@@ -19,22 +19,23 @@ A coherent, user-reviewed game specification and complete Astra build input for 
 - The user requested two art directions to compare and expressed concern about implementation feasibility. Use comparable actual rendered scenes, not artwork presented as evidence that the engine can reproduce it.
 - The resolved campaign/building ticket owns the ten-hour target's main-story/optional-content definition. It remains a player-experience target, not a measured duration or promise about build time.
 - [Deeper gameplay research](artifacts/gameplay-research.md) reads primary developer writing on learnable resource geography, useful return visits, mission-specific vehicle loadouts, threat/noise tradeoffs and crafting busywork. Its example loops predate the expanded ten-hour scope; they are hypotheses, not accepted designs. Earlier source reports remain under `docs/research/`.
-- The user answered the integrated questionnaire. Duration, building emphasis and visual direction are resolved below. The mystery ticket records the selected damaged-pod/missing-memories opening, with the deeper story still open.
+- The user answered the integrated questionnaire. Duration, building emphasis, visual direction, mystery, fleet/survival/encounter preferences and hardware target are resolved below. The owner delegates the hidden truth and protagonist reveal to the narrative team; preserve their chance to discover it by keeping major spoilers in a labelled appendix.
 
 ## Decisions so far
 
 - [Define the campaign target and building emphasis](issues/01-campaign-and-building.md): approximately ten hours for the main story plus optional exploration; vehicle-focused building with modest fixed outposts and increasingly customizable mobile homes.
 - [Compare two feasible visual directions](issues/02-art-comparison.md): richer cel-shading selected after the refined comparison, with asset designs iterated during the future build.
+- [Connect the arrival story and discovered history](issues/03-mystery-and-discovery.md): ambiguous early evidence, a surprising personal reveal authored by the narrative team, and regional leads for independent discovery.
+- [Connect resource geography to the vehicle fleet](issues/04-geography-and-fleet.md): broad specialist fleet and deployable carrier, food without thirst, evasion/deterrence and recoverable losses; authored region/resource/capability contracts are ready for final review.
+- [Choose delivery and required feasibility gates](issues/05-delivery-feasibility.md): dedicated-GPU desktop browser using TypeScript/Babylon.js; early construction gates must prove gameplay, interiors, persistence and performance.
 
 ## Not yet specified
 
-- Exact biome roster, island distribution, travel distances, routes, shortcuts and resource habitats, after the campaign and vehicle structure are chosen.
-- Resource quantities, processing chains, replenishment, logistics and protection against resource softlocks; enough interdependence to reward knowledge without forcing repetitive chores.
-- Survival pressure, death/recovery, vehicle loss or rescue, energy and repair costs, and how earlier craft remain useful.
-- The canonical lore timeline, character arcs, revelation order and how environmental evidence and blueprints connect to it. Scope and presentation of the opening cutscene.
-- Meaningful ecological interactions, discovery rewards, hazard readability and the rhythm of danger and sanctuary.
-- Target hardware, asset-production methods, world streaming, vessel interiors, island movement and final browser/native delivery if technical evidence changes the earlier recommendation.
-- Chapter-sized implementation milestones, long-session state/handoffs, lore-agent ownership, end-to-end playtest protocol and credible evidence for the duration target.
+No additional owner-preference question blocks the review input. Recipe quantities/source yields, exact encounter timing, route dimensions, asset production details and performance tuning are assigned to explicit implementation gates in the specification. Their validation is future work, not a completed planning experiment.
+
+## Final input awaiting owner review
+
+[Review the complete long-running build input](issues/06-final-build-input.md) links the full prompt and its integrated specification. The old short-game prompt remains superseded. User review and a later explicit build instruction are still required by the user's chosen scope; the current run does not submit construction.
 
 ## Out of scope
 

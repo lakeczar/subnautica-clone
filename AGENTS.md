@@ -1,6 +1,8 @@
 # Working in this repository
 
-This repository currently contains planning and research, not a playable game. The user has reopened the design for an approximately ten-hour ocean/island adventure with vehicle construction and a discoverable mystery. Read `.scratch/siltwake/map.md` for the active planning state and `docs/agents/issue-tracker.md` for its local Wayfinder tracker. `prompts/BUILD_GAME.md` is the superseded first draft, retained for comparison; do not execute it. The user must review the revised final input before game construction is submitted. Research reports explain choices; they do not silently add requirements.
+This repository contains a reviewed-by-agents planning package, not a playable game. Read `.scratch/siltwake/map.md` for decisions and `docs/agents/issue-tracker.md` for the local Wayfinder tracker. The complete owner-review input is `prompts/BUILD_GAME_REVISED.md`; construction starts only when the user explicitly submits or invokes that input for the next run. That instruction authorizes execution without another confirmation round. Reading this repo during planning is not submission. `prompts/BUILD_GAME.md` is the superseded short-game draft; do not execute it.
+
+For implementation, read the revised input and its specification pointers before assigning work. `docs/EXPEDITION_INTEGRATION.md` owns cross-system dependencies. `docs/spoilers/NARRATIVE_CANON.md` contains major story spoilers: the coordinator and lore/world integration workers need it, but ordinary owner-facing summaries and PR descriptions must not reveal the twist. Research explains choices and does not silently add or remove requirements.
 
 The coordinator owns shared interfaces, dependencies, integration, and the project state. Workers edit only the paths assigned in their task. Commit a shared baseline before creating implementation worktrees. Keep unfinished changes on feature branches and use pull requests for review.
 
