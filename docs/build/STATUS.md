@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: both independent reviewers ACCEPT integrated M0 at `d415436`; coordinator accepts the milestone. Foundation PR #2 is merged, continuing draft PR #3 is open. M1-01 first-expedition implementation is now running under Sol 6.1 max in an isolated worktree.
+Updated: 2026-10-17. State: both independent reviewers ACCEPT integrated M0 at `d415436`; coordinator accepts the milestone. Foundation PR #2 is merged, continuing draft PR #3 is open. M1 is being split into bounded coordinated work after the owner’s request. Sol is preserving its current implementation at a verification/handoff boundary; an Astra technical-lead audit is next.
 
 ## Authority and checkpoint
 
@@ -28,7 +28,7 @@ All M0/component authors and reviewers completed with owned resources closed and
 
 ## Exact next action
 
-Await the M1-01 completion notification and use the exact task ID in [TASKS](TASKS.md#active-m1-01-implementation); do not duplicate the active build. Parent retains integration/build records and makes no competing source edits. If the task asks for clarification, resolve routine implementation choices against the committed assignment/spec without asking the owner to authorize construction again. On return, inspect commits and actual source/runtime/visual evidence, reconcile proposed schema/exports, and put source on a feature candidate for fresh non-author Astra xhigh + Sol max review before accepting or integrating M1. If it returns a partial runnable checkpoint, record remaining work and continue construction rather than accepting a partial M1.
+Follow [M1 coordination revision](tasks/M1-COORDINATION.md). The existing builder was successfully steered to finish its current bounded check and return a committed handoff; its paths remain reserved until explicit release. Assign a read-only Astra xhigh technical lead to map remaining work from immutable checkpoint `5fd6338`. Await both results before dispatching mutating specialists. Preserve all existing source and keep the full M1 criteria; do not restart, duplicate or prematurely accept the build. Parent retains integration/build records and makes no competing source edits. If the task asks for clarification, resolve routine implementation choices against the committed assignment/spec without asking the owner to authorize construction again. On return, inspect commits and actual source/runtime/visual evidence, reconcile proposed schema/exports, and put source on a feature candidate for fresh non-author Astra xhigh + Sol max review before accepting or integrating M1. If it returns a partial runnable checkpoint, record remaining work and continue construction rather than accepting a partial M1.
 
 [Foundation PR #2](https://github.com/lakeczar/subnautica-clone/pull/2) is confirmed MERGED into `game/siltwake`. [Continuing draft integration PR #3](https://github.com/lakeczar/subnautica-clone/pull/3) targets `docs/astra-game-build-brief`, explicitly dependent on [planning PR #1](https://github.com/lakeczar/subnautica-clone/pull/1). T3 confirms all three linked; none watched. Main is unchanged, no deployment.
 
