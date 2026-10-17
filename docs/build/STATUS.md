@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: construction started; foundation not yet implemented.
+Updated: 2026-10-17. State: foundation implementation and author browser checks in progress; no implementation batch accepted yet.
 
 ## Authority and checkpoint
 
@@ -17,7 +17,9 @@ FND-01 main builder and ECO-01 economy-proposal worker are running as native Sol
 
 ## Acceptance and evidence
 
-- No game code, playable gameplay, runtime save test or production build exists at this checkpoint.
+- FND-01 production code is present on the feature branch but remains uncommitted worker-owned work at this status update. Author reports 18 passing rule tests and a launchable production scene with ordinary-control movement, pause and save/reload checks; final commit/evidence and independent review are pending.
+- Coordinator inspected source boundaries and actual menu/underwater captures. Early issues sent to the builder: reachable pod return ramp, strict save mode validation, paused rendering/readiness, context-loss resume gate and distinct quality scaling. Builder reports corrections with affected tests; verify at the frozen candidate.
+- ECO-01 draft arithmetic currently passes 39-recipe/33-source-patch reachability and both fleet strategies with alternate starter hulls, optional spending and failures. Numeric recovery transactions are being tightened. It is not a runtime registry or validated route/playtime balance.
 - Existing cel art study `20711d1` is reference only. Its SwiftShader captures do not establish dedicated-GPU performance.
 - Every implementation batch remains provisional until coordinator inspection, applicable checks and separate non-author Astra xhigh plus Sol 6.1 max acceptance of one frozen revision. Records go under `reviews/` following [the gate](../DELIVERY_AND_ACCEPTANCE.md#independent-review-gate).
 - No fresh-player duration/enjoyment or representative GPU measurements exist.
