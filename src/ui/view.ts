@@ -25,6 +25,7 @@ import {
 } from "../sim/inventory.js";
 import { craftingRefusal, nearestInteraction, personalLimit } from "../sim/progression.js";
 import { exposure } from "../sim/survival.js";
+import { RECOVERY_NOTICES } from "../sim/recovery.js";
 import { exitRefusal, hullDepth } from "../sim/vehicles.js";
 import type { GameCommand, Vec3, WorldQueries } from "../sim/types.js";
 import type { AudioSettings } from "../audio/sound.js";
@@ -664,6 +665,10 @@ export class GameView {
 
   private returnInformation(state: GameState): string {
     let html = '<article class="return-plan"><h3>Return & recovery</h3><p>Knowledge, blueprints and retained equipment survive incapacity. Ordinary cargo may remain in a visited cache; disabled craft keep their own holds. Recovering takes a local expedition.</p>';
+    // The saved report survives toast expiry, panel reopening and reload. Only
+    // recovery transitions belong here; other command feedback stays transient.
+    if (Object.values(RECOVERY_NOTICES).some((message) => message === state.feedback))
+      html += `<p class="recipe-status"><b>Last recovery report</b><br />${escapeHtml(state.feedback)}</p>`;
     for (const id of ["home_pod", "island_workshop", "canopy_lab"] as const) {
       if (id !== "home_pod" && !state.knowledge.markers.includes(id) && !facility(state, id)) continue;
       html += `<p><b>${PLACES[id].label}</b> · ${bearing(state.player.pose.position, PLACES[id].position)}<br />${id === "home_pod" ? `Air, healing, locker and emergency meal. ${facility(state, "pod_fabricator") ? "Equipment fabrication restored." : "Repair its bench for equipment fabrication."} Routine craft service is in the nearby pod waters.` : id === "island_workshop" ? facility(state, id) ? "Restored: air, healing, locker, charging and hull fabrication. Craft service is at the launch cradle." : "Known workshop: restore its services for air, healing, locker, charging and hull fabrication." : "Laboratory air pocket and gradual healing. It has no cargo locker or craft charging service."}</p>`;

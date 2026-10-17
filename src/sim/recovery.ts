@@ -1,7 +1,7 @@
 import { moveHull } from "./world.js";
 import { HULL_COLLIDERS, ITEMS, PLACES, RECOVERY_STAGE } from "../content/registry.js";
 import type { MaterialId } from "../content/registry.js";
-import type { GameState, Vec3, WorldQueries } from "./types.js";
+import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
 import {
   addItem,
   distance,
@@ -12,6 +12,20 @@ import {
   removeQuantity,
 } from "./inventory.js";
 const DT = 1 / 60;
+export const RECOVERY_NOTICES = {
+  ready: "Bobbin reached the exterior collar. Confirm local tow to attach; no hull has moved.",
+  blocked: "Tow clearance blocked. Dart and cargo remain at this visited site. Approach locally for in-place repair or salvage.",
+  completed: "Dart moored at the shallow rescue bench, with its original cargo, damage and charge. Apply a bound field patch and reserve cell locally.",
+} as const;
+export const RECOVERY_MOORING = { x: RECOVERY_STAGE.x + 5, y: -11, z: RECOVERY_STAGE.z } as const;
+// Keel positions, in the same reverse order as saved tow waypoint indices.
+// The approach guide is one metre above the keel; towing that guide to the
+// diver's staging position drove the hull into the bench before its final snap.
+const TOW_KEEL_WAYPOINTS: readonly Vec3[] = [
+  RECOVERY_MOORING,
+  { x: 57, y: -10, z: -65 },
+  { x: 80, y: -48, z: -89 },
+];
 export function disableVehicle(s: GameState, id: string): void {
   const v = s.fleet.vehicles.find((v) => v.id === id);
   if (!v) return;
@@ -198,66 +212,62 @@ export function recoveryCommand(
   }
   return null;
 }
-export function updateRecovery(s: GameState, world: WorldQueries): void {
+export function updateRecovery(s: GameState, world: WorldQueries): GameEvent | null {
   const op = s.recovery.operation;
-  if (!op) return;
+  if (!op) return null;
   const v = s.fleet.vehicles.find((v) => v.id === op.vehicleId);
   if (!v || !v.disabled || v.berth) {
     s.recovery.operation = null;
-    return;
+    return null;
   }
-  if (op.phase === "ready") return;
-  const points = rescueWaypoints(s, v.id);
-  const target = points[op.waypoint]!;
-  const d = distance(op.position, target),
+  if (op.phase === "ready") return null;
+  // Keep legacy approach/ready positions and indices intact. During tow use the
+  // actual keel, preserving either the local-start offset or the old +1 m guide
+  // offset without letting it change the physical route. Legacy tow index 3
+  // is the attachment point: no movement, then continue through index 2.
+  const origin = op.phase === "tow" ? v.pose.position : op.position;
+  const target = op.phase === "tow"
+    ? TOW_KEEL_WAYPOINTS[op.waypoint] ?? v.pose.position
+    : rescueWaypoints(s, v.id)[op.waypoint]!;
+  const d = distance(origin, target),
     speed = op.phase === "approach" ? 10 : 7,
     scale = Math.min(1, (speed * DT) / Math.max(d, 0.001));
   const next = {
-    x: op.position.x + (target.x - op.position.x) * scale,
-    y: op.position.y + (target.y - op.position.y) * scale,
-    z: op.position.z + (target.z - op.position.z) * scale,
+    x: origin.x + (target.x - origin.x) * scale,
+    y: origin.y + (target.y - origin.y) * scale,
+    z: origin.z + (target.z - origin.z) * scale,
   };
   if (op.phase === "tow") {
-    const origin = v.pose.position,
-      delta = {
-        x: next.x - op.position.x,
-        y: next.y - op.position.y,
-        z: next.z - op.position.z,
-      };
+    const delta = { x: next.x - origin.x, y: next.y - origin.y, z: next.z - origin.z };
     const move = moveHull(world, origin, delta, HULL_COLLIDERS.dart);
     if (
       move.hitSolid ||
       move.hitBoundary ||
-      move.position.y < world.groundHeight(move.position.x, move.position.z)
+      distance(move.position, next) > 0.001
     ) {
       s.recovery.operation = null;
-      s.feedback =
-        "Tow clearance blocked. Dart and cargo remain at this visited site. Approach locally for in-place repair or salvage.";
-      return;
+      s.feedback = RECOVERY_NOTICES.blocked;
+      return { type: "notice", message: s.feedback, error: true };
     }
     v.pose.position = move.position;
-  }
-  op.position = next;
+    op.position = { x: op.position.x + delta.x, y: op.position.y + delta.y, z: op.position.z + delta.z };
+  } else op.position = next;
   if (d <= speed * DT) {
     if (op.phase === "approach") {
       if (op.waypoint === 3) {
         op.phase = "ready";
-        s.feedback =
-          "Bobbin reached the exterior collar. Confirm local tow to attach; no hull has moved.";
+        s.feedback = RECOVERY_NOTICES.ready;
+        return { type: "notice", message: s.feedback };
       } else op.waypoint++;
     } else if (op.waypoint === 0) {
-      v.pose.position = {
-        x: RECOVERY_STAGE.x + 5,
-        y: -11,
-        z: RECOVERY_STAGE.z,
-      };
       s.recovery.losses.find((l) => l.vehicleId === v.id)!.position = {
         ...v.pose.position,
       };
       s.recovery.operation = null;
       s.metrics.rescues++;
-      s.feedback =
-        "Dart moored at the shallow rescue bench, with its original cargo, damage and charge. Apply a bound field patch and reserve cell locally.";
+      s.feedback = RECOVERY_NOTICES.completed;
+      return { type: "notice", message: s.feedback };
     } else op.waypoint--;
   }
+  return null;
 }
