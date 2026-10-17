@@ -1,14 +1,22 @@
 # Shared implementation direction
 
-Status: FND-01 seams reconciled and implemented at `8d72dd2`; provisional until dual independent acceptance. [EXPEDITION_INTEGRATION.md](../EXPEDITION_INTEGRATION.md) remains authoritative for cross-system content and progression.
+Status: foundation source at `8d72dd2`, with reviewed-findings correction source integrated at `417a7ec` (author `79423ec`). The async save/session seams below are reconciled; fresh dual independent acceptance remains pending. [EXPEDITION_INTEGRATION.md](../EXPEDITION_INTEGRATION.md) remains authoritative for cross-system content and progression.
 
 ## Implemented foundation boundary
 
 The [author evidence](evidence/FND-01.md#concrete-production-contracts) indexes the actual exports. `src/content/registry.ts` owns stable roster IDs and asset metadata; `src/sim/{types,state,world,step,clock}.ts` owns plain state, commands/events, terrain/colliders and fixed updates. `src/save/{codec,repository}.ts` owns schema validation and atomic local journals. `SiltwakeApp` composes input, renderer and UI adapters with create/update/present/dispose ownership.
 
-Coordinates are right-handed metres, Y up, water Y=0, yaw zero toward -Z. Saved player position is the capsule base; presentation adds eye height. Simulation updates at 60 Hz, capped at eight steps/frame with interruption resets. Active simulation autosaves every 30 seconds.
+Coordinates are right-handed metres, Y up, water Y=0, yaw zero toward -Z. Saved player position is the capsule base; presentation adds eye height. Simulation updates at 60 Hz, capped at eight steps/frame with interruption resets. A session with local saving enabled autosaves every 30 active simulation seconds; failed saves disable automatic retries until an explicit successful save.
 
-Schema 1 / content `foundation.1` contains only actual foundation state; future inventory, knowledge, world, fleet and recovery collections are explicitly empty/null. Later gameplay needs an explicit reviewed migration, not silently added unvalidated data. One localStorage journal commits current plus previous valid generation atomically, preserves unreadable records during explicit repair, and rejects stale-tab writes. Future/corrupt imports cannot replace progress. New/import replacement requires confirmation. Details and limitations remain in the evidence report.
+Schema 1 / content `foundation.1` contains only actual foundation state; future inventory, knowledge, world, fleet and recovery collections are explicitly empty/null. Later gameplay needs an explicit reviewed migration, not silently added unvalidated data. The correction leaves schema/content/journal format and key unchanged. One localStorage journal commits current plus previous valid generation atomically and preserves unreadable records during explicit repair. Future/corrupt imports cannot replace progress. New/import replacement requires confirmation. Details and limitations remain in the evidence reports.
+
+## Corrected persistence and session contracts
+
+The [correction evidence](evidence/FND-01-R1-FIX.md#exact-interfaces-for-coordinator-reconciliation) indexes exact exports. `SaveRepository` now takes `(storage, writerLock)`, and `commit(save, replaceProtected?, signal?)` returns an awaited `Promise<CommitResult>` with typed failure codes. It serializes a detached snapshot before waiting; observed-record comparison, previous/raw preservation and journal replacement run inside one exclusive per-origin Web Lock named `siltwake.save.journal.v1.writer`. `writer-lock.ts` supplies the injected port and native adapter. There is no uncoordinated write fallback. All writing tabs must use the compatible protocol; an old build ignoring it cannot be made cooperative.
+
+`ExpeditionSession` in `src/runtime/session.ts` owns the active plain state, one pending operation/confirmation, cancellation/disposal and autosave timing. It has no DOM/renderer dependency. `SiltwakeApp` remains the lifecycle/composition owner, advances session state through the fixed simulation, and wires session events to presentation. Pending autosaves deduplicate; queued writes and slow file reads cannot replace a later session after cancellation/disposal. Export returns a detached snapshot.
+
+After eligible storage/exclusion failures, New Game or a validated import offers an explicit exportable session without local saving. Until that choice, the old active session and local record remain unchanged. Accepting disables autosave and keeps a visible export reminder. Validation/conflict/protection/size errors retain separate refusal semantics. Missing safe exclusion permits read/export and explicit unsaved play, never racing writes. Web Locks require a secure context: HTTPS hosting or localhost HTTP. Unit and actual quota/native-lock diagnostics are recorded separately from ordinary gameplay evidence.
 
 Foundation art is original procedural Sol geometry and shaders. Declared hull/material/region IDs are a roster, not implemented gameplay. The economy files under `design/` are a provisional proposal/checker and must not become a competing runtime registry.
 

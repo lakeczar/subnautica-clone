@@ -2,11 +2,11 @@
 
 Reviewer: non-author GPT-6 Astra, reasoning effort **xhigh**, as identified by the T3/Codex runtime. No children delegated. No other independent review was received or consulted.
 
-**Frozen candidate:** `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`  
-**FND author source:** `8d72dd2ac2822873e36fe339f8ed2db8c837084b`  
-**Feature base:** `a3e400b`  
-**Full bootstrap/spec-change base:** `b3c3231b99ca5f1bd1159c5611216f2866e05a37`  
-**Review date:** 2026-10-17  
+**Frozen candidate:** `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`
+**FND author source:** `8d72dd2ac2822873e36fe339f8ed2db8c837084b`
+**Feature base:** `a3e400b`
+**Full bootstrap/spec-change base:** `b3c3231b99ca5f1bd1159c5611216f2866e05a37`
+**Review date:** 2026-10-17
 **Isolated worktree:** `/home/worker/.t3/worktrees/subnautica-clone/t3-0f9f1e6b`
 
 HEAD was verified before review and again after verification. Both checks returned the frozen candidate; the tracked worktree remained clean. Runtime/config/test/artifact-source files have no diff between the FND author source and this candidate. Installation, builds and checks ran only in this isolated checkout. No candidate source/docs were edited, committed or pushed; no PR was created.
