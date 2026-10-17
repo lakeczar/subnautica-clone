@@ -4,6 +4,7 @@ import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Scene } from "@babylonjs/core";
 import { terrainHeight, WORLD_BOUNDS } from "../sim/world.js";
+import { SOURCES } from "../content/registry.js";
 import { ArtBatch, seeded } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
 
@@ -109,6 +110,38 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
     for (let x = -10; x <= 29; x += 1.3)
       path.push([x, terrainHeight(x, z) + 0.04, z]);
     stones.tube(path, 0.07, i % 2 ? "#6d8980" : "#9cab89", 5);
+  }
+  // Exposed glass follows abraded ledges, membrane collects in a lee hollow,
+  // and tagged alloy sits on a fallen service frame. Hosts persist after harvest.
+  // These skins sample the authoritative height field; they add no art-only shelf.
+  for (const source of Object.values(SOURCES)) {
+    const { x, z } = source.position;
+    if (source.asset === "glass") {
+      for (let band = 0; band < 4; band++) {
+        const path: [number, number, number][] = [];
+        for (let i = 0; i < 7; i++) {
+          const px = x - 1.8 + i * 0.6, pz = z - 0.75 + band * 0.5 + Math.sin(i) * 0.1;
+          path.push([px, terrainHeight(px, pz) + 0.04, pz]);
+        }
+        stones.tube(path, 0.04, band % 2 ? P.steelLight : P.basalt, 4);
+      }
+    } else if (source.asset === "ribbons") {
+      for (const side of [-1, 1]) {
+        const path: [number, number, number][] = [];
+        for (let i = 0; i < 7; i++) {
+          const px = x + side * (1.2 + Math.sin(i / 6 * Math.PI) * 0.65), pz = z - 1.8 + i * 0.6;
+          path.push([px, terrainHeight(px, pz) + 0.045, pz]);
+        }
+        stones.tube(path, 0.065, P.stoneLight, 5);
+      }
+    } else if (source.asset === "scraps") {
+      const y = terrainHeight(x, z) + 0.06;
+      // A frame deliberately has an empty centre; it reads differently from ore.
+      for (const side of [-1, 1]) {
+        stones.box([x + side * 1.3, y, z], [0.12, 0.1, 2.3], P.petrol);
+        stones.box([x, y, z + side * 1.1], [2.6, 0.1, 0.12], P.metal);
+      }
+    }
   }
   stones.finish();
 
