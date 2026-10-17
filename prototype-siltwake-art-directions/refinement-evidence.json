@@ -1,0 +1,1277 @@
+{
+  "sourceCommit": "20711d1",
+  "captures": [
+    {
+      "variant": "voxel",
+      "detail": "original",
+      "view": "reef",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/voxel-original-reef.webp?raw=true",
+      "state": {
+        "variant": "voxel",
+        "detail": "original",
+        "view": "reef",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 45,
+        "vertices": 149931,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 10,
+            "vertices": 55477
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 42472
+          },
+          {
+            "name": "ecology",
+            "meshes": 16,
+            "vertices": 48932
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            28.999999999999996,
+            2.999999999999994,
+            -45
+          ],
+          "target": [
+            -1,
+            -3,
+            9
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 4.699999928474426,
+          "p95": 4.699999928474426
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "voxel",
+      "detail": "original",
+      "view": "pod",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/voxel-original-pod.webp?raw=true",
+      "state": {
+        "variant": "voxel",
+        "detail": "original",
+        "view": "pod",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 45,
+        "vertices": 149931,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 10,
+            "vertices": 55477
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 42472
+          },
+          {
+            "name": "ecology",
+            "meshes": 16,
+            "vertices": 48932
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            4,
+            8.881784197001252e-16,
+            -21.999999999999996
+          ],
+          "target": [
+            -13,
+            -4.5,
+            -1
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.399999976158142,
+          "p95": 3.399999976158142
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "voxel",
+      "detail": "original",
+      "view": "scout",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/voxel-original-scout.webp?raw=true",
+      "state": {
+        "variant": "voxel",
+        "detail": "original",
+        "view": "scout",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 45,
+        "vertices": 149931,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 10,
+            "vertices": 55477
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 42472
+          },
+          {
+            "name": "ecology",
+            "meshes": 16,
+            "vertices": 48932
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            23,
+            1.9999999999999991,
+            -18.999999999999996
+          ],
+          "target": [
+            9,
+            -3,
+            -4
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.6999999284744263,
+          "p95": 3.6999999284744263
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "voxel",
+      "detail": "original",
+      "view": "life",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/voxel-original-life.webp?raw=true",
+      "state": {
+        "variant": "voxel",
+        "detail": "original",
+        "view": "life",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 45,
+        "vertices": 149931,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 10,
+            "vertices": 55477
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 42472
+          },
+          {
+            "name": "ecology",
+            "meshes": 16,
+            "vertices": 48932
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            27,
+            5,
+            -4
+          ],
+          "target": [
+            16,
+            1.5,
+            10.5
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.5,
+          "p95": 3.5
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "voxel",
+      "detail": "original",
+      "view": "island",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/voxel-original-island.webp?raw=true",
+      "state": {
+        "variant": "voxel",
+        "detail": "original",
+        "view": "island",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 45,
+        "vertices": 149931,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 10,
+            "vertices": 55477
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 42472
+          },
+          {
+            "name": "ecology",
+            "meshes": 16,
+            "vertices": 48932
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            9.999999999999986,
+            31,
+            -8.000000000000007
+          ],
+          "target": [
+            -28,
+            19,
+            36
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.200000047683716,
+          "p95": 3.200000047683716
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "voxel",
+      "detail": "refined",
+      "view": "reef",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/voxel-refined-reef.webp?raw=true",
+      "state": {
+        "variant": "voxel",
+        "detail": "refined",
+        "view": "reef",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 49,
+        "vertices": 387575,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 13,
+            "vertices": 186051
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 77790
+          },
+          {
+            "name": "ecology",
+            "meshes": 17,
+            "vertices": 119576
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            28.999999999999996,
+            2.999999999999994,
+            -45
+          ],
+          "target": [
+            -1,
+            -3,
+            9
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.700000047683716,
+          "p95": 3.700000047683716
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "voxel",
+      "detail": "refined",
+      "view": "pod",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/voxel-refined-pod.webp?raw=true",
+      "state": {
+        "variant": "voxel",
+        "detail": "refined",
+        "view": "pod",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 49,
+        "vertices": 387575,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 13,
+            "vertices": 186051
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 77790
+          },
+          {
+            "name": "ecology",
+            "meshes": 17,
+            "vertices": 119576
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            4,
+            8.881784197001252e-16,
+            -21.999999999999996
+          ],
+          "target": [
+            -13,
+            -4.5,
+            -1
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 4,
+          "p95": 4
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "voxel",
+      "detail": "refined",
+      "view": "scout",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/voxel-refined-scout.webp?raw=true",
+      "state": {
+        "variant": "voxel",
+        "detail": "refined",
+        "view": "scout",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 49,
+        "vertices": 387575,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 13,
+            "vertices": 186051
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 77790
+          },
+          {
+            "name": "ecology",
+            "meshes": 17,
+            "vertices": 119576
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            23,
+            1.9999999999999991,
+            -18.999999999999996
+          ],
+          "target": [
+            9,
+            -3,
+            -4
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.4000000953674316,
+          "p95": 3.4000000953674316
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "voxel",
+      "detail": "refined",
+      "view": "life",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/voxel-refined-life.webp?raw=true",
+      "state": {
+        "variant": "voxel",
+        "detail": "refined",
+        "view": "life",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 49,
+        "vertices": 387575,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 13,
+            "vertices": 186051
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 77790
+          },
+          {
+            "name": "ecology",
+            "meshes": 17,
+            "vertices": 119576
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            27,
+            5,
+            -4
+          ],
+          "target": [
+            16,
+            1.5,
+            10.5
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.5999999046325684,
+          "p95": 3.5999999046325684
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "voxel",
+      "detail": "refined",
+      "view": "island",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/voxel-refined-island.webp?raw=true",
+      "state": {
+        "variant": "voxel",
+        "detail": "refined",
+        "view": "island",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 49,
+        "vertices": 387575,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 13,
+            "vertices": 186051
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 77790
+          },
+          {
+            "name": "ecology",
+            "meshes": 17,
+            "vertices": 119576
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            9.999999999999986,
+            31,
+            -8.000000000000007
+          ],
+          "target": [
+            -28,
+            19,
+            36
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.200000047683716,
+          "p95": 3.200000047683716
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "cel",
+      "detail": "original",
+      "view": "reef",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/cel-original-reef.webp?raw=true",
+      "state": {
+        "variant": "cel",
+        "detail": "original",
+        "view": "reef",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 45,
+        "vertices": 51855,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 10,
+            "vertices": 16727
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 5158
+          },
+          {
+            "name": "ecology",
+            "meshes": 16,
+            "vertices": 25672
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            28.999999999999996,
+            2.999999999999994,
+            -45
+          ],
+          "target": [
+            -1,
+            -3,
+            9
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 4.700000047683716,
+          "p95": 4.700000047683716
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "cel",
+      "detail": "original",
+      "view": "pod",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/cel-original-pod.webp?raw=true",
+      "state": {
+        "variant": "cel",
+        "detail": "original",
+        "view": "pod",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 45,
+        "vertices": 51855,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 10,
+            "vertices": 16727
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 5158
+          },
+          {
+            "name": "ecology",
+            "meshes": 16,
+            "vertices": 25672
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            4,
+            8.881784197001252e-16,
+            -21.999999999999996
+          ],
+          "target": [
+            -13,
+            -4.5,
+            -1
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.700000047683716,
+          "p95": 3.700000047683716
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "cel",
+      "detail": "original",
+      "view": "scout",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/cel-original-scout.webp?raw=true",
+      "state": {
+        "variant": "cel",
+        "detail": "original",
+        "view": "scout",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 45,
+        "vertices": 51855,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 10,
+            "vertices": 16727
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 5158
+          },
+          {
+            "name": "ecology",
+            "meshes": 16,
+            "vertices": 25672
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            23,
+            1.9999999999999991,
+            -18.999999999999996
+          ],
+          "target": [
+            9,
+            -3,
+            -4
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.600000023841858,
+          "p95": 3.600000023841858
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "cel",
+      "detail": "original",
+      "view": "life",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/cel-original-life.webp?raw=true",
+      "state": {
+        "variant": "cel",
+        "detail": "original",
+        "view": "life",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 45,
+        "vertices": 51855,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 10,
+            "vertices": 16727
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 5158
+          },
+          {
+            "name": "ecology",
+            "meshes": 16,
+            "vertices": 25672
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            27,
+            5,
+            -4
+          ],
+          "target": [
+            16,
+            1.5,
+            10.5
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 4.600000023841858,
+          "p95": 4.600000023841858
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "cel",
+      "detail": "original",
+      "view": "island",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/cel-original-island.webp?raw=true",
+      "state": {
+        "variant": "cel",
+        "detail": "original",
+        "view": "island",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 45,
+        "vertices": 51855,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 10,
+            "vertices": 16727
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 5158
+          },
+          {
+            "name": "ecology",
+            "meshes": 16,
+            "vertices": 25672
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            9.999999999999986,
+            31,
+            -8.000000000000007
+          ],
+          "target": [
+            -28,
+            19,
+            36
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.299999952316284,
+          "p95": 3.299999952316284
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "cel",
+      "detail": "refined",
+      "view": "reef",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/cel-refined-reef.webp?raw=true",
+      "state": {
+        "variant": "cel",
+        "detail": "refined",
+        "view": "reef",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 49,
+        "vertices": 122973,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 13,
+            "vertices": 39683
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 10416
+          },
+          {
+            "name": "ecology",
+            "meshes": 17,
+            "vertices": 68576
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            28.999999999999996,
+            2.999999999999994,
+            -45
+          ],
+          "target": [
+            -1,
+            -3,
+            9
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 4,
+          "p95": 4
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "cel",
+      "detail": "refined",
+      "view": "pod",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/cel-refined-pod.webp?raw=true",
+      "state": {
+        "variant": "cel",
+        "detail": "refined",
+        "view": "pod",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 49,
+        "vertices": 122973,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 13,
+            "vertices": 39683
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 10416
+          },
+          {
+            "name": "ecology",
+            "meshes": 17,
+            "vertices": 68576
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            4,
+            8.881784197001252e-16,
+            -21.999999999999996
+          ],
+          "target": [
+            -13,
+            -4.5,
+            -1
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 4.299999952316284,
+          "p95": 4.299999952316284
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "cel",
+      "detail": "refined",
+      "view": "scout",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/cel-refined-scout.webp?raw=true",
+      "state": {
+        "variant": "cel",
+        "detail": "refined",
+        "view": "scout",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 49,
+        "vertices": 122973,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 13,
+            "vertices": 39683
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 10416
+          },
+          {
+            "name": "ecology",
+            "meshes": 17,
+            "vertices": 68576
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            23,
+            1.9999999999999991,
+            -18.999999999999996
+          ],
+          "target": [
+            9,
+            -3,
+            -4
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 5.799999952316284,
+          "p95": 5.799999952316284
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "cel",
+      "detail": "refined",
+      "view": "life",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/cel-refined-life.webp?raw=true",
+      "state": {
+        "variant": "cel",
+        "detail": "refined",
+        "view": "life",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 49,
+        "vertices": 122973,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 13,
+            "vertices": 39683
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 10416
+          },
+          {
+            "name": "ecology",
+            "meshes": 17,
+            "vertices": 68576
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            27,
+            5,
+            -4
+          ],
+          "target": [
+            16,
+            1.5,
+            10.5
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 3.799999952316284,
+          "p95": 3.799999952316284
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    },
+    {
+      "variant": "cel",
+      "detail": "refined",
+      "view": "island",
+      "path": "https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/cel-refined-island.webp?raw=true",
+      "state": {
+        "variant": "cel",
+        "detail": "refined",
+        "view": "island",
+        "lighting": "daylight",
+        "paused": true,
+        "ready": true,
+        "meshes": 49,
+        "vertices": 122973,
+        "moduleStats": [
+          {
+            "name": "environment",
+            "meshes": 13,
+            "vertices": 39683
+          },
+          {
+            "name": "vehicles",
+            "meshes": 8,
+            "vertices": 10416
+          },
+          {
+            "name": "ecology",
+            "meshes": 17,
+            "vertices": 68576
+          }
+        ],
+        "renderedFrames": 2,
+        "camera": {
+          "position": [
+            9.999999999999986,
+            31,
+            -8.000000000000007
+          ],
+          "target": [
+            -28,
+            19,
+            36
+          ]
+        },
+        "viewport": [
+          1280,
+          800
+        ],
+        "webGL": 2,
+        "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "vendor": "Google Inc. (Google)",
+        "frameIntervalMs": {
+          "sampleCount": 0,
+          "p50": null,
+          "p95": null
+        },
+        "cpuRenderMs": {
+          "p50": 4,
+          "p95": 4
+        },
+        "note": "Frame intervals include a 30 fps cap and software/browser capture overhead. CPU submission is separate. Neither is a full-game performance claim."
+      }
+    }
+  ],
+  "verification": {
+    "browser": "Linux Chromium 154 / SwiftShader WebGL2",
+    "viewport": [
+      1280,
+      800
+    ],
+    "captureTime": "animation frozen at zero; daylight setting; refined includes changed shading/color",
+    "controls": "Original/refined toggle preserves camera; style and wildlife-view changes update URL; no console errors in inspected production scene",
+    "preservation": "Workers verified original per-module geometry buffers and transforms against 3826db6",
+    "normalFix": "Original cel retains historical downward sand normals for comparison; refined cel corrects winding and verifies upward flat-sand normals",
+    "limits": "No gameplay, collision, vehicle interiors, large-world systems or consumer-GPU performance demonstrated."
+  }
+}
