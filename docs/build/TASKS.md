@@ -408,3 +408,10 @@ Prepare [M1-CARRIER-YAW-FIX](tasks/M1-CARRIER-YAW-FIX.md) as a new isolated Sol 
 ### Exact-heading correction dispatched from e0ec3a9
 
 Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-carrier-yaw-sol-max-e0ec3a9`, stable request `siltwake-m1-carrier-yaw-sol-max-e0ec3a9`. Async T3 worktree at exact clean `e0ec3a91a9d0df3e13338536a76b6e573a66002e`; codex/gpt-6.1-sol with explicit reasoningEffort=max, returned model/provider match, running, no children/question. Complete brief supplied. Only carrier.ts yaw function, carrier-boundary tests and own evidence; no browser expected. LOOK/UI retain e06035d. Four active agents including root; no root browser/server. Read notified results, not polling.
+
+
+### UI clarity completed and inspected
+
+Task `siltwake-m1-ui-clarity-sol-max-e06035d` terminal: Sol6.1 max, no children/questions, owned tab/server closed5192free. Sourcee2c7ae8/evidencef02fa42 staged at ff09d4f. [Root inspection](evidence/M1-UI-CLARITY-INTEGRATION.md) records172 tests/typecheck/build,18 manifest hashes, four save decodes, actual images and public opening/recovery pairs. No shared API or simulation change; saved notices remain intact. Its UI/CSS/presentation-test paths are released.
+
+LOOK retains e06035d/render paths5191; yaw correction retains e0ec3a9/carrier-function/test paths. Three active agents including root. No root browser/server, no new delegate or acceptance. Inspect notifications and assemble before fresh paired review.
