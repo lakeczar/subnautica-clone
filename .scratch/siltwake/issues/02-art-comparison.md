@@ -3,8 +3,8 @@
 Parent: ../map.md
 Type: prototype
 Label: wayfinder:prototype
-Status: open
-Assignee: none
+Status: claimed
+Assignee: lakeczar (with Astra coordinator)
 Blocked by: none
 
 ## Question
@@ -13,4 +13,4 @@ Which of two visually distinct, implementable art directions best supports this 
 
 ## Comments
 
-The integrated questionnaire proposes vibrant stylized naturalism versus graphic cel-shaded science fiction, with alternatives. This pair is unconfirmed. Read the prototype skill and UI guidance before working this ticket; obey the repository browser rules.
+The user asked to compare voxel and cel-shaded approaches, while retaining the atmosphere of vibrant naturalism. Build those two variants with rich underwater lighting, matching scene subjects and camera presets. This chooses the comparison pair, not the winning art direction. Read the prototype skill and UI guidance before working this ticket; obey the repository browser rules.

@@ -13,4 +13,4 @@ How should an opening event explain arrival and strand the player, and how shoul
 
 ## Comments
 
-The integrated questionnaire asks about the arrival premise now; detailed narrative pacing depends on the campaign target. A distress-response mission, survey crash and damaged-pod awakening are options, not accepted canon.
+The user selected: "The player wakes in a damaged pod with missing memories." This fixes the opening premise, not its explanation, the cause of memory loss, the player's identity or the mystery's ending. Those remain open. Scan entries, personal journals and environmental evidence should gradually reveal what happened.

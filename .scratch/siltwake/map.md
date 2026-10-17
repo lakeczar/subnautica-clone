@@ -12,18 +12,18 @@ A coherent, user-reviewed game specification and complete Astra build input for 
 - This is planning. The user explicitly reserved construction for a later run and asked to inspect the final input before submission. The earlier thirty-to-forty-five-minute, under-ice, vehicle-free prompt is superseded.
 - Use Wayfinder, grilling and domain-modeling for decisions; research for factual investigations; prototype for concrete art/interaction comparisons. Before any browser work read `/work/repos/fleet/BROWSER_RULES.md` when present and `docs/BROWSER_RULES.md`.
 - Use the integrated questionnaire for user choices. Recommendations and preselected answers are not decisions. Preserve the user's answers across sessions and read this map before resuming.
-- The local tracker is defined in `../../docs/agents/issue-tracker.md`; tickets are decision questions, not implementation assignments. Read only relevant ticket detail after this index. No tickets have been resolved yet.
+- The local tracker is defined in `../../docs/agents/issue-tracker.md`; tickets are decision questions, not implementation assignments. Read only relevant ticket detail after this index.
 - Starting preferences supplied by the user: discovery and curiosity lead; building and survival follow. A plot event/cutscene explains arrival, while scans and personal journals gradually reconstruct the lore. A dedicated lore agent is a possible future role.
 - Setting preference: an open alien ocean with explorable islands and research settlements ranging from small to large. Discovery can yield special blueprints for upgrades, vehicles, items and resource processing.
-- Building preference: a home pod supports storage, crafting and healing. Multiple vehicles serve scouting, resource utility and habitation. The most capable vessels take substantially more resources and effort to obtain; specific costs, roles and stationary-building scope remain undecided.
+- Building preference: a home pod supports storage, crafting and healing. Multiple vehicles serve scouting, resource utility and habitation. The most capable vessels take substantially more resources and effort to obtain; specific costs and roles remain undecided. The resolved campaign/building ticket owns the selected balance between fixed outposts and inhabited vehicles.
 - The user requested two art directions to compare and expressed concern about implementation feasibility. Use comparable actual rendered scenes, not artwork presented as evidence that the engine can reproduce it.
-- Approximately ten hours is a proposed player-experience target, not an observed duration or a promise about build time. Its main-story/optional-content definition is pending.
+- The resolved campaign/building ticket owns the ten-hour target's main-story/optional-content definition. It remains a player-experience target, not a measured duration or promise about build time.
 - [Deeper gameplay research](artifacts/gameplay-research.md) reads primary developer writing on learnable resource geography, useful return visits, mission-specific vehicle loadouts, threat/noise tradeoffs and crafting busywork. Its example loops predate the expanded ten-hour scope; they are hypotheses, not accepted designs. Earlier source reports remain under `docs/research/`.
-- The current integrated questionnaire asks about the ten-hour target, stationary versus vehicle building, the two art directions, and the arrival premise. Answers are pending; suggested defaults are not approved.
+- The user answered the integrated questionnaire. Duration and building emphasis are resolved below. The art ticket records the selected comparison pair (voxel and cel-shaded, with vibrant atmosphere); it remains claimed pending rendered examples and the user's preference. The mystery ticket records the selected damaged-pod/missing-memories opening, with the deeper story still open.
 
 ## Decisions so far
 
-No Wayfinder decisions resolved yet. The user's starting preferences are recorded above; follow-up questions remain open.
+- [Define the campaign target and building emphasis](issues/01-campaign-and-building.md): approximately ten hours for the main story plus optional exploration; vehicle-focused building with modest fixed outposts and increasingly customizable mobile homes.
 
 ## Not yet specified
 

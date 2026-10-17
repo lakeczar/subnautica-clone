@@ -3,8 +3,8 @@
 Parent: ../map.md
 Type: grilling
 Label: wayfinder:grilling
-Status: open
-Assignee: none
+Status: resolved
+Assignee: lakeczar (with Astra coordinator)
 Blocked by: none
 
 ## Question
@@ -13,4 +13,10 @@ What should approximately ten hours of play contain, and how much building depth
 
 ## Comments
 
-The integrated questionnaire asks the user to choose what the duration counts and the building emphasis. No answer has been recorded yet.
+The user answered both questions in the integrated questionnaire.
+
+## Answer
+
+The user selected "About 10 hours for the main story, plus optional exploration" and "Vehicle-focused: modest fixed outposts, increasingly customizable mobile homes." The main-story duration is a first-play target to validate, not an observed result or an execution-time estimate. Optional building/exploration is additional; repeated resource collection and empty travel must not be used to manufacture the target duration.
+
+The starting home pod still provides storage, crafting and healing. Most construction depth belongs in specialized craft and inhabited vessels. Exact fleet roles, capacities, costs and interactions remain the subject of the geography/fleet decision.
