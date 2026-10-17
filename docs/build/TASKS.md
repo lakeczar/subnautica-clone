@@ -432,3 +432,10 @@ Task `siltwake-m1-look-sol-max-e06035d` terminal: Sol 6.1 max, no children/quest
 [Root inspection](evidence/M1-LOOK-INTEGRATION.md) records 174 tests/typecheck/build, all seven comparison HUD/camera matches, 22 inspected artifact hashes, author/combined bundle identities, earned input byte identity and nine save decodes. Root inspected actual author/reference images and fresh combined native opening plus three labelled diagnostic views. Current UI resolves the inherited console overlap. Root tab/server closed; 5190/5195/5196 free. No active children.
 
 Prepare fresh [R3 pair](tasks/M1-BATCH-REVIEW-R3.md) from one committed candidate, exact M0 diff base, whole original batch scope, both prior rounds/dispositions, carrier/UI/LOOK evidence and Opus follow-ups. Gate remains pending; no integrated M1 claim.
+
+
+### R3 pair dispatched from 21d50df
+
+Fresh non-author T3 worktree tasks use exact candidate `21d50dfb4de1ab5d2ae81cdeb36e1d9f6fcaf278`, production06927d5, accepted M0 diff base. Stable requests `siltwake-m1-batch-astra-r3-21d50df` and `siltwake-m1-batch-sol-r3-21d50df`; [paired record](reviews/M1-BATCH-R3.md) holds full task IDs. Live codex catalog verified Astra/xhigh and Sol6.1/max; explicit effort options and returned model IDs match. Both accepted running without children/questions. Full R3 and original R1 brief supplied; both earlier rounds and all fixes/dispositions required reading.
+
+Only own report paths; isolated ports5195/5196 checked free and browser rules included. Three active agents including root, no active builders/root browser/server. Receive notifications without polling, reconcile independent initial verdicts, then direct substantive fixes if needed. No acceptance or integrated-M1 claim.
