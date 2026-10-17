@@ -3,13 +3,21 @@
 Parent: ../map.md
 Type: prototype
 Label: wayfinder:prototype
-Status: claimed
+Status: resolved
 Assignee: lakeczar (with Astra coordinator)
 Blocked by: none
 
 ## Question
 
 Which of two visually distinct, implementable art directions best supports this exploration game? First obtain the user's chosen comparison pair; then render the same small scene with matching geometry, camera, representative island/reef/pod/creature/vehicle subjects, and readable interaction cues. Compare actual rendering and limitations, not concept imagery passed off as engine output. The two variants are throwaway visual studies, not two production games.
+
+## Answer
+
+The owner selected the **richer cel-shaded direction** after comparing the original and refined studies: "Richer cell is the way to go, maybe do iterations on desgins to as you build this". In the context of the questionnaire, this selects refined cel at [source commit 20711d1](https://github.com/lakeczar/subnautica-clone/tree/20711d1/.scratch/siltwake/art-prototype). It supersedes the earlier voxel preference recorded below.
+
+Use vibrant color, atmospheric lighting, detailed environments, readable organic silhouettes and precise mechanical features as the visual baseline. The owner invites design iterations during the future build; individual assets are not frozen by this style decision. Review those iterations in representative playable scenes as ecology, interaction and vehicle roles become real. Keep original editable graphics authored by Sol 6.1 at max reasoning under Astra's shared art direction. This resolves the visual direction, not production performance or the remaining world/story decisions. Full game construction remains the later run after review of the revised final input.
+
+The following sections preserve the comparison history and evidence; their pending-choice language describes the state before this answer.
 
 ## Comments
 

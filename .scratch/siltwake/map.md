@@ -5,7 +5,7 @@ Status: open
 
 ## Destination
 
-A coherent, user-reviewed game specification and complete Astra build input for an original ocean/island survival-exploration adventure targeting approximately ten hours, with deeply connected geography, resources, ecology, vehicle construction and mystery. Two small rendered art prototypes inform the visual choice before construction is submitted.
+A coherent, user-reviewed game specification and complete Astra build input for an original ocean/island survival-exploration adventure targeting approximately ten hours, with deeply connected geography, resources, ecology, vehicle construction and mystery. The completed rendered art comparison informs the selected visual baseline before construction is submitted.
 
 ## Notes
 
@@ -19,11 +19,12 @@ A coherent, user-reviewed game specification and complete Astra build input for 
 - The user requested two art directions to compare and expressed concern about implementation feasibility. Use comparable actual rendered scenes, not artwork presented as evidence that the engine can reproduce it.
 - The resolved campaign/building ticket owns the ten-hour target's main-story/optional-content definition. It remains a player-experience target, not a measured duration or promise about build time.
 - [Deeper gameplay research](artifacts/gameplay-research.md) reads primary developer writing on learnable resource geography, useful return visits, mission-specific vehicle loadouts, threat/noise tradeoffs and crafting busywork. Its example loops predate the expanded ten-hour scope; they are hypotheses, not accepted designs. Earlier source reports remain under `docs/research/`.
-- The user answered the integrated questionnaire. Duration and building emphasis are resolved below. The art ticket records the selected comparison pair (voxel and cel-shaded, with vibrant atmosphere); it remains claimed pending rendered examples and the user's preference. The mystery ticket records the selected damaged-pod/missing-memories opening, with the deeper story still open.
+- The user answered the integrated questionnaire. Duration, building emphasis and visual direction are resolved below. The mystery ticket records the selected damaged-pod/missing-memories opening, with the deeper story still open.
 
 ## Decisions so far
 
 - [Define the campaign target and building emphasis](issues/01-campaign-and-building.md): approximately ten hours for the main story plus optional exploration; vehicle-focused building with modest fixed outposts and increasingly customizable mobile homes.
+- [Compare two feasible visual directions](issues/02-art-comparison.md): richer cel-shading selected after the refined comparison, with asset designs iterated during the future build.
 
 ## Not yet specified
 
@@ -43,4 +44,4 @@ A coherent, user-reviewed game specification and complete Astra build input for 
 
 ## Art study
 
-[Compare two feasible visual directions](issues/02-art-comparison.md) links the completed original-graphics study from three GPT-6.1 Sol workers at max reasoning, coordinated by Astra; the owner prefers voxel and has requested finer blocks plus a richer cel comparison before selecting the final treatment. The full game input will preserve this graphics delegation preference. Source/evidence stay on the throwaway art branch; this map remains the planning index.
+[Compare two feasible visual directions](issues/02-art-comparison.md) holds the owner's resolved choice and the completed original-graphics study from three GPT-6.1 Sol workers at max reasoning, coordinated by Astra. The full game input will preserve this graphics delegation preference. Source/evidence stay on the throwaway art branch; this map remains the planning index.
