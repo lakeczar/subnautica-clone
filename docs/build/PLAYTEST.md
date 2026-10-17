@@ -1,6 +1,6 @@
 # Runtime and playtest evidence
 
-Foundation production checks exist; no complete expedition or campaign has been played. This log records actual observations, not planned tests as passes. The [acceptance contract](../DELIVERY_AND_ACCEPTANCE.md) defines required coverage.
+Foundation and attributed first-expedition component checks exist; the complete combined M1 route and full campaign remain unaccepted. This log records actual observations, not planned tests as passes. The [acceptance contract](../DELIVERY_AND_ACCEPTANCE.md) defines required coverage.
 
 For each run record candidate SHA, build/command, environment and renderer, input method, scenario, observed result, artifact, defect and retest. Label ordinary inputs, automated rule tests and diagnostic state injection separately. Record p50/p95/loading/memory only when measured and state the route/sample.
 
@@ -37,3 +37,6 @@ Use normal game inputs and retain the start save, final save and recording/check
 7. Repeat a representative route with selected cel art, sound and HUD; record visual/readability problems, empty travel and repeat harvesting. Reserve frame-time claims for an explicit measured sample and hardware record.
 
 Carrier feasibility has a separate fixture and later a campaign run: station keeping, entry/exit, two compact craft including dry Spindle, blocked launch, safe release of the other craft, medium-berth reconfiguration only when empty, save/interruption at transition boundaries and death inside. A fixture pass proves the local mechanic only; later integrated routes must validate its campaign use.
+
+
+Combined M1 source `4d0a7f0` has root137-test/typecheck/build checks and successful old-operation tow diagnostics. Earlier earned CORE, RECOVERY and final-source RENDER/RECOVERY-FIX replays retain their exact author attribution in evidence reports. The [combined-play tasks](tasks/M1-COMBINED-PLAY.md) now close composed production P0–P5/F0–F3 before batch reviews; neither planned runs nor isolated results count as those passes.
