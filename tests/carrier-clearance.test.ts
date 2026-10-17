@@ -4,6 +4,7 @@ import { carrierCommand, carrierRooms, carrierStructure, carrierTransferPath, fi
 import { HULL_COLLIDERS } from "../src/content/registry.js";
 import { createWorldQueries, hullClearance } from "../src/sim/world.js";
 import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
+import { executeCommand, stepGame } from "../src/sim/step.js";
 import type { GameState, Vec3 } from "../src/sim/types.js";
 
 const world = createWorldQueries();
@@ -153,4 +154,23 @@ test("the carrier's piloting envelope encloses the lower lock floor beneath its 
   assert.equal(hullClearance(world, h.pose.position, HULL_COLLIDERS.hearthline), true);
   const p = { ...h.pose.position, y: h.pose.position.y - 0.4 };
   assert.equal(hullClearance(blocker(p), h.pose.position, HULL_COLLIDERS.hearthline), false);
+});
+
+test("empty reconfiguration cannot seal a walking diver inside its new compartment", () => {
+  const { s } = setup("medium", "capture");
+  assert.equal(carrierCommand(s, "reconfigure", undefined, world), null);
+  s.player.interiorPose!.position = { x: -3, y: 4, z: -3.3 };
+  s.player.pose.position = localToWorld(s.player.interiorPose!.position, s.fleet.vehicles[0]!);
+  roundTrip(s);
+  const result = executeCommand(s, { type: "carrier", action: "reconfigure" }, world);
+  assert.ok(result.events.some((e) => e.type === "notice" && e.error));
+  assert.deepEqual(result.state, s);
+  roundTrip(result.state);
+});
+
+test("the stationary central passage admits the walking capsule from bridge to aft vestibule", () => {
+  let s = fixtureGame();
+  for (let i = 0; i < 280; i++) s = stepGame(s, [{ type: "move", forward: -1, right: 0, vertical: 0, sprint: false }], world).state;
+  assert.ok(s.player.interiorPose!.position.z >= 7, "straight passage must clear the capsule, not just the camera centre");
+  roundTrip(s);
 });

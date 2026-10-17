@@ -14,7 +14,7 @@ export const CARRIER_SUPPORT = { x: 65, y: -0.9, z: 12 };
  * Dry rooms have independent floor hatches. One opens to the lower lock; the other
  * remains sealed. Rail transfer is atomic, with the complete route swept beforehand. */
 export const CARRIER_LAYOUT = {
-  wall: 0.12,
+  wall: 0.08,
   deck: { min: { x: -6.3, y: 3.8, z: -12 }, max: { x: 6.3, y: 4, z: 12 } },
   compact: [
     { id: "carrier.berth.port", min: { x: -6, y: 4, z: -2.8 }, max: { x: -0.45, y: 8.4, z: 4.8 } },
@@ -78,7 +78,10 @@ export function atCarrierSupport(h: VehicleState): boolean {
   return distance(h.pose.position, CARRIER_SUPPORT) < 4 && Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) < 0.05;
 }
 export function carrierInteriorSolids(s: GameState): Solid[] {
-  return [...carrierStructure(s.fleet.docking?.configuration ?? "compact"),
+  const configuration = s.fleet.docking?.configuration ?? "compact";
+  return [...carrierStructure(configuration),
+    // Sealed compartments are not walking space, even when their craft is absent.
+    ...carrierRooms(configuration),
     ...s.fleet.vehicles.filter((v) => v.berth).map((v) => envelopeSolid(`berth.${v.id}`, v.berth!.pose.position, transferEnvelope(v)))];
 }
 export function launchPoint(h: VehicleState, v: VehicleState): Vec3 {
@@ -338,8 +341,12 @@ export function carrierCommand(
       s.fleet.vehicles.some((v) => v.berth?.carrierId === h.id)
     )
       return "Reconfiguration requires an empty carrier at a supported dock.";
-    dock.configuration =
-      dock.configuration === "compact" ? "medium" : "compact";
+    const configuration = dock.configuration === "compact" ? "medium" : "compact";
+    if (s.player.interiorPose && !createWorldQueries([
+      ...carrierStructure(configuration), ...carrierRooms(configuration),
+    ], () => -200).clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 }))
+      return "Move to the clear bridge passage before reconfiguring the sealed compartments. Nothing changed.";
+    dock.configuration = configuration;
     s.feedback = `Empty supported berth reconfigured to ${dock.configuration}.`;
     return null;
   }
