@@ -317,7 +317,7 @@ Astra remains the only active child on frozen ac5988c, no peer findings delivere
 
 - Exact clean parent `253200a8f969d390e175d339fa8d3b0db47770d0`; production remains `20451a8`. T3 async worktree, role implementation, codex/gpt-6.1-sol, explicit reasoningEffort=max; accepted running with no children/question.
 - Task ID `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-batch-r1-fix-sol-max-253200a`; request `siltwake-m1-batch-r1-fix-sol-max-253200a`. Backing thread uses same suffix with thread:delegated-task: prefix.
-- [Full brief](tasks/M1-BATCH-R1-SOL-FIX.md) included in prompt. Exclusive step.ts/expedition.ts/expedition tests/new render-lifecycle test/own evidence, checked-free5193. No interface/schema/geometry/material changes, children, peer polling or parent mutation.
+- [Full brief](tasks/M1-BATCH-R1-SOL-FIX.md) included in prompt. Exclusive step.ts/expedition.ts/expedition tests/new render-lifecycle test/own evidence, checked-free 5193. No interface/schema/geometry/material changes, children, peer polling or parent mutation.
 - Astra's initial review remains isolated on ac5988c; no findings shared. Three active agents including root; root has no browser/server. Notification-driven reconciliation and fresh revised-candidate review follow; no acceptance implied.
 
 
@@ -369,3 +369,8 @@ Owner explicitly authorized one Opus 5.5 at high to critique gameplay loop, tast
 - Sole owned report `docs/build/reviews/OPUS-DESIGN-R1.md`, optional protected appendix `docs/spoilers/reviews/OPUS-DESIGN-R1.md`, temporary /tmp/siltwake-opus-design-r1/, checked-free port 5197. No source edits, children, peer polling or current technical peer findings. This is early advice, not milestone acceptance or the later Astra critique.
 - Sol R2 report b36267e is inspected and staged at 5ee03ae; [paired record](reviews/M1-BATCH-R2.md) retains ACCEPT for both batches, verified archive and root replay of its new bounded probes. No new blocker; ordinary depleted-power proof remains an integrated-M1 obligation. No browser/server opened by Sol.
 - Current active agents: root, Astra R2 and Opus. Root owns no browser/server. Do not duplicate or poll; read notified results, consolidate advice and technical verdict independently. No accepted-game/main change or deployment.
+
+
+### Astra R2 terminal; new carrier-boundary correction prepared
+
+Astra report ef6be03 is staged: presentation ACCEPT, core CHANGES REQUIRED with new P2 M1-ASTRA-R2-01. Root verified 113 payloads/114 archive files, viewed actual Save refusal and reran both retained command/browser-state reproducers; [paired disposition](reviews/M1-BATCH-R2.md). All R1 findings remain resolved. Sol accepted both; presentation is accepted by the pair at e0a7d0d but core/M1 is not. Both technical reviewers are terminal/resources closed. Opus advisory continues on its unchanged a5260c9 baseline. Root prepares [carrier-bounds correction](tasks/M1-CARRIER-BOUNDS-FIX.md), exclusive world/step/carrier/new-test/evidence paths, checked-free 5193. Two active agents before new dispatch; no root browser/server. Commit first, then T3 async Sol6.1 max worktree. No new owner decision or source-schema relaxation.
