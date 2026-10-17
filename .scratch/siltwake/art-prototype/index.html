@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#062c39">
+  <title>Siltwake — two ocean-world art studies</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <canvas id="scene" aria-label="Interactive 3D art study. Drag to orbit; scroll to zoom. Use the scene-view buttons for preset cameras." tabindex="0"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <header>
+    <div class="wordmark"><span class="emblem" aria-hidden="true">≋</span><div>SILTWAKE<small>OCEAN WORLD / ART STUDY</small></div></div>
+    <div class="study"><span class="dot"></span> LIVE 3D <span class="divider">/</span> PROTOTYPE</div>
+  </header>
+  <main class="annotation" aria-live="polite">
+    <div class="eyebrow">DESIGN EXPLORATION <span id="variant-number">01 / 02</span></div>
+    <h1 id="style-title">Tidal blocks</h1>
+    <p id="style-summary">A living reef in carved, stepped forms. Crisp silhouettes under soft underwater light.</p>
+    <div class="swatches" aria-label="Shared ocean color palette"><i></i><i></i><i></i><i></i><i></i></div>
+    <p class="caption" id="technique">VOXEL GEOMETRY · DIFFUSE LIGHT</p>
+  </main>
+  <aside class="views" aria-label="Scene views">
+    <span>EXPLORE THE STUDY</span>
+    <button data-view="reef" class="selected">01 <b>The reef</b><small>environment & ecology</small></button>
+    <button data-view="pod">02 <b>The refuge</b><small>pod & materials</small></button>
+    <button data-view="scout">03 <b>The scout</b><small>vehicle silhouette</small></button>
+    <button data-view="island">04 <b>The island</b><small>surface & geography</small></button>
+  </aside>
+  <section class="conditions" aria-label="Study conditions">
+    <button id="light-toggle" aria-pressed="false">◐ <span>Daylight</span></button>
+    <button id="motion-toggle" aria-pressed="false">Ⅱ <span>Pause life</span></button>
+    <button id="reset-camera">↺ <span>Reset view</span></button>
+  </section>
+  <div class="bottom-note"><span>DRAG TO ORBIT · SCROLL TO ZOOM</span><small>Same world, camera and palette. Two ways to see it.</small></div>
+  <nav class="switcher" aria-label="Art style comparison">
+    <button id="previous" aria-label="Previous art style">←</button>
+    <button id="voxel" aria-pressed="true"><span>A</span> Voxel</button>
+    <button id="cel" aria-pressed="false"><span>B</span> Cel-shaded</button>
+    <button id="next" aria-label="Next art style">→</button>
+  </nav>
+  <button id="details-toggle" aria-expanded="false">Study notes <span>↗</span></button>
+  <section id="details" hidden>
+    <h2>A visual question, not a game</h2>
+    <p>Both versions contain the same island, reef arch, refuge pod, scout, coral, kelp and fish. Voxel uses stepped volumes; cel-shaded uses curved geometry, banded lighting and ink outlines.</p>
+    <p>All art is procedural, rendered in Babylon.js. No pre-rendered or AI-generated images. No mining, survival, interiors, resource economy or large-world performance is demonstrated here.</p>
+    <p id="render-info"></p>
+    <button id="close-details">Back to the reef</button>
+  </section>
+  <div id="loading"><span class="loader"></span><p>Composing the reef…</p></div>
+  <script type="module" src="/main.js"></script>
+</body>
+</html>
