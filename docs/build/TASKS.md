@@ -58,20 +58,32 @@ Foundation PR #2 is merged into `game/siltwake`; continuing draft integration PR
 
 The owner asked to split the broad build and add Astra subagent coordination. [Coordination revision](tasks/M1-COORDINATION.md) preserves full M1 scope. Existing Sol task received in-flight steering request `siltwake-m1-decompose-checkpoint-20261017` with delivery `steered`: finish current bounded check, commit coherent work, report remaining scope/path seams, close owned resources and return a provisional handoff. Checkpoint inspected read-only: `5fd633879d7c8e059c7ff5cb6a6200895e1f7d93`; author reports 97 passing tests. No independent M1 acceptance or accepted integration is claimed. No other implementation owner has been assigned. The advisory Astra is running and the main Sol has now returned the provisional handoff recorded above.
 
-## Active M1 coordination advice
+## Completed M1 coordination advice
 
 - Task ID: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-coordinate-astra-5fd6338`.
 - Stable request ID: `siltwake-m1-coordinate-astra-5fd6338`.
-- Provider/model/effort: `codex` / `gpt-6-astra` / `xhigh`, live catalog verified; T3-isolated worktree, role design, async. Running with no pending question or nested work at dispatch. Three active agents including root and existing main Sol builder.
+- Provider/model/effort: `codex` / `gpt-6-astra` / `xhigh`, live catalog verified; T3-isolated worktree, role design, async. Completed; terminal result read; no live children, source edits or browser resources. Full report preserved at `docs/build/evidence/M1-COORDINATION-ASTRA.md`.
 - Specification baseline: `8ffdfc22504badae587cd4b2fb672b83fa175303`. Immutable source being assessed via Git objects: `5fd633879d7c8e059c7ff5cb6a6200895e1f7d93` (provisional M1, not parent M0 tree). No source edits, commits, PRs or children allowed. Report only `/tmp/siltwake-m1-coordination-astra.md`.
 - Purpose: [coordination revision](tasks/M1-COORDINATION.md), concrete remaining-work matrix, exact non-overlapping Sol assignments, minimum necessary shared seams, dependency order and integrated route/carrier checks. Read final builder handoff if available; identify its source separately. No waiting/polling for the author. This advice is not a feature-acceptance verdict and this advisor must not serve as independent reviewer of its own contribution.
 - On both completion notifications, reconcile advice and committed author handoff, stage a provisional feature baseline, then assign narrow implementation roles. Only root dispatches; main Sol retains shared simulation/save/runtime ownership. Respect four slots, rotate the advisor out before three implementation workers. No mutating specialist starts until previous path owner explicitly releases its paths.
 
 
-## Active design research and late critique
+## Completed design research; review pending
 
 - Owner requested a dedicated end-stage Astra xhigh critic of flow, story/lore, assets, gameplay loop and design. [DESIGN-CRITIC](tasks/DESIGN-CRITIC.md) and the delivery gate now schedule this after M3, early in M4 with fixes/re-review. The actual game critique has not run; it is additional to the technical Astra/Sol pair.
 - Research task ID: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-design-principles-astra-20261017-r1`.
-- Stable request ID: `siltwake-design-principles-astra-20261017-r1`; provider/model/effort `codex` / `gpt-6-astra` / `xhigh`, live catalog verified. Async T3 worktree, baseline `c0bc4fc`, role research. Running; no children or pending question at dispatch.
+- Stable request ID: `siltwake-design-principles-astra-20261017-r1`; provider/model/effort `codex` / `gpt-6-astra` / `xhigh`, live catalog verified. Async T3 worktree, baseline `c0bc4fc`, role research. Completed; terminal result read; no live children, clean worktree, no browser resources.
 - Exclusive owned output: `docs/research/04-game-design-review.md`; only that file may be committed. About 6–10 directly inspected primary sources and a practical Siltwake review matrix; no production edits, PR, push, child dispatch or current-game acceptance. Read the research skill and existing research as historical context; preserve current scope and spoilers.
-- On return, inspect source citations, distinguish research from design inference, and route the research deliverable through the existing dual gate before treating it as accepted. Use a fresh non-author critic later; research completion cannot close the game-design critique. Root remains sole dispatcher; respect four slots.
+- Returned source `9d449e1b6913f8a9c8465bcdafe39f913d2c8e87`, staged provisionally as `cbc2fc6`. Root read the report: ten attributed primary sources, explicit access limits, fifteen-row review matrix, no runtime claims or spoilers. Route this bounded research/critic-brief batch through fresh Astra xhigh/Sol max review before treating it as accepted. Use a fresh non-author critic later; research completion cannot close the game-design critique. Root remains sole dispatcher; respect four slots.
+
+
+## M1-A0 dispatch preparation
+
+- [Assignment](tasks/M1-A0.md): Sol 6.1 max, isolated worktree, no children. Exact paths and stopping point are in the brief. Root remains integration/records owner.
+- Source/evidence preserved on feature branch `feat/siltwake-first-expedition`, merge `7da897f`. Main game branch still holds accepted M0. Fresh coordinator checks: 97 tests/typecheck/build and M1 economy pass; immediate command/save bugs independently reproduced. [Evidence](evidence/M1-STAGING.md).
+- Scope: complete command transactions, physical carrier corridor/compartment descriptor and swept clearance, transient sound-origin seam. This is a prerequisite shared checkpoint, not a broad assignment to finish every M1 system. No visual/presentation worker is dispatched yet.
+- After its result: inspect/reconcile and commit shared baseline S, then dispatch main-core plus visual and presentation specialists with exclusive paths. Rotate carrier/recovery only if necessary. Keep full final expedition, ordinary failure/repeated recovery, carrier fixture and acceptance checks open.
+
+## DESIGN-PREP review preparation
+
+Bounded deliverable: source research `docs/research/04-game-design-review.md` plus `docs/build/tasks/DESIGN-CRITIC.md` and the corresponding late-critique addition in prompt/plan/delivery rules. Accept only research fidelity, scope consistency and usable critique procedure; **no M1/gameplay acceptance**. Research author Astra and root-authored brief are not independent reviewers. Fresh non-author Astra xhigh + Sol max inspect the same frozen feature baseline, with source-verification emphasis and exact findings/dispositions. Run alongside A0 within four slots; reviewers author no production/document changes and return separate reports. Exact IDs will follow dispatch.

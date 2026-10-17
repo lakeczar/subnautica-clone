@@ -1,6 +1,6 @@
 # Dedicated game-design critic
 
-Owner-requested on 2026-10-17. Status: scheduled for the M3-to-M4 transition; supporting research is active, the actual game critique has **not** run. This adds a review obligation without reducing game scope or replacing the [independent technical gate](../../DELIVERY_AND_ACCEPTANCE.md#independent-review-gate).
+Owner-requested on 2026-10-17. Status: scheduled for the M3-to-M4 transition; supporting research has returned and is pending independent review, the actual game critique has **not** run. This adds a review obligation without reducing game scope or replacing the [independent technical gate](../../DELIVERY_AND_ACCEPTANCE.md#independent-review-gate).
 
 ## Role and timing
 
@@ -8,7 +8,7 @@ Use a fresh non-author **GPT-6 Astra at xhigh**, verified against the live catal
 
 Run the main critique after M3 has a complete playable opening, middle and ending, early enough in M4 to change weak design. Freeze and identify the candidate SHA, specification SHA and artifact before dispatch. If a major prerequisite is absent, report it, route it to implementation and reschedule the full critique; do not score an incomplete expedition as the full game. Earlier route observations can inform construction without claiming the late critique complete.
 
-Research preparation is a separate assignment, recorded in TASKS.md. Its single cited report will live at `docs/research/04-game-design-review.md`; verify availability and read it before the critique. Inspect cited primary sources where needed, treat principles as context-sensitive lenses, and distinguish their authors' claims from Siltwake-specific inference. Research is not authority to alter the owner's chosen setting, fleet, richer-cel art or ten-hour campaign.
+Research preparation is a separate assignment, recorded in TASKS.md. Its single cited report is [04-game-design-review.md](../../research/04-game-design-review.md); verify its review status and read it before the critique. Inspect cited primary sources where needed, treat principles as context-sensitive lenses, and distinguish their authors' claims from Siltwake-specific inference. Research is not authority to alter the owner's chosen setting, fleet, richer-cel art or ten-hour campaign.
 
 ## Review inputs and method
 

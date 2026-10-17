@@ -21,7 +21,7 @@ The [delivery gates](../DELIVERY_AND_ACCEPTANCE.md) own acceptance. This plan se
 
 ## Integration order
 
-The owner requested an additional dedicated game-design critic near the end. [DESIGN-CRITIC](tasks/DESIGN-CRITIC.md) runs on the full playable campaign at the M3-to-M4 transition, with correction time reserved before release. Primary-source research is being prepared separately; it is not a review of the current incomplete game. A fresh non-author Astra xhigh critic examines the actual game, and Sol max implements accepted fixes. Keep the separate Astra/Sol technical acceptance pair.
+The owner requested an additional dedicated game-design critic near the end. [DESIGN-CRITIC](tasks/DESIGN-CRITIC.md) runs on the full playable campaign at the M3-to-M4 transition, with correction time reserved before release. Primary-source research has returned and is pending independent review; it is not a review of the current incomplete game. A fresh non-author Astra xhigh critic examines the actual game, and Sol max implements accepted fixes. Keep the separate Astra/Sol technical acceptance pair.
 
 One main builder owns the first runnable baseline. After reconciliation, split along proven module seams: simulation/progression, renderer/assets/world presentation, and content/UI/audio as appropriate. Assign exclusive paths and one composition owner. Use T3 worktree delegation from a committed baseline for independent checkouts. Integrate small commits and test combined behavior before expanding scope.
 

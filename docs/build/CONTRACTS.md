@@ -48,6 +48,21 @@ Station keeping precedes helm exit and launch. Berth capture/launch is transacti
 
 ## Ownership and changes
 
+### Provisional M1 interface checkpoint
+
+The M1 source at `5fd6338`, preserved on feature merge `7da897f`, is **unaccepted**. This records its working interfaces for the bounded [A0 correction](tasks/M1-A0.md); it does not supersede accepted M0 until the new gate passes. Full author export/migration notes are in [M1-01 evidence](evidence/M1-01.md#exact-contracts-and-migration-proposals). Root inspected the production definitions and [reproduced two immediate command/save inconsistencies](evidence/M1-STAGING.md).
+
+- Schema 2 / content `expedition.2` extends plain state with identified items/containers, knowledge/provenance/blueprints, facilities/depletion, fleet/cargo, loss/recovery, berth transactions and route metrics. `scenario` distinguishes earned expedition from seeded carrier fixture. Existing atomic journal and exclusive writer/session cancellation semantics remain. Schema1 migration validates the actual foundation shape, initializes new content once, preserves valid pose/vitals, and gives explicit feedback if revised geometry requires relocation.
+- `executeCommand(state, command, world)` and `stepGame(state, commands, world)` return `{state, events}`. Menu commands can run while ticks are paused, so each successful command must immediately satisfy save invariants. A0 must fix helm pose and repair/tow coherence without weakening the validator.
+- Registry remains the sole authority for source positions, recipe/blueprint IDs, evidence/provenance and hull shapes. UI may not copy or independently alter these data. Source positions also shape terrain; persistent provenance currently validates against exact registry text.
+- `WorldQueries.clearance`, `hullFloor`, `hullClearance`, `moveHull` and shared `FACILITY_SOLIDS` govern physical geometry. Player position is capsule base; personal pressure is base+0.4 m, airway base+0.85 m swimming/+1.55 m walking, hull pressure keel+0.5 m. World coordinates stay right-handed/Y-up/metres; berth poses are explicitly carrier-local.
+- `createRenderer(canvas, availabilityChanged)` and its lifecycle remain unchanged. Art exports `createExpeditionArt(scene,cel).update(state)` and `createEcology(scene,cel): AnimatedLife`; UI sends `GameCommand` through `UiActions.command`; `PanelKind` contains inventory/craft/notebook/carrier. `Soundscape` owns activation/update/events/dispose; A0 establishes minimal transient sound-origin metadata before presentation ownership transfer.
+- Carrier has explicit local/world transforms, station keeping, prepared/lock transactions and exactly-once identities. A0 must define and check the full physical berth/lock/exit corridor before final art ownership transfers. Current endpoint-only clearance is insufficient evidence. No moving interiors or campaign carrier acquisition is claimed.
+
+Root will reconcile A0's concrete revised exports, dimensions and compatibility policy, then commit a new shared baseline before parallel worktrees. Existing render/UI seams suffice; no general extraction or duplicate registry is authorized.
+
+### Assignment discipline
+
 Main Sol builder implements production contracts, root config and composition under exclusive assignment. Coordinator directs and approves interface changes and owns `docs/build/{STATUS,PLAN,CONTRACTS,PLAYTEST,CONTENT_MANIFEST,TASKS}.md`, review records and planning handoff. Worker evidence belongs in `docs/build/evidence/<batch>.md`. Once a candidate is frozen, functional/contract edits wait for a correction assignment and a new dual review revision.
 
 Browser tasks must read the current fleet and repository browser rules before any launch; use verified isolated Linux, prefer T3 preview, preserve user/shared tabs and close only owned resources. Browser evidence must identify actual rendering hardware and ordinary inputs versus diagnostic state changes.
