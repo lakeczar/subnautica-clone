@@ -17,7 +17,7 @@ import {
   usedCapacity,
 } from "../src/sim/inventory.js";
 import { executeCommand, stepGame } from "../src/sim/step.js";
-import { createWorldQueries, hullClearance, SOLIDS, sweptHullClearance } from "../src/sim/world.js";
+import { createWorldQueries, hullClearance, SOLIDS, sweptHullClearance, WORLD_BOUNDS } from "../src/sim/world.js";
 import { HULL_COLLIDERS } from "../src/content/registry.js";
 import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
 import { exposure, updateSurvival, updateThreat } from "../src/sim/survival.js";
@@ -333,6 +333,103 @@ test("sound hunter warns before pursuit; quiet/cover or a directional distractio
   s.world.threat.distractionSeconds = 12;
   updateThreat(s, 0, events);
   assert.equal(s.world.threat.mode, "disengage");
+});
+test("directional distraction shortens its ray at every world edge/corner and saves immediately", () => {
+  const { minX, maxX, minZ, maxZ } = WORLD_BOUNDS;
+  // Synthetic boundary placements with real equipment/crafting and save validation.
+  const cases = [
+    [minX + 2, 0, Math.PI * 1.5], [maxX - 2, 0, Math.PI / 2],
+    [0, minZ + 2, 0], [0, maxZ - 2, Math.PI],
+    [minX + 2, minZ + 3, Math.PI * 1.75],
+    [maxX - 2, minZ + 3, Math.PI / 4],
+    [minX + 2, maxZ - 3, Math.PI * 1.25],
+    [maxX - 2, maxZ - 3, Math.PI * 0.75],
+    // Rounding at unequal corner distances must remain inside both bounds.
+    [minX + 1e-10, minZ + 2e-10, Math.PI * 1.75],
+    [maxX - 1e-10, minZ + 2e-10, Math.PI / 4],
+    [minX + 1e-10, maxZ - 2e-10, Math.PI * 1.25],
+    [maxX - 1e-10, maxZ - 2e-10, Math.PI * 0.75],
+  ] as const;
+  for (const [x, z, yaw] of cases) {
+    const s = prepare();
+    s.player.pose.position = { x, y: -2, z };
+    s.player.pose.yaw = yaw;
+    s.player.mode = "swimming";
+    roundTrip(s);
+    const before = structuredClone(s);
+    const result = executeCommand(s, { type: "distraction" }, world);
+    assert.ok(!result.events.some(e => e.type === "notice" && e.error));
+    const target = result.state.world.threat.distraction;
+    assert.ok(target);
+    assert.ok(target.x >= minX && target.x <= maxX, `x=${target.x}`);
+    assert.ok(target.z >= minZ && target.z <= maxZ, `z=${target.z}`);
+    assert.equal(target.y, s.player.pose.position.y);
+    const dx = target.x - x, dz = target.z - z;
+    assert.ok(Math.hypot(dx, dz) > 0 && Math.hypot(dx, dz) <= 16);
+    assert.ok(Math.abs(dx * -Math.cos(yaw) - dz * Math.sin(yaw)) < 1e-12,
+      "the shortened pulse must stay on the original ray");
+    assert.ok(Math.abs(target.x - minX) < 1e-12 || Math.abs(target.x - maxX) < 1e-12 ||
+      Math.abs(target.z - minZ) < 1e-12 || Math.abs(target.z - maxZ) < 1e-12);
+    assert.equal(result.state.world.threat.distractionSeconds, 12);
+    roundTrip(result.state);
+    const expected = structuredClone(before);
+    expected.world.threat.distraction = target;
+    expected.world.threat.distractionSeconds = 12;
+    expected.feedback = result.state.feedback;
+    assert.deepEqual(result.state, expected, "only pulse and success feedback change");
+    assert.deepEqual(s, before, "the original command input stays detached");
+    const repeated = executeCommand(result.state, { type: "distraction" }, world);
+    assert.strictEqual(repeated.state, result.state);
+    assert.deepEqual(repeated.events, [{ type: "notice", message: "Distraction is already active.", error: true }]);
+  }
+});
+test("distraction preserves the interior projection and expiry and refuses an outward boundary ray atomically", () => {
+  const s = prepare();
+  const p = s.player.pose;
+  const result = executeCommand(s, { type: "distraction" }, world);
+  assert.deepEqual(result.state.world.threat.distraction, {
+    x: p.position.x + Math.sin(p.yaw) * 16, y: p.position.y,
+    z: p.position.z - Math.cos(p.yaw) * 16,
+  });
+  roundTrip(result.state);
+  let active = result.state;
+  for (let i = 0; i < 719; i++) active = stepGame(active, [], world).state;
+  assert.ok(active.world.threat.distraction);
+  assert.ok(active.world.threat.distractionSeconds > 0);
+  for (let i = 0; i < 2; i++) active = stepGame(active, [], world).state;
+  assert.equal(active.world.threat.distraction, null);
+  assert.equal(active.world.threat.distractionSeconds, 0);
+  roundTrip(active);
+  const renewed = executeCommand(active, { type: "distraction" }, world);
+  assert.equal(renewed.state.world.threat.distractionSeconds, 12);
+  roundTrip(renewed.state);
+  // Cardinal tangency at an exact edge must ignore floating trig residue.
+  const tangent = prepare();
+  tangent.player.pose.position = { x: WORLD_BOUNDS.maxX, y: -2, z: 0 };
+  tangent.player.pose.yaw = Math.PI;
+  tangent.player.mode = "swimming";
+  const tangential = executeCommand(tangent, { type: "distraction" }, world);
+  assert.deepEqual(tangential.state.world.threat.distraction, { x: WORLD_BOUNDS.maxX, y: -2, z: 16 });
+  roundTrip(tangential.state);
+  // Synthetic exact-edge/corner poses exercise zero usable ray length.
+  for (const [x, z, yaw] of [
+    [WORLD_BOUNDS.minX, 0, Math.PI * 1.5],
+    [WORLD_BOUNDS.maxX, 0, Math.PI / 2],
+    [0, WORLD_BOUNDS.minZ, 0], [0, WORLD_BOUNDS.maxZ, Math.PI],
+    [WORLD_BOUNDS.maxX, WORLD_BOUNDS.maxZ, Math.PI * 0.75],
+  ] as const) {
+    const edge = prepare();
+    edge.player.pose.position = { x, y: -2, z };
+    edge.player.pose.yaw = yaw;
+    edge.player.mode = "swimming";
+    roundTrip(edge);
+    const before = structuredClone(edge);
+    const refused = executeCommand(edge, { type: "distraction" }, world);
+    assert.strictEqual(refused.state, edge);
+    assert.deepEqual(edge, before);
+    assert.ok(refused.events.some(e => e.type === "notice" && e.error && /face|direction/i.test(e.message)));
+    roundTrip(refused.state);
+  }
 });
 test("continued hunter damage keeps the original disabled hull saveable without renewing air or losses", () => {
   let s = dartGame();

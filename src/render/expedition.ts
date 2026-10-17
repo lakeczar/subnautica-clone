@@ -852,6 +852,11 @@ export function createExpeditionArt(
         blockMesh.position.set(exit.x, exit.y + 1, exit.z);
         blockMesh.rotation.y = -h.pose.yaw;
       }
+      for (const [id, mesh] of caches)
+        if (!s?.recovery.caches.some((c) => c.id === id)) {
+          mesh.dispose();
+          caches.delete(id);
+        }
       for (const c of s?.recovery.caches ?? []) {
         let m = caches.get(c.id);
         if (!m) {
