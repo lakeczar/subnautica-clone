@@ -121,3 +121,16 @@ Astra terminal result read: **ACCEPT DESIGN-PREP** at `c0aa5cb386a6b98ff8fa7c95d
 - Staged preserving author history through `1c8d81e` on provisional feature branch. Root inspected changes, matched source/bundle, ran 117 tests/typecheck/build/economy and both prior command/save repros (pass). [Evidence](evidence/M1-A0-INTEGRATION.md); [reconciled contracts](CONTRACTS.md#reconciled-a0-interfaces-for-provisional-m1-work). No completed core-batch or M1 acceptance.
 - Paths now transferred by [M1-PARALLEL](tasks/M1-PARALLEL.md) and its core/visual/presentation briefs. Only root active before dispatch; next three worktrees start from the shared committed baseline. Main retains core/shared files; original audio/expedition-render ownership is explicitly released to presentation/visual workers. No overlapping authors.
 - A0 is included in the later core/physical-feasibility review batch. Full P0–P5/F0–F3 and final combined visual/UI/audio evidence remain. Separate physical recovery/carrier task rotates after a completed slot; do not silently assign all those gates back to the main route task.
+
+
+## Active M1 parallel implementation
+
+All three are async T3 `isolation: worktree`, provider `codex`, model **`gpt-6.1-sol`**, explicit effort **`max`**, role implementation, from the same clean committed baseline **`411fb1d355b85dcd876f4bc337e93c3fc2cfadba`**. Live catalog/efforts verified. Four active agents including root; no further child until a slot releases. No pending questions or children reported at dispatch. Root owns records/contracts/Git assembly; no worker pushes, opens PRs, mutates parent or dispatches children.
+
+| Batch / brief | Exact T3 task ID | Stable request | Exclusive ownership / port | State |
+| --- | --- | --- | --- | --- |
+| [M1-CORE](tasks/M1-CORE.md) | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-core-sol-max-411fb1d` | `siltwake-m1-core-sol-max-411fb1d` | Exact content/sim/save/runtime/core-render/test paths and evidence in brief; port5190 | Running |
+| [M1-VISUAL](tasks/M1-VISUAL.md) | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-visual-sol-max-411fb1d` | `siltwake-m1-visual-sol-max-411fb1d` | Six render leaf files and evidence; port5191 | Running |
+| [M1-PRESENTATION](tasks/M1-PRESENTATION.md) | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-presentation-sol-max-411fb1d` | `siltwake-m1-presentation-sol-max-411fb1d` | UI/CSS/audio, sound/presentation tests and evidence; port5192 | Running |
+
+[Common plan](tasks/M1-PARALLEL.md) freezes shared geometry/events/IDs and defines the separate later physical recovery/carrier pass, combined P0–P5/F0–F3, related-batch dual review and integrated M1 gate. Original asset study and both retained artifact archives are available. Workers must read both browser rule files, verify isolated Linux, use distinct task storage/ports and preserve shared/other-task resources. Completion notifications wake root; no polling/duplicate work.
