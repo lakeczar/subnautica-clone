@@ -12,11 +12,18 @@ import {
   removeQuantity,
 } from "./inventory.js";
 const DT = 1 / 60;
+const OCCUPIED_RECOVERY = "the Dart is occupied. Tow and salvage require an empty hull. Exit only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.";
 export const RECOVERY_NOTICES = {
   ready: "Bobbin reached the exterior collar. Confirm local tow to attach; no hull has moved.",
   blocked: "Tow clearance blocked. Dart and cargo remain at this visited site. Approach locally for in-place repair or salvage.",
   completed: "Dart moored at the shallow rescue bench, with its original cargo, damage and charge. Apply a bound field patch and reserve cell locally.",
+  occupied: `Bobbin recovery stopped: ${OCCUPIED_RECOVERY}`,
 } as const;
+export function recoveryOccupancyRefusal(s: GameState, vehicleId: string): string | null {
+  return s.player.controlledVehicleId === vehicleId || s.player.interiorId === vehicleId
+    ? `Recovery unavailable: ${OCCUPIED_RECOVERY}`
+    : null;
+}
 export const RECOVERY_MOORING = { x: RECOVERY_STAGE.x + 5, y: -11, z: RECOVERY_STAGE.z } as const;
 // Keel positions, in the same reverse order as saved tow waypoint indices.
 // The approach guide is one metre above the keel; towing that guide to the
@@ -120,6 +127,10 @@ export function recoveryCommand(
   const v = s.fleet.vehicles.find((v) => v.id === id);
   if (!v || !v.disabled || v.berth || v.hull !== "dart")
     return "Select a disabled, visited Dart transponder.";
+  if (method !== "repair") {
+    const occupied = recoveryOccupancyRefusal(s, id);
+    if (occupied) return occupied;
+  }
   if (!equipped(s, "bobbin_kit"))
     return "Fabricate the retained Bobbin / collar from pod maintenance stock first.";
   const local = distance(s.player.pose.position, v.pose.position) < 7,
@@ -219,6 +230,13 @@ export function updateRecovery(s: GameState, world: WorldQueries): GameEvent | n
   if (!v || !v.disabled || v.berth) {
     s.recovery.operation = null;
     return null;
+  }
+  // Valid old saves may already contain an occupied approach, ready or tow.
+  // Cancel before changing either guide or hull; normal step survival still runs.
+  if (recoveryOccupancyRefusal(s, v.id)) {
+    s.recovery.operation = null;
+    s.feedback = RECOVERY_NOTICES.occupied;
+    return { type: "notice", message: s.feedback, error: true };
   }
   if (op.phase === "ready") return null;
   // Keep legacy approach/ready positions and indices intact. During tow use the
