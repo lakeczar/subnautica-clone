@@ -228,3 +228,10 @@ Terminal `siltwake-m1-recovery-sol-max-2ce5e14` read: completed, no pending chil
 - Exact ownership and port 5193 in [brief](tasks/M1-RECOVERY-FIX.md). Internal existing-event notice return is allowed within recovery.ts/step.ts; final signature returns to root, no save/public event schema change approved.
 - RENDER notified with `siltwake-m1-render-recovery-fix-awareness-124ff71`, delivered as steering to its existing ordinal1 task. Its source baseline remains `2ce5e14` and all five render paths remain exclusive. No new render task or moving-source copy.
 - Three active agents including root; completion notifications wake root. Inspect/assemble both returns, run combined checks/play and then fresh independent batch pair plus separate integrated M1 pair. No final-source review dispatched prematurely.
+
+
+### M1-RENDER completed and staged at 8fe6bf6
+
+Terminal `siltwake-m1-render-sol-max-2ce5e14` read completed with no children/question. Source `6ea44ceaed40ef8b6ee8b8f4a2c3a26e6ccb578c`, evidence `f8a08a236a7bca4c189e43f8186a54791dab9d87`; provisional merge `8fe6bf6ce2a39eec5fe8612a2a7793bf7c57ccbb`. Five assigned render files plus evidence only; clean author worktree, owned browser/server/recordings closed. [Root inspection](evidence/M1-RENDER-INTEGRATION.md): 204 payload hashes/206 archive entries and exact source verified, actual comparisons/selected motion inspected, all eight copied CORE inputs byte-matched. A digest transcription typo in the report was corrected without modifying source/archive/saves.
+
+Root passed 132 tests/typecheck/build with identical final bundle and repeated the geometry audit against assembled source (72 aperture/6 opaque rays, 35 pose/seat cases, 24 stable rebuilds, seven carrier points). Concrete factories/optical/seat seams reconciled in CONTRACTS. No final-source browser, independent acceptance or recovery-fix assembly is claimed. M1-RECOVERY-FIX remains the only active child from `124ff71`; no moving source copied and no new task dispatched. Final combined evidence and both review gates follow its return.
