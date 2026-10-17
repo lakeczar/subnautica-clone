@@ -1,6 +1,6 @@
 # DESIGN-PREP — independent review round 1
 
-Status: both reviews running; no verdict yet. Candidate `c0aa5cb386a6b98ff8fa7c95d123d4f50d5bc378`; applicable documentation diff base `c0bc4fcae7a0238b532bcac9b9dd56b4e5c0494a`. Source research author `9d449e1`, staged `cbc2fc6`; root critic brief at `a2cb19f` with status/link updates at candidate. No prior round or findings.
+Status: Sol independently **ACCEPTS DESIGN-PREP**; Astra is still running. Paired acceptance is pending. Candidate `c0aa5cb386a6b98ff8fa7c95d123d4f50d5bc378`; applicable documentation diff base `c0bc4fcae7a0238b532bcac9b9dd56b4e5c0494a`. Source research author `9d449e1`, staged `cbc2fc6`; root critic brief at `a2cb19f` with status/link updates at candidate. No prior round or findings.
 
 ## Bounded acceptance scope
 
@@ -23,4 +23,6 @@ Live selections verified; separate T3 worktrees; neither authored the report or 
 
 ## Findings and continuation
 
-Pending. On completion, read task_status, preserve both full reports, reconcile every substantive finding and record exact fixes/dispositions. If corrected, freeze a new SHA and use fresh delegate_task calls with original brief, both reports, dispositions and unresolved objections. Accept this preparation batch only when both explicitly accept the same revision. The actual M3-to-M4 design critique remains a separate future task.
+[Full Sol report](DESIGN-PREP-R1-SOL.md): ACCEPT at the exact candidate, no required corrections. Sol independently retrieved all ten primary-source texts and confirmed consequential attributions/claims, source/inference distinctions, scope preservation and critique procedure. It performed no browser/gameplay work and grants no M1 acceptance. No live children or owned resources remain. Root confirmed the five scoped deliverable files are unchanged since the candidate.
+
+Astra remains running with no pending question or children. Do not send Sol findings to it before its independent initial result. On Astra completion, read task_status, preserve its full report, reconcile every substantive finding and record exact fixes/dispositions. If corrected, freeze a new SHA and use fresh delegate_task calls with original brief, both reports, dispositions and unresolved objections. Accept this preparation batch only when both explicitly accept the same revision. The actual M3-to-M4 design critique remains a separate future task.

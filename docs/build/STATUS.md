@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. M0 is accepted at `d415436`; M1 remains unaccepted. Main Sol's source/evidence and the completed Astra coordination audit are preserved on provisional feature branch `feat/siltwake-first-expedition`. Root reproduced two immediate-save defects despite 97 passing tests. Bounded Sol max M1-A0 is running, before parallel visual/presentation work. Dedicated design-critic research has returned and paired independent review is running; the actual end-stage critic is still scheduled for M3-to-M4.
+Updated: 2026-10-17. M0 is accepted at `d415436`; M1 remains unaccepted. Main Sol's source/evidence and the completed Astra coordination audit are preserved on provisional feature branch `feat/siltwake-first-expedition`. Root reproduced two immediate-save defects despite 97 passing tests. Bounded Sol max M1-A0 is running, before parallel visual/presentation work. Sol independently accepts the design research/critic brief; Astra review remains running, so paired acceptance is pending; the actual end-stage critic is still scheduled for M3-to-M4.
 
 ## Authority and checkpoint
 
@@ -17,7 +17,7 @@ All M0/component authors/reviewers and both recent Astra advisory/research tasks
 
 Root ran fresh install, 97 tests/typecheck/build and M1 economy checks on the preserved source. [Staging evidence](evidence/M1-STAGING.md) records those checks and confirmed command/save defects. [Astra advice](evidence/M1-COORDINATION-ASTRA.md) supports a short shared-interface correction, then exclusive main-core/visual/presentation roles; no large extraction or restart. [M1-A0](tasks/M1-A0.md) is running on Sol max from `c0aa5cb386a6b98ff8fa7c95d123d4f50d5bc378`. Main owns core/shared paths; no dependent specialist starts before its committed baseline. [Task ledger](TASKS.md) owns exact task/model IDs and live state.
 
-Research source `9d449e1` is provisionally staged as `cbc2fc6`, only `docs/research/04-game-design-review.md`. It is not accepted yet and is not gameplay evidence. Fresh Astra xhigh/Sol max review of the research and critic brief is running alongside A0, filling four slots including root; neither research author nor advisory author counts as an independent reviewer of its own contribution.
+Research source `9d449e1` is provisionally staged as `cbc2fc6`, only `docs/research/04-game-design-review.md`. It is not accepted yet and is not gameplay evidence. Sol max independently ACCEPTS the research/critic brief at `c0aa5cb` with no required corrections; Astra xhigh is still reviewing. Three active agents including root, A0 builder and Astra reviewer; neither research author nor advisory author counts as an independent reviewer of its own contribution.
 
 ## Acceptance and evidence
 

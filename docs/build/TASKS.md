@@ -103,3 +103,8 @@ All three tasks are async T3-isolated worktrees from `c0aa5cb386a6b98ff8fa7c95d1
 ### Provisional M1 PR
 
 [Draft PR #4](https://github.com/lakeczar/subnautica-clone/pull/4), `feat/siltwake-first-expedition` → `game/siltwake`, is created and T3-linked. Body/head/base/draft verified; known save defects, incomplete playable evidence and no M1 acceptance are explicit. Continuing PR #3 links it; source remains outside the accepted integration branch. Both descriptions distinguish the research review from actual gameplay/design acceptance. No main merge or public deployment.
+
+
+### DESIGN-PREP Sol result received
+
+Terminal result read for `siltwake-design-prep-sol-r1-c0aa5cb`: **ACCEPT DESIGN-PREP** at `c0aa5cb386a6b98ff8fa7c95d123d4f50d5bc378`, no required corrections. [Full report](reviews/DESIGN-PREP-R1-SOL.md). Ten primary sources independently retrieved; no gameplay/browser claim, source edits or live children. Astra review remains running with no pending question/children; main A0 continues. Three active agents including root. Root verified the five scoped documents are unchanged from the reviewed candidate. No paired acceptance until Astra returns; do not share Sol findings with its independent initial review.
