@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: both independent reviews returned foundation changes required; both accepted the provisional economy proposal at `2eb0244`. Consolidated foundation correction assignment is ready for Sol 6.1 max. M0 remains pending.
+Updated: 2026-10-17. State: both independent reviews returned foundation changes required; both accepted the provisional economy proposal at `2eb0244`. Sol 6.1 max is implementing the consolidated foundation corrections in an isolated worktree. M0 remains pending.
 
 ## Authority and checkpoint
 
@@ -13,7 +13,7 @@ Updated: 2026-10-17. State: both independent reviews returned foundation changes
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-FND-01 and ECO-01 authors and both round-one reviewers have completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. [Round-one record, findings/dispositions and exact task IDs](reviews/FND-ECO-R1.md). Coordinator is dispatching the consolidated correction task to Sol 6.1 max in an isolated worktree.
+FND-01 and ECO-01 authors and both round-one reviewers have completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. [Round-one record, findings/dispositions and exact task IDs](reviews/FND-ECO-R1.md). The Sol 6.1 max correction task is running from `322d419` in an isolated worktree; its exact task/request IDs are in [TASKS.md](TASKS.md#active-correction-task). Two active agents including coordinator.
 
 ## Acceptance and evidence
 
@@ -26,7 +26,7 @@ FND-01 and ECO-01 authors and both round-one reviewers have completed. Exact IDs
 
 ## Exact next action
 
-Execute [the consolidated correction assignment](tasks/FND-01-R1-FIX.md) through the main Sol builder; exact active task ID goes in TASKS.md after dispatch. Sol independently confirmed the two save defects; Astra additionally found the vulnerable Vite pin. All three findings are accepted. No source correction has been made yet. Both initial review reports remain preserved and must accompany the fresh paired round-two review.
+Wait for the running correction task's completion notification; do not duplicate it. Read its result using the exact ID in TASKS.md, inspect returned commits and evidence, cherry-pick assigned corrections, reconcile contracts and rerun coordinator checks. Then freeze one round-two candidate and dispatch fresh Astra xhigh and separate Sol 6.1 max reviews. All three findings are accepted; both original reports/dispositions must accompany the new tasks. The parent source is unchanged until the builder's correction commits are integrated.
 
 Reconcile independent findings, have Sol fix substantiated issues and return the corrected revision to both reviewers. After acceptance, integrate through a feature PR and verify the integrated M0 milestone before dependent implementation. ECO-01 is provisional arithmetic, not runtime routes or recovery proof; later production-registry adoption needs its own integration review. No additional owner decision is needed to continue.
 
