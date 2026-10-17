@@ -6,6 +6,9 @@ import {
   ShaderMaterial, Effect, TransformNode, DynamicTexture
 } from '@babylonjs/core';
 import '@babylonjs/core/Rendering/outlineRenderer';
+import { createEnvironment, terrainHeight } from './assets/environment.js';
+import { createVehicles } from './assets/vehicles.js';
+import { createEcology } from './assets/ecology.js';
 
 const canvas = document.querySelector('#scene');
 const engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true }, false);
@@ -14,8 +17,9 @@ const params = new URLSearchParams(location.search);
 let variant = params.get('variant') === 'cel' ? 'cel' : 'voxel';
 let view = ['reef', 'pod', 'scout', 'island'].includes(params.get('view')) ? params.get('view') : 'reef';
 let dusk = params.get('light') === 'dusk';
-let paused = false;
-let scene, camera, toon, voxelMaterial, sun, ambient, water, animals = [];
+let paused = params.get('still') === '1';
+let renderDirty = true, interactionUntil = 0, modules = [], moduleStats = [];
+let scene, camera, toon, voxelMaterial, sun, ambient, water;
 let elapsed = 0, previousFrame = 0, samples = [], frameIntervals = [], renderedFrames = 0;
 const V = (x,y,z) => new Vector3(x,y,z);
 const C = hex => Color3.FromHexString(hex);
@@ -42,11 +46,15 @@ Effect.ShadersStore.siltToonFragmentShader = [
   'precision highp float;',
   'varying vec3 vNormal; varying vec3 vWorld; varying vec4 vColor;',
   'uniform vec3 cameraPosition; uniform vec3 fogColor; uniform float fogDensity;',
-  'uniform vec3 lightDirection; uniform float exposure;',
+  'uniform vec3 lightDirection; uniform float exposure; uniform float time;',
   'void main(){vec3 n=normalize(vNormal); float d=dot(n,normalize(lightDirection));',
-  'float band=d>0.62?1.13:(d>0.14?0.89:(d>-0.30?0.66:0.44));',
+  'float band=d>0.62?1.13:(d>0.14?0.91:(d>-0.30?0.70:0.51));',
   'float rim=pow(1.0-max(0.0,dot(n,normalize(cameraPosition-vWorld))),3.0);',
   'vec3 shade=vColor.rgb*band*exposure+vec3(0.035,0.09,0.10)*rim;',
+  'float ripple=sin(vWorld.x*1.2+vWorld.z*.35+time*.4)*sin(vWorld.z*1.45-vWorld.x*.25-time*.3);',
+  'float caustic=smoothstep(.73,.95,ripple)*max(n.y,0.0)*(1.0-smoothstep(8.8,10.0,vWorld.y));',
+  'shade+=vec3(.12,.16,.10)*caustic*exposure;',
+  'shade*=mix(.84,1.0,smoothstep(-15.0,7.0,vWorld.y));',
   'float haze=1.0-exp(-length(cameraPosition-vWorld)*fogDensity);',
   'gl_FragColor=vec4(mix(shade,fogColor,clamp(haze,0.0,0.94)),1.0);}'
 ].join('\n');
@@ -130,185 +138,7 @@ class Sculpture {
   }
 }
 
-function height(x,z) {
-  return -13 + Math.sin(x*.16)*1.2 + Math.cos(z*.15)*1.1
-    + 34*Math.exp(-((x+29)**2/170+(z-36)**2/280))
-    + 17*Math.exp(-((x+39)**2/80+(z-46)**2/110))
-    + 3*Math.exp(-((x-20)**2/220+(z-12)**2/180));
-}
-function terrainColor(y,x,z) {
-  if(y>13.2)return colors.fern;
-  if(y>7.2)return colors.shore;
-  if(y>2)return colors.stone;
-  if(Math.sin(x*.29+z*.15)>.5)return colors.deep;
-  return colors.sand;
-}
-function createTerrain() {
-  if(variant==='voxel'){
-    const land=new Sculpture('stepped-seafloor');
-    for(let x=-69;x<69;x+=3)for(let z=-48;z<90;z+=3){
-      const top=Math.round(height(x,z)/1.5)*1.5;
-      land.box([x,(-23+top)/2,z],[3,top+23,3],terrainColor(top,x,z));
-    } land.finish(false);
-  }else{
-    const positions=[],indices=[],colorData=[],normals=[];
-    const n=60,step=2.4;
-    for(let z=0;z<=n;z++)for(let x=0;x<=n;x++){
-      const px=-72+x*step,pz=-50+z*step,y=height(px,pz),c=C(terrainColor(y,px,pz));
-      positions.push(px,y,pz);colorData.push(c.r,c.g,c.b,1);
-    }
-    for(let z=0;z<n;z++)for(let x=0;x<n;x++){
-      const a=z*(n+1)+x;indices.push(a,a+n+1,a+1,a+1,a+n+1,a+n+2);
-    }
-    VertexData.ComputeNormals(positions,indices,normals);
-    const data=new VertexData(), mesh=new Mesh('sculpted-seafloor',scene);
-    data.positions=positions;data.indices=indices;data.normals=normals;data.colors=colorData;
-    data.applyToMesh(mesh);mesh.material=toon;mesh.useVertexColors=true;
-  }
-}
-
-function createReef() {
-  const rock=new Sculpture('reef-arch',1.05);
-  for(let i=0;i<11;i++){
-    const t=i/10*Math.PI;
-    rock.ellipsoid([6+Math.cos(t)*9,-11+Math.sin(t)*11,18],[3,3.4,2.8],i%3===0?colors.moss:colors.stone,1.05);
-  }
-  const rr=seeded(300);
-  for(let i=0;i<24;i++){
-    const x=(rr()-.5)*78,z=rr()*65-12;
-    rock.ellipsoid([x,height(x,z)+.4,z],[1.8+rr()*3,1.2+rr()*2,1.5+rr()*2],i%3?colors.stone:colors.moss,1.05);
-  }
-  rock.finish();
-  const reef=new Sculpture('coral-gardens',.45);
-  const sites=[[-16,-17],[18,-16],[25,-6],[-27,2],[2,14],[20,19],[-13,17],[-3,-20],[30,31],[-38,17]];
-  sites.forEach(([x,z],i)=>{
-    const y=height(x,z),color=[colors.coral,colors.purple,colors.yellow][i%3];
-    for(let j=0;j<5;j++){
-      const bx=x+(j-2)*.72,bz=z+Math.sin(j*2.1),tall=2.2+random()*2.6;
-      reef.branch([[bx,y,bz],[bx+.1,y+tall*.5,bz],[bx+(j%2?1:-1),y+tall,bz+.4]],.42,color);
-      reef.branch([[bx,y+tall*.45,bz],[bx+1.2,y+tall*.65,bz-.7],[bx+1.5,y+tall*.9,bz-.9]],.25,color);
-    }
-    reef.ellipsoid([x+2.5,y+.8,z+2],[2.1,.8,1.5],colors.lime,.5);
-    reef.ellipsoid([x+2.5,y+1.2,z+2],[1.4,.4,1],colors.leaf,.5);
-  });
-  for(let i=0;i<15;i++){
-    const x=(random()-.5)*62,z=random()*55-18,y=height(x,z);
-    if(y>6)continue;
-    reef.ellipsoid([x,y+.5,z],[1.2,.45,1.2],colors.purple,.4);
-    reef.ellipsoid([x,y+1.1,z],[.85,.33,.85],colors.coral,.35);
-    reef.ellipsoid([x,y+1.65,z],[.6,.23,.6],colors.yellow,.3);
-  }
-  reef.finish();
-}
-
-function createKelp() {
-  const garden=new Sculpture('ribbon-forest',.5);
-  const positions=[[-24,-8],[-28,-6],[-30,-1],[29,2],[34,8],[32,12],[-23,20],[25,28],[-40,10]];
-  positions.forEach(([x,z],j)=>{
-    const y=height(x,z),h=8+(j%3)*1.9;
-    const pts=[];
-    for(let i=0;i<7;i++)pts.push([x+Math.sin(i*.7+j)*1.1,y+i*h/6,z+Math.sin(i*.5)*.7]);
-    garden.branch(pts,.28,colors.moss);
-    for(let i=1;i<6;i++){
-      const p=pts[i],dir=i%2?1:-1;
-      garden.branch([p,[p[0]+dir*1.2,p[1]+1,p[2]],[p[0]+dir*2.1,p[1]+1.3,p[2]+.3]],.45,colors.leaf);
-      if(i%2===0)garden.ellipsoid([p[0]+dir*1.6,p[1]+.9,p[2]],[.36,.56,.36],colors.yellow,.3);
-    }
-  });
-  garden.finish();
-}
-
-function createPod() {
-  const pod=new Sculpture('refuge-pod',.45);
-  pod.box([0,-3.1,0],[10,.65,8],colors.metal);
-  for(const x of [-3.5,3.5])for(const z of [-2.7,2.7])pod.box([x,-5,z],[.6,4,.6],colors.metal);
-  pod.ellipsoid([0,0,0],[4,3.1,3.1],colors.white,.45);
-  pod.ellipsoid([0,-.3,-2.45],[2.85,1.8,.72],colors.window,.35);
-  pod.box([0,-2.4,-3.15],[5,.2,.3],colors.yellow);
-  pod.box([0,2.8,.2],[2.7,.6,2.4],colors.yellow);
-  pod.box([0,3.3,.2],[1.9,.5,1.7],colors.metal);
-  pod.box([-3.6,-.2,0],[.5,4.7,2.5],colors.yellow);
-  pod.box([3.6,-.2,0],[.5,4.7,2.5],colors.yellow);
-  pod.box([0,-2.5,-4.6],[3.4,.25,2.4],colors.metal);
-  pod.box([1.55,-1.9,-4.6],[.12,1.2,2.4],colors.lime);
-  pod.branch([[2,2.4,1],[2,6,1],[2.3,6.4,1]],.12,colors.white);
-  pod.ellipsoid([2.3,6.5,1],[.3,.3,.3],colors.coral,.25);
-  const root=pod.finish();root.position=V(-13,-5,-1);root.rotation.y=-.15;
-  // The warm window strips are in-scene geometry, not a painted screenshot.
-  const strips=new Sculpture('pod-window-strips',.2);
-  strips.box([0,.1,-3.16],[.13,3.1,.16],colors.lime);
-  strips.box([0,-.1,-3.22],[5.1,.13,.12],colors.lime);
-  strips.box([-2.8,-1,-3.1],[.2,.35,.2],colors.light);
-  strips.box([2.8,-1,-3.1],[.2,.35,.2],colors.light);
-  const s=strips.finish();s.parent=root;
-}
-
-function createScout() {
-  const ship=new Sculpture('scout-submersible',.34);
-  ship.ellipsoid([0,0,0],[1.9,1.45,4.6],colors.yellow,.34);
-  ship.ellipsoid([0,.55,-2.6],[1.48,1.22,1.8],colors.window,.3);
-  ship.ellipsoid([0,.5,-3.25],[1.15,.93,1.1],colors.metal,.3);
-  ship.ellipsoid([0,.6,-3.8],[.92,.66,.5],colors.window,.25);
-  ship.box([0,1.55,-1],[.23,.23,2.3],colors.white);
-  ship.box([0,-1.05,-.5],[1.4,.45,6.2],colors.white);
-  for(const side of [-1,1]){
-    ship.ellipsoid([side*2.7,-.15,1],[.75,.8,2.2],colors.white,.3);
-    ship.ellipsoid([side*2.7,-.15,2.7],[.62,.65,.45],colors.ink,.3);
-    ship.ellipsoid([side*2.7,-.15,2.95],[.29,.31,.25],colors.light,.22);
-    ship.box([side*2,-.4,.5],[2,.3,1.9],colors.metal);
-    ship.box([side*1.1,.05,-4],[.35,.35,.35],colors.light);
-  }
-  ship.branch([[0,.6,2.5],[0,2.6,3.2],[0,2.2,4.4]],.3,colors.yellow);
-  const root=ship.finish();root.position=V(9,-3,-4);root.rotation.y=-.5;
-  animals.push({root,kind:'scout',base:root.position.clone(),phase:0});
-}
-
-function createIslandPlants() {
-  const plants=new Sculpture('island-plants',.7);
-  for(let i=0;i<12;i++){
-    const x=-35+random()*18,z=28+random()*18,y=height(x,z);
-    if(y<11)continue;
-    plants.branch([[x,y,z],[x+.4,y+2.4,z],[x+1,y+5,z+.5]],.5,colors.metal);
-    for(let j=0;j<5;j++){
-      const a=j/5*Math.PI*2;
-      plants.ellipsoid([x+1+Math.cos(a)*1.7,y+4.8,z+.5+Math.sin(a)*1.7],[2.1,.6,1.4],j%2?colors.leaf:colors.fern,.65);
-    }
-  }plants.finish();
-  const station=new Sculpture('island-research-remnant',.65);
-  const x=-27,z=35,y=height(x,z);
-  station.box([x,y+1.2,z],[6,2.4,4],colors.white);
-  station.box([x,y+2.5,z],[7,.4,5],colors.metal);
-  station.box([x,y+1.2,z-2.05],[3.8,.9,.15],colors.window);
-  station.branch([[x+2,y+2.7,z],[x+2,y+7,z]],.2,colors.yellow);
-  station.ellipsoid([x+2,y+7,z],[1,.5,1],colors.yellow,.5);
-  station.finish();
-}
-
-function createFish() {
-  for(let i=0;i<24;i++){
-    const fish=new Sculpture('reef-fish',.16);
-    const col=i%4===0?colors.coral:i%3===0?colors.lime:colors.yellow;
-    fish.ellipsoid([0,0,0],[.75,.35,.19],col,.16);
-    fish.ellipsoid([-.74,0,0],[.3,.44,.11],colors.white,.14);
-    fish.ellipsoid([.45,.08,-.18],[.075,.075,.075],colors.ink,.1);
-    fish.ellipsoid([.45,.08,.18],[.075,.075,.075],colors.ink,.1);
-    const root=fish.finish();
-    const group=i<15?0:1;
-    const base=V(group===0?4+(i%5)*1.8:-10+(i%3)*1.7,group===0?2+(i%3)*.55:-6+(i%4)*.6,group===0?7+(i%3)*1.3:-12+(i%4));
-    root.position.copyFrom(base);root.scaling.setAll(.65+random()*.45);
-    animals.push({root,kind:'fish',base,phase:i*.6,group});
-  }
-  for(let i=0;i<3;i++){
-    const animal=new Sculpture('ribbon-swimmer',.35);
-    animal.ellipsoid([0,0,0],[2,.45,1.7],colors.purple,.35);
-    animal.ellipsoid([-2,.02,.3],[1.4,.2,1.6],colors.coral,.35);
-    animal.ellipsoid([2,.02,.3],[1.4,.2,1.6],colors.coral,.35);
-    animal.branch([[0,0,1],[0,-.3,3],[.4,-.7,4.4]],.16,colors.purple);
-    const root=animal.finish(),base=V(12+i*6,6+i*.7,30+i*4);
-    root.position.copyFrom(base);root.scaling.setAll(.7+i*.2);
-    animals.push({root,kind:'ray',base,phase:i});
-  }
-}
+const height = terrainHeight;
 
 function createWater() {
   const texture=new DynamicTexture('water-ripples',{width:512,height:512},scene,false);
@@ -319,8 +149,8 @@ function createWater() {
       const y=i*11+Math.sin(x*.025+i)*5+Math.sin(x*.06-i)*3;
       if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
     }ctx.stroke();
-  }texture.update();texture.uScale=8;texture.vScale=8;
-  water=MeshBuilder.CreateGround('water-surface',{width:700,height:700,subdivisions:1},scene);
+  }texture.update();texture.uScale=46;texture.vScale=46;
+  water=MeshBuilder.CreateGround('water-surface',{width:4000,height:4000,subdivisions:1},scene);
   water.position.y=10;
   const m=new StandardMaterial('water-surface-material',scene);
   m.diffuseTexture=texture;m.diffuseColor=C('#8cd8cf');m.specularColor=C('#eef5b6');
@@ -330,8 +160,7 @@ function createWater() {
   const dust=new Sculpture('suspended-matter',.1);
   for(let i=0;i<95;i++){
     const p=[(random()-.5)*70,-9+random()*19,-20+random()*60];
-    if(variant==='voxel')dust.cube(p,[.055,.055,.055],colors.light);
-    else dust.ellipsoid(p,[.04,.04,.04],colors.light);
+    dust.cube(p,[.045,.045,.045],colors.light);
   }dust.finish(false);
   const rayMat=new StandardMaterial('water-light-shaft',scene);
   rayMat.diffuseColor=C('#b0e8d9');rayMat.emissiveColor=C('#8acdc0');rayMat.alpha=.035;rayMat.backFaceCulling=false;rayMat.disableLighting=true;
@@ -341,24 +170,57 @@ function createWater() {
   }
 }
 
+function createGrounding() {
+  // Soft procedural contact shade gives the study's static forms a seabed anchor.
+  // It is an authored art cue, not a demonstrated production shadow system.
+  const tex=new DynamicTexture('soft-contact',{width:128,height:128},scene,false);
+  const ctx=tex.getContext(),g=ctx.createRadialGradient(64,64,8,64,64,64);
+  g.addColorStop(0,'rgba(7,35,46,.37)');g.addColorStop(.5,'rgba(7,35,46,.19)');g.addColorStop(1,'rgba(7,35,46,0)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,128,128);tex.update();tex.hasAlpha=true;
+  const mat=new StandardMaterial('contact-shade',scene);
+  mat.diffuseTexture=tex;mat.useAlphaFromDiffuseTexture=true;mat.disableLighting=true;mat.emissiveColor=Color3.White();mat.backFaceCulling=false;mat.zOffset=-1;
+  for(const [x,z,w,d] of [[-13,-1,15,13],[9,-4,9,9],[-3,18,10,8],[15,18,10,8]]){
+    const mesh=new Mesh('seabed-contact',scene),data=new VertexData();
+    const positions=[],uvs=[],indices=[],normals=[],step=variant==='voxel'?2.3:1;
+    const left=x-w/2,right=x+w/2,front=z-d/2,back=z+d/2;
+    const startX=variant==='voxel'?-69+Math.floor((left+69)/step)*step:left;
+    const startZ=variant==='voxel'?-48+Math.floor((front+48)/step)*step:front;
+    for(let sx=startX;sx<right;sx+=step)for(let sz=startZ;sz<back;sz+=step){
+      const a=Math.max(sx,left),b=Math.min(sx+step,right),c=Math.max(sz,front),e=Math.min(sz+step,back);
+      const top=Math.round(height(sx+step/2,sz+step/2)/.85)*.85;
+      const base=positions.length/3;
+      for(const [px,pz] of [[a,c],[a,e],[b,e],[b,c]]){
+        positions.push(px,(variant==='voxel'?top:height(px,pz))+.06,pz);
+        normals.push(0,1,0);uvs.push((px-left)/w,(pz-front)/d);
+      }indices.push(base,base+1,base+2,base,base+2,base+3);
+    }
+    data.positions=positions;data.normals=normals;data.uvs=uvs;data.indices=indices;data.applyToMesh(mesh);
+    mesh.material=mat;mesh.isPickable=false;
+  }
+}
+
 const cameras={
   reef:{position:[29,3,-45],target:[-1,-3,9]},
   pod:{position:[4,0,-22],target:[-13,-4.5,-1]},
-  scout:{position:[29,2,0],target:[9,-3,-3]},
-  island:{position:[35,45,-42],target:[-19,6,24]}
+  scout:{position:[23,2,-19],target:[9,-3,-4]},
+  island:{position:[10,31,-8],target:[-28,19,36]}
 };
 function applyCamera() {
+  renderDirty=true;
   const p=cameras[view];camera.setTarget(V(...p.target));camera.setPosition(V(...p.position));
   camera.lowerRadiusLimit=8;camera.upperRadiusLimit=130;
   document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('selected',b.dataset.view===view));
   updateAtmosphere();
 }
 function updateAtmosphere() {
+  renderDirty=true;
   const surface=view==='island';
   const fog=dusk?(surface?'#5c7391':'#124957'):(surface?'#8bd0d3':'#348997');
   scene.fogColor=C(fog);scene.clearColor=Color4.FromColor3(C(fog),1);
-  scene.fogDensity=surface?.0028:.007;
-  sun.intensity=dusk?.65:1.25;ambient.intensity=dusk?.75:1.12;
+  scene.fogDensity=surface?.0028:.009;
+  canvas.style.background=surface?(dusk?'linear-gradient(#24364e,#8d9ca7)':'linear-gradient(#79becd,#c8e3db)'):(dusk?'linear-gradient(#18566a,#082f46)':'linear-gradient(#51a4ad,#185669)');
+  scene.clearColor=new Color4(0,0,0,0);
+  sun.intensity=dusk?.65:1.1;ambient.intensity=dusk?.65:.92;
   toon.setColor3('fogColor',scene.fogColor);toon.setFloat('fogDensity',scene.fogDensity);
   toon.setFloat('exposure',dusk?.8:1.13);
   water.material.alpha=surface?.68:.16;
@@ -382,7 +244,7 @@ function syncUI() {
 }
 function build() {
   if(scene)scene.dispose();
-  animals=[];random=seeded(74);samples=[];frameIntervals=[];previousFrame=0;elapsed=0;
+  modules=[];moduleStats=[];renderDirty=true;random=seeded(74);samples=[];frameIntervals=[];previousFrame=0;elapsed=0;
   scene=new Scene(engine);scene.fogMode=Scene.FOGMODE_EXP;
   scene.imageProcessingConfiguration.exposure=1.06;scene.imageProcessingConfiguration.contrast=1.08;
   camera=new ArcRotateCamera('study-camera',-.8,1.3,58,V(0,-3,9),scene);
@@ -395,15 +257,21 @@ function build() {
   sun=new DirectionalLight('sun',V(.4,-1,.35),scene);sun.diffuse=C('#fff1bf');
   toon=new ShaderMaterial('illustrated-material',scene,{vertex:'siltToon',fragment:'siltToon'},{
     attributes:['position','normal','color'],
-    uniforms:['world','worldViewProjection','cameraPosition','fogColor','fogDensity','lightDirection','exposure']
+    uniforms:['world','worldViewProjection','cameraPosition','fogColor','fogDensity','lightDirection','exposure','time']
   });
   toon.setVector3('lightDirection',V(-.4,1,-.35));toon.backFaceCulling=false;
   voxelMaterial=new StandardMaterial('voxel-palette',scene);
   voxelMaterial.diffuseColor=Color3.White();voxelMaterial.specularColor=Color3.Black();
   voxelMaterial.ambientColor=C('#67968c');
-  createTerrain();createReef();createKelp();createPod();createScout();createIslandPlants();createFish();createWater();
+  const ctx={scene,variant,Sculpture,colors,V,C,seeded,height,paint,toon,voxelMaterial};
+  for(const [name,create] of [['environment',createEnvironment],['vehicles',createVehicles],['ecology',createEcology]]){
+    const before={meshes:scene.meshes.length,vertices:scene.meshes.reduce((n,m)=>n+m.getTotalVertices(),0)};
+    modules.push(create(ctx));
+    moduleStats.push({name,meshes:scene.meshes.length-before.meshes,vertices:scene.meshes.reduce((n,m)=>n+m.getTotalVertices(),0)-before.vertices});
+  }
+  createWater();createGrounding();
   applyCamera();syncUI();syncURL();
-  scene.executeWhenReady(()=>{document.querySelector('#loading').classList.add('loaded');setTimeout(()=>{document.querySelector('#loading').hidden=true;},550);window.dispatchEvent(new Event('art-study-ready'));});
+  scene.executeWhenReady(()=>{renderDirty=true;document.querySelector('#loading').classList.add('loaded');setTimeout(()=>{document.querySelector('#loading').hidden=true;},550);window.dispatchEvent(new Event('art-study-ready'));});
 }
 
 function chooseStyle(next) {
@@ -417,7 +285,7 @@ for(const id of ['previous','next'])document.querySelector('#'+id).addEventListe
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view;applyCamera();syncURL();}));
 document.querySelector('#light-toggle').addEventListener('click',()=>{dusk=!dusk;updateAtmosphere();syncURL();});
 document.querySelector('#motion-toggle').addEventListener('click',()=>{
-  paused=!paused;document.querySelector('#motion-toggle').setAttribute('aria-pressed',String(paused));
+  paused=!paused;renderDirty=true;document.querySelector('#motion-toggle').setAttribute('aria-pressed',String(paused));
   document.querySelector('#motion-toggle span').textContent=paused?'Resume life':'Pause life';
 });
 document.querySelector('#reset-camera').addEventListener('click',applyCamera);
@@ -432,36 +300,32 @@ window.addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();chooseStyle(variant==='voxel'?'cel':'voxel');}
   if(e.key==='Escape'){document.querySelector('#details').hidden=true;document.querySelector('#details-toggle').setAttribute('aria-expanded','false');}
 });
-window.addEventListener('resize',()=>engine.resize());
+window.addEventListener('resize',()=>{engine.resize();renderDirty=true;});
+for(const event of ['pointerdown','pointerup','pointermove','wheel','keydown'])canvas.addEventListener(event,()=>{renderDirty=true;interactionUntil=performance.now()+1600;},{passive:true});
 if(params.get('clean')==='1')document.body.classList.add('clean');
 build();
+document.querySelector('#motion-toggle').setAttribute('aria-pressed',String(paused));
+document.querySelector('#motion-toggle span').textContent=paused?'Resume life':'Pause life';
 engine.runRenderLoop(()=>{
   if(document.hidden)return;
-  const now=performance.now();if(now-previousFrame<1000/30)return;
-  if(previousFrame>0){frameIntervals.push(now-previousFrame);if(frameIntervals.length>180)frameIntervals.shift();}
+  const now=performance.now();
+  if(paused&&!renderDirty&&now>interactionUntil&&scene.isReady())return;
+  if(now-previousFrame<1000/30)return;
+  if(previousFrame>0&&!paused){frameIntervals.push(now-previousFrame);if(frameIntervals.length>180)frameIntervals.shift();}
   const dt=Math.min((now-previousFrame)/1000,.12);previousFrame=now;
   if(!paused)elapsed+=dt;
-  for(const a of animals){
-    if(a.kind==='fish'){
-      const t=elapsed*.23+a.phase;
-      a.root.position.set(a.base.x+Math.sin(t)*4,a.base.y+Math.sin(t*1.8)*.45,a.base.z+Math.cos(t)*2);
-      a.root.rotation.y=-Math.atan2(-Math.sin(t)*2,Math.cos(t)*4);
-      a.root.rotation.z=Math.sin(t*2)*.08;
-    }else if(a.kind==='ray'){
-      a.root.position.set(a.base.x+Math.sin(elapsed*.12+a.phase)*5,a.base.y+Math.sin(elapsed*.5+a.phase)*.5,a.base.z);
-      a.root.rotation.z=Math.sin(elapsed*.7+a.phase)*.08;
-    }else a.root.position.y=a.base.y+Math.sin(elapsed*.8)*.12;
-  }
+  for(const assetModule of modules)assetModule?.update?.(elapsed);
   water.material.diffuseTexture.uOffset=elapsed*.0013;
   toon.setVector3('cameraPosition',camera.position);
-  const start=performance.now();scene.render();samples.push(performance.now()-start);
+  toon.setFloat('time',elapsed);
+  const start=performance.now();scene.render();renderDirty=false;samples.push(performance.now()-start);
   if(samples.length>180)samples.shift();renderedFrames++;
 });
 Object.defineProperty(window,'artStudy',{value:{
   getState:()=>{
     const sorted=[...samples].sort((a,b)=>a-b),intervals=[...frameIntervals].sort((a,b)=>a-b),gl=engine.getGlInfo();
     return {variant,view,lighting:dusk?'blue-hour':'daylight',paused,ready:scene.isReady(),
-      meshes:scene.meshes.length,vertices:scene.getTotalVertices(),renderedFrames,
+      meshes:scene.meshes.length,vertices:scene.getTotalVertices(),moduleStats,renderedFrames,
       camera:{position:camera.position.asArray(),target:camera.target.asArray()},
       viewport:[engine.getRenderWidth(),engine.getRenderHeight()],webGL:engine.webGLVersion,
       renderer:gl.renderer,vendor:gl.vendor,
