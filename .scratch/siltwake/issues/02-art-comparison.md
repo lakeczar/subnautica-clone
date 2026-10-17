@@ -36,3 +36,9 @@ At `3826db6`, `npm run build` passes. Production browser checks cover both style
 The original asset pack is a shallow-refuge art study. Resource seams are decorative, biology animations are authored motion, vehicle windows are opaque, and interiors/collisions/gameplay are absent. These limitations must remain visible when judging production feasibility.
 
 The integrated questionnaire asks the owner to choose voxel, cel developed toward vibrant naturalism, or another naturalism pass before deciding. The coordinator recommends the cel direction for readable creature and vehicle silhouettes. **No selection is recorded yet.** Preserve both variants and keep this ticket claimed until the owner's response; a recommendation is not their decision.
+
+## Owner feedback — finer voxel and richer cel study
+
+The owner prefers the voxel version substantially: "I like the voxel a lot better and it adds more detail," while liking the precision of specific assets. They asked whether cel could become more vibrant/detailed, or voxel blocks could become smaller for smoother detail. This supersedes the coordinator's earlier cel recommendation as the leading preference, but does not yet select a final treatment.
+
+A second bounded art pass is authorized: preserve the original viewer, add finer voxel geometry with precise technology details, and enrich the cel option with actual surface/colony detail and clearer local color. Three Sol max artists continue their owned environment, vehicle and ecology modules. Coordinator-owned lighting/integration will be compared with matching cameras; changes in lighting are part of this refinement, not presented as a geometry-only comparison. No game construction is authorized by this art request.

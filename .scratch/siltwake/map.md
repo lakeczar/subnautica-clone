@@ -43,4 +43,4 @@ A coherent, user-reviewed game specification and complete Astra build input for 
 
 ## Art study
 
-[Compare two feasible visual directions](issues/02-art-comparison.md) links the completed original-graphics study from three GPT-6.1 Sol workers at max reasoning, coordinated by Astra; the owner’s style selection remains pending. The full game input will preserve this graphics delegation preference. Source/evidence stay on the throwaway art branch; this map remains the planning index.
+[Compare two feasible visual directions](issues/02-art-comparison.md) links the completed original-graphics study from three GPT-6.1 Sol workers at max reasoning, coordinated by Astra; the owner prefers voxel and has requested finer blocks plus a richer cel comparison before selecting the final treatment. The full game input will preserve this graphics delegation preference. Source/evidence stay on the throwaway art branch; this map remains the planning index.

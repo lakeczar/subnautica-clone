@@ -4,7 +4,7 @@ The owner requested **GPT-6.1 Sol at maximum reasoning** to create graphics from
 
 ## Current study
 
-The separate `prototype/siltwake-art-directions` branch holds an actual Babylon.js scene comparing voxel and cel-shaded constructions of the same subjects. Three Sol max workers author environment/ruins, vehicles/pod, and ecology. The coordinator owns interfaces, atmosphere, cameras, integration and evidence. The [art decision ticket](../.scratch/siltwake/issues/02-art-comparison.md) owns the human choice and source/evidence pointers. No winning style has been selected.
+The separate `prototype/siltwake-art-directions` branch holds an actual Babylon.js scene comparing voxel and cel-shaded constructions of the same subjects. Three Sol max workers author environment/ruins, vehicles/pod, and ecology. The coordinator owns interfaces, atmosphere, cameras, integration and evidence. The [art decision ticket](../.scratch/siltwake/issues/02-art-comparison.md) owns the human choice and source/evidence pointers. The owner now prefers voxel and has requested a finer-block treatment preserving precise asset detail, plus a richer cel comparison before selecting the final treatment.
 
 Geometry and material source are original and deterministic. This establishes an editable source workflow and concrete visual samples. It does not establish collision quality, production rigs/LOD, complete vehicle interiors, interaction, streaming, or target-hardware performance.
 

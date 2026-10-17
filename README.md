@@ -11,7 +11,7 @@ An original alien-ocean adventure being designed around discovery, a recoverable
 - Wonder comes first, with tense depths and comforting refuges.
 - The player wakes in a damaged pod with missing memories. Scans, personal journals and physical evidence gradually reveal what happened.
 - The starting pod provides storage, crafting and healing. Construction focuses on distinct scouts, utility craft and increasingly customizable mobile homes, supported by modest fixed outposts.
-- Compare original voxel and cel-shaded graphics, both with vibrant underwater atmosphere, before choosing an art direction.
+- Voxel is the current visual preference. Compare a finer-block treatment that preserves precise asset details with a richer cel-shaded revision before choosing the final treatment.
 - Astra coordinates the complete future game and its integration; GPT-6.1 Sol at **max** reasoning creates original graphics under shared art direction.
 
 The duration is a design target, not a measured result. The game has not been built or playtested. Browser delivery with TypeScript/Babylon.js is an earlier recommendation being evaluated; the small art viewer does not prove full-game performance.
