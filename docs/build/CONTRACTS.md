@@ -1,5 +1,13 @@
 # Shared implementation direction
 
+## Richer cel seams staged at 06927d5
+
+Source `b40d077` is assembled with current UI and carrier corrections; [root inspection](evidence/M1-LOOK-INTEGRATION.md). These remain provisional pending the new pair.
+
+- Internal `ArtBatch.leaf(path, widths, across, color, lip)` builds curved ridged membranes; `glow(mesh)` and optional `finish(contour = 0)` encode emission/contour in cel vertex alpha. The opaque cel shader consumes this metadata; transparent glazing retains its separate side attribute. Shared materials remain scene-owned, and gauges/geometry follow their owning hull lifecycle.
+- Regional/depth optical density and color change while the existing wet-segment/air-union geometry remains authoritative for rendering. Bounded pod/lab warm fill uses render-only world coordinates; future facility geometry changes must update those masks and existing optical air bounds together. No survival air authority changes.
+- Lab cladding reads existing `SOLIDS` floor/roof/rear/side faces; the port pane has an actual backing opening. Front and starboard approaches remain open. Dart cockpit charge/health bars read actual vessel state and inherit helm visibility/disposal. Seat, world heading/pitch, shared collision envelopes and renderer/factory public signatures remain unchanged.
+
 ## Carrier boundary additions staged at 9d1397d
 
 Source 1c8f719 plus exact-heading correction 53607cb, reconciled by root after combined 174 tests and targeted checks; still provisional until fresh paired acceptance. [Inspection](evidence/M1-CARRIER-YAW-INTEGRATION.md).

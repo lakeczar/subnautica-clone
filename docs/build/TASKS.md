@@ -423,3 +423,12 @@ Task `siltwake-m1-carrier-yaw-sol-max-e0ec3a9` terminal: Sol 6.1 max, no childre
 Carrier function/test ownership is released. LOOK remains the only active child on unchanged e06035d with render/lifecycle paths and port 5191. Root plus one builder; no root browser/server. Current UI invalidates historical presentation acceptance for the new candidate. Inspect the LOOK notification, assemble it, then dispatch fresh independent Astra xhigh and Sol max reviews. Integrated M1 and ordinary depleted-power proof remain open.
 
 Root checkpoint30b6411 pushed. PR #4/#3 refreshed and exact bodies/base/head/draft verified through GitHub API (`/tmp/siltwake-m1-pr/ui-yaw-verified-{3,4}.json`). #4 now shows the source-labelled opening/recovery pairs and0/6 revised-candidate acceptance; #3 retains M0-only65-test production. No additional source change or browser run. Await LOOK completion notification; no polling or duplicate builder.
+
+
+### LOOK completed, assembled and inspected
+
+Task `siltwake-m1-look-sol-max-e06035d` terminal: Sol 6.1 max, no children/questions, clean checkout and owned tab/server/recordings closed. Source `b40d077`/evidence `2342a8d` merged at `06927d5` with UI and carrier corrections. Eight owned render paths and the affected lifecycle test changed; no shared simulation/state/seat/public factory change. All author paths released.
+
+[Root inspection](evidence/M1-LOOK-INTEGRATION.md) records 174 tests/typecheck/build, all seven comparison HUD/camera matches, 22 inspected artifact hashes, author/combined bundle identities, earned input byte identity and nine save decodes. Root inspected actual author/reference images and fresh combined native opening plus three labelled diagnostic views. Current UI resolves the inherited console overlap. Root tab/server closed; 5190/5195/5196 free. No active children.
+
+Prepare fresh [R3 pair](tasks/M1-BATCH-REVIEW-R3.md) from one committed candidate, exact M0 diff base, whole original batch scope, both prior rounds/dispositions, carrier/UI/LOOK evidence and Opus follow-ups. Gate remains pending; no integrated M1 claim.
