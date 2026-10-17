@@ -325,3 +325,30 @@ test("recovery information follows visited caches and actual hull state without 
   view.refreshPanel(s);
   assert.ok(!get("panel-content").innerHTML.includes("Deploy Bobbin / local tow"), "repair actions are not presented as available for a healthy hull");
 });
+
+test("reopened Hold and Notebook retain saved recovery explanations without reviving unrelated feedback", (t) => {
+  const { view, get } = viewFixture(t);
+  const s = createGame(); completeOpening(s);
+  for (const message of [
+    "Bobbin reached the exterior collar. Confirm local tow to attach; no hull has moved.",
+    "Tow clearance blocked. Dart and cargo remain at this visited site. Approach locally for in-place repair or salvage.",
+    "Dart moored at the shallow rescue bench, with its original cargo, damage and charge. Apply a bound field patch and reserve cell locally.",
+  ]) {
+    s.feedback = message;
+    view.notify(message);
+    view.closePanel();
+    for (const panel of ["inventory", "notebook"] as const) {
+      view.openPanel(panel, JSON.parse(JSON.stringify(s)));
+      assert.ok(get("panel-content").innerHTML.includes(message), `${panel}: ${message}`);
+      view.refreshPanel(s);
+      assert.ok(get("panel-content").innerHTML.includes(message));
+      view.closePanel();
+    }
+  }
+  s.feedback = "Transferred 1 × Prepared reef meal to Diver hold.";
+  view.notify(s.feedback);
+  view.openPanel("inventory", s);
+  assert.equal(get("panel-feedback").hidden, true);
+  assert.ok(!get("panel-content").innerHTML.includes(s.feedback));
+  assert.ok(!get("panel-content").innerHTML.includes("Last recovery report"));
+});

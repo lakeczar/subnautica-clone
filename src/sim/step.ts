@@ -546,7 +546,8 @@ export function stepGame(
   }
   updateAction(s);
   updateBerth(s, world);
-  updateRecovery(s, world);
+  const recoveryEvent = updateRecovery(s, world);
+  if (recoveryEvent) events.push(recoveryEvent);
   updateThreat(s, loudness, events, world);
   updateSurvival(s, events);
   return { state: s, events };
