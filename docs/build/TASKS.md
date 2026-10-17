@@ -242,3 +242,16 @@ Root passed 132 tests/typecheck/build with identical final bundle and repeated t
 Task `siltwake-m1-recovery-fix-sol-max-124ff71` completed, no children/question, clean worktree and owned resources closed. Source `259b2d27c18012e2825a155ed6115b4d69a33d8e`, evidence `639548a52368bc9ce8acb43bdb6355f5c3f63756`; provisional merge with render `4d0a7f00e939f5535020ddf674fadee39f5e6bd4`. Root verified 268 payloads/269 archive entries, source blobs and actual captures; all137 tests/typecheck/build pass. Old earned approach/ready/attached replay completes, attached after945 steps with one rescue/notice and full hull/inventory conservation. [Inspection](evidence/M1-RECOVERY-FIX-INTEGRATION.md).
 
 No source author remains active. Live catalog reverified codex Sol6.1/max and Astra/xhigh. [Combined-play brief](tasks/M1-COMBINED-PLAY.md) prepares three evidence-only owners from a committed baseline: EXPEDITION port5190, RECOVERY port5193, CARRIER port5194, each its single named evidence file. These are validation authors, not the independent review pair. Root plus three fills four slots after dispatch. Production stays frozen; errors return to root for explicit assignment.
+
+
+### Combined-play tasks dispatched from e3ed566
+
+All three T3 async isolation:worktree, role test, provider codex, model gpt-6.1-sol, explicit reasoningEffort=max. Exact parent `e3ed566e0eb8951d7b492ba48005ab94f2129f94`, clean; production source `4d0a7f0`. Each accepted running with no pending children/question. Only root dispatches. These evidence authors do not serve as the subsequent non-author reviewers.
+
+| Scope | Exact task ID | Exclusive evidence file / port | Stable request |
+| --- | --- | --- | --- |
+| EXPEDITION P0–P3/return P5 | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-combined-expedition-sol-max-e3ed566` | `docs/build/evidence/M1-COMBINED-EXPEDITION.md` /5190 | `siltwake-m1-combined-expedition-sol-max-e3ed566` |
+| RECOVERY P4/recovery P5 | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-combined-recovery-sol-max-e3ed566` | `docs/build/evidence/M1-COMBINED-RECOVERY.md` /5193 | `siltwake-m1-combined-recovery-sol-max-e3ed566` |
+| CARRIER F0–F3 | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-combined-carrier-sol-max-e3ed566` | `docs/build/evidence/M1-COMBINED-CARRIER.md` /5194 | `siltwake-m1-combined-carrier-sol-max-e3ed566` |
+
+[Shared/exclusive brief](tasks/M1-COMBINED-PLAY.md). Expected JS `index-Ceft9taV.js`, SHA256 `df8da0d4e639b792b4f27beec29fedaec1a6a2cc8c1a4ca406b9c45b922a63b2`. Production, tests, config and coordinator records are read-only. Disjoint incognito storage/ports, original evidence preserved, no peer waiting or duplicate preparations. Completion notifications wake root. Root has no live browser/server. All four slots occupied; do not start acceptance reviewers until validation authors release their slots and complete evidence is inspected/frozen.
