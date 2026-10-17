@@ -47,7 +47,10 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
                 ? "#789c94"
                 : P.sand;
       if (Math.hypot(dx, dz) > 1.15) hex = py > 0 ? "#5c7f7e" : "#669894";
-      const c = Color3.FromHexString(hex);
+      // Upper Canopy sediment is cooler and lower in value than reef sand.
+      // Blend on the same physical height field; no extra shelf or false floor.
+      const canopy = Math.max(0, Math.min(1, (px - 60) / 30)) * Math.max(0, Math.min(1, (-py - 35) / 40));
+      const c = Color3.Lerp(Color3.FromHexString(hex), Color3.FromHexString(patch > .3 ? "#4b807a" : "#2e616c"), canopy);
       colors.push(c.r, c.g, c.b, 1);
       if (x < nx && z < nz) {
         const a = z * (nx + 1) + x,

@@ -9,13 +9,13 @@ import { opticalShader, opticalUniforms } from "./materials.js";
 const skyColor = `
 vec3 skyRadiance(vec3 d){
   float altitude=smoothstep(-.08,.8,d.y);
-  vec3 sky=mix(vec3(.78,.85,.72),vec3(.22,.57,.64),altitude);
+  vec3 sky=mix(vec3(.68,.84,.85),vec3(.19,.51,.68),altitude);
   float sun=dot(d,normalize(vec3(-.42,.45,-.68)));
   sky+=vec3(.22,.12,.01)*pow(max(0.0,sun),16.0);
   sky=mix(sky,vec3(1.0,.94,.71),smoothstep(.9992,.9996,sun));
   float cloud=sin(d.x*20.0+d.z*8.0+sin(d.z*15.0))*sin(d.z*26.0-d.x*8.0);
   float veil=smoothstep(.55,.85,cloud)*smoothstep(.01,.17,d.y)*(1.0-smoothstep(.22,.5,d.y));
-  return mix(sky,vec3(.85,.89,.79),veil*.32);
+  return mix(sky,vec3(.90,.93,.89),veil*.32);
 }
 `;
 
@@ -60,7 +60,7 @@ export function createAtmosphere(scene: Scene): { water: ShaderMaterial; sky: Sh
         float wave=sin(vWorld.x*1.12+vWorld.z*.27+time*.5+sin(vWorld.z*.51-time*.17)*.5);
         float line=smoothstep(.965,.995,wave);
         float distance=length(cameraPosition-vWorld),far=1.0-exp(-distance*.012);
-        vec3 color=mix(vec3(.19,.60,.61),vec3(.67,.80,.67),fresnel*.65+far*.25);
+        vec3 color=mix(vec3(.10,.51,.57),vec3(.60,.79,.79),fresnel*.65+far*.25);
         if(cameraPosition.y<0.0)color=mix(skyRadiance(ray),vec3(.17,.49,.55),.42);
         color+=vec3(.14,.16,.12)*line*(1.0-far);
         gl_FragColor=vec4(opticalFog(color,vWorld),.36+fresnel*.48+far*.15);

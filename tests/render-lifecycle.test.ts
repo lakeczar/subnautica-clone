@@ -4,7 +4,7 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { createExpeditionArt } from "../src/render/expedition.js";
 import { createCelMaterial, createGlassMaterial } from "../src/render/materials.js";
-import { createGame } from "../src/sim/state.js";
+import { createGame, makeVehicle } from "../src/sim/state.js";
 import { addItem } from "../src/sim/inventory.js";
 import { incapacitate } from "../src/sim/recovery.js";
 import { completeOpening } from "../src/sim/progression.js";
@@ -108,6 +108,41 @@ test("production expedition art reconciles cache ownership, contents and replace
     assert.equal(glassDisposed, false);
     assert.ok(scene.materials.includes(cel) && scene.materials.includes(glass));
     assert.deepEqual(loss, inputSnapshot, "art never changes physical records or inventory");
+
+    // The helm's real charge/hull bars belong to the craft/cockpit hierarchy.
+    // Replacing a save must remove the complete hierarchy and retain shared
+    // glazing/cel resources, including when that same craft ID is later reused.
+    art.update(null);
+    const piloting = createGame();
+    const dart = makeVehicle("render-dart", "dart", { x: 20, y: -4, z: -12 }, "render-hold");
+    piloting.fleet.vehicles.push(dart);
+    piloting.player.controlledVehicleId = dart.id;
+    piloting.player.mode = "piloting";
+    piloting.player.pose = structuredClone(dart.pose);
+    dart.charge = 42; dart.health = 73;
+    const pilotSnapshot = structuredClone(piloting);
+    art.update(piloting);
+    const bars = [scene.getMeshByName(`${dart.id}.instrument.charge`)!, scene.getMeshByName(`${dart.id}.instrument.health`)!];
+    assert.deepEqual(bars.map(b => b.scaling.x), [.42, .73]);
+    assert.ok(bars.every(b => b.isEnabled()));
+    dart.charge = 18; dart.health = 34;
+    art.update(piloting);
+    assert.deepEqual(bars.map(b => b.scaling.x), [.18, .34], "gauges track replaced physical values");
+    piloting.player.controlledVehicleId = null;
+    piloting.player.mode = "swimming";
+    art.update(piloting);
+    assert.ok(bars.every(b => !b.isEnabled()), "interior instruments are hidden outside the helm");
+    for (const replacement of [null, createGame(), null]) {
+      art.update(pilotSnapshot);
+      const oldHull = scene.getMeshByName(dart.id)!;
+      const oldChildren = oldHull.getChildMeshes();
+      assert.deepEqual([scene.getMeshByName(`${dart.id}.instrument.charge`)!.scaling.x, scene.getMeshByName(`${dart.id}.instrument.health`)!.scaling.x], [.42, .73]);
+      art.update(replacement);
+      assert.ok(oldHull.isDisposed() && oldChildren.every(m => m.isDisposed()));
+      assert.equal(scene.meshes.length, baselineMeshes);
+      assert.equal(scene.materials.length, baselineMaterials);
+      assert.equal(celDisposed || glassDisposed, false);
+    }
   } finally {
     scene.dispose();
     engine.dispose();

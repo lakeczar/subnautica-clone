@@ -12,7 +12,7 @@ import { ArtBatch } from "./geometry.js";
 import type { Point } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
 import { label } from "./landmarks.js";
-import { FACILITY_SOLIDS, terrainHeight } from "../sim/world.js";
+import { FACILITY_SOLIDS, SOLIDS, terrainHeight } from "../sim/world.js";
 import { createObservationPane, wallWithOpening } from "./materials.js";
 
 /** The structural descriptors remain the physical authority. Passage skins are
@@ -60,8 +60,8 @@ function carrierShellArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMateria
       b.box([cx, a.y + 0.18, z + toward * 0.002], [w - 0.4, 0.07, 0.007], accent);
       b.box([cx, a.y + 2.7, z + toward * 0.002], [w - 0.8, 0.06, 0.007], openSlot === slot ? P.ochre : P.mint);
       const name = configuration === "medium" ? "SERVICE BERTH" : slot === 0 ? "PORT / 01" : "STARBOARD / 02";
-      signs.push(label(scene, name, [cx, a.y + 3.4, z + toward * .022], w - 1.05, yaw));
-      signs.push(label(scene, openSlot === slot ? "TRANSFER / KEEP CLEAR" : "DRY / ISOLATED", [cx, a.y + 0.65, z + toward * .022], Math.min(2.7, w - 0.9), yaw));
+      signs.push(label(scene, name, [cx, a.y + 3.4, z + toward * .022], Math.min(2.3, w - 1.05), yaw));
+      signs.push(label(scene, openSlot === slot ? "TRANSFER / KEEP CLEAR" : "DRY / ISOLATED", [cx, a.y + 0.65, z + toward * .022], Math.min(1.65, w - 0.9), yaw));
     }
     for (const [x, yaw] of [[a.x - CARRIER_LAYOUT.wall - 0.002, Math.PI / 2], [c.x + CARRIER_LAYOUT.wall + 0.002, -Math.PI / 2]] as const) {
       // Side skins are flush. In particular, nothing projects into the 0.84 m
@@ -177,6 +177,12 @@ function dartArt(
     b.loft(
       [
         { z: -3.6, w: 0.15, low: 0.15, high: 0.6 },
+        { z: -2.6, w: .7833, low: .05, high: .7667 },
+      ], P.orange,
+    );
+    b.loft(
+      [
+        { z: -2.6, w: .7833, low: .05, high: .7667 },
         { z: -2.1, w: 1.1, low: 0, high: 0.85 },
         { z: 0.1, w: 1.85, low: 0, high: 0.9 },
         { z: 2.5, w: 1.15, low: 0.2, high: 0.75 },
@@ -194,8 +200,8 @@ function dartArt(
     b.box([0, 0.61, -2.2], [1.3, 0.2, 0.95], P.ochre);
     // Offset faceted canopy and broad framed stern drive, rather than paired engine tubes.
     const canopy = [
-      [-0.64, 0.8, -1.5],
-      [0.74, 0.8, -1.5],
+      [-0.78, 0.85, -1.5],
+      [0.94, 0.85, -1.5],
       [1, 1.95, 0.1],
       [-0.65, 1.95, 0.1],
     ] as const;
@@ -246,8 +252,9 @@ function dartArt(
     );
     // Pressure gasket, low boarding grip and one service coupling adapt the
     // original scout study. All extents remain inside the guided Dart envelope.
-    b.tube([canopy[0], canopy[1], canopy[2], canopy[3], canopy[0]], 0.035, P.metal, 6);
-    b.tube([[-0.65, 1.95, 0.1], [-0.85, 0.95, 1.03], [1.15, 0.95, 1.03], [1, 1.95, 0.1]], 0.035, P.steelLight, 6);
+    b.tube([canopy[0], canopy[1], canopy[2], canopy[3], canopy[0]], 0.024, P.petrol, 6);
+    b.tube([canopy[3], canopy[2]], .037, P.porcelain, 6);
+    b.tube([[-0.65, 1.95, 0.1], [-0.85, 0.95, 1.03], [1.15, 0.95, 1.03], [1, 1.95, 0.1]], 0.028, P.steelLight, 6);
     panes.push({ name: `${id}.pane.aft`, points: [[-.6, 1.96, .1], [.95, 1.96, .1], [.9, 1.1, 1.02], [-.78, 1.1, 1.02]] });
     b.panel([-1.2, 0.82, 0.1], [0.44, 0.2], 0.04, P.ochre, Math.PI / 2, 0.04);
     b.tube([[-1.29, 0.82, -0.04], [-1.29, 0.91, -0.04], [-1.29, 0.91, 0.22], [-1.29, 0.82, 0.22]], 0.025, P.steelLight, 5);
@@ -259,8 +266,14 @@ function dartArt(
         b.box([x, 0.78, 1.05 + i * 0.1], [0.34, 0.035, 0.045], P.metal);
     }
     b.ring([0, 0.8, 2.66], [1, 0, 0], [0, 1, 0], 0.32, 0.25, P.steelLight);
+    // Recessed service lines and warm chine flashes follow the existing loft.
+    for (const side of [-1, 1]) {
+      b.tube([[side * .73, .855, -2.1], [side * 1.24, .905, .1], [side * .77, .755, 2.45]], .018, P.seam, 4);
+      b.face([[side * 1.80, .30, .12], [side * 1.5, .60, .12], [side * 1.03, .59, 2.36], [side * 1.14, .37, 2.36]], P.orange);
+      b.glow(b.box([side * 2.28, .63, 1.65], [.10, .045, .18], side < 0 ? P.amber : P.mint));
+    }
   }
-  const mesh = b.finish();
+  const mesh = b.finish(hull === "dart" ? .55 : .25);
   mesh.unfreezeWorldMatrix();
   for (const pane of panes) createObservationPane(scene, glass, pane.name, pane.points, mesh);
   if (hull === "dart") {
@@ -269,17 +282,31 @@ function dartArt(
     const cockpit = new ArtBatch(`${id}.cockpit`, scene, cel);
     cockpit.box([.12, 1.04, .78], [.62, .18, .34], P.shade);
     cockpit.box([.12, 1.32, .92], [.53, .58, .12], P.petrol);
-    cockpit.box([.06, .98, -.98], [1.05, .15, .23], P.metal);
-    for (const x of [-.27, .2]) {
-      cockpit.panel([x, 1.055, -1.015], [.32, .15], .025, P.glass, 0, .025);
-      cockpit.box([x, 1.075, -.982], [.2, .018, .012], P.mint);
+    cockpit.panel([.06, .85, -.96], [1.02, .15], .25, P.petrol, 0, .065);
+    cockpit.face([[-.45, .94, -1.0], [.57, .94, -1.0], [.57, .87, -.66], [-.45, .87, -.66]], P.metal);
+    for (const x of [-.26, .23]) {
+      cockpit.box([x, .957, -.91], [.34, .025, .19], P.ink);
+      for (const dx of [-.1, 0, .1])
+        cockpit.box([x + dx, .935, -.72], [.045, .025, .045], P.ochre);
     }
+    // Lightning and shield silhouettes name the two real state bars. There is
+    // no invented depth/radar readout; the accurate HUD remains the fallback.
+    cockpit.face([[-.42,.98,-.93],[-.38,.98,-.93],[-.41,.98,-.86],[-.37,.98,-.86],[-.44,.98,-.79],[-.42,.98,-.86],[-.46,.98,-.86]], P.amber);
+    cockpit.face([[.06,.98,-.93],[.10,.98,-.93],[.10,.98,-.84],[.08,.98,-.81],[.06,.98,-.84]], P.mint);
     for (const x of [-.48, .62]) {
-      cockpit.tube([[x, .91, -.4], [x, 1.08, -.46]], .025, P.ochre, 5);
-      cockpit.box([x, 1.09, -.46], [.13, .045, .09], P.ink);
+      cockpit.tube([[x, .77, -.25], [x, .91, -.32], [x + .04, .94, -.40]], .023, P.metal, 6);
+      cockpit.tube([[x - .07, .94, -.39], [x + .06, .94, -.39]], .035, P.ink, 7);
+      cockpit.box([x + .06, .95, -.40], [.025, .018, .035], P.ochre);
     }
     const fittings = cockpit.finish();
     fittings.unfreezeWorldMatrix(); fittings.parent = mesh; fittings.renderingGroupId = 1;
+    for (const [kind, left] of [["charge", -.34], ["health", .15]] as const) {
+      const gauge = new ArtBatch(`${id}.instrument.${kind}`, scene, cel);
+      gauge.glow(gauge.box([.115, 0, 0], [.23, .012, .09], kind === "charge" ? P.amber : P.mint));
+      const bar = gauge.finish();
+      bar.unfreezeWorldMatrix(); bar.parent = fittings; bar.position.set(left, .977, -.91);
+      bar.renderingGroupId = 1;
+    }
   }
   if (hull === "hearthline") {
     for (const sign of [
@@ -540,43 +567,86 @@ export function createExpeditionArt(
       P.metal,
       7,
     );
-  // Dart cradle and sea-facing approach lights.
-  for (let i = 0; i < 5; i++)
-    site.ellipsoid([20, -0.1, -19 + i], [0.12, 0.08, 0.12], P.lime, 6);
-  // Upper laboratory: dry physical alcove with an open pressure hood and distinct return arch.
-  site.box([116, -118.2, -126], [10, 0.4, 8], P.petrol);
-  site.box([116, -113.85, -126], [10, 0.3, 8], P.porcelain);
-  site.box([116, -116, -129.9], [10, 4, 0.2], P.petrol);
-  site.box([111.15, -116, -126], [0.3, 4, 8], P.porcelain);
-  for (const x of [111.5, 120.5])
-    site.box([x, -116, -122.1], [0.25, 4, 0.25], P.ochre);
-  site.box([116, -116.94, -128], [3.2, 0.12, 1.2], P.ochre);
-  site.box([116, -116.85, -127.8], [0.85, 0.035, 0.6], P.porcelain);
-  for (let row = 0; row < 5; row++)
-    site.box([116, -116.825, -128.0 + row * 0.1], [0.62, 0.01, 0.02], P.petrol);
-  site.box([117.9, -114.4, -125], [3, 0.12, 4], P.warm);
-  // Mark the exact air-volume front (z=-122.4), and give the dry alcove a
-  // comprehensible hood, floor datum and sealed instrument wall. The threshold
-  // is a painted cue only; the simulation remains the air authority.
-  site.box([116, -117.985, -122.4], [8.8, 0.03, 0.2], P.ochre);
-  for (const x of [111.5, 120.5]) {
-    site.box([x, -116, -122.4], [0.2, 3.9, 0.2], P.metal);
-    site.box([x, -115.7, -122.27], [0.08, 2.5, 0.025], P.mint);
+  // Paired amber approach lights and south-pointing chevrons replace a large
+  // floating instruction card. The HUD still supplies the critical launch line.
+  for (let i = 0; i < 5; i++) for (const x of [17.9, 22.1]) {
+    site.ellipsoid([x, -.2, -20 + i], [.17, .11, .2], P.petrol, 6);
+    site.glow(site.ellipsoid([x, -.12, -20 + i], [.10, .045, .14], P.amber, 6));
   }
-  site.box([116, -114.1, -122.4], [9.2, 0.2, 0.24], P.metal);
-  for (let x = 112; x <= 120; x += 1.6) {
-    site.panel([x, -115.95, -129.67], [1.5, 3.35], 0.025, P.metal, Math.PI, 0.14);
-    site.panel([x, -115.8, -129.63], [1.18, 1.6], 0.02, P.petrol, Math.PI);
-    site.box([x, -115.15, -129.6], [0.75, 0.035, 0.025], P.steelLight);
+  site.tube([[10.8, 2.4, -39.2], [10.8, 3.35, -39.2], [10.15, 3.5, -38.8]], .045, P.petrol, 6);
+  site.glow(site.box([10.15, 3.45, -38.8], [.5, .045, .25], P.warm));
+  // The laboratory is an open pressure hood: only the existing floor, roof,
+  // back and port wall are solid. Read their actual faces, and leave both front
+  // and starboard approaches fully open, including the capsule-height line.
+  for (const solid of SOLIDS.filter(s => s.id.startsWith("canopy.lab."))) {
+    if (solid.id.endsWith("side")) {
+      wallWithOpening(site, [111.15, -116, -126], [.3, 4, 8], {
+        center: [111.15, -115.8, -126.7], width: 2.5, height: 1.3, normal: "x",
+      }, P.porcelain);
+    } else site.bounds(solid, solid.id.endsWith("floor") ? P.petrol : P.porcelain);
   }
+  createObservationPane(scene, glass, "canopy.lab.pane.port", [
+    [111.15, -116.45, -127.95], [111.15, -116.45, -125.45],
+    [111.15, -115.15, -125.45], [111.15, -115.15, -127.95],
+  ]);
+  for (const y of [-116.48, -115.12])
+    site.box([111.31, y, -126.7], [.018, .055, 2.6], P.petrol);
+  for (const z of [-128, -125.4])
+    site.box([111.31, -115.8, z], [.018, 1.4, .055], P.petrol);
+  // Faceted cladding is flush to the physical rear/port walls and roof. There
+  // is deliberately no decorative fourth wall or false sealed doorway.
+  for (const x of [112, 113.6, 115.2, 116.8, 118.4, 120]) {
+    site.panel([x, -116.0, -129.685], [1.52, 3.2], .012, P.shade, Math.PI, .16);
+    site.panel([x, -116.0, -130.002], [1.52, 3.2], .012, P.porcelain, 0, .16);
+    site.box([x, -114.5, -129.67], [1.18, .055, .025], P.orange);
+    site.box([x, -113.72, -126], [1.5, .025, 7.3], P.shade);
+  }
+  for (const z of [-128.7, -124.4, -122.25])
+    site.box([116, -114.015, z], [9.35, .025, .055], P.petrol);
+  site.box([116, -113.85, -122.005], [9.5, .23, .018], P.petrol);
+  site.glow(site.box([116, -113.85, -121.99], [7.8, .075, .012], P.warm));
+  for (const x of [111.6, 120.4]) {
+    site.box([x, -113.71, -126], [.5, .018, 7.2], P.petrol);
+    site.glow(site.box([x, -113.695, -126], [.22, .012, 6.4], P.amber));
+  }
+  site.box([118.5, -113.68, -125], [2.5, .025, 2.5], P.petrol);
+  site.ring([118.5, -113.66, -125], [1, 0, 0], [0, 0, 1], 1.0, .78, P.amber, 16);
+  site.glow(site.box([118.5, -113.65, -125], [.15, .012, .85], P.warm));
+  // Separate luminous strips and real bounded warm fill replace the former
+  // low-hanging slab. They sit against the existing ceiling and never lower it.
+  for (const x of [112.6, 119.2]) {
+    site.box([x, -114.025, -126.5], [.38, .045, 4.6], P.petrol);
+    site.glow(site.box([x, -114.052, -126.5], [.22, .012, 4.2], P.warm));
+  }
+  // Painted exact air limits and inset guide lights explain the open threshold.
+  site.box([116, -117.985, -122.4], [8.8, .03, .14], P.ochre);
+  site.box([120.6, -117.985, -126], [.14, .03, 7.2], P.ochre);
+  for (const x of [112, 114, 116, 118, 120])
+    site.glow(site.box([x, -117.962, -122.4], [.3, .015, .11], P.warm));
   for (const z of [-128.5, -126.5, -124.5]) {
-    site.box([116, -117.976, z], [8.8, 0.015, 0.055], P.metal);
-    site.box([111.32, -116, z], [0.025, 3.65, 0.07], P.metal);
+    site.box([116, -117.976, z], [8.8, .015, .045], P.metal);
+    site.box([111.31, -117.1, z], [.018, .5, .055], P.petrol);
   }
-  site.box([114.48, -117.4, -128], [0.04, 0.65, 1], P.ochre);
-  site.box([116, -117.4, -127.47], [2.7, 0.7, 0.025], P.shade);
+  // Inhabited bench: a task light, specimen clamps and a folded personal cloth.
+  // Everything is on the existing solid bench or flush to the rear wall.
+  site.box([116, -116.94, -128], [3.0, .12, 1.0], P.ochre);
+  site.box([116, -116.85, -127.8], [.85, .035, .6], P.porcelain);
+  for (let row = 0; row < 5; row++)
+    site.box([116, -116.825, -128.0 + row * .1], [.62, .01, .02], P.petrol);
+  site.box([116, -117.4, -127.49], [2.7, .7, .018], P.shade);
   for (const x of [115.1, 116, 116.9])
-    site.box([x, -117.2, -127.45], [0.34, 0.035, 0.025], P.ochre);
+    site.box([x, -117.2, -127.47], [.34, .035, .018], P.ochre);
+  site.tube([[115.4, -116, -129.62], [115.4, -115.3, -129.62], [115.7, -115.2, -129.1]], .035, P.petrol, 6);
+  site.box([115.7, -115.23, -129.1], [.65, .12, .28], P.orange);
+  site.glow(site.box([115.7, -115.3, -129.1], [.52, .018, .2], P.warm));
+  for (const x of [114.95, 115.25]) {
+    site.ellipsoid([x, -116.7, -127.75], [.09, .15, .09], P.shell, 8);
+    site.ellipsoid([x, -116.55, -127.75], [.1, .04, .1], P.petrol, 8);
+  }
+  site.box([117.1, -116.85, -128.05], [.55, .06, .45], P.coral);
+  site.panel([119.1, -115.8, -129.665], [1.3, 1.35], .012, P.petrol, Math.PI);
+  for (let i = 0; i < 4; i++)
+    site.box([118.7 + i * .26, -115.6, -129.64], [.08, .4, .015], i % 2 ? P.metal : P.ochre);
   const cover = CANOPY_COVER;
   site.box(
     [
@@ -610,65 +680,50 @@ export function createExpeditionArt(
     6,
   );
   site.finish();
-  label(scene, "SPLITSPINE / WORKSHOP", [10, 4.7, -32.1], 4);
-  label(scene, "DART / CLEAR CRADLE", [20, 1, -21], 3);
-  label(scene, "LARGE BERTH / INCOMPLETE", [33, 5, -30], 5);
-  label(scene, "UPPER LAB / AIR", [116, -114.7, -122.05], 3.7);
-  label(scene, "LOCAL RESCUE", [46, -10, -53.9], 2.6);
+  label(scene, "S / 02", [7, 4.78, -34.02], .8);
+  label(scene, "D / 01", [22.15, .15, -21], .62);
+  label(scene, "BERTH / INCOMPLETE", [24, 4.5, -30], 1.5);
+  label(scene, "AIR / 04", [111.65, -116.9, -122.01], .55);
+  label(scene, "RESCUE", [46, -10, -53.9], 1.0);
   // These are physical record/device labels. Persistent clue IDs remain solely
   // in the registry and notebook; the world does not advertise internal IDs.
   const ledger = EVIDENCE.C03.position, sheet = EVIDENCE.C04.position;
-  label(scene, "LOADING LEDGER", [ledger.x, ledger.y + 0.32, ledger.z - 0.1], 1.1);
-  label(scene, "FIELD OBSERVATIONS", [sheet.x, sheet.y + 0.35, sheet.z - 0.1], 1.15);
-  label(scene, "SAMPLING / UPPER CANOPY", [116, -114.65, -129.58], 3.6, Math.PI);
-  // Canopy holdfasts, buoyant bladders and long ribbed fronds establish a distinct habitat.
+  label(scene, "LOADING LEDGER", [ledger.x, ledger.y + 0.32, ledger.z - 0.1], .48);
+  label(scene, "FIELD OBSERVATIONS", [sheet.x, sheet.y + 0.35, sheet.z - 0.1], .48);
+  label(scene, "L / 04", [116, -114.65, -129.58], .65, Math.PI);
+  // The ten original rooted colonies keep their authored habitat coordinates.
+  // Radial, ridged crowns and pendant paired organs replace flat paddles and
+  // solitary spheres. Open gaps still reveal the clear flank and lower channel.
   const canopy = new ArtBatch("canopy.habitat", scene, cel);
   for (let i = 0; i < 10; i++) {
-    const x = 78 + (i % 4) * 21,
-      z = -88 - Math.floor(i / 4) * 23,
-      y = terrainHeight(x, z),
-      top = -65 - (i % 3) * 12;
-    canopy.tube(
-      [
-        [x, y, z],
-        [x + 2, y + 14, z - 1],
-        [x + 4, top, z + 1],
-      ],
-      0.23,
-      P.petrol,
-      7,
-    );
-    canopy.ellipsoid(
-      [x + 4, top, z + 1],
-      [2.7, 1.9, 2.1],
-      i % 2 ? P.amber : P.jade,
-      8,
-    );
-    for (let j = 0; j < 4; j++) {
-      const path: Point[] = [
-        [x + 4, top, z + 1],
-        [x + 6 + j, top + 2, z + 2 + j * 2],
-        [x + 10 + j * 2, top + 2.5, z + 3 + j * 4],
-      ];
-      canopy.tube(path, 0.05, P.lime, 5);
-      canopy.face(
-        [
-          [x + 4, top, z + 1],
-          [x + 6 + j, top + 3, z + j * 2],
-          [x + 12 + j * 2, top + 3, z + 5 + j * 4],
-          [x + 10 + j * 2, top + 1, z + 3 + j * 4],
-        ],
-        j % 2 ? "#4ca68e" : "#7bcda8",
-      );
+    const x = 78 + (i % 4) * 21, z = -88 - Math.floor(i / 4) * 23;
+    const y = terrainHeight(x, z), top = -65 - (i % 3) * 12;
+    canopy.tube([[x, y, z], [x + 2, y + 14, z - 1], [x + 4, top, z + 1]], .23, P.petrol, 7);
+    // Lobed buoyancy body, dark basal collar and warm folded crown.
+    canopy.ellipsoid([x + 4, top, z + 1], [2.7, 1.6, 2.1], i % 2 ? P.orange : P.jade, 10);
+    canopy.ellipsoid([x + 4, top - 1.2, z + 1], [1.7, .6, 1.4], P.petrol, 10);
+    for (let j = 0; j < 6; j++) {
+      const angle = j / 6 * Math.PI * 2 + i * .6, dx = Math.cos(angle), dz = Math.sin(angle);
+      const radius = i % 3 === 0 ? 1 : i % 3 === 1 ? .85 : .72;
+      const at = (r: number, h: number): Point => [x + 4 + dx * r * radius, top + h, z + 1 + dz * r * radius];
+      canopy.leaf([at(.8, .5), at(3.2, 2.6), at(6.2, 2.5), at(9.0, .8), at(10.2, -.6)], [.12, 1.35, 1.7, 1.05, .025], [-dz, 0, dx], j % 2 ? P.jade : "#258b80", j % 2 ? "#90d7a0" : "#51b69d");
+      canopy.tube([at(.7, -.6), at(2, -1), at(2.3, -2.6)], .06, P.petrol, 6);
+      const organ = at(2.3, -3.3);
+      canopy.ellipsoid([organ[0], organ[1] - 1.25, organ[2]], [.45, .3, .45], P.orange, 10);
+      canopy.glow(canopy.ellipsoid([organ[0], organ[1] - .1, organ[2]], [.62, 1.12, .62], P.amber, 10));
+      canopy.ellipsoid([organ[0], organ[1] + 1.05, organ[2]], [.7, .34, .7], P.plum, 8);
+      for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5])
+        canopy.tube([[organ[0] + Math.cos(a) * .18, organ[1] - 1.5, organ[2] + Math.sin(a) * .18], [organ[0] + Math.cos(a) * .62, organ[1], organ[2] + Math.sin(a) * .62], [organ[0] + Math.cos(a) * .3, organ[1] + 1.2, organ[2] + Math.sin(a) * .3]], .035, P.plum, 5);
     }
   }
-  canopy.finish();
+  canopy.finish(.22);
   const hunter = new ArtBatch("ecology.sound-hunter", scene, cel);
   hunter.loft(
     [
-      { z: -4, w: 0.2, low: 0.4, high: 0.7 },
-      { z: -1.8, w: 1.2, low: 0, high: 1.5 },
-      { z: 1, w: 0.7, low: 0.2, high: 1.2 },
+      { z: -4, w: 0.36, low: 0.5, high: 0.68 },
+      { z: -3.3, w: .9, low: .34, high: .87 },
+      { z: -1.8, w: 1.2, low: .12, high: 1.15 },
+      { z: 1, w: 0.7, low: 0.2, high: 1.05 },
       { z: 4, w: 0.1, low: 0.4, high: 0.7 },
     ],
     P.violet,
@@ -684,24 +739,25 @@ export function createExpeditionArt(
     );
     hunter.tube(
       [
-        [x * 0.9, 1.4, -1.2],
-        [x * 1.3, 2.2, -0.8],
-        [x * 1.1, 2.5, 0.3],
+        [x * .95, .9, -1.7],
+        [x * 1.65, 1.35, -2.2],
+        [x * 1.8, 1.4, -1.5],
       ],
       0.1,
       P.amber,
       6,
     );
-    hunter.ellipsoid([x * 0.65, 1.1, -1.9], [0.12, 0.13, 0.2], P.warm, 6);
+    hunter.ellipsoid([x * .76, .82, -3.25], [.16, .12, .13], P.ink, 10);
+    hunter.glow(hunter.ellipsoid([x * .76, .83, -3.36], [.09, .045, .035], P.amber, 8));
     // Long cheek ridge, gill slots and a split sensory rostrum preserve an
     // animal silhouette at the warning distance; no weapon/trophy silhouette.
-    hunter.tube([[x * 0.23, 0.62, -3.55], [x * 0.74, 0.7, -2.2], [x * 0.85, 0.54, -0.8], [x * 0.48, 0.62, 1.5]], 0.055, P.mint, 6);
-    hunter.ellipsoid([x * 0.39, 0.8, -2.8], [0.12, 0.14, 0.18], P.ink, 8);
-    hunter.ellipsoid([x * 0.43, 0.84, -2.88], [0.055, 0.05, 0.08], P.amber, 6);
+    hunter.tube([[x * .30, .59, -3.95], [x * .8, .65, -3.15], [x * .95, .54, -.8], [x * .48, .62, 1.5]], .055, P.coralRim, 6);
+    hunter.face([[x * .3, .69, -3.95], [x * .64, .885, -3.3], [x * .68, 1.12, -1.9], [x * .30, .91, -2.7]], P.plum);
     for (let gill = 0; gill < 4; gill++)
       hunter.tube([[x * (1.08 - gill * 0.05), 0.95, -1.4 + gill * 0.35], [x * (1.08 - gill * 0.05), 0.58, -1.25 + gill * 0.35]], 0.035, P.plum, 5);
-    hunter.tube([[x * 0.9, 1.4, -1.2], [x * 1.3, 2.2, -0.8], [x * 1.1, 2.5, 0.3]], 0.035, P.coralRim, 5);
+    hunter.tube([[x * .95, .9, -1.7], [x * 1.65, 1.35, -2.2], [x * 1.8, 1.4, -1.5]], .035, P.coralRim, 5);
   }
+  hunter.tube([[-.6, .48, -3.55], [0, .46, -4.01], [.6, .48, -3.55]], .035, P.ink, 5);
   for (let spine = 0; spine < 3; spine++) {
     const z = -0.5 + spine * 1.05;
     hunter.face([[0, 1.1, z - 0.35], [0, 2.5 - spine * 0.3, z + 0.3], [0.04, 1.1, z + 0.75]], spine % 2 ? P.coral : P.plum);
@@ -715,12 +771,12 @@ export function createExpeditionArt(
     ],
     P.petrol,
   );
-  const hunterMesh = hunter.finish();
+  const hunterMesh = hunter.finish(.65);
   hunterMesh.unfreezeWorldMatrix();
   const hunterFins: { mesh: Mesh; side: number }[] = [];
   for (const side of [-1, 1]) {
     const fin = new ArtBatch(`ecology.hunter-warning-fin.${side}`, scene, cel);
-    fin.face([[0, 0, -0.7], [side * 1.2, -0.15, -0.1], [side * 2.7, -0.5, 1.8], [side * 1.2, 0, 1.1], [0, 0.1, 1.4]], P.coral);
+    fin.face([[0, 0, -1.2], [side * 1.2, .15, -1.35], [side * 2.7, -.3, .8], [side * 1.2, 0, 1.1], [0, 0.1, 1.4]], P.coral);
     fin.face([[0, 0.04, -0.7], [side * 1.2, 0.03, -0.1], [side * 1.2, 0.04, 1.1], [0, 0.14, 1.4]], P.violet);
     for (const z of [-0.4, 0.2, 0.8])
       fin.tube([[0, 0.12, z], [side * 1.1, 0.04, z + 0.2], [side * 2.3, -0.35, 1.5]], 0.025, P.coralRim, 5);
@@ -815,6 +871,8 @@ export function createExpeditionArt(
         );
         for (const child of m.getChildMeshes())
           if (child.name === `${v.id}.cockpit`) child.setEnabled(s?.player.controlledVehicleId === v.id);
+          else if (child.name === `${v.id}.instrument.charge`) child.scaling.x = Math.max(0, Math.min(1, v.charge / 100));
+          else if (child.name === `${v.id}.instrument.health`) child.scaling.x = Math.max(0, Math.min(1, v.health / 100));
       }
       buoyMesh.setEnabled(!!s?.inventory.buoy.deployed);
       if (s)
