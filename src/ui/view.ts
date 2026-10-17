@@ -492,13 +492,16 @@ export class GameView {
     this.latest = state;
     if (!this.panelKind) return;
     const content = this.get("panel-content");
-    const restoreLabel = content.contains(document.activeElement) ? document.activeElement?.textContent : null;
+    const restoreFocus = content.contains(document.activeElement);
+    const restoreKey = restoreFocus ? (document.activeElement as HTMLElement | null)?.dataset.commandKey : undefined;
     this.commands.clear();
     this.get("carrier-nav").hidden = state.scenario !== "carrier-fixture";
     const button = (label: string, command: GameCommand, disabled = false): string => {
       const id = `command-${this.commands.size}`;
       this.commands.set(id, command);
-      return `<button data-action="${id}"${disabled ? " disabled" : ""}>${escapeHtml(label)}</button>`;
+      // Every operand identifies the action, independently of its label or render order.
+      const key = JSON.stringify(command, Object.keys(command).sort());
+      return `<button data-action="${id}" data-command-key="${escapeHtml(key)}"${disabled ? " disabled" : ""}>${escapeHtml(label)}</button>`;
     };
     const kind = this.panelKind;
     this.get("panel-title").textContent = {
@@ -645,8 +648,8 @@ export class GameView {
       }
     }
     this.get("panel-content").innerHTML = html;
-    if (restoreLabel) {
-      const next = [...content.querySelectorAll<HTMLButtonElement>("button:not([disabled])")].find((b) => b.textContent === restoreLabel);
+    if (restoreFocus) {
+      const next = restoreKey ? [...content.querySelectorAll<HTMLButtonElement>("button:not([disabled])")].find((b) => b.dataset.commandKey === restoreKey) : undefined;
       (next ?? this.get("panel-return")).focus({ preventScroll: true });
     }
   }
