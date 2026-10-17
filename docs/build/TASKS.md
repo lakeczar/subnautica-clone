@@ -269,3 +269,12 @@ EXPEDITION and RECOVERY remain active on their original evidence-only assignment
 Terminal `siltwake-m1-combined-recovery-sol-max-e3ed566` read completed, no pending children/question. Evidence `7869a079a98bf912172c416d50f40b10a8a285d1`, merge `17f46a8467e23008debba1235d69a6052cb6f43c`. Owned resources closed, clean worktree. [Root disposition](evidence/M1-COMBINED-RECOVERY-INTEGRATION.md) verifies554 payloads/555 archive files/155 source blobs and actual images. Root reproduced18 serialized whole-state comparisons,17 command comparisons and the negative-health blocker using current compiled modules.
 
 CR-1 blocks acceptance despite a successful alternate recovery route. [Correction brief](tasks/M1-CR1-FIX.md) transfers survival.ts, expedition tests and its own evidence only; no codec weakening, schema or geometry changes. Commit before T3 worktree dispatch. Live catalog confirms codex Sol6.1/max and Astra/xhigh. EXPEDITION is the sole active child; its original baseline/ownership remains unchanged. Do not start acceptance reviewers before the correction and all evidence are inspected/frozen.
+
+
+### CR-1 correction dispatched from b5cedfe
+
+- Exact committed parent `b5cedfeda3305542ec001e7917d08ac12781ea54`, clean; production4d0a7f0 unchanged. T3 async worktree, role implementation, codex/gpt-6.1-sol, explicit reasoningEffort=max. Accepted running, no children/question.
+- Task ID `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-cr1-fix-sol-max-b5cedfe`; stable request `siltwake-m1-cr1-fix-sol-max-b5cedfe`. Backing thread uses the same suffix with `thread:delegated-task:` prefix.
+- Exclusive survival.ts/expedition tests/own evidence ownership and port5193 in [brief](tasks/M1-CR1-FIX.md). No interface/schema change approved. Root retains all other paths and integration.
+- EXPEDITION informed via steer `siltwake-m1-expedition-cr1-awareness-b5cedfe`, same original ordinal1 task; it retains frozen e3ed566/4d0a7f0, fresh earned-route scope and port5190. No new task or moving-source copy.
+- Three active agents including root. Notifications trigger inspection; no polling/waiting or premature acceptance review. Root owns no browser/server.

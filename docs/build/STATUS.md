@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. **M0 accepted; M1 provisional and blocked by CR-1.** Combined RECOVERY completed and root reproduced its ordinary-play negative-hull-health save/export failure. CARRIER also completed; both evidence reports are inspected/staged. EXPEDITION continues read-only on `e3ed566` / production `4d0a7f0`. A focused Sol6.1 max correction is prepared in [M1-CR1-FIX](tasks/M1-CR1-FIX.md); exact dispatch state/IDs live in TASKS. Existing combined137 tests/typecheck/build passed before this newly reproduced defect; they do not clear it. Root has no browser/server. Fresh paired batch and separate integrated M1 reviews remain; design preparation is accepted and the actual end-stage critique follows M3.
+Updated: 2026-10-17. **M0 accepted; M1 provisional and blocked by CR-1.** Combined RECOVERY completed and root reproduced its ordinary-play negative-hull-health save/export failure. CARRIER also completed; both evidence reports are inspected/staged. EXPEDITION continues read-only on `e3ed566` / production `4d0a7f0`. A focused Sol6.1 max correction is running from `b5cedfe` under [M1-CR1-FIX](tasks/M1-CR1-FIX.md); exact task IDs live in TASKS. Three active agents including root. Existing combined137 tests/typecheck/build passed before this newly reproduced defect; they do not clear it. Root has no browser/server. Fresh paired batch and separate integrated M1 reviews remain; design preparation is accepted and the actual end-stage critique follows M3.
 
 ## Authority and checkpoint
 
