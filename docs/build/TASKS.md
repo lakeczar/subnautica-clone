@@ -311,3 +311,11 @@ Feature pushed through dispatch-record commit `831c219`; PR #4/#3 exact descript
 Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-batch-sol-r1-ac5988c` terminal read: completed, no children/question, actual gpt-6.1-sol/max, owned resources closed. Report `8ecc9b2587d0fd1572c61f783811e5c9688a2b1a` staged at `e41d132de5d7c998a23d8a99ad791ffb3995171c`. Both batches CHANGES REQUIRED; [report/root dispositions](reviews/M1-BATCH-R1.md). Root independently reproduced SOL-M1-01 boundary-distraction Save/Export invalidity and SOL-M1-02 stale-cache mesh lifecycle, verified112 payloads/113 archive files and inspected actual UI refusal. No new source or broad test run.
 
 Astra remains the only active child on frozen ac5988c, no peer findings delivered. Live catalog reverified codex Sol6.1/max for the new [focused correction](tasks/M1-BATCH-R1-SOL-FIX.md). Commit baseline before async worktree dispatch; exclusive step.ts/expedition.ts/focused tests/own evidence, port5193 after free check. Root retains interfaces, records and integration. Fresh round-two pair waits for both initial verdicts and inspected corrections; no premature acceptance.
+
+
+### Sol M1 round-one correction dispatched from253200a
+
+- Exact clean parent `253200a8f969d390e175d339fa8d3b0db47770d0`; production remains `20451a8`. T3 async worktree, role implementation, codex/gpt-6.1-sol, explicit reasoningEffort=max; accepted running with no children/question.
+- Task ID `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-batch-r1-fix-sol-max-253200a`; request `siltwake-m1-batch-r1-fix-sol-max-253200a`. Backing thread uses same suffix with thread:delegated-task: prefix.
+- [Full brief](tasks/M1-BATCH-R1-SOL-FIX.md) included in prompt. Exclusive step.ts/expedition.ts/expedition tests/new render-lifecycle test/own evidence, checked-free5193. No interface/schema/geometry/material changes, children, peer polling or parent mutation.
+- Astra's initial review remains isolated on ac5988c; no findings shared. Three active agents including root; root has no browser/server. Notification-driven reconciliation and fresh revised-candidate review follow; no acceptance implied.
