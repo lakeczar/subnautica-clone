@@ -1,6 +1,6 @@
 # FND-01 / ECO-01 independent review, round 1
 
-Status: Astra returned FND changes required / ECO accept; Sol remains running. No combined acceptance yet. Date: 2026-10-17.
+Status: both reviews completed. FND-01 changes required; ECO-01 accepted only as provisional arithmetic/design evidence at the frozen SHA. Date: 2026-10-17.
 
 - Candidate: `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`.
 - Foundation author: `8d72dd2ac2822873e36fe339f8ed2db8c837084b`.
@@ -9,8 +9,8 @@ Status: Astra returned FND changes required / ECO accept; Sol remains running. N
 
 | Reviewer | Model / effort | Task ID | Stable request ID | State |
 | --- | --- | --- | --- | --- |
-| Astra | `gpt-6-astra` / `xhigh` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-astra-r1-2eb0244` | `siltwake-fnd-eco-astra-r1-2eb0244` | Running |
-| Sol | `gpt-6.1-sol` / `max` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-sol-r1-2eb0244` | `siltwake-fnd-eco-sol-r1-2eb0244` | Running |
+| Astra | `gpt-6-astra` / `xhigh` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-astra-r1-2eb0244` | `siltwake-fnd-eco-astra-r1-2eb0244` | Complete: FND changes / ECO accept |
+| Sol | `gpt-6.1-sol` / `max` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-sol-r1-2eb0244` | `siltwake-fnd-eco-sol-r1-2eb0244` | Complete: FND changes / ECO accept |
 
 T3 provider `codex`; both exact effort options verified against the live catalog. Each task uses `isolation: worktree` from the candidate. Neither reviewer authored the candidate or may author corrections/delegate children.
 
@@ -34,7 +34,15 @@ Read each task status only when needed; completion notifications wake the coordi
 - Nonblocking bookkeeping: production logo is `public/siltwake.svg`, not the manifest's `siltwake-mark.svg`; correct in the next documentation update.
 - Carry forward ECO integration risks: persistent blueprint knowledge after fleet loss, concrete transferable module identity, bound recovery provenance, service-pallet layouts/return margins and actual carrier acquisition effort. Proposal acceptance does not settle these runtime obligations.
 
-Await Sol's separate findings before issuing the consolidated correction assignment. Source remains unchanged at the candidate; this record is evidence bookkeeping only.
+## Sol result and consolidated disposition
+
+[Full independent report](FND-ECO-R1-SOL.md). Sol independently returned **FND-01: CHANGES REQUIRED; ECO-01: ACCEPT** at the same SHA, with no live children and its owned browser/server closed. FND-SOL-01 duplicates accepted FND-A2; FND-SOL-02 duplicates accepted FND-A3. Both reviewers found the same persistence problems; no finding is declined and no disagreement remains. The manifest typo is confirmed by both.
+
+Sol additionally exercised induced WebGL loss/restoration using the browser extension: ticks stopped while lost, Resume was gated, restoration redrew without advancing simulation, and explicit resume worked. This closes one diagnostic adapter gap; it does not establish real device-loss compatibility or host focus/visibility behavior.
+
+**ECO-01 proposal acceptance:** coordinator checker/source inspection plus both independent acceptances cover the numeric/design proposal at `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`. No runtime registry adoption, physical rescue, route/air/power margin, acquisition timing or human balance is accepted. Carry the integration risks above into future tasks.
+
+**FND-01 correction scope:** patched Vite pin/lock; explicit exportable unsaved-session fallback for storage write refusal; cross-context write exclusion with stale comparison inside it; meaningful failure/concurrency/session-lifecycle coverage; updated evidence/contracts. [Correction assignment](../tasks/FND-01-R1-FIX.md) owns the concrete constraints. After Sol's corrections, rerun coordinator checks and return a new frozen SHA with both original reports and these dispositions to fresh Astra and Sol reviewers. M0 remains pending.
 
 ## Common round-one brief
 

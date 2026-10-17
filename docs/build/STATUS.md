@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: Astra review returned foundation changes required / economy proposal accept; separate Sol review still running on frozen candidate `2eb0244`. No combined batch acceptance yet.
+Updated: 2026-10-17. State: both independent reviews returned foundation changes required; both accepted the provisional economy proposal at `2eb0244`. Consolidated foundation correction assignment is ready for Sol 6.1 max. M0 remains pending.
 
 ## Authority and checkpoint
 
@@ -13,20 +13,20 @@ Updated: 2026-10-17. State: Astra review returned foundation changes required / 
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-FND-01 and ECO-01 authors have completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. Astra xhigh review completed; separate Sol 6.1 max review is running in its isolated worktree. Two active agents including coordinator. [Round-one record, findings/dispositions and exact task IDs](reviews/FND-ECO-R1.md).
+FND-01 and ECO-01 authors and both round-one reviewers have completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. [Round-one record, findings/dispositions and exact task IDs](reviews/FND-ECO-R1.md). Coordinator is dispatching the consolidated correction task to Sol 6.1 max in an isolated worktree.
 
 ## Acceptance and evidence
 
 - FND-01 author commit: `8d72dd2ac2822873e36fe339f8ed2db8c837084b`; clean worktree. [Author evidence](evidence/FND-01.md) records 18 passing tests, final production scene and ordinary-control movement, pause, save/reload and rejected-import checks. Builder closed its tab/server and preserved coordinator tab14.
 - Coordinator inspected source boundaries and actual rendered menu, pod, reef and island captures; directed corrections to pod access/hatch geometry, strict save-mode validation, paused rendering/readiness, context-loss resume gating, quality scaling and underwater atmosphere. Coordinator reran `npm run check` on `8d72dd2`: strict typecheck, 18/18 tests and production build passed. The large main-chunk warning remains; SwiftShader evidence does not qualify dedicated-GPU performance.
-- ECO-01 proposal committed at `cd1d303`: coordinator reran the Node checker successfully (39 recipes, 33 patches, eight strategy/starter/optional scenarios, six independent optional branches, five budgeted failures and 20 numeric disable/salvage/rebuild transactions per scenario, six rejection fixtures). It is not a runtime registry or validated route/playtime balance.
+- ECO-01 proposal committed at `cd1d303`: coordinator reran the Node checker successfully (39 recipes, 33 patches, eight strategy/starter/optional scenarios, six independent optional branches, five budgeted failures and 20 numeric disable/salvage/rebuild transactions per scenario, six rejection fixtures). Both non-author reviewers explicitly accepted its provisional arithmetic/design scope at `2eb0244`; it is not a runtime registry or validated route/playtime balance.
 - Existing cel art study `20711d1` is reference only. Its SwiftShader captures do not establish dedicated-GPU performance.
 - Every implementation batch remains provisional until coordinator inspection, applicable checks and separate non-author Astra xhigh plus Sol 6.1 max acceptance of one frozen revision. Records go under `reviews/` following [the gate](../DELIVERY_AND_ACCEPTANCE.md#independent-review-gate).
 - No fresh-player duration/enjoyment or representative GPU measurements exist.
 
 ## Exact next action
 
-Await Sol's independent review completion and read its result; do not duplicate that active task or share Astra findings before Sol returns. Both received `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`. Coordinator substantiated Astra's three findings: vulnerable Vite pin, unavailable unsaved-session fallback after write refusal, and non-atomic competing-tab saves. Consolidate Sol findings into the correction assignment to the main Sol builder. Source remains frozen; later documentation-only bookkeeping does not change the reviewed SHA.
+Execute [the consolidated correction assignment](tasks/FND-01-R1-FIX.md) through the main Sol builder; exact active task ID goes in TASKS.md after dispatch. Sol independently confirmed the two save defects; Astra additionally found the vulnerable Vite pin. All three findings are accepted. No source correction has been made yet. Both initial review reports remain preserved and must accompany the fresh paired round-two review.
 
 Reconcile independent findings, have Sol fix substantiated issues and return the corrected revision to both reviewers. After acceptance, integrate through a feature PR and verify the integrated M0 milestone before dependent implementation. ECO-01 is provisional arithmetic, not runtime routes or recovery proof; later production-registry adoption needs its own integration review. No additional owner decision is needed to continue.
 

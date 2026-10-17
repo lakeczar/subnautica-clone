@@ -11,4 +11,4 @@ Coordinator retains other documentation, integration and reviews. Builders retur
 
 ## Active independent reviews
 
-FND-01 + ECO-01 round 1 uses frozen candidate `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`. Astra xhigh returned FND changes required / ECO accept; Sol 6.1 max is still running in its T3-isolated worktree. [Exact task IDs, request IDs, briefs, findings and continuation](reviews/FND-ECO-R1.md). Two active agents including coordinator; no author remains active. Await Sol completion and consolidate both independent findings before correction work. No combined batch acceptance yet.
+FND-01 + ECO-01 round 1 at `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef` is complete. Both independently returned FND changes required / ECO accept. [Exact task IDs, request IDs, briefs, findings and dispositions](reviews/FND-ECO-R1.md). Neither reviewer has live children; both closed owned browser/server resources. ECO acceptance is provisional arithmetic/design only. FND correction task is being dispatched from the committed [assignment](tasks/FND-01-R1-FIX.md).
