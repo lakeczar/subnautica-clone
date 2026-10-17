@@ -4,6 +4,7 @@ import {
   EVIDENCE,
   CANOPY_COVER,
   RECOVERY_STAGE,
+  THREAT_HOME,
 } from "../content/registry.js";
 import type { GameState, VehicleState } from "../sim/types.js";
 import { CARRIER_LAYOUT, CARRIER_SUPPORT, carrierRooms, carrierStructure, launchPoint } from "../sim/carrier.js";
@@ -12,16 +13,26 @@ import type { Point } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
 import { label } from "./landmarks.js";
 import { FACILITY_SOLIDS, terrainHeight } from "../sim/world.js";
+import { createObservationPane, wallWithOpening } from "./materials.js";
 
 /** The structural descriptors remain the physical authority. Passage skins are
  * at most 3 mm proud of them; the capsule passage and the complete rail path stay
- * empty. Observation glazing is opaque cel glass until core supplies a shared
- * transparent, fog-aware material; it never implies a door into a sealed room. */
-function carrierShellArt(scene: Scene, cel: ShaderMaterial, configuration: "compact" | "medium", openSlot?: 0 | 1): Mesh {
+ * empty. Only the rendered fore/aft walls are cut around sealed observation
+ * panes; the simulation's complete structural walls remain unchanged. */
+function carrierShellArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, configuration: "compact" | "medium", openSlot?: 0 | 1): Mesh {
   const b = new ArtBatch("carrier.physical-compartments", scene, cel);
   const signs: Mesh[] = [];
-  for (const solid of carrierStructure(configuration, openSlot))
-    b.bounds(solid, solid.id.includes("gate") ? P.ochre : solid.id.includes("roof") ? P.shade : P.petrol);
+  const panes: { name: string; points: Point[] }[] = [];
+  for (const solid of carrierStructure(configuration, openSlot)) {
+    const room = carrierRooms(configuration).find(r => solid.id === r.id + ".fore" || solid.id === r.id + ".aft");
+    if (room) {
+      const a = solid.min, c = solid.max;
+      wallWithOpening(b, [(a.x + c.x) / 2, (a.y + c.y) / 2, (a.z + c.z) / 2], [c.x - a.x, c.y - a.y, c.z - a.z], {
+        center: [(room.min.x + room.max.x) / 2, room.min.y + 1.85, 0],
+        width: room.max.x - room.min.x - 1.04, height: 1.21, normal: "z",
+      }, P.petrol);
+    } else b.bounds(solid, solid.id.includes("gate") ? P.ochre : solid.id.includes("roof") ? P.shade : P.petrol);
+  }
   for (const [slot, room] of carrierRooms(configuration).entries()) {
     const { min: a, max: c } = room, w = c.x - a.x, length = c.z - a.z, cx = (a.x + c.x) / 2;
     const accent = slot === 0 ? P.ochre : P.steelLight;
@@ -30,9 +41,15 @@ function carrierShellArt(scene: Scene, cel: ShaderMaterial, configuration: "comp
     for (const [z, yaw] of [[a.z - CARRIER_LAYOUT.wall - 0.002, 0], [c.z + CARRIER_LAYOUT.wall + 0.002, Math.PI]] as const) {
       const toward = yaw === 0 ? -1 : 1;
       b.panel([cx, a.y + 0.65, z], [w - 0.14, 1.05], 0.016, P.metal, yaw);
-      b.panel([cx, a.y + 3.15, z], [w - 0.14, 2.1], 0.016, P.shade, yaw, 0.16);
-      b.panel([cx, a.y + 1.85, z + toward * 0.001], [w - 0.8, 1.45], 0.018, P.steelLight, yaw, 0.18);
-      b.panel([cx, a.y + 1.85, z + toward * 0.002], [w - 1.04, 1.21], 0.016, P.glass, yaw, 0.16);
+      const hole = { center: [cx, a.y + 1.85, z] as Point, width: w - 1.04, height: 1.21, normal: "z" as const };
+      // Cut all three backings, including the shade's .355 m upper overlap.
+      wallWithOpening(b, [cx, a.y + 3.15, z], [w - .14, 2.1, .016], hole, P.shade);
+      wallWithOpening(b, [cx, a.y + 1.85, z + toward * .001], [w - .8, 1.45, .018], hole, P.steelLight);
+      const x0 = cx - hole.width / 2, x1 = cx + hole.width / 2, y0 = hole.center[1] - .605, y1 = hole.center[1] + .605;
+      panes.push({ name: `carrier.pane.berth.${slot}.${toward}`, points: [
+        [x0, y0, z + toward * .02], [x1, y0, z + toward * .02],
+        [x1, y1, z + toward * .02], [x0, y1, z + toward * .02],
+      ] });
       b.box([cx - w * 0.22, a.y + 2.22, z + toward * 0.003], [w * 0.31, 0.045, 0.004], P.reflection);
       b.box([cx + w * 0.13, a.y + 1.85, z + toward * 0.003], [0.045, 1.14, 0.004], P.metal);
       for (const x of [a.x + 0.16, c.x - 0.16]) {
@@ -43,8 +60,8 @@ function carrierShellArt(scene: Scene, cel: ShaderMaterial, configuration: "comp
       b.box([cx, a.y + 0.18, z + toward * 0.002], [w - 0.4, 0.07, 0.007], accent);
       b.box([cx, a.y + 2.7, z + toward * 0.002], [w - 0.8, 0.06, 0.007], openSlot === slot ? P.ochre : P.mint);
       const name = configuration === "medium" ? "SERVICE BERTH" : slot === 0 ? "PORT / 01" : "STARBOARD / 02";
-      signs.push(label(scene, name, [cx, a.y + 3.4, z + toward * 0.008], w - 1.05, yaw));
-      signs.push(label(scene, openSlot === slot ? "TRANSFER / KEEP CLEAR" : "DRY / ISOLATED", [cx, a.y + 0.65, z + toward * 0.008], Math.min(2.7, w - 0.9), yaw));
+      signs.push(label(scene, name, [cx, a.y + 3.4, z + toward * .022], w - 1.05, yaw));
+      signs.push(label(scene, openSlot === slot ? "TRANSFER / KEEP CLEAR" : "DRY / ISOLATED", [cx, a.y + 0.65, z + toward * .022], Math.min(2.7, w - 0.9), yaw));
     }
     for (const [x, yaw] of [[a.x - CARRIER_LAYOUT.wall - 0.002, Math.PI / 2], [c.x + CARRIER_LAYOUT.wall + 0.002, -Math.PI / 2]] as const) {
       // Side skins are flush. In particular, nothing projects into the 0.84 m
@@ -71,6 +88,7 @@ function carrierShellArt(scene: Scene, cel: ShaderMaterial, configuration: "comp
   const mesh = b.finish();
   mesh.unfreezeWorldMatrix();
   mesh.renderingGroupId = 1;
+  for (const pane of panes) createObservationPane(scene, glass, pane.name, pane.points, mesh);
   for (const sign of signs) sign.parent = mesh;
   return mesh;
 }
@@ -78,21 +96,31 @@ function carrierShellArt(scene: Scene, cel: ShaderMaterial, configuration: "comp
 function dartArt(
   scene: Scene,
   cel: ShaderMaterial,
+  glass: ShaderMaterial,
   id: string,
   hull: VehicleState["hull"],
 ): Mesh {
   const b = new ArtBatch(id, scene, cel);
+  const panes: { name: string; points: readonly Point[] }[] = [];
   if (hull === "hearthline") {
     const width = CARRIER_LAYOUT.deck.max.x - CARRIER_LAYOUT.deck.min.x;
     b.box([0, 9, 0], [width + 0.6, 0.35, 26], P.porcelain);
     for (const x of [CARRIER_LAYOUT.deck.min.x, CARRIER_LAYOUT.deck.max.x]) {
-      b.box([x, 6.3, 0], [0.6, 4.5, 25], P.porcelain);
-      b.box([x > 0 ? x - 0.37 : x + 0.37, 6.5, 0], [0.05, 2.4, 16], P.glass);
+      wallWithOpening(b, [x, 6.3, 0], [.6, 4.5, 25], {
+        center: [x, 6.5, 0], width: 16, height: 2.4, normal: "x",
+      }, P.porcelain);
+      panes.push({ name: `${id}.pane.side.${Math.sign(x)}`, points: [
+        [x, 5.3, -8], [x, 5.3, 8], [x, 7.7, 8], [x, 7.7, -8],
+      ] });
       b.box([Math.sign(x) * 7.2, 1.5, 0], [4, 3, 28], P.petrol);
       b.box([Math.sign(x) * 7.2, 2.9, 0], [3, 0.8, 26], P.ochre);
     }
-    b.box([0, 6.4, -12], [width, 5, 0.3], P.petrol);
-    b.box([0, 6.6, -11.8], [8, 2.7, 0.06], P.glass);
+    wallWithOpening(b, [0, 6.4, -12], [width, 5, .3], {
+      center: [0, 6.6, -12], width: 8, height: 2.7, normal: "z",
+    }, P.petrol);
+    panes.push({ name: `${id}.pane.bridge`, points: [
+      [-4, 5.25, -12], [4, 5.25, -12], [4, 7.95, -12], [-4, 7.95, -12],
+    ] });
     // The helm is a waist-high console, readable from the actual standing eye.
     b.box([0, 4.55, -8], [3, 1.1, 1.2], P.petrol);
     b.face([[-1.45, 5.14, -8.6], [1.45, 5.14, -8.6], [1.45, 4.95, -7.4], [-1.45, 4.95, -7.4]], P.metal);
@@ -106,7 +134,7 @@ function dartArt(
     for (const x of [-4, 0, 4])
       b.box([x, 6.7, -11.75], [0.16, 2.95, 0.09], P.metal);
     for (const x of [-3.3, 2.2])
-      b.face([[x, 7.55, -11.7], [x + 0.9, 7.55, -11.7], [x + 2, 6.25, -11.7], [x + 1.7, 6.25, -11.7]], P.reflection);
+      b.face([[x, 7.55, -11.7], [x + .07, 7.55, -11.7], [x + 1.17, 6.25, -11.7], [x + 1.1, 6.25, -11.7]], P.reflection);
     for (const side of [-1, 1]) {
       const x = side * (CARRIER_LAYOUT.deck.max.x - 0.31);
       for (let z = -10; z <= 10; z += 3.8) {
@@ -171,18 +199,9 @@ function dartArt(
       [1, 1.95, 0.1],
       [-0.65, 1.95, 0.1],
     ] as const;
-    b.face(canopy, P.glass);
-    b.face([canopy[1], [1.2, 0.8, 1.0], [1, 1.95, 0.1]], "#317c8c");
-    b.face([canopy[0], [-0.9, 0.8, 1.0], [-0.65, 1.95, 0.1]], "#1c536a");
-    b.face(
-      [
-        [-0.58, 1.85, 0.02],
-        [0.3, 1.85, 0.02],
-        [0.13, 1.1, -1.13],
-        [-0.49, 1.1, -1.13],
-      ],
-      P.reflection,
-    );
+    panes.push({ name: `${id}.pane.forward`, points: canopy });
+    panes.push({ name: `${id}.pane.starboard`, points: [canopy[1], [1.2, .8, 1], canopy[2]] });
+    panes.push({ name: `${id}.pane.port`, points: [canopy[0], [-.9, .8, 1], canopy[3]] });
     for (const x of [-1.15, 1.15]) {
       // The guide shoes meet the shared keel datum; no artwork hangs below
       // BERTH_ENVELOPES.dart during the sealed floor-hatch transfer.
@@ -229,7 +248,7 @@ function dartArt(
     // original scout study. All extents remain inside the guided Dart envelope.
     b.tube([canopy[0], canopy[1], canopy[2], canopy[3], canopy[0]], 0.035, P.metal, 6);
     b.tube([[-0.65, 1.95, 0.1], [-0.85, 0.95, 1.03], [1.15, 0.95, 1.03], [1, 1.95, 0.1]], 0.035, P.steelLight, 6);
-    b.face([[-0.6, 1.96, 0.1], [0.95, 1.96, 0.1], [0.9, 1.1, 1.02], [-0.78, 1.1, 1.02]], P.glass);
+    panes.push({ name: `${id}.pane.aft`, points: [[-.6, 1.96, .1], [.95, 1.96, .1], [.9, 1.1, 1.02], [-.78, 1.1, 1.02]] });
     b.panel([-1.2, 0.82, 0.1], [0.44, 0.2], 0.04, P.ochre, Math.PI / 2, 0.04);
     b.tube([[-1.29, 0.82, -0.04], [-1.29, 0.91, -0.04], [-1.29, 0.91, 0.22], [-1.29, 0.82, 0.22]], 0.025, P.steelLight, 5);
     for (const x of [-1.35, 1.35]) {
@@ -243,6 +262,25 @@ function dartArt(
   }
   const mesh = b.finish();
   mesh.unfreezeWorldMatrix();
+  for (const pane of panes) createObservationPane(scene, glass, pane.name, pane.points, mesh);
+  if (hull === "dart") {
+    // View-only fittings stay inside the existing canopy/keel envelope. The
+    // actual hull and glazing remain visible in control; no swimming disguise.
+    const cockpit = new ArtBatch(`${id}.cockpit`, scene, cel);
+    cockpit.box([.12, 1.04, .78], [.62, .18, .34], P.shade);
+    cockpit.box([.12, 1.32, .92], [.53, .58, .12], P.petrol);
+    cockpit.box([.06, .98, -.98], [1.05, .15, .23], P.metal);
+    for (const x of [-.27, .2]) {
+      cockpit.panel([x, 1.055, -1.015], [.32, .15], .025, P.glass, 0, .025);
+      cockpit.box([x, 1.075, -.982], [.2, .018, .012], P.mint);
+    }
+    for (const x of [-.48, .62]) {
+      cockpit.tube([[x, .91, -.4], [x, 1.08, -.46]], .025, P.ochre, 5);
+      cockpit.box([x, 1.09, -.46], [.13, .045, .09], P.ink);
+    }
+    const fittings = cockpit.finish();
+    fittings.unfreezeWorldMatrix(); fittings.parent = mesh; fittings.renderingGroupId = 1;
+  }
   if (hull === "hearthline") {
     for (const sign of [
       label(scene, "BRIDGE", [0, 7.9, -11.66], 2.4, Math.PI),
@@ -252,9 +290,14 @@ function dartArt(
   }
   return mesh;
 }
+
+/** Hull-local view datum only; never a player/collider/save pose. */
+export const DART_SEAT = { x: .12, y: 1.36, z: .45 } as const;
+
 export function createExpeditionArt(
   scene: Scene,
   cel: ShaderMaterial,
+  glass: ShaderMaterial,
 ): { update(state: GameState | null): void } {
   const restraint = new ArtBatch("opening.restraint", scene, cel);
   restraint.tube(
@@ -738,8 +781,9 @@ export function createExpeditionArt(
       hunterMesh.setEnabled(s?.scenario === "expedition");
       if (t) {
         hunterMesh.position.set(t.position.x, t.position.y, t.position.z);
-        const p = s!.player.pose.position;
-        hunterMesh.rotation.y = Math.atan2(
+        const p = t.distraction ?? (t.mode === "disengage" ? THREAT_HOME : s!.player.pose.position);
+        // The authored narrow sensory nose is at local -Z, like the Dart.
+        hunterMesh.rotation.y = -Math.atan2(
           p.x - t.position.x,
           -(p.z - t.position.z),
         );
@@ -758,15 +802,19 @@ export function createExpeditionArt(
       for (const v of s?.fleet.vehicles ?? []) {
         let m = vehicles.get(v.id);
         if (!m) {
-          m = dartArt(scene, cel, v.id, v.hull);
+          m = dartArt(scene, cel, glass, v.id, v.hull);
           m.renderingGroupId = 1;
           vehicles.set(v.id, m);
         }
         m.position.set(v.pose.position.x, v.pose.position.y, v.pose.position.z);
-        m.rotation.y = v.pose.yaw;
+        // Semantic +yaw turns local -Z toward +X. Babylon's mesh Y rotation
+        // uses the opposite sign, including in a right-handed scene.
+        m.rotation.set(v.hull === "dart" && !v.berth ? v.pose.pitch : 0, -v.pose.yaw, 0);
         m.setEnabled(
-          s?.player.controlledVehicleId !== v.id || v.hull === "hearthline",
+          s?.player.controlledVehicleId !== v.id || v.hull === "hearthline" || v.hull === "dart",
         );
+        for (const child of m.getChildMeshes())
+          if (child.name === `${v.id}.cockpit`) child.setEnabled(s?.player.controlledVehicleId === v.id);
       }
       buoyMesh.setEnabled(!!s?.inventory.buoy.deployed);
       if (s)
@@ -792,17 +840,17 @@ export function createExpeditionArt(
         carrierShell = null;
         shellKey = nextShellKey;
         if (h && dock) {
-          carrierShell = carrierShellArt(scene, cel, dock.configuration, openSlot);
+          carrierShell = carrierShellArt(scene, cel, glass, dock.configuration, openSlot);
         }
       }
       if (h) {
         if (carrierShell) {
           carrierShell.position.set(h.pose.position.x, h.pose.position.y, h.pose.position.z);
-          carrierShell.rotation.y = h.pose.yaw;
+          carrierShell.rotation.y = -h.pose.yaw;
         }
         const exit = launchPoint(h, h);
         blockMesh.position.set(exit.x, exit.y + 1, exit.z);
-        blockMesh.rotation.y = h.pose.yaw;
+        blockMesh.rotation.y = -h.pose.yaw;
       }
       for (const c of s?.recovery.caches ?? []) {
         let m = caches.get(c.id);
