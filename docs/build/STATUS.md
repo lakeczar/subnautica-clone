@@ -30,6 +30,17 @@ All earlier authors/reviewers and FND-01-R2-FIX have completed, with owned brows
 
 Await Sol round-three completion and read its exact task ID in [the record](reviews/FND-ECO-R3.md); do not duplicate it. Astra accepted `50f5569a92a6e18aac8970ecdb7918e5e217a455` with all prior findings resolved. If Sol accepts the same revision, record paired acceptance, prepare/publish actual PR evidence, open/link the foundation feature PR into game/siltwake, integrate and perform the separate M0 milestone gate. If Sol finds a substantiated issue, reconcile/fix through Sol and repeat fresh dual review. Public main merge/deployment remain owner actions. No construction PR exists yet; the public repo/default main and planning PR #1 were read-only verified during preparation.
 
+### Prepared foundation PR
+
+Local draft: `/tmp/siltwake-foundation-pr/body.md`; proposed title `feat(game): add Siltwake’s playable ocean foundation`, base `game/siltwake`. Before submission, replace its pending-Sol paragraph and unchecked paired-review goal with the actual verdict and committed review-record link. Do not submit that placeholder as acceptance. The draft distinguishes feature acceptance from the separate integrated M0 gate and keeps planning PR #1 as an explicit dependency.
+
+Two inspected screenshots were published on the separate `pr-assets` branch using the PR asset helper; both returned HTTP 200 with `image/png`. No working-branch source or deployment changed:
+
+- [Island overview](https://github.com/lakeczar/subnautica-clone/blob/pr-assets/feat-siltwake-foundation/foundation-island-author-8d72dd2.png?raw=true): original author `8d72dd2`; environment art unchanged.
+- [Paused graphics recovery](https://github.com/lakeczar/subnautica-clone/blob/pr-assets/feat-siltwake-foundation/paused-recovery-review-50f5569.png?raw=true): actual independent review capture at `50f5569`.
+
+The base has no runnable application; no matching before screenshot is claimed. Captures illustrate appearance, while linked browser reports substantiate behavior. On resumption, the Astra task result was acknowledged and Sol remained running with no pending question; no duplicate review was dispatched. This is documentation-only preparation, not new implementation or fresh test evidence.
+
 Reconcile independent findings, have Sol fix substantiated issues and return the corrected revision to both reviewers. After acceptance, integrate through a feature PR and verify the integrated M0 milestone before dependent implementation. ECO-01 is provisional arithmetic, not runtime routes or recovery proof; later production-registry adoption needs its own integration review. No additional owner decision is needed to continue.
 
 After restart, inspect branch/HEAD/worktree and task ledger; check active task status before duplicating work. Preserve major story spoilers outside ordinary updates and PR descriptions.
