@@ -19,7 +19,10 @@ export interface GameRenderer {
   dispose(): void;
 }
 
-export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
+/** Availability after loss follows engine reconstruction AND scene readiness,
+ * not the earlier native canvas event. Becoming available requests a redraw;
+ * it never grants permission to resume simulation. */
+export function createRenderer(canvas: HTMLCanvasElement, availabilityChanged: (available: boolean) => void): GameRenderer {
   const engine = new Engine(canvas, true, { disableWebGL2Support: false, preserveDrawingBuffer: false, stencil: false, powerPreference: 'high-performance' }, true);
   if (engine.webGLVersion < 2) { engine.dispose(); throw new Error('Siltwake needs WebGL 2. Enable hardware acceleration or use a current desktop browser with WebGL 2 support.'); }
   const scene = new Scene(engine);
@@ -47,8 +50,33 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     engine.resize();
   };
   setQuality('rich');
+  let disposed = false, available = true, generation = 0;
+  let whenReady: (() => void) | null = null;
+  const cancelReady = (): void => {
+    if (whenReady) scene.onReadyObservable.removeCallback(whenReady);
+    whenReady = null;
+  };
+  canvas.dataset.graphics = 'available';
+  const lost = engine.onContextLostObservable.add(() => {
+    if (disposed) return;
+    generation++; cancelReady(); available = false;
+    canvas.dataset.graphics = 'lost'; canvas.dataset.ready = 'false';
+    availabilityChanged(false);
+  });
+  const restored = engine.onContextRestoredObservable.add(() => {
+    if (disposed) return;
+    cancelReady(); const restoredGeneration = generation;
+    canvas.dataset.graphics = 'restoring';
+    whenReady = () => {
+      if (disposed || generation !== restoredGeneration) return;
+      whenReady = null; available = true; canvas.dataset.graphics = 'available';
+      availabilityChanged(true);
+    };
+    scene.executeWhenReady(whenReady);
+  });
   return {
     present(state) {
+      if (disposed || !available) return;
       const time = state ? state.tick / 60 : 0;
       if (state) {
         const pose = state.player.pose;
@@ -76,7 +104,12 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
       canvas.dataset.frames = String(++presented);
     },
     setQuality, resize,
-    dispose() { scene.dispose(); engine.dispose(); },
+    dispose() {
+      if (disposed) return;
+      disposed = true; cancelReady();
+      engine.onContextLostObservable.remove(lost); engine.onContextRestoredObservable.remove(restored);
+      scene.dispose(); engine.dispose();
+    },
   };
   } catch (error) { scene.dispose(); engine.dispose(); throw error; }
 }

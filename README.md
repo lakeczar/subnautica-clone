@@ -41,6 +41,8 @@ Walk forward from the pod deck, down the **amber-edged submerged ramp**, to ente
 
 Click **Controls & settings** for rendering quality, mouse sensitivity, invert look and optional **Resume with locked mouse**. Mouse lock is only requested by that explicit button. Rich renders at the viewport's CSS-pixel size; Light renders at two-thirds of each CSS dimension. Focus loss, a background tab, menus and a lost graphics context pause simulation and clear all held controls/cruise. Resume is explicit after interruptions. The pod is currently an exterior/deck; its facilities arrive in the first expedition.
 
+New/import normally enter automatically. An interruption or player pause during their pending read, confirmation or write keeps the selected expedition paused, even if focus or graphics recover before completion. Use **Return to the water** after the operation finishes and graphics are ready. Resume while busy or rebuilding is ignored. A fresh New/import request after an earlier settled interruption is a deliberate entry; the earlier pause does not permanently block it. Graphics recovery waits for Babylon to rebuild resources and prepare the scene, then redraws the paused view without advancing simulation.
+
 ## Keep progress
 
 **New expedition**, **Continue**, **Save locally**, **Export save** and **Import save** are in the menu. Autosave runs every 30 seconds of active simulation, after a session has a writable slot. Replacing an existing expedition or importing valid progress shows a replacement confirmation. Export before replacing a session you want to retain.

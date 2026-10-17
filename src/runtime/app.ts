@@ -41,6 +41,11 @@ export class SiltwakeApp {
   private readonly session: ExpeditionSession;
   private get state(): GameState | null { return this.session.state; }
   private paused = true;
+  // Permission belongs to one accepted New/import/Continue request. Preparation
+  // pauses preserve it; an interruption or player pause revokes it permanently
+  // for that request, even if focus/graphics recover before the I/O completes.
+  private entryCanResume = false;
+  private releasingMouse = false;
   private disposed = false;
   private dirty = true;
   private frameId = 0;
@@ -50,21 +55,26 @@ export class SiltwakeApp {
 
   constructor(root: HTMLElement) {
     this.session = new ExpeditionSession(this.repository, {
-      changed: () => this.syncSessionUi(), pause: () => this.pause(),
-      entered: () => { if (this.state) this.view.update(this.state, false); this.resume(); },
+      changed: () => this.syncSessionUi(), pause: () => this.pause('', false),
+      entered: () => this.entered(),
       notify: (message, error) => this.view.notify(message, error),
     });
     this.view = new GameView(root, {
-      newGame: () => { if (this.renderer) this.session.newGame(); }, continueGame: () => { if (this.renderer) this.session.continueGame(); }, resume: () => this.resume(), pause: () => this.pause(),
+      newGame: () => { if (this.renderer) this.requestEntry(() => this.session.newGame()); }, continueGame: () => { if (this.renderer) this.requestEntry(() => this.session.continueGame()); }, resume: () => this.resume(), pause: () => this.pause(),
       save: () => this.session.manualSave(), exportGame: () => this.exportGame(), exportBackup: () => this.exportBackup(), exportRaw: () => this.exportRaw(),
-      importFile: file => { void this.session.importFile(file); }, confirm: () => this.session.confirm(),
-      cancelConfirm: () => this.session.cancel(), lockMouse: () => this.lockMouse(),
+      importFile: file => this.requestEntry(() => { void this.session.importFile(file); }), confirm: () => this.session.confirm(),
+      cancelConfirm: () => { this.entryCanResume = false; this.session.cancel(); }, lockMouse: () => this.lockMouse(),
       settings: (quality, sensitivity, invertY) => this.applySettings({ quality, sensitivity, invertY }),
     });
     this.syncSessionUi();
     this.view.settings(this.settings.quality, this.settings.sensitivity, this.settings.invertY);
     try {
-      this.renderer = createRenderer(this.view.canvas);
+      this.renderer = createRenderer(this.view.canvas, available => {
+        if (this.disposed) return;
+        this.graphicsAvailable = available;
+        if (!available) this.pause('Graphics paused while the WebGL context is unavailable.');
+        else { this.dirty = true; this.view.notify('Graphics restored. Resume when ready.'); }
+      });
       this.input = new PlayerInput(this.view.canvas, () => this.active);
       this.applySettings(this.settings, false);
     } catch (error) { this.view.graphicsError(errorText(error)); }
@@ -83,11 +93,10 @@ export class SiltwakeApp {
     let hadMouseLock = false;
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === this.view.canvas;
-      if (hadMouseLock && !locked) this.pause('Mouse released.');
+      if (hadMouseLock && !locked && !this.releasingMouse) this.pause('Mouse released.');
+      if (!locked) this.releasingMouse = false;
       hadMouseLock = locked;
     }, options);
-    this.view.canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); this.graphicsAvailable = false; this.pause('Graphics paused while the WebGL context is unavailable.'); }, options);
-    this.view.canvas.addEventListener('webglcontextrestored', () => { this.graphicsAvailable = true; this.dirty = true; this.view.notify('Graphics restored. Resume when ready.'); }, options);
     window.addEventListener('pagehide', event => { if (event.persisted) this.pause('Paused after page navigation.'); else this.dispose(); }, options);
     this.frameId = requestAnimationFrame(now => this.frame(now));
   }
@@ -122,17 +131,33 @@ export class SiltwakeApp {
     else this.view.cancelConfirmation();
   }
 
-  private resume(): void {
-    if (this.disposed || !this.state || !this.renderer || this.session.confirmation || this.session.busy || !this.graphicsAvailable) return;
-    if (document.hidden) return;
-    this.input?.clear(); this.clock.reset(); this.paused = false; this.dirty = true;
-    this.view.showGame();
+  private requestEntry(action: () => void): void {
+    if (this.disposed || this.session.busy || this.session.confirmation) return;
+    // A new deliberate request may enter after an earlier settled interruption.
+    // Refused/busy actions never authorize a future completion.
+    this.entryCanResume = this.renderer !== null && this.graphicsAvailable && !document.hidden;
+    action();
   }
 
-  private pause(reason = ''): void {
+  private entered(): void {
     if (this.disposed) return;
+    if (this.state) this.view.update(this.state, false);
+    const automatically = this.entryCanResume; this.entryCanResume = false;
+    if (!automatically || !this.resume()) this.pause('Expedition ready. Resume when ready.', false);
+  }
+
+  private resume(): boolean {
+    if (this.disposed || !this.state || !this.renderer || this.session.confirmation || this.session.busy || !this.graphicsAvailable || document.hidden) return false;
+    this.input?.clear(); this.clock.reset(); this.paused = false; this.dirty = true;
+    this.view.showGame();
+    return true;
+  }
+
+  private pause(reason = '', interruptEntry = true): void {
+    if (this.disposed) return;
+    if (interruptEntry) this.entryCanResume = false;
     this.paused = true; this.clock.reset(); this.input?.clear();
-    if (document.pointerLockElement === this.view.canvas) document.exitPointerLock();
+    if (document.pointerLockElement === this.view.canvas) { this.releasingMouse = true; document.exitPointerLock(); }
     this.view.showMenu(this.state !== null, reason); this.syncSessionUi(); this.dirty = true;
   }
 
