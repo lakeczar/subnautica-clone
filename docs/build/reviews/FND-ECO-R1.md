@@ -1,6 +1,6 @@
 # FND-01 / ECO-01 independent review, round 1
 
-Status: both reviews dispatched; no acceptance yet. Date: 2026-10-17.
+Status: Astra returned FND changes required / ECO accept; Sol remains running. No combined acceptance yet. Date: 2026-10-17.
 
 - Candidate: `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`.
 - Foundation author: `8d72dd2ac2822873e36fe339f8ed2db8c837084b`.
@@ -23,6 +23,18 @@ Each returns separate explicit FND-01 and ECO-01 verdicts, severity/file/line/re
 ## Exact continuation
 
 Read each task status only when needed; completion notifications wake the coordinator. A timeout is not cancellation. Reconcile both findings, assign substantiated corrections to Sol, freeze corrected SHA, repeat applicable checks, and start **fresh** paired T3 review tasks with original brief plus all findings/dispositions. Record both explicit acceptances before accepting either batch. Then open/link the feature PR into `game/siltwake`, integrate and run the separately required integrated M0 review. Do not launch dependent game implementation before the accepted runnable foundation is integrated.
+
+## Astra result and preliminary coordinator dispositions
+
+[Full independent report](FND-ECO-R1-ASTRA.md). Task completed with no live children and owned tab/server closed. **FND-01: CHANGES REQUIRED; ECO-01: ACCEPT**, limited to provisional arithmetic/design. Integrated M0 remains unaccepted. Sol has not received these findings and its initial review remains independent.
+
+- FND-A1, P1: upgrade exposed Vite 7.3.1 to a patched compatible pin/lockfile. **Accepted.** Coordinator independently ran `npm audit --json`: direct Vite high-severity advisories confirmed; compatible 7.3.7 fix reported. Separate low esbuild advisory concerns its Windows dev server and is not an established exploit here. Rerun clean install/check/audit and production smoke after dependency correction.
+- FND-A2, P2: read-success/write-failure prevents New Game or validated import from producing an exportable session. **Accepted.** Coordinator inspected both early returns in `src/runtime/app.ts`; reviewer demonstrated actual browser quota refusal. Correction needs an explicit unsaved-session fallback, preservation of existing progress/current session until the user's replacement choice, export availability and disabled autosave. Add app-boundary coverage, not only storage mocks.
+- FND-A3, P2: compare followed by `setItem` is not an atomic cross-context transaction. **Accepted.** Coordinator reran the review's interleaved StoragePort diagnostic: both commits reported success, current tick 30 / previous tick 10, successful tick 20 lost. Preserve the single-record journal and add cross-context write serialization (e.g. Web Locks), safe unavailable-lock behavior and competing-writer coverage. This was a diagnostic model, not simultaneous browser-tab evidence.
+- Nonblocking bookkeeping: production logo is `public/siltwake.svg`, not the manifest's `siltwake-mark.svg`; correct in the next documentation update.
+- Carry forward ECO integration risks: persistent blueprint knowledge after fleet loss, concrete transferable module identity, bound recovery provenance, service-pallet layouts/return margins and actual carrier acquisition effort. Proposal acceptance does not settle these runtime obligations.
+
+Await Sol's separate findings before issuing the consolidated correction assignment. Source remains unchanged at the candidate; this record is evidence bookkeeping only.
 
 ## Common round-one brief
 

@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: FND-01 author complete and coordinator checks passed; paired independent reviews running on frozen candidate `2eb0244`. No implementation batch accepted yet.
+Updated: 2026-10-17. State: Astra review returned foundation changes required / economy proposal accept; separate Sol review still running on frozen candidate `2eb0244`. No combined batch acceptance yet.
 
 ## Authority and checkpoint
 
@@ -13,7 +13,7 @@ Updated: 2026-10-17. State: FND-01 author complete and coordinator checks passed
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-FND-01 and ECO-01 authors have completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. Separate non-author Astra xhigh and Sol 6.1 max reviews are running in isolated worktrees; three active agents including coordinator. [Round-one record and exact task IDs](reviews/FND-ECO-R1.md).
+FND-01 and ECO-01 authors have completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. Astra xhigh review completed; separate Sol 6.1 max review is running in its isolated worktree. Two active agents including coordinator. [Round-one record, findings/dispositions and exact task IDs](reviews/FND-ECO-R1.md).
 
 ## Acceptance and evidence
 
@@ -26,7 +26,7 @@ FND-01 and ECO-01 authors have completed. Exact IDs and paths are in the task le
 
 ## Exact next action
 
-Await the two T3 review completion notifications and read their results using the task IDs in the round-one record; do not duplicate active reviews. Both received `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`. Functional/contract changes wait for a correction assignment. Source export contracts are indexed in [CONTRACTS.md](CONTRACTS.md) and the author evidence. Later documentation-only task bookkeeping does not change the reviewed source SHA.
+Await Sol's independent review completion and read its result; do not duplicate that active task or share Astra findings before Sol returns. Both received `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`. Coordinator substantiated Astra's three findings: vulnerable Vite pin, unavailable unsaved-session fallback after write refusal, and non-atomic competing-tab saves. Consolidate Sol findings into the correction assignment to the main Sol builder. Source remains frozen; later documentation-only bookkeeping does not change the reviewed SHA.
 
 Reconcile independent findings, have Sol fix substantiated issues and return the corrected revision to both reviewers. After acceptance, integrate through a feature PR and verify the integrated M0 milestone before dependent implementation. ECO-01 is provisional arithmetic, not runtime routes or recovery proof; later production-registry adoption needs its own integration review. No additional owner decision is needed to continue.
 
