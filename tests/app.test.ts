@@ -8,15 +8,17 @@ import {
   browserFixture,
 } from "./app-browser-support.js";
 import { deferred, encoded, sample, settled } from "./persistence-support.js";
+import { fixtureGame } from "../src/sim/carrier.js";
+import type { SaveEnvelope } from "../src/save/codec.js";
 
 register("./app-loader.js", import.meta.url);
 const { SiltwakeApp } = await import("../src/runtime/app.js");
 
-async function fixture(t: test.TestContext) {
+async function fixture(t: test.TestContext, initial: SaveEnvelope = sample(300)) {
   const browser = browserFixture();
   const seed = new SaveRepository(browser.storage, browser.lock);
   seed.load();
-  assert.equal((await seed.commit(sample(300))).ok, true);
+  assert.equal((await seed.commit(initial)).ok, true);
   const app = new SiltwakeApp({} as HTMLElement);
   const view = GameView.current,
     renderer = TestRenderer.current;
@@ -338,4 +340,34 @@ test("app: gameplay menu cannot grant delayed New/import permission, and command
   await settled();
   assertPaused(f, 0);
   assert.equal(f.view.state!.opening.phase, 0);
+});
+
+test("app: carrier menu command then immediate queued manual save is coherent and a blur cannot resume it", async (t) => {
+  const initial = sample(0);
+  initial.state = fixtureGame();
+  const f = await fixture(t, initial);
+  f.view.actions.resume();
+  f.frames();
+  f.view.actions.panel("carrier");
+  const tick = f.view.state!.tick;
+  f.view.actions.command({ type: "carrier", action: "helm" });
+  assert.equal(f.view.state!.tick, tick);
+  assert.equal(f.view.state!.player.mode, "piloting");
+  const gate = deferred();
+  f.lock.gate = gate.promise;
+  const oldRecord = f.storage.getItem(LOCAL_SAVE_KEY);
+  f.view.actions.save();
+  f.window.dispatchEvent(new Event("blur"));
+  f.view.actions.command({ type: "carrier", action: "station-keep" });
+  f.view.actions.resume();
+  assert.equal(f.storage.getItem(LOCAL_SAVE_KEY), oldRecord);
+  gate.resolve();
+  await settled();
+  assertPaused(f, tick);
+  const loaded = new SaveRepository(f.storage, f.lock).load();
+  assert.ok(loaded.save);
+  assert.equal(loaded.save.state.tick, tick);
+  assert.equal(loaded.save.state.player.mode, "piloting");
+  assert.equal(loaded.save.state.fleet.docking!.stationKeeping, false);
+  assert.deepEqual(loaded.save.state.player.pose.position, loaded.save.state.fleet.vehicles[0]!.pose.position);
 });

@@ -124,6 +124,7 @@ export function recoveryCommand(
     v.disabled = false;
     v.emergencyAir = 120;
     s.recovery.losses = s.recovery.losses.filter((l) => l.vehicleId !== id);
+    if (s.recovery.operation?.vehicleId === id) s.recovery.operation = null;
     s.metrics.rescues++;
     s.feedback =
       "Bound maintenance patch installed. Hull restored; charge and cargo retained. Use a reserve cell if power is depleted.";
@@ -199,12 +200,13 @@ export function recoveryCommand(
 }
 export function updateRecovery(s: GameState, world: WorldQueries): void {
   const op = s.recovery.operation;
-  if (!op || op.phase === "ready") return;
+  if (!op) return;
   const v = s.fleet.vehicles.find((v) => v.id === op.vehicleId);
-  if (!v) {
+  if (!v || !v.disabled || v.berth) {
     s.recovery.operation = null;
     return;
   }
+  if (op.phase === "ready") return;
   const points = rescueWaypoints(s, v.id);
   const target = points[op.waypoint]!;
   const d = distance(op.position, target),

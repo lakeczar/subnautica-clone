@@ -10,7 +10,7 @@ import {
 import type { GameState } from "../sim/types.js";
 import { usedCapacity } from "../sim/inventory.js";
 import { WORLD_BOUNDS } from "../sim/world.js";
-import { atCarrierSupport, BERTH_LOCAL, localToWorld } from "../sim/carrier.js";
+import { atCarrierSupport, BERTH_LOCAL, CARRIER_LAYOUT, localToWorld } from "../sim/carrier.js";
 export const record = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const exact = (v: unknown, keys: string[]): v is Record<string, unknown> =>
@@ -640,6 +640,10 @@ function semantic(s: GameState): boolean {
     )
       return false;
     if (d.supportedDock !== atCarrierSupport(h)) return false;
+    if (p.interiorPose) {
+      const pos = localToWorld(p.interiorPose.position, h);
+      if (Math.hypot(p.pose.position.x - pos.x, p.pose.position.y - pos.y, p.pose.position.z - pos.z) > 0.01) return false;
+    }
     for (const a of f.vehicles)
       if (a.berth) {
         if (
@@ -666,10 +670,11 @@ function semantic(s: GameState): boolean {
       (!d.stationKeeping ||
         p.interiorId !== h.id ||
         !p.interiorPose ||
-        Math.abs(p.interiorPose.position.x) > 4.7 ||
-        p.interiorPose.position.y !== 4 ||
-        p.interiorPose.position.z < -11 ||
-        p.interiorPose.position.z > 10)
+        p.interiorPose.position.x < CARRIER_LAYOUT.interior.minX ||
+        p.interiorPose.position.x > CARRIER_LAYOUT.interior.maxX ||
+        p.interiorPose.position.y !== CARRIER_LAYOUT.interior.y ||
+        p.interiorPose.position.z < CARRIER_LAYOUT.interior.minZ ||
+        p.interiorPose.position.z > CARRIER_LAYOUT.interior.maxZ)
     )
       return false;
     const tx = d.transaction;

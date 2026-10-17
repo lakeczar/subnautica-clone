@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decodeSave, encodeSave, MAX_SAVE_BYTES } from "../src/save/codec.js";
+import { createEnvelope, decodeSave, encodeSave, MAX_SAVE_BYTES } from "../src/save/codec.js";
+import { CARRIER_LAYOUT, carrierCommand, fixtureGame, localToWorld } from "../src/sim/carrier.js";
+import { createWorldQueries } from "../src/sim/world.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import type { CommitResult } from "../src/save/repository.js";
@@ -347,4 +349,38 @@ test("oversized protected raw records cannot be discarded even by explicit repai
   if (!result.ok) assert.equal(result.code, "too-large");
   assert.equal(storage.writes, writes);
   assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
+});
+
+test("compatible schema2 carrier saves preserve all transforms; a newly covered walking pose relocates visibly once without writing", async () => {
+  const s = fixtureGame(), h = s.fleet.vehicles[0]!;
+  assert.equal(carrierCommand(s, "launch", "fixture_dart", createWorldQueries()), null);
+  const meta = sample().meta, envelope = createEnvelope(s, meta);
+  const safe = decodeSave(JSON.stringify(envelope));
+  assert.equal(safe.ok, true);
+  assert.deepEqual(safe.value, envelope);
+  // This was clear of the former craft proxy but now intersects its sealed fore wall.
+  s.player.interiorPose!.position = { x: -3, y: 4, z: -3.1 };
+  s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
+  const original = JSON.stringify(envelope), storage = new MemoryStorage();
+  storage.setItem(LOCAL_SAVE_KEY, JSON.stringify({ format: "siltwake.local", version: 1, current: original, previous: null, preserved: null }));
+  const raw = storage.getItem(LOCAL_SAVE_KEY), writes = storage.writes;
+  const repo = new SaveRepository(storage, new TestWriterLock());
+  const loaded = repo.load();
+  assert.ok(loaded.save);
+  assert.equal(storage.writes, writes);
+  assert.equal(storage.getItem(LOCAL_SAVE_KEY), raw);
+  assert.equal(loaded.save.schemaVersion, 2);
+  assert.equal(loaded.save.contentVersion, "expedition.2");
+  assert.match(loaded.save.state.migration!, /previous walking position.*moved/);
+  assert.deepEqual(loaded.save.state.player.interiorPose!.position, CARRIER_LAYOUT.helm);
+  assert.deepEqual(loaded.save.state.fleet, s.fleet);
+  assert.deepEqual(loaded.save.state.inventory, s.inventory);
+  assert.equal(encodeSave(envelope).ok, false, "current commands must never save a pose inside the new sealed shell");
+  const exported = encodeSave(loaded.save);
+  assert.equal(exported.ok, true);
+  const second = decodeSave(exported.value);
+  assert.equal(second.ok, true);
+  assert.deepEqual(second.value, loaded.save);
+  assert.equal((await repo.commit(loaded.save)).ok, true);
+  assert.equal(repo.backupText, original);
 });

@@ -222,14 +222,14 @@ function sweep(
   // Conservative swept upright capsule proxy: a box expanded by capsule dimensions.
   // This is already a continuous solid test; detailed vehicle shapes belong to M1.
   const min = {
-    x: solid.min.x - capsule.radius,
+    x: solid.min.x - (capsule.halfWidth ?? capsule.radius),
     y: solid.min.y - capsule.height,
-    z: solid.min.z - capsule.radius,
+    z: solid.min.z - (capsule.halfLength ?? capsule.radius),
   };
   const max = {
-    x: solid.max.x + capsule.radius,
-    y: solid.max.y,
-    z: solid.max.z + capsule.radius,
+    x: solid.max.x + (capsule.halfWidth ?? capsule.radius),
+    y: solid.max.y - (capsule.bottom ?? 0),
+    z: solid.max.z + (capsule.halfLength ?? capsule.radius),
   };
   let enter = -Infinity,
     exit = Infinity;
@@ -259,31 +259,33 @@ function sweep(
 
 export function createWorldQueries(
   solids: readonly Solid[] = SOLIDS,
+  floorHeight: (x: number, z: number) => number = surfaceHeight,
 ): WorldQueries {
   return {
     clearance(origin, capsule) {
+      const rx = capsule.halfWidth ?? capsule.radius, rz = capsule.halfLength ?? capsule.radius;
       if (
-        origin.x - capsule.radius < WORLD_BOUNDS.minX ||
-        origin.x + capsule.radius > WORLD_BOUNDS.maxX ||
-        origin.z - capsule.radius < WORLD_BOUNDS.minZ ||
-        origin.z + capsule.radius > WORLD_BOUNDS.maxZ ||
-        origin.y < surfaceHeight(origin.x, origin.z) - 0.02
+        origin.x - rx < WORLD_BOUNDS.minX ||
+        origin.x + rx > WORLD_BOUNDS.maxX ||
+        origin.z - rz < WORLD_BOUNDS.minZ ||
+        origin.z + rz > WORLD_BOUNDS.maxZ ||
+        origin.y + (capsule.bottom ?? 0) < floorHeight(origin.x, origin.z) - 0.02
       )
         return false;
       return !solids.some(
         (s) =>
-          origin.x + capsule.radius > s.min.x + 0.001 &&
-          origin.x - capsule.radius < s.max.x - 0.001 &&
-          origin.z + capsule.radius > s.min.z + 0.001 &&
-          origin.z - capsule.radius < s.max.z - 0.001 &&
+          origin.x + rx > s.min.x + 0.001 &&
+          origin.x - rx < s.max.x - 0.001 &&
+          origin.z + rz > s.min.z + 0.001 &&
+          origin.z - rz < s.max.z - 0.001 &&
           origin.y + capsule.height > s.min.y + 0.001 &&
-          origin.y < s.max.y - 0.001,
+          origin.y + (capsule.bottom ?? 0) < s.max.y - 0.001,
       );
     },
     waterHeight: WATER_Y,
-    groundHeight: surfaceHeight,
+    groundHeight: floorHeight,
     supportHeight(x, z, fromY) {
-      let height = surfaceHeight(x, z);
+      let height = floorHeight(x, z);
       for (const solid of solids) {
         if (
           x >= solid.min.x &&
@@ -342,6 +344,11 @@ export function createWorldQueries(
 /** Hull keel floor sampled across its conservative circular footprint. */
 export function hullFloor(world: WorldQueries, origin: Vec3, shape: Capsule): number {
   let floor = world.groundHeight(origin.x, origin.z);
+  if (shape.halfWidth !== undefined || shape.halfLength !== undefined) {
+    for (const x of [-1, 0, 1]) for (const z of [-1, 0, 1])
+      floor = Math.max(floor, world.groundHeight(origin.x + x * (shape.halfWidth ?? shape.radius), origin.z + z * (shape.halfLength ?? shape.radius)));
+    return floor - (shape.bottom ?? 0);
+  }
   for (let i = 0; i < 8; i++) {
     const a = i * Math.PI / 4;
     floor = Math.max(floor, world.groundHeight(
@@ -349,7 +356,7 @@ export function hullFloor(world: WorldQueries, origin: Vec3, shape: Capsule): nu
       origin.z + Math.sin(a) * shape.radius,
     ));
   }
-  return floor;
+  return floor - (shape.bottom ?? 0);
 }
 export function hullClearance(world: WorldQueries, origin: Vec3, shape: Capsule): boolean {
   return world.clearance(origin, shape) && origin.y >= hullFloor(world, origin, shape) + 0.05;
@@ -384,4 +391,16 @@ export function moveHull(
     hitBoundary ||= result.hitBoundary;
   }
   return { position, hitSolid, hitBoundary };
+}
+
+/** Tests a guided route without sliding or changing state. Solids sweep continuously;
+ * terrain uses the same 0.2 m slices and full footprint as piloted movement. */
+export function sweptHullClearance(world: WorldQueries, path: readonly Vec3[], shape: Capsule): boolean {
+  if (!path.length || !path.every((p) => hullClearance(world, p, shape))) return false;
+  for (let i = 1; i < path.length; i++) {
+    const from = path[i - 1]!, to = path[i]!;
+    const move = moveHull(world, from, { x: to.x - from.x, y: to.y - from.y, z: to.z - from.z }, shape);
+    if (move.hitSolid || move.hitBoundary || Math.hypot(move.position.x - to.x, move.position.y - to.y, move.position.z - to.z) > 0.001) return false;
+  }
+  return true;
 }

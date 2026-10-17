@@ -103,9 +103,9 @@ export class Soundscape {
         : e.cue === "warning"
           ? "triangle"
           : "sine";
-    if (e.cue === "warning" && s) {
+    if (e.origin && s) {
       const p = s.player.pose,
-        t = s.world.threat.position;
+        t = e.origin;
       pan.pan.value = Math.max(
         -1,
         Math.min(
