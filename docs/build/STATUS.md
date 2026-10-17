@@ -23,6 +23,8 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 Presentation's stale successful-transfer notice was confirmed on the shared baseline and routed to CORE within its existing task; [request and ownership](TASKS.md#cross-owner-request-transfer-feedback). No shared interface change or competing edit. Verify the returned core fix together with presentation before accepting that behavior.
 
+VISUAL's cross-path glass, Canopy atmosphere and Dart cockpit issues have a [bounded render follow-up](tasks/M1-RENDER.md), prepared but not dispatched. It must follow CORE/VISUAL terminal handoffs and committed assembly with explicit path transfer, and finish before M1 presentation acceptance. [Triage and steering](TASKS.md#cross-owner-requests-glass-atmosphere-and-pilot-view) preserve all three active workers' current scope; no fourth child or competing render edits.
+
 ## Acceptance and evidence
 
 - FND-01 author commit: `8d72dd2ac2822873e36fe339f8ed2db8c837084b`; clean worktree. [Author evidence](evidence/FND-01.md) records 18 passing tests, final production scene and ordinary-control movement, pause, save/reload and rejected-import checks. Builder closed its tab/server and preserved coordinator tab14.

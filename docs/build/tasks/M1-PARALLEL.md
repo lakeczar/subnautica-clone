@@ -14,6 +14,8 @@ All three workers use **Sol 6.1 max** in separate T3 worktrees from the same com
 
 The root-facing core route assignment deliberately excludes ownership of the entire P4 recovery and F0–F3 carrier browser matrix. A separate physical-recovery/carrier assignment rotates into a completed slot after necessary interface changes are frozen. If a discovered route defect touches those mechanisms, core may fix only the directly blocking issue in its owned paths and report coverage. Full deep Bobbin and campaign carrier construction remain M2.
 
+VISUAL's glass, deep surface/sky and Dart pilot-view proposals are reserved for [M1-RENDER](M1-RENDER.md), prepared but not dispatched. It starts only after CORE/VISUAL handoff and a committed combined baseline, with explicit transfer of the four render paths. Current workers finish their bounded tasks without these cross-path changes. Close this render pass before first-expedition presentation acceptance; keep the separate recovery/carrier assignment bounded and disjoint.
+
 ## Frozen shared boundaries
 
 Read [CONTRACTS](../CONTRACTS.md#reconciled-a0-interfaces-for-provisional-m1-work) and [A0 exact dimensions](../evidence/M1-A0.md#exact-physical-contracts-proposed-to-root). Main core alone owns registry IDs/positions/costs/provenance, types/world, save schema and app lifecycle. Art reads `CARRIER_LAYOUT`, `carrierStructure`, `BERTH_ENVELOPES`, shared terrain/solids and existing scene interfaces. UI/audio reads commands/state/events and uses the transient `GameEvent.origin?: Vec3` correctly. No duplicated registry, invisible art-only air source, cosmetic relocation of colliding machinery or persistent-provenance copyediting.
