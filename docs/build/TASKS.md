@@ -8,3 +8,7 @@ Only the coordinator dispatches. Default cap is four active agents including coo
 | ECO-01 proposal | Native `/root/expedition_economy` | `gpt-6.1-sol` / `max` | `a3e400b`; only `docs/build/design/ECONOMY_CANDIDATE.md`, `economy-candidate.json`, `check-economy.mjs` | Author complete; coordinator committed `cd1d303` and reran checker (pass). Provisional, awaiting dual review with FND-01 and later runtime registry integration |
 
 Coordinator retains other documentation, integration and reviews. Builders return commit/path/check evidence and do not dispatch children or edit planning/canon without an explicit path assignment. Independent reviewers author no candidate changes.
+
+## Active independent reviews
+
+FND-01 + ECO-01 round 1 is running on frozen candidate `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef` in two T3-isolated worktrees: Astra xhigh and Sol 6.1 max. [Exact task IDs, request IDs, briefs and continuation](reviews/FND-ECO-R1.md). Three active agents including coordinator; no author remains active. Await completion notifications and reconcile independent findings before correction work. No batch accepted yet.

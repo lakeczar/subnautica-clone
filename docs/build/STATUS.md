@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: FND-01 author complete and coordinator checks passed; freezing the first independent-review candidate. No implementation batch accepted yet.
+Updated: 2026-10-17. State: FND-01 author complete and coordinator checks passed; paired independent reviews running on frozen candidate `2eb0244`. No implementation batch accepted yet.
 
 ## Authority and checkpoint
 
@@ -13,7 +13,7 @@ Updated: 2026-10-17. State: FND-01 author complete and coordinator checks passed
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-FND-01 and ECO-01 authors have completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. Coordinator is preparing separate non-author Astra xhigh and Sol 6.1 max reviews in isolated worktrees.
+FND-01 and ECO-01 authors have completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. Separate non-author Astra xhigh and Sol 6.1 max reviews are running in isolated worktrees; three active agents including coordinator. [Round-one record and exact task IDs](reviews/FND-ECO-R1.md).
 
 ## Acceptance and evidence
 
@@ -26,7 +26,7 @@ FND-01 and ECO-01 authors have completed. Exact IDs and paths are in the task le
 
 ## Exact next action
 
-Freeze the committed FND-01 plus ECO-01 proposal and these evidence records. Dispatch two independent reviews of the same SHA; record their task IDs in the ledger. Functional/contract changes wait for a correction assignment. Source export contracts are indexed in [CONTRACTS.md](CONTRACTS.md) and the author evidence.
+Await the two T3 review completion notifications and read their results using the task IDs in the round-one record; do not duplicate active reviews. Both received `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`. Functional/contract changes wait for a correction assignment. Source export contracts are indexed in [CONTRACTS.md](CONTRACTS.md) and the author evidence. Later documentation-only task bookkeeping does not change the reviewed source SHA.
 
 Reconcile independent findings, have Sol fix substantiated issues and return the corrected revision to both reviewers. After acceptance, integrate through a feature PR and verify the integrated M0 milestone before dependent implementation. ECO-01 is provisional arithmetic, not runtime routes or recovery proof; later production-registry adoption needs its own integration review. No additional owner decision is needed to continue.
 
