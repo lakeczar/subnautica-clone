@@ -332,7 +332,7 @@ export function hint(s: GameState): string {
   if (!has("C04"))
     return s.knowledge.hintLevel < 3
       ? "Follow the buoyant crowns east from the island. Quiet movement gives time to read the hunter’s warning."
-      : "Use the open upper crowns, above 150 m. The laboratory is tucked against the tall cover rib; the clear north flank leads back to the island.";
+      : "Use the open upper crowns, above 150 m. The laboratory is tucked against the tall cover rib; the clear upper flank leads back to the island.";
   return "The upper-Canopy field sheet points toward Basin survey dishes. This M1 route ends with preparation at a refuge; the larger Basin expedition is not yet open.";
 }
 export const personalLimit = (s: GameState): number =>
