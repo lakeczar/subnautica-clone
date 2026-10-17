@@ -1,18 +1,25 @@
 # Siltwake
 
-> **Design reopened; build input pending review.** The user now wants an approximately ten-hour ocean/island adventure with a discoverable mystery, a useful home pod, and a fleet of increasingly capable submersibles including mobile homes. The earlier short-campaign prompt below is retained as draft one and must not be submitted for construction. Follow the [active Wayfinder map](.scratch/siltwake/map.md). Two small visual prototypes will inform the art choice; their directions are being selected in the integrated questionnaire.
+An original alien-ocean adventure being designed around discovery, a recoverable mystery, and a fleet of increasingly capable submersibles. **Siltwake is a working title.**
 
-An original underwater survival-exploration game brief: restore a silent observatory beneath alien ice, extend your range with oxygen relays, and cross a luminous migration to reach the ascent beacon.
+**Status: design interview and original graphics studies. Full game construction is reserved for a later run, after the owner reviews the revised build input.**
 
-**Status: research and build prompt only. The game has not been built or playtested.** This public repository is the planning and future implementation home. Its existing repository slug is `subnautica-clone`; the proposed game identity is **Siltwake**.
+## Agreed direction
 
-## Earlier launch instructions — held until the revised input is reviewed
+- Approximately ten hours for a first main-story playthrough, with optional exploration beyond it. Repeated harvesting and travel must not pad the duration.
+- Open ocean, explorable islands, and research settlements from small outposts to larger ruins. Biomes, resources, ecology, blueprints and story discoveries must form one coherent world.
+- The player wakes in a damaged pod with missing memories. Scans, personal journals and physical evidence gradually reveal what happened.
+- The starting pod provides storage, crafting and healing. Construction focuses on distinct scouts, utility craft and increasingly customizable mobile homes, supported by modest fixed outposts.
+- Compare original voxel and cel-shaded graphics, both with vibrant underwater atmosphere, before choosing an art direction.
+- Astra coordinates the complete future game and its integration; GPT-6.1 Sol at **max** reasoning creates original graphics under shared art direction.
 
-Open [the complete one-shot build prompt](prompts/BUILD_GAME.md) and paste it into a fresh **GPT-6 Astra** coding session working in this repository. Alternatively, give that session this instruction:
+The duration is a design target, not a measured result. The game has not been built or playtested. Browser delivery with TypeScript/Babylon.js is an earlier recommendation being evaluated; the small art viewer does not prove full-game performance.
 
-> Read `AGENTS.md` and `prompts/BUILD_GAME.md`, then execute the build prompt. You are the Astra coordinator; use Astra child agents as specified. Build and verify the complete game, maintain the project state, and prepare the implementation PRs for final review.
+## Follow the planning work
 
-While the planning PR is unmerged, use its branch:
+The [active Wayfinder map](.scratch/siltwake/map.md) is the entry point. Human decisions live in its linked tickets. The [art comparison decision](.scratch/siltwake/issues/02-art-comparison.md) links the separate throwaway source and evidence as they become available.
+
+[Planning PR](https://github.com/lakeczar/subnautica-clone/pull/1) · [public repository](https://github.com/lakeczar/subnautica-clone)
 
 ```bash
 gh repo clone lakeczar/subnautica-clone
@@ -20,28 +27,10 @@ cd subnautica-clone
 git switch docs/astra-game-build-brief
 ```
 
-After it merges, use `main`. No game installation command exists yet; the build run must create and verify it.
+The [graphics workflow](docs/GRAPHICS_PIPELINE.md) records the requested Sol max delegation and the shared contracts for future production. The revised one-shot input will be presented in full for review before submission. **Do not execute [BUILD_GAME.md](prompts/BUILD_GAME.md): it is the superseded first draft**, which described a much shorter, vehicle-free, under-ice game. The earlier [synthesis](docs/SYNTHESIS.md) is historical rationale, not the current scope.
 
-The prompt is self-contained and defines the creative brief, required mechanics, default stack, agent ownership, milestones, PR workflow, browser isolation rules, and release evidence. “One shot” means one initial brief with iterative execution, not a single model call or a guaranteed result. Execution time and cost have not been estimated or capped by this planning run.
+## Research
 
-## What is planned
+Three GPT-6.1 Sol agents independently investigated [platforms and language](docs/research/01-platform.md), [gameplay and scope](docs/research/02-game-design.md), and [agent orchestration](docs/research/03-orchestration.md). [Deeper primary-source gameplay research](.scratch/siltwake/artifacts/gameplay-research.md) examines recognizable resource geography, useful return visits, vehicle loadouts, danger/sanctuary rhythm and crafting busywork. These findings inform hypotheses; fresh-player playtests must establish whether the eventual game is fun.
 
-- **Game:** a complete 30–45 minute campaign, three regions, six original fauna types, four meaningful equipment improvements, two restored oxygen refuges, and an ending.
-- **Stack:** strict TypeScript, Vite, Babylon.js, WebGL 2; desktop browser, local saves, bundled assets, static production build.
-- **Team:** one Astra coordinator with up to three Astra workers, clear ownership, a committed foundation, and frequent integration.
-- **Quality gate:** normal-input start-to-ending playthrough, recovery/save checks, useful automated tests, cohesive art/audio, and measured performance with hardware limitations disclosed.
-- **Release:** feature branches and reviewable PRs; final main merge and public deployment remain with the owner.
-
-The browser is the selected delivery target. Vehicles, freeform bases, multiplayer, and an infinite world are outside the first release. The aim is a finished small game whose systems work together.
-
-## Research and alternatives
-
-Three **GPT-6.1 Sol** research agents investigated the choices independently. Their reports cite primary sources and separate observed facts from recommendations:
-
-1. [Platform and language](docs/research/01-platform.md) — Babylon.js, Three.js, and Godot; architecture, delivery, and testing constraints.
-2. [Game design and scope](docs/research/02-game-design.md) — Subnautica, round-based horde survival, fishslop candidates, and original settings.
-3. [Prompt and orchestration](docs/research/03-orchestration.md) — Astra delegation, worktrees, contracts, PRs, and evidence.
-
-[The consolidated decisions](docs/SYNTHESIS.md) explain what was selected and narrowed. [Alternative game briefs](prompts/GENRE_VARIANTS.md) give wave-survival and aquarium-economy capability tests using the same completion standard. Neither variant is an extra mode required for Siltwake.
-
-Research reports are proposals; [BUILD_GAME.md](prompts/BUILD_GAME.md) is the authoritative implementation contract. The title is a working creative choice, not a claim of trademark availability. No benchmark scores or model-performance claims were produced.
+[Alternative capability-test briefs](prompts/GENRE_VARIANTS.md) cover wave survival and aquarium economy. They are examples, not additional Siltwake modes.
