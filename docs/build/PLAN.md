@@ -21,6 +21,8 @@ The [delivery gates](../DELIVERY_AND_ACCEPTANCE.md) own acceptance. This plan se
 
 ## Integration order
 
+Owner additionally requested one early **Opus 5.5 / high** project, gameplay-loop and visual critique while M1 is provisional. [OPUS-DESIGN-R1](tasks/OPUS-DESIGN-R1.md) scopes this advisory pass against actual imagery/play evidence and the full campaign plan. It supplements the technical pair and preserves the later full-campaign Astra critic. Root consolidates findings; Sol max implements accepted changes.
+
 The owner requested an additional dedicated game-design critic near the end. [DESIGN-CRITIC](tasks/DESIGN-CRITIC.md) runs on the full playable campaign at the M3-to-M4 transition, with correction time reserved before release. Primary-source research and the critic procedure passed [paired independent review](reviews/DESIGN-PREP-R1.md) at `c0aa5cb`; it is not a review of the current incomplete game. A fresh non-author Astra xhigh critic examines the actual game, and Sol max implements accepted fixes. Keep the separate Astra/Sol technical acceptance pair.
 
 One main builder owns the first runnable baseline. After reconciliation, split along proven module seams: simulation/progression, renderer/assets/world presentation, and content/UI/audio as appropriate. Assign exclusive paths and one composition owner. Use T3 worktree delegation from a committed baseline for independent checkouts. Integrate small commits and test combined behavior before expanding scope.
