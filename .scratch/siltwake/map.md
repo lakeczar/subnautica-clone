@@ -37,6 +37,8 @@ No additional owner-preference question blocks the review input. Recipe quantiti
 
 [Review the complete long-running build input](issues/06-final-build-input.md) links the full prompt and its integrated specification. The old short-game prompt remains superseded. User review and a later explicit build instruction are still required by the user's chosen scope; the current run does not submit construction.
 
+The owner additionally requires Astra at `xhigh` and Sol 6.1 at `max` to review completed/delegated work along the way. The [Independent review gate](../../docs/DELIVERY_AND_ACCEPTANCE.md#independent-review-gate) defines separate non-author reviewers, coordinator self-review, correction rounds and integrated milestone acceptance. The coordinator runs Astra at `xhigh`.
+
 ## Out of scope
 
 - Executing the earlier build prompt, starting the full game, merging to main or publicly deploying during this design interview.

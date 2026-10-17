@@ -1,6 +1,6 @@
 # Siltwake final-input review
 
-Result: **No mandatory correction or blocking contradiction found in the reviewed planning input.** This is a static specification review, not evidence that the planned game is implemented, balanced, enjoyable or performant.
+Initial review at planning commit `8a66bbc`: **No mandatory correction or blocking contradiction found in that planning input.** The dual-review workflow added later is a separate amendment. This is a static specification review, not evidence that the planned game is implemented, balanced, enjoyable or performant.
 
 Reviewed `prompts/BUILD_GAME_REVISED.md`, `docs/EXPEDITION_INTEGRATION.md`, `docs/DELIVERY_AND_ACCEPTANCE.md`, `docs/FLEET_AND_SURVIVAL.md`, `docs/WORLD_PROGRESSION.md`, `docs/STORY_DESIGN.md`, `docs/GRAPHICS_PIPELINE.md`, `GLOSSARY.md`, the planning map and decision tickets. Read the labelled canon only to verify its machinery/access, clue placement, optional-record and ending dependencies. No truth spoilers are repeated here. Ignored the coordinator’s explicitly in-flight README/AGENTS/ticket status edits.
 
@@ -28,4 +28,4 @@ Official OpenAI guidance was fetched for [persistent agent instructions](https:/
 
 ## Document and review-viewer checks
 
-The coordinator checked whitespace, local Markdown link targets, all fifteen unique canonical clue IDs against their world placements, and the eight unique material-source rows. The review viewer contains the complete 17,023-character / 2,254-word input, six fleet roles and functioning section selection. Its 728-pixel T3 HTML preview produced no console errors. These are document/viewer checks, not gameplay tests.
+At `8a66bbc`, the coordinator checked whitespace, local Markdown link targets, all fifteen unique canonical clue IDs against their world placements, and the eight unique material-source rows. The review viewer contained that revision's complete 17,023-character / 2,254-word input, six fleet roles and functioning section selection. Its 728-pixel T3 HTML preview produced no console errors. That viewer predates the dual-review amendment; the current [build input](../prompts/BUILD_GAME_REVISED.md) is authoritative. These are document/viewer checks, not gameplay tests.

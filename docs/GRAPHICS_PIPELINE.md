@@ -20,6 +20,7 @@ Geometry and material source are original and deterministic. This establishes an
 - Vehicles need distinct functional silhouettes, meaningful scale, visible access points and attachment locations that match their gameplay modules. The most capable craft must communicate inhabited space and utility. A beautiful exterior is not evidence of a traversable interior.
 - Review assets in the actual game camera and lighting, including darkness and visual clutter. Require a functional interaction or readable cue before spending effort on tiny surface decoration. Compare paired style studies with identical subjects, cameras, lighting and animation time.
 - Integrate a bounded first pass early. The coordinator inspects rendered results, gives specific corrections, and repeats only where a visible or functional problem warrants it. Do not accept disconnected asset folders as a finished art pass.
+- Before accepting an art batch or its integrated milestone, apply the [Independent review gate](DELIVERY_AND_ACCEPTANCE.md#independent-review-gate). The Sol artist cannot serve as that batch's independent Sol reviewer.
 - Record source, screenshots, build/check results and limitations in the relevant PR. Follow repository browser isolation rules. Software-rendered evidence must not be presented as consumer-GPU performance.
 
 These requirements describe the intended production workflow. The current prototype remains disposable evidence for the art decision and is not an approved foundation for the ten-hour game.

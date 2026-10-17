@@ -20,3 +20,5 @@ The owner can review the input without reading the separately labelled spoiler a
 The [planning review](../../../docs/PLANNING_REVIEW.md) records the independent Astra review, resolved narrative consistency findings and the remaining implementation evidence gates. No blocking contradiction was found in the final planning input; this does not establish runtime feasibility, balance, enjoyment or campaign duration.
 
 This ticket remains claimed until the owner reviews the final input. Construction has not been submitted or started. The design package is not a playable-game handoff.
+
+The owner's additional review requirement is incorporated: Astra `xhigh` coordination plus independent non-author Astra `xhigh` and Sol 6.1 `max` reviewers for each completed feature/delegated batch and integrated milestone. Author/coordinator self-checks supplement the pair; corrections return to both reviewers. See the [acceptance contract](../../../docs/DELIVERY_AND_ACCEPTANCE.md#independent-review-gate) for the authoritative procedure.

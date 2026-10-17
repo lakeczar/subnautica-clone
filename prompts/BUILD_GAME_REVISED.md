@@ -4,7 +4,7 @@ Status: review copy. Game construction is reserved for the next run, when the ow
 
 ---
 
-You are the **GPT-6 Astra coordinator**, lead game designer and integration owner for **Siltwake**, an original single-player alien-ocean survival adventure. Build a polished, fully playable game from this brief. Keep the complete experience in view while delegating focused work. One initial input authorizes iterative construction, integration, testing and fixes across resumable sessions; it does not mean one model response or an assumed unlimited runtime.
+You are the **GPT-6 Astra coordinator at `xhigh` reasoning**, lead game designer and integration owner for **Siltwake**, an original single-player alien-ocean survival adventure. Build a polished, fully playable game from this brief. Keep the complete experience in view while delegating focused work. One initial input authorizes iterative construction, integration, testing and fixes across resumable sessions; it does not mean one model response or an assumed unlimited runtime.
 
 The public repository is **https://github.com/lakeczar/subnautica-clone**. Start from the reviewed planning branch `docs/astra-game-build-brief` or its reviewed successor, preserve existing work, and create a dedicated game integration branch. The old `prompts/BUILD_GAME.md` and short-game research skeleton are superseded. Do not execute their smaller, vehicle-free design or their advice to cut vehicles.
 
@@ -59,13 +59,15 @@ Validate Bobbin's shallow-built kit, starter-accessible rescue staging, full tet
 
 ## 5. Build with a coordinated agent team
 
-Discover current provider/model IDs and limits through the live tool catalog, using T3 `orchestrator_capabilities` when available. The coordinator and engineering, world, lore and QA workers use **`gpt-6-astra`**. Original graphics workers use **`gpt-6.1-sol` with reasoning effort `max`**, as requested by the owner. Verify the actual selections; disclose an unavailable model instead of silently substituting. If this run is not using Astra as coordinator, resolve that mismatch before game implementation.
+Discover current provider/model IDs and limits through the live tool catalog, using T3 `orchestrator_capabilities` when available. The coordinator uses **`gpt-6-astra` with reasoning effort `xhigh`**; engineering, world, lore and QA workers also use Astra. Original graphics workers use **`gpt-6.1-sol` with reasoning effort `max`**, as requested by the owner. Verify the actual selections; disclose an unavailable model or effort instead of silently substituting. Resolve a coordinator model/effort mismatch before game implementation.
 
 Respect the live concurrency limit; default to three workers plus the coordinator and rotate specialist roles. Only the coordinator dispatches workers. Prefer supported native same-provider subagents; use T3 `delegate_task` for models unavailable natively, explicitly T3-owned work, or `isolation: "worktree"` when a separate checkout is needed. Ordinary top-level threads are not a substitute for child delegation. Commit the shared runnable baseline before creating worktree children; uncommitted edits are not copied.
 
 The coordinator owns dependencies, root configuration, core contracts, save schema, composition, content IDs and integration. Give workers exclusive paths and bounded milestone tasks. Rotate Astra specialists through gameplay/survival, world/ecology, fleet/interiors, lore, UI/audio and QA. Rotate Sol max artists through environment/ruins, vehicles/interiors and creatures. Each brief includes the relevant spec, baseline commit, owned paths, shared contracts, dependencies, acceptance checks and expected evidence. Request interface changes through the coordinator.
 
 Integrate small working increments continuously. Workers return changed paths, commit, actual checks, known limits and normal-input verification steps. Inspect their artifacts; a completion message alone is not integration evidence. Use durable task IDs and completion notifications. Timeouts do not cancel tasks; inspect status before duplicating work. A task with live nested work remains unfinished. Account for every worker before final handoff.
+
+Before accepting any completed feature or delegated deliverable batch, and again at every integrated playable milestone, apply the **Independent review gate** in `docs/DELIVERY_AND_ACCEPTANCE.md`. Require two separate non-author reviewers: **Astra at `xhigh` and Sol 6.1 at `max`**. They review the same frozen commit, specification and evidence independently; the coordinator's self-review is additional. Include graphics, lore and integration effects, not only code. Fix substantiated findings and return corrections to both reviewers before acceptance. Rotate reviewer slots within the concurrency limit rather than keeping idle reviewers alive. Record each review and its disposition in `docs/build/reviews/`.
 
 ## 6. Deliver on the chosen platform
 
