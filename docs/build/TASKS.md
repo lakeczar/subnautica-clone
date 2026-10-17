@@ -37,6 +37,12 @@ Both round-two reviews of `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc` are complet
 
 Both non-author reviewers accepted FND-01 and provisional ECO-01 at `50f5569a92a6e18aac8970ecdb7918e5e217a455`. All prior findings resolved; no new blocking findings or unresolved objections. [Exact task/request IDs, both full reports and continuation](reviews/FND-ECO-R3.md). No live children; owned resources closed. Coordinator accepts this bounded batch, with separate integrated M0 review pending. Only coordinator active. Historical states above describe their earlier checkpoints.
 
-## M0 integration review preparation
+## Active M0 milestone reviews
 
-Foundation feature PR #2 is open/T3-linked; accepted source was merged locally into `game/siltwake` at `1bba23a`, with identical feature tree. Coordinator clean-install/check/economy/production-smoke passed. [Evidence](evidence/M0-INTEGRATION.md). The next tasks are fresh independent non-author Astra xhigh + Sol max milestone reviews of the evidence-bearing frozen revision; neither has been dispatched yet. No implementation worker active.
+Both fresh non-author M0 reviews are running at `d41543694bd68e8e41a01465df7141634a5567f2`: provider `codex`, Astra `gpt-6-astra` / `xhigh`, Sol `gpt-6.1-sol` / `max`; separate T3 worktrees. [Exact task/request IDs and complete common brief](reviews/M0-R1.md). Three active agents including coordinator; no implementation author active. Await notifications; no polling watcher or duplicate review.
+
+Foundation PR #2 is confirmed merged into `game/siltwake`; draft integration PR #3 targets planning branch/PR #1. All T3-linked. [Coordinator evidence](evidence/M0-INTEGRATION.md) covers clean install, 65 tests/build, economy arithmetic, ordinary-input/reload and labelled interruption diagnostic. Separate M0 acceptance is pending.
+
+## Prepared next implementation
+
+[M1-01](tasks/M1-01.md) is the first-expedition assignment for Sol 6.1 max, **not dispatched**. It covers opening/pod/C01–C04, habitat-specific gathering/crafting, first Dart, survival/encounter/recovery, richer-cel/UI/audio iteration, explicit schema migration and simplified carrier/collision feasibility. Baseline and task ID must be supplied after M0 acceptance. Coordinator read all current integration/world/fleet/story/graphics specifications and spoiler canon; no owner-facing reveal is introduced by the assignment.
