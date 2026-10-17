@@ -1,6 +1,6 @@
 import { EVIDENCE, HULL_COLLIDERS, HULLS, ITEMS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
-import { createWorldQueries, moveHull } from "./world.js";
+import { createWorldQueries, moveHull, WORLD_BOUNDS } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import type {
   GameCommand,
@@ -109,11 +109,22 @@ function action(s: GameState, c: GameCommand, w: WorldQueries): string | null {
       const t = s.world.threat;
       if (t.distractionSeconds > 0) return "Distraction is already active.";
       const p = s.player.pose;
-      t.distraction = {
-        x: p.position.x + Math.sin(p.yaw) * 16,
+      const dx = Math.sin(p.yaw), dz = -Math.cos(p.yaw);
+      let range = 16;
+      // Shorten the ray at the first edge, preserving the intended direction.
+      // Ignore cardinal-heading trig residue when finding the intersected edge.
+      if (Math.abs(dx) > Number.EPSILON)
+        range = Math.min(range, ((dx > 0 ? WORLD_BOUNDS.maxX : WORLD_BOUNDS.minX) - p.position.x) / dx);
+      if (Math.abs(dz) > Number.EPSILON)
+        range = Math.min(range, ((dz > 0 ? WORLD_BOUNDS.maxZ : WORLD_BOUNDS.minZ) - p.position.z) / dz);
+      const target = {
+        x: clamp(p.position.x + dx * range, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX),
         y: p.position.y,
-        z: p.position.z - Math.cos(p.yaw) * 16,
+        z: clamp(p.position.z + dz * range, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ),
       };
+      if (range <= 0 || (target.x === p.position.x && target.z === p.position.z))
+        return "Face into the survey area to release a directional pulse.";
+      t.distraction = target;
       t.distractionSeconds = 12;
       s.feedback =
         "Service-tool resonator released a directional pulse. Move quietly away from it.";
