@@ -3,7 +3,7 @@ import type { Capsule, CarrierState, GameState, Vec3, VehicleState, WorldQueries
 import { distance } from "./inventory.js";
 import { createGame, makeVehicle } from "./state.js";
 import { completeOpening } from "./progression.js";
-import { createWorldQueries, sweptHullClearance, type Solid } from "./world.js";
+import { createWorldQueries, sweptHullClearance, withinWorldBounds, WORLD_BOUNDS, type HorizontalBounds, type Solid } from "./world.js";
 export const BERTH_LOCAL: readonly Vec3[] = [
   { x: -3, y: 4, z: 1 },
   { x: 3, y: 4, z: 1 },
@@ -144,6 +144,94 @@ export function worldToLocal(world: Vec3, carrier: VehicleState): Vec3 {
     z: -Math.sin(carrier.pose.yaw) * dx + Math.cos(carrier.pose.yaw) * dz,
   };
 }
+/** The existing yaw-independent piloting proxy encloses the rooms, berth hulls,
+ * walking bounds and vestibules at every heading. Launch still needs its own sweep. */
+export function carrierTravelBounds(): HorizontalBounds {
+  const { radius } = HULL_COLLIDERS.hearthline;
+  return { minX: WORLD_BOUNDS.minX + radius, maxX: WORLD_BOUNDS.maxX - radius,
+    minZ: WORLD_BOUNDS.minZ + radius, maxZ: WORLD_BOUNDS.maxZ - radius };
+}
+
+/** Retained old poses may overhang the new travel envelope. Restrict their turn
+ * at the first attached-origin world contact, including extrema between ticks.
+ * This does not add rotating-hull solid collision or require propulsion power. */
+export function constrainCarrierYaw(s: GameState, desiredYaw: number): number {
+  const h = carrierHull(s);
+  if (!h) return desiredYaw;
+  const tau = Math.PI * 2, quarter = Math.PI / 2;
+  // Check precisely the representation we will save. Adding/subtracting tau
+  // after a contact search can round an origin through a strict world plane.
+  const wrap = (yaw: number): number => yaw < 0 ? yaw + tau : yaw >= tau ? yaw - tau : yaw;
+  const delta = ((desiredYaw - h.pose.yaw + Math.PI + tau) % tau) - Math.PI;
+  const points = s.fleet.vehicles.filter((v) => v.berth?.carrierId === h.id).map((v) => v.berth!.pose.position);
+  const fits = (fraction: number): boolean => {
+    const end = h.pose.yaw + delta * fraction;
+    for (const p of points) {
+      const phase = Math.atan2(p.z, p.x), angles = [h.pose.yaw, wrap(end)];
+      for (let n = Math.ceil((Math.min(h.pose.yaw, end) + phase) / quarter);
+        n <= Math.floor((Math.max(h.pose.yaw, end) + phase) / quarter); n++) angles.push(wrap(n * quarter - phase));
+      for (const yaw of angles)
+        if (!withinWorldBounds(localToWorld(p, { ...h, pose: { ...h.pose, yaw } }))) return false;
+    }
+    return true;
+  };
+  if (fits(1)) return desiredYaw;
+  let low = 0, high = 1;
+  for (let i = 0; i < 48; i++) {
+    const mid = (low + high) / 2;
+    if (fits(mid)) low = mid;
+    else high = mid;
+  }
+  return low === 0 ? h.pose.yaw : wrap(h.pose.yaw + delta * low);
+}
+
+/** Boarding is an explicit transition, never a load-time hull relocation. Keep
+ * its authored destination when clear. For an old overhanging assembly, find a
+ * clear part of the same dry interior, or refuse before changing ownership. */
+function carrierInteriorEntry(s: GameState, world: WorldQueries, preferred: Vec3): Vec3 | null {
+  const h = carrierHull(s)!, shape = { radius: 0.34, height: 1.75 };
+  const solids = carrierInteriorSolids(s), localWorld = createWorldQueries(solids, () => -200);
+  const clear = (p: Vec3): boolean => localWorld.clearance(p, shape) && world.clearance(localToWorld(p, h), shape);
+  if (clear(preferred)) return { ...preferred };
+  const target = localToWorld(preferred, h), r = shape.radius;
+  if (withinWorldBounds({ ...target, x: target.x - r, z: target.z - r }) &&
+    withinWorldBounds({ ...target, x: target.x + r, z: target.z + r })) return null;
+  const b = CARRIER_LAYOUT.interior;
+  // Partition by physical room/wall faces expanded by the walking capsule.
+  // Each clear cell is convex; clipping it against the world gives safe entry
+  // candidates without arbitrary sampled margins or moving any vessel.
+  const cuts = (axis: "x" | "z", min: number, max: number): number[] => [...new Set([
+    min, max, ...solids.filter((a) => a.min.y < b.y + shape.height && a.max.y > b.y)
+      .flatMap((a) => [a.min[axis] - r, a.max[axis] + r]).map((n) => Math.max(min, Math.min(max, n))),
+  ])].sort((a, c) => a - c);
+  const xs = cuts("x", b.minX, b.maxX), zs = cuts("z", b.minZ, b.maxZ);
+  let best: Vec3 | null = null;
+  for (let i = 1; i < xs.length; i++) for (let j = 1; j < zs.length; j++) {
+    const x0 = xs[i - 1]!, x1 = xs[i]!, z0 = zs[j - 1]!, z1 = zs[j]!;
+    if (!localWorld.clearance({ x: (x0 + x1) / 2, y: b.y, z: (z0 + z1) / 2 }, shape)) continue;
+    let polygon: Vec3[] = [{ x: x0, y: b.y, z: z0 }, { x: x1, y: b.y, z: z0 },
+      { x: x1, y: b.y, z: z1 }, { x: x0, y: b.y, z: z1 }];
+    for (const [axis, edge, sign] of [["x", WORLD_BOUNDS.minX + r, 1], ["x", WORLD_BOUNDS.maxX - r, -1],
+      ["z", WORLD_BOUNDS.minZ + r, 1], ["z", WORLD_BOUNDS.maxZ - r, -1]] as const) {
+      const clipped: Vec3[] = [];
+      for (let k = 0; k < polygon.length; k++) {
+        const a = polygon[k]!, c = polygon[(k + 1) % polygon.length]!;
+        const da = (localToWorld(a, h)[axis] - edge) * sign, dc = (localToWorld(c, h)[axis] - edge) * sign;
+        if (da >= 0) clipped.push(a);
+        if ((da >= 0) !== (dc >= 0)) {
+          const t = da / (da - dc);
+          clipped.push({ x: a.x + (c.x - a.x) * t, y: b.y, z: a.z + (c.z - a.z) * t });
+        }
+      }
+      polygon = clipped;
+    }
+    if (!polygon.length) continue;
+    const p = { x: polygon.reduce((sum, a) => sum + a.x, 0) / polygon.length, y: b.y,
+      z: polygon.reduce((sum, a) => sum + a.z, 0) / polygon.length };
+    if (clear(p) && (!best || distance(p, preferred) < distance(best, preferred))) best = p;
+  }
+  return best;
+}
 export const carrierHull = (s: GameState): VehicleState | undefined =>
   s.fleet.vehicles.find((v) => v.id === s.fleet.docking?.vehicleId);
 export function fixtureGame(): GameState {
@@ -269,14 +357,18 @@ export function carrierCommand(
         5
     )
       return "Approach the exterior vestibule while station keeping is engaged.";
+    const entry = carrierInteriorEntry(s, world, CARRIER_LAYOUT.vestibule);
+    if (!entry) return "World edge or an obstruction blocks the dry interior. Turn or move inward before boarding.";
     s.player.controlledVehicleId = null;
     s.player.interiorId = h.id;
     s.player.interiorPose = {
       frame: "carrier-local",
-      position: { ...CARRIER_LAYOUT.vestibule },
+      position: entry,
     };
     s.player.pose.position = localToWorld(s.player.interiorPose.position, h);
     s.player.mode = "interior";
+    if (distance(entry, CARRIER_LAYOUT.vestibule) > 0.001)
+      s.feedback = "World edge blocks the vestibule landing. Entered a clear dry passage; carrier position is unchanged.";
     return null;
   }
   if (action === "station-keep") {
@@ -307,15 +399,19 @@ export function carrierCommand(
       Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) > 0.05
     )
       return "Stop and engage station keeping before leaving the helm.";
+    const entry = carrierInteriorEntry(s, world, CARRIER_LAYOUT.helm);
+    if (!entry) return "World edge or an obstruction blocks the dry interior. Turn or move inward before leaving the helm.";
     s.player.controlledVehicleId = null;
     s.player.interiorId = h.id;
     s.player.interiorPose = {
       frame: "carrier-local",
-      position: { ...CARRIER_LAYOUT.helm },
+      position: entry,
     };
     s.player.pose.position = localToWorld(s.player.interiorPose.position, h);
     s.player.mode = "interior";
     s.player.velocity = { x: 0, y: 0, z: 0 };
+    if (distance(entry, CARRIER_LAYOUT.helm) > 0.001)
+      s.feedback = "World edge blocks the bridge landing. Entered a clear dry passage; carrier position is unchanged.";
     return null;
   }
   if (

@@ -8,6 +8,16 @@ export const WORLD_BOUNDS = {
   minZ: -184,
   maxZ: 66,
 } as const;
+export interface HorizontalBounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+export function withinWorldBounds(position: Vec3): boolean {
+  return position.x >= WORLD_BOUNDS.minX && position.x <= WORLD_BOUNDS.maxX &&
+    position.z >= WORLD_BOUNDS.minZ && position.z <= WORLD_BOUNDS.maxZ;
+}
 export interface Solid {
   id: string;
   min: Vec3;
@@ -369,6 +379,7 @@ export function moveHull(
   origin: Vec3,
   delta: Vec3,
   shape: Capsule,
+  bounds?: HorizontalBounds,
 ): ReturnType<WorldQueries["moveCapsule"]> {
   const slices = Math.max(
     1,
@@ -379,6 +390,19 @@ export function moveHull(
     hitBoundary = false;
   for (let i = 0; i < slices; i++) {
     const d = { x: delta.x / slices, y: delta.y / slices, z: delta.z / slices };
+    if (bounds) {
+      // Restrict requested travel BEFORE the physical sweep, never project its
+      // result through a solid. A retained pose outside a tighter envelope can
+      // move inward/tangentially without snapping to the new boundary.
+      for (const axis of ["x", "z"] as const) {
+        const min = axis === "x" ? bounds.minX : bounds.minZ;
+        const max = axis === "x" ? bounds.maxX : bounds.maxZ;
+        const next = Math.max(Math.min(position[axis], min),
+          Math.min(Math.max(position[axis], max), position[axis] + d[axis]));
+        hitBoundary ||= next !== position[axis] + d[axis];
+        d[axis] = next - position[axis];
+      }
+    }
     const result = world.moveCapsule(position, d, shape);
     const floor = hullFloor(world, result.position, shape);
     if (result.position.y < floor + 0.05) {

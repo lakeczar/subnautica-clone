@@ -1,6 +1,6 @@
 import { EVIDENCE, HULL_COLLIDERS, HULLS, ITEMS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
-import { createWorldQueries, moveHull, WORLD_BOUNDS } from "./world.js";
+import { createWorldQueries, moveHull, withinWorldBounds, WORLD_BOUNDS } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import type {
   GameCommand,
@@ -32,6 +32,8 @@ import {
   carrierCommand,
   carrierHull,
   carrierInteriorSolids,
+  carrierTravelBounds,
+  constrainCarrierYaw,
   CARRIER_LAYOUT,
   localToWorld,
   updateBerth,
@@ -328,11 +330,16 @@ export function stepGame(
     }
   }
   yaw = ((yaw % TAU) + TAU) % TAU;
+  const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
+  if (v?.hull === "hearthline") {
+    const requestedYaw = yaw;
+    yaw = constrainCarrierYaw(s, yaw);
+    if (yaw !== requestedYaw) events.push({ type: "foundation-boundary" });
+  }
   s.player.pose.yaw = yaw;
   s.player.pose.pitch = pitch;
   const old = { ...s.player.pose.position };
   let loudness = 0;
-  const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
   if (v) {
     const dock = s.fleet.docking,
       station = v.hull === "hearthline" && dock?.stationKeeping;
@@ -371,7 +378,8 @@ export function stepGame(
       y: v.velocity.y * DT,
       z: v.velocity.z * DT,
     };
-    const move = moveHull(world, v.pose.position, delta, HULL_COLLIDERS[v.hull]);
+    const move = moveHull(world, v.pose.position, delta, HULL_COLLIDERS[v.hull],
+      v.hull === "hearthline" ? carrierTravelBounds() : undefined);
     move.position.y = Math.min(
       v.hull === "spindle" ? -0.4 : -0.9,
       move.position.y,
@@ -416,8 +424,12 @@ export function stepGame(
           3 *
           DT;
       const moved = createWorldQueries(carrierInteriorSolids(s), () => -200).moveCapsule(local.position, { x, y: 0, z }, { radius: 0.34, height: 1.75 });
-      local.position.x = clamp(moved.position.x, CARRIER_LAYOUT.interior.minX, CARRIER_LAYOUT.interior.maxX);
-      local.position.z = clamp(moved.position.z, CARRIER_LAYOUT.interior.minZ, CARRIER_LAYOUT.interior.maxZ);
+      const position = { x: clamp(moved.position.x, CARRIER_LAYOUT.interior.minX, CARRIER_LAYOUT.interior.maxX),
+        y: local.position.y, z: clamp(moved.position.z, CARRIER_LAYOUT.interior.minZ, CARRIER_LAYOUT.interior.maxZ) };
+      // Old saves may overhang the new carrier travel envelope. Refuse only the
+      // out-of-world walking step, retaining its swept local pose and ownership.
+      if (withinWorldBounds(localToWorld(position, h))) local.position = position;
+      else events.push({ type: "foundation-boundary" });
       s.player.pose.position = localToWorld(local.position, h);
       s.player.mode = "interior";
     }
