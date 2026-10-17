@@ -326,6 +326,67 @@ test("recovery information follows visited caches and actual hull state without 
   assert.ok(!get("panel-content").innerHTML.includes("Deploy Bobbin / local tow"), "repair actions are not presented as available for a healthy hull");
 });
 
+test("occupied Hold disables tow and salvage, explains conditional safe exit, and retains patch/reserve controls", (t) => {
+  const { view, get, commandButton } = viewFixture(t);
+  const s = createGame(); completeOpening(s);
+  const v = makeVehicle("occupied-dart", "dart", { x: 80, y: -48, z: -89 }, "occupied-hold");
+  v.disabled = true; v.health = 0; v.charge = 20;
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
+  addItem(s, "reserve_cell", 1, v.cargoId);
+  s.player.mode = "piloting";
+  s.player.controlledVehicleId = v.id;
+  s.player.pose = structuredClone(v.pose);
+  for (const phase of [null, "ready"] as const) {
+    s.recovery.operation = phase ? { vehicleId: v.id, method: "tow", phase, waypoint: 3, position: { ...v.pose.position } } : null;
+    const before = structuredClone(s);
+    view.openPanel("inventory", s);
+    const buttons = get("panel-content").querySelectorAll("button");
+    for (const label of [phase ? "Attach collar / confirm tow" : "Deploy Bobbin / local tow", "Salvage empty frame locally"]) {
+      const control = buttons.find((b) => b.textContent === label);
+      assert.ok(control);
+      assert.equal(control.disabled, true, label);
+    }
+    assert.match(get("panel-content").innerHTML, /occupied.*exit.*safely.*exterior collar/i);
+    assert.match(get("panel-content").innerHTML, /depth.*clearance/i);
+    assert.match(get("panel-content").innerHTML, /patch/i);
+    assert.equal(commandButton({ type: "recover", vehicleId: v.id, method: "repair" }).disabled, false);
+    assert.equal(commandButton({ type: "reserve", vehicleId: v.id }).disabled, false);
+    assert.equal(commandButton({ type: "service", vehicleId: v.id }).disabled, false);
+    assert.match(get("panel-content").innerHTML, /Reserve cells in diver \/ this craft: 100%/);
+    assert.deepEqual(s, before, "recovery presentation cannot mutate the occupied state");
+  }
+});
+
+test("recovery focus falls back when occupation disables tow, retains patch identity, and allows controls after safe exit", (t) => {
+  const { view, get, commandButton, active, activeCommand } = viewFixture(t);
+  let s = createGame(); completeOpening(s);
+  const v = makeVehicle("focus-dart", "dart", { x: 80, y: -48, z: -89 }, "focus-hold");
+  v.disabled = true; v.health = 0;
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
+  s.player.mode = "swimming";
+  s.player.pose.position = { ...v.pose.position, x: v.pose.position.x + 3.1 };
+  const tow: GameCommand = { type: "recover", vehicleId: v.id, method: "tow" };
+  const patch: GameCommand = { type: "recover", vehicleId: v.id, method: "repair" };
+  view.openPanel("inventory", s);
+  commandButton(tow).focus();
+  s.player.mode = "piloting";
+  s.player.controlledVehicleId = v.id;
+  s.player.pose = structuredClone(v.pose);
+  view.refreshPanel(s);
+  assert.equal(active(), get("panel-return"));
+  commandButton(patch).focus();
+  view.refreshPanel(s);
+  assert.deepEqual(activeCommand(), patch);
+  s = executeCommand(s, { type: "exit" }, createWorldQueries()).state;
+  assert.equal(s.player.controlledVehicleId, null);
+  view.refreshPanel(s);
+  assert.deepEqual(activeCommand(), patch);
+  assert.equal(commandButton(tow).disabled, false);
+  assert.equal(commandButton({ type: "recover", vehicleId: v.id, method: "salvage" }).disabled, false);
+});
+
 test("reopened Hold and Notebook retain saved recovery explanations without reviving unrelated feedback", (t) => {
   const { view, get } = viewFixture(t);
   const s = createGame(); completeOpening(s);
@@ -333,6 +394,7 @@ test("reopened Hold and Notebook retain saved recovery explanations without revi
     "Bobbin reached the exterior collar. Confirm local tow to attach; no hull has moved.",
     "Tow clearance blocked. Dart and cargo remain at this visited site. Approach locally for in-place repair or salvage.",
     "Dart moored at the shallow rescue bench, with its original cargo, damage and charge. Apply a bound field patch and reserve cell locally.",
+    "Bobbin recovery stopped: the Dart is occupied. Tow and salvage require an empty hull. Exit only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.",
   ]) {
     s.feedback = message;
     view.notify(message);
