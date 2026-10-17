@@ -388,3 +388,28 @@ test("legacy corner contact uses the exact saved yaw representation without roun
     coherent(s);
   }
 });
+
+test("a requested legacy turn endpoint stays saveable when its recomputed arc endpoint rounds differently", () => {
+  const position = { x: 65, y: -24, z: 63.03314320575622 };
+  const before = staged("compact", position, 1.6680903988919056);
+  const result = stepGame(before, [{ type: "look", yawDelta: -0.06564769841653488, pitchDelta: 0 }], world);
+  coherent(result.state);
+  const h = result.state.fleet.vehicles[0]!;
+  assert.deepEqual(h.pose.position, position);
+  assert.equal(result.state.player.pose.yaw, h.pose.yaw);
+  assert.ok(h.pose.yaw < before.player.pose.yaw - 0.06, "the safe part of the requested turn remains available");
+  assert.ok(result.state.fleet.vehicles[2]!.pose.position.z <= WORLD_BOUNDS.maxZ);
+  assert.ok(result.events.some((e) => e.type === "foundation-boundary"));
+});
+
+test("a nearby safe legacy endpoint retains its exact requested heading", () => {
+  const position = { x: 65, y: -24, z: 63.03314320575621 };
+  const before = staged("compact", position, 1.6680903988919056);
+  const result = stepGame(before, [{ type: "look", yawDelta: -0.06564769841653488, pitchDelta: 0 }], world);
+  coherent(result.state);
+  const h = result.state.fleet.vehicles[0]!;
+  assert.deepEqual(h.pose.position, position);
+  assert.equal(result.state.player.pose.yaw, h.pose.yaw);
+  assert.equal(h.pose.yaw, 1.602442700475371);
+  assert.equal(result.events.some((e) => e.type === "foundation-boundary"), false);
+});
