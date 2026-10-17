@@ -47,6 +47,16 @@ Respect the live concurrency cap: rotate authors out as their batches finish, ru
 
 ## Necessary verification
 
+### Dedicated game-design critique
+
+Owner addition, 2026-10-17: after the authored campaign is playable (M3), commission a **fresh, non-author `gpt-6-astra` reviewer at `xhigh`** for a dedicated game-design critique early in M4. Leave time for fixes and a focused re-review before release-candidate acceptance. This is an additional design pass; it does not replace either technical reviewer or coordinator self-review.
+
+Use primary-source design research as a lens, then judge the actual frozen game and ordinary-control evidence. Cover flow/onboarding, exploration and resource geography, expedition variety and crafting workload, fleet/interior usefulness, ecology and survival tension, recovery, story/lore and out-of-order discovery, richer-cel assets, audio/UI readability and accessibility. Critique interactions between these aspects, not isolated feature counts. Research does not silently override the owner's game choices.
+
+The [design-critic brief](build/tasks/DESIGN-CRITIC.md) owns the evidence protocol, report structure and correction loop. Give each finding a concrete scene/route, observed behavior, player consequence, severity/confidence, suggested change with tradeoffs and a way to check it. Separate observed failures, design inferences and human-test hypotheses. Keep spoiler-bearing analysis in a labelled appendix outside ordinary summaries. Track disposition of every substantive finding; unresolved blocking defects or scope violations prevent release acceptance. Model critique cannot establish fresh-player enjoyment, surprise, ten-hour duration or consumer-GPU performance.
+
+### Playable and technical checks
+
 - Rules/integration: transactional crafting and inventory conservation; depth, oxygen, food and power; source stock/progression reachability; optional spending; persistent knowledge; versioned saves; pause/focus; region activation/disposal; carrier parenting/docking; repeated all-advanced-hulls-disabled recovery.
 - Ordinary-control play: first expedition and both fleet strategies to completion; optional vessels actually used; no exact-location markers for undiscovered evidence; early reveal discovery; missed optional log; final procedure available from facility state; food access from no inventory; blocked launches; recovery of advanced modules after a deep loss.
 - Runtime: actual production build, asset/base paths, console/loading errors, shader compilation stalls, collision traps, input/pointer lock, pause/settings/subtitles and save export/import. Read the repository browser rules before every browser workflow and include them in worker briefs.

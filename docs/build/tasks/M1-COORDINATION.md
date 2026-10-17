@@ -2,7 +2,7 @@
 
 Date: 2026-10-17. Owner asked whether M1 should be split and whether an Astra subagent could help coordinate its complexity. This revises work ownership and sequencing, **not the M1 exit or full game scope**. The original [M1-01 assignment](M1-01.md) remains the acceptance checklist.
 
-## Immediate transition
+## Transition request (historical)
 
 The main builder has a provisional committed checkpoint at `5fd633879d7c8e059c7ff5cb6a6200895e1f7d93`, following `df1a6bc` and `9c537a7`, in `/home/worker/.t3/worktrees/subnautica-clone/t3-8054529a`. Its latest message reports 97 tests passing and ongoing ordinary-input verification. Those are author reports, not coordinator or independent acceptance. This source has not been integrated into the accepted game branch.
 
@@ -34,3 +34,8 @@ Exact files are assigned **after** the audit/handoff. In particular, `src/conten
 5. Apply fresh **non-author Astra xhigh and separate Sol max** reviews to completed related batches and integrated M1. The advisory Astra cannot count as an independent reviewer of its own design contribution. Keep the full campaign, source geography, six fleet roles, recovery and human/GPU evidence obligations intact.
 
 Before any delegated browser work, require reading `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md`; verify isolated Linux ownership, prefer T3 preview, use isolated task storage and preserve shared/human tabs. Close only owned resources. Advisory work should use immutable source and existing artifacts when they suffice.
+
+
+## Handoff received
+
+The main Sol task completed on 2026-10-17 with unchanged source `5fd6338` and evidence-only commit `ff92868`; worktree clean. Its 97 passing tests/build/economy checks are author evidence. Full final-source ordinary expedition, gameplay/repeated recovery, browser carrier feasibility and final visual/audio/edge checks are still open. Handoff `/tmp/siltwake-m1-builder-handoff.md` and archive `/tmp/siltwake-m1-handoff-artifacts.tar.gz` preserve details. Specialist paths in that handoff are explicitly released; main Sol retains shared simulation/save/registry/world/runtime composition for its next bounded assignment. Owned browser/server closed, no children. Await the Astra advice before assigning exact mutating paths.
