@@ -216,15 +216,15 @@ RENDER's latest author progress reports 132 tests/typecheck/build, 36 aperture/6
 
 ### M1-RECOVERY completed; focused correction prepared
 
-Terminal `siltwake-m1-recovery-sol-max-2ce5e14` read: completed, no pending children/question, clean worktree and all owned resources closed. Evidence-only `4ccc73dc0a9aba46ed4c433ca9b4104f8a120d0f` staged. Root verified all314 local/archive entries, inspected actual Hold/final workshop captures and reproduced the tow abort with empty events after971 production steps. [Disposition](evidence/M1-RECOVERY-INTEGRATION.md). Nominal mooring R-1 and UI notice R-2 block acceptance; local patch/repeated cache rescue remain useful bounded evidence.
+Terminal `siltwake-m1-recovery-sol-max-2ce5e14` read: completed, no pending children/question, clean worktree and all owned resources closed. Evidence-only `4ccc73dc0a9aba46ed4c433ca9b4104f8a120d0f` staged. Root verified all 314 local/archive entries, inspected actual Hold/final workshop captures and reproduced the tow abort with empty events after 971 production steps. [Disposition](evidence/M1-RECOVERY-INTEGRATION.md). Nominal mooring R-1 and UI notice R-2 block acceptance; local patch/repeated cache rescue remain useful bounded evidence.
 
-[Correction brief](tasks/M1-RECOVERY-FIX.md) transfers only recovery.ts/step.ts, narrowly recovery-related view.ts, named tests and its evidence to a new Sol6.1 max implementation owner. Root retains schemas/contracts/composition; RENDER retains its five files. Live codex catalog reverified requested Sol max and Astra xhigh. Commit this baseline before dispatch with isolation:worktree, own port5193. RENDER is the only active child; no review pair yet.
+[Correction brief](tasks/M1-RECOVERY-FIX.md) transfers only recovery.ts/step.ts, narrowly recovery-related view.ts, named tests and its evidence to a new Sol 6.1 max implementation owner. Root retains schemas/contracts/composition; RENDER retains its five files. Live codex catalog reverified requested Sol max and Astra xhigh. Commit this baseline before dispatch with isolation:worktree, own port 5193. RENDER is the only active child; no review pair yet.
 
 
 ### Recovery correction dispatched from 124ff71
 
 - Exact baseline `124ff713fa23c8b69690809a0dda3c34f197eba9`, clean, T3 async `isolation:worktree`, role implementation, `codex/gpt-6.1-sol`, explicit `reasoningEffort:max`. Accepted running with no pending children/question.
 - Task ID `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-recovery-fix-sol-max-124ff71`; stable request `siltwake-m1-recovery-fix-sol-max-124ff71`. Backing thread has the same suffix with `thread:delegated-task:` prefix.
-- Exact ownership and port5193 in [brief](tasks/M1-RECOVERY-FIX.md). Internal existing-event notice return is allowed within recovery.ts/step.ts; final signature returns to root, no save/public event schema change approved.
+- Exact ownership and port 5193 in [brief](tasks/M1-RECOVERY-FIX.md). Internal existing-event notice return is allowed within recovery.ts/step.ts; final signature returns to root, no save/public event schema change approved.
 - RENDER notified with `siltwake-m1-render-recovery-fix-awareness-124ff71`, delivered as steering to its existing ordinal1 task. Its source baseline remains `2ce5e14` and all five render paths remain exclusive. No new render task or moving-source copy.
 - Three active agents including root; completion notifications wake root. Inspect/assemble both returns, run combined checks/play and then fresh independent batch pair plus separate integrated M1 pair. No final-source review dispatched prematurely.
