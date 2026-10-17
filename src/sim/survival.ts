@@ -59,8 +59,12 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
   if (v) {
     const depth = hullDepth(v);
     if (v.hull !== "spindle" && depth > HULLS[v.hull].initialDepth)
-      v.health -= (3 + (depth - HULLS[v.hull].initialDepth) * 0.1) * DT;
-    if (v.hull === "spindle" && depth > 1) v.health -= 20 * DT;
+      v.health = Math.max(
+        0,
+        v.health - (3 + (depth - HULLS[v.hull].initialDepth) * 0.1) * DT,
+      );
+    if (v.hull === "spindle" && depth > 1)
+      v.health = Math.max(0, v.health - 20 * DT);
     if (v.charge === 0 || v.disabled)
       v.emergencyAir = Math.max(0, v.emergencyAir - DT);
     if (v.health <= 0 && !v.disabled) {
@@ -216,7 +220,7 @@ export function updateThreat(
     const v = s.fleet.vehicles.find(
       (v) => v.id === s.player.controlledVehicleId,
     );
-    if (v) v.health -= 12 * DT;
+    if (v) v.health = Math.max(0, v.health - 12 * DT);
     else s.player.vitals.health -= 10 * DT;
     if (s.tick % 60 === 0) events.push({ type: "sound", cue: "damage", origin: { ...t.position } });
   }
