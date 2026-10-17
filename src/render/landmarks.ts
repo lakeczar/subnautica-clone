@@ -35,8 +35,8 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial): void {
   const pod = new ArtBatch("refuge.pod", scene, cel);
   const d = POD_DECK;
   pod.box([0, -0.01, 17.1], [6.2, 0.38, 14.2], P.petrol);
-  for (let z = 10.3; z < 24; z += 0.47)
-    pod.box([0, 0.19, z], [5.5, 0.025, 0.27], "#759390");
+  for (let z = 10.8; z < 24; z += 1.2)
+    pod.box([0, 0.19, z], [5.5, 0.025, 0.07], "#426a70");
   for (const side of [-1, 1]) {
     pod.box([side * 3.25, 1.7, 21.6], [0.65, 3.5, 5.4], P.porcelain);
     pod.box([side * 2.91, 2.1, 22], [0.06, 1.05, 2.7], P.glass);

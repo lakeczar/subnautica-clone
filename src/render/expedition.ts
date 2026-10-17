@@ -264,6 +264,13 @@ export function createExpeditionArt(
   }
   site.box([-17, -7.7, -8], [1.2, 0.6, 1.8], P.ochre);
   // Workshop platform, weathered folded roof, and human-scale mechanical station.
+  // Narrow grip treads follow the same continuous terrain ramp as the controller.
+  for (let z = -30.5; z <= -23; z += 0.85) {
+    const y = terrainHeight(10, z);
+    site.box([10, y + 0.025, z], [3.4, 0.04, 0.12], P.petrol);
+    for (const x of [8.1, 11.9])
+      site.ellipsoid([x, terrainHeight(x, z) + 0.08, z], [0.1, 0.07, 0.1], P.ochre, 5);
+  }
   site.box([9.5, 1.05, -35.5], [13, 0.3, 9], P.petrol);
   for (let z = -39; z < -31; z += 0.6)
     site.box([9.5, 1.22, z], [12.4, 0.03, 0.1], P.metal);

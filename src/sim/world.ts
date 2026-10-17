@@ -36,8 +36,17 @@ export function terrainHeight(x: number, z: number): number {
     );
     height = height * (1 - weight) + (source.position.y - 0.8) * weight;
   }
-  // A walkable workshop/shore apron and shallow recovery staging bench.
-  if (x >= 3 && x <= 16 && z >= -40 && z <= -31) height = 1.2;
+  // The workshop apron continues into a broad submerged approach. Blend the
+  // edges into the island rather than putting an impassable lip at the shore.
+  const smooth = (a: number, b: number, v: number): number => {
+    const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  const apron = smooth(1, 3, x) * (1 - smooth(16, 18, x)) *
+    smooth(-44, -40, z) * (1 - smooth(-22, -18, z));
+  const approachY = 1.2 - Math.max(0, z + 31) * 0.55;
+  height = height * (1 - apron) + approachY * apron;
+  // Shallow recovery staging bench.
   if (x >= 38 && x <= 54 && z >= -60 && z <= -48) height = -13;
   return height;
 }

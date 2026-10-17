@@ -207,6 +207,20 @@ test("island shore supports water → walking → water transitions along the sa
   assert.ok(state.player.pose.position.z > -25);
 });
 
+test("the workshop's central submerged approach has no lip and can be walked back into the sea", () => {
+  let state = createGame();
+  // This is the physical approach that exposed the old 3 m apron discontinuity.
+  state.player.pose.position = { x: 10.2, y: -2.5, z: -25 };
+  state.player.mode = "swimming";
+  state = run(state, [move(1)], 4);
+  assert.equal(state.player.mode, "walking");
+  assert.ok(state.player.pose.position.z < -35, JSON.stringify(state.player.pose));
+  assert.ok(Math.abs(state.player.pose.position.y - 1.2) < 0.03);
+  state = run(state, [move(-1)], 5);
+  assert.equal(state.player.mode, "swimming");
+  assert.ok(state.player.pose.position.z > -24);
+});
+
 test("diving stays above the sea floor, the foundation boundary is bounded, and the ramp is an actual surface", () => {
   let state = run(createGame(), [move(1)], 5);
   state = run(state, [move(0, -1)], 15);
