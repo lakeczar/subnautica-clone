@@ -32,3 +32,7 @@ Both round-two reviews of `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc` are complet
 - Stable request ID: `siltwake-fnd-r2-fix-sol-max-6bd13d0`; state: completed; no live children. Owned tab/server closed and native queues/fixtures cleaned. Author source `1e2c581`, evidence `b60ac58`, integrated as `2c25b8b` / `bcef1e1`.
 - Scope: [committed assignment](tasks/FND-01-R2-FIX.md), the shared interruption race and associated paused engine-readiness check. Assigned runtime/renderer lifecycle/test/evidence paths only; no push/PR/children/parent integration.
 - Coordinator inspected source/tests and actual restored paused captures; source matches author tree; `npm run check` passed 65/65 tests/build and feature whitespace check passed. Contracts are reconciled. Next: freeze round three and launch fresh paired non-author reviews with both full prior rounds/dispositions. Do not duplicate this completed task or use a backing thread as a new review round.
+
+## Active round-three reviews
+
+Fresh T3-isolated Astra xhigh and separate Sol 6.1 max reviews are running on `50f5569a92a6e18aac8970ecdb7918e5e217a455`. [Exact task/request IDs, complete brief, proposed resolutions and continuation](reviews/FND-ECO-R3.md). Three active agents including coordinator; no author remains active. Wait for completion notifications. FND/M0 remain unaccepted; ECO is still only a provisional arithmetic/design proposal.
