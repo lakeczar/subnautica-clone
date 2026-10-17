@@ -13,7 +13,7 @@ Updated: 2026-10-17. State: construction started; foundation not yet implemented
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-No implementation child dispatched yet. Older native planning/review agents are completed. See the task ledger for dispatch IDs and exclusive paths; it supersedes this initial no-worker snapshot once a task is assigned.
+FND-01 main builder and ECO-01 economy-proposal worker are running as native Sol 6.1 max children; exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. There are three active agents including coordinator.
 
 ## Acceptance and evidence
 
@@ -24,6 +24,8 @@ No implementation child dispatched yet. Older native planning/review agents are 
 
 ## Exact next action
 
-Commit these build records, create the foundation feature branch, then dispatch Sol 6.1 max on batch FND-01 under the contracts and plan. Main builder owns production/config/test paths and its evidence report; coordinator retains build state. Commit the runnable foundation before dependent implementation worktrees. Inspect and freeze the candidate, obtain both independent reviews, fix and repeat as needed, and integrate through a feature PR.
+Main builder is implementing FND-01 under the contracts and plan. Concrete proposed seams were reconciled: `src/content/registry.ts`; pure `src/sim/{types,state,world,step,clock}.ts`; `src/save/{codec,repository}.ts`; runtime DOM/input/render adapters. Right-handed Y-up, water=0, yaw zero toward -Z; fixed step 60 Hz. Final exports require inspection of the committed implementation.
+
+Inspect the builder's returned runnable commit and evidence; freeze FND-01 (including relevant coordinator contract changes), obtain both independent reviews, fix and repeat as needed, and integrate through a feature PR. ECO-01 is provisional arithmetic pending inspection and eventual registry integration/review. Commit the runnable foundation before dependent implementation worktrees. No additional owner decision is needed to continue.
 
 After restart, inspect branch/HEAD/worktree and task ledger; check active task status before duplicating work. Preserve major story spoilers outside ordinary updates and PR descriptions.
