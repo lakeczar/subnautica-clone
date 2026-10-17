@@ -9,6 +9,9 @@ import { addItem, available } from "../src/sim/inventory.js";
 import { executeCommand } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameCommand } from "../src/sim/types.js";
+import { ExpeditionSession } from "../src/runtime/session.js";
+import { SaveRepository } from "../src/save/repository.js";
+import { MemoryStorage, TestWriterLock, encoded, sample, settled } from "./persistence-support.js";
 
 /** Minimal DOM port for rendered buttons, replacement and command wiring. Native
  * keyboard/layout behavior is checked separately in the production browser. */
@@ -19,6 +22,7 @@ function viewFixture(t: test.TestContext) {
   class ElementPort {
     private html = "";
     private buttons: ElementPort[] = [];
+    children: ElementPort[] = [];
     get innerHTML() { return this.html; }
     set innerHTML(value: string) {
       if (this.buttons.includes(document.activeElement!)) document.activeElement = null;
@@ -46,7 +50,7 @@ function viewFixture(t: test.TestContext) {
     }
     emit(type: string, value: unknown) { for (const listener of this.listeners.get(type) ?? []) listener(value as Event); }
     setAttribute() {}
-    contains(element: unknown) { return element === this || this.buttons.includes(element as ElementPort); }
+    contains(element: unknown): boolean { return element === this || this.buttons.includes(element as ElementPort) || this.children.some((child) => child.contains(element)); }
     querySelectorAll(selector: string) { return this.buttons.filter((button) => !selector.includes(":not([disabled])") || !button.disabled); }
     focus() { document.activeElement = this; }
     closest() { return this; }
@@ -55,7 +59,14 @@ function viewFixture(t: test.TestContext) {
   const root = Object.assign(new ElementPort(), {
     querySelector: (selector: string) => {
       let element = elements.get(selector);
-      if (!element) { element = new ElementPort(); elements.set(selector, element); }
+      if (!element) {
+        element = new ElementPort();
+        const tag = root.innerHTML.match(new RegExp(`<[^>]*\\bid="${selector.slice(1)}"[^>]*>`))?.[0] ?? "";
+        element.hidden = /\bhidden\b/.test(tag);
+        const action = tag.match(/data-action="([^"]*)"/)?.[1];
+        if (action) element.dataset.action = action;
+        elements.set(selector, element);
+      }
       return element;
     },
     replaceChildren() {},
@@ -75,6 +86,7 @@ function viewFixture(t: test.TestContext) {
     importFile: noop, confirm: noop, cancelConfirm: noop, lockMouse: noop, settings: noop,
   };
   const view = new GameView(root as unknown as HTMLElement, actions, createWorldQueries());
+  root.querySelector("#opening").children = ["opening-act", "opening-skip", "opening-subtitles"].map((id) => root.querySelector(`#${id}`));
   t.after(() => {
     view.dispose();
     globals.forEach((key, i) => previous[i] ? Object.defineProperty(globalThis, key, previous[i]!) : Reflect.deleteProperty(globalThis, key));
@@ -89,6 +101,13 @@ function viewFixture(t: test.TestContext) {
   return {
     view, commands, audio, get: (id: string) => root.querySelector(`#${id}`),
     active: () => document.activeElement,
+    activate: (id: string) => root.emit("click", { target: root.querySelector(`#${id}`) }),
+    key: (key: string, code = key, shiftKey = false) => {
+      const event = { key, code, shiftKey, prevented: false, stopped: false,
+        preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+      root.emit("keydown", event);
+      return event;
+    },
     activeCommand: () => commandFor(document.activeElement),
     commandButton: (command: GameCommand) => {
       const matches = root.querySelector("#panel-content").querySelectorAll("button:not([disabled])")
@@ -162,6 +181,149 @@ test("captions can be disabled without hiding simultaneous body, pressure and th
   assert.match(html, /PRESSURE/);
   assert.match(html, /SOUND HUNTER/);
   assert.ok(html.indexOf("LOW OXYGEN") < html.indexOf("SOUND HUNTER"));
+});
+
+test("four opening actions and skip preserve command identity, keyboard access and a visible safety layer", (t) => {
+  const { view, get, activate, commands, active, key, audio } = viewFixture(t);
+  let s = createGame();
+  view.update(s, false); view.showGame();
+  assert.equal(key("Tab").stopped, true, "Tab reaches opening controls before the runtime inventory shortcut");
+  assert.equal(active(), get("opening-act"));
+  key("Tab"); assert.equal(active(), get("opening-skip"));
+  key("Tab"); assert.equal(active(), get("opening-subtitles"));
+  assert.equal(key(" ", "Space").stopped, true, "focused captions may toggle without skipping");
+  get("opening-subtitles").checked = false;
+  get("opening-subtitles").emit("change", {});
+  assert.equal(audio.at(-1)?.subtitles, false);
+  view.audioSettings({ volume: 0.4, muted: false, subtitles: false });
+  assert.equal(get("subtitles").checked, false);
+  assert.equal(get("opening-caption").hidden, true);
+  key("Tab"); assert.equal(active(), get("hud-pause"));
+  for (let phase = 0; phase < 4; phase++) {
+    assert.equal(s.opening.phase, phase);
+    assert.equal(get("opening").hidden, false);
+    for (const id of ["hud-region", "hud-heading", "hud-tools", "vitals", "hud-bottom", "interact-prompt"])
+      assert.equal(get(id).hidden, true, id);
+    assert.equal(get("hud-pause").hidden, false);
+    assert.equal(get("hazard").hidden, false);
+    get("opening-act").focus(); activate("opening-act");
+    assert.deepEqual(commands.at(-1), { type: "interact" });
+    s = executeCommand(s, commands.at(-1)!, createWorldQueries()).state;
+    view.update(s, false);
+  }
+  assert.equal(s.opening.phase, 4);
+  assert.equal(get("opening").hidden, true);
+  assert.equal(get("vitals").hidden, false);
+  assert.equal(active(), get("ocean"), "finishing cannot leave focus inside a hidden opening");
+  s = createGame(); view.update(s, false);
+  get("opening-skip").focus(); activate("opening-skip");
+  assert.deepEqual(commands.at(-1), { type: "skip-opening" });
+  s = executeCommand(s, commands.at(-1)!, createWorldQueries()).state;
+  view.update(s, false);
+  assert.equal(s.opening.phase, 4);
+  assert.equal(active(), get("ocean"));
+});
+
+test("actual session entry order omits only the redundant New success, without leaking it into imports or Continue", async (t) => {
+  const { view, get } = viewFixture(t);
+  const storage = new MemoryStorage(), repository = new SaveRepository(storage, new TestWriterLock());
+  const session = new ExpeditionSession(repository, {
+    changed: () => {
+      view.slot(repository.status, session.state !== null);
+      view.persistence(session.persistenceMessage, session.autoSaveAllowed, session.state !== null, session.busy);
+    },
+    pause: () => view.showMenu(session.state !== null),
+    entered: () => { view.update(session.state!, false); view.showGame(); },
+    notify: (message, error) => view.notify(message, error),
+  });
+  t.after(() => session.dispose());
+  session.newGame(); await settled();
+  assert.equal(session.state?.opening.phase, 0);
+  assert.equal(get("notification").hidden, true, "New notifies after entered/update; its success is redundant");
+  view.notify("Could not save this expedition.", true);
+  const redundant = "Expedition saved. The island shore and reef ribs are yours to explore.";
+  view.notify(redundant);
+  assert.equal(get("notification").textContent, "Could not save this expedition.", "omitting routine success cannot replace an error");
+  view.notify(redundant, true);
+  assert.equal(get("notification").textContent, redundant, "the error flag takes precedence even for identical text");
+  const imported = sample(); imported.state.opening.phase = 2;
+  const text = encoded(imported);
+  await session.importFile({ size: text.length, text: async () => text });
+  session.confirm(); await settled();
+  assert.equal(session.state?.opening.phase, 2);
+  assert.equal(get("notification").textContent, "Imported and saved locally.");
+  session.newGame(); session.confirm(); await settled();
+  session.state = executeCommand(session.state!, { type: "skip-opening" }, createWorldQueries()).state;
+  view.update(session.state, false);
+  assert.notEqual(get("notification").textContent, redundant, "finishing a replacement opening must not revive deferred text");
+  session.dispose();
+  const continued = new ExpeditionSession(new SaveRepository(storage, new TestWriterLock()), {
+    changed: () => {}, pause: () => {},
+    entered: () => view.update(continued.state!, false),
+    notify: (message, error) => view.notify(message, error),
+  });
+  t.after(() => continued.dispose());
+  continued.continueGame();
+  assert.equal(continued.state?.opening.phase, 0);
+  assert.notEqual(get("notification").textContent, redundant);
+});
+
+test("storage-off sessions, errors and graphics recovery remain visible through opening and pause", async (t) => {
+  const { view, get } = viewFixture(t);
+  const storage = new MemoryStorage(); storage.failWrite = true;
+  const session = new ExpeditionSession(new SaveRepository(storage, new TestWriterLock()), {
+    changed: () => view.persistence(session.persistenceMessage, session.autoSaveAllowed, session.state !== null, session.busy),
+    pause: () => view.showMenu(session.state !== null),
+    entered: () => { view.update(session.state!, false); view.showGame(); },
+    notify: (message, error) => view.notify(message, error),
+  });
+  t.after(() => session.dispose());
+  session.newGame(); await settled(); session.confirm();
+  assert.equal(get("opening").hidden, false);
+  assert.equal(get("session-warning").hidden, false);
+  assert.equal(get("notification").hidden, false);
+  assert.match(get("notification").textContent, /Session only/);
+  view.showMenu(true);
+  assert.equal(get("session-warning").hidden, false, "the reminder must not inherit the hidden HUD");
+  view.showGame();
+  const s = session.state!;
+  s.player.vitals.health = 10;
+  view.update(s, false);
+  assert.match(get("hazard").innerHTML, /LOW HEALTH/);
+  view.notify("Graphics restored. Resume when ready.");
+  assert.equal(get("notification").hidden, false);
+  view.graphicsError("Graphics context unavailable.");
+  assert.equal(get("graphics-error").hidden, false);
+  assert.equal(get("session-warning").hidden, false);
+});
+
+test("moving pilot guidance stays secondary, explains stopped and blocked exits, and retains emergencies and E behavior", (t) => {
+  const { view, get } = viewFixture(t);
+  const s = createGame(); completeOpening(s);
+  const v = makeVehicle("pilot-dart", "dart", { x: 80, y: -48, z: -89 }, "pilot-hold");
+  s.fleet.vehicles.push(v);
+  s.player.mode = "piloting"; s.player.controlledVehicleId = v.id;
+  s.player.pose = structuredClone(v.pose); v.velocity.z = 5;
+  view.update(s, false);
+  assert.equal(get("interact-prompt").innerHTML, "", "routine exit text does not occupy the interaction centre");
+  assert.equal(get("pilot-guidance").hidden, false);
+  assert.ok(!get("pilot-guidance").innerHTML.includes("<small>"));
+  assert.match(get("pilot-guidance").innerHTML, /E.*Side exit.*Esc.*Controls/);
+  const exited = executeCommand(s, { type: "interact" }, createWorldQueries()).state;
+  assert.equal(exited.player.controlledVehicleId, null, "moving guidance does not change the actual E exit command");
+  v.velocity.z = 0; view.update(s, false);
+  assert.match(get("pilot-guidance").innerHTML, /personal air.*suit 60 m \/ hull 180 m/);
+  v.pose.position.y = -170; s.player.pose.position.y = -170;
+  v.charge = 10; v.health = 20;
+  view.update(s, false);
+  assert.match(get("pilot-guidance").innerHTML, /Exit blocked.*Exit exposure.*personal suit/);
+  assert.match(get("hazard").innerHTML, /HULL DEPTH/);
+  assert.match(get("hazard").innerHTML, /LOW POWER/);
+  assert.match(get("hazard").innerHTML, /LOW HULL/);
+  v.disabled = true; v.charge = 0; v.emergencyAir = 0; s.player.vitals.oxygen = 10;
+  view.update(s, false);
+  assert.match(get("hazard").innerHTML, /HULL DISABLED.*emergency air 0 s/);
+  assert.match(get("hazard").innerHTML, /LOW OXYGEN/);
 });
 
 test("inventory keeps one buoy identity, shows local transfer commands and retains validated refusal feedback", (t) => {
@@ -318,12 +480,12 @@ test("recovery information follows visited caches and actual hull state without 
   assert.match(html, /2 Prepared reef meal/);
   assert.match(html, /Dart loss transponder/);
   assert.ok(!html.includes("Upper Canopy laboratory"), "a loss does not discover a refuge");
-  assert.match(html, /Deploy Bobbin \/ local tow/);
+  assert.match(html, /Tow home · deploy Bobbin/);
   assert.deepEqual(s, snapshot);
   v.disabled = false;
   s.recovery.losses = [];
   view.refreshPanel(s);
-  assert.ok(!get("panel-content").innerHTML.includes("Deploy Bobbin / local tow"), "repair actions are not presented as available for a healthy hull");
+  assert.ok(!get("panel-content").innerHTML.includes("Tow home · deploy Bobbin"), "repair actions are not presented as available for a healthy hull");
 });
 
 test("occupied Hold disables tow and salvage, explains conditional safe exit, and retains patch/reserve controls", (t) => {
@@ -342,7 +504,7 @@ test("occupied Hold disables tow and salvage, explains conditional safe exit, an
     const before = structuredClone(s);
     view.openPanel("inventory", s);
     const buttons = get("panel-content").querySelectorAll("button");
-    for (const label of [phase ? "Attach collar / confirm tow" : "Deploy Bobbin / local tow", "Salvage empty frame locally"]) {
+    for (const label of [phase ? "Attach collar / confirm tow" : "Tow home · deploy Bobbin", "Salvage frame"]) {
       const control = buttons.find((b) => b.textContent === label);
       assert.ok(control);
       assert.equal(control.disabled, true, label);
@@ -385,6 +547,48 @@ test("recovery focus falls back when occupation disables tow, retains patch iden
   assert.deepEqual(activeCommand(), patch);
   assert.equal(commandButton(tow).disabled, false);
   assert.equal(commandButton({ type: "recover", vehicleId: v.id, method: "salvage" }).disabled, false);
+});
+
+test("recovery choices preview actual frame returns and capped rescue stock while refusals preserve their command", (t) => {
+  const { view, get, commandButton, activeCommand, active } = viewFixture(t);
+  let s = createGame(); completeOpening(s);
+  const v = makeVehicle("return-dart", "dart", { x: 80, y: -48, z: -89 }, "return-hold");
+  v.disabled = true; v.health = 0; v.boundRepairs = 2;
+  v.investment = { structural_alloy: 3, silica_glass: 2 };
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
+  s.player.mode = "swimming"; s.player.pose.position = { ...v.pose.position, x: 83.1 };
+  s.world.maintenance.alloy = 13; s.world.maintenance.membrane = 6;
+  view.openPanel("inventory", s);
+  const salvage: GameCommand = { type: "recover", vehicleId: v.id, method: "salvage" };
+  commandButton(salvage).focus();
+  const before = structuredClone(s);
+  const refused = executeCommand(s, activeCommand()!, createWorldQueries());
+  assert.deepEqual(refused.state, before);
+  const notice = refused.events.find((e) => e.type === "notice");
+  assert.ok(notice?.type === "notice" && notice.error);
+  view.notify(notice.message, notice.error); view.refreshPanel(refused.state);
+  assert.deepEqual(activeCommand(), salvage);
+  assert.equal(get("panel-feedback").textContent, notice.message);
+  addItem(s, "bobbin_kit", 1, "equipment", "recovery", "maintenance");
+  view.refreshPanel(s);
+  const html = get("panel-content").innerHTML;
+  assert.match(html, /Patch here/); assert.match(html, /Tow home/); assert.match(html, /Salvage frame/);
+  assert.match(html, /3 Structural alloy \/ 2 Silica glass/);
+  assert.match(html, /Past patches return 1 alloy \/ 1 membrane to rescue stock only/);
+  assert.match(html, /230 m/); assert.match(html, /No repair or recharge/);
+  v.investment = { structural_alloy: 6, silica_glass: 3, flex_membrane: 2 };
+  view.refreshPanel(s);
+  assert.match(get("panel-content").innerHTML, /Make 17 CU free in a deployed buoy within 6 m/);
+  assert.ok(!get("panel-content").innerHTML.includes("Make 17 CU free in the diver hold"));
+  v.investment = { structural_alloy: 3, silica_glass: 2 };
+  s = executeCommand(s, activeCommand()!, createWorldQueries()).state;
+  assert.equal(available(s, "structural_alloy", ["diver"]), 3);
+  assert.equal(available(s, "silica_glass", ["diver"]), 2);
+  assert.equal(s.world.maintenance.alloy, 14);
+  assert.equal(s.world.maintenance.membrane, 7);
+  view.refreshPanel(s);
+  assert.equal(active(), get("panel-return"));
 });
 
 test("reopened Hold and Notebook retain saved recovery explanations without reviving unrelated feedback", (t) => {
