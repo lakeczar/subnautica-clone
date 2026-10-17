@@ -13,13 +13,13 @@ Updated: 2026-10-17. State: foundation implementation and author browser checks 
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-FND-01 main builder and ECO-01 economy-proposal worker are running as native Sol 6.1 max children; exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. There are three active agents including coordinator.
+FND-01 main builder is running as a native Sol 6.1 max child; ECO-01 author has completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. There are two active agents including coordinator.
 
 ## Acceptance and evidence
 
 - FND-01 production code is present on the feature branch but remains uncommitted worker-owned work at this status update. Author reports 18 passing rule tests and a launchable production scene with ordinary-control movement, pause and save/reload checks; final commit/evidence and independent review are pending.
 - Coordinator inspected source boundaries and actual menu/underwater captures. Early issues sent to the builder: reachable pod return ramp, strict save mode validation, paused rendering/readiness, context-loss resume gate and distinct quality scaling. Builder reports corrections with affected tests; verify at the frozen candidate.
-- ECO-01 draft arithmetic currently passes 39-recipe/33-source-patch reachability and both fleet strategies with alternate starter hulls, optional spending and failures. Numeric recovery transactions are being tightened. It is not a runtime registry or validated route/playtime balance.
+- ECO-01 proposal committed at `cd1d303`: coordinator reran the Node checker successfully (39 recipes, 33 patches, eight strategy/starter/optional scenarios, six independent optional branches, five budgeted failures and 20 numeric disable/salvage/rebuild transactions per scenario, six rejection fixtures). It is not a runtime registry or validated route/playtime balance.
 - Existing cel art study `20711d1` is reference only. Its SwiftShader captures do not establish dedicated-GPU performance.
 - Every implementation batch remains provisional until coordinator inspection, applicable checks and separate non-author Astra xhigh plus Sol 6.1 max acceptance of one frozen revision. Records go under `reviews/` following [the gate](../DELIVERY_AND_ACCEPTANCE.md#independent-review-gate).
 - No fresh-player duration/enjoyment or representative GPU measurements exist.
