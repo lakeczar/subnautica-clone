@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: both non-author reviewers ACCEPT FND-01 and provisional ECO-01 at `50f5569`. Coordinator accepts the bounded batch. Foundation PR/integration and the separate M0 gate are next.
+Updated: 2026-10-17. State: paired FND-01 / provisional ECO-01 acceptance recorded; foundation PR #2 opened/linked and merged locally into `game/siltwake` at `1bba23a`. Fresh coordinator M0 checks pass. Separate independent M0 reviews are next.
 
 ## Authority and checkpoint
 
@@ -13,7 +13,7 @@ Updated: 2026-10-17. State: both non-author reviewers ACCEPT FND-01 and provisio
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-All authors and reviewers have completed with no live child work and owned browser/server resources closed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. Author `1e2c581` / evidence `b60ac58` were cherry-picked as `2c25b8b` / `bcef1e1`; runtime/config/tests match the author tree. Both round-three reviewers accepted `50f5569`. Only coordinator is active. [Exact IDs, reports, paired acceptance and continuation](reviews/FND-ECO-R3.md).
+All component authors and reviewers completed with owned resources closed and no live children. Current branch is `game/siltwake`, integrated source `1bba23a`, tree-identical to feature tip `dbcebfc`. Both component reviews accept `50f5569`; changes afterward are bookkeeping. Coordinator is preparing the new M0 review pair. [Component acceptance](reviews/FND-ECO-R3.md); [fresh integrated checks](evidence/M0-INTEGRATION.md).
 
 ## Acceptance and evidence
 
@@ -28,19 +28,14 @@ All authors and reviewers have completed with no live child work and owned brows
 
 ## Exact next action
 
-Finalize the prepared PR body with both exact-SHA acceptances, open/link the foundation feature PR into `game/siltwake`, integrate the accepted feature and perform the separate integrated M0 check/review gate before M1 implementation. Public main merge/deployment remain owner actions. No construction PR has been opened yet. No additional owner decision is needed.
+Publish `game/siltwake`, verify foundation [PR #2](https://github.com/lakeczar/subnautica-clone/pull/2) reflects integration, and establish the authoritative draft game integration PR against `docs/astra-game-build-brief`, explicitly dependent on planning [PR #1](https://github.com/lakeczar/subnautica-clone/pull/1). Link each PR with T3. Freeze the current evidence-bearing revision and dispatch fresh independent Astra xhigh plus Sol 6.1 max **M0 milestone** reviews; no component author may be a reviewer. Both must accept the same revision before M1 implementation.
 
-### Prepared foundation PR
+Fresh integrated `npm ci`, 65 tests/typecheck/build, economy arithmetic and ordinary production movement/pause/save/reload passed at `1bba23a`. A native-held write plus synthetic blur/focus stayed paused through New completion; explicit Resume worked. [Full evidence and limits](evidence/M0-INTEGRATION.md). Actual source and built artifact match the accepted component. Do not rerun unchanged component matrices without a specific unresolved concern; assess their evidence alongside the new integrated run. Functional/contract changes require new review.
 
-Local draft: `/tmp/siltwake-foundation-pr/body.md`; proposed title `feat(game): add Siltwake’s playable ocean foundation`, base `game/siltwake`. Before submission, replace its pending-Sol paragraph and unchecked paired-review goal with the actual verdict and committed review-record link. Do not submit that placeholder as acceptance. The draft distinguishes feature acceptance from the separate integrated M0 gate and keeps planning PR #1 as an explicit dependency.
+After M0 acceptance, assign the first complete expedition to the main Sol 6.1 max builder: pod/opening and early regional clues, habitat-specific gathering/crafting, first craft, survival/recovery, art/UI/audio, explicit save migration and simplified carrier/collision feasibility. [Plan](PLAN.md) and [playtest run sheet](PLAYTEST.md) retain full scope. ECO remains provisional arithmetic; runtime adoption must address its concrete module/container identities, persistent knowledge, protected recovery provenance and physical-route limits. No new owner decision is required. Main merge and public deployment remain owner actions.
 
-Two inspected screenshots were published on the separate `pr-assets` branch using the PR asset helper; both returned HTTP 200 with `image/png`. No working-branch source or deployment changed:
+### Foundation PR evidence
 
-- [Island overview](https://github.com/lakeczar/subnautica-clone/blob/pr-assets/feat-siltwake-foundation/foundation-island-author-8d72dd2.png?raw=true): original author `8d72dd2`; environment art unchanged.
-- [Paused graphics recovery](https://github.com/lakeczar/subnautica-clone/blob/pr-assets/feat-siltwake-foundation/paused-recovery-review-50f5569.png?raw=true): actual independent review capture at `50f5569`.
-
-The base has no runnable application; no matching before screenshot is claimed. Captures illustrate appearance, while linked browser reports substantiate behavior. On resumption, the Astra task result was acknowledged and Sol remained running with no pending question; no duplicate review was dispatched. This is documentation-only preparation, not new implementation or fresh test evidence.
-
-All independent findings are resolved. Integrate through a feature PR and verify the integrated M0 milestone before dependent implementation. ECO-01 is provisional arithmetic, not runtime routes or recovery proof; later production-registry adoption needs its own integration review. No additional owner decision is needed to continue.
+[PR #2](https://github.com/lakeczar/subnautica-clone/pull/2) has a verified description with 6/6 bounded FND criteria, paired exact-SHA reviews and two public actual screenshots on `pr-assets`. The island overview is author `8d72dd2` (art unchanged); the paused graphics recovery capture is independent review `50f5569`. Both URLs returned HTTP 200 image/png. The base has no runnable application, so no matching before image is claimed. No public game deployment occurred. Temporary original body: `/tmp/siltwake-foundation-pr/body.md`.
 
 After restart, inspect branch/HEAD/worktree and task ledger; check active task status before duplicating work. Preserve major story spoilers outside ordinary updates and PR descriptions.

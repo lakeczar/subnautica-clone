@@ -18,6 +18,8 @@ For each run record candidate SHA, build/command, environment and renderer, inpu
 
 [Both round-three reviews](reviews/FND-ECO-R3.md) accept FND-01 and provisional ECO-01 at `50f5569`, after fresh 65-test/build and focused production runs. Historical pending states above describe their earlier checkpoints. No integrated M0 pass is implied.
 
+Coordinator integrated verification at `1bba23a`: fresh install, 65 tests/typecheck/build and ordinary production movement/pause/save/reload passed, plus native-held write/synthetic-blur interruption check. [Full M0 evidence](evidence/M0-INTEGRATION.md). This is additional coordinator verification; separate milestone reviews remain pending.
+
 Open: integrated M0 and remaining browser adapters; first expedition; carrier/collision gates; both complete strategies; all hull niches; full gameplay save resilience; repeated recovery; fresh-human route learning/story comprehension/duration; representative dedicated-GPU performance.
 
 ## First expedition run sheet (not yet executed)

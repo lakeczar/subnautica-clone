@@ -36,3 +36,7 @@ Both round-two reviews of `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc` are complet
 ## Completed round-three reviews
 
 Both non-author reviewers accepted FND-01 and provisional ECO-01 at `50f5569a92a6e18aac8970ecdb7918e5e217a455`. All prior findings resolved; no new blocking findings or unresolved objections. [Exact task/request IDs, both full reports and continuation](reviews/FND-ECO-R3.md). No live children; owned resources closed. Coordinator accepts this bounded batch, with separate integrated M0 review pending. Only coordinator active. Historical states above describe their earlier checkpoints.
+
+## M0 integration review preparation
+
+Foundation feature PR #2 is open/T3-linked; accepted source was merged locally into `game/siltwake` at `1bba23a`, with identical feature tree. Coordinator clean-install/check/economy/production-smoke passed. [Evidence](evidence/M0-INTEGRATION.md). The next tasks are fresh independent non-author Astra xhigh + Sol max milestone reviews of the evidence-bearing frozen revision; neither has been dispatched yet. No implementation worker active.
