@@ -113,3 +113,11 @@ Terminal result read for `siltwake-design-prep-sol-r1-c0aa5cb`: **ACCEPT DESIGN-
 ### DESIGN-PREP paired acceptance
 
 Astra terminal result read: **ACCEPT DESIGN-PREP** at `c0aa5cb386a6b98ff8fa7c95d123d4f50d5bc378`, matching Sol's acceptance. Both independently checked all ten primary texts, no required corrections or unresolved objections. [Paired record/full reports](reviews/DESIGN-PREP-R1.md). Optional Astra N1 addressed with root-verified dated API retrieval metadata/content hashes, preserving accepted research claims. Coordinator self-review and reconciliation complete; preparation batch accepted. No M1, game-quality or runtime acceptance. Both reviewers complete without children/resources. Main A0 still running, no pending question/children; two active agents including root. Await A0 result before shared-contract reconciliation and dependent specialists.
+
+
+## M1-A0 completed and reconciled
+
+- Terminal result read for `siltwake-m1-a0-sol-max-c0aa5cb`; `codex/gpt-6.1-sol`, max. Source `558c28c55c21c5636c847e1702e7c6e3b67c7e7a`, evidence `aa53661363117e6a9a443cffce3c4b48887aba44`. Worktree `/home/worker/.t3/worktrees/subnautica-clone/t3-88d37a09`, branch `t3/m1-a0-runtime-seams`, clean. No children; owned tabs/port5189 closed.
+- Staged preserving author history through `1c8d81e` on provisional feature branch. Root inspected changes, matched source/bundle, ran 117 tests/typecheck/build/economy and both prior command/save repros (pass). [Evidence](evidence/M1-A0-INTEGRATION.md); [reconciled contracts](CONTRACTS.md#reconciled-a0-interfaces-for-provisional-m1-work). No completed core-batch or M1 acceptance.
+- Paths now transferred by [M1-PARALLEL](tasks/M1-PARALLEL.md) and its core/visual/presentation briefs. Only root active before dispatch; next three worktrees start from the shared committed baseline. Main retains core/shared files; original audio/expedition-render ownership is explicitly released to presentation/visual workers. No overlapping authors.
+- A0 is included in the later core/physical-feasibility review batch. Full P0–P5/F0–F3 and final combined visual/UI/audio evidence remain. Separate physical recovery/carrier task rotates after a completed slot; do not silently assign all those gates back to the main route task.

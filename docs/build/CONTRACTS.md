@@ -48,7 +48,7 @@ Station keeping precedes helm exit and launch. Berth capture/launch is transacti
 
 ## Ownership and changes
 
-### Provisional M1 interface checkpoint
+### Historical pre-A0 M1 interface checkpoint
 
 The M1 source at `5fd6338`, preserved on feature merge `7da897f`, is **unaccepted**. This records its working interfaces for the bounded [A0 correction](tasks/M1-A0.md); it does not supersede accepted M0 until the new gate passes. Full author export/migration notes are in [M1-01 evidence](evidence/M1-01.md#exact-contracts-and-migration-proposals). Root inspected the production definitions and [reproduced two immediate command/save inconsistencies](evidence/M1-STAGING.md).
 
@@ -60,6 +60,20 @@ The M1 source at `5fd6338`, preserved on feature merge `7da897f`, is **unaccepte
 - Carrier has explicit local/world transforms, station keeping, prepared/lock transactions and exactly-once identities. A0 must define and check the full physical berth/lock/exit corridor before final art ownership transfers. Current endpoint-only clearance is insufficient evidence. No moving interiors or campaign carrier acquisition is claimed.
 
 Root will reconcile A0's concrete revised exports, dimensions and compatibility policy, then commit a new shared baseline before parallel worktrees. Existing render/UI seams suffice; no general extraction or duplicate registry is authorized.
+
+### Reconciled A0 interfaces for provisional M1 work
+
+Current provisional source `558c28c`, preserved by feature merge `1c8d81e`. Root inspected and reran checks/diagnostics; [evidence](evidence/M1-A0-INTEGRATION.md). This supersedes the pre-A0 action items above for dependent work, but does not grant core/M1 acceptance. Complete source signatures and physical dimensions are in [A0 evidence](evidence/M1-A0.md#exact-physical-contracts-proposed-to-root).
+
+- Every successful menu command leaves immediately saveable coherent state. Taking the carrier helm copies world pose/velocity in the same transaction. Field repair cancels a same-hull tow before returning. No tick during save, weakened ownership validation or alternate journal path.
+- `CARRIER_LAYOUT` in `src/sim/carrier.ts` owns local dry-room, deck, lock, throat, gate, helm/vestibule and walking bounds. `carrierRooms(configuration)` returns room volumes; `carrierStructure(configuration, transferSlot?)` returns structural solids, sealed by default or with only the selected floor hatch/outer gate open. Art and walking consume these definitions; empty sealed rooms are not walkable. Reconfiguration refuses to cover a walking player.
+- `BERTH_ENVELOPES` defines aligned upright rectangular transfer shapes, separately from broad piloting proxies. `Capsule` adds optional `bottom`, `halfWidth`, `halfLength` (defaults 0/radius/radius); `height` is the top above the pose datum. Hearthline bottom is -0.5 m, top9.2/radius17 unchanged. Saved berth and launch transforms remain unchanged. Ordinary vehicle motion retains conservative broad footprints; do not infer detailed rotating mesh collision.
+- `carrierTransferPath(state, vehicle, slot, type)` returns a world-space keel route through selected berth shaft, lower rail, throat and independent endpoint, with actual approach included for capture. `sweptHullClearance(world, path, shape)` checks the whole path; preflight and commit both consider structure, terrain/world and other craft. Carrier yaw transforms local geometry; external checks use a conservative rotated world-axis envelope. Solid sweeps are continuous; terrain uses the existing 0.2 m slices and footprint sampling. `createWorldQueries(solids?, floorHeight?)` supports local query frames without world terrain intrusion.
+- Schema2 / `expedition.2` stays. No saved fields or berth/world vessel poses changed. Decode first validates semantics, including the 0.01 m interior local/world relation, then visibly/idempotently relocates only a player whose legacy walking pose intersects a newly sealed room to the clear helm passage. Reading never writes; later journal commit preserves prior raw generation. Encoding a currently blocked walking pose fails rather than silently relocating it. Existing unsupported/corrupt protections remain. Imported legacy Dart clearance still needs physical testing.
+- The sound event variant adds `origin?: Vec3`, a detached world-position copy at emission, not saved state. Threat calls/attacks include it; oxygen/food/pressure/power/body alarms omit it. Audio pans only explicit origins relative to current listener/yaw. Keep existing captions, activation, settings and disposal contracts.
+- Existing `GameRenderer`, `createExpeditionArt`, `AnimatedLife`, `GameView/UiActions/PanelKind`, command and session lifecycle signatures remain. No broad module extraction is required.
+
+[M1-PARALLEL](tasks/M1-PARALLEL.md) and its three briefs transfer exact exclusive ownership from the completed A0 author. Main core retains shared state/registry/world/save/runtime and renderer lifecycle/material/atmosphere; visual owns the six art leaf files; presentation owns UI/CSS/audio and sound tests. Shared changes require root reconciliation and a committed replacement baseline before dependent mutation. Root alone integrates Git and maintains records. Later combined play and dual review include these A0 changes.
 
 ### Assignment discipline
 

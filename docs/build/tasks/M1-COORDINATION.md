@@ -44,3 +44,8 @@ The main Sol task completed on 2026-10-17 with unchanged source `5fd6338` and ev
 ## Audit reconciled; A0 next
 
 The Astra task completed; [full report](../evidence/M1-COORDINATION-ASTRA.md) is preserved. Root accepted its sequencing advice, not a game acceptance verdict: A0 fixes immediate command/save coherence and freezes physical/audio seams before A/B/C. Root independently reproduced both R1 failures and ran fresh checks on staged source (97 tests/build/economy pass). [M1-A0](M1-A0.md) is the concrete bounded next assignment. Existing interfaces support the split; no broad extraction is authorized. Source/history is preserved on `feat/siltwake-first-expedition`, outside accepted `game/siltwake`. The advisor created no children or browser resources.
+
+
+## A0 reconciled; concrete parallel work
+
+A0 source `558c28c`, evidence `aa53661`, is staged and root-checked (117 tests/build/economy and prior immediate-save repros pass). See [M1-PARALLEL](M1-PARALLEL.md) for exact task/path transfer and sequence. Core now has a bounded earned-route/persistence assignment, visual and presentation specialists own exclusive leaf files, and the remaining physical recovery/carrier matrix is reserved for a separately rotated task. Shared contracts and physical geometry are reconciled before dispatch. This is provisional assembly, not M1 acceptance.
