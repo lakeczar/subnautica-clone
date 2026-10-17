@@ -1,6 +1,6 @@
 # M1 full completion batches — independent review round 1
 
-Status: **Both independent reviewers require changes to both batches. Three distinct blockers are accepted for correction; no acceptance.** Dispatched 2026-10-17 from clean frozen candidate `ac5988c1472da8f8f81b097ed235f33f48c62c7d`. Diff base is accepted M0 `a2cb19f1d4cd2d795b82642a2bd357f681d1c293`. Production equals final author source `20451a8dafd014012986e0c8aa1e60df0da7ff25`, assembled at `83a577b6afe7f16c74bfe63322c4890fec8a9995`. Later dispatch bookkeeping is not a new reviewed candidate.
+Status: **Both independent reviewers require changes to both batches. Two distinct blockers are corrected provisionally; occupied recovery remains open. No acceptance.** Dispatched 2026-10-17 from clean frozen candidate `ac5988c1472da8f8f81b097ed235f33f48c62c7d`. Diff base is accepted M0 `a2cb19f1d4cd2d795b82642a2bd357f681d1c293`. Production equals final author source `20451a8dafd014012986e0c8aa1e60df0da7ff25`, assembled at `83a577b6afe7f16c74bfe63322c4890fec8a9995`. Later dispatch bookkeeping is not a new reviewed candidate.
 
 ## Scope and evidence
 
@@ -60,3 +60,10 @@ Steer `siltwake-m1-batch-fix-astra-crosscheck-253200a` successfully delivered th
 
 
 P1 correction dispatch: `codex/gpt-6.1-sol` / explicit max, async isolated worktree from clean `b2e91ef6b5e6f9fb50106dc3602d11d776f9853e`, task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-occupancy-fix-sol-max-b2e91ef`. Accepted running, no children/question, disjoint paths and port5194. Together with the earlier boundary/cache worker this accounts for all three distinct blockers; neither is an independent reviewer of its corrections.
+
+
+## Boundary/cache correction inspected
+
+SOL-M1-01 / M1-ASTRA-R1-02 and SOL-M1-02 / M1-ASTRA-R1-03 are corrected **provisionally** by source `b2014592512786920b2bcfdb8f28ed90145aebea`, assembled `1bec4f3702d4055ee45916a6cf6b290dd14a19f2`. [Root inspection](../evidence/M1-BATCH-R1-SOL-FIX-INTEGRATION.md) records143 tests/typecheck/build, matching production bytes,76 payloads/77 archive files/13 source snapshots and reexecuted complete-state/real-factory evidence. Both original south/east boundary cases now save while old invalid envelopes remain rejected; actual New/import removes cache meshes without disposing shared materials. Source changes remain within assigned paths, with no interface/schema change. Author is terminal and resources closed.
+
+The earlier verdicts still apply to their exact original candidate and are not converted to acceptance. M1-ASTRA-R1-01 remains open with its separate active correction. Assemble that return before one revised candidate, affected checks and fresh paired R2 incorporating both complete initial reports, every disposition and evidence limit.
