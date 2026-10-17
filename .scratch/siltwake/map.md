@@ -30,6 +30,7 @@ A coherent, user-reviewed game specification and complete Astra build input for 
 - [Connect the arrival story and discovered history](issues/03-mystery-and-discovery.md): ambiguous early evidence, a surprising personal reveal authored by the narrative team, and regional leads for independent discovery.
 - [Connect resource geography to the vehicle fleet](issues/04-geography-and-fleet.md): broad specialist fleet and deployable carrier, food without thirst, evasion/deterrence and recoverable losses; authored region/resource/capability contracts are ready for final review.
 - [Choose delivery and required feasibility gates](issues/05-delivery-feasibility.md): dedicated-GPU desktop browser using TypeScript/Babylon.js; early construction gates must prove gameplay, interiors, persistence and performance.
+- [Review the complete long-running build input](issues/06-final-build-input.md): owner explicitly invoked construction on 2026-10-17; current execution state is in the build records.
 
 ## Not yet specified
 
