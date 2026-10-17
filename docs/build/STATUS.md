@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: foundation implementation and author browser checks in progress; no implementation batch accepted yet.
+Updated: 2026-10-17. State: FND-01 author complete and coordinator checks passed; freezing the first independent-review candidate. No implementation batch accepted yet.
 
 ## Authority and checkpoint
 
@@ -13,12 +13,12 @@ Updated: 2026-10-17. State: foundation implementation and author browser checks 
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-FND-01 main builder is running as a native Sol 6.1 max child; ECO-01 author has completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. There are two active agents including coordinator.
+FND-01 and ECO-01 authors have completed. Exact IDs and paths are in the task ledger. Older native planning/review agents are completed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. Coordinator is preparing separate non-author Astra xhigh and Sol 6.1 max reviews in isolated worktrees.
 
 ## Acceptance and evidence
 
-- FND-01 production code is present on the feature branch but remains uncommitted worker-owned work at this status update. Author reports 18 passing rule tests and a launchable production scene with ordinary-control movement, pause and save/reload checks; final commit/evidence and independent review are pending.
-- Coordinator inspected source boundaries and actual menu/underwater captures. Early issues sent to the builder: reachable pod return ramp, strict save mode validation, paused rendering/readiness, context-loss resume gate and distinct quality scaling. Builder reports corrections with affected tests; verify at the frozen candidate.
+- FND-01 author commit: `8d72dd2ac2822873e36fe339f8ed2db8c837084b`; clean worktree. [Author evidence](evidence/FND-01.md) records 18 passing tests, final production scene and ordinary-control movement, pause, save/reload and rejected-import checks. Builder closed its tab/server and preserved coordinator tab14.
+- Coordinator inspected source boundaries and actual rendered menu, pod, reef and island captures; directed corrections to pod access/hatch geometry, strict save-mode validation, paused rendering/readiness, context-loss resume gating, quality scaling and underwater atmosphere. Coordinator reran `npm run check` on `8d72dd2`: strict typecheck, 18/18 tests and production build passed. The large main-chunk warning remains; SwiftShader evidence does not qualify dedicated-GPU performance.
 - ECO-01 proposal committed at `cd1d303`: coordinator reran the Node checker successfully (39 recipes, 33 patches, eight strategy/starter/optional scenarios, six independent optional branches, five budgeted failures and 20 numeric disable/salvage/rebuild transactions per scenario, six rejection fixtures). It is not a runtime registry or validated route/playtime balance.
 - Existing cel art study `20711d1` is reference only. Its SwiftShader captures do not establish dedicated-GPU performance.
 - Every implementation batch remains provisional until coordinator inspection, applicable checks and separate non-author Astra xhigh plus Sol 6.1 max acceptance of one frozen revision. Records go under `reviews/` following [the gate](../DELIVERY_AND_ACCEPTANCE.md#independent-review-gate).
@@ -26,8 +26,8 @@ FND-01 main builder is running as a native Sol 6.1 max child; ECO-01 author has 
 
 ## Exact next action
 
-Main builder is implementing FND-01 under the contracts and plan. Concrete proposed seams were reconciled: `src/content/registry.ts`; pure `src/sim/{types,state,world,step,clock}.ts`; `src/save/{codec,repository}.ts`; runtime DOM/input/render adapters. Right-handed Y-up, water=0, yaw zero toward -Z; fixed step 60 Hz. Final exports require inspection of the committed implementation.
+Freeze the committed FND-01 plus ECO-01 proposal and these evidence records. Dispatch two independent reviews of the same SHA; record their task IDs in the ledger. Functional/contract changes wait for a correction assignment. Source export contracts are indexed in [CONTRACTS.md](CONTRACTS.md) and the author evidence.
 
-Inspect the builder's returned runnable commit and evidence; freeze FND-01 (including relevant coordinator contract changes), obtain both independent reviews, fix and repeat as needed, and integrate through a feature PR. ECO-01 is provisional arithmetic pending inspection and eventual registry integration/review. Commit the runnable foundation before dependent implementation worktrees. No additional owner decision is needed to continue.
+Reconcile independent findings, have Sol fix substantiated issues and return the corrected revision to both reviewers. After acceptance, integrate through a feature PR and verify the integrated M0 milestone before dependent implementation. ECO-01 is provisional arithmetic, not runtime routes or recovery proof; later production-registry adoption needs its own integration review. No additional owner decision is needed to continue.
 
 After restart, inspect branch/HEAD/worktree and task ledger; check active task status before duplicating work. Preserve major story spoilers outside ordinary updates and PR descriptions.

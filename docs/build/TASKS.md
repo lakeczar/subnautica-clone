@@ -4,7 +4,7 @@ Only the coordinator dispatches. Default cap is four active agents including coo
 
 | Batch | Task/agent ID | Model/effort | Baseline / owned paths | State |
 | --- | --- | --- | --- | --- |
-| FND-01 | Native `/root/foundation_builder` | `gpt-6.1-sol` / `max` | `a3e400b`; production `src/`, `public/`, tests/scripts, package/config/lockfile, index.html, README, .gitignore, CI, `docs/build/evidence/FND-01.md` | Running on shared `feat/siltwake-foundation`; builder may commit assigned files |
+| FND-01 | Native `/root/foundation_builder` | `gpt-6.1-sol` / `max` | `a3e400b`; production `src/`, `public/`, tests/scripts, package/config/lockfile, index.html, README, .gitignore, CI, `docs/build/evidence/FND-01.md` | Author complete at `8d72dd2`; coordinator check passed; awaiting independent review. Owned browser/server closed |
 | ECO-01 proposal | Native `/root/expedition_economy` | `gpt-6.1-sol` / `max` | `a3e400b`; only `docs/build/design/ECONOMY_CANDIDATE.md`, `economy-candidate.json`, `check-economy.mjs` | Author complete; coordinator committed `cd1d303` and reran checker (pass). Provisional, awaiting dual review with FND-01 and later runtime registry integration |
 
 Coordinator retains other documentation, integration and reviews. Builders return commit/path/check evidence and do not dispatch children or edit planning/canon without an explicit path assignment. Independent reviewers author no candidate changes.

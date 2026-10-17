@@ -1,6 +1,6 @@
 # Runtime and playtest evidence
 
-No production game check has run yet. This log records actual observations, not planned tests as passes. The [acceptance contract](../DELIVERY_AND_ACCEPTANCE.md) defines required coverage.
+Foundation production checks exist; no complete expedition or campaign has been played. This log records actual observations, not planned tests as passes. The [acceptance contract](../DELIVERY_AND_ACCEPTANCE.md) defines required coverage.
 
 For each run record candidate SHA, build/command, environment and renderer, input method, scenario, observed result, artifact, defect and retest. Label ordinary inputs, automated rule tests and diagnostic state injection separately. Record p50/p95/loading/memory only when measured and state the route/sample.
 
@@ -9,7 +9,10 @@ For each run record candidate SHA, build/command, environment and renderer, inpu
 | Historical richer-cel study | `20711d1` (art branch) | Visual direction accepted by owner; see art ticket | Disposable viewer; Linux SwiftShader, no production gameplay/GPU inference |
 | Browser preflight, 2026-10-17 | Build tooling only; no game candidate | T3 `preview_status` then new incognito `preview_open` succeeded. Host `factory-worker`/Linux; local T3 chrome-headless-shell process and page UA agree on Linux, Chromium 154. WebGL 2 available. | Renderer: ANGLE Vulkan SwiftShader Device (Subzero), software rendering. This is browser availability, not gameplay or performance evidence. Root owned tab `tab_14_0430977b-1ed3-45f2-ac72-3683f9fe8942`; preserve others. |
 
-Open: FND-01 production/browser smoke; first expedition; carrier/collision gates; both complete strategies; all hull niches; save resilience; repeated recovery; fresh-human route learning/story comprehension/duration; representative dedicated-GPU performance.
+| FND-01 author production smoke | `8d72dd2` | Ordinary controls reached reef, returned via pod ramp and walked on dry island. Save/reload retained exact pose/tick; corrupt/future imports preserved the entire journal; Esc pause stopped ticks and presented frames. See [full evidence and actual artifacts](evidence/FND-01.md). | Linux Chromium 154 / SwiftShader; no dedicated-GPU qualification. Real host focus switching was not induced; synthetic blur is labelled diagnostic. Context-loss/hidden-tab/storage-quota browser coverage remains incomplete. |
+| Coordinator source/check inspection | `8d72dd2` | Source and actual rendered captures inspected; `npm run check` passed with 18/18 tests and production build. Economy checker passed eight scenarios and six rejection fixtures. | Vite main-chunk warning remains. Arithmetic is not physical recovery or route evidence; independent acceptance pending. |
+
+Open: independent FND-01 review and remaining browser adapters; first expedition; carrier/collision gates; both complete strategies; all hull niches; full gameplay save resilience; repeated recovery; fresh-human route learning/story comprehension/duration; representative dedicated-GPU performance.
 
 ## First expedition run sheet (not yet executed)
 

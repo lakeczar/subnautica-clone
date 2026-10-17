@@ -1,6 +1,16 @@
 # Shared implementation direction
 
-Status: coordinator constraints for FND-01; concrete exported types and paths must be proposed by Sol and reconciled before dependent implementation. [EXPEDITION_INTEGRATION.md](../EXPEDITION_INTEGRATION.md) remains authoritative for cross-system content and progression.
+Status: FND-01 seams reconciled and implemented at `8d72dd2`; provisional until dual independent acceptance. [EXPEDITION_INTEGRATION.md](../EXPEDITION_INTEGRATION.md) remains authoritative for cross-system content and progression.
+
+## Implemented foundation boundary
+
+The [author evidence](evidence/FND-01.md#concrete-production-contracts) indexes the actual exports. `src/content/registry.ts` owns stable roster IDs and asset metadata; `src/sim/{types,state,world,step,clock}.ts` owns plain state, commands/events, terrain/colliders and fixed updates. `src/save/{codec,repository}.ts` owns schema validation and atomic local journals. `SiltwakeApp` composes input, renderer and UI adapters with create/update/present/dispose ownership.
+
+Coordinates are right-handed metres, Y up, water Y=0, yaw zero toward -Z. Saved player position is the capsule base; presentation adds eye height. Simulation updates at 60 Hz, capped at eight steps/frame with interruption resets. Active simulation autosaves every 30 seconds.
+
+Schema 1 / content `foundation.1` contains only actual foundation state; future inventory, knowledge, world, fleet and recovery collections are explicitly empty/null. Later gameplay needs an explicit reviewed migration, not silently added unvalidated data. One localStorage journal commits current plus previous valid generation atomically, preserves unreadable records during explicit repair, and rejects stale-tab writes. Future/corrupt imports cannot replace progress. New/import replacement requires confirmation. Details and limitations remain in the evidence report.
+
+Foundation art is original procedural Sol geometry and shaders. Declared hull/material/region IDs are a roster, not implemented gameplay. The economy files under `design/` are a provisional proposal/checker and must not become a competing runtime registry.
 
 ## Boundaries
 
