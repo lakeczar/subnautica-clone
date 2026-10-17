@@ -87,3 +87,51 @@ Not executed/established here: full final-source earned expedition/return margin
 ## Closed resources
 
 Both recordings stopped and transferred normally. Closed only the owned T3 tab through `t3_preview_close`; the task’s subsequent preview list was empty. Stopped only the owned Vite preview via its session’s Ctrl-C (exit130); a fresh bind confirmed port5192 free. No children, push, PR, parent mutation or shared/human tab changes. Source worktree was clean before this evidence-only addition.
+
+## Same-author correction: semantic panel focus
+
+2026-10-17. Coordinator follow-up, implemented by the same author in the same worktree. Previous commits and the preceding evidence remain intact. The earlier focus observation did not cover duplicate labels; the coordinator found a real defect in `6c99435`. This record supersedes that source’s general focus-preservation claim. It is not independent review or batch/M1 acceptance.
+
+Correction started clean at evidence commit `6bb25703f4ba0a1965ea0732adacc4f107c348e2`. New source commit: **`16fb6ff037f2e623192696ae4d27bef743703214`**. Its only paths are `src/ui/view.ts` and `tests/presentation.test.ts`; this appended record is the only additional tracked path. No core, interface, geometry, dependency, CSS or audio changes, imported CORE work, children, push, PR or parent edits.
+
+### Reproduction and change
+
+Copied and reran the coordinator’s `/tmp/siltwake-presentation-focus-repro.mjs` against freshly compiled unchanged production `GameView`. With three meals and three glass in the pod locker, a one-glass transfer restored focus to meal `item_1` instead of glass `item_2`. The original script/result were preserved. Copies and the author rerun are in `/tmp/siltwake-m1-presentation-focus/`. This minimal-DOM reproduction is explicitly diagnostic, not browser gameplay.
+
+Buttons now carry a stable identity made from the command type and all operands, with field order normalized. Refresh matches that identity among surviving enabled controls. Visible wording and sequential `command-N` dispatch IDs do not restore focus. Thus a one-unit action survives the source stack’s quantity changes, including its last remaining unit; when its destination action disappears, a vessel disappears, a container becomes inaccessible or the matching control is disabled, focus deliberately goes to Return. No unrelated equal-label command is substituted.
+
+The test DOM port now represents rendered buttons, decoded attributes, focused descendants and replacement. Tests inspect commands through the production click listener and execute actual `executeCommand` transactions; they do not assert a particular focus-key encoding. Five added regressions cover:
+
+- Three repeated partial glass transfers with equal-label meal controls and changing dispatch positions, followed by Return on the last unit.
+- An all-items transfer disappearing while an equal-label meal transfer remains.
+- Repeated full-destination transfer refusals, unchanged inventory and retained focus on the refused glass action.
+- Equal-label services for two distinct Darts, reordered vessels and removal of the focused vessel.
+- Inaccessible transfers and a newly disabled control falling back to Return.
+
+Before the view fix, **four regressions failed** with wrong-item/wrong-vessel focus or an unrelated action instead of Return; six presentation tests passed. `regression-red.log` retains the failures. After the fix, **10/10 presentation tests passed** (`regression-green.log`). Full **`npm run check` passed: strict typecheck, 129/129 tests and production build** (`final-check.log`). The existing large-main-chunk warning remains; no correction check failed or was skipped.
+
+### Native production keyboard checks
+
+Reread both `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md`. Verified `factory-worker`, Linux and local Chromium process ownership. Used `preview_status`, then a new owned incognito tab `tab_1v_0430977b-1ed3-45f2-ac72-3683f9fe8942`, with strict port5192 after a successful free-port bind.
+
+Both baseline and corrected runs imported the **unmodified** `/tmp/siltwake-m1-01/island-first-handoff.json`, with its previously recorded `5fd6338` / `index-C0WmyEai.js` earned origin. Its SHA-256 remained `e1700a64bbb87180ad9f11e599376fe7e2a4acf3bf4885d79ad6564d53448c01`; the artifact copy is byte-identical. This was a targeted replay, not a newly earned route. Browser setup used ordinary inventory transfers: move its three glass from the diver to the pod locker beside its existing two alloy. No save edits, seeded cargo, direct commands, pose setters or simulation injection were used. Evaluations only observed DOM/runtime details; Tab, Shift+Tab and Enter came through native preview keyboard controls.
+
+Baseline production bundle `index-BGT_D_6j.js` had its previous verified hash. Shift+Tab from Return focused glass’s `Take to diver · 1`. After Enter, glass fell from three to two but focus moved to alloy. A second Enter moved one alloy, leaving glass unchanged. This independently reproduced the wrong-cargo consequence in the actual browser. `baseline-wrong-item.png`, the short baseline recording and observation JSON retain it.
+
+Corrected production source `16fb6ff` loaded **`index-DPIzbKeV.js`**, SHA-256 **`3d076868e3698d4142bae926da2a059561b03213fc2ece6c42f3f01fe61fc44a`**. CSS remained `index-DONjl4IF.css` / `14756146fd5523913bc59b8079703e86ae867d0250079c88ed57e6198ab0a797`.
+
+1. After a fresh import and the same setup, three Enter presses moved only glass: pod quantities **3 → 2 → 1 → 0**. Focus retained glass `item_2`, destination diver and quantity1 while its dispatch ID changed from `command-7` to `command-8`. Alloy stayed **2**. The last transfer focused `panel-return`, despite the surviving alloy `Take to diver · 1`. One more Enter closed the panel; reopening Hold confirmed the cargo totals.
+2. Moved an existing two-glass diver stack back to the pod through the UI. Native Shift+Tab selected glass’s all-items `Take to diver · 2`, alongside the identically labelled two-alloy action. Enter took the glass and focused Return; both alloy remained in the pod.
+3. Navigated with Tab to the reserve-cell recipe. Two Enter attempts produced the authoritative missing-material refusal and retained the same `reserve_cells` command. Reachable quantities remained alloy **2/2**, glass **3/2**, membrane **0/2**. Tick **4291** remained fixed during these panel actions.
+
+Inspected the actual baseline/corrected screenshots and a frame extracted from `corrected-native-enter.mp4`. The corrected clip is **4.129 seconds**, H.264 video only, 2560×1600 capture pixels for a 1280×800 CSS viewport. Final console contained only Babylon WebGL2 startup logs; no console errors or failed network entries were observed.
+
+Host observations: Linux Chromium154, DPR2, six exposed CPUs, ANGLE Vulkan **SwiftShader Device (Subzero)**; both local browser host roots include `--mute-audio`. This correction makes no audible-mix, consumer-GPU, human-enjoyment or complete-expedition claim. Duplicate-label full-destination refusal, multiple/removed vessels, inaccessible containers and disabled controls were verified in diagnostic unit fixtures. The native refusal check used crafting; those diagnostic cases were not earned in the browser.
+
+### Artifacts, dependency and cleanup
+
+New directory: **`/tmp/siltwake-m1-presentation-focus/`**. Archive: **`/tmp/siltwake-m1-presentation-focus-artifacts.tar.gz`**. Includes the final `dist`, source patch/commit, red/green/full-check logs, copied coordinator repro and author diagnostic result, unmodified earned-save copy, `browser-observations.json`, host observations, artifact source mapping, actual screenshots and bounded recordings. The prior `/tmp/siltwake-m1-presentation/` and archive were preserved; the prior archive still hashes to `b41a8d2dc0ce415b0ae41c132f6ccd8e26c21ea848a17795fc4091ae69385865`.
+
+**CORE transfer-feedback dependency remains pending integration.** Successful UI transfers still display the older core collection notice in this branch. That was visible in both browser runs and was not patched around. Coordinator-owned combined validation must use CORE’s separately assigned fix. No new API, registry or geometry request arises from this correction. The full expedition, separate recovery/carrier pass, fresh non-author Astra/Sol batch review and integrated M1 review remain outside this bounded correction.
+
+Stopped and transferred both owned recordings. Closed only the owned tab through `t3_preview_close`; the caller’s subsequent preview status was empty. Stopped only owned preview session58968 through Ctrl-C, exit130; a new bind confirmed **port5192 free**. Shared hosts, peers and historical/human tabs were preserved. Worktree was clean after the source commit and before this evidence append.
