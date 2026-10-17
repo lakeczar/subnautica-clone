@@ -1,17 +1,65 @@
-import { PLACES } from '../content/registry.js';
-import { eyeHeight } from '../sim/state.js';
-import type { GameState } from '../sim/types.js';
-import type { SaveSlot } from '../save/repository.js';
-import type { Quality } from '../render/renderer.js';
+import {
+  BLUEPRINTS,
+  EVIDENCE,
+  HULLS,
+  ITEMS,
+  OPENING,
+  OPTIONAL_RECORD,
+  PLACES,
+  RECIPES,
+  SOURCES,
+} from "../content/registry.js";
+import {
+  containerAccessible,
+  facility,
+  nearPod,
+  nearWorkshop,
+  usedCapacity,
+} from "../sim/inventory.js";
+import { nearestInteraction, personalLimit } from "../sim/progression.js";
+import { exposure } from "../sim/survival.js";
+import { hullDepth } from "../sim/vehicles.js";
+import type { GameCommand } from "../sim/types.js";
+import type { AudioSettings } from "../audio/sound.js";
+import type { GameState } from "../sim/types.js";
+import type { SaveSlot } from "../save/repository.js";
+import type { Quality } from "../render/renderer.js";
 
 export interface UiActions {
-  newGame(): void; continueGame(): void; resume(): void; pause(): void;
-  save(): void; exportGame(): void; exportBackup(): void; exportRaw(): void;
-  importFile(file: File): void; confirm(): void; cancelConfirm(): void; lockMouse(): void;
+  command(command: GameCommand): void;
+  panel(kind: PanelKind): void;
+  closePanel(): void;
+  fixture(): void;
+  audio(settings: AudioSettings): void;
+  newGame(): void;
+  continueGame(): void;
+  resume(): void;
+  pause(): void;
+  save(): void;
+  exportGame(): void;
+  exportBackup(): void;
+  exportRaw(): void;
+  importFile(file: File): void;
+  confirm(): void;
+  cancelConfirm(): void;
+  lockMouse(): void;
   settings(quality: Quality, sensitivity: number, invertY: boolean): void;
 }
 
+export type PanelKind = "inventory" | "craft" | "notebook" | "carrier";
+const escapeHtml = (s: string): string =>
+  s.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ]!,
+  );
 export class GameView {
+  private panelKind: PanelKind | null = null;
+  private latest: GameState | null = null;
+  private subtitles = true;
+  private readonly commands = new Map<string, GameCommand>();
   readonly canvas: HTMLCanvasElement;
   private readonly abort = new AbortController();
   private readonly menu: HTMLElement;
@@ -22,21 +70,24 @@ export class GameView {
   private canContinue = false;
   private graphicsFailed = false;
 
-  constructor(private readonly root: HTMLElement, actions: UiActions) {
+  constructor(
+    private readonly root: HTMLElement,
+    actions: UiActions,
+  ) {
     root.innerHTML = `
       <canvas id="ocean" tabindex="0" aria-label="Siltwake 3D reef. WASD to move, arrow keys or mouse drag to look. Escape opens the menu."></canvas>
       <div class="vignette" aria-hidden="true"></div>
       <main id="hud" hidden aria-label="Exploration display">
-        <div class="hud-top"><div class="region"><span class="eyebrow">SILTWAKE / FOUNDATION 01</span><strong id="region-name">Hearth Reef</strong></div>
+        <div class="hud-top"><div class="region"><span class="eyebrow">SILTWAKE / FIRST EXPEDITION</span><strong id="region-name">Hearth Reef</strong></div>
         <div class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
-        <div class="hud-actions"><span id="session-warning" hidden>Autosave off · export before closing</span><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button><button data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
-        <div class="crosshair" aria-hidden="true"></div>
+        <div class="hud-actions"><span id="session-warning" hidden>Autosave off · export before closing</span><button data-action="inventory">Hold <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button><button data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
+        <div id="vitals" class="vitals"></div><div id="hazard" class="hazard" role="status"></div><div id="interact-prompt" class="interact-prompt"></div><div id="opening" class="opening" hidden><span class="eyebrow">SERVICE POD / EMERGENCY ASCENT</span><h2 id="opening-title"></h2><p id="opening-caption"></p><button data-action="opening">Act <kbd>E</kbd></button><button data-action="skip">Skip opening <kbd>Space</kbd></button><small id="opening-detail"></small></div><div class="crosshair" aria-hidden="true"></div>
         <div class="hud-bottom"><div class="telemetry"><span class="depth"><b id="depth">0.0</b><small>m / DEPTH</small></span><span class="mode"><strong id="movement">On foot</strong><small id="refuge-distance">Home pod · 0 m</small></span></div>
         <div class="explore-note"><span id="cruise" hidden>FORWARD CRUISE · R TO STOP</span><p id="context-hint">Walk down the amber-edged ramp to the water.</p><small>WASD move · drag / arrows look · Space rise · C dive</small></div></div>
       </main>
       <div id="menu" class="menu-screen" role="dialog" aria-modal="true" aria-labelledby="menu-title">
         <div class="menu-frame">
-          <div class="wordmark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 28C11 9 18 6 20 6s9 3 15 22M7 28c8-6 18-6 26 0M12 35c5-3 11-3 16 0"/></svg><span>FIELD BUILD / 0.1</span></div>
+          <div class="wordmark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 28C11 9 18 6 20 6s9 3 15 22M7 28c8-6 18-6 26 0M12 35c5-3 11-3 16 0"/></svg><span>FIELD BUILD / M1</span></div>
           <h1 id="menu-title">SILTWAKE</h1><p id="menu-subtitle" class="subtitle">A refuge. A reef. A first horizon.</p>
           <p id="pause-reason" class="pause-reason" hidden></p>
           <section id="main-menu">
@@ -46,42 +97,132 @@ export class GameView {
             <div class="menu-tools"><button id="manual-save" data-action="save" hidden>Save locally</button><button id="export-game" data-action="export" hidden>Export save</button><button data-action="import">Import save</button></div>
             <p id="save-status" class="save-status"></p>
             <details class="details"><summary>Controls & settings</summary>
-              <dl class="controls"><div><dt>W A S D</dt><dd>Move / swim</dd></div><div><dt>Drag mouse / ↑ ↓ ← →</dt><dd>Look around</dd></div><div><dt>Space / C</dt><dd>Rise or jump / dive</dd></div><div><dt>Shift</dt><dd>Move faster</dd></div><div><dt>R</dt><dd>Toggle forward cruise</dd></div><div><dt>Esc / F5</dt><dd>Pause / save locally</dd></div></dl>
+              <dl class="controls"><div><dt>W A S D</dt><dd>Move / swim</dd></div><div><dt>Drag mouse / ↑ ↓ ← →</dt><dd>Look around</dd></div><div><dt>Space / C</dt><dd>Rise or jump / dive</dd></div><div><dt>Shift</dt><dd>Move faster</dd></div><div><dt>R</dt><dd>Toggle forward cruise</dd></div><div><dt>E / Q / B / F / G</dt><dd>Interact / scan / buoy / meal / distract</dd></div><div><dt>Tab / K / J / H</dt><dd>Hold / fabricate / notebook / hint</dd></div><div><dt>Z / V</dt><dd>Quiet movement / fixture controls</dd></div><div><dt>Esc / F5</dt><dd>Pause / save locally</dd></div></dl>
               <div class="settings"><label>Rendering <select id="quality"><option value="rich">Rich · full viewport</option><option value="light">Light · lower resolution</option></select></label>
               <label>Mouse sensitivity <input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
               <button id="lock-mouse" data-action="lock" hidden>Resume with locked mouse</button><small class="control-note">Mouse lock is optional. Escape releases it and pauses. Click and drag also works.</small>
             </details>
-            <details class="details"><summary>Save safety</summary><p>Autosaves run every 30 seconds of active exploration when local saving is enabled. Menu and background time do not advance the world. Local saves keep a previous valid generation and coordinate writers between tabs.</p><p>Use export to keep a portable file. Browser storage belongs to this site and can be cleared by the browser. Session-only expeditions need an export before closing.</p><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></details>
+            <details class="details"><summary>Sound & captions</summary><div class="settings"><label>Volume <input id="volume" type="range" min="0" max="1" step="0.05" value="0.55" /></label><label class="check"><input id="muted" type="checkbox" /> Mute</label><label class="check"><input id="subtitles" type="checkbox" checked /> Captions</label></div><p>Hazards always have visible warnings. Audio starts after your first deliberate input.</p></details><details class="details"><summary>Carrier feasibility fixture</summary><p>Separate seeded test of stationary interiors and isolated launch locks. Starting this replaces the Continue slot after confirmation; export your expedition first.</p><button data-action="fixture">Open seeded carrier fixture</button></details><details class="details"><summary>Save safety</summary><p>Autosaves run every 30 seconds of active exploration when local saving is enabled. Menu and background time do not advance the world. Local saves keep a previous valid generation and coordinate writers between tabs.</p><p>Use export to keep a portable file. Browser storage belongs to this site and can be cleared by the browser. Session-only expeditions need an export before closing.</p><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></details>
           </section>
           <section id="confirmation" class="confirmation" hidden><h2 id="confirm-title"></h2><p id="confirm-detail"></p><div class="menu-buttons"><button id="confirm-accept" class="primary" data-action="confirm">Confirm</button><button data-action="cancel">Go back</button></div></section>
           <p id="save-operation" class="save-status" role="status" hidden>Reading a file or waiting to save safely… <button data-action="cancel">Cancel operation</button></p>
-          <p class="build-note"><span class="status-dot"></span> EARLY PLAYABLE FOUNDATION<span>Explore the pod deck, reef ribs and Splitspine shore. The campaign, gathering, survival and fleet are still under construction.</span></p>
+          <p class="build-note"><span class="status-dot"></span> FIRST LINKED EXPEDITION<span>Restore the pod and workshop, investigate their habitats, build a Dart and explore the upper Canopy. The remaining campaign is under construction.</span></p>
         </div>
         <div class="scene-caption" aria-hidden="true"><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
       </div>
-      <section id="graphics-error" class="graphics-error" role="alert" hidden><h2>The ocean could not open</h2><p id="graphics-error-text"></p><p>Your existing local save has not been changed. Save exports remain available in the menu.</p></section>
+      <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-header"><span class="eyebrow">EXPEDITION PAUSED / NO SURVIVAL DRAIN</span><button data-action="close-panel">Return <kbd>Esc</kbd></button></div><nav><button data-action="inventory-panel">Hold</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Notebook</button><button id="carrier-nav" data-action="carrier-panel" hidden>Carrier fixture</button></nav><h2 id="panel-title"></h2><div id="panel-content"></div></div></section><section id="graphics-error" class="graphics-error" role="alert" hidden><h2>The ocean could not open</h2><p id="graphics-error-text"></p><p>Your existing local save has not been changed. Save exports remain available in the menu.</p></section>
       <div id="notification" role="status" aria-live="polite" hidden></div>
       <input id="import-file" type="file" accept=".json,application/json" hidden />`;
-    this.canvas = this.get<HTMLCanvasElement>('ocean'); this.menu = this.get('menu'); this.hud = this.get('hud'); this.toast = this.get('notification');
+    this.canvas = this.get<HTMLCanvasElement>("ocean");
+    this.menu = this.get("menu");
+    this.hud = this.get("hud");
+    this.toast = this.get("notification");
     const options = { signal: this.abort.signal };
     const map: Record<string, () => void> = {
-      new: actions.newGame, continue: actions.continueGame, resume: actions.resume, pause: actions.pause, save: actions.save,
-      export: actions.exportGame, backup: actions.exportBackup, raw: actions.exportRaw, confirm: actions.confirm, cancel: actions.cancelConfirm,
-      lock: actions.lockMouse, import: () => { const input = this.get<HTMLInputElement>('import-file'); input.value = ''; input.click(); },
+      opening: () => actions.command({ type: "interact" }),
+      skip: () => actions.command({ type: "skip-opening" }),
+      inventory: () => actions.panel("inventory"),
+      craft: () => actions.panel("craft"),
+      notebook: () => actions.panel("notebook"),
+      fixture: actions.fixture,
+      "close-panel": actions.closePanel,
+      ...Object.fromEntries(
+        (["inventory", "craft", "notebook", "carrier"] as const).map((k) => [
+          `${k}-panel`,
+          () => {
+            if (this.latest) {
+              this.panelKind = k;
+              this.refreshPanel(this.latest);
+            }
+          },
+        ]),
+      ),
+      new: actions.newGame,
+      continue: actions.continueGame,
+      resume: actions.resume,
+      pause: actions.pause,
+      save: actions.save,
+      export: actions.exportGame,
+      backup: actions.exportBackup,
+      raw: actions.exportRaw,
+      confirm: actions.confirm,
+      cancel: actions.cancelConfirm,
+      lock: actions.lockMouse,
+      import: () => {
+        const input = this.get<HTMLInputElement>("import-file");
+        input.value = "";
+        input.click();
+      },
     };
-    root.addEventListener('click', event => {
-      const target = (event.target as Element).closest<HTMLButtonElement>('[data-action]');
-      if (target && !target.disabled) map[target.dataset.action ?? '']?.();
-    }, options);
-    this.get('import-file').addEventListener('change', () => { const file = this.get<HTMLInputElement>('import-file').files?.[0]; if (file) actions.importFile(file); }, options);
-    for (const id of ['quality', 'sensitivity', 'invert']) this.get(id).addEventListener('change', () => actions.settings(this.get<HTMLSelectElement>('quality').value as Quality, this.get<HTMLInputElement>('sensitivity').valueAsNumber, this.get<HTMLInputElement>('invert').checked), options);
-    this.menu.addEventListener('keydown', event => {
-      if (event.key !== 'Tab') return;
-      const visible = [...this.menu.querySelectorAll<HTMLElement>('button:not([disabled]),select,input,summary')].filter(element => element.getClientRects().length > 0);
-      const first = visible[0], last = visible.at(-1);
-      if (event.shiftKey && document.activeElement === first && last) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last && first) { event.preventDefault(); first.focus(); }
-    }, options);
+    root.addEventListener(
+      "click",
+      (event) => {
+        const target = (event.target as Element).closest<HTMLButtonElement>(
+          "[data-action]",
+        );
+        if (target && !target.disabled) {
+          const command = this.commands.get(target.dataset.action ?? "");
+          if (command) actions.command(command);
+          else map[target.dataset.action ?? ""]?.();
+        }
+      },
+      options,
+    );
+    this.get("import-file").addEventListener(
+      "change",
+      () => {
+        const file = this.get<HTMLInputElement>("import-file").files?.[0];
+        if (file) actions.importFile(file);
+      },
+      options,
+    );
+    for (const id of ["quality", "sensitivity", "invert"])
+      this.get(id).addEventListener(
+        "change",
+        () =>
+          actions.settings(
+            this.get<HTMLSelectElement>("quality").value as Quality,
+            this.get<HTMLInputElement>("sensitivity").valueAsNumber,
+            this.get<HTMLInputElement>("invert").checked,
+          ),
+        options,
+      );
+    for (const id of ["volume", "muted", "subtitles"])
+      this.get(id).addEventListener(
+        "change",
+        () =>
+          actions.audio({
+            volume: this.get<HTMLInputElement>("volume").valueAsNumber,
+            muted: this.get<HTMLInputElement>("muted").checked,
+            subtitles: this.get<HTMLInputElement>("subtitles").checked,
+          }),
+        options,
+      );
+    this.menu.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key !== "Tab") return;
+        const visible = [
+          ...this.menu.querySelectorAll<HTMLElement>(
+            "button:not([disabled]),select,input,summary",
+          ),
+        ].filter((element) => element.getClientRects().length > 0);
+        const first = visible[0],
+          last = visible.at(-1);
+        if (event.shiftKey && document.activeElement === first && last) {
+          event.preventDefault();
+          last.focus();
+        } else if (
+          !event.shiftKey &&
+          document.activeElement === last &&
+          first
+        ) {
+          event.preventDefault();
+          first.focus();
+        }
+      },
+      options,
+    );
   }
 
   private get<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -90,89 +231,378 @@ export class GameView {
     return element;
   }
 
+  audioSettings(settings: AudioSettings): void {
+    this.subtitles = settings.subtitles;
+    this.get<HTMLInputElement>("volume").value = String(settings.volume);
+    this.get<HTMLInputElement>("muted").checked = settings.muted;
+    this.get<HTMLInputElement>("subtitles").checked = settings.subtitles;
+    this.get("opening-caption").hidden = !this.subtitles;
+  }
+
   settings(quality: Quality, sensitivity: number, invertY: boolean): void {
-    this.get<HTMLSelectElement>('quality').value = quality; this.get<HTMLInputElement>('sensitivity').value = String(sensitivity); this.get<HTMLInputElement>('invert').checked = invertY;
+    this.get<HTMLSelectElement>("quality").value = quality;
+    this.get<HTMLInputElement>("sensitivity").value = String(sensitivity);
+    this.get<HTMLInputElement>("invert").checked = invertY;
   }
 
   slot(slot: SaveSlot, hasSession: boolean): void {
-    const button = this.get<HTMLButtonElement>('continue');
+    const button = this.get<HTMLButtonElement>("continue");
     this.canContinue = slot.save !== null;
-    button.hidden = hasSession; button.disabled = !this.canContinue;
-    button.textContent = slot.kind === 'recovered' ? 'Open previous valid save ↗' : 'Continue ↗';
-    this.get('save-status').textContent = slot.message;
-    this.get('export-backup').hidden = slot.backup === null;
-    this.get('export-raw').hidden = slot.kind === 'empty' || slot.kind === 'unavailable';
-    this.get('export-game').hidden = !hasSession && slot.save === null;
+    button.hidden = hasSession;
+    button.disabled = !this.canContinue;
+    button.textContent =
+      slot.kind === "recovered" ? "Open previous valid save ↗" : "Continue ↗";
+    this.get("save-status").textContent = slot.message;
+    this.get("export-backup").hidden = slot.backup === null;
+    this.get("export-raw").hidden =
+      slot.kind === "empty" || slot.kind === "unavailable";
+    this.get("export-game").hidden = !hasSession && slot.save === null;
   }
 
-  persistence(message: string, autoSaveAllowed: boolean, hasSession: boolean, busy: boolean): void {
-    if (message) this.get('save-status').textContent += ` ${message}`;
-    this.get('session-warning').hidden = !hasSession || autoSaveAllowed;
-    this.get('save-operation').hidden = !busy;
-    this.root.dataset.autosave = autoSaveAllowed ? 'enabled' : 'disabled';
+  persistence(
+    message: string,
+    autoSaveAllowed: boolean,
+    hasSession: boolean,
+    busy: boolean,
+  ): void {
+    if (message) this.get("save-status").textContent += ` ${message}`;
+    this.get("session-warning").hidden = !hasSession || autoSaveAllowed;
+    this.get("save-operation").hidden = !busy;
+    this.root.dataset.autosave = autoSaveAllowed ? "enabled" : "disabled";
     this.root.dataset.busy = String(busy);
-    this.menu.setAttribute('aria-busy', String(busy));
-    for (const button of this.root.querySelectorAll<HTMLButtonElement>('[data-action]')) {
+    this.menu.setAttribute("aria-busy", String(busy));
+    for (const button of this.root.querySelectorAll<HTMLButtonElement>(
+      "[data-action]",
+    )) {
       const action = button.dataset.action;
-      if (['new', 'continue', 'resume', 'lock', 'save', 'import', 'confirm'].includes(action ?? '')) {
-        button.disabled = busy || action === 'continue' && !this.canContinue
-          || this.graphicsFailed && ['new', 'continue', 'resume', 'lock'].includes(action ?? '');
+      if (
+        [
+          "new",
+          "continue",
+          "resume",
+          "lock",
+          "save",
+          "import",
+          "confirm",
+        ].includes(action ?? "")
+      ) {
+        button.disabled =
+          busy ||
+          (action === "continue" && !this.canContinue) ||
+          (this.graphicsFailed &&
+            ["new", "continue", "resume", "lock"].includes(action ?? ""));
       }
     }
   }
 
-  showMenu(hasSession: boolean, reason = ''): void {
-    this.menu.hidden = false; this.hud.hidden = true; this.root.dataset.screen = 'menu';
-    this.get('resume').hidden = !hasSession; this.get('manual-save').hidden = !hasSession;
-    this.get('lock-mouse').hidden = !hasSession || typeof this.canvas.requestPointerLock !== 'function';
-    this.get('pause-reason').hidden = reason.length === 0; this.get('pause-reason').textContent = reason;
-    this.get('menu-subtitle').textContent = hasSession ? 'A moment ashore.' : 'A refuge. A reef. A first horizon.';
-    if (this.wasPlaying) this.get(hasSession ? 'resume' : 'new-game').focus({ preventScroll: true });
+  showMenu(hasSession: boolean, reason = ""): void {
+    this.menu.hidden = false;
+    this.hud.hidden = true;
+    this.root.dataset.screen = "menu";
+    this.get("resume").hidden = !hasSession;
+    this.get("manual-save").hidden = !hasSession;
+    this.get("lock-mouse").hidden =
+      !hasSession || typeof this.canvas.requestPointerLock !== "function";
+    this.get("pause-reason").hidden = reason.length === 0;
+    this.get("pause-reason").textContent = reason;
+    this.get("menu-subtitle").textContent = hasSession
+      ? "A moment ashore."
+      : "A refuge. A reef. A first horizon.";
+    if (this.wasPlaying)
+      this.get(hasSession ? "resume" : "new-game").focus({
+        preventScroll: true,
+      });
     this.wasPlaying = false;
   }
 
   showGame(): void {
-    this.menu.hidden = true; this.hud.hidden = false; this.root.dataset.screen = 'playing';
-    this.wasPlaying = true; this.canvas.focus({ preventScroll: true });
+    this.menu.hidden = true;
+    this.hud.hidden = false;
+    this.root.dataset.screen = "playing";
+    this.wasPlaying = true;
+    this.canvas.focus({ preventScroll: true });
   }
 
   confirmation(title: string, detail: string, accept: string): void {
-    this.get('main-menu').hidden = true; this.get('confirmation').hidden = false;
-    this.get('confirm-title').textContent = title; this.get('confirm-detail').textContent = detail;
-    this.get('confirm-accept').textContent = accept; this.get('confirm-accept').focus({ preventScroll: true });
+    this.get("main-menu").hidden = true;
+    this.get("confirmation").hidden = false;
+    this.get("confirm-title").textContent = title;
+    this.get("confirm-detail").textContent = detail;
+    this.get("confirm-accept").textContent = accept;
+    this.get("confirm-accept").focus({ preventScroll: true });
   }
 
   cancelConfirmation(): void {
-    if (this.get('confirmation').hidden) return;
-    this.get('main-menu').hidden = false; this.get('confirmation').hidden = true; this.get('new-game').focus({ preventScroll: true });
+    if (this.get("confirmation").hidden) return;
+    this.get("main-menu").hidden = false;
+    this.get("confirmation").hidden = true;
+    this.get("new-game").focus({ preventScroll: true });
   }
 
   update(state: GameState, cruise: boolean): void {
-    const p = state.player.pose.position, mode = state.player.mode;
-    const degrees = (state.player.pose.yaw * 180 / Math.PI + 360) % 360;
-    this.get('compass').textContent = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(degrees / 45) % 8] ?? 'N';
-    this.get('bearing').textContent = `${Math.round(degrees).toString().padStart(3, '0')}°`;
-    this.get('depth').textContent = Math.max(0, -(p.y + eyeHeight(state))).toFixed(1);
-    this.get('movement').textContent = mode === 'swimming' ? 'Swimming' : 'On foot';
+    this.latest = state;
+    const p = state.player.pose.position,
+      mode = state.player.mode;
+    const degrees = ((state.player.pose.yaw * 180) / Math.PI + 360) % 360;
+    this.get("compass").textContent =
+      ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][
+        Math.round(degrees / 45) % 8
+      ] ?? "N";
+    this.get("bearing").textContent =
+      `${Math.round(degrees).toString().padStart(3, "0")}°`;
+    this.get("depth").textContent = exposure(state).pressureDepth.toFixed(1);
+    this.get("movement").textContent =
+      mode === "piloting"
+        ? "Piloting"
+        : mode === "interior"
+          ? "Dry interior"
+          : mode === "swimming"
+            ? "Swimming"
+            : "On foot";
     const home = PLACES.home_pod.position;
-    this.get('refuge-distance').textContent = `Home pod · ${Math.round(Math.hypot(p.x - home.x, p.z - home.z))} m`;
-    this.get('region-name').textContent = p.z < -30 ? 'Splitspine shore' : 'Hearth Reef';
-    this.get('cruise').hidden = !cruise;
-    this.get('context-hint').textContent = mode === 'swimming' ? 'The pod’s amber-edged ramp leads back to the deck.' : p.z < -25 ? 'The shore is walkable. The split ridge is your landmark.' : 'Walk down the amber-edged ramp to the water.';
-    this.hud.dataset.tick = String(state.tick); this.hud.dataset.position = `${p.x.toFixed(3)},${p.y.toFixed(3)},${p.z.toFixed(3)}`;
-    this.hud.dataset.mode = mode; this.hud.dataset.yaw = String(state.player.pose.yaw);
+    this.get("refuge-distance").textContent =
+      `Home pod · ${Math.round(Math.hypot(p.x - home.x, p.z - home.z))} m`;
+    this.get("region-name").textContent =
+      state.scenario === "carrier-fixture"
+        ? "Carrier feasibility fixture"
+        : p.x > 62
+          ? "Upper Lantern Canopy"
+          : p.z < -28
+            ? "Splitspine shore"
+            : "Hearth Reef";
+    this.get("cruise").hidden = !cruise;
+    this.get("context-hint").textContent =
+      mode === "swimming"
+        ? "The pod’s amber-edged ramp leads back to the deck."
+        : p.z < -25
+          ? "The shore is walkable. The split ridge is your landmark."
+          : "Walk down the amber-edged ramp to the water.";
+    const e = exposure(state),
+      v = state.fleet.vehicles.find(
+        (v) => v.id === state.player.controlledVehicleId,
+      ),
+      t = nearestInteraction(state);
+    this.get("context-hint").textContent = state.world.action
+      ? `Active ${state.world.action.kind} · ${Math.ceil(state.world.action.seconds)} s remaining`
+      : state.recovery.operation
+        ? `Bobbin · ${state.recovery.operation.phase} · follow the local tether corridor`
+        : e.refuge
+          ? "Safe air · gradual healing · hold / fabricate / notebook"
+          : p.x > 68
+            ? "Read the upper crowns. Z quiet · G distraction · retreat behind the tall rib."
+            : "E interact · Q scan · B buoy · F meal · H voluntary hint";
+    this.get("interact-prompt").innerHTML = v
+      ? `<kbd>E</kbd> Exit · suit ${personalLimit(state)} m / hull ${HULLS[v.hull].initialDepth} m`
+      : t
+        ? `<kbd>E</kbd> ${escapeHtml(t.label)} <small>${t.id in SOURCES ? `${SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Hand-gather food" : "Collect exposed bundle"} · Q scan` : t.kind === "evidence" ? "Inspect & record · J notebook" : "Inspect"}</small>`
+        : "";
+    this.get("vitals").innerHTML =
+      `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${e.breathable ? "Breathing air" : "180 s tank"}</small></div><div><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m</small></div>` : ""}`;
+    const pressure = !v && !e.refuge && e.pressureDepth > personalLimit(state);
+    this.get("hazard").textContent = pressure
+      ? `PRESSURE · ${e.pressureDepth.toFixed(0)} m / personal ${personalLimit(state)} m · ascend now`
+      : v && v.charge === 0
+        ? `POWER DEPLETED · emergency air ${v.emergencyAir.toFixed(0)} s · protected exit / reserve cell`
+        : v && hullDepth(v) > HULLS[v.hull].initialDepth * 0.85
+          ? `HULL DEPTH · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m`
+          : state.world.threat.mode === "warn"
+            ? "◖ SOUND HUNTER · paired warning calls · slow down or use cover"
+            : state.world.threat.mode === "investigate"
+              ? "◖ SOUND HUNTER · investigating machinery · Z quiet / G distraction"
+              : state.world.threat.mode === "pursue"
+                ? "◖ SOUND HUNTER · pursuit · break sight behind the tall rib"
+                : state.world.threat.mode === "disengage" && p.x > 70
+                  ? "SOUND HUNTER · disengaging"
+                  : state.player.vitals.food < 20
+                    ? "LOW FOOD · accessible shallow staples / F meal"
+                    : "";
+    const opening = state.opening.phase < 4;
+    this.get("opening").hidden = !opening;
+    if (opening) {
+      const o = OPENING[state.opening.phase as 0 | 1 | 2 | 3];
+      this.get("opening-title").textContent = o.label;
+      this.get("opening-caption").textContent = o.caption;
+      this.get("opening-detail").textContent = o.detail;
+    }
+    this.hud.dataset.tick = String(state.tick);
+    this.hud.dataset.position = `${p.x.toFixed(3)},${p.y.toFixed(3)},${p.z.toFixed(3)}`;
+    this.hud.dataset.mode = mode;
+    this.hud.dataset.yaw = String(state.player.pose.yaw);
+  }
+
+  closePanel(): void {
+    this.panelKind = null;
+    this.get("game-panel").hidden = true;
+  }
+  openPanel(kind: PanelKind, state: GameState): void {
+    this.panelKind = kind;
+    this.menu.hidden = true;
+    this.hud.hidden = true;
+    this.get("game-panel").hidden = false;
+    this.root.dataset.screen = "panel";
+    this.refreshPanel(state);
+  }
+  refreshPanel(state: GameState): void {
+    this.latest = state;
+    if (!this.panelKind) return;
+    this.commands.clear();
+    this.get("carrier-nav").hidden = state.scenario !== "carrier-fixture";
+    const button = (label: string, command: GameCommand): string => {
+      const id = `command-${this.commands.size}`;
+      this.commands.set(id, command);
+      return `<button data-action="${id}">${escapeHtml(label)}</button>`;
+    };
+    const kind = this.panelKind;
+    this.get("panel-title").textContent = {
+      inventory: "Hold & preparation",
+      craft: "Fabrication & services",
+      notebook: "Field notebook",
+      carrier: "Carrier feasibility fixture",
+    }[kind];
+    let html = "";
+    if (kind === "inventory") {
+      html = `<p class="panel-intro">Personal protection ${personalLimit(state)} m · diver hold ${usedCapacity(state, "diver")} / 16 CU. Containers must be physically present for transfers.</p><div class="service-actions">${button("Eat a meal", { type: "eat" })}${button(state.inventory.buoy.deployed ? "Pack empty buoy" : "Deploy buoy", { type: "buoy" })}${button("Emergency refuge meal", { type: "emergency-meal" })}</div>`;
+      const bins = state.inventory.containers.filter((c) =>
+        containerAccessible(state, c.id),
+      );
+      html += '<div class="container-grid">';
+      for (const c of bins) {
+        html += `<article class="container"><h3>${escapeHtml(c.id.replaceAll("_", " "))} <small>${usedCapacity(state, c.id)} / ${c.capacity} CU</small></h3>`;
+        for (const i of state.inventory.items.filter(
+          (i) => i.containerId === c.id,
+        )) {
+          html += `<div class="item-row"><strong>${ITEMS[i.kind].label} × ${i.quantity}</strong><small>${i.fitted ? "Fitted / retained" : `${ITEMS[i.kind].cu * i.quantity} CU`}${i.charge !== null ? ` · charge ${i.charge.toFixed(0)}%` : ""}${i.provenance === "maintenance" ? " · recovery allocation" : ""}</small><div>`;
+          if (!i.fitted)
+            for (const d of bins.filter(
+              (d) => d.id !== c.id && d.kind !== "equipment",
+            ))
+              html += button(
+                `${d.id === "diver" ? "Take" : "To " + d.id.replaceAll("_", " ")}${i.quantity > 1 ? " (bundle)" : ""}`,
+                {
+                  type: "transfer",
+                  itemId: i.id,
+                  to: d.id,
+                  quantity: i.quantity,
+                },
+              );
+          html += "</div></div>";
+        }
+        html += "</article>";
+      }
+      html += "</div>";
+      for (const v of state.fleet.vehicles.filter(
+        (v) => !v.berth && v.hull !== "hearthline",
+      ))
+        html += `<article><h3>${HULLS[v.hull].label} · ${v.disabled ? "disabled" : "available"}</h3><p>Power ${v.charge.toFixed(1)}% · hull ${v.health.toFixed(1)}% · hull rating ${HULLS[v.hull].initialDepth} m / personal ${personalLimit(state)} m</p><div class="service-actions">${button("Supported charge / repair", { type: "service", vehicleId: v.id })}${button("Use reserve cell", { type: "reserve", vehicleId: v.id })}${button("Field repair · bound 2 alloy / 1 membrane", { type: "recover", vehicleId: v.id, method: "repair" })}${button("Deploy Bobbin / attach local tow", { type: "recover", vehicleId: v.id, method: "tow" })}${button("Salvage empty frame", { type: "recover", vehicleId: v.id, method: "salvage" })}</div></article>`;
+      if (state.recovery.caches.length)
+        html +=
+          "<p>Visited cargo caches retain their own contents. Approach one physically to transfer them. Disabled craft keep their original holds.</p>";
+    } else if (kind === "craft") {
+      html = `<p class="panel-intro">${nearPod(state) ? "Home pod bench" : nearWorkshop(state) ? "Splitspine workshop" : "Approach a refuge fabrication bench."} · ingredients come from your hold, this bench’s locker and a nearby deployed buoy. A refused action consumes nothing.</p>`;
+      for (const [id, r] of Object.entries(RECIPES)) {
+        if (!state.knowledge.blueprints.includes(r.bp)) continue;
+        const done =
+          r.once &&
+          state.knowledge.crafted.includes(id as keyof typeof RECIPES);
+        html += `<article class="recipe"><div><h3>${r.label}${done ? " · installed" : ""}</h3><p>${Object.entries(
+          r.cost,
+        )
+          .map(([k, q]) => `${q} ${ITEMS[k as keyof typeof ITEMS].label}`)
+          .join(
+            " / ",
+          )}</p><small>${r.site === "island_workshop" ? "Splitspine workshop" : "Pod bench"}${r.maintenance ? " · protected maintenance allocation" : ""}</small></div>${done ? "" : button("Fabricate", { type: "craft", recipeId: id as keyof typeof RECIPES })}</article>`;
+      }
+      if (!state.knowledge.blueprints.length)
+        html += "<p>Inspect the pod regulator to recover its checklist.</p>";
+      html += `<p>Recovery allocation: ${state.world.maintenance.alloy} alloy / ${state.world.maintenance.glass} glass / ${state.world.maintenance.membrane} membrane. It funds Bobbin and bound repair patches only.</p>`;
+      const n = nearestInteraction(state);
+      if (n && n.id in SOURCES) {
+        const id = n.id as keyof typeof SOURCES;
+        html +=
+          button("Sort finite source reserve · 20 active seconds", {
+            type: "sort",
+            sourceId: id,
+          }) +
+          button("Sort recovery-only patch · if allocation empty", {
+            type: "sort",
+            sourceId: id,
+            maintenance: true,
+          });
+      }
+      if (facility(state, "island_workshop"))
+        html +=
+          "<article><h3>The unfinished large berth</h3><p>The carrier cradle needs complementary surveys and frame recovery from Pale Basin. It is a future construction opportunity; no campaign carrier is available here yet.</p></article>";
+    } else if (kind === "notebook") {
+      html = `<p class="panel-intro">Observations retain their source. Hypotheses are interpretations, not established facts. Hints sharpen regional leads voluntarily.</p>${button("Request a regional hint", { type: "hint" })}`;
+      if (
+        state.knowledge.evidence.some((e) => e.id === "C02") &&
+        state.knowledge.evidence.some((e) => e.id === "C03")
+      )
+        html +=
+          '<p class="interpretation">Together: the living intake and unspent shore supplies suggest disrupted services. The reason people left these sites is still unconfirmed, whichever record you found first.</p>';
+      for (const found of state.knowledge.evidence) {
+        const e = EVIDENCE[found.id];
+        html += `<article class="finding"><span class="eyebrow">${escapeHtml(found.provenance)}</span><h3>${e.label}</h3><p><b>Observed</b> · ${e.observation}</p><p><b>Hypothesis</b> · ${e.hypothesis}</p><p class="lead"><b>Regional lead</b> · ${e.lead}</p></article>`;
+      }
+      for (const id of state.knowledge.scans)
+        html += `<article><h3>${id === "filter_flow" ? "Current-facing filters" : SOURCES[id as keyof typeof SOURCES]?.label}</h3><p>${id === "filter_flow" ? "Open fans face the current. Harvest loose membrane from downstream catch hollows." : (SOURCES[id as keyof typeof SOURCES]?.scan ?? "")}</p></article>`;
+      if (state.knowledge.journals.includes(OPTIONAL_RECORD.id))
+        html += `<article><h3>Personal record · optional</h3><p>${OPTIONAL_RECORD.text}</p></article>`;
+      html += `<article><h3>Preparation</h3><p>Tank: 180 seconds submerged. Base personal pressure: 60 m; fitted suit: 150 m. Dart hull: 180 m. Carry a meal and charged reserve cell; keep at least a quarter of your air and power for the return. Z quiet movement, cover and G distraction can break a sound hunter’s interest.</p><p>Return to the pod for gradual healing and storage. Restored workshop services add a second refuge, charging and hull fabrication. Bobbin recovery begins locally at the shallow bench east of Splitspine; tow first if a hull is too deep for a safe personal exit.</p></article><p>Known fabrication research: ${state.knowledge.blueprints.length} / ${BLUEPRINTS.length} in this expedition. Later fleets and deeper regions remain future campaign work.</p>`;
+    } else {
+      const d = state.fleet.docking;
+      html =
+        '<p class="fixture-label">SEEDED FEASIBILITY · no earned campaign progression · station keeping only, no underway walking</p>';
+      if (!d)
+        html += "<p>Open the separate carrier fixture from the main menu.</p>";
+      else {
+        html += `<p>${d.stationKeeping ? "Station keeping" : "Under helm control"} · ${d.configuration} configuration · ${d.transaction ? `${d.transaction.type} / ${d.transaction.phase}` : "lock closed"} · completed transactions ${d.completed.length}</p><div class="service-actions">`;
+        for (const [label, a] of [
+          ["Engage station keeping", "station-keep"],
+          ["Take helm", "helm"],
+          ["Leave helm", "leave-helm"],
+          ["Leave aft vestibule", "leave-interior"],
+          ["Enter exterior vestibule", "enter-interior"],
+          ["Reconfigure empty supported berth", "reconfigure"],
+          ["Toggle fixture obstruction", "block-exit"],
+          ["Interrupt lock transaction", "interrupt"],
+          ["Fixture incapacity / refuge fallback", "failure-drill"],
+        ] as const)
+          html += button(label, { type: "carrier", action: a });
+        html += "</div>";
+        for (const v of state.fleet.vehicles.filter(
+          (v) => v.id !== d.vehicleId,
+        ))
+          html += `<article><h3>${HULLS[v.hull].label} · ${v.berth ? "dry isolated berth " + v.berth.slot : "world craft"}</h3><p>Identity ${v.id} · power ${v.charge.toFixed(1)} · damage ${(100 - v.health).toFixed(1)} · cargo ${usedCapacity(state, v.cargoId)} CU</p>${button(v.berth ? "Launch through lock" : "Capture from corridor", { type: "carrier", action: v.berth ? "launch" : "capture", vehicleId: v.id })}</article>`;
+      }
+    }
+    this.get("panel-content").innerHTML = html;
   }
 
   notify(message: string, error = false): void {
-    window.clearTimeout(this.toastTimer); this.toast.textContent = message; this.toast.hidden = false; this.toast.classList.toggle('error', error);
-    this.toastTimer = window.setTimeout(() => { this.toast.hidden = true; }, error ? 12000 : 5500);
+    window.clearTimeout(this.toastTimer);
+    this.toast.textContent = message;
+    this.toast.hidden = false;
+    this.toast.classList.toggle("error", error);
+    this.toastTimer = window.setTimeout(
+      () => {
+        this.toast.hidden = true;
+      },
+      error ? 12000 : 5500,
+    );
   }
 
   graphicsError(message: string): void {
     this.graphicsFailed = true;
-    this.get('graphics-error').hidden = false; this.get('graphics-error-text').textContent = message;
-    for (const id of ['new-game', 'continue', 'resume', 'lock-mouse']) this.get<HTMLButtonElement>(id).disabled = true;
+    this.get("graphics-error").hidden = false;
+    this.get("graphics-error-text").textContent = message;
+    for (const id of ["new-game", "continue", "resume", "lock-mouse"])
+      this.get<HTMLButtonElement>(id).disabled = true;
   }
 
-  dispose(): void { window.clearTimeout(this.toastTimer); this.abort.abort(); this.root.replaceChildren(); }
+  dispose(): void {
+    window.clearTimeout(this.toastTimer);
+    this.abort.abort();
+    this.root.replaceChildren();
+  }
 }
