@@ -379,3 +379,10 @@ Astra report ef6be03 is staged: presentation ACCEPT, core CHANGES REQUIRED with 
 ### Carrier-bounds correction dispatched from f2129a3
 
 Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-carrier-bounds-sol-max-f2129a3`, stable request siltwake-m1-carrier-bounds-sol-max-f2129a3, T3 async isolated worktree from exact `f2129a3ffeea52745dcad43adda89bee83187cd3`. Live catalog verified codex/gpt-6.1-sol and explicit reasoningEffort=max; returned provider/model match, running, no children/question. Complete committed [brief](tasks/M1-CARRIER-BOUNDS-FIX.md) supplied. Exclusive world/step/carrier boundary code, new carrier-boundary tests, only directly affected existing tests and own evidence. No schema/registry/renderer/UI edits or children. Port 5193 after free check; Opus retains 5197 and report-only ownership. Active agents: root, Opus advisory and carrier correction. Both R2 reviewers terminal, no root browser/server. Read notified returns; no polling, duplicate work or milestone acceptance.
+
+
+### Opus terminal; experience corrections prepared
+
+Task `siltwake-opus-design-r1-a5260c9` returned completed, no children/question, owned resources closed. Report-only 59949d0 is retained by merge; [root disposition](reviews/OPUS-DESIGN-R1-DISPOSITION.md) records evidence, corrections and all OD findings. Claude Opus 5.5 confirmed; high requested, effective effort unverified. No new owner decision is needed. Carrier task from f2129a3 was read once after context recovery: still running, existing exclusive paths unchanged.
+
+Prepare LOOK (nine existing render files, affected render lifecycle test, own evidence; 5191) and UI-CLARITY (view/CSS, focused presentation tests, own evidence; 5192) as Sol 6.1 max isolated worktree tasks. Both ports checked free. Root owns records/contracts/integration; no children or cross-owner changes. Live catalog verifies codex/gpt-6.1-sol with max and root Astra xhigh. Commit these briefs before dispatch. Ordinary depleted-power and integrated M1 remain open; no acceptance implied.
