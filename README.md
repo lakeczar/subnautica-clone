@@ -17,7 +17,7 @@ An original alien-ocean adventure being designed around discovery, a recoverable
 - The fleet should be broad and purposeful, including a large inhabited carrier that stores and deploys smaller craft. Classic survival includes food but no thirst meter. Failed expeditions preserve knowledge and lead to recoverable cargo or vessel repair/salvage.
 - Dangerous wildlife rewards observation, stealth and deterrence. Hunting is not the main progression loop.
 - Richer cel-shading is the selected visual direction, with vibrant atmosphere, detailed environments and precise mechanical assets. Iterate designs in playable scenes during the future build.
-- Astra at **xhigh** coordinates the complete future game and its integration; GPT-6.1 Sol at **max** creates original graphics. Every completed feature/delegated batch and integrated milestone receives independent non-author Astra **xhigh** and Sol 6.1 **max** reviews under the [review gate](docs/DELIVERY_AND_ACCEPTANCE.md#independent-review-gate).
+- Astra at **xhigh** sets direction and coordinates the complete future game; GPT-6.1 Sol at **max** is the main builder across gameplay, systems, content and original graphics. Every completed feature/delegated batch and integrated milestone receives independent non-author Astra **xhigh** and Sol 6.1 **max** reviews under the [review gate](docs/DELIVERY_AND_ACCEPTANCE.md#independent-review-gate); the Sol reviewer is separate from the builder.
 
 The duration is a design target, not a measured result. The game has not been built or playtested. The selected delivery plan is TypeScript/Vite/Babylon.js in a desktop browser, targeting a gaming PC or laptop with a dedicated GPU. The small art viewer does not prove full-game performance.
 

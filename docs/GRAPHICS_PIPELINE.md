@@ -1,6 +1,6 @@
 # Original graphics under one art direction
 
-The owner requested **GPT-6.1 Sol at maximum reasoning** to create graphics from scratch. Preserve this in the revised build input. Astra remains the project coordinator, keeping geography, progression, lore, engineering and acceptance requirements in view. Astra gameplay workers and Sol graphics workers are complementary roles; this decision does not silently replace all future workers with Sol.
+The owner requested **GPT-6.1 Sol at maximum reasoning** to create graphics from scratch and subsequently selected it as the **main builder across production work**. Astra at `xhigh` sets direction and coordinates geography, progression, lore, engineering and acceptance. Sol 6.1 max implements gameplay and assets under those shared contracts. The independent Sol reviewer is a separate non-author agent.
 
 ## Current study
 

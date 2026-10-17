@@ -39,6 +39,8 @@ No additional owner-preference question blocks the review input. Recipe quantiti
 
 The owner additionally requires Astra at `xhigh` and Sol 6.1 at `max` to review completed/delegated work along the way. The [Independent review gate](../../docs/DELIVERY_AND_ACCEPTANCE.md#independent-review-gate) defines separate non-author reviewers, coordinator self-review, correction rounds and integrated milestone acceptance. The coordinator runs Astra at `xhigh`.
 
+The latest owner instruction selects **Sol 6.1 max as the main builder**, with Astra setting direction. This supersedes earlier Astra implementation-worker assignments; original graphics remain Sol max. The Sol reviewer must be a separate non-author agent. After compaction or a restart, read the [build handoff](BUILD_HANDOFF.md) before assigning work.
+
 ## Out of scope
 
 - Executing the earlier build prompt, starting the full game, merging to main or publicly deploying during this design interview.

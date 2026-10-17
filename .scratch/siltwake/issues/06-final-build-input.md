@@ -13,7 +13,7 @@ Does the complete revised input accurately express the agreed game and a feasibl
 
 ## Review artifact
 
-The complete [revised build input](../../../prompts/BUILD_GAME_REVISED.md) and its linked specifications are prepared for owner review. They specify Astra coordination and engineering/lore workers, Sol 6.1 max original graphics, the selected richer cel direction, seven connected habitats, six useful craft, carrier deployment, food without thirst, evasion/deterrence, recoverable losses, regional investigation and a hidden authored reveal. The delivery target is a desktop browser on a dedicated-GPU machine; the future build must establish the performance and playtime claims.
+The complete [revised build input](../../../prompts/BUILD_GAME_REVISED.md) and its linked specifications are prepared for owner review. They specify Astra xhigh direction/coordination and Sol 6.1 max as the main builder across implementation and original graphics, the selected richer cel direction, seven connected habitats, six useful craft, carrier deployment, food without thirst, evasion/deterrence, recoverable losses, regional investigation and a hidden authored reveal. The delivery target is a desktop browser on a dedicated-GPU machine; the future build must establish the performance and playtime claims.
 
 The owner can review the input without reading the separately labelled spoiler appendix. The appendix is public repository content, not private storage. Its actual chronology and fifteen clues are available to the implementation team through explicit pointers.
 
