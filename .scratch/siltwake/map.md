@@ -1,7 +1,9 @@
 # Find the design for an integrated ocean-world adventure
 
 Label: wayfinder:map
-Status: open
+Status: resolved
+
+Construction was explicitly invoked on 2026-10-17: "Read .scratch/siltwake/BUILD_HANDOFF.md and start the revised Siltwake build prompt." The planning destination is complete. The notes below preserve the design interview; current execution state lives in [build status](../../docs/build/STATUS.md).
 
 ## Destination
 
@@ -34,6 +36,8 @@ A coherent, user-reviewed game specification and complete Astra build input for 
 No additional owner-preference question blocks the review input. Recipe quantities/source yields, exact encounter timing, route dimensions, asset production details and performance tuning are assigned to explicit implementation gates in the specification. Their validation is future work, not a completed planning experiment.
 
 ## Final input awaiting owner review
+
+Resolved by the owner's explicit build invocation on 2026-10-17; see [Review the complete long-running build input](issues/06-final-build-input.md). The following text records the earlier review boundary.
 
 [Review the complete long-running build input](issues/06-final-build-input.md) links the full prompt and its integrated specification. The old short-game prompt remains superseded. User review and a later explicit build instruction are still required by the user's chosen scope; the current run does not submit construction.
 

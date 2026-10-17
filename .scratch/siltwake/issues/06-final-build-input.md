@@ -3,9 +3,13 @@
 Parent: ../map.md
 Type: grilling
 Label: wayfinder:grilling
-Status: claimed
+Status: resolved
 Assignee: lakeczar (with Astra coordinator)
 Blocked by: 01, 02, 03, 04, 05
+
+## Answer
+
+On 2026-10-17 the owner explicitly instructed: "Read .scratch/siltwake/BUILD_HANDOFF.md and start the revised Siltwake build prompt." This submits the revised input for construction and closes the planning decision. Current implementation ownership and evidence are recorded in [build status](../../../docs/build/STATUS.md). The review-artifact text below preserves the pre-submission state.
 
 ## Question
 
