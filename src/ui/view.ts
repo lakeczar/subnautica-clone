@@ -19,6 +19,8 @@ export class GameView {
   private readonly toast: HTMLElement;
   private toastTimer = 0;
   private wasPlaying = false;
+  private canContinue = false;
+  private graphicsFailed = false;
 
   constructor(private readonly root: HTMLElement, actions: UiActions) {
     root.innerHTML = `
@@ -27,7 +29,7 @@ export class GameView {
       <main id="hud" hidden aria-label="Exploration display">
         <div class="hud-top"><div class="region"><span class="eyebrow">SILTWAKE / FOUNDATION 01</span><strong id="region-name">Hearth Reef</strong></div>
         <div class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
-        <div class="hud-actions"><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button><button data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
+        <div class="hud-actions"><span id="session-warning" hidden>Autosave off · export before closing</span><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button><button data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
         <div class="crosshair" aria-hidden="true"></div>
         <div class="hud-bottom"><div class="telemetry"><span class="depth"><b id="depth">0.0</b><small>m / DEPTH</small></span><span class="mode"><strong id="movement">On foot</strong><small id="refuge-distance">Home pod · 0 m</small></span></div>
         <div class="explore-note"><span id="cruise" hidden>FORWARD CRUISE · R TO STOP</span><p id="context-hint">Walk down the amber-edged ramp to the water.</p><small>WASD move · drag / arrows look · Space rise · C dive</small></div></div>
@@ -49,9 +51,10 @@ export class GameView {
               <label>Mouse sensitivity <input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
               <button id="lock-mouse" data-action="lock" hidden>Resume with locked mouse</button><small class="control-note">Mouse lock is optional. Escape releases it and pauses. Click and drag also works.</small>
             </details>
-            <details class="details"><summary>Save safety</summary><p>Autosaves run every 30 seconds of active exploration. Menu and background time do not advance the world. Local saves keep a previous valid generation.</p><p>Use export to keep a portable file. Browser storage belongs to this site and can be cleared by the browser.</p><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></details>
+            <details class="details"><summary>Save safety</summary><p>Autosaves run every 30 seconds of active exploration when local saving is enabled. Menu and background time do not advance the world. Local saves keep a previous valid generation and coordinate writers between tabs.</p><p>Use export to keep a portable file. Browser storage belongs to this site and can be cleared by the browser. Session-only expeditions need an export before closing.</p><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></details>
           </section>
           <section id="confirmation" class="confirmation" hidden><h2 id="confirm-title"></h2><p id="confirm-detail"></p><div class="menu-buttons"><button id="confirm-accept" class="primary" data-action="confirm">Confirm</button><button data-action="cancel">Go back</button></div></section>
+          <p id="save-operation" class="save-status" role="status" hidden>Reading a file or waiting to save safely… <button data-action="cancel">Cancel operation</button></p>
           <p class="build-note"><span class="status-dot"></span> EARLY PLAYABLE FOUNDATION<span>Explore the pod deck, reef ribs and Splitspine shore. The campaign, gathering, survival and fleet are still under construction.</span></p>
         </div>
         <div class="scene-caption" aria-hidden="true"><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
@@ -93,12 +96,29 @@ export class GameView {
 
   slot(slot: SaveSlot, hasSession: boolean): void {
     const button = this.get<HTMLButtonElement>('continue');
-    button.hidden = hasSession; button.disabled = slot.save === null;
+    this.canContinue = slot.save !== null;
+    button.hidden = hasSession; button.disabled = !this.canContinue;
     button.textContent = slot.kind === 'recovered' ? 'Open previous valid save ↗' : 'Continue ↗';
     this.get('save-status').textContent = slot.message;
     this.get('export-backup').hidden = slot.backup === null;
     this.get('export-raw').hidden = slot.kind === 'empty' || slot.kind === 'unavailable';
     this.get('export-game').hidden = !hasSession && slot.save === null;
+  }
+
+  persistence(message: string, autoSaveAllowed: boolean, hasSession: boolean, busy: boolean): void {
+    if (message) this.get('save-status').textContent += ` ${message}`;
+    this.get('session-warning').hidden = !hasSession || autoSaveAllowed;
+    this.get('save-operation').hidden = !busy;
+    this.root.dataset.autosave = autoSaveAllowed ? 'enabled' : 'disabled';
+    this.root.dataset.busy = String(busy);
+    this.menu.setAttribute('aria-busy', String(busy));
+    for (const button of this.root.querySelectorAll<HTMLButtonElement>('[data-action]')) {
+      const action = button.dataset.action;
+      if (['new', 'continue', 'resume', 'lock', 'save', 'import', 'confirm'].includes(action ?? '')) {
+        button.disabled = busy || action === 'continue' && !this.canContinue
+          || this.graphicsFailed && ['new', 'continue', 'resume', 'lock'].includes(action ?? '');
+      }
+    }
   }
 
   showMenu(hasSession: boolean, reason = ''): void {
@@ -122,7 +142,10 @@ export class GameView {
     this.get('confirm-accept').textContent = accept; this.get('confirm-accept').focus({ preventScroll: true });
   }
 
-  cancelConfirmation(): void { this.get('main-menu').hidden = false; this.get('confirmation').hidden = true; this.get('new-game').focus({ preventScroll: true }); }
+  cancelConfirmation(): void {
+    if (this.get('confirmation').hidden) return;
+    this.get('main-menu').hidden = false; this.get('confirmation').hidden = true; this.get('new-game').focus({ preventScroll: true });
+  }
 
   update(state: GameState, cruise: boolean): void {
     const p = state.player.pose.position, mode = state.player.mode;
@@ -146,6 +169,7 @@ export class GameView {
   }
 
   graphicsError(message: string): void {
+    this.graphicsFailed = true;
     this.get('graphics-error').hidden = false; this.get('graphics-error-text').textContent = message;
     for (const id of ['new-game', 'continue', 'resume', 'lock-mouse']) this.get<HTMLButtonElement>(id).disabled = true;
   }

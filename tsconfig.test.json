@@ -9,5 +9,5 @@
     "types": ["node"],
     "sourceMap": true
   },
-  "include": ["src/content/**/*.ts", "src/sim/**/*.ts", "src/save/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/content/**/*.ts", "src/sim/**/*.ts", "src/save/**/*.ts", "src/runtime/session.ts", "tests/**/*.ts"]
 }

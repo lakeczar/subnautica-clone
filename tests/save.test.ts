@@ -1,21 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame } from '../src/sim/state.js';
-import { createEnvelope, decodeSave, encodeSave, MAX_SAVE_BYTES } from '../src/save/codec.js';
+import { decodeSave, encodeSave, MAX_SAVE_BYTES } from '../src/save/codec.js';
 import type { SaveEnvelope } from '../src/save/codec.js';
 import { LOCAL_SAVE_KEY, SaveRepository } from '../src/save/repository.js';
-import type { StoragePort } from '../src/save/repository.js';
-
-const meta = { sessionId: 'test-session-001', createdAt: '2026-10-17T12:00:00.000Z', savedAt: '2026-10-17T12:05:00.000Z' };
-const sample = (tick = 150): SaveEnvelope => { const state = createGame(); state.tick = tick; return createEnvelope(state, meta); };
-function encoded(save: SaveEnvelope): string { const result = encodeSave(save); if (!result.ok) throw new Error(result.error); return result.value; }
-class MemoryStorage implements StoragePort {
-  data = new Map<string, string>();
-  failWrite = false;
-  failRead = false;
-  getItem(key: string): string | null { if (this.failRead) throw new Error('denied'); return this.data.get(key) ?? null; }
-  setItem(key: string, value: string): void { if (this.failWrite) throw new Error('quota'); this.data.set(key, value); }
-}
+import type { CommitResult } from '../src/save/repository.js';
+import { SAVE_WRITER_LOCK, browserWriterLock } from '../src/save/writer-lock.js';
+import { MemoryStorage, TestWriterLock, deferred, encoded, sample } from './persistence-support.js';
 
 test('save round trip preserves pose, fixed tick and all explicit extension boundaries', () => {
   const save = sample(86400);
@@ -55,74 +45,140 @@ test('future / old schema and different content are rejected without attempted m
 test('oversized files and malformed dates fail before entering the session', () => {
   assert.equal(decodeSave(' '.repeat(MAX_SAVE_BYTES + 1)).ok, false);
   for (const savedAt of ['yesterday', '2026-02-30T00:00:00.000Z', '2020-10-17T12:00:00.000Z']) {
-    assert.equal(decodeSave(JSON.stringify({ ...sample(), meta: { ...meta, savedAt } })).ok, false);
+    assert.equal(decodeSave(JSON.stringify({ ...sample(), meta: { ...sample().meta, savedAt } })).ok, false);
   }
 });
 
-test('one atomic journal commit retains the previous valid generation and survives a failed replacement', () => {
-  const storage = new MemoryStorage(), repo = new SaveRepository(storage);
+test('one atomic journal commit retains the previous valid generation and survives a failed replacement', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage(), repo = new SaveRepository(storage, lock);
   assert.equal(repo.load().kind, 'empty');
-  assert.equal(repo.commit(sample(10)).ok, true);
-  assert.equal(repo.commit(sample(20)).ok, true);
+  assert.equal((await repo.commit(sample(10))).ok, true);
+  assert.equal((await repo.commit(sample(20))).ok, true);
   assert.equal(repo.status.backup?.state.tick, 10);
   const before = storage.getItem(LOCAL_SAVE_KEY);
   storage.failWrite = true;
-  assert.equal(repo.commit(sample(30)).ok, false);
+  assert.equal((await repo.commit(sample(30))).ok, false);
   assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
   storage.failWrite = false;
-  const restarted = new SaveRepository(storage);
+  const restarted = new SaveRepository(storage, lock);
   assert.equal(restarted.load().save?.state.tick, 20);
   assert.equal(restarted.status.backup?.state.tick, 10);
 });
 
-test('invalid writes and rejected corrupt/future imports leave current AND backup byte-for-byte intact', () => {
-  const storage = new MemoryStorage(), repo = new SaveRepository(storage); repo.load(); repo.commit(sample(10)); repo.commit(sample(20));
+test('invalid writes and rejected corrupt/future imports leave current AND backup byte-for-byte intact', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage(), repo = new SaveRepository(storage, lock); repo.load(); await repo.commit(sample(10)); await repo.commit(sample(20));
   const before = storage.getItem(LOCAL_SAVE_KEY);
   const invalid = sample(30); invalid.state.player.pose.yaw = NaN;
-  assert.equal(repo.commit(invalid).ok, false);
+  assert.equal((await repo.commit(invalid)).ok, false);
   // The runtime only offers import confirmation if decode succeeds.
   for (const text of ['{bad json}', JSON.stringify({ ...sample(99), schemaVersion: 4 })]) {
-    const result = decodeSave(text); if (result.ok) repo.commit(result.value);
+    const result = decodeSave(text); if (result.ok) await repo.commit(result.value);
     assert.equal(result.ok, false);
     assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
   }
 });
 
-test('corrupt current recovers previous, blocks autosave and preserves raw record during explicit repair', () => {
-  const storage = new MemoryStorage(), repo = new SaveRepository(storage); repo.load(); repo.commit(sample(10)); repo.commit(sample(20));
+test('corrupt current recovers previous, blocks autosave and preserves raw record during explicit repair', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage(), repo = new SaveRepository(storage, lock); repo.load(); await repo.commit(sample(10)); await repo.commit(sample(20));
   const record = JSON.parse(storage.getItem(LOCAL_SAVE_KEY)! ) as Record<string, unknown>;
   record.current = '{corrupt'; storage.setItem(LOCAL_SAVE_KEY, JSON.stringify(record));
-  const restarted = new SaveRepository(storage), loaded = restarted.load();
+  const restarted = new SaveRepository(storage, lock), loaded = restarted.load();
   assert.equal(loaded.kind, 'recovered'); assert.equal(loaded.save?.state.tick, 10);
   const before = storage.getItem(LOCAL_SAVE_KEY);
-  assert.equal(restarted.commit(sample(15)).ok, false); assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
-  assert.equal(restarted.commit(sample(15), true).ok, true);
+  assert.equal((await restarted.commit(sample(15))).ok, false); assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
+  assert.equal((await restarted.commit(sample(15), true)).ok, true);
   const repaired = JSON.parse(storage.getItem(LOCAL_SAVE_KEY)!) as { preserved: string; previous: string };
   assert.equal(repaired.preserved, before);
   const backup = decodeSave(repaired.previous); assert.equal(backup.ok, true); if (backup.ok) assert.equal(backup.value.state.tick, 10);
 });
 
-test('unsupported local current is protected, even with a valid previous save', () => {
-  const storage = new MemoryStorage();
+test('unsupported local current is protected, even with a valid previous save', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage();
   const future = JSON.stringify({ ...sample(999), schemaVersion: 8 });
   storage.setItem(LOCAL_SAVE_KEY, JSON.stringify({ format: 'siltwake.local', version: 1, current: future, previous: encoded(sample(12)), preserved: null }));
-  const before = storage.getItem(LOCAL_SAVE_KEY), repo = new SaveRepository(storage);
+  const before = storage.getItem(LOCAL_SAVE_KEY), repo = new SaveRepository(storage, lock);
   assert.equal(repo.load().kind, 'recovered'); assert.match(repo.status.message, /unsupported/);
-  assert.equal(repo.commit(sample(13)).ok, false); assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
+  assert.equal((await repo.commit(sample(13))).ok, false); assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
 });
 
-test('a stale tab cannot overwrite a newer tab, and explicit reload makes the conflict visible', () => {
-  const storage = new MemoryStorage(), tabA = new SaveRepository(storage), tabB = new SaveRepository(storage);
-  tabA.load(); tabB.load(); tabA.commit(sample(10));
-  const result = tabB.commit(sample(20)); assert.equal(result.ok, false); if (!result.ok) assert.match(result.error, /another tab/);
+test('a stale tab cannot overwrite a newer tab, and explicit reload makes the conflict visible', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage(), tabA = new SaveRepository(storage, lock), tabB = new SaveRepository(storage, lock);
+  tabA.load(); tabB.load(); await tabA.commit(sample(10));
+  const result = await tabB.commit(sample(20)); assert.equal(result.ok, false); if (!result.ok) assert.match(result.error, /another tab/);
   assert.equal(tabB.load().save?.state.tick, 10);
 });
 
-test('unavailable storage and malformed outer journals do not erase progress', () => {
-  const storage = new MemoryStorage(); storage.failRead = true;
-  const repo = new SaveRepository(storage); assert.equal(repo.load().kind, 'unavailable'); assert.equal(repo.commit(sample()).ok, false);
-  assert.equal(new SaveRepository(null).load().kind, 'unavailable');
+test('unavailable storage and malformed outer journals do not erase progress', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage(); storage.failRead = true;
+  const repo = new SaveRepository(storage, lock); assert.equal(repo.load().kind, 'unavailable'); assert.equal((await repo.commit(sample())).ok, false);
+  assert.equal(new SaveRepository(null, lock).load().kind, 'unavailable');
   storage.failRead = false; storage.setItem(LOCAL_SAVE_KEY, 'old-format');
-  const protectedRepo = new SaveRepository(storage); assert.equal(protectedRepo.load().kind, 'protected');
-  assert.equal(protectedRepo.commit(sample()).ok, false); assert.equal(storage.getItem(LOCAL_SAVE_KEY), 'old-format');
+  const protectedRepo = new SaveRepository(storage, lock); assert.equal(protectedRepo.load().kind, 'protected');
+  assert.equal((await protectedRepo.commit(sample())).ok, false); assert.equal(storage.getItem(LOCAL_SAVE_KEY), 'old-format');
+});
+
+test('competing independent repositories cannot lose a successful generation in the read/write gap', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage();
+  const initial = new SaveRepository(storage, lock); initial.load(); await initial.commit(sample(10));
+  const a = new SaveRepository(storage, lock), b = new SaveRepository(storage, lock); a.load(); b.load();
+  let competing!: Promise<CommitResult>;
+  // Queue B AFTER A obtained the old comparison value but BEFORE A writes.
+  // B must wait for exclusivity and compare again, rather than use that old value.
+  storage.afterRead = () => { competing = b.commit(sample(20)); };
+  const resultA = await a.commit(sample(30)), resultB = await competing;
+  assert.equal(resultA.ok, true); assert.equal(resultB.ok, false);
+  if (!resultB.ok) assert.equal(resultB.code, 'conflict');
+  const current = new SaveRepository(storage, lock).load();
+  assert.equal(current.save?.state.tick, 30); assert.equal(current.backup?.state.tick, 10);
+  assert.deepEqual([...lock.names], [SAVE_WRITER_LOCK]);
+});
+
+test('rejected write and stale writer release exclusion for subsequent commits', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage();
+  const a = new SaveRepository(storage, lock), b = new SaveRepository(storage, lock); a.load(); b.load();
+  storage.failWrite = true;
+  const refusal = await a.commit(sample(10)); assert.equal(refusal.ok, false);
+  if (!refusal.ok) assert.equal(refusal.code, 'write-refused');
+  storage.failWrite = false;
+  assert.equal((await b.commit(sample(20))).ok, true);
+  const conflict = await a.commit(sample(30)); assert.equal(conflict.ok, false);
+  assert.equal((await b.commit(sample(40))).ok, true);
+  assert.equal(b.status.backup?.state.tick, 20);
+});
+
+test('unavailable exclusion permits read/export but never attempts a write', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage(), initial = new SaveRepository(storage, lock);
+  initial.load(); await initial.commit(sample(10));
+  const before = storage.getItem(LOCAL_SAVE_KEY), writes = storage.writes;
+  const repo = new SaveRepository(storage, null);
+  assert.equal(repo.load().save?.state.tick, 10); assert.equal(repo.canWrite, false);
+  assert.equal(repo.raw, before); assert.equal(encodeSave(repo.status.save!).ok, true);
+  const result = await repo.commit(sample(20)); assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.code, 'lock-unavailable');
+  assert.equal(storage.writes, writes); assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
+  assert.equal(browserWriterLock(null), null); assert.equal(browserWriterLock(undefined), null);
+});
+
+test('queued writes take an immutable snapshot and cancelled lock requests never write', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage(), repo = new SaveRepository(storage, lock);
+  repo.load(); const gate = deferred(); lock.gate = gate.promise;
+  const save = sample(10), pending = repo.commit(save);
+  save.state.tick = 999; save.meta.savedAt = '2026-10-17T13:00:00.000Z';
+  gate.resolve(); assert.equal((await pending).ok, true);
+  assert.equal(repo.status.save?.state.tick, 10); assert.equal(repo.status.save?.meta.savedAt, sample().meta.savedAt);
+  const before = storage.getItem(LOCAL_SAVE_KEY), writes = storage.writes, abort = new AbortController();
+  const cancelled = repo.commit(sample(20), false, abort.signal); abort.abort();
+  const result = await cancelled; assert.equal(result.ok, false); if (!result.ok) assert.equal(result.code, 'cancelled');
+  assert.equal(storage.writes, writes); assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
+  assert.equal((await repo.commit(sample(30))).ok, true);
+});
+
+test('oversized protected raw records cannot be discarded even by explicit repair', async () => {
+  const lock = new TestWriterLock(), storage = new MemoryStorage();
+  storage.setItem(LOCAL_SAVE_KEY, 'x'.repeat(MAX_SAVE_BYTES * 4 + 1));
+  const repo = new SaveRepository(storage, lock); repo.load();
+  const before = storage.getItem(LOCAL_SAVE_KEY), writes = storage.writes;
+  const result = await repo.commit(sample(), true);
+  assert.equal(result.ok, false); if (!result.ok) assert.equal(result.code, 'too-large');
+  assert.equal(storage.writes, writes); assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
 });
