@@ -1,0 +1,82 @@
+# Executable orchestration for the game build
+
+Research date: 2026-10-17. This is planning research, not implementation. The recommendations and prompt below are design judgment informed by the inspected primary sources. The assigned research worker read the research skill and performed its research role directly without recursive delegation. No browser was opened.
+
+## Verified capabilities and primary sources
+
+**Live T3 tools, inspected read-only in this session.** orchestrator_capabilities returned provider instance codex, model ID gpt-6-astra, child-task support, and appOwnedSubagents. Its Astra reasoningEffort options included low, medium, high, xhigh, max and ultra. This is an observation of the current catalog, not a guarantee about another session. Rediscover availability at execution time. The native collaboration model list also included gpt-6-astra.
+
+The live delegate_task schema says: prefer native same-provider subagents when they support the selected model; use app-owned delegation when native tools lack the model or T3-owned child tasks are desired. T3 children receive only their supplied task prompt, not parent conversation history. isolation=worktree uses the parent's local commit and completes project setup before launch; **uncommitted edits are not copied**. Omitted isolation shares the parent checkout. mode=async produces a completion notification. Wait timeout does not cancel the task. Stable clientRequestId values make retries of a specific task distinguishable from new work.
+
+The live task_status contract distinguishes working, waiting_for_children and result_available. A completed turn with live nested work is not a completed task. hasPendingChildRuns also reports later queued/executing work even after the original task is terminal. Reading a terminal result acknowledges automatic delivery. t3_thread_wait only reports status; it does not acknowledge the result. t3_thread_read supports retrieving truncated result text using itemId and textOffset.
+
+The live T3 workspace schema distinguishes top-level conversations from delegation: create_threads and t3_thread_launch create ordinary top-level threads; delegate_task creates children. t3_thread_launch can bind a new worktree before start, with workspaceStrategy type worktree, explicit baseRef and branch, and startFromOrigin=false for local commits. Omitting workspaceStrategy uses the project root, not necessarily the caller's checkout. Shell-created worktrees do not update a T3 thread's binding. t3_thread_merge_back transfers context; it is not proof of Git code integration. link_pull_request requires registration of every opened PR, including stack layers. watch_pull_request monitors checks/reviews/conflicts and avoids polling loops.
+
+These live tool schemas and catalog responses are first-party runtime evidence, without stable public URLs. Do not invent a documentation URL for them.
+
+**Git worktrees.** Linked worktrees permit concurrent branch checkouts and share repository data except per-worktree files such as HEAD and index. They are not separate repositories. Inspected [Git's source documentation](https://github.com/git/git/blob/master/Documentation/git-worktree.adoc), fetched from its raw first-party source. The rendered git-scm page returned HTTP 403. Separate checkouts alone do not prove dependency installation or successful integration.
+
+**GitHub draft PRs.** The [GitHub CLI manual](https://cli.github.com/manual/gh_pr_create), inspected over HTTP, documents --draft, --base and --body-file. Explicit bases are necessary for clear dependency stacks. Draft status alone does not prove checks ran: inspect workflow triggers and actual results. [GitHub Actions event documentation](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows), inspected over HTTP, documents PR activities including opened, synchronize and ready_for_review.
+
+**GitHub Pages.** [Custom workflow documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages), inspected over HTTP, requires a built artifact, deployment permissions including pages:write and id-token:write, build dependency and deployment environment. A local build or PR is not a deployed playable URL. Production asset paths, hosting permissions and the actual URL require verification. In this project, the owner retains final main merge and deployment authority; the coordinator can integrate worker branches into a feature integration branch and open/stack PRs.
+
+**UI verification.** [Playwright actionability](https://playwright.dev/docs/actionability), inspected over HTTP, documents visibility, stability, receipt of events and enabled-state checks. Those checks do not establish mechanics, finishability or aesthetic quality. [MDN Pointer Lock API](https://developer.mozilla.org/en-US/docs/Web/API/Pointer_Lock_API), inspected over HTTP, documents engagement-gesture requirements and explicit release behavior. Console calls do not substitute for exercising the player-facing input and pause/resume path.
+
+There is no evidence of unlimited runtime, tokens, credits, uninterrupted continuation or guaranteed quality. Do not invent a token budget, modify account settings, buy services or promise success. “One shot” should mean **one initial brief followed by iterative execution**, not one model call.
+
+## Recommended team and contracts
+
+Use one Astra coordinator plus at most three concurrent Astra workers; prohibit recursive spawning. The coordinator owns the whole game, architecture, integration, tuning, acceptance and PR handoff. Commit the shared runnable baseline before worktree delegation. Use small milestone assignments, not independent multi-day subsystem silos.
+
+| Owner | Example exclusive paths | Responsibility |
+| --- | --- | --- |
+| Coordinator | root config, package/lockfile, src/main.*, src/core, src/contracts, src/integration, CI and project docs | bootstrap, shared contracts/state, composition, save format, dependency changes, integration |
+| A | src/world, public/assets/world | terrain, biomes, ecology, resource placement, hazards, world rendering/audio |
+| B | src/gameplay, public/assets/gameplay | movement adapter, survival, interactions, inventory, crafting, progression |
+| C | src/ui, public/assets/ui, tests/e2e | menus, HUD, onboarding, accessibility, settings, player-facing acceptance |
+
+These paths are examples to adapt to the actual repository. Coordinator owns cross-cutting files; workers request shared-interface changes rather than editing each other's paths. Each worker can add meaningful colocated subsystem tests. In final QA, reuse slots for focused playtest/review/fix assignments.
+
+Define small executable contracts first: coordinates/units; simulation timing; input actions/focus/pause; stable entity/resource IDs; readable game state versus authoritative mutation commands; interaction range/targeting; world queries; rendering/disposal; objective events; save version/migration/failure handling; audio ownership; asset base paths; deterministic test seeds. Include an integration smoke example. Every delegated task receives the full creative brief, baseline SHA, owned paths, contracts, dependencies, acceptance steps and return format.
+
+Durable docs should include GAME_BRIEF (vision/player journey/scope/art/audio), ARCHITECTURE (contracts/ownership), PLAN (gates/evidence), STATUS (current SHA/branches/task IDs/blockers/next action), and PLAYTEST (steps/results/browser/hardware/defects). Re-read after restart/context loss. Avoid duplicating changing contracts in many stale task briefs.
+
+## Phase gates and cut order
+
+- **G0: foundation.** Inspect repo/tools/auth; decide original brand, coherent style, finite campaign, controls, victory/failure and browser target. Commit lockfile, contracts, runnable scaffold and CI commands. Verify setup from a fresh checkout before delegating worktrees.
+- **G1: integrated expedition.** Title screen → learn controls → leave shelter → identify/collect resource → experience oxygen pressure → return/refill → craft upgrade → save/reload. Integrate graphics, sound, gameplay and UI now; isolated demos do not pass.
+- **G2: complete loop.** Upgrade opens a distinct area; hazards have readable counterplay; obtain objective materials, build/repair the mission device, trigger explicit ending, restart. Death/recovery must work without softlocks. Prefer a compact satisfying campaign over Subnautica's breadth.
+- **G3: polish/resilience.** Cohesive lighting/fog/materials/animation/audio/HUD, interaction feedback, tutorial, balancing, settings, focus/pause, save failure handling. Check resource availability, repeated sessions and extended-play performance.
+- **G4: ready PR.** Clean install/build/checks; ordinary-player complete run; death/retry/reload runs; production-build preview smoke test; resolved blocking review findings and exact-SHA evidence. Owner performs final main merge/deployment. A failed gate creates fix work, not a prose exemption.
+
+Cut multiplayer, vehicles, large modular base construction, expansive procedural worlds, extra creatures/biomes, side quests/recipes, then ornamental effects. Preserve movement feel, legibility, survival pressure, discovery reward, complete progression, saving/retry, ending, stable frame time and cohesive presentation. Record scope changes.
+
+## Paste-ready coordinator prompt skeleton
+
+> You are the lead game designer, technical director and integration owner. Build a polished, fully playable, originally branded exploration/survival game inspired by Subnautica's wonder, vulnerability and discovery. Choose a distinct title/setting and original content. Keep the whole player experience coherent. Deliver a compact complete beginning, progression, failure/recovery and satisfying ending. One shot means this initial brief authorizes iterative implementation, integration, testing and fixes, not a single response.
+>
+> Inspect the current project and instructions first. Public repository and draft-PR workflow are authorized. Preserve existing work. The owner retains final main merge and deployment; integrate worker branches into your feature integration branch and open/stack PRs for review. Do not expose credentials, publish secrets, buy services or change account settings. Resolve routine decisions yourself. Ask only for genuinely blocking unavailable facts/credentials or a concrete action beyond authorization. Follow applicable skills when opening/reviewing PRs.
+>
+> Before browser/previews/screenshots/browser tests, read /work/repos/fleet/BROWSER_RULES.md and include those rules in delegated browser work. Prefer T3 previews and HTTP/APIs where suitable. Unattended browser work requires verified isolated Linux. Never capture/manipulate local Windows pointer/focus. Exercise real pointer lock only in isolation, preserve shared sessions and close only owned resources.
+>
+> Discover current tools/model availability, including orchestrator_capabilities if available. Use exact gpt-6-astra for coordinator and all workers, and verify actual returned selection. Disclose unavailability instead of silently substituting. Use at most three workers concurrently and prohibit recursive delegation. Prefer native same-provider subagents when supported; use T3 delegate_task targeting gpt-6-astra with isolation=worktree for separately checked-out child work. create_threads/t3_thread_launch are top-level threads, not child delegation. Commit the runnable shared baseline before worktree launch; uncommitted files are not copied. Supply full context because T3 children do not inherit conversation history.
+>
+> Maintain durable GAME_BRIEF, ARCHITECTURE, PLAN, STATUS and PLAYTEST docs. Record vision, player journey, art/audio direction, scope, contracts, ownership, gates, evidence, current SHA/branches/task IDs, blockers and next action. Re-read after restart/context loss. Preserve decisions and save-schema changes. Make every checkpoint resumable without conversational memory.
+>
+> Bootstrap/validate the common foundation yourself. Delegate small milestones to world/rendering/ecology, gameplay/progression and UI/onboarding/e2e workers with exclusive paths. Keep dependencies, root config, contracts, composition and integration under your ownership. Workers request shared API changes. Every task states baseline SHA, owned paths, dependencies, contracts, player-visible acceptance, checks and commit/evidence return format. Review diffs and integrate frequently, then rerun combined checks. Never accept “done” as integration proof.
+>
+> Enforce G0 foundation/contracts, G1 integrated survival/gathering/crafting/save expedition, G2 complete progression/ending/recovery, G3 polish/resilience, G4 verified ready PR. Do not begin broad feature parallelism before G1 works. When needed, cut multiplayer/vehicles/base-building/world breadth/extra content before the complete core loop, controls, clarity, save/retry or ending.
+>
+> Require each result to give branch/commit, changed paths, implemented behavior, actual checks/outcomes, known defects and normal-control verification steps. Inspect actual code and full terminal result. working/waiting_for_children means unfinished. Before final acceptance all delegated work must be result_available or explicitly failed/cancelled and accounted for, with no pending nested/later runs. Timeout does not cancel a task. Inspect existing IDs after ambiguous responses rather than duplicating work. Use task completion notifications and watch_pull_request, not perpetual polling/watch loops.
+>
+> Test meaningful simulation invariants and integration boundaries: oxygen/death/recovery, resource conservation/crafting, progression reachability, save/load, pause/focus and interaction range. Complete a fresh ordinary-player UI playthrough through tutorial, gathering, crafting, progression and ending, plus death/retry, reload, settings and second-session checks. Cheats/teleports/injected inventory/direct calls can diagnose but cannot count as completion evidence. Automate reliable cases and supplement with an isolated manual-style browser run/recording. Screenshots alone do not establish gameplay. Measure performance with declared hardware/browser and disclose automation/software-renderer limits. Check console/loading errors, collision traps, resource placement and built asset URLs. Mark unavailable real-input checks unverified.
+>
+> Open draft PRs with explicit bases/dependencies, milestone scope, exact-SHA checks/outcomes, screenshots/recording, actual preview URL if available, risks and gaps. Register every PR in T3 when supported. Workers target the integration branch unless genuinely ordered dependencies need a stack. Keep one authoritative final integration PR and avoid duplicate changes after integration. Resolve real findings and revalidate. Leave final main merge/deployment to the owner; provide verified production-build preview and deployment instructions. Never invent a URL or claim a draft PR is a live release.
+>
+> Do not invent token budgets, unlimited credits/runtime, guaranteed persistence or guaranteed quality. When constrained, preserve code/state and report the exact unfinished gate and next step honestly. Finish only with required gates evidenced and no unaccounted worker work. Final handoff: title/pitch, controls, verified preview link if available, repo/PR links, release-candidate SHA, test/playthrough evidence, performance context and actual limitations. If blocked, report completed artifacts, exact blocker and next action without calling the game complete.
+
+## Practical advice
+
+Combine this skeleton with a concrete creative/game brief rather than leaving the game to emerge from independent worker choices. The coordinator's most important job is protecting an integrated playable build throughout development, not maximizing concurrency. Reproducible commands and a short full normal-control run are stronger evidence than screenshot volume or invented coverage percentages.
+
+Current authorized destination, supplied by the parent: https://github.com/lakeczar/subnautica-clone ; initial main 0663330; research branch docs/astra-game-build-brief. This research did not independently create, push or verify that remote. Implementation is deferred until the brief is used. The final canonical prompt is expected at prompts/BUILD_GAME.md, consolidated by the parent.
