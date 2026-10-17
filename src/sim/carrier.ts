@@ -23,7 +23,9 @@ export const CARRIER_LAYOUT = {
   medium: { id: "carrier.berth.medium", min: { x: -6, y: 4, z: -3.7 }, max: { x: 0.1, y: 8.4, z: 5.7 } },
   lock: { id: "carrier.lock", min: { x: -6, y: HULL_COLLIDERS.hearthline.bottom, z: -3.7 }, max: { x: 6, y: 3.8, z: 5.7 } },
   lockKeelY: -0.3,
-  throat: { id: "carrier.throat", min: { x: -3.1, y: -3.3, z: -12 }, max: { x: 3.1, y: 3.8, z: -3.8 } },
+  // Side shields/gate stop at the hull underside. The descending transfer route
+  // continues through open water below them; it does not add a submerged skirt.
+  throat: { id: "carrier.throat", min: { x: -3.1, y: HULL_COLLIDERS.hearthline.bottom, z: -12 }, max: { x: 3.1, y: 3.8, z: -3.8 } },
   gateZ: -11.5,
   railTurn: { x: 0, y: -0.3, z: -9 },
   helm: { x: 0, y: 4, z: -6 },

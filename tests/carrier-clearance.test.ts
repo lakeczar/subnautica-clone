@@ -156,6 +156,15 @@ test("the carrier's piloting envelope encloses the lower lock floor beneath its 
   assert.equal(hullClearance(blocker(p), h.pose.position, HULL_COLLIDERS.hearthline), false);
 });
 
+test("the moving carrier also clears the underside of its throat walls and closed outer gate", () => {
+  const s = fixtureGame(), h = s.fleet.vehicles[0]!;
+  for (const id of ["carrier.throat.port", "carrier.lock.gate"]) {
+    const solid = carrierStructure("compact").find((a) => a.id === id)!;
+    const p = localToWorld({ x: (solid.min.x + solid.max.x) / 2, y: solid.min.y + 0.1, z: (solid.min.z + solid.max.z) / 2 }, h);
+    assert.equal(hullClearance(blocker(p), h.pose.position, HULL_COLLIDERS.hearthline), false, `${id} must be covered below the keel`);
+  }
+});
+
 test("empty reconfiguration cannot seal a walking diver inside its new compartment", () => {
   const { s } = setup("medium", "capture");
   assert.equal(carrierCommand(s, "reconfigure", undefined, world), null);
