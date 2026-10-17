@@ -21,6 +21,8 @@ A0 task completed with clean worktree, no children and owned tabs/server closed.
 
 Design research and critic procedure passed both non-author reviews at `c0aa5cb`; [paired record](reviews/DESIGN-PREP-R1.md). This is preparation-only acceptance. The actual design critique and M1 remain open.
 
+Presentation's stale successful-transfer notice was confirmed on the shared baseline and routed to CORE within its existing task; [request and ownership](TASKS.md#cross-owner-request-transfer-feedback). No shared interface change or competing edit. Verify the returned core fix together with presentation before accepting that behavior.
+
 ## Acceptance and evidence
 
 - FND-01 author commit: `8d72dd2ac2822873e36fe339f8ed2db8c837084b`; clean worktree. [Author evidence](evidence/FND-01.md) records 18 passing tests, final production scene and ordinary-control movement, pause, save/reload and rejected-import checks. Builder closed its tab/server and preserved coordinator tab14.
@@ -41,6 +43,8 @@ A0 is staged, its shared physical/audio/save interfaces reconciled in CONTRACTS 
 The dedicated [design-critic brief](tasks/DESIGN-CRITIC.md) schedules the actual critique after M3, early in M4 with corrections/re-review before release. Supporting research and critic procedure passed both independent reviews; [round-one record](reviews/DESIGN-PREP-R1.md). Keep that evidence review distinct from the later gameplay critique. Both supplement the technical pair; neither establishes human enjoyment/duration or representative-GPU performance.
 
 [Foundation PR #2](https://github.com/lakeczar/subnautica-clone/pull/2) is confirmed MERGED into `game/siltwake`. [Continuing draft integration PR #3](https://github.com/lakeczar/subnautica-clone/pull/3) targets `docs/astra-game-build-brief`, explicitly dependent on [planning PR #1](https://github.com/lakeczar/subnautica-clone/pull/1). These three PRs are T3-linked and unwatched. [M1 draft PR #4](https://github.com/lakeczar/subnautica-clone/pull/4) exposes the provisional source against `game/siltwake`; it is T3-linked and not accepted. PR #3 links the unfinished feature and retains M0-only production claims. Main is unchanged, no deployment.
+
+PR #4 and #3 descriptions were refreshed and read back exactly after A0 reconciliation/three-task dispatch. They distinguish 117 checked tests on staged A0 from the unchanged 65-test accepted M0 source and leave M1 acceptance open. PR #4 includes the actual author `558c28c` carrier-shell capture, clearly labelled physical scaffolding with visual polish pending; public `pr-assets/feat-siltwake-first-expedition/carrier-physical-scaffold-author-558c28c.png` returned HTTP 200 image/png and byte-matched the local artifact (SHA256 `07ee234fa306d80efbd1a70b09f8ed422ccb16d122d02450aeac389144e18126`). No matching before carrier image or new root browser run is claimed. The running core task's later 120-test transfer fix is not yet assembled into either PR.
 
 Fresh integrated `npm ci`, 65 tests/typecheck/build, economy arithmetic and ordinary production movement/pause/save/reload passed at `1bba23a`. A native-held write plus synthetic blur/focus stayed paused through New completion; explicit Resume worked. [Full evidence and limits](evidence/M0-INTEGRATION.md). Actual source and built artifact match the accepted component. Do not rerun unchanged component matrices without a specific unresolved concern; assess their evidence alongside the new integrated run. Functional/contract changes require new review.
 
