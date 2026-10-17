@@ -1,6 +1,6 @@
 # DESIGN-PREP — independent review round 1
 
-Status: Sol independently **ACCEPTS DESIGN-PREP**; Astra is still running. Paired acceptance is pending. Candidate `c0aa5cb386a6b98ff8fa7c95d123d4f50d5bc378`; applicable documentation diff base `c0bc4fcae7a0238b532bcac9b9dd56b4e5c0494a`. Source research author `9d449e1`, staged `cbc2fc6`; root critic brief at `a2cb19f` with status/link updates at candidate. No prior round or findings.
+Status: **both independent reviewers ACCEPT DESIGN-PREP** at the same frozen revision; coordinator accepts this bounded preparation batch. Candidate `c0aa5cb386a6b98ff8fa7c95d123d4f50d5bc378`; applicable documentation diff base `c0bc4fcae7a0238b532bcac9b9dd56b4e5c0494a`. Source research author `9d449e1`, staged `cbc2fc6`; root critic brief at `a2cb19f` with status/link updates at candidate. No prior round or findings.
 
 ## Bounded acceptance scope
 
@@ -25,4 +25,15 @@ Live selections verified; separate T3 worktrees; neither authored the report or 
 
 [Full Sol report](DESIGN-PREP-R1-SOL.md): ACCEPT at the exact candidate, no required corrections. Sol independently retrieved all ten primary-source texts and confirmed consequential attributions/claims, source/inference distinctions, scope preservation and critique procedure. It performed no browser/gameplay work and grants no M1 acceptance. No live children or owned resources remain. Root confirmed the five scoped deliverable files are unchanged since the candidate.
 
-Astra remains running with no pending question or children. Do not send Sol findings to it before its independent initial result. On Astra completion, read task_status, preserve its full report, reconcile every substantive finding and record exact fixes/dispositions. If corrected, freeze a new SHA and use fresh delegate_task calls with original brief, both reports, dispositions and unresolved objections. Accept this preparation batch only when both explicitly accept the same revision. The actual M3-to-M4 design critique remains a separate future task.
+[Full Astra report](DESIGN-PREP-R1-ASTRA.md): ACCEPT at the same candidate, no required corrections or unresolved correctness/scope objections. Astra also directly verified all ten primary-source texts. Both tasks are terminal, no live children or owned runtime/browser resources. Root reconciled the independent reports with its self-review and confirmed the scoped research/brief/requirements were unchanged at acceptance. **DESIGN-PREP is accepted at `c0aa5cb386a6b98ff8fa7c95d123d4f50d5bc378`.** Later status/report commits are evidence bookkeeping, not new claims of reviewed source.
+
+## Finding dispositions and evidence limits
+
+- No required corrections, rejected findings or unresolved blocking objections.
+- Astra **N1 (optional P3)**: a rolling latest-100 Steam feed may eventually omit historical articles. Root addressed the suggested durability improvement in supplemental [retrieval metadata](DESIGN-PREP-R1-SOURCES.json), without changing accepted research claims. Four dated `count=1`, `enddate=publicationUnixSeconds+1` requests returned HTTP 200 and the exact S2–S5 announcement IDs/publication timestamps. Metadata includes retrieval UTC, URLs, titles and SHA-256 of each raw `contents` UTF-8 string. This avoids reliance on the moving latest-100 window; it does not guarantee the publisher will retain an immutable API forever. It is root's additional retrieval evidence, not a new independent reviewer verdict.
+- Both reviewers checked substantive text, not unseen talk videos, inaccessible thesis content or actual game examples. Developer accounts establish reported intent/history, not independent effectiveness. Root made no browser/gameplay claim from the HTTP checks.
+- The accepted scope is research fidelity, scope alignment and a usable future critic procedure. M1/gameplay, human enjoyment/surprise/duration and hardware performance remain unaccepted/unverified. The actual dedicated game-design critique is still scheduled after M3/early M4.
+
+## Continuation
+
+Main Sol M1-A0 remains running with no pending question or live children at the latest status read. Only root and that builder remain active. Do not dispatch dependent visual/presentation mutation until A0 returns and its physical/audio/save interfaces are reconciled and committed. Later completed game batches and integrated M1 still require fresh non-author Astra/Sol reviews; these DESIGN-PREP verdicts do not cover production changes.
