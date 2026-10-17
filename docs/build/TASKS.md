@@ -23,4 +23,4 @@ FND-01 + ECO-01 round 1 at `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef` is complet
 
 ## Active round-two reviews
 
-Fresh T3-isolated Astra xhigh and separate Sol 6.1 max reviews are running on `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc`. [Exact task/request IDs, complete brief, proposed resolutions and continuation](reviews/FND-ECO-R2.md). Three active agents including coordinator; no author remains active. Wait for completion notifications; no corrected FND acceptance exists yet.
+Round two uses `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc`. Astra xhigh completed: original findings resolved, FND changes required for new FND-A4 (async-entry interruption race), ECO proposal accept. Separate Sol 6.1 max review is still running in its isolated worktree. [Exact IDs, reports/disposition and continuation](reviews/FND-ECO-R2.md). Two active agents including coordinator; no author remains active. Await Sol, then consolidate the correction assignment. No corrected FND acceptance exists yet.
