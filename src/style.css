@@ -438,6 +438,12 @@ h1 {
   gap: 10px;
   pointer-events: auto;
 }
+#hud-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
 .hud-actions button {
   border: 1px solid #e0e9c840;
   background: #113b4766;
@@ -745,19 +751,21 @@ kbd {
 }
 .opening {
   position: absolute;
-  left: 50%;
-  bottom: 9%;
-  transform: translateX(-50%);
-  background: #0e2f40f0;
+  left: 30px;
+  bottom: 28px;
+  background: #0d2936f2;
   border: 1px solid #debb7c66;
-  box-shadow: 0 20px 100px #0008;
-  width: 600px;
-  max-width: 90vw;
-  padding: 24px 30px;
-  text-align: center;
+  box-shadow: 0 8px 35px #0005;
+  border-radius: 4px;
+  width: 570px;
+  max-width: calc(100vw - 60px);
+  padding: 16px 20px;
   pointer-events: auto;
 }
-.opening h2,
+.opening h2 {
+  font: 400 24px Georgia, serif;
+  margin: 7px 0;
+}
 .game-panel h2 {
   font:
     400 32px Georgia,
@@ -765,20 +773,99 @@ kbd {
   margin: 12px 0;
 }
 .opening p {
-  line-height: 1.8;
-  color: #d5e3d1;
+  margin: 8px 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #eef0db;
+}
+.opening-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .opening button {
-  padding: 12px 20px;
+  padding: 9px 12px;
   border: 1px solid #b4c9a780;
-  margin: 6px;
+  border-radius: 3px;
+  font-size: 12px;
   background: #264c51;
+}
+#opening-act {
+  color: #fff0cd;
+  border-color: #e8c58c;
+}
+#opening-skip {
+  background: transparent;
+}
+.opening-actions .check {
+  font-size: 11px;
+  gap: 6px;
+  margin-left: auto;
+  color: #d4e0d5;
 }
 .opening small {
   display: block;
   margin-top: 10px;
   font-size: 10px;
   color: #a8c5ba;
+}
+.pilot-guidance {
+  position: absolute;
+  bottom: 100px;
+  left: 30px;
+  max-width: min(510px, calc(100vw - 60px));
+  padding: 9px 12px;
+  border-left: 2px solid #c5d4af99;
+  border-radius: 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  background: #102f3ee8;
+}
+.pilot-guidance small {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  color: #d2dfcd;
+}
+.pilot-guidance.urgent {
+  border-color: #ffca89;
+  color: #ffe0ad;
+}
+.session-warning {
+  position: absolute;
+  top: 72px;
+  right: 30px;
+  max-width: calc(100vw - 60px);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #ffe1b2;
+  border: 1px solid #e5bd81;
+  border-radius: 3px;
+  background: #293e40fa;
+  z-index: 9;
+}
+.session-warning button {
+  border: 1px solid #e5bd8180;
+  padding: 6px 10px;
+}
+[data-opening="true"] .hud-top {
+  justify-content: flex-end;
+}
+[data-opening="true"] .session-warning {
+  top: 24px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: max-content;
+}
+[data-opening="true"] #notification {
+  top: 90px;
+  bottom: auto;
 }
 .game-panel {
   position: absolute;
@@ -825,6 +912,55 @@ kbd {
   font-size: 15px;
   font-weight: 550;
   margin: 0 0 10px;
+}
+.recovery-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.recovery-choice {
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  border: 1px solid #c2ccb95c;
+  border-radius: 3px;
+  background: #102f3c88;
+}
+.recovery-choice h4 {
+  font: 400 22px Georgia, serif;
+  color: #f0e7c9;
+  margin: 0 0 10px;
+}
+.game-panel .recovery-cost {
+  font-size: 12px;
+  color: #f2d8a4;
+  margin: 0;
+}
+.game-panel .recovery-choice p {
+  font-size: 13px;
+  line-height: 1.55;
+}
+.game-panel .recovery-choice small {
+  font-size: 11px;
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+.game-panel .recovery-choice button {
+  margin: auto 0 0;
+  text-align: left;
+}
+.game-panel .recovery-kit {
+  margin: 10px 0;
+  font-size: 12px;
+}
+.service-details {
+  margin-top: 12px;
+}
+.service-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #d8e2cd;
 }
 .game-panel p {
   font-size: 14px;
@@ -1000,6 +1136,20 @@ kbd {
   }
 }
 @media (max-width: 680px) {
+  .recovery-choices {
+    grid-template-columns: 1fr;
+  }
+  .opening {
+    left: 18px;
+    bottom: 18px;
+    max-width: calc(100vw - 36px);
+    padding: 14px;
+  }
+  .pilot-guidance {
+    left: 18px;
+    bottom: 125px;
+    max-width: calc(100vw - 36px);
+  }
   .recipe {
     align-items: stretch;
     flex-direction: column;

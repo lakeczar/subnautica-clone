@@ -19,6 +19,7 @@ import {
   equipped,
   fabricationContainers,
   facility,
+  hasRoom,
   nearPod,
   nearWorkshop,
   usedCapacity,
@@ -102,11 +103,12 @@ export class GameView {
       <canvas id="ocean" tabindex="0" aria-label="Siltwake 3D reef. WASD to move, arrow keys or mouse drag to look. Escape opens the menu."></canvas>
       <div class="vignette" aria-hidden="true"></div>
       <main id="hud" hidden aria-label="Exploration display">
-        <div class="hud-top"><div class="region"><span class="eyebrow">SILTWAKE / FIRST EXPEDITION</span><strong id="region-name">Hearth Reef</strong></div>
-        <div class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
-        <div class="hud-actions"><span id="session-warning" hidden>Autosave off · export before closing</span><button data-action="inventory">Hold <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button><button data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
-        <div id="vitals" class="vitals"></div><div id="hazard" class="hazard" role="status" aria-live="polite"></div><div id="interact-prompt" class="interact-prompt"></div><div id="opening" class="opening" hidden><span id="opening-progress" class="eyebrow">POD CHECK 1 / 4</span><h2 id="opening-title"></h2><p id="opening-caption"></p><button id="opening-act" data-action="opening">Act <kbd>E</kbd></button><button data-action="skip">Skip opening <kbd>Space</kbd></button><small id="opening-detail"></small></div><div class="crosshair" aria-hidden="true"></div>
-        <div class="hud-bottom"><div class="telemetry"><span class="depth"><b id="depth">0.0</b><small>m / DEPTH</small></span><span class="mode"><strong id="movement">On foot</strong><small id="refuge-distance">Home pod · 0 m</small></span></div>
+        <div class="hud-top"><div id="hud-region" class="region"><span class="eyebrow">SILTWAKE / FIRST EXPEDITION</span><strong id="region-name">Hearth Reef</strong></div>
+        <div id="hud-heading" class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
+        <div class="hud-actions"><div id="hud-tools"><button data-action="inventory">Hold <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button></div><button id="hud-pause" data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
+        <div id="vitals" class="vitals"></div><div id="hazard" class="hazard" role="status" aria-live="polite"></div><div id="interact-prompt" class="interact-prompt"></div><div id="pilot-guidance" class="pilot-guidance" aria-label="Pilot exit guidance" hidden></div>
+        <section id="opening" class="opening" aria-label="Damaged pod opening" hidden><div aria-live="polite" aria-atomic="true"><span id="opening-progress" class="eyebrow">POD CHECK 1 / 4</span><h2 id="opening-title"></h2><p id="opening-caption"></p></div><div class="opening-actions"><button id="opening-act" data-action="opening">Act <kbd>E</kbd></button><button id="opening-skip" data-action="skip">Skip opening <kbd>Space</kbd></button><label class="check"><input id="opening-subtitles" type="checkbox" checked /> Captions</label></div><small id="opening-detail"></small></section><div id="crosshair" class="crosshair" aria-hidden="true"></div>
+        <div id="hud-bottom" class="hud-bottom"><div class="telemetry"><span class="depth"><b id="depth">0.0</b><small>m / DEPTH</small></span><span class="mode"><strong id="movement">On foot</strong><small id="refuge-distance">Home pod · 0 m</small></span></div>
         <div class="explore-note"><span id="cruise" hidden>FORWARD CRUISE · R TO STOP</span><p id="context-hint">Walk down the amber-edged ramp to the water.</p><small>WASD move · drag / arrows look · Space rise · C dive</small></div></div>
       </main>
       <div id="menu" class="menu-screen" role="dialog" aria-modal="true" aria-labelledby="menu-title">
@@ -135,6 +137,7 @@ export class GameView {
         <div class="scene-caption" aria-hidden="true"><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
       </div>
       <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-header"><span class="eyebrow">EXPEDITION PAUSED / NO SURVIVAL DRAIN</span><button id="panel-return" data-action="close-panel">Return <kbd>Esc</kbd></button></div><nav aria-label="Expedition panels"><button data-action="inventory-panel">Hold</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Notebook</button><button id="carrier-nav" data-action="carrier-panel" hidden>Carrier fixture</button></nav><h2 id="panel-title"></h2><p id="panel-feedback" role="status" aria-live="polite" hidden></p><div id="panel-content"></div></div></section><section id="graphics-error" class="graphics-error" role="alert" hidden><h2>The ocean could not open</h2><p id="graphics-error-text"></p><p>Your existing local save has not been changed. Save exports remain available in the menu.</p></section>
+      <aside id="session-warning" class="session-warning" aria-label="Local saving disabled" hidden><span>Autosave off · export before closing</span><button data-action="export">Export save</button></aside>
       <div id="notification" role="status" aria-live="polite" hidden></div>
       <input id="import-file" type="file" accept=".json,application/json" hidden />`;
     this.canvas = this.get<HTMLCanvasElement>("ocean");
@@ -222,9 +225,34 @@ export class GameView {
           }),
         options,
       );
+    this.get("opening-subtitles").addEventListener("change", () => actions.audio({
+      volume: this.get<HTMLInputElement>("volume").valueAsNumber,
+      muted: this.get<HTMLInputElement>("muted").checked,
+      subtitles: this.get<HTMLInputElement>("opening-subtitles").checked,
+    }), options);
     this.root.addEventListener(
       "keydown",
       (event) => {
+        if (!this.hud.hidden && !this.get("opening").hidden) {
+          const controls = ["opening-act", "opening-skip", "opening-subtitles", "hud-pause"].map((id) => this.get(id));
+          if (!this.get("session-warning").hidden)
+            controls.push(...this.get("session-warning").querySelectorAll<HTMLElement>("button"));
+          if (event.key === "Tab") {
+            event.preventDefault();
+            event.stopPropagation();
+            const current = controls.indexOf(document.activeElement as HTMLElement);
+            const next = current < 0 ? event.shiftKey ? controls.length - 1 : 0
+              : (current + (event.shiftKey ? controls.length - 1 : 1)) % controls.length;
+            controls[next]?.focus();
+            return;
+          }
+          // Space activates the focused opening control normally. On the canvas
+          // it still reaches the existing runtime shortcut to skip the opening.
+          if (event.code === "Space" && controls.includes(document.activeElement as HTMLElement)) {
+            event.stopPropagation();
+            return;
+          }
+        }
         if (event.key !== "Tab") return;
         const modal = !this.get("game-panel").hidden
           ? this.get("game-panel")
@@ -265,6 +293,7 @@ export class GameView {
     this.get("volume-value").textContent = `${Math.round(settings.volume * 100)}%`;
     this.get<HTMLInputElement>("muted").checked = settings.muted;
     this.get<HTMLInputElement>("subtitles").checked = settings.subtitles;
+    this.get<HTMLInputElement>("opening-subtitles").checked = settings.subtitles;
     this.get("opening-caption").hidden = !this.subtitles;
   }
 
@@ -427,9 +456,13 @@ export class GameView {
               ? "Below the pod deck · swim around the ramp edge, surface, then approach its amber treads."
               : "E interact · Q scan · B buoy · F meal · H voluntary hint";
     const exitBlocked = v ? exitRefusal(state, this.world) : null;
-    this.get("interact-prompt").innerHTML = v
-      ? `<kbd>E</kbd> ${exitBlocked ? "Exit blocked" : "Clear side exit"} · suit ${personalLimit(state)} m / hull ${HULLS[v.hull].initialDepth} m<small>${escapeHtml(exitBlocked ?? "Personal air and pressure protection apply outside.")}</small>`
-      : t
+    this.get("pilot-guidance").hidden = !v;
+    if (v) {
+      const stopped = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) < 0.2;
+      this.get("pilot-guidance").innerHTML = `<kbd>E</kbd> ${exitBlocked ? "Exit blocked" : "Side exit"} · <kbd>Tab</kbd> Hold · <kbd>Esc</kbd> Controls${exitBlocked || stopped ? `<small>${escapeHtml(exitBlocked ?? `Outside: personal air · suit ${personalLimit(state)} m / hull ${HULLS[v.hull].initialDepth} m.`)}</small>` : ""}`;
+      this.get("pilot-guidance").classList.toggle("urgent", exitBlocked !== null);
+    }
+    this.get("interact-prompt").innerHTML = !v && t
         ? `<kbd>E</kbd> ${escapeHtml(t.label)} <small>${t.id in SOURCES ? `${SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Hand-gather food" : "Collect exposed bundle"} · Q scan` : t.kind === "evidence" ? "Inspect & record · J notebook" : "Inspect"}</small>`
         : "";
     this.get("vitals").innerHTML =
@@ -445,6 +478,8 @@ export class GameView {
       warnings.push(`HULL DEPTH · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m · ascend before hull damage`);
     if (v && v.charge > 0 && v.charge < 25)
       warnings.push(`LOW POWER · ${v.charge.toFixed(0)}% · reserve cell or supported service`);
+    if (v && !v.disabled && v.health <= 25)
+      warnings.push(`LOW HULL · ${v.health.toFixed(0)}% · retreat for repair`);
     if (state.player.vitals.health <= 25)
       warnings.push("LOW HEALTH · retreat to refuge air and healing");
     const threat = state.world.threat.mode;
@@ -459,14 +494,26 @@ export class GameView {
     const warningHtml = warnings.map((w) => `<span>${escapeHtml(w)}</span>`).join("");
     if (this.get("hazard").innerHTML !== warningHtml) this.get("hazard").innerHTML = warningHtml;
     const opening = state.opening.phase < 4;
+    this.root.dataset.opening = String(opening);
+    // Hide only routine exploration elements. Warnings, pause and the opening
+    // remain siblings; persistence and graphics notices live outside the HUD.
+    for (const id of ["hud-region", "hud-heading", "hud-tools", "vitals", "hud-bottom", "crosshair", "interact-prompt"])
+      this.get(id).hidden = opening;
+    if (opening) this.get("pilot-guidance").hidden = true;
+    if (!opening && this.get("opening").contains(document.activeElement))
+      this.canvas.focus({ preventScroll: true });
     this.get("opening").hidden = !opening;
     if (opening) {
       const o = OPENING[state.opening.phase as 0 | 1 | 2 | 3];
-      this.get("opening-progress").textContent = `POD CHECK ${state.opening.phase + 1} / 4 · ${state.opening.phase ? "PREVIOUS CHECK COMPLETE" : "E TO ACT"}`;
-      this.get("opening-title").textContent = o.label;
-      this.get("opening-act").textContent = `${o.label} · E`;
-      this.get("opening-caption").textContent = o.caption;
-      this.get("opening-detail").textContent = o.detail;
+      const progress = `POD CHECK ${state.opening.phase + 1} / 4`;
+      // Avoid repeatedly announcing unchanged captions on each HUD refresh.
+      if (this.get("opening-progress").textContent !== progress || this.get("opening-title").textContent !== o.label) {
+        this.get("opening-progress").textContent = progress;
+        this.get("opening-title").textContent = o.label;
+        this.get("opening-act").textContent = `${state.opening.phase === 3 ? "Stand up" : o.label} · E`;
+        this.get("opening-caption").textContent = o.caption;
+        this.get("opening-detail").textContent = o.detail;
+      }
     }
     this.hud.dataset.tick = String(state.tick);
     this.hud.dataset.position = `${p.x.toFixed(3)},${p.y.toFixed(3)},${p.z.toFixed(3)}`;
@@ -519,7 +566,7 @@ export class GameView {
         buoyItem = state.inventory.items.find((i) => i.id === buoy.itemId),
         diver = state.inventory.containers.find((c) => c.id === "diver");
       html = `<p class="panel-intro">Personal suit ${personalLimit(state)} m · diver hold ${usedCapacity(state, "diver")} / ${diver?.capacity ?? 0} CU. A hull protects you only while aboard; check the side exit before leaving it.</p><div class="service-actions">${button("Eat a meal", { type: "eat" })}${button(buoy.deployed ? "Pack empty buoy" : "Deploy carried buoy", { type: "buoy" }, !buoyItem)}${button("Request emergency refuge meal", { type: "emergency-meal" })}</div>`;
-      html += `<p class="equipment-note"><b>Reusable buoy</b> · ${!buoyItem ? "Not built. Discover the intake record, then fabricate at the pod." : buoy.deployed ? `Deployed · ${usedCapacity(state, "buoy_hold")} / ${state.inventory.containers.find((c) => c.id === "buoy_hold")?.capacity ?? 0} CU · ${bearing(state.player.pose.position, buoy.position)}. Empty it, approach the collar and keep 2 CU free to pack it.` : `Packed in ${containerLabel(state, buoyItem.containerId).toLowerCase()} · 2 CU. Carry it in your diver hold before deploying.`} Packing and deploying retain the same buoy and cargo hold.</p>`;
+      html += `<p class="equipment-note"><b>Reusable buoy</b> · ${!buoyItem ? "Not built. Discover the intake record, then fabricate at the pod." : buoy.deployed ? `Deployed · ${usedCapacity(state, "buoy_hold")} / ${state.inventory.containers.find((c) => c.id === "buoy_hold")?.capacity ?? 0} CU · ${bearing(state.player.pose.position, buoy.position)}. Empty it, approach the collar and keep 2 CU free to pack it.` : `Packed in ${containerLabel(state, buoyItem.containerId).toLowerCase()} · 2 CU. Carry it in your diver hold before deploying.`}</p>`;
       const bins = state.inventory.containers.filter((c) => containerAccessible(state, c.id));
       const distant = state.inventory.containers.filter((c) => !containerAccessible(state, c.id) && c.kind !== "cache" && (c.kind !== "buoy" || buoy.deployed));
       if (distant.length)
@@ -558,11 +605,29 @@ export class GameView {
         const local = distance(state.player.pose.position, v.pose.position) < 7;
         const occupied = recoveryOccupancyRefusal(state, v.id);
         const cells = state.inventory.items.filter((i) => i.kind === "reserve_cell" && (i.containerId === "diver" || i.containerId === v.cargoId));
-        html += `<article><h3>${HULLS[v.hull].label} · ${v.disabled ? "disabled transponder" : "available"}</h3><p>${bearing(state.player.pose.position, v.pose.position)} · ${local ? "service socket in reach" : "approach the service socket"}. Power ${v.charge.toFixed(0)}% · hull ${v.health.toFixed(0)}% · hull rating ${HULLS[v.hull].initialDepth} m / personal suit ${personalLimit(state)} m.</p><p>Reserve cells in diver / this craft: ${cells.length ? cells.map((i) => `${(i.charge ?? 0).toFixed(0)}%`).join(", ") : "none"}. A full cell transfers up to 35% hull power; supported service recharges these cells. Cells in a locker must be carried first.</p><div class="service-actions">${button("Supported charge / repair", { type: "service", vehicleId: v.id })}${button("Use reserve cell", { type: "reserve", vehicleId: v.id })}${v.disabled ? `${button("Field patch · 2 maintenance alloy / 1 membrane", { type: "recover", vehicleId: v.id, method: "repair" })}${button(state.recovery.operation?.vehicleId === v.id && state.recovery.operation.phase === "ready" ? "Attach collar / confirm tow" : "Deploy Bobbin / local tow", { type: "recover", vehicleId: v.id, method: "tow" }, occupied !== null)}${button("Salvage empty frame locally", { type: "recover", vehicleId: v.id, method: "salvage" }, occupied !== null)}` : ""}</div>${v.disabled && occupied ? `<p class="recipe-status">${escapeHtml(occupied)}</p>` : ""}<small>Routine service: pod waters or restored workshop cradle, within reach of the craft. ${v.disabled ? "Bobbin kit required. Start tow at the shallow staging bench or local collar; field patch and salvage require local access." : "Field recovery options appear for a disabled Dart."}</small></article>`;
+        html += `<article class="vessel-service"><h3>${HULLS[v.hull].label} · ${v.disabled ? "disabled transponder" : "available"}</h3><p>${bearing(state.player.pose.position, v.pose.position)} · ${local ? "service socket in reach" : "approach the service socket"}. Power ${v.charge.toFixed(0)}% · hull ${v.health.toFixed(0)}% · hull ${HULLS[v.hull].initialDepth} m / suit ${personalLimit(state)} m.</p>`;
+        if (v.disabled && v.hull === "dart") {
+          const frame = Object.entries(v.investment).map(([k, q]) => `${q} ${ITEMS[k as ItemKind].label}`).join(" / ") || "No frame materials recorded";
+          const cu = Object.entries(v.investment).reduce((n, [k, q]) => n + ITEMS[k as ItemKind].cu * q, 0);
+          const destination = state.inventory.buoy.deployed && distance(state.inventory.buoy.position, state.player.pose.position) < 6 && hasRoom(state, "buoy_hold", cu)
+            ? "Deployed buoy" : hasRoom(state, "diver", cu) ? "Diver hold" : null;
+          const eligibleHolds = [
+            (state.inventory.containers.find((c) => c.id === "diver")?.capacity ?? 0) >= cu ? "the diver hold" : null,
+            (state.inventory.containers.find((c) => c.id === "buoy_hold")?.capacity ?? 0) >= cu ? "a deployed buoy within 6 m" : null,
+          ].filter(Boolean).join(" or ");
+          const patchAlloy = Math.min(14, state.world.maintenance.alloy + v.boundRepairs * 2) - state.world.maintenance.alloy;
+          const patchMembrane = Math.min(7, state.world.maintenance.membrane + v.boundRepairs) - state.world.maintenance.membrane;
+          html += `<p class="recovery-kit">${equipped(state, "bobbin_kit") ? "Bobbin kit retained" : "Requires Bobbin kit · fabricate at the pod"} · Rescue stock: ${state.world.maintenance.alloy} alloy / ${state.world.maintenance.membrane} membrane.</p><div class="recovery-choices" aria-label="Dart recovery choices">
+            <section class="recovery-choice"><h4>Patch here</h4><p class="recovery-cost">2 alloy + 1 membrane · rescue stock</p><p>At the collar, within 7 m. Restores hull to 65%; keeps cargo and charge.</p>${button("Patch here", { type: "recover", vehicleId: v.id, method: "repair" })}</section>
+            <section class="recovery-choice"><h4>Tow home</h4><p class="recovery-cost">No materials · to the shallow rescue bench</p><p>Empty hull; cargo stays aboard. Start at the staging bench or collar, within 7 m.</p><small>Upper-Canopy corridor only, within 230 m of staging. Blocked routes stop the tow. No repair or recharge.</small>${button(state.recovery.operation?.vehicleId === v.id && state.recovery.operation.phase === "ready" ? "Attach collar / confirm tow" : "Tow home · deploy Bobbin", { type: "recover", vehicleId: v.id, method: "tow" }, occupied !== null)}</section>
+            <section class="recovery-choice"><h4>Salvage frame</h4><p class="recovery-cost">No materials · returns the frame’s ingredients</p><p>At the collar, within 7 m. Empty the hull, hold and module sockets first.</p><small>${escapeHtml(frame)} · ${cu} CU.<br />${destination ? `Return to ${destination}.` : eligibleHolds ? `Make ${cu} CU free in ${eligibleHolds}.` : `Requires a container large enough for the complete ${cu} CU return.`}${v.boundRepairs ? `<br />Past patches return ${patchAlloy} alloy / ${patchMembrane} membrane to rescue stock only (limits 14 / 7).` : ""}</small>${button("Salvage frame", { type: "recover", vehicleId: v.id, method: "salvage" }, occupied !== null)}</section>
+          </div>${occupied ? `<p class="recipe-status">${escapeHtml(occupied)}</p>` : ""}`;
+        }
+        html += `<div class="service-actions">${button("Supported charge / repair", { type: "service", vehicleId: v.id })}${button("Use reserve cell", { type: "reserve", vehicleId: v.id })}</div><small>Service at pod waters or the restored workshop cradle, within 7 m of the craft.${v.disabled ? " Patch the hull before routine charging." : ""}</small><details class="service-details"><summary>Reserve cells & service</summary><p>Reserve cells in diver / this craft: ${cells.length ? cells.map((i) => `${(i.charge ?? 0).toFixed(0)}%`).join(", ") : "none"}. A full cell supplies up to 35% hull power. Service recharges these cells; carry locker cells first.</p></details></article>`;
       }
       html += this.returnInformation(state);
     } else if (kind === "craft") {
-      html = `<p class="panel-intro">${nearPod(state) ? "At the home pod bench" : nearWorkshop(state) ? "At the Splitspine workshop" : "Away from a fabrication bench"}. Ingredients use your diver hold, the required bench’s accessible locker and a nearby deployed buoy. Craft cargo is not a bench ingredient source: transfer it first. A refusal consumes nothing.</p>`;
+      html = `<p class="panel-intro">${nearPod(state) ? "At the home pod bench" : nearWorkshop(state) ? "At the Splitspine workshop" : "Away from a fabrication bench"}. Use ingredients in your diver hold, the recipe bench’s accessible locker or a nearby deployed buoy. Transfer craft cargo into one of these first.</p>`;
       for (const [key, r] of Object.entries(RECIPES)) {
         const id = key as RecipeId;
         if (!state.knowledge.blueprints.includes(r.bp)) continue;
@@ -577,12 +642,12 @@ export class GameView {
             ? kind === "structural_alloy" ? state.world.maintenance.alloy : kind === "silica_glass" ? state.world.maintenance.glass : state.world.maintenance.membrane
             : available(state, kind, bins);
           return `<span class="ingredient${have < q ? " missing" : ""}">${ITEMS[kind].label}: ${have} / ${q}${have < q ? ` · need ${q - have}` : " · ready"}</span>`;
-        }).join("")}</p><small>${r.site === "island_workshop" ? PLACES.island_workshop.label : "Home pod bench"}${r.maintenance ? " · maintenance allocation only" : " · public materials"}</small>${missingSteps.length ? `<p class="recipe-status">First complete: ${missingSteps.map((n) => RECIPES[n as RecipeId].label).join(" → ")}</p>` : ""}${refusal ? `<p class="recipe-status">${escapeHtml(refusal)}</p>` : !done ? '<p class="recipe-ready">Ready at this bench</p>' : ""}</div>${done ? "" : button(`Fabricate · ${r.label}`, { type: "craft", recipeId: id })}</article>`;
+        }).join("")}</p><small>${r.site === "island_workshop" ? PLACES.island_workshop.label : "Home pod bench"}${r.maintenance ? " · rescue stock only" : " · gathered materials"}</small>${missingSteps.length ? `<p class="recipe-status">First complete: ${missingSteps.map((n) => RECIPES[n as RecipeId].label).join(" → ")}</p>` : ""}${refusal ? `<p class="recipe-status">${escapeHtml(refusal)}</p>` : !done ? '<p class="recipe-ready">Ready at this bench</p>' : ""}</div>${done ? "" : button(`Fabricate · ${r.label}`, { type: "craft", recipeId: id })}</article>`;
       }
       html += this.knownHabitats(state);
       if (!state.knowledge.blueprints.length)
         html += "<p>Inspect the pod regulator to recover its checklist.</p>";
-      html += `<p>Recovery allocation: ${state.world.maintenance.alloy} alloy / ${state.world.maintenance.glass} glass / ${state.world.maintenance.membrane} membrane. It funds Bobbin and bound repair patches only.</p>`;
+      html += `<p>Rescue stock: ${state.world.maintenance.alloy} alloy / ${state.world.maintenance.glass} glass / ${state.world.maintenance.membrane} membrane. Reserved for Bobbin and field patches; unavailable for other recipes.</p>`;
       const n = nearestInteraction(state);
       if (n && n.id in SOURCES) {
         const id = n.id as keyof typeof SOURCES;
@@ -693,6 +758,10 @@ export class GameView {
   }
 
   notify(message: string, error = false): void {
+    // Session replacement enters/updates the view before this notice, while
+    // Continue/import have different notices. Omit only this redundant New
+    // success, regardless of timing, so no queued text can leak across sessions.
+    if (!error && message === "Expedition saved. The island shore and reef ribs are yours to explore.") return;
     // Keep the last result in the blocking panel after the transient HUD toast fades.
     this.get("panel-feedback").textContent = message;
     this.get("panel-feedback").hidden = false;
@@ -701,6 +770,8 @@ export class GameView {
     this.toast.textContent = message;
     this.toast.hidden = false;
     this.toast.classList.toggle("error", error);
+    this.toast.setAttribute("role", error ? "alert" : "status");
+    this.toast.setAttribute("aria-live", error ? "assertive" : "polite");
     this.toastTimer = window.setTimeout(
       () => {
         this.toast.hidden = true;
