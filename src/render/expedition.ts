@@ -184,7 +184,9 @@ function dartArt(
       P.reflection,
     );
     for (const x of [-1.15, 1.15]) {
-      b.box([x, 0.15, 1.3], [0.18, 0.45, 2.8], P.metal);
+      // The guide shoes meet the shared keel datum; no artwork hangs below
+      // BERTH_ENVELOPES.dart during the sealed floor-hatch transfer.
+      b.box([x, 0.225, 1.3], [0.18, 0.45, 2.8], P.metal);
       b.box([x, 0.72, 2.5], [0.16, 1.2, 0.18], P.ochre);
       b.tube(
         [
