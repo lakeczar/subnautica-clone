@@ -42,3 +42,16 @@ Batch: `planning-review-contract`. Specification/base: `8a66bbc4419c92e6d0872203
 Both reviewers were spawned separately with explicit model/effort and no inherited conversation, authored none of the amendment, and formed their initial findings without seeing the other report. The native spawn records establish the requested configurations; the live T3 catalog separately confirmed their availability. Coordinator self-inspection was additional. No fixes or rejected findings were needed, so no correction round was necessary.
 
 At the candidate, whitespace checks passed and all 52 relative Markdown link targets resolved across 28 tracked Markdown files. The review anchor exists. The revised input is 17,787 characters / 2,350 words. Both reviewers independently checked the diff's whitespace. These checks establish documentation consistency only; no game/browser construction, gameplay tests, human playtests or GPU measurements were performed. The later report-recording commit does not change the reviewed contract and is not represented as independently reviewed.
+
+## Main-builder amendment and restart handoff — 2026-10-17
+
+Batch: `planning-main-builder`. The owner selected Sol 6.1 max as the main builder with Astra setting direction and asked about compaction. Base: `8abcb1c1bcbe94bf199c80e7d1b4dc087da5d863`. Initial candidate: `702cd59bd28fa92d8a45d929623c04f3e770d2d3`. Accepted candidate: `6234042782e3a1723c7e80f9443ed5007f99625b`. The prompt and active role documents now assign production implementation to Sol while Astra coordinates; the map points to a durable restart handoff. Preparing that handoff neither performs compaction nor starts construction.
+
+The same independently configured native reviewers examined the amendment without candidate authorship. Both separately found one P2: the active story contract still assigned an Astra lore writer. The coordinator corrected it at `6234042`: Astra directs and approves canon changes, while Sol 6.1 max authors/implements lore and canon edits under exclusive paths. Both reviewed the correction against the original scope and explicitly accepted the same full candidate. No finding was rejected or remains unresolved.
+
+| Reviewer / native task ID | Initial independent report | Correction-round report | Model / effort and final verdict |
+| --- | --- | --- | --- |
+| `/root/review_contract_astra` | [Astra round 1](../.scratch/siltwake/artifacts/main-builder-astra-round1.md) | [Astra round 2](../.scratch/siltwake/artifacts/main-builder-astra-round2.md) | `gpt-6-astra` / `xhigh`; **ACCEPT** `6234042` |
+| `/root/review_contract_sol` | [Sol round 1](../.scratch/siltwake/artifacts/main-builder-sol-round1.md) | [Sol round 2](../.scratch/siltwake/artifacts/main-builder-sol-round2.md) | `gpt-6.1-sol` / `max`; **ACCEPT** `6234042` |
+
+At the initial candidate, all 59 relative Markdown links resolved across 31 tracked Markdown files; both reviewers also checked the 37 relative links in the seven changed files. The correction retained those link targets. Whitespace checks passed at the accepted candidate. The current full input is 18,418 characters / 2,439 words. These are static document checks, not game, browser, fresh-player or hardware validation. Later evidence-only bookkeeping cites these reviewed commits and is not itself represented as independently reviewed.
