@@ -21,6 +21,6 @@ FND-01 + ECO-01 round 1 at `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef` is complet
 - Scope/paths/checks: [complete committed assignment](tasks/FND-01-R1-FIX.md). Three accepted findings, no declined findings. Main builder may commit assigned changes in its own checkout; no push/PR/children/integration.
 - Coordinator inspected source/diffs and actual artifacts, reconciled contracts, and reran fresh install/check (35/35 tests/build pass) plus audit (one low esbuild advisory; no Vite/high/moderate/critical). Next: freeze round two and send both prior independent reports/dispositions to fresh paired reviewers. Never use the backing child thread to continue a review round.
 
-## Active round-two reviews
+## Completed round-two reviews
 
-Round two uses `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc`. Astra xhigh completed: original findings resolved, FND changes required for new FND-A4 (async-entry interruption race), ECO proposal accept. Separate Sol 6.1 max review is still running in its isolated worktree. [Exact IDs, reports/disposition and continuation](reviews/FND-ECO-R2.md). Two active agents including coordinator; no author remains active. Await Sol, then consolidate the correction assignment. No corrected FND acceptance exists yet.
+Both round-two reviews of `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc` are complete. Both resolved original findings, required FND changes for the same new interruption race (FND-A4 / FND-SOL-R2-01), and accepted ECO's provisional proposal. [Exact IDs, reports/dispositions and continuation](reviews/FND-ECO-R2.md). No live children; owned browser/server resources closed. [Focused correction assignment](tasks/FND-01-R2-FIX.md) is ready for dispatch. No corrected FND acceptance exists yet.

@@ -1,6 +1,6 @@
 # FND-01 / ECO-01 independent review, round 2
 
-Status: Astra returned FND changes required / ECO accept; Sol remains running. No corrected FND acceptance yet. Date: 2026-10-17.
+Status: both reviews complete: original findings resolved; FND changes required for one shared interruption race; ECO proposal accepted at this SHA. Date: 2026-10-17.
 
 - Frozen candidate: `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc`.
 - Prior reviewed candidate: `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef`.
@@ -11,7 +11,7 @@ Status: Astra returned FND changes required / ECO accept; Sol remains running. N
 | Reviewer | Model / effort | Task ID | Stable request ID | State |
 | --- | --- | --- | --- | --- |
 | Astra | `gpt-6-astra` / `xhigh` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-astra-r2-0a8ef04` | `siltwake-fnd-eco-astra-r2-0a8ef04` | Complete: FND changes / ECO accept |
-| Sol | `gpt-6.1-sol` / `max` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-sol-r2-0a8ef04` | `siltwake-fnd-eco-sol-r2-0a8ef04` | Running |
+| Sol | `gpt-6.1-sol` / `max` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-sol-r2-0a8ef04` | `siltwake-fnd-eco-sol-r2-0a8ef04` | Complete: FND changes / ECO accept |
 
 Both use provider `codex`, isolated worktrees and explicitly selected live-catalog efforts. These are new delegated tasks; neither reviewer authored this candidate. No backing thread was reused for the review round. Expected full reports: `/tmp/siltwake-fnd-eco-astra-r2.md`, `/tmp/siltwake-fnd-eco-sol-r2.md`.
 
@@ -36,6 +36,14 @@ Await completion notifications; use exact task IDs to read results without dupli
 Correction direction: preserve interruption/user-pause intent across asynchronous entry; internal replacement preparation must not itself count as a new external interruption. A completed save may install the chosen session but must remain paused after an intervening interruption until a fresh deliberate resume action, or cancel safely under existing completed-write semantics. Remember the interruption even when focus/visibility/graphics recover before completion. Add composition-boundary tests for New and valid import with interruption and recovery before completion; retain normal uninterrupted entry, Escape cancellation, disposal and storage guarantees. No schema/renderer/world change is required.
 
 Wait for Sol's round-two result and consolidate before assigning this narrow correction to Sol 6.1 max. Current source remains frozen; this is evidence bookkeeping, not acceptance or a code fix.
+
+## Consolidated round-two result
+
+[Sol's independent report](FND-ECO-R2-SOL.md) is complete with no live children and owned browser/server closed. Both reviewers explicitly resolved all three round-one findings, independently identified the same new P2 (Astra FND-A4 / Sol FND-SOL-R2-01), and accepted ECO-01's unchanged provisional arithmetic/design scope at `0a8ef04`. No finding is declined; no disagreement remains. FND remains unaccepted.
+
+The coordinator accepts the shared interruption finding. Sol additionally observed transient invalid-context/program/VAO warnings and a blank paused background during induced graphics restoration. Coordinator inspected Babylon 9.31's installed `abstractEngine.pure.js`: `_restoreEngineAfterContextLost` defers rebuilding with `setTimeout`; `onContextRestoredObservable` fires after resource reconstruction. The app currently marks graphics available directly on the earlier native canvas event, so restored-render readiness needs a focused check alongside pause intent. This is a concrete timing concern, not a claimed general GPU-driver failure.
+
+[FND-01-R2-FIX assignment](../tasks/FND-01-R2-FIX.md) authorizes the narrow lifecycle correction and renderer readiness seam if needed, without changing art/world/schema/economy. Required evidence includes New/import delayed completion after interruption/recovery, explicit resume, uninterrupted entry and an actually rendered stable paused scene after reconstruction. Preserve the already-resolved persistence protections. After author and coordinator checks, fresh dual round-three review remains required.
 
 ## Common round-two brief
 
