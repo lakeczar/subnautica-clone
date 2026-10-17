@@ -21,7 +21,7 @@ export const CARRIER_LAYOUT = {
     { id: "carrier.berth.starboard", min: { x: 0.55, y: 4, z: -2.8 }, max: { x: 6, y: 8.4, z: 4.8 } },
   ],
   medium: { id: "carrier.berth.medium", min: { x: -6, y: 4, z: -3.7 }, max: { x: 0.1, y: 8.4, z: 5.7 } },
-  lock: { id: "carrier.lock", min: { x: -6, y: -0.5, z: -3.7 }, max: { x: 6, y: 3.8, z: 5.7 } },
+  lock: { id: "carrier.lock", min: { x: -6, y: HULL_COLLIDERS.hearthline.bottom, z: -3.7 }, max: { x: 6, y: 3.8, z: 5.7 } },
   lockKeelY: -0.3,
   throat: { id: "carrier.throat", min: { x: -3.1, y: -3.3, z: -12 }, max: { x: 3.1, y: 3.8, z: -3.8 } },
   gateZ: -11.5,
@@ -72,7 +72,7 @@ function transferEnvelope(v: VehicleState): Capsule {
 }
 function envelopeSolid(id: string, p: Vec3, shape: Capsule): Solid {
   const x = shape.halfWidth ?? shape.radius, z = shape.halfLength ?? shape.radius;
-  return { id, min: { x: p.x - x, y: p.y, z: p.z - z }, max: { x: p.x + x, y: p.y + shape.height, z: p.z + z } };
+  return { id, min: { x: p.x - x, y: p.y + (shape.bottom ?? 0), z: p.z - z }, max: { x: p.x + x, y: p.y + shape.height, z: p.z + z } };
 }
 export function atCarrierSupport(h: VehicleState): boolean {
   return distance(h.pose.position, CARRIER_SUPPORT) < 4 && Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) < 0.05;

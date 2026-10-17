@@ -147,3 +147,10 @@ test("carrier-local corridor sweeps follow carrier yaw and keep obstructions on 
     roundTrip(s);
   }
 });
+
+test("the carrier's piloting envelope encloses the lower lock floor beneath its saved keel datum", () => {
+  const s = fixtureGame(), h = s.fleet.vehicles[0]!;
+  assert.equal(hullClearance(world, h.pose.position, HULL_COLLIDERS.hearthline), true);
+  const p = { ...h.pose.position, y: h.pose.position.y - 0.4 };
+  assert.equal(hullClearance(blocker(p), h.pose.position, HULL_COLLIDERS.hearthline), false);
+});

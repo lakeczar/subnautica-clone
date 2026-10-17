@@ -95,8 +95,8 @@ export const HULL_COLLIDERS = {
   hush: { radius: 3.6, height: 2.1 },
   spindle: { radius: 4, height: 1.7 },
   mantle: { radius: 4.5, height: 4 },
-  hearthline: { radius: 17, height: 9.2 },
-} as const satisfies Record<HullId, { radius: number; height: number }>;
+  hearthline: { radius: 17, height: 9.2, bottom: -0.5 },
+} as const satisfies Record<HullId, { radius: number; height: number; bottom?: number }>;
 /** Full upright authored hull bounds while aligned with a guided carrier rail.
  * Normal piloting retains the broader square HULL_COLLIDERS proxies. Metres from keel. */
 export const BERTH_ENVELOPES = {

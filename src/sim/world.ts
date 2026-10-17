@@ -228,7 +228,7 @@ function sweep(
   };
   const max = {
     x: solid.max.x + (capsule.halfWidth ?? capsule.radius),
-    y: solid.max.y,
+    y: solid.max.y - (capsule.bottom ?? 0),
     z: solid.max.z + (capsule.halfLength ?? capsule.radius),
   };
   let enter = -Infinity,
@@ -269,7 +269,7 @@ export function createWorldQueries(
         origin.x + rx > WORLD_BOUNDS.maxX ||
         origin.z - rz < WORLD_BOUNDS.minZ ||
         origin.z + rz > WORLD_BOUNDS.maxZ ||
-        origin.y < floorHeight(origin.x, origin.z) - 0.02
+        origin.y + (capsule.bottom ?? 0) < floorHeight(origin.x, origin.z) - 0.02
       )
         return false;
       return !solids.some(
@@ -279,7 +279,7 @@ export function createWorldQueries(
           origin.z + rz > s.min.z + 0.001 &&
           origin.z - rz < s.max.z - 0.001 &&
           origin.y + capsule.height > s.min.y + 0.001 &&
-          origin.y < s.max.y - 0.001,
+          origin.y + (capsule.bottom ?? 0) < s.max.y - 0.001,
       );
     },
     waterHeight: WATER_Y,
@@ -347,7 +347,7 @@ export function hullFloor(world: WorldQueries, origin: Vec3, shape: Capsule): nu
   if (shape.halfWidth !== undefined || shape.halfLength !== undefined) {
     for (const x of [-1, 0, 1]) for (const z of [-1, 0, 1])
       floor = Math.max(floor, world.groundHeight(origin.x + x * (shape.halfWidth ?? shape.radius), origin.z + z * (shape.halfLength ?? shape.radius)));
-    return floor;
+    return floor - (shape.bottom ?? 0);
   }
   for (let i = 0; i < 8; i++) {
     const a = i * Math.PI / 4;
@@ -356,7 +356,7 @@ export function hullFloor(world: WorldQueries, origin: Vec3, shape: Capsule): nu
       origin.z + Math.sin(a) * shape.radius,
     ));
   }
-  return floor;
+  return floor - (shape.bottom ?? 0);
 }
 export function hullClearance(world: WorldQueries, origin: Vec3, shape: Capsule): boolean {
   return world.clearance(origin, shape) && origin.y >= hullFloor(world, origin, shape) + 0.05;

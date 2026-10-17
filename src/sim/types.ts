@@ -219,7 +219,9 @@ export type GameEvent =
     };
 export interface Capsule {
   radius: number;
+  /** Top above the pose datum; bottom defaults to zero. */
   height: number;
+  bottom?: number;
   /** Optional fixed-axis box footprint for guided hull transfer. Radius remains the default. */
   halfWidth?: number;
   halfLength?: number;
