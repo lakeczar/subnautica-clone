@@ -15,12 +15,18 @@ export class Soundscape {
   private noiseGain: GainNode | null = null;
   private warmth: OscillatorNode | null = null;
   private warmthGain: GainNode | null = null;
+  private filter: BiquadFilterNode | null = null;
+  private disposed = false;
+  private wasActive = false;
+  private readonly voices = new Set<{ key: string; priority: number; stop(): void }>();
+  private readonly lastCue = new Map<string, number>();
   settings: AudioSettings = { volume: 0.55, muted: false, subtitles: true };
   activate(): void {
-    if (typeof AudioContext === "undefined") return;
+    if (this.disposed || typeof AudioContext === "undefined") return;
     if (!this.context) {
       const c = (this.context = new AudioContext());
       this.master = c.createGain();
+      this.master.gain.value = 0;
       this.master.connect(c.destination);
       this.bed = c.createOscillator();
       this.bed.type = "sine";
@@ -43,7 +49,7 @@ export class Soundscape {
       this.noise = c.createBufferSource();
       this.noise.buffer = buffer;
       this.noise.loop = true;
-      const filter = c.createBiquadFilter();
+      const filter = this.filter = c.createBiquadFilter();
       filter.type = "lowpass";
       filter.frequency.value = 460;
       this.noiseGain = c.createGain();
@@ -60,36 +66,57 @@ export class Soundscape {
       this.warmthGain.connect(this.master);
       this.warmth.start();
     }
-    void this.context.resume().catch(() => {});
+    if (this.context.state !== "running") void this.context.resume().catch(() => {});
+  }
+  private volume(): void {
+    const c = this.context;
+    if (!c || !this.master) return;
+    this.master.gain.setTargetAtTime(
+      this.settings.muted ? 0 : Math.max(0, Math.min(1, Number.isFinite(this.settings.volume) ? this.settings.volume : 0)),
+      c.currentTime, 0.025,
+    );
   }
   update(s: GameState | null, active: boolean): void {
     const c = this.context;
     if (!c || !this.master || !this.bedGain || !this.bed) return;
-    this.master.gain.setTargetAtTime(
-      this.settings.muted ? 0 : this.settings.volume,
-      c.currentTime,
-      0.08,
-    );
+    if (this.wasActive && !active) for (const voice of [...this.voices]) voice.stop();
+    this.wasActive = active;
+    this.volume();
     const refuge = s ? exposure(s).refuge : false;
+    const underwater = s ? s.player.pose.position.y < -0.85 : false;
+    const duck = [...this.voices].some((v) => v.priority > 1) ? 0.35 : 1;
     this.bed.frequency.setTargetAtTime(refuge ? 110 : 58, c.currentTime, 0.7);
     this.bedGain.gain.setTargetAtTime(
-      active ? (refuge ? 0.018 : 0.012) : 0,
+      active ? (refuge ? 0.018 : 0.012) * duck : 0,
       c.currentTime,
       0.15,
     );
-    this.noiseGain?.gain.setTargetAtTime(active ? refuge ? 0.04 : 0.19 : 0, c.currentTime, 0.2);
-    this.warmthGain?.gain.setTargetAtTime(active && refuge ? 0.012 : 0, c.currentTime, 0.3);
+    this.noiseGain?.gain.setTargetAtTime(active ? (refuge ? 0.04 : underwater ? 0.19 : 0.08) * duck : 0, c.currentTime, 0.2);
+    this.warmthGain?.gain.setTargetAtTime(active && refuge ? 0.012 * duck : 0, c.currentTime, 0.3);
   }
   event(e: GameEvent, s: GameState | null): void {
     if (e.type !== "sound" || !this.context || !this.master) return;
-    const c = this.context,
+    const c = this.context;
+    this.volume();
+    if (this.settings.muted || this.settings.volume <= 0) return;
+    const key = `${e.cue}/${e.origin ? "spatial" : "centred"}`;
+    const priority = e.cue === "recovery" ? 4 : e.cue === "damage" ? 3 : e.cue === "warning" ? 2 : 1;
+    // Collapse simultaneous body alarms and repeated calls without inventing a
+    // spatial origin. A body alarm and a real threat can still sound together.
+    if (c.currentTime - (this.lastCue.get(key) ?? -Infinity) < (e.cue === "warning" ? 1.2 : 0.09)) return;
+    if (priority === 1 && [...this.voices].some((v) => v.priority > 1)) return;
+    for (const voice of [...this.voices])
+      if (voice.key === key || voice.priority < priority) voice.stop();
+    if (this.voices.size >= 4) return;
+    this.lastCue.set(key, c.currentTime);
+    const
       o = c.createOscillator(),
       g = c.createGain(),
       pan = c.createStereoPanner();
     const notes = {
       collect: 520,
       craft: 330,
-      warning: 145,
+      warning: e.origin ? 145 : 280,
       refuge: 220,
       damage: 65,
       scan: 700,
@@ -103,7 +130,8 @@ export class Soundscape {
         : e.cue === "warning"
           ? "triangle"
           : "sine";
-    if (e.origin && s) {
+    pan.pan.value = 0;
+    if (e.origin && s && [e.origin.x, e.origin.y, e.origin.z].every(Number.isFinite)) {
       const p = s.player.pose,
         t = e.origin;
       pan.pan.value = Math.max(
@@ -126,25 +154,37 @@ export class Soundscape {
       g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.25);
       g.gain.setValueAtTime(0.001, c.currentTime + 0.4);
       g.gain.linearRampToValueAtTime(0.045, c.currentTime + 0.44);
-      o.frequency.setValueAtTime(112, c.currentTime + 0.4);
+      o.frequency.setValueAtTime(e.origin ? 112 : 220, c.currentTime + 0.4);
     }
+    if (e.cue === "craft" || e.cue === "recovery")
+      o.frequency.setValueAtTime(notes[e.cue] * 1.5, c.currentTime + 0.12);
     g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
     o.connect(g);
     g.connect(pan);
     pan.connect(this.master);
-    o.start();
-    o.stop(c.currentTime + duration);
-    o.onended = () => {
+    const voice = { key, priority, stop: () => { o.stop(); release(); } };
+    const release = (): void => {
+      if (!this.voices.delete(voice)) return;
       o.disconnect();
       g.disconnect();
       pan.disconnect();
     };
+    this.voices.add(voice);
+    o.onended = release;
+    o.start();
+    o.stop(c.currentTime + duration);
   }
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const voice of [...this.voices]) voice.stop();
     this.bed?.stop();
     this.noise?.stop();
     this.warmth?.stop();
+    for (const node of [this.bed, this.bedGain, this.noise, this.filter, this.noiseGain, this.warmth, this.warmthGain, this.master]) node?.disconnect();
     void this.context?.close().catch(() => {});
     this.context = null;
+    this.master = null;
+    this.lastCue.clear();
   }
 }
