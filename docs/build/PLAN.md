@@ -25,4 +25,6 @@ The owner requested an additional dedicated game-design critic near the end. [DE
 
 One main builder owns the first runnable baseline. After reconciliation, split along proven module seams: simulation/progression, renderer/assets/world presentation, and content/UI/audio as appropriate. Assign exclusive paths and one composition owner. Use T3 worktree delegation from a committed baseline for independent checkouts. Integrate small commits and test combined behavior before expanding scope.
 
+M1 carrier validation confirms an explicit M2 obligation: implement player registration of a mobile refuge and ordinary safe/unsafe fallback when that designated craft is disabled or lost. The simplified M1 fixture currently supports static-place refuge IDs and tests pod fallback from an interior/disabled carrier through labelled drills. These are distinct; the fixture cannot satisfy the full mobile-home recovery requirement. Preserve this in the M2 assignment and later full-fleet recovery checks; see [carrier disposition](evidence/M1-CARRIER-INTEGRATION.md).
+
 Construction PRs target `game/siltwake`; the final integration PR targets the appropriate reviewed base/main and makes its planning dependency explicit. Main merge/public hosting are separate owner actions. Reviewed implementation can be integrated into the game branch without another confirmation.
