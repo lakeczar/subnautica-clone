@@ -1,6 +1,6 @@
 # M1 full completion batches — independent review round 1
 
-Status: **both reviewers running; no verdict or batch acceptance yet**. Dispatched 2026-10-17 from clean frozen candidate `ac5988c1472da8f8f81b097ed235f33f48c62c7d`. Diff base is accepted M0 `a2cb19f1d4cd2d795b82642a2bd357f681d1c293`. Production equals final author source `20451a8dafd014012986e0c8aa1e60df0da7ff25`, assembled at `83a577b6afe7f16c74bfe63322c4890fec8a9995`. Later dispatch bookkeeping is not a new reviewed candidate.
+Status: **Sol requires changes to both batches; Astra's independent initial result remains pending. No acceptance.** Dispatched 2026-10-17 from clean frozen candidate `ac5988c1472da8f8f81b097ed235f33f48c62c7d`. Diff base is accepted M0 `a2cb19f1d4cd2d795b82642a2bd357f681d1c293`. Production equals final author source `20451a8dafd014012986e0c8aa1e60df0da7ff25`, assembled at `83a577b6afe7f16c74bfe63322c4890fec8a9995`. Later dispatch bookkeeping is not a new reviewed candidate.
 
 ## Scope and evidence
 
@@ -25,4 +25,15 @@ Live T3 catalog verified the requested selections. Both fresh non-author tasks u
 
 ## Reconciliation and next action
 
-Pending separate initial findings and actual model/effort confirmations in terminal reports. Completion notifications resume root; do not poll or duplicate tasks. Inspect the notified results and their evidence, record each verdict/finding/disposition here, and assign substantiated corrections to a Sol max builder under exclusive paths. Any revised source requires a new frozen candidate and fresh T3 review tasks including both prior reports/dispositions. No acceptance, integration into the accepted game branch or deployment is authorized by this dispatch record alone.
+Sol's terminal result confirms actual `gpt-6.1-sol` / `max`, completed with no children/question and owned browser/server closed (5196 free). Report-only commit `8ecc9b2587d0fd1572c61f783811e5c9688a2b1a`, staged in `e41d132de5d7c998a23d8a99ad791ffb3995171c`; [full independent report](M1-BATCH-R1-SOL.md). Independent140 tests/typecheck/build pass with matching bundle. Both batch verdicts are **CHANGES REQUIRED** despite that suite. No findings were shared with Astra; its initial review stays on unchanged `ac5988c`.
+
+| Finding | Root disposition and evidence |
+| --- | --- |
+| SOL-M1-01, P2, core: a boundary distraction creates an out-of-world target and prevents Save/Export | **Accept for correction.** Root reran copied reviewer commands against current compiled modules: valid earned state at tick22585/Z54.031842 becomes invalid with targetZ70.031842 beyond66;721 no-input steps restore validity. Root inspected the actual production refusal screenshot and source. Prior journal survives; latest progress is not exportable until expiry/retry. |
+| SOL-M1-02, P2, presentation: stale recovery-cache meshes survive New/import/null | **Accept for correction.** Root repeated the actual compiled factory NullEngine diagnostic with unchanged earned inputs: `cache_20` remains enabled/undisposed at the old location after all three replacements. This is real mesh-lifecycle proof, not a fresh WebGL capture or evidence of duplicate gameplay cargo. |
+
+Root verified112 local/archive payloads and113 regular archive files, safe unique member paths/no links, exact manifest bytes and archive SHA256 `cbf841a672e6737ff8cbfb876b508b45e7e9364cb5fc78404856fb30a1616226`. New root outputs live under `/tmp/siltwake-m1-batch-r1-root/`; originals are untouched. Root opened no browser/server and did not rerun the unchanged broad suite.
+
+[Focused correction brief](../tasks/M1-BATCH-R1-SOL-FIX.md) assigns only step.ts/expedition.ts, focused tests and its evidence to a new Sol max author from a committed baseline. Starting those established corrections does not influence Astra's frozen independent review. Retain Sol's explicit **ordinary depleted-power runtime evidence still open** for integrated M1; diagnostic zero-power cases do not complete that play line. Existing human/GPU, original-source and other proof limits remain.
+
+Completion notifications resume root; do not poll or duplicate tasks. Inspect Astra's separate initial result, reconcile findings and correction evidence, then freeze a revised candidate for fresh Astra/Sol tasks including both initial reports and dispositions. Separate integrated M1 verification/review remains after batch acceptance; no M1 integration or deployment has occurred.
