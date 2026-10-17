@@ -1,6 +1,6 @@
 # Shared implementation direction
 
-Status: foundation source at `8d72dd2`, persistence correction at `417a7ec` (author `79423ec`), interruption/readiness correction at `2c25b8b` (author `1e2c581`). The async save/session and renderer lifecycle seams below are reconciled; both non-author reviewers accepted the frozen `50f5569` candidate; see [paired acceptance](reviews/FND-ECO-R3.md). Integrated M0 remains separate. [EXPEDITION_INTEGRATION.md](../EXPEDITION_INTEGRATION.md) remains authoritative for cross-system content and progression.
+Status: foundation source at `8d72dd2`, persistence correction at `417a7ec` (author `79423ec`), interruption/readiness correction at `2c25b8b` (author `1e2c581`). The async save/session and renderer lifecycle seams below are reconciled; both non-author reviewers accepted the frozen `50f5569` candidate; see [paired acceptance](reviews/FND-ECO-R3.md). Both non-author reviewers also accepted integrated M0 at `d415436`; see [M0 record](reviews/M0-R1.md). M1 extends these contracts under a new reviewed batch. [EXPEDITION_INTEGRATION.md](../EXPEDITION_INTEGRATION.md) remains authoritative for cross-system content and progression.
 
 ## Implemented foundation boundary
 

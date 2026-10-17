@@ -37,12 +37,12 @@ Both round-two reviews of `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc` are complet
 
 Both non-author reviewers accepted FND-01 and provisional ECO-01 at `50f5569a92a6e18aac8970ecdb7918e5e217a455`. All prior findings resolved; no new blocking findings or unresolved objections. [Exact task/request IDs, both full reports and continuation](reviews/FND-ECO-R3.md). No live children; owned resources closed. Coordinator accepts this bounded batch, with separate integrated M0 review pending. Only coordinator active. Historical states above describe their earlier checkpoints.
 
-## Active M0 milestone reviews
+## Completed M0 milestone reviews
 
-Astra accepts M0 at `d41543694bd68e8e41a01465df7141634a5567f2`; the separate Sol review remains running: provider `codex`, Astra `gpt-6-astra` / `xhigh`, Sol `gpt-6.1-sol` / `max`; separate T3 worktrees. [Exact task/request IDs and complete common brief](reviews/M0-R1.md). Two active agents including coordinator; no implementation author active. Astra completed with no findings/children and owned server closed. Await notifications; no polling watcher or duplicate review.
+Both fresh non-author reviews **ACCEPT M0** at `d41543694bd68e8e41a01465df7141634a5567f2`: provider `codex`, Astra `gpt-6-astra` / `xhigh`, Sol `gpt-6.1-sol` / `max`; separate T3 worktrees. [Exact IDs, full reports and paired acceptance](reviews/M0-R1.md). No actionable findings, unresolved objections or live children; owned browser/server resources closed. Coordinator accepts M0 after self-review and reconciliation. Only coordinator active before M1 dispatch.
 
-Foundation PR #2 is confirmed merged into `game/siltwake`; draft integration PR #3 targets planning branch/PR #1. All T3-linked. [Coordinator evidence](evidence/M0-INTEGRATION.md) covers clean install, 65 tests/build, economy arithmetic, ordinary-input/reload and labelled interruption diagnostic. Separate M0 acceptance is pending.
+Foundation PR #2 is merged into `game/siltwake`; continuing draft integration PR #3 targets planning branch/PR #1. All T3-linked. [Coordinator evidence](evidence/M0-INTEGRATION.md) records the clean install, 65 tests/build, economy arithmetic, ordinary-input/reload and labelled interruption diagnostic. Independent review reports distinguish their fresh and historical evidence.
 
-## Prepared next implementation
+## Ready next implementation
 
-[M1-01](tasks/M1-01.md) is the first-expedition assignment for Sol 6.1 max, **not dispatched**. It covers opening/pod/C01–C04, habitat-specific gathering/crafting, first Dart, survival/encounter/recovery, richer-cel/UI/audio iteration, explicit schema migration and simplified carrier/collision feasibility. Baseline and task ID must be supplied after M0 acceptance. Coordinator read all current integration/world/fleet/story/graphics specifications and spoiler canon; no owner-facing reveal is introduced by the assignment.
+[M1-01](tasks/M1-01.md) is ready for dispatch to Sol 6.1 max after this baseline is committed. It covers opening/pod/C01–C04, habitat-specific gathering/crafting, Dart, survival/encounter/recovery, richer-cel/UI/audio iteration, validated schema migration and simplified carrier/collision feasibility. Record the exact dispatch baseline, task/request IDs and worktree ownership once returned. Main builder may edit only its assigned production/config/test/README/evidence paths; coordinator owns other build records/spec/canon and integration. No implementation worker is active yet.

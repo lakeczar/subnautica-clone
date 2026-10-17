@@ -20,9 +20,9 @@ For each run record candidate SHA, build/command, environment and renderer, inpu
 
 Coordinator integrated verification at `1bba23a`: fresh install, 65 tests/typecheck/build and ordinary production movement/pause/save/reload passed, plus native-held write/synthetic-blur interruption check. [Full M0 evidence](evidence/M0-INTEGRATION.md). This is additional coordinator verification; separate milestone reviews remain pending.
 
-Astra independently accepts M0 at `d415436`: fresh 65-test/build/economy/HTTP artifact/codec checks and inspection of attributed actual browser records/captures. No fresh Astra browser play is claimed. [Full report](reviews/M0-R1-ASTRA.md). Sol verdict remains pending.
+Astra independently accepts M0 at `d415436`: fresh 65-test/build/economy/HTTP artifact/codec checks and inspection of attributed actual browser records/captures. No fresh Astra browser play is claimed. [Full report](reviews/M0-R1-ASTRA.md). Sol independently accepted the same candidate with fresh ordinary browser movement/save/reload/export/import and subdirectory loading; [report](reviews/M0-R1-SOL.md). Coordinator records paired M0 acceptance; historical pending states above remain tied to their checkpoints.
 
-Open: paired integrated M0 acceptance and remaining browser adapters; first expedition; carrier/collision gates; both complete strategies; all hull niches; full gameplay save resilience; repeated recovery; fresh-human route learning/story comprehension/duration; representative dedicated-GPU performance.
+Open: remaining browser adapters; first expedition; carrier/collision gates; both complete strategies; all hull niches; full gameplay save resilience; repeated recovery; fresh-human route learning/story comprehension/duration; representative dedicated-GPU performance.
 
 ## First expedition run sheet (not yet executed)
 
