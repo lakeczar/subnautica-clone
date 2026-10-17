@@ -1,48 +1,68 @@
 # Siltwake
 
-An original alien-ocean adventure being designed around discovery, a recoverable mystery, and a fleet of increasingly capable submersibles. **Siltwake is a working title.**
+An original alien-ocean exploration adventure in construction. This branch contains **FND-01**, an early playable foundation: a refuge pod, reef ribs, a walkable island shore, swimming/walking, menus, graphics settings and guarded local saves.
 
-**Status: complete build input and integrated design package ready for owner review. Full game construction is reserved for the next run.**
+The agreed campaign remains the approximately ten-hour main-story target, seven habitats, mystery, habitat-specific resources, food without thirst, six craft and inhabited carrier, and recoverable expeditions. Those systems are **not implemented in this foundation**. The [revised build input](prompts/BUILD_GAME_REVISED.md) and [current checkpoint](docs/build/STATUS.md) own the continuing scope.
 
-[Read the complete build input](prompts/BUILD_GAME_REVISED.md). Its main text preserves the story surprise; the implementation team has an explicitly labelled spoiler appendix. This is a planning package, not a playable game.
+## Run locally
 
-## Agreed direction
-
-- Approximately ten hours for a first main-story playthrough, with optional exploration beyond it. Repeated harvesting and travel must not pad the duration.
-- Open ocean, explorable islands, and research settlements from small outposts to larger ruins. Biomes, resources, ecology, blueprints and story discoveries must form one coherent world.
-- Wonder comes first, with tense depths and comforting refuges.
-- The player wakes in a damaged pod with missing memories. Scans, personal journals and physical evidence gradually reveal what happened.
-- The narrative team authors a surprising central truth and personal reveal. Early lore supports competing interpretations; regional leads point toward biomes and landmarks for the player to investigate. Major spoilers stay in a clearly labelled writer appendix, separate from the review summary.
-- The starting pod provides storage, crafting and healing. Construction focuses on distinct scouts, utility craft and increasingly customizable mobile homes, supported by modest fixed outposts.
-- The fleet should be broad and purposeful, including a large inhabited carrier that stores and deploys smaller craft. Classic survival includes food but no thirst meter. Failed expeditions preserve knowledge and lead to recoverable cargo or vessel repair/salvage.
-- Dangerous wildlife rewards observation, stealth and deterrence. Hunting is not the main progression loop.
-- Richer cel-shading is the selected visual direction, with vibrant atmosphere, detailed environments and precise mechanical assets. Iterate designs in playable scenes during the future build.
-- Astra at **xhigh** sets direction and coordinates the complete future game; GPT-6.1 Sol at **max** is the main builder across gameplay, systems, content and original graphics. Every completed feature/delegated batch and integrated milestone receives independent non-author Astra **xhigh** and Sol 6.1 **max** reviews under the [review gate](docs/DELIVERY_AND_ACCEPTANCE.md#independent-review-gate); the Sol reviewer is separate from the builder.
-
-The duration is a design target, not a measured result. The game has not been built or playtested. The selected delivery plan is TypeScript/Vite/Babylon.js in a desktop browser, targeting a gaming PC or laptop with a dedicated GPU. The small art viewer does not prove full-game performance.
-
-## Follow the planning work
-
-The [active Wayfinder map](.scratch/siltwake/map.md) is the entry point. Human decisions live in its linked tickets. The [art comparison decision](.scratch/siltwake/issues/02-art-comparison.md) links the separate throwaway source and evidence as they become available.
-
-[Planning PR](https://github.com/lakeczar/subnautica-clone/pull/1) · [public repository](https://github.com/lakeczar/subnautica-clone)
+Use Node **22.12+** (author checks: Node 24.21.0 / npm 11.19.0). All runtime code and art are bundled; there are no remote assets, fonts or live API calls.
 
 ```bash
-gh repo clone lakeczar/subnautica-clone
-cd subnautica-clone
-git switch docs/astra-game-build-brief
+npm ci
+npm run dev
 ```
 
-The [graphics workflow](docs/GRAPHICS_PIPELINE.md) records the requested Sol max delegation and the shared contracts for future production. **Do not execute [BUILD_GAME.md](prompts/BUILD_GAME.md): it is the superseded first draft**, which described a much shorter, vehicle-free, under-ice game. The earlier [synthesis](docs/SYNTHESIS.md) is historical rationale, not the current scope.
+Open `http://localhost:5173`. A current desktop browser with **WebGL 2** is required. The menu reports a readable failure if WebGL 2 cannot open. Required package versions are pinned in `package.json` and `package-lock.json`.
 
-The [story design contract](docs/STORY_DESIGN.md) is safe to review without learning the major reveal. It links a separately labelled writer appendix for agents implementing the story.
+```bash
+npm run typecheck
+npm test
+npm run build
+npm run preview
+```
 
-Review the [integrated expedition progression](docs/EXPEDITION_INTEGRATION.md), [world and resource geography](docs/WORLD_PROGRESSION.md), [fleet and survival](docs/FLEET_AND_SURVIVAL.md), and [delivery/acceptance gates](docs/DELIVERY_AND_ACCEPTANCE.md) for the concrete design behind the input.
+Preview serves the actual `dist/` at `http://localhost:4173`. `npm run check` runs typecheck, the simulation/persistence/session tests and production build. A different isolated test origin can use `npm run preview -- --port 5184 --strictPort`. The relative Vite base supports serving the static artifact from a subdirectory. Use HTTPS for hosting, or HTTP on localhost for local play: safe local writing requires the browser's Web Locks API, which needs a secure context. Required runtime assets work offline after delivery; browser permissions still control local saving.
 
-The [planning review](docs/PLANNING_REVIEW.md) records agent review and distinguishes the written design from the gameplay, performance and fresh-player validation still required.
+## Explore
 
-## Research
+| Input | Action |
+| --- | --- |
+| W A S D | Move / swim; swimming forward follows the view |
+| Drag left mouse, or arrow keys | Look |
+| Space | Swim up / jump on land |
+| C | Dive |
+| Shift | Move faster |
+| R | Toggle forward cruise; W/S or pause cancels it |
+| Esc | Pause / resume; release optional mouse lock |
+| F5 | Save locally |
 
-Three GPT-6.1 Sol agents independently investigated [platforms and language](docs/research/01-platform.md), [gameplay and scope](docs/research/02-game-design.md), and [agent orchestration](docs/research/03-orchestration.md). [Deeper primary-source gameplay research](.scratch/siltwake/artifacts/gameplay-research.md) examines recognizable resource geography, useful return visits, vehicle loadouts, danger/sanctuary rhythm and crafting busywork. These findings inform hypotheses; fresh-player playtests must establish whether the eventual game is fun.
+Walk forward from the pod deck, down the **amber-edged submerged ramp**, to enter the sea. Return using the same ramp. The split island lies north; its south shore supports swimming-to-walking transitions. Blue basalt ribs lie west of the direct island route. The foundation area is bounded and marked by small edge buoys.
 
-[Alternative capability-test briefs](prompts/GENRE_VARIANTS.md) cover wave survival and aquarium economy. They are examples, not additional Siltwake modes.
+Click **Controls & settings** for rendering quality, mouse sensitivity, invert look and optional **Resume with locked mouse**. Mouse lock is only requested by that explicit button. Rich renders at the viewport's CSS-pixel size; Light renders at two-thirds of each CSS dimension. Focus loss, a background tab, menus and a lost graphics context pause simulation and clear all held controls/cruise. Resume is explicit after interruptions. The pod is currently an exterior/deck; its facilities arrive in the first expedition.
+
+New/import normally enter automatically. An interruption or player pause during their pending read, confirmation or write keeps the selected expedition paused, even if focus or graphics recover before completion. Use **Return to the water** after the operation finishes and graphics are ready. Resume while busy or rebuilding is ignored. A fresh New/import request after an earlier settled interruption is a deliberate entry; the earlier pause does not permanently block it. Graphics recovery waits for Babylon to rebuild resources and prepare the scene, then redraws the paused view without advancing simulation.
+
+## Keep progress
+
+**New expedition**, **Continue**, **Save locally**, **Export save** and **Import save** are in the menu. Autosave runs every 30 seconds of active simulation, after a session has a writable slot. Replacing an existing expedition or importing valid progress shows a replacement confirmation. Export before replacing a session you want to retain.
+
+When storage refuses a write, or safe cross-tab locking is unavailable, New Game and validated import offer **Use without local saving**. This second explicit choice enters an exportable session with automatic saving disabled. Cancelling keeps your current expedition. Local records remain unchanged after a refused write; the menu and HUD warn when autosave is off. Export before closing the page. You can explicitly retry **Save locally** later. A failed manual/autosave retains the active expedition and disables automatic retries. Validation failures, protected-record refusals and stale-tab conflicts retain their distinct safeguards and do not offer this replacement shortcut. Pending file reads/writes deduplicate conflicting actions; **Cancel operation** or Escape cancels waiting work.
+
+The key `siltwake.save.journal.v1` contains a single atomic localStorage journal with **current** and **previous valid** saves. Browser Web Locks serialize the observed-record comparison and journal replacement under the same per-origin lock, `siltwake.save.journal.v1.writer`. A storage quota/permission failure leaves that record unchanged. A stale tab cannot overwrite a changed slot. All writing tabs must use this compatible writer protocol; close older builds before playing. Unsupported locking permits read/export and explicit unsaved play, with no racing-write fallback. An invalid import never enters the session or storage. A corrupt/unsupported local current can offer its previous valid generation, with autosaves blocked until an explicit repair. Repair preserves the unreadable raw record inside the journal. The save-safety menu can export the previous save and raw journal; a raw journal export is a safeguard, **not** an ordinary importable save file.
+
+Schema **1**, content **`foundation.1`**, reads only that exact schema/content pair. There are no legacy migrations. Unknown, newer and older schema/content versions are rejected without truncating or rewriting them. Later feature batches must add an explicit reviewed migration from v1; reserved empty extension collections may not acquire new fields silently. Import size is capped at 1 MiB. Browser storage is site/origin-specific and can be cleared by browser settings; exported JSON is the portable copy.
+
+## Production boundaries
+
+- `src/content/registry.ts`: the single stable region/material/hull authority and original-asset metadata. The roster does not mean those regions or vehicles are active.
+- `src/sim/`: plain serializable state, typed validated commands/events, 60 Hz update, bounded fixed clock and shared terrain/solid queries. No Babylon or DOM imports.
+- `src/save/`: envelope validation and asynchronous serialized storage adapter with backup, protected recovery, cancellation and stale-tab checks.
+- `src/render/`: editable original procedural art and shaders, including a shared analytic terrain surface and pod/rib collider layout.
+- `src/runtime/`: one create/update/present/dispose app owner, input adapter, and a renderer-free expedition/session operation boundary. `src/ui/` presents state and routes actions through that owner.
+
+Coordinates are **right-handed metres**, Y up, water at Y=0. Yaw=0 faces -Z; positive yaw turns toward +X, positive pitch looks up. Player position is the upright capsule's base in the `world` frame. The camera adds an eye height. World solids use conservative swept capsule proxies and sliding; the terrain/ramp use shared surface queries. Tiny decorative foliage and stones are non-solid. Vehicle, carrier berth and interior collisions remain later gated work.
+
+The cel palette, basalt ribs, pressure-shell pod and ridged reef ribbons adapt the design language of the repository's original refined art study at **`20711d1`**. Production generators are original typed implementations; the throwaway viewer and its water-at-10 coordinate system are not imported. No copied commercial art, downloaded assets or generated raster stand-ins are used.
+
+Historical author checks are recorded in [FND-01 evidence](docs/build/evidence/FND-01.md); persistence corrections, current checks and browser artifacts are in [FND-01 round-one correction evidence](docs/build/evidence/FND-01-R1-FIX.md). The foundation is provisional until the coordinator's inspection and separate non-author Astra xhigh and Sol 6.1 max reviews. Dedicated-GPU performance, human duration/enjoyment and the later campaign gates remain unverified.

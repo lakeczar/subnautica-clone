@@ -1,7 +1,9 @@
 # Find the design for an integrated ocean-world adventure
 
 Label: wayfinder:map
-Status: open
+Status: resolved
+
+Construction was explicitly invoked on 2026-10-17: "Read .scratch/siltwake/BUILD_HANDOFF.md and start the revised Siltwake build prompt." The planning destination is complete. The notes below preserve the design interview; current execution state lives in [build status](../../docs/build/STATUS.md).
 
 ## Destination
 
@@ -28,12 +30,15 @@ A coherent, user-reviewed game specification and complete Astra build input for 
 - [Connect the arrival story and discovered history](issues/03-mystery-and-discovery.md): ambiguous early evidence, a surprising personal reveal authored by the narrative team, and regional leads for independent discovery.
 - [Connect resource geography to the vehicle fleet](issues/04-geography-and-fleet.md): broad specialist fleet and deployable carrier, food without thirst, evasion/deterrence and recoverable losses; authored region/resource/capability contracts are ready for final review.
 - [Choose delivery and required feasibility gates](issues/05-delivery-feasibility.md): dedicated-GPU desktop browser using TypeScript/Babylon.js; early construction gates must prove gameplay, interiors, persistence and performance.
+- [Review the complete long-running build input](issues/06-final-build-input.md): owner explicitly invoked construction on 2026-10-17; current execution state is in the build records.
 
 ## Not yet specified
 
 No additional owner-preference question blocks the review input. Recipe quantities/source yields, exact encounter timing, route dimensions, asset production details and performance tuning are assigned to explicit implementation gates in the specification. Their validation is future work, not a completed planning experiment.
 
 ## Final input awaiting owner review
+
+Resolved by the owner's explicit build invocation on 2026-10-17; see [Review the complete long-running build input](issues/06-final-build-input.md). The following text records the earlier review boundary.
 
 [Review the complete long-running build input](issues/06-final-build-input.md) links the full prompt and its integrated specification. The old short-game prompt remains superseded. User review and a later explicit build instruction are still required by the user's chosen scope; the current run does not submit construction.
 

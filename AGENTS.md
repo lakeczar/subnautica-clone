@@ -1,6 +1,6 @@
 # Working in this repository
 
-This repository contains a reviewed-by-agents planning package, not a playable game. Read `.scratch/siltwake/map.md` for decisions and `docs/agents/issue-tracker.md` for the local Wayfinder tracker. The complete owner-review input is `prompts/BUILD_GAME_REVISED.md`; construction starts only when the user explicitly submits or invokes that input for the next run. That instruction authorizes execution without another confirmation round. Reading this repo during planning is not submission. `prompts/BUILD_GAME.md` is the superseded short-game draft; do not execute it.
+Construction was explicitly invoked on 2026-10-17. Read `docs/build/STATUS.md` first for the current checkpoint, active ownership and next action, then `docs/build/PLAN.md` and `docs/build/CONTRACTS.md` before implementation. The authoritative input is `prompts/BUILD_GAME_REVISED.md`. Read `.scratch/siltwake/map.md` for settled decisions and `docs/agents/issue-tracker.md` for the historical Wayfinder tracker. `prompts/BUILD_GAME.md` is the superseded short-game draft; do not execute it.
 
 For implementation, read the revised input and its specification pointers before assigning work. `docs/EXPEDITION_INTEGRATION.md` owns cross-system dependencies. `docs/spoilers/NARRATIVE_CANON.md` contains major story spoilers: the coordinator and lore/world integration workers need it, but ordinary owner-facing summaries and PR descriptions must not reveal the twist. Research explains choices and does not silently add or remove requirements.
 
