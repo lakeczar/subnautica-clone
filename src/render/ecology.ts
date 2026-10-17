@@ -1,4 +1,5 @@
 import type { Scene, ShaderMaterial, Mesh } from '@babylonjs/core';
+import { SOURCES } from '../content/registry.js';
 import { terrainHeight } from '../sim/world.js';
 import { ArtBatch, seeded } from './geometry.js';
 import type { Point } from './geometry.js';
@@ -53,8 +54,56 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
   }
   shore.finish();
 
+  // The current runs along +Z into the source's lee hollow. Fans, suspended
+  // particles and loose shed all point to the actual collectable catch ID.
+  const flows: { mesh: Mesh; from: Point; to: Point; phase: number }[] = [];
+  const grazers: { mesh: Mesh; x: number; y: number; z: number; phase: number }[] = [];
+  for (const [id, source] of Object.entries(SOURCES)) {
+    const { x, y, z } = source.position;
+    if (source.asset === 'ribbons') {
+      const fans = new ArtBatch(`ecology.filters.${id}`, scene, cel);
+      const upstreamZ = z - 4.5;
+      for (const offset of [-1.6, 1.4]) {
+        const fx = x + offset, fy = terrainHeight(fx, upstreamZ);
+        fans.ellipsoid([fx, fy + 0.15, upstreamZ], [0.8, 0.3, 0.6], P.basalt, 7);
+        const stem: Point = [fx, fy + 0.2, upstreamZ];
+        for (let rib = 0; rib < 7; rib++) {
+          const angle = -1.1 + rib * 0.36;
+          const tip: Point = [fx + Math.sin(angle) * 1.55, fy + 0.7 + Math.cos(angle) * 2.3, upstreamZ + 0.7];
+          const mid: Point = [(stem[0] + tip[0]) / 2, (stem[1] + tip[1]) / 2 + 0.15, upstreamZ + 0.15];
+          fans.tube([stem, mid, tip], 0.045, P.amber, 5);
+          if (rib < 6) {
+            const next: Point = [fx + Math.sin(angle + 0.36) * 1.55, fy + 0.7 + Math.cos(angle + 0.36) * 2.3, upstreamZ + 0.7];
+            fans.face([stem, tip, next], rib % 2 ? '#65b9a6' : '#ba8ca0');
+          }
+        }
+      }
+      fans.finish();
+      for (let n = 0; n < 8; n++) {
+        const drift = new ArtBatch(`ecology.shed.${id}.${n}`, scene, cel);
+        drift.face([[-0.2, 0, 0], [0.2, 0.03, 0], [0.13, 0.18, 0.12], [-0.17, 0.08, 0.13]], n % 2 ? P.coral : P.lime);
+        const mesh = drift.finish(); mesh.unfreezeWorldMatrix();
+        flows.push({ mesh, from: [x, terrainHeight(x, upstreamZ) + 2.0, upstreamZ + 0.8], to: [x, y + 0.2, z], phase: n / 8 });
+      }
+    }
+    if (source.asset === 'glass') {
+      for (let n = 0; n < 2; n++) {
+        const grazer = new ArtBatch(`ecology.grazer.${id}.${n}`, scene, cel);
+        grazer.ellipsoid([0, 0.25, 0], [0.42, 0.28, 0.65], '#cedcb7', 8);
+        for (const side of [-1, 1]) {
+          grazer.tube([[side * 0.2, 0.17, -0.45], [side * 0.27, 0.08, -0.7]], 0.045, P.jade, 5);
+          grazer.ellipsoid([side * 0.18, 0.3, -0.49], [0.06, 0.06, 0.06], P.ink, 5);
+        }
+        for (let rib = 0; rib < 4; rib++)
+          grazer.box([0, 0.5, -0.25 + rib * 0.18], [0.32, 0.04, 0.045], P.petrol);
+        const mesh = grazer.finish(); mesh.unfreezeWorldMatrix();
+        grazers.push({ mesh, x, y: y - 0.6, z, phase: n * Math.PI + random() });
+      }
+    }
+  }
+
   const schools: Mesh[] = [];
-  for (let group = 0; group < 2; group++) {
+  for (let group = 0; group < 4; group++) {
     const school = new ArtBatch(`reef.decorative-school.${group}`, scene, cel);
     for (let fish = 0; fish < 7; fish++) {
       const x = (random() - 0.5) * 6, y = (random() - 0.5) * 2, z = (random() - 0.5) * 3;
@@ -66,9 +115,23 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
     const mesh = school.finish(); mesh.unfreezeWorldMatrix(); schools.push(mesh);
   }
   return { update(seconds) {
+    flows.forEach(({ mesh, from, to, phase }) => {
+      const t = (seconds / 7 + phase) % 1;
+      mesh.position.set(from[0] + (to[0] - from[0]) * t + Math.sin(t * 8 + phase) * 0.35, from[1] + (to[1] - from[1]) * t, from[2] + (to[2] - from[2]) * t);
+      mesh.rotation.set(t * 2, t * 3, Math.sin(t * 9) * 0.2);
+    });
+    grazers.forEach(({ mesh, x, y, z, phase }) => {
+      const a = seconds * 0.13 + phase;
+      mesh.position.set(x + Math.sin(a) * 1.1, y + Math.sin(seconds * 2.4 + phase) * 0.025, z + Math.cos(a) * 0.55);
+      mesh.rotation.y = Math.atan2(-Math.cos(a), Math.sin(a) * 0.5);
+      mesh.rotation.x = Math.sin(seconds * 2.4 + phase) * 0.09;
+    });
     schools.forEach((school, i) => {
       const angle = seconds * (0.065 + i * 0.015) + i * 2;
-      school.position.set(-15 + Math.cos(angle) * 10 + i * 20, -4.3 + Math.sin(angle * 2) * 0.6, -6 + Math.sin(angle) * 8);
+      if (i < 2)
+        school.position.set(-15 + Math.cos(angle) * 10 + i * 20, -4.3 + Math.sin(angle * 2) * 0.6, -6 + Math.sin(angle) * 8);
+      else
+        school.position.set(112 + Math.cos(angle) * 8 + (i - 2) * 12, -106 + (i - 2) * 26 + Math.sin(angle * 2) * 1.2, -116 + Math.sin(angle) * 8);
       school.rotation.y = -angle - Math.PI / 2;
     });
   } };
