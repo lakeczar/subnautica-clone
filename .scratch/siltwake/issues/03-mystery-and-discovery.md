@@ -14,3 +14,5 @@ How should an opening event explain arrival and strand the player, and how shoul
 ## Comments
 
 The user selected: "The player wakes in a damaged pod with missing memories." This fixes the opening premise, not its explanation, the cause of memory loss, the player's identity or the mystery's ending. Those remain open. Scan entries, personal journals and environmental evidence should gradually reveal what happened.
+
+The owner answered the atmosphere questionnaire: **"Wonder first, with tense depths and comforting refuges."** This fixes the emotional direction for creature design, lighting, sound and threat escalation. The art study depicts a shallow refuge region; deeper threat designs and survival pressure are still undecided. Preserve curiosity as the leading motivation, with safety in the pod/inhabited vessels and readable tension deeper down.

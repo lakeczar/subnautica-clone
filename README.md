@@ -8,6 +8,7 @@ An original alien-ocean adventure being designed around discovery, a recoverable
 
 - Approximately ten hours for a first main-story playthrough, with optional exploration beyond it. Repeated harvesting and travel must not pad the duration.
 - Open ocean, explorable islands, and research settlements from small outposts to larger ruins. Biomes, resources, ecology, blueprints and story discoveries must form one coherent world.
+- Wonder comes first, with tense depths and comforting refuges.
 - The player wakes in a damaged pod with missing memories. Scans, personal journals and physical evidence gradually reveal what happened.
 - The starting pod provides storage, crafting and healing. Construction focuses on distinct scouts, utility craft and increasingly customizable mobile homes, supported by modest fixed outposts.
 - Compare original voxel and cel-shaded graphics, both with vibrant underwater atmosphere, before choosing an art direction.

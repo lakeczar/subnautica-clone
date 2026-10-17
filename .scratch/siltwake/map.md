@@ -41,6 +41,6 @@ A coherent, user-reviewed game specification and complete Astra build input for 
 - Building two separate ten-hour games merely to compare art styles.
 - Treating research, a visual prototype, a developer-speed run or repeated harvesting as proof of ten hours of enjoyable play.
 
-## Active art delegation
+## Art study
 
-[Compare two feasible visual directions](issues/02-art-comparison.md) owns the original-graphics prototype: three GPT-6.1 Sol workers at max reasoning, coordinated by Astra. The full game input will preserve this graphics delegation preference. Source/evidence stay on the throwaway art branch; this map remains the planning index.
+[Compare two feasible visual directions](issues/02-art-comparison.md) links the completed original-graphics study from three GPT-6.1 Sol workers at max reasoning, coordinated by Astra; the owner’s style selection remains pending. The full game input will preserve this graphics delegation preference. Source/evidence stay on the throwaway art branch; this map remains the planning index.
