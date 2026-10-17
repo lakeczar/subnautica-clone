@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: foundation feature PR #2 merged into `game/siltwake`; draft continuing integration PR #3 open and T3-linked. Fresh coordinator M0 checks pass. Separate Astra xhigh and Sol max M0 reviews are running at `d415436`.
+Updated: 2026-10-17. State: foundation feature PR #2 merged into `game/siltwake`; draft continuing integration PR #3 open and T3-linked. Fresh coordinator M0 checks pass. Astra xhigh ACCEPTS M0 at `d415436`; Sol max M0 review remains running. Paired M0 acceptance is pending.
 
 ## Authority and checkpoint
 
@@ -13,7 +13,7 @@ Updated: 2026-10-17. State: foundation feature PR #2 merged into `game/siltwake`
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-All component authors and reviewers completed with owned resources closed and no live children. Current branch is `game/siltwake`, integrated source `1bba23a`, tree-identical to feature tip `dbcebfc`. Both component reviews accept `50f5569`; changes afterward are bookkeeping. Fresh non-author Astra xhigh and Sol 6.1 max M0 reviewers are now running in separate T3 worktrees at `d415436`; three active agents including coordinator. [Exact IDs and complete brief](reviews/M0-R1.md). [Component acceptance](reviews/FND-ECO-R3.md); [fresh integrated checks](evidence/M0-INTEGRATION.md).
+All component authors and reviewers completed with owned resources closed and no live children. Current branch is `game/siltwake`, integrated source `1bba23a`, tree-identical to feature tip `dbcebfc`. Both component reviews accept `50f5569`; changes afterward are bookkeeping. Astra xhigh completed with M0 acceptance at `d415436`, no findings and owned resources closed. Separate Sol 6.1 max M0 review remains running; two active agents including coordinator. [Exact IDs and complete brief](reviews/M0-R1.md). [Component acceptance](reviews/FND-ECO-R3.md); [fresh integrated checks](evidence/M0-INTEGRATION.md).
 
 ## Acceptance and evidence
 
@@ -28,7 +28,7 @@ All component authors and reviewers completed with owned resources closed and no
 
 ## Exact next action
 
-Await both M0 review completion notifications and read exact task IDs in [M0-R1.md](reviews/M0-R1.md). Do not duplicate active work or use a backing child thread as a new review round. Both must explicitly accept `d41543694bd68e8e41a01465df7141634a5567f2` before M1 implementation. Reconcile/fix substantiated findings through Sol and repeat fresh paired review if functional/contracts change.
+Await Sol M0 review completion and read its exact task ID in [M0-R1.md](reviews/M0-R1.md). Do not duplicate active work or use a backing child thread as a new review round. Both must explicitly accept `d41543694bd68e8e41a01465df7141634a5567f2` before M1 implementation. Reconcile/fix substantiated findings through Sol and repeat fresh paired review if functional/contracts change.
 
 [Foundation PR #2](https://github.com/lakeczar/subnautica-clone/pull/2) is confirmed MERGED into `game/siltwake`. [Continuing draft integration PR #3](https://github.com/lakeczar/subnautica-clone/pull/3) targets `docs/astra-game-build-brief`, explicitly dependent on [planning PR #1](https://github.com/lakeczar/subnautica-clone/pull/1). T3 confirms all three linked; none watched. Main is unchanged, no deployment.
 

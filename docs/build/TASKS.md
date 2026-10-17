@@ -39,7 +39,7 @@ Both non-author reviewers accepted FND-01 and provisional ECO-01 at `50f5569a92a
 
 ## Active M0 milestone reviews
 
-Both fresh non-author M0 reviews are running at `d41543694bd68e8e41a01465df7141634a5567f2`: provider `codex`, Astra `gpt-6-astra` / `xhigh`, Sol `gpt-6.1-sol` / `max`; separate T3 worktrees. [Exact task/request IDs and complete common brief](reviews/M0-R1.md). Three active agents including coordinator; no implementation author active. Await notifications; no polling watcher or duplicate review.
+Astra accepts M0 at `d41543694bd68e8e41a01465df7141634a5567f2`; the separate Sol review remains running: provider `codex`, Astra `gpt-6-astra` / `xhigh`, Sol `gpt-6.1-sol` / `max`; separate T3 worktrees. [Exact task/request IDs and complete common brief](reviews/M0-R1.md). Two active agents including coordinator; no implementation author active. Astra completed with no findings/children and owned server closed. Await notifications; no polling watcher or duplicate review.
 
 Foundation PR #2 is confirmed merged into `game/siltwake`; draft integration PR #3 targets planning branch/PR #1. All T3-linked. [Coordinator evidence](evidence/M0-INTEGRATION.md) covers clean install, 65 tests/build, economy arithmetic, ordinary-input/reload and labelled interruption diagnostic. Separate M0 acceptance is pending.
 
