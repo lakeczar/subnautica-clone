@@ -1,14 +1,16 @@
 # M1-RENDER — windows, depth atmosphere and Dart pilot view
 
-**Prepared, not dispatched.** Follow-up to VISUAL's 2026-10-17 cross-path proposals. This closes first-expedition presentation before M1 acceptance; it is not deferred to M4 and does not add later campaign content.
+Follow-up to VISUAL's 2026-10-17 cross-path proposals. CORE and VISUAL have completed and released their paths; root has inspected and assembled their commits. Exact dispatch state/baseline is in TASKS. This closes first-expedition presentation before M1 acceptance; it is not deferred to M4 and does not add later campaign content.
 
 ## Dependency and ownership
 
 Use Sol 6.1 max in one isolated worktree only after CORE and VISUAL return terminal handoffs, root inspects/assembles their coherent commits and commits a shared baseline. Root records the exact dispatch SHA and transfers the paths below from their previous owners. No dispatch while either owner is editing them. Respect four slots including root. A separate physical recovery/carrier task may overlap only with disjoint ownership and frozen physics/interfaces.
 
-Read AGENTS, STATUS, PLAN, CONTRACTS, revised input/specification pointers, GRAPHICS_PIPELINE, M1-PARALLEL, final CORE/VISUAL evidence and A0 physical descriptors. Review actual defect captures before implementation. Root source inspection corroborates the current implementation, but root has not yet independently observed these three rendered defects.
+Read AGENTS, STATUS, PLAN, CONTRACTS, revised input/specification pointers, GRAPHICS_PIPELINE, M1-PARALLEL, final CORE/VISUAL evidence and A0 physical descriptors. Review actual defect captures before implementation. Root inspected the final actual carrier windows, Canopy surface discontinuity and absent Dart cockpit captures, as well as the source. This was artifact inspection, not a new root browser run.
 
-Proposed exclusive paths at dispatch: `src/render/{renderer,materials,atmosphere,expedition}.ts`, plus `docs/build/evidence/M1-RENDER.md`. `geometry.ts` and all simulation/content/save/runtime/UI/audio paths remain read-only. Request any extra helper/test path with a concrete reason. Preserve public GameRenderer/lifecycle contracts, plain state, simulation poses, input controls, collision volumes, air regions, source/provenance and IDs. No dependencies, general graphics rewrite, future hulls or camera mode menu.
+Exclusive paths at dispatch: `src/render/{renderer,materials,atmosphere,expedition,landmarks}.ts`, plus `docs/build/evidence/M1-RENDER.md`. Root explicitly adds `landmarks.ts` for pod pane/backing extraction after VISUAL's release. `geometry.ts` and all simulation/content/save/runtime/UI/audio paths remain read-only. Request any extra helper/test path with a concrete reason. Preserve public GameRenderer/lifecycle contracts, plain state, simulation poses, input controls, collision volumes, air regions, source/provenance and IDs. No dependencies, general graphics rewrite, future hulls or camera mode menu.
+
+The pane/backing table in M1-VISUAL is authoritative handoff evidence: carrier bay panes have both a full steelLight backing plate and an upper shade plate overlapping the aperture by .355 m. Account for both and the actual structural wall. Preserve opaque instrument faces, the pod regulator's readability and the Dart's unchanged keel/berth envelope. The legacy departure observations used different paths: CORE reports the same unmodified old save moving from z=-24 toward -12.986, while VISUAL stopped toward -26.483. These are not equivalent inputs; verify the current intended approach and use coordinates rather than assuming a compass direction from the prose.
 
 ## Concrete result
 
@@ -26,5 +28,7 @@ Use actual production rendering on the final source with matched camera/state be
 Check transparent ordering from both sides and near the surface; frame occlusion, clipping, pause/resume, rich/light modes, resize and renderer reconstruction/material disposal where touched. Inspect console/render errors and run `npm run check`. Add focused tests only for a real new boundary or defect; do not mirror shader constants or cosmetic implementation. No need to repeat unchanged save/economy suites beyond the ordinary project check unless a relevant concern appears.
 
 Before any browser, preview, capture or browser test, read `/work/repos/fleet/BROWSER_RULES.md` when available and `docs/BROWSER_RULES.md`. Verify isolated factory-worker Linux, use T3 preview_status then preview_open and task-owned incognito storage. Root assigns a free port at dispatch; never kill another listener. Preserve human/shared tabs (including historical tab14) and other workers' tabs/servers. Use bounded input segments and close only owned resources.
+
+Assigned port: **5191**, after checking it is free. Physical validation workers use 5193 and 5194, read-only production source. Do not wait for or poll peers. Work from the committed dispatch source; send concrete proposals to root and finish independent work if a cross-path request arises.
 
 Return source/evidence commit SHAs, changed paths, exact factory/material/camera interface proposals, build/bundle hash, checks, baseline/comparison captures, source of replay saves, lifecycle observations and remaining limitations. SwiftShader/muted host is not GPU/audible evidence. No push, PR, parent mutation or children. This remains part of the first-expedition presentation batch and combined independent Astra xhigh/Sol max gate, followed by integrated M1 review; no separate acceptance ceremony per material edit.

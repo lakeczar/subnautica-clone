@@ -14,7 +14,7 @@ All three workers use **Sol 6.1 max** in separate T3 worktrees from the same com
 
 The root-facing core route assignment deliberately excludes ownership of the entire P4 recovery and F0–F3 carrier browser matrix. A separate physical-recovery/carrier assignment rotates into a completed slot after necessary interface changes are frozen. If a discovered route defect touches those mechanisms, core may fix only the directly blocking issue in its owned paths and report coverage. Full deep Bobbin and campaign carrier construction remain M2.
 
-VISUAL's glass, deep surface/sky and Dart pilot-view proposals are reserved for [M1-RENDER](M1-RENDER.md), prepared but not dispatched. It starts only after CORE/VISUAL handoff and a committed combined baseline, with explicit transfer of the four render paths. Current workers finish their bounded tasks without these cross-path changes. Close this render pass before first-expedition presentation acceptance; keep the separate recovery/carrier assignment bounded and disjoint.
+VISUAL's glass, deep surface/sky and Dart pilot-view proposals are reserved for [M1-RENDER](M1-RENDER.md), with exact dispatch state in TASKS. CORE/VISUAL have now completed and root assembled their source. Explicit transfer includes the five render paths named in the revised brief, adding landmarks for pod apertures. The original workers finished without these cross-path changes. Close this render pass before first-expedition presentation acceptance; keep the separate recovery/carrier assignment bounded and disjoint.
 
 ## Frozen shared boundaries
 
@@ -36,3 +36,8 @@ Each task ends with coherent commits, changed paths, actual checks and evidence,
 Before any browser/preview/screenshot/test read `/work/repos/fleet/BROWSER_RULES.md` when available and `docs/BROWSER_RULES.md`. Verify factory-worker/isolated Linux owns the browser; prefer T3 preview_status then preview_open. Use task-owned incognito storage and distinct free ports: core 5190, visuals 5191, presentation 5192. Check availability rather than killing a listener. Preserve human/shared tabs including historical tab14 and all other tasks' tabs/servers. Close only owned resources through normal lifecycle tools. Keep input/recording segments short enough to finish before tool timeout; do not let a timed-out script keep issuing controls.
 
 Ordinary inputs establish gameplay. Imported, unmodified earned saves can support targeted replay, with origin SHA noted; seeded fixture/art staging and direct state diagnostics must remain labelled. Use actual game-camera captures and record source/bundle, hardware/settings, input method, source of saves and limitations. SwiftShader is not dedicated-GPU evidence; a muted host cannot establish an audible mix. No user-facing story spoilers.
+
+
+## Post-assembly rotation
+
+Original CORE/VISUAL/PRESENTATION and focus correction completed; [assembly](../evidence/M1-ASSEMBLY.md) passed132 tests/typecheck/build. M1-RENDER now has a bounded five-file render assignment. The later physical evidence is split between [M1-RECOVERY and M1-CARRIER](M1-PHYSICAL.md), both production-read-only, each owning one evidence document on a separate worktree/port. With root these three fill the four-slot cap. Exact baseline/task IDs and state belong in TASKS; no worker dispatches children. This split changes coordination, not P0–P5/F0–F3 scope or acceptance.

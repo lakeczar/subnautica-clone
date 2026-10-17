@@ -125,12 +125,12 @@ Astra terminal result read: **ACCEPT DESIGN-PREP** at `c0aa5cb386a6b98ff8fa7c95d
 
 ## Active M1 parallel implementation
 
-All three are async T3 `isolation: worktree`, provider `codex`, model **`gpt-6.1-sol`**, explicit effort **`max`**, role implementation, from the same clean committed baseline **`411fb1d355b85dcd876f4bc337e93c3fc2cfadba`**. Live catalog/efforts verified. Initially four active agents including root; original presentation has since completed and its bounded correction occupies the released slot. See the follow-up record below. No further child until a slot releases. No pending questions or children reported at initial dispatch. Root owns records/contracts/Git assembly; no worker pushes, opens PRs, mutates parent or dispatches children.
+All three are async T3 `isolation: worktree`, provider `codex`, model **`gpt-6.1-sol`**, explicit effort **`max`**, role implementation, from the same clean committed baseline **`411fb1d355b85dcd876f4bc337e93c3fc2cfadba`**. Live catalog/efforts verified. Historical initial dispatch filled four slots. All three original workers and the focus correction now completed; the latest assembly/dispatch section below supersedes their earlier progress reports. No pending questions or children reported at initial dispatch. Root owns records/contracts/Git assembly; no worker pushes, opens PRs, mutates parent or dispatches children.
 
 | Batch / brief | Exact T3 task ID | Stable request | Exclusive ownership / port | State |
 | --- | --- | --- | --- | --- |
-| [M1-CORE](tasks/M1-CORE.md) | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-core-sol-max-411fb1d` | `siltwake-m1-core-sol-max-411fb1d` | Exact content/sim/save/runtime/core-render/test paths and evidence in brief; port5190 | Running |
-| [M1-VISUAL](tasks/M1-VISUAL.md) | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-visual-sol-max-411fb1d` | `siltwake-m1-visual-sol-max-411fb1d` | Six render leaf files and evidence; port5191 | Running |
+| [M1-CORE](tasks/M1-CORE.md) | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-core-sol-max-411fb1d` | `siltwake-m1-core-sol-max-411fb1d` | Exact content/sim/save/runtime/core-render/test paths and evidence in brief; port5190 | Completed; source `6b4f229`, evidence `0f2c23b`, staged `ef6608f` |
+| [M1-VISUAL](tasks/M1-VISUAL.md) | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-visual-sol-max-411fb1d` | `siltwake-m1-visual-sol-max-411fb1d` | Six render leaf files and evidence; port5191 | Completed; source `6c533ca`, evidence `3104d23`, staged `c86299c` |
 | [M1-PRESENTATION](tasks/M1-PRESENTATION.md) | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-presentation-sol-max-411fb1d` | `siltwake-m1-presentation-sol-max-411fb1d` | UI/CSS/audio, sound/presentation tests and evidence; port5192 | Completed; provisional merge `becc03e`; correction below |
 
 [Common plan](tasks/M1-PARALLEL.md) freezes shared geometry/events/IDs and defines the separate later physical recovery/carrier pass, combined P0–P5/F0–F3, related-batch dual review and integrated M1 gate. Original asset study and both retained artifact archives are available. Workers must read both browser rule files, verify isolated Linux, use distinct task storage/ports and preserve shared/other-task resources. Completion notifications wake root; no polling/duplicate work.
@@ -160,3 +160,23 @@ Root reproduced **P-FOCUS-1**: after a partial glass transfer, label-based resto
 - CORE's transfer-feedback fix is separate and still unassembled. Do not copy its moving source. Full recovery/carrier and M1-RENDER wait for their relevant finished owners/baseline; four slots are occupied by root/core/visual/focus correction.
 
 CORE interim route progress on `6b4f229` reports earned C01–C04, no optional personal note, Dart departure and useful crust/resin cargo, minimum pre-entry oxygen77.4352% and power95.8254%, no failure/rescue. A premature descent hit the shallow shelf (hull80.8024%) before the corrected eastward approach. Return/service/reload and alternate order/edges are still running. These are author progress reports, not completed route or acceptance evidence; retain the collision honestly in the terminal handoff.
+
+
+## M1 completed assembly and next dispatch
+
+All terminal results read: original CORE and VISUAL `completed`, no pending children/question; presentation focus follow-up also completed. Clean worktrees and owned resources closed. No remaining source owner is editing the dispatch paths.
+
+- Focus correction: source `16fb6ff037f2e623192696ae4d27bef743703214`, evidence `42a3e7261ad094f56ebafd53dbd8f755aacb5fff`, merge `70cef14ed9bee7818ce5223c9faa2734ee20145d`. Root verified50 artifact entries, inspected actual browser before/after, repeated its semantic-focus diagnostic, and passed129 tests/build. Earlier running-state paragraphs above are historical.
+- VISUAL: source `dd8f0f3` then `6c533ca78eb9bf110ee11ab2509fafd1e8d7b00f`, evidence `3104d23e599eb6cb11a2ee7ce169be97b28a8fb8`, merge `c86299c6f430616e2d6cfc2bd75472246479e7c7`. Root inspected all leaf diffs/captures;129 archive entries/64 original references hash-verified.
+- CORE: source `6b4f229a83a9903a07125a8646df9b943510e1cd`, evidence `0f2c23beddec3da00860f2bf11e44a9a65f4170c`, merge `ef6608f999335d8d3e08983aa20b2d2bbd7c4cc1`. Root inspected source/actual storage/reload/exit-refusal evidence and verified123 archive/original entries. No API/schema/geometry changes. Pre-lab minimum77.240741% supersedes the earlier77.4352% approximation.
+- Combined source `ef6608f`:132 tests/typecheck/build pass. [Complete assembly record](evidence/M1-ASSEMBLY.md). No new root browser or batch acceptance.
+
+Next dispatch uses a committed baseline containing this record. Live catalog reverified `codex/gpt-6.1-sol` with explicit `reasoningEffort=max`; root remains Astra xhigh. Split physical work to avoid giving one specialist both large matrices. Only root dispatches. Planned ownership:
+
+| Task | Exact owned paths | Port | State before dispatch |
+| --- | --- | --- | --- |
+| M1-RENDER | `src/render/{renderer,materials,atmosphere,expedition,landmarks}.ts`, `docs/build/evidence/M1-RENDER.md` |5191| Prepared; all former owners released |
+| M1-RECOVERY | Only `docs/build/evidence/M1-RECOVERY.md`; production read-only |5193| Prepared |
+| M1-CARRIER | Only `docs/build/evidence/M1-CARRIER.md`; production read-only |5194| Prepared |
+
+[Render brief](tasks/M1-RENDER.md) and [two physical briefs](tasks/M1-PHYSICAL.md) define the bounded work, exact evidence limits, browser isolation and cleanup. The physical workers cannot edit core source or consume moving render code. No independent reviewer is active yet; after combined evidence closes, rotate authors out and start a fresh non-author pair for the frozen related batches, then the separate integrated M1 gate.

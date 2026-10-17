@@ -77,6 +77,8 @@ Current provisional source `558c28c`, preserved by feature merge `1c8d81e`. Root
 
 ### Assignment discipline
 
+Post-parallel assembly at `ef6608f` includes the completed CORE transfer-feedback fix, VISUAL leaves and PRESENTATION focus correction. No saved fields, command/event schema, physical descriptors or public lifecycle signatures changed. `ArtBatch.ring`/`panel` are additive leaf helpers; command-based focus identity is UI-local. Root explicitly transfers only `src/render/{renderer,materials,atmosphere,expedition,landmarks}.ts` to M1-RENDER after former owners complete. Its material/factory/view-only proposals return to root for reconciliation; shared physical/input/save state stays frozen. M1-RECOVERY and M1-CARRIER own separate evidence files and have read-only production access. See TASKS for the exact committed dispatch baseline and live ownership; historical assignment paragraphs above describe prior stages.
+
 Main Sol builder implements production contracts, root config and composition under exclusive assignment. Coordinator directs and approves interface changes and owns `docs/build/{STATUS,PLAN,CONTRACTS,PLAYTEST,CONTENT_MANIFEST,TASKS}.md`, review records and planning handoff. Worker evidence belongs in `docs/build/evidence/<batch>.md`. Once a candidate is frozen, functional/contract edits wait for a correction assignment and a new dual review revision.
 
 Browser tasks must read the current fleet and repository browser rules before any launch; use verified isolated Linux, prefer T3 preview, preserve user/shared tabs and close only owned resources. Browser evidence must identify actual rendering hardware and ordinary inputs versus diagnostic state changes.

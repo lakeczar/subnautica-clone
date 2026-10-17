@@ -16,7 +16,7 @@ Root hash-verified all 43 entries of `/tmp/siltwake-m1-presentation/manifest.jso
 
 Preparation and notebook originals were published for PR #4 on `pr-assets/feat-siltwake-first-expedition/` as `preparation-author-6c99435.png` and `notebook-author-6c99435.png`. HTTP 200 image/png responses byte-match inspected originals, SHA256 `d67afd6fe4a670216fb5a6a997b89eed956c5a5682039ea472be118c23b126a6` and `18dc440d9bb8ee145d48a6a69cd442d97dd90aa697231dc5d5f451fc3a13bd66`. Descriptions of PR #4/#3 were fully written/read back with current checks, unresolved focus issue and M0/M1 separation. Matching before panel captures were not collected.
 
-## Coordinator finding P-FOCUS-1 — correction in progress
+## Coordinator finding P-FOCUS-1 — original finding
 
 `GameView.refreshPanel` preserves focus by `textContent` and chooses the first new matching button. Inventory and fleet controls can share identical labels across different objects. Root reproduced on the author's compiled source and again on the staged root build using production GameView/executeCommand with a minimal DOM port:
 
@@ -29,3 +29,11 @@ Artifacts: `/tmp/siltwake-presentation-focus-repro.mjs`, `/tmp/siltwake-presenta
 Root assigned the same Sol max author a bounded follow-up: stable semantic control/command identity, deliberate fallback when the original action disappears, regressions for duplicate labels/partial transfer/removal/refusal and a targeted production keyboard check. Only `src/ui/view.ts`, `tests/presentation.test.ts` and its author evidence are writable. Exact new task ID is in [TASKS](../TASKS.md#m1-presentation-returned-provisional-with-focus-correction-running); original terminal result stays unchanged. No unrelated shader, core or audio expansion. Correction source and CORE dependency remain unassembled.
 
 The original batch stays provisional. Inspect the correction, preserve relevant red/green evidence, assemble with core/visual/render/physical results and run combined gameplay before the fresh Astra xhigh/Sol max acceptance pair and separate integrated M1 gate.
+
+## Correction assembled and checked
+
+Follow-up task `siltwake-m1-presentation-focus-fix-6c99435` completed with no live children/questions and closed owned resources. Source `16fb6ff037f2e623192696ae4d27bef743703214`, evidence `42a3e7261ad094f56ebafd53dbd8f755aacb5fff`, staged preserving history at `70cef14ed9bee7818ce5223c9faa2734ee20145d`. Only UI, its presentation tests and author evidence changed. Focus now follows a normalized full-command key, including target operands; a missing/disabled action deliberately falls back to Return. No state/schema/geometry/audio changes.
+
+Root inspected the diff and actual before/after browser captures, hash-verified all 50 original/archive entries in `/tmp/siltwake-m1-presentation-focus-artifacts.tar.gz` (SHA256 `ad2532b6bd2e0a6595185239b5a0e6a4b13b16d23b15ca9a2e075a65e3ad81f2`), and repeated the independent production-view diagnostic. Before: glass item_2 focus became meal item_1. After: glass item_2 retained glass item_2. The diagnostic is not browser gameplay. Author native Tab/Shift+Tab/Enter replay on an unmodified earned save demonstrated glass3→2→1→0 with alloy unchanged, deliberate Return fallback and retained refusal focus; duplicate-hull/full-destination cases remain unit diagnostics.
+
+Root `npm run check` at the focus merge passed **129/129**, typecheck and build; log `/tmp/siltwake-m1-presentation-focus-coordinator-check.log`. JS `index-DPIzbKeV.js`, SHA256 `3d076868e3698d4142bae926da2a059561b03213fc2ece6c42f3f01fe61fc44a`, matches author. P-FOCUS-1 is corrected provisionally, awaiting the related-batch independent gate. CORE's transfer feedback subsequently joined this source; see [combined assembly](M1-ASSEMBLY.md). Earlier paragraphs describe their historical checkpoints, not remaining focus work.
