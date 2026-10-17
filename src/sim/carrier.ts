@@ -166,8 +166,10 @@ export function constrainCarrierYaw(s: GameState, desiredYaw: number): number {
   const points = s.fleet.vehicles.filter((v) => v.berth?.carrierId === h.id).map((v) => v.berth!.pose.position);
   const fits = (fraction: number): boolean => {
     const end = h.pose.yaw + delta * fraction;
+    // The requested endpoint can round differently from the recomputed arc end.
+    const endpoint = fraction === 1 ? desiredYaw : wrap(end);
     for (const p of points) {
-      const phase = Math.atan2(p.z, p.x), angles = [h.pose.yaw, wrap(end)];
+      const phase = Math.atan2(p.z, p.x), angles = [h.pose.yaw, endpoint];
       for (let n = Math.ceil((Math.min(h.pose.yaw, end) + phase) / quarter);
         n <= Math.floor((Math.max(h.pose.yaw, end) + phase) / quarter); n++) angles.push(wrap(n * quarter - phase));
       for (const yaw of angles)
