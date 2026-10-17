@@ -2,6 +2,8 @@
 
 Only the coordinator dispatches. Default cap is four active agents including coordinator. Completed historical planning workers are not active implementation tasks. A task with live nested work is unfinished. Check durable task status before retrying a launch; each T3 review round gets a fresh stable request ID.
 
+Current checkpoint: see the latest entry at the end of this ledger and [STATUS](STATUS.md). Earlier active/pending labels are historical snapshots, not current ownership.
+
 | Batch | Task/agent ID | Model/effort | Baseline / owned paths | State |
 | --- | --- | --- | --- | --- |
 | FND-01 | Native `/root/foundation_builder` | `gpt-6.1-sol` / `max` | `a3e400b`; production `src/`, `public/`, tests/scripts, package/config/lockfile, index.html, README, .gitignore, CI, `docs/build/evidence/FND-01.md` | Author complete at `8d72dd2`; coordinator check passed; awaiting independent review. Owned browser/server closed |
@@ -288,3 +290,11 @@ Correction author received EXP-1 and bounded depth-exit context via `siltwake-m1
 
 
 EXP-2 ownership addendum was delivered by steer `siltwake-m1-cr1-exp2-scope-af1b592` to the same running correction ordinal1 task. Root commit `af1b592` contains the exact addendum; the worker keeps its original source baseline. Only launch north→south and return north-flank→upper-flank literals in view.ts/progression.ts are added to ownership, no other changes. Combined EXPEDITION evidence merge is `57f96fa6239af66283e71aeb293e51842866b653`.
+
+### CR-1/EXP-2 completed; full batch review prepared
+
+Terminal task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-cr1-fix-sol-max-b5cedfe` is completed with no children/question. Final source `20451a8dafd014012986e0c8aa1e60df0da7ff25`, evidence `b0bf0aba4ed22a8c9328a419b604d385aca6255a`, provisional merge `83a577b6afe7f16c74bfe63322c4890fec8a9995`. Author worktree clean and owned resources closed; all source/validation authors are terminal and their paths released.
+
+[Root inspection](evidence/M1-CR1-FIX-INTEGRATION.md) records source/archive/actual-capture verification, 140 passing tests/typecheck/build, 224 saveable replay states and 13 exact serialized-state plus 2 actual-export comparisons. One non-exact walking reconstruction remains excluded. CR-1/EXP-1 and EXP-2 are corrected provisionally, not independently accepted.
+
+Live catalog reverified `codex/gpt-6-astra` with `reasoningEffort:xhigh` and `codex/gpt-6.1-sol` with `reasoningEffort:max`; root runtime is Astra xhigh. [M1-BATCH-REVIEW-R1](tasks/M1-BATCH-REVIEW-R1.md) prepares two fresh non-author worktree reviewers of the same candidate and accepted-M0 diff base `a2cb19f1d4cd2d795b82642a2bd357f681d1c293`. Each covers both full named batches and owns only its named review report; ports 5195/5196 checked free. Commit before dispatch. Only root active; no root browser/server. Separate integrated M1 review follows batch acceptance.

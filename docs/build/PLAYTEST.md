@@ -1,6 +1,6 @@
 # Runtime and playtest evidence
 
-Foundation and attributed first-expedition component checks exist; the complete combined M1 route and full campaign remain unaccepted. This log records actual observations, not planned tests as passes. The [acceptance contract](../DELIVERY_AND_ACCEPTANCE.md) defines required coverage.
+Foundation, completed combined first-expedition/recovery/carrier runs and targeted final correction checks exist; M1 and the full campaign remain unaccepted. [Latest correction evidence](evidence/M1-CR1-FIX-INTEGRATION.md) records the final 140-test source. Historical entries below retain their original pending states and source attribution. The [acceptance contract](../DELIVERY_AND_ACCEPTANCE.md) defines required coverage.
 
 For each run record candidate SHA, build/command, environment and renderer, input method, scenario, observed result, artifact, defect and retest. Label ordinary inputs, automated rule tests and diagnostic state injection separately. Record p50/p95/loading/memory only when measured and state the route/sample.
 
@@ -24,7 +24,7 @@ Astra independently accepts M0 at `d415436`: fresh 65-test/build/economy/HTTP ar
 
 Open: remaining browser adapters; first expedition; carrier/collision gates; both complete strategies; all hull niches; full gameplay save resilience; repeated recovery; fresh-human route learning/story comprehension/duration; representative dedicated-GPU performance.
 
-## First expedition run sheet (not yet executed)
+## First expedition run sheet
 
 Use normal game inputs and retain the start save, final save and recording/checkpoint captures. Complete an initial blind-route attempt before following an instrumented reproduction. Debug coordinates/inventory/state setters can diagnose failures but cannot establish completion.
 
@@ -49,3 +49,5 @@ Combined RECOVERY completed on `4d0a7f0`, including tow/patch/cockpit departure,
 
 
 Fresh combined EXPEDITION completed at `4d0a7f0`: C01–C04/Dart/useful cargo/return/reload,25 collections/31 transfers/8 recipes, minimum75.972% oxygen and93.477% power before recharge, no main failures/rescues.39 full-state comparisons reproduced; separate island-first/opening checks attributed in [report/disposition](evidence/M1-COMBINED-EXPEDITION-INTEGRATION.md). Its later depth-test extension reproduced CR-1 hunter damage before150m; actual deep exit refusal remained unexecuted. EXP-2 north/south launch guidance requires narrow copy correction. All three validators complete; correction remains active and M1 unaccepted.
+
+CR-1/EXP-1 and EXP-2 correction completed on source `20451a8`, assembled at `83a577b`. Root check passes 140 tests/typecheck/build; the affected 224-step replay stays saveable and differs only by negative hull health saturating at zero. Final actual author Save/Export, reload/Continue and protected exit preserve the same disabled vessel and finite air; earned checkpoint replays show clear south egress and 153 m suit-exit refusal / 147 m safe exit. Root reproduced 13 exact serialized-state and 2 actual-export comparisons and inspected actual captures; one non-exact walking reconstruction is excluded. [Full provenance/limits](evidence/M1-CR1-FIX-INTEGRATION.md). This targeted final-source evidence does not reattribute the earlier full runs, establish a new fresh preparation route or confer independent acceptance. Both full M1 completion batches are ready for the fresh paired review.
