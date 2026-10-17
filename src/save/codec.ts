@@ -2,6 +2,7 @@ import { CONTENT_VERSION } from "../content/registry.js";
 import type { GameState } from "../sim/types.js";
 import { createGame } from "../sim/state.js";
 import { completeOpening } from "../sim/progression.js";
+import { CARRIER_LAYOUT, carrierHull, carrierInteriorSolids, localToWorld } from "../sim/carrier.js";
 import { createWorldQueries } from "../sim/world.js";
 import { validFoundationState } from "./foundation.js";
 import { record, validState } from "./validation.js";
@@ -25,6 +26,10 @@ const date = (v: unknown): v is string =>
   /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(v) &&
   Number.isFinite(Date.parse(v)) &&
   new Date(v).toISOString() === v;
+function blockedCarrierInterior(s: GameState): boolean {
+  return !!s.player.interiorPose && !createWorldQueries(carrierInteriorSolids(s), () => -200)
+    .clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 });
+}
 function migrateFoundation(old: GameState): GameState {
   const s = createGame();
   completeOpening(s);
@@ -125,6 +130,17 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
       error:
         "Gameplay ownership, capacity, equipment, discovery, facility, recovery or berth data is invalid. Nothing was loaded.",
     };
+  // Schema/content and all saved berth transforms remain compatible. Newly sealed
+  // room walls can cover an old walking pose; only that pose receives a visible,
+  // idempotent safety relocation. Reading never writes or moves a vessel/cargo.
+  if (blockedCarrierInterior(d.state)) {
+    const s = d.state, h = carrierHull(s)!;
+    s.player.interiorPose!.position = { ...CARRIER_LAYOUT.helm };
+    s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
+    s.player.velocity = { x: 0, y: 0, z: 0 };
+    s.migration = "Carrier compartment geometry now seals the dry berths. Your previous walking position intersected a closed compartment, so you were moved to the clear bridge passage. Vessels and cargo were preserved; the original record remains in the journal backup after saving.";
+    s.feedback = s.migration;
+  }
   return { ok: true, value: d as unknown as SaveEnvelope };
 }
 export function createEnvelope(
@@ -147,5 +163,7 @@ export function encodeSave(save: SaveEnvelope): Result<string> {
     return { ok: false, error: "The current session could not be serialized." };
   }
   const check = decodeSave(text);
+  if (check.ok && blockedCarrierInterior(save.state))
+    return { ok: false, error: "The current walking position intersects a sealed carrier compartment. Move to the clear bridge passage before saving." };
   return check.ok ? { ok: true, value: text } : check;
 }

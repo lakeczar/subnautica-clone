@@ -6,7 +6,7 @@ import {
   RECOVERY_STAGE,
 } from "../content/registry.js";
 import type { GameState, VehicleState } from "../sim/types.js";
-import { CARRIER_SUPPORT } from "../sim/carrier.js";
+import { CARRIER_LAYOUT, CARRIER_SUPPORT, carrierStructure, launchPoint } from "../sim/carrier.js";
 import { ArtBatch } from "./geometry.js";
 import type { Point } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
@@ -20,19 +20,19 @@ function dartArt(
 ): Mesh {
   const b = new ArtBatch(id, scene, cel);
   if (hull === "hearthline") {
-    b.box([0, 3.8, 0], [11, 0.5, 24], P.petrol);
-    b.box([0, 9, 0], [12, 0.35, 26], P.porcelain);
-    for (const x of [-5.6, 5.6]) {
+    const width = CARRIER_LAYOUT.deck.max.x - CARRIER_LAYOUT.deck.min.x;
+    b.box([0, 9, 0], [width + 0.6, 0.35, 26], P.porcelain);
+    for (const x of [CARRIER_LAYOUT.deck.min.x, CARRIER_LAYOUT.deck.max.x]) {
       b.box([x, 6.3, 0], [0.6, 4.5, 25], P.porcelain);
-      b.box([x > 0 ? 5.23 : -5.23, 6.5, 0], [0.05, 2.4, 16], P.glass);
-      b.box([x * 1.3, 1.5, 0], [4, 3, 28], P.petrol);
-      b.box([x * 1.3, 2.9, 0], [3, 0.8, 26], P.ochre);
+      b.box([x > 0 ? x - 0.37 : x + 0.37, 6.5, 0], [0.05, 2.4, 16], P.glass);
+      b.box([Math.sign(x) * 7.2, 1.5, 0], [4, 3, 28], P.petrol);
+      b.box([Math.sign(x) * 7.2, 2.9, 0], [3, 0.8, 26], P.ochre);
     }
-    b.box([0, 6.4, -12], [11, 5, 0.3], P.petrol);
+    b.box([0, 6.4, -12], [width, 5, 0.3], P.petrol);
     b.box([0, 6.6, -11.8], [8, 2.7, 0.06], P.glass);
     b.box([0, 5, -8], [3, 1.5, 1.2], P.petrol);
     b.box([0, 5.85, -8.2], [2.7, 0.1, 0.8], P.lime);
-    b.box([0, 6.5, 12], [11, 5, 0.3], P.petrol);
+    b.box([0, 6.5, 12], [width, 5, 0.3], P.petrol);
     b.box([3.8, 4.3, 9], [2, 0.3, 4], P.ochre);
     for (const z of [-5, 3, 8])
       b.box([-4.2, 4.8, z], [1.4, 1.3, 2.5], z === 3 ? P.ochre : P.metal);
@@ -523,6 +523,7 @@ export function createExpeditionArt(
   const mooringSign = label(scene, "SUPPORTED SURVEY MOORING", [CARRIER_SUPPORT.x + 9, 3, CARRIER_SUPPORT.z + 14], 5);
   const vehicles = new Map<string, Mesh>(),
     caches = new Map<string, Mesh>();
+  let carrierShell: Mesh | null = null, shellKey = "";
   return {
     update(s) {
       mooringMesh.setEnabled(s?.scenario === "carrier-fixture");
@@ -580,12 +581,31 @@ export function createExpeditionArt(
       const h = s?.fleet.vehicles.find(
         (v) => v.id === s.fleet.docking?.vehicleId,
       );
-      if (h)
-        blockMesh.position.set(
-          h.pose.position.x,
-          h.pose.position.y - 2,
-          h.pose.position.z - 17,
-        );
+      const dock = s?.fleet.docking;
+      const openSlot = dock?.transaction?.phase === "lock" ? dock.transaction.slot : undefined;
+      const nextShellKey = h && dock ? `${h.id}.${dock.configuration}.${openSlot ?? "sealed"}` : "";
+      if (shellKey !== nextShellKey) {
+        carrierShell?.dispose();
+        carrierShell = null;
+        shellKey = nextShellKey;
+        if (h && dock) {
+          const b = new ArtBatch("carrier.physical-compartments", scene, cel);
+          for (const solid of carrierStructure(dock.configuration, openSlot))
+            b.bounds(solid, solid.id.includes("floor") || solid.id.includes("deck") ? P.petrol : solid.id.includes("gate") ? P.ochre : P.porcelain);
+          carrierShell = b.finish();
+          carrierShell.unfreezeWorldMatrix();
+          carrierShell.renderingGroupId = 1;
+        }
+      }
+      if (h) {
+        if (carrierShell) {
+          carrierShell.position.set(h.pose.position.x, h.pose.position.y, h.pose.position.z);
+          carrierShell.rotation.y = h.pose.yaw;
+        }
+        const exit = launchPoint(h, h);
+        blockMesh.position.set(exit.x, exit.y + 1, exit.z);
+        blockMesh.rotation.y = h.pose.yaw;
+      }
       for (const c of s?.recovery.caches ?? []) {
         let m = caches.get(c.id);
         if (!m) {

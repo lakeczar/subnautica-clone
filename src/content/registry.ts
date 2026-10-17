@@ -97,6 +97,15 @@ export const HULL_COLLIDERS = {
   mantle: { radius: 4.5, height: 4 },
   hearthline: { radius: 17, height: 9.2 },
 } as const satisfies Record<HullId, { radius: number; height: number }>;
+/** Full upright authored hull bounds while aligned with a guided carrier rail.
+ * Normal piloting retains the broader square HULL_COLLIDERS proxies. Metres from keel. */
+export const BERTH_ENVELOPES = {
+  dart: { radius: 3.6, halfWidth: 2.5, halfLength: 3.6, height: 2.1 },
+  spindle: { radius: 4, halfWidth: 2.4, halfLength: 3.7, height: 1.7 },
+  creel: { radius: 4.5, halfWidth: 2.9, halfLength: 3.3, height: 3.6 },
+  hush: { radius: 3.6, halfWidth: 2.5, halfLength: 3.6, height: 2.1 },
+  mantle: { radius: 4.5, halfWidth: 2.9, halfLength: 4.5, height: 4 },
+} as const;
 export const REMOTE_TOOLS = {
   bobbin: { label: "Bobbin", role: "tethered recovery service" },
 } as const;

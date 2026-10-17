@@ -32,6 +32,7 @@ import {
   carrierCommand,
   carrierHull,
   carrierInteriorSolids,
+  CARRIER_LAYOUT,
   localToWorld,
   updateBerth,
 } from "./carrier.js";
@@ -389,9 +390,9 @@ export function stepGame(
             Math.sin(yaw - h.pose.yaw) * right) *
           3 *
           DT;
-      const moved = createWorldQueries(carrierInteriorSolids(s)).moveCapsule(local.position, { x, y: 0, z }, { radius: 0.34, height: 1.75 });
-      local.position.x = clamp(moved.position.x, -4.7, 4.7);
-      local.position.z = clamp(moved.position.z, -11, 10);
+      const moved = createWorldQueries(carrierInteriorSolids(s), () => -200).moveCapsule(local.position, { x, y: 0, z }, { radius: 0.34, height: 1.75 });
+      local.position.x = clamp(moved.position.x, CARRIER_LAYOUT.interior.minX, CARRIER_LAYOUT.interior.maxX);
+      local.position.z = clamp(moved.position.z, CARRIER_LAYOUT.interior.minZ, CARRIER_LAYOUT.interior.maxZ);
       s.player.pose.position = localToWorld(local.position, h);
       s.player.mode = "interior";
     }

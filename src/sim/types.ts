@@ -205,6 +205,8 @@ export type GameEvent =
   | { type: "notice"; message: string; error?: boolean }
   | {
       type: "sound";
+      /** Transient world-space source at emission. Omit for body/equipment alarms. Never saved. */
+      origin?: Vec3;
       cue:
         | "collect"
         | "craft"
@@ -218,6 +220,9 @@ export type GameEvent =
 export interface Capsule {
   radius: number;
   height: number;
+  /** Optional fixed-axis box footprint for guided hull transfer. Radius remains the default. */
+  halfWidth?: number;
+  halfLength?: number;
 }
 export interface MoveResult {
   position: Vec3;

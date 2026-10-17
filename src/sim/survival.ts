@@ -179,7 +179,7 @@ export function updateThreat(
               : "The hunter commits. Break its line of sight or retreat toward the upper clear flank.",
           error: true,
         },
-        { type: "sound", cue: "warning" },
+        { type: "sound", cue: "warning", origin: { ...t.position } },
       );
   };
   if (!territory || (cover && t.modeSeconds > 1) || t.distraction) {
@@ -218,6 +218,6 @@ export function updateThreat(
     );
     if (v) v.health -= 12 * DT;
     else s.player.vitals.health -= 10 * DT;
-    if (s.tick % 60 === 0) events.push({ type: "sound", cue: "damage" });
+    if (s.tick % 60 === 0) events.push({ type: "sound", cue: "damage", origin: { ...t.position } });
   }
 }
