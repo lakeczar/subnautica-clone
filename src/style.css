@@ -90,7 +90,7 @@ button:active:not(:disabled) {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: safe center;
   background: linear-gradient(
     90deg,
     #102a35f5 0%,
@@ -706,6 +706,11 @@ h1 {
   background: #123b4ad9;
   padding: 10px 16px;
   border-radius: 3px;
+  display: grid;
+  gap: 7px;
+  width: max-content;
+  max-width: min(720px, 90vw);
+  line-height: 1.5;
 }
 .hazard:empty {
   display: none;
@@ -802,6 +807,7 @@ kbd {
   display: flex;
   gap: 12px;
   margin-top: 22px;
+  flex-wrap: wrap;
 }
 .panel-intro {
   color: #c4d7c7;
@@ -821,18 +827,18 @@ kbd {
   margin: 0 0 10px;
 }
 .game-panel p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.8;
   color: #c7d8c9;
 }
 .game-panel small {
-  font-size: 10px;
-  color: #b6cbbd;
+  font-size: 12px;
+  color: #cadccf;
 }
 .game-panel button {
   border: 1px solid #b8c7a35e;
   padding: 8px 12px;
-  font-size: 11px;
+  font-size: 13px;
   background: #294f55;
   margin: 3px;
 }
@@ -845,9 +851,58 @@ kbd {
 .recipe p {
   margin: 7px 0;
 }
+.recipe > div {
+  min-width: 0;
+  flex: 1;
+}
+.recipe > button {
+  max-width: 260px;
+  text-align: left;
+  line-height: 1.6;
+}
+.ingredient {
+  display: block;
+  color: #d6e7d3;
+}
+.ingredient.missing,
+.recipe-status {
+  color: #ffe0ad !important;
+}
+.recipe-ready {
+  color: #c4f0cf !important;
+}
+.equipment-note,
+#panel-feedback {
+  padding: 12px 16px;
+  border-left: 3px solid #d3c28c;
+  background: #183e4b;
+}
+#panel-feedback {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #163b48fa;
+}
+#panel-feedback.error {
+  border-color: #ffc789;
+  color: #ffe3bb;
+}
+.game-panel nav button[aria-current="page"] {
+  background: #49635a;
+  border-color: #e2cb97;
+  color: #fff0cf;
+}
+.game-panel .provenance {
+  color: #d3dfc9;
+  font-size: 12px;
+}
+.game-panel article,
+.game-panel button {
+  overflow-wrap: anywhere;
+}
 .container-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 16px;
 }
 .container-grid .container {
@@ -865,12 +920,12 @@ kbd {
   gap: 6px;
 }
 .item-row strong {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
 }
 .item-row button {
-  font-size: 10px;
-  padding: 5px 8px;
+  font-size: 12px;
+  padding: 7px 9px;
 }
 .service-actions {
   display: flex;
@@ -879,7 +934,7 @@ kbd {
 }
 .finding b {
   color: #f0d39a;
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
 }
@@ -942,5 +997,42 @@ kbd {
   .interact-prompt {
     bottom: 145px;
     width: 80vw;
+  }
+}
+@media (max-width: 680px) {
+  .recipe {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .recipe > button {
+    max-width: none;
+  }
+  .panel-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .game-panel article {
+    padding: 14px;
+  }
+  .container h3 {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .vitals {
+    top: 118px;
+    max-width: calc(100vw - 36px);
+    gap: 4px;
+  }
+  .vitals > div {
+    min-width: 0;
+    padding: 6px;
+  }
+  .vitals b {
+    font-size: 13px;
+  }
+  .hazard {
+    top: 222px;
+    font-size: 11px;
   }
 }
