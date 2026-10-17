@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: interruption/readiness correction integrated and coordinator checks passed (65 tests/build); fresh paired round-three reviews running on `50f5569`. ECO proposal accepted at `0a8ef04`; FND/M0 remain pending.
+Updated: 2026-10-17. State: Astra round three accepts FND-01 and provisional ECO-01 at `50f5569`; Sol's separate review is still running. Combined FND acceptance and integrated M0 remain pending.
 
 ## Authority and checkpoint
 
@@ -13,7 +13,7 @@ Updated: 2026-10-17. State: interruption/readiness correction integrated and coo
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-All earlier authors/reviewers and FND-01-R2-FIX have completed, with owned browser/server resources closed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. Author `1e2c581` / evidence `b60ac58` were cherry-picked as `2c25b8b` / `bcef1e1`; runtime/config/tests match the author tree. Fresh non-author Astra xhigh and Sol 6.1 max round-three reviews are running in isolated worktrees; three active agents including coordinator. [Exact IDs, brief and continuation](reviews/FND-ECO-R3.md).
+All earlier authors/reviewers and FND-01-R2-FIX have completed, with owned browser/server resources closed. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. Author `1e2c581` / evidence `b60ac58` were cherry-picked as `2c25b8b` / `bcef1e1`; runtime/config/tests match the author tree. Astra round three completed with acceptance and cleaned owned resources; Sol 6.1 max round three is still running in its isolated worktree. Two active agents including coordinator. [Exact IDs, report and continuation](reviews/FND-ECO-R3.md).
 
 ## Acceptance and evidence
 
@@ -28,7 +28,7 @@ All earlier authors/reviewers and FND-01-R2-FIX have completed, with owned brows
 
 ## Exact next action
 
-Await both round-three completion notifications and read results using the exact IDs in [the record](reviews/FND-ECO-R3.md); do not duplicate active tasks. Both received frozen `50f5569a92a6e18aac8970ecdb7918e5e217a455`, the original brief, all four prior reports/dispositions, proposed fixes and actual evidence/limits. Reconcile findings and require both explicit FND acceptances at the same revision, followed by feature PR integration and the separate M0 milestone gate. Later documentation-only task bookkeeping does not alter reviewed source.
+Await Sol round-three completion and read its exact task ID in [the record](reviews/FND-ECO-R3.md); do not duplicate it. Astra accepted `50f5569a92a6e18aac8970ecdb7918e5e217a455` with all prior findings resolved. If Sol accepts the same revision, record paired acceptance, prepare/publish actual PR evidence, open/link the foundation feature PR into game/siltwake, integrate and perform the separate M0 milestone gate. If Sol finds a substantiated issue, reconcile/fix through Sol and repeat fresh dual review. Public main merge/deployment remain owner actions. No construction PR exists yet; the public repo/default main and planning PR #1 were read-only verified during preparation.
 
 Reconcile independent findings, have Sol fix substantiated issues and return the corrected revision to both reviewers. After acceptance, integrate through a feature PR and verify the integrated M0 milestone before dependent implementation. ECO-01 is provisional arithmetic, not runtime routes or recovery proof; later production-registry adoption needs its own integration review. No additional owner decision is needed to continue.
 

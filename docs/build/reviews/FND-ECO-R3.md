@@ -1,6 +1,6 @@
 # FND-01 / ECO-01 independent review, round 3
 
-Status: two fresh reviews running; no FND/M0 acceptance yet. Date: 2026-10-17.
+Status: Astra accepts FND-01 and provisional ECO-01; Sol remains running. No combined FND or integrated M0 acceptance yet. Date: 2026-10-17.
 
 - Frozen candidate: `50f5569a92a6e18aac8970ecdb7918e5e217a455`.
 - Prior candidate: `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc`; earliest review: `2eb0244`.
@@ -10,7 +10,7 @@ Status: two fresh reviews running; no FND/M0 acceptance yet. Date: 2026-10-17.
 
 | Reviewer | Model / effort | Task ID | Stable request ID | State |
 | --- | --- | --- | --- | --- |
-| Astra | `gpt-6-astra` / `xhigh` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-astra-r3-50f5569` | `siltwake-fnd-eco-astra-r3-50f5569` | Running |
+| Astra | `gpt-6-astra` / `xhigh` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-astra-r3-50f5569` | `siltwake-fnd-eco-astra-r3-50f5569` | Complete: FND / ECO accept |
 | Sol | `gpt-6.1-sol` / `max` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-sol-r3-50f5569` | `siltwake-fnd-eco-sol-r3-50f5569` | Running |
 
 Both use provider `codex` and T3-isolated worktrees, with exact requested model/effort selections. These are fresh task invocations; no backing thread was reused as a review round. Neither reviewer authored the candidate. Expected reports: `/tmp/siltwake-fnd-eco-astra-r3.md` and `/tmp/siltwake-fnd-eco-sol-r3.md`.
@@ -26,6 +26,14 @@ Coordinator inspected source/tests, confirmed the integrated tree matches author
 ## Continuation
 
 Await completion notifications; read exact task IDs without duplicating active work. Reconcile findings, direct substantiated Sol corrections if any, and freeze a new candidate for fresh paired reviews after functional/contract changes. Require both explicit FND acceptances at one SHA. ECO requires explicit same-candidate carry-forward of its limited unchanged proposal scope. Then open/link the foundation feature PR into game/siltwake, integrate the accepted feature and perform the separate integrated M0 gate before M1 implementation. Keep main merge/public deployment with the owner; preserve spoilers.
+
+## Astra verdict
+
+[Full independent round-three report](FND-ECO-R3-ASTRA.md): **FND-01 ACCEPT; ECO-01 ACCEPT** at `50f5569a92a6e18aac8970ecdb7918e5e217a455`, with ECO limited to provisional arithmetic/design. All prior findings resolved; no new actionable blocking defect or scope reduction found. Integrated M0 remains pending and the separate Sol verdict has not arrived.
+
+Astra ran fresh install, 65/65 tests, production build, economy checker and whitespace/source comparisons. Its actual production run used ordinary movement/save/reload, then native-held writes with synthetic-focus New and induced-graphics import diagnostics. Both completed paused until explicit Resume; actual restored queued/completed import screenshots were visually inspected, with no invalid-resource warnings observed. Exact measurements/artifacts and historical-versus-fresh attribution are in the report. Hardware/human/real-focus/visibility limits remain explicit. Owned tab/server closed; no live child work.
+
+Coordinator verified the report's exact revision, scope and resolved findings. Await Sol's independent verdict before accepting the pair or integrating. Public repository still has only planning PR #1; foundation PR/evidence preparation can proceed locally, but no construction PR has been opened yet.
 
 ## Common round-three brief
 

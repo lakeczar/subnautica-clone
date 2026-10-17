@@ -35,4 +35,4 @@ Both round-two reviews of `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc` are complet
 
 ## Active round-three reviews
 
-Fresh T3-isolated Astra xhigh and separate Sol 6.1 max reviews are running on `50f5569a92a6e18aac8970ecdb7918e5e217a455`. [Exact task/request IDs, complete brief, proposed resolutions and continuation](reviews/FND-ECO-R3.md). Three active agents including coordinator; no author remains active. Wait for completion notifications. FND/M0 remain unaccepted; ECO is still only a provisional arithmetic/design proposal.
+Round three uses `50f5569a92a6e18aac8970ecdb7918e5e217a455`. Astra xhigh completed with FND/ECO acceptance, all prior findings resolved, no live children and owned resources closed. Separate Sol 6.1 max is still running in its isolated worktree. [Exact task/request IDs, report and continuation](reviews/FND-ECO-R3.md). Two active agents including coordinator; no author remains active. Await Sol before paired FND acceptance. M0 remains separate; ECO is provisional arithmetic/design only.
