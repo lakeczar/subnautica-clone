@@ -41,7 +41,7 @@ The approximately ten-hour main-story target still needs real first-time playtes
 
 ## Authoring and review boundaries
 
-Astra's lore writer owns the [canon appendix — major story spoilers](spoilers/NARRATIVE_CANON.md) and chronology. Astra's coordinator reconciles it with geography, resources, vehicle progression and the accepted scope. Sol 6.1 max artists receive the visual and reveal-tier information needed for their assets; they do not invent incompatible historical facts.
+The Astra `xhigh` coordinator sets story direction, approves canon changes, and reconciles the [canon appendix — major story spoilers](spoilers/NARRATIVE_CANON.md) and chronology with geography, resources, vehicle progression and the accepted scope. Assign lore/content authoring and implementation to **Sol 6.1 max**, including canon edits under exclusive path ownership. The Sol lore writer reads the canon and proposes any historical changes to the coordinator before implementing dependent content. Sol graphics workers receive the visual and reveal-tier information needed for their assets and follow the approved history. Lore batches use the same independent non-author Astra/Sol review gate as other implementation.
 
 The main build input, README, PR description and ordinary chat summaries remain readable without revealing the ending. The full build input explicitly references the writer appendix so implementation agents can read the truth. Filenames, scene titles and objective labels should not accidentally disclose it. The appendix is in a public repo and is not private; the separation is a courtesy to readers choosing to avoid spoilers.
 
