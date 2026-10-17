@@ -29,3 +29,16 @@ Official OpenAI guidance was fetched for [persistent agent instructions](https:/
 ## Document and review-viewer checks
 
 At `8a66bbc`, the coordinator checked whitespace, local Markdown link targets, all fifteen unique canonical clue IDs against their world placements, and the eight unique material-source rows. The review viewer contained that revision's complete 17,023-character / 2,254-word input, six fleet roles and functioning section selection. Its 728-pixel T3 HTML preview produced no console errors. That viewer predates the dual-review amendment; the current [build input](../prompts/BUILD_GAME_REVISED.md) is authoritative. These are document/viewer checks, not gameplay tests.
+
+## Dual-review amendment — 2026-10-17
+
+Batch: `planning-review-contract`. Specification/base: `8a66bbc4419c92e6d0872203143be48885d82c54` plus the owner's request for Astra xhigh and Sol max reviewers of completed/delegated work. Candidate: `c2f129bc357917618daafaf99212d4e9c3520c90`. Scope: the eight changed documents defining coordinator effort, feature/batch and integrated milestone coverage, reviewer independence, correction rounds, evidence records and the existing planning-only boundary.
+
+| Independent reviewer | Native task ID | Model / effort | Findings and verdict |
+| --- | --- | --- | --- |
+| [Astra report](../.scratch/siltwake/artifacts/review-contract-astra.md) | `/root/review_contract_astra` | `gpt-6-astra` / `xhigh` | No mandatory corrections or blocking findings; **ACCEPT** candidate `c2f129b` |
+| [Sol report](../.scratch/siltwake/artifacts/review-contract-sol.md) | `/root/review_contract_sol` | `gpt-6.1-sol` / `max` | No mandatory corrections or blocking findings; **ACCEPT** candidate `c2f129b` |
+
+Both reviewers were spawned separately with explicit model/effort and no inherited conversation, authored none of the amendment, and formed their initial findings without seeing the other report. The native spawn records establish the requested configurations; the live T3 catalog separately confirmed their availability. Coordinator self-inspection was additional. No fixes or rejected findings were needed, so no correction round was necessary.
+
+At the candidate, whitespace checks passed and all 52 relative Markdown link targets resolved across 28 tracked Markdown files. The review anchor exists. The revised input is 17,787 characters / 2,350 words. Both reviewers independently checked the diff's whitespace. These checks establish documentation consistency only; no game/browser construction, gameplay tests, human playtests or GPU measurements were performed. The later report-recording commit does not change the reviewed contract and is not represented as independently reviewed.
