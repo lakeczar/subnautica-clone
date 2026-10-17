@@ -40,3 +40,6 @@ Carrier feasibility has a separate fixture and later a campaign run: station kee
 
 
 Combined M1 source `4d0a7f0` has root 137-test/typecheck/build checks and successful old-operation tow diagnostics. Earlier earned CORE, RECOVERY and final-source RENDER/RECOVERY-FIX replays retain their exact author attribution in evidence reports. The [combined-play tasks](tasks/M1-COMBINED-PLAY.md) now close composed production P0–P5/F0–F3 before batch reviews; neither planned runs nor isolated results count as those passes.
+
+
+Combined CARRIER validation is completed on `4d0a7f0`: actual seeded F0–F3 control/save evidence, including final glass/yaw views, compact/medium passage, independent dry craft, launch/capture, interruption and labelled pod fallback. Root verified 327 payload hashes/329 archive files, inspected actual captures/selected frames and reproduced 17 audit assertions with 14 full-state comparisons. [Author report](evidence/M1-COMBINED-CARRIER.md); [root disposition and limits](evidence/M1-COMBINED-CARRIER-INTEGRATION.md). This is not campaign acquisition or registered-mobile-home fallback, and remains provisional. Fresh EXPEDITION and earned-save RECOVERY validators continue; both independent acceptance gates remain open. No unchanged broad suite was rerun for the evidence-only merge.
