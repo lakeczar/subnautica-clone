@@ -6,11 +6,11 @@ import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import type { GameState } from "../sim/types.js";
 import { eyeHeight } from "../sim/state.js";
 import { inCanopyAir } from "../sim/inventory.js";
-import { createCelMaterial } from "./materials.js";
+import { createCelMaterial, createGlassMaterial, updateOpticalUniforms } from "./materials.js";
 import { createEnvironment } from "./environment.js";
 import { createLandmarks } from "./landmarks.js";
 import { createEcology } from "./ecology.js";
-import { createExpeditionArt } from "./expedition.js";
+import { createExpeditionArt, DART_SEAT } from "./expedition.js";
 import { createAtmosphere } from "./atmosphere.js";
 
 export type Quality = "rich" | "light";
@@ -60,10 +60,11 @@ export function createRenderer(
     camera.fov = 1.02;
     scene.activeCamera = camera;
     const cel = createCelMaterial(scene);
+    const glass = createGlassMaterial(scene);
     createEnvironment(scene, cel);
-    createLandmarks(scene, cel);
+    createLandmarks(scene, cel, glass);
     const life = createEcology(scene, cel);
-    const expedition = createExpeditionArt(scene, cel);
+    const expedition = createExpeditionArt(scene, cel, glass);
     for (const mesh of scene.meshes) mesh.renderingGroupId = 1;
     const { water, sky } = createAtmosphere(scene);
     let eye = 1.62;
@@ -116,6 +117,7 @@ export function createRenderer(
       present(state) {
         if (disposed || !available) return;
         const time = state ? state.tick / 60 : 0;
+        expedition.update(state);
         if (state) {
           const pose = state.player.pose;
           if (state.opening.phase < 4) {
@@ -131,12 +133,18 @@ export function createRenderer(
             );
             camera.rotation.z = Math.sin(t * 1.8) * 0.015 * (3 - phase);
           } else {
-            eye += (eyeHeight(state) - eye) * 0.16;
-            camera.position.set(
-              pose.position.x,
-              pose.position.y + eye,
-              pose.position.z,
-            );
+            const dart = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId && v.hull === "dart");
+            if (dart) {
+              const hull = scene.getMeshByName(dart.id)!;
+              camera.position.copyFrom(Vector3.TransformCoordinates(
+                new Vector3(DART_SEAT.x, DART_SEAT.y, DART_SEAT.z),
+                hull.computeWorldMatrix(true),
+              ));
+              eye = eyeHeight(state);
+            } else {
+              eye += (eyeHeight(state) - eye) * 0.16;
+              camera.position.set(pose.position.x, pose.position.y + eye, pose.position.z);
+            }
             const direction = new Vector3(
               Math.sin(pose.yaw) * Math.cos(pose.pitch),
               Math.sin(pose.pitch),
@@ -154,20 +162,13 @@ export function createRenderer(
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
         const fog = Color3.FromHexString(interior ? "#486e76" : underwater ? "#226e7e" : "#96c5b9");
         scene.clearColor = new Color4(fog.r, fog.g, fog.b, 1);
-        cel.setVector3("cameraPosition", camera.position);
-        cel.setColor3("fogColor", fog);
+        updateOpticalUniforms([cel, glass, water, sky], camera.position, state);
         cel.setFloat("underwater", underwater);
-        sky.setFloat("underwater", underwater);
         cel.setFloat("time", time);
-        water.setVector3("cameraPosition", camera.position);
         water.setFloat("time", time);
         life.update(time);
-        expedition.update(state);
-        cel.setFloat(
-          "fogDensity",
-          state && state.player.pose.position.x > 65 ? 0.017 : 0.027,
-        );
         canvas.dataset.water = underwater ? "underwater" : "above";
+        canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
         scene.render();
         canvas.dataset.ready = scene.isReady() ? "true" : "false";
         canvas.dataset.frames = String(++presented);

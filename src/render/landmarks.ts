@@ -8,8 +8,9 @@ import type { Scene, ShaderMaterial } from "@babylonjs/core";
 import { FACILITY_SOLIDS, POD_DECK, POD_RAMP, RIB_SEGMENTS } from "../sim/world.js";
 import { ArtBatch } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
+import { createObservationPane, wallWithOpening } from "./materials.js";
 
-export function createLandmarks(scene: Scene, cel: ShaderMaterial): void {
+export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial): void {
   const rib = new ArtBatch("landmark.reef-ribs", scene, cel);
   RIB_SEGMENTS.forEach(({ a, b, radius }, i) => {
     rib.tube(
@@ -42,8 +43,15 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial): void {
   for (let z = 10.8; z < 24; z += 1.2)
     pod.box([0, 0.19, z], [5.5, 0.025, 0.07], "#426a70");
   for (const side of [-1, 1]) {
-    pod.box([side * 3.25, 1.7, 21.6], [0.65, 3.5, 5.4], P.porcelain);
-    pod.box([side * 2.91, 2.1, 22], [0.06, 1.05, 2.7], P.glass);
+    wallWithOpening(pod, [side * 3.25, 1.7, 21.6], [0.65, 3.5, 5.4], {
+      center: [side * 3.25, 2.1, 22], width: 2.7, height: 1.05, normal: "x",
+    }, P.porcelain);
+    createObservationPane(scene, glass, `pod.pane.side.${side}`, [
+      [side * 3.25, 1.575, 20.65], [side * 3.25, 1.575, 23.35],
+      [side * 3.25, 2.625, 23.35], [side * 3.25, 2.625, 20.65],
+    ]);
+    for (const y of [1.575, 2.625])
+      pod.box([side * 2.91, y, 22], [.045, .065, 2.78], P.metal);
     pod.box([side * 2.86, 2.6, 22], [0.04, 0.06, 2.2], P.reflection);
     pod.box([side * 3.2, -0.8, 21], [1.5, 1.7, 5], P.petrol);
     pod.box([side * 3.37, 0.5, 21.5], [0.6, 0.35, 5.2], P.ochre);
@@ -59,8 +67,14 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial): void {
     );
     pod.box([side * 2.4, 3.38, 21.5], [0.4, 0.12, 4], P.warm);
   }
-  pod.box([0, 1.9, 24.1], [6.9, 3.8, 0.3], P.porcelain);
-  pod.box([0, 2.1, 23.91], [3.8, 1.3, 0.09], P.glass);
+  wallWithOpening(pod, [0, 1.9, 24.1], [6.9, 3.8, .3], {
+    center: [0, 2.1, 24.1], width: 3.8, height: 1.3, normal: "z",
+  }, P.porcelain);
+  createObservationPane(scene, glass, "pod.pane.rear", [
+    [-1.9, 1.45, 24.1], [1.9, 1.45, 24.1], [1.9, 2.75, 24.1], [-1.9, 2.75, 24.1],
+  ]);
+  for (const y of [1.45, 2.75]) pod.box([0, y, 23.91], [3.9, .075, .07], P.metal);
+  for (const x of [-1.9, 1.9]) pod.box([x, 2.1, 23.91], [.075, 1.3, .07], P.metal);
   pod.box([0, 3.85, 21.8], [7.2, 0.3, 5.1], P.petrol);
   pod.box([0, 3.65, 22], [5.4, 0.05, 3.7], "#c8c8a5");
   for (const x of [-2, 2])
