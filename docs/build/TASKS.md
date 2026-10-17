@@ -57,3 +57,12 @@ Foundation PR #2 is merged into `game/siltwake`; continuing draft integration PR
 ## M1 ownership transition requested by owner
 
 The owner asked to split the broad build and add Astra subagent coordination. [Coordination revision](tasks/M1-COORDINATION.md) preserves full M1 scope. Existing Sol task received in-flight steering request `siltwake-m1-decompose-checkpoint-20261017` with delivery `steered`: finish current bounded check, commit coherent work, report remaining scope/path seams, close owned resources and return a provisional handoff. Checkpoint inspected read-only: `5fd633879d7c8e059c7ff5cb6a6200895e1f7d93`; author reports 97 passing tests. No independent M1 acceptance or accepted integration is claimed. No other implementation owner has been assigned; only a read-only advisory Astra is being prepared.
+
+## Active M1 coordination advice
+
+- Task ID: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-coordinate-astra-5fd6338`.
+- Stable request ID: `siltwake-m1-coordinate-astra-5fd6338`.
+- Provider/model/effort: `codex` / `gpt-6-astra` / `xhigh`, live catalog verified; T3-isolated worktree, role design, async. Running with no pending question or nested work at dispatch. Three active agents including root and existing main Sol builder.
+- Specification baseline: `8ffdfc22504badae587cd4b2fb672b83fa175303`. Immutable source being assessed via Git objects: `5fd633879d7c8e059c7ff5cb6a6200895e1f7d93` (provisional M1, not parent M0 tree). No source edits, commits, PRs or children allowed. Report only `/tmp/siltwake-m1-coordination-astra.md`.
+- Purpose: [coordination revision](tasks/M1-COORDINATION.md), concrete remaining-work matrix, exact non-overlapping Sol assignments, minimum necessary shared seams, dependency order and integrated route/carrier checks. Read final builder handoff if available; identify its source separately. No waiting/polling for the author. This advice is not a feature-acceptance verdict and this advisor must not serve as independent reviewer of its own contribution.
+- On both completion notifications, reconcile advice and committed author handoff, stage a provisional feature baseline, then assign narrow implementation roles. Only root dispatches; main Sol retains shared simulation/save/runtime ownership. Respect four slots, rotate the advisor out before three implementation workers. No mutating specialist starts until previous path owner explicitly releases its paths.

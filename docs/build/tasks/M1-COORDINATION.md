@@ -8,7 +8,7 @@ The main builder has a provisional committed checkpoint at `5fd633879d7c8e059c7f
 
 Root sent an in-flight steering message to the existing implementation task, stable request `siltwake-m1-decompose-checkpoint-20261017`, successfully delivered as **steered**. It asks Sol to finish its current bounded check, commit coherent fixes, produce `/tmp/siltwake-m1-builder-handoff.md` plus assigned evidence as appropriate, identify remaining M1 work and clean owned resources before returning. Broad art/content polish should not expand further during this handoff. No cancellation or loss of current work is intended. The old owner retains its paths until its explicit handoff/termination; no mutating specialist may overlap it.
 
-A separate Astra xhigh technical lead will inspect the immutable checkpoint and propose practical module boundaries, remaining-work assignments, dependencies and integration checks. It is a bounded advisory role, not an additional dispatcher or acceptance reviewer. Root remains accountable for scope, shared contracts, task dispatch, integration and PRs. Advice and author-reported progress do not close M1 criteria.
+A separate Astra xhigh technical lead is running (exact task ID in [TASKS](../TASKS.md#active-m1-coordination-advice)) to inspect the immutable checkpoint and propose practical module boundaries, remaining-work assignments, dependencies and integration checks. It is a bounded advisory role, not an additional dispatcher or acceptance reviewer. Root remains accountable for scope, shared contracts, task dispatch, integration and PRs. Advice and author-reported progress do not close M1 criteria.
 
 ## Intended team after the handoff
 
