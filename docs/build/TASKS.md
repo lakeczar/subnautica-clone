@@ -98,3 +98,8 @@ All three tasks are async T3-isolated worktrees from `c0aa5cb386a6b98ff8fa7c95d1
 - **DESIGN-PREP Sol R1** task: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-design-prep-sol-r1-c0aa5cb`. Request `siltwake-design-prep-sol-r1-c0aa5cb`; `codex/gpt-6.1-sol`, `max`, review. Running; output only `/tmp/siltwake-design-prep-sol-r1.md`.
 
 [Review scope/record](reviews/DESIGN-PREP-R1.md). Both reviewers are non-authors and receive identical frozen scope/evidence independently; no M1/runtime acceptance is requested. Completion notifications wake root. Read task_status then reconcile rather than polling or duplicating tasks. If source fixes return first, do not use these research-only reviewers as a substitute for the later gameplay batch reviews.
+
+
+### Provisional M1 PR
+
+[Draft PR #4](https://github.com/lakeczar/subnautica-clone/pull/4), `feat/siltwake-first-expedition` → `game/siltwake`, is created and T3-linked. Body/head/base/draft verified; known save defects, incomplete playable evidence and no M1 acceptance are explicit. Continuing PR #3 links it; source remains outside the accepted integration branch. Both descriptions distinguish the research review from actual gameplay/design acceptance. No main merge or public deployment.
