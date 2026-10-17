@@ -386,3 +386,13 @@ Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3
 Task `siltwake-opus-design-r1-a5260c9` returned completed, no children/question, owned resources closed. Report-only 59949d0 is retained by merge; [root disposition](reviews/OPUS-DESIGN-R1-DISPOSITION.md) records evidence, corrections and all OD findings. Claude Opus 5.5 confirmed; high requested, effective effort unverified. No new owner decision is needed. Carrier task from f2129a3 was read once after context recovery: still running, existing exclusive paths unchanged.
 
 Prepare LOOK (nine existing render files, affected render lifecycle test, own evidence; 5191) and UI-CLARITY (view/CSS, focused presentation tests, own evidence; 5192) as Sol 6.1 max isolated worktree tasks. Both ports checked free. Root owns records/contracts/integration; no children or cross-owner changes. Live catalog verifies codex/gpt-6.1-sol with max and root Astra xhigh. Commit these briefs before dispatch. Ordinary depleted-power and integrated M1 remain open; no acceptance implied.
+
+
+### LOOK and UI-CLARITY dispatched from e06035d
+
+Both async T3 worktree delegates started from clean `e06035df95a8ffe72f425a98dcb2e767b507b774`, production unchanged47d8872. Target codex/gpt-6.1-sol with explicit reasoningEffort=max; returned provider/model match and status running, no children/questions. Complete committed briefs supplied.
+
+- LOOK: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-look-sol-max-e06035d`; stable request `siltwake-m1-look-sol-max-e06035d`; exclusive render/lifecycle/evidence paths, port5191.
+- UI-CLARITY: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-ui-clarity-sol-max-e06035d`; stable request `siltwake-m1-ui-clarity-sol-max-e06035d`; exclusive view/CSS/presentation-test/evidence paths, port5192.
+
+Backing thread IDs use the same suffix with `thread:delegated-task:` prefix. Carrier correction retains its exact f2129a3 parent, sim/world/carrier ownership and5193. Four active agents including root; no root browser/server. Receive notifications, inspect actual results, assemble affected checks, then freeze a fresh paired-review candidate. No peer polling, new delegate or premature M1 acceptance. Gameplay/economy/canon follow-up remains tracked in the Opus disposition.
