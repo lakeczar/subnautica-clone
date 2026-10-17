@@ -74,9 +74,20 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
           fans.tube([stem, mid, tip], 0.045, P.amber, 5);
           if (rib < 6) {
             const next: Point = [fx + Math.sin(angle + 0.36) * 1.55, fy + 0.7 + Math.cos(angle + 0.36) * 2.3, upstreamZ + 0.7];
-            fans.face([stem, tip, next], rib % 2 ? '#65b9a6' : '#ba8ca0');
+            const middle: Point = [(stem[0] + tip[0] + next[0]) / 3, (stem[1] + tip[1] + next[1]) / 3, upstreamZ + 0.23];
+            fans.face([stem, tip, middle], rib % 2 ? P.coral : '#ca8e9f');
+            fans.face([middle, tip, next], P.coralRim);
+            fans.face([stem, middle, next], '#b282a6');
+            // Cross-veins and the bright outer lip make an open membrane,
+            // rather than a stack of flat alternating triangles.
+            for (const t of [0.45, 0.72]) {
+              const at = (p: Point): Point => [stem[0] + (p[0] - stem[0]) * t, stem[1] + (p[1] - stem[1]) * t, stem[2] + (p[2] - stem[2]) * t - 0.035];
+              fans.tube([at(tip), at(next)], 0.018, P.shell, 4);
+            }
+            fans.tube([tip, next], 0.027, P.coralRim, 5);
           }
         }
+        fans.tube([[fx, fy + 0.18, upstreamZ], [fx + offset * 0.12, fy + 0.1, upstreamZ + 1.1], [fx + offset * 0.2, terrainHeight(fx, upstreamZ + 1.7) + 0.06, upstreamZ + 1.7]], 0.07, P.petrol, 6);
       }
       fans.finish();
       for (let n = 0; n < 8; n++) {
@@ -90,15 +101,44 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
       for (let n = 0; n < 2; n++) {
         const grazer = new ArtBatch(`ecology.grazer.${id}.${n}`, scene, cel);
         grazer.ellipsoid([0, 0.25, 0], [0.42, 0.28, 0.65], '#cedcb7', 8);
+        grazer.ellipsoid([0, 0.13, -0.05], [0.36, 0.1, 0.63], P.jade, 8);
         for (const side of [-1, 1]) {
           grazer.tube([[side * 0.2, 0.17, -0.45], [side * 0.27, 0.08, -0.7]], 0.045, P.jade, 5);
           grazer.ellipsoid([side * 0.18, 0.3, -0.49], [0.06, 0.06, 0.06], P.ink, 5);
+          for (let leg = 0; leg < 3; leg++)
+            grazer.tube([[side * 0.22, 0.14, -0.3 + leg * 0.26], [side * 0.45, 0.05, -0.4 + leg * 0.26], [side * 0.51, 0.04, -0.25 + leg * 0.26]], 0.028, P.ochre, 5);
+          grazer.tube([[side * 0.28, 0.37, -0.35], [side * 0.38, 0.34, 0.1], [side * 0.22, 0.36, 0.49]], 0.022, P.shell, 5);
         }
         for (let rib = 0; rib < 4; rib++)
           grazer.box([0, 0.5, -0.25 + rib * 0.18], [0.32, 0.04, 0.045], P.petrol);
         const mesh = grazer.finish(); mesh.unfreezeWorldMatrix();
         grazers.push({ mesh, x, y: y - 0.6, z, phase: n * Math.PI + random() });
       }
+    }
+    if (source.asset === 'crust' || source.asset === 'resin') {
+      const host = new ArtBatch(`ecology.holdfast.${id}`, scene, cel);
+      // Off-axis living host leaves the registered collectable and approach clear.
+      const hx = x + 2.6, hz = z - 1.8, floor = terrainHeight(hx, hz);
+      for (const side of [-1, 1])
+        host.tube([[hx + side * 1.1, terrainHeight(hx + side * 1.1, hz) + 0.03, hz], [hx + side * 0.5, floor + 0.45, hz], [hx, floor + 2.4, hz]], 0.12, P.petrol, 6);
+      host.tube([[hx, floor + 0.15, hz], [hx + 0.15, floor + 2.4, hz], [hx + 0.6, floor + 5.1, hz + 0.5]], 0.13, P.petrol, 7);
+      host.ellipsoid([hx + 0.6, floor + 5.1, hz + 0.5], [1.35, 0.9, 1], source.asset === 'resin' ? P.amber : P.jade, 10);
+      for (let vein = 0; vein < 4; vein++) {
+        const dx = -1.2 + vein * 0.7;
+        host.face([[hx + 0.6, floor + 5.5, hz + 0.5], [hx + dx, floor + 6.5, hz - 0.2], [hx + dx * 1.8, floor + 6.0, hz - 2.7], [hx + dx * 1.3, floor + 5.6, hz - 2.1]], vein % 2 ? P.jade : '#479c91');
+        host.tube([[hx + 0.6, floor + 5.55, hz + 0.5], [hx + dx, floor + 6.4, hz - 0.2], [hx + dx * 1.8, floor + 6.0, hz - 2.7]], 0.025, P.mint, 5);
+      }
+      if (source.asset === 'resin') {
+        // A cured scar above the loose amber nodules teaches shed provenance.
+        host.ellipsoid([hx + 0.3, floor + 4.55, hz + 0.1], [0.43, 0.13, 0.4], P.orange, 8);
+      } else {
+        for (let fin = 0; fin < 3; fin++) {
+          const fx = x - 0.7 + fin * 0.65;
+          host.face([[fx, y - 0.8, z - 0.9], [fx, y + 0.2, z - 0.6], [fx, y + 0.05, z + 0.9], [fx, y - 0.8, z + 1.1]], P.petrol);
+          host.tube([[fx, y + 0.2, z - 0.6], [fx, y + 0.05, z + 0.9]], 0.032, P.ochre, 5);
+        }
+      }
+      host.finish();
     }
   }
 

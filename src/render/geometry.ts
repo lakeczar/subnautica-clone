@@ -96,6 +96,34 @@ export class ArtBatch {
     return this.paint(mesh, color);
   }
 
+  /** A pressure bezel with an actual opening, rather than a painted-on disc.
+   * u/v are unit axes in the fitting's plane. Original 20711d1 ring construction. */
+  ring(p: Point, u: Point, v: Point, outer: number, inner: number, color: string, sides = 12): void {
+    const point = (r: number, i: number): Point => {
+      const a = i / sides * Math.PI * 2;
+      const x = r * Math.cos(a), y = r * Math.sin(a);
+      return [p[0] + u[0] * x + v[0] * y, p[1] + u[1] * x + v[1] * y, p[2] + u[2] * x + v[2] * y];
+    };
+    for (let i = 0; i < sides; i++)
+      this.face([point(outer, i), point(outer, i + 1), point(inner, i + 1), point(inner, i)], color);
+  }
+
+  /** Shallow chamfered equipment plate; the corners describe manufactured scale.
+   * The datum is its front face, facing -Z before yaw, with depth behind it. */
+  panel(p: Point, size: readonly [number, number], depth: number, color: string, yaw = 0, chamfer = 0.1): void {
+    const w = size[0] / 2, h = size[1] / 2;
+    const c = Math.min(chamfer, w * 0.4, h * 0.4);
+    const outline = [[-w + c, -h], [w - c, -h], [w, -h + c], [w, h - c], [w - c, h], [-w + c, h], [-w, h - c], [-w, -h + c]];
+    const at = (q: number[], z: number): Point => [p[0] + q[0]! * Math.cos(yaw) + z * Math.sin(yaw), p[1] + q[1]!, p[2] - q[0]! * Math.sin(yaw) + z * Math.cos(yaw)];
+    const front = outline.map((q) => at(q, 0)), back = outline.map((q) => at(q, depth));
+    this.face(front, color);
+    this.face([...back].reverse(), color);
+    for (let i = 0; i < front.length; i++) {
+      const j = (i + 1) % front.length;
+      this.face([front[i]!, back[i]!, back[j]!, front[j]!], color);
+    }
+  }
+
   /** Original faceted cross-section loft, adapted from the 20711d1 cel sculpture technique. */
   loft(
     sections: readonly { z: number; w: number; low: number; high: number }[],

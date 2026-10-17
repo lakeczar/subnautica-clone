@@ -1,8 +1,10 @@
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
+import { Vector4 } from "@babylonjs/core/Maths/math.vector.js";
+import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder.js";
-import type { Mesh, Scene, ShaderMaterial } from "@babylonjs/core";
+import type { Scene, ShaderMaterial } from "@babylonjs/core";
 import { FACILITY_SOLIDS, POD_DECK, POD_RAMP, RIB_SEGMENTS } from "../sim/world.js";
 import { ArtBatch } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
@@ -65,6 +67,34 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial): void {
     pod.box([x, 1.95, 19.45], [1, 3.3, 0.4], P.porcelain);
   pod.box([0, 3.2, 19.45], [3.2, 0.55, 0.4], P.petrol);
   pod.box([0, 3.12, 19.18], [2.9, 0.1, 0.08], P.warm);
+  // Pressure-frame cheeks and retained hatch guides stop outside the open
+  // doorway. The entrance remains a continuous view and walking line to shore.
+  for (const side of [-1, 1]) {
+    pod.panel([side * 2.22, 1.85, 19.2], [0.47, 2.9], 0.1, P.shade, 0, 0.14);
+    pod.box([side * 1.51, 1.8, 19.23], [0.035, 2.7, 0.07], P.metal);
+    for (const y of [0.6, 2.8]) {
+      pod.box([side * 2.02, y, 19.14], [0.3, 0.17, 0.09], P.petrol);
+      pod.box([side * 2.02, y, 19.085], [0.16, 0.07, 0.02], P.ochre);
+    }
+    // Panel rhythm wraps the existing side wall; no new wall occupies the deck.
+    for (const z of [20.0, 21.7, 23.35]) {
+      pod.box([side * 3.58, 1.8, z], [0.025, 3.2, 0.035], P.seam);
+      pod.box([side * 2.895, 2.1, z], [0.025, 1.1, 0.045], P.metal);
+    }
+    pod.box([side * 3.62, 3.35, 21.6], [0.1, 0.1, 4.7], P.ochre);
+    pod.box([side * 2.82, 0.4, 22.7], [0.07, 0.12, 1.4], P.warm);
+    for (const z of [20, 23.1]) {
+      pod.panel([side * 3.59, 1.1, z], [0.7, 0.45], 0.025, P.petrol, -side * Math.PI / 2);
+      for (let i = 0; i < 4; i++)
+        pod.box([side * 3.62, 1.0 + i * 0.07, z], [0.025, 0.025, 0.48], P.metal);
+    }
+  }
+  // Deck inlays lead to the ramp without resembling a row of pickups.
+  for (let z = 10.7; z < 19; z += 1.2) {
+    pod.box([0, 0.207, z], [0.12, 0.012, 0.62], P.ochre);
+    for (const x of [-2.55, 2.55])
+      pod.box([x, 0.207, z], [0.28, 0.012, 0.05], P.steelLight);
+  }
   // Working bench and identifiable locker face actual simulation interaction positions.
   pod.box([2.1, 1.36, 20.9], [1.45, 0.18, 2.7], P.metal);
   pod.box([2.05, 1.53, 20.45], [0.9, 0.16, 0.7], P.ochre);
@@ -80,8 +110,6 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial): void {
     P.porcelain,
     5,
   );
-  pod.box([-2.2, 1.72, 21.1], [1.0, 0.75, 0.3], P.petrol);
-  pod.ellipsoid([-1.68, 1.78, 21.1], [0.05, 0.23, 0.23], P.warm, 10);
   pod.tube(
     [
       [-2.7, 2.7, 23.6],
@@ -92,6 +120,30 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial): void {
     P.ochre,
     6,
   );
+  // Scored regulator: a protected side-wall instrument within reach of C01.
+  // Its mechanical face, not a floating clue identifier, supplies the affordance.
+  pod.panel([-2.82, 1.65, 21.05], [1.65, 1.85], 0.06, P.shade, -Math.PI / 2, 0.18);
+  pod.panel([-2.745, 1.68, 21.05], [1.31, 1.48], 0.025, P.petrol, -Math.PI / 2);
+  pod.ellipsoid([-2.7, 1.85, 20.9], [0.035, 0.28, 0.28], P.shell, 12);
+  pod.ring([-2.65, 1.85, 20.9], [0, 0, 1], [0, 1, 0], 0.31, 0.265, P.ochre);
+  pod.tube([[-2.62, 1.85, 20.9], [-2.62, 2.02, 20.76]], 0.018, P.ink, 4);
+  for (let i = 0; i < 5; i++) {
+    const a = i / 4 * Math.PI;
+    pod.tube([[-2.615, 1.85 + Math.sin(a) * 0.22, 20.9 + Math.cos(a) * 0.22], [-2.615, 1.85 + Math.sin(a) * 0.19, 20.9 + Math.cos(a) * 0.19]], 0.012, P.ink, 4);
+  }
+  pod.box([-2.69, 1.31, 21.36], [0.07, 0.22, 0.25], P.ochre);
+  pod.tube([[-2.58, 1.32, 21.45], [-2.58, 1.32, 21.27]], 0.028, P.ink, 5);
+  // Localized peeled shield and scored metal, leaving the refuge comfortable.
+  pod.face([[-3.58, 3.56, 20.1], [-2.66, 3.85, 20.05], [-2.87, 4.14, 20.65], [-3.6, 3.58, 20.8]], P.ochre);
+  pod.tube([[-2.88, 2.87, 20.15], [-2.88, 2.65, 20.39], [-2.88, 2.57, 20.25], [-2.88, 2.2, 20.45]], 0.022, P.ink, 4);
+  pod.tube([[-2.78, 2.9, 20.15], [-2.62, 2.73, 20.35], [-2.73, 2.4, 20.55]], 0.023, P.orange, 5);
+  // Worktop grip, tool slots, storage seam and a useful fabrication control face.
+  pod.panel([1.66, 0.85, 20.75], [1.85, 0.75], 0.025, P.shade, Math.PI / 2);
+  for (const z of [20.25, 21.05, 21.8])
+    pod.box([1.64, 1.05, z], [0.045, 0.05, 0.3], P.ochre);
+  pod.panel([1.87, 2.2, 21.4], [0.62, 0.65], 0.018, P.ink, Math.PI / 2);
+  for (let i = 0; i < 3; i++)
+    pod.box([1.84, 2.07 + i * 0.13, 21.4], [0.02, 0.035, 0.3 - i * 0.06], P.mint);
   const r = POD_RAMP;
   pod.face(
     [
@@ -148,9 +200,10 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial): void {
   pod.box([-2.1, 5.1, 22], [0.8, 0.1, 0.12], P.warm);
   pod.box([0, 0.21, d.min.z + 0.1], [2.65, 0.03, 0.2], P.ochre);
   pod.finish();
-  label(scene, "HOME / 01", [0, 3.45, 19.15], 1.6);
+  label(scene, "HOME / AIR", [0, 3.45, 19.15], 1.8);
   label(scene, "LOCKER", [-1.52, 1.65, 22.4], 0.85, Math.PI / 2);
   label(scene, "SERVICE / AIR", [1.65, 2.9, 21.2], 1.1);
+  label(scene, "REGULATOR", [-2.68, 2.55, 21.05], 0.85, -Math.PI / 2);
 }
 
 export function label(
@@ -170,7 +223,7 @@ export function label(
     text,
     null,
     82,
-    "bold 45px sans-serif",
+    `bold ${Math.min(45, Math.floor(800 / Math.max(1, text.length)))}px sans-serif`,
     "#f3e6bb",
     "#234d58",
     true,
@@ -179,10 +232,11 @@ export function label(
   material.diffuseTexture = texture;
   material.emissiveColor = Color3.White();
   material.disableLighting = true;
-  material.backFaceCulling = false;
+  material.backFaceCulling = true;
   const plane = CreatePlane(
     "label." + text,
-    { width, height: width / 4 },
+    { width, height: width / 4, sideOrientation: Mesh.DOUBLESIDE,
+      frontUVs: new Vector4(1, 0, 0, 1), backUVs: new Vector4(0, 0, 1, 1) },
     scene,
   );
   plane.position.set(...p);
@@ -190,5 +244,10 @@ export function label(
   plane.material = material;
   plane.isPickable = false;
   plane.renderingGroupId = 1;
+  // Each side has explicit UVs. With the production right-handed scene, the
+  // -Z face needs U reversed; a two-sided material alone mirrors the return view.
+  // Static signs live with the scene. Dynamic carrier signs also dispose their
+  // texture/material when their shell is rebuilt for another lock state.
+  plane.onDisposeObservable.add(() => material.dispose(true, true));
   return plane;
 }
