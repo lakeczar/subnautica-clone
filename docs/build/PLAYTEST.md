@@ -16,7 +16,9 @@ For each run record candidate SHA, build/command, environment and renderer, inpu
 | Interruption/readiness correction author | `1e2c581`, integrated `2c25b8b` | 65/65 tests, including 30 real-app composition cases; ordinary movement/save/reload retained tick 941/pose. Delayed New/import stayed paused after synthetic focus or induced graphics recovery, then explicit Resume worked. Stable restored paused images show populated scenes; no invalid-resource warnings observed. [Evidence](evidence/FND-01-R2-FIX.md). | Native-lock/event fixtures are diagnostic; SwiftShader only. Original save/economy paths unchanged; no new campaign/performance claim. |
 | Interruption correction coordinator | `bcef1e1` (source `2c25b8b`) | Source/tests inspected, runtime/config/test diff matches author tree. Actual restored queued-New and completed-paused-import captures inspected. `npm run check` passed 65/65 tests/build; main asset `index-DLXkZ6jy.js` matches author. Full feature whitespace check passed. | No fresh coordinator browser run; exact ordinary/diagnostic runs remain author-attributed. Fresh independent round-three acceptance pending. |
 
-Open: independent FND-01 review and remaining browser adapters; first expedition; carrier/collision gates; both complete strategies; all hull niches; full gameplay save resilience; repeated recovery; fresh-human route learning/story comprehension/duration; representative dedicated-GPU performance.
+[Both round-three reviews](reviews/FND-ECO-R3.md) accept FND-01 and provisional ECO-01 at `50f5569`, after fresh 65-test/build and focused production runs. Historical pending states above describe their earlier checkpoints. No integrated M0 pass is implied.
+
+Open: integrated M0 and remaining browser adapters; first expedition; carrier/collision gates; both complete strategies; all hull niches; full gameplay save resilience; repeated recovery; fresh-human route learning/story comprehension/duration; representative dedicated-GPU performance.
 
 ## First expedition run sheet (not yet executed)
 

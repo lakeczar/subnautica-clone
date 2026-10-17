@@ -1,6 +1,6 @@
 # FND-01 / ECO-01 independent review, round 3
 
-Status: Astra accepts FND-01 and provisional ECO-01; Sol remains running. No combined FND or integrated M0 acceptance yet. Date: 2026-10-17.
+Status: both independent reviewers ACCEPT FND-01 and provisional ECO-01 at the frozen candidate. Coordinator accepts the bounded feature/design batch. Integrated M0 remains pending. Date: 2026-10-17.
 
 - Frozen candidate: `50f5569a92a6e18aac8970ecdb7918e5e217a455`.
 - Prior candidate: `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc`; earliest review: `2eb0244`.
@@ -11,7 +11,7 @@ Status: Astra accepts FND-01 and provisional ECO-01; Sol remains running. No com
 | Reviewer | Model / effort | Task ID | Stable request ID | State |
 | --- | --- | --- | --- | --- |
 | Astra | `gpt-6-astra` / `xhigh` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-astra-r3-50f5569` | `siltwake-fnd-eco-astra-r3-50f5569` | Complete: FND / ECO accept |
-| Sol | `gpt-6.1-sol` / `max` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-sol-r3-50f5569` | `siltwake-fnd-eco-sol-r3-50f5569` | Running |
+| Sol | `gpt-6.1-sol` / `max` | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-eco-sol-r3-50f5569` | `siltwake-fnd-eco-sol-r3-50f5569` | Complete: FND / ECO accept |
 
 Both use provider `codex` and T3-isolated worktrees, with exact requested model/effort selections. These are fresh task invocations; no backing thread was reused as a review round. Neither reviewer authored the candidate. Expected reports: `/tmp/siltwake-fnd-eco-astra-r3.md` and `/tmp/siltwake-fnd-eco-sol-r3.md`.
 
@@ -23,17 +23,21 @@ Related graphics readiness now follows engine reconstruction plus scene readines
 
 Coordinator inspected source/tests, confirmed the integrated tree matches author source, viewed actual restored queued-New and completed-paused-import images, and ran `npm run check`: 65/65 tests and build passed with `index-DLXkZ6jy.js`. Feature whitespace check passed. Actual browser runs remain author-attributed, with synthetic focus/induced graphics/native-lock diagnostics labelled. No new audit or unchanged economy rerun was claimed. Remaining low esbuild advisory, chunk warning and hardware/human gaps persist.
 
-## Continuation
+## Combined acceptance and continuation
 
-Await completion notifications; read exact task IDs without duplicating active work. Reconcile findings, direct substantiated Sol corrections if any, and freeze a new candidate for fresh paired reviews after functional/contract changes. Require both explicit FND acceptances at one SHA. ECO requires explicit same-candidate carry-forward of its limited unchanged proposal scope. Then open/link the foundation feature PR into game/siltwake, integrate the accepted feature and perform the separate integrated M0 gate before M1 implementation. Keep main merge/public deployment with the owner; preserve spoilers.
+Both non-author reviewers explicitly **ACCEPT FND-01** and **ACCEPT ECO-01 (provisional arithmetic/design only)** at `50f5569a92a6e18aac8970ecdb7918e5e217a455`. Coordinator inspected both full reports against the specification, prior dispositions, source checks and actual artifacts. All prior findings are resolved; no new blocking finding, declined finding or unresolved disagreement remains. Reports are separate and were reached independently. Both reviewers completed with no live children and closed owned browser/server resources.
+
+[Full Sol report](FND-ECO-R3-SOL.md) records fresh 65/65 tests/typecheck/build, economy checks and ordinary production movement/save/reload plus native-lock/synthetic-focus/induced-graphics diagnostics. Sol also checked queued cancellation and synthetic pagehide disposal. Sol's incognito download was observed and used for UI import but disappeared after cleanup; its attempted post-cleanup Node decode failed with ENOENT and is **not** counted as evidence. Retain this report's explicit attribution and limits.
+
+Open/link the foundation PR into `game/siltwake`, integrate accepted source, and run the separate M0 milestone gate with fresh non-author Astra xhigh and Sol max reviews. ECO arithmetic does not establish runtime registry, recovery topology, route timing or balance. Preserve real-focus/visibility, software-renderer, hardware/human and later campaign gaps. Subsequent bookkeeping does not extend this exact-SHA review to future source/contract changes. Main merge/public deployment remain owner actions.
 
 ## Astra verdict
 
-[Full independent round-three report](FND-ECO-R3-ASTRA.md): **FND-01 ACCEPT; ECO-01 ACCEPT** at `50f5569a92a6e18aac8970ecdb7918e5e217a455`, with ECO limited to provisional arithmetic/design. All prior findings resolved; no new actionable blocking defect or scope reduction found. Integrated M0 remains pending and the separate Sol verdict has not arrived.
+[Full independent round-three report](FND-ECO-R3-ASTRA.md): **FND-01 ACCEPT; ECO-01 ACCEPT** at `50f5569a92a6e18aac8970ecdb7918e5e217a455`, with ECO limited to provisional arithmetic/design. All prior findings resolved; no new actionable blocking defect or scope reduction found. Integrated M0 remains pending. Sol independently agreed, as recorded above.
 
 Astra ran fresh install, 65/65 tests, production build, economy checker and whitespace/source comparisons. Its actual production run used ordinary movement/save/reload, then native-held writes with synthetic-focus New and induced-graphics import diagnostics. Both completed paused until explicit Resume; actual restored queued/completed import screenshots were visually inspected, with no invalid-resource warnings observed. Exact measurements/artifacts and historical-versus-fresh attribution are in the report. Hardware/human/real-focus/visibility limits remain explicit. Owned tab/server closed; no live child work.
 
-Coordinator verified the report's exact revision, scope and resolved findings. Await Sol's independent verdict before accepting the pair or integrating. Public repository still has only planning PR #1; foundation PR/evidence preparation can proceed locally, but no construction PR has been opened yet.
+Coordinator verified both reports' exact revision, scope and resolved findings. The pair is accepted for FND-01 and the qualified ECO-01 scope; separate integrated M0 review follows feature integration.
 
 ## Common round-three brief
 

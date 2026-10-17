@@ -33,6 +33,6 @@ Both round-two reviews of `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc` are complet
 - Scope: [committed assignment](tasks/FND-01-R2-FIX.md), the shared interruption race and associated paused engine-readiness check. Assigned runtime/renderer lifecycle/test/evidence paths only; no push/PR/children/parent integration.
 - Coordinator inspected source/tests and actual restored paused captures; source matches author tree; `npm run check` passed 65/65 tests/build and feature whitespace check passed. Contracts are reconciled. Next: freeze round three and launch fresh paired non-author reviews with both full prior rounds/dispositions. Do not duplicate this completed task or use a backing thread as a new review round.
 
-## Active round-three reviews
+## Completed round-three reviews
 
-Round three uses `50f5569a92a6e18aac8970ecdb7918e5e217a455`. Astra xhigh completed with FND/ECO acceptance, all prior findings resolved, no live children and owned resources closed. Separate Sol 6.1 max is still running in its isolated worktree. [Exact task/request IDs, report and continuation](reviews/FND-ECO-R3.md). Two active agents including coordinator; no author remains active. Await Sol before paired FND acceptance. M0 remains separate; ECO is provisional arithmetic/design only.
+Both non-author reviewers accepted FND-01 and provisional ECO-01 at `50f5569a92a6e18aac8970ecdb7918e5e217a455`. All prior findings resolved; no new blocking findings or unresolved objections. [Exact task/request IDs, both full reports and continuation](reviews/FND-ECO-R3.md). No live children; owned resources closed. Coordinator accepts this bounded batch, with separate integrated M0 review pending. Only coordinator active. Historical states above describe their earlier checkpoints.
