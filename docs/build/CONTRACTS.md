@@ -1,6 +1,6 @@
 # Shared implementation direction
 
-Status: foundation source at `8d72dd2`, with reviewed-findings correction source integrated at `417a7ec` (author `79423ec`). The async save/session seams below are reconciled; fresh dual independent acceptance remains pending. [EXPEDITION_INTEGRATION.md](../EXPEDITION_INTEGRATION.md) remains authoritative for cross-system content and progression.
+Status: foundation source at `8d72dd2`, persistence correction at `417a7ec` (author `79423ec`), interruption/readiness correction at `2c25b8b` (author `1e2c581`). The async save/session and renderer lifecycle seams below are reconciled; fresh dual independent acceptance remains pending. [EXPEDITION_INTEGRATION.md](../EXPEDITION_INTEGRATION.md) remains authoritative for cross-system content and progression.
 
 ## Implemented foundation boundary
 
@@ -17,6 +17,12 @@ The [correction evidence](evidence/FND-01-R1-FIX.md#exact-interfaces-for-coordin
 `ExpeditionSession` in `src/runtime/session.ts` owns the active plain state, one pending operation/confirmation, cancellation/disposal and autosave timing. It has no DOM/renderer dependency. `SiltwakeApp` remains the lifecycle/composition owner, advances session state through the fixed simulation, and wires session events to presentation. Pending autosaves deduplicate; queued writes and slow file reads cannot replace a later session after cancellation/disposal. Export returns a detached snapshot.
 
 After eligible storage/exclusion failures, New Game or a validated import offers an explicit exportable session without local saving. Until that choice, the old active session and local record remain unchanged. Accepting disables autosave and keeps a visible export reminder. Validation/conflict/protection/size errors retain separate refusal semantics. Missing safe exclusion permits read/export and explicit unsaved play, never racing writes. Web Locks require a secure context: HTTPS hosting or localhost HTTP. Unit and actual quota/native-lock diagnostics are recorded separately from ordinary gameplay evidence.
+
+## Interruption and renderer readiness
+
+The [interruption correction evidence](evidence/FND-01-R2-FIX.md) records the actual app-boundary behavior. `SiltwakeApp` owns automatic-entry permission for an accepted New/import/Continue request. Session preparation pauses preserve it; external interruption or deliberate player pause revokes it for that request, including across later recovery. Completion consumes it and may install the selected session paused. Busy/blocked Resume cannot queue permission. A fresh deliberate request after an earlier settled interruption is independent. Session/save exports remain unchanged.
+
+`createRenderer(canvas, availabilityChanged)` now requires an availability callback. It sends `false` on engine context loss, and `true` only after Babylon's restored observable and scene readiness. The early native canvas event is not reconstruction completion. Availability requests a paused redraw, never simulation resume; presentation is gated while unavailable. Observers/readiness callbacks are removed or invalidated on disposal. `GameRenderer`'s present/quality/resize/dispose methods remain unchanged. Diagnostic dataset values are observations, not proof of visible recovery; actual captures accompany the check.
 
 Foundation art is original procedural Sol geometry and shaders. Declared hull/material/region IDs are a roster, not implemented gameplay. The economy files under `design/` are a provisional proposal/checker and must not become a competing runtime registry.
 

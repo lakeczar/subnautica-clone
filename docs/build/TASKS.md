@@ -25,10 +25,10 @@ FND-01 + ECO-01 round 1 at `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef` is complet
 
 Both round-two reviews of `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc` are complete. Both resolved original findings, required FND changes for the same new interruption race (FND-A4 / FND-SOL-R2-01), and accepted ECO's provisional proposal. [Exact IDs, reports/dispositions and continuation](reviews/FND-ECO-R2.md). No live children; owned browser/server resources closed. [Focused correction assignment](tasks/FND-01-R2-FIX.md) is ready for dispatch. No corrected FND acceptance exists yet.
 
-## Active interruption correction
+## Completed interruption correction
 
 - Batch: FND-01-R2-FIX. T3 task ID: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-r2-fix-sol-max-6bd13d0`.
 - Provider/model/effort: `codex` / `gpt-6.1-sol` / `max`; isolated worktree from `6bd13d0b69f0d4e44db06475612e48638fa610e7`.
-- Stable request ID: `siltwake-fnd-r2-fix-sol-max-6bd13d0`; state: running. Two active agents including coordinator; no reviewer or other author is active.
+- Stable request ID: `siltwake-fnd-r2-fix-sol-max-6bd13d0`; state: completed; no live children. Owned tab/server closed and native queues/fixtures cleaned. Author source `1e2c581`, evidence `b60ac58`, integrated as `2c25b8b` / `bcef1e1`.
 - Scope: [committed assignment](tasks/FND-01-R2-FIX.md), the shared interruption race and associated paused engine-readiness check. Assigned runtime/renderer lifecycle/test/evidence paths only; no push/PR/children/parent integration.
-- Await completion notification, inspect returned commits and actual evidence, cherry-pick assigned corrections, reconcile contracts and rerun coordinator checks. Then freeze round three and launch fresh paired non-author reviews with both full review rounds and dispositions. Do not duplicate this task or use a backing thread as a new review round.
+- Coordinator inspected source/tests and actual restored paused captures; source matches author tree; `npm run check` passed 65/65 tests/build and feature whitespace check passed. Contracts are reconciled. Next: freeze round three and launch fresh paired non-author reviews with both full prior rounds/dispositions. Do not duplicate this completed task or use a backing thread as a new review round.
