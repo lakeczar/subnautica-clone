@@ -33,7 +33,7 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: Shader
         4,
       );
   });
-  rib.finish();
+  rib.finish(.32);
 
   const pod = new ArtBatch("refuge.pod", scene, cel);
   for (const body of FACILITY_SOLIDS.filter((s) => s.id.startsWith("pod.")))
@@ -65,7 +65,8 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: Shader
       P.metal,
       6,
     );
-    pod.box([side * 2.4, 3.38, 21.5], [0.4, 0.12, 4], P.warm);
+    pod.box([side * 2.4, 3.48, 21.5], [0.48, 0.16, 4.1], P.petrol);
+    pod.glow(pod.box([side * 2.4, 3.38, 21.5], [0.24, 0.045, 3.8], P.warm));
   }
   wallWithOpening(pod, [0, 1.9, 24.1], [6.9, 3.8, .3], {
     center: [0, 2.1, 24.1], width: 3.8, height: 1.3, normal: "z",
@@ -80,7 +81,7 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: Shader
   for (const x of [-2, 2])
     pod.box([x, 1.95, 19.45], [1, 3.3, 0.4], P.porcelain);
   pod.box([0, 3.2, 19.45], [3.2, 0.55, 0.4], P.petrol);
-  pod.box([0, 3.12, 19.18], [2.9, 0.1, 0.08], P.warm);
+  pod.glow(pod.box([0, 3.12, 19.18], [2.9, 0.1, 0.08], P.warm));
   // Pressure-frame cheeks and retained hatch guides stop outside the open
   // doorway. The entrance remains a continuous view and walking line to shore.
   for (const side of [-1, 1]) {
@@ -158,6 +159,20 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: Shader
   pod.panel([1.87, 2.2, 21.4], [0.62, 0.65], 0.018, P.ink, Math.PI / 2);
   for (let i = 0; i < 3; i++)
     pod.box([1.84, 2.07 + i * 0.13, 21.4], [0.02, 0.035, 0.3 - i * 0.06], P.mint);
+  // Personal objects stay on the existing worktop/locker, never in a walking
+  // line. A clipped task lamp, mug and folded cloth imply use without pickups.
+  pod.tube([[2.62, 1.5, 20.0], [2.62, 2.4, 20.0], [2.2, 2.5, 20.12]], .035, P.petrol, 6);
+  pod.panel([2.17, 2.43, 20.08], [.35, .13], .08, P.ochre);
+  pod.glow(pod.box([2.17, 2.37, 20.17], [.27, .035, .12], P.warm));
+  pod.ellipsoid([2.05, 1.58, 21.92], [.12, .16, .12], P.orange, 10);
+  pod.ellipsoid([2.05, 1.73, 21.92], [.09, .013, .09], P.ink, 10);
+  pod.ring([1.9, 1.61, 21.92], [1, 0, 0], [0, 1, 0], .085, .05, P.orange, 10);
+  for (let i = 0; i < 3; i++)
+    pod.box([-2.17, 1.63 + i * .035, 22.5], [.65, .035, .4], i % 2 ? P.coral : P.shell);
+  for (const x of [-1.53, 1.53]) {
+    pod.box([x, 1.6, 19.25], [.06, 2.8, .06], P.petrol);
+    pod.glow(pod.box([x, 1.6, 19.21], [.035, 2.35, .025], P.warm));
+  }
   const r = POD_RAMP;
   pod.face(
     [
@@ -213,11 +228,11 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: Shader
   );
   pod.box([-2.1, 5.1, 22], [0.8, 0.1, 0.12], P.warm);
   pod.box([0, 0.21, d.min.z + 0.1], [2.65, 0.03, 0.2], P.ochre);
-  pod.finish();
-  label(scene, "HOME / AIR", [0, 3.45, 19.15], 1.8);
-  label(scene, "LOCKER", [-1.52, 1.65, 22.4], 0.85, Math.PI / 2);
-  label(scene, "SERVICE / AIR", [1.65, 2.9, 21.2], 1.1);
-  label(scene, "REGULATOR", [-2.68, 2.55, 21.05], 0.85, -Math.PI / 2);
+  pod.finish(.45);
+  label(scene, "H / 01", [0, 3.45, 19.15], .62);
+  label(scene, "LOCKER", [-1.52, 1.65, 22.4], 0.54, Math.PI / 2);
+  label(scene, "SERVICE", [1.65, 2.9, 21.2], .52);
+  label(scene, "REGULATOR", [-2.68, 2.55, 21.05], .54, -Math.PI / 2);
 }
 
 export function label(

@@ -49,7 +49,9 @@ float waterPath(vec3 a,vec3 b){
 vec3 opticalFog(vec3 color,vec3 point){
   float distance=length(point-cameraPosition),wet=waterPath(cameraPosition,point);
   float dry=max(0.0,distance-wet);
-  float haze=1.0-exp(-fogDensity*(wet+dry*.18));
+  // Air has its own clear haze. A dry room does not clear the wet portion of
+  // an exterior ray; distant underwater objects may still disappear entirely.
+  float haze=1.0-exp(-fogDensity*wet-dry*.0018);
   vec3 medium=mix(fogColor,waterFogColor,wet/max(.0001,wet+dry*.08));
   return mix(color,medium,clamp(haze,0.0,.9999));
 }
@@ -73,24 +75,36 @@ uniform vec3 lightDirection; uniform float time; uniform float underwater;
 ${opticalShader}
 void main(){
   vec3 n=normalize(vNormal); float d=dot(n,normalize(lightDirection));
-  float band=d>.66?1.09:(d>.12?.91:(d>-.32?.72:.53));
-  vec3 temperature=mix(vec3(.66,.85,1.02),vec3(1.07,1.035,.9),smoothstep(-.12,.75,d));
+  float band=d>.66?1.09:(d>.12?.91:(d>-.32?.69:.45));
+  vec3 temperature=mix(vec3(.61,.83,1.04),vec3(1.07,1.035,.93),smoothstep(-.12,.75,d));
   vec3 shade=vColor.rgb*band*temperature;
   float rim=pow(1.0-max(0.0,dot(n,normalize(cameraPosition-vWorld))),3.0);
-  shade+=vec3(.026,.067,.071)*rim;
+  // Selective grazing ink is in the same opaque pass and receives the same
+  // fog/depth test as its owner. No shells, through-wall lines or extra draws.
+  float contour=smoothstep(.64,.96,rim)*max(0.0,vColor.a-1.0);
+  shade=mix(shade,vec3(.035,.105,.13),contour*.78);
   float wx=vWorld.x*.82+sin(vWorld.z*.49+time*.2)*.9+time*.15;
   float wz=vWorld.z*.93+sin(vWorld.x*.44-time*.15)*.7;
   float net=1.0-smoothstep(.012,.09,abs(sin(wx)*sin(wz)));
   float caustic=net*smoothstep(.45,.95,n.y)*(1.0-smoothstep(-.8,-.1,vWorld.y));
   shade+=vec3(.06,.10,.055)*caustic*underwater*exp(min(0.0,vWorld.y)*.025);
+  // Authored diffuse warmth, bounded to the existing refuge interiors. This
+  // shader owns the visible light pools; Babylon lamps cannot light this cel.
+  float pod=step(abs(vWorld.x),2.94)*step(19.38,vWorld.z)*step(vWorld.z,24.01)*step(.15,vWorld.y)*step(vWorld.y,3.73);
+  float lab=step(111.28,vWorld.x)*step(vWorld.x,120.61)*step(-129.72,vWorld.z)*step(vWorld.z,-122.39)*step(-118.03,vWorld.y)*step(vWorld.y,-113.97);
+  vec3 pd=(vWorld-vec3(.7,2.6,21.4))*vec3(.22,.35,.30);
+  vec3 ld=(vWorld-vec3(114.5,-115.1,-127.4))*vec3(.19,.28,.22);
+  float warmth=pod*exp(-dot(pd,pd))*.75+lab*exp(-dot(ld,ld))*.9;
+  shade=shade*mix(vec3(1.0),vec3(1.23,1.05,.79),warmth)+vec3(.095,.042,.009)*warmth;
+  shade=mix(shade,vColor.rgb*1.12,step(vColor.a,-.5));
   gl_FragColor=vec4(opticalFog(shade,vWorld),1.0);
 }`;
 
 function initializeOptics(material: ShaderMaterial): void {
   material.setVector3("cameraPosition", Vector3.Zero());
-  material.setColor3("fogColor", Color3.FromHexString("#96c5b9"));
-  material.setColor3("waterFogColor", Color3.FromHexString("#226e7e"));
-  material.setFloat("fogDensity", 0.027);
+  material.setColor3("fogColor", Color3.FromHexString("#a5ccd1"));
+  material.setColor3("waterFogColor", Color3.FromHexString("#237e89"));
+  material.setFloat("fogDensity", 0.0105);
   material.setVector3("carrierPosition", Vector3.Zero());
   material.setFloat("carrierYaw", 0);
   material.setFloat("carrierPresent", 0);
@@ -191,13 +205,20 @@ export function updateOpticalUniforms(
 ): void {
   const h = state?.fleet.vehicles.find(v => v.id === state.fleet.docking?.vehicleId);
   const depth = Math.max(0, -camera.y);
-  const waterFog = Color3.Lerp(Color3.FromHexString("#226e7e"), Color3.FromHexString("#10384e"), 1 - Math.exp(-depth * .018));
-  const airFog = Color3.FromHexString("#96c5b9");
+  const blend = (low: number, high: number, value: number): number => {
+    const t = Math.max(0, Math.min(1, (value - low) / (high - low)));
+    return t * t * (3 - 2 * t);
+  };
+  const canopy = blend(60, 90, camera.x) * blend(35, 65, depth);
+  const lower = blend(98, 175, depth);
+  const density = .0105 * (1 - canopy) + (.009 + lower * .014) * canopy;
+  const waterFog = Color3.Lerp(Color3.FromHexString("#237e89"), Color3.FromHexString("#0b3048"), blend(15, 190, depth));
+  const airFog = Color3.FromHexString("#a5ccd1");
   for (const material of materials) {
     material.setVector3("cameraPosition", camera);
     material.setColor3("fogColor", airFog);
     material.setColor3("waterFogColor", waterFog);
-    material.setFloat("fogDensity", state && state.player.pose.position.x > 65 ? .017 : .027);
+    material.setFloat("fogDensity", density);
     material.setFloat("carrierPresent", h ? 1 : 0);
     material.setFloat("carrierYaw", h?.pose.yaw ?? 0);
     material.setVector3("carrierAirMin", new Vector3(CARRIER_LAYOUT.deck.min.x, CARRIER_LAYOUT.deck.max.y, CARRIER_LAYOUT.deck.min.z));

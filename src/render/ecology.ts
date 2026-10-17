@@ -125,8 +125,13 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
       host.ellipsoid([hx + 0.6, floor + 5.1, hz + 0.5], [1.35, 0.9, 1], source.asset === 'resin' ? P.amber : P.jade, 10);
       for (let vein = 0; vein < 4; vein++) {
         const dx = -1.2 + vein * 0.7;
-        host.face([[hx + 0.6, floor + 5.5, hz + 0.5], [hx + dx, floor + 6.5, hz - 0.2], [hx + dx * 1.8, floor + 6.0, hz - 2.7], [hx + dx * 1.3, floor + 5.6, hz - 2.1]], vein % 2 ? P.jade : '#479c91');
-        host.tube([[hx + 0.6, floor + 5.55, hz + 0.5], [hx + dx, floor + 6.4, hz - 0.2], [hx + dx * 1.8, floor + 6.0, hz - 2.7]], 0.025, P.mint, 5);
+        host.leaf([[hx + .6, floor + 5.5, hz + .5], [hx + dx * .5, floor + 6.4, hz - .2], [hx + dx * 1.5, floor + 6.2, hz - 1.7], [hx + dx * 1.8, floor + 5.8, hz - 2.7]], [.025, .42, .6, .02], [1, 0, 0], vein % 2 ? P.jade : '#268c80', '#8fd5a6');
+      }
+      for (const side of [-1, 1]) {
+        host.tube([[hx + .6, floor + 4.8, hz + .5], [hx + .6 + side * .8, floor + 4.3, hz + .5]], .035, P.petrol, 5);
+        host.ellipsoid([hx + .6 + side * .8, floor + 3.55, hz + .5], [.24, .13, .24], P.orange, 8);
+        host.ellipsoid([hx + .6 + side * .8, floor + 4.4, hz + .5], [.23, .15, .23], P.plum, 8);
+        host.glow(host.ellipsoid([hx + .6 + side * .8, floor + 4.0, hz + .5], [.18, .4, .18], P.amber, 8));
       }
       if (source.asset === 'resin') {
         // A cured scar above the loose amber nodules teaches shed provenance.
@@ -138,7 +143,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
           host.tube([[fx, y + 0.2, z - 0.6], [fx, y + 0.05, z + 0.9]], 0.032, P.ochre, 5);
         }
       }
-      host.finish();
+      host.finish(.35);
     }
   }
 
