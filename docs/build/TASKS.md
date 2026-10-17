@@ -43,6 +43,13 @@ Both fresh non-author reviews **ACCEPT M0** at `d41543694bd68e8e41a01465df714163
 
 Foundation PR #2 is merged into `game/siltwake`; continuing draft integration PR #3 targets planning branch/PR #1. All T3-linked. [Coordinator evidence](evidence/M0-INTEGRATION.md) records the clean install, 65 tests/build, economy arithmetic, ordinary-input/reload and labelled interruption diagnostic. Independent review reports distinguish their fresh and historical evidence.
 
-## Ready next implementation
+## Active M1-01 implementation
 
-[M1-01](tasks/M1-01.md) is ready for dispatch to Sol 6.1 max after this baseline is committed. It covers opening/pod/C01–C04, habitat-specific gathering/crafting, Dart, survival/encounter/recovery, richer-cel/UI/audio iteration, validated schema migration and simplified carrier/collision feasibility. Record the exact dispatch baseline, task/request IDs and worktree ownership once returned. Main builder may edit only its assigned production/config/test/README/evidence paths; coordinator owns other build records/spec/canon and integration. No implementation worker is active yet.
+- Task ID: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-01-sol-max-0f3b06b`.
+- Stable request ID: `siltwake-m1-01-sol-max-0f3b06b`.
+- Provider/model/selected effort: `codex` / `gpt-6.1-sol` / `max`, live catalog verified. Role implementation, T3 `isolation: worktree`, async. State: running, no pending question or child work reported at dispatch.
+- Exact baseline: `0f3b06bc9ad37ea271cdf78def01027d1f6b0982`; accepted integrated M0 source candidate `d415436` plus subsequent documentation only. Two active agents including coordinator; all earlier authors/reviewers are complete.
+- Complete assignment: [M1-01](tasks/M1-01.md). Exclusive owned paths: `src/`, `public/`, tests/scripts, package/config/lockfile, index.html, README, .gitignore, and `docs/build/evidence/M1-01.md`. Coordinator owns other build records, specs/canon and integration. Builder commits to its own task branch, with no push/PR/children or parent mutation.
+- Scope: opening/pod/C01–C04, habitat-specific gathering/crafting, first Dart, survival/encounter/recovery, richer-cel/UI/audio, validated migration and simplified carrier/collision feasibility. Read canonical chronology; no user-facing reveal. First expedition is not M2–M4 completion.
+- Browser port 5188 if available. Task must read fleet/repo browser rules before browser work, verify isolated Linux, prefer T3 preview, isolate storage and close only owned resources. Normal-input production runs and separately labelled carrier fixture/diagnostics required. SwiftShader does not establish GPU performance.
+- Completion wakes coordinator. Do not poll or launch a duplicate. Inspect source/evidence, reconcile interfaces, direct corrections and freeze a feature candidate for both fresh non-author reviews. M1 integration has its own gate after accepted component integration. No further owner start confirmation needed.

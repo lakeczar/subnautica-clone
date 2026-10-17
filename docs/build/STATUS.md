@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: both independent reviewers ACCEPT integrated M0 at `d415436`; coordinator accepts the milestone. Foundation PR #2 is merged, continuing draft PR #3 is open. M1 first-expedition assignment is ready for Sol 6.1 max dispatch.
+Updated: 2026-10-17. State: both independent reviewers ACCEPT integrated M0 at `d415436`; coordinator accepts the milestone. Foundation PR #2 is merged, continuing draft PR #3 is open. M1-01 first-expedition implementation is now running under Sol 6.1 max in an isolated worktree.
 
 ## Authority and checkpoint
 
@@ -13,7 +13,7 @@ Updated: 2026-10-17. State: both independent reviewers ACCEPT integrated M0 at `
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-All M0/component authors and reviewers completed with owned resources closed and no live children. Current branch is `game/siltwake`, integrated source `1bba23a`, tree-identical to feature tip `dbcebfc`. Component acceptance is at `50f5569`; integrated M0 acceptance at `d415436`; subsequent edits are bookkeeping. Only coordinator active before the M1 dispatch. [Paired M0 verdicts and task IDs](reviews/M0-R1.md); [coordinator checks](evidence/M0-INTEGRATION.md).
+All M0/component authors and reviewers completed with owned resources closed and no live children. Current branch is `game/siltwake`, integrated source `1bba23a`, tree-identical to feature tip `dbcebfc`. Component acceptance is at `50f5569`; integrated M0 acceptance at `d415436`; subsequent edits are bookkeeping. Main builder M1-01 is running from committed baseline `0f3b06bc9ad37ea271cdf78def01027d1f6b0982`, provider `codex`, model `gpt-6.1-sol`, explicit effort `max`. Two active agents including coordinator. [Exact ID and ownership](TASKS.md#active-m1-01-implementation). No reviewer remains active. [Paired M0 verdicts and task IDs](reviews/M0-R1.md); [coordinator checks](evidence/M0-INTEGRATION.md).
 
 ## Acceptance and evidence
 
@@ -28,13 +28,13 @@ All M0/component authors and reviewers completed with owned resources closed and
 
 ## Exact next action
 
-Commit the accepted baseline and dispatch [M1-01](tasks/M1-01.md) to `codex/gpt-6.1-sol`, explicit `reasoningEffort: max`, in a T3-isolated worktree. Both non-author reviewers accepted `d41543694bd68e8e41a01465df7141634a5567f2`; no pending correctness objection or new owner decision blocks construction. Record the returned exact task/request IDs and owned paths before waiting for completion.
+Await the M1-01 completion notification and use the exact task ID in [TASKS](TASKS.md#active-m1-01-implementation); do not duplicate the active build. Parent retains integration/build records and makes no competing source edits. If the task asks for clarification, resolve routine implementation choices against the committed assignment/spec without asking the owner to authorize construction again. On return, inspect commits and actual source/runtime/visual evidence, reconcile proposed schema/exports, and put source on a feature candidate for fresh non-author Astra xhigh + Sol max review before accepting or integrating M1. If it returns a partial runnable checkpoint, record remaining work and continue construction rather than accepting a partial M1.
 
 [Foundation PR #2](https://github.com/lakeczar/subnautica-clone/pull/2) is confirmed MERGED into `game/siltwake`. [Continuing draft integration PR #3](https://github.com/lakeczar/subnautica-clone/pull/3) targets `docs/astra-game-build-brief`, explicitly dependent on [planning PR #1](https://github.com/lakeczar/subnautica-clone/pull/1). T3 confirms all three linked; none watched. Main is unchanged, no deployment.
 
 Fresh integrated `npm ci`, 65 tests/typecheck/build, economy arithmetic and ordinary production movement/pause/save/reload passed at `1bba23a`. A native-held write plus synthetic blur/focus stayed paused through New completion; explicit Resume worked. [Full evidence and limits](evidence/M0-INTEGRATION.md). Actual source and built artifact match the accepted component. Do not rerun unchanged component matrices without a specific unresolved concern; assess their evidence alongside the new integrated run. Functional/contract changes require new review.
 
-M0 acceptance is recorded. Dispatch the prepared [M1-01 assignment](tasks/M1-01.md) to the main Sol 6.1 max builder in an isolated worktree: pod/opening and early regional clues, habitat-specific gathering/crafting, first craft, survival/recovery, art/UI/audio, explicit save migration and simplified carrier/collision feasibility. [Plan](PLAN.md) and [playtest run sheet](PLAYTEST.md) retain full scope. ECO remains provisional arithmetic; runtime adoption must address its concrete module/container identities, persistent knowledge, protected recovery provenance and physical-route limits. No new owner decision is required. Main merge and public deployment remain owner actions.
+M0 acceptance is recorded. The dispatched [M1-01 assignment](tasks/M1-01.md) owns: pod/opening and early regional clues, habitat-specific gathering/crafting, first craft, survival/recovery, art/UI/audio, explicit save migration and simplified carrier/collision feasibility. [Plan](PLAN.md) and [playtest run sheet](PLAYTEST.md) retain full scope. ECO remains provisional arithmetic; runtime adoption must address its concrete module/container identities, persistent knowledge, protected recovery provenance and physical-route limits. No new owner decision is required. Main merge and public deployment remain owner actions.
 
 ### Foundation PR evidence
 
