@@ -1,6 +1,6 @@
 # M1 full completion batches — independent review round 1
 
-Status: **Sol requires changes to both batches; Astra's independent initial result remains pending. No acceptance.** Dispatched 2026-10-17 from clean frozen candidate `ac5988c1472da8f8f81b097ed235f33f48c62c7d`. Diff base is accepted M0 `a2cb19f1d4cd2d795b82642a2bd357f681d1c293`. Production equals final author source `20451a8dafd014012986e0c8aa1e60df0da7ff25`, assembled at `83a577b6afe7f16c74bfe63322c4890fec8a9995`. Later dispatch bookkeeping is not a new reviewed candidate.
+Status: **Both independent reviewers require changes to both batches. Three distinct blockers are accepted for correction; no acceptance.** Dispatched 2026-10-17 from clean frozen candidate `ac5988c1472da8f8f81b097ed235f33f48c62c7d`. Diff base is accepted M0 `a2cb19f1d4cd2d795b82642a2bd357f681d1c293`. Production equals final author source `20451a8dafd014012986e0c8aa1e60df0da7ff25`, assembled at `83a577b6afe7f16c74bfe63322c4890fec8a9995`. Later dispatch bookkeeping is not a new reviewed candidate.
 
 ## Scope and evidence
 
@@ -25,7 +25,7 @@ Live T3 catalog verified the requested selections. Both fresh non-author tasks u
 
 ## Reconciliation and next action
 
-Sol's terminal result confirms actual `gpt-6.1-sol` / `max`, completed with no children/question and owned browser/server closed (5196 free). Report-only commit `8ecc9b2587d0fd1572c61f783811e5c9688a2b1a`, staged in `e41d132de5d7c998a23d8a99ad791ffb3995171c`; [full independent report](M1-BATCH-R1-SOL.md). Independent140 tests/typecheck/build pass with matching bundle. Both batch verdicts are **CHANGES REQUIRED** despite that suite. No findings were shared with Astra; its initial review stays on unchanged `ac5988c`.
+Sol's terminal result confirms actual `gpt-6.1-sol` / `max`, completed with no children/question and owned browser/server closed (5196 free). Report-only commit `8ecc9b2587d0fd1572c61f783811e5c9688a2b1a`, staged in `e41d132de5d7c998a23d8a99ad791ffb3995171c`; [full independent report](M1-BATCH-R1-SOL.md). Independent140 tests/typecheck/build pass with matching bundle. Both batch verdicts are **CHANGES REQUIRED** despite that suite. No findings were shared with Astra before its independent initial verdict; both reviews evaluated unchanged `ac5988c`.
 
 | Finding | Root disposition and evidence |
 | --- | --- |
@@ -36,7 +36,24 @@ Root verified112 local/archive payloads and113 regular archive files, safe uniqu
 
 [Focused correction brief](../tasks/M1-BATCH-R1-SOL-FIX.md) assigns only step.ts/expedition.ts, focused tests and its evidence to a new Sol max author from a committed baseline. Starting those established corrections does not influence Astra's frozen independent review. Retain Sol's explicit **ordinary depleted-power runtime evidence still open** for integrated M1; diagnostic zero-power cases do not complete that play line. Existing human/GPU, original-source and other proof limits remain.
 
-Completion notifications resume root; do not poll or duplicate tasks. Inspect Astra's separate initial result, reconcile findings and correction evidence, then freeze a revised candidate for fresh Astra/Sol tasks including both initial reports and dispositions. Separate integrated M1 verification/review remains after batch acceptance; no M1 integration or deployment has occurred.
+Completion notifications resume root; do not poll or duplicate tasks. Both initial results are now inspected. Reconcile both disjoint correction deliveries, run affected combined checks, then freeze a revised candidate for fresh Astra/Sol tasks including both initial reports and dispositions. Separate integrated M1 verification/review remains after batch acceptance; no M1 integration or deployment has occurred.
 
 
 Correction dispatch: new non-reviewer `codex/gpt-6.1-sol` / explicit max, async isolated worktree from clean `253200a8f969d390e175d339fa8d3b0db47770d0`, task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-batch-r1-fix-sol-max-253200a`. Accepted running, no children/question. This does not alter either initial review candidate or substitute an author verdict for the independent pair.
+
+
+## Astra terminal review and complete round-one disposition
+
+Astra task `siltwake-m1-batch-astra-r1-ac5988c` completed with no children/question; actual runtime gpt-6-astra/xhigh, owned browser/server closed and5195 free. Report-only source `d2496285652d0945432f9b9e367f46e7975fa663`, staged by `866915c3322e68c6ab53e9b493f9d33b39a47f7a`; [full independent report](M1-BATCH-R1-ASTRA.md). Independent140 tests/typecheck/build and final bundle identity pass, but both batches **CHANGES REQUIRED**. Initial findings were independent; no peer findings/status were read.
+
+| Astra finding | Relationship and root disposition |
+| --- | --- |
+| M1-ASTRA-R1-01, P1: occupied Dart tow/salvage invalidates player–vehicle persistence | **Accept for correction; additional blocker.** Root repeated unchanged earned-export commands. Tow leaves0.1166667m separation at sampled steps0–119, all unsaveable; occupied repair remains saveable. Cargo transfer/buoy/empty-frame salvage removes the hull but leaves `piloting/dart_16`, immediately unsaveable. Root viewed actual tow/salvage UI refusals. |
+| M1-ASTRA-R1-02, P2: boundary distraction | Same defect as **SOL-M1-01**, covered by the running correction. Root repeated Astra's separate earned east-edge route: X176.00228 valid → target192.00228 beyond188 invalid, then expiry restores saveability. This supplements Sol's south-edge production/command evidence. |
+| M1-ASTRA-R1-03, P2: stale cache geometry | Same defect as **SOL-M1-02**, covered by the running correction. Root repeated Astra's detached lifecycle probe and inspected actual staged populated/empty-session production views: prompt disappears but old cache remains. Synthetic appearance staging is explicitly not earned-loss evidence. |
+
+Root verified all30 Astra payload hashes against exact SHA256SUMS hash `e17d65854454178c98dc0283a7372a805f5011aa2d7dfbab37611136e36f7c42`. Copied scripts import root's unchanged compiled modules and write only `/tmp/siltwake-m1-batch-r1-astra-root/`; originals are untouched. No fresh root browser or broad suite. The first occupied tow command itself still encodes before movement; root retained that derived valid snapshot to require compatibility handling for already-saved occupied operations.
+
+Chosen P1 correction: atomically refuse occupied tow/salvage, protect a valid old occupied operation by stopping it before movement, keep paid repair/normal safety limits, and show truthful Hold availability/guidance. [Disjoint correction brief](../tasks/M1-BATCH-R1-OCCUPANCY-FIX.md) owns recovery.ts, narrow view.ts, new occupancy tests and recovery presentation tests. Existing boundary/cache author retains its paths. Neither requires weakened validation or forced exit.
+
+Steer `siltwake-m1-batch-fix-astra-crosscheck-253200a` successfully delivered these matching supplemental findings/scope boundaries to the existing running correction ordinal1. It did not start a new task or change its baseline/ownership. No peer findings were sent until both independent initial verdicts were complete. All three distinct blockers remain open pending corrected-source evidence and fresh paired review. Sol's ordinary-depleted-power proof line remains open for integrated M1; other existing limits persist.
