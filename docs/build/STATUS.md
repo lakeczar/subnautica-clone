@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: both round-two reviewers confirmed original fixes and independently found the same async-entry interruption/pause regression. ECO proposal accepted at `0a8ef04`; FND/M0 remain pending. Focused Sol correction assignment is ready.
+Updated: 2026-10-17. State: both round-two reviewers confirmed original fixes and independently found the same async-entry interruption/pause regression. ECO proposal accepted at `0a8ef04`; FND/M0 remain pending. Focused Sol 6.1 max correction is running.
 
 ## Authority and checkpoint
 
@@ -13,7 +13,7 @@ Updated: 2026-10-17. State: both round-two reviewers confirmed original fixes an
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-All authors and both round-two reviewers have completed; no child remains active before the next dispatch. Owned child browser/server resources were closed. Exact IDs and paths are in the task ledger. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`; source remains the corrected `417a7ec` tree. [Round-two exact IDs, independent reports and consolidated disposition](reviews/FND-ECO-R2.md). Coordinator is dispatching the narrow interruption correction to Sol 6.1 max in an isolated worktree.
+Earlier authors and both round-two reviewers have completed, with owned browser/server resources closed. The Sol 6.1 max FND-01-R2-FIX task is now running in an isolated worktree from `6bd13d0`; two active agents including coordinator. [Exact active task/request IDs](TASKS.md#active-interruption-correction). Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`; parent source remains the corrected `417a7ec` tree. [Round-two reports and disposition](reviews/FND-ECO-R2.md).
 
 ## Acceptance and evidence
 
@@ -27,7 +27,7 @@ All authors and both round-two reviewers have completed; no child remains active
 
 ## Exact next action
 
-Execute [FND-01-R2-FIX](tasks/FND-01-R2-FIX.md) through the main Sol builder; retain the returned exact task ID in TASKS.md. Both reviewers confirmed the pause race and resolved all three round-one defects. Verify delayed New/import stays paused after interruption even if visibility/graphics recover before completion; check actual paused redraw after engine reconstruction. Then inspect/integrate the correction, reconcile any lifecycle contract, run coordinator checks and dispatch fresh paired round-three reviews. FND still needs both acceptances, followed by feature PR integration and the separate M0 milestone gate.
+Await the active [FND-01-R2-FIX](tasks/FND-01-R2-FIX.md) completion notification and read its result using TASKS.md's exact ID; do not duplicate it. Both reviewers confirmed the pause race and resolved all three round-one defects. Inspect proof that delayed New/import stays paused after interruption even if visibility/graphics recover before completion, and actual paused redraw after engine reconstruction. Integrate the correction, reconcile lifecycle contracts, run coordinator checks and dispatch fresh paired round-three reviews. FND still needs both acceptances, followed by feature PR integration and the separate M0 milestone gate.
 
 Reconcile independent findings, have Sol fix substantiated issues and return the corrected revision to both reviewers. After acceptance, integrate through a feature PR and verify the integrated M0 milestone before dependent implementation. ECO-01 is provisional arithmetic, not runtime routes or recovery proof; later production-registry adoption needs its own integration review. No additional owner decision is needed to continue.
 
