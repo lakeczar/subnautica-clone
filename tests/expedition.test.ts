@@ -20,7 +20,7 @@ import { executeCommand, stepGame } from "../src/sim/step.js";
 import { createWorldQueries, hullClearance, SOLIDS, sweptHullClearance } from "../src/sim/world.js";
 import { HULL_COLLIDERS } from "../src/content/registry.js";
 import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
-import { exposure, updateThreat } from "../src/sim/survival.js";
+import { exposure, updateSurvival, updateThreat } from "../src/sim/survival.js";
 import { exitRefusal } from "../src/sim/vehicles.js";
 import {
   disableVehicle,
@@ -333,6 +333,118 @@ test("sound hunter warns before pursuit; quiet/cover or a directional distractio
   s.world.threat.distractionSeconds = 12;
   updateThreat(s, 0, events);
   assert.equal(s.world.threat.mode, "disengage");
+});
+test("continued hunter damage keeps the original disabled hull saveable without renewing air or losses", () => {
+  let s = dartGame();
+  const v = s.fleet.vehicles[0]!;
+  v.pose.position = { x: 123, y: -110, z: -105 };
+  v.health = 0.5;
+  s.player.pose = structuredClone(v.pose);
+  s.player.controlledVehicleId = v.id;
+  s.player.mode = "piloting";
+  s.world.threat.position = { ...v.pose.position, x: v.pose.position.x + 3 };
+  s.world.threat.mode = "pursue";
+  s.world.threat.interest = 12;
+  addItem(s, "conductive_crust", 2, v.cargoId);
+  const before = roundTrip(s);
+  let notices = 0;
+  let disabledAt = 0;
+  let loss: GameState["recovery"]["losses"] = [];
+  for (let i = 0; i < 120; i++) {
+    const result = stepGame(s, [], world);
+    s = result.state;
+    const hull = s.fleet.vehicles[0]!;
+    notices += result.events.filter((e) => e.type === "notice" && e.message.startsWith("Hull disabled.")).length;
+    if (i === 0) assert.ok(hull.health > 0 && hull.health < v.health);
+    if (hull.disabled && !disabledAt) {
+      disabledAt = s.tick;
+      loss = structuredClone(s.recovery.losses);
+    }
+    if (hull.disabled) {
+      assert.equal(hull.health, 0);
+      assert.deepEqual(s.recovery.losses, loss);
+    }
+    roundTrip(s);
+  }
+  const hull = s.fleet.vehicles[0]!;
+  assert.equal(disabledAt, before.tick + 3);
+  assert.equal(notices, 1);
+  assert.equal(s.world.threat.mode, "pursue", "continued pursuit must still exercise hostile damage");
+  assert.equal(s.fleet.vehicles.length, 1);
+  assert.equal(loss.length, 1);
+  assert.deepEqual(loss[0], { vehicleId: v.id, position: v.pose.position, visited: true });
+  assert.ok(Math.abs(hull.charge - (v.charge - 3 * 0.015 / 60)) < 1e-9);
+  assert.ok(Math.abs(hull.emergencyAir - (v.emergencyAir - 117 / 60)) < 1e-9);
+  assert.deepEqual(hull, { ...v, health: 0, disabled: true, charge: hull.charge, emergencyAir: hull.emergencyAir });
+  assert.deepEqual(s.inventory, before.inventory);
+  assert.deepEqual(s.knowledge, before.knowledge);
+  assert.equal(s.metrics.failures, before.metrics.failures);
+  assert.equal(s.metrics.rescues, before.metrics.rescues);
+  const invalid = createEnvelope(s, { sessionId: "negative-disabled-health", createdAt: "2026-10-17T12:00:00.000Z", savedAt: "2026-10-17T12:00:00.000Z" });
+  invalid.state.fleet.vehicles[0]!.health = -0.2;
+  assert.equal(encodeSave(invalid).ok, false);
+  assert.equal(decodeSave(JSON.stringify(invalid)).ok, false);
+});
+test("pressure damage disables once and remains saveable while emergency air runs out", () => {
+  let s = dartGame();
+  const v = s.fleet.vehicles[0]!;
+  const deepWater = createWorldQueries([], () => -200);
+  v.pose.position = { x: 170, y: -190, z: -150 };
+  v.health = 0.12;
+  v.emergencyAir = 1;
+  s.player.pose = structuredClone(v.pose);
+  s.player.controlledVehicleId = v.id;
+  s.player.mode = "piloting";
+  const before = roundTrip(s);
+  let notices = 0;
+  for (let i = 0; i < 90; i++) {
+    const result = stepGame(s, [], deepWater);
+    s = result.state;
+    notices += result.events.filter((e) => e.type === "notice" && e.message.startsWith("Hull disabled.")).length;
+    if (i === 0) assert.ok(s.fleet.vehicles[0]!.health > 0 && s.fleet.vehicles[0]!.health < v.health);
+    roundTrip(s);
+  }
+  assert.equal(notices, 1);
+  assert.equal(s.fleet.vehicles[0]!.health, 0);
+  assert.equal(s.fleet.vehicles[0]!.disabled, true);
+  assert.equal(s.fleet.vehicles[0]!.emergencyAir, 0);
+  assert.equal(exposure(s).breathable, false);
+  assert.ok(s.player.vitals.oxygen < before.player.vitals.oxygen);
+  assert.deepEqual(s.recovery.losses, [{ vehicleId: v.id, position: v.pose.position, visited: true }]);
+  assert.deepEqual(s.inventory, before.inventory);
+  assert.deepEqual(s.knowledge, before.knowledge);
+  assert.deepEqual(s.fleet.vehicles[0]!.investment, v.investment);
+  assert.deepEqual(s.fleet.vehicles[0]!.modules, v.modules);
+});
+test("submerged surface-only hull retains zero health and finite emergency air under continued depth damage", () => {
+  const s = ready();
+  s.scenario = "carrier-fixture";
+  const v = makeVehicle("depth_spindle", "spindle", { x: 70, y: -10, z: -72 }, "depth_spindle_hold");
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", capacity: 96, ownerId: v.id });
+  s.player.pose = structuredClone(v.pose);
+  s.player.controlledVehicleId = v.id;
+  s.player.mode = "piloting";
+  v.health = 0.5;
+  v.emergencyAir = 1;
+  const before = roundTrip(s), events: GameEvent[] = [];
+  // Piloting pins Spindle to the surface before survival; exercise a submerged
+  // exposure directly without replacing its movement or weakening the codec.
+  for (let i = 0; i < 90; i++) {
+    updateSurvival(s, events);
+    if (i === 0) assert.ok(v.health > 0 && v.health < 0.5);
+    roundTrip(s);
+  }
+  assert.equal(v.health, 0);
+  assert.equal(v.disabled, true);
+  assert.equal(v.emergencyAir, 0);
+  assert.equal(exposure(s).breathable, false);
+  assert.ok(s.player.vitals.oxygen < before.player.vitals.oxygen);
+  assert.equal(events.filter((e) => e.type === "notice" && e.message.startsWith("Hull disabled.")).length, 1);
+  assert.deepEqual(s.recovery.losses, [{ vehicleId: v.id, position: v.pose.position, visited: true }]);
+  assert.deepEqual(s.inventory, before.inventory);
+  assert.deepEqual(s.knowledge, before.knowledge);
+  assert.deepEqual(v, { ...before.fleet.vehicles[0]!, health: 0, disabled: true, emergencyAir: 0 });
 });
 test("physical laboratory air is safe before its field sheet is read", () => {
   let s = prepare();

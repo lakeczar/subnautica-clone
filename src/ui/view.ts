@@ -420,7 +420,7 @@ export class GameView {
         : e.refuge
           ? "Safe air · gradual healing · hold / fabricate / notebook"
           : v?.hull === "dart" && p.x > 15 && p.x < 25 && p.z < -16 && p.z > -29
-            ? "Launch cradle · move north beyond the amber rails before turning. Return along the same clear approach."
+            ? "Launch cradle · move south beyond the amber rails before turning. Return along the same clear approach."
           : p.x > 68
             ? "Read the upper crowns. Z quiet · G distraction · retreat behind the tall rib."
             : p.z > 9 && p.y < 0 && Math.abs(p.x) < 4
