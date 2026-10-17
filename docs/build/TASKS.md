@@ -180,3 +180,18 @@ Next dispatch uses a committed baseline containing this record. Live catalog rev
 | M1-CARRIER | Only `docs/build/evidence/M1-CARRIER.md`; production read-only |5194| Prepared |
 
 [Render brief](tasks/M1-RENDER.md) and [two physical briefs](tasks/M1-PHYSICAL.md) define the bounded work, exact evidence limits, browser isolation and cleanup. The physical workers cannot edit core source or consume moving render code. No independent reviewer is active yet; after combined evidence closes, rotate authors out and start a fresh non-author pair for the frozen related batches, then the separate integrated M1 gate.
+
+### Dispatched from 2ce5e14
+
+All three accepted as **running**, no pending question/children at dispatch. Exact parent `2ce5e14ca1e2a86c06cc3a9a35718e6300794b99`, clean root baseline. T3 async `isolation:worktree`, provider `codex`, model `gpt-6.1-sol`, explicit `reasoningEffort:max`; root plus three workers fills four slots. These IDs supersede the prepared states above; do not dispatch a duplicate or poll active work.
+
+| Task | Exact task ID | Stable client request | Role |
+| --- | --- | --- | --- |
+| M1-RENDER | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-render-sol-max-2ce5e14` | `siltwake-m1-render-sol-max-2ce5e14` | implementation |
+| M1-RECOVERY | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-recovery-sol-max-2ce5e14` | `siltwake-m1-recovery-sol-max-2ce5e14` | test |
+| M1-CARRIER | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-carrier-sol-max-2ce5e14` | `siltwake-m1-carrier-sol-max-2ce5e14` | test |
+
+Completion notifications wake root. Next inspect terminal source/evidence, assign concrete corrections if needed, finish combined gameplay evidence, then fresh paired batch and integrated M1 reviews. Root launched no browser/server during assembly; no owned root resource needs closure.
+
+
+Render's in-flight seam proposal was approved through steer request `siltwake-m1-render-seams-approved-2ce5e14` (same task/run, no new child): scene-owned `createGlassMaterial(scene)`, explicit panes, `createLandmarks(scene,cel,glass)` and `createExpeditionArt(scene,cel,glass)`, plus shared optical helpers/uniform updates inside assigned files. Root confirmed production callers are in renderer.ts. ArtBatch, public GameRenderer/update/state/input remain unchanged. Local air subtraction must preserve deep exterior attenuation; shared material disposal cannot be owned by individual panes. Fixed view-only hull-local Dart seat offset is approved subject to approach/clipping/exit evidence. Final exact signatures/constants await return and CONTRACTS reconciliation.
