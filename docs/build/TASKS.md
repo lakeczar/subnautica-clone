@@ -13,10 +13,14 @@ Coordinator retains other documentation, integration and reviews. Builders retur
 
 FND-01 + ECO-01 round 1 at `2eb0244d850f4aa2806ddadc3f23c9c47132d1ef` is complete. Both independently returned FND changes required / ECO accept. [Exact task IDs, request IDs, briefs, findings and dispositions](reviews/FND-ECO-R1.md). Neither reviewer has live children; both closed owned browser/server resources. ECO acceptance is provisional arithmetic/design only. FND correction task is being dispatched from the committed [assignment](tasks/FND-01-R1-FIX.md).
 
-## Active correction task
+## Completed correction task
 
 - Batch: FND-01-R1-FIX; T3 task ID: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-fnd-r1-fix-sol-max-322d419`.
 - Provider/model/effort: `codex` / `gpt-6.1-sol` / `max`; isolated worktree from `322d419cb1e8e921fa6fc1e10c2ef8296693c993`.
 - Stable request ID: `siltwake-fnd-r1-fix-sol-max-322d419`; state: completed, no live children. Owned tabs/server closed; diagnostic fixtures removed. Source commit `79423ec`, evidence commit `e884c7e`, cherry-picked as `417a7ec` / `fbb4b5e`.
 - Scope/paths/checks: [complete committed assignment](tasks/FND-01-R1-FIX.md). Three accepted findings, no declined findings. Main builder may commit assigned changes in its own checkout; no push/PR/children/integration.
 - Coordinator inspected source/diffs and actual artifacts, reconciled contracts, and reran fresh install/check (35/35 tests/build pass) plus audit (one low esbuild advisory; no Vite/high/moderate/critical). Next: freeze round two and send both prior independent reports/dispositions to fresh paired reviewers. Never use the backing child thread to continue a review round.
+
+## Active round-two reviews
+
+Fresh T3-isolated Astra xhigh and separate Sol 6.1 max reviews are running on `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc`. [Exact task/request IDs, complete brief, proposed resolutions and continuation](reviews/FND-ECO-R2.md). Three active agents including coordinator; no author remains active. Wait for completion notifications; no corrected FND acceptance exists yet.

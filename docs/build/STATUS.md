@@ -1,6 +1,6 @@
 # Siltwake build status
 
-Updated: 2026-10-17. State: foundation corrections integrated and coordinator checks passed; preparing the frozen round-two candidate. Both reviewers accepted the provisional economy proposal at `2eb0244`. FND/M0 remain pending.
+Updated: 2026-10-17. State: foundation corrections integrated and coordinator checks passed; fresh paired round-two reviews running on frozen `0a8ef04`. Both reviewers accepted the provisional economy proposal at `2eb0244`. FND/M0 remain pending.
 
 ## Authority and checkpoint
 
@@ -13,7 +13,7 @@ Updated: 2026-10-17. State: foundation corrections integrated and coordinator ch
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-FND-01 and ECO-01 authors, both round-one reviewers and the Sol correction task have completed; all owned child browser/server resources were closed. Exact IDs and paths are in the task ledger. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. [Round-one findings/dispositions](reviews/FND-ECO-R1.md). Correction commits `79423ec` / `e884c7e` were cherry-picked as `417a7ec` / `fbb4b5e`; production/config/tests exactly match the author source. Coordinator is preparing two fresh worktree reviews.
+FND-01 and ECO-01 authors, both round-one reviewers and the Sol correction task have completed; all owned child browser/server resources were closed. Exact IDs and paths are in the task ledger. Current feature branch is `feat/siltwake-foundation`, baseline `a3e400b`. [Round-one findings/dispositions](reviews/FND-ECO-R1.md). Correction commits `79423ec` / `e884c7e` were cherry-picked as `417a7ec` / `fbb4b5e`; production/config/tests exactly match the author source. Fresh independent Astra xhigh and Sol 6.1 max reviews are running in isolated worktrees. Three active agents including coordinator. [Round-two exact IDs and brief](reviews/FND-ECO-R2.md).
 
 ## Acceptance and evidence
 
@@ -27,7 +27,7 @@ FND-01 and ECO-01 authors, both round-one reviewers and the Sol correction task 
 
 ## Exact next action
 
-Freeze the corrected source plus reconciled contracts and evidence records; dispatch fresh Astra xhigh and separate Sol 6.1 max reviews of the same SHA. Include original brief, both independent reports, accepted findings and proposed fixes, evidence and known gaps. All three original findings have implementation corrections and coordinator checks; reviewers must independently verify them. Preserve ECO's limited proposal scope and require explicit verdicts for the new candidate. Then open/link the feature PR and validate the integrated M0 milestone before dependent gameplay implementation.
+Await both round-two completion notifications; read results using exact IDs in [the record](reviews/FND-ECO-R2.md), without duplicating active tasks. Both reviewers have frozen `0a8ef045d45b00f34386ddf3d2c3f31b7811adbc`, original brief/reports, accepted findings and proposed fixes, evidence and known gaps. Reconcile findings and require both explicit acceptances before accepting FND. Preserve ECO's limited proposal scope. Then open/link the feature PR and validate the integrated M0 milestone before dependent gameplay implementation. Later documentation-only bookkeeping does not change the reviewed source SHA.
 
 Reconcile independent findings, have Sol fix substantiated issues and return the corrected revision to both reviewers. After acceptance, integrate through a feature PR and verify the integrated M0 milestone before dependent implementation. ECO-01 is provisional arithmetic, not runtime routes or recovery proof; later production-registry adoption needs its own integration review. No additional owner decision is needed to continue.
 
