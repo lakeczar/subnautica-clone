@@ -1,10 +1,12 @@
 # Siltwake
 
+> **Design reopened; build input pending review.** The user now wants an approximately ten-hour ocean/island adventure with a discoverable mystery, a useful home pod, and a fleet of increasingly capable submersibles including mobile homes. The earlier short-campaign prompt below is retained as draft one and must not be submitted for construction. Follow the [active Wayfinder map](.scratch/siltwake/map.md). Two small visual prototypes will inform the art choice; their directions are being selected in the integrated questionnaire.
+
 An original underwater survival-exploration game brief: restore a silent observatory beneath alien ice, extend your range with oxygen relays, and cross a luminous migration to reach the ascent beacon.
 
 **Status: research and build prompt only. The game has not been built or playtested.** This public repository is the planning and future implementation home. Its existing repository slug is `subnautica-clone`; the proposed game identity is **Siltwake**.
 
-## Run the build next
+## Earlier launch instructions — held until the revised input is reviewed
 
 Open [the complete one-shot build prompt](prompts/BUILD_GAME.md) and paste it into a fresh **GPT-6 Astra** coding session working in this repository. Alternatively, give that session this instruction:
 

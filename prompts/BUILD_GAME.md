@@ -1,5 +1,7 @@
 # One-shot build prompt: Siltwake
 
+> **Superseded draft one — do not execute.** The design interview now targets a larger ocean/island adventure with vehicle construction, mobile homes, and an approximately ten-hour campaign. See [the active Wayfinder map](../.scratch/siltwake/map.md). This text is retained for comparison and will be replaced by a complete revised input for the user's review before submission.
+
 Paste this entire document into a fresh GPT-6 Astra coding session in this repository. It is self-contained. One shot means one initial instruction followed by autonomous implementation, integration, testing, and revision. It does not mean one model call or a guarantee of a finished game within an unspecified budget.
 
 ---
