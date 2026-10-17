@@ -15,7 +15,8 @@ const engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: 
 engine.setHardwareScalingLevel(1);
 const params = new URLSearchParams(location.search);
 let variant = params.get('variant') === 'cel' ? 'cel' : 'voxel';
-let view = ['reef', 'pod', 'scout', 'island'].includes(params.get('view')) ? params.get('view') : 'reef';
+let refined = params.get('detail') !== 'original';
+let view = ['reef', 'pod', 'scout', 'island','life'].includes(params.get('view')) ? params.get('view') : 'reef';
 let dusk = params.get('light') === 'dusk';
 let paused = params.get('still') === '1';
 let renderDirty = true, interactionUntil = 0, modules = [], moduleStats = [];
@@ -46,7 +47,7 @@ Effect.ShadersStore.siltToonFragmentShader = [
   'precision highp float;',
   'varying vec3 vNormal; varying vec3 vWorld; varying vec4 vColor;',
   'uniform vec3 cameraPosition; uniform vec3 fogColor; uniform float fogDensity;',
-  'uniform vec3 lightDirection; uniform float exposure; uniform float time;',
+  'uniform vec3 lightDirection; uniform float exposure; uniform float time; uniform float refinement; uniform float blockStyle;',
   'void main(){vec3 n=normalize(vNormal); float d=dot(n,normalize(lightDirection));',
   'float band=d>0.62?1.13:(d>0.14?0.91:(d>-0.30?0.70:0.51));',
   'float rim=pow(1.0-max(0.0,dot(n,normalize(cameraPosition-vWorld))),3.0);',
@@ -55,6 +56,19 @@ Effect.ShadersStore.siltToonFragmentShader = [
   'float caustic=smoothstep(.73,.95,ripple)*max(n.y,0.0)*(1.0-smoothstep(8.8,10.0,vWorld.y));',
   'shade+=vec3(.12,.16,.10)*caustic*exposure;',
   'shade*=mix(.84,1.0,smoothstep(-15.0,7.0,vWorld.y));',
+  'if(refinement>0.5){',
+  'float lum=dot(vColor.rgb,vec3(.2126,.7152,.0722));',
+  'vec3 pigment=clamp(mix(vec3(lum),vColor.rgb,1.22),0.0,1.0);',
+  'float direct=max(d,0.0);float light=blockStyle>.5?(.55+direct*.63):band;',
+  'vec3 temperature=mix(vec3(.68,.88,1.03),vec3(1.08,1.035,.91),smoothstep(-.1,.72,d));',
+  'shade=pigment*light*temperature*exposure;',
+  'float waveX=vWorld.x*.9+sin(vWorld.z*.62+time*.18)*.7+time*.12;',
+  'float waveZ=vWorld.z*1.05+sin(vWorld.x*.51-time*.13)*.8;',
+  'float net=1.0-smoothstep(.018,.12,abs(sin(waveX)*sin(waveZ)));',
+  'caustic=net*max(n.y,0.0)*(1.0-smoothstep(8.8,10.0,vWorld.y));',
+  'shade+=vec3(.035,.12,.15)*rim+vec3(.08,.13,.12)*caustic;',
+  'shade*=mix(.89,1.0,smoothstep(-15.0,5.0,vWorld.y));',
+  '}',
   'float haze=1.0-exp(-length(cameraPosition-vWorld)*fogDensity);',
   'gl_FragColor=vec4(mix(shade,fogColor,clamp(haze,0.0,0.94)),1.0);}'
 ].join('\n');
@@ -181,13 +195,14 @@ function createGrounding() {
   mat.diffuseTexture=tex;mat.useAlphaFromDiffuseTexture=true;mat.disableLighting=true;mat.emissiveColor=Color3.White();mat.backFaceCulling=false;mat.zOffset=-1;
   for(const [x,z,w,d] of [[-13,-1,15,13],[9,-4,9,9],[-3,18,10,8],[15,18,10,8]]){
     const mesh=new Mesh('seabed-contact',scene),data=new VertexData();
-    const positions=[],uvs=[],indices=[],normals=[],step=variant==='voxel'?2.3:1;
+    const positions=[],uvs=[],indices=[],normals=[],step=variant==='voxel'?(refined?1.15:2.3):1;
     const left=x-w/2,right=x+w/2,front=z-d/2,back=z+d/2;
     const startX=variant==='voxel'?-69+Math.floor((left+69)/step)*step:left;
     const startZ=variant==='voxel'?-48+Math.floor((front+48)/step)*step:front;
     for(let sx=startX;sx<right;sx+=step)for(let sz=startZ;sz<back;sz+=step){
       const a=Math.max(sx,left),b=Math.min(sx+step,right),c=Math.max(sz,front),e=Math.min(sz+step,back);
-      const top=Math.round(height(sx+step/2,sz+step/2)/.85)*.85;
+      const quantum=refined?.425:.85;
+      const top=Math.round(height(sx+step/2,sz+step/2)/quantum)*quantum;
       const base=positions.length/3;
       for(const [px,pz] of [[a,c],[a,e],[b,e],[b,c]]){
         positions.push(px,(variant==='voxel'?top:height(px,pz))+.06,pz);
@@ -203,7 +218,8 @@ const cameras={
   reef:{position:[29,3,-45],target:[-1,-3,9]},
   pod:{position:[4,0,-22],target:[-13,-4.5,-1]},
   scout:{position:[23,2,-19],target:[9,-3,-4]},
-  island:{position:[10,31,-8],target:[-28,19,36]}
+  island:{position:[10,31,-8],target:[-28,19,36]},
+  life:{position:[27,5,-4],target:[16,1.5,10.5]}
 };
 function applyCamera() {
   renderDirty=true;
@@ -215,29 +231,33 @@ function applyCamera() {
 function updateAtmosphere() {
   renderDirty=true;
   const surface=view==='island';
-  const fog=dusk?(surface?'#5c7391':'#124957'):(surface?'#8bd0d3':'#348997');
+  const fog=dusk?(surface?'#5c7391':'#124957'):(surface?'#8bd0d3':refined?'#176980':'#348997');
   scene.fogColor=C(fog);scene.clearColor=Color4.FromColor3(C(fog),1);
-  scene.fogDensity=surface?.0028:.009;
+  scene.fogDensity=surface?.0028:(refined?.0048:.009);
   canvas.style.background=surface?(dusk?'linear-gradient(#24364e,#8d9ca7)':'linear-gradient(#79becd,#c8e3db)'):(dusk?'linear-gradient(#18566a,#082f46)':'linear-gradient(#51a4ad,#185669)');
+  if(refined&&!surface)canvas.style.background=dusk?'linear-gradient(#123c59,#041c32)':'linear-gradient(#398f9c,#0a344f)';
   scene.clearColor=new Color4(0,0,0,0);
   sun.intensity=dusk?.65:1.1;ambient.intensity=dusk?.65:.92;
   toon.setColor3('fogColor',scene.fogColor);toon.setFloat('fogDensity',scene.fogDensity);
-  toon.setFloat('exposure',dusk?.8:1.13);
+  toon.setFloat('exposure',dusk?.8:(refined?1.08:1.13));
+  toon.setFloat('refinement',refined?1:0);toon.setFloat('blockStyle',variant==='voxel'?1:0);
   water.material.alpha=surface?.68:.16;
   document.querySelector('#light-toggle').setAttribute('aria-pressed',String(dusk));
   document.querySelector('#light-toggle span').textContent=dusk?'Blue hour':'Daylight';
 }
 function syncURL() {
-  const url=new URL(location.href);url.searchParams.set('variant',variant);url.searchParams.set('view',view);
+  const url=new URL(location.href);url.searchParams.set('variant',variant);url.searchParams.set('view',view);url.searchParams.set('detail',refined?'refined':'original');
   if(dusk)url.searchParams.set('light','dusk');else url.searchParams.delete('light');
   history.replaceState({},'',url);
 }
 function syncUI() {
   const voxel=variant==='voxel';
-  document.querySelector('#style-title').textContent=voxel?'Tidal blocks':'Living ink';
+  document.querySelector('#detail-toggle').setAttribute('aria-pressed',String(refined));
+  document.querySelector('#detail-toggle span').textContent=refined?'Refined study':'Original study';
+  document.querySelector('#style-title').textContent=voxel?(refined?'Fine tidal blocks':'Tidal blocks'):(refined?'Living color':'Living ink');
   document.querySelector('#style-summary').textContent=voxel?
-    'A living reef in carved, stepped forms. Crisp silhouettes under soft underwater light.':
-    'Sculpted life, pools of color and delicate ink. A luminous ocean with an illustrated edge.';
+    (refined?'Smaller steps reveal finer silhouettes, while engineered surfaces retain their precision.':'A living reef in carved, stepped forms. Crisp silhouettes under soft underwater light.'):
+    (refined?'Richer reef colonies, clearer material colors and a more luminous illustrated ocean.':'Sculpted life, pools of color and delicate ink. A luminous ocean with an illustrated edge.');
   document.querySelector('#technique').textContent=voxel?'VOXEL GEOMETRY · DIFFUSE LIGHT':'CURVED GEOMETRY · BANDED LIGHT · INK';
   document.querySelector('#variant-number').textContent=voxel?'01 / 02':'02 / 02';
   for(const id of ['voxel','cel'])document.querySelector('#'+id).setAttribute('aria-pressed',String(variant===id));
@@ -257,13 +277,14 @@ function build() {
   sun=new DirectionalLight('sun',V(.4,-1,.35),scene);sun.diffuse=C('#fff1bf');
   toon=new ShaderMaterial('illustrated-material',scene,{vertex:'siltToon',fragment:'siltToon'},{
     attributes:['position','normal','color'],
-    uniforms:['world','worldViewProjection','cameraPosition','fogColor','fogDensity','lightDirection','exposure','time']
+    uniforms:['world','worldViewProjection','cameraPosition','fogColor','fogDensity','lightDirection','exposure','time','refinement','blockStyle']
   });
   toon.setVector3('lightDirection',V(-.4,1,-.35));toon.backFaceCulling=false;
   voxelMaterial=new StandardMaterial('voxel-palette',scene);
   voxelMaterial.diffuseColor=Color3.White();voxelMaterial.specularColor=Color3.Black();
   voxelMaterial.ambientColor=C('#67968c');
-  const ctx={scene,variant,Sculpture,colors,V,C,seeded,height,paint,toon,voxelMaterial};
+  if(refined&&variant==='voxel')voxelMaterial=toon;
+  const ctx={scene,variant,refined,Sculpture,colors,V,C,seeded,height,paint,toon,voxelMaterial};
   for(const [name,create] of [['environment',createEnvironment],['vehicles',createVehicles],['ecology',createEcology]]){
     const before={meshes:scene.meshes.length,vertices:scene.meshes.reduce((n,m)=>n+m.getTotalVertices(),0)};
     modules.push(create(ctx));
@@ -273,6 +294,10 @@ function build() {
   applyCamera();syncUI();syncURL();
   scene.executeWhenReady(()=>{renderDirty=true;document.querySelector('#loading').classList.add('loaded');setTimeout(()=>{document.querySelector('#loading').hidden=true;},550);window.dispatchEvent(new Event('art-study-ready'));});
 }
+
+document.querySelector('#detail-toggle').addEventListener('click',()=>{
+  const position=camera.position.clone(),target=camera.target.clone();refined=!refined;build();camera.setTarget(target);camera.setPosition(position);
+});
 
 function chooseStyle(next) {
   if(variant===next)return;
@@ -285,7 +310,7 @@ for(const id of ['previous','next'])document.querySelector('#'+id).addEventListe
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view;applyCamera();syncURL();}));
 document.querySelector('#light-toggle').addEventListener('click',()=>{dusk=!dusk;updateAtmosphere();syncURL();});
 document.querySelector('#motion-toggle').addEventListener('click',()=>{
-  paused=!paused;renderDirty=true;document.querySelector('#motion-toggle').setAttribute('aria-pressed',String(paused));
+  paused=!paused;renderDirty=true;previousFrame=0;frameIntervals=[];document.querySelector('#motion-toggle').setAttribute('aria-pressed',String(paused));
   document.querySelector('#motion-toggle span').textContent=paused?'Resume life':'Pause life';
 });
 document.querySelector('#reset-camera').addEventListener('click',applyCamera);
@@ -324,7 +349,7 @@ engine.runRenderLoop(()=>{
 Object.defineProperty(window,'artStudy',{value:{
   getState:()=>{
     const sorted=[...samples].sort((a,b)=>a-b),intervals=[...frameIntervals].sort((a,b)=>a-b),gl=engine.getGlInfo();
-    return {variant,view,lighting:dusk?'blue-hour':'daylight',paused,ready:scene.isReady(),
+    return {variant,detail:refined?'refined':'original',view,lighting:dusk?'blue-hour':'daylight',paused,ready:scene.isReady(),
       meshes:scene.meshes.length,vertices:scene.getTotalVertices(),moduleStats,renderedFrames,
       camera:{position:camera.position.asArray(),target:camera.target.asArray()},
       viewport:[engine.getRenderWidth(),engine.getRenderHeight()],webGL:engine.webGLVersion,

@@ -116,6 +116,36 @@ function terrainColor(x, y, z) {
   return patch > .9 ? P.sandLight : (patch < -.35 ? P.sandShade : P.sand);
 }
 
+const REFINED_ROCK_BEDS = [
+  [-5.5, 17, 6.4, 5.8], [18.2, 21, 6.0, 6.7],
+  [-31, 8.5, 7.3, 4.8], [29, 15, 7.7, 5.4], [34, 39, 7.1, 7.3]
+];
+
+function refinedTerrainColor(x, y, z) {
+  const slope = slopeAt(x, z);
+  if (y > 13.5) {
+    if (slope > .8) return ['#416873', '#5b7f7c', '#6b8980', '#527575'][Math.floor((y + x * .018 + 30) / 1.3) % 4];
+    return Math.sin(x * .31 + z * .17) > .3 ? '#849a71' : '#6f8a74';
+  }
+  if (y > 7.2) return y > 11.8 && slope > 1.3 ? '#5c827d' : (y > 9.4 ? '#e3d39e' : '#c5c396');
+  if (slope > .72) return Math.sin(y * 1.4 + x * .03) > .55 ? '#70978b' : '#3e737a';
+  const bed = Math.max(...REFINED_ROCK_BEDS.map(([cx, cz, rx, rz]) =>
+    Math.exp(-(((x - cx) / rx) ** 2 + ((z - cz) / rz) ** 2) * 2)));
+  const currents = Math.sin(x * .22 + Math.sin(z * .13) * 1.7) * .13;
+  if (bed + currents > .52) return '#547e7c';
+  if (bed + currents > .30) return '#91ac98';
+  const sand = Math.sin(x * .075 + Math.sin(z * .08)) + Math.sin(z * .11 - x * .03) * .55;
+  return sand > .85 ? '#c4d7b4' : (sand < -.3 ? '#98bea5' : '#b2ceb0');
+}
+
+function supportingHeight(ctx, x, z) {
+  if (ctx.variant !== 'voxel') return terrainHeight(x, z);
+  const step = ctx.refined ? 1.15 : 2.3, quantum = ctx.refined ? .425 : .85;
+  const px = -69 + (Math.floor((x + 69) / step) + .5) * step;
+  const pz = -48 + (Math.floor((z + 48) / step) + .5) * step;
+  return snap(terrainHeight(px, pz), quantum);
+}
+
 function strataColor(y, land = false) {
   const band = Math.floor((y + 30) / 1.45) % 5;
   return (land ? [P.basalt, P.ridge, P.stratum, P.basaltLight, P.ridge] :
@@ -130,22 +160,23 @@ function archStrataColor(x, y) {
 }
 
 function makeTerrain(ctx) {
+  const colorAt = ctx.refined ? refinedTerrainColor : terrainColor;
   if (ctx.variant === 'voxel') {
-    const b = new SurfaceBatch(ctx, 'env-exposed-voxel-terrain'), n = 60, step = 2.3, bottom = -20;
+    const b = new SurfaceBatch(ctx, 'env-exposed-voxel-terrain'), n = ctx.refined ? 120 : 60, step = ctx.refined ? 1.15 : 2.3, bottom = -20;
     const heights = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) =>
-      snap(terrainHeight(-69 + (i + .5) * step, -48 + (j + .5) * step), .85)));
+      snap(terrainHeight(-69 + (i + .5) * step, -48 + (j + .5) * step), ctx.refined ? .425 : .85)));
     const wall = (a, c, lo, hi, x, z) => {
       if (hi <= lo + .01) return;
       const count = Math.max(1, Math.ceil((hi - lo) / 1.7));
       for (let k = 0; k < count; k++) {
         const y0 = lerp(lo, hi, k / count), y1 = lerp(lo, hi, (k + 1) / count);
         b.face([[a[0], y0, a[1]], [c[0], y0, c[1]], [c[0], y1, c[1]], [a[0], y1, a[1]]],
-          hi > 6 ? strataColor((y0 + y1) / 2, true) : terrainColor(x, hi, z), .94);
+          hi > 6 ? strataColor((y0 + y1) / 2, true) : colorAt(x, hi, z), .94);
       }
     };
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
       const x = -69 + i * step, z = -48 + j * step, y = heights[i][j];
-      b.face([[x, y, z], [x, y, z + step], [x + step, y, z + step], [x + step, y, z]], terrainColor(x + step / 2, y, z + step / 2));
+      b.face([[x, y, z], [x, y, z + step], [x + step, y, z + step], [x + step, y, z]], colorAt(x + step / 2, y, z + step / 2));
       const l = i ? heights[i - 1][j] : bottom, r = i < n - 1 ? heights[i + 1][j] : bottom;
       const f = j ? heights[i][j - 1] : bottom, back = j < n - 1 ? heights[i][j + 1] : bottom;
       wall([x, z], [x, z + step], l, y, x, z);
@@ -155,13 +186,17 @@ function makeTerrain(ctx) {
     }
     b.finish();
   } else {
-    const positions = [], indices = [], colors = [], normals = [], n = 72, step = 138 / n;
+    const positions = [], indices = [], colors = [], normals = [], n = ctx.refined ? 120 : 72, step = 138 / n;
     for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) {
-      const x = -69 + i * step, z = -48 + j * step, y = terrainHeight(x, z), c = ctx.C(terrainColor(x, y, z));
+      const x = -69 + i * step, z = -48 + j * step, y = terrainHeight(x, z), c = ctx.C(colorAt(x, y, z));
       positions.push(x, y, z); colors.push(c.r, c.g, c.b, 1);
     }
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-      const k = j * (n + 1) + i; indices.push(k, k + n + 1, k + 1, k + 1, k + n + 1, k + n + 2);
+      const k = j * (n + 1) + i;
+      // Preserve the first study for comparison. Its direct grid used the
+      // opposite LH winding: refined sand must face the light, not the seabed.
+      if (ctx.refined) indices.push(k, k + 1, k + n + 1, k + 1, k + n + 2, k + n + 1);
+      else indices.push(k, k + n + 1, k + 1, k + 1, k + n + 1, k + n + 2);
     }
     VertexData.ComputeNormals(positions, indices, normals);
     const data = new VertexData(), mesh = new Mesh('env-sculpted-sand-and-island', ctx.scene);
@@ -184,7 +219,7 @@ function contourRadius(angle, level) {
 
 function makeIslandShelves(ctx) {
   const b = new SurfaceBatch(ctx, 'env-island-wavecut-bench-and-strata');
-  const voxel = ctx.variant === 'voxel', n = voxel ? 72 : 100;
+  const voxel = ctx.variant === 'voxel', n = ctx.refined ? (voxel ? 144 : 140) : (voxel ? 72 : 100);
   // Broad intertidal limestone/sand apron, then narrower resistant basalt beds.
   const levels = [6.6, 10.25, 13.65, 17.35, 20.75, 24.0];
   for (let s = 0; s < levels.length; s++) {
@@ -195,7 +230,7 @@ function makeIslandShelves(ctx) {
       const width = (shore ? 1.8 : s === 0 ? 1.15 : .75) * erosion;
       const point = radius => {
         let x = -32 + dx * radius, z = 39 + dz * radius;
-        if (voxel) { x = snap(x, 1.15); z = snap(z, 1.15); }
+        if (voxel) { x = snap(x, ctx.refined ? .575 : 1.15); z = snap(z, ctx.refined ? .575 : 1.15); }
         return [x, level + .07, z];
       };
       const inner = point(r - .38), outer = point(r + width);
@@ -251,7 +286,7 @@ function pointInProfile(x, y, polygon) {
 function makeArch(ctx) {
   const b = new SurfaceBatch(ctx, 'env-eroded-basalt-arch'), voxel = ctx.variant === 'voxel';
   if (voxel) {
-    const step = .78, nx = 29, ny = 19, nz = 7;
+    const step = ctx.refined ? .39 : .78, nx = ctx.refined ? 58 : 29, ny = ctx.refined ? 38 : 19, nz = ctx.refined ? 14 : 7;
     const occupied = new Set();
     const key = (i, j, k) => `${i},${j},${k}`;
     const outline = Array.from({ length: 51 }, (_, i) => archProfile(ARCH_OUTER, i / 50))
@@ -259,7 +294,8 @@ function makeArch(ctx) {
     for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) {
       const x = -5.31 + (i + .5) * step, y = -13.35 + (j + .5) * step, z = 15.27 + (k + .5) * step;
       const local = x - 6, insideCrown = pointInProfile(x, y, outline);
-      const depth = 2.05 + .3 * Math.sin(local * .7) + .22 * Math.cos(y * 1.4);
+      const depth = 2.05 + .3 * Math.sin(local * .7) + .22 * Math.cos(y * 1.4)
+        + (ctx.refined ? .085 * Math.sin(local * 3.1 + y * .4) : 0);
       if (insideCrown && Math.abs(z - 18) < depth && y > -13.1) occupied.add(key(i, j, k));
     }
     for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) {
@@ -274,7 +310,7 @@ function makeArch(ctx) {
       if (!occupied.has(key(i, j, k + 1))) b.face([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], col, .92);
     }
   } else {
-    const n = 30, rings = 6;
+    const n = ctx.refined ? 48 : 30, rings = ctx.refined ? 8 : 6;
     const point = (i, r, back) => {
       const a = i / n * Math.PI, wave = .10 * Math.sin(a * 7) + .06 * Math.sin(a * 13);
       const inner = archProfile(ARCH_INNER, i / n), outer = archProfile(ARCH_OUTER, i / n);
@@ -318,14 +354,14 @@ function makeOutcrops(ctx) {
     const ca = Math.cos(s.angle), sa = Math.sin(s.angle), base = terrainHeight(s.x, s.z) - .75;
     const world = (x, y, z) => [s.x + x * ca - z * sa, y, s.z + z * ca + x * sa];
     if (voxel) {
-      const step = .9, nx = Math.ceil(s.rx * 2 / step), nz = Math.ceil(s.rz * 2 / step), heights = [];
+      const step = ctx.refined ? .45 : .9, nx = Math.ceil(s.rx * 2 / step), nz = Math.ceil(s.rz * 2 / step), heights = [];
       const top = (i, j) => (i < 0 || j < 0 || i >= nx || j >= nz) ? base - 1 : heights[i][j];
       for (let i = 0; i < nx; i++) {
         heights[i] = [];
         for (let j = 0; j < nz; j++) {
           const x = (i + .5) * step - s.rx, z = (j + .5) * step - s.rz;
           const q = Math.abs(x / s.rx) ** 1.8 + Math.abs(z / s.rz) ** 2.7;
-          heights[i][j] = q > 1 ? base - 1 : base + snap(s.h * Math.max(0, 1 - q * .73) + (x / s.rx) * .35, .65);
+          heights[i][j] = q > 1 ? base - 1 : base + snap(s.h * Math.max(0, 1 - q * .73) + (x / s.rx) * .35, ctx.refined ? .325 : .65);
         }
       }
       for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
@@ -346,6 +382,8 @@ function makeOutcrops(ctx) {
       const tiers = [{ scale: 1.04, y: -.35, shift: 0 }, { scale: 1.0, y: .24, shift: .03 },
         { scale: .81, y: .48, shift: -.03 }, { scale: .85, y: .57, shift: -.03 },
         { scale: .56, y: .94, shift: -.12 }, { scale: .21, y: 1, shift: -.18 }];
+      if (ctx.refined) tiers.splice(2, 0, { scale: .93, y: .36, shift: .015 }, { scale: .97, y: .405, shift: .015 });
+      if (ctx.refined) tiers.splice(6, 0, { scale: .69, y: .73, shift: -.075 }, { scale: .73, y: .78, shift: -.075 });
       const ring = t => footprint.map(([x, z]) => world((x * t.scale + t.shift) * s.rx, base + t.y * s.h + x * .3, z * t.scale * s.rz));
       for (let j = 0; j < tiers.length - 1; j++) {
         const a = ring(tiers[j]), c = ring(tiers[j + 1]);
@@ -363,6 +401,25 @@ function makeGeologicalDetails(ctx) {
   // Ripples are confined to three low-current pockets, never sprinkled over rock.
   for (const [cx, cz, angle, length] of [[2, -17, .25, 13], [24, 2, -.45, 9], [-28, -8, -.2, 8]]) {
     for (let row = 0; row < 7; row++) {
+      if (ctx.refined) {
+        const strips = [], count = 22, across = [-1, -.38, .38, 1];
+        for (let i = 0; i <= count; i++) {
+          const xx = (i / count - .5) * length, fade = Math.sin(i / count * Math.PI);
+          const centreZ = (row - 3) * .78 + Math.sin(xx * .45 + row * .35) * .12;
+          const width = .10 + fade * .15;
+          strips.push(across.map((side, k) => {
+            const zz = centreZ + side * width;
+            let x = cx + xx * Math.cos(angle) - zz * Math.sin(angle), z = cz + xx * Math.sin(angle) + zz * Math.cos(angle);
+            if (voxel) { x = snap(x, .115); z = snap(z, .115); }
+            const relief = (k === 1 || k === 2 ? .055 : .008) * fade;
+            return [x, supportingHeight(ctx, x, z) + .012 + (voxel ? snap(relief, .02) : relief), z];
+          }));
+        }
+        for (let i = 0; i < count; i++) for (let k = 0; k < 3; k++) {
+          sand.face([strips[i][k], strips[i][k + 1], strips[i + 1][k + 1], strips[i + 1][k]], k === 1 ? '#b3c6a3' : '#a0bc9e');
+        }
+        continue;
+      }
       const points = [];
       for (let i = 0; i <= 15; i++) {
         const xx = (i / 15 - .5) * length, zz = (row - 3) * .78 + Math.sin(xx * .45 + row * .35) * .12;
@@ -384,10 +441,11 @@ function makeGeologicalDetails(ctx) {
     const base = terrainHeight(s.x, s.z) - .75;
     let py;
     if (voxel) {
-      px = (Math.floor((px + s.rx) / .9) + .5) * .9 - s.rx;
-      pz = (Math.floor((pz + s.rz) / .9) + .5) * .9 - s.rz;
+      const step = ctx.refined ? .45 : .9;
+      px = (Math.floor((px + s.rx) / step) + .5) * step - s.rx;
+      pz = (Math.floor((pz + s.rz) / step) + .5) * step - s.rz;
       const q = Math.abs(px / s.rx) ** 1.8 + Math.abs(pz / s.rz) ** 2.7;
-      py = base + snap(s.h * Math.max(0, 1 - q * .73) + (px / s.rx) * .35, .65) + .08;
+      py = base + snap(s.h * Math.max(0, 1 - q * .73) + (px / s.rx) * .35, ctx.refined ? .325 : .65) + .08;
     } else {
       py = base + .57 * s.h + (px / s.rx) * .3 + .035;
       pz -= .035;
@@ -401,10 +459,10 @@ function makeGeologicalDetails(ctx) {
   ];
   seams.forEach((path, index) => {
     for (let i = 0; i < path.length - 1; i++) {
-      const a = path[i], c = path[i + 1], col = index === 1 ? P.ore : P.vein;
+      const a = path[i], c = path[i + 1], col = ctx.refined ? (index === 1 ? '#e0b065' : '#a5d3b2') : (index === 1 ? P.ore : P.vein);
       if (voxel) {
-        const count = Math.ceil(Math.hypot(...sub(c, a)) / .26);
-        for (let k = 0; k < count; k++) minerals.box(mixPoint(a, c, k / count).map(v => snap(v, .2)), [.27, .19, .18], col);
+        const count = Math.ceil(Math.hypot(...sub(c, a)) / (ctx.refined ? .16 : .26));
+        for (let k = 0; k < count; k++) minerals.box(mixPoint(a, c, k / count).map(v => snap(v, ctx.refined ? .1 : .2)), ctx.refined ? [.18, .13, .14] : [.27, .19, .18], col);
       } else minerals.beam(a, c, .10, .12, col);
     }
     if (index < 2) for (let j = 0; j < 3; j++) {
@@ -432,8 +490,8 @@ function makeResearchStation(ctx) {
     if (!voxel || Math.abs(a[1] - b[1]) < .01 || Math.abs(a[0] - b[0]) + Math.abs(a[2] - b[2]) < .01) {
       batch.beam(W(a), W(b), width, depth, color); return;
     }
-    const count = Math.ceil(Math.hypot(...sub(a, b)) / .45);
-    for (let i = 0; i <= count; i++) box(batch, mixPoint(a, b, i / count).map(v => snap(v, .3)), [width, .5, depth], color);
+    const count = Math.ceil(Math.hypot(...sub(a, b)) / (ctx.refined ? .25 : .45));
+    for (let i = 0; i <= count; i++) box(batch, mixPoint(a, b, i / count).map(v => snap(v, ctx.refined ? .15 : .3)), [width, ctx.refined ? .3 : .5, depth], color);
   };
 
   const deckPlan = [[-6.1, -3.2], [-4.3, -4.4], [4.3, -4.4], [6.1, -2.8], [6.1, 2.6], [4.4, 4], [-4.6, 4], [-6.1, 2.6]];
@@ -485,11 +543,12 @@ function makeResearchStation(ctx) {
   // Roof cross section: a shallow folded wing, never an ellipsoid house.
   const roofX = [-5.55, -4.5, 0, 4.6, 5.5], roofY = [3.2, 3.88, 4.35, 3.72, 3.05];
   if (voxel) {
-    for (let i = -11; i <= 10; i++) {
-      const xx = (i + .5) * .5;
+    const half = ctx.refined ? 22 : 11, step = ctx.refined ? .25 : .5;
+    for (let i = -half; i <= half - 1; i++) {
+      const xx = (i + .5) * step;
       let k = 0; while (k < roofX.length - 2 && xx > roofX[k + 1]) k++;
-      const yy = snap(lerp(roofY[k], roofY[k + 1], clamp((xx - roofX[k]) / (roofX[k + 1] - roofX[k]), 0, 1)), .28);
-      box(shell, [xx, yy, .12], [.5, .36, 7.5], i < -7 ? P.hullShade : P.hull);
+      const yy = snap(lerp(roofY[k], roofY[k + 1], clamp((xx - roofX[k]) / (roofX[k + 1] - roofX[k]), 0, 1)), ctx.refined ? .14 : .28);
+      box(shell, [xx, yy, .12], [step, .36, 7.5], i < (ctx.refined ? -14 : -7) ? P.hullShade : P.hull);
     }
   } else {
     for (let i = 0; i < roofX.length - 1; i++) {
@@ -542,7 +601,184 @@ function makeResearchStation(ctx) {
   const panel = [plus(plus(dropped, u, -1), v, -1), plus(plus(dropped, u), v, -1), plus(plus(dropped, u), v), plus(plus(dropped, u, -1), v)];
   shell.face(panel, P.hullShade); shell.face([...panel].reverse(), P.hullShade);
   details.beam(plus(dropped, u, -.9), plus(dropped, u, .9), .16, .12, P.orange);
+  if (ctx.refined) {
+    // Human-scale maintenance fittings, kept in the existing merged batches.
+    for (const xx of [-1.8, .0, 1.8, 3.6]) {
+      box(details, [xx, .87, -3.48], [1.28, .045, .07], '#77928b');
+      for (const dx of [-.48, .48]) box(details, [xx + dx, .72, -3.48], [.075, .075, .06], P.metal);
+    }
+    box(structural, [5.15, .95, 1.65], [.18, 1.08, 1.26], P.metal);
+    box(details, [5.26, .95, 1.65], [.06, .88, 1.05], P.orange);
+    for (let i = 0; i < 4; i++) box(details, [5.30, .7 + i * .15, 1.65], [.07, .06, .66], P.ink);
+    box(details, [-3.12, 1.68, -2.72], [.28, .42, .12], P.metal);
+    box(details, [-3.12, 1.79, -2.80], [.13, .09, .06], '#c9dc9c');
+    box(details, [-3.12, 1.60, -2.80], [.11, .07, .06], P.ochre);
+    for (let i = 0; i < 6; i++) box(structural, [-2.9 + i * .40, 4.23 + i * .042, .35], [.18, .09, 1.45], P.metal);
+    for (const xx of [-4.8, 4.9]) beam(structural, [xx, 3.7, -.9], [xx, 3.76, 2.2], .10, .12, P.metal);
+    glazing.face([W([-.8, 2.25, -3.325]), W([-.4, 2.7, -3.325]), W([.1, 2.7, -3.325]), W([-.3, 2.25, -3.325])], '#609399');
+    glazing.face([W([2.4, 2.3, -3.325]), W([2.65, 2.7, -3.325]), W([2.83, 2.7, -3.325]), W([2.58, 2.3, -3.325])], '#6e9d9e');
+  }
   structural.finish(); shell.finish(true, .022); glazing.finish(); details.finish();
+}
+
+function makeRefinedGeology(ctx) {
+  const gravel = new SurfaceBatch(ctx, 'env-refined-sediment-lenses-and-talus');
+  const cliff = new SurfaceBatch(ctx, 'env-refined-cliff-weathering');
+  const bedding = new SurfaceBatch(ctx, 'env-refined-arch-bedding-and-fissures');
+  const voxel = ctx.variant === 'voxel';
+  const lenses = [
+    [-7.0, 15.5, 3.0, 1.7, -.32], [19.2, 18.1, 3.2, 1.75, .5],
+    [-32.0, 5.6, 3.6, 1.6, -.36], [28.4, 10.7, 3.8, 1.75, .25],
+    [-20.5, 31.5, 2.3, 1.8, -.9], [-39.0, 31.3, 2.2, 1.8, .2]
+  ];
+  const rotate = (cx, cz, angle, x, z, y) => [cx + x * Math.cos(angle) - z * Math.sin(angle), y, cz + z * Math.cos(angle) + x * Math.sin(angle)];
+  const localStone = (cx, cz, rx, rz, height, angle, index) => {
+    const world = (x, z, y) => rotate(cx, cz, angle, x, z, y);
+    const col = index % 3 === 0 ? '#768e80' : (index % 3 === 1 ? '#4b7375' : '#5d827b');
+    if (voxel) {
+      const step = .20, nx = Math.ceil(rx * 2 / step), nz = Math.ceil(rz * 2 / step), top = [], base = [];
+      for (let i = 0; i < nx; i++) {
+        top[i] = []; base[i] = [];
+        for (let j = 0; j < nz; j++) {
+          const x = (i + .5) * step - rx, z = (j + .5) * step - rz, p = world(x, z, 0);
+          const q = Math.abs(x / rx) ** 2.1 + Math.abs(z / rz) ** 2.8;
+          base[i][j] = supportingHeight(ctx, p[0], p[2]);
+          top[i][j] = q > 1 ? -Infinity : base[i][j] + .035 + snap(height * (1 - q * .62), .08);
+        }
+      }
+      const neighbor = (i, j, fallback) => i < 0 || j < 0 || i >= nx || j >= nz ? fallback : top[i][j];
+      for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+        const y = top[i][j]; if (!Number.isFinite(y)) continue;
+        const x0 = i * step - rx, x1 = x0 + step, z0 = j * step - rz, z1 = z0 + step;
+        gravel.face([world(x0, z0, y), world(x0, z1, y), world(x1, z1, y), world(x1, z0, y)], col, 1.04);
+        for (const [ii, jj, a, c] of [[i - 1, j, [x0, z0], [x0, z1]], [i + 1, j, [x1, z1], [x1, z0]], [i, j - 1, [x1, z0], [x0, z0]], [i, j + 1, [x0, z1], [x1, z1]]]) {
+          const lo = Math.max(base[i][j] - .015, neighbor(ii, jj, base[i][j]));
+          if (lo < y) gravel.face([world(a[0], a[1], lo), world(c[0], c[1], lo), world(c[0], c[1], y), world(a[0], a[1], y)], col);
+        }
+      }
+    } else {
+      const footprint = [[-.9, -.4], [-.28, -.95], [.67, -.72], [1, .1], [.3, .88], [-.7, .65]];
+      const bottom = footprint.map(([x, z]) => {
+        const p = world(x * rx, z * rz, 0); p[1] = supportingHeight(ctx, p[0], p[2]) - .05; return p;
+      });
+      const top = footprint.map(([x, z]) => {
+        const p = world((x * .68 - .08) * rx, z * .67 * rz, 0);
+        p[1] = supportingHeight(ctx, p[0], p[2]) + height * (1 + x * .16); return p;
+      });
+      for (let i = 0; i < footprint.length; i++) gravel.face([bottom[(i + 1) % bottom.length], bottom[i], top[i], top[(i + 1) % top.length]], col);
+      gravel.face([...top].reverse(), col, 1.06);
+    }
+  };
+
+  // Low sediment lenses collect talus beside existing rock habitats. Each has
+  // the same deliberate seven-chip arrangement; none occupies a vehicle pad.
+  const chips = [[-.68, -.24, .36, .24, .22], [-.42, .15, .46, .31, .28],
+    [-.18, -.35, .26, .18, .17], [.05, .1, .55, .36, .36], [.36, -.26, .40, .25, .25],
+    [.64, .14, .24, .17, .16], [.2, .58, .22, .16, .12]];
+  lenses.forEach(([cx, cz, rx, rz, angle], index) => {
+    const world = (x, z, y = 0) => rotate(cx, cz, angle, x, z, y);
+    if (voxel) {
+      const step = .575, nx = Math.ceil(rx * 2 / step), nz = Math.ceil(rz * 2 / step);
+      for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+        const x = (i + .5) * step - rx, z = (j + .5) * step - rz;
+        const q = (x / rx) ** 2 + (z / rz) ** 2;
+        if (q > 1 + Math.sin(x * 2 + index) * .09) continue;
+        const p = world(x, z), y = supportingHeight(ctx, p[0], p[2]) + (q < .5 ? .13 : .065);
+        gravel.face([world(x - step / 2, z - step / 2, y), world(x - step / 2, z + step / 2, y), world(x + step / 2, z + step / 2, y), world(x + step / 2, z - step / 2, y)], q < .5 ? '#72958a' : '#95af96');
+      }
+    } else {
+      const rings = [0, .54, 1], count = 18, ring = r => Array.from({ length: count }, (_, i) => {
+        const a = i / count * Math.PI * 2, erosion = 1 + .08 * Math.sin(a * 5 + index);
+        const p = world(Math.cos(a) * rx * r * erosion, Math.sin(a) * rz * r * erosion);
+        p[1] = supportingHeight(ctx, p[0], p[2]) + (1 - r * r) * .14 + .035; return p;
+      });
+      const middle = ring(rings[1]), outside = ring(rings[2]), centre = world(0, 0);
+      centre[1] = supportingHeight(ctx, centre[0], centre[2]) + .175;
+      for (let i = 0; i < count; i++) {
+        const j = (i + 1) % count;
+        gravel.face([centre, middle[j], middle[i]], '#72958a');
+        gravel.face([middle[i], middle[j], outside[j], outside[i]], '#95af96');
+      }
+    }
+    chips.forEach(([px, pz, sx, sz, tall], k) => {
+      const p = world(px * rx, pz * rz);
+      localStone(p[0], p[2], sx, sz, tall, angle + k * .6, index + k);
+    });
+  });
+
+  // Narrow runoff ribs and short resistant beds break the blank island face.
+  // Their positions follow the shared contours; the station approach stays clear.
+  for (const [g, angle] of [-1.95, -1.52, -1.12, -.72, -.25, .38].entries()) {
+    const rings = [], count = 19;
+    for (let i = 0; i <= count; i++) {
+      const level = lerp(24.8, 11.35, i / count), a = angle + Math.sin(i * .34 + g) * .035;
+      const r = contourRadius(a, level), x = -32 + Math.cos(a) * r, z = 39 + Math.sin(a) * r;
+      const tangent = [-Math.sin(a), Math.cos(a)], width = .28 + .10 * Math.sin(i * .4 + g);
+      if (voxel) {
+        const px = snap(x, .575), pz = snap(z, .575), base = supportingHeight(ctx, px, pz);
+        cliff.box([px, base + .12, pz], [.575, .24, .575], i % 4 === 0 ? '#809786' : '#4d7777');
+      } else rings.push([-1, 0, 1].map((side, k) => {
+        const px = x + tangent[0] * width * side, pz = z + tangent[1] * width * side;
+        return [px, supportingHeight(ctx, px, pz) + (k === 1 ? .23 + .06 * Math.sin(i) : .025), pz];
+      }));
+    }
+    if (!voxel) for (let i = 0; i < count; i++) for (let k = 0; k < 2; k++) {
+      cliff.face([rings[i][k + 1], rings[i + 1][k + 1], rings[i + 1][k], rings[i][k]], k ? '#6f8f82' : '#486f71');
+    }
+  }
+  for (const [index, level] of [12.2, 15.2, 19.0, 22.5].entries()) {
+    const strip = [], count = 26;
+    for (let i = 0; i <= count; i++) {
+      const a = lerp(-2.0 + index * .1, -.35 + index * .08, i / count), r = contourRadius(a, level);
+      const width = .32 + Math.sin(i * .45 + index) * .16;
+      strip.push([-.12, width].map(offset => {
+        let x = -32 + Math.cos(a) * (r + offset), z = 39 + Math.sin(a) * (r + offset);
+        if (voxel) { x = snap(x, .575); z = snap(z, .575); }
+        return [x, level + .07, z];
+      }));
+    }
+    for (let i = 0; i < count; i++) if (i % 11 !== 5) {
+      const a = strip[i], b = strip[i + 1];
+      cliff.face([a[0], b[0], b[1], a[1]], index % 2 ? '#6e9081' : '#5b817c');
+      cliff.face([a[1], b[1], [b[1][0], b[1][1] - .25, b[1][2]], [a[1][0], a[1][1] - .25, a[1][2]]], '#426c72');
+    }
+  }
+
+  const archFront = (t, r) => {
+    const a = t * Math.PI, inner = archProfile(ARCH_INNER, t), outer = archProfile(ARCH_OUTER, t);
+    const wave = .10 * Math.sin(a * 7) + .06 * Math.sin(a * 13);
+    const x = lerp(inner[0], outer[0], r) + wave * r, y = lerp(inner[1], outer[1], r) + wave * r;
+    let z = 18 - 2.05 - Math.sin(r * Math.PI) * .45 + Math.sin(a * 4) * .22;
+    if (voxel) {
+      const px = -5.31 + (Math.floor((x + 5.31) / .39) + .5) * .39;
+      const py = -13.35 + (Math.floor((y + 13.35) / .39) + .5) * .39;
+      const depth = 2.05 + .3 * Math.sin((px - 6) * .7) + .22 * Math.cos(py * 1.4) + .085 * Math.sin((px - 6) * 3.1 + py * .4);
+      z = 15.27 + Math.ceil((18 - depth - 15.27) / .39 - .5) * .39;
+    }
+    return [x, y, z];
+  };
+  for (const [j, patch] of [[.12, .25, .55, .87], [.34, .50, .68, .93], [.65, .77, .28, .58], [.80, .92, .60, .88]].entries()) {
+    const [t0, t1, r0, r1] = patch, count = 7;
+    for (let i = 0; i < count; i++) for (let row = 0; row < 2; row++) {
+      const t = lerp(t0, t1, i / count), tNext = lerp(t0, t1, (i + 1) / count);
+      const r = lerp(r0, r1, row / 2), rNext = lerp(r0, r1, (row + 1) / 2);
+      if (voxel) {
+        const p = archFront((t + tNext) / 2, (r + rNext) / 2);
+        bedding.box([snap(p[0], .195), snap(p[1], .195), p[2] - .045], [.34, .28, .11], j % 2 ? '#638984' : '#527d7e');
+      } else {
+        const a = archFront(t, r), b = archFront(tNext, r), c = archFront(tNext, rNext), d = archFront(t, rNext);
+        for (const p of [a, b, c, d]) p[2] -= .055 + row * .025;
+        bedding.face([a, b, c, d], j % 2 ? '#638984' : '#527d7e');
+        bedding.face([d, c, plus(c, [0, 0, .10]), plus(d, [0, 0, .10])], '#3e6871');
+      }
+    }
+  }
+  for (const [j, path] of [[[.18, .40], [.205, .50], [.20, .67], [.23, .78]],
+    [[.72, .43], [.75, .49], [.78, .65], [.81, .72]]].entries()) {
+    const points = path.map(([t, r]) => { const p = archFront(t, r); p[2] -= .09; return p; });
+    for (let i = 0; i < points.length - 1; i++) bedding.beam(points[i], points[i + 1], .035, .045, j ? '#355e69' : '#8fae96');
+  }
+  gravel.finish(); cliff.finish(); bedding.finish();
 }
 
 export function createEnvironment(ctx) {
@@ -552,5 +788,6 @@ export function createEnvironment(ctx) {
   makeOutcrops(ctx);
   makeGeologicalDetails(ctx);
   makeResearchStation(ctx);
+  if (ctx.refined) makeRefinedGeology(ctx);
   return {};
 }
