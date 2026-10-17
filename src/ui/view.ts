@@ -517,7 +517,7 @@ export class GameView {
       html = `<p class="panel-intro">Personal suit ${personalLimit(state)} m · diver hold ${usedCapacity(state, "diver")} / ${diver?.capacity ?? 0} CU. A hull protects you only while aboard; check the side exit before leaving it.</p><div class="service-actions">${button("Eat a meal", { type: "eat" })}${button(buoy.deployed ? "Pack empty buoy" : "Deploy carried buoy", { type: "buoy" }, !buoyItem)}${button("Request emergency refuge meal", { type: "emergency-meal" })}</div>`;
       html += `<p class="equipment-note"><b>Reusable buoy</b> · ${!buoyItem ? "Not built. Discover the intake record, then fabricate at the pod." : buoy.deployed ? `Deployed · ${usedCapacity(state, "buoy_hold")} / ${state.inventory.containers.find((c) => c.id === "buoy_hold")?.capacity ?? 0} CU · ${bearing(state.player.pose.position, buoy.position)}. Empty it, approach the collar and keep 2 CU free to pack it.` : `Packed in ${containerLabel(state, buoyItem.containerId).toLowerCase()} · 2 CU. Carry it in your diver hold before deploying.`} Packing and deploying retain the same buoy and cargo hold.</p>`;
       const bins = state.inventory.containers.filter((c) => containerAccessible(state, c.id));
-      const distant = state.inventory.containers.filter((c) => !containerAccessible(state, c.id) && c.kind !== "cache");
+      const distant = state.inventory.containers.filter((c) => !containerAccessible(state, c.id) && c.kind !== "cache" && (c.kind !== "buoy" || buoy.deployed));
       if (distant.length)
         html += `<p class="equipment-note"><b>Out of reach</b> · ${distant.map((c) => `${escapeHtml(containerLabel(state, c.id))} (${usedCapacity(state, c.id)} / ${c.capacity} CU)`).join(" · ")}. Approach a locker, deployed buoy or craft to transfer. A workshop locker opens after its services are restored.</p>`;
       html += '<div class="container-grid">';
@@ -567,6 +567,7 @@ export class GameView {
         const missingSteps = r.needs.filter((n) => !state.knowledge.crafted.includes(n as RecipeId));
         html += `<article class="recipe" data-recipe="${id}"><div><h3>${r.label}${done ? " · installed" : ""}</h3><p>${Object.entries(r.cost).map(([k, q]) => {
           const kind = k as ItemKind;
+          if (done) return `<span class="ingredient">${ITEMS[kind].label}: ${q} used</span>`;
           const have = r.maintenance
             ? kind === "structural_alloy" ? state.world.maintenance.alloy : kind === "silica_glass" ? state.world.maintenance.glass : state.world.maintenance.membrane
             : available(state, kind, bins);
@@ -613,7 +614,7 @@ export class GameView {
       if (state.knowledge.journals.includes(OPTIONAL_RECORD.id))
         html += `<article><h3>Personal record · optional</h3><p>${OPTIONAL_RECORD.text}</p></article>`;
       html += this.knownHabitats(state);
-      html += `<article><h3>Before committing to a dive</h3><p>Current personal suit: ${personalLimit(state)} m. A Dart hull is rated to ${HULLS.dart.initialDepth} m, but it cannot protect you outside. Your full tank lasts 180 seconds submerged. Carry a meal and charged reserve cell; plan to return with at least a quarter of your air and power.</p><p>Z reduces movement noise. Terrain cover and the service tool’s G distraction can break a sound hunter’s interest. Warning calls have a visible HUD equivalent even with sound muted or opening captions off.</p></article>`;
+      html += `<article><h3>Before committing to a dive</h3><p>Current personal suit: ${personalLimit(state)} m. A Dart hull is rated to ${HULLS.dart.initialDepth} m, but it cannot protect you outside. Your full tank lasts 180 seconds submerged. Carry a meal and charged reserve cell; plan to return with at least a quarter of your air and power.</p><p>Z reduces movement noise. The tall rib’s cover and the service tool’s G distraction can break a sound hunter’s interest. Warning calls have a visible HUD equivalent even with sound muted or opening captions off.</p></article>`;
       html += this.returnInformation(state);
       html += `<p>Recovered research: ${state.knowledge.blueprints.length} / ${BLUEPRINTS.length} in this expedition. Later fleets and deeper regions remain under construction.</p>`;
     } else {
@@ -662,7 +663,7 @@ export class GameView {
     let html = '<article class="return-plan"><h3>Return & recovery</h3><p>Knowledge, blueprints and retained equipment survive incapacity. Ordinary cargo may remain in a visited cache; disabled craft keep their own holds. Recovering takes a local expedition.</p>';
     for (const id of ["home_pod", "island_workshop", "canopy_lab"] as const) {
       if (id !== "home_pod" && !state.knowledge.markers.includes(id) && !facility(state, id)) continue;
-      html += `<p><b>${PLACES[id].label}</b> · ${bearing(state.player.pose.position, PLACES[id].position)}<br />${id === "home_pod" ? "Air, healing, locker and emergency meal. Repair its bench for equipment fabrication. Routine craft service is in the nearby pod waters." : id === "island_workshop" ? facility(state, id) ? "Restored: air, healing, locker, charging and hull fabrication. Craft service is at the launch cradle." : "Known workshop: restore its services for air, healing, locker, charging and hull fabrication." : "Laboratory air pocket and gradual healing. It has no cargo locker or craft charging service."}</p>`;
+      html += `<p><b>${PLACES[id].label}</b> · ${bearing(state.player.pose.position, PLACES[id].position)}<br />${id === "home_pod" ? `Air, healing, locker and emergency meal. ${facility(state, "pod_fabricator") ? "Equipment fabrication restored." : "Repair its bench for equipment fabrication."} Routine craft service is in the nearby pod waters.` : id === "island_workshop" ? facility(state, id) ? "Restored: air, healing, locker, charging and hull fabrication. Craft service is at the launch cradle." : "Known workshop: restore its services for air, healing, locker, charging and hull fabrication." : "Laboratory air pocket and gradual healing. It has no cargo locker or craft charging service."}</p>`;
     }
     for (const cache of state.recovery.caches) {
       const items = state.inventory.items.filter((i) => i.containerId === cache.containerId);

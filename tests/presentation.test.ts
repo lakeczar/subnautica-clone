@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { GameView, type UiActions } from "../src/ui/view.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
 import { completeOpening, discover } from "../src/sim/progression.js";
+import { incapacitate } from "../src/sim/recovery.js";
 import { addItem } from "../src/sim/inventory.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameCommand } from "../src/sim/types.js";
@@ -139,6 +140,7 @@ test("inventory keeps one buoy identity, shows local transfer commands and retai
   addItem(s, "meal", 2, "pod_locker");
   const snapshot = structuredClone(s);
   view.openPanel("inventory", s);
+  assert.ok(!get("panel-content").innerHTML.includes("Deployed buoy ("), "a packed buoy is not a distant deployed container");
   click("Deploy carried buoy");
   click("Take to diver · 1");
   assert.deepEqual(commands[0], { type: "buoy" });
@@ -152,4 +154,30 @@ test("inventory keeps one buoy identity, shows local transfer commands and retai
   view.refreshPanel(s);
   assert.match(get("panel-content").innerHTML, /Pack empty buoy/);
   assert.equal(s.inventory.buoy.itemId, buoy.id);
+});
+
+test("recovery information follows visited caches and actual hull state without unlocking unknown refuges", (t) => {
+  const { view, get } = viewFixture(t);
+  const s = createGame(); completeOpening(s);
+  const v = makeVehicle("lost-dart", "dart", { x: 100, y: -100, z: -100 }, "lost-hold");
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
+  addItem(s, "meal", 2, "diver");
+  s.player.controlledVehicleId = v.id;
+  s.player.mode = "piloting";
+  s.player.pose.position = { ...v.pose.position };
+  incapacitate(s, "Diagnostic loss.");
+  const snapshot = structuredClone(s);
+  view.openPanel("inventory", s);
+  const html = get("panel-content").innerHTML;
+  assert.match(html, /Visited cargo cache/);
+  assert.match(html, /2 Prepared reef meal/);
+  assert.match(html, /Dart loss transponder/);
+  assert.ok(!html.includes("Upper Canopy laboratory"), "a loss does not discover a refuge");
+  assert.match(html, /Deploy Bobbin \/ local tow/);
+  assert.deepEqual(s, snapshot);
+  v.disabled = false;
+  s.recovery.losses = [];
+  view.refreshPanel(s);
+  assert.ok(!get("panel-content").innerHTML.includes("Deploy Bobbin / local tow"), "repair actions are not presented as available for a healthy hull");
 });
