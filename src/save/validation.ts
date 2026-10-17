@@ -10,7 +10,7 @@ import {
 import type { GameState } from "../sim/types.js";
 import { usedCapacity } from "../sim/inventory.js";
 import { WORLD_BOUNDS } from "../sim/world.js";
-import { localToWorld } from "../sim/carrier.js";
+import { atCarrierSupport, BERTH_LOCAL, localToWorld } from "../sim/carrier.js";
 export const record = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const exact = (v: unknown, keys: string[]): v is Record<string, unknown> =>
@@ -550,7 +550,22 @@ function semantic(s: GameState): boolean {
       !k.crafted.includes(kind === "reserve_cell" ? "reserve_cells" : kind)
     )
       return false;
+    if (k.crafted.includes(kind === "reserve_cell" ? "reserve_cells" : kind) && n !== (kind === "reserve_cell" ? 2 : 1))
+      return false;
   }
+  if (items.some((i) => (i.kind === "essential_tools" && i.fitted !== "tools") ||
+    (i.kind === "suit_150" && i.fitted !== "suit") ||
+    (i.kind === "bobbin_kit" && (i.fitted !== "recovery" || i.provenance !== "maintenance")))) return false;
+  if (k.crafted.some((r) => !k.blueprints.includes(RECIPES[r].bp) || RECIPES[r].needs.some((id) => !k.crafted.includes(id as keyof typeof RECIPES)))) return false;
+  for (const node of s.world.resources) {
+    const def = SOURCES[node.id];
+    if (node.stock + node.reserve > def.stock + def.reserve) return false;
+  }
+  const expectedBlueprints = new Set<string>();
+  for (const e of k.evidence) {
+    for (const bp of ({ C01: ["bp_pod_checklist"], C02: ["bp_reef_recovery"], C03: ["bp_island_workshop", "bp_carrier_workshop"], C04: ["bp_canopy_reinforcement"] } as const)[e.id]) expectedBlueprints.add(bp);
+  }
+  if (k.blueprints.length !== expectedBlueprints.size || k.blueprints.some((bp) => !expectedBlueprints.has(bp))) return false;
   const bi = items.find((i) => i.id === buoy.itemId);
   if (
     (buoy.itemId !== null && (!bi || bi.kind !== "salvage_buoy")) ||
@@ -585,7 +600,7 @@ function semantic(s: GameState): boolean {
   for (const v of f.vehicles) {
     if (
       v.disabled !== (v.health === 0) ||
-      (!v.disabled && s.recovery.losses.some((l) => l.vehicleId === v.id))
+      (v.disabled !== s.recovery.losses.some((l) => l.vehicleId === v.id))
     )
       return false;
     if (
@@ -624,12 +639,16 @@ function semantic(s: GameState): boolean {
       !unique(f.vehicles.filter((v) => v.berth).map((v) => v.berth!.slot))
     )
       return false;
+    if (d.supportedDock !== atCarrierSupport(h)) return false;
     for (const a of f.vehicles)
       if (a.berth) {
         if (
           a.berth.carrierId !== h.id ||
           HULLS[a.hull].berth !== d.configuration ||
-          (d.configuration === "medium" && a.berth.slot !== 0)
+          (d.configuration === "medium" && a.berth.slot !== 0) ||
+          a.berth.pose.yaw !== 0 ||
+          Math.hypot(a.velocity.x, a.velocity.y, a.velocity.z) > 0.001 ||
+          Math.hypot(a.berth.pose.position.x - BERTH_LOCAL[a.berth.slot]!.x, a.berth.pose.position.y - BERTH_LOCAL[a.berth.slot]!.y, a.berth.pose.position.z - BERTH_LOCAL[a.berth.slot]!.z) > 0.001
         )
           return false;
         const pos = localToWorld(a.berth.pose.position, h);
@@ -660,8 +679,10 @@ function semantic(s: GameState): boolean {
         !a ||
         !d.stationKeeping ||
         d.completed.includes(tx.id) ||
-        (tx.type === "launch" && !a.berth) ||
-        (tx.type === "capture" && !!a.berth)
+        tx.slot > (d.configuration === "medium" ? 0 : 1) ||
+        HULLS[a.hull].berth !== d.configuration ||
+        (tx.type === "launch" && (!a.berth || a.berth.slot !== tx.slot)) ||
+        (tx.type === "capture" && (!!a.berth || f.vehicles.some((v) => v.berth?.slot === tx.slot)))
       )
         return false;
     }

@@ -1,13 +1,29 @@
-import { HULLS } from "../content/registry.js";
+import { HULL_COLLIDERS, HULLS } from "../content/registry.js";
 import type { GameState, Vec3, VehicleState, WorldQueries } from "./types.js";
 import { distance } from "./inventory.js";
 import { createGame, makeVehicle } from "./state.js";
 import { completeOpening } from "./progression.js";
+import { hullClearance, type Solid } from "./world.js";
 export const BERTH_LOCAL: readonly Vec3[] = [
-  { x: -3, y: 1, z: 1 },
-  { x: 3, y: 1, z: 1 },
+  { x: -3, y: 4, z: 1 },
+  { x: 3, y: 4, z: 1 },
 ];
 export const LAUNCH_LOCAL = { x: 0, y: -3, z: -17 };
+export const CARRIER_SUPPORT = { x: 65, y: -0.9, z: 12 };
+export function atCarrierSupport(h: VehicleState): boolean {
+  return distance(h.pose.position, CARRIER_SUPPORT) < 4 && Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) < 0.05;
+}
+export function carrierInteriorSolids(s: GameState): Solid[] {
+  return s.fleet.vehicles.filter((v) => v.berth).map((v) => {
+    const p = v.berth!.pose.position, halfWidth = v.hull === "creel" ? 2.5 : 2.35;
+    return { id: `berth.${v.id}`, min: { x: p.x - halfWidth, y: p.y, z: p.z - 3.6 }, max: { x: p.x + halfWidth, y: p.y + 2, z: p.z + 3 } };
+  });
+}
+export function launchPoint(h: VehicleState, v: VehicleState): Vec3 {
+  const p = localToWorld(LAUNCH_LOCAL, h);
+  if (v.hull === "spindle") p.y = -0.4;
+  return p;
+}
 export function localToWorld(local: Vec3, carrier: VehicleState): Vec3 {
   const { position: p, yaw } = carrier.pose;
   return {
@@ -77,7 +93,7 @@ export function fixtureGame(): GameState {
     vehicleId: h.id,
     configuration: "compact",
     stationKeeping: true,
-    supportedDock: true,
+    supportedDock: false,
     transaction: null,
     sequence: 0,
     completed: [],
@@ -164,6 +180,7 @@ export function carrierCommand(
   if (action === "station-keep") {
     h.velocity = { x: 0, y: 0, z: 0 };
     dock.stationKeeping = true;
+    dock.supportedDock = atCarrierSupport(h);
     s.feedback =
       "Station keeping engaged. Interior and launch controls available.";
     return null;
@@ -217,7 +234,7 @@ export function carrierCommand(
   if (dock.transaction) return "A berth transaction is already in progress.";
   if (action === "reconfigure") {
     if (
-      !dock.supportedDock ||
+      !dock.supportedDock || !atCarrierSupport(h) ||
       s.fleet.vehicles.some((v) => v.berth?.carrierId === h.id)
     )
       return "Reconfiguration requires an empty carrier at a supported dock.";
@@ -242,10 +259,12 @@ export function carrierCommand(
       ticks: 0,
     };
   } else if (action === "capture") {
+    if (s.player.controlledVehicleId === v.id)
+      return "Exit the craft and use the stationary carrier interface before capture.";
     if (
       v.berth ||
       v.disabled ||
-      distance(v.pose.position, localToWorld(LAUNCH_LOCAL, h)) > 13 ||
+      distance(v.pose.position, launchPoint(h, v)) > 13 ||
       Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) > 1
     )
       return "Approach the launch corridor slowly with an independent craft.";
@@ -282,13 +301,10 @@ export function launchRefusal(
   world: WorldQueries,
 ): string | null {
   const h = carrierHull(s)!;
-  const exit = localToWorld(LAUNCH_LOCAL, h);
+  const exit = launchPoint(h, v);
   if (
     s.fleet.docking?.launchBlocked ||
-    !world.clearance(exit, {
-      radius: v.hull === "creel" ? 3 : 2.2,
-      height: 2.8,
-    })
+    !hullClearance(world, exit, HULL_COLLIDERS[v.hull])
   )
     return "Launch volume obstructed. Docked identity, cargo, charge and damage are unchanged.";
   if (
@@ -307,6 +323,7 @@ export function updateBerth(s: GameState, world: WorldQueries): void {
   const dock = s.fleet.docking,
     h = carrierHull(s);
   if (!dock || !h) return;
+  dock.supportedDock = atCarrierSupport(h);
   for (const v of s.fleet.vehicles)
     if (v.berth?.carrierId === h.id) {
       v.pose.position = localToWorld(v.berth.pose.position, h);
@@ -345,12 +362,18 @@ export function updateBerth(s: GameState, world: WorldQueries): void {
       return;
     }
     v.berth = null;
-    v.pose.position = localToWorld(LAUNCH_LOCAL, h);
+    v.pose.position = launchPoint(h, v);
     v.pose.yaw = h.pose.yaw;
     v.pose.pitch = 0;
   } else {
-    if (v.berth) {
+    if (v.berth || v.disabled || s.player.controlledVehicleId === v.id ||
+      distance(v.pose.position, launchPoint(h, v)) > 13 ||
+      Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) > 1 ||
+      (v.hull === "spindle" && h.pose.position.y < -1) ||
+      s.fleet.vehicles.some((a) => a.berth?.carrierId === h.id && a.berth.slot === t.slot) ||
+      HULLS[v.hull].berth !== dock.configuration) {
       dock.transaction = null;
+      s.feedback = "Capture clearance changed before lock closure. World craft and cargo retained.";
       return;
     }
     v.berth = {
@@ -363,6 +386,9 @@ export function updateBerth(s: GameState, world: WorldQueries): void {
       },
     };
     v.pose.position = localToWorld(v.berth.pose.position, h);
+    v.pose.yaw = h.pose.yaw;
+    v.pose.pitch = 0;
+    v.velocity = { x: 0, y: 0, z: 0 };
   }
   dock.completed.push(t.id);
   if (dock.completed.length > 64) dock.completed.shift();

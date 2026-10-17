@@ -245,6 +245,20 @@ test("food-empty restart preserves movement, has warned grace and grants accessi
   assert.equal(s.player.vitals.food, 70);
   assert.equal(s.knowledge.crafted.length, 0);
 });
+test("save validation rejects erased retained equipment, false research, excess source stock and unmarked disabled hulls", () => {
+  for (const mutate of [
+    (s: GameState) => { s.inventory.items = s.inventory.items.filter((i) => i.kind !== "essential_tools"); },
+    (s: GameState) => { s.knowledge.blueprints.push("bp_canopy_reinforcement"); },
+    (s: GameState) => { s.knowledge.crafted = s.knowledge.crafted.filter((id) => id !== "essential_tools"); },
+    (s: GameState) => { s.world.resources[0]!.stock += 1; },
+    (s: GameState) => { s.fleet.vehicles[0]!.disabled = true; s.fleet.vehicles[0]!.health = 0; },
+  ]) {
+    const s = dartGame();
+    mutate(s);
+    const result = encodeSave(createEnvelope(s, { sessionId: "invalid-m1-state", createdAt: "2026-10-17T12:00:00.000Z", savedAt: "2026-10-17T12:00:00.000Z" }));
+    assert.equal(result.ok, false);
+  }
+});
 test("sound hunter warns before pursuit; quiet/cover or a directional distraction permit disengagement", () => {
   const s = prepare();
   s.player.pose.position = { x: 123, y: -110, z: -105 };
@@ -258,6 +272,32 @@ test("sound hunter warns before pursuit; quiet/cover or a directional distractio
   s.world.threat.distractionSeconds = 12;
   updateThreat(s, 0, events);
   assert.equal(s.world.threat.mode, "disengage");
+});
+test("physical laboratory air is safe before its field sheet is read", () => {
+  let s = prepare();
+  s.player.pose.position = { x: 116, y: -118, z: -126 };
+  s.player.mode = "walking";
+  s.world.threat.mode = "pursue";
+  s.world.threat.interest = 10;
+  s.world.threat.position = { x: 116, y: -117, z: -121 };
+  assert.equal(s.knowledge.evidence.some((e) => e.id === "C04"), false);
+  assert.equal(exposure(s).breathable, true);
+  const health = s.player.vitals.health;
+  s = stepGame(s, [], world).state;
+  assert.equal(s.world.threat.mode, "disengage");
+  assert.ok(s.player.vitals.health >= health);
+});
+test("pursuing hunter uses the same solid sweep instead of crossing a wall", () => {
+  const barrier = createWorldQueries([{
+    id: "test.threat-wall", min: { x: 128, y: -130, z: -130 }, max: { x: 128.1, y: -80, z: -90 },
+  }]);
+  let s = prepare();
+  s.player.pose.position = { x: 145, y: -110, z: -110 };
+  s.world.threat.position = { x: 124, y: -110, z: -110 };
+  s.world.threat.mode = "pursue";
+  s.world.threat.interest = 12;
+  for (let i = 0; i < 90; i++) s = stepGame(s, [], barrier).state;
+  assert.ok(s.world.threat.position.x <= 126.801, JSON.stringify(s.world.threat.position));
 });
 test("actual oxygen exhaustion causes refuge return, retained knowledge/tools and capped identified cargo without vessel duplication", () => {
   let s = dartGame();

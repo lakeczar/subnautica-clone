@@ -2,8 +2,8 @@ import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTextur
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder.js";
-import type { Scene, ShaderMaterial } from "@babylonjs/core";
-import { POD_DECK, POD_RAMP, RIB_SEGMENTS } from "../sim/world.js";
+import type { Mesh, Scene, ShaderMaterial } from "@babylonjs/core";
+import { FACILITY_SOLIDS, POD_DECK, POD_RAMP, RIB_SEGMENTS } from "../sim/world.js";
 import { ArtBatch } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
 
@@ -33,6 +33,8 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial): void {
   rib.finish();
 
   const pod = new ArtBatch("refuge.pod", scene, cel);
+  for (const body of FACILITY_SOLIDS.filter((s) => s.id.startsWith("pod.")))
+    pod.bounds(body, P.petrol);
   const d = POD_DECK;
   pod.box([0, -0.01, 17.1], [6.2, 0.38, 14.2], P.petrol);
   for (let z = 10.8; z < 24; z += 1.2)
@@ -64,12 +66,10 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial): void {
   pod.box([0, 3.2, 19.45], [3.2, 0.55, 0.4], P.petrol);
   pod.box([0, 3.12, 19.18], [2.9, 0.1, 0.08], P.warm);
   // Working bench and identifiable locker face actual simulation interaction positions.
-  pod.box([2.25, 0.78, 21.0], [1.15, 1.1, 2.5], P.petrol);
   pod.box([2.1, 1.36, 20.9], [1.45, 0.18, 2.7], P.metal);
   pod.box([2.05, 1.53, 20.45], [0.9, 0.16, 0.7], P.ochre);
   pod.box([2.15, 2.2, 21.4], [0.45, 0.85, 0.8], P.petrol);
   pod.box([1.89, 2.2, 21.4], [0.05, 0.55, 0.6], P.lime);
-  pod.box([-2.2, 0.9, 22.4], [1.2, 1.4, 1.2], P.petrol);
   pod.box([-1.55, 1.0, 22.4], [0.08, 1.1, 0.8], P.ochre);
   pod.tube(
     [
@@ -159,7 +159,7 @@ export function label(
   p: readonly [number, number, number],
   width = 2,
   yaw = 0,
-): void {
+): Mesh {
   const texture = new DynamicTexture(
     "label." + text,
     { width: 512, height: 128 },
@@ -190,4 +190,5 @@ export function label(
   plane.material = material;
   plane.isPickable = false;
   plane.renderingGroupId = 1;
+  return plane;
 }

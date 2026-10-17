@@ -18,8 +18,8 @@ import {
 } from "../sim/inventory.js";
 import { nearestInteraction, personalLimit } from "../sim/progression.js";
 import { exposure } from "../sim/survival.js";
-import { hullDepth } from "../sim/vehicles.js";
-import type { GameCommand } from "../sim/types.js";
+import { exitRefusal, hullDepth } from "../sim/vehicles.js";
+import type { GameCommand, WorldQueries } from "../sim/types.js";
 import type { AudioSettings } from "../audio/sound.js";
 import type { GameState } from "../sim/types.js";
 import type { SaveSlot } from "../save/repository.js";
@@ -73,6 +73,7 @@ export class GameView {
   constructor(
     private readonly root: HTMLElement,
     actions: UiActions,
+    private readonly world: WorldQueries,
   ) {
     root.innerHTML = `
       <canvas id="ocean" tabindex="0" aria-label="Siltwake 3D reef. WASD to move, arrow keys or mouse drag to look. Escape opens the menu."></canvas>
@@ -388,11 +389,16 @@ export class GameView {
         ? `Bobbin · ${state.recovery.operation.phase} · follow the local tether corridor`
         : e.refuge
           ? "Safe air · gradual healing · hold / fabricate / notebook"
+          : v?.hull === "dart" && p.x > 15 && p.x < 25 && p.z < -16 && p.z > -29
+            ? "Launch cradle · move north beyond the amber rails before turning. Return along the same clear approach."
           : p.x > 68
             ? "Read the upper crowns. Z quiet · G distraction · retreat behind the tall rib."
-            : "E interact · Q scan · B buoy · F meal · H voluntary hint";
+            : p.z > 9 && p.y < 0 && Math.abs(p.x) < 4
+              ? "Below the pod deck · swim around the ramp edge, surface, then approach its amber treads."
+              : "E interact · Q scan · B buoy · F meal · H voluntary hint";
+    const exitBlocked = v ? exitRefusal(state, this.world) : null;
     this.get("interact-prompt").innerHTML = v
-      ? `<kbd>E</kbd> Exit · suit ${personalLimit(state)} m / hull ${HULLS[v.hull].initialDepth} m`
+      ? `<kbd>E</kbd> ${exitBlocked ? "Exit blocked" : "Clear side exit"} · suit ${personalLimit(state)} m / hull ${HULLS[v.hull].initialDepth} m<small>${escapeHtml(exitBlocked ?? "Personal air and pressure protection apply outside.")}</small>`
       : t
         ? `<kbd>E</kbd> ${escapeHtml(t.label)} <small>${t.id in SOURCES ? `${SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Hand-gather food" : "Collect exposed bundle"} · Q scan` : t.kind === "evidence" ? "Inspect & record · J notebook" : "Inspect"}</small>`
         : "";
@@ -428,6 +434,7 @@ export class GameView {
     this.hud.dataset.position = `${p.x.toFixed(3)},${p.y.toFixed(3)},${p.z.toFixed(3)}`;
     this.hud.dataset.mode = mode;
     this.hud.dataset.yaw = String(state.player.pose.yaw);
+    this.hud.dataset.pitch = String(state.player.pose.pitch);
   }
 
   closePanel(): void {
@@ -475,7 +482,7 @@ export class GameView {
           if (!i.fitted)
             for (const d of bins.filter(
               (d) => d.id !== c.id && d.kind !== "equipment",
-            ))
+            )) {
               html += button(
                 `${d.id === "diver" ? "Take" : "To " + d.id.replaceAll("_", " ")}${i.quantity > 1 ? " (bundle)" : ""}`,
                 {
@@ -485,6 +492,11 @@ export class GameView {
                   quantity: i.quantity,
                 },
               );
+              if (i.quantity > 1)
+                html += button(`${d.id === "diver" ? "Take" : "To " + d.id.replaceAll("_", " ")} 1`, {
+                  type: "transfer", itemId: i.id, to: d.id, quantity: 1,
+                });
+            }
           html += "</div></div>";
         }
         html += "</article>";

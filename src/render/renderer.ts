@@ -5,6 +5,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import type { GameState } from "../sim/types.js";
 import { eyeHeight } from "../sim/state.js";
+import { inCanopyAir } from "../sim/inventory.js";
 import { createCelMaterial } from "./materials.js";
 import { createEnvironment } from "./environment.js";
 import { createLandmarks } from "./landmarks.js";
@@ -149,8 +150,9 @@ export function createRenderer(
           camera.setTarget(new Vector3(-1, -0.8, -20));
           eye = 1.62;
         }
-        const underwater = camera.position.y < -0.08 ? 1 : 0;
-        const fog = Color3.FromHexString(underwater ? "#226e7e" : "#96c5b9");
+        const interior = !!state && (inCanopyAir(state) || state.player.mode === "interior");
+        const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
+        const fog = Color3.FromHexString(interior ? "#486e76" : underwater ? "#226e7e" : "#96c5b9");
         scene.clearColor = new Color4(fog.r, fog.g, fog.b, 1);
         cel.setVector3("cameraPosition", camera.position);
         cel.setColor3("fogColor", fog);

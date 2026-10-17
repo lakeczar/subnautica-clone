@@ -1,6 +1,6 @@
-import { EVIDENCE, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
+import { EVIDENCE, HULL_COLLIDERS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
-import { moveHull } from "./world.js";
+import { createWorldQueries, moveHull } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import type {
   GameCommand,
@@ -31,6 +31,7 @@ import { board, eat, exit, reserve, service } from "./vehicles.js";
 import {
   carrierCommand,
   carrierHull,
+  carrierInteriorSolids,
   localToWorld,
   updateBerth,
 } from "./carrier.js";
@@ -344,10 +345,7 @@ export function stepGame(
       y: v.velocity.y * DT,
       z: v.velocity.z * DT,
     };
-    const move = moveHull(world, v.pose.position, delta, {
-      radius: v.hull === "hearthline" ? 7 : v.hull === "creel" ? 2.5 : 1.2,
-      height: v.hull === "hearthline" ? 9 : 2,
-    });
+    const move = moveHull(world, v.pose.position, delta, HULL_COLLIDERS[v.hull]);
     move.position.y = Math.min(
       v.hull === "spindle" ? -0.4 : -0.9,
       move.position.y,
@@ -391,8 +389,9 @@ export function stepGame(
             Math.sin(yaw - h.pose.yaw) * right) *
           3 *
           DT;
-      local.position.x = clamp(local.position.x + x, -4.7, 4.7);
-      local.position.z = clamp(local.position.z + z, -11, 10);
+      const moved = createWorldQueries(carrierInteriorSolids(s)).moveCapsule(local.position, { x, y: 0, z }, { radius: 0.34, height: 1.75 });
+      local.position.x = clamp(moved.position.x, -4.7, 4.7);
+      local.position.z = clamp(moved.position.z, -11, 10);
       s.player.pose.position = localToWorld(local.position, h);
       s.player.mode = "interior";
     }
@@ -533,7 +532,7 @@ export function stepGame(
   updateAction(s);
   updateBerth(s, world);
   updateRecovery(s, world);
-  updateThreat(s, loudness, events);
+  updateThreat(s, loudness, events, world);
   updateSurvival(s, events);
   return { state: s, events };
 }

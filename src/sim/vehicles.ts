@@ -1,4 +1,4 @@
-import { HULLS } from "../content/registry.js";
+import { DART_BUILD_POSE, HULLS } from "../content/registry.js";
 import type { GameState, VehicleState, WorldQueries } from "./types.js";
 import {
   distance,
@@ -16,9 +16,9 @@ export function exitRefusal(s: GameState, world: WorldQueries): string | null {
   if (v.hull === "hearthline")
     return "Engage station keeping, then leave the helm into the dry interior.";
   const exit = {
-    x: v.pose.position.x + Math.cos(v.pose.yaw) * 2.7,
+    x: v.pose.position.x + Math.cos(v.pose.yaw) * 3.1,
     y: v.pose.position.y + 0.2,
-    z: v.pose.position.z + Math.sin(v.pose.yaw) * 2.7,
+    z: v.pose.position.z + Math.sin(v.pose.yaw) * 3.1,
   };
   const depth = Math.max(0, -(exit.y + 0.4));
   if (depth > personalLimit(s))
@@ -52,9 +52,9 @@ export function exit(s: GameState, world: WorldQueries): string | null {
     (v) => v.id === s.player.controlledVehicleId,
   )!;
   s.player.pose.position = {
-    x: v.pose.position.x + Math.cos(v.pose.yaw) * 2.7,
+    x: v.pose.position.x + Math.cos(v.pose.yaw) * 3.1,
     y: v.pose.position.y + 0.2,
-    z: v.pose.position.z + Math.sin(v.pose.yaw) * 2.7,
+    z: v.pose.position.z + Math.sin(v.pose.yaw) * 3.1,
   };
   s.player.controlledVehicleId = null;
   s.player.mode = "swimming";
@@ -69,7 +69,7 @@ export function service(s: GameState, id: string): string | null {
   if (!v || v.berth || distance(s.player.pose.position, v.pose.position) > 7)
     return "Approach the craft service socket locally.";
   const supported =
-    (distance(v.pose.position, { x: 20, y: -1.6, z: -24 }) < 12 &&
+    (distance(v.pose.position, DART_BUILD_POSE) < 12 &&
       facility(s, "island_workshop")) ||
     distance(v.pose.position, { x: 0, y: -1, z: 8 }) < 12;
   if (!supported)

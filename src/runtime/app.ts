@@ -134,7 +134,7 @@ export class SiltwakeApp {
       lockMouse: () => this.lockMouse(),
       settings: (quality, sensitivity, invertY) =>
         this.applySettings({ quality, sensitivity, invertY }),
-    });
+    }, this.world);
     try {
       const a = JSON.parse(localStorage.getItem("siltwake.audio.v2") ?? "null");
       if (a && typeof a.volume === "number" && Number.isFinite(a.volume))

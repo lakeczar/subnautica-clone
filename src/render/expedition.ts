@@ -6,11 +6,12 @@ import {
   RECOVERY_STAGE,
 } from "../content/registry.js";
 import type { GameState, VehicleState } from "../sim/types.js";
+import { CARRIER_SUPPORT } from "../sim/carrier.js";
 import { ArtBatch } from "./geometry.js";
 import type { Point } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
 import { label } from "./landmarks.js";
-import { terrainHeight } from "../sim/world.js";
+import { FACILITY_SOLIDS, terrainHeight } from "../sim/world.js";
 function dartArt(
   scene: Scene,
   cel: ShaderMaterial,
@@ -24,8 +25,8 @@ function dartArt(
     for (const x of [-5.6, 5.6]) {
       b.box([x, 6.3, 0], [0.6, 4.5, 25], P.porcelain);
       b.box([x > 0 ? 5.23 : -5.23, 6.5, 0], [0.05, 2.4, 16], P.glass);
-      b.box([x * 1.3, 0.8, 0], [4, 3, 28], P.petrol);
-      b.box([x * 1.3, 2.2, 0], [3, 0.8, 26], P.ochre);
+      b.box([x * 1.3, 1.5, 0], [4, 3, 28], P.petrol);
+      b.box([x * 1.3, 2.9, 0], [3, 0.8, 26], P.ochre);
     }
     b.box([0, 6.4, -12], [11, 5, 0.3], P.petrol);
     b.box([0, 6.6, -11.8], [8, 2.7, 0.06], P.glass);
@@ -247,6 +248,8 @@ export function createExpeditionArt(
     sourceMeshes.set(id, b.finish());
   }
   const site = new ArtBatch("facilities.context", scene, cel);
+  for (const body of FACILITY_SOLIDS.filter((s) => !s.id.startsWith("pod.")))
+    site.bounds(body, body.id === "workshop.locker" || body.id.startsWith("workshop.cradle.") ? P.ochre : body.id === "canopy.bench" ? P.metal : P.petrol);
   // Reef intake pipes, a sediment-choked filter and actual current-facing colonies.
   for (const x of [-20, -18, -16]) {
     site.tube(
@@ -276,7 +279,6 @@ export function createExpeditionArt(
     site.box([9.5, 1.22, z], [12.4, 0.03, 0.1], P.metal);
   for (const x of [3.3, 15.7])
     for (const z of [-39.7, -32]) {
-      site.box([x, 3.3, z], [0.24, 4.2, 0.24], P.petrol);
       site.box([x, 1.5, z], [0.4, 0.4, 0.4], P.ochre);
     }
   site.face(
@@ -297,10 +299,20 @@ export function createExpeditionArt(
     ],
     "#adc5b9",
   );
-  site.box([10, 2.15, -39], [5.5, 1.7, 1], P.petrol);
-  site.box([10, 3.1, -39], [5.8, 0.2, 1.2], P.metal);
-  site.box([10, 2.3, -37.2], [0.9, 0.1, 0.65], P.ochre);
-  site.box([14.9, 2.3, -36.6], [0.7, 1.8, 1.4], P.ochre);
+  site.box([10, 2.3, -39], [5.8, 0.14, 1.2], P.metal);
+  // A reachable, readable ledger and instrument panel above a waist-high bench.
+  site.box([10, 2.4, -38.8], [1.1, 0.06, 0.7], P.ochre);
+  site.box([10, 2.44, -38.8], [0.85, 0.02, 0.55], P.porcelain);
+  for (let row = 0; row < 4; row++)
+    site.box([10, 2.455, -39 + row * 0.13], [0.63 - row * 0.06, 0.01, 0.025], P.petrol);
+  site.box([11.8, 2.85, -39.3], [1.2, 0.8, 0.15], P.ochre);
+  site.box([11.8, 2.85, -39.2], [0.95, 0.58, 0.06], P.petrol);
+  for (const x of [11.5, 11.8, 12.1])
+    site.box([x, 2.85, -39.15], [0.09, 0.35, 0.03], P.lime);
+  for (const x of [7.8, 9, 10.2, 11.4, 12.2]) {
+    site.box([x, 1.73, -38.48], [0.8, 0.75, 0.04], "#396b74");
+    site.box([x, 1.9, -38.43], [0.35, 0.045, 0.04], P.ochre);
+  }
   for (let z = -38; z < -35; z += 0.6)
     site.tube(
       [
@@ -340,7 +352,6 @@ export function createExpeditionArt(
       7,
     );
   // Dart cradle and sea-facing approach lights.
-  for (const x of [17, 23]) site.box([x, -0.5, -24], [0.3, 1.5, 6], P.ochre);
   for (let i = 0; i < 5; i++)
     site.ellipsoid([20, -0.1, -19 + i], [0.12, 0.08, 0.12], P.lime, 6);
   // Upper laboratory: dry physical alcove with an open pressure hood and distinct return arch.
@@ -350,8 +361,10 @@ export function createExpeditionArt(
   site.box([111.15, -116, -126], [0.3, 4, 8], P.porcelain);
   for (const x of [111.5, 120.5])
     site.box([x, -116, -122.1], [0.25, 4, 0.25], P.ochre);
-  site.box([116, -117.3, -128], [3, 1.3, 1], P.metal);
-  site.box([116, -116.5, -128], [2.5, 0.15, 1.2], P.ochre);
+  site.box([116, -116.94, -128], [3.2, 0.12, 1.2], P.ochre);
+  site.box([116, -116.85, -127.8], [0.85, 0.035, 0.6], P.porcelain);
+  for (let row = 0; row < 5; row++)
+    site.box([116, -116.825, -128.0 + row * 0.1], [0.62, 0.01, 0.02], P.petrol);
   site.box([117.9, -114.4, -125], [3, 0.12, 4], P.warm);
   const cover = CANOPY_COVER;
   site.box(
@@ -501,10 +514,19 @@ export function createExpeditionArt(
     obstruction.box([x, 0, -0.4], [0.4, 5, 0.1], P.ink, [0, 0, -0.3]);
   const blockMesh = obstruction.finish();
   blockMesh.unfreezeWorldMatrix();
+  const mooring = new ArtBatch("fixture.support-mooring", scene, cel);
+  for (const x of [-9, 9]) for (const z of [-14, 14]) {
+    mooring.ellipsoid([CARRIER_SUPPORT.x + x, 0.3, CARRIER_SUPPORT.z + z], [0.9, 0.6, 0.9], P.ochre, 9);
+    mooring.tube([[CARRIER_SUPPORT.x + x, 0.3, CARRIER_SUPPORT.z + z], [CARRIER_SUPPORT.x + x, 2, CARRIER_SUPPORT.z + z]], 0.07, P.petrol, 6);
+  }
+  const mooringMesh = mooring.finish();
+  const mooringSign = label(scene, "SUPPORTED SURVEY MOORING", [CARRIER_SUPPORT.x + 9, 3, CARRIER_SUPPORT.z + 14], 5);
   const vehicles = new Map<string, Mesh>(),
     caches = new Map<string, Mesh>();
   return {
     update(s) {
+      mooringMesh.setEnabled(s?.scenario === "carrier-fixture");
+      mooringSign.setEnabled(s?.scenario === "carrier-fixture");
       restraintMesh.setEnabled(!!s && s.opening.phase === 0);
       fogMesh.setEnabled(!!s && s.opening.phase < 3);
       latchMesh.setEnabled(!!s && s.opening.phase < 2);

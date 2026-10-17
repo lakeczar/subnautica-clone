@@ -1,5 +1,5 @@
 import { moveHull } from "./world.js";
-import { ITEMS, PLACES, RECOVERY_STAGE } from "../content/registry.js";
+import { HULL_COLLIDERS, ITEMS, PLACES, RECOVERY_STAGE } from "../content/registry.js";
 import type { MaterialId } from "../content/registry.js";
 import type { GameState, Vec3, WorldQueries } from "./types.js";
 import {
@@ -222,7 +222,7 @@ export function updateRecovery(s: GameState, world: WorldQueries): void {
         y: next.y - op.position.y,
         z: next.z - op.position.z,
       };
-    const move = moveHull(world, origin, delta, { radius: 1.2, height: 2 });
+    const move = moveHull(world, origin, delta, HULL_COLLIDERS.dart);
     if (
       move.hitSolid ||
       move.hitBoundary ||

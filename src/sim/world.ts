@@ -112,8 +112,22 @@ export const POD_DECK = {
   min: { x: -3.1, y: -0.2, z: 10 },
   max: { x: 3.1, y: 0.18, z: 19.4 },
 } satisfies Solid;
+/** Large facility equipment shares its authored bounds with production art. */
+export const FACILITY_SOLIDS: readonly Solid[] = [
+  { id: "workshop.cradle.port", min: { x: 15.4, y: -2.5, z: -26 }, max: { x: 15.7, y: 0.5, z: -18 } },
+  { id: "workshop.cradle.starboard", min: { x: 24.3, y: -2.5, z: -26 }, max: { x: 24.6, y: 0.5, z: -18 } },
+  { id: "pod.bench", min: { x: 1.675, y: 0.23, z: 19.75 }, max: { x: 2.825, y: 1.33, z: 22.25 } },
+  { id: "pod.locker", min: { x: -2.8, y: 0.2, z: 21.8 }, max: { x: -1.6, y: 1.6, z: 23 } },
+  { id: "workshop.bench", min: { x: 7.25, y: 1.25, z: -39.5 }, max: { x: 12.75, y: 2.25, z: -38.5 } },
+  { id: "workshop.locker", min: { x: 14.55, y: 1.4, z: -37.3 }, max: { x: 15.25, y: 3.2, z: -35.9 } },
+  { id: "canopy.bench", min: { x: 114.5, y: -118, z: -128.5 }, max: { x: 117.5, y: -117, z: -127.5 } },
+  ...[3.3, 15.7].flatMap((x) => [-39.7, -32].map((z) => ({
+    id: `workshop.post.${x}.${z}`, min: { x: x - 0.12, y: 1.2, z: z - 0.12 }, max: { x: x + 0.12, y: 5.4, z: z + 0.12 },
+  }))),
+];
 export const SOLIDS: readonly Solid[] = [
   POD_DECK,
+  ...FACILITY_SOLIDS,
   {
     id: "pod.floor",
     min: { x: -3.1, y: -0.2, z: 19.4 },
@@ -325,6 +339,22 @@ export function createWorldQueries(
   };
 }
 
+/** Hull keel floor sampled across its conservative circular footprint. */
+export function hullFloor(world: WorldQueries, origin: Vec3, shape: Capsule): number {
+  let floor = world.groundHeight(origin.x, origin.z);
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    floor = Math.max(floor, world.groundHeight(
+      origin.x + Math.cos(a) * shape.radius,
+      origin.z + Math.sin(a) * shape.radius,
+    ));
+  }
+  return floor;
+}
+export function hullClearance(world: WorldQueries, origin: Vec3, shape: Capsule): boolean {
+  return world.clearance(origin, shape) && origin.y >= hullFloor(world, origin, shape) + 0.05;
+}
+
 /** Continuous solid sweep plus short travel slices against the shared terrain.
  * A conservative footprint prevents scout/large hulls climbing or tunnelling shore cliffs. */
 export function moveHull(
@@ -343,21 +373,7 @@ export function moveHull(
   for (let i = 0; i < slices; i++) {
     const d = { x: delta.x / slices, y: delta.y / slices, z: delta.z / slices };
     const result = world.moveCapsule(position, d, shape);
-    let floor = -Infinity;
-    for (const [x, z] of [
-      [0, 0],
-      [-0.7, -0.7],
-      [0.7, -0.7],
-      [-0.7, 0.7],
-      [0.7, 0.7],
-    ])
-      floor = Math.max(
-        floor,
-        world.groundHeight(
-          result.position.x + x! * shape.radius,
-          result.position.z + z! * shape.radius,
-        ),
-      );
+    const floor = hullFloor(world, result.position, shape);
     if (result.position.y < floor + 0.05) {
       hitSolid = true;
       if (Math.abs(d.x) + Math.abs(d.z) > 0.00001) break;

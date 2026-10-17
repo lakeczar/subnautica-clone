@@ -2,6 +2,7 @@ import {
   DART_BUILD_POSE,
   EVIDENCE,
   ITEMS,
+  HULL_COLLIDERS,
   OPTIONAL_RECORD,
   PLACES,
   RECIPES,
@@ -15,6 +16,7 @@ import type {
   SourceId,
 } from "../content/registry.js";
 import type { GameState, Vec3, WorldQueries } from "./types.js";
+import { hullClearance } from "./world.js";
 import {
   addItem,
   available,
@@ -206,7 +208,7 @@ export function craftingRefusal(
     return "A Dart already exists. Recover its frame or cargo instead of duplicating it.";
   if (
     id === "dart_base" &&
-    !world.clearance(DART_BUILD_POSE, { radius: 2.2, height: 2.4 })
+    !hullClearance(world, DART_BUILD_POSE, HULL_COLLIDERS.dart)
   )
     return "Construction clearance is blocked. Nothing consumed.";
   const bins = fabricationContainers(s, r.site);

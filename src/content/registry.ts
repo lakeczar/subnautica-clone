@@ -88,6 +88,15 @@ export const HULLS = {
   },
 } as const;
 export type HullId = keyof typeof HULLS;
+/** Conservative upright sweep envelopes enclose the authored hull silhouettes. */
+export const HULL_COLLIDERS = {
+  dart: { radius: 3.6, height: 2.1 },
+  creel: { radius: 4.5, height: 3.6 },
+  hush: { radius: 3.6, height: 2.1 },
+  spindle: { radius: 4, height: 1.7 },
+  mantle: { radius: 4.5, height: 4 },
+  hearthline: { radius: 17, height: 9.2 },
+} as const satisfies Record<HullId, { radius: number; height: number }>;
 export const REMOTE_TOOLS = {
   bobbin: { label: "Bobbin", role: "tethered recovery service" },
 } as const;
@@ -596,7 +605,7 @@ export const EVIDENCE = {
   C03: {
     label: "Unspent departure supplies",
     place: "island_workshop",
-    position: { x: 10, y: 2, z: -37 },
+    position: { x: 10, y: 2.45, z: -38.8 },
     observation:
       "Departure supplies remain unused. The loading ledger has no outbound entry. Scout plans and the workshop service checklist survive.",
     provenance: "Splitspine / workshop ledger and physical stock",
@@ -607,7 +616,7 @@ export const EVIDENCE = {
   C04: {
     label: "Quiet lower channel",
     place: "canopy_lab",
-    position: { x: 116, y: -117, z: -126 },
+    position: { x: 116, y: -116.8, z: -127.8 },
     observation:
       "Schooling fauna remain in the clear upper water and avoid the dense lower channel. The dated laboratory sheet records that change before equipment faults.",
     provenance: "Upper Canopy / field sheet and present fauna distribution",
@@ -623,7 +632,7 @@ export const OPTIONAL_RECORD = {
   position: { x: -24, y: -8, z: -9 },
   text: "Mara Sen / field method: “Start with what the fans are doing. The instruments can wait. The water will not.” A personal working note, separate from the intake service record.",
 } as const;
-export const DART_BUILD_POSE = { x: 20, y: -1.6, z: -24 } as const;
+export const DART_BUILD_POSE = { x: 20, y: -1.6, z: -22 } as const;
 export const RECOVERY_STAGE = { x: 46, y: -12, z: -54 } as const;
 export const CANOPY_COVER = {
   min: { x: 103, y: -145, z: -122 },

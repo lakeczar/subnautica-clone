@@ -30,7 +30,7 @@ void main(){
   float wz=vWorld.z*.93+sin(vWorld.x*.44-time*.15)*.7;
   float net=1.0-smoothstep(.012,.09,abs(sin(wx)*sin(wz)));
   float caustic=net*smoothstep(.45,.95,n.y)*(1.0-smoothstep(-.8,-.1,vWorld.y));
-  shade+=vec3(.06,.10,.055)*caustic;
+  shade+=vec3(.06,.10,.055)*caustic*underwater;
   float distance=length(cameraPosition-vWorld);
   float density=mix(fogDensity*.27,fogDensity,underwater);
   float haze=1.0-exp(-distance*density);

@@ -103,7 +103,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
   }
 
   const schools: Mesh[] = [];
-  for (let group = 0; group < 2; group++) {
+  for (let group = 0; group < 4; group++) {
     const school = new ArtBatch(`reef.decorative-school.${group}`, scene, cel);
     for (let fish = 0; fish < 7; fish++) {
       const x = (random() - 0.5) * 6, y = (random() - 0.5) * 2, z = (random() - 0.5) * 3;
@@ -128,7 +128,10 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
     });
     schools.forEach((school, i) => {
       const angle = seconds * (0.065 + i * 0.015) + i * 2;
-      school.position.set(-15 + Math.cos(angle) * 10 + i * 20, -4.3 + Math.sin(angle * 2) * 0.6, -6 + Math.sin(angle) * 8);
+      if (i < 2)
+        school.position.set(-15 + Math.cos(angle) * 10 + i * 20, -4.3 + Math.sin(angle * 2) * 0.6, -6 + Math.sin(angle) * 8);
+      else
+        school.position.set(112 + Math.cos(angle) * 8 + (i - 2) * 12, -106 + (i - 2) * 26 + Math.sin(angle * 2) * 1.2, -116 + Math.sin(angle) * 8);
       school.rotation.y = -angle - Math.PI / 2;
     });
   } };

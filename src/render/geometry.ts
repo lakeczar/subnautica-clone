@@ -28,6 +28,13 @@ export class ArtBatch {
     private readonly material: Material,
   ) {}
 
+  bounds(s: { min: Vec3; max: Vec3 }, hex: string): void {
+    this.box(
+      [(s.min.x + s.max.x) / 2, (s.min.y + s.max.y) / 2, (s.min.z + s.max.z) / 2],
+      [s.max.x - s.min.x, s.max.y - s.min.y, s.max.z - s.min.z], hex,
+    );
+  }
+
   paint(mesh: Mesh, hex: string): Mesh {
     // UV-free palette shader: all batched parts must have identical attributes.
     mesh.removeVerticesData("uv");

@@ -136,6 +136,7 @@ test("Spindle surface release and empty supported-dock medium reconfiguration pr
   assert.equal(carrierCommand(s, "launch", "fixture_spindle", w), null);
   advance(s);
   assert.equal(s.fleet.vehicles[2]!.berth, null);
+  assert.equal(s.fleet.vehicles[2]!.pose.position.y, -0.4);
   s.fleet.vehicles[2]!.pose.position.x += 12;
   assert.equal(carrierCommand(s, "launch", "fixture_dart", w), null);
   advance(s);
@@ -149,6 +150,29 @@ test("Spindle surface release and empty supported-dock medium reconfiguration pr
   assert.equal(c.berth!.slot, 0);
   assert.match(carrierCommand(s, "reconfigure", undefined, w)!, /empty/);
   save(s);
+});
+test("interior walking collides with the visible dry craft instead of crossing their berths", () => {
+  let s = fixtureGame();
+  s.player.interiorPose!.position.x = -3;
+  s.player.pose.position = localToWorld(s.player.interiorPose!.position, s.fleet.vehicles[0]!);
+  for (let i = 0; i < 120; i++) s = stepGame(s, [{ type: "move", forward: -1, right: 0, vertical: 0, sprint: false }], w).state;
+  assert.ok(s.player.interiorPose!.position.z < -2.8);
+  save(s);
+});
+test("unsupported remote reconfiguration and a capture that drifts from the corridor refuse without changing ownership", () => {
+  const s = fixtureGame(), h = s.fleet.vehicles[0]!;
+  for (const v of s.fleet.vehicles) if (v.berth) v.berth = null;
+  h.pose.position = { x: 100, y: -0.9, z: 12 };
+  s.fleet.docking!.supportedDock = true;
+  s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
+  assert.match(carrierCommand(s, "reconfigure", undefined, w)!, /supported/);
+  const v = s.fleet.vehicles[1]!;
+  v.pose.position = localToWorld(LAUNCH_LOCAL, h);
+  assert.equal(carrierCommand(s, "capture", v.id, w), null);
+  v.pose.position.x += 40;
+  advance(s);
+  assert.equal(v.berth, null);
+  assert.equal(s.fleet.docking!.completed.length, 0);
 });
 test("death inside carrier falls back to a valid refuge and never silently moves a vessel or loses its cargo", () => {
   const s = fixtureGame(),

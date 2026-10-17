@@ -1,5 +1,6 @@
 import { CANOPY_COVER, HULLS, THREAT_HOME } from "../content/registry.js";
-import type { GameEvent, GameState, Vec3 } from "./types.js";
+import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
+import { createWorldQueries, moveHull } from "./world.js";
 import {
   distance,
   facility,
@@ -23,7 +24,7 @@ export function exposure(s: GameState): {
   const refuge =
     nearPod(s) ||
     (nearWorkshop(s) && facility(s, "island_workshop")) ||
-    (inCanopyAir(s) && facility(s, "canopy_lab")) ||
+    inCanopyAir(s) ||
     (s.player.mode === "interior" &&
       !!s.player.interiorId &&
       s.fleet.docking?.stationKeeping === true);
@@ -46,7 +47,8 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
   const p = s.player,
     v = s.fleet.vehicles.find((v) => v.id === p.controlledVehicleId),
     e = exposure(s),
-    before = p.vitals.oxygen;
+    before = p.vitals.oxygen,
+    foodBefore = p.vitals.food;
   if (e.breathable) p.vitals.oxygen = Math.min(100, p.vitals.oxygen + 20 * DT);
   else p.vitals.oxygen = Math.max(0, p.vitals.oxygen - (100 / 180) * DT);
   s.metrics.oxygenUsed += Math.max(0, before - p.vitals.oxygen);
@@ -100,10 +102,15 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
           { type: "sound", cue: "warning" },
         );
       }
+  for (const limit of [20, 10])
+    if (foodBefore > limit && p.vitals.food <= limit)
+      events.push({ type: "notice", message: `Food ${limit}%. Hand-gather shallow staples or use an emergency refuge portion; ordinary swimming remains available.`, error: true }, { type: "sound", cue: "warning" });
   if (s.tick % 300 === 0) {
     if (e.pressureDepth > personalLimit(s) && !v)
       events.push({ type: "sound", cue: "warning" });
     if (v && v.charge < 25) events.push({ type: "sound", cue: "warning" });
+    if (v && v.hull !== "spindle" && hullDepth(v) > HULLS[v.hull].initialDepth * 0.85)
+      events.push({ type: "sound", cue: "warning" });
   }
   if (p.vitals.health <= 0) {
     incapacitate(
@@ -142,6 +149,7 @@ export function updateThreat(
   s: GameState,
   loudness: number,
   events: GameEvent[],
+  world: WorldQueries = createWorldQueries(),
 ): void {
   if (s.opening.phase < 4 || s.scenario !== "expedition") return;
   const t = s.world.threat,
@@ -199,8 +207,11 @@ export function updateThreat(
   if (t.mode === "idle" || t.mode === "warn") speed = 0;
   const dist = distance(t.position, target),
     scale = Math.min(1, (speed * DT) / Math.max(0.01, dist));
-  for (const a of ["x", "y", "z"] as const)
-    t.position[a] += (target[a] - t.position[a]) * scale;
+  t.position = moveHull(world, t.position, {
+    x: (target.x - t.position.x) * scale,
+    y: (target.y - t.position.y) * scale,
+    z: (target.z - t.position.z) * scale,
+  }, { radius: 1.2, height: 1.8 }).position;
   if (t.mode === "pursue" && d < 5.3 && !cover) {
     const v = s.fleet.vehicles.find(
       (v) => v.id === s.player.controlledVehicleId,
