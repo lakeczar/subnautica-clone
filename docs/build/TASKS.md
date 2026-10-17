@@ -77,13 +77,24 @@ The owner asked to split the broad build and add Astra subagent coordination. [C
 - Returned source `9d449e1b6913f8a9c8465bcdafe39f913d2c8e87`, staged provisionally as `cbc2fc6`. Root read the report: ten attributed primary sources, explicit access limits, fifteen-row review matrix, no runtime claims or spoilers. Route this bounded research/critic-brief batch through fresh Astra xhigh/Sol max review before treating it as accepted. Use a fresh non-author critic later; research completion cannot close the game-design critique. Root remains sole dispatcher; respect four slots.
 
 
-## M1-A0 dispatch preparation
+## Active M1-A0 implementation
 
 - [Assignment](tasks/M1-A0.md): Sol 6.1 max, isolated worktree, no children. Exact paths and stopping point are in the brief. Root remains integration/records owner.
 - Source/evidence preserved on feature branch `feat/siltwake-first-expedition`, merge `7da897f`. Main game branch still holds accepted M0. Fresh coordinator checks: 97 tests/typecheck/build and M1 economy pass; immediate command/save bugs independently reproduced. [Evidence](evidence/M1-STAGING.md).
 - Scope: complete command transactions, physical carrier corridor/compartment descriptor and swept clearance, transient sound-origin seam. This is a prerequisite shared checkpoint, not a broad assignment to finish every M1 system. No visual/presentation worker is dispatched yet.
 - After its result: inspect/reconcile and commit shared baseline S, then dispatch main-core plus visual and presentation specialists with exclusive paths. Rotate carrier/recovery only if necessary. Keep full final expedition, ordinary failure/repeated recovery, carrier fixture and acceptance checks open.
 
-## DESIGN-PREP review preparation
+## Active DESIGN-PREP independent reviews
 
 Bounded deliverable: source research `docs/research/04-game-design-review.md` plus `docs/build/tasks/DESIGN-CRITIC.md` and the corresponding late-critique addition in prompt/plan/delivery rules. Accept only research fidelity, scope consistency and usable critique procedure; **no M1/gameplay acceptance**. Research author Astra and root-authored brief are not independent reviewers. Fresh non-author Astra xhigh + Sol max inspect the same frozen feature baseline, with source-verification emphasis and exact findings/dispositions. Run alongside A0 within four slots; reviewers author no production/document changes and return separate reports. Exact IDs will follow dispatch.
+
+
+### Dispatch records — 2026-10-17
+
+All three tasks are async T3-isolated worktrees from `c0aa5cb386a6b98ff8fa7c95d123d4f50d5bc378`, selected models/efforts verified in the live catalog. Four active agents including root; no further dispatch until a slot is released. No pending questions or children at dispatch.
+
+- **M1-A0** task: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-a0-sol-max-c0aa5cb`. Request `siltwake-m1-a0-sol-max-c0aa5cb`; `codex/gpt-6.1-sol`, `max`, implementation. Running; source/evidence only per [M1-A0](tasks/M1-A0.md). Stop at shared-interface checkpoint; no children/push/PR/parent edits.
+- **DESIGN-PREP Astra R1** task: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-design-prep-astra-r1-c0aa5cb`. Request `siltwake-design-prep-astra-r1-c0aa5cb`; `codex/gpt-6-astra`, `xhigh`, review. Running; output only `/tmp/siltwake-design-prep-astra-r1.md`.
+- **DESIGN-PREP Sol R1** task: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-design-prep-sol-r1-c0aa5cb`. Request `siltwake-design-prep-sol-r1-c0aa5cb`; `codex/gpt-6.1-sol`, `max`, review. Running; output only `/tmp/siltwake-design-prep-sol-r1.md`.
+
+[Review scope/record](reviews/DESIGN-PREP-R1.md). Both reviewers are non-authors and receive identical frozen scope/evidence independently; no M1/runtime acceptance is requested. Completion notifications wake root. Read task_status then reconcile rather than polling or duplicating tasks. If source fixes return first, do not use these research-only reviewers as a substitute for the later gameplay batch reviews.
