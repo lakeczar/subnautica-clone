@@ -278,3 +278,10 @@ CR-1 blocks acceptance despite a successful alternate recovery route. [Correctio
 - Exclusive survival.ts/expedition tests/own evidence ownership and port5193 in [brief](tasks/M1-CR1-FIX.md). No interface/schema change approved. Root retains all other paths and integration.
 - Attempted EXPEDITION steer `siltwake-m1-expedition-cr1-awareness-b5cedfe` returned `thread_not_sendable`: no running turn could be steered. No delivery is claimed; root reads its durable task status before any further action. Its assigned baseline remains e3ed566/4d0a7f0 and no source was copied or new turn started.
 - Three active agents including root. Notifications trigger inspection; no polling/waiting or premature acceptance review. Root owns no browser/server.
+
+
+### Combined EXPEDITION completed; correction scope addendum
+
+After the steer rejection root read durable task status: `siltwake-m1-combined-expedition-sol-max-e3ed566` completed, no children/question. Evidence `ff51dbcda657c4632ad68794d706ec503b7dc6d3`; owned resources closed. [Root disposition](evidence/M1-COMBINED-EXPEDITION-INTEGRATION.md):477 payloads/478 archive files,39 exact source copies,39 whole-state comparisons and actual views checked. Main fresh route/counts/reserves/reload complete; separate EXP-1 reproduces CR-1 hunter failure, EXP-2 points out incorrect north launch wording.
+
+Correction author received EXP-1 and bounded depth-exit context via `siltwake-m1-cr1-expedition-evidence-b5cedfe`, delivered as steering on its existing ordinal1 run. [Brief addendum](tasks/M1-CR1-FIX.md#root-addendum-completed-expedition-and-exp-2) grants two literal-only direction edits in view.ts/progression.ts to the same author, with no shared contract change or other owner. No full-route redo, no source copied, no new task. Two active agents including root; all validation authors complete. Fresh acceptance pairs follow correction/inspection, never beforehand.
