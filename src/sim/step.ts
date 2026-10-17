@@ -1,4 +1,4 @@
-import { EVIDENCE, HULL_COLLIDERS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
+import { EVIDENCE, HULL_COLLIDERS, HULLS, ITEMS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
 import { createWorldQueries, moveHull } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
@@ -61,8 +61,22 @@ function action(s: GameState, c: GameCommand, w: WorldQueries): string | null {
   switch (c.type) {
     case "craft":
       return craft(s, c.recipeId, w);
-    case "transfer":
-      return transfer(s, c.itemId, c.to, c.quantity);
+    case "transfer": {
+      const item = s.inventory.items.find((i) => i.id === c.itemId);
+      const no = transfer(s, c.itemId, c.to, c.quantity);
+      if (no) return no;
+      const container = s.inventory.containers.find((a) => a.id === c.to)!;
+      const vehicle = s.fleet.vehicles.find((v) => v.cargoId === c.to);
+      const destination = vehicle
+        ? `${HULLS[vehicle.hull].label} hold`
+        : container.kind === "cache"
+          ? "cargo cache"
+          : c.to === "diver"
+            ? "diver hold"
+            : c.to.replaceAll("_", " ");
+      s.feedback = `Transferred ${c.quantity} × ${ITEMS[item!.kind].label} to ${destination}.`;
+      return null;
+    }
     case "eat":
       return eat(s);
     case "buoy":

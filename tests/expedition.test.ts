@@ -182,6 +182,64 @@ test("M1 package, reserve cells and first hull consume the accepted public budge
   );
   roundTrip(s);
 });
+test("transfer commands report their committed quantity and destination instead of stale collection or craft feedback", () => {
+  const s = ready();
+  const item = addItem(s, "silica_glass", 4, "diver");
+  s.feedback = "Build Dart scout / 180 m complete.";
+  const before = structuredClone(s);
+  const partial = executeCommand(s, {
+    type: "transfer", itemId: item.id, to: "pod_locker", quantity: 1,
+  }, world);
+  assert.deepEqual(s, before, "commands must leave their input snapshot unchanged");
+  assert.equal(partial.state.feedback, "Transferred 1 × Silica glass to pod locker.");
+  assert.deepEqual(partial.events, [
+    { type: "notice", message: partial.state.feedback },
+    { type: "sound", cue: "collect" },
+  ]);
+  assert.equal(partial.state.inventory.items.find((i) => i.id === item.id)!.quantity, 3);
+  assert.equal(partial.state.inventory.items.find((i) => i.containerId === "pod_locker")!.provenance, item.provenance);
+  roundTrip(partial.state);
+
+  const full = stepGame(partial.state, [{
+    type: "transfer", itemId: item.id, to: "pod_locker", quantity: 3,
+  }], world);
+  assert.equal(full.state.feedback, "Transferred 3 × Silica glass to pod locker.");
+  assert.ok(full.events.some((e) => e.type === "notice" && e.message === full.state.feedback));
+  assert.deepEqual(full.state.inventory.items.find((i) => i.id === item.id), {
+    ...partial.state.inventory.items.find((i) => i.id === item.id)!, containerId: "pod_locker",
+  });
+  assert.equal(usedCapacity(full.state, "diver"), 0);
+  roundTrip(full.state);
+});
+test("refused transfer preserves inventory and prior feedback and emits only the refusal", () => {
+  const s = ready();
+  const item = addItem(s, "silica_glass", 4, "diver");
+  s.feedback = "4 × Silica glass → diver hold.";
+  const before = structuredClone(s);
+  const result = executeCommand(s, {
+    type: "transfer", itemId: item.id, to: "workshop_locker", quantity: 2,
+  }, world);
+  assert.equal(result.state, s);
+  assert.deepEqual(result.state, before);
+  assert.deepEqual(result.events, [{
+    type: "notice", message: "Both containers must be present and accessible.", error: true,
+  }]);
+});
+test("transfer feedback identifies a local craft hold by its registry hull label", () => {
+  const s = dartGame();
+  const v = s.fleet.vehicles[0]!;
+  s.player.pose.position = { ...v.pose.position };
+  s.player.mode = "swimming";
+  const item = addItem(s, "conductive_crust", 3, "diver");
+  const result = executeCommand(s, {
+    type: "transfer", itemId: item.id, to: v.cargoId, quantity: 3,
+  }, world);
+  assert.equal(result.state.feedback, "Transferred 3 × Conductive crust to Dart hold.");
+  assert.deepEqual(result.state.inventory.items.find((i) => i.id === item.id), {
+    ...item, containerId: v.cargoId,
+  });
+  roundTrip(result.state);
+});
 test("deployed buoy has one identity and a separate container; packing loaded or overflowing buoy refuses atomically", () => {
   const s = prepare();
   assert.equal(toggleBuoy(s), null);
