@@ -396,3 +396,10 @@ Both async T3 worktree delegates started from clean `e06035df95a8ffe72f425a98dcb
 - UI-CLARITY: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-ui-clarity-sol-max-e06035d`; stable request `siltwake-m1-ui-clarity-sol-max-e06035d`; exclusive view/CSS/presentation-test/evidence paths, port5192.
 
 Backing thread IDs use the same suffix with `thread:delegated-task:` prefix. Carrier correction retains its exact f2129a3 parent, sim/world/carrier ownership and5193. Four active agents including root; no root browser/server. Receive notifications, inspect actual results, assemble affected checks, then freeze a fresh paired-review candidate. No peer polling, new delegate or premature M1 acceptance. Gameplay/economy/canon follow-up remains tracked in the Opus disposition.
+
+
+### Carrier bounds inspected; endpoint precision correction prepared
+
+Task `siltwake-m1-carrier-bounds-sol-max-f2129a3` returned terminal, actual Sol6.1 max, no children/questions, own resources closed. Source1c8f719/evidence0d0ca02 staged at e63e32d. [Root inspection](evidence/M1-CARRIER-BOUNDS-INTEGRATION.md):167 tests/typecheck/build, verified105 payloads/106 archive members/22 source snapshots,2609 route checks and five whole actual-export comparisons. Source review produced a new meaningful red ROOT-CB-01: full-return yaw differs from tested endpoint; one look from a valid staged old save gives attachedZ66.00000000000001. No fresh browser was needed.
+
+Prepare [M1-CARRIER-YAW-FIX](tasks/M1-CARRIER-YAW-FIX.md) as a new isolated Sol max task, only carrier.ts heading function, carrier-boundary.test.ts and own evidence. Existing LOOK/UI workers retain e06035d and their ownership. Root plus two builders active before dispatch; no root browser/server. No independent acceptance yet.

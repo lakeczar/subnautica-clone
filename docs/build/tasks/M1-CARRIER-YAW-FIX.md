@@ -1,0 +1,15 @@
+# ROOT-CB-01 — test the exact returned carrier heading
+
+One focused Sol 6.1 **max** implementation, isolated worktree at exact dispatch parent. Read AGENTS, STATUS, CONTRACTS, the carrier-bounds brief/evidence, root M1-CARRIER-BOUNDS-INTEGRATION and prior R2 disposition. No children or peer polling. LOOK and UI-CLARITY continue independently; do not copy their source.
+
+Own only `src/sim/carrier.ts` narrowly in `constrainCarrierYaw`, `tests/carrier-boundary.test.ts` and `docs/build/evidence/M1-CARRIER-YAW-FIX.md`. Existing other production paths and validation stay frozen. No schema, bounds, geometry, gameplay cost or UI change. Preserve the accepted approach and all earlier fixes.
+
+Root has a meaningful red command/codec reproduction at `/tmp/siltwake-m1-carrier-bounds-root/yaw-endpoint-regression.mjs`, with complete before/after JSON and log. Its setup uses a valid staged old compact carrier at `(65,-24,63.03314320575622)`, yaw `1.6680903988919056`. One look command delta `-0.06564769841653488` causes Z`66.00000000000001` and Save/Export rejection. `fits(1)` checks recomputed yaw `1.6024427004753719` but returns requested yaw `1.602442700475371`. The previous normalization correction covers bisection only.
+
+Make every successful path return exactly an angle that was checked, including the requested endpoint. Retain full shortest-arc/extremum handling and blocked-turn view/hull coherence. No independent child clamping, spatial nudges, tolerance/validation weakening or load-time relocation. Prefer the smallest clear fix, not a new orientation framework. Add this production step/codec regression and one focused nearby/wrap case if justified. Preserve a red run against your clean parent before editing.
+
+Run focused carrier regressions and one final `npm run check`; rerun copies of root endpoint regression and existing retained-route/browser-export analyzers against final compiled source. These do not launch a browser. Do not redo the full legacy matrix or full expedition unless the correction expands beyond this arithmetic defect. Original browser captures remain attributed to 1c8f719; replayed exports are diagnostic compatibility proof on your new modules, not a fresh browser run.
+
+Temporary `/tmp/siltwake-m1-carrier-yaw-fix/`. Prefer existing evidence/APIs. If browser work becomes necessary, first read `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md`; T3 preview_status then own isolated Linux incognito tab, checked-free5193. Preserve historical tab14, LOOK5191, UI5192 and all shared/user resources. No Windows automation or process-name kills; close only own resources normally. No browser is requested for the anticipated one-function correction.
+
+Return clean source/evidence commits, exact changed paths, actual checks and remaining limits. Evidence about one page with source/bundle identity and useful repro outputs; no giant repeated dossier. No push/PR/merge or acceptance claim. Root inspects/assembles, then fresh non-author Astra xhigh and Sol max review of the complete candidate.

@@ -1,0 +1,17 @@
+# Carrier boundary correction: provisional integration
+
+2026-10-17. Author source `1c8f719`, evidence `0d0ca02`, staged merge `e63e32dc6316a528762276861b123111949f640c`. Only world/step/carrier, new carrier-boundary tests and author evidence changed. Sol 6.1 max task `siltwake-m1-carrier-bounds-sol-max-f2129a3` is terminal, no children/questions; owned browser/server closed. No independent acceptance.
+
+Root inspected the complete source/test diff, author evidence and actual `edge-save-menu.png`. Verified archive SHA256 `484106c5eeabf3d74f212a0672a006ee8c03713765c2ce343f30a0cdb50fffe4`, 105 payloads/106 safe regular members and 22 exact source snapshots. Copies and root results: `/tmp/siltwake-m1-carrier-bounds-root/`; originals remain untouched. Root reran `npm run check`: **167/167 tests, typecheck/build pass**. JS `index-CQyexEOR.js` SHA256 `b8d8dd0b20a9aa8558bdf982e1f23d91f6d9543945e926de19b234aaf6fbb9aa` matches author source. Root reran the copied original-route/retained-save analyzer (2,609 full codec checks) and browser-export analyzer (five whole-state comparisons, 2,010 codec checks including actual cold Continue). No fresh root browser, ordinary battery depletion or full campaign evidence.
+
+The additive bounds helper and pre-sweep restriction are appropriate: new carrier travel reserves its existing 17 m proxy, old valid overhangs do not snap inward, and local/world transforms remain coherent. The explicit legacy interior-entry fallback is clearance checked and reports when it chooses another dry landing. `HorizontalBounds`, `withinWorldBounds`, optional `moveHull(..., bounds)`, `carrierTravelBounds` and `constrainCarrierYaw` remain pending final reconciliation after the precision correction below; no schema change.
+
+## ROOT-CB-01 — exact returned yaw still bypasses the checked endpoint
+
+**Changes required.** In `constrainCarrierYaw`, `fits(1)` tests `wrap(current + delta)` but its successful branch returns `desiredYaw`. Floating-point arithmetic can make these different. The bisection branch's representation fix does not cover this early return.
+
+Root's bounded targeted endpoint probe found a concrete failure at case74. `yaw-endpoint-regression.mjs` stages a complete **codec-valid** compact fixture at carrier position `(65,-24,63.03314320575622)`, yaw `1.6680903988919056`, takes helm, then applies one ordinary look command `yawDelta=-0.06564769841653488`, `pitchDelta=0`. The checked endpoint is `1.6024427004753719`; the returned/saved yaw is `1.602442700475371`. Starboard attached origin becomes Z`66.00000000000001`, and strict encode fails. Root retained complete before/after states, error and failing assertion in `yaw-endpoint-regression.{json,log}`. Placement is diagnostic, not an earned route or actual browser input.
+
+Fix every successful return to use exactly the tested angle, retain arc-extremum checks and strict validation, and add this command/codec regression. Do not add a validator tolerance, move attachments separately or alter old poses. [Focused correction brief](../tasks/M1-CARRIER-YAW-FIX.md). Original route/browser results remain valid for their tested schedules, but they cannot close this remaining case.
+
+LOOK and UI-CLARITY remain on their unchanged e06035d baselines. Freeze a new paired-review candidate only after all corrections are inspected/assembled. Integrated M1 and ordinary depleted-power proof remain open.
