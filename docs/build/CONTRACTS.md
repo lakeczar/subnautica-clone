@@ -1,5 +1,13 @@
 # Shared implementation direction
 
+## Carrier boundary additions staged at 9d1397d
+
+Source 1c8f719 plus exact-heading correction 53607cb, reconciled by root after combined 174 tests and targeted checks; still provisional until fresh paired acceptance. [Inspection](evidence/M1-CARRIER-YAW-INTEGRATION.md).
+
+- world.ts exports `HorizontalBounds { minX, maxX, minZ, maxZ }` and `withinWorldBounds(position: Vec3): boolean`, an inclusive horizontal origin check without a Y policy. `moveHull(world, origin, delta, shape, bounds?: HorizontalBounds)` restricts requested per-slice travel before existing physical sweeps. Four-argument callers keep their previous semantics. A retained origin outside a tighter interval may move inward/tangentially, never snap to the interval or move further outward.
+- carrier.ts exports `carrierTravelBounds(): HorizontalBounds`, using the existing 17 m Hearthline proxy, and read-only `constrainCarrierYaw(state, desiredYaw): number`, checking actual attached origins over the shortest arc and its extrema. Every successful return uses exactly the checked angle; blocked heading is shared by camera/steering and hull. No independent child clamping, new saved field or validation relaxation.
+- Valid older near-edge states retain their origin. Explicit boarding/helm exit first checks the authored landing, then only for a world-edge overhang may choose a locally/world-clear dry passage with visible feedback; otherwise it refuses atomically. Walking rejects an out-of-world candidate without changing local/world ownership. Launch/capture keep existing full-path checks. This is compatibility handling within the conservative existing proxy, not general rotating-hull solid collision.
+
 Status: foundation source at `8d72dd2`, persistence correction at `417a7ec` (author `79423ec`), interruption/readiness correction at `2c25b8b` (author `1e2c581`). The async save/session and renderer lifecycle seams below are reconciled; both non-author reviewers accepted the frozen `50f5569` candidate; see [paired acceptance](reviews/FND-ECO-R3.md). Both non-author reviewers also accepted integrated M0 at `d415436`; see [M0 record](reviews/M0-R1.md). M1 extends these contracts under a new reviewed batch. [EXPEDITION_INTEGRATION.md](../EXPEDITION_INTEGRATION.md) remains authoritative for cross-system content and progression.
 
 ## Implemented foundation boundary
