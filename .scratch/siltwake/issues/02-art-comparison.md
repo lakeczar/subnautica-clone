@@ -42,3 +42,25 @@ The integrated questionnaire asks the owner to choose voxel, cel developed towar
 The owner prefers the voxel version substantially: "I like the voxel a lot better and it adds more detail," while liking the precision of specific assets. They asked whether cel could become more vibrant/detailed, or voxel blocks could become smaller for smoother detail. This supersedes the coordinator's earlier cel recommendation as the leading preference, but does not yet select a final treatment.
 
 A second bounded art pass is authorized: preserve the original viewer, add finer voxel geometry with precise technology details, and enrich the cel option with actual surface/colony detail and clearer local color. Three Sol max artists continue their owned environment, vehicle and ecology modules. Coordinator-owned lighting/integration will be compared with matching cameras; changes in lighting are part of this refinement, not presented as a geometry-only comparison. No game construction is authorized by this art request.
+
+## Refinement comparison ready
+
+The requested revisions are integrated at [art source commit 20711d1](https://github.com/lakeczar/subnautica-clone/tree/20711d1/.scratch/siltwake/art-prototype). The viewer defaults to refined voxel and offers `detail=original|refined` alongside the existing style switch. A fifth wildlife camera makes anatomy readable. Original module geometry and transforms are preserved against `3826db6`.
+
+- [Download the original/refined comparison](https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/refinement-comparison.html?raw=true)
+- [Twenty captures and structured evidence](https://github.com/lakeczar/subnautica-clone/blob/pr-assets/prototype-siltwake-art-directions/refinement-evidence.json)
+
+Voxel terrain steps are halved from 2.3/.85 m to 1.15/.425 m. Vehicle contour cells are 62% of their original size, while precise windows, hatches, controls and rails retain engineered surfaces. Ecology uses finer cells, raised membrane ribs, richer anatomy and clustered funnel-coral nurseries. Both refined styles add geological detail and clearer color/lighting separation.
+
+The coordinator found that the original cel sand had downward normals, which contributed to its flat/dark appearance. Refined cel corrects the winding; the original switch deliberately preserves that historical appearance for comparison. Earlier broad normal-audit wording has been corrected in the environment notes. Refined flat-sand samples have upward normals, and all 14,400 refined voxel terrain tops match the required grid/height quantum.
+
+At `20711d1`, the production build passes and all twenty combinations render at 1280×800. The five four-way view groups have matching cameras and frozen animation state. The Original/Refined control preserves the camera; style, detail and wildlife-view selection update the URL. No console errors appeared in the inspected production scene.
+
+| Study | Meshes | Vertices |
+| --- | ---: | ---: |
+| Original voxel | 45 | 149,931 |
+| Refined voxel | 49 | 387,575 |
+| Original cel | 45 | 51,855 |
+| Refined cel | 49 | 122,973 |
+
+The higher geometry costs are measured; FPS on consumer hardware, world streaming and production LOD remain unmeasured. These are visual assets and authored animation, not a gameplay system. An integrated questionnaire asks whether refined voxel achieves the desired balance, whether to keep the chunkier original, or whether the richer cel now appeals more. **Voxel is the stated preference; the final treatment is still awaiting the owner's response.**
