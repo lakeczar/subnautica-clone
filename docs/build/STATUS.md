@@ -1,8 +1,8 @@
 # Siltwake build status
 
-Updated: 2026-10-17. **Construction is resumed through the full game. M0 and M1 remain accepted at their recorded source; Opus implementation advice is in progress before Sol-authored polish.** Fresh non-author Astra xhigh and Sol 6.1 max each ACCEPT the final correction/evidence batch and integrated M1 on **`1caa05f1e790a18edacbd3fce236763e48725c2f`**. The coordinator reconciled both reports and accepts the same scopes; [paired record](reviews/M1-INTEGRATED-R1.md). Production remains **`a5821aa8f3d88045669190a720ccb5765c1acef2`**, final source84fb7e8/evidence5e67fdf. Root and both reviewers pass210 tests/typecheck/build/economy, with exact artifact checks and complete actual A/B/C reloads after44/47/29 ticks. One coalesced nonblocking secondary-guidance contrast finding remains for later polish.
+Updated: 2026-10-18. **Construction continues through the full game. M0 and M1 retain their recorded acceptance; Opus implementation advice is reconciled and POLISH-1A is ready for Sol6.1/max dispatch.** Fresh non-author Astra xhigh and Sol 6.1 max each ACCEPT the final correction/evidence batch and integrated M1 on **`1caa05f1e790a18edacbd3fce236763e48725c2f`**. The coordinator reconciled both reports and accepts the same scopes; [paired record](reviews/M1-INTEGRATED-R1.md). Production remains **`a5821aa8f3d88045669190a720ccb5765c1acef2`**, final source84fb7e8/evidence5e67fdf. Root and both reviewers pass210 tests/typecheck/build/economy, with exact artifact checks and complete actual A/B/C reloads after44/47/29 ticks. One coalesced nonblocking secondary-guidance contrast finding remains for later polish.
 
-**All earlier implementation/review tasks are terminal. One same-thread Opus implementation consultation is active; no builder is assigned until its plan is reconciled.** The coordinator has no browser/server/recording/input. M1 remains on `feat/siltwake-first-expedition` / draft PR#4; `game/siltwake` remains M0 at **a2cb19f1d4cd2d795b82642a2bd357f681d1c293** / draft PR#3. No game/main merge or deployment occurred. M2–M4, the dedicated post-M3 Astra design critique and human/hardware validation remain open.
+**The Opus consultation is terminal at40fcef9, with no children/questions/resources. Root has reconciled its advice in [POLISH-1](tasks/POLISH-1.md) and frozen sequential simulation then presentation ownership. TASKS records the active dispatch.** The coordinator has no browser/server/recording/input. M1 remains on `feat/siltwake-first-expedition` / draft PR#4; `game/siltwake` remains M0 at **a2cb19f1d4cd2d795b82642a2bd357f681d1c293** / draft PR#3. No game/main merge or deployment occurred. M2–M4, the dedicated post-M3 Astra design critique and human/hardware validation remain open.
 
 ## Resumed full-game construction
 
@@ -17,17 +17,17 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 - Owner invoked `.scratch/siltwake/BUILD_HANDOFF.md` and the revised prompt on 2026-10-17. Routine implementation, integration, fixes and PR work are authorized. Main merge/public deployment remain with the owner.
 - Specification: [revised input](../../prompts/BUILD_GAME_REVISED.md); planning source SHA `b3c3231b99ca5f1bd1159c5611216f2866e05a37`. Review acceptance for the underlying planning changes is at `6234042`; later planning evidence was bookkeeping.
 - Integration branch: `game/siltwake`. Implementation begins from the build-records commit immediately after the planning source. Use `git log -1` for the current checkout SHA; task candidates and acceptance SHAs are recorded explicitly below.
-- Accepted milestones: M0 foundation at `d415436` and M1 first expedition at `1caa05f`. Current activity: detailed Opus implementation consultation, then Sol execution and continued stage loops. [Plan](PLAN.md), [contracts](CONTRACTS.md), [playtest record](PLAYTEST.md), [content manifest](CONTENT_MANIFEST.md), [task ledger](TASKS.md).
+- Accepted milestones: M0 foundation at `d415436` and M1 first expedition at `1caa05f`. Current activity: POLISH-1A simulation/interaction implementation, followed by 1B controls/presentation and continued stage loops. [Plan](PLAN.md), [contracts](CONTRACTS.md), [playtest record](PLAYTEST.md), [content manifest](CONTENT_MANIFEST.md), [task ledger](TASKS.md).
 
 ## Active ownership
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-All implementation authors and reviewers are complete with no live children or owned running resources. Both final review models/efforts are runtime-confirmed. Astra report2a7b32e was merged ate938d20; Sol reportd7aa801 was merged ate3d335c. Root verified15 Astra and18 Sol reviewer payloads and inspected independent probes/results. Later changes are reports/build records only; reviewed production/tests/config remain frozen. The original OPUS-DESIGN-R2 review released its browser/server. Its same-thread consultation now owns only `docs/build/design/OPUS-DESIGN-R2-IMPLEMENTATION.md` and its new temp notes; no production paths are assigned. Root plus one Opus adviser active.
+All implementation authors and reviewers are complete with no live children or owned running resources. Both final review models/efforts are runtime-confirmed. Astra report2a7b32e was merged ate938d20; Sol reportd7aa801 was merged ate3d335c. Root verified15 Astra and18 Sol reviewer payloads and inspected independent probes/results. Later changes are reports/build records only; reviewed production/tests/config remain frozen. The original Opus review and implementation consultation are terminal. The plan-only40fcef9 is integrated and root reran its launch/stall/prefab probes. POLISH-1 transfers bounded simulation/registry/minimal prompt ownership to the next Sol6.1/max child; exact dispatch SHA/task is in TASKS. No overlapping worker edits.
 
 ### Historical implementation checkpoints
 
-The paragraphs below retain earlier source-specific provisional states. They do not override current M1 acceptance or the owner pause.
+The paragraphs below retain earlier source-specific provisional states. They do not override current M1 acceptance or the resumed construction above.
 
 A0 task completed with clean worktree, no children and owned tabs/server closed. Source `558c28c55c21c5636c847e1702e7c6e3b67c7e7a`, evidence `aa53661363117e6a9a443cffce3c4b48887aba44`, provisional merge `1c8d81e`. [Root reconciliation/checks](evidence/M1-A0-INTEGRATION.md): 117 tests/typecheck/build, economy and independent immediate-save diagnostics pass; final bundle hash matches. Root inspected the actual final author carrier capture. No fresh root browser or full route acceptance is claimed.
 
@@ -54,11 +54,11 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the implementation-consultation completion for task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Athread-send%3Asiltwake-opus-r2-implementation-consult-ef8d761`, inspect/reconcile its detailed plan and commit shared contracts before dispatching bounded Sol6.1/max implementation. Do not start another independent Opus audit or duplicate the adviser. Follow the four-stage protocol through the complete game; no routine owner approval or new idle pause is required. Main merge/public deployment remain separate.
+Dispatch/receive POLISH-1A from the committed contract baseline, inspect its source/tests/evidence and stage it provisionally. Then dispatch POLISH-1B against the implemented interfaces for mouse/control/target-cue/impact presentation and actual S1–S6 play evidence. Freeze the composed slice for independent Astra/Sol acceptance; continue slice2 and the end-of-stage1 Opus review, then M2–M4. Do not repeat the completed consultation or stop after advice. Main merge/public deployment remain separate.
 
 ### Historical execution and evidence
 
-The following pending/dispatch labels describe earlier checkpoints and are superseded by the current acceptance and pause above.
+The following pending/dispatch labels describe earlier checkpoints and are superseded by the current acceptance and continuation above.
 
 Follow [M1 coordination revision](tasks/M1-COORDINATION.md) and the [combined assembly record](evidence/M1-ASSEMBLY.md). Completed CORE source `6b4f229` provides an earned C01–C04 Dart outing/return/store/service and actual reload, with pre-refill oxygen minima 78.805556% preparation and 77.240741% lab, return power 92.057056%, and no failures/rescues. Whole-state reload matches 679 no-input ticks. Its 21 exact collection actions/eight sortie transfers are retained; full preparation transfer count and continuous pre-reload input trace were lost. Keep those limits, shallow-shelf misstep and all earlier source attribution explicit.
 
