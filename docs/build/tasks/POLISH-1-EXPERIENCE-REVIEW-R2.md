@@ -1,6 +1,6 @@
 # Complete experience correction — independent R2 brief
 
-**Prepared for dispatch after root commits the frozen candidate.** Fresh non-author Astra xhigh and Sol6.1 max each review the complete batch from base **c4de57928347c89ea7602a13d1e14a2849caf722**. No S1/S2/COMPOSE/caption/layout author may review. Preserve the full original eight-criterion scope below.
+**Dispatched on frozen3e740a8876ccddb6d433558c0b91e4aba3fb31d9; TASKS records both IDs.** Fresh non-author Astra xhigh and Sol6.1 max each review the complete batch from base **c4de57928347c89ea7602a13d1e14a2849caf722**. No S1/S2/COMPOSE/caption/layout author may review. Preserve the full original eight-criterion scope below.
 
 Combined correction source555ac20/reportfab1702 is now inspected and provisionally integrated at5090866. Read `evidence/POLISH-1-EXPERIENCE-CALL-LAYOUT.md` and `evidence/POLISH-1-EXPERIENCE-CALL-LAYOUT-INTEGRATION.md`. Root399 checks/build/economies and27-file build equality pass;414 artifacts verify (manifestbdc70f928d61646e499b1d361c0aafc1884bd87028d65764e273e11f8fb4a2a8). Current artifacts `/tmp/siltwake-polish-1-experience-call-layout/`, root receipts in the sibling `-root/` directory. Author terminal/released. Fresh reviewers independently judge closure, not adopt the author/root verdict.
 
