@@ -1,5 +1,7 @@
 # Find the design for an integrated ocean-world adventure
 
+Current owner continuation: after OPUS-DESIGN-R2, obtain detailed implementation advice from that same Opus thread, implement with Sol6.1/max under Astra/xhigh, and continue to the complete game. Thorough Opus5.5/high reviews are required after current polish, M2, M3 and M4, with detailed fix advice and Sol correction loops. Avoid excessive menu subtitles/subheadings/helper copy. See [live status](../../docs/build/STATUS.md) and [standing protocol](../../docs/build/tasks/OPUS-STAGE-REVIEWS.md); these supersede historical pause/planning-only wording.
+
 Label: wayfinder:map
 Status: resolved
 

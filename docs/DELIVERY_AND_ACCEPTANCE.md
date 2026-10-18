@@ -45,6 +45,29 @@ The Astra `xhigh` coordinator remains responsible for the whole game, integratio
 
 Respect the live concurrency cap: rotate authors out as their batches finish, run the pair in available slots, then resume implementation. Review milestone integration separately even when its component batches passed. The final integration PR must include both reviewers' assessment of the release candidate.
 
+## Owner-required Opus experience loop
+
+The owner explicitly resumed construction after the second Opus audit and requires a thorough **Claude Opus 5.5 / high** experience review at the end of each remaining stage:
+
+1. Current M1 controls, interaction and flow polish.
+2. M2 fleet/world skeleton.
+3. M3 authored campaign.
+4. M4 final polish/release candidate.
+
+These reviews supplement the Astra xhigh/Sol6.1 max gate and the separately requested post-M3 Astra game-design critic. The earlier OPUS-DESIGN-R2 audit precedes implementation; it does not count as the end-of-stage1 review. Use the current live model catalog and record selected/effective settings honestly.
+
+Give each stage reviewer the complete stage scope, frozen source, executable/playable artifact, actual ordinary-control evidence, relevant earlier findings and their dispositions, and explicit remaining limits. Review gameplay loop, motion and controls, menu/UI flow and text density, timing, visual/audio coherence, discovery/lore and the composed player experience. Inspect actual visuals and relevant motion/interaction evidence; code and screenshots alone do not prove feel. Keep major spoilers in protected appendices.
+
+For substantive findings, ask the critic for a detailed implementation approach: concrete player behavior, affected modules/contracts, dependencies, algorithms/trial values, concise UI copy, compatibility and verification. A same-thread consultation may retain the completed critic's context; it is implementation advice, not a fresh independent review round. Track its own returned task ID. Root reconciles proposals and delegates implementation to **Sol6.1/max**, including art; Claude remains reviewer/adviser. Record reasons/evidence for any disputed or deferred finding rather than silently ignoring it. Resolve blocking findings before completing the stage.
+
+After corrections, run affected checks and the applicable Astra/Sol gate on the new frozen candidate. Use a fresh delegated Opus review to verify affected experience findings, supplying the original scope, findings, responses and new evidence. Do not continue an independent review round through a child-thread message. Root then advances to the next stage without requesting routine permission. Main merge/public deployment remain separate owner actions. [Execution protocol](build/tasks/OPUS-STAGE-REVIEWS.md) owns the stage ledger and follow-up procedure.
+
+## Menu and interface writing
+
+Owner priority: **avoid subtitle, subheading and helper-copy overuse in menus and routine UI throughout the game**. Lead with clear action labels, items, current state and costs. Add explanatory text only when it helps the immediate decision; use optional contextual help for deeper rules. Do not repeat the same instructions across cards/panels or surround every heading with decorative eyebrow/subtitle text. Group related information instead of giving each sentence its own heading. Show a result/refusal in the appropriate place without simultaneous repetitive banners.
+
+This does not remove useful dialogue captions, accessibility equivalents, critical hazard information, unsaved-session warnings or persistence/graphics errors. Notebook evidence may need narrative depth; routine controls should not require reading a manual. Use player-facing names, not internal object IDs. Check menus during ordinary preparation/return workflows, including keyboard focus and narrow desktop layouts, for scroll burden, repeated text and whether the next useful action is easy to find.
+
 ## Necessary verification
 
 ### Dedicated game-design critique
