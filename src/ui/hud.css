@@ -53,7 +53,7 @@
 .menu-screen .settings label, .menu-screen .settings select,
 .menu-screen .controls div, .menu-screen .save-status,
 .menu-screen .control-note, .menu-screen .build-note > span:last-child { font-size: 12px; }
-.menu-screen .wordmark > span, .menu-screen .build-note, .scene-caption small { font-size: 11px; }
+.menu-screen .wordmark > span, .menu-screen .build-note, .scene-caption > span, .scene-caption small { font-size: 11px; }
 #panel-return kbd { font-size: 12px; }
 .crosshair {
   position: absolute;
