@@ -448,3 +448,10 @@ PR #4/#3 refreshed for LOOK assembly and running R3 pair; exact bodies/base/head
 Task `siltwake-m1-batch-astra-r3-21d50df` terminal, actual Astra/xhigh, clean worktree and closed own tab/server5195, no children/questions. Report `e16139b` merged at `dbfca53`. Core CHANGES REQUIRED; presentation ACCEPT. Root verified80 artifact payloads/81 unique safe regular archive members and reran the copied historical codec/session reproduction on unchanged root206a6ec. [Root evidence](evidence/M1-R3-MIGRATION-REPRODUCTION.md): M1-ASTRA-R3-01 confirmed, original raw journal unchanged, helm workaround demonstrated.
 
 Sol R3 remains active/independent at21d50df with only its report path and port5196. No Astra findings shared. [Migration correction](tasks/M1-MIGRATION-FIX.md) transfers only codec legacy placement/result checks, the existing checked-entry helper in carrier.ts, focused migration/save/session tests and its own evidence to a separate Sol max worktree. Await exact dispatch record below; root alone integrates/updates records. No root browser/server or production mutation; no batch acceptance. Later correction requires a new frozen candidate and fresh independent pair.
+
+
+### Migration correction dispatched from 9514dd7
+
+Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-m1-migration-fix-sol-max-9514dd7`, stable request `siltwake-m1-migration-fix-sol-max-9514dd7`. T3 isolated worktree, exact committed parent `9514dd7cdf7730995eece31e953f3fefd2120bab`, production unchanged06927d5. Live codex catalog verified gpt-6.1-sol/max; explicit reasoningEffort=max and returned model/provider match. Async accepted running without children/questions. Complete ownership/spec/reproduction/browser brief supplied.
+
+Root plus builder plus independent Sol R3 reviewer are active. Builder owns only the narrow migration/helper/test/evidence assignment; Sol reviewer owns its original report at unchanged21d50df. No peer findings shared. No root browser/server. Receive completions; no polling/waiters, no duplicate author. Inspect both returns and freeze corrected source for a fresh pair before acceptance.
