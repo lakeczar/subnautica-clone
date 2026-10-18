@@ -9,6 +9,7 @@ import {
 } from "../content/registry.js";
 import type { GameState } from "../sim/types.js";
 import { usedCapacity } from "../sim/inventory.js";
+import { installedModuleValid, moduleItem, SMALL_CRAFT_SOCKETS } from "../sim/modules.js";
 import { WORLD_BOUNDS } from "../sim/world.js";
 import { atCarrierSupport, BERTH_LOCAL, CARRIER_LAYOUT, localToWorld } from "../sim/carrier.js";
 export const record = (v: unknown): v is Record<string, unknown> =>
@@ -323,7 +324,7 @@ export function validState(value: unknown): value is GameState {
         !bool(v.disabled) ||
         !n(v.emergencyAir, 0, 120) ||
         !id(v.cargoId) ||
-        !array(v.modules, 0, () => false) ||
+        !stringSet(v.modules, SMALL_CRAFT_SOCKETS, id) ||
         !record(v.investment) ||
         !Object.entries(v.investment).every(
           ([a, b]) =>
@@ -533,6 +534,18 @@ function semantic(s: GameState): boolean {
       (i.provenance === "maintenance" && i.kind !== "bobbin_kit")
     )
       return false;
+    if (i.kind === "dart_acoustic_trim" && !moduleItem(i)) return false;
+  }
+  const moduleReferences = new Set<string>();
+  for (const v of f.vehicles) {
+    const kinds = new Set<string>();
+    for (const itemId of v.modules) {
+      if (moduleReferences.has(itemId) || !installedModuleValid(s, v, itemId)) return false;
+      const kind = items.find((i) => i.id === itemId)!.kind;
+      if (kinds.has(kind)) return false;
+      kinds.add(kind);
+      moduleReferences.add(itemId);
+    }
   }
   for (const kind of [
     "essential_tools",
@@ -540,6 +553,7 @@ function semantic(s: GameState): boolean {
     "salvage_buoy",
     "bobbin_kit",
     "reserve_cell",
+    "dart_acoustic_trim",
   ] as const) {
     const n = items
       .filter((i) => i.kind === kind)
@@ -706,4 +720,15 @@ function semantic(s: GameState): boolean {
   )
     return false;
   return true;
+}
+/** expedition.2's closed domain, followed by the SAME strict structural/relational validator.
+ * This revision adds one item/recipe ID and installed refs only; no new blueprint/source IDs.
+ * Never let an old content tag smuggle current-domain data through migration. */
+export function validExpedition2Domain(value: unknown): boolean {
+  if (!record(value) || !record(value.inventory) || !record(value.knowledge) || !record(value.fleet)) return false;
+  return Array.isArray(value.inventory.items) && value.inventory.items.every((i: unknown) =>
+    record(i) && i.kind !== "dart_acoustic_trim") &&
+    Array.isArray(value.knowledge.crafted) && !value.knowledge.crafted.includes("dart_acoustic_trim") &&
+    Array.isArray(value.fleet.vehicles) && value.fleet.vehicles.every((v: unknown) =>
+      record(v) && Array.isArray(v.modules) && v.modules.length === 0);
 }

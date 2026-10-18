@@ -76,7 +76,7 @@ function dartGame(): GameState {
   s.player.pose.position = { x: 10, y: 1.2, z: -34 };
   for (const id of ["restore_workshop", "dart_base"] as const) {
     for (const [k, n] of Object.entries(RECIPES[id].cost))
-      addItem(s, k as "structural_alloy", n, "workshop_locker");
+      addItem(s, k as "structural_alloy", n, id === "restore_workshop" ? "diver" : "workshop_locker");
     assert.equal(craft(s, id, world), null);
   }
   return s;
@@ -141,7 +141,7 @@ test("collection/craft/transfer refusals conserve stock, identity and inputs und
   funded.player.pose.position = { x: 10, y: 1.2, z: -34 };
   for (const rid of ["restore_workshop", "dart_base"] as const)
     for (const [k, n] of Object.entries(RECIPES[rid].cost))
-      addItem(funded, k as "structural_alloy", n, "workshop_locker");
+      addItem(funded, k as "structural_alloy", n, rid === "restore_workshop" ? "diver" : "workshop_locker");
   assert.equal(craft(funded, "restore_workshop", world), null);
   const snapshot = structuredClone(funded);
   assert.match(
@@ -150,7 +150,7 @@ test("collection/craft/transfer refusals conserve stock, identity and inputs und
   );
   assert.deepEqual(funded, snapshot);
 });
-test("M1 package, reserve cells and first hull consume the accepted public budget exactly; source stock has two independent patches", () => {
+test("M1 package, reserve cells and first hull consume the declared starter budget exactly; source stock has two independent patches", () => {
   const s = dartGame();
   assert.deepEqual(s.world.maintenance, { alloy: 14, glass: 0, membrane: 7 });
   assert.equal(s.fleet.vehicles.length, 1);
@@ -161,13 +161,13 @@ test("M1 package, reserve cells and first hull consume the accepted public budge
   });
   const totals = { structural_alloy: 0, silica_glass: 0, flex_membrane: 0 };
   for (const [id, r] of Object.entries(RECIPES))
-    if (id !== "bobbin_kit")
+    if (id !== "bobbin_kit" && id !== "dart_acoustic_trim")
       for (const [k, n] of Object.entries(r.cost))
         totals[k as keyof typeof totals] += n;
   assert.deepEqual(totals, {
     structural_alloy: 16,
     silica_glass: 11,
-    flex_membrane: 13,
+    flex_membrane: 12,
   });
   for (const kind of [
     "structural_alloy",
@@ -375,8 +375,9 @@ test("directional distraction shortens its ray at every world edge/corner and sa
     const expected = structuredClone(before);
     expected.world.threat.distraction = target;
     expected.world.threat.distractionSeconds = 12;
+    expected.inventory.items.find((i) => i.kind === "reserve_cell")!.charge = 75;
     expected.feedback = result.state.feedback;
-    assert.deepEqual(result.state, expected, "only pulse and success feedback change");
+    assert.deepEqual(result.state, expected, "only selected cell charge, pulse and success feedback change");
     assert.deepEqual(s, before, "the original command input stays detached");
     const repeated = executeCommand(result.state, { type: "distraction" }, world);
     assert.strictEqual(repeated.state, result.state);

@@ -1,6 +1,6 @@
 /** Stable saved identifiers. Labels and render mesh names are never saved references.
  * Seeded from WORLD_PROGRESSION / EXPEDITION_INTEGRATION, not a recipe balance. */
-export const CONTENT_VERSION = "expedition.2" as const;
+export const CONTENT_VERSION = "expedition.3" as const;
 
 export const REGIONS = {
   refuge_reef: { label: "Hearth Reef", depth: [0, 65] },
@@ -202,8 +202,14 @@ export const ITEMS = {
   salvage_buoy: { label: "Reusable salvage buoy", cu: 2 },
   reserve_cell: { label: "Rechargeable reserve cell", cu: 2 },
   bobbin_kit: { label: "Bobbin / rescue collar", cu: 6 },
+  dart_acoustic_trim: { label: "Dart acoustic trim", cu: 2 },
 } as const;
 export type ItemKind = keyof typeof ITEMS;
+/** Installed references name ordinary cargo item instances; no separate fitting/container. */
+export const MODULES = {
+  dart_acoustic_trim: { hull: "dart", quietSpeed: 4.2, boostSpeed: 9 },
+} as const;
+export type ModuleKind = keyof typeof MODULES;
 export type BlueprintId =
   | "bp_pod_checklist"
   | "bp_reef_recovery"
@@ -248,7 +254,7 @@ export const RECIPES = {
   },
   essential_tools: {
     label: "Scanner & service tool",
-    cost: { structural_alloy: 2, silica_glass: 2, flex_membrane: 2 },
+    cost: { structural_alloy: 1, silica_glass: 3, flex_membrane: 1 },
     bp: "bp_pod_checklist",
     needs: ["pod_repair"],
     site: "pod_fabricator",
@@ -259,7 +265,7 @@ export const RECIPES = {
   },
   suit_150: {
     label: "Fit 150 m pressure suit",
-    cost: { structural_alloy: 1, silica_glass: 1, flex_membrane: 2 },
+    cost: { structural_alloy: 1, flex_membrane: 3 },
     bp: "bp_pod_checklist",
     needs: ["essential_tools"],
     site: "pod_fabricator",
@@ -270,7 +276,7 @@ export const RECIPES = {
   },
   restore_workshop: {
     label: "Restore workshop services",
-    cost: { structural_alloy: 2, silica_glass: 1, flex_membrane: 1 },
+    cost: { structural_alloy: 3, silica_glass: 1 },
     bp: "bp_island_workshop",
     needs: ["essential_tools"],
     site: "island_workshop",
@@ -321,6 +327,17 @@ export const RECIPES = {
     output: "dart",
     quantity: 1,
     once: false,
+    maintenance: false,
+  },
+  dart_acoustic_trim: {
+    label: "Dart acoustic trim",
+    cost: { conductive_crust: 2, buoyant_resin: 2 },
+    bp: "bp_canopy_reinforcement",
+    needs: ["dart_base"],
+    site: "island_workshop",
+    output: "dart_acoustic_trim",
+    quantity: 1,
+    once: true,
     maintenance: false,
   },
 } as const satisfies Record<string, Recipe>;

@@ -1,13 +1,80 @@
-import { DART_BUILD_POSE, HULLS } from "../content/registry.js";
-import type { GameState, VehicleState, WorldQueries } from "./types.js";
+import { HULLS } from "../content/registry.js";
+import type { GameState, Vec3, VehicleState, WorldQueries } from "./types.js";
 import {
   distance,
-  facility,
+  containerLabel,
+  equipped,
+  fabricationContainers,
+  localBenchSite,
   nearPod,
   nearWorkshop,
   removeQuantity,
+  supportedServiceSite,
 } from "./inventory.js";
 import { personalLimit } from "./progression.js";
+import { WORLD_BOUNDS } from "./world.js";
+
+export const PULSE_CHARGE_COST = 25;
+export type DistractionPreview =
+  | { refusal: string; cellId: null; target: null; cost: 25; remainingCharge: null }
+  | { refusal: null; cellId: string; target: Vec3; cost: 25; remainingCharge: number };
+/** Same eligibility/ray/selection for the command and its future presentation. Never mutates. */
+export function distractionPreview(s: GameState): DistractionPreview {
+  const refuse = (refusal: string): DistractionPreview =>
+    ({ refusal, cellId: null, target: null, cost: PULSE_CHARGE_COST, remainingCharge: null });
+  if (!equipped(s, "essential_tools")) return refuse("The service tool supplies the acoustic distraction; each pulse costs 25 reserve-cell charge points.");
+  if (s.world.threat.distractionSeconds > 0) return refuse("Distraction is already active.");
+  const p = s.player.pose, dx = Math.sin(p.yaw), dz = -Math.cos(p.yaw);
+  let range = 16;
+  // Preserve the existing clipped ray, including cardinal-heading residue handling.
+  if (Math.abs(dx) > Number.EPSILON)
+    range = Math.min(range, ((dx > 0 ? WORLD_BOUNDS.maxX : WORLD_BOUNDS.minX) - p.position.x) / dx);
+  if (Math.abs(dz) > Number.EPSILON)
+    range = Math.min(range, ((dz > 0 ? WORLD_BOUNDS.maxZ : WORLD_BOUNDS.minZ) - p.position.z) / dz);
+  const target = {
+    x: Math.max(WORLD_BOUNDS.minX, Math.min(WORLD_BOUNDS.maxX, p.position.x + dx * range)),
+    y: p.position.y,
+    z: Math.max(WORLD_BOUNDS.minZ, Math.min(WORLD_BOUNDS.maxZ, p.position.z + dz * range)),
+  };
+  if (range <= 0 || (target.x === p.position.x && target.z === p.position.z))
+    return refuse("Face into the survey area to release a directional pulse.");
+  const craft = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
+  const containers = ["diver", ...(craft && !craft.berth ? [craft.cargoId] : [])];
+  for (const id of containers) {
+    const cell = s.inventory.items.filter((i) => i.kind === "reserve_cell" &&
+      !i.fitted && i.containerId === id && (i.charge ?? 0) >= PULSE_CHARGE_COST)
+      .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)[0];
+    if (cell) return { refusal: null, cellId: cell.id, target, cost: PULSE_CHARGE_COST,
+      remainingCharge: cell.charge! - PULSE_CHARGE_COST };
+  }
+  return refuse("A pulse costs 25 charge points from one reserve cell in your hold or the controlled craft. Quiet movement, cover and retreat remain available.");
+}
+export function distraction(s: GameState): string | null {
+  const p = distractionPreview(s);
+  if (p.refusal !== null) return p.refusal;
+  const cell = s.inventory.items.find((i) => i.id === p.cellId)!;
+  cell.charge = p.remainingCharge;
+  s.world.threat.distraction = p.target;
+  s.world.threat.distractionSeconds = 12;
+  s.feedback = `Directional pulse released: 25 charge points from a reserve cell in ${containerLabel(s, cell.containerId)}; ${p.remainingCharge.toFixed(2)} remain. Move quietly away from it.`;
+  return null;
+}
+export function cellRechargePreview(s: GameState): { cellIds: string[]; refusal: string | null } {
+  const site = localBenchSite(s);
+  if (!site) return { cellIds: [], refusal: "Use the restored pod fabricator or restored workshop bench to recharge local reserve cells." };
+  const bins = fabricationContainers(s, site);
+  const cells = s.inventory.items.filter((i) => i.kind === "reserve_cell" && !i.fitted && bins.includes(i.containerId));
+  const cellIds = cells.filter((i) => (i.charge ?? 0) < 100).map((i) => i.id);
+  return { cellIds, refusal: !cells.length ? "No reserve cells at this bench or its local cargo containers."
+    : !cellIds.length ? "All local reserve cells are already full." : null };
+}
+export function rechargeCells(s: GameState): string | null {
+  const p = cellRechargePreview(s);
+  if (p.refusal) return p.refusal;
+  for (const i of s.inventory.items) if (p.cellIds.includes(i.id)) i.charge = 100;
+  s.feedback = `Recharged ${p.cellIds.length} local reserve ${p.cellIds.length === 1 ? "cell" : "cells"}.`;
+  return null;
+}
 export const hullDepth = (v: VehicleState): number =>
   Math.max(0, -(v.pose.position.y + 0.5));
 export function exitRefusal(s: GameState, world: WorldQueries): string | null {
@@ -68,11 +135,7 @@ export function service(s: GameState, id: string): string | null {
   const v = s.fleet.vehicles.find((v) => v.id === id);
   if (!v || v.berth || distance(s.player.pose.position, v.pose.position) > 7)
     return "Approach the craft service socket locally.";
-  const supported =
-    (distance(v.pose.position, DART_BUILD_POSE) < 12 &&
-      facility(s, "island_workshop")) ||
-    distance(v.pose.position, { x: 0, y: -1, z: 8 }) < 12;
-  if (!supported)
+  if (!supportedServiceSite(s, v))
     return "Charging and routine repair require the pod or restored workshop cradle. Field recovery uses maintenance patches.";
   if (v.disabled)
     return "Apply a bound recovery patch before routine charging.";

@@ -66,6 +66,7 @@ export interface VehicleState {
   disabled: boolean;
   emergencyAir: number;
   cargoId: string;
+  /** Installed ordinary cargo item instance IDs, still counted in cargo capacity. */
   modules: string[];
   investment: Partial<Record<MaterialId, number>>;
   boundRepairs: number;
@@ -172,11 +173,15 @@ export type GameCommand =
   | { type: "skip-opening" }
   | { type: "craft"; recipeId: RecipeId }
   | { type: "transfer"; itemId: string; to: string; quantity: number }
+  | { type: "store-materials"; from: string; to: string }
   | { type: "sort"; sourceId: SourceId; maintenance?: boolean }
   | { type: "eat" }
   | { type: "buoy" }
   | { type: "exit" }
   | { type: "service"; vehicleId: string }
+  | { type: "recharge-cells" }
+  | { type: "install-module"; vehicleId: string; itemId: string }
+  | { type: "remove-module"; vehicleId: string; itemId: string }
   | { type: "reserve"; vehicleId: string }
   | { type: "recover"; vehicleId: string; method: "tow" | "repair" | "salvage" }
   | { type: "emergency-meal" }
