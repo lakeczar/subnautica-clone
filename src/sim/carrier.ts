@@ -187,10 +187,12 @@ export function constrainCarrierYaw(s: GameState, desiredYaw: number): number {
   return low === 0 ? h.pose.yaw : wrap(h.pose.yaw + delta * low);
 }
 
-/** Boarding is an explicit transition, never a load-time hull relocation. Keep
- * its authored destination when clear. For an old overhanging assembly, find a
- * clear part of the same dry interior, or refuse before changing ownership. */
-function carrierInteriorEntry(s: GameState, world: WorldQueries, preferred: Vec3): Vec3 | null {
+/** Checked landing for explicit entry and legacy walking-pose migration in a
+ * validated carrier assembly. Returns a detached carrier-local point, preferring
+ * the authored destination. Only a world-edge overhang enables the dry-passage
+ * fallback; every candidate must clear local structure and the supplied world.
+ * Returns null if no supported landing clears. Does not mutate state/ownership. */
+export function carrierInteriorEntry(s: GameState, world: WorldQueries, preferred: Vec3): Vec3 | null {
   const h = carrierHull(s)!, shape = { radius: 0.34, height: 1.75 };
   const solids = carrierInteriorSolids(s), localWorld = createWorldQueries(solids, () => -200);
   const clear = (p: Vec3): boolean => localWorld.clearance(p, shape) && world.clearance(localToWorld(p, h), shape);
