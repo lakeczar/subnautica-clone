@@ -1232,3 +1232,12 @@ Only root, this implementation author and independent Sol R1 are active. Sol R1 
 ### Public Astra-finding / active-correction checkpoint synchronized
 
 PR #4/#3 complete descriptions disclose ASTRA-EXP-R1-01, pending correction, independent Sol review and remaining paired/Opus gates. Readbacks match `/tmp/siltwake-m1-pr/experience-r1-finding-verification.json` at9926415/M0a2cb19f; #3 remains M0-only. All source/tests remain identical to e81bb6f; review/report records alone changed. No new screenshot or fixed-defect claim. Stack linked/unwatched. Root owns no running browser/server/check; only the correction author and independent Sol reviewer remain active. Await their notifications.
+
+
+### Sol complete-experience R1 terminal; both findings reconciled
+
+Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-experience-sol-r1-e81bb6f` acknowledged terminal without children/questions. Reporta5f82822cde076310e4beb73aee20b440cc600e2 integrated atef81dfb2e677af2792f68fdff2c40e085d9c5d0a; source/tests unchanged. Both original contexts confirm actual gpt-6.1-sol/max. Root verifies167 payloads/4,699,912bytes, manifest899ccb284c26a3178122187c5fbe5e9eeafffb62108a83d8c442d93d4bf84a93. Reviewer resources normally closed; report ownership released.
+
+[Paired R1](reviews/POLISH-1-EXPERIENCE-R1.md) requests changes for ASTRA-EXP-R1-01 and SOL-EXP-01. Root confirms Sol's native five-warning/prompt overlap from actual image, independently recalculated28px intersection, and current compiled codec/target/banner/atomic-refusal probe. Its production attempt remains inconclusive/excluded; no new earned-play claim. Both reviewers produced their initial reports before peer sharing.
+
+Root sent authoritative amendment to the already-active layout implementation thread with stable request `siltwake-experience-layout-sol-r1-amend-a5f8282`; delivery **steered**, original ordinal1 run continues, no new taskID/worker. Both findings now share hud.css/view.ts/conditional presentation-test/report ownership. Parent staysf70f4c8; same port5190 and own artifact root. Preserve all prior invariants and perform combined native/production checks within the amended brief. Only root and this Sol6.1/max author are active. Receive notification without polling; root opens no browser/server/check. Fresh full-batch paired R2, Opus, then M2–M4 remain. No game/main merge/deployment.

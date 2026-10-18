@@ -1,5 +1,7 @@
 # Shared implementation direction
 
+SOL-EXP-01 joins ASTRA-EXP-R1-01 in the existing layout author assignment; paths and all semantic/public-interface constraints remain unchanged. Both R1 reviewers are terminal/released; their reports were independent. Author keeps parentf70f4c8 and now verifies five-warning prompt/result/look plus call/save/status composition together. No second builder or overlapping edits.
+
 ASTRA-EXP-R1-01 correction ownership is limited to hud.css, view.ts only if local layout grouping is necessary, presentation.test.ts only for meaningful structural behavior coverage, and its own report. Existing public interfaces, IDs/handlers, visibility/focus, simulation/save/input/timing/copy remain frozen. TASKS owns actual dispatch. Sol R1 retains only its independent report on original e81bb6f; no source overlap or peer contact.
 
 Current experience freeze: caption sourcef2e634a is inspected and provisionally integrated at35de825. The only added selector sets the non-action pause caption to11px; no public interface/state/test change. All implementation ownership is released. The complete S1/S2/COMPOSE/caption batch awaits the fresh paired gate and Opus; TASKS owns actual dispatch. Earlier active-owner descriptions below are historical.
