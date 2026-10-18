@@ -22,6 +22,7 @@ export class HudView {
   private noticeTimer = 0;
   private announcementTimer = 0;
   private announcementVersion = 0;
+  private pendingExitAnnouncements: string[] = [];
   private shownResult: ActionResult | null = null;
   private announcedContexts = new Set<string>();
   private current: GameState | null = null;
@@ -307,6 +308,9 @@ export class HudView {
       this.current = state;
       this.presentation.observe(state, covered);
       this.renderPilotGuidance(state);
+      // Observation can invalidate a result before this delivery replaces it,
+      // even if the new refusal happens to carry the same exit metadata.
+      if (this.presentation.result !== this.shownResult) this.cancelAnnouncement();
     }
     if ((options.channel ?? "action") === "action" && state && state.opening.phase < 4) return;
     this.presentation.notify(message, error, options, performance.now(), covered);
@@ -334,13 +338,28 @@ export class HudView {
     surface.classList.toggle("error", result?.error ?? false);
     if (surface.textContent !== (result?.message ?? "")) surface.textContent = result?.message ?? "";
     if (result !== this.shownResult) {
+      const previous = this.shownResult;
       this.shownResult = result;
-      window.clearTimeout(this.announcementTimer);
-      const version = ++this.announcementVersion, live = this.get("action-announce");
-      live.textContent = "";
-      if (result) this.announcementTimer = window.setTimeout(() => {
-        if (!this.disposed && version === this.announcementVersion) live.textContent = result.error ? result.full : result.message;
-      }, 0);
+      if (this.pendingExitAnnouncements.length && result?.error && result.refusal && previous?.refusal &&
+        result.refusal.vehicleId === previous.refusal.vehicleId && result.refusal.code === previous.refusal.code) {
+        // Keep actual attempts (including repeats) until this scheduling turn
+        // flushes. One atomic text update exposes their full messages in order.
+        this.pendingExitAnnouncements.push(result.full);
+      } else {
+        this.cancelAnnouncement();
+        const version = this.announcementVersion, live = this.get("action-announce");
+        live.textContent = "";
+        if (result) {
+          if (result.error && result.refusal) this.pendingExitAnnouncements.push(result.full);
+          this.announcementTimer = window.setTimeout(() => {
+            if (this.disposed || version !== this.announcementVersion) return;
+            this.announcementTimer = 0;
+            live.textContent = this.pendingExitAnnouncements.length ? this.pendingExitAnnouncements.join("\n")
+              : result.error ? result.full : result.message;
+            this.pendingExitAnnouncements = [];
+          }, 0);
+        }
+      }
     }
     const notice = this.presentation.central;
     this.toast.hidden = !notice;
@@ -359,6 +378,13 @@ export class HudView {
     this.noticeTimer = expiry === null ? 0 : window.setTimeout(() => this.renderNotices(), Math.max(1, expiry - now));
   }
 
+  private cancelAnnouncement(): void {
+    window.clearTimeout(this.announcementTimer);
+    this.announcementTimer = 0;
+    ++this.announcementVersion;
+    this.pendingExitAnnouncements = [];
+  }
+
   private renderCall(state: GameState): void {
     const call = this.presentation.callDirection(state), cue = this.get("call-cue");
     cue.hidden = !call;
@@ -375,8 +401,7 @@ export class HudView {
   dispose(): void {
     this.resetPresentation();
     this.disposed = true;
-    ++this.announcementVersion;
-    window.clearTimeout(this.announcementTimer);
+    this.cancelAnnouncement();
     window.clearTimeout(this.noticeTimer);
   }
 }

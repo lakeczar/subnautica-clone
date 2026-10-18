@@ -2,13 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
 import { GameView, type UiActions } from "../src/ui/view.js";
+import { HudView } from "../src/ui/hud.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
 import { completeOpening, discover } from "../src/sim/progression.js";
 import { incapacitate, RECOVERY_NOTICES } from "../src/sim/recovery.js";
 import { addItem, available, materialStoragePreview } from "../src/sim/inventory.js";
 import { cellRechargePreview, distractionPreview, exitBlock } from "../src/sim/vehicles.js";
 import { dartPerformance } from "../src/sim/modules.js";
-import { executeCommand } from "../src/sim/step.js";
+import { executeCommand, stepGame } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import { aimedInteraction } from "../src/sim/targeting.js";
 import { faceTarget, NORMAL_VIEWS, readyState } from "./targeting-support.js";
@@ -186,7 +187,7 @@ function viewFixture(t: test.TestContext, world = createWorldQueries()) {
     return commands.splice(count)[0];
   };
   return {
-    view, commands, audio, markup: () => root.innerHTML, get: (id: string) => root.querySelector(`#${id}`),
+    view, root, commands, audio, markup: () => root.innerHTML, get: (id: string) => root.querySelector(`#${id}`),
     structure: (selector: string) => root.querySelectorAll(selector)[0]!,
     active: () => document.activeElement,
     timerCount: () => timers.size,
@@ -1463,6 +1464,195 @@ test("tiny hull impacts flash without zero chips, accumulate honestly and reset 
   view.dispose(); assert.equal(timerCount(), 0);
 });
 
+function exitAnnouncementFixture(t: test.TestContext, world = createWorldQueries([], () => -300)) {
+  const fixture = viewFixture(t, world), { view } = fixture, s = readyState();
+  const v = makeVehicle("os2-batch", "dart", { x: -55, y: -80, z: 30 }, "batch-hold");
+  s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id; s.player.mode = "piloting";
+  s.player.pose = structuredClone(v.pose); view.showGame(); view.update(s, false);
+  const deliver = (commands: GameCommand[] = [{ type: "exit" }]) => {
+    const result = stepGame(s, commands, world);
+    // Match the app's synchronous event delivery, followed by a HUD refresh.
+    for (const event of result.events) if (event.type === "notice") view.notify(event.message, event.error, event, result.state);
+    view.update(result.state, false);
+    return result;
+  };
+  return { ...fixture, s, v, world, deliver };
+}
+
+function assertFullAnnouncements(content: string, messages: readonly string[]): void {
+  let remaining = content;
+  for (const message of messages) {
+    assert.ok(remaining.startsWith(message), `expected the next complete announcement ${JSON.stringify(message)} in ${JSON.stringify(remaining)}`);
+    remaining = remaining.slice(message.length).trimStart();
+  }
+  assert.equal(remaining, "", "no extra or replayed announcement occurrences");
+}
+
+test("same-turn stepGame exit refusals retain every full accessible occurrence", (t) => {
+  const { get, wall, s, world, deliver } = exitAnnouncementFixture(t);
+  const result = deliver([{ type: "exit" }, { type: "interact" }]);
+  const refusals = result.events.filter(e => e.type === "notice" && e.refusal);
+  assert.equal(refusals.length, 2, "both real command adapters emit a refusal");
+  assert.equal(get("action-announce").textContent, "", "delivery waits for the pending turn");
+  wall(0);
+  const full = exitBlock(s, world)!.message;
+  assert.equal(get("action-announce").textContent.split(full).length - 1, 2,
+    "the final accessible content must retain both identical attempts, without overwriting the first");
+  assert.equal(get("action-result").textContent, "Exit blocked");
+  assert.ok(get("pilot-guidance").innerHTML.includes(full));
+});
+
+test("pending exit batches retain original depth text in order, then later repeats start fresh without render or expiry replay", (t) => {
+  const { view, get, wall, timerCount, s, v, world, deliver } = exitAnnouncementFixture(t);
+  const first = exitBlock(s, world)!.message;
+  deliver([{ type: "exit" }, { type: "interact" }]);
+  v.pose.position.y = s.player.pose.position.y = -90;
+  view.update(s, false); view.presentationStep(s);
+  const later = exitBlock(s, world)!.message;
+  assert.notEqual(first, later);
+  deliver([{ type: "interact" }, { type: "exit" }]);
+  assert.equal(timerCount(), 1, "the pending turn has one flush, with no delayed backlog");
+  assert.equal(get("action-result").textContent, "Exit blocked");
+  assert.ok(get("pilot-guidance").innerHTML.includes(later));
+  assert.ok(!get("pilot-guidance").innerHTML.includes(first));
+  wall(0);
+  assertFullAnnouncements(get("action-announce").textContent, [first, first, later, later]);
+  assert.equal(timerCount(), 0);
+  const deliveredWrites = get("action-announce").textWrites;
+  for (let i = 0; i < 10; i++) { view.update(s, false); view.presentationStep(s); }
+  wall(10000);
+  assert.equal(get("action-announce").textWrites, deliveredWrites, "refreshes and paused wall time do not replay a batch");
+  deliver(); assert.equal(get("action-announce").textContent, ""); wall(0);
+  assertFullAnnouncements(get("action-announce").textContent, [later]);
+  const repeatWrites = get("action-announce").textWrites;
+  for (let i = 0; i < 239; i++) view.presentationStep(s);
+  assert.equal(get("action-result").hidden, false);
+  assert.equal(get("action-announce").textWrites, repeatWrites);
+  view.presentationStep(s); wall(0);
+  assert.equal(get("action-result").hidden, true); assertFullAnnouncements(get("action-announce").textContent, []);
+  assert.equal(timerCount(), 0);
+  const expiredWrites = get("action-announce").textWrites;
+  view.update(s, false); wall(10000);
+  assert.equal(get("action-announce").textWrites, expiredWrites, "expired attempts stay delivered");
+});
+
+for (const boundary of ["actor", "reason", "success", "menu", "panel", "reset", "opening", "dispose"] as const) {
+  test(`pending full exit refusals are invalidated by ${boundary} before flush`, (t) => {
+    let obstruction = false;
+    const world: WorldQueries = { ...createWorldQueries([], () => -300), clearance: () => !obstruction };
+    const { view, get, wall, timerCount, s, v, deliver } = exitAnnouncementFixture(t, world);
+    deliver([{ type: "exit" }, { type: "interact" }]);
+    assert.equal(timerCount(), 1);
+    let expected = "";
+    if (boundary === "actor") {
+      const other = makeVehicle("os2-replacement", "dart", { x: -65, y: -80, z: 30 }, "replacement-hold");
+      s.fleet.vehicles.push(other); s.player.controlledVehicleId = other.id; s.player.pose = structuredClone(other.pose);
+      view.update(s, false);
+    } else if (boundary === "reason") {
+      obstruction = true; v.pose.position.y = s.player.pose.position.y = -20; view.presentationStep(s);
+    } else if (boundary === "success") {
+      v.pose.position.y = s.player.pose.position.y = -20;
+      const result = deliver();
+      assert.equal(result.state.player.controlledVehicleId, null);
+      assert.ok(result.events.some(e => e.type === "notice" && e.summary === "Left the craft" && !e.error));
+      expected = "Left the craft";
+    } else if (boundary === "menu") view.showMenu(true);
+    else if (boundary === "panel") view.openPanel("inventory", s);
+    else if (boundary === "reset") { view.resetPresentation(); view.update(readyState(), false); }
+    else if (boundary === "opening") { s.opening.phase = 0; view.update(s, false); }
+    else view.dispose();
+    wall(0); assert.equal(get("action-announce").textContent, expected); assert.equal(timerCount(), 0);
+    wall(10000); assert.equal(get("action-announce").textContent, expected);
+    if (boundary === "dispose") return;
+    view.closePanel(); view.resetPresentation(); view.showGame();
+    obstruction = false; s.opening.phase = 4; s.player.mode = "piloting"; s.player.controlledVehicleId = v.id;
+    v.pose.position.y = -80; s.player.pose = structuredClone(v.pose); view.update(s, false);
+    deliver(); wall(0);
+    assertFullAnnouncements(get("action-announce").textContent, [exitBlock(s, world)!.message]);
+    assert.equal(timerCount(), 0, "the next valid attempt contains no obsolete pending content");
+  });
+}
+
+for (const changed of ["actor", "reason"] as const) {
+  test(`an unmatched fallback after a ${changed} change cannot retain the invalidated batch`, (t) => {
+    let obstruction = false;
+    const world: WorldQueries = { ...createWorldQueries([], () => -300), clearance: () => !obstruction };
+    const { view, get, wall, timerCount, s, v, deliver } = exitAnnouncementFixture(t, world);
+    const result = deliver([{ type: "exit" }, { type: "interact" }]);
+    const event = result.events.find(e => e.type === "notice")!;
+    assert.ok(event.type === "notice" && event.refusal);
+    if (changed === "actor") {
+      const other = makeVehicle("os2-fallback", "dart", { x: -65, y: -80, z: 30 }, "fallback-hold");
+      s.fleet.vehicles.push(other); s.player.controlledVehicleId = other.id; s.player.pose = structuredClone(other.pose);
+    } else { obstruction = true; v.pose.position.y = s.player.pose.position.y = -20; }
+    // A real earlier command's tagged event arrives against the changed final
+    // context. Its full fallback is valid, while earlier pending entries are not.
+    view.notify(event.message, event.error, event, s); wall(0);
+    assert.equal(get("action-result").textContent, event.message);
+    assertFullAnnouncements(get("action-announce").textContent, [event.message]);
+    assert.equal(timerCount(), 0);
+  });
+}
+
+test("generic action replacement drops pending exits and a subsequent exit never revives them", (t) => {
+  const { view, get, wall, timerCount, s, world, deliver } = exitAnnouncementFixture(t);
+  deliver([{ type: "exit" }, { type: "interact" }]);
+  view.notify("No cargo space <available>", true, {}, s); wall(0);
+  assert.equal(get("action-result").textContent, "No cargo space <available>");
+  assertFullAnnouncements(get("action-announce").textContent, ["No cargo space <available>"]);
+  deliver(); wall(0);
+  assertFullAnnouncements(get("action-announce").textContent, [exitBlock(s, world)!.message]);
+  deliver([{ type: "exit" }, { type: "interact" }]);
+  view.notify("first generic action"); view.notify("latest generic action", false, { summary: "Latest receipt" }); wall(0);
+  assertFullAnnouncements(get("action-announce").textContent, ["Latest receipt"]);
+  assert.equal(timerCount(), 0);
+});
+
+test("explicit HUD action clear cancels pending exit content and its scheduled write", (t) => {
+  const { root, get, wall, timerCount, s, world } = exitAnnouncementFixture(t);
+  const hud = new HudView(root as unknown as HTMLElement, world);
+  try {
+    hud.update(s, false);
+    const result = stepGame(s, [{ type: "exit" }, { type: "interact" }], world);
+    for (const event of result.events) if (event.type === "notice") hud.notify(event.message, event.error, event, result.state);
+    hud.clearActionNotice(); assert.equal(timerCount(), 0); wall(0);
+    assertFullAnnouncements(get("action-announce").textContent, []);
+    const event = result.events.find(e => e.type === "notice")!; assert.ok(event.type === "notice");
+    hud.notify(event.message, event.error, event, result.state); wall(0);
+    assertFullAnnouncements(get("action-announce").textContent, [event.message]);
+    assert.equal(timerCount(), 0);
+  } finally { hud.dispose(); }
+});
+
+for (const replacement of ["New", "import", "Continue"] as const) {
+  test(`real ${replacement} session entry resets pending exit announcements`, async (t) => {
+    const { view, get, wall, timerCount, deliver } = exitAnnouncementFixture(t);
+    const repository = new SaveRepository(new MemoryStorage(), new TestWriterLock());
+    repository.load(); assert.equal((await repository.commit(sample())).ok, true);
+    let entries = 0;
+    const session = new ExpeditionSession(repository, {
+      changed: () => {}, pause: () => {},
+      entered: () => { entries++; view.resetPresentation(); view.update(session.state!, false); view.showGame(); },
+      notify: (message, error, options) => view.notify(message, error, options, session.state),
+    });
+    t.after(() => session.dispose());
+    if (replacement !== "Continue") session.continueGame();
+    const before = entries;
+    deliver([{ type: "exit" }, { type: "interact" }]);
+    assert.equal(timerCount(), 1);
+    if (replacement === "New") { session.newGame(); session.confirm(); await settled(); }
+    else if (replacement === "import") {
+      const text = encoded(sample(300));
+      await session.importFile({ size: text.length, text: async () => text }); session.confirm(); await settled();
+    } else session.continueGame();
+    assert.equal(entries, before + 1, "the actual entry callback crosses GameView.resetPresentation");
+    assert.ok(session.state); wall(0);
+    assert.equal(get("action-result").hidden, true); assertFullAnnouncements(get("action-announce").textContent, []);
+    wall(13000); assert.equal(timerCount(), 0);
+    assertFullAnnouncements(get("action-announce").textContent, []);
+  });
+}
+
 test("exit results use current typed guidance, announce the original once per attempt and invalidate changed reasons", (t) => {
   let obstruction = false;
   const world: WorldQueries = { ...createWorldQueries([], () => -300), clearance: () => !obstruction };
@@ -1484,12 +1674,12 @@ test("exit results use current typed guidance, announce the original once per at
   assert.equal(get("action-announce").textWrites, writes, "ordinary rendering and active steps do not announce again");
   attempt(); assert.equal(get("action-announce").textContent, ""); wall(0);
   assert.equal(get("action-announce").textContent, full);
-  assert.equal(get("action-announce").textWrites, writes + 2, "an identical new attempt gets its own full announcement");
+  const repeatedWrites = get("action-announce").textWrites;
   v.pose.position.y = s.player.pose.position.y = -90;
   view.presentationStep(s);
   assert.ok(get("pilot-guidance").innerHTML.includes(exitBlock(s, world)!.message), "same reason uses the current depth sentence immediately");
   assert.equal(get("action-result").textContent, "Exit blocked");
-  assert.equal(get("action-announce").textWrites, writes + 2);
+  assert.equal(get("action-announce").textWrites, repeatedWrites);
   obstruction = true; v.pose.position.y = s.player.pose.position.y = -20;
   view.presentationStep(s);
   assert.equal(get("action-result").hidden, true); assert.equal(get("action-announce").textContent, "");
@@ -1506,7 +1696,10 @@ test("exit results use current typed guidance, announce the original once per at
   const beforeExpiry = get("action-announce").textWrites;
   view.presentationStep(s); wall(0);
   assert.equal(get("action-result").hidden, true); assert.equal(get("action-announce").textContent, "");
-  assert.equal(get("action-announce").textWrites, beforeExpiry + 1, "expiry clears without replaying a full message");
+  assert.ok(get("action-announce").textWrites > beforeExpiry, "expiry clears the delivered content");
+  const expiredWrites = get("action-announce").textWrites;
+  view.update(s, false); wall(0);
+  assert.equal(get("action-announce").textWrites, expiredWrites, "expiry and later renders never replay the message");
 });
 
 test("unmatched exit delivery remains fully readable and actor changes never conceal a reason", (t) => {
