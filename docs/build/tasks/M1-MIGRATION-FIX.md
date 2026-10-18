@@ -33,3 +33,8 @@ Add meaningful tests around production codec/repository/session behavior, not on
 No fresh full expedition or unchanged browser matrix is requested. Use executable persistence integration and existing immutable artifacts. If browser inspection becomes necessary, first read `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md`; use T3 preview_status then own incognito tab on verified isolated factory-worker Linux, with checked-free5193. Preserve reviewer5196, historical tab14, user/peer tabs/storage and shared hosts. No Windows automation, physical desktop cursor capture or process-name kills. Close only own resources through normal lifecycle and report cleanup.
 
 Return clean source/evidence commits, changed paths, final helper seam, checks/artifact paths and honest remaining limits. Evidence should be concise and source-attributed. Root inspects/assembles before a fresh non-author Astra xhigh/Sol max pair on a new frozen candidate. Do not wait for peers.
+
+
+## Completed Sol R3 follow-up
+
+After both independent initial verdicts returned, root steered the existing author with SOL-M1-R3-01, the same defect at carrier `(65,-24,64)`, yaw π, interior player `(-3,4,4.9)`. Current incoming validation passes; old decode relocates world Z to70 beyond maxZ66. Include this second edge/heading in focused coverage alongside the historical Astra case. Root reproduction/verification: `/tmp/siltwake-m1-r3-root/sol/`. The completed Sol report may now be read; no peer consultation, new paths, children or scope expansion. Its staged fixture is not historical-codec/actual-save proof. The original exact parent/ownership remain9514dd7.

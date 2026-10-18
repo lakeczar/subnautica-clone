@@ -458,3 +458,12 @@ Root plus builder plus independent Sol R3 reviewer are active. Builder owns only
 
 
 PR #4/#3 refreshed after Astra's return and correction dispatch; exact bodies/base/head/draft read back in `/tmp/siltwake-m1-pr/r3-astra-verified-{3,4}.json`. PR #3 remains M0-only; no production change, deployment, root browser or repeated full matrix. Current production06927d5 and frozen Sol review21d50df remain unchanged. Receive the Sol R3 and migration-builder completion notifications before the next integration action.
+
+
+### Sol R3 returned; paired disposition recorded
+
+Task `siltwake-m1-batch-sol-r3-21d50df` terminal: actual Sol6.1/max, no children/questions/peer consultation, clean checkout and owned tab/server5196 closed. Report5333be0 merged at1e66254. Both R3 reviewers independently accept presentation and require the same core migration defect; [paired disposition](reviews/M1-BATCH-R3.md) accepts only the bounded presentation batch at21d50df. Integrated M1 remains open.
+
+Root verified Sol's40 payloads/41 safe unique regular archive members and reran its distinct compact Z-edge session/codec diagnostic under unchanged current source. Same invalid successful Continue, Save/Export failure, zero journal writes and helm workaround. Root evidence `/tmp/siltwake-m1-r3-root/sol/`; original artifacts preserved. No fresh browser/full-suite repetition.
+
+Existing migration builder received Sol's second edge/heading through T3 steer `siltwake-migration-fix-sol-r3-second-pose`, delivered to its original active run. Ownership/parent unchanged9514dd7; no new task or peer consultation. Root plus that one builder active, no root resources. Inspect its terminal return, reconcile/integrate/check, then fresh paired review on corrected candidate. Presentation acceptance remains21d50df-specific.
