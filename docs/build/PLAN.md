@@ -93,3 +93,7 @@ Advice7d0e635 is integrated at1d962a9. [POLISH-1-EXPERIENCE](tasks/POLISH-1-EXPE
 ### S1 integrated; disjoint presentation work prepared
 
 Shared data/query sourceff3b013 is provisionally integrated atc8215c0 with376 tests/build/economies and compatibility evidence. [S1 root inspection](evidence/POLISH-1-EXPERIENCE-S1-INTEGRATION.md) releases its ownership and freezes exports. The two prepared [S2a HUD/app/cue](tasks/POLISH-1-EXPERIENCE-S2A.md) and [S2b Cargo/fabrication](tasks/POLISH-1-EXPERIENCE-S2B.md) briefs freeze their PanelView boundary and exclusive tests. Dispatch from one committed parent, compose real visual/workflow evidence and reconcile any shared legacy test assertions; then full-correction pair and fresh Opus verification. No leaf independently satisfies stage1. M2–M4 remain under standing authorization.
+
+### Cargo integrated; final HUD and composition remain
+
+S2b39de511 is provisionally integrated at19d7562 with actual earned refit preparation needing0 scrolls, paid fabrication and labelled native checks. [Root inspection](evidence/POLISH-1-EXPERIENCE-S2B-INTEGRATION.md) retains372/384 full-suite status (12 legacy shared presentation assertions),18 owned passing tests, matching build and both economies. S2a remains independent/active on8eecb7b. Its handoff releases the shared tests for one composed Sol reconciliation; preserve their underlying behavior checks. Then current-source P1–P8/active reload, fresh full-correction pair and Opus verification, followed by M2–M4.
