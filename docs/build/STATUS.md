@@ -1,14 +1,16 @@
 # Build status
 
-## Current checkpoint — controls accepted; preparation and encounter polish underway
+## Current checkpoint — controls accepted; complete slice2 provisionally assembled
 
-**POLISH-1 slice1 is accepted by independent Astra xhigh, Sol 6.1 max and coordinator on d031803730fb44b9208e52fdfb91a88e9ddf8a41.** All nine criteria pass; SOL-P1-1 is closed. [Paired reconciliation](reviews/POLISH-1-SLICE1-R2.md) preserves the reviewed production 5f25810. M0/M1 remain accepted; `game/siltwake` remains M0 a2cb19f. Root branch is `feat/siltwake-first-expedition`; use Git for current HEAD.
+**POLISH-1 slice1 is accepted on d031803730fb44b9208e52fdfb91a88e9ddf8a41**, production5f25810. M0/M1 remain accepted; `game/siltwake` remains M0a2cb19f. Root branch is `feat/siltwake-first-expedition`; use Git for current HEAD.
 
-C0, curved reef collision, transient encounter signals, preparation menus and hunter warning display are provisionally combined at **90878a26dc779db288ecc8a7dd945b87f2b1d383**. [Visual integration](evidence/POLISH-1-SLICE2-2D-VISUAL-INTEGRATION.md) records **333/333 tests**, typecheck/build/economies, 264 verified visual artifacts and an exact 640-step replay of three complete encounter exports. Root inspected actual matched imagery and sampled motion. [Preparation integration](evidence/POLISH-1-SLICE2-2C-INTEGRATION.md) retains its 242 artifacts/native keyboard evidence and complete 30-tick reload match; [signal integration](evidence/POLISH-1-SLICE2-2D0-INTEGRATION.md) retains applicable state/event/codec parity. New assembly does not inherit controls acceptance; HUD consumers are still pending.
+All slice2 pieces — C0 extraction, curved reef collision, transient signals, preparation menus, hunter display and HUD composition — are provisionally combined at **660350b1cf9cc8bb6f6df4629acfd5008d792877**. [HUD/composed integration](evidence/POLISH-1-SLICE2-2D-HUD-INTEGRATION.md) records **353/353 tests**, typecheck/build/economies,379 verified HUD payloads, six reproduced author reload comparisons and fresh bounded combined production encounter/refit/reload. Actual reload matches all state fields after eight no-input steps. Earlier component evidence keeps its own source attribution.
 
-C0/RIB/2D0/2C/2D-VISUAL authors are terminal, actual Sol 6.1/max runtime confirmed, designated paths released and owned resources closed. Existing hunter eyes/fins now pulse modestly during alert modes, preserving geometry/fog/occlusion. At the retained ordinary warning the animal is still below the viewport; brightness does not resolve that limit. [2D-HUD composition](tasks/POLISH-1-SLICE2-2D-HUD.md) remains assigned from76ea8bf to app/HUD and narrow view/panel wiring. [TASKS](TASKS.md) records exact IDs. No shared shader, physics, encounter timing or saved-state change is authorized.
+All implementation authors are terminal with actual Sol6.1/max runtime confirmed; source ownership is released and owned resources closed. No implementation workers remain. [Full-slice R1 brief](tasks/POLISH-1-SLICE2-REVIEW-R1.md) freezes the eight-criterion scope for fresh independent Astra xhigh/Sol max reviewers; [TASKS](TASKS.md) records actual dispatch IDs and candidate. The new slice has no inherited acceptance.
 
-The final HUD task owns notice priority and pause/context lifetimes, singular panel feedback, actual air-source labels, sustained measured obstruction, a short emitted-call direction cue, contextual pulse information and contrast. The acoustic cue will not continuously track the animal or assume that line of sight means visibility through deep fog. All slice2 pieces still need composed root verification and a fresh Astra xhigh/Sol max pair, then stage1 Opus and corrections. M2–M4 remain authorized. Root has no browser/server/check process. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified; no main merge/deployment.
+Actual save during warning leaves danger/call information intact; disengagement clears stale signals; the short refit retains deliberate storage/focus and reload state. The ordinary hunter remains off-screen at first warning, so its brief emitted-call direction is complementary. Some refit copy remains repetitive and secondary text small; these are explicit review priorities. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
+
+Next: fresh full-slice pair, reconciled fixes if needed, then required stage1 Opus experience review/advice/corrections. M2–M4 remain authorized. Root has no browser/server/check process. No main merge/deployment.
 
 ## Resumed full-game construction
 
@@ -60,7 +62,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Sol 6.1/max **2D-HUD** remains assigned from clean76ea8bf; **2D-VISUAL** is inspected and provisionally integrated at90878a2. Receive the HUD terminal notification without polling or duplicate dispatch, inspect before assembly, then run composed slice2 verification and the fresh paired review. Preserve the ordinary off-screen warning limitation when checking its call cue. Stage1 Opus review/advice/corrections and M2–M4 continue under standing authorization. TASKS owns exact IDs and paths; main merge/public deployment remain separate.
+Commission/receive the fresh full-slice Astra xhigh and Sol6.1 max R1 reviews on the same committed candidate; TASKS owns exact IDs and report-only paths. All implementation owners are released. Do not duplicate workers or poll. Reconcile separate initial findings, delegate substantiated corrections to Sol and repeat the affected pair, then stage1 Opus review/advice/fixes before M2. Continue M2–M4 under standing authorization. Main merge/public deployment remain separate.
 
 ### Historical execution and evidence
 
