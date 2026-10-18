@@ -6,9 +6,11 @@
 
 [Correction inspection](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md) records359/359 tests, typecheck/build, exact source/build identity, resolved root defect probes and final author traces. Both R2 reviewers independently pass359 checks/build and verify retained evidence. Actual models/efforts and all reviewer artifacts are verified. Earlier composed workflow/reload retains660350b attribution; simulation/save/economy are unchanged by the two corrections. No further production changes occurred during review.
 
-All prior implementation authors and reviewers are terminal; the new S1 Sol builder is active. The required **Opus5.5/high stage1 experience review on5dbc73a is complete**; report8c49770 is integrated with no source changes. [Coordinator disposition](reviews/OPUS-STAGE1-R1-DISPOSITION.md) accepts a bounded follow-up for action feedback during danger, reach discoverability, cargo hierarchy and related HUD clarity. Root inspected actual images, verified31 artifact payloads and three earned saves, and reproduced the core presentation cases. The manifest self-hash and missing independent browser-process receipt are explicitly qualified. The same-context implementation consultation is complete at7d0e635 and integrated at1d962a9. [Reconciled correction batch](tasks/POLISH-1-EXPERIENCE.md) freezes the next work: S1 shared summaries/preview/service queries and measured Dart contact, then separate HUD and cargo owners. Root corrected the proposed contact threshold using actual fixed-step diagnostics and preserved message/focus/save boundaries. [S1](tasks/POLISH-1-EXPERIENCE-S1.md) is active on committedd98b0eb in an isolated Sol6.1/max worktree; TASKS records its exact task ID and source ownership. Stage1 remains open for advice, Sol corrections, affected paired acceptance and fresh Opus verification. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
+The stage1 Opus review and detailed advice are reconciled in [the experience correction](tasks/POLISH-1-EXPERIENCE.md). S1 is terminal and provisionally integrated at **c8215c0**, sourceff3b013/report e928dc6. [Root inspection](evidence/POLISH-1-EXPERIENCE-S1-INTEGRATION.md) confirms actual Sol6.1/max runtime, all444 manifest payloads,376 tests/typecheck/build, both economy checks, matching build bytes and360 additional complete-state/sweep comparisons. S1 ownership is released. No new browser or visible experience acceptance is claimed.
 
-Then continue M2–M4 under standing authorization. Root has no browser/server/check process. No main merge/deployment.
+[S2a HUD/app/cue](tasks/POLISH-1-EXPERIENCE-S2A.md) and [S2b Cargo/fabrication](tasks/POLISH-1-EXPERIENCE-S2B.md) are prepared against the inspected S1 exports and frozen PanelView seam. TASKS records actual dispatch and exact common parent. The two leaves have disjoint paths; shared legacy presentation-test expectations will be reconciled after composition if needed. The composed correction still requires fresh non-author Astra xhigh/Sol max acceptance and fresh Opus experience verification. Stage1 remains open; M2–M4 remain required. Human feel, audible mix, duration/enjoyment and representative-GPU evidence remain unverified.
+
+Root owns no browser/server/recording/check process. No main merge/deployment.
 
 ## Resumed full-game construction
 
@@ -60,7 +62,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active POLISH-1-EXPERIENCE-S1 Sol6.1/max task on exactd98b0eb. On return inspect exact interfaces, checks and compatibility before preparing the disjoint S2a HUD/cue/app and S2b cargo-panel worktrees. No dependent source assignment yet. The combined correction requires fresh Astra/Sol acceptance and fresh Opus verification, then M2–M4. Production remainsc32d8c5 until S1 is integrated. Use completion notifications without polling; main merge/public deployment remain owner actions.
+Dispatch the two prepared S2a/S2b Sol6.1/max worktrees from one committed common parent, then receive completion notifications without polling. Inspect and compose their source/actual production evidence, reconcile affected shared tests, verify P1–P8 and obtain the fresh full-correction pair and Opus verification before M2–M4. Current provisional production is c8215c0/ff3b013; accepted slice2 production remains c32d8c5. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

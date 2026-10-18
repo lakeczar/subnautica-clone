@@ -89,3 +89,7 @@ Opus report8c49770 on5dbc73a is integrated without production changes. [Root dis
 ### Stage1 advice reconciled; shared data before parallel presentation
 
 Advice7d0e635 is integrated at1d962a9. [POLISH-1-EXPERIENCE](tasks/POLISH-1-EXPERIENCE.md) resolves all OS1-01–08 implementation choices. Root verified the29 sampled cradle paths and found that the proposed0.02m contact threshold never sustains after collision damping; the narrowed signal uses1e−5m with actual contact and explicit forward-intent gates. One Sol S1 owner establishes summaries/preview/service/crafting queries and measured contact, then root inspects and freezes exports for disjoint HUD/app and cargo-panel owners. All three leaves share one composed acceptance batch and a fresh stage1 Opus verification. No UI owner depends on unfinished peer work.
+
+### S1 integrated; disjoint presentation work prepared
+
+Shared data/query sourceff3b013 is provisionally integrated atc8215c0 with376 tests/build/economies and compatibility evidence. [S1 root inspection](evidence/POLISH-1-EXPERIENCE-S1-INTEGRATION.md) releases its ownership and freezes exports. The two prepared [S2a HUD/app/cue](tasks/POLISH-1-EXPERIENCE-S2A.md) and [S2b Cargo/fabrication](tasks/POLISH-1-EXPERIENCE-S2B.md) briefs freeze their PanelView boundary and exclusive tests. Dispatch from one committed parent, compose real visual/workflow evidence and reconcile any shared legacy test assertions; then full-correction pair and fresh Opus verification. No leaf independently satisfies stage1. M2–M4 remain under standing authorization.
