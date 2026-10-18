@@ -76,7 +76,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-The fresh combined OS2 Astra xhigh/Sol6.1 max pair is active on frozen fbd7914. Synchronize public PRs, then receive completion notifications without polling, reconcile findings and verify affected fixes before fresh Opus stage1 verification. Continue accepted M2 direction and M3/M4 automatically. No routine owner permission is needed. Main merge/public deployment remain owner actions.
+The fresh combined OS2 Astra xhigh/Sol6.1 max pair is active on frozen fbd7914. Public PRs are synchronized. Receive completion notifications without polling, reconcile findings and verify affected fixes before fresh Opus stage1 verification. Continue accepted M2 direction and M3/M4 automatically. No routine owner permission is needed. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
