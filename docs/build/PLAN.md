@@ -73,3 +73,7 @@ Astra R1 requests one bounded correction, ASTRA-S2-R1-01, reproduced by root: a 
 ### Paired slice2 R1 reconciliation
 
 Both initial reviewers now request changes for two distinct reproduced P2 defects. [Paired disposition](reviews/POLISH-1-SLICE2-R1.md) accepts save-retry warning and closed-panel storage-context findings. [Storage-context amendment](tasks/POLISH-1-SLICE2-STORAGE-CONTEXT-FIX.md) extends the current Sol correction owner to panels/view/preparation tests, using its existing presentation fixture; no overlapping builder or dependency on unfinished review. Inspect the two identifiable fixes together, then fresh full-slice pair before stage1 Opus. Optional copy density and human/hardware limits remain explicit.
+
+### Both slice2 corrections inspected; fresh full-slice R2 next
+
+Save5005f1f and storage11d9a0d are provisionally combined at **c32d8c5**,359 checks/build. [Root record](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md) verifies both resolved defect probes, final production traces and exact build identity. All author ownership is released. [Fresh R2](tasks/POLISH-1-SLICE2-REVIEW-R2.md) retains all six pieces/eight criteria and both R1 findings/dispositions. No accepted slice2 or completed stage1 is implied. Stage1 Opus then M2–M4 remain next under the standing protocol.

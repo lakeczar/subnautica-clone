@@ -1,16 +1,16 @@
 # Build status
 
-## Current checkpoint — controls accepted; complete slice2 provisionally assembled
+## Current checkpoint — controls accepted; slice2 corrections verified provisionally
 
 **POLISH-1 slice1 is accepted on d031803730fb44b9208e52fdfb91a88e9ddf8a41**, production5f25810. M0/M1 remain accepted; `game/siltwake` remains M0a2cb19f. Root branch is `feat/siltwake-first-expedition`; use Git for current HEAD.
 
-All slice2 pieces — C0 extraction, curved reef collision, transient signals, preparation menus, hunter display and HUD composition — are provisionally combined at **660350b1cf9cc8bb6f6df4629acfd5008d792877**. [HUD/composed integration](evidence/POLISH-1-SLICE2-2D-HUD-INTEGRATION.md) records **353/353 tests**, typecheck/build/economies,379 verified HUD payloads, six reproduced author reload comparisons and fresh bounded combined production encounter/refit/reload. Actual reload matches all state fields after eight no-input steps. Earlier component evidence keeps its own source attribution.
+All six slice2 pieces and both R1 corrections are provisionally integrated at **c32d8c5d9caeef12e658e697bed78505155cb6b6**. [Correction inspection](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md) records **359/359 tests**, typecheck/build, verified source/build identity, both resolved root defect probes and final author trace checks. Earlier [composed workflow/reload](evidence/POLISH-1-SLICE2-2D-HUD-INTEGRATION.md) keeps its660350b attribution; simulation/save/economy are unchanged by these corrections.
 
-All original implementation authors are terminal with actual Sol6.1/max runtime confirmed; their source ownership is released and owned resources closed. A bounded Sol6.1/max save-retry presentation correction is now active from **fcb7477**, with notices.ts and named composition tests. Both R1 reviewers are now terminal; a coordinated storage-context amendment adds panels.ts/view.ts and preparation tests to the same builder, avoiding overlapping ownership. TASKS records the actual amendment delivery. [Full-slice R1 brief](tasks/POLISH-1-SLICE2-REVIEW-R1.md) freezes the eight-criterion scope for fresh independent Astra xhigh/Sol max reviewers; [TASKS](TASKS.md) records actual dispatch IDs and candidate. The new slice has no inherited acceptance.
+Both independent R1 reviewers requested changes on b9c99a0: stale warning after successful save retry, and storage intent surviving closed-panel departure/return. Root reproduced both; the terminal Sol6.1/max builder supplied both bounded corrections, now inspected and provisionally resolved. Neither original finding demonstrated data/inventory loss. [Paired disposition](reviews/POLISH-1-SLICE2-R1.md). All authors and R1 reviewers are terminal, owned resources closed and source ownership released. Root has no browser/server/check process.
 
-Actual save during warning leaves danger/call information intact; disengagement clears stale signals; the short refit retains deliberate storage/focus and reload state. The ordinary hunter remains off-screen at first warning, so its brief emitted-call direction is complementary. Some refit copy remains repetitive and secondary text small; these are explicit review priorities. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
+Next: fresh independent **full-slice Astra xhigh + Sol6.1 max R2** on one committed candidate, following [R2 brief](tasks/POLISH-1-SLICE2-REVIEW-R2.md). TASKS records actual dispatch IDs; prepared work is not active until dispatched. No slice2 acceptance yet. The reviewers cover all six original pieces/eight criteria and both fixes. Some refit copy remains repetitive, secondary text small and HUD dense; these stay explicit experience-review priorities. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
 
-Both independent R1 reviewers returned **REQUEST CHANGES** on **b9c99a003c0c428aac0669bda995b6f86d0eed09** (production660350b). Root verified actual models/artifacts and reproduced two P2 findings: **ASTRA-S2-R1-01**, a stale failure warning after successful save retry; **SOL-S2-R1-1**, storage intent fails to reset after leaving/returning with panels closed. Neither demonstrates data/inventory loss. [Paired disposition](reviews/POLISH-1-SLICE2-R1.md). The same Sol Max builder receives both bounded corrections through explicit ownership amendment. Next: inspect/check both returned changes, then fresh full-slice paired review and stage1 Opus experience review/advice/corrections. M2–M4 remain authorized. Root has no browser/server/check process. No main merge/deployment.
+After paired acceptance, run stage1 Opus experience review/advice/corrections, then M2–M4 under standing authorization. No main merge/deployment.
 
 ## Resumed full-game construction
 
@@ -62,7 +62,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the current Sol Max correction owner's two bounded changes: save-retry notice resolution and storage-context observation during closed-panel travel. Both initial reviewers are terminal and independently inspected. TASKS owns original task/amendment IDs and exclusive paths; no duplicate worker or polling. Inspect/verify both fixes together, then commission a fresh full-slice Astra/Sol pair with both reports/dispositions. Stage1 Opus then M2–M4 continue under standing authorization. Main merge/public deployment remain separate.
+Dispatch fresh full-slice R2 from the clean committed baseline using the R2 brief, both R1 reports/disposition and final correction evidence. No duplicate correction builder is needed. Receive both independent results without polling, reconcile/fix/review, then stage1 Opus and M2–M4. TASKS owns actual IDs and report-only paths. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

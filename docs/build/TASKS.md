@@ -1014,3 +1014,11 @@ Original task remains `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a3
 ### Public paired-R1 correction checkpoint synchronized
 
 PR #4/#3 now record both independent REQUEST CHANGES verdicts, the two reproduced lifetime defects and one Sol Max builder owning both corrections. Exact full-body/base/head/draft readbacks at9aff41a/M0a2cb19f match `/tmp/siltwake-m1-pr/slice2-paired-r1-verification.json`. Production660350b,353 checks and all earlier media retain source attribution; no fix is represented as complete. Stack remains linked/unwatched. Root has no browser/server/check process or production changes. Receive the current correction task's terminal handoff, including its steered storage amendment, without polling or duplicate dispatch; inspect both changes and commission the next fresh full-slice pair.
+
+### Save/storage correction task terminal; combined source inspected
+
+Original task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice2-save-retry-sol-max-fcb7477` acknowledged completed/result_available, no pending children/questions. Its steered storage amendment is included. Exact parentfcb7477, source5005f1fc / reporta2f21fd, storage source11d9a0d / report66d2ecfe2340c3024a866770367bed47ccafd2a0; clean t3-3390552f. Both actual session turn contexts confirm Sol6.1/max. All owned resources closed and source/report ownership released.
+
+Provisional merge **c32d8c5d9caeef12e658e697bed78505155cb6b6**. [Root inspection](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md):359 tests/typecheck/build, all27 build files match, both author manifests/source identities verified, both R1 root probes now pass and recorded final production traces validate against combined compiled code. Root no browser/server/recording; earlier evidence preserved. Both findings provisionally resolved; no independent acceptance.
+
+Prepared [R2 full-slice brief](tasks/POLISH-1-SLICE2-REVIEW-R2.md) retains accepted-controls base d031803, all eight criteria, both reports and dispositions. Actual frozen candidate/IDs follow dispatch. Stage1 Opus and M2–M4 remain authorized; no polling or duplicate builders.
