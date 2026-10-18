@@ -199,6 +199,20 @@ test("native expansion state is remembered across refresh/panel switches; sessio
   assert.equal((commands().find((c) => c.type === "store-materials") as { to: string }).to, "workshop_locker");
 });
 
+test("observed departure clears obsolete storage fallback without rendering a panel en route", (t) => {
+  const { panel, html, commands } = panelFixture(t), s = workshop(), v = addDart(s);
+  panel.refresh("inventory", s); panel.selectStorage("storage-to", v.cargoId);
+  v.pose.position = { x: 90, y: -20, z: -80 }; panel.refresh("inventory", s);
+  assert.match(html(), /Dart hold is out of reach/);
+  const previousHtml = html();
+  s.player.pose.position = { x: 70, y: -5, z: -35 }; panel.observeStorageContext(s);
+  s.player.pose.position = { x: 11, y: 1.2, z: -35 }; panel.observeStorageContext(s);
+  assert.equal(html(), previousHtml, "context observation leaves the rendered DOM alone");
+  panel.refresh("inventory", s);
+  assert.doesNotMatch(html(), /Dart hold is out of reach/);
+  assert.deepEqual(commands().find(c => c.type === "store-materials"), { type: "store-materials", from: "diver", to: "workshop_locker" });
+});
+
 test("ordinary panel labels are readable; empty-inventory emergency food and retained facts stay accessible", (t) => {
   const { panel, html, commands } = panelFixture(t);
   const s = workshop(); const v = addDart(s);

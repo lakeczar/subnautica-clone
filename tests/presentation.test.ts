@@ -27,8 +27,11 @@ function viewFixture(t: test.TestContext) {
     private html = "";
     private buttons: ElementPort[] = [];
     children: ElementPort[] = [];
+    htmlWrites = 0;
+    scrollTop = 0;
     get innerHTML() { return this.html; }
     set innerHTML(value: string) {
+      this.htmlWrites++;
       if (this.buttons.includes(document.activeElement!)) document.activeElement = null;
       this.html = value;
       this.buttons = [...value.matchAll(/<button\b([^>]*)>(.*?)<\/button>/gs)].map((match) => {
@@ -137,6 +140,10 @@ function viewFixture(t: test.TestContext) {
     },
     navigate: (kind: string) => root.emit("click", { target: root.querySelectorAll("button").find(b => b.dataset.action === `${kind}-panel`)! }),
     activate: (id: string) => root.emit("click", { target: root.querySelector(`#${id}`) }),
+    selectStorage: (id: "storage-from" | "storage-to", value: string) => {
+      const target = Object.assign(root.querySelector(`#${id}`), { id, value, tagName: "SELECT" });
+      root.emit("change", { target });
+    },
     key: (key: string, code = key, shiftKey = false) => {
       const event = { key, code, shiftKey, prevented: false, stopped: false,
         preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
@@ -1004,6 +1011,65 @@ test("the GameView replacement boundary clears panel results and invalidates old
   stale.focus(); assert.equal(activeCommand(), undefined);
   view.openPanel("inventory", structuredClone(s));
   commandButton({ type: "eat" });
+});
+
+test("closed-panel travel resets storage operands without rendering panels, changing focus or mutating the expedition", (t) => {
+  const { view, get, active, commands, commandButton, selectStorage, timerCount } = viewFixture(t), s = readyState();
+  s.player.pose.position = { x: 11, y: 1.2, z: -35 };
+  s.world.facilities.find(f => f.id === "island_workshop")!.repaired = true;
+  const v = makeVehicle("storage-dart", "dart", { x: 20, y: -1.6, z: -22 }, "storage-hold");
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
+  addItem(s, "structural_alloy", 2, "diver");
+  view.update(s, false); view.showGame(); view.openPanel("inventory", s);
+  selectStorage("storage-from", "workshop_locker"); selectStorage("storage-to", v.cargoId);
+  commandButton({ type: "store-materials", from: "workshop_locker", to: v.cargoId });
+  view.closePanel(); view.showGame();
+  const html = get("panel-content").innerHTML, writes = get("panel-content").htmlWrites,
+    focus = active(), timers = timerCount();
+  get("game-panel").scrollTop = 137;
+  const away = structuredClone(s); away.player.pose.position = { x: 70, y: -5, z: -35 };
+  const beforeAway = structuredClone(away), beforeReturn = structuredClone(s);
+  for (let i = 0; i < 100; i++) view.update(away, false);
+  view.update(s, false);
+  assert.equal(view.currentPanel, null);
+  assert.equal(get("panel-content").innerHTML, html); assert.equal(get("panel-content").htmlWrites, writes);
+  assert.equal(get("game-panel").scrollTop, 137); assert.equal(active(), focus);
+  assert.equal(timerCount(), timers); assert.deepEqual(commands, []);
+  assert.deepEqual(away, beforeAway); assert.deepEqual(s, beforeReturn);
+  view.openPanel("inventory", s);
+  commandButton({ type: "store-materials", from: "diver", to: "workshop_locker" });
+  assert.match(get("panel-content").innerHTML, /<option value="workshop_locker" selected>Workshop locker/);
+  assert.equal(get("panel-feedback").hidden, true);
+});
+
+test("closed-panel observations preserve same-site storage intent through roster, pause and bench/cradle changes", (t) => {
+  const { view, commandButton, selectStorage, navigate } = viewFixture(t), s = readyState();
+  s.player.pose.position = { x: 11, y: 1.2, z: -35 };
+  s.world.facilities.find(f => f.id === "island_workshop")!.repaired = true;
+  const v = makeVehicle("storage-dart", "dart", { x: 20, y: -1.6, z: -22 }, "storage-hold");
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
+  view.update(s, false); view.openPanel("inventory", s); selectStorage("storage-to", v.cargoId);
+  const chosen: GameCommand = { type: "store-materials", from: "diver", to: v.cargoId };
+  view.closePanel(); view.showGame(); view.update(s, false); view.openPanel("inventory", s);
+  commandButton(chosen);
+  view.closePanel();
+  const other = makeVehicle("passing-dart", "dart", { x: 21, y: -1.6, z: -22 }, "passing-hold");
+  s.fleet.vehicles.push(other);
+  s.inventory.containers.push({ id: other.cargoId, kind: "vehicle", ownerId: other.id, capacity: 32 });
+  view.update(s, false);
+  s.fleet.vehicles = s.fleet.vehicles.filter(a => a.id !== other.id);
+  s.inventory.containers = s.inventory.containers.filter(c => c.id !== other.cargoId);
+  view.update(s, false);
+  const cradle = structuredClone(s);
+  cradle.player.controlledVehicleId = v.id; cradle.player.mode = "piloting"; cradle.player.pose = structuredClone(v.pose);
+  view.update(cradle, false); view.update(s, false);
+  view.showMenu(true); view.update(s, false); view.openPanel("inventory", s);
+  commandButton(chosen);
+  navigate("craft"); navigate("inventory"); commandButton(chosen);
+  view.resetPresentation(); view.update(s, false); view.openPanel("inventory", s);
+  commandButton({ type: "store-materials", from: "diver", to: "workshop_locker" });
 });
 
 test("panel outcomes are singular, preserve focus, and clear on switch/close while persistence remains independent", (t) => {

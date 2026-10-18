@@ -370,6 +370,7 @@ export class GameView {
 
   update(state: GameState, cruise: boolean, forward = 0): void {
     this.latest = state;
+    this.panels.observeStorageContext(state);
     this.hudPresentation.update(state, cruise, forward);
   }
 
