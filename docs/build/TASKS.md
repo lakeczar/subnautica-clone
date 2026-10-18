@@ -467,3 +467,6 @@ Task `siltwake-m1-batch-sol-r3-21d50df` terminal: actual Sol6.1/max, no children
 Root verified Sol's40 payloads/41 safe unique regular archive members and reran its distinct compact Z-edge session/codec diagnostic under unchanged current source. Same invalid successful Continue, Save/Export failure, zero journal writes and helm workaround. Root evidence `/tmp/siltwake-m1-r3-root/sol/`; original artifacts preserved. No fresh browser/full-suite repetition.
 
 Existing migration builder received Sol's second edge/heading through T3 steer `siltwake-migration-fix-sol-r3-second-pose`, delivered to its original active run. Ownership/parent unchanged9514dd7; no new task or peer consultation. Root plus that one builder active, no root resources. Inspect its terminal return, reconcile/integrate/check, then fresh paired review on corrected candidate. Presentation acceptance remains21d50df-specific.
+
+
+PR #4/#3 updated for the complete R3 pair and exactly read back (`/tmp/siltwake-m1-pr/r3-paired-verified-{3,4}.json`): #4 has1/6 accepted bounded criteria, presentation at21d50df only; #3 retains accepted65-test M0. Stack linked and unwatched. Production remains06927d5, only the migration builder is active. No source change, root browser/server, repeated matrix or new delegate. Next: inspect the migration completion notification.
