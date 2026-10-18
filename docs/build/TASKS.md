@@ -868,3 +868,10 @@ Original RIB remains independently assigned from577d249 with optional5192; no st
 ### Public C0/2C checkpoint synchronized
 
 PR#4/#3 full bodies distinguish accepted controls ond031803 from provisional C0 ate3c3ce1 and active unintegrated2C/RIB work. Current C0 checks275/275,22 before/final parity cases,16 native intervals and matching index-CmqWR8YJ bundle are attributed; no new independent acceptance or full root browser replay is claimed. Exact body/base/head/draft readbacks atd8a6e17/M0a2cb19f match `/tmp/siltwake-m1-pr/slice2-c0-verification.json`. #3 remains M0-only; existing images retain original sources. All four stack layers confirmed linked/unwatched. Root clean with no browser/server/check process; task completion notifications resume integration without polling. No game/main merge or deployment.
+
+
+### RIB terminal, inspected and provisionally assembled
+
+Original RIB task completed/result_available with no children/questions. Clean t3-e631f169 at source6ebaf02c96b226859463ce88ae7db8264ef0fa8b/evidence8539348a6b968a916aad0c20d410b7336639cb11, parent577d249. Root independently verifies both actual Sol6.1/max turn-context records, four-path scope,90 sealed/archive payloads and source/test hashes. Merged atd4829c0b2260c8d72e2c36a39d7d5c85a0a3fbb1 alongside C0. [Root inspection](evidence/POLISH-1-SLICE2-RIB-INTEGRATION.md) records291 passing tests/build/economies, exact stall reruns,14 whole-state save comparisons,3 carrier paths and945 swept/equal-state recovery ticks. Root inspected all six sampled motion sheets and actual arch still; no new root browser run. RIB ownership/resources released.
+
+2C remains assigned from45612f7 without polling or overlapping edits. Root explicitly splits2D: [2D0 signals](tasks/POLISH-1-SLICE2-2D0.md) can use inspected RIB on disjoint sim/session paths, while later HUD/app/render work waits for both returns. Its additive contracts are frozen before dispatch; no presentation acceptance or changed state/handling. Root will record exact committed baseline/returned task ID before treating2D0 active. Full slice pair/stage1 Opus/M2–M4 remain required.

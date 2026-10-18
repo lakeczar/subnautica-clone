@@ -41,3 +41,8 @@ Construction PRs target `game/siltwake`; the final integration PR targets the ap
 ## Current slice2 execution
 
 [Reconciled slice2](tasks/POLISH-1-SLICE2.md) starts two disjoint Sol max worktrees: C0 mechanical UI extraction and RIB curved-obstacle correction with existing actor proxies. Root inspects/integrates each seam before its consumers: menu preparation needs C0 only and may run alongside RIB; encounter/obstruction work waits for inspected geometry and presentation wiring; all delivered pieces share the full-slice paired acceptance gate. Stage1 Opus follows that gate.
+
+
+### Slice2 signal/presentation split after RIB inspection
+
+RIB6ebaf02 and C0 are provisionally combined atd4829c0; root passes291 checks/build and reproduces selected save/routes. [2D0](tasks/POLISH-1-SLICE2-2D0.md) is a bounded signal-only Sol task on sim/types/step/survival and session notification metadata. It can run alongside2C because neither consumes the other's edits. This refines the earlier whole2D dependency: the actual HUD/app/render presentation pass still waits for both inspected returns and exclusive UI ownership. Full composed-slice paired acceptance and stage1 Opus remain required.

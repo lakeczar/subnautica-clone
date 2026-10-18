@@ -178,3 +178,10 @@ C0 source72c3355/evidenced8b3742 is provisionally assembled ate3c3ce1. [Coordina
 The [2C task](tasks/POLISH-1-SLICE2-2C.md) adds `PanelView.resetSession(): void` for storage/expansion/command/transient panel memory, invoked only by the existing `GameView.resetPresentation()` boundary for New/import/Continue/replacement; ordinary refresh/pause/panel switches do not reset intentional choices. `PanelKind`, UiActions and other public GameView methods stay. Narrow view edits may replace the panel header copy, support explicit semantic panel-local controls and route panel-local events/reset; no input/capture/focus-trap rewrite. Notification channel/context/TTL remains2D-owned and is not changed in2C. No simultaneous view owner.
 
 RIB still owns its original world/helper/new-test/evidence scope on577d249.2C depends on integrated C0, not on unmerged RIB. Root will integrate/check corrected geometry separately before2D. All pieces share the eventual full-slice paired gate; neither parent acceptance nor author checks grant acceptance of the new batch.
+
+
+## Slice2 RIB and2D signal boundary
+
+RIB6ebaf02 is provisionally integrated with C0 atd4829c0. [Root reconciliation](evidence/POLISH-1-SLICE2-RIB-INTEGRATION.md) records unchanged actor boxes/public world APIs, exact canonical matching, continuous curved-obstacle sweep, analytical support and bounded conservative stops. This supersedes old coarse physical rib boxes only; terrain, handling and saved state remain. RIB ownership is released.
+
+[2D0](tasks/POLISH-1-SLICE2-2D0.md) freezes additive optional NoticeOptions/notice context, SessionEvents third notification argument, threat-call sound source, read-only airSupply and transient ascent-sample measurements. The full brief owns exact fields/semantics. Existing UI callbacks may ignore optional metadata until later2D integration; no visible priority/TTL/air/obstruction improvement is claimed yet. No saved timers or writer/session lifecycle change.2C retains its panel/view/style/main/test ownership;2D0 may not touch those or app/render/world/repository/codec. Presentation consumes only both inspected, committed returns.
