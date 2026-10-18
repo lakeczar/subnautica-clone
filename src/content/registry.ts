@@ -614,7 +614,7 @@ export const EVIDENCE = {
       "The regulator is scored by deep pressure. Ballast residue points to an ascent. Its navigation buffer is damaged.",
     provenance: "Home pod / regulator serial and repair checklist",
     hypothesis:
-      "An underwater launch fits the hardware. Its purpose is still unknown.",
+      "Damage from an accident, or hardware used for a launch? The scoring and ballast residue need another point of comparison.",
     lead: "The abandoned intake below the twin reef ribs may explain the pod’s damaged filters.",
   },
   C02: {
@@ -637,7 +637,7 @@ export const EVIDENCE = {
     provenance: "Splitspine / workshop ledger and physical stock",
     hypothesis:
       "Departure was interrupted, or people chose to stay. Neither explanation is confirmed.",
-    lead: "Investigate the buoyant crowns east of the workshop. The upper laboratory sits beside the clear flank; prepare a 150 m suit and return power.",
+    lead: "Buoyant crowns rise east of Splitspine. A small laboratory hangs beside the tall rib on their clear upper flank.",
   },
   C04: {
     label: "Quiet lower channel",
@@ -648,7 +648,7 @@ export const EVIDENCE = {
     provenance: "Upper Canopy / field sheet and present fauna distribution",
     hypothesis:
       "Changing water chemistry may precede machinery failure. Predator avoidance is another possibility to investigate.",
-    lead: "Survey dishes beyond the lower crowns point toward Pale Basin. That longer expedition needs reinforcement and service preparation.",
+    lead: "Beyond the lower Canopy crowns, fallen survey dishes mark the edge of Pale Basin. The field sheet leaves that water an open question.",
   },
 } as const;
 export type EvidenceId = keyof typeof EVIDENCE;
@@ -669,13 +669,13 @@ export const OPENING = [
   {
     label: "Release restraint",
     caption:
-      "Pressure alarm. Upward motion. A restraint holds your chest against the seat.",
+      "Pressure alarm. The pod lurches. A restraint holds your chest against the seat.",
     detail: "E · release the amber restraint. Space · skip the opening.",
   },
   {
     label: "Close service latch",
     caption:
-      "The pod rises through black water. A leaking service latch shakes beside the damaged regulator.",
+      "Black water fills the window. A leaking service latch shakes beside the damaged regulator.",
     detail: "E · close the service latch. The air refuge remains protected.",
   },
   {

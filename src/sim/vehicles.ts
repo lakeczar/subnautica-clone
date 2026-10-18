@@ -136,9 +136,9 @@ export function service(s: GameState, id: string): string | null {
   if (!v || v.berth || distance(s.player.pose.position, v.pose.position) > 7)
     return "Approach the craft service socket locally.";
   if (!supportedServiceSite(s, v))
-    return "Charging and routine repair require the pod or restored workshop cradle. Field recovery uses maintenance patches.";
+    return "Use pod waters or the restored workshop cradle for hull charging and routine repair. Field patches use rescue stock.";
   if (v.disabled)
-    return "Apply a bound recovery patch before routine charging.";
+    return "Apply a rescue patch before routine charging.";
   // Supported service is an active session action; it has no time bypass or raw-material output.
   v.charge = 100;
   v.health = 100;
@@ -150,7 +150,7 @@ export function service(s: GameState, id: string): string | null {
     )
       i.charge = 100;
   s.feedback =
-    "Supported service complete: battery, hull and carried reserve cells restored. Cargo and module identities retained.";
+    "Service complete: hull battery, health, emergency air and cells in your hold or this craft restored. Cargo and fitted modules retained.";
   return null;
 }
 export function reserve(s: GameState, id: string): string | null {
@@ -168,7 +168,7 @@ export function reserve(s: GameState, id: string): string | null {
   const amount = Math.min((35 * (cell.charge ?? 0)) / 100, 100 - v.charge);
   v.charge += amount;
   cell.charge = Math.max(0, (cell.charge ?? 0) - (amount / 35) * 100);
-  s.feedback = `Transferred ${amount.toFixed(0)}% power. Empty cells can be recharged at a supported refuge.`;
+  s.feedback = `Added ${amount.toFixed(0)}% hull power from a reserve cell. Recharge local cells at a restored pod or workshop bench.`;
   return null;
 }
 export function eat(s: GameState): string | null {

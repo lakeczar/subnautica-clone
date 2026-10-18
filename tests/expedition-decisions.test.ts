@@ -150,7 +150,7 @@ test("bench recharge includes matching disabled hull cargo but leaves healthy em
     // No service via the bench's cargo reach; physical local service still requires <7 m.
     refused(out, { type: "service", vehicleId: v.id }, /locally/);
     out.player.pose.position = { ...v.pose.position };
-    if (disabled) assert.match(service(out, v.id)!, /bound recovery patch/);
+    if (disabled) assert.match(service(out, v.id)!, /rescue patch/);
     else {
       assert.equal(out.fleet.vehicles[0]!.disabled, false);
       assert.equal(reserve(out, v.id), null); assert.equal(out.fleet.vehicles[0]!.charge, 35);

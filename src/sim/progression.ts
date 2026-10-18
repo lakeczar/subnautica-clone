@@ -194,7 +194,7 @@ export function craftingRefusal(
   if (!s.knowledge.blueprints.includes(r.bp))
     return "Blueprint unknown. Investigate the intake and workshop records.";
   if (r.once && s.knowledge.crafted.includes(id))
-    return "Already installed. The equipment identity is retained.";
+    return "Already completed. The fabricated equipment or restored service is retained.";
   if (!r.needs.every((n) => s.knowledge.crafted.includes(n as RecipeId)))
     return "Earlier service work or equipment is still required.";
   if (r.site === "island_workshop" ? !nearWorkshop(s) || !!s.player.interiorId : !nearPod(s))
@@ -218,7 +218,7 @@ export function craftingRefusal(
       s.world.maintenance.glass < 1 ||
       s.world.maintenance.membrane < 3
     )
-      return "Maintenance allocation is low. Use the recovery-only sorting station at the shallow intake.";
+      return "Rescue stock is low. Sort recovery supplies at the shallow intake.";
   } else if (
     Object.entries(r.cost).some(
       ([kind, n]) => available(s, kind as ItemKind, bins) < n,
@@ -328,12 +328,12 @@ export function hint(s: GameState): string {
   if (!has("C03"))
     return "Find the low workshop platform at the southern foot of the split island ridge. Its ledger is beside unused panels.";
   if (!s.knowledge.crafted.includes("dart_base"))
-    return "Prepare at the pod: tools, 150 m suit, buoy and reserve cells. Restore the island workshop, then build the Dart in its clear launch cradle.";
+    return "Prepare at the pod: tools, 150 m suit, buoy, a meal and charged reserve cells. Recharge local cells at its restored bench. Restore the island workshop, then build the Dart in its clear launch cradle.";
   if (!has("C04"))
     return s.knowledge.hintLevel < 3
       ? "Follow the buoyant crowns east from the island. Quiet movement gives time to read the hunter’s warning."
       : "Use the open upper crowns, above 150 m. The laboratory is tucked against the tall cover rib; the clear upper flank leads back to the island.";
-  return "The upper-Canopy field sheet points toward Basin survey dishes. This M1 route ends with preparation at a refuge; the larger Basin expedition is not yet open.";
+  return "The field sheet points toward Basin survey dishes, a future expedition in this build. For now, bring two crust and two resin back to the workshop for optional Dart acoustic trim. Fit it at the cradle for faster quiet travel, with less boost speed.";
 }
 export const personalLimit = (s: GameState): number =>
   equipped(s, "suit_150") ? 150 : 60;

@@ -136,9 +136,9 @@ function action(s: GameState, c: GameCommand, w: WorldQueries): string | null {
         return "Approach this source by hand.";
       if (c.maintenance) {
         if (d.region !== "refuge_reef")
-          return "Recovery allocation is sorted only at the shallow reef service habitats.";
+          return "Sort rescue stock at the shallow reef service habitats.";
         if (s.world.maintenance.alloy >= 2 && s.world.maintenance.membrane >= 1)
-          return "A bound field patch is still available. General purchases cannot use this allocation.";
+          return "Rescue stock still covers a field patch. It is reserved for recovery, not other purchases.";
         s.world.action = {
           sourceId: c.sourceId,
           seconds: 20,
