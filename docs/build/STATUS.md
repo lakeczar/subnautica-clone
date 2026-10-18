@@ -1,10 +1,10 @@
 # Build status
 
-## Current checkpoint — combined OS2 correction inspected; fresh pair next
+## Current checkpoint — combined OS2 correction under independent review
 
 Movement source **cc3f20d** and feedback/copy source **4a5103f** are provisionally integrated; root's test-only reconciliation is **bd29ac3872bbad934e76eeb2a1d248304948ec84**. Root passes **419/419 tests**, typecheck/build and both economies. All27 production files match the author build; complete actual reload state/envelope except export savedAt and journal bytes match at tick16729. [Refinement inspection](evidence/POLISH-1-REFINEMENTS-INTEGRATION.md) and [movement inspection](evidence/POLISH-1-RIB-SURFACE-INTEGRATION.md) retain actual/diagnostic, prior-source and human/hardware limits.
 
-Both authors are terminal and release all paths/resources. **This is provisional integration, not independent acceptance or stage1 closure.** The [fresh full-correction review](tasks/POLISH-1-OS2-REVIEW-R1.md) covers both leaves from base1c942bd, including original Opus findings/advice, root's rejected-prototype objection and bounded UI requirements. Freeze this committed candidate for separate Astra xhigh/Sol6.1 max reviewers, then fresh Opus stage1 verification. TASKS owns actual dispatch IDs; historical active labels below do not override this checkpoint.
+Both authors are terminal and release all paths/resources. **This is provisional integration, not independent acceptance or stage1 closure.** The [fresh full-correction review](tasks/POLISH-1-OS2-REVIEW-R1.md) covers both leaves from base1c942bd, including original Opus findings/advice, root's rejected-prototype objection and bounded UI requirements. Fresh separate Astra xhigh/Sol6.1 max reviewers are active on frozen **fbd79148e7a94014d4998e457f00ee81accf9f25**, followed by fresh Opus stage1 verification. TASKS owns actual dispatch IDs; historical active labels below do not override this checkpoint.
 
 The [M2 direction](design/M2-DIRECTION-PROPOSAL.md) has paired planning acceptance on **30c6bf9**, all seven criteria with root concurrence. It starts with an earned Canopy–Basin benchmark, then earned fleet/mobile-home systems, then deep routes and both functional ending routes. This is direction only; no M2 production or schema acceptance is implied. OS2-04/06 remain first-M2-benchmark obligations. M2–M4 follow automatically under the owner's standing authorization. Earlier active/next labels below are historical.
 
@@ -41,7 +41,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-No builder remains active. Movement and refinement authors are terminal; all production/test ownership is released. Root owns integration/build records and no browser/server/recording/check process. The fresh independent pair owns only its assigned reports once dispatched; TASKS records exact candidate, models and task IDs.
+No builder remains active. Movement and refinement authors are terminal; all production/test ownership is released. Root owns integration/build records and no browser/server/recording/check process. The active fresh independent pair owns only its assigned reports; TASKS records exact candidate, models and task IDs.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -76,7 +76,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the prepared fresh combined OS2 Astra xhigh/Sol6.1 max pair from a clean frozen commit, then synchronize the public PRs. Receive completion notifications without polling, reconcile findings and verify affected fixes before fresh Opus stage1 verification. Continue accepted M2 direction and M3/M4 automatically. No routine owner permission is needed. Main merge/public deployment remain owner actions.
+The fresh combined OS2 Astra xhigh/Sol6.1 max pair is active on frozen fbd7914. Synchronize public PRs, then receive completion notifications without polling, reconcile findings and verify affected fixes before fresh Opus stage1 verification. Continue accepted M2 direction and M3/M4 automatically. No routine owner permission is needed. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
