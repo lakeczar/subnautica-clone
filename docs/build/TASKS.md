@@ -1227,3 +1227,8 @@ Exact parent **f70f4c89705a118fc3e19b21e59ef127f352507c**, unchanged production3
 Complete [brief](tasks/POLISH-1-EXPERIENCE-CALL-LAYOUT.md) supplied verbatim. Own hud.css; view.ts for local grouping only if needed; presentation.test.ts only for meaningful structural behavior coverage; new evidence report. No semantic/input/save/copy or cross-path change, no children, peer contact, push/PR/merge or parent edits. One owned isolated Linux tab/storage/port5190 with actual process proof/normal cleanup; new artifacts /tmp/siltwake-polish-1-experience-call-layout/. Immutable reviewer/author originals preserved.
 
 Only root, this implementation author and independent Sol R1 are active. Sol R1 still reviews originale81bb6f and receives no Astra findings before its own return. Receive notifications without polling; reconcile both R1 reports and author result before fresh full-batch R2. Opus then M2–M4 remain. Root has no browser/server/check process; no game/main merge/deployment.
+
+
+### Public Astra-finding / active-correction checkpoint synchronized
+
+PR #4/#3 complete descriptions disclose ASTRA-EXP-R1-01, pending correction, independent Sol review and remaining paired/Opus gates. Readbacks match `/tmp/siltwake-m1-pr/experience-r1-finding-verification.json` at9926415/M0a2cb19f; #3 remains M0-only. All source/tests remain identical to e81bb6f; review/report records alone changed. No new screenshot or fixed-defect claim. Stack linked/unwatched. Root owns no running browser/server/check; only the correction author and independent Sol reviewer remain active. Await their notifications.
