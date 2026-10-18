@@ -1,5 +1,7 @@
 import { CANOPY_COVER, SOURCES } from "../content/registry.js";
 import type { Capsule, Vec3, WorldQueries } from "./types.js";
+import { actorBox, RIB_CONTACT_TOLERANCE, RIB_SLIDE_ITERATIONS, ribUpperHeight,
+  segmentBoxClosest, sweptBoxIntersects, sweepBoxRib } from "./ribCollision.js";
 
 export const WATER_Y = 0;
 export const WORLD_BOUNDS = {
@@ -264,8 +266,19 @@ function segmentHitsSolid(a: Vec3, b: Vec3, solid: Solid): boolean {
 
 // Recognize only supplied registered rib geometry, including detached copies.
 // Empty/local rosters and unrelated solids reusing an id acquire no global ribs.
-const OPTICAL_RIBS = new Map(SOLIDS.filter(s => s.id.startsWith("reef.rib.")).map((solid, i) =>
+const CANONICAL_RIBS = new Map(SOLIDS.filter(s => s.id.startsWith("reef.rib.")).map((solid, i) =>
   [solid.id, { solid, rib: RIB_SEGMENTS[i]! }] as const));
+function canonicalRib(solid: Solid): RibSegment | null {
+  const registered = CANONICAL_RIBS.get(solid.id);
+  return registered && AXES.every(axis => solid.min[axis] === registered.solid.min[axis] &&
+    solid.max[axis] === registered.solid.max[axis]) ? registered.rib : null;
+}
+function validShape(shape: Capsule): boolean {
+  return [shape.radius, shape.height, shape.bottom ?? 0, shape.halfWidth ?? shape.radius,
+    shape.halfLength ?? shape.radius].every(Number.isFinite) &&
+    shape.radius >= 0 && (shape.halfWidth ?? shape.radius) >= 0 &&
+    (shape.halfLength ?? shape.radius) >= 0 && shape.height >= (shape.bottom ?? 0);
+}
 
 function sweep(
   origin: Vec3,
@@ -325,9 +338,7 @@ export function createWorldQueries(
         if (!finitePoint(solid.min) || !finitePoint(solid.max) ||
             AXES.some(axis => solid.min[axis] > solid.max[axis])) return false;
         if (ignore.includes(solid.id)) continue;
-        const registered = OPTICAL_RIBS.get(solid.id);
-        const rib = registered && AXES.every(axis => solid.min[axis] === registered.solid.min[axis] &&
-          solid.max[axis] === registered.solid.max[axis]) ? registered.rib : null;
+        const rib = canonicalRib(solid);
         if (rib ? segmentDistanceSquared(a, b, rib.a, rib.b) <= rib.radius ** 2
           : segmentHitsSolid(a, b, solid)) return false;
       }
@@ -339,6 +350,7 @@ export function createWorldQueries(
       return true;
     },
     clearance(origin, capsule) {
+      if (!finitePoint(origin) || !validShape(capsule)) return false;
       const rx = capsule.halfWidth ?? capsule.radius, rz = capsule.halfLength ?? capsule.radius;
       if (
         origin.x - rx < WORLD_BOUNDS.minX ||
@@ -348,21 +360,34 @@ export function createWorldQueries(
         origin.y + (capsule.bottom ?? 0) < floorHeight(origin.x, origin.z) - 0.02
       )
         return false;
-      return !solids.some(
-        (s) =>
+      const box = actorBox(origin, capsule);
+      return !solids.some((s) => {
+        if (!sweptBoxIntersects(box, { x: 0, y: 0, z: 0 }, s)) return false;
+        const rib = canonicalRib(s);
+        if (rib) return segmentBoxClosest(rib.a, rib.b, box).distance < rib.radius - RIB_CONTACT_TOLERANCE;
+        return (
           origin.x + rx > s.min.x + 0.001 &&
           origin.x - rx < s.max.x - 0.001 &&
           origin.z + rz > s.min.z + 0.001 &&
           origin.z - rz < s.max.z - 0.001 &&
           origin.y + capsule.height > s.min.y + 0.001 &&
-          origin.y + (capsule.bottom ?? 0) < s.max.y - 0.001,
-      );
+          origin.y + (capsule.bottom ?? 0) < s.max.y - 0.001
+        );
+      });
     },
     waterHeight: WATER_Y,
     groundHeight: floorHeight,
     supportHeight(x, z, fromY) {
       let height = floorHeight(x, z);
       for (const solid of solids) {
+        const rib = canonicalRib(solid);
+        if (rib) {
+          if (x >= solid.min.x && x <= solid.max.x && z >= solid.min.z && z <= solid.max.z) {
+            const upper = ribUpperHeight(x, z, rib);
+            if (upper !== null && fromY >= upper - 0.25) height = Math.max(height, upper);
+          }
+          continue;
+        }
         if (
           x >= solid.min.x &&
           x <= solid.max.x &&
@@ -375,16 +400,28 @@ export function createWorldQueries(
       return height;
     },
     moveCapsule(origin, delta, capsule) {
+      if (!finitePoint(origin)) throw new RangeError("Movement origin must be finite.");
+      if (!finitePoint(delta) || !validShape(capsule) ||
+          !finitePoint({ x: origin.x + delta.x, y: origin.y + delta.y, z: origin.z + delta.z }))
+        return { position: { ...origin }, hitSolid: true, hitBoundary: false };
       let position = { ...origin },
         remaining = { ...delta },
         hitSolid = false;
-      for (let i = 0; i < 4; i++) {
-        let nearest: ReturnType<typeof sweep> = null;
+      // Every new tangent is swept against the entire supplied roster again.
+      // Eight unresolved contacts exhaust conservatively: the remainder is discarded.
+      for (let i = 0; i < RIB_SLIDE_ITERATIONS; i++) {
+        let nearest: { t: number; normal: Vec3; rib: boolean; stop: boolean } | null = null;
+        const box = actorBox(position, capsule);
         for (const solid of solids) {
-          const hit = sweep(position, remaining, capsule, solid);
-          if (hit && (!nearest || hit.t < nearest.t)) nearest = hit;
+          if (!sweptBoxIntersects(box, remaining, solid)) continue;
+          const rib = canonicalRib(solid);
+          const hit = rib
+            ? sweepBoxRib(box, remaining, rib)
+            : sweep(position, remaining, capsule, solid);
+          if (hit && (!nearest || hit.t < nearest.t || (hit.t === nearest.t && "stop" in hit && hit.stop)))
+            nearest = { ...hit, rib: rib !== null, stop: "stop" in hit && hit.stop === true };
         }
-        const fraction = nearest ? Math.max(0, nearest.t - 0.0001) : 1;
+        const fraction = nearest ? Math.max(0, nearest.t - (nearest.rib ? 0 : 0.0001)) : 1;
         position = {
           x: position.x + remaining.x * fraction,
           y: position.y + remaining.y * fraction,
@@ -392,13 +429,16 @@ export function createWorldQueries(
         };
         if (!nearest) break;
         hitSolid = true;
+        if (nearest.stop) break;
         remaining = {
           x: remaining.x * (1 - fraction),
           y: remaining.y * (1 - fraction),
           z: remaining.z * (1 - fraction),
         };
-        for (const axis of AXES)
-          if (nearest.normal[axis] !== 0) remaining[axis] = 0;
+        const inward = dot(remaining, nearest.normal);
+        if (inward >= 0) break; // no progress: never treat unresolved travel as clear
+        for (const axis of AXES) remaining[axis] -= nearest.normal[axis] * inward;
+        if (Math.hypot(remaining.x, remaining.y, remaining.z) < 1e-12) break;
       }
       const x = Math.max(
         WORLD_BOUNDS.minX,
