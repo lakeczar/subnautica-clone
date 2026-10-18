@@ -1,5 +1,7 @@
 # Shared implementation direction
 
+Layout source555ac20 is provisionally integrated at5090866; author ownership is released. Only private constructor grouping and CSS placement changed; existing IDs, action attributes, public signatures, lifetime/visibility/focus behavior and simulation/save/input remain unchanged. Session notices stay outside HUD, call stays inside. Compact warning lanes use prompt presence; fresh complete R2 must assess surrounding menu/panel and warning compositions.
+
 SOL-EXP-01 joins ASTRA-EXP-R1-01 in the existing layout author assignment; paths and all semantic/public-interface constraints remain unchanged. Both R1 reviewers are terminal/released; their reports were independent. Author keeps parentf70f4c8 and now verifies five-warning prompt/result/look plus call/save/status composition together. No second builder or overlapping edits.
 
 ASTRA-EXP-R1-01 correction ownership is limited to hud.css, view.ts only if local layout grouping is necessary, presentation.test.ts only for meaningful structural behavior coverage, and its own report. Existing public interfaces, IDs/handlers, visibility/focus, simulation/save/input/timing/copy remain frozen. TASKS owns actual dispatch. Sol R1 retains only its independent report on original e81bb6f; no source overlap or peer contact.

@@ -1246,3 +1246,10 @@ Root sent authoritative amendment to the already-active layout implementation th
 ### Public paired-R1 checkpoint synchronized
 
 PR #4/#3 complete bodies disclose both confirmed P2 overlaps, one active Sol6.1/max layout correction and remaining fresh paired/Opus gates. Full body/base/head/draft readbacks atc1f785e/M0a2cb19f match `/tmp/siltwake-m1-pr/experience-r1-paired-verification.json`; #3 remains M0-only. No fix or new production-play claim. Current root source/tests still match e81bb6f. Both reviewers are terminal/released; only the amended layout author is active. Stack linked/unwatched. Root owns no browser/server/check; receive author completion without polling.
+
+
+### Combined experience layout correction terminal and inspected
+
+Task siltwake-polish-1-experience-call-layout-sol-max-f70f4c8 acknowledged completed/result_available without pending children/questions. Exact parentf70f4c8, source555ac20efd66962bb503a6e49276148f63a0e786, reportfab1702216835dc494a0be19b70c47f5568cdef8; root merge509086696b96d802bf76b0a72ac00ada648a28a6. Clean t3-e6e57172; actual original gpt-6.1-sol/max confirmed. [Root inspection](evidence/POLISH-1-EXPERIENCE-CALL-LAYOUT-INTEGRATION.md) verifies414 payloads,399 checks/build/economies,27 matching build files, unchanged IDs/actions and ten independently recalculated production/native layouts without intersections. All author paths/resources released. Root opened no browser/server.
+
+Both R1 examples are provisionally corrected, not independently accepted. Native transition/focus receipts keep intermediate58cafc5 attribution; final production/ten snapshots are555ac20. Later exports do not prove capture-time equality; original gameplay/reload remains source-attributed. All reviewed scope and both findings go to prepared fresh same-candidate R2; no reviewer active until dispatch below. Opus then M2–M4 remain. No game/main merge/deployment.
