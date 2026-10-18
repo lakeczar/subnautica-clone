@@ -59,6 +59,16 @@ export class PanelView {
     this.storageNotice = "";
   }
 
+  // Observe travel even with panels closed, without touching their DOM/focus.
+  observeStorageContext(state: GameState): void {
+    const context = this.storageAnchor(state);
+    if (context !== this.storageContext) {
+      this.storageContext = context;
+      this.storageFrom = this.storageToChosen = null;
+      this.storageNotice = "";
+    }
+  }
+
   refresh(kind: PanelKind, state: GameState): void {
     const content = this.get("panel-content");
     const restoreFocus = content.contains(document.activeElement);
@@ -68,12 +78,7 @@ export class PanelView {
     const fallbackKey = focused?.dataset.focusFallback;
     for (const group of content.querySelectorAll<HTMLDetailsElement>("details[data-panel-group]"))
       if (group.dataset.panelGroup) this.expansions.set(group.dataset.panelGroup, group.open);
-    const context = this.storageAnchor(state);
-    if (context !== this.storageContext) {
-      this.storageContext = context;
-      this.storageFrom = this.storageToChosen = null;
-      this.storageNotice = "";
-    }
+    this.observeStorageContext(state);
     if (this.renderedKind !== kind) this.get("game-panel").scrollTop = 0;
     this.renderedKind = kind;
     this.commands.clear();

@@ -14,7 +14,7 @@ import { aimedInteraction } from "../src/sim/targeting.js";
 import { faceTarget, NORMAL_VIEWS, readyState } from "./targeting-support.js";
 import type { GameCommand } from "../src/sim/types.js";
 import { ExpeditionSession } from "../src/runtime/session.js";
-import { SaveRepository } from "../src/save/repository.js";
+import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import { MemoryStorage, TestWriterLock, encoded, sample, settled } from "./persistence-support.js";
 
 /** Minimal DOM port for rendered buttons, replacement and command wiring. Native
@@ -27,8 +27,11 @@ function viewFixture(t: test.TestContext) {
     private html = "";
     private buttons: ElementPort[] = [];
     children: ElementPort[] = [];
+    htmlWrites = 0;
+    scrollTop = 0;
     get innerHTML() { return this.html; }
     set innerHTML(value: string) {
+      this.htmlWrites++;
       if (this.buttons.includes(document.activeElement!)) document.activeElement = null;
       this.html = value;
       this.buttons = [...value.matchAll(/<button\b([^>]*)>(.*?)<\/button>/gs)].map((match) => {
@@ -137,6 +140,10 @@ function viewFixture(t: test.TestContext) {
     },
     navigate: (kind: string) => root.emit("click", { target: root.querySelectorAll("button").find(b => b.dataset.action === `${kind}-panel`)! }),
     activate: (id: string) => root.emit("click", { target: root.querySelector(`#${id}`) }),
+    selectStorage: (id: "storage-from" | "storage-to", value: string) => {
+      const target = Object.assign(root.querySelector(`#${id}`), { id, value, tagName: "SELECT" });
+      root.emit("change", { target });
+    },
     key: (key: string, code = key, shiftKey = false) => {
       const event = { key, code, shiftKey, prevented: false, stopped: false,
         preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
@@ -563,6 +570,68 @@ test("storage-off sessions, errors and graphics recovery remain visible through 
   assert.equal(get("session-warning").hidden, false);
 });
 
+test("a confirmed local retry resolves the failed-save alert and reminder while Hold stays paused", async (t) => {
+  const { view, get, active, wall, timerCount } = viewFixture(t);
+  const storage = new MemoryStorage(), repository = new SaveRepository(storage, new TestWriterLock());
+  const initial = sample(); completeOpening(initial.state);
+  repository.load(); assert.equal((await repository.commit(initial)).ok, true);
+  const session = new ExpeditionSession(repository, {
+    changed: () => {
+      view.slot(repository.status, session.state !== null);
+      view.persistence(session.persistenceMessage, session.autoSaveAllowed, session.state !== null, session.busy);
+    },
+    pause: () => view.showMenu(session.state !== null),
+    entered: () => { view.resetPresentation(); view.update(session.state!, false); view.showGame(); },
+    notify: (message, error, options) => view.notify(message, error, options),
+  });
+  t.after(() => session.dispose());
+  session.continueGame(); view.openPanel("inventory", session.state!);
+  const focus = active(), before = repository.raw, state = structuredClone(session.state);
+  assert.ok(before); assert.equal(session.autoSaveAllowed, true);
+
+  storage.failWrite = true; session.manualSave(); await settled();
+  const failure = get("notification").textContent;
+  assert.match(failure, /Browser storage refused the save/);
+  assert.equal(get("notification").hidden, false);
+  assert.equal(get("session-warning").hidden, false);
+  assert.equal(session.autoSaveAllowed, false);
+  assert.equal(new SaveRepository(storage, new TestWriterLock()).load().save?.meta.savedAt, initial.meta.savedAt);
+  assert.equal(repository.raw, before); assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
+  assert.equal(active(), focus);
+
+  wall(1000); session.manualSave(); await settled();
+  assert.equal(get("notification").textContent, failure, "a still-failing retry keeps the truthful alert");
+  assert.equal(session.autoSaveAllowed, false); assert.equal(repository.raw, before);
+  assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
+  view.notify("Exported portable copy", false, { channel: "system" });
+  view.notify("Graphics restored", false, { channel: "system" });
+  assert.equal(get("notification").textContent, failure, "system success cannot establish local recovery");
+  assert.equal(get("session-warning").hidden, false);
+  view.notify("Suppressed invalid import", true, { channel: "system" });
+
+  wall(1000); storage.failWrite = false; session.manualSave(); await settled();
+  assert.equal(session.autoSaveAllowed, true);
+  assert.equal(session.persistenceMessage, "");
+  assert.equal(get("session-warning").hidden, true);
+  assert.match(get("save-status").textContent, /Saved locally/);
+  assert.notEqual(repository.raw, before);
+  assert.equal(storage.getItem(LOCAL_SAVE_KEY), repository.raw);
+  const loaded = new SaveRepository(storage, new TestWriterLock()).load();
+  assert.deepEqual(loaded.save?.state, state); assert.deepEqual(loaded.backup, initial);
+  assert.equal(get("notification").hidden, true, "confirmed recovery immediately resolves the obsolete failure");
+  assert.match(get("system-status").textContent, /Saved locally/);
+  assert.equal(get("system-status").hidden, false);
+  assert.equal(active(), focus); assert.equal(view.currentPanel, "inventory");
+  assert.equal(timerCount(), 1);
+  wall(3001);
+  assert.equal(get("system-status").hidden, true); assert.equal(get("notification").hidden, true);
+  assert.equal(timerCount(), 0, "the obsolete failure's timeout is removed with its notice");
+  wall(20000);
+  assert.equal(get("notification").hidden, true, "suppressed notices never replay after recovery or chip expiry");
+  assert.deepEqual(session.state, state, "paused retry and wall expiry do not advance simulation");
+  assert.equal(active(), focus);
+});
+
 test("moving pilot guidance stays secondary, explains stopped and blocked exits, and retains emergencies and E behavior", (t) => {
   const { view, get } = viewFixture(t);
   const s = createGame(); completeOpening(s);
@@ -942,6 +1011,65 @@ test("the GameView replacement boundary clears panel results and invalidates old
   stale.focus(); assert.equal(activeCommand(), undefined);
   view.openPanel("inventory", structuredClone(s));
   commandButton({ type: "eat" });
+});
+
+test("closed-panel travel resets storage operands without rendering panels, changing focus or mutating the expedition", (t) => {
+  const { view, get, active, commands, commandButton, selectStorage, timerCount } = viewFixture(t), s = readyState();
+  s.player.pose.position = { x: 11, y: 1.2, z: -35 };
+  s.world.facilities.find(f => f.id === "island_workshop")!.repaired = true;
+  const v = makeVehicle("storage-dart", "dart", { x: 20, y: -1.6, z: -22 }, "storage-hold");
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
+  addItem(s, "structural_alloy", 2, "diver");
+  view.update(s, false); view.showGame(); view.openPanel("inventory", s);
+  selectStorage("storage-from", "workshop_locker"); selectStorage("storage-to", v.cargoId);
+  commandButton({ type: "store-materials", from: "workshop_locker", to: v.cargoId });
+  view.closePanel(); view.showGame();
+  const html = get("panel-content").innerHTML, writes = get("panel-content").htmlWrites,
+    focus = active(), timers = timerCount();
+  get("game-panel").scrollTop = 137;
+  const away = structuredClone(s); away.player.pose.position = { x: 70, y: -5, z: -35 };
+  const beforeAway = structuredClone(away), beforeReturn = structuredClone(s);
+  for (let i = 0; i < 100; i++) view.update(away, false);
+  view.update(s, false);
+  assert.equal(view.currentPanel, null);
+  assert.equal(get("panel-content").innerHTML, html); assert.equal(get("panel-content").htmlWrites, writes);
+  assert.equal(get("game-panel").scrollTop, 137); assert.equal(active(), focus);
+  assert.equal(timerCount(), timers); assert.deepEqual(commands, []);
+  assert.deepEqual(away, beforeAway); assert.deepEqual(s, beforeReturn);
+  view.openPanel("inventory", s);
+  commandButton({ type: "store-materials", from: "diver", to: "workshop_locker" });
+  assert.match(get("panel-content").innerHTML, /<option value="workshop_locker" selected>Workshop locker/);
+  assert.equal(get("panel-feedback").hidden, true);
+});
+
+test("closed-panel observations preserve same-site storage intent through roster, pause and bench/cradle changes", (t) => {
+  const { view, commandButton, selectStorage, navigate } = viewFixture(t), s = readyState();
+  s.player.pose.position = { x: 11, y: 1.2, z: -35 };
+  s.world.facilities.find(f => f.id === "island_workshop")!.repaired = true;
+  const v = makeVehicle("storage-dart", "dart", { x: 20, y: -1.6, z: -22 }, "storage-hold");
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
+  view.update(s, false); view.openPanel("inventory", s); selectStorage("storage-to", v.cargoId);
+  const chosen: GameCommand = { type: "store-materials", from: "diver", to: v.cargoId };
+  view.closePanel(); view.showGame(); view.update(s, false); view.openPanel("inventory", s);
+  commandButton(chosen);
+  view.closePanel();
+  const other = makeVehicle("passing-dart", "dart", { x: 21, y: -1.6, z: -22 }, "passing-hold");
+  s.fleet.vehicles.push(other);
+  s.inventory.containers.push({ id: other.cargoId, kind: "vehicle", ownerId: other.id, capacity: 32 });
+  view.update(s, false);
+  s.fleet.vehicles = s.fleet.vehicles.filter(a => a.id !== other.id);
+  s.inventory.containers = s.inventory.containers.filter(c => c.id !== other.cargoId);
+  view.update(s, false);
+  const cradle = structuredClone(s);
+  cradle.player.controlledVehicleId = v.id; cradle.player.mode = "piloting"; cradle.player.pose = structuredClone(v.pose);
+  view.update(cradle, false); view.update(s, false);
+  view.showMenu(true); view.update(s, false); view.openPanel("inventory", s);
+  commandButton(chosen);
+  navigate("craft"); navigate("inventory"); commandButton(chosen);
+  view.resetPresentation(); view.update(s, false); view.openPanel("inventory", s);
+  commandButton({ type: "store-materials", from: "diver", to: "workshop_locker" });
 });
 
 test("panel outcomes are singular, preserve focus, and clear on switch/close while persistence remains independent", (t) => {

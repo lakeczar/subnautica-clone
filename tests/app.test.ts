@@ -674,6 +674,30 @@ test("app: a replacement session with the same vehicle ID cannot inherit an exit
   assert.ok(!f.view.notices.slice(notices).some(n => n.startsWith("Clear exit.")));
 });
 
+test("app: successful exports remain system feedback while only a successful local write reports persistence recovery", async (t) => {
+  const f = await fixture(t), before = f.storage.getItem(LOCAL_SAVE_KEY);
+  const downloads: { href: string; download: string }[] = [];
+  Object.assign(f.document, {
+    body: { append: (anchor: { href: string; download: string }) => downloads.push(anchor) },
+    createElement: () => ({ href: "", download: "", click() {}, remove() {} }),
+  });
+  Object.assign(f.window, { setTimeout: (callback: () => void) => { callback(); return 0; } });
+  f.storage.failWrite = true; f.view.actions.save(); await settled();
+  assert.equal(f.view.noticeRecords.at(-1)?.error, true);
+  assert.equal(f.view.noticeRecords.at(-1)?.options.channel, "persistence");
+  f.view.actions.exportGame();
+  f.view.actions.exportRaw();
+  assert.equal(downloads.length, 2);
+  for (const notice of f.view.noticeRecords.slice(-2)) {
+    assert.equal(notice.error, false); assert.equal(notice.options.channel, "system");
+  }
+  assert.equal(f.storage.getItem(LOCAL_SAVE_KEY), before);
+  f.storage.failWrite = false; f.view.actions.save(); await settled();
+  assert.equal(f.view.noticeRecords.at(-1)?.error, false);
+  assert.equal(f.view.noticeRecords.at(-1)?.options.channel, "persistence");
+  assert.notEqual(f.storage.getItem(LOCAL_SAVE_KEY), before);
+});
+
 test("app: presentation advances exactly once after each installed step/event batch and never from paint, menu commands or resume catch-up", async (t) => {
   const initial = sample(600); completeOpening(initial.state);
   const f = await fixture(t, initial);
