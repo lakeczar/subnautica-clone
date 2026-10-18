@@ -1,5 +1,7 @@
 # Complete experience correction — independent R3 brief
 
+**Dispatched on frozen 4baaa34f3c5cdb859d75e320e4f95a53a669ef1e; TASKS records both IDs.**
+
 Fresh non-author **Astra xhigh** and **Sol6.1 max** each review the complete experience batch from base **c4de57928347c89ea7602a13d1e14a2849caf722** to the same frozen candidate supplied at dispatch. No implementation author or earlier review continuation may supply this fresh round. TASKS records candidate and actual IDs. The latest production source is **d9aaf6356cb320f283887922abf97ed8bdc54f59**, author report9124f21238854fd7dea5c764795cb9bfb4947e9b, provisional mergee212da4d1df85a22c119f70ef2717d78ae6cfa38.
 
 Read STATUS first, PLAN/CONTRACTS, prompts/BUILD_GAME_REVISED.md and relevant specification pointers, docs/DELIVERY_AND_ACCEPTANCE.md, original whole-batch POLISH-1-EXPERIENCE.md and S1/S2a/S2b/COMPOSE briefs, OPUS-STAGE1-R1 report/disposition and OPUS-STAGE1-IMPLEMENTATION advice. Reconciliation governs conflicts. All requested game content beyond stage1 remains; do not call this a completed campaign.
