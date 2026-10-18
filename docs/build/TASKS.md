@@ -1211,3 +1211,10 @@ Only root and these two reviewers are active. Root owns no browser/server/record
 PR #4/#3 full descriptions now record provisional35de825/sourcef2e634a,399 passing checks/build/economies, final caption inspection and the active fresh same-candidate pair one81bb6f. Earlier gameplay captures/reload remain correctly attributed to unchanged5005095 systems; #3 stays M0-only. Exact body/base/head/draft readbacks at8c122bb73fb24b9f65eedb588f2a85bcf33e8f60/M0a2cb19f match `/tmp/siltwake-m1-pr/experience-review-verification.json`. No new media or current-source gameplay claim.
 
 All four PR layers remain linked/unwatched. Only the two independent reviewers are active; root has no browser/server/recording/check process. Await their completion notifications without polling. No game/main merge/deployment.
+
+
+### Astra complete-experience R1 terminal; bounded correction prepared
+
+Astra task siltwake-polish-1-experience-astra-r1-e81bb6f acknowledged terminal without children/questions. Report7bde6fbb0071bd0cd8ba536de7d7fe68f91578f7 integrated at2c201ebbba8471dca900edd3a5fa1834af94c146; source/tests unchanged. Root confirms actual gpt-6-astra/xhigh from both original contexts and all145 payloads. [Interim disposition](reviews/POLISH-1-EXPERIENCE-R1.md) accepts ASTRA-EXP-R1-01, P2, from actual production imagery/source and independent100% overlap calculation on9 retained active observations. Criteria4/6 require changes; other6 accept with limits. Ownership/resources released.
+
+Sol R1 remains independent on originale81bb6f, no peer findings shared. [Call-layout correction](tasks/POLISH-1-EXPERIENCE-CALL-LAYOUT.md) is prepared for a new Sol6.1/max implementation worktree from a committed baseline. No correction author active until actual ID entry below. Root has no browser/server/check process; no game/main merge/deployment.

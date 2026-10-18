@@ -1,0 +1,25 @@
+# Bounded experience correction — call/save composition
+
+Root supplies a clean committed baseline at dispatch, with production identical to reviewed e81bb6fa3e19f01641f6fe874cce70443263b257. Implement **ASTRA-EXP-R1-01** from the complete experience R1. Main builder **Sol6.1/max**, isolated T3 worktree; no children or peer contact. Sol's independent R1 remains on its original candidate; do not inspect its unfinished work. Root owns reconciliation/integration.
+
+Read STATUS first, current PLAN/CONTRACTS, revised build input, DELIVERY_AND_ACCEPTANCE, POLISH-1-EXPERIENCE.md and the complete R1 brief/report/interim disposition. Preserve the reconciled requirements and whole-game scope. This is a bounded layout fix, not another HUD redesign.
+
+## Ownership and invariants
+
+Own **src/ui/hud.css**. You may use **src/ui/view.ts** only if local DOM grouping/layout wiring is needed to reserve space reliably; retain public signatures, IDs, existing handlers, focus identities and HUD/menu/panel visibility behavior. No simulation, state, save, input, timing, cue semantics or copy change. Own **tests/presentation.test.ts** only for meaningful behavioral coverage needed by an actual structural change; do not add tests that merely mirror CSS declarations or weaken existing coverage. New report only **docs/build/evidence/POLISH-1-EXPERIENCE-CALL-LAYOUT.md**. No other path edits. Propose any necessary extra seam to root while continuing independent work.
+
+Keep the call inside the existing HUD visibility contract. Persistence/export and graphics/system notices must remain available outside hidden HUD states. No second notification model, extra per-frame DOM rebuild, polling layout loop or altered live announcements. Prefer the smallest robust composition that gives the call, persistent save warning and existing status chip distinct readable space. Preserve capture/toolbar position, actionable text≥12px and label≥11px. Do not hide essential information, shorten actionable errors, invent subtitles or add helper paragraphs.
+
+## Defect and evidence
+
+Current .call-cue is top75/right24; .session-warning top72/right24/z9. In actual production960 the call rectangle692.789/75/243.211×39 lies fully within save banner632.594/72/303.406×48. The exact-source1280 fixture has the same overlap. Source and immutable evidence: `/tmp/siltwake-polish-1-experience-astra-r1/production-call-save-shot-960.png`, production-observations.json, browser-calls.json, production-diagnostic-active-export.json and the reviewer report. Do not run artifact scripts in place; inspect then copy/adapt with new output paths. The staged save is an earned-derived diagnostic, not a fresh route.
+
+## Acceptance and bounded verification
+
+1. Both save/export warning and complete call instrument remain readable and nonoverlapping at actual CSS960×600 and1280×800, with a real simulation-emitted call in the production app under autosave-off/session-only state. Preserve bearing/elevation/caption and export activation. Check after the central transient persistence message expires as well as while it is visible. A DOM-only fixture supplements but cannot replace production proof.
+2. Verify save warning on/off, call on/off, current system-status chip, threat banner and relevant surrounding vitals/toolbar/result do not gain new overlaps. Include supported direction/elevation copy lengths and normal pause/panel/hidden-HUD transitions; use bounded labelled fixtures for rare combinations. Native keyboard focus/export remains usable. No hiding one element behind another to satisfy rectangles.
+3. Retain existing lifetimes, announcements, resets and session/save semantics. If using a grouping, inspect native visibility and existing focus tests. No unnecessary full-route/recovery reruns: the unchanged P1–P8/active-reload evidence keeps its earlier source attribution.
+4. Run applicable full check/build and diff checks. Record source/compiled identity and actual source-attributed before/final screenshots with measured rectangles. Keep seeded versus ordinary input explicit, original artifacts immutable, and original runtime evidence. No human feel/audio/GPU claims.
+5. Clean worktree with separate source and report commits, report exact changes/proposed seam usage, checks and limits, immutable artifact manifest and normal cleanup. Root inspection plus fresh full-batch Astra/Sol gate remain required; no author acceptance claim.
+
+Before browser work read BOTH `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md`. Prefer existing artifacts/HTTP for unchanged questions, T3 preview_status/open for needed native checks. Use one owned incognito isolated factory-worker Linux tab/storage and assigned port5190; verify actual renderer process ownership (UA/loopback insufficient). No unattended Windows/physical-cursor work. Preserve human/peer/shared tabs/hosts, retain raw traces/downloads before closure, release input/lock, restore diagnostics, and close only owned tab/server normally with a final port-free receipt. No kill/relaunch loops. New artifacts `/tmp/siltwake-polish-1-experience-call-layout/`; no push, PR, merge or parent mutation.

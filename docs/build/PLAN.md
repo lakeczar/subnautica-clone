@@ -1,5 +1,7 @@
 # Construction plan
 
+Astra complete-experience R1 now requests ASTRA-EXP-R1-01: the save-disabled banner occludes the sound direction cue. Root confirms the production capture/source and prepares [bounded Sol layout correction](tasks/POLISH-1-EXPERIENCE-CALL-LAYOUT.md), independent of the unfinished Sol R1 review on e81bb6f. Reconcile both returns before full-batch R2; Opus then M2–M4 remain.
+
 Current experience checkpoint: caption sourcef2e634a is inspected and provisionally integrated at35de825;399 tests/typecheck/build/economies pass. All authors are terminal and release their paths. Freeze the complete experience correction for [fresh paired R1](tasks/POLISH-1-EXPERIENCE-REVIEW-R1.md), then Opus verification before M2–M4. TASKS records actual dispatch; no leaf is independently accepted.
 
 The [delivery gates](../DELIVERY_AND_ACCEPTANCE.md) own acceptance. This plan sequences implementation and does not reduce the requested campaign. A batch and a milestone each need the dual review gate. Later batches become concrete after the preceding runnable interfaces are integrated.
