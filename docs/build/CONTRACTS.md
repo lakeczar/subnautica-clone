@@ -2,11 +2,19 @@
 
 ## Richer cel seams staged at 06927d5
 
-Source `b40d077` is assembled with current UI and carrier corrections; [root inspection](evidence/M1-LOOK-INTEGRATION.md). These remain provisional pending the new pair.
+Source `b40d077` is assembled with current UI and carrier corrections; [root inspection](evidence/M1-LOOK-INTEGRATION.md). Both R3 reviewers accepted the bounded presentation on21d50df; new revisions still require the applicable review gate.
 
 - Internal `ArtBatch.leaf(path, widths, across, color, lip)` builds curved ridged membranes; `glow(mesh)` and optional `finish(contour = 0)` encode emission/contour in cel vertex alpha. The opaque cel shader consumes this metadata; transparent glazing retains its separate side attribute. Shared materials remain scene-owned, and gauges/geometry follow their owning hull lifecycle.
 - Regional/depth optical density and color change while the existing wet-segment/air-union geometry remains authoritative for rendering. Bounded pod/lab warm fill uses render-only world coordinates; future facility geometry changes must update those masks and existing optical air bounds together. No survival air authority changes.
 - Lab cladding reads existing `SOLIDS` floor/roof/rear/side faces; the port pane has an actual backing opening. Front and starboard approaches remain open. Dart cockpit charge/health bars read actual vessel state and inherit helm visibility/disposal. Seat, world heading/pitch, shared collision envelopes and renderer/factory public signatures remain unchanged.
+
+## Checked legacy carrier migration staged at769f2ad
+
+Source a5e589f is assembled and root-checked; [integration evidence](evidence/M1-MIGRATION-FIX-INTEGRATION.md). It supersedes the earlier unconditional helm relocation described in the A0 checkpoint. Core acceptance remains pending R4.
+
+- `carrierInteriorEntry(s: GameState, world: WorldQueries, preferred: Vec3): Vec3 | null` is now exported. Given a validated carrier assembly, it returns a detached local landing without mutation. The existing algorithm/body and explicit entry callers are unchanged: prefer the authored point; only an edge overhang enables dry-cell fallback; every candidate clears local structure and the supplied world; otherwise null.
+- Schema2 decode applies this checked entry to covered legacy room positions, then checks strict semantics/local clearance before success. No supported landing refuses atomically; no vessel/cargo relocation, helm ownership, service grant, bounds relaxation or schema/content change. Feedback describes a clear dry passage. Reading never writes; repository/session backup and import protocols remain unchanged. Successful migration is immediately saveable/idempotent; encoding an unmigrated blocked current position still refuses.
+- Root ran181 tests/typecheck/build, both exact R3 persistence regressions, historical compact/medium variants and protected refusal. This is staged executable compatibility evidence, not a fresh browser route.
 
 ## Carrier boundary additions staged at 9d1397d
 
@@ -101,7 +109,7 @@ Render-only helpers `createObservationPane`, `wallWithOpening`, `updateOpticalUn
 
 ### Current ownership
 
-Current narrow [migration correction](tasks/M1-MIGRATION-FIX.md) owns codec legacy-room placement/result checks, the existing checked `carrierInteriorEntry` helper/export, focused save/migration/session tests and its own evidence. Root authorizes reuse of that placement seam, with its final signature/behavior returned before integration. Schema, validation, carrier travel/turn/transfer geometry and other contracts stay frozen. Both R3 reviewers have completed report-only work on21d50df; the single migration builder retains exclusive implementation ownership.
+The [migration correction](tasks/M1-MIGRATION-FIX.md) is terminal, assembled at769f2ad and its checked-entry export is reconciled above. All author paths are released. Schema, validation, carrier travel/turn/transfer geometry and other contracts stay frozen. Both R3 reviewers are terminal. Fresh R4 reviewers receive report-only ownership on the new frozen candidate; root alone integrates and maintains records.
 
 Recovery source `259b2d2` is provisionally assembled with RENDER at `4d0a7f0`. `updateRecovery(s: GameState, world: WorldQueries): GameEvent | null` returns one existing notice only at automatic ready/blocked/completed transitions; stepGame appends it. `RECOVERY_NOTICES` is readonly shared text for UI identification of saved last recovery feedback. `RECOVERY_MOORING` is the existing `(51,-11,-54)` endpoint. Tow uses keel-space points `(80,-48,-89)`→`(57,-10,-65)`→mooring with every step swept, while `rescueWaypoints` still describes the approach-guide route. Existing saved waypoint/guide offsets remain supported without schema change; no final unchecked position assignment or free repair/charge. Newer command feedback supersedes the historical report. [Correction inspection](evidence/M1-RECOVERY-FIX-INTEGRATION.md).
 

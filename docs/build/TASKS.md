@@ -470,3 +470,12 @@ Existing migration builder received Sol's second edge/heading through T3 steer `
 
 
 PR #4/#3 updated for the complete R3 pair and exactly read back (`/tmp/siltwake-m1-pr/r3-paired-verified-{3,4}.json`): #4 has1/6 accepted bounded criteria, presentation at21d50df only; #3 retains accepted65-test M0. Stack linked and unwatched. Production remains06927d5, only the migration builder is active. No source change, root browser/server, repeated matrix or new delegate. Next: inspect the migration completion notification.
+
+
+### Migration correction completed and root-checked
+
+Task `siltwake-m1-migration-fix-sol-max-9514dd7` terminal: actual Sol6.1/max, clean worktree, no children/questions/browser/server. Source a5e589f4f63a66c829cadcc9a5eac36220ebc4e4 and evidence2bae60d533b7380e2120dfeecf4ad01036df23f7 assembled at769f2adc18cb150c9dd1ff4bac699ea73ad6274b. Only two narrow production paths/new carrier-migration.test.ts/own evidence changed; paths released. Checked-entry export and unchanged helper behavior reconciled in CONTRACTS.
+
+[Root integration](evidence/M1-MIGRATION-FIX-INTEGRATION.md):56 payload hashes/57 safe unique regular archive members,181 tests/typecheck/build, source/config/build byte identity, both exact reported persistence cases,16 historical inputs/16 successful migrations including Sol diagnostic/1 atomic refusal,120 additional ordinary simulated walking ticks. Original journal/source and all unrelated fields conserved; no fresh browser/earned-route claim. Root artifacts `/tmp/siltwake-m1-migration-root/`. Both reviewers and builder are terminal; no active children or root resources.
+
+Prepare fresh [R4 pair](tasks/M1-BATCH-REVIEW-R4.md), exact accepted-M0 diff base, complete original scope/R1 brief, all R1–R3 reports/findings/dispositions and new correction/evidence. Candidate will be the next committed records-only successor. No acceptance of correction/core/integrated M1 yet.

@@ -39,3 +39,6 @@ Root verified all40 payload hashes and41 unique safe regular archive members, ma
 | Integrated M1 | **OPEN.** Healthy-battery exhaustion, affected integrated checks and separate paired milestone review remain; no full-game or integrated acceptance follows from presentation. |
 
 Both independent initial verdicts were obtained before sharing findings. Root then steered the already-running migration builder to include Sol's second edge/heading; same ownership and parent9514dd7, no added child. Both reviewers are terminal. Root and that builder remain active. Inspect its terminal source/evidence return, reconcile the helper contract, run affected integration checks, and freeze a corrected candidate for a fresh Astra xhigh/Sol max pair. The current presentation acceptance is source-specific and must not be represented as acceptance of later functional changes. Accepted game/main are unchanged; no deployment.
+
+
+The correction subsequently completed and is provisionally assembled at769f2ad; [root integration](../evidence/M1-MIGRATION-FIX-INTEGRATION.md) records181 checks and both repaired session regressions. Source a5e589f exports the existing checked landing helper and validates migrated output/refuses safely. This disposition does not retroactively accept R3 core; a fresh [R4 pair](../tasks/M1-BATCH-REVIEW-R4.md) reviews the corrected candidate.
