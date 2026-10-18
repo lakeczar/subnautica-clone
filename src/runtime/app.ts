@@ -237,8 +237,10 @@ export class SiltwakeApp {
         Tab: "inventory", KeyI: "inventory", KeyK: "craft", KeyJ: "notebook", KeyV: "carrier",
       };
       const panel = panels[event.code];
-      if (panel && !event.shiftKey && (this.active || this.panelOpen) &&
-        (event.code === "Tab" || !textEntryHasFocus(event.target))) {
+      if (panel && !event.defaultPrevented && !event.shiftKey && (this.active || this.panelOpen) &&
+        (event.code === "Tab"
+          ? this.active && !this.panelOpen && !controlHasFocus(event.target)
+          : !textEntryHasFocus(event.target))) {
         event.preventDefault();
         if (this.panelOpen && this.view.currentPanel === panel) this.resume(true);
         else this.openPanel(panel);

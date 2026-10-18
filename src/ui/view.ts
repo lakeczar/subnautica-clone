@@ -293,27 +293,30 @@ export class GameView {
             return;
           }
         }
-        if (event.key !== "Tab") return;
+        if (event.key !== "Tab" || event.defaultPrevented) return;
         const modal = !this.get("game-panel").hidden
           ? this.get("game-panel")
           : !this.menu.hidden ? this.menu : null;
-        if (!modal || (this.panelKind === "inventory" && !event.shiftKey)) return;
+        if (!modal) return;
         const visible = [
           ...modal.querySelectorAll<HTMLElement>(
-            "button:not([disabled]),select,input,summary",
+            'button:not([disabled]),select:not([disabled]),input:not([disabled]),textarea:not([disabled]),a[href],summary,[tabindex]:not([tabindex="-1"]),[contenteditable="true"]',
           ),
-        ].filter((element) => element.getClientRects().length > 0);
+        ].filter((element) => element.checkVisibility());
         const first = visible[0],
           last = visible.at(-1);
-        if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement)) && last) {
+        const current = visible.indexOf(document.activeElement as HTMLElement);
+        if (event.shiftKey && current <= 0 && last) {
           event.preventDefault();
+          event.stopPropagation();
           last.focus();
         } else if (
           !event.shiftKey &&
-          (document.activeElement === last || !modal.contains(document.activeElement)) &&
+          (current < 0 || document.activeElement === last) &&
           first
         ) {
           event.preventDefault();
+          event.stopPropagation();
           first.focus();
         }
       },
