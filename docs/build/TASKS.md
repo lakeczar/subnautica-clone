@@ -840,3 +840,8 @@ Committed clean baseline **577d24954e17410974f6fa65a9f102201ba6e723**, productio
 - RIB task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice2-rib-sol-max-577d249`; request `siltwake-polish-1-slice2-rib-sol-max-577d249`. [Full brief](tasks/POLISH-1-SLICE2-RIB.md) included verbatim. Exclusive world.ts/new internal ribCollision.ts/new rib-collision.test.ts and own evidence. Existing actor extents and public APIs frozen. Temp `/tmp/siltwake-polish-1-slice2-rib/`, optional isolated5192.
 
 Both T3-owned async tasks accepted running/working in isolated worktrees, no pending child/questions. Root plus2 workers; no child delegation. Root has no browser/server. Receive completion notifications without polling/watchers. Root inspects and provisionally assembles their exact seams before later2C/2D consumers, with full composed-slice paired acceptance and stage1 Opus still required. Main merge/deployment remain separate. New source is not yet returned or accepted.
+
+
+### Public controls acceptance and active slice2 synchronized
+
+PR#4/#3 full descriptions now record paired/coordinator acceptance of all nine controls criteria ond031803 and the two newly dispatched Sol max slice2 owners. Exact body/base/head/draft readbacks atc250bb7/M0a2cb19f match `/tmp/siltwake-m1-pr/slice1-r2-accepted-verification.json`. #3 retains M0-only production claims; #4 distinguishes accepted controls from unintegrated C0/RIB work. Existing source-attributed screenshots/recordings retained; no new public media or root browser/test run. The full1/2/3/4 stack is confirmed linked; all remain unwatched. No main/game merge or deployment. Completion notifications resume ordinary integration; no polling or watcher.
