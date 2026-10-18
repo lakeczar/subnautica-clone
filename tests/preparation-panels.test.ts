@@ -409,6 +409,8 @@ test("paid live Dart salvage removes Current craft and crafted history still all
   const v = s.fleet.vehicles.find((v) => v.hull === "dart")!;
   addItem(s, "bobbin_kit", 1, "equipment", "recovery");
   disableVehicle(s, v.id); s.player.pose.position = { x: 23, y: -1.6, z: -22 }; s.player.mode = "swimming";
+  const buoy = addItem(s, "salvage_buoy", 1, "equipment", "buoy");
+  s.inventory.buoy.itemId = buoy.id;
   s.inventory.buoy.deployed = true; s.inventory.buoy.position = { ...s.player.pose.position };
   s = executeCommand(s, { type: "recover", vehicleId: v.id, method: "salvage" }, world).state;
   assert.equal(s.fleet.vehicles.length, 0); assert.ok(s.knowledge.crafted.includes("dart_base"));

@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EncounterPresentation, type PresentedNotice } from "../src/ui/notices.js";
-import { createGame, eyeHeight } from "../src/sim/state.js";
+import { createGame, eyeHeight, makeVehicle } from "../src/sim/state.js";
 import { completeOpening } from "../src/sim/progression.js";
+
+import { airSupply, exposure } from "../src/sim/survival.js";
+import { hazardBanners } from "../src/ui/hud.js";
 
 function encounter() {
   const state = createGame(); completeOpening(state);
@@ -210,4 +213,45 @@ test("call dial separates bearing and elevation, clears on actor changes, and do
   assert.equal(direction.bearingStep, 1); assert.equal(direction.elevation, "below");
   assert.equal("glyph" in direction, false);
   s.player.controlledVehicleId = "new-actor"; p.observe(s); assert.equal(p.callDirection(s), null);
+});
+
+
+test("ROOT-EXP-01 names unlimited surface and real refuge air without a fabricated finite warning", () => {
+  const s = encounter(), v = makeVehicle("air-warning-dart", "dart", { x: -50, y: -0.9, z: 20 }, "air-warning-hold");
+  s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id; s.player.mode = "piloting";
+  s.player.pose = structuredClone(v.pose); v.emergencyAir = 0;
+  for (const disabled of [false, true]) {
+    v.disabled = disabled; v.charge = disabled ? 60 : 0;
+    assert.deepEqual(airSupply(s), { kind: "surface", remainingSeconds: null });
+    assert.equal(exposure(s).breathable, true); assert.equal(exposure(s).refuge, false);
+    const before = structuredClone(s), banners = hazardBanners(s);
+    assert.match(banners[0]!.text, disabled ? /^HULL DISABLED · Surface air/ : /^POWER DEPLETED · Surface air/);
+    assert.doesNotMatch(banners.map(b => b.text).join(" "), /(?:Emergency|Suit) air|0 s/);
+    assert.deepEqual(s, before);
+  }
+  // A near-pod piloted hull is surface air, not refuge. Use an actual protected
+  // underwater laboratory with no controlled craft to exercise refuge authority.
+  s.player.controlledVehicleId = null; s.player.mode = "walking";
+  s.player.pose.position = { x: 116, y: -117.9, z: -126 };
+  s.player.vitals.oxygen = 0;
+  assert.equal(exposure(s).refuge, true); assert.equal(exposure(s).airwayY < 0, true);
+  assert.deepEqual(airSupply(s), { kind: "refuge", remainingSeconds: null });
+  assert.deepEqual(hazardBanners(s), [], "a depleted tank cannot invent a finite-air warning in breathable refuge air");
+});
+
+test("finite emergency and suit air keep exact duration, warning order and powered-craft precedence", () => {
+  const s = encounter(), v = makeVehicle("finite-air-dart", "dart", { ...s.player.pose.position }, "finite-air-hold");
+  s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id; s.player.mode = "piloting";
+  s.player.pose = structuredClone(v.pose); v.disabled = true; v.charge = 0; v.emergencyAir = 7.25;
+  assert.deepEqual(airSupply(s), { kind: "emergency", remainingSeconds: 7.25 });
+  assert.match(hazardBanners(s)[0]!.text, /^HULL DISABLED · Emergency air · 8 s/);
+  v.emergencyAir = 0; s.player.vitals.oxygen = 10; s.player.vitals.food = 0; s.player.vitals.health = 20;
+  assert.deepEqual(airSupply(s), { kind: "suit", remainingSeconds: 18 });
+  const before = structuredClone(s), banners = hazardBanners(s);
+  assert.deepEqual(banners.map(b => b.context), ["oxygen", "hull", "health", "food"]);
+  assert.match(banners[1]!.text, /emergency air exhausted · Suit air · 18 s/);
+  assert.deepEqual(s, before);
+  v.disabled = false; v.charge = 60;
+  assert.deepEqual(airSupply(s), { kind: "craft", remainingSeconds: null });
+  assert.ok(!hazardBanners(s).some(b => b.context === "oxygen" || b.context === "hull"));
 });

@@ -25,25 +25,46 @@ function viewFixture(t: test.TestContext) {
     (entity) => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" })[entity]!);
   class ElementPort {
     private html = "";
-    private buttons: ElementPort[] = [];
+    private nodes: ElementPort[] = [];
     children: ElementPort[] = [];
+    parentElement: ElementPort | null = null;
+    id = "";
+    classes = "";
+    attrs: Record<string, string> = {};
+    open = false;
     htmlWrites = 0;
     scrollTop = 0;
     get innerHTML() { return this.html; }
     set innerHTML(value: string) {
       this.htmlWrites++;
-      if (this.buttons.includes(document.activeElement!)) document.activeElement = null;
+      if (this.contains(document.activeElement) && document.activeElement !== this) document.activeElement = null;
       this.html = value;
-      this.buttons = [...value.matchAll(/<button\b([^>]*)>(.*?)<\/button>/gs)].map((match) => {
-        const button = new ElementPort();
-        button.tagName = "BUTTON";
-        button.textContent = decodeHtml(match[2]!.replace(/<[^>]*>/g, ""));
-        button.disabled = /\sdisabled(?:\s|=|$)/.test(match[1]!);
-        button.hidden = /\shidden(?:\s|=|$)/.test(match[1]!);
-        for (const [, name, text] of match[1]!.matchAll(/\bdata-([\w-]+)="([^"]*)"/g))
-          button.dataset[name!.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase())] = decodeHtml(text!);
-        return button;
-      });
+      this.nodes = [];
+      // Parse the small rendered panel tree so closed native disclosures and
+      // semantic outcome anchors participate in focus checks, not just buttons.
+      const stack: ElementPort[] = [this];
+      for (const token of value.matchAll(/<\/([a-z][\w-]*)\s*>|<([a-z][\w-]*)\b([^>]*)>|([^<]+)/gi)) {
+        if (token[1]) {
+          const at = stack.map(e => e.tagName).lastIndexOf(token[1]!.toUpperCase());
+          if (at > 0) stack.length = at;
+        } else if (token[2]) {
+          const element = new ElementPort(), attrs = token[3]!;
+          element.tagName = token[2]!.toUpperCase();
+          element.parentElement = stack.at(-1)!;
+          element.parentElement.nodes.push(element);
+          for (const [, name, value] of attrs.matchAll(/([\w-]+)(?:="([^"]*)")?/g)) element.attrs[name!] = decodeHtml(value ?? "");
+          element.id = attrs.match(/\bid="([^"]*)"/)?.[1] ?? "";
+          element.classes = attrs.match(/\bclass="([^"]*)"/)?.[1] ?? "";
+          element.disabled = /\sdisabled(?:\s|=|$)/.test(attrs);
+          element.hidden = /\shidden(?:\s|=|$)/.test(attrs);
+          element.open = /\sopen(?:\s|=|$)/.test(attrs);
+          for (const [, name, text] of attrs.matchAll(/\bdata-([\w-]+)="([^"]*)"/g))
+            element.dataset[name!.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase())] = decodeHtml(text!);
+          if (!/^(INPUT|BR|HR|META|LINK|IMG)$/.test(element.tagName)) stack.push(element);
+        } else if (token[4]) {
+          for (const element of stack.slice(1)) element.text += decodeHtml(token[4]);
+        }
+      }
     }
     private text = "";
     textWrites = 0;
@@ -64,26 +85,59 @@ function viewFixture(t: test.TestContext) {
       this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
     }
     emit(type: string, value: unknown) { for (const listener of this.listeners.get(type) ?? []) listener(value as Event); }
-    setAttribute() {}
-    contains(element: unknown): boolean { return element === this || this.buttons.includes(element as ElementPort) || this.children.some((child) => child.contains(element)); }
-    querySelectorAll(selector: string): ElementPort[] {
-      const candidates = [...this.buttons, ...this.children.flatMap((child) => [child, ...child.querySelectorAll(selector)])];
-      return candidates.filter((element) =>
-        (selector.includes(",") ? ["BUTTON", "SELECT", "INPUT", "TEXTAREA", "A", "SUMMARY"].includes(element.tagName) : element.tagName === "BUTTON") &&
-        (!selector.includes(":not([disabled])") || !element.disabled));
+    setAttribute(name: string, value: string) { this.attrs[name] = value; }
+    contains(element: unknown): boolean { return element === this || [...this.nodes, ...this.children].some(child => child.contains(element)); }
+    private matches(selector: string): boolean {
+      if (selector.includes(",")) return selector.split(",").some(part => this.matches(part.trim()));
+      if (selector.includes(" > ")) {
+        const [parent, child] = selector.split(" > ");
+        return this.matches(child!) && !!this.parentElement?.matches(parent!);
+      }
+      if (selector.includes(" ")) {
+        const [ancestor, child] = selector.split(" ");
+        return this.matches(child!) && !!this.parentElement?.closest(ancestor!);
+      }
+      for (const [, excluded] of selector.matchAll(/:not\(([^)]+)\)/g)) if (this.matches(excluded!)) return false;
+      selector = selector.replace(/:not\([^)]+\)/g, "");
+      for (const [, name, value] of selector.matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)) {
+        if (name === "disabled" ? !this.disabled : !(name! in this.attrs)) return false;
+        if (value !== undefined && this.attrs[name!] !== value) return false;
+      }
+      const tag = selector.match(/^[a-z]+/i)?.[0];
+      const cls = selector.match(/\.([\w-]+)/)?.[1];
+      const data = selector.match(/\[data-([\w-]+)\]/)?.[1];
+      return (!tag || this.tagName === tag.toUpperCase()) &&
+        (!cls || this.classes.split(" ").includes(cls)) &&
+        (!data || data.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase()) in this.dataset) &&
+        (!selector.startsWith("#") || this.id === selector.slice(1));
     }
+    querySelectorAll(selector: string): ElementPort[] {
+      return [...this.nodes, ...this.children].flatMap(child => [child, ...child.querySelectorAll("*")]).filter(e => e.matches(selector));
+    }
+    querySelector(selector: string): ElementPort { return this.querySelectorAll(selector)[0]!; }
     getClientRects() { return this.hidden ? [] : [{}]; }
-    checkVisibility() { return !this.hidden && this.layoutVisible; }
+    checkVisibility(): boolean {
+      if (this.hidden || !this.layoutVisible) return false;
+      for (let child: ElementPort = this, parent = this.parentElement; parent; child = parent, parent = parent.parentElement) {
+        if (parent.hidden || !parent.layoutVisible || parent.tagName === "DETAILS" && !parent.open && child.tagName !== "SUMMARY") return false;
+      }
+      return true;
+    }
     focus() { document.activeElement = this; }
-    closest() { return this; }
+    closest(selector: string): ElementPort | null { return this.matches(selector) ? this : this.parentElement?.closest(selector) ?? null; }
+
   }
   const elements = new Map<string, ElementPort>();
   const root = Object.assign(new ElementPort(), {
     querySelector: (selector: string) => {
+      const rendered = elements.get("#panel-content")?.querySelector(selector);
+      if (rendered) return rendered;
       let element = elements.get(selector);
       if (!element) {
         element = new ElementPort();
         const tag = root.innerHTML.match(new RegExp(`<[^>]*\\bid="${selector.slice(1)}"[^>]*>`))?.[0] ?? "";
+        for (const [, name, value] of tag.matchAll(/([\w-]+)(?:="([^"]*)")?/g)) element.attrs[name!] = decodeHtml(value ?? "");
+        element.id = selector.slice(1);
         element.tagName = tag.match(/^<(\w+)/)?.[1]?.toUpperCase() ?? "DIV";
         element.hidden = /\bhidden\b/.test(tag);
         const action = tag.match(/data-action="([^"]*)"/)?.[1];
@@ -119,6 +173,7 @@ function viewFixture(t: test.TestContext) {
   root.querySelector("#game-panel").children = [root.querySelector("#panel-return"),
     ...root.querySelectorAll("button").filter((button) => ["inventory-panel", "craft-panel", "notebook-panel", "carrier-panel"].includes(button.dataset.action!)),
     root.querySelector("#panel-title"), root.querySelector("#panel-content")];
+  for (const child of root.querySelector("#game-panel").children) child.parentElement = root.querySelector("#game-panel");
   t.after(() => {
     view.dispose();
     globals.forEach((key, i) => previous[i] ? Object.defineProperty(globalThis, key, previous[i]!) : Reflect.deleteProperty(globalThis, key));
@@ -151,11 +206,20 @@ function viewFixture(t: test.TestContext) {
       return event;
     },
     activeCommand: () => commandFor(document.activeElement),
+    activateControl: commandFor,
+    renderedControl: (command: GameCommand) => {
+      const matches = root.querySelector("#panel-content").querySelectorAll("button")
+        .filter(b => b.dataset.commandKey && isDeepStrictEqual(JSON.parse(b.dataset.commandKey), command));
+      assert.equal(matches.length, 1, `expected one rendered control for ${JSON.stringify(command)}`);
+      return matches[0]!;
+    },
     commandButton: (command: GameCommand) => {
       const matches = root.querySelector("#panel-content").querySelectorAll("button:not([disabled])")
         .filter((button) => isDeepStrictEqual(commandFor(button), command));
       assert.equal(matches.length, 1, `expected one control for ${JSON.stringify(command)}`);
-      return matches[0]!;
+      const button = matches[0]!;
+      for (let group = button.closest("details"); group; group = group.parentElement?.closest("details") ?? null) group.open = true;
+      return button;
     },
     click: (label: string) => {
       const button = root.querySelector("#panel-content").querySelectorAll("button:not([disabled])")
@@ -171,7 +235,7 @@ for (const panel of ["inventory", "craft", "notebook", "carrier"] as const) {
     const { view, get, key, active } = viewFixture(t), s = readyState();
     view.update(s, false); view.showGame(); view.openPanel(panel, s);
     const first = get("panel-return");
-    const last = get("game-panel").querySelectorAll("button:not([disabled])").filter((control) => !control.hidden).at(-1)!;
+    const last = get("game-panel").querySelectorAll("button:not([disabled]), select, input, a, summary").filter(control => control.checkVisibility()).at(-1)!;
     assert.notEqual(last, first);
     assert.equal(active(), first, "initial panel focus remains Return");
     assert.equal(key("Tab").prevented, false, "interior traversal belongs to the browser");
@@ -313,8 +377,8 @@ test("bench cell recharge is an explicit pre-vessel command, separate from hull 
   assert.deepEqual(cellRechargePreview(s).cellIds, [cell.id]);
   view.openPanel("inventory", s);
   const html = get("panel-content").innerHTML;
-  assert.match(html, /Bench cell recharge/);
-  assert.match(html, /Cells only\. Hull battery, health and emergency air require supported service/);
+  assert.match(html, /<h3>Local cells<\/h3>/);
+  assert.match(html, /Hull battery, health and emergency air require supported service beside the craft/);
   commandButton({ type: "recharge-cells" }).focus();
   s = executeCommand(s, { type: "recharge-cells" }, createWorldQueries()).state;
   view.refreshPanel(s);
@@ -323,32 +387,42 @@ test("bench cell recharge is an explicit pre-vessel command, separate from hull 
   assert.equal(active(), get("panel-return"), "a now-disabled action falls back to Return");
 });
 
-test("bulk storage shows the shared whole-stack set and preserves operands and focus on refusal", (t) => {
-  const { view, get, commandButton, activeCommand, active } = viewFixture(t);
+test("bulk storage retains whole-stack CU and operands, suppresses known refusal and atomically refuses a stale enabled command", (t) => {
+  const { view, get, commandButton, renderedControl, activateControl, activeCommand, active } = viewFixture(t);
   let s = createGame(); completeOpening(s);
-  addItem(s, "structural_alloy", 2, "diver");
-  addItem(s, "silica_glass", 3, "diver");
+  addItem(s, "structural_alloy", 2, "diver"); addItem(s, "silica_glass", 3, "diver");
   const meal = addItem(s, "meal", 1, "diver"), cell = addItem(s, "reserve_cell", 1, "diver");
-  s.inventory.containers.find((c) => c.id === "pod_locker")!.capacity = 6;
+  s.inventory.containers.find(c => c.id === "pod_locker")!.capacity = 6;
   const command: GameCommand = { type: "store-materials", from: "diver", to: "pod_locker" };
-  const p = materialStoragePreview(s, command.from, command.to);
+  const preview = materialStoragePreview(s, command.from, command.to);
   view.openPanel("inventory", s);
-  assert.match(get("panel-content").innerHTML, /2 × Structural alloy · 3 × Silica glass.*7 CU · whole stacks/);
-  assert.ok(get("panel-content").innerHTML.includes(p.refusal!));
-  const before = structuredClone(s);
-  commandButton(command).focus();
-  let result = executeCommand(s, command, createWorldQueries());
-  assert.deepEqual(result.state, before);
-  const notice = result.events.find((e) => e.type === "notice"); assert.ok(notice?.type === "notice");
-  view.notify(notice.message, true); view.refreshPanel(result.state);
-  assert.deepEqual(activeCommand(), command);
-  assert.equal(get("panel-feedback").textContent, p.refusal);
-  s.inventory.containers.find((c) => c.id === "pod_locker")!.capacity = 80;
-  result = executeCommand(s, command, createWorldQueries()); s = result.state;
-  view.refreshPanel(s);
-  assert.deepEqual(activeCommand(), command, "empty selected source does not silently select another source");
-  assert.equal(s.inventory.items.find((i) => i.id === meal.id)?.containerId, "diver");
-  assert.equal(s.inventory.items.find((i) => i.id === cell.id)?.containerId, "diver");
+  assert.match(get("panel-content").innerHTML, /2 × Structural alloy · 3 × Silica glass · whole stacks/);
+  assert.equal(renderedControl(command).textContent, "Store · 7 CU");
+  assert.equal(renderedControl(command).disabled, true);
+  assert.equal(activateControl(renderedControl(command)), undefined, "known full destination cannot dispatch");
+  assert.ok(get("panel-content").innerHTML.includes(preview.refusal!));
+  s.inventory.containers.find(c => c.id === "pod_locker")!.capacity = 80;
+  view.refreshPanel(s); commandButton(command).focus();
+  // Capacity can change after rendering. The simulation still validates this
+  // formerly enabled command, independently of the DOM's activation guard.
+  s.inventory.containers.find(c => c.id === "pod_locker")!.capacity = 6;
+  const before = structuredClone(s), stale = activeCommand(); assert.deepEqual(stale, command);
+  const refused = executeCommand(s, stale!, createWorldQueries());
+  assert.deepEqual(refused.state, before);
+  const notice = refused.events.find(e => e.type === "notice" && e.error); assert.ok(notice?.type === "notice");
+  view.notify(notice.message, true); view.refreshPanel(refused.state);
+  assert.equal(active()?.dataset.focusKey, "storage");
+  assert.equal(activeCommand(), undefined, "disabled Store never retargets a different command");
+  assert.equal(get("panel-feedback").textContent, preview.refusal);
+  s.inventory.containers.find(c => c.id === "pod_locker")!.capacity = 80;
+  view.refreshPanel(s); commandButton(command).focus();
+  s = executeCommand(s, activeCommand()!, createWorldQueries()).state; view.refreshPanel(s);
+  assert.equal(active()?.dataset.focusKey, "storage");
+  assert.equal(renderedControl(command).disabled, true); assert.equal(renderedControl(command).textContent, "Nothing to store");
+  assert.equal(activateControl(renderedControl(command)), undefined);
+  assert.equal(s.inventory.items.find(i => i.id === meal.id)?.containerId, "diver");
+  assert.equal(s.inventory.items.find(i => i.id === cell.id)?.containerId, "diver");
+  assert.equal(available(s, "structural_alloy", ["pod_locker"]), 2); assert.equal(available(s, "silica_glass", ["pod_locker"]), 3);
   s.player.pose.position = { x: 80, y: -48, z: -89 }; view.refreshPanel(s);
   assert.equal(active(), get("panel-return"));
 });
@@ -364,14 +438,15 @@ test("trim UI distinguishes stored from installed, uses actual occupancy, and ex
   s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
   view.openPanel("inventory", s);
   assert.match(get("panel-content").innerHTML, /Dart acoustic trim · fabricated \/ stored/);
-  assert.match(get("panel-content").innerHTML, /Quiet 3 → 4\.2 m\/s · normal 8 → 8 · boost 11 → 9/);
+  assert.match(get("panel-content").innerHTML, /Quiet 3 → 4\.2 · boost 11 → 9 m\/s · 1 socket · 2 CU/);
   assert.match(get("panel-content").innerHTML, /0 \/ 2 sockets · 0 \/ 32 CU hold/);
   const install: GameCommand = { type: "install-module", vehicleId: v.id, itemId: item.id };
   commandButton(install).focus(); s = executeCommand(s, install, createWorldQueries()).state;
   view.refreshPanel(s);
-  assert.equal(active(), get("panel-return"));
+  assert.equal(active()?.dataset.focusKey, `fitting:${v.id}`);
   assert.match(get("panel-content").innerHTML, /1 \/ 2 sockets · 2 \/ 32 CU hold/);
-  assert.match(get("panel-content").innerHTML, /Now: quiet 4\.2 · normal 8 · boost 9 m\/s · trim occupies 2 CU/);
+  assert.equal((get("panel-content").innerHTML.match(/class="trim-tradeoff"/g) ?? []).length, 1);
+  assert.doesNotMatch(get("panel-content").innerHTML, /Now: quiet/);
   assert.equal(dartPerformance(s, v.id)?.acousticTrim, true);
   assert.ok(!get("panel-content").querySelectorAll("button").some((b) => {
     const c = b.dataset.commandKey ? JSON.parse(b.dataset.commandKey) as GameCommand : null;
@@ -385,7 +460,7 @@ test("trim UI distinguishes stored from installed, uses actual occupancy, and ex
   s.player.pose.position = { x: 80, y: -47, z: -89 }; s.player.mode = "swimming";
   addItem(s, "essential_tools", 1, "equipment", "tools"); addItem(s, "bobbin_kit", 1, "equipment", "recovery");
   view.refreshPanel(s);
-  assert.match(get("panel-content").innerHTML, /Eligible local collar removal.*before frame salvage/);
+  assert.match(get("panel-content").innerHTML, /eligible local disabled-hull collar removal requires the service tool and Bobbin kit, safe personal depth and clearance/);
   const remove: GameCommand = { type: "remove-module", vehicleId: owned.id, itemId: item.id };
   commandButton(remove); s = executeCommand(s, remove, createWorldQueries()).state;
   assert.equal(s.fleet.vehicles[0]!.modules.length, 0);
@@ -708,47 +783,49 @@ test("panel focus repeats the same partial transfer across duplicate labels and 
     }
   }
   assert.equal(available(s, "silica_glass", ["diver"]), 3);
-  assert.equal(active(), get("panel-return"), "the last item removes the original destination action");
-  assert.equal(activeCommand(), undefined, "Return must not dispatch another cargo command");
+  assert.equal(active(), get("container-diver"), "the removed last source row falls back to carried items");
+  assert.equal(activeCommand(), undefined, "the outcome anchor must not dispatch another cargo command");
 });
 
-test("a completed all-items transfer focuses Return while an equal-label transfer still exists", (t) => {
-  const { view, get, commandButton, active, activeCommand } = viewFixture(t);
+test("a completed all-items transfer focuses the next visible Move while an equal-label command remains", (t) => {
+  const { view, commandButton, active, activeCommand } = viewFixture(t);
   let s = createGame(); completeOpening(s);
-  const meal = addItem(s, "meal", 3, "pod_locker");
   const glass = addItem(s, "silica_glass", 3, "pod_locker");
+  const meal = addItem(s, "meal", 3, "pod_locker");
   const command: GameCommand = { type: "transfer", itemId: glass.id, to: "diver", quantity: 3 };
   view.openPanel("inventory", s);
   commandButton(command).focus();
   s = executeCommand(s, command, createWorldQueries()).state;
   view.refreshPanel(s);
-  assert.equal(commandButton({ ...command, itemId: meal.id }).textContent, "Take to diver · 3");
-  assert.equal(active(), get("panel-return"));
+  assert.equal(commandButton({ ...command, itemId: meal.id }).textContent, "Take to diver · all (3)");
+  assert.equal(active()?.dataset.focusKey, `move:${meal.id}`);
+  assert.equal(active()?.checkVisibility(), true);
   assert.equal(activeCommand(), undefined);
   assert.equal(available(s, "meal", ["pod_locker"]), 3);
 });
 
-test("refusal refresh preserves the refused item action without selecting equal-label cargo", (t) => {
-  const { view, get, commandButton, activeCommand } = viewFixture(t);
+test("known-full transfers suppress activation; stale enabled refusal preserves item identity and a useful Move anchor", (t) => {
+  const { view, get, commandButton, renderedControl, activateControl, activeCommand, active } = viewFixture(t);
   const s = createGame(); completeOpening(s);
-  addItem(s, "meal", 16, "diver");
-  addItem(s, "meal", 3, "pod_locker");
-  const glass = addItem(s, "silica_glass", 3, "pod_locker");
+  const filling = addItem(s, "meal", 16, "diver");
+  const other = addItem(s, "meal", 3, "pod_locker"), glass = addItem(s, "silica_glass", 3, "pod_locker");
   const command: GameCommand = { type: "transfer", itemId: glass.id, to: "diver", quantity: 1 };
-  const before = structuredClone(s);
   view.openPanel("inventory", s);
-  commandButton(command).focus();
+  assert.equal(renderedControl(command).disabled, true);
+  assert.equal(activateControl(renderedControl(command)), undefined);
+  assert.match(get("panel-content").innerHTML, /Needs 1 CU free in Diver hold/);
   for (let attempt = 0; attempt < 2; attempt++) {
-    assert.deepEqual(activeCommand(), command);
+    filling.quantity = 15; view.refreshPanel(s); commandButton(command).focus();
+    filling.quantity = 16;
+    const before = structuredClone(s); assert.deepEqual(activeCommand(), command);
     const result = executeCommand(s, command, createWorldQueries());
-    const refusal = result.events.find((event) => event.type === "notice" && event.error);
-    assert.ok(refusal?.type === "notice");
-    assert.equal(refusal.message, "The destination is full. Nothing moved.");
-    view.notify(refusal.message, true);
-    view.refreshPanel(result.state);
-    assert.deepEqual(activeCommand(), command);
+    const refusal = result.events.find(event => event.type === "notice" && event.error);
+    assert.ok(refusal?.type === "notice"); assert.equal(refusal.message, "The destination is full. Nothing moved.");
+    view.notify(refusal.message, true); view.refreshPanel(result.state);
+    assert.equal(active()?.dataset.focusKey, `move:${glass.id}`);
+    assert.equal(active()?.checkVisibility(), true); assert.equal(activeCommand(), undefined);
     assert.equal(get("panel-feedback").textContent, refusal.message);
-    assert.deepEqual(result.state, before);
+    assert.deepEqual(result.state, before); assert.equal(other.quantity, 3);
   }
 });
 
@@ -765,21 +842,23 @@ test("same-label service controls retain their vessel through refresh and reorde
   view.openPanel("inventory", s);
   assert.equal(commandButton(command).textContent, commandButton({ type: "service", vehicleId: "first-dart" }).textContent);
   commandButton(command).focus();
+  s.fleet.vehicles.reverse(); view.refreshPanel(s); assert.deepEqual(activeCommand(), command);
   s = executeCommand(s, command, createWorldQueries()).state;
   view.refreshPanel(s);
-  assert.deepEqual(activeCommand(), command);
+  assert.equal(active()?.dataset.focusKey, "vessel:second-dart");
+  assert.equal(activeCommand(), undefined);
   assert.equal(s.fleet.vehicles.find((v) => v.id === "first-dart")?.charge, 25);
   assert.equal(s.fleet.vehicles.find((v) => v.id === "second-dart")?.charge, 100);
   s.fleet.vehicles.reverse();
   view.refreshPanel(s);
-  assert.deepEqual(activeCommand(), command, "vessel order must not define focus identity");
+  assert.equal(active()?.dataset.focusKey, "vessel:second-dart", "vessel order must not define focus identity");
   s.fleet.vehicles = s.fleet.vehicles.filter((v) => v.id !== "second-dart");
   view.refreshPanel(s);
   assert.equal(active(), get("panel-return"), "a removed vessel must not redirect service to another hull");
   assert.equal(activeCommand(), undefined);
 });
 
-test("inaccessible transfers and newly disabled controls deliberately return focus to Return", (t) => {
+test("departed transfers fall back to carried items and removed unrelated controls fall back to Return", (t) => {
   const { view, get, commandButton, active } = viewFixture(t);
   const s = createGame(); completeOpening(s);
   const glass = addItem(s, "silica_glass", 2, "pod_locker");
@@ -787,14 +866,14 @@ test("inaccessible transfers and newly disabled controls deliberately return foc
   commandButton({ type: "transfer", itemId: glass.id, to: "diver", quantity: 1 }).focus();
   s.player.pose.position = { x: 10, y: 2, z: -35 };
   view.refreshPanel(s);
-  assert.equal(active(), get("panel-return"));
+  assert.equal(active(), get("container-diver"));
   const buoy = addItem(s, "salvage_buoy", 1, "diver");
   s.inventory.buoy.itemId = buoy.id;
   view.refreshPanel(s);
   commandButton({ type: "buoy" }).focus();
   s.inventory.items = s.inventory.items.filter((i) => i.id !== buoy.id);
   view.refreshPanel(s);
-  assert.equal(active(), get("panel-return"), "a matching disabled control cannot retain focus");
+  assert.equal(active(), get("container-diver"), "a removed buoy row must not retain its disabled command");
 });
 
 test("recovery information follows visited caches and actual hull state without unlocking unknown refuges", (t) => {
@@ -824,7 +903,7 @@ test("recovery information follows visited caches and actual hull state without 
 });
 
 test("occupied Hold disables tow and salvage, explains conditional safe exit, and retains patch/reserve controls", (t) => {
-  const { view, get, commandButton } = viewFixture(t);
+  const { view, get, commandButton, renderedControl, activateControl } = viewFixture(t);
   const s = createGame(); completeOpening(s);
   const v = makeVehicle("occupied-dart", "dart", { x: 80, y: -48, z: -89 }, "occupied-hold");
   v.disabled = true; v.health = 0; v.charge = 20;
@@ -847,17 +926,28 @@ test("occupied Hold disables tow and salvage, explains conditional safe exit, an
     assert.match(get("panel-content").innerHTML, /occupied.*exit.*safely.*exterior collar/i);
     assert.match(get("panel-content").innerHTML, /depth.*clearance/i);
     assert.match(get("panel-content").innerHTML, /patch/i);
-    assert.equal(commandButton({ type: "recover", vehicleId: v.id, method: "repair" }).disabled, false);
+    const patch: GameCommand = { type: "recover", vehicleId: v.id, method: "repair" };
+    assert.equal(renderedControl(patch).disabled, true);
+    assert.equal(activateControl(renderedControl(patch)), undefined);
+    assert.match(get("panel-content").innerHTML, /Fabricate the reusable Bobbin \/ collar/);
     assert.equal(commandButton({ type: "reserve", vehicleId: v.id }).disabled, false);
-    assert.equal(commandButton({ type: "service", vehicleId: v.id }).disabled, false);
+    assert.equal(renderedControl({ type: "service", vehicleId: v.id }).disabled, true);
     assert.match(get("panel-content").innerHTML, /Cells in diver \/ this craft: Reserve cell 1 · 100%/);
     assert.deepEqual(s, before, "recovery presentation cannot mutate the occupied state");
   }
+  addItem(s, "bobbin_kit", 1, "equipment", "recovery", "maintenance");
+  view.refreshPanel(s);
+  commandButton({ type: "recover", vehicleId: v.id, method: "repair" });
+  const patched = executeCommand(s, { type: "recover", vehicleId: v.id, method: "repair" }, createWorldQueries()).state;
+  assert.equal(patched.fleet.vehicles[0]!.health, 65); assert.equal(patched.fleet.vehicles[0]!.charge, 20);
+  assert.equal(patched.player.controlledVehicleId, v.id, "a local patch may repair an occupied hull");
 });
 
 test("recovery focus falls back when occupation disables tow, retains patch identity, and allows controls after safe exit", (t) => {
   const { view, get, commandButton, active, activeCommand } = viewFixture(t);
   let s = createGame(); completeOpening(s);
+  addItem(s, "bobbin_kit", 1, "equipment", "recovery", "maintenance");
+  addItem(s, "suit_150", 1, "equipment", "suit");
   const v = makeVehicle("focus-dart", "dart", { x: 80, y: -48, z: -89 }, "focus-hold");
   v.disabled = true; v.health = 0;
   s.fleet.vehicles.push(v);
@@ -885,7 +975,7 @@ test("recovery focus falls back when occupation disables tow, retains patch iden
 });
 
 test("recovery choices preview actual frame returns and capped rescue stock while refusals preserve their command", (t) => {
-  const { view, get, commandButton, activeCommand, active } = viewFixture(t);
+  const { view, get, commandButton, renderedControl, activateControl, activeCommand, active } = viewFixture(t);
   let s = createGame(); completeOpening(s);
   const v = makeVehicle("return-dart", "dart", { x: 80, y: -48, z: -89 }, "return-hold");
   v.disabled = true; v.health = 0; v.boundRepairs = 2;
@@ -896,14 +986,19 @@ test("recovery choices preview actual frame returns and capped rescue stock whil
   s.world.maintenance.alloy = 13; s.world.maintenance.membrane = 6;
   view.openPanel("inventory", s);
   const salvage: GameCommand = { type: "recover", vehicleId: v.id, method: "salvage" };
-  commandButton(salvage).focus();
+  assert.equal(renderedControl(salvage).disabled, true);
+  assert.equal(activateControl(renderedControl(salvage)), undefined);
+  const kit = addItem(s, "bobbin_kit", 1, "equipment", "recovery", "maintenance");
+  view.refreshPanel(s); commandButton(salvage).focus();
+  s.inventory.items = s.inventory.items.filter(i => i.id !== kit.id);
   const before = structuredClone(s);
   const refused = executeCommand(s, activeCommand()!, createWorldQueries());
   assert.deepEqual(refused.state, before);
   const notice = refused.events.find((e) => e.type === "notice");
   assert.ok(notice?.type === "notice" && notice.error);
   view.notify(notice.message, notice.error); view.refreshPanel(refused.state);
-  assert.deepEqual(activeCommand(), salvage);
+  assert.equal(active(), get("panel-return"));
+  assert.equal(renderedControl(salvage).disabled, true);
   assert.equal(get("panel-feedback").textContent, notice.message);
   addItem(s, "bobbin_kit", 1, "equipment", "recovery", "maintenance");
   view.refreshPanel(s);
@@ -917,6 +1012,7 @@ test("recovery choices preview actual frame returns and capped rescue stock whil
   assert.match(get("panel-content").innerHTML, /Make 17 CU free in a deployed buoy within 6 m/);
   assert.ok(!get("panel-content").innerHTML.includes("Make 17 CU free in the diver hold"));
   v.investment = { structural_alloy: 3, silica_glass: 2 };
+  view.refreshPanel(s); commandButton(salvage).focus();
   s = executeCommand(s, activeCommand()!, createWorldQueries()).state;
   assert.equal(available(s, "structural_alloy", ["diver"]), 3);
   assert.equal(available(s, "silica_glass", ["diver"]), 2);
@@ -988,14 +1084,17 @@ test("impact loss is coalesced once, cancellation clears it, and pitch/surface c
 
 
 test("recipe focus follows its full command as shortage work becomes ready; completion has a safe visible fallback", (t) => {
-  const { view, get, commandButton, activeCommand, active } = viewFixture(t);
+  const { view, get, commandButton, renderedControl, activateControl, activeCommand, active } = viewFixture(t);
   let s = createGame(); completeOpening(s);
   const command: GameCommand = { type: "craft", recipeId: "pod_repair" };
-  view.openPanel("craft", s); commandButton(command).focus();
+  view.openPanel("craft", s);
+  assert.equal(renderedControl(command).disabled, true); assert.equal(activateControl(renderedControl(command)), undefined);
+  assert.match(get("panel-content").innerHTML, /Missing public materials/);
   addItem(s, "structural_alloy", 2, "diver"); addItem(s, "silica_glass", 1, "diver"); addItem(s, "flex_membrane", 2, "diver");
+  view.refreshPanel(s); commandButton(command).focus();
   view.refreshPanel(s); assert.deepEqual(activeCommand(), command);
   s = executeCommand(s, command, createWorldQueries()).state;
-  view.refreshPanel(s); assert.equal(active(), get("panel-return"));
+  view.refreshPanel(s); assert.equal(active()?.dataset.focusKey, "group:completed-recipes");
   assert.equal(activeCommand(), undefined, "completed one-time work cannot redirect to another recipe");
 });
 
@@ -1014,7 +1113,7 @@ test("the GameView replacement boundary clears panel results and invalidates old
 });
 
 test("closed-panel travel resets storage operands without rendering panels, changing focus or mutating the expedition", (t) => {
-  const { view, get, active, commands, commandButton, selectStorage, timerCount } = viewFixture(t), s = readyState();
+  const { view, get, active, commands, commandButton, renderedControl, selectStorage, timerCount } = viewFixture(t), s = readyState();
   s.player.pose.position = { x: 11, y: 1.2, z: -35 };
   s.world.facilities.find(f => f.id === "island_workshop")!.repaired = true;
   const v = makeVehicle("storage-dart", "dart", { x: 20, y: -1.6, z: -22 }, "storage-hold");
@@ -1023,7 +1122,7 @@ test("closed-panel travel resets storage operands without rendering panels, chan
   addItem(s, "structural_alloy", 2, "diver");
   view.update(s, false); view.showGame(); view.openPanel("inventory", s);
   selectStorage("storage-from", "workshop_locker"); selectStorage("storage-to", v.cargoId);
-  commandButton({ type: "store-materials", from: "workshop_locker", to: v.cargoId });
+  assert.equal(renderedControl({ type: "store-materials", from: "workshop_locker", to: v.cargoId }).disabled, true);
   view.closePanel(); view.showGame();
   const html = get("panel-content").innerHTML, writes = get("panel-content").htmlWrites,
     focus = active(), timers = timerCount();
@@ -1044,7 +1143,7 @@ test("closed-panel travel resets storage operands without rendering panels, chan
 });
 
 test("closed-panel observations preserve same-site storage intent through roster, pause and bench/cradle changes", (t) => {
-  const { view, commandButton, selectStorage, navigate } = viewFixture(t), s = readyState();
+  const { view, renderedControl, selectStorage, navigate } = viewFixture(t), s = readyState();
   s.player.pose.position = { x: 11, y: 1.2, z: -35 };
   s.world.facilities.find(f => f.id === "island_workshop")!.repaired = true;
   const v = makeVehicle("storage-dart", "dart", { x: 20, y: -1.6, z: -22 }, "storage-hold");
@@ -1053,7 +1152,7 @@ test("closed-panel observations preserve same-site storage intent through roster
   view.update(s, false); view.openPanel("inventory", s); selectStorage("storage-to", v.cargoId);
   const chosen: GameCommand = { type: "store-materials", from: "diver", to: v.cargoId };
   view.closePanel(); view.showGame(); view.update(s, false); view.openPanel("inventory", s);
-  commandButton(chosen);
+  assert.equal(renderedControl(chosen).disabled, true);
   view.closePanel();
   const other = makeVehicle("passing-dart", "dart", { x: 21, y: -1.6, z: -22 }, "passing-hold");
   s.fleet.vehicles.push(other);
@@ -1066,10 +1165,10 @@ test("closed-panel observations preserve same-site storage intent through roster
   cradle.player.controlledVehicleId = v.id; cradle.player.mode = "piloting"; cradle.player.pose = structuredClone(v.pose);
   view.update(cradle, false); view.update(s, false);
   view.showMenu(true); view.update(s, false); view.openPanel("inventory", s);
-  commandButton(chosen);
-  navigate("craft"); navigate("inventory"); commandButton(chosen);
+  assert.equal(renderedControl(chosen).disabled, true);
+  navigate("craft"); navigate("inventory"); assert.equal(renderedControl(chosen).disabled, true);
   view.resetPresentation(); view.update(s, false); view.openPanel("inventory", s);
-  commandButton({ type: "store-materials", from: "diver", to: "workshop_locker" });
+  assert.equal(renderedControl({ type: "store-materials", from: "diver", to: "workshop_locker" }).disabled, true);
 });
 
 test("panel outcomes are singular, preserve focus, and clear on switch/close while persistence remains independent", (t) => {
@@ -1161,6 +1260,8 @@ test("air card follows authoritative current-source precedence and remaining sec
   s.player.vitals.oxygen = 0; check("suit", /Suit air · 0 s/);
   s.player.pose.position.y = v.pose.position.y = -0.9; check("surface", /Surface air/);
   assert.ok(!get("hazard").innerHTML.includes("emergency air exhausted"));
+  assert.match(get("hazard").innerHTML, /HULL DISABLED · Surface air/);
+  assert.doesNotMatch(get("hazard").innerHTML, /Emergency air|0 s/);
 });
 
 test("pulse HUD stays contextual while Hold retains the actual cost, selected cell and free alternatives", (t) => {
