@@ -1496,3 +1496,10 @@ Exact clean frozen parent/candidate **dc0902864afb872c658b239821e870423877178a**
 - Sol task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-os2-sol-r2-dc09028`, stable request `siltwake-os2-sol-r2-dc09028`. Requested codex/gpt-6.1-sol/reasoningEffort max; returned running/working without pending children/questions. Bound branch `t3/review-os2-r2-correction`, worktree `/home/worker/.t3/worktrees/subnautica-clone/t3-dd93e6c0`. Own only `docs/build/reviews/POLISH-1-OS2-SOL-R2.md`, artifact `/tmp/siltwake-os2-sol-r2/`, optional free port5192.
 
 Live catalog confirms both models/efforts; returned models and checkout bindings match. Original effective runtime records remain to verify at return. Dispatch receipt `/tmp/siltwake-os2-announcement-integration/r2-dispatch.json`. Only these two report-only workers are active besides root. Root owns records/PR synchronization and no browser/server/recording/check. Receive completion notifications without polling; inspect/reconcile both initial reports, resolve substantive findings, then fresh Opus stage1 verification before M2–M4.
+
+
+### Public R2 checkpoint synchronized
+
+PR #4/#3 full descriptions now record provisionally integrated announcement75402ae, root436 checks/build/economies, content/native-trace correction and fresh full-batch R2 ondc09028. Readbacks at feature5fbd97e / M0a2cb19f match `/tmp/siltwake-m1-pr/os2-r2-active-verification.json`; body files `os2-r2-active-body-{3,4}.md`. Historical production images/reload remain attributed to4a5103f and motion tocc3f20d. Latest UI-only native evidence is not described as a new 3D expedition or screen-reader speech proof. All four PR layers remain linked and unwatched; no game/main merge/deployment.
+
+Root receipts now have a finite11-file manifest at `/tmp/siltwake-os2-announcement-integration/`; originals untouched. No root browser/server/recording/check is running. Both fresh R2 reviewers are active report-only; receive completion notifications without polling, reconcile them, then Opus verification and M2–M4.
