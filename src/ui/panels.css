@@ -51,8 +51,11 @@
 .game-panel article, .game-panel button { overflow-wrap: anywhere; }
 .game-panel .panel-status { margin: 12px 0 8px; color: #e2ead8; font-size: 13px; }
 .game-panel .bench-direction, .game-panel .recipe-count-label { font-size: 13px; }
-#panel-feedback { margin: 8px 0; padding: 8px 12px; border-left: 3px solid #d3c28c; background: #163b48fa; font-size: 13px; line-height: 1.5; }
+#panel-feedback { position: sticky; top: 69px; z-index: 1; margin: 8px 0; padding: 8px 12px; border-left: 3px solid #d3c28c; background: #163b48fa; font-size: 13px; line-height: 1.5; pointer-events: none; }
 #panel-feedback.error { border-color: #ffc789; color: #ffe3bb; }
+#app:has(#system-status:not([hidden]), #session-warning:not([hidden])) #panel-feedback {
+  padding-right: min(430px, 46vw);
+}
 .panel-group > summary { cursor: pointer; color: #ecedda; font-size: 14px; line-height: 1.6; }
 .panel-group > summary small { margin-left: 8px; }
 .panel-group[open] > summary { margin-bottom: 10px; }
@@ -108,6 +111,7 @@
   .panel-header { flex-wrap: wrap; gap: 8px; }
   .game-panel h2 { font-size: 26px; }
   .panel-header nav { order: 2; width: 100%; }
+  #panel-feedback { top: 109px; }
   .carried, .recovery-choices { grid-template-columns: 1fr; }
   .recipe { align-items: stretch; flex-direction: column; gap: 8px; }
   .recipe > button { max-width: none; }

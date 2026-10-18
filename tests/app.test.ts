@@ -13,6 +13,7 @@ import { craft, completeOpening, discover } from "../src/sim/progression.js";
 import { addItem } from "../src/sim/inventory.js";
 import { RECIPES, THREAT_HOME, type ItemKind } from "../src/content/registry.js";
 import { faceTarget } from "./targeting-support.js";
+import { makeVehicle } from "../src/sim/state.js";
 import { fixtureGame } from "../src/sim/carrier.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
 
@@ -671,4 +672,139 @@ test("app: a replacement session with the same vehicle ID cannot inherit an exit
   f.frames(60);
   assert.equal(f.view.state!.player.controlledVehicleId, initial.state.player.controlledVehicleId);
   assert.ok(!f.view.notices.slice(notices).some(n => n.startsWith("Clear exit.")));
+});
+
+test("app: presentation advances exactly once after each installed step/event batch and never from paint, menu commands or resume catch-up", async (t) => {
+  const initial = sample(600); completeOpening(initial.state);
+  const f = await fixture(t, initial);
+  const before = f.view.presentationSteps.length;
+  f.frames(100);
+  assert.equal(f.view.presentationSteps.length, before, "paused paint cannot consume active TTL");
+  f.view.actions.resume(); f.frames(90); f.view.actions.pause();
+  const steps = f.view.presentationSteps.slice(before);
+  assert.ok(steps.length > 80 && steps.length <= 90);
+  for (let i = 1; i < steps.length; i++) assert.equal(steps[i]!.tick, steps[i - 1]!.tick + 1);
+  const installed = (f.app as unknown as { session: { state: { tick: number } } }).session.state.tick;
+  assert.equal(steps.at(-1)?.tick, installed);
+  const paused = f.view.presentationSteps.length;
+  f.view.actions.save(); await settled(); f.frames(60);
+  assert.equal(f.view.presentationSteps.length, paused);
+  assert.equal(f.view.noticeRecords.at(-1)?.options.channel, "persistence", "successful save metadata is forwarded unchanged");
+  f.renderer.lose(); f.renderer.finishRestore();
+  assert.equal(f.view.noticeRecords.at(-1)?.options.channel, "system");
+  f.frames(600); f.view.actions.resume(); f.frames(2);
+  assert.ok(f.view.presentationSteps.length - paused <= 2, "no paused-time catch-up");
+});
+
+for (const mode of ["idle", "investigate"] as const) {
+  test(`app: actual ${mode === "idle" ? "warn" : "pursue"} call forwards detached finite emission after state install and before presentation step`, async (t) => {
+    const initial = sample(800); completeOpening(initial.state);
+    initial.state.player.pose.position = { x: 133, y: -112, z: -113 };
+    initial.state.player.mode = "swimming";
+    initial.state.world.threat.mode = mode;
+    initial.state.world.threat.interest = mode === "idle" ? 0.7 : 4;
+    initial.state.world.threat.modeSeconds = 5;
+    const origin = structuredClone(initial.state.world.threat.position);
+    const f = await fixture(t, initial);
+    assert.equal(f.view.calls.length, 1);
+    const call = f.view.calls[0]!;
+    assert.deepEqual(call.origin, origin);
+    assert.equal(call.mode, mode === "idle" ? "warn" : "pursue");
+    const ci = f.view.observations.findIndex(o => o.kind === "call");
+    assert.equal(f.view.observations[ci + 1]?.kind, "step");
+    assert.equal(f.view.observations[ci + 1]?.tick, call.tick);
+    const notice = f.view.noticeRecords.find(n => n.options.context === "threat");
+    assert.equal(notice?.options.channel, "hazard"); assert.equal(notice?.error, true);
+    const before = f.view.calls.length;
+    f.view.actions.resume(); f.frames(60); f.view.actions.pause();
+    assert.equal(f.view.calls.length, before, "periodic body/pressure/attack warnings do not become calls");
+  });
+}
+
+test("app: malformed/unmarked sound origins never reach the call view, while the same real events still reach audio", async (t) => {
+  const f = await fixture(t), port = f.app as unknown as {
+    events(events: import("../src/sim/types.js").GameEvent[]): void;
+    sound: { event: (e: import("../src/sim/types.js").GameEvent) => void };
+  };
+  const sounds: import("../src/sim/types.js").GameEvent[] = [];
+  port.sound.event = e => { sounds.push(e); };
+  const origin = { x: 1, y: 2, z: 3 };
+  const events: import("../src/sim/types.js").GameEvent[] = [
+    { type: "sound", cue: "warning" }, { type: "sound", cue: "damage", origin },
+    { type: "sound", cue: "warning", source: "threat-call" },
+    { type: "sound", cue: "warning", source: "threat-call", origin: { ...origin, x: NaN } },
+    { type: "sound", cue: "warning", source: "threat-call", origin },
+  ];
+  port.events(events);
+  assert.deepEqual(sounds, events, "forwarding does not rewrite or consume audio's events");
+  assert.equal(f.view.calls.length, 1);
+  assert.deepEqual(f.view.calls[0]!.origin, origin);
+});
+
+function ascentInput(f: Fixture, up: boolean, right = 0): void {
+  const input = (f.app as unknown as { input: { sample(): import("../src/sim/types.js").GameCommand[] } }).input;
+  input.sample = () => up ? [{ type: "move", forward: 0, right, vertical: 1, sprint: false, quiet: false }] : [];
+}
+for (const kind of ["deck", "rib", "corrected-a", "corrected-b", "surface"] as const) {
+  test(`app: measured ${kind} ascent uses sustained solid shortfall, with release/pause/panel/graphics resets`, async (t) => {
+    const initial = sample(900); completeOpening(initial.state);
+    initial.state.player.mode = "swimming";
+    initial.state.player.pose.position = kind === "deck" ? { x: 0, y: -1.151, z: 14 }
+      : kind === "rib" ? { x: -6, y: -9.971, z: -8 }
+      : kind === "corrected-a" ? { x: -26.37, y: -9.62, z: -8.91 }
+      : kind === "corrected-b" ? { x: -13.3, y: -1.66, z: -5.84 }
+      : { x: -55, y: -0.5, z: 30 };
+    const f = await fixture(t, initial), blocked = kind === "deck" || kind === "rib";
+    ascentInput(f, true); f.view.actions.resume(); f.frames(26);
+    assert.equal(f.view.blocked.at(-1), false, "less than 0.45 s cannot trigger");
+    f.frames(10); assert.equal(f.view.blocked.at(-1), blocked);
+    ascentInput(f, false); f.frames(2); assert.equal(f.view.blocked.at(-1), false);
+    ascentInput(f, true); f.frames(36); assert.equal(f.view.blocked.at(-1), blocked);
+    f.view.actions.pause(); assert.equal(f.view.blocked.at(-1), false);
+    f.frames(300); f.view.actions.resume(); f.frames(10);
+    assert.equal(f.view.blocked.at(-1), false, "pause resets the accumulator");
+    f.frames(30); f.view.actions.panel("inventory"); assert.equal(f.view.blocked.at(-1), false);
+    f.view.actions.resume(); f.frames(10); assert.equal(f.view.blocked.at(-1), false);
+    f.frames(30); f.renderer.lose(); assert.equal(f.view.blocked.at(-1), false);
+  });
+}
+
+test("app: obstruction observation rejects correction/slide/invalid samples and resets across actual actor change and replacement", async (t) => {
+  const initial = sample(1200); completeOpening(initial.state);
+  initial.state.player.mode = "swimming"; initial.state.player.pose.position = { x: 70, y: -40, z: -60 };
+  const v = makeVehicle("ascent-actor", "dart", { x: 70, y: -40, z: -63 }, "ascent-hold");
+  v.investment = { ...RECIPES.dart_base.cost };
+  initial.state.fleet.vehicles.push(v);
+  initial.state.inventory.containers.push({ id: v.cargoId, kind: "vehicle", capacity: 32, ownerId: v.id });
+  faceTarget(initial.state, v.id);
+  const f = await fixture(t, initial);
+  const port = f.app as unknown as { observeAscent(events: import("../src/sim/types.js").GameEvent[]): void };
+  const a: Extract<import("../src/sim/types.js").GameEvent, { type: "ascent-sample" }> = {
+    type: "ascent-sample", actorId: null, requestedRise: 0.05, actualRise: 0, solidLimitedRise: 0.05, surfaceLimitedRise: 0,
+  };
+  f.view.actions.resume();
+  for (let i = 0; i < 26; i++) port.observeAscent([a, a]);
+  assert.equal(f.view.blocked.at(-1), false, "a duplicate record is not a second completed step");
+  port.observeAscent([a]); assert.equal(f.view.blocked.at(-1), true);
+  for (const invalid of [
+    { ...a, solidLimitedRise: 0 }, { ...a, actualRise: 0.03 },
+    { ...a, actualRise: -0.02 }, { ...a, surfaceLimitedRise: 0.05 },
+    { ...a, requestedRise: NaN }, { ...a, actorId: "old-actor" },
+  ]) {
+    port.observeAscent([invalid]); assert.equal(f.view.blocked.at(-1), false);
+    for (let i = 0; i < 27; i++) port.observeAscent([a]);
+    assert.equal(f.view.blocked.at(-1), true);
+  }
+  f.view.actions.command({ type: "interact" });
+  assert.equal((f.app as unknown as { session: { state: { player: { controlledVehicleId: string | null } } } }).session.state.player.controlledVehicleId, v.id);
+  assert.equal(f.view.blocked.at(-1), false, "the accepted boarding command clears the swimmer accumulator");
+  for (let i = 0; i < 30; i++) port.observeAscent([a]);
+  assert.equal(f.view.blocked.at(-1), false, "old swimmer samples cannot accrue for the new actor");
+  f.view.actions.pause();
+  const next = sample(1500); completeOpening(next.state);
+  const text = encoded(next);
+  f.view.actions.importFile({ size: text.length, text: async () => text } as File); await settled();
+  f.view.actions.confirm(); await settled();
+  assert.equal(f.view.blocked.at(-1), false);
+  assert.equal((f.app as unknown as { session: { state: { tick: number } } }).session.state.tick, 1500);
 });

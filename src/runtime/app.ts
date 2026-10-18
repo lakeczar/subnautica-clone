@@ -30,6 +30,8 @@ const DEFAULT_SETTINGS: Settings = {
   keyTurnSpeed: 1,
 };
 const SETTINGS_KEY = "siltwake.settings.v1";
+const BLOCKED_ASCENT_SECONDS = 0.45;
+const ASCENT_EPSILON = 1e-5;
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : "An unknown error occurred.";
 
@@ -104,6 +106,8 @@ export class SiltwakeApp {
   private frameId = 0;
   private hudTime = 0;
   private forwardThrust = 0;
+  private ascentSeconds = 0;
+  private ascentActor: string | null = null;
   private lastBoundaryNotice = -Infinity;
   private settings = readSettings();
 
@@ -112,7 +116,7 @@ export class SiltwakeApp {
       changed: () => this.syncSessionUi(),
       pause: () => this.pause("", false),
       entered: () => this.entered(),
-      notify: (message, error) => this.view.notify(message, error),
+      notify: (message, error, options) => this.view.notify(message, error, options),
     });
     this.view = new GameView(root, {
       command: (command) => this.command(command),
@@ -180,7 +184,7 @@ export class SiltwakeApp {
           this.pause("Graphics paused while the WebGL context is unavailable.");
         else {
           this.dirty = true;
-          this.view.notify("Graphics restored. Resume when ready.");
+          this.view.notify("Graphics restored. Resume when ready.", false, { channel: "system" });
         }
       });
       this.input = new PlayerInput(this.view.canvas, () => this.active, () => {
@@ -312,6 +316,8 @@ export class SiltwakeApp {
       );
       this.session.state = result.state;
       this.events(result.events);
+      this.observeAscent(result.events);
+      this.view.presentationStep(result.state);
       this.validateGesture();
       for (const event of result.events)
         if (
@@ -320,6 +326,7 @@ export class SiltwakeApp {
         ) {
           this.view.notify(
             "Upper-Canopy survey boundary. Prepare at a refuge before the later Basin expedition; that route is not yet open.",
+            false, { channel: "system" },
           );
           this.lastBoundaryNotice = now;
         }
@@ -377,6 +384,7 @@ export class SiltwakeApp {
   private entered(): void {
     if (this.disposed) return;
     this.sessionGeneration++;
+    this.resetAscent();
     this.cancelGesture();
     this.view.resetPresentation();
     if (this.state) this.view.update(this.state, false);
@@ -418,6 +426,7 @@ export class SiltwakeApp {
     this.view.closePanel();
     if (interruptEntry) this.entryCanResume = false;
     this.paused = true;
+    this.resetAscent();
     this.forwardThrust = 0;
     this.clock.reset();
     this.input?.clear();
@@ -434,7 +443,10 @@ export class SiltwakeApp {
 
   private events(events: readonly GameEvent[]): void {
     for (const event of events) {
-      if (event.type === "notice") this.view.notify(event.message, event.error);
+      if (event.type === "notice") this.view.notify(event.message, event.error, event);
+      if (event.type === "sound" && event.source === "threat-call" && event.origin && this.state &&
+        [event.origin.x, event.origin.y, event.origin.z].every(Number.isFinite))
+        this.view.threatCall(event.origin, this.state);
       if (event.type === "impact" && event.hullLoss > 0) {
         this.view.impact(event.hullLoss, this.state);
         this.sound.event({ type: "sound", cue: "impact" }, this.state);
@@ -443,6 +455,30 @@ export class SiltwakeApp {
       this.sound.event(event, this.state);
     }
   }
+
+  private resetAscent(): void {
+    this.ascentSeconds = 0;
+    this.ascentActor = null;
+    this.view.blockedAscent(false);
+  }
+
+  private observeAscent(events: readonly GameEvent[]): void {
+    const sample = events.find((e): e is Extract<GameEvent, { type: "ascent-sample" }> => e.type === "ascent-sample");
+    if (!this.active || !this.state || !sample || sample.actorId !== this.state.player.controlledVehicleId ||
+      ![sample.requestedRise, sample.actualRise, sample.solidLimitedRise, sample.surfaceLimitedRise].every(Number.isFinite) ||
+      sample.requestedRise <= ASCENT_EPSILON || sample.surfaceLimitedRise > ASCENT_EPSILON ||
+      Math.abs(sample.actualRise) > sample.requestedRise * 0.1 + ASCENT_EPSILON ||
+      sample.solidLimitedRise <= sample.requestedRise * 0.5 + ASCENT_EPSILON) {
+      this.resetAscent();
+      return;
+    }
+    const actor = `${this.state.player.mode}/${sample.actorId ?? "diver"}`;
+    if (actor !== this.ascentActor) this.ascentSeconds = 0;
+    this.ascentActor = actor;
+    this.ascentSeconds = Math.min(BLOCKED_ASCENT_SECONDS, this.ascentSeconds + FIXED_SECONDS);
+    this.view.blockedAscent(this.ascentSeconds + 1e-9 >= BLOCKED_ASCENT_SECONDS);
+  }
+
   private command(command: GameCommand): void {
     if (
       !this.state ||
@@ -455,8 +491,10 @@ export class SiltwakeApp {
     )
       return;
     this.sound.activate();
+    const actor = `${this.state.player.mode}/${this.state.player.controlledVehicleId ?? "diver"}`;
     const result = executeCommand(this.state, command, this.world);
     this.session.state = result.state;
+    if (actor !== `${result.state.player.mode}/${result.state.player.controlledVehicleId ?? "diver"}`) this.resetAscent();
     this.validateGesture();
     this.view.update(result.state, false);
     this.dirty = true;
@@ -485,7 +523,7 @@ export class SiltwakeApp {
     if (!save) return;
     const encoded = encodeSave(save);
     if (!encoded.ok) {
-      this.view.notify(encoded.error, true);
+      this.view.notify(encoded.error, true, { channel: "persistence" });
       return;
     }
     this.download(
@@ -494,6 +532,7 @@ export class SiltwakeApp {
     );
     this.view.notify(
       "Save file exported. Import it into a compatible Siltwake build to continue.",
+      false, { channel: "system" },
     );
   }
 
@@ -507,6 +546,7 @@ export class SiltwakeApp {
       this.download(text, "siltwake-local-record.json");
       this.view.notify(
         "Local journal exported for safekeeping. This record contains both generations; use Export save for a normal importable file.",
+        false, { channel: "system" },
       );
     }
   }
@@ -650,6 +690,7 @@ export class SiltwakeApp {
   dispose(): void {
     if (this.disposed) return;
     this.cancelGesture();
+    this.resetAscent();
     this.releaseMouse();
     this.view.cancelFeedback();
     this.disposed = true;
