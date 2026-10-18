@@ -798,3 +798,13 @@ Draft #4/#3 full descriptions now reflect completed Astra ACCEPT/Sol REQUEST CHA
 Task siltwake-polish-1-slice1-r1-fix-sol-max-7eec795 acknowledged completed/result_available, no children/questions. Root verifies actual gpt-6.1-sol/max and clean t3-a8b4da6f checkout. Sources7c1cbfd651235462f46c98f95cf7eb7e42305e34/da1a9dc8299b6ca1935e465abcd8b8ae1a3bbdd5, evidence44d4efec97453199e209f8a2758c2016ab7e2a1c assembled at5f25810a7f7d9974ffd2fb2b3379d812d206b0f9. Only app/view/two tests/evidence changed; ownership released, owned tab/server closed5191free.
 
 [Root inspection](evidence/POLISH-1-SLICE1-R1-FIX-INTEGRATION.md):275 checks/build/economy,47 payloads/37source/25test/27build identities, old root SELECT/BUTTON probe now paused, actual native19-Tab invariants/selected imagery inspected with delayed-observer caveats. Root has no browser/server. [Fresh R2 scope](tasks/POLISH-1-SLICE1-REVIEW-R2.md) retains all nine criteria and both initial reports, not only latest input lines. Freeze committed candidate and dispatch independent Astra xhigh/Sol6.1 max report-only reviews. No acceptance or slice2 implementation before reconciliation.
+
+
+### POLISH-1 slice1 R2 pair dispatched atd031803
+
+Frozen candidate **d031803730fb44b9208e52fdfb91a88e9ddf8a41**, full diff base61fcc3033292f9412a795a2388616a4f926ece22, production5f25810. Live catalog confirmed codex/gpt-6-astra xhigh and codex/gpt-6.1-sol max; both targets explicitly set requested efforts. Effective runtime confirmation pending.
+
+- Astra task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice1-astra-r2-d031803`. Stable request siltwake-polish-1-slice1-astra-r2-d031803, only report POLISH-1-SLICE1-ASTRA-R2.md; new temp -astra-r2/, optional5193.
+- Sol task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice1-sol-r2-d031803`. Stable request siltwake-polish-1-slice1-sol-r2-d031803, only report POLISH-1-SLICE1-SOL-R2.md; new temp -sol-r2/, optional5194.
+
+Both accepted running/working as fresh T3-owned async isolated worktrees from the exact same parent, no pending children/questions. Full R2 brief included verbatim with all nine criteria, original scope/links, both prior reports/root responses, native observer timing limits and Linux browser rules. No peer discussion/current-round findings sharing before both reports return. Root plus two reviewers active; implementation ownership released and source frozen. Await notifications, never poll/duplicate/review via thread_send. Slice2 and stage1 Opus follow only after reconciliation/acceptance.
