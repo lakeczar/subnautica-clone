@@ -85,3 +85,7 @@ Both fresh non-author reviewers and coordinator accept the full preparation/enco
 ### Stage1 experience review returned; bounded follow-up
 
 Opus report8c49770 on5dbc73a is integrated without production changes. [Root disposition](reviews/OPUS-STAGE1-R1-DISPOSITION.md) prioritizes action feedback, a presentation-only reach preview and useful cargo actions, with related warning/type/copy refinements. It narrows optional motion, toolbar, resume and geometry suggestions. Obtain [same-context implementation advice](tasks/OPUS-STAGE1-IMPLEMENTATION-CONSULT.md), freeze contracts, delegate Sol corrections, then affected paired acceptance and fresh Opus verification. M2 benchmark depth/particle/cockpit/ecology work remains later scope. TASKS owns actual dispatch state.
+
+### Stage1 advice reconciled; shared data before parallel presentation
+
+Advice7d0e635 is integrated at1d962a9. [POLISH-1-EXPERIENCE](tasks/POLISH-1-EXPERIENCE.md) resolves all OS1-01–08 implementation choices. Root verified the29 sampled cradle paths and found that the proposed0.02m contact threshold never sustains after collision damping; the narrowed signal uses1e−5m with actual contact and explicit forward-intent gates. One Sol S1 owner establishes summaries/preview/service/crafting queries and measured contact, then root inspects and freezes exports for disjoint HUD/app and cargo-panel owners. All three leaves share one composed acceptance batch and a fresh stage1 Opus verification. No UI owner depends on unfinished peer work.

@@ -241,3 +241,7 @@ Both independent reviewers and coordinator accept the complete extraction/rib/si
 ### Stage1 Opus disposition; no contract change yet
 
 Report8c49770 and root disposition identify a deliberate future revision to action-suppression presentation, a non-executable reach preview and cargo/HUD hierarchy. The [consultation](tasks/OPUS-STAGE1-IMPLEMENTATION-CONSULT.md) is design-only. Existing E/Q reach, LOS, saved state, content/economy, movement, native focus, save-retry/storage-intent and deliberate resume contracts remain in force. Root freezes exact additive interfaces after advice, before assigning Sol authors. No inferred source ownership from a suggestion.
+
+### Stage1 experience correction contracts frozen for S1
+
+The [whole-batch reconciliation](tasks/POLISH-1-EXPERIENCE.md) and [S1 assignment](tasks/POLISH-1-EXPERIENCE-S1.md) now supersede advice-only status for their bounded scope. Add optional NoticeOptions.summary, pure non-executable reachPreview (4≤distance<8m while E/Q stays<4m), shared service predicates, typed craftingBlock and an unsaved Dart thrust-sample from current sweeps. Panel-response events suppress generic stale-notice fallback. No save/state/rate/geometry/input authority changes; only explicitly listed feedback and opening-copy edits. S1 owns no UI/render/browser. Later result surface/timers, cue styling and cargo layout await inspected S1 exports and exact S2 assignments. Original slice2 source acceptance stays historical; the new composite batch needs fresh paired and Opus review.

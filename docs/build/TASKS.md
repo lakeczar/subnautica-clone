@@ -1087,3 +1087,11 @@ Existing child thread `thread:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-
 PR #4/#3 complete bodies now distinguish accepted technical slices from the completed stage1 Opus experience review and active implementation consultation. They list the bounded feedback/reach/cargo/HUD follow-up, pending Sol corrections/review and remaining full-game stages. Exact body/base/head/draft readbacks atdf1d37d/M0a2cb19f match `/tmp/siltwake-m1-pr/stage1-advice-verification.json`. Existing media retains source attribution; no new production, continuous-review-play or human/hardware claim. #3 remains M0-only.
 
 All four stack layers are T3-linked and unwatched. No game/main merge or deployment. Root owns no browser/server/recording/check process; only the design-only Opus consultation is active. Receive its completion notification without polling, inspect/reconcile and assign the next bounded Sol6.1/max implementation.
+
+### Stage1 consultation terminal, inspected and integrated
+
+Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Athread-send%3Asiltwake-opus-stage1-implementation-consult-b5e88e8` acknowledged completed/result_available, no children/questions. Advice-only7d0e635c23a23f79a2d043b82d90be080c3d77cc integrated at1d962a99c18489e60c3aa4e99c90c3653f1a2e64. Clean worktree, only assigned design document, no browser/server/source changes; ownership released. Model claude-opus-5-5, selected high; no independent effective-effort readout.
+
+Root read the full advice/current code, reproduced all29 cradle probe rows and added actual stepGame quiet/cruise/boost contacts. `/tmp/siltwake-opus-stage1-consult-root/verification.json` hashes five receipts. Root reconciles the too-high0.02m threshold, NoticeOptions propagation, panel stale-feedback fallback, accurate service/exit text, unavailable-control semantics and salvage/rebuild precedence in [the batch direction](tasks/POLISH-1-EXPERIENCE.md). Cargo rename accepted; collection habitat context stays in notebook; no extra first-collection lore toast. Historical reviewer isolation remains unproven at process level; no new browser was launched.
+
+[S1](tasks/POLISH-1-EXPERIENCE-S1.md) is committed/prepared for a Sol6.1/max worktree; S2a/S2b are plans only. No production change yet. Only root dispatches, using a shared committed baseline.
