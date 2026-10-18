@@ -882,3 +882,10 @@ Original RIB task completed/result_available with no children/questions. Clean t
 Exact clean baseline **413a7fced9b6e4f018348d2230782f78d2c84ed0**, inspected C0/RIB productiond4829c0. Task **`node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice2-2d0-sol-max-413a7fc`**, stable request `siltwake-polish-1-slice2-2d0-sol-max-413a7fc`, T3-owned async isolated worktree accepted running/working, no pending question/child. Live catalog rechecked codex/gpt-6.1-sol; reasoningEffort max explicitly selected. Actual runtime confirmation awaits return. Full [2D0 brief](tasks/POLISH-1-SLICE2-2D0.md) included verbatim.
 
 Exclusive types/step/survival/session, two new signal/session-notice test files and own evidence. No app/input/UI/render/world/save/config edits; old tests unchanged. Temp `/tmp/siltwake-polish-1-slice2-2d0/`; no browser planned.2C continues on its original separate UI ownership; no overlap, peer dependency, polling or duplicate dispatch. Root plus two workers. Actual encounter HUD/priority/air/call/fin/obstruction presentation follows inspection/assembly of both returns. Full composed pair, stage1 Opus and M2–M4 remain required.
+
+
+### Public RIB/signal checkpoint synchronized
+
+PR#4/#3 full bodies now record provisional C0/RIB assemblyd4829c0,291 passing checks/build,14 full-state checkpoint comparisons,3 carrier paths and945 checked recovery steps. Exact body/base/head/draft readbacks at0e5321f/M0a2cb19f match `/tmp/siltwake-m1-pr/slice2-rib-verification.json`. #3 remains M0-only. #4 includes source6ebaf02's clearly seeded corrected-rise GIF/full MP4, HTTP200 bytes/hash verified on pr-assets; no matched parent browser recording or root combined browser run is claimed. Earlier media retains original source attribution. All four PR layers confirmed linked/unwatched.
+
+2C and2D0 remain assigned with exclusive ownership; no polling or watcher. Root waits for their completion notifications after finishing records, then continues inspection/assembly/presentation and the required review stages. No game/main merge or deployment.
