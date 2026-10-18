@@ -479,3 +479,10 @@ Task `siltwake-m1-migration-fix-sol-max-9514dd7` terminal: actual Sol6.1/max, cl
 [Root integration](evidence/M1-MIGRATION-FIX-INTEGRATION.md):56 payload hashes/57 safe unique regular archive members,181 tests/typecheck/build, source/config/build byte identity, both exact reported persistence cases,16 historical inputs/16 successful migrations including Sol diagnostic/1 atomic refusal,120 additional ordinary simulated walking ticks. Original journal/source and all unrelated fields conserved; no fresh browser/earned-route claim. Root artifacts `/tmp/siltwake-m1-migration-root/`. Both reviewers and builder are terminal; no active children or root resources.
 
 Prepare fresh [R4 pair](tasks/M1-BATCH-REVIEW-R4.md), exact accepted-M0 diff base, complete original scope/R1 brief, all R1–R3 reports/findings/dispositions and new correction/evidence. Candidate will be the next committed records-only successor. No acceptance of correction/core/integrated M1 yet.
+
+
+### R4 pair dispatched from5eb1be1
+
+Fresh non-author T3 worktree tasks `siltwake-m1-batch-astra-r4-5eb1be1` and `siltwake-m1-batch-sol-r4-5eb1be1` use exact clean candidate5eb1be1589caca72acc39b230997328682472196, production769f2ad, accepted M0 diff base. [Paired record](reviews/M1-BATCH-R4.md) holds full IDs. Live catalog verified codex/Astra xhigh and Sol6.1 max; explicit effort options and returned models match. Both async running without children/questions. Complete current R4 and original R1 briefs supplied; all prior rounds and dispositions required reading.
+
+Only own review reports, isolated ports5195/5196 checked free, browser rules included. Three active agents including root; no live builders/root browser/server. No current-peer findings shared. Receive notifications, reconcile both initial verdicts, no polling/watcher or duplicate work. Correction/core remain provisional; R3 presentation acceptance stays at21d50df. Integrated M1 and later campaign work remain open.
