@@ -1,6 +1,6 @@
 import { fixtureGame } from "../sim/carrier.js";
 import { createGame } from "../sim/state.js";
-import type { GameState } from "../sim/types.js";
+import type { GameState, NoticeOptions } from "../sim/types.js";
 import { createEnvelope, decodeSave, MAX_SAVE_BYTES } from "../save/codec.js";
 import type { SaveEnvelope, SaveMetadata } from "../save/codec.js";
 import type { CommitFailure, SaveRepository } from "../save/repository.js";
@@ -14,7 +14,7 @@ export interface SessionEvents {
   changed(): void;
   pause(): void;
   entered(): void;
-  notify(message: string, error?: boolean): void;
+  notify(message: string, error?: boolean, options?: NoticeOptions): void;
 }
 export interface ImportFilePort {
   readonly size: number;
@@ -113,6 +113,7 @@ export class ExpeditionSession {
     this.events.changed();
     this.events.notify(
       "Operation cancelled. Your active expedition is unchanged. A local save that already completed remains on disk.",
+      undefined, { channel: "system" },
     );
   }
 
@@ -160,16 +161,16 @@ export class ExpeditionSession {
     if (!slot.save) return;
     this.enter(slot.save, slot.kind === "ready" && this.repository.canWrite);
     if (slot.save.state.migration)
-      this.events.notify(slot.save.state.migration);
+      this.events.notify(slot.save.state.migration, undefined, { channel: "system" });
     if (slot.kind === "recovered")
       this.events.notify(
         "Opened the previous valid save. Automatic saving is paused. Use Save to explicitly repair the protected slot.",
-        true,
+        true, { channel: "persistence" },
       );
     else if (!this.automatic)
       this.events.notify(
         "Local saving is unavailable. Export this expedition before closing this page.",
-        true,
+        true, { channel: "persistence" },
       );
   }
 
@@ -204,6 +205,7 @@ export class ExpeditionSession {
         source === "new"
           ? "Expedition saved. The island shore and reef ribs are yours to explore."
           : "Imported and saved locally.",
+        false, { channel: "persistence" },
       );
     } else if (sessionFallback(result.code)) {
       this.ask(
@@ -216,14 +218,14 @@ export class ExpeditionSession {
           this.enter(save, false);
           this.events.notify(
             "Session only: automatic saving is disabled. Export save from the menu before closing this page.",
-            true,
+            true, { channel: "persistence" },
           );
         },
       );
     } else if (result.code !== "cancelled")
       this.events.notify(
         `${result.error} Your active expedition is unchanged.`,
-        true,
+        true, { channel: "persistence" },
       );
   }
 
@@ -235,7 +237,7 @@ export class ExpeditionSession {
       this.finish(operation);
       this.events.notify(
         "The file exceeds the 1 MiB save limit. Current progress is unchanged.",
-        true,
+        true, { channel: "system" },
       );
       return;
     }
@@ -247,7 +249,7 @@ export class ExpeditionSession {
         this.finish(operation);
         this.events.notify(
           "This file could not be read. Current progress is unchanged.",
-          true,
+          true, { channel: "system" },
         );
       }
       return;
@@ -256,7 +258,7 @@ export class ExpeditionSession {
     const decoded = decodeSave(text);
     this.finish(operation);
     if (!decoded.ok) {
-      this.events.notify(decoded.error, true);
+      this.events.notify(decoded.error, true, { channel: "system" });
       return;
     }
     const save = decoded.value;
@@ -320,11 +322,12 @@ export class ExpeditionSession {
       if (manual)
         this.events.notify(
           "Saved locally. The previous valid save is retained as a backup.",
+          false, { channel: "persistence" },
         );
     } else if (result.code !== "cancelled")
       this.events.notify(
         `${result.error} Automatic saving is disabled. Export save from the menu to keep this expedition.`,
-        true,
+        true, { channel: "persistence" },
       );
   }
 

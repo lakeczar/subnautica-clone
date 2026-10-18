@@ -12,6 +12,7 @@ import { personalLimit } from "./progression.js";
 import { hullDepth } from "./vehicles.js";
 import { disableVehicle, incapacitate } from "./recovery.js";
 const DT = 1 / 60;
+export const SUIT_OXYGEN_DRAIN_PER_SECOND = 100 / 180;
 /** These are fixed simulation reference points. Renderer eye interpolation is never read. */
 export function exposure(s: GameState): {
   pressureDepth: number;
@@ -42,6 +43,19 @@ export function exposure(s: GameState): {
     refuge,
   };
 }
+/** Current air source only; finite supplies are not combined or replenished here. */
+export function airSupply(s: GameState): {
+  kind: "craft" | "refuge" | "surface" | "emergency" | "suit";
+  remainingSeconds: number | null;
+} {
+  const v = s.fleet.vehicles.find(v => v.id === s.player.controlledVehicleId),
+    e = exposure(s);
+  if (v && v.charge > 0 && !v.disabled) return { kind: "craft", remainingSeconds: null };
+  if (e.refuge) return { kind: "refuge", remainingSeconds: null };
+  if (e.airwayY >= 0) return { kind: "surface", remainingSeconds: null };
+  if (v && v.emergencyAir > 0) return { kind: "emergency", remainingSeconds: v.emergencyAir };
+  return { kind: "suit", remainingSeconds: s.player.vitals.oxygen / SUIT_OXYGEN_DRAIN_PER_SECOND };
+}
 export function updateSurvival(s: GameState, events: GameEvent[]): void {
   if (s.opening.phase < 4) return;
   const p = s.player,
@@ -50,7 +64,7 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
     before = p.vitals.oxygen,
     foodBefore = p.vitals.food;
   if (e.breathable) p.vitals.oxygen = Math.min(100, p.vitals.oxygen + 20 * DT);
-  else p.vitals.oxygen = Math.max(0, p.vitals.oxygen - (100 / 180) * DT);
+  else p.vitals.oxygen = Math.max(0, p.vitals.oxygen - SUIT_OXYGEN_DRAIN_PER_SECOND * DT);
   s.metrics.oxygenUsed += Math.max(0, before - p.vitals.oxygen);
   s.metrics.minOxygen = Math.min(s.metrics.minOxygen, p.vitals.oxygen);
   if (p.vitals.oxygen === 0) p.vitals.health -= 12 * DT;
@@ -71,6 +85,7 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
       disableVehicle(s, v.id);
       events.push({
         type: "notice",
+        channel: "hazard", context: "hull",
         message:
           "Hull disabled. Emergency air is limited. Use a protected exit and return with the reusable rescue collar.",
         error: true,
@@ -100,6 +115,7 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
         events.push(
           {
             type: "notice",
+            channel: "hazard", context: "oxygen",
             message: `${label} ${limit}%. Return to air; the pod ramp and established refuges are safe.`,
             error: true,
           },
@@ -108,7 +124,7 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
       }
   for (const limit of [20, 10])
     if (foodBefore > limit && p.vitals.food <= limit)
-      events.push({ type: "notice", message: `Food ${limit}%. Hand-gather shallow staples or use an emergency refuge portion; ordinary swimming remains available.`, error: true }, { type: "sound", cue: "warning" });
+      events.push({ type: "notice", channel: "hazard", context: "food", message: `Food ${limit}%. Hand-gather shallow staples or use an emergency refuge portion; ordinary swimming remains available.`, error: true }, { type: "sound", cue: "warning" });
   if (s.tick % 300 === 0) {
     if (e.pressureDepth > personalLimit(s) && !v)
       events.push({ type: "sound", cue: "warning" });
@@ -127,7 +143,7 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
     );
     events.push(
       { type: "sound", cue: "recovery" },
-      { type: "notice", message: s.feedback, error: true },
+      { type: "notice", channel: "hazard", context: "recovery", message: s.feedback, error: true },
     );
   }
 }
@@ -177,13 +193,14 @@ export function updateThreat(
       events.push(
         {
           type: "notice",
+          channel: "hazard", context: "threat",
           message:
             mode === "warn"
               ? "Paired warning calls. The hunter turns toward you. Slow down or reach cover."
               : "The hunter is pursuing. Break sight behind the tall rib or retreat to the clear upper flank.",
           error: true,
         },
-        { type: "sound", cue: "warning", origin: { ...t.position } },
+        { type: "sound", cue: "warning", origin: { ...t.position }, source: "threat-call" },
       );
   };
   if (!territory || (cover && t.modeSeconds > 1) || t.distraction) {

@@ -157,7 +157,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         return "Fabricate the scanner, or directly inspect the nearby physical records.";
       const t = aimedInteraction(s, w);
       if (!t) {
-        events.push({ type: "notice", message: "Nothing within reach." });
+        events.push({ type: "notice", channel: "action", message: "Nothing within reach." });
         return null;
       }
       let message: string;
@@ -170,7 +170,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         message = `${t.known ? `${t.label} · scan retained. ` : ""}${SOURCES[id].scan}`;
       } else message = `${t.label} · scan retained. The notebook distinguishes observed facts from hypotheses.`;
       s.world.threat.interest = Math.min(12, s.world.threat.interest + 2);
-      events.push({ type: "notice", message }, { type: "sound", cue: "scan" });
+      events.push({ type: "notice", channel: "action", message }, { type: "sound", cue: "scan" });
       return null;
     }
     case "interact": {
@@ -179,13 +179,13 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       if (c.target !== undefined && target?.id !== c.target)
         return "Aim at a visible host within reach.";
       if (!target) {
-        events.push({ type: "notice", message: "Nothing within reach." });
+        events.push({ type: "notice", channel: "action", message: "Nothing within reach." });
         return null;
       }
       if (target.kind === "source") {
         const id = target.id as SourceId;
         if (target.verb === "empty") {
-          events.push({ type: "notice", message: `${target.label} · Empty.` });
+          events.push({ type: "notice", channel: "action", message: `${target.label} · Empty.` });
           return null;
         }
         if (target.verb === "sort" && SOURCES[id].item !== "meal")
@@ -193,13 +193,13 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
             maintenance: s.world.resources.find(n => n.id === id)!.reserve === 0 }, w, events);
         const no = collect(s, id);
         if (!no && target.verb === "sort")
-          events.push({ type: "notice", message: "Active tending started · 20 seconds. Movement away cancels; pause freezes tending." });
+          events.push({ type: "notice", channel: "action", message: "Active tending started · 20 seconds. Movement away cancels; pause freezes tending." });
         return no;
       }
       if (target.id in EVIDENCE) {
         if (target.known) {
           events.push({ type: "interaction-panel", panel: "notebook", targetId: target.id },
-            { type: "notice", message: `${target.label} · in notebook.` });
+            { type: "notice", channel: "action", message: `${target.label} · in notebook.` });
           return null;
         }
         s.feedback = discover(s, target.id as EvidenceId);
@@ -214,16 +214,16 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       if (target.kind === "vehicle" && target.verb === "board") return board(s, target.id);
       if (target.kind === "vehicle") {
         events.push({ type: "interaction-panel", panel: "inventory", targetId: target.id },
-          { type: "notice", message: `${target.label} · hold and recovery.` });
+          { type: "notice", channel: "action", message: `${target.label} · hold and recovery.` });
         return null;
       }
       if (target.kind === "cache") {
         events.push({ type: "interaction-panel", panel: "inventory", targetId: target.id },
-          { type: "notice", message: "Cargo cache reached · identified contents in Hold." });
+          { type: "notice", channel: "action", message: "Cargo cache reached · identified contents in Hold." });
         return null;
       }
       events.push({ type: "interaction-panel", panel: target.id === "rescue_staging" ? "inventory" : "craft", targetId: target.id },
-        { type: "notice", message: target.id === "rescue_staging" ? "Local recovery bench · Hold." : "Refuge services · Fabricate." });
+        { type: "notice", channel: "action", message: target.id === "rescue_staging" ? "Local recovery bench · Hold." : "Refuge services · Fabricate." });
       return null;
     }
   }
@@ -268,10 +268,10 @@ export function executeCommand(
   const events: GameEvent[] = [];
   const no = action(draft, command, world, events);
   if (no)
-    return { state, events: [{ type: "notice", message: no, error: true }] };
+    return { state, events: [{ type: "notice", channel: "action", message: no, error: true }] };
   if (draft.feedback && !events.some(e => e.type === "notice"))
     events.push(
-      { type: "notice", message: draft.feedback },
+      { type: "notice", channel: "action", message: draft.feedback },
       { type: "sound", cue: command.type === "craft" ? "craft" : "collect" },
     );
   return { state: draft, events };
@@ -288,11 +288,11 @@ export function stepGame(
     const previous = s.feedback;
     const actionEvents: GameEvent[] = [];
     const no = action(s, c, world, actionEvents);
-    if (no) events.push({ type: "notice", message: no, error: true });
+    if (no) events.push({ type: "notice", channel: "action", message: no, error: true });
     else {
       events.push(...actionEvents);
       if (s.feedback && s.feedback !== previous && !actionEvents.some(e => e.type === "notice")) events.push(
-        { type: "notice", message: s.feedback },
+        { type: "notice", channel: "action", message: s.feedback },
         {
           type: "sound",
           cue:
@@ -341,6 +341,7 @@ export function stepGame(
   s.player.pose.pitch = pitch;
   const old = { ...s.player.pose.position };
   let loudness = 0;
+  let ascent: Extract<GameEvent, { type: "ascent-sample" }> | null = null;
   if (v) {
     const dock = s.fleet.docking,
       station = v.hull === "hearthline" && dock?.stationKeeping;
@@ -380,8 +381,21 @@ export function stepGame(
       y: v.velocity.y * DT,
       z: v.velocity.z * DT,
     };
-    const move = moveHull(world, v.pose.position, delta, HULL_COLLIDERS[v.hull],
+    if (speed > 0 && v.hull !== "spindle" && target.y > 0 && delta.y > 0)
+      ascent = { type: "ascent-sample", actorId: v.id, requestedRise: delta.y,
+        actualRise: 0, solidLimitedRise: 0, surfaceLimitedRise: 0 };
+    // Observe the existing sweeps before moveHull's separate terrain correction.
+    // Its aggregate hitSolid also includes floor support and cannot classify a ceiling.
+    const attempt = ascent;
+    const measuredWorld: WorldQueries = attempt ? { ...world, moveCapsule(origin, d, shape) {
+      const result = world.moveCapsule(origin, d, shape);
+      if (result.hitSolid && d.y > 0)
+        attempt.solidLimitedRise += Math.max(0, origin.y + d.y - result.position.y);
+      return result;
+    } } : world;
+    const move = moveHull(measuredWorld, v.pose.position, delta, HULL_COLLIDERS[v.hull],
       v.hull === "hearthline" ? carrierTravelBounds() : undefined);
+    if (ascent) ascent.surfaceLimitedRise = Math.max(0, move.position.y + 0.9);
     move.position.y = Math.min(
       v.hull === "spindle" ? -0.4 : -0.9,
       move.position.y,
@@ -491,6 +505,9 @@ export function stepGame(
       vy *= speed / magnitude;
       vz *= speed / magnitude;
     }
+    if (mode === "swimming" && vertical * 2.8 + Math.sin(pitch) * forward * speed > 0 && vy > 0)
+      ascent = { type: "ascent-sample", actorId: null, requestedRise: 0,
+        actualRise: 0, solidLimitedRise: 0, surfaceLimitedRise: 0 };
     let position = { ...old },
       hitBoundary = false;
     const slices = Math.max(1, Math.ceil((magnitude * DT) / 0.12)),
@@ -501,6 +518,8 @@ export function stepGame(
         y: (vy * DT) / slices,
         z: (vz * DT) / slices,
       };
+      const requestedRise = Math.max(0, delta.y);
+      if (ascent) ascent.requestedRise += requestedRise;
       const nextFloor = world.groundHeight(
           position.x + delta.x,
           position.z + delta.z,
@@ -526,6 +545,8 @@ export function stepGame(
       )
         delta.y = nextSupport - position.y;
       const move = world.moveCapsule(position, delta, capsule);
+      if (ascent && move.hitSolid && requestedRise > 0)
+        ascent.solidLimitedRise += Math.max(0, position.y + requestedRise - move.position.y);
       position = move.position;
       hitBoundary ||= move.hitBoundary;
       const floor = world.supportHeight(position.x, position.z, position.y);
@@ -539,6 +560,7 @@ export function stepGame(
         old.y <= -0.5 &&
         floor < -0.55
       ) {
+        if (ascent) ascent.surfaceLimitedRise += position.y + 0.5;
         position.y = -0.5;
         vy = 0;
       }
@@ -576,8 +598,20 @@ export function stepGame(
   updateAction(s);
   updateBerth(s, world);
   const recoveryEvent = updateRecovery(s, world);
-  if (recoveryEvent) events.push(recoveryEvent);
+  if (recoveryEvent) events.push(recoveryEvent.type === "notice"
+    ? { ...recoveryEvent, channel: recoveryEvent.error ? "hazard" : "action", context: "recovery" }
+    : recoveryEvent);
   updateThreat(s, loudness, events, world);
   updateSurvival(s, events);
+  // A command/berth transition or incapacity can replace the moving actor this step.
+  // Emit only a measurement that still describes the original active actor and mode.
+  if (ascent && state.opening.phase === 4 && s.player.mode === state.player.mode &&
+      s.player.mode === (ascent.actorId === null ? "swimming" : "piloting") &&
+      s.player.controlledVehicleId === ascent.actorId && state.player.controlledVehicleId === ascent.actorId &&
+      !s.player.interiorId && s.metrics.failures === state.metrics.failures &&
+      (!v || (!v.disabled && v.charge > 0))) {
+    ascent.actualRise = s.player.pose.position.y - old.y;
+    events.push(ascent);
+  }
   return { state: s, events };
 }
