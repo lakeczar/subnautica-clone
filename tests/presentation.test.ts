@@ -4,8 +4,10 @@ import { isDeepStrictEqual } from "node:util";
 import { GameView, type UiActions } from "../src/ui/view.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
 import { completeOpening, discover } from "../src/sim/progression.js";
-import { incapacitate } from "../src/sim/recovery.js";
-import { addItem, available } from "../src/sim/inventory.js";
+import { incapacitate, RECOVERY_NOTICES } from "../src/sim/recovery.js";
+import { addItem, available, materialStoragePreview } from "../src/sim/inventory.js";
+import { cellRechargePreview, distractionPreview } from "../src/sim/vehicles.js";
+import { dartPerformance } from "../src/sim/modules.js";
 import { executeCommand } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameCommand } from "../src/sim/types.js";
@@ -124,7 +126,7 @@ function viewFixture(t: test.TestContext) {
   };
 }
 
-test("recipe quantities count accessible bench inputs, exclude craft cargo, and dispatch without optimistic mutation", (t) => {
+test("recipe quantities use the same supported-cradle inputs as fabrication, without optimistic mutation", (t) => {
   const { view, get, click, commands } = viewFixture(t);
   const s = createGame(); completeOpening(s);
   addItem(s, "structural_alloy", 2, "pod_locker");
@@ -133,11 +135,13 @@ test("recipe quantities count accessible bench inputs, exclude craft cargo, and 
   s.fleet.vehicles.push(v);
   s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
   addItem(s, "flex_membrane", 4, v.cargoId);
+  s.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired = true;
   const snapshot = structuredClone(s);
   view.openPanel("craft", s);
   let recipe = get("panel-content").innerHTML.split('data-recipe="pod_repair"')[1]!.split("</article>")[0]!;
   assert.match(recipe, /Structural alloy: 2 \/ 2/);
-  assert.match(recipe, /Flexible membrane: 0 \/ 2/);
+  assert.match(recipe, /Flexible membrane: 4 \/ 2/);
+  assert.match(recipe, /Local sources:.*Dart hold.*supported-cradle cargo/);
   click("Fabricate · Repair pod regulator & bench");
   assert.deepEqual(commands, [{ type: "craft", recipeId: "pod_repair" }]);
   assert.deepEqual(s, snapshot, "view never consumes or moves ingredients");
@@ -145,6 +149,142 @@ test("recipe quantities count accessible bench inputs, exclude craft cargo, and 
   view.refreshPanel(s);
   recipe = get("panel-content").innerHTML.split('data-recipe="pod_repair"')[1]!.split("</article>")[0]!;
   assert.match(recipe, /Structural alloy: 0 \/ 2/, "remote pod locker must not count as a reachable ingredient");
+});
+
+test("pulse presentation follows the paying cell, excludes remote charge, and never offers an active pulse", (t) => {
+  const { view, get, commandButton } = viewFixture(t);
+  const s = createGame(); completeOpening(s);
+  addItem(s, "essential_tools", 1, "equipment", "tools");
+  const remote = addItem(s, "reserve_cell", 1, "pod_locker");
+  const carried = addItem(s, "reserve_cell", 1, "diver"); carried.charge = 30;
+  s.player.pose.position = { x: 80, y: -48, z: -89 };
+  const preview = distractionPreview(s); assert.equal(preview.cellId, carried.id);
+  const before = structuredClone(s);
+  view.openPanel("inventory", s);
+  assert.match(get("panel-content").innerHTML, new RegExp(`Next payment: ${carried.id}.*30 → 5%`));
+  assert.ok(!get("panel-content").innerHTML.includes(`Next payment: ${remote.id}`));
+  assert.deepEqual(s, before);
+  commandButton({ type: "distraction" });
+  carried.charge = 24; view.refreshPanel(s);
+  assert.match(get("panel-content").innerHTML, /one reserve cell in your hold or the controlled craft/);
+  assert.ok(get("panel-content").innerHTML.includes('disabled>Release pulse'));
+  carried.charge = 100; s.world.threat.distractionSeconds = 10; view.refreshPanel(s);
+  assert.match(get("panel-content").innerHTML, /already active.*10 seconds remain/);
+  assert.ok(get("panel-content").innerHTML.includes('disabled>Release pulse'));
+});
+
+test("bench cell recharge is an explicit pre-vessel command, separate from hull service", (t) => {
+  const { view, get, commandButton, active } = viewFixture(t);
+  let s = createGame(); completeOpening(s);
+  s.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired = true;
+  const cell = addItem(s, "reserve_cell", 1, "pod_locker"); cell.charge = 50;
+  assert.deepEqual(cellRechargePreview(s).cellIds, [cell.id]);
+  view.openPanel("craft", s);
+  const html = get("panel-content").innerHTML;
+  assert.match(html, /Bench cell recharge/);
+  assert.match(html, /Cells only\. Hull battery, health and emergency air require supported service/);
+  commandButton({ type: "recharge-cells" }).focus();
+  s = executeCommand(s, { type: "recharge-cells" }, createWorldQueries()).state;
+  view.refreshPanel(s);
+  assert.equal(s.inventory.items.find((i) => i.id === cell.id)?.charge, 100);
+  assert.equal(s.fleet.vehicles.length, 0);
+  assert.equal(active(), get("panel-return"), "a now-disabled action falls back to Return");
+});
+
+test("bulk storage shows the shared whole-stack set and preserves operands and focus on refusal", (t) => {
+  const { view, get, commandButton, activeCommand, active } = viewFixture(t);
+  let s = createGame(); completeOpening(s);
+  addItem(s, "structural_alloy", 2, "diver");
+  addItem(s, "silica_glass", 3, "diver");
+  const meal = addItem(s, "meal", 1, "diver"), cell = addItem(s, "reserve_cell", 1, "diver");
+  s.inventory.containers.find((c) => c.id === "pod_locker")!.capacity = 6;
+  const command: GameCommand = { type: "store-materials", from: "diver", to: "pod_locker" };
+  const p = materialStoragePreview(s, command.from, command.to);
+  view.openPanel("inventory", s);
+  assert.match(get("panel-content").innerHTML, /2 × Structural alloy<br \/>3 × Silica glass.*7 CU · whole stacks/);
+  assert.ok(get("panel-content").innerHTML.includes(p.refusal!));
+  const before = structuredClone(s);
+  commandButton(command).focus();
+  let result = executeCommand(s, command, createWorldQueries());
+  assert.deepEqual(result.state, before);
+  const notice = result.events.find((e) => e.type === "notice"); assert.ok(notice?.type === "notice");
+  view.notify(notice.message, true); view.refreshPanel(result.state);
+  assert.deepEqual(activeCommand(), command);
+  assert.equal(get("panel-feedback").textContent, p.refusal);
+  s.inventory.containers.find((c) => c.id === "pod_locker")!.capacity = 80;
+  result = executeCommand(s, command, createWorldQueries()); s = result.state;
+  view.refreshPanel(s);
+  assert.deepEqual(activeCommand(), command, "empty selected source does not silently select another source");
+  assert.equal(s.inventory.items.find((i) => i.id === meal.id)?.containerId, "diver");
+  assert.equal(s.inventory.items.find((i) => i.id === cell.id)?.containerId, "diver");
+  s.player.pose.position = { x: 80, y: -48, z: -89 }; view.refreshPanel(s);
+  assert.equal(active(), get("panel-return"));
+});
+
+test("trim UI distinguishes stored from installed, uses actual occupancy, and exposes safe local removal", (t) => {
+  const { view, get, commandButton, active } = viewFixture(t);
+  let s = createGame(); completeOpening(s); discover(s, "C04");
+  s.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired = true;
+  s.knowledge.crafted.push("dart_acoustic_trim");
+  const item = addItem(s, "dart_acoustic_trim", 1, "diver");
+  const v = makeVehicle("refit-dart", "dart", { x: 0, y: -1, z: 8 }, "refit-hold");
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
+  view.openPanel("inventory", s);
+  assert.match(get("panel-content").innerHTML, /Dart acoustic trim · fabricated \/ stored/);
+  assert.match(get("panel-content").innerHTML, /Quiet 3 → 4\.2 m\/s · normal 8 → 8 · boost 11 → 9/);
+  assert.match(get("panel-content").innerHTML, /0 \/ 2 sockets · 0 \/ 32 CU hold/);
+  const install: GameCommand = { type: "install-module", vehicleId: v.id, itemId: item.id };
+  commandButton(install).focus(); s = executeCommand(s, install, createWorldQueries()).state;
+  view.refreshPanel(s);
+  assert.equal(active(), get("panel-return"));
+  assert.match(get("panel-content").innerHTML, /1 \/ 2 sockets · 2 \/ 32 CU hold/);
+  assert.match(get("panel-content").innerHTML, /Now: quiet 4\.2 · normal 8 · boost 9 m\/s · trim occupies 2 CU/);
+  assert.equal(dartPerformance(s, v.id)?.acousticTrim, true);
+  assert.ok(!get("panel-content").querySelectorAll("button").some((b) => {
+    const c = b.dataset.commandKey ? JSON.parse(b.dataset.commandKey) as GameCommand : null;
+    return c?.type === "transfer" && c.itemId === item.id;
+  }), "installed items offer removal rather than a direct transfer control");
+  const transferred = executeCommand(s, { type: "transfer", itemId: item.id, to: "diver", quantity: 1 }, createWorldQueries());
+  assert.deepEqual(transferred.state, s);
+  assert.ok(transferred.events.some((e) => e.type === "notice" && e.error && e.message.includes("Remove this installed module")));
+  const owned = s.fleet.vehicles[0]!;
+  owned.pose.position = { x: 80, y: -48, z: -89 }; owned.disabled = true;
+  s.player.pose.position = { x: 80, y: -47, z: -89 }; s.player.mode = "swimming";
+  addItem(s, "essential_tools", 1, "equipment", "tools"); addItem(s, "bobbin_kit", 1, "equipment", "recovery");
+  view.refreshPanel(s);
+  assert.match(get("panel-content").innerHTML, /Eligible local collar removal.*before frame salvage/);
+  const remove: GameCommand = { type: "remove-module", vehicleId: owned.id, itemId: item.id };
+  commandButton(remove); s = executeCommand(s, remove, createWorldQueries()).state;
+  assert.equal(s.fleet.vehicles[0]!.modules.length, 0);
+  assert.equal(s.inventory.items.find((i) => i.id === item.id)?.containerId, owned.cargoId);
+});
+
+test("completed receipts label current reference prices honestly and a locked workshop cannot fund itself", (t) => {
+  const { view, get } = viewFixture(t);
+  const s = createGame(); completeOpening(s); discover(s, "C03");
+  s.knowledge.crafted.push("essential_tools");
+  s.player.pose.position = { x: 10, y: 2, z: -35 };
+  addItem(s, "structural_alloy", 8, "workshop_locker");
+  view.openPanel("craft", s);
+  const html = get("panel-content").innerHTML;
+  const completed = html.split('data-recipe="essential_tools"')[1]!.split("</article>")[0]!;
+  assert.match(completed, /completed.*Current recipe reference/s);
+  assert.ok(!completed.includes("used") && !completed.includes("installed"));
+  const repair = html.split('data-recipe="restore_workshop"')[1]!.split("</article>")[0]!;
+  assert.match(repair, /Structural alloy: 0 \/ 3/);
+  assert.ok(!repair.includes("Local sources: Diver hold · Workshop locker"));
+  assert.match(html, /unrestored workshop locker stays locked.*carried materials or a nearby deployed buoy/);
+});
+
+test("saved recovery wording stays intact while its displayed next step names rescue stock", (t) => {
+  const { view, get } = viewFixture(t);
+  const s = createGame(); completeOpening(s); s.feedback = RECOVERY_NOTICES.completed;
+  const before = structuredClone(s);
+  view.openPanel("inventory", s); view.notify(s.feedback);
+  assert.match(get("panel-content").innerHTML, /Last recovery report.*Apply a rescue patch/s);
+  assert.match(get("notification").textContent, /Cargo, damage and charge are unchanged/);
+  assert.deepEqual(s, before, "display conversion never rewrites the compatibility notice in a save");
 });
 
 test("notebook retains both early orders and omits unknown sources and an uncollected optional record", (t) => {
@@ -515,7 +655,7 @@ test("occupied Hold disables tow and salvage, explains conditional safe exit, an
     assert.equal(commandButton({ type: "recover", vehicleId: v.id, method: "repair" }).disabled, false);
     assert.equal(commandButton({ type: "reserve", vehicleId: v.id }).disabled, false);
     assert.equal(commandButton({ type: "service", vehicleId: v.id }).disabled, false);
-    assert.match(get("panel-content").innerHTML, /Reserve cells in diver \/ this craft: 100%/);
+    assert.match(get("panel-content").innerHTML, /Cells in diver \/ this craft: item_\d+ · 100%/);
     assert.deepEqual(s, before, "recovery presentation cannot mutate the occupied state");
   }
 });
@@ -602,12 +742,14 @@ test("reopened Hold and Notebook retain saved recovery explanations without revi
   ]) {
     s.feedback = message;
     view.notify(message);
+    const displayed = get("notification").textContent;
     view.closePanel();
     for (const panel of ["inventory", "notebook"] as const) {
       view.openPanel(panel, JSON.parse(JSON.stringify(s)));
-      assert.ok(get("panel-content").innerHTML.includes(message), `${panel}: ${message}`);
+      assert.ok(get("panel-content").innerHTML.includes(displayed), `${panel}: ${message}`);
       view.refreshPanel(s);
-      assert.ok(get("panel-content").innerHTML.includes(message));
+      assert.ok(get("panel-content").innerHTML.includes(displayed));
+      assert.equal(s.feedback, message, "the saved notice is never rewritten");
       view.closePanel();
     }
   }

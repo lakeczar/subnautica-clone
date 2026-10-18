@@ -604,7 +604,7 @@ test("repeated disable/field-repair/salvage conserves public investment and bind
   assert.equal(recoveryCommand(s, v.id, "repair"), null);
   disableVehicle(s, v.id);
   const before = structuredClone(s);
-  assert.match(recoveryCommand(s, v.id, "repair")!, /unavailable/);
+  assert.match(recoveryCommand(s, v.id, "repair")!, /Not enough rescue stock/);
   assert.deepEqual(s, before);
   assert.equal(toggleBuoy(s), null);
   assert.equal(recoveryCommand(s, v.id, "salvage"), null);

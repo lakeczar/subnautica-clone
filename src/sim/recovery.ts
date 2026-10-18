@@ -133,7 +133,7 @@ export function recoveryCommand(
     if (occupied) return occupied;
   }
   if (!equipped(s, "bobbin_kit"))
-    return "Fabricate the retained Bobbin / collar from pod maintenance stock first.";
+    return "Fabricate the reusable Bobbin / collar from pod rescue stock first.";
   const local = distance(s.player.pose.position, v.pose.position) < 7,
     atStage = distance(s.player.pose.position, RECOVERY_STAGE) < 7;
   if (!local && !atStage)
@@ -142,7 +142,7 @@ export function recoveryCommand(
     if (!local)
       return "A field patch must be applied at the actual hull collar. Tow to the shallow bench if personal depth prevents access.";
     if (s.world.maintenance.alloy < 2 || s.world.maintenance.membrane < 1)
-      return "Maintenance patch unavailable; material-free local tow remains available.";
+      return "Not enough rescue stock for a patch. Local tow needs no materials.";
     s.world.maintenance.alloy -= 2;
     s.world.maintenance.membrane--;
     v.boundRepairs = Math.min(7, v.boundRepairs + 1);
@@ -153,7 +153,7 @@ export function recoveryCommand(
     if (s.recovery.operation?.vehicleId === id) s.recovery.operation = null;
     s.metrics.rescues++;
     s.feedback =
-      "Bound maintenance patch installed. Hull restored; charge and cargo retained. Use a reserve cell if power is depleted.";
+      "Rescue patch fitted. Hull restored to 65%; charge and cargo retained. Use a reserve cell if power is depleted.";
     return null;
   }
   if (method === "salvage") {
@@ -195,7 +195,7 @@ export function recoveryCommand(
     s.recovery.losses = s.recovery.losses.filter((l) => l.vehicleId !== id);
     s.recovery.operation = null;
     s.feedback =
-      "Public frame investment returned once. Bound patches returned to maintenance, never public purchases. Learned Dart plans remain.";
+      "Frame materials recovered. Past patches return to rescue stock for future repairs. Learned Dart plans remain.";
     return null;
   }
   if (s.recovery.operation) {

@@ -179,8 +179,8 @@ export function updateThreat(
           type: "notice",
           message:
             mode === "warn"
-              ? "A low paired call. The sound hunter turns toward your machinery. Slow down, use the tall rib as cover, or release a distraction."
-              : "The hunter commits. Break its line of sight or retreat toward the upper clear flank.",
+              ? "Paired warning calls. The hunter turns toward you. Slow down or reach cover."
+              : "The hunter is pursuing. Break sight behind the tall rib or retreat to the clear upper flank.",
           error: true,
         },
         { type: "sound", cue: "warning", origin: { ...t.position } },
