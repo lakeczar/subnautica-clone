@@ -1,5 +1,7 @@
 # Construction plan
 
+Current composition source **d9aaf63** is inspected and provisionally integrated at **e212da4**; [root record](evidence/POLISH-1-EXPERIENCE-COMPOSITION-FIX-INTEGRATION.md). Root400 checks/build/economies,447 payloads and27-file equality pass. Both R2 examples are resolved in inspected evidence, all authors are terminal, and [fresh full-batch R3](tasks/POLISH-1-EXPERIENCE-REVIEW-R3.md) precedes Opus verification and M2–M4. No new campaign completion claim. Earlier active/freeze labels below describe historical checkpoints.
+
 Both R2 reports close the original R1 cases and independently require the same two adjacent composition corrections; [paired disposition](reviews/POLISH-1-EXPERIENCE-R2.md). The sole bounded [Sol composition owner](tasks/POLISH-1-EXPERIENCE-COMPOSITION-FIX.md) has both completed reports. Inspect its return before fresh complete-batch paired review and Opus verification; M2–M4 remain required. The following freeze/active labels are historical checkpoints.
 
 The combined layout correction555ac20/reportfab1702 is inspected and provisionally integrated at5090866. Root399 checks/build/economies pass; both reproduced R1 overlaps are resolved in retained final production/native cases. All implementation ownership is released. Freeze for [fresh complete R2](tasks/POLISH-1-EXPERIENCE-REVIEW-R2.md), then Opus before M2–M4.

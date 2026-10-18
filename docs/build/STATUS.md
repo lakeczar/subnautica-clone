@@ -2,7 +2,7 @@
 
 ## Current checkpoint — controls and preparation/encounter slices accepted
 
-**Experience R2 update:** both Astra reportc429a1e and Sol report8c078ea request changes on frozen3e740a8 for the same two defects: a full save error covers an enabled fabrication button, and seven pilot warnings cover part of the full exit refusal at960×600. [Paired reconciliation](reviews/POLISH-1-EXPERIENCE-R2.md) verifies both actual runtimes and175/173 payloads; root inspected both production captures and recalculated the overlaps. Both reviewers are terminal/released. The sole active [composition correction](tasks/POLISH-1-EXPERIENCE-COMPOSITION-FIX.md) is Sol6.1/max on0f8ae44 and has received both completed reports. TASKS records actual ID/steering. No new production change or acceptance. Fresh full-batch pair after correction, Opus verification, then M2–M4 remain.
+**Experience correction inspected:** source **d9aaf6356cb320f283887922abf97ed8bdc54f59**, report9124f21, provisionally integrated at **e212da4d1df85a22c119f70ef2717d78ae6cfa38**. [Root inspection](evidence/POLISH-1-EXPERIENCE-COMPOSITION-FIX-INTEGRATION.md) passes400 tests/typecheck/build/both economies, verifies447 payloads and27 matching build files, and confirms the two R2 examples are disjoint in final evidence. Current-codec paid export and both staged danger seeds pass. All implementation authors and R2 reviewers are terminal/released. The [fresh complete-batch R3 brief](tasks/POLISH-1-EXPERIENCE-REVIEW-R3.md) preserves all eight criteria and both prior rounds; TASKS owns actual dispatch IDs. No acceptance yet. Fresh Opus verification follows the pair, then M2–M4. Earlier active/next labels below are historical.
 
 **POLISH-1 slice2 is accepted on c4de57928347c89ea7602a13d1e14a2849caf722**, production **c32d8c5d9caeef12e658e697bed78505155cb6b6**. Both fresh non-author Astra xhigh and Sol6.1/max reviewers accept all eight criteria and close both R1 findings; coordinator inspection concurs. [Paired reconciliation](reviews/POLISH-1-SLICE2-R2.md). Slice1 remains accepted ond031803 (production5f25810); M0/M1 remain accepted. Root branch `feat/siltwake-first-expedition`; game/siltwake remains M0a2cb19f. Use Git for current HEAD.
 
@@ -70,7 +70,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active Sol composition correction completion without polling. Both R2 reports are reconciled as the same two blockers. Inspect the correction, then fresh same-candidate full-batch Astra/Sol review, Opus verification and M2–M4. TASKS records actual ownership/ID. Current provisional production5090866/source555ac20 still passes399 checks/build/economies but has the two confirmed layout defects. Main merge/deployment remain owner actions.
+Freeze the inspected composition correction and dispatch fresh independent Astra xhigh and Sol6.1 max R3 reviewers on the same candidate, using the complete eight-criterion brief. Include focused initial-title/opening and relocated cue checks. Receive completion notifications without polling; root reconciles both before acceptance. Fresh Opus stage1 verification then M2–M4 remain authorized and required. TASKS records actual ownership/IDs. Main merge/deployment remain owner actions.
 
 ### Historical execution and evidence
 
