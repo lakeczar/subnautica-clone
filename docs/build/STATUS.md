@@ -1,25 +1,27 @@
 # Siltwake build status
 
-Updated: 2026-10-17. **M0 and M1 are accepted; owner-requested second Opus experience audit is running.** Fresh non-author Astra xhigh and Sol 6.1 max each ACCEPT the final correction/evidence batch and integrated M1 on **`1caa05f1e790a18edacbd3fce236763e48725c2f`**. The coordinator reconciled both reports and accepts the same scopes; [paired record](reviews/M1-INTEGRATED-R1.md). Production remains **`a5821aa8f3d88045669190a720ccb5765c1acef2`**, final source84fb7e8/evidence5e67fdf. Root and both reviewers pass210 tests/typecheck/build/economy, with exact artifact checks and complete actual A/B/C reloads after44/47/29 ticks. One coalesced nonblocking secondary-guidance contrast finding remains for later polish.
+Updated: 2026-10-17. **M0 and M1 are accepted; owner-requested second Opus experience audit is complete and reconciled.** Fresh non-author Astra xhigh and Sol 6.1 max each ACCEPT the final correction/evidence batch and integrated M1 on **`1caa05f1e790a18edacbd3fce236763e48725c2f`**. The coordinator reconciled both reports and accepts the same scopes; [paired record](reviews/M1-INTEGRATED-R1.md). Production remains **`a5821aa8f3d88045669190a720ccb5765c1acef2`**, final source84fb7e8/evidence5e67fdf. Root and both reviewers pass210 tests/typecheck/build/economy, with exact artifact checks and complete actual A/B/C reloads after44/47/29 ticks. One coalesced nonblocking secondary-guidance contrast finding remains for later polish.
 
-**All earlier builders and reviewers are terminal. One new Opus 5.5/high experience audit is running; no implementation worker is assigned.** The coordinator has no browser/server/recording/input. M1 remains on `feat/siltwake-first-expedition` / draft PR#4; `game/siltwake` remains M0 at **a2cb19f1d4cd2d795b82642a2bd357f681d1c293** / draft PR#3. No game/main merge or deployment occurred. M2–M4, the dedicated post-M3 Astra design critique and human/hardware validation remain open.
+**All earlier builders and reviewers are terminal. The second Opus experience audit is terminal and reconciled; no worker is active.** The coordinator has no browser/server/recording/input. M1 remains on `feat/siltwake-first-expedition` / draft PR#4; `game/siltwake` remains M0 at **a2cb19f1d4cd2d795b82642a2bd357f681d1c293** / draft PR#3. No game/main merge or deployment occurred. M2–M4, the dedicated post-M3 Astra design critique and human/hardware validation remain open.
 
 ## Owner-requested experience audit
 
-The idle checkpoint was delivered. The owner then explicitly requested another **Opus 5.5 / high** audit, prioritizing intuitive, polished gameplay loops, motion/controls, menu flow, feedback/timing and overall taste. [OPUS-DESIGN-R2](tasks/OPUS-DESIGN-R2.md) defines a hands-on current-M1 advisory review with a ranked actionable shortlist. This request resumes that audit only; no parallel implementation or M2 work is assigned. Current technical acceptance remains at1caa05f. Reviewers must assess actual motion and UI transitions, revisit earlier Opus advice against current changes and disclose human/hardware limits.
+The owner-requested **Opus5.5/high** controls/flow/polish audit completed at report5991273, merged atf752d04. [Full report](reviews/OPUS-DESIGN-R2.md); [coordinator disposition and recommended order](reviews/OPUS-DESIGN-R2-DISPOSITION.md). Root inspected source, representative actual pixels/frames,36 evidence-file hashes, four exact earned-save copies and the accepted production bundle. Live opening plus three earned imports support the advice; no fresh root play or human/hardware qualification is claimed. Effective high effort remains requested/selected, not independently runtime-labelled.
+
+Highest priorities: aimed interaction; deliberate mouse-look continuity and clear Dart launch; menus that expose current useful actions; state-aware threat feedback; understandable breathing/obstruction cues. Root narrows automatic movement/exit/pitch proposals and corrects the terrain-disable versus predator attribution. Two sequential bounded polish batches are recommended before M2 breadth. **These are directions, not active implementation assignments.** Existing M1 acceptance is source-specific; subsequent functional changes need the normal pair. Return the completed audit and plan to the owner.
 
 ## Authority and checkpoint
 
 - Owner invoked `.scratch/siltwake/BUILD_HANDOFF.md` and the revised prompt on 2026-10-17. Routine implementation, integration, fixes and PR work are authorized. Main merge/public deployment remain with the owner.
 - Specification: [revised input](../../prompts/BUILD_GAME_REVISED.md); planning source SHA `b3c3231b99ca5f1bd1159c5611216f2866e05a37`. Review acceptance for the underlying planning changes is at `6234042`; later planning evidence was bookkeeping.
 - Integration branch: `game/siltwake`. Implementation begins from the build-records commit immediately after the planning source. Use `git log -1` for the current checkout SHA; task candidates and acceptance SHAs are recorded explicitly below.
-- Accepted milestones: M0 foundation at `d415436` and M1 first expedition at `1caa05f`. Current activity: running the owner-requested Opus experience audit. [Plan](PLAN.md), [contracts](CONTRACTS.md), [playtest record](PLAYTEST.md), [content manifest](CONTENT_MANIFEST.md), [task ledger](TASKS.md).
+- Accepted milestones: M0 foundation at `d415436` and M1 first expedition at `1caa05f`. Current activity: completed audit handoff; no active workers. [Plan](PLAN.md), [contracts](CONTRACTS.md), [playtest record](PLAYTEST.md), [content manifest](CONTENT_MANIFEST.md), [task ledger](TASKS.md).
 
 ## Active ownership
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
-All implementation authors and reviewers are complete with no live children or owned running resources. Both final review models/efforts are runtime-confirmed. Astra report2a7b32e was merged ate938d20; Sol reportd7aa801 was merged ate3d335c. Root verified15 Astra and18 Sol reviewer payloads and inspected independent probes/results. Later changes are reports/build records only; reviewed production/tests/config remain frozen. OPUS-DESIGN-R2 owns only its ordinary/protected review reports and temporary evidence; all production paths remain unassigned.
+All implementation authors and reviewers are complete with no live children or owned running resources. Both final review models/efforts are runtime-confirmed. Astra report2a7b32e was merged ate938d20; Sol reportd7aa801 was merged ate3d335c. Root verified15 Astra and18 Sol reviewer payloads and inspected independent probes/results. Later changes are reports/build records only; reviewed production/tests/config remain frozen. OPUS-DESIGN-R2 released its report and temporary evidence ownership after closing its own tab/server; all production paths remain unassigned.
 
 ### Historical implementation checkpoints
 
@@ -50,7 +52,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-OPUS-DESIGN-R2 is running from exact parent e41b98d46bb0c2e0b48421add95ef46d60d8af76 as claudeAgent/claude-opus-5-5 with explicit effort high. Durable task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-opus-design-r2-e41b98d`; no children/questions at dispatch. Receive its completion notification without polling; inspect the findings and actual evidence, then consolidate the highest-value controls/flow/polish changes. No production edits, M2 expansion or game-branch merge during the audit.
+Return the completed Opus audit and [focused polish direction](reviews/OPUS-DESIGN-R2-DISPOSITION.md) to the owner. No workers are active. When implementation resumes, use two bounded Sol6.1/max batches with explicit shared interfaces and paired reviews before M2 expansion. No code, game-branch merge or deployment was performed during this audit.
 
 ### Historical execution and evidence
 

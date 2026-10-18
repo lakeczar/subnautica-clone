@@ -4,6 +4,9 @@ Current checkpoint: **final correction/evidence and integrated M1 accepted by bo
 
 Sol's final reconciliation distinguishes the current early branch (C01/C03 only, hand food and pre-vehicle recharge) from the completed historical C03→C02 route at source4d0a7f0 (ticks1254→2198, endpoint2204, no optional note). Current-module replay retains 11 recovery and 13 carrier complete-state intervals. Of 17 historical recovery commands,15 are wholly unchanged; patch/service have two explicitly recorded authorized feedback-text substitutions. New installed-trim recovery is hull disable, not player incapacity; the older ordinary two-incapacity/two-cache route remains separate. Neither independent reviewer claims a fresh browser expedition or human/hardware qualification.
 
+
+Owner-requested second [Opus audit](reviews/OPUS-DESIGN-R2.md) on current productiona5821aa: fresh opening/reef and three byte-identical normal earned imports for Dart controls, refit and warning/quiet response. [Root disposition](reviews/OPUS-DESIGN-R2-DISPOSITION.md) separates code/actual-image findings from reviewer-reported timings and human hypotheses. Four retrieved recordings and19 stills remain source-attributed; opening recording unavailable, no continuous-motion viewing/audio/real locked-mouse movement/GPU qualification. Root snapshot hashes36 files and confirms all four copied saves match originals; one copy was not a played import. No new root browser run or production change. The intentional terrain-disable clip is not a predator attack. All workers/resources closed.
+
 For each run record candidate SHA, build/command, environment and renderer, input method, scenario, observed result, artifact, defect and retest. Label ordinary inputs, automated rule tests and diagnostic state injection separately. Record p50/p95/loading/memory only when measured and state the route/sample.
 
 | Evidence | Candidate | Result | Limits |

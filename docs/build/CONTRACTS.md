@@ -1,6 +1,6 @@
 # Shared implementation direction
 
-Current acceptance: **M1 final correction and integrated milestone accepted at `1caa05f`**, production `a5821aa`; [paired verdicts and coordinator reconciliation](reviews/M1-INTEGRATED-R1.md). Historical staged/provisional statements below identify earlier checkpoints; their current implementations are covered by this acceptance. No production or contract change follows that candidate. All author/reviewer ownership is released. After the idle handoff, the owner authorized OPUS-DESIGN-R2, a report-only experience audit. Production/interfaces stay frozen during it; `game/siltwake` remains M0 at `a2cb19f`.
+Current acceptance: **M1 final correction and integrated milestone accepted at `1caa05f`**, production `a5821aa`; [paired verdicts and coordinator reconciliation](reviews/M1-INTEGRATED-R1.md). Historical staged/provisional statements below identify earlier checkpoints; their current implementations are covered by this acceptance. No production or contract change follows that candidate. All author/reviewer ownership is released. The report-only OPUS-DESIGN-R2 audit is complete. Its proposed targeting/input/notification changes are not implemented contracts; root must reconcile those interfaces before any implementation assignment. Production/interfaces remain unchanged; `game/siltwake` remains M0 at `a2cb19f`.
 
 ## Expedition decision seams staged at5b518b7
 
