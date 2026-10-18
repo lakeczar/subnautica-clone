@@ -1218,3 +1218,12 @@ All four PR layers remain linked/unwatched. Only the two independent reviewers a
 Astra task siltwake-polish-1-experience-astra-r1-e81bb6f acknowledged terminal without children/questions. Report7bde6fbb0071bd0cd8ba536de7d7fe68f91578f7 integrated at2c201ebbba8471dca900edd3a5fa1834af94c146; source/tests unchanged. Root confirms actual gpt-6-astra/xhigh from both original contexts and all145 payloads. [Interim disposition](reviews/POLISH-1-EXPERIENCE-R1.md) accepts ASTRA-EXP-R1-01, P2, from actual production imagery/source and independent100% overlap calculation on9 retained active observations. Criteria4/6 require changes; other6 accept with limits. Ownership/resources released.
 
 Sol R1 remains independent on originale81bb6f, no peer findings shared. [Call-layout correction](tasks/POLISH-1-EXPERIENCE-CALL-LAYOUT.md) is prepared for a new Sol6.1/max implementation worktree from a committed baseline. No correction author active until actual ID entry below. Root has no browser/server/check process; no game/main merge/deployment.
+
+
+### Call-layout correction dispatched independently of Sol review
+
+Exact parent **f70f4c89705a118fc3e19b21e59ef127f352507c**, unchanged production35de825/f2e634a. T3 async isolated-worktree task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-experience-call-layout-sol-max-f70f4c8`; stable request `siltwake-polish-1-experience-call-layout-sol-max-f70f4c8`. Running/working, no children/questions. Live catalog and thread configuration confirm codex/gpt-6.1-sol/reasoningEffort=max; original runtime awaits return.
+
+Complete [brief](tasks/POLISH-1-EXPERIENCE-CALL-LAYOUT.md) supplied verbatim. Own hud.css; view.ts for local grouping only if needed; presentation.test.ts only for meaningful structural behavior coverage; new evidence report. No semantic/input/save/copy or cross-path change, no children, peer contact, push/PR/merge or parent edits. One owned isolated Linux tab/storage/port5190 with actual process proof/normal cleanup; new artifacts /tmp/siltwake-polish-1-experience-call-layout/. Immutable reviewer/author originals preserved.
+
+Only root, this implementation author and independent Sol R1 are active. Sol R1 still reviews originale81bb6f and receives no Astra findings before its own return. Receive notifications without polling; reconcile both R1 reports and author result before fresh full-batch R2. Opus then M2–M4 remain. Root has no browser/server/check process; no game/main merge/deployment.
