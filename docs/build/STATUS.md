@@ -14,7 +14,7 @@ The stage1 Opus review and detailed advice are reconciled in [the experience cor
 
 COMPOSE is terminal and provisionally integrated at **5355a63f9cbf73008f1e1d6433fc4fd90b961129**, source5005095/reporteb66478. [Root inspection](evidence/POLISH-1-EXPERIENCE-COMPOSE-INTEGRATION.md) passes **399/399 tests**, typecheck/build and both economies; all12 legacy expectations retain behavior coverage, and ROOT-EXP-01 is corrected. Root verifies368 payloads, all27 matching build files, actual Sol6.1/max, complete active reload equality at18457, preparation counts and aligned/off-centre input replays. Current P1–P8 evidence is retained with explicit fresh/earned/diagnostic and stale-journal/preflight limits.
 
-The **CSS-only caption follow-up** is terminal and provisionally integrated at **35de8258fcb89561eb666a4e16d3c4ff910e7566**, sourcef2e634a/reportd7a2b5b. [Root inspection](evidence/POLISH-1-EXPERIENCE-CAPTION-INTEGRATION.md) confirms399 checks/build/economies,110 verified payloads, unchanged COMPOSE evidence,27 matching build files, actual Sol6.1/max and final menu captures. All implementation paths are released. The complete experience revision is ready for the [fresh Astra xhigh/Sol max pair](tasks/POLISH-1-EXPERIENCE-REVIEW-R1.md); TASKS owns actual dispatch. Stage1 remains open pending the pair and fresh Opus verification; M2–M4 remain required. Human feel, audible mix, duration/enjoyment and representative-GPU evidence remain unverified.
+The **CSS-only caption follow-up** is terminal and provisionally integrated at **35de8258fcb89561eb666a4e16d3c4ff910e7566**, sourcef2e634a/reportd7a2b5b. [Root inspection](evidence/POLISH-1-EXPERIENCE-CAPTION-INTEGRATION.md) confirms399 checks/build/economies,110 verified payloads, unchanged COMPOSE evidence,27 matching build files, actual Sol6.1/max and final menu captures. All implementation paths are released. Fresh independent Astra xhigh and Sol6.1 max reviewers are active on frozen **e81bb6fa3e19f01641f6fe874cce70443263b257**, covering the [complete experience revision](tasks/POLISH-1-EXPERIENCE-REVIEW-R1.md); TASKS records exact IDs. Stage1 remains open pending the pair and fresh Opus verification; M2–M4 remain required. Human feel, audible mix, duration/enjoyment and representative-GPU evidence remain unverified.
 
 Root owns no browser/server/recording/check process. No main merge/deployment.
 
@@ -68,7 +68,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the prepared fresh non-author Astra xhigh/Sol max pair on the same frozen complete S1/S2/COMPOSE/caption candidate, then receive completion notifications without polling. Reconcile/fix/re-review substantive findings, then fresh Opus verification before M2–M4. Current provisional production is35de825/sourcef2e634a,399 checks/build/economies pass; accepted slice2 production remainsc32d8c5. Main merge/public deployment remain owner actions.
+Receive the active fresh Astra xhigh/Sol max R1 completion notifications without polling; both review the complete S1/S2/COMPOSE/caption candidate e81bb6f. Reconcile/fix/re-review substantive findings, then fresh Opus verification before M2–M4. Current provisional production is35de825/sourcef2e634a,399 checks/build/economies pass; accepted slice2 production remainsc32d8c5. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

@@ -1192,3 +1192,15 @@ All four stack layers are linked/unwatched. Only the caption implementation foll
 Follow-up `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Athread-send%3Asiltwake-polish-1-experience-caption-sol-max-eb66478` acknowledged completed/result_available, no pending children/questions. Exact parenteb66478, sourcef2e634add96e7dd4951df4d2ac328cc31bf2e621, reportd7a2b5b2729ffb6fbbdba367054a0b72316b77a0, provisional root35de8258fcb89561eb666a4e16d3c4ff910e7566. [Root inspection](evidence/POLISH-1-EXPERIENCE-CAPTION-INTEGRATION.md):399 checks/build/economies,110 verified payloads, unchanged368-payload composition archive,27 exact build files and actual Sol6.1/max contexts. Original owned resources closed; root opened no browser/server. All author paths released.
 
 Freeze the complete experience revision for the prepared same-SHA Astra xhigh/Sol max pair. No reviewers dispatched until the following actual ID record. Opus verification then M2–M4 remain; no game/main merge or deployment.
+
+
+### Complete experience R1 independently dispatched
+
+Frozen candidate **e81bb6fa3e19f01641f6fe874cce70443263b257**, production35de825/sourcef2e634a; base **c4de57928347c89ea7602a13d1e14a2849caf722**. Both fresh T3 async isolated-worktree delegates returned running/working without children/questions. Live catalog and each thread configuration confirm codex/gpt-6-astra/xhigh and codex/gpt-6.1-sol/max. Original effective runtime receipts await their returns.
+
+- Astra: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-experience-astra-r1-e81bb6f`; stable request `siltwake-polish-1-experience-astra-r1-e81bb6f`. Own only docs/build/reviews/POLISH-1-EXPERIENCE-ASTRA-R1.md; artifacts /tmp/siltwake-polish-1-experience-astra-r1/; optional isolated port5190.
+- Sol: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-experience-sol-r1-e81bb6f`; stable request `siltwake-polish-1-experience-sol-r1-e81bb6f`. Own only docs/build/reviews/POLISH-1-EXPERIENCE-SOL-R1.md; artifacts /tmp/siltwake-polish-1-experience-sol-r1/; optional isolated port5192.
+
+Both received the complete eight-criterion [brief](tasks/POLISH-1-EXPERIENCE-REVIEW-R1.md) verbatim, complete prior evidence/dispositions, final caption inspection and immutable artifact/build identities. No author is reused. Full source/dependency review, separate initial findings, requested runtime verification, unchanged gameplay-source attribution and focused browser evidence limits are explicit. Each owns only a new report and separate temporary outputs; no source edits, children, peer sharing/polling, push/PR/merge or parent mutation. Browser rules include actual isolated Linux process proof, own tab/storage/port, copied traces before normal cleanup and preservation of shared resources.
+
+Only root and these two reviewers are active. Root owns no browser/server/recording/check process. Await completion notifications; reconcile/fix/re-review, then fresh stage1 Opus verification and M2–M4. Production stays frozen during review. No game/main merge or deployment.

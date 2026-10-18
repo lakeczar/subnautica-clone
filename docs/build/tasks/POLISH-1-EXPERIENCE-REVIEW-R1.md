@@ -1,6 +1,6 @@
 # Complete experience correction — independent R1 brief
 
-**Prepared only until TASKS records dispatch.** Root supplies the same exact frozen candidate to fresh non-author Astra xhigh and Sol6.1 max reviewers after the caption correction is inspected. Diff base **c4de57928347c89ea7602a13d1e14a2849caf722** (accepted preparation/encounter slice; productionc32d8c5). Review the **whole experience correction**, not just the last air/CSS fix. No author of S1/S2/COMPOSE/caption can be a reviewer. Coordinator inspection is additional.
+**Dispatched on e81bb6fa3e19f01641f6fe874cce70443263b257; TASKS records both task IDs.** Root supplies the same exact frozen candidate to fresh non-author Astra xhigh and Sol6.1 max reviewers after the caption correction is inspected. Diff base **c4de57928347c89ea7602a13d1e14a2849caf722** (accepted preparation/encounter slice; productionc32d8c5). Review the **whole experience correction**, not just the last air/CSS fix. No author of S1/S2/COMPOSE/caption can be a reviewer. Coordinator inspection is additional.
 
 Read STATUS first, PLAN/CONTRACTS, prompts/BUILD_GAME_REVISED.md and relevant specs, docs/DELIVERY_AND_ACCEPTANCE.md, whole-batch POLISH-1-EXPERIENCE.md, its S1/S2a/S2b/COMPOSE briefs, OPUS-STAGE1-R1 report/disposition and OPUS-STAGE1-IMPLEMENTATION advice. Reconciliation governs conflicts. All owner-required game content beyond this bounded stage remains; do not mislabel it a finished campaign.
 
