@@ -2,7 +2,7 @@
 
 The [delivery gates](../DELIVERY_AND_ACCEPTANCE.md) own acceptance. This plan sequences implementation and does not reduce the requested campaign. A batch and a milestone each need the dual review gate. Later batches become concrete after the preceding runnable interfaces are integrated.
 
-Current checkpoint: **M0 and M1 accepted.** Both fresh non-author reviewers and coordinator accept final correction/evidence and integrated M1 at `1caa05f` (production `a5821aa`); [paired record](reviews/M1-INTEGRATED-R1.md). M1 remains on `feat/siltwake-first-expedition`; `game/siltwake` remains M0 at `a2cb19f`. All workers are finished. **Pause for the owner's implementation input before fixes, another review, M2 dispatch or game-branch merge.** The remaining plan below resumes only after that input.
+Current checkpoint: **M0 and M1 accepted.** Both fresh non-author reviewers and coordinator accept final correction/evidence and integrated M1 at `1caa05f` (production `a5821aa`); [paired record](reviews/M1-INTEGRATED-R1.md). M1 remains on `feat/siltwake-first-expedition`; `game/siltwake` remains M0 at `a2cb19f`. The owner supplied new input after the idle handoff: run one [Opus5.5/high experience audit](tasks/OPUS-DESIGN-R2.md) of controls, menus, timing, gameplay flow and polish. Prepare that advisory review before new implementation/M2 or game-branch merge.
 
 | Milestone | Bounded work | Playable exit and dependency |
 | --- | --- | --- |
