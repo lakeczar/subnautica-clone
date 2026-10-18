@@ -963,3 +963,12 @@ Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3
 Provisional merge **660350b1cf9cc8bb6f6df4629acfd5008d792877** composes all slice2 pieces. [Root record](evidence/POLISH-1-SLICE2-2D-HUD-INTEGRATION.md):353 tests/typecheck/build/economies, six author full-state reload comparisons reproduced, actual combined encounter/save/release plus short service/refit/boarding/next-outing and real reload matching all fields after8 steps. Root inspected final captures/motion samples, retained all source/automation/tooling exclusions and closed its tab/recording/server normally. Root artifact manifest35 files/3,452,156 bytes, SHA e02e5a0d9c932ad2b1103529a8c018773dada0ad0c572d7ce1a13fffdb2c23e4.
 
 Next committed [full-slice R1 brief](tasks/POLISH-1-SLICE2-REVIEW-R1.md) is report-only and covers all eight criteria. Candidate/IDs will be appended after dispatch. No independent acceptance yet. Stage1 Opus follows the paired gate, then M2–M4; no polling, duplicate task, game/main merge or deployment.
+
+### Full slice2 independent R1 dispatched
+
+Exact frozen candidate **b9c99a003c0c428aac0669bda995b6f86d0eed09**, production660350b, diff base **d031803730fb44b9208e52fdfb91a88e9ddf8a41**. Live catalog confirms both requested models/efforts; actual reviewer runtime awaits their handoffs. Both T3-owned async isolated worktrees were accepted running/working with no children/questions. The complete [R1 brief](tasks/POLISH-1-SLICE2-REVIEW-R1.md) was supplied to each, with separate initial findings and all eight criteria.
+
+- Astra xhigh: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice2-astra-r1-b9c99a0`. Own report `docs/build/reviews/POLISH-1-SLICE2-ASTRA-R1.md`, temp `/tmp/siltwake-polish-1-slice2-astra-r1/`, optional isolated5191. Cross-system/player-experience emphasis, full scope.
+- Sol6.1 max: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice2-sol-r1-b9c99a0`. Own report `docs/build/reviews/POLISH-1-SLICE2-SOL-R1.md`, temp `/tmp/siltwake-polish-1-slice2-sol-r1/`, optional isolated5192. Implementation/test/artifact emphasis, full scope.
+
+No source ownership, fixes, children, peer contact/polling, push or PR/merge. Both browser isolation/cleanup rules included. Root plus two reviewers; production remains frozen. Receive completion notifications, inspect separate results and reconcile; stage1 Opus then M2–M4 follow the existing protocol. No acceptance claim or repeated owner permission.

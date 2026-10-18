@@ -10,7 +10,7 @@ All implementation authors are terminal with actual Sol6.1/max runtime confirmed
 
 Actual save during warning leaves danger/call information intact; disengagement clears stale signals; the short refit retains deliberate storage/focus and reload state. The ordinary hunter remains off-screen at first warning, so its brief emitted-call direction is complementary. Some refit copy remains repetitive and secondary text small; these are explicit review priorities. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
 
-Next: fresh full-slice pair, reconciled fixes if needed, then required stage1 Opus experience review/advice/corrections. M2–M4 remain authorized. Root has no browser/server/check process. No main merge/deployment.
+Fresh full-slice Astra xhigh and Sol6.1 max R1 reviews are now active on **b9c99a003c0c428aac0669bda995b6f86d0eed09** (production660350b). TASKS records separate report-only ownership/IDs. Next: receive independent results, reconcile fixes if needed, then required stage1 Opus experience review/advice/corrections. M2–M4 remain authorized. Root has no browser/server/check process. No main merge/deployment.
 
 ## Resumed full-game construction
 
