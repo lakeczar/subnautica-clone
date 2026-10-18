@@ -1,0 +1,116 @@
+/* Preparation panels have their own layout; HUD and menu styles stay in style.css. */
+.game-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: auto;
+  background: #102d3ef5;
+  backdrop-filter: blur(7px);
+}
+.panel-frame {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 0 24px 48px;
+}
+.panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0 12px;
+  background: #102d3efa;
+  border-bottom: 1px solid #84b1a450;
+}
+.game-panel h2 { margin: 0 10px 0 0; font: 400 28px Georgia, serif; }
+.game-panel nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.panel-header nav { order: 1; }
+.panel-header #panel-return { order: 3; }
+.panel-paused { order: 2; margin-left: auto; color: #d3dfc9; font-size: 13px; }
+.game-panel article, .panel-group {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid #84b1a442;
+  border-radius: 4px;
+  background: #2048548a;
+}
+.game-panel h3 { margin: 0 0 8px; font-size: 15px; font-weight: 550; }
+.game-panel h4 { margin: 0 0 6px; font-size: 14px; font-weight: 550; }
+.game-panel p { margin: 6px 0; color: #d2dfd2; font-size: 14px; line-height: 1.6; }
+.game-panel small { color: #cadccf; font-size: 12px; line-height: 1.5; }
+.game-panel button {
+  margin: 2px;
+  padding: 8px 11px;
+  border: 1px solid #b8c7a35e;
+  background: #294f55;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.game-panel nav button[aria-current="page"] { background: #49635a; border-color: #e2cb97; color: #fff0cf; }
+.game-panel article, .game-panel button { overflow-wrap: anywhere; }
+.game-panel .panel-status { margin: 12px 0 8px; color: #e2ead8; font-size: 13px; }
+.game-panel .bench-direction, .game-panel .recipe-count-label { font-size: 13px; }
+#panel-feedback { margin: 8px 0; padding: 8px 12px; border-left: 3px solid #d3c28c; background: #163b48fa; font-size: 13px; line-height: 1.5; }
+#panel-feedback.error { border-color: #ffc789; color: #ffe3bb; }
+.panel-group > summary { cursor: pointer; color: #ecedda; font-size: 14px; line-height: 1.6; }
+.panel-group > summary small { margin-left: 8px; }
+.panel-group[open] > summary { margin-bottom: 10px; }
+.panel-group > article { margin: 8px 0 0; }
+.container-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 8px; }
+.container-grid > .panel-group { margin: 0; align-self: start; }
+.carried { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
+.carried > h3, .carried > .service-actions { grid-column: 1 / -1; }
+.item-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 8px 0; border-top: 1px solid #8bb5a440; }
+.item-row strong { font-size: 14px; font-weight: 500; }
+.item-row small { display: block; }
+.item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.item-row button { padding: 6px 8px; font-size: 12px; }
+.service-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.storage-operands { display: flex; align-items: end; gap: 8px; }
+.storage-operands label { display: grid; flex: 1; min-width: 0; gap: 5px; font-size: 12px; }
+.storage-operands > span { align-self: center; }
+.storage-operands select { width: 100%; min-width: 0; padding: 8px; border: 1px solid #b8c7a360; background: #183d48; color: #e4ead3; font-size: 13px; }
+.storage-operands button { max-width: 270px; text-align: left; }
+.game-panel .storage-quantities, .game-panel .storage-context { font-size: 13px; }
+.game-panel .module-fitting { padding: 10px 0 0; margin: 10px 0; border: 0; border-top: 1px solid #84b1a442; background: none; }
+.game-panel .module-fitting p, .game-panel .power-preparation p { font-size: 13px; }
+.fitting-choice { margin-top: 8px; }
+.bench-charge { margin-top: 12px; padding-top: 12px; border-top: 1px solid #b8c7a340; }
+.no-charge-options { display: block; margin-top: 8px; }
+.recipe { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.recipe > div { flex: 1; min-width: 0; }
+.recipe > button { max-width: 250px; text-align: left; }
+.recipe-costs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.ingredient { display: inline-block; color: #d6e7d3; font-size: 13px; }
+.ingredient.missing, .recipe-status { color: #ffe0ad !important; }
+.recipe-ready { color: #c4f0cf !important; }
+.recipe-group { margin-top: 14px; }
+.recipe-group > h3 { color: #e9e3c6; }
+.recipe .panel-group { padding: 0; margin: 5px 0 0; border: 0; background: none; }
+.recipe .panel-group > summary { font-size: 12px; }
+.recipe .panel-group > p { font-size: 12px; }
+.game-panel .dive-check p { font-size: 13px; }
+.game-panel .provenance { color: #d3dfc9; font-size: 12px; }
+.finding b { color: #f0d39a; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; }
+.lead { border-left: 2px solid #e0ba7c; padding-left: 14px; }
+.fixture-label, .interpretation { border: 1px solid #e0ba7c88; padding: 12px; color: #ffe2a6 !important; }
+.recovery-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.recovery-choice { display: flex; flex-direction: column; padding: 12px; border: 1px solid #c2ccb95c; border-radius: 3px; background: #102f3c88; }
+.recovery-choice h4 { color: #f0e7c9; font: 400 22px Georgia, serif; }
+.game-panel .recovery-cost { font-size: 12px; color: #f2d8a4; }
+.game-panel .recovery-choice p { font-size: 13px; line-height: 1.55; }
+.game-panel .recovery-choice small { margin-bottom: 12px; }
+.game-panel .recovery-choice button { margin: auto 0 0; text-align: left; }
+.game-panel .recovery-kit { font-size: 12px; }
+@media (max-width: 680px) {
+  .panel-frame { padding: 0 16px 32px; }
+  .panel-header { flex-wrap: wrap; gap: 8px; }
+  .game-panel h2 { font-size: 26px; }
+  .panel-header nav { order: 2; width: 100%; }
+  .carried, .recovery-choices { grid-template-columns: 1fr; }
+  .recipe { align-items: stretch; flex-direction: column; gap: 8px; }
+  .recipe > button { max-width: none; }
+  .storage-operands { flex-wrap: wrap; }
+  .storage-operands button { max-width: none; }
+}

@@ -766,12 +766,6 @@ kbd {
   font: 400 24px Georgia, serif;
   margin: 7px 0;
 }
-.game-panel h2 {
-  font:
-    400 32px Georgia,
-    serif;
-  margin: 12px 0;
-}
 .opening p {
   margin: 8px 0 12px;
   font-size: 13px;
@@ -867,266 +861,6 @@ kbd {
   top: 90px;
   bottom: auto;
 }
-.game-panel {
-  position: absolute;
-  inset: 0;
-  background: #102d3eea;
-  overflow: auto;
-  backdrop-filter: blur(7px);
-  z-index: 3;
-}
-.panel-frame {
-  max-width: 1060px;
-  margin: 32px auto;
-  padding: 16px 30px 80px;
-}
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.panel-header button,
-.game-panel nav button {
-  padding: 10px 16px;
-  border: 1px solid #b8c5ad60;
-}
-.game-panel nav {
-  display: flex;
-  gap: 12px;
-  margin-top: 22px;
-  flex-wrap: wrap;
-}
-.panel-intro {
-  color: #c4d7c7;
-  font-size: 13px;
-  line-height: 1.7;
-}
-.game-panel article {
-  padding: 17px 20px;
-  margin: 14px 0;
-  background: #2048548a;
-  border: 1px solid #84b1a442;
-  border-radius: 4px;
-}
-.game-panel h3 {
-  font-size: 15px;
-  font-weight: 550;
-  margin: 0 0 10px;
-}
-.recovery-choices {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 14px 0;
-}
-.recovery-choice {
-  display: flex;
-  flex-direction: column;
-  padding: 14px;
-  border: 1px solid #c2ccb95c;
-  border-radius: 3px;
-  background: #102f3c88;
-}
-.recovery-choice h4 {
-  font: 400 22px Georgia, serif;
-  color: #f0e7c9;
-  margin: 0 0 10px;
-}
-.game-panel .recovery-cost {
-  font-size: 12px;
-  color: #f2d8a4;
-  margin: 0;
-}
-.game-panel .recovery-choice p {
-  font-size: 13px;
-  line-height: 1.55;
-}
-.game-panel .recovery-choice small {
-  font-size: 11px;
-  line-height: 1.6;
-  margin-bottom: 14px;
-}
-.game-panel .recovery-choice button {
-  margin: auto 0 0;
-  text-align: left;
-}
-.game-panel .recovery-kit {
-  margin: 10px 0;
-  font-size: 12px;
-}
-.service-details {
-  margin-top: 12px;
-}
-.service-details summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: #d8e2cd;
-}
-.game-panel p {
-  font-size: 14px;
-  line-height: 1.8;
-  color: #c7d8c9;
-}
-.game-panel small {
-  font-size: 12px;
-  color: #cadccf;
-}
-.game-panel button {
-  border: 1px solid #b8c7a35e;
-  padding: 8px 12px;
-  font-size: 13px;
-  background: #294f55;
-  margin: 3px;
-}
-.recipe {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-.recipe p {
-  margin: 7px 0;
-}
-.recipe > div {
-  min-width: 0;
-  flex: 1;
-}
-.recipe > button {
-  max-width: 260px;
-  text-align: left;
-  line-height: 1.6;
-}
-.ingredient {
-  display: block;
-  color: #d6e7d3;
-}
-.ingredient.missing,
-.recipe-status {
-  color: #ffe0ad !important;
-}
-.recipe-ready {
-  color: #c4f0cf !important;
-}
-.equipment-note,
-#panel-feedback {
-  padding: 12px 16px;
-  border-left: 3px solid #d3c28c;
-  background: #183e4b;
-}
-#panel-feedback {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: #163b48fa;
-}
-#panel-feedback.error {
-  border-color: #ffc789;
-  color: #ffe3bb;
-}
-.game-panel nav button[aria-current="page"] {
-  background: #49635a;
-  border-color: #e2cb97;
-  color: #fff0cf;
-}
-.game-panel .provenance {
-  color: #d3dfc9;
-  font-size: 12px;
-}
-.game-panel article,
-.game-panel button {
-  overflow-wrap: anywhere;
-}
-.container-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-  gap: 16px;
-}
-.container-grid .container {
-  margin: 14px 0 0;
-}
-.container h3 {
-  display: flex;
-  justify-content: space-between;
-}
-.item-row {
-  display: flex;
-  flex-direction: column;
-  padding: 12px 0;
-  border-top: 1px solid #8bb5a440;
-  gap: 6px;
-}
-.item-row strong {
-  font-size: 14px;
-  font-weight: 500;
-}
-.item-row button {
-  font-size: 12px;
-  padding: 7px 9px;
-}
-.service-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.preparation-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  align-items: start;
-}
-.preparation-grid article {
-  margin-bottom: 0;
-}
-.game-panel .power-preparation p,
-.game-panel .bulk-storage p,
-.game-panel .module-fitting p {
-  margin: 8px 0;
-  font-size: 13px;
-  line-height: 1.6;
-}
-.game-panel .power-preparation small,
-.game-panel .bulk-storage small,
-.game-panel .module-fitting small {
-  display: block;
-  font-size: 12px;
-  line-height: 1.6;
-}
-.bench-charge,
-.fitting-choice {
-  border-top: 1px solid #b8c7a340;
-  margin-top: 16px;
-  padding-top: 14px;
-}
-.game-panel h4 {
-  margin: 0 0 8px;
-  font-size: 14px;
-  font-weight: 550;
-}
-.storage-operands {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.storage-operands label {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-  gap: 7px;
-  font-size: 12px;
-}
-.storage-operands select {
-  width: 100%;
-  min-width: 0;
-  padding: 9px 5px;
-  border: 1px solid #b8c7a360;
-  background: #183d48;
-  color: #e4ead3;
-  font-size: 12px;
-}
-.game-panel .recipe-sources {
-  font-size: 12px;
-  color: #c4d7c7;
-}
 .explore-note small {
   display: block;
   margin-top: 5px;
@@ -1145,22 +879,6 @@ kbd {
   font-size: 10px;
   line-height: 1.5;
 }
-.finding b {
-  color: #f0d39a;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-}
-.lead {
-  border-left: 2px solid #e0ba7c;
-  padding-left: 14px;
-}
-.fixture-label,
-.interpretation {
-  border: 1px solid #e0ba7c88;
-  padding: 16px;
-  color: #ffe2a6 !important;
-}
 .hud-actions {
   max-width: 520px;
   flex-wrap: wrap;
@@ -1174,13 +892,7 @@ kbd {
   bottom: 34px;
   max-width: 780px;
 }
-.game-panel #notification {
-  bottom: 10px;
-}
 @media (max-width: 900px) {
-  .preparation-grid {
-    grid-template-columns: 1fr;
-  }
   .vitals {
     left: 18px;
     gap: 6px;
@@ -1203,10 +915,6 @@ kbd {
     top: 190px;
     width: 85vw;
   }
-  .panel-frame {
-    padding: 12px 18px;
-    margin: 12px auto;
-  }
   .explore-note {
     max-width: 40vw;
   }
@@ -1216,9 +924,6 @@ kbd {
   }
 }
 @media (max-width: 680px) {
-  .recovery-choices {
-    grid-template-columns: 1fr;
-  }
   .opening {
     left: 18px;
     bottom: 18px;
@@ -1229,25 +934,6 @@ kbd {
     left: 18px;
     bottom: 125px;
     max-width: calc(100vw - 36px);
-  }
-  .recipe {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .recipe > button {
-    max-width: none;
-  }
-  .panel-header {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .game-panel article {
-    padding: 14px;
-  }
-  .container h3 {
-    flex-wrap: wrap;
-    gap: 8px;
   }
   .vitals {
     top: 118px;
