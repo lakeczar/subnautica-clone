@@ -12,7 +12,7 @@ The stage1 Opus review and detailed advice are reconciled in [the experience cor
 
 [S2a HUD/app/cue](tasks/POLISH-1-EXPERIENCE-S2A.md) is terminal and provisionally composed with Cargo at **4c09ee749cfc9f16ca77e1759f83175cb41e3e7b**, source3d37f4e/typography24c241d/report34c2900. [Root inspection](evidence/POLISH-1-EXPERIENCE-S2A-INTEGRATION.md) verifies actual Sol6.1/max,198 payloads, exact source/build receipts, unchanged earned saves and retained complete-state reload equality at tick16585. Root inspected six final author captures. Four lost final event streams and corrected rail-capture labels remain disclosed; these are prior-source HUD evidence, not combined play proof. S2a ownership is released; neither S2 author remains active.
 
-The combined check is **385/397 tests,12 failures**, the same legacy panel expectations; standalone build/typecheck and both economies pass. Root also reproduces **ROOT-EXP-01**, a surface-air warning incorrectly saying emergency air0s. [Composition task](tasks/POLISH-1-EXPERIENCE-COMPOSE.md) assigns one Sol owner to preserve test coverage, correct the air label and verify current-source P1–P8 plus active post-Continue complete state. TASKS records dispatch. Full batch acceptance requires the fresh Astra xhigh/Sol max pair and Opus verification. Stage1 remains open; M2–M4 remain required. Human feel, audible mix, duration/enjoyment and representative-GPU evidence remain unverified.
+The combined check is **385/397 tests,12 failures**, the same legacy panel expectations; standalone build/typecheck and both economies pass. Root also reproduces **ROOT-EXP-01**, a surface-air warning incorrectly saying emergency air0s. [Composition task](tasks/POLISH-1-EXPERIENCE-COMPOSE.md) assigns one Sol owner to preserve test coverage, correct the air label and verify current-source P1–P8 plus active post-Continue complete state. COMPOSE is active on exact parent648fa9248fffcf5e3aa0161174bb7dc37400f748; TASKS records its task ID. Full batch acceptance requires the fresh Astra xhigh/Sol max pair and Opus verification. Stage1 remains open; M2–M4 remain required. Human feel, audible mix, duration/enjoyment and representative-GPU evidence remain unverified.
 
 Root owns no browser/server/recording/check process. No main merge/deployment.
 
@@ -66,7 +66,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the committed [composition brief](tasks/POLISH-1-EXPERIENCE-COMPOSE.md), then receive its completion without polling. Inspect the12 shared-test reconciliations and ROOT-EXP-01, current-source P1–P8 and active full-state reload evidence. Freeze the complete S1+S2 candidate for fresh non-author Astra xhigh/Sol max review, then fresh Opus verification before M2–M4. Current provisional production is4c09ee7; accepted slice2 production remainsc32d8c5. Main merge/public deployment remain owner actions.
+Receive the active [composition worker](tasks/POLISH-1-EXPERIENCE-COMPOSE.md) completion without polling. Inspect the12 shared-test reconciliations and ROOT-EXP-01, current-source P1–P8 and active full-state reload evidence. Freeze the complete S1+S2 candidate for fresh non-author Astra xhigh/Sol max review, then fresh Opus verification before M2–M4. Current provisional production is4c09ee7; accepted slice2 production remainsc32d8c5. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
