@@ -40,4 +40,4 @@ Construction PRs target `game/siltwake`; the final integration PR targets the ap
 
 ## Current slice2 execution
 
-[Reconciled slice2](tasks/POLISH-1-SLICE2.md) starts two disjoint Sol max worktrees: C0 mechanical UI extraction and RIB curved-obstacle correction with existing actor proxies. Root inspects/integrates these seams before assigning menu preparation and encounter presentation; all delivered pieces share the full-slice paired acceptance gate. Stage1 Opus follows that gate.
+[Reconciled slice2](tasks/POLISH-1-SLICE2.md) starts two disjoint Sol max worktrees: C0 mechanical UI extraction and RIB curved-obstacle correction with existing actor proxies. Root inspects/integrates each seam before its consumers: menu preparation needs C0 only and may run alongside RIB; encounter/obstruction work waits for inspected geometry and presentation wiring; all delivered pieces share the full-slice paired acceptance gate. Stage1 Opus follows that gate.

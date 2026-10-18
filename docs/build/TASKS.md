@@ -845,3 +845,12 @@ Both T3-owned async tasks accepted running/working in isolated worktrees, no pen
 ### Public controls acceptance and active slice2 synchronized
 
 PR#4/#3 full descriptions now record paired/coordinator acceptance of all nine controls criteria ond031803 and the two newly dispatched Sol max slice2 owners. Exact body/base/head/draft readbacks atc250bb7/M0a2cb19f match `/tmp/siltwake-m1-pr/slice1-r2-accepted-verification.json`. #3 retains M0-only production claims; #4 distinguishes accepted controls from unintegrated C0/RIB work. Existing source-attributed screenshots/recordings retained; no new public media or root browser/test run. The full1/2/3/4 stack is confirmed linked; all remain unwatched. No main/game merge or deployment. Completion notifications resume ordinary integration; no polling or watcher.
+
+
+### C0 terminal, inspected and provisionally assembled
+
+Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice2-c0-sol-max-577d249` completed/result_available, no children/questions. Clean t3-02afb686; root independently confirms actual gpt-6.1-sol/max session turn_context. Source72c3355f6f19710622363ed9e856c27fc57430af/evidenced8b3742c4f29c0d41ba58f3665cb2b599e703475 merge ate3c3ce167bc60e5230c474dc7dcfdb8a1c1d43fd. Scope only assigned UI/evidence; ownership released, owned resources closed5191 free.
+
+[Root integration](evidence/POLISH-1-SLICE2-C0-INTEGRATION.md) records275 unchanged tests/typecheck/build/economy,50 sealed payloads,40source/25test/27build identities,20 exact/four normalized methods,22 actual before/final parity checkpoints and16 inspected native panel Tab intervals. Root viewed current dense-layout baselines. Additional service/storage comparison preserves80 elapsed ticks and all state except four unrecorded look angles; not a full input replay. No root browser run or full-slice acceptance.
+
+Dependency clarification:2C uses inspected C0 and frozen world APIs, so can proceed while original RIB works independently.2D waits for reconciled geometry/presentation. Root will record committed2C baseline and returned task ID before treating it active. No duplicate RIB task or polling. Complete composed slice2 still requires paired review and stage1 Opus.
