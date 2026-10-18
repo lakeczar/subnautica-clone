@@ -1,11 +1,13 @@
 import { EVIDENCE, HULLS, HULL_COLLIDERS, ITEMS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
-import { createWorldQueries, moveHull, withinWorldBounds } from "./world.js";
+import { createWorldQueries, hullFloor, moveHull, withinWorldBounds } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import type {
   GameCommand,
   GameEvent,
   GameState,
+  Capsule,
+  Vec3,
   WorldQueries,
 } from "./types.js";
 import {
@@ -42,6 +44,43 @@ import {
   localToWorld,
   updateBerth,
 } from "./carrier.js";
+
+/** A caller correction is another continuous move, including from a legacy rib
+ * overlap. Require the straight vertical path, its intended endpoint and floor;
+ * accepting a slid/stopped correction would let an actor climb above the water.
+ * No fixed displacement/thickness assumption, and no clearance-false bypass. */
+function verticalCorrection(world: WorldQueries, position: Vec3, y: number, shape: Capsule, hull: boolean): Vec3 | null {
+  if (y === position.y) return position;
+  const target = { ...position, y };
+  const floor = hull ? hullFloor(world, target, shape) + 0.05
+    : world.groundHeight(target.x, target.z) - (shape.bottom ?? 0) - 0.02;
+  if (!Number.isFinite(y) || !Number.isFinite(floor) || y < floor) return null;
+  const correction = world.moveCapsule(position, { x: 0, y: y - position.y, z: 0 }, shape);
+  return !correction.hitSolid && !correction.hitBoundary && distance(correction.position, target) <= 1e-10
+    ? target : null;
+}
+
+/** One ordinary attempt, at most one surface-capped retry, then the retained
+ * origin. Only the chosen attempt's collision/measurement data reaches callers.
+ * surfaceLimitedRise records the constraint that rejected the ordinary rise;
+ * correction probes never become additional propulsion/impact measurements. */
+function surfaceMove<T extends ReturnType<WorldQueries["moveCapsule"]>>(
+  world: WorldQueries, origin: Vec3, delta: Vec3, shape: Capsule,
+  attempt: (d: Vec3) => T, targetY: (move: T) => number, hull = false,
+): { move: T; surfaceLimitedRise: number; limited: boolean; rolledBack: boolean } {
+  const first = attempt(delta), y = targetY(first);
+  const limited = y !== first.position.y;
+  const surfaceLimitedRise = Math.max(0, first.position.y - y);
+  const corrected = verticalCorrection(world, first.position, y, shape, hull);
+  if (corrected) return { move: { ...first, position: corrected }, surfaceLimitedRise, limited, rolledBack: false };
+  const retry = attempt({ ...delta, y: Math.min(delta.y, y - origin.y) });
+  const retryY = targetY(retry);
+  const retryCorrected = verticalCorrection(world, retry.position, retryY, shape, hull);
+  return {
+    move: { ...retry, position: retryCorrected ?? { ...origin }, hitSolid: retry.hitSolid || !retryCorrected },
+    surfaceLimitedRise: Math.max(surfaceLimitedRise, retry.position.y - retryY), limited, rolledBack: !retryCorrected,
+  };
+}
 import { incapacitate, recoveryCommand, updateRecovery } from "./recovery.js";
 import { updateSurvival, updateThreat } from "./survival.js";
 const clamp = (v: number, a: number, b: number): number =>
@@ -436,25 +475,28 @@ export function stepGame(
     // Its aggregate hitSolid also includes floor support and cannot classify a ceiling.
     const attempt = ascent;
     const forwardAttempt = thrust;
-    let forwardBoundary = false;
-    const measuredWorld: WorldQueries = attempt || forwardAttempt ? { ...world, moveCapsule(origin, d, shape) {
-      const result = world.moveCapsule(origin, d, shape);
-      if (attempt && result.hitSolid && d.y > 0)
-        attempt.solidLimitedRise += Math.max(0, origin.y + d.y - result.position.y);
-      if (forwardAttempt && result.hitSolid)
-        forwardAttempt.solidLimited += Math.max(0, Math.hypot(d.x, d.z) -
-          Math.hypot(result.position.x - origin.x, result.position.z - origin.z));
-      if (forwardAttempt && result.hitBoundary) forwardBoundary = true;
-      return result;
-    } } : world;
-    const move = moveHull(measuredWorld, v.pose.position, delta, HULL_COLLIDERS[v.hull],
-      v.hull === "hearthline" ? carrierTravelBounds() : undefined);
-    if (ascent) ascent.surfaceLimitedRise = Math.max(0, move.position.y + 0.9);
-    move.position.y = Math.min(
-      v.hull === "spindle" ? -0.4 : -0.9,
-      move.position.y,
-    );
-    if (v.hull === "spindle") move.position.y = -0.4;
+    const shape = HULL_COLLIDERS[v.hull], hullOrigin = { ...v.pose.position };
+    const constrained = surfaceMove(world, hullOrigin, delta, shape, d => {
+      let solidRise = 0, solidThrust = 0, forwardBoundary = false;
+      const measuredWorld: WorldQueries = attempt || forwardAttempt ? { ...world, moveCapsule(origin, slice, proxy) {
+        const result = world.moveCapsule(origin, slice, proxy);
+        if (attempt && result.hitSolid && slice.y > 0)
+          solidRise += Math.max(0, origin.y + slice.y - result.position.y);
+        if (forwardAttempt && result.hitSolid)
+          solidThrust += Math.max(0, Math.hypot(slice.x, slice.z) -
+            Math.hypot(result.position.x - origin.x, result.position.z - origin.z));
+        if (forwardAttempt && result.hitBoundary) forwardBoundary = true;
+        return result;
+      } } : world;
+      return { ...moveHull(measuredWorld, hullOrigin, d, shape,
+        v.hull === "hearthline" ? carrierTravelBounds() : undefined), solidRise, solidThrust, forwardBoundary };
+    }, move => v.hull === "spindle" ? -0.4 : Math.min(-0.9, move.position.y), true);
+    const move = constrained.move;
+    if (ascent) {
+      ascent.solidLimitedRise = constrained.rolledBack ? Math.max(0, delta.y) : move.solidRise;
+      ascent.surfaceLimitedRise = constrained.surfaceLimitedRise;
+    }
+    if (thrust) thrust.solidLimited = constrained.rolledBack ? requested : move.solidThrust;
     if (move.hitSolid && previousSpeed > 4) {
       const before = v.health;
       v.health = Math.max(0, v.health - (previousSpeed - 4) * DT * 10);
@@ -483,7 +525,7 @@ export function stepGame(
     s.metrics.powerUsed += drain;
     loudness = quiet ? 0.08 : sprint ? 1 : d > 0.003 ? 0.48 : 0.08;
     if (move.hitBoundary) events.push({ type: "foundation-boundary" });
-    if (move.hitBoundary || forwardBoundary) thrust = null;
+    if (move.hitBoundary || move.forwardBoundary) thrust = null;
     else if (thrust) thrust.actual = Math.hypot(move.position.x - old.x, move.position.z - old.z);
   } else if (s.player.interiorId) {
     const h = carrierHull(s),
@@ -600,26 +642,24 @@ export function stepGame(
         position.y + delta.y < nextSupport
       )
         delta.y = nextSupport - position.y;
-      const move = world.moveCapsule(position, delta, capsule);
-      if (ascent && move.hitSolid && requestedRise > 0)
-        ascent.solidLimitedRise += Math.max(0, position.y + requestedRise - move.position.y);
-      position = move.position;
-      hitBoundary ||= move.hitBoundary;
-      const floor = world.supportHeight(position.x, position.z, position.y);
-      if (position.y < floor) {
-        position.y = floor;
-        vy = 0;
+      const sliceOrigin = { ...position };
+      const constrained = surfaceMove(world, sliceOrigin, delta, capsule, d => {
+        const move = world.moveCapsule(sliceOrigin, d, capsule);
+        const solidRise = move.hitSolid && requestedRise > 0
+          ? Math.max(0, sliceOrigin.y + Math.max(0, d.y) - move.position.y) : 0;
+        const floor = world.supportHeight(move.position.x, move.position.z, move.position.y);
+        const supported = move.position.y < floor;
+        return { ...move, position: supported ? { ...move.position, y: floor } : move.position,
+          solidRise, floor, supported };
+      }, move => mode === "swimming" && old.y <= -0.5 && move.floor < -0.55
+        ? Math.min(-0.5, move.position.y) : move.position.y);
+      if (ascent) {
+        ascent.solidLimitedRise += constrained.rolledBack ? requestedRise : constrained.move.solidRise;
+        ascent.surfaceLimitedRise += constrained.surfaceLimitedRise;
       }
-      if (
-        mode === "swimming" &&
-        position.y > -0.5 &&
-        old.y <= -0.5 &&
-        floor < -0.55
-      ) {
-        if (ascent) ascent.surfaceLimitedRise += position.y + 0.5;
-        position.y = -0.5;
-        vy = 0;
-      }
+      position = constrained.move.position;
+      hitBoundary ||= constrained.move.hitBoundary;
+      if (constrained.move.supported || constrained.limited) vy = 0;
     }
     const finalSupport = world.supportHeight(
       position.x,

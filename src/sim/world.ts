@@ -412,9 +412,14 @@ export function createWorldQueries(
       for (let i = 0; i < RIB_SLIDE_ITERATIONS; i++) {
         let nearest: { t: number; normal: Vec3; rib: boolean; stop: boolean } | null = null;
         const box = actorBox(position, capsule);
+        const overlaps: { rib: RibSegment; gap: number }[] = [];
         for (const solid of solids) {
           if (!sweptBoxIntersects(box, remaining, solid)) continue;
           const rib = canonicalRib(solid);
+          if (rib && sweptBoxIntersects(box, { x: 0, y: 0, z: 0 }, solid)) {
+            const gap = segmentBoxClosest(rib.a, rib.b, box).distance - rib.radius;
+            if (gap < -RIB_CONTACT_TOLERANCE) overlaps.push({ rib, gap });
+          }
           const hit = rib
             ? sweepBoxRib(box, remaining, rib)
             : sweep(position, remaining, capsule, solid);
@@ -422,11 +427,18 @@ export function createWorldQueries(
             nearest = { ...hit, rib: rib !== null, stop: "stop" in hit && hit.stop === true };
         }
         const fraction = nearest ? Math.max(0, nearest.t - (nearest.rib ? 0 : 0.0001)) : 1;
-        position = {
+        const next = {
           x: position.x + remaining.x * fraction,
           y: position.y + remaining.y * fraction,
           z: position.z + remaining.z * fraction,
         };
+        // Numerical backstop for the non-closing proof, at EVERY accepted slide.
+        // Never use overlap as permission to accept a deeper endpoint.
+        if (overlaps.some(({ rib, gap }) => {
+          const nextGap = segmentBoxClosest(rib.a, rib.b, actorBox(next, capsule)).distance - rib.radius;
+          return !Number.isFinite(nextGap) || nextGap < gap - 1e-9;
+        })) { hitSolid = true; break; }
+        position = next;
         if (!nearest) break;
         hitSolid = true;
         if (nearest.stop) break;
