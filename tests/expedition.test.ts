@@ -196,7 +196,7 @@ test("transfer commands report their committed quantity and destination instead 
   assert.deepEqual(s, before, "commands must leave their input snapshot unchanged");
   assert.equal(partial.state.feedback, "Transferred 1 × Silica glass to pod locker.");
   assert.deepEqual(partial.events, [
-    { type: "notice", message: partial.state.feedback },
+    { type: "notice", channel: "action", message: partial.state.feedback },
     { type: "sound", cue: "collect" },
   ]);
   assert.equal(partial.state.inventory.items.find((i) => i.id === item.id)!.quantity, 3);
@@ -225,7 +225,7 @@ test("refused transfer preserves inventory and prior feedback and emits only the
   assert.equal(result.state, s);
   assert.deepEqual(result.state, before);
   assert.deepEqual(result.events, [{
-    type: "notice", message: "Both containers must be present and accessible.", error: true,
+    type: "notice", channel: "action", message: "Both containers must be present and accessible.", error: true,
   }]);
 });
 test("transfer feedback identifies a local craft hold by its registry hull label", () => {
@@ -381,7 +381,7 @@ test("directional distraction shortens its ray at every world edge/corner and sa
     assert.deepEqual(s, before, "the original command input stays detached");
     const repeated = executeCommand(result.state, { type: "distraction" }, world);
     assert.strictEqual(repeated.state, result.state);
-    assert.deepEqual(repeated.events, [{ type: "notice", message: "Distraction is already active.", error: true }]);
+    assert.deepEqual(repeated.events, [{ type: "notice", channel: "action", message: "Distraction is already active.", error: true }]);
   }
 });
 test("distraction preserves the interior projection and expiry and refuses an outward boundary ray atomically", () => {
@@ -656,14 +656,14 @@ test("automatic Bobbin ready and blocked transitions publish one notice through 
   s.recovery.operation = { vehicleId: v.id, method: "tow", phase: "approach", waypoint: 3, position: { ...v.pose.position, y: v.pose.position.y + 1 } };
   let result = stepGame(s, [], world);
   assert.equal(result.state.recovery.operation?.phase, "ready");
-  assert.deepEqual(result.events.filter((e) => e.type === "notice"), [{ type: "notice", message: result.state.feedback }]);
+  assert.deepEqual(result.events.filter((e) => e.type === "notice"), [{ type: "notice", channel: "action", context: "recovery", message: result.state.feedback }]);
   assert.equal(stepGame(result.state, [], world).events.filter((e) => e.type === "notice").length, 0);
   s = executeCommand(result.state, { type: "recover", vehicleId: v.id, method: "tow" }, world).state;
   const blocked = createWorldQueries([{ id: "diagnostic.tow-roof", min: { x: 90, y: -89.5, z: -110 }, max: { x: 100, y: -89.4, z: -90 } }]);
   result = stepGame(s, [], blocked);
   assert.equal(result.state.recovery.operation, null);
   assert.match(result.state.feedback, /Tow clearance blocked/);
-  assert.deepEqual(result.events.filter((e) => e.type === "notice"), [{ type: "notice", message: result.state.feedback, error: true }]);
+  assert.deepEqual(result.events.filter((e) => e.type === "notice"), [{ type: "notice", channel: "hazard", context: "recovery", message: result.state.feedback, error: true }]);
   assert.equal(stepGame(result.state, [], blocked).events.filter((e) => e.type === "notice").length, 0);
 });
 test("legacy operation phase cuts and attachment offsets resume a fully swept tow with immediately valid saves", () => {
@@ -745,7 +745,7 @@ test("a blocker on the final mooring segment stops at the last clear pose withou
   assert.deepEqual(s.inventory, before.inventory);
   assert.deepEqual(s.recovery.losses, before.recovery.losses);
   assert.ok(hullClearance(blocked, s.fleet.vehicles[0]!.pose.position, HULL_COLLIDERS.dart));
-  assert.deepEqual(events.filter((e) => e.type === "notice"), [{ type: "notice", message: RECOVERY_NOTICES.blocked, error: true }]);
+  assert.deepEqual(events.filter((e) => e.type === "notice"), [{ type: "notice", channel: "hazard", context: "recovery", message: RECOVERY_NOTICES.blocked, error: true }]);
   s = roundTrip(JSON.parse(JSON.stringify(s)) as GameState);
   assert.equal(stepGame(s, [], blocked).events.filter((e) => e.type === "notice").length, 0);
   const tick = s.tick;

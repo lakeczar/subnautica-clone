@@ -195,7 +195,7 @@ test("known evidence E repeats are informative, saveable and idempotent without 
   for (let i = 0; i < 3; i++) {
     const out = executeCommand(s, { type: "interact" }, world);
     assert.deepEqual(out.state, original);
-    assert.deepEqual(out.events, [{ type: "interaction-panel", panel: "notebook", targetId: "C01" }, { type: "notice", message: "Scored regulator · in notebook." }]);
+    assert.deepEqual(out.events, [{ type: "interaction-panel", panel: "notebook", targetId: "C01" }, { type: "notice", channel: "action", message: "Scored regulator · in notebook." }]);
     s = saved(out.state);
   }
   const stepped = stepGame(s, [{ type: "interact" }, { type: "interact" }], world);
@@ -232,11 +232,11 @@ test("Q keeps equipment and acoustic rules on the same target; known scans repea
   const wall = createWorldQueries([{ id: "scanner-wall", min: { x: -18, y: -9, z: -6.5 }, max: { x: -16, y: -5, z: -6.4 } }], () => -200);
   const blocked = executeCommand(s, { type: "scan" }, wall);
   assert.deepEqual(blocked.state, s); assert.equal(panels(blocked.events).length, 0);
-  assert.deepEqual(blocked.events, [{ type: "notice", message: "Nothing within reach." }]);
+  assert.deepEqual(blocked.events, [{ type: "notice", channel: "action", message: "Nothing within reach." }]);
   s.player.pose.yaw += Math.PI;
   const away = executeCommand(s, { type: "scan" }, world);
   assert.equal(away.state.world.threat.interest, s.world.threat.interest); assert.equal(panels(away.events).length, 0);
-  assert.deepEqual(away.events, [{ type: "notice", message: "Nothing within reach." }]);
+  assert.deepEqual(away.events, [{ type: "notice", channel: "action", message: "Nothing within reach." }]);
 });
 
 test("depleted hosts sort finite stock, tend food, retain recovery-only constraints, or say Empty", () => {

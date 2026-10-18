@@ -204,16 +204,27 @@ export type GameCommand =
         | "enter-interior";
       vehicleId?: string;
     };
+export type NoticeChannel = "action" | "hazard" | "system" | "persistence";
+export type NoticeContext = "threat" | "oxygen" | "food" | "hull" | "recovery";
+export interface NoticeOptions {
+  channel?: NoticeChannel;
+  context?: NoticeContext;
+}
 export type GameEvent =
   | { type: "movement-mode-changed"; mode: MovementMode }
   | { type: "foundation-boundary" }
   | { type: "impact"; speed: number; hullLoss: number; origin: Vec3 }
+  /** One commanded upward attempt, in metres this step. Absence resets presentation. Never saved. */
+  | { type: "ascent-sample"; actorId: string | null; requestedRise: number; actualRise: number;
+      solidLimitedRise: number; surfaceLimitedRise: number }
   | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook"; targetId: string }
-  | { type: "notice"; message: string; error?: boolean }
+  | ({ type: "notice"; message: string; error?: boolean } & NoticeOptions)
   | {
       type: "sound";
       /** Transient world-space source at emission. Omit for body/equipment alarms. Never saved. */
       origin?: Vec3;
+      /** Only a positional warning call at an actual warn/pursue transition. */
+      source?: "threat-call";
       cue:
         | "collect"
         | "craft"

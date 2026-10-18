@@ -136,7 +136,7 @@ test("valid old occupied approach, ready and tow snapshots cancel once before mo
     assert.deepEqual(result.state.fleet.vehicles[0], { ...v, emergencyAir: v.emergencyAir - 1 / 60 });
     assert.deepEqual(result.state.player.pose, before.player.pose);
     assert.ok(result.state.player.vitals.food < before.player.vitals.food);
-    assert.deepEqual(result.events.filter((e) => e.type === "notice"), [event]);
+    assert.deepEqual(result.events.filter((e) => e.type === "notice"), [{ ...event, channel: "hazard", context: "recovery" }]);
     s = roundTrip(result.state);
     for (let i = 0; i < 5; i++) {
       const next = stepGame(s, [], world);
