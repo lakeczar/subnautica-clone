@@ -777,3 +777,12 @@ Sol’s initial review remains pending. No peer findings sent, no production cha
 Both task notifications are acknowledged terminal/result_available with no live children/questions. Astra9325777 and Sold75a220c reports are integrated. Root confirms both models/efforts from actual sessions. [Paired reconciliation](reviews/POLISH-1-SLICE1-R1.md): Astra ACCEPT; Sol REQUEST CHANGES; root accepts the P2 native Tab navigation/capture regression, including focused-button reproduction and associated inventory focus-wrap omission. No batch acceptance. Review ownership is released; owned resources closed and5193/5194 free. Root has no browser/server.
 
 [Bounded correction](tasks/POLISH-1-SLICE1-R1-FIX.md) owns app/view focus handling, three named test/support paths and its evidence. No unrelated source changes. The next dispatch receives a committed shared baseline and explicit Sol6.1/max selection. After root inspection/checks, fresh paired round2 must assess all nine original criteria plus both R1 reports/disposition. Slice2, stage1 Opus and M2–M4 remain authorized. No duplicate workers or review through thread_send.
+
+
+### SOL-P1-1 correction dispatched from7eec795
+
+- Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice1-r1-fix-sol-max-7eec795`; stable request `siltwake-polish-1-slice1-r1-fix-sol-max-7eec795`.
+- T3-owned async isolated worktree, exact parent **7eec795a5619042931199a73b70bca563aae6a30**. Live catalog confirms codex/gpt-6.1-sol supports max; dispatch explicitly sets reasoningEffort=max. Accepted running/working, no pending children/questions; effective runtime confirmation remains pending.
+- Binding [brief](tasks/POLISH-1-SLICE1-R1-FIX.md) and both independent reports/root disposition supplied. Exclusive app/view focus handling; tests/app.test.ts, tests/presentation.test.ts, tests/app-browser-support.ts; sole evidence doc. No source API/schema/physics ownership. Only root and this builder active.
+- One owned incognito Linux tab if needed, checked-free5191, actual browser-process isolation verification and normal cleanup required. Originals read-only, new /tmp/siltwake-polish-1-slice1-r1-fix/. No children/peer edits/push/PR/merge. Native Tab/Shift+Tab/wrap/capture proof required; no unrelated replay expansion.
+- Completion notification resumes root for inspection and fresh paired round2 on the complete original slice. Do not poll, duplicate the author or continue review through a child-thread message. Stage1 Opus and M2–M4 remain open.
