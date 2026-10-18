@@ -611,3 +611,10 @@ PR #4/#3 updated for final productiona5821aa and running frozen1caa05f correctio
 ### Owner requests an idle checkpoint for input
 
 Allow the existing integrated-R1 Astra/Sol reviews to finish and reconcile/record their results, then preserve a clean checkpoint and notify the owner that no workers are active. **Pause before any new correction task, review round or M2 implementation** so the owner can provide implementation input. Do not cancel current reviews; no additional task is dispatched for this request. Any blockers are recorded for discussion. The full build remains unfinished; this owner-directed stopping point supersedes earlier automatic continuation instructions until the owner responds.
+
+
+### Astra integrated R1 returned; owner pause remains scheduled
+
+Task `siltwake-m1-integrated-astra-r1-1caa05f` terminal, actual Astra/xhigh, report2a7b32e merged ate938d20. Both final correction/evidence and integrated M1 ACCEPT at1caa05f; no blocker. Root inspected report, independent scripts/results and15 checksummed payloads; [paired record](reviews/M1-INTEGRATED-R1.md) has exact hashes and evidence limits. ASTRA-M1-INTEGRATED-R1-01 records the known nonblocking adjacent-guidance contrast issue, with no fix assigned. Source remains frozen; no new root suite/browser run.
+
+Sol remains independent with initial verdicts pending; no Astra findings shared. Root plus Sol active, no root resources. Receive its existing completion notification and reconcile, then preserve a clean checkpoint and tell the owner all workers are idle. **No new correction, review round, M2 task or integration into game/siltwake before the requested input pause.** No polling or duplicate work.
