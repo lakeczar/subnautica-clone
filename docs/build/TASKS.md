@@ -1285,3 +1285,8 @@ Exact parent **0f8ae44afa048758472ba6911ce30f9de27ae121**, unchanged production5
 Complete [composition brief](tasks/POLISH-1-EXPERIENCE-COMPOSITION-FIX.md) supplied verbatim. Own hud.css, panels.css, private constructor grouping in view.ts, bounded presentation/preparation-panels tests and new evidence report. Shared semantics/public APIs/copy/lifetimes remain frozen. Separate artifacts `/tmp/siltwake-polish-1-experience-composition-fix/`, one owned isolated Linux tab/storage/port5190 with process proof and normal cleanup. No children, peer contact/polling, push/PR/merge or parent/artifact mutation.
 
 Only root, this Sol implementation owner and the independent Sol R2 reviewer on3e740a8 are active. Root owns no browser/server/recording/check. Receive completion notifications without polling; reconcile both returns, inspect correction, fresh complete-batch pair, Opus verification, then M2–M4. No game/main merge/deployment.
+
+
+### Public Astra R2 / active-correction checkpoint synchronized
+
+PR #4/#3 complete bodies disclose the two confirmed R2 blockers, active Sol6.1/max composition correction and unfinished independent Sol review. Exact full-body/base/head/draft readbacks at4cd3790/M0a2cb19f match `/tmp/siltwake-m1-pr/experience-r2-astra-verification.json`. Existing comparison images remain attributed to their specific closed R1 examples; no corrected-R2 or new-route claim. #3 retains M0-only scope. Stack linked/unwatched; root has no browser/server/check. Receive the correction and independent review notifications without polling.
