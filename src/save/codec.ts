@@ -2,7 +2,7 @@ import { CONTENT_VERSION } from "../content/registry.js";
 import type { GameState } from "../sim/types.js";
 import { createGame } from "../sim/state.js";
 import { completeOpening } from "../sim/progression.js";
-import { CARRIER_LAYOUT, carrierHull, carrierInteriorSolids, localToWorld } from "../sim/carrier.js";
+import { CARRIER_LAYOUT, carrierHull, carrierInteriorEntry, carrierInteriorSolids, localToWorld } from "../sim/carrier.js";
 import { createWorldQueries } from "../sim/world.js";
 import { validFoundationState } from "./foundation.js";
 import { record, validState } from "./validation.js";
@@ -135,11 +135,15 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
   // idempotent safety relocation. Reading never writes or moves a vessel/cargo.
   if (blockedCarrierInterior(d.state)) {
     const s = d.state, h = carrierHull(s)!;
-    s.player.interiorPose!.position = { ...CARRIER_LAYOUT.helm };
+    const error = "Carrier compartment migration could not find a clear dry passage at this saved vessel position. Keep the original save for a compatible build; nothing was loaded or changed.";
+    const entry = carrierInteriorEntry(s, createWorldQueries(), CARRIER_LAYOUT.helm);
+    if (!entry) return { ok: false, error };
+    s.player.interiorPose!.position = entry;
     s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
     s.player.velocity = { x: 0, y: 0, z: 0 };
-    s.migration = "Carrier compartment geometry now seals the dry berths. Your previous walking position intersected a closed compartment, so you were moved to the clear bridge passage. Vessels and cargo were preserved; the original record remains in the journal backup after saving.";
+    s.migration = "Carrier compartment geometry now seals the dry berths. Your previous walking position intersected a closed compartment, so you were moved to a clear dry passage. Vessels and cargo were preserved; the original record remains in the journal backup after saving.";
     s.feedback = s.migration;
+    if (!validState(s) || blockedCarrierInterior(s)) return { ok: false, error };
   }
   return { ok: true, value: d as unknown as SaveEnvelope };
 }
