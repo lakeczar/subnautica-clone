@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PanelView } from "../src/ui/panels.js";
-import { RECIPES, type ItemKind } from "../src/content/registry.js";
-import { addItem, available, fabricationContainers, materialStoragePreview } from "../src/sim/inventory.js";
+import { DART_BUILD_POSE, RECIPES, type ItemKind } from "../src/content/registry.js";
+import { addItem, available, fabricationContainers, materialStoragePreview, usedCapacity } from "../src/sim/inventory.js";
 import { completeOpening, craftingRefusal, discover } from "../src/sim/progression.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
 import { executeCommand } from "../src/sim/step.js";
+import { disableVehicle } from "../src/sim/recovery.js";
+import { serviceRefusal, serviceWouldRestore } from "../src/sim/vehicles.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameCommand, GameState, WorldQueries } from "../src/sim/types.js";
 
@@ -43,12 +45,16 @@ function panelFixture(t: test.TestContext, world: WorldQueries = createWorldQuer
   const panel = new PanelView(root as unknown as HTMLElement, world);
   const html = () => get("panel-content").innerHTML;
   const commands = (): GameCommand[] => [...html().matchAll(/data-action="([^"]*)"/g)].map((m) => panel.command(m[1]!)!);
+  const controls = () => [...html().matchAll(/<button\b([^>]*)>([^<]*)<\/button>/g)].map((m) => ({
+    command: panel.command(m[1]!.match(/data-action="([^"]*)"/)![1]!)!,
+    disabled: /\sdisabled(?:\s|$)/.test(m[1]!), label: m[2]!, attrs: m[1]!,
+  }));
   const recipe = (id: string) => html().split(`data-recipe="${id}"`)[1]!.split("</article>")[0]!;
   const groupOf = (id: string) => {
     const before = html().slice(0, html().indexOf(`data-recipe="${id}"`));
     return [...before.matchAll(/data-recipe-group="([^"]*)"|data-panel-group="(completed-recipes)"/g)].at(-1)?.slice(1).find(Boolean);
   };
-  return { panel, get, html, commands, recipe, groupOf };
+  return { panel, get, html, commands, controls, recipe, groupOf };
 }
 function workshop(): GameState {
   const s = createGame(); completeOpening(s); discover(s, "C03"); discover(s, "C04");
@@ -73,7 +79,7 @@ test("actual-ready work leads; only completed one-time recipes collapse and repe
   assert.equal(craftingRefusal(s, "dart_acoustic_trim", createWorldQueries()), null);
   assert.equal(groupOf("dart_acoustic_trim"), "ready");
   assert.equal(groupOf("essential_tools"), "completed-recipes");
-  assert.equal(groupOf("dart_base"), "blocked");
+  assert.equal(groupOf("dart_base"), "current");
   assert.ok(html().indexOf('data-recipe="dart_acoustic_trim"') < html().indexOf('data-recipe="dart_base"'));
   assert.ok(commands().some((c) => c.type === "craft" && c.recipeId === "dart_base"));
   assert.match(recipe("dart_base"), /A Dart already exists/);
@@ -228,4 +234,189 @@ test("ordinary panel labels are readable; empty-inventory emergency food and ret
       assert.match(text, /future construction opportunity; no campaign carrier is available here yet/);
     }
   }
+});
+
+test("Cargo context rows use actual local access: field, locked workshop, restored bench and supported seat", (t) => {
+  const { panel, html, controls, get } = panelFixture(t);
+  const s = workshop();
+  s.player.pose.position = { x: 65, y: -5, z: 10 };
+  panel.refresh("inventory", s);
+  assert.equal(get("panel-title").textContent, "Cargo");
+  assert.doesNotMatch(html(), /class="here-actions"/);
+  assert.ok(!controls().some((b) => b.command.type === "store-materials"));
+  s.player.pose.position = { x: 11, y: 1.2, z: -35 };
+  s.world.facilities.find((f) => f.id === "island_workshop")!.repaired = false;
+  panel.refresh("inventory", s);
+  assert.match(html(), /Locked · restore workshop services/);
+  assert.ok(!controls().some((b) => b.command.type === "store-materials"));
+  s.world.facilities.find((f) => f.id === "island_workshop")!.repaired = true;
+  const cell = addItem(s, "reserve_cell", 1, "workshop_locker"); cell.charge = 20;
+  panel.refresh("inventory", s);
+  assert.ok(html().indexOf('class="bulk-storage"') < html().indexOf('id="container-diver"'));
+  assert.ok(html().indexOf('class="bench-charge"') < html().indexOf('id="container-diver"'));
+  assert.equal(controls().find((b) => b.command.type === "recharge-cells")!.disabled, false);
+  const v = addDart(s); v.charge = 60;
+  s.player.controlledVehicleId = v.id; s.player.mode = "piloting"; s.player.pose = structuredClone(v.pose);
+  panel.refresh("inventory", s);
+  assert.match(html(), /Seated · power 60%/); assert.doesNotMatch(html(), /0m away/);
+  assert.ok(html().indexOf('id="vessel-menu-dart"') < html().indexOf('class="bulk-storage"'));
+  assert.equal(controls().find((b) => b.command.type === "service")!.disabled, false);
+  assert.deepEqual(controls().find((b) => b.command.type === "store-materials")!.command, { type: "store-materials", from: "diver", to: v.cargoId });
+});
+
+test("unsupported occupied craft offers reserve power; supported service and bench cells retain distinct exact rules", (t) => {
+  const { panel, controls, html } = panelFixture(t);
+  const s = workshop(), v = addDart(s);
+  v.charge = 35; v.pose.position = { x: 60, y: -30, z: -40 };
+  s.player.mode = "piloting"; s.player.controlledVehicleId = v.id; s.player.pose = structuredClone(v.pose);
+  addItem(s, "reserve_cell", 1, "diver").charge = 50;
+  panel.refresh("inventory", s);
+  assert.equal(controls().find((b) => b.command.type === "reserve")!.disabled, false);
+  const service = controls().find((b) => b.command.type === "service")!;
+  assert.equal(service.disabled, true); assert.match(service.attrs, /aria-describedby=/);
+  assert.ok(html().includes(serviceRefusal(s, v.id)!));
+  v.pose.position = { ...DART_BUILD_POSE }; s.player.pose = structuredClone(v.pose);
+  v.charge = 100; s.inventory.items.find((i) => i.kind === "reserve_cell")!.charge = 100;
+  assert.equal(serviceWouldRestore(s, v), false);
+  panel.refresh("inventory", s);
+  assert.match(html(), /Fully serviced/); assert.ok(!controls().some((b) => b.command.type === "service"));
+  assert.equal(executeCommand(s, { type: "service", vehicleId: v.id }, createWorldQueries()).events.some((e) => e.type === "notice" && e.error), false);
+  s.player.controlledVehicleId = null; s.player.mode = "walking"; s.player.pose.position = { x: 11, y: 1.2, z: -35 };
+  addItem(s, "reserve_cell", 1, "workshop_locker").charge = 25;
+  panel.refresh("inventory", s);
+  assert.equal(controls().find((b) => b.command.type === "recharge-cells")!.disabled, false);
+  assert.ok(!controls().some((b) => b.command.type === "service" && !b.disabled), "a bench can reach cargo without reaching the hull socket");
+  const pod = createGame(); completeOpening(pod); pod.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired = true;
+  addItem(pod, "reserve_cell", 1, "pod_locker").charge = 0;
+  panel.refresh("inventory", pod);
+  assert.equal(controls().find((b) => b.command.type === "recharge-cells")!.disabled, false);
+});
+
+test("Nothing to store and full destinations are native disabled with adjacent reasons; stale transfers remain atomic", (t) => {
+  const { panel, controls, html } = panelFixture(t);
+  const s = workshop(), v = addDart(s), world = createWorldQueries();
+  panel.refresh("inventory", s);
+  let store = controls().find((b) => b.command.type === "store-materials")!;
+  assert.equal(store.label, "Nothing to store"); assert.equal(store.disabled, true);
+  assert.doesNotMatch(html().split('class="bulk-storage"')[1]!.split('</article>')[0]!, /recipe-status|No public material stacks/);
+  const item = addItem(s, "structural_alloy", 2, "diver");
+  addItem(s, "structural_alloy", 16, v.cargoId);
+  panel.refresh("inventory", s);
+  const moves = controls().filter((b) => b.command.type === "transfer" && b.command.to === v.cargoId);
+  assert.ok(moves.length === 2 && moves.every((b) => b.disabled));
+  assert.match(html(), /Needs 4 CU free in Dart hold/);
+  store = controls().find((b) => b.command.type === "store-materials")!;
+  assert.equal(store.disabled, false);
+  s.player.pose.position = { x: 65, y: -5, z: -35 };
+  const before = structuredClone(s);
+  assert.deepEqual(executeCommand(s, store.command, world).state, before);
+  assert.deepEqual(executeCommand(s, { type: "transfer", itemId: item.id, to: "workshop_locker", quantity: 2 }, world).state, before);
+});
+
+test("Move disclosures retain quantities, CU, charge, provenance and reset only on semantic departure", (t) => {
+  const { panel, html, get } = panelFixture(t);
+  const s = workshop(), v = addDart(s);
+  const alloy = addItem(s, "structural_alloy", 3, "diver", null, "maintenance");
+  addItem(s, "reserve_cell", 1, "diver").charge = 37;
+  const trim = addItem(s, "dart_acoustic_trim", 1, v.cargoId); v.modules.push(trim.id);
+  panel.refresh("inventory", s);
+  assert.match(html(), /Structural alloy × 3.*6 CU · rescue stock/);
+  assert.match(html(), /charge 37%/); assert.match(html(), /2 CU · Installed in Dart/);
+  assert.ok(!html().includes(`data-panel-group="move:${trim.id}"`));
+  const key = `move:${alloy.id}`;
+  get("panel-content").groups.find((g) => g.dataset.panelGroup === key)!.open = true;
+  get("game-panel").scrollTop = 210;
+  addDart(s, "roster-change"); panel.refresh("inventory", s);
+  assert.ok(html().includes(`data-panel-group="${key}" open`)); assert.equal(get("game-panel").scrollTop, 210);
+  // Depart and return with the old open DOM still present; it must not repopulate the map.
+  s.player.pose.position = { x: 65, y: -5, z: -35 }; panel.observeStorageContext(s);
+  s.player.pose.position = { x: 11, y: 1.2, z: -35 }; panel.observeStorageContext(s);
+  panel.refresh("inventory", s);
+  assert.ok(!html().includes(`data-panel-group="${key}" open`));
+  get("panel-content").groups.find((g) => g.dataset.panelGroup === key)!.open = true;
+  panel.resetSession(); panel.refresh("inventory", s);
+  assert.ok(!html().includes(`data-panel-group="${key}" open`));
+});
+
+test("disabled recovery stays prominent with exact occupancy, stock, contents and complete-frame return reasons", (t) => {
+  const { panel, html, controls } = panelFixture(t);
+  const s = workshop(), v = addDart(s);
+  addItem(s, "bobbin_kit", 1, "equipment", "recovery"); disableVehicle(s, v.id);
+  s.player.controlledVehicleId = v.id; s.player.mode = "piloting"; s.player.pose = structuredClone(v.pose);
+  const before = structuredClone(s); panel.refresh("inventory", s); assert.deepEqual(s, before);
+  assert.ok(html().indexOf('class="recovery-choices"') < html().indexOf('id="container-diver"'));
+  const recover = controls().filter((b) => b.command.type === "recover");
+  assert.equal(recover.find((b) => b.command.type === "recover" && b.command.method === "repair")!.disabled, false);
+  assert.ok(recover.filter((b) => b.command.type === "recover" && b.command.method !== "repair").every((b) => b.disabled));
+  assert.match(html(), /the Dart is occupied/); assert.match(html(), /2 alloy \+ 1 membrane · rescue stock/);
+  assert.match(html(), /No repair or recharge/); assert.match(html(), /Empty the hull, hold and module sockets first/);
+  s.player.controlledVehicleId = null; s.player.mode = "swimming";
+  s.world.maintenance.alloy = 0;
+  addItem(s, "meal", 1, v.cargoId); panel.refresh("inventory", s);
+  assert.match(html(), /Not enough rescue stock for a patch/);
+  assert.match(html(), /transfer all cargo before salvaging/);
+});
+
+test("one trim tradeoff keeps socket costs and exact fitting/removal prerequisites without duplicate speeds", (t) => {
+  const { panel, html, controls } = panelFixture(t);
+  const s = workshop(), v = addDart(s);
+  s.knowledge.crafted.push("dart_acoustic_trim");
+  const trim = addItem(s, "dart_acoustic_trim", 1, "diver");
+  panel.refresh("inventory", s);
+  assert.equal((html().match(/Quiet 3 → 4.2/g) ?? []).length, 1);
+  assert.doesNotMatch(html(), /Now: quiet|normal 8|Faster quiet travel/);
+  assert.match(html(), /1 socket · 2 CU/);
+  const fit = controls().find((b) => b.command.type === "install-module")!;
+  assert.equal(fit.disabled, false);
+  let out = executeCommand(s, fit.command, createWorldQueries());
+  panel.refresh("inventory", out.state);
+  assert.equal(controls().find((b) => b.command.type === "remove-module")!.disabled, false);
+  out.state.player.controlledVehicleId = v.id; out.state.player.mode = "piloting"; out.state.player.pose = structuredClone(v.pose);
+  panel.refresh("inventory", out.state);
+  assert.equal(controls().find((b) => b.command.type === "remove-module")!.disabled, true);
+  assert.match(html(), /Exit the occupied hull safely/);
+  assert.ok(out.state.fleet.vehicles[0]!.modules.includes(trim.id));
+});
+
+test("live ownership wins the presentation group while the original first refusal stays visible; cradle status is truthful", (t) => {
+  const { panel, recipe, groupOf, controls } = panelFixture(t);
+  const s = workshop(), v = addDart(s);
+  const cases: { change: () => void; expected: RegExp }[] = [
+    { change: () => {}, expected: /Dart owned — in cradle/ },
+    { change: () => { s.player.controlledVehicleId = v.id; s.player.mode = "piloting"; s.player.pose = structuredClone(v.pose); }, expected: /Dart owned — piloting/ },
+    { change: () => { s.player.controlledVehicleId = null; s.player.mode = "walking"; s.player.pose.position = { x: 11, y: 1.2, z: -35 }; v.disabled = true; }, expected: /Dart owned — disabled/ },
+    { change: () => { v.disabled = false; v.velocity.x = .2; }, expected: /Dart owned — [NSEW]/ },
+    { change: () => { v.velocity.x = 0; v.pose.position.x += 1.5; }, expected: /Dart owned — [NSEW]/ },
+    { change: () => { v.pose.position = { ...DART_BUILD_POSE }; s.world.facilities.find((f) => f.id === "island_workshop")!.repaired = false; }, expected: /Dart owned — [NSEW]/ },
+  ];
+  for (const c of cases) {
+    c.change(); panel.refresh("craft", s);
+    assert.equal(groupOf("dart_base"), "current"); assert.match(recipe("dart_base"), c.expected);
+    assert.ok(recipe("dart_base").includes(craftingRefusal(s, "dart_base", createWorldQueries())!));
+    assert.equal(controls().find((b) => b.command.type === "craft" && b.command.recipeId === "dart_base")!.disabled, true);
+  }
+});
+
+test("paid live Dart salvage removes Current craft and crafted history still allows a second paid build", (t) => {
+  const world = createWorldQueries(); const { panel, groupOf, controls } = panelFixture(t, world);
+  let s = workshop();
+  for (const [kind, q] of Object.entries(RECIPES.dart_base.cost)) addItem(s, kind as ItemKind, q, "workshop_locker");
+  panel.refresh("craft", s); assert.equal(groupOf("dart_base"), "ready");
+  const build = controls().find((b) => b.command.type === "craft" && b.command.recipeId === "dart_base")!;
+  assert.equal(build.disabled, false); assert.match(build.attrs, /class="primary"/);
+  s = executeCommand(s, build.command, world).state;
+  assert.equal(usedCapacity(s, "workshop_locker"), 0);
+  const v = s.fleet.vehicles.find((v) => v.hull === "dart")!;
+  addItem(s, "bobbin_kit", 1, "equipment", "recovery");
+  disableVehicle(s, v.id); s.player.pose.position = { x: 23, y: -1.6, z: -22 }; s.player.mode = "swimming";
+  s.inventory.buoy.deployed = true; s.inventory.buoy.position = { ...s.player.pose.position };
+  s = executeCommand(s, { type: "recover", vehicleId: v.id, method: "salvage" }, world).state;
+  assert.equal(s.fleet.vehicles.length, 0); assert.ok(s.knowledge.crafted.includes("dart_base"));
+  s.player.pose.position = { x: 11, y: 1.2, z: -35 }; s.player.mode = "walking";
+  s.inventory.buoy.position = { ...s.player.pose.position };
+  panel.refresh("craft", s); assert.equal(groupOf("dart_base"), "ready");
+  assert.ok(usedCapacity(s, "buoy_hold") > 0);
+  s = executeCommand(s, build.command, world).state;
+  assert.equal(s.fleet.vehicles.filter((v) => v.hull === "dart").length, 1);
+  assert.equal(usedCapacity(s, "buoy_hold"), 0);
 });

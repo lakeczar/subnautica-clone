@@ -39,6 +39,12 @@
 .game-panel h4 { margin: 0 0 6px; font-size: 14px; font-weight: 550; }
 .game-panel p { margin: 6px 0; color: #d2dfd2; font-size: 14px; line-height: 1.6; }
 .game-panel small { color: #cadccf; font-size: 12px; line-height: 1.5; }
+.game-panel kbd { font-size: 12px; }
+.game-panel .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.panel-action { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.panel-action .action-reason { display: block; overflow-wrap: anywhere; }
+.game-panel button:disabled { opacity: 0.65; cursor: default; }
+.game-panel button.primary { background: #5b735a; border-color: #dfce95; color: #fff3d2; }
 .game-panel button {
   margin: 2px;
   padding: 8px 11px;
@@ -57,17 +63,25 @@
   padding-right: min(430px, 46vw);
 }
 .panel-group > summary { cursor: pointer; color: #ecedda; font-size: 14px; line-height: 1.6; }
+.game-panel summary:focus-visible { outline: 2px solid #f3d59c; outline-offset: 4px; border-radius: 2px; }
 .panel-group > summary small { margin-left: 8px; }
 .panel-group[open] > summary { margin-bottom: 10px; }
 .panel-group > article { margin: 8px 0 0; }
 .container-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 8px; }
 .container-grid > .panel-group { margin: 0; align-self: start; }
-.carried { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
-.carried > h3, .carried > .service-actions { grid-column: 1 / -1; }
-.item-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 8px 0; border-top: 1px solid #8bb5a440; }
+.here-actions > h3 { margin: 12px 0 4px; color: #e9e3c6; }
+.here-actions > article { margin: 6px 0; padding: 8px 12px; }
+.here-row { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; font-size: 13px; }
+.here-row > .panel-action { max-width: 55%; }
+.item-row { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 6px 0; border-top: 1px solid #8bb5a440; }
 .item-row strong { font-size: 14px; font-weight: 500; }
 .item-row small { display: block; }
-.item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.item-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: end; gap: 4px; }
+.row-move { position: relative; }
+.row-move > summary { cursor: pointer; padding: 4px 8px; color: #ecedda; font-size: 12px; border: 1px solid #b8c7a35e; border-radius: 3px; }
+.row-move[open] { flex-basis: 100%; }
+.move-destinations { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+.move-destinations > .panel-action { max-width: 220px; }
 .item-row button { padding: 6px 8px; font-size: 12px; }
 .service-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .storage-operands { display: flex; align-items: end; gap: 8px; }
@@ -75,15 +89,20 @@
 .storage-operands > span { align-self: center; }
 .storage-operands select { width: 100%; min-width: 0; padding: 8px; border: 1px solid #b8c7a360; background: #183d48; color: #e4ead3; font-size: 13px; }
 .storage-operands button { max-width: 270px; text-align: left; }
+.storage-operands > .panel-action { flex: 0 1 210px; }
 .game-panel .storage-quantities, .game-panel .storage-context { font-size: 13px; }
-.game-panel .module-fitting { padding: 10px 0 0; margin: 10px 0; border: 0; border-top: 1px solid #84b1a442; background: none; }
 .game-panel .module-fitting p, .game-panel .power-preparation p { font-size: 13px; }
+.module-fitting > .panel-group { margin: 4px 0 0; padding: 0; border: 0; background: none; }
+.module-fitting > .panel-group > summary { font-size: 12px; }
+.vessel-service > .panel-group { margin: 4px 0 0; padding: 0; border: 0; background: none; }
+.vessel-service > .panel-group > summary { font-size: 12px; }
+.service-full { color: #c4f0cf; font-size: 13px; }
 .fitting-choice { margin-top: 8px; }
 .bench-charge { margin-top: 12px; padding-top: 12px; border-top: 1px solid #b8c7a340; }
 .no-charge-options { display: block; margin-top: 8px; }
 .recipe { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .recipe > div { flex: 1; min-width: 0; }
-.recipe > button { max-width: 250px; text-align: left; }
+.recipe > .panel-action { flex: 0 1 250px; text-align: left; }
 .recipe-costs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .ingredient { display: inline-block; color: #d6e7d3; font-size: 13px; }
 .ingredient.missing, .recipe-status { color: #ffe0ad !important; }
@@ -105,6 +124,7 @@
 .game-panel .recovery-choice p { font-size: 13px; line-height: 1.55; }
 .game-panel .recovery-choice small { margin-bottom: 12px; }
 .game-panel .recovery-choice button { margin: auto 0 0; text-align: left; }
+.game-panel .recovery-choice > .panel-action { margin-top: auto; }
 .game-panel .recovery-kit { font-size: 12px; }
 @media (max-width: 680px) {
   .panel-frame { padding: 0 16px 32px; }
@@ -112,9 +132,11 @@
   .game-panel h2 { font-size: 26px; }
   .panel-header nav { order: 2; width: 100%; }
   #panel-feedback { top: 109px; }
-  .carried, .recovery-choices { grid-template-columns: 1fr; }
+  .recovery-choices { grid-template-columns: 1fr; }
   .recipe { align-items: stretch; flex-direction: column; gap: 8px; }
-  .recipe > button { max-width: none; }
+  .recipe > .panel-action { flex-basis: auto; }
+  .here-row { flex-wrap: wrap; }
+  .here-row > .panel-action { max-width: 100%; }
   .storage-operands { flex-wrap: wrap; }
   .storage-operands button { max-width: none; }
 }
