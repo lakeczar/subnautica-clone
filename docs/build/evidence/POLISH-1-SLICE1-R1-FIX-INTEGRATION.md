@@ -29,3 +29,10 @@ Two trace qualifications matter: delayed `keydown-after` callbacks can follow an
 Author closed the sole owned incognito tab/server normally, no recordings,5191 free; shared hosts/user/peer/tab14 preserved. Root opened no browser/server. Existing human-feel/native-drag, muted audio, software-rendering/GPU, sampled terrain cost and full-campaign limits remain. Root inspected keyboard behavior rather than replaying unchanged routes; prior route/save evidence stays source-attributed and can be reused with explicit source equivalence.
 
 Freeze a new candidate and dispatch separate fresh non-author Astra xhigh and Sol6.1 max tasks. Both cover all original nine criteria, both R1 reports/disposition, this correction and its new evidence. Until both accept, the full slice remains provisional. Slice2, required stage1 Opus and M2–M4 follow automatically.
+
+
+## Public review evidence
+
+PR#4 shows the result of native Tab from a storage selector on earlier88f1f71 and final authorda1a9dc, both1280×800. Published files `panel-tab-regression-88f1f71.png` and `panel-tab-corrected-da1a9dc.png` live on pr-assets/feat-siltwake-first-expedition, returned HTTP200/image/png and match original bytes. Receipt `/tmp/siltwake-m1-pr/slice1-r2-assets.json`. These compare earlier feature candidates, not the PR base; images show state while native traces establish navigation/pause/capture. No new recording was made. No binaries added to this feature branch.
+
+Public #4/#3 descriptions record275 tests/build and running independent R2 on d031803; #3 remains M0-only. Full body/base/head/draft readbacks at79595a4/M0a2cb19f match `/tmp/siltwake-m1-pr/slice1-r2-verification.json`. Later records do not alter the frozen reviewed source.

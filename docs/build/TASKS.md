@@ -808,3 +808,8 @@ Frozen candidate **d031803730fb44b9208e52fdfb91a88e9ddf8a41**, full diff base61f
 - Sol task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice1-sol-r2-d031803`. Stable request siltwake-polish-1-slice1-sol-r2-d031803, only report POLISH-1-SLICE1-SOL-R2.md; new temp -sol-r2/, optional5194.
 
 Both accepted running/working as fresh T3-owned async isolated worktrees from the exact same parent, no pending children/questions. Full R2 brief included verbatim with all nine criteria, original scope/links, both prior reports/root responses, native observer timing limits and Linux browser rules. No peer discussion/current-round findings sharing before both reports return. Root plus two reviewers active; implementation ownership released and source frozen. Await notifications, never poll/duplicate/review via thread_send. Slice2 and stage1 Opus follow only after reconciliation/acceptance.
+
+
+### Public round2 checkpoint synchronized
+
+PR#4/#3 full bodies now record inspected correction,275 passing checks and both fresh R2 reviewers running on d031803; exact readbacks at79595a4/M0a2cb19f match `/tmp/siltwake-m1-pr/slice1-r2-verification.json`. #4 includes two byte-verified HTTP200 keyboard-state comparison images on pr-assets, explicitly earlier88f1f71 versus authorda1a9dc, with native trace/motion limits. #3 remains M0-only. All layers linked/unwatched. Root has no browser/server or watcher; sources remain frozen. Completion notifications resume reconciliation; no author or review polling.
