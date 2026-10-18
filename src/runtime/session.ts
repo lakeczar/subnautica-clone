@@ -321,7 +321,7 @@ export class ExpeditionSession {
     if (result.ok) {
       if (manual)
         this.events.notify(
-          "Saved locally. The previous valid save is retained as a backup.",
+          "Saved locally",
           false, { channel: "persistence" },
         );
     } else if (result.code !== "cancelled")

@@ -1,5 +1,5 @@
 import { HULLS } from "../content/registry.js";
-import type { GameState, Vec3, VehicleState, WorldQueries } from "./types.js";
+import type { ExitRefusalCode, GameState, Vec3, VehicleState, WorldQueries } from "./types.js";
 import {
   distance,
   containerLabel,
@@ -77,11 +77,11 @@ export function rechargeCells(s: GameState): string | null {
 }
 export const hullDepth = (v: VehicleState): number =>
   Math.max(0, -(v.pose.position.y + 0.5));
-export function exitRefusal(s: GameState, world: WorldQueries): string | null {
+export function exitBlock(s: GameState, world: WorldQueries): { code: ExitRefusalCode; message: string } | null {
   const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
-  if (!v) return "You are not piloting a craft.";
+  if (!v) return { code: "not-piloting", message: "You are not piloting a craft." };
   if (v.hull === "hearthline")
-    return "Engage station keeping, then leave the helm into the dry interior.";
+    return { code: "carrier", message: "Engage station keeping, then leave the helm into the dry interior." };
   const exit = {
     x: v.pose.position.x + Math.cos(v.pose.yaw) * 3.1,
     y: v.pose.position.y + 0.2,
@@ -89,10 +89,13 @@ export function exitRefusal(s: GameState, world: WorldQueries): string | null {
   };
   const depth = Math.max(0, -(exit.y + 0.4));
   if (depth > personalLimit(s))
-    return `Exit exposure ${depth.toFixed(0)} m exceeds your ${personalLimit(s)} m personal suit. The ${HULLS[v.hull].initialDepth} m hull does not protect a diver outside.`;
+    return { code: "depth", message: `Exit exposure ${depth.toFixed(0)} m exceeds your ${personalLimit(s)} m personal suit. The ${HULLS[v.hull].initialDepth} m hull does not protect a diver outside.` };
   if (!world.clearance(exit, { radius: 0.34, height: 0.95 }))
-    return "Exit side is obstructed. Move the craft to clear water before disembarking.";
+    return { code: "obstructed", message: "Exit side is obstructed. Move the craft to clear water before disembarking." };
   return null;
+}
+export function exitRefusal(s: GameState, world: WorldQueries): string | null {
+  return exitBlock(s, world)?.message ?? null;
 }
 export function board(s: GameState, id: string): string | null {
   const v = s.fleet.vehicles.find((v) => v.id === id);

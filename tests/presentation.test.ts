@@ -6,20 +6,20 @@ import { createGame, makeVehicle } from "../src/sim/state.js";
 import { completeOpening, discover } from "../src/sim/progression.js";
 import { incapacitate, RECOVERY_NOTICES } from "../src/sim/recovery.js";
 import { addItem, available, materialStoragePreview } from "../src/sim/inventory.js";
-import { cellRechargePreview, distractionPreview } from "../src/sim/vehicles.js";
+import { cellRechargePreview, distractionPreview, exitBlock } from "../src/sim/vehicles.js";
 import { dartPerformance } from "../src/sim/modules.js";
 import { executeCommand } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import { aimedInteraction } from "../src/sim/targeting.js";
 import { faceTarget, NORMAL_VIEWS, readyState } from "./targeting-support.js";
-import type { GameCommand } from "../src/sim/types.js";
+import type { GameCommand, WorldQueries } from "../src/sim/types.js";
 import { ExpeditionSession } from "../src/runtime/session.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import { MemoryStorage, TestWriterLock, encoded, sample, settled } from "./persistence-support.js";
 
 /** Minimal DOM port for rendered buttons, replacement and command wiring. Native
  * keyboard/layout behavior is checked separately in the production browser. */
-function viewFixture(t: test.TestContext) {
+function viewFixture(t: test.TestContext, world = createWorldQueries()) {
   const document = { activeElement: null as ElementPort | null };
   const decodeHtml = (value: string): string => value.replace(/&(amp|lt|gt|quot|#39);/g,
     (entity) => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" })[entity]!);
@@ -168,7 +168,7 @@ function viewFixture(t: test.TestContext) {
     exportGame: noop, exportBackup: noop, exportRaw: noop,
     importFile: noop, confirm: noop, cancelConfirm: noop, lockMouse: noop, settings: noop,
   };
-  const view = new GameView(root as unknown as HTMLElement, actions, createWorldQueries());
+  const view = new GameView(root as unknown as HTMLElement, actions, world);
   root.querySelector("#opening").children = ["opening-act", "opening-skip", "opening-subtitles"].map((id) => root.querySelector(`#${id}`));
   root.querySelector("#game-panel").children = [root.querySelector("#panel-return"),
     ...root.querySelectorAll("button").filter((button) => ["inventory-panel", "craft-panel", "notebook-panel", "carrier-panel"].includes(button.dataset.action!)),
@@ -1428,8 +1428,131 @@ test("empty opening detail and in-session subtitle hide while capture affordance
   const { view, get } = viewFixture(t), s = createGame(); view.update(s, false); view.showGame();
   assert.equal(get("opening-detail").hidden, true);
   view.showMenu(true); assert.equal(get("menu-subtitle").hidden, true);
+  assert.equal(get("build-note").hidden, true);
   view.showMenu(false); assert.equal(get("menu-subtitle").hidden, false);
+  assert.equal(get("build-note").hidden, false);
   completeOpening(s); view.update(s, false); view.showGame(); view.lookAction(true, true);
   for (let i = 0; i < 1000; i++) view.update(s, false);
   assert.equal(get("look-action").hidden, false); assert.match(get("look-action").textContent, /drag \/ arrows available/);
+});
+
+test("tiny hull impacts flash without zero chips, accumulate honestly and reset by time, craft and session", (t) => {
+  const { view, get, wall, timerCount } = viewFixture(t), s = readyState();
+  const v = makeVehicle("os2-impact", "dart", { x: -55, y: -20, z: 30 }, "impact-hold");
+  s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id; s.player.mode = "piloting";
+  s.player.pose = structuredClone(v.pose); view.showGame(); view.update(s, false);
+  for (const loss of [0.01, 0.04]) {
+    view.cancelFeedback(); view.impact(loss, s); view.update(s, false);
+    assert.equal(get("impact-notice").hidden, true); assert.equal(get("impact-notice").textContent, "");
+    assert.match(get("vitals").innerHTML, /hull-impact/);
+    wall(599); view.update(s, false); assert.match(get("vitals").innerHTML, /hull-impact/);
+    wall(1); view.update(s, false); assert.doesNotMatch(get("vitals").innerHTML, /hull-impact/);
+  }
+  view.cancelFeedback(); view.impact(0.01, s); view.impact(0.04, s);
+  assert.equal(get("impact-notice").hidden, false); assert.equal(get("impact-notice").textContent, "Hull −0.1%");
+  wall(1501); view.impact(0.26, s); assert.equal(get("impact-notice").textContent, "Hull −0.3%");
+  wall(1799); assert.equal(get("impact-notice").hidden, false);
+  wall(1); assert.equal(get("impact-notice").hidden, true);
+  view.impact(0.01, s); assert.equal(get("impact-notice").textContent, "");
+  view.impact(0.26, s); assert.equal(get("impact-notice").hidden, false);
+  const other = makeVehicle("os2-other-impact", "dart", { x: -60, y: -20, z: 30 }, "other-impact-hold");
+  s.fleet.vehicles.push(other); s.player.controlledVehicleId = other.id;
+  view.impact(0.01, s); assert.equal(get("impact-notice").hidden, true);
+  assert.equal(get("impact-notice").textContent, "", "a hidden new craft's tiny loss cannot retain the previous visible amount");
+  view.resetPresentation(); view.impact(0.04, s); assert.equal(get("impact-notice").hidden, true);
+  view.dispose(); assert.equal(timerCount(), 0);
+});
+
+test("exit results use current typed guidance, announce the original once per attempt and invalidate changed reasons", (t) => {
+  let obstruction = false;
+  const world: WorldQueries = { ...createWorldQueries([], () => -300), clearance: () => !obstruction };
+  const { view, get, wall } = viewFixture(t, world), s = readyState();
+  const v = makeVehicle("os2-exit", "dart", { x: -55, y: -80, z: 30 }, "exit-hold");
+  s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id; s.player.mode = "piloting";
+  s.player.pose = structuredClone(v.pose); view.showGame(); view.update(s, false);
+  const attempt = () => {
+    const event = executeCommand(s, { type: "interact" }, world).events[0]!;
+    assert.ok(event.type === "notice" && event.error && event.refusal);
+    view.notify(event.message, event.error, event, s); return event.message;
+  };
+  const full = attempt();
+  assert.equal(get("action-result").textContent, "Exit blocked");
+  assert.ok(get("pilot-guidance").innerHTML.includes(full));
+  wall(0); assert.equal(get("action-announce").textContent, full);
+  const writes = get("action-announce").textWrites;
+  for (let i = 0; i < 10; i++) { view.update(s, false); view.presentationStep(s); }
+  assert.equal(get("action-announce").textWrites, writes, "ordinary rendering and active steps do not announce again");
+  attempt(); assert.equal(get("action-announce").textContent, ""); wall(0);
+  assert.equal(get("action-announce").textContent, full);
+  assert.equal(get("action-announce").textWrites, writes + 2, "an identical new attempt gets its own full announcement");
+  v.pose.position.y = s.player.pose.position.y = -90;
+  view.presentationStep(s);
+  assert.ok(get("pilot-guidance").innerHTML.includes(exitBlock(s, world)!.message), "same reason uses the current depth sentence immediately");
+  assert.equal(get("action-result").textContent, "Exit blocked");
+  assert.equal(get("action-announce").textWrites, writes + 2);
+  obstruction = true; v.pose.position.y = s.player.pose.position.y = -20;
+  view.presentationStep(s);
+  assert.equal(get("action-result").hidden, true); assert.equal(get("action-announce").textContent, "");
+  assert.match(get("pilot-guidance").innerHTML, /Exit side is obstructed/);
+  const obstructed = attempt(); wall(0);
+  assert.equal(get("action-result").textContent, "Exit blocked"); assert.equal(get("action-announce").textContent, obstructed);
+  obstruction = false; view.presentationStep(s);
+  assert.equal(get("action-result").hidden, true, "clearing a reason removes its obsolete receipt");
+  assert.doesNotMatch(get("pilot-guidance").innerHTML, /Exit blocked/);
+  view.notify("A different failed action", true); wall(0);
+  assert.equal(get("action-result").textContent, "A different failed action");
+  for (let i = 0; i < 239; i++) view.presentationStep(s);
+  assert.equal(get("action-result").hidden, false);
+  const beforeExpiry = get("action-announce").textWrites;
+  view.presentationStep(s); wall(0);
+  assert.equal(get("action-result").hidden, true); assert.equal(get("action-announce").textContent, "");
+  assert.equal(get("action-announce").textWrites, beforeExpiry + 1, "expiry clears without replaying a full message");
+});
+
+test("unmatched exit delivery remains fully readable and actor changes never conceal a reason", (t) => {
+  const world = createWorldQueries([], () => -300), { view, get, wall } = viewFixture(t, world), s = readyState();
+  const a = makeVehicle("os2-a", "dart", { x: -55, y: -80, z: 30 }, "a-hold"),
+    b = makeVehicle("os2-b", "dart", { x: -60, y: -80, z: 30 }, "b-hold");
+  s.fleet.vehicles.push(a, b); s.player.mode = "piloting"; s.player.controlledVehicleId = a.id;
+  s.player.pose = structuredClone(a.pose); view.showGame(); view.update(s, false);
+  const event = executeCommand(s, { type: "exit" }, world).events[0]!;
+  assert.ok(event.type === "notice" && event.refusal);
+  s.player.controlledVehicleId = b.id; s.player.pose = structuredClone(b.pose);
+  view.notify(event.message, true, event, s); wall(0);
+  assert.equal(get("action-result").textContent, event.message, "a previous batch actor's reason is a full fallback at delivery");
+  view.update(s, false); assert.equal(get("action-result").textContent, event.message);
+  view.notify("Translated exit reason", true, { refusal: { kind: "exit", vehicleId: b.id, code: "depth" } }, s); wall(0);
+  assert.equal(get("action-result").textContent, "Exit blocked", "identity, never prose, matches guidance");
+  assert.equal(get("action-announce").textContent, "Translated exit reason");
+  s.player.controlledVehicleId = "missing"; view.update(s, false);
+  assert.equal(get("action-result").hidden, true); assert.equal(get("pilot-guidance").hidden, true);
+  view.notify(event.message, true, event, s); wall(0);
+  assert.equal(get("action-result").textContent, event.message, "missing current actor cannot shorten a delivered reason");
+  s.player.controlledVehicleId = null; s.player.mode = "swimming"; view.presentationStep(s);
+  assert.equal(get("action-result").hidden, true);
+});
+
+test("targeted exit feedback respects panel and menu routing while persistence errors remain separate", (t) => {
+  const world = createWorldQueries([], () => -300), { view, get, wall } = viewFixture(t, world), s = readyState();
+  const v = makeVehicle("os2-routing", "dart", { x: -55, y: -80, z: 30 }, "routing-hold");
+  s.fleet.vehicles.push(v); s.player.mode = "piloting"; s.player.controlledVehicleId = v.id;
+  s.player.pose = structuredClone(v.pose); view.showGame(); view.update(s, false);
+  const event = executeCommand(s, { type: "exit" }, world).events[0]!;
+  assert.ok(event.type === "notice" && event.refusal);
+  view.notify(event.message, true, event, s); wall(0);
+  view.openPanel("inventory", s); view.notify(event.message, true, event, s); wall(0);
+  assert.equal(get("panel-feedback").textContent, event.message);
+  assert.equal(get("action-result").hidden, true); assert.equal(get("action-announce").textContent, "");
+  view.notify("Save failed; export before closing", true, { channel: "persistence" }, s);
+  assert.equal(get("notification").textContent, "Save failed; export before closing");
+  view.closePanel(); view.showGame(); view.update(s, false);
+  assert.equal(get("action-result").hidden, true, "closing the panel cannot replay its full refusal");
+  view.notify(event.message, true, event, s); view.showMenu(true); wall(0);
+  assert.equal(get("action-announce").textContent, "");
+  view.notify(event.message, true, event, s); wall(0);
+  assert.equal(get("action-result").hidden, true, "hidden menu action feedback never leaks onto the HUD");
+  assert.equal(get("notification").textContent, "Save failed; export before closing");
+  view.notify("Saved locally", false, { channel: "persistence" }, s);
+  assert.equal(get("notification").hidden, true); assert.equal(get("system-status").textContent, "Saved locally");
+  view.showGame(); view.update(s, false); assert.equal(get("action-result").hidden, true);
 });
