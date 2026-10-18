@@ -1,6 +1,6 @@
 # POLISH-1B — controls and feedback presentation
 
-Ready for dispatch after root inspected and provisionally integrated1A at **0b071354a629fd84235eecf3eb2f72403c7e4204**. [Root reconciliation](../evidence/POLISH-1A-INTEGRATION.md) freezes its implemented exports/metadata and verification limits. TASKS records the full committed dispatch baseline and returned task ID. This is the second leaf of one combined controls/action batch; it does not own slice2 menus/encounter/physics.
+Dispatched from85161287302d62fbd5f3828c66bfc4112461fa3a after root inspected and provisionally integrated1A at **0b071354a629fd84235eecf3eb2f72403c7e4204**. [Root reconciliation](../evidence/POLISH-1A-INTEGRATION.md) freezes its implemented exports/metadata and verification limits. TASKS records the full committed dispatch baseline and returned task ID. This is the second leaf of one combined controls/action batch; it does not own slice2 menus/encounter/physics.
 
 Use Sol6.1/max. Read [POLISH-1](POLISH-1.md), CONTRACTS and the original Opus implementation plan/disposition. The former supplies root's binding reconciliation. Preserve schema2/expedition.3, action authority, protected provenance/recovery text, actual Dart handling and session/writer lifecycle. No children/peers/push/PR/merge or edits outside assigned paths.
 
