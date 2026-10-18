@@ -1,10 +1,10 @@
 # Build status
 
-## Current checkpoint — announcement correction inspected; full OS2 R2 next
+## Current checkpoint — corrected OS2 batch under fresh R2 review
 
 Movement cc3f20d, feedback/copy4a5103f and accessible announcement75402ae are provisionally combined at **6aaeae2d97476528c3848e140aded6a069b0c3b1**. Root passes **436/436 tests**, typecheck/build and both economies. All27 production files,85 tracked source/test/config files and40 compiled native modules match the correction author. The prior failed announcement case now retains both full occurrences atomically, with native trace/menu/reset/singleton evidence inspected. [Current inspection](evidence/POLISH-1-OS2-ANNOUNCEMENT-INTEGRATION.md).
 
-Both R1 reviewers and all authors are terminal and release paths/resources. **This remains provisional integration, not paired acceptance or stage1 closure.** R1 was Astra ACCEPT / Sol REQUEST CHANGES for SOL-OS2-R1-01; [disposition](reviews/POLISH-1-OS2-R1.md) preserves the original defect and content-based atomic-delivery clarification. [Fresh full-batch R2](tasks/POLISH-1-OS2-REVIEW-R2.md) covers all eight original criteria and the correction, followed by fresh Opus verification. TASKS records actual dispatch. Earlier active labels below are historical.
+Both R1 reviewers and all authors are terminal and release paths/resources. **This remains provisional integration, not paired acceptance or stage1 closure.** R1 was Astra ACCEPT / Sol REQUEST CHANGES for SOL-OS2-R1-01; [disposition](reviews/POLISH-1-OS2-R1.md) preserves the original defect and content-based atomic-delivery clarification. [Fresh full-batch R2](tasks/POLISH-1-OS2-REVIEW-R2.md) is active on frozen **dc0902864afb872c658b239821e870423877178a**, covering all eight original criteria and the correction, followed by fresh Opus verification. TASKS records actual dispatch. Earlier active labels below are historical.
 
 The [M2 direction](design/M2-DIRECTION-PROPOSAL.md) has paired planning acceptance on **30c6bf9**, all seven criteria with root concurrence. It starts with an earned Canopy–Basin benchmark, then earned fleet/mobile-home systems, then deep routes and both functional ending routes. This is direction only; no M2 production or schema acceptance is implied. OS2-04/06 remain first-M2-benchmark obligations. M2–M4 follow automatically under the owner's standing authorization. Earlier active/next labels below are historical.
 
@@ -76,7 +76,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Commit/freeze the inspected combined correction and dispatch fresh non-author Astra xhigh and Sol6.1 max full-batch R2. Receive completion notifications without polling, reconcile both reports, and resolve substantive findings before fresh Opus stage1 verification. Then continue accepted M2 direction and M3/M4 automatically. Main merge/public deployment remain owner actions.
+Fresh non-author Astra xhigh and Sol6.1 max full-batch R2 is active on dc09028. Receive completion notifications without polling, reconcile both reports, and resolve substantive findings before fresh Opus stage1 verification. Then continue accepted M2 direction and M3/M4 automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
