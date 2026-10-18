@@ -32,7 +32,7 @@ import {
   toggleBuoy,
 } from "./progression.js";
 import { aimedInteraction } from "./targeting.js";
-import { board, distraction, eat, exit, rechargeCells, reserve, service } from "./vehicles.js";
+import { board, distraction, eat, exit, exitBlock, rechargeCells, reserve, service } from "./vehicles.js";
 import { dartPerformance, installModule, removeModule } from "./modules.js";
 import {
   carrierCommand,
@@ -91,8 +91,15 @@ function actionResult(s: GameState, events: GameEvent[], summary: string, cue: "
   events.push({ type: "notice", channel: "action", message: s.feedback, summary }, { type: "sound", cue });
 }
 function exitAction(s: GameState, w: WorldQueries, events: GameEvent[]): string | null {
+  const block = exitBlock(s, w);
+  if (block) {
+    const v = s.fleet.vehicles.find(v => v.id === s.player.controlledVehicleId);
+    if (s.player.mode === "piloting" && v) events.push({ type: "notice", channel: "action",
+      message: block.message, error: true, refusal: { kind: "exit", vehicleId: v.id, code: block.code } });
+    return block.message;
+  }
   const no = exit(s, w);
-  if (!no) actionResult(s, events, "Clear exit · personal suit protection");
+  if (!no) actionResult(s, events, "Left the craft");
   return no;
 }
 /** Mutates only the detached fixed-step draft; every refusal precedes gameplay mutations. */
@@ -345,7 +352,8 @@ export function executeCommand(
   const events: GameEvent[] = [];
   const no = action(draft, command, world, events);
   if (no)
-    return { state, events: [{ type: "notice", channel: "action", message: no, error: true }] };
+    return { state, events: events.some(e => e.type === "notice" && e.refusal)
+      ? events : [{ type: "notice", channel: "action", message: no, error: true }] };
   if (draft.feedback && !events.some(e => e.type === "notice" || e.type === "interaction-panel"))
     events.push(
       { type: "notice", channel: "action", message: draft.feedback },
@@ -369,7 +377,8 @@ export function stepGame(
     if (s.player.controlledVehicleId !== state.player.controlledVehicleId ||
         s.player.mode !== state.player.mode || s.player.interiorId !== state.player.interiorId)
       movementActorStable = false;
-    if (no) events.push({ type: "notice", channel: "action", message: no, error: true });
+    if (no) events.push(...(actionEvents.some(e => e.type === "notice" && e.refusal)
+      ? actionEvents : [{ type: "notice" as const, channel: "action" as const, message: no, error: true }]));
     else {
       events.push(...actionEvents);
       if (s.feedback && s.feedback !== previous && !actionEvents.some(e => e.type === "notice" || e.type === "interaction-panel")) events.push(

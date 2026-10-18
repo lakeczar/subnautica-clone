@@ -290,7 +290,7 @@ export function craft(
   if (!s.knowledge.crafted.includes(id)) s.knowledge.crafted.push(id);
   s.feedback = id === "dart_acoustic_trim"
     ? "Acoustic trim made · fit it from Cargo at the pod or workshop cradle."
-    : `${r.label} complete. ${id === "restore_workshop" ? "Air, healing, locker, charging and hull fabrication are now available." : id === "dart_base" ? "Dart is in the yellow launch cradle. Approach the cockpit side and board deliberately." : ""}`;
+    : `${r.label} complete. ${id === "restore_workshop" ? "Air, healing, locker, charging and hull fabrication are now available." : id === "dart_base" ? "Dart is in the yellow launch cradle. Board it from the cockpit side." : ""}`;
   return null;
 }
 export function toggleBuoy(s: GameState): string | null {

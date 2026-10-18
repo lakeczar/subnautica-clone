@@ -405,7 +405,7 @@ export class PanelView {
     const required = [...new Set(recipes.filter((r) => !r.done && (r.r.site === "island_workshop" ? !atWorkshop : !atPod)).map((r) => r.r.site === "island_workshop" ? "island_workshop" : "home_pod"))] as ("home_pod" | "island_workshop")[];
     const directions = required.filter((id) => id === "home_pod" || state.knowledge.markers.includes(id) || facility(state, id))
       .map((id) => `${PLACES[id].label} · ${bearing(state.player.pose.position, PLACES[id].position)}`);
-    let html = `<p class="panel-status">${current}</p>${directions.length ? `<p class="bench-direction">Required bench${directions.length > 1 ? "es" : ""}: ${escapeHtml(directions.join(" · "))}</p>` : ""}<p class="recipe-count-label">Ingredients: usable here / cost</p>`;
+    let html = `<p class="panel-status">${current}</p>${directions.length ? `<p class="bench-direction">Required bench${directions.length > 1 ? "es" : ""}: ${escapeHtml(directions.join(" · "))}</p>` : ""}<p class="recipe-count-label">Have here / needed</p>`;
     const render = ({ id, r, done, block, dart }: typeof recipes[number]): string => {
       const bins = fabricationContainers(state, r.site);
       const missingSteps = r.needs.filter((n) => !state.knowledge.crafted.includes(n as RecipeId));
@@ -441,7 +441,7 @@ export class PanelView {
       if (rows.length) html += `<section class="recipe-group" data-recipe-group="${group}"><h3>${label} <small>${rows.length}</small></h3>${rows.map(render).join("")}</section>`;
     }
     const completed = recipes.filter((r) => r.done);
-    if (completed.length) html += this.group("completed-recipes", `Completed <small>${completed.length} one-time reference${completed.length === 1 ? "" : "s"}</small>`, completed.map(render).join(""));
+    if (completed.length) html += this.group("completed-recipes", `Completed · <small>${completed.length}</small>`, completed.map(render).join(""));
     if (!recipes.length) html += "<p>Inspect the pod regulator to recover its checklist.</p>";
     return html;
   }
@@ -457,7 +457,7 @@ export class PanelView {
     const known = Object.entries(SOURCES).filter(([id]) => state.knowledge.scans.includes(id));
     return `<article class="habitat-notes"><h3>Known source habitats</h3>${known.length ? known.map(([id, s]) => {
       const stock = state.world.resources.find((r) => r.id === id);
-      return `<p><b>${ITEMS[s.item].label} · ${s.label}</b><br />${REGIONS[s.region].label} · ${s.context}<br /><small>${stock?.stock ?? 0} exposed · ${stock?.reserve ?? 0} finite reserve · ${s.bundle} per hand bundle. ${s.item === "meal" ? "When empty, tend here for 20 active seconds for two more portions." : "Sort the host’s finite reserve locally if exposed stock is empty."}</small></p>`;
+      return `<p><b>${ITEMS[s.item].label} · ${s.label}</b><br />${REGIONS[s.region].label} · ${s.context}<br /><small>${stock?.stock ?? 0} ready · ${stock?.reserve ?? 0} in reserve · ${s.bundle} per gather. ${s.item === "meal" ? "When empty, tend here for 20 seconds to prepare two more." : "When none are ready, sort the reserve here."}</small></p>`;
     }).join("") : "<p>No habitats recorded yet.</p>"}</article>`;
   }
 

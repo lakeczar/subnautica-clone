@@ -83,9 +83,9 @@ export class GameView {
           </section>
           <section id="confirmation" class="confirmation" hidden><h2 id="confirm-title"></h2><p id="confirm-detail"></p><div class="menu-buttons"><button id="confirm-accept" class="primary" data-action="confirm">Confirm</button><button data-action="cancel">Go back</button></div></section>
           <p id="save-operation" class="save-status" role="status" hidden>Reading a file or waiting to save safely… <button data-action="cancel">Cancel operation</button></p>
-          <p class="build-note"><span class="status-dot"></span> FIRST LINKED EXPEDITION<span>Restore the pod and workshop, investigate their habitats, build a Dart and explore the upper Canopy. The remaining campaign is under construction.</span></p>
+          <p id="build-note" class="build-note"><span class="status-dot"></span> FIRST EXPEDITION · <span>Pod, workshop, Dart and the upper Canopy. More of the campaign is in development.</span></p>
         </div>
-        <div class="scene-caption" aria-hidden="true"><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
+        <div class="scene-caption" aria-hidden="true" hidden><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
       </div>
       <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-chrome"><div class="panel-header"><button id="panel-return" data-action="close-panel">Return <kbd>Esc</kbd></button><h2 id="panel-title"></h2><nav aria-label="Expedition panels"><button data-action="inventory-panel">Cargo</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Notebook</button><button id="carrier-nav" data-action="carrier-panel" hidden>Carrier fixture</button></nav><span class="panel-paused">Paused</span></div><p id="panel-feedback" role="status" aria-live="polite" hidden></p></div><div id="panel-content"></div></div></section>
       <div class="session-notices"><section id="graphics-error" class="graphics-error" role="alert" hidden><h2>The ocean could not open</h2><p id="graphics-error-text"></p><p>Your existing local save has not been changed. Save exports remain available in the menu.</p></section>
@@ -335,6 +335,7 @@ export class GameView {
     this.get("pause-reason").hidden = reason.length === 0;
     this.get("pause-reason").textContent = reason;
     this.get("menu-subtitle").hidden = hasSession;
+    this.get("build-note").hidden = hasSession;
     if (this.wasPlaying)
       this.get(hasSession ? "resume" : "new-game").focus({
         preventScroll: true,

@@ -206,11 +206,14 @@ export type GameCommand =
     };
 export type NoticeChannel = "action" | "hazard" | "system" | "persistence";
 export type NoticeContext = "threat" | "oxygen" | "food" | "hull" | "recovery";
+export type ExitRefusalCode = "not-piloting" | "carrier" | "depth" | "obstructed";
 export interface NoticeOptions {
   channel?: NoticeChannel;
   context?: NoticeContext;
   /** Optional transient action receipt; the full message remains available. Never saved. */
   summary?: string;
+  /** Identity of an actual refused exit attempt. Event metadata only; never saved. */
+  refusal?: { kind: "exit"; vehicleId: string; code: ExitRefusalCode };
 }
 export type GameEvent =
   | { type: "movement-mode-changed"; mode: MovementMode }

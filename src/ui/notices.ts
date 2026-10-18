@@ -7,7 +7,15 @@ import type { GameState, NoticeContext, NoticeOptions, Vec3 } from "../sim/types
 // saved state is involved. Ongoing danger remains in the separate hazard area.
 export const NOTICE_SECONDS = { action: 2.5, refusal: 4, hazard: 6, error: 12, system: 3, release: 2.5, call: 3 } as const;
 const NO_BANNERS: ReadonlySet<NoticeContext> = new Set();
-export interface ActionResult { message: string; error: boolean; activeLeft: number }
+export interface ActionResult {
+  message: string;
+  full: string;
+  refusal?: NoticeOptions["refusal"];
+  error: boolean;
+  activeLeft: number;
+}
+const sameExit = (a: NoticeOptions["refusal"], b: NoticeOptions["refusal"]): boolean =>
+  a?.vehicleId === b?.vehicleId && a?.code === b?.code;
 type ThreatMode = GameState["world"]["threat"]["mode"];
 export interface PresentedNotice extends NoticeOptions {
   message: string;
@@ -27,6 +35,7 @@ export class EncounterPresentation {
   private refuge = false;
   private actor: string | null = null;
   private menuVisible = false;
+  private exitGuidance: NoticeOptions["refusal"];
   private call: { origin: Vec3; activeLeft: number } | null = null;
 
   notify(message: string, error: boolean, options: NoticeOptions, now: number,
@@ -34,7 +43,10 @@ export class EncounterPresentation {
     this.expire(now);
     const channel = options.channel ?? "action";
     if (channel === "action") {
-      if (!this.menuVisible) this.result = { message: options.summary ?? message, error,
+      if (!this.menuVisible) this.result = {
+        message: options.refusal ? error && sameExit(options.refusal, this.exitGuidance) ? "Exit blocked" : message
+          : options.summary ?? message,
+        full: message, ...(options.refusal ? { refusal: { ...options.refusal } } : {}), error,
         activeLeft: error ? NOTICE_SECONDS.refusal : NOTICE_SECONDS.action };
       return;
     }
@@ -56,6 +68,13 @@ export class EncounterPresentation {
     this.central = { ...options, channel, message, error, priority,
       activeLeft: channel === "hazard" ? NOTICE_SECONDS.hazard : NOTICE_SECONDS.action,
       expiresAt: wall ? now + NOTICE_SECONDS.error * 1000 : null };
+  }
+
+  /** Only the current, rendered pilot guidance can cover an exit result. A
+   * fallback delivered without a match stays readable until its context changes. */
+  observeExitGuidance(guidance: NoticeOptions["refusal"]): void {
+    if (this.result?.refusal && !sameExit(guidance, this.exitGuidance)) this.clearAction();
+    this.exitGuidance = guidance;
   }
 
   observe(state: GameState, covered: ReadonlySet<NoticeContext> = NO_BANNERS): void {
@@ -143,6 +162,7 @@ export class EncounterPresentation {
     this.central = this.status = this.call = null;
     this.result = null;
     this.mode = this.actor = null;
+    this.exitGuidance = undefined;
     this.refuge = false;
   }
 }

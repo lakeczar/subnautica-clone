@@ -5,7 +5,7 @@ import { deliberateExit } from "../runtime/input.js";
 import type { AimedTarget, ReachPreview } from "../sim/targeting.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import { airSupply, exposure } from "../sim/survival.js";
-import { distractionPreview, exitRefusal, hullDepth, serviceRefusal, serviceState } from "../sim/vehicles.js";
+import { distractionPreview, exitBlock, hullDepth, serviceRefusal, serviceState } from "../sim/vehicles.js";
 import type { GameState, NoticeContext, NoticeOptions, Vec3, WorldQueries } from "../sim/types.js";
 import { FACILITY_SOLIDS } from "../sim/world.js";
 import { escapeHtml, recoveryDisplay } from "./format.js";
@@ -60,6 +60,7 @@ export class HudView {
     const covered = this.renderHazards(state);
     this.presentation.observe(state, covered);
     this.current = state;
+    this.renderPilotGuidance(state);
     this.renderBlocked();
     this.renderNotices();
     this.renderCall(state);
@@ -111,7 +112,6 @@ export class HudView {
             : p.z > 9 && p.y < 0 && Math.abs(p.x) < 4
               ? "Below the pod deck · swim around the ramp edge, surface, then approach its amber treads."
               : "";
-    const exitBlocked = v ? exitRefusal(state, this.world) : null;
     const pulse = distractionPreview(state);
     const threatened = !e.refuge && ["warn", "investigate", "pursue"].includes(state.world.threat.mode);
     if (threatened) this.get("context-hint").textContent = "";
@@ -120,19 +120,9 @@ export class HudView {
       : state.world.threat.distractionSeconds > 0 ? `G · pulse active ${Math.ceil(state.world.threat.distractionSeconds)} s`
       : pulse.refusal === null ? `G · ${pulse.cost} cell points · ${(pulse.remainingCharge + pulse.cost).toFixed(0)} → ${pulse.remainingCharge.toFixed(0)}%`
       : `G · unavailable · Z quiet / cover / retreat`;
-    this.get("pilot-guidance").hidden = !v;
-    if (this.pilotId !== (v?.id ?? null)) {
-      this.pilotId = v?.id ?? null;
-      this.pilotSince = state.tick;
-    }
     this.get("control-hint").textContent = threatened || this.get("context-hint").textContent ? "" : v
       ? state.tick - this.pilotSince < 720 ? "Look steers · W/S thrust · A/D slide · Space/C rise/dive · Z quiet · Shift boost" : ""
       : state.tick - this.startTick < 3600 ? "WASD move · mouse / arrows look · Space rise · C dive" : "";
-    if (v) {
-      const stopped = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) < 0.2;
-      this.get("pilot-guidance").innerHTML = `<kbd>${this.exitKey}</kbd> ${exitBlocked ? "Exit blocked" : `${deliberateExit(state) ? "Hold to exit" : "Exit"}`}${this.exitProgress !== null ? ` <progress aria-label="Exit hold" max="1" value="${this.exitProgress}"></progress>` : ""}${exitBlocked || stopped ? `<small>${escapeHtml(exitBlocked ?? `Suit ${personalLimit(state)} m · hull ${HULLS[v.hull].initialDepth} m`)}</small>` : ""}`;
-      this.get("pilot-guidance").classList.toggle("urgent", exitBlocked !== null);
-    }
     const pitch = state.player.pose.pitch;
     this.get("pitch-cue").hidden = !(mode === "swimming" || v) || Math.abs(pitch) <= 0.14;
     this.get("pitch-cue").innerHTML = `<i style="top:${50 - Math.max(-1, Math.min(1, pitch / (Math.PI / 2))) * 46}%"></i>${Math.abs(pitch) > Math.PI / 4 ? `<small>${Math.round(pitch * 180 / Math.PI)}°</small>` : ""}`;
@@ -183,6 +173,26 @@ export class HudView {
     this.hud.dataset.pitch = String(state.player.pose.pitch);
   }
 
+  private renderPilotGuidance(state: GameState): void {
+    const v = state.player.mode === "piloting"
+      ? state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId) : undefined;
+    const block = v ? exitBlock(state, this.world) : null;
+    const guidance = this.get("pilot-guidance");
+    guidance.hidden = !v || state.opening.phase < 4;
+    if (this.pilotId !== (v?.id ?? null)) {
+      this.pilotId = v?.id ?? null;
+      this.pilotSince = state.tick;
+    }
+    if (v) {
+      const stopped = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) < 0.2;
+      const html = `<kbd>${this.exitKey}</kbd> ${block ? "Exit blocked" : `${deliberateExit(state) ? "Hold to exit" : "Exit"}`}${this.exitProgress !== null ? ` <progress aria-label="Exit hold" max="1" value="${this.exitProgress}"></progress>` : ""}${block || stopped ? `<small>${escapeHtml(block?.message ?? `Suit ${personalLimit(state)} m · hull ${HULLS[v.hull].initialDepth} m`)}</small>` : ""}`;
+      if (guidance.innerHTML !== html) guidance.innerHTML = html;
+      guidance.classList.toggle("urgent", block !== null);
+    }
+    this.presentation.observeExitGuidance(v && block && !guidance.hidden && !this.hud.hidden
+      ? { kind: "exit", vehicleId: v.id, code: block.code } : undefined);
+  }
+
   target(t: AimedTarget | null, state: GameState | null, preview: ReachPreview | null = null): void {
     const html = t
       ? `${t.verb === "empty" ? "" : "<kbd>E</kbd> "}${escapeHtml(t.kind === "vehicle" && state ? (() => {
@@ -221,8 +231,9 @@ export class HudView {
     this.impactVehicle = id;
     this.impactUntil = now + 600;
     const notice = this.get("impact-notice");
-    notice.textContent = `Hull −${this.impactLoss.toFixed(1)}%`;
-    notice.hidden = false;
+    const shown = Math.round(this.impactLoss * 10) / 10;
+    notice.textContent = shown < 0.1 ? "" : `Hull −${shown.toFixed(1)}%`;
+    notice.hidden = shown < 0.1;
     notice.classList.toggle("urgent", (state.fleet.vehicles.find(v => v.id === id)?.health ?? 100) <= 25);
     window.clearTimeout(this.impactTimer);
     this.impactTimer = window.setTimeout(() => { notice.hidden = true; }, 1800);
@@ -254,6 +265,7 @@ export class HudView {
   presentationStep(state: GameState): void {
     this.current = state;
     this.presentation.step(state, this.renderHazards(state));
+    this.renderPilotGuidance(state);
     this.renderBlocked();
     this.renderNotices();
     this.renderCall(state);
@@ -291,7 +303,11 @@ export class HudView {
     // All notice classification uses metadata, never message text.
     if (!error && message === "Expedition saved. The island shore and reef ribs are yours to explore.") return;
     const covered = state ? this.renderHazards(state) : new Set<NoticeContext>();
-    if (state) { this.current = state; this.presentation.observe(state, covered); }
+    if (state) {
+      this.current = state;
+      this.presentation.observe(state, covered);
+      this.renderPilotGuidance(state);
+    }
     if ((options.channel ?? "action") === "action" && state && state.opening.phase < 4) return;
     this.presentation.notify(message, error, options, performance.now(), covered);
     this.renderNotices();
@@ -323,7 +339,7 @@ export class HudView {
       const version = ++this.announcementVersion, live = this.get("action-announce");
       live.textContent = "";
       if (result) this.announcementTimer = window.setTimeout(() => {
-        if (!this.disposed && version === this.announcementVersion) live.textContent = result.message;
+        if (!this.disposed && version === this.announcementVersion) live.textContent = result.error ? result.full : result.message;
       }, 0);
     }
     const notice = this.presentation.central;

@@ -156,7 +156,7 @@ test("paid Dart/trim fabrication, fitting, service/reserve, boarding and underwa
   s.fleet.vehicles[0]!.charge = 90.5;
   out = executeCommand(s, { type: "reserve", vehicleId: v.id }, empty); receipt(out, "+9.5% hull power"); s = out.state;
   out = executeCommand(s, { type: "service", vehicleId: v.id }, empty); receipt(out, HULLS.dart.label + " serviced"); s = out.state;
-  out = executeCommand(s, { type: "exit" }, empty); receipt(out, "Clear exit · personal suit protection");
+  out = executeCommand(s, { type: "exit" }, empty); receipt(out, "Left the craft");
   assert.equal(out.state.player.mode, "swimming"); assert.ok(out.state.player.pose.position.y < 0);
 });
 
