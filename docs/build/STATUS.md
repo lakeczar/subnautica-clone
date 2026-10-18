@@ -6,7 +6,7 @@ Updated: 2026-10-18. **Construction continues through the full game. M0/M1 retai
 
 [Round1 reconciliation](reviews/POLISH-1-SLICE1-R1.md) preserves Astra ACCEPT/Sol REQUEST CHANGES on88f1f71 and accepted SOL-P1-1. The correction is provisionally verified; [interim R2 reconciliation](reviews/POLISH-1-SLICE1-R2.md) records Astra ACCEPT/Sol pending. **No composed-slice acceptance yet**. [Round2 brief](tasks/POLISH-1-SLICE1-REVIEW-R2.md) covers all nine original criteria, both R1 reports and revised keyboard contract. P1-VIS-1/2/3 remain supported by both prior reviewers within source-attributed/sampled limits. Slice2, stage1 Opus and M2–M4 remain open.
 
-Public #4/#3 require the interim Astra ACCEPT/Sol pending status; prior complete readbacks at79595a4/M0a2cb19f recorded both R2 reviews running. Two source-attributed keyboard comparison images on pr-assets return HTTP200 with matching bytes; source/trace limitations remain explicit. #3 retains M0-only claims. Stack linked/unwatched; no main merge/deployment.
+Public #4/#3 now record Astra ACCEPT/Sol pending on frozen d031803. Exact full body/base/head/draft readbacks atb7a6286/M0a2cb19f match `/tmp/siltwake-m1-pr/slice1-r2-astra-verification.json`. Two source-attributed keyboard comparison images on pr-assets return HTTP200 with matching bytes; source/trace limitations remain explicit. #3 retains M0-only claims. Stack linked/unwatched; no main merge/deployment.
 
 
 ## Resumed full-game construction
