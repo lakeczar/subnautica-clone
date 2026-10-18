@@ -832,17 +832,37 @@ export function createExpeditionArt(
   );
   const hunterMesh = hunter.finish(.65);
   hunterMesh.unfreezeWorldMatrix();
+  // Retain only this animal's selected vertex colors. The shared cel material
+  // interprets alpha -1 as emission, still in its ordinary opaque/fogged pass.
+  const hunterDisplay: {
+    mesh: Mesh; base: Float32Array; colors: Float32Array; offsets: number[];
+  }[] = [];
+  const retainHunterDisplay = (mesh: Mesh, select: (offset: number, colors: Float32Array) => boolean): void => {
+    const base = new Float32Array(mesh.getVerticesData("color")!);
+    const colors = base.slice(), offsets: number[] = [];
+    for (let i = 0; i < base.length; i += 4)
+      if (select(i, base)) offsets.push(i);
+    const display = { mesh, base, colors, offsets };
+    mesh.setVerticesData("color", colors, true, 4);
+    hunterDisplay.push(display);
+    // Meshes remain scene-owned; disposing one releases its retained data,
+    // without disposing the cel material shared by the rest of the scene.
+    mesh.onDisposeObservable.addOnce(() => hunterDisplay.splice(hunterDisplay.indexOf(display), 1));
+  };
+  retainHunterDisplay(hunterMesh, (i, colors) => colors[i + 3]! < 0);
+  let hunterDisplayGain = 1;
   const hunterFins: { mesh: Mesh; side: number }[] = [];
   for (const side of [-1, 1]) {
     const fin = new ArtBatch(`ecology.hunter-warning-fin.${side}`, scene, cel);
-    fin.face([[0, 0, -1.2], [side * 1.2, .15, -1.35], [side * 2.7, -.3, .8], [side * 1.2, 0, 1.1], [0, 0.1, 1.4]], P.coral);
-    fin.face([[0, 0.04, -0.7], [side * 1.2, 0.03, -0.1], [side * 1.2, 0.04, 1.1], [0, 0.14, 1.4]], P.violet);
+    const membraneVertices = fin.face([[0, 0, -1.2], [side * 1.2, .15, -1.35], [side * 2.7, -.3, .8], [side * 1.2, 0, 1.1], [0, 0.1, 1.4]], P.coral).getTotalVertices();
+    const veinStart = membraneVertices + fin.face([[0, 0.04, -0.7], [side * 1.2, 0.03, -0.1], [side * 1.2, 0.04, 1.1], [0, 0.14, 1.4]], P.violet).getTotalVertices();
     for (const z of [-0.4, 0.2, 0.8])
       fin.tube([[0, 0.12, z], [side * 1.1, 0.04, z + 0.2], [side * 2.3, -0.35, 1.5]], 0.025, P.coralRim, 5);
     const mesh = fin.finish();
     mesh.unfreezeWorldMatrix();
     mesh.parent = hunterMesh;
     mesh.position.set(side * 0.65, 0.65, 0);
+    retainHunterDisplay(mesh, i => i < membraneVertices * 4 || i >= veinStart * 4);
     hunterFins.push({ mesh, side });
   }
   const buoy = new ArtBatch("equipment.salvage-buoy", scene, cel);
@@ -894,6 +914,23 @@ export function createExpeditionArt(
       const time = s ? s.tick / 60 : 0;
       const t = s?.world.threat;
       hunterMesh.setEnabled(s?.scenario === "expedition");
+      const displaying = s?.scenario === "expedition" &&
+        (t?.mode === "warn" || t?.mode === "investigate" || t?.mode === "pursue");
+      // 0.75 Hz, +8–28% local color gain. Simulation time keeps pause and
+      // replacement deterministic; no wall-clock phase or per-frame buffers.
+      const displayGain = displaying ? 1.18 + Math.sin(time * Math.PI * 2 * .75) * .1 : 1;
+      if (displayGain !== hunterDisplayGain) {
+        for (const { mesh, base, colors, offsets } of hunterDisplay) {
+          for (const i of offsets) {
+            colors[i] = base[i]! * displayGain;
+            colors[i + 1] = base[i + 1]! * displayGain;
+            colors[i + 2] = base[i + 2]! * displayGain;
+            colors[i + 3] = displaying ? -1 : base[i + 3]!;
+          }
+          mesh.updateVerticesData("color", colors, false, false);
+        }
+        hunterDisplayGain = displayGain;
+      }
       if (t) {
         hunterMesh.position.set(t.position.x, t.position.y, t.position.z);
         const p = t.distraction ?? (t.mode === "disengage" ? THREAT_HOME : s!.player.pose.position);
