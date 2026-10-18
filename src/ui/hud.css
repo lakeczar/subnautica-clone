@@ -48,6 +48,13 @@
   padding: 8px;
 }
 .hud-actions kbd { font: inherit; font-size: 12px; margin-left: 5px; color: #d6e5d9; }
+/* Outer controls and essential menu information share the HUD's readable floor. */
+.menu-screen .details summary, .menu-screen .details p,
+.menu-screen .settings label, .menu-screen .settings select,
+.menu-screen .controls div, .menu-screen .save-status,
+.menu-screen .control-note, .menu-screen .build-note > span:last-child { font-size: 12px; }
+.menu-screen .wordmark > span, .menu-screen .build-note, .scene-caption small { font-size: 11px; }
+#panel-return kbd { font-size: 12px; }
 .crosshair {
   position: absolute;
   top: 50%; left: 50%;
