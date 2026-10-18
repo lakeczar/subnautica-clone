@@ -786,3 +786,8 @@ Both task notifications are acknowledged terminal/result_available with no live 
 - Binding [brief](tasks/POLISH-1-SLICE1-R1-FIX.md) and both independent reports/root disposition supplied. Exclusive app/view focus handling; tests/app.test.ts, tests/presentation.test.ts, tests/app-browser-support.ts; sole evidence doc. No source API/schema/physics ownership. Only root and this builder active.
 - One owned incognito Linux tab if needed, checked-free5191, actual browser-process isolation verification and normal cleanup required. Originals read-only, new /tmp/siltwake-polish-1-slice1-r1-fix/. No children/peer edits/push/PR/merge. Native Tab/Shift+Tab/wrap/capture proof required; no unrelated replay expansion.
 - Completion notification resumes root for inspection and fresh paired round2 on the complete original slice. Do not poll, duplicate the author or continue review through a child-thread message. Stage1 Opus and M2–M4 remain open.
+
+
+### Public R1 correction checkpoint
+
+Draft #4/#3 full descriptions now reflect completed Astra ACCEPT/Sol REQUEST CHANGES, the reproduced native Tab defect, running Sol max correction and required fresh paired review. Exact full-body/base/head/draft readbacks at9bed12e/M0a2cb19f match `/tmp/siltwake-m1-pr/slice1-r1-verification.json`. Existing screenshots/recordings retain source identity; #3 remains M0-only. All stack layers linked/unwatched. Root production/tests unchanged; only bounded temporary harness probe ran after compilation. No root browser/server or polling process. Wait for the correction completion notification, then continue the authorized loop.
