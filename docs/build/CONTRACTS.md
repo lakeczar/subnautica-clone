@@ -233,3 +233,7 @@ Both initial R1 reviewers are terminal. [SOL-S2-R1-1](reviews/POLISH-1-SLICE2-R1
 ### Implemented save/storage corrections; source ownership released
 
 Both corrections are provisionally assembled at **c32d8c5**; [root verification](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md). Successful non-error persistence notifications now clear only the obsolete central persistence notice before the existing status chip. System/export success does not. Internal `PanelView.observeStorageContext(state: GameState): void` runs from refresh and `GameView.update` with unchanged semantic anchors; observed departure clears source/explicit destination/local fallback without DOM/focus/scroll/timer or simulation writes. Same-site intent remains. Public GameView/save/session/schema/physics are unchanged. All correction paths are released; fresh R2 reviewers own only their reports.
+
+### Slice2 contracts accepted on c4de579
+
+Both independent reviewers and coordinator accept the complete extraction/rib/signal/preparation/hunter/HUD slice and its save/storage corrections on **c4de579**, productionc32d8c5; [paired record](reviews/POLISH-1-SLICE2-R2.md). Historical provisional labels above now describe prior checkpoints. No subsequent source/interface changes. All author/reviewer paths are released. Stage1 Opus is report-only; accepted technical contracts remain until root reconciles any new bounded implementation direction.

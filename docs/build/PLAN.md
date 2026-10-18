@@ -77,3 +77,7 @@ Both initial reviewers now request changes for two distinct reproduced P2 defect
 ### Both slice2 corrections inspected; fresh full-slice R2 next
 
 Save5005f1f and storage11d9a0d are provisionally combined at **c32d8c5**,359 checks/build. [Root record](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md) verifies both resolved defect probes, final production traces and exact build identity. All author ownership is released. [Fresh R2](tasks/POLISH-1-SLICE2-REVIEW-R2.md) retains all six pieces/eight criteria and both R1 findings/dispositions. No accepted slice2 or completed stage1 is implied. Stage1 Opus then M2–M4 remain next under the standing protocol.
+
+### Slice2 paired acceptance; stage1 experience pass next
+
+Both fresh non-author reviewers and coordinator accept the full preparation/encounter slice on **c4de579**, productionc32d8c5. [Paired record](reviews/POLISH-1-SLICE2-R2.md) closes both R1 findings with all eight criteria passing and359 tests/build. This joins accepted slice1; no production change follows the reviews. Dispatch [stage1 Opus](tasks/OPUS-STAGE1-R1.md), obtain detailed advice and implement/re-review substantive experience findings before advancing to M2. Technical acceptance does not substitute for the owner's experience pass or human/hardware evidence.

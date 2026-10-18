@@ -1,16 +1,14 @@
 # Build status
 
-## Current checkpoint — controls accepted; slice2 corrections verified provisionally
+## Current checkpoint — controls and preparation/encounter slices accepted
 
-**POLISH-1 slice1 is accepted on d031803730fb44b9208e52fdfb91a88e9ddf8a41**, production5f25810. M0/M1 remain accepted; `game/siltwake` remains M0a2cb19f. Root branch is `feat/siltwake-first-expedition`; use Git for current HEAD.
+**POLISH-1 slice2 is accepted on c4de57928347c89ea7602a13d1e14a2849caf722**, production **c32d8c5d9caeef12e658e697bed78505155cb6b6**. Both fresh non-author Astra xhigh and Sol6.1/max reviewers accept all eight criteria and close both R1 findings; coordinator inspection concurs. [Paired reconciliation](reviews/POLISH-1-SLICE2-R2.md). Slice1 remains accepted ond031803 (production5f25810); M0/M1 remain accepted. Root branch `feat/siltwake-first-expedition`; game/siltwake remains M0a2cb19f. Use Git for current HEAD.
 
-All six slice2 pieces and both R1 corrections are provisionally integrated at **c32d8c5d9caeef12e658e697bed78505155cb6b6**. [Correction inspection](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md) records **359/359 tests**, typecheck/build, verified source/build identity, both resolved root defect probes and final author trace checks. Earlier [composed workflow/reload](evidence/POLISH-1-SLICE2-2D-HUD-INTEGRATION.md) keeps its660350b attribution; simulation/save/economy are unchanged by these corrections.
+[Correction inspection](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md) records359/359 tests, typecheck/build, exact source/build identity, resolved root defect probes and final author traces. Both R2 reviewers independently pass359 checks/build and verify retained evidence. Actual models/efforts and all reviewer artifacts are verified. Earlier composed workflow/reload retains660350b attribution; simulation/save/economy are unchanged by the two corrections. No further production changes occurred during review.
 
-Both independent R1 reviewers requested changes on b9c99a0: stale warning after successful save retry, and storage intent surviving closed-panel departure/return. Root reproduced both; the terminal Sol6.1/max builder supplied both bounded corrections, now inspected and provisionally resolved. Neither original finding demonstrated data/inventory loss. [Paired disposition](reviews/POLISH-1-SLICE2-R1.md). All authors and R1 reviewers are terminal, owned resources closed and source ownership released. Root has no browser/server/check process.
+All implementation authors and both R2 reviewers are terminal, source/report ownership released and owned resources closed. The next action is the required **Opus5.5/high stage1 experience review** following [prepared brief](tasks/OPUS-STAGE1-R1.md); TASKS records its actual dispatch when started. It will assess the integrated controls, menus, motion, timing, visual taste and expedition loop, including repeated refit facts, small text and HUD density. Stage1 is not complete until its experience findings/advice/corrections are resolved. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
 
-Fresh **Astra R2 accepts all eight criteria and closes both R1 findings on c4de57928347c89ea7602a13d1e14a2849caf722**; independent Sol R2 remains pending, following [R2 brief](tasks/POLISH-1-SLICE2-REVIEW-R2.md). TASKS records both actual task IDs and exclusive report-only paths. No slice2 acceptance yet. The full pair covers all six original pieces/eight criteria and both fixes. [Interim R2 reconciliation](reviews/POLISH-1-SLICE2-R2.md) records verified Astra runtime/artifacts and root concurrence. Some refit copy remains repetitive, secondary text small and HUD dense; these stay explicit experience-review priorities. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
-
-After paired acceptance, run stage1 Opus experience review/advice/corrections, then M2–M4 under standing authorization. No main merge/deployment.
+Then continue M2–M4 under standing authorization. Root has no browser/server/check process. No main merge/deployment.
 
 ## Resumed full-game construction
 
@@ -62,7 +60,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the remaining independent Sol R2 on frozen c4de579, using the R2 brief, both R1 reports/disposition and final correction evidence. No duplicate correction builder is needed. Receive both independent results without polling, reconcile/fix/review, then stage1 Opus and M2–M4. TASKS owns actual IDs and report-only paths. Main merge/public deployment remain owner actions.
+Dispatch the fresh stage1 Opus5.5/high experience review on a clean documentation successor to accepted c4de579 (same productionc32d8c5), with the full prepared brief, prior OD2 findings/dispositions and current acceptance/evidence. Record the actual task ID, then receive its completion without polling. Substantive findings require detailed implementation advice, reconciliation, Sol fixes and affected re-review. Continue M2–M4; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
