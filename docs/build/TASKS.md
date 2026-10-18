@@ -678,3 +678,10 @@ Follow-up task `siltwake-opus-r2-implementation-consult-ef8d761` is completed/re
 [POLISH-1](tasks/POLISH-1.md) records concrete reconciliation, exact shared interfaces, compatibility, exclusive ownership and verification. Sequential1A core then1B presentation avoids speculative parallel stubs. No behind-eye/inside-host bypass, stale-target cache, scanner requirement bypass or unvalidated global buoyancy/pitch change. Slice2 retains the rib physics fix and compact menu/notice work. The original completed adviser is released; next dispatch is the main Sol6.1/max core builder from this committed baseline. Continued four-stage Opus protocol remains mandatory.
 
 Public PR#4/#3 continuation bodies are verified at pushed7ee421f/M0a2cb19f in `/tmp/siltwake-m1-pr/resumed-verification.json`; all four stack PRs are linked/unwatched. Update their current worker status after dispatch. No main/game merge or deployment.
+
+
+### POLISH-1A dispatched from61fcc30
+
+Task **`node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1a-sol-max-61fcc30`**, stable request `siltwake-polish-1a-sol-max-61fcc30`, exact parent **61fcc3033292f9412a795a2388616a4f926ece22**. T3 async isolated worktree accepted running with provider codex/model gpt-6.1-sol and explicitly requested reasoningEffort=max; worker must verify actual runtime. No pending children/questions at dispatch. Root plus this builder active; adviser released.
+
+Full POLISH-1 assignment supplied directly, including root reconciliation, exclusive paths, frozen interfaces, existing earned saves, diagnostic limitations and browser rules if needed. Own evidence POLISH-1A/temp area, optional checked-free5190 only; no children/peers/PR/push/merge. Root prepares [1B](tasks/POLISH-1B.md) without assigning its dependent paths. Receive1A completion, inspect/reconcile exports/checks and stage provisionally before dispatching1B on a new committed baseline. No polling, duplicate author or independent acceptance claim.
