@@ -694,3 +694,9 @@ Worker reports actual gpt-6.1-sol/max verified from session turn_context, isolat
 Sent to the existing running child using `t3_thread_send`, mode steer, stable request `siltwake-polish-1a-source-alignment-0511e7f`; delivery **steered**, same ordinal1 run, no new task.1A continues independently and returns a separate correction commit plus geometry/LOS/action evidence.1B adds final actual rendered/ordinary interaction checks for these sources and food/depletion. Root owns only records; no browser/source edits, duplicate worker or acceptance claim.
 
 PR#4/#3 active-builder bodies previously read back exactly at0511e7f/M0a2cb19f; `/tmp/siltwake-m1-pr/polish-1a-verification.json` preserves hashes/base/head/draft checks. Stack remains linked/unwatched.
+
+### POLISH-1A throttle-fixture amendment
+
+Worker reports first full check: typecheck passes,230/231 tests pass, only the existing module throttle-target test fails; economy passes. Build completion is not claimed for that failed check. Root inspected the source: the paid fixture now inherits legitimate new-fabrication yawπ, while this speed-isolation test seeds/asserts fixed negative-Z velocity. Root authorizes only explicit diagnostic yaw0 before boarding in that test in `tests/modules.test.ts`, without changing shared fixture helpers, paid crafting, speed/drain/acceleration/input-precedence expectations, tolerances or production. Separate hull-clearance checks retain actual new/legacy heading coverage.
+
+Sent to original running child via stable steer `siltwake-polish-1a-throttle-fixture-02760ee`; same ordinal1 run, delivery steered. Worker reruns affected test and final full check/build, continues probes/evidence, then returns terminal handoff. Reported28 static-host and corrected-art checks are still author evidence pending root inspection; no batch acceptance yet. No extra worker/browser/source edit by root.

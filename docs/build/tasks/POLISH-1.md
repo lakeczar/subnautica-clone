@@ -47,6 +47,8 @@ Return this correction as a small separate source commit with exact metadata/mes
 
 Tests: new `tests/targeting.test.ts`, optional reusable `tests/targeting-support.ts`, existing `tests/{expedition,hull-clearance,simulation,expedition-decisions,command-snapshot,presentation}.test.ts`. Existing test edits must be narrow consequences of view-sensitive targeting or the required query method. Do not weaken state/refusal expectations, delete failing cases or grant fixture inventory to conceal a regression. If another path is essential, report the exact proposal to root and continue independent work; do not edit beyond ownership.
 
+Test-only amendment: `tests/modules.test.ts` is additionally assigned **only** to set explicit yaw0 in the isolated quiet/boost throttle-target fixture, alongside its already synthetic position/pitch, before boarding copies the heading to the player. That test seeds negative-Z velocity and asserts the same fixed-axis targets; inheriting the newly fabricated yawπ accidentally changes its precondition. Keep shared paid-fabrication helpers, speed/drain/acceleration/input-precedence assertions and tolerances unchanged. New fabrication yawπ and legacy yaw0 remain separately checked in hull-clearance tests/earned-save probes. Preserve the initial reported230/231 check failure and rerun the corrected test plus final full check through build. Delivered to the same running child via steer `siltwake-polish-1a-throttle-fixture-02760ee`; no new task.
+
 Evidence: `docs/build/evidence/POLISH-1A.md`; temporary artifacts under `/tmp/siltwake-polish-1a/`. No other docs, child agents, pushes, PRs, merges, parent/worktree changes or waits on peers.
 
 ## 1A required behavior and checks
