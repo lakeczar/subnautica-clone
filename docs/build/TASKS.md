@@ -854,3 +854,12 @@ Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3
 [Root integration](evidence/POLISH-1-SLICE2-C0-INTEGRATION.md) records275 unchanged tests/typecheck/build/economy,50 sealed payloads,40source/25test/27build identities,20 exact/four normalized methods,22 actual before/final parity checkpoints and16 inspected native panel Tab intervals. Root viewed current dense-layout baselines. Additional service/storage comparison preserves80 elapsed ticks and all state except four unrecorded look angles; not a full input replay. No root browser run or full-slice acceptance.
 
 Dependency clarification:2C uses inspected C0 and frozen world APIs, so can proceed while original RIB works independently.2D waits for reconciled geometry/presentation. Root will record committed2C baseline and returned task ID before treating it active. No duplicate RIB task or polling. Complete composed slice2 still requires paired review and stage1 Opus.
+
+
+### Preparation2C dispatched from45612f7
+
+Exact clean parent **45612f7740490f569eb8a311a7fde5357823f97a**, inspected C0 production72c3355/root assemblye3c3ce1. Task **`node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice2-2c-sol-max-45612f7`**, stable request `siltwake-polish-1-slice2-2c-sol-max-45612f7`, fresh T3-owned async isolated worktree accepted running/working with no pending child/questions. Live catalog rechecked codex/gpt-6.1-sol; reasoningEffort max explicitly selected, effective runtime confirmation pending.
+
+[Full2C brief](tasks/POLISH-1-SLICE2-2C.md) included verbatim. Exclusive panels.ts/new panels.css; narrowly panel-local view.ts/style.css and one main.ts CSS import; presentation.test.ts/optional preparation-panels.test.ts; own evidence. No HUD/runtime/simulation/world/render/canon edits. New PanelView.resetSession is reconciled in CONTRACTS. Own temp `/tmp/siltwake-polish-1-slice2-2c/`, optional5191. Required matched baseline/final refit counts retain ordinary-input and CSS-viewport attribution. No subtitle/help-copy proliferation.
+
+Original RIB remains independently assigned from577d249 with optional5192; no status polling, duplicate task or peer source consumption. Root plus2 workers, no root browser/server/check process. Receive terminal notifications and inspect before assembly.2D waits for inspected geometry/presentation seams; composed slice2 pair and stage1 Opus remain required. No main merge/deployment.
