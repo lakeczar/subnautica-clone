@@ -8,7 +8,7 @@ All six slice2 pieces and both R1 corrections are provisionally integrated at **
 
 Both independent R1 reviewers requested changes on b9c99a0: stale warning after successful save retry, and storage intent surviving closed-panel departure/return. Root reproduced both; the terminal Sol6.1/max builder supplied both bounded corrections, now inspected and provisionally resolved. Neither original finding demonstrated data/inventory loss. [Paired disposition](reviews/POLISH-1-SLICE2-R1.md). All authors and R1 reviewers are terminal, owned resources closed and source ownership released. Root has no browser/server/check process.
 
-Fresh independent **full-slice Astra xhigh + Sol6.1 max R2 is active on c4de57928347c89ea7602a13d1e14a2849caf722**, following [R2 brief](tasks/POLISH-1-SLICE2-REVIEW-R2.md). TASKS records both actual task IDs and exclusive report-only paths. No slice2 acceptance yet. The reviewers cover all six original pieces/eight criteria and both fixes. Some refit copy remains repetitive, secondary text small and HUD dense; these stay explicit experience-review priorities. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
+Fresh **Astra R2 accepts all eight criteria and closes both R1 findings on c4de57928347c89ea7602a13d1e14a2849caf722**; independent Sol R2 remains pending, following [R2 brief](tasks/POLISH-1-SLICE2-REVIEW-R2.md). TASKS records both actual task IDs and exclusive report-only paths. No slice2 acceptance yet. The full pair covers all six original pieces/eight criteria and both fixes. [Interim R2 reconciliation](reviews/POLISH-1-SLICE2-R2.md) records verified Astra runtime/artifacts and root concurrence. Some refit copy remains repetitive, secondary text small and HUD dense; these stay explicit experience-review priorities. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
 
 After paired acceptance, run stage1 Opus experience review/advice/corrections, then M2–M4 under standing authorization. No main merge/deployment.
 
@@ -62,7 +62,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active full-slice R2 reviewers on frozen c4de579, using the R2 brief, both R1 reports/disposition and final correction evidence. No duplicate correction builder is needed. Receive both independent results without polling, reconcile/fix/review, then stage1 Opus and M2–M4. TASKS owns actual IDs and report-only paths. Main merge/public deployment remain owner actions.
+Receive the remaining independent Sol R2 on frozen c4de579, using the R2 brief, both R1 reports/disposition and final correction evidence. No duplicate correction builder is needed. Receive both independent results without polling, reconcile/fix/review, then stage1 Opus and M2–M4. TASKS owns actual IDs and report-only paths. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
