@@ -1204,3 +1204,10 @@ Frozen candidate **e81bb6fa3e19f01641f6fe874cce70443263b257**, production35de825
 Both received the complete eight-criterion [brief](tasks/POLISH-1-EXPERIENCE-REVIEW-R1.md) verbatim, complete prior evidence/dispositions, final caption inspection and immutable artifact/build identities. No author is reused. Full source/dependency review, separate initial findings, requested runtime verification, unchanged gameplay-source attribution and focused browser evidence limits are explicit. Each owns only a new report and separate temporary outputs; no source edits, children, peer sharing/polling, push/PR/merge or parent mutation. Browser rules include actual isolated Linux process proof, own tab/storage/port, copied traces before normal cleanup and preservation of shared resources.
 
 Only root and these two reviewers are active. Root owns no browser/server/recording/check process. Await completion notifications; reconcile/fix/re-review, then fresh stage1 Opus verification and M2–M4. Production stays frozen during review. No game/main merge or deployment.
+
+
+### Public final-caption / active-review checkpoint synchronized
+
+PR #4/#3 full descriptions now record provisional35de825/sourcef2e634a,399 passing checks/build/economies, final caption inspection and the active fresh same-candidate pair one81bb6f. Earlier gameplay captures/reload remain correctly attributed to unchanged5005095 systems; #3 stays M0-only. Exact body/base/head/draft readbacks at8c122bb73fb24b9f65eedb588f2a85bcf33e8f60/M0a2cb19f match `/tmp/siltwake-m1-pr/experience-review-verification.json`. No new media or current-source gameplay claim.
+
+All four PR layers remain linked/unwatched. Only the two independent reviewers are active; root has no browser/server/recording/check process. Await their completion notifications without polling. No game/main merge/deployment.
