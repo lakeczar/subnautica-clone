@@ -700,3 +700,12 @@ PR#4/#3 active-builder bodies previously read back exactly at0511e7f/M0a2cb19f; 
 Worker reports first full check: typecheck passes,230/231 tests pass, only the existing module throttle-target test fails; economy passes. Build completion is not claimed for that failed check. Root inspected the source: the paid fixture now inherits legitimate new-fabrication yawπ, while this speed-isolation test seeds/asserts fixed negative-Z velocity. Root authorizes only explicit diagnostic yaw0 before boarding in that test in `tests/modules.test.ts`, without changing shared fixture helpers, paid crafting, speed/drain/acceleration/input-precedence expectations, tolerances or production. Separate hull-clearance checks retain actual new/legacy heading coverage.
 
 Sent to original running child via stable steer `siltwake-polish-1a-throttle-fixture-02760ee`; same ordinal1 run, delivery steered. Worker reruns affected test and final full check/build, continues probes/evidence, then returns terminal handoff. Reported28 static-host and corrected-art checks are still author evidence pending root inspection; no batch acceptance yet. No extra worker/browser/source edit by root.
+
+
+### POLISH-1A actual-triangle/headland-frame amendment
+
+Worker reports231/231 tests/typecheck/build and economy before final numeric geometry audit. Root inspected `geometry-final.mjs` and selected JSON results: diagnostic interpolation matches actual terrain indices(a,c,b,b,c,d); intermediate headland+1.5Y and west-glass+.65Y stock remain buried against rendered triangles, and headland persistent-frame local exposure is zero. These supersede the prior analytical-only placement conclusions, not the saved source/physics authority.
+
+Root authorizes only `src/render/environment.ts` headland-scraps frame Y translation via optional shared registry `persistentOffsetY`; already-assigned stock offsets/host metadata may be corrected against actual triangles. All other hosts, topology/materials, terrain/collision, source datums/yields and reach stay unchanged. Final probes must check visible approach eyes/rays and depleted anchor as well as analytical LOS;1B verifies actual production. Full constraints in POLISH-1/CONTRACTS.
+
+Delivered to original running child using steer `siltwake-polish-1a-persistent-frame-b6dec10`, same ordinal1 run, no new task. Retain intermediate evidence provenance; rerun applicable geometry/targeting and final full check/build after final changes. Root made only records, no browser/source edit or new acceptance claim.
