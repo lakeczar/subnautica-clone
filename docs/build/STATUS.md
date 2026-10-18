@@ -6,7 +6,7 @@
 
 [Correction inspection](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md) records359/359 tests, typecheck/build, exact source/build identity, resolved root defect probes and final author traces. Both R2 reviewers independently pass359 checks/build and verify retained evidence. Actual models/efforts and all reviewer artifacts are verified. Earlier composed workflow/reload retains660350b attribution; simulation/save/economy are unchanged by the two corrections. No further production changes occurred during review.
 
-All implementation authors and both R2 reviewers are terminal, source/report ownership released and owned resources closed. The next action is the required **Opus5.5/high stage1 experience review** following [prepared brief](tasks/OPUS-STAGE1-R1.md); TASKS records its actual dispatch when started. It will assess the integrated controls, menus, motion, timing, visual taste and expedition loop, including repeated refit facts, small text and HUD density. Stage1 is not complete until its experience findings/advice/corrections are resolved. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
+All implementation authors and both R2 reviewers are terminal, source/report ownership released and owned resources closed. The required **Opus5.5/high stage1 experience review is active on5dbc73a** following [the full brief](tasks/OPUS-STAGE1-R1.md); TASKS records its actual task ID and report-only ownership. It will assess the integrated controls, menus, motion, timing, visual taste and expedition loop, including repeated refit facts, small text and HUD density. Stage1 is not complete until its experience findings/advice/corrections are resolved. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
 
 Then continue M2–M4 under standing authorization. Root has no browser/server/check process. No main merge/deployment.
 
@@ -60,7 +60,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the fresh stage1 Opus5.5/high experience review on a clean documentation successor to accepted c4de579 (same productionc32d8c5), with the full prepared brief, prior OD2 findings/dispositions and current acceptance/evidence. Record the actual task ID, then receive its completion without polling. Substantive findings require detailed implementation advice, reconciliation, Sol fixes and affected re-review. Continue M2–M4; main merge/public deployment remain owner actions.
+Receive the active fresh stage1 Opus5.5/high experience review on5dbc73a, a documentation successor to acceptedc4de579 with identical productionc32d8c5. TASKS owns its ID and report-only path. Use completion notifications without polling. Substantive findings require detailed implementation advice, reconciliation, Sol fixes and affected re-review. Continue M2–M4; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
