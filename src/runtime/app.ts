@@ -11,7 +11,7 @@ import { browserWriterLock } from "../save/writer-lock.js";
 import { ExpeditionSession } from "./session.js";
 import { createRenderer } from "../render/renderer.js";
 import type { GameRenderer, Quality } from "../render/renderer.js";
-import { PlayerInput, controlHasFocus, deliberateExit } from "./input.js";
+import { PlayerInput, controlHasFocus, textEntryHasFocus, deliberateExit } from "./input.js";
 import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
 
@@ -238,7 +238,7 @@ export class SiltwakeApp {
       };
       const panel = panels[event.code];
       if (panel && !event.shiftKey && (this.active || this.panelOpen) &&
-        (event.code === "Tab" || !controlHasFocus(event.target))) {
+        (event.code === "Tab" || !textEntryHasFocus(event.target))) {
         event.preventDefault();
         if (this.panelOpen && this.view.currentPanel === panel) this.resume(true);
         else this.openPanel(panel);

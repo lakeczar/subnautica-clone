@@ -423,6 +423,29 @@ test("app: capture only follows deliberate return; panel toggle and Escape have 
   assert.equal(f.view.canvas.captures, count, "cooldown never retries");
 });
 
+test("app: panel letter toggles work from focused buttons but preserve text entry", async (t) => {
+  const f = await fixture(t);
+  f.view.actions.resume();
+  f.view.actions.command({ type: "skip-opening" });
+  const keyFrom = (code: string, tagName: string, isContentEditable = false) => {
+    const event = Object.assign(new Event("keydown", { cancelable: true }), { code });
+    Object.defineProperty(event, "target", { value: { tagName, isContentEditable } });
+    f.window.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  for (const code of ["KeyK", "KeyJ"]) {
+    f.key(code);
+    assert.equal(f.view.screen, "panel");
+    for (const tagName of ["INPUT", "TEXTAREA", "SELECT"]) {
+      assert.equal(keyFrom(code, tagName), false);
+      assert.equal(f.view.screen, "panel");
+    }
+    assert.equal(keyFrom(code, "DIV", true), false);
+    assert.equal(keyFrom(code, "BUTTON"), true);
+    assert.equal(f.view.screen, "playing");
+  }
+});
+
 for (const order of ["unlock-before-close", "close-before-unlock"] as const) {
   test(`app: intentional panel release tolerates ${order}`, async (t) => {
     const f = await fixture(t);

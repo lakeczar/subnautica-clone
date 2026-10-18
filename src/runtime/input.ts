@@ -14,10 +14,15 @@ export function deliberateExit(state: GameState): boolean {
     Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) >= 1.5;
 }
 
-export function controlHasFocus(target: EventTarget | null): boolean {
+export function textEntryHasFocus(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null;
   return !!element && (element.isContentEditable ||
-    ["INPUT", "SELECT", "TEXTAREA", "BUTTON", "SUMMARY", "A"].includes(element.tagName));
+    ["INPUT", "SELECT", "TEXTAREA"].includes(element.tagName));
+}
+export function controlHasFocus(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  return textEntryHasFocus(target) || !!element &&
+    ["BUTTON", "SUMMARY", "A"].includes(element.tagName);
 }
 const GAME_KEYS = new Set([
   "KeyW",

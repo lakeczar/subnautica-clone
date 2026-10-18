@@ -1,6 +1,6 @@
 import type { GameState } from "../src/sim/types.js";
 import type { SaveSlot } from "../src/save/repository.js";
-export { deliberateExit, controlHasFocus } from "../src/runtime/input.js";
+export { deliberateExit, controlHasFocus, textEntryHasFocus } from "../src/runtime/input.js";
 import type { UiActions } from "../src/ui/view.js";
 import { MemoryStorage, TestWriterLock } from "./persistence-support.js";
 
