@@ -48,11 +48,12 @@ function assertClear(s: GameState): void {
   assert.ok(world.clearance(s.player.pose.position, shape), "actual world terrain, solids and capsule bounds must clear");
   assert.deepEqual(s.player.pose.position, localToWorld(s.player.interiorPose!.position, s.fleet.vehicles[0]!));
 }
-function assertMigrates(input: SaveEnvelope): SaveEnvelope {
+function assertMigrates(input: SaveEnvelope, legacyContent = false): SaveEnvelope {
   assert.ok(validState(input.state), "incoming semantics must already be valid");
   assert.ok(world.clearance(input.state.player.pose.position, shape), "original historical-compatible player clears the world");
   assert.equal(createWorldQueries(carrierInteriorSolids(input.state), () => -200).clearance(input.state.player.interiorPose!.position, shape), false);
-  const raw = JSON.stringify(input), result = decodeSave(raw);
+  const unchangedInput = JSON.stringify(input);
+  const raw = JSON.stringify(legacyContent ? { ...input, contentVersion: "expedition.2" } : input), result = decodeSave(raw);
   assert.ok(result.ok, result.ok ? "" : result.error);
   const output = result.value;
   assertClear(output.state);
@@ -62,13 +63,14 @@ function assertMigrates(input: SaveEnvelope): SaveEnvelope {
   // player velocity and visible migration/feedback. This compares every other
   // field, including vitals, fleet/cargo, inventory, knowledge, tick and metadata.
   const expected = JSON.parse(raw) as SaveEnvelope;
+  expected.contentVersion = "expedition.3";
   expected.state.player.interiorPose!.position = { ...output.state.player.interiorPose!.position };
   expected.state.player.pose.position = { ...output.state.player.pose.position };
   expected.state.player.velocity = { x: 0, y: 0, z: 0 };
   expected.state.migration = output.state.migration;
   expected.state.feedback = output.state.feedback;
   assert.deepEqual(output, expected);
-  assert.equal(JSON.stringify(input), raw, "decoding must not mutate the source envelope");
+  assert.equal(JSON.stringify(input), unchangedInput, "decoding must not mutate the source envelope");
   assert.equal(encodeSave(input).ok, false, "encoding an unmigrated blocked current pose must still refuse");
   const text = encoded(output), again = decodeSave(text);
   assert.ok(again.ok);
@@ -91,6 +93,7 @@ const file = (text: string) => Object.freeze({ size: new TextEncoder().encode(te
 test("historical maxX and independently staged Sol maxZ migrations return clear, immediately saveable states", () => {
   for (const input of [historicalEdge(), solEdge()]) {
     const output = assertMigrates(input);
+    assert.deepEqual(assertMigrates(input, true), output, "explicit expedition.2 migration applies the same checked carrier landing");
     assert.notDeepEqual(output.state.player.interiorPose!.position, CARRIER_LAYOUT.helm, "out-of-world helm cannot be selected");
   }
 });

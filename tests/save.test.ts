@@ -370,7 +370,7 @@ test("compatible schema2 carrier saves preserve all transforms; a newly covered 
   assert.equal(storage.writes, writes);
   assert.equal(storage.getItem(LOCAL_SAVE_KEY), raw);
   assert.equal(loaded.save.schemaVersion, 2);
-  assert.equal(loaded.save.contentVersion, "expedition.2");
+  assert.equal(loaded.save.contentVersion, "expedition.3");
   assert.match(loaded.save.state.migration!, /previous walking position.*moved/);
   assert.deepEqual(loaded.save.state.player.interiorPose!.position, CARRIER_LAYOUT.helm);
   assert.deepEqual(loaded.save.state.fleet, s.fleet);

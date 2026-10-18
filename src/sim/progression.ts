@@ -197,11 +197,11 @@ export function craftingRefusal(
     return "Already installed. The equipment identity is retained.";
   if (!r.needs.every((n) => s.knowledge.crafted.includes(n as RecipeId)))
     return "Earlier service work or equipment is still required.";
-  if (r.site === "island_workshop" ? !nearWorkshop(s) : !nearPod(s))
+  if (r.site === "island_workshop" ? !nearWorkshop(s) || !!s.player.interiorId : !nearPod(s))
     return "Use the fabrication bench at the required refuge.";
   if (
     (r.site === "pod_fabricator" && !facility(s, "pod_fabricator")) ||
-    (id === "dart_base" && !facility(s, "island_workshop"))
+    (r.site === "island_workshop" && id !== "restore_workshop" && !facility(s, "island_workshop"))
   )
     return "Restore these fabrication services first.";
   if (id === "dart_base" && s.fleet.vehicles.some((v) => v.hull === "dart"))
@@ -224,8 +224,8 @@ export function craftingRefusal(
       ([kind, n]) => available(s, kind as ItemKind, bins) < n,
     )
   )
-    return "Missing public materials. The bench uses your hold, its locker, and a nearby deployed buoy.";
-  if (r.output === "reserve_cell" || r.output === "salvage_buoy") {
+    return "Missing public materials. The bench uses your hold, its accessible locker, a nearby deployed buoy and craft at this site's supported cradle.";
+  if (r.output === "reserve_cell" || r.output === "salvage_buoy" || r.output === "dart_acoustic_trim") {
     const after = structuredClone(s);
     spend(after, r.cost, bins);
     if (!hasRoom(after, "diver", ITEMS[r.output].cu * r.quantity))

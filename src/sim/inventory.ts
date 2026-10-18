@@ -1,6 +1,6 @@
-import { ITEMS } from "../content/registry.js";
-import type { ItemKind } from "../content/registry.js";
-import type { Fitting, GameState, ItemStack, Vec3 } from "./types.js";
+import { DART_BUILD_POSE, HULLS, ITEMS, MATERIALS } from "../content/registry.js";
+import type { ItemKind, MaterialId } from "../content/registry.js";
+import type { Fitting, GameState, ItemStack, Vec3, VehicleState } from "./types.js";
 export const distance = (a: Vec3, b: Vec3): number =>
   Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 export const nextId = (s: GameState, prefix: string): string =>
@@ -110,11 +110,28 @@ export function inCanopyAir(s: GameState): boolean {
 export function facility(s: GameState, id: string): boolean {
   return s.world.facilities.some((f) => f.id === id && f.repaired);
 }
+export type ServiceSite = "home_pod" | "island_workshop";
+/** Existing cradle positions/radii and service restoration rules, without player access grants. */
+export function supportedServiceSite(s: GameState, v: VehicleState): ServiceSite | null {
+  if (v.berth || s.fleet.docking?.transaction?.vehicleId === v.id) return null;
+  if (distance(v.pose.position, DART_BUILD_POSE) < 12 && facility(s, "island_workshop"))
+    return "island_workshop";
+  if (distance(v.pose.position, { x: 0, y: -1, z: 8 }) < 12)
+    return "home_pod";
+  return null;
+}
+/** A restored bench the diver is actually using, not a nearby/remote craft. */
+export function localBenchSite(s: GameState): ServiceSite | null {
+  if (s.player.interiorId || s.player.controlledVehicleId) return null;
+  if (nearPod(s) && facility(s, "pod_fabricator")) return "home_pod";
+  if (nearWorkshop(s) && facility(s, "island_workshop")) return "island_workshop";
+  return null;
+}
 export function containerAccessible(s: GameState, id: string): boolean {
   if (id === "diver" || id === "equipment") return true;
   if (id === "pod_locker") return nearPod(s);
   if (id === "workshop_locker")
-    return nearWorkshop(s) && facility(s, "island_workshop");
+    return localBenchSite(s) === "island_workshop";
   if (id === "buoy_hold")
     return (
       s.inventory.buoy.deployed &&
@@ -123,11 +140,61 @@ export function containerAccessible(s: GameState, id: string): boolean {
   const cache = s.recovery.caches.find((c) => c.containerId === id);
   if (cache) return distance(s.player.pose.position, cache.position) < 4;
   const v = s.fleet.vehicles.find((v) => v.cargoId === id);
+  const bench = localBenchSite(s);
   return (
-    !!v &&
+    !!v && !v.berth && s.fleet.docking?.transaction?.vehicleId !== v.id &&
     (v.id === s.player.controlledVehicleId ||
-      (distance(s.player.pose.position, v.pose.position) < 6 && !v.berth))
+      distance(s.player.pose.position, v.pose.position) < 6 ||
+      (bench !== null && bench === supportedServiceSite(s, v)))
   );
+}
+export function containerLabel(s: GameState, id: string): string {
+  const v = s.fleet.vehicles.find((v) => v.cargoId === id);
+  if (v) return `${HULLS[v.hull].label} hold`;
+  if (id === "diver") return "diver hold";
+  if (s.inventory.containers.find((c) => c.id === id)?.kind === "cache") return "cargo cache";
+  return id.replaceAll("_", " ");
+}
+export interface MaterialStoragePreview {
+  from: string;
+  to: string;
+  destination: string;
+  items: { id: string; kind: MaterialId; quantity: number }[];
+  quantities: Partial<Record<MaterialId, number>>;
+  totalCu: number;
+  refusal: string | null;
+}
+/** Detached read-only transaction description; the command uses this exact set and refusal. */
+export function materialStoragePreview(s: GameState, from: string, to: string): MaterialStoragePreview {
+  const installed = new Set(s.fleet.vehicles.flatMap((v) => v.modules));
+  const items = s.inventory.items.filter((i) =>
+    i.containerId === from && !i.fitted && i.provenance === "public" &&
+    Object.hasOwn(MATERIALS, i.kind) && !installed.has(i.id),
+  ).map((i) => ({ id: i.id, kind: i.kind as MaterialId, quantity: i.quantity }));
+  const quantities: MaterialStoragePreview["quantities"] = {};
+  for (const i of items) quantities[i.kind] = (quantities[i.kind] ?? 0) + i.quantity;
+  const totalCu = items.reduce((n, i) => n + ITEMS[i.kind].cu * i.quantity, 0);
+  const source = s.inventory.containers.find((c) => c.id === from);
+  const destination = s.inventory.containers.find((c) => c.id === to);
+  const refusal = !source || !destination || from === to ||
+      source.kind === "equipment" || destination.kind === "equipment" ||
+      !containerAccessible(s, from) || !containerAccessible(s, to)
+    ? "Choose two distinct, locally accessible cargo containers. Equipment cannot be stored."
+    : !items.length
+      ? "No public material stacks in the source. Meals, cells, tools and modules stay with their container."
+      : !hasRoom(s, to, totalCu)
+        ? `The destination needs ${totalCu} CU for all these materials. Nothing moved.`
+        : null;
+  return { from, to, destination: containerLabel(s, to), items, quantities, totalCu, refusal };
+}
+export function storeMaterials(s: GameState, from: string, to: string): string | null {
+  const preview = materialStoragePreview(s, from, to);
+  if (preview.refusal) return preview.refusal;
+  const ids = new Set(preview.items.map((i) => i.id));
+  for (const i of s.inventory.items) if (ids.has(i.id)) i.containerId = to;
+  s.feedback = `Stored ${Object.entries(preview.quantities).map(([k, n]) =>
+    `${n} × ${ITEMS[k as MaterialId].label}`).join(", ")} in ${preview.destination} (${preview.totalCu} CU).`;
+  return null;
 }
 export function transfer(
   s: GameState,
@@ -136,6 +203,8 @@ export function transfer(
   quantity: number,
 ): string | null {
   const i = s.inventory.items.find((i) => i.id === itemId);
+  if (i && s.fleet.vehicles.some((v) => v.modules.includes(i.id)))
+    return "Remove this installed module at a supported cradle or eligible local disabled-hull collar before transferring it.";
   if (
     !i ||
     i.fitted ||
@@ -200,9 +269,18 @@ export function fabricationContainers(
   s: GameState,
   site: "home_pod" | "pod_fabricator" | "island_workshop",
 ): string[] {
+  const atSite = site === "island_workshop"
+    ? nearWorkshop(s) && !s.player.interiorId
+    : nearPod(s);
+  if (!atSite) return [];
+  const serviceSite = site === "island_workshop" ? "island_workshop" : "home_pod";
   return [
     "diver",
-    site === "island_workshop" ? "workshop_locker" : "pod_locker",
+    ...(site === "island_workshop"
+      ? (containerAccessible(s, "workshop_locker") ? ["workshop_locker"] : [])
+      : ["pod_locker"]),
     ...(containerAccessible(s, "buoy_hold") ? ["buoy_hold"] : []),
+    ...s.fleet.vehicles.filter((v) => supportedServiceSite(s, v) === serviceSite &&
+      containerAccessible(s, v.cargoId)).map((v) => v.cargoId),
   ];
 }

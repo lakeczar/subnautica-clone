@@ -5,7 +5,7 @@ import { completeOpening } from "../sim/progression.js";
 import { CARRIER_LAYOUT, carrierHull, carrierInteriorEntry, carrierInteriorSolids, localToWorld } from "../sim/carrier.js";
 import { createWorldQueries } from "../sim/world.js";
 import { validFoundationState } from "./foundation.js";
-import { record, validState } from "./validation.js";
+import { record, validExpedition2Domain, validState } from "./validation.js";
 export const SAVE_SCHEMA_VERSION = 2 as const;
 export const MAX_SAVE_BYTES = 1_048_576;
 export interface SaveMetadata {
@@ -26,6 +26,18 @@ const date = (v: unknown): v is string =>
   /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(v) &&
   Number.isFinite(Date.parse(v)) &&
   new Date(v).toISOString() === v;
+const FOUNDATION_RELOCATED = "Foundation progress imported. Revised habitat geometry covered the old position, so you were moved to the valid home-pod deck.";
+const CARRIER_RELOCATED = "Carrier compartment geometry now seals the dry berths. Your previous walking position intersected a closed compartment, so you were moved to a clear dry passage. Vessels and cargo were preserved.";
+const HISTORICAL_NOTICES = [
+  [FOUNDATION_RELOCATED + " The original save remains in the journal backup.", FOUNDATION_RELOCATED],
+  ["Carrier compartment geometry now seals the dry berths. Your previous walking position intersected a closed compartment, so you were moved to a clear dry passage. Vessels and cargo were preserved; the original record remains in the journal backup after saving.", CARRIER_RELOCATED],
+] as const;
+function normalizeHistoricalNotice(s: GameState): void {
+  for (const [old, corrected] of HISTORICAL_NOTICES) if (s.migration === old) {
+    s.migration = corrected;
+    if (s.feedback === old) s.feedback = corrected;
+  }
+}
 function blockedCarrierInterior(s: GameState): boolean {
   return !!s.player.interiorPose && !createWorldQueries(carrierInteriorSolids(s), () => -200)
     .clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 });
@@ -51,7 +63,7 @@ function migrateFoundation(old: GameState): GameState {
     s.player.mode = "walking";
     s.player.velocity = { x: 0, y: 0, z: 0 };
     s.migration =
-      "Foundation progress imported. Revised habitat geometry covered the old position, so you were moved to the valid home-pod deck. The original save remains in the journal backup.";
+      FOUNDATION_RELOCATED;
   } else
     s.migration =
       "Foundation progress imported. Your prior safe position and vitals were preserved; M1 facilities and source stock were initialized once.";
@@ -77,10 +89,8 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
       ok: false,
       error: `Save schema ${typeof d.schemaVersion === "number" || typeof d.schemaVersion === "string" ? String(d.schemaVersion).slice(0, 24) : "(unrecognized)"} is unsupported. This build reads schema 2 and validated foundation schema 1 only. Keep the original file.`,
     };
-  if (
-    d.contentVersion !==
-    (d.schemaVersion === 1 ? "foundation.1" : CONTENT_VERSION)
-  )
+  if (d.schemaVersion === 1 ? d.contentVersion !== "foundation.1"
+    : d.contentVersion !== CONTENT_VERSION && d.contentVersion !== "expedition.2")
     return {
       ok: false,
       error:
@@ -124,13 +134,13 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
       ),
     };
   }
-  if (!validState(d.state))
+  if ((d.contentVersion === "expedition.2" && !validExpedition2Domain(d.state)) || !validState(d.state))
     return {
       ok: false,
       error:
         "Gameplay ownership, capacity, equipment, discovery, facility, recovery or berth data is invalid. Nothing was loaded.",
     };
-  // Schema/content and all saved berth transforms remain compatible. Newly sealed
+  // All saved berth transforms remain compatible. Newly sealed
   // room walls can cover an old walking pose; only that pose receives a visible,
   // idempotent safety relocation. Reading never writes or moves a vessel/cargo.
   if (blockedCarrierInterior(d.state)) {
@@ -141,10 +151,12 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
     s.player.interiorPose!.position = entry;
     s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
     s.player.velocity = { x: 0, y: 0, z: 0 };
-    s.migration = "Carrier compartment geometry now seals the dry berths. Your previous walking position intersected a closed compartment, so you were moved to a clear dry passage. Vessels and cargo were preserved; the original record remains in the journal backup after saving.";
+    s.migration = CARRIER_RELOCATED;
     s.feedback = s.migration;
     if (!validState(s) || blockedCarrierInterior(s)) return { ok: false, error };
   }
+  normalizeHistoricalNotice(d.state);
+  d.contentVersion = CONTENT_VERSION;
   return { ok: true, value: d as unknown as SaveEnvelope };
 }
 export function createEnvelope(
@@ -160,6 +172,8 @@ export function createEnvelope(
   };
 }
 export function encodeSave(save: SaveEnvelope): Result<string> {
+  if (save.schemaVersion !== SAVE_SCHEMA_VERSION || save.contentVersion !== CONTENT_VERSION)
+    return { ok: false, error: "This build writes schema 2 / expedition.3 only. Decode a supported older save before writing it." };
   let text: string;
   try {
     text = JSON.stringify(save, null, 2);

@@ -55,7 +55,8 @@ export function incapacitate(s: GameState, reason: string): void {
       i.containerId === "diver" &&
       !i.fitted &&
       i.charge === null &&
-      i.kind !== "salvage_buoy",
+      i.kind !== "salvage_buoy" &&
+      i.kind !== "dart_acoustic_trim",
   );
   let dropped = 0;
   const contents: { kind: (typeof cargo)[number]["kind"]; quantity: number }[] =
@@ -162,7 +163,7 @@ export function recoveryCommand(
       s.inventory.items.some((i) => i.containerId === v.cargoId) ||
       v.modules.length
     )
-      return "Transfer all cargo and modules before salvaging the frame. Nothing changed.";
+      return "Remove installed modules at a supported cradle or eligible local disabled-hull collar, then transfer all cargo before salvaging the frame. Nothing changed.";
     const cu = Object.entries(v.investment).reduce(
       (n, [k, q]) => n + ITEMS[k as MaterialId].cu * q,
       0,

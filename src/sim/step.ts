@@ -1,6 +1,6 @@
-import { EVIDENCE, HULL_COLLIDERS, HULLS, ITEMS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
+import { EVIDENCE, HULL_COLLIDERS, ITEMS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
-import { createWorldQueries, moveHull, withinWorldBounds, WORLD_BOUNDS } from "./world.js";
+import { createWorldQueries, moveHull, withinWorldBounds } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import type {
   GameCommand,
@@ -10,12 +10,14 @@ import type {
 } from "./types.js";
 import {
   addItem,
+  containerLabel,
   distance,
   equipped,
   hasRoom,
   inCanopyAir,
   nearPod,
   nearWorkshop,
+  storeMaterials,
   transfer,
 } from "./inventory.js";
 import {
@@ -27,7 +29,8 @@ import {
   nearestInteraction,
   toggleBuoy,
 } from "./progression.js";
-import { board, eat, exit, reserve, service } from "./vehicles.js";
+import { board, distraction, eat, exit, rechargeCells, reserve, service } from "./vehicles.js";
+import { dartPerformance, installModule, removeModule } from "./modules.js";
 import {
   carrierCommand,
   carrierHull,
@@ -67,18 +70,18 @@ function action(s: GameState, c: GameCommand, w: WorldQueries): string | null {
       const item = s.inventory.items.find((i) => i.id === c.itemId);
       const no = transfer(s, c.itemId, c.to, c.quantity);
       if (no) return no;
-      const container = s.inventory.containers.find((a) => a.id === c.to)!;
-      const vehicle = s.fleet.vehicles.find((v) => v.cargoId === c.to);
-      const destination = vehicle
-        ? `${HULLS[vehicle.hull].label} hold`
-        : container.kind === "cache"
-          ? "cargo cache"
-          : c.to === "diver"
-            ? "diver hold"
-            : c.to.replaceAll("_", " ");
+      const destination = containerLabel(s, c.to);
       s.feedback = `Transferred ${c.quantity} × ${ITEMS[item!.kind].label} to ${destination}.`;
       return null;
     }
+    case "store-materials":
+      return storeMaterials(s, c.from, c.to);
+    case "recharge-cells":
+      return rechargeCells(s);
+    case "install-module":
+      return installModule(s, c.vehicleId, c.itemId);
+    case "remove-module":
+      return removeModule(s, c.vehicleId, c.itemId, w);
     case "eat":
       return eat(s);
     case "buoy":
@@ -105,33 +108,8 @@ function action(s: GameState, c: GameCommand, w: WorldQueries): string | null {
         return null;
       }
       return carrierCommand(s, c.action, c.vehicleId, w);
-    case "distraction": {
-      if (!equipped(s, "essential_tools"))
-        return "The service tool supplies the reusable acoustic distraction.";
-      const t = s.world.threat;
-      if (t.distractionSeconds > 0) return "Distraction is already active.";
-      const p = s.player.pose;
-      const dx = Math.sin(p.yaw), dz = -Math.cos(p.yaw);
-      let range = 16;
-      // Shorten the ray at the first edge, preserving the intended direction.
-      // Ignore cardinal-heading trig residue when finding the intersected edge.
-      if (Math.abs(dx) > Number.EPSILON)
-        range = Math.min(range, ((dx > 0 ? WORLD_BOUNDS.maxX : WORLD_BOUNDS.minX) - p.position.x) / dx);
-      if (Math.abs(dz) > Number.EPSILON)
-        range = Math.min(range, ((dz > 0 ? WORLD_BOUNDS.maxZ : WORLD_BOUNDS.minZ) - p.position.z) / dz);
-      const target = {
-        x: clamp(p.position.x + dx * range, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX),
-        y: p.position.y,
-        z: clamp(p.position.z + dz * range, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ),
-      };
-      if (range <= 0 || (target.x === p.position.x && target.z === p.position.z))
-        return "Face into the survey area to release a directional pulse.";
-      t.distraction = target;
-      t.distractionSeconds = 12;
-      s.feedback =
-        "Service-tool resonator released a directional pulse. Move quietly away from it.";
-      return null;
-    }
+    case "distraction":
+      return distraction(s);
     case "emergency-meal":
       if (!nearPod(s) && !nearWorkshop(s))
         return "Emergency portions are issued at a refuge.";
@@ -343,6 +321,7 @@ export function stepGame(
   if (v) {
     const dock = s.fleet.docking,
       station = v.hull === "hearthline" && dock?.stationKeeping;
+    const performance = dartPerformance(s, v.id);
     const speed =
       v.disabled || v.charge <= 0 || station
         ? 0
@@ -353,9 +332,9 @@ export function stepGame(
             : v.hull === "spindle"
               ? 7
               : quiet
-                ? 3
+                ? performance?.quietSpeed ?? 3
                 : sprint
-                  ? 11
+                  ? performance?.boostSpeed ?? 11
                   : 8;
     const n = Math.max(1, Math.hypot(forward, right, vertical));
     forward /= n;
