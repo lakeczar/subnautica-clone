@@ -1022,3 +1022,12 @@ Original task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f
 Provisional merge **c32d8c5d9caeef12e658e697bed78505155cb6b6**. [Root inspection](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md):359 tests/typecheck/build, all27 build files match, both author manifests/source identities verified, both R1 root probes now pass and recorded final production traces validate against combined compiled code. Root no browser/server/recording; earlier evidence preserved. Both findings provisionally resolved; no independent acceptance.
 
 Prepared [R2 full-slice brief](tasks/POLISH-1-SLICE2-REVIEW-R2.md) retains accepted-controls base d031803, all eight criteria, both reports and dispositions. Actual frozen candidate/IDs follow dispatch. Stage1 Opus and M2–M4 remain authorized; no polling or duplicate builders.
+
+### Fresh full-slice R2 dispatched
+
+Frozen candidate **c4de57928347c89ea7602a13d1e14a2849caf722**, production **c32d8c5d9caeef12e658e697bed78505155cb6b6**, accepted-controls base **d031803730fb44b9208e52fdfb91a88e9ddf8a41**. Live catalog reconfirmed; explicit model/effort selected. Actual runtime awaits each return. Both T3 async isolated-worktree tasks accepted running/working, no pending children/questions; complete [R2 brief](tasks/POLISH-1-SLICE2-REVIEW-R2.md), both prior findings/dispositions and browser rules supplied.
+
+- Astra xhigh: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice2-astra-r2-c4de579`. Own report `docs/build/reviews/POLISH-1-SLICE2-ASTRA-R2.md`, temp `/tmp/siltwake-polish-1-slice2-astra-r2/`, optional isolated5191.
+- Sol6.1 max: `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice2-sol-r2-c4de579`. Own report `docs/build/reviews/POLISH-1-SLICE2-SOL-R2.md`, temp `/tmp/siltwake-polish-1-slice2-sol-r2/`, optional isolated5192.
+
+Both cover all eight criteria/six original pieces plus both corrections. Separate initial R2 findings before sharing, no source edits/fixes/children/peer polling/push/PR/parent mutation. Root plus two reviewers. Receive completion notifications, inspect and reconcile; no polling, duplicate work or acceptance claim. Stage1 Opus then M2–M4 continue. Root production frozen, no browser/server/check process.
