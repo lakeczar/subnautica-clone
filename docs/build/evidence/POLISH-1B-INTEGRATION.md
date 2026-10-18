@@ -25,3 +25,11 @@ Dispatch [POLISH-1C](../tasks/POLISH-1C.md) as a bounded Sol max correction from
 ## Evidence limits retained
 
 No isolated ordinary rib-only optical trial was found among reachable C02/scrap poses. Existing numerical and sim atomic-refusal tests remain useful; use a labelled production diagnostic if a natural host cannot test the gap, without moving real sources or claiming an ordinary encounter. Native drag tool calls timed out; native lock entry/release was observed, relative look synthetic, blur synthetic and permission denial deliberately injected. Human motion comfort, audible mix and dedicated-GPU performance remain unproven.1C should not replay unrelated recovery/carrier campaigns or present those hardware limits as a source defect.
+
+## Public review evidence
+
+PR #4 now records the provisional combined source and three unresolved visual findings, with final-author regulator/cockpit PNGs and the complete paid-fabrication/boarding/departure MP4. Root inspected both PNGs; the earlier sampled movie inspection remains the motion inspection. A derivative GIF preserves the full68.329933-second sequence at640px/8fps with reduced palette; no speed change or new capture. Files are labelled8c15277, whose production code matches the assembled source. No matched base-branch before capture exists for this pass; the PR states this. No root browser was opened.
+
+All four files on `pr-assets/feat-siltwake-first-expedition/` returned HTTP200 and match local SHA256/bytes. Public manifest: `/tmp/siltwake-m1-pr/polish-1b-public-assets.json`. The original MP4 hash is79a879377a60a04b6b5ce42209488738739e903e532b3e97060205d0a0e53d0b; derived GIF0041c4862ab816c56ddc7c9b293272ded496065f346c67ac820270765f4b5319. No binaries were added to the feature branch.
+
+Full PR #4/#3 body/base/head/draft readbacks match the prepared bodies, recorded in `/tmp/siltwake-m1-pr/polish-1b-current-verification.json` at root2263025 and M0a2cb19f respectively. #3 retains its M0-only65-test claim; #4 separates accepted M1 from263-test provisional polish. PRs1–4 are linked and unwatched. No game/main merge or deployment occurred;1C and the combined independent gate remain open.
