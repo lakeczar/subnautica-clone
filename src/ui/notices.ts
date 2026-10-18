@@ -30,9 +30,10 @@ export class EncounterPresentation {
   notify(message: string, error: boolean, options: NoticeOptions, now: number): void {
     this.expire(now);
     const channel = options.channel ?? "action";
-    // SessionEvents labels successful writes as persistence too. Their success
-    // is bookkeeping; only a failure/reminder claims the central priority.
+    // A confirmed local write resolves its obsolete failure/reminder. System
+    // successes (including exports) cannot establish local-save recovery.
     if ((channel === "system" || channel === "persistence") && !error) {
+      if (channel === "persistence" && this.central?.channel === "persistence") this.central = null;
       this.status = { message, expiresAt: now + NOTICE_SECONDS.system * 1000 };
       return;
     }

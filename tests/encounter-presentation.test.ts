@@ -51,6 +51,39 @@ test("action lifetime advances only on completed fixed steps; errors and status 
   p.expire(72000); assert.equal(p.central, null);
 });
 
+test("local-write recovery resolves persistence reminders but preserves unrelated errors and emitted calls", () => {
+  const p = new EncounterPresentation(), s = encounter(); s.world.threat.mode = "warn";
+  p.observe(s, true); p.threatCall({ x: 120, y: -30, z: -100 }, s);
+  const call = p.callDirection(s);
+  p.notify("Use without local saving", true, { channel: "persistence" }, 0);
+  p.notify("Suppressed warning", true, { channel: "hazard", context: "threat" }, 1);
+  p.notify("Suppressed action", false, { channel: "action" }, 2);
+  p.notify("Write still refused", true, { channel: "persistence" }, 1000);
+  p.expire(12000);
+  assert.equal(p.central?.message, "Write still refused", "another failure refreshes its wall lifetime");
+  p.notify("Export succeeded", false, { channel: "system" }, 12001);
+  assert.equal(p.central?.message, "Write still refused");
+  p.notify("Local write confirmed", false, { channel: "persistence" }, 12002);
+  assert.equal(p.central, null);
+  assert.equal(p.status?.message, "Local write confirmed");
+  assert.deepEqual(p.callDirection(s), call);
+  p.expire(15002); p.observe(s, true);
+  assert.equal(p.central, null); assert.equal(p.status, null);
+  assert.deepEqual(p.callDirection(s), call, "wall expiry while paused cannot consume the active call");
+
+  for (const channel of ["action", "system"] as const) {
+    const unrelated = new EncounterPresentation();
+    unrelated.setMenu(true);
+    unrelated.notify("Unrelated refusal", true, { channel }, 4000);
+    unrelated.notify("Local write confirmed", false, { channel: "persistence" }, 5000);
+    assert.equal(unrelated.central?.message, "Unrelated refusal");
+    assert.equal(unrelated.central?.channel, channel);
+    unrelated.reset(); assert.equal(unrelated.nextExpiry, null);
+  }
+  p.reset();
+  assert.equal(p.nextExpiry, null); assert.equal(p.callDirection(s), null);
+});
+
 test("paused import validation remains readable over the hidden gameplay hazard without claiming persistence failure", () => {
   const p = new EncounterPresentation(), s = encounter(); s.world.threat.mode = "warn";
   p.observe(s, true); p.notify("calls", true, { channel: "hazard", context: "threat" }, 0);

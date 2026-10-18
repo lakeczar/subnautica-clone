@@ -14,7 +14,7 @@ import { aimedInteraction } from "../src/sim/targeting.js";
 import { faceTarget, NORMAL_VIEWS, readyState } from "./targeting-support.js";
 import type { GameCommand } from "../src/sim/types.js";
 import { ExpeditionSession } from "../src/runtime/session.js";
-import { SaveRepository } from "../src/save/repository.js";
+import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import { MemoryStorage, TestWriterLock, encoded, sample, settled } from "./persistence-support.js";
 
 /** Minimal DOM port for rendered buttons, replacement and command wiring. Native
@@ -561,6 +561,68 @@ test("storage-off sessions, errors and graphics recovery remain visible through 
   view.graphicsError("Graphics context unavailable.");
   assert.equal(get("graphics-error").hidden, false);
   assert.equal(get("session-warning").hidden, false);
+});
+
+test("a confirmed local retry resolves the failed-save alert and reminder while Hold stays paused", async (t) => {
+  const { view, get, active, wall, timerCount } = viewFixture(t);
+  const storage = new MemoryStorage(), repository = new SaveRepository(storage, new TestWriterLock());
+  const initial = sample(); completeOpening(initial.state);
+  repository.load(); assert.equal((await repository.commit(initial)).ok, true);
+  const session = new ExpeditionSession(repository, {
+    changed: () => {
+      view.slot(repository.status, session.state !== null);
+      view.persistence(session.persistenceMessage, session.autoSaveAllowed, session.state !== null, session.busy);
+    },
+    pause: () => view.showMenu(session.state !== null),
+    entered: () => { view.resetPresentation(); view.update(session.state!, false); view.showGame(); },
+    notify: (message, error, options) => view.notify(message, error, options),
+  });
+  t.after(() => session.dispose());
+  session.continueGame(); view.openPanel("inventory", session.state!);
+  const focus = active(), before = repository.raw, state = structuredClone(session.state);
+  assert.ok(before); assert.equal(session.autoSaveAllowed, true);
+
+  storage.failWrite = true; session.manualSave(); await settled();
+  const failure = get("notification").textContent;
+  assert.match(failure, /Browser storage refused the save/);
+  assert.equal(get("notification").hidden, false);
+  assert.equal(get("session-warning").hidden, false);
+  assert.equal(session.autoSaveAllowed, false);
+  assert.equal(new SaveRepository(storage, new TestWriterLock()).load().save?.meta.savedAt, initial.meta.savedAt);
+  assert.equal(repository.raw, before); assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
+  assert.equal(active(), focus);
+
+  wall(1000); session.manualSave(); await settled();
+  assert.equal(get("notification").textContent, failure, "a still-failing retry keeps the truthful alert");
+  assert.equal(session.autoSaveAllowed, false); assert.equal(repository.raw, before);
+  assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
+  view.notify("Exported portable copy", false, { channel: "system" });
+  view.notify("Graphics restored", false, { channel: "system" });
+  assert.equal(get("notification").textContent, failure, "system success cannot establish local recovery");
+  assert.equal(get("session-warning").hidden, false);
+  view.notify("Suppressed invalid import", true, { channel: "system" });
+
+  wall(1000); storage.failWrite = false; session.manualSave(); await settled();
+  assert.equal(session.autoSaveAllowed, true);
+  assert.equal(session.persistenceMessage, "");
+  assert.equal(get("session-warning").hidden, true);
+  assert.match(get("save-status").textContent, /Saved locally/);
+  assert.notEqual(repository.raw, before);
+  assert.equal(storage.getItem(LOCAL_SAVE_KEY), repository.raw);
+  const loaded = new SaveRepository(storage, new TestWriterLock()).load();
+  assert.deepEqual(loaded.save?.state, state); assert.deepEqual(loaded.backup, initial);
+  assert.equal(get("notification").hidden, true, "confirmed recovery immediately resolves the obsolete failure");
+  assert.match(get("system-status").textContent, /Saved locally/);
+  assert.equal(get("system-status").hidden, false);
+  assert.equal(active(), focus); assert.equal(view.currentPanel, "inventory");
+  assert.equal(timerCount(), 1);
+  wall(3001);
+  assert.equal(get("system-status").hidden, true); assert.equal(get("notification").hidden, true);
+  assert.equal(timerCount(), 0, "the obsolete failure's timeout is removed with its notice");
+  wall(20000);
+  assert.equal(get("notification").hidden, true, "suppressed notices never replay after recovery or chip expiry");
+  assert.deepEqual(session.state, state, "paused retry and wall expiry do not advance simulation");
+  assert.equal(active(), focus);
 });
 
 test("moving pilot guidance stays secondary, explains stopped and blocked exits, and retains emergencies and E behavior", (t) => {
