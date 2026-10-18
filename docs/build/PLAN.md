@@ -65,3 +65,7 @@ Hunter source afc126a/evidence cd987e1 is provisionally combined at **90878a2**.
 ### Complete slice2 assembled; independent acceptance next
 
 HUD sourced7f2085/report e0c1e23 is integrated with all five earlier pieces at **660350b**. [Composed inspection](evidence/POLISH-1-SLICE2-2D-HUD-INTEGRATION.md) records353 checks/build/economies, actual warning-save/release and short preparation/refit/next-outing workflow, plus exact eight-step actual-reload comparison. All implementation ownership is released. The [full-slice R1 brief](tasks/POLISH-1-SLICE2-REVIEW-R1.md) covers all eight criteria from accepted-controls base d031803; neither HUD nor the assembled slice is accepted yet. Obtain separate fresh Astra/Sol findings before sharing, reconcile/fix/review, then stage1 Opus and the remaining game. Repetitive refit copy and text size remain explicit experience-review priorities, with human feel/timing and hardware limits preserved.
+
+### Slice2 R1 save-retry correction
+
+Astra R1 requests one bounded correction, ASTRA-S2-R1-01, reproduced by root: a confirmed successful retry must resolve its obsolete persistence failure while preserving unrelated danger and still-failing/export cases. [Correction brief](tasks/POLISH-1-SLICE2-SAVE-RETRY-FIX.md) owns notices.ts and targeted composition tests only. It may proceed while Sol's independent R1 continues on frozen b9c99a0, with no peer sharing/dependency. Reconcile both results before fresh paired acceptance; stage1 Opus follows that gate.

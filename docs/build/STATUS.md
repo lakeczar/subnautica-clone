@@ -6,11 +6,11 @@
 
 All slice2 pieces — C0 extraction, curved reef collision, transient signals, preparation menus, hunter display and HUD composition — are provisionally combined at **660350b1cf9cc8bb6f6df4629acfd5008d792877**. [HUD/composed integration](evidence/POLISH-1-SLICE2-2D-HUD-INTEGRATION.md) records **353/353 tests**, typecheck/build/economies,379 verified HUD payloads, six reproduced author reload comparisons and fresh bounded combined production encounter/refit/reload. Actual reload matches all state fields after eight no-input steps. Earlier component evidence keeps its own source attribution.
 
-All implementation authors are terminal with actual Sol6.1/max runtime confirmed; source ownership is released and owned resources closed. No implementation workers remain. [Full-slice R1 brief](tasks/POLISH-1-SLICE2-REVIEW-R1.md) freezes the eight-criterion scope for fresh independent Astra xhigh/Sol max reviewers; [TASKS](TASKS.md) records actual dispatch IDs and candidate. The new slice has no inherited acceptance.
+All original implementation authors are terminal with actual Sol6.1/max runtime confirmed; their source ownership is released and owned resources closed. A bounded save-retry presentation correction is prepared after the reproduced Astra finding; TASKS records its dispatch before it becomes active. [Full-slice R1 brief](tasks/POLISH-1-SLICE2-REVIEW-R1.md) freezes the eight-criterion scope for fresh independent Astra xhigh/Sol max reviewers; [TASKS](TASKS.md) records actual dispatch IDs and candidate. The new slice has no inherited acceptance.
 
 Actual save during warning leaves danger/call information intact; disengagement clears stale signals; the short refit retains deliberate storage/focus and reload state. The ordinary hunter remains off-screen at first warning, so its brief emitted-call direction is complementary. Some refit copy remains repetitive and secondary text small; these are explicit review priorities. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
 
-Fresh full-slice Astra xhigh and Sol6.1 max R1 reviews are now active on **b9c99a003c0c428aac0669bda995b6f86d0eed09** (production660350b). TASKS records separate report-only ownership/IDs. Next: receive independent results, reconcile fixes if needed, then required stage1 Opus experience review/advice/corrections. M2–M4 remain authorized. Root has no browser/server/check process. No main merge/deployment.
+Astra R1 returned **REQUEST CHANGES** on **b9c99a003c0c428aac0669bda995b6f86d0eed09** (production660350b): a successful save retry leaves the old persistence-failure alert visible. Root verified its actual runtime/artifacts and reproduced **ASTRA-S2-R1-01**; the save itself succeeds. [Interim disposition](reviews/POLISH-1-SLICE2-R1.md). Sol R1 continues independently on the unchanged frozen candidate. [Bounded correction](tasks/POLISH-1-SLICE2-SAVE-RETRY-FIX.md) may proceed without depending on or sharing with that reviewer. Next: receive Sol’s independent result, integrate/check the correction and any additional findings, then fresh paired review and stage1 Opus experience review/advice/corrections. M2–M4 remain authorized. Root has no browser/server/check process. No main merge/deployment.
 
 ## Resumed full-game construction
 
@@ -62,7 +62,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Commission/receive the fresh full-slice Astra xhigh and Sol6.1 max R1 reviews on the same committed candidate; TASKS owns exact IDs and report-only paths. All implementation owners are released. Do not duplicate workers or poll. Reconcile separate initial findings, delegate substantiated corrections to Sol and repeat the affected pair, then stage1 Opus review/advice/fixes before M2. Continue M2–M4 under standing authorization. Main merge/public deployment remain separate.
+Dispatch/receive the bounded Sol save-retry correction and receive the still-independent Sol R1 review on b9c99a0; TASKS owns exact IDs and exclusive paths. Astra R1 is terminal, inspected and requires ASTRA-S2-R1-01. Keep the active reviewer independent; do not share its peer's report or poll. Reconcile both initial reviews, inspect/verify the correction, address any additional finding and commission a fresh full-slice Astra/Sol pair. Stage1 Opus then M2–M4 continue under standing authorization. Main merge/public deployment remain separate.
 
 ### Historical execution and evidence
 
