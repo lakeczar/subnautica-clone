@@ -302,7 +302,7 @@ export class GameView {
           ...modal.querySelectorAll<HTMLElement>(
             'button:not([disabled]),select:not([disabled]),input:not([disabled]),textarea:not([disabled]),a[href],summary,[tabindex]:not([tabindex="-1"]),[contenteditable="true"]',
           ),
-        ].filter((element) => element.getClientRects().length > 0);
+        ].filter((element) => element.checkVisibility());
         const first = visible[0],
           last = visible.at(-1);
         const current = visible.indexOf(document.activeElement as HTMLElement);

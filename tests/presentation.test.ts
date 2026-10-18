@@ -45,6 +45,7 @@ function viewFixture(t: test.TestContext) {
     textContent = "";
     tagName = "DIV";
     hidden = false;
+    layoutVisible = true;
     disabled = false;
     checked = false;
     value = "";
@@ -66,6 +67,7 @@ function viewFixture(t: test.TestContext) {
         (!selector.includes(":not([disabled])") || !element.disabled));
     }
     getClientRects() { return this.hidden ? [] : [{}]; }
+    checkVisibility() { return !this.hidden && this.layoutVisible; }
     focus() { document.activeElement = this; }
     closest() { return this; }
   }
@@ -168,17 +170,19 @@ for (const panel of ["inventory", "craft", "notebook", "carrier"] as const) {
   });
 }
 
-test("menu settings retain native interior Tab and wrap at visible boundaries", (t) => {
+test("menu settings leave interior Tab to the browser and wrap past collapsed details", (t) => {
   const { view, get, key, active } = viewFixture(t);
   // Supply the existing settings controls' hierarchy; this port does not parse layout.
-  get("menu").children = [get("resume"), get("quality"), get("subtitles")];
+  get("menu").children = [get("resume"), get("quality"), get("sensitivity"), get("invert"), get("subtitles")];
+  // Chromium can retain layout rectangles for descendants of closed details.
+  get("subtitles").layoutVisible = false;
   view.showMenu(true);
   get("quality").focus();
   assert.equal(key("Tab").prevented, false);
   assert.equal(key("Tab", "Tab", true).prevented, false);
   get("resume").focus();
   assert.equal(key("Tab", "Tab", true).stopped, true);
-  assert.equal(active(), get("subtitles"));
+  assert.equal(active(), get("invert"));
   assert.equal(key("Tab").stopped, true);
   assert.equal(active(), get("resume"));
 });
