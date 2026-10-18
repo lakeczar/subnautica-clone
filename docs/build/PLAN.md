@@ -46,3 +46,9 @@ Construction PRs target `game/siltwake`; the final integration PR targets the ap
 ### Slice2 signal/presentation split after RIB inspection
 
 RIB6ebaf02 and C0 are provisionally combined atd4829c0; root passes291 checks/build and reproduces selected save/routes. [2D0](tasks/POLISH-1-SLICE2-2D0.md) is a bounded signal-only Sol task on sim/types/step/survival and session notification metadata. It can run alongside2C because neither consumes the other's edits. This refines the earlier whole2D dependency: the actual HUD/app/render presentation pass still waits for both inspected returns and exclusive UI ownership. Full composed-slice paired acceptance and stage1 Opus remain required.
+
+### Signals integrated; independent hunter art can proceed
+
+Signal source c9cd039 and test-only amendment 6b3ba83 are provisionally assembled with C0/RIB at **9dcbada**. [Root inspection and combined checks](evidence/POLISH-1-SLICE2-2D0-INTEGRATION.md) pass 321 tests, typecheck/build and both economies; no production change accompanied the ten expected-value amendments. Prior complete-state/event/codec parity remains applicable. The signal owner is terminal and releases its paths.
+
+Preparation 2C retains its assigned UI paths. [2D-VISUAL](tasks/POLISH-1-SLICE2-2D-VISUAL.md) can independently implement only existing hunter eye/fin warning brightness in expedition.ts: it reads current threat mode, needs no unfinished panel wiring and cannot change shared shaders, geometry, physics or UI. This explicitly refines the earlier whole-render dependency. Final app/HUD notice, air, call-direction, obstruction, pulse and contrast composition still waits for inspected 2C and a committed baseline. Root records the visual dispatch in TASKS before treating it active. All pieces remain provisional until composed slice2 verification and the fresh Astra/Sol pair, followed by stage1 Opus.
