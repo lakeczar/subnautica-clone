@@ -79,7 +79,7 @@ export function installModule(s: GameState, vehicleId: string, itemId: string): 
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId)!;
   s.inventory.items.find((i) => i.id === itemId)!.containerId = v.cargoId;
   v.modules.push(itemId);
-  s.feedback = `Installed ${dartPerformance(s, vehicleId)!.description}`;
+  s.feedback = "Dart acoustic trim fitted.";
   return null;
 }
 export function removeModuleRefusal(s: GameState, vehicleId: string, itemId: string, world: WorldQueries): string | null {
@@ -102,6 +102,6 @@ export function removeModule(s: GameState, vehicleId: string, itemId: string, wo
   if (no) return no;
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId)!;
   v.modules = v.modules.filter((id) => id !== itemId);
-  s.feedback = "Dart acoustic trim removed from its socket. The same 2 CU item remains in the Dart hold, ready to transfer or reinstall.";
+  s.feedback = "Dart acoustic trim removed · retained in the Dart hold.";
   return null;
 }

@@ -196,7 +196,7 @@ test("transfer commands report their committed quantity and destination instead 
   assert.deepEqual(s, before, "commands must leave their input snapshot unchanged");
   assert.equal(partial.state.feedback, "Transferred 1 × Silica glass to pod locker.");
   assert.deepEqual(partial.events, [
-    { type: "notice", channel: "action", message: partial.state.feedback },
+    { type: "notice", channel: "action", message: partial.state.feedback, summary: "1 × Silica glass → pod locker" },
     { type: "sound", cue: "collect" },
   ]);
   assert.equal(partial.state.inventory.items.find((i) => i.id === item.id)!.quantity, 3);

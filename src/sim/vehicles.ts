@@ -131,14 +131,36 @@ export function exit(s: GameState, world: WorldQueries): string | null {
     "Clear exit. Your personal oxygen and pressure protection now apply.";
   return null;
 }
-export function service(s: GameState, id: string): string | null {
+type ServiceCheck =
+  | { state: "ready"; refusal: null; vehicle: VehicleState }
+  | { state: "away" | "unsupported" | "patch"; refusal: string };
+/** One authoritative, read-only check in the command's original precedence. */
+function checkService(s: GameState, id: string): ServiceCheck {
   const v = s.fleet.vehicles.find((v) => v.id === id);
   if (!v || v.berth || distance(s.player.pose.position, v.pose.position) > 7)
-    return "Approach the craft service socket locally.";
+    return { state: "away", refusal: "Approach the craft service socket locally." };
   if (!supportedServiceSite(s, v))
-    return "Use pod waters or the restored workshop cradle for hull charging and routine repair. Field patches use rescue stock.";
+    return { state: "unsupported", refusal: "Use pod waters or the restored workshop cradle for hull charging and routine repair. Field patches use rescue stock." };
   if (v.disabled)
-    return "Apply a rescue patch before routine charging.";
+    return { state: "patch", refusal: "Apply a rescue patch before routine charging." };
+  return { state: "ready", refusal: null, vehicle: v };
+}
+export function serviceRefusal(s: GameState, id: string): string | null {
+  return checkService(s, id).refusal;
+}
+export function serviceState(s: GameState, id: string): "ready" | "patch" | "unsupported" | "away" {
+  return checkService(s, id).state;
+}
+/** Deficits only; this does not grant service access or invalidate a full hull. */
+export function serviceWouldRestore(s: GameState, v: VehicleState): boolean {
+  return v.health < 100 || v.charge < 100 || v.emergencyAir < 120 ||
+    s.inventory.items.some(i => i.kind === "reserve_cell" &&
+      (i.containerId === "diver" || i.containerId === v.cargoId) && (i.charge ?? 0) < 100);
+}
+export function service(s: GameState, id: string): string | null {
+  const check = checkService(s, id);
+  if (check.state !== "ready") return check.refusal;
+  const v = check.vehicle;
   // Supported service is an active session action; it has no time bypass or raw-material output.
   v.charge = 100;
   v.health = 100;

@@ -1,4 +1,4 @@
-import { EVIDENCE, HULL_COLLIDERS, ITEMS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
+import { EVIDENCE, HULLS, HULL_COLLIDERS, ITEMS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
 import { createWorldQueries, moveHull, withinWorldBounds } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
@@ -19,9 +19,10 @@ import {
   nearWorkshop,
   storeMaterials,
   transfer,
+  usedCapacity,
 } from "./inventory.js";
 import {
-  collect,
+  collectWithOutcome,
   completeOpening,
   craft,
   discover,
@@ -46,6 +47,15 @@ import { updateSurvival, updateThreat } from "./survival.js";
 const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
+/** Explicit receipts also own their one existing originless action sound. */
+function actionResult(s: GameState, events: GameEvent[], summary: string, cue: "collect" | "craft" = "collect"): void {
+  events.push({ type: "notice", channel: "action", message: s.feedback, summary }, { type: "sound", cue });
+}
+function exitAction(s: GameState, w: WorldQueries, events: GameEvent[]): string | null {
+  const no = exit(s, w);
+  if (!no) actionResult(s, events, "Clear exit · personal suit protection");
+  return no;
+}
 /** Mutates only the detached fixed-step draft; every refusal precedes gameplay mutations. */
 function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent[]): string | null {
   if (c.type === "look" || c.type === "move") return null;
@@ -64,34 +74,59 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     return null;
   }
   switch (c.type) {
-    case "craft":
-      return craft(s, c.recipeId, w);
+    case "craft": {
+      const no = craft(s, c.recipeId, w);
+      if (!no && (c.recipeId === "dart_base" || c.recipeId === "dart_acoustic_trim"))
+        actionResult(s, events, c.recipeId === "dart_base" ? "Dart scout built" : "Acoustic trim made", "craft");
+      return no;
+    }
     case "transfer": {
       const item = s.inventory.items.find((i) => i.id === c.itemId);
       const no = transfer(s, c.itemId, c.to, c.quantity);
       if (no) return no;
       const destination = containerLabel(s, c.to);
       s.feedback = `Transferred ${c.quantity} × ${ITEMS[item!.kind].label} to ${destination}.`;
+      actionResult(s, events, `${c.quantity} × ${ITEMS[item!.kind].label} → ${destination}`);
       return null;
     }
-    case "store-materials":
-      return storeMaterials(s, c.from, c.to);
-    case "recharge-cells":
-      return rechargeCells(s);
-    case "install-module":
-      return installModule(s, c.vehicleId, c.itemId);
-    case "remove-module":
-      return removeModule(s, c.vehicleId, c.itemId, w);
+    case "store-materials": {
+      const before = usedCapacity(s, c.to);
+      const no = storeMaterials(s, c.from, c.to);
+      if (!no) actionResult(s, events, `Stored ${usedCapacity(s, c.to) - before} CU → ${containerLabel(s, c.to)}`);
+      return no;
+    }
+    case "recharge-cells": {
+      const no = rechargeCells(s);
+      if (!no) actionResult(s, events, s.feedback);
+      return no;
+    }
+    case "install-module": {
+      const no = installModule(s, c.vehicleId, c.itemId);
+      if (!no) actionResult(s, events, "Dart acoustic trim fitted");
+      return no;
+    }
+    case "remove-module": {
+      const no = removeModule(s, c.vehicleId, c.itemId, w);
+      if (!no) actionResult(s, events, "Dart acoustic trim removed · Dart hold");
+      return no;
+    }
     case "eat":
       return eat(s);
     case "buoy":
       return toggleBuoy(s);
     case "exit":
-      return exit(s, w);
-    case "service":
-      return service(s, c.vehicleId);
-    case "reserve":
-      return reserve(s, c.vehicleId);
+      return exitAction(s, w, events);
+    case "service": {
+      const no = service(s, c.vehicleId);
+      if (!no) actionResult(s, events, `${HULLS[s.fleet.vehicles.find(v => v.id === c.vehicleId)!.hull].label} serviced`);
+      return no;
+    }
+    case "reserve": {
+      const v = s.fleet.vehicles.find(v => v.id === c.vehicleId), before = v?.charge ?? 0;
+      const no = reserve(s, c.vehicleId);
+      if (!no) actionResult(s, events, `+${Number((v!.charge - before).toFixed(2))}% hull power`);
+      return no;
+    }
     case "recover":
       return recoveryCommand(s, c.vehicleId, c.method);
     case "hint":
@@ -174,7 +209,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       return null;
     }
     case "interact": {
-      if (s.player.controlledVehicleId) return exit(s, w);
+      if (s.player.controlledVehicleId) return exitAction(s, w, events);
       const target = aimedInteraction(s, w);
       if (c.target !== undefined && target?.id !== c.target)
         return "Aim at a visible host within reach.";
@@ -191,15 +226,17 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         if (target.verb === "sort" && SOURCES[id].item !== "meal")
           return action(s, { type: "sort", sourceId: id,
             maintenance: s.world.resources.find(n => n.id === id)!.reserve === 0 }, w, events);
-        const no = collect(s, id);
-        if (!no && target.verb === "sort")
+        const { refusal, pickup } = collectWithOutcome(s, id);
+        if (pickup) {
+          const capacity = s.inventory.containers.find(c => c.id === pickup.destination)!.capacity;
+          actionResult(s, events, `+${pickup.quantity} ${ITEMS[pickup.item].label} · ${containerLabel(s, pickup.destination)} ${usedCapacity(s, pickup.destination)}/${capacity} CU`);
+        } else if (!refusal && target.verb === "sort")
           events.push({ type: "notice", channel: "action", message: "Active tending started · 20 seconds. Movement away cancels; pause freezes tending." });
-        return no;
+        return refusal;
       }
       if (target.id in EVIDENCE) {
         if (target.known) {
-          events.push({ type: "interaction-panel", panel: "notebook", targetId: target.id },
-            { type: "notice", channel: "action", message: `${target.label} · in notebook.` });
+          events.push({ type: "interaction-panel", panel: "notebook", targetId: target.id });
           return null;
         }
         s.feedback = discover(s, target.id as EvidenceId);
@@ -211,19 +248,20 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         s.feedback = OPTIONAL_RECORD.text;
         return null;
       }
-      if (target.kind === "vehicle" && target.verb === "board") return board(s, target.id);
+      if (target.kind === "vehicle" && target.verb === "board") {
+        const no = board(s, target.id);
+        if (!no) actionResult(s, events, `Piloting ${HULLS[s.fleet.vehicles.find(v => v.id === target.id)!.hull].label}`);
+        return no;
+      }
       if (target.kind === "vehicle") {
-        events.push({ type: "interaction-panel", panel: "inventory", targetId: target.id },
-          { type: "notice", channel: "action", message: `${target.label} · hold and recovery.` });
+        events.push({ type: "interaction-panel", panel: "inventory", targetId: target.id });
         return null;
       }
       if (target.kind === "cache") {
-        events.push({ type: "interaction-panel", panel: "inventory", targetId: target.id },
-          { type: "notice", channel: "action", message: "Cargo cache reached · identified contents in Hold." });
+        events.push({ type: "interaction-panel", panel: "inventory", targetId: target.id });
         return null;
       }
-      events.push({ type: "interaction-panel", panel: target.id === "rescue_staging" ? "inventory" : "craft", targetId: target.id },
-        { type: "notice", channel: "action", message: target.id === "rescue_staging" ? "Local recovery bench · Hold." : "Refuge services · Fabricate." });
+      events.push({ type: "interaction-panel", panel: target.id === "rescue_staging" ? "inventory" : "craft", targetId: target.id });
       return null;
     }
   }
@@ -269,7 +307,7 @@ export function executeCommand(
   const no = action(draft, command, world, events);
   if (no)
     return { state, events: [{ type: "notice", channel: "action", message: no, error: true }] };
-  if (draft.feedback && !events.some(e => e.type === "notice"))
+  if (draft.feedback && !events.some(e => e.type === "notice" || e.type === "interaction-panel"))
     events.push(
       { type: "notice", channel: "action", message: draft.feedback },
       { type: "sound", cue: command.type === "craft" ? "craft" : "collect" },
@@ -284,14 +322,18 @@ export function stepGame(
   const s = structuredClone(state),
     events: GameEvent[] = [];
   s.tick++;
+  let movementActorStable = true;
   for (const c of commands) {
     const previous = s.feedback;
     const actionEvents: GameEvent[] = [];
     const no = action(s, c, world, actionEvents);
+    if (s.player.controlledVehicleId !== state.player.controlledVehicleId ||
+        s.player.mode !== state.player.mode || s.player.interiorId !== state.player.interiorId)
+      movementActorStable = false;
     if (no) events.push({ type: "notice", channel: "action", message: no, error: true });
     else {
       events.push(...actionEvents);
-      if (s.feedback && s.feedback !== previous && !actionEvents.some(e => e.type === "notice")) events.push(
+      if (s.feedback && s.feedback !== previous && !actionEvents.some(e => e.type === "notice" || e.type === "interaction-panel")) events.push(
         { type: "notice", channel: "action", message: s.feedback },
         {
           type: "sound",
@@ -342,6 +384,7 @@ export function stepGame(
   const old = { ...s.player.pose.position };
   let loudness = 0;
   let ascent: Extract<GameEvent, { type: "ascent-sample" }> | null = null;
+  let thrust: Extract<GameEvent, { type: "thrust-sample" }> | null = null;
   if (v) {
     const dock = s.fleet.docking,
       station = v.hull === "hearthline" && dock?.stationKeeping;
@@ -360,6 +403,7 @@ export function stepGame(
                 : sprint
                   ? performance?.boostSpeed ?? 11
                   : 8;
+    const forwardIntent = forward > 0.5 && Math.abs(right) <= 0.1;
     const n = Math.max(1, Math.hypot(forward, right, vertical));
     forward /= n;
     right /= n;
@@ -384,13 +428,23 @@ export function stepGame(
     if (speed > 0 && v.hull !== "spindle" && target.y > 0 && delta.y > 0)
       ascent = { type: "ascent-sample", actorId: v.id, requestedRise: delta.y,
         actualRise: 0, solidLimitedRise: 0, surfaceLimitedRise: 0 };
+    const requested = Math.hypot(delta.x, delta.z);
+    if (v.hull === "dart" && speed > 0 && forwardIntent && Number.isFinite(requested) && requested > 1e-5 &&
+        delta.x * Math.sin(yaw) - delta.z * Math.cos(yaw) > 0)
+      thrust = { type: "thrust-sample", actorId: v.id, requested, actual: 0, solidLimited: 0 };
     // Observe the existing sweeps before moveHull's separate terrain correction.
     // Its aggregate hitSolid also includes floor support and cannot classify a ceiling.
     const attempt = ascent;
-    const measuredWorld: WorldQueries = attempt ? { ...world, moveCapsule(origin, d, shape) {
+    const forwardAttempt = thrust;
+    let forwardBoundary = false;
+    const measuredWorld: WorldQueries = attempt || forwardAttempt ? { ...world, moveCapsule(origin, d, shape) {
       const result = world.moveCapsule(origin, d, shape);
-      if (result.hitSolid && d.y > 0)
+      if (attempt && result.hitSolid && d.y > 0)
         attempt.solidLimitedRise += Math.max(0, origin.y + d.y - result.position.y);
+      if (forwardAttempt && result.hitSolid)
+        forwardAttempt.solidLimited += Math.max(0, Math.hypot(d.x, d.z) -
+          Math.hypot(result.position.x - origin.x, result.position.z - origin.z));
+      if (forwardAttempt && result.hitBoundary) forwardBoundary = true;
       return result;
     } } : world;
     const move = moveHull(measuredWorld, v.pose.position, delta, HULL_COLLIDERS[v.hull],
@@ -429,6 +483,8 @@ export function stepGame(
     s.metrics.powerUsed += drain;
     loudness = quiet ? 0.08 : sprint ? 1 : d > 0.003 ? 0.48 : 0.08;
     if (move.hitBoundary) events.push({ type: "foundation-boundary" });
+    if (move.hitBoundary || forwardBoundary) thrust = null;
+    else if (thrust) thrust.actual = Math.hypot(move.position.x - old.x, move.position.z - old.z);
   } else if (s.player.interiorId) {
     const h = carrierHull(s),
       local = s.player.interiorPose;
@@ -613,5 +669,11 @@ export function stepGame(
     ascent.actualRise = s.player.pose.position.y - old.y;
     events.push(ascent);
   }
+  if (thrust && movementActorStable && state.opening.phase === 4 &&
+      s.player.mode === "piloting" && state.player.mode === "piloting" &&
+      s.player.controlledVehicleId === thrust.actorId && state.player.controlledVehicleId === thrust.actorId &&
+      !s.player.interiorId && s.metrics.failures === state.metrics.failures &&
+      v && !v.disabled && v.charge > 0)
+    events.push(thrust);
   return { state: s, events };
 }

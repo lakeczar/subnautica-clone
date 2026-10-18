@@ -702,24 +702,24 @@ export const OPENING = [
     label: "Release restraint",
     caption:
       "Pressure alarm. The pod lurches. A restraint holds your chest against the seat.",
-    detail: "E · release the amber restraint. Space · skip the opening.",
+    detail: "",
   },
   {
     label: "Close service latch",
     caption:
       "Black water fills the window. A leaking service latch shakes beside the damaged regulator.",
-    detail: "E · close the service latch. The air refuge remains protected.",
+    detail: "The air refuge remains protected.",
   },
   {
     label: "Trigger reserve purge",
     caption:
       "Reserve pressure is holding. Purge the fogged window before the pod settles.",
-    detail: "E · trigger the reserve purge.",
+    detail: "",
   },
   {
     label: "A place to breathe",
     caption:
       "Shallow light. A reef. An island. “Ren. Access engineer.” The remaining introduction breaks into static.",
-    detail: "E · stand up. Your hands remember the work.",
+    detail: "Your hands remember the work.",
   },
 ] as const;

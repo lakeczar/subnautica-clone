@@ -140,21 +140,27 @@ export function completeOpening(s: GameState): void {
   s.feedback =
     "The pod is safe to breathe in. Repair the regulator with alloy, glass and shed membrane. Choose the reef ribs or Splitspine shore.";
 }
-export function collect(s: GameState, id: SourceId): string | null {
+export interface CollectionOutcome {
+  refusal: string | null;
+  pickup: { item: ItemKind; quantity: number; destination: string } | null;
+}
+/** The sole collection mutation path; tending starts have no pickup receipt. */
+export function collectWithOutcome(s: GameState, id: SourceId): CollectionOutcome {
+  const refused = (refusal: string): CollectionOutcome => ({ refusal, pickup: null });
   const def = SOURCES[id],
     node = s.world.resources.find((n) => n.id === id);
-  if (!node) return "This source is not available.";
+  if (!node) return refused("This source is not available.");
   if (
     s.player.controlledVehicleId ||
     distance(s.player.pose.position, def.position) > 4
   )
-    return "Exit with adequate personal protection and approach the source.";
+    return refused("Exit with adequate personal protection and approach the source.");
   if (node.stock === 0) {
     if (def.item === "meal") {
       s.world.action = { sourceId: id, seconds: 20, kind: "food" };
-      return null;
+      return { refusal: null, pickup: null };
     }
-    return "Exposed stock is exhausted. Survey the matching second patch, or sort this host’s finite reserve.";
+    return refused("Exposed stock is exhausted. Survey the matching second patch, or sort this host’s finite reserve.");
   }
   const n = Math.min(def.bundle, node.stock);
   const destination = hasRoom(s, "diver", ITEMS[def.item].cu * n)
@@ -164,41 +170,47 @@ export function collect(s: GameState, id: SourceId): string | null {
       ? "buoy_hold"
       : null;
   if (!destination)
-    return "No room for this bundle. Stow cargo, or deploy the 24 CU salvage buoy. Nothing collected.";
+    return refused("No room for this bundle. Stow cargo, or deploy the 24 CU salvage buoy. Nothing collected.");
   addItem(s, def.item, n, destination);
   node.stock -= n;
   s.metrics.collections++;
   if (!s.knowledge.scans.includes(id)) s.knowledge.scans.push(id);
   s.feedback = `${n} × ${ITEMS[def.item].label} → ${destination === "diver" ? "diver hold" : "buoy"}. ${def.context}`;
-  return null;
+  return { refusal: null, pickup: { item: def.item, quantity: n, destination } };
 }
-export function craftingRefusal(
+export function collect(s: GameState, id: SourceId): string | null {
+  return collectWithOutcome(s, id).refusal;
+}
+export type CraftingBlockCode = "opening" | "blueprint" | "completed" | "needs" | "site" |
+  "restore" | "duplicate-hull" | "clearance" | "materials" | "rescue-low" | "space";
+export function craftingBlock(
   s: GameState,
   id: RecipeId,
   world: WorldQueries,
-): string | null {
+): { code: CraftingBlockCode; message: string } | null {
+  const block = (code: CraftingBlockCode, message: string): { code: CraftingBlockCode; message: string } => ({ code, message });
   const r: Recipe = RECIPES[id];
-  if (s.opening.phase < 4) return "Finish the pod checks first.";
+  if (s.opening.phase < 4) return block("opening", "Finish the pod checks first.");
   if (!s.knowledge.blueprints.includes(r.bp))
-    return "Blueprint unknown. Investigate the intake and workshop records.";
+    return block("blueprint", "Blueprint unknown. Investigate the intake and workshop records.");
   if (r.once && s.knowledge.crafted.includes(id))
-    return "Already completed. The fabricated equipment or restored service is retained.";
+    return block("completed", "Already completed. The fabricated equipment or restored service is retained.");
   if (!r.needs.every((n) => s.knowledge.crafted.includes(n as RecipeId)))
-    return "Earlier service work or equipment is still required.";
+    return block("needs", "Earlier service work or equipment is still required.");
   if (r.site === "island_workshop" ? !nearWorkshop(s) || !!s.player.interiorId : !nearPod(s))
-    return "Use the fabrication bench at the required refuge.";
+    return block("site", "Use the fabrication bench at the required refuge.");
   if (
     (r.site === "pod_fabricator" && !facility(s, "pod_fabricator")) ||
     (r.site === "island_workshop" && id !== "restore_workshop" && !facility(s, "island_workshop"))
   )
-    return "Restore these fabrication services first.";
+    return block("restore", "Restore these fabrication services first.");
   if (id === "dart_base" && s.fleet.vehicles.some((v) => v.hull === "dart"))
-    return "A Dart already exists. Recover its frame or cargo instead of duplicating it.";
+    return block("duplicate-hull", "A Dart already exists. Recover its frame or cargo instead of duplicating it.");
   if (
     id === "dart_base" &&
     !hullClearance(world, DART_BUILD_POSE, HULL_COLLIDERS.dart)
   )
-    return "Construction clearance is blocked. Nothing consumed.";
+    return block("clearance", "Construction clearance is blocked. Nothing consumed.");
   const bins = fabricationContainers(s, r.site);
   if (r.maintenance) {
     if (
@@ -206,20 +218,23 @@ export function craftingRefusal(
       s.world.maintenance.glass < 1 ||
       s.world.maintenance.membrane < 3
     )
-      return "Rescue stock is low. Sort recovery supplies at the shallow intake.";
+      return block("rescue-low", "Rescue stock is low. Sort recovery supplies at the shallow intake.");
   } else if (
     Object.entries(r.cost).some(
       ([kind, n]) => available(s, kind as ItemKind, bins) < n,
     )
   )
-    return "Missing public materials. The bench uses your hold, its accessible locker, a nearby deployed buoy and craft at this site's supported cradle.";
+    return block("materials", "Missing public materials. The bench uses your hold, its accessible locker, a nearby deployed buoy and craft at this site's supported cradle.");
   if (r.output === "reserve_cell" || r.output === "salvage_buoy" || r.output === "dart_acoustic_trim") {
     const after = structuredClone(s);
     spend(after, r.cost, bins);
     if (!hasRoom(after, "diver", ITEMS[r.output].cu * r.quantity))
-      return "Output would not fit your hold. Nothing consumed.";
+      return block("space", "Output would not fit your hold. Nothing consumed.");
   }
   return null;
+}
+export function craftingRefusal(s: GameState, id: RecipeId, world: WorldQueries): string | null {
+  return craftingBlock(s, id, world)?.message ?? null;
 }
 export function craft(
   s: GameState,
@@ -273,7 +288,9 @@ export function craft(
     }
   }
   if (!s.knowledge.crafted.includes(id)) s.knowledge.crafted.push(id);
-  s.feedback = `${r.label} complete. ${id === "restore_workshop" ? "Air, healing, locker, charging and hull fabrication are now available." : id === "dart_base" ? "Dart is in the yellow launch cradle. Approach the canopy side and board deliberately." : ""}`;
+  s.feedback = id === "dart_acoustic_trim"
+    ? "Acoustic trim made · fit it from Cargo at the pod or workshop cradle."
+    : `${r.label} complete. ${id === "restore_workshop" ? "Air, healing, locker, charging and hull fabrication are now available." : id === "dart_base" ? "Dart is in the yellow launch cradle. Approach the cockpit side and board deliberately." : ""}`;
   return null;
 }
 export function toggleBuoy(s: GameState): string | null {
