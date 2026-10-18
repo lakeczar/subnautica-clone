@@ -606,3 +606,8 @@ Each reviews both complete scopes with separate explicit verdicts, independently
 
 
 PR #4/#3 updated for final productiona5821aa and running frozen1caa05f correction/integrated pair. Full body/base/head/draft readbacks at feature checkpointa471330 and M0a2cb19f match `/tmp/siltwake-m1-pr/integrated-r1-verified-{3,4}.json`; verification summary `integrated-r1-verification.json`. Body SHA256 #4 `041bbd3065ee1217b5ee9f6345db583369c927d8b8a33710651fb80b1ee0bd8a`, #3 `08a14847666cdc5f6f88c82081512847cdcd12aba1e08c8017906bb4dd840309`. Two matched public pulse-contrast images fetched200 image/png/exact bytes; metadata `final-play-public-assets.json`. Appearance staging and prior-source full route/recovery/fixture limits remain explicit. All stack PRs linked and unwatched. No accepted-game/main merge, deployment, extra worker or root browser/server. Receive the existing independent review notifications; no polling or repeated unchanged suite.
+
+
+### Owner requests an idle checkpoint for input
+
+Allow the existing integrated-R1 Astra/Sol reviews to finish and reconcile/record their results, then preserve a clean checkpoint and notify the owner that no workers are active. **Pause before any new correction task, review round or M2 implementation** so the owner can provide implementation input. Do not cancel current reviews; no additional task is dispatched for this request. Any blockers are recorded for discussion. The full build remains unfinished; this owner-directed stopping point supersedes earlier automatic continuation instructions until the owner responds.
