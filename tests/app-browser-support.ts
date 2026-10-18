@@ -1,4 +1,4 @@
-import type { GameState } from "../src/sim/types.js";
+import type { GameState, NoticeOptions, Vec3 } from "../src/sim/types.js";
 import type { SaveSlot } from "../src/save/repository.js";
 export { deliberateExit, controlHasFocus, textEntryHasFocus } from "../src/runtime/input.js";
 import type { UiActions } from "../src/ui/view.js";
@@ -18,6 +18,11 @@ export class GameView {
   state: GameState | null = null;
   reason = "";
   notices: string[] = [];
+  noticeRecords: { message: string; error: boolean; options: NoticeOptions }[] = [];
+  presentationSteps: { tick: number; mode: string; threat: string; vehicleId: string | null }[] = [];
+  calls: { origin: Vec3; tick: number; mode: string }[] = [];
+  blocked: boolean[] = [];
+  observations: { kind: string; tick: number | null }[] = [];
   disposed = false;
   currentPanel: string | null = null;
   lookVisible = false;
@@ -45,6 +50,15 @@ export class GameView {
   impact(): void {}
   cancelFeedback(): void {}
   resetPresentation(): void {}
+  presentationStep(state: GameState): void {
+    this.presentationSteps.push({ tick: state.tick, mode: state.player.mode, threat: state.world.threat.mode, vehicleId: state.player.controlledVehicleId });
+    this.observations.push({ kind: "step", tick: state.tick });
+  }
+  threatCall(origin: Vec3, state: GameState): void {
+    this.calls.push({ origin: { ...origin }, tick: state.tick, mode: state.world.threat.mode });
+    this.observations.push({ kind: "call", tick: state.tick });
+  }
+  blockedAscent(visible: boolean): void { this.blocked.push(visible); }
   audioSettings(): void {}
   confirmation(): void {}
   cancelConfirmation(): void {}
@@ -65,8 +79,10 @@ export class GameView {
   update(state: GameState): void {
     this.state = structuredClone(state);
   }
-  notify(message: string): void {
+  notify(message: string, error = false, options: NoticeOptions = {}): void {
     this.notices.push(message);
+    this.noticeRecords.push({ message, error, options: { ...options } });
+    this.observations.push({ kind: "notice", tick: null });
   }
   graphicsError(message: string): void {
     throw new Error(message);

@@ -312,7 +312,7 @@ export class PanelView {
     if (!this.storageFrom || !to) return `<article class="bulk-storage"><h3>Store materials</h3><p>${escapeHtml(this.storageNotice)}${this.storageNotice ? " " : ""}Approach a local locker, deployed buoy or craft hold to choose a destination.</p><small>Meals, cells, tools and modules stay put.</small></article>`;
     const preview = materialStoragePreview(state, this.storageFrom, to);
     const options = (choices: typeof bins, selected: string): string => choices.map((c) => `<option value="${escapeHtml(c.id)}"${c.id === selected ? " selected" : ""}>${escapeHtml(containerLabel(state, c.id))} · ${usedCapacity(state, c.id)} / ${c.capacity} CU</option>`).join("");
-    return `<article class="bulk-storage"><h3>Store materials</h3><div class="storage-operands"><label>From<select id="storage-from">${options(bins, this.storageFrom)}</select></label><span aria-hidden="true">→</span><label>To<select id="storage-to">${options(destinations, to)}</select></label>${button(`Store materials · ${containerLabel(state, this.storageFrom)} → ${containerLabel(state, to)}`, { type: "store-materials", from: this.storageFrom, to })}</div>${this.storageNotice ? `<p class="storage-context">${escapeHtml(this.storageNotice)} Using ${escapeHtml(containerLabel(state, to))}.</p>` : ""}<p class="storage-quantities">${preview.items.length ? Object.entries(preview.quantities).map(([k, q]) => `${q} × ${ITEMS[k as ItemKind].label}`).join(" · ") : "No material stacks selected"} · <b>${preview.totalCu} CU · whole stacks</b></p>${preview.refusal ? `<p class="recipe-status">${escapeHtml(preview.refusal)}</p>` : ""}<small>Meals, cells, tools and modules stay put. Individual transfers are with each container.</small></article>`;
+    return `<article class="bulk-storage"><h3>Store materials</h3><div class="storage-operands"><label>From<select id="storage-from">${options(bins, this.storageFrom)}</select></label><span aria-hidden="true">→</span><label>To<select id="storage-to">${options(destinations, to)}</select></label>${button(`Store materials · ${containerLabel(state, this.storageFrom)} → ${containerLabel(state, to)}`, { type: "store-materials", from: this.storageFrom, to })}</div>${this.storageNotice ? `<p class="storage-context">${escapeHtml(this.storageNotice)} Using ${escapeHtml(containerLabel(state, to))}.</p>` : ""}<p class="storage-quantities">${preview.items.length ? Object.entries(preview.quantities).map(([k, q]) => `${q} × ${ITEMS[k as ItemKind].label}`).join(" · ") : "No material stacks selected"} · <b>${preview.totalCu} CU · whole stacks</b></p>${preview.refusal ? `<p class="recipe-status">${escapeHtml(preview.refusal)}</p>` : ""}<small>${preview.items.length ? "Meals, cells, tools and modules stay put. " : ""}Individual transfers are with each container.</small></article>`;
   }
 
   private moduleFitting(state: GameState, button: CommandButton, vessel?: VehicleState): string {
@@ -465,10 +465,16 @@ export class PanelView {
   }
 
   notify(message: string, error: boolean): void {
-    // Keep the last result after the transient HUD toast fades.
-    this.get("panel-feedback").textContent = message;
+    this.get("panel-feedback").textContent = recoveryDisplay(message);
     this.get("panel-feedback").hidden = false;
     this.get("panel-feedback").classList.toggle("error", error);
+  }
+
+  clearNotice(): void {
+    const feedback = this.get("panel-feedback");
+    feedback.hidden = true;
+    feedback.textContent = "";
+    feedback.classList.remove("error");
   }
 
   cancelFeedback(): void {

@@ -42,7 +42,10 @@ function viewFixture(t: test.TestContext) {
         return button;
       });
     }
-    textContent = "";
+    private text = "";
+    textWrites = 0;
+    get textContent() { return this.text; }
+    set textContent(value: string) { this.text = value; this.textWrites++; }
     tagName = "DIV";
     hidden = false;
     layoutVisible = true;
@@ -88,10 +91,16 @@ function viewFixture(t: test.TestContext) {
     },
     replaceChildren() {},
   });
-  const globals = ["document", "window"] as const;
+  const globals = ["document", "window", "performance"] as const;
+  let now = 0, nextTimer = 0;
+  const timers = new Map<number, { due: number; callback: () => void }>();
   const previous = globals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
   Object.defineProperty(globalThis, "document", { configurable: true, value: document });
-  Object.defineProperty(globalThis, "window", { configurable: true, value: { clearTimeout() {}, setTimeout: () => 1 } });
+  Object.defineProperty(globalThis, "performance", { configurable: true, value: { now: () => now } });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: {
+    clearTimeout: (id: number) => timers.delete(id),
+    setTimeout: (callback: () => void, delay: number) => { timers.set(++nextTimer, { callback, due: now + delay }); return nextTimer; },
+  } });
   const commands: GameCommand[] = [];
   const audio: Parameters<UiActions["audio"]>[0][] = [];
   const noop = () => {};
@@ -121,6 +130,12 @@ function viewFixture(t: test.TestContext) {
   return {
     view, commands, audio, get: (id: string) => root.querySelector(`#${id}`),
     active: () => document.activeElement,
+    timerCount: () => timers.size,
+    wall: (milliseconds: number) => {
+      now += milliseconds;
+      for (const [id, timer] of [...timers]) if (timer.due <= now) { timers.delete(id); timer.callback(); }
+    },
+    navigate: (kind: string) => root.emit("click", { target: root.querySelectorAll("button").find(b => b.dataset.action === `${kind}-panel`)! }),
     activate: (id: string) => root.emit("click", { target: root.querySelector(`#${id}`) }),
     key: (key: string, code = key, shiftKey = false) => {
       const event = { key, code, shiftKey, prevented: false, stopped: false,
@@ -393,7 +408,8 @@ test("saved recovery wording stays intact while its displayed next step names re
   const before = structuredClone(s);
   view.openPanel("inventory", s); view.notify(s.feedback);
   assert.match(get("panel-content").innerHTML, /Last recovery report.*Apply a rescue patch/s);
-  assert.match(get("notification").textContent, /Cargo, damage and charge are unchanged/);
+  assert.match(get("panel-feedback").textContent, /Cargo, damage and charge are unchanged/);
+  assert.equal(get("notification").hidden, true);
   assert.deepEqual(s, before, "display conversion never rewrites the compatibility notice in a save");
 });
 
@@ -483,8 +499,8 @@ test("actual session entry order omits only the redundant New success, without l
       view.persistence(session.persistenceMessage, session.autoSaveAllowed, session.state !== null, session.busy);
     },
     pause: () => view.showMenu(session.state !== null),
-    entered: () => { view.update(session.state!, false); view.showGame(); },
-    notify: (message, error) => view.notify(message, error),
+    entered: () => { view.resetPresentation(); view.update(session.state!, false); view.showGame(); },
+    notify: (message, error, options) => view.notify(message, error, options),
   });
   t.after(() => session.dispose());
   session.newGame(); await settled();
@@ -501,7 +517,7 @@ test("actual session entry order omits only the redundant New success, without l
   await session.importFile({ size: text.length, text: async () => text });
   session.confirm(); await settled();
   assert.equal(session.state?.opening.phase, 2);
-  assert.equal(get("notification").textContent, "Imported and saved locally.");
+  assert.equal(get("system-status").textContent, "Imported and saved locally.");
   session.newGame(); session.confirm(); await settled();
   session.state = executeCommand(session.state!, { type: "skip-opening" }, createWorldQueries()).state;
   view.update(session.state, false);
@@ -509,8 +525,8 @@ test("actual session entry order omits only the redundant New success, without l
   session.dispose();
   const continued = new ExpeditionSession(new SaveRepository(storage, new TestWriterLock()), {
     changed: () => {}, pause: () => {},
-    entered: () => view.update(continued.state!, false),
-    notify: (message, error) => view.notify(message, error),
+    entered: () => { view.resetPresentation(); view.update(continued.state!, false); },
+    notify: (message, error, options) => view.notify(message, error, options),
   });
   t.after(() => continued.dispose());
   continued.continueGame();
@@ -524,8 +540,8 @@ test("storage-off sessions, errors and graphics recovery remain visible through 
   const session = new ExpeditionSession(new SaveRepository(storage, new TestWriterLock()), {
     changed: () => view.persistence(session.persistenceMessage, session.autoSaveAllowed, session.state !== null, session.busy),
     pause: () => view.showMenu(session.state !== null),
-    entered: () => { view.update(session.state!, false); view.showGame(); },
-    notify: (message, error) => view.notify(message, error),
+    entered: () => { view.resetPresentation(); view.update(session.state!, false); view.showGame(); },
+    notify: (message, error, options) => view.notify(message, error, options),
   });
   t.after(() => session.dispose());
   session.newGame(); await settled(); session.confirm();
@@ -572,7 +588,7 @@ test("moving pilot guidance stays secondary, explains stopped and blocked exits,
   assert.match(get("hazard").innerHTML, /LOW HULL/);
   v.disabled = true; v.charge = 0; v.emergencyAir = 0; s.player.vitals.oxygen = 10;
   view.update(s, false);
-  assert.match(get("hazard").innerHTML, /HULL DISABLED.*emergency air 0 s/);
+  assert.match(get("hazard").innerHTML, /HULL DISABLED.*emergency air exhausted.*Suit air · 18 s/);
   assert.match(get("hazard").innerHTML, /LOW OXYGEN/);
 });
 
@@ -926,4 +942,110 @@ test("the GameView replacement boundary clears panel results and invalidates old
   stale.focus(); assert.equal(activeCommand(), undefined);
   view.openPanel("inventory", structuredClone(s));
   commandButton({ type: "eat" });
+});
+
+test("panel outcomes are singular, preserve focus, and clear on switch/close while persistence remains independent", (t) => {
+  const { view, get, active, navigate } = viewFixture(t), s = readyState();
+  view.update(s, false); view.showGame(); view.openPanel("inventory", s);
+  const focus = active();
+  view.notify("Nothing moved.", true, { channel: "action" });
+  assert.equal(active(), focus);
+  assert.equal(get("panel-feedback").textContent, "Nothing moved.");
+  assert.equal(get("notification").hidden, true);
+  view.notify("Export before closing.", true, { channel: "persistence" });
+  assert.equal(get("notification").textContent, "Export before closing.");
+  assert.equal(get("panel-feedback").textContent, "Nothing moved.");
+  view.notify("Stored materials.", false, { channel: "action" });
+  assert.equal(get("panel-feedback").textContent, "Stored materials.");
+  assert.equal(get("notification").textContent, "Export before closing.");
+  assert.equal(active(), focus);
+  view.closePanel(); view.showGame();
+  assert.equal(get("panel-feedback").hidden, true);
+  assert.equal(get("panel-feedback").textContent, "");
+  view.openPanel("inventory", s); view.notify("Another result", false);
+  navigate("craft");
+  assert.equal(view.currentPanel, "craft");
+  assert.equal(get("panel-feedback").hidden, true);
+  assert.equal(get("notification").textContent, "Export before closing.");
+});
+
+test("real view active clocks, wall timers and disposal stay bounded and do not repeatedly announce unchanged calls", (t) => {
+  const { view, get, timerCount, wall } = viewFixture(t), s = readyState();
+  s.player.mode = "swimming"; s.player.pose.position = { x: -55, y: -15, z: 30 };
+  view.update(s, false); view.showGame(); view.notify("Collected", false, { channel: "action" });
+  for (let i = 0; i < 600; i++) view.update(s, false);
+  view.showMenu(true); wall(20000);
+  assert.equal(get("notification").textContent, "Collected");
+  assert.equal(timerCount(), 0);
+  view.showGame(); for (let i = 0; i < 240; i++) view.presentationStep(s);
+  assert.equal(get("notification").hidden, true);
+  s.world.threat.mode = "warn"; view.update(s, false);
+  view.notify("Warning calls", true, { channel: "hazard", context: "threat" });
+  view.threatCall({ x: -55, y: -14.35, z: 10 }, s);
+  const writes = get("call-direction").textWrites;
+  for (let i = 0; i < 100; i++) view.update(s, false);
+  assert.equal(get("call-direction").textWrites, writes, "unchanged live text is not replaced per refresh");
+  view.notify("Saved", false, { channel: "persistence" });
+  assert.equal(get("notification").textContent, "Warning calls");
+  assert.equal(get("system-status").textContent, "Saved");
+  assert.equal(timerCount(), 1);
+  view.showMenu(true); wall(3000);
+  assert.equal(get("system-status").hidden, true);
+  assert.equal(get("call-cue").hidden, false, "pause freezes the call's active clock");
+  view.notify("Invalid import", true, { channel: "system" });
+  assert.equal(get("notification").textContent, "Invalid import");
+  wall(11999); assert.equal(get("notification").hidden, false);
+  wall(1); assert.equal(get("notification").hidden, true);
+  view.blockedAscent(true); view.cancelFeedback();
+  assert.equal(get("blocked-ascent").hidden, true);
+  view.resetPresentation();
+  assert.equal(get("call-cue").hidden, true);
+  assert.equal(timerCount(), 0);
+  view.notify("Failed save", true, { channel: "persistence" });
+  assert.equal(timerCount(), 1); view.dispose(); assert.equal(timerCount(), 0);
+});
+
+test("air card follows authoritative current-source precedence and remaining seconds, including the first submerged ramp transition", (t) => {
+  const { view, get } = viewFixture(t), s = readyState();
+  const check = (kind: string, text: RegExp) => {
+    const before = structuredClone(s); view.update(s, false);
+    assert.equal(get("vitals").dataset.airSource, kind);
+    assert.match(get("vitals").innerHTML, text);
+    assert.deepEqual(s, before);
+    assert.ok(!get("vitals").innerHTML.includes("180 s tank"));
+  };
+  s.player.mode = "walking"; s.player.pose.position = { x: 0, y: 0.18, z: 14 };
+  check("refuge", /Home pod air/);
+  s.player.mode = "swimming"; s.player.pose.position = { x: 0, y: -0.850001, z: 9 };
+  s.player.vitals.oxygen = 37.5; check("suit", /Suit air · 68 s/);
+  s.player.pose.position.y = -0.85; check("surface", /Surface air/);
+  s.player.pose.position = { x: 116, y: -117.9, z: -126 }; check("refuge", /Upper Canopy laboratory air/);
+  s.player.pose.position = { x: 10, y: 1.2, z: -34 };
+  s.world.facilities.find(f => f.id === "island_workshop")!.repaired = true;
+  check("refuge", /Splitspine workshop air/);
+  const v = makeVehicle("air-dart", "dart", { x: -55, y: -20, z: 30 }, "air-hold");
+  s.fleet.vehicles.push(v); s.player.mode = "piloting"; s.player.controlledVehicleId = v.id;
+  s.player.pose = structuredClone(v.pose); check("craft", /Dart air/);
+  v.disabled = true; v.charge = 0; v.emergencyAir = 7.25; check("emergency", /Emergency air · 8 s/);
+  v.emergencyAir = 0; s.player.vitals.oxygen = 10; check("suit", /Suit air · 18 s/);
+  s.player.vitals.oxygen = 0; check("suit", /Suit air · 0 s/);
+  s.player.pose.position.y = v.pose.position.y = -0.9; check("surface", /Surface air/);
+  assert.ok(!get("hazard").innerHTML.includes("emergency air exhausted"));
+});
+
+test("pulse HUD stays contextual while Hold retains the actual cost, selected cell and free alternatives", (t) => {
+  const { view, get } = viewFixture(t), s = readyState();
+  addItem(s, "essential_tools", 1, "equipment").fitted = "tools";
+  s.player.pose.position = { x: 90, y: -40, z: -90 }; s.player.mode = "swimming";
+  view.update(s, false); assert.equal(get("pulse-summary").textContent, "");
+  s.world.threat.mode = "disengage";
+  view.update(s, false); assert.equal(get("pulse-summary").textContent, "", "release alone does not advertise a charged response");
+  s.world.threat.mode = "warn"; view.update(s, false);
+  assert.match(get("pulse-summary").textContent, /G · (25 cell points|unavailable)/);
+  view.openPanel("inventory", s);
+  assert.match(get("panel-content").innerHTML, /Pulse G · −25 points/);
+  s.world.threat.mode = "idle"; s.world.threat.distractionSeconds = 2;
+  view.update(s, false); assert.match(get("pulse-summary").textContent, /pulse active 2 s/);
+  s.world.threat.distractionSeconds = 0; view.update(s, false);
+  assert.equal(get("pulse-summary").textContent, "");
 });
