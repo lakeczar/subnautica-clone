@@ -1,0 +1,16 @@
+# POLISH-1 slice1 — round2 reconciliation, interim
+
+**Astra: ACCEPT. Sol: pending. Combined acceptance remains open.** Frozen candidate **d031803730fb44b9208e52fdfb91a88e9ddf8a41**, full-slice base61fcc3033292f9412a795a2388616a4f926ece22, production5f25810. [Round2 scope](../tasks/POLISH-1-SLICE1-REVIEW-R2.md) covers all original nine criteria and the keyboard correction. Subsequent root commits are records only.
+
+| Reviewer | Task | Effective runtime | Verdict |
+| --- | --- | --- | --- |
+| [Astra](POLISH-1-SLICE1-ASTRA-R2.md), reporta404c0272b86df32855e8e9b7903c887a60b1e8c | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice1-astra-r2-d031803` | Root confirms gpt-6-astra/xhigh in both session turn_context records | ACCEPT all nine; SOL-P1-1 closed; no new blocking finding |
+| Sol | `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice1-sol-r2-d031803` | Explicitly selected gpt-6.1-sol/max; effective confirmation pending | Pending |
+
+Root read the entire Astra report, confirmed clean report-only scope, inspected its verification/replay scripts and results, browser observer/native events and cleanup receipts. All37source/25test/27build hashes match final correction identity. Root fingerprinted17 review receipts in `/tmp/siltwake-polish-1-slice1-root-r2/astra-receipts.json` and independently checked all15 native panel-Tab intervals in the reviewer's137-event trace: panel/tick96/capture1/unlocked state stay invariant. Focus events/marks confirm traversal/wrap, closed-details menu boundary, and separate deliberate Return/letter capture versus Escape release. This is inspection of the independent reviewer's actual native trial, not a new root browser run.
+
+Astra independently passed275 tests/typecheck/build/economy, reproduced both full80-tick actual reload states, paid fabrication and five older earned-save roundtrips, and inspected source-attributed original art/motion. Its blocked/clear rib replay stays a labelled seeded diagnostic. It reviewed the current focus-list/visibility assumptions and found no current blocking defect. The root correction's delayed-observer qualifications are preserved. No original receipt was modified and no source/config change or new root test run accompanies this report-only checkpoint.
+
+Root finds this verdict supported. No current-round finding has been sent to Sol and no dependent implementation/correction is dispatched. Astra's owned incognito tab/server are closed normally;5193 is free, no recordings, shared resources preserved. Its report ownership is released. Root has no browser/server; Sol retains report-only ownership on the frozen candidate.
+
+Native drag/physical-mouse feel, representative-GPU/audio/human duration/enjoyment remain unverified. Local terrain/sample/cost and source-attribution limits continue; one review does not certify slice2, stage1 or the full campaign. Receive Sol's completion notification without polling, inspect its independent report and reconcile both before acceptance or further fixes. Then continue slice2, stage1 Opus and M2–M4 automatically. Main merge/deployment remain separate.
