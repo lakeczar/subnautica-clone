@@ -97,3 +97,8 @@ Shared data/query sourceff3b013 is provisionally integrated atc8215c0 with376 te
 ### Cargo integrated; final HUD and composition remain
 
 S2b39de511 is provisionally integrated at19d7562 with actual earned refit preparation needing0 scrolls, paid fabrication and labelled native checks. [Root inspection](evidence/POLISH-1-EXPERIENCE-S2B-INTEGRATION.md) retains372/384 full-suite status (12 legacy shared presentation assertions),18 owned passing tests, matching build and both economies. S2a remains independent/active on8eecb7b. Its handoff releases the shared tests for one composed Sol reconciliation; preserve their underlying behavior checks. Then current-source P1–P8/active reload, fresh full-correction pair and Opus verification, followed by M2–M4.
+
+
+### HUD/Cargo composed; bounded final correction and verification
+
+S2a3d37f4e/24c241d/report34c2900 is provisionally composed with S2b at **4c09ee7**. [Root inspection](evidence/POLISH-1-EXPERIENCE-S2A-INTEGRATION.md) records385/397 checks with the same12 shared panel expectation failures, separate build/economies passing and ROOT-EXP-01's reproduced surface-air mislabel. Both owners are terminal/released. The [composition leaf](tasks/POLISH-1-EXPERIENCE-COMPOSE.md) owns shared-test reconciliation, the bounded air-label correction and final current-source P1–P8/active reload proof. This closes composition work before the fresh complete-batch Astra/Sol pair and Opus verification. Do not expand into M2 depth/ecology/cockpit work in this leaf. M2–M4 remain authorized and required.
