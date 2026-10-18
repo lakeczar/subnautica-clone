@@ -5,61 +5,96 @@ import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js
 import type { Scene } from "@babylonjs/core";
 import { terrainHeight, WORLD_BOUNDS } from "../sim/world.js";
 import { INTERACTION_HOSTS, SOURCES } from "../content/registry.js";
-import { ArtBatch, seeded } from "./geometry.js";
+import { ArtBatch, seeded, type Point } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
+import { createTerrainSurface } from "./terrainSurface.js";
+
+/** Broken service runners rest on the slope instead of bridging the pit.
+ * Pale edge metal and small surviving tags also identify the empty work site. */
+function salvageHost(b: ArtBatch, id: string, x: number, z: number): void {
+  const at = (dx: number, dz: number, lift = .075): Point => [x + dx, terrainHeight(x + dx, z + dz) + lift, z + dz];
+  const rail = (dx: number, dz: number, radius = .065): Point => {
+    const px = x + dx, pz = z + dz;
+    const gx = (terrainHeight(px + .02, pz) - terrainHeight(px - .02, pz)) / .04;
+    const gz = (terrainHeight(px, pz + .02) - terrainHeight(px, pz - .02)) / .04;
+    // A round runner touches the inclined plane along its underside. A mere
+    // radius of vertical lift would bury its uphill half on a steep slope.
+    return at(dx, dz, radius * Math.hypot(1, gx, gz) + .01);
+  };
+  for (const side of [-1, 1]) {
+    b.tube(Array.from({ length: 13 }, (_, i) => rail(side * 1.04, -.8 + i * .1333333333)), .065, P.steelLight, 5);
+    b.tube(Array.from({ length: 15 }, (_, i) => rail(-1.04 + i * 2.08 / 14, side * .8)), .065, side < 0 ? P.ochre : P.steelLight, 5);
+    b.tube([rail(side * 1.04, -.61, .072), rail(side * 1.04, -.39, .072)], .072, P.petrol, 5);
+  }
+  const offset = INTERACTION_HOSTS[id]?.offset;
+  const dx = offset?.x ?? 0, dz = offset?.z ?? 0;
+  b.face([at(dx + .22, dz - .13, .105), at(dx + .22, dz + .13, .105), at(dx - .22, dz + .13, .105), at(dx - .22, dz - .13, .105)], P.porcelain);
+  for (let i = 0; i < 3; i++) {
+    const cx = dx - .12 + i * .1;
+    b.face([at(cx + .018, dz - .07, .112), at(cx + .018, dz + .07, .112), at(cx - .018, dz + .07, .112), at(cx - .018, dz - .07, .112)], P.petrol);
+  }
+}
+
+/** Abraded mineral seams, with small scalloped grazing scars. This remains
+ * geological relief after loose nodules are collected, never a human frame. */
+function westernGlassHost(b: ArtBatch, x: number, z: number): void {
+  for (let band = 0; band < 3; band++) {
+    const path: Point[] = [];
+    for (let i = 0; i <= 18; i++) {
+      const px = x - 1.3 + i * 2.6 / 18, pz = z - .6 + band * .55 + Math.sin(i * .65 + band) * .09;
+      path.push([px, terrainHeight(px, pz) + .065, pz]);
+    }
+    const at = (p: Point, across: number, lift: number): Point => [p[0], terrainHeight(p[0], p[2] + across) + lift, p[2] + across];
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i]!, c = path[i + 1]!;
+      b.face([at(c, -.15, .008), at(c, 0, .15), at(a, 0, .15), at(a, -.15, .008)], P.basalt);
+      b.face([at(c, 0, .15), at(c, .15, .008), at(a, .15, .008), at(a, 0, .15)], P.metal);
+      b.face([at(c, -.026, .158), at(c, .026, .158), at(a, .026, .158), at(a, -.026, .158)], band === 1 ? P.reflection : P.steelLight);
+    }
+  }
+  for (let scar = 0; scar < 3; scar++) {
+    const path: Point[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const a = i / 8 * Math.PI, px = x - .75 + scar * .7 + Math.cos(a) * .23, pz = z + Math.sin(a) * .2;
+      path.push([px, terrainHeight(px, pz) + .055, pz]);
+    }
+    b.tube(path, .025, P.shell, 4);
+  }
+}
 
 export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
   const terrain = new Mesh("island.terrain", scene),
     data = new VertexData();
-  const positions: number[] = [],
-    normals: number[] = [],
-    colors: number[] = [],
-    indices: number[] = [];
-  const nx = 190,
-    nz = 178,
-    minX = -95,
-    minZ = -202,
-    sizeX = 300,
-    sizeZ = 290;
-  for (let z = 0; z <= nz; z++)
-    for (let x = 0; x <= nx; x++) {
-      const px = minX + (x / nx) * sizeX,
-        pz = minZ + (z / nz) * sizeZ,
-        py = terrainHeight(px, pz);
-      positions.push(px, py, pz);
-      const dx =
-        (terrainHeight(px + 0.1, pz) - terrainHeight(px - 0.1, pz)) / 0.2;
-      const dz =
-        (terrainHeight(px, pz + 0.1) - terrainHeight(px, pz - 0.1)) / 0.2;
-      const length = Math.hypot(dx, 1, dz);
-      normals.push(-dx / length, 1 / length, -dz / length);
-      const patch = Math.sin(px * 0.2 + pz * 0.12) * Math.cos(pz * 0.16);
-      let hex: string =
-        py > 13
-          ? P.basalt
-          : py > 3.3
-            ? patch > 0.1
-              ? "#81966e"
-              : "#76947b"
-            : py > -1.2
-              ? P.shore
-              : patch > 0.44
-                ? "#789c94"
-                : P.sand;
-      if (Math.hypot(dx, dz) > 1.15) hex = py > 0 ? "#5c7f7e" : "#669894";
-      // Upper Canopy sediment is cooler and lower in value than reef sand.
-      // Blend on the same physical height field; no extra shelf or false floor.
-      const canopy = Math.max(0, Math.min(1, (px - 60) / 30)) * Math.max(0, Math.min(1, (-py - 35) / 40));
-      const c = Color3.Lerp(Color3.FromHexString(hex), Color3.FromHexString(patch > .3 ? "#4b807a" : "#2e616c"), canopy);
-      colors.push(c.r, c.g, c.b, 1);
-      if (x < nx && z < nz) {
-        const a = z * (nx + 1) + x,
-          b = a + 1,
-          c = a + nx + 1,
-          d = c + 1;
-        indices.push(a, c, b, b, c, d);
-      }
-    }
+  const { positions, indices } = createTerrainSurface();
+  const normals: number[] = [], colors: number[] = [];
+  for (let i = 0; i < positions.length; i += 3) {
+    const px = positions[i]!, py = positions[i + 1]!, pz = positions[i + 2]!;
+    const dx =
+      (terrainHeight(px + 0.1, pz) - terrainHeight(px - 0.1, pz)) / 0.2;
+    const dz =
+      (terrainHeight(px, pz + 0.1) - terrainHeight(px, pz - 0.1)) / 0.2;
+    const length = Math.hypot(dx, 1, dz);
+    normals.push(-dx / length, 1 / length, -dz / length);
+    const patch = Math.sin(px * 0.2 + pz * 0.12) * Math.cos(pz * 0.16);
+    let hex: string =
+      py > 13
+        ? P.basalt
+        : py > 3.3
+          ? patch > 0.1
+            ? "#81966e"
+            : "#76947b"
+          : py > -1.2
+            ? P.shore
+            : patch > 0.44
+              ? "#789c94"
+              : P.sand;
+    if (Math.hypot(dx, dz) > 1.15) hex = py > 0 ? "#5c7f7e" : "#669894";
+    // Upper Canopy sediment is cooler and lower in value than reef sand.
+    // Blend on the same physical height field; no extra shelf or false floor.
+    const canopy = Math.max(0, Math.min(1, (px - 60) / 30)) * Math.max(0, Math.min(1, (-py - 35) / 40));
+    const c = Color3.Lerp(Color3.FromHexString(hex), Color3.FromHexString(patch > .3 ? "#4b807a" : "#2e616c"), canopy);
+    colors.push(c.r, c.g, c.b, 1);
+  }
   data.positions = positions;
   data.normals = normals;
   data.colors = colors;
@@ -119,6 +154,13 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
   // These skins sample the authoritative height field; they add no art-only shelf.
   for (const [id, source] of Object.entries(SOURCES)) {
     const { x, z } = source.position;
+    if (id === "island_workshop_scraps" || id === "island_headland_scraps" || id === "island_glass_ledge_west") {
+      const host = new ArtBatch("source-host." + id, scene, cel);
+      if (id === "island_glass_ledge_west") westernGlassHost(host, x, z);
+      else salvageHost(host, id, x, z);
+      host.finish(.1);
+      continue;
+    }
     if (source.asset === "glass") {
       for (let band = 0; band < 4; band++) {
         const path: [number, number, number][] = [];
@@ -138,8 +180,7 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
         stones.tube(path, 0.065, P.stoneLight, 5);
       }
     } else if (source.asset === "scraps") {
-      const y = terrainHeight(x, z) + 0.06 +
-        (id === "island_headland_scraps" ? INTERACTION_HOSTS[id]?.persistentOffsetY ?? 0 : 0);
+      const y = terrainHeight(x, z) + 0.06;
       // A frame deliberately has an empty centre; it reads differently from ore.
       for (const side of [-1, 1]) {
         stones.box([x + side * 1.3, y, z], [0.12, 0.1, 2.3], P.petrol);

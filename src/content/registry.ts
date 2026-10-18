@@ -665,10 +665,9 @@ export interface InteractionHostDefinition {
   offset?: { x: number; y: number; z: number };
   radius?: number;
   solidIds?: readonly string[];
-  /** The three buried source groups only; shared by their art and aim datum. */
+  /** Work-face height from the source datum. Surface-authored island stock
+   * rests on the heightfield; its tags/anchor share the X/Z offset below. */
   renderOffsetY?: number;
-  /** The existing headland frame only; no terrain or frame shape change. */
-  persistentOffsetY?: number;
 }
 /** Offsets from interaction datums to the actual instrument, record or work face.
  * Only a host's own furniture is exempt from optical occlusion, never its room. */
@@ -686,9 +685,9 @@ export const INTERACTION_HOSTS: Readonly<Record<string, InteractionHostDefinitio
   rescue_staging: { offset: { x: 0, y: -0.3, z: 0 }, radius: 0.85 },
   reef_ribbon_catch_north: { offset: { x: 0.35, y: -0.25, z: 0.1 }, radius: 1.3 },
   reef_ribbon_catch_south: { offset: { x: 0.35, y: -0.25, z: 0.1 }, radius: 1.3 },
-  island_workshop_scraps: { renderOffsetY: 0.25 },
-  island_headland_scraps: { renderOffsetY: 2, persistentOffsetY: 0.5, offset: { x: -0.65, y: 0.1, z: -0.35 } },
-  island_glass_ledge_west: { renderOffsetY: 1.25, offset: { x: 0, y: 0.45, z: -0.5 } },
+  island_workshop_scraps: { renderOffsetY: 0.25, offset: { x: -.32, y: -.1, z: -.35 } },
+  island_headland_scraps: { renderOffsetY: 1.5, offset: { x: -.5, y: .1, z: -.4 } },
+  island_glass_ledge_west: { renderOffsetY: 1, offset: { x: -.3, y: .2, z: -.25 } },
   island_shore_crop_east: { offset: { x: 0, y: 0.18, z: -0.35 } },
   island_shore_crop_west: { offset: { x: 0, y: 0.18, z: -0.35 } },
 };

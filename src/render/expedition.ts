@@ -16,6 +16,57 @@ import { label } from "./landmarks.js";
 import { FACILITY_SOLIDS, SOLIDS, terrainHeight } from "../sim/world.js";
 import { createObservationPane, wallWithOpening } from "./materials.js";
 
+/** Individual bent maintenance plates keep contact with the local surface.
+ * Their pale service tags, folded edges and bolt holes distinguish salvage
+ * from geology before the player aims. No new obstacle or support platform. */
+function surfaceScraps(b: ArtBatch, id: string, x: number, z: number): void {
+  const offset = INTERACTION_HOSTS[id]?.offset;
+  const layout = [[offset?.x ?? 0, offset?.z ?? 0, -.2], [-.65, .43, .35], [.58, -.36, -.5], [.63, .43, .18], [.02, .12, .7]] as const;
+  for (const [i, [dx, dz, yaw]] of layout.entries()) {
+    const at = (u: number, v: number, lift: number): Point => {
+      const px = x + dx + u * Math.cos(yaw) + v * Math.sin(yaw), pz = z + dz - u * Math.sin(yaw) + v * Math.cos(yaw);
+      return [px, terrainHeight(px, pz) + lift, pz];
+    };
+    const outline = [[-.23, -.36], [.23, -.36], [.29, -.27], [.29, .27], [.22, .36], [-.22, .36], [-.29, .27], [-.29, -.27]] as const;
+    const top = (u: number): number => .13 + u * .19;
+    const upper = outline.map(([u, v]) => at(u, v, top(u))), lower = outline.map(([u, v]) => at(u, v, .012));
+    for (let j = 0; j < outline.length; j++) {
+      const next = (j + 1) % outline.length;
+      b.face([at(0, 0, top(0)), upper[j]!, upper[next]!], i % 3 === 1 ? P.ochre : P.steelLight);
+      b.face([lower[next]!, upper[next]!, upper[j]!, lower[j]!], P.metal);
+    }
+    // A pressed rib and a surviving pale inventory tag sit on each plate.
+    b.tube([at(-.2, -.23, top(-.2) + .018), at(.2, -.23, top(.2) + .018)], .018, P.petrol, 4);
+    b.face([at(.13, -.08, top(.13) + .006), at(.13, .06, top(.13) + .006), at(-.17, .06, top(-.17) + .006), at(-.17, -.08, top(-.17) + .006)], P.porcelain);
+    b.face([at(-.065, -.055, top(-.065) + .013), at(-.065, .035, top(-.065) + .013), at(-.11, .035, top(-.11) + .013), at(-.11, -.055, top(-.11) + .013)], P.petrol);
+    for (let side = 0; side < 8; side++) {
+      const a = side / 8 * Math.PI * 2, n = (side + 1) / 8 * Math.PI * 2;
+      const point = (r: number, angle: number): Point => {
+        const u = .17 + Math.cos(angle) * r, v = .2 + Math.sin(angle) * r;
+        return at(u, v, top(u) + .01);
+      };
+      b.face([point(.065, a), point(.065, n), point(.032, n), point(.032, a)], P.petrol);
+    }
+  }
+}
+
+function surfaceGlass(b: ArtBatch, x: number, z: number): void {
+  for (const [i, [dx, dz, height]] of [[-.72, -.37, .4], [.05, -.35, .52], [.68, -.15, .34], [-.45, .38, .38], [.4, .42, .44]].entries()) {
+    const cx = x + dx!, cz = z + dz!, h = height!;
+    const tip: Point = [cx + .035, terrainHeight(cx + .035, cz) + h, cz];
+    for (let side = 0; side < 6; side++) {
+      const a = side / 6 * Math.PI * 2, n = (side + 1) / 6 * Math.PI * 2;
+      const base = (angle: number): Point => {
+        const px = cx + Math.cos(angle) * .28, pz = cz + Math.sin(angle) * .24;
+        return [px, terrainHeight(px, pz) + .005, pz];
+      };
+      b.face([base(a), base(n), tip], side % 3 === 0 ? P.glass : side % 2 ? P.reflection : P.mint);
+    }
+    const px = cx - .08, pz = cz - .1;
+    b.tube([[px, terrainHeight(px, pz) + .06, pz], [cx + .025, tip[1] - .035, cz - .015]], .018, i % 2 ? P.shell : P.mint, 4);
+  }
+}
+
 /** The structural descriptors remain the physical authority. Passage skins are
  * at most 3 mm proud of them; the capsule passage and the complete rail path stay
  * empty. Only the rendered fore/aft walls are cut around sealed observation
@@ -369,6 +420,12 @@ export function createExpeditionArt(
     const b = new ArtBatch("source." + id, scene, cel),
       { x, y: sourceY, z } = s.position,
       y = sourceY + (INTERACTION_HOSTS[id]?.renderOffsetY ?? 0);
+    if (id === "island_workshop_scraps" || id === "island_headland_scraps" || id === "island_glass_ledge_west") {
+      if (id === "island_glass_ledge_west") surfaceGlass(b, x, z);
+      else surfaceScraps(b, id, x, z);
+      sourceMeshes.set(id, b.finish(.14));
+      continue;
+    }
     for (let i = 0; i < 5; i++) {
       const dx = ((i % 3) - 1) * 0.65,
         dz = (Math.floor(i / 3) - 0.5) * 0.7;
