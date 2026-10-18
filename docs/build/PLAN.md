@@ -102,3 +102,8 @@ S2b39de511 is provisionally integrated at19d7562 with actual earned refit prepar
 ### HUD/Cargo composed; bounded final correction and verification
 
 S2a3d37f4e/24c241d/report34c2900 is provisionally composed with S2b at **4c09ee7**. [Root inspection](evidence/POLISH-1-EXPERIENCE-S2A-INTEGRATION.md) records385/397 checks with the same12 shared panel expectation failures, separate build/economies passing and ROOT-EXP-01's reproduced surface-air mislabel. Both owners are terminal/released. The [composition leaf](tasks/POLISH-1-EXPERIENCE-COMPOSE.md) owns shared-test reconciliation, the bounded air-label correction and final current-source P1–P8/active reload proof. This closes composition work before the fresh complete-batch Astra/Sol pair and Opus verification. Do not expand into M2 depth/ecology/cockpit work in this leaf. M2–M4 remain authorized and required.
+
+
+### Experience composition inspected; caption then full-batch gate
+
+COMPOSE5005095/reporteb66478 is provisionally integrated at5355a63. [Root inspection](evidence/POLISH-1-EXPERIENCE-COMPOSE-INTEGRATION.md) passes399 checks/build/economies and confirms preserved test coverage, truthful air, current P1–P8 evidence, active reload equality and exact movement replay. The same author has a bounded CSS-only9→11px caption follow-up; no broader implementation remains assigned. After inspection, use the [prepared R1 brief](tasks/POLISH-1-EXPERIENCE-REVIEW-R1.md) for fresh non-author Astra/Sol review of the whole correction from c4de579, then fresh Opus verification. M2–M4 continuation remains authorized.
