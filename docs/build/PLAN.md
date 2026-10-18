@@ -1,5 +1,7 @@
 # Construction plan
 
+Astra R3 accepts all eight complete-experience criteria on **4baaa34**, with report/evidence independently inspected. Sol R3 remains pending on the same frozen candidate; [interim reconciliation](reviews/POLISH-1-EXPERIENCE-R3.md). No paired acceptance or production change. Fresh Opus verification and M2–M4 remain next.
+
 Current composition source **d9aaf63** is inspected and provisionally integrated at **e212da4**; [root record](evidence/POLISH-1-EXPERIENCE-COMPOSITION-FIX-INTEGRATION.md). Root400 checks/build/economies,447 payloads and27-file equality pass. Both R2 examples are resolved in inspected evidence, all authors are terminal, and [fresh full-batch R3](tasks/POLISH-1-EXPERIENCE-REVIEW-R3.md) precedes Opus verification and M2–M4. No new campaign completion claim. Earlier active/freeze labels below describe historical checkpoints.
 
 Both R2 reports close the original R1 cases and independently require the same two adjacent composition corrections; [paired disposition](reviews/POLISH-1-EXPERIENCE-R2.md). The sole bounded [Sol composition owner](tasks/POLISH-1-EXPERIENCE-COMPOSITION-FIX.md) has both completed reports. Inspect its return before fresh complete-batch paired review and Opus verification; M2–M4 remain required. The following freeze/active labels are historical checkpoints.
