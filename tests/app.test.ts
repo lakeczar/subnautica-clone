@@ -11,7 +11,7 @@ import { deferred, encoded, sample, settled } from "./persistence-support.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import { craft, completeOpening, discover } from "../src/sim/progression.js";
 import { addItem } from "../src/sim/inventory.js";
-import { RECIPES, type ItemKind } from "../src/content/registry.js";
+import { RECIPES, THREAT_HOME, type ItemKind } from "../src/content/registry.js";
 import { faceTarget } from "./targeting-support.js";
 import { fixtureGame } from "../src/sim/carrier.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
@@ -561,4 +561,42 @@ test("app: moving hold preserves the simulation's deep exit refusal", async (t) 
   f.key("KeyX"); f.frames(24);
   assert.ok(f.view.state!.player.controlledVehicleId);
   assert.ok(f.view.notices.some(n => n.includes("Exit exposure")));
+});
+
+for (const emergency of ["disabled", "empty", "low hull", "air", "pursuit"] as const) {
+  test(`app: ${emergency} moving emergency exits on the first E press without a hold`, async (t) => {
+    const initial = pilotSave(), s = initial.state, v = s.fleet.vehicles[0]!;
+    if (emergency === "disabled") {
+      v.disabled = true; v.health = 0;
+      s.recovery.losses.push({ vehicleId: v.id, position: { ...v.pose.position }, visited: true });
+    }
+    if (emergency === "empty") v.charge = 0;
+    if (emergency === "low hull") v.health = 25;
+    if (emergency === "air") v.emergencyAir = 15;
+    if (emergency === "pursuit") {
+      s.world.threat.mode = "pursue"; s.world.threat.interest = 10;
+      v.pose.position = { ...THREAT_HOME, x: THREAT_HOME.x - 20 };
+      s.player.pose = structuredClone(v.pose);
+      s.world.threat.position = { ...THREAT_HOME };
+      s.world.threat.modeSeconds = 0;
+    }
+    const f = await fixture(t, initial); f.view.actions.resume();
+    const tick = f.view.state!.tick;
+    f.key("KeyE"); f.key("KeyE", "keyup");
+    assert.equal(f.view.state!.tick, tick);
+    assert.equal(f.view.state!.player.controlledVehicleId, null);
+    assert.ok(f.view.notices.some(n => n.startsWith("Clear exit.")));
+  });
+}
+
+test("app: a replacement session with the same vehicle ID cannot inherit an exit hold", async (t) => {
+  const initial = pilotSave(), f = await fixture(t, initial);
+  f.view.actions.resume(); f.key("KeyX"); f.frames(4);
+  const notices = f.view.notices.length;
+  const text = encoded(initial);
+  f.view.actions.importFile({ size: text.length, text: async () => text } as File);
+  await settled(); f.view.actions.confirm(); await settled();
+  f.frames(60);
+  assert.equal(f.view.state!.player.controlledVehicleId, initial.state.player.controlledVehicleId);
+  assert.ok(!f.view.notices.slice(notices).some(n => n.startsWith("Clear exit.")));
 });
