@@ -270,8 +270,9 @@ test("pulse presentation follows the paying cell, excludes remote charge, and ne
   const preview = distractionPreview(s); assert.equal(preview.cellId, carried.id);
   const before = structuredClone(s);
   view.openPanel("inventory", s);
-  assert.match(get("panel-content").innerHTML, new RegExp(`Next payment: ${carried.id}.*30 → 5%`));
-  assert.ok(!get("panel-content").innerHTML.includes(`Next payment: ${remote.id}`));
+  assert.match(get("panel-content").innerHTML, /Next payment: Reserve cell 2.*30 → 5%/);
+  assert.ok(!get("panel-content").innerHTML.includes("Next payment: Reserve cell 1"));
+  assert.ok(remote.id !== carried.id);
   assert.deepEqual(s, before);
   commandButton({ type: "distraction" });
   carried.charge = 24; view.refreshPanel(s);
@@ -288,7 +289,7 @@ test("bench cell recharge is an explicit pre-vessel command, separate from hull 
   s.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired = true;
   const cell = addItem(s, "reserve_cell", 1, "pod_locker"); cell.charge = 50;
   assert.deepEqual(cellRechargePreview(s).cellIds, [cell.id]);
-  view.openPanel("craft", s);
+  view.openPanel("inventory", s);
   const html = get("panel-content").innerHTML;
   assert.match(html, /Bench cell recharge/);
   assert.match(html, /Cells only\. Hull battery, health and emergency air require supported service/);
@@ -310,7 +311,7 @@ test("bulk storage shows the shared whole-stack set and preserves operands and f
   const command: GameCommand = { type: "store-materials", from: "diver", to: "pod_locker" };
   const p = materialStoragePreview(s, command.from, command.to);
   view.openPanel("inventory", s);
-  assert.match(get("panel-content").innerHTML, /2 × Structural alloy<br \/>3 × Silica glass.*7 CU · whole stacks/);
+  assert.match(get("panel-content").innerHTML, /2 × Structural alloy · 3 × Silica glass.*7 CU · whole stacks/);
   assert.ok(get("panel-content").innerHTML.includes(p.refusal!));
   const before = structuredClone(s);
   commandButton(command).focus();
@@ -764,7 +765,7 @@ test("occupied Hold disables tow and salvage, explains conditional safe exit, an
     assert.equal(commandButton({ type: "recover", vehicleId: v.id, method: "repair" }).disabled, false);
     assert.equal(commandButton({ type: "reserve", vehicleId: v.id }).disabled, false);
     assert.equal(commandButton({ type: "service", vehicleId: v.id }).disabled, false);
-    assert.match(get("panel-content").innerHTML, /Cells in diver \/ this craft: item_\d+ · 100%/);
+    assert.match(get("panel-content").innerHTML, /Cells in diver \/ this craft: Reserve cell 1 · 100%/);
     assert.deepEqual(s, before, "recovery presentation cannot mutate the occupied state");
   }
 });
@@ -898,4 +899,31 @@ test("impact loss is coalesced once, cancellation clears it, and pitch/surface c
   view.cancelFeedback(); assert.equal(get("impact-notice").hidden, true);
   view.impact(0.2, s); assert.equal(get("impact-notice").textContent, "Hull −0.2%");
   view.resetPresentation(); assert.equal(get("impact-notice").hidden, true);
+});
+
+
+test("recipe focus follows its full command as shortage work becomes ready; completion has a safe visible fallback", (t) => {
+  const { view, get, commandButton, activeCommand, active } = viewFixture(t);
+  let s = createGame(); completeOpening(s);
+  const command: GameCommand = { type: "craft", recipeId: "pod_repair" };
+  view.openPanel("craft", s); commandButton(command).focus();
+  addItem(s, "structural_alloy", 2, "diver"); addItem(s, "silica_glass", 1, "diver"); addItem(s, "flex_membrane", 2, "diver");
+  view.refreshPanel(s); assert.deepEqual(activeCommand(), command);
+  s = executeCommand(s, command, createWorldQueries()).state;
+  view.refreshPanel(s); assert.equal(active(), get("panel-return"));
+  assert.equal(activeCommand(), undefined, "completed one-time work cannot redirect to another recipe");
+});
+
+test("the GameView replacement boundary clears panel results and invalidates old commands", (t) => {
+  const { view, get, commandButton, activeCommand } = viewFixture(t);
+  const s = createGame(); completeOpening(s); addItem(s, "meal", 1, "diver");
+  view.openPanel("inventory", s);
+  const stale = commandButton({ type: "eat" });
+  view.notify("Previous expedition result", true);
+  view.resetPresentation();
+  assert.equal(get("panel-content").innerHTML, "");
+  assert.equal(get("panel-feedback").textContent, ""); assert.equal(get("panel-feedback").hidden, true);
+  stale.focus(); assert.equal(activeCommand(), undefined);
+  view.openPanel("inventory", structuredClone(s));
+  commandButton({ type: "eat" });
 });

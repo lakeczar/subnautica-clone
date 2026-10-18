@@ -86,7 +86,7 @@ export class GameView {
         </div>
         <div class="scene-caption" aria-hidden="true"><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
       </div>
-      <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-header"><span class="eyebrow">EXPEDITION PAUSED / NO SURVIVAL DRAIN</span><button id="panel-return" data-action="close-panel">Return <kbd>Esc</kbd></button></div><nav aria-label="Expedition panels"><button data-action="inventory-panel">Hold</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Notebook</button><button id="carrier-nav" data-action="carrier-panel" hidden>Carrier fixture</button></nav><h2 id="panel-title"></h2><p id="panel-feedback" role="status" aria-live="polite" hidden></p><div id="panel-content"></div></div></section><section id="graphics-error" class="graphics-error" role="alert" hidden><h2>The ocean could not open</h2><p id="graphics-error-text"></p><p>Your existing local save has not been changed. Save exports remain available in the menu.</p></section>
+      <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-header"><button id="panel-return" data-action="close-panel">Return <kbd>Esc</kbd></button><h2 id="panel-title"></h2><nav aria-label="Expedition panels"><button data-action="inventory-panel">Hold</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Notebook</button><button id="carrier-nav" data-action="carrier-panel" hidden>Carrier fixture</button></nav><span class="panel-paused">Paused</span></div><p id="panel-feedback" role="status" aria-live="polite" hidden></p><div id="panel-content"></div></div></section><section id="graphics-error" class="graphics-error" role="alert" hidden><h2>The ocean could not open</h2><p id="graphics-error-text"></p><p>Your existing local save has not been changed. Save exports remain available in the menu.</p></section>
       <aside id="session-warning" class="session-warning" aria-label="Local saving disabled" hidden><span>Autosave off · export before closing</span><button data-action="export">Export save</button></aside>
       <div id="notification" role="status" aria-live="polite" hidden></div>
       <input id="import-file" type="file" accept=".json,application/json" hidden />`;
@@ -411,7 +411,7 @@ export class GameView {
   }
 
   resetPresentation(): void {
-    this.panels.cancelFeedback();
+    this.panels.resetSession();
     this.hudPresentation.resetPresentation();
   }
 

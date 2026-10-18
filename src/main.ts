@@ -1,4 +1,5 @@
 import './style.css';
+import './ui/panels.css';
 import { SiltwakeApp } from './runtime/app.js';
 
 const root = document.querySelector<HTMLElement>('#app');
