@@ -101,8 +101,19 @@ export function sweepBoxRib(box: BoxBounds, delta: Vec3, rib: SegmentCapsule,
     const closest = segmentBoxClosest(rib.a, rib.b, translated);
     normal = closest.normal;
     const gap = closest.distance - rib.radius, closing = -dot(normal, delta);
-    if (!Number.isFinite(gap) || gap < -RIB_CONTACT_TOLERANCE)
+    if (!Number.isFinite(gap) || !Number.isFinite(closing))
       return { t: 0, normal, stop: true, iterations: i + 1 };
+    if (gap < -RIB_CONTACT_TOLERANCE) {
+      // Distance between convex sets under translation is convex. A defined
+      // separating normal with non-closing travel therefore proves this entire
+      // straight remainder cannot deepen the starting overlap. Every slide is
+      // queried anew; an axis inside the box has no such normal and stays closed.
+      if (i > 0 || closest.distance <= 1e-9)
+        return { t, normal, stop: true, iterations: i + 1 };
+      if (closing > 1e-12 * Math.max(1, Math.hypot(delta.x, delta.y, delta.z)))
+        return { t: 0, normal, stop: false, iterations: i + 1 };
+      return null;
+    }
     if (closing <= 0 || (gap >= 0 && closing <= 1e-12)) return null;
     if (gap <= RIB_SWEEP_SEPARATION) return { t, normal, stop: false, iterations: i + 1 };
     const advance = gap / closing;

@@ -1,0 +1,285 @@
+{
+  "format": "siltwake.save",
+  "schemaVersion": 2,
+  "contentVersion": "expedition.3",
+  "meta": {
+    "sessionId": "5c1ce9fd-ce62-45ac-9d9e-e3794226e913",
+    "createdAt": "2026-10-18T20:02:55.381Z",
+    "savedAt": "2026-10-18T20:11:53.707Z"
+  },
+  "state": {
+    "tick": 22258,
+    "sequence": 1,
+    "scenario": "expedition",
+    "player": {
+      "pose": {
+        "frame": "world",
+        "position": {
+          "x": -24.415625654848196,
+          "y": -0.5,
+          "z": -8.300421871420056
+        },
+        "yaw": 5.07955592153858,
+        "pitch": 1.35
+      },
+      "velocity": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "mode": "swimming",
+      "vitals": {
+        "health": 100,
+        "oxygen": 100,
+        "food": 93.96277777783475
+      },
+      "refugeId": "home_pod",
+      "controlledVehicleId": null,
+      "interiorId": null,
+      "starvationSeconds": 0,
+      "graceSeconds": 0,
+      "interiorPose": null
+    },
+    "opening": {
+      "phase": 4,
+      "phaseTicks": 0
+    },
+    "inventory": {
+      "items": [
+        {
+          "id": "item_1",
+          "kind": "meal",
+          "quantity": 4,
+          "containerId": "diver",
+          "fitted": null,
+          "charge": null,
+          "provenance": "public"
+        }
+      ],
+      "containers": [
+        {
+          "id": "diver",
+          "kind": "diver",
+          "capacity": 16,
+          "ownerId": "player"
+        },
+        {
+          "id": "equipment",
+          "kind": "equipment",
+          "capacity": 0,
+          "ownerId": "player"
+        },
+        {
+          "id": "pod_locker",
+          "kind": "locker",
+          "capacity": 160,
+          "ownerId": "home_pod"
+        },
+        {
+          "id": "workshop_locker",
+          "kind": "locker",
+          "capacity": 160,
+          "ownerId": "island_workshop"
+        },
+        {
+          "id": "buoy_hold",
+          "kind": "buoy",
+          "capacity": 24,
+          "ownerId": "salvage_buoy"
+        }
+      ],
+      "buoy": {
+        "itemId": null,
+        "deployed": false,
+        "position": {
+          "x": 0,
+          "y": 0.18,
+          "z": 14
+        }
+      }
+    },
+    "knowledge": {
+      "blueprints": [
+        "bp_pod_checklist"
+      ],
+      "scans": [
+        "reef_edible_school_south"
+      ],
+      "evidence": [
+        {
+          "id": "C01",
+          "tick": 592,
+          "provenance": "Home pod / regulator serial and repair checklist"
+        }
+      ],
+      "journals": [],
+      "markers": [
+        "home_pod"
+      ],
+      "crafted": [],
+      "hintLevel": 1
+    },
+    "world": {
+      "resources": [
+        {
+          "id": "reef_service_scraps_east",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "reef_service_scraps_west",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "reef_glass_ridge_north",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "reef_glass_ridge_south",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "reef_ribbon_catch_north",
+          "stock": 12,
+          "reserve": 12
+        },
+        {
+          "id": "reef_ribbon_catch_south",
+          "stock": 12,
+          "reserve": 12
+        },
+        {
+          "id": "island_workshop_scraps",
+          "stock": 18,
+          "reserve": 8
+        },
+        {
+          "id": "island_headland_scraps",
+          "stock": 18,
+          "reserve": 8
+        },
+        {
+          "id": "island_glass_ledge_east",
+          "stock": 10,
+          "reserve": 8
+        },
+        {
+          "id": "island_glass_ledge_west",
+          "stock": 10,
+          "reserve": 8
+        },
+        {
+          "id": "island_resin_cove_east",
+          "stock": 6,
+          "reserve": 6
+        },
+        {
+          "id": "island_resin_cove_west",
+          "stock": 6,
+          "reserve": 6
+        },
+        {
+          "id": "canopy_grounding_fins_upper",
+          "stock": 14,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_grounding_fins_lower",
+          "stock": 14,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_resin_lee_upper",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_resin_lee_lower",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "reef_edible_school_north",
+          "stock": 8,
+          "reserve": 0
+        },
+        {
+          "id": "reef_edible_school_south",
+          "stock": 4,
+          "reserve": 0
+        },
+        {
+          "id": "island_shore_crop_east",
+          "stock": 8,
+          "reserve": 0
+        },
+        {
+          "id": "island_shore_crop_west",
+          "stock": 8,
+          "reserve": 0
+        }
+      ],
+      "facilities": [
+        {
+          "id": "home_pod",
+          "repaired": true
+        },
+        {
+          "id": "pod_fabricator",
+          "repaired": false
+        },
+        {
+          "id": "island_workshop",
+          "repaired": false
+        },
+        {
+          "id": "canopy_lab",
+          "repaired": false
+        }
+      ],
+      "maintenance": {
+        "alloy": 16,
+        "glass": 1,
+        "membrane": 10
+      },
+      "threat": {
+        "mode": "idle",
+        "position": {
+          "x": 132,
+          "y": -112,
+          "z": -113
+        },
+        "interest": 0,
+        "modeSeconds": 361.10000000000025,
+        "distraction": null,
+        "distractionSeconds": 0
+      },
+      "action": null
+    },
+    "fleet": {
+      "vehicles": [],
+      "docking": null
+    },
+    "recovery": {
+      "operation": null,
+      "caches": [],
+      "losses": []
+    },
+    "metrics": {
+      "swimMetres": 60.53201708581945,
+      "pilotMetres": 0,
+      "oxygenUsed": 72.38888888886976,
+      "powerUsed": 0,
+      "collections": 2,
+      "failures": 0,
+      "rescues": 0,
+      "minOxygen": 27.61111111113668,
+      "minPower": 100
+    },
+    "feedback": "Two visible leads: the twin reef ribs and Splitspine’s broken ridge.",
+    "migration": null
+  }
+}

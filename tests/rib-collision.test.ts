@@ -171,7 +171,7 @@ test("wide shallow piloting hulls and every rectangular berth retain X/Z/bottom/
   }
 });
 
-test("contact tolerance permits exact tangency, blocks inward motion, and never teleports overlap diagnostics", () => {
+test("contact tolerance blocks inward travel while defined-normal overlaps may separate without teleporting", () => {
   const p = { ...first.a, x: first.a.x + first.radius };
   assert.equal(one.clearance(p, point), true);
   assert.deepEqual(one.moveCapsule(p, { x: 0.3, y: 0, z: 0 }, point).position, plus(p, { x: 0.3, y: 0, z: 0 }));
@@ -180,11 +180,14 @@ test("contact tolerance permits exact tangency, blocks inward motion, and never 
   const tangent = one.moveCapsule(p, { x: 0, y: -0.3, z: 0 }, point);
   assert.equal(tangent.hitSolid, false); near(tangent.position.y, p.y - 0.3, 1e-12);
   assert.equal(one.clearance({ ...p, x: p.x - RIB_CONTACT_TOLERANCE / 2 }, point), true);
-  for (const overlap of [{ ...p, x: p.x - 2 * RIB_CONTACT_TOLERANCE }, first.a]) {
-    assert.equal(one.clearance(overlap, point), false);
-    const result = one.moveCapsule(overlap, { x: 2, y: 3, z: 4 }, point);
-    assert.equal(result.hitSolid, true); assert.deepEqual(result.position, overlap);
-  }
+  const overlap = { ...p, x: p.x - 2 * RIB_CONTACT_TOLERANCE };
+  assert.equal(one.clearance(overlap, point), false);
+  const result = one.moveCapsule(overlap, { x: 2, y: 3, z: 4 }, point);
+  assert.equal(result.hitSolid, false); assert.deepEqual(result.position, plus(overlap, { x: 2, y: 3, z: 4 }));
+  const closing = one.moveCapsule(overlap, { x: -0.1, y: 0, z: 0 }, point);
+  assert.ok(closing.hitSolid); assert.deepEqual(closing.position, overlap);
+  const unknown = one.moveCapsule(first.a, { x: 2, y: 3, z: 4 }, point);
+  assert.ok(unknown.hitSolid); assert.deepEqual(unknown.position, first.a, "zero-normal axis point stays fail closed");
 });
 
 test("previously safe registration-face tolerance poses stay exactly in place and can leave", () => {
