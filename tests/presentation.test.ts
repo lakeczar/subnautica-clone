@@ -10,6 +10,8 @@ import { cellRechargePreview, distractionPreview } from "../src/sim/vehicles.js"
 import { dartPerformance } from "../src/sim/modules.js";
 import { executeCommand } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
+import { aimedInteraction } from "../src/sim/targeting.js";
+import { faceTarget, NORMAL_VIEWS, readyState } from "./targeting-support.js";
 import type { GameCommand } from "../src/sim/types.js";
 import { ExpeditionSession } from "../src/runtime/session.js";
 import { SaveRepository } from "../src/save/repository.js";
@@ -125,6 +127,54 @@ function viewFixture(t: test.TestContext) {
     },
   };
 }
+
+test("minimal prompt follows actual aimed actions across all real hosts, and is absent after looking away", (t) => {
+  const { view, get } = viewFixture(t), world = createWorldQueries();
+  const opening = readyState(); view.update(opening, false);
+  assert.equal(get("interact-prompt").innerHTML, "", "known regulator to the side does not prompt at stand-up");
+  for (const v of NORMAL_VIEWS) {
+    const s = readyState(); s.player.pose.position = { ...v.position }; s.player.mode = v.mode; faceTarget(s, v.id);
+    const before = structuredClone(s), target = aimedInteraction(s, world)!;
+    view.update(s, false);
+    const prompt = get("interact-prompt").innerHTML;
+    assert.ok(prompt.startsWith("<kbd>E</kbd> "), v.id);
+    assert.ok(prompt.replace(/&amp;/g, "&").includes(target.label), v.id);
+    assert.ok(!prompt.includes("Q scan"), "no scanner-less scan promise");
+    const result = executeCommand(s, { type: "interact" }, world);
+    assert.ok(!result.events.some(e => e.type === "notice" && e.error), v.id);
+    assert.deepEqual(s, before, "presentation and target queries are pure");
+    s.player.pose.yaw += Math.PI; view.update(s, false);
+    const away = aimedInteraction(s, world);
+    if (!away) assert.equal(get("interact-prompt").innerHTML, "", v.id + " looking away");
+  }
+});
+
+test("minimal per-verb prompt names collect, gather, sort, tend, empty, review, read, services, board, recovery and cache actions", (t) => {
+  const { view, get } = viewFixture(t);
+  const render = (s: ReturnType<typeof readyState>, id: string): string => { faceTarget(s, id); view.update(s, false); return get("interact-prompt").innerHTML; };
+  const s = readyState(); s.player.mode = "walking"; s.player.pose.position = { x: 8, y: 1.2, z: -32.5 };
+  assert.match(render(s, "island_workshop_scraps"), /<small>Collect<\/small>/);
+  addItem(s, "essential_tools", 1, "equipment", "tools");
+  assert.match(render(s, "island_workshop_scraps"), /Collect · Q scan/);
+  const n = s.world.resources.find(n => n.id === "island_workshop_scraps")!; n.stock = 0;
+  assert.match(render(s, n.id), /Sort · 20 s/); n.reserve = 0;
+  assert.match(render(s, n.id), /Empty/); assert.ok(!get("interact-prompt").innerHTML.includes("<kbd>E</kbd>"));
+  s.player.pose.position = { x: 13, y: 1.2, z: -32.5 };
+  assert.match(render(s, "island_shore_crop_east"), /Gather/);
+  s.world.resources.find(n => n.id === "island_shore_crop_east")!.stock = 0;
+  assert.match(render(s, "island_shore_crop_east"), /Tend · 20 s/);
+  s.player.pose.position = { x: 10, y: 1.2, z: -36.3 };
+  assert.match(render(s, "C03"), /Inspect/); discover(s, "C03"); assert.match(render(s, "C03"), /Notebook/);
+  assert.match(render(s, "workshop_services"), /Use/);
+  s.player.mode = "swimming"; s.player.pose.position = { x: -24, y: -8, z: -6.5 };
+  assert.match(render(s, "mara_reef_note"), /Read/);
+  s.player.pose.position = { x: 60, y: -20, z: -30 };
+  const v = makeVehicle("prompt-dart", "dart", { x: 60, y: -20, z: -32 }, "dart_hold"); s.fleet.vehicles.push(v);
+  assert.match(render(s, v.id), /Dart <small>Board/); v.disabled = true;
+  assert.match(render(s, v.id), /Dart · disabled <small>Recover/);
+  s.fleet.vehicles = []; s.recovery.caches.push({ id: "prompt-cache", position: { x: 60, y: -20, z: -32 }, containerId: "cache_hold" });
+  addItem(s, "structural_alloy", 1, "cache_hold"); assert.match(render(s, "prompt-cache"), /Identified cargo cache <small>Open/);
+});
 
 test("recipe quantities use the same supported-cradle inputs as fabrication, without optimistic mutation", (t) => {
   const { view, get, click, commands } = viewFixture(t);

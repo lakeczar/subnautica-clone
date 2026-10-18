@@ -1,6 +1,8 @@
 import {
   DART_BUILD_POSE,
+  DART_BUILD_YAW,
   EVIDENCE,
+  HULLS,
   ITEMS,
   HULL_COLLIDERS,
   OPTIONAL_RECORD,
@@ -83,9 +85,9 @@ export function interactions(s: GameState): Interaction[] {
     if (!v.berth && v.hull !== "hearthline")
       targets.push({
         id: v.id,
-        label: v.disabled
-          ? `${v.hull} / disabled transponder`
-          : `${v.hull} / board`,
+        label: v.disabled || v.charge <= 0
+          ? `${HULLS[v.hull].label} · disabled`
+          : HULLS[v.hull].label,
         position: { ...v.pose.position, y: v.pose.position.y + 0.6 },
         kind: "vehicle",
       });
@@ -98,20 +100,6 @@ export function interactions(s: GameState): Interaction[] {
         kind: "cache",
       });
   return targets;
-}
-export function nearestInteraction(s: GameState): Interaction | null {
-  if (
-    s.opening.phase < 4 ||
-    s.player.controlledVehicleId ||
-    s.player.interiorId
-  )
-    return null;
-  return (
-    interactions(s)
-      .map((t) => ({ t, d: distance(s.player.pose.position, t.position) }))
-      .filter((a) => a.d < 4)
-      .sort((a, b) => a.d - b.d)[0]?.t ?? null
-  );
 }
 export function discover(s: GameState, id: EvidenceId): string {
   const def = EVIDENCE[id];
@@ -254,6 +242,7 @@ export function craft(
     const vid = nextId(s, "dart"),
       cargoId = `${vid}_hold`,
       v = makeVehicle(vid, "dart", DART_BUILD_POSE, cargoId);
+    v.pose.yaw = DART_BUILD_YAW;
     v.investment = { ...r.cost };
     s.fleet.vehicles.push(v);
     s.inventory.containers.push({

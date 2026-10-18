@@ -207,6 +207,8 @@ export type GameCommand =
 export type GameEvent =
   | { type: "movement-mode-changed"; mode: MovementMode }
   | { type: "foundation-boundary" }
+  | { type: "impact"; speed: number; hullLoss: number; origin: Vec3 }
+  | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook"; targetId: string }
   | { type: "notice"; message: string; error?: boolean }
   | {
       type: "sound";
@@ -242,4 +244,5 @@ export interface WorldQueries {
   supportHeight(x: number, z: number, fromY: number): number;
   moveCapsule(origin: Vec3, delta: Vec3, capsule: Capsule): MoveResult;
   clearance(origin: Vec3, capsule: Capsule): boolean;
+  lineOfSight(a: Vec3, b: Vec3, ignore?: readonly string[]): boolean;
 }

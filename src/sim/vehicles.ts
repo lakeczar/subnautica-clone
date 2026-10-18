@@ -109,7 +109,7 @@ export function board(s: GameState, id: string): string | null {
   s.player.pose.yaw = v.pose.yaw;
   s.player.pose.pitch = v.pose.pitch;
   s.player.velocity = { ...v.velocity };
-  s.feedback = `Boarded ${HULLS[v.hull].label}. Hull ${HULLS[v.hull].initialDepth} m; personal suit ${personalLimit(s)} m. WASD steer, Space/C rise/dive, E exit. Quiet throttle avoids acoustic attention.`;
+  s.feedback = `${HULLS[v.hull].label} · mouse or arrows steer · W/S thrust · A/D slide.`;
   return null;
 }
 export function exit(s: GameState, world: WorldQueries): string | null {

@@ -223,6 +223,50 @@ export const SOLIDS: readonly Solid[] = [
 type Axis = "x" | "y" | "z";
 const AXES: readonly Axis[] = ["x", "y", "z"];
 
+const finitePoint = (p: Vec3): boolean => AXES.every(axis => Number.isFinite(p[axis]));
+const subtract = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
+const unitClamp = (n: number): number => Math.max(0, Math.min(1, n));
+
+/** Squared distance between finite segments, including point/parallel cases. */
+function segmentDistanceSquared(a: Vec3, b: Vec3, c: Vec3, d: Vec3): number {
+  const u = subtract(b, a), v = subtract(d, c), r = subtract(a, c);
+  const uu = dot(u, u), vv = dot(v, v), ur = dot(u, r), vr = dot(v, r), uv = dot(u, v);
+  let s = 0, t = 0;
+  if (uu <= 1e-12) t = vv <= 1e-12 ? 0 : unitClamp(vr / vv);
+  else if (vv <= 1e-12) s = unitClamp(-ur / uu);
+  else {
+    const denominator = uu * vv - uv * uv;
+    s = denominator > 1e-12 ? unitClamp((uv * vr - ur * vv) / denominator) : 0;
+    t = (uv * s + vr) / vv;
+    if (t < 0) { t = 0; s = unitClamp(-ur / uu); }
+    else if (t > 1) { t = 1; s = unitClamp((uv - ur) / uu); }
+  }
+  return (r.x + u.x * s - v.x * t) ** 2 +
+    (r.y + u.y * s - v.y * t) ** 2 + (r.z + u.z * s - v.z * t) ** 2;
+}
+
+function segmentHitsSolid(a: Vec3, b: Vec3, solid: Solid): boolean {
+  let enter = 0, exit = 1;
+  for (const axis of AXES) {
+    const delta = b[axis] - a[axis];
+    if (Math.abs(delta) < 1e-12) {
+      if (a[axis] < solid.min[axis] || a[axis] > solid.max[axis]) return false;
+    } else {
+      const t1 = (solid.min[axis] - a[axis]) / delta, t2 = (solid.max[axis] - a[axis]) / delta;
+      enter = Math.max(enter, Math.min(t1, t2));
+      exit = Math.min(exit, Math.max(t1, t2));
+      if (enter > exit) return false;
+    }
+  }
+  return true;
+}
+
+// Recognize only supplied registered rib geometry, including detached copies.
+// Empty/local rosters and unrelated solids reusing an id acquire no global ribs.
+const OPTICAL_RIBS = new Map(SOLIDS.filter(s => s.id.startsWith("reef.rib.")).map((solid, i) =>
+  [solid.id, { solid, rib: RIB_SEGMENTS[i]! }] as const));
+
 function sweep(
   origin: Vec3,
   delta: Vec3,
@@ -272,6 +316,28 @@ export function createWorldQueries(
   floorHeight: (x: number, z: number) => number = surfaceHeight,
 ): WorldQueries {
   return {
+    lineOfSight(a, b, ignore = []) {
+      if (!finitePoint(a) || !finitePoint(b)) return false;
+      const length = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+      const steps = Math.max(1, Math.ceil(length / 0.15));
+      if (!Number.isFinite(steps) || steps > 100000) return false;
+      for (const solid of solids) {
+        if (!finitePoint(solid.min) || !finitePoint(solid.max) ||
+            AXES.some(axis => solid.min[axis] > solid.max[axis])) return false;
+        if (ignore.includes(solid.id)) continue;
+        const registered = OPTICAL_RIBS.get(solid.id);
+        const rib = registered && AXES.every(axis => solid.min[axis] === registered.solid.min[axis] &&
+          solid.max[axis] === registered.solid.max[axis]) ? registered.rib : null;
+        if (rib ? segmentDistanceSquared(a, b, rib.a, rib.b) <= rib.radius ** 2
+          : segmentHitsSolid(a, b, solid)) return false;
+      }
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps, x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t;
+        const floor = floorHeight(x, z);
+        if (!Number.isFinite(floor) || a.y + (b.y - a.y) * t < floor - 0.02) return false;
+      }
+      return true;
+    },
     clearance(origin, capsule) {
       const rx = capsule.halfWidth ?? capsule.radius, rz = capsule.halfLength ?? capsule.radius;
       if (

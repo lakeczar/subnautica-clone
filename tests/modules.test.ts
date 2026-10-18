@@ -126,7 +126,8 @@ test("trim changes only piloted Dart quiet/boost targets, preserving normal spee
     const speeds: number[] = [], drains: number[] = [], distances: number[] = [];
     for (const installed of [false, true]) {
       const s = trimGame(installed), v = s.fleet.vehicles[0]!;
-      v.pose.position = { x: -50, y: -20, z: 20 }; v.pose.pitch = 0;
+      // This speed fixture uses fixed -Z coordinates, independent of the fabrication heading.
+      v.pose.position = { x: -50, y: -20, z: 20 }; v.pose.pitch = 0; v.pose.yaw = 0;
       s.player.pose.position = { ...v.pose.position }; assert.equal(board(s, v.id), null);
       const speed = mode.startsWith("quiet") ? installed ? 4.2 : 3 : mode === "boost" ? installed ? 9 : 11 : 8;
       v.velocity = { x: 0, y: 0, z: -speed }; s.player.velocity = { ...v.velocity };
