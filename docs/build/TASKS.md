@@ -746,3 +746,10 @@ Full binding brief, exact findings/paths, root geometric reproduction, actual ca
 ### Public checkpoint synchronized while POLISH-1C runs
 
 Root confirmed2263025 pushed, rewrote #4/#3 descriptions to the current provisional1A+1B assembly/263-check status and open1C visual findings, and verified complete host body/base/head/draft readbacks. #3 retains M0-only production claims. Existing final1B regulator/cockpit images and paid-launch recording plus a full-sequence GIF are published on pr-assets, source-attributed and byte-verified over public HTTP. [Evidence](evidence/POLISH-1B-INTEGRATION.md#public-review-evidence) records receipts and limitations. No new root browser, production edits or duplicate worker; stack linked/unwatched. Active1C ownership and notification-driven next action remain unchanged.
+
+
+### POLISH-1C terminal, assembled and ready for combined review
+
+Task siltwake-polish-1c-sol-max-3c6ed94 read/acknowledged terminal, no pending children/questions. Source131079f9985a89ee969079f85c2e8e2cd18b289e and evidence37f0eee3079ad6c02803bf23eb5c6803fd3bacf5, clean bound worktree t3-bda9b21f. Root independently verified actual Sol6.1/max in three turn_context records, inspected the complete six-path diff and real stock/empty/motion evidence, and assembled atcd4ef9f832db52742aa127399b5a595ca19fca4b. Root passes265 tests/typecheck/build/economy, verifies200 artifacts/37 source/25 test/27 build hashes, independently reproduces entire80-tick reload and28 codec roundtrips, and verifies positive rendered clearance at the exact old/new west coordinates. See [reconciliation](evidence/POLISH-1C-INTEGRATION.md) for precise claims, costs and limits.
+
+All1A/1B/1C authors are terminal; ownership released and owned resources closed. The full composed batch remains provisional. [Independent review round1](tasks/POLISH-1-SLICE1-REVIEW-R1.md) uses pre-polish61fcc3033292f9412a795a2388616a4f926ece22 as diff base, one new frozen candidate and two fresh non-author reviewers. No production change until their reports are reconciled. Slice2 and required stage1 Opus remain next after this gate.
