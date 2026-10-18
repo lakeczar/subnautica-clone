@@ -187,6 +187,7 @@ function viewFixture(t: test.TestContext) {
   };
   return {
     view, commands, audio, markup: () => root.innerHTML, get: (id: string) => root.querySelector(`#${id}`),
+    structure: (selector: string) => root.querySelectorAll(selector)[0]!,
     active: () => document.activeElement,
     timerCount: () => timers.size,
     wall: (milliseconds: number) => {
@@ -1204,6 +1205,45 @@ test("panel outcomes are singular, preserve focus, and clear on switch/close whi
   assert.equal(get("notification").textContent, "Export before closing.");
 });
 
+test("notice reflow preserves panel commands, focus and scroll while full notices survive a hidden HUD", (t) => {
+  const { view, get, active, commandButton, activeCommand, wall, structure } = viewFixture(t), s = readyState();
+  addItem(s, "structural_alloy", 2, "diver");
+  view.update(s, false); view.showGame(); view.openPanel("inventory", s);
+  const command: GameCommand = { type: "store-materials", from: "diver", to: "pod_locker" };
+  const button = commandButton(command); button.focus();
+  get("game-panel").scrollTop = 137;
+  const error = "Browser storage refused the save (quota or permissions). The local record is unchanged. Automatic saving is disabled. Export save from the menu to keep this expedition.";
+  view.persistence("", false, true, false);
+  view.notify(error, true, { channel: "persistence" });
+  view.notify("Graphics restored. Resume when ready.", false, { channel: "system" });
+  view.notify("Nothing moved. The destination needs space.", true);
+  assert.equal(active(), button);
+  assert.equal(get("game-panel").scrollTop, 137);
+  assert.deepEqual(activeCommand(), command);
+  assert.equal(get("notification").textContent, error);
+  assert.equal(get("panel-feedback").textContent, "Nothing moved. The destination needs space.");
+  // The common layout owns the sidebar, not the hidden exploration main or
+  // replaceable panel rows. Header and full feedback share one sized group.
+  const notices = structure(".session-notices"), hud = structure("#hud"), panel = structure("#game-panel");
+  assert.equal(notices.parentElement, hud.parentElement);
+  assert.equal(notices.parentElement, panel.parentElement);
+  for (const id of ["session-warning", "notification", "system-status", "graphics-error"])
+    assert.ok(notices.contains(structure(`#${id}`)));
+  const chrome = structure(".panel-chrome");
+  assert.ok(chrome.contains(structure("#panel-return")));
+  assert.ok(chrome.contains(structure("#panel-feedback")));
+  assert.ok(!chrome.contains(structure("#panel-content")));
+  view.persistence("", true, true, false);
+  wall(3000);
+  assert.equal(get("system-status").hidden, true);
+  assert.equal(get("notification").hidden, false, "status expiry cannot shorten the full save error");
+  assert.equal(active(), button); assert.equal(get("game-panel").scrollTop, 137);
+  view.closePanel(); view.showMenu(true);
+  assert.equal(get("hud").hidden, true); assert.equal(get("notification").textContent, error);
+  wall(8999); assert.equal(get("notification").hidden, false);
+  wall(1); assert.equal(get("notification").hidden, true);
+});
+
 test("real view active clocks, wall timers and disposal stay bounded and do not repeatedly announce unchanged calls", (t) => {
   const { view, get, timerCount, wall } = viewFixture(t), s = readyState();
   s.player.mode = "swimming"; s.player.pose.position = { x: -55, y: -15, z: 30 };
@@ -1291,7 +1331,7 @@ test("pulse HUD stays contextual while Hold retains the actual cost, selected ce
 
 
 test("interaction stack preserves full receipts during danger and save errors; repeated live updates cancel on all boundaries", (t) => {
-  const { view, get, wall, timerCount, markup } = viewFixture(t), s = readyState();
+  const { view, get, wall, timerCount, markup, structure } = viewFixture(t), s = readyState();
   s.player.mode = "swimming"; s.player.pose.position = { x: 100, y: -30, z: -100 }; s.player.vitals.oxygen = 30;
   view.update(s, false); view.showGame(); view.update(s, false);
   const refusal = "No room for this bundle. Stow cargo, or deploy the 24 CU salvage buoy. Nothing collected.";
@@ -1319,7 +1359,11 @@ test("interaction stack preserves full receipts during danger and save errors; r
   assert.equal(get("action-announce").textContent, "");
   view.showGame(); view.notify("dispose callback"); view.dispose(); wall(0); assert.equal(timerCount(), 0);
   assert.match(markup(), /id="interaction-stack"[^]*id="interact-prompt"[^]*id="action-result"[^]*id="look-action"/);
-  assert.match(markup(), /<\/main>[^]*id="alert-stack"/);
+  const encounter = structure(".encounter-stack");
+  assert.ok(encounter.contains(structure("#hazard")));
+  assert.ok(encounter.contains(structure("#interaction-stack")));
+  assert.ok(!encounter.contains(structure("#pilot-guidance")));
+  assert.ok(!encounter.contains(structure("#notification")));
 });
 
 test("current notice state renders matching hazard coverage before dedup; percentages never chatter", (t) => {
