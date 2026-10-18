@@ -1,6 +1,6 @@
 # Construction plan
 
-**Complete experience correction accepted on 4baaa34**, production d9aaf63: fresh Astra xhigh and Sol 6.1 max each accept all eight criteria, with root concurrence and no remaining blocker. [Paired R3](reviews/POLISH-1-EXPERIENCE-R3.md). Fresh [Opus stage1 R2](tasks/OPUS-STAGE1-R2.md) verifies experience before M2 breadth. All prior active/pending labels below are historical; TASKS records live dispatch.
+**Stage1 is held for newly reproduced OS2-01**, despite historical complete-experience paired acceptance on4baaa34 (productiond9aaf63). [Opus R2 disposition](reviews/OPUS-STAGE1-R2-DISPOSITION.md) confirms an unchecked surface correction creates rib overlap and current collision prevents escape. No production change yet. [Same-context consultation](tasks/OPUS-STAGE1-R2-IMPLEMENTATION-CONSULT.md) precedes a bounded Sol correction, fresh affected Astra/Sol gate and fresh Opus verification; then M2–M4. OS2-02/03/07 remain bounded refinements. OS2-04/06 are first-M2-benchmark requirements before expanding content. All older active/pending labels below are historical; TASKS records live ownership.
 
 Astra R3 accepts all eight complete-experience criteria on **4baaa34**, with report/evidence independently inspected. Sol R3 remains pending on the same frozen candidate; [interim reconciliation](reviews/POLISH-1-EXPERIENCE-R3.md). No paired acceptance or production change. Fresh Opus verification and M2–M4 remain next.
 

@@ -1,8 +1,10 @@
 # Build status
 
-## Current checkpoint — controls and preparation/encounter slices accepted
+## Current checkpoint — stage1 held for a reproduced movement trap
 
-**Complete experience batch accepted:** both fresh non-author Astra xhigh and Sol 6.1 max R3 reviewers accept all eight criteria on **4baaa34f3c5cdb859d75e320e4f95a53a669ef1e**, production **d9aaf6356cb320f283887922abf97ed8bdc54f59**; coordinator inspection concurs. [Paired R3 reconciliation](reviews/POLISH-1-EXPERIENCE-R3.md). Both R2 blockers are closed and R1 fixes remain intact. Root verifies actual reviewer runtimes, all156/255 reviewer payloads, current build identity, raw layouts and paid export; 400 tests/typecheck/build/both economies pass. All implementation authors and Astra/Sol reviewers are terminal and released. **Fresh Opus 5.5/high stage1 R2 is active** on c299ba9d406f124062a9f411f60b9f1e48ee4a88 with unchanged accepted production, then M2–M4. [Review brief](tasks/OPUS-STAGE1-R2.md); TASKS records actual dispatch. Earlier active/next labels below are historical.
+**Fresh Opus stage1 R2 is complete and recommends one focused correction before M2.** Root independently reproduces OS2-01: surfacing beside a reef rib creates overlap, and the overlap rule then prevents escape, including after loading the actual saved trap. [Disposition and root evidence](reviews/OPUS-STAGE1-R2-DISPOSITION.md). All220 Opus payloads, source/build/config and cleanup receipts are verified. The short reproduction fails both actual-export movement and a minimal15-tick clear-start case. No production fix has been made; source remains **d9aaf6356cb320f283887922abf97ed8bdc54f59**.
+
+Historical **complete-experience technical acceptance on4baaa34** remains recorded, including400 tests/typecheck/build/economies and the corrected layouts; it does not override the newly discovered blocker. M0/M1 and earlier slices retain bounded acceptance. The Opus reviewer is terminal and its report integrated. [Same-context implementation consultation](tasks/OPUS-STAGE1-R2-IMPLEMENTATION-CONSULT.md) is prepared; TASKS records actual dispatch before it is considered active. Then bounded Sol6.1/max correction, fresh Astra/Sol acceptance and fresh Opus verification, followed by M2–M4. OS2-02/03/07 are bounded refinements; OS2-04/06 are M2 benchmark obligations. Other input/wayfinding observations remain hypotheses. Earlier active/next labels below are historical.
 
 **POLISH-1 slice2 is accepted on c4de57928347c89ea7602a13d1e14a2849caf722**, production **c32d8c5d9caeef12e658e697bed78505155cb6b6**. Both fresh non-author Astra xhigh and Sol6.1/max reviewers accept all eight criteria and close both R1 findings; coordinator inspection concurs. [Paired reconciliation](reviews/POLISH-1-SLICE2-R2.md). Slice1 remains accepted ond031803 (production5f25810); M0/M1 remain accepted. Root branch `feat/siltwake-first-expedition`; game/siltwake remains M0a2cb19f. Use Git for current HEAD.
 
@@ -70,7 +72,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active fresh Opus 5.5/high stage1 R2 completion without polling. It reviews clean parent c299ba9d406f124062a9f411f60b9f1e48ee4a88, unchanged production d9aaf63, with both independent acceptance records and the complete prior scope/findings/advice. Reconcile any substantive findings, obtain detailed implementation advice and use Sol 6.1/max for accepted changes with affected reviews. If ready, continue M2 world/fleet work, then M3/M4 under the standing protocol. TASKS records actual ownership/ID. Main merge/deployment remain owner actions.
+Obtain detailed correction advice from the completed Opus stage1 R2 context using the committed consultation brief. Root has isolated the real movement and persistence symptoms and recorded explicit safety objections. Reconcile advice before assigning Sol exclusive production paths; receive completion notifications without polling. Correct OS2-01 and bounded refinements, inspect the combined result, obtain fresh Astra/Sol affected acceptance and fresh Opus verification, then advance M2 world/fleet benchmark and M3/M4 automatically. No new owner permission is required. Main merge/deployment remain owner actions. TASKS owns exact active IDs.
 
 ### Historical execution and evidence
 
