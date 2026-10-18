@@ -2,7 +2,7 @@
 
 ## Current checkpoint — controls and preparation/encounter slices accepted
 
-**Experience R2 update:** Astra reportc429a1e requests changes on frozen3e740a8; root confirms a full save error covering an enabled fabrication button and seven pilot warnings covering the full exit refusal at960×600. [Interim reconciliation](reviews/POLISH-1-EXPERIENCE-R2.md) verifies175 payloads, actual Astra/xhigh and current-source defect probes. Sol R2 remains independent on the same frozen candidate. The [composition correction](tasks/POLISH-1-EXPERIENCE-COMPOSITION-FIX.md) is prepared for one Sol6.1/max worker; TASKS alone records actual dispatch. No new production change or acceptance. Fresh full-batch pair after correction, Opus verification, then M2–M4 remain.
+**Experience R2 update:** both Astra reportc429a1e and Sol report8c078ea request changes on frozen3e740a8 for the same two defects: a full save error covers an enabled fabrication button, and seven pilot warnings cover part of the full exit refusal at960×600. [Paired reconciliation](reviews/POLISH-1-EXPERIENCE-R2.md) verifies both actual runtimes and175/173 payloads; root inspected both production captures and recalculated the overlaps. Both reviewers are terminal/released. The sole active [composition correction](tasks/POLISH-1-EXPERIENCE-COMPOSITION-FIX.md) is Sol6.1/max on0f8ae44 and has received both completed reports. TASKS records actual ID/steering. No new production change or acceptance. Fresh full-batch pair after correction, Opus verification, then M2–M4 remain.
 
 **POLISH-1 slice2 is accepted on c4de57928347c89ea7602a13d1e14a2849caf722**, production **c32d8c5d9caeef12e658e697bed78505155cb6b6**. Both fresh non-author Astra xhigh and Sol6.1/max reviewers accept all eight criteria and close both R1 findings; coordinator inspection concurs. [Paired reconciliation](reviews/POLISH-1-SLICE2-R2.md). Slice1 remains accepted ond031803 (production5f25810); M0/M1 remain accepted. Root branch `feat/siltwake-first-expedition`; game/siltwake remains M0a2cb19f. Use Git for current HEAD.
 
@@ -70,7 +70,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the remaining independent Sol R2 completion without polling and execute the bounded composition correction for confirmed Astra R2 findings. TASKS records actual correction ownership/ID. Reconcile both returns before fresh same-candidate full-batch Astra/Sol review, then Opus verification and M2–M4. Current provisional production5090866/source555ac20 still passes399 checks/build/economies but has the two confirmed layout defects. Main merge/deployment remain owner actions.
+Receive the active Sol composition correction completion without polling. Both R2 reports are reconciled as the same two blockers. Inspect the correction, then fresh same-candidate full-batch Astra/Sol review, Opus verification and M2–M4. TASKS records actual ownership/ID. Current provisional production5090866/source555ac20 still passes399 checks/build/economies but has the two confirmed layout defects. Main merge/deployment remain owner actions.
 
 ### Historical execution and evidence
 

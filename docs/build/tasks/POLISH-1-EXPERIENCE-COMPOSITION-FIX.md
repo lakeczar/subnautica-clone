@@ -1,8 +1,10 @@
 # Experience R2 — notice and action composition correction
 
-Implement the two confirmed Astra R2 defects with one bounded Sol6.1/max author. Root supplies the exact committed parent at dispatch; current production remains555ac20. Sol R2 is independently reviewing3e740a8; do not contact or inspect unfinished peer work. Root alone reconciles its return and any amendment. This is a correction within the complete experience batch, not a new acceptance boundary or M2 expansion.
+Implement the two confirmed R2 defects with one bounded Sol6.1/max author. Original exact parent0f8ae44 remains unchanged; current production remains555ac20. Both independent reviewers are now terminal and identify the same two defects; root has steered Sol's completed evidence to the existing author. No new blocker/path/interface is added. This is a correction within the complete experience batch, not a new acceptance boundary or M2 expansion.
 
 Read STATUS first, PLAN/CONTRACTS, the revised build input and relevant UI/delivery specifications, whole-batch POLISH-1-EXPERIENCE.md, REVIEW-R2's eight criteria, both original R1 reports/disposition, completed ASTRA-R2 report and R2 reconciliation. The original stage1 Opus report/advice/disposition remain authority for intended outcomes. All source and prior author ownership is released; only root dispatches.
+
+Completed Sol report8c078ea is now also required context: SOL-EXP-R2-01/02 map directly to ASTRA-EXP-R2-01/02. Its immutable `/tmp/siltwake-polish-1-experience-sol-r2/` archive adds actual production pilot proof (`production-seven-warning-look-refusal-verified-960.*`) using valid staged starvation/pursuit and explicitly untrusted E events, plus a pointer-lock negative control. Include the starvation copy variant in the existing checks. Its1280 full-notice native fixture omits “save” from the actual export instruction; use exact current production strings for final checks, not that shortened fixture. Existing paths/parent/port/artifacts/acceptance remain unchanged.
 
 ## Ownership and invariants
 
