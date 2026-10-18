@@ -1,5 +1,7 @@
 # Shared implementation direction
 
+R2 composition correction receives hud.css, panels.css and private constructor layout grouping in view.ts, plus bounded existing presentation/preparation tests and its report. [Task](tasks/POLISH-1-EXPERIENCE-COMPOSITION-FIX.md) owns exact constraints: allocate space for notices/panel controls and full warning/result/look content; preserve IDs/actions, all semantic/timing/focus/visibility/public interfaces, save/input/simulation and copy. No second notification model or layout polling. All earlier source owners are released; Sol R2 remains report-only on3e740a8. TASKS establishes actual dispatch; no overlapping writer.
+
 Layout source555ac20 is provisionally integrated at5090866; author ownership is released. Only private constructor grouping and CSS placement changed; existing IDs, action attributes, public signatures, lifetime/visibility/focus behavior and simulation/save/input remain unchanged. Session notices stay outside HUD, call stays inside. Compact warning lanes use prompt presence; fresh complete R2 must assess surrounding menu/panel and warning compositions.
 
 SOL-EXP-01 joins ASTRA-EXP-R1-01 in the existing layout author assignment; paths and all semantic/public-interface constraints remain unchanged. Both R1 reviewers are terminal/released; their reports were independent. Author keeps parentf70f4c8 and now verifies five-warning prompt/result/look plus call/save/status composition together. No second builder or overlapping edits.

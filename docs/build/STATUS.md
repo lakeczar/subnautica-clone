@@ -2,6 +2,8 @@
 
 ## Current checkpoint — controls and preparation/encounter slices accepted
 
+**Experience R2 update:** Astra reportc429a1e requests changes on frozen3e740a8; root confirms a full save error covering an enabled fabrication button and seven pilot warnings covering the full exit refusal at960×600. [Interim reconciliation](reviews/POLISH-1-EXPERIENCE-R2.md) verifies175 payloads, actual Astra/xhigh and current-source defect probes. Sol R2 remains independent on the same frozen candidate. The [composition correction](tasks/POLISH-1-EXPERIENCE-COMPOSITION-FIX.md) is prepared for one Sol6.1/max worker; TASKS alone records actual dispatch. No new production change or acceptance. Fresh full-batch pair after correction, Opus verification, then M2–M4 remain.
+
 **POLISH-1 slice2 is accepted on c4de57928347c89ea7602a13d1e14a2849caf722**, production **c32d8c5d9caeef12e658e697bed78505155cb6b6**. Both fresh non-author Astra xhigh and Sol6.1/max reviewers accept all eight criteria and close both R1 findings; coordinator inspection concurs. [Paired reconciliation](reviews/POLISH-1-SLICE2-R2.md). Slice1 remains accepted ond031803 (production5f25810); M0/M1 remain accepted. Root branch `feat/siltwake-first-expedition`; game/siltwake remains M0a2cb19f. Use Git for current HEAD.
 
 [Correction inspection](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md) records359/359 tests, typecheck/build, exact source/build identity, resolved root defect probes and final author traces. Both R2 reviewers independently pass359 checks/build and verify retained evidence. Actual models/efforts and all reviewer artifacts are verified. Earlier composed workflow/reload retains660350b attribution; simulation/save/economy are unchanged by the two corrections. No further production changes occurred during review.
@@ -68,7 +70,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active fresh Astra xhigh/Sol6.1 max R2 completion notifications without polling; both review frozen3e740a8 with the complete corrected experience scope. Both original findings/dispositions, current correction and evidence limits remain in scope. Current provisional production5090866/source555ac20 passes399 checks/build/economies. Receive completion notifications without polling, reconcile any findings, then fresh Opus verification before M2–M4. Main merge/deployment remain owner actions.
+Receive the remaining independent Sol R2 completion without polling and execute the bounded composition correction for confirmed Astra R2 findings. TASKS records actual correction ownership/ID. Reconcile both returns before fresh same-candidate full-batch Astra/Sol review, then Opus verification and M2–M4. Current provisional production5090866/source555ac20 still passes399 checks/build/economies but has the two confirmed layout defects. Main merge/deployment remain owner actions.
 
 ### Historical execution and evidence
 

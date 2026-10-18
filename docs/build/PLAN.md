@@ -1,5 +1,7 @@
 # Construction plan
 
+Current R2 Astra reportc429a1e closes both original R1 cases but requires two adjacent composition corrections; [root disposition](reviews/POLISH-1-EXPERIENCE-R2.md). One bounded [Sol composition owner](tasks/POLISH-1-EXPERIENCE-COMPOSITION-FIX.md) may proceed independently of Sol R2's untouched frozen review. Reconcile both returns before fresh complete-batch paired review and Opus verification; M2–M4 remain required. The following freeze/active labels are historical checkpoints.
+
 The combined layout correction555ac20/reportfab1702 is inspected and provisionally integrated at5090866. Root399 checks/build/economies pass; both reproduced R1 overlaps are resolved in retained final production/native cases. All implementation ownership is released. Freeze for [fresh complete R2](tasks/POLISH-1-EXPERIENCE-REVIEW-R2.md), then Opus before M2–M4.
 
 Both independent experience R1 reports now request changes; [paired reconciliation](reviews/POLISH-1-EXPERIENCE-R1.md) accepts two P2 overlaps. The same active Sol layout author corrects both without new source ownership, under the amended [brief](tasks/POLISH-1-EXPERIENCE-CALL-LAYOUT.md). Inspect the composed result, then fresh paired R2 and Opus before M2–M4.
