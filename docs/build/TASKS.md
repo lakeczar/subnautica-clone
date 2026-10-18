@@ -1045,3 +1045,7 @@ Task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3
 **ACCEPT** all eight criteria and explicit closure of both R1 findings, no new blockers. [Interim reconciliation](reviews/POLISH-1-SLICE2-R2.md) retains optional trim-copy/text/HUD and evidence limits. Sol R2 remains independent on originalc4de579; no peer result shared, polling or duplicate task. Production remainsc32d8c5; no whole-slice acceptance yet.
 
 Prepared [stage1 Opus experience brief](tasks/OPUS-STAGE1-R1.md) for after paired reconciliation. It covers the full implemented stage, OD2-01–10, live bounded control/menu/loop/visual taste sampling, concise-copy priority and honest input/hardware limits. It is not dispatched or assigned. Root has no browser/server/check process; receive remaining Sol result, then proceed under the standing stage loop.
+
+### Public Astra R2 checkpoint synchronized
+
+PR #4/#3 now record verified Astra ACCEPT/all eight criteria/both R1 findings closed on **c4de579**, with independent Sol R2 pending. Full body/base/head/draft readbacks at **1a29b3d** / M0 **a2cb19f** match `/tmp/siltwake-m1-pr/slice2-r2-astra-verification.json`. Source c32d8c5/359 checks and all published media keep their original attribution; no full-slice acceptance or new production change. All stack layers linked/unwatched. Only Sol R2 is outstanding; prepared stage1 Opus has not been dispatched. Root has no browser/server/check process.
