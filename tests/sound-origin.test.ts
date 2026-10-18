@@ -179,3 +179,15 @@ test("activation, mute, volume, pause and disposal keep one owned audio graph", 
   assert.equal(probe.closed, 1);
   assert.equal(probe.disconnected, disconnected, "disposal is idempotent and cannot reactivate");
 });
+
+test("impact equipment thud stays centred even with an accidental origin and coalesces bursts", (t) => {
+  const { audio, probe } = soundFixture(t);
+  const s = createGame(); audio.update(s, true);
+  audio.event({ type: "sound", cue: "impact", origin: { x: 90, y: 0, z: 0 } }, s);
+  assert.equal(AudioProbe.pans.at(-1)!.value, 0);
+  const count = probe.oscillators.length;
+  for (let i = 0; i < 30; i++) audio.event({ type: "sound", cue: "impact" }, s);
+  assert.equal(probe.oscillators.length, count);
+  audio.update(s, false);
+  assert.ok(probe.oscillators.at(-1)!.stops.includes(undefined));
+});

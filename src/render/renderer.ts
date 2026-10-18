@@ -5,6 +5,8 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import type { GameState } from "../sim/types.js";
 import { eyeHeight } from "../sim/state.js";
+import type { InteractionHost } from "../sim/targeting.js";
+import { createTargetCue } from "./targetCue.js";
 import { inCanopyAir } from "../sim/inventory.js";
 import { createCelMaterial, createGlassMaterial, updateOpticalUniforms } from "./materials.js";
 import { createEnvironment } from "./environment.js";
@@ -15,7 +17,7 @@ import { createAtmosphere } from "./atmosphere.js";
 
 export type Quality = "rich" | "light";
 export interface GameRenderer {
-  present(state: GameState | null): void;
+  present(state: GameState | null, overlay?: { target: InteractionHost | null }): void;
   setQuality(quality: Quality): void;
   resize(): void;
   dispose(): void;
@@ -67,7 +69,7 @@ export function createRenderer(
     const expedition = createExpeditionArt(scene, cel, glass);
     for (const mesh of scene.meshes) mesh.renderingGroupId = 1;
     const { water, sky } = createAtmosphere(scene);
-    let eye = 1.62;
+    const cue = createTargetCue(scene);
     let presented = 0;
     canvas.dataset.renderer = "WebGL 2";
     canvas.dataset.meshes = String(scene.meshes.length);
@@ -114,10 +116,11 @@ export function createRenderer(
       scene.executeWhenReady(whenReady);
     });
     return {
-      present(state) {
+      present(state, overlay) {
         if (disposed || !available) return;
         const time = state ? state.tick / 60 : 0;
         expedition.update(state);
+        cue.update(state ? overlay?.target ?? null : null);
         if (state) {
           const pose = state.player.pose;
           if (state.opening.phase < 4) {
@@ -140,10 +143,8 @@ export function createRenderer(
                 new Vector3(DART_SEAT.x, DART_SEAT.y, DART_SEAT.z),
                 hull.computeWorldMatrix(true),
               ));
-              eye = eyeHeight(state);
             } else {
-              eye += (eyeHeight(state) - eye) * 0.16;
-              camera.position.set(pose.position.x, pose.position.y + eye, pose.position.z);
+              camera.position.set(pose.position.x, pose.position.y + eyeHeight(state), pose.position.z);
             }
             const direction = new Vector3(
               Math.sin(pose.yaw) * Math.cos(pose.pitch),
@@ -156,13 +157,12 @@ export function createRenderer(
         } else {
           camera.position.set(25, 13, 44);
           camera.setTarget(new Vector3(-1, -0.8, -20));
-          eye = 1.62;
         }
         const interior = !!state && (inCanopyAir(state) || state.player.mode === "interior");
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
         const fog = Color3.FromHexString(interior ? "#486e76" : underwater ? "#226e7e" : "#96c5b9");
         scene.clearColor = new Color4(fog.r, fog.g, fog.b, 1);
-        updateOpticalUniforms([cel, glass, water, sky], camera.position, state);
+        updateOpticalUniforms([cel, glass, water, sky, cue.material], camera.position, state);
         cel.setFloat("underwater", underwater);
         cel.setFloat("time", time);
         water.setFloat("time", time);
@@ -181,6 +181,7 @@ export function createRenderer(
         cancelReady();
         engine.onContextLostObservable.remove(lost);
         engine.onContextRestoredObservable.remove(restored);
+        cue.dispose();
         scene.dispose();
         engine.dispose();
       },

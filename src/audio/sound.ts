@@ -99,8 +99,8 @@ export class Soundscape {
     const c = this.context;
     this.volume();
     if (this.settings.muted || this.settings.volume <= 0) return;
-    const key = `${e.cue}/${e.origin ? "spatial" : "centred"}`;
-    const priority = e.cue === "recovery" ? 4 : e.cue === "damage" ? 3 : e.cue === "warning" ? 2 : 1;
+    const key = `${e.cue}/${e.cue !== "impact" && e.origin ? "spatial" : "centred"}`;
+    const priority = e.cue === "recovery" ? 4 : (e.cue === "damage" || e.cue === "impact") ? 3 : e.cue === "warning" ? 2 : 1;
     // Collapse simultaneous body alarms and repeated calls without inventing a
     // spatial origin. A body alarm and a real threat can still sound together.
     if (c.currentTime - (this.lastCue.get(key) ?? -Infinity) < (e.cue === "warning" ? 1.2 : 0.09)) return;
@@ -119,6 +119,7 @@ export class Soundscape {
       warning: e.origin ? 145 : 280,
       refuge: 220,
       damage: 65,
+      impact: 52,
       scan: 700,
       opening: 90,
       recovery: 196,
@@ -131,7 +132,7 @@ export class Soundscape {
           ? "triangle"
           : "sine";
     pan.pan.value = 0;
-    if (e.origin && s && [e.origin.x, e.origin.y, e.origin.z].every(Number.isFinite)) {
+    if (e.cue !== "impact" && e.origin && s && [e.origin.x, e.origin.y, e.origin.z].every(Number.isFinite)) {
       const p = s.player.pose,
         t = e.origin;
       pan.pan.value = Math.max(
@@ -144,10 +145,11 @@ export class Soundscape {
         ),
       );
     }
+    if (e.cue === "impact") o.frequency.exponentialRampToValueAtTime(32, c.currentTime + 0.18);
     const duration = e.cue === "warning" ? 0.82 : 0.24;
     g.gain.setValueAtTime(0, c.currentTime);
     g.gain.linearRampToValueAtTime(
-      e.cue === "damage" ? 0.035 : 0.06,
+      e.cue === "damage" || e.cue === "impact" ? 0.035 : 0.06,
       c.currentTime + 0.02,
     );
     if (e.cue === "warning") {

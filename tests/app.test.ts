@@ -8,6 +8,11 @@ import {
   browserFixture,
 } from "./app-browser-support.js";
 import { deferred, encoded, sample, settled } from "./persistence-support.js";
+import { createWorldQueries } from "../src/sim/world.js";
+import { craft, completeOpening, discover } from "../src/sim/progression.js";
+import { addItem } from "../src/sim/inventory.js";
+import { RECIPES, type ItemKind } from "../src/content/registry.js";
+import { faceTarget } from "./targeting-support.js";
 import { fixtureGame } from "../src/sim/carrier.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
 
@@ -370,4 +375,167 @@ test("app: carrier menu command then immediate queued manual save is coherent an
   assert.equal(loaded.save.state.player.mode, "piloting");
   assert.equal(loaded.save.state.fleet.docking!.stationKeeping, false);
   assert.deepEqual(loaded.save.state.player.pose.position, loaded.save.state.fleet.vehicles[0]!.pose.position);
+});
+
+for (const failure of ["throw", "reject"] as const) {
+  test(`app: ${failure} capture leaves active drag/keyboard fallback and never retries on focus`, async (t) => {
+    const f = await fixture(t);
+    let calls = 0;
+    f.view.canvas.lock = () => { calls++; if (failure === "throw") throw Error("Denied"); return Promise.reject(Error("Denied")); };
+    f.activation.isActive = true;
+    f.view.actions.resume();
+    await settled();
+    assert.equal(calls, 1);
+    assert.equal(f.view.screen, "playing");
+    assert.equal(f.view.lookVisible && f.view.fallback, true);
+    f.window.dispatchEvent(new Event("focus")); f.frames(60);
+    assert.equal(calls, 1);
+    assert.ok(f.view.state!.tick > 300);
+  });
+}
+
+test("app: capture only follows deliberate return; panel toggle and Escape have distinct lock intent", async (t) => {
+  const f = await fixture(t);
+  assert.equal(f.view.canvas.captures, 0, "Continue without activation cannot capture");
+  f.activation.isActive = true;
+  f.view.actions.resume();
+  assert.equal(f.view.canvas.captures, 1);
+  f.locked(true);
+  f.view.actions.command({ type: "skip-opening" });
+  f.key("Tab");
+  assert.equal(f.view.screen, "panel");
+  f.locked(false);
+  assert.equal(f.view.screen, "panel", "our asynchronous release does not double pause");
+  f.key("Tab");
+  assert.equal(f.view.screen, "playing");
+  assert.equal(f.view.canvas.captures, 2);
+  f.locked(true);
+  f.key("KeyJ"); f.locked(false);
+  f.escape();
+  assert.equal(f.view.screen, "playing");
+  assert.equal(f.view.canvas.captures, 2, "Escape closing a panel never captures");
+  f.view.actions.lockMouse(); f.locked(true);
+  f.locked(false); // Native Escape may precede its keydown.
+  f.escape();
+  assert.equal(f.view.screen, "menu", "native event before Escape cannot resume the game");
+  const count = f.view.canvas.captures;
+  f.view.actions.resume();
+  assert.equal(f.view.canvas.captures, count, "cooldown never retries");
+});
+
+for (const order of ["unlock-before-close", "close-before-unlock"] as const) {
+  test(`app: intentional panel release tolerates ${order}`, async (t) => {
+    const f = await fixture(t);
+    f.activation.isActive = true; f.view.actions.resume(); f.locked(true);
+    f.view.actions.command({ type: "skip-opening" });
+    f.key("KeyK");
+    if (order === "unlock-before-close") f.locked(false);
+    f.key("KeyK");
+    if (order === "close-before-unlock") f.locked(false);
+    assert.equal(f.view.screen, "playing");
+    f.frames(); assert.equal(f.view.screen, "playing");
+  });
+}
+
+for (const interruption of ["blur", "graphics", "replacement", "dispose"] as const) {
+  test(`app: stale successful capture after ${interruption} is released without resuming`, async (t) => {
+    const f = await fixture(t), gate = deferred();
+    let requests = 0;
+    f.view.canvas.lock = () => { requests++; return gate.promise; };
+    f.activation.isActive = true; f.view.actions.resume();
+    assert.equal(requests, 1);
+    if (interruption === "blur") f.window.dispatchEvent(new Event("blur"));
+    if (interruption === "graphics") f.renderer.lose();
+    if (interruption === "replacement") {
+      f.view.actions.newGame(); f.view.actions.confirm(); await settled();
+    }
+    if (interruption === "dispose") f.app.dispose();
+    const screen = f.view.screen;
+    f.document.pointerLockElement = f.view.canvas;
+    gate.resolve(); await settled();
+    f.document.dispatchEvent(new Event("pointerlockchange"));
+    assert.equal(f.document.pointerLockElement, null);
+    assert.equal(f.view.screen, screen);
+    assert.equal(requests, 1, "pending request cannot be reused for a replacement");
+  });
+}
+
+for (const [json, expected] of [
+  ["{}", ["rich", 1, false, "captured", 1]],
+  ["[garbage", ["rich", 1, false, "captured", 1]],
+  ['{"mouseMode":"drag","keyTurnSpeed":5,"sensitivity":0.1,"invertY":true}', ["rich", 0.4, true, "drag", 2]],
+  ['{"mouseMode":"oops","keyTurnSpeed":"fast"}', ["rich", 1, false, "captured", 1]],
+] as const) {
+  test(`app: tolerant preferences ${json}`, (t) => {
+    const b = browserFixture(); b.storage.setItem("siltwake.settings.v1", json);
+    const app = new SiltwakeApp({} as HTMLElement);
+    t.after(() => { app.dispose(); b.restore(); });
+    assert.deepEqual(GameView.current.lastSettings, expected);
+    assert.equal(GameView.current.canvas.captures, 0);
+  });
+}
+
+test("app: canvas skip is a continuous 0.8-second hold; keyup, repeat, blur and pause cancel it", async (t) => {
+  const f = await fixture(t);
+  f.view.actions.resume(); f.view.canvas.focus();
+  f.key("Space"); f.frames(20); f.key("Space", "keyup");
+  assert.equal(f.view.state!.opening.phase, 0);
+  f.key("Space", "keydown", true); f.frames(70);
+  assert.equal(f.view.state!.opening.phase, 0, "repeat after cancellation is not a new hold");
+  f.key("Space"); f.frames(20); f.window.dispatchEvent(new Event("blur"));
+  f.view.actions.resume(); f.frames(70);
+  assert.equal(f.view.state!.opening.phase, 0);
+  f.key("Space"); f.frames(20); f.view.actions.pause();
+  f.view.actions.resume(); f.frames(70);
+  assert.equal(f.view.state!.opening.phase, 0);
+  f.key("Space"); f.frames(49);
+  assert.equal(f.view.state!.opening.phase, 4);
+  assert.equal(f.view.progress.kind, null);
+});
+
+function pilotSave(depth = 4) {
+  const envelope = sample(0), s = envelope.state, world = createWorldQueries();
+  completeOpening(s);
+  discover(s, "C03");
+  for (const id of ["pod_repair", "essential_tools", "suit_150", "restore_workshop", "dart_base"] as const) {
+    const r = RECIPES[id];
+    if (r.site === "island_workshop") { s.player.pose.position = { x: 10, y: 1.2, z: -36 }; s.player.mode = "walking"; }
+    for (const [kind, n] of Object.entries(r.cost)) addItem(s, kind as ItemKind, n, id === "restore_workshop" ? "diver" : r.site === "island_workshop" ? "workshop_locker" : "pod_locker");
+    assert.equal(craft(s, id, world), null);
+  }
+  const v = s.fleet.vehicles[0]!;
+  v.pose.position = { x: 55, y: -depth, z: 5 }; v.pose.yaw = Math.PI;
+  v.velocity.z = 8;
+  s.player.mode = "piloting"; s.player.controlledVehicleId = v.id;
+  s.player.pose = structuredClone(v.pose); s.player.velocity = { ...v.velocity };
+  return envelope;
+}
+
+for (const code of ["KeyE", "KeyX"]) {
+  test(`app: ${code} tap, cancelled hold and one continuous hold issue a single semantic exit`, async (t) => {
+    const f = await fixture(t, pilotSave()); f.view.actions.resume();
+    f.key(code); f.frames(4); f.key(code, "keyup");
+    assert.ok(f.view.state!.player.controlledVehicleId);
+    f.view.actions.pause(); f.view.actions.resume(); f.frames(3);
+    assert.ok(f.view.state!.player.controlledVehicleId, "cancelled gesture never executes later");
+    f.key(code); f.frames(24);
+    assert.equal(f.view.state!.player.controlledVehicleId, null);
+    const feedback = f.view.notices.filter(n => n.startsWith("Clear exit.")).length;
+    f.frames(40); assert.equal(f.view.notices.filter(n => n.startsWith("Clear exit.")).length, feedback);
+  });
+}
+
+test("app: known aimed E opens its validated entry; Q cannot open notebook without scanner", async (t) => {
+  const initial = sample(0); completeOpening(initial.state); faceTarget(initial.state, "C01");
+  const f = await fixture(t, initial); f.view.actions.resume();
+  f.key("KeyQ"); assert.equal(f.view.screen, "playing");
+  f.key("KeyE"); assert.equal(f.view.screen, "panel");
+  assert.equal(f.view.currentPanel, "notebook"); assert.equal(f.view.targetId, "C01");
+});
+
+test("app: moving hold preserves the simulation's deep exit refusal", async (t) => {
+  const f = await fixture(t, pilotSave(170)); f.view.actions.resume();
+  f.key("KeyX"); f.frames(24);
+  assert.ok(f.view.state!.player.controlledVehicleId);
+  assert.ok(f.view.notices.some(n => n.includes("Exit exposure")));
 });

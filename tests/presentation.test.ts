@@ -47,7 +47,8 @@ function viewFixture(t: test.TestContext) {
     value = "";
     valueAsNumber = 0;
     dataset: Record<string, string> = {};
-    classList = { toggle() {} };
+    classList = { toggle() {}, add() {}, remove() {} };
+    scrollIntoView() {}
     private listeners = new Map<string, ((e: Event) => void)[]>();
     addEventListener(type: string, listener: (e: Event) => void) {
       this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
@@ -498,11 +499,11 @@ test("moving pilot guidance stays secondary, explains stopped and blocked exits,
   assert.equal(get("interact-prompt").innerHTML, "", "routine exit text does not occupy the interaction centre");
   assert.equal(get("pilot-guidance").hidden, false);
   assert.ok(!get("pilot-guidance").innerHTML.includes("<small>"));
-  assert.match(get("pilot-guidance").innerHTML, /E.*Side exit.*Esc.*Controls/);
+  assert.match(get("pilot-guidance").innerHTML, /E.*Hold to exit/);
   const exited = executeCommand(s, { type: "interact" }, createWorldQueries()).state;
   assert.equal(exited.player.controlledVehicleId, null, "moving guidance does not change the actual E exit command");
   v.velocity.z = 0; view.update(s, false);
-  assert.match(get("pilot-guidance").innerHTML, /personal air.*suit 60 m \/ hull 180 m/);
+  assert.match(get("pilot-guidance").innerHTML, /Suit 60 m · hull 180 m/);
   v.pose.position.y = -170; s.player.pose.position.y = -170;
   v.charge = 10; v.health = 20;
   view.update(s, false);
@@ -809,4 +810,34 @@ test("reopened Hold and Notebook retain saved recovery explanations without revi
   assert.equal(get("panel-feedback").hidden, true);
   assert.ok(!get("panel-content").innerHTML.includes(s.feedback));
   assert.ok(!get("panel-content").innerHTML.includes("Last recovery report"));
+});
+
+
+test("validated notebook focus only targets an existing finding, without discovering one", (t) => {
+  const { view, get, active } = viewFixture(t), s = readyState();
+  const before = structuredClone(s);
+  view.openPanel("notebook", s, "C01");
+  assert.equal(active(), get("finding-C01"));
+  assert.match(get("panel-content").innerHTML, /id="finding-C01" tabindex="-1"/);
+  view.openPanel("notebook", s, "C04");
+  assert.equal(active(), get("panel-return"));
+  assert.ok(!get("panel-content").innerHTML.includes('id="finding-C04"'));
+  assert.deepEqual(s, before);
+});
+
+test("impact loss is coalesced once, cancellation clears it, and pitch/surface cues use real input", (t) => {
+  const { view, get } = viewFixture(t), s = readyState();
+  const v = makeVehicle("cue-dart", "dart", { x: 20, y: -0.9, z: 0 }, "cue-hold");
+  s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id; s.player.mode = "piloting";
+  s.player.pose = structuredClone(v.pose); s.player.pose.pitch = v.pose.pitch = 0.3;
+  view.update(s, false);
+  assert.equal(get("pitch-cue").hidden, false);
+  assert.equal(get("surface-cue").hidden, true, "pitch alone is not forward thrust");
+  view.update(s, false, 1); assert.equal(get("surface-cue").hidden, false);
+  view.impact(0.25, s); view.impact(1.25, s);
+  assert.equal(get("impact-notice").textContent, "Hull −1.5%");
+  view.impact(0, s); assert.equal(get("impact-notice").textContent, "Hull −1.5%");
+  view.cancelFeedback(); assert.equal(get("impact-notice").hidden, true);
+  view.impact(0.2, s); assert.equal(get("impact-notice").textContent, "Hull −0.2%");
+  view.resetPresentation(); assert.equal(get("impact-notice").hidden, true);
 });

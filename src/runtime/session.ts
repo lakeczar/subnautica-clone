@@ -263,7 +263,7 @@ export class ExpeditionSession {
     this.ask(
       {
         title: "Import this expedition?",
-        detail: `Saved ${new Date(save.meta.savedAt).toLocaleString()} · ${Math.floor(save.state.tick / 3600)} minutes explored. This replaces your active expedition and Continue slot if local saving succeeds. The previous valid local save is retained and unreadable records are preserved. Export any active expedition you want to keep first.`,
+        detail: `Saved ${new Date(save.meta.savedAt).toLocaleString()} · ${Math.floor(save.state.tick / 3600)} minute${Math.floor(save.state.tick / 3600) === 1 ? "" : "s"} explored. This replaces your active expedition and Continue slot if local saving succeeds. The previous valid local save is retained and unreadable records are preserved. Export any active expedition you want to keep first.`,
         accept: "Import & save",
       },
       () => {

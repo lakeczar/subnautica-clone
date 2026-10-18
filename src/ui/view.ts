@@ -28,6 +28,8 @@ import {
   usedCapacity,
 } from "../sim/inventory.js";
 import { craftingRefusal, personalLimit } from "../sim/progression.js";
+import { deliberateExit } from "../runtime/input.js";
+import type { AimedTarget } from "../sim/targeting.js";
 import { aimedInteraction } from "../sim/targeting.js";
 import { exposure } from "../sim/survival.js";
 import { RECOVERY_NOTICES, recoveryOccupancyRefusal } from "../sim/recovery.js";
@@ -57,7 +59,7 @@ export interface UiActions {
   confirm(): void;
   cancelConfirm(): void;
   lockMouse(): void;
-  settings(quality: Quality, sensitivity: number, invertY: boolean): void;
+  settings(quality: Quality, sensitivity: number, invertY: boolean, mouseMode: "captured" | "drag", keyTurnSpeed: number): void;
 }
 
 export type PanelKind = "inventory" | "craft" | "notebook" | "carrier";
@@ -109,6 +111,18 @@ export class GameView {
   private graphicsFailed = false;
   private storageFrom: string | null = null;
   private storageTo: string | null = null;
+  private highlightTimer = 0;
+  private impactTimer = 0;
+  private impactLoss = 0;
+  private impactAt = -Infinity;
+  private impactUntil = -Infinity;
+  private impactVehicle: string | null = null;
+  private pilotId: string | null = null;
+  private pilotSince = 0;
+  private startTick: number | null = null;
+  private exitKey = "E";
+  private exitProgress: number | null = null;
+  get currentPanel(): PanelKind | null { return this.panelKind; }
 
   constructor(
     private readonly root: HTMLElement,
@@ -116,16 +130,16 @@ export class GameView {
     private readonly world: WorldQueries,
   ) {
     root.innerHTML = `
-      <canvas id="ocean" tabindex="0" aria-label="Siltwake 3D reef. WASD to move, arrow keys or mouse drag to look. Escape opens the menu."></canvas>
+      <canvas id="ocean" tabindex="0" aria-label="Siltwake 3D reef. WASD to move, mouse or arrow keys to look. Escape opens the menu."></canvas>
       <div class="vignette" aria-hidden="true"></div>
       <main id="hud" hidden aria-label="Exploration display">
         <div class="hud-top"><div id="hud-region" class="region"><span class="eyebrow">SILTWAKE / FIRST EXPEDITION</span><strong id="region-name">Hearth Reef</strong></div>
         <div id="hud-heading" class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
         <div class="hud-actions"><div id="hud-tools"><button data-action="inventory">Hold <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button></div><button id="hud-pause" data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
         <div id="vitals" class="vitals"></div><div id="hazard" class="hazard" role="status" aria-live="polite"></div><div id="interact-prompt" class="interact-prompt"></div><div id="pilot-guidance" class="pilot-guidance" aria-label="Pilot exit guidance" hidden></div>
-        <section id="opening" class="opening" aria-label="Damaged pod opening" hidden><div aria-live="polite" aria-atomic="true"><span id="opening-progress" class="eyebrow">POD CHECK 1 / 4</span><h2 id="opening-title"></h2><p id="opening-caption"></p></div><div class="opening-actions"><button id="opening-act" data-action="opening">Act <kbd>E</kbd></button><button id="opening-skip" data-action="skip">Skip opening <kbd>Space</kbd></button><label class="check"><input id="opening-subtitles" type="checkbox" checked /> Captions</label></div><small id="opening-detail"></small></section><div id="crosshair" class="crosshair" aria-hidden="true"></div>
+        <section id="opening" class="opening" aria-label="Damaged pod opening" hidden><div aria-live="polite" aria-atomic="true"><span id="opening-progress" class="eyebrow">POD CHECK 1 / 4</span><h2 id="opening-title"></h2><p id="opening-caption"></p></div><div class="opening-actions"><button id="opening-act" data-action="opening">Act <kbd>E</kbd></button><button id="opening-skip" data-action="skip">Skip · hold <kbd>Space</kbd></button><label class="check"><input id="opening-subtitles" type="checkbox" checked /> Captions</label></div><small id="opening-detail"></small></section><div id="crosshair" class="crosshair" aria-hidden="true"></div><div id="pitch-cue" class="pitch-cue" aria-label="Pitch" hidden></div><span id="surface-cue" class="surface-cue" hidden>Surface</span><button id="look-action" class="look-action" data-action="lock" hidden>Click to look</button><div id="impact-notice" class="impact-notice" role="status" aria-live="polite" hidden></div>
         <div id="hud-bottom" class="hud-bottom"><div class="telemetry"><span class="depth"><b id="depth">0.0</b><small>m / DEPTH</small></span><span class="mode"><strong id="movement">On foot</strong><small id="refuge-distance">Home pod · 0 m</small></span></div>
-        <div class="explore-note"><span id="cruise" hidden>FORWARD CRUISE · R TO STOP</span><p id="context-hint">Walk down the amber-edged ramp to the water.</p><small id="pulse-summary"></small><small>WASD move · drag / arrows look · Space rise · C dive</small></div></div>
+        <div class="explore-note"><span id="cruise" hidden>FORWARD CRUISE · R TO STOP</span><p id="context-hint">Walk down the amber-edged ramp to the water.</p><small id="pulse-summary"></small><small id="control-hint"></small></div></div>
       </main>
       <div id="menu" class="menu-screen" role="dialog" aria-modal="true" aria-labelledby="menu-title">
         <div class="menu-frame">
@@ -139,10 +153,10 @@ export class GameView {
             <div class="menu-tools"><button id="manual-save" data-action="save" hidden>Save locally</button><button id="export-game" data-action="export" hidden>Export save</button><button data-action="import">Import save</button></div>
             <p id="save-status" class="save-status"></p>
             <details class="details"><summary>Controls & settings</summary>
-              <dl class="controls"><div><dt>W A S D</dt><dd>Move / swim</dd></div><div><dt>Drag mouse / ↑ ↓ ← →</dt><dd>Look around</dd></div><div><dt>Space / C</dt><dd>Rise or jump / dive</dd></div><div><dt>Shift</dt><dd>Move faster</dd></div><div><dt>R</dt><dd>Toggle forward cruise</dd></div><div><dt>E / Q / B / F / G</dt><dd>Interact / scan / buoy / meal / distract</dd></div><div><dt>Tab / K / J / H</dt><dd>Hold / fabricate / notebook / hint</dd></div><div><dt>Z / V</dt><dd>Quiet movement / fixture controls</dd></div><div><dt>Esc / F5</dt><dd>Pause / save locally</dd></div></dl>
+              <dl class="controls"><div><dt>W A S D</dt><dd>Move / swim</dd></div><div><dt>Mouse / ↑ ↓ ← →</dt><dd>Look around</dd></div><div><dt>Space / C</dt><dd>Rise or jump / dive</dd></div><div><dt>Shift</dt><dd>Move faster</dd></div><div><dt>R</dt><dd>Toggle forward cruise</dd></div><div><dt>E / Q / B / F / G</dt><dd>Interact / scan / buoy / meal / distract</dd></div><div><dt>Tab or I / K / J / H</dt><dd>Hold / fabricate / notebook / hint</dd></div><div><dt>W / S · A / D</dt><dd>Pilot thrust · slide; look steers</dd></div><div><dt>X</dt><dd>Exit craft (hold while moving)</dd></div><div><dt>Z / V</dt><dd>Quiet movement / fixture controls</dd></div><div><dt>Esc / F5</dt><dd>Pause / save locally</dd></div></dl>
               <div class="settings"><label>Rendering <select id="quality"><option value="rich">Rich · full viewport</option><option value="light">Light · lower resolution</option></select></label>
-              <label>Mouse sensitivity <input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
-              <button id="lock-mouse" data-action="lock" hidden>Resume with locked mouse</button><small class="control-note">Mouse lock is optional. Escape releases it and pauses. Click and drag also works.</small>
+              <label>Sensitivity <output id="sensitivity-value">1.0</output><input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label>Mouse look<select id="mouse-mode"><option value="captured">Captured</option><option value="drag">Drag</option></select></label><label>Key turn speed <output id="key-turn-value">1.0</output><input id="key-turn" type="range" min="0.5" max="2" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
+
             </details>
             <details class="details"><summary>Sound & captions</summary><div class="settings"><label>Volume <output id="volume-value">55%</output><input id="volume" type="range" min="0" max="1" step="0.05" value="0.55" /></label><label class="check"><input id="muted" type="checkbox" /> Mute</label><label class="check"><input id="subtitles" type="checkbox" checked /> Opening captions</label></div><p>Hazards, action results and notebook records remain readable with captions off. Audio starts after deliberate play input.</p></details><details class="details"><summary>Carrier feasibility fixture</summary><p>Separate seeded test of stationary interiors and isolated launch locks. Starting this replaces the Continue slot after confirmation; export your expedition first.</p><button data-action="fixture">Open seeded carrier fixture</button></details><details class="details"><summary>Save safety</summary><p>Autosaves run every 30 seconds of active exploration when local saving is enabled. Menu and background time do not advance the world. Local saves keep a previous valid generation and coordinate writers between tabs.</p><p>Use export to keep a portable file. Browser storage belongs to this site and can be cleared by the browser. Session-only expeditions need an export before closing.</p><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></details>
           </section>
@@ -227,14 +241,16 @@ export class GameView {
       },
       options,
     );
-    for (const id of ["quality", "sensitivity", "invert"])
+    for (const id of ["quality", "sensitivity", "invert", "mouse-mode", "key-turn"])
       this.get(id).addEventListener(
-        id === "sensitivity" ? "input" : "change",
+        ["sensitivity", "key-turn"].includes(id) ? "input" : "change",
         () =>
           actions.settings(
             this.get<HTMLSelectElement>("quality").value as Quality,
             this.get<HTMLInputElement>("sensitivity").valueAsNumber,
             this.get<HTMLInputElement>("invert").checked,
+            this.get<HTMLSelectElement>("mouse-mode").value as "captured" | "drag",
+            this.get<HTMLInputElement>("key-turn").valueAsNumber,
           ),
         options,
       );
@@ -281,7 +297,7 @@ export class GameView {
         const modal = !this.get("game-panel").hidden
           ? this.get("game-panel")
           : !this.menu.hidden ? this.menu : null;
-        if (!modal) return;
+        if (!modal || (this.panelKind === "inventory" && !event.shiftKey)) return;
         const visible = [
           ...modal.querySelectorAll<HTMLElement>(
             "button:not([disabled]),select,input,summary",
@@ -321,10 +337,14 @@ export class GameView {
     this.get("opening-caption").hidden = !this.subtitles;
   }
 
-  settings(quality: Quality, sensitivity: number, invertY: boolean): void {
+  settings(quality: Quality, sensitivity: number, invertY: boolean, mouseMode: "captured" | "drag" = "captured", keyTurnSpeed = 1): void {
     this.get<HTMLSelectElement>("quality").value = quality;
     this.get<HTMLInputElement>("sensitivity").value = String(sensitivity);
     this.get<HTMLInputElement>("invert").checked = invertY;
+    this.get("sensitivity-value").textContent = sensitivity.toFixed(1);
+    this.get<HTMLSelectElement>("mouse-mode").value = mouseMode;
+    this.get<HTMLInputElement>("key-turn").value = String(keyTurnSpeed);
+    this.get("key-turn-value").textContent = keyTurnSpeed.toFixed(1);
   }
 
   slot(slot: SaveSlot, hasSession: boolean): void {
@@ -384,8 +404,6 @@ export class GameView {
     this.root.dataset.screen = "menu";
     this.get("resume").hidden = !hasSession;
     this.get("manual-save").hidden = !hasSession;
-    this.get("lock-mouse").hidden =
-      !hasSession || typeof this.canvas.requestPointerLock !== "function";
     this.get("pause-reason").hidden = reason.length === 0;
     this.get("pause-reason").textContent = reason;
     this.get("menu-subtitle").textContent = hasSession
@@ -423,8 +441,9 @@ export class GameView {
     this.get("new-game").focus({ preventScroll: true });
   }
 
-  update(state: GameState, cruise: boolean): void {
+  update(state: GameState, cruise: boolean, forward = 0): void {
     this.latest = state;
+    this.startTick ??= state.tick;
     const p = state.player.pose.position,
       mode = state.player.mode;
     const degrees = ((state.player.pose.yaw * 180) / Math.PI + 360) % 360;
@@ -464,21 +483,21 @@ export class GameView {
     const e = exposure(state),
       v = state.fleet.vehicles.find(
         (v) => v.id === state.player.controlledVehicleId,
-      ),
-      t = aimedInteraction(state, this.world);
+      );
     this.get("context-hint").textContent = state.world.action
       ? `Active ${state.world.action.kind} · ${Math.ceil(state.world.action.seconds)} s remaining`
       : state.recovery.operation
         ? `Bobbin · ${state.recovery.operation.phase} · follow the local tether corridor`
         : e.refuge
-          ? "Safe air · gradual healing · hold / fabricate / notebook"
+          ? ""
           : v?.hull === "dart" && p.x > 15 && p.x < 25 && p.z < -16 && p.z > -29
-            ? "Launch cradle · move south beyond the amber rails before turning. Return along the same clear approach."
+            ? Math.abs(Math.atan2(Math.sin(v.pose.yaw - Math.PI), Math.cos(v.pose.yaw - Math.PI))) > 0.6
+              ? "Turn to the open lane" : ""
           : p.x > 68
             ? "Read the upper crowns. Z quiet · cover / retreat · Tab for pulse & reserves."
             : p.z > 9 && p.y < 0 && Math.abs(p.x) < 4
               ? "Below the pod deck · swim around the ramp edge, surface, then approach its amber treads."
-              : "E interact · Q scan · B buoy · F meal · H voluntary hint";
+              : "";
     const exitBlocked = v ? exitRefusal(state, this.world) : null;
     const pulse = distractionPreview(state);
     this.get("pulse-summary").textContent = !equipped(state, "essential_tools") ? ""
@@ -486,16 +505,29 @@ export class GameView {
       : pulse.refusal === null ? `G · ${pulse.cost} cell points · ${(pulse.remainingCharge + pulse.cost).toFixed(0)} → ${pulse.remainingCharge.toFixed(0)}%`
       : `G · unavailable · Tab for reserves`;
     this.get("pilot-guidance").hidden = !v;
+    if (this.pilotId !== (v?.id ?? null)) {
+      this.pilotId = v?.id ?? null;
+      this.pilotSince = state.tick;
+    }
+    this.get("control-hint").textContent = v
+      ? state.tick - this.pilotSince < 720 ? "Look steers · W/S thrust · A/D slide · Space/C rise/dive · Z quiet · Shift boost" : ""
+      : state.tick - this.startTick < 3600 ? "WASD move · mouse / arrows look · Space rise · C dive" : "";
     if (v) {
       const stopped = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) < 0.2;
-      this.get("pilot-guidance").innerHTML = `<kbd>E</kbd> ${exitBlocked ? "Exit blocked" : "Side exit"} · <kbd>Tab</kbd> Hold · <kbd>Esc</kbd> Controls${exitBlocked || stopped ? `<small>${escapeHtml(exitBlocked ?? `Outside: personal air · suit ${personalLimit(state)} m / hull ${HULLS[v.hull].initialDepth} m.`)}</small>` : ""}`;
+      this.get("pilot-guidance").innerHTML = `<kbd>${this.exitKey}</kbd> ${exitBlocked ? "Exit blocked" : `${deliberateExit(state) ? "Hold to exit" : "Exit"}`}${this.exitProgress !== null ? ` <progress aria-label="Exit hold" max="1" value="${this.exitProgress}"></progress>` : ""}${exitBlocked || stopped ? `<small>${escapeHtml(exitBlocked ?? `Suit ${personalLimit(state)} m · hull ${HULLS[v.hull].initialDepth} m`)}</small>` : ""}`;
       this.get("pilot-guidance").classList.toggle("urgent", exitBlocked !== null);
     }
-    this.get("interact-prompt").innerHTML = !v && t
-        ? `${t.verb === "empty" ? "" : "<kbd>E</kbd> "}${escapeHtml(t.label)} <small>${({ collect: "Collect", gather: "Gather", sort: t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Tend · 20 s" : "Sort · 20 s", inspect: "Inspect", review: "Notebook", read: "Read", board: "Board", recover: "Recover", open: "Open", use: "Use", empty: "Empty" })[t.verb]}${equipped(state, "essential_tools") && !t.known && (t.kind === "source" || t.kind === "evidence") ? " · Q scan" : ""}</small>`
-        : "";
+    const pitch = state.player.pose.pitch;
+    this.get("pitch-cue").hidden = !(mode === "swimming" || v) || Math.abs(pitch) <= 0.14;
+    this.get("pitch-cue").innerHTML = `<i style="top:${50 - Math.max(-1, Math.min(1, pitch / (Math.PI / 2))) * 46}%"></i>${Math.abs(pitch) > Math.PI / 4 ? `<small>${Math.round(pitch * 180 / Math.PI)}°</small>` : ""}`;
+    this.get("pitch-cue").setAttribute("aria-label", `Pitch ${Math.round(pitch * 180 / Math.PI)} degrees`);
+    this.get("surface-cue").hidden = !v || v.pose.position.y < -0.95 || forward <= 0 || v.pose.pitch <= 0.1;
+    if (v?.hull === "dart" && v.pose.position.z > -16 && v.pose.position.z < -7 &&
+      Math.abs(v.pose.position.x - 20) < 6 && v.velocity.z < -4)
+      this.get("context-hint").textContent = "Slow · cradle ahead";
+    this.target(aimedInteraction(state, this.world));
     this.get("vitals").innerHTML =
-      `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${e.breathable ? "Breathing air" : "180 s tank"}</small></div><div><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m</small></div>` : ""}`;
+      `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${e.breathable ? "Breathing air" : "180 s tank"}</small></div><div><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}${this.impactVehicle === v.id && performance.now() < this.impactUntil ? " hull-impact" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m</small></div>` : ""}`;
     const warnings: string[] = [];
     if (!v && !e.refuge && e.pressureDepth > personalLimit(state))
       warnings.push(`PRESSURE · ${e.pressureDepth.toFixed(0)} m / personal ${personalLimit(state)} m · ascend now`);
@@ -528,7 +560,7 @@ export class GameView {
     // remain siblings; persistence and graphics notices live outside the HUD.
     for (const id of ["hud-region", "hud-heading", "hud-tools", "vitals", "hud-bottom", "crosshair", "interact-prompt"])
       this.get(id).hidden = opening;
-    if (opening) this.get("pilot-guidance").hidden = true;
+    if (opening) for (const id of ["pilot-guidance", "pitch-cue", "surface-cue"]) this.get(id).hidden = true;
     if (!opening && this.get("opening").contains(document.activeElement))
       this.canvas.focus({ preventScroll: true });
     this.get("opening").hidden = !opening;
@@ -555,7 +587,7 @@ export class GameView {
     this.panelKind = null;
     this.get("game-panel").hidden = true;
   }
-  openPanel(kind: PanelKind, state: GameState): void {
+  openPanel(kind: PanelKind, state: GameState, targetId?: string): void {
     this.panelKind = kind;
     this.menu.hidden = true;
     this.hud.hidden = true;
@@ -564,6 +596,7 @@ export class GameView {
     this.get("panel-feedback").hidden = true;
     this.refreshPanel(state);
     this.get("panel-return").focus({ preventScroll: true });
+    if (targetId) this.focusPanelTarget(kind, state, targetId);
   }
   refreshPanel(state: GameState): void {
     this.latest = state;
@@ -604,7 +637,7 @@ export class GameView {
         html += `<p class="equipment-note"><b>Out of reach</b> · ${distant.map((c) => `${escapeHtml(containerLabel(state, c.id))} (${usedCapacity(state, c.id)} / ${c.capacity} CU)`).join(" · ")}. Approach a locker, deployed buoy or craft to transfer. A workshop locker opens after its services are restored.</p>`;
       html += '<div class="container-grid">';
       for (const c of bins) {
-        html += `<article class="container"><h3>${escapeHtml(containerLabel(state, c.id))} <small>${usedCapacity(state, c.id)} / ${c.capacity} CU</small></h3>`;
+        html += `<article class="container" id="container-${escapeHtml(c.id)}" tabindex="-1"><h3>${escapeHtml(containerLabel(state, c.id))} <small>${usedCapacity(state, c.id)} / ${c.capacity} CU</small></h3>`;
         for (const i of state.inventory.items.filter(
           (i) => i.containerId === c.id,
         )) {
@@ -637,7 +670,7 @@ export class GameView {
         const local = distance(state.player.pose.position, v.pose.position) < 7;
         const occupied = recoveryOccupancyRefusal(state, v.id);
         const cells = state.inventory.items.filter((i) => i.kind === "reserve_cell" && (i.containerId === "diver" || i.containerId === v.cargoId));
-        html += `<article class="vessel-service"><h3>${HULLS[v.hull].label} · ${v.disabled ? "disabled transponder" : "available"}</h3><p>${bearing(state.player.pose.position, v.pose.position)} · ${local ? "service socket in reach" : "approach the service socket"}. Power ${v.charge.toFixed(0)}% · hull ${v.health.toFixed(0)}% · hull ${HULLS[v.hull].initialDepth} m / suit ${personalLimit(state)} m.</p>`;
+        html += `<article class="vessel-service" id="vessel-${escapeHtml(v.id)}" tabindex="-1"><h3>${HULLS[v.hull].label} · ${v.disabled ? "disabled transponder" : "available"}</h3><p>${bearing(state.player.pose.position, v.pose.position)} · ${local ? "service socket in reach" : "approach the service socket"}. Power ${v.charge.toFixed(0)}% · hull ${v.health.toFixed(0)}% · hull ${HULLS[v.hull].initialDepth} m / suit ${personalLimit(state)} m.</p>`;
         if (v.disabled && v.hull === "dart") {
           const frame = Object.entries(v.investment).map(([k, q]) => `${q} ${ITEMS[k as ItemKind].label}`).join(" / ") || "No frame materials recorded";
           const cu = Object.entries(v.investment).reduce((n, [k, q]) => n + ITEMS[k as ItemKind].cu * q, 0);
@@ -713,7 +746,7 @@ export class GameView {
           '<p class="interpretation">Together: the living intake and unspent shore supplies suggest disrupted services. The reason people left these sites is still unconfirmed, whichever record you found first.</p>';
       for (const found of state.knowledge.evidence) {
         const e = EVIDENCE[found.id];
-        html += `<article class="finding"><h3>${e.label}</h3><p class="provenance">Source · ${escapeHtml(found.provenance)}</p><p><b>Observed</b> · ${e.observation}</p><p><b>Hypothesis</b> · ${e.hypothesis}</p><p class="lead"><b>Regional lead</b> · ${e.lead}</p></article>`;
+        html += `<article class="finding" id="finding-${found.id}" tabindex="-1"><h3>${e.label}</h3><p class="provenance">Source · ${escapeHtml(found.provenance)}</p><p><b>Observed</b> · ${e.observation}</p><p><b>Hypothesis</b> · ${e.hypothesis}</p><p class="lead"><b>Regional lead</b> · ${e.lead}</p></article>`;
       }
       for (const id of state.knowledge.scans)
         html += `<article><h3>${id === "filter_flow" ? "Current-facing filters" : SOURCES[id as keyof typeof SOURCES]?.label}</h3><p>${id === "filter_flow" ? "Open fans face the current. Harvest loose membrane from downstream catch hollows." : (SOURCES[id as keyof typeof SOURCES]?.scan ?? "")}</p></article>`;
@@ -839,6 +872,88 @@ export class GameView {
     return html + "</article>";
   }
 
+  target(t: AimedTarget | null): void {
+    const html = t
+      ? `${t.verb === "empty" ? "" : "<kbd>E</kbd> "}${escapeHtml(t.kind === "vehicle" && this.latest ? (() => {
+          const v = this.latest!.fleet.vehicles.find(v => v.id === t.id);
+          return v ? `${HULLS[v.hull].label}${v.disabled ? " · disabled" : ""}` : t.label;
+        })() : t.label)} <small>${({ collect: "Collect", gather: "Gather", sort: t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Tend · 20 s" : "Sort · 20 s", inspect: "Inspect", review: "Notebook", read: "Read", board: "Board", recover: "Recover", open: "Open", use: "Use", empty: "Empty" })[t.verb]}${this.latest && equipped(this.latest, "essential_tools") && !t.known && (t.kind === "source" || t.kind === "evidence") ? " · Q scan" : ""}</small>` : "";
+    if (this.get("interact-prompt").innerHTML !== html) this.get("interact-prompt").innerHTML = html;
+  }
+
+  lookAction(visible: boolean, fallback = false): void {
+    this.get("look-action").hidden = !visible;
+    this.get("look-action").textContent = fallback ? "Click to look · drag / arrows available" : "Click to look";
+  }
+
+  gesture(kind: "exit" | "skip" | null, progress: number, key = "E"): void {
+    this.exitProgress = kind === "exit" ? progress : null;
+    this.exitKey = kind === "exit" ? key : "E";
+    this.get("opening-skip").innerHTML = `Skip · hold <kbd>Space</kbd>${kind === "skip" ? ` <progress aria-label="Skip hold" max="1" value="${progress}"></progress>` : ""}`;
+    if (this.latest?.player.controlledVehicleId) {
+      const indicator = kind === "exit" ? ` <progress aria-label="Exit hold" max="1" value="${progress}"></progress>` : "";
+      // The regular HUD update supplies refusal/suit information; this small
+      // progress element updates every step without rebuilding the full HUD.
+      const guidance = this.get("pilot-guidance");
+      const base = guidance.innerHTML.replace(/ <progress[^>]*><\/progress>/g, "");
+      guidance.innerHTML = base.replace(/<kbd>[EX]<\/kbd>/, `<kbd>${this.exitKey}</kbd>`) + indicator;
+    }
+  }
+
+  private focusPanelTarget(kind: PanelKind, state: GameState, targetId: string): void {
+    let id: string | null = null;
+    if (kind === "notebook" && state.knowledge.evidence.some(e => e.id === targetId)) id = `finding-${targetId}`;
+    if (kind === "inventory") {
+      const cache = state.recovery.caches.find(c => c.id === targetId);
+      if (cache) id = `container-${cache.containerId}`;
+      else if (state.fleet.vehicles.some(v => v.id === targetId)) id = `vessel-${targetId}`;
+      else if (targetId === "rescue_staging") id = "panel-content";
+    }
+    if (kind === "craft") id = "panel-title";
+    if (!id) return;
+    const element = this.get(id);
+    element.setAttribute("tabindex", "-1");
+    element.focus({ preventScroll: true });
+    element.scrollIntoView({ block: "nearest" });
+    element.classList.add("interaction-focus");
+    window.clearTimeout(this.highlightTimer);
+    this.highlightTimer = window.setTimeout(() => element.classList.remove("interaction-focus"), 1400);
+  }
+
+  impact(loss: number, state: GameState | null): void {
+    if (!state || !Number.isFinite(loss) || loss <= 0) return;
+    const id = state.player.controlledVehicleId;
+    const now = performance.now();
+    this.impactLoss = now - this.impactAt <= 1500 && this.impactVehicle === id ? this.impactLoss + loss : loss;
+    this.impactAt = now;
+    this.impactVehicle = id;
+    this.impactUntil = now + 600;
+    const notice = this.get("impact-notice");
+    notice.textContent = `Hull −${this.impactLoss.toFixed(1)}%`;
+    notice.hidden = false;
+    notice.classList.toggle("urgent", (state.fleet.vehicles.find(v => v.id === id)?.health ?? 100) <= 25);
+    window.clearTimeout(this.impactTimer);
+    this.impactTimer = window.setTimeout(() => { notice.hidden = true; }, 1800);
+  }
+
+  cancelFeedback(): void {
+    window.clearTimeout(this.highlightTimer);
+    window.clearTimeout(this.impactTimer);
+    this.impactLoss = 0;
+    this.impactAt = this.impactUntil = -Infinity;
+    this.impactVehicle = null;
+    this.get("impact-notice").hidden = true;
+    for (const element of this.root.querySelectorAll<HTMLElement>(".interaction-focus, .hull-impact")) element.classList.remove("interaction-focus", "hull-impact");
+  }
+
+  resetPresentation(): void {
+    this.cancelFeedback();
+    this.pilotId = null;
+    this.startTick = null;
+    window.clearTimeout(this.toastTimer);
+    this.toast.hidden = true;
+  }
+
   notify(message: string, error = false): void {
     message = recoveryDisplay(message);
     // Session replacement enters/updates the view before this notice, while
@@ -867,11 +982,12 @@ export class GameView {
     this.graphicsFailed = true;
     this.get("graphics-error").hidden = false;
     this.get("graphics-error-text").textContent = message;
-    for (const id of ["new-game", "continue", "resume", "lock-mouse"])
+    for (const id of ["new-game", "continue", "resume", "look-action"])
       this.get<HTMLButtonElement>(id).disabled = true;
   }
 
   dispose(): void {
+    this.cancelFeedback();
     window.clearTimeout(this.toastTimer);
     this.abort.abort();
     this.root.replaceChildren();

@@ -1,11 +1,15 @@
 import type { GameState } from "../src/sim/types.js";
 import type { SaveSlot } from "../src/save/repository.js";
+export { deliberateExit, controlHasFocus } from "../src/runtime/input.js";
 import type { UiActions } from "../src/ui/view.js";
 import { MemoryStorage, TestWriterLock } from "./persistence-support.js";
 
 class TestCanvas extends EventTarget {
   dataset: Record<string, string> = {};
-  focus(): void {}
+  focus(): void { (document as unknown as { activeElement: unknown }).activeElement = this; }
+  captures = 0;
+  lock: () => Promise<void> | void = () => { this.captures++; };
+  requestPointerLock(): Promise<void> | void { return this.lock(); }
 }
 export class GameView {
   static current: GameView;
@@ -15,6 +19,12 @@ export class GameView {
   reason = "";
   notices: string[] = [];
   disposed = false;
+  currentPanel: string | null = null;
+  lookVisible = false;
+  fallback = false;
+  lastSettings: unknown[] = [];
+  progress: { kind: string | null; progress: number } = { kind: null, progress: 0 };
+  targetId: string | null = null;
   constructor(
     _root: HTMLElement,
     readonly actions: UiActions,
@@ -28,7 +38,13 @@ export class GameView {
     _hasSession: boolean,
     _busy: boolean,
   ): void {}
-  settings(): void {}
+  settings(...settings: unknown[]): void { this.lastSettings = settings; }
+  lookAction(visible: boolean, fallback = false): void { this.lookVisible = visible; this.fallback = fallback; }
+  target(): void {}
+  gesture(kind: string | null, progress: number): void { this.progress = { kind, progress }; }
+  impact(): void {}
+  cancelFeedback(): void {}
+  resetPresentation(): void {}
   audioSettings(): void {}
   confirmation(): void {}
   cancelConfirmation(): void {}
@@ -36,8 +52,10 @@ export class GameView {
     this.screen = "menu";
     this.reason = reason;
   }
-  closePanel(): void {}
-  openPanel(): void {
+  closePanel(): void { this.currentPanel = null; }
+  openPanel(kind: string, _state: GameState, targetId?: string): void {
+    this.currentPanel = kind;
+    this.targetId = targetId ?? null;
     this.screen = "panel";
   }
   refreshPanel(): void {}
@@ -59,7 +77,7 @@ export class GameView {
 }
 export class PlayerInput {
   cruise = false;
-  settings = { sensitivity: 1, invertY: false };
+  settings = { sensitivity: 1, invertY: false, keyTurnSpeed: 1 };
   clear(): void {
     this.cruise = false;
   }
@@ -115,6 +133,7 @@ export function browserFixture() {
   const document = Object.assign(new EventTarget(), {
     hidden: false,
     pointerLockElement: null as TestCanvas | null,
+    activeElement: null as TestCanvas | null,
     exitPointerLock: () => {
       document.pointerLockElement = null;
     },
@@ -127,6 +146,7 @@ export function browserFixture() {
     document,
     localStorage: storage,
     navigator: {
+      userActivation: { isActive: false },
       locks: {
         request: (
           name: string,
@@ -156,6 +176,14 @@ export function browserFixture() {
     lock,
     window,
     document,
+    activation: values.navigator.userActivation,
+    key(code: string, type = "keydown", repeat = false): void {
+      window.dispatchEvent(Object.assign(new Event(type, { cancelable: true }), { code, repeat }));
+    },
+    locked(locked: boolean): void {
+      document.pointerLockElement = locked ? GameView.current.canvas : null;
+      document.dispatchEvent(new Event("pointerlockchange"));
+    },
     frames(count = 12): void {
       for (let i = 0; i < count; i++) {
         now += 1000 / 60;
