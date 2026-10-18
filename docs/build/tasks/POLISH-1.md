@@ -35,7 +35,15 @@ Use **sequential implementation owners**: 1A lands usable simulation/target inte
 
 ## 1A exclusive implementation ownership
 
-Production: `src/sim/{targeting,world,types,step,vehicles,progression}.ts`, `src/content/registry.ts`; **only minimal target imports/call replacements and accurate per-verb interaction prompt** in `src/ui/view.ts`. No panel redesign, runtime, renderer, audio, save or physics edits.
+Production: `src/sim/{targeting,world,types,step,vehicles,progression}.ts`, `src/content/registry.ts`; **only minimal target imports/call replacements and accurate per-verb interaction prompt** in `src/ui/view.ts`. No panel redesign, runtime, audio, save or physics edits. The narrow renderer exception below is explicitly authorized; no other render work.
+
+### Authorized source alignment, 2026-10-18
+
+Root inspected the worker's `/tmp/siltwake-polish-1a/reach-probe.{mjs,json}`, current source rendering, terrain-following persistent hosts and workshop platform. Strict LOS exposes three previously buried collectable groups. Add **`src/render/expedition.ts` only for vertical translation of the existing `island_workshop_scraps`, `island_headland_scraps` and `island_glass_ledge_west` groups**. A narrowly typed additive registry render-offset field/table is allowed; it must be the shared authority for art translations and target datums. No separate renderer-only magic offsets, new asset variants or general art changes. Source IDs/positions/yields/provenance, saves, terrain/platform/collision, existing4m reach and movement stay unchanged. No LOS bypass or ignored terrain.
+
+Check actual transformed geometry and support across the group footprint, plus collision-valid reachable aim/action poses. Do not make a cluster hover to clear one high point. Existing terrain-following persistent scrap/glass hosts in `environment.ts` remain unassigned and should provide the depleted/sort anchor; report a concrete new cross-path need if they cannot. Preserve stock-driven resource visibility. The probe also reports null for both shore-crop targets, whose upper cups are already above the platform; fix their aim metadata on visible geometry while retaining hand food and empty-host tending. Do not infer a mesh move merely from a null probe.
+
+Return this correction as a small separate source commit with exact metadata/mesh/source numbers and a bounded geometry/LOS/action probe. Temporary NullEngine diagnostics are allowed in the assigned temp area; no additional permanent test path. Actual final production look/aim/collect/depleted-host verification is added to1B below. This scope was delivered to the running original child with stable steer request `siltwake-polish-1a-source-alignment-0511e7f`; it creates no new review/task or worker.
 
 Tests: new `tests/targeting.test.ts`, optional reusable `tests/targeting-support.ts`, existing `tests/{expedition,hull-clearance,simulation,expedition-decisions,command-snapshot,presentation}.test.ts`. Existing test edits must be narrow consequences of view-sensitive targeting or the required query method. Do not weaken state/refusal expectations, delete failing cases or grant fixture inventory to conceal a regression. If another path is essential, report the exact proposal to root and continue independent work; do not edit beyond ownership.
 
