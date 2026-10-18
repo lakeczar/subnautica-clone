@@ -633,6 +633,14 @@ test("storage-off sessions, errors and graphics recovery remain visible through 
   assert.match(get("notification").textContent, /Session only/);
   view.showMenu(true);
   assert.equal(get("session-warning").hidden, false, "the reminder must not inherit the hidden HUD");
+  assert.equal(get("session-warning").checkVisibility(), true);
+  assert.equal(get("notification").checkVisibility(), true, "grouped persistence errors remain outside hidden HUD ancestry");
+  view.notify("Graphics restored. Resume when ready.", false, { channel: "system" });
+  assert.equal(get("system-status").checkVisibility(), true, "grouped system feedback remains available in menus");
+  view.openPanel("inventory", session.state!);
+  for (const id of ["session-warning", "notification", "system-status"])
+    assert.equal(get(id).checkVisibility(), true, `${id} remains available through panel HUD hiding`);
+  view.closePanel();
   view.showGame();
   const s = session.state!;
   s.player.vitals.health = 10;
