@@ -1,10 +1,10 @@
 # Build status
 
-## Current checkpoint — surface correction inspected; stage1 remains open
+## Current checkpoint — combined OS2 correction inspected; fresh pair next
 
-The OS2-01 movement correction is provisionally integrated at **1231fee4d3703a64839bfde180985867a85f9c78**, source **cc3f20df8de8e22ae7ad401e40240c6bb1109e98**. Root passes **410 tests**, typecheck/build and both economy scripts, verifies all 406 author payloads and 27 production build files, reproduces safe escape/prevention and zero overlap deepening, and confirms complete actual reload-state equality. [Inspection and limits](evidence/POLISH-1-RIB-SURFACE-INTEGRATION.md). Both swimmer and hull surface corrections are checked continuously; existing shallow trapped saves escape normally with no decode relocation or schema change. The Sol author is terminal and releases its paths/resources.
+Movement source **cc3f20d** and feedback/copy source **4a5103f** are provisionally integrated; root's test-only reconciliation is **bd29ac3872bbad934e76eeb2a1d248304948ec84**. Root passes **419/419 tests**, typecheck/build and both economies. All27 production files match the author build; complete actual reload state/envelope except export savedAt and journal bytes match at tick16729. [Refinement inspection](evidence/POLISH-1-REFINEMENTS-INTEGRATION.md) and [movement inspection](evidence/POLISH-1-RIB-SURFACE-INTEGRATION.md) retain actual/diagnostic, prior-source and human/hardware limits.
 
-**This is provisional integration, not independent acceptance or stage1 closure.** The [small feedback/copy assignment](tasks/POLISH-1-REFINEMENTS.md) is prepared: hide zero-rounded hull chips, retain one full exit refusal with typed target/reason identity and full accessible announcement, and shorten routine menu copy. The isolated Sol 6.1/max refinement builder is active from parent 5830e0a; TASKS records its exact ID and ownership. Both leaves share a fresh full-correction Astra xhigh/Sol6.1 max gate, then fresh Opus stage1 verification. The original Opus finding and the rejected prototype's composed-clamp defect remain in the review context; historical experience acceptance on 4baaa34 does not supersede this gate.
+Both authors are terminal and release all paths/resources. **This is provisional integration, not independent acceptance or stage1 closure.** The [fresh full-correction review](tasks/POLISH-1-OS2-REVIEW-R1.md) covers both leaves from base1c942bd, including original Opus findings/advice, root's rejected-prototype objection and bounded UI requirements. Freeze this committed candidate for separate Astra xhigh/Sol6.1 max reviewers, then fresh Opus stage1 verification. TASKS owns actual dispatch IDs; historical active labels below do not override this checkpoint.
 
 The [M2 direction](design/M2-DIRECTION-PROPOSAL.md) has paired planning acceptance on **30c6bf9**, all seven criteria with root concurrence. It starts with an earned Canopy–Basin benchmark, then earned fleet/mobile-home systems, then deep routes and both functional ending routes. This is direction only; no M2 production or schema acceptance is implied. OS2-04/06 remain first-M2-benchmark obligations. M2–M4 follow automatically under the owner's standing authorization. Earlier active/next labels below are historical.
 
@@ -41,7 +41,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-Current sole builder: OS2 feedback/copy refinement, Sol 6.1/max, parent 5830e0a, branch `t3/os2-feedback-refinements`, worktree `/home/worker/.t3/worktrees/subnautica-clone/t3-82f2eea7`. The movement author and all earlier tasks are terminal and released. The new builder owns only the narrowly listed refinement paths; movement/collision remains frozen. Root owns integration/build records and no browser/server/recording/check process. TASKS records the exact ID.
+No builder remains active. Movement and refinement authors are terminal; all production/test ownership is released. Root owns integration/build records and no browser/server/recording/check process. The fresh independent pair owns only its assigned reports once dispatched; TASKS records exact candidate, models and task IDs.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -76,7 +76,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active isolated Sol 6.1/max refinement builder through its completion notification. Inspect its return provisionally and freeze the full movement + refinement batch for fresh non-author Astra xhigh and Sol6.1 max acceptance, followed by fresh Opus stage1 verification. Continue accepted M2 direction and M3/M4 automatically. No routine owner permission is needed. Receive completion notifications without polling; TASKS owns actual active IDs. Main merge/deployment remain owner actions.
+Dispatch the prepared fresh combined OS2 Astra xhigh/Sol6.1 max pair from a clean frozen commit, then synchronize the public PRs. Receive completion notifications without polling, reconcile findings and verify affected fixes before fresh Opus stage1 verification. Continue accepted M2 direction and M3/M4 automatically. No routine owner permission is needed. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

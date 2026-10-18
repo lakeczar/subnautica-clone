@@ -289,3 +289,14 @@ Provisional composition **4c09ee7** includes S2a3d37f4e/24c241d with S2b39de511.
 ### COMPOSE inspected; no public interface change
 
 Source5005095/reporteb66478 is provisionally integrated at5355a63,399 checks/build/economies pass. A private hud.ts airSourceLabel is shared by vitals/hazard banners; authoritative surface/refuge/craft/finite-air precedence and warning order stay unchanged.12 shared test expectations now retain native-disclosure/focus/atomicity/prerequisite/storage behavior; paid-rebuild fixture has a real buoy item. No source/schema/physics/economy seam changes. COMPOSE paths released. The same author receives only hud.css for the9→11px non-action pause caption and a new evidence report. Full experience acceptance awaits this bounded return, the prepared fresh pair and Opus. TASKS records actual ownership.
+
+
+### OS2 movement/refinement composed; ownership released
+
+Movement cc3f20d and refinement4a5103f are provisionally assembled with test-only reconciliationbd29ac3. Root419 checks/typecheck/build/economies pass; [root inspection](evidence/POLISH-1-REFINEMENTS-INTEGRATION.md). All author source/test paths are released. The fresh combined review remains required before acceptance.
+
+Movement preserves WorldQueries/Capsule signatures, geometry and saved state. Conservative defined-normal separation checks neighboring solids and each slide; surface callers validate correction, perform at most one capped retry, then roll back. No codec relocation or always-on nudge. Measurements use the selected final attempt; exact private helpers are in the movement author report.
+
+Refinement adds transient `ExitRefusalCode = "not-piloting" | "carrier" | "depth" | "obstructed"` and optional `NoticeOptions.refusal?: { kind: "exit"; vehicleId: string; code: ExitRefusalCode }`. Pure `exitBlock(s: GameState, world: WorldQueries): { code: ExitRefusalCode; message: string } | null` owns existing refusal precedence/text; `exitRefusal` remains its compatible string/null wrapper. Both explicit and contextual exit adapters emit one targeted refusal with no success mutation/cue. This metadata is never saved.
+
+UI `ActionResult` now retains `full: string` and optional refusal alongside message/error/activeLeft. Internal `EncounterPresentation.observeExitGuidance(guidance: NoticeOptions["refusal"]): void` observes actual visible current craft/reason; matching results may shorten, changed context clears obsolete targeted results, unmatched delivery stays full. Full errors announce once per actual attempt; ordinary refresh does not replay them. Public lifecycle, save/schema, input and economy remain unchanged. Successful receipt is Left the craft; full saved feedback remains original. Manual save text is Saved locally without changing persistence behavior. Impact rounding and concise copy follow the bounded task; CSS/render and movement helpers are untouched by the refinement.
