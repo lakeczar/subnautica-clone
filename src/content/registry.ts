@@ -659,6 +659,8 @@ export const OPTIONAL_RECORD = {
   text: "Mara Sen / field method: “Start with what the fans are doing. The instruments can wait. The water will not.” A personal working note, separate from the intake service record.",
 } as const;
 export const DART_BUILD_POSE = { x: 20, y: -1.6, z: -22 } as const;
+/** Fabrication only: saved hulls and makeVehicle's neutral heading stay intact. */
+export const DART_BUILD_YAW = Math.PI;
 export interface InteractionHostDefinition {
   offset?: { x: number; y: number; z: number };
   radius?: number;
@@ -671,6 +673,19 @@ export interface InteractionHostDefinition {
 /** Offsets from interaction datums to the actual instrument, record or work face.
  * Only a host's own furniture is exempt from optical occlusion, never its room. */
 export const INTERACTION_HOSTS: Readonly<Record<string, InteractionHostDefinition>> = {
+  C01: { offset: { x: -1.25, y: 0.75, z: -0.3 }, radius: 0.7 },
+  C02: { offset: { x: 0, y: -0.7, z: 0 }, radius: 1.05 },
+  C03: { radius: 0.55 },
+  C04: { offset: { x: 0, y: -0.025, z: 0 }, radius: 0.5 },
+  pod_services: {
+    offset: { x: 0.34, y: 1.2, z: 0.9 }, radius: 0.45, solidIds: ["pod.bench"],
+  },
+  workshop_services: {
+    offset: { x: 0.8, y: 0.85, z: -4.15 }, radius: 0.65, solidIds: ["workshop.bench"],
+  },
+  rescue_staging: { offset: { x: 0, y: -0.3, z: 0 }, radius: 0.85 },
+  reef_ribbon_catch_north: { offset: { x: 0.35, y: -0.25, z: 0.1 }, radius: 1.3 },
+  reef_ribbon_catch_south: { offset: { x: 0.35, y: -0.25, z: 0.1 }, radius: 1.3 },
   island_workshop_scraps: { renderOffsetY: 0.25 },
   island_headland_scraps: { renderOffsetY: 2, persistentOffsetY: 0.5, offset: { x: -0.65, y: 0.1, z: -0.35 } },
   island_glass_ledge_west: { renderOffsetY: 1.25, offset: { x: 0, y: 0.45, z: -0.5 } },

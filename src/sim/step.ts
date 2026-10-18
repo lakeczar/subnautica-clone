@@ -26,9 +26,9 @@ import {
   craft,
   discover,
   hint,
-  nearestInteraction,
   toggleBuoy,
 } from "./progression.js";
+import { aimedInteraction } from "./targeting.js";
 import { board, distraction, eat, exit, rechargeCells, reserve, service } from "./vehicles.js";
 import { dartPerformance, installModule, removeModule } from "./modules.js";
 import {
@@ -47,7 +47,7 @@ const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
 /** Mutates only the detached fixed-step draft; every refusal precedes gameplay mutations. */
-function action(s: GameState, c: GameCommand, w: WorldQueries): string | null {
+function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent[]): string | null {
   if (c.type === "look" || c.type === "move") return null;
   if (c.type === "skip-opening") {
     completeOpening(s);
@@ -155,27 +155,53 @@ function action(s: GameState, c: GameCommand, w: WorldQueries): string | null {
     case "scan": {
       if (!equipped(s, "essential_tools"))
         return "Fabricate the scanner, or directly inspect the nearby physical records.";
-      const t = nearestInteraction(s);
-      if (!t) return "Approach a source, animal habitat or record to scan.";
-      if (t.kind === "evidence") s.feedback = discover(s, t.id as EvidenceId);
-      else if (t.id in SOURCES) {
+      const t = aimedInteraction(s, w);
+      if (!t) {
+        events.push({ type: "notice", message: "Nothing within reach." });
+        return null;
+      }
+      let message: string;
+      if (t.kind === "evidence") {
+        message = t.known ? `${t.label} · in notebook.` : discover(s, t.id as EvidenceId);
+        if (!t.known) s.feedback = message;
+      } else if (t.id in SOURCES) {
         const id = t.id as SourceId;
         if (!s.knowledge.scans.includes(id)) s.knowledge.scans.push(id);
-        s.feedback = SOURCES[id].scan;
-      } else
-        s.feedback =
-          "Scan retained. The notebook distinguishes observed facts from hypotheses.";
+        message = `${t.known ? `${t.label} · scan retained. ` : ""}${SOURCES[id].scan}`;
+      } else message = `${t.label} · scan retained. The notebook distinguishes observed facts from hypotheses.`;
       s.world.threat.interest = Math.min(12, s.world.threat.interest + 2);
+      events.push({ type: "notice", message }, { type: "sound", cue: "scan" });
       return null;
     }
     case "interact": {
       if (s.player.controlledVehicleId) return exit(s, w);
-      const target = c.target
-        ? nearestTarget(s, c.target)
-        : nearestInteraction(s);
-      if (!target) return "Approach a readable handle, source patch or record.";
-      if (target.id in SOURCES) return collect(s, target.id as SourceId);
+      const target = aimedInteraction(s, w);
+      if (c.target !== undefined && target?.id !== c.target)
+        return "Aim at a visible host within reach.";
+      if (!target) {
+        events.push({ type: "notice", message: "Nothing within reach." });
+        return null;
+      }
+      if (target.kind === "source") {
+        const id = target.id as SourceId;
+        if (target.verb === "empty") {
+          events.push({ type: "notice", message: `${target.label} · Empty.` });
+          return null;
+        }
+        if (target.verb === "sort" && SOURCES[id].item !== "meal")
+          return action(s, { type: "sort", sourceId: id,
+            maintenance: s.world.resources.find(n => n.id === id)!.reserve === 0 }, w, events);
+        const no = collect(s, id);
+        if (!no && target.verb === "sort")
+          events.push({ type: "notice", message: "Active tending started · 20 seconds. Movement away cancels; pause freezes tending." });
+        return no;
+      }
       if (target.id in EVIDENCE) {
+        if (target.known) {
+          events.push({ type: "interaction-panel", panel: "notebook", targetId: target.id },
+            { type: "notice", message: `${target.label} · in notebook.` });
+          return null;
+        }
         s.feedback = discover(s, target.id as EvidenceId);
         return null;
       }
@@ -185,23 +211,22 @@ function action(s: GameState, c: GameCommand, w: WorldQueries): string | null {
         s.feedback = OPTIONAL_RECORD.text;
         return null;
       }
-      if (target.kind === "vehicle") return board(s, target.id);
-      if (target.kind === "cache") {
-        s.feedback =
-          "Cargo cache reached. Open the hold to transfer its identified contents.";
+      if (target.kind === "vehicle" && target.verb === "board") return board(s, target.id);
+      if (target.kind === "vehicle") {
+        events.push({ type: "interaction-panel", panel: "inventory", targetId: target.id },
+          { type: "notice", message: `${target.label} · hold and recovery.` });
         return null;
       }
-      s.feedback =
-        target.id === "rescue_staging"
-          ? "Local recovery bench. Deploy Bobbin toward a disabled Dart, attach its collar, then guide it back along the shallow flank."
-          : "Refuge services. Open the hold or fabrication panel to prepare.";
+      if (target.kind === "cache") {
+        events.push({ type: "interaction-panel", panel: "inventory", targetId: target.id },
+          { type: "notice", message: "Cargo cache reached · identified contents in Hold." });
+        return null;
+      }
+      events.push({ type: "interaction-panel", panel: target.id === "rescue_staging" ? "inventory" : "craft", targetId: target.id },
+        { type: "notice", message: target.id === "rescue_staging" ? "Local recovery bench · Hold." : "Refuge services · Fabricate." });
       return null;
     }
   }
-}
-function nearestTarget(s: GameState, id: string) {
-  const t = nearestInteraction(s);
-  return t?.id === id ? t : null;
 }
 function updateAction(s: GameState): void {
   const a = s.world.action;
@@ -240,21 +265,16 @@ export function executeCommand(
   world: WorldQueries,
 ): { state: GameState; events: GameEvent[] } {
   const draft = structuredClone(state);
-  const no = action(draft, command, world);
+  const events: GameEvent[] = [];
+  const no = action(draft, command, world, events);
   if (no)
     return { state, events: [{ type: "notice", message: no, error: true }] };
-  return {
-    state: draft,
-    events: draft.feedback
-      ? [
-          { type: "notice", message: draft.feedback },
-          {
-            type: "sound",
-            cue: command.type === "craft" ? "craft" : "collect",
-          },
-        ]
-      : [],
-  };
+  if (draft.feedback && !events.some(e => e.type === "notice"))
+    events.push(
+      { type: "notice", message: draft.feedback },
+      { type: "sound", cue: command.type === "craft" ? "craft" : "collect" },
+    );
+  return { state: draft, events };
 }
 export function stepGame(
   state: GameState,
@@ -266,10 +286,12 @@ export function stepGame(
   s.tick++;
   for (const c of commands) {
     const previous = s.feedback;
-    const no = action(s, c, world);
+    const actionEvents: GameEvent[] = [];
+    const no = action(s, c, world, actionEvents);
     if (no) events.push({ type: "notice", message: no, error: true });
-    else if (s.feedback && s.feedback !== previous)
-      events.push(
+    else {
+      events.push(...actionEvents);
+      if (s.feedback && s.feedback !== previous && !actionEvents.some(e => e.type === "notice")) events.push(
         { type: "notice", message: s.feedback },
         {
           type: "sound",
@@ -283,6 +305,7 @@ export function stepGame(
                   : "collect",
         },
       );
+    }
   }
   if (s.opening.phase < 4) {
     s.opening.phaseTicks++;
@@ -364,8 +387,12 @@ export function stepGame(
       move.position.y,
     );
     if (v.hull === "spindle") move.position.y = -0.4;
-    if (move.hitSolid && previousSpeed > 4)
+    if (move.hitSolid && previousSpeed > 4) {
+      const before = v.health;
       v.health = Math.max(0, v.health - (previousSpeed - 4) * DT * 10);
+      const hullLoss = before - v.health;
+      if (hullLoss > 0) events.push({ type: "impact", speed: previousSpeed, hullLoss, origin: { ...move.position } });
+    }
     if (move.hitSolid) {
       v.velocity.x *= 0.5;
       v.velocity.z *= 0.5;

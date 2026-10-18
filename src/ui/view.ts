@@ -27,7 +27,8 @@ import {
   nearWorkshop,
   usedCapacity,
 } from "../sim/inventory.js";
-import { craftingRefusal, nearestInteraction, personalLimit } from "../sim/progression.js";
+import { craftingRefusal, personalLimit } from "../sim/progression.js";
+import { aimedInteraction } from "../sim/targeting.js";
 import { exposure } from "../sim/survival.js";
 import { RECOVERY_NOTICES, recoveryOccupancyRefusal } from "../sim/recovery.js";
 import { cellRechargePreview, distractionPreview, exitRefusal, hullDepth, PULSE_CHARGE_COST } from "../sim/vehicles.js";
@@ -464,7 +465,7 @@ export class GameView {
       v = state.fleet.vehicles.find(
         (v) => v.id === state.player.controlledVehicleId,
       ),
-      t = nearestInteraction(state);
+      t = aimedInteraction(state, this.world);
     this.get("context-hint").textContent = state.world.action
       ? `Active ${state.world.action.kind} · ${Math.ceil(state.world.action.seconds)} s remaining`
       : state.recovery.operation
@@ -491,7 +492,7 @@ export class GameView {
       this.get("pilot-guidance").classList.toggle("urgent", exitBlocked !== null);
     }
     this.get("interact-prompt").innerHTML = !v && t
-        ? `<kbd>E</kbd> ${escapeHtml(t.label)} <small>${t.id in SOURCES ? `${SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Hand-gather food" : "Collect exposed bundle"} · Q scan` : t.kind === "evidence" ? "Inspect & record · J notebook" : "Inspect"}</small>`
+        ? `${t.verb === "empty" ? "" : "<kbd>E</kbd> "}${escapeHtml(t.label)} <small>${({ collect: "Collect", gather: "Gather", sort: t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Tend · 20 s" : "Sort · 20 s", inspect: "Inspect", review: "Notebook", read: "Read", board: "Board", recover: "Recover", open: "Open", use: "Use", empty: "Empty" })[t.verb]}${equipped(state, "essential_tools") && !t.known && (t.kind === "source" || t.kind === "evidence") ? " · Q scan" : ""}</small>`
         : "";
     this.get("vitals").innerHTML =
       `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${e.breathable ? "Breathing air" : "180 s tank"}</small></div><div><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m</small></div>` : ""}`;
@@ -683,7 +684,7 @@ export class GameView {
       if (!state.knowledge.blueprints.length)
         html += "<p>Inspect the pod regulator to recover its checklist.</p>";
       html += `<p>Rescue stock: ${state.world.maintenance.alloy} alloy / ${state.world.maintenance.glass} glass / ${state.world.maintenance.membrane} membrane. Reserved for Bobbin and field patches; unavailable for other recipes.</p>`;
-      const n = nearestInteraction(state);
+      const n = aimedInteraction(state, this.world);
       if (n && n.id in SOURCES) {
         const id = n.id as keyof typeof SOURCES;
         html +=
