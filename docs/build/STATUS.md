@@ -1,10 +1,10 @@
 # Build status
 
-## Current checkpoint — combined OS2 correction under independent review
+## Current checkpoint — paired OS2 review requires one accessibility correction
 
 Movement source **cc3f20d** and feedback/copy source **4a5103f** are provisionally integrated; root's test-only reconciliation is **bd29ac3872bbad934e76eeb2a1d248304948ec84**. Root passes **419/419 tests**, typecheck/build and both economies. All27 production files match the author build; complete actual reload state/envelope except export savedAt and journal bytes match at tick16729. [Refinement inspection](evidence/POLISH-1-REFINEMENTS-INTEGRATION.md) and [movement inspection](evidence/POLISH-1-RIB-SURFACE-INTEGRATION.md) retain actual/diagnostic, prior-source and human/hardware limits.
 
-Both authors are terminal and release all paths/resources. **This is provisional integration, not independent acceptance or stage1 closure.** The [fresh full-correction review](tasks/POLISH-1-OS2-REVIEW-R1.md) covers both leaves from base1c942bd, including original Opus findings/advice, root's rejected-prototype objection and bounded UI requirements. Fresh Astra xhigh accepts all eight criteria on frozen **fbd79148e7a94014d4998e457f00ee81accf9f25**; independent Sol6.1 max remains pending. [Interim reconciliation](reviews/POLISH-1-OS2-R1.md). Fresh Opus stage1 verification follows paired acceptance. TASKS owns actual dispatch IDs; historical active labels below do not override this checkpoint.
+Both authors and both R1 reviewers are terminal and release all paths/resources. **Astra ACCEPT / Sol REQUEST CHANGES** on frozen **fbd79148e7a94014d4998e457f00ee81accf9f25**. Root reproduces SOL-OS2-R1-01: two simultaneous blocked-exit events cancel the first full accessible announcement, although visual guidance and transactions remain correct. [Paired reconciliation](reviews/POLISH-1-OS2-R1.md). The [bounded Sol correction](tasks/POLISH-1-OS2-ANNOUNCEMENT-FIX.md) changes only HUD announcement delivery and affected tests; full paired R2 and fresh Opus verification remain before stage1 closure. TASKS records actual dispatch. Earlier active labels below are historical.
 
 The [M2 direction](design/M2-DIRECTION-PROPOSAL.md) has paired planning acceptance on **30c6bf9**, all seven criteria with root concurrence. It starts with an earned Canopy–Basin benchmark, then earned fleet/mobile-home systems, then deep routes and both functional ending routes. This is direction only; no M2 production or schema acceptance is implied. OS2-04/06 remain first-M2-benchmark obligations. M2–M4 follow automatically under the owner's standing authorization. Earlier active/next labels below are historical.
 
@@ -76,7 +76,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-The fresh combined OS2 Astra reviewer accepts frozen fbd7914; the separate Sol review remains pending. Receive its completion notification without polling, reconcile findings and verify affected fixes before fresh Opus stage1 verification. Continue accepted M2 direction and M3/M4 automatically. No routine owner permission is needed. Main merge/public deployment remain owner actions.
+Commit the prepared bounded announcement correction baseline and dispatch one isolated Sol6.1/max builder. Receive its completion notification without polling, inspect and obtain fresh full-batch Astra/Sol R2. Fresh Opus stage1 verification follows acceptance, then accepted M2 direction and M3/M4 continue automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
