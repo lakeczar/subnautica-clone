@@ -560,3 +560,10 @@ Only assigned review report paths (protected appendix if a story finding require
 
 
 PR #4/#3 refreshed for61e9a7/210 checks and running gameplay pair0778644. Exact complete bodies/base/head/draft read back in `/tmp/siltwake-m1-pr/play-presentation-verified-{3,4}.json`; verification summary `/tmp/siltwake-m1-pr/play-presentation-verification.json`. Body SHA256 #4 `935e11165ede4025535299ce0b80fa2120a699fd9272cf38b34de9fa86c10c21`, #3 `53bc3f9ed0854d9f943037634a15a7724ab55d4b57b6bf99896f6cc4f7d82ff5`. Five new public images verified200 image/png/exact bytes; source/pose/viewport and temporary overlay limits disclosed. #3 remains accepted65-test M0; current #4 acceptance remains pending. No source/browser/test-matrix change, watcher or new delegate. Root has no owned running resources. Await the two independent review notifications; no polling or peer sharing.
+
+
+### Astra M1-PLAY R1 returned; no blockers, Sol remains independent
+
+Task `siltwake-m1-play-astra-r1-0778644` terminal, actual Astra/xhigh, clean worktree and no children/questions/browser/server. Report70e8e98 merged atbd2592e. Whole gameplay batch ACCEPT at0778644; no blocker. Root read the report and independent probes/results, indexed13 evidence files and inspected the actual pulse-HUD contrast crop. Reviewer210 tests/build/economy and2,304 staged payment cases pass; no redundant root suite/browser rerun. [Paired record](reviews/M1-PLAY-R1.md) records hashes and the exact verdict.
+
+Root accepts ASTRA-M1-PLAY-R1-01 as a nonblocking P3: pale pulse-cost hint over bright cockpit. Queue a bounded contrast treatment with actual bright/dark/narrow imagery and affected paired acceptance; no current source change. Sol remains independent at0778644, no findings shared. Root plus Sol active, no root resources. Receive its notification and reconcile the pair before any new author work; healthy-battery/no-charge integrated checks and M2–M4 remain required.
