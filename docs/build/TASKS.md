@@ -735,3 +735,10 @@ Task siltwake-polish-1b-sol-max-8516128 acknowledged completed/result_available 
 [Root inspection](evidence/POLISH-1B-INTEGRATION.md) records263 passing tests/build/economy, all160 artifact hashes and36 source/27 build matches, nine unchanged save roundtrips, exact paid fabrication and complete80-tick actual reload equality. Root inspected actual resource/regulator/notebook/cockpit imagery plus launch/impact frame sequences. Live author source/anchor findings are corroborated; root additionally reproduces camera below rendered terrain at recorded west approach, and co-planar workshop deck conflict.
 
 [POLISH-1C](tasks/POLISH-1C.md) freezes a bounded Sol max correction before accepting the composed batch. It explicitly replaces the inadequate translation-only constraint with supported readable assets and faithful local render terrain; physics/saves/resources remain frozen. No duplicate1B worker or premature independent acceptance. Root has no browser/server.
+
+
+### POLISH-1C dispatched from3c6ed94
+
+Task **`node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1c-sol-max-3c6ed94`**, stable request siltwake-polish-1c-sol-max-3c6ed94, exact parent **3c6ed94f247941d38ee2560a2f09f954afcd2f10**. T3 async isolated worktree accepted running with codex/gpt-6.1-sol and reasoningEffort=max; actual runtime confirmation pending. No pending child runs/questions. Only root and this builder active;1A/1B released.
+
+Full binding brief, exact findings/paths, root geometric reproduction, actual captures/earned saves, expected evidence and Linux browser rules supplied. Own checked-free5191 and incognito context; no children/peer edits/PR/push/merge. Correction does not inherit input/physics/save ownership. No premature acceptance or repeat consultation. Receive completion notification, inspect source/live evidence, then fresh Astra/Sol paired gate for composed1A+1B+1C.
