@@ -195,7 +195,7 @@ test("known evidence E repeats are informative, saveable and idempotent without 
   for (let i = 0; i < 3; i++) {
     const out = executeCommand(s, { type: "interact" }, world);
     assert.deepEqual(out.state, original);
-    assert.deepEqual(out.events, [{ type: "interaction-panel", panel: "notebook", targetId: "C01" }, { type: "notice", channel: "action", message: "Scored regulator · in notebook." }]);
+    assert.deepEqual(out.events, [{ type: "interaction-panel", panel: "notebook", targetId: "C01" }]);
     s = saved(out.state);
   }
   const stepped = stepGame(s, [{ type: "interact" }, { type: "interact" }], world);

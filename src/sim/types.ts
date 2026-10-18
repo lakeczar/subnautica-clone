@@ -209,6 +209,8 @@ export type NoticeContext = "threat" | "oxygen" | "food" | "hull" | "recovery";
 export interface NoticeOptions {
   channel?: NoticeChannel;
   context?: NoticeContext;
+  /** Optional transient action receipt; the full message remains available. Never saved. */
+  summary?: string;
 }
 export type GameEvent =
   | { type: "movement-mode-changed"; mode: MovementMode }
@@ -217,6 +219,8 @@ export type GameEvent =
   /** One commanded upward attempt, in metres this step. Absence resets presentation. Never saved. */
   | { type: "ascent-sample"; actorId: string | null; requestedRise: number; actualRise: number;
       solidLimitedRise: number; surfaceLimitedRise: number }
+  /** Horizontal metres from this step's commanded Dart movement. Never saved. */
+  | { type: "thrust-sample"; actorId: string; requested: number; actual: number; solidLimited: number }
   | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook"; targetId: string }
   | ({ type: "notice"; message: string; error?: boolean } & NoticeOptions)
   | {

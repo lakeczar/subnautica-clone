@@ -14,6 +14,15 @@ export interface AimedTarget extends Interaction {
   verb: InteractionVerb;
   known: boolean;
 }
+export const INTERACTION_REACH = 4;
+export const PREVIEW_REACH = 8;
+export interface ReachPreview {
+  id: string;
+  kind: Interaction["kind"];
+  host: InteractionHost;
+  label: string | null;
+}
+interface Candidate { target: AimedTarget; angle: number; reach: number; fresh: boolean }
 
 const finite = (v: Vec3): boolean => [v.x, v.y, v.z].every(Number.isFinite);
 const AIM_SLACK = 0.18;
@@ -78,15 +87,11 @@ function describe(s: GameState, t: Interaction, host: InteractionHost): AimedTar
   return { ...t, position: { ...t.position }, host, verb, known };
 }
 
-/** Pure, current-state selection. Reach uses the existing body datum; visibility
- * always reaches the actual host center, even when the eye is inside its sphere. */
-export function aimedInteraction(s: GameState, world: WorldQueries): AimedTarget | null {
-  const ray = aimRay(s);
-  if (!ray) return null;
-  const candidates: { target: AimedTarget; angle: number; reach: number; fresh: boolean }[] = [];
+function aimCandidates(s: GameState, world: WorldQueries, ray: AimRay, maxReach: number): Candidate[] {
+  const candidates: Candidate[] = [];
   for (const t of interactions(s)) {
     const reach = distance(s.player.pose.position, t.position);
-    if (!Number.isFinite(reach) || reach >= 4) continue;
+    if (!Number.isFinite(reach) || reach >= maxReach) continue;
     const host = interactionHost(s, t);
     if (!finite(host.center) || !Number.isFinite(host.radius) || host.radius <= 0) continue;
     const x = host.center.x - ray.origin.x, y = host.center.y - ray.origin.y, z = host.center.z - ray.origin.z;
@@ -101,6 +106,9 @@ export function aimedInteraction(s: GameState, world: WorldQueries): AimedTarget
       : t.kind === "source" && (target.verb === "collect" || target.verb === "gather");
     candidates.push({ target, angle, reach, fresh });
   }
+  return candidates;
+}
+function pick(candidates: Candidate[]): AimedTarget | null {
   candidates.sort((a, b) => a.angle - b.angle || a.reach - b.reach || a.target.id.localeCompare(b.target.id));
   const first = candidates[0];
   if (!first) return null;
@@ -110,4 +118,20 @@ export function aimedInteraction(s: GameState, world: WorldQueries): AimedTarget
   return candidates.filter(c => c.angle <= tie).sort((a, b) =>
     Number(b.fresh) - Number(a.fresh) || a.angle - b.angle || a.reach - b.reach ||
     a.target.id.localeCompare(b.target.id))[0]!.target;
+}
+/** Pure, current-state selection. Reach uses the existing body datum; visibility
+ * always reaches the actual host center, even when the eye is inside its sphere. */
+export function aimedInteraction(s: GameState, world: WorldQueries): AimedTarget | null {
+  const ray = aimRay(s);
+  return ray ? pick(aimCandidates(s, world, ray, INTERACTION_REACH)) : null;
+}
+/** Presentation only: never an executable Interaction, and never reveals unknown records. */
+export function reachPreview(s: GameState, world: WorldQueries): ReachPreview | null {
+  const ray = aimRay(s);
+  if (!ray || pick(aimCandidates(s, world, ray, INTERACTION_REACH))) return null;
+  const target = pick(aimCandidates(s, world, ray, PREVIEW_REACH)
+    .filter(c => c.reach >= INTERACTION_REACH && c.target.verb !== "empty"));
+  if (!target) return null;
+  return { id: target.id, kind: target.kind, host: target.host,
+    label: target.kind === "record" || (target.kind === "evidence" && !target.known) ? null : target.label };
 }
