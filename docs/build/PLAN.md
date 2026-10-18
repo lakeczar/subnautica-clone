@@ -1,5 +1,7 @@
 # Construction plan
 
+**Complete experience correction accepted on 4baaa34**, production d9aaf63: fresh Astra xhigh and Sol 6.1 max each accept all eight criteria, with root concurrence and no remaining blocker. [Paired R3](reviews/POLISH-1-EXPERIENCE-R3.md). Fresh [Opus stage1 R2](tasks/OPUS-STAGE1-R2.md) verifies experience before M2 breadth. All prior active/pending labels below are historical; TASKS records live dispatch.
+
 Astra R3 accepts all eight complete-experience criteria on **4baaa34**, with report/evidence independently inspected. Sol R3 remains pending on the same frozen candidate; [interim reconciliation](reviews/POLISH-1-EXPERIENCE-R3.md). No paired acceptance or production change. Fresh Opus verification and M2–M4 remain next.
 
 Current composition source **d9aaf63** is inspected and provisionally integrated at **e212da4**; [root record](evidence/POLISH-1-EXPERIENCE-COMPOSITION-FIX-INTEGRATION.md). Root400 checks/build/economies,447 payloads and27-file equality pass. Both R2 examples are resolved in inspected evidence, all authors are terminal, and [fresh full-batch R3](tasks/POLISH-1-EXPERIENCE-REVIEW-R3.md) precedes Opus verification and M2–M4. No new campaign completion claim. Earlier active/freeze labels below describe historical checkpoints.
