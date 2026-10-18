@@ -86,20 +86,18 @@
 .vitals .urgent { border-color: #f3b477; color: #ffe0a3; }
 .vitals[data-air-source="suit"] > div:first-child { border-color: #9bc8d0; }
 .vitals .service-hint { color: #ffe1b2; }
-/* Alerts are outside the HUD so save and graphics outcomes survive menus.
-   Concurrent danger and errors share a row, reserving the interaction area. */
+/* Danger and session notices occupy separate side lanes. Session notices stay
+   outside the HUD so persistence and graphics outcomes survive menus. */
 .alert-stack {
   position: absolute;
   top: 224px;
   left: 24px; right: 24px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: start;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   pointer-events: none;
   z-index: 8;
 }
-.alert-stack:has(#hazard:empty), .alert-stack:has(#notification[hidden]) { display: flex; flex-direction: column; align-items: center; }
 .hazard, #notification {
   max-width: min(700px, 100%);
   padding: 9px 12px;
@@ -115,8 +113,6 @@
 #notification { border: 1px solid #b6c79b80; color: #e9eddb; }
 #notification.error { background: #38372ffa; color: #ffe1b2; }
 #notification[data-channel="persistence"] { border: 2px solid #e5bd81; }
-[data-screen="menu"] .alert-stack, [data-screen="panel"] .alert-stack { top: auto; bottom: 20px; display: flex; align-items: center; }
-[data-screen="menu"] .alert-stack { top: 200px; bottom: auto; left: auto; width: min(420px, calc(100vw - 500px)); }
 [data-screen="menu"] #hazard, [data-screen="panel"] #hazard { display: none; }
 .interaction-stack {
   position: absolute;
@@ -160,15 +156,17 @@
 .pilot-guidance { position: absolute; bottom: 126px; left: 24px; max-width: min(300px, calc(50vw - 280px)); padding: 9px 10px; border-left: 2px solid #c5d4af99; border-radius: 3px; font-size: 12px; line-height: 1.5; background: #102f3ef5; }
 .pilot-guidance small { display: block; margin-top: 5px; font-size: 12px; color: #d2dfcd; }
 .pilot-guidance.urgent { border-color: #ffca89; color: #ffe0ad; }
-.session-warning { position: absolute; top: 72px; right: 24px; max-width: calc(100vw - 48px); display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 8px 12px; font-size: 12px; color: #ffe1b2; border: 1px solid #e5bd81; border-radius: 3px; background: #293e40fa; z-index: 9; }
+/* The call keeps its HUD lifetime and fixed instrument position. Stack durable
+   save, system and error notices below it using their actual content heights. */
+.session-notices { position: absolute; top: 122px; right: 24px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: min(340px, calc(100vw - 48px)); pointer-events: none; z-index: 9; }
+.session-warning { max-width: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 8px 12px; font-size: 12px; color: #ffe1b2; border: 1px solid #e5bd81; border-radius: 3px; background: #293e40fa; pointer-events: auto; }
 .session-warning button { border: 1px solid #e5bd8180; padding: 6px 10px; font-size: 12px; }
 [data-opening="true"] .hud-top { justify-content: flex-end; }
-[data-opening="true"] .session-warning { top: 24px; left: 50%; right: auto; transform: translateX(-50%); width: max-content; }
+[data-opening="true"] .session-notices { top: 24px; left: 50%; right: auto; transform: translateX(-50%); width: max-content; }
 [data-opening="true"] .alert-stack { top: 100px; }
-#system-status { position: absolute; right: 24px; top: 124px; max-width: min(290px, calc(100vw - 48px)); padding: 7px 10px; border: 1px solid #a3c7bd70; border-radius: 4px; background: #102d36fa; color: #d6e5d9; font-size: 12px; line-height: 1.5; pointer-events: none; z-index: 8; }
-[data-screen="menu"] #system-status { top: 24px; }
-[data-screen="panel"] #system-status { top: 84px; }
-.session-warning:not([hidden]) ~ #system-status { top: 142px; }
+#system-status { max-width: 290px; padding: 7px 10px; border: 1px solid #a3c7bd70; border-radius: 4px; background: #102d36fa; color: #d6e5d9; font-size: 12px; line-height: 1.5; }
+[data-screen="menu"] .session-notices { top: 24px; }
+[data-screen="panel"] .session-notices { top: 72px; }
 .pitch-cue { position: absolute; left: calc(50% + 40px); top: calc(50% - 28px); width: 7px; height: 56px; border-left: 1px solid #f6e6bc80; pointer-events: none; }
 .pitch-cue::after { content: ""; position: absolute; left: -3px; top: 50%; width: 5px; border-top: 1px solid #f6e6bc80; }
 .pitch-cue i { position: absolute; width: 7px; border-top: 2px solid #ffdf9e; }
@@ -197,7 +195,13 @@
   .vitals b { font-size: 15px; }
   .interaction-stack { width: 480px; bottom: 126px; }
   .pilot-guidance { max-width: 194px; }
-  .alert-stack { top: 220px; }
+  .alert-stack { top: 212px; }
+  .hazard { max-width: calc(100vw - 460px); }
+  /* A reachable target needs the centre for its prompt and full result. Craft
+     warnings keep the wider lane clear of the existing pilot guidance. */
+  [data-screen="playing"]:has(#interact-prompt:not(:empty)) .alert-stack { top: 220px; right: auto; width: 194px; align-items: flex-start; }
+  [data-screen="playing"]:has(#interact-prompt:not(:empty)) .hazard { max-width: 100%; }
+  .session-notices #notification { max-width: 194px; }
   #system-status { max-width: 270px; }
 }
 @media (max-width: 800px) {
@@ -206,11 +210,12 @@
   .region { max-width: 210px; }
   .region strong { font-size: 18px; }
   .vitals { left: 16px; top: 112px; max-width: calc(100vw - 32px); flex-wrap: wrap; }
-  .alert-stack { left: 16px; right: 16px; top: 250px; }
+  .alert-stack { left: 16px; right: 16px; top: 250px; width: auto; }
+  .hazard { max-width: 100%; }
   .interaction-stack { width: min(420px, calc(100vw - 32px)); }
   .pilot-guidance { bottom: 210px; left: 16px; max-width: 180px; }
   .opening { left: 16px; max-width: calc(100vw - 32px); }
-  [data-screen="menu"] .alert-stack { top: auto; bottom: 16px; left: 16px; width: auto; }
+  .session-notices { right: 16px; }
 }
 
 /* Keep obstruction and exit feedback in one reserved side column. */
