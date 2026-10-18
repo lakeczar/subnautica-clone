@@ -4,7 +4,7 @@ import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Scene } from "@babylonjs/core";
 import { terrainHeight, WORLD_BOUNDS } from "../sim/world.js";
-import { SOURCES } from "../content/registry.js";
+import { INTERACTION_HOSTS, SOURCES } from "../content/registry.js";
 import { ArtBatch, seeded } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
 
@@ -117,7 +117,7 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
   // Exposed glass follows abraded ledges, membrane collects in a lee hollow,
   // and tagged alloy sits on a fallen service frame. Hosts persist after harvest.
   // These skins sample the authoritative height field; they add no art-only shelf.
-  for (const source of Object.values(SOURCES)) {
+  for (const [id, source] of Object.entries(SOURCES)) {
     const { x, z } = source.position;
     if (source.asset === "glass") {
       for (let band = 0; band < 4; band++) {
@@ -138,7 +138,8 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
         stones.tube(path, 0.065, P.stoneLight, 5);
       }
     } else if (source.asset === "scraps") {
-      const y = terrainHeight(x, z) + 0.06;
+      const y = terrainHeight(x, z) + 0.06 +
+        (id === "island_headland_scraps" ? INTERACTION_HOSTS[id]?.persistentOffsetY ?? 0 : 0);
       // A frame deliberately has an empty centre; it reads differently from ore.
       for (const side of [-1, 1]) {
         stones.box([x + side * 1.3, y, z], [0.12, 0.1, 2.3], P.petrol);

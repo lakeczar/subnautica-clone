@@ -1,6 +1,7 @@
 import type { Scene, ShaderMaterial, Mesh } from "@babylonjs/core";
 import {
   SOURCES,
+  INTERACTION_HOSTS,
   EVIDENCE,
   CANOPY_COVER,
   RECOVERY_STAGE,
@@ -366,7 +367,8 @@ export function createExpeditionArt(
   const sourceMeshes = new Map<string, Mesh>();
   for (const [id, s] of Object.entries(SOURCES)) {
     const b = new ArtBatch("source." + id, scene, cel),
-      { x, y, z } = s.position;
+      { x, y: sourceY, z } = s.position,
+      y = sourceY + (INTERACTION_HOSTS[id]?.renderOffsetY ?? 0);
     for (let i = 0; i < 5; i++) {
       const dx = ((i % 3) - 1) * 0.65,
         dz = (Math.floor(i / 3) - 0.5) * 0.7;

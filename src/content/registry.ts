@@ -659,6 +659,24 @@ export const OPTIONAL_RECORD = {
   text: "Mara Sen / field method: “Start with what the fans are doing. The instruments can wait. The water will not.” A personal working note, separate from the intake service record.",
 } as const;
 export const DART_BUILD_POSE = { x: 20, y: -1.6, z: -22 } as const;
+export interface InteractionHostDefinition {
+  offset?: { x: number; y: number; z: number };
+  radius?: number;
+  solidIds?: readonly string[];
+  /** The three buried source groups only; shared by their art and aim datum. */
+  renderOffsetY?: number;
+  /** The existing headland frame only; no terrain or frame shape change. */
+  persistentOffsetY?: number;
+}
+/** Offsets from interaction datums to the actual instrument, record or work face.
+ * Only a host's own furniture is exempt from optical occlusion, never its room. */
+export const INTERACTION_HOSTS: Readonly<Record<string, InteractionHostDefinition>> = {
+  island_workshop_scraps: { renderOffsetY: 0.25 },
+  island_headland_scraps: { renderOffsetY: 2, persistentOffsetY: 0.5, offset: { x: -0.65, y: 0.1, z: -0.35 } },
+  island_glass_ledge_west: { renderOffsetY: 1.25, offset: { x: 0, y: 0.45, z: -0.5 } },
+  island_shore_crop_east: { offset: { x: 0, y: 0.18, z: -0.35 } },
+  island_shore_crop_west: { offset: { x: 0, y: 0.18, z: -0.35 } },
+};
 export const RECOVERY_STAGE = { x: 46, y: -12, z: -54 } as const;
 export const CANOPY_COVER = {
   min: { x: 103, y: -145, z: -122 },
