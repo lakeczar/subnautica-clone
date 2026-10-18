@@ -518,3 +518,12 @@ Builder owns only the M1-PLAY-CORE rules/registry/validation/tests/economy/evide
 
 
 PR #4/#3 updated and exact full bodies/base/head/draft read back in `/tmp/siltwake-m1-pr/r4-paired-verified-{3,4}.json`. #4 now records4/6 bounded criteria accepted at5eb1be1, explicitly leaving final gameplay route and integrated M1 open; #3 retains65-test M0-only productiona2cb19f. Published production remains769f2ad; worker retains exact76017b7 baseline despite parent records-only commits. Source-attributed images are unchanged. No root resources, repeated suite or new reviewer. Await the single M1-PLAY-CORE completion notification without polling; review its proposed exports/source/evidence before the next presentation assignment.
+
+
+### M1-PLAY-CORE completed, assembled and checked
+
+Task `siltwake-m1-play-core-sol-max-76017b7` terminal: actual codex/gpt-6.1-sol/max, source46b57f0de520f8925a1f41fc9a731d08f79c925c, evidencebc86c65004c9e9d13869b2dba4f0895ff2ecadb3; clean worktree, no children/questions/browser/server. Root assembled at5b518b7aa2f983e403ab0c032dba2be3cdadf7ba. All author paths released.
+
+[Root inspection](evidence/M1-PLAY-CORE-INTEGRATION.md):141 payloads/142 safe unique regular archive members and18 source snapshots verified;204 tests/typecheck/build/economy pass with matching JS/CSS. Six actual historical earned exports migrate with content-tag-only differences and correct session/journal preservation. Diagnostic refit from retained4+4 cargo and source-boundary comparisons pass against root-compiled modules. Original artifacts untouched; no new browser or redundant full matrix. Contracts now index exact additive commands, shared local access/module ownership and content3 guard.
+
+Prepared [M1-PLAY-PRESENTATION](tasks/M1-PLAY-PRESENTATION.md): exclusive UI/CSS, narrowly scoped lore/command wording and optional existing hunter-fin cue adjustment, then one fresh ordinary-control final-source route with durable action counts, paid/no-charge counterplay, actual return refit and reload. Root added two explicit presentation requirements from source inspection: crafted trim is not automatically installed; current recipe prices must not be called historical paid costs. Shared mechanics/save/geometry remain frozen. All workers terminal; root alone active before dispatch below. Fresh paired M1-PLAY and separate integrated-M1 review still required; no acceptance inherited from5eb1be1.
