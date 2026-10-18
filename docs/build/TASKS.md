@@ -863,3 +863,8 @@ Exact clean parent **45612f7740490f569eb8a311a7fde5357823f97a**, inspected C0 pr
 [Full2C brief](tasks/POLISH-1-SLICE2-2C.md) included verbatim. Exclusive panels.ts/new panels.css; narrowly panel-local view.ts/style.css and one main.ts CSS import; presentation.test.ts/optional preparation-panels.test.ts; own evidence. No HUD/runtime/simulation/world/render/canon edits. New PanelView.resetSession is reconciled in CONTRACTS. Own temp `/tmp/siltwake-polish-1-slice2-2c/`, optional5191. Required matched baseline/final refit counts retain ordinary-input and CSS-viewport attribution. No subtitle/help-copy proliferation.
 
 Original RIB remains independently assigned from577d249 with optional5192; no status polling, duplicate task or peer source consumption. Root plus2 workers, no root browser/server/check process. Receive terminal notifications and inspect before assembly.2D waits for inspected geometry/presentation seams; composed slice2 pair and stage1 Opus remain required. No main merge/deployment.
+
+
+### Public C0/2C checkpoint synchronized
+
+PR#4/#3 full bodies distinguish accepted controls ond031803 from provisional C0 ate3c3ce1 and active unintegrated2C/RIB work. Current C0 checks275/275,22 before/final parity cases,16 native intervals and matching index-CmqWR8YJ bundle are attributed; no new independent acceptance or full root browser replay is claimed. Exact body/base/head/draft readbacks atd8a6e17/M0a2cb19f match `/tmp/siltwake-m1-pr/slice2-c0-verification.json`. #3 remains M0-only; existing images retain original sources. All four stack layers confirmed linked/unwatched. Root clean with no browser/server/check process; task completion notifications resume integration without polling. No game/main merge or deployment.
