@@ -726,3 +726,12 @@ Full task and committed POLISH-1B specify exclusive runtime/UI/render/audio/test
 
 
 PR#4/#3 complete replacement descriptions were read back exactly at pushed eb31532 / M0a2cb19f. Verification `/tmp/siltwake-m1-pr/polish-1b-verification.json` records body hashes/base/head/draft checks. They distinguish accepted M1 from provisional1A and running1B, keep earlier media source-attributed, and retain M0-only claims for#3. All four stack layers are T3-linked and unwatched. No main/game merge or deployment. Root is ready to receive1B rather than polling; its completion automatically returns here for integration and the fresh paired gate.
+
+
+### POLISH-1B completed and provisionally assembled
+
+Task siltwake-polish-1b-sol-max-8516128 acknowledged completed/result_available with no pending children/questions; runtime Sol6.1/max confirmed from actual turn_context. Clean author source fff0511/2965fd1/8c15277/c1e5ca6 and evidence51d9863 merged at e4b979e75a500b1d004d74f29ec766592a7b48a6. Owned tab/recordings/server closed,5191 free; paths released.
+
+[Root inspection](evidence/POLISH-1B-INTEGRATION.md) records263 passing tests/build/economy, all160 artifact hashes and36 source/27 build matches, nine unchanged save roundtrips, exact paid fabrication and complete80-tick actual reload equality. Root inspected actual resource/regulator/notebook/cockpit imagery plus launch/impact frame sequences. Live author source/anchor findings are corroborated; root additionally reproduces camera below rendered terrain at recorded west approach, and co-planar workshop deck conflict.
+
+[POLISH-1C](tasks/POLISH-1C.md) freezes a bounded Sol max correction before accepting the composed batch. It explicitly replaces the inadequate translation-only constraint with supported readable assets and faithful local render terrain; physics/saves/resources remain frozen. No duplicate1B worker or premature independent acceptance. Root has no browser/server.
