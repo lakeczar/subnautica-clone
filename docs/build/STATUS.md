@@ -8,7 +8,7 @@
 
 The stage1 Opus review and detailed advice are reconciled in [the experience correction](tasks/POLISH-1-EXPERIENCE.md). S1 is terminal and provisionally integrated at **c8215c0**, sourceff3b013/report e928dc6. [Root inspection](evidence/POLISH-1-EXPERIENCE-S1-INTEGRATION.md) confirms actual Sol6.1/max runtime, all444 manifest payloads,376 tests/typecheck/build, both economy checks, matching build bytes and360 additional complete-state/sweep comparisons. S1 ownership is released. No new browser or visible experience acceptance is claimed.
 
-[S2a HUD/app/cue](tasks/POLISH-1-EXPERIENCE-S2A.md) and [S2b Cargo/fabrication](tasks/POLISH-1-EXPERIENCE-S2B.md) are prepared against the inspected S1 exports and frozen PanelView seam. TASKS records actual dispatch and exact common parent. The two leaves have disjoint paths; shared legacy presentation-test expectations will be reconciled after composition if needed. The composed correction still requires fresh non-author Astra xhigh/Sol max acceptance and fresh Opus experience verification. Stage1 remains open; M2–M4 remain required. Human feel, audible mix, duration/enjoyment and representative-GPU evidence remain unverified.
+[S2a HUD/app/cue](tasks/POLISH-1-EXPERIENCE-S2A.md) and [S2b Cargo/fabrication](tasks/POLISH-1-EXPERIENCE-S2B.md) are active in isolated Sol6.1/max worktrees on common parent **8eecb7b4770230435f9c7002b4903bbe0477037b**, using inspected S1 exports and the frozen PanelView seam. TASKS records exact dispatch IDs. The two leaves have disjoint paths; shared legacy presentation-test expectations will be reconciled after composition if needed. The composed correction still requires fresh non-author Astra xhigh/Sol max acceptance and fresh Opus experience verification. Stage1 remains open; M2–M4 remain required. Human feel, audible mix, duration/enjoyment and representative-GPU evidence remain unverified.
 
 Root owns no browser/server/recording/check process. No main merge/deployment.
 
@@ -62,7 +62,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the two prepared S2a/S2b Sol6.1/max worktrees from one committed common parent, then receive completion notifications without polling. Inspect and compose their source/actual production evidence, reconcile affected shared tests, verify P1–P8 and obtain the fresh full-correction pair and Opus verification before M2–M4. Current provisional production is c8215c0/ff3b013; accepted slice2 production remains c32d8c5. Main merge/public deployment remain owner actions.
+Receive the active S2a/S2b Sol6.1/max completion notifications without polling. Inspect and compose their source/actual production evidence, reconcile affected shared tests, verify P1–P8 and obtain the fresh full-correction pair and Opus verification before M2–M4. Current provisional production is c8215c0/ff3b013; accepted slice2 production remains c32d8c5. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
