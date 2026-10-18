@@ -499,3 +499,12 @@ Sol R4 remains active at unchanged5eb1be1; no Astra findings shared. Root plus S
 
 
 PR #4/#3 updated for Astra R4 acceptance of both batches and Sol pending; exact bodies/base/head/draft verified in `/tmp/siltwake-m1-pr/r4-astra-verified-{3,4}.json`. #4 links the prepared gameplay direction, explicitly not dispatched. #3 remains accepted 65-test M0. Stack linked/unwatched; source unchanged at769f2ad, reviewer candidate5eb1be1 frozen. No root resources, new delegate or repeated test matrix. Next: read Sol R4's completion notification and reconcile the pair.
+
+
+### Sol R4 returned; both bounded batches accepted
+
+Task `siltwake-m1-batch-sol-r4-5eb1be1` terminal, actual Sol6.1/max, no children/questions/browser/server, clean worktree. Report-only470d86fa2e3ad116507af11307b6ddc0f6f951e6 merged. Root read the complete report and persistence probe/results; verified66 payloads/67 safe unique regular archive members. Reviewer181 checks and541 supported staged migration/transaction cases plus960 simulated walking ticks pass. Original evidence untouched; no repeated root suite/browser matrix.
+
+Both independent R4 reviewers plus root accept the full bounded core/physical-feasibility and presentation batches on5eb1be1589caca72acc39b230997328682472196 / production769f2adc18cb150c9dd1ff4bac699ea73ad6274b. [Paired record](reviews/M1-BATCH-R4.md) contains exact verdicts/hashes/disposition. Nonblocking SOL-M1-R4-01 (incorrect import-backup sentence) is assigned to compatibility work. M0 remains the sole accepted integrated milestone.
+
+The next [M1-PLAY direction](tasks/M1-PLAY-DIRECTION.md) is now split into two sequential author steps within one deliverable batch. [M1-PLAY-CORE](tasks/M1-PLAY-CORE.md) receives rules/content compatibility first: paid pulse/local recharge, shared local crafting/bulk storage, signature early recipes and an optional removable Dart trim. Root settled exact cost, item/ref ownership, effect/tradeoff, strict content3 migration and salvage preservation. UI/render/lore and final ordinary-route evidence follow only after the source/APIs are reconciled; no concurrent consumer guesses. Fresh paired review of the assembled gameplay batch and separate integrated M1 follow. All previous tasks terminal; root alone active before the dispatch entry below. No owner decision needed.

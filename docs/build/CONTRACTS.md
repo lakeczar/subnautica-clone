@@ -1,5 +1,9 @@
 # Shared implementation direction
 
+## Accepted bounded checkpoint and next contract
+
+Both M1 core/physical-feasibility and presentation batches are accepted at `5eb1be1` (production `769f2ad`), following [paired R4 review](reviews/M1-BATCH-R4.md) and root inspection. This supersedes provisional acceptance labels in the historical seam entries below, not their source attribution. Integrated M1 remains open. [M1-PLAY-CORE](tasks/M1-PLAY-CORE.md) is the next explicit additive command/module/content compatibility contract. It is not implemented at this checkpoint; all other shared boundaries remain frozen.
+
 ## Richer cel seams staged at 06927d5
 
 Source `b40d077` is assembled with current UI and carrier corrections; [root inspection](evidence/M1-LOOK-INTEGRATION.md). Both R3 reviewers accepted the bounded presentation on21d50df; new revisions still require the applicable review gate.
@@ -10,7 +14,7 @@ Source `b40d077` is assembled with current UI and carrier corrections; [root ins
 
 ## Checked legacy carrier migration staged at769f2ad
 
-Source a5e589f is assembled and root-checked; [integration evidence](evidence/M1-MIGRATION-FIX-INTEGRATION.md). It supersedes the earlier unconditional helm relocation described in the A0 checkpoint. Core acceptance remains pending R4.
+Source a5e589f is assembled and root-checked; [integration evidence](evidence/M1-MIGRATION-FIX-INTEGRATION.md). It supersedes the earlier unconditional helm relocation described in the A0 checkpoint. Core acceptance is now recorded by the R4 pair at5eb1be1.
 
 - `carrierInteriorEntry(s: GameState, world: WorldQueries, preferred: Vec3): Vec3 | null` is now exported. Given a validated carrier assembly, it returns a detached local landing without mutation. The existing algorithm/body and explicit entry callers are unchanged: prefer the authored point; only an edge overhang enables dry-cell fallback; every candidate clears local structure and the supplied world; otherwise null.
 - Schema2 decode applies this checked entry to covered legacy room positions, then checks strict semantics/local clearance before success. No supported landing refuses atomically; no vessel/cargo relocation, helm ownership, service grant, bounds relaxation or schema/content change. Feedback describes a clear dry passage. Reading never writes; repository/session backup and import protocols remain unchanged. Successful migration is immediately saveable/idempotent; encoding an unmigrated blocked current position still refuses.
