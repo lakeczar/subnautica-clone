@@ -587,3 +587,12 @@ Exclusive edits: bounded `src/style.css` pulse-hint contrast and `docs/build/evi
 
 
 PR #4/#3 refreshed for paired bounded gameplay acceptance0778644 and the active final-play task fromfd5b90c. Complete body/base/head/draft readbacks at feature checkpointb56315a and unchanged M0a2cb19f match `/tmp/siltwake-m1-pr/play-paired-verified-{3,4}.json`; summary `play-paired-verification.json`. Body SHA256 #4 `59da645c6c24bbc4ea234b961400f961113afa039cce23fbca44c4b11107c942`, #3 `fb9bcb71745588ed50169400da59ad861e76575030f5c44b027dcdc66cd28102`. #4 retains the nonblocking P3 and focused play/integrated-gate obligations; #3 remains65-test M0-only. All four stack PRs linked and unwatched. Root changes are records only, production remains61e9a7 and no redundant tests/browser matrix ran. Root plus the one bounded builder active; await its completion notification without polling.
+
+
+### M1-FINAL-PLAY completed, assembled and inspected
+
+Task `siltwake-m1-final-play-sol-max-fd5b90c` terminal, actual codex/gpt-6.1-sol/max, clean worktree, no children/questions/resources. Source84fb7e86c9a6144bd4c1936b2451ea513f9fb010 and evidence5e67fdf0b24056249a039f3ce446f0363db6e86d merged at a5821aa8f3d88045669190a720ccb5765c1acef2. Only11 CSS lines and own evidence changed; all paths released. Author closed own tab/server and verified5190 free.
+
+[Coordinator inspection](evidence/M1-FINAL-INTEGRATION.md) records210 tests/typecheck/build/economy, all27 production files equal,576 payload/577 archive-member verification, copied current-module audit and44/47/29-tick complete actual reload matches. Root independently reproduced reserve/paid repair transactions and no-charge refusal; inspected actual contrast/depletion/warning/recovered-trim frames and helper provenance. Ordinary A/B/C completed with explicit imports/missteps/timeout limits. No new root browser or source change.
+
+Prepared [M1-INTEGRATED-R1](tasks/M1-INTEGRATED-R1.md) for **two separate verdicts** per fresh non-author reviewer: final correction/evidence batch and integrated M1 since accepted M0a2cb19f. Prior complete-batch and gameplay accepts retain their exact SHAs; the integrated verdict is new. Root alone active before dispatch, ports5195/5196 checked free. Commit this exact shared baseline before isolated-worktree reviewers. Only root dispatches; no author is eligible for the independent pair.
