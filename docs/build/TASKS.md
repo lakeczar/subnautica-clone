@@ -1367,3 +1367,13 @@ PR #4/#3 full descriptions now disclose the confirmed movement/save blocker, cur
 ### M2 direction proposal terminal and provisionally inspected
 
 Task `node:delegated-task:command%3Amcp%3A3164a7d5-0450-47fb-a4b4-e52dea3d2a43%3Adelegate-task%3Asiltwake-m2-direction-astra-89e271b` acknowledged completed/result_available, no pending children/questions. Report-only4478b806b4ce2d409daab18c74aa3666137c6f6f on exact89e271b changes only the two assigned proposal/labelled-spoiler documents, now provisionally integrated. Original turn_context confirms gpt-6-astra/xhigh and boundt3-0e0bf861; worktree clean, no production/children/browser/resources, ownership released. Root inspected both documents and relevant code/linked evidence; [reconciliation](reviews/M2-DIRECTION-ROOT.md) preserves provisional schema/path/budget/route choices. [Fresh paired planning review](tasks/M2-DIRECTION-REVIEW-R1.md) is prepared, not active until actual dispatch. This does not advance stage1 or authorize M2 production; the Opus correction consultation remains active independently.
+
+
+### Fresh M2 direction planning pair dispatched
+
+Both fresh non-author reviewers receive exact frozen parent30c6bf9, original M2 preparation brief, all seven planning criteria, full specification pointers, root objections and unchanged-production limits. Diff base89e271b; authored proposal4478b80. This is planning acceptance only, not M2 implementation or stage1 closure.
+
+- Astra: task `node:delegated-task:command%3Amcp%3A3164a7d5-0450-47fb-a4b4-e52dea3d2a43%3Adelegate-task%3Asiltwake-m2-direction-astra-r1-30c6bf9`; stable request `siltwake-m2-direction-astra-r1-30c6bf9`; sole report reviews/M2-DIRECTION-ASTRA-R1.md.
+- Sol: task `node:delegated-task:command%3Amcp%3A3164a7d5-0450-47fb-a4b4-e52dea3d2a43%3Adelegate-task%3Asiltwake-m2-direction-sol-r1-30c6bf9`; stable request `siltwake-m2-direction-sol-r1-30c6bf9`; sole report reviews/M2-DIRECTION-SOL-R1.md.
+
+Both returned running/working without pending children/questions. Live catalog and each actual T3 configuration confirm codex/gpt-6-astra/xhigh and codex/gpt-6.1-sol/max; original runtime verification remains due at return. Both isolated worktrees, independent first findings, no peer contact or unfinished dependency, no children/browser/server/implementation/push/PR/merge. Root + pair + active Opus correction consultation occupy four slots. Do not poll or duplicate tasks. Root owns no browser/server/recording/check. The next production step remains reconciliation of Opus advice and bounded Sol correction; M2 proposal does not bypass that gate.
