@@ -1,14 +1,17 @@
-import { HULLS, OPENING, PLACES, SOURCES } from "../content/registry.js";
+import { HULLS, HULL_COLLIDERS, OPENING, PLACES, SOURCES } from "../content/registry.js";
 import { inCanopyAir, nearPod, nearWorkshop, equipped } from "../sim/inventory.js";
 import { personalLimit } from "../sim/progression.js";
 import { deliberateExit } from "../runtime/input.js";
-import type { AimedTarget } from "../sim/targeting.js";
-import { aimedInteraction } from "../sim/targeting.js";
+import type { AimedTarget, ReachPreview } from "../sim/targeting.js";
+import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import { airSupply, exposure } from "../sim/survival.js";
-import { distractionPreview, exitRefusal, hullDepth } from "../sim/vehicles.js";
-import type { GameState, NoticeOptions, Vec3, WorldQueries } from "../sim/types.js";
+import { distractionPreview, exitRefusal, hullDepth, serviceRefusal, serviceState } from "../sim/vehicles.js";
+import type { GameState, NoticeContext, NoticeOptions, Vec3, WorldQueries } from "../sim/types.js";
+import { FACILITY_SOLIDS } from "../sim/world.js";
 import { escapeHtml, recoveryDisplay } from "./format.js";
-import { EncounterPresentation } from "./notices.js";
+import { EncounterPresentation, type ActionResult } from "./notices.js";
+
+export interface HudAim { target: AimedTarget | null; preview: ReachPreview | null }
 
 // State is supplied by GameView on each call; only transient presentation
 // bookkeeping lives here. Input and modal focus remain with GameView.
@@ -17,6 +20,14 @@ export class HudView {
   private readonly canvas: HTMLCanvasElement;
   private readonly toast: HTMLElement;
   private noticeTimer = 0;
+  private announcementTimer = 0;
+  private announcementVersion = 0;
+  private shownResult: ActionResult | null = null;
+  private announcedContexts = new Set<string>();
+  private current: GameState | null = null;
+  private ascentBlocked = false;
+  private thrustBlocked = false;
+  private disposed = false;
   private readonly presentation = new EncounterPresentation();
   private impactTimer = 0;
   private impactLoss = 0;
@@ -44,9 +55,12 @@ export class HudView {
     return element;
   }
 
-  update(state: GameState, cruise: boolean, forward = 0): void {
+  update(state: GameState, cruise: boolean, forward = 0, aim?: HudAim): void {
     this.startTick ??= state.tick;
-    this.presentation.observe(state, currentDanger(state));
+    const covered = this.renderHazards(state);
+    this.presentation.observe(state, covered);
+    this.current = state;
+    this.renderBlocked();
     this.renderNotices();
     this.renderCall(state);
     const p = state.player.pose.position,
@@ -72,19 +86,13 @@ export class HudView {
       `Home pod · ${Math.round(Math.hypot(p.x - home.x, p.z - home.z))} m`;
     this.get("region-name").textContent =
       state.scenario === "carrier-fixture"
-        ? "Carrier feasibility fixture"
+        ? "Carrier test fixture"
         : p.x > 62
           ? "Upper Lantern Canopy"
           : p.z < -28
             ? "Splitspine shore"
             : "Hearth Reef";
     this.get("cruise").hidden = !cruise;
-    this.get("context-hint").textContent =
-      mode === "swimming"
-        ? "The pod’s amber-edged ramp leads back to the deck."
-        : p.z < -25
-          ? "The shore is walkable. The split ridge is your landmark."
-          : "Walk down the amber-edged ramp to the water.";
     const e = exposure(state),
       v = state.fleet.vehicles.find(
         (v) => v.id === state.player.controlledVehicleId,
@@ -105,6 +113,8 @@ export class HudView {
               : "";
     const exitBlocked = v ? exitRefusal(state, this.world) : null;
     const pulse = distractionPreview(state);
+    const threatened = !e.refuge && ["warn", "investigate", "pursue"].includes(state.world.threat.mode);
+    if (threatened) this.get("context-hint").textContent = "";
     this.get("pulse-summary").textContent = (!equipped(state, "essential_tools") || exposure(state).refuge ||
       !["warn", "investigate", "pursue"].includes(state.world.threat.mode) && state.world.threat.distractionSeconds <= 0) ? ""
       : state.world.threat.distractionSeconds > 0 ? `G · pulse active ${Math.ceil(state.world.threat.distractionSeconds)} s`
@@ -115,7 +125,7 @@ export class HudView {
       this.pilotId = v?.id ?? null;
       this.pilotSince = state.tick;
     }
-    this.get("control-hint").textContent = v
+    this.get("control-hint").textContent = threatened || this.get("context-hint").textContent ? "" : v
       ? state.tick - this.pilotSince < 720 ? "Look steers · W/S thrust · A/D slide · Space/C rise/dive · Z quiet · Shift boost" : ""
       : state.tick - this.startTick < 3600 ? "WASD move · mouse / arrows look · Space rise · C dive" : "";
     if (v) {
@@ -128,49 +138,31 @@ export class HudView {
     this.get("pitch-cue").innerHTML = `<i style="top:${50 - Math.max(-1, Math.min(1, pitch / (Math.PI / 2))) * 46}%"></i>${Math.abs(pitch) > Math.PI / 4 ? `<small>${Math.round(pitch * 180 / Math.PI)}°</small>` : ""}`;
     this.get("pitch-cue").setAttribute("aria-label", `Pitch ${Math.round(pitch * 180 / Math.PI)} degrees`);
     this.get("surface-cue").hidden = !v || v.pose.position.y < -0.95 || forward <= 0 || v.pose.pitch <= 0.1;
-    if (v?.hull === "dart" && v.pose.position.z > -16 && v.pose.position.z < -7 &&
+    if (!threatened && v?.hull === "dart" && v.pose.position.z > -16 && v.pose.position.z < -7 &&
       Math.abs(v.pose.position.x - 20) < 6 && v.velocity.z < -4)
       this.get("context-hint").textContent = "Slow · cradle ahead";
-    this.target(aimedInteraction(state, this.world), state);
+    if (this.get("context-hint").textContent) this.get("control-hint").textContent = "";
+    const target = aim ? aim.target : aimedInteraction(state, this.world);
+    this.target(target, state, aim ? aim.preview : target ? null : reachPreview(state, this.world));
     const air = airSupply(state);
     const airLabel = air.kind === "craft" && v ? `${HULLS[v.hull].label} air`
       : air.kind === "refuge" ? `${nearPod(state) ? PLACES.home_pod.label : nearWorkshop(state) ? PLACES.island_workshop.label : inCanopyAir(state) ? PLACES.canopy_lab.label : "Hearthline"} air`
       : air.kind === "surface" ? "Surface air"
       : air.kind === "emergency" ? `Emergency air · ${Math.ceil(air.remainingSeconds!)} s`
       : `Suit air · ${Math.ceil(air.remainingSeconds!)} s`;
+    const service = mode === "piloting" && v?.hull === "dart" ? serviceState(state, v.id) : null;
+    const serviceLine = v && service === "ready" && serviceRefusal(state, v.id) === null ? "Service here · Tab"
+      : service === "patch" ? "Patch hull first" : "";
     this.get("vitals").dataset.airSource = air.kind;
     this.get("vitals").innerHTML =
-      `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${escapeHtml(airLabel)}</small></div><div><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}${this.impactVehicle === v.id && performance.now() < this.impactUntil ? " hull-impact" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m</small></div>` : ""}`;
-    const warnings: string[] = [];
-    if (!v && !e.refuge && e.pressureDepth > personalLimit(state))
-      warnings.push(`PRESSURE · ${e.pressureDepth.toFixed(0)} m / personal ${personalLimit(state)} m · ascend now`);
-    if (!e.breathable && state.player.vitals.oxygen <= 35)
-      warnings.push(`LOW OXYGEN · ${state.player.vitals.oxygen.toFixed(0)}% · return to air now`);
-    if (v && (v.charge === 0 || v.disabled))
-      warnings.push(`${v.disabled ? "HULL DISABLED" : "POWER DEPLETED"} · ${air.kind === "emergency" ? `emergency air ${Math.ceil(air.remainingSeconds!)} s` : air.kind === "suit" ? `emergency air exhausted · ${airLabel}` : airLabel} · protected exit / reserve cell`);
-    if (v && hullDepth(v) > HULLS[v.hull].initialDepth * 0.85)
-      warnings.push(`HULL DEPTH · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m · ascend before hull damage`);
-    if (v && v.charge > 0 && v.charge < 25)
-      warnings.push(`LOW POWER · ${v.charge.toFixed(0)}% · reserve cell or supported service`);
-    if (v && !v.disabled && v.health <= 25)
-      warnings.push(`LOW HULL · ${v.health.toFixed(0)}% · retreat for repair`);
-    if (state.player.vitals.health <= 25)
-      warnings.push("LOW HEALTH · retreat to refuge air and healing");
-    const threat = state.world.threat.mode;
-    if (!e.refuge && threat !== "idle" && threat !== "disengage")
-      warnings.push(`SOUND HUNTER · ${threat === "warn" ? "paired calls · slow down / cover" : threat === "investigate" ? "investigating · Z quiet / retreat" : "pursuit · break sight behind the tall rib / retreat"}`);
-    if (state.player.vitals.food < 20)
-      warnings.push(state.player.vitals.food === 0
-        ? state.player.starvationSeconds > 180 ? "STARVATION · health falling · F meal / refuge emergency portion" : "FOOD EMPTY · gather normally during grace · F meal / refuge portion"
-        : "LOW FOOD · F meal / shallow staples / refuge emergency portion");
-    const warningHtml = warnings.map((w) => `<span>${escapeHtml(w)}</span>`).join("");
-    if (this.get("hazard").innerHTML !== warningHtml) this.get("hazard").innerHTML = warningHtml;
+      `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${escapeHtml(airLabel)}</small></div><div><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}${this.impactVehicle === v.id && performance.now() < this.impactUntil ? " hull-impact" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m</small>${serviceLine ? `<small class="service-hint">${serviceLine}</small>` : ""}</div>` : ""}`;
     const opening = state.opening.phase < 4;
     this.root.dataset.opening = String(opening);
     // Hide only routine exploration elements. Warnings, pause and the opening
     // remain siblings; persistence and graphics notices live outside the HUD.
-    for (const id of ["hud-region", "hud-heading", "hud-tools", "vitals", "hud-bottom", "crosshair", "interact-prompt"])
+    for (const id of ["hud-region", "hud-heading", "hud-tools", "vitals", "hud-bottom", "crosshair", "interact-prompt", "interaction-stack"])
       this.get(id).hidden = opening;
+    if (opening) this.clearActionNotice();
     if (opening) for (const id of ["pilot-guidance", "pitch-cue", "surface-cue"]) this.get(id).hidden = true;
     if (!opening && this.get("opening").contains(document.activeElement))
       this.canvas.focus({ preventScroll: true });
@@ -185,6 +177,7 @@ export class HudView {
         this.get("opening-act").textContent = `${state.opening.phase === 3 ? "Stand up" : o.label} · E`;
         this.get("opening-caption").textContent = o.caption;
         this.get("opening-detail").textContent = o.detail;
+        this.get("opening-detail").hidden = !o.detail;
       }
     }
     this.hud.dataset.tick = String(state.tick);
@@ -194,12 +187,13 @@ export class HudView {
     this.hud.dataset.pitch = String(state.player.pose.pitch);
   }
 
-  target(t: AimedTarget | null, state: GameState | null): void {
+  target(t: AimedTarget | null, state: GameState | null, preview: ReachPreview | null = null): void {
     const html = t
       ? `${t.verb === "empty" ? "" : "<kbd>E</kbd> "}${escapeHtml(t.kind === "vehicle" && state ? (() => {
           const v = state!.fleet.vehicles.find(v => v.id === t.id);
           return v ? `${HULLS[v.hull].label}${v.disabled ? " · disabled" : ""}` : t.label;
-        })() : t.label)} <small>${({ collect: "Collect", gather: "Gather", sort: t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Tend · 20 s" : "Sort · 20 s", inspect: "Inspect", review: "Notebook", read: "Read", board: "Board", recover: "Recover", open: "Open", use: "Use", empty: "Empty" })[t.verb]}${state && equipped(state, "essential_tools") && !t.known && (t.kind === "source" || t.kind === "evidence") ? " · Q scan" : ""}</small>` : "";
+        })() : t.label)} <small>${({ collect: "Collect", gather: "Gather", sort: t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Tend · 20 s" : "Sort · 20 s", inspect: "Inspect", review: "Notebook", read: "Read", board: "Board", recover: "Recover", open: "Open", use: "Use", empty: "Empty" })[t.verb]}${state && equipped(state, "essential_tools") && !t.known && (t.kind === "source" || t.kind === "evidence") ? " · Q scan" : ""}</small>` : preview ? `${preview.label ? `${escapeHtml(preview.label)} · ` : ""}Move closer` : "";
+    this.get("interact-prompt").dataset.preview = String(!t && !!preview);
     if (this.get("interact-prompt").innerHTML !== html) this.get("interact-prompt").innerHTML = html;
   }
 
@@ -244,7 +238,8 @@ export class HudView {
     this.impactAt = this.impactUntil = -Infinity;
     this.impactVehicle = null;
     this.get("impact-notice").hidden = true;
-    this.blockedAscent(false);
+    this.ascentBlocked = this.thrustBlocked = false;
+    this.renderBlocked();
     for (const element of this.root.querySelectorAll<HTMLElement>(".hull-impact")) element.classList.remove("hull-impact");
   }
 
@@ -252,13 +247,18 @@ export class HudView {
     this.cancelFeedback();
     this.pilotId = null;
     this.startTick = null;
+    this.current = null;
+    this.announcedContexts.clear();
+    this.get("hazard-announce").textContent = "";
     this.presentation.reset();
     this.renderNotices();
     this.get("call-cue").hidden = true;
   }
 
   presentationStep(state: GameState): void {
-    this.presentation.step(state, currentDanger(state));
+    this.current = state;
+    this.presentation.step(state, this.renderHazards(state));
+    this.renderBlocked();
     this.renderNotices();
     this.renderCall(state);
   }
@@ -268,27 +268,68 @@ export class HudView {
     this.renderCall(state);
   }
 
-  blockedAscent(visible: boolean): void { this.get("blocked-ascent").hidden = !visible; }
+  blockedAscent(visible: boolean): void { this.ascentBlocked = visible; this.renderBlocked(); }
+  blockedThrust(visible: boolean, state: GameState | null): void {
+    this.thrustBlocked = visible;
+    this.current = state;
+    this.renderBlocked();
+  }
+
+  private renderBlocked(): void {
+    const cue = this.get("blocked-ascent");
+    cue.hidden = !this.ascentBlocked && !this.thrustBlocked;
+    cue.textContent = this.ascentBlocked ? "Blocked above" : this.thrustBlocked
+      ? `Blocked ahead${this.current && atCradleRail(this.current) ? " · Centre between the rails" : ""}` : "";
+  }
 
   clearActionNotice(): void {
     this.presentation.clearAction();
     this.renderNotices();
   }
 
-  menu(visible: boolean): void { this.presentation.setMenu(visible); }
+  menu(visible: boolean): void { this.presentation.setMenu(visible); this.renderNotices(); }
 
-  notify(message: string, error = false, options: NoticeOptions = {}): void {
+  notify(message: string, error = false, options: NoticeOptions = {}, state: GameState | null = this.current): void {
     message = recoveryDisplay(message);
     // Retain the accepted omission of this one redundant legacy New success.
     // All notice classification uses metadata, never message text.
     if (!error && message === "Expedition saved. The island shore and reef ribs are yours to explore.") return;
-    this.presentation.notify(message, error, options, performance.now());
+    const covered = state ? this.renderHazards(state) : new Set<NoticeContext>();
+    if (state) { this.current = state; this.presentation.observe(state, covered); }
+    if ((options.channel ?? "action") === "action" && state && state.opening.phase < 4) return;
+    this.presentation.notify(message, error, options, performance.now(), covered);
     this.renderNotices();
   }
 
+  private renderHazards(state: GameState): ReadonlySet<NoticeContext> {
+    const banners = hazardBanners(state);
+    const html = banners.map(b => `<span>${escapeHtml(b.text)}</span>`).join("");
+    if (this.get("hazard").innerHTML !== html) this.get("hazard").innerHTML = html;
+    const current = this.hud.hidden ? [] : banners;
+    const appearing = current.filter(b => !this.announcedContexts.has(b.context));
+    if (appearing.length) this.get("hazard-announce").textContent = appearing.map(b => b.text).join(". ");
+    else if (!current.length) this.get("hazard-announce").textContent = "";
+    this.announcedContexts = new Set(current.map(b => b.context));
+    return new Set(current.flatMap(b => ["threat", "oxygen", "food", "hull", "recovery"].includes(b.context) ? [b.context as NoticeContext] : []));
+  }
+
   private renderNotices(): void {
+    if (this.disposed) return;
     const now = performance.now();
     this.presentation.expire(now);
+    const result = this.presentation.result, surface = this.get("action-result");
+    surface.hidden = !result;
+    surface.classList.toggle("error", result?.error ?? false);
+    if (surface.textContent !== (result?.message ?? "")) surface.textContent = result?.message ?? "";
+    if (result !== this.shownResult) {
+      this.shownResult = result;
+      window.clearTimeout(this.announcementTimer);
+      const version = ++this.announcementVersion, live = this.get("action-announce");
+      live.textContent = "";
+      if (result) this.announcementTimer = window.setTimeout(() => {
+        if (!this.disposed && version === this.announcementVersion) live.textContent = result.message;
+      }, 0);
+    }
     const notice = this.presentation.central;
     this.toast.hidden = !notice;
     if (notice) {
@@ -311,21 +352,61 @@ export class HudView {
     cue.hidden = !call;
     if (!call) { this.get("call-direction").textContent = ""; return; }
     cue.dataset.sector = call.sector;
-    this.get("call-arrow").textContent = call.glyph;
-    const label = `Call · ${call.label}`;
+    const dial = this.get("call-dial");
+    dial.hidden = call.vertical;
+    dial.setAttribute("style", `--turn:${call.bearingStep * 45}deg`);
+    this.get("call-elevation").textContent = call.elevation === "above" ? "▲" : call.elevation === "below" ? "▼" : "";
+    const label = `Call bearing · ${call.label}`;
     if (this.get("call-direction").textContent !== label) this.get("call-direction").textContent = label;
   }
 
   dispose(): void {
     this.resetPresentation();
+    this.disposed = true;
+    ++this.announcementVersion;
+    window.clearTimeout(this.announcementTimer);
     window.clearTimeout(this.noticeTimer);
   }
 }
 
-function currentDanger(state: GameState): boolean {
-  const e = exposure(state), v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
-  return (!e.breathable && state.player.vitals.oxygen <= 35) || state.player.vitals.health <= 25 ||
-    state.player.vitals.food < 20 || !v && !e.refuge && e.pressureDepth > personalLimit(state) ||
-    !!v && (v.disabled || v.charge < 25 || v.health <= 25 || hullDepth(v) > HULLS[v.hull].initialDepth * 0.85) ||
-    !e.refuge && ["warn", "investigate", "pursue"].includes(state.world.threat.mode);
+export interface HazardBanner { context: NoticeContext | "pressure" | "health" | "hullDepth" | "power"; text: string }
+/** The exact current-state list used for both visible warnings and coverage. */
+export function hazardBanners(state: GameState): HazardBanner[] {
+  const warnings: HazardBanner[] = [];
+  const e = exposure(state), v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId), air = airSupply(state);
+  const airLabel = `${air.kind === "suit" ? "Suit" : "Emergency"} air · ${Math.ceil(air.remainingSeconds ?? 0)} s`;
+  if (!v && !e.refuge && e.pressureDepth > personalLimit(state))
+    warnings.push({ context: "pressure", text: `PRESSURE · ${e.pressureDepth.toFixed(0)} m / personal ${personalLimit(state)} m · ascend now` });
+  if (!e.breathable && state.player.vitals.oxygen <= 35)
+    warnings.push({ context: "oxygen", text: `LOW OXYGEN · ${state.player.vitals.oxygen.toFixed(0)}% · return to air now` });
+  if (v && (v.charge === 0 || v.disabled))
+    warnings.push({ context: "hull", text: `${v.disabled ? "HULL DISABLED" : "POWER DEPLETED"} · ${air.kind === "emergency" ? `emergency air ${Math.ceil(air.remainingSeconds!)} s` : air.kind === "suit" ? `emergency air exhausted · ${airLabel}` : airLabel} · protected exit / reserve cell` });
+  if (v && hullDepth(v) > HULLS[v.hull].initialDepth * 0.85)
+    warnings.push({ context: "hullDepth", text: `HULL DEPTH · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m · ascend before hull damage` });
+  if (v && v.charge > 0 && v.charge < 25)
+    warnings.push({ context: "power", text: `LOW POWER · ${v.charge.toFixed(0)}% · reserve cell or supported service` });
+  if (v && !v.disabled && v.health <= 25)
+    warnings.push({ context: "hull", text: `LOW HULL · ${v.health.toFixed(0)}% · retreat for repair` });
+  if (state.player.vitals.health <= 25)
+    warnings.push({ context: "health", text: "LOW HEALTH · retreat to refuge air and healing" });
+  const threat = state.world.threat.mode;
+  if (!e.refuge && threat !== "idle" && threat !== "disengage")
+    warnings.push({ context: "threat", text: `SOUND HUNTER · ${threat === "warn" ? "paired calls · slow down / cover" : threat === "investigate" ? "investigating · Z quiet / retreat" : "pursuit · break sight behind the tall rib / retreat"}` });
+  if (state.player.vitals.food < 20)
+    warnings.push({ context: "food", text: state.player.vitals.food === 0
+      ? state.player.starvationSeconds > 180 ? "STARVATION · health falling · F meal / refuge emergency portion" : "FOOD EMPTY · gather normally during grace · F meal / refuge portion"
+      : "LOW FOOD · F meal / shallow staples / refuge emergency portion" });
+  return warnings;
+}
+
+/** Only a northward approach contacting an actual rail's forward end earns
+ * centring help. Other measured solid contacts keep the generic wording. */
+function atCradleRail(state: GameState): boolean {
+  const v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
+  if (state.player.mode !== "piloting" || v?.hull !== "dart" || Math.cos(v.pose.yaw) < 0.9) return false;
+  const p = v.pose.position, proxy = HULL_COLLIDERS.dart;
+  return FACILITY_SOLIDS.some(s => s.id.startsWith("workshop.cradle.") &&
+    Math.abs(p.z - proxy.radius - s.max.z) < 0.15 &&
+    p.x + proxy.radius > s.min.x && p.x - proxy.radius < s.max.x &&
+    p.y + proxy.height > s.min.y && p.y < s.max.y);
 }

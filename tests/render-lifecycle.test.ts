@@ -158,11 +158,13 @@ test("target brackets retain one fogged depth-tested mesh through thousands of t
   try {
     const cue = createTargetCue(scene), mesh = scene.getMeshByName("interaction.cue")!;
     const counts = [scene.meshes.length, scene.materials.length, scene.geometries.length];
+    const colors = mesh.getVerticesData("color")!;
+    assert.ok(colors.includes(0) && colors.includes(1), "retained bracket buffer has dark edges and light cores");
     assert.equal(mesh.isEnabled(), false);
     assert.equal(cue.material.depthFunction, Constants.LEQUAL);
     assert.equal(cue.material.disableDepthWrite, true);
     for (let i = 0; i < 2000; i++) {
-      cue.update(i % 3 ? { center: { x: i, y: -3, z: 2 }, radius: 0.7, solidIds: [] } : null);
+      cue.update(i % 3 ? { center: { x: i, y: -3, z: 2 }, radius: 0.7, solidIds: [] } : null, undefined, i % 2 === 0);
       assert.equal(mesh.isEnabled(), i % 3 !== 0);
       assert.deepEqual([scene.meshes.length, scene.materials.length, scene.geometries.length], counts);
     }
@@ -177,6 +179,8 @@ test("target brackets retain one fogged depth-tested mesh through thousands of t
     assert.deepEqual(host.center, { x: 7, y: -2, z: 4 }, "host metadata stays detached");
     cue.update(null); assert.equal(mesh.isEnabled(), false);
     cue.dispose(); cue.dispose();
+    cue.update(host, undefined, false);
+    assert.ok(mesh.isDisposed(), "late preview updates cannot revive disposed geometry");
     assert.equal(scene.meshes.length, 0);
     assert.ok(!scene.materials.includes(cue.material));
   } finally { scene.dispose(); engine.dispose(); }

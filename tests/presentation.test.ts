@@ -131,7 +131,7 @@ function viewFixture(t: test.TestContext) {
     return commands.splice(count)[0];
   };
   return {
-    view, commands, audio, get: (id: string) => root.querySelector(`#${id}`),
+    view, commands, audio, markup: () => root.innerHTML, get: (id: string) => root.querySelector(`#${id}`),
     active: () => document.activeElement,
     timerCount: () => timers.size,
     wall: (milliseconds: number) => {
@@ -513,11 +513,11 @@ test("actual session entry order omits only the redundant New success, without l
   session.newGame(); await settled();
   assert.equal(session.state?.opening.phase, 0);
   assert.equal(get("notification").hidden, true, "New notifies after entered/update; its success is redundant");
-  view.notify("Could not save this expedition.", true);
+  view.notify("Could not save this expedition.", true, { channel: "persistence" });
   const redundant = "Expedition saved. The island shore and reef ribs are yours to explore.";
   view.notify(redundant);
   assert.equal(get("notification").textContent, "Could not save this expedition.", "omitting routine success cannot replace an error");
-  view.notify(redundant, true);
+  view.notify(redundant, true, { channel: "persistence" });
   assert.equal(get("notification").textContent, redundant, "the error flag takes precedence even for identical text");
   const imported = sample(); imported.state.opening.phase = 2;
   const text = encoded(imported);
@@ -563,7 +563,7 @@ test("storage-off sessions, errors and graphics recovery remain visible through 
   s.player.vitals.health = 10;
   view.update(s, false);
   assert.match(get("hazard").innerHTML, /LOW HEALTH/);
-  view.notify("Graphics restored. Resume when ready.");
+  view.notify("Graphics restored. Resume when ready.", false, { channel: "system" });
   assert.equal(get("notification").hidden, false);
   view.graphicsError("Graphics context unavailable.");
   assert.equal(get("graphics-error").hidden, false);
@@ -937,7 +937,7 @@ test("reopened Hold and Notebook retain saved recovery explanations without revi
   ]) {
     s.feedback = message;
     view.notify(message);
-    const displayed = get("notification").textContent;
+    const displayed = get("action-result").textContent;
     view.closePanel();
     for (const panel of ["inventory", "notebook"] as const) {
       view.openPanel(panel, JSON.parse(JSON.stringify(s)));
@@ -1102,8 +1102,10 @@ test("real view active clocks, wall timers and disposal stay bounded and do not 
   s.player.mode = "swimming"; s.player.pose.position = { x: -55, y: -15, z: 30 };
   view.update(s, false); view.showGame(); view.notify("Collected", false, { channel: "action" });
   for (let i = 0; i < 600; i++) view.update(s, false);
-  view.showMenu(true); wall(20000);
-  assert.equal(get("notification").textContent, "Collected");
+  wall(20000);
+  assert.equal(get("action-result").textContent, "Collected", "paints and wall time do not consume the action clock");
+  view.showMenu(true);
+  assert.equal(get("action-result").hidden, true, "menu clears without replay");
   assert.equal(timerCount(), 0);
   view.showGame(); for (let i = 0; i < 240; i++) view.presentationStep(s);
   assert.equal(get("notification").hidden, true);
@@ -1114,7 +1116,7 @@ test("real view active clocks, wall timers and disposal stay bounded and do not 
   for (let i = 0; i < 100; i++) view.update(s, false);
   assert.equal(get("call-direction").textWrites, writes, "unchanged live text is not replaced per refresh");
   view.notify("Saved", false, { channel: "persistence" });
-  assert.equal(get("notification").textContent, "Warning calls");
+  assert.equal(get("notification").hidden, true, "the current threat banner covers its prose");
   assert.equal(get("system-status").textContent, "Saved");
   assert.equal(timerCount(), 1);
   view.showMenu(true); wall(3000);
@@ -1176,4 +1178,105 @@ test("pulse HUD stays contextual while Hold retains the actual cost, selected ce
   view.update(s, false); assert.match(get("pulse-summary").textContent, /pulse active 2 s/);
   s.world.threat.distractionSeconds = 0; view.update(s, false);
   assert.equal(get("pulse-summary").textContent, "");
+});
+
+
+test("interaction stack preserves full receipts during danger and save errors; repeated live updates cancel on all boundaries", (t) => {
+  const { view, get, wall, timerCount, markup } = viewFixture(t), s = readyState();
+  s.player.mode = "swimming"; s.player.pose.position = { x: 100, y: -30, z: -100 }; s.player.vitals.oxygen = 30;
+  view.update(s, false); view.showGame(); view.update(s, false);
+  const refusal = "No room for this bundle. Stow cargo, or deploy the 24 CU salvage buoy. Nothing collected.";
+  view.notify("Save retry failed; export remains available", true, { channel: "persistence" });
+  view.notify("Long full action message", false, { summary: "+4 Structural alloy · Diver hold 8/16" });
+  assert.match(get("hazard").innerHTML, /LOW OXYGEN/);
+  assert.equal(get("action-result").textContent, "+4 Structural alloy · Diver hold 8/16");
+  assert.match(get("notification").textContent, /Save retry failed/);
+  wall(0); const writes = get("action-announce").textWrites;
+  view.notify("Long full action message", false, { summary: "+4 Structural alloy · Diver hold 8/16" });
+  assert.equal(get("action-announce").textContent, ""); wall(0);
+  assert.ok(get("action-announce").textWrites > writes);
+  assert.equal(get("action-announce").textContent, get("action-result").textContent);
+  view.notify(refusal, true); assert.equal(get("action-result").textContent, refusal);
+  view.openPanel("inventory", s); wall(0);
+  assert.equal(get("action-result").hidden, true); assert.equal(get("action-announce").textContent, "");
+  view.notify("Full panel message", false, { summary: "Short field receipt" });
+  assert.equal(get("panel-feedback").textContent, "Full panel message");
+  view.closePanel(); view.showGame();
+  view.notify("old callback"); view.notify("new callback"); wall(0);
+  assert.equal(get("action-announce").textContent, "new callback");
+  view.notify("reset callback"); view.resetPresentation(); wall(0);
+  assert.equal(get("action-announce").textContent, "");
+  view.notify("menu callback"); view.showMenu(true); wall(0);
+  assert.equal(get("action-announce").textContent, "");
+  view.showGame(); view.notify("dispose callback"); view.dispose(); wall(0); assert.equal(timerCount(), 0);
+  assert.match(markup(), /id="interaction-stack"[^]*id="interact-prompt"[^]*id="action-result"[^]*id="look-action"/);
+  assert.match(markup(), /<\/main>[^]*id="alert-stack"/);
+});
+
+test("current notice state renders matching hazard coverage before dedup; percentages never chatter", (t) => {
+  const { view, get } = viewFixture(t), s = readyState();
+  s.player.mode = "swimming"; s.player.pose.position = { x: 100, y: -30, z: -100 };
+  view.update(s, false); view.showGame();
+  const current = structuredClone(s); current.player.vitals.oxygen = 30; current.world.threat.mode = "warn";
+  view.notify("newly crossed oxygen threshold", true, { channel: "hazard", context: "oxygen" }, current);
+  assert.match(get("hazard").innerHTML, /LOW OXYGEN/); assert.equal(get("notification").hidden, true);
+  view.update(current, false); const writes = get("hazard-announce").textWrites;
+  for (const value of [29, 28, 27, 26]) { current.player.vitals.oxygen = value; view.update(current, false); }
+  assert.equal(get("hazard-announce").textWrites, writes);
+  assert.equal(get("context-hint").textContent, ""); assert.equal(get("control-hint").textContent, "");
+  // The prior oxygen banner is stale: current air is safe and the delivered
+  // context has no matching visible banner. It must not be silently dropped.
+  const safe = structuredClone(current); safe.player.vitals.oxygen = 100;
+  view.notify("A current unmatched hazard", true, { channel: "hazard", context: "recovery" }, safe);
+  assert.equal(get("notification").textContent, "A current unmatched hazard");
+  view.showMenu(true);
+  view.notify("Menu warning without a visible banner", true, { channel: "hazard", context: "oxygen" }, current);
+  assert.equal(get("notification").textContent, "Menu warning without a visible banner");
+});
+
+test("preview has no key, respects nullable labels and never shadows an executable target", (t) => {
+  const { view, get } = viewFixture(t), s = readyState(); view.update(s, false);
+  const preview = { id: "C02", kind: "evidence" as const, label: null, host: { center: { x: 1, y: -1, z: 0 }, radius: .7, solidIds: [] } };
+  view.target(null, preview); assert.equal(get("interact-prompt").innerHTML, "Move closer");
+  view.target(null, { ...preview, label: "Known source" });
+  assert.equal(get("interact-prompt").innerHTML, "Known source · Move closer");
+  faceTarget(s, "C01"); const target = aimedInteraction(s, createWorldQueries()); assert.ok(target);
+  view.target(target, preview);
+  assert.match(get("interact-prompt").innerHTML, /<kbd>E<\/kbd>/);
+  assert.equal(get("interact-prompt").dataset.preview, "false");
+  assert.ok(!get("interact-prompt").innerHTML.includes("Move closer"));
+});
+
+test("service support is visible for a full piloted Dart; disabled and unsupported state stay truthful", (t) => {
+  const { view, get } = viewFixture(t), s = readyState();
+  const v = makeVehicle("service-dart", "dart", { x: 0, y: -1, z: 8 }, "service-hold");
+  s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id; s.player.mode = "piloting"; s.player.pose = structuredClone(v.pose);
+  view.update(s, false); assert.match(get("vitals").innerHTML, /Service here · Tab/);
+  v.disabled = true; view.update(s, false); assert.match(get("vitals").innerHTML, /Patch hull first/);
+  v.pose.position.x = s.player.pose.position.x = 70; view.update(s, false);
+  assert.doesNotMatch(get("vitals").innerHTML, /Service here|Patch hull first/);
+});
+
+test("ascent cue wins; rail help requires current forward rail-end contact, with generic text elsewhere", (t) => {
+  const { view, get } = viewFixture(t), s = readyState();
+  const v = makeVehicle("blocked-dart", "dart", { x: 18, y: -.9, z: -14.4 }, "blocked-hold");
+  s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id; s.player.mode = "piloting"; s.player.pose = structuredClone(v.pose);
+  view.update(s, false); view.blockedThrust(true, s);
+  assert.equal(get("blocked-ascent").textContent, "Blocked ahead · Centre between the rails");
+  view.blockedAscent(true); assert.equal(get("blocked-ascent").textContent, "Blocked above");
+  view.blockedAscent(false); v.pose.position = { x: 80, y: -40, z: -80 };
+  view.blockedThrust(true, s); assert.equal(get("blocked-ascent").textContent, "Blocked ahead");
+  v.pose.position = { x: 20, y: -.9, z: -14.4 };
+  view.blockedThrust(true, s); assert.equal(get("blocked-ascent").textContent, "Blocked ahead", "centred does not need rail-centering advice");
+  view.cancelFeedback(); assert.equal(get("blocked-ascent").hidden, true);
+});
+
+test("empty opening detail and in-session subtitle hide while capture affordance remains until explicitly changed", (t) => {
+  const { view, get } = viewFixture(t), s = createGame(); view.update(s, false); view.showGame();
+  assert.equal(get("opening-detail").hidden, true);
+  view.showMenu(true); assert.equal(get("menu-subtitle").hidden, true);
+  view.showMenu(false); assert.equal(get("menu-subtitle").hidden, false);
+  completeOpening(s); view.update(s, false); view.showGame(); view.lookAction(true, true);
+  for (let i = 0; i < 1000; i++) view.update(s, false);
+  assert.equal(get("look-action").hidden, false); assert.match(get("look-action").textContent, /drag \/ arrows available/);
 });

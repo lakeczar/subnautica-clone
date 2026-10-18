@@ -1,10 +1,10 @@
 import type { GameCommand, GameState, NoticeOptions, Vec3, WorldQueries } from "../sim/types.js";
-import type { AimedTarget } from "../sim/targeting.js";
+import type { AimedTarget, ReachPreview } from "../sim/targeting.js";
 import type { AudioSettings } from "../audio/sound.js";
 import type { SaveSlot } from "../save/repository.js";
 import type { Quality } from "../render/renderer.js";
 import { PanelView, type PanelKind } from "./panels.js";
-import { HudView } from "./hud.js";
+import { HudView, type HudAim } from "./hud.js";
 
 export type { PanelKind } from "./panels.js";
 
@@ -55,9 +55,9 @@ export class GameView {
       <main id="hud" hidden aria-label="Exploration display">
         <div class="hud-top"><div id="hud-region" class="region"><span class="eyebrow">SILTWAKE / FIRST EXPEDITION</span><strong id="region-name">Hearth Reef</strong></div>
         <div id="hud-heading" class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
-        <div class="hud-actions"><div id="hud-tools"><button data-action="inventory">Hold <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button></div><button id="hud-pause" data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
-        <div id="call-cue" class="call-cue" hidden><span id="call-arrow" aria-hidden="true"></span><span id="call-direction" role="status" aria-live="polite" aria-atomic="true"></span></div><span id="blocked-ascent" class="blocked-ascent" role="status" aria-live="polite" hidden>Blocked above</span><div id="vitals" class="vitals"></div><div id="hazard" class="hazard" role="status" aria-live="polite"></div><div id="interact-prompt" class="interact-prompt"></div><div id="pilot-guidance" class="pilot-guidance" aria-label="Pilot exit guidance" hidden></div>
-        <section id="opening" class="opening" aria-label="Damaged pod opening" hidden><div aria-live="polite" aria-atomic="true"><span id="opening-progress" class="eyebrow">POD CHECK 1 / 4</span><h2 id="opening-title"></h2><p id="opening-caption"></p></div><div class="opening-actions"><button id="opening-act" data-action="opening">Act <kbd>E</kbd></button><button id="opening-skip" data-action="skip">Skip · hold <kbd>Space</kbd></button><label class="check"><input id="opening-subtitles" type="checkbox" checked /> Captions</label></div><small id="opening-detail"></small></section><div id="crosshair" class="crosshair" aria-hidden="true"></div><div id="pitch-cue" class="pitch-cue" aria-label="Pitch" hidden></div><span id="surface-cue" class="surface-cue" hidden>Surface</span><button id="look-action" class="look-action" data-action="lock" hidden>Click to look</button><div id="impact-notice" class="impact-notice" role="status" aria-live="polite" hidden></div>
+        <div class="hud-actions"><div id="hud-tools"><button data-action="inventory">Cargo <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button></div><button id="hud-pause" data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
+        <div id="call-cue" class="call-cue" hidden><span id="call-dial" class="call-dial" aria-hidden="true"></span><span id="call-elevation" aria-hidden="true"></span><span id="call-direction" role="status" aria-live="polite" aria-atomic="true"></span></div><div id="vitals" class="vitals"></div><span id="hazard-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><span id="action-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><div class="motion-guidance"><span id="blocked-ascent" class="blocked-ascent" role="status" aria-live="polite" hidden>Blocked above</span><div id="pilot-guidance" class="pilot-guidance" aria-label="Pilot exit guidance" hidden></div></div>
+        <section id="opening" class="opening" aria-label="Damaged pod opening" hidden><div aria-live="polite" aria-atomic="true"><span id="opening-progress" class="eyebrow">POD CHECK 1 / 4</span><h2 id="opening-title"></h2><p id="opening-caption"></p></div><div class="opening-actions"><button id="opening-act" data-action="opening">Act <kbd>E</kbd></button><button id="opening-skip" data-action="skip">Skip · hold <kbd>Space</kbd></button><label class="check"><input id="opening-subtitles" type="checkbox" checked /> Captions</label></div><small id="opening-detail"></small></section><div id="crosshair" class="crosshair" aria-hidden="true"></div><div id="pitch-cue" class="pitch-cue" aria-label="Pitch" hidden></div><span id="surface-cue" class="surface-cue" hidden>Surface</span><div id="interaction-stack" class="interaction-stack"><div id="interact-prompt" class="interact-prompt"></div><div id="action-result" class="action-result" hidden></div><button id="look-action" class="look-action" data-action="lock" hidden>Click to look</button></div><div id="impact-notice" class="impact-notice" role="status" aria-live="polite" hidden></div>
         <div id="hud-bottom" class="hud-bottom"><div class="telemetry"><span class="depth"><b id="depth">0.0</b><small>m / DEPTH</small></span><span class="mode"><strong id="movement">On foot</strong><small id="refuge-distance">Home pod · 0 m</small></span></div>
         <div class="explore-note"><span id="cruise" hidden>FORWARD CRUISE · R TO STOP</span><p id="context-hint">Walk down the amber-edged ramp to the water.</p><small id="pulse-summary"></small><small id="control-hint"></small></div></div>
       </main>
@@ -73,7 +73,7 @@ export class GameView {
             <div class="menu-tools"><button id="manual-save" data-action="save" hidden>Save locally</button><button id="export-game" data-action="export" hidden>Export save</button><button data-action="import">Import save</button></div>
             <p id="save-status" class="save-status"></p>
             <details class="details"><summary>Controls & settings</summary>
-              <dl class="controls"><div><dt>W A S D</dt><dd>Move / swim</dd></div><div><dt>Mouse / ↑ ↓ ← →</dt><dd>Look around</dd></div><div><dt>Space / C</dt><dd>Rise or jump / dive</dd></div><div><dt>Shift</dt><dd>Move faster</dd></div><div><dt>R</dt><dd>Toggle forward cruise</dd></div><div><dt>E / Q / B / F / G</dt><dd>Interact / scan / buoy / meal / distract</dd></div><div><dt>Tab or I / K / J / H</dt><dd>Hold / fabricate / notebook / hint</dd></div><div><dt>W / S · A / D</dt><dd>Pilot thrust · slide; look steers</dd></div><div><dt>X</dt><dd>Exit craft (hold while moving)</dd></div><div><dt>Z / V</dt><dd>Quiet movement / fixture controls</dd></div><div><dt>Esc / F5</dt><dd>Pause / save locally</dd></div></dl>
+              <dl class="controls"><div><dt>W A S D</dt><dd>Move / swim</dd></div><div><dt>Mouse / ↑ ↓ ← →</dt><dd>Look around</dd></div><div><dt>Space / C</dt><dd>Rise or jump / dive</dd></div><div><dt>Shift</dt><dd>Move faster</dd></div><div><dt>R</dt><dd>Toggle forward cruise</dd></div><div><dt>E / Q / B / F / G</dt><dd>Interact / scan / buoy / meal / distract</dd></div><div><dt>Tab or I / K / J / H</dt><dd>Cargo / fabricate / notebook / hint</dd></div><div><dt>W / S · A / D</dt><dd>Pilot thrust · slide; look steers</dd></div><div><dt>X</dt><dd>Exit craft (hold while moving)</dd></div><div><dt>Z / V</dt><dd>Quiet movement / fixture controls</dd></div><div><dt>Esc / F5</dt><dd>Pause / save locally</dd></div></dl>
               <div class="settings"><label>Rendering <select id="quality"><option value="rich">Rich · full viewport</option><option value="light">Light · lower resolution</option></select></label>
               <label>Sensitivity <output id="sensitivity-value">1.0</output><input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label>Mouse look<select id="mouse-mode"><option value="captured">Captured</option><option value="drag">Drag</option></select></label><label>Key turn speed <output id="key-turn-value">1.0</output><input id="key-turn" type="range" min="0.5" max="2" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
 
@@ -86,10 +86,10 @@ export class GameView {
         </div>
         <div class="scene-caption" aria-hidden="true"><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
       </div>
-      <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-header"><button id="panel-return" data-action="close-panel">Return <kbd>Esc</kbd></button><h2 id="panel-title"></h2><nav aria-label="Expedition panels"><button data-action="inventory-panel">Hold</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Notebook</button><button id="carrier-nav" data-action="carrier-panel" hidden>Carrier fixture</button></nav><span class="panel-paused">Paused</span></div><p id="panel-feedback" role="status" aria-live="polite" hidden></p><div id="panel-content"></div></div></section><section id="graphics-error" class="graphics-error" role="alert" hidden><h2>The ocean could not open</h2><p id="graphics-error-text"></p><p>Your existing local save has not been changed. Save exports remain available in the menu.</p></section>
+      <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-header"><button id="panel-return" data-action="close-panel">Return <kbd>Esc</kbd></button><h2 id="panel-title"></h2><nav aria-label="Expedition panels"><button data-action="inventory-panel">Cargo</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Notebook</button><button id="carrier-nav" data-action="carrier-panel" hidden>Carrier fixture</button></nav><span class="panel-paused">Paused</span></div><p id="panel-feedback" role="status" aria-live="polite" hidden></p><div id="panel-content"></div></div></section><section id="graphics-error" class="graphics-error" role="alert" hidden><h2>The ocean could not open</h2><p id="graphics-error-text"></p><p>Your existing local save has not been changed. Save exports remain available in the menu.</p></section>
       <aside id="session-warning" class="session-warning" aria-label="Local saving disabled" hidden><span>Autosave off · export before closing</span><button data-action="export">Export save</button></aside>
       <div id="system-status" role="status" aria-live="polite" hidden></div>
-      <div id="notification" role="status" aria-live="polite" hidden></div>
+      <div id="alert-stack" class="alert-stack"><div id="hazard" class="hazard" aria-live="off"></div><div id="notification" role="status" aria-live="polite" hidden></div></div>
       <input id="import-file" type="file" accept=".json,application/json" hidden />`;
     this.canvas = this.get<HTMLCanvasElement>("ocean");
     this.menu = this.get("menu");
@@ -332,9 +332,7 @@ export class GameView {
     this.get("manual-save").hidden = !hasSession;
     this.get("pause-reason").hidden = reason.length === 0;
     this.get("pause-reason").textContent = reason;
-    this.get("menu-subtitle").textContent = hasSession
-      ? "A moment ashore."
-      : "A refuge. A reef. A first horizon.";
+    this.get("menu-subtitle").hidden = hasSession;
     if (this.wasPlaying)
       this.get(hasSession ? "resume" : "new-game").focus({
         preventScroll: true,
@@ -368,10 +366,10 @@ export class GameView {
     this.get("new-game").focus({ preventScroll: true });
   }
 
-  update(state: GameState, cruise: boolean, forward = 0): void {
+  update(state: GameState, cruise: boolean, forward = 0, aim?: HudAim): void {
     this.latest = state;
     this.panels.observeStorageContext(state);
-    this.hudPresentation.update(state, cruise, forward);
+    this.hudPresentation.update(state, cruise, forward, aim);
   }
 
   closePanel(): void {
@@ -399,8 +397,8 @@ export class GameView {
     if (this.panelKind) this.panels.refresh(this.panelKind, state);
   }
 
-  target(t: AimedTarget | null): void {
-    this.hudPresentation.target(t, this.latest);
+  target(t: AimedTarget | null, preview: ReachPreview | null = null): void {
+    this.hudPresentation.target(t, this.latest, preview);
   }
 
   lookAction(visible: boolean, fallback = false): void {
@@ -431,11 +429,13 @@ export class GameView {
 
   blockedAscent(visible: boolean): void { this.hudPresentation.blockedAscent(visible); }
 
-  notify(message: string, error = false, options: NoticeOptions = {}): void {
+  blockedThrust(visible: boolean, state: GameState | null = this.latest): void { this.hudPresentation.blockedThrust(visible, state); }
+
+  notify(message: string, error = false, options: NoticeOptions = {}, state: GameState | null = this.latest): void {
     if (this.panelKind && (options.channel ?? "action") === "action") {
       this.hudPresentation.clearActionNotice();
       this.panels.notify(message, error);
-    } else this.hudPresentation.notify(message, error, options);
+    } else this.hudPresentation.notify(message, error, options, state);
   }
 
   graphicsError(message: string): void {
