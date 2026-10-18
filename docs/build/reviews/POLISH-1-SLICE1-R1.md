@@ -20,3 +20,5 @@ No new blocking correction request or scope dispute is raised by this report. Ro
 Preserve the sampled local terrain bound, increased geometry/buffer cost, remote coarse terrain, SwiftShader/muted-audio and synthetic-relative-input limits. Native drag tooling, representative-GPU performance and human feel/duration remain unverified. Slice2, stage1 Opus and M2–M4 remain required; this is not stage or full-game acceptance.
 
 Astra closed its owned tab/server normally, with no recordings and port5193 free; shared resources remain. Root opened no browser/server. Receive Sol's completion notification without polling, inspect its report/receipts, reconcile both independent verdicts and then accept or dispatch bounded corrections. Do not send Astra's findings to the still-independent initial reviewer.
+
+Public #4/#3 descriptions now distinguish Astra ACCEPT from pending Sol and retain provisional batch status. Exact full-body/base/head/draft verification at b68e092/M0a2cb19f is `/tmp/siltwake-m1-pr/slice1-astra-verification.json`; stack remains linked/unwatched. No source/test/config change or new test run accompanies this report-only checkpoint.
