@@ -791,3 +791,10 @@ Both task notifications are acknowledged terminal/result_available with no live 
 ### Public R1 correction checkpoint
 
 Draft #4/#3 full descriptions now reflect completed Astra ACCEPT/Sol REQUEST CHANGES, the reproduced native Tab defect, running Sol max correction and required fresh paired review. Exact full-body/base/head/draft readbacks at9bed12e/M0a2cb19f match `/tmp/siltwake-m1-pr/slice1-r1-verification.json`. Existing screenshots/recordings retain source identity; #3 remains M0-only. All stack layers linked/unwatched. Root production/tests unchanged; only bounded temporary harness probe ran after compilation. No root browser/server or polling process. Wait for the correction completion notification, then continue the authorized loop.
+
+
+### SOL-P1-1 correction terminal and assembled
+
+Task siltwake-polish-1-slice1-r1-fix-sol-max-7eec795 acknowledged completed/result_available, no children/questions. Root verifies actual gpt-6.1-sol/max and clean t3-a8b4da6f checkout. Sources7c1cbfd651235462f46c98f95cf7eb7e42305e34/da1a9dc8299b6ca1935e465abcd8b8ae1a3bbdd5, evidence44d4efec97453199e209f8a2758c2016ab7e2a1c assembled at5f25810a7f7d9974ffd2fb2b3379d812d206b0f9. Only app/view/two tests/evidence changed; ownership released, owned tab/server closed5191free.
+
+[Root inspection](evidence/POLISH-1-SLICE1-R1-FIX-INTEGRATION.md):275 checks/build/economy,47 payloads/37source/25test/27build identities, old root SELECT/BUTTON probe now paused, actual native19-Tab invariants/selected imagery inspected with delayed-observer caveats. Root has no browser/server. [Fresh R2 scope](tasks/POLISH-1-SLICE1-REVIEW-R2.md) retains all nine criteria and both initial reports, not only latest input lines. Freeze committed candidate and dispatch independent Astra xhigh/Sol6.1 max report-only reviews. No acceptance or slice2 implementation before reconciliation.
