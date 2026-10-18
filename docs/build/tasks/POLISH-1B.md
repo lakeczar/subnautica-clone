@@ -1,6 +1,6 @@
 # POLISH-1B — controls and feedback presentation
 
-Prepared by root during POLISH-1A. **Not yet assigned.** Dispatch only after root inspects and provisionally integrates 1A, records its exact exports and commits the new shared baseline. This is the second leaf of one combined controls/action batch; it does not own slice2 menus/encounter/physics.
+Ready for dispatch after root inspected and provisionally integrated1A at **0b071354a629fd84235eecf3eb2f72403c7e4204**. [Root reconciliation](../evidence/POLISH-1A-INTEGRATION.md) freezes its implemented exports/metadata and verification limits. TASKS records the full committed dispatch baseline and returned task ID. This is the second leaf of one combined controls/action batch; it does not own slice2 menus/encounter/physics.
 
 Use Sol6.1/max. Read [POLISH-1](POLISH-1.md), CONTRACTS and the original Opus implementation plan/disposition. The former supplies root's binding reconciliation. Preserve schema2/expedition.3, action authority, protected provenance/recovery text, actual Dart handling and session/writer lifecycle. No children/peers/push/PR/merge or edits outside assigned paths.
 
@@ -17,11 +17,11 @@ Use Sol6.1/max. Read [POLISH-1](POLISH-1.md), CONTRACTS and the original Opus im
 9. Preserve the opening's accessible Act and Skip buttons. A canvas Space hold (trial0.8s) avoids accidentally skipping while trying to rise; a focused Skip button still activates instantly by Space/Enter. Key repeat, lost focus and pause cancel appropriately. Do not swallow ordinary browser/DOM keyboard activation. Grammar fix for minute/minutes is allowed; session behavior is not.
 10. Concise UI throughout touched areas: one clear prompt, correct vessel names, no internal IDs in added copy, transient useful hints instead of multiple repeated subtitles. Keep essential warnings/captions and the incomplete-build disclosure. Broader Hold/Fabricate/Notebook redesign and state-aware notice center are slice2.
 
-## Intended exclusive paths
+## Exclusive paths
 
-After 1A releases ownership: `src/runtime/{app,input,session}.ts` (session grammar only), `src/ui/view.ts`, `src/render/{renderer,targetCue}.ts`, `src/audio/sound.ts`, `src/style.css`, and `src/sim/types.ts` **only** the impact sound cue member. No sim rules/registry/world/save edits.
+1A ownership is released: `src/runtime/{app,input,session}.ts` (session grammar only), `src/ui/view.ts`, `src/render/{renderer,targetCue}.ts`, `src/audio/sound.ts`, `src/style.css`, and `src/sim/types.ts` **only** the impact sound cue member. No sim rules/registry/world/save edits.
 
-Tests: `tests/{app,app-browser-support,app-loader,presentation,render-lifecycle,sound-origin}.ts` with existing actual `.test.ts` names where applicable; new focused `tests/input.test.ts` or `tests/target-cue.test.ts` if meaningful. Do not alter simulation tests/fixtures or weaken safety expectations. Evidence only `docs/build/evidence/POLISH-1B.md`, temp `/tmp/siltwake-polish-1b/`. Exact task prompt at dispatch will resolve file-name list and reflect implemented1A exports.
+Tests: `tests/app.test.ts`, `tests/app-browser-support.ts`, `tests/app-loader.ts`, `tests/presentation.test.ts`, `tests/render-lifecycle.test.ts`, `tests/sound-origin.test.ts`; new focused `tests/input.test.ts` or `tests/target-cue.test.ts` if meaningful. Do not alter simulation tests/fixtures or weaken safety expectations. Evidence only `docs/build/evidence/POLISH-1B.md`, temp `/tmp/siltwake-polish-1b/`. The names above are verified against the checkout. Report any additional cross-path need to root while continuing independent work.
 
 ## Verification and playable evidence
 
@@ -29,7 +29,7 @@ Run relevant DOM/input/lifecycle tests and final `npm run check` plus economy. I
 
 - Fresh opening → ordinary look at known regulator → E opens the correct entry. Before/after appearance plus interaction sequence; captions/keyboard skip remain usable.
 - Earned intake approach: point at scraps vs record; E matches cue/prompt, known entry opens, looking away hides cue, wall/rib occlusion holds. Verify transitions at close range and walk/swim camera height, not just static poses.
-- Verify the three1A-aligned source groups (workshop scraps, headland scraps, west glass) and translated headland persistent frame in actual production: visibly supported assets against the actual triangulated terrain, cue on the host, valid ordinary aim/collection and a legible depleted sorting anchor. Camera/approach rays must not pass under visible terrain despite analytical collision clearance. Also verify both workshop shore-crop targets and empty-host food tending. Numeric geometry probes alone do not establish this visible result.1B may inspect these assets but does not inherit general expedition/environment-art edit ownership.
+- Verify the three1A-aligned source groups (workshop scraps, headland scraps, west glass) and translated headland persistent frame in actual production: visibly supported assets against the actual triangulated terrain, cue on the host, valid ordinary aim/collection and a legible depleted sorting anchor. Camera/approach rays must not pass under visible terrain despite analytical collision clearance. Also verify both workshop shore-crop targets and empty-host food tending. Numeric geometry probes alone do not establish this visible result. Only4.80% of headland stock and7.96% of western-glass sampled surface is exposed; do not equate visibility of one geometric point with a readable collectable.1B may inspect these assets but does not inherit general expedition/environment-art edit ownership.
 - Import byte-identical earned `island-glass-east-bundles.json`, navigate to workshop by ordinary controls, fabricate a **new** Dart, board and launch W for3s with no hull loss. Record transaction and complete exported state; an old already-built save does not prove this.
 - Separately import unchanged old `dart-fabrication.json` and show preserved yaw0, readable lane guidance and ordinary departure. No automatic legacy rotation.
 - Deliberate high-speed terrain contact shows real impact feedback; slow contact gives no damaging-impact text. A tap versus held E/X demonstrates exit behavior, with normal depth refusal/safe exit and cancelled hold. Emergency fixtures may be labelled diagnostics; do not pass them off as naturally depleted play.

@@ -709,3 +709,10 @@ Worker reports231/231 tests/typecheck/build and economy before final numeric geo
 Root authorizes only `src/render/environment.ts` headland-scraps frame Y translation via optional shared registry `persistentOffsetY`; already-assigned stock offsets/host metadata may be corrected against actual triangles. All other hosts, topology/materials, terrain/collision, source datums/yields and reach stay unchanged. Final probes must check visible approach eyes/rays and depleted anchor as well as analytical LOS;1B verifies actual production. Full constraints in POLISH-1/CONTRACTS.
 
 Delivered to original running child using steer `siltwake-polish-1a-persistent-frame-b6dec10`, same ordinal1 run, no new task. Retain intermediate evidence provenance; rerun applicable geometry/targeting and final full check/build after final changes. Root made only records, no browser/source edit or new acceptance claim.
+
+
+### POLISH-1A completed and provisionally integrated
+
+Original task completed/result_available, no pending children/questions. Runtime Sol6.1/max confirmed. Source74357dfc1f61eaca0dc84f0f35c7ee98bef10235 andb92188be0d31f217034eedf862260b8ff176676f plus evidence49c9454 are merged at0b071354a629fd84235eecf3eb2f72403c7e4204. Author worktree clean, no browser/server. [Root inspection](evidence/POLISH-1A-INTEGRATION.md) records231 passing tests/build/economy;15 source,27 artifact and17 receipt matches; five preserved saves; identical root geometry/action reruns and2304 independent optical cases plus reversals. No actual ordinary-play or independent acceptance claim.
+
+1A ownership is released.1B now has explicit filenames, implemented interfaces, actual rendered-source concerns and separate earned new/legacy launch proof in its committed assignment. Dispatch one Sol6.1/max isolated builder next; pair-review composed1A+1B after its return. No duplicate workers or polling.
