@@ -441,3 +441,10 @@ Fresh non-author T3 worktree tasks use exact candidate `21d50dfb4de1ab5d2ae81cde
 Only own report paths; isolated ports5195/5196 checked free and browser rules included. Three active agents including root, no active builders/root browser/server. Receive notifications without polling, reconcile independent initial verdicts, then direct substantive fixes if needed. No acceptance or integrated-M1 claim.
 
 PR #4/#3 refreshed for LOOK assembly and running R3 pair; exact bodies/base/head/draft verified in `/tmp/siltwake-m1-pr/look-verified-{3,4}.json`. Five new public PNGs returned200 image/png with exact bytes. Root owner comparison HTML checked at728/360 px. Production remains frozen06927d5; docs-only follow-up does not change the reviewed candidate21d50df. Await independent completion notifications; no source work or new reviewer started.
+
+
+### Astra R3 returned; legacy migration finding reproduced
+
+Task `siltwake-m1-batch-astra-r3-21d50df` terminal, actual Astra/xhigh, clean worktree and closed own tab/server5195, no children/questions. Report `e16139b` merged at `dbfca53`. Core CHANGES REQUIRED; presentation ACCEPT. Root verified80 artifact payloads/81 unique safe regular archive members and reran the copied historical codec/session reproduction on unchanged root206a6ec. [Root evidence](evidence/M1-R3-MIGRATION-REPRODUCTION.md): M1-ASTRA-R3-01 confirmed, original raw journal unchanged, helm workaround demonstrated.
+
+Sol R3 remains active/independent at21d50df with only its report path and port5196. No Astra findings shared. [Migration correction](tasks/M1-MIGRATION-FIX.md) transfers only codec legacy placement/result checks, the existing checked-entry helper in carrier.ts, focused migration/save/session tests and its own evidence to a separate Sol max worktree. Await exact dispatch record below; root alone integrates/updates records. No root browser/server or production mutation; no batch acceptance. Later correction requires a new frozen candidate and fresh independent pair.
