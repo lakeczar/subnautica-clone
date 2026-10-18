@@ -2,7 +2,7 @@ import { Soundscape } from "../audio/sound.js";
 import { executeCommand, stepGame } from "../sim/step.js";
 import { createWorldQueries } from "../sim/world.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
-import { aimedInteraction } from "../sim/targeting.js";
+import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
 import { encodeSave } from "../save/codec.js";
 import { SaveRepository } from "../save/repository.js";
@@ -106,6 +106,8 @@ export class SiltwakeApp {
   private frameId = 0;
   private hudTime = 0;
   private forwardThrust = 0;
+  private thrustSeconds = 0;
+  private thrustActor: string | null = null;
   private ascentSeconds = 0;
   private ascentActor: string | null = null;
   private lastBoundaryNotice = -Infinity;
@@ -116,7 +118,7 @@ export class SiltwakeApp {
       changed: () => this.syncSessionUi(),
       pause: () => this.pause("", false),
       entered: () => this.entered(),
-      notify: (message, error, options) => this.view.notify(message, error, options),
+      notify: (message, error, options) => this.view.notify(message, error, options, this.state),
     });
     this.view = new GameView(root, {
       command: (command) => this.command(command),
@@ -317,6 +319,7 @@ export class SiltwakeApp {
       this.session.state = result.state;
       this.events(result.events);
       this.observeAscent(result.events);
+      this.observeThrust(result.events);
       this.view.presentationStep(result.state);
       this.validateGesture();
       for (const event of result.events)
@@ -332,11 +335,14 @@ export class SiltwakeApp {
         }
       this.session.autosave();
     });
-    if (this.state) this.view.target(this.active ? aimedInteraction(this.state, this.world) : null);
+    const target = this.active && this.state ? aimedInteraction(this.state, this.world) : null;
+    const preview = this.active && this.state && !target ? reachPreview(this.state, this.world) : null;
+    const aim = { target, preview };
     if (this.state && now - this.hudTime > 90) {
-      this.view.update(this.state, this.input?.cruise ?? false, this.forwardThrust);
+      this.view.update(this.state, this.input?.cruise ?? false, this.forwardThrust, aim);
       this.hudTime = now;
     }
+    if (this.state) this.view.target(target, preview);
     if (
       this.renderer &&
       this.graphicsAvailable &&
@@ -344,7 +350,7 @@ export class SiltwakeApp {
       (this.active || this.dirty || this.view.canvas.dataset.ready !== "true")
     ) {
       try {
-        this.renderer.present(this.state, { target: this.active && this.state ? aimedInteraction(this.state, this.world)?.host ?? null : null });
+        this.renderer.present(this.state, { target: target?.host ?? null, preview: preview?.host ?? null });
         this.dirty = false;
       } catch (error) {
         this.pause();
@@ -443,7 +449,7 @@ export class SiltwakeApp {
 
   private events(events: readonly GameEvent[]): void {
     for (const event of events) {
-      if (event.type === "notice") this.view.notify(event.message, event.error, event);
+      if (event.type === "notice") this.view.notify(event.message, event.error, event, this.state);
       if (event.type === "sound" && event.source === "threat-call" && event.origin && this.state &&
         [event.origin.x, event.origin.y, event.origin.z].every(Number.isFinite))
         this.view.threatCall(event.origin, this.state);
@@ -456,10 +462,11 @@ export class SiltwakeApp {
     }
   }
 
-  private resetAscent(): void {
+  private resetAscent(resetThrust = true): void {
     this.ascentSeconds = 0;
     this.ascentActor = null;
     this.view.blockedAscent(false);
+    if (resetThrust) this.resetThrust();
   }
 
   private observeAscent(events: readonly GameEvent[]): void {
@@ -469,7 +476,7 @@ export class SiltwakeApp {
       sample.requestedRise <= ASCENT_EPSILON || sample.surfaceLimitedRise > ASCENT_EPSILON ||
       Math.abs(sample.actualRise) > sample.requestedRise * 0.1 + ASCENT_EPSILON ||
       sample.solidLimitedRise <= sample.requestedRise * 0.5 + ASCENT_EPSILON) {
-      this.resetAscent();
+      this.resetAscent(false);
       return;
     }
     const actor = `${this.state.player.mode}/${sample.actorId ?? "diver"}`;
@@ -477,6 +484,31 @@ export class SiltwakeApp {
     this.ascentActor = actor;
     this.ascentSeconds = Math.min(BLOCKED_ASCENT_SECONDS, this.ascentSeconds + FIXED_SECONDS);
     this.view.blockedAscent(this.ascentSeconds + 1e-9 >= BLOCKED_ASCENT_SECONDS);
+  }
+
+  private resetThrust(): void {
+    this.thrustSeconds = 0;
+    this.thrustActor = null;
+    this.view.blockedThrust(false, this.state);
+  }
+
+  private observeThrust(events: readonly GameEvent[]): void {
+    const s = this.state, v = s?.fleet.vehicles.find(v => v.id === s.player.controlledVehicleId);
+    const sample = events.find((e): e is Extract<GameEvent, { type: "thrust-sample" }> => e.type === "thrust-sample");
+    if (!this.active || !s || s.opening.phase < 4 || s.player.mode !== "piloting" ||
+      v?.hull !== "dart" || v.disabled || v.charge <= 0 || !sample || sample.actorId !== v.id ||
+      events.some(e => e.type === "foundation-boundary") ||
+      ![sample.requested, sample.actual, sample.solidLimited].every(Number.isFinite) ||
+      sample.requested <= 1e-5 || sample.actual < 0 || sample.solidLimited < 0 ||
+      sample.actual > sample.requested * 0.1 ||
+      sample.solidLimited < 0.8 * (sample.requested - sample.actual)) {
+      this.resetThrust();
+      return;
+    }
+    if (this.thrustActor !== v.id) this.thrustSeconds = 0;
+    this.thrustActor = v.id;
+    this.thrustSeconds = Math.min(0.5, this.thrustSeconds + FIXED_SECONDS);
+    this.view.blockedThrust(this.thrustSeconds + 1e-9 >= 0.5, s);
   }
 
   private command(command: GameCommand): void {

@@ -22,6 +22,7 @@ export class GameView {
   presentationSteps: { tick: number; mode: string; threat: string; vehicleId: string | null }[] = [];
   calls: { origin: Vec3; tick: number; mode: string }[] = [];
   blocked: boolean[] = [];
+  thrustBlocked: boolean[] = [];
   observations: { kind: string; tick: number | null }[] = [];
   disposed = false;
   currentPanel: string | null = null;
@@ -59,6 +60,7 @@ export class GameView {
     this.observations.push({ kind: "call", tick: state.tick });
   }
   blockedAscent(visible: boolean): void { this.blocked.push(visible); }
+  blockedThrust(visible: boolean): void { this.thrustBlocked.push(visible); }
   audioSettings(): void {}
   confirmation(): void {}
   cancelConfirmation(): void {}

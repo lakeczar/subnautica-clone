@@ -17,7 +17,7 @@ import { createAtmosphere } from "./atmosphere.js";
 
 export type Quality = "rich" | "light";
 export interface GameRenderer {
-  present(state: GameState | null, overlay?: { target: InteractionHost | null }): void;
+  present(state: GameState | null, overlay?: { target: InteractionHost | null; preview?: InteractionHost | null }): void;
   setQuality(quality: Quality): void;
   resize(): void;
   dispose(): void;
@@ -157,7 +157,7 @@ export function createRenderer(
           camera.position.set(25, 13, 44);
           camera.setTarget(new Vector3(-1, -0.8, -20));
         }
-        cue.update(state ? overlay?.target ?? null : null, camera.position);
+        cue.update(state ? overlay?.target ?? overlay?.preview ?? null : null, camera.position, !!overlay?.target);
         const interior = !!state && (inCanopyAir(state) || state.player.mode === "interior");
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
         const fog = Color3.FromHexString(interior ? "#486e76" : underwater ? "#226e7e" : "#96c5b9");

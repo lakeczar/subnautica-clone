@@ -832,3 +832,69 @@ test("app: obstruction observation rejects correction/slide/invalid samples and 
   assert.equal(f.view.blocked.at(-1), false);
   assert.equal((f.app as unknown as { session: { state: { tick: number } } }).session.state.tick, 1500);
 });
+
+function thrustInput(f: Fixture, forward: number, right = 0, quiet = false): void {
+  const input = (f.app as unknown as { input: { sample(): import("../src/sim/types.js").GameCommand[] } }).input;
+  input.sample = () => [{ type: "move", forward, right, vertical: 0, sprint: false, quiet }];
+}
+function pilotedSave(x = 18, z = -14.4) {
+  const initial = sample(900); completeOpening(initial.state);
+  const s = initial.state, v = makeVehicle("thrust-dart", "dart", { x, y: -.9, z }, "thrust-hold");
+  v.investment = { ...RECIPES.dart_base.cost };
+  s.fleet.vehicles.push(v); s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", capacity: 32, ownerId: v.id });
+  s.player.mode = "piloting"; s.player.controlledVehicleId = v.id; s.player.pose = structuredClone(v.pose);
+  return initial;
+}
+for (const x of [18, 20, 22]) {
+  test(`app: actual Dart contact at x=${x} requires half a second and releases on progress/input/pause`, async (t) => {
+    const f = await fixture(t, pilotedSave(x));
+    f.view.actions.resume(); thrustInput(f, 1, 0, true); f.frames(29);
+    assert.equal(f.view.thrustBlocked.at(-1), false);
+    f.frames(6); assert.equal(f.view.thrustBlocked.at(-1), x !== 20);
+    thrustInput(f, 0); f.frames(2); assert.equal(f.view.thrustBlocked.at(-1), false);
+    thrustInput(f, 1); f.frames(36); assert.equal(f.view.thrustBlocked.at(-1), x !== 20);
+    f.view.actions.pause(); assert.equal(f.view.thrustBlocked.at(-1), false);
+    f.view.actions.resume(); thrustInput(f, 1); f.frames(10); assert.equal(f.view.thrustBlocked.at(-1), false);
+    f.view.actions.panel("inventory"); assert.equal(f.view.thrustBlocked.at(-1), false);
+    f.view.actions.resume(); thrustInput(f, 1); f.frames(36); f.renderer.lose();
+    assert.equal(f.view.thrustBlocked.at(-1), false);
+  });
+}
+
+test("app: thrust accumulator excludes missing, boundary, release/progress, tiny, invalid and non-solid samples", async (t) => {
+  const f = await fixture(t, pilotedSave()); f.view.actions.resume();
+  type Event = import("../src/sim/types.js").GameEvent;
+  const port = f.app as unknown as {
+    observeThrust(events: Event[]): void;
+    session: { state: import("../src/sim/types.js").GameState };
+  };
+  const sample: Extract<Event, { type: "thrust-sample" }> = { type: "thrust-sample", actorId: "thrust-dart", requested: .0044586, actual: 0, solidLimited: .0044586 };
+  for (let i = 0; i < 29; i++) port.observeThrust([sample, sample]);
+  assert.equal(f.view.thrustBlocked.at(-1), false, "duplicate events do not count multiple steps");
+  port.observeThrust([sample]); assert.equal(f.view.thrustBlocked.at(-1), true);
+  for (const invalid of [
+    [], [sample, { type: "foundation-boundary" }],
+    [{ ...sample, requested: 1e-5 }], [{ ...sample, requested: NaN }],
+    [{ ...sample, actual: .001 }], [{ ...sample, actual: -.001 }],
+    [{ ...sample, solidLimited: .002 }], [{ ...sample, solidLimited: Infinity }],
+    [{ ...sample, actorId: "old-actor" }],
+  ] as Event[][]) {
+    port.observeThrust(invalid); assert.equal(f.view.thrustBlocked.at(-1), false);
+    for (let i = 0; i < 29; i++) port.observeThrust([sample]);
+    assert.equal(f.view.thrustBlocked.at(-1), false, "reset starts a new active half-second");
+    port.observeThrust([sample]); assert.equal(f.view.thrustBlocked.at(-1), true);
+  }
+  const v = port.session.state.fleet.vehicles[0]!;
+  for (const field of ["disabled", "charge"] as const) {
+    if (field === "disabled") v.disabled = true; else v.charge = 0;
+    port.observeThrust([sample]); assert.equal(f.view.thrustBlocked.at(-1), false);
+    v.disabled = false; v.charge = 100;
+  }
+  port.session.state.player.mode = "swimming";
+  port.observeThrust([sample]); assert.equal(f.view.thrustBlocked.at(-1), false);
+  port.session.state.player.mode = "piloting";
+  f.view.actions.pause(); port.observeThrust([sample]); assert.equal(f.view.thrustBlocked.at(-1), false);
+  f.view.actions.resume(); for (let i = 0; i < 30; i++) port.observeThrust([sample]);
+  assert.equal(f.view.thrustBlocked.at(-1), true);
+  f.view.actions.command({ type: "exit" }); assert.equal(f.view.thrustBlocked.at(-1), false);
+});
