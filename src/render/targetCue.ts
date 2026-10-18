@@ -4,6 +4,7 @@ import { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import { Constants } from "@babylonjs/core/Engines/constants.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import type { InteractionHost } from "../sim/targeting.js";
+import type { Vec3 } from "../sim/types.js";
 import { opticalShader, opticalUniforms } from "./materials.js";
 
 /** One retained, depth-tested and normally fogged set of quiet host brackets. */
@@ -42,13 +43,25 @@ export function createTargetCue(scene: Scene) {
   let disposed = false;
   return {
     material,
-    update(host: InteractionHost | null): void {
+    update(host: InteractionHost | null, eye?: Vec3): void {
       if (disposed) return;
       const valid = host && [host.center.x, host.center.y, host.center.z, host.radius].every(Number.isFinite) && host.radius > 0;
       mesh.setEnabled(!!valid);
       if (!host || !valid) return;
       mesh.position.set(host.center.x, host.center.y, host.center.z);
-      mesh.scaling.setAll(Math.max(0.12, Math.min(0.42, host.radius * 0.3)));
+      let scale = Math.min(0.42, host.radius * 0.3);
+      if (eye) {
+        const x = eye.x - host.center.x, y = eye.y - host.center.y, z = eye.z - host.center.z;
+        const distance = Math.hypot(x, y, z);
+        if (Number.isFinite(distance) && distance > 1e-6) {
+          // Keep the cue on the near side of its host rather than buried in
+          // the host mesh. It still uses the ordinary scene depth buffer.
+          const offset = Math.min(host.radius * 0.9, distance * 0.5);
+          mesh.position.addInPlaceFromFloats(x * offset / distance, y * offset / distance, z * offset / distance);
+          scale = Math.min(scale, (distance - offset) * 0.07);
+        }
+      }
+      mesh.scaling.setAll(Math.max(0.02, scale));
     },
     dispose(): void {
       if (disposed) return;

@@ -120,7 +120,6 @@ export function createRenderer(
         if (disposed || !available) return;
         const time = state ? state.tick / 60 : 0;
         expedition.update(state);
-        cue.update(state ? overlay?.target ?? null : null);
         if (state) {
           const pose = state.player.pose;
           if (state.opening.phase < 4) {
@@ -158,6 +157,7 @@ export function createRenderer(
           camera.position.set(25, 13, 44);
           camera.setTarget(new Vector3(-1, -0.8, -20));
         }
+        cue.update(state ? overlay?.target ?? null : null, camera.position);
         const interior = !!state && (inCanopyAir(state) || state.player.mode === "interior");
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
         const fog = Color3.FromHexString(interior ? "#486e76" : underwater ? "#226e7e" : "#96c5b9");
