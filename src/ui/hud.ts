@@ -145,11 +145,7 @@ export class HudView {
     const target = aim ? aim.target : aimedInteraction(state, this.world);
     this.target(target, state, aim ? aim.preview : target ? null : reachPreview(state, this.world));
     const air = airSupply(state);
-    const airLabel = air.kind === "craft" && v ? `${HULLS[v.hull].label} air`
-      : air.kind === "refuge" ? `${nearPod(state) ? PLACES.home_pod.label : nearWorkshop(state) ? PLACES.island_workshop.label : inCanopyAir(state) ? PLACES.canopy_lab.label : "Hearthline"} air`
-      : air.kind === "surface" ? "Surface air"
-      : air.kind === "emergency" ? `Emergency air · ${Math.ceil(air.remainingSeconds!)} s`
-      : `Suit air · ${Math.ceil(air.remainingSeconds!)} s`;
+    const airLabel = airSourceLabel(state);
     const service = mode === "piloting" && v?.hull === "dart" ? serviceState(state, v.id) : null;
     const serviceLine = v && service === "ready" && serviceRefusal(state, v.id) === null ? "Service here · Tab"
       : service === "patch" ? "Patch hull first" : "";
@@ -369,18 +365,28 @@ export class HudView {
   }
 }
 
+/** Vitals and warnings name the same authoritative supply, including unlimited air. */
+function airSourceLabel(state: GameState): string {
+  const air = airSupply(state);
+  const v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
+  return air.kind === "craft" && v ? `${HULLS[v.hull].label} air`
+    : air.kind === "refuge" ? `${nearPod(state) ? PLACES.home_pod.label : nearWorkshop(state) ? PLACES.island_workshop.label : inCanopyAir(state) ? PLACES.canopy_lab.label : "Hearthline"} air`
+    : air.kind === "surface" ? "Surface air"
+    : `${air.kind === "emergency" ? "Emergency" : "Suit"} air · ${Math.ceil(air.remainingSeconds!)} s`;
+}
+
 export interface HazardBanner { context: NoticeContext | "pressure" | "health" | "hullDepth" | "power"; text: string }
 /** The exact current-state list used for both visible warnings and coverage. */
 export function hazardBanners(state: GameState): HazardBanner[] {
   const warnings: HazardBanner[] = [];
   const e = exposure(state), v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId), air = airSupply(state);
-  const airLabel = `${air.kind === "suit" ? "Suit" : "Emergency"} air · ${Math.ceil(air.remainingSeconds ?? 0)} s`;
+  const airLabel = airSourceLabel(state);
   if (!v && !e.refuge && e.pressureDepth > personalLimit(state))
     warnings.push({ context: "pressure", text: `PRESSURE · ${e.pressureDepth.toFixed(0)} m / personal ${personalLimit(state)} m · ascend now` });
   if (!e.breathable && state.player.vitals.oxygen <= 35)
     warnings.push({ context: "oxygen", text: `LOW OXYGEN · ${state.player.vitals.oxygen.toFixed(0)}% · return to air now` });
   if (v && (v.charge === 0 || v.disabled))
-    warnings.push({ context: "hull", text: `${v.disabled ? "HULL DISABLED" : "POWER DEPLETED"} · ${air.kind === "emergency" ? `emergency air ${Math.ceil(air.remainingSeconds!)} s` : air.kind === "suit" ? `emergency air exhausted · ${airLabel}` : airLabel} · protected exit / reserve cell` });
+    warnings.push({ context: "hull", text: `${v.disabled ? "HULL DISABLED" : "POWER DEPLETED"} · ${air.kind === "suit" ? "emergency air exhausted · " : ""}${airLabel} · protected exit / reserve cell` });
   if (v && hullDepth(v) > HULLS[v.hull].initialDepth * 0.85)
     warnings.push({ context: "hullDepth", text: `HULL DEPTH · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m · ascend before hull damage` });
   if (v && v.charge > 0 && v.charge < 25)
