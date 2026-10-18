@@ -81,3 +81,7 @@ Save5005f1f and storage11d9a0d are provisionally combined at **c32d8c5**,359 che
 ### Slice2 paired acceptance; stage1 experience pass next
 
 Both fresh non-author reviewers and coordinator accept the full preparation/encounter slice on **c4de579**, productionc32d8c5. [Paired record](reviews/POLISH-1-SLICE2-R2.md) closes both R1 findings with all eight criteria passing and359 tests/build. This joins accepted slice1; no production change follows the reviews. Dispatch [stage1 Opus](tasks/OPUS-STAGE1-R1.md), obtain detailed advice and implement/re-review substantive experience findings before advancing to M2. Technical acceptance does not substitute for the owner's experience pass or human/hardware evidence.
+
+### Stage1 experience review returned; bounded follow-up
+
+Opus report8c49770 on5dbc73a is integrated without production changes. [Root disposition](reviews/OPUS-STAGE1-R1-DISPOSITION.md) prioritizes action feedback, a presentation-only reach preview and useful cargo actions, with related warning/type/copy refinements. It narrows optional motion, toolbar, resume and geometry suggestions. Obtain [same-context implementation advice](tasks/OPUS-STAGE1-IMPLEMENTATION-CONSULT.md), freeze contracts, delegate Sol corrections, then affected paired acceptance and fresh Opus verification. M2 benchmark depth/particle/cockpit/ecology work remains later scope. TASKS owns actual dispatch state.

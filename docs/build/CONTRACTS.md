@@ -237,3 +237,7 @@ Both corrections are provisionally assembled at **c32d8c5**; [root verification]
 ### Slice2 contracts accepted on c4de579
 
 Both independent reviewers and coordinator accept the complete extraction/rib/signal/preparation/hunter/HUD slice and its save/storage corrections on **c4de579**, productionc32d8c5; [paired record](reviews/POLISH-1-SLICE2-R2.md). Historical provisional labels above now describe prior checkpoints. No subsequent source/interface changes. All author/reviewer paths are released. Stage1 Opus is report-only; accepted technical contracts remain until root reconciles any new bounded implementation direction.
+
+### Stage1 Opus disposition; no contract change yet
+
+Report8c49770 and root disposition identify a deliberate future revision to action-suppression presentation, a non-executable reach preview and cargo/HUD hierarchy. The [consultation](tasks/OPUS-STAGE1-IMPLEMENTATION-CONSULT.md) is design-only. Existing E/Q reach, LOS, saved state, content/economy, movement, native focus, save-retry/storage-intent and deliberate resume contracts remain in force. Root freezes exact additive interfaces after advice, before assigning Sol authors. No inferred source ownership from a suggestion.

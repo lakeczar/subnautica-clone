@@ -6,7 +6,7 @@
 
 [Correction inspection](evidence/POLISH-1-SLICE2-CORRECTIONS-INTEGRATION.md) records359/359 tests, typecheck/build, exact source/build identity, resolved root defect probes and final author traces. Both R2 reviewers independently pass359 checks/build and verify retained evidence. Actual models/efforts and all reviewer artifacts are verified. Earlier composed workflow/reload retains660350b attribution; simulation/save/economy are unchanged by the two corrections. No further production changes occurred during review.
 
-All implementation authors and both R2 reviewers are terminal, source/report ownership released and owned resources closed. The required **Opus5.5/high stage1 experience review is active on5dbc73a** following [the full brief](tasks/OPUS-STAGE1-R1.md); TASKS records its actual task ID and report-only ownership. It will assess the integrated controls, menus, motion, timing, visual taste and expedition loop, including repeated refit facts, small text and HUD density. Stage1 is not complete until its experience findings/advice/corrections are resolved. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
+All implementation authors and reviewers are terminal. The required **Opus5.5/high stage1 experience review on5dbc73a is complete**; report8c49770 is integrated with no source changes. [Coordinator disposition](reviews/OPUS-STAGE1-R1-DISPOSITION.md) accepts a bounded follow-up for action feedback during danger, reach discoverability, cargo hierarchy and related HUD clarity. Root inspected actual images, verified31 artifact payloads and three earned saves, and reproduced the core presentation cases. The manifest self-hash and missing independent browser-process receipt are explicitly qualified. The same-context [implementation consultation](tasks/OPUS-STAGE1-IMPLEMENTATION-CONSULT.md) is prepared; TASKS records dispatch when active. Stage1 remains open for advice, Sol corrections, affected paired acceptance and fresh Opus verification. Physical mouse feel, audible mix, human duration/enjoyment and representative-GPU performance remain unverified.
 
 Then continue M2–M4 under standing authorization. Root has no browser/server/check process. No main merge/deployment.
 
@@ -60,7 +60,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active fresh stage1 Opus5.5/high experience review on5dbc73a, a documentation successor to acceptedc4de579 with identical productionc32d8c5. TASKS owns its ID and report-only path. Use completion notifications without polling. Substantive findings require detailed implementation advice, reconciliation, Sol fixes and affected re-review. Continue M2–M4; main merge/public deployment remain owner actions.
+Dispatch the prepared same-context Opus stage1 implementation consultation with the root disposition supplied verbatim. It owns only a new design document; no source or browser work. On return reconcile exact interfaces and delegate bounded Sol6.1/max corrections, then fresh affected Astra/Sol and Opus review. Use completion notifications without polling. Production remainsc32d8c5. Continue M2–M4; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
