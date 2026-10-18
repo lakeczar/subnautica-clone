@@ -621,3 +621,12 @@ Sol remains independent with initial verdicts pending; no Astra findings shared.
 
 
 PR #4/#3 refreshed for Astra ACCEPT/ACCEPT at1caa05f, Sol pending and owner pause after the existing reviews. Exact body/base/head/draft readbacks verified atc6e90e5/M0a2cb19f; `/tmp/siltwake-m1-pr/integrated-astra-verification.json` records body hashes #4 `1d9dff89ce56be02b08988c81c2893e1bec7943ba0cf50457366428853dc2ab6`, #3 `057874830cfd348aff9b4410b86c9f500c74e754d47987e516757c24ff3251f9`. Stack linked/unwatched; source/game/main unchanged. No new task or resource; Sol remains the sole existing reviewer to await before the idle handoff.
+
+
+### Integrated M1 accepted; all workers idle for owner input
+
+Sol task `siltwake-m1-integrated-sol-r1-1caa05f` completed as actual codex/gpt-6.1-sol/max, clean worktree, no children/questions/resources. Report **d7aa8019ba376729b4197e1df703aa4f76a0f8b8** merged at **e3d335c9112bb103e452d362e3aca00f6133f734**. Root inspected the full report and four independent scripts/results, then verified all18 checksum payloads; receipt `/tmp/siltwake-m1-integrated-r1-root/sol-artifact-verification.json`. [Paired record](reviews/M1-INTEGRATED-R1.md) preserves exact hashes, evidence provenance and both independent initial verdicts. No peer findings were shared before either initial return.
+
+Both non-author reviewers and coordinator **ACCEPT final correction/evidence and integrated M1 at1caa05f**, productiona5821aa. The only new finding is coalesced ASTRA/SOL-M1-INTEGRATED-R1-01, nonblocking secondary-guidance contrast, retained for later polish. Current early evidence ends atC01/C03; completed alternateC03→C02 is historical4d0a7f0. Fifteen historical recovery commands are unchanged; patch/service have two explicit authorized text substitutions. Scope remains the first expedition, not the full game.
+
+Durable active-thread query shows only root doing records, with no workers pending/running. Root has no browser/server/recording/input; all author/reviewer resources are closed. No production/test/config changes or redundant suite/browser run during this report merge. Preserve a clean pushed feature checkpoint and refreshed draft PR#4/#3, then notify the owner and **pause before any new fix, review, M2 work or merge into game/siltwake**. Accepted game branch remains M0a2cb19f; M2–M4 and final design critic remain required. The next action is the owner's implementation input.
