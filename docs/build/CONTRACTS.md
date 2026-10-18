@@ -1,5 +1,7 @@
 # Shared implementation direction
 
+Current experience freeze: caption sourcef2e634a is inspected and provisionally integrated at35de825. The only added selector sets the non-action pause caption to11px; no public interface/state/test change. All implementation ownership is released. The complete S1/S2/COMPOSE/caption batch awaits the fresh paired gate and Opus; TASKS owns actual dispatch. Earlier active-owner descriptions below are historical.
+
 Current acceptance: **M1 final correction and integrated milestone accepted at `1caa05f`**, production `a5821aa`; [paired verdicts and coordinator reconciliation](reviews/M1-INTEGRATED-R1.md). Historical staged/provisional statements below identify earlier checkpoints; their current implementations are covered by this acceptance. Subsequent controls/action source is independently accepted by both R2 reviewers and coordinator on d031803, production5f25810; [reconciliation](reviews/POLISH-1-SLICE1-R2.md). All pre-polish ownership is released. The owner has authorized implementing OPUS-DESIGN-R2 findings and continuing through the full game. The Opus consultation40fcef9 is complete; [POLISH-1](tasks/POLISH-1.md#frozen-interfaces-for-this-slice) freezes the new targeted interaction/LOS/transient-event and subsequent presentation contracts before Sol implementation. These supersede conflicting historical freeze text only within that assignment. POLISH-1A+1B+1C are assembled at cd4ef9f; `game/siltwake` remains M0 at `a2cb19f`.
 
 ## Stage1 controls and action contracts

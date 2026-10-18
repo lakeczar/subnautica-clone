@@ -1185,3 +1185,10 @@ PR #4/#3 full descriptions now record5355a63/source5005095, root399/399/typechec
 Three current5005095 stills (earned Store/Fit, labelled concurrent refusal/error, earned warning/dial) are published and all HTTP200 bytes match originals: `/tmp/siltwake-m1-pr/experience-verified-media/public-verification.json`. The comparison is earlier feature5dbc73a versus current5005095, not the M0 PR base; older39de511 recording remains explicitly historical/preflight-inclusive. Current input traces/exports prove the stated transactions and sampled movement; no new continuous video/human-feel claim. Full report preserves stale-journal/preflight/diagnostic exceptions.
 
 All four stack layers are linked/unwatched. Only the caption implementation follow-up is active; root has no browser/server/recording/check process. Receive its completion without polling, inspect/freeze, then dispatch the prepared whole-batch pair. No game/main merge/deployment.
+
+
+### Caption terminal, inspected and provisionally integrated
+
+Follow-up `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Athread-send%3Asiltwake-polish-1-experience-caption-sol-max-eb66478` acknowledged completed/result_available, no pending children/questions. Exact parenteb66478, sourcef2e634add96e7dd4951df4d2ac328cc31bf2e621, reportd7a2b5b2729ffb6fbbdba367054a0b72316b77a0, provisional root35de8258fcb89561eb666a4e16d3c4ff910e7566. [Root inspection](evidence/POLISH-1-EXPERIENCE-CAPTION-INTEGRATION.md):399 checks/build/economies,110 verified payloads, unchanged368-payload composition archive,27 exact build files and actual Sol6.1/max contexts. Original owned resources closed; root opened no browser/server. All author paths released.
+
+Freeze the complete experience revision for the prepared same-SHA Astra xhigh/Sol max pair. No reviewers dispatched until the following actual ID record. Opus verification then M2–M4 remain; no game/main merge or deployment.

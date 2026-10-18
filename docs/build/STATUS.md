@@ -14,7 +14,7 @@ The stage1 Opus review and detailed advice are reconciled in [the experience cor
 
 COMPOSE is terminal and provisionally integrated at **5355a63f9cbf73008f1e1d6433fc4fd90b961129**, source5005095/reporteb66478. [Root inspection](evidence/POLISH-1-EXPERIENCE-COMPOSE-INTEGRATION.md) passes **399/399 tests**, typecheck/build and both economies; all12 legacy expectations retain behavior coverage, and ROOT-EXP-01 is corrected. Root verifies368 payloads, all27 matching build files, actual Sol6.1/max, complete active reload equality at18457, preparation counts and aligned/off-centre input replays. Current P1–P8 evidence is retained with explicit fresh/earned/diagnostic and stale-journal/preflight limits.
 
-A same-author **CSS-only caption follow-up** is active from eb66478 to raise the non-action pause caption9→11px. It owns hud.css and a new report only; COMPOSE source/tests are released. TASKS records the exact follow-up ID. After inspection, freeze the complete experience revision and dispatch the [prepared fresh Astra xhigh/Sol max pair](tasks/POLISH-1-EXPERIENCE-REVIEW-R1.md), then Opus verification. Stage1 remains open; M2–M4 remain required. Human feel, audible mix, duration/enjoyment and representative-GPU evidence remain unverified.
+The **CSS-only caption follow-up** is terminal and provisionally integrated at **35de8258fcb89561eb666a4e16d3c4ff910e7566**, sourcef2e634a/reportd7a2b5b. [Root inspection](evidence/POLISH-1-EXPERIENCE-CAPTION-INTEGRATION.md) confirms399 checks/build/economies,110 verified payloads, unchanged COMPOSE evidence,27 matching build files, actual Sol6.1/max and final menu captures. All implementation paths are released. The complete experience revision is ready for the [fresh Astra xhigh/Sol max pair](tasks/POLISH-1-EXPERIENCE-REVIEW-R1.md); TASKS owns actual dispatch. Stage1 remains open pending the pair and fresh Opus verification; M2–M4 remain required. Human feel, audible mix, duration/enjoyment and representative-GPU evidence remain unverified.
 
 Root owns no browser/server/recording/check process. No main merge/deployment.
 
@@ -68,7 +68,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active caption follow-up completion without polling; inspect its CSS-only change, final fonts/menu evidence and retained source/build identity. Freeze the complete S1/S2/COMPOSE/caption candidate and dispatch the prepared fresh non-author Astra xhigh/Sol max pair on the same SHA. Then fresh Opus verification before M2–M4. Current provisional production is5355a63/source5005095,399 checks/build/economies pass; accepted slice2 production remainsc32d8c5. Main merge/public deployment remain owner actions.
+Dispatch the prepared fresh non-author Astra xhigh/Sol max pair on the same frozen complete S1/S2/COMPOSE/caption candidate, then receive completion notifications without polling. Reconcile/fix/re-review substantive findings, then fresh Opus verification before M2–M4. Current provisional production is35de825/sourcef2e634a,399 checks/build/economies pass; accepted slice2 production remainsc32d8c5. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
