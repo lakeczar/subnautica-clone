@@ -150,3 +150,34 @@ test("production expedition art reconciles cache ownership, contents and replace
     else Reflect.deleteProperty(globalThis, "OffscreenCanvas");
   }
 });
+
+test("target brackets retain one fogged depth-tested mesh through thousands of targets and dispose once", async () => {
+  const { createTargetCue } = await import("../src/render/targetCue.js");
+  const { Constants } = await import("@babylonjs/core/Engines/constants.js");
+  const engine = new NullEngine(), scene = new Scene(engine);
+  try {
+    const cue = createTargetCue(scene), mesh = scene.getMeshByName("interaction.cue")!;
+    const counts = [scene.meshes.length, scene.materials.length, scene.geometries.length];
+    assert.equal(mesh.isEnabled(), false);
+    assert.equal(cue.material.depthFunction, Constants.LEQUAL);
+    assert.equal(cue.material.disableDepthWrite, true);
+    for (let i = 0; i < 2000; i++) {
+      cue.update(i % 3 ? { center: { x: i, y: -3, z: 2 }, radius: 0.7, solidIds: [] } : null);
+      assert.equal(mesh.isEnabled(), i % 3 !== 0);
+      assert.deepEqual([scene.meshes.length, scene.materials.length, scene.geometries.length], counts);
+    }
+    cue.update({ center: { x: 7, y: -2, z: 4 }, radius: 1, solidIds: [] });
+    assert.deepEqual(mesh.position.asArray(), [7, -2, 4]);
+    const host = { center: { x: 7, y: -2, z: 4 }, radius: 1, solidIds: [] };
+    cue.update(host, { x: 7, y: -2, z: 8 });
+    assert.deepEqual(mesh.position.asArray(), [7, -2, 4.9]);
+    assert.ok(mesh.scaling.x < 0.3, "near-face cue keeps a modest apparent size");
+    cue.update(host, { x: 7, y: -2, z: 4.2 });
+    assert.equal(mesh.position.z, 4.1, "an eye inside the host cannot move the cue past the eye");
+    assert.deepEqual(host.center, { x: 7, y: -2, z: 4 }, "host metadata stays detached");
+    cue.update(null); assert.equal(mesh.isEnabled(), false);
+    cue.dispose(); cue.dispose();
+    assert.equal(scene.meshes.length, 0);
+    assert.ok(!scene.materials.includes(cue.material));
+  } finally { scene.dispose(); engine.dispose(); }
+});

@@ -1,9 +1,28 @@
-import type { GameCommand } from "../sim/types.js";
+import type { GameCommand, GameState } from "../sim/types.js";
 import { FIXED_SECONDS } from "../sim/clock.js";
 
 export interface InputSettings {
   sensitivity: number;
   invertY: boolean;
+  keyTurnSpeed: number;
+}
+/** Presentation trial only; the semantic exit still validates depth/clearance. */
+export function deliberateExit(state: GameState): boolean {
+  const v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
+  return !!v && !v.disabled && v.charge > 0 && v.health > 25 &&
+    v.emergencyAir > 15 && state.world.threat.mode !== "pursue" &&
+    Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) >= 1.5;
+}
+
+export function textEntryHasFocus(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  return !!element && (element.isContentEditable ||
+    ["INPUT", "SELECT", "TEXTAREA"].includes(element.tagName));
+}
+export function controlHasFocus(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  return textEntryHasFocus(target) || !!element &&
+    ["BUTTON", "SUMMARY", "A"].includes(element.tagName);
 }
 const GAME_KEYS = new Set([
   "KeyW",
@@ -29,11 +48,13 @@ export class PlayerInput {
   private dx = 0;
   private dy = 0;
   cruise = false;
-  settings: InputSettings = { sensitivity: 1, invertY: false };
+  settings: InputSettings = { sensitivity: 1, invertY: false, keyTurnSpeed: 1 };
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly isActive: () => boolean,
+    private readonly activateLook: () => boolean = () => false,
+    private readonly interrupted: () => void = () => {},
   ) {
     const options = { signal: this.abort.signal };
     window.addEventListener(
@@ -44,10 +65,12 @@ export class PlayerInput {
           event.ctrlKey ||
           event.metaKey ||
           event.altKey ||
+          controlHasFocus(event.target) ||
           !GAME_KEYS.has(event.code)
         )
           return;
         event.preventDefault();
+        if (event.repeat) return;
         if (event.code === "KeyR" && !event.repeat) this.cruise = !this.cruise;
         if (event.code === "KeyW" || event.code === "KeyS") this.cruise = false;
         this.held.add(event.code);
@@ -66,6 +89,7 @@ export class PlayerInput {
       (event) => {
         if (!this.isActive() || event.button !== 0) return;
         canvas.focus({ preventScroll: true });
+        if (this.activateLook()) return;
         if (document.pointerLockElement !== canvas) {
           this.drag = event.pointerId;
           canvas.setPointerCapture(event.pointerId);
@@ -84,13 +108,19 @@ export class PlayerInput {
       },
       options,
     );
-    canvas.addEventListener("pointercancel", () => this.clear(), options);
+    const interrupt = (): void => { this.clear(); this.interrupted(); };
+    canvas.addEventListener("pointercancel", interrupt, options);
+    window.addEventListener("blur", interrupt, options);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) interrupt();
+    }, options);
     window.addEventListener(
       "pointermove",
       (event) => {
         if (
           !this.isActive() ||
-          (document.pointerLockElement !== canvas && this.drag === null)
+          (document.pointerLockElement !== canvas &&
+            (this.drag === null || event.pointerId !== this.drag))
         )
           return;
         this.dx += event.movementX;
@@ -101,16 +131,17 @@ export class PlayerInput {
   }
 
   sample(): GameCommand[] {
+    if (!this.isActive()) { this.clear(); return []; }
     const key = (code: string): number => (this.held.has(code) ? 1 : 0);
     const sensitivity = this.settings.sensitivity * 0.0025;
     const look: GameCommand = {
       type: "look",
       yawDelta:
         this.dx * sensitivity +
-        (key("ArrowRight") - key("ArrowLeft")) * 1.5 * FIXED_SECONDS,
+        (key("ArrowRight") - key("ArrowLeft")) * 1.5 * FIXED_SECONDS * this.settings.keyTurnSpeed,
       pitchDelta:
         this.dy * sensitivity * (this.settings.invertY ? 1 : -1) +
-        (key("ArrowUp") - key("ArrowDown")) * 1.2 * FIXED_SECONDS,
+        (key("ArrowUp") - key("ArrowDown")) * 1.2 * FIXED_SECONDS * this.settings.keyTurnSpeed,
     };
     this.dx = 0;
     this.dy = 0;

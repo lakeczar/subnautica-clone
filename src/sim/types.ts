@@ -220,6 +220,7 @@ export type GameEvent =
         | "warning"
         | "refuge"
         | "damage"
+        | "impact"
         | "scan"
         | "opening"
         | "recovery";

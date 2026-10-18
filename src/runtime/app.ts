@@ -1,7 +1,8 @@
 import { Soundscape } from "../audio/sound.js";
 import { executeCommand, stepGame } from "../sim/step.js";
 import { createWorldQueries } from "../sim/world.js";
-import { FixedStepClock } from "../sim/clock.js";
+import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
+import { aimedInteraction } from "../sim/targeting.js";
 import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
 import { encodeSave } from "../save/codec.js";
 import { SaveRepository } from "../save/repository.js";
@@ -10,18 +11,23 @@ import { browserWriterLock } from "../save/writer-lock.js";
 import { ExpeditionSession } from "./session.js";
 import { createRenderer } from "../render/renderer.js";
 import type { GameRenderer, Quality } from "../render/renderer.js";
-import { PlayerInput } from "./input.js";
+import { PlayerInput, controlHasFocus, textEntryHasFocus, deliberateExit } from "./input.js";
 import { GameView } from "../ui/view.js";
+import type { PanelKind } from "../ui/view.js";
 
 interface Settings {
   quality: Quality;
   sensitivity: number;
   invertY: boolean;
+  mouseMode: "captured" | "drag";
+  keyTurnSpeed: number;
 }
 const DEFAULT_SETTINGS: Settings = {
   quality: "rich",
   sensitivity: 1,
   invertY: false,
+  mouseMode: "captured",
+  keyTurnSpeed: 1,
 };
 const SETTINGS_KEY = "siltwake.settings.v1";
 const errorText = (error: unknown): string =>
@@ -50,6 +56,9 @@ function readSettings(): Settings {
           ? Math.max(0.4, Math.min(2.5, value.sensitivity))
           : 1,
       invertY: value.invertY === true,
+      mouseMode: value.mouseMode === "drag" ? "drag" : "captured",
+      keyTurnSpeed: typeof value.keyTurnSpeed === "number" && Number.isFinite(value.keyTurnSpeed)
+        ? Math.max(0.5, Math.min(2, value.keyTurnSpeed)) : 1,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -80,11 +89,21 @@ export class SiltwakeApp {
   // pauses preserve it; an interruption or player pause revokes it permanently
   // for that request, even if focus/graphics recover before the I/O completes.
   private entryCanResume = false;
-  private releasingMouse = false;
+  // Native lock requests cannot be cancelled. Keep their generation until the
+  // native result arrives, even after pause/replacement invalidates the intent.
+  private captureGeneration = 0;
+  private captureRequest: { generation: number } | null = null;
+  private mouseReleasePending = false;
+  private hadMouseLock = false;
+  private mouseState: "off" | "requesting" | "on" | "denied" | "cooldown" = "off";
+  private cooldownUntil = 0;
+  private sessionGeneration = 0;
+  private gesture: { code: string; kind: "exit" | "skip"; vehicleId: string | null; session: number; seconds: number } | null = null;
   private disposed = false;
   private dirty = true;
   private frameId = 0;
   private hudTime = 0;
+  private forwardThrust = 0;
   private lastBoundaryNotice = -Infinity;
   private settings = readSettings();
 
@@ -98,7 +117,7 @@ export class SiltwakeApp {
     this.view = new GameView(root, {
       command: (command) => this.command(command),
       panel: (kind) => this.openPanel(kind),
-      closePanel: () => this.resume(),
+      closePanel: () => this.resume(true),
       fixture: () => {
         if (this.renderer)
           this.requestEntry(() => this.session.newGame("carrier-fixture"));
@@ -116,7 +135,7 @@ export class SiltwakeApp {
       continueGame: () => {
         if (this.renderer) this.requestEntry(() => this.session.continueGame());
       },
-      resume: () => this.resume(),
+      resume: () => this.resume(true),
       pause: () => this.pause(),
       save: () => this.session.manualSave(),
       exportGame: () => this.exportGame(),
@@ -131,9 +150,9 @@ export class SiltwakeApp {
         this.entryCanResume = false;
         this.session.cancel();
       },
-      lockMouse: () => this.lockMouse(),
-      settings: (quality, sensitivity, invertY) =>
-        this.applySettings({ quality, sensitivity, invertY }),
+      lockMouse: () => { if (this.resume()) this.requestCapture(); },
+      settings: (quality, sensitivity, invertY, mouseMode, keyTurnSpeed) =>
+        this.applySettings({ quality, sensitivity, invertY, mouseMode, keyTurnSpeed }),
     }, this.world);
     try {
       const a = JSON.parse(localStorage.getItem("siltwake.audio.v2") ?? "null");
@@ -150,6 +169,8 @@ export class SiltwakeApp {
       this.settings.quality,
       this.settings.sensitivity,
       this.settings.invertY,
+      this.settings.mouseMode,
+      this.settings.keyTurnSpeed,
     );
     try {
       this.renderer = createRenderer(this.view.canvas, (available) => {
@@ -162,7 +183,13 @@ export class SiltwakeApp {
           this.view.notify("Graphics restored. Resume when ready.");
         }
       });
-      this.input = new PlayerInput(this.view.canvas, () => this.active);
+      this.input = new PlayerInput(this.view.canvas, () => this.active, () => {
+        if (this.settings.mouseMode !== "captured" || this.mouseState === "denied" ||
+          this.mouseState === "cooldown" && performance.now() < this.cooldownUntil)
+          return false;
+        this.requestCapture();
+        return document.pointerLockElement !== this.view.canvas;
+      }, () => this.cancelGesture());
       this.applySettings(this.settings, false);
     } catch (error) {
       this.view.graphicsError(errorText(error));
@@ -189,81 +216,65 @@ export class SiltwakeApp {
       },
       options,
     );
-    window.addEventListener(
-      "keydown",
-      (event) => {
-        if (
-          this.active &&
-          !event.repeat &&
-          !event.ctrlKey &&
-          !event.metaKey &&
-          !event.altKey
-        ) {
-          const panels: Record<
-            string,
-            "inventory" | "craft" | "notebook" | "carrier"
-          > = {
-            Tab: "inventory",
-            KeyI: "inventory",
-            KeyK: "craft",
-            KeyJ: "notebook",
-            KeyV: "carrier",
-          };
-          const panel = panels[event.code];
-          if (panel) {
-            event.preventDefault();
-            this.openPanel(panel);
-            return;
-          }
-          const commands: Record<string, GameCommand> = {
-            KeyE: { type: "interact" },
-            KeyQ: { type: "scan" },
-            KeyB: { type: "buoy" },
-            KeyF: { type: "eat" },
-            KeyG: { type: "distraction" },
-            KeyH: { type: "hint" },
-            KeyX: { type: "exit" },
-          };
-          if (this.state?.opening.phase !== 4 && event.code === "Space") {
-            event.preventDefault();
-            this.command({ type: "skip-opening" });
-            return;
-          }
-          const command = commands[event.code];
-          if (command) {
-            event.preventDefault();
-            this.command(command);
-            return;
-          }
-        }
-
-        if (event.code === "Escape") {
-          event.preventDefault();
-          if (this.session.confirmation || this.session.busy) {
-            this.session.cancel();
-            this.pause();
-          } else if (this.active) this.pause();
-          else if (this.state) this.resume();
-        }
-        if (event.code === "F5" && this.state) {
-          event.preventDefault();
-          this.session.manualSave();
-        }
-      },
-      options,
-    );
-    let hadMouseLock = false;
-    document.addEventListener(
-      "pointerlockchange",
-      () => {
-        const locked = document.pointerLockElement === this.view.canvas;
-        if (hadMouseLock && !locked && !this.releasingMouse)
-          this.pause("Mouse released.");
-        if (!locked) this.releasingMouse = false;
-        hadMouseLock = locked;
-      },
-      options,
-    );
+    window.addEventListener("keydown", (event) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.code === "Escape") {
+        event.preventDefault();
+        if (this.session.confirmation || this.session.busy) {
+          this.session.cancel();
+          this.pause();
+        } else if (this.panelOpen) this.resume();
+        else this.pause();
+        return;
+      }
+      if (event.code === "F5" && this.state) {
+        event.preventDefault();
+        this.session.manualSave();
+        return;
+      }
+      if (event.repeat) return;
+      const panels: Record<string, PanelKind> = {
+        Tab: "inventory", KeyI: "inventory", KeyK: "craft", KeyJ: "notebook", KeyV: "carrier",
+      };
+      const panel = panels[event.code];
+      if (panel && !event.shiftKey && (this.active || this.panelOpen) &&
+        (event.code === "Tab" || !textEntryHasFocus(event.target))) {
+        event.preventDefault();
+        if (this.panelOpen && this.view.currentPanel === panel) this.resume(true);
+        else this.openPanel(panel);
+        return;
+      }
+      if (!this.active || controlHasFocus(event.target)) return;
+      if (this.state?.opening.phase !== 4 && event.code === "Space" &&
+        (event.target === this.view.canvas || document.activeElement === this.view.canvas)) {
+        event.preventDefault();
+        this.startGesture(event.code, "skip");
+        return;
+      }
+      if ((event.code === "KeyE" || event.code === "KeyX") &&
+        this.state?.player.controlledVehicleId) {
+        event.preventDefault();
+        if (deliberateExit(this.state)) this.startGesture(event.code, "exit");
+        else this.command({ type: "exit" });
+        return;
+      }
+      const commands: Record<string, GameCommand> = {
+        KeyE: { type: "interact" }, KeyQ: { type: "scan" },
+        KeyB: { type: "buoy" }, KeyF: { type: "eat" },
+        KeyG: { type: "distraction" }, KeyH: { type: "hint" }, KeyX: { type: "exit" },
+      };
+      const command = commands[event.code];
+      if (command) { event.preventDefault(); this.command(command); }
+    }, options);
+    window.addEventListener("keyup", (event) => {
+      if (event.code === this.gesture?.code) this.cancelGesture();
+    }, options);
+    this.view.canvas.addEventListener("blur", () => {
+      this.input?.clear();
+      this.cancelGesture();
+    }, options);
+    document.addEventListener("pointerlockchange", () => this.pointerLockChanged(), options);
+    document.addEventListener("pointerlockerror", () => this.captureDenied(), options);
     window.addEventListener(
       "pagehide",
       (event) => {
@@ -288,14 +299,18 @@ export class SiltwakeApp {
   private frame(now: number): void {
     if (this.disposed) return;
     this.clock.advance(now, this.active, () => {
-      if (!this.state) return;
+      if (!this.state || !this.active) return;
+      const gesture = this.sampleGesture();
+      const controls = this.input?.sample() ?? [];
+      this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
       const result = stepGame(
         this.state,
-        this.input?.sample() ?? [],
+        [...controls, ...gesture],
         this.world,
       );
       this.session.state = result.state;
       this.events(result.events);
+      this.validateGesture();
       for (const event of result.events)
         if (
           event.type === "foundation-boundary" &&
@@ -308,8 +323,9 @@ export class SiltwakeApp {
         }
       this.session.autosave();
     });
+    if (this.state) this.view.target(this.active ? aimedInteraction(this.state, this.world) : null);
     if (this.state && now - this.hudTime > 90) {
-      this.view.update(this.state, this.input?.cruise ?? false);
+      this.view.update(this.state, this.input?.cruise ?? false, this.forwardThrust);
       this.hudTime = now;
     }
     if (
@@ -319,7 +335,7 @@ export class SiltwakeApp {
       (this.active || this.dirty || this.view.canvas.dataset.ready !== "true")
     ) {
       try {
-        this.renderer.present(this.state);
+        this.renderer.present(this.state, { target: this.active && this.state ? aimedInteraction(this.state, this.world)?.host ?? null : null });
         this.dirty = false;
       } catch (error) {
         this.pause();
@@ -358,14 +374,18 @@ export class SiltwakeApp {
 
   private entered(): void {
     if (this.disposed) return;
+    this.sessionGeneration++;
+    this.cancelGesture();
+    this.view.resetPresentation();
     if (this.state) this.view.update(this.state, false);
     const automatically = this.entryCanResume;
     this.entryCanResume = false;
     if (!automatically || !this.resume())
       this.pause("Expedition ready. Resume when ready.", false);
+    else if (navigator.userActivation?.isActive) this.requestCapture();
   }
 
-  private resume(): boolean {
+  private resume(capture = false): boolean {
     if (
       this.disposed ||
       !this.state ||
@@ -380,10 +400,13 @@ export class SiltwakeApp {
     this.view.closePanel();
     this.sound.activate();
     this.input?.clear();
+    this.cancelGesture();
     this.clock.reset();
     this.paused = false;
     this.dirty = true;
     this.view.showGame();
+    this.lookAction();
+    if (capture) this.requestCapture();
     return true;
   }
 
@@ -393,12 +416,15 @@ export class SiltwakeApp {
     this.view.closePanel();
     if (interruptEntry) this.entryCanResume = false;
     this.paused = true;
+    this.forwardThrust = 0;
     this.clock.reset();
     this.input?.clear();
-    if (document.pointerLockElement === this.view.canvas) {
-      this.releasingMouse = true;
-      document.exitPointerLock();
-    }
+    this.cancelGesture();
+    this.view.cancelFeedback();
+    this.sound.update(this.state, false);
+    this.releaseMouse();
+    this.view.target(null);
+    this.lookAction();
     this.view.showMenu(this.state !== null, reason);
     this.syncSessionUi();
     this.dirty = true;
@@ -407,6 +433,11 @@ export class SiltwakeApp {
   private events(events: readonly GameEvent[]): void {
     for (const event of events) {
       if (event.type === "notice") this.view.notify(event.message, event.error);
+      if (event.type === "impact" && event.hullLoss > 0) {
+        this.view.impact(event.hullLoss, this.state);
+        this.sound.event({ type: "sound", cue: "impact" }, this.state);
+      }
+      if (event.type === "interaction-panel") this.openPanel(event.panel, event.targetId);
       this.sound.event(event, this.state);
     }
   }
@@ -424,16 +455,18 @@ export class SiltwakeApp {
     this.sound.activate();
     const result = executeCommand(this.state, command, this.world);
     this.session.state = result.state;
-    this.events(result.events);
+    this.validateGesture();
     this.view.update(result.state, false);
     this.dirty = true;
     if (this.panelOpen) this.view.refreshPanel(result.state);
+    this.events(result.events);
   }
   private openPanel(
-    kind: "inventory" | "craft" | "notebook" | "carrier",
+    kind: PanelKind,
+    targetId?: string,
   ): void {
     if (
-      !this.active ||
+      (!this.active && !this.panelOpen) ||
       !this.state ||
       this.session.busy ||
       this.session.confirmation
@@ -441,7 +474,7 @@ export class SiltwakeApp {
       return;
     this.pause("", true);
     this.panelOpen = true;
-    this.view.openPanel(kind, this.state);
+    this.view.openPanel(kind, this.state, targetId);
     this.dirty = true;
   }
 
@@ -489,32 +522,119 @@ export class SiltwakeApp {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  private lockMouse(): void {
-    if (!this.state || !this.renderer) return;
-    this.resume();
-    if (!this.active) return;
+  private lookAction(): void {
+    this.view.lookAction(this.active && this.settings.mouseMode === "captured" &&
+      document.pointerLockElement !== this.view.canvas,
+      this.mouseState === "denied" || this.mouseState === "cooldown");
+  }
+
+  private requestCapture(): void {
+    if (!this.active || this.settings.mouseMode !== "captured" || this.captureRequest ||
+      this.mouseReleasePending || document.pointerLockElement === this.view.canvas ||
+      navigator.userActivation?.isActive === false) return;
+    if (this.mouseState === "cooldown" && performance.now() < this.cooldownUntil) return;
+    const request = { generation: this.captureGeneration };
+    this.captureRequest = request;
+    this.mouseState = "requesting";
     try {
-      const request = this.view.canvas.requestPointerLock();
-      if (request && typeof request.catch === "function")
-        void request.catch(() => {
-          this.pause(
-            "Mouse lock was unavailable. Click and drag or use the arrow keys.",
-          );
-        });
-    } catch {
-      this.pause(
-        "Mouse lock was unavailable. Click and drag or use the arrow keys.",
-      );
+      const result = this.view.canvas.requestPointerLock();
+      if (result && typeof result.then === "function") void result.then(() => {
+        if (this.disposed) {
+          if (document.pointerLockElement === this.view.canvas) document.exitPointerLock();
+          return;
+        }
+        if (document.pointerLockElement === this.view.canvas) this.pointerLockChanged();
+      }, () => this.captureDenied(request));
+    } catch { this.captureDenied(request); }
+    this.lookAction();
+  }
+
+  private captureDenied(request = this.captureRequest): void {
+    if (!request || request !== this.captureRequest) return;
+    this.captureRequest = null;
+    if (this.disposed || request.generation !== this.captureGeneration) return;
+    this.mouseState = "denied";
+    this.lookAction();
+  }
+
+  private releaseMouse(): void {
+    this.captureGeneration++;
+    if (document.pointerLockElement === this.view.canvas) {
+      // Persists until the native unlocked event, regardless of its delivery order.
+      this.mouseReleasePending = true;
+      document.exitPointerLock();
     }
   }
 
+  private pointerLockChanged(): void {
+    const locked = document.pointerLockElement === this.view.canvas;
+    if (locked) {
+      const stale = this.captureRequest && this.captureRequest.generation !== this.captureGeneration;
+      this.captureRequest = null;
+      this.hadMouseLock = true;
+      if (this.disposed || stale || !this.active || this.settings.mouseMode !== "captured" || this.mouseReleasePending) {
+        this.releaseMouse();
+        return;
+      }
+      this.mouseState = "on";
+    } else {
+      const intentional = this.mouseReleasePending;
+      this.mouseReleasePending = false;
+      if (this.hadMouseLock && !intentional) {
+        this.mouseState = "cooldown";
+        this.cooldownUntil = performance.now() + 1200;
+        this.hadMouseLock = false;
+        this.pause();
+      } else if (this.mouseState === "on") this.mouseState = "off";
+      this.hadMouseLock = false;
+    }
+    this.lookAction();
+  }
+
+  private startGesture(code: string, kind: "exit" | "skip"): void {
+    if (!this.state || this.gesture) return;
+    if (kind === "skip") this.input?.clear();
+    this.gesture = { code, kind, seconds: 0, session: this.sessionGeneration,
+      vehicleId: this.state.player.controlledVehicleId };
+    this.view.gesture(kind, 0, code === "KeyX" ? "X" : "E");
+  }
+
+  private cancelGesture(): void {
+    this.gesture = null;
+    this.view.gesture(null, 0);
+  }
+
+  private validateGesture(): void {
+    const g = this.gesture;
+    if (g && (!this.active || g.session !== this.sessionGeneration ||
+      g.vehicleId !== this.state?.player.controlledVehicleId ||
+      (g.kind === "skip" && this.state?.opening.phase === 4))) this.cancelGesture();
+  }
+
+  private sampleGesture(): GameCommand[] {
+    this.validateGesture();
+    const g = this.gesture;
+    if (!g || !this.state) return [];
+    g.seconds += FIXED_SECONDS;
+    const duration = g.kind === "skip" ? 0.8 : 0.35;
+    this.view.gesture(g.kind, Math.min(1, g.seconds / duration), g.code === "KeyX" ? "X" : "E");
+    if (g.seconds + 1e-9 < duration && (g.kind !== "exit" || deliberateExit(this.state))) return [];
+    this.cancelGesture();
+    if (g.kind === "skip") this.input?.clear();
+    return [{ type: g.kind === "skip" ? "skip-opening" : "exit" }];
+  }
+
   private applySettings(settings: Settings, persist = true): void {
+    if (settings.mouseMode !== this.settings.mouseMode) this.releaseMouse();
     this.settings = settings;
+    this.view.settings(settings.quality, settings.sensitivity, settings.invertY, settings.mouseMode, settings.keyTurnSpeed);
+    this.lookAction();
     this.renderer?.setQuality(settings.quality);
     if (this.input)
       this.input.settings = {
         sensitivity: settings.sensitivity,
         invertY: settings.invertY,
+        keyTurnSpeed: settings.keyTurnSpeed,
       };
     this.dirty = true;
     if (persist)
@@ -527,6 +647,9 @@ export class SiltwakeApp {
 
   dispose(): void {
     if (this.disposed) return;
+    this.cancelGesture();
+    this.releaseMouse();
+    this.view.cancelFeedback();
     this.disposed = true;
     this.paused = true;
     cancelAnimationFrame(this.frameId);
