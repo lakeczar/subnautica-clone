@@ -69,3 +69,7 @@ HUD sourced7f2085/report e0c1e23 is integrated with all five earlier pieces at *
 ### Slice2 R1 save-retry correction
 
 Astra R1 requests one bounded correction, ASTRA-S2-R1-01, reproduced by root: a confirmed successful retry must resolve its obsolete persistence failure while preserving unrelated danger and still-failing/export cases. [Correction brief](tasks/POLISH-1-SLICE2-SAVE-RETRY-FIX.md) owns notices.ts and targeted composition tests only. It may proceed while Sol's independent R1 continues on frozen b9c99a0, with no peer sharing/dependency. Reconcile both results before fresh paired acceptance; stage1 Opus follows that gate.
+
+### Paired slice2 R1 reconciliation
+
+Both initial reviewers now request changes for two distinct reproduced P2 defects. [Paired disposition](reviews/POLISH-1-SLICE2-R1.md) accepts save-retry warning and closed-panel storage-context findings. [Storage-context amendment](tasks/POLISH-1-SLICE2-STORAGE-CONTEXT-FIX.md) extends the current Sol correction owner to panels/view/preparation tests, using its existing presentation fixture; no overlapping builder or dependency on unfinished review. Inspect the two identifiable fixes together, then fresh full-slice pair before stage1 Opus. Optional copy density and human/hardware limits remain explicit.
