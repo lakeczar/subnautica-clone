@@ -39,6 +39,16 @@ async function fixture(t: test.TestContext, initial: SaveEnvelope = sample(300))
   return { ...browser, app, view, renderer };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+function keyFrom(f: Fixture, code: string, tagName: string, options: {
+  shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean;
+  repeat?: boolean; isContentEditable?: boolean; handled?: boolean;
+} = {}): boolean {
+  const event = Object.assign(new Event("keydown", { cancelable: true }), { code, ...options });
+  Object.defineProperty(event, "target", { value: { tagName, isContentEditable: options.isContentEditable } });
+  if (options.handled) event.preventDefault();
+  f.window.dispatchEvent(event);
+  return event.defaultPrevented;
+}
 async function replacement(f: Fixture, source: "new" | "import") {
   const gate = deferred();
   f.lock.gate = gate.promise;
@@ -407,6 +417,9 @@ test("app: capture only follows deliberate return; panel toggle and Escape have 
   f.locked(false);
   assert.equal(f.view.screen, "panel", "our asynchronous release does not double pause");
   f.key("Tab");
+  assert.equal(f.view.screen, "panel", "Tab inside Hold is navigation, even without a control target");
+  assert.equal(f.view.canvas.captures, 1);
+  f.key("KeyI");
   assert.equal(f.view.screen, "playing");
   assert.equal(f.view.canvas.captures, 2);
   f.locked(true);
@@ -423,26 +436,85 @@ test("app: capture only follows deliberate return; panel toggle and Escape have 
   assert.equal(f.view.canvas.captures, count, "cooldown never retries");
 });
 
-test("app: panel letter toggles work from focused buttons but preserve text entry", async (t) => {
+for (const [code, panel] of [["KeyI", "inventory"], ["KeyK", "craft"], ["KeyJ", "notebook"], ["KeyV", "carrier"]] as const) {
+  test(`app: ${panel} Tab navigation never switches, advances simulation or captures`, async (t) => {
+    const f = await fixture(t);
+    f.activation.isActive = true;
+    f.view.actions.resume(); f.locked(true);
+    f.view.actions.command({ type: "skip-opening" });
+    f.key(code); f.locked(false);
+    f.frames();
+    const paused = structuredClone(f.view.state), captures = f.view.canvas.captures;
+    for (const shiftKey of [false, true]) {
+      for (const tagName of ["BUTTON", "SELECT", "INPUT", "TEXTAREA", "A", "SUMMARY", "ARTICLE", "DIV"]) {
+        const prevented = keyFrom(f, "Tab", tagName, { shiftKey });
+        f.frames(60);
+        assert.equal(f.view.screen, "panel", `${tagName}: screen`);
+        assert.equal(f.view.currentPanel, panel, `${tagName}: panel identity`);
+        assert.deepEqual(f.view.state, paused, `${tagName}: all simulation drains stay frozen`);
+        assert.equal(f.view.canvas.captures, captures, `${tagName}: capture requests`);
+        assert.equal(f.document.pointerLockElement, null);
+        assert.equal(prevented, false, `${tagName}: runtime leaves Tab to the view/browser`);
+      }
+    }
+    f.view.actions.closePanel();
+    assert.equal(f.view.screen, "playing", "explicit Return still resumes");
+    assert.equal(f.view.canvas.captures, captures + 1, "explicit Return retains deliberate capture");
+    f.locked(true); f.frames(60);
+    assert.ok(f.view.state!.tick > paused!.tick);
+  });
+}
+
+test("app: gameplay Tab opens Hold only outside controls and respects handled events and modifiers", async (t) => {
   const f = await fixture(t);
-  f.view.actions.resume();
+  f.activation.isActive = true;
+  f.view.actions.resume(); f.locked(true);
   f.view.actions.command({ type: "skip-opening" });
-  const keyFrom = (code: string, tagName: string, isContentEditable = false) => {
-    const event = Object.assign(new Event("keydown", { cancelable: true }), { code });
-    Object.defineProperty(event, "target", { value: { tagName, isContentEditable } });
-    f.window.dispatchEvent(event);
-    return event.defaultPrevented;
-  };
-  for (const code of ["KeyK", "KeyJ"]) {
+  for (const tagName of ["BUTTON", "SELECT", "INPUT", "TEXTAREA", "A", "SUMMARY"]) {
+    assert.equal(keyFrom(f, "Tab", tagName), false);
+    assert.equal(f.view.screen, "playing", `${tagName}: focused HUD/control navigation`);
+  }
+  assert.equal(keyFrom(f, "Tab", "DIV", { isContentEditable: true }), false);
+  for (const options of [{ shiftKey: true }, { ctrlKey: true }, { altKey: true }, { metaKey: true }, { repeat: true }, { handled: true }]) {
+    keyFrom(f, "Tab", "CANVAS", options);
+    assert.equal(f.view.screen, "playing");
+    assert.equal(f.view.canvas.captures, 1);
+  }
+  assert.equal(keyFrom(f, "Tab", "CANVAS"), true);
+  f.locked(false);
+  assert.equal(f.view.currentPanel, "inventory");
+  assert.equal(f.view.screen, "panel");
+  assert.equal(f.view.canvas.captures, 1);
+});
+
+test("app: all panel letter toggles capture from focused buttons but preserve text entry and modifiers", async (t) => {
+  const f = await fixture(t);
+  f.activation.isActive = true;
+  f.view.actions.resume();
+  f.locked(true);
+  f.view.actions.command({ type: "skip-opening" });
+  for (const code of ["KeyI", "KeyK", "KeyJ", "KeyV"]) {
     f.key(code);
+    f.locked(false);
     assert.equal(f.view.screen, "panel");
+    f.frames();
+    const paused = structuredClone(f.view.state), captures = f.view.canvas.captures;
     for (const tagName of ["INPUT", "TEXTAREA", "SELECT"]) {
-      assert.equal(keyFrom(code, tagName), false);
+      assert.equal(keyFrom(f, code, tagName), false);
       assert.equal(f.view.screen, "panel");
     }
-    assert.equal(keyFrom(code, "DIV", true), false);
-    assert.equal(keyFrom(code, "BUTTON"), true);
+    assert.equal(keyFrom(f, code, "DIV", { isContentEditable: true }), false);
+    for (const options of [{ shiftKey: true }, { ctrlKey: true }, { altKey: true }, { metaKey: true }, { repeat: true }]) {
+      assert.equal(keyFrom(f, code, "BUTTON", options), false);
+      assert.equal(f.view.screen, "panel");
+    }
+    f.frames(60);
+    assert.deepEqual(f.view.state, paused);
+    assert.equal(f.view.canvas.captures, captures);
+    assert.equal(keyFrom(f, code, "BUTTON"), true);
     assert.equal(f.view.screen, "playing");
+    assert.equal(f.view.canvas.captures, captures + 1);
+    f.locked(true);
   }
 });
 

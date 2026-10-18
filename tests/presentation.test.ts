@@ -33,14 +33,17 @@ function viewFixture(t: test.TestContext) {
       this.html = value;
       this.buttons = [...value.matchAll(/<button\b([^>]*)>(.*?)<\/button>/gs)].map((match) => {
         const button = new ElementPort();
+        button.tagName = "BUTTON";
         button.textContent = decodeHtml(match[2]!.replace(/<[^>]*>/g, ""));
         button.disabled = /\sdisabled(?:\s|=|$)/.test(match[1]!);
+        button.hidden = /\shidden(?:\s|=|$)/.test(match[1]!);
         for (const [, name, text] of match[1]!.matchAll(/\bdata-([\w-]+)="([^"]*)"/g))
           button.dataset[name!.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase())] = decodeHtml(text!);
         return button;
       });
     }
     textContent = "";
+    tagName = "DIV";
     hidden = false;
     disabled = false;
     checked = false;
@@ -56,7 +59,13 @@ function viewFixture(t: test.TestContext) {
     emit(type: string, value: unknown) { for (const listener of this.listeners.get(type) ?? []) listener(value as Event); }
     setAttribute() {}
     contains(element: unknown): boolean { return element === this || this.buttons.includes(element as ElementPort) || this.children.some((child) => child.contains(element)); }
-    querySelectorAll(selector: string) { return this.buttons.filter((button) => !selector.includes(":not([disabled])") || !button.disabled); }
+    querySelectorAll(selector: string): ElementPort[] {
+      const candidates = [...this.buttons, ...this.children.flatMap((child) => [child, ...child.querySelectorAll(selector)])];
+      return candidates.filter((element) =>
+        (selector.includes(",") ? ["BUTTON", "SELECT", "INPUT", "TEXTAREA", "A", "SUMMARY"].includes(element.tagName) : element.tagName === "BUTTON") &&
+        (!selector.includes(":not([disabled])") || !element.disabled));
+    }
+    getClientRects() { return this.hidden ? [] : [{}]; }
     focus() { document.activeElement = this; }
     closest() { return this; }
   }
@@ -67,6 +76,7 @@ function viewFixture(t: test.TestContext) {
       if (!element) {
         element = new ElementPort();
         const tag = root.innerHTML.match(new RegExp(`<[^>]*\\bid="${selector.slice(1)}"[^>]*>`))?.[0] ?? "";
+        element.tagName = tag.match(/^<(\w+)/)?.[1]?.toUpperCase() ?? "DIV";
         element.hidden = /\bhidden\b/.test(tag);
         const action = tag.match(/data-action="([^"]*)"/)?.[1];
         if (action) element.dataset.action = action;
@@ -92,6 +102,9 @@ function viewFixture(t: test.TestContext) {
   };
   const view = new GameView(root as unknown as HTMLElement, actions, createWorldQueries());
   root.querySelector("#opening").children = ["opening-act", "opening-skip", "opening-subtitles"].map((id) => root.querySelector(`#${id}`));
+  root.querySelector("#game-panel").children = [root.querySelector("#panel-return"),
+    ...root.querySelectorAll("button").filter((button) => ["inventory-panel", "craft-panel", "notebook-panel", "carrier-panel"].includes(button.dataset.action!)),
+    root.querySelector("#panel-title"), root.querySelector("#panel-content")];
   t.after(() => {
     view.dispose();
     globals.forEach((key, i) => previous[i] ? Object.defineProperty(globalThis, key, previous[i]!) : Reflect.deleteProperty(globalThis, key));
@@ -128,6 +141,47 @@ function viewFixture(t: test.TestContext) {
     },
   };
 }
+
+for (const panel of ["inventory", "craft", "notebook", "carrier"] as const) {
+  test(`${panel} wraps Tab both ways, including non-control panel focus, and consumes only its wrap`, (t) => {
+    const { view, get, key, active } = viewFixture(t), s = readyState();
+    view.update(s, false); view.showGame(); view.openPanel(panel, s);
+    const first = get("panel-return");
+    const last = get("game-panel").querySelectorAll("button:not([disabled])").filter((control) => !control.hidden).at(-1)!;
+    assert.notEqual(last, first);
+    assert.equal(active(), first, "initial panel focus remains Return");
+    assert.equal(key("Tab").prevented, false, "interior traversal belongs to the browser");
+    for (const origin of [first, get("panel-title"), get("ocean")]) {
+      origin.focus();
+      const event = key("Tab", "Tab", true);
+      assert.equal(active(), last, "reverse wrap reaches the last visible control");
+      assert.equal(event.prevented && event.stopped, true, "runtime cannot reinterpret a handled wrap");
+    }
+    for (const origin of [last, get("panel-title"), get("ocean")]) {
+      origin.focus();
+      const event = key("Tab");
+      assert.equal(active(), first, "forward wrap reaches Return");
+      assert.equal(event.prevented && event.stopped, true);
+    }
+    assert.equal(view.currentPanel, panel);
+    assert.equal(get("game-panel").hidden, false);
+  });
+}
+
+test("menu settings retain native interior Tab and wrap at visible boundaries", (t) => {
+  const { view, get, key, active } = viewFixture(t);
+  // Supply the existing settings controls' hierarchy; this port does not parse layout.
+  get("menu").children = [get("resume"), get("quality"), get("subtitles")];
+  view.showMenu(true);
+  get("quality").focus();
+  assert.equal(key("Tab").prevented, false);
+  assert.equal(key("Tab", "Tab", true).prevented, false);
+  get("resume").focus();
+  assert.equal(key("Tab", "Tab", true).stopped, true);
+  assert.equal(active(), get("subtitles"));
+  assert.equal(key("Tab").stopped, true);
+  assert.equal(active(), get("resume"));
+});
 
 test("minimal prompt follows actual aimed actions across all real hosts, and is absent after looking away", (t) => {
   const { view, get } = viewFixture(t), world = createWorldQueries();
