@@ -37,7 +37,7 @@ test("new, successful manual save and import acknowledge persistence after the e
   assert.match(last(f, "persistence", false).message, /^Expedition saved/);
   f.order.length = 0; f.session.manualSave(); await settled();
   assert.deepEqual(f.order, ["changed", "changed", "notice:persistence"]);
-  assert.equal(last(f, "persistence", false).message, "Saved locally. The previous valid save is retained as a backup.");
+  assert.equal(last(f, "persistence", false).message, "Saved locally");
   await f.session.importFile(file(encoded(sample(123))));
   assert.equal(f.notices.length, 2, "reading and asking do not add acknowledgements");
   f.order.length = 0; f.session.confirm(); await settled();
