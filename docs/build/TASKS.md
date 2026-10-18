@@ -823,3 +823,10 @@ Sol's independent current-round report is still pending; no findings shared, pol
 
 
 Public #4/#3 are synchronized to Astra R2 ACCEPT and pending independent Sol, retaining provisional batch/M0-only integration distinctions. Exact full-body/base/head/draft verification atb7a6286/M0a2cb19f is `/tmp/siltwake-m1-pr/slice1-r2-astra-verification.json`. Existing source-attributed media unchanged; no new browser/tests/production edits. All stack layers linked/unwatched. Receive Sol completion without polling, then reconcile both.
+
+
+### Controls slice R2 accepted; proceed to slice2
+
+Sol task `node:delegated-task:command%3Amcp%3A77db24d4-f446-41f1-a361-c1d3f090551d%3Adelegate-task%3Asiltwake-polish-1-slice1-sol-r2-d031803` is completed/result_available with no live child/question. Report48323d4f1c3f58498a34ab61821adcb69fea3924 is integrated from clean t3-a7afd221, report-only scope and exact candidate parent. Root confirms actual gpt-6.1-sol/max in all three session turn contexts, inspects full report/scripts/native receipts and matches37source/25test/27build hashes. Root verifies12 native panel Tab intervals with focus destinations;18 receipts fingerprinted in `/tmp/siltwake-polish-1-slice1-root-r2/sol-receipts.json`. No original evidence overwritten and no new root full-suite/browser run.
+
+[Final paired reconciliation](reviews/POLISH-1-SLICE1-R2.md): Astra ACCEPT / Sol ACCEPT / coordinator ACCEPT on d031803730fb44b9208e52fdfb91a88e9ddf8a41 for all nine original criteria plus keyboard correction. SOL-P1-1 closed. Production5f25810 and current bundle unchanged. Source-attribution, local terrain/cost, synthetic-input/software-GPU and missing human/hardware limitations remain. Both report owners released; no root browser/server. This supersedes earlier pending labels and authorizes dependent slice2 dispatch from a new committed baseline; it is not stage1 or campaign acceptance.
