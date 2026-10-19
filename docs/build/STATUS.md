@@ -1,10 +1,10 @@
 # Build status
 
-## Current checkpoint — Canopy landmark integrated; hunter contact next
+## Current checkpoint — Canopy landmark integrated; hunter contact active
 
 **Canopy source dc5d67c/report e43d8b7 is inspected and provisionally assembled at9877c8a**, alongside correctness7a822d7. [Root inspection](evidence/M2-A-CANOPY-LANDMARK-INTEGRATION.md) passes **520/520 tests**, typecheck/build, M1/design and M2 fresh/completed economies. Original and combined replay each reproduce29 complete exports over3,279 steps exactly. Actual source-attributed views expose the elevated fork and descent to existing cover; both ordinary-control assisted routes reach true cover without extra damage. Human recognition remains unverified.
 
-The landmark task is terminal, clean and released; no other worker is active before the next dispatch. The [prepared hunter contact/withdrawal task](tasks/M2-A-HUNTER-CONTACT.md) starts only from the committed combined baseline. It preserves the landmark and the sixth support-observation callback; no hunter implementation is integrated yet. TASKS records the actual dispatch when started.
+The landmark task is terminal, clean and released. **Only [hunter contact/withdrawal](tasks/M2-A-HUNTER-CONTACT.md) is active**, from exact256f1c79a926ec7b355c5ecc50942d6ffddfca2a in t3-3be5c293. Original runtime confirms Sol6.1/max. It preserves the landmark and sixth support-observation callback; no hunter implementation is integrated yet. TASKS records the exact ID and ownership. Receive completion without polling.
 
 The original connected earned Canopy–Basin expedition and local recovery remain attributed to b91cde9. [Route inspection](evidence/M2-A-COMPOSE-INTEGRATION.md) proves paid progression, useful return, recovery and actual reload, with61.63% oxygen/83.97% power minima. Current bounded replay does not relabel that full route as a new-source playthrough. [Correctness inspection](evidence/M2-A-COMPOSE-CORRECTIONS-INTEGRATION.md) retains the earned stall cue and completed-save repair.
 
@@ -53,7 +53,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-Canopy landmark, correctness and encounter-direction authors are terminal and released. Root owns integration/build records. Hunter implementation is the next exclusive Sol6.1/max leaf on a new committed baseline; TASKS records its dispatch, binding and runtime. Until dispatch no implementation worker is active. No shared source paths are concurrently assigned.
+Canopy landmark, correctness and encounter-direction authors are terminal and released. Root owns integration/build records. The hunter Sol6.1/max leaf is active from256f1c7, bound to t3-3be5c293, with exclusive paths in its brief. TASKS records exact dispatch and verified runtime. No shared source paths are concurrently assigned.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -88,7 +88,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the [hunter contact/withdrawal correction](tasks/M2-A-HUNTER-CONTACT.md) on the inspected Canopy+correctness assembly. Receive its completion notification, inspect source and affected earned approach/contact/withdrawal/cover/quiet/recovery/reload evidence, then fresh complete M2-A Astra/Sol review. Continue M2-B/C and M3/M4 automatically; main merge/public deployment remain owner actions.
+Receive the active [hunter contact/withdrawal correction](tasks/M2-A-HUNTER-CONTACT.md) completion notification without polling, inspect source and affected earned approach/contact/withdrawal/cover/quiet/recovery/reload evidence, then fresh complete M2-A Astra/Sol review. Continue M2-B/C and M3/M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
