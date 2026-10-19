@@ -819,6 +819,26 @@ export function createExpeditionRegion(
     site.face([[cover.min.x, y, cover.max.z + 0.01], [cover.max.x, y + 0.9, cover.max.z + 0.01], [cover.max.x, y + 1.2, cover.max.z + 0.01], [cover.min.x, y + 0.25, cover.max.z + 0.01]], P.stoneLight);
     site.face([[cover.max.x + 0.01, y + 1.2, cover.min.z], [cover.max.x + 0.01, y + 0.9, cover.max.z], [cover.max.x + 0.01, y + 1.2, cover.max.z], [cover.max.x + 0.01, y + 1.6, cover.min.z]], P.deep);
   }
+  // The fork's holdfast wraps onto the actual north/west stone faces. This
+  // flush, narrowing seam leads down the west edge; it adds no upper shelter
+  // or relief in the open passage beside the rib.
+  site.face([[cover.min.x + .2, cover.max.y + .014, cover.max.z - .8],
+    [cover.min.x + .65, cover.max.y + .014, cover.max.z - .55],
+    [cover.min.x + .45, cover.max.y + .014, cover.max.z],
+    [cover.min.x, cover.max.y + .014, cover.max.z]], P.shell);
+  site.face([[cover.min.x, cover.max.y, cover.max.z + .014],
+    [cover.min.x + .45, cover.max.y, cover.max.z + .014],
+    [cover.min.x + .32, cover.max.y - 1.1, cover.max.z + .014],
+    [cover.min.x, cover.max.y - 2.2, cover.max.z + .014]], P.shell);
+  const holdfast = [[cover.max.z, cover.max.y], [cover.max.z - 1.1, cover.max.y - 2.2],
+    [cover.min.z + 2.2, cover.max.y - 6], [cover.min.z + .9, cover.max.y - 9.5],
+    [cover.min.z + .8, cover.max.y - 13]] as const;
+  for (let i = 0; i < holdfast.length - 1; i++) {
+    const [za, ya] = holdfast[i]!, [zb, yb] = holdfast[i + 1]!;
+    const width = .42 - i * .07;
+    site.face([[cover.min.x - .014, ya, za], [cover.min.x - .014, yb, zb],
+      [cover.min.x - .014, yb, zb - width], [cover.min.x - .014, ya, za - width]], P.shell);
+  }
   site.finish();
   makeSign("AIR / 04", [111.65, -116.9, -122.01], .55);
   const sheet = EVIDENCE.C04.position;
@@ -849,6 +869,30 @@ export function createExpeditionRegion(
         canopy.tube([[organ[0] + Math.cos(a) * .18, organ[1] - 1.5, organ[2] + Math.sin(a) * .18], [organ[0] + Math.cos(a) * .62, organ[1], organ[2] + Math.sin(a) * .62], [organ[0] + Math.cos(a) * .3, organ[1] + 1.2, organ[2] + Math.sin(a) * .3]], .035, P.plum, 5);
     }
   }
+  // One raised, open fork differs from the radial crowns. Its two cupped
+  // fronds and unequal tips remain legible in still/grayscale views; sparse
+  // living tethers attach it to the unchanged crest, twenty-four metres below.
+  const forkX = (cover.min.x + cover.max.x) / 2;
+  const forkZ = (cover.min.z + cover.max.z) / 2;
+  const forkAt = (x: number, y: number, z: number): Point => [forkX + x, cover.max.y + y, forkZ + z];
+  canopy.leaf([forkAt(-.15, 22.8, .2), forkAt(-.9, 23.45, -.5),
+    forkAt(-1.7, 24.4, -.9), forkAt(-2, 24.8, -.95)],
+    [.12, .55, .62, .025], [.52, 0, -.85], P.jade, P.shell);
+  canopy.leaf([forkAt(.15, 22.8, .15), forkAt(.9, 24, .65),
+    forkAt(1.4, 25.1, 1), forkAt(1.7, 25.3, 1.15)],
+    [.12, .6, .55, .025], [.52, 0, -.85], P.jade, P.shell);
+  // Inflated lobes keep the fork readable when a membrane is edge-on.
+  canopy.ellipsoid(forkAt(-1.35, 24, -.78), [.67, .72, .58], P.shell, 8);
+  canopy.ellipsoid(forkAt(1.12, 24.45, .82), [.65, .95, .62], P.shell, 8);
+  canopy.tube([forkAt(-2, 24.8, -.95), forkAt(-1.7, 24.4, -.9),
+    forkAt(-.9, 23.45, -.5), forkAt(0, 22.8, .2), forkAt(.9, 24, .65),
+    forkAt(1.4, 25.1, 1), forkAt(1.7, 25.3, 1.15)], .085, P.petrol, 6);
+  canopy.tube([forkAt(-.2, 22.8, .2), forkAt(-1.25, 18, .35), forkAt(-1.5, 12, .6),
+    [cover.min.x + .45, cover.max.y + 5, cover.max.z - .85],
+    [cover.min.x + .3, cover.max.y + .015, cover.max.z - .7]], .1, P.shell, 6);
+  canopy.tube([forkAt(.35, 22.8, .25), forkAt(-.3, 18, 1.1), forkAt(-.75, 12, 1.6),
+    [cover.min.x + .85, cover.max.y + 5, cover.max.z - .35],
+    [cover.min.x + .6, cover.max.y + .015, cover.max.z - .15]], .085, P.jade, 6);
   canopy.finish(.22);
   }
   if (include("refuge_reef")) {
