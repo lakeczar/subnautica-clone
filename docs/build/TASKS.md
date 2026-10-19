@@ -1720,3 +1720,10 @@ Root terrain receipts are sealed: 20 files / 1708122 bytes; manifest SHA256 `406
 Fresh T3-owned implementation task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-wall-sol-max-930c023` starts from **930c023d4135f4a6c916eedbb0b7eff4a6381b78**, branch `t3/wall-clearance`, bound worktree `/home/worker/.t3/worktrees/subnautica-clone/t3-90589dff`. Selected and original runtime **gpt-6.1-sol/max** plus exact parent are independently verified; receipts `/tmp/siltwake-m2-wall-dispatch-root/`. No pending question/child at dispatch.
 
 Exclusive ownership is the [wall brief](tasks/M2-A-WALL-CLEARANCE.md): world.ts/step.ts, named movement/recovery tests and its new report. Other production, terrain, camera and codec remain frozen. Port 5190 belongs to this worker if free/needed; root owns no browser/server/recording/check process. All prior authors are terminal and released. Receive completion notifications without polling; inspect/assemble the correction, then prepared earned composition and fresh complete-batch Astra/Sol reviews. No M2 acceptance claim.
+
+
+### Terrain checkpoint and active correction published
+
+Feature d2b8dce is pushed. PR #4/#3 bodies are fully rewritten/read back with 502 tests, terrain conformity evidence, explicit ROOT-A2-WALL failure/active correction, current cold-loading cost and outstanding natural-cover/composed-play/independent gates. #3 remains M0-only a2cb19f. Four source-attributed terrain comparison PNGs are published on pr-assets and each HTTP 200 image matches the retained bytes; these are staged source 9913751→34fdbd7 comparisons, not earned/current-assembly proof. PR receipts are `/tmp/siltwake-m2-terrain-pr/`.
+
+Dispatch/runtime receipts `/tmp/siltwake-m2-wall-dispatch-root/` are sealed: 5 files / 37034 bytes; manifest SHA256 `767e0c1dc00a1ca6df6b1459937f3b62d579f21a7ff6f66ec42a7497dc24b03a`. Only the wall worker is active. Root has no browser/server/recording/check process; await completion notification without polling. All four PR stack layers remain linked and unwatched; no game/main merge or deployment.
