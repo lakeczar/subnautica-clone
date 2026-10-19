@@ -11,11 +11,12 @@ import { cellRechargePreview, distractionPreview, exitBlock } from "../src/sim/v
 import { dartPerformance } from "../src/sim/modules.js";
 import { executeCommand, stepGame } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
-import { aimedInteraction } from "../src/sim/targeting.js";
-import { faceTarget, NORMAL_VIEWS, readyState } from "./targeting-support.js";
+import { aimRay, aimedInteraction } from "../src/sim/targeting.js";
+import { faceTarget, NORMAL_VIEWS, protectedReadyState, readyState } from "./targeting-support.js";
 import type { GameCommand, WorldQueries } from "../src/sim/types.js";
 import { ExpeditionSession } from "../src/runtime/session.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
+import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
 import { MemoryStorage, TestWriterLock, encoded, sample, settled } from "./persistence-support.js";
 
 /** Minimal DOM port for rendered buttons, replacement and command wiring. Native
@@ -280,15 +281,24 @@ test("minimal prompt follows actual aimed actions across all real hosts, and is 
   const opening = readyState(); view.update(opening, false);
   assert.equal(get("interact-prompt").innerHTML, "", "known regulator to the side does not prompt at stand-up");
   for (const v of NORMAL_VIEWS) {
-    const s = readyState(); s.player.pose.position = { ...v.position }; s.player.mode = v.mode; faceTarget(s, v.id);
+    const s = v.position.y < -150 ? protectedReadyState(350) : v.position.y < -60 ? protectedReadyState(150) : readyState();
+    s.player.pose.position = { ...v.position }; s.player.mode = v.mode; faceTarget(s, v.id);
+    assert.ok(world.clearance(s.player.pose.position, { radius: 0.34, height: v.mode === "walking" ? 1.75 : 0.95 }), v.id + " body clearance");
     const before = structuredClone(s), target = aimedInteraction(s, world)!;
+    assert.equal(target?.id, v.id);
+    assert.ok(world.lineOfSight(aimRay(s)!.origin, target.host.center, target.host.solidIds));
     view.update(s, false);
     const prompt = get("interact-prompt").innerHTML;
     assert.ok(prompt.startsWith("<kbd>E</kbd> "), v.id);
     assert.ok(prompt.replace(/&amp;/g, "&").includes(target.label), v.id);
-    assert.ok(!prompt.includes("Q scan"), "no scanner-less scan promise");
+    const hasScanner = s.inventory.items.some(i => i.kind === "essential_tools" && i.fitted === "tools");
+    assert.equal(prompt.includes("Q scan"), hasScanner && !target.known && (target.kind === "source" || target.kind === "evidence"),
+      "scan promises require actual fitted tools and an unknown scannable host");
     const result = executeCommand(s, { type: "interact" }, world);
     assert.ok(!result.events.some(e => e.type === "notice" && e.error), v.id);
+    const save = createEnvelope(result.state, { sessionId: "normal-prompt-hosts", createdAt: "2026-10-18T06:00:00.000Z", savedAt: "2026-10-18T06:00:00.000Z" });
+    const encodedSave = encodeSave(save); assert.ok(encodedSave.ok, encodedSave.ok ? "" : encodedSave.error);
+    assert.deepEqual(decodeSave(encodedSave.value), { ok: true, value: save }, v.id + " immediate paused save");
     assert.deepEqual(s, before, "presentation and target queries are pure");
     s.player.pose.yaw += Math.PI; view.update(s, false);
     const away = aimedInteraction(s, world);
@@ -924,7 +934,7 @@ test("occupied Hold disables tow and salvage, explains conditional safe exit, an
   s.player.controlledVehicleId = v.id;
   s.player.pose = structuredClone(v.pose);
   for (const phase of [null, "ready"] as const) {
-    s.recovery.operation = phase ? { vehicleId: v.id, method: "tow", phase, waypoint: 3, position: { ...v.pose.position } } : null;
+    s.recovery.operation = phase ? { vehicleId: v.id, routeId: "canopy", method: "tow", phase, waypoint: 3, position: { ...v.pose.position } } : null;
     const before = structuredClone(s);
     view.openPanel("inventory", s);
     const buttons = get("panel-content").querySelectorAll("button");

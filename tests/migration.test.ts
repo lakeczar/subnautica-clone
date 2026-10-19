@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
+import { SOURCES as CURRENT_SOURCES } from "../src/content/registry.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import { encoded, MemoryStorage, sample, settled, TestWriterLock } from "./persistence-support.js";
 import { RECIPES } from "../src/content/registry.js";
@@ -10,7 +11,10 @@ import { completeOpening, craft, discover } from "../src/sim/progression.js";
 import { createGame } from "../src/sim/state.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import { fixtureGame, updateBerth } from "../src/sim/carrier.js";
-import { validExpedition2Domain, validState } from "../src/save/validation.js";
+import { validState } from "../src/save/validation.js";
+import { validExpedition2Domain, validState as validLegacyState } from "../src/save/legacy/validation.js";
+import type { GameState as LegacyState } from "../src/save/legacy/types.js";
+import { schema2Fixture, schema3Expected } from "./legacy-fixture-support.js";
 import { ExpeditionSession } from "../src/runtime/session.js";
 const foundation = () => ({
   format: "siltwake.save",
@@ -50,18 +54,28 @@ const foundation = () => ({
     recovery: { caches: [] },
   },
 });
-test("actual foundation schema1 migrates safe pose/vitals once with feedback and explicit schema2 content version", () => {
+test("actual foundation schema1 migrates safe pose/vitals once with feedback and explicit schema3 content version", () => {
   const old = foundation(),
     d = decodeSave(JSON.stringify(old));
   assert.equal(d.ok, true);
   if (!d.ok) return;
-  assert.equal(d.value.schemaVersion, 2);
-  assert.equal(d.value.contentVersion, "expedition.3");
+  assert.equal(d.value.schemaVersion, 3);
+  assert.equal(d.value.contentVersion, "expedition.4");
   assert.deepEqual(d.value.state.player.pose, old.state.player.pose);
   assert.deepEqual(d.value.state.player.vitals, old.state.player.vitals);
   assert.equal(d.value.state.tick, 444);
   assert.equal(d.value.state.opening.phase, 4);
   assert.ok(d.value.state.migration);
+  const expected = createGame(); completeOpening(expected);
+  expected.tick = old.state.tick;
+  expected.player.pose = { ...structuredClone(old.state.player.pose), frame: "world" };
+  expected.player.velocity = { ...old.state.player.velocity };
+  expected.player.mode = "walking";
+  expected.player.vitals = { ...old.state.player.vitals };
+  expected.metrics.minOxygen = old.state.player.vitals.oxygen;
+  expected.migration = "Foundation progress imported. Your prior safe position and vitals were preserved; M1 facilities and source stock were initialized once.";
+  expected.feedback = expected.migration;
+  assert.deepEqual(d.value, createEnvelope(expected, old.meta), "full foundation conversion, including every initialized field");
   const e = encodeSave(d.value);
   assert.equal(e.ok, true);
   if (e.ok) {
@@ -79,13 +93,13 @@ test("geometry-covered foundation pose relocates to actual refuge; malformed leg
   if (d.ok) assert.doesNotMatch(d.value.state.migration!, /journal|backup/);
   for (const mutate of [
     (s: ReturnType<typeof foundation>) => {
-      s.state.knowledge.scans.push("invented" as never);
+      Reflect.set(s.state.knowledge.scans, 0, "invented");
     },
     (s: ReturnType<typeof foundation>) => {
       s.schemaVersion = 3;
     },
     (s: ReturnType<typeof foundation>) => {
-      s.state.player.mode = ["walking"] as unknown as string;
+      Reflect.set(s.state.player, "mode", ["walking"]);
     },
     (s: ReturnType<typeof foundation>) => {
       s.contentVersion = "foundation.2";
@@ -132,60 +146,88 @@ function compatibleRuleFixture() {
   s.player.vitals = { health: 43, oxygen: 59, food: 61 };
   s.inventory.items.find((i) => i.kind === "reserve_cell")!.charge = 37.25;
   s.fleet.vehicles[0]!.charge = 0;
-  return createEnvelope(s, foundation().meta);
+  return schema2Fixture(s, foundation().meta, "expedition.2");
 }
 const foundationOldNotice = "Foundation progress imported. Revised habitat geometry covered the old position, so you were moved to the valid home-pod deck. The original save remains in the journal backup.";
 const carrierOldNotice = "Carrier compartment geometry now seals the dry berths. Your previous walking position intersected a closed compartment, so you were moved to a clear dry passage. Vessels and cargo were preserved; the original record remains in the journal backup after saving.";
 
-test("validated expedition.2 converts only its tag, retaining crafted receipts, empty battery, charge, IDs, metadata and every gameplay field", () => {
-  const current = compatibleRuleFixture(), old = { ...current, contentVersion: "expedition.2" };
+test("validated expedition.2 migrates only declared schema3 additions, retaining crafted receipts, empty battery, charge, IDs, metadata and every prior gameplay field", () => {
+  const old = compatibleRuleFixture(), current = schema3Expected(old);
   const source = JSON.stringify(old), decoded = decodeSave(source);
   assert.ok(decoded.ok, decoded.ok ? "" : decoded.error);
   assert.deepEqual(decoded.value, JSON.parse(JSON.stringify(current)));
   assert.equal(JSON.stringify(old), source);
   assert.equal(encodeSave(decoded.value).ok, true);
   assert.deepEqual(decodeSave(encoded(decoded.value)), decoded);
-  assert.equal(encodeSave(old as unknown as typeof current).ok, false, "writes require current content explicitly");
+  // Exercise the public JavaScript boundary with an explicitly typed legacy envelope.
+  assert.equal(Reflect.apply(encodeSave, undefined, [old]).ok, false, "writes require current schema/content explicitly");
 });
 
 test("old content tags cannot smuggle new items, module references/receipts or bypass prior strict relationships", () => {
-  const current = compatibleRuleFixture();
+  const current = schema3Expected(compatibleRuleFixture());
   for (const [k, n] of Object.entries(RECIPES.dart_acoustic_trim.cost)) addItem(current.state, k as ItemKind, n, "workshop_locker");
   assert.equal(craft(current.state, "dart_acoustic_trim", createWorldQueries()), null);
-  assert.ok(validState(current.state)); assert.equal(validExpedition2Domain(current.state), false);
+  assert.ok(validState(current.state));
+  const oldTrim = schema2Fixture(current.state, current.meta);
+  assert.ok(validLegacyState(oldTrim.state)); assert.equal(validExpedition2Domain(oldTrim.state), false);
   assert.ok(decodeSave(JSON.stringify(current)).ok, "the new domain is valid with its actual tag");
-  assert.equal(decodeSave(JSON.stringify({ ...current, contentVersion: "expedition.2" })).ok, false);
+  assert.equal(decodeSave(JSON.stringify({ ...oldTrim, contentVersion: "expedition.2" })).ok, false);
   const item = current.state.inventory.items.find((i) => i.kind === "dart_acoustic_trim")!;
   item.containerId = current.state.fleet.vehicles[0]!.cargoId; current.state.fleet.vehicles[0]!.modules = [item.id];
   assert.ok(validState(current.state));
-  assert.equal(decodeSave(JSON.stringify({ ...current, contentVersion: "expedition.2" })).ok, false);
+  const installedTrim = schema2Fixture(current.state, current.meta);
+  assert.ok(decodeSave(JSON.stringify(installedTrim)).ok, "trim is legitimate schema2/expedition.3 content");
+  assert.equal(decodeSave(JSON.stringify({ ...installedTrim, contentVersion: "expedition.2" })).ok, false);
   for (const mutate of [
-    (s: typeof current.state) => { s.knowledge.crafted.push("dart_acoustic_trim"); },
-    (s: typeof current.state) => { s.fleet.vehicles[0]!.modules = ["unknown_ref"]; },
-    (s: typeof current.state) => { s.inventory.items.find((i) => i.kind === "reserve_cell")!.charge = -1; },
-    (s: typeof current.state) => { s.knowledge.blueprints = []; },
-    (s: typeof current.state) => { s.inventory.items[0]!.kind = "unknown_old_item" as ItemKind; },
+    (s: LegacyState) => { s.knowledge.crafted.push("dart_acoustic_trim"); },
+    (s: LegacyState) => { s.fleet.vehicles[0]!.modules = ["unknown_ref"]; },
+    (s: LegacyState) => { s.inventory.items.find((i) => i.kind === "reserve_cell")!.charge = -1; },
+    (s: LegacyState) => { s.knowledge.blueprints = []; },
+    (s: LegacyState) => { Reflect.set(s.inventory.items[0]!, "kind", "unknown_old_item"); },
   ]) {
     const f = compatibleRuleFixture(); mutate(f.state);
     assert.equal(decodeSave(JSON.stringify({ ...f, contentVersion: "expedition.2" })).ok, false);
   }
-  for (const contentVersion of ["expedition.4", "expedition.999", "foundation.1", "expedition.2x"])
+  assert.equal(decodeSave(JSON.stringify({ ...compatibleRuleFixture(), contentVersion: "expedition.4" })).ok, false, "schema2 cannot borrow the current content tag");
+  for (const contentVersion of ["expedition.5", "expedition.999", "foundation.1", "expedition.2x"])
     assert.equal(decodeSave(JSON.stringify({ ...compatibleRuleFixture(), contentVersion })).ok, false);
+  // Start with a legitimate closed-domain fixture for each corruption. These
+  // failures cannot be explained by an unrelated current resource roster.
+  for (const version of ["expedition.2", "expedition.3"] as const) for (const mutate of [
+    (s: LegacyState) => { Reflect.set(s.inventory.items.find(i => i.kind === "suit_150")!, "kind", "suit_350"); },
+    (s: LegacyState) => { Reflect.set(s.knowledge.crafted, s.knowledge.crafted.length, "suit_350"); },
+    (s: LegacyState) => { Reflect.set(s.world.resources, s.world.resources.length,
+      { id: "basin_ridge_salvage_north", stock: CURRENT_SOURCES.basin_ridge_salvage_north.stock, reserve: CURRENT_SOURCES.basin_ridge_salvage_north.reserve }); },
+    (s: LegacyState) => { Reflect.set(s.knowledge.evidence, s.knowledge.evidence.length, { id: "C05", tick: s.tick, provenance: "injected" }); },
+    (s: LegacyState) => { s.player.pose.position.x = 248; },
+    (s: LegacyState) => { s.player.pose.position.y = -240; },
+  ]) {
+    const f = compatibleRuleFixture(); f.contentVersion = version;
+    assert.ok(validLegacyState(f.state)); assert.ok(validExpedition2Domain(f.state));
+    assert.ok(decodeSave(JSON.stringify(f)).ok);
+    mutate(f.state);
+    assert.equal(decodeSave(JSON.stringify(f)).ok, false, version + ": current content cannot enter the frozen domain");
+  }
 });
 
 test("only the two exact historical notices and equal feedback normalize; custom or unrelated text is preserved", () => {
-  for (const old of [foundationOldNotice, carrierOldNotice]) {
+  for (const [old, corrected] of [
+    [foundationOldNotice, "Foundation progress imported. Revised habitat geometry covered the old position, so you were moved to the valid home-pod deck."],
+    [carrierOldNotice, "Carrier compartment geometry now seals the dry berths. Your previous walking position intersected a closed compartment, so you were moved to a clear dry passage. Vessels and cargo were preserved."],
+  ] as const) {
+    // Both frozen notices have exactly one supported replacement.
     for (const contentVersion of ["expedition.2", "expedition.3"]) for (const feedback of [old, "Unrelated feedback, keep verbatim."]) {
       const s = compatibleRuleFixture(); s.state.migration = old; s.state.feedback = feedback;
       const decoded = decodeSave(JSON.stringify({ ...s, contentVersion })); assert.ok(decoded.ok);
       assert.doesNotMatch(decoded.value.state.migration!, /journal|backup/);
+      assert.equal(decoded.value.state.migration, corrected);
       assert.equal(decoded.value.state.feedback, feedback === old ? decoded.value.state.migration : feedback);
-      const expected = JSON.parse(JSON.stringify(s)); expected.state.migration = decoded.value.state.migration;
-      expected.state.feedback = decoded.value.state.feedback;
+      const expected = schema3Expected(s); expected.state.migration = corrected;
+      expected.state.feedback = feedback === old ? corrected : feedback;
       assert.deepEqual(decoded.value, expected);
     }
     const near = compatibleRuleFixture(); near.state.migration = old + " Custom note."; near.state.feedback = near.state.migration;
-    assert.deepEqual(decodeSave(encoded(near)), { ok: true, value: JSON.parse(JSON.stringify(near)) });
+    assert.deepEqual(decodeSave(JSON.stringify(near)), { ok: true, value: schema3Expected(near) });
   }
 });
 
@@ -195,15 +237,14 @@ function relocatedCarrierSource(): string {
   h.pose.position = { x: 188, y: -24, z: 0 }; h.pose.yaw = Math.PI / 2;
   s.player.interiorPose!.position = { x: -3, y: 4, z: 4.5 };
   s.player.pose.yaw = h.pose.yaw; updateBerth(s, createWorldQueries());
-  assert.ok(validState(s));
-  return JSON.stringify({ ...createEnvelope(s, foundation().meta), contentVersion: "expedition.2" });
+  return JSON.stringify(schema2Fixture(s, foundation().meta, "expedition.2"));
 }
 test("import over another expedition then reopen/Continue keeps pre-import previous, immutable file and truthful new/persisted migration notices", async () => {
   const covered = foundation(); covered.state.player.pose.position = { x: 0, y: 3.8, z: 21 };
   const migrated = decodeSave(JSON.stringify(covered)); assert.ok(migrated.ok);
   const persisted = [foundationOldNotice, carrierOldNotice].map((notice) => {
     const save = structuredClone(migrated.value); save.state.migration = notice; save.state.feedback = notice;
-    return JSON.stringify({ ...save, contentVersion: "expedition.2" });
+    return JSON.stringify(schema2Fixture(save.state, save.meta, "expedition.2"));
   });
   for (const source of [JSON.stringify(covered), relocatedCarrierSource(), ...persisted]) {
     const expected = decodeSave(source); assert.ok(expected.ok);

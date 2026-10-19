@@ -247,23 +247,23 @@ test("old overhanging interiors stop at the world plane while safe local walking
 });
 
 test("restricting travel before a sweep preserves real obstruction/terrain checks and never projects an old hull to the new margin", () => {
-  const origin = { x: 180, y: -24, z: 0 }, shape = HULL_COLLIDERS.hearthline;
-  const blocked = createWorldQueries([{ id: "legacy-inward-wall", min: { x: 159, y: -30, z: -30 },
-    max: { x: 160, y: 0, z: 30 } }], () => -200);
+  const origin = { x: WORLD_BOUNDS.maxX - 8, y: -24, z: 0 }, shape = HULL_COLLIDERS.hearthline;
+  const blocked = createWorldQueries([{ id: "legacy-inward-wall", min: { x: origin.x - 21, y: -30, z: -30 },
+    max: { x: origin.x - 20, y: 0, z: 30 } }], () => -200);
   const still = moveHull(blocked, origin, { x: 0, y: 0, z: 0 }, shape, bounds);
   assert.deepEqual(still.position, origin);
   const inward = moveHull(blocked, origin, { x: -10, y: 0, z: 0 }, shape, bounds);
   assert.ok(inward.hitSolid);
-  assert.ok(inward.position.x > 177 && inward.position.x < 180);
-  const terrain = createWorldQueries([], (x) => x < 160 ? -1 : -200);
+  assert.ok(inward.position.x > origin.x - 3 && inward.position.x < origin.x);
+  const terrain = createWorldQueries([], (x) => x < origin.x - 20 ? -1 : -200);
   const shelf = moveHull(terrain, origin, { x: -10, y: 0, z: 0 }, shape, bounds);
   assert.ok(shelf.hitSolid);
-  assert.ok(shelf.position.x >= 177);
+  assert.ok(shelf.position.x >= origin.x - 3);
   // Callers without the additive carrier bounds keep their existing origin
   // boundary semantics: no incidental swimmer/Dart movement change.
   const empty = createWorldQueries([], () => -200);
-  assert.equal(empty.moveCapsule({ x: 187, y: -24, z: 0 }, { x: 5, y: 0, z: 0 }, { radius: 0.34, height: 0.95 }).position.x, 188);
-  assert.equal(moveHull(empty, { x: 187, y: -24, z: 0 }, { x: 5, y: 0, z: 0 }, HULL_COLLIDERS.dart).position.x, 188);
+  assert.equal(empty.moveCapsule({ x: WORLD_BOUNDS.maxX - 1, y: -24, z: 0 }, { x: 5, y: 0, z: 0 }, { radius: 0.34, height: 0.95 }).position.x, WORLD_BOUNDS.maxX);
+  assert.equal(moveHull(empty, { x: WORLD_BOUNDS.maxX - 1, y: -24, z: 0 }, { x: 5, y: 0, z: 0 }, HULL_COLLIDERS.dart).position.x, WORLD_BOUNDS.maxX);
 });
 
 test("boundary launch/capture prepared and lock interruptions keep exactly one vehicle and preserve cargo", () => {

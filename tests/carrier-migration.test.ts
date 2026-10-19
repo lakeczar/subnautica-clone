@@ -2,9 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { BERTH_LOCAL, CARRIER_LAYOUT, carrierInteriorSolids, fixtureGame, localToWorld, updateBerth } from "../src/sim/carrier.js";
 import type { GameState, Vec3 } from "../src/sim/types.js";
-import { createWorldQueries, WORLD_BOUNDS } from "../src/sim/world.js";
+import { createWorldQueries } from "../src/sim/world.js";
+import { LEGACY_WORLD_BOUNDS } from "../src/content/routes.js";
 import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
+import { carrierInteriorSolids as legacyInteriorSolids } from "../src/save/legacy/carrier-entry.js";
+import { validState as validLegacyState, validExpedition2Domain } from "../src/save/legacy/validation.js";
+import { legacyWorld, schema2Fixture, schema3Expected, type Schema2Envelope } from "./legacy-fixture-support.js";
 import { validState } from "../src/save/validation.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import { ExpeditionSession } from "../src/runtime/session.js";
@@ -12,13 +16,14 @@ import { encoded, MemoryStorage, sample, settled, TestWriterLock } from "./persi
 
 const world = createWorldQueries(), shape = { radius: 0.34, height: 1.75 };
 const meta = { sessionId: "carrier-migration", createdAt: "2026-10-17T00:00:00.000Z", savedAt: "2026-10-17T00:01:00.000Z" };
+const landingNotice = "Carrier compartment geometry now seals the dry berths. Your previous walking position intersected a closed compartment, so you were moved to a clear dry passage. Vessels and cargo were preserved.";
 
 // Staged compatibility diagnostics, not captured saves or earned routes. The exact
 // maxX case, edge variants and refusal fixture were checked with historical
 // c0aa5cb's codec AND local clearance (M1-MIGRATION-FIX evidence). The distinct
 // Sol R3 maxZ case is retained as a reviewer-staged compatible-pose diagnostic.
 function staged(configuration: "compact" | "medium", position: Vec3, yaw: number,
-  local = { x: -3, y: 4, z: 4.5 }): SaveEnvelope {
+  local = { x: -3, y: 4, z: 4.5 }): Schema2Envelope {
   const s = fixtureGame(), h = s.fleet.vehicles[0]!;
   if (configuration === "medium") {
     for (const [i, v] of s.fleet.vehicles.entries()) if (v.berth) {
@@ -34,11 +39,11 @@ function staged(configuration: "compact" | "medium", position: Vec3, yaw: number
   s.player.interiorPose!.position = { ...local };
   s.player.pose.yaw = yaw;
   updateBerth(s, world);
-  return createEnvelope(s, meta);
+  return schema2Fixture(s, meta);
 }
-const historicalEdge = (): SaveEnvelope => staged("compact", { x: 188, y: -24, z: 0 }, Math.PI / 2);
-const solEdge = (): SaveEnvelope => staged("compact", { x: 65, y: -24, z: 64 }, Math.PI, { x: -3, y: 4, z: 4.9 });
-const noLanding = (): SaveEnvelope => staged("medium", { x: 188, y: -24, z: 66 }, 50 * Math.PI / 180, { x: -4.7, y: 4, z: 4.5 });
+const historicalEdge = (): Schema2Envelope => staged("compact", { x: 188, y: -24, z: 0 }, Math.PI / 2);
+const solEdge = (): Schema2Envelope => staged("compact", { x: 65, y: -24, z: 64 }, Math.PI, { x: -3, y: 4, z: 4.9 });
+const noLanding = (): Schema2Envelope => staged("medium", { x: 188, y: -24, z: 66 }, 50 * Math.PI / 180, { x: -4.7, y: 4, z: 4.5 });
 
 function assertClear(s: GameState): void {
   assert.ok(validState(s), "returned state must satisfy strict semantics immediately");
@@ -46,32 +51,38 @@ function assertClear(s: GameState): void {
   assert.equal(s.player.controlledVehicleId, null, "migration does not take the helm");
   assert.ok(createWorldQueries(carrierInteriorSolids(s), () => -200).clearance(s.player.interiorPose!.position, shape));
   assert.ok(world.clearance(s.player.pose.position, shape), "actual world terrain, solids and capsule bounds must clear");
+  assert.ok(legacyWorld.clearance(s.player.pose.position, shape), "expanded bounds cannot supply a historical landing");
   assert.deepEqual(s.player.pose.position, localToWorld(s.player.interiorPose!.position, s.fleet.vehicles[0]!));
 }
-function assertMigrates(input: SaveEnvelope, legacyContent = false): SaveEnvelope {
-  assert.ok(validState(input.state), "incoming semantics must already be valid");
-  assert.ok(world.clearance(input.state.player.pose.position, shape), "original historical-compatible player clears the world");
-  assert.equal(createWorldQueries(carrierInteriorSolids(input.state), () => -200).clearance(input.state.player.interiorPose!.position, shape), false);
+function assertMigrates(input: Schema2Envelope, legacyContent = false): SaveEnvelope {
+  assert.ok(validLegacyState(input.state), "incoming semantics must already be valid");
+  assert.ok(legacyWorld.clearance(input.state.player.pose.position, shape), "original historical-compatible player clears the world");
+  assert.equal(createWorldQueries(legacyInteriorSolids(input.state), () => -200).clearance(input.state.player.interiorPose!.position, shape), false);
   const unchangedInput = JSON.stringify(input);
-  const raw = JSON.stringify(legacyContent ? { ...input, contentVersion: "expedition.2" } : input), result = decodeSave(raw);
+  const source: Schema2Envelope = legacyContent ? { ...input, contentVersion: "expedition.2" } : input;
+  if (legacyContent) assert.ok(validExpedition2Domain(source.state));
+  const raw = JSON.stringify(source), result = decodeSave(raw);
   assert.ok(result.ok, result.ok ? "" : result.error);
   const output = result.value;
   assertClear(output.state);
   assert.match(output.state.migration!, /previous walking position.*moved.*clear dry passage/);
+  assert.equal(output.state.migration, landingNotice);
   assert.equal(output.state.feedback, output.state.migration);
   // These are the ONLY intended changes: walking local/world position, zeroed
-  // player velocity and visible migration/feedback. This compares every other
-  // field, including vitals, fleet/cargo, inventory, knowledge, tick and metadata.
-  const expected = JSON.parse(raw) as SaveEnvelope;
-  expected.contentVersion = "expedition.3";
+  // player velocity, visible migration/feedback and the declared M2 version additions.
+  // Every other field stays in comparison: vitals, fleet/cargo, inventory,
+  // knowledge, tick and metadata.
+  const expected = schema3Expected(source);
+  assert.equal(output.schemaVersion, 3);
+  assert.equal(output.contentVersion, "expedition.4");
   expected.state.player.interiorPose!.position = { ...output.state.player.interiorPose!.position };
   expected.state.player.pose.position = { ...output.state.player.pose.position };
   expected.state.player.velocity = { x: 0, y: 0, z: 0 };
-  expected.state.migration = output.state.migration;
-  expected.state.feedback = output.state.feedback;
+  expected.state.migration = landingNotice;
+  expected.state.feedback = landingNotice;
   assert.deepEqual(output, expected);
   assert.equal(JSON.stringify(input), unchangedInput, "decoding must not mutate the source envelope");
-  assert.equal(encodeSave(input).ok, false, "encoding an unmigrated blocked current pose must still refuse");
+  assert.equal(encodeSave(schema3Expected(input)).ok, false, "encoding an unmigrated blocked current pose must still refuse");
   const text = encoded(output), again = decodeSave(text);
   assert.ok(again.ok);
   assert.deepEqual(again.value, JSON.parse(JSON.stringify(output)), "migration is idempotent, including its visible notice");
@@ -100,18 +111,18 @@ test("historical maxX and independently staged Sol maxZ migrations return clear,
 
 test("compact/medium legacy edge headings preserve all unaffected fields and prefer a clear authored helm", () => {
   const edges = [
-    { x: WORLD_BOUNDS.maxX, z: 0, yaw: Math.PI / 2 - 0.12 },
-    { x: WORLD_BOUNDS.maxX, z: 0, yaw: Math.PI / 2 },
-    { x: WORLD_BOUNDS.maxX, z: 0, yaw: Math.PI / 2 + 0.12 },
-    { x: WORLD_BOUNDS.minX, z: 0, yaw: 3 * Math.PI / 2 },
-    { x: 65, z: WORLD_BOUNDS.maxZ, yaw: Math.PI },
-    { x: 65, z: WORLD_BOUNDS.minZ, yaw: 0 },
+    { x: LEGACY_WORLD_BOUNDS.maxX, z: 0, yaw: Math.PI / 2 - 0.12 },
+    { x: LEGACY_WORLD_BOUNDS.maxX, z: 0, yaw: Math.PI / 2 },
+    { x: LEGACY_WORLD_BOUNDS.maxX, z: 0, yaw: Math.PI / 2 + 0.12 },
+    { x: LEGACY_WORLD_BOUNDS.minX, z: 0, yaw: 3 * Math.PI / 2 },
+    { x: 65, z: LEGACY_WORLD_BOUNDS.maxZ, yaw: Math.PI },
+    { x: 65, z: LEGACY_WORLD_BOUNDS.minZ, yaw: 0 },
     { x: 65, z: 12, yaw: 0.31 },
   ];
   for (const configuration of ["compact", "medium"] as const) for (const edge of edges) {
     // The western edge has shallow terrain: stage at the surface so the source
     // and destination capsules both have real world clearance.
-    const input = staged(configuration, { x: edge.x, y: edge.x === WORLD_BOUNDS.minX ? -0.9 : -24, z: edge.z }, edge.yaw);
+    const input = staged(configuration, { x: edge.x, y: edge.x === LEGACY_WORLD_BOUNDS.minX ? -0.9 : -24, z: edge.z }, edge.yaw);
     input.state.player.vitals = { health: 53, oxygen: 37, food: 42 };
     input.state.player.velocity = { x: 0.03, y: -0.01, z: 0.02 };
     input.state.player.graceSeconds = 0;
@@ -126,20 +137,23 @@ test("ordinary compatible carrier records stay unchanged and invalid local/world
   const input = createEnvelope(fixtureGame(), meta), result = decodeSave(JSON.stringify(input));
   assert.ok(result.ok);
   assert.deepEqual(result.value, input);
+  const legacy = schema2Fixture(input.state, meta);
+  assert.deepEqual(decodeSave(JSON.stringify(legacy)), { ok: true, value: schema3Expected(legacy) },
+    "compatible schema2 retains every field with only the declared schema3 additions");
   const broken = historicalEdge();
   broken.state.player.pose.position.x += 0.02;
   assert.equal(decodeSave(JSON.stringify(broken)).ok, false);
-  assert.equal(encodeSave(broken).ok, false);
+  assert.equal(encodeSave(schema3Expected(broken)).ok, false);
 });
 
 test("no supported dry landing refuses a historically clear, semantically valid source atomically", async () => {
   const input = noLanding(), raw = JSON.stringify(input);
-  assert.ok(validState(input.state));
-  assert.ok(world.clearance(input.state.player.pose.position, shape));
+  assert.ok(validLegacyState(input.state));
+  assert.ok(legacyWorld.clearance(input.state.player.pose.position, shape));
   const result = decodeSave(raw);
   assert.equal(result.ok, false);
   if (!result.ok) assert.match(result.error, /carrier.*(?:migration|compartment).*clear dry passage/i);
-  assert.equal(encodeSave(input).ok, false);
+  assert.equal(encodeSave(schema3Expected(input)).ok, false);
   assert.equal(JSON.stringify(input), raw);
   // No previous generation: protected, no invalid Continue session. With a valid
   // previous generation: recover that generation with autosave paused, retaining
@@ -158,7 +172,7 @@ test("no supported dry landing refuses a historically clear, semantically valid 
         assert.ok(h.session.confirmation, "repair must still require an explicit choice");
         h.session.cancel();
       }
-      const commit = await h.repo.commit(input, true);
+      const commit = await h.repo.commit(schema3Expected(input), true);
       assert.equal(commit.ok, false);
       if (!commit.ok) assert.equal(commit.code, "invalid");
       assert.equal(h.lock.requests, 0);

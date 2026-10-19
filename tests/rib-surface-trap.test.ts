@@ -9,6 +9,8 @@ import { stepGame } from "../src/sim/step.js";
 import { exit, exitRefusal } from "../src/sim/vehicles.js";
 import { actorBox, RIB_CONTACT_TOLERANCE, segmentBoxClosest } from "../src/sim/ribCollision.js";
 import { createWorldQueries, hullClearance, RIB_SEGMENTS, SOLIDS } from "../src/sim/world.js";
+import { schema3Expected, type Schema2Envelope } from "./legacy-fixture-support.js";
+import { validState as validLegacyState } from "../src/save/legacy/validation.js";
 import type { Capsule, GameCommand, GameState, Vec3, VehicleState } from "../src/sim/types.js";
 
 const world = createWorldQueries(), swimmer = { radius: 0.34, height: 0.95 };
@@ -43,9 +45,14 @@ function trappedExport() {
   const decoded = decodeSave(text); assert.ok(decoded.ok); return { text, envelope: decoded.value };
 }
 
-test("actual trapped export decodes unchanged, escapes, roundtrips and moves again without migration or grants", () => {
+test("actual trapped export preserves every prior field through schema migration, escapes, roundtrips and moves again without relocation or grants", () => {
   const { text, envelope } = trappedExport();
-  assert.deepEqual(envelope, JSON.parse(text));
+  const old: Schema2Envelope = JSON.parse(text);
+  assert.equal(old.schemaVersion, 2); assert.equal(old.contentVersion, "expedition.3");
+  assert.ok(validLegacyState(old.state), "the unchanged earned input belongs to the frozen legacy domain");
+  assert.deepEqual(envelope, schema3Expected(old), "only the exact four-source/schema additions are allowed; every prior field stays in comparison");
+  assert.deepEqual(envelope.state.player, old.state.player, "no pose relocation, vitals or ownership grant");
+  assert.equal(envelope.state.migration, old.state.migration);
   const encoded = encodeSave(envelope); assert.ok(encoded.ok);
   const decoded = decodeSave(encoded.value); assert.ok(decoded.ok); assert.deepEqual(decoded.value, envelope);
   const original = structuredClone(envelope.state);

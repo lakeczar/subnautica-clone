@@ -37,7 +37,7 @@ function disabledDart(): GameState {
   s.player.mode = "walking";
   s.player.pose.position = { x: 0, y: 0.18, z: 14 };
   discover(s, "C02");
-  for (const id of ["pod_repair", "essential_tools", "bobbin_kit"] as const) {
+  for (const id of ["pod_repair", "essential_tools", "suit_150", "bobbin_kit"] as const) {
     for (const [kind, quantity] of Object.entries(RECIPES[id].cost))
       addItem(s, kind as "structural_alloy", quantity, "pod_locker");
     assert.equal(craft(s, id, world), null);

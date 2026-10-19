@@ -112,7 +112,7 @@ test("installation/removal require supported, unoccupied local access and no rec
   refused(s, { type: "install-module", vehicleId: v.id, itemId: trim(s).id }, /Exit.*occupied/);
   const active = trimGame(true), av = active.fleet.vehicles[0]!;
   disableVehicle(active, av.id);
-  active.recovery.operation = { vehicleId: av.id, method: "tow", phase: "ready", position: { ...av.pose.position }, waypoint: 3 };
+  active.recovery.operation = { vehicleId: av.id, routeId: "canopy", method: "tow", phase: "ready", position: { ...av.pose.position }, waypoint: 3 };
   refused(active, { type: "remove-module", vehicleId: av.id, itemId: trim(active).id }, /Finish recovery/);
   const item = trim(s); item.containerId = "pod_locker";
   s.player.controlledVehicleId = null; s.player.mode = "walking"; s.player.pose.position = { x: 10, y: 1.2, z: -34 };

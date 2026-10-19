@@ -11,7 +11,7 @@ import { service, serviceRefusal, serviceState, serviceWouldRestore } from "../s
 import { disableVehicle, recoveryCommand } from "../src/sim/recovery.js";
 import { executeCommand, stepGame } from "../src/sim/step.js";
 import { createWorldQueries, WORLD_BOUNDS } from "../src/sim/world.js";
-import { faceTarget, NORMAL_VIEWS, readyState } from "./targeting-support.js";
+import { faceTarget, NORMAL_VIEWS, protectedReadyState, readyState } from "./targeting-support.js";
 
 const empty = createWorldQueries([], () => -200), world = createWorldQueries();
 const forward: GameCommand = { type: "move", forward: 1, right: 0, vertical: 0, sprint: false };
@@ -303,9 +303,24 @@ test("service helpers keep command precedence, 7m access boundary, restoration a
 
 test("crafting reason codes preserve all recipe messages, precedence and pure output capacity", () => {
   const codes = new Set<string>();
+  const messages = {
+    opening: "Finish the pod checks first.",
+    blueprint: "Blueprint unknown. Investigate the intake and workshop records.",
+    completed: "Already completed. The fabricated equipment or restored service is retained.",
+    needs: "Earlier service work or equipment is still required.",
+    equipment: "Bring the one fitted 150 m suit for its paid refit. Nothing consumed.",
+    site: "Use the fabrication bench at the required refuge.",
+    restore: "Restore these fabrication services first.",
+    "duplicate-hull": "A Dart already exists. Recover its frame or cargo instead of duplicating it.",
+    clearance: "Construction clearance is blocked. Nothing consumed.",
+    "rescue-low": "Rescue stock is low. Sort recovery supplies at the shallow intake.",
+    materials: "Missing public materials. The bench uses your hold, its accessible locker, a nearby deployed buoy and craft at this site's supported cradle.",
+    space: "Output would not fit your hold. Nothing consumed.",
+  };
   for (const id of Object.keys(RECIPES) as RecipeId[]) {
-    const r = RECIPES[id], s = readyState(); s.knowledge.blueprints.push(r.bp);
-    s.knowledge.crafted = [...r.needs] as RecipeId[];
+    const r = RECIPES[id], s = id === "suit_350" ? protectedReadyState(150) : readyState();
+    s.knowledge.blueprints.push(r.bp);
+    s.knowledge.crafted = [...new Set<RecipeId>([...s.knowledge.crafted, ...r.needs])];
     for (const f of s.world.facilities) f.repaired = true;
     if (r.site === "island_workshop") s.player.pose.position = { x: 10, y: 1.2, z: -34 };
     for (const [k, n] of Object.entries(r.cost)) addItem(s, k as ItemKind, n, r.site === "island_workshop" ? "workshop_locker" : "pod_locker");
@@ -319,7 +334,7 @@ test("crafting reason codes preserve all recipe messages, precedence and pure ou
       const unrestored = structuredClone(s); for (const f of unrestored.world.facilities) f.repaired = false;
       cases.push([unrestored, "restore"]);
     }
-    const short = structuredClone(s); short.inventory.items = [];
+    const short = structuredClone(s); short.inventory.items = short.inventory.items.filter(i => i.fitted !== null);
     if (r.maintenance) { short.world.maintenance.alloy = 0; cases.push([short, "rescue-low"]); }
     else cases.push([short, "materials"]);
     if (id === "dart_base") {
@@ -329,20 +344,42 @@ test("crafting reason codes preserve all recipe messages, precedence and pure ou
     }
     if (["reserve_cell", "salvage_buoy", "dart_acoustic_trim"].includes(r.output)) {
       const full = structuredClone(s); addItem(full, "silica_glass", 16, "diver"); cases.push([full, "space"]);
+      const fullAndShort = structuredClone(full);
+      fullAndShort.inventory.items = fullAndShort.inventory.items.filter(i => i.containerId === "diver" || i.fitted !== null);
+      cases.push([fullAndShort, "materials"]);
+    }
+    if (id === "suit_350") {
+      const missing = structuredClone(s); missing.inventory.items = missing.inventory.items.filter(i => i.fitted !== "suit");
+      cases.push([missing, "equipment"]);
+      // Earlier guards still win without the suit; equipment wins over every
+      // later site/restoration/material guard, with no spending in the preview.
+      const early = structuredClone(missing); early.opening.phase = 0; cases.push([early, "opening"]);
+      const unknown = structuredClone(missing); unknown.knowledge.blueprints = []; cases.push([unknown, "blueprint"]);
+      const done = structuredClone(missing); done.knowledge.crafted.push(id); cases.push([done, "completed"]);
+      const needs = structuredClone(missing); needs.knowledge.crafted = []; cases.push([needs, "needs"]);
+      const away = structuredClone(missing); away.player.pose.position.x = 180; cases.push([away, "equipment"]);
+      const unrestored = structuredClone(missing); for (const f of unrestored.world.facilities) f.repaired = false;
+      cases.push([unrestored, "equipment"]);
+      const noMaterials = structuredClone(missing); noMaterials.inventory.items = []; cases.push([noMaterials, "equipment"]);
+      const carried = structuredClone(s); carried.inventory.items.find(i => i.fitted === "suit")!.containerId = "diver";
+      cases.push([carried, "equipment"]);
+      const duplicate = structuredClone(s); addItem(duplicate, "suit_150", 1, "equipment", "suit"); cases.push([duplicate, "equipment"]);
     }
     for (const [candidate, code, w = empty] of cases) {
       const before = structuredClone(candidate), b = craftingBlock(candidate, id, w);
       assert.equal(b?.code ?? null, code, id); assert.equal(craftingRefusal(candidate, id, w), b?.message ?? null);
       assert.deepEqual(candidate, before, "queries must not spend or mutate");
       if (b) {
+        assert.equal(b.message, messages[b.code], id + ": exact refusal text");
         codes.add(b.code);
         if (code === "opening") continue; // action() deliberately ignores non-opening commands during the opening.
         const result = executeCommand(candidate, { type: "craft", recipeId: id }, w);
         assert.equal(result.state, candidate); assert.equal(notices(result.events)[0]!.message, b.message);
+        assert.deepEqual(result.state, before, "refused commands preserve the full state");
       }
     }
   }
-  assert.deepEqual([...codes].sort(), ["opening", "blueprint", "completed", "needs", "site", "restore", "duplicate-hull", "clearance", "materials", "rescue-low", "space"].sort());
+  assert.deepEqual([...codes].sort(), ["opening", "blueprint", "completed", "needs", "equipment", "site", "restore", "duplicate-hull", "clearance", "materials", "rescue-low", "space"].sort());
 });
 
 test("paid fabrication, full frame salvage and paid rebuild keep Dart once:false viable", () => {
