@@ -130,7 +130,7 @@ export class HudView {
       !["warn", "investigate", "pursue"].includes(state.world.threat.mode) && state.world.threat.distractionSeconds <= 0) ? ""
       : state.world.threat.distractionSeconds > 0 ? `G · pulse active ${Math.ceil(state.world.threat.distractionSeconds)} s`
       : pulse.refusal === null ? `G · ${pulse.cost} cell points · ${(pulse.remainingCharge + pulse.cost).toFixed(0)} → ${pulse.remainingCharge.toFixed(0)}%`
-      : `G · unavailable · Z quiet / cover / retreat`;
+      : `G · ${pulse.block === "facing" ? "face the survey area" : "no cell with 25 charge"} · Z quiet / cover / retreat`;
     this.get("control-hint").textContent = threatened || aftermath || this.get("context-hint").textContent ? "" : v
       ? state.tick - this.pilotSince < 720 ? "Look steers · W/S thrust · A/D slide · Space/C rise/dive · Z quiet · Shift boost" : ""
       : state.tick - this.startTick < 3600 ? "WASD move · mouse / arrows look · Space rise · C dive" : "";

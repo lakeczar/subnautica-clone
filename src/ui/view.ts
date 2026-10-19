@@ -65,7 +65,7 @@ export class GameView {
       </main>
       <div id="menu" class="menu-screen" role="dialog" aria-modal="true" aria-labelledby="menu-title">
         <div class="menu-frame">
-          <div class="wordmark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 28C11 9 18 6 20 6s9 3 15 22M7 28c8-6 18-6 26 0M12 35c5-3 11-3 16 0"/></svg><span>FIELD BUILD / M1</span></div>
+          <div class="wordmark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 28C11 9 18 6 20 6s9 3 15 22M7 28c8-6 18-6 26 0M12 35c5-3 11-3 16 0"/></svg><span>FIELD BUILD / M2</span></div>
           <h1 id="menu-title">SILTWAKE</h1><p id="menu-subtitle" class="subtitle">A refuge. A reef. A first horizon.</p>
           <p id="pause-reason" class="pause-reason" hidden></p>
           <section id="main-menu">

@@ -15,15 +15,17 @@ import { personalDepth, personalLimit } from "./capabilities.js";
 import { WORLD_BOUNDS } from "./world.js";
 
 export const PULSE_CHARGE_COST = 25;
+/** Why a pulse is refused, for compact presentation; `refusal` stays the full text. */
+export type DistractionBlock = "tool" | "active" | "facing" | "cell";
 export type DistractionPreview =
-  | { refusal: string; cellId: null; target: null; cost: 25; remainingCharge: null }
-  | { refusal: null; cellId: string; target: Vec3; cost: 25; remainingCharge: number };
+  | { refusal: string; block: DistractionBlock; cellId: null; target: null; cost: 25; remainingCharge: null }
+  | { refusal: null; block: null; cellId: string; target: Vec3; cost: 25; remainingCharge: number };
 /** Same eligibility/ray/selection for the command and its future presentation. Never mutates. */
 export function distractionPreview(s: GameState): DistractionPreview {
-  const refuse = (refusal: string): DistractionPreview =>
-    ({ refusal, cellId: null, target: null, cost: PULSE_CHARGE_COST, remainingCharge: null });
-  if (!equipped(s, "essential_tools")) return refuse("The service tool supplies the acoustic distraction; each pulse costs 25 reserve-cell charge points.");
-  if (s.world.threat.distractionSeconds > 0) return refuse("Distraction is already active.");
+  const refuse = (block: DistractionBlock, refusal: string): DistractionPreview =>
+    ({ refusal, block, cellId: null, target: null, cost: PULSE_CHARGE_COST, remainingCharge: null });
+  if (!equipped(s, "essential_tools")) return refuse("tool", "The service tool supplies the acoustic distraction; each pulse costs 25 reserve-cell charge points.");
+  if (s.world.threat.distractionSeconds > 0) return refuse("active", "Distraction is already active.");
   const p = s.player.pose, dx = Math.sin(p.yaw), dz = -Math.cos(p.yaw);
   let range = 16;
   // Preserve the existing clipped ray, including cardinal-heading residue handling.
@@ -37,17 +39,17 @@ export function distractionPreview(s: GameState): DistractionPreview {
     z: Math.max(WORLD_BOUNDS.minZ, Math.min(WORLD_BOUNDS.maxZ, p.position.z + dz * range)),
   };
   if (range <= 0 || (target.x === p.position.x && target.z === p.position.z))
-    return refuse("Face into the survey area to release a directional pulse.");
+    return refuse("facing", "Face into the survey area to release a directional pulse.");
   const craft = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
   const containers = ["diver", ...(craft && !craft.berth ? [craft.cargoId] : [])];
   for (const id of containers) {
     const cell = s.inventory.items.filter((i) => i.kind === "reserve_cell" &&
       !i.fitted && i.containerId === id && (i.charge ?? 0) >= PULSE_CHARGE_COST)
       .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)[0];
-    if (cell) return { refusal: null, cellId: cell.id, target, cost: PULSE_CHARGE_COST,
+    if (cell) return { refusal: null, block: null, cellId: cell.id, target, cost: PULSE_CHARGE_COST,
       remainingCharge: cell.charge! - PULSE_CHARGE_COST };
   }
-  return refuse("A pulse costs 25 charge points from one reserve cell in your hold or the controlled craft. Quiet movement, cover and retreat remain available.");
+  return refuse("cell", "A pulse costs 25 charge points from one reserve cell in your hold or the controlled craft. Quiet movement, cover and retreat remain available.");
 }
 export function distraction(s: GameState): string | null {
   const p = distractionPreview(s);

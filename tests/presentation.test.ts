@@ -1,3 +1,4 @@
+import { ROUTE_WORLD_BOUNDS } from "../src/content/routes.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
@@ -1332,7 +1333,7 @@ test("pulse HUD stays contextual while Hold retains the actual cost, selected ce
   s.world.threat.mode = "disengage";
   view.update(s, false); assert.equal(get("pulse-summary").textContent, "", "release alone does not advertise a charged response");
   s.world.threat.mode = "warn"; view.update(s, false);
-  assert.match(get("pulse-summary").textContent, /G · (25 cell points|unavailable)/);
+  assert.match(get("pulse-summary").textContent, /G · (25 cell points|no cell with 25 charge|face the survey area)/);
   view.openPanel("inventory", s);
   assert.match(get("panel-content").innerHTML, /Pulse G · −25 points/);
   s.world.threat.mode = "idle"; s.world.threat.distractionSeconds = 2;
@@ -1341,6 +1342,18 @@ test("pulse HUD stays contextual while Hold retains the actual cost, selected ce
   assert.equal(get("pulse-summary").textContent, "");
 });
 
+
+test("an unavailable pulse names the actual reason instead of a bare refusal", (t) => {
+  const { view, get } = viewFixture(t), s = readyState();
+  addItem(s, "essential_tools", 1, "equipment").fitted = "tools";
+  s.inventory.items = s.inventory.items.filter(i => i.kind !== "reserve_cell");
+  s.player.pose.position = { x: 90, y: -40, z: -90 }; s.player.mode = "swimming";
+  s.world.threat.mode = "warn"; view.update(s, false);
+  assert.equal(get("pulse-summary").textContent, "G · no cell with 25 charge · Z quiet / cover / retreat");
+  s.player.pose.position = { x: 90, y: -40, z: ROUTE_WORLD_BOUNDS.minZ }; s.player.pose.yaw = 0;
+  view.update(s, false);
+  assert.equal(get("pulse-summary").textContent, "G · face the survey area · Z quiet / cover / retreat");
+});
 
 test("interaction stack preserves full receipts during danger and save errors; repeated live updates cancel on all boundaries", (t) => {
   const { view, get, wall, timerCount, markup, structure } = viewFixture(t), s = readyState();

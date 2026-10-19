@@ -4,7 +4,9 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { createRegionalArt } from "../src/render/renderer.js";
-import { createCelMaterial, createGlassMaterial } from "../src/render/materials.js";
+import { createCelMaterial, createGlassMaterial, updateOpticalUniforms } from "../src/render/materials.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { createGame } from "../src/sim/state.js";
 import { carrierCommand, fixtureGame, updateBerth } from "../src/sim/carrier.js";
 import { createWorldQueries } from "../src/sim/world.js";
@@ -134,25 +136,40 @@ test("Dart recipes preserve exact body, cockpit, gauges and fresh panes across i
   }
 }));
 
-test("a production regional revisit reconstructs live art without thousands of temporary primitive meshes", () => sceneTest(scene => {
+test("a production regional revisit re-attaches retained art; after context loss it reconstructs from recipes", () => sceneTest(scene => {
   const art = createRegionalArt(scene, createCelMaterial(scene), createGlassMaterial(scene)), state = createGame();
   art.update(state);
+  const expected = identity(scene);
   const old = scene.getMeshByName("reef.ribbon-colonies")!;
   state.player.pose.position = { x: 178, y: -160, z: -208 }; art.update(state);
-  assert.ok(old.isDisposed());
+  assert.ok(!old.isDisposed() && !scene.meshes.includes(old), "a retained owner leaves the scene without releasing buffers");
+  assert.ok(old.geometry && !scene.geometries.includes(old.geometry));
+  assert.deepEqual(new Set(art.retained), new Set(["refuge_reef", "island_chain"]));
   let created = 0;
   const addMesh = scene.addMesh;
   scene.addMesh = function (...args) { created++; return addMesh.apply(this, args); };
+  const hits = art.cacheStats.hits;
+  state.player.pose.position = { x: 0, y: .18, z: 22 }; art.update(state);
+  assert.strictEqual(scene.getMeshByName(old.name), old, "a warm return re-attaches the same live handles");
+  assert.equal(art.cacheStats.hits, hits, "re-attachment reads no recipes");
+  assert.deepEqual(identity(scene), expected, "re-attached art equals its first construction exactly");
+  state.player.pose.position = { x: 178, y: -160, z: -208 }; art.update(state);
+  // Detached buffers are not rebuilt by the engine, so loss releases retention.
+  scene.getEngine().onContextLostObservable.notifyObservers(scene.getEngine() as never);
+  assert.ok(old.isDisposed() && art.retained.length === 0);
+  created = 0;
   state.player.pose.position = { x: 0, y: .18, z: 22 }; art.update(state);
   scene.addMesh = addMesh;
-  assert.notStrictEqual(scene.getMeshByName(old.name), old, "reuse must create fresh live geometry handles");
-  assert.ok(created < 128, `warm refuge activation created ${created} meshes, including temporary primitives`);
-  assert.ok(art.cacheStats.hits > 0);
+  assert.notStrictEqual(scene.getMeshByName(old.name), old, "reconstruction after loss creates fresh live geometry handles");
+  assert.ok(created < 128, `recipe reconstruction created ${created} meshes, including temporary primitives`);
+  assert.ok(art.cacheStats.hits > hits);
+  assert.deepEqual(identity(scene), expected, "recipe reconstruction equals the first construction");
   assert.ok(art.cacheStats.bytes > 0 && art.cacheStats.bytes <= art.cacheStats.maxBytes);
   art.dispose();
   assert.equal(art.cacheStats.bytes, 0);
   assert.equal(art.cacheStats.entries, 0);
   assert.equal(art.cacheStats.disposed, true);
+  assert.equal(scene.meshes.length, 0); assert.equal(scene.geometries.length, 0);
 }));
 
 test("the pinned carrier keeps every sign while compatible display materials fit the original trial", () => sceneTest(scene => {
@@ -249,4 +266,27 @@ test("identical display ownership releases on the last plane and reconstructs af
   assert.deepEqual(pool.stats, { entries: 0, references: 0 });
   assert.equal(scene.materials.length, 0); assert.equal(scene.textures.length, 0);
   assert.throws(() => pool.acquire("READABLE"), /Disposed/);
+}));
+
+test("Pale Basin water is silt-pale at depth, unchanged on the Canopy route and continuous across its edge", () => sceneTest(scene => {
+  const cel = createCelMaterial(scene);
+  const fog = (x: number, y: number, z: number) => {
+    updateOpticalUniforms([cel], new Vector3(x, y, z), null);
+    const c = (cel as unknown as { _colors3: Record<string, Color3> })._colors3.waterFogColor!;
+    return { c, luminance: .2126 * c.r + .7152 * c.g + .0722 * c.b, density: (cel as unknown as { _floats: Record<string, number> })._floats.fogDensity! };
+  };
+  const deep = (depth: number) => Color3.Lerp(Color3.FromHexString("#237e89"), Color3.FromHexString("#0b3048"),
+    ((t: number) => t * t * (3 - 2 * t))(Math.max(0, Math.min(1, (depth - 15) / 175))));
+  for (const [x, y, z] of [[57, -10, -65], [126, -118, -120], [146, -142, -166], [0, -4, 10]] as const)
+    assert.ok(fog(x, y, z).c.equalsWithEpsilon(deep(-y), 1e-6), `route pose ${x},${y},${z} keeps its existing water`);
+  const parking = fog(172, -153, -196), site = fog(216, -166, -232);
+  assert.ok(parking.luminance > deep(153).toLuminance() * 2 && site.luminance > deep(166).toLuminance() * 2, "Basin water reads pale");
+  const blend = (low: number, high: number, v: number) => { const t = Math.max(0, Math.min(1, (v - low) / (high - low))); return t * t * (3 - 2 * t); };
+  assert.ok(Math.abs(parking.density - (.009 + blend(98, 175, 153) * .014)) < 1e-9, "haze density is unchanged");
+  let previous = fog(162, -152, -160).luminance;
+  for (let z = -161; z >= -200; z--) {
+    const next = fog(162, -152, z).luminance;
+    assert.ok(Math.abs(next - previous) < .02, `no visible step at z=${z}`);
+    previous = next;
+  }
 }));
