@@ -1863,3 +1863,15 @@ Both T3 implementation children start from **57aacb0380c8990bc376841e261d651cbdf
 - **Warm-region profile:** task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a-r1-region-sol-max-57aacb0`; branch `t3/profile-region-cache-performance`, checkout `/home/worker/.t3/worktrees/subnautica-clone/t3-3170b96b`. Only listed measured render/lifetime paths, named tests and new report; one isolated Linux tab/server5191. Full source changes depend on measured attribution; public/physical contracts stay frozen.
 
 Ownership is disjoint. No children/peer waits/polling or parent publication. Receive completion notifications, inspect/compose returns and affected play, then fresh complete M2-A paired R2 against original base c1ddb0a and all ten criteria. Root owns no browser/server/recording/check process. No M2-A acceptance, game/main merge or deployment.
+
+
+## Active spatial/resource research; owner requests subsequent Opus implementation
+
+Owner asks for Subnautica map/renewal research and confirms the planned size is acceptable if the gameplay loop supports it. Owner specifically requests Opus5.5/high to implement some resulting improvements **based on returned findings**; this explicitly supersedes the earlier Sol-only builder preference for that bounded assignment only. Opus is not dispatched yet.
+
+- Research task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-space-renewal-research-sol-max-8166dc9`.
+- Exact parent8166dc97a7252c1125473d330e03438d24f76039; branch `t3/research-subnautica-space-renewal`, T3 checkout `/home/worker/.t3/worktrees/subnautica-clone/t3-2f543bdd`. Original session confirms gpt-6.1-sol/max; binding verified.
+- Owns only new `docs/research/05-subnautica-space-and-renewal.md`, fresh `/tmp/siltwake-space-research/` artifacts and optional isolated research tab. No game server/port, implementation, children or peer waits; prefer HTTP to preserve the render-profile environment.
+- Root independently audits current bounds/routes/speeds/material mutation and records [SPACE-AND-RESOURCE-AUDIT](design/SPACE-AND-RESOURCE-AUDIT.md). Exact arithmetic/dispatch/runtime receipts `/tmp/siltwake-spatial-audit-root/`. No production change or acceptance.
+
+The two existing correction tasks retain their exact ownership. Four occupied slots including root; wait for completion notifications rather than adding a fifth task. Receive/reconcile research, define exclusive Opus5.5/high implementation based on findings, and keep separate new-scope acceptance from M2-A corrections. Do not accidentally drop this owner request on a later correction completion.

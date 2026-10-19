@@ -1,0 +1,40 @@
+# Ocean spacing, resource renewal and expedition purpose
+
+Owner steering, 2026-10-19: compare Subnautica's map/resource behavior with this game, ensure farther/deeper habitats justify equipment and fleet upgrades, and preserve the prepare → explore → gather/investigate → return → improve → push farther loop. The owner accepts the planned map size **if the loop supports it**. Retain the existing **2.0 × 1.8 km**, approximately780m-deep full-world envelope; do not enlarge it just to match another game's dimensions or reduce it to the current benchmark. Numbers remain tuning hypotheses until played.
+
+The owner explicitly requests **Opus5.5/high implementation based on returned research**. This is a specific exception to the earlier Sol-only implementation default, not permission to silently replace every future builder. Research must return and be reconciled before defining/dispatching that implementation. Existing hunter/render corrections keep their original ownership and gates.
+
+## Current code audit
+
+Production inspected: **35c2d22473ff17ed907c62362c25d17ed47cbcd0**; documentation checkout8166dc9. Read-only arithmetic from its retained compiled registry/routes is in `/tmp/siltwake-spatial-audit-root/current-metrics.json`. This is not a new browser playthrough or measured travel-time test.
+
+| Measure | Current implementation | Full-world design |
+| --- | --- | --- |
+| Horizontal bounds | X−76..248, Z−260..66: **324 × 326m** | **2,000 × 1,800m** |
+| Bounding rectangle |0.105624km², includes land/nontraversable space |3.6km² envelope, not a promised amount of empty water |
+| Vertical validation |Y−240..100; current investigated Basin sites around166–172m depth |Distinct connected regions through780m |
+| Placed source hosts |24:20 material,4 food across Reef/Isles/Canopy/Basin |All seven habitats with useful source contexts |
+| Placed material families |5 of8 |8; ceramic/core/lattice currently have registry names but no deposits |
+| Ordinary material renewal |None; finite exposed stock plus finite reserve |World specification calls for ordinary habitat renewal, with special finite caches and guaranteed solvency |
+| Repeatable supply |20s active food tending and bound recovery allocation |Dependable food/recovery plus a deliberate source lifecycle, without mandatory camping |
+
+`src/content/routes.ts` owns bounds/route datums; `src/content/registry.ts` owns places/sources/capabilities. Three-dimensional straight-line distances from the pod datum are approximately51m to the workshop,217m to the lab,336m to the Basin dormitory and375m to the boundary station. They are not traversable path lengths. The authored upper→Basin route polylines total318m from their staging entrance; the alternate return polyline is352m. At the Dart's nominal8m/s these imply ideal travel lower bounds around40/44s, excluding acceleration, vertical speed reduction, terrain, turns, stopping and investigation. They do not establish fresh-player experience.
+
+Nominal current swim/Dart/Creel/carrier speeds are3.4/8/4/3m/s. The existing250–600m inter-site trial translates to roughly31–75s in a cruising Dart,63–150s in Creel and83–200s in Hearthline before constraints. Consequently one universal leg length cannot guarantee the same experience for all fleet roles. A carrier should relocate a useful staging home occasionally, not repeat every small collection trip. The45–120s observation/decision trial is a design aid, not an event timer or imposed minimum.
+
+Stock changes only at collection and active sorting/tending. `collectWithOutcome` subtracts bundles; sorting moves at most2 units from the host's finite reserve; tending food adds2 portions; maintenance restores a bounded recovery-only allocation. Saves preserve stock/reserve, and regional rendering does not refill them. There is no passive elapsed-time or leave/re-enter renewal system. This is compatible with the finite M1 economy proof, but it is **not the full ordinary-renewal intention stated in WORLD_PROGRESSION**. The economy draft explicitly deferred biological renewal; it does not silently delete the world requirement.
+
+## Direction retained for the researched implementation
+
+- Treat the current scene as an early benchmark, not evidence that a full-size exploration loop is complete. Preserve old saved poses and current source geometry while expanding connected outer shelves/routes; do not uniformly multiply all coordinates. Additional extent must have real terrain, collision, landmarks, ecology, investigation, resources and recovery, not only a larger water plane.
+- Make each region explain a material and a useful upgrade. Shallow sources start the fleet; Canopy materials enable reinforcement; farther Basin bulk supports logistics; Rift ceramic/core and Divide lattice justify deeper equipment. First accessible stock must be reachable with the preceding tier. No advanced-material supply beside home that erases those destinations.
+- Keep earlier habitats useful through shared seals, instruments, food and maintenance. New hulls change safe range, cargo, stealth, local work or staging; larger vehicles do not simply replace every smaller craft.
+- Resource lifecycle must distinguish finite structures/caches from replenishable habitat outputs. Final policy follows the researched evidence and root disposition; Subnautica facts and Siltwake design choices must be labelled separately. No global refill on scene unload, re-entry, save/reload or browser closure, and no mandatory waiting for progress/recovery. Renewable output still belongs to its source habitat and must have bounded stock and persistent timing/state.
+- Validate the loop in ordinary controls: before/after trip time, useful payload, return oxygen/power, preparation, collection/transfer counts, repeated empty legs and what the next upgrade changes. Preserve the original finite-stock completion budget as a conservative solvency check; renewable supply cannot conceal an inaccessible prerequisite.
+- The target is purposeful exploration, tension and a rewarding return. Human learning, enjoyment and ten-hour duration remain unverified until tested; map area and agent reviews cannot substitute for them.
+
+## Execution boundary
+
+Background source research owns only `docs/research/05-subnautica-space-and-renewal.md`. Root will reconcile that result against this audit and issue a concrete **Opus5.5/high** implementation brief with exclusive paths, persistence/economy constraints and relevant evidence. The first coherent implementation may be a resource-lifecycle slice while broad physical expansion is composed with M2-B/C fleet/route work. Do not claim the entire2km map, renewed source lifecycle or either ending is implemented by this note.
+
+Existing M2-A hunter correction and measured regional profile remain active/disjoint. New ecology/spacing work must not silently amend their frozen reviews. Keep an explicit separate batch boundary or revise the subsequent complete review scope before integrating it; all production still requires coordinator inspection and fresh non-author Astra xhigh/Sol max review. Opus's own authorship cannot substitute for either independent review. Major stage Opus reviews and the post-M3 Astra critic remain required.
