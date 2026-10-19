@@ -112,7 +112,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Wait for the owner to resume after the VM upgrade. Follow [VM_UPGRADE_HANDOFF](VM_UPGRADE_HANDOFF.md): inspect actual resources and retained evidence, then start a fresh complete SPACE-1 Sol6.1/xhigh review with the interrupted context. Opus fixes substantiated findings before fresh affected review. Continue M2-B/C, M3 and M4 after acceptance; main merge/public deployment remain owner actions.
+Receive the three running tasks recorded in the latest TASKS entries; do not restart them. Inspect the complete SPACE-1 Sol6.1/xhigh verdict and evidence, reconcile any findings with Opus and accept that parent before integrating M2-B1. Inspect the GPU preparation bundle and obtain fresh Sol6.1/xhigh review before native-approved host execution; checkpoint all active work before any disruptive transition, then verify services and the actual WebGL renderer. Inspect the completed Creel/mobile-refuge build and give the composed candidate its own fresh complete Sol review. Continue the remaining M2-B/C, M3 and M4 gates; main merge/public deployment remain owner actions. The earlier upgrade pause and its next-action text are historical.
 
 ### Historical execution and evidence
 
