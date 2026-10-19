@@ -1,10 +1,12 @@
 # Build status
 
-## Current checkpoint — stage1 closed; M2-A1 builder active
+## Current checkpoint — M2-A1 assembled; verification reconciliation next
+
+**M2-A1 is provisionally assembled at69e7976**, source785c87c/reportea4f021. [Root inspection](evidence/M2-A1-INTEGRATION.md) verifies actual Sol6.1/max,459 archived payloads,50 source/27 build hashes,42/42 clean focused tests, production build and65 retained migrations plus the preserved refusal. Full `npm run check` is **not passing**:12 old-fixture compile errors; the emitted diagnostic suite is435/462 with27 failures. Original M1 checker also needs version/roster reconciliation; design and new M2 economies pass. [Bounded reconciliation](tasks/M2-A1-RECONCILE.md) must precede A2/A3 shared-baseline dispatch. No ordinary Basin play, visual feedback or M2 acceptance is claimed.
 
 Movement cc3f20d, feedback/copy4a5103f and accessible announcement75402ae are combined at **6aaeae2d97476528c3848e140aded6a069b0c3b1** and accepted by both R2 reviewers on **dc0902864afb872c658b239821e870423877178a**. Root passes **436/436 tests**, typecheck/build and both economies. All27 production files,85 tracked source/test/config files and40 compiled native modules match the correction author. The prior failed announcement case now retains both full occurrences atomically, with native trace/menu/reset/singleton evidence inspected. [Current inspection](evidence/POLISH-1-OS2-ANNOUNCEMENT-INTEGRATION.md).
 
-**Stage1 is closed on accepted dc09028 production.** Astra/Sol accept all eight complete OS2 criteria, coordinator concurs, and fresh Opus R3 on identical-source223a387 recommends **advance to M2**. [Paired acceptance](reviews/POLISH-1-OS2-R2.md); [R3 disposition](reviews/OPUS-STAGE1-R3-DISPOSITION.md). Root verifies the116-payload archive and confirms a new predator-feedback gap, OS3-01: actual hull loss lacks a visible damage alert. It is explicitly required in the first M2 batch alongside the Canopy/floor/cockpit readability obligations, not waived. The [same-context advice](design/OPUS-STAGE1-R3-IMPLEMENTATION.md) is terminal and reconciled in [M2-A contracts](design/M2-A-CONTRACT.md). Its meal criticism is withdrawn; consumption rules remain unchanged. [M2-A1](tasks/M2-A1.md) now owns the first route/protection/recovery/migration build and bite-event producer. No M2 production is implemented yet. Earlier active labels below are historical.
+**Stage1 is closed on accepted dc09028 production.** Astra/Sol accept all eight complete OS2 criteria, coordinator concurs, and fresh Opus R3 on identical-source223a387 recommends **advance to M2**. [Paired acceptance](reviews/POLISH-1-OS2-R2.md); [R3 disposition](reviews/OPUS-STAGE1-R3-DISPOSITION.md). Root verifies the116-payload archive and confirms a new predator-feedback gap, OS3-01: actual hull loss lacks a visible damage alert. It is explicitly required in the first M2 batch alongside the Canopy/floor/cockpit readability obligations, not waived. The [same-context advice](design/OPUS-STAGE1-R3-IMPLEMENTATION.md) is terminal and reconciled in [M2-A contracts](design/M2-A-CONTRACT.md). Its meal criticism is withdrawn; consumption rules remain unchanged. [M2-A1](tasks/M2-A1.md) now owns the first route/protection/recovery/migration build and bite-event producer. M2 production is now provisionally assembled as described above. Earlier active labels below are historical.
 
 The [M2 direction](design/M2-DIRECTION-PROPOSAL.md) has paired planning acceptance on **30c6bf9**, all seven criteria with root concurrence. It starts with an earned Canopy–Basin benchmark, then earned fleet/mobile-home systems, then deep routes and both functional ending routes. This is direction only; no M2 production or schema acceptance is implied. OS2-04/06 remain first-M2-benchmark obligations. M2–M4 follow automatically under the owner's standing authorization. Earlier active/next labels below are historical.
 
@@ -41,7 +43,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All prior authors/reviewers and the Opus implementation consultation are terminal and release their paths/resources. Root owns integration/build records and no browser/server/recording/check process. The sole active implementation owner is Sol6.1/max M2-A1 on c1ddb0a in isolated worktree t3-af7a330d, branch t3/m2-a1-route-recovery; TASKS records the exact task ID. A2/A3 are not yet dispatched and must consume the same inspected A1 commit.
+All prior authors/reviewers and the Opus implementation consultation are terminal and release their paths/resources. Root owns integration/build records and no browser/server/recording/check process. M2-A1 is terminal and its source/report ownership is released. The next sole Sol6.1/max owner is M2-A1-RECONCILE under its exact test/script brief; TASKS records actual dispatch. A2/A3 are not yet dispatched and must consume the same inspected A1 commit.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -76,7 +78,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Opus advice is integrated and reconciled. M2-A1 is dispatched from committed c1ddb0a. Receive its terminal handoff without polling, inspect its source, migration, geometry, event and recovery proof, then commit a shared baseline for independent A2 visual and A3 presentation consumers. Review the whole composed A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max; no leaf acceptance or fresh route proof is implied by dispatch. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+Opus advice is integrated and reconciled. Complete the bounded M2-A1-RECONCILE fixture/checker pass; root inspects preserved assertions and a clean full check. Then commit one shared baseline for independent A2 visual and A3 presentation consumers using the reconciled A1 source/geometry/event contracts. Review the whole composed A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max; no leaf acceptance or fresh route proof is implied by dispatch. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
