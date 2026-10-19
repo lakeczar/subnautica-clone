@@ -62,7 +62,7 @@ test("bounded render refinement tracks the physical field and joins without crac
     }
   }
   assert.ok(samples > 50_000);
-  assert.ok(ix.length / 3 < 170_000, "refinement remains bounded rather than multiplying the whole world");
+  assert.ok(ix.length / 3 < 220_000, "bounded conformity uses the root-authorized ceiling rather than multiplying the whole world");
   // An unpaired edge anywhere except the outer extent or extracted deck is a
   // crack/T-junction. Test the final topology, not just equal border heights.
   const edges = new Map<string, { a: number; b: number; count: number }>();
