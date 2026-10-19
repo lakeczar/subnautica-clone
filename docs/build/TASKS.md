@@ -1837,3 +1837,12 @@ Both fresh T3 review children start from frozen **d5c0694abc6ac4d38d95f5d2549a64
 Both independently judge all ten [complete-batch criteria](tasks/M2-A-REVIEW-R1.md). No production ownership, children, peer messages/waits, parent edits or publication. Receive completion notifications, reconcile both initial reports and then direct substantiated fixes. Do not poll or duplicate reviewers. Root owns no browser/server/recording/check process; production stays frozen. No M2-A acceptance, game/main merge or deployment.
 
 Root reconciliation receipts are sealed at `/tmp/siltwake-m2-hunter-reconcile-root/`:180 regular files/66,226,752 bytes,13 non-followed symlinks; manifest SHA256 `6c07b4fb902fa9f108df6545a1efbd62b92fa56dac886292f54b0a45da647a99`. Copied author context is distinguished from independently regenerated root results in its README.
+
+
+## Complete M2-A Astra R1 returned; Sol initial review remains pending
+
+Astra task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a-astra-r1-d5c0694` is terminal/result_available with no children/questions. Reportefde5848da979c2d75c9ab71d52f1d19af994a2b is merged at217922808f48154784675ba4c13ac420b4bddb24; only its report changed. Root verifies two original Astra/xhigh contexts, all66 regular payloads/45,273,916 bytes plus one symlink, and196 byte-identical compiled modules. Author acquired no browser/server; clean checkout and assigned report/artifact/5190 ownership released.
+
+[Interim paired record](reviews/M2-A-R1.md) records eight ACCEPT criteria and REQUEST CHANGES for criteria5/7. Root exactly reproduces the schema-valid staged hunter stall (1,778 stationary steps,16 safe alternatives) and extracts both retained warm-browser misses. New root receipts: `/tmp/siltwake-m2-a-r1-root/astra/`; original seals unchanged. No new suite/browser run for documentation-only integration.
+
+Only the original Sol R1 task on d5c0694 remains active; report/artifact/optional5191 ownership is unchanged. No peer findings are sent to it. Receive its completion without polling, reconcile both initial results, then assign bounded Sol corrections and fresh complete-batch round2. No implementation owner, M2-A acceptance, game/main merge or deployment.
