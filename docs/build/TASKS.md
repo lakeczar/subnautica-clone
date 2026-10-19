@@ -1928,3 +1928,10 @@ Root adopts [M2-A-WARM-ATTRIBUTION](tasks/M2-A-WARM-ATTRIBUTION.md) only, to dis
 - Complete [assignment](tasks/M2-A-WARM-ATTRIBUTION.md), only its report tracked, conditional temporary four-path instrumentation with byte-exact restore, owned isolated5191 only. No production/test commit, children, peer contact/polling or shared tracing. Capability failure must stop before game timing. Dispatch/binding/runtime receipts `/home/worker/.local/share/siltwake-evidence/m2-a-warm-attribution-root/`.
 
 Only this task and Opus SPACE-1 remain active beside root, three occupied slots. All prior correction/advisory workers are released. Root owns no running check/browser/server/recording. Receive completions automatically; no duplicate or premature review. After attribution disposition, affected ordinary play and fresh complete M2-A R2 remain required; SPACE-1 stays separate.
+
+
+## SPACE-1 Opus completed; isolated version reconciliation prepared
+
+Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-space1-opus-high-dae17fc` is completed/result_available with no pending children/questions. Source7df64e34d764d7c3d4024d3c486a9f0c9384f184/report239b301b65042f145403c9ec6cfc590cc93a54fa remain separate, clean in the original T3 worktree. All paths/browser/server and5190 are released. Root verifies51 payloads, served bundle, frozen validator/saved-type bodies and actual Notebook/regrowth images; [staged inspection](evidence/SPACE-1-STAGING.md). Author553/556 and failing M1 current-content assertion are explicitly not passing. Full future acquisition proposals remain advice; no SPACE-1 production is integrated into root.
+
+[SPACE-1-RECONCILE](tasks/SPACE-1-RECONCILE.md) authorizes a fresh Sol6.1/max isolated composite and exactly the carrier-test/M1-checker current-version literals. No browser/full suite or production edits; root retains complete checks and fresh SPACE-1 review after M2-A disposition. The attribution worker keeps its original ownership/5191. Actual reconciliation dispatch follows the next committed root baseline. Root has no running browser/server/check process.
