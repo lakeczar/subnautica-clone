@@ -1,10 +1,12 @@
 # Build status
 
-## Current checkpoint — A1–A3 provisionally assembled; bounded corrections next
+## Current checkpoint — A1–A3 and priority fix assembled; two render corrections active
 
-**A2 is terminal, inspected and provisionally merged with A3 at9e1169c2359296fed489bac72b0a0070c4748c7d.** Root passes **488/488 tests**, typecheck/build and all three economies. All493 A2 payloads and97 source/test/config inputs verify; original runtime is Sol6.1/max. [Root inspection](evidence/M2-A2-INTEGRATION.md) closes missing Basin triangles but retains OS2-06 high-approach visibility, warm activation stalls, carrier material excess and a reproduced floor mismatch. A2 releases all paths/resources. No complete-batch acceptance or fresh earned M2 route claim.
+**A1–A3 plus the injury-priority correction are provisionally assembled at733617c45907c77c138103e72e75e2237bc0d2f6.** Root passes **492/492 tests**, typecheck/build and the original5/5 priority probe. The three economies passed on9e1169c before the HUD-only correction. [A2 inspection](evidence/M2-A2-INTEGRATION.md) verifies493 payloads/97 inputs/27 build files; [priority inspection](evidence/M2-A3-PRIORITY-INTEGRATION.md) verifies180 payloads/97 inputs/27 build files and original Sol6.1/max runtime. ROOT-A3-01's failing case is corrected. All original A1–A3 and priority authors release their paths/resources. No complete-batch acceptance or fresh earned M2 route claim.
 
-The existing [A3 priority correction](tasks/M2-A3-PRIORITY-FIX.md) retains its exclusive UI/app/test ownership. Two disjoint Sol6.1/max corrections are prepared: [render performance](tasks/M2-A-RENDER-PERFORMANCE.md) and [terrain conformity](tasks/M2-A-TERRAIN-CONFORMITY.md). TASKS records actual dispatch. Then assemble and perform the earned Canopy–Basin expedition/recovery/reload, resolve natural visibility, and commission the fresh whole-batch Astra/Sol pair. M2-B/C, integrated M2/Opus, M3 and M4 remain required. Earlier active labels below are historical.
+Two separate **Sol6.1/max** corrections are active from clean99137519ac7674c96036ac2fd8139cedf58926b2: [render performance](tasks/M2-A-RENDER-PERFORMANCE.md) in t3-5daaa259 and [terrain conformity](tasks/M2-A-TERRAIN-CONFORMITY.md) in t3-d76f0eff. Their selected and original runtime model/effort plus exact parents are verified; TASKS records IDs. The former owns regional/asset lifetime and carrier material cost, the latter only terrainSurface and named terrain tests. OS2-06 natural high-approach cover recognition remains reserved for composed play and any explicitly assigned correction.
+
+Then assemble, perform the earned Canopy–Basin expedition/recovery/reload and commission the fresh complete-batch Astra/Sol pair. M2-B/C, integrated M2/Opus, M3 and M4 remain required. Earlier active labels below are historical.
 
 Reconciliation source **a9b94111ed24a3c46634ab2e661f8cee75184ac4** / report **dc8693e8553602bda5d36437ae4f1862e9143668** is terminal, inspected and provisionally merged at **6e2a4b092693ed1f54fab245c055eb9241d69ace**. Root clean compilation/full check reproduces **461/462**, with only the confirmed missing Basin terrain failure. All 12 old compile errors and 27 prior failures are resolved. Separate build and all three economies pass; 50 source/27 built files match A1. [Current inspection](evidence/M2-A1-RECONCILE-INTEGRATION.md) verifies actual Sol6.1/max, all 32 new evidence payloads, 1,220 prior files and 66 migration inputs. The worker releases all paths/resources. [A2 rendering](tasks/M2-A2.md) and [A3 presentation](tasks/M2-A3.md) are active in separate T3 worktrees from **d753b0209edd83e9c0bb1b0062c4071dbecadfa0**, explicitly carrying the A2 terrain blocker. Both original runtime contexts confirm Sol6.1/max; TASKS records exact IDs and ownership. No batch acceptance is claimed; earlier fixture counts below are historical.
 
@@ -49,7 +51,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-A1–A3 and reconciliation are provisionally integrated; original workers release all paths/resources. The bounded A3 priority correction owns only its named UI/app/tests. Render performance and terrain conformity receive disjoint paths in their briefs when dispatched; TASKS owns exact IDs/bindings. Root owns integration/build records, no competing source edits or browser/server/recording/check process. Receive terminal notifications rather than polling.
+A1–A3, reconciliation and the priority correction are provisionally integrated; those workers release all paths/resources. Active performance and terrain builders have the disjoint paths in their briefs; TASKS owns exact IDs/bindings. Root owns integration/build records, no competing source edits or browser/server/recording/check process. Receive terminal notifications rather than polling.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -84,7 +86,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Commit this inspected assembly and the two correction briefs, then dispatch separate Sol6.1/max worktrees. Receive the existing priority fix and new render corrections, inspect/assemble, and run the earned preparation → Canopy → Basin → return → failure/recovery → actual reload composition with input counts, margins, injury priority and natural cover learning. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+Receive the two render corrections through completion notifications, inspect and assemble them with733617c, then assign the earned preparation → Canopy → Basin → return → failure/recovery → actual reload composition. Capture input counts, pre-refill margins, injury priority and natural cover learning; resolve substantiated visibility defects under explicit ownership. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

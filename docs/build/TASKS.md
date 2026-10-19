@@ -1661,3 +1661,17 @@ Root receipts `/tmp/siltwake-m2-a3-root/manifest.json`:27 files /1,275,509 bytes
 A2 task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a2-sol-max-d753b02` is acknowledged completed/result_available, no pending children/questions. Source2d209a8/reportce22a0d merge at9e1169c2359296fed489bac72b0a0070c4748c7d. Root488/488, typecheck/build and all three economies pass. All493 payloads and97 source inputs verify, original runtime Sol6.1/max confirmed, actual final images inspected. [Inspection](evidence/M2-A2-INTEGRATION.md) records all unresolved findings and concrete root terrain reproduction. A2 releases all paths/resources.
 
 Prepared disjoint [performance](tasks/M2-A-RENDER-PERFORMANCE.md) and [terrain](tasks/M2-A-TERRAIN-CONFORMITY.md) briefs receive a committed assembly before fresh Sol worktree dispatch. Existing A3 priority worker retains its UI/app/test ownership; no competing edits. Root owns no browser/server/recording/check process. Actual IDs/bindings follow below; no polling or premature batch acceptance.
+
+
+### Two renderer corrections dispatched; priority correction integrated
+
+Both fresh T3-owned children start from clean **99137519ac7674c96036ac2fd8139cedf58926b2**. Requested/live-selected codex/gpt-6.1-sol/max and each original runtime turn_context are verified, as are their exact Git parents. No children/pending questions at dispatch.
+
+| Leaf | Exact task and binding | Exclusive scope |
+| --- | --- | --- |
+| Performance | `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-render-perf-sol-max-9913751`; `/home/worker/.t3/worktrees/subnautica-clone/t3-5daaa259`, `t3/region-render-cache` | Eight named render files, optional geometryCache, named lifecycle/cache tests and its report; port5191. TerrainSurface and UI/app read-only. |
+| Terrain | `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-terrain-sol-max-9913751`; `/home/worker/.t3/worktrees/subnautica-clone/t3-d76f0eff`, `t3/terrain-conformity-fix` | terrainSurface.ts, resource-surface/optional terrain-boundaries tests and its report; port5190. Other render/content/physics/UI read-only. |
+
+The original priority task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a3-priority-sol-max-5a65381` subsequently completed/result_available without pending children/questions. Source8ce6bd2/report027e063 are inspected and merged at733617c45907c77c138103e72e75e2237bc0d2f6. Root492/492/typecheck/build plus original5/5 repro pass. [Inspection](evidence/M2-A3-PRIORITY-INTEGRATION.md) verifies180 payloads,97 source inputs,27 build files, original Sol6.1/max and native diagnostic limits. Priority paths/resources are released; no peer baseline change is needed.
+
+Root plus two builders occupy three slots. No root browser/server/recording/check remains. A2 root receipts and dispatch/runtime/binding evidence are in `/tmp/siltwake-m2-a2-root/`; priority receipts are separate `/tmp/siltwake-m2-a3-priority-root/`. Receive notifications, inspect/assemble, then earned composition and fresh whole-batch Astra/Sol review. No M2 acceptance or campaign completion claim.
