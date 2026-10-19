@@ -1675,3 +1675,14 @@ Both fresh T3-owned children start from clean **99137519ac7674c96036ac2fd8139ced
 The original priority task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a3-priority-sol-max-5a65381` subsequently completed/result_available without pending children/questions. Source8ce6bd2/report027e063 are inspected and merged at733617c45907c77c138103e72e75e2237bc0d2f6. Root492/492/typecheck/build plus original5/5 repro pass. [Inspection](evidence/M2-A3-PRIORITY-INTEGRATION.md) verifies180 payloads,97 source inputs,27 build files, original Sol6.1/max and native diagnostic limits. Priority paths/resources are released; no peer baseline change is needed.
 
 Root plus two builders occupy three slots. No root browser/server/recording/check remains. A2 root receipts and dispatch/runtime/binding evidence are in `/tmp/siltwake-m2-a2-root/`; priority receipts are separate `/tmp/siltwake-m2-a3-priority-root/`. Receive notifications, inspect/assemble, then earned composition and fresh whole-batch Astra/Sol review. No M2 acceptance or campaign completion claim.
+
+
+### Assembled M2 checkpoint published and root receipts sealed
+
+Feature077cee9 is pushed. PR #4/#3 are rewritten/read back with492/492, passing build and original5/5 priority probe, prior unchanged economy checks, inspected A2 rendering, two active bounded corrections and remaining composed-play/independent gates. #3 retains M0-onlya2cb19f. Four source-attributed staged Basin before/after images are published onpr-assets and HTTP200/image hashes verified; none claims assembled UI, fresh earned play, or resolved floor/visibility/performance. All four stack layers remain linked/draft where open/unwatched. No game/main merge or deployment.
+
+Root receipt set `/tmp/siltwake-m2-a2-root/manifest.json`: 29 files / 948225 bytes; manifest SHA256 `03aed29ec1a6921afbd8065ce656f961d1a62d183d08565b91eed20f73f32eb0`. Sealed; use a new directory for subsequent work.
+
+Root receipt set `/tmp/siltwake-m2-a3-priority-root/manifest.json`: 5 files / 67664 bytes; manifest SHA256 `a09d153faf31883a133f5ea8d2e02fd148210510583a573a8c030d8c4e69d037`. Sealed; use a new directory for subsequent work.
+
+Only the performance and terrain workers remain active, each on9913751 with disjoint ownership and verified Sol6.1/max. Root has no browser/server/recording/check process. Receive terminal notifications, integrate and compose the earned M2 route before fresh complete-batch review.
