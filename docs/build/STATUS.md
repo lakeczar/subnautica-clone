@@ -1,8 +1,8 @@
 # Build status
 
-## Current checkpoint — M2-A1 reconciliation finishing; A2 terrain dependency confirmed
+## Current checkpoint — M2-A1 reconciliation inspected; A2/A3 ready
 
-The active reconciliation worker reports all 12 old compile errors and 27 old diagnostic failures resolved, with a new full-check result of **461/462**. The remaining `resource-surface.test.ts` failure is a real A2 dependency: all four Basin source hosts extend beyond the submitted terrain triangles. Root reran the read-only reproduction with byte-identical output; [disposition](evidence/M2-TERRAIN-DISPOSITION.md). This is not a green full check or acceptance. The worker finishes its owned fixture/checker work without renderer edits or weakened assertions. After terminal inspection/integration, A2 and A3 may start from one committed baseline carrying this named renderer blocker; A2 must close it before composed acceptance. The earlier fixture counts below remain historical.
+Reconciliation source **a9b94111ed24a3c46634ab2e661f8cee75184ac4** / report **dc8693e8553602bda5d36437ae4f1862e9143668** is terminal, inspected and provisionally merged at **6e2a4b092693ed1f54fab245c055eb9241d69ace**. Root clean compilation/full check reproduces **461/462**, with only the confirmed missing Basin terrain failure. All 12 old compile errors and 27 prior failures are resolved. Separate build and all three economies pass; 50 source/27 built files match A1. [Current inspection](evidence/M2-A1-RECONCILE-INTEGRATION.md) verifies actual Sol6.1/max, all 32 new evidence payloads, 1,220 prior files and 66 migration inputs. The worker releases all paths/resources. [A2 rendering](tasks/M2-A2.md) and [A3 presentation](tasks/M2-A3.md) are ready for dispatch from one committed baseline, explicitly carrying the A2 terrain blocker. No batch acceptance is claimed; earlier fixture counts below are historical.
 
 **M2-A1 is provisionally assembled at69e7976**, source785c87c/reportea4f021. [Root inspection](evidence/M2-A1-INTEGRATION.md) verifies actual Sol6.1/max,459 archived payloads,50 source/27 build hashes,42/42 clean focused tests, production build and65 retained migrations plus the preserved refusal. Full `npm run check` is **not passing**:12 old-fixture compile errors; the emitted diagnostic suite is435/462 with27 failures. Original M1 checker also needs version/roster reconciliation; design and new M2 economies pass. [Bounded reconciliation](tasks/M2-A1-RECONCILE.md) must precede A2/A3 shared-baseline dispatch. No ordinary Basin play, visual feedback or M2 acceptance is claimed.
 
@@ -45,7 +45,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All prior authors/reviewers and the Opus implementation consultation are terminal and release their paths/resources. Root owns integration/build records and no browser/server/recording/check process. M2-A1 is terminal and its source/report ownership is released. The sole active Sol6.1/max owner is M2-A1-RECONCILE on8296f40, bound to t3-4df20da3 / t3/m2-a1-fixture-reconcile; TASKS records its exact ID. A2/A3 are not yet dispatched and must consume the same inspected A1 commit.
+All prior authors/reviewers and the Opus consultation are terminal and release their paths/resources. M2-A1 and its reconciliation are inspected/provisionally integrated; no implementation worker is active at this checkpoint. Root owns integration/build records and no browser/server/recording/check process. A2/A3 consume the same committed reconciliation baseline; TASKS records actual dispatch and exact ownership.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
