@@ -286,7 +286,7 @@ test("service helpers keep command precedence, 7m access boundary, restoration a
       const expectedState = structuredClone(before), ev = expectedState.fleet.vehicles[0]!;
       ev.health = 100; ev.charge = 100; ev.emergencyAir = 120;
       for (const i of expectedState.inventory.items) if (i.kind === "reserve_cell" && (i.containerId === "diver" || i.containerId === ev.cargoId)) i.charge = 100;
-      expectedState.feedback = "Service complete: hull battery, health, emergency air and cells in your hold or this craft restored. Cargo and fitted modules retained.";
+      expectedState.feedback = "Serviced: hull, power and emergency air full. Cells in your hold and this craft charged. Cargo and modules kept.";
       assert.deepEqual(out.state, expectedState); assert.equal(serviceWouldRestore(out.state, out.state.fleet.vehicles[0]!), false);
       assert.equal(serviceRefusal(out.state, v.id), null, "a fully serviced command remains valid");
     }

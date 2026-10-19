@@ -9,6 +9,7 @@ import type {
   RecipeId,
   SourceId,
 } from "../content/registry.js";
+import type { RecoveryRouteId } from "../content/routes.js";
 export interface Vec3 {
   x: number;
   y: number;
@@ -136,6 +137,7 @@ export interface GameState {
   recovery: {
     operation: {
       vehicleId: string;
+      routeId: RecoveryRouteId;
       method: "tow" | "repair" | "salvage";
       phase: "approach" | "ready" | "tow";
       position: Vec3;
@@ -219,6 +221,10 @@ export type GameEvent =
   | { type: "movement-mode-changed"; mode: MovementMode }
   | { type: "foundation-boundary" }
   | { type: "impact"; speed: number; hullLoss: number; origin: Vec3 }
+  /** Actual positive hunter bite loss, before disable/incapacity. Transient, never saved. */
+  | { type: "threat-damage"; source: "hunter";
+      target: { kind: "vehicle"; vehicleId: string } | { kind: "diver" };
+      loss: number; healthAfter: number }
   /** One commanded upward attempt, in metres this step. Absence resets presentation. Never saved. */
   | { type: "ascent-sample"; actorId: string | null; requestedRise: number; actualRise: number;
       solidLimitedRise: number; surfaceLimitedRise: number }

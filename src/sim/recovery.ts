@@ -1,5 +1,6 @@
-import { moveHull } from "./world.js";
+import { createWorldQueries, moveHull, sweptHullClearance } from "./world.js";
 import { HULL_COLLIDERS, ITEMS, PLACES, RECOVERY_STAGE } from "../content/registry.js";
+import { LEGACY_WORLD_BOUNDS, RECOVERY_ROUTES, RECOVERY_SURFACE_OPERATOR, type RecoveryRouteId } from "../content/routes.js";
 import type { MaterialId } from "../content/registry.js";
 import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
 import {
@@ -11,6 +12,7 @@ import {
   nextId,
   removeQuantity,
 } from "./inventory.js";
+import { safePersonalDepth } from "./capabilities.js";
 const DT = 1 / 60;
 const OCCUPIED_RECOVERY = "the Dart is occupied. Tow and salvage require an empty hull. Exit only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.";
 export const RECOVERY_NOTICES = {
@@ -25,14 +27,26 @@ export function recoveryOccupancyRefusal(s: GameState, vehicleId: string): strin
     : null;
 }
 export const RECOVERY_MOORING = { x: RECOVERY_STAGE.x + 5, y: -11, z: RECOVERY_STAGE.z } as const;
-// Keel positions, in the same reverse order as saved tow waypoint indices.
-// The approach guide is one metre above the keel; towing that guide to the
-// diver's staging position drove the hull into the bench before its final snap.
-const TOW_KEEL_WAYPOINTS: readonly Vec3[] = [
-  RECOVERY_MOORING,
-  { x: 57, y: -10, z: -65 },
-  { x: 80, y: -48, z: -89 },
-];
+export const BOBBIN_COLLIDER = { radius: 0.25, height: 0.3 } as const;
+/** Chosen at initiation from the visited loss, never from render residency or tow position. */
+export function recoveryRouteFor(position: Readonly<Vec3>): RecoveryRouteId {
+  return position.x > LEGACY_WORLD_BOUNDS.maxX || position.z < LEGACY_WORLD_BOUNDS.minZ ? "basin" : "canopy";
+}
+function retainedRoute(s: GameState, vehicleId: string): RecoveryRouteId {
+  return s.recovery.operation?.vehicleId === vehicleId ? s.recovery.operation.routeId :
+    recoveryRouteFor(s.recovery.losses.find(l => l.vehicleId === vehicleId)?.position ??
+      s.fleet.vehicles.find(v => v.id === vehicleId)!.pose.position);
+}
+function towWaypoints(position: Vec3, routeId: RecoveryRouteId): Vec3[] {
+  const route = RECOVERY_ROUTES[routeId];
+  return [...route.tow.map(p => ({ ...p })), ...(routeId === "basin"
+    ? [{ x: position.x, y: RECOVERY_ROUTES.basin.liftY, z: position.z }] : [])];
+}
+/** Detached complete keel path, including the visited attachment position. */
+export function recoveryTowPath(s: GameState, vehicleId: string, routeId: RecoveryRouteId = retainedRoute(s, vehicleId)): Vec3[] {
+  const p = s.fleet.vehicles.find(v => v.id === vehicleId)!.pose.position;
+  return [{ ...p }, ...towWaypoints(p, routeId).reverse()];
+}
 export function disableVehicle(s: GameState, id: string): void {
   const v = s.fleet.vehicles.find((v) => v.id === id);
   if (!v) return;
@@ -110,13 +124,12 @@ export function incapacitate(s: GameState, reason: string): void {
   s.metrics.failures++;
   s.feedback = `${reason} You recovered at ${workshop ? "Splitspine workshop" : "the home pod"}. Knowledge and essential equipment remain. Ordinary cargo has a visited-site marker; disabled craft retain their hold and modules.`;
 }
-export function rescueWaypoints(s: GameState, vehicleId: string): Vec3[] {
+export function rescueWaypoints(s: GameState, vehicleId: string, routeId: RecoveryRouteId = retainedRoute(s, vehicleId)): Vec3[] {
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId)!;
-  // M1's open upper-flank recovery corridor. Deep Bobbin topology is an M2 obligation.
+  const route = RECOVERY_ROUTES[routeId];
   return [
-    { ...RECOVERY_STAGE },
-    { x: 57, y: -9, z: -65 },
-    { x: 80, y: -47, z: -89 },
+    ...route.approach.map(p => ({ ...p })),
+    ...(routeId === "basin" ? [{ x: v.pose.position.x, y: RECOVERY_ROUTES.basin.liftY + 1, z: v.pose.position.z }] : []),
     { ...v.pose.position, y: v.pose.position.y + 1 },
   ];
 }
@@ -124,6 +137,7 @@ export function recoveryCommand(
   s: GameState,
   id: string,
   method: "tow" | "repair" | "salvage",
+  world: WorldQueries = createWorldQueries(),
 ): string | null {
   const v = s.fleet.vehicles.find((v) => v.id === id);
   if (!v || !v.disabled || v.berth || v.hull !== "dart")
@@ -135,12 +149,15 @@ export function recoveryCommand(
   if (!equipped(s, "bobbin_kit"))
     return "Fabricate the reusable Bobbin / collar from pod rescue stock first.";
   const local = distance(s.player.pose.position, v.pose.position) < 7,
-    atStage = distance(s.player.pose.position, RECOVERY_STAGE) < 7;
+    atStage = distance(s.player.pose.position, RECOVERY_STAGE) < 7 || distance(s.player.pose.position, RECOVERY_SURFACE_OPERATOR) < 7;
   if (!local && !atStage)
     return "Travel to the shallow rescue staging bench east of Splitspine, or approach the exterior collar locally.";
   if (method === "repair") {
     if (!local)
       return "A field patch must be applied at the actual hull collar. Tow to the shallow bench if personal depth prevents access.";
+    if (s.player.controlledVehicleId !== v.id && (!safePersonalDepth(s) ||
+        !world.clearance(s.player.pose.position, { radius: 0.34, height: s.player.mode === "walking" ? 1.75 : 0.95 })))
+      return "Reach the actual hull collar with safe personal depth and clearance before applying a field patch.";
     if (s.world.maintenance.alloy < 2 || s.world.maintenance.membrane < 1)
       return "Not enough rescue stock for a patch. Local tow needs no materials.";
     s.world.maintenance.alloy -= 2;
@@ -159,6 +176,8 @@ export function recoveryCommand(
   if (method === "salvage") {
     if (!local)
       return "Salvage requires local collar access, after towing if necessary.";
+    if (!safePersonalDepth(s) || !world.clearance(s.player.pose.position, { radius: 0.34, height: s.player.mode === "walking" ? 1.75 : 0.95 }))
+      return "Reach the actual hull collar with safe personal depth and clearance before salvaging.";
     if (
       s.inventory.items.some((i) => i.containerId === v.cargoId) ||
       v.modules.length
@@ -203,20 +222,31 @@ export function recoveryCommand(
     if (op.vehicleId !== id)
       return "A local rescue operation is already staged.";
     if (op.phase === "ready") {
+      if (op.routeId === "basin" && !sweptHullClearance(world, recoveryTowPath(s, id, op.routeId), HULL_COLLIDERS.dart))
+        return RECOVERY_NOTICES.blocked;
       op.phase = "tow";
-      op.waypoint = 2;
+      op.waypoint = RECOVERY_ROUTES[op.routeId].attachmentIndex - 1;
       s.feedback =
         "Collar attached. Guided tow follows the surveyed clear flank back to the shallow bench.";
     } else return "Bobbin is moving along the local tether corridor.";
   } else {
-    if (distance(RECOVERY_STAGE, v.pose.position) > 230)
+    const routeId = retainedRoute(s, id), route = RECOVERY_ROUTES[routeId];
+    if (routeId === "canopy" && distance(RECOVERY_STAGE, v.pose.position) > route.maximumTether)
       return "This loss is outside the implemented upper-Canopy tether corridor.";
+    if (routeId === "basin") {
+      const approach = rescueWaypoints(s, id, routeId);
+      const tetherLength = approach.slice(1).reduce((n, p, i) => n + distance(approach[i]!, p), 0);
+      if (tetherLength > route.maximumTether || !sweptHullClearance(world, approach, BOBBIN_COLLIDER) ||
+          !sweptHullClearance(world, recoveryTowPath(s, id, routeId), HULL_COLLIDERS.dart))
+        return "The surveyed Basin tether or extraction path is blocked. No hull, cargo or rescue stock moved; use a safe local collar or clear the obstruction.";
+    }
     s.recovery.operation = {
       vehicleId: id,
+      routeId,
       method: "tow",
       phase: local ? "tow" : "approach",
       position: local ? { ...v.pose.position } : { ...RECOVERY_STAGE },
-      waypoint: local ? 2 : 1,
+      waypoint: local ? route.attachmentIndex - 1 : 1,
     };
     s.feedback = local
       ? "Collar attached locally. The guided shallow tow is underway."
@@ -246,8 +276,8 @@ export function updateRecovery(s: GameState, world: WorldQueries): GameEvent | n
   // is the attachment point: no movement, then continue through index 2.
   const origin = op.phase === "tow" ? v.pose.position : op.position;
   const target = op.phase === "tow"
-    ? TOW_KEEL_WAYPOINTS[op.waypoint] ?? v.pose.position
-    : rescueWaypoints(s, v.id)[op.waypoint]!;
+    ? towWaypoints(v.pose.position, op.routeId)[op.waypoint] ?? v.pose.position
+    : rescueWaypoints(s, v.id, op.routeId)[op.waypoint]!;
   const d = distance(origin, target),
     speed = op.phase === "approach" ? 10 : 7,
     scale = Math.min(1, (speed * DT) / Math.max(d, 0.001));
@@ -270,10 +300,18 @@ export function updateRecovery(s: GameState, world: WorldQueries): GameEvent | n
     }
     v.pose.position = move.position;
     op.position = { x: op.position.x + delta.x, y: op.position.y + delta.y, z: op.position.z + delta.z };
+  } else if (op.routeId === "basin") {
+    const move = moveHull(world, origin, { x: next.x - origin.x, y: next.y - origin.y, z: next.z - origin.z }, BOBBIN_COLLIDER);
+    if (move.hitSolid || move.hitBoundary || distance(move.position, next) > 0.001) {
+      s.recovery.operation = null;
+      s.feedback = "Bobbin's local tether path is blocked. The visited hull, cargo and rescue stock are unchanged.";
+      return { type: "notice", message: s.feedback, error: true };
+    }
+    op.position = move.position;
   } else op.position = next;
   if (d <= speed * DT) {
     if (op.phase === "approach") {
-      if (op.waypoint === 3) {
+      if (op.waypoint === RECOVERY_ROUTES[op.routeId].attachmentIndex) {
         op.phase = "ready";
         s.feedback = RECOVERY_NOTICES.ready;
         return { type: "notice", message: s.feedback };

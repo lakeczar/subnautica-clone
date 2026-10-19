@@ -1,6 +1,6 @@
 /** Stable saved identifiers. Labels and render mesh names are never saved references.
  * Seeded from WORLD_PROGRESSION / EXPEDITION_INTEGRATION, not a recipe balance. */
-export const CONTENT_VERSION = "expedition.3" as const;
+export const CONTENT_VERSION = "expedition.4" as const;
 
 export const REGIONS = {
   refuge_reef: { label: "Hearth Reef", depth: [0, 65] },
@@ -110,7 +110,7 @@ export const REMOTE_TOOLS = {
   bobbin: { label: "Bobbin", role: "tethered recovery service" },
 } as const;
 
-// Only the bounded foundation is active. The seed roster above does not spawn content.
+// Only the bounded Reef–Canopy–Basin slice is active; the hull roster does not spawn content.
 export const PLACES = {
   home_pod: {
     label: "Home pod",
@@ -136,6 +136,16 @@ export const PLACES = {
     label: "Splitspine shore",
     region: "island_chain",
     position: { x: 10, y: 0, z: -31 },
+  },
+  basin_dormitory: {
+    label: "Basin dormitory",
+    region: "silt_basin",
+    position: { x: 178, y: -166, z: -218 },
+  },
+  basin_boundary_station: {
+    label: "Sediment boundary station",
+    region: "silt_basin",
+    position: { x: 216, y: -172, z: -240 },
   },
 } as const satisfies Record<
   string,
@@ -199,6 +209,7 @@ export const ITEMS = {
   meal: { label: "Prepared reef meal", cu: 1 },
   essential_tools: { label: "Scanner & service tool", cu: 2 },
   suit_150: { label: "150 m pressure suit", cu: 3 },
+  suit_350: { label: "350 m refitted pressure suit", cu: 3 },
   salvage_buoy: { label: "Reusable salvage buoy", cu: 2 },
   reserve_cell: { label: "Rechargeable reserve cell", cu: 2 },
   bobbin_kit: { label: "Bobbin / rescue collar", cu: 6 },
@@ -215,7 +226,10 @@ export type BlueprintId =
   | "bp_reef_recovery"
   | "bp_island_workshop"
   | "bp_carrier_workshop"
-  | "bp_canopy_reinforcement";
+  | "bp_canopy_reinforcement"
+  | "bp_creel_service"
+  | "bp_carrier_basin"
+  | "bp_rift_pressure";
 export type FacilityId =
   | "home_pod"
   | "pod_fabricator"
@@ -227,7 +241,17 @@ export const BLUEPRINTS: readonly BlueprintId[] = [
   "bp_island_workshop",
   "bp_carrier_workshop",
   "bp_canopy_reinforcement",
+  "bp_creel_service",
+  "bp_carrier_basin",
+  "bp_rift_pressure",
 ];
+/** Knowledge for subsequent fleet/route construction; these are not fabricable hulls. */
+export const FUTURE_BLUEPRINTS = {
+  bp_carrier_workshop: "Carrier workshop plans",
+  bp_creel_service: "Creel interior and service plans",
+  bp_carrier_basin: "Carrier Basin frame and anchorage survey",
+  bp_rift_pressure: "Cool-flank pressure and service research",
+} as const;
 export interface Recipe {
   label: string;
   cost: Partial<Record<MaterialId, number>>;
@@ -340,6 +364,17 @@ export const RECIPES = {
     once: true,
     maintenance: false,
   },
+  suit_350: {
+    label: "Refit personal suit / 350 m",
+    cost: { structural_alloy: 2, flex_membrane: 2, conductive_crust: 4, buoyant_resin: 4 },
+    bp: "bp_canopy_reinforcement",
+    needs: ["suit_150"],
+    site: "island_workshop",
+    output: "suit_350",
+    quantity: 1,
+    once: true,
+    maintenance: false,
+  },
 } as const satisfies Record<string, Recipe>;
 export type RecipeId = keyof typeof RECIPES;
 
@@ -365,7 +400,7 @@ export const SOURCES = {
     reserve: 8,
     bundle: 4,
     context:
-      "Tagged maintenance panels beside the intake; four alloy per hand bundle.",
+      "Tagged maintenance panels beside the intake.",
     scan: "Service tags identify replaceable frames, not random seabed ore.",
     asset: "scraps",
   },
@@ -602,6 +637,54 @@ export const SOURCES = {
     scan: "Established refuges retain a meal issue as a fallback.",
     asset: "food",
   },
+  basin_ridge_salvage_north: {
+    label: "Northern loose survey salvage",
+    region: "silt_basin",
+    position: { x: 160, y: -162, z: -204 },
+    item: "structural_alloy",
+    stock: 20,
+    reserve: 8,
+    bundle: 4,
+    context: "Loose tagged panels on the stable ridge below the fallen survey dish.",
+    scan: "Detached maintenance panels can be gathered by hand. The intact dish spine is a host, not mineable hull stock.",
+    asset: "scraps",
+  },
+  basin_ridge_salvage_south: {
+    label: "Southern loose survey salvage",
+    region: "silt_basin",
+    position: { x: 196, y: -172, z: -240 },
+    item: "structural_alloy",
+    stock: 20,
+    reserve: 8,
+    bundle: 4,
+    context: "A separate fallen frame exposes hand-sized panels beside the southern ridge.",
+    scan: "This second tagged frame supplies independent loose alloy. Powered bulk handling would help with a larger expedition load.",
+    asset: "scraps",
+  },
+  basin_survey_fins_east: {
+    label: "Eastern survey grounding fins",
+    region: "silt_basin",
+    position: { x: 216, y: -168, z: -214 },
+    item: "conductive_crust",
+    stock: 14,
+    reserve: 8,
+    bundle: 2,
+    context: "Crust coats exposed grounding fins on the sediment survey frame.",
+    scan: "The Canopy fin habitat continues on exposed Basin instruments; the clear ridge leaves these fins accessible above the silt.",
+    asset: "crust",
+  },
+  basin_survey_fins_west: {
+    label: "Western survey grounding fins",
+    region: "silt_basin",
+    position: { x: 144, y: -174, z: -244 },
+    item: "conductive_crust",
+    stock: 14,
+    reserve: 8,
+    bundle: 2,
+    context: "A separate survey frame catches crust on its current-facing fins.",
+    scan: "An independent western fin patch remains on the first Dart-accessible shelf. Read the host above the sediment before descending.",
+    asset: "crust",
+  },
 } as const satisfies Record<string, SourceDefinition>;
 export type SourceId = keyof typeof SOURCES;
 
@@ -650,8 +733,31 @@ export const EVIDENCE = {
       "Changing water chemistry may precede machinery failure. Predator avoidance is another possibility to investigate.",
     lead: "Beyond the lower Canopy crowns, fallen survey dishes mark the edge of Pale Basin. The field sheet leaves that water an open question.",
   },
+  C05: {
+    label: "Inward transfer tags",
+    place: "basin_dormitory",
+    position: { x: 178, y: -164.8, z: -222.2 },
+    observation: "Empty beds face tagged bundles moved inward, away from the open-water landing. The transfer tags read disaster day +04:20. Tavi Orr's separate +04:40 note says Ren held sole return-gate control while Tavi's partner remained outside; it records no outcome.",
+    provenance: "Pale Basin dormitory / D0 +04:20 transfer tags; Tavi Orr +04:40 witness note",
+    hypothesis: "An organized evacuation or confinement? The tags establish inward movement. The witness assigns control, without explaining the decision or where the residents went.",
+    lead: "The service rack preserves Creel interior plans and the Basin half of the carrier frame survey. The boundary station beside the southern dish retains the sediment record; neither investigation requires the other.",
+  },
+  C06: {
+    label: "Dated sediment profiles",
+    place: "basin_boundary_station",
+    position: { x: 216, y: -170.75, z: -244 },
+    observation: "Profiles dated D−12 and disaster day +00:35 show dense water rising along matching fresh slope fractures. The newer instrument trace records the sediment surge before the station stopped. Present clear ridge fins stand above the sediment pockets.",
+    provenance: "Pale Basin boundary station / D−12 profile; D0 +00:35 trace and fractured slope",
+    hypothesis: "The storm and the weakened slope are connected to the water change. These measurements do not establish the extraction history or the residents' fate.",
+    lead: "Cool-flank pressure research describes pale open fans on the Rift shoulder. Keep alloy and fin crust for service work; the dormitory's inward-facing transfer tags offer an independent regional question.",
+  },
 } as const;
 export type EvidenceId = keyof typeof EVIDENCE;
+export const EVIDENCE_BLUEPRINTS = {
+  C01: ["bp_pod_checklist"], C02: ["bp_reef_recovery"],
+  C03: ["bp_island_workshop", "bp_carrier_workshop"], C04: ["bp_canopy_reinforcement"],
+  C05: ["bp_creel_service", "bp_carrier_basin"], C06: ["bp_rift_pressure"],
+} as const satisfies Record<EvidenceId, readonly BlueprintId[]>;
 export const OPTIONAL_RECORD = {
   id: "mara_reef_note",
   label: "Mara’s field note",
@@ -676,6 +782,8 @@ export const INTERACTION_HOSTS: Readonly<Record<string, InteractionHostDefinitio
   C02: { offset: { x: 0, y: -0.7, z: 0 }, radius: 1.05 },
   C03: { radius: 0.55 },
   C04: { offset: { x: 0, y: -0.025, z: 0 }, radius: 0.5 },
+  C05: { radius: 0.55, solidIds: ["basin.dormitory.bundles"] },
+  C06: { radius: 0.55, solidIds: ["basin.station.console"] },
   pod_services: {
     offset: { x: 0.34, y: 1.2, z: 0.9 }, radius: 0.45, solidIds: ["pod.bench"],
   },
@@ -690,6 +798,10 @@ export const INTERACTION_HOSTS: Readonly<Record<string, InteractionHostDefinitio
   island_glass_ledge_west: { renderOffsetY: 1, offset: { x: -.3, y: .2, z: -.25 } },
   island_shore_crop_east: { offset: { x: 0, y: 0.18, z: -0.35 } },
   island_shore_crop_west: { offset: { x: 0, y: 0.18, z: -0.35 } },
+  basin_ridge_salvage_north: { offset: { x: 0, y: 0.15, z: 0 }, radius: 1.1, renderOffsetY: 0 },
+  basin_ridge_salvage_south: { offset: { x: 0, y: 0.15, z: 0 }, radius: 1.1, renderOffsetY: 0 },
+  basin_survey_fins_east: { offset: { x: 0, y: 0.25, z: 0 }, radius: 0.9, renderOffsetY: 0 },
+  basin_survey_fins_west: { offset: { x: 0, y: 0.25, z: 0 }, radius: 0.9, renderOffsetY: 0 },
 };
 export const RECOVERY_STAGE = { x: 46, y: -12, z: -54 } as const;
 export const CANOPY_COVER = {

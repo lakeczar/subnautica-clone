@@ -8,7 +8,7 @@ import {
   nearPod,
   nearWorkshop,
 } from "./inventory.js";
-import { personalLimit } from "./progression.js";
+import { personalDepth, personalLimit } from "./capabilities.js";
 import { hullDepth } from "./vehicles.js";
 import { disableVehicle, incapacitate } from "./recovery.js";
 const DT = 1 / 60;
@@ -31,7 +31,7 @@ export function exposure(s: GameState): {
       s.fleet.docking?.stationKeeping === true);
   const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
   const airwayY = p.y + (s.player.mode === "swimming" ? 0.85 : 1.55),
-    pressureDepth = Math.max(0, -(p.y + 0.4));
+    pressureDepth = personalDepth(p);
   return {
     pressureDepth,
     airwayY,
@@ -237,8 +237,18 @@ export function updateThreat(
     const v = s.fleet.vehicles.find(
       (v) => v.id === s.player.controlledVehicleId,
     );
-    if (v) v.health = Math.max(0, v.health - 12 * DT);
-    else s.player.vitals.health -= 10 * DT;
+    if (v) {
+      const before = v.health;
+      v.health = Math.max(0, v.health - 12 * DT);
+      const loss = before - v.health;
+      if (loss > 0) events.push({ type: "threat-damage", source: "hunter",
+        target: { kind: "vehicle", vehicleId: v.id }, loss, healthAfter: v.health });
+    } else {
+      const before = s.player.vitals.health;
+      s.player.vitals.health -= 10 * DT;
+      const healthAfter = Math.max(0, s.player.vitals.health), loss = Math.max(0, before - healthAfter);
+      if (loss > 0) events.push({ type: "threat-damage", source: "hunter", target: { kind: "diver" }, loss, healthAfter });
+    }
     if (s.tick % 60 === 0) events.push({ type: "sound", cue: "damage", origin: { ...t.position } });
   }
 }
