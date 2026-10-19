@@ -1799,3 +1799,10 @@ Hunter contact/withdrawal is now ready for exclusive dispatch from the next comm
 - Receive terminal notification, inspect actual contact/withdrawal and affected earned shelter/quiet/recovery/reload; then fresh complete M2-A pair. Earlier branch acceptance does not accept new contact behavior. No other worker is active; root has no browser/server/recording/check process.
 
 Root inspection/dispatch receipts `/tmp/siltwake-m2-canopy-landmark-root/` are sealed:208 files /47,825,293 bytes; manifest SHA256 `037d397de8f38b9cfacea537c6cf6931a09786813c6b37b2b318570c798b4079`. PR publication receipts `/tmp/siltwake-m2-canopy-landmark-pr/` preserve source-attributed before/after PNGs and response MP4; public bytes verified HTTP200. The matched prior feature baseline is d9f09dc, final art dc5d67c; these are not base-M0 or fresh combined-source screenshots. PR #4/#3 retain separate feature/M0 scopes; stack remains linked and unwatched. No game/main merge or deployment.
+
+
+## Hunter contact terminal and provisionally integrated
+
+Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-hunter-contact-sol-max-256f1c7` is terminal/result_available with no children/questions. Source f3c5d79c26daf1a0baa338069f9d4552e257a526 and4583671b2df61bfb181a49813e9877d6921c2bf0/report3d4dbc51eeff11c65955e3dca4e71a973773a46e merge at **d94a3cad27da175877ad9b9de84ae6c0a792c6e1**. Three original runtime contexts confirm Sol6.1/max; original checkout and all owned resources/paths are released.
+
+[Root inspection](evidence/M2-A-HUNTER-CONTACT-INTEGRATION.md) verifies1,503 archive/local payload members, source/build identity,57-export candidate replay, default movement and earned return/recovery suffixes. Full check remains527/530; separate build/economies pass. ROOT-HUNTER-01 invalid fixtures,02 CPU query costs,03 parked-hull overlap require the [prepared reconciliation](tasks/M2-A-HUNTER-RECONCILE.md) before complete M2-A review. No worker is active before dispatch; root owns no browser/server/recording/check process.

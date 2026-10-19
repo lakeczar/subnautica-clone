@@ -1,14 +1,14 @@
 # Build status
 
-## Current checkpoint — Canopy landmark integrated; hunter contact active
+## Current checkpoint — hunter assembled; reconciliation required
 
-**Canopy source dc5d67c/report e43d8b7 is inspected and provisionally assembled at9877c8a**, alongside correctness7a822d7. [Root inspection](evidence/M2-A-CANOPY-LANDMARK-INTEGRATION.md) passes **520/520 tests**, typecheck/build, M1/design and M2 fresh/completed economies. Original and combined replay each reproduce29 complete exports over3,279 steps exactly. Actual source-attributed views expose the elevated fork and descent to existing cover; both ordinary-control assisted routes reach true cover without extra damage. Human recognition remains unverified.
+**Hunter source4583671/report3d4dbc5 is inspected and provisionally assembled at d94a3ca.** [Root inspection](evidence/M2-A-HUNTER-CONTACT-INTEGRATION.md) reproduces **527/530 tests**: three old fixtures expect an inside-hull bite and need valid exterior contact. Separate typecheck/build and all three economies pass, including completed-earned M2. The full check remains red. Root verifies1,499 files/four symlinks, source/build identity,57 browser-export replays (55 exact, two hunter-coordinate differences≤5.6844e−14m),5,622 steps and affected return/recovery continuations.
 
-The landmark task is terminal, clean and released. **Only [hunter contact/withdrawal](tasks/M2-A-HUNTER-CONTACT.md) is active**, from exact256f1c79a926ec7b355c5ecc50942d6ffddfca2a in t3-3be5c293. Original runtime confirms Sol6.1/max. It preserves the landmark and sixth support-observation callback; no hunter implementation is integrated yet. TASKS records the exact ID and ownership. Receive completion without polling.
+Actual views show restored separation and approach/contact/withdrawal. Current CPU cost and parked-hull overlap prevent an acceptance freeze. [ROOT-HUNTER-01/02/03](evidence/M2-A-HUNTER-CONTACT-INTEGRATION.md) assign valid fixture reconciliation, cheaper exact geometry queries and hunter-only nearby-fleet avoidance/occlusion. The [bounded Sol task](tasks/M2-A-HUNTER-RECONCILE.md) is prepared for a new committed baseline. The original hunter author is terminal/clean/released; no worker is active before dispatch.
 
-The original connected earned Canopy–Basin expedition and local recovery remain attributed to b91cde9. [Route inspection](evidence/M2-A-COMPOSE-INTEGRATION.md) proves paid progression, useful return, recovery and actual reload, with61.63% oxygen/83.97% power minima. Current bounded replay does not relabel that full route as a new-source playthrough. [Correctness inspection](evidence/M2-A-COMPOSE-CORRECTIONS-INTEGRATION.md) retains the earned stall cue and completed-save repair.
+Canopy landmark dc5d67c and grounded-Dart/checker corrections7a822d7 remain integrated. Prior original full earned Canopy–Basin route/recovery stays attributed to b91cde9, with61.63% oxygen/83.97% power minima. Current bounded suffixes and source-specific browser confirmation do not relabel the old whole route. Human route recognition, control feel, duration/enjoyment and hardware pacing remain unverified; first-use loading and50.6ms historical return remain open.
 
-Close-hunter occlusion remains open; shelter recognition is provisional pending affected hunter play and complete-batch review. First-use loading and the50.6ms return above the50ms trial remain explicit. After final corrections/continuations, freeze complete M2-A for fresh non-author Astra xhigh/Sol6.1 max review, then continue M2-B/C, integrated M2/Opus and M3/M4 automatically. Root has no browser/server/recording/check process. Earlier active labels below are historical.
+After reconciled source/affected ordinary continuation evidence, freeze complete M2-A for fresh non-author Astra xhigh/Sol6.1 max review. Then continue M2-B/C, integrated M2/Opus and M3/M4 automatically. Root has no browser/server/recording/check process. Earlier active labels below are historical.
 
 Reconciliation source **a9b94111ed24a3c46634ab2e661f8cee75184ac4** / report **dc8693e8553602bda5d36437ae4f1862e9143668** is terminal, inspected and provisionally merged at **6e2a4b092693ed1f54fab245c055eb9241d69ace**. Root clean compilation/full check reproduces **461/462**, with only the confirmed missing Basin terrain failure. All 12 old compile errors and 27 prior failures are resolved. Separate build and all three economies pass; 50 source/27 built files match A1. [Current inspection](evidence/M2-A1-RECONCILE-INTEGRATION.md) verifies actual Sol6.1/max, all 32 new evidence payloads, 1,220 prior files and 66 migration inputs. The worker releases all paths/resources. [A2 rendering](tasks/M2-A2.md) and [A3 presentation](tasks/M2-A3.md) are active in separate T3 worktrees from **d753b0209edd83e9c0bb1b0062c4071dbecadfa0**, explicitly carrying the A2 terrain blocker. Both original runtime contexts confirm Sol6.1/max; TASKS records exact IDs and ownership. No batch acceptance is claimed; earlier fixture counts below are historical.
 
@@ -53,7 +53,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-Canopy landmark, correctness and encounter-direction authors are terminal and released. Root owns integration/build records. The hunter Sol6.1/max leaf is active from256f1c7, bound to t3-3be5c293, with exclusive paths in its brief. TASKS records exact dispatch and verified runtime. No shared source paths are concurrently assigned.
+All previous authors, including hunter contact, are terminal and released. Root owns integration/build records. Hunter reconciliation is prepared for exclusive Sol6.1/max dispatch from the next committed baseline; TASKS records actual ID/binding/runtime after dispatch. No other implementation paths are assigned.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -88,7 +88,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active [hunter contact/withdrawal correction](tasks/M2-A-HUNTER-CONTACT.md) completion notification without polling, inspect source and affected earned approach/contact/withdrawal/cover/quiet/recovery/reload evidence, then fresh complete M2-A Astra/Sol review. Continue M2-B/C and M3/M4 automatically; main merge/public deployment remain owner actions.
+Dispatch [hunter reconciliation](tasks/M2-A-HUNTER-RECONCILE.md) on the committed provisional assembly. Inspect its terminal source/evidence, resolve current red fixtures/performance/parked-hull issues, then fresh complete M2-A Astra/Sol review before M2-B/C and M3/M4. Receive completion notifications without polling or duplicate workers. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

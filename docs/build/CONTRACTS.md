@@ -1,5 +1,8 @@
 # Shared implementation direction
 
+**Hunter4583671 is provisionally assembled at d94a3ca, not accepted.** Shared readonly numeric encounter geometry and pure hunter queries own render/simulation orientation, surface contact and cycle; no saved field or camera/art deformation. `MovementOptions.separateBoxOverlaps` is fourth optional WorldQueries.moveCapsule argument/seventh moveHull argument; sixth observeSupport is preserved, only hunter opts in. [Reconciliation](tasks/M2-A-HUNTER-RECONCILE.md) authorizes query optimization and nearby-fleet avoidance/occlusion inside the hunter only, plus exact named fixture/test corrections. World/step/types/camera/render/save authority stays frozen for this correction. All preceding authors release paths.
+
+
 **Canopy landmark dc5d67c is provisionally assembled at9877c8a.** It adds44 lines of static Canopy art only; physical cover, camera, actor/vehicle geometry, UI and simulation/save authority remain unchanged. Landmark ownership is released for the sequential [hunter task](tasks/M2-A-HUNTER-CONTACT.md). That task preserves the landmark and correctness7a822d7's sixth support-observation callback; its optional seventh movement-policy argument is authorized only within the task's opt-in compatibility rules. No hunter policy is implemented at this checkpoint.
 
 

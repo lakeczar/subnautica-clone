@@ -78,3 +78,10 @@ Both R1 corrections are assembled at `47d8872`; [combined root evidence](evidenc
 ## Canopy landmark assembled at9877c8a
 
 [Root inspection](evidence/M2-A-CANOPY-LANDMARK-INTEGRATION.md) verifies original and combined29-export/3,279-step exact replay and actual source-attributed level/down/west-edge/response imagery.009 reaches cover11044 while investigate;012 reaches cover11158 from investigate on the preceding step, with no added damage. Actual author Continue at11215 is exact; subsequent export is37 steps later. Quiet retreat remains separately no-cover. These are coordinate-assisted controlled-frame continuations, not human learning/feel or a fresh full route.520 checks/build and all three economies (M2 fresh/completed) pass. Hunter contact and affected current continuations precede full M2-A review.
+
+
+## Hunter contact at d94a3ca — provisional, correction required
+
+[Inspection](evidence/M2-A-HUNTER-CONTACT-INTEGRATION.md) reproduces57 actual-export comparisons (55 exact/two hunter-coordinate-only≤5.6844e−14m),5,622 steps/one command, nine actual reload pairs plus final458 confirmation;1,528 valid current-actor bite events. Original released controls legitimately no longer disable at old tick11865; separate ordinary loud motion demonstrates actual disable/incapacity. Warning→cover and quiet retreat stay distinct. Earned025 return and037–041 recovery suffixes reproduce with≥25% margins and unchanged paid identities. Source attribution and missing six final native downloads remain explicit.
+
+Root full check527/530, separate build/economies pass. Reconcile fixtures, measured CPU cost and missing parked-fleet avoidance before acceptance. Geometry screen finds191–2,124 parked-Dart triangles intersecting conservative hunter pieces at ten ordinary diver checkpoints; this is not exact animal-triangle intersection proof. Current contact/geometry source is4583671; most main videos f3c5d79, with explicit final production confirmation.
