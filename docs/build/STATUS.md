@@ -1,10 +1,10 @@
 # Build status
 
-## Current checkpoint — OS2 R2 Astra accepts; Sol pending
+## Current checkpoint — OS2 accepted; fresh Opus stage1 verification next
 
-Movement cc3f20d, feedback/copy4a5103f and accessible announcement75402ae are provisionally combined at **6aaeae2d97476528c3848e140aded6a069b0c3b1**. Root passes **436/436 tests**, typecheck/build and both economies. All27 production files,85 tracked source/test/config files and40 compiled native modules match the correction author. The prior failed announcement case now retains both full occurrences atomically, with native trace/menu/reset/singleton evidence inspected. [Current inspection](evidence/POLISH-1-OS2-ANNOUNCEMENT-INTEGRATION.md).
+Movement cc3f20d, feedback/copy4a5103f and accessible announcement75402ae are combined at **6aaeae2d97476528c3848e140aded6a069b0c3b1** and accepted by both R2 reviewers on **dc0902864afb872c658b239821e870423877178a**. Root passes **436/436 tests**, typecheck/build and both economies. All27 production files,85 tracked source/test/config files and40 compiled native modules match the correction author. The prior failed announcement case now retains both full occurrences atomically, with native trace/menu/reset/singleton evidence inspected. [Current inspection](evidence/POLISH-1-OS2-ANNOUNCEMENT-INTEGRATION.md).
 
-Fresh R2 Astra accepts all eight criteria on frozen **dc0902864afb872c658b239821e870423877178a**, closes SOL-OS2-R1-01 and finds no new blockers. Root verifies its report-only commit, actual Astra/xhigh runtime and all 34 evidence payloads; [interim reconciliation](reviews/POLISH-1-OS2-R2.md). Sol's independent R2 remains pending on the same candidate, without peer findings shared. **This remains provisional integration, not paired acceptance or stage1 closure.** Both R1 reviewers and all authors are terminal. [R1 disposition](reviews/POLISH-1-OS2-R1.md) preserves the original defect and content-based atomic-delivery clarification; [complete R2 scope](tasks/POLISH-1-OS2-REVIEW-R2.md) retains all eight criteria. Fresh Opus verification follows paired acceptance. TASKS records actual dispatch. Earlier active labels below are historical.
+**Astra and Sol independently ACCEPT all eight complete OS2 criteria on dc09028; coordinator concurs. SOL-OS2-R1-01 is CLOSED.** Root verifies both report-only commits, original runtime settings and finite evidence manifests; [paired reconciliation](reviews/POLISH-1-OS2-R2.md). Both reviewers and all authors are terminal and release ownership/resources. This accepts the bounded correction; **stage1 remains open for [fresh Opus5.5/high experience verification](tasks/OPUS-STAGE1-R3.md)**. The full original experience scope, prior advice/dispositions and current corrections remain required. TASKS records actual dispatch. Earlier active labels below are historical.
 
 The [M2 direction](design/M2-DIRECTION-PROPOSAL.md) has paired planning acceptance on **30c6bf9**, all seven criteria with root concurrence. It starts with an earned Canopy–Basin benchmark, then earned fleet/mobile-home systems, then deep routes and both functional ending routes. This is direction only; no M2 production or schema acceptance is implied. OS2-04/06 remain first-M2-benchmark obligations. M2–M4 follow automatically under the owner's standing authorization. Earlier active/next labels below are historical.
 
@@ -41,7 +41,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-No builder remains active. Movement and refinement authors are terminal; all production/test ownership is released. Root owns integration/build records and no browser/server/recording/check process. Astra is terminal and releases its report/resources; the independent Sol reviewer owns only its assigned report; TASKS records exact candidate, models and task IDs.
+No builder remains active. Both OS2 R2 reviewers and all implementation authors are terminal; all source/test/report ownership is released. Root owns integration/build records and no browser/server/recording/check process. Fresh Opus stage1 verification is the next report-only task; TASKS records actual dispatch, candidate and ownership.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -76,7 +76,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Astra R2 ACCEPT on dc09028 is inspected and recorded; Sol6.1 max R2 remains pending independently. Receive its completion notification without polling, inspect/reconcile its report, and resolve substantive findings before fresh Opus stage1 verification. Then continue accepted M2 direction and M3/M4 automatically. Main merge/public deployment remain owner actions.
+Dispatch fresh Opus5.5/high stage1 experience verification from a committed clean successor of accepted dc09028, following OPUS-STAGE1-R3. Receive completion without polling. Consult substantive findings in that completed context, reconcile advice and delegate corrections to Sol; otherwise close stage1 and continue accepted M2 direction, then M3/M4 automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
