@@ -55,7 +55,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All previous M2-A authors/reviewers/advisors and the dedicated profiler are terminal/released, including5191. Root owns integration/build records. Opus SPACE-1 and its Sol version reconciliation are terminal/released; their production stays in a separate composite. The bounded report-only affected-play task may use one isolated T3 tab/5190; TASKS records its actual dispatch/binding. No production paths are assigned. No peer edits, polling or duplicate workers.
+All previous M2-A authors/reviewers/advisors and the dedicated profiler are terminal/released, including5191. Root owns integration/build records. Opus SPACE-1 and its Sol version reconciliation are terminal/released; their production stays in a separate composite. The bounded report-only affected-play Sol6.1/max task is active fromed8a991 in t3-ee5be971, with actual runtime/binding verified and one isolated T3 tab/5190 assigned. TASKS records its exact ID. No production paths are assigned. No peer edits, polling or duplicate workers.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
