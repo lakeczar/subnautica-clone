@@ -8,7 +8,7 @@ The unchanged 50 ms warm-region criterion closes for the current four-region bat
 
 **SPACE-1 is now provisionally integrated at eb712f1527439ec1f38f2c52ef61ac78989ba74c**, identical to final Opus source e4062ae. [Coordinator inspection](evidence/SPACE-1-COMPOSE-INTEGRATION.md) verifies55 author payloads, all27 build files, **567/567 tests**, typecheck/build, all four economy invocations and the progression checker. An independently rerun earned-save migration preserves every old field, initializes zero renewal and matches600-step complete futures. Current production writes **schema4 / expedition.5**; M2-A's earlier c2c6155 remains its accepted pre-renewal source.
 
-The composition author is terminal and all implementation paths are released. The [complete SPACE-1 review brief](tasks/SPACE-1-SOL-XHIGH-REVIEW.md) covers the entire renewal/migration/progression feature and retained-region composition against e2a9d04, not just the final presentation changes. One fresh non-author **Sol6.1/xhigh** review follows on the committed candidate; [TASKS](TASKS.md) records actual dispatch. SPACE-1 is not yet accepted. Browser source/diagnostic attribution and the missing ordinary reef retained-return case remain explicit; no global route-inaccessibility claim is supported by bounded searches.
+The composition author is terminal and all implementation paths are released. The [complete SPACE-1 review brief](tasks/SPACE-1-SOL-XHIGH-REVIEW.md) covers the entire renewal/migration/progression feature and retained-region composition against e2a9d04, not just the final presentation changes. One fresh non-author **Sol6.1/xhigh** review is active on **2b1a252f9fdd88d91116efc0bb72d2b24876b9f5**; original runtime and isolated binding are verified in [TASKS](TASKS.md#complete-space-1-solxhigh-review-dispatched). SPACE-1 is not yet accepted. Browser source/diagnostic attribution and the missing ordinary reef retained-return case remain explicit; no global route-inaccessibility claim is supported by bounded searches.
 
 After acceptance continue M2-B fleet/mobile homes with an early Basin-funded Creel/service payoff and additional finite membrane supply, then M2-C deep routes/both endings, integrated M2 plus fresh Opus experience review, and M3/M4. Earlier active/pair/model labels below are historical.
 
@@ -102,7 +102,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the prepared complete SPACE-1 review on the committed candidate, receive the fresh Sol6.1/xhigh result automatically and reconcile it with coordinator inspection. Opus fixes substantiated findings before fresh affected review; do not duplicate active work or restart accepted M2-A's unchanged full gate. Continue M2-B/C, M3 and M4 under standing authorization after acceptance. Main merge/public deployment remain owner actions.
+Receive the active complete SPACE-1 Sol6.1/xhigh review automatically and reconcile its seven criteria with coordinator inspection. Opus fixes substantiated findings before fresh affected review; do not duplicate active work or restart accepted M2-A's unchanged full gate. Continue M2-B/C, M3 and M4 under standing authorization after acceptance. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
