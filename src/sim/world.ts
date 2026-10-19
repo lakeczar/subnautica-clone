@@ -638,6 +638,7 @@ export function moveHull(
   delta: Vec3,
   shape: Capsule,
   bounds?: HorizontalBounds,
+  observeSupport?: (rejectedHorizontalTravel: number) => void,
 ): ReturnType<WorldQueries["moveCapsule"]> {
   if (!finitePoint(origin)) throw new RangeError("Movement origin must be finite.");
   const slices = Math.max(
@@ -668,7 +669,15 @@ export function moveHull(
     const floor = hullFloor(world, result.position, shape);
     if (result.position.y < floor + 0.05) {
       hitSolid = true;
-      if (Math.abs(d.x) + Math.abs(d.z) > 0.00001) break;
+      if (Math.abs(d.x) + Math.abs(d.z) > 0.00001) {
+        // The floor refuses the sweep's remaining horizontal progress and
+        // cancels later slices. Sweep-rejected travel is already measured by
+        // its caller; only the progress it allowed belongs to floor support.
+        const rejected = Math.hypot(result.position.x - position.x, result.position.z - position.z) +
+          Math.hypot(delta.x / slices, delta.z / slices) * (slices - i - 1);
+        if (Number.isFinite(rejected)) observeSupport?.(Math.max(0, rejected));
+        break;
+      }
       const y = Math.max(position.y, floor + 0.05);
       const lift = world.moveCapsule(result.position, { x: 0, y: y - result.position.y, z: 0 }, shape);
       if (lift.hitSolid || lift.hitBoundary || Math.abs(lift.position.y - y) > 1e-10 ||

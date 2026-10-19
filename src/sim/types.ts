@@ -229,7 +229,7 @@ export type GameEvent =
   | { type: "ascent-sample"; actorId: string | null; requestedRise: number; actualRise: number;
       solidLimitedRise: number; surfaceLimitedRise: number }
   /** Horizontal metres from this step's commanded Dart movement. Never saved. */
-  | { type: "thrust-sample"; actorId: string; requested: number; actual: number; solidLimited: number }
+  | { type: "thrust-sample"; actorId: string; requested: number; actual: number; solidLimited: number; supportLimited: number }
   | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook"; targetId: string }
   | ({ type: "notice"; message: string; error?: boolean } & NoticeOptions)
   | {

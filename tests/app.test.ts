@@ -894,15 +894,26 @@ test("app: thrust accumulator excludes missing, boundary, release/progress, tiny
     observeThrust(events: Event[]): void;
     session: { state: import("../src/sim/types.js").GameState };
   };
-  const sample: Extract<Event, { type: "thrust-sample" }> = { type: "thrust-sample", actorId: "thrust-dart", requested: .0044586, actual: 0, solidLimited: .0044586 };
+  const sample: Extract<Event, { type: "thrust-sample" }> = { type: "thrust-sample", actorId: "thrust-dart", requested: .0044586, actual: 0, solidLimited: .0044586, supportLimited: 0 };
   for (let i = 0; i < 29; i++) port.observeThrust([sample, sample]);
   assert.equal(f.view.thrustBlocked.at(-1), false, "duplicate events do not count multiple steps");
   port.observeThrust([sample]); assert.equal(f.view.thrustBlocked.at(-1), true);
+  for (const obstruction of [
+    { solidLimited: 0, supportLimited: sample.requested },
+    { solidLimited: sample.requested * .4, supportLimited: sample.requested * .4 },
+  ]) {
+    port.observeThrust([]);
+    for (let i = 0; i < 29; i++) port.observeThrust([{ ...sample, ...obstruction }]);
+    assert.equal(f.view.thrustBlocked.at(-1), false);
+    port.observeThrust([{ ...sample, ...obstruction }]); assert.equal(f.view.thrustBlocked.at(-1), true);
+  }
   for (const invalid of [
     [], [sample, { type: "foundation-boundary" }],
     [{ ...sample, requested: 1e-5 }], [{ ...sample, requested: NaN }],
     [{ ...sample, actual: .001 }], [{ ...sample, actual: -.001 }],
     [{ ...sample, solidLimited: .002 }], [{ ...sample, solidLimited: Infinity }],
+    [{ ...sample, solidLimited: sample.requested * .4, supportLimited: sample.requested * .399 }],
+    [{ ...sample, supportLimited: NaN }], [{ ...sample, supportLimited: Infinity }], [{ ...sample, supportLimited: -.001 }],
     [{ ...sample, actorId: "old-actor" }],
   ] as Event[][]) {
     port.observeThrust(invalid); assert.equal(f.view.thrustBlocked.at(-1), false);

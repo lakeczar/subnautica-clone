@@ -512,10 +512,11 @@ export class SiltwakeApp {
     if (!this.active || !s || s.opening.phase < 4 || s.player.mode !== "piloting" ||
       v?.hull !== "dart" || v.disabled || v.charge <= 0 || !sample || sample.actorId !== v.id ||
       events.some(e => e.type === "foundation-boundary") ||
-      ![sample.requested, sample.actual, sample.solidLimited].every(Number.isFinite) ||
-      sample.requested <= 1e-5 || sample.actual < 0 || sample.solidLimited < 0 ||
+      ![sample.requested, sample.actual, sample.solidLimited, sample.supportLimited].every(Number.isFinite) ||
+      sample.requested <= 1e-5 || sample.actual < 0 || sample.solidLimited < 0 || sample.supportLimited < 0 ||
       sample.actual > sample.requested * 0.1 ||
-      sample.solidLimited < 0.8 * (sample.requested - sample.actual)) {
+      Math.min(sample.requested - sample.actual, sample.solidLimited + sample.supportLimited) <
+        0.8 * (sample.requested - sample.actual)) {
       this.resetThrust();
       return;
     }

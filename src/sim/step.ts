@@ -481,14 +481,14 @@ export function stepGame(
     const requested = Math.hypot(delta.x, delta.z);
     if (v.hull === "dart" && speed > 0 && forwardIntent && Number.isFinite(requested) && requested > 1e-5 &&
         delta.x * Math.sin(yaw) - delta.z * Math.cos(yaw) > 0)
-      thrust = { type: "thrust-sample", actorId: v.id, requested, actual: 0, solidLimited: 0 };
+      thrust = { type: "thrust-sample", actorId: v.id, requested, actual: 0, solidLimited: 0, supportLimited: 0 };
     // Observe the existing sweeps before moveHull's separate terrain correction.
     // Its aggregate hitSolid also includes floor support and cannot classify a ceiling.
     const attempt = ascent;
     const forwardAttempt = thrust;
     const shape = HULL_COLLIDERS[v.hull], hullOrigin = { ...v.pose.position };
     const constrained = surfaceMove(world, hullOrigin, delta, shape, d => {
-      let solidRise = 0, solidThrust = 0, forwardBoundary = false;
+      let solidRise = 0, solidThrust = 0, supportThrust = 0, forwardBoundary = false;
       const measuredWorld: WorldQueries = attempt || forwardAttempt ? { ...world, moveCapsule(origin, slice, proxy) {
         const result = world.moveCapsule(origin, slice, proxy);
         if (attempt && result.hitSolid && slice.y > 0)
@@ -499,15 +499,22 @@ export function stepGame(
         if (forwardAttempt && result.hitBoundary) forwardBoundary = true;
         return result;
       } } : world;
-      return { ...moveHull(measuredWorld, hullOrigin, d, shape,
-        v.hull === "hearthline" ? carrierTravelBounds() : undefined), solidRise, solidThrust, forwardBoundary };
+      const moved = moveHull(measuredWorld, hullOrigin, d, shape,
+        v.hull === "hearthline" ? carrierTravelBounds() : undefined,
+        forwardAttempt ? rejected => { supportThrust += rejected; } : undefined);
+      return { ...moved, solidRise, solidThrust, supportThrust, forwardBoundary };
     }, move => v.hull === "spindle" ? -0.4 : Math.min(-0.9, move.position.y), true);
     const move = constrained.move;
     if (ascent) {
       ascent.solidLimitedRise = constrained.rolledBack ? Math.max(0, delta.y) : move.solidRise;
       ascent.surfaceLimitedRise = constrained.surfaceLimitedRise;
     }
-    if (thrust) thrust.solidLimited = constrained.rolledBack ? requested : move.solidThrust;
+    if (thrust) {
+      thrust.solidLimited = constrained.rolledBack ? requested : move.solidThrust;
+      // A final surface rollback already attributes all refused travel above.
+      // Discarded ordinary attempts never contribute support from their retry.
+      thrust.supportLimited = constrained.rolledBack ? 0 : move.supportThrust;
+    }
     if (move.hitSolid && previousSpeed > 4) {
       const before = v.health;
       v.health = Math.max(0, v.health - (previousSpeed - 4) * DT * 10);

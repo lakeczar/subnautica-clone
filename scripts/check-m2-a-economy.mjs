@@ -33,7 +33,8 @@ assert.equal(BASIN_SOURCE_IDS.filter(id => SOURCES[id].item === "structural_allo
 assert.equal(BASIN_SOURCE_IDS.filter(id => SOURCES[id].item === "conductive_crust").length, 2);
 
 function run(initial, provenance) {
-  let s = structuredClone(initial); completeOpening(s);
+  const inputSnapshot = structuredClone(initial);
+  let s = structuredClone(initial);
   const receipts = [], gathered = {}, spent = {}, peak = { diver: 0, craft: 0, saveBytes: 0 };
   let codecChecks = 0;
   function check() {
@@ -50,6 +51,13 @@ function run(initial, provenance) {
     s.player.controlledVehicleId = null; s.player.interiorId = null; s.player.interiorPose = null;
     s.player.mode = p.y < 0 ? "swimming" : "walking"; s.world.action = null;
   }
+  // Validate the retained import before any staged movement, discovery or
+  // spending. The diagnostic owns a clone; the supplied gameplay stays intact.
+  check();
+  const inputState = { tick: s.tick, inventory: structuredClone(s.inventory), fleet: structuredClone(s.fleet),
+    knowledge: structuredClone(s.knowledge), resources: structuredClone(s.world.resources),
+    maintenance: structuredClone(s.world.maintenance) };
+  completeOpening(s);
   for (const id of ["C02", "C03", "C04"]) discover(s, id);
   function storeAtBench(locker) {
     if (!containerAccessible(s, locker)) return;
@@ -95,12 +103,20 @@ function run(initial, provenance) {
     const item = s.inventory.items.find(i => i.kind === d.item && i.containerId === "diver");
     cargo[d.item] = (cargo[d.item] ?? 0) + item.quantity; assert.equal(transfer(s, item.id, v.cargoId, item.quantity), null); check();
   }
-  for (const order of [["C05", "C06"], ["C06", "C05"]]) {
-    const branch = structuredClone(s); for (const id of order) discover(branch, id);
-    assert.deepEqual(branch.knowledge.evidence.slice(-2).map(e => e.id), order);
-    assert.equal(branch.knowledge.journals.length, s.knowledge.journals.length);
-  }
-  discover(s, "C06"); discover(s, "C05");
+  // Rediscovery is idempotent. Existing records retain their original order,
+  // tick and provenance; only genuinely missing clues append in this branch.
+  const beforeRediscovery = structuredClone(s.knowledge);
+  const discoveryOrder = ["C06", "C05"];
+  const missing = discoveryOrder.filter(id => !beforeRediscovery.evidence.some(e => e.id === id));
+  for (const id of discoveryOrder) discover(s, id);
+  assert.deepEqual(s.knowledge.evidence.slice(0, beforeRediscovery.evidence.length), beforeRediscovery.evidence);
+  assert.deepEqual(s.knowledge.evidence.slice(beforeRediscovery.evidence.length).map(e => e.id), missing);
+  assert.deepEqual(s.knowledge.journals, beforeRediscovery.journals);
+  const afterRediscovery = structuredClone(s.knowledge);
+  for (const id of ["C05", "C06"]) discover(s, id);
+  assert.deepEqual(s.knowledge, afterRediscovery, "repeat discovery preserves complete known records and knowledge");
+  const rediscovery = { classification: "Actual input branch; existing records preserved, missing clues deliberately discovered",
+    before: beforeRediscovery, after: afterRediscovery, appendedIds: missing };
   const inventory = structuredClone(s.inventory); v.pose.position = { ...BASIN_GEOMETRY.station.parking }; v.charge = 0; disableVehicle(s, v.id);
   visit(RECOVERY_SURFACE_OPERATOR); assert.equal(recoveryCommand(s, v.id, "tow", world), null); check();
   let steps = 0;
@@ -113,20 +129,40 @@ function run(initial, provenance) {
   assert.equal(s.world.maintenance.alloy, reserveBefore.alloy - 2); assert.equal(s.world.maintenance.membrane, reserveBefore.membrane - 1);
   assert.ok(s.world.maintenance.alloy >= 2 && s.world.maintenance.membrane >= 1, "another failure retains a patch reserve");
   assert.deepEqual(v.modules, [retainedModuleId]); assert.deepEqual(v.investment, retainedFrame);
-  return { provenance, scope: "Staged positions and direct discovery, real collection/transfer/craft/recovery/codec rules. No ordinary route or oxygen/power-margin claim.",
+  for (const known of inputState.knowledge.evidence)
+    assert.deepEqual(s.knowledge.evidence.find(e => e.id === known.id), known, "all original clue records survive the entire staged branch");
+  assert.deepEqual(initial, inputSnapshot, "input state is never changed by staged diagnostics");
+  return { provenance, inputState, rediscovery, scope: "Staged positions and direct discovery, real collection/transfer/craft/recovery/codec rules. No ordinary route or oxygen/power-margin claim.",
     receipts, spent, gathered, deliveredBasinCargo: cargo, remainingRescue: s.world.maintenance, peak, codecChecks, rescueSteps: steps,
     finalSuitId: s.inventory.items.find(i => i.fitted === "suit").id, retainedModuleId, retainedFrame };
 }
+// These branches start clue-free rather than deleting immutable records from
+// an earned export. Both arrival orders remain mandatory, separate assertions.
+const clueOrderDiagnostics = [["C05", "C06"], ["C06", "C05"]].map(order => {
+  const branch = createGame();
+  assert.deepEqual(branch.knowledge.evidence, []);
+  const journals = structuredClone(branch.knowledge.journals);
+  for (const id of order) discover(branch, id);
+  assert.deepEqual(branch.knowledge.evidence.map(e => e.id), order);
+  assert.deepEqual(branch.knowledge.journals, journals);
+  const known = structuredClone(branch.knowledge);
+  for (const id of [...order].reverse()) discover(branch, id);
+  assert.deepEqual(branch.knowledge, known);
+  return { classification: "Deliberately staged clue-free New Game diagnostic; not retained earned evidence", order,
+    evidence: branch.knowledge.evidence, rediscoveryPreservesKnowledge: true };
+});
 const scenarios = [run(createGame(), "Fresh New Game state; rule-staged preparation, not played New Game")];
 let retainedInput = null;
 if (earnedPath) {
   const bytes = fs.readFileSync(earnedPath), decoded = decodeSave(bytes.toString("utf8")); assert.ok(decoded.ok, decoded.ok ? "" : decoded.error);
   const original = JSON.parse(bytes), before = hash(bytes);
   retainedInput = { path: earnedPath, sha256: before, originalSchema: original.schemaVersion, originalContent: original.contentVersion, originalTick: original.state.tick,
+    originalStateSha256: hash(JSON.stringify(original.state)), originalInventory: original.state.inventory,
+    originalFleet: original.state.fleet, originalKnowledge: original.state.knowledge,
     originalResources: original.state.world.resources, classification: "Actual retained earned gameplay import, followed by explicitly staged rule diagnostics" };
   scenarios.push(run(decoded.value.state, `Retained earned export ${before}`)); assert.equal(hash(fs.readFileSync(earnedPath)), before);
 }
 const result = { schema: SAVE_SCHEMA_VERSION, content: CONTENT_VERSION, predecessorBudgetWithOptionalTrim: budget,
-  predecessorStock: Object.fromEntries(Object.keys(budget).map(kind => [kind, family(kind).reduce((n, [, d]) => n + d.stock, 0)])), retainedInput, scenarios };
+  predecessorStock: Object.fromEntries(Object.keys(budget).map(kind => [kind, family(kind).reduce((n, [, d]) => n + d.stock, 0)])), retainedInput, clueOrderDiagnostics, scenarios };
 if (output) fs.writeFileSync(output, JSON.stringify(result, null, 2) + "\n");
 console.log(JSON.stringify(result, null, 2));
