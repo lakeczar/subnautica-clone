@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createGame, makeVehicle } from "../src/sim/state.js";
 import * as hunter from "../src/sim/hunter.js";
 import { updateThreat } from "../src/sim/survival.js";
-import { createWorldQueries } from "../src/sim/world.js";
+import { createWorldQueries, hullClearance } from "../src/sim/world.js";
 import { fixtureGame, localToWorld } from "../src/sim/carrier.js";
 import { carrierShell, encounterRotation, inverseRotation, hullMesh, inside, triangleBox, add, sub, vec,
   meshOccludes } from "../src/sim/hunterQueries.js";
@@ -101,5 +101,72 @@ test("a parked opaque pane occludes mouth LOS, independently of damage target id
   s.world.threat.position=hunter.hunterStandOff(s);const original=structuredClone(parked),events:Parameters<typeof updateThreat>[2]=[];
   updateThreat(s,1,events,empty);assert.ok(events.filter(e=>e.type==="threat-damage").every(e=>e.type==="threat-damage"&&e.target.kind==="vehicle"&&e.target.vehicleId===controlled.id));
   assert.deepEqual(parked,original);
+});
+
+function parkedPursuit(yawOffset=0, heightOffset=0, disabled=true):GameState {
+  const s=fixture(),v=makeVehicle("parked-dart","dart",
+    {x:122.2388436138658,y:-102.78398623796338,z:-99.79702216882471},"parked-hold");
+  v.pose.yaw=1.51659265358977+yawOffset;v.pose.pitch=1.734723475976807e-16;
+  v.disabled=disabled;v.health=disabled?0:100;s.fleet.vehicles=[v];s.tick=12645;
+  const at=(p:Vec3):Vec3=>add(v.pose.position,encounterRotation(p,v.pose.yaw,v.pose.pitch));
+  s.player.pose.position=at({x:-14,y:heightOffset,z:0});s.player.velocity={x:0,y:0,z:0};
+  s.world.threat.position=at({x:-5.54327719506773,y:0,z:-2.29610059419053});
+  return s;
+}
+
+test("parked-Dart pursuit resumes contact approaches throughout the retained 1800-step stall",()=>{
+  // Minimal motion-only version of Astra/root's schema-valid real12645
+  // derivative. Keep the actor alive for the full 30 seconds without changing
+  // damage rules; the separate updateThreat case below exercises actual loss.
+  const s=parkedPursuit(),world=createWorldQueries(),vehicle=structuredClone(s.fleet.vehicles),player=structuredClone(s.player);
+  let stationary=0,maxStationary=0,travelled=0,contacts=0,contactRuns=0,wasBiting=false,closest=Infinity;
+  for(let i=0;i<1800;i++) {
+    s.tick++;s.world.threat.modeSeconds+=1/60;
+    const start={...s.world.threat.position},from=hunter.hunterPose(s),motion=hunter.moveHunter(s,world);
+    const distance=Math.hypot(motion.position.x-start.x,motion.position.y-start.y,motion.position.z-start.z);
+    assert.ok(distance<=(motion.yielding?H.yieldSpeed:H.approachSpeed)/60+1e-8,"existing movement rate");
+    assert.ok(hunter.hunterFleetSweep(s,start,motion.position,from,hunter.hunterPose(s,motion.position)),"continuous fleet safety, including retained overlap");
+    assert.ok(hullClearance(world,motion.position,H.worldEnvelope),"actual-world clearance");
+    s.world.threat.position=motion.position;
+    if(distance<1e-8)stationary++;else stationary=0;
+    maxStationary=Math.max(maxStationary,stationary);travelled+=distance;closest=Math.min(closest,motion.contact.gap);
+    if(motion.contact.biting) {
+      contacts++;if(!wasBiting)contactRuns++;
+      assert.ok(motion.contact.clear&&!motion.contact.penetrating&&motion.contact.gap<=H.reach);
+      assert.ok(!hunter.hunterFleetObstruction(s).penetrating,"no bite through parked hull");
+      assert.ok(!hunter.hunterPhase(s).withdrawing);
+    }
+    wasBiting=motion.contact.biting;
+  }
+  assert.ok(maxStationary<120,`pursuit remained stationary for ${maxStationary} steps`);
+  assert.ok(closest<=H.reach&&contacts>100&&contactRuns>=6,"repeated valid approaches, rather than harmless oscillation");
+  assert.ok(travelled>40,"meaningful approach and withdrawal over the full repro");
+  assert.deepEqual(s.fleet.vehicles,vehicle);assert.deepEqual(s.player,player);
+});
+
+test("level fallback preserves safe contact and damage rates at nearby parked-Dart orientations and heights",()=>{
+  for(const [yaw,height,disabled] of [[0,0,true],[-.1,.25,false],[.1,-.25,true]] as const) {
+    const s=parkedPursuit(yaw,height,disabled),world=createWorldQueries(),vehicle=structuredClone(s.fleet.vehicles);
+    let damage=0,firstContact=-1;
+    for(let i=0;i<600;i++) {
+      s.tick++;const start={...s.world.threat.position},from=hunter.hunterPose(s),events:Parameters<typeof updateThreat>[2]=[];
+      const penetrating=hunter.hunterPenetratesActor(s)||hunter.hunterFleetObstruction(s).penetrating;
+      updateThreat(s,1,events,world);
+      const end=s.world.threat.position;
+      assert.ok(Math.hypot(end.x-start.x,end.y-start.y,end.z-start.z)<=(penetrating?H.yieldSpeed:H.approachSpeed)/60+1e-8);
+      assert.ok(hunter.hunterFleetSweep(s,start,end,from,hunter.hunterPose(s)));
+      assert.ok(hullClearance(world,end,H.worldEnvelope));
+      for(const event of events)if(event.type==="threat-damage") {
+        const contact=hunter.hunterContact(s,end,world);
+        assert.ok(!penetrating&&contact.biting&&contact.clear&&!contact.penetrating&&contact.gap<=H.reach);
+        assert.ok(!hunter.hunterFleetObstruction(s).penetrating);
+        assert.deepEqual(event.target,{kind:"diver"});assert.ok(event.loss>0&&event.loss<=10/60+1e-10);
+        damage+=event.loss;if(firstContact<0)firstContact=i;
+      }
+    }
+    assert.ok(firstContact>=0&&firstContact<180,`${yaw}/${height}: bounded resumed approach`);
+    assert.ok(damage>10,`${yaw}/${height}: meaningful danger`);assert.deepEqual(s.fleet.vehicles,vehicle);
+    assert.equal(s.world.threat.mode,"pursue");assert.equal(s.world.threat.interest,12);
+  }
 });
 
