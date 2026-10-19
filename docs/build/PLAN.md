@@ -1,6 +1,6 @@
 # Construction plan
 
-**Current733617c adds the inspected priority correction to A1–A3; root492/492/build and original5/5 probe pass.** Two disjoint Sol6.1/max floor/performance corrections are active from9913751. Inspect their returns, compose earned play/visibility/recovery/reload, then the fresh complete-batch pair. Current STATUS/TASKS override older pending labels below.
+**Current 0208f05 adds the inspected render-performance correction; root 497/497 tests, typecheck/build and all three economies pass.** Warm activation/material trials pass in bounded diagnostics; cold loading remains expensive. Only terrain conformity remains active. Inspect/assemble that return, compose earned play/visibility/recovery/reload, then obtain the fresh complete-batch pair. [Performance inspection](evidence/M2-A-RENDER-PERFORMANCE-INTEGRATION.md). Current STATUS/TASKS override older pending labels below.
 
 **A1–A3 are provisionally assembled at9e1169c; root488/488/typecheck/build/three economies pass.** [A2 inspection](evidence/M2-A2-INTEGRATION.md) assigns bounded terrain-conformity and render-performance corrections beside the existing A3 priority fix. After assembly, prove the earned route/recovery/reload and natural cover learning, then fresh complete-batch Astra/Sol review. M2-B/C and M3/M4 remain required. Earlier active labels below are historical.
 

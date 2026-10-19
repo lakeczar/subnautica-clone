@@ -1686,3 +1686,14 @@ Root receipt set `/tmp/siltwake-m2-a2-root/manifest.json`: 29 files / 948225 byt
 Root receipt set `/tmp/siltwake-m2-a3-priority-root/manifest.json`: 5 files / 67664 bytes; manifest SHA256 `a09d153faf31883a133f5ea8d2e02fd148210510583a573a8c030d8c4e69d037`. Sealed; use a new directory for subsequent work.
 
 Only the performance and terrain workers remain active, each on9913751 with disjoint ownership and verified Sol6.1/max. Root has no browser/server/recording/check process. Receive terminal notifications, integrate and compose the earned M2 route before fresh complete-batch review.
+
+
+### Render performance terminal, inspected and provisionally integrated
+
+Performance task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-render-perf-sol-max-9913751` is completed/result_available without pending children/questions. Source 6dbd9cab1ed17a6541417e6c75ffeaf1063c2001/report d4322164f57d70dff89b7fa6e499bf51f7f0ed44 merge at **0208f05600f14d1f77cc1258eaddd79a28679b5e**. Root 497/497 tests, typecheck/build and all three economies pass. [Inspection](evidence/M2-A-RENDER-PERFORMANCE-INTEGRATION.md) records verified archive/source/build identity, six identical image pairs, independent CPU warm 4.096/6.776/9.740 ms and clean disposal. Performance/material findings close provisionally; cold loading, terrain and natural cover/earned play remain open.
+
+Read-only same-author attribution task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Athread-send%3Asiltwake-render-perf-banner-attribution-0208f05` is also terminal/result_available without pending children/questions. Root confirms the full-size image reads “Save file exported”, with checkpoint export clicks and the expected system-notice lifetime. No rejection/stale-error defect, source change or new browser use. This is evidence clarification, not review acceptance.
+
+Performance author releases all paths/resources. Only the already assigned terrain worker remains active at the exact task/binding above. Root has no browser/server/recording/check process; root receipts are in `/tmp/siltwake-m2-render-performance-root/`. Await the terrain notification without polling, inspect/assemble, then earned composition and the fresh complete-batch Astra/Sol pair. No M2 acceptance or campaign completion claim.
+
+Root performance receipts sealed: 192 regular files / 4463848 bytes; manifest SHA256 `3aa0214ff1f22bd6fe91b9e2623bde3999c48f5a161a826ab744057b8fca7f8d`. Symlinks/dependencies are excluded. No later operation may append to this receipt directory.

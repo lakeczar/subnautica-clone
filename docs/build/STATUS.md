@@ -1,12 +1,14 @@
 # Build status
 
-## Current checkpoint — A1–A3 and priority fix assembled; two render corrections active
+## Current checkpoint — performance correction assembled; terrain correction active
 
-**A1–A3 plus the injury-priority correction are provisionally assembled at733617c45907c77c138103e72e75e2237bc0d2f6.** Root passes **492/492 tests**, typecheck/build and the original5/5 priority probe. The three economies passed on9e1169c before the HUD-only correction. [A2 inspection](evidence/M2-A2-INTEGRATION.md) verifies493 payloads/97 inputs/27 build files; [priority inspection](evidence/M2-A3-PRIORITY-INTEGRATION.md) verifies180 payloads/97 inputs/27 build files and original Sol6.1/max runtime. ROOT-A3-01's failing case is corrected. All original A1–A3 and priority authors release their paths/resources. No complete-batch acceptance or fresh earned M2 route claim.
+**A1–A3, injury priority and render performance are provisionally assembled at 0208f05600f14d1f77cc1258eaddd79a28679b5e.** Root passes **497/497 tests**, typecheck/build and all three economies. [Performance inspection](evidence/M2-A-RENDER-PERFORMANCE-INTEGRATION.md) verifies 826 payloads, both source/build inventories, six identical production image pairs and independent geometry/lifetime results. Warm activation meets the unchanged 50 ms trial: root CPU median/p95/max 4.096/6.776/9.740 ms; author production browser 14.35/23.0/23.0 ms. Carrier materials fall from 27 to 21. Cold startup remains expensive. No complete-batch acceptance or fresh earned M2 route claim.
 
-Two separate **Sol6.1/max** corrections are active from clean99137519ac7674c96036ac2fd8139cedf58926b2: [render performance](tasks/M2-A-RENDER-PERFORMANCE.md) in t3-5daaa259 and [terrain conformity](tasks/M2-A-TERRAIN-CONFORMITY.md) in t3-d76f0eff. Their selected and original runtime model/effort plus exact parents are verified; TASKS records IDs. The former owns regional/asset lifetime and carrier material cost, the latter only terrainSurface and named terrain tests. OS2-06 natural high-approach cover recognition remains reserved for composed play and any explicitly assigned correction.
+The performance author and read-only banner-attribution follow-up are terminal; all paths/resources are released. The apparent error in the motion contact sheet is a normal **export-success** notice, confirmed in the full-size image/source and retained export records. No save-rejection defect is established.
 
-Then assemble, perform the earned Canopy–Basin expedition/recovery/reload and commission the fresh complete-batch Astra/Sol pair. M2-B/C, integrated M2/Opus, M3 and M4 remain required. Earlier active labels below are historical.
+The separate **Sol 6.1/max terrain-conformity correction** remains active from clean 99137519ac7674c96036ac2fd8139cedf58926b2 in t3-d76f0eff. It owns terrainSurface and named terrain tests only; [brief](tasks/M2-A-TERRAIN-CONFORMITY.md), exact task in TASKS. OS2-06 natural high-approach cover recognition remains reserved for composed play and any explicitly assigned correction.
+
+After terrain inspection/assembly, perform the earned Canopy–Basin expedition/recovery/reload and commission the fresh complete-batch Astra/Sol pair. M2-B/C, integrated M2/Opus, M3 and M4 remain required. Earlier active labels below are historical.
 
 Reconciliation source **a9b94111ed24a3c46634ab2e661f8cee75184ac4** / report **dc8693e8553602bda5d36437ae4f1862e9143668** is terminal, inspected and provisionally merged at **6e2a4b092693ed1f54fab245c055eb9241d69ace**. Root clean compilation/full check reproduces **461/462**, with only the confirmed missing Basin terrain failure. All 12 old compile errors and 27 prior failures are resolved. Separate build and all three economies pass; 50 source/27 built files match A1. [Current inspection](evidence/M2-A1-RECONCILE-INTEGRATION.md) verifies actual Sol6.1/max, all 32 new evidence payloads, 1,220 prior files and 66 migration inputs. The worker releases all paths/resources. [A2 rendering](tasks/M2-A2.md) and [A3 presentation](tasks/M2-A3.md) are active in separate T3 worktrees from **d753b0209edd83e9c0bb1b0062c4071dbecadfa0**, explicitly carrying the A2 terrain blocker. Both original runtime contexts confirm Sol6.1/max; TASKS records exact IDs and ownership. No batch acceptance is claimed; earlier fixture counts below are historical.
 
@@ -51,7 +53,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-A1–A3, reconciliation and the priority correction are provisionally integrated; those workers release all paths/resources. Active performance and terrain builders have the disjoint paths in their briefs; TASKS owns exact IDs/bindings. Root owns integration/build records, no competing source edits or browser/server/recording/check process. Receive terminal notifications rather than polling.
+A1–A3, reconciliation, priority and performance corrections are provisionally integrated; those authors and the read-only banner consultation release all paths/resources. Only the terrain builder remains active, with exclusive paths in its brief; TASKS owns the exact ID/binding. Root owns integration/build records, with no competing source edits or browser/server/recording/check process. Receive terminal notifications rather than polling.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -86,7 +88,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the two render corrections through completion notifications, inspect and assemble them with733617c, then assign the earned preparation → Canopy → Basin → return → failure/recovery → actual reload composition. Capture input counts, pre-refill margins, injury priority and natural cover learning; resolve substantiated visibility defects under explicit ownership. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+Receive the terrain correction through its completion notification, inspect and assemble it with 0208f05, then assign the earned preparation → Canopy → Basin → return → failure/recovery → actual reload composition. Capture input counts, pre-refill margins, injury priority and natural cover learning; resolve substantiated visibility defects under explicit ownership. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
