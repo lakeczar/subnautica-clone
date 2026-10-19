@@ -1,6 +1,8 @@
 # Build status
 
-## Current checkpoint — M2-A1 assembled; reconciliation worker active
+## Current checkpoint — M2-A1 reconciliation finishing; A2 terrain dependency confirmed
+
+The active reconciliation worker reports all 12 old compile errors and 27 old diagnostic failures resolved, with a new full-check result of **461/462**. The remaining `resource-surface.test.ts` failure is a real A2 dependency: all four Basin source hosts extend beyond the submitted terrain triangles. Root reran the read-only reproduction with byte-identical output; [disposition](evidence/M2-TERRAIN-DISPOSITION.md). This is not a green full check or acceptance. The worker finishes its owned fixture/checker work without renderer edits or weakened assertions. After terminal inspection/integration, A2 and A3 may start from one committed baseline carrying this named renderer blocker; A2 must close it before composed acceptance. The earlier fixture counts below remain historical.
 
 **M2-A1 is provisionally assembled at69e7976**, source785c87c/reportea4f021. [Root inspection](evidence/M2-A1-INTEGRATION.md) verifies actual Sol6.1/max,459 archived payloads,50 source/27 build hashes,42/42 clean focused tests, production build and65 retained migrations plus the preserved refusal. Full `npm run check` is **not passing**:12 old-fixture compile errors; the emitted diagnostic suite is435/462 with27 failures. Original M1 checker also needs version/roster reconciliation; design and new M2 economies pass. [Bounded reconciliation](tasks/M2-A1-RECONCILE.md) must precede A2/A3 shared-baseline dispatch. No ordinary Basin play, visual feedback or M2 acceptance is claimed.
 
