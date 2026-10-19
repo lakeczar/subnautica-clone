@@ -59,7 +59,7 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
       },
     };
   });
-  const expedition = createExpeditionActors(scene, cel, glass, p => regions.contains(p), labels);
+  const expedition = createExpeditionActors(scene, cel, glass, p => regions.contains(p), labels, cache);
   const fixed = scene.meshes.filter(m => !initial.has(m));
   let disposed = false;
   return {

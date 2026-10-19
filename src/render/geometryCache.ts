@@ -12,7 +12,8 @@ export interface ArtCacheKey { readonly owner: GeometryCache; readonly key: stri
 
 /** One renderer's immutable authored batches, never live Babylon objects or
  * gameplay state. Only deterministic regional factories opt in with a complete
- * generation namespace. Hulls, lock configurations and animated poses do not.
+ * generation namespace. Dart-local immutable batches also opt in; live hulls,
+ * lock configurations, state and animated/world poses never do.
  * Admission is bounded; exceeding either limit falls back to ordinary baking. */
 export class GeometryCache {
   private readonly entries = new Map<string, BakedArt>();

@@ -14,6 +14,8 @@ import { ArtBatch } from "../src/render/geometry.js";
 import { GeometryCache } from "../src/render/geometryCache.js";
 import { LabelMaterials, label } from "../src/render/landmarks.js";
 import { createEcology } from "../src/render/ecology.js";
+import { createExpeditionActors } from "../src/render/expedition.js";
+import { makeVehicle } from "../src/sim/state.js";
 import { createHash } from "node:crypto";
 import type { RenderRegion } from "../src/render/regions.js";
 
@@ -39,6 +41,98 @@ function sceneTest(run: (scene: Scene) => void): void {
     if (previous) Object.defineProperty(globalThis, "OffscreenCanvas", previous); else Reflect.deleteProperty(globalThis, "OffscreenCanvas");
   }
 }
+
+function dartIdentity(scene: Scene, id: string): unknown {
+  const hull = scene.getMeshByName(id) as Mesh;
+  hull.computeWorldMatrix(true);
+  return [hull, ...hull.getChildMeshes()].filter((mesh): mesh is Mesh => mesh instanceof Mesh).map(mesh => {
+    mesh.computeWorldMatrix(true);
+    const box = mesh.getBoundingInfo().boundingBox;
+    return {
+      name: mesh.name.replace(id, "dart"), parent: mesh.parent?.name.replace(id, "dart"),
+      position: mesh.position.asArray(), rotation: mesh.rotation.asArray(), scaling: mesh.scaling.asArray(),
+      world: Array.from(mesh.getWorldMatrix().m), enabled: mesh.isEnabled(), visible: mesh.isVisible,
+      group: mesh.renderingGroupId, material: mesh.material?.name, pickable: mesh.isPickable,
+      bounds: [box.minimum, box.maximum, box.minimumWorld, box.maximumWorld].map(v => v.asArray()),
+      vertices: mesh.getVerticesDataKinds().sort().map(kind => ({ kind,
+        type: mesh.getVerticesData(kind)!.constructor.name, data: Array.from(mesh.getVerticesData(kind)!),
+        stride: mesh.getVertexBuffer(kind)!.getSize(), updatable: mesh.getVertexBuffer(kind)!.isUpdatable() })),
+      indices: Array.from(mesh.getIndices()!), indexType: mesh.getIndices()!.constructor.name,
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+test("Dart recipes preserve exact body, cockpit, gauges and fresh panes across identities and detached live buffers", () => sceneTest(scene => {
+  const cel = createCelMaterial(scene), glass = createGlassMaterial(scene), cache = new GeometryCache();
+  const state = createGame(), dart = makeVehicle("first-dart", "dart", { x: 20, y: -4, z: -12 }, "hold");
+  dart.pose.yaw = 1.23; dart.pose.pitch = -.34; dart.charge = 42; dart.health = 73;
+  state.fleet.vehicles.push(dart); state.player.controlledVehicleId = dart.id;
+  const before = structuredClone(state);
+  const plain = createExpeditionActors(scene, cel, glass);
+  plain.update(state);
+  const expected = dartIdentity(scene, dart.id);
+  plain.dispose();
+  const art = createExpeditionActors(scene, cel, glass, undefined, undefined, cache);
+  art.update(state);
+  assert.deepEqual(dartIdentity(scene, dart.id), expected, "cold admission preserves every numeric attribute, bounds and hierarchy");
+  const coldHull = scene.getMeshByName(dart.id)!;
+  const cold = [coldHull, ...coldHull.getChildMeshes()];
+  const retained = cache.stats;
+  assert.equal(retained.entries, 4, "only body, cockpit and the two differently colored gauge recipes are admitted");
+  assert.equal(cold.filter(m => m.name.includes(".pane.")).length, 8, "each of four panes retains its separate inside and outside faces");
+  art.update(null);
+  assert.ok(cold.every(m => m.isDisposed()));
+  let created = 0, paneCreated = 0;
+  const addMesh = scene.addMesh;
+  scene.addMesh = function (...args) { created++; if (args[0].name.includes(".pane.")) paneCreated++; return addMesh.apply(this, args); };
+  art.update(state);
+  scene.addMesh = addMesh;
+  assert.equal(created - paneCreated, 4, "cached body/cockpit/gauges create only four live meshes and no temporary primitives");
+  assert.equal(paneCreated, 16, "each of eight uncached pane faces still gets its ordinary temporary and merged mesh");
+  assert.deepEqual(dartIdentity(scene, dart.id), expected, "warm reconstruction preserves exact geometry and all four panes");
+  assert.equal(cache.stats.hits - retained.hits, 4);
+  assert.equal(cache.stats.bytes, retained.bytes);
+  const first = scene.getMeshByName(dart.id) as Mesh;
+  const other = structuredClone(dart); other.id = "second-dart";
+  state.fleet.vehicles.push(other); state.player.controlledVehicleId = other.id;
+  art.update(state);
+  const second = scene.getMeshByName(other.id) as Mesh;
+  for (const a of [first, ...first.getChildMeshes()].filter((mesh): mesh is Mesh => mesh instanceof Mesh)) {
+    const b = [second, ...second.getChildMeshes()].find(m => m.name === a.name.replace(dart.id, other.id))!;
+    assert.notStrictEqual(a.geometry, b.geometry);
+    for (const kind of a.getVerticesDataKinds()) {
+      const x = a.getVerticesData(kind)!, y = b.getVerticesData(kind)!;
+      assert.notStrictEqual(x, y, `${a.name} ${kind} buffers are detached`);
+      if (ArrayBuffer.isView(x) && ArrayBuffer.isView(y)) assert.notStrictEqual(x.buffer, y.buffer);
+    }
+    assert.notStrictEqual(a.getIndices(), b.getIndices());
+  }
+  assert.deepEqual(dartIdentity(scene, other.id), expected, "identity and controlled visibility are read from the current state");
+  assert.equal(scene.getMeshByName(`${dart.id}.cockpit`)!.isEnabled(), false);
+  first.setVerticesData("color", new Float32Array(first.getTotalVertices() * 4));
+  first.setIndices([0, 1, 2]);
+  scene.getMeshByName(`${dart.id}.instrument.charge`)!.setVerticesData("position", new Float32Array(72));
+  assert.deepEqual(dartIdentity(scene, other.id), expected, "mutating one live hierarchy cannot poison another");
+  art.update(null); art.update(before);
+  assert.deepEqual(dartIdentity(scene, dart.id), expected, "mutated buffers and disposal cannot poison later reconstruction");
+  assert.deepEqual(before.fleet.vehicles[0], dart, "rendering never writes current vehicle state");
+  art.dispose(); art.dispose();
+  assert.equal(scene.meshes.length, 0); assert.equal(scene.geometries.length, 0);
+  assert.ok(scene.materials.includes(cel) && scene.materials.includes(glass));
+  assert.equal(cache.stats.bytes, retained.bytes, "borrowed numeric recipes live until their explicit owner disposes");
+  cache.dispose();
+  assert.equal(cache.stats.entries, 0); assert.equal(cache.stats.bytes, 0);
+  for (const limited of [new GeometryCache(1), new GeometryCache(256, 1)]) {
+    const fallback = createExpeditionActors(scene, cel, glass, undefined, undefined, limited);
+    for (let pass = 0; pass < 2; pass++) {
+      fallback.update(before);
+      assert.deepEqual(dartIdentity(scene, dart.id), expected, "partial or refused admission keeps exact uncached output");
+      assert.ok(limited.stats.entries <= limited.stats.maxEntries && limited.stats.bytes <= limited.stats.maxBytes);
+      fallback.update(null);
+    }
+    fallback.dispose(); limited.dispose();
+  }
+}));
 
 test("a production regional revisit reconstructs live art without thousands of temporary primitive meshes", () => sceneTest(scene => {
   const art = createRegionalArt(scene, createCelMaterial(scene), createGlassMaterial(scene)), state = createGame();
