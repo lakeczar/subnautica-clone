@@ -1,5 +1,9 @@
 # Build status
 
+## Owner-directed hold — model usage discussion
+
+The owner requests less Astra review use and a stopping point to direct a revised model mix. Automatic construction/review dispatch is on hold pending that direction. Root requested cancellation of both active M2-A R2 reviewers (`siltwake-m2-a-astra-r2-b293667` and `siltwake-m2-a-sol-r2-b293667`), preserving their partial artifacts and clean source worktrees. No replacement model or revised acceptance policy has been chosen. The prior active-review and automatic-continuation entries below are historical until the owner resumes work. Production remains6319184; M2-A remains unaccepted.
+
 ## Current checkpoint — complete M2-A R2 active on b293667
 
 Fresh independent Astra xhigh and Sol6.1/max reviewers are dispatched on **b2936674332744c22f5c319685e3f564d5976784**, with both original runtime contexts and clean T3 worktree bindings verified. Both assess all ten original criteria, full R1 findings/dispositions, current affected play and unresolved regional timings under [the complete R2 brief](tasks/M2-A-REVIEW-R2.md). Each owns only its separate report/private evidence and optional isolated5190/5191; no production paths are assigned. [TASKS](TASKS.md#complete-m2-a-r2-dispatched--actual-runtimes-verified) records exact IDs and bindings. Receive their independent returns automatically; no polling, duplicate work or acceptance is implied.
