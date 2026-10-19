@@ -2,12 +2,14 @@ import {
   DART_BUILD_POSE,
   DART_BUILD_YAW,
   EVIDENCE,
+  EVIDENCE_BLUEPRINTS,
   HULLS,
   ITEMS,
   HULL_COLLIDERS,
   OPTIONAL_RECORD,
   PLACES,
   RECIPES,
+  RECOVERY_STAGE,
   SOURCES,
 } from "../content/registry.js";
 import type {
@@ -24,7 +26,6 @@ import {
   available,
   containerAccessible,
   distance,
-  equipped,
   fabricationContainers,
   facility,
   hasRoom,
@@ -34,6 +35,8 @@ import {
   spend,
 } from "./inventory.js";
 import { makeVehicle } from "./state.js";
+import { personalLimit as personalPressureLimit, safePersonalDepth } from "./capabilities.js";
+import { RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
 export interface Interaction {
   id: string;
   label: string;
@@ -77,7 +80,10 @@ export function interactions(s: GameState): Interaction[] {
     {
       id: "rescue_staging",
       label: "Shallow rescue staging / tether guides",
-      position: { x: 46, y: -12, z: -54 },
+      // One local station has two real work faces. Keep the old submerged datum
+      // and expose its surface operator through the same existing panel/action.
+      position: { ...(distance(s.player.pose.position, RECOVERY_SURFACE_OPERATOR) < distance(s.player.pose.position, RECOVERY_STAGE)
+        ? RECOVERY_SURFACE_OPERATOR : RECOVERY_STAGE) },
       kind: "service",
     },
   );
@@ -108,18 +114,12 @@ export function discover(s: GameState, id: EvidenceId): string {
   const add = (bp: GameState["knowledge"]["blueprints"][number]): void => {
     if (!s.knowledge.blueprints.includes(bp)) s.knowledge.blueprints.push(bp);
   };
-  if (id === "C01") add("bp_pod_checklist");
+  for (const bp of EVIDENCE_BLUEPRINTS[id]) add(bp);
   if (id === "C02") {
-    add("bp_reef_recovery");
     if (!s.knowledge.scans.includes("filter_flow"))
       s.knowledge.scans.push("filter_flow");
   }
-  if (id === "C03") {
-    add("bp_island_workshop");
-    add("bp_carrier_workshop");
-  }
   if (id === "C04") {
-    add("bp_canopy_reinforcement");
     s.world.facilities.find((f) => f.id === "canopy_lab")!.repaired = true;
   }
   const place = def.place;
@@ -155,6 +155,7 @@ export function collectWithOutcome(s: GameState, id: SourceId): CollectionOutcom
     distance(s.player.pose.position, def.position) > 4
   )
     return refused("Exit with adequate personal protection and approach the source.");
+  if (!safePersonalDepth(s)) return refused(`This work exceeds your ${personalPressureLimit(s)} m personal suit. Return to safe depth and refit before collecting.`);
   if (node.stock === 0) {
     if (def.item === "meal") {
       s.world.action = { sourceId: id, seconds: 20, kind: "food" };
@@ -182,7 +183,7 @@ export function collect(s: GameState, id: SourceId): string | null {
   return collectWithOutcome(s, id).refusal;
 }
 export type CraftingBlockCode = "opening" | "blueprint" | "completed" | "needs" | "site" |
-  "restore" | "duplicate-hull" | "clearance" | "materials" | "rescue-low" | "space";
+  "restore" | "duplicate-hull" | "clearance" | "materials" | "rescue-low" | "space" | "equipment";
 export function craftingBlock(
   s: GameState,
   id: RecipeId,
@@ -197,6 +198,9 @@ export function craftingBlock(
     return block("completed", "Already completed. The fabricated equipment or restored service is retained.");
   if (!r.needs.every((n) => s.knowledge.crafted.includes(n as RecipeId)))
     return block("needs", "Earlier service work or equipment is still required.");
+  if (id === "suit_350" && (s.inventory.items.filter(i => i.fitted === "suit").length !== 1 ||
+      !s.inventory.items.some(i => i.kind === "suit_150" && i.fitted === "suit" && i.containerId === "equipment" && i.quantity === 1)))
+    return block("equipment", "Bring the one fitted 150 m suit for its paid refit. Nothing consumed.");
   if (r.site === "island_workshop" ? !nearWorkshop(s) || !!s.player.interiorId : !nearPod(s))
     return block("site", "Use the fabrication bench at the required refuge.");
   if (
@@ -266,6 +270,9 @@ export function craft(
       capacity: 32,
       ownerId: vid,
     });
+  } else if (r.output === "suit_350") {
+    // Refit the paid instance in place; its ID, fitting, container and earlier receipt survive.
+    s.inventory.items.find(i => i.kind === "suit_150" && i.fitted === "suit")!.kind = "suit_350";
   } else {
     const fitted =
       r.output === "essential_tools"
@@ -339,9 +346,13 @@ export function hint(s: GameState): string {
     return s.knowledge.hintLevel < 3
       ? "Follow the buoyant crowns east from the island. Quiet movement gives time to read the hunter’s warning."
       : "Use the open upper crowns, above 150 m. The laboratory is tucked against the tall cover rib; the clear upper flank leads back to the island.";
-  return "The field sheet points toward Basin survey dishes, a future expedition in this build. For now, bring two crust and two resin back to the workshop for optional Dart acoustic trim. Fit it at the cradle for faster quiet travel, with less boost speed.";
+  if (!s.knowledge.crafted.includes("suit_350"))
+    return "Bring four crust and four cured resin from the Canopy to the restored workshop for a 350 m suit refit, with two alloy and two membrane. Dart's 180 m hull reaches the first Basin shelf; your suit must protect the exit.";
+  if (!has("C05") || !has("C06"))
+    return "Follow the lower crowns to the fallen Basin dish. The flooded dormitory faces inward; a separate boundary station stands beside the southern dish. Both lie on the first shelf, with an open upper return east of the Canopy.";
+  return "Both Basin observations are retained. Store useful loose alloy and survey-fin crust at the workshop; the service and frame plans complement its fleet designs. The upper return and local rescue guides remain available.";
 }
 export const personalLimit = (s: GameState): number =>
-  equipped(s, "suit_150") ? 150 : 60;
+  personalPressureLimit(s);
 export const discoveredPlace = (s: GameState, id: string): boolean =>
   s.knowledge.markers.includes(id as keyof typeof PLACES);

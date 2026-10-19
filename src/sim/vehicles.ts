@@ -11,7 +11,7 @@ import {
   removeQuantity,
   supportedServiceSite,
 } from "./inventory.js";
-import { personalLimit } from "./progression.js";
+import { personalDepth, personalLimit } from "./capabilities.js";
 import { WORLD_BOUNDS } from "./world.js";
 
 export const PULSE_CHARGE_COST = 25;
@@ -87,7 +87,7 @@ export function exitBlock(s: GameState, world: WorldQueries): { code: ExitRefusa
     y: v.pose.position.y + 0.2,
     z: v.pose.position.z + Math.sin(v.pose.yaw) * 3.1,
   };
-  const depth = Math.max(0, -(exit.y + 0.4));
+  const depth = personalDepth(exit);
   if (depth > personalLimit(s))
     return { code: "depth", message: `Exit exposure ${depth.toFixed(0)} m exceeds your ${personalLimit(s)} m personal suit. The ${HULLS[v.hull].initialDepth} m hull does not protect a diver outside.` };
   if (!world.clearance(exit, { radius: 0.34, height: 0.95 }))
@@ -175,7 +175,7 @@ export function service(s: GameState, id: string): string | null {
     )
       i.charge = 100;
   s.feedback =
-    "Service complete: hull battery, health, emergency air and cells in your hold or this craft restored. Cargo and fitted modules retained.";
+    "Serviced: hull, power and emergency air full. Cells in your hold and this craft charged. Cargo and modules kept.";
   return null;
 }
 export function reserve(s: GameState, id: string): string | null {
@@ -218,6 +218,6 @@ export function eat(s: GameState): string | null {
   s.player.vitals.food = Math.min(100, s.player.vitals.food + 70);
   s.player.starvationSeconds = 0;
   s.feedback =
-    "Meal eaten. Prepared portions do not spoil; ordinary movement remains available when hungry.";
+    `Meal eaten · food ${Math.round(s.player.vitals.food)}`;
   return null;
 }

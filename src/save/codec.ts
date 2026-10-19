@@ -1,12 +1,17 @@
-import { CONTENT_VERSION } from "../content/registry.js";
+import { CONTENT_VERSION, SOURCES } from "../content/registry.js";
+import { BASIN_SOURCE_IDS, LEGACY_WORLD_BOUNDS } from "../content/routes.js";
 import type { GameState } from "../sim/types.js";
 import { createGame } from "../sim/state.js";
 import { completeOpening } from "../sim/progression.js";
-import { CARRIER_LAYOUT, carrierHull, carrierInteriorEntry, carrierInteriorSolids, localToWorld } from "../sim/carrier.js";
+import { carrierInteriorSolids } from "../sim/carrier.js";
+import { CARRIER_LAYOUT, carrierHull, carrierInteriorEntry,
+  carrierInteriorSolids as legacyInteriorSolids, localToWorld } from "./legacy/carrier-entry.js";
 import { createWorldQueries } from "../sim/world.js";
 import { validFoundationState } from "./foundation.js";
-import { record, validExpedition2Domain, validState } from "./validation.js";
-export const SAVE_SCHEMA_VERSION = 2 as const;
+import { record, validState } from "./validation.js";
+import { validExpedition2Domain, validState as validLegacyState } from "./legacy/validation.js";
+import type { GameState as LegacyGameState } from "./legacy/types.js";
+export const SAVE_SCHEMA_VERSION = 3 as const;
 export const MAX_SAVE_BYTES = 1_048_576;
 export interface SaveMetadata {
   sessionId: string;
@@ -38,8 +43,8 @@ function normalizeHistoricalNotice(s: GameState): void {
     if (s.feedback === old) s.feedback = corrected;
   }
 }
-function blockedCarrierInterior(s: GameState): boolean {
-  return !!s.player.interiorPose && !createWorldQueries(carrierInteriorSolids(s), () => -200)
+function blockedCarrierInterior(s: GameState, legacy = false): boolean {
+  return !!s.player.interiorPose && !createWorldQueries(legacy ? legacyInteriorSolids(s as LegacyGameState) : carrierInteriorSolids(s), () => -200)
     .clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 });
 }
 function migrateFoundation(old: GameState): GameState {
@@ -70,6 +75,14 @@ function migrateFoundation(old: GameState): GameState {
   s.feedback = s.migration;
   return s;
 }
+function migrateExpedition(old: LegacyGameState): GameState {
+  return { ...old,
+    world: { ...old.world, resources: [...old.world.resources, ...BASIN_SOURCE_IDS.map(id =>
+      ({ id, stock: SOURCES[id].stock, reserve: SOURCES[id].reserve }))] },
+    recovery: { ...old.recovery, operation: old.recovery.operation ?
+      { ...old.recovery.operation, routeId: "canopy" } : null },
+  };
+}
 export function decodeSave(text: string): Result<SaveEnvelope> {
   if (new TextEncoder().encode(text).byteLength > MAX_SAVE_BYTES)
     return { ok: false, error: "This save exceeds the 1 MiB import limit." };
@@ -84,13 +97,14 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
   }
   if (!record(d) || d.format !== "siltwake.save")
     return { ok: false, error: "This is not a Siltwake save file." };
-  if (d.schemaVersion !== 2 && d.schemaVersion !== 1)
+  if (d.schemaVersion !== 3 && d.schemaVersion !== 2 && d.schemaVersion !== 1)
     return {
       ok: false,
-      error: `Save schema ${typeof d.schemaVersion === "number" || typeof d.schemaVersion === "string" ? String(d.schemaVersion).slice(0, 24) : "(unrecognized)"} is unsupported. This build reads schema 2 and validated foundation schema 1 only. Keep the original file.`,
+      error: `Save schema ${typeof d.schemaVersion === "number" || typeof d.schemaVersion === "string" ? String(d.schemaVersion).slice(0, 24) : "(unrecognized)"} is unsupported. This build reads schema 3, validated expedition schema 2 and foundation schema 1 only. Keep the original file.`,
     };
   if (d.schemaVersion === 1 ? d.contentVersion !== "foundation.1"
-    : d.contentVersion !== CONTENT_VERSION && d.contentVersion !== "expedition.2")
+    : d.schemaVersion === 2 ? d.contentVersion !== "expedition.3" && d.contentVersion !== "expedition.2"
+      : d.contentVersion !== CONTENT_VERSION)
     return {
       ok: false,
       error:
@@ -126,27 +140,39 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
         ok: false,
         error: "Malformed foundation data. The original record is unchanged.",
       };
+    const state = migrateFoundation(d.state);
+    if (!validState(state)) return { ok: false, error: "The migrated foundation state is invalid. The original record is unchanged." };
     return {
       ok: true,
       value: createEnvelope(
-        migrateFoundation(d.state),
+        state,
         m as unknown as SaveMetadata,
       ),
     };
   }
-  if ((d.contentVersion === "expedition.2" && !validExpedition2Domain(d.state)) || !validState(d.state))
+  const legacy = d.schemaVersion === 2;
+  if (legacy ? ((d.contentVersion === "expedition.2" && !validExpedition2Domain(d.state)) || !validLegacyState(d.state)) : !validState(d.state))
     return {
       ok: false,
       error:
         "Gameplay ownership, capacity, equipment, discovery, facility, recovery or berth data is invalid. Nothing was loaded.",
     };
-  // All saved berth transforms remain compatible. Newly sealed
+  const s = legacy ? migrateExpedition(d.state as LegacyGameState) : d.state as GameState;
+  // All saved berth transforms remain compatible. Historically sealed
   // room walls can cover an old walking pose; only that pose receives a visible,
   // idempotent safety relocation. Reading never writes or moves a vessel/cargo.
-  if (blockedCarrierInterior(d.state)) {
-    const s = d.state, h = carrierHull(s)!;
+  if (blockedCarrierInterior(s, legacy)) {
+    if (!legacy) return { ok: false, error: "The current walking position intersects a sealed carrier compartment. Nothing was loaded." };
+    const h = carrierHull(s as LegacyGameState)!;
     const error = "Carrier compartment migration could not find a clear dry passage at this saved vessel position. Keep the original save for a compatible build; nothing was loaded or changed.";
-    const entry = carrierInteriorEntry(s, createWorldQueries(), CARRIER_LAYOUT.helm);
+    const world = createWorldQueries(), bounds = LEGACY_WORLD_BOUNDS;
+    // Historical entry must not gain a landing merely because M2 enlarged the world.
+    const legacyWorld = { ...world, clearance(p: GameState["player"]["pose"]["position"], shape: Parameters<typeof world.clearance>[1]) {
+      return p.x - shape.radius >= bounds.minX && p.x + shape.radius <= bounds.maxX &&
+        p.z - shape.radius >= bounds.minZ && p.z + shape.radius <= bounds.maxZ &&
+        p.y >= -200 && p.y <= 100 && world.clearance(p, shape);
+    } };
+    const entry = carrierInteriorEntry(s as LegacyGameState, legacyWorld, CARRIER_LAYOUT.helm);
     if (!entry) return { ok: false, error };
     s.player.interiorPose!.position = entry;
     s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
@@ -155,9 +181,9 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
     s.feedback = s.migration;
     if (!validState(s) || blockedCarrierInterior(s)) return { ok: false, error };
   }
-  normalizeHistoricalNotice(d.state);
-  d.contentVersion = CONTENT_VERSION;
-  return { ok: true, value: d as unknown as SaveEnvelope };
+  normalizeHistoricalNotice(s);
+  if (!validState(s)) return { ok: false, error: "The migrated gameplay state is invalid. The original record is unchanged." };
+  return { ok: true, value: createEnvelope(s, m as unknown as SaveMetadata) };
 }
 export function createEnvelope(
   state: GameState,
@@ -173,7 +199,7 @@ export function createEnvelope(
 }
 export function encodeSave(save: SaveEnvelope): Result<string> {
   if (save.schemaVersion !== SAVE_SCHEMA_VERSION || save.contentVersion !== CONTENT_VERSION)
-    return { ok: false, error: "This build writes schema 2 / expedition.3 only. Decode a supported older save before writing it." };
+    return { ok: false, error: "This build writes schema 3 / expedition.4 only. Decode a supported older save before writing it." };
   let text: string;
   try {
     text = JSON.stringify(save, null, 2);

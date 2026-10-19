@@ -1,17 +1,21 @@
 import {
   BLUEPRINTS,
   EVIDENCE,
+  EVIDENCE_BLUEPRINTS,
   HULLS,
   ITEMS,
   PLACES,
   RECIPES,
   SOURCES,
 } from "../content/registry.js";
+import { LEGACY_WORLD_BOUNDS, RECOVERY_ROUTES, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
 import type { GameState } from "../sim/types.js";
 import { usedCapacity } from "../sim/inventory.js";
 import { installedModuleValid, moduleItem, SMALL_CRAFT_SOCKETS } from "../sim/modules.js";
 import { WORLD_BOUNDS } from "../sim/world.js";
 import { atCarrierSupport, BERTH_LOCAL, CARRIER_LAYOUT, localToWorld } from "../sim/carrier.js";
+// Compatibility export for historical callers; decode additionally runs the frozen full validator.
+export { validExpedition2Domain } from "./legacy/validation.js";
 export const record = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const exact = (v: unknown, keys: string[]): v is Record<string, unknown> =>
@@ -31,7 +35,7 @@ const worldVec = (v: unknown): boolean =>
   vec(v) &&
   record(v) &&
   n(v.x, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX) &&
-  n(v.y, -200, 100) &&
+  n(v.y, WORLD_VERTICAL_BOUNDS.minY, WORLD_VERTICAL_BOUNDS.maxY) &&
   n(v.z, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ);
 const pose = (v: unknown): boolean =>
   exact(v, ["frame", "position", "yaw", "pitch"]) &&
@@ -205,7 +209,7 @@ export function validState(value: unknown): value is GameState {
     !stringSet(k.scans, 40, (v) => v === "filter_flow" || known(SOURCES)(v)) ||
     !array(
       k.evidence,
-      4,
+      Object.keys(EVIDENCE).length,
       (v) =>
         exact(v, ["id", "tick", "provenance"]) &&
         known(EVIDENCE)(v.id) &&
@@ -214,7 +218,7 @@ export function validState(value: unknown): value is GameState {
         v.provenance === EVIDENCE[v.id as keyof typeof EVIDENCE].provenance,
     ) ||
     !stringSet(k.journals, 1, (v) => v === "mara_reef_note") ||
-    !stringSet(k.markers, 5, known(PLACES)) ||
+    !stringSet(k.markers, Object.keys(PLACES).length, known(PLACES)) ||
     !stringSet(k.crafted, Object.keys(RECIPES).length, known(RECIPES)) ||
     !int(k.hintLevel, 0, 3)
   )
@@ -419,16 +423,20 @@ export function validState(value: unknown): value is GameState {
       r.operation === null ||
       (exact(r.operation, [
         "vehicleId",
+        "routeId",
         "method",
         "phase",
         "position",
         "waypoint",
       ]) &&
         id(r.operation.vehicleId) &&
+        oneOf(r.operation.routeId, ["canopy", "basin"]) &&
         r.operation.method === "tow" &&
         oneOf(r.operation.phase, ["approach", "ready", "tow"]) &&
         worldVec(r.operation.position) &&
-        int(r.operation.waypoint, 0, 3))
+        int(r.operation.waypoint, 0, RECOVERY_ROUTES[r.operation.routeId as keyof typeof RECOVERY_ROUTES].attachmentIndex) &&
+        (r.operation.routeId === "canopy" || (r.operation.phase === "ready" ? r.operation.waypoint === 5 :
+          r.operation.phase === "approach" ? n(r.operation.waypoint, 1, 5) : n(r.operation.waypoint, 0, 4))))
     )
   )
     return false;
@@ -527,7 +535,7 @@ function semantic(s: GameState): boolean {
     if (
       !containers.some((c) => c.id === i.containerId) ||
       (i.containerId === "equipment") !== !!i.fitted ||
-      (i.fitted && fit[i.fitted] !== i.kind) ||
+      (i.fitted && (i.fitted === "suit" ? i.kind !== "suit_150" && i.kind !== "suit_350" : fit[i.fitted] !== i.kind)) ||
       (i.fitted && i.quantity !== 1) ||
       (i.kind === "reserve_cell") !== (i.charge !== null) ||
       (i.charge !== null && i.quantity !== 1) ||
@@ -549,7 +557,6 @@ function semantic(s: GameState): boolean {
   }
   for (const kind of [
     "essential_tools",
-    "suit_150",
     "salvage_buoy",
     "bobbin_kit",
     "reserve_cell",
@@ -567,8 +574,12 @@ function semantic(s: GameState): boolean {
     if (k.crafted.includes(kind === "reserve_cell" ? "reserve_cells" : kind) && n !== (kind === "reserve_cell" ? 2 : 1))
       return false;
   }
+  const suits = items.filter(i => i.kind === "suit_150" || i.kind === "suit_350");
+  if (suits.length !== (k.crafted.includes("suit_150") ? 1 : 0) ||
+      suits.some(i => i.quantity !== 1 || i.fitted !== "suit" ||
+        (i.kind === "suit_350") !== k.crafted.includes("suit_350"))) return false;
   if (items.some((i) => (i.kind === "essential_tools" && i.fitted !== "tools") ||
-    (i.kind === "suit_150" && i.fitted !== "suit") ||
+    ((i.kind === "suit_150" || i.kind === "suit_350") && i.fitted !== "suit") ||
     (i.kind === "bobbin_kit" && (i.fitted !== "recovery" || i.provenance !== "maintenance")))) return false;
   if (k.crafted.some((r) => !k.blueprints.includes(RECIPES[r].bp) || RECIPES[r].needs.some((id) => !k.crafted.includes(id as keyof typeof RECIPES)))) return false;
   for (const node of s.world.resources) {
@@ -577,7 +588,7 @@ function semantic(s: GameState): boolean {
   }
   const expectedBlueprints = new Set<string>();
   for (const e of k.evidence) {
-    for (const bp of ({ C01: ["bp_pod_checklist"], C02: ["bp_reef_recovery"], C03: ["bp_island_workshop", "bp_carrier_workshop"], C04: ["bp_canopy_reinforcement"] } as const)[e.id]) expectedBlueprints.add(bp);
+    for (const bp of EVIDENCE_BLUEPRINTS[e.id]) expectedBlueprints.add(bp);
   }
   if (k.blueprints.length !== expectedBlueprints.size || k.blueprints.some((bp) => !expectedBlueprints.has(bp))) return false;
   const bi = items.find((i) => i.id === buoy.itemId);
@@ -719,16 +730,12 @@ function semantic(s: GameState): boolean {
     )
   )
     return false;
+  const op = s.recovery.operation;
+  if (op) {
+    const target = f.vehicles.find(v => v.id === op.vehicleId), loss = s.recovery.losses.find(l => l.vehicleId === op.vehicleId);
+    if (!target || target.hull !== "dart" || target.berth || !loss) return false;
+    const basin = loss.position.x > LEGACY_WORLD_BOUNDS.maxX || loss.position.z < LEGACY_WORLD_BOUNDS.minZ;
+    if ((op.routeId === "basin") !== basin) return false;
+  }
   return true;
-}
-/** expedition.2's closed domain, followed by the SAME strict structural/relational validator.
- * This revision adds one item/recipe ID and installed refs only; no new blueprint/source IDs.
- * Never let an old content tag smuggle current-domain data through migration. */
-export function validExpedition2Domain(value: unknown): boolean {
-  if (!record(value) || !record(value.inventory) || !record(value.knowledge) || !record(value.fleet)) return false;
-  return Array.isArray(value.inventory.items) && value.inventory.items.every((i: unknown) =>
-    record(i) && i.kind !== "dart_acoustic_trim") &&
-    Array.isArray(value.knowledge.crafted) && !value.knowledge.crafted.includes("dart_acoustic_trim") &&
-    Array.isArray(value.fleet.vehicles) && value.fleet.vehicles.every((v: unknown) =>
-      record(v) && Array.isArray(v.modules) && v.modules.length === 0);
 }

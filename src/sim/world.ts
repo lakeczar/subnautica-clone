@@ -1,15 +1,12 @@
 import { CANOPY_COVER, SOURCES } from "../content/registry.js";
+import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, LEGACY_TERRAIN_SOURCE_IDS,
+  LEGACY_WORLD_BOUNDS, ROUTE_WORLD_BOUNDS, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
 import type { Capsule, Vec3, WorldQueries } from "./types.js";
 import { actorBox, RIB_CONTACT_TOLERANCE, RIB_SLIDE_ITERATIONS, ribUpperHeight,
   segmentBoxClosest, sweptBoxIntersects, sweepBoxRib } from "./ribCollision.js";
 
 export const WATER_Y = 0;
-export const WORLD_BOUNDS = {
-  minX: -76,
-  maxX: 188,
-  minZ: -184,
-  maxZ: 66,
-} as const;
+export const WORLD_BOUNDS = ROUTE_WORLD_BOUNDS;
 export interface HorizontalBounds {
   minX: number;
   maxX: number;
@@ -32,7 +29,7 @@ export interface RibSegment {
 }
 
 /** Shared deterministic height field. Renderer samples this very function. */
-export function terrainHeight(x: number, z: number): number {
+export function legacyTerrainHeight(x: number, z: number): number {
   const shelf = -8.8 + Math.sin(x * 0.105) * 0.52 + Math.cos(z * 0.12) * 0.42;
   const beach = 16.8 * Math.exp(-((x - 9) ** 2 / 620 + (z + 57) ** 2 / 680));
   const westPeak = 13 * Math.exp(-((x + 1) ** 2 / 78 + (z + 62) ** 2 / 115));
@@ -41,7 +38,8 @@ export function terrainHeight(x: number, z: number): number {
   const reefBowl = 22 * Math.exp(-((x + 32) ** 2 / 190 + (z + 24) ** 2 / 190));
   let height = shelf + beach + westPeak + eastPeak - canopy - reefBowl;
   // Authored source ledges share their actual collision/terrain authority. No floating loot.
-  for (const source of Object.values(SOURCES)) {
+  for (const id of LEGACY_TERRAIN_SOURCE_IDS) {
+    const source = SOURCES[id];
     if (source.position.y > 0 || source.item === "meal") continue;
     const weight = Math.exp(
       -((x - source.position.x) ** 2 + (z - source.position.z) ** 2) / 18,
@@ -60,6 +58,25 @@ export function terrainHeight(x: number, z: number): number {
   height = height * (1 - apron) + approachY * apron;
   // Shallow recovery staging bench.
   if (x >= 38 && x <= 54 && z >= -60 && z <= -48) height = -13;
+  return height;
+}
+
+/** The old rectangle is bit-identical, including source order and zero-weight math.
+ * Basin relief is local to the adjoining extension; its new sources never feed the old loop. */
+export function terrainHeight(x: number, z: number): number {
+  let height = legacyTerrainHeight(x, z);
+  if (x >= LEGACY_WORLD_BOUNDS.minX && x <= LEGACY_WORLD_BOUNDS.maxX &&
+      z >= LEGACY_WORLD_BOUNDS.minZ && z <= LEGACY_WORLD_BOUNDS.maxZ) return height;
+  const t = Math.max(0, Math.min(1, (-z - 184) / 76));
+  height -= 36 * t * t * (3 - 2 * t) * Math.max(0, Math.min(1, (x - 74) / 24));
+  for (const id of BASIN_SOURCE_IDS) {
+    const source = SOURCES[id], r2 = (x - source.position.x) ** 2 + (z - source.position.z) ** 2;
+    if (r2 >= 144) continue;
+    const weight = (Math.exp(-r2 / 18) - Math.exp(-8)) / (1 - Math.exp(-8));
+    height = height * (1 - weight) + (source.position.y - 0.8) * weight;
+  }
+  for (const pad of BASIN_GEOMETRY.terrainPads)
+    if (x >= pad.minX && x <= pad.maxX && z >= pad.minZ && z <= pad.maxZ) height = Math.max(height, pad.y);
   return height;
 }
 
@@ -220,6 +237,7 @@ export const SOLIDS: readonly Solid[] = [
       z: Math.max(a.z, b.z) + radius,
     },
   })),
+  ...BASIN_GEOMETRY.solids,
 ];
 
 type Axis = "x" | "y" | "z";
@@ -357,6 +375,7 @@ export function createWorldQueries(
         origin.x + rx > WORLD_BOUNDS.maxX ||
         origin.z - rz < WORLD_BOUNDS.minZ ||
         origin.z + rz > WORLD_BOUNDS.maxZ ||
+        origin.y < WORLD_VERTICAL_BOUNDS.minY || origin.y > WORLD_VERTICAL_BOUNDS.maxY ||
         origin.y + (capsule.bottom ?? 0) < floorHeight(origin.x, origin.z) - 0.02
       )
         return false;
@@ -460,10 +479,11 @@ export function createWorldQueries(
         WORLD_BOUNDS.minZ,
         Math.min(WORLD_BOUNDS.maxZ, position.z),
       );
+      const y = Math.max(WORLD_VERTICAL_BOUNDS.minY, Math.min(WORLD_VERTICAL_BOUNDS.maxY, position.y));
       return {
-        position: { x, y: position.y, z },
+        position: { x, y, z },
         hitSolid,
-        hitBoundary: x !== position.x || z !== position.z,
+        hitBoundary: x !== position.x || y !== position.y || z !== position.z,
       };
     },
   };

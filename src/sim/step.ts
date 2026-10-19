@@ -83,6 +83,7 @@ function surfaceMove<T extends ReturnType<WorldQueries["moveCapsule"]>>(
 }
 import { incapacitate, recoveryCommand, updateRecovery } from "./recovery.js";
 import { updateSurvival, updateThreat } from "./survival.js";
+import { safePersonalDepth } from "./capabilities.js";
 const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
@@ -174,7 +175,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       return no;
     }
     case "recover":
-      return recoveryCommand(s, c.vehicleId, c.method);
+      return recoveryCommand(s, c.vehicleId, c.method, w);
     case "hint":
       s.feedback = hint(s);
       return null;
@@ -215,6 +216,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         s.player.controlledVehicleId
       )
         return "Approach this source by hand.";
+      if (!safePersonalDepth(s)) return "Refit personal pressure protection before working at this depth.";
       if (c.maintenance) {
         if (d.region !== "refuge_reef")
           return "Sort rescue stock at the shallow reef service habitats.";
@@ -317,7 +319,7 @@ function updateAction(s: GameState): void {
   if (!a) return;
   if (
     distance(s.player.pose.position, SOURCES[a.sourceId].position) > 4 ||
-    s.player.controlledVehicleId
+    s.player.controlledVehicleId || !safePersonalDepth(s)
   ) {
     s.world.action = null;
     return;
