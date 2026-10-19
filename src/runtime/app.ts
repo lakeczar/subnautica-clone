@@ -32,6 +32,8 @@ const DEFAULT_SETTINGS: Settings = {
 const SETTINGS_KEY = "siltwake.settings.v1";
 const BLOCKED_ASCENT_SECONDS = 0.45;
 const ASCENT_EPSILON = 1e-5;
+/** Lets a pause or menu draw before idle region preparation may block a frame. */
+const IDLE_PREPARE_MS = 250;
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : "An unknown error occurred.";
 
@@ -105,6 +107,8 @@ export class SiltwakeApp {
   private dirty = true;
   private frameId = 0;
   private hudTime = 0;
+  /** Last frame time at which play advanced; idle preparation waits after it. */
+  private lastActive = Number.NEGATIVE_INFINITY;
   private forwardThrust = 0;
   private thrustSeconds = 0;
   private thrustActor: string | null = null;
@@ -357,6 +361,20 @@ export class SiltwakeApp {
         this.dirty = false;
       } catch (error) {
         this.pause();
+        this.view.graphicsError(errorText(error));
+        this.renderer.dispose();
+        this.renderer = null;
+      }
+    }
+    if (this.active) this.lastActive = now;
+    else if (
+      this.renderer && this.graphicsAvailable && !document.hidden && !this.panelOpen &&
+      !this.session.busy && !this.session.confirmation &&
+      this.view.canvas.dataset.ready === "true" && now - this.lastActive > IDLE_PREPARE_MS
+    ) {
+      // Title, pause and entry-ready screens: build at most one nearby region
+      // per frame into retention so first visits during play do not stall.
+      try { this.renderer.prepare(); } catch (error) {
         this.view.graphicsError(errorText(error));
         this.renderer.dispose();
         this.renderer = null;

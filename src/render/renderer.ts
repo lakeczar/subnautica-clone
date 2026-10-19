@@ -17,11 +17,16 @@ import { createExpeditionActors, createExpeditionRegion, DART_SEAT } from "./exp
 import { createAtmosphere } from "./atmosphere.js";
 import { createRegionResidency, type RegionArt, type RenderRegion } from "./regions.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import type { Geometry } from "@babylonjs/core/Meshes/geometry.js";
 import { GeometryCache } from "./geometryCache.js";
 
 export type Quality = "rich" | "light";
 export interface GameRenderer {
   present(state: GameState | null, overlay?: { target: InteractionHost | null; preview?: InteractionHost | null }): void;
+  /** Idle-time construction of one nearby region into retention. Callers use
+   * it only while play is not advancing; it never draws or changes state. */
+  prepare(): boolean;
   setQuality(quality: Quality): void;
   resize(): void;
   dispose(): void;
@@ -31,6 +36,8 @@ export interface GameRenderer {
  * Shared cel/glass stay scene-owned; every regional/actor handle owns its meshes. */
 export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial): RegionArt & {
   readonly active: readonly RenderRegion[];
+  readonly retained: readonly RenderRegion[];
+  prepare(): RenderRegion | null;
   readonly cacheStats: GeometryCache["stats"];
   readonly labelStats: LabelMaterials["stats"];
 } {
@@ -50,20 +57,43 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
       mesh.renderingGroupId = 1;
       mesh.metadata = { ...mesh.metadata, detailRegion: region };
     }
+    // Retention detaches meshes and geometries from the scene like an asset
+    // container: nothing is evaluated or drawn, CPU/GPU buffers stay intact.
+    let detached: Geometry[] | null = null;
     return {
       update(state) { expedition.update(state); life.update(state ? state.tick / 60 : 0, state); },
       setQuality(quality) { life.setQuality(quality); },
+      suspend() {
+        if (detached) return;
+        detached = [];
+        for (const mesh of meshes) {
+          if (mesh.isDisposed()) continue;
+          scene.removeMesh(mesh);
+          const geometry = (mesh as Mesh).geometry;
+          if (geometry && scene.removeGeometry(geometry)) detached.push(geometry);
+        }
+      },
+      resume() {
+        if (!detached) return;
+        for (const geometry of detached) if (!geometry.isDisposed()) scene.addGeometry(geometry);
+        detached = null;
+        for (const mesh of meshes) if (!mesh.isDisposed()) scene.addMesh(mesh);
+      },
       dispose() {
         expedition.dispose(); life.dispose();
         for (const mesh of meshes) if (!mesh.isDisposed()) mesh.dispose();
       },
     };
   });
+  // Detached buffers are not rebuilt by the engine after context loss.
+  const lost = scene.getEngine().onContextLostObservable.add(() => regions.discardRetained());
   const expedition = createExpeditionActors(scene, cel, glass, p => regions.contains(p), labels, cache);
   const fixed = scene.meshes.filter(m => !initial.has(m));
   let disposed = false;
   return {
     get active() { return regions.active; },
+    get retained() { return regions.retained; },
+    prepare() { return disposed ? null : regions.prepare(); },
     get cacheStats() { return cache.stats; },
     get labelStats() { return labels.stats; },
     update(state) {
@@ -78,6 +108,7 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
       for (const mesh of fixed) if (!mesh.isDisposed()) mesh.dispose();
       cache.dispose(); labels.dispose();
       scene.onDisposeObservable.remove(disposal);
+      scene.getEngine().onContextLostObservable.remove(lost);
     },
   };
 }
@@ -181,8 +212,10 @@ export function createRenderer(
         const priorRegions = art.active.join(",");
         art.update(state);
         canvas.dataset.regions = art.active.join(",");
-        if (priorRegions !== canvas.dataset.regions)
+        if (priorRegions !== canvas.dataset.regions) {
           canvas.dataset.activationMs = (performance.now() - activationStart).toFixed(3);
+          canvas.dataset.retained = art.retained.join(",");
+        }
         if (state) {
           const pose = state.player.pose;
           if (state.opening.phase < 4) {
@@ -241,6 +274,18 @@ export function createRenderer(
         canvas.dataset.textures = String(scene.textures.length);
         canvas.dataset.ready = scene.isReady() ? "true" : "false";
         canvas.dataset.frames = String(++presented);
+      },
+      prepare() {
+        if (disposed || !available) return false;
+        const start = performance.now();
+        const region = art.prepare();
+        if (!region) return false;
+        // Cold construction moved to idle time stays measured, never folded
+        // into activationMs: it is first-use work, not a warm activation.
+        canvas.dataset.prepared = [...(canvas.dataset.prepared ? canvas.dataset.prepared.split(",") : []),
+          `${region}:${(performance.now() - start).toFixed(3)}`].join(",");
+        canvas.dataset.retained = art.retained.join(",");
+        return true;
       },
       setQuality,
       resize,

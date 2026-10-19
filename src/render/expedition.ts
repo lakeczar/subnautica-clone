@@ -1115,13 +1115,15 @@ export function createExpeditionActors(
         for (const { mesh, side } of hunterFins)
           mesh.rotation.z = side * pose.finAngle;
       }
+      // A remote parked hull is hidden, not rebuilt on every return: the fleet
+      // is small and bounded, and its live handles are re-read from state.
       for (const [id, mesh] of vehicles)
-        if (!s?.fleet.vehicles.some(v => v.id === id && visibleVehicle(v))) {
+        if (!s?.fleet.vehicles.some(v => v.id === id)) {
           mesh.dispose();
           vehicles.delete(id);
         }
       for (const v of s?.fleet.vehicles ?? []) {
-        if (!visibleVehicle(v)) continue;
+        if (!visibleVehicle(v)) { vehicles.get(v.id)?.setEnabled(false); continue; }
         let m = vehicles.get(v.id);
         if (m && m.metadata.hull !== v.hull) { m.dispose(); vehicles.delete(v.id); m = undefined; }
         if (!m) {

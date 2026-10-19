@@ -7,8 +7,23 @@ export type RenderQuality = "rich" | "light";
 export interface RegionArt {
   update(state: GameState | null): void;
   setQuality?(quality: RenderQuality): void;
+  /** Optional retention: stop drawing without releasing buffers. A retained
+   * owner is always reconciled by update(state) before it draws again. */
+  suspend?(): void;
+  resume?(): void;
   dispose(): void;
 }
+
+/** Detailed owners plus retained (suspended) owners. Retention turns a warm
+ * return into re-attachment instead of reconstruction; the limit bounds
+ * resident geometry as the world grows beyond the current four regions. */
+export const RESIDENT_REGION_LIMIT = 4;
+const NEIGHBOURS: Readonly<Record<RenderRegion, readonly RenderRegion[]>> = {
+  refuge_reef: ["island_chain", "suspended_garden"],
+  island_chain: ["refuge_reef", "suspended_garden"],
+  suspended_garden: ["refuge_reef", "island_chain", "silt_basin"],
+  silt_basin: ["suspended_garden"],
+};
 
 export function renderRegionAt(p: Readonly<Vec3>): RenderRegion {
   const basin = ROUTE_REGIONS.silt_basin.bounds, canopy = ROUTE_REGIONS.suspended_garden.bounds;
@@ -29,17 +44,41 @@ function adjoining(region: RenderRegion, p: Readonly<Vec3>): RenderRegion {
   }
 }
 
-/** Two adjoining detailed owners. Silhouettes and pinned moving actors have
- * their own bounded lifetimes. Discard old owners before constructing new ones
- * so an ordinary transition never temporarily retains four detailed regions. */
-export function createRegionResidency(create: (region: RenderRegion) => RegionArt): RegionArt & {
+/** Two adjoining detailed owners. Owners that leave the detailed pair are
+ * suspended and retained, least recently used first out, within `limit`
+ * resident regions; owners without suspend support are disposed as before.
+ * Retained owners never draw, never count as resident for actors and are
+ * reconciled against the current state on return. Silhouettes and pinned
+ * moving actors have their own bounded lifetimes. */
+export function createRegionResidency(
+  create: (region: RenderRegion) => RegionArt,
+  limit = RESIDENT_REGION_LIMIT,
+): RegionArt & {
   readonly active: readonly RenderRegion[];
+  readonly retained: readonly RenderRegion[];
   contains(position: Readonly<Vec3>): boolean;
+  /** Construct one nearby non-resident owner directly into retention. Only
+   * for idle presentation time; returns the prepared region, if any. */
+  prepare(): RenderRegion | null;
+  /** Release retained owners whose buffers can no longer be trusted. */
+  discardRetained(): void;
 } {
-  const live = new Map<RenderRegion, RegionArt>();
+  const live = new Map<RenderRegion, RegionArt>(), kept = new Map<RenderRegion, RegionArt>();
   let primary: RenderRegion | null = null, quality: RenderQuality = "rich", disposed = false;
+  const capacity = Math.max(2, limit);
+  const trim = (room: number): void => {
+    for (const [id, art] of kept) {
+      if (live.size + kept.size + room <= capacity) break;
+      kept.delete(id); art.dispose();
+    }
+  };
+  const retire = (id: RenderRegion, art: RegionArt): void => {
+    if (!art.suspend || !art.resume) { art.dispose(); return; }
+    art.suspend(); kept.set(id, art);
+  };
   return {
     get active() { return [...live.keys()]; },
+    get retained() { return [...kept.keys()]; },
     contains(position) { return live.has(renderRegionAt(position)); },
     update(state) {
       if (disposed) return;
@@ -52,18 +91,42 @@ export function createRegionResidency(create: (region: RenderRegion) => RegionAr
       if (primary === "silt_basin" && next === "suspended_garden" && p.z < edge + 8) next = primary;
       primary = next;
       const wanted = new Set([primary, adjoining(primary, p)]);
-      for (const [id, art] of live) if (!wanted.has(id)) { art.dispose(); live.delete(id); }
+      for (const [id, art] of live) if (!wanted.has(id)) { live.delete(id); retire(id, art); }
+      // Re-attach retained owners before any eviction for a cold construction.
+      for (const id of wanted) {
+        const art = kept.get(id);
+        if (!art || live.has(id)) continue;
+        kept.delete(id); art.resume!(); art.setQuality?.(quality); live.set(id, art);
+      }
       for (const id of wanted) if (!live.has(id)) {
+        trim(1);
         const art = create(id); art.setQuality?.(quality); live.set(id, art);
       }
+      trim(0);
       for (const art of live.values()) art.update(state);
     },
     setQuality(next) { quality = next; for (const art of live.values()) art.setQuality?.(next); },
+    prepare() {
+      if (disposed || !primary || live.size + kept.size >= capacity) return null;
+      const seen = new Set<RenderRegion>([primary]), queue: RenderRegion[] = [primary];
+      for (let region = queue.shift(); region; region = queue.shift()) {
+        if (!live.has(region) && !kept.has(region)) {
+          const art = create(region);
+          if (!art.suspend || !art.resume) { art.dispose(); return null; }
+          art.setQuality?.(quality); art.suspend(); kept.set(region, art);
+          return region;
+        }
+        for (const next of NEIGHBOURS[region]) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+      }
+      return null;
+    },
+    discardRetained() { for (const art of kept.values()) art.dispose(); kept.clear(); },
     dispose() {
       if (disposed) return;
       disposed = true;
       for (const art of live.values()) art.dispose();
-      live.clear(); primary = null;
+      for (const art of kept.values()) art.dispose();
+      live.clear(); kept.clear(); primary = null;
     },
   };
 }

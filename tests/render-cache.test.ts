@@ -134,25 +134,40 @@ test("Dart recipes preserve exact body, cockpit, gauges and fresh panes across i
   }
 }));
 
-test("a production regional revisit reconstructs live art without thousands of temporary primitive meshes", () => sceneTest(scene => {
+test("a production regional revisit re-attaches retained art; after context loss it reconstructs from recipes", () => sceneTest(scene => {
   const art = createRegionalArt(scene, createCelMaterial(scene), createGlassMaterial(scene)), state = createGame();
   art.update(state);
+  const expected = identity(scene);
   const old = scene.getMeshByName("reef.ribbon-colonies")!;
   state.player.pose.position = { x: 178, y: -160, z: -208 }; art.update(state);
-  assert.ok(old.isDisposed());
+  assert.ok(!old.isDisposed() && !scene.meshes.includes(old), "a retained owner leaves the scene without releasing buffers");
+  assert.ok(old.geometry && !scene.geometries.includes(old.geometry));
+  assert.deepEqual(new Set(art.retained), new Set(["refuge_reef", "island_chain"]));
   let created = 0;
   const addMesh = scene.addMesh;
   scene.addMesh = function (...args) { created++; return addMesh.apply(this, args); };
+  const hits = art.cacheStats.hits;
+  state.player.pose.position = { x: 0, y: .18, z: 22 }; art.update(state);
+  assert.strictEqual(scene.getMeshByName(old.name), old, "a warm return re-attaches the same live handles");
+  assert.equal(art.cacheStats.hits, hits, "re-attachment reads no recipes");
+  assert.deepEqual(identity(scene), expected, "re-attached art equals its first construction exactly");
+  state.player.pose.position = { x: 178, y: -160, z: -208 }; art.update(state);
+  // Detached buffers are not rebuilt by the engine, so loss releases retention.
+  scene.getEngine().onContextLostObservable.notifyObservers(scene.getEngine() as never);
+  assert.ok(old.isDisposed() && art.retained.length === 0);
+  created = 0;
   state.player.pose.position = { x: 0, y: .18, z: 22 }; art.update(state);
   scene.addMesh = addMesh;
-  assert.notStrictEqual(scene.getMeshByName(old.name), old, "reuse must create fresh live geometry handles");
-  assert.ok(created < 128, `warm refuge activation created ${created} meshes, including temporary primitives`);
-  assert.ok(art.cacheStats.hits > 0);
+  assert.notStrictEqual(scene.getMeshByName(old.name), old, "reconstruction after loss creates fresh live geometry handles");
+  assert.ok(created < 128, `recipe reconstruction created ${created} meshes, including temporary primitives`);
+  assert.ok(art.cacheStats.hits > hits);
+  assert.deepEqual(identity(scene), expected, "recipe reconstruction equals the first construction");
   assert.ok(art.cacheStats.bytes > 0 && art.cacheStats.bytes <= art.cacheStats.maxBytes);
   art.dispose();
   assert.equal(art.cacheStats.bytes, 0);
   assert.equal(art.cacheStats.entries, 0);
   assert.equal(art.cacheStats.disposed, true);
+  assert.equal(scene.meshes.length, 0); assert.equal(scene.geometries.length, 0);
 }));
 
 test("the pinned carrier keeps every sign while compatible display materials fit the original trial", () => sceneTest(scene => {

@@ -118,6 +118,12 @@ export class TestRenderer {
     this.presents++;
     this.canvas.dataset.ready = "true";
   }
+  /** Idle preparation calls; ticks with an active session must never prepare. */
+  prepares: number[] = [];
+  prepare(): boolean {
+    this.prepares.push(this.presents);
+    return false;
+  }
   setQuality(): void {}
   resize(): void {}
   dispose(): void {

@@ -1072,3 +1072,31 @@ test("app: a later real pressure-disable batch cancels the real HUD onset withou
   assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage" && !e.origin).length, 1,
     "the earlier valid onset audio is unchanged");
 });
+
+test("app: region preparation runs only on settled idle screens, never during play, panels or session work", async (t) => {
+  const f = await fixture(t);
+  f.view.actions.resume();
+  f.frames();
+  const playing = f.renderer.prepares.length;
+  f.frames(90);
+  assert.equal(f.view.screen, "playing");
+  assert.equal(f.renderer.prepares.length, playing, "active play never builds regions");
+  f.view.actions.panel("notebook");
+  f.frames(60);
+  assert.equal(f.view.screen, "panel");
+  assert.equal(f.renderer.prepares.length, playing, "open gameplay panels stay responsive");
+  f.view.actions.resume();
+  f.frames();
+  f.view.actions.pause();
+  f.frames(12);
+  assert.equal(f.renderer.prepares.length, playing, "the pause screen draws before any preparation");
+  f.frames(6);
+  assert.ok(f.renderer.prepares.length > playing, "a settled pause screen prepares nearby regions");
+  const tick = f.view.state!.tick;
+  f.frames(60);
+  assert.equal(f.view.state!.tick, tick, "preparation never advances the simulation");
+  f.hidden(true);
+  const hidden = f.renderer.prepares.length;
+  f.frames(30);
+  assert.equal(f.renderer.prepares.length, hidden, "a hidden tab does no preparation");
+});

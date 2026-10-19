@@ -174,17 +174,24 @@ test("production expedition art reconciles cache ownership, contents and replace
     assert.equal(recipes.stats.entries, admitted.entries);
     assert.equal(recipes.stats.bytes, admitted.bytes);
     current.player.controlledVehicleId = null;
+    const retainedHull = scene.getMeshByName(dart.id)!;
     for (let i = 0; i < 5; i++) {
       const old = scene.getMeshByName(dart.id)!;
       resident = false; actors.update(current);
-      assert.ok(old.isDisposed(), "leaving residency releases the live hierarchy");
+      assert.ok(!old.isDisposed() && !old.isEnabled(), "leaving residency hides the retained hierarchy");
+      assert.ok(old.getChildMeshes().every(m => !m.isEnabled()), "hidden hull children cannot draw");
+      // A hidden hull is not updated; returning must read the current state.
+      vessel.pose.position = i % 2 ? { x: 47, y: -15, z: 9 } : { x: 48, y: -14, z: 10 };
       resident = true; actors.setQuality?.(i % 2 ? "light" : "rich"); actors.update(current);
-      assert.deepEqual(scene.getMeshByName(dart.id)!.position.asArray(), [47, -15, 9]);
+      assert.strictEqual(scene.getMeshByName(dart.id), retainedHull, "returning re-shows the same live hierarchy");
+      assert.ok(retainedHull.isEnabled());
+      assert.deepEqual(scene.getMeshByName(dart.id)!.position.asArray(), i % 2 ? [47, -15, 9] : [48, -14, 10]);
       assert.equal(scene.getMeshByName(`${dart.id}.cockpit`)!.isEnabled(), false);
       assert.equal(scene.getMeshByName(`${dart.id}.instrument.charge`)!.scaling.x, .09);
       assert.equal(recipes.stats.entries, admitted.entries); assert.equal(recipes.stats.bytes, admitted.bytes);
     }
     currentSnapshot.player.controlledVehicleId = null;
+    vessel.pose.position = { x: 47, y: -15, z: 9 };
     assert.deepEqual(current, currentSnapshot, "replacement/return rendering never mutates physical state");
     actors.dispose(); actors.dispose(); recipes.dispose();
     assert.equal(scene.meshes.length, 0); assert.equal(scene.geometries.length, 0);
