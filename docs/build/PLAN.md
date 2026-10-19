@@ -1,6 +1,20 @@
 # Construction plan
 
-**Resumed by the owner on 2026-10-19.** [Worker verification](evidence/WORKER-RESUME-20261019.md) confirms the recovered 16 GiB worker and restored evidence. SPACE-1 now has [fresh complete Sol6.1/xhigh acceptance and coordinator concurrence](reviews/SPACE-1-SOL-XHIGH-RESUME-R1-DISPOSITION.md); the old interrupted reviewer supplied no verdict. Opus 5.5/high prepares RTX 3090 development enablement in parallel, before independent review and any native-gated host change. Game production and all remaining milestones below are unchanged.
+**Resumed by the owner on 2026-10-19.** [Worker verification](evidence/WORKER-RESUME-20261019.md) confirms the recovered 16 GiB worker and restored evidence. SPACE-1 now has [fresh complete Sol6.1/xhigh acceptance and coordinator concurrence](reviews/SPACE-1-SOL-XHIGH-RESUME-R1-DISPOSITION.md); the old interrupted reviewer supplied no verdict. The Opus GPU bundle has returned and its fresh Sol6.1/xhigh execution-readiness review is running. No live GPU change has occurred. Game production and all remaining milestones below are unchanged.
+
+## Current route to the complete game
+
+| Milestone | Current state | Required playable result |
+| --- | --- | --- |
+| M0, M1, stage1 controls/flow, M2-A, SPACE-1 | Accepted at their recorded revisions | Preserve accepted opening, first expedition, Canopy–Basin route, controls and bounded renewal |
+| M2-B1 | Opus/high building; separate complete Sol review still required | Earned Creel, 350 m options, cargo/cabin choice, forward service, finite membrane and local mobile-home recovery |
+| [M2-B2 fleet/home](tasks/M2-B2-OPUS.md) | Prepared only; reconcile B1 contracts before dispatch | Three actual islands, useful Hush/Spindle, earned inhabited Hearthline, compact/medium operations and assembly recovery |
+| M2-C | Required | Rift/Divide/District, safe first late-material access, deeper capability, Mantle, deep recovery and both functional completion strategies |
+| Integrated M2 | Required after all component gates | Both ordinary-control strategies, all seven regions/six useful craft, complete technical review and fresh Opus experience audit |
+| M3 | Required | Complete authored campaign, clues and alternate evidence, every hull mission, original assets/audio and both routes; technical and Opus stage reviews |
+| M4 / release candidate | Required | Dedicated design critique, corrections, controls/accessibility/pacing polish, final play/recovery/reload, qualified hardware evidence and reviewable artifact/PR |
+
+The B1 assignment combines the older proposal's Creel and 350-tier/cabin steps. The prepared B2 brief covers the remaining connected fleet/home outcome; it does not restart those B1 steps or pre-accept their unfinished implementation. GPU execution remains a separate reviewed/checkpointed operation. The compact benchmark is not the final map and automated checks do not establish human enjoyment or ten-hour duration. Historical checkpoint paragraphs below retain their original source attribution; current ownership and next action are in STATUS/TASKS.
 
 The [M2-B1 Opus assignment](tasks/M2-B1-OPUS.md) turns Basin research into an earned Creel, useful hauling/loadout choice, early mobile refuge and forward-service loop. It combines the related early workboat/refuge pieces into one player-facing batch with broad connected ownership. It is building provisionally in an isolated checkout on production identical to the now-accepted SPACE-1 parent. B1 still requires root inspection and its own independent gate. The [prepared complete B1 review](tasks/M2-B1-SOL-XHIGH-REVIEW.md) retains all seven original outcome groups and cross-cutting compatibility, actual play and lifecycle checks; dispatch only after root inspects the author's completed handoff and supplies the frozen source/evidence. The completed parent review required no source correction. Remaining Hearthline/Hush/Spindle/world work, M2-C and later stages remain required; the brief does not accept candidate economics or the compact benchmark as the finished map.
 
