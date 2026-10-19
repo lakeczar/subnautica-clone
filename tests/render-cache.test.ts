@@ -4,7 +4,9 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { createRegionalArt } from "../src/render/renderer.js";
-import { createCelMaterial, createGlassMaterial } from "../src/render/materials.js";
+import { createCelMaterial, createGlassMaterial, updateOpticalUniforms } from "../src/render/materials.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { createGame } from "../src/sim/state.js";
 import { carrierCommand, fixtureGame, updateBerth } from "../src/sim/carrier.js";
 import { createWorldQueries } from "../src/sim/world.js";
@@ -264,4 +266,27 @@ test("identical display ownership releases on the last plane and reconstructs af
   assert.deepEqual(pool.stats, { entries: 0, references: 0 });
   assert.equal(scene.materials.length, 0); assert.equal(scene.textures.length, 0);
   assert.throws(() => pool.acquire("READABLE"), /Disposed/);
+}));
+
+test("Pale Basin water is silt-pale at depth, unchanged on the Canopy route and continuous across its edge", () => sceneTest(scene => {
+  const cel = createCelMaterial(scene);
+  const fog = (x: number, y: number, z: number) => {
+    updateOpticalUniforms([cel], new Vector3(x, y, z), null);
+    const c = (cel as unknown as { _colors3: Record<string, Color3> })._colors3.waterFogColor!;
+    return { c, luminance: .2126 * c.r + .7152 * c.g + .0722 * c.b, density: (cel as unknown as { _floats: Record<string, number> })._floats.fogDensity! };
+  };
+  const deep = (depth: number) => Color3.Lerp(Color3.FromHexString("#237e89"), Color3.FromHexString("#0b3048"),
+    ((t: number) => t * t * (3 - 2 * t))(Math.max(0, Math.min(1, (depth - 15) / 175))));
+  for (const [x, y, z] of [[57, -10, -65], [126, -118, -120], [146, -142, -166], [0, -4, 10]] as const)
+    assert.ok(fog(x, y, z).c.equalsWithEpsilon(deep(-y), 1e-6), `route pose ${x},${y},${z} keeps its existing water`);
+  const parking = fog(172, -153, -196), site = fog(216, -166, -232);
+  assert.ok(parking.luminance > deep(153).toLuminance() * 2 && site.luminance > deep(166).toLuminance() * 2, "Basin water reads pale");
+  const blend = (low: number, high: number, v: number) => { const t = Math.max(0, Math.min(1, (v - low) / (high - low))); return t * t * (3 - 2 * t); };
+  assert.ok(Math.abs(parking.density - (.009 + blend(98, 175, 153) * .014)) < 1e-9, "haze density is unchanged");
+  let previous = fog(162, -152, -160).luminance;
+  for (let z = -161; z >= -200; z--) {
+    const next = fog(162, -152, z).luminance;
+    assert.ok(Math.abs(next - previous) < .02, `no visible step at z=${z}`);
+    previous = next;
+  }
 }));

@@ -218,6 +218,8 @@ export function wallWithOpening(
   piece(a, c, low, d); piece(a, c, e, high);
 }
 
+const BASIN_SILT = "#4f807c";
+
 export function updateOpticalUniforms(
   materials: readonly ShaderMaterial[], camera: Vector3, state: GameState | null,
 ): void {
@@ -230,7 +232,13 @@ export function updateOpticalUniforms(
   const canopy = blend(60, 90, camera.x) * blend(35, 65, depth);
   const lower = blend(98, 175, depth);
   const density = .0105 * (1 - canopy) + (.009 + lower * .014) * canopy;
-  const waterFog = Color3.Lerp(Color3.FromHexString("#237e89"), Color3.FromHexString("#0b3048"), blend(15, 190, depth));
+  // Pale Basin: suspended sediment lifts the deep water to a pale silt jade
+  // at unchanged haze density, so wreck ridges and survey dishes read as dark
+  // silhouettes. Blended across the Canopy edge and descent; render-only.
+  const basin = blend(-168, -194, camera.z) * blend(92, 112, camera.x) * blend(116, 146, depth);
+  const waterFog = Color3.Lerp(
+    Color3.Lerp(Color3.FromHexString("#237e89"), Color3.FromHexString("#0b3048"), blend(15, 190, depth)),
+    Color3.FromHexString(BASIN_SILT), basin * .82);
   const airFog = Color3.FromHexString("#a5ccd1");
   for (const material of materials) {
     material.setVector3("cameraPosition", camera);
