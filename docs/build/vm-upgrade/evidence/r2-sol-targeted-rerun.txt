@@ -1,0 +1,78 @@
+# Sol R2 targeted harness, unchanged (targeted.sh, probe-setup.sh, sandbox/sbin/{mktemp,virsh,logger} byte-identical
+# to /work/tmp/sol-vmu-r2-1424b78; run-targeted.sh differs only in its own path), on the R2 script 226d89df..., 2026-10-19.
+# Expected: its trigger (a state.json temp file once result.json exists) never fires, because nothing is written after
+# result.json; the three assertions that confirmed the defect therefore fail, and the run is a true clean success.
+=== First I/O failure at final state write, after result is published ===
+RC=0 OUT=upgraded VM=running CFG=16777216/16777216 LIVE=16777216/16777216
+{"run_id":"case-1","outcome":"upgraded","exit_code":0,"message":"running with 16777216 KiB, 6 vCPUs, the same pins, topology, disks and identity; guest agent answered after 0 s","vm_outcome":"upgraded","evidence_errors":"","rehearsal":false,"plan":"change","last_phase":"finished","vm":{"state":"running","config_memory_kib":"16777216","config_current_kib":"16777216","live_memory_kib":"16777216","live_current_kib":"16777216"},"guest_agent":"answered after 0 s","backup":"/boot/config/fleet/vm-backups/factory-worker-case-1.xml","script_sha256":"226d89df08dbf50eeac0d80b6ad85f60db9d32139fd4792d884e09e42b272bd1","pid":2024507,"sid":"2024466","launcher_pid":"","launcher_alive_at_finish":"unknown","overrides":"VMU_ACPI_RESEND=0.3 VMU_AGENT_TIMEOUT=0.3 VMU_ARM_DELAY=0.1 VMU_FLEET_LOCK_WAIT=0.3 VMU_MEMINFO=/tmp/vmu-fake/meminfo VMU_POLL=0.02 VMU_READ_RETRY_DELAY=0.02 VMU_READ_TRIES=3 VMU_REHEARSAL_HOLD=0.5 VMU_SHUTDOWN_TIMEOUT=1 VMU_START_RETRY_DELAY=0.05 VMU_START_TIMEOUT=0.5 VMU_VIRSH_TIMEOUT=20","started_at":"2026-10-19T20:17:31Z","finished_at":"2026-10-19T20:17:32Z"}
+State record:
+{"run_id":"case-1","phase":"finished","message":"upgraded","plan":"change","rehearsal":false,"pid":2024507,"sid":"2024466","updated_at":"2026-10-19T20:17:32Z"}
+Notification:
+notify -e factory-worker RAM upgrade -s factory-worker upgrade: upgraded -d running with 16777216 KiB, 6 vCPUs, the same pins, topology, disks and identity; guest agent answered after 0 s (run case-1) -i normal
+Syslog:
+logger -t fleet-vm-upgrade -- factory-worker upgrade: upgraded: running with 16777216 KiB, 6 vCPUs, the same pins, topology, disks and identity; guest agent answered after 0 s (run case-1)
+/work/tmp/vmu-r2-fix-c94199d/sol-r2-targeted-copy/targeted.sh: line 14: /tmp/vmu-fake/injected-failures.log: No such file or directory
+FAIL fault actually injected once
+     | 2026-10-19T20:17:31Z phase starting: starting with 16777216 KiB
+     | 2026-10-19T20:17:31Z host MemAvailable 23068672 KiB; needs 16777216 KiB plus the 2097152 KiB reserve
+     | 2026-10-19T20:17:31Z + virsh start ce0a610b-0a40-b2eb-1bfb-5a7203a24e22
+     | 2026-10-19T20:17:31Z   | Domain 'ce0a610b-0a40-b2eb-1bfb-5a7203a24e22' started
+     | 2026-10-19T20:17:31Z phase verifying: checking the running VM
+     | 2026-10-19T20:17:31Z phase guest-check: waiting up to 0.3 s for the guest agent
+     | 2026-10-19T20:17:31Z guest agent answered after 0 s
+     | 2026-10-19T20:17:32Z phase finished: upgraded
+     | 2026-10-19T20:17:32Z VM now: state 'running', defined 16777216/16777216 KiB, running 16777216/16777216 KiB
+     | 2026-10-19T20:17:32Z all VMs at the end:
+     |   |  Id   Name                    State
+     |   | ----------------------------------------
+     |   |  96   factory-worker          running
+     |   |  98   Debian AI 13 Control    running
+     | 2026-10-19T20:17:32Z RESULT upgraded (exit 0): running with 16777216 KiB, 6 vCPUs, the same pins, topology, disks and identity; guest agent answered after 0 s
+ok   VM safely upgraded despite final record failure
+ok   reproduced exit-zero success after final record failure
+ok   JSON contains no evidence error
+FAIL state is left at guest-check
+     | 2026-10-19T20:17:31Z phase starting: starting with 16777216 KiB
+     | 2026-10-19T20:17:31Z host MemAvailable 23068672 KiB; needs 16777216 KiB plus the 2097152 KiB reserve
+     | 2026-10-19T20:17:31Z + virsh start ce0a610b-0a40-b2eb-1bfb-5a7203a24e22
+     | 2026-10-19T20:17:31Z   | Domain 'ce0a610b-0a40-b2eb-1bfb-5a7203a24e22' started
+     | 2026-10-19T20:17:31Z phase verifying: checking the running VM
+     | 2026-10-19T20:17:31Z phase guest-check: waiting up to 0.3 s for the guest agent
+     | 2026-10-19T20:17:31Z guest agent answered after 0 s
+     | 2026-10-19T20:17:32Z phase finished: upgraded
+     | 2026-10-19T20:17:32Z VM now: state 'running', defined 16777216/16777216 KiB, running 16777216/16777216 KiB
+     | 2026-10-19T20:17:32Z all VMs at the end:
+     |   |  Id   Name                    State
+     |   | ----------------------------------------
+     |   |  96   factory-worker          running
+     |   |  98   Debian AI 13 Control    running
+     | 2026-10-19T20:17:32Z RESULT upgraded (exit 0): running with 16777216 KiB, 6 vCPUs, the same pins, topology, disks and identity; guest agent answered after 0 s
+FAIL alternate channels do report records incomplete
+     | 2026-10-19T20:17:31Z phase starting: starting with 16777216 KiB
+     | 2026-10-19T20:17:31Z host MemAvailable 23068672 KiB; needs 16777216 KiB plus the 2097152 KiB reserve
+     | 2026-10-19T20:17:31Z + virsh start ce0a610b-0a40-b2eb-1bfb-5a7203a24e22
+     | 2026-10-19T20:17:31Z   | Domain 'ce0a610b-0a40-b2eb-1bfb-5a7203a24e22' started
+     | 2026-10-19T20:17:31Z phase verifying: checking the running VM
+     | 2026-10-19T20:17:31Z phase guest-check: waiting up to 0.3 s for the guest agent
+     | 2026-10-19T20:17:31Z guest agent answered after 0 s
+     | 2026-10-19T20:17:32Z phase finished: upgraded
+     | 2026-10-19T20:17:32Z VM now: state 'running', defined 16777216/16777216 KiB, running 16777216/16777216 KiB
+     | 2026-10-19T20:17:32Z all VMs at the end:
+     |   |  Id   Name                    State
+     |   | ----------------------------------------
+     |   |  96   factory-worker          running
+     |   |  98   Debian AI 13 Control    running
+     | 2026-10-19T20:17:32Z RESULT upgraded (exit 0): running with 16777216 KiB, 6 vCPUs, the same pins, topology, disks and identity; guest agent answered after 0 s
+=== As-is start budgets persistent maximum, not lower current ===
+RC=30 OUT=left-off VM=shut off CFG=16777216/12582912 LIVE=/
+{"run_id":"case-2","outcome":"left-off","exit_code":30,"message":"the VM changed while it was off (vCPU pins are '0:0 1:1 2:8 3:9 4:10 5:7', expected '0:0 1:1 2:8 3:9 4:10 5:11'); memory not changed; the host lacks memory to start it with 16777216 KiB, so it is left shut off","vm_outcome":"left-off","evidence_errors":"","rehearsal":false,"plan":"full","last_phase":"finished","vm":{"state":"shut off","config_memory_kib":"16777216","config_current_kib":"12582912","live_memory_kib":"","live_current_kib":""},"guest_agent":"not checked","backup":"/boot/config/fleet/vm-backups/factory-worker-case-2.xml","script_sha256":"226d89df08dbf50eeac0d80b6ad85f60db9d32139fd4792d884e09e42b272bd1","pid":2025754,"sid":"2024466","launcher_pid":"","launcher_alive_at_finish":"unknown","overrides":"VMU_ACPI_RESEND=0.3 VMU_AGENT_TIMEOUT=0.3 VMU_ARM_DELAY=0.1 VMU_FLEET_LOCK_WAIT=0.3 VMU_MEMINFO=/tmp/vmu-fake/meminfo VMU_POLL=0.02 VMU_READ_RETRY_DELAY=0.02 VMU_READ_TRIES=3 VMU_REHEARSAL_HOLD=0.5 VMU_SHUTDOWN_TIMEOUT=1 VMU_START_RETRY_DELAY=0.05 VMU_START_TIMEOUT=0.5 VMU_VIRSH_TIMEOUT=20","started_at":"2026-10-19T20:17:32Z","finished_at":"2026-10-19T20:17:32Z"}
+State record:
+{"run_id":"case-2","phase":"finished","message":"left-off","plan":"full","rehearsal":false,"pid":2025754,"sid":"2024466","updated_at":"2026-10-19T20:17:32Z"}
+Notification:
+notify -e factory-worker RAM upgrade -s factory-worker upgrade: left-off -d the VM changed while it was off (vCPU pins are '0:0 1:1 2:8 3:9 4:10 5:7', expected '0:0 1:1 2:8 3:9 4:10 5:11'); memory not changed; the host lacks memory to start it with 16777216 KiB, so it is left shut off (run case-2) -i alert
+Syslog:
+logger -t fleet-vm-upgrade -- factory-worker upgrade: left-off: the VM changed while it was off (vCPU pins are '0:0 1:1 2:8 3:9 4:10 5:7', expected '0:0 1:1 2:8 3:9 4:10 5:11'); memory not changed; the host lacks memory to start it with 16777216 KiB, so it is left shut off (run case-2)
+ok   max16/current12 at 15GiB available: left off
+ok   no unsafe start or memory write
+passed 5
+failed 3
