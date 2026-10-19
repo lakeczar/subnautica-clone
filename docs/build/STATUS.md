@@ -1,12 +1,14 @@
 # Build status
 
-## Current checkpoint — Astra requests two corrections; Sol review pending
+## Current checkpoint — both M2-A reviews reconciled; bounded corrections prepared
 
 **Hunter reconciliation source35c2d22/report893390b is inspected and provisionally integrated at7c2db5d.** [Root inspection](evidence/M2-A-HUNTER-RECONCILE-INTEGRATION.md) reproduces **536/536 tests**, typecheck/build and all economies, including completed-earned M2. All three ROOT-HUNTER findings are provisionally resolved: valid exterior fixtures with442 unchanged assertions, cheaper exact queries, and parked/disabled/berthed fleet obstruction after exit.
 
 Root verifies all1,477 archive payload members, current source/build identity,8,512 exact compatibility outputs,42 browser-export replays over6,498 steps (40 exact and two negligible hunter-coordinate differences),13 exact actual Save/Continue pairs and affected earned return/recovery suffixes. Highest root warm hunter-query p95 is1.476ms against the2ms trial. Original full earned Canopy–Basin route remains b91cde9, with61.63% oxygen/83.97% power minima; current bounded continuations do not relabel it.
 
-All implementation authors are terminal and released. [Astra's complete M2-A R1](reviews/M2-A-ASTRA-R1.md) accepts eight criteria and requests changes for a hunter stall near a parked vessel and the unclosed warm-region50ms trial. [Root interim reconciliation](reviews/M2-A-R1.md) verifies the report/archive/runtime, exactly reproduces1,778 stationary pursuit steps despite16 safe alternatives, and confirms the retained50.6/59.3ms browser samples. Sol's independent initial review remains pending on frozen d5c0694, base c1ddb0a; its ownership is unchanged. No M2-A acceptance or correction dispatch yet. Human route recognition/control feel, duration/enjoyment, audible mix and hardware pacing remain unverified; first-use loading stays open.
+Both independent M2-A R1 reviewers are terminal and released. [Complete reconciliation](reviews/M2-A-R1.md) records **REQUEST CHANGES / REQUEST CHANGES** on frozen d5c0694, base c1ddb0a. Both accept eight criteria; both require disposition of the retained50.6/59.3ms warm-region trial misses. Astra additionally reproduces a parked-hull hunter stall; Sol accepts that criterion from different evidence, but root's exact1,778-step reproduction confirms the correction is needed. Sol report6963c37 is verified and merged at a3da919; all432 payloads/archive bytes and three original Sol6.1/max contexts verify.
+
+Two disjoint Sol6.1/max briefs are committed for the next shared-baseline dispatch: [hunter movement](tasks/M2-A-R1-HUNTER-FIX.md) and [warm-region profiling/measured correction](tasks/M2-A-R1-REGION-PROFILE.md). Hunter is initially nonbrowser; profiler owns isolated5191. No corrected source or M2-A acceptance yet. Root retains actual affected ordinary hunter continuation after assembly, followed by fresh complete-batch Astra/Sol R2. Human route recognition/control feel, duration/enjoyment, audible mix and hardware pacing remain unverified; first-use loading stays open.
 
 After paired acceptance continue M2-B fleet/mobile homes → M2-C deep routes/both functional endings → integrated M2 pair/Opus → M3 authored campaign → dedicated Astra critic/M4 polish. Root owns no browser/server/recording/check process. Earlier active labels below are historical.
 
@@ -53,7 +55,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All implementation authors and the Astra R1 reviewer are terminal and released. Root owns integration/build records. Only the original Sol R1 reviewer remains active, with its report/artifact/optional5191 ownership in TASKS. Production stays frozen; no correction worker is assigned until both initial reports are reconciled.
+Both initial reviewers and all previous authors are terminal/released. Root owns integration/build records. The two new correction briefs have disjoint source/report ownership; TASKS records dispatch IDs and actual bindings after the committed baseline. No peer edits, review polling or duplicate workers.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -88,7 +90,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive Sol's original complete M2-A R1 result and reconcile it with the inspected [Astra findings](reviews/M2-A-R1.md). Then assign bounded Sol6.1/max corrections, affected checks and a fresh complete-batch pair. After acceptance continue M2-B/C and M3/M4 automatically. Completion notifications drive continuation; no polling or duplicate workers. Main merge/public deployment remain owner actions.
+Dispatch the two committed correction briefs from one clean baseline, verify actual Sol6.1/max runtime and bindings, then receive their terminal returns without polling. Inspect/assemble the bounded changes, retain affected ordinary hunter play and obtain fresh complete M2-A paired R2 on one frozen candidate. After acceptance continue M2-B/C and M3/M4 automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
