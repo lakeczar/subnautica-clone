@@ -486,12 +486,13 @@ export class PanelView {
 
   private knownHabitats(state: GameState): string {
     const known = Object.entries(SOURCES).filter(([id]) => state.knowledge.scans.includes(id));
-    return `<article class="habitat-notes"><h3>Known source habitats</h3>${known.length ? known.map(([id, s]) => {
+    // The shared rule is stated once; each row carries only its own lifecycle.
+    return `<article class="habitat-notes"><h3>Known source habitats</h3>${known.length ? `<p class="habitat-legend">Living sheds regrow while you explore; finite stock does not. When none are ready, sort a reserve on site.</p>${known.map(([id, s]) => {
       const stock = state.world.resources.find((r) => r.id === id), reserve = stock?.reserve ?? 0;
-      const lifecycle = s.item === "meal" ? "When empty, tend here for 20 seconds to prepare two more."
-        : `${renewable(id) ? `Living shed · regrows to ${s.stock} ready` : "Finite"}${reserve ? " · sort the reserve when none are ready" : renewable(id) ? "" : " · no reserve left"}.`;
-      return `<section class="known-source" data-lifecycle="${s.item === "meal" ? "tended" : renewable(id) ? "renewing" : "finite"}"><p><b>${ITEMS[s.item].label} · ${s.label}</b><br />${REGIONS[s.region].label} · ${s.context}<br /><small>${stock?.stock ?? 0} ready · ${reserve} in reserve · ${s.bundle} per gather. ${lifecycle}</small></p>${this.group(`scan:${id}`, "Field scan", `<p>${escapeHtml(s.scan)}</p>`)}</section>`;
-    }).join("") : "<p>No habitats recorded yet.</p>"}</article>`;
+      const lifecycle = s.item === "meal" ? "Tended · when empty, tend 20 s for two more"
+        : renewable(id) ? `Living shed · regrows to ${s.stock} ready` : reserve ? "Finite" : "Finite · no reserve left";
+      return `<section class="known-source" data-lifecycle="${s.item === "meal" ? "tended" : renewable(id) ? "renewing" : "finite"}"><p><b>${ITEMS[s.item].label} · ${s.label}</b><br />${REGIONS[s.region].label} · ${s.context}<br /><small>${stock?.stock ?? 0} ready · ${reserve} in reserve · ${s.bundle} per gather · ${lifecycle}</small></p>${this.group(`scan:${id}`, "Field scan", `<p>${escapeHtml(s.scan)}</p>`)}</section>`;
+    }).join("")}` : "<p>No habitats recorded yet.</p>"}</article>`;
   }
 
   private places(state: GameState): string {

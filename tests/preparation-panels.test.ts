@@ -534,10 +534,11 @@ test("recovery names where an unknown Bobbin plan comes from; known habitats dis
   const source = (label: string) => html().split(label)[0]!.split("<section ").at(-1)! + html().split(label)[1]!.split("</small>")[0]!;
   const north = source(SOURCES.reef_ribbon_catch_north.label), lower = source(SOURCES.canopy_resin_lee_lower.label);
   const drift = source(SOURCES.island_resin_cove_east.label), food = source(SOURCES.reef_edible_school_north.label);
-  assert.match(north, /data-lifecycle="renewing"/); assert.match(north, /12 ready · 12 in reserve · 4 per gather\. Living shed · regrows to 12 ready · sort the reserve when none are ready\./);
-  assert.match(lower, /data-lifecycle="renewing"/); assert.match(lower, /Living shed · regrows to 12 ready\.<\/small>|Living shed · regrows to 12 ready\.$/);
-  assert.match(drift, /data-lifecycle="finite"/); assert.match(drift, /Finite · no reserve left\./);
-  assert.match(food, /data-lifecycle="tended"/); assert.match(food, /tend here for 20 seconds/);
+  assert.match(north, /data-lifecycle="renewing"/); assert.match(north, /12 ready · 12 in reserve · 4 per gather · Living shed · regrows to 12 ready$/);
+  assert.match(lower, /data-lifecycle="renewing"/); assert.match(lower, /0 in reserve · 2 per gather · Living shed · regrows to 12 ready$/);
+  assert.match(drift, /data-lifecycle="finite"/); assert.match(drift, /Finite · no reserve left$/);
+  assert.match(food, /data-lifecycle="tended"/); assert.match(food, /Tended · when empty, tend 20 s for two more$/);
+  assert.equal(html().match(/sort a reserve/gi)?.length, 1, "the shared sorting rule is stated once, not per source");
   assert.doesNotMatch(html(), /\d+:\d\d|seconds? (?:left|remaining)|minutes?/i, "no regrowth countdown clutter");
 });
 

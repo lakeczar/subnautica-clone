@@ -5,7 +5,7 @@ import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Scene } from "@babylonjs/core";
 import { terrainHeight, WORLD_BOUNDS } from "../sim/world.js";
-import { INTERACTION_HOSTS, SOURCES } from "../content/registry.js";
+import { INTERACTION_HOSTS, renewable, SOURCES } from "../content/registry.js";
 import { BASIN_SOURCE_IDS } from "../content/routes.js";
 import { type RenderRegion } from "./regions.js";
 import { ArtBatch, seeded, type Point } from "./geometry.js";
@@ -231,6 +231,22 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: Re
       if (id === "island_glass_ledge_west") westernGlassHost(host, x, z);
       else salvageHost(host, id, x, z);
       host.finish(.1);
+      continue;
+    }
+    if (renewable(id) && source.asset === "resin") {
+      // A living pocket remains a place after harvest: a shallow stone cup on
+      // its pinnacle, stained by cured resin, under the collectable nodules.
+      const host = batch("source-host." + id), y = source.position.y;
+      const at = (r: number, i: number, lift: number): Point => {
+        const a = i / 10 * Math.PI * 2;
+        return [x + Math.cos(a) * 1.3 * r, y + lift, z + Math.sin(a) * .9 * r];
+      };
+      host.ellipsoid([x, y - .78, z], [1.05, .26, .75], P.basalt, 10);
+      for (let i = 0; i < 10; i++)
+        host.face([at(.72, i, -.62), at(.72, i + 1, -.62), at(1, i + 1, -.4), at(1, i, -.4)], i % 2 ? P.petrol : P.basalt);
+      host.tube(Array.from({ length: 11 }, (_, i) => at(1, i, -.4)), .05, P.stoneLight, 5);
+      for (const i of [1.3, 4.3, 7.3]) host.ellipsoid(at(.94, i, -.39), [.12, .035, .09], P.orange, 6);
+      host.finish(.2);
       continue;
     }
     if (source.asset === "glass") {
