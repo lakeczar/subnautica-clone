@@ -1902,3 +1902,10 @@ Both Sol6.1/max children start from exact **485655a98ac058502dce986ce310c2256ce5
 - Dart reconstruction: `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-dart-cache-sol-max-485655a`; branch `t3/dart-geometry-cache`, checkout `/home/worker/.t3/worktrees/subnautica-clone/t3-5b9e9d44`; original session01a15402-a4fa-75b0-8926-88d4afc301e2. Owns only M2-A-DART-RECONSTRUCTION paths and isolated free5191.
 
 Opus SPACE-1 remains active on dae17fc with its disjoint ownership/5190. Four occupied slots including root. Receive completions without polling; no fifth task, peer coordination or threshold waiver. Root owns no browser/server/recording/check process. Inspect corrections and affected ordinary play, freeze complete M2-A for fresh Astra/Sol R2, then separately integrate/review SPACE-1 and continue remaining full-game work.
+
+
+## Dart cache returned; focused remaining-activation direction prepared
+
+Dart task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-dart-cache-sol-max-485655a` is completed/result_available, no pending children/questions. Source1cd713a68ca79a634ea096499313bced09c82cd3/report faf15576b3870ba306ae90c898dda87e8e9ac80c are inspected and provisionally integrated. Root verifies144 payloads/archive and four matching PNG pairs; current serial full check is underway. Author539 checks/build/economies pass. Timing remains open with three misses among56 warm transitions; no favorable reruns or waiver. Source/report ownership and5191 are released.
+
+Prepare fresh Astra/xhigh report-only M2-A-WARM-ACTIVATION-DIRECTION from the next committed baseline: diagnose remaining evidence and one concrete next seam without a speculative rewrite or another unmotivated timing population. Hunter-cost Sol and SPACE-1 Opus continue with original disjoint ownership. No M2-A acceptance; root ordinary affected play and full paired R2 remain required.
