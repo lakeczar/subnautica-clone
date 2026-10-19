@@ -1,10 +1,10 @@
 # Build status
 
-## Current checkpoint — OS2 accepted; fresh Opus stage1 verification active
+## Current checkpoint — stage1 closed; M2 implementation preparation
 
 Movement cc3f20d, feedback/copy4a5103f and accessible announcement75402ae are combined at **6aaeae2d97476528c3848e140aded6a069b0c3b1** and accepted by both R2 reviewers on **dc0902864afb872c658b239821e870423877178a**. Root passes **436/436 tests**, typecheck/build and both economies. All27 production files,85 tracked source/test/config files and40 compiled native modules match the correction author. The prior failed announcement case now retains both full occurrences atomically, with native trace/menu/reset/singleton evidence inspected. [Current inspection](evidence/POLISH-1-OS2-ANNOUNCEMENT-INTEGRATION.md).
 
-**Astra and Sol independently ACCEPT all eight complete OS2 criteria on dc09028; coordinator concurs. SOL-OS2-R1-01 is CLOSED.** Root verifies both report-only commits, original runtime settings and finite evidence manifests; [paired reconciliation](reviews/POLISH-1-OS2-R2.md). Both reviewers and all authors are terminal and release ownership/resources. This accepts the bounded correction; **stage1 remains open for [fresh Opus5.5/high experience verification](tasks/OPUS-STAGE1-R3.md)**. The full original experience scope, prior advice/dispositions and current corrections remain required. TASKS records actual dispatch. Earlier active labels below are historical.
+**Stage1 is closed on accepted dc09028 production.** Astra/Sol accept all eight complete OS2 criteria, coordinator concurs, and fresh Opus R3 on identical-source223a387 recommends **advance to M2**. [Paired acceptance](reviews/POLISH-1-OS2-R2.md); [R3 disposition](reviews/OPUS-STAGE1-R3-DISPOSITION.md). Root verifies the116-payload archive and confirms a new predator-feedback gap, OS3-01: actual hull loss lacks a visible damage alert. It is explicitly required in the first M2 batch alongside the Canopy/floor/cockpit readability obligations, not waived. The [same-context consultation](tasks/OPUS-STAGE1-R3-IMPLEMENTATION-CONSULT.md) will specify the minimal A1 signal and A3 presentation before Sol construction. No M2 production is implemented yet. Earlier active labels below are historical.
 
 The [M2 direction](design/M2-DIRECTION-PROPOSAL.md) has paired planning acceptance on **30c6bf9**, all seven criteria with root concurrence. It starts with an earned Canopy–Basin benchmark, then earned fleet/mobile-home systems, then deep routes and both functional ending routes. This is direction only; no M2 production or schema acceptance is implied. OS2-04/06 remain first-M2-benchmark obligations. M2–M4 follow automatically under the owner's standing authorization. Earlier active/next labels below are historical.
 
@@ -41,7 +41,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-No builder remains active. Both OS2 R2 reviewers and all implementation authors are terminal; all source/test/report ownership is released. Root owns integration/build records and no browser/server/recording/check process. Fresh Opus5.5/high stage1 R3 is active from clean223a387, owning only docs/build/reviews/OPUS-STAGE1-R3.md; TASKS records actual ID and bound worktree.
+No builder remains active. Both OS2 R2 reviewers, all implementation authors and Opus R3 are terminal and release their paths/resources. Root owns integration/build records and no browser/server/recording/check process. The same-context Opus implementation consultation is the next advisory-only task; TASKS records actual dispatch and ownership.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -76,7 +76,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Fresh Opus5.5/high stage1 R3 is active on clean223a387, a documentation successor of accepted dc09028, following OPUS-STAGE1-R3. Receive completion without polling. Consult substantive findings in that completed context, reconcile advice and delegate corrections to Sol; otherwise close stage1 and continue accepted M2 direction, then M3/M4 automatically. Main merge/public deployment remain owner actions.
+Consult OS3-01/02 implementation in the completed Opus R3 context, receive completion without polling, and reconcile its signal/copy/presentation contracts into M2-A1/A3. Then commit the M2 baseline and assign the first Sol6.1/max route/protection/recovery/state builder, followed by independent A2 visual and A3 presentation consumers on the inspected A1 baseline. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

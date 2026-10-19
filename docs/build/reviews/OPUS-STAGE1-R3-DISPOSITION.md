@@ -1,0 +1,35 @@
+# Stage1 R3 experience disposition
+
+**Close stage1 and advance to M2.** Fresh Opus5.5/high recommends advancement on documentation parent **223a3870d6b9e94b09d83df9253e9822b614c823**, identical in production/tests/config to accepted **dc0902864afb872c658b239821e870423877178a**. Root concurs after inspecting the report and evidence. This closes the bounded controls/action/preparation/encounter stage, not the full game or human/hardware validation. M2–M4 remain required.
+
+One new substantive issue, **OS3-01**, is confirmed and explicitly required in the first M2 presentation batch. It joins the already-planned encounter/readability benchmark before content multiplication. It is not waived or evidence of a completed encounter experience; the current first expedition remains playable with this disclosed feedback defect. The correct scope decision follows its dependency on the M2 encounter work, not merely the cost of another review cycle.
+
+## Review and root inspection
+
+- Report-only **d7597d976d9a6c95cbfa7610c32220a3001a67e4** changes only [OPUS-STAGE1-R3.md](OPUS-STAGE1-R3.md), directly on223a387. Clean bound worktree verified. Task is completed/result_available without children/questions; report/browser/server resources released.
+- Live configuration and retained dispatch confirm **claudeAgent/claude-opus-5-5/selected effort high**. There is no separate effective-effort readout.
+- Root verifies all **116 payloads /39,490,341 bytes**, finite manifest SHA256 **50dfc0b1544659aedf1a0c6afcb42d3ee66c13e9edee874e41f2e465985e470a**. The reconstructible build tree is explicitly excluded; current JS/CSS receipts match accepted hashes. Original archive remains read-only.
+- Root reads the report, route counts, raw encounter/hold telemetry, actual post-bite export, browser process/pulse/cleanup receipts and extracted bite contact sheet. This is artifact inspection, not fresh root gameplay or continuous video viewing. The reviewer performed actual production play with synthetic inputs, Light/SwiftShader, muted audio and Drag look. The first oversized recording is lost; earlier fresh/legacy actions lack the continuous pre-reload helper log. Exact legacy pose/reload statements are reviewer observations, not a new root whole-state replay.
+- Root's receipts are `/tmp/siltwake-opus-stage1-r3-root/`. Fresh compilation plus the isolated `damage-probe.mjs` confirms the missing visual event path: two seeded updateThreat calls each apply0.2 hull loss; tick10973 emits no event, tick10980 emits only sound. Neither emits impact/damage/notice. The actual production telemetry records hull98→96→93→92 at ticks10972/10979/10994/11007; the latter already shows the calm hint. Actual export has health92.4. No candidate source/test change or new browser occurred.
+
+## Findings and binding decisions
+
+| Finding | Root disposition |
+| --- | --- |
+| OS2-01 trap | Closed. Accepted swept correction/runtime separation and fresh Opus approaches/legacy import support advancement. Decode relocation remains rejected. |
+| OS2-02/03/07 damage precision, refusal duplication, routine copy | Closed for the accepted correction. R3 contact/copy observations supplement prior precise native/refusal evidence; live exit refusal was not replayed. |
+| OS3-01 missing predator damage feedback | Confirmed, required in **M2-A** before its acceptance/breadth. A1 owns any typed simulation event; A3 consumes the committed event in HUD/notices/audio/app. This is a presentation outcome but cannot be assumed a one-file UI change. Preserve damage/AI/physics/economy/save semantics. |
+| OS3-02 copy residue | Accept concise meal/service receipt, duplicate habitat-yield prose and dangling title separator cleanup with M2-A3 and any explicitly assigned producer paths. Preserve accurate outcomes, useful costs/errors/captions. No new food threshold, hold-to-eat or changed meal consumption is authorized by this taste suggestion. Context-sensitive hint progression belongs with M2/M3 evidence/lead work; avoid globally replacing useful early leads. |
+| OS2-04/06 floor wash and Canopy readability; cockpit balance | Remain binding first-M2 benchmark obligations under accepted direction. Diagnose actual geometry/view/aim relationship, supply physically usable visible cover/return landmarks and truthful threat cues. No automatic camera lift, global fog removal or through-wall creature tracking. |
+| OS3-03 blocked-thrust cue | Strengthened hypothesis. Capture requested/actual/solid/surface/support limitation and timing in the M2 docking/contact benchmark, then decide from evidence. No threshold loosening or new geometry authority now. |
+| OS2-05/08 and other taste observations | Mouse resume remains unverified with physical input; bench-finding concern is weakened by the short successful bearing-based approach. Site-scoped Fit versus local Service, imported pitch and exact bite wording are alternatives, not stage blockers. |
+
+## Constraints for implementation advice
+
+Ask the same completed Opus context for a concrete [M2 implementation consultation](../tasks/OPUS-STAGE1-R3-IMPLEMENTATION-CONSULT.md). Its original review/evidence remain immutable; advisory output alone does not validate a correction.
+
+Raw actual damage belongs in transient events; round only in display. Do not reuse collision `impact` in a way that mislabels bites or contaminates contact sound/metrics. Identify the damaged diver/vehicle before any disable/recovery transition; final controlled state can differ. Do not infer every health decrease is a hunter bite, or report starvation/pressure/terrain as one. Aggregate sustained per-step loss without60Hz text/speech/audio spam; first sub-second contact must remain perceivable with sound muted and captions disabled. Caption/accessibility equivalents must be meaningful and bounded, with no stale replay after pause, actor/session replacement or reset. A short aftermath presentation may suppress calm advice without pretending AI pursuit continues or clearing unrelated danger. Keep compact960/1280 layout and existing refusal information.
+
+Root will reconcile the event and presentation contracts before assigning their exclusive Sol6.1/max owners. M2-A1 establishes persistent routes/recovery/protection plus the needed signal; A2 visual/scene work and A3 UI/audio then consume the same committed baseline. All leaves share complete M2-A paired acceptance and ordinary earned expedition/recovery/reload evidence. Opus stage2 follows integrated M2; do not add a standalone review cycle for every trivial copy change. Production stays on accepted dc09028 while the advice is pending.
+
+No fresh root full-suite, ordinary route, audio, physical mouse, human enjoyment/duration or representative-GPU result is claimed. Main merge/public deployment remain owner actions.
