@@ -1,6 +1,8 @@
 # Build status
 
-## Current checkpoint — M2-A2 rendering and M2-A3 presentation active
+## Current checkpoint — M2-A3 provisionally integrated; A2 rendering active
+
+**A3 is terminal and inspected**, source222b805/reportdf8c516 provisionally merged at **52dee6c05ec031f2211a5e190d9504d0a341c80b**. Root reproduces482/483 (only inherited A2 terrain failure), separate build/all three economies and97 source/27 build matches. Original Sol6.1/max runtime,516 payloads and six final images are inspected. [Root finding](evidence/M2-A3-INTEGRATION.md) **ROOT-A3-01** requires a [bounded priority correction](tasks/M2-A3-PRIORITY-FIX.md): queued bite onset must yield to a later hull outcome without needing another bite. TASKS records actual dispatch. Original A3 ownership is released; A2 continues independently. No batch acceptance.
 
 **A2 in-flight direction:** the author reports initial 466/466 checks, build/economies and corrected Basin terrain, not yet integrated or independently reproduced. Root inspected current captures and keeps 53 m Canopy counterplay and warm activation stalls open. [Disposition](design/M2-A2-INFLIGHT-DISPOSITION.md) preserves the camera/physical boundary, requests bounded visibility/timing attribution, and reserves any core correction for composition. Steering reached the existing A2 run; A3 remains independent. Root's assembled check remains 461/462 pending terminal returns.
 
@@ -47,7 +49,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All prior authors/reviewers and the Opus consultation are terminal and release their paths/resources. M2-A1 and its reconciliation are inspected/provisionally integrated. Two Sol6.1/max workers are active from shared d753b02: A2 in t3-cfb3703d owns rendering and named renderer tests; A3 in t3-8394a043 owns UI, narrow app wiring and named presentation tests. Their exact tasks/bindings are in TASKS. Root owns integration/build records, no browser/server/recording/check process, and no competing source edits. Receive completion notifications rather than polling; inspect both bounded returns before composition and full-batch review.
+M2-A1, reconciliation and A3 are inspected/provisionally integrated; their original workers release all paths/resources. A2 in t3-cfb3703d retains rendering and named renderer tests. The bounded A3 correction receives only the paths in M2-A3-PRIORITY-FIX when dispatched; TASKS records exact binding. Root owns integration/build records, no browser/server/recording/check process, and no competing source edits. Receive terminal notifications rather than polling; inspect correction/render returns before composition and full-batch review.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -82,7 +84,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive A2/A3 terminal notifications without polling, inspect their bounded source/evidence and assemble provisionally. Assign the earned Canopy–Basin route/recovery/reload composition, explicitly resolving the Canopy visibility and region-activation findings in the current disposition. Then review the whole composed A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max; no leaf acceptance or fresh route proof is implied by dispatch. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+Dispatch the bounded A3 priority correction, receive it and A2 through terminal notifications, and inspect/assemble provisionally. Assign earned Canopy–Basin route/recovery/reload composition, explicitly resolving Canopy visibility and region-activation findings. Then review the whole composed A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max; no leaf acceptance or fresh route proof is implied by dispatch. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
