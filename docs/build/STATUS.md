@@ -1,14 +1,14 @@
 # Build status
 
-## Current checkpoint — performance correction assembled; terrain correction active
+## Current checkpoint — terrain assembled; wall-contact correction required
 
-**A1–A3, injury priority and render performance are provisionally assembled at 0208f05600f14d1f77cc1258eaddd79a28679b5e.** Root passes **497/497 tests**, typecheck/build and all three economies. [Performance inspection](evidence/M2-A-RENDER-PERFORMANCE-INTEGRATION.md) verifies 826 payloads, both source/build inventories, six identical production image pairs and independent geometry/lifetime results. Warm activation meets the unchanged 50 ms trial: root CPU median/p95/max 4.096/6.776/9.740 ms; author production browser 14.35/23.0/23.0 ms. Carrier materials fall from 27 to 21. Cold startup remains expensive. No complete-batch acceptance or fresh earned M2 route claim.
+**A1–A3, injury priority, render performance and terrain conformity are provisionally assembled at 36aed3d158d550a67d468d7b08bcfe8b1c816135.** Root passes **502/502 tests**, typecheck/build and all three economies. [Terrain inspection](evidence/M2-A-TERRAIN-INTEGRATION.md) verifies 422 payloads, 105 source inputs, both 27-file builds and ten state-matched actual image pairs. The original route probe now stays within −0.084292/+0.091587 m, with no missing surfaces. Terrain totals 184,438 triangles under the authorized 220k ceiling. No complete-batch acceptance or fresh earned M2 route claim.
 
-The performance author and read-only banner-attribution follow-up are terminal; all paths/resources are released. The apparent error in the motion contact sheet is a normal **export-success** notice, confirmed in the full-size image/source and retained export records. No save-rejection defect is established.
+All original authors are terminal and release their paths/resources. A newly measured **ROOT-A2-WALL** remains: ordinary forward input can push the camera near plane through a rescue-bench wall. Root independently reproduces it after 22 steps and confirms centre-only terrain collision, with matching camera origins. [Bounded Sol correction](tasks/M2-A-WALL-CLEARANCE.md) owns the next movement/compatibility work; TASKS records actual dispatch. Do not hide/move the wall or reject/teleport old contact saves. The [earned composition brief](tasks/M2-A-COMPOSE.md) is prepared but waits for this correction's inspection.
 
-The separate **Sol 6.1/max terrain-conformity correction** remains active from clean 99137519ac7674c96036ac2fd8139cedf58926b2 in t3-d76f0eff. It owns terrainSurface and named terrain tests only; [brief](tasks/M2-A-TERRAIN-CONFORMITY.md), exact task in TASKS. OS2-06 natural high-approach cover recognition remains reserved for composed play and any explicitly assigned correction.
+Warm activation/material findings are provisionally corrected; [performance inspection](evidence/M2-A-RENDER-PERFORMANCE-INTEGRATION.md) retains the measured sources. Cold terrain construction now measures about 3.2 seconds in the author's Node run and remains a loading cost. OS2-06 natural high-approach cover recognition remains open for composed play and any explicitly assigned correction.
 
-After terrain inspection/assembly, perform the earned Canopy–Basin expedition/recovery/reload and commission the fresh complete-batch Astra/Sol pair. M2-B/C, integrated M2/Opus, M3 and M4 remain required. Earlier active labels below are historical.
+After wall correction, perform earned preparation → Canopy → Basin → return → failure/recovery → actual reload, then the fresh complete-batch Astra/Sol pair. M2-B/C, integrated M2/Opus, M3 and M4 remain required. Earlier active labels below are historical.
 
 Reconciliation source **a9b94111ed24a3c46634ab2e661f8cee75184ac4** / report **dc8693e8553602bda5d36437ae4f1862e9143668** is terminal, inspected and provisionally merged at **6e2a4b092693ed1f54fab245c055eb9241d69ace**. Root clean compilation/full check reproduces **461/462**, with only the confirmed missing Basin terrain failure. All 12 old compile errors and 27 prior failures are resolved. Separate build and all three economies pass; 50 source/27 built files match A1. [Current inspection](evidence/M2-A1-RECONCILE-INTEGRATION.md) verifies actual Sol6.1/max, all 32 new evidence payloads, 1,220 prior files and 66 migration inputs. The worker releases all paths/resources. [A2 rendering](tasks/M2-A2.md) and [A3 presentation](tasks/M2-A3.md) are active in separate T3 worktrees from **d753b0209edd83e9c0bb1b0062c4071dbecadfa0**, explicitly carrying the A2 terrain blocker. Both original runtime contexts confirm Sol6.1/max; TASKS records exact IDs and ownership. No batch acceptance is claimed; earlier fixture counts below are historical.
 
@@ -53,7 +53,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-A1–A3, reconciliation, priority and performance corrections are provisionally integrated; those authors and the read-only banner consultation release all paths/resources. Only the terrain builder remains active, with exclusive paths in its brief; TASKS owns the exact ID/binding. Root owns integration/build records, with no competing source edits or browser/server/recording/check process. Receive terminal notifications rather than polling.
+A1–A3 and all original correction authors are terminal and release their paths/resources. Only the new wall-contact correction receives simulation/test ownership; TASKS records its actual ID/binding. Terrain/render source is frozen for that task. Root owns integration/build records, with no competing source edits or browser/server/recording/check process. Receive terminal notifications rather than polling.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -88,7 +88,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the terrain correction through its completion notification, inspect and assemble it with 0208f05, then dispatch the prepared [earned composition](tasks/M2-A-COMPOSE.md): preparation → Canopy → Basin → return → failure/recovery → actual reload. Capture input counts, pre-refill margins, injury priority and natural cover learning; resolve substantiated visibility defects under explicit ownership. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+Receive the wall-contact correction through its completion notification, inspect and assemble it with 36aed3d, then dispatch the prepared [earned composition](tasks/M2-A-COMPOSE.md): preparation → Canopy → Basin → return → failure/recovery → actual reload. Capture input counts, pre-refill margins, injury priority and natural cover learning; resolve substantiated visibility defects under explicit ownership. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

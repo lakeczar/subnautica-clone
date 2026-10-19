@@ -1704,3 +1704,12 @@ Root performance receipts sealed: 192 regular files / 4463848 bytes; manifest SH
 Feature 91b72e4 is pushed. PR #4 and #3 descriptions are fully rewritten and read back: 497 tests, all three economies, independently reproduced warm activation, unchanged matched imagery, expensive cold loading and the still-active terrain/natural-cover/composed-play gates. #3 remains M0-only a2cb19f. Readbacks are `/tmp/siltwake-m2-render-performance-pr/readback-{3,4}.json`; all four stack layers remain T3-linked/unwatched. No game/main merge or deployment.
 
 [Earned composition brief](tasks/M2-A-COMPOSE.md) is prepared but not dispatched. It assigns no production paths and requires the final terrain assembly before a fresh Sol 6.1/max worktree. The existing terrain worker remains the only active child; no new peer work or polling. Root has no running browser/server/recording/check process.
+
+
+### Terrain terminal, inspected and provisionally integrated; contact defect reproduced
+
+Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-terrain-sol-max-9913751` is completed/result_available, no pending children/questions. Source 34fdbd79e8bcc3a81cc81507398ba8c6270bfeeb/report c9cc50267eebea7f2abafd59e4caea7c61a49505 merge at **36aed3d158d550a67d468d7b08bcfe8b1c816135**. Root 502/502 tests, typecheck/build and all three economies pass; actual Sol 6.1/max, 422 payloads/105 inputs and both 27-file builds verified. Ten actual image pairs retain identical complete states. [Inspection](evidence/M2-A-TERRAIN-INTEGRATION.md) records independent route and contact reproduction. Terrain author releases all paths/resources.
+
+ROOT-A2-WALL is real: full 150-step production replay matches three browser exports, with 55 near-plane crossings; minimal ordinary forward reproduction fails after 22 steps. Direct probe confirms centre-only collision rather than camera-origin mismatch or a later XZ correction. Prepared [bounded wall correction](tasks/M2-A-WALL-CLEARANCE.md) receives only world.ts/step.ts and named tests after this committed baseline. No current implementation worker remains active until the following dispatch; composed play stays prepared, not launched.
+
+Root terrain receipts are sealed: 20 files / 1708122 bytes; manifest SHA256 `406164d58798f18433d0b0cccb8df3a61daaf4720e4fb1521e20691f67ebf838`. Later dispatch/PR receipts belong in separate directories.
