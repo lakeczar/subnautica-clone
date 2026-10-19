@@ -1713,3 +1713,10 @@ Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3
 ROOT-A2-WALL is real: full 150-step production replay matches three browser exports, with 55 near-plane crossings; minimal ordinary forward reproduction fails after 22 steps. Direct probe confirms centre-only collision rather than camera-origin mismatch or a later XZ correction. Prepared [bounded wall correction](tasks/M2-A-WALL-CLEARANCE.md) receives only world.ts/step.ts and named tests after this committed baseline. No current implementation worker remains active until the following dispatch; composed play stays prepared, not launched.
 
 Root terrain receipts are sealed: 20 files / 1708122 bytes; manifest SHA256 `406164d58798f18433d0b0cccb8df3a61daaf4720e4fb1521e20691f67ebf838`. Later dispatch/PR receipts belong in separate directories.
+
+
+### Wall-contact correction dispatched
+
+Fresh T3-owned implementation task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-wall-sol-max-930c023` starts from **930c023d4135f4a6c916eedbb0b7eff4a6381b78**, branch `t3/wall-clearance`, bound worktree `/home/worker/.t3/worktrees/subnautica-clone/t3-90589dff`. Selected and original runtime **gpt-6.1-sol/max** plus exact parent are independently verified; receipts `/tmp/siltwake-m2-wall-dispatch-root/`. No pending question/child at dispatch.
+
+Exclusive ownership is the [wall brief](tasks/M2-A-WALL-CLEARANCE.md): world.ts/step.ts, named movement/recovery tests and its new report. Other production, terrain, camera and codec remain frozen. Port 5190 belongs to this worker if free/needed; root owns no browser/server/recording/check process. All prior authors are terminal and released. Receive completion notifications without polling; inspect/assemble the correction, then prepared earned composition and fresh complete-batch Astra/Sol reviews. No M2 acceptance claim.
