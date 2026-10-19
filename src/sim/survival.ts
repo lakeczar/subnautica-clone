@@ -1,6 +1,7 @@
 import { CANOPY_COVER, HULLS, THREAT_HOME } from "../content/registry.js";
 import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
-import { createWorldQueries, moveHull } from "./world.js";
+import { createWorldQueries } from "./world.js";
+import { moveHunter } from "./hunter.js";
 import {
   distance,
   facility,
@@ -218,22 +219,9 @@ export function updateThreat(
     distance(t.position, THREAT_HOME) < 4
   )
     change("idle");
-  let target: Vec3 = THREAT_HOME,
-    speed = 2;
-  if (t.distraction) target = t.distraction;
-  else if (t.mode === "investigate" || t.mode === "pursue") {
-    target = p;
-    speed = t.mode === "pursue" ? 7 : 3;
-  }
-  if (t.mode === "idle" || t.mode === "warn") speed = 0;
-  const dist = distance(t.position, target),
-    scale = Math.min(1, (speed * DT) / Math.max(0.01, dist));
-  t.position = moveHull(world, t.position, {
-    x: (target.x - t.position.x) * scale,
-    y: (target.y - t.position.y) * scale,
-    z: (target.z - t.position.z) * scale,
-  }, { radius: 1.2, height: 1.8 }).position;
-  if (t.mode === "pursue" && d < 5.3 && !cover) {
+  const motion = moveHunter(s, world);
+  t.position = motion.position;
+  if (motion.contact.biting && !behindCover(p, t.position) && !exposure(s).refuge && !t.distraction) {
     const v = s.fleet.vehicles.find(
       (v) => v.id === s.player.controlledVehicleId,
     );

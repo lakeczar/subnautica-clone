@@ -6,8 +6,10 @@ import {
   EVIDENCE,
   CANOPY_COVER,
   RECOVERY_STAGE,
-  THREAT_HOME,
 } from "../content/registry.js";
+import { CREEL_GEOMETRY as CG, HEARTHLINE_KEEL as HK, HUNTER_GEOMETRY as HG,
+  SCOUT_GEOMETRY as SG, SPINDLE_GEOMETRY as PG } from "../content/encounterGeometry.js";
+import { hunterPose } from "../sim/hunter.js";
 import type { GameState, VehicleState } from "../sim/types.js";
 import { CARRIER_LAYOUT, CARRIER_SUPPORT, carrierRooms, carrierStructure, launchPoint } from "../sim/carrier.js";
 import { ArtBatch } from "./geometry.js";
@@ -170,8 +172,8 @@ function dartArt(
       panes.push({ name: `${id}.pane.side.${Math.sign(x)}`, points: [
         [x, 5.3, -8], [x, 5.3, 8], [x, 7.7, 8], [x, 7.7, -8],
       ] });
-      b.box([Math.sign(x) * 7.2, 1.5, 0], [4, 3, 28], P.petrol);
-      b.box([Math.sign(x) * 7.2, 2.9, 0], [3, 0.8, 26], P.ochre);
+      b.box([Math.sign(x) * HK.offsetX, HK.centerY, 0], HK.size, P.petrol);
+      b.box([Math.sign(x) * HK.offsetX, HK.capY, 0], HK.capSize, P.ochre);
     }
     wallWithOpening(b, [0, 6.4, -12], [width, 5, .3], {
       center: [0, 6.6, -12], width: 8, height: 2.7, normal: "z",
@@ -213,59 +215,27 @@ function dartArt(
     for (const z of [6.5, 7.5, 8.5])
       b.box([2.2, 4.011, z], [2.4, 0.008, 0.07], P.steelLight);
   } else if (hull === "spindle") {
-    b.loft(
-      [
-        { z: -3.7, w: 0.1, low: 0, high: 0.4 },
-        { z: -1, w: 0.85, low: 0, high: 1 },
-        { z: 2.8, w: 0.7, low: 0.1, high: 1 },
-      ],
-      P.porcelain,
-    );
+    b.loft(PG.body, P.porcelain);
     for (const x of [-2, 2]) {
-      b.ellipsoid([x, 0.4, 0], [0.32, 0.45, 2.6], P.ochre, 8);
+      b.ellipsoid([x, 0.4, 0], PG.float.radius, P.ochre, 8);
       b.box([x / 2, 0.55, 0], [2, 0.15, 0.2], P.metal);
     }
-    b.box([0, 1.4, 0], [1.2, 0.12, 1.5], P.glass);
+    b.box(PG.roof.center, PG.roof.size, P.glass);
   } else if (hull === "creel") {
-    b.box([0, 0.8, 0], [4, 1.5, 6.5], P.petrol);
-    b.box([0, 2, -1], [3.5, 1.5, 2.5], P.porcelain);
-    b.box([0, 2, -2.3], [2.8, 0.9, 0.06], P.glass);
-    for (const x of [-2.5, 2.5]) b.box([x, 0.8, -2], [0.6, 0.4, 3], P.ochre);
+    b.box(CG.body.center, CG.body.size, P.petrol);
+    b.box(CG.cabin.center, CG.cabin.size, P.porcelain);
+    b.box(CG.window.center, CG.window.size, P.glass);
+    for (const x of [-2.5, 2.5]) b.box([x, 0.8, -2], CG.toolSize, P.ochre);
   } else {
-    b.loft(
-      [
-        { z: -3.6, w: 0.15, low: 0.15, high: 0.6 },
-        { z: -2.6, w: .7833, low: .05, high: .7667 },
-      ], P.orange,
-    );
-    b.loft(
-      [
-        { z: -2.6, w: .7833, low: .05, high: .7667 },
-        { z: -2.1, w: 1.1, low: 0, high: 0.85 },
-        { z: 0.1, w: 1.85, low: 0, high: 0.9 },
-        { z: 2.5, w: 1.15, low: 0.2, high: 0.75 },
-      ],
-      P.metal,
-    );
-    b.loft(
-      [
-        { z: -2, w: 0.7, low: 0.15, high: 0.6 },
-        { z: 0, w: 1.7, low: 0.1, high: 0.7 },
-        { z: 2.5, w: 1.15, low: 0.2, high: 0.7 },
-      ],
-      P.petrol,
-    );
-    b.box([0, 0.61, -2.2], [1.3, 0.2, 0.95], P.ochre);
+    b.loft(SG.bow, P.orange);
+    b.loft(SG.body, P.metal);
+    b.loft(SG.inset, P.petrol);
+    b.box(SG.prow.center, SG.prow.size, P.ochre);
     // Offset faceted canopy and broad framed stern drive, rather than paired engine tubes.
-    const canopy = [
-      [-0.78, 0.85, -1.5],
-      [0.94, 0.85, -1.5],
-      [1, 1.95, 0.1],
-      [-0.65, 1.95, 0.1],
-    ] as const;
+    const canopy = SG.canopy;
     panes.push({ name: `${id}.pane.forward`, points: canopy });
-    panes.push({ name: `${id}.pane.starboard`, points: [canopy[1], [1.2, .8, 1], canopy[2]] });
-    panes.push({ name: `${id}.pane.port`, points: [canopy[0], [-.9, .8, 1], canopy[3]] });
+    panes.push({ name: `${id}.pane.starboard`, points: SG.starboard });
+    panes.push({ name: `${id}.pane.port`, points: SG.port });
     for (const x of [-1.15, 1.15]) {
       // The guide shoes meet the shared keel datum; no artwork hangs below
       // BERTH_ENVELOPES.dart during the sealed floor-hatch transfer.
@@ -313,7 +283,7 @@ function dartArt(
     b.tube([canopy[0], canopy[1], canopy[2], canopy[3], canopy[0]], 0.024, P.petrol, 6);
     b.tube([canopy[3], canopy[2]], .037, P.porcelain, 6);
     b.tube([[-0.65, 1.95, 0.1], [-0.85, 0.95, 1.03], [1.15, 0.95, 1.03], [1, 1.95, 0.1]], 0.028, P.steelLight, 6);
-    panes.push({ name: `${id}.pane.aft`, points: [[-.6, 1.96, .1], [.95, 1.96, .1], [.9, 1.1, 1.02], [-.78, 1.1, 1.02]] });
+    panes.push({ name: `${id}.pane.aft`, points: SG.aft });
     b.panel([-1.2, 0.82, 0.1], [0.44, 0.2], 0.04, P.ochre, Math.PI / 2, 0.04);
     b.tube([[-1.29, 0.82, -0.04], [-1.29, 0.91, -0.04], [-1.29, 0.91, 0.22], [-1.29, 0.82, 0.22]], 0.025, P.steelLight, 5);
     for (const x of [-1.35, 1.35]) {
@@ -986,16 +956,7 @@ export function createExpeditionActors(
   );
   const latchMesh = latch.finish();
   const hunter = new ArtBatch("ecology.sound-hunter", scene, cel);
-  hunter.loft(
-    [
-      { z: -4, w: 0.36, low: 0.5, high: 0.68 },
-      { z: -3.3, w: .9, low: .34, high: .87 },
-      { z: -1.8, w: 1.2, low: .12, high: 1.15 },
-      { z: 1, w: 0.7, low: 0.2, high: 1.05 },
-      { z: 4, w: 0.1, low: 0.4, high: 0.7 },
-    ],
-    P.violet,
-  );
+  hunter.loft(HG.body, P.violet);
   for (const x of [-1, 1]) {
     hunter.face(
       [
@@ -1142,18 +1103,10 @@ export function createExpeditionActors(
       }
       if (t) {
         hunterMesh.position.set(t.position.x, t.position.y, t.position.z);
-        const p = t.distraction ?? (t.mode === "disengage" ? THREAT_HOME : s!.player.pose.position);
-        // The authored narrow sensory nose is at local -Z, like the Dart.
-        hunterMesh.rotation.y = -Math.atan2(
-          p.x - t.position.x,
-          -(p.z - t.position.z),
-        );
-        hunterMesh.rotation.z = Math.sin(time * 1.5) * 0.045;
-        // State-driven display communicates the implemented warning/approach
-        // without claiming additional ecology or changing threat timing.
-        const warning = t.mode === "warn" || t.mode === "investigate" || t.mode === "pursue";
+        const pose = hunterPose(s!);
+        hunterMesh.rotation.set(0, -pose.yaw, pose.roll);
         for (const { mesh, side } of hunterFins)
-          mesh.rotation.z = side * ((warning ? 0.3 : -0.16) + Math.sin(time * (warning ? 4 : 1.8)) * (warning ? 0.13 : 0.055));
+          mesh.rotation.z = side * pose.finAngle;
       }
       for (const [id, mesh] of vehicles)
         if (!s?.fleet.vehicles.some(v => v.id === id && visibleVehicle(v))) {

@@ -7,6 +7,9 @@ import { createExpeditionArt } from "../src/render/expedition.js";
 import { createCelMaterial, createGlassMaterial } from "../src/render/materials.js";
 import { createGame } from "../src/sim/state.js";
 import { completeOpening } from "../src/sim/progression.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { HUNTER_GEOMETRY as H, HUNTER_PART_ENVELOPES } from "../src/content/encounterGeometry.js";
+import { hunterPose } from "../src/sim/hunter.js";
 
 test("hunter warning colors follow simulation state without moving geometry, leaking buffers or owning shared materials", () => {
   // Only the label canvas is stubbed; production meshes/materials run on NullEngine.
@@ -87,7 +90,28 @@ test("hunter warning colors follow simulation state without moving geometry, lea
         assert.deepEqual(colors(), warning, "replacing state/tick restores its deterministic display");
         for (let update = 0; update < 2000; update++) {
           state.tick = 10000 + update; state.world.threat.mode = update % 2 ? "pursue" : "warn";
+          state.world.threat.modeSeconds = update / 60;
           art.update(state);
+          if (update % 20 === 0) {
+            const matrix = hunter.computeWorldMatrix(true), inverse = matrix.clone().invert();
+            const mouth = Vector3.TransformCoordinates(new Vector3(...H.mouth), matrix), numeric = hunterPose(state).mouth;
+            assert.ok(Vector3.Distance(mouth, new Vector3(numeric.x, numeric.y, numeric.z)) < 2e-5);
+            for (const mesh of owned) {
+              const world = mesh.computeWorldMatrix(true), vertices = mesh.getVerticesData("position")!, points: number[][] = [];
+              for (let i = 0; i < vertices.length; i += 3) {
+                const p = Vector3.TransformCoordinates(new Vector3(vertices[i]!, vertices[i + 1]!, vertices[i + 2]!), world);
+                const origin = state.world.threat.position;
+                assert.ok(Math.hypot(p.x - origin.x, p.z - origin.z) <= H.worldEnvelope.radius);
+                assert.ok(p.y - origin.y >= H.worldEnvelope.bottom && p.y - origin.y <= H.worldEnvelope.height);
+                points.push(Vector3.TransformCoordinates(p, inverse).asArray());
+              }
+              const indices = mesh.getIndices()!;
+              for (let i = 0; i < indices.length; i += 3) {
+                const triangle = [points[indices[i]!]!, points[indices[i + 1]!]!, points[indices[i + 2]!]!];
+                assert.ok(HUNTER_PART_ENVELOPES.some(b => triangle.every(p => p.every((v, j) => Math.abs(v - b.center[j]!) <= b.size[j]! / 2 + 2e-5))), "whole animated triangle fits an actor-separation piece");
+              }
+            }
+          }
         }
         assert.deepEqual(counts(), expectedCounts);
         owned.forEach((mesh, i) => {

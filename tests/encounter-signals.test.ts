@@ -8,6 +8,7 @@ import { executeCommand, stepGame } from "../src/sim/step.js";
 import { airSupply, exposure, SUIT_OXYGEN_DRAIN_PER_SECOND, updateSurvival, updateThreat } from "../src/sim/survival.js";
 import { createWorldQueries, RIB_SEGMENTS, SOLIDS, WORLD_BOUNDS } from "../src/sim/world.js";
 import type { GameCommand, GameEvent, GameState, Vec3, VehicleState, WorldQueries } from "../src/sim/types.js";
+import { hunterStandOff } from "../src/sim/hunter.js";
 
 const empty = createWorldQueries([], () => -200);
 const up: GameCommand = { type: "move", forward: 0, right: 0, vertical: 1, sprint: false };
@@ -77,6 +78,7 @@ test("oxygen/food/body warnings and positional attack sounds do not acquire thre
   for (const e of events) if (e.type === "sound") { assert.equal(e.source, undefined); assert.equal(e.origin, undefined); }
   const attack = swimmer({ x: THREAT_HOME.x + 1, y: THREAT_HOME.y, z: THREAT_HOME.z });
   attack.tick = 60; Object.assign(attack.world.threat, { mode: "pursue", interest: 4 });
+  attack.world.threat.position = hunterStandOff(attack);
   const attacked: GameEvent[] = []; updateThreat(attack, 1, attacked, empty);
   const damage = attacked.find(e => e.type === "sound" && e.cue === "damage");
   assert.ok(damage?.type === "sound" && damage.origin); assert.equal(damage.source, undefined);
