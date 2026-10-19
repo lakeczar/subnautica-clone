@@ -8,6 +8,7 @@ import { disableVehicle } from "../src/sim/recovery.js";
 import { stepGame } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameEvent, GameState } from "../src/sim/types.js";
+import { hunterStandOff } from "../src/sim/hunter.js";
 const world = createWorldQueries();
 type Bite = Extract<GameEvent, { type: "threat-damage" }>;
 const bites = (events: GameEvent[]): Bite[] => events.filter((e): e is Bite => e.type === "threat-damage");
@@ -22,8 +23,9 @@ function fixture(pilot: boolean, health = 100): GameState {
     v.health = health; s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id;
     if (health === 0) disableVehicle(s, v.id);
   }
-  s.world.threat = { mode: "pursue", position: { x: 133, y: -110, z: -112 },
+  s.world.threat = { mode: "pursue", position: { x: 147, y: -110, z: -112 },
     interest: 5, modeSeconds: 0, distraction: null, distractionSeconds: 0 };
+  s.world.threat.position = hunterStandOff(s);
   return s;
 }
 const near = (a: number, b: number): void => assert.ok(Math.abs(a - b) < 1e-10, `${a} != ${b}`);
@@ -73,7 +75,7 @@ test("cover, distance and the existing AI transitions suppress bites without cha
   }
   for (const reason of ["distance", "cover", "interest", "outside", "distraction"] as const) {
     const s = fixture(true), t = s.world.threat;
-    if (reason === "distance") t.position.x = s.player.pose.position.x + 6;
+    if (reason === "distance") t.position.x = s.player.pose.position.x + 15;
     if (reason === "cover") {
       s.player.pose.position = { x: 99, y: -100, z: -118 }; t.position = { x: 113, y: -100, z: -118 }; t.modeSeconds = 2;
     }
@@ -122,7 +124,8 @@ test("a same-step collision and bite retain separate loss accounting and event o
   const s = fixture(true), v = s.fleet.vehicles[0]!;
   v.pose.position = { x: 99.39, y: -100, z: -118.5 }; v.pose.yaw = Math.PI / 2;
   v.velocity = { x: 8, y: 0, z: 0 }; s.player.pose = structuredClone(v.pose);
-  s.world.threat.position = { x: 97, y: -100, z: -118.5 };
+  s.world.threat.position = { x: 84, y: -100, z: -118.5 };
+  s.world.threat.position = hunterStandOff(s);
   const r = stepGame(s, [{ type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], world);
   const collision = r.events.find(e => e.type === "impact"), hit = bites(r.events)[0]!;
   assert.ok(collision?.type === "impact" && collision.hullLoss > 0);

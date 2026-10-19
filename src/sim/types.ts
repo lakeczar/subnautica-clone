@@ -263,11 +263,14 @@ export interface MoveResult {
   hitSolid: boolean;
   hitBoundary: boolean;
 }
+export interface MovementOptions {
+  readonly separateBoxOverlaps?: boolean;
+}
 export interface WorldQueries {
   waterHeight: number;
   groundHeight(x: number, z: number): number;
   supportHeight(x: number, z: number, fromY: number): number;
-  moveCapsule(origin: Vec3, delta: Vec3, capsule: Capsule): MoveResult;
+  moveCapsule(origin: Vec3, delta: Vec3, capsule: Capsule, options?: MovementOptions): MoveResult;
   clearance(origin: Vec3, capsule: Capsule): boolean;
   lineOfSight(a: Vec3, b: Vec3, ignore?: readonly string[]): boolean;
 }

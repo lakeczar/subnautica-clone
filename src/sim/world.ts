@@ -1,7 +1,7 @@
 import { CANOPY_COVER, SOURCES } from "../content/registry.js";
 import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, LEGACY_TERRAIN_SOURCE_IDS,
   LEGACY_WORLD_BOUNDS, ROUTE_WORLD_BOUNDS, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
-import type { Capsule, Vec3, WorldQueries } from "./types.js";
+import type { Capsule, MovementOptions, Vec3, WorldQueries } from "./types.js";
 import { actorBox, RIB_CONTACT_TOLERANCE, RIB_SLIDE_ITERATIONS, ribUpperHeight,
   segmentBoxClosest, sweptBoxIntersects, sweepBoxRib } from "./ribCollision.js";
 
@@ -372,6 +372,22 @@ function sweepTerrain(p: Vec3, d: Vec3, shape: Capsule, solid: Solid): ReturnTyp
   return sweep(p, d, shape, solid);
 }
 
+/** At an exact nearest-face tie choose the non-closing supporting plane in the
+ * requested direction. Its linear gap proves the WHOLE segment non-deepening. */
+function sweepOverlap(p: Vec3, d: Vec3, shape: Capsule, solid: Solid): ReturnType<typeof sweep> {
+  const { gap } = terrainGap(p, shape, solid);
+  if (gap >= -1e-6) return sweep(p, d, shape, solid);
+  const box = actorBox(p, shape);
+  let best = -Infinity, normal: Vec3 = { x: 0, y: 0, z: 0 };
+  for (const axis of AXES) for (const sign of [-1, 1]) {
+    const g = sign < 0 ? solid.min[axis] - box.max[axis] : box.min[axis] - solid.max[axis];
+    if (Math.abs(g - gap) > 1e-10) continue;
+    const progress = d[axis] * sign;
+    if (progress > best) { best = progress; normal = { x: 0, y: 0, z: 0 }; normal[axis] = sign; }
+  }
+  return best < -1e-12 ? { t: 0, normal } : null;
+}
+
 interface BenchEdge { axis: "x" | "z"; value: number; outward: number; lo: number; hi: number; slope: number }
 const EDGE_EPSILON = 1e-9;
 /** Bound the tangential derivative of the uncut heightfield on one bench edge.
@@ -526,14 +542,29 @@ export function createWorldQueries(
       }
       return height;
     },
-    moveCapsule(origin, delta, capsule) {
+    moveCapsule(origin, delta, capsule, options) {
       if (!finitePoint(origin)) throw new RangeError("Movement origin must be finite.");
       if (!finitePoint(delta) || !validShape(capsule) ||
           !finitePoint({ x: origin.x + delta.x, y: origin.y + delta.y, z: origin.z + delta.z }))
         return { position: { ...origin }, hitSolid: true, hitBoundary: false };
+      if (options?.separateBoxOverlaps && (solids.some(s => !finitePoint(s.min) || !finitePoint(s.max) ||
+          AXES.some(a => s.min[a] > s.max[a])) || !Number.isFinite(floorHeight(origin.x, origin.z))))
+        return { position: { ...origin }, hitSolid: true, hitBoundary: false };
       let position = { ...origin },
         remaining = { ...delta },
-        hitSolid = false;
+        hitSolid = false, clippedBoundary = false;
+      if (options?.separateBoxOverlaps) {
+        // Clip requested travel before sweeping; do not clamp an accepted
+        // endpoint through another solid. Retained edge poses can move inward.
+        const limits = { x: [WORLD_BOUNDS.minX + (capsule.halfWidth ?? capsule.radius), WORLD_BOUNDS.maxX - (capsule.halfWidth ?? capsule.radius)],
+          y: [WORLD_VERTICAL_BOUNDS.minY - (capsule.bottom ?? 0), WORLD_VERTICAL_BOUNDS.maxY - capsule.height],
+          z: [WORLD_BOUNDS.minZ + (capsule.halfLength ?? capsule.radius), WORLD_BOUNDS.maxZ - (capsule.halfLength ?? capsule.radius)] };
+        for (const a of AXES) {
+          const next = Math.max(Math.min(origin[a], limits[a][0]!),
+            Math.min(Math.max(origin[a], limits[a][1]!), origin[a] + remaining[a])) - origin[a];
+          clippedBoundary ||= next !== remaining[a]; remaining[a] = next;
+        }
+      }
       // Every new tangent is swept against the entire supplied roster again.
       // Eight unresolved contacts exhaust conservatively: the remainder is discarded.
       for (let i = 0; i < RIB_SLIDE_ITERATIONS; i++) {
@@ -554,13 +585,18 @@ export function createWorldQueries(
         for (const solid of solids) {
           if (!sweptBoxIntersects(box, remaining, solid)) continue;
           const rib = canonicalRib(solid);
+          if (!rib && options?.separateBoxOverlaps) {
+            const { gap } = terrainGap(position, capsule, solid);
+            if (gap < -1e-6) terrainOverlaps.push({ solid, gap });
+          }
           if (rib && sweptBoxIntersects(box, { x: 0, y: 0, z: 0 }, solid)) {
             const gap = segmentBoxClosest(rib.a, rib.b, box).distance - rib.radius;
             if (gap < -RIB_CONTACT_TOLERANCE) overlaps.push({ rib, gap });
           }
           const hit = rib
             ? sweepBoxRib(box, remaining, rib)
-            : sweep(position, remaining, capsule, solid);
+            : options?.separateBoxOverlaps ? sweepOverlap(position, remaining, capsule, solid)
+              : sweep(position, remaining, capsule, solid);
           if (hit && (!nearest || hit.t < nearest.t || (hit.t === nearest.t && "stop" in hit && hit.stop)))
             nearest = { ...hit, rib: rib !== null, stop: "stop" in hit && hit.stop === true };
         }
@@ -591,19 +627,19 @@ export function createWorldQueries(
         for (const axis of AXES) remaining[axis] -= nearest.normal[axis] * inward;
         if (Math.hypot(remaining.x, remaining.y, remaining.z) < 1e-12) break;
       }
-      const x = Math.max(
+      const x = options?.separateBoxOverlaps ? position.x : Math.max(
         WORLD_BOUNDS.minX,
         Math.min(WORLD_BOUNDS.maxX, position.x),
       );
-      const z = Math.max(
+      const z = options?.separateBoxOverlaps ? position.z : Math.max(
         WORLD_BOUNDS.minZ,
         Math.min(WORLD_BOUNDS.maxZ, position.z),
       );
-      const y = Math.max(WORLD_VERTICAL_BOUNDS.minY, Math.min(WORLD_VERTICAL_BOUNDS.maxY, position.y));
+      const y = options?.separateBoxOverlaps ? position.y : Math.max(WORLD_VERTICAL_BOUNDS.minY, Math.min(WORLD_VERTICAL_BOUNDS.maxY, position.y));
       return {
         position: { x, y, z },
         hitSolid,
-        hitBoundary: x !== position.x || y !== position.y || z !== position.z,
+        hitBoundary: clippedBoundary || x !== position.x || y !== position.y || z !== position.z,
       };
     },
   };
@@ -639,6 +675,7 @@ export function moveHull(
   shape: Capsule,
   bounds?: HorizontalBounds,
   observeSupport?: (rejectedHorizontalTravel: number) => void,
+  options?: MovementOptions,
 ): ReturnType<WorldQueries["moveCapsule"]> {
   if (!finitePoint(origin)) throw new RangeError("Movement origin must be finite.");
   const slices = Math.max(
@@ -665,9 +702,21 @@ export function moveHull(
         d[axis] = next - position[axis];
       }
     }
-    const result = world.moveCapsule(position, d, shape);
+    const result = world.moveCapsule(position, d, shape, options);
     const floor = hullFloor(world, result.position, shape);
+    if (options?.separateBoxOverlaps && !Number.isFinite(floor)) { hitSolid = true; break; }
     if (result.position.y < floor + 0.05) {
+      if (options?.separateBoxOverlaps) {
+        const oldGap = position.y - hullFloor(world, position, shape);
+        const nextGap = result.position.y - floor;
+        // Retained floor overlaps may escape continuously; never snap/lift the
+        // enlarged animal, or accept a deeper gap at a short travel slice.
+        if (!Number.isFinite(oldGap) || !Number.isFinite(nextGap) || nextGap < Math.min(.05, oldGap) - 1e-10) {
+          hitSolid = true; break;
+        }
+        position = result.position; hitSolid ||= result.hitSolid; hitBoundary ||= result.hitBoundary;
+        continue;
+      }
       hitSolid = true;
       if (Math.abs(d.x) + Math.abs(d.z) > 0.00001) {
         // The floor refuses the sweep's remaining horizontal progress and
@@ -679,7 +728,7 @@ export function moveHull(
         break;
       }
       const y = Math.max(position.y, floor + 0.05);
-      const lift = world.moveCapsule(result.position, { x: 0, y: y - result.position.y, z: 0 }, shape);
+      const lift = world.moveCapsule(result.position, { x: 0, y: y - result.position.y, z: 0 }, shape, options);
       if (lift.hitSolid || lift.hitBoundary || Math.abs(lift.position.y - y) > 1e-10 ||
           Math.hypot(lift.position.x - result.position.x, lift.position.z - result.position.z) > 1e-10) break;
       result.position = lift.position;
