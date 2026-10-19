@@ -1,12 +1,12 @@
 # Build status
 
-## Current checkpoint — Opus completion inspected, Sol xhigh review next
+## Current checkpoint — Opus completion inspected, Sol xhigh review active
 
 Opus source941008e/018f8ba and reportc836987 are terminal and provisionally merged at **c2c61556f007578f138fa63c4908f19cc923a39e**. Root passes **546/546 tests**, typecheck/build and all four economy checks; all27 built files match the author's final build. [Coordinator inspection](evidence/M2-A-OPUS-INTEGRATION.md) records168 verified payloads, reproduced timing/frame summaries, actual Basin image inspection and source/evidence limitations.
 
 Returning regions retain detached geometry within a four-region cap while only two draw. Idle screens prepare nearby regions; the Basin tint and pulse refusal wording improve presentation. The changed architecture is authorized under [MODEL_POLICY](MODEL_POLICY.md): Opus5.5/high builds with discretion, one fresh non-author Sol6.1/xhigh reviews. The56-per-build warm trial measures median11.75→0.25ms and max22.7→3.0ms, but neither reproduced the earlier51.8/78/65.6ms misses. The50ms predicate remains unchanged; closure, memory cost and synchronous idle-screen preparation require independent assessment.
 
-All authors and the interrupted old R2 pair are stopped. [Complete Sol/xhigh review](tasks/M2-A-SOL-XHIGH-REVIEW.md) is prepared with all ten original M2-A criteria, prior findings/dispositions and current tradeoffs; TASKS records actual dispatch. No M2-A acceptance is claimed. SPACE-1 stays separate; next are its composition/review, M2-B/C and M3/M4. Earlier active/pair/model labels below are historical.
+All authors and the interrupted old R2 pair are stopped. One fresh non-author [Sol/xhigh reviewer](tasks/M2-A-SOL-XHIGH-REVIEW.md) is active on frozen **51c4dcd82755b53c4c3914dc2e4220ec0d701ff4**, covering all ten original M2-A criteria, prior findings/dispositions and current tradeoffs. Its original runtime confirms gpt-6.1-sol/xhigh; [TASKS](TASKS.md#complete-m2-a-solxhigh-review-dispatched) records the exact task and isolated worktree. No M2-A acceptance is claimed. SPACE-1 stays separate; next are its composition/review, M2-B/C and M3/M4. Earlier active/pair/model labels below are historical.
 
 ## Preserved checkpoint — M2-A R2 stopped on b293667
 
@@ -67,7 +67,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-Opus completion is terminal with no pending children/questions; its worktree is clean and all owned paths/tab/server/5190 are released. Root owns integration/build records and the complete Sol/xhigh review handoff. The reviewer receives report-only ownership on a frozen candidate as recorded in TASKS. No production writer or Astra review is active. SPACE-1 authors/reconciler remain terminal with their production separate.
+Opus completion is terminal with no pending children/questions; its worktree is clean and all owned paths/tab/server/5190 are released. Root owns integration/build records and PR management. The active Sol/xhigh reviewer owns only `docs/build/reviews/M2-A-SOL-XHIGH-R1.md`, private evidence and optional isolated port 5190 on frozen 51c4dcd, as recorded in TASKS. No production writer or Astra review is active. SPACE-1 authors/reconciler remain terminal with their production separate.
 
 ### Historical implementation checkpoints
 
@@ -98,7 +98,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch/receive the fresh complete Sol6.1/xhigh review under the current model policy, inspect all ten criteria and reconcile any findings with Opus corrections. After acceptance, compose/check/review SPACE-1 and continue M2-B/C, M3 and M4 automatically. Main merge/public deployment remain owner actions.
+Receive the already-dispatched complete Sol6.1/xhigh review automatically; do not duplicate or poll it. Inspect all ten criteria and reconcile any findings with Opus corrections. After acceptance, compose/check/review SPACE-1 and continue M2-B/C, M3 and M4 automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
