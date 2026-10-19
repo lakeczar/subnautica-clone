@@ -7,7 +7,7 @@ import { SOURCES as OLD_SOURCES } from "../src/save/legacy/registry.js";
 import { validState as validOld, validExpedition2Domain } from "../src/save/legacy/validation.js";
 import type { GameState as LegacyState } from "../src/save/legacy/types.js";
 import { BASIN_SOURCE_IDS } from "../src/content/routes.js";
-import { PLACES, RECIPES, SOURCES } from "../src/content/registry.js";
+import { PLACES, RECIPES, RENEWABLE_SOURCE_IDS, SOURCES } from "../src/content/registry.js";
 import type { MaterialId, RecipeId } from "../src/content/registry.js";
 import { createGame } from "../src/sim/state.js";
 import { addItem } from "../src/sim/inventory.js";
@@ -21,7 +21,9 @@ import { MemoryStorage, TestWriterLock } from "./persistence-support.js";
 import type { GameState } from "../src/sim/types.js";
 const meta = { sessionId: "m2-migration-test", createdAt: "2026-10-17T00:00:00.000Z", savedAt: "2026-10-18T00:00:00.000Z" }, world = createWorldQueries();
 function legacy(s: GameState): LegacyState {
-  const old = JSON.parse(JSON.stringify(s)) as LegacyState;
+  assert.deepEqual(s.world.renewal, RENEWABLE_SOURCE_IDS.map(id => ({ id, progress: 0 })), "only pristine renewal predates its schema");
+  const { renewal: _renewal, ...world } = s.world;
+  const old = JSON.parse(JSON.stringify({ ...s, world })) as LegacyState;
   old.world.resources = old.world.resources.filter(r => Object.hasOwn(OLD_SOURCES, r.id));
   if (old.recovery.operation) delete (old.recovery.operation as unknown as Record<string, unknown>).routeId;
   assert.ok(validOld(old)); return old;
@@ -31,8 +33,9 @@ function envelope(s: LegacyState, contentVersion = "expedition.3") {
 }
 function verify(raw: string): ReturnType<typeof createEnvelope> {
   const original = JSON.parse(raw) as ReturnType<typeof envelope>, out = decodeSave(raw); assert.ok(out.ok, out.ok ? "" : out.error);
-  assert.equal(out.value.schemaVersion, 3); assert.equal(out.value.contentVersion, "expedition.4");
-  const expected = structuredClone(original.state) as unknown as GameState;
+  assert.equal(out.value.schemaVersion, 4); assert.equal(out.value.contentVersion, "expedition.5");
+  const old = structuredClone(original.state), { resources, ...rest } = old.world;
+  const expected = { ...old, world: { resources, renewal: RENEWABLE_SOURCE_IDS.map(id => ({ id, progress: 0 })), ...rest } } as unknown as GameState;
   expected.world.resources.push(...BASIN_SOURCE_IDS.map(id => ({ id, stock: SOURCES[id].stock, reserve: SOURCES[id].reserve })));
   if (expected.recovery.operation) expected.recovery.operation.routeId = "canopy";
   assert.deepEqual(out.value.state, expected, "EVERY pre-existing state field remains identical");
@@ -87,8 +90,8 @@ test("closed legacy validation rejects cross-version content and field injection
     (d: typeof clean) => { d.state.inventory.containers[0]!.capacity++; },
   ]) { const bad = structuredClone(clean); mutate(bad); assert.equal(decodeSave(JSON.stringify(bad)).ok, false); }
   const current = createEnvelope(createGame(), meta);
-  for (const schemaVersion of [1, 2, 4, 99]) assert.equal(decodeSave(JSON.stringify({ ...current, schemaVersion })).ok, false);
-  for (const contentVersion of ["expedition.2", "expedition.3", "expedition.5", "foundation.1"]) assert.equal(decodeSave(JSON.stringify({ ...current, contentVersion })).ok, false);
+  for (const schemaVersion of [1, 2, 3, 5, 99]) assert.equal(decodeSave(JSON.stringify({ ...current, schemaVersion })).ok, false);
+  for (const contentVersion of ["expedition.2", "expedition.3", "expedition.4", "expedition.6", "foundation.1"]) assert.equal(decodeSave(JSON.stringify({ ...current, contentVersion })).ok, false);
   assert.equal(decodeSave(JSON.stringify({ ...clean, contentVersion: "expedition.4" })).ok, false);
   const trimmed = envelope(legacy(invested(true)), "expedition.2"); assert.equal(decodeSave(JSON.stringify(trimmed)).ok, false);
   const old = legacy(invested()), v = old.fleet.vehicles[0]!; v.health = 0; v.disabled = true;

@@ -1,0 +1,57 @@
+// Run after npm test (compiled production modules). Derives the IMPLEMENTED part of the
+// acquisition curve from runtime rules only; planned/unbuilt rows live in PROGRESSION-CURVE.md.
+import assert from "node:assert/strict";
+import { EVIDENCE, EVIDENCE_BLUEPRINTS, FUTURE_BLUEPRINTS, RECIPES, RENEWABLE_SOURCE_IDS, SOURCE_RENEWAL, SOURCES }
+  from "../.test-build/src/content/registry.js";
+import { personalDepth } from "../.test-build/src/sim/capabilities.js";
+import { completeOpening, craftingBlock, discover } from "../.test-build/src/sim/progression.js";
+import { advanceRenewal, renewalCap } from "../.test-build/src/sim/renewal.js";
+import { createGame } from "../.test-build/src/sim/state.js";
+import { FIXED_SECONDS } from "../.test-build/src/sim/clock.js";
+import { createWorldQueries } from "../.test-build/src/sim/world.js";
+
+const world = createWorldQueries(), ids = Object.keys(RECIPES);
+const opened = () => { const s = createGame(); completeOpening(s); return s; };
+const visible = s => ids.filter(id => s.knowledge.blueprints.includes(RECIPES[id].bp));
+
+// 1. Gate codes on a fresh, opened New Game at the pod.
+const fresh = opened();
+const newGame = Object.fromEntries(ids.map(id => [id, craftingBlock(fresh, id, world)?.code ?? "ready"]));
+assert.ok(ids.every(id => id === "pod_repair" || newGame[id] !== "ready" && newGame[id] !== "materials"), "only the first repair is attemptable");
+
+// 2. What each clue adds, independently of order.
+const unlocks = Object.fromEntries(Object.keys(EVIDENCE).map(id => {
+  const s = opened(), before = visible(s); discover(s, id);
+  return [id, { blueprints: EVIDENCE_BLUEPRINTS[id], executable: visible(s).filter(r => !before.includes(r)),
+    research: EVIDENCE_BLUEPRINTS[id].filter(bp => Object.hasOwn(FUTURE_BLUEPRINTS, bp)) }];
+}));
+
+// 3. Preceding personal protection and reachable source patches per recipe.
+const limit = id => Math.max(60, ...RECIPES[id].needs.map(n => n === "suit_350" ? 350 : n === "suit_150" ? 150 : limit(n)));
+const recipes = Object.fromEntries(ids.map(id => {
+  const before = limit(id), materials = Object.fromEntries(Object.entries(RECIPES[id].cost).map(([kind, q]) => {
+    const patches = Object.keys(SOURCES).filter(s => SOURCES[s].item === kind && personalDepth(SOURCES[s].position) <= before);
+    assert.ok(patches.length >= 2, `${id}: ${kind}`);
+    return [kind, { quantity: q, patches: patches.length, exposed: patches.reduce((n, s) => n + SOURCES[s].stock, 0) }];
+  }));
+  return [id, { blueprint: RECIPES[id].bp, needs: RECIPES[id].needs, site: RECIPES[id].site, protectionBefore: before,
+    rescueStock: RECIPES[id].maintenance, materials }];
+}));
+
+// 4. Living-shed arithmetic, executed through the per-step rule from an empty source.
+const renewal = Object.fromEntries(RENEWABLE_SOURCE_IDS.map(id => {
+  const s = opened(), node = s.world.resources.find(n => n.id === id);
+  node.stock = 0; let steps = 0;
+  while (node.stock < renewalCap(id)) { advanceRenewal(s); steps++; }
+  for (let i = 0; i < SOURCE_RENEWAL[id].intervalSteps * 2; i++) advanceRenewal(s);
+  assert.equal(node.stock, renewalCap(id), "never exceeds its cap");
+  return [id, { item: SOURCES[id].item, perInterval: SOURCE_RENEWAL[id].quantity,
+    intervalMinutes: SOURCE_RENEWAL[id].intervalSteps * FIXED_SECONDS / 60, cap: renewalCap(id),
+    finiteReserve: SOURCES[id].reserve, emptyToCapActiveMinutes: steps * FIXED_SECONDS / 60 }];
+}));
+const finite = kind => Object.values(SOURCES).filter(s => s.item === kind).reduce((n, s) => n + s.stock + s.reserve, 0);
+const demand = kind => ids.reduce((n, id) => n + (RECIPES[id].maintenance ? 0 : RECIPES[id].cost[kind] ?? 0), 0);
+const solvency = Object.fromEntries(["flex_membrane", "buoyant_resin"].map(k => [k, { implementedDemand: demand(k), finiteStockAndReserve: finite(k) }]));
+for (const [k, v] of Object.entries(solvency)) assert.ok(v.finiteStockAndReserve >= v.implementedDemand, `${k}: zero-renewal solvency`);
+
+console.log(JSON.stringify({ scope: "Implemented runtime rules only; staged rule checks, not play time", newGame, unlocks, recipes, renewal, solvency }, null, 2));

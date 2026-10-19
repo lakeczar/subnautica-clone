@@ -54,13 +54,13 @@ const foundation = () => ({
     recovery: { caches: [] },
   },
 });
-test("actual foundation schema1 migrates safe pose/vitals once with feedback and explicit schema3 content version", () => {
+test("actual foundation schema1 migrates safe pose/vitals once with feedback and explicit current schema content version", () => {
   const old = foundation(),
     d = decodeSave(JSON.stringify(old));
   assert.equal(d.ok, true);
   if (!d.ok) return;
-  assert.equal(d.value.schemaVersion, 3);
-  assert.equal(d.value.contentVersion, "expedition.4");
+  assert.equal(d.value.schemaVersion, 4);
+  assert.equal(d.value.contentVersion, "expedition.5");
   assert.deepEqual(d.value.state.player.pose, old.state.player.pose);
   assert.deepEqual(d.value.state.player.vitals, old.state.player.vitals);
   assert.equal(d.value.state.tick, 444);
