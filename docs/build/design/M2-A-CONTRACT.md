@@ -8,7 +8,7 @@ Report 93ba9943c74a369cf9e7636845f322a2de84c605 is report-only, directly on d759
 
 - **OS3-01 required:** emit an explicit creature-injury event, then provide visible, bounded damage feedback in A3. It joins OS2-04 floor readability, OS2-06 meaningful visible Canopy geography/cover and cockpit balance as first-M2 obligations.
 - **OS3-02 corrected:** the earlier meal criticism is withdrawn. `eat()` already refuses at actual food >=99; rounded HUD 99 does not imply refusal eligibility. Preserve threshold, quantities and holds. Use a concise actual-food receipt only. Preserve the original report as historical evidence with this correction.
-- **OS3-03 unproven:** no blocked-thrust threshold changes. Composition must obtain an earned pre-stall save and replay actual modules with requested/actual/solid/support/surface movement and reset reasons. Seeded alternatives remain diagnostics. Any resulting producer/consumer change needs explicit root ownership.
+- **OS3-03 now reproduced in earned composition:** footprint-floor refusal is omitted from the thrust producer. [Root inspection](../evidence/M2-A-COMPOSE-INTEGRATION.md) and [bounded correction](../tasks/M2-A-COMPOSE-CORRECTIONS.md) authorize transient support measurement/consumption; physical movement, thresholds and reset policy remain unchanged. The earlier uncertainty is resolved by the retained earned save and actual-module replay, not seeded stalls.
 - Human mouse comfort, screen-reader speech, dedicated-GPU performance and enjoyment remain unverified; model advice does not close them.
 
 ## A1 world, progression and save boundary

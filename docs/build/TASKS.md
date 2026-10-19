@@ -1742,3 +1742,10 @@ Dispatch/runtime receipts `/tmp/siltwake-m2-wall-dispatch-root/` are sealed: 5 f
 - Exclusive report-only ownership: [M2-A-COMPOSE](tasks/M2-A-COMPOSE.md), new `docs/build/evidence/M2-A-COMPOSE.md` and fresh `/tmp/siltwake-m2-a-compose/`. Production/tests/prior evidence frozen. Own isolated Linux tab/storage/server5192; no children, peer waits/messages, parent edits, push/PR/merge.
 - Read the connected New Game → Canopy/Basin → return → failure/recovery → reload evidence when completion notifies root. Retain OS2-06, current route loading and placement limits. Return precise production defects for focused ownership; fresh complete-batch Astra/Sol pair follows. Do not poll or duplicate this task.
 - PRs #1–#4 are linked. #4/#3 descriptions now distinguish corrected wall movement, 516 checks and active composed play from pending M2 acceptance; #3 remains M0-only. Root owns no browser/server/recording/check process.
+
+
+## Earned composition inspected; correction/direction prepared
+
+Composition task siltwake-m2-compose-sol-max-49fffcd is terminal, no children/questions, clean worktree and all owned resources released. Report1f619c9436af83797bd98b99ec11fbd48703a845 merged at6b99da7. [Root inspection](evidence/M2-A-COMPOSE-INTEGRATION.md) verifies the earned route, margins, recovery, complete replay/save evidence and archive identity; confirms OS3-03 and the completed-save checker failure; retains OS2-06 and hunter occlusion. No production changes or complete-batch acceptance.
+
+The committed [Sol correctness brief](tasks/M2-A-COMPOSE-CORRECTIONS.md) assigns exclusive producer/consumer/checker/tests paths and optional support-observation contract. The [Astra encounter direction](tasks/M2-A-ENCOUNTER-DIRECTION.md) owns only its new proposal/report and artifacts. Both start from the next committed shared baseline; actual task IDs/bindings follow dispatch. Root has no browser/server/recording/check process. No polling/watchers, no duplicate composition worker.

@@ -1,16 +1,16 @@
 # Build status
 
-## Current checkpoint — wall correction assembled; earned Basin composition next
+## Current checkpoint — earned Basin route inspected; focused corrections next
 
-**A1–A3 and all bounded corrections are provisionally assembled at b91cde9e2956ce36ec9e4e7901332f7ebf1257cc.** Root passes **516/516 tests**, typecheck/build and all three economies. [Wall inspection](evidence/M2-A-WALL-INTEGRATION.md) verifies the original 150-tick sequence now has zero camera crossings, exact old-contact import/escape, 11 full browser-state replays and actual reload equality. All 1228 payloads, source/build identities and original Sol6.1/max runtime are checked. The author is terminal and releases all paths/resources. No complete-batch acceptance or fresh earned M2 route claim.
+**The connected earned Canopy–Basin expedition and local recovery completed on production b91cde9.** Report1f619c9 is merged at6b99da7. [Root inspection](evidence/M2-A-COMPOSE-INTEGRATION.md) verifies all541 payloads,110 source inputs,27 build files and184 compiled replay files. Root reruns43 complete exports:31 exact,12 numeric-only differences <=2.85e-14; actual main/recovery Continue and completion are exact. Main minima61.63% oxygen/83.97% power exceed25%. Navigation was coordinate assisted and timing controlled; no fresh-human learning/playtime claim.
 
-Historical placement clearance remains unchanged for compatibility and can still accept terrain-footprint overlaps. The movement correction preserves non-closing escape; the inspection records affected callers and the safe-hull exit containment argument without claiming all placement paths fixed. This limit remains in the complete-batch review and earned fleet/placement gate.
+Production remains **516/516/typecheck/build** passing. M1/design economies pass, but the M2 checker **fails on the new completed earned export** because its alternate clue-order diagnostic assumes no prior C05/C06 records. Root reproduces this harness failure. The same run's pre-Basin input passes only its separately labelled staged diagnostics; that is not a completed-save pass.
 
-The [earned composition](tasks/M2-A-COMPOSE.md) is active in t3-64ba2b7a from clean **49fffcd7aca7e4d15b2f5a6782018bd14573a800**; original Sol6.1/max runtime and T3 binding are verified. Prove New Game preparation → Canopy → paid refit → Basin → useful return → failure/local recovery → actual reload. Capture durable input/transaction counts, pre-refill margins, injury priority and natural cover learning. TASKS records the exact task and report-only ownership.
+Root also reproduces **OS3-03** from the earned grounded-Dart checkpoint: terrain-footprint rejection is absent from thrust obstruction measurement, so Blocked ahead never appears. [Focused Sol corrections](tasks/M2-A-COMPOSE-CORRECTIONS.md) cover this producer/consumer seam and the checker without changing physical movement or thresholds. [Focused Astra direction](tasks/M2-A-ENCOUNTER-DIRECTION.md) will propose concrete corrections for **OS2-06** high-approach shelter recognition and **ROOT-COMPOSE-HUNTER** close-body occlusion. These are separate, exclusive tasks; TASKS records dispatch.
 
-Warm activation/material findings are provisionally corrected; prior measurements precede terrain refinement. Cold terrain construction measured about 3.2 seconds in the author's Node run and remains a loading cost. OS2-06 natural high-approach cover recognition remains open for composed play and any explicitly assigned correction.
+The composition author is terminal; all its paths/resources are released. Historical placement limits remain explicit. Current route loading includes first-use stalls and a50.6ms return sample above the50ms trial; older cache timings do not certify current frame pacing. Corrected visual work must retain this performance evidence.
 
-After composition and real fixes, freeze the complete A1–A3 batch for fresh non-author Astra xhigh/Sol6.1 max review. M2-B/C, integrated M2/Opus, M3 and M4 follow automatically. Earlier active labels below are historical.
+After focused fixes and affected earned continuations, freeze the complete A1–A3 batch for fresh non-author Astra xhigh/Sol6.1 max review. No M2 acceptance. M2-B/C, integrated M2/Opus, M3 and M4 follow automatically. Earlier active labels below are historical.
 
 Reconciliation source **a9b94111ed24a3c46634ab2e661f8cee75184ac4** / report **dc8693e8553602bda5d36437ae4f1862e9143668** is terminal, inspected and provisionally merged at **6e2a4b092693ed1f54fab245c055eb9241d69ace**. Root clean compilation/full check reproduces **461/462**, with only the confirmed missing Basin terrain failure. All 12 old compile errors and 27 prior failures are resolved. Separate build and all three economies pass; 50 source/27 built files match A1. [Current inspection](evidence/M2-A1-RECONCILE-INTEGRATION.md) verifies actual Sol6.1/max, all 32 new evidence payloads, 1,220 prior files and 66 migration inputs. The worker releases all paths/resources. [A2 rendering](tasks/M2-A2.md) and [A3 presentation](tasks/M2-A3.md) are active in separate T3 worktrees from **d753b0209edd83e9c0bb1b0062c4071dbecadfa0**, explicitly carrying the A2 terrain blocker. Both original runtime contexts confirm Sol6.1/max; TASKS records exact IDs and ownership. No batch acceptance is claimed; earlier fixture counts below are historical.
 
@@ -55,7 +55,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All implementation authors, including the wall-contact correction, are terminal and release their paths/resources. Production is frozen for the report-only earned composition task; TASKS records its exact baseline, ID and ownership. Root owns integration/build records with no competing source edits or browser/server/recording/check process. Receive terminal notifications rather than polling.
+All prior authors, including earned composition, are terminal and release their paths/resources. Only the named correctness correction receives production/test ownership; the encounter-direction task is report-only. TASKS records exact IDs/baselines/bindings. Root owns integration/build records, with no browser/server/recording/check process. Receive completion notifications rather than polling.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -90,7 +90,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active [earned composition](tasks/M2-A-COMPOSE.md) through its completion notification and inspect its evidence on the corrected committed assembly: preparation → Canopy → Basin → return → failure/recovery → actual reload. Capture input counts, pre-refill margins, injury priority and natural cover learning; resolve substantiated defects under explicit ownership. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+Dispatch/inspect the [Sol correctness correction](tasks/M2-A-COMPOSE-CORRECTIONS.md) and [Astra encounter direction](tasks/M2-A-ENCOUNTER-DIRECTION.md) from the committed shared baseline. Reconcile concrete visibility/AI proposals, assign Sol implementation, verify affected earned continuations, then review the complete M2-A batch with fresh non-author Astra xhigh/Sol6.1 max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
