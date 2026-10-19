@@ -1,6 +1,6 @@
 # M2-A hunter reconciliation
 
-Sol6.1/max implementation under root Astra xhigh. Start clean at the exact committed baseline in dispatch; verify original runtime/effort and T3 binding. Read AGENTS, STATUS/PLAN/CONTRACTS, revised input, relevant expedition/ecology/fleet/delivery contracts, [hunter brief](M2-A-HUNTER-CONTACT.md), [author handoff](../evidence/M2-A-HUNTER-CONTACT.md) and [root inspection](../evidence/M2-A-HUNTER-CONTACT-INTEGRATION.md). Root findings/this brief control scope. No children, peer messages/polling/waits, parent mutation, push/PR/merge.
+Sol6.1/max implementation under root Astra xhigh. Dispatched from exact150e334fe1a98d1adb23f0065cb167a597d1e35e in the isolated t3-00ef40e7 worktree. Start clean at that committed baseline; verify original runtime/effort and T3 binding. Read AGENTS, STATUS/PLAN/CONTRACTS, revised input, relevant expedition/ecology/fleet/delivery contracts, [hunter brief](M2-A-HUNTER-CONTACT.md), [author handoff](../evidence/M2-A-HUNTER-CONTACT.md) and [root inspection](../evidence/M2-A-HUNTER-CONTACT-INTEGRATION.md). Root findings/this brief control scope. No children, peer messages/polling/waits, parent mutation, push/PR/merge.
 
 ## Exclusive paths
 

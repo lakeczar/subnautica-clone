@@ -1806,3 +1806,13 @@ Root inspection/dispatch receipts `/tmp/siltwake-m2-canopy-landmark-root/` are s
 Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-hunter-contact-sol-max-256f1c7` is terminal/result_available with no children/questions. Source f3c5d79c26daf1a0baa338069f9d4552e257a526 and4583671b2df61bfb181a49813e9877d6921c2bf0/report3d4dbc51eeff11c65955e3dca4e71a973773a46e merge at **d94a3cad27da175877ad9b9de84ae6c0a792c6e1**. Three original runtime contexts confirm Sol6.1/max; original checkout and all owned resources/paths are released.
 
 [Root inspection](evidence/M2-A-HUNTER-CONTACT-INTEGRATION.md) verifies1,503 archive/local payload members, source/build identity,57-export candidate replay, default movement and earned return/recovery suffixes. Full check remains527/530; separate build/economies pass. ROOT-HUNTER-01 invalid fixtures,02 CPU query costs,03 parked-hull overlap require the [prepared reconciliation](tasks/M2-A-HUNTER-RECONCILE.md) before complete M2-A review. No worker is active before dispatch; root owns no browser/server/recording/check process.
+
+
+## Active hunter reconciliation
+
+- Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-hunter-reconcile-sol-max-150e334`; stable request `siltwake-m2-hunter-reconcile-sol-max-150e334`.
+- Exact initial parent **150e334fe1a98d1adb23f0065cb167a597d1e35e**, production d94a3ca/4583671. T3 branch `t3/m2a-hunter-reconciliation`, checkout `/home/worker/.t3/worktrees/subnautica-clone/t3-00ef40e7`. Original session turn_context confirms **gpt-6.1-sol/max**, and Git parent/binding agree.
+- Exclusive [brief](tasks/M2-A-HUNTER-RECONCILE.md): hunter/query helpers, narrowly scoped shared geometry/survival, named app/expedition fixtures and contact tests, new report/artifacts. World/step/types/render/camera/save/economy remain read-only. Own isolated Linux browser/server5190 only; no children/peer polling/waits/parent changes/publication.
+- Root awaits terminal completion notification and performs affected checks before fresh complete M2-A Astra/Sol review. No other author active. Root has no browser/server/recording/check process.
+
+Root receipts `/tmp/siltwake-m2-hunter-contact-root/` sealed135 files/52,119,823 bytes; manifest SHA256 `56b4861e8c2f893adc680913bcb48522e97c18b0985a4959590ca804765fc6f5`. Public source-attributed hunter comparison PNG, final458 separation GIF/MP4 and contact/withdrawal MP4 are HTTP200/byte verified; publication/readback receipts `/tmp/siltwake-m2-hunter-contact-pr/`. PR #4/#3 retain red527/530 versus successful separate build/economies and pending reconciliation/acceptance. All stack layers linked/unwatched; no game/main merge/deployment.
