@@ -6,7 +6,7 @@
 
 Historical placement clearance remains unchanged for compatibility and can still accept terrain-footprint overlaps. The movement correction preserves non-closing escape; the inspection records affected callers and the safe-hull exit containment argument without claiming all placement paths fixed. This limit remains in the complete-batch review and earned fleet/placement gate.
 
-The [earned composition brief](tasks/M2-A-COMPOSE.md) is ready for a fresh Sol6.1/max worktree from the committed corrected assembly. Prove New Game preparation → Canopy → paid refit → Basin → useful return → failure/local recovery → actual reload. Capture durable input/transaction counts, pre-refill margins, injury priority and natural cover learning. TASKS records dispatch/binding when issued.
+The [earned composition](tasks/M2-A-COMPOSE.md) is active in t3-64ba2b7a from clean **49fffcd7aca7e4d15b2f5a6782018bd14573a800**; original Sol6.1/max runtime and T3 binding are verified. Prove New Game preparation → Canopy → paid refit → Basin → useful return → failure/local recovery → actual reload. Capture durable input/transaction counts, pre-refill margins, injury priority and natural cover learning. TASKS records the exact task and report-only ownership.
 
 Warm activation/material findings are provisionally corrected; prior measurements precede terrain refinement. Cold terrain construction measured about 3.2 seconds in the author's Node run and remains a loading cost. OS2-06 natural high-approach cover recognition remains open for composed play and any explicitly assigned correction.
 
@@ -90,7 +90,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch and inspect the prepared [earned composition](tasks/M2-A-COMPOSE.md) on the corrected committed assembly: preparation → Canopy → Basin → return → failure/recovery → actual reload. Capture input counts, pre-refill margins, injury priority and natural cover learning; resolve substantiated defects under explicit ownership. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+Receive the active [earned composition](tasks/M2-A-COMPOSE.md) through its completion notification and inspect its evidence on the corrected committed assembly: preparation → Canopy → Basin → return → failure/recovery → actual reload. Capture input counts, pre-refill margins, injury priority and natural cover learning; resolve substantiated defects under explicit ownership. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
