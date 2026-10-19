@@ -1,5 +1,7 @@
 # Stage1 experience verification — fresh Opus round3
 
+Dispatched from clean **223a3870d6b9e94b09d83df9253e9822b614c823**, a documentation-only successor of accepted dc09028. TASKS owns the exact returned ID and binding.
+
 This is a new independent experience review of the **entire implemented controls/action/preparation/encounter stage**, following the accepted correction to the R2 experience findings. It is not a same-thread consultation, technical-pair replacement or review limited to the last HUD diff. Root supplies the exact clean documentation parent at dispatch. Verify production/tests/config match accepted **dc0902864afb872c658b239821e870423877178a**, correction source **75402ae4e3491a1f30cb3134ab9e0b1b3c843089**, combined source **6aaeae2d97476528c3848e140aded6a069b0c3b1**.
 
 Use **claudeAgent / claude-opus-5-5 / effort high**. Verify live selection and distinguish it from an independent effective-effort readout. Own only **docs/build/reviews/OPUS-STAGE1-R3.md**, committed on the supplied parent. Evidence belongs in **/tmp/siltwake-opus-stage1-r3/**; optional free preview port **5197**. No production/test/config edits, fixes, children, peer messages/waits, push, PR, merge or parent mutation. Only Sol6.1/max implements production.

@@ -1,6 +1,6 @@
 # Build status
 
-## Current checkpoint — OS2 accepted; fresh Opus stage1 verification next
+## Current checkpoint — OS2 accepted; fresh Opus stage1 verification active
 
 Movement cc3f20d, feedback/copy4a5103f and accessible announcement75402ae are combined at **6aaeae2d97476528c3848e140aded6a069b0c3b1** and accepted by both R2 reviewers on **dc0902864afb872c658b239821e870423877178a**. Root passes **436/436 tests**, typecheck/build and both economies. All27 production files,85 tracked source/test/config files and40 compiled native modules match the correction author. The prior failed announcement case now retains both full occurrences atomically, with native trace/menu/reset/singleton evidence inspected. [Current inspection](evidence/POLISH-1-OS2-ANNOUNCEMENT-INTEGRATION.md).
 
@@ -41,7 +41,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-No builder remains active. Both OS2 R2 reviewers and all implementation authors are terminal; all source/test/report ownership is released. Root owns integration/build records and no browser/server/recording/check process. Fresh Opus stage1 verification is the next report-only task; TASKS records actual dispatch, candidate and ownership.
+No builder remains active. Both OS2 R2 reviewers and all implementation authors are terminal; all source/test/report ownership is released. Root owns integration/build records and no browser/server/recording/check process. Fresh Opus5.5/high stage1 R3 is active from clean223a387, owning only docs/build/reviews/OPUS-STAGE1-R3.md; TASKS records actual ID and bound worktree.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -76,7 +76,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch fresh Opus5.5/high stage1 experience verification from a committed clean successor of accepted dc09028, following OPUS-STAGE1-R3. Receive completion without polling. Consult substantive findings in that completed context, reconcile advice and delegate corrections to Sol; otherwise close stage1 and continue accepted M2 direction, then M3/M4 automatically. Main merge/public deployment remain owner actions.
+Fresh Opus5.5/high stage1 R3 is active on clean223a387, a documentation successor of accepted dc09028, following OPUS-STAGE1-R3. Receive completion without polling. Consult substantive findings in that completed context, reconcile advice and delegate corrections to Sol; otherwise close stage1 and continue accepted M2 direction, then M3/M4 automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
