@@ -1,5 +1,8 @@
 # Construction plan
 
+**Canopy landmark dc5d67c is inspected and provisionally assembled at9877c8a with correctness7a822d7.** [Root inspection](evidence/M2-A-CANOPY-LANDMARK-INTEGRATION.md) records520 checks/build/economies and29 exact combined replay exports. The author is released. Dispatch [hunter contact/withdrawal](tasks/M2-A-HUNTER-CONTACT.md), inspect affected earned continuations, then the complete M2-A pair before M2-B/C and M3/M4. Human route recognition and loading costs remain unverified/open. Earlier active labels are historical.
+
+
 **Correctness7a822d7 is inspected and assembled at2225eef.** [Inspection](evidence/M2-A-COMPOSE-CORRECTIONS-INTEGRATION.md) records520 checks/build, all economy modes including the completed save, exact bounded state preservation and actual cue/escape/reload. Only Canopy landmark remains active. Inspect/assemble its return, then dispatch the [prepared hunter contact task](tasks/M2-A-HUNTER-CONTACT.md); final affected composition and fresh complete M2-A pair precede M2-B/C. Earlier active correctness labels are historical.
 
 **Focused encounter direction acc731c is inspected and merged.** [Reconciliation](evidence/M2-A-ENCOUNTER-DIRECTION-INTEGRATION.md) selects the unchanged-cover landmark first and a later shared-contact/withdrawal hunter correction. The [Canopy art leaf](tasks/M2-A-CANOPY-LANDMARK.md) may run independently beside the existing correctness worker. Inspect/assemble both before hunter implementation, then affected earned composition and complete M2-A paired review. No production/acceptance change accompanies the advisory report. Earlier active-direction labels are historical.

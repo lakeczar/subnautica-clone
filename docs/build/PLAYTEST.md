@@ -73,3 +73,8 @@ Both R1 corrections are assembled at `47d8872`; [combined root evidence](evidenc
 ## M2-A earned stall/checker correction — source7a822d7, assembly2225eef
 
 [Coordinator inspection](evidence/M2-A-COMPOSE-CORRECTIONS-INTEGRATION.md) verifies retained earned import9370→W30 visible Blocked ahead→ordinary retreat/rise→actual Save/reload/Continue. Six complete browser exports/native downloads match old-source gameplay;1,897 bounded state/save comparisons preserve movement.520 tests/typecheck/build and completed/pre-Basin/schema2 M2 economy diagnostics pass. This is an earned-save continuation with controlled timing, not a fresh expedition, human learning or GPU evidence. Shelter/hunter and full-batch acceptance remain open.
+
+
+## Canopy landmark assembled at9877c8a
+
+[Root inspection](evidence/M2-A-CANOPY-LANDMARK-INTEGRATION.md) verifies original and combined29-export/3,279-step exact replay and actual source-attributed level/down/west-edge/response imagery.009 reaches cover11044 while investigate;012 reaches cover11158 from investigate on the preceding step, with no added damage. Actual author Continue at11215 is exact; subsequent export is37 steps later. Quiet retreat remains separately no-cover. These are coordinate-assisted controlled-frame continuations, not human learning/feel or a fresh full route.520 checks/build and all three economies (M2 fresh/completed) pass. Hunter contact and affected current continuations precede full M2-A review.

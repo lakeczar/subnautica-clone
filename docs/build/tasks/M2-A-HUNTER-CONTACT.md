@@ -1,6 +1,6 @@
 # M2-A hunter contact and withdrawal
 
-**Prepared, not dispatched.** Root first inspects and assembles the active Canopy landmark with corrected production7a822d7, then commits and supplies the exact candidate baseline. This task must not consume unfinished peer changes. Sol6.1/max implements under root Astra xhigh; fresh full-batch Astra/Sol review follows final composition.
+**Ready for dispatch after inspected assembly9877c8a.** Canopy source dc5d67c and corrected production7a822d7 are combined and root-checked:520 tests/build/economies and29 exact exported-state replays. Root supplies the exact committed candidate baseline in dispatch. Read [landmark integration](../evidence/M2-A-CANOPY-LANDMARK-INTEGRATION.md) and preserve its art. This task must not consume unfinished peer changes. Sol6.1/max implements under root Astra xhigh; fresh full-batch Astra/Sol review follows final composition.
 
 Read AGENTS, STATUS/PLAN/CONTRACTS, revised input and ecology/expedition/delivery contracts; the [encounter direction](../design/M2-A-ENCOUNTER-DIRECTION.md), [root disposition](../evidence/M2-A-ENCOUNTER-DIRECTION-INTEGRATION.md) and [correctness inspection](../evidence/M2-A-COMPOSE-CORRECTIONS-INTEGRATION.md). This task controls ownership and the corrected helper signature. Verify clean exact parent, original runtime/effort and T3 binding. No children, peer messages/polling/waits, parent mutation, push/PR/merge.
 
