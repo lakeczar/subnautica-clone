@@ -1,10 +1,12 @@
 # Build status
 
-## Current checkpoint — profiling inconclusive; affected gameplay next
+## Current checkpoint — affected gameplay inspected; complete M2-A R2 next
 
 Checked production **631918436001c2264aad3123329efeb0bb6e3ab4** combines Dart cache1cd713a and hunter query reuseea4f5d9. Root passes **541/541 tests**, strict typecheck/build and all four economy invocations. [Composition inspection](evidence/M2-A-PERFORMANCE-COMPOSITION.md) records exact bundle/source identity, verified author artifacts and the one predeclared current hunter trial: all six warm-p95 values pass the unchanged2 ms predicate, maximum p95 **1.165593 ms**. The author's separate high-load failures remain retained; this does not establish their cause or all-hardware pacing. Per-call thread-CPU diagnostics are too quantized for fine-grained attribution.
 
-**Warm-region loading remains open**:56 current transitions retain51.8/78.0/65.6ms misses. Dedicated profilebfd62ade is terminal and [inspected](evidence/M2-A-DEDICATED-PROFILE-INTEGRATION.md): public attribution works, but11/12 targets and31 warm activations at8.1–24.3ms provide no slow interval or causal correction. Light reference cockpit is unrun after a documented harness timeout; HeadlessChrome156 also differs from the earlier shared Chrome154. Root verifies473 payloads/archive,27 matching production files and restored source. No further timing loop, speculative correction or50ms waiver. Proceed to [affected ordinary gameplay](tasks/M2-A-AFFECTED-PLAY.md), then fresh complete M2-A Astra/Sol R2 carrying the unresolved criterion explicitly.
+**Warm-region loading remains open**:56 current transitions retain51.8/78.0/65.6ms misses. Dedicated profilebfd62ade is terminal and [inspected](evidence/M2-A-DEDICATED-PROFILE-INTEGRATION.md): public attribution works, but11/12 targets and31 warm activations at8.1–24.3ms provide no slow interval or causal correction. Light reference cockpit is unrun after a documented harness timeout; HeadlessChrome156 also differs from the earlier shared Chrome154. No further timing loop, speculative correction or50ms waiver.
+
+**Current affected gameplay is complete and inspected**, report2d327531 copied atfaa7780: actual healthy reboard/cockpit, natural disable13495 and open-water/Recover/refused-X continuation,22 exact exported states and two complete reload/future pairs. Root verifies437 payloads/archive,112 unchanged inputs/27 build files and independently reproduces both120-step futures. The healthy active-pursuit camera gap and compiled-versus-browser evidence remain explicit. [Inspection](evidence/M2-A-AFFECTED-PLAY-INTEGRATION.md). The [fresh complete M2-A R2 brief](tasks/M2-A-REVIEW-R2.md) retains all ten original criteria, both R1 reports/dispositions and unresolved criterion5. No M2-A acceptance is claimed.
 
 **SPACE-1 reconciliation is complete and inspected, still separate from M2-A.** Opus source7df64e3/report239b301b and Sol's isolated merge32e9fce/correction153b4a4/report4f6f464 remain provisional. The correction changes exactly three current-version assertion literals in two files; clean compilation, **93/93 focused tests**, M1 economy and frozen-domain comparisons pass. Root verifies34 reconciliation payloads,59 production files against their authorized origins and110 unchanged compiled production files. Only the author report is copied into root; no SPACE-1 production or corrected assertions are integrated here. [Staged inspection](evidence/SPACE-1-STAGING.md), [author reconciliation](evidence/SPACE-1-RECONCILE.md). Full composite checks and a fresh independent pair remain pending after M2-A disposition; root production stays6319184/schema3/expedition.4.
 
@@ -55,7 +57,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All previous M2-A authors/reviewers/advisors and the dedicated profiler are terminal/released, including5191. Root owns integration/build records. Opus SPACE-1 and its Sol version reconciliation are terminal/released; their production stays in a separate composite. The bounded report-only affected-play Sol6.1/max task is active fromed8a991 in t3-ee5be971, with actual runtime/binding verified and one isolated T3 tab/5190 assigned. TASKS records its exact ID. No production paths are assigned. No peer edits, polling or duplicate workers.
+All previous M2-A authors/reviewers/advisors, profiler and affected-play worker are terminal/released, including5190/5191. Root owns integration/build records. Opus SPACE-1 and its Sol version reconciliation are terminal/released; their production stays separate. Fresh complete M2-A R2 reviewers receive one frozen candidate with report-only ownership; TASKS records actual dispatch/bindings. No production paths are assigned. No peer edits, polling or duplicate workers.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -90,7 +92,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Complete the bounded affected ordinary-play delivery on unchanged6319184, inspect it, then dispatch fresh full-batch M2-A Astra/Sol R2 with all ten criteria and unresolved regional timings. No additional profile is scheduled after inconclusivebfd62ade. SPACE-1 remains separately reconciled until M2-A disposition, then needs full composition/checks/pair. Continue M2-B/C and M3/M4 automatically after applicable gates. Main merge/public deployment remain owner actions.
+Receive/reconcile the fresh complete M2-A Astra/Sol R2 with all ten criteria, current affected gameplay and unresolved regional timings. No additional profile or correction is presumed. SPACE-1 remains separately reconciled until M2-A disposition, then needs full composition/checks/pair. Continue M2-B/C and M3/M4 automatically after applicable gates. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
