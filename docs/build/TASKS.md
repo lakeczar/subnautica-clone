@@ -2070,3 +2070,15 @@ The owner asked to pause, upgrade factory-worker and continue from the checkpoin
 [VM_UPGRADE_HANDOFF](VM_UPGRADE_HANDOFF.md) is authoritative for resumption. Root found no remaining process in the reviewer checkout, and5190 is free. Shared hosts/user resources remain untouched. Temporary Siltwake paths were archived onto the existing persistent disk; all390 paths and archive verification receipts are retained under `/home/worker/.local/share/siltwake-checkpoints/vm-upgrade-20261019/`. No VM configuration or resource limits were changed.
 
 No new workers until owner continuation. After restart verify resources/evidence, then dispatch a fresh Sol6.1/xhigh review with the complete original scope plus interrupted context, not a child-thread continuation. Productioneb712f and author e4062ae remain identical, schema4/expedition.5; M2-A accepted, SPACE-1 provisional. M2-B/C and M3/M4 remain required.
+
+
+## Resumed after worker recovery — 2026-10-19
+
+Owner resumed the whole-game goal and requested RTX 3090 development use. Root verification is in [WORKER-RESUME-20261019](evidence/WORKER-RESUME-20261019.md). Shared committed baseline: `d8a812ed3008d8950a0bdd3f9fe59caa6762e545`. Both live thread configurations verify the requested models/efforts; initial worktree bindings are recorded below. Private full briefs/dispatch/configuration receipts: `/home/worker/.local/share/siltwake-evidence/worker-resume-root/dispatches.json`.
+
+- **SPACE-1 fresh complete review**: `node:delegated-task:command%3Amcp%3A2cbf186c-627f-4d86-933f-50a2dde43454%3Adelegate-task%3Asiltwake-space1-sol-xhigh-resume-r1-d8a812e`; gpt-6.1-sol / [{'id': 'reasoningEffort', 'value': 'xhigh'}].
+  Binding: `/home/worker/.t3/worktrees/subnautica-clone/t3-10bb8614`, branch `t3/space1-acceptance-review`. State: running; no children. Owns only `docs/build/reviews/SPACE-1-SOL-XHIGH-RESUME-R1.md` and fresh private evidence `space1-sol-xhigh-resume-r1`; optional isolated port5190. Original interrupted report/evidence stays untouched. All seven original criteria and evidence limits remain in scope; no production edits.
+- **RTX 3090 enablement preparation**: `node:delegated-task:command%3Amcp%3A2cbf186c-627f-4d86-933f-50a2dde43454%3Adelegate-task%3Asiltwake-gpu-enablement-opus-high-d8a812e`; claude-opus-5-5 / [{'id': 'effort', 'value': 'high'}].
+  Binding: `/home/worker/.t3/worktrees/subnautica-clone/t3-b9861fd3`, branch `t3/enable-3090-gpu`. State: running; no children. Owns only new `docs/build/gpu-enablement/` scripts, plan/report and offline checks. Read-only live infrastructure inspection; no host ask, driver/service/VM/browser-flag mutation during preparation. Root reviews and schedules any later gated execution. No game edits.
+
+Root owns coordination, current records and Fleet PR16 inventory/execution updates. No GPU change has occurred. M2-A remains accepted; SPACE-1 remains provisional. Continue M2-B/C, M3, M4 under the current model policy after applicable gates.
