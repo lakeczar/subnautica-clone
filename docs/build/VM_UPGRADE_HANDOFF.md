@@ -2,6 +2,18 @@
 
 Construction is paused for the owner's factory-worker resource upgrade. Do not restart implementation or reviews until the owner asks to resume. No VM settings or resource limits were changed by the coordinator.
 
+## Upgrade execution checkpoint
+
+Opus 5.5/high authored the host-side upgrade bundle. Fresh Sol 6.1/xhigh [R3 review](vm-upgrade/REVIEW-SOL-R3.md) and coordinator inspection accept it **for staging**: 225 suite checks pass independently, plus 55 reviewer focused checks. All review findings are closed. This is not real-host upgrade acceptance.
+
+- Reviewed script: `docs/build/vm-upgrade/vm-ram-upgrade.sh`, SHA-256 `226d89df08dbf50eeac0d80b6ad85f60db9d32139fd4792d884e09e42b272bd1`; [runbook](vm-upgrade/RUNBOOK.md).
+- Identical operational bundle is published in Fleet commit `881b72c0a1ca8d9952a21b8d255756db6ed9d4a5`, branch `ops/factory-worker-16g`, checkout `/work/repos/fleet-vm-upgrade`, [draft PR #16](https://github.com/lakeczar/fleet/pull/16). Shared Fleet main and its unrelated research file were preserved.
+- Script staged at `/mnt/user/appdata/fleet-vm-upgrade/vm-ram-upgrade.sh` on Unraid; readback is byte-identical. Current host prechecks pass: 12 GiB, six vCPUs/pins unchanged, roughly 10 GiB available on the host, archive present.
+- **Nondisruptive rehearsal request `20261019-152953-5ebd` is awaiting the host's native owner approval.** It cannot shut down or change the VM. No real-upgrade request has been submitted.
+- Local durable receipts are in `/home/worker/.local/share/siltwake-checkpoints/vm-upgrade-20261019/`: `host-script-staging.json`, `rehearsal-command.txt`, `rehearsal-ask.json`, `fleet-upgrade-pr-readback.json`, and the coordinator/reviewer records. `READY.json` retains the original pre-upgrade game checkpoint, not the later infrastructure-documentation commits.
+
+Next, use `ssh unraid-admin 'ask result 20261019-152953-5ebd'` after approval. Verify the resulting host run against every rehearsal criterion in RUNBOOK (successful durable result, launcher gone, different session, stable expected reads/plan and records). Only then publish the final restart handoff and submit the separately approved real upgrade. The detached host process owns shutdown through restart because T3 and this coordinator run inside the VM. Communicate the maintenance exclusion window. After boot inspect actual resources, all services/endpoints, cgroup WARNs, archive and retained paths before claiming completion; update Fleet `machines.yaml`/`docs/STATE.md` together. Game work remains paused until the owner resumes it.
+
 ## Saved checkpoint
 
 - Branch `feat/siltwake-first-expedition`; pre-pause published HEAD `9ddb5e9538abe6a66edf51955d744d7681f56ed0`. Later pause records are documentation only.
