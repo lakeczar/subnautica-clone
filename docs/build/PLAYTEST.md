@@ -68,3 +68,8 @@ Boundary/cache correction source `b201459`, assembled `1bec4f3`, passes root143 
 
 
 Both R1 corrections are assembled at `47d8872`; [combined root evidence](evidence/M1-BATCH-R1-OCCUPANCY-INTEGRATION.md) records 153 tests/typecheck/build,7 exact occupied-recovery actual-export comparisons, 1237 swept/saveable earned-checkpoint tow steps and 1378 codec round trips, plus the boundary/cache comparison/lifecycle harnesses. Actual author occupied controls, safe exit/salvage and paid patch remain attributed to d99aa649. No new root browser/preparation or full matrix was run. All three initial blockers are provisionally corrected; fresh paired batch review and separate integrated M1 acceptance remain. Ordinary depleted-power runtime proof stays open for integrated M1.
+
+
+## M2-A earned stall/checker correction — source7a822d7, assembly2225eef
+
+[Coordinator inspection](evidence/M2-A-COMPOSE-CORRECTIONS-INTEGRATION.md) verifies retained earned import9370→W30 visible Blocked ahead→ordinary retreat/rise→actual Save/reload/Continue. Six complete browser exports/native downloads match old-source gameplay;1,897 bounded state/save comparisons preserve movement.520 tests/typecheck/build and completed/pre-Basin/schema2 M2 economy diagnostics pass. This is an earned-save continuation with controlled timing, not a fresh expedition, human learning or GPU evidence. Shelter/hunter and full-batch acceptance remain open.

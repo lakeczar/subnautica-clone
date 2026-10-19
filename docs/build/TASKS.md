@@ -1775,3 +1775,10 @@ Root selects the [Canopy landmark leaf](tasks/M2-A-CANOPY-LANDMARK.md) to run in
 - Owns only [landmark brief](tasks/M2-A-CANOPY-LANDMARK.md) paths, isolated browser/server5191 and fresh artifact directory. No hunter, core, UI or shared authority changes. No children, peer waits/polling, parent mutation or publishing.
 - Original correctness task on8f30651 remains active and retains world/step/types/app/checker/named tests and optional5190. Astra direction is complete. No other worker is dispatched; root has no browser/server/recording/check.
 - Inspect both returns, compose them, then assign shared-contact hunter implementation on a new committed baseline. Full M2-A paired review remains pending; subsequent M2-B/C and M3/M4 remain required.
+
+
+## Correctness terminal and provisionally integrated; landmark remains active
+
+Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-compose-fix-sol-max-8f30651` is terminal/result_available without children/questions. Source7a822d7dfad8d19c1509e4f1bc943705e1cdfe7d/report305d41a36f0db38d54606439988a3a9c03f8036f merge at **2225eef0f7588040c75a8a2f8ce848d826f55399**. [Root inspection](evidence/M2-A-COMPOSE-CORRECTIONS-INTEGRATION.md) verifies actual Sol6.1/max, all839 archive payloads, source/build identity,520 tests/typecheck/build/economies,1,897 old/new complete-state/save comparisons and six actual browser exports. Its paths and5190/browser/recording resources are released.
+
+Only `siltwake-m2-canopy-landmark-sol-max-d9f09dc` remains active, unchanged original baseline/binding/ownership above; do not copy corrections into its unfinished checkout or duplicate its work. [Hunter contact](tasks/M2-A-HUNTER-CONTACT.md) is prepared, **not dispatched**, and waits for the inspected landmark assembly. Its future seventh optional movement-options argument preserves correctness's sixth callback. Root owns no browser/server/recording/check; completion notifications drive continuation. Full M2-A paired review and all later stages remain pending.
