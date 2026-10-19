@@ -1,8 +1,12 @@
 # Build status
 
-## Current model policy — Opus high builds, Sol xhigh reviews
+## Current checkpoint — Opus completion inspected, Sol xhigh review next
 
-The owner has supplied the revised model mix and asks for more builder discretion: **Opus5.5/high implements, Sol6.1/xhigh independently reviews**. [Current policy](MODEL_POLICY.md) supersedes old model assignments, routine paired-review requirements and restrictive per-file approval rules. The sole active builder is Opus5.5/high on committed baseline **b52155eb05d16bfcb5e8e2cd4e3ee8bbd491493c**, under [M2-A-OPUS-COMPLETION](tasks/M2-A-OPUS-COMPLETION.md). T3 model/worktree binding and exact initial HEAD are verified; high effort was explicitly requested and accepted. TASKS records the dispatch. Both former M2-A R2 tasks are interrupted, with no pending children and no acceptance verdict; their partial evidence is preserved. Production remains6319184; M2-A remains unaccepted. All older active-review labels below are historical.
+Opus source941008e/018f8ba and reportc836987 are terminal and provisionally merged at **c2c61556f007578f138fa63c4908f19cc923a39e**. Root passes **546/546 tests**, typecheck/build and all four economy checks; all27 built files match the author's final build. [Coordinator inspection](evidence/M2-A-OPUS-INTEGRATION.md) records168 verified payloads, reproduced timing/frame summaries, actual Basin image inspection and source/evidence limitations.
+
+Returning regions retain detached geometry within a four-region cap while only two draw. Idle screens prepare nearby regions; the Basin tint and pulse refusal wording improve presentation. The changed architecture is authorized under [MODEL_POLICY](MODEL_POLICY.md): Opus5.5/high builds with discretion, one fresh non-author Sol6.1/xhigh reviews. The56-per-build warm trial measures median11.75→0.25ms and max22.7→3.0ms, but neither reproduced the earlier51.8/78/65.6ms misses. The50ms predicate remains unchanged; closure, memory cost and synchronous idle-screen preparation require independent assessment.
+
+All authors and the interrupted old R2 pair are stopped. [Complete Sol/xhigh review](tasks/M2-A-SOL-XHIGH-REVIEW.md) is prepared with all ten original M2-A criteria, prior findings/dispositions and current tradeoffs; TASKS records actual dispatch. No M2-A acceptance is claimed. SPACE-1 stays separate; next are its composition/review, M2-B/C and M3/M4. Earlier active/pair/model labels below are historical.
 
 ## Preserved checkpoint — M2-A R2 stopped on b293667
 
@@ -63,9 +67,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-The former M2-A R2 reviewers are interrupted with no pending children. Their worktrees and partial evidence are preserved; no acceptance report was completed. The sole Opus5.5/high writer is active under [M2-A-OPUS-COMPLETION](tasks/M2-A-OPUS-COMPLETION.md). TASKS records the actual committed baseline and dispatch. Root retains integration/build records; the builder owns the connected expedition implementation without competing writers. Independent acceptance will use fresh Sol6.1/xhigh under [MODEL_POLICY](MODEL_POLICY.md).
-
-SPACE-1's previous Opus author and Sol reconciler are terminal; their production remains separate. All other prior assignments are historical and released. No automatic Astra review or old paired gate is active.
+Opus completion is terminal with no pending children/questions; its worktree is clean and all owned paths/tab/server/5190 are released. Root owns integration/build records and the complete Sol/xhigh review handoff. The reviewer receives report-only ownership on a frozen candidate as recorded in TASKS. No production writer or Astra review is active. SPACE-1 authors/reconciler remain terminal with their production separate.
 
 ### Historical implementation checkpoints
 
@@ -96,7 +98,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active Opus5.5/high expedition-completion result automatically, inspect it, then obtain fresh Sol6.1/xhigh review. Address substantiated findings with Opus. After acceptance, compose/check/review SPACE-1 and continue M2-B/C, M3 and M4 under the revised model policy. Main merge/public deployment remain owner actions.
+Dispatch/receive the fresh complete Sol6.1/xhigh review under the current model policy, inspect all ten criteria and reconcile any findings with Opus corrections. After acceptance, compose/check/review SPACE-1 and continue M2-B/C, M3 and M4 automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

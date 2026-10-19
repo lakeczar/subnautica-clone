@@ -2010,3 +2010,10 @@ The next sole writer receives [M2-A-OPUS-COMPLETION](tasks/M2-A-OPUS-COMPLETION.
 - Full [assignment](tasks/M2-A-OPUS-COMPLETION.md) supplies connected expedition ownership, design discretion, preserved evidence and browser isolation, with own5190/private artifacts. Root retains STATUS/PLAN/TASKS and PR management. Dispatch/binding receipts: `/home/worker/.local/share/siltwake-evidence/m2-a-opus-completion-root/`.
 
 This is the sole active worker. Both old R2 tasks remain stopped; no routine Astra reviewer or replacement pair. Fresh non-author Sol6.1/xhigh review follows the returned frozen result. Receive completion automatically; preserve all old evidence and remaining failures. No production integration or new acceptance is claimed at dispatch.
+
+
+## Opus completion returned and inspected; full Sol/xhigh review prepared
+
+Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a-completion-opus-high-b52155e` is completed/result_available, no pending children/questions. Source941008e91f0913fa211b04a9281388b6b3b555e3/018f8ba3d9251ef8f2bb9537b96f55664f7f1fcf and reportc836987d8124a99d2e225fdedcae983b138e3f1f are merged provisionally atc2c61556f007578f138fa63c4908f19cc923a39e. T3 confirms Opus5.5; high was explicitly requested/accepted, no separate effective-effort readout. Clean author checkout, paths/tab/server released and5190 free.
+
+Root [inspection](evidence/M2-A-OPUS-INTEGRATION.md) verifies168 payloads, reproduces author timing/frame derivations, inspects actual Basin images and passes546 tests/typecheck/build/all four economies. All27 build files match018f8ba. Root provisionally adopts finite four-owner retention/two drawing with documented synchronous idle preparation; no50ms waiver, old-spike causal diagnosis, full-world performance or batch acceptance. The fresh [single Sol/xhigh review](tasks/M2-A-SOL-XHIGH-REVIEW.md) covers the whole ten-criterion M2-A batch, original basec1ddb0a and all prior findings. Actual dispatch follows on the next committed candidate. All previous workers are stopped; no root browser/server/recording/check process remains.
