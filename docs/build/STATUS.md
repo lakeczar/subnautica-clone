@@ -1,6 +1,8 @@
 # Build status
 
-## Current checkpoint — affected gameplay inspected; complete M2-A R2 next
+## Current checkpoint — complete M2-A R2 active on b293667
+
+Fresh independent Astra xhigh and Sol6.1/max reviewers are dispatched on **b2936674332744c22f5c319685e3f564d5976784**, with both original runtime contexts and clean T3 worktree bindings verified. Both assess all ten original criteria, full R1 findings/dispositions, current affected play and unresolved regional timings under [the complete R2 brief](tasks/M2-A-REVIEW-R2.md). Each owns only its separate report/private evidence and optional isolated5190/5191; no production paths are assigned. [TASKS](TASKS.md#complete-m2-a-r2-dispatched--actual-runtimes-verified) records exact IDs and bindings. Receive their independent returns automatically; no polling, duplicate work or acceptance is implied.
 
 Checked production **631918436001c2264aad3123329efeb0bb6e3ab4** combines Dart cache1cd713a and hunter query reuseea4f5d9. Root passes **541/541 tests**, strict typecheck/build and all four economy invocations. [Composition inspection](evidence/M2-A-PERFORMANCE-COMPOSITION.md) records exact bundle/source identity, verified author artifacts and the one predeclared current hunter trial: all six warm-p95 values pass the unchanged2 ms predicate, maximum p95 **1.165593 ms**. The author's separate high-load failures remain retained; this does not establish their cause or all-hardware pacing. Per-call thread-CPU diagnostics are too quantized for fine-grained attribution.
 
@@ -57,7 +59,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All previous M2-A authors/reviewers/advisors, profiler and affected-play worker are terminal/released, including5190/5191. Root owns integration/build records. Opus SPACE-1 and its Sol version reconciliation are terminal/released; their production stays separate. Fresh complete M2-A R2 reviewers receive one frozen candidate with report-only ownership; TASKS records actual dispatch/bindings. No production paths are assigned. No peer edits, polling or duplicate workers.
+All previous M2-A authors/R1 reviewers/advisors, profiler and affected-play worker are terminal/released. Root owns integration/build records. Opus SPACE-1 and its Sol version reconciliation are terminal/released; their production stays separate. Fresh complete M2-A R2 Astra and Sol reviewers are active on b293667 with report-only ownership and optional isolated5190 and5191 respectively; TASKS records exact dispatch/bindings. No production paths are assigned. No peer edits, polling or duplicate workers.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
