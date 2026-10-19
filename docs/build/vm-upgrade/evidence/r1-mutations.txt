@@ -1,0 +1,52 @@
+# Mutation trials on the R1 correction (each re-breaks one fix in a copy; the suite must fail), 2026-10-19
+ 1 caught (2 failing): F1 observe ignores failed reads
+      FAIL definition unreadable twice, then readable: upgraded
+      FAIL   ...the failed reads were retried
+ 2 caught (2 failing): F1 examine does not retry
+      FAIL definition unreadable twice, then readable: upgraded
+      FAIL   ...the failed reads were retried
+ 3 MISSED (0 failing): F1 have_room takes unknown as zero
+ 4 caught (1 failing): F2 no post-lock comparison with the reference
+      FAIL   ...the difference is recorded
+ 5 caught (3 failing): F2 decisions before the lock (lock taken after examine)
+      FAIL   ...memory not written
+      FAIL   ...still 12 GiB defined and running
+      FAIL   ...the difference is recorded
+ 6 caught (1 failing): F2 recovery writes without checking the state
+      FAIL recovery, someone started it meanwhile: restarted-elsewhere
+ 7 caught (11 failing): F3 put_file reports success on failure
+      FAIL state.json cannot be written: preflight-failed
+      FAIL   ...not stopped
+      FAIL the definition record cannot be written: preflight-failed
+ 8 caught (7 failing): F3 unpublished result keeps its exit code
+      FAIL   ...exit 32, result not written
+      FAIL   ...owner alerted that the result is missing
+      FAIL result.json blocked after the shutdown: exit 32, not 0
+ 9 caught (4 failing): F3 no gate before disruption
+      FAIL the definition record cannot be written: preflight-failed
+      FAIL   ...not stopped
+      FAIL result.json is blocked before the shutdown: not stopped
+10 caught (3 failing): F4 classify ignores running memory
+      FAIL defined 12, running 8: preflight-failed
+      FAIL   ...not stopped
+      FAIL defined 12, running 16: preflight-failed
+11 caught (8 failing): F4 running VM not checked
+      FAIL runs but pins differ live after the start: started-unverified
+      FAIL 16 GiB with other running pins: preflight-failed, not already-upgraded
+      FAIL   ...preflight reports the running pins
+12 caught (1 failing): F5 ln may enter a folder
+      FAIL a folder appears just before ln: kept, nothing linked inside it
+13 caught (1 failing): F5 link failures not counted
+      FAIL ln fails: exit 1, failures counted
+caught 12/13
+exit 0
+
+combined mutation (observe accepts an unreadable definition + have_room unknown-as-zero): caught
+  FAIL definition unreadable once off: left-off
+  FAIL   ...never started
+  FAIL   ...said in syslog too
+  FAIL start as is, memory unreadable: left-off
+  FAIL   ...never started
+  FAIL definition unreadable twice, then readable: upgraded
+  FAIL   ...the failed reads were retried
+  FAIL   ...preflight says so, exit 1
