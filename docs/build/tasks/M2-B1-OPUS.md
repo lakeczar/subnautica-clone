@@ -1,6 +1,8 @@
 # M2-B1 — an earned workboat and first mobile refuge
 
-Prepared continuation, not a dispatched task or acceptance. Start from the committed candidate supplied by the coordinator after the complete SPACE-1 gate. Author: **Opus 5.5 / high**. One cohesive owner may change connected production modules, art, UI, sound, migration and meaningful tests; choose the implementation and suggest improvements. Do not divide this into per-file approval requests. Root owns integration and the later fresh Sol 6.1/xhigh acceptance review.
+Start only when dispatched from the coordinator's committed candidate. Author: **Opus 5.5 / high**. One cohesive owner may change connected production modules, art, UI, sound, migration and meaningful tests; choose the implementation and suggest improvements. Do not divide this into per-file approval requests. Root owns integration and the later fresh Sol 6.1/xhigh acceptance review.
+
+The read-only SPACE-1 review can finish against its frozen candidate while this builder works in a separate checkout. Its independent combined checks currently pass, with no reported blocker, but no final verdict exists. This is provisional dependent development, not parent acceptance. Do not copy unfinished reviewer work or wait/poll on it. Root must reconcile any SPACE-1 corrections and accept that parent before integrating/accepting this continuation; B1 also requires its own complete independent gate. No live infrastructure change is scheduled during this build.
 
 ## Player outcome
 
