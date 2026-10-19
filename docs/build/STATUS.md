@@ -84,7 +84,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the bounded A3 priority correction, receive it and A2 through terminal notifications, and inspect/assemble provisionally. Assign earned Canopy–Basin route/recovery/reload composition, explicitly resolving Canopy visibility and region-activation findings. Then review the whole composed A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max; no leaf acceptance or fresh route proof is implied by dispatch. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+The bounded A3 priority correction is dispatched from5a65381 to Sol6.1/max in t3-e9d93c96; actual runtime is verified. Receive it and A2 through terminal notifications, inspect/assemble provisionally, then assign earned Canopy–Basin route/recovery/reload composition with visibility and activation-cost corrections. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max; no leaf acceptance or fresh route proof is implied by dispatch. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
