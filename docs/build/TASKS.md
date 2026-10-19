@@ -1878,3 +1878,10 @@ The two existing correction tasks retain their exact ownership. Four occupied sl
 
 
 Owner follow-up: the intended model is explicitly **Claude Opus5.5/high**, correcting the phrase “y'all.” Its research-led implementation assignment must also inspect staged craftability and the full progression curve for bases/mobile refuges, vehicles, upgrades, equipment and survival convenience. [Audit amendment](design/SPACE-AND-RESOURCE-AUDIT.md#execution-boundary) records concrete checks. This does not dispatch a fifth worker or alter the active research/correction paths. Research remains running at the needed mid-turn status read; receive its completion notification, then dispatch the concrete Opus scope.
+
+
+## Research returned; SPACE-1 prepared; hunter result open
+
+Research cbcd8cf is verified and integrated at effe874c785448742afced250f73114ccf10a2ba. Root verified23 text payload hashes plus four official Steam news body hashes; `/tmp/siltwake-space-opus-root/research-verification.json`. Report-only worktree is clean, no live children/resources. [Concrete SPACE-1 brief](tasks/SPACE-PROGRESSION-OPUS.md) implements the owner's explicit Opus5.5/high request, including staged craftability/progression. Live catalog confirms `claudeAgent / claude-opus-5-5 / effort:high`. Committed parent precedes dispatch; actual ID/binding follow. This separate batch will not be smuggled into original M2-A acceptance.
+
+Hunter task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a-r1-hunter-sol-max-57aacb0` is completed/result_available without pending children/questions. Source9473318bbd69aff4b8a9201a7ad7c44b6f892060/report e69a0351d19c7b8fe2aed47877c90b92d4a9d69c are not yet merged. Root inspected the bounded component-fallback diff/report; author538 checks and safe approach evidence are provisional. Warm-p95 query trial fails up to10.328ms, with both host contention and real added fallback queries disclosed. Root retains reproduction/disposition, ordinary affected continuation and full paired gate. All hunter paths/resources released. Regional profile remains active with unchanged ownership/5191.

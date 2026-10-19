@@ -1,6 +1,6 @@
 # Build status
 
-## Current checkpoint — both M2-A reviews reconciled; two corrections active
+## Current checkpoint — research reconciled; Opus implementation prepared; M2-A corrections open
 
 **Hunter reconciliation source35c2d22/report893390b is inspected and provisionally integrated at7c2db5d.** [Root inspection](evidence/M2-A-HUNTER-RECONCILE-INTEGRATION.md) reproduces **536/536 tests**, typecheck/build and all economies, including completed-earned M2. All three ROOT-HUNTER findings are provisionally resolved: valid exterior fixtures with442 unchanged assertions, cheaper exact queries, and parked/disabled/berthed fleet obstruction after exit.
 
@@ -8,9 +8,11 @@ Root verifies all1,477 archive payload members, current source/build identity,8,
 
 Both independent M2-A R1 reviewers are terminal and released. [Complete reconciliation](reviews/M2-A-R1.md) records **REQUEST CHANGES / REQUEST CHANGES** on frozen d5c0694, base c1ddb0a. Both accept eight criteria; both require disposition of the retained50.6/59.3ms warm-region trial misses. Astra additionally reproduces a parked-hull hunter stall; Sol accepts that criterion from different evidence, but root's exact1,778-step reproduction confirms the correction is needed. Sol report6963c37 is verified and merged at a3da919; all432 payloads/archive bytes and three original Sol6.1/max contexts verify.
 
-Two disjoint Sol6.1/max workers are active from **57aacb0380c8990bc376841e261d651cbdfb2ac1**, with original runtime and separate T3 bindings verified: [hunter movement](tasks/M2-A-R1-HUNTER-FIX.md) and [warm-region profiling/measured correction](tasks/M2-A-R1-REGION-PROFILE.md). Hunter is initially nonbrowser; profiler owns isolated5191. No corrected source or M2-A acceptance yet. Root retains actual affected ordinary hunter continuation after assembly, followed by fresh complete-batch Astra/Sol R2. Human route recognition/control feel, duration/enjoyment, audible mix and hardware pacing remain unverified; first-use loading stays open.
+The hunter worker is terminal at source9473318/report e69a035, not yet integrated. Its retained stall is corrected and author538 checks pass, but its required query trial misses the2ms warm-p95 bound (worst10.328ms). Root will inspect added fallback work and timing attribution before disposition; no waiver or M2-A acceptance. The regional profiler remains active from57aacb0 with its original render/test ownership and isolated5191. Root retains affected ordinary browser continuations and fresh complete-batch Astra/Sol R2 after composition.
 
-**Owner spatial/resource steering is being researched.** [Current audit](design/SPACE-AND-RESOURCE-AUDIT.md) distinguishes the324×326m benchmark and finite materials from the planned2.0×1.8km world and habitat renewal. The owner accepts the planned size if the expedition/upgrade loop supports it, and specifically requests **Opus5.5/high implementation based on the returned findings**. A third bounded Sol6.1/max research child is active; no Opus implementation is dispatched before its result. The owner additionally requires Opus to audit staged crafting unlocks and even progression of refuges, vehicles, equipment and survival convenience; the pending brief must cover the full acquisition curve, not only resource renewal. Existing recipe gates already exist; campaign pacing remains unproven. Existing correction ownership remains unchanged.
+**Spatial/resource research is reconciled and integrated at effe874c.** Root checked all23 text payloads and four official-news bodies. Ordinary Subnautica inorganic resources do not intentionally respawn on departure; living/specific producers are separate. The owner retains the2.0×1.8km target, provided the expedition loop supports it. [SPACE-1](tasks/SPACE-PROGRESSION-OPUS.md) authorizes the specifically requested **Claude Opus5.5/high** implementation: bounded persistent membrane/resin renewal, strict save migration, existing-gate audit/fixes and a complete campaign acquisition matrix. Current recipes already have gates; full pacing remains unproven. This explicitly scoped exception overrides the older Sol-only wording for this task. Dispatch follows the committed baseline; TASKS records the actual task.
+
+SPACE-1 owns simulation/content/save/source-panel paths, disjoint from the active renderer profile and hunter correction. Its production will be held separately until original M2-A correction review is dispositioned, then receive its own fresh Astra/Sol batch gate. The original finite-stock solvency requirement remains; no mandatory renewal wait, instant region refill or full-map completion claim. Human learning/control feel, duration/enjoyment, audible mix and representative hardware remain unverified.
 
 After paired acceptance continue M2-B fleet/mobile homes → M2-C deep routes/both functional endings → integrated M2 pair/Opus → M3 authored campaign → dedicated Astra critic/M4 polish. Root owns no browser/server/recording/check process. Earlier active labels below are historical.
 
@@ -57,7 +59,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-Both initial reviewers and all previous authors are terminal/released. Root owns integration/build records. The two active correction workers have disjoint source/report ownership; TASKS records actual dispatch IDs, verified runtime and separate bindings on57aacb0. No peer edits, review polling or duplicate workers.
+Both M2-A reviewers, research author and hunter author are terminal/released. Root owns integration/build records and hunter result inspection. Regional profiler retains its original exclusive paths; the committed SPACE-1 brief assigns disjoint paths to Opus on dispatch. TASKS records actual bindings. No peer edits, polling or duplicate workers.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -92,7 +94,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the two active bounded corrections on57aacb0 through their terminal notifications without polling. Inspect/assemble the bounded changes, retain affected ordinary hunter play and obtain fresh complete M2-A paired R2 on one frozen candidate. After acceptance continue M2-B/C and M3/M4 automatically. Main merge/public deployment remain owner actions.
+Dispatch the committed SPACE-1 brief to Claude Opus5.5/high in an isolated worktree. Inspect the terminal hunter correction and its query-cost failure while the regional profiler continues. Compose M2-A corrections, retain affected ordinary play and obtain fresh complete-batch Astra/Sol R2 before accepting that batch. Integrate/review SPACE-1 separately, then continue M2-B/C and M3/M4 automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
