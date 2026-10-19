@@ -1,8 +1,10 @@
 import {
-  DART_BUILD_POSE,
-  DART_BUILD_YAW,
   EVIDENCE,
   EVIDENCE_BLUEPRINTS,
+  FRAME_ALLOY,
+  HULL_BUILD,
+  HULL_HOLD_CU,
+  HULL_REFITS,
   HULLS,
   ITEMS,
   HULL_COLLIDERS,
@@ -11,14 +13,19 @@ import {
   RECIPES,
   RECOVERY_STAGE,
   SOURCES,
+  TECH_RECORDS,
 } from "../content/registry.js";
 import type {
   EvidenceId,
+  HullOutput,
   ItemKind,
   Recipe,
   RecipeId,
   SourceId,
+  TechRecordId,
 } from "../content/registry.js";
+import { CANOPY_STOP } from "../content/routes.js";
+import { CREEL_CABIN, cabinHull, fittedCabin, hullToWorld, DIVER_LIFT_SECONDS } from "./fleet.js";
 import type { GameState, Vec3, WorldQueries } from "./types.js";
 import { hullClearance } from "./world.js";
 import {
@@ -26,13 +33,16 @@ import {
   available,
   containerAccessible,
   distance,
+  equipped,
   fabricationContainers,
   facility,
   hasRoom,
+  nearCanopyStop,
   nearPod,
   nearWorkshop,
   nextId,
   spend,
+  supportedServiceSite,
 } from "./inventory.js";
 import { makeVehicle } from "./state.js";
 import { personalLimit as personalPressureLimit, safePersonalDepth } from "./capabilities.js";
@@ -43,7 +53,15 @@ export interface Interaction {
   position: Vec3;
   kind: "source" | "evidence" | "record" | "vehicle" | "cache" | "service";
 }
+/** Fixtures of the cabin the player stands in. Nothing outside is reachable. */
+function cabinInteractions(s: GameState): Interaction[] {
+  const v = cabinHull(s)!, f = CREEL_CABIN.fixtures;
+  return ([["cabin:bunk", "Cabin bunk", f.bunk], ["cabin:cooker", "Galley cooker", f.cooker],
+    ["cabin:locker", "Cabin locker", f.locker], ["cabin:helm", "Helm door", f.helm], ["cabin:hatch", "Aft hatch", f.hatch]] as const)
+    .map(([id, label, local]) => ({ id, label, position: hullToWorld(local, v), kind: "service" as const }));
+}
 export function interactions(s: GameState): Interaction[] {
+  if (cabinHull(s)) return cabinInteractions(s);
   const targets: Interaction[] = [
     ...Object.entries(SOURCES).map(([id, a]) => ({
       id,
@@ -63,6 +81,9 @@ export function interactions(s: GameState): Interaction[] {
       position: OPTIONAL_RECORD.position,
       kind: "record",
     },
+    ...Object.entries(TECH_RECORDS).map(([id, r]) => ({
+      id, label: r.label, position: r.position, kind: "record" as const,
+    })),
   ];
   targets.push(
     {
@@ -75,6 +96,12 @@ export function interactions(s: GameState): Interaction[] {
       id: "workshop_services",
       label: "Workshop bench / berth",
       position: { x: 11, y: 2, z: -35 },
+      kind: "service",
+    },
+    {
+      id: "canopy_stop_services",
+      label: "Outer-crown mooring / service mast",
+      position: { ...CANOPY_STOP.work },
       kind: "service",
     },
     {
@@ -97,11 +124,14 @@ export function interactions(s: GameState): Interaction[] {
         position: { ...v.pose.position, y: v.pose.position.y + 0.6 },
         kind: "vehicle",
       });
+  for (const v of s.fleet.vehicles)
+    if (!v.berth && v.hull === "creel" && fittedCabin(s, v))
+      targets.push({ id: `${v.id}:hatch`, label: "Creel cabin hatch", position: hullToWorld(CREEL_CABIN.hatchOutside, v), kind: "service" });
   for (const c of s.recovery.caches)
     if (s.inventory.items.some((i) => i.containerId === c.containerId))
       targets.push({
         id: c.id,
-        label: "Identified cargo cache",
+        label: c.id.startsWith("canister_") ? "Salvage canister" : "Identified cargo cache",
         position: c.position,
         kind: "cache",
       });
@@ -124,7 +154,17 @@ export function discover(s: GameState, id: EvidenceId): string {
   }
   const place = def.place;
   if (!s.knowledge.markers.includes(place)) s.knowledge.markers.push(place);
+  // The C04 field sheet's service log names the dark mooring: a known place after
+  // the laboratory, exactly as migration appends it. Not a pin to new evidence.
+  if (id === "C04" && !s.knowledge.markers.includes("canopy_stop")) s.knowledge.markers.push("canopy_stop");
   return `${def.label} recorded. ${def.lead}`;
+}
+/** Inspecting an ordinary technical record keeps it and grants its plans, once. */
+export function readTechRecord(s: GameState, id: TechRecordId): string {
+  if (!s.knowledge.scans.includes(id)) s.knowledge.scans.push(id);
+  for (const bp of TECH_RECORDS[id].blueprints)
+    if (!s.knowledge.blueprints.includes(bp)) s.knowledge.blueprints.push(bp);
+  return `${TECH_RECORDS[id].label} · ${TECH_RECORDS[id].text}`;
 }
 export function completeOpening(s: GameState): void {
   if (s.opening.phase === 4) return;
@@ -156,6 +196,13 @@ export function collectWithOutcome(s: GameState, id: SourceId): CollectionOutcom
   )
     return refused("Exit with adequate personal protection and approach the source.");
   if (!safePersonalDepth(s)) return refused(`This work exceeds your ${personalPressureLimit(s)} m personal suit. Return to safe depth and refit before collecting.`);
+  if (def.item === "tagged_frame") {
+    if (node.stock === 0) return refused("Every tagged frame here has been lifted. Frames do not return.");
+    if (!equipped(s, "essential_tools")) return refused("Cut the frame straps with the service tool. Fabricate it at the pod.");
+    if (!frameDestination(s)) return refused("A tagged frame needs 10 CU: clear your hold, deploy the buoy, or bring a Creel alongside. Nothing lifted.");
+    s.world.action = { sourceId: id, seconds: DIVER_LIFT_SECONDS, kind: "lift" };
+    return { refusal: null, pickup: null };
+  }
   if (node.stock === 0) {
     if (def.item === "meal") {
       s.world.action = { sourceId: id, seconds: 20, kind: "food" };
@@ -182,8 +229,33 @@ export function collectWithOutcome(s: GameState, id: SourceId): CollectionOutcom
 export function collect(s: GameState, id: SourceId): string | null {
   return collectWithOutcome(s, id).refusal;
 }
+/** Where a diver-lifted frame lands: an alongside powered Creel's arms take it,
+ * otherwise the diver hold, otherwise a nearby deployed buoy. */
+export function frameDestination(s: GameState): string | null {
+  const cu = ITEMS.tagged_frame.cu;
+  const creel = s.fleet.vehicles.filter((v) => v.hull === "creel" && !v.berth && !v.disabled && v.charge >= 4 &&
+    distance(v.pose.position, s.player.pose.position) < 8 && hasRoom(s, v.cargoId, cu))
+    .sort((a, b) => a.id.localeCompare(b.id))[0];
+  if (creel) return creel.cargoId;
+  if (hasRoom(s, "diver", cu)) return "diver";
+  return containerAccessible(s, "buoy_hold") && hasRoom(s, "buoy_hold", cu) ? "buoy_hold" : null;
+}
 export type CraftingBlockCode = "opening" | "blueprint" | "completed" | "needs" | "site" |
-  "restore" | "duplicate-hull" | "clearance" | "materials" | "rescue-low" | "space" | "equipment";
+  "restore" | "duplicate-hull" | "clearance" | "materials" | "rescue-low" | "space" | "equipment" | "refit";
+const HULL_OUTPUTS: readonly string[] = ["dart", "creel"];
+export const hullOutput = (r: Recipe): HullOutput | null =>
+  HULL_OUTPUTS.includes(r.output) ? r.output as HullOutput : null;
+/** The refit recipe's hull, if it is one. */
+export const refitHull = (id: RecipeId): HullOutput | null =>
+  id === "dart_350" ? "dart" : id === "creel_350" ? "creel" : null;
+/** The owned hull a refit would modify: at the workshop cradle/slip, empty of crew. */
+export function refitTarget(s: GameState, hull: HullOutput) {
+  return s.fleet.vehicles.find((v) => v.hull === hull && !v.berth) ?? null;
+}
+export function atSite(s: GameState, site: Recipe["site"]): boolean {
+  return site === "island_workshop" ? nearWorkshop(s) && !s.player.interiorId
+    : site === "canopy_stop" ? nearCanopyStop(s) : nearPod(s);
+}
 export function craftingBlock(
   s: GameState,
   id: RecipeId,
@@ -201,20 +273,37 @@ export function craftingBlock(
   if (id === "suit_350" && (s.inventory.items.filter(i => i.fitted === "suit").length !== 1 ||
       !s.inventory.items.some(i => i.kind === "suit_150" && i.fitted === "suit" && i.containerId === "equipment" && i.quantity === 1)))
     return block("equipment", "Bring the one fitted 150 m suit for its paid refit. Nothing consumed.");
-  if (r.site === "island_workshop" ? !nearWorkshop(s) || !!s.player.interiorId : !nearPod(s))
-    return block("site", "Use the fabrication bench at the required refuge.");
+  if (!atSite(s, r.site) || (r.site === "island_workshop" && !!s.player.interiorId))
+    return block("site", r.site === "canopy_stop" ? "Work at the outer-crown mooring's service mast." : "Use the fabrication bench at the required refuge.");
   if (
     (r.site === "pod_fabricator" && !facility(s, "pod_fabricator")) ||
     (r.site === "island_workshop" && id !== "restore_workshop" && !facility(s, "island_workshop"))
   )
     return block("restore", "Restore these fabrication services first.");
-  if (id === "dart_base" && s.fleet.vehicles.some((v) => v.hull === "dart"))
-    return block("duplicate-hull", "A Dart already exists. Recover its frame or cargo instead of duplicating it.");
-  if (
-    id === "dart_base" &&
-    !hullClearance(world, DART_BUILD_POSE, HULL_COLLIDERS.dart)
-  )
-    return block("clearance", "Construction clearance is blocked. Nothing consumed.");
+  const hull = hullOutput(r);
+  if (hull && s.fleet.vehicles.some((v) => v.hull === hull))
+    return block("duplicate-hull", `A ${HULLS[hull].label} already exists. Recover its frame or cargo instead of duplicating it.`);
+  if (hull) {
+    const build = HULL_BUILD[hull], shape = HULL_COLLIDERS[hull];
+    const occupied = s.fleet.vehicles.some((v) => !v.berth &&
+      Math.abs(v.pose.position.x - build.pose.x) < shape.radius + HULL_COLLIDERS[v.hull].radius &&
+      Math.abs(v.pose.position.z - build.pose.z) < shape.radius + HULL_COLLIDERS[v.hull].radius &&
+      Math.abs(v.pose.position.y - build.pose.y) < Math.max(shape.height, HULL_COLLIDERS[v.hull].height));
+    if (occupied || !hullClearance(world, build.pose, shape))
+      return block("clearance", hull === "creel" ? "The medium slip is not clear. Move any craft out of it. Nothing consumed."
+        : "Construction clearance is blocked. Nothing consumed.");
+  }
+  const refit = refitHull(id);
+  if (refit) {
+    const v = refitTarget(s, refit);
+    if (!v) return block("refit", `Bring the ${HULLS[refit].label} to the workshop for this hull refit.`);
+    if (v.rating >= HULL_REFITS[refit].rating) return block("refit", `This ${HULLS[refit].label} is already rated ${v.rating} m.`);
+    if (v.disabled) return block("refit", "Patch the disabled hull before refitting it.");
+    if (s.player.controlledVehicleId === v.id || s.player.interiorId === v.id)
+      return block("refit", "Leave the hull before its refit.");
+    if (supportedServiceSite(s, v) !== "island_workshop")
+      return block("refit", `Moor the ${HULLS[refit].label} in its workshop cradle or slip for the refit.`);
+  }
   const bins = fabricationContainers(s, r.site);
   if (r.maintenance) {
     if (
@@ -229,13 +318,28 @@ export function craftingBlock(
     )
   )
     return block("materials", "Missing public materials. The bench uses your hold, its accessible locker, a nearby deployed buoy and craft at this site's supported cradle.");
-  if (r.output === "reserve_cell" || r.output === "salvage_buoy" || r.output === "dart_acoustic_trim") {
+  if (id === "strip_frame") {
     const after = structuredClone(s);
     spend(after, r.cost, bins);
-    if (!hasRoom(after, "diver", ITEMS[r.output].cu * r.quantity))
-      return block("space", "Output would not fit your hold. Nothing consumed.");
+    if (!hasRoom(after, "workshop_locker", ITEMS.structural_alloy.cu * FRAME_ALLOY))
+      return block("space", `Stripped alloy goes to the workshop locker; it needs ${ITEMS.structural_alloy.cu * FRAME_ALLOY} CU. Nothing consumed.`);
+  }
+  if (r.output === "reserve_cell" || r.output === "salvage_buoy" || r.output === "dart_acoustic_trim" ||
+      r.output === "creel_cargo_rack" || r.output === "creel_cabin") {
+    const after = structuredClone(s);
+    spend(after, r.cost, bins);
+    const to = r.output === "creel_cargo_rack" || r.output === "creel_cabin" ? packageDestination(after) : "diver";
+    if (!to || !hasRoom(after, to, ITEMS[r.output].cu * r.quantity))
+      return block("space", r.output === "creel_cargo_rack" || r.output === "creel_cabin"
+        ? `The ${ITEMS[r.output].cu} CU package needs room in the workshop locker or your hold. Nothing consumed.`
+        : "Output would not fit your hold. Nothing consumed.");
   }
   return null;
+}
+/** Mount packages are bulky: the workshop locker first, then the diver hold. */
+function packageDestination(s: GameState): string | null {
+  const cu = ITEMS.creel_cabin.cu;
+  return hasRoom(s, "workshop_locker", cu) ? "workshop_locker" : hasRoom(s, "diver", cu) ? "diver" : null;
 }
 export function craftingRefusal(s: GameState, id: RecipeId, world: WorldQueries): string | null {
   return craftingBlock(s, id, world)?.message ?? null;
@@ -248,31 +352,49 @@ export function craft(
   const no = craftingRefusal(s, id, world);
   if (no) return no;
   const r: Recipe = RECIPES[id];
+  const bins = fabricationContainers(s, r.site);
   if (r.maintenance) {
     s.world.maintenance.alloy -= 2;
     s.world.maintenance.glass--;
     s.world.maintenance.membrane -= 3;
-  } else spend(s, r.cost, fabricationContainers(s, r.site));
+  } else spend(s, r.cost, bins);
+  const hull = hullOutput(r), refit = refitHull(id);
   if (r.output === "pod_repair")
     s.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired = true;
   else if (r.output === "restore_workshop")
     s.world.facilities.find((f) => f.id === "island_workshop")!.repaired = true;
-  else if (r.output === "dart") {
-    const vid = nextId(s, "dart"),
+  else if (r.output === "restore_canopy_stop")
+    s.world.facilities.find((f) => f.id === "canopy_stop")!.repaired = true;
+  else if (hull) {
+    const vid = nextId(s, hull),
       cargoId = `${vid}_hold`,
-      v = makeVehicle(vid, "dart", DART_BUILD_POSE, cargoId);
-    v.pose.yaw = DART_BUILD_YAW;
+      v = makeVehicle(vid, hull, HULL_BUILD[hull].pose, cargoId);
+    v.pose.yaw = HULL_BUILD[hull].yaw;
     v.investment = { ...r.cost };
     s.fleet.vehicles.push(v);
     s.inventory.containers.push({
       id: cargoId,
       kind: "vehicle",
-      capacity: 32,
+      capacity: HULL_HOLD_CU[hull],
       ownerId: vid,
     });
+  } else if (refit) {
+    // A paid refit is part of the frame: its materials return with any salvage.
+    const v = refitTarget(s, refit)!;
+    v.rating = HULL_REFITS[refit].rating;
+    for (const [k, q] of Object.entries(r.cost) as [keyof typeof v.investment, number][])
+      v.investment[k] = (v.investment[k] ?? 0) + q;
+  } else if (id === "strip_frame") {
+    addItem(s, "structural_alloy", FRAME_ALLOY, "workshop_locker");
   } else if (r.output === "suit_350") {
     // Refit the paid instance in place; its ID, fitting, container and earlier receipt survive.
     s.inventory.items.find(i => i.kind === "suit_150" && i.fitted === "suit")!.kind = "suit_350";
+  } else if (r.output === "creel_cargo_rack" || r.output === "creel_cabin") {
+    const to = packageDestination(s)!;
+    const item = addItem(s, r.output, 1, to);
+    // The cabin's own locker exists for as long as the cabin package does.
+    if (r.output === "creel_cabin")
+      s.inventory.containers.push({ id: `${item.id}_locker`, kind: "locker", capacity: 16, ownerId: item.id });
   } else {
     const fitted =
       r.output === "essential_tools"
@@ -285,7 +407,7 @@ export function craft(
     for (let q = 0; q < r.quantity; q++) {
       const item = addItem(
         s,
-        r.output,
+        r.output as ItemKind,
         1,
         fitted ? "equipment" : "diver",
         fitted,
@@ -297,6 +419,12 @@ export function craft(
   if (!s.knowledge.crafted.includes(id)) s.knowledge.crafted.push(id);
   s.feedback = id === "dart_acoustic_trim"
     ? "Acoustic trim made · fit it from Cargo at the pod or workshop cradle."
+    : id === "creel_base" ? "Creel built in the medium slip west of the landing. Board it from the cockpit side."
+    : id === "creel_cargo_rack" || id === "creel_cabin"
+      ? `${ITEMS[r.output as ItemKind].label} made · stowed in ${s.inventory.items.some((i) => i.kind === r.output && i.containerId === "workshop_locker") ? "the workshop locker" : "your hold"}. Fit it from Cargo with the Creel at a supported mooring.`
+    : refit ? `${HULLS[refit].label} hull refitted · rated 350 m. Your suit limit is separate.`
+    : id === "strip_frame" ? "Frame stripped · 8 structural alloy in the workshop locker."
+    : id === "restore_canopy_stop" ? "Outer-crown mooring restored · hull service, cell charging, a 48 CU locker and mount changes here. No air: the laboratory pocket remains the Canopy's refuge."
     : `${r.label} complete. ${id === "restore_workshop" ? "Air, healing, locker, charging and hull fabrication are now available." : id === "dart_base" ? "Dart is in the yellow launch cradle. Board it from the cockpit side." : ""}`;
   return null;
 }

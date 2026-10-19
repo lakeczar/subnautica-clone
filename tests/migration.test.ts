@@ -59,8 +59,8 @@ test("actual foundation schema1 migrates safe pose/vitals once with feedback and
     d = decodeSave(JSON.stringify(old));
   assert.equal(d.ok, true);
   if (!d.ok) return;
-  assert.equal(d.value.schemaVersion, 4);
-  assert.equal(d.value.contentVersion, "expedition.5");
+  assert.equal(d.value.schemaVersion, 5);
+  assert.equal(d.value.contentVersion, "expedition.6");
   assert.deepEqual(d.value.state.player.pose, old.state.player.pose);
   assert.deepEqual(d.value.state.player.vitals, old.state.player.vitals);
   assert.equal(d.value.state.tick, 444);

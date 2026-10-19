@@ -1,8 +1,12 @@
 /** Readonly physical/route datums, metres in the world frame (Y up, water Y=0).
  * Rendering consumes these; region residency never owns simulation or saved state. */
 export const LEGACY_WORLD_BOUNDS = { minX: -76, maxX: 188, minZ: -184, maxZ: 66 } as const;
-export const ROUTE_WORLD_BOUNDS = { ...LEGACY_WORLD_BOUNDS, maxX: 248, minZ: -260 } as const;
-export const WORLD_VERTICAL_BOUNDS = { minY: -240, maxY: 100 } as const;
+/** M2-B1 extends only south of the accepted Basin edge (-260) to the boundary
+ * fracture terrace. The legacy rectangle and the M2-A extension keep their heights. */
+export const ROUTE_WORLD_BOUNDS = { ...LEGACY_WORLD_BOUNDS, maxX: 248, minZ: -320 } as const;
+/** The M2-A Basin edge. Terrain north of it is unchanged by the fracture extension. */
+export const M2A_BASIN_MIN_Z = -260;
+export const WORLD_VERTICAL_BOUNDS = { minY: -300, maxY: 100 } as const;
 
 /** Closed source order of the accepted heightfield. New patches MUST NOT enter it. */
 export const LEGACY_TERRAIN_SOURCE_IDS = [
@@ -18,6 +22,19 @@ export const BASIN_SOURCE_IDS = [
   "basin_ridge_salvage_north", "basin_ridge_salvage_south",
   "basin_survey_fins_east", "basin_survey_fins_west",
 ] as const;
+/** M2-B1 tagged-frame hosts. Each rests on its own local ledge outside the legacy
+ * rectangle, exactly like the M2-A Basin sources; nothing joins the legacy order. */
+export const FRAME_SOURCE_IDS = ["basin_frame_ridge", "basin_frame_terrace", "basin_frame_fracture"] as const;
+/** Every source whose datum shapes the extension terrain, in a closed order. */
+export const ROUTE_TERRAIN_SOURCE_IDS = [...BASIN_SOURCE_IDS, ...FRAME_SOURCE_IDS] as const;
+/** Boundary fracture: the fresh slope break recorded by C06, below the station.
+ * Analytic trench parameters shared by physics and rendering. Metres. */
+export const BASIN_FRACTURE = {
+  minX: 132, fullMinX: 156, fullMaxX: 232, maxX: 246,
+  centerZ: -294, sigma2: 160, depth: 58,
+  shelfStartZ: -262, shelfFullZ: -290, shelfDrop: 10,
+  lipStartZ: -262, lipFullZ: -276,
+} as const;
 
 export const ROUTE_REGIONS = {
   suspended_garden: {
@@ -26,7 +43,7 @@ export const ROUTE_REGIONS = {
     safePocket: { x: 116, y: -118, z: -125 },
   },
   silt_basin: {
-    bounds: { minX: 98, maxX: 248, minZ: -260, maxZ: -184 },
+    bounds: { minX: 98, maxX: 248, minZ: -320, maxZ: -184 },
     landmark: { x: 197, y: -151, z: -219 },
     safePocket: { x: 172, y: -153, z: -196 },
   },
@@ -135,4 +152,31 @@ export const STARTER_RESCUE_APPROACH = [
   { x: 0, y: -0.5, z: 6 }, { x: 34, y: -0.5, z: -20 },
   { x: 57, y: -0.5, z: -40 }, RECOVERY_SURFACE_OPERATOR,
   RECOVERY_ROUTES.canopy.stage,
+] as const;
+
+/** M2-B1 outer-crown service mooring on the clear eastern Canopy margin, outside
+ * the hunter's 72 m territory and below the outer return lane. The diver works on
+ * the deck at 138 m (suit 150). Hulls moor in open water south of it. */
+export const CANOPY_STOP = {
+  work: { x: 204, y: -138, z: -150.2 },
+  mooring: { x: 204, y: -140, z: -137 },
+  serviceRadius: 12,
+  marker: { x: 204, y: -100, z: -151 },
+  solids: [
+    { id: "canopy.stop.deck", min: { x: 200, y: -138.4, z: -151 }, max: { x: 208, y: -138, z: -145 } },
+    { id: "canopy.stop.mast", min: { x: 203.4, y: -164.5, z: -151.8 }, max: { x: 204.6, y: -126, z: -150.6 } },
+    { id: "canopy.stop.locker", min: { x: 205.4, y: -138, z: -151 }, max: { x: 207.4, y: -136.4, z: -150 } },
+  ],
+} as const;
+/** Two mineral ribs carry the finite margin ribbon nets. Ledge tops are the work faces. */
+export const CANOPY_MARGIN_RIBS = [
+  { id: "canopy.margin.rib.north", min: { x: 225, y: -164.5, z: -131.8 }, max: { x: 228.5, y: -98, z: -128.2 } },
+  { id: "canopy.margin.ledge.north", min: { x: 222.4, y: -122.6, z: -131.4 }, max: { x: 225, y: -122.2, z: -128.6 } },
+  { id: "canopy.margin.rib.south", min: { x: 239, y: -164.5, z: -179.8 }, max: { x: 242.5, y: -104, z: -176.2 } },
+  { id: "canopy.margin.ledge.south", min: { x: 236.4, y: -128.6, z: -179.4 }, max: { x: 239, y: -128.2, z: -176.6 } },
+] as const;
+/** Medium slip rails beside the workshop landing; the hull sits between them. */
+export const CREEL_SLIP_SOLIDS = [
+  { id: "workshop.slip.port", min: { x: -11.4, y: -3.5, z: -31 }, max: { x: -11.1, y: 0.5, z: -21 } },
+  { id: "workshop.slip.starboard", min: { x: -0.9, y: -3.5, z: -31 }, max: { x: -0.6, y: 0.5, z: -21 } },
 ] as const;

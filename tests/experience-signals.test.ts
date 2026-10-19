@@ -1,5 +1,8 @@
 import test from "node:test";
+import { CANOPY_STOP } from "../src/content/routes.js";
+import { CREEL_BUILD_POSE, DART_BUILD_POSE, ITEMS } from "../src/content/registry.js";
 import assert from "node:assert/strict";
+import type { CraftingBlockCode } from "../src/sim/progression.js";
 import { EVIDENCE, HULLS, HULL_COLLIDERS, OPTIONAL_RECORD, RECIPES, SOURCES } from "../src/content/registry.js";
 import type { ItemKind, RecipeId, SourceId } from "../src/content/registry.js";
 import type { GameCommand, GameEvent, GameState, Vec3, WorldQueries } from "../src/sim/types.js";
@@ -316,14 +319,33 @@ test("crafting reason codes preserve all recipe messages, precedence and pure ou
     "rescue-low": "Rescue stock is low. Sort recovery supplies at the shallow intake.",
     materials: "Missing public materials. The bench uses your hold, its accessible locker, a nearby deployed buoy and craft at this site's supported cradle.",
     space: "Output would not fit your hold. Nothing consumed.",
-  };
+    refit: "",
+  } as Record<CraftingBlockCode, string>;
+  // M2-B1 hull/site/package messages name their own hull, mooring or package.
+  const message = (code: CraftingBlockCode, id: RecipeId): string =>
+    code === "site" && RECIPES[id].site === "canopy_stop" ? "Work at the outer-crown mooring's service mast."
+    : code === "duplicate-hull" && id === "creel_base" ? "A Creel already exists. Recover its frame or cargo instead of duplicating it."
+    : code === "clearance" && id === "creel_base" ? "The medium slip is not clear. Move any craft out of it. Nothing consumed."
+    : code === "space" && (id === "creel_cargo_rack" || id === "creel_cabin") ? `The ${ITEMS[id].cu} CU package needs room in the workshop locker or your hold. Nothing consumed.`
+    : code === "space" && id === "strip_frame" ? "Stripped alloy goes to the workshop locker; it needs 16 CU. Nothing consumed."
+    : messages[code];
+  const refitHull = (id: RecipeId) => id === "dart_350" ? "dart" : id === "creel_350" ? "creel" : null;
   for (const id of Object.keys(RECIPES) as RecipeId[]) {
     const r = RECIPES[id], s = id === "suit_350" ? protectedReadyState(150) : readyState();
     s.knowledge.blueprints.push(r.bp);
     s.knowledge.crafted = [...new Set<RecipeId>([...s.knowledge.crafted, ...r.needs])];
     for (const f of s.world.facilities) f.repaired = true;
     if (r.site === "island_workshop") s.player.pose.position = { x: 10, y: 1.2, z: -34 };
-    for (const [k, n] of Object.entries(r.cost)) addItem(s, k as ItemKind, n, r.site === "island_workshop" ? "workshop_locker" : "pod_locker");
+    if (r.site === "canopy_stop") { s.player.pose.position = { ...CANOPY_STOP.work }; s.player.mode = "swimming"; }
+    for (const [k, n] of Object.entries(r.cost)) addItem(s, k as ItemKind, n, r.site === "island_workshop" ? "workshop_locker"
+      : r.site === "canopy_stop" ? "canopy_stop_locker" : "pod_locker");
+    const hull = refitHull(id);
+    if (hull) {
+      const v = makeVehicle(`refit_${hull}`, hull, hull === "dart" ? DART_BUILD_POSE : CREEL_BUILD_POSE, `refit_${hull}_hold`);
+      v.investment = { ...RECIPES[hull === "dart" ? "dart_base" : "creel_base"].cost };
+      s.fleet.vehicles.push(v);
+      s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", capacity: hull === "dart" ? 32 : 64, ownerId: v.id });
+    }
     const cases: [GameState, string | null, WorldQueries?][] = [[s, null]];
     const opened = structuredClone(s); opened.opening.phase = 0; cases.push([opened, "opening"]);
     const unknown = structuredClone(s); unknown.knowledge.blueprints = []; cases.push([unknown, "blueprint"]);
@@ -341,6 +363,22 @@ test("crafting reason codes preserve all recipe messages, precedence and pure ou
       const duplicate = structuredClone(s); addDart(duplicate); cases.push([duplicate, "duplicate-hull"]);
       const wrongSite = structuredClone(duplicate); wrongSite.player.pose.position.x = 180;
       cases.push([wrongSite, "site"], [s, "clearance", { ...empty, clearance: () => false }]);
+    }
+    if (hull) {
+      const none = structuredClone(s); none.fleet.vehicles = []; none.inventory.containers = none.inventory.containers.filter(c => c.kind !== "vehicle");
+      cases.push([none, "refit"]);
+      const rated = structuredClone(s); rated.fleet.vehicles[0]!.rating = 350; cases.push([rated, "refit"]);
+      const elsewhere = structuredClone(s); elsewhere.fleet.vehicles[0]!.pose.position.x += 40; cases.push([elsewhere, "refit"]);
+    }
+    if (id === "creel_base") {
+      const duplicate = structuredClone(s); duplicate.fleet.vehicles.push(makeVehicle("signal_creel", "creel", { x: -55, y: -10, z: 30 }, "signal_creel_hold"));
+      duplicate.inventory.containers.push({ id: "signal_creel_hold", kind: "vehicle", capacity: 64, ownerId: "signal_creel" });
+      cases.push([duplicate, "duplicate-hull"], [s, "clearance", { ...empty, clearance: () => false }]);
+    }
+    if (id === "creel_cargo_rack" || id === "creel_cabin" || id === "strip_frame") {
+      const full = structuredClone(s); addItem(full, "structural_alloy", 80, "workshop_locker");
+      if (id !== "strip_frame") addItem(full, "silica_glass", 16, "diver");
+      cases.push([full, "space"]);
     }
     if (["reserve_cell", "salvage_buoy", "dart_acoustic_trim"].includes(r.output)) {
       const full = structuredClone(s); addItem(full, "silica_glass", 16, "diver"); cases.push([full, "space"]);
@@ -370,7 +408,8 @@ test("crafting reason codes preserve all recipe messages, precedence and pure ou
       assert.equal(b?.code ?? null, code, id); assert.equal(craftingRefusal(candidate, id, w), b?.message ?? null);
       assert.deepEqual(candidate, before, "queries must not spend or mutate");
       if (b) {
-        assert.equal(b.message, messages[b.code], id + ": exact refusal text");
+        if (b.code === "refit") assert.match(b.message, /refit|already rated|cradle or slip/, id);
+        else assert.equal(b.message, message(b.code, id), id + ": exact refusal text");
         codes.add(b.code);
         if (code === "opening") continue; // action() deliberately ignores non-opening commands during the opening.
         const result = executeCommand(candidate, { type: "craft", recipeId: id }, w);
@@ -379,7 +418,7 @@ test("crafting reason codes preserve all recipe messages, precedence and pure ou
       }
     }
   }
-  assert.deepEqual([...codes].sort(), ["opening", "blueprint", "completed", "needs", "equipment", "site", "restore", "duplicate-hull", "clearance", "materials", "rescue-low", "space"].sort());
+  assert.deepEqual([...codes].sort(), ["opening", "blueprint", "completed", "needs", "equipment", "site", "restore", "duplicate-hull", "clearance", "materials", "rescue-low", "space", "refit"].sort());
 });
 
 test("paid fabrication, full frame salvage and paid rebuild keep Dart once:false viable", () => {

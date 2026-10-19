@@ -2,15 +2,22 @@ import {
   BLUEPRINTS,
   EVIDENCE,
   EVIDENCE_BLUEPRINTS,
+  HULL_REFITS,
   HULLS,
+  isMountKind,
   ITEMS,
+  MODULES,
   PLACES,
   RECIPES,
   RENEWABLE_SOURCE_IDS,
   renewable,
   SOURCE_RENEWAL,
   SOURCES,
+  TECH_RECORDS,
+  techRecord,
 } from "../content/registry.js";
+import { CREEL_CABIN, fittedMount, holdCapacity, hullToWorld } from "../sim/fleet.js";
+import { CANISTER_CU } from "../sim/recovery.js";
 import { renewalCap } from "../sim/renewal.js";
 import { LEGACY_WORLD_BOUNDS, RECOVERY_ROUTES, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
 import type { GameState } from "../sim/types.js";
@@ -106,6 +113,7 @@ export function validState(value: unknown): value is GameState {
       "starvationSeconds",
       "graceSeconds",
       "interiorPose",
+      "mobileRefuge",
     ]) ||
     !pose(p.pose) ||
     !vec(p.velocity) ||
@@ -117,7 +125,9 @@ export function validState(value: unknown): value is GameState {
     !(p.controlledVehicleId === null || id(p.controlledVehicleId)) ||
     !(p.interiorId === null || id(p.interiorId)) ||
     !n(p.starvationSeconds, 0, 100000) ||
-    !n(p.graceSeconds, 0, 180)
+    !n(p.graceSeconds, 0, 180) ||
+    !(p.mobileRefuge === null || (exact(p.mobileRefuge, ["vehicleId", "moduleId"]) &&
+      id(p.mobileRefuge.vehicleId) && id(p.mobileRefuge.moduleId)))
   )
     return false;
   if (
@@ -129,7 +139,7 @@ export function validState(value: unknown): value is GameState {
     !(
       p.interiorPose === null ||
       (exact(p.interiorPose, ["frame", "position"]) &&
-        p.interiorPose.frame === "carrier-local" &&
+        (p.interiorPose.frame === "carrier-local" || p.interiorPose.frame === "hull-local") &&
         vec(p.interiorPose.position))
     )
   )
@@ -160,7 +170,7 @@ export function validState(value: unknown): value is GameState {
         known(ITEMS)(v.kind) &&
         int(v.quantity, 1, 1000) &&
         id(v.containerId) &&
-        [null, "tools", "suit", "recovery", "buoy"].includes(
+        [null, "tools", "suit", "recovery", "buoy", "mount"].includes(
           v.fitted as null,
         ) &&
         [null, "public", "maintenance"].includes(v.provenance as null) &&
@@ -210,7 +220,7 @@ export function validState(value: unknown): value is GameState {
     !stringSet(k.blueprints, BLUEPRINTS.length, (v) =>
       BLUEPRINTS.includes(v as (typeof BLUEPRINTS)[number]),
     ) ||
-    !stringSet(k.scans, 40, (v) => v === "filter_flow" || known(SOURCES)(v)) ||
+    !stringSet(k.scans, 48, (v) => v === "filter_flow" || known(SOURCES)(v) || techRecord(v)) ||
     !array(
       k.evidence,
       Object.keys(EVIDENCE).length,
@@ -265,7 +275,7 @@ export function validState(value: unknown): value is GameState {
   if (
     !array(
       w.facilities,
-      4,
+      5,
       (v) =>
         exact(v, ["id", "repaired"]) &&
         oneOf(v.id, [
@@ -273,6 +283,7 @@ export function validState(value: unknown): value is GameState {
           "pod_fabricator",
           "island_workshop",
           "canopy_lab",
+          "canopy_stop",
         ]) &&
         bool(v.repaired),
     )
@@ -291,7 +302,7 @@ export function validState(value: unknown): value is GameState {
       (exact(w.action, ["sourceId", "seconds", "kind"]) &&
         known(SOURCES)(w.action.sourceId) &&
         n(w.action.seconds, 0, 20) &&
-        oneOf(w.action.kind, ["sort", "food", "maintenance"]))
+        oneOf(w.action.kind, ["sort", "food", "maintenance", "lift", "arm"]))
     )
   )
     return false;
@@ -330,6 +341,7 @@ export function validState(value: unknown): value is GameState {
           "cargoId",
           "modules",
           "investment",
+          "rating",
           "boundRepairs",
           "berth",
         ]) ||
@@ -350,9 +362,11 @@ export function validState(value: unknown): value is GameState {
         !Object.entries(v.investment).every(
           ([a, b]) =>
             a in ITEMS &&
-            ["structural_alloy", "silica_glass", "flex_membrane"].includes(a) &&
-            int(b, 0, 50),
+            ["structural_alloy", "silica_glass", "flex_membrane", "conductive_crust",
+              "buoyant_resin", "tagged_frame"].includes(a) &&
+            int(b, 1, 50),
         ) ||
+        !int(v.rating, 0, 800) ||
         !int(v.boundRepairs, 0, 7)
       )
         return false;
@@ -500,7 +514,7 @@ function semantic(s: GameState): boolean {
     !unique(s.world.resources.map((r) => r.id)) ||
     s.world.resources.length !== Object.keys(SOURCES).length ||
     !unique(s.world.facilities.map((a) => a.id)) ||
-    s.world.facilities.length !== 4
+    s.world.facilities.length !== 5
   )
     return false;
   for (const r of s.world.resources) {
@@ -514,19 +528,12 @@ function semantic(s: GameState): boolean {
     ["pod_locker", "locker", 160, "home_pod"],
     ["workshop_locker", "locker", 160, "island_workshop"],
     ["buoy_hold", "buoy", 24, "salvage_buoy"],
-    ...f.vehicles.map((v) => [
-      v.cargoId,
-      "vehicle",
-      v.hull === "hearthline"
-        ? 256
-        : v.hull === "spindle"
-          ? 96
-          : v.hull === "creel"
-            ? 64
-            : 32,
-      v.id,
-    ]),
-    ...s.recovery.caches.map((c) => [c.containerId, "cache", 8, c.id]),
+    ["canopy_stop_locker", "locker", 48, "canopy_stop"],
+    // Hold size follows hull and fitted mount; a stale capacity is invalid.
+    ...f.vehicles.map((v) => [v.cargoId, "vehicle", holdCapacity(s, v), v.id]),
+    ...s.recovery.caches.map((c) => [c.containerId, "cache", c.id.startsWith("canister_") ? CANISTER_CU : 8, c.id]),
+    // Each cabin package owns one persistent locker, fitted or stowed.
+    ...items.filter((i) => i.kind === "creel_cabin").map((i) => [`${i.id}_locker`, "locker", MODULES.creel_cabin.lockerCu, i.id]),
   ];
   if (
     expected.length !== containers.length ||
@@ -548,7 +555,15 @@ function semantic(s: GameState): boolean {
     recovery: "bobbin_kit",
     buoy: "salvage_buoy",
   };
+  const mountHolds = new Map(f.vehicles.map((v) => [v.cargoId, v]));
   for (const i of items) {
+    if (i.fitted === "mount") {
+      // A fitted package is in its own hull's hold and referenced by that hull only.
+      const v = mountHolds.get(i.containerId);
+      if (!v || v.hull !== "creel" || !isMountKind(i.kind) || !v.modules.includes(i.id) ||
+          i.quantity !== 1 || i.charge !== null || i.provenance !== "public") return false;
+      continue;
+    }
     if (
       !containers.some((c) => c.id === i.containerId) ||
       (i.containerId === "equipment") !== !!i.fitted ||
@@ -559,7 +574,16 @@ function semantic(s: GameState): boolean {
       (i.provenance === "maintenance" && i.kind !== "bobbin_kit")
     )
       return false;
-    if (i.kind === "dart_acoustic_trim" && !moduleItem(i)) return false;
+    if ((i.kind === "dart_acoustic_trim" || isMountKind(i.kind)) && !moduleItem(i)) return false;
+    if (i.kind === "tagged_frame" && i.provenance !== "public") return false;
+  }
+  // A cabin locker is open only while its cabin is fitted; a stowed cabin's is empty.
+  for (const cabin of items.filter((i) => i.kind === "creel_cabin"))
+    if (cabin.fitted !== "mount" && items.some((i) => i.containerId === `${cabin.id}_locker`)) return false;
+  for (const v of f.vehicles) {
+    const mounts = v.modules.filter((m) => isMountKind(items.find((i) => i.id === m)?.kind));
+    if (mounts.length > 1 || (mounts.length && v.hull !== "creel")) return false;
+    if (v.modules.length > (v.hull === "creel" ? 1 : SMALL_CRAFT_SOCKETS)) return false;
   }
   const moduleReferences = new Set<string>();
   for (const v of f.vehicles) {
@@ -578,6 +602,8 @@ function semantic(s: GameState): boolean {
     "bobbin_kit",
     "reserve_cell",
     "dart_acoustic_trim",
+    "creel_cargo_rack",
+    "creel_cabin",
   ] as const) {
     const n = items
       .filter((i) => i.kind === kind)
@@ -612,6 +638,7 @@ function semantic(s: GameState): boolean {
   for (const e of k.evidence) {
     for (const bp of EVIDENCE_BLUEPRINTS[e.id]) expectedBlueprints.add(bp);
   }
+  for (const scan of k.scans) if (techRecord(scan)) for (const bp of TECH_RECORDS[scan].blueprints) expectedBlueprints.add(bp);
   if (k.blueprints.length !== expectedBlueprints.size || k.blueprints.some((bp) => !expectedBlueprints.has(bp))) return false;
   const bi = items.find((i) => i.id === buoy.itemId);
   if (
@@ -629,19 +656,31 @@ function semantic(s: GameState): boolean {
     s.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired !==
       k.crafted.includes("pod_repair") ||
     s.world.facilities.find((f) => f.id === "island_workshop")!.repaired !==
-      k.crafted.includes("restore_workshop")
+      k.crafted.includes("restore_workshop") ||
+    s.world.facilities.find((f) => f.id === "canopy_stop")!.repaired !==
+      k.crafted.includes("restore_canopy_stop")
   )
     return false;
+  // Frame hosts have no reserve; timed lifts/arms work only their own host kinds.
+  const a = s.world.action;
+  if (a) {
+    const def = SOURCES[a.sourceId], frame = def.item === "tagged_frame";
+    if (a.kind === "lift" ? !frame || a.seconds > 10 : a.kind === "arm"
+      ? !(def.region === "silt_basin" && (frame || def.item === "structural_alloy")) || a.seconds > 6 ||
+        f.vehicles.find((v) => v.id === s.player.controlledVehicleId)?.hull !== "creel"
+      : frame) return false;
+  }
   if (
     s.opening.phase < 4 &&
     (k.evidence.length || k.crafted.length || items.length || f.vehicles.length)
   )
     return false;
+  // Campaign fleets: at most one earned Dart and one earned Creel.
   if (
     s.scenario === "expedition" &&
     (f.docking ||
-      f.vehicles.some((v) => v.hull !== "dart") ||
-      f.vehicles.length > 1)
+      f.vehicles.some((v) => v.hull !== "dart" && v.hull !== "creel") ||
+      !unique(f.vehicles.map((v) => v.hull)))
   )
     return false;
   for (const v of f.vehicles) {
@@ -650,11 +689,28 @@ function semantic(s: GameState): boolean {
       (v.disabled !== s.recovery.losses.some((l) => l.vehicleId === v.id))
     )
       return false;
-    if (
-      s.scenario === "expedition" &&
-      JSON.stringify(v.investment) !== JSON.stringify(RECIPES.dart_base.cost)
-    )
-      return false;
+    if (s.scenario !== "expedition") {
+      if (v.rating !== HULLS[v.hull].initialDepth) return false;
+      continue;
+    }
+    // Investment is exactly the paid build, plus the paid refit when rated above initial.
+    const hull = v.hull as "dart" | "creel", refit = HULL_REFITS[hull];
+    if (v.rating !== HULLS[hull].initialDepth && v.rating !== refit.rating) return false;
+    const refitted = v.rating === refit.rating;
+    if (refitted && !k.crafted.includes(refit.recipe)) return false;
+    const expectedInvestment: Record<string, number> = { ...RECIPES[hull === "dart" ? "dart_base" : "creel_base"].cost };
+    if (refitted) for (const [m, q] of Object.entries(RECIPES[refit.recipe].cost)) expectedInvestment[m] = (expectedInvestment[m] ?? 0) + q;
+    const actual = v.investment as Record<string, number>;
+    if (Object.keys(actual).length !== Object.keys(expectedInvestment).length ||
+        Object.entries(expectedInvestment).some(([m, q]) => actual[m] !== q)) return false;
+    if (v.berth) return false;
+  }
+  // The registered refuge names a Creel and its fitted cabin, in a campaign.
+  const r = s.player.mobileRefuge;
+  if (r) {
+    const host = f.vehicles.find((v) => v.id === r.vehicleId);
+    if (s.scenario !== "expedition" || !host || host.hull !== "creel" || fittedMount(s, host)?.id !== r.moduleId ||
+        items.find((i) => i.id === r.moduleId)?.kind !== "creel_cabin") return false;
   }
   const p = s.player,
     v = f.vehicles.find((v) => v.id === p.controlledVehicleId);
@@ -676,6 +732,15 @@ function semantic(s: GameState): boolean {
     (p.interiorId && p.controlledVehicleId)
   )
     return false;
+  // A Creel cabin occupant stands in the fitted cabin of an unberthed Creel.
+  if (p.interiorPose?.frame === "hull-local") {
+    const h = f.vehicles.find((v) => v.id === p.interiorId), w = CREEL_CABIN.walk, local = p.interiorPose.position;
+    if (!h || h.hull !== "creel" || h.berth || fittedMount(s, h)?.kind !== "creel_cabin" ||
+        local.x < w.minX || local.x > w.maxX || local.z < w.minZ || local.z > w.maxZ || local.y !== CREEL_CABIN.floorY ||
+        Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) > 0.6) return false;
+    const pos = hullToWorld(local, h);
+    if (Math.hypot(p.pose.position.x - pos.x, p.pose.position.y - pos.y, p.pose.position.z - pos.z) > 0.01) return false;
+  }
   const d = f.docking,
     h = f.vehicles.find((v) => v.id === d?.vehicleId);
   if (d) {
@@ -721,7 +786,8 @@ function semantic(s: GameState): boolean {
         p.interiorPose.position.x > CARRIER_LAYOUT.interior.maxX ||
         p.interiorPose.position.y !== CARRIER_LAYOUT.interior.y ||
         p.interiorPose.position.z < CARRIER_LAYOUT.interior.minZ ||
-        p.interiorPose.position.z > CARRIER_LAYOUT.interior.maxZ)
+        p.interiorPose.position.z > CARRIER_LAYOUT.interior.maxZ ||
+        p.interiorPose.frame !== "carrier-local")
     )
       return false;
     const tx = d.transaction;
@@ -738,7 +804,7 @@ function semantic(s: GameState): boolean {
       )
         return false;
     }
-  } else if (p.interiorId || f.vehicles.some((v) => v.berth)) return false;
+  } else if ((p.interiorId && p.interiorPose?.frame !== "hull-local") || f.vehicles.some((v) => v.berth)) return false;
   if (
     s.recovery.losses.some(
       (l) => !f.vehicles.some((v) => v.id === l.vehicleId && v.disabled),
@@ -755,7 +821,7 @@ function semantic(s: GameState): boolean {
   const op = s.recovery.operation;
   if (op) {
     const target = f.vehicles.find(v => v.id === op.vehicleId), loss = s.recovery.losses.find(l => l.vehicleId === op.vehicleId);
-    if (!target || target.hull !== "dart" || target.berth || !loss) return false;
+    if (!target || (target.hull !== "dart" && target.hull !== "creel") || target.berth || !loss) return false;
     const basin = loss.position.x > LEGACY_WORLD_BOUNDS.maxX || loss.position.z < LEGACY_WORLD_BOUNDS.minZ;
     if ((op.routeId === "basin") !== basin) return false;
   }

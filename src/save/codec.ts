@@ -1,4 +1,4 @@
-import { CONTENT_VERSION } from "../content/registry.js";
+import { CONTENT_VERSION, HULLS, SOURCES } from "../content/registry.js";
 import { BASIN_SOURCE_IDS, LEGACY_WORLD_BOUNDS } from "../content/routes.js";
 import type { GameState } from "../sim/types.js";
 import { createGame } from "../sim/state.js";
@@ -15,7 +15,10 @@ import { validExpedition4State } from "./expedition4/validation.js";
 import { SOURCES as EXPEDITION4_SOURCES } from "./expedition4/domain.js";
 import type { GameState as Expedition4State } from "./expedition4/types.js";
 import { initialRenewal } from "../sim/renewal.js";
-export const SAVE_SCHEMA_VERSION = 4 as const;
+import { validExpedition5State } from "./expedition5/validation.js";
+import type { GameState as Expedition5State } from "./expedition5/types.js";
+import { SOURCES as EXPEDITION5_SOURCES } from "./expedition5/domain.js";
+export const SAVE_SCHEMA_VERSION = 5 as const;
 export const MAX_SAVE_BYTES = 1_048_576;
 export interface SaveMetadata {
   sessionId: string;
@@ -48,7 +51,7 @@ function normalizeHistoricalNotice(s: GameState): void {
   }
 }
 function blockedCarrierInterior(s: GameState, legacy = false): boolean {
-  return !!s.player.interiorPose && !createWorldQueries(legacy ? legacyInteriorSolids(s as LegacyGameState) : carrierInteriorSolids(s), () => -200)
+  return s.player.interiorPose?.frame === "carrier-local" && !createWorldQueries(legacy ? legacyInteriorSolids(s as LegacyGameState) : carrierInteriorSolids(s), () => -200)
     .clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 });
 }
 function migrateFoundation(old: GameState): GameState {
@@ -89,9 +92,35 @@ function migrateExpedition(old: LegacyGameState): Expedition4State {
 }
 /** expedition.5 adds only living-shed progress, starting at zero: no catch-up, refill
  * or materials. Every other field, including depleted stock and reserves, is retained. */
-function migrateRenewal(old: Expedition4State): GameState {
+function migrateRenewal(old: Expedition4State): Expedition5State {
   const { resources, ...world } = old.world;
   return { ...old, world: { resources, renewal: initialRenewal(), ...world } };
+}
+/** expedition.6 (M2-B1). Only genuinely new fields/sources initialize, once:
+ * no registered mobile refuge, each hull's own initial rating, the dark (unrestored)
+ * outer-crown mooring and its empty locker, and first stock for the new margin
+ * nets and frame hosts. A found C04 lists the mooring its sheet names. Old stock,
+ * reserves, renewal progress, IDs, investments, poses, notes and losses are kept. */
+export function migrateCreel(old: Expedition5State): GameState {
+  const known = new Set<string>(Object.keys(EXPEDITION5_SOURCES));
+  const added = (Object.keys(SOURCES) as (keyof typeof SOURCES)[]).filter((id) => !known.has(id))
+    .map((id) => ({ id, stock: SOURCES[id].stock, reserve: SOURCES[id].reserve }));
+  const markers = old.knowledge.evidence.some((e) => e.id === "C04") && !old.knowledge.markers.includes("canopy_stop" as never)
+    ? [...old.knowledge.markers, "canopy_stop" as const] : [...old.knowledge.markers];
+  return {
+    ...old,
+    player: { ...old.player, mobileRefuge: null },
+    // The mooring locker takes the position New Game gives it, after the buoy hold.
+    inventory: { ...old.inventory, containers: old.inventory.containers.flatMap((c) => c.id === "buoy_hold"
+      ? [c, { id: "canopy_stop_locker", kind: "locker" as const, capacity: 48, ownerId: "canopy_stop" }] : [c]) },
+    knowledge: { ...old.knowledge, markers },
+    world: { ...old.world, resources: [...old.world.resources, ...added],
+      facilities: [...old.world.facilities, { id: "canopy_stop", repaired: false }] },
+    fleet: { ...old.fleet, vehicles: old.fleet.vehicles.map((v) => {
+      const { boundRepairs, berth, ...rest } = v;
+      return { ...rest, rating: HULLS[v.hull].initialDepth, boundRepairs, berth };
+    }) },
+  } as GameState;
 }
 export function decodeSave(text: string): Result<SaveEnvelope> {
   if (new TextEncoder().encode(text).byteLength > MAX_SAVE_BYTES)
@@ -107,15 +136,16 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
   }
   if (!record(d) || d.format !== "siltwake.save")
     return { ok: false, error: "This is not a Siltwake save file." };
-  if (d.schemaVersion !== 4 && d.schemaVersion !== 3 && d.schemaVersion !== 2 && d.schemaVersion !== 1)
+  if (d.schemaVersion !== 5 && d.schemaVersion !== 4 && d.schemaVersion !== 3 && d.schemaVersion !== 2 && d.schemaVersion !== 1)
     return {
       ok: false,
-      error: `Save schema ${typeof d.schemaVersion === "number" || typeof d.schemaVersion === "string" ? String(d.schemaVersion).slice(0, 24) : "(unrecognized)"} is unsupported. This build reads schema 4, validated expedition schemas 3 and 2 and foundation schema 1 only. Keep the original file.`,
+      error: `Save schema ${typeof d.schemaVersion === "number" || typeof d.schemaVersion === "string" ? String(d.schemaVersion).slice(0, 24) : "(unrecognized)"} is unsupported. This build reads schema 5, validated expedition schemas 4, 3 and 2 and foundation schema 1 only. Keep the original file.`,
     };
   if (d.schemaVersion === 1 ? d.contentVersion !== "foundation.1"
     : d.schemaVersion === 2 ? d.contentVersion !== "expedition.3" && d.contentVersion !== "expedition.2"
       : d.schemaVersion === 3 ? d.contentVersion !== "expedition.4"
-        : d.contentVersion !== CONTENT_VERSION)
+        : d.schemaVersion === 4 ? d.contentVersion !== "expedition.5"
+          : d.contentVersion !== CONTENT_VERSION)
     return {
       ok: false,
       error:
@@ -161,16 +191,17 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
       ),
     };
   }
-  const legacy = d.schemaVersion === 2, previous = d.schemaVersion === 3;
+  const legacy = d.schemaVersion === 2, previous = d.schemaVersion === 3, renewal = d.schemaVersion === 4;
   if (legacy ? ((d.contentVersion === "expedition.2" && !validExpedition2Domain(d.state)) || !validLegacyState(d.state))
-    : previous ? !validExpedition4State(d.state) : !validState(d.state))
+    : previous ? !validExpedition4State(d.state) : renewal ? !validExpedition5State(d.state) : !validState(d.state))
     return {
       ok: false,
       error:
         "Gameplay ownership, capacity, equipment, discovery, facility, recovery or berth data is invalid. Nothing was loaded.",
     };
-  const s = legacy ? migrateRenewal(migrateExpedition(d.state as LegacyGameState))
-    : previous ? migrateRenewal(d.state as Expedition4State) : d.state as GameState;
+  const s = legacy ? migrateCreel(migrateRenewal(migrateExpedition(d.state as LegacyGameState)))
+    : previous ? migrateCreel(migrateRenewal(d.state as Expedition4State))
+      : renewal ? migrateCreel(d.state as Expedition5State) : d.state as GameState;
   // All saved berth transforms remain compatible. Historically sealed
   // room walls can cover an old walking pose; only that pose receives a visible,
   // idempotent safety relocation. Reading never writes or moves a vessel/cargo.
@@ -212,7 +243,7 @@ export function createEnvelope(
 }
 export function encodeSave(save: SaveEnvelope): Result<string> {
   if (save.schemaVersion !== SAVE_SCHEMA_VERSION || save.contentVersion !== CONTENT_VERSION)
-    return { ok: false, error: "This build writes schema 4 / expedition.5 only. Decode a supported older save before writing it." };
+    return { ok: false, error: "This build writes schema 5 / expedition.6 only. Decode a supported older save before writing it." };
   let text: string;
   try {
     text = JSON.stringify(save, null, 2);
