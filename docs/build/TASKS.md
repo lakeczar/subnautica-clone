@@ -1609,3 +1609,16 @@ Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3
 [Root inspection](evidence/M2-A1-RECONCILE-INTEGRATION.md) reproduces461/462 with only the A2 terrain blocker; separate build/all three economies pass,50 source/27 built files match,32 new payloads and1,220 old files/66 retained migration inputs verify. New root compiled-terrain repro matches; no root browser or repeated unchanged historical matrix. Root artifacts `/tmp/siltwake-m2-a1-reconcile-root/`.
 
 Live catalog confirms codex/gpt-6.1-sol supports reasoningEffort max. Commit records before dispatching prepared A2/A3 from one shared parent. No workers are active at this checkpoint; actual task IDs/bindings follow in the next entry. Root has no running check/browser/server/recording. The shared baseline explicitly carries the real missing-terrain failure; acceptance still requires A2 correction, combined play and the full independent pair.
+
+### M2-A2/A3 consumers dispatched from shared d753b02
+
+Both T3-owned async implementation children started from clean **d753b0209edd83e9c0bb1b0062c4071dbecadfa0**, confirmed by Git in both bound worktrees. Requested/live-selected **codex/gpt-6.1-sol/reasoningEffort max** is also confirmed in each original runtime turn_context. Neither has pending questions or child runs at dispatch. Root plus two builders use three of the four slots; no blocked worker or watcher is added.
+
+| Leaf | Exact task and binding | Ownership |
+| --- | --- | --- |
+| A2 | `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a2-sol-max-d753b02`; `/home/worker/.t3/worktrees/subnautica-clone/t3-cfb3703d`, branch `t3/canopy-basin-rendering` | Only paths in [M2-A2](tasks/M2-A2.md): rendering, new regions handle, named render tests and its report. Port5191/owned isolated tab if browser rules pass. |
+| A3 | `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a3-sol-max-d753b02`; `/home/worker/.t3/worktrees/subnautica-clone/t3-8394a043`, branch `t3/expedition-injury-feedback` | Only paths in [M2-A3](tasks/M2-A3.md): UI/narrow app event wiring/named presentation tests and its report. Audio engine read-only. Port5192/owned isolated tab if browser rules pass. |
+
+Both receive full briefs, current root inspection and explicit known461/462 baseline. A2 must close missing Basin terrain with real geometry and retained coverage; A3 preserves that inherited failure in its isolated result. Physical/camera/save/input contracts and GameRenderer interfaces are frozen; no unfinished-peer exports, children, cross-owner edits, push/PR/merge, parent mutations or peer waits. Both read browser rules and keep ordinary versus staged evidence separate. Root dispatch/config/binding/full-prompt/runtime receipts are new in `/tmp/siltwake-m2-a1-reconcile-root/`.
+
+Reconciliation ownership remains released. Root owns build records and has no browser/server/recording/check process. Receive completion notifications, inspect/assemble bounded returns, assign ordinary composed expedition/recovery/reload and then fresh whole-batch Astra xhigh/Sol6.1 max review. No M2-A acceptance or M2 completion is claimed; continue the remaining roadmap afterward.
