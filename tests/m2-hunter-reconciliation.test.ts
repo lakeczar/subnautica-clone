@@ -170,3 +170,36 @@ test("level fallback preserves safe contact and damage rates at nearby parked-Da
   }
 });
 
+test("fleet refusal of a raw approach does not discard its safe world-slid endpoint",()=>{
+  const s=parkedPursuit();s.tick=12668;s.world.threat.modeSeconds=23/60;
+  s.player.pose.position={x:121.48036372348837,y:-102.78398623796338,z:-113.77646093638234};
+  s.world.threat.position={x:124.23125314110811,y:-100.21731957129685,z:-105.45655432932651};
+  const start={...s.world.threat.position},floor=start.y+H.worldEnvelope.bottom;
+  const world=createWorldQueries([{id:"level-slide",min:{x:-220,y:floor-10,z:-220},max:{x:220,y:floor,z:220}}],()=>-250);
+  const move=world.moveCapsule.bind(world);let first:{raw:Vec3;end:Vec3}|undefined,calls=0;
+  world.moveCapsule=(position,delta,...args)=>{
+    const result=move(position,delta,...args);calls++;
+    first??={raw:add(position,delta),end:{...result.position}};return result;
+  };
+  const motion=hunter.moveHunter(s,world),from=hunter.hunterPose(s);
+  assert.ok(first&&first.raw.y<start.y,"the desired downward component crosses the parked envelope");
+  assert.equal(hunter.hunterFleetSweep(s,start,first.raw,from,hunter.hunterPose(s,first.raw)),false);
+  assert.equal(calls,1,"retain the preferred approach after the world slides it safely");
+  assert.deepEqual(motion.position,first.end);assert.equal(motion.position.y,start.y);
+  assert.ok(Math.hypot(motion.position.x-start.x,motion.position.z-start.z)>.09);
+  assert.ok(hunter.hunterFleetSweep(s,start,motion.position,from,hunter.hunterPose(s,motion.position)));
+  assert.ok(!motion.yielding&&!motion.contact.penetrating&&!motion.contact.biting);
+});
+
+test("fleet query reuse expires before a changed pose, roster or restored state is evaluated",()=>{
+  const s=parkedPursuit(),world=createWorldQueries(),original=structuredClone(s),expected=hunter.moveHunter(s,world);
+  const v=s.fleet.vehicles[0]!;v.pose.position.x+=30;v.pose.yaw+=.4;
+  const displaced=hunter.moveHunter(s,world);
+  assert.notDeepEqual(displaced,expected,"moving the obstruction changes this approach");
+  assert.deepEqual(displaced,hunter.moveHunter(structuredClone(s),createWorldQueries()));
+  s.fleet.vehicles=[];
+  assert.deepEqual(hunter.moveHunter(s,world),hunter.moveHunter(structuredClone(s),createWorldQueries()));
+  assert.deepEqual(hunter.moveHunter(original,world),expected,"restoring the saved pose has no cached future");
+  assert.deepEqual(original,parkedPursuit(),"queries leave state unchanged");
+});
+

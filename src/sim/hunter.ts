@@ -7,7 +7,7 @@ import { HEARTHLINE_KEEL as K } from "../content/encounterGeometry.js";
 import { vec, add, sub, scale, length, finite, unit, encounterRotation, inverseRotation,
   hullMesh, closestOnMesh, inside, triangleBox, DIVER_MESH } from "./hunterQueries.js";
 import { boundDistance, carrierShell, escapePlane, escapePlaneGap, meshOccludes, translatedBoxSweep } from "./hunterQueries.js";
-import type { Triangle, ContactMesh, OrientedPiece } from "./hunterQueries.js";
+import type { Triangle, ContactMesh, OrientedPiece, Separation } from "./hunterQueries.js";
 import type { ContactBox } from "../content/encounterGeometry.js";
 import { localToWorld } from "./carrier.js";
 export { encounterRotation } from "./hunterQueries.js";
@@ -139,15 +139,26 @@ const angleDelta=(a:number,b:number):number=>Math.atan2(Math.sin(b-a),Math.cos(b
 /** Continuous actual-triangle sweep of the unchanged world envelope. For a
  * retained overlap, one hull-specific supporting plane certifies non-closing
  * escape over the entire linear path. No broad hull bounds become walls. */
-function fleetSweep(obstacles: readonly Obstacle[], start: Vec3, end: Vec3, from: AnimalPose, to: AnimalPose): boolean {
+function fleetSweepFrom(obstacles: readonly Obstacle[], start: Vec3, from: AnimalPose) {
   const fixed={yaw:0,roll:0};
-  for(const {query:a} of obstacles) {
-    if(intersects(a,start,fixed,[fleetBox])) {
-      const initialActual=intersects(a,start,from);
+  // Every alternative starts at the same immutable pose in this evaluation.
+  // Reuse its exact overlap/escape queries, never an endpoint from another
+  // update or a raw proposal in place of the world's swept/slid result.
+  const entries=obstacles.map(o=>{
+    const a=o.query;let actual:boolean|undefined,separation:Separation|undefined;
+    return {o,overlapping:intersects(a,start,fixed,[fleetBox]),
+      actual:():boolean=>actual??=intersects(a,start,from),
+      separation:():Separation=>separation??=escapePlane(a.mesh,piecesIn(a,start,fixed,[fleetBox]))};
+  });
+  return {overlaps:entries.filter(e=>e.overlapping),accepts:(end:Vec3,to:AnimalPose):boolean=>{
+  for(const entry of entries) {
+    const a=entry.o.query;
+    if(entry.overlapping) {
+      const initialActual=entry.actual();
       // A retained conservative-envelope overlap may separate; a clear animal
       // cannot rotate through that hull while it is clearing the envelope.
       if(!initialActual&&(Math.abs(angleDelta(from.yaw,to.yaw))>1e-10||Math.abs(from.roll-to.roll)>1e-10))return false;
-      const escape=escapePlane(a.mesh,piecesIn(a,start,fixed,[fleetBox]));
+      const escape=entry.separation();
       const next=piecesIn(a,end,fixed,[fleetBox])[0]!;
       const certificate=escapePlaneGap(a.mesh,escape.normal,()=>{
         const axis=escape.normal,c=next.center,r=Math.abs(axis.x*next.axes[0].x+axis.y*next.axes[0].y+axis.z*next.axes[0].z)*next.half.x+
@@ -159,12 +170,13 @@ function fleetSweep(obstacles: readonly Obstacle[], start: Vec3, end: Vec3, from
     } else if(translatedBoxSweep(a.worldTriangles(),start,end,fleetBox))return false;
   }
   return true;
+  }};
 }
 /** Bounded numeric sweep used for the hunter only; large/nonfinite requests
  * safely refuse. The pose is transient and never enters the save schema. */
 export function hunterFleetSweep(s: GameState, start: Vec3, end: Vec3, from: AnimalPose, to: AnimalPose): boolean {
   return finite(start)&&finite(end)&&[from.yaw,from.roll,to.yaw,to.roll].every(Number.isFinite)&&
-    length(sub(end,start))<=H.yieldSpeed/60+1e-8&&fleetSweep(nearby(fleetObstacles(s),start),start,end,from,to);
+    length(sub(end,start))<=H.yieldSpeed/60+1e-8&&fleetSweepFrom(nearby(fleetObstacles(s),start),start,from).accepts(end,to);
 }
 export function hunterPenetratesActor(s: GameState, position: Vec3 = s.world.threat.position): boolean {
   const a=actor(s);return penetrates(a,position,poseAt(s,position,actorSurface(a,position)));
@@ -213,9 +225,15 @@ export function moveHunter(s: GameState, world: WorldQueries): {
 } {
   const t=s.world.threat,start=t.position,a=actor(s),plan=actorSurface(a,start),pose=poseAt(s,start,plan),phase=hunterPhase(s);
   const obstacles=fleetObstacles(s),near=nearby(obstacles,start);
-  const actorOverlap=penetrates(a,start,pose),overlaps=near.filter(o=>intersects(o.query,start,{yaw:0,roll:0},[fleetBox]))
-    .map(o=>({o,separation:escapePlane(o.query.mesh,piecesIn(o.query,start,{yaw:0,roll:0},[fleetBox]))}));
-  const yielding=actorOverlap||overlaps.some(i=>intersects(i.o.query,start,pose));
+  const actorOverlap=penetrates(a,start,pose),fleet=fleetSweepFrom(near,start,pose),overlaps=fleet.overlaps;
+  const yielding=actorOverlap||overlaps.some(i=>i.actual());
+  const endpoints:{position:Vec3;pose:ReturnType<typeof hunterPose>;penetrating?:boolean;fleetSafe?:boolean}[]=[{position:start,pose,penetrating:actorOverlap}];
+  const at=(position:Vec3):typeof endpoints[number]=>{
+    const previous=endpoints.find(e=>Object.is(e.position.x,position.x)&&Object.is(e.position.y,position.y)&&Object.is(e.position.z,position.z));
+    if(previous)return previous;
+    const next={position,pose:poseAt(s,position,actorSurface(a,position))};endpoints.push(next);return next;
+  };
+  const penetratesAt=(endpoint:typeof endpoints[number]):boolean=>endpoint.penetrating??=penetrates(a,endpoint.position,endpoint.pose);
   let target:Vec3=t.distraction??THREAT_HOME, speed=2;
   if(!t.distraction&&(t.mode==="investigate"||t.mode==="pursue")) {
     const gap=H.mouthGap+(t.mode==="investigate"?H.investigateGap:phase.withdrawing?H.withdrawalGap:0);
@@ -227,7 +245,7 @@ export function moveHunter(s: GameState, world: WorldQueries): {
   const sweep=(delta:Vec3):Vec3=>moveHull(world,start,delta,H.worldEnvelope,undefined,undefined,{separateBoxOverlaps:true}).position;
   let position={...start}, blocked=false;
   if(yielding||overlaps.length) {
-    const n=plan.outward,normals=overlaps.map(({o,separation})=>encounterRotation(separation.normal,o.query.pose.yaw,o.query.pitch));
+    const n=plan.outward,normals=overlaps.map(({o,separation})=>encounterRotation(separation().normal,o.query.pose.yaw,o.query.pitch));
     const aggregate=normals.reduce(add,{x:0,y:0,z:0});
     const directions=[...(length(aggregate)>1e-8?[unit(aggregate)]:[]),...normals,n,{x:-n.z,y:0,z:n.x},{x:n.z,y:0,z:-n.x},{x:0,y:1,z:0},scale(n,-1),
       ...(overlaps.length?[{x:0,y:-1,z:0},...[-3,-1,1,3].map(i=>encounterRotation(n,i*Math.PI/4))]:[])];
@@ -235,14 +253,17 @@ export function moveHunter(s: GameState, world: WorldQueries): {
     for(const direction of directions) {
       const next=sweep(scale(direction,(yielding?H.yieldSpeed:speed)/60));
       if(finite(next)&&length(sub(next,start))>1e-7&&(!actorOverlap||length(sub(next,targetPosition))>oldDistance+1e-8)&&
-        fleetSweep(near,start,next,pose,poseAt(s,next,actorSurface(a,next)))){position=next;break;}
+        fleet.accepts(next,at(next).pose)){position=next;break;}
     }
     blocked=length(sub(position,start))<1e-8;
   } else if(speed>0) {
     const d=sub(target,start), delta=scale(d,Math.min(1,speed/60/Math.max(1e-12,length(d))));
     const next=sweep(delta);
-    const safe=(next:Vec3):boolean=>finite(next)&&!penetrates(a,next,poseAt(s,next,actorSurface(a,next)))&&
-      fleetSweep(near,start,next,pose,poseAt(s,next,actorSurface(a,next)));
+    const safe=(next:Vec3):boolean=>{
+      if(!finite(next))return false;
+      const endpoint=at(next);
+      return !penetratesAt(endpoint)&&(endpoint.fleetSafe??=fleet.accepts(next,endpoint.pose));
+    };
     if(safe(next))position=next;
     else if(near.length) {
       const angles=[Math.PI/4,-Math.PI/4,Math.PI/2,-Math.PI/2],level={x:delta.x,y:0,z:delta.z};
@@ -257,8 +278,8 @@ export function moveHunter(s: GameState, world: WorldQueries): {
     }
     blocked=length(sub(position,start)) + 1e-7 < length(delta);
   }
-  const finalPose=position===start?pose:poseAt(s,position,actorSurface(a,position));
-  const contact=contactAt(s,position,world,a,finalPose,penetrates(a,position,finalPose),obstacles);
+  const endpoint=at(position);
+  const contact=contactAt(s,position,world,a,endpoint.pose,penetratesAt(endpoint),obstacles);
   if(yielding||overlaps.length)contact.biting=false;
   return {position,yielding,blocked,contact};
 }
