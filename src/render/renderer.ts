@@ -11,12 +11,13 @@ import { createTargetCue } from "./targetCue.js";
 import { inCanopyAir } from "../sim/inventory.js";
 import { createCelMaterial, createGlassMaterial, updateOpticalUniforms } from "./materials.js";
 import { createEnvironment } from "./environment.js";
-import { createLandmarks, createNavigationSilhouettes } from "./landmarks.js";
+import { createLandmarks, createNavigationSilhouettes, LabelMaterials } from "./landmarks.js";
 import { createEcology } from "./ecology.js";
 import { createExpeditionActors, createExpeditionRegion, DART_SEAT } from "./expedition.js";
 import { createAtmosphere } from "./atmosphere.js";
 import { createRegionResidency, type RegionArt, type RenderRegion } from "./regions.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
+import { GeometryCache } from "./geometryCache.js";
 
 export type Quality = "rich" | "light";
 export interface GameRenderer {
@@ -30,16 +31,20 @@ export interface GameRenderer {
  * Shared cel/glass stay scene-owned; every regional/actor handle owns its meshes. */
 export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial): RegionArt & {
   readonly active: readonly RenderRegion[];
+  readonly cacheStats: GeometryCache["stats"];
+  readonly labelStats: LabelMaterials["stats"];
 } {
+  const cache = new GeometryCache(), labels = new LabelMaterials(scene);
+  const disposal = scene.onDisposeObservable.add(() => { cache.dispose(); labels.dispose(); });
   const initial = new Set(scene.meshes);
   createEnvironment(scene, cel, "terrain");
   const navigation = createNavigationSilhouettes(scene, cel);
   const regions = createRegionResidency(region => {
     const before = new Set(scene.meshes);
-    createEnvironment(scene, cel, region);
-    if (region === "refuge_reef") createLandmarks(scene, cel, glass);
-    const expedition = createExpeditionRegion(scene, cel, glass, region);
-    const life = createEcology(scene, cel, region);
+    createEnvironment(scene, cel, region, cache);
+    if (region === "refuge_reef") createLandmarks(scene, cel, glass, cache, labels);
+    const expedition = createExpeditionRegion(scene, cel, glass, region, cache, labels);
+    const life = createEcology(scene, cel, region, cache);
     const meshes = scene.meshes.filter(m => !before.has(m));
     for (const mesh of meshes) {
       mesh.renderingGroupId = 1;
@@ -54,11 +59,13 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
       },
     };
   });
-  const expedition = createExpeditionActors(scene, cel, glass, p => regions.contains(p));
+  const expedition = createExpeditionActors(scene, cel, glass, p => regions.contains(p), labels);
   const fixed = scene.meshes.filter(m => !initial.has(m));
   let disposed = false;
   return {
     get active() { return regions.active; },
+    get cacheStats() { return cache.stats; },
+    get labelStats() { return labels.stats; },
     update(state) {
       if (disposed) return;
       regions.update(state); navigation.update(regions.active); expedition.update(state);
@@ -69,6 +76,8 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
       disposed = true;
       regions.dispose(); expedition.dispose(); navigation.dispose();
       for (const mesh of fixed) if (!mesh.isDisposed()) mesh.dispose();
+      cache.dispose(); labels.dispose();
+      scene.onDisposeObservable.remove(disposal);
     },
   };
 }

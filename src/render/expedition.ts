@@ -1,3 +1,4 @@
+import type { GeometryCache } from "./geometryCache.js";
 import type { Scene, ShaderMaterial, Mesh } from "@babylonjs/core";
 import {
   SOURCES,
@@ -12,7 +13,7 @@ import { CARRIER_LAYOUT, CARRIER_SUPPORT, carrierRooms, carrierStructure, launch
 import { ArtBatch } from "./geometry.js";
 import type { Point } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
-import { label } from "./landmarks.js";
+import { label, type LabelMaterials } from "./landmarks.js";
 import { FACILITY_SOLIDS, SOLIDS, terrainHeight } from "../sim/world.js";
 import { createObservationPane, wallWithOpening } from "./materials.js";
 import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
@@ -73,7 +74,8 @@ function surfaceGlass(b: ArtBatch, x: number, z: number): void {
  * at most 3 mm proud of them; the capsule passage and the complete rail path stay
  * empty. Only the rendered fore/aft walls are cut around sealed observation
  * panes; the simulation's complete structural walls remain unchanged. */
-function carrierShellArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, configuration: "compact" | "medium", openSlot?: 0 | 1): Mesh {
+function carrierShellArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, configuration: "compact" | "medium", openSlot?: 0 | 1, labels?: LabelMaterials): Mesh {
+  const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
   const b = new ArtBatch("carrier.physical-compartments", scene, cel);
   const signs: Mesh[] = [];
   const panes: { name: string; points: Point[] }[] = [];
@@ -114,8 +116,8 @@ function carrierShellArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMateria
       b.box([cx, a.y + 0.18, z + toward * 0.002], [w - 0.4, 0.07, 0.007], accent);
       b.box([cx, a.y + 2.7, z + toward * 0.002], [w - 0.8, 0.06, 0.007], openSlot === slot ? P.ochre : P.mint);
       const name = configuration === "medium" ? "SERVICE BERTH" : slot === 0 ? "PORT / 01" : "STARBOARD / 02";
-      signs.push(label(scene, name, [cx, a.y + 3.4, z + toward * .022], Math.min(2.3, w - 1.05), yaw));
-      signs.push(label(scene, openSlot === slot ? "TRANSFER / KEEP CLEAR" : "DRY / ISOLATED", [cx, a.y + 0.65, z + toward * .022], Math.min(1.65, w - 0.9), yaw));
+      signs.push(makeSign(name, [cx, a.y + 3.4, z + toward * .022], Math.min(2.3, w - 1.05), yaw));
+      signs.push(makeSign(openSlot === slot ? "TRANSFER / KEEP CLEAR" : "DRY / ISOLATED", [cx, a.y + 0.65, z + toward * .022], Math.min(1.65, w - 0.9), yaw));
     }
     for (const [x, yaw] of [[a.x - CARRIER_LAYOUT.wall - 0.002, Math.PI / 2], [c.x + CARRIER_LAYOUT.wall + 0.002, -Math.PI / 2]] as const) {
       // Side skins are flush. In particular, nothing projects into the 0.84 m
@@ -153,7 +155,9 @@ function dartArt(
   glass: ShaderMaterial,
   id: string,
   hull: VehicleState["hull"],
+  labels?: LabelMaterials,
 ): Mesh {
+  const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
   const b = new ArtBatch(id, scene, cel);
   const panes: { name: string; points: readonly Point[] }[] = [];
   if (hull === "hearthline") {
@@ -364,9 +368,9 @@ function dartArt(
   }
   if (hull === "hearthline") {
     for (const sign of [
-      label(scene, "BRIDGE", [0, 7.9, -11.66], 2.4, Math.PI),
-      label(scene, "AFT / VESTIBULE", [3.8, 7.45, 11.68], 2.7),
-      label(scene, "HEARTHLINE / LAUNCH CONTROL", [-3.7, 6.0, -11.67], 2.7, Math.PI),
+      makeSign("BRIDGE", [0, 7.9, -11.66], 2.4, Math.PI),
+      makeSign("AFT / VESTIBULE", [3.8, 7.45, 11.68], 2.7),
+      makeSign("HEARTHLINE / LAUNCH CONTROL", [-3.7, 6.0, -11.67], 2.7, Math.PI),
     ]) sign.parent = mesh;
   }
   return mesh;
@@ -390,8 +394,9 @@ function surfaceRescueArt(b: ArtBatch): void {
   b.tube([[p.x, -12.3, p.z], [p.x, -.9, p.z]], .025, P.ochre, 5);
 }
 
-function createBasinArt(scene: Scene, cel: ShaderMaterial): void {
-  const b = new ArtBatch("basin.facilities", scene, cel);
+function createBasinArt(scene: Scene, cel: ShaderMaterial, cache?: GeometryCache, labels?: LabelMaterials): void {
+  const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
+  const b = new ArtBatch("basin.facilities", scene, cel, cache && { owner: cache, key: "expedition:basin:facilities" });
   for (const solid of BASIN_GEOMETRY.solids) {
     const color = solid.id.endsWith("floor") ? P.petrol : solid.id.endsWith("back") ? P.metal
       : solid.id.includes("beds") ? P.shade : solid.id.endsWith("bundles") ? P.shell : P.petrol;
@@ -448,19 +453,21 @@ function createBasinArt(scene: Scene, cel: ShaderMaterial): void {
     b.box([spine.max.x + .012, y + 1, -219], [.02, .4, 3.6], P.ochre);
   }
   b.finish(.34);
-  label(scene, "DORMITORY", [178, -162, -223.68], 2.4);
-  label(scene, "BOUNDARY", [216, -168.1, -245.68], 2.2);
-  label(scene, "SURVEY", [197, -158, -216.97], 1.6);
+  makeSign("DORMITORY", [178, -162, -223.68], 2.4);
+  makeSign("BOUNDARY", [216, -168.1, -245.68], 2.2);
+  makeSign("SURVEY", [197, -158, -216.97], 1.6);
 }
 
 export function createExpeditionRegion(
-  scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, region?: RenderRegion,
+  scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, region?: RenderRegion, cache?: GeometryCache, labels?: LabelMaterials,
 ): RegionArt {
+  const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
+  const batch = (name: string): ArtBatch => new ArtBatch(name, scene, cel, cache && { owner: cache, key: `expedition:${region ?? "complete"}:${name}` });
   const initial = new Set(scene.meshes);
   const sourceMeshes = new Map<string, Mesh>();
   for (const [id, s] of Object.entries(SOURCES)) {
     if (region && s.region !== region) continue;
-    const b = new ArtBatch("source." + id, scene, cel),
+    const b = batch("source." + id),
       { x, y: sourceY, z } = s.position,
       y = sourceY + (INTERACTION_HOSTS[id]?.renderOffsetY ?? 0);
     if (BASIN_SOURCE_IDS.some(sourceId => sourceId === id)) {
@@ -559,7 +566,7 @@ export function createExpeditionRegion(
   }
   const include = (id: RenderRegion): boolean => !region || region === id;
   if (include("refuge_reef")) {
-  const site = new ArtBatch("facilities.reef", scene, cel);
+  const site = batch("facilities.reef");
   // Reef intake pipes, a sediment-choked filter and actual current-facing colonies.
   for (const x of [-20, -18, -16]) {
     site.tube(
@@ -579,7 +586,7 @@ export function createExpeditionRegion(
   site.finish();
   }
   if (include("island_chain")) {
-  const site = new ArtBatch("facilities.island", scene, cel);
+  const site = batch("facilities.island");
   for (const body of FACILITY_SOLIDS.filter(s => s.id.startsWith("workshop.")))
     site.bounds(body, body.id === "workshop.locker" || body.id.startsWith("workshop.cradle.") ? P.ochre : P.petrol);
   // Workshop platform, weathered folded roof, and human-scale mechanical station.
@@ -701,14 +708,14 @@ export function createExpeditionRegion(
   site.tube([[10.8, 2.4, -39.2], [10.8, 3.35, -39.2], [10.15, 3.5, -38.8]], .045, P.petrol, 6);
   site.glow(site.box([10.15, 3.45, -38.8], [.5, .045, .25], P.warm));
   site.finish();
-  label(scene, "S / 02", [7, 4.78, -34.02], .8);
-  label(scene, "D / 01", [22.15, .15, -21], .62);
-  label(scene, "BERTH / INCOMPLETE", [24, 4.5, -30], 1.5);
+  makeSign("S / 02", [7, 4.78, -34.02], .8);
+  makeSign("D / 01", [22.15, .15, -21], .62);
+  makeSign("BERTH / INCOMPLETE", [24, 4.5, -30], 1.5);
   const ledger = EVIDENCE.C03.position;
-  label(scene, "LOADING LEDGER", [ledger.x, ledger.y + .32, ledger.z - .1], .48);
+  makeSign("LOADING LEDGER", [ledger.x, ledger.y + .32, ledger.z - .1], .48);
   }
   if (include("suspended_garden")) {
-  const site = new ArtBatch("facilities.canopy", scene, cel);
+  const site = batch("facilities.canopy");
   for (const body of FACILITY_SOLIDS.filter(s => s.id.startsWith("canopy."))) site.bounds(body, P.metal);
   // The laboratory is an open pressure hood: only the existing floor, roof,
   // back and port wall are solid. Read their actual faces, and leave both front
@@ -813,14 +820,14 @@ export function createExpeditionRegion(
     site.face([[cover.max.x + 0.01, y + 1.2, cover.min.z], [cover.max.x + 0.01, y + 0.9, cover.max.z], [cover.max.x + 0.01, y + 1.2, cover.max.z], [cover.max.x + 0.01, y + 1.6, cover.min.z]], P.deep);
   }
   site.finish();
-  label(scene, "AIR / 04", [111.65, -116.9, -122.01], .55);
+  makeSign("AIR / 04", [111.65, -116.9, -122.01], .55);
   const sheet = EVIDENCE.C04.position;
-  label(scene, "FIELD OBSERVATIONS", [sheet.x, sheet.y + .35, sheet.z - .1], .48);
-  label(scene, "L / 04", [116, -114.65, -129.58], .65, Math.PI);
+  makeSign("FIELD OBSERVATIONS", [sheet.x, sheet.y + .35, sheet.z - .1], .48);
+  makeSign("L / 04", [116, -114.65, -129.58], .65, Math.PI);
   // The ten original rooted colonies keep their authored habitat coordinates.
   // Radial, ridged crowns and pendant paired organs replace flat paddles and
   // solitary spheres. Open gaps still reveal the clear flank and lower channel.
-  const canopy = new ArtBatch("canopy.habitat", scene, cel);
+  const canopy = batch("canopy.habitat");
   for (let i = 0; i < 10; i++) {
     const x = 78 + (i % 4) * 21, z = -88 - Math.floor(i / 4) * 23;
     const y = terrainHeight(x, z), top = -65 - (i % 3) * 12;
@@ -845,7 +852,7 @@ export function createExpeditionRegion(
   canopy.finish(.22);
   }
   if (include("refuge_reef")) {
-  const site = new ArtBatch("facilities.rescue", scene, cel);
+  const site = batch("facilities.rescue");
   const rs = RECOVERY_STAGE;
   site.box([rs.x, rs.y - 0.9, rs.z], [8, 0.4, 7], P.petrol);
   site.box([rs.x, rs.y - 0.3, rs.z], [0.9, 0.9, 1.4], P.ochre);
@@ -860,10 +867,10 @@ export function createExpeditionRegion(
   );
   surfaceRescueArt(site);
   site.finish();
-  label(scene, "RESCUE", [46, -10, -53.9], 1.0);
-  label(scene, "RESCUE", [46, 1.5, -53.9], 1.15);
+  makeSign("RESCUE", [46, -10, -53.9], 1.0);
+  makeSign("RESCUE", [46, 1.5, -53.9], 1.15);
   }
-  if (include("silt_basin")) createBasinArt(scene, cel);
+  if (include("silt_basin")) createBasinArt(scene, cel, cache, labels);
   const meshes = scene.meshes.filter(m => !initial.has(m));
   let disposed = false;
   return {
@@ -892,7 +899,9 @@ export function createExpeditionActors(
   cel: ShaderMaterial,
   glass: ShaderMaterial,
   resident: (position: Readonly<GameState["player"]["pose"]["position"]>) => boolean = () => true,
+  labels?: LabelMaterials,
 ): RegionArt {
+  const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
   const initial = new Set(scene.meshes);
   let disposed = false;
   const restraint = new ArtBatch("opening.restraint", scene, cel);
@@ -1052,7 +1061,7 @@ export function createExpeditionActors(
     mooring.tube([[CARRIER_SUPPORT.x + x, 0.3, CARRIER_SUPPORT.z + z], [CARRIER_SUPPORT.x + x, 2, CARRIER_SUPPORT.z + z]], 0.07, P.petrol, 6);
   }
   const mooringMesh = mooring.finish();
-  const mooringSign = label(scene, "SUPPORTED SURVEY MOORING", [CARRIER_SUPPORT.x + 9, 3, CARRIER_SUPPORT.z + 14], 5);
+  const mooringSign = makeSign("SUPPORTED SURVEY MOORING", [CARRIER_SUPPORT.x + 9, 3, CARRIER_SUPPORT.z + 14], 5);
   const vehicles = new Map<string, Mesh>(),
     caches = new Map<string, Mesh>();
   let carrierShell: Mesh | null = null, shellKey = "";
@@ -1112,7 +1121,7 @@ export function createExpeditionActors(
         let m = vehicles.get(v.id);
         if (m && m.metadata.hull !== v.hull) { m.dispose(); vehicles.delete(v.id); m = undefined; }
         if (!m) {
-          m = dartArt(scene, cel, glass, v.id, v.hull);
+          m = dartArt(scene, cel, glass, v.id, v.hull, labels);
           m.metadata = { hull: v.hull };
           m.renderingGroupId = 1;
           vehicles.set(v.id, m);
@@ -1153,7 +1162,7 @@ export function createExpeditionActors(
         carrierShell = null;
         shellKey = nextShellKey;
         if (h && dock && visibleVehicle(h)) {
-          carrierShell = carrierShellArt(scene, cel, glass, dock.configuration, openSlot);
+          carrierShell = carrierShellArt(scene, cel, glass, dock.configuration, openSlot, labels);
         }
       }
       if (h) {
