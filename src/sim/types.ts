@@ -7,6 +7,7 @@ import type {
   MaterialId,
   PlaceId,
   RecipeId,
+  RenewableSourceId,
   SourceId,
 } from "../content/registry.js";
 import type { RecoveryRouteId } from "../content/routes.js";
@@ -117,6 +118,9 @@ export interface GameState {
   };
   world: {
     resources: { id: SourceId; stock: number; reserve: number }[];
+    /** One entry per living shed, in SOURCE_RENEWAL order. Integer active expedition
+     * steps since its stock was last below the cap; zero whenever at or above it. */
+    renewal: { id: RenewableSourceId; progress: number }[];
     facilities: { id: FacilityId; repaired: boolean }[];
     maintenance: { alloy: number; glass: number; membrane: number };
     threat: {

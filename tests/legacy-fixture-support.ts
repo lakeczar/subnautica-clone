@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { SOURCES } from "../src/content/registry.js";
+import { RENEWABLE_SOURCE_IDS, SOURCES } from "../src/content/registry.js";
 import { BASIN_SOURCE_IDS, LEGACY_WORLD_BOUNDS } from "../src/content/routes.js";
 import { SOURCES as LEGACY_SOURCES } from "../src/save/legacy/registry.js";
 import type { GameState as LegacyState } from "../src/save/legacy/types.js";
+import type { GameState as Expedition4State } from "../src/save/expedition4/types.js";
 import { validExpedition2Domain, validState as validLegacyState } from "../src/save/legacy/validation.js";
 import type { SaveEnvelope, SaveMetadata } from "../src/save/codec.js";
 import { decodeSave, encodeSave } from "../src/save/codec.js";
@@ -18,7 +19,7 @@ export interface Schema2Envelope {
 }
 
 /** Construct synthetic old fixtures before any intentional corruption. Only the
- * four pristine M2 seed records and canopy route annotation may be removed.
+ * four pristine M2 seed records, zero renewal progress and canopy route annotation may be removed.
  * Paid new content, depletion or Basin operations cannot be laundered this way.
  * Never use this constructor to rewrite a retained/archived input. */
 export function schema2Fixture(state: GameState, meta: SaveMetadata,
@@ -29,8 +30,11 @@ export function schema2Fixture(state: GameState, meta: SaveMetadata,
   const operation = s.recovery.operation;
   if (operation) assert.equal(operation.routeId, "canopy", "only the historical route has schema2 waypoint semantics");
   const oldOperation = operation ? (({ routeId: _routeId, ...old }) => old)(operation) : null;
+  assert.deepEqual(s.world.renewal, RENEWABLE_SOURCE_IDS.map(id => ({ id, progress: 0 })),
+    "accumulated renewal progress cannot be laundered into a historical fixture");
+  const { renewal: _renewal, ...world } = s.world;
   const old: unknown = { ...s,
-    world: { ...s.world, resources: s.world.resources.filter(n => Object.hasOwn(LEGACY_SOURCES, n.id)) },
+    world: { ...world, resources: s.world.resources.filter(n => Object.hasOwn(LEGACY_SOURCES, n.id)) },
     recovery: { ...s.recovery, operation: oldOperation },
   };
   assert.ok(validLegacyState(old), "fixture must satisfy the frozen schema2 roster, bounds and semantics");
@@ -39,9 +43,17 @@ export function schema2Fixture(state: GameState, meta: SaveMetadata,
   return { format: "siltwake.save", schemaVersion: 2, contentVersion, meta: { ...meta }, state: old };
 }
 
-/** Exact expected version additions, leaving every prior field in the comparison.
- * Carrier landing/notice normalization, when expected, must be explicit in callers. */
-export function schema3Expected(old: Schema2Envelope): SaveEnvelope {
+export interface Schema3Envelope {
+  format: "siltwake.save";
+  schemaVersion: 3;
+  contentVersion: "expedition.4";
+  meta: SaveMetadata;
+  state: Expedition4State;
+}
+
+/** Exact historical schema3 / expedition.4 additions, leaving every prior field in the
+ * comparison. Also a genuine schema3 input for the next migration step. */
+export function historicalSchema3(old: Schema2Envelope): Schema3Envelope {
   const s = structuredClone(old.state);
   return { ...old, schemaVersion: 3, contentVersion: "expedition.4", meta: { ...old.meta }, state: { ...s,
     world: { ...s.world, resources: [...s.world.resources,
@@ -49,6 +61,19 @@ export function schema3Expected(old: Schema2Envelope): SaveEnvelope {
     recovery: { ...s.recovery, operation: s.recovery.operation ? { ...s.recovery.operation, routeId: "canopy" } : null },
   } };
 }
+
+/** The only schema4 / expedition.5 addition: zero living-shed progress, inserted after
+ * resources. Every schema3 field, including depleted stock and reserve, stays compared. */
+export function withRenewal(old: Schema3Envelope): SaveEnvelope {
+  const { resources, ...world } = structuredClone(old.state.world);
+  return { ...old, schemaVersion: 4, contentVersion: "expedition.5", meta: { ...old.meta },
+    state: { ...structuredClone(old.state), world: { resources,
+      renewal: RENEWABLE_SOURCE_IDS.map(id => ({ id, progress: 0 })), ...world } } };
+}
+/** Historical name: the exact expected current decode of a schema2 fixture, composing
+ * both declared version additions. Carrier landing/notice normalization, when
+ * expected, must be explicit in callers. */
+export const schema3Expected = (old: Schema2Envelope): SaveEnvelope => withRenewal(historicalSchema3(old));
 
 /** Exercise real schema2 decoding, including the absent route field, and compare
  * the entire envelope before allowing a legacy operation to resume. */

@@ -516,3 +516,41 @@ test("both rescue work faces expose one visited Basin target with actual local e
   assert.match(html(), /Pale Basin overhead lift/);
   assert.doesNotMatch(html(), /Upper-Canopy corridor only/);
 });
+
+test("recovery names where an unknown Bobbin plan comes from; known habitats distinguish living sheds from finite stock", (t) => {
+  const { panel, html } = panelFixture(t);
+  const s = workshop(); const v = addDart(s); disableVehicle(s, v.id);
+  s.player.pose.position = { x: 0, y: 0.18, z: 21.2 };
+  panel.refresh("inventory", s);
+  assert.match(html(), /Requires Bobbin kit · plans at the reef intake/, "C03/C04 without C02 has no Bobbin plan");
+  assert.doesNotMatch(html(), /fabricate at the pod/);
+  discover(s, "C02");
+  panel.refresh("inventory", s);
+  assert.match(html(), /Requires Bobbin kit · fabricate at the pod/);
+  s.knowledge.scans.push("reef_ribbon_catch_north", "canopy_resin_lee_lower", "island_resin_cove_east", "reef_edible_school_north");
+  s.world.resources.find((n) => n.id === "canopy_resin_lee_lower")!.reserve = 0;
+  s.world.resources.find((n) => n.id === "island_resin_cove_east")!.reserve = 0;
+  panel.refresh("notebook", s);
+  const source = (label: string) => html().split(label)[0]!.split("<section ").at(-1)! + html().split(label)[1]!.split("</small>")[0]!;
+  const north = source(SOURCES.reef_ribbon_catch_north.label), lower = source(SOURCES.canopy_resin_lee_lower.label);
+  const drift = source(SOURCES.island_resin_cove_east.label), food = source(SOURCES.reef_edible_school_north.label);
+  assert.match(north, /data-lifecycle="renewing"/); assert.match(north, /12 ready · 12 in reserve · 4 per gather\. Living shed · regrows to 12 ready · sort the reserve when none are ready\./);
+  assert.match(lower, /data-lifecycle="renewing"/); assert.match(lower, /Living shed · regrows to 12 ready\.<\/small>|Living shed · regrows to 12 ready\.$/);
+  assert.match(drift, /data-lifecycle="finite"/); assert.match(drift, /Finite · no reserve left\./);
+  assert.match(food, /data-lifecycle="tended"/); assert.match(food, /tend here for 20 seconds/);
+  assert.doesNotMatch(html(), /\d+:\d\d|seconds? (?:left|remaining)|minutes?/i, "no regrowth countdown clutter");
+});
+
+test("the fabricator lists only known plans; Basin plans stay research without construction rows", (t) => {
+  const { panel, html } = panelFixture(t);
+  const s = createGame(); completeOpening(s);
+  panel.refresh("craft", s);
+  const listed = () => [...html().matchAll(/data-recipe="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells"]));
+  for (const id of ["C05", "C06"] as const) discover(s, id);
+  panel.refresh("craft", s);
+  assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells"]), "Basin clues add no executable row");
+  panel.refresh("notebook", s);
+  assert.match(html(), /Plans retained · 3/);
+  assert.match(html(), /Research knowledge · construction not available yet\./);
+});
