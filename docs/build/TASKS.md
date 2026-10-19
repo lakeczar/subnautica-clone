@@ -1825,3 +1825,15 @@ Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3
 [Root inspection](evidence/M2-A-HUNTER-RECONCILE-INTEGRATION.md) verifies536 checks/build/economies, source/archive identity,8,512 exact compatibility outputs,42 current exports/6,498 replayed steps,13 exact actual Continue pairs, affected earned suffixes and matching actual parked screens. Warm hunter CPU p95 max1.476ms; first-use and prior regional loading limits remain. Root owns no browser/server/recording/check process.
 
 The [fresh complete-batch R1](tasks/M2-A-REVIEW-R1.md) uses base c1ddb0a00ca950fda0da6008e4083023873b3369, verified against the A1 dispatch ledger and accepted Stage1 production. Both new non-author reviewers receive the same frozen next commit and all ten criteria. Only their separately named report/artifact paths and ports5190/5191 are assigned; no production owner or overlapping edits. Actual dispatch IDs/bindings follow.
+
+
+## Active complete M2-A independent review — round1
+
+Both fresh T3 review children start from frozen **d5c0694abc6ac4d38d95f5d2549a64645cae06f3**, diff base **c1ddb0a00ca950fda0da6008e4083023873b3369**. Root verifies exact Git parent, T3 binding and original runtime contexts; complete prompts/dispatch/binding/runtime receipts live in `/tmp/siltwake-m2-a-review-dispatch-root/`.
+
+- **Astra xhigh** — task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a-astra-r1-d5c0694`; actual gpt-6-astra/xhigh; branch `t3/review-m2-a-round-one`, checkout `/home/worker/.t3/worktrees/subnautica-clone/t3-a69922c4`. Owns only `docs/build/reviews/M2-A-ASTRA-R1.md`, fresh artifacts and isolated free5190.
+- **Sol6.1 max** — task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a-sol-r1-d5c0694`; actual gpt-6.1-sol/max; branch `t3/review-m2-a-round1`, checkout `/home/worker/.t3/worktrees/subnautica-clone/t3-9ff9adb5`. Owns only `docs/build/reviews/M2-A-SOL-R1.md`, fresh artifacts and isolated free5191.
+
+Both independently judge all ten [complete-batch criteria](tasks/M2-A-REVIEW-R1.md). No production ownership, children, peer messages/waits, parent edits or publication. Receive completion notifications, reconcile both initial reports and then direct substantiated fixes. Do not poll or duplicate reviewers. Root owns no browser/server/recording/check process; production stays frozen. No M2-A acceptance, game/main merge or deployment.
+
+Root reconciliation receipts are sealed at `/tmp/siltwake-m2-hunter-reconcile-root/`:180 regular files/66,226,752 bytes,13 non-followed symlinks; manifest SHA256 `6c07b4fb902fa9f108df6545a1efbd62b92fa56dac886292f54b0a45da647a99`. Copied author context is distinguished from independently regenerated root results in its README.

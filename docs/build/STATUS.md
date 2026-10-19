@@ -6,7 +6,7 @@
 
 Root verifies all1,477 archive payload members, current source/build identity,8,512 exact compatibility outputs,42 browser-export replays over6,498 steps (40 exact and two negligible hunter-coordinate differences),13 exact actual Save/Continue pairs and affected earned return/recovery suffixes. Highest root warm hunter-query p95 is1.476ms against the2ms trial. Original full earned Canopy–Basin route remains b91cde9, with61.63% oxygen/83.97% power minima; current bounded continuations do not relabel it.
 
-All implementation authors are terminal and released. The complete M2-A batch is frozen for [fresh independent Astra xhigh and Sol6.1 max round1](tasks/M2-A-REVIEW-R1.md), diff base c1ddb0a; TASKS records exact candidate and actual dispatch. No M2-A acceptance yet. Human route recognition/control feel, duration/enjoyment, audible mix and hardware pacing remain unverified; first-use loading and prior50.6/59.3ms warm-region samples stay open.
+All implementation authors are terminal and released. The complete M2-A batch is frozen for [fresh independent Astra xhigh and Sol6.1 max round1](tasks/M2-A-REVIEW-R1.md), frozen candidate d5c0694, diff base c1ddb0a; both actual runtimes and separate T3 bindings are verified in TASKS. No M2-A acceptance yet. Human route recognition/control feel, duration/enjoyment, audible mix and hardware pacing remain unverified; first-use loading and prior50.6/59.3ms warm-region samples stay open.
 
 After paired acceptance continue M2-B fleet/mobile homes → M2-C deep routes/both functional endings → integrated M2 pair/Opus → M3 authored campaign → dedicated Astra critic/M4 polish. Root owns no browser/server/recording/check process. Earlier active labels below are historical.
 
