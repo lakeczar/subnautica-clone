@@ -1766,3 +1766,12 @@ Receive completion notifications. Inspect Sol source/evidence; reconcile Astra's
 Astra task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-encounter-direction-astra-8f30651` is terminal/result_available with no children/questions. Report acc731c63dc1c017aaf4fb6fa50a0a922bbcc6dc is merged. [Root reconciliation](evidence/M2-A-ENCOUNTER-DIRECTION-INTEGRATION.md) verifies all54 payloads, original Astra/xhigh runtime and four identical numerical reproductions. Report-only production; no acceptance. Its path/resources are released.
 
 Root selects the [Canopy landmark leaf](tasks/M2-A-CANOPY-LANDMARK.md) to run independently of the existing correctness worker. Static Canopy art, named region test/new report only; no hunter/vehicle/camera/physical-cover changes. This refines the advisory single-owner sequence without overlapping paths. Hunter implementation waits for both inspected leaves and a fresh composed baseline. Actual new task ID/binding follows dispatch from the next committed baseline. Root owns no running browser/server/recording/check. Do not poll or duplicate the active correctness worker.
+
+
+## Active Canopy landmark; original correctness task unchanged
+
+- Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-canopy-landmark-sol-max-d9f09dc`, stable request `siltwake-m2-canopy-landmark-sol-max-d9f09dc`.
+- Exact parent **d9f09dc6a18e13fafd70496c4c6bb9743fbe53a6**, production b91cde9; branch `t3/m2-a-canopy-landmark`, bound worktree `/home/worker/.t3/worktrees/subnautica-clone/t3-567c62e8`. Original session confirms **gpt-6.1-sol/max**, parent HEAD and T3 binding independently verified. Receipts `/tmp/siltwake-m2-encounter-root/landmark-{task,binding,runtime}.json`.
+- Owns only [landmark brief](tasks/M2-A-CANOPY-LANDMARK.md) paths, isolated browser/server5191 and fresh artifact directory. No hunter, core, UI or shared authority changes. No children, peer waits/polling, parent mutation or publishing.
+- Original correctness task on8f30651 remains active and retains world/step/types/app/checker/named tests and optional5190. Astra direction is complete. No other worker is dispatched; root has no browser/server/recording/check.
+- Inspect both returns, compose them, then assign shared-contact hunter implementation on a new committed baseline. Full M2-A paired review remains pending; subsequent M2-B/C and M3/M4 remain required.

@@ -57,7 +57,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All prior authors, including earned composition, are terminal and release their paths/resources. Only the named correctness correction receives production/test ownership; the encounter-direction task is report-only. TASKS records exact IDs/baselines/bindings. Root owns integration/build records, with no browser/server/recording/check process. Receive completion notifications rather than polling.
+The correctness correction and Canopy landmark are the only active implementation tasks, on disjoint paths. The encounter-direction author is terminal and released. Hunter implementation is not yet dispatched; it requires both inspected leaves and a composed baseline. TASKS records exact IDs/baselines/bindings. Root owns integration/build records, with no browser/server/recording/check process. Receive completion notifications rather than polling.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
