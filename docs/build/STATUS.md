@@ -88,7 +88,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the terrain correction through its completion notification, inspect and assemble it with 0208f05, then assign the earned preparation → Canopy → Basin → return → failure/recovery → actual reload composition. Capture input counts, pre-refill margins, injury priority and natural cover learning; resolve substantiated visibility defects under explicit ownership. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+Receive the terrain correction through its completion notification, inspect and assemble it with 0208f05, then dispatch the prepared [earned composition](tasks/M2-A-COMPOSE.md): preparation → Canopy → Basin → return → failure/recovery → actual reload. Capture input counts, pre-refill margins, injury priority and natural cover learning; resolve substantiated visibility defects under explicit ownership. Review the complete A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

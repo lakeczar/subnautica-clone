@@ -1697,3 +1697,10 @@ Read-only same-author attribution task `node:delegated-task:command%3Amcp%3A2e1e
 Performance author releases all paths/resources. Only the already assigned terrain worker remains active at the exact task/binding above. Root has no browser/server/recording/check process; root receipts are in `/tmp/siltwake-m2-render-performance-root/`. Await the terrain notification without polling, inspect/assemble, then earned composition and the fresh complete-batch Astra/Sol pair. No M2 acceptance or campaign completion claim.
 
 Root performance receipts sealed: 192 regular files / 4463848 bytes; manifest SHA256 `3aa0214ff1f22bd6fe91b9e2623bde3999c48f5a161a826ab744057b8fca7f8d`. Symlinks/dependencies are excluded. No later operation may append to this receipt directory.
+
+
+### Performance checkpoint published; composed-play brief prepared
+
+Feature 91b72e4 is pushed. PR #4 and #3 descriptions are fully rewritten and read back: 497 tests, all three economies, independently reproduced warm activation, unchanged matched imagery, expensive cold loading and the still-active terrain/natural-cover/composed-play gates. #3 remains M0-only a2cb19f. Readbacks are `/tmp/siltwake-m2-render-performance-pr/readback-{3,4}.json`; all four stack layers remain T3-linked/unwatched. No game/main merge or deployment.
+
+[Earned composition brief](tasks/M2-A-COMPOSE.md) is prepared but not dispatched. It assigns no production paths and requires the final terrain assembly before a fresh Sol 6.1/max worktree. The existing terrain worker remains the only active child; no new peer work or polling. Root has no running browser/server/recording/check process.
