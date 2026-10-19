@@ -1,6 +1,6 @@
 # Build status
 
-## Current checkpoint — stage1 closed; M2-A1 construction authorized
+## Current checkpoint — stage1 closed; M2-A1 builder active
 
 Movement cc3f20d, feedback/copy4a5103f and accessible announcement75402ae are combined at **6aaeae2d97476528c3848e140aded6a069b0c3b1** and accepted by both R2 reviewers on **dc0902864afb872c658b239821e870423877178a**. Root passes **436/436 tests**, typecheck/build and both economies. All27 production files,85 tracked source/test/config files and40 compiled native modules match the correction author. The prior failed announcement case now retains both full occurrences atomically, with native trace/menu/reset/singleton evidence inspected. [Current inspection](evidence/POLISH-1-OS2-ANNOUNCEMENT-INTEGRATION.md).
 
@@ -41,7 +41,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All prior authors/reviewers and the Opus implementation consultation are terminal and release their paths/resources. Root owns integration/build records and no browser/server/recording/check process. The sole next implementation owner is Sol6.1/max M2-A1 under its committed brief; TASKS records actual dispatch. A2/A3 are not yet dispatched and must consume the same inspected A1 commit.
+All prior authors/reviewers and the Opus implementation consultation are terminal and release their paths/resources. Root owns integration/build records and no browser/server/recording/check process. The sole active implementation owner is Sol6.1/max M2-A1 on c1ddb0a in isolated worktree t3-af7a330d, branch t3/m2-a1-route-recovery; TASKS records the exact task ID. A2/A3 are not yet dispatched and must consume the same inspected A1 commit.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -76,7 +76,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Opus advice is integrated and reconciled. Dispatch M2-A1 from the committed contract/brief, receive its terminal handoff without polling, inspect its source, migration, geometry, event and recovery proof, then commit a shared baseline for independent A2 visual and A3 presentation consumers. Review the whole composed A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max; no leaf acceptance or fresh route proof is implied by dispatch. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+Opus advice is integrated and reconciled. M2-A1 is dispatched from committed c1ddb0a. Receive its terminal handoff without polling, inspect its source, migration, geometry, event and recovery proof, then commit a shared baseline for independent A2 visual and A3 presentation consumers. Review the whole composed A1–A3 batch with fresh non-author Astra xhigh and Sol6.1/max; no leaf acceptance or fresh route proof is implied by dispatch. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
