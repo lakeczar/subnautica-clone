@@ -1,10 +1,10 @@
 # Build status
 
-## Owner-directed hold — model usage discussion
+## Current model policy — Opus high builds, Sol xhigh reviews
 
-The owner requests less Astra review use and a stopping point to direct a revised model mix. Automatic construction/review dispatch is on hold pending that direction. Root requested cancellation of both active M2-A R2 reviewers (`siltwake-m2-a-astra-r2-b293667` and `siltwake-m2-a-sol-r2-b293667`), preserving their partial artifacts and clean source worktrees. No replacement model or revised acceptance policy has been chosen. The prior active-review and automatic-continuation entries below are historical until the owner resumes work. Production remains6319184; M2-A remains unaccepted.
+The owner has supplied the revised model mix and asks for more builder discretion: **Opus5.5/high implements, Sol6.1/xhigh independently reviews**. [Current policy](MODEL_POLICY.md) supersedes old model assignments, routine paired-review requirements and restrictive per-file approval rules. The authorized build resumes with a cohesive Opus expedition-completion assignment; actual dispatch follows in TASKS. Both former M2-A R2 tasks are interrupted, with no pending children and no acceptance verdict; their partial evidence is preserved. Production remains6319184; M2-A remains unaccepted. All older active-review labels below are historical.
 
-## Current checkpoint — complete M2-A R2 active on b293667
+## Preserved checkpoint — M2-A R2 stopped on b293667
 
 Fresh independent Astra xhigh and Sol6.1/max reviewers are dispatched on **b2936674332744c22f5c319685e3f564d5976784**, with both original runtime contexts and clean T3 worktree bindings verified. Both assess all ten original criteria, full R1 findings/dispositions, current affected play and unresolved regional timings under [the complete R2 brief](tasks/M2-A-REVIEW-R2.md). Each owns only its separate report/private evidence and optional isolated5190/5191; no production paths are assigned. [TASKS](TASKS.md#complete-m2-a-r2-dispatched--actual-runtimes-verified) records exact IDs and bindings. Receive their independent returns automatically; no polling, duplicate work or acceptance is implied.
 
@@ -63,11 +63,9 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All previous M2-A authors/R1 reviewers/advisors, profiler and affected-play worker are terminal/released. Root owns integration/build records. Opus SPACE-1 and its Sol version reconciliation are terminal/released; their production stays separate. Fresh complete M2-A R2 Astra and Sol reviewers are active on b293667 with report-only ownership and optional isolated5190 and5191 respectively; TASKS records exact dispatch/bindings. No production paths are assigned. No peer edits, polling or duplicate workers.
+The former M2-A R2 reviewers are interrupted with no pending children. Their worktrees and partial evidence are preserved; no acceptance report was completed. Root is preparing the sole Opus5.5/high writer under [M2-A-OPUS-COMPLETION](tasks/M2-A-OPUS-COMPLETION.md). TASKS records the actual committed baseline and dispatch. Root retains integration/build records; the builder owns the connected expedition implementation without competing writers. Independent acceptance will use fresh Sol6.1/xhigh under [MODEL_POLICY](MODEL_POLICY.md).
 
-Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
-
-All pre-polish implementation authors and reviewers are complete with no live children or owned running resources. Both final review models/efforts are runtime-confirmed. Astra report2a7b32e was merged ate938d20; Sol reportd7aa801 was merged ate3d335c. Root verified15 Astra and18 Sol reviewer payloads and inspected independent probes/results. Later changes are reports/build records only; reviewed production/tests/config remain frozen. The original Opus review and implementation consultation are terminal. The plan-only40fcef9 is integrated and root reran its launch/stall/prefab probes. The POLISH-1A Sol6.1/max child is terminal, runtime confirmed by its session turn_context; its ownership is released after provisional assembly. POLISH-1B is also terminal and its ownership released. POLISH-1C is terminal and its explicit source-art/render-terrain/metadata/test ownership is released. Its actual Sol6.1/max runtime is confirmed; Astra’s full-slice report9325777 is terminal and integrated; effective gpt-6-astra/xhigh runtime is confirmed and its owned resources are closed. Sol reportd75a220c is terminal and integrated; root confirms both actual Sol6.1/max turn_context records. Both independent review paths are released. The bounded correction is terminal at44d4efe and integrated at5f25810; actual Sol6.1/max is confirmed and all assigned paths/resources are released. Astra R2 reporta404c027 is terminal/integrated; actual gpt-6-astra/xhigh confirmed in both session contexts, owned resources closed and report ownership released. Sol R2 report48323d4 is terminal and integrated; actual gpt-6.1-sol/max is confirmed in all three session contexts and its report ownership is released. TASKS records exact IDs and next ownership. Root additionally authorized three buried island resource-group translations in expedition.ts and only the headland persistent-frame Y translation in environment.ts, driven by shared metadata and checked against actual terrain triangles; source positions/physics/yields stay unchanged. Exact dispatch/amendment is in TASKS. No overlapping worker edits.
+SPACE-1's previous Opus author and Sol reconciler are terminal; their production remains separate. All other prior assignments are historical and released. No automatic Astra review or old paired gate is active.
 
 ### Historical implementation checkpoints
 
@@ -98,7 +96,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive/reconcile the fresh complete M2-A Astra/Sol R2 with all ten criteria, current affected gameplay and unresolved regional timings. No additional profile or correction is presumed. SPACE-1 remains separately reconciled until M2-A disposition, then needs full composition/checks/pair. Continue M2-B/C and M3/M4 automatically after applicable gates. Main merge/public deployment remain owner actions.
+Dispatch the prepared Opus5.5/high expedition-completion task from a committed shared baseline, inspect its cohesive result, then obtain fresh Sol6.1/xhigh review. Address substantiated findings with Opus. After acceptance, compose/check/review SPACE-1 and continue M2-B/C, M3 and M4 under the revised model policy. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

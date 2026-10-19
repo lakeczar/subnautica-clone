@@ -4,9 +4,9 @@ Construction was explicitly invoked on 2026-10-17. Read `docs/build/STATUS.md` f
 
 For implementation, read the revised input and its specification pointers before assigning work. `docs/EXPEDITION_INTEGRATION.md` owns cross-system dependencies. `docs/spoilers/NARRATIVE_CANON.md` contains major story spoilers: the coordinator and lore/world integration workers need it, but ordinary owner-facing summaries and PR descriptions must not reveal the twist. Research explains choices and does not silently add or remove requirements.
 
-The Astra `xhigh` coordinator sets direction and owns shared interfaces, dependencies, integration, and the project state. Sol 6.1 at `max` is the main builder and default implementation model, including graphics. Workers edit only the paths assigned in their task. Commit a shared baseline before creating implementation worktrees. Keep unfinished changes on feature branches and use pull requests for review.
+For delegation, review or resuming an older task, read `docs/build/MODEL_POLICY.md`: the owner now selects **Opus 5.5 high to build** and **Sol 6.1 xhigh to review**. The coordinator retains direction and integration. Give Opus coherent outcome-based ownership and room for design suggestions and cross-module improvements; use disjoint ownership when workers run in parallel. Commit a shared baseline before creating implementation worktrees. Keep unfinished changes on feature branches and use pull requests for review.
 
-Before accepting a feature, delegated deliverable batch or integrated milestone, follow the Independent review gate in `docs/DELIVERY_AND_ACCEPTANCE.md`: non-author Astra `xhigh` and Sol 6.1 `max` reviewers are required in addition to coordinator self-review. The coordinator runs Astra at `xhigh`.
+Before accepting a feature, delegated deliverable batch or integrated milestone, follow the Independent review gate in `docs/DELIVERY_AND_ACCEPTANCE.md`: one fresh non-author **Sol 6.1 xhigh** reviewer plus coordinator inspection. The new owner policy replaces the old mandatory Astra/Sol pair; preserve historical evidence without restarting that arrangement.
 
 ## Browser usage
 

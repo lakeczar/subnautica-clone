@@ -1,5 +1,7 @@
 # Dedicated game-design critic
 
+Owner model revision, 2026-10-19: this dedicated critique now uses a fresh non-author **Sol6.1/xhigh** under [MODEL_POLICY](../MODEL_POLICY.md). Historical Astra assignments below are superseded; the design scope and evidence standards remain.
+
 Owner-requested on 2026-10-17. Status: scheduled for the M3-to-M4 transition; supporting research and this procedure passed [paired review](../reviews/DESIGN-PREP-R1.md) at `c0aa5cb`, the actual game critique has **not** run. This adds a review obligation without reducing game scope or replacing the [independent technical gate](../../DELIVERY_AND_ACCEPTANCE.md#independent-review-gate).
 
 ## Role and timing

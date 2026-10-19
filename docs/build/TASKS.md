@@ -1994,3 +1994,10 @@ Three occupied slots including root; all preceding workers/paths/resources relea
 ## Owner-directed model-usage hold
 
 The owner requests slowing Astra review usage and a pause for direct guidance about the model mix. Both R2 tasks above were still running without pending questions/children; root called task_cancel for each with stable requests `siltwake-m2-a-r2-owner-model-hold-0` and `siltwake-m2-a-r2-owner-model-hold-1`. Both calls returned cancel_requested. Preserve partial evidence and do not restart, replace or dispatch further work until owner direction. Both worktrees were clean and no process matching either worktree or assigned preview ports was observed at the stop check. This is an execution hold, not acceptance or a decided replacement review policy; existing source and unresolved findings are unchanged.
+
+
+## Owner model revision — Opus builds, Sol reviews
+
+The owner now chooses Opus5.5/high for implementation and Sol6.1/xhigh for independent review, with greater builder design/implementation discretion. [MODEL_POLICY](MODEL_POLICY.md) replaces the old routine Astra/Sol pair and Sol/max builder policy. The model-discussion hold is resolved by this direction. Both interrupted R2 tasks remain interrupted/result_available with no pending children; partial results are preserved, not acceptance verdicts. Their initial candidate remainsb293667 and production remains6319184.
+
+The next sole writer receives [M2-A-OPUS-COMPLETION](tasks/M2-A-OPUS-COMPLETION.md): coherent expedition-completion ownership, evidence-aware loading work and room for connected design refinements. Root retains integration records and PR management. A fresh non-author Sol/xhigh review follows its returned candidate; no Astra replacement or duplicate review is dispatched. Actual task ID, baseline, binding and model settings follow below.

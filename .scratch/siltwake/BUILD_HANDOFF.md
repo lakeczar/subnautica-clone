@@ -1,5 +1,7 @@
 # Siltwake construction handoff
 
+**Owner model revision, 2026-10-19:** [MODEL_POLICY](../../docs/build/MODEL_POLICY.md) selects Opus5.5/high builders with design discretion and Sol6.1/xhigh independent review, replacing all older role/pair assignments below.
+
 **Construction invoked 2026-10-17.** Read [current build status](../../docs/build/STATUS.md) before resuming; it supersedes the pre-launch state below. The owner explicitly submitted this handoff and the revised input. No further start confirmation is needed.
 
 Read after compaction or a restart. This is a planning checkpoint, not a build launch. The owner reserved construction for the next run and requested review of the full input first; begin when they explicitly invoke the revised input. That invocation authorizes routine implementation, integration, fixes and PR work without another confirmation round.
