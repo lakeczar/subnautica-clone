@@ -1654,3 +1654,10 @@ Only hud.ts, narrowly necessary app.ts, presentation/app tests and the new corre
 Feature cff3525 is pushed. PR #4 and continuing #3 descriptions are rewritten/read back:482/483, passing build/economies, provisional A3 UI, reproduced ROOT-A3-01 and open A2 visibility/activation findings. #3 remains M0-only a2cb19f; #4 remains draft. Current refit and muted-bite PNGs plus the actual earned-continuation MP4 are published on pr-assets with source222b805 labels; all three HTTP200 payloads match retained bytes. No matching M0 state or A2 rendering claim. All four stack PRs are T3-linked/unwatched; no main/game merge or deployment.
 
 Root receipts `/tmp/siltwake-m2-a3-root/manifest.json`:27 files /1,275,509 bytes, manifest SHA256 `c7bb2069b0f83ec38d937caa0128ca4578080a913b0c2d71a983ba91b6847ada`. This evidence set is sealed; use a new directory for later correction/render inspection. A2 and the bounded priority correction remain active. Root has no running check/browser/server/recording; receive completion notifications rather than polling.
+
+
+### A2 terminal, inspected and provisionally assembled with A3
+
+A2 task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a2-sol-max-d753b02` is acknowledged completed/result_available, no pending children/questions. Source2d209a8/reportce22a0d merge at9e1169c2359296fed489bac72b0a0070c4748c7d. Root488/488, typecheck/build and all three economies pass. All493 payloads and97 source inputs verify, original runtime Sol6.1/max confirmed, actual final images inspected. [Inspection](evidence/M2-A2-INTEGRATION.md) records all unresolved findings and concrete root terrain reproduction. A2 releases all paths/resources.
+
+Prepared disjoint [performance](tasks/M2-A-RENDER-PERFORMANCE.md) and [terrain](tasks/M2-A-TERRAIN-CONFORMITY.md) briefs receive a committed assembly before fresh Sol worktree dispatch. Existing A3 priority worker retains its UI/app/test ownership; no competing edits. Root owns no browser/server/recording/check process. Actual IDs/bindings follow below; no polling or premature batch acceptance.
