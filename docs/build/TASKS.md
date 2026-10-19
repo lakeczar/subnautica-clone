@@ -2082,3 +2082,14 @@ Owner resumed the whole-game goal and requested RTX 3090 development use. Root v
   Binding: `/home/worker/.t3/worktrees/subnautica-clone/t3-b9861fd3`, branch `t3/enable-3090-gpu`. State: running; no children. Owns only new `docs/build/gpu-enablement/` scripts, plan/report and offline checks. Read-only live infrastructure inspection; no host ask, driver/service/VM/browser-flag mutation during preparation. Root reviews and schedules any later gated execution. No game edits.
 
 Root owns coordination, current records and Fleet PR16 inventory/execution updates. No GPU change has occurred. M2-A remains accepted; SPACE-1 remains provisional. Continue M2-B/C, M3, M4 under the current model policy after applicable gates.
+
+
+## M2-B1 provisional build beside frozen SPACE-1 review
+
+- Task: `node:delegated-task:command%3Amcp%3A2cbf186c-627f-4d86-933f-50a2dde43454%3Adelegate-task%3Asiltwake-m2-b1-opus-high-7bd259c`.
+- Runtime selection verified: `claude-opus-5-5` / `high`, full-access. Parent `7bd259c395542e2d58724417be66a1864c58c005`.
+- Binding: `/home/worker/.t3/worktrees/subnautica-clone/t3-b6aef8ec`, branch `t3/earned-creel-mobile-refuge-loop`.
+- Scope: [M2-B1](tasks/M2-B1-OPUS.md), all connected game production/art/UI/audio/migration/tests, supporting design docs and `evidence/M2-B1-OPUS.md`; no root coordination or infrastructure edits. Optional owned incognito browser/server5191.
+- State: running; no children. SPACE-1 reviewer remains independently frozen on d8a812e/5190; GPU preparation owns its separate directory and optional5192. Root plus three children fills the four-agent cap.
+- Parent review interim checks pass567 tests/build/economies and31,119 historical-validator comparisons with no reported blocker; no verdict yet. Isolated provisional B1 development is now permitted while that review finishes. Root must reconcile/accept SPACE-1 before integrating B1; B1 requires its own complete fresh Sol6.1/xhigh review. This is a scheduling change, not inferred acceptance.
+- Full prompt/configuration/binding receipt: `/home/worker/.local/share/siltwake-evidence/worker-resume-root/m2-b1-dispatch.json`. Root informed GPU author of the port ownership; live infrastructure mutation is still unassigned pending review/checkpoint. No current browser host/process is root-owned.
