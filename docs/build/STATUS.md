@@ -2,7 +2,7 @@
 
 ## Current model policy — Opus high builds, Sol xhigh reviews
 
-The owner has supplied the revised model mix and asks for more builder discretion: **Opus5.5/high implements, Sol6.1/xhigh independently reviews**. [Current policy](MODEL_POLICY.md) supersedes old model assignments, routine paired-review requirements and restrictive per-file approval rules. The authorized build resumes with a cohesive Opus expedition-completion assignment; actual dispatch follows in TASKS. Both former M2-A R2 tasks are interrupted, with no pending children and no acceptance verdict; their partial evidence is preserved. Production remains6319184; M2-A remains unaccepted. All older active-review labels below are historical.
+The owner has supplied the revised model mix and asks for more builder discretion: **Opus5.5/high implements, Sol6.1/xhigh independently reviews**. [Current policy](MODEL_POLICY.md) supersedes old model assignments, routine paired-review requirements and restrictive per-file approval rules. The sole active builder is Opus5.5/high on committed baseline **b52155eb05d16bfcb5e8e2cd4e3ee8bbd491493c**, under [M2-A-OPUS-COMPLETION](tasks/M2-A-OPUS-COMPLETION.md). T3 model/worktree binding and exact initial HEAD are verified; high effort was explicitly requested and accepted. TASKS records the dispatch. Both former M2-A R2 tasks are interrupted, with no pending children and no acceptance verdict; their partial evidence is preserved. Production remains6319184; M2-A remains unaccepted. All older active-review labels below are historical.
 
 ## Preserved checkpoint — M2-A R2 stopped on b293667
 
@@ -63,7 +63,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-The former M2-A R2 reviewers are interrupted with no pending children. Their worktrees and partial evidence are preserved; no acceptance report was completed. Root is preparing the sole Opus5.5/high writer under [M2-A-OPUS-COMPLETION](tasks/M2-A-OPUS-COMPLETION.md). TASKS records the actual committed baseline and dispatch. Root retains integration/build records; the builder owns the connected expedition implementation without competing writers. Independent acceptance will use fresh Sol6.1/xhigh under [MODEL_POLICY](MODEL_POLICY.md).
+The former M2-A R2 reviewers are interrupted with no pending children. Their worktrees and partial evidence are preserved; no acceptance report was completed. The sole Opus5.5/high writer is active under [M2-A-OPUS-COMPLETION](tasks/M2-A-OPUS-COMPLETION.md). TASKS records the actual committed baseline and dispatch. Root retains integration/build records; the builder owns the connected expedition implementation without competing writers. Independent acceptance will use fresh Sol6.1/xhigh under [MODEL_POLICY](MODEL_POLICY.md).
 
 SPACE-1's previous Opus author and Sol reconciler are terminal; their production remains separate. All other prior assignments are historical and released. No automatic Astra review or old paired gate is active.
 
@@ -96,7 +96,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the prepared Opus5.5/high expedition-completion task from a committed shared baseline, inspect its cohesive result, then obtain fresh Sol6.1/xhigh review. Address substantiated findings with Opus. After acceptance, compose/check/review SPACE-1 and continue M2-B/C, M3 and M4 under the revised model policy. Main merge/public deployment remain owner actions.
+Receive the active Opus5.5/high expedition-completion result automatically, inspect it, then obtain fresh Sol6.1/xhigh review. Address substantiated findings with Opus. After acceptance, compose/check/review SPACE-1 and continue M2-B/C, M3 and M4 under the revised model policy. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

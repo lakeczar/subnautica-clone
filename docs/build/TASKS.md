@@ -2001,3 +2001,12 @@ The owner requests slowing Astra review usage and a pause for direct guidance ab
 The owner now chooses Opus5.5/high for implementation and Sol6.1/xhigh for independent review, with greater builder design/implementation discretion. [MODEL_POLICY](MODEL_POLICY.md) replaces the old routine Astra/Sol pair and Sol/max builder policy. The model-discussion hold is resolved by this direction. Both interrupted R2 tasks remain interrupted/result_available with no pending children; partial results are preserved, not acceptance verdicts. Their initial candidate remainsb293667 and production remains6319184.
 
 The next sole writer receives [M2-A-OPUS-COMPLETION](tasks/M2-A-OPUS-COMPLETION.md): coherent expedition-completion ownership, evidence-aware loading work and room for connected design refinements. Root retains integration records and PR management. A fresh non-author Sol/xhigh review follows its returned candidate; no Astra replacement or duplicate review is dispatched. Actual task ID, baseline, binding and model settings follow below.
+
+
+## Opus expedition completion dispatched
+
+- Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-a-completion-opus-high-b52155e`; stable request `siltwake-m2-a-completion-opus-high-b52155e`; implementation, async, isolated worktree.
+- Exact parent **b52155eb05d16bfcb5e8e2cd4e3ee8bbd491493c**; T3 branch `t3/canopy-basin-expedition`, checkout `/home/worker/.t3/worktrees/subnautica-clone/t3-3fcfcfbd`. Root verifies full initial HEAD, clean checkout, T3 provider `claudeAgent` and running model **claude-opus-5-5**. **effort: high** is explicit in the accepted dispatch; separate provider-runtime effort metadata has not yet been independently read.
+- Full [assignment](tasks/M2-A-OPUS-COMPLETION.md) supplies connected expedition ownership, design discretion, preserved evidence and browser isolation, with own5190/private artifacts. Root retains STATUS/PLAN/TASKS and PR management. Dispatch/binding receipts: `/home/worker/.local/share/siltwake-evidence/m2-a-opus-completion-root/`.
+
+This is the sole active worker. Both old R2 tasks remain stopped; no routine Astra reviewer or replacement pair. Fresh non-author Sol6.1/xhigh review follows the returned frozen result. Receive completion automatically; preserve all old evidence and remaining failures. No production integration or new acceptance is claimed at dispatch.
