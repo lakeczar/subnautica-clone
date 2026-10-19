@@ -78,6 +78,24 @@ void main(){
   float band=d>.66?1.09:(d>.12?.91:(d>-.32?.69:.45));
   vec3 temperature=mix(vec3(.61,.83,1.04),vec3(1.07,1.035,.93),smoothstep(-.12,.75,d));
   vec3 shade=vColor.rgb*band*temperature;
+  // Ground alone carries alpha zero. Bounded, antialiased sediment relief
+  // breaks up a near-floor wash without lifting the eye or inventing support.
+  // This is shading on submitted triangles, not a displacement/collision rule.
+  float ground=step(0.0,vColor.a)*(1.0-step(.5,vColor.a));
+  float phase=vWorld.x*3.2+vWorld.z*.85+sin(vWorld.z*1.4)*.65;
+  float ripple=sin(phase);
+  float relief=mix(.67,1.02,smoothstep(-.6,.65,ripple));
+  relief=mix(relief,.85,smoothstep(.8,2.5,fwidth(phase)));
+  float grain=sin(vWorld.x*37.0+sin(vWorld.z*29.0))*sin(vWorld.z*41.0);
+  float grainFade=1.0-smoothstep(.12,.6,fwidth(vWorld.x*37.0)+fwidth(vWorld.z*41.0));
+  // A close down-look sees less than a metre of floor. The broad ripples alone
+  // can fill that view with one flat value, so retain a smaller sediment scale
+  // locally and fade it before it becomes a distant moire pattern.
+  float finePhase=vWorld.x*13.0+vWorld.z*5.0+sin(vWorld.z*7.0)*.5;
+  float fine=mix(.57,1.02,smoothstep(-.35,.5,sin(finePhase)));
+  float fineFade=(1.0-smoothstep(3.0,14.0,length(vWorld-cameraPosition)))*
+    (1.0-smoothstep(.7,2.5,fwidth(finePhase)));
+  shade*=mix(1.0,relief*mix(1.0,fine,fineFade)+grain*.035*grainFade,ground);
   float rim=pow(1.0-max(0.0,dot(n,normalize(cameraPosition-vWorld))),3.0);
   // Selective grazing ink is in the same opaque pass and receives the same
   // fog/depth test as its owner. No shells, through-wall lines or extra draws.

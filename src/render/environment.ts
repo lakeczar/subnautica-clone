@@ -5,6 +5,8 @@ import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js
 import type { Scene } from "@babylonjs/core";
 import { terrainHeight, WORLD_BOUNDS } from "../sim/world.js";
 import { INTERACTION_HOSTS, SOURCES } from "../content/registry.js";
+import { BASIN_SOURCE_IDS } from "../content/routes.js";
+import { type RenderRegion } from "./regions.js";
 import { ArtBatch, seeded, type Point } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
 import { createTerrainSurface } from "./terrainSurface.js";
@@ -62,7 +64,8 @@ function westernGlassHost(b: ArtBatch, x: number, z: number): void {
   }
 }
 
-export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
+export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: RenderRegion | "terrain"): void {
+  if (!region || region === "terrain") {
   const terrain = new Mesh("island.terrain", scene),
     data = new VertexData();
   const { positions, indices } = createTerrainSurface();
@@ -93,7 +96,13 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
     // Blend on the same physical height field; no extra shelf or false floor.
     const canopy = Math.max(0, Math.min(1, (px - 60) / 30)) * Math.max(0, Math.min(1, (-py - 35) / 40));
     const c = Color3.Lerp(Color3.FromHexString(hex), Color3.FromHexString(patch > .3 ? "#4b807a" : "#2e616c"), canopy);
-    colors.push(c.r, c.g, c.b, 1);
+    const basin = Math.max(0, Math.min(1, (-pz - 180) / 30)) * Math.max(0, Math.min(1, (px - 85) / 25));
+    // Two sediment lanes have different widths/values. They are a surface
+    // pattern on the real slope, not a current/visibility simulation.
+    const lane = Math.sin((px - 170) * .14 + pz * .08 + Math.sin(pz * .07) * 1.2);
+    const sediment = Color3.FromHexString(lane > .3 ? "#638d8b" : "#335e70");
+    const color = Color3.Lerp(c, sediment, basin);
+    colors.push(color.r, color.g, color.b, 0); // Terrain-only relief in the shared cel pass.
   }
   data.positions = positions;
   data.normals = normals;
@@ -103,9 +112,12 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
   terrain.material = cel;
   terrain.isPickable = false;
   terrain.freezeWorldMatrix();
+  if (region === "terrain") return;
+  }
 
   const stones = new ArtBatch("reef.geology", scene, cel),
     random = seeded(574);
+  if (!region || region === "refuge_reef") {
   // Authored sediment lenses and rubble cluster beside ribs, leaving a clear pod route.
   for (const [cx, cz, count] of [
     [-25, -7, 28],
@@ -141,6 +153,8 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
     }
     stones.tube(path, 0.035, "#c2d1ae", 4);
   }
+  }
+  if (!region || region === "island_chain") {
   // Rock bands follow existing island surfaces: decorative relief is only centimetres.
   for (let i = 0; i < 7; i++) {
     const z = -42 - i * 4.6;
@@ -149,11 +163,67 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
       path.push([x, terrainHeight(x, z) + 0.04, z]);
     stones.tube(path, 0.07, i % 2 ? "#6d8980" : "#9cab89", 5);
   }
+  }
   // Exposed glass follows abraded ledges, membrane collects in a lee hollow,
   // and tagged alloy sits on a fallen service frame. Hosts persist after harvest.
   // These skins sample the authoritative height field; they add no art-only shelf.
   for (const [id, source] of Object.entries(SOURCES)) {
+    if (region && source.region !== region) continue;
     const { x, z } = source.position;
+    if (BASIN_SOURCE_IDS.some(s => s === id)) {
+      const host = new ArtBatch("source-host." + id, scene, cel);
+      if (source.asset === "scraps") {
+        salvageHost(host, id, x, z);
+        const south = id === "basin_ridge_salvage_south";
+        // One broken ladder and one curved runner identify different wreck
+        // patches. Both follow the floor instead of bridging an invisible pit.
+        const runner = (a: readonly [number, number], c: readonly [number, number], color: string): void => {
+          const count = Math.ceil(Math.hypot(c[0] - a[0], c[1] - a[1]) / .1);
+          // A bent, broad runner follows both sides of the slope. Straight
+          // endpoint tubes would cut through the strongly curved source ledge.
+          const at = (t: number, side: number, lift: number): Point => {
+            const px = x + a[0] + (c[0] - a[0]) * t + side * .065;
+            const pz = z + a[1] + (c[1] - a[1]) * t;
+            return [px, terrainHeight(px, pz) + lift, pz];
+          };
+          for (let i = 0; i < count; i++) {
+            const lo = i / count, hi = (i + 1) / count;
+            host.face([at(lo, -1, .13), at(hi, -1, .13), at(hi, 1, .13), at(lo, 1, .13)], color);
+          }
+        };
+        if (south) {
+          for (const dx of [-1.6, 1.6]) { runner([dx, -1.6], [dx, 0], P.ochre); runner([dx, 0], [dx + .35, 1.5], P.ochre); }
+          for (const dz of [-1.4, -.7, 0, .7, 1.4]) runner([-1.6, dz], [1.6, dz], P.steelLight);
+        } else {
+          runner([-2, -1.3], [-1.65, -.4], P.metal); runner([-1.65, -.4], [-1.7, 1], P.metal);
+          runner([-1.7, 1], [-1, 1.5], P.metal); runner([1.9, -1.3], [1.7, 1.2], P.ochre);
+        }
+      } else {
+        // Persistent survey-fin mount; mineral stock is a separate mesh and
+        // can vanish without erasing the learned source context.
+        const west = id === "basin_survey_fins_west";
+        for (let i = 0; i < (west ? 4 : 3); i++) {
+          const dx = (i - (west ? 1.5 : 1)) * .58, dz = west ? dx * .3 : 0;
+          const at = (t: number, side: number, lift: number): Point => {
+            const px = x + dx + side * .065, pz = z + dz + t;
+            return [px, terrainHeight(px, pz) + lift, pz];
+          };
+          for (let j = 0; j < 13; j++) {
+            const a = -.65 + j * .1, c = a + .1;
+            for (const side of [-1, 1]) host.face([at(a, side, .08), at(c, side, .08), at(c, side, .58), at(a, side, .58)], P.petrol);
+            host.face([at(a, -1, .6), at(c, -1, .6), at(c, 1, .6), at(a, 1, .6)], P.steelLight);
+          }
+          host.face([at(.65, -1, .1), at(.65, 1, .1), at(.65, 1, .58), at(.65, -1, .58)], P.ochre);
+        }
+        for (let j = 0; j < 25; j++) {
+          const a = x - 1.25 + j * .1, c = a + .1;
+          const at = (px: number, pz: number): Point => [px, terrainHeight(px, pz) + .1, pz];
+          for (const dz of [-.8, .8]) host.face([at(a, z + dz - .04), at(c, z + dz - .04), at(c, z + dz + .04), at(a, z + dz + .04)], P.metal);
+        }
+      }
+      host.finish(.2);
+      continue;
+    }
     if (id === "island_workshop_scraps" || id === "island_headland_scraps" || id === "island_glass_ledge_west") {
       const host = new ArtBatch("source-host." + id, scene, cel);
       if (id === "island_glass_ledge_west") westernGlassHost(host, x, z);
@@ -188,8 +258,9 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial): void {
       }
     }
   }
-  stones.finish();
+  if (!region || region === "refuge_reef" || region === "island_chain") stones.finish();
 
+  if (region && region !== "refuge_reef") return;
   // Edge buoys are navigation context for this deliberately bounded early build.
   const buoys = new ArtBatch("foundation.edge-buoys", scene, cel);
   for (const [x, z] of [

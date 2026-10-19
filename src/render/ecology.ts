@@ -1,16 +1,21 @@
 import type { Scene, ShaderMaterial, Mesh } from '@babylonjs/core';
+import { BASIN_SOURCE_IDS } from '../content/routes.js';
+import type { GameState } from '../sim/types.js';
+import type { RenderRegion, RenderQuality } from './regions.js';
 import { SOURCES } from '../content/registry.js';
 import { terrainHeight } from '../sim/world.js';
 import { ArtBatch, seeded } from './geometry.js';
 import type { Point } from './geometry.js';
 import { PALETTE as P } from './palette.js';
 
-export interface AnimatedLife { update(seconds: number): void }
+export interface AnimatedLife { update(seconds: number, state?: GameState | null): void; setQuality(quality: RenderQuality): void; dispose(): void }
 
-export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
+export function createEcology(scene: Scene, cel: ShaderMaterial, region?: RenderRegion): AnimatedLife {
+  const initial = new Set(scene.meshes);
+  let disposed = false, quality: RenderQuality = "rich";
   const plants = new ArtBatch('reef.ribbon-colonies', scene, cel), random = seeded(361);
   const patches: readonly Point[] = [[-28, 0, -5], [-10, 0, -13], [-25, 0, -21], [22, 0, -8], [28, 0, 10], [-21, 0, 22]];
-  patches.forEach(([cx, , cz], patch) => {
+  if (!region || region === "refuge_reef") patches.forEach(([cx, , cz], patch) => {
     for (let colony = 0; colony < 5; colony++) {
       const x = cx + (random() - 0.5) * 6.5, z = cz + (random() - 0.5) * 5.2, y = terrainHeight(x, z);
       const height = 1.5 + random() * 1.7, color = patch % 3 === 0 ? P.coral : patch % 3 === 1 ? P.jade : P.violet;
@@ -37,12 +42,12 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
       }
     }
   });
-  plants.finish();
+  if (!region || region === "refuge_reef") plants.finish();
 
   // Shore plants are authored to the walkable height field; they are decorative,
   // without resource glints or interaction prompts until the first expedition.
   const shore = new ArtBatch('island.wind-leaves', scene, cel);
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; (!region || region === "island_chain") && i < 28; i++) {
     const x = -4 + random() * 28, z = -38 - random() * 20, y = terrainHeight(x, z);
     if (y < 1 || y > 12) continue;
     const h = 1.1 + random() * 1.8;
@@ -52,13 +57,14 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
       shore.face([[x + 0.1, yy, z], [x + 0.7 * direction, yy + 0.22, z - 0.3], [x + 1.4 * direction, yy + 0.65, z + 0.1], [x + 0.6 * direction, yy + 0.42, z + 0.3]], j % 2 ? '#a8bd7a' : '#829f71');
     }
   }
-  shore.finish();
+  if (!region || region === "island_chain") shore.finish();
 
   // The current runs along +Z into the source's lee hollow. Fans, suspended
   // particles and loose shed all point to the actual collectable catch ID.
   const flows: { mesh: Mesh; from: Point; to: Point; phase: number }[] = [];
   const grazers: { mesh: Mesh; x: number; y: number; z: number; phase: number }[] = [];
   for (const [id, source] of Object.entries(SOURCES)) {
+    if (region && source.region !== region) continue;
     const { x, y, z } = source.position;
     if (source.asset === 'ribbons') {
       const fans = new ArtBatch(`ecology.filters.${id}`, scene, cel);
@@ -115,7 +121,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
         grazers.push({ mesh, x, y: y - 0.6, z, phase: n * Math.PI + random() });
       }
     }
-    if (source.asset === 'crust' || source.asset === 'resin') {
+    if ((source.asset === 'crust' || source.asset === 'resin') && source.region !== 'silt_basin') {
       const host = new ArtBatch(`ecology.holdfast.${id}`, scene, cel);
       // Off-axis living host leaves the registered collectable and approach clear.
       const hx = x + 2.6, hz = z - 1.8, floor = terrainHeight(hx, hz);
@@ -147,8 +153,10 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
     }
   }
 
-  const schools: Mesh[] = [];
-  for (let group = 0; group < 4; group++) {
+  const schools: { mesh: Mesh; canopy: boolean }[] = [];
+  for (let group = 0; group < 2; group++) {
+    const owner = group ? "suspended_garden" : "refuge_reef";
+    if (region && region !== owner) continue;
     const school = new ArtBatch(`reef.decorative-school.${group}`, scene, cel);
     for (let fish = 0; fish < 7; fish++) {
       const x = (random() - 0.5) * 6, y = (random() - 0.5) * 2, z = (random() - 0.5) * 3;
@@ -157,9 +165,32 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
       school.face([[x, y + 0.05, z], [x - 0.15, y + 0.43, z - 0.03], [x + 0.22, y + 0.13, z]], P.petrol);
       school.ellipsoid([x + 0.3, y + 0.04, z - 0.11], [0.045, 0.05, 0.025], P.ink, 4);
     }
-    const mesh = school.finish(); mesh.unfreezeWorldMatrix(); schools.push(mesh);
+    const mesh = school.finish(); mesh.unfreezeWorldMatrix(); schools.push({ mesh, canopy: group === 1 });
   }
-  return { update(seconds) {
+  const scavengers: { mesh: Mesh; x: number; z: number; phase: number }[] = [];
+  let silt: Mesh | null = null;
+  if (!region || region === "silt_basin") {
+    for (const [i, id] of BASIN_SOURCE_IDS.slice(0, 2).entries()) {
+      const p = SOURCES[id].position, b = new ArtBatch(`basin.scavenger.${id}`, scene, cel);
+      b.ellipsoid([0, .18, 0], [.38, .18, .6], P.steelLight, 6);
+      for (const side of [-1, 1]) for (let leg = 0; leg < 3; leg++)
+        b.tube([[side * .2, .14, -.35 + leg * .3], [side * .55, .04, -.4 + leg * .3]], .025, P.ochre, 4);
+      const mesh = b.finish(); mesh.unfreezeWorldMatrix();
+      scavengers.push({ mesh, x: p.x - 2.4, z: p.z - 1.5, phase: i * Math.PI });
+    }
+    const b = new ArtBatch("basin.local-silt", scene, cel);
+    for (let i = 0; i < 48; i++) {
+      const x = (random() - .5) * 9, y = random() * 2, z = (random() - .5) * 7;
+      b.face([[x, y, z], [x + .045, y + .02, z], [x + .01, y + .075, z + .015]], i % 2 ? P.steelLight : P.metal);
+    }
+    silt = b.finish(); silt.unfreezeWorldMatrix(); silt.setEnabled(false);
+  }
+  const meshes = scene.meshes.filter(m => !initial.has(m));
+  return { update(seconds, state) {
+    if (disposed) return;
+    const craft = state?.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
+    const machinery = craft ? Math.hypot(craft.velocity.x, craft.velocity.y, craft.velocity.z) : 0;
+
     flows.forEach(({ mesh, from, to, phase }) => {
       const t = (seconds / 7 + phase) % 1;
       mesh.position.set(from[0] + (to[0] - from[0]) * t + Math.sin(t * 8 + phase) * 0.35, from[1] + (to[1] - from[1]) * t, from[2] + (to[2] - from[2]) * t);
@@ -171,13 +202,35 @@ export function createEcology(scene: Scene, cel: ShaderMaterial): AnimatedLife {
       mesh.rotation.y = Math.atan2(-Math.cos(a), Math.sin(a) * 0.5);
       mesh.rotation.x = Math.sin(seconds * 2.4 + phase) * 0.09;
     });
-    schools.forEach((school, i) => {
-      const angle = seconds * (0.065 + i * 0.015) + i * 2;
-      if (i < 2)
-        school.position.set(-15 + Math.cos(angle) * 10 + i * 20, -4.3 + Math.sin(angle * 2) * 0.6, -6 + Math.sin(angle) * 8);
+    schools.forEach(({ mesh: school, canopy }, i) => {
+      const angle = seconds * (canopy ? .08 : .065) + i * 2;
+      const scatter = canopy && machinery > 3 ? 3 : 0;
+      if (!canopy)
+        school.position.set(-15 + Math.cos(angle) * 10, -4.3 + Math.sin(angle * 2) * .6, -6 + Math.sin(angle) * 8);
       else
-        school.position.set(112 + Math.cos(angle) * 8 + (i - 2) * 12, -106 + (i - 2) * 26 + Math.sin(angle * 2) * 1.2, -116 + Math.sin(angle) * 8);
+        school.position.set(112 + Math.cos(angle) * (8 + scatter), -106 + Math.sin(angle * 2) * 1.2 + scatter, -116 + Math.sin(angle) * (8 + scatter));
       school.rotation.y = -angle - Math.PI / 2;
     });
-  } };
+    scavengers.forEach(({ mesh, x, z, phase }) => {
+      const nearby = state && Math.hypot(state.player.pose.position.x - x, state.player.pose.position.z - z) < 12;
+      const retreat = nearby && machinery > 1 ? 1.3 : 0;
+      const px = x + Math.sin(seconds * .16 + phase) * .6 - retreat;
+      const pz = z + Math.cos(seconds * .16 + phase) * .45;
+      mesh.position.set(px, terrainHeight(px, pz) + .02, pz);
+      mesh.rotation.y = seconds * .16 + phase;
+    });
+    if (silt) {
+      const p = craft?.pose.position;
+      const floor = p ? terrainHeight(p.x, p.z) : 0;
+      const active = !!p && p.y - floor < 6 && machinery > .5 && quality === "rich";
+      silt.setEnabled(active);
+      if (p && active) {
+        silt.position.set(p.x, floor + .2 + Math.sin(seconds * .5) * .1, p.z);
+        silt.rotation.y = seconds * .08;
+      }
+    }
+  },
+  setQuality(next) { quality = next; if (next === "light") silt?.setEnabled(false); },
+  dispose() { if (disposed) return; disposed = true; for (const mesh of meshes) mesh.dispose(); },
+  };
 }

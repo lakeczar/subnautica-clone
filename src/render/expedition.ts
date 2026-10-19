@@ -15,6 +15,8 @@ import { PALETTE as P } from "./palette.js";
 import { label } from "./landmarks.js";
 import { FACILITY_SOLIDS, SOLIDS, terrainHeight } from "../sim/world.js";
 import { createObservationPane, wallWithOpening } from "./materials.js";
+import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
+import { pinnedVehicleIds, type RegionArt, type RenderRegion } from "./regions.js";
 
 /** Individual bent maintenance plates keep contact with the local surface.
  * Their pale service tags, folded edges and bolt holes distinguish salvage
@@ -239,7 +241,7 @@ function dartArt(
         { z: 0.1, w: 1.85, low: 0, high: 0.9 },
         { z: 2.5, w: 1.15, low: 0.2, high: 0.75 },
       ],
-      P.porcelain,
+      P.metal,
     );
     b.loft(
       [
@@ -373,53 +375,111 @@ function dartArt(
 /** Hull-local view datum only; never a player/collider/save pose. */
 export const DART_SEAT = { x: .12, y: 1.36, z: .45 } as const;
 
-export function createExpeditionArt(
-  scene: Scene,
-  cel: ShaderMaterial,
-  glass: ShaderMaterial,
-): { update(state: GameState | null): void } {
-  const restraint = new ArtBatch("opening.restraint", scene, cel);
-  restraint.tube(
-    [
-      [-0.65, 1.4, 21.1],
-      [0, 0.7, 21.25],
-      [0.65, 1.4, 21.1],
-    ],
-    0.065,
-    P.ochre,
-    6,
-  );
-  restraint.box([0, 0.76, 21.2], [0.32, 0.27, 0.12], P.petrol);
-  restraint.panel([0, 0.76, 21.11], [0.23, 0.17], 0.025, P.metal, 0, 0.035);
-  restraint.box([0, 0.76, 21.085], [0.14, 0.035, 0.018], P.ochre);
-  const restraintMesh = restraint.finish();
-  const fogged = new ArtBatch("opening.fogged-window", scene, cel);
-  fogged.box([0, 1.6, 19.4], [3.2, 3.0, 0.12], "#0c2c3d");
-  for (let i = 0; i < 8; i++)
-    fogged.box(
-      [-1.2 + i * 0.34, 1.2 + Math.sin(i) * 0.3, 19.48],
-      [0.025, 1.5, 0.025],
-      "#2b6370",
-    );
-  const fogMesh = fogged.finish();
-  const latch = new ArtBatch("opening.service-latch", scene, cel);
-  latch.box([-1.4, 1.3, 20.7], [0.75, 0.6, 0.22], P.ochre);
-  latch.tube(
-    [
-      [-1.65, 1.2, 20.9],
-      [-1.65, 1.5, 20.9],
-      [-1.2, 1.5, 20.9],
-    ],
-    0.05,
-    P.ink,
-    5,
-  );
-  const latchMesh = latch.finish();
+function surfaceRescueArt(b: ArtBatch): void {
+  const p = RECOVERY_SURFACE_OPERATOR;
+  // The surface control repeats the real submerged fitting, at the second
+  // registered work face. It is flooded equipment, never a new air pocket.
+  b.box([p.x, p.y - .42, p.z], [.9, .6, 1.3], P.ochre);
+  b.box([p.x, p.y - .08, p.z], [.65, .06, .9], P.petrol);
+  b.ring([p.x, p.y - .035, p.z], [1, 0, 0], [0, 0, 1], .25, .18, P.shell, 12);
+  for (const x of [43, 49]) {
+    b.ellipsoid([x, -.1, p.z], [.5, .33, .65], P.ochre, 8);
+    b.tube([[x, -12.8, p.z], [x, .1, p.z], [x, 1.9, p.z]], .045, P.steelLight, 5);
+    b.box([x, 1.8, p.z], [.65, .22, .04], P.ochre);
+  }
+  b.tube([[p.x, -12.3, p.z], [p.x, -.9, p.z]], .025, P.ochre, 5);
+}
+
+function createBasinArt(scene: Scene, cel: ShaderMaterial): void {
+  const b = new ArtBatch("basin.facilities", scene, cel);
+  for (const solid of BASIN_GEOMETRY.solids) {
+    const color = solid.id.endsWith("floor") ? P.petrol : solid.id.endsWith("back") ? P.metal
+      : solid.id.includes("beds") ? P.shade : solid.id.endsWith("bundles") ? P.shell : P.petrol;
+    b.bounds(solid, color);
+  }
+  // Furnish only the shared floors, rear walls and low work solids. Both broad
+  // entrances and the entire overhead extraction path remain open water.
+  for (const [site, width, depth] of [[BASIN_GEOMETRY.dormitory, 18, 12], [BASIN_GEOMETRY.station, 16, 12]] as const) {
+    const { x, y, z } = site.datum;
+    for (const side of [-1, 1]) {
+      b.box([x + side * (width / 2 - .2), y + .018, z], [.12, .025, depth - .4], P.ochre);
+      b.box([x + side * (width / 2 - .25), y + 4.5, z - depth / 2 + .32], [.18, .22, .025], P.shell);
+    }
+    for (let dx = -width / 2 + 1; dx < width / 2; dx += 2)
+      b.box([x + dx, y + .015, z + 3.8], [1.2, .02, .06], P.steelLight);
+    // Open entrance paint follows the actual floor datum, without a lintel.
+    b.box([x, y + .018, z + depth / 2 - .18], [width - 1, .025, .12], P.ochre);
+    for (const yy of [1.5, 3.5])
+      b.box([x, y + yy, z - depth / 2 + .315], [width - .7, .035, .025], P.steelLight);
+  }
+  const d = BASIN_GEOMETRY.dormitory.datum;
+  for (const side of [-1, 1]) for (let i = 0; i < 3; i++) {
+    const x = d.x + side * (3.8 + i * 1.55);
+    b.box([x, -165.37, -221.75], [1.25, .045, 2.0], i % 2 ? P.metal : P.petrol);
+    b.box([x, -165.34, -222.4], [1.1, .025, .25], P.shell);
+  }
+  // Strapped bundles face inward toward the existing C05 work pose, rather
+  // than suggesting a pickup on the inaccessible back of the wall.
+  for (const x of [177, 178, 179]) {
+    b.box([x, -164.975, -222.35], [.8, .035, .62], P.shade);
+    b.box([x, -164.947, -222.35], [.075, .02, .62], P.ochre);
+    b.box([x, -165.5, -221.985], [.65, .36, .02], P.shell);
+    b.box([x, -165.5, -221.97], [.075, .36, .012], P.petrol);
+  }
+  // Boundary station: a different low, ribbed instrument face, still confined
+  // to the committed console. Its display does not invent a power/air rule.
+  b.box([216, -171.4, -243.58], [2.3, .55, .025], P.shade);
+  for (let i = 0; i < 7; i++) {
+    const x = 215.1 + i * .3;
+    b.box([x, -171.3, -243.56], [.06, .3, .012], i < 3 ? P.ochre : P.steelLight);
+  }
+  b.box([216, -170.985, -244.1], [2.6, .025, .8], P.metal);
+  // The fallen survey dish reads from the crest while remaining inside the
+  // exact four-metre physical spine footprint. No dish spans a flight lane.
+  const spine = BASIN_GEOMETRY.solids.find(s => s.id === "basin.dish.spine")!;
+  const x = (spine.min.x + spine.max.x) / 2, top = spine.max.y;
+  b.ring([x, top - 2.5, spine.max.z + .012], [1, 0, 0], [0, 1, 0], 1.95, 1.68, P.shell, 18);
+  for (let i = 0; i < 9; i++) {
+    const a = i / 8 * Math.PI;
+    b.tube([[x, top - 3.6, spine.max.z + .018], [x + Math.cos(a) * 1.66, top - 2.5 + Math.sin(a) * 1.66, spine.max.z + .018]], .055, P.ochre, 5);
+  }
+  for (let y = spine.min.y + 2; y < top - 5; y += 3.8) {
+    b.box([x, y, spine.max.z + .015], [3.9, .2, .025], P.metal);
+    b.box([spine.max.x + .012, y + 1, -219], [.02, .4, 3.6], P.ochre);
+  }
+  b.finish(.34);
+  label(scene, "DORMITORY", [178, -162, -223.68], 2.4);
+  label(scene, "BOUNDARY", [216, -168.1, -245.68], 2.2);
+  label(scene, "SURVEY", [197, -158, -216.97], 1.6);
+}
+
+export function createExpeditionRegion(
+  scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, region?: RenderRegion,
+): RegionArt {
+  const initial = new Set(scene.meshes);
   const sourceMeshes = new Map<string, Mesh>();
   for (const [id, s] of Object.entries(SOURCES)) {
+    if (region && s.region !== region) continue;
     const b = new ArtBatch("source." + id, scene, cel),
       { x, y: sourceY, z } = s.position,
       y = sourceY + (INTERACTION_HOSTS[id]?.renderOffsetY ?? 0);
+    if (BASIN_SOURCE_IDS.some(sourceId => sourceId === id)) {
+      if (s.asset === "scraps") surfaceScraps(b, id, x, z);
+      else for (let i = 0; i < (id === "basin_survey_fins_west" ? 4 : 3); i++) {
+        const west = id === "basin_survey_fins_west", dx = (i - (west ? 1.5 : 1)) * .58;
+        const px = x + dx, pz = z + (west ? dx * .3 : 0);
+        const at = (u: number, v: number, lift: number): Point => [px + u, terrainHeight(px + u, pz + v) + lift, pz + v];
+        // Crust lies on the real persistent fin's sloped top. A flat nodule
+        // would float above the downslope edge of this steep ledge.
+        for (let j = 0; j < 10; j++) {
+          const a = -.5 + j * .1, c = a + .1;
+          b.face([at(-.16, a, .61), at(-.16, c, .61), at(0, c, .76), at(0, a, .76)], P.amber);
+          b.face([at(0, a, .76), at(0, c, .76), at(.16, c, .61), at(.16, a, .61)], j % 3 ? P.ochre : P.orange);
+        }
+      }
+      sourceMeshes.set(id, b.finish(.14));
+      continue;
+    }
     if (id === "island_workshop_scraps" || id === "island_headland_scraps" || id === "island_glass_ledge_west") {
       if (id === "island_glass_ledge_west") surfaceGlass(b, x, z);
       else surfaceScraps(b, id, x, z);
@@ -497,9 +557,9 @@ export function createExpeditionArt(
     }
     sourceMeshes.set(id, b.finish());
   }
-  const site = new ArtBatch("facilities.context", scene, cel);
-  for (const body of FACILITY_SOLIDS.filter((s) => !s.id.startsWith("pod.")))
-    site.bounds(body, body.id === "workshop.locker" || body.id.startsWith("workshop.cradle.") ? P.ochre : body.id === "canopy.bench" ? P.metal : P.petrol);
+  const include = (id: RenderRegion): boolean => !region || region === id;
+  if (include("refuge_reef")) {
+  const site = new ArtBatch("facilities.reef", scene, cel);
   // Reef intake pipes, a sediment-choked filter and actual current-facing colonies.
   for (const x of [-20, -18, -16]) {
     site.tube(
@@ -516,6 +576,12 @@ export function createExpeditionArt(
       site.box([x, -7.5, -8 + i * 0.4], [0.58, 0.1, 0.07], P.metal);
   }
   site.box([-17, -7.7, -8], [1.2, 0.6, 1.8], P.ochre);
+  site.finish();
+  }
+  if (include("island_chain")) {
+  const site = new ArtBatch("facilities.island", scene, cel);
+  for (const body of FACILITY_SOLIDS.filter(s => s.id.startsWith("workshop.")))
+    site.bounds(body, body.id === "workshop.locker" || body.id.startsWith("workshop.cradle.") ? P.ochre : P.petrol);
   // Workshop platform, weathered folded roof, and human-scale mechanical station.
   // Narrow grip treads follow the same continuous terrain ramp as the controller.
   for (let z = -30.5; z <= -23; z += 0.85) {
@@ -634,6 +700,16 @@ export function createExpeditionArt(
   }
   site.tube([[10.8, 2.4, -39.2], [10.8, 3.35, -39.2], [10.15, 3.5, -38.8]], .045, P.petrol, 6);
   site.glow(site.box([10.15, 3.45, -38.8], [.5, .045, .25], P.warm));
+  site.finish();
+  label(scene, "S / 02", [7, 4.78, -34.02], .8);
+  label(scene, "D / 01", [22.15, .15, -21], .62);
+  label(scene, "BERTH / INCOMPLETE", [24, 4.5, -30], 1.5);
+  const ledger = EVIDENCE.C03.position;
+  label(scene, "LOADING LEDGER", [ledger.x, ledger.y + .32, ledger.z - .1], .48);
+  }
+  if (include("suspended_garden")) {
+  const site = new ArtBatch("facilities.canopy", scene, cel);
+  for (const body of FACILITY_SOLIDS.filter(s => s.id.startsWith("canopy."))) site.bounds(body, P.metal);
   // The laboratory is an open pressure hood: only the existing floor, roof,
   // back and port wall are solid. Read their actual faces, and leave both front
   // and starboard approaches fully open, including the capsule-height line.
@@ -720,35 +796,26 @@ export function createExpeditionArt(
     ],
     P.basalt,
   );
+  // The tall rib is the real cover, not the living crowns. Broad pale strata
+  // and a broken dark vertical seam reveal its top and sheltered west flank
+  // at approach distance without moving the seventy-three-metre crest.
+  site.face([[cover.min.x, cover.max.y + .008, cover.min.z], [cover.min.x, cover.max.y + .008, cover.max.z],
+    [cover.max.x, cover.max.y + .008, cover.max.z], [cover.max.x, cover.max.y + .008, cover.min.z]], P.steelLight);
+  for (const [a, b] of [[103.2, 104.45], [107.8, 108.8]])
+    site.face([[a!, cover.min.y, cover.max.z + .012], [b!, cover.min.y, cover.max.z + .012],
+      [b!, cover.max.y, cover.max.z + .012], [a!, cover.max.y, cover.max.z + .012]], P.stoneLight);
+  site.face([[cover.min.x - .012, cover.min.y, -121.6], [cover.min.x - .012, cover.max.y, -121.6],
+    [cover.min.x - .012, cover.max.y, -120.3], [cover.min.x - .012, cover.min.y, -120.3]], P.steelLight);
   // Mineral bedding across the existing cover rib makes its scale legible.
   // Surface relief stays flush to the physical box; the clear flank stays open.
   for (let y = cover.min.y + 2; y < cover.max.y; y += 5.5) {
     site.face([[cover.min.x, y, cover.max.z + 0.01], [cover.max.x, y + 0.9, cover.max.z + 0.01], [cover.max.x, y + 1.2, cover.max.z + 0.01], [cover.min.x, y + 0.25, cover.max.z + 0.01]], P.stoneLight);
     site.face([[cover.max.x + 0.01, y + 1.2, cover.min.z], [cover.max.x + 0.01, y + 0.9, cover.max.z], [cover.max.x + 0.01, y + 1.2, cover.max.z], [cover.max.x + 0.01, y + 1.6, cover.min.z]], P.deep);
   }
-  const rs = RECOVERY_STAGE;
-  site.box([rs.x, rs.y - 0.9, rs.z], [8, 0.4, 7], P.petrol);
-  site.box([rs.x, rs.y - 0.3, rs.z], [0.9, 0.9, 1.4], P.ochre);
-  site.tube(
-    [
-      [rs.x - 3, rs.y - 1, rs.z],
-      [rs.x - 3, rs.y + 2, rs.z],
-    ],
-    0.07,
-    P.metal,
-    6,
-  );
   site.finish();
-  label(scene, "S / 02", [7, 4.78, -34.02], .8);
-  label(scene, "D / 01", [22.15, .15, -21], .62);
-  label(scene, "BERTH / INCOMPLETE", [24, 4.5, -30], 1.5);
   label(scene, "AIR / 04", [111.65, -116.9, -122.01], .55);
-  label(scene, "RESCUE", [46, -10, -53.9], 1.0);
-  // These are physical record/device labels. Persistent clue IDs remain solely
-  // in the registry and notebook; the world does not advertise internal IDs.
-  const ledger = EVIDENCE.C03.position, sheet = EVIDENCE.C04.position;
-  label(scene, "LOADING LEDGER", [ledger.x, ledger.y + 0.32, ledger.z - 0.1], .48);
-  label(scene, "FIELD OBSERVATIONS", [sheet.x, sheet.y + 0.35, sheet.z - 0.1], .48);
+  const sheet = EVIDENCE.C04.position;
+  label(scene, "FIELD OBSERVATIONS", [sheet.x, sheet.y + .35, sheet.z - .1], .48);
   label(scene, "L / 04", [116, -114.65, -129.58], .65, Math.PI);
   // The ten original rooted colonies keep their authored habitat coordinates.
   // Radial, ridged crowns and pendant paired organs replace flat paddles and
@@ -765,7 +832,7 @@ export function createExpeditionArt(
       const angle = j / 6 * Math.PI * 2 + i * .6, dx = Math.cos(angle), dz = Math.sin(angle);
       const radius = i % 3 === 0 ? 1 : i % 3 === 1 ? .85 : .72;
       const at = (r: number, h: number): Point => [x + 4 + dx * r * radius, top + h, z + 1 + dz * r * radius];
-      canopy.leaf([at(.8, .5), at(3.2, 2.6), at(6.2, 2.5), at(9.0, .8), at(10.2, -.6)], [.12, 1.35, 1.7, 1.05, .025], [-dz, 0, dx], j % 2 ? P.jade : "#258b80", j % 2 ? "#90d7a0" : "#51b69d");
+      canopy.leaf([at(.8, .5), at(3.2, 2.6), at(6.2, 2.5), at(9.0, .8), at(10.2, -.6)], [.12, 1.35, 1.7, 1.05, .025], [-dz, 0, dx], j % 2 ? P.jade : "#258b80", j % 2 ? P.shell : P.lime);
       canopy.tube([at(.7, -.6), at(2, -1), at(2.3, -2.6)], .06, P.petrol, 6);
       const organ = at(2.3, -3.3);
       canopy.ellipsoid([organ[0], organ[1] - 1.25, organ[2]], [.45, .3, .45], P.orange, 10);
@@ -776,6 +843,95 @@ export function createExpeditionArt(
     }
   }
   canopy.finish(.22);
+  }
+  if (include("refuge_reef")) {
+  const site = new ArtBatch("facilities.rescue", scene, cel);
+  const rs = RECOVERY_STAGE;
+  site.box([rs.x, rs.y - 0.9, rs.z], [8, 0.4, 7], P.petrol);
+  site.box([rs.x, rs.y - 0.3, rs.z], [0.9, 0.9, 1.4], P.ochre);
+  site.tube(
+    [
+      [rs.x - 3, rs.y - 1, rs.z],
+      [rs.x - 3, rs.y + 2, rs.z],
+    ],
+    0.07,
+    P.metal,
+    6,
+  );
+  surfaceRescueArt(site);
+  site.finish();
+  label(scene, "RESCUE", [46, -10, -53.9], 1.0);
+  label(scene, "RESCUE", [46, 1.5, -53.9], 1.15);
+  }
+  if (include("silt_basin")) createBasinArt(scene, cel);
+  const meshes = scene.meshes.filter(m => !initial.has(m));
+  let disposed = false;
+  return {
+    update(state) {
+      if (disposed) return;
+      for (const [id, mesh] of sourceMeshes)
+        mesh.setEnabled(!state || !!state.world.resources.find(r => r.id === id && r.stock > 0));
+    },
+    dispose() { if (disposed) return; disposed = true; for (const mesh of meshes) mesh.dispose(); },
+  };
+}
+
+/** Compatible full-scene factory for direct callers. Production composition
+ * uses the regional and actor handles independently. */
+export function createExpeditionArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial): RegionArt {
+  const staticArt = createExpeditionRegion(scene, cel, glass);
+  const actors = createExpeditionActors(scene, cel, glass);
+  return {
+    update(state) { staticArt.update(state); actors.update(state); },
+    dispose() { actors.dispose(); staticArt.dispose(); },
+  };
+}
+
+export function createExpeditionActors(
+  scene: Scene,
+  cel: ShaderMaterial,
+  glass: ShaderMaterial,
+  resident: (position: Readonly<GameState["player"]["pose"]["position"]>) => boolean = () => true,
+): RegionArt {
+  const initial = new Set(scene.meshes);
+  let disposed = false;
+  const restraint = new ArtBatch("opening.restraint", scene, cel);
+  restraint.tube(
+    [
+      [-0.65, 1.4, 21.1],
+      [0, 0.7, 21.25],
+      [0.65, 1.4, 21.1],
+    ],
+    0.065,
+    P.ochre,
+    6,
+  );
+  restraint.box([0, 0.76, 21.2], [0.32, 0.27, 0.12], P.petrol);
+  restraint.panel([0, 0.76, 21.11], [0.23, 0.17], 0.025, P.metal, 0, 0.035);
+  restraint.box([0, 0.76, 21.085], [0.14, 0.035, 0.018], P.ochre);
+  const restraintMesh = restraint.finish();
+  const fogged = new ArtBatch("opening.fogged-window", scene, cel);
+  fogged.box([0, 1.6, 19.4], [3.2, 3.0, 0.12], "#0c2c3d");
+  for (let i = 0; i < 8; i++)
+    fogged.box(
+      [-1.2 + i * 0.34, 1.2 + Math.sin(i) * 0.3, 19.48],
+      [0.025, 1.5, 0.025],
+      "#2b6370",
+    );
+  const fogMesh = fogged.finish();
+  const latch = new ArtBatch("opening.service-latch", scene, cel);
+  latch.box([-1.4, 1.3, 20.7], [0.75, 0.6, 0.22], P.ochre);
+  latch.tube(
+    [
+      [-1.65, 1.2, 20.9],
+      [-1.65, 1.5, 20.9],
+      [-1.2, 1.5, 20.9],
+    ],
+    0.05,
+    P.ink,
+    5,
+  );
+  const latchMesh = latch.finish();
   const hunter = new ArtBatch("ecology.sound-hunter", scene, cel);
   hunter.loft(
     [
@@ -900,20 +1056,20 @@ export function createExpeditionArt(
   const vehicles = new Map<string, Mesh>(),
     caches = new Map<string, Mesh>();
   let carrierShell: Mesh | null = null, shellKey = "";
+  const fixedMeshes = scene.meshes.filter(m => !initial.has(m));
   return {
     update(s) {
+      if (disposed) return;
+      const pins = pinnedVehicleIds(s);
+      const visibleVehicle = (v: VehicleState): boolean => pins.has(v.id) || resident(v.pose.position);
       mooringMesh.setEnabled(s?.scenario === "carrier-fixture");
       mooringSign.setEnabled(s?.scenario === "carrier-fixture");
       restraintMesh.setEnabled(!!s && s.opening.phase === 0);
       fogMesh.setEnabled(!!s && s.opening.phase < 3);
       latchMesh.setEnabled(!!s && s.opening.phase < 2);
-      for (const [id, mesh] of sourceMeshes)
-        mesh.setEnabled(
-          !s || !!s.world.resources.find((r) => r.id === id && r.stock > 0),
-        );
       const time = s ? s.tick / 60 : 0;
       const t = s?.world.threat;
-      hunterMesh.setEnabled(s?.scenario === "expedition");
+      hunterMesh.setEnabled(s?.scenario === "expedition" && !!t && (resident(t.position) || t.mode !== "idle"));
       const displaying = s?.scenario === "expedition" &&
         (t?.mode === "warn" || t?.mode === "investigate" || t?.mode === "pursue");
       // 0.75 Hz, +8–28% local color gain. Simulation time keeps pause and
@@ -947,14 +1103,17 @@ export function createExpeditionArt(
           mesh.rotation.z = side * ((warning ? 0.3 : -0.16) + Math.sin(time * (warning ? 4 : 1.8)) * (warning ? 0.13 : 0.055));
       }
       for (const [id, mesh] of vehicles)
-        if (!s?.fleet.vehicles.some((v) => v.id === id)) {
+        if (!s?.fleet.vehicles.some(v => v.id === id && visibleVehicle(v))) {
           mesh.dispose();
           vehicles.delete(id);
         }
       for (const v of s?.fleet.vehicles ?? []) {
+        if (!visibleVehicle(v)) continue;
         let m = vehicles.get(v.id);
+        if (m && m.metadata.hull !== v.hull) { m.dispose(); vehicles.delete(v.id); m = undefined; }
         if (!m) {
           m = dartArt(scene, cel, glass, v.id, v.hull);
+          m.metadata = { hull: v.hull };
           m.renderingGroupId = 1;
           vehicles.set(v.id, m);
         }
@@ -988,12 +1147,12 @@ export function createExpeditionArt(
       );
       const dock = s?.fleet.docking;
       const openSlot = dock?.transaction?.phase === "lock" ? dock.transaction.slot : undefined;
-      const nextShellKey = h && dock ? `${h.id}.${dock.configuration}.${openSlot ?? "sealed"}` : "";
+      const nextShellKey = h && dock && visibleVehicle(h) ? `${h.id}.${dock.configuration}.${openSlot ?? "sealed"}` : "";
       if (shellKey !== nextShellKey) {
         carrierShell?.dispose();
         carrierShell = null;
         shellKey = nextShellKey;
-        if (h && dock) {
+        if (h && dock && visibleVehicle(h)) {
           carrierShell = carrierShellArt(scene, cel, glass, dock.configuration, openSlot);
         }
       }
@@ -1007,11 +1166,12 @@ export function createExpeditionArt(
         blockMesh.rotation.y = -h.pose.yaw;
       }
       for (const [id, mesh] of caches)
-        if (!s?.recovery.caches.some((c) => c.id === id)) {
+        if (!s?.recovery.caches.some(c => c.id === id && resident(c.position))) {
           mesh.dispose();
           caches.delete(id);
         }
       for (const c of s?.recovery.caches ?? []) {
+        if (!resident(c.position)) continue;
         let m = caches.get(c.id);
         if (!m) {
           const b = new ArtBatch(c.id, scene, cel);
@@ -1035,6 +1195,15 @@ export function createExpeditionArt(
           s!.inventory.items.some((i) => i.containerId === c.containerId),
         );
       }
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const mesh of vehicles.values()) mesh.dispose();
+      for (const mesh of caches.values()) mesh.dispose();
+      vehicles.clear(); caches.clear();
+      carrierShell?.dispose(); carrierShell = null;
+      for (const mesh of fixedMeshes) mesh.dispose();
     },
   };
 }
