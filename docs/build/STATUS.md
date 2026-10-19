@@ -1,6 +1,12 @@
 # Build status
 
-## Current checkpoint — paused for VM upgrade
+## Current checkpoint — resumed after worker recovery
+
+The owner resumed the complete-game goal on 2026-10-19 and requested use of the RTX 3090. [Worker verification](evidence/WORKER-RESUME-20261019.md) confirms 16 GiB, six vCPUs, services/endpoints, increased agent limits and intact evidence. Our original host upgrade run timed out without changing memory; the later recovery is separately attributed. All 390 historical temporary paths now resolve to the verified disk-backed archive extraction. Production remains `eb712f1527439ec1f38f2c52ef61ac78989ba74c`.
+
+Next: a new complete fresh Sol 6.1/xhigh SPACE-1 review, preserving the interrupted round as incomplete evidence. In parallel, Opus 5.5/high prepares the GPU setup for independent review; factory-worker currently has no passed-through GPU, and no dedicated-GPU performance claim is possible yet. The host GPU functions are referenced by the stopped inference/Windows VM definitions. No GPU reassignment or additional restart has been performed. TASKS records actual dispatches. Continue M2-B/C, M3 and M4 after the applicable feature gates, under MODEL_POLICY.
+
+## Historical checkpoint — paused for VM upgrade
 
 **Construction is paused for the owner’s VM upgrade.** [VM_UPGRADE_HANDOFF](VM_UPGRADE_HANDOFF.md) records the tested source, interrupted review, persistent archive and exact resume procedure. No implementation/review should restart until the owner asks to continue. The code is committed and pushed; temporary project evidence has been copied to persistent disk. No VM settings were changed.
 

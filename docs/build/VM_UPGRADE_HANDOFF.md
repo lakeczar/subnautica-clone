@@ -1,5 +1,9 @@
 # VM upgrade pause — 2026-10-19
 
+## Current disposition — recovered and resumed
+
+The owner reports recovery by another agent and explicitly resumed work. [Current verification](evidence/WORKER-RESUME-20261019.md) confirms 16 GiB/six vCPUs and healthy services, increased agent ceilings, verified archive and 390 restored historical paths. Original run `20261019T203605Z-d291` ended `shutdown-timeout`/13 with the original 12 GiB definition unchanged; it did not perform the successful upgrade. Preserve that failed result. The historical pause instructions below are superseded by the owner's resume. SPACE-1 needs a new complete fresh reviewer. RTX 3090 access is separately requested and not yet configured.
+
 Construction is paused for the owner's factory-worker resource upgrade. Do not restart implementation or reviews until the owner asks to resume. No VM settings or resource limits were changed by the coordinator.
 
 ## Upgrade execution checkpoint
