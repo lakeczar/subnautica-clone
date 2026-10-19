@@ -1816,3 +1816,12 @@ Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3
 - Root awaits terminal completion notification and performs affected checks before fresh complete M2-A Astra/Sol review. No other author active. Root has no browser/server/recording/check process.
 
 Root receipts `/tmp/siltwake-m2-hunter-contact-root/` sealed135 files/52,119,823 bytes; manifest SHA256 `56b4861e8c2f893adc680913bcb48522e97c18b0985a4959590ca804765fc6f5`. Public source-attributed hunter comparison PNG, final458 separation GIF/MP4 and contact/withdrawal MP4 are HTTP200/byte verified; publication/readback receipts `/tmp/siltwake-m2-hunter-contact-pr/`. PR #4/#3 retain red527/530 versus successful separate build/economies and pending reconciliation/acceptance. All stack layers linked/unwatched; no game/main merge/deployment.
+
+
+## Hunter reconciliation terminal; complete M2-A review prepared
+
+Task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-hunter-reconcile-sol-max-150e334` is completed/result_available, no children/questions. Source35c2d22473ff17ed907c62362c25d17ed47cbcd0/report893390b92fa1db71fc3307efbe5aff382fd39db4 merge at7c2db5d8468e1fca6c0e1e6bf25d4b3eef2b1784. Three original runtime contexts confirm Sol6.1/max; clean checkout, all paths/browser/server resources released.
+
+[Root inspection](evidence/M2-A-HUNTER-RECONCILE-INTEGRATION.md) verifies536 checks/build/economies, source/archive identity,8,512 exact compatibility outputs,42 current exports/6,498 replayed steps,13 exact actual Continue pairs, affected earned suffixes and matching actual parked screens. Warm hunter CPU p95 max1.476ms; first-use and prior regional loading limits remain. Root owns no browser/server/recording/check process.
+
+The [fresh complete-batch R1](tasks/M2-A-REVIEW-R1.md) uses base c1ddb0a00ca950fda0da6008e4083023873b3369, verified against the A1 dispatch ledger and accepted Stage1 production. Both new non-author reviewers receive the same frozen next commit and all ten criteria. Only their separately named report/artifact paths and ports5190/5191 are assigned; no production owner or overlapping edits. Actual dispatch IDs/bindings follow.

@@ -1,5 +1,7 @@
 # Shared implementation direction
 
+**Hunter reconciliation35c2d22 is provisionally integrated at7c2db5d.** [Inspection](evidence/M2-A-HUNTER-RECONCILE-INTEGRATION.md) records bounded immutable geometry-query caches, per-evaluation transforms and nearby parked/disabled/berth/structural-shell obstruction and LOS. New readonly diagnostics are hunterFleetObstruction(state, position?) and hunterFleetSweep(state, start, end, from, to). Fleet sweep uses the existing full-animation world envelope conservatively against actual hull triangles; retained overlap uses nonclosing supporting-plane escape. This is hunter-only, with no world/step/types/render/save/UI/economy change. No mutable state cache or decoder relocation. Full checks and affected replays pass; complete-batch independent acceptance remains pending.
+
 **Hunter4583671 is provisionally assembled at d94a3ca, not accepted.** Shared readonly numeric encounter geometry and pure hunter queries own render/simulation orientation, surface contact and cycle; no saved field or camera/art deformation. `MovementOptions.separateBoxOverlaps` is fourth optional WorldQueries.moveCapsule argument/seventh moveHull argument; sixth observeSupport is preserved, only hunter opts in. [Reconciliation](tasks/M2-A-HUNTER-RECONCILE.md) authorizes query optimization and nearby-fleet avoidance/occlusion inside the hunter only, plus exact named fixture/test corrections. World/step/types/camera/render/save authority stays frozen for this correction. All preceding authors release paths.
 
 

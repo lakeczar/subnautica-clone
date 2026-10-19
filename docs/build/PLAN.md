@@ -1,5 +1,7 @@
 # Construction plan
 
+**Complete M2-A is assembled for fresh paired round1.** Hunter reconciliation35c2d22 is integrated at7c2db5d; [root inspection](evidence/M2-A-HUNTER-RECONCILE-INTEGRATION.md) passes536 checks/build/economies, exact compatibility and affected replay/recovery, with warm hunter-query p95≤1.476ms. All authors released. The [complete-batch brief](tasks/M2-A-REVIEW-R1.md) uses A1 parent c1ddb0a and covers all ten criteria. TASKS records actual frozen candidate/reviewers. M2-B/C, integrated M2/Opus and M3/M4 follow acceptance; first-use and human/GPU limits remain open. Earlier active entries are historical.
+
 **Hunter4583671 is provisionally assembled at d94a3ca.** [Root inspection](evidence/M2-A-HUNTER-CONTACT-INTEGRATION.md) reproduces527/530 (three invalid legacy contact fixtures), separate successful build/economies and candidate replay/return/recovery. [Bounded reconciliation](tasks/M2-A-HUNTER-RECONCILE.md) must fix fixtures, repeated geometry cost and parked-fleet obstruction before complete M2-A paired review. Original author is released; Sol6.1/max reconciliation is active from150e334 in t3-00ef40e7 with verified runtime. M2-B/C, integrated M2/Opus and M3/M4 remain required.
 
 
