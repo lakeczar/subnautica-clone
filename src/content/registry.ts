@@ -1,6 +1,6 @@
 /** Stable saved identifiers. Labels and render mesh names are never saved references.
  * Seeded from WORLD_PROGRESSION / EXPEDITION_INTEGRATION, not a recipe balance. */
-export const CONTENT_VERSION = "expedition.4" as const;
+export const CONTENT_VERSION = "expedition.5" as const;
 
 export const REGIONS = {
   refuge_reef: { label: "Hearth Reef", depth: [0, 65] },
@@ -687,6 +687,20 @@ export const SOURCES = {
   },
 } as const satisfies Record<string, SourceDefinition>;
 export type SourceId = keyof typeof SOURCES;
+/** Siltwake design, not a claim about another game: only these living sheds regrow,
+ * and only during active post-opening expedition steps (60 per second). Exposed stock
+ * returns toward its original authored quantity; finite reserves never refill and
+ * every other source keeps its existing finite rule. Progress is discarded at the cap. */
+export const SOURCE_RENEWAL = {
+  reef_ribbon_catch_north: { quantity: 2, intervalSteps: 21_600 },
+  reef_ribbon_catch_south: { quantity: 2, intervalSteps: 21_600 },
+  canopy_resin_lee_upper: { quantity: 2, intervalSteps: 36_000 },
+  canopy_resin_lee_lower: { quantity: 2, intervalSteps: 36_000 },
+} as const satisfies Partial<Record<SourceId, { quantity: number; intervalSteps: number }>>;
+export type RenewableSourceId = keyof typeof SOURCE_RENEWAL;
+export const RENEWABLE_SOURCE_IDS = Object.keys(SOURCE_RENEWAL) as RenewableSourceId[];
+export const renewable = (id: unknown): id is RenewableSourceId =>
+  typeof id === "string" && Object.hasOwn(SOURCE_RENEWAL, id);
 
 export const EVIDENCE = {
   C01: {

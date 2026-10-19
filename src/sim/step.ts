@@ -1,4 +1,4 @@
-import { EVIDENCE, HULLS, HULL_COLLIDERS, ITEMS, OPTIONAL_RECORD, SOURCES } from "../content/registry.js";
+import { EVIDENCE, HULLS, HULL_COLLIDERS, ITEMS, OPTIONAL_RECORD, renewable, SOURCES } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
 import { createWorldQueries, hullFloor, moveHull, withinWorldBounds } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
@@ -84,6 +84,7 @@ function surfaceMove<T extends ReturnType<WorldQueries["moveCapsule"]>>(
 import { incapacitate, recoveryCommand, updateRecovery } from "./recovery.js";
 import { updateSurvival, updateThreat } from "./survival.js";
 import { safePersonalDepth } from "./capabilities.js";
+import { advanceRenewal, settleRenewal } from "./renewal.js";
 const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
@@ -268,7 +269,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       if (target.kind === "source") {
         const id = target.id as SourceId;
         if (target.verb === "empty") {
-          events.push({ type: "notice", channel: "action", message: `${target.label} · Empty.` });
+          events.push({ type: "notice", channel: "action", message: `${target.label} · Empty${renewable(id) ? " · regrowing" : ""}.` });
           return null;
         }
         if (target.verb === "sort" && SOURCES[id].item !== "meal")
@@ -331,6 +332,7 @@ function updateAction(s: GameState): void {
     const n = Math.min(2, node.reserve);
     node.reserve -= n;
     node.stock += n;
+    settleRenewal(s, a.sourceId);
     s.feedback = `Sorted ${n} units from the finite reserve into exposed stock.`;
   } else if (a.kind === "food") {
     node.stock += 2;
@@ -713,6 +715,7 @@ export function stepGame(
         (s.player.pose.position[a] - buoy.position[a]) * DT * 2;
   }
   updateAction(s);
+  advanceRenewal(s);
   updateBerth(s, world);
   const recoveryEvent = updateRecovery(s, world);
   if (recoveryEvent) events.push(recoveryEvent.type === "notice"

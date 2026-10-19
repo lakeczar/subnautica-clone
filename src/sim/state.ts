@@ -1,5 +1,6 @@
 import { PLACES, SOURCES, THREAT_HOME } from "../content/registry.js";
 import type { GameState, VehicleState, Vec3 } from "./types.js";
+import { initialRenewal } from "./renewal.js";
 export function createGame(): GameState {
   return {
     tick: 0,
@@ -68,6 +69,7 @@ export function createGame(): GameState {
         stock: s.stock,
         reserve: s.reserve,
       })),
+      renewal: initialRenewal(),
       facilities: [
         { id: "home_pod", repaired: true },
         { id: "pod_fabricator", repaired: false },

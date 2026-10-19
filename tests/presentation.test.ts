@@ -317,7 +317,12 @@ test("minimal per-verb prompt names collect, gather, sort, tend, empty, review, 
   assert.match(render(s, "island_workshop_scraps"), /Collect · Q scan/);
   const n = s.world.resources.find(n => n.id === "island_workshop_scraps")!; n.stock = 0;
   assert.match(render(s, n.id), /Sort · 20 s/); n.reserve = 0;
-  assert.match(render(s, n.id), /Empty/); assert.ok(!get("interact-prompt").innerHTML.includes("<kbd>E</kbd>"));
+  assert.match(render(s, n.id), /<small>Empty(?! · regrowing)/); assert.ok(!get("interact-prompt").innerHTML.includes("<kbd>E</kbd>"));
+  // A living shed says it regrows; finite stock above never does.
+  const catchNode = s.world.resources.find(n => n.id === "reef_ribbon_catch_north")!; catchNode.stock = 0; catchNode.reserve = 0;
+  s.player.mode = "swimming"; s.player.pose.position = { x: -15, y: -8.6, z: 3 };
+  assert.match(render(s, catchNode.id), /<small>Empty · regrowing/);
+  s.player.mode = "walking"; s.player.pose.position = { x: 8, y: 1.2, z: -32.5 };
   s.player.pose.position = { x: 13, y: 1.2, z: -32.5 };
   assert.match(render(s, "island_shore_crop_east"), /Gather/);
   s.world.resources.find(n => n.id === "island_shore_crop_east")!.stock = 0;

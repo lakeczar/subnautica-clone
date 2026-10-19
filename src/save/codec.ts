@@ -1,4 +1,4 @@
-import { CONTENT_VERSION, SOURCES } from "../content/registry.js";
+import { CONTENT_VERSION } from "../content/registry.js";
 import { BASIN_SOURCE_IDS, LEGACY_WORLD_BOUNDS } from "../content/routes.js";
 import type { GameState } from "../sim/types.js";
 import { createGame } from "../sim/state.js";
@@ -11,7 +11,11 @@ import { validFoundationState } from "./foundation.js";
 import { record, validState } from "./validation.js";
 import { validExpedition2Domain, validState as validLegacyState } from "./legacy/validation.js";
 import type { GameState as LegacyGameState } from "./legacy/types.js";
-export const SAVE_SCHEMA_VERSION = 3 as const;
+import { validExpedition4State } from "./expedition4/validation.js";
+import { SOURCES as EXPEDITION4_SOURCES } from "./expedition4/domain.js";
+import type { GameState as Expedition4State } from "./expedition4/types.js";
+import { initialRenewal } from "../sim/renewal.js";
+export const SAVE_SCHEMA_VERSION = 4 as const;
 export const MAX_SAVE_BYTES = 1_048_576;
 export interface SaveMetadata {
   sessionId: string;
@@ -75,13 +79,19 @@ function migrateFoundation(old: GameState): GameState {
   s.feedback = s.migration;
   return s;
 }
-function migrateExpedition(old: LegacyGameState): GameState {
+function migrateExpedition(old: LegacyGameState): Expedition4State {
   return { ...old,
     world: { ...old.world, resources: [...old.world.resources, ...BASIN_SOURCE_IDS.map(id =>
-      ({ id, stock: SOURCES[id].stock, reserve: SOURCES[id].reserve }))] },
+      ({ id, stock: EXPEDITION4_SOURCES[id].stock, reserve: EXPEDITION4_SOURCES[id].reserve }))] },
     recovery: { ...old.recovery, operation: old.recovery.operation ?
       { ...old.recovery.operation, routeId: "canopy" } : null },
   };
+}
+/** expedition.5 adds only living-shed progress, starting at zero: no catch-up, refill
+ * or materials. Every other field, including depleted stock and reserves, is retained. */
+function migrateRenewal(old: Expedition4State): GameState {
+  const { resources, ...world } = old.world;
+  return { ...old, world: { resources, renewal: initialRenewal(), ...world } };
 }
 export function decodeSave(text: string): Result<SaveEnvelope> {
   if (new TextEncoder().encode(text).byteLength > MAX_SAVE_BYTES)
@@ -97,14 +107,15 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
   }
   if (!record(d) || d.format !== "siltwake.save")
     return { ok: false, error: "This is not a Siltwake save file." };
-  if (d.schemaVersion !== 3 && d.schemaVersion !== 2 && d.schemaVersion !== 1)
+  if (d.schemaVersion !== 4 && d.schemaVersion !== 3 && d.schemaVersion !== 2 && d.schemaVersion !== 1)
     return {
       ok: false,
-      error: `Save schema ${typeof d.schemaVersion === "number" || typeof d.schemaVersion === "string" ? String(d.schemaVersion).slice(0, 24) : "(unrecognized)"} is unsupported. This build reads schema 3, validated expedition schema 2 and foundation schema 1 only. Keep the original file.`,
+      error: `Save schema ${typeof d.schemaVersion === "number" || typeof d.schemaVersion === "string" ? String(d.schemaVersion).slice(0, 24) : "(unrecognized)"} is unsupported. This build reads schema 4, validated expedition schemas 3 and 2 and foundation schema 1 only. Keep the original file.`,
     };
   if (d.schemaVersion === 1 ? d.contentVersion !== "foundation.1"
     : d.schemaVersion === 2 ? d.contentVersion !== "expedition.3" && d.contentVersion !== "expedition.2"
-      : d.contentVersion !== CONTENT_VERSION)
+      : d.schemaVersion === 3 ? d.contentVersion !== "expedition.4"
+        : d.contentVersion !== CONTENT_VERSION)
     return {
       ok: false,
       error:
@@ -150,14 +161,16 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
       ),
     };
   }
-  const legacy = d.schemaVersion === 2;
-  if (legacy ? ((d.contentVersion === "expedition.2" && !validExpedition2Domain(d.state)) || !validLegacyState(d.state)) : !validState(d.state))
+  const legacy = d.schemaVersion === 2, previous = d.schemaVersion === 3;
+  if (legacy ? ((d.contentVersion === "expedition.2" && !validExpedition2Domain(d.state)) || !validLegacyState(d.state))
+    : previous ? !validExpedition4State(d.state) : !validState(d.state))
     return {
       ok: false,
       error:
         "Gameplay ownership, capacity, equipment, discovery, facility, recovery or berth data is invalid. Nothing was loaded.",
     };
-  const s = legacy ? migrateExpedition(d.state as LegacyGameState) : d.state as GameState;
+  const s = legacy ? migrateRenewal(migrateExpedition(d.state as LegacyGameState))
+    : previous ? migrateRenewal(d.state as Expedition4State) : d.state as GameState;
   // All saved berth transforms remain compatible. Historically sealed
   // room walls can cover an old walking pose; only that pose receives a visible,
   // idempotent safety relocation. Reading never writes or moves a vessel/cargo.
@@ -199,7 +212,7 @@ export function createEnvelope(
 }
 export function encodeSave(save: SaveEnvelope): Result<string> {
   if (save.schemaVersion !== SAVE_SCHEMA_VERSION || save.contentVersion !== CONTENT_VERSION)
-    return { ok: false, error: "This build writes schema 3 / expedition.4 only. Decode a supported older save before writing it." };
+    return { ok: false, error: "This build writes schema 4 / expedition.5 only. Decode a supported older save before writing it." };
   let text: string;
   try {
     text = JSON.stringify(save, null, 2);

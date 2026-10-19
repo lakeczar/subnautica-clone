@@ -89,7 +89,7 @@ test("invalid JSON, unrecognized format, unsafe numeric ranges and nonempty futu
 });
 
 test("unsupported schema and different content are rejected without rewriting data", () => {
-  for (const version of [0, 4, 100, "1", null, ["1"], { toString: {} }]) {
+  for (const version of [0, 5, 100, "1", null, ["1"], { toString: {} }]) {
     const result = decodeSave(
       JSON.stringify({ ...sample(), schemaVersion: version }),
     );
@@ -150,7 +150,7 @@ test("invalid writes and rejected corrupt/future imports leave current AND backu
   // The runtime only offers import confirmation if decode succeeds.
   for (const text of [
     "{bad json}",
-    JSON.stringify({ ...sample(99), schemaVersion: 4 }),
+    JSON.stringify({ ...sample(99), schemaVersion: 5 }),
   ]) {
     const result = decodeSave(text);
     if (result.ok) await repo.commit(result.value);
@@ -363,9 +363,12 @@ test("compatible schema2 carrier saves preserve all transforms; a newly covered 
   // This was clear of the former craft proxy but now intersects its sealed fore wall.
   s.player.interiorPose!.position = { x: -3, y: 4, z: -3.1 };
   s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
-  // A genuine schema2 closed-domain fixture; new sources belong only to schema3.
+  // A genuine schema2 closed-domain fixture; new sources belong only to schema3 and
+  // pristine renewal progress only to schema4.
+  assert.ok(s.world.renewal.every(r => r.progress === 0));
+  const { renewal: _renewal, ...world } = s.world;
   const original = JSON.stringify({ ...envelope, schemaVersion: 2, contentVersion: "expedition.3",
-    state: { ...s, world: { ...s.world, resources: s.world.resources.filter(r => Object.hasOwn(LEGACY_SOURCES, r.id)) } } }), storage = new MemoryStorage();
+    state: { ...s, world: { ...world, resources: s.world.resources.filter(r => Object.hasOwn(LEGACY_SOURCES, r.id)) } } }), storage = new MemoryStorage();
   storage.setItem(LOCAL_SAVE_KEY, JSON.stringify({ format: "siltwake.local", version: 1, current: original, previous: null, preserved: null }));
   const raw = storage.getItem(LOCAL_SAVE_KEY), writes = storage.writes;
   const repo = new SaveRepository(storage, new TestWriterLock());
@@ -373,8 +376,8 @@ test("compatible schema2 carrier saves preserve all transforms; a newly covered 
   assert.ok(loaded.save);
   assert.equal(storage.writes, writes);
   assert.equal(storage.getItem(LOCAL_SAVE_KEY), raw);
-  assert.equal(loaded.save.schemaVersion, 3);
-  assert.equal(loaded.save.contentVersion, "expedition.4");
+  assert.equal(loaded.save.schemaVersion, 4);
+  assert.equal(loaded.save.contentVersion, "expedition.5");
   assert.match(loaded.save.state.migration!, /previous walking position.*moved/);
   assert.deepEqual(loaded.save.state.player.interiorPose!.position, CARRIER_LAYOUT.helm);
   assert.deepEqual(loaded.save.state.fleet, s.fleet);

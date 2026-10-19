@@ -1,4 +1,4 @@
-import { HULLS, HULL_COLLIDERS, OPENING, PLACES, SOURCES } from "../content/registry.js";
+import { HULLS, HULL_COLLIDERS, OPENING, PLACES, renewable, SOURCES } from "../content/registry.js";
 import { ROUTE_REGIONS } from "../content/routes.js";
 import { inCanopyAir, nearPod, nearWorkshop, equipped } from "../sim/inventory.js";
 import { personalLimit } from "../sim/progression.js";
@@ -209,7 +209,7 @@ export class HudView {
       ? `${t.verb === "empty" ? "" : "<kbd>E</kbd> "}${escapeHtml(t.kind === "vehicle" && state ? (() => {
           const v = state!.fleet.vehicles.find(v => v.id === t.id);
           return v ? `${HULLS[v.hull].label}${v.disabled ? " · disabled" : ""}` : t.label;
-        })() : t.label)} <small>${({ collect: "Collect", gather: "Gather", sort: t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Tend · 20 s" : "Sort · 20 s", inspect: "Inspect", review: "Notebook", read: "Read", board: "Board", recover: "Recover", open: "Open", use: "Use", empty: "Empty" })[t.verb]}${state && equipped(state, "essential_tools") && !t.known && (t.kind === "source" || t.kind === "evidence") ? " · Q scan" : ""}</small>` : preview ? `${preview.label ? `${escapeHtml(preview.label)} · ` : ""}Move closer` : "";
+        })() : t.label)} <small>${({ collect: "Collect", gather: "Gather", sort: t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Tend · 20 s" : "Sort · 20 s", inspect: "Inspect", review: "Notebook", read: "Read", board: "Board", recover: "Recover", open: "Open", use: "Use", empty: renewable(t.id) ? "Empty · regrowing" : "Empty" })[t.verb]}${state && equipped(state, "essential_tools") && !t.known && (t.kind === "source" || t.kind === "evidence") ? " · Q scan" : ""}</small>` : preview ? `${preview.label ? `${escapeHtml(preview.label)} · ` : ""}Move closer` : "";
     this.get("interact-prompt").dataset.preview = String(!t && !!preview);
     if (this.get("interact-prompt").innerHTML !== html) this.get("interact-prompt").innerHTML = html;
   }

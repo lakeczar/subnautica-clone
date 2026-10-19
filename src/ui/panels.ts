@@ -1,6 +1,6 @@
 import {
   DART_BUILD_POSE, EVIDENCE, FUTURE_BLUEPRINTS, HULLS, ITEMS, MATERIALS, MODULES, OPTIONAL_RECORD, PLACES,
-  RECOVERY_STAGE, RECIPES, REGIONS, SOURCES,
+  RECOVERY_STAGE, RECIPES, REGIONS, renewable, SOURCES,
 } from "../content/registry.js";
 import { RECOVERY_ROUTES, RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
 import type { ItemKind, RecipeId } from "../content/registry.js";
@@ -333,7 +333,7 @@ export class PanelView {
         const no = recoveryCommand(structuredClone(state), v.id, method);
         return button(label, { type: "recover", vehicleId: v.id, method }, no !== null, no ?? undefined);
       };
-      html += `<p class="recovery-kit">${equipped(state, "bobbin_kit") ? "Bobbin kit retained" : "Requires Bobbin kit · fabricate at the pod"} · Rescue stock: ${state.world.maintenance.alloy} alloy / ${state.world.maintenance.membrane} membrane.</p><div class="recovery-choices" aria-label="Dart recovery choices">
+      html += `<p class="recovery-kit">${equipped(state, "bobbin_kit") ? "Bobbin kit retained" : `Requires Bobbin kit · ${state.knowledge.blueprints.includes(RECIPES.bobbin_kit.bp) ? "fabricate at the pod" : "plans at the reef intake"}`} · Rescue stock: ${state.world.maintenance.alloy} alloy / ${state.world.maintenance.membrane} membrane.</p><div class="recovery-choices" aria-label="Dart recovery choices">
         <section class="recovery-choice"><h4>Patch here</h4><p class="recovery-cost">2 alloy + 1 membrane · rescue stock</p><p>At the collar, within 7 m. Restores hull to 65%; keeps cargo and charge.</p>${recovery("Patch here", "repair")}</section>
         <section class="recovery-choice"><h4>Tow home</h4><p class="recovery-cost">No materials · to the shallow rescue bench</p><p>Empty hull; cargo stays aboard. Start at the staging bench or collar, within 7 m.</p><small>${routeId === "basin" ? "Pale Basin · surveyed overhead lift and shallow return" : "Upper-Canopy corridor"} · ${route.maximumTether} m tether limit. Blocked routes stop the tow. No repair or recharge.</small>${recovery(state.recovery.operation?.vehicleId === v.id && state.recovery.operation.phase === "ready" ? "Attach collar / confirm tow" : "Tow home · deploy Bobbin", "tow")}</section>
         <section class="recovery-choice"><h4>Salvage frame</h4><p class="recovery-cost">No materials · returns the frame’s ingredients</p><p>At the collar, within 7 m. Empty the hull, hold and module sockets first.</p><small>${escapeHtml(frame)} · ${cu} CU.<br />${destination ? `Return to ${destination}.` : eligibleHolds ? `Make ${cu} CU free in ${eligibleHolds}.` : `Requires a container large enough for the complete ${cu} CU return.`}${v.boundRepairs ? `<br />Past patches return ${patchAlloy} alloy / ${patchMembrane} membrane to rescue stock only (limits 14 / 7).` : ""}</small>${recovery("Salvage frame", "salvage")}</section>
@@ -486,10 +486,13 @@ export class PanelView {
 
   private knownHabitats(state: GameState): string {
     const known = Object.entries(SOURCES).filter(([id]) => state.knowledge.scans.includes(id));
-    return `<article class="habitat-notes"><h3>Known source habitats</h3>${known.length ? known.map(([id, s]) => {
-      const stock = state.world.resources.find((r) => r.id === id);
-      return `<section class="known-source"><p><b>${ITEMS[s.item].label} · ${s.label}</b><br />${REGIONS[s.region].label} · ${s.context}<br /><small>${stock?.stock ?? 0} ready · ${stock?.reserve ?? 0} in reserve · ${s.bundle} per gather. ${s.item === "meal" ? "When empty, tend here for 20 seconds to prepare two more." : "When none are ready, sort the reserve here."}</small></p>${this.group(`scan:${id}`, "Field scan", `<p>${escapeHtml(s.scan)}</p>`)}</section>`;
-    }).join("") : "<p>No habitats recorded yet.</p>"}</article>`;
+    // The shared rule is stated once; each row carries only its own lifecycle.
+    return `<article class="habitat-notes"><h3>Known source habitats</h3>${known.length ? `<p class="habitat-legend">Living sheds regrow while you explore; finite stock does not. When none are ready, sort a reserve on site.</p>${known.map(([id, s]) => {
+      const stock = state.world.resources.find((r) => r.id === id), reserve = stock?.reserve ?? 0;
+      const lifecycle = s.item === "meal" ? "Tended · when empty, tend 20 s for two more"
+        : renewable(id) ? `Living shed · regrows to ${s.stock} ready` : reserve ? "Finite" : "Finite · no reserve left";
+      return `<section class="known-source" data-lifecycle="${s.item === "meal" ? "tended" : renewable(id) ? "renewing" : "finite"}"><p><b>${ITEMS[s.item].label} · ${s.label}</b><br />${REGIONS[s.region].label} · ${s.context}<br /><small>${stock?.stock ?? 0} ready · ${reserve} in reserve · ${s.bundle} per gather · ${lifecycle}</small></p>${this.group(`scan:${id}`, "Field scan", `<p>${escapeHtml(s.scan)}</p>`)}</section>`;
+    }).join("")}` : "<p>No habitats recorded yet.</p>"}</article>`;
   }
 
   private places(state: GameState): string {
