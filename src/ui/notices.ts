@@ -1,11 +1,23 @@
 import { FIXED_SECONDS } from "../sim/clock.js";
 import { eyeHeight } from "../sim/state.js";
 import { exposure } from "../sim/survival.js";
-import type { GameState, NoticeContext, NoticeOptions, Vec3 } from "../sim/types.js";
+import type { GameEvent, GameState, NoticeContext, NoticeOptions, Vec3 } from "../sim/types.js";
 
 // Trial presentation lifetimes. Only errors/status use wall time; no queue or
 // saved state is involved. Ongoing danger remains in the separate hazard area.
 export const NOTICE_SECONDS = { action: 2.5, refusal: 4, hazard: 6, error: 12, system: 3, release: 2.5, call: 3 } as const;
+export const DAMAGE_SECONDS = { aftermath: 3, pulse: 1 } as const;
+export type ThreatDamage = Extract<GameEvent, { type: "threat-damage" }>;
+export type DamageTarget = ThreatDamage["target"];
+export interface DamageFeedback {
+  target: DamageTarget;
+  total: number;
+  sinceLast: number;
+  sincePulse: number;
+  pulse: boolean;
+}
+const sameTarget = (a: DamageTarget, b: DamageTarget): boolean =>
+  a.kind === b.kind && (a.kind === "diver" || b.kind === "vehicle" && a.vehicleId === b.vehicleId);
 const NO_BANNERS: ReadonlySet<NoticeContext> = new Set();
 export interface ActionResult {
   message: string;
@@ -31,6 +43,8 @@ export class EncounterPresentation {
   result: ActionResult | null = null;
   central: PresentedNotice | null = null;
   status: { message: string; expiresAt: number } | null = null;
+  damage: DamageFeedback | null = null;
+  private bittenThisStep = false;
   private mode: ThreatMode | null = null;
   private refuge = false;
   private actor: string | null = null;
@@ -83,6 +97,8 @@ export class EncounterPresentation {
     const actorChanged = this.actor !== null && actor !== this.actor;
     if (state.opening.phase < 4 || this.refuge !== e.refuge || actorChanged) this.clearAction();
     if (actorChanged) this.call = null;
+    if (actorChanged || e.refuge || state.opening.phase < 4 ||
+      this.damage && !this.damageTargetValid(this.damage.target, state)) this.clearDamage();
     const notice = this.central;
     if (notice?.channel === "hazard") {
       const v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
@@ -108,6 +124,12 @@ export class EncounterPresentation {
 
   step(state: GameState, covered: ReadonlySet<NoticeContext> = NO_BANNERS): void {
     this.observe(state, covered);
+    if (this.damage) {
+      if (!this.bittenThisStep) this.damage.sinceLast += FIXED_SECONDS;
+      this.damage.sincePulse += FIXED_SECONDS;
+      if (this.damage.sinceLast + 1e-9 >= DAMAGE_SECONDS.aftermath) this.clearDamage();
+    }
+    this.bittenThisStep = false;
     if (this.result) {
       this.result.activeLeft -= FIXED_SECONDS;
       if (this.result.activeLeft < 1e-9) this.result = null;
@@ -121,6 +143,34 @@ export class EncounterPresentation {
       if (this.call.activeLeft < 1e-9) this.call = null;
     }
   }
+
+  damageTargetValid(target: DamageTarget, state: GameState): boolean {
+    if (this.menuVisible || state.opening.phase < 4 || exposure(state).refuge) return false;
+    return target.kind === "vehicle"
+      ? state.player.mode === "piloting" && state.player.controlledVehicleId === target.vehicleId &&
+        state.fleet.vehicles.some(v => v.id === target.vehicleId)
+      : !state.player.controlledVehicleId && !state.player.interiorId &&
+        state.player.vitals.health > 0 && ["swimming", "walking"].includes(state.player.mode);
+  }
+
+  /** Caller observes this step's actor before delivering its authoritative loss. */
+  recordDamage(target: DamageTarget, loss: number): boolean {
+    if (!Number.isFinite(loss) || loss <= 0) return false;
+    const onset = !this.damage || !sameTarget(this.damage.target, target);
+    if (onset) this.damage = { target: { ...target }, total: loss, sinceLast: 0, sincePulse: 0, pulse: true };
+    else {
+      this.damage!.total += loss;
+      this.damage!.sinceLast = 0;
+      if (this.damage!.sincePulse + 1e-9 >= DAMAGE_SECONDS.pulse) {
+        this.damage!.pulse = true;
+        this.damage!.sincePulse = 0;
+      }
+    }
+    this.bittenThisStep = true;
+    return onset;
+  }
+
+  clearDamage(): void { this.damage = null; this.bittenThisStep = false; }
 
   threatCall(origin: Vec3, state: GameState): void {
     if (![origin.x, origin.y, origin.z].every(Number.isFinite) || exposure(state).refuge ||
@@ -157,8 +207,9 @@ export class EncounterPresentation {
   }
 
   clearAction(): void { this.result = null; }
-  setMenu(visible: boolean): void { this.menuVisible = visible; if (visible) this.clearAction(); }
+  setMenu(visible: boolean): void { this.menuVisible = visible; if (visible) { this.clearAction(); this.clearDamage(); } }
   reset(): void {
+    this.clearDamage();
     this.central = this.status = this.call = null;
     this.result = null;
     this.mode = this.actor = null;

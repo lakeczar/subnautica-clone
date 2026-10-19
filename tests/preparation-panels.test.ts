@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PanelView } from "../src/ui/panels.js";
-import { DART_BUILD_POSE, RECIPES, type ItemKind } from "../src/content/registry.js";
+import { DART_BUILD_POSE, RECIPES, SOURCES, type ItemKind } from "../src/content/registry.js";
 import { addItem, available, fabricationContainers, materialStoragePreview, usedCapacity } from "../src/sim/inventory.js";
 import { completeOpening, craftingRefusal, discover } from "../src/sim/progression.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
@@ -421,4 +421,98 @@ test("paid live Dart salvage removes Current craft and crafted history still all
   s = executeCommand(s, build.command, world).state;
   assert.equal(s.fleet.vehicles.filter((v) => v.hull === "dart").length, 1);
   assert.equal(usedCapacity(s, "buoy_hold"), 0);
+});
+
+test("M2 preparation presents the paid in-place personal refit beside the unchanged chosen hull and exact local costs", (t) => {
+  const { panel, html, controls, recipe } = panelFixture(t), s = workshop(), v = addDart(s);
+  panel.refresh("craft", s);
+  const refit = () => controls().find(b => b.command.type === "craft" && b.command.recipeId === "suit_350")!;
+  assert.equal(refit().disabled, true); assert.match(refit().attrs, /aria-describedby/);
+  const fitted = addItem(s, "suit_150", 1, "equipment", "suit"), identity = fitted.id;
+  for (const [kind, quantity] of Object.entries(RECIPES.suit_350.cost)) addItem(s, kind as ItemKind, quantity, "workshop_locker");
+  const before = structuredClone(s); panel.refresh("craft", s);
+  assert.match(html(), /Suit 150 m · Dart hull 180 m/);
+  assert.match(recipe("suit_350"), /Paid in-place refit · fitted suit 150 → 350 m/);
+  assert.match(recipe("suit_350"), /Dart hull stays 180 m/);
+  assert.match(recipe("suit_350"), /Structural alloy: 2 \/ 2/);
+  assert.match(recipe("suit_350"), /Conductive crust: 4 \/ 4/);
+  assert.match(recipe("suit_350"), /Splitspine workshop bench · restored/);
+  assert.equal(refit().disabled, false); assert.equal(refit().label, "Refit fitted suit · 350 m");
+  assert.deepEqual(s, before);
+  const result = executeCommand(s, refit().command, createWorldQueries());
+  assert.equal(result.events.some(e => e.type === "notice" && e.error), false);
+  assert.equal(result.state.inventory.items.find(i => i.id === identity)?.kind, "suit_350");
+  assert.equal(result.state.inventory.items.filter(i => i.fitted === "suit").length, 1);
+  panel.refresh("craft", result.state);
+  assert.match(html(), /Suit 350 m · Dart hull 180 m/);
+  assert.equal(result.state.fleet.vehicles[0]!.id, v.id);
+  assert.ok(!controls().some(b => b.command.type === "craft" && b.command.recipeId === "suit_350"));
+});
+
+test("M2 notebook preserves C06-first provenance, observation and inference, showing future plans as knowledge", (t) => {
+  const { panel, html, commands } = panelFixture(t), s = createGame(); completeOpening(s); discover(s, "C06");
+  const recorded = structuredClone(s.knowledge.evidence), before = structuredClone(s);
+  panel.refresh("notebook", s);
+  assert.match(html(), /independent lead.*either order/);
+  assert.match(html(), /D−12 profile; D0 \+00:35 trace and fractured slope/);
+  assert.match(html(), /<b>Observed<\/b>.*Profiles dated/);
+  assert.match(html(), /<b>Hypothesis<\/b>.*do not establish the extraction history/);
+  assert.match(html(), /Cool-flank pressure and service research/);
+  assert.match(html(), /Research knowledge · construction not available yet/);
+  assert.doesNotMatch(html(), /id="finding-C04"|id="finding-C05"/);
+  assert.ok(!commands().some(c => c.type === "craft"));
+  assert.deepEqual(s, before);
+  discover(s, "C05"); discover(s, "C04"); panel.refresh("notebook", s);
+  assert.deepEqual(s.knowledge.evidence[0], recorded[0], "later context cannot rewrite the early finding");
+  assert.match(html(), /dated water change and inward movement are separate facts/);
+  assert.match(html(), /Creel interior and service plans/);
+  assert.match(html(), /Carrier Basin frame and anchorage survey/);
+  assert.doesNotMatch(html(), /Basin.*(?:not yet open|future expedition|later expedition)/);
+});
+
+test("M2 learned habitats occur once in the notebook, while recovered local materials and services lead the return", (t) => {
+  const { panel, html, controls } = panelFixture(t), s = workshop(), v = addDart(s);
+  s.knowledge.scans.push("canopy_grounding_fins_upper", "canopy_resin_lee_upper");
+  addItem(s, "structural_alloy", 8, v.cargoId); addItem(s, "conductive_crust", 4, v.cargoId);
+  panel.refresh("notebook", s);
+  assert.equal(html().split(SOURCES.canopy_grounding_fins_upper.context).length - 1, 1);
+  assert.match(html(), /data-panel-group="scan:canopy_grounding_fins_upper"/);
+  assert.doesNotMatch(html(), /basin_ridge_salvage_north|basin_survey_fins_east/, "unknown sources gain no exact pins or records");
+  panel.refresh("inventory", s);
+  assert.match(html(), /Local materials · 8 Structural alloy · 4 Conductive crust/);
+  assert.ok(html().indexOf('class="bulk-storage"') < html().indexOf('id="container-diver"'));
+  assert.ok(controls().some(b => b.command.type === "store-materials" && b.disabled), "the default empty diver source is retained");
+  panel.selectStorage("storage-from", v.cargoId); panel.refresh("inventory", s);
+  assert.ok(controls().some(b => b.command.type === "store-materials" && !b.disabled));
+  v.charge = 40; panel.refresh("inventory", s);
+  assert.ok(controls().some(b => b.command.type === "service" && b.disabled), "bench cargo access cannot grant remote hull service");
+  s.player.mode = "piloting"; s.player.controlledVehicleId = v.id; s.player.pose = structuredClone(v.pose);
+  panel.refresh("inventory", s);
+  assert.ok(controls().some(b => b.command.type === "service" && !b.disabled));
+});
+
+test("both rescue work faces expose one visited Basin target with actual local eligibility and retained route identity", (t) => {
+  const { panel, html, controls } = panelFixture(t), s = workshop(), v = addDart(s);
+  addItem(s, "bobbin_kit", 1, "equipment", "recovery", "maintenance");
+  v.pose.position = { x: 178, y: -160, z: -208 }; disableVehicle(s, v.id);
+  for (const y of [-0.5, -12]) {
+    s.player.mode = "swimming"; s.player.pose.position = { x: 46, y, z: -54 };
+    const before = structuredClone(s); panel.refresh("inventory", s);
+    const recovery = controls().filter(b => b.command.type === "recover");
+    assert.equal(recovery.length, 3, "one target, not one registry per work face");
+    assert.equal(recovery.find(b => b.command.type === "recover" && b.command.method === "tow")!.disabled, false);
+    assert.equal(recovery.find(b => b.command.type === "recover" && b.command.method === "repair")!.disabled, true);
+    assert.equal(recovery.find(b => b.command.type === "recover" && b.command.method === "salvage")!.disabled, true);
+    assert.match(html(), /Pale Basin · surveyed overhead lift and shallow return · 650 m tether limit/);
+    assert.match(html(), /same station/); assert.match(html(), /Only the surface work face has surface air/);
+    assert.ok(html().indexOf('id="vessel-menu-dart"') < html().indexOf('id="container-diver"'));
+    assert.deepEqual(s, before);
+  }
+  const tow = controls().find(b => b.command.type === "recover" && b.command.method === "tow")!;
+  const active = executeCommand(s, tow.command, createWorldQueries()).state;
+  assert.equal(active.recovery.operation?.routeId, "basin");
+  active.fleet.vehicles[0]!.pose.position = { x: 100, y: -4, z: -170 };
+  panel.refresh("inventory", active);
+  assert.match(html(), /Pale Basin overhead lift/);
+  assert.doesNotMatch(html(), /Upper-Canopy corridor only/);
 });

@@ -5,6 +5,7 @@ import type { SaveSlot } from "../save/repository.js";
 import type { Quality } from "../render/renderer.js";
 import { PanelView, type PanelKind } from "./panels.js";
 import { HudView, type HudAim } from "./hud.js";
+import type { ThreatDamage } from "./notices.js";
 
 export type { PanelKind } from "./panels.js";
 
@@ -57,7 +58,7 @@ export class GameView {
         <div class="hud-top"><div id="hud-region" class="region"><span class="eyebrow">SILTWAKE / FIRST EXPEDITION</span><strong id="region-name">Hearth Reef</strong></div>
         <div id="hud-heading" class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
         <div class="hud-actions"><div id="hud-tools"><button data-action="inventory">Cargo <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button></div><button id="hud-pause" data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
-        <div id="call-cue" class="call-cue" hidden><span id="call-dial" class="call-dial" aria-hidden="true"></span><span id="call-elevation" aria-hidden="true"></span><span id="call-direction" role="status" aria-live="polite" aria-atomic="true"></span></div><div class="hud-instruments"><div id="vitals" class="vitals"></div><div id="pitch-cue" class="pitch-cue" aria-label="Pitch" hidden></div></div><span id="hazard-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><span id="action-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><div class="motion-guidance"><span id="surface-cue" class="surface-cue" hidden>Surface</span><div id="impact-notice" class="impact-notice" role="status" aria-live="polite" hidden></div><span id="blocked-ascent" class="blocked-ascent" role="status" aria-live="polite" hidden>Blocked above</span><div id="pilot-guidance" class="pilot-guidance" aria-label="Pilot exit guidance" hidden></div></div>
+        <div id="call-cue" class="call-cue" hidden><span id="call-dial" class="call-dial" aria-hidden="true"></span><span id="call-elevation" aria-hidden="true"></span><span id="call-direction" role="status" aria-live="polite" aria-atomic="true"></span></div><div class="hud-instruments"><div id="vitals" class="vitals"></div><div id="pitch-cue" class="pitch-cue" aria-label="Pitch" hidden></div></div><span id="hazard-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><span id="damage-announce" class="hud-sr" role="alert" aria-live="assertive" aria-atomic="true"></span><span id="action-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><div class="motion-guidance"><span id="surface-cue" class="surface-cue" hidden>Surface</span><div id="impact-notice" class="impact-notice" role="status" aria-live="polite" hidden></div><span id="blocked-ascent" class="blocked-ascent" role="status" aria-live="polite" hidden>Blocked above</span><div id="pilot-guidance" class="pilot-guidance" aria-label="Pilot exit guidance" hidden></div></div>
         <section id="opening" class="opening" aria-label="Damaged pod opening" hidden><div aria-live="polite" aria-atomic="true"><span id="opening-progress" class="eyebrow">POD CHECK 1 / 4</span><h2 id="opening-title"></h2><p id="opening-caption"></p></div><div class="opening-actions"><button id="opening-act" data-action="opening">Act <kbd>E</kbd></button><button id="opening-skip" data-action="skip">Skip · hold <kbd>Space</kbd></button><label class="check"><input id="opening-subtitles" type="checkbox" checked /> Captions</label></div><small id="opening-detail"></small></section><div id="crosshair" class="crosshair" aria-hidden="true"></div><div class="encounter-stack"><div id="alert-stack" class="alert-stack"><div id="hazard" class="hazard" aria-live="off"></div></div><div id="interaction-stack" class="interaction-stack"><div id="interact-prompt" class="interact-prompt"></div><div id="action-result" class="action-result" hidden></div><button id="look-action" class="look-action" data-action="lock" hidden>Click to look</button></div></div>
         <div id="hud-bottom" class="hud-bottom"><div class="telemetry"><span class="depth"><b id="depth">0.0</b><small>m / DEPTH</small></span><span class="mode"><strong id="movement">On foot</strong><small id="refuge-distance">Home pod · 0 m</small></span></div>
         <div class="explore-note"><span id="cruise" hidden>FORWARD CRUISE · R TO STOP</span><p id="context-hint">Walk down the amber-edged ramp to the water.</p><small id="pulse-summary"></small><small id="control-hint"></small></div></div>
@@ -83,7 +84,7 @@ export class GameView {
           </section>
           <section id="confirmation" class="confirmation" hidden><h2 id="confirm-title"></h2><p id="confirm-detail"></p><div class="menu-buttons"><button id="confirm-accept" class="primary" data-action="confirm">Confirm</button><button data-action="cancel">Go back</button></div></section>
           <p id="save-operation" class="save-status" role="status" hidden>Reading a file or waiting to save safely… <button data-action="cancel">Cancel operation</button></p>
-          <p id="build-note" class="build-note"><span class="status-dot"></span> FIRST EXPEDITION · <span>Pod, workshop, Dart and the upper Canopy. More of the campaign is in development.</span></p>
+          <p id="build-note" class="build-note"><span class="status-dot"></span> FIRST EXPEDITION<span>Pod, workshop, Dart, Canopy and the Basin survey. More of the campaign is in development.</span></p>
         </div>
         <div class="scene-caption" aria-hidden="true" hidden><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
       </div>
@@ -381,6 +382,7 @@ export class GameView {
     this.get("game-panel").hidden = true;
   }
   openPanel(kind: PanelKind, state: GameState, targetId?: string): void {
+    this.hudPresentation.cancelFeedback();
     this.hudPresentation.menu(false);
     this.panels.clearNotice();
     this.hudPresentation.clearActionNotice();
@@ -427,6 +429,10 @@ export class GameView {
   }
 
   presentationStep(state: GameState): void { this.hudPresentation.presentationStep(state); }
+
+  threatDamage(event: ThreatDamage, state: GameState, suppressAnnouncement = false): boolean {
+    return this.hudPresentation.threatDamage(event, state, suppressAnnouncement);
+  }
 
   threatCall(origin: Vec3, state: GameState): void { this.hudPresentation.threatCall(origin, state); }
 
