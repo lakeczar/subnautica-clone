@@ -6,8 +6,12 @@ import {
   ITEMS,
   PLACES,
   RECIPES,
+  RENEWABLE_SOURCE_IDS,
+  renewable,
+  SOURCE_RENEWAL,
   SOURCES,
 } from "../content/registry.js";
+import { renewalCap } from "../sim/renewal.js";
 import { LEGACY_WORLD_BOUNDS, RECOVERY_ROUTES, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
 import type { GameState } from "../sim/types.js";
 import { usedCapacity } from "../sim/inventory.js";
@@ -224,7 +228,20 @@ export function validState(value: unknown): value is GameState {
   )
     return false;
   const w = value.world;
-  if (!exact(w, ["resources", "facilities", "maintenance", "threat", "action"]))
+  if (!exact(w, ["resources", "renewal", "facilities", "maintenance", "threat", "action"]))
+    return false;
+  if (
+    !array(
+      w.renewal,
+      RENEWABLE_SOURCE_IDS.length,
+      (v) =>
+        exact(v, ["id", "progress"]) &&
+        renewable(v.id) &&
+        int(v.progress, 0, SOURCE_RENEWAL[v.id].intervalSteps - 1),
+    ) ||
+    w.renewal.length !== RENEWABLE_SOURCE_IDS.length ||
+    !w.renewal.every((v, i) => record(v) && v.id === RENEWABLE_SOURCE_IDS[i])
+  )
     return false;
   if (
     !array(
@@ -586,6 +603,11 @@ function semantic(s: GameState): boolean {
     const def = SOURCES[node.id];
     if (node.stock + node.reserve > def.stock + def.reserve) return false;
   }
+  // Progress exists only below the cap, and only after active post-opening expedition steps.
+  for (const r of s.world.renewal)
+    if (r.progress !== 0 && (s.scenario !== "expedition" || s.opening.phase < 4 ||
+        s.world.resources.find((n) => n.id === r.id)!.stock >= renewalCap(r.id)))
+      return false;
   const expectedBlueprints = new Set<string>();
   for (const e of k.evidence) {
     for (const bp of EVIDENCE_BLUEPRINTS[e.id]) expectedBlueprints.add(bp);
