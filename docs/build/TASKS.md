@@ -1759,3 +1759,10 @@ Both children start at **8f3065117c91a2a8ddceba6235c3b8c4939d51ca**, production 
 - **Astra encounter direction** — task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-encounter-direction-astra-8f30651`, stable request of the same suffix; actual **gpt-6-astra/xhigh**, branch `t3/encounter-visibility-direction`, worktree `/home/worker/.t3/worktrees/subnautica-clone/t3-518a7eda`. Report-only [brief](tasks/M2-A-ENCOUNTER-DIRECTION.md); new design proposal/artifacts, all production read-only; isolated5191 only if needed. This author cannot serve as the later independent acceptance reviewer.
 
 Receive completion notifications. Inspect Sol source/evidence; reconcile Astra's concrete shelter/hunter proposal before assigning Sol implementation. Complete-batch pair follows assembled corrections and affected earned continuations. Root owns no browser/server/recording/check process. Earlier completion/prepared labels remain historical.
+
+
+## Encounter direction inspected; disjoint landmark leaf prepared
+
+Astra task `node:delegated-task:command%3Amcp%3A2e1e5263-9a2f-46b6-b140-bd39eb7b7827%3Adelegate-task%3Asiltwake-m2-encounter-direction-astra-8f30651` is terminal/result_available with no children/questions. Report acc731c63dc1c017aaf4fb6fa50a0a922bbcc6dc is merged. [Root reconciliation](evidence/M2-A-ENCOUNTER-DIRECTION-INTEGRATION.md) verifies all54 payloads, original Astra/xhigh runtime and four identical numerical reproductions. Report-only production; no acceptance. Its path/resources are released.
+
+Root selects the [Canopy landmark leaf](tasks/M2-A-CANOPY-LANDMARK.md) to run independently of the existing correctness worker. Static Canopy art, named region test/new report only; no hunter/vehicle/camera/physical-cover changes. This refines the advisory single-owner sequence without overlapping paths. Hunter implementation waits for both inspected leaves and a fresh composed baseline. Actual new task ID/binding follows dispatch from the next committed baseline. Root owns no running browser/server/recording/check. Do not poll or duplicate the active correctness worker.
