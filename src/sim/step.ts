@@ -660,10 +660,13 @@ export function stepGame(
           ? Math.max(0, sliceOrigin.y + Math.max(0, d.y) - move.position.y) : 0;
         const floor = world.supportHeight(move.position.x, move.position.z, move.position.y);
         const supported = move.position.y < floor;
-        return { ...move, position: supported ? { ...move.position, y: floor } : move.position,
-          solidRise, floor, supported };
-      }, move => mode === "swimming" && old.y <= -0.5 && move.floor < -0.55
-        ? Math.min(-0.5, move.position.y) : move.position.y);
+        return { ...move, solidRise, floor, supported };
+      }, move => {
+        // Support is another vertical correction, just like the water cap.
+        // Validate its whole path before accepting it near a cliff/adjacent solid.
+        const y = Math.max(move.position.y, move.floor);
+        return mode === "swimming" && old.y <= -0.5 && move.floor < -0.55 ? Math.min(-0.5, y) : y;
+      });
       if (ascent) {
         ascent.solidLimitedRise += constrained.rolledBack ? requestedRise : constrained.move.solidRise;
         ascent.surfaceLimitedRise += constrained.surfaceLimitedRise;

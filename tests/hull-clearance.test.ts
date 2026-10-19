@@ -120,3 +120,27 @@ test('low-speed contact and fast unobstructed movement emit no impact events', (
     assert.ok(!out.events.some(e => e.type === "impact"));
   }
 });
+
+test('hull floor correction cannot lift a clear origin through an adjacent ceiling', () => {
+  const shape = HULL_COLLIDERS.dart, start = { x: 55, y: -7.96, z: -54 };
+  const ceiling = { id: 'hull.support.ceiling',
+    min: { x: 45, y: start.y + shape.height + .005, z: -64 },
+    max: { x: 65, y: start.y + shape.height + .015, z: -44 } };
+  const world = createWorldQueries([ceiling], () => -8);
+  assert.ok(world.clearance(start, shape));
+  const result = moveHull(world, start, { x: 0, y: 0, z: 0 }, shape);
+  assert.ok(result.hitSolid); assert.deepEqual(result.position, start);
+  assert.ok(world.clearance(result.position, shape));
+});
+
+test('large diagonal hull motion respects the full terrain footprint while sliding around its corner', () => {
+  const base = createWorldQueries([]), shape = HULL_COLLIDERS.dart;
+  const world = { ...base, moveCapsule: (...args: Parameters<typeof base.moveCapsule>) => {
+    const r = base.moveCapsule(...args), p = r.position;
+    assert.ok(p.x >= 54 + shape.radius - 1e-6 || p.x <= 38 - shape.radius + 1e-6 ||
+      p.z <= -60 - shape.radius + 1e-6 || p.z >= -48 + shape.radius - 1e-6, JSON.stringify(p));
+    return r;
+  } };
+  const result = moveHull(world, { x: 62, y: -30, z: -67 }, { x: -20, y: 0, z: 24 }, shape);
+  assert.ok(result.hitSolid);
+});

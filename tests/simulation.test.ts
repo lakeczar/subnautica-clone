@@ -239,3 +239,14 @@ test("diving stays above the sea floor, the foundation boundary is bounded, and 
   const stationary = run(state, [], 10);
   assert.equal(stationary.player.pose.position.y, p.y);
 });
+
+test("a support correction beside an overhead solid must clear its full vertical path", () => {
+  const shape = { radius: .34, height: .95 }, start = { x: -55, y: -8.01, z: 30 };
+  const ceiling = { id: "support.ceiling", min: { x: -57, y: -7.055, z: 28 }, max: { x: -53, y: -7.045, z: 32 } };
+  const query = createWorldQueries([ceiling], () => -8), s = createGame();
+  s.player.mode = "swimming"; s.player.pose.position = start;
+  assert.ok(query.clearance(start, shape));
+  const next = stepGame(s, [move(0)], query).state;
+  assert.deepEqual(next.player.pose.position, start, "retain the pose when even the tiny support lift hits the ceiling");
+  assert.ok(query.clearance(next.player.pose.position, shape));
+});

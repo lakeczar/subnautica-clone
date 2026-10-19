@@ -28,6 +28,8 @@ export interface RibSegment {
   radius: number;
 }
 
+const RESCUE_BENCH = { minX: 38, maxX: 54, minZ: -60, maxZ: -48, y: -13 } as const;
+
 /** Shared deterministic height field. Renderer samples this very function. */
 export function legacyTerrainHeight(x: number, z: number): number {
   const shelf = -8.8 + Math.sin(x * 0.105) * 0.52 + Math.cos(z * 0.12) * 0.42;
@@ -57,7 +59,8 @@ export function legacyTerrainHeight(x: number, z: number): number {
   const approachY = 1.2 - Math.max(0, z + 31) * 0.55;
   height = height * (1 - apron) + approachY * apron;
   // Shallow recovery staging bench.
-  if (x >= 38 && x <= 54 && z >= -60 && z <= -48) height = -13;
+  if (x >= RESCUE_BENCH.minX && x <= RESCUE_BENCH.maxX &&
+      z >= RESCUE_BENCH.minZ && z <= RESCUE_BENCH.maxZ) height = RESCUE_BENCH.y;
   return height;
 }
 
@@ -342,10 +345,115 @@ function sweep(
   return { t: Math.max(0, enter), normal };
 }
 
+// Movement-only terrain volumes. Keep placement/clearance's historical contract:
+// foundation migration and current/legacy carrier entry must not acquire a new
+// relocation policy. Custom local floors never receive these world features.
+const TERRAIN_COLUMNS: readonly Solid[] = [RESCUE_BENCH, ...BASIN_GEOMETRY.terrainPads].map((p, i) => ({
+  id: `terrain.column.${i}`, min: { x: p.minX, y: WORLD_VERTICAL_BOUNDS.minY - 1, z: p.minZ },
+  max: { x: p.maxX, y: p.y, z: p.maxZ },
+}));
+function terrainGap(p: Vec3, shape: Capsule, solid: Solid): { gap: number; normal: Vec3 } {
+  const box = actorBox(p, shape);
+  let gap = -Infinity, normal: Vec3 = { x: 0, y: 0, z: 0 };
+  for (const axis of AXES) for (const sign of [-1, 1]) {
+    const g = sign < 0 ? solid.min[axis] - box.max[axis] : box.min[axis] - solid.max[axis];
+    if (g > gap) { gap = g; normal = { x: 0, y: 0, z: 0 }; normal[axis] = sign; }
+  }
+  return { gap, normal };
+}
+function sweepTerrain(p: Vec3, d: Vec3, shape: Capsule, solid: Solid): ReturnType<typeof sweep> {
+  const { gap, normal } = terrainGap(p, shape, solid);
+  if (gap < -1e-6) {
+    // A retained contact may separate or move tangentially. This supporting
+    // plane proves the complete segment non-closing; each new slide is checked
+    // again against all terrain, ribs and supplied solids, with a gap backstop.
+    return dot(normal, d) < -1e-12 ? { t: 0, normal } : null;
+  }
+  return sweep(p, d, shape, solid);
+}
+
+interface BenchEdge { axis: "x" | "z"; value: number; outward: number; lo: number; hi: number; slope: number }
+const EDGE_EPSILON = 1e-9;
+/** Bound the tangential derivative of the uncut heightfield on one bench edge.
+ * Gaussian derivatives use their nearest/farthest distances on that interval.
+ * Each source blend adds |w'| * |sourceY-height|; all blend heights are bounded
+ * by235m (sum of the original base amplitudes) or the source ordinate. The apron
+ * is identically zero here. No finite-difference or sampled maximum is assumed. */
+function benchEdgeSlope(edge: Omit<BenchEdge, "slope">): number {
+  const axis = edge.axis === "x" ? "z" : "x";
+  const bounds = edge.axis === "x"
+    ? { minX: edge.value - EDGE_EPSILON, maxX: edge.value + EDGE_EPSILON, minZ: edge.lo, maxZ: edge.hi }
+    : { minX: edge.lo, maxX: edge.hi, minZ: edge.value - EDGE_EPSILON, maxZ: edge.value + EDGE_EPSILON };
+  const derivative = (cx: number, cz: number, kx: number, kz: number): number => {
+    const dx = Math.max(0, bounds.minX - cx, cx - bounds.maxX);
+    const dz = Math.max(0, bounds.minZ - cz, cz - bounds.maxZ);
+    const far = axis === "x" ? Math.max(Math.abs(bounds.minX - cx), Math.abs(bounds.maxX - cx))
+      : Math.max(Math.abs(bounds.minZ - cz), Math.abs(bounds.maxZ - cz));
+    return 2 * far / (axis === "x" ? kx : kz) * Math.exp(-dx * dx / kx - dz * dz / kz);
+  };
+  let slope = (axis === "x" ? .52 * .105 + 155 / 60 : .42 * .12) +
+    16.8 * derivative(9, -57, 620, 680) + 13 * derivative(-1, -62, 78, 115) +
+    18 * derivative(19, -64, 65, 90) + 22 * derivative(-32, -24, 190, 190);
+  const sources = LEGACY_TERRAIN_SOURCE_IDS.map(id => SOURCES[id]).filter(s => s.position.y <= 0 && s.item !== "meal");
+  const magnitude = Math.max(235, ...sources.map(s => Math.abs(s.position.y - .8)));
+  for (const s of sources) slope += derivative(s.position.x, s.position.z, 18, 18) *
+    (magnitude + Math.abs(s.position.y - .8));
+  return slope;
+}
+const BENCH_EDGES: readonly BenchEdge[] = [
+  { axis: "x" as const, value: RESCUE_BENCH.minX, outward: -1, lo: RESCUE_BENCH.minZ, hi: RESCUE_BENCH.maxZ },
+  { axis: "x" as const, value: RESCUE_BENCH.maxX, outward: 1, lo: RESCUE_BENCH.minZ, hi: RESCUE_BENCH.maxZ },
+  { axis: "z" as const, value: RESCUE_BENCH.minZ, outward: -1, lo: RESCUE_BENCH.minX, hi: RESCUE_BENCH.maxX },
+  { axis: "z" as const, value: RESCUE_BENCH.maxZ, outward: 1, lo: RESCUE_BENCH.minX, hi: RESCUE_BENCH.maxX },
+].map(e => ({ ...e, slope: benchEdgeSlope(e) }));
+
+/** The bench overwrites terrain, so some sides cut INTO higher natural ground.
+ * Bound only these exposed side faces, never an infinite rectangular obstacle.
+ * Constant raised pads need only their columns: max(natural,pad) has no cut side.
+ * Interval bounds prove each coarse face covers the whole requested height; only
+ * ambiguous top/edge contacts refine, to <0.1um (below the solid sweep tolerance).
+ * All faces are continuously swept. Exhaustion discards unproved movement. */
+function benchCutWalls(p: Vec3, d: Vec3, shape: Capsule): Solid[] | null {
+  const box = actorBox(p, shape), result: Solid[] = [];
+  if (box.max.y + Math.max(0, d.y) <= RESCUE_BENCH.y) return result;
+  let budget = 4096;
+  for (const edge of BENCH_EDGES) {
+    if (box.min[edge.axis] + Math.min(0, d[edge.axis]) > edge.value ||
+        box.max[edge.axis] + Math.max(0, d[edge.axis]) < edge.value) continue;
+    const tangent = edge.axis === "x" ? "z" : "x";
+    const lo = Math.max(edge.lo, box.min[tangent] + Math.min(0, d[tangent]));
+    const hi = Math.min(edge.hi, box.max[tangent] + Math.max(0, d[tangent]));
+    if (lo > hi) continue;
+    const pending: [number, number][] = [[lo, hi]];
+    while (pending.length) {
+      if (--budget < 0) return null;
+      const [a, b] = pending.pop()!, mid = (a + b) / 2;
+      const h = edge.axis === "x"
+        ? legacyTerrainHeight(edge.value + edge.outward * EDGE_EPSILON, mid)
+        : legacyTerrainHeight(mid, edge.value + edge.outward * EDGE_EPSILON);
+      const error = edge.slope * ((b - a) / 2 + EDGE_EPSILON) + 1e-11;
+      const upper = h + error;
+      if (upper <= RESCUE_BENCH.y) continue;
+      const solid: Solid = { id: "terrain.bench.cut", min: { x: a, y: RESCUE_BENCH.y, z: a },
+        max: { x: b, y: upper, z: b } };
+      solid.min[edge.axis] = solid.max[edge.axis] = edge.value;
+      if (!sweptBoxIntersects(box, d, solid)) continue;
+      if (terrainGap(p, shape, solid).gap >= 0 && !sweep(p, d, shape, solid)) continue;
+      if (h - error >= box.min.y + Math.max(0, d.y) || error < 1e-7) result.push(solid);
+      else {
+        if (mid === a || mid === b) return null;
+        pending.push([mid, b], [a, mid]);
+      }
+    }
+  }
+  return result;
+}
+
 export function createWorldQueries(
   solids: readonly Solid[] = SOLIDS,
   floorHeight: (x: number, z: number) => number = surfaceHeight,
 ): WorldQueries {
+  const worldTerrain = floorHeight === surfaceHeight || floorHeight === terrainHeight;
   return {
     lineOfSight(a, b, ignore = []) {
       if (!finitePoint(a) || !finitePoint(b)) return false;
@@ -432,6 +540,17 @@ export function createWorldQueries(
         let nearest: { t: number; normal: Vec3; rib: boolean; stop: boolean } | null = null;
         const box = actorBox(position, capsule);
         const overlaps: { rib: RibSegment; gap: number }[] = [];
+        const cuts = worldTerrain ? benchCutWalls(position, remaining, capsule) : [];
+        if (!cuts) { hitSolid = true; break; }
+        const terrain = worldTerrain ? [...TERRAIN_COLUMNS, ...cuts] : [];
+        const terrainOverlaps: { solid: Solid; gap: number }[] = [];
+        for (const solid of terrain) {
+          if (!sweptBoxIntersects(box, remaining, solid)) continue;
+          const { gap } = terrainGap(position, capsule, solid);
+          if (gap < -1e-6) terrainOverlaps.push({ solid, gap });
+          const hit = sweepTerrain(position, remaining, capsule, solid);
+          if (hit && (!nearest || hit.t < nearest.t)) nearest = { ...hit, rib: false, stop: false };
+        }
         for (const solid of solids) {
           if (!sweptBoxIntersects(box, remaining, solid)) continue;
           const rib = canonicalRib(solid);
@@ -453,7 +572,8 @@ export function createWorldQueries(
         };
         // Numerical backstop for the non-closing proof, at EVERY accepted slide.
         // Never use overlap as permission to accept a deeper endpoint.
-        if (overlaps.some(({ rib, gap }) => {
+        if (terrainOverlaps.some(({ solid, gap }) => terrainGap(next, capsule, solid).gap < gap - 1e-9) ||
+          overlaps.some(({ rib, gap }) => {
           const nextGap = segmentBoxClosest(rib.a, rib.b, actorBox(next, capsule)).distance - rib.radius;
           return !Number.isFinite(nextGap) || nextGap < gap - 1e-9;
         })) { hitSolid = true; break; }
@@ -519,10 +639,13 @@ export function moveHull(
   shape: Capsule,
   bounds?: HorizontalBounds,
 ): ReturnType<WorldQueries["moveCapsule"]> {
+  if (!finitePoint(origin)) throw new RangeError("Movement origin must be finite.");
   const slices = Math.max(
     1,
     Math.ceil(Math.hypot(delta.x, delta.y, delta.z) / 0.2),
   );
+  if (!finitePoint(delta) || !validShape(shape) || !Number.isFinite(slices) || slices > 100000)
+    return { position: { ...origin }, hitSolid: true, hitBoundary: false };
   let position = { ...origin },
     hitSolid = false,
     hitBoundary = false;
@@ -546,7 +669,11 @@ export function moveHull(
     if (result.position.y < floor + 0.05) {
       hitSolid = true;
       if (Math.abs(d.x) + Math.abs(d.z) > 0.00001) break;
-      result.position.y = Math.max(position.y, floor + 0.05);
+      const y = Math.max(position.y, floor + 0.05);
+      const lift = world.moveCapsule(result.position, { x: 0, y: y - result.position.y, z: 0 }, shape);
+      if (lift.hitSolid || lift.hitBoundary || Math.abs(lift.position.y - y) > 1e-10 ||
+          Math.hypot(lift.position.x - result.position.x, lift.position.z - result.position.z) > 1e-10) break;
+      result.position = lift.position;
     }
     position = result.position;
     hitSolid ||= result.hitSolid;
