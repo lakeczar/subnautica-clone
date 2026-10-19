@@ -192,6 +192,7 @@ function viewFixture(t: test.TestContext, world = createWorldQueries()) {
     structure: (selector: string) => root.querySelectorAll(selector)[0]!,
     active: () => document.activeElement,
     timerCount: () => timers.size,
+    pendingCallbacks: () => [...timers.values()].map(timer => timer.callback),
     wall: (milliseconds: number) => {
       now += milliseconds;
       for (const [id, timer] of [...timers]) if (timer.due <= now) { timers.delete(id); timer.callback(); }
@@ -1858,4 +1859,75 @@ test("disabled hull keeps a truthful chip while outcome speech wins; diver incap
   assert.equal(view.threatDamage(diver, s, true), false); wall(0);
   assert.equal(get("impact-notice").hidden, true); assert.equal(get("damage-announce").textContent, "");
   assert.equal(get("notification").textContent, "Returned to refuge");
+});
+
+test("a later hull outcome cancels queued bite onset without another bite and preserves ordered refusals and persistence", (t) => {
+  const { view, get, wall, pendingCallbacks, s, v, bite } = biteFixture(t);
+  v.health = 0.3;
+  const full = exitBlock(s, createWorldQueries())!.message;
+  const refusal = { kind: "exit", vehicleId: v.id, code: "depth" } as const;
+  view.notify(full, true, { refusal }, s);
+  view.notify(full, true, { refusal }, s);
+  view.notify("Save refused; retained generation", true, { channel: "persistence" }, s);
+  v.health = 0.1;
+  assert.equal(view.threatDamage({ ...bite, healthAfter: 0.1 }, s), true);
+  view.presentationStep(s);
+  const queued = pendingCallbacks(), writes = get("damage-announce").textWrites;
+  assert.equal(get("damage-announce").textContent, "", "onset has not flushed");
+
+  // The next fixed-step batch has only collision and the hull outcome.
+  s.tick++; v.health = 0; v.disabled = true;
+  view.impact(0.1, s);
+  view.notify("Hull disabled", true, { channel: "hazard", context: "hull" }, s);
+  view.presentationStep(s);
+  const afterOutcome = structuredClone(s);
+  wall(0);
+  assert.equal(get("damage-announce").textContent, "", "no second bite is required to cancel onset");
+  assert.equal(get("damage-announce").textWrites, writes, "obsolete onset never reaches the live region");
+  assert.equal(get("impact-notice").textContent, "Bitten · hull −0.2% · impact −0.1%");
+  assert.equal(get("impact-notice").attrs["aria-live"], "off");
+  assert.match(get("hazard-announce").textContent, /HULL DISABLED/);
+  assertFullAnnouncements(get("action-announce").textContent, [full, full]);
+  assert.equal(get("notification").textContent, "Save refused; retained generation");
+  assert.deepEqual(s, afterOutcome, "priority changes presentation only");
+
+  // Even an already-dequeued callback is obsolete after cancellation/reset.
+  for (const callback of queued) callback();
+  assert.equal(get("damage-announce").textContent, "");
+  view.resetPresentation();
+  for (const callback of queued) callback();
+  wall(0);
+  assert.equal(get("damage-announce").textContent, "");
+  assert.equal(get("impact-notice").hidden, true);
+});
+
+test("a later recovery outcome without another bite cancels onset and clears invalid damage", (t) => {
+  const { view, get, wall, s, bite } = biteFixture(t);
+  view.threatDamage(bite, s); view.presentationStep(s);
+  s.tick++; incapacitate(s, "Exposure or injury.");
+  view.notify("Returned to refuge", true, { channel: "hazard", context: "recovery" }, s);
+  view.presentationStep(s); wall(0);
+  assert.equal(get("damage-announce").textContent, "");
+  assert.equal(get("impact-notice").hidden, true);
+  assert.equal(get("notification").textContent, "Returned to refuge");
+});
+
+test("other notices preserve one ordinary bite onset and a later episode can announce again", (t) => {
+  const { view, get, wall, s, v, bite } = biteFixture(t);
+  const writes = get("damage-announce").textWrites;
+  view.threatDamage(bite, s); view.presentationStep(s);
+  view.notify("Action receipt", false, { channel: "action", context: "hull" }, s);
+  view.notify("System status", false, { channel: "system", context: "hull" }, s);
+  view.notify("Save refused", true, { channel: "persistence", context: "hull" }, s);
+  view.notify("Low oxygen", true, { channel: "hazard", context: "oxygen" }, s);
+  wall(0);
+  assert.equal(get("damage-announce").textContent, "Bitten · hull −0.2%");
+  assert.equal(get("damage-announce").textWrites, writes + 1);
+  v.disabled = true; v.health = 0;
+  view.notify("Hull disabled", true, { channel: "hazard", context: "hull" }, s);
+  assert.equal(get("damage-announce").textContent, "");
+  assert.equal(get("impact-notice").textContent, "Bitten · hull −0.2%");
+  view.resetPresentation(); v.disabled = false; v.health = 99.8;
+  assert.equal(view.threatDamage(bite, s), true); wall(0);
+  assert.equal(get("damage-announce").textContent, "Bitten · hull −0.2%");
 });

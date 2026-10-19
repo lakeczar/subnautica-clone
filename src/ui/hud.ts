@@ -393,6 +393,10 @@ export class HudView {
 
   notify(message: string, error = false, options: NoticeOptions = {}, state: GameState | null = this.current): void {
     message = recoveryDisplay(message);
+    // A later step can deliver an outcome without another bite. Invalidate its
+    // queued onset here while retaining the still-controlled hull's damage chip.
+    if (options.channel === "hazard" && (options.context === "hull" || options.context === "recovery"))
+      this.cancelDamageAnnouncement();
     if (options.context === "recovery") {
       this.presentation.clearDamage();
       this.renderDamageChip();

@@ -16,8 +16,9 @@ import { faceTarget } from "./targeting-support.js";
 import { makeVehicle } from "../src/sim/state.js";
 import { fixtureGame } from "../src/sim/carrier.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
-import type { GameEvent, GameState } from "../src/sim/types.js";
+import type { GameEvent, GameState, NoticeOptions } from "../src/sim/types.js";
 import { EncounterPresentation, type ThreatDamage } from "../src/ui/notices.js";
+import { HudView } from "../src/ui/hud.js";
 
 // Extend the existing app-only presentation double in this owned test file.
 // Real DOM injury, cancellation and announcements are tested in presentation.
@@ -992,4 +993,69 @@ test("app: same-step disable retains the target with speech suppressed, while in
   assert.equal(injuryDeliveries.get(f.view)!.at(-1)!.accepted, false);
   assert.equal(injuryPort(f.view).damage, null);
   assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage").length, 0);
+});
+
+test("app: a later real pressure-disable batch cancels the real HUD onset without a second bite", async (t) => {
+  const f = await fixture(t), { port, v, sounds } = appInjury(f);
+  // Only DOM and timer ports are replaced here. Notification priority and
+  // deferred cancellation execute in the production HudView, not the double.
+  class HudElement {
+    textContent = "";
+    innerHTML = "";
+    hidden = false;
+    dataset: Record<string, string> = {};
+    classList = { toggle() {}, remove() {} };
+    setAttribute() {}
+  }
+  const elements = new Map<string, HudElement>();
+  const get = (id: string): HudElement => {
+    if (!elements.has(id)) elements.set(id, new HudElement());
+    return elements.get(id)!;
+  };
+  const root = { querySelector: (selector: string) => get(selector.slice(1)), querySelectorAll: () => [] };
+  const hud = new HudView(root as unknown as HTMLElement, createWorldQueries());
+  let nextTimer = 0;
+  const timers = new Map<number, { callback: () => void; delay: number }>();
+  Object.assign(f.window, {
+    setTimeout: (callback: () => void, delay: number) => { timers.set(++nextTimer, { callback, delay }); return nextTimer; },
+    clearTimeout: (id: number) => timers.delete(id),
+  });
+  const deliveries: { tick: number; target: ThreatDamage["target"] }[] = [];
+  const notify = f.view.notify, step = f.view.presentationStep, dispose = f.view.dispose;
+  Object.assign(f.view, {
+    notify(message: string, error: boolean, options: NoticeOptions, state: GameState) {
+      hud.notify(message, error, options, state);
+      notify.call(f.view, message, error, options);
+    },
+    threatDamage(event: ThreatDamage, state: GameState, suppressed: boolean) {
+      deliveries.push({ tick: state.tick, target: { ...event.target } });
+      return hud.threatDamage(event, state, suppressed);
+    },
+    presentationStep(state: GameState) { hud.presentationStep(state); step.call(f.view, state); },
+    dispose() { hud.dispose(); dispose.call(f.view); },
+  });
+
+  // Seeded diagnostic: one real bite leaves 0.04 hull. Stage the same actor in
+  // over-depth water outside pursuit before the next real fixed step.
+  v.health = 0.24;
+  port.frame(0); port.frame(1000 / 60);
+  assert.deepEqual(deliveries, [{ tick: 17, target: { kind: "vehicle", vehicleId: v.id } }]);
+  assert.equal(get("impact-notice").textContent, "Bitten · hull −0.2%");
+  assert.equal(get("damage-announce").textContent, "");
+  const later = port.session.state, hull = later.fleet.vehicles.find(hull => hull.id === v.id)!;
+  assert.ok(hull.health > 0 && hull.health < 0.05);
+  hull.pose.position = { x: 196, y: -181, z: -228 };
+  later.player.pose = structuredClone(hull.pose);
+  port.frame(2000 / 60);
+  assert.equal(port.session.state.tick, 18);
+  assert.equal(port.session.state.fleet.vehicles.find(hull => hull.id === v.id)!.disabled, true);
+  assert.equal(port.session.state.player.controlledVehicleId, v.id);
+  assert.equal(deliveries.length, 1, "the later outcome batch has no threat-damage event");
+  assert.ok(f.view.noticeRecords.some(n => n.options.channel === "hazard" && n.options.context === "hull"));
+  for (const [id, timer] of [...timers]) if (timer.delay === 0) { timers.delete(id); timer.callback(); }
+  assert.equal(get("damage-announce").textContent, "", "the real outcome notification cancels the deferred onset");
+  assert.equal(get("impact-notice").textContent, "Bitten · hull −0.2%");
+  assert.match(get("hazard-announce").textContent, /HULL DISABLED/);
+  assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage" && !e.origin).length, 1,
+    "the earlier valid onset audio is unchanged");
 });
