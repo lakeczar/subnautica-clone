@@ -6,7 +6,7 @@ Checked production **631918436001c2264aad3123329efeb0bb6e3ab4** combines Dart ca
 
 **Warm-region loading remains open**:56 current transitions retain51.8/78.0/65.6 ms misses. Astra direction26a2f2c and the resulting [shared-preview preflight](evidence/M2-A-WARM-ATTRIBUTION.md) are terminal, verified and integrated. The working shared preview lacks supported target tracing; no new game timings ran. Root's [dedicated Linux profiling workflow](tasks/M2-A-DEDICATED-PROFILE.md) now specifies a separately owned Playwright/Chromium process using public CDP tracing APIs, preserving all T3/shared resources. It first proves useful attribution, then permits only the finite12-target capture; significant unexplained off-CPU time stays inconclusive. No speculative source correction or50 ms waiver. Root retains actual ordinary affected play and fresh complete M2-A Astra/Sol R2.
 
-**Claude Opus5.5/high has returned [SPACE-1](evidence/SPACE-1-STAGING.md)**, source7df64e3/report239b301b, clean and released including5190. Root verifies51 payloads, exact served bundle, frozen validator/saved-type bodies and actual lifecycle/regrowth captures. Its isolated build has553/556 tests passing and a failing M1 economy literal: two unowned files retain old current-version expectations. [Sol reconciliation](tasks/SPACE-1-RECONCILE.md) may compose the returned source in its own checkout and correct only those literals; root M2-A remains schema3/expedition.4. No SPACE-1 acceptance or production integration yet.
+**SPACE-1 reconciliation is complete and inspected, still separate from M2-A.** Opus source7df64e3/report239b301b and Sol's isolated merge32e9fce/correction153b4a4/report4f6f464 remain provisional. The correction changes exactly three current-version assertion literals in two files; clean compilation, **93/93 focused tests**, M1 economy and frozen-domain comparisons pass. Root verifies34 reconciliation payloads,59 production files against their authorized origins and110 unchanged compiled production files. Only the author report is copied into root; no SPACE-1 production or corrected assertions are integrated here. [Staged inspection](evidence/SPACE-1-STAGING.md), [author reconciliation](evidence/SPACE-1-RECONCILE.md). Full composite checks and a fresh independent pair remain pending after M2-A disposition; root production stays6319184/schema3/expedition.4.
 
 SPACE-1 adds bounded persistent membrane/resin renewal, strict schema4 migration and a full progression matrix. Current recipes already enforce gates. Its future unlock/Creel/material-budget recommendations remain proposals for M2-B/C, not a new registry. Preserve finite-stock solvency, concise menus and the owner's planned2.0×1.8km world; the current324×326m benchmark is not that full world.
 
@@ -55,7 +55,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-Both M2-A R1 reviewers, research author, Sol correction workers and Astra warm-direction advisor are terminal/released. Root owns integration/build records. Opus SPACE-1 is terminal/released; its bounded Sol version reconciliation stays in a separate composite. Only the dedicated report-only profiling workflow may use the released render diagnostic paths and5191. TASKS records actual dispatch/bindings. No peer edits, polling or duplicate workers.
+Both M2-A R1 reviewers, research author, Sol correction workers and Astra warm-direction advisor are terminal/released. Root owns integration/build records. Opus SPACE-1 and its Sol version reconciliation are terminal/released; their production stays in a separate composite. The dedicated report-only profiling workflow is the sole active worker, with its conditional render diagnostic paths and5191. TASKS records actual dispatch/bindings. No peer edits, polling or duplicate workers.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -90,7 +90,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch/receive the dedicated isolated-browser attribution and disposition its evidence without speculative optimization or a timing waiver. Reconcile returned Opus SPACE-1 work separately. Complete affected ordinary play and fresh full-batch M2-A Astra/Sol R2; then integrate/review SPACE-1, continue M2-B/C and M3/M4 automatically. Main merge/public deployment remain owner actions.
+Receive the active dedicated isolated-browser attribution and disposition its evidence without speculative optimization or a timing waiver. SPACE-1 version reconciliation is inspected and held separately. Complete affected ordinary play and fresh full-batch M2-A Astra/Sol R2; then compose/full-check/review SPACE-1, continue M2-B/C and M3/M4 automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
