@@ -1,6 +1,6 @@
 # Build status
 
-## Current checkpoint — both M2-A reviews reconciled; bounded corrections prepared
+## Current checkpoint — both M2-A reviews reconciled; two corrections active
 
 **Hunter reconciliation source35c2d22/report893390b is inspected and provisionally integrated at7c2db5d.** [Root inspection](evidence/M2-A-HUNTER-RECONCILE-INTEGRATION.md) reproduces **536/536 tests**, typecheck/build and all economies, including completed-earned M2. All three ROOT-HUNTER findings are provisionally resolved: valid exterior fixtures with442 unchanged assertions, cheaper exact queries, and parked/disabled/berthed fleet obstruction after exit.
 
@@ -8,7 +8,7 @@ Root verifies all1,477 archive payload members, current source/build identity,8,
 
 Both independent M2-A R1 reviewers are terminal and released. [Complete reconciliation](reviews/M2-A-R1.md) records **REQUEST CHANGES / REQUEST CHANGES** on frozen d5c0694, base c1ddb0a. Both accept eight criteria; both require disposition of the retained50.6/59.3ms warm-region trial misses. Astra additionally reproduces a parked-hull hunter stall; Sol accepts that criterion from different evidence, but root's exact1,778-step reproduction confirms the correction is needed. Sol report6963c37 is verified and merged at a3da919; all432 payloads/archive bytes and three original Sol6.1/max contexts verify.
 
-Two disjoint Sol6.1/max briefs are committed for the next shared-baseline dispatch: [hunter movement](tasks/M2-A-R1-HUNTER-FIX.md) and [warm-region profiling/measured correction](tasks/M2-A-R1-REGION-PROFILE.md). Hunter is initially nonbrowser; profiler owns isolated5191. No corrected source or M2-A acceptance yet. Root retains actual affected ordinary hunter continuation after assembly, followed by fresh complete-batch Astra/Sol R2. Human route recognition/control feel, duration/enjoyment, audible mix and hardware pacing remain unverified; first-use loading stays open.
+Two disjoint Sol6.1/max workers are active from **57aacb0380c8990bc376841e261d651cbdfb2ac1**, with original runtime and separate T3 bindings verified: [hunter movement](tasks/M2-A-R1-HUNTER-FIX.md) and [warm-region profiling/measured correction](tasks/M2-A-R1-REGION-PROFILE.md). Hunter is initially nonbrowser; profiler owns isolated5191. No corrected source or M2-A acceptance yet. Root retains actual affected ordinary hunter continuation after assembly, followed by fresh complete-batch Astra/Sol R2. Human route recognition/control feel, duration/enjoyment, audible mix and hardware pacing remain unverified; first-use loading stays open.
 
 After paired acceptance continue M2-B fleet/mobile homes → M2-C deep routes/both functional endings → integrated M2 pair/Opus → M3 authored campaign → dedicated Astra critic/M4 polish. Root owns no browser/server/recording/check process. Earlier active labels below are historical.
 
@@ -55,7 +55,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-Both initial reviewers and all previous authors are terminal/released. Root owns integration/build records. The two new correction briefs have disjoint source/report ownership; TASKS records dispatch IDs and actual bindings after the committed baseline. No peer edits, review polling or duplicate workers.
+Both initial reviewers and all previous authors are terminal/released. Root owns integration/build records. The two active correction workers have disjoint source/report ownership; TASKS records actual dispatch IDs, verified runtime and separate bindings on57aacb0. No peer edits, review polling or duplicate workers.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -90,7 +90,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the two committed correction briefs from one clean baseline, verify actual Sol6.1/max runtime and bindings, then receive their terminal returns without polling. Inspect/assemble the bounded changes, retain affected ordinary hunter play and obtain fresh complete M2-A paired R2 on one frozen candidate. After acceptance continue M2-B/C and M3/M4 automatically. Main merge/public deployment remain owner actions.
+Receive the two active bounded corrections on57aacb0 through their terminal notifications without polling. Inspect/assemble the bounded changes, retain affected ordinary hunter play and obtain fresh complete M2-A paired R2 on one frozen candidate. After acceptance continue M2-B/C and M3/M4 automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
