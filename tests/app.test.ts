@@ -1,3 +1,4 @@
+import { hunterStandOff } from "../src/sim/hunter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -945,8 +946,9 @@ function appInjury(f: Fixture) {
   s.player.mode = "piloting"; s.player.pose.position = { x: 132, y: -110, z: -112 };
   const v = makeVehicle("app-bite", "dart", s.player.pose.position, "app-bite-hold");
   s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id;
-  s.world.threat = { mode: "pursue", position: { x: 133, y: -110, z: -112 }, interest: 5,
+  s.world.threat = { mode: "pursue", position: { x: 144, y: -110, z: -112 }, interest: 5,
     modeSeconds: 0, distraction: null, distractionSeconds: 0 };
+  s.world.threat.position = hunterStandOff(s);
   const bite: ThreatDamage = { type: "threat-damage", source: "hunter", target: { kind: "vehicle", vehicleId: v.id }, loss: .2, healthAfter: 99.8 };
   const sounds: GameEvent[] = []; port.sound.event = e => { sounds.push(e); };
   f.view.actions.resume();
