@@ -11,7 +11,7 @@ import { board } from "../src/sim/vehicles.js";
 import { RECOVERY_NOTICES } from "../src/sim/recovery.js";
 import { createEnvelope, encodeSave, decodeSave } from "../src/save/codec.js";
 import type { GameEvent, GameState, Vec3 } from "../src/sim/types.js";
-import { faceTarget, NORMAL_VIEWS, readyState } from "./targeting-support.js";
+import { faceTarget, NORMAL_VIEWS, protectedReadyState, readyState } from "./targeting-support.js";
 
 const world = createWorldQueries(), empty = createWorldQueries([], () => -200);
 const panels = (events: GameEvent[]) => events.filter(e => e.type === "interaction-panel");
@@ -81,12 +81,17 @@ test("very narrow adjacent hosts resolve to deliberate center aim, stably across
   }
 });
 
-test("all sources, food, C01–C04, optional note and services retain collision-valid normal views and matching actions", () => {
-  assert.equal(NORMAL_VIEWS.length, interactions(readyState()).length);
+test("all sources, food, C01–C06, optional note and both rescue work faces retain collision-valid normal views and matching actions", () => {
+  assert.deepEqual([...new Set(NORMAL_VIEWS.map(v => v.id))].sort(), interactions(readyState()).map(t => t.id).sort(),
+    "every actual host is covered, including the six added Basin hosts");
+  assert.equal(NORMAL_VIEWS.length, interactions(readyState()).length + 1, "one additional view, with no missing or duplicated other hosts");
+  assert.equal(NORMAL_VIEWS.filter(v => v.id === "rescue_staging").length, 2, "both work faces keep the same stable ID");
   for (const v of NORMAL_VIEWS) {
-    const s = readyState(); viewAt(s, v.id);
+    const s = v.position.y < -150 ? protectedReadyState(350) : v.position.y < -60 ? protectedReadyState(150) : readyState();
+    s.player.pose.position = { ...v.position }; s.player.mode = v.mode; faceTarget(s, v.id);
     assert.ok(world.clearance(s.player.pose.position, { radius: 0.34, height: v.mode === "walking" ? 1.75 : 0.95 }), v.id + " body clearance");
     const target = aimedInteraction(s, world); assert.equal(target?.id, v.id, v.id);
+    assert.ok(world.lineOfSight(aimRay(s)!.origin, target!.host.center, target!.host.solidIds), v.id + " host LOS");
     const result = executeCommand(s, { type: "interact" }, world);
     assert.ok(!result.events.some(e => e.type === "notice" && e.error), v.id);
     if (v.id in SOURCES) {
@@ -97,6 +102,8 @@ test("all sources, food, C01–C04, optional note and services retain collision-
     else if (v.id === "mara_reef_note") assert.ok(result.state.knowledge.journals.includes(v.id));
     else assert.deepEqual(panels(result.events), [{ type: "interaction-panel", panel: v.id === "rescue_staging" ? "inventory" : "craft", targetId: v.id }]);
     saved(result.state);
+    s.player.pose.yaw += Math.PI;
+    assert.notEqual(aimedInteraction(s, world)?.id, v.id, v.id + " looking away");
   }
 });
 

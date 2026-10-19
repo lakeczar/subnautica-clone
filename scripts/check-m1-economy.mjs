@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { CONTENT_VERSION, RECIPES, SOURCES, ITEMS, PLACES } from "../.test-build/src/content/registry.js";
+import { LEGACY_TERRAIN_SOURCE_IDS } from "../.test-build/src/content/routes.js";
 import { createGame } from "../.test-build/src/sim/state.js";
 import { collect, completeOpening, craft, discover, toggleBuoy } from "../.test-build/src/sim/progression.js";
 import { available, fabricationContainers, materialStoragePreview, storeMaterials, transfer, usedCapacity } from "../.test-build/src/sim/inventory.js";
@@ -15,11 +16,15 @@ const proposalText = read("../docs/build/design/economy-candidate.json");
 const candidate = JSON.parse(proposalText);
 const delta = JSON.parse(read("../docs/build/design/M1-PLAY-ECONOMY.json"));
 assert.equal(createHash("sha256").update(proposalText).digest("hex"), delta.historicalProposalSha256, "historical proposal must remain unchanged");
-assert.equal(CONTENT_VERSION, delta.contentVersion);
+assert.equal(delta.contentVersion, "expedition.3", "historical adoption retains its original content tag");
+assert.equal(CONTENT_VERSION, "expedition.4", "check the current executable content separately");
 assert.deepEqual(Object.keys(delta.costOverrides).sort(), ["essential_tools", "restore_workshop", "suit_150"]);
-assert.deepEqual(Object.keys(RECIPES).sort(), [...delta.preCanopy, ...Object.keys(delta.optionalReturn)].sort(), "cover every executable recipe exactly once");
+const m1Ids = [...delta.preCanopy, ...Object.keys(delta.optionalReturn)];
+assert.equal(new Set(m1Ids).size, m1Ids.length, "each adopted M1 recipe is covered exactly once");
+assert.deepEqual(Object.keys(RECIPES).sort(), [...m1Ids, "suit_350"].sort(), "complete executable roster is M1 plus the separately checked M2 refit");
 assert.equal(new Set(delta.preCanopy).size, delta.preCanopy.length);
-for (const [id, r] of Object.entries(RECIPES)) {
+for (const id of m1Ids) {
+  const r = RECIPES[id];
   const optional = delta.optionalReturn[id];
   if (optional) {
     assert.ok(!candidate.recipes[id], "optional reward is not historical arithmetic");
@@ -50,7 +55,10 @@ assert.deepEqual(starterSpend, delta.budget.publicStarterSpend); assert.deepEqua
 assert.equal(cu(starterSpend), delta.budget.publicStarterCu); assert.deepEqual(RECIPES.bobbin_kit.cost, delta.budget.rescueOnlyKitSpend);
 assert.deepEqual(RECIPES.dart_base.cost, { structural_alloy: 6, silica_glass: 3, flex_membrane: 2 });
 const stock = {}, starterStock = {}, patches = {};
-for (const source of Object.values(SOURCES)) {
+// M1 solvency must precede Basin access. New stock cannot cover a missing old
+// source or pay the optional return upgrade that helps prepare that next route.
+for (const id of LEGACY_TERRAIN_SOURCE_IDS) {
+  const source = SOURCES[id];
   stock[source.item] = (stock[source.item] ?? 0) + source.stock;
   if (["refuge_reef", "island_chain"].includes(source.region)) {
     assert.ok(-source.position.y <= 60, "starter sources precede suit/vehicle protection");
@@ -147,7 +155,8 @@ function stagedPreparation(order) {
     sources, receipts, peakCu: peak, firstCanopyPayloadCu: 16, installedHoldCu: usedCapacity(s, v.cargoId), moduleId: item.id,
     publicFrameInvestment: v.investment, collections: s.metrics.collections };
 }
-console.log(JSON.stringify({ scope: delta.limits, content: CONTENT_VERSION, comparedRecipes: Object.keys(RECIPES).length,
+console.log(JSON.stringify({ scope: delta.limits, historicalContent: delta.contentVersion, content: CONTENT_VERSION,
+  comparedRecipes: m1Ids.length, executableRecipes: Object.keys(RECIPES).length,
   starterSpend, starterRawCu: cu(starterSpend), optionalReturnSpend: optionalSpend, optionalRawCu: cu(optionalSpend),
   exposedStarterStock: starterStock, exposedStock: stock, starterRemaining: Object.fromEntries(Object.entries(starterSpend).map(([k, n]) => [k, starterStock[k] - n])),
   rescueOnlyKitSpend: RECIPES.bobbin_kit.cost, frameCu, capacities: { diver: delta.budget.diverCu, buoy: delta.budget.buoyCu, dart: delta.budget.dartCu },

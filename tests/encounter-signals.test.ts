@@ -97,7 +97,7 @@ test("hull disable and incapacity use hazard contexts without changing recovery"
 test("automatic recovery results are tagged only at step composition, distinguishing progress from errors", () => {
   const ready = pilot(), v = ready.fleet.vehicles[0]!; v.disabled = true; v.health = 0;
   ready.player.controlledVehicleId = null; ready.player.mode = "swimming";
-  ready.recovery.operation = { vehicleId: v.id, method: "tow", phase: "approach", waypoint: 3,
+  ready.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase: "approach", waypoint: 3,
     position: { ...v.pose.position, y: v.pose.position.y + 1 } };
   const out = stepGame(ready, [], empty), notice = out.events.find(e => e.type === "notice");
   assert.ok(notice?.type === "notice");

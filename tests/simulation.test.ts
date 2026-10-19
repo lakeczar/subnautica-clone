@@ -13,6 +13,7 @@ import {
   POD_DECK,
   surfaceHeight,
   terrainHeight,
+  WORLD_BOUNDS,
 } from "../src/sim/world.js";
 import type { GameCommand, GameState, WorldQueries } from "../src/sim/types.js";
 
@@ -228,12 +229,12 @@ test("diving stays above the sea floor, the foundation boundary is bounded, and 
   assert.ok(p.y >= terrainHeight(p.x, p.z) - 0.001);
   assert.ok(p.y < -5);
   const boundary = world.moveCapsule(
-    { x: 187, y: -1, z: 0 },
+    { x: WORLD_BOUNDS.maxX - 1, y: -1, z: 0 },
     { x: 50, y: 0, z: 0 },
     { radius: 0.34, height: 1 },
   );
   assert.equal(boundary.hitBoundary, true);
-  assert.equal(boundary.position.x, 188);
+  assert.equal(boundary.position.x, WORLD_BOUNDS.maxX);
   assert.ok(surfaceHeight(0, 8) > terrainHeight(0, 8));
   const stationary = run(state, [], 10);
   assert.equal(stationary.player.pose.position.y, p.y);

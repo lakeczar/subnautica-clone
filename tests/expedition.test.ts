@@ -31,6 +31,7 @@ import {
   updateRecovery,
 } from "../src/sim/recovery.js";
 import type { GameEvent, GameState } from "../src/sim/types.js";
+import { migrateSchema2Fixture } from "./legacy-fixture-support.js";
 const world = createWorldQueries();
 const ready = (): GameState => {
   const s = createGame();
@@ -160,10 +161,11 @@ test("M1 package, reserve cells and first hull consume the declared starter budg
     flex_membrane: 2,
   });
   const totals = { structural_alloy: 0, silica_glass: 0, flex_membrane: 0 };
-  for (const [id, r] of Object.entries(RECIPES))
-    if (id !== "bobbin_kit" && id !== "dart_acoustic_trim")
-      for (const [k, n] of Object.entries(r.cost))
-        totals[k as keyof typeof totals] += n;
+  // Explicit adopted public M1 package; Bobbin has its separate maintenance budget.
+  for (const id of ["pod_repair", "essential_tools", "suit_150", "salvage_buoy", "reserve_cells", "restore_workshop", "dart_base"] as const)
+    for (const [k, n] of Object.entries(RECIPES[id].cost))
+      totals[k as keyof typeof totals] += n;
+  assert.deepEqual(RECIPES.dart_acoustic_trim.cost, { conductive_crust: 2, buoyant_resin: 2 });
   assert.deepEqual(totals, {
     structural_alloy: 16,
     silica_glass: 11,
@@ -653,7 +655,7 @@ test("automatic Bobbin ready and blocked transitions publish one notice through 
   disableVehicle(s, v.id);
   s.player.pose.position = { x: 46, y: -12, z: -54 };
   s.player.mode = "swimming";
-  s.recovery.operation = { vehicleId: v.id, method: "tow", phase: "approach", waypoint: 3, position: { ...v.pose.position, y: v.pose.position.y + 1 } };
+  s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase: "approach", waypoint: 3, position: { ...v.pose.position, y: v.pose.position.y + 1 } };
   let result = stepGame(s, [], world);
   assert.equal(result.state.recovery.operation?.phase, "ready");
   assert.deepEqual(result.events.filter((e) => e.type === "notice"), [{ type: "notice", channel: "action", context: "recovery", message: result.state.feedback }]);
@@ -687,8 +689,10 @@ test("legacy operation phase cuts and attachment offsets resume a fully swept to
     const guide = cut.phase === "approach"
       ? [{ x: 46, y: -12, z: -54 }, { x: 46, y: -12, z: -54 }, { x: 57, y: -9, z: -65 }, { x: 80, y: -47, z: -89 }][cut.waypoint]!
       : { ...v.pose.position, y: v.pose.position.y + cut.offset };
-    s.recovery.operation = { vehicleId: v.id, method: "tow", phase: cut.phase, waypoint: cut.waypoint, position: { ...guide } };
+    s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase: cut.phase, waypoint: cut.waypoint, position: { ...guide } };
     s = roundTrip(s);
+    for (const version of ["expedition.2", "expedition.3"] as const)
+      s = migrateSchema2Fixture(s, { sessionId: "legacy-operation-cuts", createdAt: "2026-10-17T12:00:00.000Z", savedAt: "2026-10-17T12:00:00.000Z" }, version);
     const before = structuredClone(s), notices: GameEvent[] = [];
     for (let i = 0; s.recovery.operation && i < 2500; i++) {
       if (s.recovery.operation.phase === "ready") {
@@ -728,7 +732,7 @@ test("a blocker on the final mooring segment stops at the last clear pose withou
   disableVehicle(s, v.id);
   s.player.pose.position = { x: 46, y: -12, z: -54 };
   s.player.mode = "swimming";
-  s.recovery.operation = { vehicleId: v.id, method: "tow", phase: "tow", waypoint: 0, position: { ...v.pose.position, y: v.pose.position.y + 1 } };
+  s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase: "tow", waypoint: 0, position: { ...v.pose.position, y: v.pose.position.y + 1 } };
   const blocked = createWorldQueries([...SOLIDS, { id: "diagnostic.final-mooring-wall", min: { x: 40, y: -13, z: -50.55 }, max: { x: 62, y: -5, z: -50.5 } }]);
   assert.ok(hullClearance(blocked, v.pose.position, HULL_COLLIDERS.dart));
   const before = structuredClone(s), events: GameEvent[] = [];

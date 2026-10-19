@@ -11,6 +11,7 @@ import { executeCommand, stepGame } from "../src/sim/step.js";
 import type { GameCommand, GameState } from "../src/sim/types.js";
 import { createWorldQueries, hullClearance, SOLIDS, sweptHullClearance } from "../src/sim/world.js";
 
+import { migrateSchema2Fixture } from "./legacy-fixture-support.js";
 const world = createWorldQueries();
 const meta = {
   sessionId: "recovery-occupancy-test",
@@ -60,7 +61,7 @@ test("occupied tow initiation and ready attachment refuse atomically and remain 
   for (const phase of [null, "ready", "approach", "tow"] as const) {
     const s = fixture(), v = s.fleet.vehicles[0]!;
     addItem(s, "meal", 2, v.cargoId);
-    if (phase) s.recovery.operation = { vehicleId: v.id, method: "tow", phase, waypoint: 2, position: { ...v.pose.position } };
+    if (phase) s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase, waypoint: 2, position: { ...v.pose.position } };
     roundTrip(s);
     const before = structuredClone(s);
     const result = executeCommand(s, { type: "recover", vehicleId: v.id, method: "tow" }, world);
@@ -80,7 +81,7 @@ test("occupied empty-frame salvage refuses before returning investment, stock or
   v.boundRepairs = 2;
   s.world.maintenance.alloy -= 4;
   s.world.maintenance.membrane -= 2;
-  s.recovery.operation = { vehicleId: v.id, method: "tow", phase: "ready", waypoint: 3, position: { ...v.pose.position } };
+  s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase: "ready", waypoint: 3, position: { ...v.pose.position } };
   const before = structuredClone(roundTrip(s));
   const result = executeCommand(s, { type: "recover", vehicleId: v.id, method: "salvage" }, world);
   assert.deepEqual(result.state, before);
@@ -94,7 +95,7 @@ test("paid occupied patch and reserve transfer keep their costs and identity wit
   let s = fixture(["reserve_cells"]);
   addItem(s, "meal", 2, s.fleet.vehicles[0]!.cargoId);
   const before = structuredClone(s), v = before.fleet.vehicles[0]!;
-  s.recovery.operation = { vehicleId: v.id, method: "tow", phase: "tow", waypoint: 2, position: { ...v.pose.position } };
+  s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase: "tow", waypoint: 2, position: { ...v.pose.position } };
   s = command(s, { type: "recover", vehicleId: v.id, method: "repair" });
   assert.equal(s.player.controlledVehicleId, v.id);
   assert.deepEqual(s.player, before.player);
@@ -119,8 +120,9 @@ test("valid old occupied approach, ready and tow snapshots cancel once before mo
     addItem(s, "meal", 2, v.cargoId);
     s.player.graceSeconds = 0;
     s.player.vitals.food = 70;
-    s.recovery.operation = { vehicleId: v.id, method: "tow", phase, waypoint: 2, position: { ...v.pose.position, y: v.pose.position.y + 1 } };
-    s = roundTrip(s); // This is a valid legacy save, never an invalid-import repair.
+    s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase, waypoint: 2, position: { ...v.pose.position, y: v.pose.position.y + 1 } };
+    s = roundTrip(s);
+    for (const version of ["expedition.2", "expedition.3"] as const) s = migrateSchema2Fixture(s, meta, version);
     const before = structuredClone(s), detached = structuredClone(s);
     const event = updateRecovery(detached, world);
     assert.deepEqual(detached, { ...before, recovery: { ...before.recovery, operation: null }, feedback: detached.feedback });
@@ -152,8 +154,9 @@ test("cancelling an occupied old tow with exhausted cabin air does not refill ai
   v.emergencyAir = 0;
   v.charge = 0;
   s.player.vitals.oxygen = 50;
-  s.recovery.operation = { vehicleId: v.id, method: "tow", phase: "tow", waypoint: 2, position: { ...v.pose.position } };
+  s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase: "tow", waypoint: 2, position: { ...v.pose.position } };
   s = roundTrip(s);
+  for (const version of ["expedition.2", "expedition.3"] as const) s = migrateSchema2Fixture(s, meta, version);
   const result = stepGame(s, [], world);
   assert.equal(result.state.recovery.operation, null);
   assert.equal(result.state.fleet.vehicles[0]!.emergencyAir, 0);
