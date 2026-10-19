@@ -1,10 +1,10 @@
 # Build status
 
-## Current checkpoint — Opus renewal/progression active; M2-A performance corrections prepared
+## Current checkpoint — Opus renewal/progression active; M2-A performance corrections active
 
 **Current production9473318 is provisionally assembled at47df63e.** [Root inspection](evidence/M2-A-R1-CORRECTIONS-INTEGRATION.md) passes538/538 tests/typecheck/build and all economies. The parked-hull stall is corrected, but the root's retained baseline/candidate comparison confirms nearby-two query p95 regresses from~.91–1.05ms to2.30–2.59ms. The2ms gate remains open. Regional profile fb0872f is report-only:111 warm transitions include92.2/106.5ms setup replacements; all48 later targets pass, but the50ms gate remains open.
 
-Both original correction workers are terminal and released. Root prepares disjoint Sol6.1/max [hunter cost](tasks/M2-A-HUNTER-COST.md) and [Dart reconstruction](tasks/M2-A-DART-RECONSTRUCTION.md) corrections based on measured work. Actual tasks/bindings follow in TASKS. Root retains actual affected ordinary hunter continuations and fresh complete M2-A Astra/Sol R2 on all ten original criteria. Both R1 reviews remain REQUEST CHANGES. No threshold waiver or M2-A acceptance.
+Both original correction workers are terminal and released. Root has dispatched disjoint Sol6.1/max [hunter cost](tasks/M2-A-HUNTER-COST.md) and [Dart reconstruction](tasks/M2-A-DART-RECONSTRUCTION.md) corrections based on measured work. Both begin at485655a with original runtime and separate T3 bindings verified in TASKS. Root retains actual affected ordinary hunter continuations and fresh complete M2-A Astra/Sol R2 on all ten original criteria. Both R1 reviews remain REQUEST CHANGES. No threshold waiver or M2-A acceptance.
 
 **Claude Opus5.5/high is actively implementing [SPACE-1](tasks/SPACE-PROGRESSION-OPUS.md)** from dae17fc in isolated t3-4ef859b2. Exact provider/model/high configuration and original Claude model transcript are verified; its own production is not integrated. Root verified the returned Subnautica report's23 text payloads/four official-news bodies and integrated it at effe874c. Ordinary inorganic pickups do not normally refill on departure; living producers are distinct. The owner accepts the planned2.0×1.8km world if the loop earns it. SPACE-1 implements bounded persistent membrane/resin renewal, strict migration, current recipe-gate checks/fixes and the full campaign acquisition matrix. It preserves finite-stock solvency and concise menus; current recipes already have gates.
 
@@ -55,7 +55,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-Both M2-A reviewers, research author and initial correction workers are terminal/released. Root owns integration/build records. Opus SPACE-1 is active; the next committed baseline authorizes disjoint hunter-cost/render-cache tasks. TASKS records actual bindings. No peer edits, polling or duplicate workers.
+Both M2-A reviewers, research author and initial correction workers are terminal/released. Root owns integration/build records. Opus SPACE-1 is active; disjoint hunter-cost/render-cache tasks are active on485655a. TASKS records actual bindings. No peer edits, polling or duplicate workers.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -90,7 +90,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch the two committed measured performance corrections on the shared baseline while Opus continues. Receive their completion notifications, inspect/compose M2-A corrections, retain affected ordinary play and obtain fresh complete-batch Astra/Sol R2. Integrate/review SPACE-1 separately, then continue M2-B/C and M3/M4 automatically. Main merge/public deployment remain owner actions.
+Receive the active measured performance corrections and Opus work through completion notifications, inspect/compose M2-A corrections, retain affected ordinary play and obtain fresh complete-batch Astra/Sol R2. Integrate/review SPACE-1 separately, then continue M2-B/C and M3/M4 automatically. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
