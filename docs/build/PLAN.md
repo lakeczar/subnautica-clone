@@ -1,5 +1,7 @@
 # Construction plan
 
+**Next measured corrections:** hunter9473318 is provisionally integrated with538 checks/economies passing, but root confirms a real query-cost miss; regional profile is report-only with two current warm misses. [Root disposition](evidence/M2-A-R1-CORRECTIONS-INTEGRATION.md) assigns bounded hunter cost and immutable Dart reconstruction corrections. Opus SPACE-1 is active from dae17fc and remains a separate feature/review boundary.
+
 **Research disposition and next implementation:** [SPACE-1](tasks/SPACE-PROGRESSION-OPUS.md) defines owner-requested Opus5.5/high production renewal, schema4/expedition.5 migration, current gate verification/fixes and full progression matrix. Research is integrated at effe874c; distinguish finite minerals from living outputs. Preserve finite-stock solvency and2.0×1.8km target. Keep this batch separate from current M2-A corrections; hunter9473318 is terminal with an unresolved query-cost miss, regional profiler continues.
 
 **2026-10-19 owner steering:** retain the2.0×1.8km full-world target and make distance/depth, habitat resources and equipment/fleet choices sustain a purposeful outward-and-return loop. [Current code audit](design/SPACE-AND-RESOURCE-AUDIT.md) finds a compact324×326m benchmark and no ordinary passive material renewal. Reconcile current Subnautica research, then dispatch the expressly requested Opus5.5/high implementation in a separate bounded scope. Existing M2-A corrections/review gates remain active; expand actual world geography with M2-B/C rather than merely enlarging a water plane.
