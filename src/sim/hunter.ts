@@ -244,8 +244,16 @@ export function moveHunter(s: GameState, world: WorldQueries): {
     const safe=(next:Vec3):boolean=>finite(next)&&!penetrates(a,next,poseAt(s,next,actorSurface(a,next)))&&
       fleetSweep(near,start,next,pose,poseAt(s,next,actorSurface(a,next)));
     if(safe(next))position=next;
-    else if(near.length)for(const angle of [Math.PI/4,-Math.PI/4,Math.PI/2,-Math.PI/2]) {
-      const attempt=sweep(encounterRotation(delta,angle));if(safe(attempt)&&length(sub(attempt,start))>1e-7){position=attempt;break;}
+    else if(near.length) {
+      const angles=[Math.PI/4,-Math.PI/4,Math.PI/2,-Math.PI/2],level={x:delta.x,y:0,z:delta.z};
+      // After clearing a hull vertically, every rotated approach can descend
+      // into it again. Try separated components through the same sweeps; their
+      // lengths never exceed the requested step and no clearance is relaxed.
+      const alternatives=[...angles.map(angle=>encounterRotation(delta,angle)),
+        ...(Math.abs(delta.y)>1e-8?[level,...angles.map(angle=>encounterRotation(level,angle)),{x:0,y:delta.y,z:0}]:[])];
+      for(const alternative of alternatives) {
+        const attempt=sweep(alternative);if(safe(attempt)&&length(sub(attempt,start))>1e-7){position=attempt;break;}
+      }
     }
     blocked=length(sub(position,start)) + 1e-7 < length(delta);
   }
