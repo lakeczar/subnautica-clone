@@ -1,6 +1,6 @@
 # Construction plan
 
-**Resumed by the owner on 2026-10-19.** [Worker verification](evidence/WORKER-RESUME-20261019.md) confirms the recovered 16 GiB worker and restored evidence. SPACE-1 now has [fresh complete Sol6.1/xhigh acceptance and coordinator concurrence](reviews/SPACE-1-SOL-XHIGH-RESUME-R1-DISPOSITION.md); the old interrupted reviewer supplied no verdict. The Opus GPU bundle has returned and its fresh Sol6.1/xhigh execution-readiness review is running. No live GPU change has occurred. Game production and all remaining milestones below are unchanged.
+**Resumed by the owner on 2026-10-19.** [Worker verification](evidence/WORKER-RESUME-20261019.md) confirms the recovered 16 GiB worker and restored evidence. SPACE-1 now has [fresh complete Sol6.1/xhigh acceptance and coordinator concurrence](reviews/SPACE-1-SOL-XHIGH-RESUME-R1-DISPOSITION.md); the old interrupted reviewer supplied no verdict. The GPU Sol6.1/xhigh R1 requests changes and Opus/high is implementing the [reconciled corrections](reviews/GPU-ENABLEMENT-SOL-XHIGH-R1-DISPOSITION.md). A fresh full-scope review follows. No live GPU change has occurred. Game production and all remaining milestones below are unchanged.
 
 ## Current route to the complete game
 
