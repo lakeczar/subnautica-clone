@@ -9,7 +9,7 @@
 | M0, M1, stage1 controls/flow, M2-A, SPACE-1 | Accepted at their recorded revisions | Preserve accepted opening, first expedition, Canopy–Basin route, controls and bounded renewal |
 | M2-B1 | Opus/high building; separate complete Sol review still required | Earned Creel, 350 m options, cargo/cabin choice, forward service, finite membrane and local mobile-home recovery |
 | [M2-B2 fleet/home](tasks/M2-B2-OPUS.md) | Prepared only; reconcile B1 contracts before dispatch | Three actual islands, useful Hush/Spindle, earned inhabited Hearthline, compact/medium operations and assembly recovery |
-| M2-C | Required | Rift/Divide/District, safe first late-material access, deeper capability, Mantle, deep recovery and both functional completion strategies |
+| [M2-C deep expeditions](tasks/M2-C-OPUS.md) | Prepared only; reconcile accepted B1/B2 before dispatch | Rift/Divide/District, safe first late-material access, deeper capability, Mantle, deep recovery and both functional completion strategies |
 | Integrated M2 | Required after all component gates | Both ordinary-control strategies, all seven regions/six useful craft, complete technical review and fresh Opus experience audit |
 | M3 | Required | Complete authored campaign, clues and alternate evidence, every hull mission, original assets/audio and both routes; technical and Opus stage reviews |
 | M4 / release candidate | Required | Dedicated design critique, corrections, controls/accessibility/pacing polish, final play/recovery/reload, qualified hardware evidence and reviewable artifact/PR |
