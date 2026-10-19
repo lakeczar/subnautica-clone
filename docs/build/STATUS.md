@@ -1,12 +1,12 @@
 # Build status
 
-## Current checkpoint — Opus completion inspected, Sol xhigh review active
+## Current checkpoint — M2-A accepted; resource-renewal composition next
 
-Opus source941008e/018f8ba and reportc836987 are terminal and provisionally merged at **c2c61556f007578f138fa63c4908f19cc923a39e**. Root passes **546/546 tests**, typecheck/build and all four economy checks; all27 built files match the author's final build. [Coordinator inspection](evidence/M2-A-OPUS-INTEGRATION.md) records168 verified payloads, reproduced timing/frame summaries, actual Basin image inspection and source/evidence limitations.
+**M2-A is accepted on `51c4dcd82755b53c4c3914dc2e4220ec0d701ff4`.** One fresh non-author **Sol 6.1/xhigh** reviewer accepts all ten original criteria, and coordinator inspection concurs. [Acceptance and continuation](reviews/M2-A-SOL-XHIGH-R1-DISPOSITION.md) records the full findings disposition and limits; [independent report](reviews/M2-A-SOL-XHIGH-R1.md). Production remains **c2c61556f007578f138fa63c4908f19cc923a39e**, identical to author018f8ba, with root and reviewer independently passing **546 tests**, typecheck/build and all four economies.
 
-Returning regions retain detached geometry within a four-region cap while only two draw. Idle screens prepare nearby regions; the Basin tint and pulse refusal wording improve presentation. The changed architecture is authorized under [MODEL_POLICY](MODEL_POLICY.md): Opus5.5/high builds with discretion, one fresh non-author Sol6.1/xhigh reviews. The56-per-build warm trial measures median11.75→0.25ms and max22.7→3.0ms, but neither reproduced the earlier51.8/78/65.6ms misses. The50ms predicate remains unchanged; closure, memory cost and synchronous idle-screen preparation require independent assessment.
+The unchanged 50 ms warm-region criterion closes for the current four-region batch: reattachment replaces repeated construction and the declared 56-transition trial has a 3.0 ms maximum. Earlier failed measurements and unknown causes remain attributed to their source. Cold entry and synchronous menu preparation remain real costs; define first-entry/menu budgets and measure retained memory/eviction before broader M2-B world construction. Human controls/learning, audio, duration/enjoyment and dedicated-GPU evidence remain unverified.
 
-All authors and the interrupted old R2 pair are stopped. One fresh non-author [Sol/xhigh reviewer](tasks/M2-A-SOL-XHIGH-REVIEW.md) is active on frozen **51c4dcd82755b53c4c3914dc2e4220ec0d701ff4**, covering all ten original M2-A criteria, prior findings/dispositions and current tradeoffs. Its original runtime confirms gpt-6.1-sol/xhigh; [TASKS](TASKS.md#complete-m2-a-solxhigh-review-dispatched) records the exact task and isolated worktree. No M2-A acceptance is claimed. SPACE-1 stays separate; next are its composition/review, M2-B/C and M3/M4. Earlier active/pair/model labels below are historical.
+All prior workers are terminal and released. [SPACE-1 composition](tasks/SPACE-1-COMPOSE-OPUS.md) is the next coherent **Opus 5.5/high** build: reuse the staged renewal/migration/progression work, preserve accepted M2-A, validate the full composite and affected play, then obtain its own fresh Sol/xhigh review. TASKS records actual dispatch when active. SPACE-1 production remains separate until the returned build is inspected. M2-B/C, integrated M2 plus Opus experience review, and M3/M4 remain required. Earlier active/pair/model labels below are historical.
 
 ## Preserved checkpoint — M2-A R2 stopped on b293667
 
@@ -67,7 +67,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-Opus completion is terminal with no pending children/questions; its worktree is clean and all owned paths/tab/server/5190 are released. Root owns integration/build records and PR management. The active Sol/xhigh reviewer owns only `docs/build/reviews/M2-A-SOL-XHIGH-R1.md`, private evidence and optional isolated port 5190 on frozen 51c4dcd, as recorded in TASKS. No production writer or Astra review is active. SPACE-1 authors/reconciler remain terminal with their production separate.
+The M2-A Sol/xhigh review is terminal with no pending children/questions; its clean checkout and owned tab/server/port 5190 are released. Root owns build records, integration and PR management. The next Opus/high worker receives coherent SPACE-1 composition ownership in an isolated committed worktree under [the current model policy](MODEL_POLICY.md); actual task/binding is recorded in TASKS. No routine Astra review or old review pair is active. Prior SPACE-1 authors/reconciler are terminal; preserve their separate source and sealed evidence.
 
 ### Historical implementation checkpoints
 
@@ -98,7 +98,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the already-dispatched complete Sol6.1/xhigh review automatically; do not duplicate or poll it. Inspect all ten criteria and reconcile any findings with Opus corrections. After acceptance, compose/check/review SPACE-1 and continue M2-B/C, M3 and M4 automatically. Main merge/public deployment remain owner actions.
+Dispatch/receive the assigned Opus/high SPACE-1 composition, inspect combined checks and affected renewal/persistence/retained-region behavior, then freeze it for one fresh non-author Sol6.1/xhigh reviewer. Continue M2-B/C, M3 and M4 automatically under the standing authorization. Do not repeat accepted M2-A's unchanged full review or launch a second implementation owner for this composition. Main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
