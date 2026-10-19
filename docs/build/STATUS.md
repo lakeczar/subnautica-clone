@@ -1,6 +1,8 @@
 # Build status
 
-## Current checkpoint — M2-A accepted; complete SPACE-1 assembled for review
+## Current checkpoint — paused for VM upgrade
+
+**Construction is paused for the owner’s VM upgrade.** [VM_UPGRADE_HANDOFF](VM_UPGRADE_HANDOFF.md) records the tested source, interrupted review, persistent archive and exact resume procedure. No implementation/review should restart until the owner asks to continue. The code is committed and pushed; temporary project evidence has been copied to persistent disk. No VM settings were changed.
 
 **M2-A is accepted on `51c4dcd82755b53c4c3914dc2e4220ec0d701ff4`.** One fresh non-author **Sol 6.1/xhigh** reviewer accepts all ten original criteria, and coordinator inspection concurs. [Acceptance and continuation](reviews/M2-A-SOL-XHIGH-R1-DISPOSITION.md) records the full findings disposition and limits; [independent report](reviews/M2-A-SOL-XHIGH-R1.md). Production remains **c2c61556f007578f138fa63c4908f19cc923a39e**, identical to author018f8ba, with root and reviewer independently passing **546 tests**, typecheck/build and all four economies.
 
@@ -8,7 +10,7 @@ The unchanged 50 ms warm-region criterion closes for the current four-region bat
 
 **SPACE-1 is now provisionally integrated at eb712f1527439ec1f38f2c52ef61ac78989ba74c**, identical to final Opus source e4062ae. [Coordinator inspection](evidence/SPACE-1-COMPOSE-INTEGRATION.md) verifies55 author payloads, all27 build files, **567/567 tests**, typecheck/build, all four economy invocations and the progression checker. An independently rerun earned-save migration preserves every old field, initializes zero renewal and matches600-step complete futures. Current production writes **schema4 / expedition.5**; M2-A's earlier c2c6155 remains its accepted pre-renewal source.
 
-The composition author is terminal and all implementation paths are released. The [complete SPACE-1 review brief](tasks/SPACE-1-SOL-XHIGH-REVIEW.md) covers the entire renewal/migration/progression feature and retained-region composition against e2a9d04, not just the final presentation changes. One fresh non-author **Sol6.1/xhigh** review is active on **2b1a252f9fdd88d91116efc0bb72d2b24876b9f5**; original runtime and isolated binding are verified in [TASKS](TASKS.md#complete-space-1-solxhigh-review-dispatched). SPACE-1 is not yet accepted. Browser source/diagnostic attribution and the missing ordinary reef retained-return case remain explicit; no global route-inaccessibility claim is supported by bounded searches.
+The composition author is terminal and all implementation paths are released. The [complete SPACE-1 review brief](tasks/SPACE-1-SOL-XHIGH-REVIEW.md) covers the entire renewal/migration/progression feature and retained-region composition against e2a9d04, not just the final presentation changes. The fresh **Sol6.1/xhigh** review on **2b1a252f9fdd88d91116efc0bb72d2b24876b9f5** is interrupted for the upgrade, with its clean worktree and partial evidence preserved. Original runtime/binding and stop status are recorded in [TASKS](TASKS.md). SPACE-1 is not yet accepted. Browser source/diagnostic attribution and the missing ordinary reef retained-return case remain explicit; no global route-inaccessibility claim is supported by bounded searches.
 
 After acceptance continue M2-B fleet/mobile homes with an early Basin-funded Creel/service payoff and additional finite membrane supply, then M2-C deep routes/both endings, integrated M2 plus fresh Opus experience review, and M3/M4. Earlier active/pair/model labels below are historical.
 
@@ -102,7 +104,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Receive the active complete SPACE-1 Sol6.1/xhigh review automatically and reconcile its seven criteria with coordinator inspection. Opus fixes substantiated findings before fresh affected review; do not duplicate active work or restart accepted M2-A's unchanged full gate. Continue M2-B/C, M3 and M4 under standing authorization after acceptance. Main merge/public deployment remain owner actions.
+Wait for the owner to resume after the VM upgrade. Follow [VM_UPGRADE_HANDOFF](VM_UPGRADE_HANDOFF.md): inspect actual resources and retained evidence, then start a fresh complete SPACE-1 Sol6.1/xhigh review with the interrupted context. Opus fixes substantiated findings before fresh affected review. Continue M2-B/C, M3 and M4 after acceptance; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 

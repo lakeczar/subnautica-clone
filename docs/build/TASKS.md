@@ -2061,3 +2061,12 @@ The [prepared whole-feature review](tasks/SPACE-1-SOL-XHIGH-REVIEW.md) covers se
 - The complete [review brief](tasks/SPACE-1-SOL-XHIGH-REVIEW.md) supplies all seven criteria, original briefs, staged reconciliation and source-attributed evidence/gaps. Reviewer owns only `docs/build/reviews/SPACE-1-SOL-XHIGH-R1.md`, private evidence and optional isolated5190. No production edits, children or peer waits.
 
 This is the sole active worker, two slots including root. Complete SPACE-1 is provisionally integrated, **not accepted**; M2-A remains accepted at its previous frozen source. Receive completion automatically without polling or duplicate work. Reconcile findings, then M2-B/C, integrated M2/Opus and M3/M4. No root browser/server/check process, game/main merge or deployment. Completed author-inspection receipts are sealed:20 payloads, manifest SHA256 `bd5fa741e73a3c291bab5231a3fc474668e8c2cdf1bf584c44ada3cefb645a6e`; active-review receipts remain open.
+
+
+## VM upgrade pause — SPACE-1 reviewer interrupted
+
+The owner asked to pause, upgrade factory-worker and continue from the checkpoint. Root stopped the sole active review with `task_cancel`, request `siltwake-vm-upgrade-stop-space1-review-20261019`. Task `siltwake-space1-sol-xhigh-r1-2b1a252` is **interrupted**, result available, no pending children/questions and automatic delivery disposed. Its clean worktree remains at2b1a252 with no report commit. The last partial summary reports17 matching frozen-domain projections and a SIGTERM-interrupted suite after551 passing assertions; no complete independent verdict is claimed. Root's earlier567-test result remains unchanged.
+
+[VM_UPGRADE_HANDOFF](VM_UPGRADE_HANDOFF.md) is authoritative for resumption. Root found no remaining process in the reviewer checkout, and5190 is free. Shared hosts/user resources remain untouched. Temporary Siltwake paths were archived onto the existing persistent disk; all390 paths and archive verification receipts are retained under `/home/worker/.local/share/siltwake-checkpoints/vm-upgrade-20261019/`. No VM configuration or resource limits were changed.
+
+No new workers until owner continuation. After restart verify resources/evidence, then dispatch a fresh Sol6.1/xhigh review with the complete original scope plus interrupted context, not a child-thread continuation. Productioneb712f and author e4062ae remain identical, schema4/expedition.5; M2-A accepted, SPACE-1 provisional. M2-B/C and M3/M4 remain required.
