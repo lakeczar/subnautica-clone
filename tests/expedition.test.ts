@@ -1,3 +1,4 @@
+import { hunterStandOff } from "../src/sim/hunter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EVIDENCE, RECIPES, SOURCES } from "../src/content/registry.js";
@@ -442,9 +443,10 @@ test("continued hunter damage keeps the original disabled hull saveable without 
   s.player.pose = structuredClone(v.pose);
   s.player.controlledVehicleId = v.id;
   s.player.mode = "piloting";
-  s.world.threat.position = { ...v.pose.position, x: v.pose.position.x + 3 };
+  s.world.threat.position = { ...v.pose.position, x: v.pose.position.x + 12 };
   s.world.threat.mode = "pursue";
   s.world.threat.interest = 12;
+  s.world.threat.position = hunterStandOff(s);
   addItem(s, "conductive_crust", 2, v.cargoId);
   const before = roundTrip(s);
   let notices = 0;
