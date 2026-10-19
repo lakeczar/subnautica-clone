@@ -1,0 +1,27 @@
+# M2-A warm activation — bounded attribution
+
+Assign a fresh **Sol 6.1/max** T3 worktree from root's committed candidate containing production6319184. This is diagnosis with a strict stop, not a production correction or acceptance review. Read AGENTS/STATUS/PLAN/CONTRACTS, revised input and delivery/rendering requirements, original complete M2-A R1 scope/reports/disposition, [current composition](../evidence/M2-A-PERFORMANCE-COMPOSITION.md) and the complete [Astra direction](../design/M2-A-WARM-ACTIVATION-DIRECTION.md).
+
+Answer whether one identifiable application/VM cost or native/scheduler delay accounts for a current >50 ms warm activation. All prior failed trials remain retained. Do not run another population that cannot answer that question, search for quiet samples or propose another speculative optimization.
+
+## Ownership and safe preflight
+
+Only tracked deliverable: **docs/build/evidence/M2-A-WARM-ATTRIBUTION.md**. Private artifacts: **/home/worker/.local/share/siltwake-evidence/m2-a-warm-attribution/**. `/tmp` is nearly full; no new large artifacts there. No production/test commit is permitted. Optional temporary phase instrumentation is limited to `src/render/{renderer,geometryCache,expedition,landmarks}.ts` in your checkout, only after the preflight succeeds; save its patch/bundle identity then restore those files byte-exact before committing the report.
+
+First inspect the available supported tracing facilities. Before browser work, read `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md`; prefer T3 preview, call status then open if needed, verify isolated Linux host/process, use only your own tab/context/storage and available port **5191**. Preserve all shared/human/peer resources. No Windows automation, shared/global browser tracing, process suspension, permission bypass, undocumented transport injection or relaunch loop. The absence of a dedicated trace tool is not permission to attach globally or replace the working T3 browser with standalone automation. A capability check that returns a concrete unsupported result is useful completion.
+
+Before any game timing, demonstrate target-specific page→renderer PID/main TID mapping, monotonic activation/callback alignment, useful measured clock precision, main-thread CPU/scheduler evidence and GC/JIT/source-mapped sampled stacks. Use a named marker and bounded known-duration intervals to check mapping and quantization. Do not use API units, aggregate process CPU or the prior coarse self-profiler as proof of precision. Any supported observation must remain confined to your owned target. If required observations cannot safely be obtained, **stop before timing** and report the exact missing capability and smallest isolated-environment requirement. Do not compensate with more pressure polling or another sample population.
+
+## Conditional finite capture
+
+Only if that preflight succeeds, implement the exact finite protocol in the Astra report: one uninstrumented reference cycle and one traced cycle per Rich/Light preset, 1280×800 CSS/DPR2/muted/drag/no recording. Three named targets per cycle: original A return tick10149; B refuge13845→diver12645 replacement; cockpit9899. **Twelve named targets total**, plus every setup/intermediate owner transition. Use the original save bytes/control suffixes; retain all outcomes, first-use and subsequent render callbacks. No cycles added after success, nonreproduction or failure.
+
+Keep existing synchronous presentation, two detailed region owners, 256 entries/32 MiB numeric cache, fresh live handles, scene-owned materials, geometry/camera/physics, state/input/readiness and deliberate resume unchanged. No outside-ledger prewarming, delayed simulation, hidden cost transfer, quality reduction or new live-geometry ownership. Original50 ms outer predicate remains unchanged.
+
+Private instrumentation must store bounded numeric nested phases/counters for regions/actors/cache copies/buffer application/labels/disposal without hot-path network/console/screenshot writes or per-primitive allocations. Capture CPU/GC/JIT/scheduling evidence during the same interval. Report observer overhead/dropouts and an explicit unexplained remainder. Diagnostic timings cannot become production passes; no assigning residuals to host noise. Require one slow interval and same-path ordinary comparator to justify a concrete correction. No observed miss or inadequate attribution means **inconclusive**, then stop.
+
+## Verification and handoff
+
+Verify original Sol6.1/max session runtime, clean exact parent and T3 binding. Hash inputs/served bundles, retain chronological controls/ticks/owners and state preservation at replacement. Conditional instrumentation needs focused typecheck/build and existing region/cache/lifecycle checks, plus output/resource comparison. If preflight stops with no source/build/browser work, report that exactly; do not repeat the full suite/economies. Historical/private sealed evidence stays read-only.
+
+Commit only the new report, return actual capability result, any verified causal target, exact source/receipt paths and limits. Close only your own tab/server/trace/process; release ownership. No children, peer contact/polling/waiting, parent changes, push/PR/merge. Root retains environment/contract decisions, actual ordinary affected play and fresh complete M2-A paired R2. An advisory/profiling completion does not accept the game or waive the unresolved50 ms trial.
