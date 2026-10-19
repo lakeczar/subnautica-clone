@@ -1875,3 +1875,6 @@ Owner asks for Subnautica map/renewal research and confirms the planned size is 
 - Root independently audits current bounds/routes/speeds/material mutation and records [SPACE-AND-RESOURCE-AUDIT](design/SPACE-AND-RESOURCE-AUDIT.md). Exact arithmetic/dispatch/runtime receipts `/tmp/siltwake-spatial-audit-root/`. No production change or acceptance.
 
 The two existing correction tasks retain their exact ownership. Four occupied slots including root; wait for completion notifications rather than adding a fifth task. Receive/reconcile research, define exclusive Opus5.5/high implementation based on findings, and keep separate new-scope acceptance from M2-A corrections. Do not accidentally drop this owner request on a later correction completion.
+
+
+Owner follow-up: the intended model is explicitly **Claude Opus5.5/high**, correcting the phrase “y'all.” Its research-led implementation assignment must also inspect staged craftability and the full progression curve for bases/mobile refuges, vehicles, upgrades, equipment and survival convenience. [Audit amendment](design/SPACE-AND-RESOURCE-AUDIT.md#execution-boundary) records concrete checks. This does not dispatch a fifth worker or alter the active research/correction paths. Research remains running at the needed mid-turn status read; receive its completion notification, then dispatch the concrete Opus scope.

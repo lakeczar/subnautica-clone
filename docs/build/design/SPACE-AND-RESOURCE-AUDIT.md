@@ -4,6 +4,8 @@ Owner steering, 2026-10-19: compare Subnautica's map/resource behavior with this
 
 The owner explicitly requests **Opus5.5/high implementation based on returned research**. This is a specific exception to the earlier Sol-only implementation default, not permission to silently replace every future builder. Research must return and be reconciled before defining/dispatching that implementation. Existing hunter/render corrections keep their original ownership and gates.
 
+**Additional owner priority:** Opus5.5/high must examine and improve the unlock/pacing curve, not only resource renewal. The owner explicitly clarified “Opus5.5,” not “y'all.” Everything must not be craftable at the beginning. Bases/refuges, vehicles, upgrades, equipment and survival convenience should improve in useful increments at a reasonably even experiential pace. Preserve vehicle-focused building and modest fixed outposts. Avoid interpreting even pacing as a hard elapsed-time gate, XP grind or requirement to build every optional hull.
+
 ## Current code audit
 
 Production inspected: **35c2d22473ff17ed907c62362c25d17ed47cbcd0**; documentation checkout8166dc9. Read-only arithmetic from its retained compiled registry/routes is in `/tmp/siltwake-spatial-audit-root/current-metrics.json`. This is not a new browser playthrough or measured travel-time test.
@@ -34,6 +36,10 @@ Stock changes only at collection and active sorting/tending. `collectWithOutcome
 - The target is purposeful exploration, tension and a rewarding return. Human learning, enjoyment and ten-hour duration remain unverified until tested; map area and agent reviews cannot substitute for them.
 
 ## Execution boundary
+
+The pending Opus brief must include a full progression matrix: starting availability, blueprint/discovery prerequisite, prior-tier accessible materials, bench/service requirement, unlocked capability, next useful expedition and retained value of earlier gear. Inspect actual recipe command enforcement and what menus reveal; visible plans must not imply unavailable construction. Current recipes already use blueprint/needs/site/material gates (`src/content/registry.ts`, `src/sim/progression.ts`), and the fabricator lists known blueprints only (`src/ui/panels.ts`). Do not falsely report that all existing recipes are currently craftable at New Game. The unresolved task is the complete campaign's acquisition curve and proof that the gates produce satisfying play.
+
+Ask Opus to identify long reward droughts, simultaneous unlock piles, redundant upgrades, premature endgame access, circular resource prerequisites and abandoned earlier hulls. Each major unlock should get a useful mission before its replacement or next pressure tier. Survival convenience should grow through meaningful equipment/infrastructure while deeper regions introduce fresh decisions. Use the existing sequence of starting pod/basic gear → workshop/first scout → capability and cargo options/forward service → early mobile refuge → carrier/specialist deep work, preserving both ending strategies. Do not force every optional branch into that order. Test the earliest legal access to each tier with ordinary resources and out-of-order discoveries; renewal must not erase regional material gates. Keep UI concise and the mystery reveal protected. Measured human pacing remains a later validation requirement.
 
 Background source research owns only `docs/research/05-subnautica-space-and-renewal.md`. Root will reconcile that result against this audit and issue a concrete **Opus5.5/high** implementation brief with exclusive paths, persistence/economy constraints and relevant evidence. The first coherent implementation may be a resource-lifecycle slice while broad physical expansion is composed with M2-B/C fleet/route work. Do not claim the entire2km map, renewed source lifecycle or either ending is implemented by this note.
 
