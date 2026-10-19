@@ -4,6 +4,16 @@
 # writes the ones it needs (see reset_fake in checks.sh). Every call is logged
 # to $S/calls.log. Verbs the upgrade must never use (destroy, define, undefine,
 # reset, reboot, ...) are logged as FORBIDDEN and fail.
+#
+# Knobs beyond the VM's own values (files in $S):
+#   xml_ok_off N, xml_fail_off N|always  definition reads while off: N good ones, then failures
+#   live_topology                        the running VM's topology, if not the defined one
+#   live_pins                            the running VM's pins (vcpupin), if not the defined ones
+#   on_start_live_pins                   becomes live_pins when the VM is started
+#   on_setmaxmem_pins                    someone else changes the pins during the change
+#   setmaxmem_block                      setmaxmem marks $S/blocked-setmaxmem and hangs this long, then fails
+#   on_setmem_fail_restart               when setmem fails, someone else starts the VM right after
+#   on_shutoff_pins/_take/_restart/_cmd  at power-off: change pins, take host memory, start it, run a script
 S="${S:-/tmp/vmu-fake}"
 echo "virsh $*" >> "$S/calls.log"
 get() { cat "$S/$1" 2>/dev/null; }
@@ -33,7 +43,9 @@ write_meminfo() {
   printf 'MemTotal:       32000000 kB\nMemAvailable:   %s kB\n' "$avail" > "$S/meminfo"
 }
 
-xml() { # <mem> <cur>
+xml() { # <mem> <cur> [live]
+  local topology; topology="$(get topology)"
+  [ -n "${3:-}" ] && [ -f "$S/live_topology" ] && topology="$(get live_topology)"
   cat <<EOF
 <domain type='kvm'>
   <name>$(get name)</name>
@@ -56,7 +68,7 @@ EOF
     <apic/>
   </features>
   <cpu mode='host-passthrough' check='none' migratable='on'>
-    $(get topology)
+    $topology
   </cpu>
 EOF
   cat "$S/extra" 2>/dev/null
@@ -87,6 +99,7 @@ tick() {
     [ -f "$S/on_shutoff_take" ] && { put taken "$(get on_shutoff_take)"; rm -f "$S/on_shutoff_take"; }
     [ -f "$S/on_shutoff_restart" ] && mv "$S/on_shutoff_restart" "$S/restart_next"
     write_meminfo
+    [ -f "$S/on_shutoff_cmd" ] && { bash "$S/on_shutoff_cmd"; rm -f "$S/on_shutoff_cmd"; }
   else
     put shutdown_pending $((left - 1))
   fi
@@ -107,7 +120,14 @@ case "${pos[0]:-}" in
     printf 'Max memory:     %s KiB\nUsed memory:    %s KiB\nPersistent:     yes\nAutostart:      %s\n' "$m" "$u" "$(get autostart)" ;;
   dumpxml)
     need_me "${pos[1]}"
-    if [ -z "$inactive" ] && [ "$(get state)" = running ]; then xml "$(get live_mem)" "$(get live_cur)"; else xml "$(get cfg_mem)" "$(get cfg_cur)"; fi ;;
+    if [ "$(get state)" = "shut off" ] && [ -f "$S/xml_fail_off" ]; then
+      if [ "$(get xml_ok_off)" -gt 0 ] 2>/dev/null; then put xml_ok_off $(( $(get xml_ok_off) - 1 ))
+      elif [ "$(get xml_fail_off)" = always ] || [ "$(get xml_fail_off)" -gt 0 ]; then
+        [ "$(get xml_fail_off)" = always ] || put xml_fail_off $(( $(get xml_fail_off) - 1 ))
+        echo "error: failed to read the definition (injected)" >&2; exit 1
+      fi
+    fi
+    if [ -z "$inactive" ] && [ "$(get state)" = running ]; then xml "$(get live_mem)" "$(get live_cur)" live; else xml "$(get cfg_mem)" "$(get cfg_cur)"; fi ;;
   vcpupin)
     need_me "${pos[1]}"
     pins="$(get pins)"; [ "$(get state)" = running ] && [ -f "$S/live_pins" ] && pins="$(get live_pins)"
@@ -128,14 +148,20 @@ case "${pos[0]:-}" in
       new) [ "$(get cfg_mem)" = "$NEW" ] && { echo "error: cannot allocate memory" >&2; exit 1; } ;;
     esac
     put state running; put live_mem "$(get cfg_mem)"; put live_cur "$(get cfg_cur)"; write_meminfo
+    [ -f "$S/on_start_live_pins" ] && mv "$S/on_start_live_pins" "$S/live_pins"
     echo "Domain '${pos[1]}' started" ;;
   setmaxmem)
     need_me "${pos[1]}"
     [ "$(get setmaxmem_fail)" = yes ] && { echo "error: setmaxmem refused" >&2; exit 1; }
+    [ -f "$S/setmaxmem_block" ] && { touch "$S/blocked-setmaxmem"; sleep "$(get setmaxmem_block)"; echo "error: timed out" >&2; exit 1; }
+    [ -f "$S/on_setmaxmem_pins" ] && { put pins "$(get on_setmaxmem_pins)"; rm -f "$S/on_setmaxmem_pins"; }
     put cfg_mem "${pos[2]}"; [ "$(get cfg_cur)" -gt "${pos[2]}" ] && put cfg_cur "${pos[2]}"; true ;;
   setmem)
     need_me "${pos[1]}"
-    [ "$(get setmem_fail)" = yes ] && { echo "error: setmem refused" >&2; exit 1; }
+    if [ "$(get setmem_fail)" = yes ]; then
+      [ -f "$S/on_setmem_fail_restart" ] && mv "$S/on_setmem_fail_restart" "$S/restart_next"
+      echo "error: setmem refused" >&2; exit 1
+    fi
     [ "${pos[2]}" -le "$(get cfg_mem)" ] || { echo "error: cannot set memory higher than max memory" >&2; exit 1; }
     put cfg_cur "${pos[2]}"
     [ -f "$S/setmem_inject" ] && { cat "$S/setmem_inject" >> "$S/extra"; rm -f "$S/setmem_inject"; }

@@ -24,7 +24,8 @@ count()      { grep -Ec -- "$1" "$S/calls.log"; }
 MUTATING='virsh (shutdown|start|setmem|setmaxmem) '
 
 export VMU_POLL=0.02 VMU_ARM_DELAY=0.1 VMU_SHUTDOWN_TIMEOUT=1 VMU_ACPI_RESEND=0.3 VMU_START_TIMEOUT=0.5 \
-  VMU_START_RETRY_DELAY=0.05 VMU_AGENT_TIMEOUT=0.3 VMU_FLEET_LOCK_WAIT=0.3 VMU_REHEARSAL_HOLD=0.5 VMU_MEMINFO="$S/meminfo"
+  VMU_START_RETRY_DELAY=0.05 VMU_AGENT_TIMEOUT=0.3 VMU_FLEET_LOCK_WAIT=0.3 VMU_REHEARSAL_HOLD=0.5 VMU_MEMINFO="$S/meminfo" \
+  VMU_READ_TRIES=3 VMU_READ_RETRY_DELAY=0.02 VMU_VIRSH_TIMEOUT=20
 
 sync_meminfo() {
   local avail=$(( $(get host_free) - $(get taken) ))
@@ -47,10 +48,12 @@ reset_fake() {
 off_at() { put state "shut off"; put cfg_mem "$1"; put cfg_cur "${2:-$1}"; put live_mem ""; put live_cur ""; }
 
 n=0
-# go [run options]: a foreground run in a fresh run folder. Sets RD, RC, OUT.
+# go [run options]: a foreground run in a fresh run folder (in $GO_IN if set; after
+# running $PREP there if set). Sets RD, RC, OUT.
 go() {
-  n=$((n + 1)); RD="$RUNS/case-$n"; mkdir -p "$RD"
+  n=$((n + 1)); RD="${GO_IN:-$RUNS}/case-$n"; mkdir -p "$RD"
   [ -n "${PRECANCEL:-}" ] && touch "$RD/CANCEL"
+  [ -z "${PREP:-}" ] || eval "$PREP"
   sync_meminfo; : > "$S/calls.log"
   bash "$SCRIPT" run --run-dir "$RD" "$@" > /dev/null 2>&1; RC=$?
   OUT="$(sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p' "$RD/result.json" 2>/dev/null)"
@@ -62,6 +65,11 @@ vm_is() { # <state> <defined KiB> [<running KiB>]
     || { echo "     VM is '$(get state)' defined $(get cfg_mem)/$(get cfg_cur) running $(get live_mem)/$(get live_cur)"; return 1; }
 }
 no_forbidden() { not_called FORBIDDEN; }
+# all '<a> && <b>': a compound check, so that is() judges all of it, not just <a>.
+all() { eval "$1"; }
+field() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" "$RD/result.json" 2>/dev/null; }
+notified() { grep -q -- "$1" "$S/notify.log" 2>/dev/null; }
+in_syslog() { grep -q -- "$1" "$S/syslog.log" 2>/dev/null; }
 wait_result() { local i; for i in $(seq 1 "${2:-300}"); do [ -f "$1/result.json" ] && return 0; sleep 0.05; done; return 1; }
 newest_run() { ls -1d "$RUNS"/2*/ 2>/dev/null | sort | tail -1 | sed 's:/$::'; }
 
@@ -205,8 +213,9 @@ is "  ...the other change is not clobbered" grep -q 'edited by someone' "$S/extr
 is "  ...the difference is recorded" grep -q 'edited by someone' "$RD/unexpected-diff-$NEW.txt"
 is "  ...never redefined from the backup" no_forbidden
 reset_fake; exec 7>/tmp/fleet-admin.lock; flock 7; go; exec 7>&-
-is "fleet-admin lock busy: rolled-back-started-old" outcome rolled-back-started-old 20
+is "fleet-admin lock busy: started-as-is, memory not changed" outcome started-as-is 21
 is "  ...running at 12 GiB" vm_is running $OLD $OLD
+is "  ...no memory call" not_called 'setmem|setmaxmem'
 
 echo "# the start"
 reset_fake; put start_fail once; go
@@ -224,12 +233,146 @@ is "  ...running at 12 GiB" vm_is running $OLD $OLD
 reset_fake; put on_shutoff_take $((10 * GIB)); go
 is "too little left even for 12 GiB: left-off" outcome left-off 30
 is "  ...not started" [ "$(count 'virsh start')" = 0 ]
-reset_fake; put live_pins "0:0 1:1 2:2 3:3 4:4 5:5"; go
-is "runs but pins differ live: started-unverified" outcome started-unverified 22
+reset_fake; put on_start_live_pins "0:0 1:1 2:2 3:3 4:4 5:5"; go
+is "runs but pins differ live after the start: started-unverified" outcome started-unverified 22
 is "  ...not stopped again" [ "$(count 'virsh shutdown')" = 1 ]
 reset_fake; put agent no; go
 is "no guest agent: still upgraded" outcome upgraded 0
 is "  ...recorded" grep -q '"guest_agent":"no answer' "$RD/result.json"
+
+echo "# SOL-R1-01: memory that cannot be read never counts as zero"
+# Review case: 16 GiB defined, running 12; once off its definition cannot be
+# read and 15 GiB is free, too little for 16 GiB plus the reserve.
+reset_fake; put cfg_mem $NEW; put cfg_cur $NEW; put xml_fail_off always; put on_shutoff_take $((7 * GIB)); go
+is "definition unreadable once off: left-off" outcome left-off 30
+is "  ...never started" not_called 'virsh start'
+is "  ...nothing written" not_called 'setmem|setmaxmem'
+is "  ...owner alerted" notified '-i alert'
+is "  ...said in syslog too" in_syslog 'left-off'
+reset_fake; put on_shutoff_pins "0:0 1:1 2:8 3:9 4:10 5:7"; put xml_ok_off 1; put xml_fail_off always; go
+is "start as is, memory unreadable: left-off" outcome left-off 30
+is "  ...never started" not_called 'virsh start'
+reset_fake; put xml_fail_off 2; go
+is "definition unreadable twice, then readable: upgraded" outcome upgraded 0
+is "  ...the failed reads were retried" grep -q 'again in' "$RD/run.log"
+reset_fake; echo 'rm -f /tmp/vmu-fake/meminfo' > "$S/on_shutoff_cmd"; go
+is "MemAvailable unreadable once off: left-off" outcome left-off 30
+is "  ...back at 12 GiB, not started" vm_is "shut off" $OLD
+is "  ...never started" not_called 'virsh start'
+reset_fake; put cfg_mem 12abc; go
+is "defined memory not a number: preflight-failed" outcome preflight-failed 10
+is "  ...nothing changed" not_called "$MUTATING"
+out="$(bash "$SCRIPT" 2>&1)"; rc=$?
+is "  ...preflight says so, exit 1" all '[ "$rc" = 1 ] && grep -q "not a number of KiB" <<<"$out"'
+
+echo "# SOL-R1-02: checked again after taking fleet-admin's lock"
+# locked_out <command...>: hold fleet-admin's lock, start a run, run the command
+# while the run (VM off) waits for the lock, then release it and wait for the end.
+locked_out() {
+  n=$((n + 1)); RD="$RUNS/case-$n"; mkdir -p "$RD"; sync_meminfo; : > "$S/calls.log"
+  exec 7>/tmp/fleet-admin.lock; flock 7
+  VMU_FLEET_LOCK_WAIT=10 bash "$SCRIPT" run --run-dir "$RD" 7>&- > /dev/null 2>&1 &
+  local pid=$! i
+  for i in $(seq 1 400); do grep -q '"phase":"changing"' "$RD/state.json" 2>/dev/null && break; sleep 0.02; done
+  sleep 0.15
+  "$@"; sync_meminfo
+  exec 7>&-
+  wait "$pid"; RC=$?; OUT="$(sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p' "$RD/result.json")"
+}
+reset_fake; locked_out put pins "0:0 1:1 2:8 3:9 4:10 5:7"
+is "pins changed while waiting for the lock: started-as-is" outcome started-as-is 21
+is "  ...memory not written" not_called 'setmem|setmaxmem'
+is "  ...running at 12 GiB, their pins kept" all 'vm_is running $OLD $OLD && [ "$(get pins)" = "0:0 1:1 2:8 3:9 4:10 5:7" ]'
+reset_fake; locked_out eval 'put state running; put live_mem $OLD; put live_cur $OLD'
+is "started by someone else while waiting for the lock: restarted-elsewhere" outcome restarted-elsewhere 21
+is "  ...memory not written" not_called 'setmem|setmaxmem'
+is "  ...still 12 GiB defined and running" vm_is running $OLD $OLD
+reset_fake; locked_out eval 'echo "  <description>owner note</description>" > "$S/extra"'
+is "other definition edit while waiting for the lock: started-as-is" outcome started-as-is 21
+is "  ...memory not written" not_called 'setmem|setmaxmem'
+is "  ...the difference is recorded" grep -q 'owner note' "$RD/changed-while-off.txt"
+reset_fake; put setmem_fail yes; touch "$S/on_setmem_fail_restart"; go
+is "recovery, someone started it meanwhile: restarted-elsewhere" outcome restarted-elsewhere 21
+is "  ...12 GiB not written over it" not_called "setmaxmem $UUID $OLD"
+reset_fake; put setmem_fail yes; put on_setmaxmem_pins "0:0 1:1 2:8 3:9 4:10 5:7"; go
+is "recovery after someone changed pins mid-change: rolled-back-started-old" outcome rolled-back-started-old 20
+is "  ...12 GiB again, their pins kept" all 'vm_is running $OLD $OLD && [ "$(get pins)" = "0:0 1:1 2:8 3:9 4:10 5:7" ]'
+is "  ...the difference is recorded" [ -s "$RD/changed-besides-memory.txt" ]
+is "  ...never redefined" no_forbidden
+
+echo "# SOL-R1-03: records that cannot be written"
+# Review case: folders where the original script's fixed temporary names were.
+reset_fake; PREP='mkdir "$RD/.state.json.tmp" "$RD/.result.json.tmp"' go; PREP=
+is "the review's blocked temporary names no longer matter: upgraded" outcome upgraded 0
+is "  ...result.json published" [ -f "$RD/result.json" ]
+reset_fake; PREP='mkdir "$RD/state.json"' go; PREP=
+is "state.json cannot be written: preflight-failed" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
+reset_fake; PREP='mkdir "$RD/definition-reference.xml"' go; PREP=
+is "the definition record cannot be written: preflight-failed" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
+reset_fake; PREP='mkdir "$RD/result.json"' go; PREP=
+is "result.json is blocked before the shutdown: not stopped" not_called "$MUTATING"
+is "  ...exit 32, result not written" [ "$RC" = 32 ]
+is "  ...owner alerted that the result is missing" notified 'result NOT written'
+is "  ...and syslog has the outcome" in_syslog 'preflight-failed'
+reset_fake; rm -rf /boot/config/fleet/vm-backups; : > /boot/config/fleet/vm-backups; go
+rm -f /boot/config/fleet/vm-backups; mkdir -p /boot/config/fleet/vm-backups
+is "backups cannot be written: preflight-failed" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
+reset_fake; PREP='mkdir "$RD/definition-before-$NEW.xml"' go; PREP=
+is "a record fails after the shutdown: evidence-incomplete" outcome evidence-incomplete 23
+is "  ...the VM was still upgraded" all 'vm_is running $NEW $NEW && [ "$(field vm_outcome)" = upgraded ]'
+is "  ...owner alerted" notified '-i alert'
+reset_fake; PREP='printf "mkdir %q\n" "$RD/result.json" > "$S/on_shutoff_cmd"' go; PREP=
+is "result.json blocked after the shutdown: exit 32, not 0" all '[ "$RC" = 32 ] && [ ! -f "$RD/result.json" ]'
+is "  ...the VM was still upgraded" vm_is running $NEW $NEW
+is "  ...owner told the outcome and that the result is missing" notified 'upgraded, result NOT written'
+is "  ...syslog too" in_syslog 'upgraded'
+# A really full disk (a 16 MiB tmpfs), before and after the shutdown.
+reset_fake; mkdir -p /mnt/smallfs/pre; head -c 32M /dev/zero > /mnt/smallfs/filler 2>/dev/null
+GO_IN=/mnt/smallfs/pre go; GO_IN=; rm -rf /mnt/smallfs/*
+is "full disk before anything: not stopped" not_called "$MUTATING"
+is "  ...exit 32 and an alert" all '[ "$RC" = 32 ] && notified "result NOT written"'
+reset_fake; echo 'head -c 32M /dev/zero > /mnt/smallfs/filler 2>/dev/null' > "$S/on_shutoff_cmd"
+GO_IN=/mnt/smallfs go; GO_IN=; rm -rf /mnt/smallfs/*
+is "disk full once off: the VM still upgraded" vm_is running $NEW $NEW
+is "  ...exit 32, never 0" [ "$RC" = 32 ]
+is "  ...owner told it was upgraded without a result" notified 'upgraded, records incomplete, result NOT written'
+reset_fake; mv /usr/local/emhttp/webGui/scripts/notify /tmp/notify.away; go
+mv /tmp/notify.away /usr/local/emhttp/webGui/scripts/notify
+is "Unraid notify missing: preflight-failed" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
+is "  ...syslog still has it" in_syslog 'preflight-failed'
+
+echo "# SOL-R1-04: only the listed defined/running memory states"
+# Review case: 12 GiB defined but running with 8 GiB.
+reset_fake; put live_mem 8388608; put live_cur 8388608; go
+is "defined 12, running 8: preflight-failed" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
+reset_fake; put live_mem $NEW; put live_cur $NEW; go
+is "defined 12, running 16: preflight-failed" outcome preflight-failed 10
+reset_fake; put cfg_mem $NEW; put cfg_cur $NEW; put live_mem $NEW; put live_cur $OLD; go
+is "running with 16 maximum but 12 current: preflight-failed" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
+# Review case: already 16 GiB, but the running VM's pins differ.
+reset_fake; put cfg_mem $NEW; put cfg_cur $NEW; put live_mem $NEW; put live_cur $NEW; put live_pins "0:0 1:1 2:2 3:3 4:4 5:5"; go
+is "16 GiB with other running pins: preflight-failed, not already-upgraded" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
+out="$(bash "$SCRIPT" 2>&1)"; rc=$?
+is "  ...preflight reports the running pins" all '[ "$rc" = 1 ] && grep -q "problem: running: vCPU pins" <<<"$out"'
+reset_fake; armed eval 'put cfg_mem $NEW; put cfg_cur $NEW; put live_mem $NEW; put live_cur $NEW; put live_pins "0:0 1:1 2:2 3:3 4:4 5:5"'
+is "upgraded elsewhere while armed, other running pins: preflight-failed" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
+reset_fake; put live_topology "<topology sockets='1' dies='1' clusters='1' cores='6' threads='1'/>"; go
+is "running topology differs from the definition: preflight-failed" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
+reset_fake; armed put live_topology "<topology sockets='1' dies='1' clusters='1' cores='6' threads='1'/>"
+is "running topology changes while armed: preflight-failed" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
+reset_fake; armed eval 'echo "  <description>owner note</description>" > "$S/extra"'
+is "definition edited while armed: preflight-failed" outcome preflight-failed 10
+is "  ...not stopped" not_called "$MUTATING"
 
 echo "# killed mid-run, then re-run"
 reset_fake; put shutdown_polls never; sync_meminfo; : > "$S/calls.log"
@@ -243,6 +386,18 @@ rm -f "$S/shutdown_pending"; off_at $OLD   # the guest finished powering off aft
 go
 is "re-run after the abort: upgraded" outcome upgraded 0
 is "  ...without a second shutdown" not_called 'virsh shutdown'
+# The documented limit: TERM once the VM is off (here inside setmaxmem) leaves it
+# off for the owner to relaunch; the relaunch finishes the job.
+reset_fake; put setmaxmem_block 1; sync_meminfo; : > "$S/calls.log"
+n=$((n + 1)); RD="$RUNS/case-$n"; mkdir -p "$RD"
+bash "$SCRIPT" run --run-dir "$RD" > /dev/null 2>&1 &
+pid=$!
+for i in $(seq 1 400); do [ -f "$S/blocked-setmaxmem" ] && break; sleep 0.02; done
+kill -TERM "$pid"; wait "$pid"; RC=$?; OUT="$(sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p' "$RD/result.json")"
+is "TERM once the VM is off: aborted, left off (owner relaunches)" all 'outcome aborted 31 && vm_is "shut off" $OLD'
+is "  ...owner alerted" notified '-i alert'
+rm -f "$S/setmaxmem_block"; go
+is "  ...the relaunch: upgraded" outcome upgraded 0
 
 echo "# launch: the boundary between the caller and the run"
 # The approved command exactly as ask-command.sh prints it for the owner, and a
@@ -263,7 +418,7 @@ is "rehearsal: changed nothing" not_called "$MUTATING"
 is "rehearsal: no backup written" [ ! -e "/boot/config/fleet/vm-backups/factory-worker-$(run_id_of).xml" ]
 is "rehearsal: launcher gone before the end" grep -q '"launcher_alive_at_finish":"no"' "$RD/result.json"
 lsid="$(sed -n 's/.*"launcher_sid":"\([0-9]*\)".*/\1/p' "$RD/launch.json")"; rsid="$(sed -n 's/.*"sid":"\([0-9]*\)".*/\1/p' "$RD/result.json")"
-is "rehearsal: run in its own session ($rsid, launcher $lsid)" [ -n "$rsid" ] && [ "$rsid" != "$lsid" ]
+is "rehearsal: run in its own session ($rsid, launcher $lsid)" all '[ -n "$rsid" ] && [ "$rsid" != "$lsid" ]'
 is "rehearsal: runs its own verified copy" [ "$(sha256sum < "$RD/vm-ram-upgrade.sh" | cut -d' ' -f1)" = "$SHA" ]
 
 # The runner stays alive and its timeout signals its whole process group while the
@@ -287,7 +442,7 @@ is "tampered staged file: the approved command stops" [ "$(cat /tmp/runner.exit)
 is "  ...no run started" [ "$(ls "$RUNS" | wc -l)" = "$before" ]
 is "  ...nothing called" not_called "$MUTATING"
 out="$(bash "$SCRIPT" launch --expect-sha256 "$(printf '0%.0s' $(seq 64))" 2>&1)"; rc=$?
-is "launch with the wrong hash: refused" [ "$rc" = 2 ] && grep -q 'nothing was started' <<<"$out"
+is "launch with the wrong hash: refused" all '[ "$rc" = 2 ] && grep -q "nothing was started" <<<"$out"'
 is "launch without a hash: refused" bash -c "! bash '$SCRIPT' launch >/dev/null 2>&1"
 
 echo "# worker-check: T3's agent slice formula"
@@ -299,20 +454,31 @@ CK=/tmp/rtl/ck; TM=/tmp/rtl/tmp; rm -rf /tmp/rtl; mkdir -p "$CK" "$TM" /tmp/rtl/
 echo one > /tmp/rtl/src/file-a; echo two > /tmp/rtl/src/dir-a/inner; echo three > /tmp/rtl/src/file-b
 tar -cf "$CK/tmp-siltwake.tar" -C /tmp/rtl/src file-a dir-a file-b
 printf '%s\0' file-a dir-a file-b > "$CK/tmp-paths.nul"
-echo "someone else's" > "$TM/file-b"
+THEIRS="someone else's"; echo "$THEIRS" > "$TM/file-b"
 rsha="$(sha256sum < "$CK/tmp-siltwake.tar" | cut -d' ' -f1)"
 rtl() { RTL_CHECKPOINT="$CK" RTL_TMP="$TM" RTL_SHA256="${RSHA:-$rsha}" bash "$SRC/restore-tmp-links.sh" "$@" 2>&1; }
 out="$(rtl)"
 is "dry run: would link 2, keeps 1" grep -q 'would link: 2, kept (exist in /tmp/rtl/tmp): 1' <<<"$out"
-is "dry run: nothing extracted or linked" [ ! -e "$CK/tmp-restored" ] && [ ! -e "$TM/file-a" ]
+is "dry run: nothing extracted or linked" all '[ ! -e "$CK/tmp-restored" ] && [ ! -e "$TM/file-a" ]'
 out="$(RSHA=$(printf 'f%.0s' $(seq 64)) rtl --apply)"; rc=$?
-is "wrong archive hash: refuses" [ "$rc" = 1 ] && [ ! -e "$CK/tmp-restored" ]
+is "wrong archive hash: refuses" all '[ "$rc" = 1 ] && [ ! -e "$CK/tmp-restored" ]'
 out="$(rtl --apply)"; rc=$?
-is "apply: links the missing names" [ "$rc" = 0 ] && [ "$(cat "$TM/file-a")" = one ] && [ "$(cat "$TM/dir-a/inner")" = two ]
+is "apply: links the missing names" all '[ "$rc" = 0 ] && [ "$(cat "$TM/file-a")" = one ] && [ "$(cat "$TM/dir-a/inner")" = two ]'
 is "apply: links point at the disk copy" [ "$(readlink "$TM/file-a")" = "$CK/tmp-restored/file-a" ]
-is "apply: an existing /tmp entry is untouched" [ "$(cat "$TM/file-b")" = "someone else's" ] && [ ! -L "$TM/file-b" ]
+is "apply: an existing /tmp entry is untouched" all '[ "$(cat "$TM/file-b")" = "$THEIRS" ] && [ ! -L "$TM/file-b" ]'
 out="$(rtl --apply)"
 is "apply again: idempotent" grep -q 'linked before: 2, linked now: 0' <<<"$out"
+# Review cases: a link that cannot be made, and a folder that appears just before ln.
+out="$(RTL_CHECKPOINT="$CK" RTL_TMP=/tmp/rtl/nowhere RTL_SHA256="$rsha" bash "$SRC/restore-tmp-links.sh" --apply 2>&1)"; rc=$?
+is "/tmp folder missing: exit 1, nothing linked" all '[ "$rc" = 1 ] && [ ! -e /tmp/rtl/nowhere ]'
+mkdir -p /tmp/rtl/bin /tmp/rtl/tmp2
+printf '#!/bin/bash\necho "ln: refused (injected)" >&2; exit 1\n' > /tmp/rtl/bin/ln; chmod +x /tmp/rtl/bin/ln
+out="$(PATH="/tmp/rtl/bin:$PATH" RTL_CHECKPOINT="$CK" RTL_TMP=/tmp/rtl/tmp2 RTL_SHA256="$rsha" bash "$SRC/restore-tmp-links.sh" --apply 2>&1)"; rc=$?
+is "ln fails: exit 1, failures counted" all '[ "$rc" = 1 ] && grep -q "linked now: 0,.*failed: 3" <<<"$out"'
+printf '#!/bin/bash\nt="${@: -1}"; mkdir "$t" && echo theirs > "$t/owner-data"; exec /usr/bin/ln "$@"\n' > /tmp/rtl/bin/ln
+rm -rf /tmp/rtl/tmp2; mkdir -p /tmp/rtl/tmp2
+out="$(PATH="/tmp/rtl/bin:$PATH" RTL_CHECKPOINT="$CK" RTL_TMP=/tmp/rtl/tmp2 RTL_SHA256="$rsha" bash "$SRC/restore-tmp-links.sh" --apply 2>&1)"; rc=$?
+is "a folder appears just before ln: kept, nothing linked inside it" all '[ "$rc" = 0 ] && grep -q "kept, appeared" <<<"$out" && [ -z "$(find /tmp/rtl/tmp2 -type l)" ] && [ "$(cat /tmp/rtl/tmp2/file-a/owner-data)" = theirs ]'
 
 # Let any detached run from above finish before the sandbox goes away.
 for i in $(seq 1 100); do pgrep -f 'vm-ram-upgrade.sh run' >/dev/null || break; sleep 0.1; done

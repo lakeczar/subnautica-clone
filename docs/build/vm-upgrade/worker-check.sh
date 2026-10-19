@@ -40,11 +40,12 @@ cgroup_expect() {
 
 result_of() { "${HOST[@]}" files read "$RUNS/$1/result.json" 2>/dev/null; }
 outcome_of() { sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p'; }
+exit_of() { sed -n 's/.*"exit_code":\([0-9]*\).*/\1/p'; }
 
 vm_info() { "${HOST[@]}" vm info factory-worker 2>&1; }
 
 pre() {
-  local info local_sha remote_sha avail power
+  local info local_sha remote_sha avail power res
   info="$(vm_info)"
   grep -q '^UUID: *ce0a610b-0a40-b2eb-1bfb-5a7203a24e22$' <<<"$info" && pass "host: UUID" || fail "host: UUID (vm info: $info)"
   grep -q '^Max memory: *12582912 KiB$' <<<"$info" && pass "host: 12 GiB defined and running" \
@@ -60,7 +61,9 @@ pre() {
   remote_sha="$("${HOST[@]}" files read "$STAGED" 2>/dev/null | sha256sum | cut -d' ' -f1)"
   [ "$local_sha" = "$remote_sha" ] && pass "staged script matches this bundle ($local_sha)" || fail "staged script differs or is missing (local $local_sha)"
   if [ -n "${1:-}" ]; then
-    [ "$(result_of "$1" | outcome_of)" = rehearsal-ok ] && pass "rehearsal $1: rehearsal-ok" || fail "rehearsal $1 did not finish rehearsal-ok"
+    res="$(result_of "$1")"
+    [ "$(outcome_of <<<"$res")" = rehearsal-ok ] && [ "$(exit_of <<<"$res")" = 0 ] && pass "rehearsal $1: rehearsal-ok, exit 0" \
+      || fail "rehearsal $1 did not finish rehearsal-ok with exit 0"
   else
     warn "no rehearsal run id given"
   fi
@@ -80,7 +83,7 @@ post() {
   local run="${1:-}" info total exp high max h m res
   [ -n "$run" ] || { echo "usage: worker-check.sh post <run-id>" >&2; exit 2; }
   res="$(result_of "$run")"
-  [ "$(outcome_of <<<"$res")" = upgraded ] && pass "host run $run: upgraded" || fail "host run $run: $(outcome_of <<<"$res") — $(sed -n 's/.*"message":"\([^"]*\)".*/\1/p' <<<"$res")"
+  [ "$(outcome_of <<<"$res")" = upgraded ] && [ "$(exit_of <<<"$res")" = 0 ] && pass "host run $run: upgraded, exit 0" || fail "host run $run: $(outcome_of <<<"$res") — $(sed -n 's/.*"message":"\([^"]*\)".*/\1/p' <<<"$res")"
   info="$(vm_info)"
   grep -q '^Max memory: *16777216 KiB$' <<<"$info" && pass "host: 16 GiB" || fail "host: $(grep 'Max memory' <<<"$info")"
   grep -q "^CPU(s): *6$" <<<"$info" && [[ "$info" == *"$PINS_TABLE"* ]] && pass "host: 6 vCPUs, same pins" || fail "host: vCPUs or pins differ"
@@ -91,6 +94,9 @@ post() {
   [ "$total" -gt 16106127360 ] && [ "$total" -le 17179869184 ] && pass "guest: MemTotal $total bytes" || fail "guest: MemTotal $total bytes (want 15–16 GiB)"
   check "guest: t3code.service active" systemctl --user is-active --quiet t3code.service
   for s in fleet-dashboard-v2 fleet-dashboard fleet-status; do check "guest: $s.service active" systemctl --user is-active --quiet "$s.service"; done
+  for s in t3code fleet-dashboard-v2 fleet-dashboard fleet-status; do check "guest: $s.service enabled" systemctl --user is-enabled --quiet "$s.service"; done
+  [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" = yes ] && pass "guest: lingering on (user services start at boot)" || fail "guest: lingering is off"
+  check "guest: :9100 architecture page" curl -fsS -m 10 -o /dev/null "http://$TAILNET_NAME:9100/"
   check "guest: :9110/api/health" curl -fsS -m 10 "http://$TAILNET_NAME:9110/api/health"
   check "guest: :9101/status" curl -fsS -m 10 "http://$TAILNET_NAME:9101/status"
   exp="$(cgroup_expect "$total")"
