@@ -41,7 +41,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-No builder remains active. Both OS2 R2 reviewers, all implementation authors and Opus R3 are terminal and release their paths/resources. Root owns integration/build records and no browser/server/recording/check process. The same-context Opus implementation consultation is the next advisory-only task; TASKS records actual dispatch and ownership.
+No builder remains active. Both OS2 R2 reviewers, all implementation authors and Opus R3 are terminal and release their paths/resources. Root owns integration/build records and no browser/server/recording/check process. The same-context Opus implementation consultation is active, owning only docs/build/design/OPUS-STAGE1-R3-IMPLEMENTATION.md on report parentd7597d9; TASKS records its separate follow-up ID.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
@@ -76,7 +76,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Consult OS3-01/02 implementation in the completed Opus R3 context, receive completion without polling, and reconcile its signal/copy/presentation contracts into M2-A1/A3. Then commit the M2 baseline and assign the first Sol6.1/max route/protection/recovery/state builder, followed by independent A2 visual and A3 presentation consumers on the inspected A1 baseline. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+The OS3-01/02 implementation consultation is active in the completed Opus R3 context. Receive completion without polling and reconcile its signal/copy/presentation contracts into M2-A1/A3. Then commit the M2 baseline and assign the first Sol6.1/max route/protection/recovery/state builder, followed by independent A2 visual and A3 presentation consumers on the inspected A1 baseline. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
