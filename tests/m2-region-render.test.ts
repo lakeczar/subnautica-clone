@@ -45,6 +45,7 @@ test("production regional owners survive five return traversals, depletion, repl
     CANOPY_BASIN_ROUTE.labParking, { x: 178, y: -160, z: -208 }, { x: 216, y: -166, z: -232 },
     { x: 228, y: -80, z: -170 }, { x: 57, y: -10, z: -65 }, { x: 0, y: .18, z: 22 }];
   const retained = new Map<string, number[]>();
+  let warmCache: { entries: number; bytes: number } | null = null;
   for (let traversal = 0; traversal < 5; traversal++) for (const [index, p] of stops.entries()) {
     state.player.pose.position = { ...p };
     const before = structuredClone(state);
@@ -52,6 +53,10 @@ test("production regional owners survive five return traversals, depletion, repl
     art.update(state);
     assert.deepEqual(state, before, "activation/deactivation never changes inventory, knowledge, pursuit or recovery");
     assert.equal(art.active.length, 2);
+    const { entries, bytes, maxBytes, maxEntries } = art.cacheStats;
+    assert.ok(entries <= maxEntries && bytes <= maxBytes, "immutable recipes have explicit renderer-owned bounds");
+    if (traversal === 0 && index === stops.length - 1) warmCache = { entries, bytes };
+    if (traversal > 0) assert.deepEqual({ entries, bytes }, warmCache, "quality/state/route revisits do not grow the warmed cache");
     const groups = new Set(scene.meshes.map(m => m.metadata?.detailRegion).filter(Boolean));
     assert.deepEqual(groups, new Set(art.active), "only the two current detailed owners remain");
     const current = counts(scene), key = `${index}:${art.active.join(",")}`;
@@ -82,8 +87,12 @@ test("production regional owners survive five return traversals, depletion, repl
   for (let i = 0; i < 3; i++) {
     art.dispose(); art.dispose(); art.update(replacement);
     assert.equal(scene.meshes.length, 0); assert.equal(scene.geometries.length, 0); assert.equal(scene.textures.length, 0);
+    assert.equal(art.cacheStats.bytes, 0); assert.equal(art.cacheStats.entries, 0);
+    assert.deepEqual(art.labelStats, { entries: 0, references: 0 });
     assert.equal(sharedDisposed, false);
-    art = createRegionalArt(scene, cel, glass); art.update(replacement);
+    art = createRegionalArt(scene, cel, glass);
+    assert.equal(art.cacheStats.entries, 0, "graphics reconstruction starts with a new geometry owner");
+    art.update(replacement);
     assert.deepEqual(counts(scene), baseline, "graphics reconstruction re-reads the replacement state exactly");
   }
   art.dispose();

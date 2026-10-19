@@ -1,3 +1,4 @@
+import type { GeometryCache } from "./geometryCache.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
@@ -64,7 +65,8 @@ function westernGlassHost(b: ArtBatch, x: number, z: number): void {
   }
 }
 
-export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: RenderRegion | "terrain"): void {
+export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: RenderRegion | "terrain", cache?: GeometryCache): void {
+  const batch = (name: string): ArtBatch => new ArtBatch(name, scene, cel, cache && { owner: cache, key: `environment:${region ?? "complete"}:${name}` });
   if (!region || region === "terrain") {
   const terrain = new Mesh("island.terrain", scene),
     data = new VertexData();
@@ -115,7 +117,7 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: Re
   if (region === "terrain") return;
   }
 
-  const stones = new ArtBatch("reef.geology", scene, cel),
+  const stones = batch("reef.geology"),
     random = seeded(574);
   if (!region || region === "refuge_reef") {
   // Authored sediment lenses and rubble cluster beside ribs, leaving a clear pod route.
@@ -171,7 +173,7 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: Re
     if (region && source.region !== region) continue;
     const { x, z } = source.position;
     if (BASIN_SOURCE_IDS.some(s => s === id)) {
-      const host = new ArtBatch("source-host." + id, scene, cel);
+      const host = batch("source-host." + id);
       if (source.asset === "scraps") {
         salvageHost(host, id, x, z);
         const south = id === "basin_ridge_salvage_south";
@@ -225,7 +227,7 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: Re
       continue;
     }
     if (id === "island_workshop_scraps" || id === "island_headland_scraps" || id === "island_glass_ledge_west") {
-      const host = new ArtBatch("source-host." + id, scene, cel);
+      const host = batch("source-host." + id);
       if (id === "island_glass_ledge_west") westernGlassHost(host, x, z);
       else salvageHost(host, id, x, z);
       host.finish(.1);
@@ -262,7 +264,7 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: Re
 
   if (region && region !== "refuge_reef") return;
   // Edge buoys are navigation context for this deliberately bounded early build.
-  const buoys = new ArtBatch("foundation.edge-buoys", scene, cel);
+  const buoys = batch("foundation.edge-buoys");
   for (const [x, z] of [
     [WORLD_BOUNDS.minX + 2, 12],
     [WORLD_BOUNDS.maxX - 2, 12],

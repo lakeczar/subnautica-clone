@@ -1,3 +1,4 @@
+import type { GeometryCache } from "./geometryCache.js";
 import type { Scene, ShaderMaterial, Mesh } from '@babylonjs/core';
 import { BASIN_SOURCE_IDS } from '../content/routes.js';
 import type { GameState } from '../sim/types.js';
@@ -10,10 +11,11 @@ import { PALETTE as P } from './palette.js';
 
 export interface AnimatedLife { update(seconds: number, state?: GameState | null): void; setQuality(quality: RenderQuality): void; dispose(): void }
 
-export function createEcology(scene: Scene, cel: ShaderMaterial, region?: RenderRegion): AnimatedLife {
+export function createEcology(scene: Scene, cel: ShaderMaterial, region?: RenderRegion, cache?: GeometryCache): AnimatedLife {
+  const batch = (name: string): ArtBatch => new ArtBatch(name, scene, cel, cache && { owner: cache, key: `ecology:${region ?? "complete"}:${name}` });
   const initial = new Set(scene.meshes);
   let disposed = false, quality: RenderQuality = "rich";
-  const plants = new ArtBatch('reef.ribbon-colonies', scene, cel), random = seeded(361);
+  const plants = batch('reef.ribbon-colonies'), random = seeded(361);
   const patches: readonly Point[] = [[-28, 0, -5], [-10, 0, -13], [-25, 0, -21], [22, 0, -8], [28, 0, 10], [-21, 0, 22]];
   if (!region || region === "refuge_reef") patches.forEach(([cx, , cz], patch) => {
     for (let colony = 0; colony < 5; colony++) {
@@ -46,7 +48,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
 
   // Shore plants are authored to the walkable height field; they are decorative,
   // without resource glints or interaction prompts until the first expedition.
-  const shore = new ArtBatch('island.wind-leaves', scene, cel);
+  const shore = batch('island.wind-leaves');
   for (let i = 0; (!region || region === "island_chain") && i < 28; i++) {
     const x = -4 + random() * 28, z = -38 - random() * 20, y = terrainHeight(x, z);
     if (y < 1 || y > 12) continue;
@@ -67,7 +69,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
     if (region && source.region !== region) continue;
     const { x, y, z } = source.position;
     if (source.asset === 'ribbons') {
-      const fans = new ArtBatch(`ecology.filters.${id}`, scene, cel);
+      const fans = batch(`ecology.filters.${id}`);
       const upstreamZ = z - 4.5;
       for (const offset of [-1.6, 1.4]) {
         const fx = x + offset, fy = terrainHeight(fx, upstreamZ);
@@ -97,7 +99,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
       }
       fans.finish();
       for (let n = 0; n < 8; n++) {
-        const drift = new ArtBatch(`ecology.shed.${id}.${n}`, scene, cel);
+        const drift = batch(`ecology.shed.${id}.${n}`);
         drift.face([[-0.2, 0, 0], [0.2, 0.03, 0], [0.13, 0.18, 0.12], [-0.17, 0.08, 0.13]], n % 2 ? P.coral : P.lime);
         const mesh = drift.finish(); mesh.unfreezeWorldMatrix();
         flows.push({ mesh, from: [x, terrainHeight(x, upstreamZ) + 2.0, upstreamZ + 0.8], to: [x, y + 0.2, z], phase: n / 8 });
@@ -105,7 +107,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
     }
     if (source.asset === 'glass') {
       for (let n = 0; n < 2; n++) {
-        const grazer = new ArtBatch(`ecology.grazer.${id}.${n}`, scene, cel);
+        const grazer = batch(`ecology.grazer.${id}.${n}`);
         grazer.ellipsoid([0, 0.25, 0], [0.42, 0.28, 0.65], '#cedcb7', 8);
         grazer.ellipsoid([0, 0.13, -0.05], [0.36, 0.1, 0.63], P.jade, 8);
         for (const side of [-1, 1]) {
@@ -122,7 +124,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
       }
     }
     if ((source.asset === 'crust' || source.asset === 'resin') && source.region !== 'silt_basin') {
-      const host = new ArtBatch(`ecology.holdfast.${id}`, scene, cel);
+      const host = batch(`ecology.holdfast.${id}`);
       // Off-axis living host leaves the registered collectable and approach clear.
       const hx = x + 2.6, hz = z - 1.8, floor = terrainHeight(hx, hz);
       for (const side of [-1, 1])
@@ -157,7 +159,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
   for (let group = 0; group < 2; group++) {
     const owner = group ? "suspended_garden" : "refuge_reef";
     if (region && region !== owner) continue;
-    const school = new ArtBatch(`reef.decorative-school.${group}`, scene, cel);
+    const school = batch(`reef.decorative-school.${group}`);
     for (let fish = 0; fish < 7; fish++) {
       const x = (random() - 0.5) * 6, y = (random() - 0.5) * 2, z = (random() - 0.5) * 3;
       school.ellipsoid([x, y, z], [0.46, 0.16, 0.13], group ? P.amber : P.lime, 6);
@@ -171,14 +173,14 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
   let silt: Mesh | null = null;
   if (!region || region === "silt_basin") {
     for (const [i, id] of BASIN_SOURCE_IDS.slice(0, 2).entries()) {
-      const p = SOURCES[id].position, b = new ArtBatch(`basin.scavenger.${id}`, scene, cel);
+      const p = SOURCES[id].position, b = batch(`basin.scavenger.${id}`);
       b.ellipsoid([0, .18, 0], [.38, .18, .6], P.steelLight, 6);
       for (const side of [-1, 1]) for (let leg = 0; leg < 3; leg++)
         b.tube([[side * .2, .14, -.35 + leg * .3], [side * .55, .04, -.4 + leg * .3]], .025, P.ochre, 4);
       const mesh = b.finish(); mesh.unfreezeWorldMatrix();
       scavengers.push({ mesh, x: p.x - 2.4, z: p.z - 1.5, phase: i * Math.PI });
     }
-    const b = new ArtBatch("basin.local-silt", scene, cel);
+    const b = batch("basin.local-silt");
     for (let i = 0; i < 48; i++) {
       const x = (random() - .5) * 9, y = random() * 2, z = (random() - .5) * 7;
       b.face([[x, y, z], [x + .045, y + .02, z], [x + .01, y + .075, z + .015]], i % 2 ? P.steelLight : P.metal);

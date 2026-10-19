@@ -1,3 +1,4 @@
+import type { GeometryCache } from "./geometryCache.js";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
@@ -45,8 +46,10 @@ export function createNavigationSilhouettes(scene: Scene, cel: ShaderMaterial): 
   };
 }
 
-export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial): void {
-  const rib = new ArtBatch("landmark.reef-ribs", scene, cel);
+export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, cache?: GeometryCache, labels?: LabelMaterials): void {
+  const makeSign = (text: string, p: readonly [number, number, number], width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
+  const batch = (name: string): ArtBatch => new ArtBatch(name, scene, cel, cache && { owner: cache, key: `landmarks:refuge:${name}` });
+  const rib = batch("landmark.reef-ribs");
   RIB_SEGMENTS.forEach(({ a, b, radius }, i) => {
     rib.tube(
       [
@@ -70,7 +73,7 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: Shader
   });
   rib.finish(.32);
 
-  const pod = new ArtBatch("refuge.pod", scene, cel);
+  const pod = batch("refuge.pod");
   for (const body of FACILITY_SOLIDS.filter((s) => s.id.startsWith("pod.")))
     pod.bounds(body, P.petrol);
   const d = POD_DECK;
@@ -264,19 +267,13 @@ export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: Shader
   pod.box([-2.1, 5.1, 22], [0.8, 0.1, 0.12], P.warm);
   pod.box([0, 0.21, d.min.z + 0.1], [2.65, 0.03, 0.2], P.ochre);
   pod.finish(.45);
-  label(scene, "H / 01", [0, 3.45, 19.15], .62);
-  label(scene, "LOCKER", [-1.52, 1.65, 22.4], 0.54, Math.PI / 2);
-  label(scene, "SERVICE", [1.65, 2.9, 21.2], .52);
-  label(scene, "REGULATOR", [-2.68, 2.55, 21.05], .54, -Math.PI / 2);
+  makeSign("H / 01", [0, 3.45, 19.15], .62);
+  makeSign("LOCKER", [-1.52, 1.65, 22.4], 0.54, Math.PI / 2);
+  makeSign("SERVICE", [1.65, 2.9, 21.2], .52);
+  makeSign("REGULATOR", [-2.68, 2.55, 21.05], .54, -Math.PI / 2);
 }
 
-export function label(
-  scene: Scene,
-  text: string,
-  p: readonly [number, number, number],
-  width = 2,
-  yaw = 0,
-): Mesh {
+function labelMaterial(scene: Scene, text: string): StandardMaterial {
   const texture = new DynamicTexture(
     "label." + text,
     { width: 512, height: 128 },
@@ -297,6 +294,47 @@ export function label(
   material.emissiveColor = Color3.White();
   material.disableLighting = true;
   material.backFaceCulling = true;
+  return material;
+}
+
+/** Renderer-owned sharing only while identical signs are live. Every current
+ * sign uses the same raster/font/optical settings; width and UVs stay per plane.
+ * The last plane releases both texture and material, including on shell swaps. */
+export class LabelMaterials {
+  private readonly live = new Map<string, { material: StandardMaterial; refs: number }>();
+  private disposed = false;
+  constructor(private readonly scene: Scene) {}
+  get stats() { return { entries: this.live.size, references: [...this.live.values()].reduce((n, e) => n + e.refs, 0) }; }
+  acquire(text: string): { material: StandardMaterial; release(): void } {
+    if (this.disposed) throw new Error("Disposed label owner");
+    let entry = this.live.get(text);
+    if (!entry) { entry = { material: labelMaterial(this.scene, text), refs: 0 }; this.live.set(text, entry); }
+    entry.refs++;
+    const retained = entry;
+    let released = false;
+    return { material: entry.material, release: () => {
+      if (released || this.disposed) return;
+      released = true;
+      if (--retained.refs === 0) { this.live.delete(text); retained.material.dispose(true, true); }
+    } };
+  }
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const entry of this.live.values()) entry.material.dispose(true, true);
+    this.live.clear();
+  }
+}
+
+export function label(
+  scene: Scene,
+  text: string,
+  p: readonly [number, number, number],
+  width = 2,
+  yaw = 0,
+  labels?: LabelMaterials,
+): Mesh {
+  const shared = labels?.acquire(text), material = shared?.material ?? labelMaterial(scene, text);
   const plane = CreatePlane(
     "label." + text,
     { width, height: width / 4, sideOrientation: Mesh.DOUBLESIDE,
@@ -310,8 +348,6 @@ export function label(
   plane.renderingGroupId = 1;
   // Each side has explicit UVs. With the production right-handed scene, the
   // -Z face needs U reversed; a two-sided material alone mirrors the return view.
-  // Static signs live with the scene. Dynamic carrier signs also dispose their
-  // texture/material when their shell is rebuilt for another lock state.
-  plane.onDisposeObservable.add(() => material.dispose(true, true));
+  plane.onDisposeObservable.add(() => shared ? shared.release() : material.dispose(true, true));
   return plane;
 }
