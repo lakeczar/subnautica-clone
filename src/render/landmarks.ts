@@ -5,10 +5,45 @@ import { Vector4 } from "@babylonjs/core/Maths/math.vector.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder.js";
 import type { Scene, ShaderMaterial } from "@babylonjs/core";
-import { FACILITY_SOLIDS, POD_DECK, POD_RAMP, RIB_SEGMENTS } from "../sim/world.js";
+import { FACILITY_SOLIDS, POD_DECK, POD_RAMP, RIB_SEGMENTS, SOLIDS } from "../sim/world.js";
+import { CANOPY_COVER } from "../content/registry.js";
+import { BASIN_GEOMETRY } from "../content/routes.js";
+import type { RenderRegion } from "./regions.js";
 import { ArtBatch } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
 import { createObservationPane, wallWithOpening } from "./materials.js";
+
+/** Coarse geography remains when its detailed owner is absent. These use the
+ * same datums as the detailed art and never grant collision, air or discovery. */
+export function createNavigationSilhouettes(scene: Scene, cel: ShaderMaterial): {
+  update(active: readonly RenderRegion[]): void; dispose(): void;
+} {
+  const meshes = new Map<RenderRegion, Mesh>();
+  const reef = new ArtBatch("navigation.reef", scene, cel);
+  for (const { a, b, radius } of RIB_SEGMENTS) reef.tube([[a.x, a.y, a.z], [b.x, b.y, b.z]], radius, P.basalt, 5);
+  reef.box([0, 1.8, 22], [6.5, 3.6, 5], P.petrol);
+  meshes.set("refuge_reef", reef.finish());
+  const canopy = new ArtBatch("navigation.canopy", scene, cel);
+  canopy.bounds(CANOPY_COVER, P.basalt);
+  for (const solid of SOLIDS.filter(s => s.id.startsWith("canopy.lab."))) canopy.bounds(solid, P.steelLight);
+  for (const i of [0, 1, 4, 6, 9]) {
+    const x = 82 + (i % 4) * 21, z = -87 - Math.floor(i / 4) * 23, top = -65 - (i % 3) * 12;
+    canopy.ellipsoid([x, top, z], [2.7, 1.6, 2.1], P.ochre, 6);
+    for (const side of [-1, 1])
+      canopy.leaf([[x, top, z], [x + side * 4, top + 2.6, z], [x + side * 9, top + .8, z]], [.1, 1.3, .03], [0, 0, 1], P.jade, P.lime);
+  }
+  meshes.set("suspended_garden", canopy.finish(.2));
+  const basin = new ArtBatch("navigation.basin", scene, cel);
+  for (const solid of BASIN_GEOMETRY.solids.filter(s => s.id.endsWith("back") || s.id === "basin.dish.spine"))
+    basin.bounds(solid, solid.id.endsWith("back") ? P.steelLight : P.petrol);
+  basin.ring([197, -153.5, -216.98], [1, 0, 0], [0, 1, 0], 1.95, 1.65, P.shell, 12);
+  meshes.set("silt_basin", basin.finish(.25));
+  let disposed = false;
+  return {
+    update(active) { if (!disposed) for (const [id, mesh] of meshes) mesh.setEnabled(!active.includes(id)); },
+    dispose() { if (disposed) return; disposed = true; for (const mesh of meshes.values()) mesh.dispose(); meshes.clear(); },
+  };
+}
 
 export function createLandmarks(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial): void {
   const rib = new ArtBatch("landmark.reef-ribs", scene, cel);

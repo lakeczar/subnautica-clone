@@ -3,6 +3,7 @@ import { Scene } from "@babylonjs/core/scene.js";
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
+import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation.js";
 import type { GameState } from "../sim/types.js";
 import { eyeHeight } from "../sim/state.js";
 import type { InteractionHost } from "../sim/targeting.js";
@@ -10,10 +11,12 @@ import { createTargetCue } from "./targetCue.js";
 import { inCanopyAir } from "../sim/inventory.js";
 import { createCelMaterial, createGlassMaterial, updateOpticalUniforms } from "./materials.js";
 import { createEnvironment } from "./environment.js";
-import { createLandmarks } from "./landmarks.js";
+import { createLandmarks, createNavigationSilhouettes } from "./landmarks.js";
 import { createEcology } from "./ecology.js";
-import { createExpeditionArt, DART_SEAT } from "./expedition.js";
+import { createExpeditionActors, createExpeditionRegion, DART_SEAT } from "./expedition.js";
 import { createAtmosphere } from "./atmosphere.js";
+import { createRegionResidency, type RegionArt, type RenderRegion } from "./regions.js";
+import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 
 export type Quality = "rich" | "light";
 export interface GameRenderer {
@@ -21,6 +24,53 @@ export interface GameRenderer {
   setQuality(quality: Quality): void;
   resize(): void;
   dispose(): void;
+}
+
+/** Internal scene lifetime, also exercised with the real NullEngine factories.
+ * Shared cel/glass stay scene-owned; every regional/actor handle owns its meshes. */
+export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial): RegionArt & {
+  readonly active: readonly RenderRegion[];
+} {
+  const initial = new Set(scene.meshes);
+  createEnvironment(scene, cel, "terrain");
+  const navigation = createNavigationSilhouettes(scene, cel);
+  const regions = createRegionResidency(region => {
+    const before = new Set(scene.meshes);
+    createEnvironment(scene, cel, region);
+    if (region === "refuge_reef") createLandmarks(scene, cel, glass);
+    const expedition = createExpeditionRegion(scene, cel, glass, region);
+    const life = createEcology(scene, cel, region);
+    const meshes = scene.meshes.filter(m => !before.has(m));
+    for (const mesh of meshes) {
+      mesh.renderingGroupId = 1;
+      mesh.metadata = { ...mesh.metadata, detailRegion: region };
+    }
+    return {
+      update(state) { expedition.update(state); life.update(state ? state.tick / 60 : 0, state); },
+      setQuality(quality) { life.setQuality(quality); },
+      dispose() {
+        expedition.dispose(); life.dispose();
+        for (const mesh of meshes) if (!mesh.isDisposed()) mesh.dispose();
+      },
+    };
+  });
+  const expedition = createExpeditionActors(scene, cel, glass, p => regions.contains(p));
+  const fixed = scene.meshes.filter(m => !initial.has(m));
+  let disposed = false;
+  return {
+    get active() { return regions.active; },
+    update(state) {
+      if (disposed) return;
+      regions.update(state); navigation.update(regions.active); expedition.update(state);
+    },
+    setQuality(quality) { regions.setQuality?.(quality); },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      regions.dispose(); expedition.dispose(); navigation.dispose();
+      for (const mesh of fixed) if (!mesh.isDisposed()) mesh.dispose();
+    },
+  };
 }
 
 /** Availability after loss follows engine reconstruction AND scene readiness,
@@ -63,13 +113,11 @@ export function createRenderer(
     scene.activeCamera = camera;
     const cel = createCelMaterial(scene);
     const glass = createGlassMaterial(scene);
-    createEnvironment(scene, cel);
-    createLandmarks(scene, cel, glass);
-    const life = createEcology(scene, cel);
-    const expedition = createExpeditionArt(scene, cel, glass);
+    const art = createRegionalArt(scene, cel, glass);
     for (const mesh of scene.meshes) mesh.renderingGroupId = 1;
     const { water, sky } = createAtmosphere(scene);
     const cue = createTargetCue(scene);
+    const instrumentation = new SceneInstrumentation(scene);
     let presented = 0;
     canvas.dataset.renderer = "WebGL 2";
     canvas.dataset.meshes = String(scene.meshes.length);
@@ -80,6 +128,7 @@ export function createRenderer(
     const setQuality = (quality: Quality): void => {
       // Explicit CSS-pixel policy: predictable on DPR=1/2; Light is always distinct.
       engine.setHardwareScalingLevel(quality === "light" ? 1.5 : 1);
+      art.setQuality?.(quality);
       engine.resize();
     };
     setQuality("rich");
@@ -119,7 +168,12 @@ export function createRenderer(
       present(state, overlay) {
         if (disposed || !available) return;
         const time = state ? state.tick / 60 : 0;
-        expedition.update(state);
+        const activationStart = performance.now();
+        const priorRegions = art.active.join(",");
+        art.update(state);
+        canvas.dataset.regions = art.active.join(",");
+        if (priorRegions !== canvas.dataset.regions)
+          canvas.dataset.activationMs = (performance.now() - activationStart).toFixed(3);
         if (state) {
           const pose = state.player.pose;
           if (state.opening.phase < 4) {
@@ -166,10 +220,16 @@ export function createRenderer(
         cel.setFloat("underwater", underwater);
         cel.setFloat("time", time);
         water.setFloat("time", time);
-        life.update(time);
         canvas.dataset.water = underwater ? "underwater" : "above";
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
         scene.render();
+        canvas.dataset.meshes = String(scene.meshes.length);
+        canvas.dataset.vertices = String(scene.meshes.reduce((n, m) => n + m.getTotalVertices(), 0));
+        canvas.dataset.triangles = String(scene.meshes.reduce((n, m) => n + m.getTotalIndices() / 3, 0));
+        canvas.dataset.draws = String(instrumentation.drawCallsCounter.current);
+        canvas.dataset.materials = String(scene.materials.length);
+        canvas.dataset.geometries = String(scene.geometries.length);
+        canvas.dataset.textures = String(scene.textures.length);
         canvas.dataset.ready = scene.isReady() ? "true" : "false";
         canvas.dataset.frames = String(++presented);
       },
@@ -181,6 +241,8 @@ export function createRenderer(
         cancelReady();
         engine.onContextLostObservable.remove(lost);
         engine.onContextRestoredObservable.remove(restored);
+        art.dispose();
+        instrumentation.dispose();
         cue.dispose();
         scene.dispose();
         engine.dispose();
