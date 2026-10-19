@@ -450,8 +450,13 @@ test("open water, tangent slides, surface clamp and terrain rejection cannot fab
     const out = stepGame(s, [input], w), t = thrusts(out.events)[0]!;
     assert.ok(t);
     assert.ok(t.solidLimited < 0.01 * t.requested, "no material solid limitation");
-    if (w.groundHeight(0, 0) === -9.9) assert.equal(t.actual, 0, "floor rejection stays observable without being called solid loss");
-    else assert.ok(t.actual > t.requested * 0.9);
+    if (w.groundHeight(0, 0) === -9.9) {
+      assert.equal(t.actual, 0, "floor rejection stays observable without being called solid loss");
+      close(t.supportLimited, t.requested);
+    } else {
+      assert.ok(t.actual > t.requested * 0.9);
+      assert.equal(t.supportLimited, 0, "open water, tangent slides and surface caps do not fabricate support loss");
+    }
   }
 });
 

@@ -258,7 +258,8 @@ test("safe ordinary movement and ascent/thrust traces retain exact pre-correctio
     [swim({ x: 0, y: -1.2, z: 6 }, Math.PI), input(1), 90, "f8e8fdc4833829164503c14e3335466da4e4d30868135819b846eb4d34b478d7"],
     [swim({ x: 10, y: -0.8, z: -26 }), input(1), 160, "55858defa8081c19b75efb8b2cc9c3e88a31416d688eab97e3d72d366c8027ac"],
     [swim({ x: 0, y: 0.18, z: 14 }), input(), 12, "817e7f6688a2fd873c1ae10e3ec89e97d47b5965766eca1a65718d855731848a"],
-    [pilot("dart", { x: -55, y: -1, z: 30 }, 0, 0.3), input(1, 0, 1), 60, "1e0dafabfe213a0ddfc379c954268a6c934db9f43d87a7cd2032f2a91882d203"],
+    // Same retained trace with the new, zero-valued supportLimited member.
+    [pilot("dart", { x: -55, y: -1, z: 30 }, 0, 0.3), input(1, 0, 1), 60, "e579ecda29ebfc34efbd943d24f261ccb94312f2725e3c27d38b0049e0c27d70"],
     [pilot("dart", { x: -55, y: -0.9, z: 30 }), input(-1), 60, "73af0a667a3e71d568bf8ca0d108df4df6b4f6101bf7c7364262916c8d0a97c0"],
     [pilot("spindle", { x: -55, y: -0.4, z: 30 }, 0, 0.3), input(1, 0, 1), 60, "629d3907361d73b4755de72c11f798e2af01b36f55e9aebd41938f3c1e079b5d"],
     [pilot("hearthline", { x: 140, y: -40, z: -80 }, 0.4), input(1), 60, "6aa1bc5493c2376901a6134ba1f84f2739096c110621984a0a4e79a04fce7288"],
@@ -267,6 +268,7 @@ test("safe ordinary movement and ascent/thrust traces retain exact pre-correctio
     let s = initial; const trace = [];
     for (let i = 0; i < ticks; i++) {
       const out = stepGame(s, [command], world); s = out.state;
+      for (const e of out.events) if (e.type === "thrust-sample") assert.equal(e.supportLimited, 0);
       trace.push({ pose: s.player.pose, velocity: s.player.velocity, mode: s.player.mode,
         events: out.events.filter(e => ["ascent-sample", "thrust-sample", "impact", "foundation-boundary"].includes(e.type)) });
     }
@@ -299,4 +301,6 @@ test("a long inherited hull rise selects a safe capped retry under a shelf witho
   assert.equal(next.fleet.vehicles[0]!.health, 100); assert.equal(out.events.filter(e => e.type === "impact").length, 0);
   const ascent = out.events.find(e => e.type === "ascent-sample"); assert.ok(ascent?.type === "ascent-sample");
   assert.ok(Math.abs(ascent.actualRise - 2.1) < 1e-12); assert.equal(ascent.solidLimitedRise, 0); assert.ok(ascent.surfaceLimitedRise > 0);
+  const thrust = out.events.find(e => e.type === "thrust-sample"); assert.ok(thrust);
+  assert.equal(thrust.supportLimited, 0); assert.equal(thrust.solidLimited, 0, "selected safe surface retry retains only its own measurements");
 });
