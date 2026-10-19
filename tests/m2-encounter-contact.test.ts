@@ -55,6 +55,20 @@ test("stationary loudness-one rule fixtures fail within 30 seconds with repeated
   }
 });
 
+test("end-on carrier approaches reach actual keel skin without increasing mouth reach", () => {
+  for (const yaw of [0, Math.PI]) for (const bearing of [Math.PI / 2, Math.PI * 1.5]) {
+    const s = fixture("hearthline"), v = s.fleet.vehicles[0]!; v.pose.yaw = yaw;
+    s.world.threat.position = { x: 132 + Math.cos(bearing) * 35, y: -110, z: -112 + Math.sin(bearing) * 35 };
+    let touched = false;
+    for (let i = 0; i < 300; i++) {
+      s.tick++; const m = moveHunter(s, empty); s.world.threat.position = m.position;
+      assert.ok(!m.contact.penetrating);
+      if (m.contact.biting) { assert.ok(m.contact.gap <= H.reach); touched = true; break; }
+    }
+    assert.ok(touched, `carrier end ${yaw}/${bearing} remains reachable`);
+  }
+});
+
 test("investigation stands off; withdrawal keeps its nose toward the actor and cannot bite",()=>{
   const s=fixture("dart");s.world.threat.position=hunterStandOff(s);s.world.threat.mode="investigate";
   for(let i=0;i<90;i++){s.tick++;updateThreat(s,1,[],empty);}

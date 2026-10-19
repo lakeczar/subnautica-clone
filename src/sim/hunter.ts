@@ -137,6 +137,18 @@ function actorSurface(s: GameState, position: Vec3): { point: Vec3; outward: Vec
   if(!a.hull) return { point:add(a.pose.position,{x:n.x*.34,y:.5,z:n.z*.34}),outward:n };
   const origin=add(a.pose.position,{x:n.x*100,y:a.hull==="hearthline"?1.5:a.hull==="creel"?.8:.55,z:n.z*100});
   const local=inverseRotation(sub(origin,a.pose.position),a.pose.yaw,a.pitch);
+  if (a.hull === "hearthline") {
+    const from = inverseRotation(sub(position, a.pose.position), a.pose.yaw);
+    if (Math.abs(from.z) > K.size[2] / 2 && Math.abs(from.x) < K.offsetX + K.size[0] / 2) {
+      // An end-on approach to the twin keels otherwise selects an inner
+      // corner: the animal's cheek stops short while its mouth is out of reach.
+      const point = add(a.pose.position, encounterRotation({
+        x: from.x < 0 ? -K.offsetX : K.offsetX,
+        y: K.centerY, z: Math.sign(from.z) * K.size[2] / 2,
+      }, a.pose.yaw));
+      return { point, outward: outward(position, point) };
+    }
+  }
   const mesh=hullMesh(a.hull);
   let distance=Infinity, point: Vec3 | null=null;
   // Choose the exposed skin from this bearing, including projecting fins/tools
