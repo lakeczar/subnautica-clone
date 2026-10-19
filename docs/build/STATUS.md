@@ -1,6 +1,6 @@
 # Build status
 
-## Current checkpoint — M2-A1 assembled; verification reconciliation next
+## Current checkpoint — M2-A1 assembled; reconciliation worker active
 
 **M2-A1 is provisionally assembled at69e7976**, source785c87c/reportea4f021. [Root inspection](evidence/M2-A1-INTEGRATION.md) verifies actual Sol6.1/max,459 archived payloads,50 source/27 build hashes,42/42 clean focused tests, production build and65 retained migrations plus the preserved refusal. Full `npm run check` is **not passing**:12 old-fixture compile errors; the emitted diagnostic suite is435/462 with27 failures. Original M1 checker also needs version/roster reconciliation; design and new M2 economies pass. [Bounded reconciliation](tasks/M2-A1-RECONCILE.md) must precede A2/A3 shared-baseline dispatch. No ordinary Basin play, visual feedback or M2 acceptance is claimed.
 
@@ -43,7 +43,7 @@ Throughout the project, avoid subtitle/subheading/helper-copy overuse in menus a
 
 ## Active ownership
 
-All prior authors/reviewers and the Opus implementation consultation are terminal and release their paths/resources. Root owns integration/build records and no browser/server/recording/check process. M2-A1 is terminal and its source/report ownership is released. The next sole Sol6.1/max owner is M2-A1-RECONCILE under its exact test/script brief; TASKS records actual dispatch. A2/A3 are not yet dispatched and must consume the same inspected A1 commit.
+All prior authors/reviewers and the Opus implementation consultation are terminal and release their paths/resources. Root owns integration/build records and no browser/server/recording/check process. M2-A1 is terminal and its source/report ownership is released. The sole active Sol6.1/max owner is M2-A1-RECONCILE on8296f40, bound to t3-4df20da3 / t3/m2-a1-fixture-reconcile; TASKS records its exact ID. A2/A3 are not yet dispatched and must consume the same inspected A1 commit.
 
 Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
 
