@@ -1,8 +1,8 @@
 # M2-A — earned Canopy–Basin expedition
 
-Prepared, **not dispatched**. Root supplies the exact clean committed assembly after inspecting the active terrain correction. Sol 6.1/max in an isolated T3 worktree; verify actual runtime, binding and baseline. This is playable verification and defect diagnosis, not independent acceptance. No children, peer waits/messages, parent mutation, push/PR/merge or production edits.
+Prepared, **not dispatched**. Root supplies the exact clean committed assembly after inspecting the terrain and wall-contact corrections. Sol 6.1/max in an isolated T3 worktree; verify actual runtime, binding and baseline. This is playable verification and defect diagnosis, not independent acceptance. No children, peer waits/messages, parent mutation, push/PR/merge or production edits.
 
-Read STATUS, PLAN, CONTRACTS, the revised build input and its integration/world/fleet/story/delivery pointers; M2-A-CONTRACT; A1/A2/A3 author reports and root inspections; performance and terrain corrections and their root dispositions. Stage1 is accepted; M2-A remains provisional. Root retains all interface/tuning decisions. Do not execute older short-game drafts or silently reduce the campaign.
+Read STATUS, PLAN, CONTRACTS, the revised build input and its integration/world/fleet/story/delivery pointers; M2-A-CONTRACT; A1/A2/A3 author reports and root inspections; performance, terrain and wall-contact corrections and their root dispositions. The corrected production assembly is b91cde9; dispatch names its exact records successor. Historical placement clearance remains unchanged; do not reinterpret that as universal placement safety. Stage1 is accepted; M2-A remains provisional. Root retains all interface/tuning decisions. Do not execute older short-game drafts or silently reduce the campaign.
 
 ## Ownership
 
