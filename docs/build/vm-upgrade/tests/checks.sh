@@ -339,6 +339,56 @@ GO_IN=/mnt/smallfs go; GO_IN=; rm -rf /mnt/smallfs/*
 is "disk full once off: the VM still upgraded" vm_is running $NEW $NEW
 is "  ...exit 32, never 0" [ "$RC" = 32 ]
 is "  ...owner told it was upgraded without a result" notified 'upgraded, records incomplete, result NOT written'
+
+echo "# SOL-R2-01: the first failure is in finish's own final records"
+# A mktemp ahead of the real one. The first record made while state.json still says
+# guest-check is finish's final state: there it fails that one (fail-final-state), or
+# fills the disk until result.json's turn (fill-at-finish), so the final log lines
+# fail as well: run.log is padded to the end of its last page, which a full tmpfs
+# would otherwise still take, and cut back afterwards. It also notes any run-folder
+# record made once result.json exists.
+cat > /usr/local/sbin/mktemp <<'EOF'
+#!/bin/bash
+f=/tmp/vmu-fake; t="${@: -1}"; d="${t%/*}"
+[ -f "$d/result.json" ] && echo "$t" >> "$f/after-result.log"
+case "$t" in
+  */.state.json.*)
+    if grep -q '"phase":"guest-check"' "$d/state.json" 2>/dev/null; then
+      [ -f "$f/fail-final-state" ] && { echo "$t" >> "$f/injected.log"; exit 1; }
+      if [ -f "$f/fill-at-finish" ]; then
+        stat -c %s "$d/run.log" > "$f/log-size"; echo "$t" >> "$f/injected.log"
+        head -c 32M /dev/zero > /mnt/smallfs/filler 2>/dev/null; head -c 8192 /dev/zero >> "$d/run.log" 2>/dev/null
+      fi
+    fi ;;
+  */.result.json.*)
+    [ -f /mnt/smallfs/filler ] && { rm -f /mnt/smallfs/filler; truncate -s "$(cat "$f/log-size")" "$d/run.log"; } ;;
+esac
+exec /usr/bin/mktemp "$@"
+EOF
+chmod +x /usr/local/sbin/mktemp
+errors_are() { [ "$(field evidence_errors)" = "$1" ] || { echo "     evidence_errors '$(field evidence_errors)'"; return 1; }; }
+none_after_result() { [ ! -s "$S/after-result.log" ] || { echo "     made after result.json: $(cat "$S/after-result.log")"; return 1; }; }
+reset_fake; touch "$S/fail-final-state"; go
+is "final state.json fails first: evidence-incomplete, not exit 0" outcome evidence-incomplete 23
+is "  ...injected once, in finish" [ "$(wc -l < "$S/injected.log")" = 1 ]
+is "  ...the VM was still upgraded" all 'vm_is running $NEW $NEW && [ "$(field vm_outcome)" = upgraded ]'
+is "  ...result lists state.json" errors_are state.json
+is "  ...run.log has the same result" grep -q 'RESULT evidence-incomplete (exit 23): .*could not write: state.json' "$RD/run.log"
+is "  ...owner alerted" all 'notified "upgraded, records incomplete" && notified "-i alert" && in_syslog "records incomplete"'
+is "  ...no record made after result.json" none_after_result
+reset_fake; touch "$S/fill-at-finish"; GO_IN=/mnt/smallfs go; GO_IN=
+is "disk full from finish's final state until result.json: evidence-incomplete" outcome evidence-incomplete 23
+is "  ...the VM was still upgraded" vm_is running $NEW $NEW
+is "  ...result lists the state and the log" errors_are "state.json run.log"
+is "  ...owner alerted" all 'notified "upgraded, records incomplete" && notified "-i alert"'
+is "  ...no record made after result.json" none_after_result
+rm -rf /mnt/smallfs/*
+# The review's own trigger (state.json once result.json exists) has nothing left to hit.
+reset_fake; go
+is "an ordinary upgrade: nothing made after result.json" all '[ "$OUT" = upgraded ] && none_after_result'
+is "  ...state.json says finished" grep -q '"phase":"finished","message":"upgraded"' "$RD/state.json"
+rm -f /usr/local/sbin/mktemp
+
 reset_fake; mv /usr/local/emhttp/webGui/scripts/notify /tmp/notify.away; go
 mv /tmp/notify.away /usr/local/emhttp/webGui/scripts/notify
 is "Unraid notify missing: preflight-failed" outcome preflight-failed 10
@@ -430,7 +480,7 @@ is "group kill: runner was timed out" [ "$(cat /tmp/runner.exit)" = 124 ]
 pid="$(sed -n 's/.*"pid":\([0-9]*\).*/\1/p' "$RD/state.json")"
 kill -HUP "$pid" 2>/dev/null
 is "group kill: run survives and finishes" wait_result "$RD" 400
-OUT="$(sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p' "$RD/result.json")"; RC=0
+OUT="$(sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p' "$RD/result.json")"; RC="$(sed -n 's/.*"exit_code":\([0-9]*\).*/\1/p' "$RD/result.json")"
 is "group kill: upgraded" outcome upgraded 0
 is "group kill: running with 16 GiB" vm_is running $NEW $NEW
 

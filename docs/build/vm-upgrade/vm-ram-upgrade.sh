@@ -303,18 +303,29 @@ tell_owner() {
     || log "the syslog message could not be written"
 }
 
-# finish <outcome> <exit code> <message>: record the result, tell the owner, exit.
+# finish <outcome> <exit code> <message>: the final state and log records, then
+# result.json, which counts any of them that failed; then tell the owner and exit.
 # Success is only reported with every record written and result.json published.
+# Nothing required is written after result.json; the notification and syslog are best effort.
 finish() {
-  local outcome="$1" code="$2" msg="$3" vm_outcome="$1" level=alert launcher=unknown subject
+  local outcome code msg vm_outcome="$1" level=alert launcher=unknown subject errs
   FINISHED=1
   release_fleet_lock
   observe
   [ -n "$LAUNCHER_PID" ] && { kill -0 "$LAUNCHER_PID" 2>/dev/null && launcher=yes || launcher=no; }
-  if [ ${#EVIDENCE_ERRORS[@]} -gt 0 ]; then
-    msg="$msg; could not write: ${EVIDENCE_ERRORS[*]}"
-    [ "$code" != 0 ] || { outcome=evidence-incomplete; code=23; }
-  fi
+  set_phase finished "$vm_outcome"
+  log "VM now: $(describe)"
+  log "all VMs at the end:"; { virsh list --all 2>&1 || :; } | sed 's/^/  | /' || note_failed_write run.log
+  # Again if the RESULT line itself could not be written, so that the result says so.
+  while :; do
+    errs=${#EVIDENCE_ERRORS[@]}; outcome="$1"; code="$2"; msg="$3"
+    if [ "$errs" -gt 0 ]; then
+      msg="$msg; could not write: ${EVIDENCE_ERRORS[*]}"
+      [ "$code" != 0 ] || { outcome=evidence-incomplete; code=23; }
+    fi
+    log "RESULT $outcome (exit $code): $msg"
+    [ ${#EVIDENCE_ERRORS[@]} -gt "$errs" ] || break
+  done
   {
     printf '{"run_id":%s,"outcome":%s,"exit_code":%s,"message":%s,' "$(json_str "$RUN_ID")" "$(json_str "$outcome")" "$code" "$(json_str "$msg")"
     printf '"vm_outcome":%s,"evidence_errors":%s,' "$(json_str "$vm_outcome")" "$(json_str "${EVIDENCE_ERRORS[*]:-}")"
@@ -327,11 +338,8 @@ finish() {
   } | put_file "$RUN_DIR/result.json"
   if [ $? -ne 0 ]; then
     code=32; msg="result.json could NOT be written; the run ended '$outcome' (VM: $vm_outcome): $msg"
+    log "RESULT NOT PUBLISHED (exit 32): $msg"
   fi
-  set_phase finished "$outcome"
-  log "RESULT $outcome (exit $code): $msg"
-  log "VM now: $(describe)"
-  log "all VMs at the end:"; virsh list --all 2>&1 | sed 's/^/  | /'
   case "$code" in
     0) level=normal ;;
     1[0-9]) [ "$STATE" = running ] && level=warning ;;

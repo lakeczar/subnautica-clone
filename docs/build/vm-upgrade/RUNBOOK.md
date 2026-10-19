@@ -1,6 +1,6 @@
 # factory-worker RAM upgrade: 12 GiB → 16 GiB
 
-**Status: R1 correction prepared and offline-tested only.** No host file, VM, ask request or resource limit has been changed. The first candidate failed independent review ([Sol R1](REVIEW-SOL-R1.md), [disposition](COORDINATOR-R1.md)); [CORRECTION-R1.md](CORRECTION-R1.md) records how each finding was handled. Root inspects this bundle, gets a fresh Sol 6.1/xhigh review, places the operational files on a Fleet feature branch and then follows the procedure below.
+**Status: R2 correction prepared and offline-tested only.** No host file, VM, ask request or resource limit has been changed. The first candidate failed independent review ([Sol R1](REVIEW-SOL-R1.md), [disposition](COORDINATOR-R1.md)); [CORRECTION-R1.md](CORRECTION-R1.md) records how each finding was handled. [Sol R2](REVIEW-SOL-R2.md) closed four of them and found one remaining reporting defect in the finalization order, corrected in [CORRECTION-R2.md](CORRECTION-R2.md). Root inspects this bundle, gets a fresh Sol 6.1/xhigh review of the affected change, places the operational files on a Fleet feature branch and then follows the procedure below.
 
 ## What it changes
 
@@ -79,7 +79,7 @@ Every run ends with an Unraid notification (`normal`, `warning` or `alert`; anyt
 
 **Starting only with known memory.** Every start (upgrade, rollback or as-is) first reads the definition successfully and checks that host `MemAvailable` covers the defined maximum plus a 2 GiB reserve. If the definition or `MemAvailable` cannot be read after the retries, or the memory does not fit, or the start fails twice, the VM stays off (`left-off`) and the owner is alerted.
 
-**Records after the shutdown.** A write that fails after the shutdown no longer stops anything: the VM is still changed/started or recovered. The result then says `evidence-incomplete` (23) and lists what is missing. If `result.json` itself cannot be written, the run exits 32 and the Unraid notification and syslog carry the outcome.
+**Records after the shutdown.** A write that fails after the shutdown no longer stops anything: the VM is still changed/started or recovered. The result then says `evidence-incomplete` (23) and lists what is missing. At the end the run writes its final `state.json` and log lines (including the `RESULT` line) first and only then publishes `result.json`, so a failure in those last records is counted in the result too. If `result.json` itself cannot be written, the run exits 32 and the Unraid notification and syslog carry the outcome. Nothing required is written after `result.json`: only the notification, the syslog line and a log note if either could not be sent, all best effort.
 
 **Re-entry:** the plan always comes from the VM's current state (table above). A run that ended for any reason can be launched again; it does not stop an already-upgraded VM.
 
@@ -200,7 +200,7 @@ Verified:
 - Guest: `HandlePowerKey` is the default (poweroff), no inhibitors, `qemu-guest-agent` is active, `poweroff.target` has a 30 min timeout followed by `poweroff-force`, and `DefaultTimeoutStopUSec` is 90 s. `t3code`, `fleet-dashboard-v2`, `fleet-dashboard` (:9100) and `fleet-status` (:9101) are enabled and active, and lingering is on.
 - T3 slice formula: read from the installed binary, and it matches the live values.
 - libvirt (`qemu_driver.c`, current source): `setmaxmem --config` lowers `cur_balloon` with the maximum; `setmem` above the maximum is rejected.
-- Offline: see [CORRECTION-R1.md](CORRECTION-R1.md) for the current suite, the run against the original scripts and the mutation trials. The first candidate's numbers in [EVIDENCE.md](EVIDENCE.md) are historical.
+- Offline: see [CORRECTION-R2.md](CORRECTION-R2.md) for the current suite and its run against the R1 script, and [CORRECTION-R1.md](CORRECTION-R1.md) for the run against the original scripts and the mutation trials. The first candidate's numbers in [EVIDENCE.md](EVIDENCE.md) are historical.
 
 Assumed (the rehearsal and preflight check the first four on the real host):
 
