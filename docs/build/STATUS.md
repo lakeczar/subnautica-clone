@@ -6,7 +6,7 @@
 
 Production remains **516/516/typecheck/build** passing. M1/design economies pass, but the M2 checker **fails on the new completed earned export** because its alternate clue-order diagnostic assumes no prior C05/C06 records. Root reproduces this harness failure. The same run's pre-Basin input passes only its separately labelled staged diagnostics; that is not a completed-save pass.
 
-Root also reproduces **OS3-03** from the earned grounded-Dart checkpoint: terrain-footprint rejection is absent from thrust obstruction measurement, so Blocked ahead never appears. [Focused Sol corrections](tasks/M2-A-COMPOSE-CORRECTIONS.md) cover this producer/consumer seam and the checker without changing physical movement or thresholds. [Focused Astra direction](tasks/M2-A-ENCOUNTER-DIRECTION.md) will propose concrete corrections for **OS2-06** high-approach shelter recognition and **ROOT-COMPOSE-HUNTER** close-body occlusion. These are separate, exclusive tasks; TASKS records dispatch.
+Root also reproduces **OS3-03** from the earned grounded-Dart checkpoint: terrain-footprint rejection is absent from thrust obstruction measurement, so Blocked ahead never appears. [Focused Sol corrections](tasks/M2-A-COMPOSE-CORRECTIONS.md) cover this producer/consumer seam and the checker without changing physical movement or thresholds. [Focused Astra direction](tasks/M2-A-ENCOUNTER-DIRECTION.md) will propose concrete corrections for **OS2-06** high-approach shelter recognition and **ROOT-COMPOSE-HUNTER** close-body occlusion. Both are active from **8f3065117c91a2a8ddceba6235c3b8c4939d51ca** in t3-42fec51b and t3-518a7eda; original Sol6.1/max and Astra/xhigh runtimes and bindings are verified. TASKS records exclusive ownership and exact IDs.
 
 The composition author is terminal; all its paths/resources are released. Historical placement limits remain explicit. Current route loading includes first-use stalls and a50.6ms return sample above the50ms trial; older cache timings do not certify current frame pacing. Corrected visual work must retain this performance evidence.
 
@@ -90,7 +90,7 @@ Design research and critic procedure passed both non-author reviews at `c0aa5cb`
 
 ## Exact next action
 
-Dispatch/inspect the [Sol correctness correction](tasks/M2-A-COMPOSE-CORRECTIONS.md) and [Astra encounter direction](tasks/M2-A-ENCOUNTER-DIRECTION.md) from the committed shared baseline. Reconcile concrete visibility/AI proposals, assign Sol implementation, verify affected earned continuations, then review the complete M2-A batch with fresh non-author Astra xhigh/Sol6.1 max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
+Receive and inspect the [Sol correctness correction](tasks/M2-A-COMPOSE-CORRECTIONS.md) and [Astra encounter direction](tasks/M2-A-ENCOUNTER-DIRECTION.md) from the committed shared baseline. Reconcile concrete visibility/AI proposals, assign Sol implementation, verify affected earned continuations, then review the complete M2-A batch with fresh non-author Astra xhigh/Sol6.1 max. Continue M2–M4 automatically; main merge/public deployment remain owner actions.
 
 ### Historical execution and evidence
 
