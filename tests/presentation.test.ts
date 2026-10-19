@@ -1759,3 +1759,103 @@ test("targeted exit feedback respects panel and menu routing while persistence e
   assert.equal(get("notification").hidden, true); assert.equal(get("system-status").textContent, "Saved locally");
   view.showGame(); view.update(s, false); assert.equal(get("action-result").hidden, true);
 });
+
+function biteFixture(t: test.TestContext) {
+  const fixture = viewFixture(t), s = readyState();
+  const v = makeVehicle("bite-ui-dart", "dart", { x: 130, y: -112, z: -110 }, "bite-ui-hold");
+  s.fleet.vehicles.push(v); s.player.mode = "piloting"; s.player.controlledVehicleId = v.id;
+  s.player.pose = structuredClone(v.pose); s.world.threat.mode = "pursue";
+  const bite = { type: "threat-damage", source: "hunter", target: { kind: "vehicle", vehicleId: v.id }, loss: 0.2, healthAfter: 99.8 } as const;
+  fixture.view.update(s, false); fixture.view.showGame();
+  return { ...fixture, s, v, bite };
+}
+
+test("one positive bite speaks once with mute/captions off, accumulates per step and composes independent collision loss", (t) => {
+  const { view, get, wall, s, v, bite } = biteFixture(t);
+  view.audioSettings({ volume: 0, muted: true, subtitles: false });
+  const initial = structuredClone(s), live = get("damage-announce"), writes = live.textWrites;
+  assert.equal(view.threatDamage({ ...bite, loss: 0 }, s), false);
+  assert.equal(get("impact-notice").hidden, true);
+  assert.equal(view.threatDamage(bite, s), true);
+  assert.equal(get("impact-notice").textContent, "Bitten · hull −0.2%");
+  assert.equal(get("impact-notice").attrs["aria-live"], "off");
+  assert.equal(get("impact-notice").attrs["aria-hidden"], "true");
+  view.update(s, false); assert.match(get("vitals").innerHTML, /hull-impact/);
+  assert.equal(get("context-hint").textContent, "");
+  assert.equal(live.textContent, ""); wall(0);
+  assert.equal(live.textContent, "Bitten · hull −0.2%");
+  for (let i = 0; i < 40; i++) {
+    s.tick++; view.presentationStep(s);
+    assert.equal(view.threatDamage(bite, s), false);
+  }
+  wall(0); assert.equal(live.textWrites, writes + 1, "no per-step announcement churn");
+  view.impact(0.6, s);
+  assert.equal(get("impact-notice").textContent, "Bitten · hull −8.2% · impact −0.6%");
+  wall(1800); assert.equal(get("impact-notice").textContent, "Bitten · hull −8.2%", "collision expiry cannot hide the bite");
+  v.health = 20; view.update(s, false);
+  assert.equal(live.textWrites, writes + 1, "health changes cannot invent another bite");
+  const expected = structuredClone(initial); expected.tick = s.tick; expected.fleet.vehicles[0]!.health = 20;
+  assert.deepEqual(s, expected, "presentation leaves gameplay unchanged");
+});
+
+test("four steps in one frame retain each bite once, then exact aftermath expiry restores calm hints", (t) => {
+  const { view, get, wall, s, bite } = biteFixture(t);
+  for (let i = 0; i < 4; i++) {
+    s.tick++; assert.equal(view.threatDamage(bite, s), i === 0); view.presentationStep(s);
+  }
+  view.update(s, false); wall(0);
+  assert.equal(get("impact-notice").textContent, "Bitten · hull −0.8%");
+  assert.equal(get("damage-announce").textContent, "Bitten · hull −0.2%");
+  s.world.threat.mode = "disengage";
+  for (let i = 0; i < 179; i++) { s.tick++; view.presentationStep(s); }
+  view.update(s, false); assert.equal(get("context-hint").textContent, ""); assert.equal(get("impact-notice").hidden, false);
+  s.tick++; view.presentationStep(s); view.update(s, false);
+  assert.equal(get("impact-notice").hidden, true); assert.equal(get("damage-announce").textContent, "");
+  assert.match(get("context-hint").textContent, /upper crowns/);
+});
+
+for (const boundary of ["pause", "panel", "replacement", "actor", "refuge"] as const) {
+  test(`bite onset pending work is cancelled on ${boundary}, without disturbing exit refusals or persistence`, (t) => {
+    const { view, get, wall, s, bite } = biteFixture(t);
+    view.persistence("export before closing", false, true, false);
+    view.notify("Save refused; retained generation", true, { channel: "persistence" }, s);
+    const full = "Exit exposure exceeds personal suit. Find a safe depth and clearance.";
+    view.notify(full, true, { refusal: { kind: "exit", vehicleId: bite.target.vehicleId, code: "depth" } }, s);
+    view.threatDamage(bite, s);
+    if (boundary === "pause") view.showMenu(true);
+    if (boundary === "panel") view.openPanel("inventory", s);
+    if (boundary === "replacement") view.resetPresentation();
+    if (boundary === "actor") { s.player.controlledVehicleId = null; s.player.mode = "swimming"; view.update(s, false); }
+    if (boundary === "refuge") { s.player.controlledVehicleId = null; s.player.mode = "walking"; s.player.pose.position = { x: 0, y: 0.6, z: 14 }; view.update(s, false); }
+    wall(0); assert.equal(get("damage-announce").textContent, ""); assert.equal(get("impact-notice").hidden, true);
+    if (boundary !== "replacement") assert.equal(get("notification").textContent, "Save refused; retained generation");
+    assert.equal(get("session-warning").hidden, false);
+  });
+}
+
+test("disabled hull keeps a truthful chip while outcome speech wins; diver incapacity cannot relabel that hit", (t) => {
+  const { view, get, wall, s, v, bite } = biteFixture(t);
+  v.health = 25; view.update(s, false);
+  assert.match(get("hazard-announce").textContent, /LOW HULL/);
+  view.threatDamage(bite, s); // Pending onset from an earlier step in this frame.
+  v.disabled = true; v.health = 0;
+  view.notify("Hull disabled", true, { channel: "hazard", context: "hull" }, s);
+  assert.equal(view.threatDamage({ ...bite, loss: 0.1, healthAfter: 0 }, s, true), false);
+  wall(0);
+  assert.equal(get("damage-announce").textContent, "");
+  assert.equal(get("impact-notice").textContent, "Bitten · hull −0.3%");
+  assert.match(get("hazard-announce").textContent, /HULL DISABLED/);
+  const disabledWrites = get("hazard-announce").textWrites;
+  for (let i = 0; i < 40; i++) { s.tick++; view.presentationStep(s); }
+  assert.equal(get("hazard-announce").textWrites, disabledWrites, "disabled outcome speaks once despite the changing emergency air");
+  s.player.controlledVehicleId = null; s.player.mode = "swimming"; view.update(s, false);
+  const diver = { ...bite, target: { kind: "diver" }, loss: 1 / 6 } as const;
+  assert.equal(view.threatDamage(diver, s), true); view.update(s, false);
+  assert.match(get("vitals").innerHTML, /class="hull-impact"><span>HEALTH/);
+  assert.equal(get("impact-notice").textContent, "Bitten · health −0.2");
+  incapacitate(s, "Exposure or injury.");
+  view.notify("Returned to refuge", true, { channel: "hazard", context: "recovery" }, s);
+  assert.equal(view.threatDamage(diver, s, true), false); wall(0);
+  assert.equal(get("impact-notice").hidden, true); assert.equal(get("damage-announce").textContent, "");
+  assert.equal(get("notification").textContent, "Returned to refuge");
+});

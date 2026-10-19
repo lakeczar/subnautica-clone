@@ -1,4 +1,5 @@
 import { HULLS, HULL_COLLIDERS, OPENING, PLACES, SOURCES } from "../content/registry.js";
+import { ROUTE_REGIONS } from "../content/routes.js";
 import { inCanopyAir, nearPod, nearWorkshop, equipped } from "../sim/inventory.js";
 import { personalLimit } from "../sim/progression.js";
 import { deliberateExit } from "../runtime/input.js";
@@ -9,7 +10,7 @@ import { distractionPreview, exitBlock, hullDepth, serviceRefusal, serviceState 
 import type { GameState, NoticeContext, NoticeOptions, Vec3, WorldQueries } from "../sim/types.js";
 import { FACILITY_SOLIDS } from "../sim/world.js";
 import { escapeHtml, recoveryDisplay } from "./format.js";
-import { EncounterPresentation, type ActionResult } from "./notices.js";
+import { EncounterPresentation, type ActionResult, type DamageTarget, type ThreatDamage } from "./notices.js";
 
 export interface HudAim { target: AimedTarget | null; preview: ReachPreview | null }
 
@@ -35,6 +36,12 @@ export class HudView {
   private impactAt = -Infinity;
   private impactUntil = -Infinity;
   private impactVehicle: string | null = null;
+  private collisionVisible = false;
+  private chipHasBite: boolean | null = null;
+  private damageAnnouncementTimer = 0;
+  private damageAnnouncementVersion = 0;
+  private damageFlashUntil = -Infinity;
+  private damageFlashTarget: DamageTarget | null = null;
   private pilotId: string | null = null;
   private pilotSince = 0;
   private startTick: number | null = null;
@@ -58,9 +65,7 @@ export class HudView {
 
   update(state: GameState, cruise: boolean, forward = 0, aim?: HudAim): void {
     this.startTick ??= state.tick;
-    const covered = this.renderHazards(state);
-    this.presentation.observe(state, covered);
-    this.current = state;
+    this.observePresentation(state);
     this.renderPilotGuidance(state);
     this.renderBlocked();
     this.renderNotices();
@@ -89,6 +94,8 @@ export class HudView {
     this.get("region-name").textContent =
       state.scenario === "carrier-fixture"
         ? "Carrier test fixture"
+        : p.x >= ROUTE_REGIONS.silt_basin.bounds.minX && p.z < ROUTE_REGIONS.silt_basin.bounds.maxZ
+          ? "Pale Basin"
         : p.x > 62
           ? "Upper Lantern Canopy"
           : p.z < -28
@@ -108,6 +115,8 @@ export class HudView {
           : v?.hull === "dart" && p.x > 15 && p.x < 25 && p.z < -16 && p.z > -29
             ? Math.abs(Math.atan2(Math.sin(v.pose.yaw - Math.PI), Math.cos(v.pose.yaw - Math.PI))) > 0.6
               ? "Turn to the open lane" : ""
+          : p.x >= ROUTE_REGIONS.silt_basin.bounds.minX && p.z < ROUTE_REGIONS.silt_basin.bounds.maxZ
+            ? "Pale Basin · flooded survey sites · no refuge air"
           : p.x > 68
             ? "Read the upper crowns. Z quiet · cover / retreat · Tab for pulse & reserves."
             : p.z > 9 && p.y < 0 && Math.abs(p.x) < 4
@@ -115,13 +124,14 @@ export class HudView {
               : "";
     const pulse = distractionPreview(state);
     const threatened = !e.refuge && ["warn", "investigate", "pursue"].includes(state.world.threat.mode);
-    if (threatened) this.get("context-hint").textContent = "";
+    const aftermath = this.presentation.damage !== null;
+    if (threatened || aftermath) this.get("context-hint").textContent = "";
     this.get("pulse-summary").textContent = (!equipped(state, "essential_tools") || exposure(state).refuge ||
       !["warn", "investigate", "pursue"].includes(state.world.threat.mode) && state.world.threat.distractionSeconds <= 0) ? ""
       : state.world.threat.distractionSeconds > 0 ? `G · pulse active ${Math.ceil(state.world.threat.distractionSeconds)} s`
       : pulse.refusal === null ? `G · ${pulse.cost} cell points · ${(pulse.remainingCharge + pulse.cost).toFixed(0)} → ${pulse.remainingCharge.toFixed(0)}%`
       : `G · unavailable · Z quiet / cover / retreat`;
-    this.get("control-hint").textContent = threatened || this.get("context-hint").textContent ? "" : v
+    this.get("control-hint").textContent = threatened || aftermath || this.get("context-hint").textContent ? "" : v
       ? state.tick - this.pilotSince < 720 ? "Look steers · W/S thrust · A/D slide · Space/C rise/dive · Z quiet · Shift boost" : ""
       : state.tick - this.startTick < 3600 ? "WASD move · mouse / arrows look · Space rise · C dive" : "";
     const pitch = state.player.pose.pitch;
@@ -129,7 +139,7 @@ export class HudView {
     this.get("pitch-cue").innerHTML = `<i style="top:${50 - Math.max(-1, Math.min(1, pitch / (Math.PI / 2))) * 46}%"></i>${Math.abs(pitch) > Math.PI / 4 ? `<small>${Math.round(pitch * 180 / Math.PI)}°</small>` : ""}`;
     this.get("pitch-cue").setAttribute("aria-label", `Pitch ${Math.round(pitch * 180 / Math.PI)} degrees`);
     this.get("surface-cue").hidden = !v || v.pose.position.y < -0.95 || forward <= 0 || v.pose.pitch <= 0.1;
-    if (!threatened && v?.hull === "dart" && v.pose.position.z > -16 && v.pose.position.z < -7 &&
+    if (!threatened && !aftermath && v?.hull === "dart" && v.pose.position.z > -16 && v.pose.position.z < -7 &&
       Math.abs(v.pose.position.x - 20) < 6 && v.velocity.z < -4)
       this.get("context-hint").textContent = "Slow · cradle ahead";
     if (this.get("context-hint").textContent) this.get("control-hint").textContent = "";
@@ -142,7 +152,7 @@ export class HudView {
       : service === "patch" ? "Patch hull first" : "";
     this.get("vitals").dataset.airSource = air.kind;
     this.get("vitals").innerHTML =
-      `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${escapeHtml(airLabel)}</small></div><div><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}${this.impactVehicle === v.id && performance.now() < this.impactUntil ? " hull-impact" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m</small>${serviceLine ? `<small class="service-hint">${serviceLine}</small>` : ""}</div>` : ""}`;
+      `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${escapeHtml(airLabel)}</small></div><div class="${this.damageFlashing("diver") ? "hull-impact" : ""}"><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}${this.impactVehicle === v.id && performance.now() < this.impactUntil || this.damageFlashing("vehicle", v.id) ? " hull-impact" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m</small>${serviceLine ? `<small class="service-hint">${serviceLine}</small>` : ""}</div>` : ""}`;
     const opening = state.opening.phase < 4;
     this.root.dataset.opening = String(opening);
     // Hide only routine exploration elements. Warnings, pause and the opening
@@ -231,13 +241,90 @@ export class HudView {
     this.impactAt = now;
     this.impactVehicle = id;
     this.impactUntil = now + 600;
-    const notice = this.get("impact-notice");
-    const shown = Math.round(this.impactLoss * 10) / 10;
-    notice.textContent = shown < 0.1 ? "" : `Hull −${shown.toFixed(1)}%`;
-    notice.hidden = shown < 0.1;
-    notice.classList.toggle("urgent", (state.fleet.vehicles.find(v => v.id === id)?.health ?? 100) <= 25);
+    this.current = state;
+    this.collisionVisible = true;
+    this.renderDamageChip();
     window.clearTimeout(this.impactTimer);
-    this.impactTimer = window.setTimeout(() => { notice.hidden = true; }, 1800);
+    this.impactTimer = window.setTimeout(() => { this.collisionVisible = false; this.renderDamageChip(); }, 1800);
+  }
+
+  /** Before each step's events, invalidate feedback against that step's actor. */
+  observePresentation(state: GameState): void {
+    this.current = state;
+    this.presentation.observe(state, this.renderHazards(state));
+    this.renderDamageChip();
+  }
+
+  /** Returns a valid episode onset; suppressAnnouncement drops speech, not the chip. */
+  threatDamage(event: ThreatDamage, state: GameState, suppressAnnouncement = false): boolean {
+    this.observePresentation(state);
+    if (this.disposed || this.hud.hidden || !this.presentation.damageTargetValid(event.target, state) ||
+      !Number.isFinite(event.loss) || event.loss <= 0) return false;
+    const onset = this.presentation.recordDamage(event.target, event.loss);
+    this.renderDamageChip();
+    if (suppressAnnouncement) this.cancelDamageAnnouncement();
+    if (onset && !suppressAnnouncement) {
+      this.cancelDamageAnnouncement();
+      const version = this.damageAnnouncementVersion, episode = this.presentation.damage;
+      const message = this.biteText();
+      this.damageAnnouncementTimer = window.setTimeout(() => {
+        if (this.disposed || version !== this.damageAnnouncementVersion || this.presentation.damage !== episode ||
+          this.hud.hidden || !this.current || !this.presentation.damageTargetValid(event.target, this.current)) return;
+        this.damageAnnouncementTimer = 0;
+        this.get("damage-announce").textContent = message;
+      }, 0);
+    }
+    return onset;
+  }
+
+  private biteText(): string {
+    const damage = this.presentation.damage;
+    return damage ? `Bitten · ${damage.target.kind === "vehicle" ? "hull" : "health"} −${(Math.round(damage.total * 10) / 10).toFixed(1)}${damage.target.kind === "vehicle" ? "%" : ""}` : "";
+  }
+
+  private damageFlashing(kind: DamageTarget["kind"], vehicleId?: string): boolean {
+    const target = this.damageFlashTarget;
+    return performance.now() < this.damageFlashUntil && target?.kind === kind &&
+      (target.kind === "diver" || target.vehicleId === vehicleId);
+  }
+
+  private renderDamageChip(): void {
+    const damage = this.presentation.damage, state = this.current, notice = this.get("impact-notice");
+    if (!damage) {
+      this.cancelDamageAnnouncement();
+      this.damageFlashUntil = -Infinity;
+      this.damageFlashTarget = null;
+    } else if (damage.pulse) {
+      this.damageFlashUntil = performance.now() + 600;
+      this.damageFlashTarget = { ...damage.target };
+      damage.pulse = false;
+    }
+    if (damage) {
+      this.get("context-hint").textContent = "";
+      this.get("control-hint").textContent = "";
+    }
+    const shown = Math.round(this.impactLoss * 10) / 10;
+    const collision = this.collisionVisible && shown >= 0.1 && this.impactVehicle === state?.player.controlledVehicleId;
+    const text = this.biteText() + (collision ? `${damage ? " · impact" : "Hull"} −${shown.toFixed(1)}%` : "");
+    if (notice.textContent !== text) notice.textContent = text;
+    if (notice.hidden === !!text) notice.hidden = !text;
+    // Totals change at simulation frequency. Only the separate onset speaks.
+    if (this.chipHasBite !== !!damage) {
+      notice.setAttribute("aria-live", damage ? "off" : "polite");
+      notice.setAttribute("aria-hidden", String(!!damage));
+      this.chipHasBite = !!damage;
+    }
+    const health = damage?.target.kind === "diver" ? state?.player.vitals.health
+      : state?.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId)?.health;
+    notice.classList.toggle("urgent", (health ?? 100) <= 25);
+  }
+
+  private cancelDamageAnnouncement(): void {
+    window.clearTimeout(this.damageAnnouncementTimer);
+    this.damageAnnouncementTimer = 0;
+    ++this.damageAnnouncementVersion;
+    const live = this.get("damage-announce");
+    if (live.textContent) live.textContent = "";
   }
 
   cancelFeedback(): void {
@@ -245,7 +332,9 @@ export class HudView {
     this.impactLoss = 0;
     this.impactAt = this.impactUntil = -Infinity;
     this.impactVehicle = null;
-    this.get("impact-notice").hidden = true;
+    this.collisionVisible = false;
+    this.presentation.clearDamage();
+    this.renderDamageChip();
     this.ascentBlocked = this.thrustBlocked = false;
     this.renderBlocked();
     for (const element of this.root.querySelectorAll<HTMLElement>(".hull-impact")) element.classList.remove("hull-impact");
@@ -266,6 +355,7 @@ export class HudView {
   presentationStep(state: GameState): void {
     this.current = state;
     this.presentation.step(state, this.renderHazards(state));
+    this.renderDamageChip();
     this.renderPilotGuidance(state);
     this.renderBlocked();
     this.renderNotices();
@@ -296,10 +386,17 @@ export class HudView {
     this.renderNotices();
   }
 
-  menu(visible: boolean): void { this.presentation.setMenu(visible); this.renderNotices(); }
+  menu(visible: boolean): void {
+    if (visible) this.cancelFeedback();
+    this.presentation.setMenu(visible); this.renderNotices();
+  }
 
   notify(message: string, error = false, options: NoticeOptions = {}, state: GameState | null = this.current): void {
     message = recoveryDisplay(message);
+    if (options.context === "recovery") {
+      this.presentation.clearDamage();
+      this.renderDamageChip();
+    }
     // Retain the accepted omission of this one redundant legacy New success.
     // All notice classification uses metadata, never message text.
     if (!error && message === "Expedition saved. The island shore and reef ribs are yours to explore.") return;
@@ -307,6 +404,7 @@ export class HudView {
     if (state) {
       this.current = state;
       this.presentation.observe(state, covered);
+      this.renderDamageChip();
       this.renderPilotGuidance(state);
       // Observation can invalidate a result before this delivery replaces it,
       // even if the new refusal happens to carry the same exit metadata.
@@ -322,10 +420,15 @@ export class HudView {
     const html = banners.map(b => `<span>${escapeHtml(b.text)}</span>`).join("");
     if (this.get("hazard").innerHTML !== html) this.get("hazard").innerHTML = html;
     const current = this.hud.hidden ? [] : banners;
-    const appearing = current.filter(b => !this.announcedContexts.has(b.context));
+    const hull = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
+    // A disable is a new outcome even if a low-hull/power banner was already
+    // speaking. Numeric totals still do not produce repeated announcements.
+    const key = (b: typeof banners[number]): string => b.context === "hull"
+      ? `hull:${hull?.disabled ? "disabled" : hull?.charge === 0 ? "power" : "low"}` : b.context;
+    const appearing = current.filter(b => !this.announcedContexts.has(key(b)));
     if (appearing.length) this.get("hazard-announce").textContent = appearing.map(b => b.text).join(". ");
     else if (!current.length) this.get("hazard-announce").textContent = "";
-    this.announcedContexts = new Set(current.map(b => b.context));
+    this.announcedContexts = new Set(current.map(key));
     return new Set(current.flatMap(b => ["threat", "oxygen", "food", "hull", "recovery"].includes(b.context) ? [b.context as NoticeContext] : []));
   }
 

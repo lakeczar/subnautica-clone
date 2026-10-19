@@ -182,6 +182,9 @@ export class SiltwakeApp {
       this.renderer = createRenderer(this.view.canvas, (available) => {
         if (this.disposed) return;
         this.graphicsAvailable = available;
+        // Reconstruction does not re-enter the session. Neither availability
+        // edge may retain an episode or a deferred injury announcement.
+        this.view.cancelFeedback();
         if (!available)
           this.pause("Graphics paused while the WebGL context is unavailable.");
         else {
@@ -328,7 +331,7 @@ export class SiltwakeApp {
           now - this.lastBoundaryNotice > 6000
         ) {
           this.view.notify(
-            "Upper-Canopy survey boundary. Prepare at a refuge before the later Basin expedition; that route is not yet open.",
+            "Survey edge · turn back toward the Canopy–Basin route.",
             false, { channel: "system" },
           );
           this.lastBoundaryNotice = now;
@@ -459,6 +462,17 @@ export class SiltwakeApp {
       }
       if (event.type === "interaction-panel") this.openPanel(event.panel, event.targetId);
       this.sound.event(event, this.state);
+    }
+    // Deliver injury after this batch's outcomes. The view observes the exact
+    // installed step state before accepting its event target (including a
+    // disabled, still-controlled hull). No frame-final health inference.
+    const outcomeSpeaks = events.some(e => e.type === "notice" && e.channel === "hazard" &&
+      (e.context === "hull" || e.context === "recovery"));
+    const damageCue = events.some(e => e.type === "impact" && e.hullLoss > 0 ||
+      e.type === "sound" && ["damage", "impact", "recovery"].includes(e.cue));
+    for (const event of events) if (event.type === "threat-damage" && this.active && this.state) {
+      if (this.view.threatDamage(event, this.state, outcomeSpeaks) && !damageCue)
+        this.sound.event({ type: "sound", cue: "damage" }, this.state);
     }
   }
 

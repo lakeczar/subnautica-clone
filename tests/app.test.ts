@@ -16,6 +16,31 @@ import { faceTarget } from "./targeting-support.js";
 import { makeVehicle } from "../src/sim/state.js";
 import { fixtureGame } from "../src/sim/carrier.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
+import type { GameEvent, GameState } from "../src/sim/types.js";
+import { EncounterPresentation, type ThreatDamage } from "../src/ui/notices.js";
+
+// Extend the existing app-only presentation double in this owned test file.
+// Real DOM injury, cancellation and announcements are tested in presentation.
+const injuryPorts = new WeakMap<GameView, EncounterPresentation>();
+const injuryDeliveries = new WeakMap<GameView, { tick: number; target: ThreatDamage["target"]; accepted: boolean; suppressed: boolean }[]>();
+function injuryPort(view: GameView): EncounterPresentation {
+  if (!injuryPorts.has(view)) injuryPorts.set(view, new EncounterPresentation());
+  return injuryPorts.get(view)!;
+}
+Object.assign(GameView.prototype, {
+  threatDamage(this: GameView, event: ThreatDamage, state: GameState, suppressed: boolean): boolean {
+    const p = injuryPort(this); p.observe(state);
+    const accepted = this.screen === "playing" && p.damageTargetValid(event.target, state) && event.loss > 0;
+    const list = injuryDeliveries.get(this) ?? [];
+    list.push({ tick: state.tick, target: { ...event.target }, accepted, suppressed }); injuryDeliveries.set(this, list);
+    return accepted && p.recordDamage(event.target, event.loss);
+  },
+});
+const oldStep = GameView.prototype.presentationStep, oldCancel = GameView.prototype.cancelFeedback,
+  oldReset = GameView.prototype.resetPresentation;
+GameView.prototype.presentationStep = function(state) { injuryPort(this).step(state); oldStep.call(this, state); };
+GameView.prototype.cancelFeedback = function() { injuryPort(this).clearDamage(); oldCancel.call(this); };
+GameView.prototype.resetPresentation = function() { injuryPort(this).reset(); oldReset.call(this); };
 
 register("./app-loader.js", import.meta.url);
 const { SiltwakeApp } = await import("../src/runtime/app.js");
@@ -897,4 +922,74 @@ test("app: thrust accumulator excludes missing, boundary, release/progress, tiny
   f.view.actions.resume(); for (let i = 0; i < 30; i++) port.observeThrust([sample]);
   assert.equal(f.view.thrustBlocked.at(-1), true);
   f.view.actions.command({ type: "exit" }); assert.equal(f.view.thrustBlocked.at(-1), false);
+});
+
+function appInjury(f: Fixture) {
+  const port = f.app as unknown as {
+    session: { state: GameState }; events(events: GameEvent[]): void; frame(now: number): void;
+    sound: { event(e: GameEvent): void };
+  };
+  const s = port.session.state; completeOpening(s); s.tick = 16;
+  s.player.mode = "piloting"; s.player.pose.position = { x: 132, y: -110, z: -112 };
+  const v = makeVehicle("app-bite", "dart", s.player.pose.position, "app-bite-hold");
+  s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id;
+  s.world.threat = { mode: "pursue", position: { x: 133, y: -110, z: -112 }, interest: 5,
+    modeSeconds: 0, distraction: null, distractionSeconds: 0 };
+  const bite: ThreatDamage = { type: "threat-damage", source: "hunter", target: { kind: "vehicle", vehicleId: v.id }, loss: .2, healthAfter: 99.8 };
+  const sounds: GameEvent[] = []; port.sound.event = e => { sounds.push(e); };
+  f.view.actions.resume();
+  return { port, s, v, bite, sounds };
+}
+
+test("app: several fixed steps in a frame deliver each actual bite once against its own installed state", async (t) => {
+  const f = await fixture(t), { port, sounds } = appInjury(f);
+  f.frames(2);
+  const before = injuryDeliveries.get(f.view)!.length, health = port.session.state.fleet.vehicles[0]!.health;
+  port.frame(10000);
+  const delivered = injuryDeliveries.get(f.view)!.slice(before);
+  assert.equal(delivered.length, 8, "clock retains its existing eight-step frame cap");
+  assert.ok(delivered.every(d => d.accepted && d.target.kind === "vehicle" && d.target.vehicleId === "app-bite"));
+  for (let i = 1; i < delivered.length; i++) assert.equal(delivered[i]!.tick, delivered[i - 1]!.tick + 1);
+  assert.ok(Math.abs(health - port.session.state.fleet.vehicles[0]!.health - 1.6) < 1e-10);
+  assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage" && !e.origin).length, 1);
+});
+
+test("app: onset audio yields to the batch's existing spatial damage, collision or recovery cue", async (t) => {
+  const f = await fixture(t), { port, s, bite, sounds } = appInjury(f);
+  const others: GameEvent[][] = [[], [{ type: "sound", cue: "damage", origin: { x: 133, y: -110, z: -112 } }],
+    [{ type: "impact", hullLoss: .6, speed: 8, origin: { x: 132, y: -110, z: -112 } }], [{ type: "sound", cue: "recovery" }]];
+  for (const cues of others) {
+    f.view.cancelFeedback(); sounds.length = 0; port.events([bite, ...cues]);
+    assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage" && !e.origin).length, cues.length ? 0 : 1);
+    for (const cue of cues) assert.ok(sounds.includes(cue), "original event and spatial origin forwarded unchanged");
+    port.events([{ ...bite, loss: .1 }]);
+    assert.ok(Math.abs(injuryPort(f.view).damage!.total - .3) < 1e-12);
+  }
+  f.view.cancelFeedback(); sounds.length = 0;
+  port.events([{ ...bite, loss: 0 }]); assert.equal(injuryPort(f.view).damage, null);
+  assert.equal(sounds.filter(e => e.type === "sound").length, 0);
+  assert.equal(s.player.controlledVehicleId, "app-bite");
+});
+
+test("app: same-step disable retains the target with speech suppressed, while incapacity and graphics reconstruction clear", async (t) => {
+  const f = await fixture(t), { port, s, v, bite, sounds } = appInjury(f);
+  v.disabled = true; v.health = 0;
+  port.events([bite, { type: "notice", message: "Hull disabled", error: true, channel: "hazard", context: "hull" }]);
+  assert.equal(injuryDeliveries.get(f.view)!.at(-1)!.suppressed, true);
+  assert.equal(injuryPort(f.view).damage?.target.kind, "vehicle");
+  assert.equal(injuryPort(f.view).damage!.total, .2);
+  f.renderer.lose(); assert.equal(injuryPort(f.view).damage, null);
+  f.renderer.nativeRestore(); f.renderer.finishRestore();
+  assert.equal(injuryPort(f.view).damage, null); assert.equal(f.view.screen, "menu");
+  f.view.actions.resume(); port.events([bite]); assert.ok(injuryPort(f.view).damage);
+  // A reconstruction-ready callback must clear even without entered() or a
+  // preceding loss callback in this diagnostic adapter.
+  f.renderer.finishRestore(); assert.equal(injuryPort(f.view).damage, null);
+  sounds.length = 0; s.player.controlledVehicleId = null; s.player.mode = "walking";
+  s.player.pose.position = { x: 0, y: .6, z: 14 };
+  port.events([{ ...bite, target: { kind: "diver" }, loss: .1, healthAfter: 0 }, { type: "sound", cue: "recovery" },
+    { type: "notice", channel: "hazard", context: "recovery", message: "Returned to refuge", error: true }]);
+  assert.equal(injuryDeliveries.get(f.view)!.at(-1)!.accepted, false);
+  assert.equal(injuryPort(f.view).damage, null);
+  assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage").length, 0);
 });
