@@ -111,17 +111,23 @@ test("remote parked hulls unload while occupied, recovery and transferred assemb
   assert.ok(pinned && pinned.isEnabled());
   assert.deepEqual(pinned.position.asArray(), [216, -166, -232]);
   assert.deepEqual(s, before);
+  const admitted = art.cacheStats;
+  assert.equal(admitted.maxEntries, 256); assert.equal(admitted.maxBytes, 32 * 1024 * 1024);
+  assert.ok(admitted.entries > 4 && admitted.bytes <= admitted.maxBytes,
+    "regional and Dart geometry share the same aggregate owner and limits");
   s.recovery.operation = null; art.update(s);
   assert.ok(pinned.isDisposed());
   s.player.pose.position = { x: 216, y: -166, z: -232 }; art.update(s);
   const reentered = scene.getMeshByName(v.id)!;
   assert.ok(reentered && reentered !== pinned);
   assert.deepEqual(reentered.position.asArray(), [216, -166, -232]);
+  assert.equal(art.cacheStats.hits - admitted.hits, 4, "a returned Dart reads the renderer's four immutable local recipes");
   assert.equal(s.fleet.vehicles[0]!.health, 0); assert.equal(s.fleet.vehicles[0]!.disabled, true);
   s.player.pose.position = { x: 0, y: .18, z: 22 }; s.player.controlledVehicleId = v.id; art.update(s);
   assert.strictEqual(scene.getMeshByName(v.id), reentered, "occupied actor remains pinned across a regional boundary");
   art.update(null); assert.ok(reentered.isDisposed());
   art.dispose();
+  assert.equal(art.cacheStats.entries, 0); assert.equal(art.cacheStats.bytes, 0);
 
   const fixture = fixtureGame(), dock = fixture.fleet.docking!;
   const carrier = fixture.fleet.vehicles.find(v => v.id === dock.vehicleId)!;

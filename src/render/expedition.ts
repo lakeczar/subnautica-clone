@@ -158,9 +158,15 @@ function dartArt(
   id: string,
   hull: VehicleState["hull"],
   labels?: LabelMaterials,
+  cache?: GeometryCache,
 ): Mesh {
   const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
-  const b = new ArtBatch(id, scene, cel);
+  // Only the Dart's deterministic local batches opt in. Bump this generation
+  // when its geometry, palette or contour recipe changes. Identity, pose,
+  // glazing and gauge values belong to newly created live handles, never keys.
+  const dartBatch = (name: string, part: string): ArtBatch => new ArtBatch(name, scene, cel,
+    cache && hull === "dart" ? { owner: cache, key: `expedition:dart-local:v1:${part}` } : undefined);
+  const b = dartBatch(id, "body-contour-0.55");
   const panes: { name: string; points: readonly Point[] }[] = [];
   if (hull === "hearthline") {
     const width = CARRIER_LAYOUT.deck.max.x - CARRIER_LAYOUT.deck.min.x;
@@ -307,7 +313,7 @@ function dartArt(
   if (hull === "dart") {
     // View-only fittings stay inside the existing canopy/keel envelope. The
     // actual hull and glazing remain visible in control; no swimming disguise.
-    const cockpit = new ArtBatch(`${id}.cockpit`, scene, cel);
+    const cockpit = dartBatch(`${id}.cockpit`, "cockpit-contour-0");
     cockpit.box([.12, 1.04, .78], [.62, .18, .34], P.shade);
     cockpit.box([.12, 1.32, .92], [.53, .58, .12], P.petrol);
     cockpit.panel([.06, .85, -.96], [1.02, .15], .25, P.petrol, 0, .065);
@@ -329,7 +335,7 @@ function dartArt(
     const fittings = cockpit.finish();
     fittings.unfreezeWorldMatrix(); fittings.parent = mesh; fittings.renderingGroupId = 1;
     for (const [kind, left] of [["charge", -.34], ["health", .15]] as const) {
-      const gauge = new ArtBatch(`${id}.instrument.${kind}`, scene, cel);
+      const gauge = dartBatch(`${id}.instrument.${kind}`, `gauge-${kind}-contour-0`);
       gauge.glow(gauge.box([.115, 0, 0], [.23, .012, .09], kind === "charge" ? P.amber : P.mint));
       const bar = gauge.finish();
       bar.unfreezeWorldMatrix(); bar.parent = fittings; bar.position.set(left, .977, -.91);
@@ -914,6 +920,7 @@ export function createExpeditionActors(
   glass: ShaderMaterial,
   resident: (position: Readonly<GameState["player"]["pose"]["position"]>) => boolean = () => true,
   labels?: LabelMaterials,
+  cache?: GeometryCache,
 ): RegionArt {
   const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
   const initial = new Set(scene.meshes);
@@ -1118,7 +1125,7 @@ export function createExpeditionActors(
         let m = vehicles.get(v.id);
         if (m && m.metadata.hull !== v.hull) { m.dispose(); vehicles.delete(v.id); m = undefined; }
         if (!m) {
-          m = dartArt(scene, cel, glass, v.id, v.hull, labels);
+          m = dartArt(scene, cel, glass, v.id, v.hull, labels, cache);
           m.metadata = { hull: v.hull };
           m.renderingGroupId = 1;
           vehicles.set(v.id, m);

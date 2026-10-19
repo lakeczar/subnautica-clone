@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
-import { createExpeditionArt } from "../src/render/expedition.js";
+import { createExpeditionArt, createExpeditionActors } from "../src/render/expedition.js";
+import { GeometryCache } from "../src/render/geometryCache.js";
 import { createCelMaterial, createGlassMaterial } from "../src/render/materials.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
 import { addItem } from "../src/sim/inventory.js";
@@ -143,6 +144,52 @@ test("production expedition art reconciles cache ownership, contents and replace
       assert.equal(scene.materials.length, baselineMaterials);
       assert.equal(celDisposed || glassDisposed, false);
     }
+    art.dispose();
+    const recipes = new GeometryCache();
+    let resident = true;
+    const actors = createExpeditionActors(scene, cel, glass, () => resident, undefined, recipes);
+    actors.update(pilotSnapshot);
+    const originalHull = scene.getMeshByName(dart.id)!;
+    const originalChildren = originalHull.getChildMeshes();
+    const admitted = recipes.stats;
+    const changed = structuredClone(pilotSnapshot);
+    changed.fleet.vehicles[0] = makeVehicle(dart.id, "creel", { x: 35, y: -8, z: 7 }, "other-hold");
+    actors.update(changed);
+    assert.ok(originalHull.isDisposed() && originalChildren.every(m => m.isDisposed()));
+    assert.equal(scene.getMeshByName(`${dart.id}.cockpit`), null, "same ID with a different hull cannot retain Dart children");
+    assert.equal(recipes.stats.hits, admitted.hits, "other hulls never read a Dart recipe");
+    assert.equal(recipes.stats.entries, admitted.entries);
+    const creel = scene.getMeshByName(dart.id)!;
+    const current = structuredClone(pilotSnapshot), vessel = current.fleet.vehicles[0]!;
+    vessel.pose.position = { x: 47, y: -15, z: 9 }; vessel.pose.yaw = -.7; vessel.pose.pitch = .3;
+    vessel.charge = 9; vessel.health = 24; vessel.disabled = true;
+    const currentSnapshot = structuredClone(current);
+    actors.update(current);
+    assert.ok(creel.isDisposed());
+    const rebuilt = scene.getMeshByName(dart.id)!;
+    assert.deepEqual(rebuilt.position.asArray(), [47, -15, 9]);
+    assert.deepEqual(rebuilt.rotation.asArray(), [.3, .7, 0]);
+    assert.deepEqual([scene.getMeshByName(`${dart.id}.instrument.charge`)!.scaling.x,
+      scene.getMeshByName(`${dart.id}.instrument.health`)!.scaling.x], [.09, .24]);
+    assert.equal(recipes.stats.entries, admitted.entries);
+    assert.equal(recipes.stats.bytes, admitted.bytes);
+    current.player.controlledVehicleId = null;
+    for (let i = 0; i < 5; i++) {
+      const old = scene.getMeshByName(dart.id)!;
+      resident = false; actors.update(current);
+      assert.ok(old.isDisposed(), "leaving residency releases the live hierarchy");
+      resident = true; actors.setQuality?.(i % 2 ? "light" : "rich"); actors.update(current);
+      assert.deepEqual(scene.getMeshByName(dart.id)!.position.asArray(), [47, -15, 9]);
+      assert.equal(scene.getMeshByName(`${dart.id}.cockpit`)!.isEnabled(), false);
+      assert.equal(scene.getMeshByName(`${dart.id}.instrument.charge`)!.scaling.x, .09);
+      assert.equal(recipes.stats.entries, admitted.entries); assert.equal(recipes.stats.bytes, admitted.bytes);
+    }
+    currentSnapshot.player.controlledVehicleId = null;
+    assert.deepEqual(current, currentSnapshot, "replacement/return rendering never mutates physical state");
+    actors.dispose(); actors.dispose(); recipes.dispose();
+    assert.equal(scene.meshes.length, 0); assert.equal(scene.geometries.length, 0);
+    assert.equal(recipes.stats.bytes, 0); assert.equal(recipes.stats.entries, 0);
+    assert.equal(celDisposed || glassDisposed, false);
   } finally {
     scene.dispose();
     engine.dispose();
