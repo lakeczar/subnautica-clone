@@ -188,8 +188,6 @@ export function eatIfHungry(d: Driver, below = 45): void {
   if (d.state.player.vitals.food < below) d.command({ type: "eat" }, { allowRefusal: true });
 }
 
-export const carried = (d: Driver, kind: ItemKind): number => d.count(kind, ["diver"]);
-
 /** Hand-gather materials from sources in `regions` (nearest first, within the
  * personal suit), ferrying full holds back to `refuge` and stowing them in its
  * locker when it has one. Stops when every need is met or sources run out. */

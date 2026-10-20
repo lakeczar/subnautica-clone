@@ -85,6 +85,9 @@ export interface RunRecord {
   checks: { name: string; ok: boolean; detail: string }[];
   /** Friction a player would work around (and the harness did, by ordinary play). */
   notes: string[];
+  /** Hazard notices the game raised, by context (threat, oxygen, food, hull, recovery). */
+  hazards: Record<string, number>;
+  hazardLog: { tick: number; phase: string; leg: string; message: string }[];
 }
 
 export const freshMinima = (): Minima => ({ oxygen: 100, food: 100, health: 100, power: null, hull: null });

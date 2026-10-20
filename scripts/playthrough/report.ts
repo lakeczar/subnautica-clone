@@ -26,7 +26,7 @@ export function formatRun(run: RunRecord): string {
   out.push(`  saves: ${run.saves.map((s) => `${s.label}${s.equal ? "" : " (MISMATCH)"}`).join(", ") || "—"}`);
   const thin = run.legs.filter((l: LegRecord) => l.minima.oxygen < 25 || (l.minima.power !== null && l.minima.power < 25));
   out.push(`  legs: ${run.legs.length}; below 25% oxygen or power: ${thin.length ? thin.map((l) => `${l.phase}/${l.leg}`).join("; ") : "none"}`);
-  out.push(`  refusals met on the way: ${run.refusals.length}; incapacities: ${run.failures}`);
+  out.push(`  refusals met on the way: ${run.refusals.length}; incapacities: ${run.failures}; hazard notices: ${counts(run.hazards)}`);
   for (const n of run.notes) out.push(`  note: ${n}`);
   for (const c of run.checks) out.push(`  check ${c.ok ? "ok  " : "FAIL"} ${c.name}${c.detail ? ` · ${c.detail}` : ""}`);
   return out.join("\n");

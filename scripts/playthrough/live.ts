@@ -1,21 +1,20 @@
 /** Live phases: New Game through the Basin, the Creel and C1's story, played
  * against today's world. Both fleet strategies share them. */
-import { MATERIALS, RECIPES, SOURCES } from "../../src/content/registry.js";
+import { HULL_COLLIDERS, MATERIALS, RECIPES, SOURCES } from "../../src/content/registry.js";
 import type { ItemKind, RecipeId, SourceId } from "../../src/content/registry.js";
-import { BASIN_GEOMETRY, CANOPY_BASIN_ROUTE, CANOPY_STOP, RECOVERY_SURFACE_OPERATOR } from "../../src/content/routes.js";
-import { available } from "../../src/sim/inventory.js";
+import { BASIN_GEOMETRY, CANOPY_BASIN_ROUTE } from "../../src/content/routes.js";
 import { isOptional } from "../../src/content/story/evidence.js";
 import type { DiscoveryId } from "../../src/content/story/evidence.js";
+import { armTarget } from "../../src/sim/fleet.js";
+import { available, supportedServiceSite } from "../../src/sim/inventory.js";
 import type { VehicleState } from "../../src/sim/types.js";
+import { sweptHullClearance } from "../../src/sim/world.js";
 import { board, craft, eatIfHungry, gather, interact, leaveCraft, move, openPanel, procure, reach, unload } from "./actions.js";
 import { Blocked, Driver, where } from "./driver.js";
-import { breathe, enter, surface, surfaceTo } from "./nav.js";
+import { enter } from "./nav.js";
 import type { Refuge } from "./nav.js";
 import { fly, pilotTo, turnTo } from "./routes.js";
-import { armTarget } from "../../src/sim/fleet.js";
 import { dist, route, travel, yawTo } from "./travel.js";
-import { HULL_COLLIDERS } from "../../src/content/registry.js";
-import { sweptHullClearance } from "../../src/sim/world.js";
 
 export interface PlayOptions {
   /** Read optional personal logs when passing them (the main runs do). */
@@ -158,6 +157,7 @@ export function boardAt(d: Driver, v: VehicleState): void {
 function exitHere(d: Driver): void { leaveCraft(d); }
 /** At the workshop bench: the moored craft's materials into the locker (one panel action). */
 export function stowHold(d: Driver, v: VehicleState): void {
+  if (supportedServiceSite(d.state, v) !== "island_workshop") return;
   enter(d, "workshop");
   if (d.state.inventory.items.some((i) => i.containerId === v.cargoId && Object.hasOwn(MATERIALS, i.kind)))
     d.command({ type: "store-materials", from: v.cargoId, to: "workshop_locker" });
@@ -373,7 +373,9 @@ const refits: Phase = {
     leaveCraft(d);
     openPanel(d, "canopy_stop_services");
     craft(d, "restore_canopy_stop");
-    d.command({ type: "service", vehicleId: dart.id }, { allowRefusal: true });
+    // Back at the Dart's socket, the restored mooring charges and repairs it.
+    reach(d, dart.id);
+    d.command({ type: "service", vehicleId: dart.id });
     returnToCraft(d, d.vehicle("dart")!);
     fly(d, "stop_to_head");
     fly(d, "dart_home");
@@ -384,4 +386,3 @@ const refits: Phase = {
 
 export const LIVE_PHASES: readonly Phase[] = [opening, reef, isles, canopy, survey, creel, frames, refits];
 export const REFITS_PHASE = refits;
-export { BASIN_GEOMETRY, CANOPY_STOP, RECOVERY_SURFACE_OPERATOR, surface, surfaceTo, breathe };

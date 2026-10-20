@@ -36,8 +36,12 @@ export const CRAFT_ROUTES = {
 } as const satisfies Record<string, CraftRoute>;
 export type CraftRouteId = keyof typeof CRAFT_ROUTES;
 
-/** Quiet inside the sound hunter's territory (72 m), with a 10 m margin. */
-const inTerritory = (q: Vec3): boolean => dist(q, THREAT_HOME) < 82;
+/** Quiet on any segment that comes within the sound hunter's territory (72 m), with a 12 m margin. */
+function nearTerritory(a: Vec3, b: Vec3): boolean {
+  const ab = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }, len2 = ab.x ** 2 + ab.y ** 2 + ab.z ** 2;
+  const t = len2 ? Math.max(0, Math.min(1, ((THREAT_HOME.x - a.x) * ab.x + (THREAT_HOME.y - a.y) * ab.y + (THREAT_HOME.z - a.z) * ab.z) / len2)) : 0;
+  return dist({ x: a.x + ab.x * t, y: a.y + ab.y * t, z: a.z + ab.z * t }, THREAT_HOME) < 84;
+}
 
 /** Fly the piloted craft along a route, first proving the hull sweeps clear. The
  * route begins wherever the craft is; its first point need not be exact. */
@@ -58,8 +62,8 @@ export function fly(d: Driver, id: CraftRouteId | CraftRoute, options: { quiet?:
         `(${points[i]!.x.toFixed(0)}, ${points[i]!.y.toFixed(0)}, ${points[i]!.z.toFixed(0)}) and point ${i + 1}`, where(d.state));
   // Split at the territory edge: quiet inside, cruise outside.
   const legs: { quiet: boolean; points: Waypoint[] }[] = [];
-  for (const q of points.slice(1)) {
-    const quiet = options.quiet ?? inTerritory(q);
+  for (const [k, q] of points.slice(1).entries()) {
+    const quiet = options.quiet ?? nearTerritory(points[k]!, q);
     const last = legs.at(-1);
     if (last && last.quiet === quiet) last.points.push(q); else legs.push({ quiet, points: [q] });
   }

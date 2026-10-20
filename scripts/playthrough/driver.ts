@@ -54,7 +54,7 @@ export class Driver {
     this.state = state;
     this.run = {
       scenario, strategy, outcome: "complete", ticks: 0, minutes: 0, wallMs: 0, phases: [], legs: [], saves: [],
-      discoveries: [], gathered: {}, spent: {}, refusals: [], failures: 0, checks: [], notes: [],
+      discoveries: [], gathered: {}, spent: {}, refusals: [], failures: 0, checks: [], notes: [], hazards: {}, hazardLog: [],
     };
     for (const id of knownRecords(state)) this.known.add(id);
   }
@@ -117,13 +117,16 @@ export class Driver {
   }
   onSpend: ((cost: Readonly<Partial<Record<string, number>>>) => void) | null = null;
   onGather: ((kind: string, n: number) => void) | null = null;
-  onDiscover: ((id: string) => void) | null = null;
 
   private bump(into: Record<string, number>, kind: string, n: number): void { into[kind] = (into[kind] ?? 0) + n; }
 
   private accept(before: GameState, after: GameState, events: GameEvent[]): void {
     this.state = after;
     this.lastEvents = events;
+    for (const e of events) if (e.type === "notice" && e.channel === "hazard") {
+      this.bump(this.run.hazards, e.context ?? "other", 1);
+      this.run.hazardLog.push({ tick: after.tick, phase: this.phase, leg: this.leg?.leg ?? "", message: e.message });
+    }
     // Gathered: exposed stock leaves a source only by collection, tool arms or a frame lift.
     for (let i = 0; i < after.world.resources.length; i++) {
       const a = before.world.resources[i]!, b = after.world.resources[i]!;
@@ -137,7 +140,6 @@ export class Driver {
       this.known.add(id);
       const record: DiscoveryRecord = { id, tick: after.tick, phase: this.phase };
       this.run.discoveries.push(record);
-      this.onDiscover?.(id);
     }
     this.run.failures = after.metrics.failures;
     this.run.ticks = after.tick;

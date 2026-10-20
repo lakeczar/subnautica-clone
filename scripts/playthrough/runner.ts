@@ -1,7 +1,8 @@
 /** Runs a sequence of phases on one driver: requirement check, play, milestone
  * save and reload, then the phase record. The first phase that cannot be played
  * stops the run; every later phase still reports what it is missing. */
-import { Blocked, Driver } from "./driver.js";
+import { Blocked } from "./driver.js";
+import type { Driver } from "./driver.js";
 import type { Phase, PlayOptions } from "./live.js";
 import { SaveSlot } from "./persistence.js";
 import { addCounts, freshMinima } from "./timeline.js";
@@ -43,9 +44,9 @@ export async function runPhases(d: Driver, phases: readonly Phase[], o: RunOptio
       phase.play(d, o);
       await slot.milestone(d, phase.id);
     } catch (error) {
-      if (!(error instanceof Blocked)) throw error;
+      // A game refusal or trap is a finding; anything else is a harness bug, reported as such.
       record.status = "blocked";
-      record.detail = [error.message];
+      record.detail = [error instanceof Blocked ? error.message : `harness error: ${error instanceof Error ? error.stack ?? error.message : String(error)}`];
       stopped = "blocked";
     }
     record.ticks = d.state.tick - record.startTick;

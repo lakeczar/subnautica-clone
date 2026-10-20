@@ -10,13 +10,15 @@ import { isOptional } from "../../src/content/story/evidence.js";
 import type { DiscoveryId } from "../../src/content/story/evidence.js";
 import { interactions } from "../../src/sim/progression.js";
 import { hullClearance, sweptHullClearance } from "../../src/sim/world.js";
+import { CARRIER_LAYOUT, carrierInteriorSolids, localToWorld } from "../../src/sim/carrier.js";
+import { createWorldQueries } from "../../src/sim/world.js";
 import type { GameCommand, Vec3, VehicleState } from "../../src/sim/types.js";
 import { board, craft, gather, interact, leaveCraft, move, procure, reach, unload } from "./actions.js";
 import { campaignSite, need, s2Route } from "./content.js";
 import { Blocked, Driver, where } from "./driver.js";
 import { carry, dockAndService, make, stowHold } from "./live.js";
 import type { Phase, PlayOptions } from "./live.js";
-import { enter } from "./nav.js";
+import { enter, gridPath } from "./nav.js";
 import { fly, pilotTo } from "./routes.js";
 import { route, travel } from "./travel.js";
 
@@ -151,8 +153,31 @@ function boardCraft(d: Driver, hull: VehicleState["hull"]): void {
   const v = d.vehicle(hull);
   if (!v) throw new Blocked(`No ${hull} owned`, where(d.state));
   if (d.state.player.controlledVehicleId === v.id) return;
+  if (hull === "hearthline") return boardHearthline(d);
   reach(d, v.id);
   board(d, v.id);
+}
+/** The carrier has no canopy handle: reach its exterior vestibule (by Creel when it
+ * waits far away), enter the dry interior and take the helm. */
+function boardHearthline(d: Driver): void {
+  const h = carrier(d);
+  if (d.state.player.interiorId === h.id) {
+    walkAboard(d, CARRIER_LAYOUT.helm, "to the helm");
+    d.command({ type: "carrier", action: "helm" });
+    return;
+  }
+  const vestibule = localToWorld(CARRIER_LAYOUT.exteriorVestibule, h);
+  const p = d.state.player.pose.position;
+  if (Math.hypot(p.x - vestibule.x, p.z - vestibule.z) > 60) {
+    // Ride the Creel to the yard and moor clear of the carrier.
+    boardCraft(d, "creel");
+    fly(d, "creel_out");
+    followS2(d, "route.isles.workshop_stack");
+    pilotTo(d, "beside the carrier", clearOfBuilds(d, "stack_yard", parkNear(d, { ...vestibule, y: vestibule.y - 6 })));
+    leaveCraft(d);
+  }
+  d.command({ type: "carrier", action: "station-keep" }, { allowRefusal: true });
+  carrierIn(d);
 }
 function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
   for (const [id, reverse] of legs) followS2(d, id, reverse);
@@ -308,6 +333,7 @@ function toMeridian(d: Driver, strategy: Strategy): void {
 function launchMantle(d: Driver): void {
   d.command({ type: "carrier", action: "launch", vehicleId: d.vehicle("mantle")!.id });
   d.waitFor("the Mantle launch", 60, (s) => !s.fleet.docking?.transaction);
+  walkAboard(d, CARRIER_LAYOUT.vestibule, "to the vestibule");
   d.command({ type: "carrier", action: "leave-interior" });
   boardCraft(d, "mantle");
 }
@@ -318,9 +344,12 @@ function fromMeridian(d: Driver, strategy: Strategy): void {
     return;
   }
   // Mantle back into its berth, then the carrier home to the yard.
+  leaveCraft(d);
+  carrierIn(d);
+  d.command({ type: "carrier", action: "station-keep" });
   d.command({ type: "carrier", action: "capture", vehicleId: d.vehicle("mantle")!.id });
   d.waitFor("the Mantle capture", 60, (s) => !s.fleet.docking?.transaction);
-  boardCraft(d, "hearthline");
+  d.command({ type: "carrier", action: "helm" });
   for (const id of ["route.divide.meridian_broad", "route.basin.divide", "route.canopy_east.basin", "route.isles.canopy_east"]) followS2(d, id, true);
 }
 
@@ -386,6 +415,7 @@ const works = (strategy: Strategy): Phase => ({
       d.command({ type: "carrier", action: "station-keep" });
       d.command({ type: "carrier", action: "leave-helm" });
       const mantle = d.vehicle("mantle")!;
+      // ASSUME: the berthed Mantle's hold is reachable from the carrier interior.
       for (const i of [...d.state.inventory.items].filter((x) => x.containerId === hold))
         d.command({ type: "transfer", itemId: i.id, to: mantle.cargoId, quantity: i.quantity });
       launchMantle(d);
@@ -402,6 +432,8 @@ const ending = (strategy: Strategy): Phase => ({
     ...stories({ readOptional: true, reverse: false }, "C14", "district_controller"),
   ],
   play(d, o) {
+    // The buffer's crust comes from the workshop stock; the pod bench takes the diver load.
+    carryFromWorkshop(d, RECIPES.pod_buffer.cost as Record<string, number>);
     make(d, "pod_buffer", "pod", ["refuge_reef", "island_chain"]);
     enter(d, "pod");
     if (!d.knows("C14")) { interact(d, "C14"); if (!d.knows("C14")) throw new Blocked("C14 recorded nothing", where(d.state)); }
@@ -462,6 +494,75 @@ function stockUp(d: Driver, cost: Readonly<Record<string, number>>): void {
   for (const v of d.state.fleet.vehicles) stowHold(d, v);
 }
 
+// ASSUME (carrier): the Hearthline is piloted like any hull, station keeping frees the
+// helm, the diver walks the dry interior to the aft vestibule and leaves through it,
+// and re-enters within 5 m of the exterior vestibule (sim/carrier.ts today).
+const carrier = (d: Driver): VehicleState => {
+  const h = d.vehicle("hearthline");
+  if (!h) throw new Blocked("No Hearthline owned", where(d.state));
+  return h;
+};
+/** Compact berths leave one walkway between bow and stern: the 0.84 m strip between
+ * the berth-room walls, passable only on centre lines near x 0.0–0.1 (game movement). */
+const COMPACT_LANE = { x: 0.05, aft: 5.6, fore: -3.4 } as const;
+/** Walk the dry interior in the carrier frame, routed around its rooms, fixtures and
+ * berthed craft (the game's own interior solids, queried read-only). */
+function walkAboard(d: Driver, local: Vec3, label: string): void {
+  const h = carrier(d), here = d.state.player.interiorPose?.position;
+  if (!here) throw new Blocked(`Not inside the carrier to walk ${label}`, where(d.state));
+  const solids = createWorldQueries(carrierInteriorSolids(d.state), () => -200), b = CARRIER_LAYOUT.interior;
+  const open = (x: number, z: number): boolean => x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ &&
+    solids.clearance({ x, y: here.y + 0.02, z }, { radius: 0.36, height: 1.75 });
+  const leg = (from: Vec3, to: Vec3): Vec3[] => gridPath(from, to, here.y, 0.25, 2, open, "interior");
+  const crosses = d.state.fleet.docking?.configuration === "compact" &&
+    ((here.z > COMPACT_LANE.aft && local.z < COMPACT_LANE.fore) || (here.z < COMPACT_LANE.fore && local.z > COMPACT_LANE.aft));
+  let path: Vec3[];
+  if (crosses) {
+    const [near, far] = here.z > local.z ? [COMPACT_LANE.aft, COMPACT_LANE.fore] : [COMPACT_LANE.fore, COMPACT_LANE.aft];
+    const a = { x: COMPACT_LANE.x, y: here.y, z: near }, z = { x: COMPACT_LANE.x, y: here.y, z: far };
+    path = [...leg(here, a), z, ...leg(z, local)];
+  } else path = leg(here, local);
+  travel(d, route(`carrier ${label}`, "diver", "dry interior walk, A* over the interior solids, played",
+    path.map((q, i) => ({ ...localToWorld(q, h), land: true, tolerance: i === path.length - 1 ? 0.5 : 0.08 }))));
+}
+/** From the helm: hold station, walk aft and swim out of the vestibule. */
+function carrierOut(d: Driver): void {
+  d.command({ type: "carrier", action: "station-keep" });
+  d.command({ type: "carrier", action: "leave-helm" });
+  walkAboard(d, CARRIER_LAYOUT.vestibule, "to the vestibule");
+  d.command({ type: "carrier", action: "leave-interior" });
+}
+/** Back through the exterior vestibule, stow the diver hold in the stores, take the helm. */
+function carrierIn(d: Driver): void {
+  const h = carrier(d);
+  // Within 1 m: the interface also refuses beyond 15 m of the keel datum, and the
+  // vestibule sits 13.8 m out, so much of its 5 m entry radius is refused.
+  travel(d, route("to the carrier vestibule", "diver", "local swim, played", [{ ...localToWorld(CARRIER_LAYOUT.exteriorVestibule, h), tolerance: 1 }]));
+  d.command({ type: "carrier", action: "enter-interior" });
+  unload(d, "diver", h.cargoId);
+  walkAboard(d, CARRIER_LAYOUT.helm, "to the helm");
+  d.command({ type: "carrier", action: "helm" });
+}
+/** At an S2 carrier mooring that lists "charge": hold station and ask for service. A
+ * refusal is recorded; the run goes on with whatever charge the carrier has. */
+function chargeAtMooring(d: Driver, site: string): void {
+  const h = carrier(d);
+  d.command({ type: "carrier", action: "station-keep" });
+  const r = d.command({ type: "service", vehicleId: h.id }, { allowRefusal: true });
+  if (!r.ok) {
+    const note = `${site}: S2 lists charge here, but the Hearthline cannot be serviced (${r.message}); it arrived at ${h.charge.toFixed(0)}% power.`;
+    if (!d.run.notes.includes(note)) d.run.notes.push(note);
+  }
+  d.command({ type: "carrier", action: "helm" }); // releases station keeping
+}
+/** Lattice from the 400 m carrier: hold station above the ledge and work it by suit. */
+function carrierHarvest(d: Driver, id: string, want: number): void {
+  pilotTo(d, `carrier above ${id}`, parkNear(d, SOURCES[id as SourceId].position));
+  carrierOut(d);
+  gather(d, id as SourceId, want);
+  carrierIn(d);
+}
+
 const carrierDeep: Phase = {
   id: "carrier-deep", title: "Hearthline to the Divide lee mooring: lattice from the 400 m carrier; 550 m refit, Mantle, 800 m suit",
   missing: (d) => [
@@ -472,21 +573,40 @@ const carrierDeep: Phase = {
     ...routes("route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide"),
     ...sites("divide.lee_mooring", "isles.stack_yard"),
   ],
-  play(d, o) {
+  play(d) {
     boardCraft(d, "hearthline");
     followS2(d, "route.isles.canopy_east");
     followS2(d, "route.canopy_east.basin");
     followS2(d, "route.basin.divide");
+    // Lattice: Hearthline 550 L6, Mantle L5, suit 800 L4, air assembly L2. S2's ledge
+    // routes are medium-profile; the carrier flies swept local legs from the lee mooring
+    // to hold station above each ledge.
+    const lee = { x: 560, y: -390, z: -1120 };
+    chargeAtMooring(d, "divide.lee_mooring");
+    carrierHarvest(d, "divide_lattice_ledge_west", 10);
+    pilotTo(d, "back to the lee mooring", lee);
+    carrierHarvest(d, "divide_lattice_ledge_east", 10);
+    pilotTo(d, "back to the lee mooring", lee);
+    if (need.story("C07").length) d.deferred.push("C07");
+    else {
+      pilotTo(d, "carrier by C07", parkNear(d, hostAt(d, "C07")));
+      carrierOut(d);
+      interact(d, "C07");
+      carrierIn(d);
+    }
+    for (const id of ["route.basin.divide", "route.canopy_east.basin", "route.isles.canopy_east"]) followS2(d, id, true);
+    // At the yard: the 550 m refit and the Mantle, paid from the carrier stores.
+    for (const recipe of ["hearthline_550", "mantle_base"]) {
+      carrierOut(d);
+      toWorkPose(d, "stack_yard", campaignSite("stack_yard")!.work);
+      craft(d, recipe as RecipeId);
+      carrierIn(d);
+    }
+    // ASSUME: the new Mantle is captured into the medium berth from the carrier interface.
     d.command({ type: "carrier", action: "station-keep" });
-    d.command({ type: "carrier", action: "leave-helm" });
-    d.command({ type: "carrier", action: "leave-interior" });
-    harvest(d, "divide_lattice_ledge_west", 8);
-    harvest(d, "divide_lattice_ledge_east", 8);
-    story(d, "C07", o);
-    followS2(d, "route.basin.divide", true);
-    followS2(d, "route.canopy_east.basin", true);
-    followS2(d, "route.isles.canopy_east", true);
-    for (const recipe of ["hearthline_550", "mantle_base"]) siteCraft(d, "stack_yard", recipe);
+    d.command({ type: "carrier", action: "capture", vehicleId: d.vehicle("mantle")!.id });
+    d.waitFor("the Mantle capture", 60, (s) => !s.fleet.docking?.transaction);
+    if (!d.vehicle("mantle")!.berth) throw new Blocked("The Mantle is not berthed in the Hearthline", where(d.state));
     make(d, "suit_800" as RecipeId, "workshop", ISLES);
   },
 };

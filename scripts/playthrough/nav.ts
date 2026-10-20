@@ -47,27 +47,26 @@ const swimmable = (d: Driver, x: number, z: number): boolean =>
   [[0, 0], [0.7, 0], [-0.7, 0], [0, 0.7], [0, -0.7]].every(([ox, oz]) =>
     d.world.groundHeight(x + ox!, z + oz!) < -1.3 && d.world.supportHeight(x + ox!, z + oz!, SURFACE_Y) < -1.9) &&
   d.world.clearance({ x, y: SURFACE_Y, z }, { radius: SWIM.radius + 0.4, height: SWIM.height });
-function clearSegment(d: Driver, a: Vec3, b: Vec3): boolean {
-  const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.4));
-  for (let i = 0; i <= n; i++) if (!swimmable(d, a.x + (b.x - a.x) * i / n, a.z + (b.z - a.z) * i / n)) return false;
-  return true;
-}
-/** Surface route from `from` to `to`: A* on a 2 m grid of open surface water, then
- * shortcut by straight clear segments. A read-only query of the world; the result
- * is then swum with real steps. */
-export function surfacePath(d: Driver, from: Vec3, to: Vec3): Waypoint[] {
-  const a = { x: from.x, y: SURFACE_Y, z: from.z }, b = { x: to.x, y: SURFACE_Y, z: to.z };
-  if (clearSegment(d, a, b)) return [b];
-  const cell = 2, pad = 40;
+/** A* over a horizontal grid of `cell` metres, then shortcut by straight clear
+ * segments. `open(x, z)` is a read-only world query; the path is played afterwards. */
+export function gridPath(from: Vec3, to: Vec3, y: number, cell: number, pad: number,
+  open: (x: number, z: number) => boolean, label: string): Vec3[] {
+  const a = { x: from.x, y, z: from.z }, b = { x: to.x, y, z: to.z };
+  const clear = (p: Vec3, q: Vec3): boolean => {
+    const n = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.z - p.z) / (cell / 4)));
+    for (let i = 0; i <= n; i++) if (!open(p.x + (q.x - p.x) * i / n, p.z + (q.z - p.z) * i / n)) return false;
+    return true;
+  };
+  if (clear(a, b)) return [b];
   const minX = Math.min(a.x, b.x) - pad, minZ = Math.min(a.z, b.z) - pad;
-  const w = Math.ceil((Math.abs(a.x - b.x) + 2 * pad) / cell), h = Math.ceil((Math.abs(a.z - b.z) + 2 * pad) / cell);
+  const w = Math.ceil((Math.abs(a.x - b.x) + 2 * pad) / cell) + 1, h = Math.ceil((Math.abs(a.z - b.z) + 2 * pad) / cell) + 1;
   const key = (i: number, j: number): number => j * w + i;
-  const at = (i: number, j: number): Vec3 => ({ x: minX + i * cell, y: SURFACE_Y, z: minZ + j * cell });
-  const open = new Map<number, boolean>();
+  const at = (i: number, j: number): Vec3 => ({ x: minX + i * cell, y, z: minZ + j * cell });
+  const cache = new Map<number, boolean>();
   const ok = (i: number, j: number): boolean => {
     const k = key(i, j);
-    if (!open.has(k)) { const p = at(i, j); open.set(k, swimmable(d, p.x, p.z)); }
-    return open.get(k)!;
+    if (!cache.has(k)) { const p = at(i, j); cache.set(k, open(p.x, p.z)); }
+    return cache.get(k)!;
   };
   const snap = (p: Vec3): [number, number] => [Math.round((p.x - minX) / cell), Math.round((p.z - minZ) / cell)];
   const [si, sj] = snap(a), [ti, tj] = snap(b);
@@ -88,16 +87,26 @@ export function surfacePath(d: Driver, from: Vec3, to: Vec3): Waypoint[] {
       }
     }
   }
-  if (!found) throw new Blocked(`No open surface route to (${to.x.toFixed(0)}, ${to.z.toFixed(0)})`, where(d.state));
+  if (!found) throw new Blocked(`No open ${label} route to (${to.x.toFixed(1)}, ${to.z.toFixed(1)})`);
   const cells: Vec3[] = [];
   for (let k: number | undefined = key(ti, tj); k !== undefined; k = came.get(k)) cells.unshift(at(k % w, Math.floor(k / w)));
   cells[0] = a; cells[cells.length - 1] = b;
-  const out: Waypoint[] = [];
+  const out: Vec3[] = [];
   let anchor = a;
   for (let i = 1; i < cells.length; i++)
-    if (!clearSegment(d, anchor, cells[i]!) ) { anchor = cells[i - 1]!; out.push({ ...anchor, tolerance: 0.6 }); }
+    if (!clear(anchor, cells[i]!)) { anchor = cells[i - 1]!; out.push({ ...anchor }); }
   out.push(b);
   return out;
+}
+
+/** Surface route over open water (2 m grid). */
+export function surfacePath(d: Driver, from: Vec3, to: Vec3): Waypoint[] {
+  try {
+    return gridPath(from, to, SURFACE_Y, 2, 40, (x, z) => swimmable(d, x, z), "surface")
+      .map((p, i, all) => i < all.length - 1 ? { ...p, tolerance: 0.6 } : p);
+  } catch (e) {
+    throw e instanceof Blocked ? new Blocked(e.message, where(d.state)) : e;
+  }
 }
 
 /** Swim at the surface to above `point`. */
