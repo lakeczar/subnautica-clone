@@ -1,5 +1,14 @@
 # Build status
 
+## Now (2026-10-20, Opus 5.5 coordinator)
+
+- **Running:**
+  - M2-B1 Opus builder (Creel/mobile refuge), worktree `t3-b6aef8ec`.
+  - GPU bundle R2 review (Sol 6.1 xhigh) on `c4d5191`, task `siltwake-gpu-r2-sol-xhigh-c4d5191`.
+  - Direction audit (Sol 6.1 xhigh) of process, architecture, game state and a parallel plan, task `siltwake-direction-audit-sol-xhigh-f76ec48`.
+- **Next:** decide changes from the audit, then fan out parallel Opus builders on disjoint workstreams. For the GPU: after acceptance, Fleet placement and then the owner's native approval for the attach.
+- **Rule:** heavy tests go through `scripts/heavy-check.sh` (one at a time, 6 GiB cap). See WORKER_RESOURCE_LIMITS.
+
 ## Current coordination and worker memory incident
 
 The owner requests **Opus5.5/high to coordinate this existing thread**, retaining a separate Opus builder and fresh Sol6.1/xhigh review. [Handoff](OPUS_COORDINATOR_HANDOFF.md) records exact live tasks and next actions. Before heavy tests, follow [worker resource limits](WORKER_RESOURCE_LIMITS.md): root stopped a recurring B1 full-suite memory exhaustion and verified recovery; B1 is isolating the cause under a6 GiB total-memory/zero-swap scope. The GPU author's incident acknowledgement was interim, with ordinal3 now finishing its report/checks/commits. Neither batch is accepted. NVIDIA is still absent from guest PCI inventory. Accepted production and full-game roadmap below remain unchanged.
