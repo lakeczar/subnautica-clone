@@ -1,35 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BERTH_LOCAL, CARRIER_LAYOUT, carrierTravelBounds, fixtureGame, localToWorld, updateBerth } from "../src/sim/carrier.js";
+import { BERTH_LOCAL, CARRIER_LAYOUT, fixtureGame, localToWorld, updateBerth } from "../src/sim/carrier.js";
 import { executeCommand, stepGame } from "../src/sim/step.js";
 import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
 import { createWorldQueries, moveHull, WORLD_BOUNDS } from "../src/sim/world.js";
 import { BERTH_ENVELOPES, HULL_COLLIDERS } from "../src/content/registry.js";
 import { disableVehicle } from "../src/sim/recovery.js";
-import type { GameCommand, GameState, Vec3 } from "../src/sim/types.js";
-
-const world = createWorldQueries();
-const meta = { sessionId: "carrier-boundary", createdAt: "2026-10-17T00:00:00.000Z", savedAt: "2026-10-17T00:00:00.000Z" };
-function roundTrip(s: GameState): GameState {
-  const encoded = encodeSave(createEnvelope(s, meta));
-  assert.equal(encoded.ok, true, `tick ${s.tick}: ${encoded.ok ? "" : encoded.error}`);
-  const decoded = decodeSave(encoded.value);
-  assert.equal(decoded.ok, true);
-  // JSON's signed-zero normalization is the codec's only representational change.
-  assert.deepEqual(decoded.value.state, JSON.parse(JSON.stringify(s)));
-  return decoded.value.state;
-}
-function coherent(s: GameState): void {
-  const h = s.fleet.vehicles[0]!;
-  for (const v of s.fleet.vehicles) if (v.berth) {
-    assert.deepEqual(v.pose.position, localToWorld(v.berth.pose.position, h));
-    assert.equal(v.pose.yaw, h.pose.yaw + v.berth.pose.yaw);
-  }
-  if (s.player.controlledVehicleId === h.id) assert.deepEqual(s.player.pose.position, h.pose.position);
-  if (s.player.interiorPose) assert.deepEqual(s.player.pose.position, localToWorld(s.player.interiorPose.position, h));
-  roundTrip(s);
-}
-const move = (forward = 0, right = 0, vertical = 0): GameCommand => ({ type: "move", forward, right, vertical, sprint: false });
+import type { Vec3 } from "../src/sim/types.js";
+import { bounds, coherent, command, edges, meta, move, roundTrip, staged, world, worldMove } from "./carrier-boundary-support.js";
 
 test("ordinary production carrier ascent/reverse route remains coherent and saveable through the former tick 1681 failure", () => {
   let s = roundTrip(fixtureGame());
@@ -48,43 +26,6 @@ test("ordinary production carrier ascent/reverse route remains coherent and save
 });
 
 // Explicit diagnostic staging for combinations not reached by the bounded route.
-function staged(configuration: "compact" | "medium", position: Vec3, yaw: number): GameState {
-  const s = fixtureGame(), h = s.fleet.vehicles[0]!;
-  if (configuration === "medium") {
-    for (const [i, v] of s.fleet.vehicles.entries()) if (v.berth) {
-      v.berth = null;
-      v.pose.position = { x: 100 + i * 10, y: -1, z: -60 };
-    }
-    s.fleet.docking!.configuration = "medium";
-    s.fleet.vehicles[3]!.berth = { carrierId: h.id, slot: 0,
-      pose: { frame: "carrier-local", position: { ...BERTH_LOCAL[0]! }, yaw: 0 } };
-  }
-  h.pose.position = { ...position };
-  h.pose.yaw = yaw;
-  h.pose.pitch = 0;
-  s.player.pose.pitch = 0;
-  s.player.pose.yaw = yaw;
-  updateBerth(s, world);
-  return roundTrip(executeCommand(s, { type: "carrier", action: "helm" }, world).state);
-}
-function worldMove(s: GameState, x: number, z: number): GameCommand {
-  const yaw = s.player.pose.yaw;
-  return move(Math.sin(yaw) * x - Math.cos(yaw) * z, Math.cos(yaw) * x + Math.sin(yaw) * z);
-}
-function command(s: GameState, action: Extract<GameCommand, { type: "carrier" }>["action"], vehicleId?: string): GameState {
-  const result = executeCommand(s, { type: "carrier", action, ...(vehicleId ? { vehicleId } : {}) }, world);
-  assert.equal(result.events.some((e) => e.type === "notice" && e.error), false, JSON.stringify(result.events));
-  coherent(result.state);
-  return result.state;
-}
-const bounds = carrierTravelBounds();
-const edges = [
-  { x: bounds.minX, z: 0, dx: -1, dz: 0 }, { x: bounds.maxX, z: 0, dx: 1, dz: 0 },
-  { x: 65, z: bounds.minZ, dx: 0, dz: -1 }, { x: 65, z: bounds.maxZ, dx: 0, dz: 1 },
-  ...[-1, 1].flatMap((dx) => [-1, 1].map((dz) => ({ x: dx < 0 ? bounds.minX : bounds.maxX,
-    z: dz < 0 ? bounds.minZ : bounds.maxZ, dx, dz }))),
-];
-
 test("the existing carrier proxy encloses both berth layouts, interior and vestibules through a full turn", () => {
   const radius = HULL_COLLIDERS.hearthline.radius;
   const points: Vec3[] = [CARRIER_LAYOUT.helm, CARRIER_LAYOUT.vestibule, CARRIER_LAYOUT.exteriorVestibule,
@@ -96,56 +37,6 @@ test("the existing carrier proxy encloses both berth layouts, interior and vesti
   assert.ok(points.every((p) => Math.hypot(p.x, p.z) + 0.34 < radius));
   assert.deepEqual(bounds, { minX: WORLD_BOUNDS.minX + radius, maxX: WORLD_BOUNDS.maxX - radius,
     minZ: WORLD_BOUNDS.minZ + radius, maxZ: WORLD_BOUNDS.maxZ - radius });
-});
-
-test("loaded compact/medium assemblies at every edge/corner preserve turns, outward contact and inward/tangential escape", () => {
-  let cases = 0;
-  for (const configuration of ["compact", "medium"] as const) for (const edge of edges)
-    for (const yaw of [...Array.from({ length: 24 }, (_, n) => n * Math.PI / 12), 0.31, 0.83]) {
-      let s = staged(configuration, { x: edge.x, y: -0.9, z: edge.z }, yaw);
-      const items = structuredClone(s.inventory.items), before = { ...s.fleet.vehicles[0]!.pose.position };
-      for (let i = 0; i < 8; i++) {
-        const result = stepGame(s, [worldMove(s, edge.dx, edge.dz)], world);
-        s = result.state;
-        coherent(s);
-        assert.ok(result.events.some((e) => e.type === "foundation-boundary"));
-      }
-      assert.ok(Math.hypot(s.fleet.vehicles[0]!.pose.position.x - before.x,
-        s.fleet.vehicles[0]!.pose.position.z - before.z) < 1e-10);
-      // Stationary turning must work even at corners, without accumulating a
-      // rejected view heading that suddenly rotates the hull on a later step.
-      for (let i = 0; i < 8; i++) {
-        s = stepGame(s, [{ type: "look", yawDelta: 0.8, pitchDelta: 0 }], world).state;
-        coherent(s);
-        assert.equal(s.player.pose.yaw, s.fleet.vehicles[0]!.pose.yaw);
-      }
-      s = command(s, "station-keep");
-      for (let i = 0; i < 30; i++) {
-        s = stepGame(s, [worldMove(s, 0, 0)], world).state;
-        coherent(s);
-      }
-      // Remove the ordinary damping's outward residual via station keeping.
-      s = command(s, "helm");
-      for (let i = 0; i < 25; i++) {
-        s = stepGame(s, [worldMove(s, -edge.dx, -edge.dz)], world).state;
-        coherent(s);
-      }
-      assert.ok(Math.hypot(s.fleet.vehicles[0]!.pose.position.x - before.x,
-        s.fleet.vehicles[0]!.pose.position.z - before.z) > 0.1);
-      assert.deepEqual(s.inventory.items, items);
-      cases++;
-    }
-  assert.equal(cases, 416);
-  for (const edge of edges.slice(0, 4)) {
-    let s = staged("compact", { x: edge.x, y: -0.9, z: edge.z }, 0.31);
-    const before = { ...s.fleet.vehicles[0]!.pose.position };
-    for (let i = 0; i < 40; i++) {
-      s = stepGame(s, [worldMove(s, edge.dx || 1, edge.dz || 1)], world).state;
-      coherent(s);
-    }
-    assert.ok(Math.hypot(s.fleet.vehicles[0]!.pose.position.x - before.x,
-      s.fleet.vehicles[0]!.pose.position.z - before.z) > 0.2, "diagonal contact retains its tangential component");
-  }
 });
 
 test("retained valid near-edge saves neither snap to the new margin nor rotate attachments out of the world", () => {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { same } from "./render-assert.js";
+import { digest, same } from "./render-assert.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
@@ -19,11 +19,9 @@ import { LabelMaterials, label } from "../src/render/landmarks.js";
 import { createEcology } from "../src/render/ecology.js";
 import { createExpeditionActors } from "../src/render/expedition.js";
 import { makeVehicle } from "../src/sim/state.js";
-import { createHash } from "node:crypto";
 import type { RenderRegion } from "../src/render/regions.js";
 
 function identity(scene: Scene): unknown {
-  const digest = (data: ArrayLike<number>): string => createHash("sha256").update(JSON.stringify(Array.from(data))).digest("hex");
   return scene.meshes.filter((mesh): mesh is Mesh => mesh instanceof Mesh).map(mesh => ({ name: mesh.name, position: mesh.position.asArray(), rotation: mesh.rotation.asArray(),
     scaling: mesh.scaling.asArray(), enabled: mesh.isEnabled(),
     vertices: mesh.getVerticesDataKinds().sort().map(kind => [kind, digest(mesh.getVerticesData(kind)!)]),
@@ -58,9 +56,9 @@ function dartIdentity(scene: Scene, id: string): unknown {
       group: mesh.renderingGroupId, material: mesh.material?.name, pickable: mesh.isPickable,
       bounds: [box.minimum, box.maximum, box.minimumWorld, box.maximumWorld].map(v => v.asArray()),
       vertices: mesh.getVerticesDataKinds().sort().map(kind => ({ kind,
-        type: mesh.getVerticesData(kind)!.constructor.name, data: Array.from(mesh.getVerticesData(kind)!),
+        data: digest(mesh.getVerticesData(kind)),
         stride: mesh.getVertexBuffer(kind)!.getSize(), updatable: mesh.getVertexBuffer(kind)!.isUpdatable() })),
-      indices: Array.from(mesh.getIndices()!), indexType: mesh.getIndices()!.constructor.name,
+      indices: digest(mesh.getIndices()),
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 }

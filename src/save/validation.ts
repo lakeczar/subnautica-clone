@@ -25,8 +25,7 @@ import { usedCapacity } from "../sim/inventory.js";
 import { installedModuleValid, moduleItem, SMALL_CRAFT_SOCKETS } from "../sim/modules.js";
 import { WORLD_BOUNDS } from "../sim/world.js";
 import { atCarrierSupport, BERTH_LOCAL, CARRIER_LAYOUT, localToWorld } from "../sim/carrier.js";
-// Compatibility export for historical callers; decode additionally runs the frozen full validator.
-export { validExpedition2Domain } from "./legacy/validation.js";
+import { createGame } from "../sim/state.js";
 export const record = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const exact = (v: unknown, keys: string[]): v is Record<string, unknown> =>
@@ -77,6 +76,8 @@ const known =
 const sameKeys = (v: unknown, template: object): v is Record<string, unknown> =>
   exact(v, Object.keys(template));
 export function validState(value: unknown): value is GameState {
+  // New Game's rosters define the complete facility and fixed-container sets.
+  const fresh = createGame();
   if (
     !exact(value, [
       "tick",
@@ -228,8 +229,9 @@ export function validState(value: unknown): value is GameState {
         exact(v, ["id", "tick", "provenance"]) &&
         known(EVIDENCE)(v.id) &&
         int(v.tick, 0, value.tick as number) &&
-        text(v.provenance, 200) &&
-        v.provenance === EVIDENCE[v.id as keyof typeof EVIDENCE].provenance,
+        // The saved provenance is the text shown at discovery; display reads the
+        // registry by ID, so editing prose never invalidates a save.
+        text(v.provenance, 200),
     ) ||
     !stringSet(k.journals, 1, (v) => v === "mara_reef_note") ||
     !stringSet(k.markers, Object.keys(PLACES).length, known(PLACES)) ||
@@ -275,16 +277,10 @@ export function validState(value: unknown): value is GameState {
   if (
     !array(
       w.facilities,
-      5,
+      fresh.world.facilities.length,
       (v) =>
         exact(v, ["id", "repaired"]) &&
-        oneOf(v.id, [
-          "home_pod",
-          "pod_fabricator",
-          "island_workshop",
-          "canopy_lab",
-          "canopy_stop",
-        ]) &&
+        oneOf(v.id, fresh.world.facilities.map((f) => f.id)) &&
         bool(v.repaired),
     )
   )
@@ -487,9 +483,9 @@ export function validState(value: unknown): value is GameState {
     !Object.values(metrics).every((v) => n(v, 0, 1e9))
   )
     return false;
-  return semantic(value as unknown as GameState);
+  return semantic(value as unknown as GameState, fresh);
 }
-function semantic(s: GameState): boolean {
+function semantic(s: GameState, fresh: GameState): boolean {
   const { items, containers, buoy } = s.inventory,
     k = s.knowledge,
     f = s.fleet;
@@ -514,7 +510,7 @@ function semantic(s: GameState): boolean {
     !unique(s.world.resources.map((r) => r.id)) ||
     s.world.resources.length !== Object.keys(SOURCES).length ||
     !unique(s.world.facilities.map((a) => a.id)) ||
-    s.world.facilities.length !== 5
+    s.world.facilities.length !== fresh.world.facilities.length
   )
     return false;
   for (const r of s.world.resources) {
@@ -523,12 +519,7 @@ function semantic(s: GameState): boolean {
       return false;
   }
   const expected = [
-    ["diver", "diver", 16, "player"],
-    ["equipment", "equipment", 0, "player"],
-    ["pod_locker", "locker", 160, "home_pod"],
-    ["workshop_locker", "locker", 160, "island_workshop"],
-    ["buoy_hold", "buoy", 24, "salvage_buoy"],
-    ["canopy_stop_locker", "locker", 48, "canopy_stop"],
+    ...fresh.inventory.containers.map((c) => [c.id, c.kind, c.capacity, c.ownerId]),
     // Hold size follows hull and fitted mount; a stale capacity is invalid.
     ...f.vehicles.map((v) => [v.cargoId, "vehicle", holdCapacity(s, v), v.id]),
     ...s.recovery.caches.map((c) => [c.containerId, "cache", c.id.startsWith("canister_") ? CANISTER_CU : 8, c.id]),
