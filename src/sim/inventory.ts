@@ -1,7 +1,7 @@
 import { CREEL_BUILD_POSE, DART_BUILD_POSE, HULLS, ITEMS, MATERIALS } from "../content/registry.js";
 import type { FabricationSite, ItemKind, MaterialId } from "../content/registry.js";
 import { CANOPY_STOP } from "../content/routes.js";
-import { STOP_IDS, stopForSite, WORKING_STOPS, type WorkingStopId } from "../content/stops.js";
+import { MOORING_SERVICE_RADIUS, SERVICE_MOORINGS, STOP_IDS, stopForSite, WORKING_STOPS, type WorkingStopId } from "../content/stops.js";
 import { HEARTHLINE_CONTAINERS } from "../content/fleet/hearthlineInterior.js";
 import type { Fitting, GameState, ItemStack, Vec3, VehicleState } from "./types.js";
 export const distance = (a: Vec3, b: Vec3): number =>
@@ -135,7 +135,7 @@ export function nearCanopyStop(s: GameState): boolean {
 export function facility(s: GameState, id: string): boolean {
   return s.world.facilities.some((f) => f.id === id && f.repaired);
 }
-export type ServiceSite = "home_pod" | "island_workshop" | "canopy_stop" | WorkingStopId;
+export type ServiceSite = "home_pod" | "island_workshop" | "canopy_stop" | WorkingStopId | `mooring:${string}`;
 /** A working stop is usable: it needs no restoration, or it has been restored. */
 export function stopWorks(s: GameState, id: WorkingStopId): boolean {
   const f = WORKING_STOPS[id].facility;
@@ -162,10 +162,13 @@ export function supportedServiceSite(s: GameState, v: VehicleState): ServiceSite
     return "home_pod";
   if (distance(v.pose.position, CANOPY_STOP.mooring) < CANOPY_STOP.serviceRadius && facility(s, "canopy_stop"))
     return "canopy_stop";
-  return STOP_IDS.find((id) => stopWorks(s, id) && distance(v.pose.position, WORKING_STOPS[id].mooring) < WORKING_STOPS[id].serviceRadius) ?? null;
+  const stop = STOP_IDS.find((id) => stopWorks(s, id) && distance(v.pose.position, WORKING_STOPS[id].mooring) < WORKING_STOPS[id].serviceRadius);
+  if (stop) return stop;
+  const mooring = SERVICE_MOORINGS.find((m) => distance(v.pose.position, m.position) < MOORING_SERVICE_RADIUS);
+  return mooring ? `mooring:${mooring.id}` : null;
 }
 /** A restored bench the diver is actually using, not a nearby/remote craft. */
-export function localBenchSite(s: GameState): ServiceSite | null {
+export function localBenchSite(s: GameState): Exclude<ServiceSite, `mooring:${string}`> | null {
   if (s.player.interiorId || s.player.controlledVehicleId) return null;
   if (nearPod(s) && facility(s, "pod_fabricator")) return "home_pod";
   if (nearWorkshop(s) && facility(s, "island_workshop")) return "island_workshop";

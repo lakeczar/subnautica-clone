@@ -150,10 +150,13 @@ type ServiceCheck =
 /** One authoritative, read-only check in the command's original precedence. */
 function checkService(s: GameState, id: string): ServiceCheck {
   const v = s.fleet.vehicles.find((v) => v.id === id);
-  if (!v || v.berth || distance(s.player.pose.position, v.pose.position) > 7)
+  // The carrier's own pilot or crew is local to its socket: its helm and rooms
+  // stand up to 11 m from the keel datum.
+  const aboard = v?.hull === "hearthline" && (s.player.controlledVehicleId === v.id || s.player.interiorId === v.id);
+  if (!v || v.berth || (!aboard && distance(s.player.pose.position, v.pose.position) > 7))
     return { state: "away", refusal: "Approach the craft service socket locally." };
   if (!supportedServiceSite(s, v))
-    return { state: "unsupported", refusal: "Service at pod waters, the workshop cradle or a restored mooring." };
+    return { state: "unsupported", refusal: "Service at pod waters, the workshop cradle, a restored stop or a charging mooring." };
   if (v.disabled)
     return { state: "patch", refusal: "Apply a rescue patch before routine charging." };
   return { state: "ready", refusal: null, vehicle: v };

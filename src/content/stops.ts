@@ -49,12 +49,15 @@ const stop = (s2: string, extra: Omit<WorkingStop, "s2" | "region" | "work" | "m
 export const WORKING_STOPS = {
   /** The carrier's construction berth: hull builds, shore power, a yard store. */
   stack_yard: { ...stop("isles.stack_yard", {
-    label: "Splitspine yard berth", facility: null, workRadius: 4, serviceRadius: 30, air: false,
+    label: "Splitspine yard berth", facility: null, workRadius: 4, serviceRadius: 50, air: false,
     locker: "stack_yard_locker", fabrication: "stack_yard",
     offers: "Hull construction slips · shore power and repair · 48 CU yard store",
   }),
-  // The yard is worked from the dry pier deck, clear of the carrier's berth.
-  work: { x: 470, y: 1.4, z: 21 } },
+  // The yard is worked from the dry pier deck, clear of the carrier's berth. Its
+  // supply mooring lies east of the pier, outside every build slip (P1 found S2's
+  // berth datum inside the carrier's build clearance); the 50 m service radius
+  // still reaches every slip, the carrier's berth included.
+  work: { x: 470, y: 1.4, z: 21 }, mooring: { x: 484, y: -4, z: 24 } },
   rift_station: stop("rift.materials_station", {
     label: "Ember Rift materials station", facility: "rift_station", workRadius: 4, serviceRadius: 14, air: true,
     locker: "rift_station_locker", fabrication: "rift_station",
@@ -82,3 +85,11 @@ export const stopForSite = (siteId: string): WorkingStopId | null =>
 export const STOP_RESTORATIONS = { restore_rift_station: "rift_station", restore_divide_stop: "divide_dock" } as const;
 
 export { YARD_BUILD } from "./yard.js";
+
+/** S2's moorings that list charging (S2 `services`): a craft moored within
+ * MOORING_SERVICE_RADIUS of one is charged and repaired there, the carrier
+ * included. The yard berth has its own stop above. (P1: the carrier route
+ * stranded because the lee mooring refused the service S2 lists.) */
+export const MOORING_SERVICE_RADIUS = 30;
+export const SERVICE_MOORINGS = SITES.filter((x) => x.role === "mooring" && x.services?.includes("charge") && x.id !== "isles.stack_yard")
+  .map((x) => ({ id: x.id, label: x.label, position: parkPose(x, worldFloor) }));

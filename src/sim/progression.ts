@@ -304,12 +304,13 @@ export function craftingBlock(
     return block("duplicate-hull", "The Hearthline keel is already laid in the yard berth. Fit it out.");
   if (hull) {
     const build = HULL_BUILD[hull], shape = HULL_COLLIDERS[hull];
-    const occupied = s.fleet.vehicles.some((v) => !v.berth &&
+    const occupant = s.fleet.vehicles.find((v) => !v.berth &&
       Math.abs(v.pose.position.x - build.pose.x) < shape.radius + HULL_COLLIDERS[v.hull].radius &&
       Math.abs(v.pose.position.z - build.pose.z) < shape.radius + HULL_COLLIDERS[v.hull].radius &&
       Math.abs(v.pose.position.y - build.pose.y) < Math.max(shape.height, HULL_COLLIDERS[v.hull].height));
-    if (occupied || !hullClearance(world, build.pose, shape))
+    if (occupant || !hullClearance(world, build.pose, shape))
       return block("clearance", hull === "creel" ? "The medium slip is not clear. Move any craft out of it. Nothing consumed."
+        : occupant ? `The ${HULLS[occupant.hull].label} sits in the ${HULLS[hull].label}'s build slip. Move it out (the yard mooring is east of the pier). Nothing consumed.`
         : "Construction clearance is blocked. Nothing consumed.");
   }
   const refit = refitHull(id), tier = refitTier(id);

@@ -35,8 +35,11 @@ test("every stop stands on S2's own work and park poses, clear for a diver and a
   for (const id of STOP_IDS) {
     const stop = WORKING_STOPS[id], site = SITES.find((x) => x.id === stop.s2)!;
     assert.ok(site, id);
-    assert.deepEqual(stop.mooring, parkPose(site, worldFloor), id);
-    if (id !== "stack_yard") assert.deepEqual(stop.work, workPose(site, worldFloor), id);
+    // The yard is worked from S2's pier, with its mooring moved clear of every build slip (P1).
+    if (id !== "stack_yard") {
+      assert.deepEqual(stop.mooring, parkPose(site, worldFloor), id);
+      assert.deepEqual(stop.work, workPose(site, worldFloor), id);
+    }
     assert.ok(world.clearance(stop.work, { radius: 0.34, height: id === "stack_yard" ? 1.75 : 0.95 }), `${id} diver`);
     assert.ok(hullClearance(world, stop.mooring, HULL_COLLIDERS.creel), `${id} mooring`);
   }
@@ -157,4 +160,17 @@ test("a save that has scanned every source, record and the filter flow validates
   saveable(s);
   const dup = structuredClone(s); dup.knowledge.scans.push(dup.knowledge.scans[0]!);
   assert.equal(validState(dup), false, "duplicates still refused");
+});
+
+test("P1: a craft at the yard mooring never blocks a build; a craft in a slip is named", () => {
+  const yard = WORKING_STOPS.stack_yard;
+  for (const [hull, b] of Object.entries(YARD_BUILD)) {
+    const reach = HULL_COLLIDERS[hull as keyof typeof YARD_BUILD].radius + HULL_COLLIDERS.creel.radius;
+    assert.ok(Math.abs(yard.mooring.x - b.pose.x) >= reach || Math.abs(yard.mooring.z - b.pose.z) >= reach, `${hull} slip clear of the mooring`);
+    assert.ok(Math.hypot(yard.mooring.x - b.pose.x, yard.mooring.z - b.pose.z) < yard.serviceRadius, `${hull} slip within the yard's service radius`);
+  }
+  const s = campaignReady();
+  parkCreel(s, YARD_BUILD.hush.pose);
+  at(s, yard.work); stock(s, "hush_base", "stack_yard_locker");
+  assert.match(craftingBlock(s, "hush_base", world)!.message, /Creel sits in the Hush's build slip/);
 });
