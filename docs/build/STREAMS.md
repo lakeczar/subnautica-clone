@@ -67,3 +67,12 @@ A complete procedural soundscape, extending today's WebAudio system in `src/audi
 The host is muted. Verify with offline rendering (OfflineAudioContext in the browser), level and peak analysis and spectrum snapshots, and say plainly that no human listening was done. Expose an event-to-cue mapping the coordinator wires into `app.ts`. Add a dev page, `tools/audio-lab.html`.
 
 **Adverse case:** a burst of many simultaneous events stays within the voice and level limits.
+
+## Live task IDs (clientRequestId; the full ID is `node:delegated-task:command%3Amcp%3A6149902b-1c5f-4da8-84f4-9330f9f8bac8%3Adelegate-task%3A<id>`)
+- S1 `siltwake-s1-world-runtime-6a0fa56`
+- S3 `siltwake-s3-fleet-art-6a0fa56`
+- S4 `siltwake-s4-ecology-6a0fa56`
+- S5 `siltwake-s5-campaign-6a0fa56`
+- S6 `siltwake-s6-audio-6a0fa56`
+- GPU R3 review `siltwake-gpu-r3-sol-xhigh-8d6dba9`
+- B1 (earlier root session) `node:delegated-task:command%3Amcp%3A2cbf186c-627f-4d86-933f-50a2dde43454%3Adelegate-task%3Asiltwake-m2-b1-opus-high-7bd259c`
