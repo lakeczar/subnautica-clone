@@ -944,9 +944,10 @@ export function createExpeditionActors(
   // Story fixtures composed at existing sites, on the same datums as their hosts.
   const story = new Map<StoryHostId, Mesh>();
   const checklist = new ArtBatch("story.pod_checklist", scene, cel), cp = STORY_HOSTS.pod_checklist.position;
-  checklist.box([cp.x, cp.y, cp.z + .07], [.5, .64, .03], P.porcelain);
-  checklist.box([cp.x, cp.y + .27, cp.z + .05], [.18, .05, .02], P.ochre);
-  for (let i = 0; i < 5; i++) checklist.box([cp.x - .04, cp.y + .15 - i * .1, cp.z + .052], [.34, .018, .006], P.ink);
+  // A laminated sheet on the locker door's outer face (x −1.51), facing the cabin.
+  checklist.box([cp.x - .052, cp.y, cp.z], [.012, .36, .26], P.porcelain);
+  checklist.box([cp.x - .044, cp.y + .17, cp.z], [.016, .04, .1], P.ochre);
+  for (let i = 0; i < 4; i++) checklist.box([cp.x - .045, cp.y + .09 - i * .07, cp.z - .02], [.004, .012, .18], P.ink);
   story.set("pod_checklist", checklist.finish());
   const tray = new ArtBatch("story.mara_specimen_tray", scene, cel), tp = STORY_HOSTS.mara_specimen_tray.position;
   tray.box([tp.x, tp.y - .03, tp.z], [.5, .05, .34], P.ochre);

@@ -129,7 +129,8 @@ export function storyHint(s: GameState): string {
 /** Discoveries placed at existing sites but new to the game, with their record
  * fixtures. C14 exists only once its pod repair is made. */
 export const STORY_HOSTS = {
-  pod_checklist: { position: { x: 0.6, y: 1.6, z: 23.9 }, kind: "record" },
+  // Clipped to the pod locker's door, as its record says; clear of the door handle.
+  pod_checklist: { position: { x: -1.45, y: 1.15, z: 22.55 }, kind: "record" },
   mara_specimen_tray: { position: { x: 117.1, y: -116.9, z: -128.1 }, kind: "record" },
   C14: { position: { x: -2.78, y: 1.2, z: 20.2 }, kind: "evidence" },
 } as const satisfies Partial<Record<DiscoveryId, { position: { x: number; y: number; z: number }; kind: "record" | "evidence" }>>;
