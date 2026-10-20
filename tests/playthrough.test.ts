@@ -94,9 +94,10 @@ test("removing an existing recipe blocks the phase that needs it instead of repo
     assert.equal(run.outcome, "blocked");
     assert.match(run.phases[0]!.detail!.join(), /unexpected missing content \[recipe:pod_buffer\]/);
   } finally { registry.pod_buffer = saved; }
-  // Untouched, the same phase is merely pending on listed C3 content.
+  // Untouched: since C3 nothing is pending, so the phase never reports missing content.
   const run = await runPhases(new Driver("fast-pending-ok", "creel"), CREEL_LATER.filter((p) => p.id === "ending"), { readOptional: true, reverse: false });
-  assert.equal(run.outcome, "pending-c3");
+  assert.notEqual(run.outcome, "pending-c3");
+  assert.doesNotMatch(run.phases[0]!.detail?.join() ?? "", /missing content/);
   assert.deepEqual(staleExpected(), [], "every expected-pending key is still missing in this build");
 });
 

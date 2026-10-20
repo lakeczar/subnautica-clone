@@ -310,7 +310,7 @@ export function craftingBlock(
       Math.abs(v.pose.position.y - build.pose.y) < Math.max(shape.height, HULL_COLLIDERS[v.hull].height));
     if (occupant || !hullClearance(world, build.pose, shape))
       return block("clearance", hull === "creel" ? "The medium slip is not clear. Move any craft out of it. Nothing consumed."
-        : occupant ? `The ${HULLS[occupant.hull].label} sits in the ${HULLS[hull].label}'s build slip. Move it out (the yard mooring is east of the pier). Nothing consumed.`
+        : occupant ? `The ${HULLS[occupant.hull].label} sits in the ${HULLS[hull].label}'s build slip. Move it out (the yard mooring is west of the cradles). Nothing consumed.`
         : "Construction clearance is blocked. Nothing consumed.");
   }
   const refit = refitHull(id), tier = refitTier(id);

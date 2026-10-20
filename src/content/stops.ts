@@ -49,15 +49,16 @@ const stop = (s2: string, extra: Omit<WorkingStop, "s2" | "region" | "work" | "m
 export const WORKING_STOPS = {
   /** The carrier's construction berth: hull builds, shore power, a yard store. */
   stack_yard: { ...stop("isles.stack_yard", {
-    label: "Splitspine yard berth", facility: null, workRadius: 4, serviceRadius: 50, air: false,
+    label: "Splitspine yard berth", facility: null, workRadius: 4, serviceRadius: 75, air: false,
     locker: "stack_yard_locker", fabrication: "stack_yard",
     offers: "Hull construction slips · shore power and repair · 48 CU yard store",
   }),
   // The yard is worked from the dry pier deck, clear of the carrier's berth. Its
-  // supply mooring lies east of the pier, outside every build slip (P1 found S2's
-  // berth datum inside the carrier's build clearance); the 50 m service radius
-  // still reaches every slip, the carrier's berth included.
-  work: { x: 470, y: 1.4, z: 21 }, mooring: { x: 484, y: -4, z: 24 } },
+  // supply mooring lies west of the cradles, outside every build slip (P1 found
+  // S2's berth datum inside the carrier's build clearance) and in open water from
+  // the isles routes, which arrive from the west; the 75 m service radius reaches
+  // every slip, the carrier's berth included.
+  work: { x: 470, y: 1.4, z: 21 }, mooring: { x: 440, y: -3, z: 12 } },
   rift_station: stop("rift.materials_station", {
     label: "Ember Rift materials station", facility: "rift_station", workRadius: 4, serviceRadius: 14, air: true,
     locker: "rift_station_locker", fabrication: "rift_station",

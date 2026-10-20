@@ -21,7 +21,9 @@ const WORKSHOP_BENCH: Waypoint = { x: 10, y: 1.2, z: -35.2, land: true, toleranc
  * field shelter's terrace (C3): the only shore the harness walks besides the
  * pod ramp and the workshop apron. */
 export const HEADLAND_IN: Waypoint[] = [{ x: 946, y: -0.5, z: -14 }, { x: 954.2, y: 0.71, z: -12.3, land: true },
-  { x: 966.4, y: 6.89, z: -9.7, land: true }, { x: 978.6, y: 10, z: -7.1, land: true }];
+  { x: 966.4, y: 6.89, z: -9.7, land: true }, { x: 976, y: 9.86, z: -11.5, land: true },
+  // Round to the shelter hut's one door, in its south wall (x 982.6..984.4).
+  { x: 983.5, y: 10, z: -11.5, land: true }, { x: 983.5, y: 10, z: -7.5, land: true }];
 const HEADLAND_OUT: Waypoint[] = [...HEADLAND_IN].reverse().map((p, i, all) => i === all.length - 1 ? { ...p, land: false } : { ...p });
 export const nearHeadland = (p: { x: number; z: number }): boolean => Math.hypot(p.x - 970, p.z + 8) < 40;
 
