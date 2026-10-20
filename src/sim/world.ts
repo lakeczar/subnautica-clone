@@ -2,6 +2,7 @@ import { CANOPY_COVER, SOURCES } from "../content/registry.js";
 import { BASIN_GEOMETRY, CANOPY_MARGIN_RIBS, CANOPY_STOP, CREEL_SLIP_SOLIDS, LEGACY_TERRAIN_SOURCE_IDS,
   WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
 import { STRUCTURE_SOLIDS } from "../content/regions/structures.js";
+import { VISTA_SOLIDS } from "../content/vistas.js";
 import { worldFloor } from "../content/regions/worldFloor.js";
 import { WORLD_ENVELOPE } from "../world/frame.js";
 import { legacyTerrainHeight, RESCUE_BENCH } from "./terrain.js";
@@ -124,6 +125,8 @@ export const FACILITY_SOLIDS: readonly Solid[] = [
 export const REGION_SOLIDS: readonly Solid[] = [
   // S2's regional structures (130 boxes).
   ...STRUCTURE_SOLIDS,
+  // A1's set pieces (wreck, arch, gantry, pipes, markers, ring): their art's own boxes.
+  ...VISTA_SOLIDS,
 ].map(s => ({ id: s.id, min: s.bounds.min, max: s.bounds.max }));
 export const SOLIDS: readonly Solid[] = [
   POD_DECK,

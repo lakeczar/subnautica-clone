@@ -98,3 +98,19 @@ test("REAL WORLD ADVERSE: a diver lit and loud in the stalker's warm passage, th
   assert.equal(escape.events.filter((e) => e.event.type === "ecology-strike").length, 0, "nothing strikes during the escape");
   assert.ok(THREAT_AGENT_IDS.every((id) => !canReach(id, stimulus(p), world, 600 + 60 * 60)), "safe at the end");
 });
+
+test("one clock at the chimney: S2's pulse is S4's plume field, and the brine cue never denies the skate", () => {
+  const pulse = HAZARDS.find((h) => h.id === "hazard.rift.chimney_pulse")!, plume = HAZARD_FIELDS.rift_split_plume;
+  assert.deepEqual(pulse.cycle, { periodS: plume.cycle.period, activeS: plume.cycle.duration });
+  assert.doesNotMatch(HAZARD_FIELDS.divide_dense_layer.cue, /nothing lives/);
+});
+
+test("the physical world is composed: worldFloor, B1's, S2's and A1's solids in one roster", async () => {
+  const { SOLIDS, terrainHeight } = await import("../src/sim/world.js");
+  const { STRUCTURE_SOLIDS } = await import("../src/content/regions/structures.js");
+  const { VISTA_SOLIDS } = await import("../src/content/vistas.js");
+  assert.equal(terrainHeight, worldFloor);
+  const ids = new Set(SOLIDS.map((s) => s.id));
+  assert.equal(ids.size, SOLIDS.length, "solid IDs are unique across the roster");
+  for (const s of [...STRUCTURE_SOLIDS, ...VISTA_SOLIDS]) assert.ok(ids.has(s.id), s.id);
+});

@@ -62,7 +62,7 @@ export const HAZARD_FIELDS = {
     // S2's brine volume: X 180..950, Z -1632..-1280, interface at BRINE_Y -440.
     shape: { kind: "layer", center: at("divide_saddle"), y: 10, min: { x: -385, y: 0, z: -176 }, max: { x: 385, y: 0, z: 176 } },
     intensity: 1, edge: 1,
-    cue: "A mirror-bright surface lies across the saddle; sails drift above it and nothing lives below.",
+    cue: "A mirror-bright surface lies across the saddle; sails drift above it, and no fans or small life live below it.",
   },
   divide_downwelling: {
     label: "Saddle downwelling", kind: "current", region: "brine_divide",
