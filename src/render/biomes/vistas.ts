@@ -1,7 +1,7 @@
 import type { MeshRecipe } from "../kit/types.js";
 import type { ChunkDescriptor, LodLevel } from "../../world/types.js";
 import { hash2 } from "../../content/regions/noise.js";
-import { ESCARPMENT_MARKERS, RING, VISTA_SETS, type VistaSet, type VistaTone } from "../../content/vistas.js";
+import { ESCARPMENT_MARKERS, RING, RING_PATH, VISTA_SETS, type VistaSet, type VistaTone } from "../../content/vistas.js";
 import { PALETTE } from "../palette.js";
 import { hex, RecipeBuilder, type P3, type Rgb } from "./recipe.js";
 
@@ -38,15 +38,13 @@ const LIT: ReadonlySet<VistaTone> = new Set(["glow", "warm", "cyan"]);
 const glow = (b: RecipeBuilder, f: () => void): void => { const a = b.alpha; b.alpha = -1; f(); b.alpha = a; };
 const lerp3 = (a: P3, b: P3, t: number): P3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
-/** A solid set exactly as its collision data: each block is its box, each
- * tube a faceted tube inside its segment boxes, each piece its own facets.
- * Coarse LOD only drops tube facets. */
-export function drawSolidSet(b: RecipeBuilder, s: VistaSet, fine: boolean): void {
+/** A solid set exactly as its collision data: each block is its box and
+ * each piece its own facets, at every LOD (they are already coarse). */
+export function drawSolidSet(b: RecipeBuilder, s: VistaSet, _fine: boolean): void {
   for (const k of s.blocks) {
     const draw = (): void => b.aabb([k.min.x, k.min.y, k.min.z], [k.max.x, k.max.y, k.max.z], C[k.tone], k.top ? C[k.top] : undefined);
     if (LIT.has(k.tone)) glow(b, draw); else draw();
   }
-  for (const t of s.tubes) b.tube(t.points.map(p => [p.x, p.y, p.z] as P3), t.radius, fine ? t.sides : Math.max(3, t.sides - 2), C[t.tone]);
   for (const p of s.pieces) for (const f of p.facets) b.face(f.pts.map(q => [q.x, q.y, q.z] as P3), C[f.tone]);
 }
 
@@ -127,7 +125,7 @@ function debrisTrail(b: RecipeBuilder, floor: Floor, from: [number, number], to:
 // --- Dressing ---------------------------------------------------------------
 
 const ARCH = VISTA_SETS.find(s => s.id === "drop.arch")!;
-const RING_POINTS = VISTA_SETS.find(s => s.id === "escarp.ring")!.tubes[0]!.points;
+const RING_POINTS = RING_PATH;
 export const VISTA_DRESSING: readonly VistaPart[] = [
   // Wreck ridge: debris trails down both flanks and the boom's lacing.
   { id: "wreck.trail", x: 760, z: -575, draw: (b, floor, fine) => {
@@ -195,7 +193,7 @@ export const VISTA_DRESSING: readonly VistaPart[] = [
     draw: (b: RecipeBuilder, floor: Floor, fine: boolean) => bulbs(b, floor, m.x - 2, m.z + 3, 4, i + 20, fine) }] : []),
   { id: "escarp.mast", x: 1356, z: -748, draw: (b, floor, fine) => latticeMast(b, floor, 1356, -748, 30, 4.5, fine, C.warm) },
   { id: "escarp.inlays", x: RING.x, z: RING.z - 1, draw: (b, _floor, fine) => {
-    // The ring's square section presents a ridge toward -Z: inlays sit on it.
+    // The ring presents a flat face toward -Z: the inlays sit on it.
     const face = RING.z - RING.thick - 0.04;
     glow(b, () => { for (let i = 1; i < RING_POINTS.length - 1; i += fine ? 2 : 4) b.box([RING_POINTS[i]!.x, RING_POINTS[i]!.y, face], [0.9, 0.9, 0.06], i % 4 === 1 ? C.cyan : C.warm); });
   } },
