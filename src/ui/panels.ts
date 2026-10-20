@@ -61,6 +61,8 @@ export class PanelView {
   private storageContext: string | null = null;
   private storageNotice = "";
   private readonly expansions = new Map<string, boolean>();
+  /** Open state each disclosure was rendered with before any player toggle. */
+  private readonly renderedDefaults = new Map<string, boolean>();
   private discardRenderedMoves = false;
   private highlightTimer = 0;
   private renderedKind: PanelKind | null = null;
@@ -132,9 +134,15 @@ export class PanelView {
     const oldMoves = [...content.querySelectorAll<HTMLElement>(".row-move > summary")].map((e) => e.dataset.focusKey);
     const followingMoves = moveKey ? oldMoves.slice(oldMoves.indexOf(moveKey) + 1) : [];
     this.observeStorageContext(state);
-    for (const group of content.querySelectorAll<HTMLDetailsElement>("details[data-panel-group]"))
-      if (group.dataset.panelGroup && !(this.discardRenderedMoves && group.dataset.panelGroup.startsWith("move:")))
-        this.expansions.set(group.dataset.panelGroup, group.open);
+    // Remember only the player's departures from each rendered default, so an
+    // automatic choice (the newest record open) never becomes sticky intent.
+    for (const group of content.querySelectorAll<HTMLDetailsElement>("details[data-panel-group]")) {
+      const id = group.dataset.panelGroup;
+      if (!id || (this.discardRenderedMoves && id.startsWith("move:"))) continue;
+      if (group.open === (this.renderedDefaults.get(id) ?? false)) this.expansions.delete(id);
+      else this.expansions.set(id, group.open);
+    }
+    this.renderedDefaults.clear();
     this.discardRenderedMoves = false;
     const scrollTop = this.renderedKind === kind ? this.get("game-panel").scrollTop : 0;
     this.renderedKind = kind;
@@ -146,7 +154,8 @@ export class PanelView {
       // Every operand identifies the action, independently of its label or render order.
       const key = JSON.stringify(command, Object.keys(command).sort());
       const fallback = command.type === "craft" ? `recipe:${command.recipeId}`
-        : command.type === "install-module" || command.type === "remove-module" ? `fitting:${command.vehicleId}`
+        : command.type === "install-module" || command.type === "remove-module"
+          ? `${isMountKind(state.inventory.items.find((i) => i.id === command.itemId)?.kind ?? "meal") ? "mount" : "fitting"}:${command.vehicleId}`
         : command.type === "transfer" ? `move:${command.itemId}`
         : command.type === "service" || command.type === "reserve" ? `vessel:${command.vehicleId}`
         : command.type === "store-materials" ? "storage" : "";
@@ -215,6 +224,7 @@ export class PanelView {
     this.storageFrom = this.storageToChosen = this.storageContext = null;
     this.storageNotice = "";
     this.expansions.clear();
+    this.renderedDefaults.clear();
     this.discardRenderedMoves = false;
     this.renderedKind = null;
     this.commands.clear();
@@ -227,6 +237,7 @@ export class PanelView {
 
   private group(id: string, label: string, body: string, initiallyOpen = false): string {
     const move = id.startsWith("move:");
+    this.renderedDefaults.set(id, initiallyOpen);
     return `<details class="${move ? "row-move" : "panel-group"}" data-panel-group="${escapeHtml(id)}"${(this.expansions.get(id) ?? initiallyOpen) ? " open" : ""}><summary data-focus-key="${move ? "" : "group:"}${escapeHtml(id)}">${label}</summary>${body}</details>`;
   }
 
@@ -573,6 +584,7 @@ export class PanelView {
     const latest = state.knowledge.evidence.at(-1)?.id;
     const findings = state.knowledge.evidence.map((f) => {
       const e = EVIDENCE[f.id], key = `finding:${f.id}`;
+      this.renderedDefaults.set(key, f.id === latest);
       return `<details class="panel-group finding" id="finding-${f.id}" tabindex="-1" data-panel-group="${key}"${(this.expansions.get(key) ?? f.id === latest) ? " open" : ""}><summary data-focus-key="group:${key}">${e.label}</summary><p class="provenance">Source · ${escapeHtml(e.provenance)}</p><p><b>Observed</b> · ${e.observation}</p><p><b>Hypothesis</b> · ${e.hypothesis}</p><p class="lead"><b>Regional lead</b> · ${e.lead}</p></details>`;
     }).join("");
     let notes = state.knowledge.scans.includes("filter_flow") ? '<article><h3>Current-facing filters</h3><p>Open fans face the current. Harvest loose membrane from downstream catch hollows.</p></article>' : "";

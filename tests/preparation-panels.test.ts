@@ -619,3 +619,21 @@ test("the notebook keeps every record whole but opens only the newest; reference
   assert.match(html(), /data-panel-group="notebook:pairs"/, "extension disclosures are namespaced by panel");
   assert.ok(html().trimEnd().endsWith('<section class="panel-extension" data-section="tail"><p>Appended</p></section>'));
 });
+
+test("only the newest record opens across later finds and reloads; a record the player opened stays open", (t) => {
+  const { panel, get, html } = panelFixture(t);
+  const s = UI_SCENARIOS["opening-fabrication"]();
+  const open = () => [...html().matchAll(/data-panel-group="finding:(C\d\d)" open/g)].map((m) => m[1]);
+  panel.refresh("notebook", s); assert.deepEqual(open(), ["C01"]);
+  panel.refresh("inventory", s); discover(s, "C02");
+  panel.refresh("notebook", s); assert.deepEqual(open(), ["C02"], "the earlier automatic choice is not sticky");
+  panel.refresh("craft", s); discover(s, "C03");
+  panel.refresh("notebook", s); assert.deepEqual(open(), ["C03"]);
+  get("panel-content").groups.find((g) => g.dataset.panelGroup === "finding:C01")!.open = true;
+  panel.refresh("notebook", s); discover(s, "C04"); panel.refresh("notebook", s);
+  assert.deepEqual(open(), ["C01", "C04"], "explicit intent survives; the newest still opens");
+  get("panel-content").groups.find((g) => g.dataset.panelGroup === "finding:C04")!.open = false;
+  panel.refresh("notebook", s); assert.deepEqual(open(), ["C01"], "closing the newest is also intent");
+  panel.resetSession(); panel.refresh("notebook", structuredClone(s));
+  assert.deepEqual(open(), ["C04"], "a reload starts from the default: newest only");
+});
