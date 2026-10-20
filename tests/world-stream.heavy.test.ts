@@ -41,11 +41,17 @@ function chunkBytes(scene: Scene): number {
 }
 const chunkMeshes = (scene: Scene) => scene.meshes.filter(m => m.name.startsWith("chunk:"));
 
+/** A work clock: every read advances 0.01 ms, so each frame's construction
+ * budget is a fixed amount of work whatever the host load (these tests failed
+ * once under machine load with the wall clock). Streaming, budgets and
+ * settlement are asserted exactly as before. */
+function workClock(): () => number { let t = 0; return () => (t += 0.01); }
+
 test("the terrain streams in chunks: nearby ground first, the rest within budget, regions and chunks under one budget", () => sceneTest(scene => {
   const cel = createCelMaterial(scene), glass = createGlassMaterial(scene);
   // Today's refined terrain alone (the legacy pack): S2's composed regions
   // stream through the same path in regions-stream.heavy.test.ts.
-  const art = createRegionalArt(scene, cel, glass, { world: composeWorldArt([LEGACY_ART]) });
+  const art = createRegionalArt(scene, cel, glass, { world: composeWorldArt([LEGACY_ART]), now: workClock() });
   const state = protectedReadyState(350);
   const pod: Vec3 = { x: 0, y: 1.2, z: 22 };
   state.player.pose.position = { ...pod };
@@ -73,7 +79,7 @@ test("the terrain streams in chunks: nearby ground first, the rest within budget
 
 test("repeated region returns stabilize meshes, geometries and accounted bytes", () => sceneTest(scene => {
   const cel = createCelMaterial(scene), glass = createGlassMaterial(scene);
-  const art = createRegionalArt(scene, cel, glass);
+  const art = createRegionalArt(scene, cel, glass, { now: workClock() });
   const state = protectedReadyState(350);
   const stops: readonly Vec3[] = [{ x: 0, y: .18, z: 22 }, CANOPY_BASIN_ROUTE.labParking, { x: 178, y: -160, z: -208 },
     { x: 216, y: -166, z: -232 }, { x: 57, y: -10, z: -65 }];
@@ -96,14 +102,14 @@ test("ADVERSE: a budget smaller than the regions plus terrain degrades the far t
   const cel = createCelMaterial(scene), glass = createGlassMaterial(scene);
   const state = protectedReadyState(350);
   state.player.pose.position = { x: 0, y: 1.2, z: 22 };
-  const probe = createRegionalArt(scene, cel, glass);
+  const probe = createRegionalArt(scene, cel, glass, { now: workClock() });
   probe.update(state);
   const regions = probe.regionBytes;
   probe.dispose();
   // Room for the two detailed owners and 3.5 MiB of chunks: the 2.85 MB pod
   // chunk and its neighbours fit, the whole 5.4 MB route terrain does not.
   const budget = regions + 3.5 * MiB;
-  const art = createRegionalArt(scene, cel, glass, { budget: { cpuBytes: budget, gpuBytes: budget } });
+  const art = createRegionalArt(scene, cel, glass, { budget: { cpuBytes: budget, gpuBytes: budget }, now: workClock() });
   art.update(state);
   let s = art.stream(state.player.pose.position, { nearRadius: NEAR_WORLD })!;
   for (let f = 0; f < 4000 && !s.settled; f++) {
