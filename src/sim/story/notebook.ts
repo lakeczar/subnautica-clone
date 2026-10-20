@@ -3,9 +3,8 @@
  * preserves an earlier reading the player actually saw before later facts replaced it. */
 import { EVIDENCE, OPTIONAL_RECORD, REGIONS } from "../../content/registry.js";
 import type { EvidenceId } from "../../content/registry.js";
-import { RECORDS, STORY_EVIDENCE } from "../../content/story/evidence.js";
+import { JOURNALS, RECORDS, STORY_EVIDENCE } from "../../content/story/evidence.js";
 import type { DiscoveryId, JournalId, RecordId } from "../../content/story/evidence.js";
-import { JOURNALS } from "../../content/story/evidence.js";
 import { FACTS } from "../../content/story/facts.js";
 import type { FactId } from "../../content/story/facts.js";
 import { LEADS } from "../../content/story/leads.js";

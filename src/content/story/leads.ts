@@ -58,14 +58,14 @@ export const LEADS = {
     ],
   },
   L04: {
-    offeredBy: ["C04"],
+    offeredBy: ["C04", "C06"],
     targets: ["C05"],
     site: "basin_dormitory",
     region: "silt_basin",
     order: 30,
     text: "Beyond the lower Canopy crowns, fallen survey dishes mark Pale Basin. A dormitory lies on the first shelf.",
     hints: [
-      "The laboratory sheet dates the water change before the equipment failed. Its survey dishes looked down into the Basin.",
+      "The water records point down into Pale Basin, where people lived on the first shelf.",
       "Follow the lower crowns until fallen dishes rise out of pale sediment. The dormitory sits on the first shelf, facing inward.",
       "The first shelf is deeper than 150 m: a 350 m suit protects the exit and the Dart's hull reaches the shelf. Pack a meal and a charged cell.",
     ],
@@ -84,14 +84,14 @@ export const LEADS = {
     ],
   },
   L06: {
-    offeredBy: ["C06"],
+    offeredBy: ["C06", "C11"],
     targets: ["rift_station_ledger"],
     site: "rift_materials_station",
     region: "thermal_rift",
     order: 40,
     text: "Cool-flank research points southwest to Ember Rift: pale open fans on the shoulder, and a materials station on the split chimney.",
     hints: [
-      "The boundary station's research describes cool-flank ceramics, refined somewhere southwest of the Basin.",
+      "The Basin records point southwest, to where its ceramics and quota minerals were processed.",
       "Southwest of the Basin a split chimney rises from Ember Rift. The materials station sits on its pale, cool shoulder.",
       "Keep to the cool flank where fans still open; warm passages are optional. The ledger is on the processing floor, near 300 m: a 350 m hull and suit.",
     ],

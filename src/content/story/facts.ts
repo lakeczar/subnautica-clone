@@ -34,13 +34,13 @@ export const FACTS = {
   F12: { text: "Ren gave the authenticated order: “Close the return.”", sources: ["C09", "C12", "district_controller"], critical: true },
   F13: {
     text: "The outer lock is crushed. The hydraulic pipe can equalize the gallery but cannot carry a person. The gate needs independent power and air before the diversion is isolated.",
-    sources: ["C09", "C12", "gate_panel"],
+    sources: ["C09", "C12", "gate_panel", "district_controller"],
     critical: true,
   },
   F14: { text: "The annex ran a consented long-suspension protocol with very low vital thresholds.", sources: ["C10", "district_controller"], critical: false },
   F15: {
     text: "Extraction thinned the Basin's supporting ridge; the warnings were measured and written off.",
-    sources: ["C11", "rift_station_ledger"],
+    sources: ["C11", "rift_station_ledger", "district_controller"],
     critical: true,
   },
   F16: {

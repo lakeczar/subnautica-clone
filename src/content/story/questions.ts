@@ -29,7 +29,7 @@ export interface QuestionDefinition {
 export const QUESTIONS = {
   Q1: {
     title: "What happened to the pod?",
-    appears: [["F01"]],
+    appears: [["F01"], ["F08"], ["F18"]],
     hypotheses: {
       drift: {
         text: "An accident broke it loose and it drifted here.",

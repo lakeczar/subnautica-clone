@@ -1,9 +1,10 @@
-/** Placement proposals for the region author (S2), keyed by site ID and grouped
- * by region in SITES_BY_REGION. Depths are proposals inside WORLD_PROGRESSION's
- * envelopes. `depth` is where a craft must work; `exit` is the diver's exposure
- * (null on land or in a dry interior). Notes describe what must be physically
- * visible; story meaning stays in the story data. */
+/** Placement proposals for the region author (S2), keyed by site ID. Depths are
+ * proposals inside WORLD_PROGRESSION's envelopes. `depth` is where a craft must
+ * work; `exit` is the diver's exposure (null on land or in a dry interior). Notes
+ * describe what must be physically visible; story meaning stays in the story data.
+ * PLACEMENTS groups them by region. */
 import type { RegionId } from "../registry.js";
+import { DISCOVERY_IDS, siteOf } from "./evidence.js";
 import type { DiscoveryId, StorySiteId } from "./evidence.js";
 
 export interface StorySite {
@@ -132,10 +133,8 @@ export const STORY_SITES = {
   },
 } as const satisfies Record<StorySiteId, StorySite>;
 
-export const SITES_BY_REGION = Object.entries(STORY_SITES).reduce(
-  (by, [id, site]) => ((by[site.region] ??= []).push(id as StorySiteId), by),
-  {} as Partial<Record<RegionId, StorySiteId[]>>,
-);
-/** Story items held at each site, for S2's placement checklist. */
-export const holds = (site: StorySiteId, ids: readonly DiscoveryId[], siteOf: (id: DiscoveryId) => StorySiteId): DiscoveryId[] =>
-  ids.filter((id) => siteOf(id) === site);
+/** S2's placement checklist: each region's story sites and the items each holds. */
+export const PLACEMENTS = (Object.keys(STORY_SITES) as StorySiteId[]).reduce((by, site) => {
+  (by[STORY_SITES[site].region] ??= []).push({ site, holds: DISCOVERY_IDS.filter((id) => siteOf(id) === site) });
+  return by;
+}, {} as Partial<Record<RegionId, { site: StorySiteId; holds: DiscoveryId[] }[]>>);

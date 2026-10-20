@@ -125,7 +125,7 @@ export type WorksStep =
   | "w_power" | "w_air" | "w_isolate" | "w_equalize" | "w_wait" | "w_open"
   | "w_hall" | "w_food" | "w_route" | "w_begin";
 /** Practical hints for the works, three tiers each. `plans` replaces tiers 2–3
- * while the step's plans are unknown, naming where they survive. Steps after the
+ * while the step's plans are unknown, naming where they are kept. Steps after the
  * gate are offered only once the waking question is open. */
 export const WORKS_HINTS = {
   w_power: {
@@ -142,7 +142,7 @@ export const WORKS_HINTS = {
       "Fabricate a portable air staging assembly at a workshop bench or the carrier's bay.",
       "Two brine lattice, four flexible membrane and two silica glass. Couple it at the gate panel.",
     ],
-    plans: "Air staging plans survive in Meridian's transfer hall and medical annex, and on the gate panel itself.",
+    plans: "Air staging plans are kept in Meridian's transfer hall and medical annex, and on the gate panel itself.",
   },
   w_isolate: {
     tiers: [

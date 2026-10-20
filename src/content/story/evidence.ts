@@ -185,7 +185,7 @@ export const RECORDS = {
     media: ["record", "telemetry"],
     optional: false,
     observation:
-      "A maintenance controller, not a voice. Its recovery summary: storm load; slope collapse; mast lost; brine saddle breached; dense, oxygen-poor water in the extraction circuits; 20 dead in the first hour. 198 consolidated; six outside assignments did not return. Return gate closed by access engineer Ren at the documented threshold; service-pipe option rejected. 192 entered suspension. Day 2,678: exterior viable, repair specialist dispatched; regulator fault logged. 191 occupants within thresholds. Unknown: whether a later closure would have been survivable.",
+      "A maintenance controller, not a voice. Its recovery summary: extraction load on the supporting ridge, 14 fracture alarms in two years, each closed as an instrument fault; storm load; slope collapse; mast lost; brine saddle breached; dense, oxygen-poor water in the extraction circuits; 20 dead in the first hour. 198 consolidated; six outside assignments did not return. Return gate closed by access engineer Ren at the documented threshold; service-pipe option rejected. Outer lock crushed; hydraulic pipe not person-rated; isolating the diversion requires independent power and air. 192 entered suspension. Day 2,678: exterior viable, repair specialist dispatched; regulator fault logged. 191 occupants within thresholds. Unknown: whether a later closure would have been survivable.",
     provenance: "Meridian lower service window / district controller recovery summary",
     reading: "Everything the machines knew, in one list. It does not judge, and it says what it cannot know.",
   },
