@@ -125,3 +125,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **S1 R2 fixes done** at `84bbc86` (39 fast and 7 heavy tests, 10/10 mutations). A focused Sol R3 review is running. S2 should re-merge `84bbc86`.
 - **S7 R1 (Sol xhigh):** changes-needed (`review/s7` `4020f8b`). No save defect found. Blockers: nested heavy-lock deadlock (root fixed `heavy-check.sh` at `3225577`) and a fast-tier guard that misses indirect and dynamic Babylon imports. Back with the author.
 - **S4 R3 fix done** at `4696f7a`: grace is once per episode and persists across switching and save/load, with a reminder caption via `ecology.controlled`. A focused Sol R4 review is running.
+- **S8 R1 (Sol xhigh):** changes-needed, small (`review/s8` `a74f5e2`). The production build has no shader errors and warnings are clear at all sizes. P2: notebook records stay expanded after later finds; P3: Creel mount focus jumps to Return. Back with the author.
