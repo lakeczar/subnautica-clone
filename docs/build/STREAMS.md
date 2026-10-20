@@ -100,8 +100,8 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **S4 R1 (Sol xhigh):** changes-needed (`review/s4` `dab1858`). The escape test removed walls (68 HP > 60), strikes go through cover, heat/brine warnings are 4.28 s, and persistence IDs are unsafe. All accepted and back with the author.
 
 ## Concurrency queue (cap: 5 Opus builders)
-- **Running:** GPU author, S1 (R1 fixes), S2, S4 (R1 fixes), S3 (R1 fixes, resumed). B1 is done at `2cff245` (587/587 `npm run check`), and its Sol R1 review is running. S5's fixes are done at `476a044`; the coordinator reproduced 59/59 tests, and an R2 Sol review is running.
-- **Paused, in resume order:** S6 (R1 fixes). Each was told to commit and stop; resume with "continue".
+- **Running:** S1 (R1 fixes), S2, S4 (R1 fixes), S3 (R1 fixes), S6 (R1 fixes, resumed). The GPU fix is done at `785503c` (`qemu:commandline` plus a pre-shutdown `domxml-to-native` gate), with an R5 Sol review running. B1 is done at `2cff245` (587/587 `npm run check`), and its Sol R1 review is running. S5's fixes are done at `476a044`; the coordinator reproduced 59/59 tests, and an R2 Sol review is running.
+- **Paused:** none. Each was told to commit and stop; resume with "continue".
   - S4 paused at `27de0fb`: S4-03 mostly done and S4-04 half done; S4-01, S4-02 and S4-05 not started; tests to update.
   - S3 paused at `682bdd3`: S3-01 and S3-03 done but unrun; S3-02 (the Dart berth proposal) and the S3.md updates remain.
   - S6 paused at `ab59c89`: all five fixes are in source, but their tests, the lab re-measure and the doc updates remain.
