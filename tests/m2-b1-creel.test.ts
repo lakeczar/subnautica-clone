@@ -355,3 +355,31 @@ test("near but out of arm reach, the HUD helper names the host so the pilot turn
   creelOf(s).pose.yaw = 0; s.player.pose.yaw = 0;
   assert.equal(armTarget(s)?.sourceId, "basin_frame_ridge"); assert.equal(armNearby(s), null);
 });
+
+test("every new loss-capable B1 site has a complete Bobbin tow from the shallow bench, or a suit-reachable salvage collar", () => {
+  // Staging is the existing starter-accessible surface operator; Creel hulls of any rating.
+  const sites: [string, { x: number; y: number; z: number }][] = [
+    ["ridge frames", { x: 226, y: -165.5, z: -199.7 }], ["north salvage", { x: 160, y: -158.6, z: -197.5 }],
+    ["terrace frames", { x: 190, y: -193, z: -248 }], ["fracture floor", { x: 196, y: -256, z: -292 }],
+    ["outer-crown mooring", { x: 204, y: -140, z: -137 }], ["margin rib north", { x: 216, y: -122, z: -130 }],
+    ["margin rib south", { x: 230, y: -128, z: -178 }],
+  ];
+  for (const [name, at] of sites) {
+    const s = creelFirst(); parkCreel(s, at); disableVehicle(s, creelOf(s).id);
+    const tow = structuredClone(s); tow.player.pose.position = { x: 46, y: -0.5, z: -54 }; tow.player.mode = "swimming";
+    const towNo = recoveryCommand(tow, creelOf(tow).id, "tow", world);
+    if (towNo === null) {
+      let steps = 0;
+      while (tow.recovery.operation?.phase !== "ready") { assert.ok(!(updateRecovery(tow, world) as { error?: boolean } | null)?.error, name); assert.ok(++steps < 30000, name); }
+      assert.equal(recoveryCommand(tow, creelOf(tow).id, "tow", world), null, name);
+      while (tow.recovery.operation) { assert.ok(!(updateRecovery(tow, world) as { error?: boolean } | null)?.error, name); assert.ok(++steps < 60000, name); }
+      saveable(tow);
+      continue;
+    }
+    // No tow: the collar must be reachable by a 350 m suit with clearance, and salvage completes in place.
+    const local = structuredClone(s); local.player.pose.position = { x: at.x, y: at.y + 4.5, z: at.z + 2 }; local.player.mode = "swimming";
+    assert.ok(world.clearance(local.player.pose.position, { radius: 0.34, height: 0.95 }), `${name}: collar water clear`);
+    assert.equal(recoveryCommand(local, creelOf(local).id, "salvage", world), null, `${name}: ${towNo}`);
+    saveable(local);
+  }
+});
