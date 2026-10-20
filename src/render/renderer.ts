@@ -45,11 +45,14 @@ export const WORLD_BUDGET: Partial<ResidencyBudget> = {
 };
 /** Chunks this close to the viewer are drawn before a frame after a load or
  * a jump: the first playable frame always has ground under the player. */
-export const NEAR_WORLD = 48;
+export const NEAR_WORLD = 32;
 const JUMP = 64;
-/** Cap on synchronous catch-up per frame, and extra build time per frame
- * while no expedition is running (title, load). */
-const CATCH_UP_MS = 2500, MENU_BUILD_MS = 12;
+/** Cap on synchronous catch-up per frame; extra build time per frame while
+ * nothing is interactive (title, load, the opening), and in play while the
+ * visible range is still incomplete. */
+const CATCH_UP_MS = 2500, MENU_BUILD_MS = 12, PLAY_BUILD_MS = 4;
+/** Underwater fog hides chunks beyond about this distance. */
+const VISIBLE_WORLD = 200;
 
 /** Internal scene lifetime, also exercised with the real NullEngine factories.
  * Shared cel/glass stay scene-owned; every regional/actor handle owns its meshes.
@@ -326,8 +329,9 @@ export function createRenderer(
         // (title, loading) construction gets more of each frame.
         const jumped = !lastViewer || Vector3.Distance(lastViewer, camera.position) > JUMP;
         lastViewer = camera.position.clone();
-        const world = art.stream(camera.position, { ...(jumped ? { nearRadius: NEAR_WORLD } : {}),
-          ...(state ? {} : { extraMs: MENU_BUILD_MS }) });
+        const cinematic = !state || state.opening.phase < 4;
+        const extraMs = cinematic ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
+        const world = art.stream(camera.position, { ...(jumped ? { nearRadius: NEAR_WORLD } : {}), extraMs });
         cue.update(state ? overlay?.target ?? overlay?.preview ?? null : null, camera.position, !!overlay?.target);
         const interior = !!state && (inCanopyAir(state) || state.player.mode === "interior");
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
