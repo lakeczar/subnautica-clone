@@ -1,16 +1,14 @@
 import type { GeometryCache } from "./geometryCache.js";
-import { Color3 } from "@babylonjs/core/Maths/math.color.js";
-import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
-import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Scene } from "@babylonjs/core";
-import { fractureDepth, terrainHeight, WORLD_BOUNDS } from "../sim/world.js";
+import { terrainHeight, WORLD_BOUNDS } from "../sim/world.js";
 import { INTERACTION_HOSTS, renewable, SOURCES } from "../content/registry.js";
 import { BASIN_SOURCE_IDS } from "../content/routes.js";
 import { type RenderRegion } from "./regions.js";
 import { ArtBatch, seeded, type Point } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";
-import { createTerrainSurface } from "./terrainSurface.js";
+import { legacyTerrainWhole } from "./legacyTerrain.js";
+import { uploadMesh } from "./kit/loader.js";
 
 /** Broken service runners rest on the slope instead of bridging the pit.
  * Pale edge metal and small surviving tags also identify the empty work site. */
@@ -65,59 +63,12 @@ function westernGlassHost(b: ArtBatch, x: number, z: number): void {
   }
 }
 
-export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: RenderRegion | "terrain", cache?: GeometryCache): void {
+/** Regional environment art, or the complete environment (every region plus
+ * the whole route terrain as one mesh) when `region` is omitted. The renderer
+ * streams the terrain per chunk instead (`legacyTerrainFactory`). */
+export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: RenderRegion, cache?: GeometryCache): void {
   const batch = (name: string): ArtBatch => new ArtBatch(name, scene, cel, cache && { owner: cache, key: `environment:${region ?? "complete"}:${name}` });
-  if (!region || region === "terrain") {
-  const terrain = new Mesh("island.terrain", scene),
-    data = new VertexData();
-  const { positions, indices } = createTerrainSurface();
-  const normals: number[] = [], colors: number[] = [];
-  for (let i = 0; i < positions.length; i += 3) {
-    const px = positions[i]!, py = positions[i + 1]!, pz = positions[i + 2]!;
-    const dx =
-      (terrainHeight(px + 0.1, pz) - terrainHeight(px - 0.1, pz)) / 0.2;
-    const dz =
-      (terrainHeight(px, pz + 0.1) - terrainHeight(px, pz - 0.1)) / 0.2;
-    const length = Math.hypot(dx, 1, dz);
-    normals.push(-dx / length, 1 / length, -dz / length);
-    const patch = Math.sin(px * 0.2 + pz * 0.12) * Math.cos(pz * 0.16);
-    let hex: string =
-      py > 13
-        ? P.basalt
-        : py > 3.3
-          ? patch > 0.1
-            ? "#81966e"
-            : "#76947b"
-          : py > -1.2
-            ? P.shore
-            : patch > 0.44
-              ? "#789c94"
-              : P.sand;
-    if (Math.hypot(dx, dz) > 1.15) hex = py > 0 ? "#5c7f7e" : "#669894";
-    // Upper Canopy sediment is cooler and lower in value than reef sand.
-    // Blend on the same physical height field; no extra shelf or false floor.
-    const canopy = Math.max(0, Math.min(1, (px - 60) / 30)) * Math.max(0, Math.min(1, (-py - 35) / 40));
-    const c = Color3.Lerp(Color3.FromHexString(hex), Color3.FromHexString(patch > .3 ? "#4b807a" : "#2e616c"), canopy);
-    const basin = Math.max(0, Math.min(1, (-pz - 180) / 30)) * Math.max(0, Math.min(1, (px - 85) / 25));
-    // Two sediment lanes have different widths/values. They are a surface
-    // pattern on the real slope, not a current/visibility simulation.
-    const lane = Math.sin((px - 170) * .14 + pz * .08 + Math.sin(pz * .07) * 1.2);
-    const sediment = Color3.FromHexString(lane > .3 ? "#638d8b" : "#335e70");
-    // The boundary fracture darkens with its own extra depth: fresh, unsorted slope.
-    const fracture = Math.max(0, Math.min(1, fractureDepth(px, pz) / 30));
-    const color = Color3.Lerp(Color3.Lerp(c, sediment, basin), Color3.FromHexString("#203f52"), fracture * .8);
-    colors.push(color.r, color.g, color.b, 0); // Terrain-only relief in the shared cel pass.
-  }
-  data.positions = positions;
-  data.normals = normals;
-  data.colors = colors;
-  data.indices = indices;
-  data.applyToMesh(terrain);
-  terrain.material = cel;
-  terrain.isPickable = false;
-  terrain.freezeWorldMatrix();
-  if (region === "terrain") return;
-  }
+  if (!region) uploadMesh(legacyTerrainWhole(), "island.terrain", scene, cel);
 
   const stones = batch("reef.geology"),
     random = seeded(574);

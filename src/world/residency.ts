@@ -119,9 +119,10 @@ export interface ResidencyStats {
   /** Wanted chunks beyond the budget frontier (or not fitting the share left
    * by external owners): not drawn this frame. */
   readonly cut: number;
-  /** All admitted work is done and nothing is over budget: nothing changes
-   * until the viewer, the budget or the external share does. True in a
-   * stable degraded state (held/cut/refused); `isReady` is not. */
+  /** All admitted work is done, nothing is over budget and no retention
+   * eviction is pending: nothing changes until the viewer, the budget or the
+   * external share does. True in a stable degraded state (held/cut/refused);
+   * `isReady` is not. */
   readonly settled: boolean;
   /** Chunks whose measured coarse (or only) LOD exceeds the whole budget:
    * not rebuilt, not drawn. */
@@ -519,6 +520,10 @@ export function createResidency(options: {
         }
       }
       const bytes = accounted();
+      // Hidden units over the retained count that waited this frame are
+      // evicted next frame: until then the state is still changing.
+      let evictable = 0;
+      for (const u of units.values()) if (u.state === "hidden" && !protectedKeys.has(u.key)) evictable++;
       let building = 0, prepared = 0, uploading = 0, shown = 0, hiddenCount = 0;
       let gpuAllocatedBytes = 0, shownGpuBytes = 0, hiddenGpuBytes = 0;
       for (const u of units.values()) {
@@ -539,7 +544,7 @@ export function createResidency(options: {
         // Nothing in flight and nothing learned this frame: a build that
         // completed may still reveal room for chunks cut this frame.
         settled: fits(bytes) && building + prepared + uploading === 0 && pending === 0 && steps === 0 && uploads === 0 &&
-          totals.overBudgetDiscards === discardsBefore,
+          totals.overBudgetDiscards === discardsBefore && evictable <= budget.retainedUnits,
         buildMs, buildSteps: steps, maxStepMs, uploadMs, uploads, uploadedBytes, uploadOverrunBytes, pending,
         totals: { ...totals },
       };

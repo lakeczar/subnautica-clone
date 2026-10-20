@@ -170,3 +170,22 @@ test("a budget smaller than the view keeps the nearest chunks and discards hidde
   assert.equal(h.residency.units().filter(u => u.state === "hidden").length, 0);
   h.consistent();
 });
+
+test("REVIEW S1-06: settled waits for the retention eviction scheduled for the next frame", () => {
+  const chunk = { id: "solo", region: "refuge_reef", lod: { fine: 112, coarse: 400, hysteresis: 16 } };
+  const solo = { layout: { chunks: [chunk] }, chunksWithin: (p: Vec3) => (p.x < 400 ? [{ chunk, distance: 0 }] : []) };
+  const loader: ChunkLoader = {
+    *build() {
+      return { cpuBytes: 1024, gpuBytes: 1024, discard() {},
+        upload() { return { cpuBytes: 1024, gpuBytes: 1024, setVisible() {}, dispose() {} }; } };
+    },
+  };
+  const r = createResidency({ map: solo as never, loader, budget: { cpuBytes: 4096, gpuBytes: 4096, retainedUnits: 0 }, now: () => 0 });
+  r.update({ x: 0, y: 0, z: 0 }); r.update({ x: 0, y: 0, z: 0 });
+  const leave = r.update({ x: 500, y: 0, z: 0 });
+  assert.equal(leave.hidden, 1);
+  assert.equal(leave.settled, false, "a hidden unit over the retained count is still to be evicted");
+  const next = r.update({ x: 500, y: 0, z: 0 });
+  assert.deepEqual([next.hidden, next.cpuBytes, next.settled], [0, 0, true]);
+  r.dispose();
+});

@@ -16,7 +16,12 @@ import { createEcology } from "./ecology.js";
 import { createExpeditionActors, createExpeditionRegion, DART_SEAT } from "./expedition.js";
 import { CREEL_SEAT } from "../sim/fleet.js";
 import { createAtmosphere } from "./atmosphere.js";
-import { createRegionResidency, type RegionArt, type RenderRegion } from "./regions.js";
+import { createRegionResidency, REGION_OWNER_BYTES, RESIDENT_REGION_LIMIT, type RegionArt, type RenderRegion } from "./regions.js";
+import { composeWorldArt, type ComposedWorld } from "./worldArt.js";
+import { createKitLoader, TemplateLibrary } from "./kit/loader.js";
+import { defaultContext } from "./kit/factories.js";
+import { createResidency, type Residency, type ResidencyBudget, type ResidencyStats } from "../world/residency.js";
+import type { Vec3 } from "../sim/types.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Geometry } from "@babylonjs/core/Meshes/geometry.js";
@@ -33,19 +38,52 @@ export interface GameRenderer {
   dispose(): void;
 }
 
+/** Byte budget of all world art: chunk residency plus the legacy region
+ * owners, which are declared to it as external bytes each frame. */
+export const WORLD_BUDGET: Partial<ResidencyBudget> = {
+  cpuBytes: 256 * 1024 * 1024, gpuBytes: 256 * 1024 * 1024, buildMsPerFrame: 4,
+};
+/** Chunks this close to the viewer are drawn before a frame after a load or
+ * a jump: the first playable frame always has ground under the player. */
+export const NEAR_WORLD = 32;
+const JUMP = 64;
+/** Cap on synchronous catch-up per frame; extra build time per frame while
+ * nothing is interactive (title, load, the opening), and in play while the
+ * visible range is still incomplete. */
+const CATCH_UP_MS = 2500, MENU_BUILD_MS = 12, PLAY_BUILD_MS = 4;
+/** Underwater fog hides chunks beyond about this distance. */
+const VISIBLE_WORLD = 200;
+
 /** Internal scene lifetime, also exercised with the real NullEngine factories.
- * Shared cel/glass stay scene-owned; every regional/actor handle owns its meshes. */
-export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial): RegionArt & {
+ * Shared cel/glass stay scene-owned; every regional/actor handle owns its meshes.
+ * Legacy region owners follow `update(state)`; chunked world art (today's
+ * terrain, and any composed region pack) follows `stream(viewer)`. */
+export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, options: {
+  world?: ComposedWorld; budget?: Partial<ResidencyBudget>; now?: () => number;
+} = {}): RegionArt & {
   readonly active: readonly RenderRegion[];
   readonly retained: readonly RenderRegion[];
   prepare(): RenderRegion | null;
+  /** Advance chunk residency for `viewer`. `nearRadius`: first build (within
+   * a bounded time) until every wanted chunk that close is drawn. `extraMs`:
+   * spend up to this much more on construction this frame. */
+  stream(viewer: Readonly<Vec3>, options?: { nearRadius?: number; extraMs?: number }): ResidencyStats | null;
+  readonly residency: Residency;
+  /** Bytes held by the legacy region owners (live and retained). */
+  readonly regionBytes: number;
   readonly cacheStats: GeometryCache["stats"];
   readonly labelStats: LabelMaterials["stats"];
 } {
+  const now = options.now ?? (() => performance.now());
   const cache = new GeometryCache(), labels = new LabelMaterials(scene);
   const disposal = scene.onDisposeObservable.add(() => { cache.dispose(); labels.dispose(); });
   const initial = new Set(scene.meshes);
-  createEnvironment(scene, cel, "terrain");
+  const world = options.world ?? composeWorldArt();
+  const loader = createKitLoader({
+    scene, material: cel, templates: new TemplateLibrary(world.templates), factories: world.factories,
+    context: defaultContext(world.floor, 0.75, now, world.biomeAt),
+  });
+  const residency = createResidency({ map: world.map, loader, budget: { ...WORLD_BUDGET, ...options.budget }, now });
   const navigation = createNavigationSilhouettes(scene, cel);
   const regions = createRegionResidency(region => {
     const before = new Set(scene.meshes);
@@ -58,10 +96,12 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
       mesh.renderingGroupId = 1;
       mesh.metadata = { ...mesh.metadata, detailRegion: region };
     }
+    const bytes = meshes.reduce((n, m) => n + meshBytesOf(m as Mesh), 0);
     // Retention detaches meshes and geometries from the scene like an asset
     // container: nothing is evaluated or drawn, CPU/GPU buffers stay intact.
     let detached: Geometry[] | null = null;
     return {
+      bytes,
       update(state) { expedition.update(state); life.update(state ? state.tick / 60 : 0, state); },
       setQuality(quality) { life.setQuality(quality); },
       suspend() {
@@ -85,15 +125,17 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
         for (const mesh of meshes) if (!mesh.isDisposed()) mesh.dispose();
       },
     };
-  });
-  // Detached buffers are not rebuilt by the engine after context loss.
-  const lost = scene.getEngine().onContextLostObservable.add(() => regions.discardRetained());
+  }, RESIDENT_REGION_LIMIT, { maxBytes: REGION_OWNER_BYTES });
+  // Detached and hidden buffers are not rebuilt by the engine after context loss.
+  const lost = scene.getEngine().onContextLostObservable.add(() => { regions.discardRetained(); residency.discardHidden(); });
   const expedition = createExpeditionActors(scene, cel, glass, p => regions.contains(p), labels, cache);
   const fixed = scene.meshes.filter(m => !initial.has(m));
   let disposed = false;
   return {
     get active() { return regions.active; },
     get retained() { return regions.retained; },
+    get residency() { return residency; },
+    get regionBytes() { return regions.bytes; },
     prepare() { return disposed ? null : regions.prepare(); },
     get cacheStats() { return cache.stats; },
     get labelStats() { return labels.stats; },
@@ -101,17 +143,42 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
       if (disposed) return;
       regions.update(state); navigation.update(regions.active); expedition.update(state);
     },
+    stream(viewer, streaming = {}) {
+      if (disposed) return null;
+      const start = now();
+      // Legacy owners and chunks share one budget: chunks get what is left.
+      residency.setExternalBytes({ cpu: regions.bytes, gpu: regions.bytes });
+      let stats = residency.update(viewer);
+      const near = streaming.nearRadius;
+      while (near !== undefined && !stats.settled && !residency.isReady(near) && now() - start < CATCH_UP_MS)
+        stats = residency.update(viewer);
+      const extra = streaming.extraMs ?? 0;
+      while (extra > 0 && !stats.settled && now() - start < extra) stats = residency.update(viewer);
+      return stats;
+    },
     setQuality(quality) { regions.setQuality?.(quality); },
     dispose() {
       if (disposed) return;
       disposed = true;
-      regions.dispose(); expedition.dispose(); navigation.dispose();
+      regions.dispose(); residency.dispose(); expedition.dispose(); navigation.dispose();
       for (const mesh of fixed) if (!mesh.isDisposed()) mesh.dispose();
       cache.dispose(); labels.dispose();
       scene.onDisposeObservable.remove(disposal);
       scene.getEngine().onContextLostObservable.remove(lost);
     },
   };
+}
+
+/** Vertex and index bytes of a mesh's geometry, as the kit counts them. */
+function meshBytesOf(mesh: Mesh): number {
+  let bytes = 0;
+  for (const kind of mesh.getVerticesDataKinds()) {
+    const data = mesh.getVerticesData(kind, false, false);
+    if (data) bytes += Array.isArray(data) ? data.length * 4 : (data as Float32Array).byteLength;
+  }
+  const indices = mesh.getIndices(false, true);
+  if (indices) bytes += Array.isArray(indices) ? indices.length * 4 : (indices as Uint32Array).byteLength;
+  return bytes;
 }
 
 /** Availability after loss follows engine reconstruction AND scene readiness,
@@ -176,6 +243,7 @@ export function createRenderer(
     let disposed = false,
       available = true,
       generation = 0;
+    let lastViewer: Vector3 | null = null;
     let whenReady: (() => void) | null = null;
     const cancelReady = (): void => {
       if (whenReady) scene.onReadyObservable.removeCallback(whenReady);
@@ -256,6 +324,14 @@ export function createRenderer(
           camera.position.set(25, 13, 44);
           camera.setTarget(new Vector3(-1, -0.8, -20));
         }
+        // Chunks stream around the camera. After a load or a jump the nearby
+        // ground is built before this frame draws; with no expedition running
+        // (title, loading) construction gets more of each frame.
+        const jumped = !lastViewer || Vector3.Distance(lastViewer, camera.position) > JUMP;
+        lastViewer = camera.position.clone();
+        const cinematic = !state || state.opening.phase < 4;
+        const extraMs = cinematic ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
+        const world = art.stream(camera.position, { ...(jumped ? { nearRadius: NEAR_WORLD } : {}), extraMs });
         cue.update(state ? overlay?.target ?? overlay?.preview ?? null : null, camera.position, !!overlay?.target);
         const interior = !!state && (inCanopyAir(state) || state.player.mode === "interior");
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
@@ -275,7 +351,24 @@ export function createRenderer(
         canvas.dataset.materials = String(scene.materials.length);
         canvas.dataset.geometries = String(scene.geometries.length);
         canvas.dataset.textures = String(scene.textures.length);
-        canvas.dataset.ready = scene.isReady() ? "true" : "false";
+        // Ready: the scene's effects are compiled AND chunk residency has
+        // settled (nothing left to build, upload or evict for this view, which
+        // includes a stable degraded state under byte pressure). The app keeps
+        // presenting paused screens until then, so the world streams in behind
+        // the title. `worldReady` is the stricter nearby completeness.
+        const sceneReady = scene.isReady();
+        canvas.dataset.sceneReady = String(sceneReady);
+        canvas.dataset.worldReady = String(art.residency.isReady(NEAR_WORLD));
+        canvas.dataset.worldSettled = String(!!world?.settled);
+        canvas.dataset.ready = sceneReady && world?.settled ? "true" : "false";
+        if (world) {
+          canvas.dataset.residentCpu = String(world.cpuBytes);
+          canvas.dataset.residentGpu = String(world.gpuBytes);
+          canvas.dataset.residentUnits = String(world.shown + world.hidden);
+          canvas.dataset.pending = String(world.pending + world.building + world.prepared + world.uploading);
+          canvas.dataset.refused = String(world.refused.length);
+          canvas.dataset.regionBytes = String(art.regionBytes);
+        }
         canvas.dataset.frames = String(++presented);
       },
       prepare() {

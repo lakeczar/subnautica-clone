@@ -152,6 +152,15 @@ export function writeMatrix(out: Float32Array, offset: number, x: number, y: num
  * triangles with vertex remapping, so no single upload part exceeds a
  * per-frame upload cap. A mesh already within the cap is returned as is. */
 export function splitMesh(m: MeshRecipe, maxBytes: number): MeshRecipe[] {
+  const steps = splitMeshSteps(m, maxBytes);
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return r.value;
+  }
+}
+/** `splitMesh` in bounded steps: yields whenever `due()` is true. */
+export function* splitMeshSteps(m: MeshRecipe, maxBytes: number,
+  due: () => boolean = () => false): Generator<void, MeshRecipe[]> {
   if (meshBytes(m) <= maxBytes) return [m];
   const parts: MeshRecipe[] = [];
   const VERTEX = 40, INDEX = 4;
@@ -177,6 +186,7 @@ export function splitMesh(m: MeshRecipe, maxBytes: number): MeshRecipe[] {
       }
       idx.push(k);
     }
+    if ((t & 1023) === 0 && due()) yield;
   }
   flush();
   return parts;

@@ -1,12 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HULL_COLLIDERS } from "../src/content/registry.js";
-import { createWorldQueries, SOLIDS } from "../src/sim/world.js";
-import { createIndexedWorldQueries } from "../src/world/queries.js";
+import { createWorldQueries, SOLIDS, surfaceHeight, type Solid } from "../src/sim/world.js";
 import type { Capsule, Vec3 } from "../src/sim/types.js";
 
-const full = createWorldQueries();
-const indexed = createIndexedWorldQueries();
+const full = createWorldQueries(SOLIDS, surfaceHeight, { broadPhase: false });
+const indexed = createWorldQueries();
 const random = (seed: number) => () => ((seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296);
 const shapes: Capsule[] = [
   { radius: 0.34, height: 0.95 }, { radius: 0, height: 0 }, { radius: 0.34, height: 1.7, bottom: -0.2 },
@@ -47,4 +46,25 @@ test("long and degenerate requests keep the full scan's answers", () => {
   assert.equal(indexed.lineOfSight({ x: -70, y: -5, z: 60 }, { x: 240, y: -160, z: -300 }),
     full.lineOfSight({ x: -70, y: -5, z: 60 }, { x: 240, y: -160, z: -300 }));
   assert.ok(SOLIDS.length > 40, "the comparison covers a real roster");
+});
+
+test("the production roster really uses the broad phase: a far solid is never visited", () => {
+  // A trap solid whose box is read only by a full scan. The indexed query at
+  // the pod must not touch it; the forced full scan must.
+  let reads = 0;
+  const far = { id: "far.trap", min: { x: 240, y: -170, z: -318 }, max: { x: 241, y: -169, z: -317 } };
+  const trap: Solid = { id: far.id, get min() { reads++; return far.min; }, get max() { reads++; return far.max; } };
+  const roster = [...SOLIDS, trap];
+  const swimmer = shapes[0]!, p = { x: 0, y: -2, z: 12 };
+  createWorldQueries(roster); // the index reads every box once
+  reads = 0;
+  const indexedQueries = createWorldQueries(roster);
+  indexedQueries.moveCapsule(p, { x: 0.5, y: 0, z: 0 }, swimmer);
+  indexedQueries.clearance(p, swimmer);
+  indexedQueries.supportHeight(p.x, p.z, p.y);
+  indexedQueries.lineOfSight(p, { x: 4, y: -2, z: 12 });
+  assert.equal(reads, 0, "nearby queries never read the far solid");
+  createWorldQueries(roster, surfaceHeight, { broadPhase: false }).clearance(p, swimmer);
+  assert.ok(reads > 0, "the full scan does");
+  assert.ok(createWorldQueries([trap]).clearance(p, swimmer), "a short roster still scans");
 });
