@@ -39,19 +39,19 @@ This is WORLD-EVOLUTION's W2 Option A hub: a spur of reef-capped pinnacles from 
 
 Three small arch caves on the spur and one medium shaft through the crown. The shaft is the fastest safe way from the hub down to Basin depth.
 
-**Small caves (3)**: diver-only, 10–25 m of water.
+**Small caves (3)**: diver-only; every water extent 25 m or less. Footprint is the replacement rock the cave owns; water is length × width × height of what it carves.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Network | Layout | Contents | Links |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `hub_apron_hollow` | -20, -26.3, -348 | -32..-8 × -360..-340 | 22–32 | — | A 14 m hollow at the apron's south lip, the first arch of the spur. | Glimmer ceiling | — |
-| `hub_step_arch` | 80, -40, -400 ⟂ | 68..92 × -412..-388 | 36–48 | — | A 16 m arch tunnel through the first step's shoulder. | Shelter on the spur crossing | `hub_glimmer_crack` |
-| `hub_glimmer_crack` | 190, -50, -470 ⟂ | 178..202 × -482..-458 | 44–60 | — | An 18 m crack through the second step, ceiling thick with glimmers. | Glimmer mats leaning toward the crown side | `hub_step_arch` |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Exits | Network | Layout | Contents | Links |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `hub_apron_hollow` | -20, -26.3, -348 | -32..-8 × -360..-340 | 14 × 8 × 10 | 22–32 | apron mouth | — | A 14 m hollow at the apron's south lip, the first arch of the spur. | Glimmer ceiling | — |
+| `hub_step_arch` | 80, -40, -400 ⟂ | 68..92 × -412..-388 | 16 × 5 × 12 | 36–48 | north mouth, south mouth | — | A 16 m arch tunnel through the first step's shoulder. | Shelter on the spur crossing | `hub_glimmer_crack` |
+| `hub_glimmer_crack` | 190, -50, -470 ⟂ | 178..202 × -482..-458 | 18 × 3 × 16 | 44–60 | north mouth, crown-side mouth | — | An 18 m crack through the second step, ceiling thick with glimmers. | Glimmer mats leaning toward the crown side | `hub_step_arch` |
 
-**Medium caves (1)**: 30–80 m, a loop with two or more exits; the main hall takes the craft listed.
+**Medium caves (1)**: water 30–80 m, 2–5 named chambers, a through-loop from one exit to another; the main hall takes the craft listed.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Hall admits | Layout | Contents |
-| --- | --- | --- | --- | --- | --- | --- |
-| `hub_crown_shaft` | 330, -48, -560 ⟂ | 300..360 × -590..-530 | 48–140 | small | A wide shaft from the crown top down through the pinnacle, a Dart-wide spiral, opening onto the north flank at 140 m above the anchorage. | The fastest safe way from the hub to Basin depth |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Hall admits | Chambers | Loop | Exits | Layout | Contents |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `hub_crown_shaft` | 330, -48, -560 ⟂ | 300..360 × -590..-530 | 40 × 30 × 72 | 48–120 | small | crown bowl, spiral shaft, diver chimney, flank chamber | crown mouth → crown bowl → spiral shaft → flank chamber → flank mouth | crown mouth, flank mouth | Through the crown: the crown mouth into a crown bowl, a Dart-wide spiral shaft (with a parallel diver chimney) down to a flank chamber, and a flank mouth at 120 m over the anchorage. | The fastest safe way from the hub to Basin depth |
 
 ## 4. Creatures
 

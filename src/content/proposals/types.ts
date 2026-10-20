@@ -65,12 +65,23 @@ export interface CaveProposal {
   /** Main mouth datum, on the exterior floor. */
   readonly mouth: Point;
   readonly anchor: Anchor;
-  /** Proposed replacement footprint (W1 kit). Small caves fit 10–25 m of water; medium 30–80 m. */
+  /** Proposed replacement-rock footprint (W1 kit): the columns the cave owns, collar
+   * included. Separate from the water it carves (`water`). */
   readonly footprint: Rect;
   /** Shallowest and deepest water inside, metres below the surface (positive). */
   readonly depth: readonly [top: number, bottom: number];
   /** Largest profile the main hall admits. Small caves are always `diver`. */
   readonly admits: CraftProfileId;
+  /** Extent of the carved water, metres: length along the main passage, width
+   * across it, height = the depth span. Small: every extent 25 m or less, the
+   * longest 10–25 m. Medium: every extent 80 m or less, the longest 30–80 m. */
+  readonly water: { readonly length: number; readonly width: number; readonly height: number };
+  /** Named openings to open water. Small caves have one or more; medium caves two or more. */
+  readonly exits: readonly string[];
+  /** Medium caves: 2–5 named chambers. */
+  readonly chambers?: readonly string[];
+  /** Medium caves: the through-route, from one exit via two or more chambers to another exit. */
+  readonly loop?: { readonly from: string; readonly via: readonly string[]; readonly to: string };
   /** Small caves joined by crawlways share a network ID. */
   readonly network?: string;
   readonly layout: string;
@@ -189,6 +200,9 @@ export interface ResourceProposal {
   readonly renewable: boolean;
   /** Cave or cave-biome ID when the source is underground. */
   readonly inCave?: string;
+  /** A ledge to cut into existing terrain (S2 pad convention): the test checks the
+   * floor within `radius` spans the datum, so the pad is cuttable. */
+  readonly pad?: { readonly radius: number };
   /** What a player learns to read (never colour alone). */
   readonly condition: string;
   readonly near: readonly Ref[];
@@ -238,6 +252,8 @@ export interface SideRewardProposal {
   readonly at: Point;
   readonly anchor: Anchor;
   readonly reward: string;
+  /** Caches: the finite materials inside (counted as samples by the tier rule). */
+  readonly contents?: Readonly<Partial<Record<MaterialId | "tagged_frame" | "meal", number>>>;
   readonly near: readonly Ref[];
 }
 

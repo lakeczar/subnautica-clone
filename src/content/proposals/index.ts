@@ -33,8 +33,8 @@ export const DOCS: { readonly areas: Readonly<Record<AreaId, string>>; readonly 
 };
 
 export { CAVE_BIOMES } from "./caveBiomes.js";
-export { REQUIRED_CLUES, REQUIRED_SOURCES, TIER_STEPS } from "./progression.js";
-export type { RequiredClue, RequiredSource, TierStep } from "./progression.js";
+export { RECIPE_SNAPSHOTS, REQUIRED_CLUES, REQUIRED_SOURCES, SOURCE_CHANGES, STORY_SITE_PLACEMENTS, TIER_STEPS, TRANSITIONS } from "./progression.js";
+export type { RequiredClue, RequiredSource, SourceChange, TierStep, Transition } from "./progression.js";
 export { SPECIES, SPECIES_IDS } from "./species.js";
 export { ELSEWHERE_PLANS, NEW_PLANS, PROPOSED_PLAN_IDS, REJECTED_MATERIALS, SEEDS } from "./blueprints.js";
 export type * from "./types.js";

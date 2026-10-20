@@ -32,7 +32,7 @@ Every row has a stable ID. Status is `existing` (already in game data, named in 
 
 | Area | Region file | Main path min | With optional min | Anchors | Clusters | Small caves | Medium caves | Creatures | Lost sites |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Hearth Reef | [hearth-reef.md](regions/hearth-reef.md) | 35 | 75 | 3 | 10 | 7 | 2 | 4 | 1 |
+| Hearth Reef | [hearth-reef.md](regions/hearth-reef.md) | 35 | 75 | 3 | 10 | 8 | 2 | 4 | 1 |
 | Splitspine Isles | [splitspine-isles.md](regions/splitspine-isles.md) | 70 | 110 | 3 | 12 | 7 | 2 | 4 | 2 |
 | Lantern Canopy | [lantern-canopy.md](regions/lantern-canopy.md) | 75 | 120 | 3 | 12 | 6 | 2 | 6 | 2 |
 | Hub spur | [hub-spur.md](regions/hub-spur.md) | 20 | 40 | 1 | 6 | 3 | 1 | 4 | 1 |
@@ -43,15 +43,17 @@ Every row has a stable ID. Status is `existing` (already in game data, named in 
 
 **Totals:** about **525 minutes (8.8 h) on the main path alone** and **815 minutes (13.6 h) with everything optional**. A blind first-timer can't tell optional from required, so expect roughly the main path plus half the rest: **about 670 minutes (11.2 h)**. That clears the 10-hour floor through content, not padding.
 
-These are design estimates, not measurements. The bot catches structural slog, and the owner's playtests decide feel. If the owner reads the floor as main-path-only, the gap is about 75 minutes. The cheapest fix is to promote two optional beats to the main path's leads, such as the Drop Cathedral and the Canopy rootways; adding errands is not.
+These are hypotheses, not measurements. The floor is measured on a blind first playthrough (coordinator, R1), and the estimate assumes about half the optional content is visited. Calibrate travel, gathering and discovery gaps with the composed play timeline before claiming the floor is met. The bot catches structural slog; the owner's playtests decide feel.
 
 ## Decisions this bible makes
 
 - **Main-path cave biomes.** GAME-DIRECTION names three cave biomes as main path. The bible reads that as: the leads route the player through them, and they hold main-path beats (the first decode, the Basin's stop, the late Rift–Divide crossing). **None of them is the only source of a required material, plan or clue.** The adverse-case guarantee is therefore stronger than the brief asks: it covers every cave, not only the optional ones. A player who never enters a cave can still finish both routes.
 - **No new materials.** The eight shared materials, seeds, plans and caches carry every reward. Rejected candidates and why are listed below. Higher tiers use more of the common materials plus the frontier one, as GAME-DIRECTION requires.
-- **Rare early samples are finite and optional.** For example: ceramic and core in the Isles undercroft's dead vent, lattice in the Canopy's salt-sweat hollow, ceramic and core salvage in the Basin vaults, and crust on the reef's old intake. Each is enough to scan, so the player meets the material before its use is known, but never enough to skip a tier.
+- **The tier rule is checked per transition, with no tolerance.** Every craft and suit transition needs a frontier material whose shallowest source anywhere (exterior, cave or cache; tastes excepted) is at or beyond the previous access tier's limit, with an exterior patch reachable before the transition. That puts each frontier exactly at the edge of the current rating: frames at 150 m, core at 350 m, lattice at 450 m. See [the tier rule](#the-tier-rule-per-transition).
+- **Rare early samples are tastes, not bypasses.** Summed across the whole world, the samples and caches of every rare material stay below what any transition needs. That means one ceramic lamina in the Isles undercroft, two ceramic liners in the Basin vaults, one lattice crystal in the Canopy rootways and one on each Divide flushed ledge, plus crust on the reef's old intake (crust is common). There are no core samples at all. Each is enough to scan, so the player meets the material before its use is known.
 - **One threat per region at most,** and none in the Reef, Isles, Basin or hub. Knot eels are a den animal (they warn, never chase), counted apart from the Canopy's roaming hunter.
 - **Every region has its own cave resident** with a real cue: glimmers point to the nearest mouth, clappers warn of the surge, weavers make resin, wakeglow lights your trail, crawlers warn of heat, skimmers mark dense water, and tenders trace live lines.
+- **Crawlway links are proposals, not proof.** A link between two small caves' separate footprints is a design intent. When it is lifted, the builder must author who owns the connecting rock (one footprint, or an explicit union), and a rescue or turning route for the diver through it. A static link does not prove an underground connection.
 - **Lost sites never gate the story.** Every decode is `story: false`. Lost sites give plans for convenience, safety and reach (SYS-1/SYS-2 shapes), map reveals and logs.
 
 ## Cave biomes
@@ -144,27 +146,25 @@ Rejected new materials:
 
 ## Cross-region progression
 
-How materials, tiers, upgrades, outposts and decodes pull the player outward on both routes. **Tier rule (GAME-DIRECTION):** each new craft or depth tier needs at least one material found at or beyond the previous tier's limit.
+How materials, tiers, upgrades, outposts and decodes pull the player outward on both routes.
 
-| Step | Reach | Areas | Builds | Frontier material | Independent route | Carrier route | Pulls outward |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| **A place to breathe** | `starter` | Hearth Reef, Splitspine Isles | `pod_repair`, `essential_tools`, `suit_150`, `salvage_buoy`, `reserve_cells`, `bobbin_kit` | — | Short dives from the pod; the workshop landing on foot. | Identical: both routes share the opening. | Crowns visible east of Splitspine; the C03 lead names the Canopy laboratory. |
-| **First craft and the decoder** | `early` | Splitspine Isles, Hearth Reef, Lantern Canopy | `restore_workshop`, `dart_base`, `creel_base`, `creel_cargo_rack`, `creel_cabin` | `conductive_crust` at 130 m (previous limit 150 m) | Dart first for reach, or Creel first for cargo. A basic outpost at the Canopy's upper edge is the stopgap stop. | Same; the carrier is not yet available. | C04 reinforcement plans need crust and resin at the 150 m suit's frontier; the dishes mark the Basin edge. |
-| **Reinforced to 350 m** | `reinforced` | Lantern Canopy, Pale Basin, Hub spur | `suit_350`, `dart_350`, `creel_350`, `restore_canopy_stop`, `dart_acoustic_trim`, `strip_frame` | `tagged_frame` at 262 m (previous limit 240 m) | Restore the outer-crown mooring and the spur crown station; leapfrog a standard outpost to the Basin anchorage terrace. | Hearthline (400 m) from the five early materials plus tagged frames, at the yard berth. Moor at the Canopy (160 m) and the Basin (240 m). | C06 points to pale open fans on the Rift shoulder; the spur crown overlooks the Rift head. |
-| **Ceramic and core: 450 m service** | `service` | Ember Rift, Pale Basin | `creel_450`, `hush_450`, `service_power_assembly` | `thermal_core` at 290 m (previous limit 240 m) | The materials station is the fixed stop; a thermal outpost on the north shoulder charges at the vents. | Moor on the cool flank (300 m) and send the Creel or Dart to the shoulders. | The Divide's shimmer and the upper dock (lead from C06/station ledger); the seam's Rift mouth sits beside the flank gate. |
-| **Lattice and the deep package** | `deep` | Mirror Divide, Ember Rift | `creel_800`, `mantle`, `service_air_assembly`, `hearthline_550` | `brine_lattice` at 375 m (previous limit 350 m) | The upper service dock is the forward stop; outposts leapfrog onto the Divide lee shelf. | Moor in the Divide lee (390 m); the 550 refit opens the district shelf at 520 m. | C07 and the gateworks point past the ridge to the Meridian terraces. |
-| **Meridian: repairs from what you know** | `deep` | Meridian | `restore_upper_hall`, `restore_food_module`, `pod_buffer` | — | The staging office is the last stop; an advanced outpost on the second terrace shortens deep sorties. | The upgraded carrier stages on the district shelf and launches the deep craft. | The investigation itself; the escarpment ledge returns toward the Canopy. |
+| Step | Reach | Areas | Builds | Independent route | Carrier route | Pulls outward |
+| --- | --- | --- | --- | --- | --- | --- |
+| **A place to breathe** | `starter` | Hearth Reef, Splitspine Isles | `pod_repair`, `essential_tools`, `suit_150`, `salvage_buoy`, `reserve_cells`, `bobbin_kit` | Short dives from the pod; the workshop landing on foot. | Identical: both routes share the opening. | Crowns visible east of Splitspine; the C03 lead names the Canopy laboratory. |
+| **First craft and the decoder** | `early` | Splitspine Isles, Hearth Reef, Lantern Canopy | `restore_workshop`, `dart_base`, `creel_base`, `creel_cargo_rack`, `creel_cabin` | Dart first for reach, or Creel first for cargo. A basic outpost at the Canopy's upper edge is the stopgap stop. | Same; the carrier is not yet available. | C04 reinforcement plans need crust and resin at the 150 m suit's frontier; the dishes mark the Basin edge. |
+| **Reinforced to 350 m** | `reinforced` | Lantern Canopy, Pale Basin, Hub spur | `suit_350`, `dart_350`, `creel_350`, `restore_canopy_stop`, `dart_acoustic_trim`, `strip_frame` | Restore the outer-crown mooring and the spur crown station; leapfrog a standard outpost to the Basin anchorage terrace. | Gather frames and the five early materials for the Hearthline; it is laid down once the 350 m core ledge is reached (next step). | C06 points to pale open fans on the Rift shoulder; the spur crown overlooks the Rift head. |
+| **Ceramic and core: 450 m service** | `service` | Ember Rift, Pale Basin | `suit_450`, `creel_450`, `hush_450`, `hearthline_keel`, `hearthline_base`, `service_power_assembly` | The materials station is the fixed stop; a thermal outpost on the north shoulder charges at the vents. | Lay down the Hearthline (400 m) at the yard berth with core from the 350 m ledges; moor at the Canopy (160 m), Basin (240 m) and cool flank (300 m). | The Divide's shimmer and the upper dock (lead from C06/station ledger); the seam's Rift mouth sits beside the flank gate. |
+| **Lattice and the deep package** | `deep` | Mirror Divide, Ember Rift | `suit_800`, `creel_800`, `mantle_base`, `service_air_assembly`, `hearthline_550` | The upper service dock is the forward stop; outposts leapfrog onto the Divide lee shelf. | Moor in the Divide lee (390 m); the 550 refit opens the district shelf at 520 m. | C07 and the gateworks point past the ridge to the Meridian terraces. |
+| **Meridian: repairs from what you know** | `deep` | Meridian | `restore_upper_hall`, `restore_food_module`, `pod_buffer` | The staging office is the last stop; an advanced outpost on the second terrace shortens deep sorties. | The upgraded carrier stages on the district shelf and launches the deep craft. | The investigation itself; the escarpment ledge returns toward the Canopy. |
 
 | Step | Optional upgrades (SYS-1) | Outposts and systems (SYS-2) | Lost-site decodes that pay off | Tier rule |
 | --- | --- | --- | --- | --- |
-| **A place to breathe** | `cell_bank_1`, `flare_launcher`, `emergency_ballast` | — | `reef_pumphouse_log` | Baseline tier: there is no previous limit to beat. |
-| **First craft and the decoder** | `plating_alloy`, `drive_tuning_1`, `floodlights_1`, `dart_overdrive` | `bp_field_outpost`, `bp_decoder`, `bp_survey_station`, `bp_cultivation` | `isles_tide_store_fragment`, `isles_strain_gauge_log` | The Creel needs crust found at 90–130 m, at the edge of the 150 m suit. The Dart uses only shore materials: it is the first craft, and the bible proposes treating it as the baseline exception (owner decision). |
-| **Reinforced to 350 m** | `silent_running`, `dart_range_tagger`, `dart_wide_sonar`, `creel_cutting_arm`, `creel_grapple` | `bp_outpost_standard` | `canopy_basket_log`, `canopy_roots_store_archive`, `basin_pumphead_log`, `hub_beacon_archive` | Tagged frames lie at 171–262 m: beyond the Dart's 180 m and, for the fracture spill, the Creel's 240 m starting ratings. |
-| **Ceramic and core: 450 m service** | `plating_ceramic`, `hull_heat_lining`, `thermal_exchanger`, `cell_bank_2`, `floodlights_2`, `drive_tuning_2` | `bp_outpost_advanced`, `bp_outpost_thermal_tap` | `rift_borehole_log`, `basin_vault_archive` | First ceramic at 258/266 m and core at 289/290 m: beyond every starting craft rating, inside the 350 m configuration. |
-| **Lattice and the deep package** | `hull_brine_seals`, `mantle_thermal_shroud`, `mantle_hull_air_line`, `mantle_drone_bay` | — | `divide_mixing_log` | First lattice at 366/375 m on flushed ledges: beyond the 350 m configuration that reaches them with a 450 m refit. |
+| **A place to breathe** | `cell_bank_1`, `flare_launcher`, `emergency_ballast` | — | `reef_pumphouse_log` | Baseline: the 150 m suit is built from shore stock before any craft (see TRANSITIONS). |
+| **First craft and the decoder** | `plating_alloy`, `drive_tuning_1`, `floodlights_1`, `dart_overdrive` | `bp_field_outpost`, `bp_decoder`, `bp_survey_station`, `bp_cultivation` | `isles_tide_store_fragment`, `isles_strain_gauge_log` | The Dart is the baseline first craft (coordinator). The Creel, Hush and Spindle each need one tagged frame from the 150 m rim stack, at the early tier's limit. |
+| **Reinforced to 350 m** | `silent_running`, `dart_range_tagger`, `dart_wide_sonar`, `creel_cutting_arm`, `creel_grapple` | `bp_outpost_standard` | `canopy_basket_log`, `canopy_roots_store_archive`, `basin_pumphead_log`, `hub_beacon_archive` | Every 350 m transition needs a tagged frame; the shallowest frames are the 150 m rim stack, at the early tier's limit. No frame is shallower. |
+| **Ceramic and core: 450 m service** | `plating_ceramic`, `hull_heat_lining`, `thermal_exchanger`, `cell_bank_2`, `floodlights_2`, `drive_tuning_2` | `bp_outpost_advanced`, `bp_outpost_thermal_tap` | `rift_borehole_log`, `basin_vault_archive` | Workable core is first found at the 350 m lower ledges, at the reinforced tier's limit; the 290 m shoulders show inclusions too thin to work. Ceramic (258 m) is the step's other rare material, not its frontier. |
+| **Lattice and the deep package** | `hull_brine_seals`, `mantle_thermal_shroud`, `mantle_hull_air_line`, `mantle_drone_bay` | — | `divide_mixing_log` | Workable lattice is first found on the 450 m east-flank ledges, at the service tier's limit (and beyond the carrier's 400 m). The 366/375 m ledges hold one rinsed crystal each: a taste. |
 | **Meridian: repairs from what you know** | — | — | `meridian_allotment_log` | No new material (canon and integration contract): repairs use alloy, glass, membrane, resin, crust, core and lattice. |
-
-**Where the rule needs an owner call:** the Dart, the first craft, is built from shore materials only. The bible proposes treating the first craft as the baseline tier. Adding a frontier material to the Dart would force a long unsupported swim to the Canopy before any craft exists. That is a pacing loss for no gain, but changing it is the owner's decision.
 
 **How each route pulls outward:**
 - **Independent:**
@@ -177,13 +177,74 @@ How materials, tiers, upgrades, outposts and decodes pull the player outward on 
 
   Outposts leapfrog between restored stops.
 - **Carrier:**
-  - the yard berth;
+  - the Hearthline is laid down at the yard berth once the 350 m core ledges are reached;
   - moorings at the Canopy (160 m), Basin (240 m), Rift (300 m) and Divide (390 m);
   - the district shelf (520 m) after the 550 refit.
 
   Small craft and divers do the cave work from each mooring.
 
 Both routes reach every system. The cave biomes sit within one short sortie of a carrier mooring or a stop.
+
+## The tier rule, per transition
+
+**GAME-DIRECTION:** each new craft or depth tier needs at least one material found at or beyond the previous tier's limit. The coordinator's reading (R1) is the preceding configuration's limit, taken from `ACCESS_TIERS`:
+
+| Access tier | Limit |
+| --- | --- |
+| `starter` | 60 m |
+| `early` | 150 m |
+| `reinforced` | 350 m |
+| `service` | 450 m |
+| `deep` | 800 m |
+| `carrier` | 400 m |
+| `carrier_upgraded` | 550 m |
+
+For each transition:
+- **Previous tier:** a suit or hull refit uses the tier below the one it produces. A new craft uses the tier it is built from.
+- **Reach:** the tier held while building, from the recipe's prerequisites.
+- **Frontier:** the frontier material's shallowest source anywhere (samples and caches excepted) is at depth ≥ the previous limit. At least one exterior patch is at depth ≤ reach. Where reach equals the previous tier, that means exactly at the limit: a push to the edge of the rating you hold.
+- **Samples:** summed samples of every rare material in the cost stay below what the transition needs.
+
+`tests/content-proposals.test.ts` checks this with no tolerance. It uses the registry's live `RECIPES` and a checked snapshot of S9 (`a67c76a`) and SYS-1 (`40f60fb`) costs, compared with the composed files whenever they are present.
+
+| Transition | Recipe owner | Produces | Previous tier (limit) | Reach while building | Frontier material × needed | First found at | Proposed recipe change | Exception |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `suit_150` | registry | `early` | `starter` (60 m) | `starter` (60 m) | — | — | — | pending-owner: Built from shore stock before any craft exists, like the first craft. Nothing is workable below 60 m without it. Proposed as part of the same baseline; needs explicit confirmation. |
+| `dart_base` | registry | `early` | `early` (150 m) | `early` (150 m) | — | — | — | coordinator-2026-10-20: The Dart is the first craft and the tier rule's baseline. |
+| `creel_base` | registry | `early` | `early` (150 m) | `early` (150 m) | `tagged_frame` × 1 | canopy_rim_frames (150 m) | +1 `tagged_frame`, -8 `structural_alloy` | — |
+| `hush_base` | S9 | `early` | `early` (150 m) | `early` (150 m) | `tagged_frame` × 1 | canopy_rim_frames (150 m) | +1 `tagged_frame`, -4 `structural_alloy` | — |
+| `spindle_base` | S9 | `early` | `early` (150 m) | `early` (150 m) | `tagged_frame` × 1 | canopy_rim_frames (150 m) | +1 `tagged_frame`, -4 `structural_alloy` | — |
+| `suit_350` | registry | `reinforced` | `early` (150 m) | `early` (150 m) | `tagged_frame` × 1 | canopy_rim_frames (150 m) | +1 `tagged_frame`, -2 `structural_alloy` | — |
+| `dart_350` | registry | `reinforced` | `early` (150 m) | `early` (150 m) | `tagged_frame` × 1 | canopy_rim_frames (150 m) | — | — |
+| `creel_350` | registry | `reinforced` | `early` (150 m) | `early` (150 m) | `tagged_frame` × 2 | canopy_rim_frames (150 m) | — | — |
+| `hush_350` | SYS-1 | `reinforced` | `early` (150 m) | `early` (150 m) | `tagged_frame` × 1 | canopy_rim_frames (150 m) | — | — |
+| `suit_450` | S9 | `service` | `reinforced` (350 m) | `reinforced` (350 m) | `thermal_core` × 1 | rift_core_lower_north, rift_core_lower_west (350 m) | +1 `thermal_core` | — |
+| `creel_450` | S9 | `service` | `reinforced` (350 m) | `reinforced` (350 m) | `thermal_core` × 2 | rift_core_lower_north, rift_core_lower_west (350 m) | — | — |
+| `hush_450` | SYS-1 | `service` | `reinforced` (350 m) | `reinforced` (350 m) | `thermal_core` × 1 | rift_core_lower_north, rift_core_lower_west (350 m) | +1 `thermal_core` | — |
+| `hearthline` (hearthline_keel + hearthline_base) | S9 | `carrier` | `reinforced` (350 m) | `reinforced` (350 m) | `thermal_core` × 2 | rift_core_lower_north, rift_core_lower_west (350 m) | +2 `thermal_core` | — |
+| `suit_800` | S9 | `deep` | `service` (450 m) | `service` (450 m) | `brine_lattice` × 4 | divide_lattice_flank_north, divide_lattice_flank_south (450 m) | — | — |
+| `creel_800` | S9 | `deep` | `service` (450 m) | `service` (450 m) | `brine_lattice` × 5 | divide_lattice_flank_north, divide_lattice_flank_south (450 m) | — | — |
+| `mantle_base` | S9 | `deep` | `service` (450 m) | `service` (450 m) | `brine_lattice` × 5 | divide_lattice_flank_north, divide_lattice_flank_south (450 m) | — | — |
+| `hearthline_550` | S9 | `carrier_upgraded` | `carrier` (400 m) | `service` (450 m) | `brine_lattice` × 6 | divide_lattice_flank_north, divide_lattice_flank_south (450 m) | — | — |
+
+**Existing sources this changes** (S2 sites / S9 sources; coordinator):
+
+| Existing source | Change | Stock after | Why |
+| --- | --- | --- | --- |
+| `rift_core_shoulder_north` | scan-only | 0 | Core inclusions show on the 290 m shoulder but are too thin to work; the seam thickens down the wall to the 350 m lower ledge. |
+| `rift_core_shoulder_west` | scan-only | 0 | As the north shoulder: a teaching site; workable core at the west lower ledge (350 m). |
+| `divide_lattice_ledge_west` | sample | 1 | One rinsed crystal: the first sight of lattice; thick fans grow on the 450 m east flank. |
+| `divide_lattice_ledge_east` | sample | 1 | As the west ledge. |
+
+**Every sample in the world:** `reef_pumphouse_crust` 2 `conductive_crust`; `isles_undercroft_kiln_ceramic` 1 `pressure_ceramic`; `canopy_rootways_lattice` 1 `brine_lattice`; `basin_vault_liner_ceramic` 2 `pressure_ceramic`; plus one rinsed crystal on each Divide flushed ledge (above). Cache contents are declared per region and hold no ceramic, core or lattice.
+
+**What it costs the current plan:**
+- Workable core moves from 290 m to 350 m, and lattice from 366/375 m to 450 m on the Divide's east flank (north of the brine field). Both mean a push to the edge of the current rating, which is the owner's intent.
+- The Hearthline needs core, so the carrier comes after the first Rift trip instead of before it. It is still mid-campaign.
+- The Creel, Hush, Spindle and 350 m suit each need one tagged frame, taken from the 150 m rim stack before deeper frames are in reach. Each swaps out alloy, so their bulk barely changes.
+- These are recipe and source proposals for their owners: the registry, S9 and SYS-1 recipes, and S2/S9 sources. The P1 playthrough route and the economy scripts (SYS-1 `upgrade-economy.mjs`, C3's campaign economy) must be rerun once composed.
+- SYS-1's economy treats a frontier as first found within (previous reach, this reach]. Under the moved sources it still passes, but frames at exactly 150 m become "common base" in its arithmetic; SYS-1 should check its tier-line results at composition.
+- **Exceptions:** the Dart is the baseline (coordinator, R1). The 150 m suit is built from shore stock before any craft and has nothing reachable at 60 m. It is proposed as the same baseline and **needs explicit confirmation**.
 
 ## Adverse case: skip every optional cave and lost site
 
@@ -196,10 +257,10 @@ A player who never enters a cave or decodes a lost site can still finish both ro
 | `flex_membrane` | pod_repair | source `reef_ribbon_catch_north`, source `reef_ribbon_catch_south`, source `canopy_ribbon_margin_north`, source `canopy_ribbon_margin_south` |
 | `conductive_crust` | creel_base / suit_350 | source `canopy_grounding_fins_upper`, source `canopy_grounding_fins_lower`, source `basin_survey_fins_east`, source `basin_survey_fins_west`, site `canopy_east_fins`, site `basin_dish_fins` |
 | `buoyant_resin` | creel_base / suit_350 | source `canopy_resin_lee_upper`, source `canopy_resin_lee_lower`, source `island_resin_cove_east`, source `island_resin_cove_west`, site `isles_stack_resin_cove`, site `isles_headland_resin_cove`, site `canopy_east_resin_lee` |
-| `tagged_frame` | creel_350 / restore_canopy_stop / Hearthline | source `basin_frame_ridge`, source `basin_frame_terrace`, source `basin_frame_fracture` |
-| `pressure_ceramic` | creel_450 / plating | site `rift_ceramic_lip_north`, site `rift_ceramic_lip_south` |
-| `thermal_core` | service_power_assembly | site `rift_core_shoulder_north`, site `rift_core_shoulder_west` |
-| `brine_lattice` | creel_800 / service_air_assembly | site `divide_lattice_ledge_west`, site `divide_lattice_ledge_east` |
+| `tagged_frame` | creel_base / suit_350 | `canopy_rim_frames`, source `basin_frame_ridge`, source `basin_frame_terrace`, source `basin_frame_fracture` |
+| `pressure_ceramic` | suit_450 / creel_450 | site `rift_ceramic_lip_north`, site `rift_ceramic_lip_south` |
+| `thermal_core` | suit_450 / creel_450 / hearthline_keel | `rift_core_lower_north`, `rift_core_lower_west` |
+| `brine_lattice` | suit_800 / creel_800 / service_air_assembly | `divide_lattice_flank_north`, `divide_lattice_flank_south` |
 | `meal` | food meter | source `reef_edible_school_north`, source `reef_edible_school_south`, source `island_shore_crop_east`, source `island_shore_crop_west`, site `isles_headland_crops` |
 
 Every clue sits at an existing story site outside all caves. C15 is optional by canon.
@@ -252,10 +313,10 @@ Plans: every required recipe's plan comes from evidence and technical records al
 | **SYS-2** (outposts, decoder, cultivation, survey, chart, journal) | `LostSiteProposal` / `DecodeProposal` (their shape), `SEEDS`, and the SYS-2-owned `NEW_PLANS`. Also the cycle IDs for the journal. |
 | **Coordinator** | Registry changes: new sources, sites and seeds; `strip_frame` at the Basin pump hall; any composed stock. One schema change at integration (additive content needs no bump). |
 
-## Open questions
+## Decisions received (R1) and what is still open
 
-1. **Owner:** treat the first craft as the tier rule's baseline, or add a frontier material to the Dart?
-2. **Owner:** does the 10-hour floor mean main path alone (about 8.8 h here) or a blind first playthrough (about 11.2 h)?
-3. **Coordinator / W2:** is a 240 m hub pinnacle affordable? The fallback is the existing south apron (services kept, centrality lost).
-4. **Coordinator / SYS-2:** keep `bp_outpost_standard` and `bp_outpost_advanced` on main-path records as well as in the lost-site decodes, so the independent route never depends on an optional decode.
-5. **Story structure:** the turbine hall (C12) and Meridian's interiors have no world placement yet. The bible only marks their exterior approaches.
+- **Pacing:** measured on a blind first playthrough; the estimates here stay hypotheses until calibrated with the timeline.
+- **Tier-rule baseline:** the Dart, the first craft. **Still open:** confirm that the 150 m suit shares that baseline (see the tier rule).
+- **Outpost-kit plans:** main-path copies are required; SYS-2 is handling them.
+- **Hub crown versus apron:** decided later with W2.
+- **Still open, for owners:** the recipe deltas (registry, S9, SYS-1) and source changes (S2/S9) in [the tier rule](#the-tier-rule-per-transition). The turbine hall (C12) and Meridian's interiors still have no world placement; the bible marks only their exterior approaches.

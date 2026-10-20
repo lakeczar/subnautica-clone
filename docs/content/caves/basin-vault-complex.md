@@ -16,7 +16,7 @@ The main-path mid cave biome under the wreck ridge. It is half natural seam and 
 | ID | Zone | Centre (x, y, z) | Depth m | Light | Life | Resources | Note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `basin_ridge_vaults.north_gallery` | North gallery | 800, -280, -470 | 268–292 | A grey glow from the north mouth, then nothing. | Wakeglow drift: your own wake lights the way back. | Crust on unsilted grounding fins. | Half-natural, half-cut: the extraction works followed a sediment-cemented seam. |
-| `basin_ridge_vaults.pump_hall` | Pump hall | 790, -290, -540 | 276–306 | Dark until restored; then the stop's work lamps. | Scavengers den in the frame racks. | Liner ceramic ×4 and a heater core ×1 (frontier samples). | Restorable service stop with a frame press (strips tagged frames on site). |
+| `basin_ridge_vaults.pump_hall` | Pump hall | 790, -290, -540 | 276–306 | Dark until restored; then the stop's work lamps. | Scavengers den in the frame racks. | Two fired ceramic liners (a taste). | Restorable service stop with a frame press (strips tagged frames on site). |
 | `basin_ridge_vaults.instrument_vault` | Instrument vault | 805, -300, -600 | 288–312 | Black; one sealed door with a tag light still blinking. | None inside; wakeglow in the corridor. | Vault archive (decodable). | The sealed instrument vault: the archive decode reveals the Rift approach. |
 | `basin_ridge_vaults.settling_tanks` | Settling tanks | 830, -315, -650 | 300–330 | Faint: the south mouth's silt glow. | Silt combs on the tank rims. | Bulk loose alloy in the tank racks. | Shelter from the plume lane that passes just south. |
 | `basin_ridge_vaults.east_sluice` | East sluice | 880, -325, -570 | 312–338 | Blue-black open water through a sluice gate. | Scavengers at the gate. | None. | Exit onto the east flank above the pale floor. |
@@ -39,7 +39,7 @@ Back-entrance small caves: `basin_burrow_warren`.
 
 ## Resources
 
-- Pressure ceramic ×4 and thermal core ×1 (frontier samples)
+- Pressure ceramic ×2 (a taste)
 - Vault crust
 - Loose tank-rack alloy
 

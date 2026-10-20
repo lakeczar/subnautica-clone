@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { BLUEPRINTS, FUTURE_BLUEPRINTS, MATERIALS, PLACES, SOURCES, TECH_RECORDS } from "../src/content/registry.js";
+import { BLUEPRINTS, FUTURE_BLUEPRINTS, MATERIALS, PLACES, RECIPES, SOURCES, TECH_RECORDS } from "../src/content/registry.js";
+import type { CostKind } from "../src/content/registry.js";
+import { ACCESS_TIERS, CRAFT_PROFILES } from "../src/content/regions/passages.js";
 import { CAVE_SOURCES } from "../src/content/regions/caves.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
 import { SITES } from "../src/content/regions/sites.js";
@@ -11,7 +13,8 @@ import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { STORY_SITES } from "../src/content/story/sites.js";
 import { VISTA_SETS } from "../src/content/vistas.js";
-import { AREAS, CAVE_BIOMES, DOCS, NEW_PLANS, PROPOSED_PLAN_IDS, REQUIRED_CLUES, REQUIRED_SOURCES, SEEDS, SPECIES, TIER_STEPS } from "../src/content/proposals/index.js";
+import { AREAS, CAVE_BIOMES, DOCS, NEW_PLANS, PROPOSED_PLAN_IDS, RECIPE_SNAPSHOTS, REQUIRED_CLUES, REQUIRED_SOURCES, SEEDS, SOURCE_CHANGES, SPECIES,
+  STORY_SITE_PLACEMENTS, TIER_STEPS, TRANSITIONS } from "../src/content/proposals/index.js";
 import type { AreaId, Point, Ref } from "../src/content/proposals/index.js";
 import type { Rect } from "../src/world/types.js";
 
@@ -29,12 +32,19 @@ const proposalIds = [
 const proposalSet = new Set(proposalIds);
 const caveIds = new Set([...caves.map(c => c.id), ...CAVE_BIOMES.map(b => b.id), ...CAVE_SOURCES.map(c => c.id)]);
 
-const positionOf = (r: Ref): { x: number; z: number } | null => {
+/** World position of a reference, y included where it is known. Story sites go
+ * through STORY_SITE_PLACEMENTS; unplaced ones (story structure) return null. */
+const positionOf = (r: Ref): { x: number; y: number; z: number } | null => {
   switch (r.kind) {
-    case "site": { const s = SITES.find(s => s.id === r.id); return s ? s.at : null; }
+    case "site": {
+      const s = SITES.find(s => s.id === r.id);
+      return s ? { x: s.at.x, y: typeof s.at.y === "number" ? s.at.y : worldFloor(s.at.x, s.at.z) + (s.lift ?? 0), z: s.at.z } : null;
+    }
     case "source": { const s = (SOURCES as Record<string, { position: Point }>)[r.id]; return s ? s.position : null; }
     case "place": { const s = (PLACES as Record<string, { position: Point }>)[r.id]; return s ? s.position : null; }
     case "tech_record": { const s = (TECH_RECORDS as Record<string, { position: Point }>)[r.id]; return s ? s.position : null; }
+    case "story_site": { const p = STORY_SITE_PLACEMENTS[r.id]; return p ? positionOf(p) : null; }
+    case "proposal": { const x = [...resources, ...landmarks, ...lost, ...rewards].find(x => x.id === r.id); return x ? x.at : null; }
     default: return null;
   }
 };
@@ -103,8 +113,6 @@ test("items, seeds, species and plans are known; new plans do not collide with t
   for (const step of TIER_STEPS) {
     for (const bp of step.outposts) assert.ok(registry.has(bp) || PROPOSED_PLAN_IDS.includes(bp), `${step.id}: unknown plan ${bp}`);
     for (const d of step.decodes) assert.ok(decodes.some(x => x.id === d), `${step.id}: unknown decode ${d}`);
-    if (step.frontier) assert.ok(step.frontier.depth >= step.frontier.previousLimit - 30,
-      `${step.id}: frontier ${step.frontier.item} at ${step.frontier.depth} m is not near or beyond ${step.frontier.previousLimit} m`);
   }
   for (const d of decodes) assert.equal(d.story, false, `${d.id}: lost-site decodes never gate the story`);
 });
@@ -163,7 +171,13 @@ test("cave biomes: 150–300 m, 3–5 zones, front and back entrances, buried zo
     }
     const buried = b.zones.filter(z => z.depth[0] >= -worldFloor(z.centre.x, z.centre.z) + 6);
     assert.ok(buried.length >= 2, `${b.id}: at least two zones lie under 6 m of rock`);
-    for (const e of b.entrances) assert.ok(inRect(D, e.at.x, e.at.z, 12), `${e.id}: entrance far outside the domain`);
+    for (const e of b.entrances) {
+      // The admitted craft's whole envelope at the entrance datum lies inside the carve domain.
+      const prof = CRAFT_PROFILES[e.admits];
+      assert.ok(inRect(D, e.at.x, e.at.z, -prof.radius), `${e.id}: a ${e.admits} at the entrance leaves the domain horizontally`);
+      assert.ok(e.at.y + prof.bottom >= b.domain.min.y && e.at.y + prof.height <= b.domain.max.y,
+        `${e.id}: a ${e.admits} at y ${e.at.y} (height ${prof.height}) is outside the domain's y ${b.domain.min.y}..${b.domain.max.y}`);
+    }
     assert.ok(caves.some(c => c.backEntranceTo === b.id), `${b.id}: no small cave links to its back entrance`);
   }
 });
@@ -217,12 +231,17 @@ test("adverse case: every required material and clue has an exterior or main-pat
       assert.ok(at, `${req.item}: ${r.id} has no position`);
       const pt = { x: at!.x, y: yOf(r), z: at!.z };
       for (const v of [...columns, ...buried()]) assert.ok(!inside(v, pt), `${req.item}: ${r.id} lies inside a cave`);
-      const item = r.kind === "source" ? (SOURCES as Record<string, { item: string }>)[r.id]!.item : SITES.find(s => s.id === r.id)!.material;
+      const item = r.kind === "source" ? (SOURCES as Record<string, { item: string }>)[r.id]!.item
+        : r.kind === "proposal" ? resources.find(x => x.id === r.id)!.item : SITES.find(s => s.id === r.id)!.material;
+      assert.ok(!SOURCE_CHANGES.some(ch => ch.ref.id === r.id), `${req.item}: ${r.id} is reduced to a taste or scan-only`);
       assert.equal(item, req.item, `${r.id} does not supply ${req.item}`);
     }
   }
   for (const m of Object.keys(MATERIALS)) assert.ok(REQUIRED_SOURCES.some(r => r.item === m), `${m} missing from the ledger`);
   assert.deepEqual(REQUIRED_CLUES.map(c => c.id), Array.from({ length: 15 }, (_, i) => `C${String(i + 1).padStart(2, "0")}`));
+  for (const c of REQUIRED_CLUES) if (c.site.kind === "story_site")
+    assert.ok(Object.hasOwn(STORY_SITE_PLACEMENTS, c.site.id), `${c.id}: ${c.site.id} needs a placement or an explicit null`);
+  for (const id of Object.keys(STORY_SITES)) assert.ok(Object.hasOwn(STORY_SITE_PLACEMENTS, id), `story site ${id} missing from STORY_SITE_PLACEMENTS`);
   for (const c of REQUIRED_CLUES) {
     const at = positionOf(c.site);
     if (at) for (const v of [...columns, ...buried("optional")]) assert.ok(!inside(v, { x: at.x, y: yOf(c.site), z: at.z }), `${c.id} lies inside an optional cave`);
@@ -240,6 +259,113 @@ test("cave-interior resources and lost sites lie inside their cave", () => {
     assert.ok(inRect(f, r.at.x, r.at.z, 1), `${r.id}: outside ${r.inCave}`);
     assert.equal(r.anchor, "reshape", `${r.id}: an underground point is not on today's floor`);
   }
+});
+
+test("caves: water extent and topology fit the size classes (GAME-DIRECTION caves)", () => {
+  for (const c of caves) {
+    const { length, width, height } = c.water, span = c.depth[1] - c.depth[0];
+    const f = c.footprint, fw = f.maxX - f.minX, fd = f.maxZ - f.minZ;
+    assert.equal(height, span, `${c.id}: water height ${height} is not its depth span ${span}`);
+    assert.ok(length >= width && length <= Math.max(fw, fd) && width <= Math.min(fw, fd), `${c.id}: water ${length}×${width} does not fit its ${fw}×${fd} footprint`);
+    const longest = Math.max(length, width, height);
+    if (c.size === "small") {
+      assert.ok(longest >= 10 && longest <= 25, `${c.id}: small cave's longest water extent ${longest} m`);
+      assert.ok(c.exits.length >= 1 && !c.chambers && !c.loop, `${c.id}: a small cave has exits and no chamber plan`);
+    } else {
+      assert.ok(longest >= 30 && longest <= 80, `${c.id}: medium cave's longest water extent ${longest} m`);
+      const ch = c.chambers ?? [], loop = c.loop;
+      assert.ok(ch.length >= 2 && ch.length <= 5, `${c.id}: ${ch.length} chambers`);
+      assert.ok(c.exits.length >= 2, `${c.id}: needs two or more exits`);
+      assert.ok(loop && loop.from !== loop.to && c.exits.includes(loop.from) && c.exits.includes(loop.to), `${c.id}: the loop must run exit to exit`);
+      assert.ok(loop!.via.length >= 2 && loop!.via.every(v => ch.includes(v)), `${c.id}: the loop passes two or more named chambers`);
+    }
+  }
+});
+
+// Tier rule (CB-01). Costs: registry RECIPES live, S9/SYS-1 from the checked snapshot.
+type Cost = Partial<Record<CostKind, number>>;
+const rawCost = (id: string): Cost => (Object.hasOwn(RECIPES, id) ? (RECIPES as Record<string, { cost: Cost }>)[id]!.cost : RECIPE_SNAPSHOTS.costs[id])!;
+const COST_KINDS = new Set<string>([...Object.keys(MATERIALS), "tagged_frame"]);
+interface WorldSource { id: string; item: string; depth: number; units: number; cave: boolean; sample: boolean; exterior: boolean }
+function worldSources(): WorldSource[] {
+  const changes = new Map(SOURCE_CHANGES.map(c => [c.ref.id, c]));
+  const inAnyCave = (x: number, y: number, z: number) => caves.some(c => inRect(c.footprint, x, z)) || CAVE_SOURCES.some(c => inRect(c.footprint, x, z))
+    || CAVE_BIOMES.some(b => inRect(domainRect(b.domain), x, z) && y >= b.domain.min.y && y <= b.domain.max.y);
+  const out: WorldSource[] = [];
+  const add = (id: string, item: string, at: { x: number; y: number; z: number }, units: number, cave?: boolean) => {
+    if (!COST_KINDS.has(item) || out.some(s => s.id === id)) return;
+    const ch = changes.get(id), u = ch ? ch.stock : units;
+    if (u <= 0) return;
+    const inCave = cave ?? inAnyCave(at.x, at.y, at.z);
+    out.push({ id, item, depth: -at.y, units: u, cave: inCave, sample: ch?.role === "sample", exterior: !inCave });
+  };
+  for (const [id, s] of Object.entries(SOURCES)) add(id, s.item, s.position, s.stock + s.reserve);
+  for (const s of SITES) if (s.role === "source" && s.material && s.stock) add(s.id, s.material, positionOf({ kind: "site", id: s.id })!, s.stock[0] + s.stock[2]);
+  for (const r of resources) {
+    if (r.kind === "seed") continue;
+    const sample = r.kind === "frontier_sample";
+    if (!COST_KINDS.has(r.item)) continue;
+    out.push({ id: r.id, item: r.item, depth: -r.at.y, units: r.stock[0] + r.stock[2], cave: !!r.inCave, sample, exterior: !r.inCave });
+  }
+  for (const w of rewards) for (const [item, n] of Object.entries(w.contents ?? {}))
+    if (COST_KINDS.has(item) && n) out.push({ id: `${w.id}:${item}`, item, depth: -w.at.y, units: n, cave: false, sample: true, exterior: true });
+  return out;
+}
+
+test("tier rule: every craft and suit transition needs a frontier material at or beyond the previous tier's limit, with no tolerance", t => {
+  const world = worldSources();
+  const sampleUnits = (item: string) => world.filter(s => s.sample && s.item === item).reduce((n, s) => n + s.units, 0);
+  const common = new Set([...COST_KINDS].filter(k => world.some(s => s.item === k && !s.sample && s.exterior && s.depth <= ACCESS_TIERS.early.depth)));
+  const ladder = Object.keys(ACCESS_TIERS);
+  for (const tr of TRANSITIONS) {
+    const cost: Cost = {};
+    for (const r of tr.recipes) {
+      const c = rawCost(r);
+      assert.ok(c, `${tr.id}: no cost known for ${r}`);
+      for (const [k, v] of Object.entries(c)) cost[k as CostKind] = (cost[k as CostKind] ?? 0) + v!;
+    }
+    for (const [k, v] of Object.entries(tr.delta)) cost[k as CostKind] = (cost[k as CostKind] ?? 0) + v!;
+    for (const [k, v] of Object.entries(cost)) assert.ok(v! >= 0, `${tr.id}: delta leaves ${k} at ${v}`);
+    assert.ok(ladder.includes(tr.previous) && ladder.includes(tr.reach), `${tr.id}: unknown access tier`);
+    const limit = ACCESS_TIERS[tr.previous].depth, reach = ACCESS_TIERS[tr.reach].depth;
+    assert.ok(reach >= limit, `${tr.id}: reach ${reach} is shallower than the limit ${limit}`);
+    // Samples never pay a transition's rare cost, in any rare material.
+    for (const [k, v] of Object.entries(cost)) if (!common.has(k) && v)
+      assert.ok(sampleUnits(k) < v, `${tr.id}: ${sampleUnits(k)} sampled ${k} across the world would pay its ${v}`);
+    if (tr.baseline) { t.diagnostic(`${tr.id}: baseline exception (${tr.baseline.decision})`); continue; }
+    const m = tr.frontier;
+    assert.ok(m && (cost[m] ?? 0) >= 1, `${tr.id}: its cost carries no frontier material`);
+    const regular = world.filter(s => s.item === m && !s.sample);
+    const shallowest = Math.min(...regular.map(s => s.depth));
+    assert.ok(shallowest >= limit, `${tr.id}: ${m} is found at ${shallowest} m (${regular.find(s => s.depth === shallowest)?.id}), shallower than the ${tr.previous} limit ${limit} m`);
+    const reachable = regular.filter(s => s.exterior && s.depth <= reach);
+    assert.ok(reachable.length >= 1, `${tr.id}: no exterior ${m} at ${limit}–${reach} m`);
+    assert.ok(reachable.some(s => s.units >= cost[m]!), `${tr.id}: no single reachable ${m} patch holds ${cost[m]}`);
+  }
+  assert.deepEqual(TRANSITIONS.filter(x => x.baseline).map(x => x.id).sort(), ["dart_base", "suit_150"], "only the agreed baseline is exempt");
+});
+
+test("recipe snapshots match the composed S9 and SYS-1 files when present", async t => {
+  const tryLoad = async (rel: string) => existsSync(new URL(rel, import.meta.url)) ? await import(new URL(rel, import.meta.url).href) : null;
+  const s9 = await tryLoad("../src/content/campaign/recipes.js") as { CAMPAIGN_RECIPES: Record<string, { cost: Cost }> } | null;
+  const sys1 = await tryLoad("../src/content/upgrades/catalogue.js") as { UPGRADES: Record<string, { cost: Cost }> } | null;
+  if (!s9 && !sys1) t.diagnostic("S9 and SYS-1 are not composed on this branch yet; snapshot comparison deferred");
+  for (const [id, cost] of Object.entries(RECIPE_SNAPSHOTS.costs)) {
+    const live = s9?.CAMPAIGN_RECIPES[id]?.cost ?? sys1?.UPGRADES[id]?.cost;
+    if (live) assert.deepEqual(live, cost, `${id}: snapshot differs from the composed recipe`);
+  }
+});
+
+test("pads and caches: cut ledges are cuttable, caches declare their contents", () => {
+  for (const r of resources) if (r.pad) {
+    let lo = Infinity, hi = -Infinity;
+    for (let a = 0; a < 16; a++) for (const k of [0.5, 1]) {
+      const f = worldFloor(r.at.x + Math.cos(a * Math.PI / 8) * r.pad.radius * k, r.at.z + Math.sin(a * Math.PI / 8) * r.pad.radius * k);
+      lo = Math.min(lo, f); hi = Math.max(hi, f);
+    }
+    assert.ok(lo <= r.at.y && r.at.y <= hi, `${r.id}: floor ${lo.toFixed(1)}..${hi.toFixed(1)} within its pad does not span ${r.at.y}`);
+  }
+  for (const w of rewards) if (w.kind === "cache") assert.ok(w.contents, `${w.id}: a cache must declare its contents`);
 });
 
 // Spoiler guard for owner-facing text: data and docs/content stay twist-free.

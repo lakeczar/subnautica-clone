@@ -42,22 +42,22 @@ Coordinates are metres (x east, y up with water at 0, z north). ⟂ marks a poin
 
 Basin caves are silt-buried vaults: half natural, half cut, with square doorways, soft floors and still water. Wakeglow drift is the region's cave rule: your own wake glows behind you for a minute, so the way back is lit. The **ridge-south** network (the burrow warren) is the vaults' back entrance, and the **west-rim** network joins the rim pipes to the rim cut toward the Rift.
 
-**Small caves (5)**: diver-only, 10–25 m of water.
+**Small caves (5)**: diver-only; every water extent 25 m or less. Footprint is the replacement rock the cave owns; water is length × width × height of what it carves.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Network | Layout | Contents | Links |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `basin_culvert_north` | 410, -268.9, -495 | 398..422 × -507..-483 | 262–274 | — | A buried 20 m intake culvert near the north dish; square, silted floor, grounding fins on its walls. | Crust on unsilted culvert fins | — |
-| `basin_burrow_warren` | 800, -296, -690 | 788..812 × -702..-678 | 290–304 | ridge_south | Scavenger burrows widened into a 20 m crawl; it breaks into the ridge vaults' settling tanks. | Scavenger den (they back away) | `basin_ridge_vaults.burrow_entry` **back entrance → `basin_ridge_vaults`** |
-| `basin_buried_hut` | 560, -381.7, -770 | 548..572 × -782..-758 | 376–382 | — | A survey hut swallowed to its roofline; the door is a slot you swim down into a 10 m room. | A survey lens spare (survey range +30% for one station) | — |
-| `basin_fracture_pocket` | 300, -212.4, -365 | 288..312 × -377..-353 | 206–218 | — | A 14 m pocket opened by the same slope fractures the boundary station recorded. | Fresh fracture faces to scan | — |
-| `basin_rim_pipes` | 274, -270.3, -830 | 262..286 × -842..-818 | 262–274 | west_rim | Two broken pipe sections half-buried in the rim, joined by a crawl to the rim cut. | Pipe-wall crust | `basin_west_rim_cut` |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Exits | Network | Layout | Contents | Links |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `basin_culvert_north` | 410, -268.9, -495 | 398..422 × -507..-483 | 20 × 4 × 12 | 262–274 | culvert mouth | — | A buried 20 m intake culvert near the north dish; square, silted floor, grounding fins on its walls. | Crust on unsilted culvert fins | — |
+| `basin_burrow_warren` | 800, -296, -690 | 788..812 × -702..-678 | 20 × 3 × 14 | 290–304 | burrow mouth | ridge_south | Scavenger burrows widened into a 20 m crawl; it breaks into the ridge vaults' settling tanks. | Scavenger den (they back away) | `basin_ridge_vaults.burrow_entry` **back entrance → `basin_ridge_vaults`** |
+| `basin_buried_hut` | 560, -381.7, -770 | 548..572 × -782..-758 | 10 × 6 × 6 | 376–382 | door slot | — | A survey hut swallowed to its roofline; the door is a slot you swim down into a 10 m room. | A survey lens spare (survey range +30% for one station) | — |
+| `basin_fracture_pocket` | 300, -212.4, -365 | 288..312 × -377..-353 | 14 × 6 × 12 | 206–218 | fracture mouth | — | A 14 m pocket opened by the same slope fractures the boundary station recorded. | Fresh fracture faces to scan | — |
+| `basin_rim_pipes` | 274, -270.3, -830 | 262..286 × -842..-818 | 24 × 3 × 12 | 262–274 | pipe mouth | west_rim | Two broken pipe sections half-buried in the rim, joined by a crawl to the rim cut. | Pipe-wall crust | `basin_west_rim_cut` |
 
-**Medium caves (2)**: 30–80 m, a loop with two or more exits; the main hall takes the craft listed.
+**Medium caves (2)**: water 30–80 m, 2–5 named chambers, a through-loop from one exit to another; the main hall takes the craft listed.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Hall admits | Layout | Contents |
-| --- | --- | --- | --- | --- | --- | --- |
-| `basin_dish_lee_vault` | 540, -299, -640 | 510..570 × -680..-630 | 290–340 | medium | 50 m: an eroded cliff mouth below the south dish into a broad chamber a Creel can park in, with a diver-only alcove and a second mouth on the pale-floor slope. | Silt shelter and salvage workspace; The dish rim seen from inside the mouth |
-| `basin_west_rim_cut` | 230, -261.1, -810 | 200..260 × -850..-790 | 255–300 | small | 60 m extraction cut: a square-walled trench roofed over by slumped sediment, two chambers, opening west toward the Rift's cool shelf. | Cut walls showing the worked layers; A sheltered approach to the Rift |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Hall admits | Chambers | Loop | Exits | Layout | Contents |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `basin_dish_lee_vault` | 540, -299, -640 | 510..570 × -680..-630 | 50 × 30 × 50 | 290–340 | medium | mouth hall, parking chamber, diver alcove | cliff mouth → mouth hall → parking chamber → slope mouth | cliff mouth, slope mouth | 50 m: an eroded cliff mouth below the south dish into a mouth hall, a broad parking chamber a Creel can turn in, and a second mouth on the pale-floor slope. A diver-only alcove leaves the parking chamber. | Silt shelter and salvage workspace; The dish rim seen from inside the mouth |
+| `basin_west_rim_cut` | 230, -261.1, -810 | 200..260 × -850..-790 | 60 × 14 × 45 | 255–300 | small | east cut, west cut | rim mouth → east cut → west cut → Rift-side mouth | rim mouth, Rift-side mouth | 60 m extraction cut roofed by slumped sediment: an east cut from the rim mouth, a west cut beyond a collapsed bulkhead, and a mouth opening toward the Rift's cool shelf. | Cut walls showing the worked layers; A sheltered approach to the Rift |
 
 **Cave biome:** the [Ridge vaults](../caves/basin-vault-complex.md) (`basin_ridge_vaults`), main path, under the wreck ridge. They hold the pump hall stop with its frame press, and the instrument vault's archive.
 
@@ -76,14 +76,13 @@ No threat, on purpose. The research warned against filling the Basin's gaps with
 
 - **Required here, outside caves:** loose survey salvage (alloy) and survey fins (crust) on the first shelf, three tagged-frame stacks, and S2's ridge panels, bulk frames and dish fins.
 - **New exterior patches:** a fourth tagged-frame spill at the tipped housing, so frames are not only on the first shelf, and pump-head alloy on the west rim.
-- **Rare early samples:** four fired ceramic liners and one heater core in the vaults' pump hall. These are human salvage, a plausible early taste of Rift materials.
+- **Rare early sample:** two fired ceramic liners in the vaults' pump hall: human salvage, a taste of Rift ceramic. With the Isles lamina that is three ceramic in the whole world before the Rift, below any recipe's ceramic need.
 - **Cave-favoured:** heavy crust on vault and culvert fins, and loose rack alloy in the settling tanks.
 - **Seeds:** pale crust spores in the comb meadow (SYS-2's Basin seed, second patch; specimen sampling).
 
 | ID | Kind | Item | At (x, y, z) | Stock / bundle / reserve | Renews | Cave | How you read it |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `basin_vault_liner_ceramic` | frontier sample | `pressure_ceramic` | 790, -292, -545 ⟂ | 4 / 1 / 0 | no | `basin_ridge_vaults` | Pale fired liners stacked by the pumps: the same ceramic the Rift's lips carry. |
-| `basin_vault_heater_core` | frontier sample | `thermal_core` | 788, -292, -535 ⟂ | 1 / 1 / 0 | no | `basin_ridge_vaults` | One salvageable heater core in a dead pump. |
+| `basin_vault_liner_ceramic` | frontier sample | `pressure_ceramic` | 790, -292, -545 ⟂ | 2 / 1 / 0 | no | `basin_ridge_vaults` | Pale fired liners stacked by the pumps: the same ceramic the Rift's lips carry. |
 | `basin_vault_fin_crust` | cave favoured | `conductive_crust` | 800, -282, -470 ⟂ | 12 / 2 / 0 | no | `basin_ridge_vaults` | Fins stand clear of silt in still water: heavy crust. |
 | `basin_tank_rack_alloy` | cave favoured | `structural_alloy` | 830, -318, -650 ⟂ | 16 / 4 / 0 | no | `basin_ridge_vaults` | Loose rack panels inside the settling tanks. |
 | `basin_culvert_crust` | cave favoured | `conductive_crust` | 410, -270, -498 ⟂ | 8 / 2 / 0 | no | `basin_culvert_north` | Fins on the culvert walls stay clean of silt. |

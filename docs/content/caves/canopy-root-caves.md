@@ -19,7 +19,7 @@ An optional mid-game cave biome inside the east Canopy's holdfasts. It is ribbed
 | `canopy_rootways.nave` | Root nave | 960, -180, -180 | 165–200 | Dark, ribbed by roots as thick as the pod; glowing root tips mark the walls. | Resin weavers everywhere overhead. | Weaver-nest resin (renewable). | The big hall: the LC proof's centrepiece. |
 | `canopy_rootways.weaver_galleries` | Weaver galleries | 1010, -170, -130 | 158–185 | Dim: nest clusters glow faintly. | Weaver colonies; rootglow buds on the floor. | Rootglow seed (specimen sampling), nest resin. | Diver-only side galleries climbing toward the back stair. |
 | `canopy_rootways.knot_warren` | Knot warren | 1040, -190, -200 | 178–200 | Black; knot holes ringed with pale growth. | Knot eel dens with clear rattling warnings. | The root specimen store sits beyond the warren. | The cave's den: always a lamp-held way past and a second passage round. |
-| `canopy_rootways.salt_sweat` | Salt-sweat hollow | 1060, -210, -250 | 200–222 | A cold violet sheen off crystal crusts. | Almost none: fans closed, roots pale. | Brine lattice ×2 (frontier sample) where root colonies sweat out dense water. | An early, readable glimpse of how the Divide's crystal forms. |
+| `canopy_rootways.salt_sweat` | Salt-sweat hollow | 1060, -210, -250 | 200–222 | A cold violet sheen off crystal crusts. | Almost none: fans closed, roots pale. | One brine lattice crystal (a taste) where root colonies sweat out dense water. | An early, readable glimpse of how the Divide's crystal forms. |
 
 ## Entrances
 
@@ -41,7 +41,7 @@ Back-entrance small caves: `isles_headland_root`.
 
 - Renewable weaver-nest resin
 - Root-fin crust
-- Brine lattice ×2 (frontier sample)
+- Brine lattice ×1 (a taste)
 - Rootglow seed (exclusive)
 
 Every material here also has an exterior source; see the adverse-case ledger in the [BIBLE](../BIBLE.md#adverse-case-skip-every-optional-cave-and-lost-site).

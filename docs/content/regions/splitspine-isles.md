@@ -43,24 +43,24 @@ Coordinates are metres (x east, y up with water at 0, z north). ⟂ marks a poin
 
 Isles caves are wave-cut: flat wet floors, polished ceilings and light from the side. Two networks link small caves. The **scar** network on the stack's west flank is the undercroft's back entrance. The **cove** network under the headland's south cove leads down the root stair into the Canopy's optional rootways. The storm arch and the west sea cave are the medium caves; the west sea cave's waterline mouth is a Spindle-sized surprise.
 
-**Small caves (7)**: diver-only, 10–25 m of water.
+**Small caves (7)**: diver-only; every water extent 25 m or less. Footprint is the replacement rock the cave owns; water is length × width × height of what it carves.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Network | Layout | Contents | Links |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `isles_scar_crawl` | 360, -25.1, 45 | 348..372 × 33..57 | 22–34 | scar | Two 8 m pockets in the slump scar joined by a squeeze; the upper pocket opens into the undercroft's scar mouth zone. | Fresh basalt with no growth yet; The quiet way into the undercroft | `isles_undercroft.scar_mouth` **back entrance → `isles_undercroft`** |
-| `isles_surf_cave` | 556, -14.2, 112 | 548..568 × 104..124 | 6–16 | — | A 12 m wave cave under the stack's east surf ledge; surge washes in and out over a pale floor. | Cave-scoured glass; Clapper colony on the ceiling | — |
-| `isles_cove_undercut` | 968, -16.9, -54 | 956..980 × -66..-44 | 8–20 | cove | A 14 m undercut in the cove's east wall; drift resin floats up and lodges in its ceiling pockets. | Renewable resin on the ceiling | `isles_cove_crawl` |
-| `isles_cove_crawl` | 992, -20.5, -64 | 982..1002 × -74..-54 | 14–24 | cove | A 16 m crawl from the undercut south under the beach rocks, emerging on the slope. | A sealed float tin (two nav beacons) | `isles_cove_undercut`, `isles_headland_root` |
-| `isles_headland_root` | 1012, -31.8, -72 | 1004..1028 × -79..-55 | 28–45 | cove | A 20 m sloping crack where Canopy root ends break through basalt; it drops into the back stair of the rootways. | Root tips glowing with rootglow buds | `isles_cove_crawl`, `canopy_rootways.back_stair` **back entrance → `canopy_rootways`** |
-| `isles_east_ledge_cave` | 1160, -22.5, 40 | 1148..1172 × 28..52 | 16–26 | — | An 18 m flat-floored undercut below the button ledges; shore buttons line its lip. | A storm-tossed survey float wedged at the back | — |
-| `isles_blowhole` | 1090, -14.5, 130 | 1080..1100 × 120..140 | 2–16 | — | A 15 m surge cave from the north cliff foot up a chimney to a dry ledge (waterline walking support must be validated first). | Dry ledge stash; View along the north cliff | — |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Exits | Network | Layout | Contents | Links |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `isles_scar_crawl` | 360, -25.1, 45 | 348..372 × 33..57 | 20 × 8 × 12 | 22–34 | scar mouth | scar | Two 8 m pockets in the slump scar joined by a squeeze; the upper pocket opens into the undercroft's scar mouth zone. | Fresh basalt with no growth yet; The quiet way into the undercroft | `isles_undercroft.scar_mouth` **back entrance → `isles_undercroft`** |
+| `isles_surf_cave` | 556, -14.2, 112 | 548..568 × 104..124 | 12 × 8 × 10 | 6–16 | surf mouth | — | A 12 m wave cave under the stack's east surf ledge; surge washes in and out over a pale floor. | Cave-scoured glass; Clapper colony on the ceiling | — |
+| `isles_cove_undercut` | 968, -16.9, -54 | 956..980 × -66..-44 | 14 × 10 × 12 | 8–20 | cove mouth | cove | A 14 m undercut in the cove's east wall; drift resin floats up and lodges in its ceiling pockets. | Renewable resin on the ceiling | `isles_cove_crawl` |
+| `isles_cove_crawl` | 992, -20.5, -64 | 982..1002 × -74..-54 | 16 × 3 × 10 | 14–24 | undercut end, slope mouth | cove | A 16 m crawl from the undercut south under the beach rocks, emerging on the slope. | A sealed float tin (two nav beacons) | `isles_cove_undercut`, `isles_headland_root` |
+| `isles_headland_root` | 1012, -31.8, -72 | 1004..1028 × -79..-55 | 20 × 4 × 17 | 28–45 | slope mouth | cove | A 20 m sloping crack where Canopy root ends break through basalt; it drops into the back stair of the rootways. | Root tips glowing with rootglow buds | `isles_cove_crawl`, `canopy_rootways.back_stair` **back entrance → `canopy_rootways`** |
+| `isles_east_ledge_cave` | 1160, -22.5, 40 | 1148..1172 × 28..52 | 18 × 10 × 10 | 16–26 | ledge mouth | — | An 18 m flat-floored undercut below the button ledges; shore buttons line its lip. | A storm-tossed survey float wedged at the back | — |
+| `isles_blowhole` | 1090, -14.5, 130 | 1080..1100 × 120..140 | 15 × 5 × 14 | 2–16 | cliff-foot mouth, chimney top | — | A 15 m surge cave from the north cliff foot up a chimney to a dry ledge (waterline walking support must be validated first). | Dry ledge stash; View along the north cliff | — |
 
-**Medium caves (2)**: 30–80 m, a loop with two or more exits; the main hall takes the craft listed.
+**Medium caves (2)**: water 30–80 m, 2–5 named chambers, a through-loop from one exit to another; the main hall takes the craft listed.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Hall admits | Layout | Contents |
-| --- | --- | --- | --- | --- | --- | --- |
-| `isles_storm_arch` | 1130, -14.3, 134 | 1124..1184 × 64..140 | 8–28 | small | 70 m sea cave through the headland's north-east point: north mouth at the cliff foot, a Dart-wide hall with a skylight crack, a diver-only glass gallery, and an east mouth over the button ledges. | Cave-favoured glass; Storm-wrecked float (cache) |
-| `isles_headland_west` | 912, -20.7, 30 | 900..950 × 0..50 | 10–30 | small | 45 m loop through the headland's west foot: a waterline mouth a Spindle can nose into, a hall with a shingle shelf, and a lower mouth toward the south beach. | Shingle shelf (outpost-suitable ledge, solar through the mouth) |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Hall admits | Chambers | Loop | Exits | Layout | Contents |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `isles_storm_arch` | 1130, -14.3, 134 | 1124..1184 × 64..140 | 70 × 16 × 20 | 8–28 | small | north hall, skylight hall, glass gallery | cliff-foot mouth → north hall → skylight hall → east mouth | cliff-foot mouth, east mouth, skylight crack | 70 m sea cave through the headland's north-east point: the cliff-foot mouth opens into a Dart-wide north hall, then a skylight hall under a diver-sized skylight crack, and out the east mouth over the button ledges. A diver-only glass gallery leaves the skylight hall. | Cave-favoured glass; Storm-wrecked float (cache) |
+| `isles_headland_west` | 912, -20.7, 30 | 900..950 × 0..50 | 45 × 14 × 20 | 10–30 | small | waterline hall, shingle chamber | waterline mouth → waterline hall → shingle chamber → south-beach mouth | waterline mouth, south-beach mouth | 45 m loop through the headland's west foot: a waterline mouth a Spindle can nose into, a waterline hall, a shingle chamber with a dry-looking shelf, and a lower mouth toward the south beach. | Shingle shelf (outpost-suitable ledge, solar through the mouth) |
 
 **Cave biome:** the [Splitstack Undercroft](../caves/isles-tidal-caves.md) (`isles_undercroft`) runs under the stack from the yard to the slump scar, with a window onto the split. It is the main-path early cave: it teaches darkness, the lamp and exits, and it holds the first decodable.
 
@@ -78,14 +78,13 @@ No threat. Shore buttons are the Isles' signature animal (research-named, expens
 ## 5. Resources
 
 - **Required here, outside caves:** workshop and gantry alloy, east and west wave-washed glass, drift resin in the coves, and shore crops. All are existing sources; the S2 stack and headland patches add second patches.
-- **Rare early samples:** three ceramic and one thermal core in the undercroft's cold vent. The stack was a chimney once. A player gets a first taste of Rift materials hours early and without knowing their use.
+- **Rare early sample:** one ceramic lamina in the undercroft's cold vent (the stack was a chimney once). It is enough to scan and learn the look of ceramic hours early, never enough to pay for anything.
 - **Cave-favoured:** ceiling resin in the cove undercut (resin floats, so look up) and scoured glass in the surf cave and storm arch.
 - **Seeds:** salve fronds in the undercroft's yard sump, a richer second patch of SYS-2's island seed.
 
 | ID | Kind | Item | At (x, y, z) | Stock / bundle / reserve | Renews | Cave | How you read it |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `isles_undercroft_kiln_ceramic` | frontier sample | `pressure_ceramic` | 440, -20, 88 ⟂ | 3 / 1 / 0 | no | `isles_undercroft` | Pale layers around a dead vent in the lamp hall's floor: the stack was a chimney once. |
-| `isles_undercroft_core_node` | frontier sample | `thermal_core` | 444, -21, 92 ⟂ | 1 / 1 / 0 | no | `isles_undercroft` | One dark node in the cold vent throat. |
+| `isles_undercroft_kiln_ceramic` | frontier sample | `pressure_ceramic` | 440, -20, 88 ⟂ | 1 / 1 / 0 | no | `isles_undercroft` | One pale lamina around a dead vent in the lamp hall's floor: the stack was a chimney once. A taste, enough to scan. |
 | `isles_undercroft_salve` | seed | `seed_salve_frond` | 438, -26, 30 ⟂ | 4 / 1 / 0 | no | `isles_undercroft` | Salve fronds rooted where the yard's runoff pools. |
 | `isles_cove_ceiling_resin` | cave favoured | `buoyant_resin` | 970, -14, -58 ⟂ | 10 / 2 / 0 | yes | `isles_cove_undercut` | Resin floats: look up. It lodges in ceiling pockets where the eddy brings it. |
 | `isles_surf_cave_glass` | cave favoured | `silica_glass` | 560, -13, 116 ⟂ | 8 / 2 / 0 | no | `isles_surf_cave` | Surge scours the floor clean; nodules lie loose. |

@@ -41,24 +41,27 @@ Coordinates are metres (x east, y up with water at 0, z north). ⟂ marks a poin
 
 Reef caves teach the cave grammar before anything is at stake. The **Colonnade network** (`reef_archlet`, `reef_bellhole`, `reef_wrackhollow`) is three short caves joined by crawlways in the arches' feet. The **Fanvault network** adds `reef_fan_crawl` and `reef_shelf_lip` to the accepted Fanvault loop, carrying the first cave on down to the shelf break. Two medium caves give the Dart its first underground hall: the Lantern grotto on the west shelf break, and the Drop Cathedral, which turns the open gully into a sheltered descent toward the Basin.
 
-**Small caves (7, plus the existing Fanvault loop (W1-pre, diver-only teaching cave))**: diver-only, 10–25 m of water.
+**Small caves (8)**: diver-only; every water extent 25 m or less. Footprint is the replacement rock the cave owns; water is length × width × height of what it carves.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Network | Layout | Contents | Links |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `reef_archlet` | -452, -20.4, 100 | -466..-438 × 88..112 | 17–23 | colonnade | A 14 m tunnel through the foot of the north arch; a crawlway leaves its west wall toward the Wrackhollow. | Glimmer mats on the low ceiling; A dive-school slate with depth marks | `reef_wrackhollow`, `reef_bellhole` |
-| `reef_bellhole` | -446, -23, 60 | -460..-432 × 46..74 | 19–26 | colonnade | An 18 m dome under the middle arch with a single mouth and a high bell-shaped ceiling; a crawl joins the Archlet. | Densest glimmer mats on the reef; Dive-school locker (side reward) | `reef_archlet` |
-| `reef_wrackhollow` | -505, -22.8, 118 | -522..-490 × 104..134 | 20–27 | colonnade | A 22 m catch cave whose mouth faces the current: sheds pile inside against the back wall. Crawlway east to the Archlet. | Renewable rich membrane catch; Ribbon fan cuttings outside the mouth | `reef_archlet` |
-| `reef_pumphouse_undercut` | -366, -23, -28 | -378..-354 × -44..-24 | 21–27 | — | A 12 m undercut beneath the pump house's foundation slab; the old intake pipe runs through it. | Intake pipe grating with crust fins (frontier sample) | `reef.pumphouse` |
-| `reef_fan_crawl` | -310, -31, -104 | -322..-298 × -116..-92 | 26–34 | fanvault | A 20 m crawl from the Fanvault's south mouth down to the shelf edge; one squeeze, lit at both ends. | A short practice for the lamp-off retreat | cave `fanvault`, `reef_shelf_lip` |
-| `reef_shelf_lip` | -350, -43, -125 | -364..-336 × -138..-112 | 38–47 | fanvault | A 15 m cave under the shelf break overhang, opening onto blue water and the first view of the slope. | Glass nodules scoured by the down-slope current | `reef_fan_crawl` |
-| `reef_gully_window` | -205, -59.5, -165 | -218..-192 × -180..-152 | 55–66 | — | A 16 m cave on the gully's east wall with a round window looking down into the Basin's dark. | A survey bolt line pointing south (map hint to the hub spur) | `reef_drop_cathedral` |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Exits | Network | Layout | Contents | Links |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `fanvault` (existing) | — | -316..-264 × -92..-40 | ≈ 51 m long (W1-pre carves) | 18–26 | north mouth, south mouth, skylight | fanvault | The accepted W1-pre teaching loop: two diver mouths, a vault under a skylight, a dark catch pocket. | Membrane catch pocket | `reef_fan_crawl` |
+| `reef_archlet` | -452, -20.4, 100 | -466..-438 × 88..112 | 14 × 5 × 6 | 17–23 | north foot mouth, south foot mouth | colonnade | A 14 m tunnel through the foot of the north arch; a crawlway leaves its west wall toward the Wrackhollow. | Glimmer mats on the low ceiling; A dive-school slate with depth marks | `reef_wrackhollow`, `reef_bellhole` |
+| `reef_bellhole` | -446, -23, 60 | -460..-432 × 46..74 | 18 × 12 × 7 | 19–26 | shelf mouth | colonnade | An 18 m dome under the middle arch with a single mouth and a high bell-shaped ceiling; a crawl joins the Archlet. | Densest glimmer mats on the reef; Dive-school locker (side reward) | `reef_archlet` |
+| `reef_wrackhollow` | -505, -22.8, 118 | -522..-490 × 104..134 | 22 × 9 × 7 | 20–27 | current-facing mouth | colonnade | A 22 m catch cave whose mouth faces the current: sheds pile inside against the back wall. Crawlway east to the Archlet. | Renewable rich membrane catch; Ribbon fan cuttings outside the mouth | `reef_archlet` |
+| `reef_pumphouse_undercut` | -366, -23, -28 | -378..-354 × -44..-24 | 12 × 6 × 6 | 21–27 | slab mouth, pipe gap | — | A 12 m undercut beneath the pump house's foundation slab; the old intake pipe runs through it. | Intake pipe grating with crust fins (a taste) | `reef.pumphouse` |
+| `reef_fan_crawl` | -310, -31, -104 | -322..-298 × -116..-92 | 20 × 3 × 8 | 26–34 | Fanvault south mouth, shelf-edge mouth | fanvault | A 20 m crawl from the Fanvault's south mouth down to the shelf edge; one squeeze, lit at both ends. | A short practice for the lamp-off retreat | cave `fanvault`, `reef_shelf_lip` |
+| `reef_shelf_lip` | -350, -43, -125 | -364..-336 × -138..-112 | 15 × 9 × 9 | 38–47 | overhang mouth | fanvault | A 15 m cave under the shelf break overhang, opening onto blue water and the first view of the slope. | Glass nodules scoured by the down-slope current | `reef_fan_crawl` |
+| `reef_gully_window` | -205, -59.5, -165 | -218..-192 × -180..-152 | 16 × 8 × 11 | 55–66 | gully mouth, window | — | A 16 m cave on the gully's east wall with a round window looking down into the Basin's dark. | A survey bolt line pointing south (map hint to the hub spur) | `reef_drop_cathedral` |
 
-**Medium caves (2)**: 30–80 m, a loop with two or more exits; the main hall takes the craft listed.
+The Fanvault is counted with the small caves because it is diver-only with no craft hall, but its accepted loop carries about 51 m of water, longer than the small class's 25 m. Neither class fits it exactly; it is listed as built, not resized. It is the W1-pre teaching cave.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Hall admits | Layout | Contents |
-| --- | --- | --- | --- | --- | --- | --- |
-| `reef_lantern_grotto` | -470, -43.5, -110 | -510..-440 × -150..-90 | 32–62 | small | 60 m, three chambers in a loop: shelf mouth at 34 m into a glimmer hall big enough to turn a Dart, a diver-only side gallery of glass, and a slope mouth at 58 m. | Cave-favoured glass; Glimmer hall; Parked-Dart turning bay |
-| `reef_drop_cathedral` | -262, -64, -150 | -300..-240 × -200..-130 | 55–100 | small | 70 m: a tall chamber in the gully's west wall entered beside the arch, a Dart-wide ramp spiralling down, and a lower mouth onto the gully at 95 m. Diver crawl east to the Gully window. | The quick way down to the Basin west gate; First lamp-only chamber |
+**Medium caves (2)**: water 30–80 m, 2–5 named chambers, a through-loop from one exit to another; the main hall takes the craft listed.
+
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Hall admits | Chambers | Loop | Exits | Layout | Contents |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `reef_lantern_grotto` | -470, -43.5, -110 | -510..-440 × -150..-90 | 60 × 24 × 30 | 32–62 | small | shelf hall, glimmer hall, glass gallery | shelf mouth → shelf hall → glimmer hall → slope mouth | shelf mouth, slope mouth | 60 m, three chambers: the shelf mouth (34 m) opens into a shelf hall, which turns down into a glimmer hall big enough to turn a Dart and out through the slope mouth (58 m). A diver-only glass gallery leaves the glimmer hall. | Cave-favoured glass; Glimmer hall; Parked-Dart turning bay |
+| `reef_drop_cathedral` | -262, -64, -150 | -300..-240 × -200..-130 | 70 × 22 × 45 | 55–100 | small | arch hall, spiral ramp, gully chamber | arch mouth → arch hall → spiral ramp → gully chamber → gully mouth | arch mouth, gully mouth | 70 m: the arch mouth beside the drop arch opens into a tall arch hall; a Dart-wide spiral ramp descends to a gully chamber and out the gully mouth at 95 m. A diver crawl leaves the gully chamber east to the Gully window. | The quick way down to the Basin west gate; First lamp-only chamber |
 
 ## 4. Creatures
 

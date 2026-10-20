@@ -43,22 +43,22 @@ Coordinates are metres (x east, y up with water at 0, z north). ⟂ marks a poin
 
 Meridian's cave style, chosen by the lore owner: **cut voids**. These are foundation galleries and cable culverts where builders met natural rock. Cable tenders gather only on lines that still carry current, so their chains trace live power through the dark. That is an honest, implementable cue that also deepens the district's central question. Meridian's story interiors stay with the story structure; nothing here enters them.
 
-**Small caves (5)**: diver-only, 10–25 m of water.
+**Small caves (5)**: diver-only; every water extent 25 m or less. Footprint is the replacement rock the cave owns; water is length × width × height of what it carves.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Network | Layout | Contents | Links |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `meridian_footing_void` | 1050, -520, -1225 | 1038..1062 × -1237..-1213 | 518–530 | — | A 15 m foundation gallery under the shelf edge, square and dry-walled, with a service alcove. | Service alcove (cache) | — |
-| `meridian_culvert_north` | 1240, -600, -1180 | 1228..1252 × -1192..-1168 | 596–606 | north_terrace | A 20 m cable culvert under the first terrace, tenders strung along one live line. | Crusted cable trays | — |
-| `meridian_spire_footing` | 1190, -600.1, -1350 | 1178..1202 × -1362..-1338 | 596–610 | — | A 14 m void under the spire's base, the spire's feed cables running through. | The spire's live feed, traced by tenders | — |
-| `meridian_escarp_pocket` | 1330, -505.5, -930 | 1318..1342 × -942..-918 | 500–512 | — | A 12 m natural pocket in the escarpment, a survey bolt line in its wall. | A rest pocket on the return ledge | — |
-| `meridian_terrace_crack` | 1100, -600, -1460 | 1088..1112 × -1472..-1448 | 596–640 | — | A 16 m crack where the second terrace wall split, a diver's shortcut down toward the third. | Shortcut between terraces | — |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Exits | Network | Layout | Contents | Links |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `meridian_footing_void` | 1050, -520, -1225 | 1038..1062 × -1237..-1213 | 15 × 8 × 12 | 518–530 | shelf-edge mouth | — | A 15 m foundation gallery under the shelf edge, square and dry-walled, with a service alcove. | Service alcove (cache) | — |
+| `meridian_culvert_north` | 1240, -600, -1180 | 1228..1252 × -1192..-1168 | 20 × 3 × 10 | 596–606 | terrace mouth, cable duct | north_terrace | A 20 m cable culvert under the first terrace, tenders strung along one live line. | Crusted cable trays | — |
+| `meridian_spire_footing` | 1190, -600.1, -1350 | 1178..1202 × -1362..-1338 | 14 × 10 × 14 | 596–610 | footing mouth | — | A 14 m void under the spire's base, the spire's feed cables running through. | The spire's live feed, traced by tenders | — |
+| `meridian_escarp_pocket` | 1330, -505.5, -930 | 1318..1342 × -942..-918 | 12 × 8 × 12 | 500–512 | ledge mouth | — | A 12 m natural pocket in the escarpment, a survey bolt line in its wall. | A rest pocket on the return ledge | — |
+| `meridian_terrace_crack` | 1100, -600, -1460 | 1088..1112 × -1472..-1448 | 16 × 4 × 16 | 596–612 | terrace mouth, wall slot | — | A 16 m crack where the second terrace wall split; a slot at its foot looks straight down the wall to the third terrace. | Shortcut between terraces | — |
 
-**Medium caves (2)**: 30–80 m, a loop with two or more exits; the main hall takes the craft listed.
+**Medium caves (2)**: water 30–80 m, 2–5 named chambers, a through-loop from one exit to another; the main hall takes the craft listed.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Hall admits | Layout | Contents |
-| --- | --- | --- | --- | --- | --- | --- |
-| `meridian_window_gallery` | 1010, -520, -1290 | 980..1040 × -1320..-1260 | 520–610 | small | 60 m lateral cliff gallery in the first terrace wall: a wide window facing up the clear lane, one descending room, a lower mouth on the second terrace. | Ceramic in the cut walls; A protected work pocket with a view |
-| `meridian_escarp_culvert` | 1370, -509.6, -960 | 1350..1400 × -985..-940 | 500–560 | small | 50 m: a drainage culvert cut through the escarpment's foot, two chambers, an upper mouth onto the return ledge. | The exterior return ledge revealed |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Hall admits | Chambers | Loop | Exits | Layout | Contents |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `meridian_window_gallery` | 1010, -520, -1290 | 980..1040 × -1320..-1260 | 60 × 18 × 45 | 520–565 | small | window room, gallery, sump room | window mouth → window room → gallery → sump room → wall mouth | window mouth, wall mouth | 60 m lateral gallery in the first terrace wall: a wide window mouth facing the clear lane into a window room, a gallery running along the wall and down to a sump room, which opens through a wall mouth at 560 m above the second terrace. | Ceramic in the cut walls; A protected work pocket with a view |
+| `meridian_escarp_culvert` | 1370, -509.6, -960 | 1350..1400 × -985..-940 | 50 × 10 × 60 | 500–560 | small | lower culvert, upper chamber | foot mouth → lower culvert → upper chamber → ledge mouth | foot mouth, ledge mouth | 50 m drainage culvert through the escarpment's foot: a lower culvert from the foot mouth climbing to an upper chamber and a ledge mouth onto the return ledge. | The exterior return ledge revealed |
 
 ## 4. Creatures
 

@@ -43,23 +43,23 @@ Coordinates are metres (x east, y up with water at 0, z north). ⟂ marks a poin
 
 Root hollows are living caves: holdfast roots braided over mineral ribs. The **east-crown** network joins the bladder pocket to the quiet crawl above the tether basket. The headland root stair (an Isles small cave) is the rootways' back entrance. The Lantern hall is a sheltered pass toward the Basin, and the escarpment gallery is the first framed view of the deep return.
 
-**Small caves (6)**: diver-only, 10–25 m of water.
+**Small caves (6)**: diver-only; every water extent 25 m or less. Footprint is the replacement rock the cave owns; water is length × width × height of what it carves.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Network | Layout | Contents | Links |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `canopy_knot_hollow` | 720, -121.4, -122 | 708..732 × -134..-110 | 116–128 | — | A 16 m hollow inside a holdfast knot; root fins line its back wall. | Crust on root fins | — |
-| `canopy_bladder_pocket` | 800, -86.3, -45 | 788..812 × -57..-33 | 80–92 | eastcrown | An 18 m pocket under the nursery's rim; cured resin floats up and lodges in its ceiling. | Renewable ceiling resin; Weaver nests | `canopy_quiet_crawl` |
-| `canopy_quiet_crawl` | 760, -85.2, -80 | 748..772 × -92..-68 | 82–96 | eastcrown | A 20 m root-lined crawl joining the bladder pocket to the slope above the tether basket. | A diver's quiet path past the open crowns | `canopy_bladder_pocket` |
-| `canopy_lee_hollow` | 690, -192.5, -255 | 678..702 × -267..-243 | 186–200 | — | A 14 m hollow behind the mooring lee's rib; resin piles at its back. | Extra resin beside the mooring's patch | — |
-| `canopy_fin_cleft` | 560, -128.5, -150 | 548..572 × -162..-138 | 122–136 | — | A 15 m split in a mineral rib, both walls crusted with fins. | A sheltered crust pocket out of the open water | — |
-| `canopy_arch_hollows` | 1250, -243.8, -280 | 1238..1262 × -292..-268 | 238–252 | — | Two 10 m hollows in the root arch's foot, one with a window onto the escarpment. | Root-arch scan: how the arch grew | `canopy_escarp_gallery` |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Exits | Network | Layout | Contents | Links |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `canopy_knot_hollow` | 720, -121.4, -122 | 708..732 × -134..-110 | 16 × 8 × 12 | 116–128 | knot mouth | — | A 16 m hollow inside a holdfast knot; root fins line its back wall. | Crust on root fins | — |
+| `canopy_bladder_pocket` | 800, -86.3, -45 | 788..812 × -57..-33 | 18 × 10 × 12 | 80–92 | rim mouth | eastcrown | An 18 m pocket under the nursery's rim; cured resin floats up and lodges in its ceiling. | Renewable ceiling resin; Weaver nests | `canopy_quiet_crawl` |
+| `canopy_quiet_crawl` | 760, -85.2, -80 | 748..772 × -92..-68 | 20 × 3 × 14 | 82–96 | pocket end, slope mouth | eastcrown | A 20 m root-lined crawl joining the bladder pocket to the slope above the tether basket. | A diver's quiet path past the open crowns | `canopy_bladder_pocket` |
+| `canopy_lee_hollow` | 690, -192.5, -255 | 678..702 × -267..-243 | 14 × 7 × 14 | 186–200 | lee mouth | — | A 14 m hollow behind the mooring lee's rib; resin piles at its back. | Extra resin beside the mooring's patch | — |
+| `canopy_fin_cleft` | 560, -128.5, -150 | 548..572 × -162..-138 | 15 × 4 × 14 | 122–136 | north end, south end | — | A 15 m split in a mineral rib, both walls crusted with fins. | A sheltered crust pocket out of the open water | — |
+| `canopy_arch_hollows` | 1250, -243.8, -280 | 1238..1262 × -292..-268 | 22 × 10 × 14 | 238–252 | arch-foot mouth, escarpment window | — | Two 10 m hollows in the root arch's foot, one with a window onto the escarpment. | Root-arch scan: how the arch grew | `canopy_escarp_gallery` |
 
-**Medium caves (2)**: 30–80 m, a loop with two or more exits; the main hall takes the craft listed.
+**Medium caves (2)**: water 30–80 m, 2–5 named chambers, a through-loop from one exit to another; the main hall takes the craft listed.
 
-| ID | Mouth (x, y, z) | Footprint | Depth m | Hall admits | Layout | Contents |
-| --- | --- | --- | --- | --- | --- | --- |
-| `canopy_lantern_hall` | 520, -175.8, -230 | 490..550 × -260..-200 | 160–200 | small | 60 m rib-side hall with a lit mouth toward the east mooring and a lower mouth toward the Basin terrace; a diver-only side branch holds weaver nests. | Sheltered pass between the mooring bowl and the Basin; Weaver nests |
-| `canopy_escarp_gallery` | 1280, -292.7, -240 | 1250..1310 × -265..-215 | 240–300 | small | 55 m: a gallery under the root arch, from the arch hollows down to a lip over the deep east arm. | The first framed view down the escarpment toward the deep district |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Hall admits | Chambers | Loop | Exits | Layout | Contents |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `canopy_lantern_hall` | 520, -175.8, -230 | 490..550 × -260..-200 | 60 × 20 × 40 | 160–200 | small | lit hall, root bend, weaver branch | mooring mouth → lit hall → root bend → terrace mouth | mooring mouth, terrace mouth | 60 m rib-side cave: the mooring mouth opens into a lit hall, which bends through roots to the terrace mouth toward the Basin. A diver-only weaver branch leaves the root bend. | Sheltered pass between the mooring bowl and the Basin; Weaver nests |
+| `canopy_escarp_gallery` | 1280, -292.7, -240 | 1250..1310 × -265..-215 | 55 × 14 × 60 | 240–300 | small | arch-foot chamber, gallery, lip chamber | arch mouth → arch-foot chamber → gallery → lip chamber → escarpment lip | arch mouth, escarpment lip | 55 m under the root arch: an arch mouth into the arch-foot chamber (crawl to the arch hollows), down a long gallery to a lip chamber that opens over the deep east arm. | The first framed view down the escarpment toward the deep district |
 
 **Cave biome:** the [Lantern Rootways](../caves/canopy-root-caves.md) (`canopy_rootways`) is optional by design, with exclusive rewards: the shaded lamp filter and rootglow seed. It is also the LC large-cave proof.
 
@@ -79,7 +79,8 @@ The sound hunter stays the one roaming threat. Knot eels are a den animal: they 
 ## 5. Resources
 
 - **Required here, outside caves:** crust on the upper and lower grounding fins, cured resin in the upper and lower lee pockets, margin ribbon nets, and the east-mooring crust and resin patches. All stay at 150 m or shallower for first access (EXPEDITION_INTEGRATION).
-- **Rare early sample:** two brine lattice in the rootways' salt-sweat hollow, where root colonies sweat out dense water. It is a readable glimpse of where the Divide's crystal comes from.
+- **Frontier source:** the tether-anchor frames on the Canopy's south rim (`canopy_rim_frames`) sit at exactly 150 m, the early tier's limit. They are the shallowest tagged frames in the basin, so every 350 m transition and every craft after the Dart is fetched from the edge of the 150 m suit (tier rule).
+- **Rare early sample:** one brine lattice crystal in the rootways' salt-sweat hollow, where root colonies sweat out dense water. It is a readable glimpse of where the Divide's crystal comes from, a taste only.
 - **Cave-favoured:** knot-hollow crust, bladder-pocket ceiling resin and weaver-nest resin. The last two are renewable.
 - **Seeds:** lumen bulbs on the east crowns (a second patch of SYS-2's), and rootglow in the rootways (exclusive; specimen sampling).
 
@@ -88,10 +89,11 @@ The sound hunter stays the one roaming threat. Knot eels are a den animal: they 
 | `canopy_knot_hollow_crust` | cave favoured | `conductive_crust` | 722, -123, -120 ⟂ | 10 / 2 / 0 | no | `canopy_knot_hollow` | Root fins grounded to the rib, out of drifting silt. |
 | `canopy_bladder_ceiling_resin` | cave favoured | `buoyant_resin` | 800, -86, -47 ⟂ | 10 / 2 / 0 | yes | `canopy_bladder_pocket` | Cured resin floats into the ceiling pocket. |
 | `canopy_rootways_weaver_resin` | cave favoured | `buoyant_resin` | 960, -185, -175 ⟂ | 14 / 2 / 0 | yes | `canopy_rootways` | Empty weaver nests are cured resin; occupied ones have a weaver at the door. |
-| `canopy_rootways_lattice` | frontier sample | `brine_lattice` | 1060, -212, -250 ⟂ | 2 / 1 / 0 | no | `canopy_rootways` | Crystal crusts where root colonies sweat out dense water; fans closed around them. |
+| `canopy_rootways_lattice` | frontier sample | `brine_lattice` | 1060, -212, -250 ⟂ | 1 / 1 / 0 | no | `canopy_rootways` | Crystal crusts where root colonies sweat out dense water; fans closed around them. |
 | `canopy_rootways_rootglow` | seed | `seed_rootglow` | 1010, -172, -130 ⟂ | 3 / 1 / 0 | no | `canopy_rootways` | Glowing buds on the gallery floor; they tear unless sampled gently (Hush specimen bay). |
 | `canopy_floater_lee_resin` | exterior | `buoyant_resin` | 820, -84.6, -60 | 8 / 2 / 4 | no | — | Cured nodules roll into the lee of the floater clusters. |
 | `canopy_quiet_lane_fins` | exterior | `conductive_crust` | 760, -168.3, -200 | 8 / 2 / 4 | no | — | Fins under the frond roof stay clean of silt. |
+| `canopy_rim_frames` | exterior | `tagged_frame` | 370, -150, -192 | 4 / 1 / 0 | no | — | Tagged anchor frames dropped from a crown tether onto the Canopy's south rim, right at the 150 m suit's limit: the shallowest frames in the basin. |
 | `canopy_crown_lumen` | seed | `seed_lumen_bulb` | 640, -111.8, -110 | 3 / 1 / 0 | no | — | Bulbs clustered on a holdfast's sunny side. |
 
 ## 6. Side rewards and lost site
@@ -133,7 +135,7 @@ Skilled first-time play: **about 75 minutes on the main path, 120 with the optio
 | 0 | Upper crowns: the hunter's warning and the quiet roots | area |
 | 10 | Quiet lower channel (C04) | story |
 | 20 | Lower fins and the survey post | discovery |
-| 32 | 350 m suit refit from crust and resin | tool |
+| 32 | 350 m suit refit: crust, resin and a frame from the 150 m rim | tool |
 | 42 | Restore the outer-crown service mooring | tool |
 | 55 | East mooring bowl and the crown survey marker | discovery |
 | 66 | Fallen tether basket (lost site) | discovery |
@@ -142,7 +144,7 @@ Skilled first-time play: **about 75 minutes on the main path, 120 with the optio
 | 104 | Knot warren and the specimen store | discovery |
 | 114 | Escarpment gallery: the deep return in view | area |
 
-The lab, fins, suit refit and outer mooring make the main path, about 75 minutes. The east shelf is reached once a craft can cross. The rootways are a 30–40 minute optional expedition best done once 200 m is comfortable, and they pay for themselves in the Rift with the lamp filter.
+The lab, fins, suit refit and outer mooring make the main path, about 75 minutes. The east shelf is reached once a craft can cross. The rim frames are a short push to the 150 m limit on the way to the suit refit. The rootways are a 30–40 minute optional expedition best done once 200 m is comfortable, and they pay for themselves in the Rift with the lamp filter.
 
 ## Builder notes
 

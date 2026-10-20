@@ -16,7 +16,7 @@ The first cave biome, under the split stack. It is shallow (4–34 m), gentle an
 | ID | Zone | Centre (x, y, z) | Depth m | Light | Life | Resources | Note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `isles_undercroft.yard_sump` | Yard sump | 438, -22, 30 | 14–32 | Daylight from the yard mouth fading to dusk past two dead work lamps. | Reef school sheltering in the mouth; tide clappers on the cut walls. | Salve fronds where runoff pools. | Human-worked: the yard dredged and squared this sump. The tide store opens off its east side. |
-| `isles_undercroft.lamp_hall` | Lamp hall | 432, -16, 90 | 10–24 | Fully dark under the island. The lesson: lamp on to see the room, lamp off to see the cleft window's glow. | Clapper runs along the walls; nothing that bites. | Old vent laminae and one core node (frontier samples). | A cold vent throat in the floor explains why the stack is split: it was a chimney once. |
+| `isles_undercroft.lamp_hall` | Lamp hall | 432, -16, 90 | 10–24 | Fully dark under the island. The lesson: lamp on to see the room, lamp off to see the cleft window's glow. | Clapper runs along the walls; nothing that bites. | One old vent lamina of ceramic (a taste). | A cold vent throat in the floor explains why the stack is split: it was a chimney once. |
 | `isles_undercroft.cleft_window` | Cleft window | 455, -8, 96 | 4–14 | A bright slot of daylight from the split. | Grazers on the window sill. | None. | The 'exits' lesson: the obvious daylight is a way out. Diver-only slot onto the small-craft cleft. |
 | `isles_undercroft.clapper_throat` | Clapper throat | 395, -14, 82 | 8–20 | Dim green light sideways from the west flank. | The densest clapper colony: their rippling clap precedes each surge. | Glass scoured loose on the floor. | Surge cycle candidate (isles.tidal_surge). A side pocket gives shelter. |
 | `isles_undercroft.scar_mouth` | Scar mouth | 360, -26, 68 | 18–34 | Open blue water over the slump scar. | Reef school; grazers on new basalt. | Footing debris on the scar below. | Joins the scar crawl, the back entrance, and looks down the scar to the gauge line. |
@@ -39,7 +39,7 @@ Back-entrance small caves: `isles_scar_crawl`.
 
 ## Resources
 
-- Pressure ceramic ×3 and thermal core ×1 (frontier samples)
+- Pressure ceramic ×1 (a taste, enough to scan)
 - Salve frond cuttings
 - Loose surge-scoured glass
 

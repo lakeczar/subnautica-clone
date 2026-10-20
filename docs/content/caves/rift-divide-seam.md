@@ -6,7 +6,7 @@ The main-path late cave biome between the Ember Rift and the Mirror Divide. Hot 
 
 ## Placement and size
 
-- **Domain:** x 170..420, z -1370..-1150, y -540..-368 (about 250 m on its longest side, 368–540 m deep).
+- **Domain:** x 170..420, z -1370..-1150, y -540..-350 (about 250 m on its longest side, 350–540 m deep).
 - **Design tier:** `service`.
 - **Near:** site `rift.flank_gate`, site `divide_lattice_ledge_west`, story site `divide_turbine_hall`.
 - **Staging:** Carrier: cool flank mooring (300 m) or Divide lee mooring (390 m). Independent: an advanced outpost with a thermal tap on the Rift mouth shelf.
@@ -17,8 +17,8 @@ The main-path late cave biome between the Ember Rift and the Mirror Divide. Hot 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `rift_divide_seam.kiln_tubes` | Kiln tubes | 205, -385, -1185 | 372–398 | Orange glow seeping through cracked tube walls. | Kiln crawlers file into cracks before each heat breath. | Kiln-tube ceramic lining (rich). | Tier-1 thermal exchanger charges at a tube vent here. |
 | `rift_divide_seam.breath_gallery` | Breath gallery | 245, -395, -1220 | 382–410 | Pulsing glow with each heat breath. | Crawlers; nothing hunts here (too narrow for the stalker). | None. | Heat-breath cycle candidate: wait under a minute in the side niche, or take the cold bypass. |
-| `rift_divide_seam.cold_junction` | Cold junction | 290, -410, -1240 | 395–425 | Dark; the rock changes from black glass to pale rime. | Brine skimmers begin. | Lattice rime on the walls (frontier sample). | Hot meets cold: a gallery record here points to the turbine hall. |
-| `rift_divide_seam.brine_galleries` | Brine galleries | 360, -465, -1300 | 450–480 | Mirror sheens on trapped pools; a steady artificial current runs through. | Brine skimmers over every pool. | Pocket-rim lattice (rich). | The current flows from the gateworks: a question the player carries to the turbine hall. |
+| `rift_divide_seam.cold_junction` | Cold junction | 290, -410, -1240 | 395–425 | Dark; the rock changes from black glass to pale rime. | Brine skimmers begin. | Pale rime on the walls (visual only; too thin to work). | Hot meets cold: a gallery record here points to the turbine hall. |
+| `rift_divide_seam.brine_galleries` | Brine galleries | 360, -465, -1300 | 450–480 | Mirror sheens on trapped pools; a steady artificial current runs through. | Brine skimmers over every pool. | Pool-rim lattice (rich, at 450 m and deeper). | The current flows from the gateworks: a question the player carries to the turbine hall. |
 | `rift_divide_seam.mirror_sump` | Mirror sump | 405, -505, -1345 | 490–520 | A brine surface below, lit from the saddle. | Skimmers; the skate's water lies beyond the exit. | None. | Optional exit into the saddle: needs brine protection. |
 
 ## Entrances
@@ -41,8 +41,7 @@ Back-entrance small caves: `divide_mirror_pocket`.
 ## Resources
 
 - Rich kiln-tube ceramic
-- Rich pocket-rim lattice
-- Lattice rime (frontier sample at the junction)
+- Rich pool-rim lattice in the brine galleries (465 m, beyond the 450 m frontier)
 
 Every material here also has an exterior source; see the adverse-case ledger in the [BIBLE](../BIBLE.md#adverse-case-skip-every-optional-cave-and-lost-site).
 
