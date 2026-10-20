@@ -221,6 +221,7 @@ export function commandEffect(c: GameCommand, before: GameState, after: GameStat
           case "leave-interior": return p.mode === "swimming" && p.interiorId === null ? [] : ["still aboard after leaving the interior"];
           case "launch": case "capture": return dock?.transaction?.vehicleId === cm.vehicleId || (cm.action === "launch"
             ? vehicle(after, cm.vehicleId)?.berth === null : !!vehicle(after, cm.vehicleId)?.berth) ? [] : [`${cm.action} of ${cm.vehicleId} did not start`];
+          case "reconfigure": return dock && dock.configuration !== before.fleet.docking?.configuration ? [] : ["the berth configuration did not change"];
           default: return [`carrier action ${cm.action} is not verified by this harness`];
         }
       })();

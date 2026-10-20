@@ -111,7 +111,9 @@ function loadDiver(d: Driver, cost: Readonly<Record<string, number>>): void {
 }
 /** A mooring spot inside the stop's service radius but outside every hull build
  * envelope, so a supply craft never blocks construction it is lending stock to. */
-function clearOfBuilds(d: Driver, site: string, mooring: Vec3): Vec3 {
+/** `composed`: the point is the site's composed mooring (a finding when it blocks a
+ * build), not a harness park beside the carrier. */
+function clearOfBuilds(d: Driver, site: string, mooring: Vec3, composed = true): Vec3 {
   const v = d.occupied()!, shape = HULL_COLLIDERS[v.hull];
   const builds = Object.entries(HULL_BUILD) as [keyof typeof HULL_COLLIDERS, { pose: Vec3 }][];
   const blocks = (q: Vec3) => builds.some(([hull, b]) => Math.abs(q.x - b.pose.x) < shape.radius + HULL_COLLIDERS[hull].radius &&
@@ -122,7 +124,7 @@ function clearOfBuilds(d: Driver, site: string, mooring: Vec3): Vec3 {
     if (!blocks(q) && hullClearance(d.world, q, shape)) {
       const note = `${site}: the composed mooring (${mooring.x}, ${mooring.y}, ${mooring.z}) lies inside a hull build envelope; ` +
         `a craft moored there blocks construction ("Construction clearance is blocked" does not say why). Moored ${r} m off instead.`;
-      if (!d.run.notes.includes(note)) d.run.notes.push(note);
+      if (composed && !d.run.notes.includes(note)) d.run.notes.push(note);
       return q;
     }
   }
@@ -229,7 +231,7 @@ function boardHearthline(d: Driver): void {
     boardCraft(d, "creel");
     fly(d, "creel_out");
     followS2(d, "route.isles.workshop_stack");
-    pilotTo(d, "beside the carrier", clearOfBuilds(d, "stack_yard", parkNear(d, { ...vestibule, y: vestibule.y - 6 })));
+    pilotTo(d, "beside the carrier", clearOfBuilds(d, "stack_yard", parkNear(d, { ...vestibule, y: vestibule.y - 6 }), false));
     leaveCraft(d);
   }
   carrierIn(d);
@@ -593,16 +595,16 @@ const works = (strategy: Strategy): Phase => ({
     const assemblies: Cargo = { ids: cargo.ids, stock: {} }, stock: Cargo = { ids: [], stock: cargo.stock };
     const gate: WorksAction[] = ["install_power", "install_air", "isolate", "equalize", "open"];
     const hall: WorksAction[] = ["restore_hall", "restore_food"];
+    // The gate hall lies 170 m below the upper hall: down S2's terrace route and back
+    // up for each gate visit (route power needs the hall restored first).
+    const atGate = (visit: () => void): void => {
+      chargeCraftAt(d, "meridian.staging_shelf");
+      followS2(d, "route.meridian.terraces");
+      visit();
+      followS2(d, "route.meridian.terraces", true);
+    };
     if (strategy === "creel") {
       toMeridian(d, "creel");
-      // The gate hall lies 170 m below the upper hall: down S2's terrace route and back
-      // up for each gate visit (route power needs the hall restored first).
-      const atGate = (visit: () => void): void => {
-        chargeCraftAt(d, "meridian.staging_shelf");
-        followS2(d, "route.meridian.terraces");
-        visit();
-        followS2(d, "route.meridian.terraces", true);
-      };
       atGate(() => worksVisit(d, gate, assemblies));
       worksVisit(d, hall, stock);
       atGate(() => worksVisit(d, ["route_power"], { ids: [], stock: {} }));
@@ -619,9 +621,9 @@ const works = (strategy: Strategy): Phase => ({
     const mantle = d.vehicle("mantle")!;
     const together = cargoCu(d, cargo) <= d.freeCu(mantle.cargoId);
     const trips: [Cargo, () => void][] = together
-      ? [[cargo, () => { worksVisit(d, gate, assemblies); worksVisit(d, hall, stock); worksVisit(d, ["route_power"], { ids: [], stock: {} }); }]]
-      : [[assemblies, () => worksVisit(d, gate, assemblies)],
-        [stock, () => { worksVisit(d, hall, stock); worksVisit(d, ["route_power"], { ids: [], stock: {} }); }]];
+      ? [[cargo, () => { atGate(() => worksVisit(d, gate, assemblies)); worksVisit(d, hall, stock); atGate(() => worksVisit(d, ["route_power"], { ids: [], stock: {} })); }]]
+      : [[assemblies, () => atGate(() => worksVisit(d, gate, assemblies))],
+        [stock, () => { worksVisit(d, hall, stock); atGate(() => worksVisit(d, ["route_power"], { ids: [], stock: {} })); }]];
     for (const [items, visit] of trips) {
       if (cargoCu(d, items) > d.freeCu(mantle.cargoId))
         throw new Blocked(`The Mantle hold has ${d.freeCu(mantle.cargoId)} CU free; this trip needs ${cargoCu(d, items)} CU`, where(d.state));
@@ -643,7 +645,7 @@ export function deliverToCarrier(d: Driver, cargo: Cargo, site: string | null): 
   if (!creel || creel.hull !== "creel") throw new Error("harness: deliverToCarrier starts at the Creel's helm");
   const h = carrier(d), vestibule = localToWorld(CARRIER_LAYOUT.exteriorVestibule, h);
   const park = parkNear(d, { ...vestibule, y: vestibule.y - 6 });
-  pilotTo(d, "beside the carrier", site ? clearOfBuilds(d, site, park) : park);
+  pilotTo(d, "beside the carrier", site ? clearOfBuilds(d, site, park, false) : park);
   leaveCraft(d);
   ferryToCarrier(d, creel.id, cargo);
 }
@@ -662,6 +664,7 @@ const ending = (strategy: Strategy): Phase => ({
   ],
   play(d, o) {
     // The buffer's crust comes from the workshop stock; the pod bench takes the diver load.
+    ashoreFromCarrier(d);
     // Crust grows back slowly on the isles; the 800 m suit takes the Canopy fins too (C3).
     stockUp(d, RECIPES.pod_buffer.cost as Record<string, number>);
     carryFromWorkshop(d, RECIPES.pod_buffer.cost as Record<string, number>);
@@ -669,10 +672,8 @@ const ending = (strategy: Strategy): Phase => ({
     enter(d, "pod");
     if (!d.knows("C14")) { interact(d, "C14"); if (!d.knows("C14")) throw new Blocked("C14 recorded nothing", where(d.state)); }
     toMeridian(d, strategy);
-    if (strategy === "creel") {
-      chargeCraftAt(d, "meridian.staging_shelf");
-      followS2(d, "route.meridian.terraces");
-    }
+    chargeCraftAt(d, "meridian.staging_shelf");
+    followS2(d, "route.meridian.terraces");
     sortie(d, hostAt(d, "district_controller"), "resolution", () => {
       reach(d, "district_controller");
       for (const a of ["begin", "complete"] as const) {
@@ -801,7 +802,7 @@ function boardHearthlineWith(d: Driver, cargo: Cargo): void {
   fly(d, "creel_out");
   followS2(d, "route.isles.workshop_stack");
   const h = carrier(d), vestibule = localToWorld(CARRIER_LAYOUT.exteriorVestibule, h);
-  pilotTo(d, "beside the carrier", clearOfBuilds(d, "stack_yard", parkNear(d, { ...vestibule, y: vestibule.y - 6 })));
+  pilotTo(d, "beside the carrier", clearOfBuilds(d, "stack_yard", parkNear(d, { ...vestibule, y: vestibule.y - 6 }), false));
   leaveCraft(d);
   d.command({ type: "carrier", action: "station-keep" }, { allowRefusal: true });
   ferryToCarrier(d, creel.id, cargo);
