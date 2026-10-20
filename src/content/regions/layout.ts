@@ -136,7 +136,7 @@ export function biomeAt(x: number, z: number, m: TerrainMasks = terrainMasks(x, 
 
 /** The extent S2 terrain leaves to the legacy terrain mesh (C2's legacy
  * terrain factory draws exactly this): accepted B1's `TERRAIN_EXTENT`. */
-export const S2_TERRAIN_SKIP: Rect = { minX: TERRAIN_EXTENT.minX, maxX: TERRAIN_EXTENT.maxX, minZ: TERRAIN_EXTENT.minZ, maxZ: TERRAIN_EXTENT.maxZ };
+export const S2_TERRAIN_SKIP: Rect = TERRAIN_EXTENT;
 
 /** Legacy coverage of a column: the existing renderer owns that terrain. */
 export function legacyCoverage(rect: Rect): "none" | "partial" | "full" {

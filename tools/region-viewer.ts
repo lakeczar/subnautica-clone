@@ -12,20 +12,17 @@ import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstr
 import type { LinesMesh } from "@babylonjs/core/Meshes/linesMesh.js";
 import { createCelMaterial } from "../src/render/materials.js";
 import { createAtmosphere } from "../src/render/atmosphere.js";
-import { createEnvironment } from "../src/render/environment.js";
 import { createKitMaterial } from "../src/render/kit/material.js";
 import { createKitLoader, TemplateLibrary } from "../src/render/kit/loader.js";
-import { KIT_FACTORIES } from "../src/render/kit/factories.js";
-import { templateRecipes } from "../src/render/kit/templates.js";
-import { createWorldMap } from "../src/world/map.js";
+import { defaultContext } from "../src/render/kit/factories.js";
+import { composeWorldArt } from "../src/render/worldArt.js";
 import { createResidency } from "../src/world/residency.js";
-import { worldLayout } from "../src/content/regions/layout.js";
-import { spatialEntries } from "../src/content/regions/spatial.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { HAZARDS } from "../src/content/regions/hazards.js";
 import { ROUTES } from "../src/content/regions/passages.js";
 import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
-import { S2_FACTORIES, S2_TEMPLATE_LIBRARY, opticsAt, s2BuildContext } from "../src/render/biomes/index.js";
+import { S2_FACTORIES, opticsAt } from "../src/render/biomes/index.js";
+import { prewarmScatter } from "../src/render/biomes/scatter.js";
 import { setTerrainStore } from "../src/render/biomes/terrain.js";
 import { httpTerrainStore } from "../src/render/biomes/terrainAssets.js";
 
@@ -69,15 +66,16 @@ const kit = createKitMaterial(scene, cel);
 const { water, sky } = createAtmosphere(scene);
 const materials = [cel, kit, water, sky];
 // Today's terrain mesh, for seam checks against S2 chunks.
-createEnvironment(scene, cel, "terrain");
-for (const mesh of scene.meshes) if (mesh.name === "island.terrain") mesh.renderingGroupId = 1;
 
 // Baked terrain (npm run bake:terrain) unless `?live=1`; a missing file falls back to live tessellation.
 const terrainStore = params.get("live") === "1" ? null : httpTerrainStore("/terrain/");
 setTerrainStore(terrainStore);
-const layout = worldLayout();
-const map = createWorldMap(layout, spatialEntries());
-const templates = new TemplateLibrary([...templateRecipes(), ...S2_TEMPLATE_LIBRARY]);
+// The game's own composition (WORLD_ART): legacy terrain over B1's extent,
+// S2 everywhere else, the same factories, templates and map as the renderer.
+const world = composeWorldArt();
+const map = world.map;
+const templates = new TemplateLibrary(world.templates);
+prewarmScatter();
 // Dev diagnostics: the slowest single step per factory, with its chunk and LOD.
 const slowSteps: Record<string, { ms: number; chunk: string; lod: string; step: number }> = {};
 const timed = (f: (typeof S2_FACTORIES)[number]): (typeof S2_FACTORIES)[number] => ({
@@ -94,7 +92,9 @@ const timed = (f: (typeof S2_FACTORIES)[number]): (typeof S2_FACTORIES)[number] 
     } finally { g.return(undefined as never); }
   },
 });
-const loader = createKitLoader({ scene, material: kit, templates, factories: [...KIT_FACTORIES, ...S2_FACTORIES.map(timed)], context: s2BuildContext() });
+const s2 = new Set(S2_FACTORIES.map(f => f.id));
+const loader = createKitLoader({ scene, material: kit, templates, factories: world.factories.map(f => s2.has(f.id) ? timed(f) : f),
+  context: defaultContext(world.floor, 0.75, undefined, world.biomeAt) });
 const residency = createResidency({ map, loader, budget: {
   cpuBytes: Number(params.get("budget") ?? 160) * MiB, gpuBytes: Number(params.get("budget") ?? 160) * MiB,
   uploadBytesPerFrame: 4 * MiB, buildMsPerFrame: Number(params.get("build") ?? 8), maxInFlight: 2, retainedUnits: 48,
