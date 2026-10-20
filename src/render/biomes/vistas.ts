@@ -174,7 +174,7 @@ export const VISTA_DRESSING: readonly VistaPart[] = [
   // Meridian works: framing lattice masts, the hook cable, the lamp avenue.
   { id: "works.towers", x: 1420, z: -1553, draw: (b, floor, fine) => {
     latticeMast(b, floor, 1368, -1566, 44, 6, fine, C.glow);
-    latticeMast(b, floor, 1474, -1540, 38, 5, fine, C.cyan);
+    latticeMast(b, floor, 1462, -1536, 38, 5, fine, C.cyan);
     // No cable between them: the rescue tethers drop through the yard.
     b.tube([[1446, -736.6, -1576], [1446, -742.1, -1576]], 0.08, 3, C.petrol);
   } },

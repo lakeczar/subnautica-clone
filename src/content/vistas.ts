@@ -211,8 +211,10 @@ function pipe(from: [number, number], to: [number, number], r: number, lift: num
   }
   return { blocks, pieces: beam(pts, () => [r, r, 0.3], () => "metal") };
 }
-const pipes = [pipe([1419, -1601], [1419, -1648], 1.1, 1.8), pipe([1466, -1566], [1466, -1544], 0.9, 1.5),
-  pipe([1462, -1590], [1515, -1590], 1.1, 1.8), pipe([1451, -1602], [1451, -1650], 0.8, 1.3)];
+// All inside the world envelope (X <= 1472, Z >= -1632): three runs south from the
+// block's back and one north beside the hatch.
+const pipes = [pipe([1419, -1601], [1419, -1626], 1.1, 1.8), pipe([1466, -1566], [1466, -1544], 0.9, 1.5),
+  pipe([1458, -1601], [1458, -1626], 1.1, 1.8), pipe([1451, -1602], [1451, -1626], 0.8, 1.3)];
 
 // --- Meridian escarpment ----------------------------------------------------
 
@@ -263,7 +265,7 @@ export const VISTA_SETS: readonly VistaSet[] = [
     block(v(1445.3, -744.3, -1576.7), v(1446.7, -742.1, -1575.3), "ochre"),
     ...LEGS.map(([x, z]) => block(v(x - 0.45, GANTRY_TOP + 1.6, z - 0.45), v(x + 0.45, GANTRY_TOP + 2.5, z + 0.45), "glow")),
   ], pieces: LEGS.flatMap(([x, z]) => beam([v(x, floor(x, z) - 0.5, z), v(x, GANTRY_TOP, z)], () => [0.7, 0.7, 0.3], () => "ochre")) },
-  { id: "works.pipes", region: "deep_district", anchor: { x: 1478, z: -1590 }, blocks: pipes.flatMap(p => p.blocks), pieces: pipes.flatMap(p => p.pieces) },
+  { id: "works.pipes", region: "deep_district", anchor: { x: 1440, z: -1610 }, blocks: pipes.flatMap(p => p.blocks), pieces: pipes.flatMap(p => p.pieces) },
   ...ESCARPMENT_MARKERS.map((m, i): VistaSet => {
     const y = floor(m.x, m.z) - 0.4;
     return { id: `escarp.marker.${i}`, region: "deep_district", anchor: { x: m.x, z: m.z }, pieces: [], blocks: [

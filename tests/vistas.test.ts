@@ -7,11 +7,13 @@ import { CRAFT_PROFILES, ROUTES } from "../src/content/regions/passages.js";
 import { SITES } from "../src/content/regions/sites.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { BASIN_GEOMETRY, CANOPY_BASIN_ROUTE, RECOVERY_ROUTES } from "../src/content/routes.js";
-import { BASIN_YARD, VISTA_SOLIDS } from "../src/content/vistas.js";
+import { BASIN_YARD, VISTA_SETS, VISTA_SOLIDS } from "../src/content/vistas.js";
+import { worldLayout } from "../src/content/regions/layout.js";
+import { WORLD_ENVELOPE } from "../src/world/frame.js";
 import type { Vec3 } from "../src/world/types.js";
 import { blocked, blockedBox, prewarmScatter } from "../src/render/biomes/scatter.js";
 import { RecipeBuilder } from "../src/render/biomes/recipe.js";
-import { VISTA_DRESSING } from "../src/render/biomes/vistas.js";
+import { drawSolidSet, VISTA_DRESSING, vistaMesh } from "../src/render/biomes/vistas.js";
 
 /** Composed vistas (A1). Solid-looking pieces are drawn only from the shapes
  * that are also their collision (`VISTA_SOLIDS`); everything else is thin,
@@ -102,5 +104,43 @@ test("the Basin works yard stays off the legacy lanes, parking and work poses", 
     for (const lane of lanes) for (let i = 0; i < lane.length - 1; i++)
       assert.ok(segDist(p, lane[i]!, lane[i + 1]!) > 6, `yard ${name} crowds a Basin lane at ${JSON.stringify(lane[i])}`);
     for (const q of poses) assert.ok(Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) > 4, `yard ${name} crowds a parking or work pose`);
+  }
+});
+
+test("INVARIANT (A1-R3-01): every vista set is drawn exactly once by a real chunk, its solids inside the world", () => {
+  const chunks = worldLayout().chunks.filter(c => c.art.some(a => a.factory === "s2.scatter"));
+  const owners = (x: number, z: number): number =>
+    chunks.filter(c => x >= c.bounds.min.x && x < c.bounds.max.x && z >= c.bounds.min.z && z < c.bounds.max.z).length;
+  // Control: the old pipe anchor lay past the world's east edge.
+  assert.equal(owners(1478, -1590), 0, "an anchor outside the world has no owning chunk");
+  for (const s of VISTA_SETS) assert.equal(owners(s.anchor.x, s.anchor.z), 1, `${s.id}: anchor must be owned by exactly one scatter chunk`);
+  for (const p of VISTA_DRESSING) assert.equal(owners(p.x, p.z), 1, `${p.id}: anchor must be owned by exactly one scatter chunk`);
+  const E = WORLD_ENVELOPE;
+  for (const s of VISTA_SOLIDS) assert.ok(s.bounds.min.x >= E.min.x && s.bounds.max.x <= E.max.x && s.bounds.min.z >= E.min.z && s.bounds.max.z <= E.max.z,
+    `${s.id} lies outside the world envelope`);
+  // No invisible solids and no swim-through art: every set with solids draws
+  // art and every drawn set has solids...
+  const own = (lod: "fine" | "coarse"): number => {
+    let n = 0;
+    for (const s of VISTA_SETS) {
+      const b = new RecipeBuilder();
+      drawSolidSet(b, s, lod === "fine");
+      const solids = VISTA_SOLIDS.filter(k => k.id.startsWith(`vista.${s.id}.`)).length;
+      assert.ok((b.vertexCount > 0) === (solids > 0), `${s.id}: ${b.vertexCount} art vertices but ${solids} solids`);
+      n += b.vertexCount;
+    }
+    for (const p of VISTA_DRESSING) { const b = new RecipeBuilder(); p.draw(b, worldFloor, lod === "fine"); n += b.vertexCount; }
+    return n;
+  };
+  // ...and through the real chunk path, the chunks emit exactly that art once.
+  for (const lod of ["fine", "coarse"] as const) {
+    let emitted = 0;
+    for (const c of chunks) {
+      const g = vistaMesh(c, lod, worldFloor, () => false);
+      let r = g.next();
+      while (!r.done) r = g.next();
+      emitted += r.value ? r.value.positions.length / 3 : 0;
+    }
+    assert.equal(emitted, own(lod), `${lod}: chunks emit every vista set's art exactly once`);
   }
 });
