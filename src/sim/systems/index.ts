@@ -1,0 +1,21 @@
+/** SYS-2 public surface for the coordinator: bases and knowledge rules, state and
+ * views. Content lives in src/content/systems/*. See docs/build/streams/SYS-2.md. */
+export { createSystems, validSystems } from "./state.js";
+export type { BeaconState, DecodeJob, OutpostState, PackedKit, PlanterState, PowerSource, SocketEntry, SystemsState } from "./state.js";
+export { accessible, carrierHost, carrierHostId, carrierOccupants, hostById, hostLocal, hostServices, installModule, listHosts,
+  locationPower, removeModule, workContainers } from "./hosts.js";
+export type { HostKind, HostPower, SocketHost, SocketSlot } from "./hosts.js";
+export { conservedTotals, deployOutpost, deployPreview, outpostLimit, packOutpost, packPreview, renameOutpost, siteProblem, sitePower,
+  upgradeOutpost, upgradePreview } from "./outposts.js";
+export type { DeployPreview, Ground, OutpostRules, OutpostSiteQuery, PackPreview, SiteSample, UpgradePreview } from "./outposts.js";
+export { advanceDecodes, decodeStatus, decodeViews, decoderPlanProblems, discoverSite, knownSites, recordReadable, startDecode } from "./decoder.js";
+export type { DecodeCompletion, DecoderContext, DecodeView } from "./decoder.js";
+export { advanceGrowth, cropViews, harvest, harvestPreview, plant } from "./cultivation.js";
+export { handheldPing, knownMaterials, stationSurvey, surveyQuery, surveyRange } from "./survey.js";
+export type { SurveyMark } from "./survey.js";
+export { beaconViews, chartView, collectBeacon, placeBeacon, renameBeacon, setBeaconOn, setCategoryOn, visitChart } from "./navigation.js";
+export type { BeaconView, ChartView } from "./navigation.js";
+export { buildJournal, searchJournal } from "./journal.js";
+export type { CreatureEntry, CycleEntry, FieldJournal, JournalEntry, JournalTab } from "./journal.js";
+export { advanceSystems } from "./step.js";
+export type { SystemsEvent } from "./step.js";
