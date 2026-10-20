@@ -183,3 +183,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 
   Back with the author.
 - **W1-pre R1 fixes done** at `90d38b3`: a real swept lamp-off retreat (82/82 starts exit), an exact voxel lamp walk checked against the 3090 on 2,734 rays, and a prototype adapter `src/sim/caveWorld.ts` with full-actor ownership and the legacy guards preserved; 760 tests pass. Sol R2 running.
+- **W1-pre R2 (Sol):** changes-needed (`review/w1-pre-r2` `803e9cf`). R1-01, R1-02 and the original R1-03 cases are verified. W1-PRE-04 (P2): the adapter picks the composite once per move, so distant exterior walls vanish. Plus a P3 lamp-skin oracle. Back with the author.
