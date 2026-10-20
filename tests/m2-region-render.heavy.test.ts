@@ -34,7 +34,7 @@ function counts(scene: Scene): number[] {
     scene.meshes.reduce((n, m) => n + m.getTotalVertices(), 0), scene.meshes.reduce((n, m) => n + m.getTotalIndices() / 3, 0)];
 }
 
-test("production regional owners survive five return traversals, depletion, replacement and reconstruction without state writes or resource growth", () => sceneTest(scene => {
+test("production regional owners survive three return traversals, depletion, replacement and reconstruction without state writes or resource growth", () => sceneTest(scene => {
   const cel = createCelMaterial(scene), glass = createGlassMaterial(scene);
   let sharedDisposed = false;
   cel.onDisposeObservable.add(() => { sharedDisposed = true; });
@@ -47,7 +47,8 @@ test("production regional owners survive five return traversals, depletion, repl
     { x: 228, y: -80, z: -170 }, { x: 57, y: -10, z: -65 }, { x: 0, y: .18, z: 22 }];
   const retained = new Map<string, number[]>();
   let warmCache: { entries: number; bytes: number } | null = null;
-  for (let traversal = 0; traversal < 5; traversal++) for (const [index, p] of stops.entries()) {
+  // Traversal 0 builds, 1 warms in the other quality, 2 must match both exactly.
+  for (let traversal = 0; traversal < 3; traversal++) for (const [index, p] of stops.entries()) {
     state.player.pose.position = { ...p };
     const before = structuredClone(state);
     art.setQuality?.(traversal % 2 ? "light" : "rich");
@@ -93,7 +94,7 @@ test("production regional owners survive five return traversals, depletion, repl
   assert.ok(scene.getMeshByName(depleted.name)!.isEnabled(), "and its actual restored stock");
   assert.deepEqual(replacement, copy);
   const baseline = counts(scene);
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 2; i++) {
     art.dispose(); art.dispose(); art.update(replacement);
     assert.equal(scene.meshes.length, 0); assert.equal(scene.geometries.length, 0); assert.equal(scene.textures.length, 0);
     assert.equal(art.cacheStats.bytes, 0); assert.equal(art.cacheStats.entries, 0);

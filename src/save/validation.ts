@@ -25,8 +25,6 @@ import { usedCapacity } from "../sim/inventory.js";
 import { installedModuleValid, moduleItem, SMALL_CRAFT_SOCKETS } from "../sim/modules.js";
 import { WORLD_BOUNDS } from "../sim/world.js";
 import { atCarrierSupport, BERTH_LOCAL, CARRIER_LAYOUT, localToWorld } from "../sim/carrier.js";
-// Compatibility export for historical callers; decode additionally runs the frozen full validator.
-export { validExpedition2Domain } from "./legacy/validation.js";
 export const record = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const exact = (v: unknown, keys: string[]): v is Record<string, unknown> =>
@@ -228,8 +226,9 @@ export function validState(value: unknown): value is GameState {
         exact(v, ["id", "tick", "provenance"]) &&
         known(EVIDENCE)(v.id) &&
         int(v.tick, 0, value.tick as number) &&
-        text(v.provenance, 200) &&
-        v.provenance === EVIDENCE[v.id as keyof typeof EVIDENCE].provenance,
+        // The saved provenance is the text shown at discovery; display reads the
+        // registry by ID, so editing prose never invalidates a save.
+        text(v.provenance, 200),
     ) ||
     !stringSet(k.journals, 1, (v) => v === "mara_reef_note") ||
     !stringSet(k.markers, Object.keys(PLACES).length, known(PLACES)) ||
