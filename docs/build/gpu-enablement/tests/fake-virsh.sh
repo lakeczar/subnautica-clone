@@ -14,6 +14,10 @@
 # backup_differs (security-info read succeeds with an extra element).
 # R2: start_response_lost (start boots the VM, then reports failure), fail_state (the worker's
 # state read fails), fail_state_on_read N (while off, the Nth state read and all later ones fail).
+# R3: define replaces the persistent definition with the given file (identity checked);
+# define_fail, define_fail_from N (the Nth define and later fail), define_noop, define_extra
+# (libvirt adds a controller), define_drops_sysinfo (the fw_cfg sysinfo is dropped),
+# on_define_cmd (after a define).
 # Hooks: on_start_cmd (script run after a successful start), on_start_fail_cmd (after a failed
 # start), on_attach_cmd (after an attach).
 S="${S:-/tmp/gpu-fake}"
@@ -127,6 +131,16 @@ case "$verb" in
         { print }' "$S/cfg.xml" > "$S/cfg.new" && mv "$S/cfg.new" "$S/cfg.xml"
     fi
     echo "Device ${verb%-device}ed successfully" ;;
+  define)
+    f="${pos[1]:-}"; [ -f "$f" ] && grep -q "<uuid>$UUID</uuid>" "$f" || forbid
+    n=$(( $(get define_count || echo 0) + 1 )); echo "$n" > "$S/define_count"
+    [ -f "$S/define_fail" ] && { echo "error: XML error: define failed" >&2; exit 1; }
+    [ -n "$(get define_fail_from)" ] && [ "$n" -ge "$(get define_fail_from)" ] && { echo "error: define failed" >&2; exit 1; }
+    [ -f "$S/define_noop" ] && { echo "Domain '$NAME' defined from $f"; exit 0; }
+    if [ -f "$S/define_drops_sysinfo" ]; then awk '/<sysinfo type=.fwcfg.>/{d=1} !d{print} /<\/sysinfo>/{d=0}' "$f" > "$S/cfg.xml"; else cp "$f" "$S/cfg.xml"; fi
+    [ -f "$S/define_extra" ] && sed -i "s#^  </devices>#    <controller type='pci' index='7' model='pcie-root-port'/>\n&#" "$S/cfg.xml"
+    [ -f "$S/on_define_cmd" ] && bash "$S/on_define_cmd"
+    echo "Domain '$NAME' defined from $f" ;;
   domtime)
     me || forbid
     [ "$(get state)" = running ] && [ ! -f "$S/agent_silent" ] || { echo "error: guest agent is not responding" >&2; exit 1; }

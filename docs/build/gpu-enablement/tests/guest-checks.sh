@@ -21,7 +21,8 @@ ok "fake guest tools selected first on PATH"
 
 export GPU_KVER=$KV GPU_CMDLINE="$GF/cmdline" GPU_GRUB_DEFAULT="$GF/grub" GPU_SOURCES="$GF/apt/siltwake-gpu-nonfree.sources" \
   GPU_STATE_DIR="$GF/state" GPU_GLVND_DIR="$GF/glvnd" GPU_VULKAN_DIR="$GF/vulkan" GPU_BOOT_DIR="$GF/boot" GPU_DEV_DIR="$GF/dev" \
-  GPU_FB_DEVICE="$GF/fb0-device" GPU_BOOT_ID_FILE="$GF/boot_id" GPU_SCRATCH="$GF/scratch"
+  GPU_FB_DEVICE="$GF/fb0-device" GPU_BOOT_ID_FILE="$GF/boot_id" GPU_SCRATCH="$GF/scratch" \
+  GPU_PCI_DIR="$GF/pci" GPU_IOMEM_FILE="$GF/iomem" GPU_FWCFG_FILE="$GF/fwcfg-raw"
 
 # The worker as it is today, plus a driver already installed (for the checks) unless bare=1.
 reset_guest() {
@@ -145,21 +146,40 @@ is "dry run of an unsafe plan: exit 1" [ "$RC" = 1 ]
 echo "== check post"
 NV="NVIDIA GeForce RTX 3090, 550.163.01, 00000000:06:00.0, 24576 MiB"
 post_ready() { reset_guest; printf '06:00.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [GeForce RTX 3090] [10de:2204]\n\tKernel driver in use: nvidia\n' > "$GF/lspci.txt"
-  echo "$NV" > "$GF/nvidia-smi.txt"; : > "$GF/dev/nvidia0"; : > "$GF/dev/nvidiactl"; }
+  echo "$NV" > "$GF/nvidia-smi.txt"; : > "$GF/dev/nvidia0"; : > "$GF/dev/nvidiactl"
+  # The card behind root port 6 with its 32 GiB BAR1 placed in a 64 GiB OVMF window at 64 GiB.
+  mkdir -p "$GF/pci/0000:06:00.0" "$GF/pci/0000:00:1e.0"; echo 0x1b36 > "$GF/pci/0000:00:1e.0/vendor"; echo 0x0100 > "$GF/pci/0000:00:1e.0/device"
+  echo 0x10de > "$GF/pci/0000:06:00.0/vendor"; echo 0x2204 > "$GF/pci/0000:06:00.0/device"
+  printf '%s\n' '0x0000000086000000 0x0000000086ffffff 0x0000000000040200' '0x0000001000000000 0x00000017ffffffff 0x000000000014220c' \
+    '0x0000000000000000 0x0000000000000000 0x0000000000000000' '0x0000001800000000 0x0000001801ffffff 0x000000000014220c' > "$GF/pci/0000:06:00.0/resource"
+  printf '%s\n' '00000000-00000fff : Reserved' '80000000-dfffffff : PCI Bus 0000:00' '1000000000-18ffffffff : PCI Bus 0000:00' \
+    '  1000000000-1801ffffff : PCI Bus 0000:06' '    1000000000-17ffffffff : 0000:06:00.0' > "$GF/iomem"
+  echo 65536 > "$GF/fwcfg-raw"
+  # A complete passing report for this boot and host, written by the probe's own builder, so
+  # that every post case below fails only for the reason it sets up.
+  node --input-type=module -e "import { fixtureReport } from '$SRC/webgl-probe.mjs'; import fs from 'node:fs';
+    fs.writeFileSync('$GF/report.json', JSON.stringify(fixtureReport({ bootId: '$(cat "$GF/boot_id")', host: '$(hostname)', commit: 'abc123', finishedAt: new Date().toISOString() })));"; }
 post_ready; run check post
 is "no report: check post exits 1" eval '[ "$RC" = 1 ] && grep -q "needs the probe" <<<"$OUT"'
 REPORT="$GF/report.json"
-node --input-type=module -e "import { fixtureReport } from '$SRC/webgl-probe.mjs'; import fs from 'node:fs';
-  fs.writeFileSync('$REPORT', JSON.stringify(fixtureReport({ bootId: '$(cat "$GF/boot_id")', host: '$(hostname)', commit: 'abc123', finishedAt: new Date().toISOString() })));"
 is "fixture report written by the probe's own builder" [ -s "$REPORT" ]
 run check post "$REPORT" --commit abc123
 is "complete current report and a working device: check post exits 0" [ "$RC" = 0 ]
+is "R3: BAR1 reported inside the root window, fw_cfg value shown" eval 'grep -q "^PASS BAR1 1000000000-17ffffffff (32768 MiB) assigned inside root window 1000000000-18ffffffff (36 GiB)" <<<"$OUT" && grep -q "^PASS OVMF received X-PciMmio64Mb=65536" <<<"$OUT"'
 run check post "$REPORT" --commit other
 is "report from another commit: exit 1" eval '[ "$RC" = 1 ] && grep -q "built from" <<<"$OUT"'
 echo 00000000-0000-0000-0000-000000000000 > "$GF/boot_id"; run check post "$REPORT" --commit abc123
 is "report from an earlier boot: exit 1" eval '[ "$RC" = 1 ] && grep -q "not this boot" <<<"$OUT"'
+post_ready; sed -i '2s/.*/0x0000000000000000 0x0000000000000000 0x0000000000000000/' "$GF/pci/0000:06:00.0/resource"; run check post "$REPORT" --commit abc123
+is "R3: BAR1 not assigned (window too small): exit 1, only that" eval '[ "$RC" = 1 ] && [ "$(grep -c "^FAIL" <<<"$OUT")" = 1 ] && grep -q "^FAIL BAR1 of 0000:06:00.0 is not assigned" <<<"$OUT"'
+post_ready; sed -i 's/^1000000000-18ffffffff : PCI Bus 0000:00$/1000000000-13ffffffff : PCI Bus 0000:00/' "$GF/iomem"; run check post "$REPORT" --commit abc123
+is "R3: BAR1 outside every root window: exit 1, only that" eval '[ "$RC" = 1 ] && [ "$(grep -c "^FAIL" <<<"$OUT")" = 1 ] && grep -q "is not inside any" <<<"$OUT"'
+post_ready; rm "$GF/iomem"; run check post "$REPORT" --commit abc123
+is "R3: /proc/iomem unreadable: exit 1, only that" eval '[ "$RC" = 1 ] && [ "$(grep -c "^FAIL" <<<"$OUT")" = 1 ] && grep -q "^FAIL cannot read .*iomem as root" <<<"$OUT"'
+post_ready; rm "$GF/fwcfg-raw"; run check post "$REPORT" --commit abc123
+is "R3: fw_cfg not visible is only a warning when BAR1 is placed" eval '[ "$RC" = 0 ] && grep -q "^WARN fw_cfg X-PciMmio64Mb not visible" <<<"$OUT"'
 post_ready; rm "$GF/nvidia-smi.txt"; run check post "$REPORT" --commit abc123
-is "nvidia-smi failing: exit 1" [ "$RC" = 1 ]
+is "nvidia-smi failing: exit 1, and that is the only failure" eval '[ "$RC" = 1 ] && [ "$(grep -c "^FAIL" <<<"$OUT")" = 1 ] && grep -q "^FAIL nvidia-smi" <<<"$OUT"'
 post_ready; echo '{"verdict":"accelerated","exitCode":0}' > "$GF/context.json"; run check post "$GF/context.json" --commit abc123
 is "context-only document: exit 1 (R1-06 case)" eval '[ "$RC" = 1 ] && grep -q "a context probe alone is not a game smoke" <<<"$OUT"'
 

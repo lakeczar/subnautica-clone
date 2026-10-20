@@ -1,6 +1,6 @@
 # RTX 3090 for factory-worker
 
-**Status (2026-10-19): R1 corrections prepared and offline-tested only.** No host file, VM definition, guest package, driver, service or browser setting has been changed, and no `ask` was submitted. Author: Opus 5.5/high (`claude-opus-5-5`, effort high), worktree `t3/enable-3090-gpu`. Round 1 (`e1a85c2`) and round 2 (`c4d5191`) were reviewed by Sol 6.1/xhigh with **REQUEST CHANGES**; [R1-FIX.md](R1-FIX.md) and [R2-FIX.md](R2-FIX.md) map every finding to its correction and checks. Next: root inspection, a fresh Sol review of the whole bundle, then byte-identical placement in Fleet and the native-gated steps below. Nothing here shows a working GPU.
+**Status (2026-10-19): R1 corrections prepared and offline-tested only.** No host file, VM definition, guest package, driver, service or browser setting has been changed, and no `ask` was submitted. Author: Opus 5.5/high (`claude-opus-5-5`, effort high), worktree `t3/enable-3090-gpu`. Round 1 (`e1a85c2`) and round 2 (`c4d5191`) were reviewed by Sol 6.1/xhigh with **REQUEST CHANGES**; [R1-FIX.md](R1-FIX.md) and [R2-FIX.md](R2-FIX.md) map every finding to its correction and checks. `8d6dba9` passed Sol R3. Its real rehearsal (2026-10-20, run `20261020T003504Z-f08a`) correctly stopped on the card's resizable BAR. [R3-FIX.md](R3-FIX.md) covers the 64-bit window this round adds. Next: root inspection, a fresh Sol review of the whole bundle, then byte-identical placement in Fleet and the native-gated steps below. Nothing here shows a working GPU.
 
 ## What the GPU is for
 
@@ -15,7 +15,11 @@
 ## The chain, and where each link is checked
 
 1. **Host:** `0000:01:00.0` (10de:2204, VGA) and `.1` (10de:1aef, audio), bound to `vfio-pci` or no driver, alone in their IOMMU group (bridges allowed). No VM that is not shut off may name them, and no host framebuffer may sit in a BAR. → `host-gpu.sh`, checked at the start, before the shutdown, after it, and again just before the start.
-2. **Definition:** two `<hostdev managed='yes'>` entries in factory-worker on its free `pcie-root-port` index 6 (guest bus 0x06), function 0 with `multifunction='on'` (as in the proven Windows/inference entries). Everything else in the definition must read back byte for byte. QXL stays the primary display for VNC.
+2. **Definition:** our entries in factory-worker:
+   - two `<hostdev managed='yes'>` on its free `pcie-root-port` index 6 (guest bus 0x06), function 0 with `multifunction='on'` (as in the proven Windows/inference entries);
+   - `<sysinfo type='fwcfg'><entry name='opt/ovmf/X-PciMmio64Mb'>65536</entry></sysinfo>`, the 64-bit PCI window OVMF opens, sized for the resizable BAR (next section).
+
+   They are written in one `virsh define` of the VM's own full definition. Everything else must read back byte for byte. QXL stays the primary display for VNC.
 3. **Cold start:** OVMF sizes the root port's windows for the card at boot. VFIO pins all 16 GiB of guest RAM. → start, live entries read back, guest agent answers.
 4. **Guest driver:** Debian 13 `nvidia-kernel-dkms` 550.163.01 built for the running kernel, with nouveau blacklisted. → `worker-gpu.sh check pre|post`, `nvidia-smi`
 5. **Userspace:** glvnd EGL vendor `10_nvidia.json`, GLES2, the NVIDIA Vulkan ICD; `/dev/nvidia0` and `/dev/nvidiactl` usable by `worker`. → `worker-gpu.sh check post`
@@ -23,6 +27,18 @@
 7. **Game:** the probe serves the production `dist/` itself and records its commit and file hashes. It starts a new expedition and waits for the game's own readiness (`#ocean` `data-graphics=available`, `data-ready=true`, HUD shown). It then counts frames from the game's render loop (`data-frames`, one per `scene.render()`) over 5 s, needing at least 10. It checks the canvas image alone (DOM overlays hidden) is a real scene, and fails on page errors, console errors, relevant WebGL warnings and context loss. → `webgl-probe.mjs --dist`, then `webgl-probe.mjs --validate` (called by `check post`), which re-derives the result from the raw observations for this commit, this boot and this host.
 
 A device that only appears in `lspci` passes link 3 and nothing after it. The game frame count from headless Chromium is a functional signal, not a performance figure; 1080p/60 is not measured here.
+
+## Resizable BAR and the 64-bit window
+
+The real rehearsal found resizable BAR enabled on the host. BAR1 is **32 GiB** (`6000000000-67ffffffff`) and BAR3 32 MiB, so 33,587,200 KiB of 64-bit prefetchable memory. OVMF's 64-bit window in this guest is 32 GiB (`7000000000-77ffffffff`, 39 physical bits, `OVMF_CODE-pure-efi.fd`, `pc-q35-10.2`). The card would not fit, and the old fixed 8 GiB limit refused it before anything was changed. Decision: keep ReBAR on the host, avoid a host reboot, and enlarge the guest's window. The owner may still choose to disable ReBAR in the BIOS instead. The script then computes a 64 GiB window as before, which is harmless.
+
+- **What OVMF reads:** fw_cfg `opt/ovmf/X-PciMmio64Mb`, in MiB (edk2 `OvmfPkg/Library/PlatformInitLib/MemDetect.c`). A value sets `PcdPciMmio64Size` and `PcdPciMmio64Override`, which bypasses the dynamic and classic window sizing. The base is then the first address above RAM, aligned to the window's power-of-two size.
+- **How it is set:** libvirt's native `<sysinfo type='fwcfg'>` (since libvirt 6.5). libvirt 12.2.0's `qemuBuildSysinfoCommandLine` turns each entry into exactly `-fw_cfg name=<name>,string=<value>`, and `virSysinfoFormatFWCfg` writes it back as a one-line `<entry>`. No `<qemu:commandline>`, no QEMU namespace and no custom-argv taint. Libvirt's `pcihole64` is not used: it sets only QEMU's ACPI window and not where OVMF places BARs.
+- **Size:** the card's 64-bit prefetchable total, plus 2 GiB for the other root ports' 64-bit padding (5 × 256 MiB observed in the guest), rounded up to a power of two, at least 64 GiB. For this card that is **65536**. This follows edk2's `CalculateResourceAperture`: a root port's aperture is its children packed by alignment and aligned to the bridge's own 1 MiB, so the GPU port needs 32 GiB + 32 MiB, aligned at 32 GiB. The script refuses if the window, placed above all RAM and aligned to its size, would end beyond the CPU's physical address bits (host-passthrough CPU, so the host's `address sizes`: 39 bits = 512 GiB).
+- **Ownership:** our hostdevs and this one fw_cfg entry are "ours". They are added together, compared, and removed together on detach and on every rollback. Any other fw_cfg entry, a `file=` blob for our name, any `<qemu:…>` element, or any non-PCI hostdev is foreign; the run refuses, or leaves the VM for the owner. The whole-definition comparison treats exactly our entries as the only allowed difference.
+- **Check in the guest:** QEMU's ACPI window starts at the lowest 64-bit BAR, so Linux will not show a "64 GiB" window. `check post` requires BAR1 to be assigned and inside a `PCI Bus 0000:00` window of this boot's `/proc/iomem`. It reports the window and, when the `qemu_fw_cfg` module exposes it, the `X-PciMmio64Mb` value OVMF received.
+- **Unraid's form-view VM editor** may rewrite the definition and drop the `<sysinfo>` element (and with it the window). If the owner edits factory-worker in form view, run `ask-command.sh rehearsal`: a dropped entry shows as plan `full`, and `attach` restores it with one restart. Use the XML view to keep it.
+- **Windows 11 Gaming** has the same card and no MMIO settings, so it probably has the same latent problem with resizable BAR on. It is not changed here.
 
 ## Why a cold change, not live hotplug
 
@@ -58,7 +74,7 @@ The scripts check the recovery configuration and never edit it. The host run wai
 Host records: `/mnt/user/appdata/fleet-gpu/host-gpu.sh` (staged) and `runs/<RUN_ID>/`. Each run folder holds:
 
 - `launch.json`, `state.json`, `run.log` (with host facts and every check) and `result.json`;
-- `definition-at-start.xml`, plus `definition-before-change.xml`/`-after-change.xml` and `hostdev-[01].xml`;
+- `definition-at-start.xml`, plus `definition-before-change.xml`/`-after-change.xml` (the `define` file itself holds security info and is a root-only temporary file in the host's `/tmp`, removed at once);
 - `backup.sha256`;
 - when relevant, `changed-definition.xml/.diff`, `unexpected-diff.txt` and `definition-after-undo.xml`.
 
@@ -82,7 +98,7 @@ The full backup with security info is `/boot/config/fleet/vm-backups/factory-wor
 | `needs-owner` | 30 | **not started by the run**: after the shutdown the state or definition could not be read, or its hostdev entries were not the expected ones, or the state after a failed start is unreadable or unusual; the message gives what was observed |
 | `aborted` | 31 | launch again; the plan follows the VM's current state |
 
-A recovery start happens only after a successful read of a shut-off state and a complete definition whose hostdev entries are exactly the expected ones; otherwise the VM stays off as `needs-owner`. After any failed start the run reads the state: running (for example a lost response after boot) counts as started and is not started again; shut off is `left-off`; unreadable or other is `needs-owner`. The plan always comes from the current state: running without the GPU → full; off without → attach and start; off with ours → start only; running with ours → nothing. Any other hostdev (including non-PCI) is refused; `detach` removes only our two entries.
+A recovery start happens only after a successful read of a shut-off state and a complete definition whose entries of ours (hostdevs and the fw_cfg window) are exactly the expected ones; otherwise the VM stays off as `needs-owner`. After any failed start the run reads the state: running (for example a lost response after boot) counts as started and is not started again; shut off is `left-off`; unreadable or other is `needs-owner`. The plan always comes from the current state of our entries, defined and running. Running and different from the target (including a dropped fw_cfg entry) → full. Off and different → change and start. Off and equal → start only. Running and equal → nothing. Anything foreign is refused, and `detach` removes only our entries.
 
 ## Procedure (root; native approval where marked)
 
@@ -96,7 +112,7 @@ U=/mnt/user/appdata/fleet-gpu; B=<placed bundle directory>; SRC=<game source com
 1. **Stage** (no approval): `$H files write $U/host-gpu.sh < $B/host-gpu.sh`; `$H files read $U/host-gpu.sh | sha256sum` must equal the reviewed hash.
 2. **Rehearsal** (approval 1, changes nothing): `$H "ask run $(bash $B/ask-command.sh rehearsal)"`. After approval read `$U/runs/<RUN_ID>/{result.json,run.log}`. Accept only:
    - `rehearsal-ok`/0, `launcher_alive_at_finish` `no`, a `sid` different from `launch.json`'s `launcher_sid`, and a `backup` path;
-   - plan `full`, no PROBLEM lines, and facts showing 10de:2204/1aef, `vfio-pci` or `none`, the group members, BAR sizes with BAR0 seen in the host memory map, every other VM checked, and `MemAvailable` + QEMU RSS ≥ 19,398,656 KiB.
+   - plan `full`, no PROBLEM lines, and facts showing 10de:2204/1aef, `vfio-pci` or `none`, the group members, BAR sizes with BAR0 seen in the host memory map, the 64-bit window line (`X-PciMmio64Mb=65536`, 39 physical bits), every other VM checked, and `MemAvailable` + QEMU RSS ≥ 19,398,656 KiB.
 
    This is also the read-only host diagnostic. `ask-command.sh preflight` gives the checks synchronously if only facts are needed.
 3. **Guest driver** (guest-local, no reboot):
@@ -118,7 +134,7 @@ U=/mnt/user/appdata/fleet-gpu; B=<placed bundle directory>; SRC=<game source com
    - Record resumed services/endpoints, CPU/memory/disks/autostart and unchanged repository/evidence checkpoints; update Fleet `machines.yaml` and `docs/STATE.md` together.
    - Link this GPU-browser workflow from Fleet's operational docs and Siltwake's agent/browser guidance (root's integration step).
 7. **Undo:**
-   - The GPU: `ask-command.sh detach` (another restart).
+   - The GPU: `ask-command.sh detach` (another restart). It removes the hostdevs and the fw_cfg window entry together.
    - The packages, optionally afterwards: `bash $B/worker-gpu.sh undo-plan` is read-only. It lists only packages that one of our recorded plans newly installed, that were absent before, and that are still at the version we installed. It simulates their removal and refuses if apt would remove anything else. It names unrelated or changed packages it leaves alone, and the `apt-mark auto` and sources-file steps, and prints the commands for an operator to run by hand.
    - The owner can always run `bash $U/host-gpu.sh status`, or the same `launch` text, from the web terminal.
 
@@ -127,6 +143,7 @@ If no candidate is accelerated while `nvidia-smi` works, the report holds `chrom
 ## Owner decisions
 
 - **The card becomes factory-worker's.** It autostarts and stays on, so `Windows 11 Gaming`, `Debian AI13 Inference` and `Ubuntu AI 24_OLD` cannot start while it holds the 3090 (libvirt refuses). Their definitions are untouched. Gaming means `detach` first (a worker restart).
+- **Resizable BAR stays on;** the guest gets a 64 GiB 64-bit window instead (no host reboot). Disabling ReBAR in the BIOS remains the owner's alternative.
 - **One worker restart** for attach, and one for any detach.
 - **Host memory:** all 16 GiB of worker RAM becomes pinned; the balloon is ineffective with VFIO. On 2026-10-19 the host had 31 GiB, about 7.5 GiB available, Hermes 4 GiB and no swap.
 - **VNC console:** OVMF may put the EFI console on the NVIDIA card. `check post` reports where it went; `<rom bar='off'/>` would be a separate reviewed change.
@@ -147,7 +164,8 @@ Round-1 fix:
 ## Not verified (needs the real run)
 
 - The GPU's actual IDs, binding, group, BAR sizes, host framebuffer, `vfio-pci.cfg`, QEMU RSS, libvirt pid path, and the security-info backup matching the plain definition on this libvirt. The rehearsal reports or checks all of them before any shutdown.
-- That libvirt formats the inactive definition identically before and after a power-off and after `attach --config`/its undo. A difference makes the run back off or report it; it never forces.
+- That libvirt formats the inactive definition identically before and after a power-off and after our `define`/its undo. A difference makes the run back off or report it; it never forces.
+- That Unraid's OVMF build honours `X-PciMmio64Mb` (in edk2 since 2017) and that OVMF places BAR1 in the 64 GiB window. `check post` shows BAR1 assigned inside a root window.
 - The next ACPI shutdown, OVMF BAR allocation, guest boot with the card, module load, `nvidia-smi`, device permissions, which ANGLE backend renders on the 3090, the draw check and game smoke on it, VNC framebuffer placement, and detach on real libvirt.
 - Any performance figure; a complete-game or 1080p/60 claim.
 
