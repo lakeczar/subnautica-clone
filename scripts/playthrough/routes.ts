@@ -28,9 +28,9 @@ export const CRAFT_ROUTES = {
   canopy_basin: { id: "canopy_basin", source: "B1 CANOPY_BASIN_ROUTE.basin", points: CANOPY_BASIN_ROUTE.basin.map((q) => ({ ...q })) },
   basin_return: { id: "basin_return", source: "B1 CANOPY_BASIN_ROUTE.returnLoop", points: CANOPY_BASIN_ROUTE.returnLoop.map((q) => ({ ...q })) },
   basin_outbound: { id: "basin_outbound", source: "B1 CANOPY_BASIN_ROUTE.returnLoop reversed", points: [...CANOPY_BASIN_ROUTE.returnLoop].reverse().map((q) => ({ ...q })) },
-  /** Basin station → outer-crown mooring, along the clear eastern margin. */
-  basin_to_stop: { id: "basin_to_stop", source: "harness: Basin station → outer-crown mooring", points: [{ ...CANOPY_BASIN_ROUTE.returnLoop[0] }, { ...CANOPY_BASIN_ROUTE.returnLoop[1] }, p(214, -140, -170), { ...CANOPY_STOP.mooring }] },
-  stop_to_return: { id: "stop_to_return", source: "harness: outer-crown mooring → return lane", points: [{ ...CANOPY_STOP.mooring }, p(214, -120, -150), { ...CANOPY_BASIN_ROUTE.returnLoop[2] }, ...CANOPY_BASIN_ROUTE.returnLoop.slice(3).map((q) => ({ ...q }))] },
+  /** Route head → outer-crown mooring along the clear return lane, outside the hunter's territory. */
+  head_to_stop: { id: "head_to_stop", source: "harness: return lane → outer-crown mooring", points: [{ ...CANOPY_BASIN_ROUTE.upper[0] }, p(90, -18, -45), p(170, -55, -90), p(214, -120, -150), { ...CANOPY_STOP.mooring }] },
+  stop_to_head: { id: "stop_to_head", source: "harness: outer-crown mooring → return lane", points: [{ ...CANOPY_STOP.mooring }, p(214, -120, -150), p(170, -55, -90), p(90, -18, -45), { ...CANOPY_BASIN_ROUTE.upper[0] }] },
 } as const satisfies Record<string, CraftRoute>;
 export type CraftRouteId = keyof typeof CRAFT_ROUTES;
 
@@ -63,7 +63,30 @@ export function fly(d: Driver, id: CraftRouteId | CraftRoute, options: { quiet?:
   });
 }
 
-/** Fly straight to a nearby point if the hull sweeps clear there. */
+/** Fly to a nearby point: straight if the hull sweeps clear, otherwise up, across
+ * and down through open water above both ends. */
 export function pilotTo(d: Driver, label: string, to: Vec3, options: { quiet?: boolean } = {}): void {
-  fly(d, { id: label, source: "harness: direct local leg", points: [{ ...to }] }, options);
+  const v = d.occupied();
+  if (!v) throw new Blocked(`${label} needs a piloted craft`, where(d.state));
+  const from = v.pose.position, shape = HULL_COLLIDERS[v.hull as HullId];
+  let points: Waypoint[] = [{ ...to }];
+  if (!sweptHullClearance(d.world, [from, to], shape))
+    for (const rise of [8, 16, 30, 50]) {
+      const y = Math.min(-2, Math.max(from.y, to.y) + rise);
+      const over = [{ ...from, y }, { ...to, y }, { ...to }];
+      if (sweptHullClearance(d.world, [from, ...over], shape)) { points = over; break; }
+    }
+  fly(d, { id: label, source: "harness: local leg, swept", points }, options);
+}
+
+/** Hold position and turn the craft to a heading with real look steps. */
+export function turnTo(d: Driver, yaw: number): void {
+  for (let i = 0; i < 8 * 60; i++) {
+    const v = d.occupied()!;
+    const err = ((yaw - v.pose.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    if (Math.abs(err) < 0.01) return;
+    d.tick([{ type: "look", yawDelta: Math.max(-0.8, Math.min(0.8, err)), pitchDelta: -d.state.player.pose.pitch },
+      { type: "move", forward: 0, right: 0, vertical: 0, sprint: false }]);
+  }
+  throw new Blocked(`Could not turn the craft to heading ${yaw.toFixed(2)}`, where(d.state));
 }

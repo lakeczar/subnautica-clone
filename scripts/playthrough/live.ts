@@ -7,12 +7,15 @@ import { available } from "../../src/sim/inventory.js";
 import { isOptional } from "../../src/content/story/evidence.js";
 import type { DiscoveryId } from "../../src/content/story/evidence.js";
 import type { VehicleState } from "../../src/sim/types.js";
-import { board, craft, gather, interact, leaveCraft, move, openPanel, procure, reach, unload } from "./actions.js";
+import { board, craft, eatIfHungry, gather, interact, leaveCraft, move, openPanel, procure, reach, unload } from "./actions.js";
 import { Blocked, Driver, where } from "./driver.js";
 import { breathe, enter, surface, surfaceTo } from "./nav.js";
 import type { Refuge } from "./nav.js";
-import { fly, pilotTo } from "./routes.js";
-import { dist, route, travel } from "./travel.js";
+import { fly, pilotTo, turnTo } from "./routes.js";
+import { armTarget } from "../../src/sim/fleet.js";
+import { dist, route, travel, yawTo } from "./travel.js";
+import { HULL_COLLIDERS } from "../../src/content/registry.js";
+import { sweptHullClearance } from "../../src/sim/world.js";
 
 export interface PlayOptions {
   /** Read optional personal logs when passing them (the main runs do). */
@@ -218,5 +221,149 @@ const canopy: Phase = {
   },
 };
 
-export const LIVE_PHASES: readonly Phase[] = [opening, reef, isles, canopy];
+// ------------------------------------------------------------------------- Creel
+
+const creel: Phase = {
+  id: "creel", title: "Creel built in the medium slip, cargo rack fitted",
+  missing: () => [],
+  play(d) {
+    make(d, "creel_base", "workshop", ISLES);
+    make(d, "creel_cargo_rack", "workshop", ISLES);
+    const v = d.vehicle("creel")!, rack = d.state.inventory.items.find((i) => i.kind === "creel_cargo_rack")!;
+    d.command({ type: "install-module", vehicleId: v.id, itemId: rack.id });
+    // Departure power: the reserve cells come along in the Creel hold.
+    enter(d, "pod");
+    unload(d, "pod_locker", "diver", ["reserve_cell"]);
+    provision(d, "reef");
+    enter(d, "workshop");
+    unload(d, "diver", v.cargoId, ["reserve_cell"]);
+  },
+};
+
+// ------------------------------------------------------------------------- Basin
+
+/** Bring the Creel's bow over an arm host and let its tool arms lift until empty or full. */
+function armLift(d: Driver, id: SourceId, times: number): number {
+  const host = SOURCES[id].position, shape = HULL_COLLIDERS.creel;
+  // Park beside the host on whichever side has open water, bow toward it.
+  const park = ([[0, 5.5], [0, -5.5], [5.5, 0], [-5.5, 0]] as const)
+    .map(([dx, dz]) => ({ x: host.x + dx, y: host.y + 4.5, z: host.z + dz }))
+    .find((q) => sweptHullClearance(d.world, [{ ...q, y: q.y + 30 }, q], shape));
+  if (!park) throw new Blocked(`No open water beside ${id} for the Creel's bow`, where(d.state));
+  pilotTo(d, `bow over ${id}`, park);
+  turnTo(d, yawTo(park, host));
+  let lifted = 0;
+  for (let i = 0; i < times; i++) {
+    const t = armTarget(d.state);
+    if (!t || t.sourceId !== id || t.refusal) break;
+    d.command({ type: "arm-lift" });
+    d.waitFor(`tool arms on ${id}`, 8, (s) => !s.world.action);
+    lifted++;
+  }
+  return lifted;
+}
+
+const survey: Phase = {
+  id: "basin-survey", title: "Dart to the Pale Basin: C05, C06, the keel plate, Basin crust",
+  missing: () => [],
+  play(d, o) {
+    const dart = (): VehicleState => d.vehicle("dart")!;
+    reach(d, dart().id);
+    board(d, dart().id);
+    fly(d, "dart_out");
+    fly(d, "basin_outbound");
+    // Story order: the dormitory then the station, or the station first when reversed.
+    const sites = [["C05", BASIN_GEOMETRY.dormitory.parking], ["C06", BASIN_GEOMETRY.station.parking]] as const;
+    for (const [id, park] of o.reverse ? [...sites].reverse() : sites) {
+      pilotTo(d, `park for ${id}`, park);
+      leaveCraft(d);
+      discover(d, id, o);
+      returnToCraft(d, dart());
+    }
+    // The 180 m Dart waits above the terrace; the 350 m suit reads the plate below it.
+    pilotTo(d, "park above the keel plate", { x: 172, y: -176, z: -250 });
+    leaveCraft(d);
+    d.legOf("read basin_keel_plate", "work", () => { interact(d, "basin_keel_plate"); });
+    returnToCraft(d, dart());
+    pilotTo(d, "park by the eastern survey fins", { x: 216, y: -160, z: -218 });
+    workFrom(d, dart(), ["basin_survey_fins_east"], { conductive_crust: 8 });
+    pilotTo(d, "back to the station lane", { x: 216, y: -160, z: -232 });
+    fly(d, "basin_return");
+    fly(d, "dart_home");
+    leaveCraft(d);
+    enter(d, "workshop");
+  },
+};
+
+const frames: Phase = {
+  id: "basin-frames", title: "Creel to the Basin: tagged frames and salvage by the tool arms",
+  missing: () => [],
+  play(d) {
+    const creel = (): VehicleState => d.vehicle("creel")!;
+    reach(d, creel().id);
+    board(d, creel().id);
+    fly(d, "creel_out");
+    fly(d, "basin_outbound");
+    armLift(d, "basin_frame_ridge", 3);
+    armLift(d, "basin_frame_terrace", 3);
+    armLift(d, "basin_ridge_salvage_north", 4);
+    pilotTo(d, "back to the station lane", { x: 216, y: -160, z: -232 });
+    fly(d, "basin_return");
+    fly(d, "creel_home");
+    leaveCraft(d);
+    enter(d, "workshop");
+    const hold = creel().cargoId;
+    d.command({ type: "store-materials", from: hold, to: "workshop_locker" });
+    unload(d, hold, "workshop_locker", ["tagged_frame"]);
+  },
+};
+
+/** At the workshop: put `needs` in the diver hold from the locker and the moored
+ * holds, gathering any remainder from the isles and reef. */
+function carry(d: Driver, needs: Readonly<Partial<Record<ItemKind | "tagged_frame", number>>>): void {
+  enter(d, "workshop");
+  const bins = ["workshop_locker", ...d.state.fleet.vehicles.map((v) => v.cargoId)];
+  const short: Partial<Record<ItemKind, number>> = {};
+  for (const [kind, n] of Object.entries(needs) as [ItemKind, number][]) {
+    for (const from of bins) {
+      const left = n - d.count(kind, ["diver"]);
+      if (left > 0 && d.count(kind, [from]) > 0) move(d, kind, Math.min(left, d.count(kind, [from])), from, "diver");
+    }
+    if (n > d.count(kind, ["diver"])) short[kind] = n - d.count(kind, ["diver"]);
+  }
+  if (Object.keys(short).length) procure(d, short, "workshop", ISLES, { stow: false });
+}
+
+// ------------------------------------------------------------------------- refits and the mooring
+
+const refits: Phase = {
+  id: "refits", title: "Creel and Dart refits to 350 m, outer-crown mooring restored",
+  missing: () => [],
+  play(d) {
+    make(d, "creel_350", "workshop", ISLES);
+    make(d, "dart_350", "workshop", ISLES);
+    // One 14 CU diver load restores the dark mooring; its locker is shut until then,
+    // so eat first and carry a single meal.
+    enter(d, "workshop");
+    eatIfHungry(d, 70);
+    if (d.count("meal", ["diver"]) > 1) move(d, "meal", d.count("meal", ["diver"]) - 1, "diver", "workshop_locker");
+    carry(d, { tagged_frame: 1, silica_glass: 2, conductive_crust: 2 });
+    const dart = d.vehicle("dart")!;
+    reach(d, dart.id);
+    board(d, dart.id);
+    fly(d, "dart_out");
+    fly(d, "head_to_stop");
+    leaveCraft(d);
+    openPanel(d, "canopy_stop_services");
+    craft(d, "restore_canopy_stop");
+    d.command({ type: "service", vehicleId: dart.id }, { allowRefusal: true });
+    returnToCraft(d, d.vehicle("dart")!);
+    fly(d, "stop_to_head");
+    fly(d, "dart_home");
+    leaveCraft(d);
+    enter(d, "workshop");
+  },
+};
+
+export const LIVE_PHASES: readonly Phase[] = [opening, reef, isles, canopy, survey, creel, frames, refits];
 export { BASIN_GEOMETRY, CANOPY_STOP, RECOVERY_SURFACE_OPERATOR, surface, surfaceTo, breathe };
