@@ -2,6 +2,9 @@ import { CANOPY_COVER, SOURCES } from "../content/registry.js";
 import { BASIN_FRACTURE, BASIN_GEOMETRY, CANOPY_MARGIN_RIBS, CANOPY_STOP, CREEL_SLIP_SOLIDS, LEGACY_TERRAIN_SOURCE_IDS, LEGACY_WORLD_BOUNDS,
   M2A_BASIN_MIN_Z, ROUTE_TERRAIN_SOURCE_IDS, ROUTE_WORLD_BOUNDS, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
 import type { Capsule, MovementOptions, Vec3, WorldQueries } from "./types.js";
+import { createSpatialIndex } from "../world/spatialIndex.js";
+import { solidEntries } from "../world/queries.js";
+import type { SpatialQuery } from "../world/types.js";
 import { actorBox, RIB_CONTACT_TOLERANCE, RIB_SLIDE_ITERATIONS, ribUpperHeight,
   segmentBoxClosest, sweptBoxIntersects, sweepBoxRib } from "./ribCollision.js";
 
@@ -484,18 +487,55 @@ function benchCutWalls(p: Vec3, d: Vec3, shape: Capsule): Solid[] | null {
   return result;
 }
 
+/** Rosters at least this long get the indexed broad phase. Shorter ones (a
+ * cabin, a carrier interior) scan faster than they index. */
+const BROAD_PHASE_MIN = 48;
+/** Candidate margin: any superset of the touched solids, kept in roster
+ * order, gives the exact same answer because the narrow phase still decides. */
+const BROAD_PHASE_MARGIN = 1;
+const TALL = 1e6;
+const broadPhases = new WeakMap<readonly Solid[], SpatialQuery<Solid> | null>();
+/** The roster's spatial index, built once per roster array, or null for a
+ * short roster or one holding an invalid box (whose full scan must still see
+ * it and refuse, exactly as before). */
+function broadPhase(solids: readonly Solid[]): SpatialQuery<Solid> | null {
+  let index = broadPhases.get(solids);
+  if (index === undefined) {
+    index = solids.length >= BROAD_PHASE_MIN && solids.every(s => finitePoint(s.min) && finitePoint(s.max) &&
+      AXES.every(axis => s.min[axis] <= s.max[axis]))
+      ? createSpatialIndex(solidEntries(solids))
+      : null;
+    broadPhases.set(solids, index);
+  }
+  return index;
+}
+const grown = (box: { min: Vec3; max: Vec3 }, by: number): { min: Vec3; max: Vec3 } => ({
+  min: { x: box.min.x - by, y: box.min.y - by, z: box.min.z - by },
+  max: { x: box.max.x + by, y: box.max.y + by, z: box.max.z + by },
+});
+
+/** World queries over a solid roster. Rosters of `BROAD_PHASE_MIN` or more
+ * solids narrow each call to the solids near it through a spatial index
+ * (cost follows nearby solids, not the whole world); the narrow phase is the
+ * same either way, so results are identical (tests/world-queries.test.ts).
+ * `broadPhase: false` forces the full scan, for that comparison. */
 export function createWorldQueries(
   solids: readonly Solid[] = SOLIDS,
   floorHeight: (x: number, z: number) => number = surfaceHeight,
+  options: { broadPhase?: boolean } = {},
 ): WorldQueries {
   const worldTerrain = floorHeight === surfaceHeight || floorHeight === terrainHeight;
+  const index = options.broadPhase === false ? null : broadPhase(solids);
+  const near = (box: { min: Vec3; max: Vec3 }): readonly Solid[] =>
+    index ? index.inBox(box, ["solid"]).map(e => e.data!) : solids;
   return {
     lineOfSight(a, b, ignore = []) {
       if (!finitePoint(a) || !finitePoint(b)) return false;
       const length = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
       const steps = Math.max(1, Math.ceil(length / 0.15));
       if (!Number.isFinite(steps) || steps > 100000) return false;
-      for (const solid of solids) {
+      const candidates = index ? index.alongSegment(a, b, BROAD_PHASE_MARGIN, ["solid"]).map(e => e.data!) : solids;
+      for (const solid of candidates) {
         if (!finitePoint(solid.min) || !finitePoint(solid.max) ||
             AXES.some(axis => solid.min[axis] > solid.max[axis])) return false;
         if (ignore.includes(solid.id)) continue;
@@ -523,7 +563,7 @@ export function createWorldQueries(
       )
         return false;
       const box = actorBox(origin, capsule);
-      return !solids.some((s) => {
+      return !near(grown(box, BROAD_PHASE_MARGIN)).some((s) => {
         if (!sweptBoxIntersects(box, { x: 0, y: 0, z: 0 }, s)) return false;
         const rib = canonicalRib(s);
         if (rib) return segmentBoxClosest(rib.a, rib.b, box).distance < rib.radius - RIB_CONTACT_TOLERANCE;
@@ -541,7 +581,9 @@ export function createWorldQueries(
     groundHeight: floorHeight,
     supportHeight(x, z, fromY) {
       let height = floorHeight(x, z);
-      for (const solid of solids) {
+      const column = { min: { x: x - BROAD_PHASE_MARGIN, y: -TALL, z: z - BROAD_PHASE_MARGIN },
+        max: { x: x + BROAD_PHASE_MARGIN, y: TALL, z: z + BROAD_PHASE_MARGIN } };
+      for (const solid of index && Number.isFinite(x) && Number.isFinite(z) ? near(column) : solids) {
         const rib = canonicalRib(solid);
         if (rib) {
           if (x >= solid.min.x && x <= solid.max.x && z >= solid.min.z && z <= solid.max.z) {
@@ -569,6 +611,11 @@ export function createWorldQueries(
       if (options?.separateBoxOverlaps && (solids.some(s => !finitePoint(s.min) || !finitePoint(s.max) ||
           AXES.some(a => s.min[a] > s.max[a])) || !Number.isFinite(floorHeight(origin.x, origin.z))))
         return { position: { ...origin }, hitSolid: true, hitBoundary: false };
+      // Slides never travel further than |delta| in total, so the actor box
+      // grown by that length bounds every swept contact.
+      const reach = Math.hypot(delta.x, delta.y, delta.z);
+      const candidates = index && Number.isFinite(reach)
+        ? near(grown(actorBox(origin, capsule), reach + BROAD_PHASE_MARGIN)) : solids;
       let position = { ...origin },
         remaining = { ...delta },
         hitSolid = false, clippedBoundary = false;
@@ -601,7 +648,7 @@ export function createWorldQueries(
           const hit = sweepTerrain(position, remaining, capsule, solid);
           if (hit && (!nearest || hit.t < nearest.t)) nearest = { ...hit, rib: false, stop: false };
         }
-        for (const solid of solids) {
+        for (const solid of candidates) {
           if (!sweptBoxIntersects(box, remaining, solid)) continue;
           const rib = canonicalRib(solid);
           if (!rib && options?.separateBoxOverlaps) {
