@@ -169,3 +169,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
   - R2 caves and underground, design plus technology (`siltwake-research-r2-caves`);
   - R3 landmarks, creatures and resources (`siltwake-research-r3-landmarks-fauna`).
 - **Next:** the coordinator consolidates these into an iteration-1 plan (caves and a content density pass) and an iteration-2 map note.
+- **A1 FINAL: accepted at `7b81cbb`.** The coordinator inspected the pipe fix and the both-direction invariant test. **Integrated into root at `dfdb727`:** fast 739/739, build OK. `VISTA_SOLIDS` is 5,195 boxes, and C3 appends them to the broad phase and measures the cost.
