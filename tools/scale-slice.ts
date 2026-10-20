@@ -47,7 +47,10 @@ const instrumentation = new SceneInstrumentation(scene);
 const layout = createSliceLayout({ density: num("density", 1), setPieces: num("setpieces", 0.25), parts: num("parts", 240) });
 const map = createWorldMap(layout, sliceEntries());
 const templates = new TemplateLibrary(templateRecipes());
-const loader = createKitLoader({ scene, material: kit, templates, factories: KIT_FACTORIES, context: defaultContext(sliceFloor) });
+const loader = createKitLoader({ scene, material: kit, templates, factories: KIT_FACTORIES, context: defaultContext(sliceFloor, 0.75, undefined, (x, z) => {
+  const r = map.regionAt({ x, y: 0, z });
+  return r ? map.region(r)!.biomes[0]! : "reef_shelf";
+}) });
 const residency = createResidency({
   map, loader,
   budget: {

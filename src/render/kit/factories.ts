@@ -17,10 +17,11 @@ export function seededRandom(seed: number): () => number {
 /** Build context whose `due()` turns true `stepMs` after `startStep()`; the
  * kit loader starts the clock before resuming each factory step. */
 export function defaultContext(floor: (x: number, z: number) => number, stepMs = 0.75,
-  now: () => number = () => performance.now()): ChunkBuildContext & { startStep(): void } {
+  now: () => number = () => performance.now(), biomeAt?: (x: number, z: number) => string,
+): ChunkBuildContext & { startStep(): void } {
   let deadline = Infinity;
   return {
-    floor, random: seededRandom,
+    floor, random: seededRandom, ...(biomeAt ? { biomeAt } : {}),
     due: () => now() >= deadline,
     startStep() { deadline = now() + stepMs; },
   };
@@ -47,19 +48,45 @@ export const terrainFactory: ChunkArtFactory = {
       if (ctx.due()) yield;
     }
     const at = (i: number, j: number): number => h[(j + 1) * side + (i + 1)]!;
-    const [light, dark] = GROUND[chunk.biome] ?? [P.sand, P.stoneLight];
-    const lightC = rgba(light, 0), darkC = rgba(dark, 0);
+    // Ground palette blended on a 16 m world lattice: every lattice point
+    // averages the biomes within 16 m, so chunks agree along shared edges.
+    const LATTICE = 16;
+    const palette = (biome: string): readonly [Rgba, Rgba] => {
+      const [light, dark] = GROUND[biome] ?? [P.sand, P.stoneLight];
+      return [rgba(light, 0), rgba(dark, 0)];
+    };
+    const lattice = new Map<string, readonly [Rgba, Rgba]>();
+    const latticeAt = (lx: number, lz: number): readonly [Rgba, Rgba] => {
+      const k = `${lx}:${lz}`, hit = lattice.get(k);
+      if (hit) return hit;
+      const acc = [0, 0, 0, 0, 0, 0];
+      for (const ox of [-1, 0, 1]) for (const oz of [-1, 0, 1]) {
+        const [l, d] = palette(ctx.biomeAt ? ctx.biomeAt(lx + ox * LATTICE, lz + oz * LATTICE) : chunk.biome);
+        for (let c = 0; c < 3; c++) { acc[c]! += l[c]! / 9; acc[c + 3]! += d[c]! / 9; }
+      }
+      const out: readonly [Rgba, Rgba] = [[acc[0]!, acc[1]!, acc[2]!, 0], [acc[3]!, acc[4]!, acc[5]!, 0]];
+      lattice.set(k, out);
+      return out;
+    };
     const b = new RecipeBuilder();
-    const colorAt = (y: number, slope: number): Rgba => {
+    const colorAt = (x: number, z: number, y: number, slope: number): Rgba => {
+      const lx = Math.floor(x / LATTICE) * LATTICE, lz = Math.floor(z / LATTICE) * LATTICE;
+      const fx = (x - lx) / LATTICE, fz = (z - lz) / LATTICE;
+      const c00 = latticeAt(lx, lz), c10 = latticeAt(lx + LATTICE, lz), c01 = latticeAt(lx, lz + LATTICE), c11 = latticeAt(lx + LATTICE, lz + LATTICE);
       const t = Math.min(1, Math.max(0, slope * 1.4 + Math.max(0, -y - 40) / 900));
-      return [lightC[0] + (darkC[0] - lightC[0]) * t, lightC[1] + (darkC[1] - lightC[1]) * t,
-        lightC[2] + (darkC[2] - lightC[2]) * t, 0];
+      const out: number[] = [];
+      for (let c = 0; c < 3; c++) {
+        const mix = (k: 0 | 1) => (c00[k][c]! * (1 - fx) + c10[k][c]! * fx) * (1 - fz) + (c01[k][c]! * (1 - fx) + c11[k][c]! * fx) * fz;
+        out.push(mix(0) + (mix(1) - mix(0)) * t);
+      }
+      return [out[0]!, out[1]!, out[2]!, 0];
     };
     const grid: number[] = [];
     for (let j = 0; j <= n; j++) {
       for (let i = 0; i <= n; i++) {
         const y = at(i, j), dx = (at(i + 1, j) - at(i - 1, j)) / (2 * spacing), dz = (at(i, j + 1) - at(i, j - 1)) / (2 * spacing);
-        grid.push(b.vertex([min.x + i * spacing, y, min.z + j * spacing], [-dx, 1, -dz], colorAt(y, Math.hypot(dx, dz))));
+        grid.push(b.vertex([min.x + i * spacing, y, min.z + j * spacing], [-dx, 1, -dz],
+          colorAt(min.x + i * spacing, min.z + j * spacing, y, Math.hypot(dx, dz))));
       }
       if (ctx.due()) yield;
     }
@@ -78,8 +105,8 @@ export const terrainFactory: ChunkArtFactory = {
       const [i0, j0] = border(k, edge), [i1, j1] = border(k + 1, edge);
       const top0 = grid[j0 * (n + 1) + i0]!, top1 = grid[j1 * (n + 1) + i1]!;
       const out: [number, number, number] = edge === 0 ? [0, 0, -1] : edge === 1 ? [1, 0, 0] : edge === 2 ? [0, 0, 1] : [-1, 0, 0];
-      const lo0 = b.vertex([min.x + i0 * spacing, at(i0, j0) - drop, min.z + j0 * spacing], out, darkC);
-      const lo1 = b.vertex([min.x + i1 * spacing, at(i1, j1) - drop, min.z + j1 * spacing], out, darkC);
+      const lo0 = b.vertex([min.x + i0 * spacing, at(i0, j0) - drop, min.z + j0 * spacing], out, colorAt(min.x + i0 * spacing, min.z + j0 * spacing, -900, 1));
+      const lo1 = b.vertex([min.x + i1 * spacing, at(i1, j1) - drop, min.z + j1 * spacing], out, colorAt(min.x + i1 * spacing, min.z + j1 * spacing, -900, 1));
       b.triangle(top0, lo0, top1); b.triangle(top1, lo0, lo1);
     }
     yield;

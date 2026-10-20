@@ -42,6 +42,9 @@ export interface ChunkBuildContext {
    * check it in inner loops and `yield` when it turns true, so a step stays
    * short however expensive the floor or the art is. */
   due(): boolean;
+  /** Biome at a world position (by region footprint), for blending palettes
+   * across chunk edges. Optional: without it a chunk uses its own biome. */
+  biomeAt?(x: number, z: number): string;
 }
 
 /** A render factory, registered under `id` and referenced from descriptors.
