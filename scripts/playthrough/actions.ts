@@ -102,9 +102,17 @@ export function reach(d: Driver, id: string): void {
   } else {
     if (mode === "walking") toWater(d);
     const p = d.state.player.pose.position;
+    // Air is the nearest of the surface and a powered craft moored close by (a deep
+    // sortie's own craft): budget the swim there and back to it, not up 600 m.
+    const craft = d.state.fleet.vehicles.filter((v) => !v.berth && !v.disabled && v.charge > 0 && dist(v.pose.position, p) < 40)
+      .map((v) => dist(v.pose.position, b)).sort((x, y) => x - y)[0];
+    const toAir = Math.min(-b.y / 3, craft === undefined ? Infinity : craft / 3);
     const direct = dist(p, b) < 30 && d.world.lineOfSight({ ...p, y: p.y + 0.5 }, { ...b, y: b.y + 0.5 }) &&
-      airSeconds(d) > dist(p, b) / 3 + -b.y / 3 + 25;
+      airSeconds(d) > dist(p, b) / 3 + toAir + 25;
     if (direct) travel(d, route(`approach ${id}`, "diver", "local approach, played", [b]), `to ${id}`);
+    else if (-p.y / 3 + 25 > airSeconds(d))
+      // Surfacing from here would drown the diver: name it instead of trying.
+      throw new Blocked(`No clear swim to ${id} within reach of the craft, and the surface (${(-p.y).toFixed(0)} m up) is beyond suit air`, where(d.state));
     else {
       surfaceTo(d, b);
       breathe(d);

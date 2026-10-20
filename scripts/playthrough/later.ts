@@ -6,7 +6,11 @@
  * Assumptions C3 should confirm (or adapt here) are marked ASSUME. */
 import { HULL_BUILD, HULL_COLLIDERS, ITEMS, RECIPES, SOURCES } from "../../src/content/registry.js";
 import type { ItemKind, RecipeId, SourceId } from "../../src/content/registry.js";
-import { isOptional, STORY_RECIPES } from "../../src/content/story/evidence.js";
+import { isOptional, siteOf, STORY_RECIPES } from "../../src/content/story/evidence.js";
+import { STORY_PLACEMENTS } from "../../src/content/story/placements.js";
+import { SITES } from "../../src/content/regions/sites.js";
+import { parkPose } from "../../src/content/regions/access.js";
+import { worldFloor } from "../../src/content/regions/worldFloor.js";
 import type { DiscoveryId, StorySiteId } from "../../src/content/story/evidence.js";
 import { WORKS_TEXT } from "../../src/content/story/works.js";
 import type { WorksAction } from "../../src/content/story/works.js";
@@ -15,6 +19,7 @@ import { worksAction } from "../../src/sim/story/works.js";
 import { interactions } from "../../src/sim/progression.js";
 import { hullClearance, sweptHullClearance } from "../../src/sim/world.js";
 import { CARRIER_LAYOUT, localToWorld } from "../../src/sim/carrier.js";
+import { SERVICE_MOORINGS } from "../../src/content/stops.js";
 import type { GameCommand, Vec3, VehicleState } from "../../src/sim/types.js";
 import { board, craft, gather, interact, leaveCraft, move, procure, reach, unload, eatIfHungry } from "./actions.js";
 import { campaignSite, need, s2Route, worksFace, worksFaceId } from "./content.js";
@@ -49,9 +54,18 @@ const sites = (...ids: string[]): Missing[] => ids.flatMap(need.site);
 /** Fly an S2 route (validated by S2's swept corridor tests, and again here by the
  * game's own hull sweep). Reversed for return journeys. */
 function followS2(d: Driver, id: string, reverse = false): void {
+  eatIfHungry(d);
   const r = s2Route(id);
   const path = reverse ? [...r.path].reverse() : [...r.path];
   fly(d, { id: `${id}${reverse ? " (back)" : ""}`, source: `S2 ${id}, ${r.profile} profile`, points: path.map((p) => ({ ...p })) });
+}
+/** Long later phases (C3): eat at the workshop and carry three meals; eat()
+ * reaches the diver hold anywhere, and followS2 eats between legs. */
+function provision(d: Driver): void {
+  enter(d, "workshop");
+  eatIfHungry(d, 70);
+  procure(d, { meal: 3 }, "workshop", ISLES);
+  carry(d, { meal: 3 });
 }
 /** A keel pose near `point` the occupied hull can hold, reached from above. */
 function parkNear(d: Driver, point: Vec3): Vec3 {
@@ -104,11 +118,21 @@ function toWorkPose(d: Driver, site: string, work: Vec3): void {
     dry ? [{ x: work.x, y: -0.5, z: work.z, tolerance: 6 }, { ...work, land: true, tolerance: 0.8 }] : [{ ...work, tolerance: 0.8 }]));
 }
 /** Park by an interaction host (or at a composed mooring), exit, run `work`, swim back and board. */
-function sortie(d: Driver, at: Vec3, label: string, work: () => void): void {
+/** C3: the S2 site hosting a placed story discovery has an authored craft park
+ * pose with a proven final diver swim; use it when the craft fits there. */
+function s2ParkFor(d: Driver, id: string): Vec3 | undefined {
+  const placed = (STORY_PLACEMENTS as Record<string, { s2: string }>)[siteOf(id as DiscoveryId)];
+  const site = placed && SITES.find((x) => x.id === placed.s2);
+  const v = d.occupied();
+  if (!site || !v) return undefined;
+  const p = parkPose(site, worldFloor);
+  return hullClearance(d.world, p, HULL_COLLIDERS[v.hull]) && -p.y <= v.rating ? p : undefined;
+}
+function sortie(d: Driver, at: Vec3, label: string, work: () => void, park?: Vec3): void {
   const v = d.occupied()!;
   // A host ashore: the craft stays afloat where the route ended; the diver walks in.
   if (at.y <= 0.5) {
-    const s2park = hullClearance(d.world, at, HULL_COLLIDERS[v.hull]) ? at : parkNear(d, at);
+    const s2park = park ?? (hullClearance(d.world, at, HULL_COLLIDERS[v.hull]) ? at : parkNear(d, at));
     // Never take a hull below its rating: that is a choice of craft, not a route.
     if (-s2park.y > v.rating) throw new Blocked(`The ${v.hull} (rated ${v.rating} m) would park at ${(-s2park.y).toFixed(0)} m for ${label}`, where(d.state));
     pilotTo(d, `park for ${label}`, s2park);
@@ -132,7 +156,7 @@ const hostAt = (d: Driver, id: string): Vec3 => {
 function story(d: Driver, id: string, o: PlayOptions): void {
   if (d.knows(id) || (isOptional(id as DiscoveryId) && !o.readOptional)) return;
   if (need.story(id).length) { d.deferred.push(id); return; }
-  sortie(d, hostAt(d, id), id, () => { interact(d, id); });
+  sortie(d, hostAt(d, id), id, () => { interact(d, id); }, s2ParkFor(d, id));
   if (!d.knows(id)) throw new Blocked(`Interacting with ${id} recorded nothing: ${d.state.feedback}`, where(d.state));
 }
 /** Gather a source from the craft into its hold, a diver load per sortie. */
@@ -284,6 +308,7 @@ const deepRecords = (strategy: Strategy): Phase => ({
     ...(d.vehicle("dart") ? [] : [{ key: "owned:dart", text: "an owned Dart" }]),
   ],
   play(d, o) {
+    provision(d);
     // Surface run to the headland shelter in the Dart.
     boardCraft(d, "dart");
     fly(d, "dart_out");
@@ -305,6 +330,7 @@ const deepRecords = (strategy: Strategy): Phase => ({
       followS2(d, "route.basin.legacy_anchorage");
       followS2(d, "route.basin.divide");
       story(d, "C12", o);
+      chargeCraftAt(d, "divide.lee_mooring");
       homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
     } else {
       carrierTo(d, CARRIER_TO_DIVIDE);
@@ -376,7 +402,11 @@ function toMeridian(d: Driver, strategy: Strategy): void {
     boardCraft(d, "creel");
     fly(d, "creel_out");
     fly(d, "basin_outbound");
-    for (const id of ["route.basin.legacy_anchorage", "route.basin.divide", "route.divide.service_ledge"]) followS2(d, id);
+    followS2(d, "route.basin.legacy_anchorage");
+    followS2(d, "route.basin.divide");
+    // C3: S2's moorings charge; top up before the service ledge and the terraces.
+    chargeCraftAt(d, "divide.lee_mooring");
+    followS2(d, "route.divide.service_ledge");
     return;
   }
   carrierTo(d, CARRIER_TO_SHELF);
@@ -391,7 +421,9 @@ function launchMantle(d: Driver): void {
 }
 function fromMeridian(d: Driver, strategy: Strategy): void {
   if (strategy === "creel") {
+    chargeCraftAt(d, "meridian.staging_shelf");
     followS2(d, "route.divide.service_ledge", true);
+    chargeCraftAt(d, "divide.lee_mooring");
     homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
     return;
   }
@@ -405,9 +437,25 @@ const meridian = (strategy: Strategy): Phase => ({
   missing: () => [...meridianMissing(),
     ...(strategy === "carrier" ? [...routes("route.divide.meridian_broad"), ...sites("meridian.staging_shelf")] : [])],
   play(d, o) {
+    provision(d);
     toMeridian(d, strategy);
     const order = ["C08", "C10", "iona_ledger_note", "C09", "gate_panel", "C13", "district_controller"];
-    for (const id of o.reverse ? [...order].reverse() : order) story(d, id, o);
+    const deep = new Set(["C09", "gate_panel", "C13", "district_controller"]);
+    let down = false;
+    for (const id of o.reverse ? [...order].reverse() : order) {
+      // The gate hall and service window lie 170 m below the terraces: charge at the
+      // shelf, then fly S2's terrace route down (and back up before leaving).
+      if (strategy === "creel" && deep.has(id) && !down) {
+        chargeCraftAt(d, "meridian.staging_shelf");
+        followS2(d, "route.meridian.terraces");
+        down = true;
+      } else if (strategy === "creel" && !deep.has(id) && down) {
+        followS2(d, "route.meridian.terraces", true);
+        down = false;
+      }
+      story(d, id, o);
+    }
+    if (down) followS2(d, "route.meridian.terraces", true);
     fromMeridian(d, strategy);
   },
 });
@@ -499,6 +547,7 @@ const works = (strategy: Strategy): Phase => ({
   id: "works", title: "The return-gate works: power, air, isolate, equalize, open; hall, food, turbine power",
   missing: worksMissing,
   play(d) {
+    provision(d);
     const cargo = stageWorksCargo(d);
     const assemblies: Cargo = { ids: cargo.ids, stock: {} }, stock: Cargo = { ids: [], stock: cargo.stock };
     const gate: WorksAction[] = ["install_power", "install_air", "isolate", "equalize", "open"];
@@ -619,6 +668,14 @@ function stockUp(d: Driver, cost: Readonly<Record<string, number>>): void {
 
 /** At an S2 carrier mooring that lists "charge": hold station and ask for service. A
  * refusal is recorded; the run goes on with whatever charge the carrier has. */
+/** C3: every S2 mooring that lists charge services any craft moored there. */
+function chargeCraftAt(d: Driver, site: string): void {
+  const m = SERVICE_MOORINGS.find((x) => x.id === site);
+  if (!m) throw new Error(`No charging mooring ${site}`);
+  pilotTo(d, `moor at ${site} to charge`, m.position);
+  const v = d.occupied()!;
+  d.command({ type: "service", vehicleId: v.id }, { allowRefusal: true });
+}
 function chargeAtMooring(d: Driver, site: string): void {
   const h = carrier(d);
   d.command({ type: "carrier", action: "station-keep" });
@@ -648,11 +705,7 @@ const carrierDeep: Phase = {
     ...sites("divide.lee_mooring", "isles.stack_yard"),
   ],
   play(d) {
-    // A long carrier phase (C3): eat, then carry meals; eat() reaches the diver hold and the galley aboard.
-    enter(d, "workshop");
-    eatIfHungry(d, 70);
-    procure(d, { meal: 4 }, "workshop", ISLES);
-    carry(d, { meal: 4 });
+    provision(d);
     boardCraft(d, "hearthline");
     for (const id of ["route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide"]) { eatIfHungry(d); followS2(d, id); }
     // Lattice: Hearthline 550 L6, Mantle L5, suit 800 L4, air assembly L2. S2's ledge

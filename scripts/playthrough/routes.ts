@@ -5,7 +5,7 @@ import { CREEL_BUILD_POSE, DART_BUILD_POSE, HULL_COLLIDERS, THREAT_HOME } from "
 import type { HullId } from "../../src/content/registry.js";
 import { CANOPY_BASIN_ROUTE, CANOPY_STOP } from "../../src/content/routes.js";
 import { sweptHullClearance } from "../../src/sim/world.js";
-import type { Vec3 } from "../../src/sim/types.js";
+import type { Capsule, Vec3 } from "../../src/sim/types.js";
 import { Blocked, Driver, where } from "./driver.js";
 import { dist, route, travel } from "./travel.js";
 import type { Waypoint } from "./travel.js";
@@ -50,10 +50,18 @@ export function fly(d: Driver, id: CraftRouteId | CraftRoute, options: { quiet?:
   const v = d.occupied();
   if (!v || d.state.player.controlledVehicleId !== v.id) throw new Blocked(`Route ${r.id} needs a piloted craft`, where(d.state));
   const shape = HULL_COLLIDERS[v.hull as HullId];
+  // Low on power before a leg: plug in a carried reserve cell (each adds up to 35%).
+  if (v.charge < 35 && v.hull !== "hearthline") d.command({ type: "reserve", vehicleId: v.id }, { allowRefusal: true });
   // Join the route at the nearest point the hull can reach in a clear straight line.
   const here = v.pose.position;
-  const join = r.points.map((q, i) => ({ i, d: dist(q, here) })).sort((a, b) => a.d - b.d)
-    .find(({ i }) => sweptHullClearance(d.world, [here, r.points[i]!], shape))?.i ?? 0;
+  const nearest = r.points.map((q, i) => ({ i, d: dist(q, here) })).sort((a, b) => a.d - b.d);
+  let join = nearest.find(({ i }) => sweptHullClearance(d.world, [here, r.points[i]!], shape))?.i;
+  if (join === undefined) {
+    // No point in a clear straight line (a ridge between): climb to the nearest first.
+    join = nearest[0]!.i;
+    pilotTo(d, `join ${r.id}`, r.points[join]!, options);
+    return fly(d, { ...r, points: r.points.slice(join) }, options);
+  }
   const rest = r.points.slice(join);
   const points = [{ ...here }, ...rest.filter((q, i) => i > 0 || dist(q, here) > 2)];
   for (let i = 0; i < points.length - 1; i++)
@@ -80,13 +88,20 @@ export function pilotTo(d: Driver, label: string, to: Vec3, options: { quiet?: b
   const v = d.occupied();
   if (!v) throw new Blocked(`${label} needs a piloted craft`, where(d.state));
   const from = v.pose.position, shape = HULL_COLLIDERS[v.hull as HullId];
-  let points: Waypoint[] = [{ ...to }];
-  if (!sweptHullClearance(d.world, [from, to], shape))
+  // Prefer a 1.5 m margin: the craft's bounded turning wanders off a straight line,
+  // so a leg that only just clears (a mooring pylon) climbs over when it can. With
+  // no margin plan, the exact hull plans as before.
+  const wide = { ...shape, radius: shape.radius + 1.5 };
+  const plan = (hull: Capsule): Waypoint[] | null => {
+    if (sweptHullClearance(d.world, [from, to], hull)) return [{ ...to }];
     for (const rise of [8, 16, 30, 50]) {
       const y = Math.min(-2, Math.max(from.y, to.y) + rise);
       const over = [{ ...from, y }, { ...to, y }, { ...to }];
-      if (sweptHullClearance(d.world, [from, ...over], shape)) { points = over; break; }
+      if (sweptHullClearance(d.world, [from, ...over.slice(0, 2)], hull) && sweptHullClearance(d.world, [over[1]!, to], shape)) return over;
     }
+    return null;
+  };
+  const points: Waypoint[] = plan(wide) ?? plan(shape) ?? [{ ...to }];
   fly(d, { id: label, source: "harness: local leg, swept", points }, options);
 }
 
