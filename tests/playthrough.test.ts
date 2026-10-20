@@ -21,8 +21,9 @@ import { malformedExpected, staleExpected } from "../scripts/playthrough/pending
 import { emptyRun } from "../scripts/playthrough/timeline.js";
 import { loadCampaign, need, optionalModule } from "../scripts/playthrough/content.js";
 import { Blocked, Driver } from "../scripts/playthrough/driver.js";
-import { CARRIER_LATER, CREEL_LATER, sortieHull, stageWorksCargo, worksSite } from "../scripts/playthrough/later.js";
-import { LIVE_PHASES } from "../scripts/playthrough/live.js";
+import { CARRIER_LATER, CREEL_LATER, deliverToCarrier, sortieHull, stageWorksCargo, worksSite } from "../scripts/playthrough/later.js";
+import { LIVE_PHASES, REFITS_PHASE } from "../scripts/playthrough/live.js";
+import { executeCommand } from "../src/sim/step.js";
 import { runPhases } from "../scripts/playthrough/runner.js";
 
 // The full campaign runs as `npm run playthrough`; this keeps its first real slice
@@ -193,5 +194,55 @@ test("R2: carrier cargo moves only through the vestibule and the craft's side (s
   enterCarrier(d);
   ferryFromCarrier(d, creel.id, { ids: [a.id, b.id], stock: {} });
   assert.deepEqual([a.id, b.id].map((id) => d.state.inventory.items.find((i) => i.id === id)!.containerId), [creel.cargoId, creel.cargoId]);
+  assert.equal(d.run.refusals.length, 0);
+});
+
+test("R3: a command accepted without its effect blocks: a silent refit, transfer, service, mount or store", () => {
+  // Seeded: a Creel-first state at the workshop bench with the 350 m refit paid for.
+  const s = creelFirst(["creel_cargo_rack"]);
+  for (const [k, n] of Object.entries(RECIPES.creel_350.cost)) addItem(s, k as ItemKind, n, "workshop_locker");
+  const d = new Driver("fast-effects", "creel", s);
+  const creel = d.vehicle("creel")!;
+  // The reviewer's case: the game answers "refitted" but the hull keeps its rating.
+  const silent: typeof d.exec = (state, c, w) => c.type === "craft" || c.type === "transfer" || c.type === "service" ||
+      c.type === "install-module" || c.type === "store-materials"
+    ? { state: { ...structuredClone(state), feedback: "Done." }, events: [{ type: "notice", channel: "action", message: "Done." }] }
+    : executeCommand(state, c, w);
+  d.exec = silent;
+  const rack = d.state.inventory.items.find((i) => i.kind === "creel_cargo_rack")!;
+  const cell = d.state.inventory.items.find((i) => i.kind === "reserve_cell")!;
+  for (const [command, why] of [
+    [{ type: "craft", recipeId: "creel_350" }, /no creel newly rated 350 m/],
+    [{ type: "transfer", itemId: cell.id, to: "workshop_locker", quantity: 1 }, /transfer moved 0/],
+    [{ type: "install-module", vehicleId: creel.id, itemId: rack.id }, /is not installed/],
+  ] as const) assert.throws(() => d.command(command), (e) => e instanceof Blocked && why.test(e.message), JSON.stringify(command));
+  // With the real game every one of them takes effect and passes verification.
+  d.exec = executeCommand;
+  d.command({ type: "craft", recipeId: "creel_350" });
+  assert.equal(d.vehicle("creel")!.rating, 350);
+  d.command({ type: "install-module", vehicleId: creel.id, itemId: rack.id });
+  d.command({ type: "transfer", itemId: cell.id, to: "workshop_locker", quantity: 1 });
+});
+
+test("R3: a refits milestone whose Creel kept its 240 m rating does not pass", () => {
+  const d = new Driver("fast-refit-outcome", "creel", creelFirst());
+  assert.match(REFITS_PHASE.verify(d).join("; "), /the creel is rated 240 m, not 350 m/);
+  assert.match(REFITS_PHASE.verify(d).join("; "), /creel_350 was never crafted/);
+});
+
+test("R3: connected delivery to the carrier: moor, exit, approach in range, station keep, ferry (seeded fixture, real commands)", () => {
+  // Seeded: the root carrier fixture with station keeping off, the diver at the
+  // fixture Creel's helm, and the works cargo in its hold. The rest is real commands.
+  const s = fixtureGame(), creel = s.fleet.vehicles.find((v) => v.hull === "creel")!, h = s.fleet.vehicles.find((v) => v.hull === "hearthline")!;
+  s.fleet.docking!.stationKeeping = false;
+  const a = addItem(s, "service_power_assembly", 1, creel.cargoId), b = addItem(s, "service_air_assembly", 1, creel.cargoId);
+  addItem(s, "structural_alloy", 6, creel.cargoId);
+  Object.assign(s.player, { mode: "piloting", controlledVehicleId: creel.id, interiorId: null, interiorPose: null,
+    pose: structuredClone(creel.pose), velocity: { x: 0, y: 0, z: 0 } });
+  const d = new Driver("fast-delivery", "carrier", s);
+  deliverToCarrier(d, { ids: [a.id, b.id], stock: { structural_alloy: 6 } }, null);
+  assert.deepEqual([a.id, b.id].map((id) => d.state.inventory.items.find((i) => i.id === id)!.containerId), [h.cargoId, h.cargoId]);
+  assert.equal(d.count("structural_alloy", [h.cargoId]), 6);
+  assert.equal(d.state.fleet.docking!.stationKeeping, true);
   assert.equal(d.run.refusals.length, 0);
 });

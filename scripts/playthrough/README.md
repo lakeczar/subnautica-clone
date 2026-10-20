@@ -13,6 +13,12 @@ The single exception is the labelled **travel helper** (`travel.ts`). It steers 
 
 Read-only queries (targeting, clearance) choose where to stand. A refusal or a trap is reported as **blocked** with the position, power and hull, never worked around. Missing content is **pending C3** only if its key is on the versioned expected-pending list in `pending.ts`. That list holds absent IDs (S9 recipes and sources, S5 hosts and sites) plus one condition, `bounds:b1-simulation`: the simulation still runs B1's bounds and the point lies inside S1's world frame. An ID that exists but can't be used (a site or route outside the composed bounds or S1's frame, a recipe S9 marks unplaced) gets a `broken:` or `refused:` key that is never listable, and blocks. So does any unlisted missing capability, such as a removed recipe. An optional module counts as absent only when its own file is missing; any error inside an existing module propagates. A story host that isn't placed is **deferred** (recorded, run stays pending, phase still plays) on the same terms. The run also fails if a listed key is already present, so the list must be pruned at integration.
 
+**Effects are verified, not assumed** (`effects.ts`, `outcomes.ts`). After every accepted command the driver checks its effect on the real state, and any mismatch blocks:
+- **Crafts:** the exact cost consumed (or the rescue stock drawn), and the output present: a hull newly at the refit rating, the suit rating, a new hull, the item count, a restored facility, the pod-buffer repair, or a newly recorded construction stage.
+- **Other commands:** transfers, stores, service (power and hull at 100), reserve cells, mounts, recovery, tool arms, eating, exit, and every carrier action.
+
+Each phase also checks its purpose before its milestone counts, for example the Creel and Dart at 350 m and the mooring restored after the refits phase.
+
 At every phase end the harness saves through the real `SaveRepository`, reloads with a fresh repository, requires an identical state hash, and continues from the reloaded state.
 
 ## Run

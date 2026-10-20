@@ -54,11 +54,16 @@ export function carrierIn(d: Driver): void {
   d.command({ type: "carrier", action: "helm" });
 }
 
-/** Swim to the exterior vestibule and step into the dry interior (station keeping on). */
+/** Swim to the exterior vestibule, engage station keeping there if it is off (the
+ * interface answers only within 15 m of the keel datum, and the vestibule is 13.8 m
+ * out), then step into the dry interior. */
 export function enterCarrier(d: Driver): void {
   const h = carrier(d);
-  // Within 1 m: the interface also refuses beyond 15 m of the keel datum.
   travel(d, route("to the carrier vestibule", "diver", "local swim, played", [{ ...localToWorld(CARRIER_LAYOUT.exteriorVestibule, h), tolerance: 1 }]));
+  const keel = Math.hypot(d.state.player.pose.position.x - h.pose.position.x, d.state.player.pose.position.y - h.pose.position.y,
+    d.state.player.pose.position.z - h.pose.position.z);
+  if (keel > 15) throw new Blocked(`At the exterior vestibule the diver is ${keel.toFixed(1)} m from the carrier keel; its interface answers within 15 m`, where(d.state));
+  if (!d.state.fleet.docking?.stationKeeping) d.command({ type: "carrier", action: "station-keep" });
   d.command({ type: "carrier", action: "enter-interior" });
 }
 /** From anywhere aboard: walk aft and leave through the vestibule. */

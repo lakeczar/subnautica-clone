@@ -10,6 +10,7 @@ import { sweptHullClearance } from "../../src/sim/world.js";
 import { board, interact, leaveCraft, reach } from "./actions.js";
 import { Blocked, where } from "./driver.js";
 import type { Phase } from "./live.js";
+import { all, custom, hull } from "./outcomes.js";
 import { boardAt } from "./live.js";
 import { enter, surface, surfaceTo } from "./nav.js";
 import { fly, pilotTo, turnTo } from "./routes.js";
@@ -17,6 +18,7 @@ import { yawTo } from "./travel.js";
 
 export const creelLoss: Phase = {
   id: "creel-loss", title: "Adverse: the 240 m Creel lost in the Basin fracture, towed home by Bobbin",
+  verify: all(hull("creel", 240), custom("no rescue recorded", (d) => d.state.metrics.rescues > 0)),
   missing: () => [],
   play(d) {
     const creel = () => d.vehicle("creel")!;
