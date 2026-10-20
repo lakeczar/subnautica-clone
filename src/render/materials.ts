@@ -111,6 +111,7 @@ uniform vec3 lightDirection; uniform float time; uniform float underwater;
 ${opticalShader}
 ${NOISE_SHADER}
 void main(){
+  // Thin two-sided parts (fans, fronds, ribbons) light the side in view.
   vec3 n=normalize(vNormal); float d=dot(n,normalize(lightDirection));
   float band=d>.66?1.09:(d>.12?.91:(d>-.32?.69:.45));
   vec3 temperature=mix(vec3(.61,.83,1.04),vec3(1.07,1.035,.93),smoothstep(-.12,.75,d));
