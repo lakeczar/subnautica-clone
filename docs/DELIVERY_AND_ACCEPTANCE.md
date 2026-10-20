@@ -34,6 +34,8 @@ The skeleton gate may use rough art, but a functional ending must already resolv
 
 ## Independent review gate
 
+**2026-10-20:** the lean gate in [DIRECTION](build/DIRECTION.md#lean-acceptance-gate) replaces the evidence-volume requirements below. Keep one fresh Sol review per coherent feature, coordinator inspection and focused reproductions.
+
 **Owner revision, 2026-10-19:** [MODEL_POLICY](build/MODEL_POLICY.md) selects Opus5.5/high for implementation and **one fresh non-author Sol6.1/xhigh reviewer** for acceptance, alongside coordinator inspection. This replaces the earlier automatic Astra/xhigh plus Sol/max pair. Historical reviews retain their actual attribution.
 
 1. Apply the gate to each completed feature or coherent delegated batch, including graphics/lore, and each integrated milestone. Related edits may share a batch. Name the player-facing acceptance criteria; provisional integration is allowed before acceptance.

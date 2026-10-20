@@ -1,5 +1,7 @@
 # Shared implementation direction
 
+> Historical contract record up to 2026-10-19. [DIRECTION](DIRECTION.md) and the code's types override it where they conflict. Lean per-stream interface notes replace it as streams land.
+
 **Owner model revision, 2026-10-19:** [MODEL_POLICY](MODEL_POLICY.md) supersedes historical role assignments and file-by-file approval constraints. Opus5.5/high may evolve connected interfaces within its coherent task and document compatibility; existing gameplay/save requirements remain authoritative. Sol6.1/xhigh supplies the independent acceptance review. Historical source-specific contracts below describe the current baseline and evidence, not a prohibition on necessary cohesive implementation changes.
 
 **M2-A is accepted; SPACE-1 is accepted on d8a812e, with unchanged production eb712f.** [Inspection](evidence/SPACE-1-COMPOSE-INTEGRATION.md) records source/build/check identity. Current **schema4 / expedition.5** adds canonical `world.renewal: {id, progress}[]` after resources: north/south reef catches (2 membrane per21,600 steps) then upper/lower Canopy pockets (2 resin per36,000). Integer progress is below its interval and zero at/above original exposed cap12 or in opening/carrier-fixture states. `advanceRenewal` follows `updateAction` once per simulation step; sorting to cap clears progress in the same transaction. No pause/menu/offline/load catch-up, banked progress, reserve refill or stock clamp above cap. Mandatory solvency credits zero renewal.

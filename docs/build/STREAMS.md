@@ -1,0 +1,69 @@
+# Parallel streams (2026-10-20)
+
+Each stream has one Opus 5.5/high owner in its own worktree, branched from the coordinator baseline. All of them follow [DIRECTION](DIRECTION.md): the ground rules, the B1-owned roots that nobody else may edit, and the lean gate. Streams write **new modules plus a short interface note** (`docs/build/streams/<ID>.md`). The coordinator composes them into the shared roots after B1 lands. Each handoff is one page, followed by one fresh Sol review.
+
+Common to every stream:
+- **Read first:** `prompts/BUILD_GAME_REVISED.md`, the specification docs it points to, `docs/build/reviews/DIRECTION-AUDIT-SOL-XHIGH.md` and the current code. B1's in-progress interfaces are readable at `/home/worker/.t3/worktrees/subnautica-clone/t3-b6aef8ec`, read-only.
+- **Checks:** `npx tsc --noEmit` and your own new tests with `node --test` on your files only. Anything using Babylon or NullEngine goes through `scripts/heavy-check.sh` with `--test-concurrency=1`. Assertions on scene objects use `same()`-style name checks (see B1's `tests/render-assert.ts`), never deep equality on Babylon objects.
+- **Browser:** read `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md` first. Use only your assigned port and T3 preview tools, and close only what you opened. The shared browser is software-rendered (SwiftShader), so judge looks and behavior there, not frame rate.
+- **Branching:** commit early and often on your branch. Don't push, open a PR or start children. The coordinator reviews and integrates.
+- **Design freedom:** improve the design where it serves the established game. Flag anything that changes owner scope.
+
+| ID | Outcome | Owns (new paths) | Port | State |
+| --- | --- | --- | --- | --- |
+| S1 | World runtime and scale | `src/world/*`, `src/render/kit/*`, `tools/scale-slice.*`, `tests/world-*.test.ts` | 5195 | dispatched |
+| S2 | Remaining regions and islands, authored | `src/content/regions/*`, `src/render/biomes/*` | 5199 | waits for S1's descriptor commit |
+| S3 | Fleet art and the Hearthline interior | `src/render/fleet/*`, `src/content/fleet/*`, `tools/fleet-viewer.*` | 5196 | dispatched |
+| S4 | Ecology, encounters and hazards | `src/sim/ecology/*`, `src/content/ecology/*`, `src/render/creatures/*`, `tools/creature-viewer.*` | 5197 | dispatched |
+| S5 | Campaign, evidence chain and ending | `src/content/story/*`, `src/sim/story/*`, `tests/story-*.test.ts` | — | dispatched |
+| S6 | Audio | `src/audio/*` (except where B1 needs it), `tools/audio-lab.*` | 5198 | dispatched |
+| S7 | Save simplification and test tiers | `src/save/*`, `package.json`, test config | — | coordinator, after B1 |
+
+## S1 — World runtime and scale
+The player can cross a full-size 2.0×1.8 km world with seven regions and three islands, down to 780 m, without hitches or unbounded memory. Deliver:
+- **Descriptors:** typed chunk and region descriptors for bounds, vertical extent, adjacency, biome, LOD bands and access, plus a spatial query index for solids, sources and landmarks that works whether or not the render is resident. **Commit the descriptor and query types early, with an interface note, before the rest.** S2 builds on them.
+- **Residency manager:** byte-based (CPU recipe and GPU buffer bytes tracked separately), LRU eviction, time-sliced or worker construction, bounded uploads per frame, cancellation and readiness.
+- **Shared template kit:** instancing (thin instances), coarse and fine LOD, chunk culling.
+- **Scale-slice harness** (`tools/scale-slice.html`), run under Vite dev. It shows more than four regions with eviction proven, dense instanced vegetation, three hulls plus a carrier-sized placeholder, and a deep vertical transition. It reports frame time, draw calls and resident bytes.
+- **Integration plan:** how the current `renderer.ts`, `regions.ts`, `environment.ts`, `terrainSurface.ts` and `sim/world.ts` would migrate onto this. Write it as a plan; the coordinator composes after B1.
+
+**Adverse case:** a fast traversal across 6+ chunks while construction is pending must not stall or leak.
+
+## S2 — Remaining regions and islands
+Starts after S1 publishes its descriptors. Authors the remaining regions, the other two islands and the research district, with source habitats, landmarks, return shortcuts and rescue access, following `docs/WORLD_PROGRESSION.md`. Each area gets one striking vista, one rich resource habitat and one refuge.
+
+## S3 — Fleet art and the Hearthline interior
+Original cel art for **Hush** (quiet survey glider), **Spindle** (surface island tender), **Mantle** (deep service craft) and **Hearthline** (inhabited carrier). Each needs a readable role silhouette, cockpit and access points, and colliders that match the visible geometry. Hearthline also needs a walkable interior kit: bridge, cabin/galley, storage, fabrication, a launch vestibule, two dry berths and authored furniture and equipment sockets. Follow B1's Creel art patterns in `fleetArt.ts`.
+
+Also write hull role data proposals in `src/content/fleet/` (dimensions, collider, mounts, capacity, berth envelope, pressure envelope, per `docs/FLEET_AND_SURVIVAL.md`) and a dev viewer, `tools/fleet-viewer.html`.
+
+**Adverse case:** a visible-geometry versus collider mismatch check for each hull.
+
+## S4 — Ecology, encounters and hazards
+Regional wildlife that responds to legible cues (noise, light, disturbance), with warning, evasion, cover and disengagement, and defensive or deterrent tools that don't require killing. The design comes from `docs/WORLD_PROGRESSION.md` and `docs/FLEET_AND_SURVIVAL.md`. Deliver:
+- **Behaviors:** pure simulation modules for bounded active agents, at least three new behaviors for later regions, plus a few useful ecological interactions.
+- **Hazards:** later-region hazards such as heat, currents, darkness and pressure, whose protective materials are reachable beforehand.
+- **Art and viewer:** creature render leaves for the new species, and a viewer.
+
+**Integration:** consume world queries through a small adapter interface, so it works against today's `sim/world.ts` and later S1.
+
+**Adverse case:** a player cornered with no tool can still disengage.
+
+## S5 — Campaign, evidence chain and ending
+You are the lore owner and may read `docs/spoilers/NARRATIVE_CANON.md`. Keep the twist out of every handoff, commit message, filename, ID and string shown to players. Deliver:
+- **The chain:** a rough, complete, playable mystery from the existing C01–C06 through the remaining evidence, to the authored resolution reachable by both fleet strategies. Include regional leads, corroboration across scans, journals and physical evidence, out-of-order discovery and interpretation, alternate sources for critical information, voluntary graduated hints, and a notebook that interprets the evidence.
+- **Ending:** the ending machinery's rules and requirements, from the final repair requirements.
+- **Form:** data plus pure rules, with placements proposed by region and site ID for S2.
+
+**Adverse case:** a player who finds evidence in the reverse order still gets coherent notes, and no optional log blocks progress.
+
+## S6 — Audio
+A complete procedural soundscape, extending today's WebAudio system in `src/audio/sound.ts`:
+- **Ambience:** distinct per-region ambience and depth layers, plus a warm refuge or interior bed.
+- **Vehicles:** layers for each of the six hulls and the carrier.
+- **Encounters:** the mix and its priority and ducking, warnings and their caption equivalents, and transitions.
+- **Music:** a restrained musical identity for moments of discovery and the ending.
+
+The host is muted. Verify with offline rendering (OfflineAudioContext in the browser), level and peak analysis and spectrum snapshots, and say plainly that no human listening was done. Expose an event-to-cue mapping the coordinator wires into `app.ts`. Add a dev page, `tools/audio-lab.html`.
+
+**Adverse case:** a burst of many simultaneous events stays within the voice and level limits.
