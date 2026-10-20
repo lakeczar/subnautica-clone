@@ -175,8 +175,11 @@ export const CANOPY_MARGIN_RIBS = [
   { id: "canopy.margin.rib.south", min: { x: 239, y: -164.5, z: -179.8 }, max: { x: 242.5, y: -104, z: -176.2 } },
   { id: "canopy.margin.ledge.south", min: { x: 236.4, y: -128.6, z: -179.4 }, max: { x: 239, y: -128.2, z: -176.6 } },
 ] as const;
-/** Medium slip rails beside the workshop landing; the hull sits between them. */
+/** Medium slip rails beside the workshop landing; the hull sits between them. The
+ * rails stay submerged so surface swimmers between reef and workshop pass over
+ * them; one marker post at the outer (south) end carries the slip sign. */
 export const CREEL_SLIP_SOLIDS = [
-  { id: "workshop.slip.port", min: { x: -11.4, y: -3.5, z: -31 }, max: { x: -11.1, y: 0.5, z: -21 } },
-  { id: "workshop.slip.starboard", min: { x: -0.9, y: -3.5, z: -31 }, max: { x: -0.6, y: 0.5, z: -21 } },
+  { id: "workshop.slip.port", min: { x: -11.4, y: -3.5, z: -31 }, max: { x: -11.1, y: -1.2, z: -21 } },
+  { id: "workshop.slip.starboard", min: { x: -0.9, y: -3.5, z: -31 }, max: { x: -0.6, y: -1.2, z: -21 } },
+  { id: "workshop.slip.post", min: { x: -11.5, y: -3.5, z: -31.3 }, max: { x: -11.0, y: 1.6, z: -30.8 } },
 ] as const;

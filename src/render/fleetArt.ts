@@ -231,9 +231,9 @@ export function createB1Sites(scene: Scene, cel: ShaderMaterial, glass: ShaderMa
       const ground = terrainHeight(-6, z) + .03;
       slip.face([[-7.2, ground, z], [-6, ground, z - .8], [-4.8, ground, z], [-6, ground, z - .35]], P.ochre);
     }
-    for (const x of [-11.25, -0.75]) slip.box([x, .62, -26], [.5, .2, 9.4], P.petrol);
+    for (const x of [-11.25, -0.75]) slip.box([x, -1.12, -26], [.42, .16, 9.4], P.petrol);
     meshes.push(slip.finish(.2));
-    const sign = label(scene, "MEDIUM SLIP", [-11.25, .95, -26], 1.6, Math.PI / 2, labels);
+    const sign = label(scene, "MEDIUM SLIP", [-11.25, 1.25, -31.32], 1.4, 0, labels);
     meshes.push(sign);
   }
   if (include("suspended_garden")) {
