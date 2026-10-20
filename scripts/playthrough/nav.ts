@@ -17,6 +17,13 @@ const POD_BENCH: Waypoint = { x: 0.6, y: 0.18, z: 19.6, land: true, tolerance: 0
 const WORKSHOP_OUT: Waypoint[] = [{ x: 10, y: 1.2, z: -31, land: true }, { x: 10, y: 0, z: -27.5, land: true }, { x: 10, y: -0.5, z: -25.5 }];
 const WORKSHOP_IN: Waypoint[] = [{ x: 10, y: -0.5, z: -25.5 }, { x: 10, y: 0, z: -28.5, land: true }, { x: 10, y: 1.2, z: -32, land: true }];
 const WORKSHOP_BENCH: Waypoint = { x: 10, y: 1.2, z: -35.2, land: true, tolerance: 0.3 };
+/** S2's headland landing (isles.headland_landing) and the 0.55 m/m slope up to the
+ * field shelter's terrace (C3): the only shore the harness walks besides the
+ * pod ramp and the workshop apron. */
+export const HEADLAND_IN: Waypoint[] = [{ x: 946, y: -0.5, z: -14 }, { x: 954.2, y: 0.71, z: -12.3, land: true },
+  { x: 966.4, y: 6.89, z: -9.7, land: true }, { x: 978.6, y: 10, z: -7.1, land: true }];
+const HEADLAND_OUT: Waypoint[] = [...HEADLAND_IN].reverse().map((p, i, all) => i === all.length - 1 ? { ...p, land: false } : { ...p });
+export const nearHeadland = (p: { x: number; z: number }): boolean => Math.hypot(p.x - 970, p.z + 8) < 40;
 
 export const inPod = (d: Driver): boolean => nearPod(d.state);
 export const atWorkshop = (d: Driver): boolean => nearWorkshop(d.state);
@@ -30,6 +37,7 @@ export function toWater(d: Driver): void {
     [{ ...CANOPY_BASIN_ROUTE.labDiverInside, land: true }, { ...CANOPY_BASIN_ROUTE.labDiverEntry }]));
   else if (p.z > 4) travel(d, route("pod ramp out", "diver", "authored pod ramp, played", POD_OUT));
   else if (p.z < -24 && p.x > -5 && p.x < 25) travel(d, route("workshop apron out", "diver", "authored apron, played", WORKSHOP_OUT));
+  else if (nearHeadland(p)) travel(d, route("headland landing out", "diver", "S2 headland landing, played", HEADLAND_OUT));
   else throw new Blocked("Walking somewhere with no authored water entry", where(d.state));
 }
 

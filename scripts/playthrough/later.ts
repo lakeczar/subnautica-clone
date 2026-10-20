@@ -99,8 +99,11 @@ function toWorkPose(d: Driver, site: string, work: Vec3): void {
 /** Park by an interaction host (or at a composed mooring), exit, run `work`, swim back and board. */
 function sortie(d: Driver, at: Vec3, label: string, work: () => void): void {
   const v = d.occupied()!;
-  const s2park = hullClearance(d.world, at, HULL_COLLIDERS[v.hull]) ? at : parkNear(d, at);
-  pilotTo(d, `park for ${label}`, s2park);
+  // A host ashore: the craft stays afloat where the route ended; the diver walks in.
+  if (at.y <= 0.5) {
+    const s2park = hullClearance(d.world, at, HULL_COLLIDERS[v.hull]) ? at : parkNear(d, at);
+    pilotTo(d, `park for ${label}`, s2park);
+  }
   leaveCraft(d);
   work();
   const craftNow = d.state.fleet.vehicles.find((x) => x.id === v.id)!;

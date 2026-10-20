@@ -2,7 +2,7 @@ import type { GameState } from "../sim/types.js";
 import { createGame } from "../sim/state.js";
 import { createStory } from "../sim/story/index.js";
 import { createEcology } from "../sim/ecology/ecology.js";
-import { carrierCompartmentContainers, emptySockets } from "../sim/carrier.js";
+import { BERTH_LOCAL, carrierCompartmentContainers, emptySockets, localToWorld } from "../sim/carrier.js";
 import { ITEMS } from "../content/registry.js";
 import { record } from "./validation.js";
 
@@ -72,6 +72,8 @@ export function addNewContent(state: GameState): { ok: true; value: GameState } 
 }
 
 const SCHEMA5_CARRIER_HOLD_CU = 256;
+/** The starboard compact berth's x before C3 widened the carrier walkway. */
+const OLD_STARBOARD_X = 3;
 /** Fields added since schema 5 whose absence means exactly their first state:
  * no schema 5 build could record a later story discovery, hint, works step,
  * resolution or carrier socket occupant. `story` and `docking.sockets` start at
@@ -91,6 +93,17 @@ function addNewFields(state: GameState, template: GameState): { ok: true; value:
   const fleet = out.fleet as unknown;
   if (record(fleet) && record(fleet.docking) && !Object.hasOwn(fleet.docking, "sockets"))
     out.fleet = { ...out.fleet, docking: { ...out.fleet.docking!, sockets: emptySockets() } };
+  // C3 widened the compact walkway: the starboard berth datum moved from x 3 to
+  // its current value. A berth saved at the old datum is that same berth.
+  const docked = out.fleet as unknown;
+  if (record(docked) && record(docked.docking) && Array.isArray(docked.vehicles)) {
+    const h = (docked.vehicles as GameState["fleet"]["vehicles"]).find((v) => record(v) && v.id === (docked.docking as { vehicleId?: unknown }).vehicleId);
+    if (h && record(h.pose)) out.fleet = { ...out.fleet, vehicles: out.fleet.vehicles.map((v) =>
+      record(v) && record(v.berth) && v.berth.slot === 1 && record(v.berth.pose) && record(v.berth.pose.position) && v.berth.pose.position.x === OLD_STARBOARD_X
+        ? { ...v, berth: { ...v.berth, pose: { ...v.berth.pose, position: { ...BERTH_LOCAL[1]! } } },
+            pose: { ...v.pose, position: localToWorld(BERTH_LOCAL[1]!, h) } }
+        : v) };
+  }
   const inv = out.inventory as unknown;
   if (!record(inv) || !Array.isArray(inv.containers) || !Array.isArray(inv.items) || !record(fleet) || !Array.isArray(fleet.vehicles))
     return { ok: true, value: out };

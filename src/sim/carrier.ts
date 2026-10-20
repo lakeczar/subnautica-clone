@@ -11,7 +11,9 @@ import { siteDatum } from "../content/regions/access.js";
 import { worldFloor } from "../content/regions/worldFloor.js";
 export const BERTH_LOCAL: readonly Vec3[] = [
   { x: -3, y: 4, z: 1 },
-  { x: 3, y: 4, z: 1 },
+  // C3 (P1): the compact rooms' inboard walls stand at -0.55 and 0.75 (each Dart
+  // envelope meets its wall), so the bow-to-stern walkway is 1.14 m, not 0.84 m.
+  { x: 3.2, y: 4, z: 1 },
 ];
 export const LAUNCH_LOCAL = { x: 0, y: -3, z: -17 };
 export const CARRIER_SUPPORT = { x: 65, y: -0.9, z: 12 };
@@ -22,8 +24,8 @@ export const CARRIER_LAYOUT = {
   wall: 0.08,
   deck: { min: { x: -6.3, y: 3.8, z: -12 }, max: { x: 6.3, y: 4, z: 12 } },
   compact: [
-    { id: "carrier.berth.port", min: { x: -6, y: 4, z: -2.8 }, max: { x: -0.45, y: 8.4, z: 4.8 } },
-    { id: "carrier.berth.starboard", min: { x: 0.55, y: 4, z: -2.8 }, max: { x: 6, y: 8.4, z: 4.8 } },
+    { id: "carrier.berth.port", min: { x: -6, y: 4, z: -2.8 }, max: { x: -0.55, y: 8.4, z: 4.8 } },
+    { id: "carrier.berth.starboard", min: { x: 0.75, y: 4, z: -2.8 }, max: { x: 6, y: 8.4, z: 4.8 } },
   ],
   medium: { id: "carrier.berth.medium", min: { x: -6, y: 4, z: -3.7 }, max: { x: 0.1, y: 8.4, z: 5.7 } },
   lock: { id: "carrier.lock", min: { x: -6, y: HULL_COLLIDERS.hearthline.bottom, z: -3.7 }, max: { x: 6, y: 3.8, z: 5.7 } },
@@ -361,10 +363,13 @@ export function carrierCommand(
   const dock = s.fleet.docking,
     h = carrierHull(s);
   if (!dock || !h) return "No carrier interface is present in this expedition.";
+  // The interface is the hull or its exterior vestibule (13.8 m aft of the keel,
+  // entered within 5 m): measuring only from the keel refused 39% of that zone.
   if (
     s.player.interiorId !== h.id &&
     s.player.controlledVehicleId !== h.id &&
-    distance(s.player.pose.position, h.pose.position) > 15
+    distance(s.player.pose.position, h.pose.position) > 15 &&
+    distance(s.player.pose.position, localToWorld(CARRIER_LAYOUT.exteriorVestibule, h)) > 5
   )
     return "Approach the carrier interface locally.";
   if (action === "leave-interior") {

@@ -9,7 +9,7 @@ import { eyeHeight } from "../../src/sim/state.js";
 import type { GameEvent, GameState, Vec3 } from "../../src/sim/types.js";
 import { Blocked, Driver, where } from "./driver.js";
 import { dist, faceEye, horizontal, route, travel } from "./travel.js";
-import { breathe, enter, surfaceTo, toWater } from "./nav.js";
+import { breathe, enter, HEADLAND_IN, nearHeadland, surfaceTo, toWater } from "./nav.js";
 import type { Refuge } from "./nav.js";
 import { personalLimit } from "../../src/sim/capabilities.js";
 import type { Waypoint } from "./travel.js";
@@ -82,6 +82,10 @@ export function reach(d: Driver, id: string): void {
     if (mode !== "walking") {
       if (Math.hypot(b.x - 10, b.z + 35) < 12) enter(d, "workshop");
       else if (Math.hypot(b.x, b.z - 18) < 8) enter(d, "pod");
+      else if (nearHeadland(b)) {
+        surfaceTo(d, HEADLAND_IN[0]!);
+        travel(d, route("headland landing in", "diver", "S2 headland landing, played", HEADLAND_IN));
+      }
       else throw new Blocked(`${id} stands ashore with no authored landing`, where(d.state));
     }
     travel(d, route(`approach ${id}`, "diver", "local approach, played", [b]), `to ${id}`);

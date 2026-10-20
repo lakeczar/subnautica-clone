@@ -89,7 +89,10 @@ export const CREEL_SEAT = { x: 0, y: 2.22, z: -1.8 } as const;
 /** Tool-arm reach datum at the guarded bow; the art stays inside the berth envelope. */
 export const CREEL_ARM = { x: 0, y: 0.7, z: -3.3, reach: 7.5 } as const;
 export const ARM_LIFT_SECONDS = 6;
-export const ARM_CHARGE = 4;
+/** Battery percent per arm lift. C3 (P1 playthrough): at 4% a full Basin frame
+ * haul (10 lifts plus the return loop) came home at 7%; at 1.5% it keeps the
+ * 25% return margin EXPEDITION_INTEGRATION asks for. */
+export const ARM_CHARGE = 1.5;
 export const DIVER_LIFT_SECONDS = 10;
 
 export function hullToWorld(local: Readonly<Vec3>, v: Readonly<VehicleState>): Vec3 {

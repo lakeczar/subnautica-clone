@@ -277,7 +277,7 @@ test("strict codec validation still rejects an out-of-world assembly instead of 
 });
 
 test("legacy corner contact uses the exact saved yaw representation without rounding an attached origin outside", () => {
-  let s = staged("compact", { x: WORLD_BOUNDS.minX + 2.36602540478444, y: -0.9, z: WORLD_BOUNDS.minZ + 3.0980762123533 }, 2 * Math.PI / 3);
+  let s = staged("compact", { x: WORLD_BOUNDS.minX + 2.46602540478444, y: -0.9, z: WORLD_BOUNDS.minZ + 3.0980762123533 }, 2 * Math.PI / 3);
   for (let i = 0; i < 30; i++) {
     s = stepGame(s, [{ type: "look", yawDelta: -0.8, pitchDelta: 0 }], world).state;
     coherent(s);
@@ -286,7 +286,7 @@ test("legacy corner contact uses the exact saved yaw representation without roun
 
 test("a requested legacy turn endpoint stays saveable when its recomputed arc endpoint rounds differently", () => {
   // Adjacent doubles at the north edge, re-derived by bisection for the envelope.
-  const position = { x: NORTH_X, y: -24, z: 157.03314320575623 };
+  const position = { x: NORTH_X, y: -24, z: 156.83324334669499 };
   const before = staged("compact", position, 1.6680903988919056);
   const result = stepGame(before, [{ type: "look", yawDelta: -0.06564769841653488, pitchDelta: 0 }], world);
   coherent(result.state);
@@ -299,7 +299,7 @@ test("a requested legacy turn endpoint stays saveable when its recomputed arc en
 });
 
 test("a nearby safe legacy endpoint retains its exact requested heading", () => {
-  const position = { x: NORTH_X, y: -24, z: 157.0331432057562 };
+  const position = { x: NORTH_X, y: -24, z: 156.83324334669496 };
   const before = staged("compact", position, 1.6680903988919056);
   const result = stepGame(before, [{ type: "look", yawDelta: -0.06564769841653488, pitchDelta: 0 }], world);
   coherent(result.state);

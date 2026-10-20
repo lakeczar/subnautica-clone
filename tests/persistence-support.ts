@@ -1,3 +1,4 @@
+import { BERTH_LOCAL, localToWorld } from "../src/sim/carrier.js";
 import { createEcology } from "../src/sim/ecology/ecology.js";
 import { WORLD_SOURCES } from "../src/content/worldSources.js";
 import { createGame } from '../src/sim/state.js';
@@ -105,6 +106,12 @@ export function withComposedFields<T extends { state: unknown }>(old: T): T {
   for (const l of C3_LOCKERS) if (!containers.some((c: any) => c.id === l.id)) containers.splice(++at, 0, { ...l });
   const docking = (out.fleet as any).docking;
   if (docking && !("sockets" in docking)) docking.sockets = Object.fromEntries(SOCKET_IDS.map((id) => [id, null]));
+  // C3 moved the starboard berth datum from x 3; a berth saved there moves with it.
+  const carrierHull = (out.fleet as any).vehicles.find((v: any) => v.id === docking?.vehicleId);
+  for (const v of (out.fleet as any).vehicles) if (carrierHull && v.berth?.slot === 1 && v.berth.pose.position.x === 3) {
+    v.berth.pose.position = { ...BERTH_LOCAL[1]! };
+    v.pose.position = localToWorld(BERTH_LOCAL[1]!, carrierHull);
+  }
   const inv = out.inventory as any;
   for (const v of (out.fleet as any).vehicles) {
     const hold = v.hull === "hearthline" && inv.containers.find((c: any) => c.id === v.cargoId && c.capacity === 256);
@@ -133,6 +140,12 @@ export function withoutComposedFields(state: any): any {
   if (rest.inventory.items.some((i: any) => C3_LOCKERS.some((l) => l.id === i.containerId))) throw new Error("stop lockers are not empty");
   rest.inventory.containers = rest.inventory.containers.filter((c: any) => !C3_LOCKERS.some((l) => l.id === c.id));
   const docking = rest.fleet.docking;
+  // Before C3 the starboard berth datum was x 3.
+  const carrier = rest.fleet.vehicles.find((v: any) => v.id === docking?.vehicleId);
+  for (const v of rest.fleet.vehicles) if (carrier && v.berth?.slot === 1) {
+    v.berth.pose.position = { ...v.berth.pose.position, x: 3 };
+    v.pose.position = localToWorld(v.berth.pose.position, carrier);
+  }
   if (docking) {
     if (Object.values(docking.sockets).some((v) => v !== null)) throw new Error("carrier sockets are not empty");
     delete docking.sockets;
