@@ -28,6 +28,8 @@ export const CRAFT_ROUTES = {
   canopy_basin: { id: "canopy_basin", source: "B1 CANOPY_BASIN_ROUTE.basin", points: CANOPY_BASIN_ROUTE.basin.map((q) => ({ ...q })) },
   basin_return: { id: "basin_return", source: "B1 CANOPY_BASIN_ROUTE.returnLoop", points: CANOPY_BASIN_ROUTE.returnLoop.map((q) => ({ ...q })) },
   basin_outbound: { id: "basin_outbound", source: "B1 CANOPY_BASIN_ROUTE.returnLoop reversed", points: [...CANOPY_BASIN_ROUTE.returnLoop].reverse().map((q) => ({ ...q })) },
+  /** S2's western reef return (route.basin.reef_west ends beside the pod) → medium slip. */
+  reef_to_slip: { id: "reef_to_slip", source: "harness: reef west return → medium slip", points: [p(-8, -2.5, 4), p(4, -3, 0), p(6, -3.4, -13), CREEL_SLIP_MOUTH, { ...CREEL_BUILD_POSE, z: CREEL_BUILD_POSE.z + 1 }] },
   /** Route head → outer-crown mooring along the clear return lane, outside the hunter's territory. */
   head_to_stop: { id: "head_to_stop", source: "harness: return lane → outer-crown mooring", points: [{ ...CANOPY_BASIN_ROUTE.upper[0] }, p(90, -18, -45), p(170, -55, -90), p(214, -120, -150), { ...CANOPY_STOP.mooring }] },
   stop_to_head: { id: "stop_to_head", source: "harness: outer-crown mooring → return lane", points: [{ ...CANOPY_STOP.mooring }, p(214, -120, -150), p(170, -55, -90), p(90, -18, -45), { ...CANOPY_BASIN_ROUTE.upper[0] }] },
@@ -44,7 +46,12 @@ export function fly(d: Driver, id: CraftRouteId | CraftRoute, options: { quiet?:
   const v = d.occupied();
   if (!v || d.state.player.controlledVehicleId !== v.id) throw new Blocked(`Route ${r.id} needs a piloted craft`, where(d.state));
   const shape = HULL_COLLIDERS[v.hull as HullId];
-  const points = [{ ...v.pose.position }, ...r.points.filter((q, i) => i > 0 || dist(q, v.pose.position) > 2)];
+  // Join the route at the nearest point the hull can reach in a clear straight line.
+  const here = v.pose.position;
+  const join = r.points.map((q, i) => ({ i, d: dist(q, here) })).sort((a, b) => a.d - b.d)
+    .find(({ i }) => sweptHullClearance(d.world, [here, r.points[i]!], shape))?.i ?? 0;
+  const rest = r.points.slice(join);
+  const points = [{ ...here }, ...rest.filter((q, i) => i > 0 || dist(q, here) > 2)];
   for (let i = 0; i < points.length - 1; i++)
     if (!sweptHullClearance(d.world, [points[i]!, points[i + 1]!], shape))
       throw new Blocked(`Route ${r.id} (${r.source}) does not sweep clear for the ${v.hull} between ` +

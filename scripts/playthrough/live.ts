@@ -1,6 +1,6 @@
 /** Live phases: New Game through the Basin, the Creel and C1's story, played
  * against today's world. Both fleet strategies share them. */
-import { RECIPES, SOURCES } from "../../src/content/registry.js";
+import { MATERIALS, RECIPES, SOURCES } from "../../src/content/registry.js";
 import type { ItemKind, RecipeId, SourceId } from "../../src/content/registry.js";
 import { BASIN_GEOMETRY, CANOPY_BASIN_ROUTE, CANOPY_STOP, RECOVERY_SURFACE_OPERATOR } from "../../src/content/routes.js";
 import { available } from "../../src/sim/inventory.js";
@@ -156,6 +156,12 @@ export function boardAt(d: Driver, v: VehicleState): void {
 }
 /** Leave the helm, refusing if the exit is unsafe. */
 function exitHere(d: Driver): void { leaveCraft(d); }
+/** At the workshop bench: the moored craft's materials into the locker (one panel action). */
+export function stowHold(d: Driver, v: VehicleState): void {
+  enter(d, "workshop");
+  if (d.state.inventory.items.some((i) => i.containerId === v.cargoId && Object.hasOwn(MATERIALS, i.kind)))
+    d.command({ type: "store-materials", from: v.cargoId, to: "workshop_locker" });
+}
 /** Moored at home: leave the helm and service the craft from its socket. */
 export function dockAndService(d: Driver, v: VehicleState): void {
   leaveCraft(d);
@@ -203,8 +209,10 @@ const canopy: Phase = {
     discover(d, "C04", o);
     discover(d, "mara_specimen_tray", o);
     returnToCraft(d, d.vehicle("dart")!);
-    // Crust and resin on the quiet lee fins and pockets, within the 150 m suit.
-    const want = { conductive_crust: 12, buoyant_resin: 12 };
+    // Crust and resin on the quiet lee fins and pockets, within the 150 m suit. The
+    // whole campaign needs about 33 crust and 26 resin; the Basin fins and island
+    // coves supply the rest.
+    const want = { conductive_crust: 16, buoyant_resin: 16 };
     for (const [id, park] of [
       ["canopy_grounding_fins_lower", { x: 132, y: -120, z: -128 }],
       ["canopy_resin_lee_lower", { x: 138, y: -128, z: -138 }],
@@ -223,6 +231,7 @@ const canopy: Phase = {
     dockAndService(d, d.vehicle("dart")!);
     // The Dart's hold counts at the workshop bench while it sits in its cradle.
     make(d, "suit_350", "workshop", ISLES);
+    stowHold(d, d.vehicle("dart")!);
   },
 };
 
@@ -291,12 +300,12 @@ const survey: Phase = {
     d.legOf("read basin_keel_plate", "work", () => { interact(d, "basin_keel_plate"); });
     returnToCraft(d, dart());
     pilotTo(d, "park by the eastern survey fins", { x: 216, y: -160, z: -218 });
-    workFrom(d, dart(), ["basin_survey_fins_east"], { conductive_crust: 8 });
+    workFrom(d, dart(), ["basin_survey_fins_east"], { conductive_crust: 14 });
     pilotTo(d, "back to the station lane", { x: 216, y: -160, z: -232 });
     fly(d, "basin_return");
     fly(d, "dart_home");
     dockAndService(d, dart());
-    enter(d, "workshop");
+    stowHold(d, dart());
   },
 };
 
@@ -325,7 +334,7 @@ const frames: Phase = {
 
 /** At the workshop: put `needs` in the diver hold from the locker and the moored
  * holds, gathering any remainder from the isles and reef. */
-function carry(d: Driver, needs: Readonly<Partial<Record<ItemKind | "tagged_frame", number>>>): void {
+export function carry(d: Driver, needs: Readonly<Partial<Record<ItemKind | "tagged_frame", number>>>): void {
   enter(d, "workshop");
   // Travel light: everything but the load and one meal stays in the locker.
   for (const i of [...d.state.inventory.items].filter((x) => x.containerId === "diver" && !x.fitted && !(x.kind in needs) && x.kind !== "meal"))

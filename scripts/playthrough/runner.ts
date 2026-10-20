@@ -36,7 +36,7 @@ export async function runPhases(d: Driver, phases: readonly Phase[], o: RunOptio
     }
     d.beginPhase(phase.id);
     const crafted = new Set(d.state.knowledge.crafted);
-    const discoveries = d.run.discoveries.length;
+    const discoveries = d.run.discoveries.length, deferred = d.deferred.length;
     d.onGather = (k, n) => addCounts(record.gathered, { [k]: n });
     d.onSpend = (cost) => addCounts(record.spent, cost as Record<string, number>);
     try {
@@ -52,11 +52,12 @@ export async function runPhases(d: Driver, phases: readonly Phase[], o: RunOptio
     record.crafted = d.state.knowledge.crafted.filter((id) => !crafted.has(id));
     record.discoveries = d.run.discoveries.slice(discoveries).map((r) => r.id);
     record.minima = d.phaseMinimaSoFar();
+    if (d.deferred.length > deferred) record.deferred = d.deferred.slice(deferred);
     d.run.phases.push(record);
     if (o.verbose) console.log(`  ${phase.id.padEnd(16)} ${record.status.padEnd(10)} ${String(record.ticks).padStart(7)} ticks` +
       `${record.detail ? `  ${record.detail.join("; ")}` : ""}`);
   }
-  d.run.outcome = stopped === "blocked" ? "blocked" : stopped === "pending-c3" ? "pending-c3" : "complete";
+  d.run.outcome = stopped === "blocked" ? "blocked" : stopped === "pending-c3" || d.deferred.length ? "pending-c3" : "complete";
   d.run.ticks = d.state.tick;
   d.run.minutes = Math.round(d.state.tick / 60 / 6) / 10;
   d.run.wallMs += Math.round(performance.now() - t0);

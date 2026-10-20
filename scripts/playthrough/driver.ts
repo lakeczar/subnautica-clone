@@ -24,8 +24,9 @@ export const IDLE: GameCommand = { type: "move", forward: 0, right: 0, vertical:
 
 const fmt = (n: number): string => n.toFixed(1);
 export const where = (s: GameState): string => {
-  const p = s.player.pose.position;
-  return `(${fmt(p.x)}, ${fmt(p.y)}, ${fmt(p.z)}) ${s.player.mode} tick ${s.tick}`;
+  const p = s.player.pose.position, v = s.fleet.vehicles.find((x) => x.id === s.player.controlledVehicleId);
+  return `(${fmt(p.x)}, ${fmt(p.y)}, ${fmt(p.z)}) ${s.player.mode} tick ${s.tick}` +
+    (v ? ` · ${v.hull} power ${fmt(v.charge)} hull ${fmt(v.health)} rating ${v.rating}` : ` · O2 ${fmt(s.player.vitals.oxygen)}`);
 };
 
 /** Every story record the game keeps, in one ordered list of IDs. */
@@ -53,7 +54,7 @@ export class Driver {
     this.state = state;
     this.run = {
       scenario, strategy, outcome: "complete", ticks: 0, minutes: 0, wallMs: 0, phases: [], legs: [], saves: [],
-      discoveries: [], gathered: {}, spent: {}, refusals: [], failures: 0, checks: [],
+      discoveries: [], gathered: {}, spent: {}, refusals: [], failures: 0, checks: [], notes: [],
     };
     for (const id of knownRecords(state)) this.known.add(id);
   }
@@ -79,6 +80,8 @@ export class Driver {
   }
   /** Set while an adverse scenario deliberately loses a craft or the diver. */
   expectFailure = false;
+  /** Story reads skipped because the build has not placed their hosts (pending C3). */
+  deferred: string[] = [];
 
   idle(seconds: number): void {
     for (let i = 0; i < Math.round(seconds * STEPS_PER_SECOND); i++) this.tick([IDLE]);

@@ -4,21 +4,21 @@
  * "pending C3" with that list. Once C3 lands they play like the live phases.
  *
  * Assumptions C3 should confirm (or adapt here) are marked ASSUME. */
-import { HULL_COLLIDERS, RECIPES, SOURCES } from "../../src/content/registry.js";
+import { HULL_BUILD, HULL_COLLIDERS, ITEMS, RECIPES, SOURCES } from "../../src/content/registry.js";
 import type { ItemKind, RecipeId, SourceId } from "../../src/content/registry.js";
 import { isOptional } from "../../src/content/story/evidence.js";
 import type { DiscoveryId } from "../../src/content/story/evidence.js";
 import { interactions } from "../../src/sim/progression.js";
 import { hullClearance, sweptHullClearance } from "../../src/sim/world.js";
 import type { GameCommand, Vec3, VehicleState } from "../../src/sim/types.js";
-import { board, craft, interact, leaveCraft, move, openPanel, reach, unload } from "./actions.js";
-import { campaignSites, need, s2Route } from "./content.js";
+import { board, craft, gather, interact, leaveCraft, move, procure, reach, unload } from "./actions.js";
+import { campaignSite, need, s2Route } from "./content.js";
 import { Blocked, Driver, where } from "./driver.js";
-import { dockAndService, make } from "./live.js";
+import { carry, dockAndService, make, stowHold } from "./live.js";
 import type { Phase, PlayOptions } from "./live.js";
 import { enter } from "./nav.js";
 import { fly, pilotTo } from "./routes.js";
-import { dist } from "./travel.js";
+import { route, travel } from "./travel.js";
 
 const ISLES = ["island_chain", "refuge_reef"];
 const recipes = (...ids: string[]): string[] => ids.flatMap(need.recipe);
@@ -26,6 +26,13 @@ const sources = (...ids: string[]): string[] => ids.flatMap(need.source);
 const stories = (o: PlayOptions, ...ids: string[]): string[] =>
   ids.filter((id) => o.readOptional || !isOptional(id as DiscoveryId)).flatMap(need.story);
 const routes = (...ids: string[]): string[] => ids.flatMap(need.route);
+/** A plan known now, or a placed story host that grants it. */
+const plans = (d: Driver, bp: string, ...hosts: string[]): string[] =>
+  (d.state.knowledge.blueprints as readonly string[]).includes(bp) || hosts.some((h) => need.story(h).length === 0) ? []
+    : [`plans ${bp}: none of its sources (${hosts.join(", ")}) is placed`];
+/** A phase that only reads story hosts has nothing to play until one is placed. */
+const anyPlaced = (...ids: string[]): string[] =>
+  ids.some((id) => need.story(id).length === 0) ? [] : [`a placed story host among ${ids.join(", ")}`];
 const sites = (...ids: string[]): string[] => ids.flatMap(need.site);
 
 // ------------------------------------------------------------------------ helpers
@@ -47,16 +54,58 @@ function parkNear(d: Driver, point: Vec3): Vec3 {
   }
   throw new Blocked(`No clear parking for the ${v.hull} near (${point.x.toFixed(0)}, ${point.y.toFixed(0)}, ${point.z.toFixed(0)})`, where(d.state));
 }
-/** Park by an interaction host, exit, run `work`, swim back and board. */
+/** Beside the parked craft: swap the diver hold for exactly `cost` from the craft hold. */
+function loadDiver(d: Driver, cost: Readonly<Record<string, number>>): void {
+  const v = d.state.fleet.vehicles.find((x) => !x.berth && x.hull !== "hearthline" &&
+    Math.hypot(x.pose.position.x - d.state.player.pose.position.x, x.pose.position.y - d.state.player.pose.position.y,
+      x.pose.position.z - d.state.player.pose.position.z) < 12);
+  if (!v) throw new Blocked("No craft alongside to load the diver from", where(d.state));
+  reach(d, v.id);
+  for (const i of [...d.state.inventory.items].filter((x) => x.containerId === "diver" && !x.fitted && !(x.kind in cost)))
+    d.command({ type: "transfer", itemId: i.id, to: v.cargoId, quantity: i.quantity });
+  for (const [kind, n] of Object.entries(cost)) {
+    const short = n - d.count(kind as ItemKind, ["diver"]);
+    if (short > 0 && move(d, kind as ItemKind, short, v.cargoId, "diver") < short)
+      throw new Blocked(`The ${v.hull} hold lacks ${short} ${kind} for this diver load`, where(d.state));
+  }
+}
+/** A mooring spot inside the stop's service radius but outside every hull build
+ * envelope, so a supply craft never blocks construction it is lending stock to. */
+function clearOfBuilds(d: Driver, site: string, mooring: Vec3): Vec3 {
+  const v = d.occupied()!, shape = HULL_COLLIDERS[v.hull];
+  const builds = Object.entries(HULL_BUILD) as [keyof typeof HULL_COLLIDERS, { pose: Vec3 }][];
+  const blocks = (q: Vec3) => builds.some(([hull, b]) => Math.abs(q.x - b.pose.x) < shape.radius + HULL_COLLIDERS[hull].radius &&
+    Math.abs(q.z - b.pose.z) < shape.radius + HULL_COLLIDERS[hull].radius && Math.abs(q.y - b.pose.y) < Math.max(shape.height, HULL_COLLIDERS[hull].height));
+  if (!blocks(mooring)) return mooring;
+  for (const r of [10, 16, 22, 26]) for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2, q = { x: mooring.x + Math.cos(a) * r, y: mooring.y, z: mooring.z + Math.sin(a) * r };
+    if (!blocks(q) && hullClearance(d.world, q, shape)) {
+      const note = `${site}: the composed mooring (${mooring.x}, ${mooring.y}, ${mooring.z}) lies inside a hull build envelope; ` +
+        `a craft moored there blocks construction ("Construction clearance is blocked" does not say why). Moored ${r} m off instead.`;
+      if (!d.run.notes.includes(note)) d.run.notes.push(note);
+      return q;
+    }
+  }
+  throw new Blocked(`No mooring near ${site} clear of every build envelope`, where(d.state));
+}
+/** The diver to a site's work pose: a swim, or ashore onto a dry deck. */
+function toWorkPose(d: Driver, site: string, work: Vec3): void {
+  const dry = work.y > -0.5;
+  travel(d, route(`to the ${site} work pose`, "diver", "local swim to the composed work pose, played",
+    dry ? [{ x: work.x, y: -0.5, z: work.z, tolerance: 6 }, { ...work, land: true, tolerance: 0.8 }] : [{ ...work, tolerance: 0.8 }]));
+}
+/** Park by an interaction host (or at a composed mooring), exit, run `work`, swim back and board. */
 function sortie(d: Driver, at: Vec3, label: string, work: () => void): void {
   const v = d.occupied()!;
-  const s2park = parkNear(d, at);
+  const s2park = hullClearance(d.world, at, HULL_COLLIDERS[v.hull]) ? at : parkNear(d, at);
   pilotTo(d, `park for ${label}`, s2park);
   leaveCraft(d);
   work();
   const craftNow = d.state.fleet.vehicles.find((x) => x.id === v.id)!;
   reach(d, craftNow.id);
   unload(d, "diver", craftNow.cargoId);
+  // At a restored stop the socket charges and repairs; elsewhere it simply refuses.
+  if (craftNow.charge < 99 || craftNow.health < 99) d.command({ type: "service", vehicleId: craftNow.id }, { allowRefusal: true });
   board(d, craftNow.id);
 }
 const hostAt = (d: Driver, id: string): Vec3 => {
@@ -64,57 +113,40 @@ const hostAt = (d: Driver, id: string): Vec3 => {
   if (!t) throw new Blocked(`No interaction ${id} in this state`, where(d.state));
   return t.position;
 };
-/** Discover a story host from the craft, skipping optional logs unless reading them. */
+/** Discover a story host from the craft, skipping optional logs unless reading them.
+ * A host the build has not placed is deferred: recorded, and the run stays pending. */
 function story(d: Driver, id: string, o: PlayOptions): void {
   if (d.knows(id) || (isOptional(id as DiscoveryId) && !o.readOptional)) return;
+  if (need.story(id).length) { d.deferred.push(id); return; }
   sortie(d, hostAt(d, id), id, () => { interact(d, id); });
   if (!d.knows(id)) throw new Blocked(`Interacting with ${id} recorded nothing: ${d.state.feedback}`, where(d.state));
 }
-/** Gather a source from the craft into its hold. */
+/** Gather a source from the craft into its hold, a diver load per sortie. */
 function harvest(d: Driver, id: string, want: number): void {
   const def = SOURCES[id as SourceId];
-  sortie(d, def.position, id, () => {
-    let got = 0;
-    while (got < want && d.state.world.resources.find((n) => n.id === id)!.stock > 0) {
-      const before = d.count(def.item as ItemKind, ["diver"]);
-      reach(d, id);
-      d.command({ type: "interact" });
-      got += d.count(def.item as ItemKind, ["diver"]) - before;
-      if (d.freeCu("diver") < 4) break;
-    }
-  });
+  let got = 0;
+  for (let trip = 0; trip < 6 && got < want; trip++) {
+    const stock = d.state.world.resources.find((n) => n.id === id)!.stock;
+    const hold = d.occupied()!.cargoId;
+    if (stock <= 0 || d.freeCu(hold) < ITEMS[def.item].cu * def.bundle) break;
+    sortie(d, def.position, id, () => { got += gather(d, id as SourceId, want - got); });
+  }
 }
-/** The service interaction (bench, mast or panel) at an S9 campaign site. ASSUME:
- * C3 adds one service host within 6 m of the site's work pose. */
-function siteHost(d: Driver, site: string): string {
-  const work = campaignSites()[site]?.work;
-  if (!work) throw new Blocked(`S9 site ${site} is not in this build`, where(d.state));
-  const t = interactions(d.state).filter((x) => x.kind === "service" && dist(x.position, work) < 6)
-    .sort((a, b) => dist(a.position, work) - dist(b.position, work))[0];
-  if (!t) throw new Blocked(`No service host at S9 site ${site} (${work.x}, ${work.y}, ${work.z})`, where(d.state));
-  return t.id;
-}
-/** Restore or fabricate at an S9 site from what the diver carries. */
+/** Restore or fabricate at an S9 site: park, swim to S2's work pose, open the craft
+ * panel (K, a UI-only key) and fabricate from what the diver and the moored hold
+ * carry; then service the craft if the stop now offers it. */
 function siteCraft(d: Driver, site: string, recipe: string): void {
-  const work = campaignSites()[site]!.work;
-  sortie(d, work, `${recipe} at ${site}`, () => {
-    openPanel(d, siteHost(d, site));
+  const at = campaignSite(site);
+  if (!at) throw new Blocked(`S9 site ${site} is not in this build`, where(d.state));
+  sortie(d, at.mooring ? clearOfBuilds(d, site, at.mooring) : at.work, `${recipe} at ${site}`, () => {
+    // A stop's own restoration is paid from one diver load (its locker is shut until then).
+    if (recipe.startsWith("restore_")) loadDiver(d, RECIPES[recipe as RecipeId].cost as Record<string, number>);
+    toWorkPose(d, site, at.work);
     craft(d, recipe as RecipeId);
-    const v = d.state.fleet.vehicles.find((x) => dist(x.pose.position, d.state.player.pose.position) < 20);
-    if (v) d.command({ type: "service", vehicleId: v.id }, { allowRefusal: true });
   });
 }
-/** Put `needs` in the diver hold at the workshop from the locker and moored holds. */
-function carryFromWorkshop(d: Driver, needs: Readonly<Record<string, number>>): void {
-  enter(d, "workshop");
-  for (const [kind, n] of Object.entries(needs))
-    for (const from of ["workshop_locker", ...d.state.fleet.vehicles.map((v) => v.cargoId)]) {
-      const short = n - d.count(kind as ItemKind, ["diver"]);
-      if (short > 0 && d.count(kind as ItemKind, [from]) > 0) move(d, kind as ItemKind, Math.min(short, d.count(kind as ItemKind, [from])), from, "diver");
-    }
-  for (const [kind, n] of Object.entries(needs))
-    if (d.count(kind as ItemKind, ["diver"]) < n) throw new Blocked(`Workshop stock lacks ${n} ${kind} to carry`, where(d.state));
-}
+/** Put `needs` in the diver hold at the workshop, gathering any shortfall. */
+const carryFromWorkshop = (d: Driver, needs: Readonly<Record<string, number>>): void => carry(d, needs as Partial<Record<ItemKind, number>>);
 function boardCraft(d: Driver, hull: VehicleState["hull"]): void {
   const v = d.vehicle(hull);
   if (!v) throw new Blocked(`No ${hull} owned`, where(d.state));
@@ -127,9 +159,7 @@ function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
   fly(d, "basin_return");
   fly(d, "creel_home");
   dockAndService(d, d.vehicle("creel")!);
-  enter(d, "workshop");
-  const hold = d.vehicle("creel")!.cargoId;
-  d.command({ type: "store-materials", from: hold, to: "workshop_locker" }, { allowRefusal: true });
+  stowHold(d, d.vehicle("creel")!);
 }
 
 // --------------------------------------------------------------- Creel route (independent)
@@ -141,8 +171,7 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
   missing: (d) => [
     ...recipes("suit_450", "restore_rift_station", ...(strategy === "creel" ? ["creel_450"] : [])),
     ...sources("rift_ceramic_lip_north", "rift_ceramic_lip_south", "rift_core_shoulder_north", "rift_core_shoulder_west"),
-    ...stories({ readOptional: true, reverse: false }, "rift_station_ledger"),
-    ...routes("route.basin.legacy_anchorage", "route.basin.rift", "route.rift.ceramic"),
+    ...routes("route.basin.legacy_anchorage", "route.basin.rift", "route.rift.ceramic", "route.rift.west_return", "route.basin.reef_west"),
     ...sites("rift.materials_station"),
     ...(d.vehicle("creel") ? [] : ["an owned Creel"]),
   ],
@@ -160,9 +189,14 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
     followS2(d, "route.rift.ceramic");
     harvest(d, "rift_ceramic_lip_south", 12);
     followS2(d, "route.rift.ceramic", true);
-    // Core: Creel 450 K2, Creel 800 K3, suit 800 K1, power assembly K2 (carrier: Mantle K4).
+    // Core: Creel 450 K2, Creel 800 K3, suit 800 K1, power assembly K2 (carrier: Mantle K4),
+    // on the shoulder where S2's western return leaves for the reef.
     harvest(d, "rift_core_shoulder_north", 8);
-    homeAndUnload(d, [["route.basin.rift", true], ["route.basin.legacy_anchorage", true]]);
+    followS2(d, "route.rift.west_return");
+    followS2(d, "route.basin.reef_west");
+    fly(d, "reef_to_slip");
+    dockAndService(d, d.vehicle("creel")!);
+    stowHold(d, d.vehicle("creel")!);
     make(d, "suit_450" as RecipeId, "workshop", ISLES);
     if (strategy === "creel") make(d, "creel_450" as RecipeId, "workshop", ISLES);
   },
@@ -170,12 +204,13 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
 
 const divide: Phase = {
   id: "divide", title: "Mirror Divide: lattice, the upper dock restored, C07; Creel and suit to 800 m",
-  missing: () => [
+  missing: (d) => [
     ...recipes("restore_divide_stop", "creel_800", "suit_800"),
     ...sources("divide_lattice_ledge_west", "divide_lattice_ledge_east"),
-    ...stories({ readOptional: true, reverse: false }, "C07"),
     ...routes("route.basin.divide", "route.divide.lattice_west", "route.divide.lattice_east"),
     ...sites("divide.service_dock"),
+    // The deep-service plans (the dock, Creel 800, suit 800) come only from these records.
+    ...plans(d, "bp_deep_service", "C07", "rift_station_ledger"),
   ],
   play(d, o) {
     carryFromWorkshop(d, { structural_alloy: 3, silica_glass: 3, conductive_crust: 3 });
@@ -191,14 +226,9 @@ const divide: Phase = {
     followS2(d, "route.divide.lattice_east");
     harvest(d, "divide_lattice_ledge_east", 8);
     followS2(d, "route.divide.lattice_east", true);
-    // The dock's restoration takes two lattice from the hold into the diver load.
-    const hold = d.vehicle("creel")!.cargoId;
-    leaveCraft(d);
-    move(d, "brine_lattice" as ItemKind, 2, hold, "diver");
-    board(d, d.vehicle("creel")!.id);
-    siteCraft(d, "divide_dock", "restore_divide_stop");
     story(d, "C07", o);
     story(d, "ren_access_log", o);
+    siteCraft(d, "divide_dock", "restore_divide_stop");
     homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
     make(d, "creel_800" as RecipeId, "workshop", ISLES);
     make(d, "suit_800" as RecipeId, "workshop", ISLES);
@@ -210,7 +240,7 @@ const divide: Phase = {
 const deepRecords: Phase = {
   id: "deep-records", title: "Field shelter (C11) and the Divide turbine hall (C12)",
   missing: (d) => [
-    ...stories({ readOptional: true, reverse: false }, "C11", "C12"),
+    ...anyPlaced("C11", "C12", "mara_last_page"),
     ...routes("route.isles.workshop_stack", "route.isles.stack_headland", "route.basin.divide"),
     ...(d.vehicle("dart") ? [] : ["an owned Dart"]),
   ],
@@ -252,8 +282,8 @@ function worksStep(d: Driver, action: string): void {
   if (JSON.stringify(d.state.story.works) === before) throw new Blocked(`Works command "${action}" changed nothing: not wired`, where(d.state));
 }
 
-const meridianMissing = (o: PlayOptions): string[] => [
-  ...stories(o, "C08", "C10", "C09", "gate_panel", "C13", "district_controller", "iona_ledger_note"),
+const meridianMissing = (): string[] => [
+  ...anyPlaced("C08", "C10", "C09", "gate_panel", "C13", "district_controller", "iona_ledger_note"),
   ...routes("route.divide.service_ledge", "route.meridian.terraces"),
   ...sites("meridian.gate_hall", "meridian.gate_hall_panel", "meridian.staging_office"),
 ];
@@ -297,7 +327,7 @@ function fromMeridian(d: Driver, strategy: Strategy): void {
 const meridian = (strategy: Strategy): Phase => ({
   id: "meridian", title: strategy === "creel" ? "Meridian District by the 800 m Creel: transfer hall, annex, gate hall, service window"
     : "Meridian by carrier: the 550 m Hearthline at the shelf, Mantle sorties",
-  missing: () => [...meridianMissing({ readOptional: true, reverse: false }),
+  missing: () => [...meridianMissing(),
     ...(strategy === "carrier" ? [...routes("route.divide.meridian_broad"), ...sites("meridian.staging_shelf")] : [])],
   play(d, o) {
     toMeridian(d, strategy);
@@ -400,40 +430,45 @@ const hearthline: Phase = {
     ...sites("isles.stack_yard"),
   ],
   play(d) {
-    // Keel F2 A16 R6 and fit-out A6 G8 M8 C8 R4 travel in the Creel's rack hold.
-    enter(d, "workshop");
-    const hold = d.vehicle("creel")!.cargoId;
-    const cost: Record<string, number> = {};
-    for (const id of ["hearthline_keel", "hearthline_base"])
-      for (const [k, n] of Object.entries(RECIPES[id as RecipeId].cost)) cost[k] = (cost[k] ?? 0) + n;
-    for (const [kind, n] of Object.entries(cost)) move(d, kind as ItemKind, n, "workshop_locker", hold);
-    boardCraft(d, "creel");
-    fly(d, "creel_out");
-    followS2(d, "route.isles.workshop_stack");
+    // Keel F2 A16 R6 (58 CU) and fit-out A6 G8 M8 C8 R4 (46 CU): one Creel rack load each.
     for (const recipe of ["hearthline_keel", "hearthline_base"]) {
-      const work = campaignSites().stack_yard!.work;
-      sortie(d, work, recipe, () => {
-        const v = d.vehicle("creel")!;
-        reach(d, v.id);
-        for (const [k, n] of Object.entries(RECIPES[recipe as RecipeId].cost)) move(d, k as ItemKind, n, v.cargoId, "diver");
-        openPanel(d, siteHost(d, "stack_yard"));
-        craft(d, recipe as RecipeId);
-      });
+      const cost = RECIPES[recipe as RecipeId].cost as Record<string, number>;
+      stockUp(d, cost);
+      const hold = d.vehicle("creel")!.cargoId;
+      for (const [kind, n] of Object.entries(cost)) move(d, kind as ItemKind, n - d.count(kind as ItemKind, [hold]), "workshop_locker", hold);
+      boardCraft(d, "creel");
+      fly(d, "creel_out");
+      followS2(d, "route.isles.workshop_stack");
+      // The moored Creel's hold lends its stock to the yard's fabrication.
+      siteCraft(d, "stack_yard", recipe);
+      followS2(d, "route.isles.workshop_stack", true);
+      fly(d, "creel_home");
+      dockAndService(d, d.vehicle("creel")!);
     }
     if (!d.vehicle("hearthline")) throw new Blocked("The fit-out did not produce a Hearthline", where(d.state));
-    followS2(d, "route.isles.workshop_stack", true);
-    fly(d, "creel_home");
-    leaveCraft(d);
   },
 };
 
+/** Bring the workshop locker up to `cost`, gathering what it lacks from the isles and reef. */
+function stockUp(d: Driver, cost: Readonly<Record<string, number>>): void {
+  enter(d, "workshop");
+  const bins = ["workshop_locker", "diver", ...d.state.fleet.vehicles.map((v) => v.cargoId)];
+  const short: Partial<Record<ItemKind, number>> = {};
+  for (const [kind, n] of Object.entries(cost)) {
+    const left = n - d.count(kind as ItemKind, bins);
+    if (left > 0) short[kind as ItemKind] = left;
+  }
+  if (Object.keys(short).length) procure(d, short, "workshop", ISLES);
+  for (const v of d.state.fleet.vehicles) stowHold(d, v);
+}
+
 const carrierDeep: Phase = {
   id: "carrier-deep", title: "Hearthline to the Divide lee mooring: lattice from the 400 m carrier; 550 m refit, Mantle, 800 m suit",
-  missing: () => [
-    ...recipes("hearthline_550", "mantle_base", "suit_800", "restore_divide_stop"),
+  missing: (d) => [
+    ...recipes("hearthline_550", "mantle_base", "suit_800"),
+    ...plans(d, "bp_deep_service", "C07", "rift_station_ledger"),
     ...need.hull("mantle"),
     ...sources("divide_lattice_ledge_west", "divide_lattice_ledge_east"),
-    ...stories({ readOptional: true, reverse: false }, "C07"),
     ...routes("route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide"),
     ...sites("divide.lee_mooring", "isles.stack_yard"),
   ],

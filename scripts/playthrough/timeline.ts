@@ -62,6 +62,8 @@ export interface PhaseRecord {
   minima: Minima;
   /** Missing content IDs for pending phases, the refusal or trap for blocked ones. */
   detail?: string[];
+  /** Story reads this phase would make whose hosts the build has not placed yet. */
+  deferred?: string[];
 }
 
 export interface RunRecord {
@@ -81,6 +83,8 @@ export interface RunRecord {
   refusals: { tick: number; phase: string; message: string }[];
   failures: number;
   checks: { name: string; ok: boolean; detail: string }[];
+  /** Friction a player would work around (and the harness did, by ordinary play). */
+  notes: string[];
 }
 
 export const freshMinima = (): Minima => ({ oxygen: 100, food: 100, health: 100, power: null, hull: null });

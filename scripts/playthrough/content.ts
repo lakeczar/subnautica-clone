@@ -20,11 +20,22 @@ interface Campaign {
   CAMPAIGN_SITES?: Readonly<Record<string, { s2: string; work: Vec3; depth: number }>>;
 }
 let campaign: Campaign | null = null;
+/** C3's composed stops (work pose and craft mooring per site), once C3 lands. */
+let stops: Readonly<Record<string, { work: Vec3; mooring: Vec3; fabrication: string | null }>> = {};
 export async function loadCampaign(): Promise<void> {
-  const spec = "../../src/content/campaign/index.js";
+  const spec = "../../src/content/campaign/index.js", stopSpec = "../../src/content/stops.js";
   try { campaign = await import(spec) as Campaign; } catch { campaign = null; }
+  try { stops = (await import(stopSpec) as { WORKING_STOPS: typeof stops }).WORKING_STOPS; } catch { stops = {}; }
 }
-export const campaignSites = (): Readonly<Record<string, { s2: string; work: Vec3; depth: number }>> => campaign?.CAMPAIGN_SITES ?? {};
+export interface CampaignSite { work: Vec3; mooring: Vec3 | null }
+/** An S9 site's diver work pose and craft mooring: C3's composed stop when the
+ * build has one, otherwise S9's provisional work pose. */
+export const campaignSite = (site: string): CampaignSite | null => {
+  const stop = Object.values(stops).find((x) => x.fabrication === site);
+  if (stop) return { work: stop.work, mooring: stop.mooring };
+  const s9 = campaign?.CAMPAIGN_SITES?.[site];
+  return s9 ? { work: s9.work, mooring: null } : null;
+};
 
 /** A point the simulation lets the player occupy. */
 export const simReaches = (p: Vec3): boolean => withinWorldBounds(p) && p.y >= WORLD_VERTICAL_BOUNDS.minY;
