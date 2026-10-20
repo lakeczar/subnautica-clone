@@ -126,8 +126,16 @@ export interface LineStep {
   readonly ok: boolean;
   readonly owner: "SYS-1" | "registry";
 }
-/** Each successive tier of a line (per hull for refits): at least as much common
- * base as the tier below, plus at least one rare material the tier below lacks. */
+type Cost = Partial<Record<CostKind, number>>;
+/** One tier step against the rule: strictly more common base than the tier below,
+ * plus at least one rare material the tier below lacks. */
+export function tierStep(common: ReadonlySet<CostKind>, lower: Cost, higher: Cost): { commonBefore: number; commonAfter: number; newRare: CostKind[]; ok: boolean } {
+  const sum = (c: Cost): number => (Object.entries(c) as [CostKind, number][]).filter(([k]) => common.has(k)).reduce((n, [, v]) => n + v, 0);
+  const newRare = (Object.keys(higher) as CostKind[]).filter((k) => !common.has(k) && !(k in lower));
+  const commonBefore = sum(lower), commonAfter = sum(higher);
+  return { commonBefore, commonAfter, newRare, ok: commonAfter > commonBefore && newRare.length > 0 };
+}
+/** Each successive tier of a line (per hull for refits), checked by `tierStep`. */
 export function lineSteps(sources: readonly SourceView[]): LineStep[] {
   const common = new Set(commonBase(sources));
   // A line is ordered per hull: plating, for one, has a tier the Spindle cannot take.
@@ -145,13 +153,8 @@ export function lineSteps(sources: readonly SourceView[]): LineStep[] {
       const from = ordered[i - 1]!, to = ordered[i]!;
       if (seen.has(`${from}>${to}`)) continue;
       seen.add(`${from}>${to}`);
-      const a = entry(from).cost, b = entry(to).cost;
-      const sum = (c: Partial<Record<CostKind, number>>): number =>
-        (Object.entries(c) as [CostKind, number][]).filter(([k]) => common.has(k)).reduce((n, [, v]) => n + v, 0);
-      const newRare = (Object.keys(b) as CostKind[]).filter((k) => !common.has(k) && !(k in a));
       const owner = entry(from).registry || entry(to).registry ? "registry" : "SYS-1";
-      steps.push({ line: entry(to).line, from, to, commonBefore: sum(a), commonAfter: sum(b), newRare,
-        ok: sum(b) >= sum(a) && newRare.length > 0, owner });
+      steps.push({ line: entry(to).line, from, to, ...tierStep(common, entry(from).cost, entry(to).cost), owner });
     }
   }
   return steps;

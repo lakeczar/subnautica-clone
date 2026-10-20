@@ -50,7 +50,11 @@ In `tests/upgrades.test.ts`, "adverse: …":
 - **Swapping the only hull bay** for a heat lining is refused the same way.
 - **At 340 m** the change is allowed.
 - **In the carrier's dry berth** with the carrier at 390 m, the change is allowed with a warning: the Dart "cannot launch until the carrier rises above 350 m or the fitting is restored".
-- **Heat and brine** follow the same rule: protection can't be removed inside the hazard. Already overloaded, losing the exchanger's slower load is refused too.
+- **Heat and brine** follow the same rule: protection can't be removed inside the hazard.
+- **Already overheated** (R1), a change is judged by survival's own load rate: tolerated heat gives a margin of spare tolerance, otherwise `−(effective − tolerance) × heatLoad`. Zero stays the safe/unsafe boundary.
+  - A 450 m Creel at 300 m in 0.9 core heat cannot drop its lining. Its load would rise from 0.15 to 0.55; on C3's real `stepExposure` that is 3 → 11 points per second.
+  - A Dart swapping its exchanger for a lining (0.36 → 0.20) is allowed.
+- **Dry-berth warnings** (R1): a berthed change is checked against `berth.carrierDepth` and `berth.exterior`, the hazard sample at the launch lock. It gets one warning per hazard the new fit could not launch into: pressure, heat and brine, each tested separately. The change is still allowed.
 - **Never stranded.** No change can make the hull less safe where it is. Emergency ballast is a powerless 40 m ascent.
 
 ## Effects interface (pure)
@@ -90,7 +94,7 @@ A throwaway adapter type-checked cleanly against SYS-2's tree.
 | --- | --- | --- |
 | `HostPower` (power and drain) | `hostPowerState(input).powered`; `hostDrainStep` for drain | Matches SYS-2's `PowerSource`, plus `"carrier"`: SYS-2 marks the carrier `plant`, but SYS-1 powers it from its battery above 20%, and each powered occupant drains 0.004 %/s. Cells hosts drain 100/1800 points per powered module per second (one cell runs a decoder for 30 min), bio-cells first. Solar hosts need daylight. |
 | `decoderSpeed(moduleId)` | `decoderSpeed(moduleUpgrades)` | ×1.5 / ×2.25 per decoder **module** item, so the upgrade travels with a packed outpost |
-| survey `tier` | `surveyTier(moduleUpgrades, moduleId, mastNearby)` | Tier 1–3 per survey module. The Spindle radio mast **adds one tier** (capped at 3) instead of a ×1.5 range, to fit SYS-2's tier API; it still multiplies relay range ×1.5 (`mastRangeFactor`) |
+| survey `tier` | `surveyTier(moduleUpgrades, moduleId, mastNearby)` | Tier 1–3 per survey module. A surfaced Spindle radio mast within 100 m **adds one tier**, capped at 3, to fit SYS-2's tier API. That is not a uniform ×1.5: the steps are 150 → 300, 300 → 500 and 500 → 800 m, then nothing. Relay range is ×1.5 (`mastRangeFactor`). The catalogue text says the same. |
 | `limitBonus` | `outpostLimitBonus(knowledge.crafted)` | +1 / +2; tiers do not stack |
 | `chartView(…, { livePosition })` | `livePosition(knowledge.crafted)` | one tier-1 upgrade |
 | `seedCollectable(seed, specimenBay)` | `specimenBayAvailable(pilotedProfile, held)` | a piloted Hush with the bay and fewer than 4 specimens |
@@ -112,7 +116,12 @@ Run with `node scripts/upgrade-economy.mjs` after `npm test`. It covers 53 upgra
 - every upgrade is payable from ordinary (non-cave, unprotected) stock within its tier;
 - no cost is cave-only;
 - every depth refit uses its tier's frontier material;
-- every SYS-1 tier line adds common base and a rare new material: plating, cells, drive tuning, lights, Hush refits, decoder, survey and network.
+- every SYS-1 tier line adds **strictly** more common base and a rare new material: plating, cells, drive tuning, lights, Hush refits, decoder, survey and network. Since R1, an equal common cost fails (`tierStep`, tested with 7 → 7).
+
+**What it is not** (R1):
+- **Not a reachability proof.** Reach is the tier's declared depth limit, not derived from earlier purchases, plans, transport, oxygen or power. P1's playthrough owns route proof.
+- **No quantity bound on unplaced materials.** On this branch, ceramic, core and lattice have no placed source, so their quantities are unbounded; even 1,000,000 ceramic would pass with a region-level flag. The C3 probe has every source placed and does the finite arithmetic.
+- **Rerun at composition.** The coordinator reruns the check once S9's sources are composed. Neither run proves combined campaign solvency after arbitrary purchases.
 
 **Stress** (reported, not gated). Every SYS-1 upgrade bought once, across all six hulls and both host scopes, after C3's required and optional campaign spend and a failed rescue, with zero renewal:
 - most materials fit with room;
@@ -140,7 +149,7 @@ That is +6 crust, +2 resin and +2 membrane on the independent route, within its 
 - **Pod container:** `${vehicleId}_pod`, 16 CU, a cache that persists while dropped.
 - **`GameState.world.flares: FlareState[]`.**
 - **`GameState.moduleUpgrades: Record<itemId, HostUpgradeId>`,** for SYS-2 decoder and survey modules. Knowledge upgrades live in `knowledge.crafted`.
-- **`CarrierState.configuration`** gains `"mixed"`. System-socket occupants are SYS-2's (`carrierOccupants`). The carrier charging dock is SYS-2's charger module (`mod_charger`) in a Hearthline system socket, so there is no new item.
+- **`CarrierState.configuration`** gains `"mixed"`. The coordinator enforces SYS-1's 2 (4 with the system bay) powered system sockets against SYS-2's authored socket map at composition. System-socket occupants are SYS-2's (`carrierOccupants`). The carrier charging dock is SYS-2's charger module (`mod_charger`) in a Hearthline system socket, so there is no new item.
 
 ## How to compose
 - **`registry.ts`:**
@@ -151,7 +160,8 @@ That is +6 crust, +2 resin and +2 membrane on the independent route, within its 
 - **`modules.ts`:** build a `FitTarget` and keep today's local-access and cabin checks in front of `installPreview`/`removePreview`. The target is:
   - `v.rating` and the fitted kinds;
   - the dock: home pod, workshop, restored stop, `carrier_berth`, outpost, or `service_head` when another Creel with the head is within 8 m;
-  - `hullDepth`, the berth's carrier depth and the hazard sample (heat classified as `core` inside a cycled plume's shape, `burst` while its cycle is active, else `ambient`);
+  - `hullDepth`; for a berthed craft, `berth: { carrierDepth, exterior }`, where exterior is the hazard sample at the carrier's launch lock;
+  - the hazard sample (heat classified as `core` inside a cycled plume's shape, `burst` while its cycle is active, else `ambient`);
   - `usedCapacity` and `HULL_HOLD_CU`;
   - the carrier state and `inUse`.
 
@@ -186,8 +196,14 @@ That is +6 crust, +2 resin and +2 membrane on the independent route, within its 
 - **Balance:** every number is a proposal.
 
 ## Checks
-- **`npm test`:** 832/832 pass, with 51 new tests in `tests/upgrades*.test.ts` and `tests/power.test.ts`. The fast tier's Babylon guard holds.
-- **C3-composed probe:** the same 51 tests pass.
-- **Economy:** PASS on this branch and on the C3 probe.
+- **`npm test`:** 834/834 pass, with 53 SYS-1 tests in `tests/upgrades*.test.ts` and `tests/power.test.ts`. The fast tier's Babylon guard holds. At the R1 candidate `1bef219` it was 832/832.
+- **Composed probe:** C3 `32c91c7` + SYS-2 `c910fea` + SYS-1, from the reviewer's tree. The 53 tests pass, and the economy check passes with every source placed.
+- **Economy on this branch:** PASS, with region-level fallbacks.
 - **Heavy tier:** not run. No SYS-1 file reaches Babylon or rendering.
 - **Browser:** not run, as briefed.
+
+## R1 fixes (Sol xhigh, changes-needed)
+- **P2, heat while overheated.** `heatMargin` weights the excess by survival's load rate. Regressions cover removal while overheated and a safer swap. Rechecked against C3's real `stepExposure`: the 3 → 11 removal is refused.
+- **P2, dry-berth warnings.** `FitTarget.berth.exterior` is documented, and `launchWarnings` warns separately for pressure, heat and brine. Each has its own test, plus a no-warning case.
+- **P3, tier guard.** `tierStep` requires a strict increase, with a negative regression for 7 → 7.
+- **Notes.** The economy check is not a reachability proof, and unplaced materials are unbounded on this branch. The mast wording is reconciled. The 2/4 system-socket limit is left to composition.

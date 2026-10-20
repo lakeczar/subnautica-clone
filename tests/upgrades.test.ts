@@ -5,10 +5,11 @@ import type { HullId } from "../src/content/registry.js";
 import { HULL_SLOTS, upgrade, UPGRADE_IDS, UPGRADES } from "../src/content/upgrades/catalogue.js";
 import type { UpgradeId } from "../src/content/upgrades/catalogue.js";
 import {
-  applyFit, berthLayouts, fabricatePreview, installPreview, profileOf, refitPreview, removePreview,
+  applyFit, berthLayouts, fabricatePreview, heatMargin, installPreview, profileOf, refitPreview, removePreview,
 } from "../src/sim/upgrades/fitting.js";
 import type { FitTarget, Fitted } from "../src/sim/upgrades/fitting.js";
 
+const near = (a: number, b: number, eps = 1e-9): void => assert.ok(Math.abs(a - b) < eps, `${a} ≉ ${b}`);
 const fit = (kind: UpgradeId, n = 1): Fitted => ({ itemId: `${kind}#${n}`, kind });
 function target(hull: HullId, over: Partial<FitTarget> = {}): FitTarget {
   return { hull, rating: HULLS[hull].initialDepth, fitted: [], dock: "workshop", depth: 5, berth: null,
@@ -214,7 +215,7 @@ test("adverse: heat and brine protection cannot be removed inside the hazard", (
   assert.match(removePreview(brine, "hull_brine_seals#1").refusal!, /unprotected in this brine\. Climb above the dense layer first/);
   // Already overloaded by heat: the exchanger's slower load is margin; losing it is refused too.
   const vent = target("dart", { fitted: [fit("thermal_exchanger")], dock: "service_stop", hazards: { heat: [{ level: 0.9, kind: "core" }], brine: 0 } });
-  assert.match(removePreview(vent, "thermal_exchanger#1").refusal!, /unprotected in this heat/);
+  assert.match(removePreview(vent, "thermal_exchanger#1").refusal!, /loading heat faster here/);
 });
 
 // ---------------------------------------------------------------- carrier structure
@@ -247,4 +248,51 @@ test("a module whose tool is out in the world stays fitted until it is recovered
   assert.match(removePreview(anchored, "hearthline_mooring_anchor#1").refusal!, /anchor is down/);
   // A fitting record that does not belong on the hull is refused, not crashed on.
   assert.match(removePreview(target("dart", { fitted: [fit("creel_grapple")] }), "creel_grapple#1").refusal!, /does not belong on the Dart/);
+});
+
+test("R1: while already overheated, a change is judged by survival's own load rate", () => {
+  const core = { heat: [{ level: 0.9, kind: "core" as const }], brine: 0 };
+  // A 450 m Creel at 300 m with its lining: tolerance 0.75 → 0.35 would load 0.15 → 0.55 per unit time.
+  const creel = target("creel", { rating: 450, fitted: [fit("hull_heat_lining")], depth: 300, dock: "service_stop", hazards: core });
+  const p = removePreview(creel, "hull_heat_lining#1");
+  assert.match(p.refusal!, /Removing Hull heat lining leaves the Creel loading heat faster here\. Move to cooler water first/);
+  near(heatMargin(p.before, core.heat), -0.15);
+  near(heatMargin(p.after, core.heat), -0.55);
+  // A genuinely safer swap is allowed: the Dart's exchanger (load 0.6 × 0.6) for a lining (0.2 × 1).
+  const dart = target("dart", { fitted: [fit("thermal_exchanger")], dock: "service_stop", hazards: core });
+  const swap = installPreview(dart, fit("hull_heat_lining"));
+  assert.equal(swap.refusal, null);
+  assert.equal(swap.displaced?.kind, "thermal_exchanger");
+  near(heatMargin(swap.before, core.heat), -0.36);
+  near(heatMargin(swap.after, core.heat), -0.2);
+  // The boundary holds: tolerated heat is positive margin, and crossing it is refused.
+  assert.ok(heatMargin(profileOf(creel), [{ level: 0.7, kind: "ambient" }]) > 0);
+  assert.match(removePreview({ ...creel, hazards: { heat: [{ level: 0.6, kind: "ambient" }], brine: 0 } }, "hull_heat_lining#1").refusal!,
+    /unprotected in this heat/);
+});
+
+test("R1: dry-berth changes stay allowed but warn per hazard outside the lock", () => {
+  const berth = (exterior: { heat: { level: number; kind: "ambient" }[]; brine: number }, carrierDepth = 300) =>
+    ({ carrierDepth, exterior });
+  const lined = target("creel", { rating: 450, fitted: [fit("hull_heat_lining")], depth: 300, dock: "carrier_berth",
+    berth: berth({ heat: [{ level: 0.6, kind: "ambient" }], brine: 0 }) });
+  const heat = removePreview(lined, "hull_heat_lining#1");
+  assert.equal(heat.refusal, null);
+  assert.equal(heat.warnings.length, 1);
+  assert.match(heat.warnings[0]!, /water outside the lock is too hot for the Creel without it/);
+  const sealed = target("creel", { rating: 800, fitted: [fit("hull_brine_seals")], depth: 450, dock: "carrier_berth",
+    berth: berth({ heat: [], brine: 0.7 }, 450) });
+  const brine = removePreview(sealed, "hull_brine_seals#1");
+  assert.equal(brine.refusal, null);
+  assert.equal(brine.warnings.length, 1);
+  assert.match(brine.warnings[0]!, /brine the Creel cannot take without it/);
+  const plated = target("dart", { rating: 350, fitted: [fit("plating_ceramic")], depth: 380, dock: "carrier_berth",
+    berth: berth({ heat: [], brine: 0 }, 390) });
+  const pressure = removePreview(plated, "plating_ceramic#1");
+  assert.equal(pressure.refusal, null);
+  assert.equal(pressure.warnings.length, 1);
+  assert.match(pressure.warnings[0]!, /cannot launch until the carrier rises above 350 m/);
+  // Benign water outside the lock, or no exterior sample: no warning.
+  assert.deepEqual(removePreview({ ...lined, berth: berth({ heat: [], brine: 0 }) }, "hull_heat_lining#1").warnings, []);
+  assert.deepEqual(removePreview({ ...sealed, berth: { carrierDepth: 450 } }, "hull_brine_seals#1").warnings, []);
 });

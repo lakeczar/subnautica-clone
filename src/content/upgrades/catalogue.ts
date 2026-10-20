@@ -406,7 +406,7 @@ export const UPGRADES = {
     // One tagged frame member for the mast; crust and glass for the antenna.
     cost: { tagged_frame: 1, conductive_crust: 2, silica_glass: 1, structural_alloy: 1 }, cu: 3, plan: "bp_spindle_tender",
     effect: { contract: "radio_mast" },
-    benefit: "Relay and survey range ×1.5 while the Spindle is on the surface.",
+    benefit: "While surfaced: relay range ×1.5, and survey stations within 100 m reach one tier further (150 → 300 → 500 → 800 m).",
     tradeoff: "A socket and 3 CU of hold.",
   },
   // ------------------------------------------------------------ Mantle: deep service craft

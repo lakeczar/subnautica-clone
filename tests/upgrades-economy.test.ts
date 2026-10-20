@@ -4,7 +4,7 @@ import { BLUEPRINTS } from "../src/content/registry.js";
 import { UPGRADE_IDS, upgrade } from "../src/content/upgrades/catalogue.js";
 import { HOST_UPGRADE_IDS } from "../src/content/upgrades/hosts.js";
 import {
-  checkUpgradeEconomy, commonBase, firstDepth, frontierMaterials, inCave, registrySources, upgradeRow,
+  checkUpgradeEconomy, commonBase, firstDepth, frontierMaterials, inCave, registrySources, tierStep, upgradeRow,
 } from "../src/sim/upgrades/economy.js";
 import type { SourceView } from "../src/sim/upgrades/economy.js";
 import { CAVE_SOURCES } from "../src/content/regions/caves.js";
@@ -26,7 +26,12 @@ test("higher tiers need more common base plus a rare new material", () => {
   const report = checkUpgradeEconomy();
   const own = report.lines.filter((l) => l.owner === "SYS-1");
   assert.ok(own.length >= 9);
-  for (const l of own) assert.ok(l.ok && l.commonAfter >= l.commonBefore && l.newRare.length > 0, `${l.from} → ${l.to}`);
+  for (const l of own) assert.ok(l.ok && l.commonAfter > l.commonBefore && l.newRare.length > 0, `${l.from} → ${l.to}`);
+  // R1 P3: an equal common cost is not "more" (hush_450 mutated to 7 → 7 common).
+  const common = new Set(commonBase(registrySources()));
+  const flat = tierStep(common, upgrade("hush_350").cost, { pressure_ceramic: 4, conductive_crust: 3, buoyant_resin: 3, silica_glass: 1 });
+  assert.deepEqual([flat.commonBefore, flat.commonAfter, flat.ok], [7, 7, false]);
+  assert.equal(tierStep(common, upgrade("hush_350").cost, upgrade("hush_450").cost).ok, true);
   // S9's Creel refit costs miss the rule; they are reported for their owner, never silently passed.
   assert.deepEqual(report.advisories.map((a) => a.split(":")[0]), ["creel_350 → creel_450", "creel_450 → creel_800"]);
 });

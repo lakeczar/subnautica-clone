@@ -276,7 +276,8 @@ export function droneLaunchRefusal(p: CraftProfile, mantle: { speed: number; ber
 }
 export const droneRecall = (drone: Vec3, mantle: Vec3, secondsOut: number): boolean =>
   dist(drone, mantle) > SCOUT_DRONE.tether || secondsOut >= SCOUT_DRONE.batterySeconds;
-/** Spindle radio mast. Contract: SYS-2's relay and survey ranges ×1.5 while surfaced. */
+/** Spindle radio mast. Contract: SYS-2's relay range ×1.5 while surfaced. Survey
+ * stations nearby gain one tier instead (`upgrades/hosts.ts` `surveyTier`). */
 export const RADIO_MAST = { factor: 1.5 } as const;
 export const mastRangeFactor = (p: CraftProfile, surfaced: boolean): number =>
   hasContract(p, "radio_mast") && surfaced ? RADIO_MAST.factor : 1;

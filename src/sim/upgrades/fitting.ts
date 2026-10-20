@@ -11,6 +11,7 @@ import type { DockKind, SlotKind, UpgradeDefinition, UpgradeEffect, UpgradeId } 
 import { craftProfile, heatExposure, motion } from "./effects.js";
 import type { CraftProfile, HeatContribution } from "./effects.js";
 
+export interface Hazards { readonly heat: readonly HeatContribution[]; readonly brine: number }
 /** One fitted module instance: the intact item and its upgrade kind. */
 export interface Fitted { readonly itemId: string; readonly kind: UpgradeId }
 export type BerthConfiguration = "compact" | "medium" | "mixed";
@@ -23,10 +24,13 @@ export interface FitTarget {
   readonly dock: DockKind | null;
   /** Hull depth, metres. */
   readonly depth: number;
-  /** In a dry carrier berth the hull feels no pressure; it launches at `carrierDepth`. */
-  readonly berth: { readonly carrierDepth: number } | null;
-  /** Hazard sample at the hull. */
-  readonly hazards: { readonly heat: readonly HeatContribution[]; readonly brine: number };
+  /** In a dry carrier berth the hull feels no pressure or water. It launches at
+   * `carrierDepth` into `exterior`: the hazard sample at the carrier's launch lock
+   * (none when omitted). Changes stay allowed there, with a warning per hazard the
+   * new fit could not launch into. */
+  readonly berth: { readonly carrierDepth: number; readonly exterior?: Hazards } | null;
+  /** Hazard sample at the hull (unused while berthed: see `berth.exterior`). */
+  readonly hazards: Hazards;
   /** CU used in this hull's hold now, and its base hold (HULL_HOLD_CU). */
   readonly hold: { readonly usedCu: number; readonly baseCu: number };
   /** The carrier's own berth and system state, for Hearthline structure changes. */
@@ -89,36 +93,50 @@ export function dockRefusal(t: Pick<FitTarget, "hull" | "dock">, slot: SlotKind)
 const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
 // ---------------------------------------------------------------- safety
-interface Margin { axis: "pressure" | "heat" | "brine"; before: number; after: number }
-/** Margins at the hull's current position (positive is safe). A dry berth has no pressure or water. */
-function margins(t: FitTarget, before: CraftProfile, after: CraftProfile): Margin[] {
-  if (t.berth) return [];
+type Axis = "pressure" | "heat" | "brine";
+interface Margin { axis: Axis; before: number; after: number }
+/** Heat margin on survival's own scale: spare tolerance while tolerated, else the
+ * negative load rate, `(effective − tolerance) × heatLoad`, so a bigger excess or
+ * a faster load is always worse and zero is the safe/unsafe boundary. */
+export function heatMargin(p: CraftProfile, heat: readonly HeatContribution[]): number {
+  const e = heatExposure(p, heat);
+  return e.tolerated ? p.heat - e.effective : -(e.effective - p.heat) * e.loadRate;
+}
+/** Margins in one place (positive is safe). */
+function marginsAt(hull: HullId, depth: number, hazards: Hazards, before: CraftProfile, after: CraftProfile): Margin[] {
   const out: Margin[] = [];
-  if (t.hull !== "spindle") out.push({ axis: "pressure", before: before.rating - t.depth, after: after.rating - t.depth });
-  const hb = heatExposure(before, t.hazards.heat), ha = heatExposure(after, t.hazards.heat);
-  // A slower heat load counts as margin while heat already exceeds tolerance.
-  out.push({ axis: "heat", before: hb.tolerated ? before.heat - hb.effective : -hb.loadRate,
-    after: ha.tolerated ? after.heat - ha.effective : -ha.loadRate });
-  out.push({ axis: "brine", before: before.brine - t.hazards.brine, after: after.brine - t.hazards.brine });
+  if (hull !== "spindle") out.push({ axis: "pressure", before: before.rating - depth, after: after.rating - depth });
+  out.push({ axis: "heat", before: heatMargin(before, hazards.heat), after: heatMargin(after, hazards.heat) });
+  out.push({ axis: "brine", before: before.brine - hazards.brine, after: after.brine - hazards.brine });
   return out;
 }
+/** A change is unsafe on an axis when it leaves the hull exposed there and worse off than before. */
+const worsened = (ms: readonly Margin[]): Margin[] => ms.filter((m) => m.after < 0 && m.after < m.before);
 /** Refuse any change that makes the hull unsafe where it is now, or less safe
- * where it is already exposed. Never strands: the message says how to recover. */
+ * where it is already exposed. Never strands: the message says how to recover.
+ * A dry berth has no pressure or water; see `launchWarnings`. */
 function safetyRefusal(t: FitTarget, before: CraftProfile, after: CraftProfile, what: string): string | null {
-  for (const m of margins(t, before, after)) {
-    if (m.after >= 0 || m.after >= m.before) continue;
-    const hull = label(t.hull);
-    if (m.axis === "pressure")
-      return `${what} leaves the ${hull} rated ${after.rating} m, but it is at ${Math.round(t.depth)} m. Climb above ${after.rating} m first. Nothing changed.`;
-    if (m.axis === "heat")
-      return `${what} leaves the ${hull} unprotected in this heat. Move to cooler water first. Nothing changed.`;
-    return `${what} leaves the ${hull} unprotected in this brine. Climb above the dense layer first. Nothing changed.`;
-  }
-  return null;
+  if (t.berth) return null;
+  const m = worsened(marginsAt(t.hull, t.depth, t.hazards, before, after))[0];
+  if (!m) return null;
+  const hull = label(t.hull);
+  if (m.axis === "pressure")
+    return `${what} leaves the ${hull} rated ${after.rating} m, but it is at ${Math.round(t.depth)} m. Climb above ${after.rating} m first. Nothing changed.`;
+  if (m.axis === "heat")
+    return `${what} leaves the ${hull} ${m.before >= 0 ? "unprotected in this heat" : "loading heat faster here"}. Move to cooler water first. Nothing changed.`;
+  return `${what} leaves the ${hull} unprotected in this brine. Climb above the dense layer first. Nothing changed.`;
 }
-function launchWarning(t: FitTarget, before: CraftProfile, after: CraftProfile): string | null {
-  if (!t.berth || t.hull === "spindle" || after.rating >= t.berth.carrierDepth || after.rating >= before.rating) return null;
-  return `Safe in the dry berth, but the carrier is at ${Math.round(t.berth.carrierDepth)} m: the ${label(t.hull)} (rated ${after.rating} m) cannot launch until the carrier rises above ${after.rating} m or the fitting is restored.`;
+/** From a dry berth: allowed, but one warning per hazard the new fit could not
+ * launch into at the carrier's depth and lock exterior. */
+function launchWarnings(t: FitTarget, before: CraftProfile, after: CraftProfile): string[] {
+  if (!t.berth) return [];
+  const { carrierDepth } = t.berth, hull = label(t.hull), outside = t.berth.exterior ?? { heat: [], brine: 0 };
+  return worsened(marginsAt(t.hull, carrierDepth, outside, before, after)).map((m) =>
+    m.axis === "pressure"
+      ? `Safe in the dry berth, but the carrier is at ${Math.round(carrierDepth)} m: the ${hull} (rated ${after.rating} m) cannot launch until the carrier rises above ${after.rating} m or the fitting is restored.`
+      : m.axis === "heat"
+        ? `Safe in the dry berth, but the water outside the lock is too hot for the ${hull} without it: launching would load the hull. Move the carrier to cooler water or restore the fitting first.`
+        : `Safe in the dry berth, but the carrier sits in brine the ${hull} cannot take without it. Move the carrier above the dense layer or restore the fitting before launching.`);
 }
 
 /** A module whose tool is out in the world stays fitted until it is recovered. */
@@ -237,8 +255,7 @@ export function installPreview(t: FitTarget, item: Fitted, options: { replace?: 
   const losses = [d.tradeoff, ...diff.losses];
   if (displaced) losses.unshift(`Replaces ${def(displaced.kind).label}; it returns intact to the hold.`);
   if (usedAfter >= capacity) losses.push(`Uses the ${capacity === 1 ? "only" : "last free"} ${SLOT_WORDS[slot][0]}.`);
-  const warning = launchWarning(t, before, after);
-  return preview(t, act, item.kind, { ...base, gains: [d.benefit, ...diff.gains], losses, warnings: warning ? [warning] : [] });
+  return preview(t, act, item.kind, { ...base, gains: [d.benefit, ...diff.gains], losses, warnings: launchWarnings(t, before, after) });
 }
 
 /** Read-only removal preview. The module returns intact to this hold unless
@@ -270,9 +287,8 @@ export function removePreview(t: FitTarget, itemId: string, options: { elsewhere
   if (usedCu > capacityCu)
     return refuse(t, act, item.kind, `The ${hull} hold would need ${usedCu} CU but holds ${capacityCu} CU without it. Store ${usedCu - capacityCu} CU first, or take the module to a locker. Nothing changed.`, base);
   const diff = profileChanges(before, after, t.hold.baseCu);
-  const warning = launchWarning(t, before, after);
   return preview(t, act, item.kind, {
-    ...base, warnings: warning ? [warning] : [],
+    ...base, warnings: launchWarnings(t, before, after),
     gains: [`${d.label} returns intact${options.elsewhere ? "" : " to the hold"}.`, `Frees a ${SLOT_WORDS[slot][0]}.`, ...diff.gains],
     losses: [`Gives up: ${d.benefit}`, ...diff.losses],
   });
