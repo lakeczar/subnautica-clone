@@ -286,6 +286,9 @@ h1 {
 .menu-frame:has(> #settings-menu:not([hidden])) {
   width: min(720px, calc(100vw - 64px));
 }
+.menu-screen:has(#settings-menu:not([hidden])) {
+  background: linear-gradient(90deg, #102a35f7 0%, #102a35ee 55%, #102a35c8 75%, #102a3560 100%);
+}
 .menu-frame:has(> #settings-menu:not([hidden])) .wordmark {
   display: none;
 }

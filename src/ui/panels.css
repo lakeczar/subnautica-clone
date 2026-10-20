@@ -59,10 +59,12 @@
 }
 .game-panel nav button[aria-current="page"] { background: #49635a; border-color: #e2cb97; color: #fff0cf; }
 .game-panel article, .game-panel button { overflow-wrap: anywhere; }
-.game-panel .panel-status { margin: 12px 0 8px; color: #e2ead8; font-size: 13px; }
+.game-panel .panel-status { margin: 10px 0 4px; color: #e2ead8; font-size: 13px; }
 #panel-feedback { margin: 8px 0; padding: 8px 12px; border-left: 3px solid #d3c28c; background: #163b48fa; font-size: 13px; line-height: 1.5; pointer-events: none; }
 #panel-feedback.error { border-color: #ffc789; color: #ffe3bb; }
 .panel-group > summary { cursor: pointer; color: #ecedda; font-size: 14px; line-height: 1.6; }
+/* Closed disclosures read as a compact list. */
+.game-panel details.panel-group:not([open]) { margin: 5px 0; padding-block: 7px; }
 .game-panel summary:focus-visible { outline: 2px solid #f3d59c; outline-offset: 4px; border-radius: 2px; }
 .panel-group > summary small { margin-left: 8px; }
 .panel-group[open] > summary { margin-bottom: 10px; }
@@ -72,10 +74,9 @@
 .here-actions > h3 { margin: 12px 0 4px; color: #e9e3c6; }
 .here-actions > article { margin: 6px 0; padding: 8px 12px; }
 .here-row { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; font-size: 13px; }
-.here-row > .panel-action { max-width: 55%; }
-.item-row { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 6px 0; border-top: 1px solid #8bb5a440; }
+.item-row { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 3px 0; border-top: 1px solid #8bb5a440; }
 .item-row strong { font-size: 14px; font-weight: 500; }
-.item-row small { display: block; }
+.item-row small { margin-left: 10px; }
 .item-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: end; gap: 4px; }
 .row-move { position: relative; }
 .row-move > summary { cursor: pointer; padding: 4px 8px; color: #ecedda; font-size: 12px; border: 1px solid #b8c7a35e; border-radius: 3px; }
@@ -86,7 +87,7 @@
 .service-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .storage-operands { display: flex; align-items: center; gap: 8px; }
 .storage-operands > h3 { margin: 0 6px 0 0; white-space: nowrap; }
-.storage-operands label { display: flex; flex: 1; align-items: center; min-width: 0; gap: 6px; font-size: 12px; }
+.storage-operands label { display: flex; flex: 1; align-items: center; min-width: 0; gap: 6px; font-size: 12px; white-space: nowrap; }
 .storage-operands > span { align-self: center; }
 .storage-operands select { width: 100%; min-width: 0; padding: 5px 6px; border: 1px solid #b8c7a360; background: #183d48; color: #e4ead3; font-size: 13px; }
 .storage-operands button { max-width: 270px; text-align: left; }
@@ -104,6 +105,11 @@
 .vessel-line > span { color: #d2dfd2; font-size: 13px; }
 .vessel-line > .service-actions { margin: 0 0 0 auto; }
 .fitting-choice > span { font-size: 13px; }
+/* A blocked change keeps its one reason on the same line as the action. */
+.here-row > .panel-action, .vessel-line .panel-action { flex-direction: row-reverse; align-items: center; gap: 4px 10px; max-width: 70%; }
+.here-row .action-reason, .vessel-line .action-reason { text-align: right; }
+.here-row .panel-action > button, .vessel-line .panel-action > button { flex-shrink: 0; white-space: nowrap; }
+.here-actions button, .vessel-line button, .dive-check button, .carried .service-actions button { padding: 5px 10px; }
 .fitting-choice { margin-top: 4px; }
 .bench-charge { margin-top: 8px; padding-top: 8px; border-top: 1px solid #b8c7a340; }
 .no-charge-options { display: block; margin-top: 8px; }
@@ -127,6 +133,10 @@
 .recipe-done { align-self: center; color: #c4f0cf; font-size: 12px; }
 .recipe-group { margin-top: 10px; }
 .recipe-group > h3 { margin-bottom: 4px; }
+/* A row of closed disclosures; an opened one takes the full width below. */
+.panel-folds { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.game-panel .panel-folds > .panel-group { flex: 1 1 180px; margin: 0; padding: 8px 14px; }
+.panel-folds > .panel-group[open], .panel-folds > .panel-extension { flex-basis: 100%; order: 1; }
 .recipe-group > h3 { color: #e9e3c6; }
 .game-panel .dive-check p { font-size: 13px; }
 .game-panel .provenance { color: #d3dfc9; font-size: 12px; }

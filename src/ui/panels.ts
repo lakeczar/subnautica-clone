@@ -79,13 +79,21 @@ export class PanelView {
     this.sections.set(kind, [...(this.sections.get(kind) ?? []).filter((s) => s.id !== section.id), section]);
   }
 
-  private compose(kind: PanelKind, built: [string, string][], state: GameState, button: CommandButton): string {
+  /** Built sections in order, each followed by its extensions. Consecutive
+   * `fold` sections share one row of closed disclosures. */
+  private compose(kind: PanelKind, built: [id: string, html: string, fold?: boolean][], state: GameState, button: CommandButton): string {
     const kit: SectionKit = { button, group: (id, label, body, open) => this.group(`${kind}:${id}`, label, body, open), escape: escapeHtml };
     const extra = this.sections.get(kind) ?? [];
     const anchors = new Set(built.map(([id]) => id));
     const after = (anchor: string): string => extra.filter((s) => s.after === anchor)
       .map((s) => `<section class="panel-extension" data-section="${escapeHtml(s.id)}">${s.render(state, kit)}</section>`).join("");
-    return built.map(([id, html]) => html + after(id)).join("") +
+    let html = "", folding = false;
+    for (const [id, part, fold = false] of built) {
+      if (fold !== folding) html += fold ? '<div class="panel-folds">' : "</div>";
+      folding = fold;
+      html += part + after(id);
+    }
+    return html + (folding ? "</div>" : "") +
       extra.filter((s) => !anchors.has(s.after)).map((s) => `<section class="panel-extension" data-section="${escapeHtml(s.id)}">${s.render(state, kit)}</section>`).join("");
   }
 
@@ -537,20 +545,23 @@ export class PanelView {
       return `<article class="recipe" data-recipe="${id}" data-readiness="${dart ? "current" : done ? "completed" : block === null ? "ready" : "blocked"}" data-focus-key="recipe:${id}" tabindex="-1">${this.group(`recipe:${id}`, `<span class="recipe-name">${r.label}</span><span class="recipe-costs">${costs}</span>`, `<div class="recipe-more">${detail}</div>`)}${action}</article>`;
     };
     // The next useful work leads; prerequisites, completed work and owned craft collapse.
-    for (const [group, label] of [["ready", "Ready"], ["materials", "Needs materials"], ["blocked", "Blocked"], ["current", "Owned craft"]] as const) {
+    for (const [group, label] of [["ready", "Ready"], ["materials", "Needs materials"], ["blocked", "Not here"]] as const) {
       const rows = recipes.filter((r) => r.group === group);
       if (rows.length) html += `<section class="recipe-group" data-recipe-group="${group}"><h3>${label} <small>${rows.length}</small></h3>${rows.map(render).join("")}</section>`;
     }
-    const locked = recipes.filter((r) => r.group === "locked");
-    if (locked.length) html += this.group("locked-recipes", `Locked <small>${locked.length}</small>`, locked.map(render).join(""));
-    const completed = recipes.filter((r) => r.group === "completed");
-    if (completed.length) html += this.group("completed-recipes", `Completed <small>${completed.length}</small>`, completed.map(render).join(""));
+    // Owned, locked and completed work share one row of closed folds.
+    const folds = ([["current", "owned-recipes", "Owned craft"], ["locked", "locked-recipes", "Locked"], ["completed", "completed-recipes", "Completed"]] as const)
+      .map(([group, id, label]) => {
+        const rows = recipes.filter((r) => r.group === group);
+        return rows.length ? this.group(id, `${label} <small>${rows.length}</small>`, rows.map(render).join("")).replace("<details ", group === "current" ? '<details data-recipe-group="current" ' : "<details ") : "";
+      }).join("");
+    if (folds) html += `<div class="panel-folds">${folds}</div>`;
     if (!recipes.length) html += "<p>Inspect the pod regulator to recover its checklist.</p>";
     return html;
   }
 
   /** Ordered notebook sections. Story records stay whole; reference blocks collapse. */
-  private notebook(state: GameState, button: CommandButton): [string, string][] {
+  private notebook(state: GameState, button: CommandButton): [string, string, boolean?][] {
     const found = (id: string): boolean => state.knowledge.evidence.some((e) => e.id === id);
     const question = found("C06") ? found("C05")
       ? "The dated water change and inward movement are separate facts. What connects them? Keep the residents’ destination and the cause open while comparing the records."
@@ -576,12 +587,12 @@ export class PanelView {
       ["findings", findings],
       ["field-notes", notes],
       ["refuge", this.refugeStatus(state)],
-      ["places", this.places(state)],
-      ["habitats", this.knownHabitats(state)],
-      ["preparation", this.group("dive-preparation", "Dive preparation & safety", `<p>Plan for at least a quarter of your air and power before refilling. Personal protection applies outside the hull; the upper laboratory needs suit 150 m, Basin work needs the paid 350 m refit. Carry a meal and charged cell.</p><p>Z quiet, cover and retreat cost no charge. G spends ${PULSE_CHARGE_COST} points from one carried cell, then a controlled-craft cell, for a 12-second directional distraction. Move quietly away; remote locker cells cannot pay. A full cell can instead supply up to 35% hull power locally.</p><p>Recharge local cells at a restored bench; hull service requires the supported craft nearby. Calls and injury remain visible with mute or opening captions off.</p>`)],
-      ["plans", plans.length ? this.group("retained-plans", `Plans retained <small>${plans.length}</small>`, `<p>Research knowledge · construction not available yet.</p>${plans.map(([, label]) => `<p>${escapeHtml(label)}</p>`).join("")}`) : ""],
-      ["return", this.returnInformation(state)],
-      ["berth", facility(state, "island_workshop") ? this.group("unfinished-berth", "The unfinished large berth", "<p>The carrier cradle needs complementary surveys and frame recovery from Pale Basin. It is a future construction opportunity; no campaign carrier is available here yet.</p>") : ""],
+      ["places", this.places(state), true],
+      ["habitats", this.knownHabitats(state), true],
+      ["preparation", this.group("dive-preparation", "Dive preparation & safety", `<p>Plan for at least a quarter of your air and power before refilling. Personal protection applies outside the hull; the upper laboratory needs suit 150 m, Basin work needs the paid 350 m refit. Carry a meal and charged cell.</p><p>Z quiet, cover and retreat cost no charge. G spends ${PULSE_CHARGE_COST} points from one carried cell, then a controlled-craft cell, for a 12-second directional distraction. Move quietly away; remote locker cells cannot pay. A full cell can instead supply up to 35% hull power locally.</p><p>Recharge local cells at a restored bench; hull service requires the supported craft nearby. Calls and injury remain visible with mute or opening captions off.</p>`), true],
+      ["plans", plans.length ? this.group("retained-plans", `Plans retained <small>${plans.length}</small>`, `<p>Research knowledge · construction not available yet.</p>${plans.map(([, label]) => `<p>${escapeHtml(label)}</p>`).join("")}`) : "", true],
+      ["return", this.returnInformation(state), true],
+      ["berth", facility(state, "island_workshop") ? this.group("unfinished-berth", "The unfinished large berth", "<p>The carrier cradle needs complementary surveys and frame recovery from Pale Basin. It is a future construction opportunity; no campaign carrier is available here yet.</p>") : "", true],
     ];
   }
 
