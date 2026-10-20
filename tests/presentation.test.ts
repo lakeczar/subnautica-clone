@@ -19,6 +19,7 @@ import { ExpeditionSession } from "../src/runtime/session.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
 import { MemoryStorage, TestWriterLock, encoded, sample, settled } from "./persistence-support.js";
+import { UI_SCENARIOS } from "./ui-scenarios.js";
 
 /** Minimal DOM port for rendered buttons, replacement and command wiring. Native
  * keyboard/layout behavior is checked separately in the production browser. */
@@ -1957,4 +1958,23 @@ test("other notices preserve one ordinary bite onset and a later episode can ann
   view.resetPresentation(); v.disabled = false; v.health = 99.8;
   assert.equal(view.threatDamage(bite, s), true); wall(0);
   assert.equal(get("damage-announce").textContent, "Bitten · hull −0.2%");
+});
+
+test("B1 copy: the cabin's own aft hatch prompts leaving, and Creel mount receipts name the rack", (t) => {
+  const { view, get } = viewFixture(t), world = createWorldQueries();
+  const s = UI_SCENARIOS["creel-cabin"]();
+  faceTarget(s, "cabin:hatch");
+  const target = aimedInteraction(s, world);
+  assert.equal(target?.id, "cabin:hatch");
+  view.update(s, false); view.target(target);
+  assert.match(get("interact-prompt").innerHTML, /Leave by hatch/);
+  assert.doesNotMatch(get("interact-prompt").innerHTML, /Enter cabin/);
+  const slip = UI_SCENARIOS["creel-slip"](), creel = slip.fleet.vehicles.find(v => v.hull === "creel")!;
+  const rack = creel.modules[0]!;
+  const removed = executeCommand(slip, { type: "remove-module", vehicleId: creel.id, itemId: rack }, world);
+  const summary = (r: typeof removed) => r.events.flatMap(e => e.type === "notice" ? [e.summary] : []).join(" ");
+  assert.equal(summary(removed), "Creel cargo rack removed · Creel hold");
+  const refit = executeCommand(removed.state, { type: "install-module", vehicleId: creel.id, itemId: rack }, world);
+  assert.equal(summary(refit), "Creel cargo rack fitted");
+  assert.doesNotMatch(summary(removed) + summary(refit), /Dart|trim/);
 });
