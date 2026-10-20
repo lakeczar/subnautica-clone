@@ -37,14 +37,6 @@ export function samplePath(path: readonly Readonly<Vec3>[], step = 1): Vec3[] {
 export const pathLength = (path: readonly Readonly<Vec3>[]): number =>
   path.slice(1).reduce((n, b, i) => n + Math.hypot(b.x - path[i]!.x, b.y - path[i]!.y, b.z - path[i]!.z), 0);
 
-/** Upright box of a hull profile at a keel point. */
-function hullBox(p: Readonly<Vec3>, profile: CraftProfileId, pad = 0): Aabb {
-  const c = CRAFT_PROFILES[profile];
-  return { min: { x: p.x - c.radius - pad, y: p.y + c.bottom - pad, z: p.z - c.radius - pad },
-    max: { x: p.x + c.radius + pad, y: p.y + c.height + pad, z: p.z + c.radius + pad } };
-}
-const overlaps = (a: Aabb, b: Aabb): boolean =>
-  a.min.x < b.max.x && a.max.x > b.min.x && a.min.y < b.max.y && a.max.y > b.min.y && a.min.z < b.max.z && a.max.z > b.min.z;
 export const inside = (b: Aabb, p: Readonly<Vec3>, pad = 0): boolean =>
   p.x >= b.min.x - pad && p.x <= b.max.x + pad && p.y >= b.min.y - pad && p.y <= b.max.y + pad &&
   p.z >= b.min.z - pad && p.z <= b.max.z + pad;
@@ -84,14 +76,44 @@ export function corridorProblems(name: string, path: readonly Readonly<Vec3>[], 
         }
       }
     }
-    const hb = hullBox(p, o.profile);
-    for (const s of ctx.solids) if (overlaps(hb, s.bounds)) once(`solid:${s.id}`, `hits ${s.id} at ${fmt(p)}`);
-    for (const h of ctx.hazards ?? []) {
-      if (!h.protection || o.protections?.includes(h.protection)) continue;
-      if (overlaps(hb, h.bounds)) once(`hazard:${h.id}`, `enters ${h.id} (needs ${h.protection}) at ${fmt(p)}`);
+  }
+  // Solids and hazards: exact, continuous sweeps of every path segment, so
+  // no sample spacing can step over a corner.
+  const forbidden = (ctx.hazards ?? []).filter(h => h.protection && !o.protections?.includes(h.protection));
+  for (let i = 0; i < Math.max(1, path.length - 1); i++) {
+    const a = path[i]!, b = path[Math.min(i + 1, path.length - 1)]!;
+    for (const s of ctx.solids) {
+      const t = sweepHull(a, b, o.profile, s.bounds);
+      if (t !== null) once(`solid:${s.id}`, `hits ${s.id} at ${fmt(lerp3(a, b, t))}`);
+    }
+    for (const h of forbidden) {
+      const t = sweepHull(a, b, o.profile, h.bounds);
+      if (t !== null) once(`hazard:${h.id}`, `enters ${h.id} (needs ${h.protection}) at ${fmt(lerp3(a, b, t))}`);
     }
   }
   return out;
+}
+
+const lerp3 = (a: Readonly<Vec3>, b: Readonly<Vec3>, t: number): Vec3 =>
+  ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t });
+/** Continuous sweep of a hull profile's box along the keel segment a->b
+ * against a box. Returns the first parameter of positive-volume overlap, or
+ * null; touching faces do not count. The test is the keel segment against
+ * the box expanded by the hull (Minkowski), solved exactly per axis. */
+export function sweepHull(a: Readonly<Vec3>, b: Readonly<Vec3>, profile: CraftProfileId, box: Aabb): number | null {
+  const c = CRAFT_PROFILES[profile];
+  const lo = { x: box.min.x - c.radius, y: box.min.y - c.height, z: box.min.z - c.radius };
+  const hi = { x: box.max.x + c.radius, y: box.max.y - c.bottom, z: box.max.z + c.radius };
+  let enter = 0, exit = 1;
+  for (const k of ["x", "y", "z"] as const) {
+    const d = b[k] - a[k];
+    if (Math.abs(d) < 1e-12) { if (a[k] <= lo[k] || a[k] >= hi[k]) return null; continue; }
+    let t0 = (lo[k] - a[k]) / d, t1 = (hi[k] - a[k]) / d;
+    if (t0 > t1) [t0, t1] = [t1, t0];
+    enter = Math.max(enter, t0); exit = Math.min(exit, t1);
+    if (exit - enter <= 1e-9) return null;
+  }
+  return enter;
 }
 
 /** Walkable land: the sim refuses a step rising more than 1.15 m per metre;

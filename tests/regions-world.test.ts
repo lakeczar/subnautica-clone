@@ -4,7 +4,7 @@ import { REGIONS, SOURCES } from "../src/content/registry.js";
 import { SOLIDS, terrainHeight } from "../src/sim/world.js";
 import { CHUNK_SIZE, WORLD_ENVELOPE, chunkId, columnRect } from "../src/world/frame.js";
 import { createWorldMap, validateLayout } from "../src/world/map.js";
-import { corridorProblems, FINAL_SWIM, firstAccess, firstAccessProblems, inside, lossCapable, parkPose, pathLength, rescue, rescueProblems,
+import { corridorProblems, sweepHull, FINAL_SWIM, firstAccess, firstAccessProblems, inside, lossCapable, parkPose, pathLength, rescue, rescueProblems,
   routeProblems, siteDatum, workPose, type CheckContext } from "../src/content/regions/access.js";
 import type { Vec3 } from "../src/world/types.js";
 import { footprintFloor } from "../src/content/regions/drape.js";
@@ -254,4 +254,22 @@ test("ADVERSE controls: a wrong mooring and a missing stage are both refused", (
   assert.ok(RESCUE_PLANS.every(p => wrong.some(m => m.startsWith(`${p.id}: isles_stack_glass_east is not a repair mooring`))), "every plan's mooring is checked");
   const without = rescueProblems(ctx, RESCUE_PLANS.filter(p => p.id !== "rescue.meridian_works"));
   assert.ok(without.some(m => m.startsWith("meridian.works_hatch")), "control: works hatch unrescued without its stage");
+});
+
+test("REGRESSION: solid checks are continuous sweeps; the old ceramic-lip tow is refused", () => {
+  const stub = STRUCTURE_SOLIDS.find(s => s.id === "rift.cool_chimneys.stub_north")!;
+  // R2's tow segment clipped the chimney by 0.27 x 0.34 m between samples.
+  const a = { x: 92.0267, y: -253.4667, z: -966.5333 }, b = { x: 95.6, y: -254, z: -962 };
+  assert.notEqual(sweepHull(a, b, "medium", stub.bounds), null, "the analytic sweep sees the clip");
+  assert.ok(corridorProblems("old tow", [a, b], ctx, { profile: "medium", step: 1.5 }).some(p => p.includes(stub.id)),
+    "the corridor check refuses it at any sample spacing");
+  // A segment passing a box corner between coarse samples is still caught.
+  const box = { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } };
+  assert.notEqual(sweepHull({ x: -10, y: -0.5, z: -5.2 }, { x: 10, y: -0.5, z: 4.8 }, "diver", box), null);
+  assert.equal(sweepHull({ x: -10, y: 5, z: 0 }, { x: 10, y: 5, z: 0 }, "diver", box), null);
+  // The recorded recovery for the lip now clears every solid along every leg.
+  const o = rescue(ctx).outcomes.find(x => x.site === "rift_ceramic_lip_north")!;
+  for (const path of [o.attach, o.tow, o.bobbin, RESCUE_PLANS.find(p => p.id === o.plan)!.tethers[o.branch]!.slice(0, o.vertex + 1)])
+    for (let i = 0; i < path.length - 1; i++) for (const sol of ctx.solids)
+      assert.equal(sweepHull(path[i]!, path[i + 1]!, path === o.bobbin ? "diver" : "medium", sol.bounds), null, `${sol.id} on the lip recovery`);
 });
