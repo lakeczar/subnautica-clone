@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { parseEcology, serializeEcology } from "../src/sim/ecology/persist.js";
 import { createEcology, resumeEcology, stepEcology } from "../src/sim/ecology/ecology.js";
+import { DIVER_ACTOR } from "../src/sim/ecology/types.js";
+import type { EcologyState } from "../src/sim/ecology/types.js";
 import { layerY } from "../src/sim/ecology/agents.js";
-import { HAZARD_FIELDS } from "../src/content/ecology/hazards.js";
+import { EXPOSURE, HAZARD_FIELDS } from "../src/content/ecology/hazards.js";
 import { sitePosition } from "../src/content/ecology/sites.js";
 import { WARNING_LEAD } from "../src/sim/ecology/types.js";
 import { ecologyWorldFrom } from "../src/sim/ecology/adapter.js";
@@ -38,6 +40,8 @@ test("the proposed ecology save block round-trips and rejects malformed data", (
     ["legacy exposure shape", x => { delete x.diver.heatWarned; }],
     ["bad hull key", x => { x.hulls[0].id = "../x"; }],
     ["missing block", x => { delete x.hulls; }],
+    ["controlled not an actor", x => { x.controlled = "../x"; }],
+    ["controlled missing", x => { delete x.controlled; }],
   ];
   for (const [label, mutate] of bad) {
     const copy = structuredClone(json);
@@ -64,7 +68,8 @@ test("the stimulus is derived from today's GameState and the adapter wraps today
   const before = structuredClone(createEcology());
   const after = createEcology();
   const r = stepEcology(after, { tick: s.tick, stimulus: lit, protection: protectionFor(null, []), vehicleId: null }, world);
-  assert.deepEqual(after, before);
+  assert.deepEqual({ ...after, controlled: before.controlled }, before);
+  assert.equal(after.controlled, DIVER_ACTOR);
   assert.equal(r.events.length, 0);
 });
 
@@ -109,40 +114,90 @@ test("hull exposure follows the fleet ID contract, is bounded, cross-checked, an
   assert.notEqual(typeof parseEcology({ ...base, hulls: [entry("dart-1")] }, { vehicleIds: ["dart-1"] }), "string");
 });
 
-test("control transfer: an uncontrolled actor recovers silently, and on return harm waits five seconds after a delivered warning", () => {
+/** Brine just below the layer, and the "other actor" position just above it. */
+const brineAt = () => {
   const saddle = sitePosition(HAZARD_FIELDS.divide_dense_layer.shape.center);
-  const p = { ...saddle, x: saddle.x - 70, y: layerY("divide_dense_layer") - 1 };
-  // The reviewer's cases: load in brine as one actor, step out (other actor
-  // just above the layer), optionally save/load, then return to the exposed actor.
+  return { ...saddle, x: saddle.x - 70, y: layerY("divide_dense_layer") - 1 };
+};
+type Target = "hull" | "diver";
+function transferInput(target: Target, t: number, controlled: boolean) {
+  const p = brineAt(), hull = controlled === (target === "hull") ? "dart" as const : null;
+  return { tick: t, stimulus: stimulus(controlled ? p : { ...p, y: p.y + 2.2 }, { hull, light: 0, noise: 0 }),
+    protection: protectionFor(hull, []), vehicleId: hull ? "Dart_1" : null };
+}
+const roundTripResume = (state: EcologyState): EcologyState => {
+  const parsed = parseEcology(JSON.parse(JSON.stringify(serializeEcology(state))), { vehicleIds: ["Dart_1"] });
+  assert.notEqual(typeof parsed, "string", String(parsed));
+  resumeEcology(parsed as EcologyState);
+  return parsed as EcologyState;
+};
+/** Tracks the target actor's warnings and harm across a whole run. */
+function tracker(target: Target) {
+  const t = { firstDelivered: null as number | null, firstHarm: null as number | null, harm: 0 };
+  return Object.assign(t, {
+    see(tick: number, controlled: boolean, r: ReturnType<typeof stepEcology>) {
+      const warned = r.events.some(e => e.type === "hazard-warning" && e.hazard === "brine");
+      if (!controlled) assert.equal(warned, false, "nothing is warned for an actor nobody controls");
+      if (controlled && warned && t.firstDelivered === null) t.firstDelivered = tick;
+      const h = target === "hull" ? r.effects.vehicleHealth : r.effects.diverHealth;
+      if (h > 0) { t.harm += h; t.firstHarm ??= tick; }
+    },
+  });
+}
+
+test("control transfer: an uncontrolled actor recovers silently; harm still comes five seconds after the episode's delivered warning", () => {
   for (const target of ["hull", "diver"] as const) for (const viaSave of [true, false]) {
     let state = createEcology(), tick = 0;
-    const input = (t: number, controlled: boolean) => {
-      const hull = controlled === (target === "hull") ? "dart" as const : null;
-      return { tick: t, stimulus: stimulus(controlled ? p : { ...p, y: p.y + 2.2 }, { hull, light: 0, noise: 0 }),
-        protection: protectionFor(hull, []), vehicleId: hull ? "Dart_1" : null };
-    };
-    const world = openWater();
-    for (; tick < 600; tick++) stepEcology(state, input(tick, true), world);
-    stepEcology(state, input(tick++, false), world);
-    if (viaSave) {
-      const parsed = parseEcology(JSON.parse(JSON.stringify(serializeEcology(state))), { vehicleIds: ["Dart_1"] });
-      assert.notEqual(typeof parsed, "string", String(parsed));
-      state = parsed as typeof state;
-      resumeEcology(state);
-    }
-    for (let i = 0; i < 60; i++, tick++) {
-      const r = stepEcology(state, input(tick, false), world);
-      assert.equal(r.events.filter(e => e.type === "hazard-warning" && e.hazard === "brine").length, 0, "nothing is warned for an actor nobody controls");
-    }
-    let firstWarning: number | null = null, firstHarm: number | null = null;
-    for (let i = 0; i < 600 && firstHarm === null; i++, tick++) {
-      const r = stepEcology(state, input(tick, true), world);
-      if (firstWarning === null && r.events.some(e => e.type === "hazard-warning" && e.hazard === "brine")) firstWarning = i;
-      if ((target === "hull" ? r.effects.vehicleHealth : r.effects.diverHealth) > 0) firstHarm = i;
-    }
+    const tr = tracker(target), world = openWater();
+    for (; tick < 600; tick++) tr.see(tick, true, stepEcology(state, transferInput(target, tick, true), world));
+    tr.see(tick, false, stepEcology(state, transferInput(target, tick, false), world)); tick++;
+    if (viaSave) state = roundTripResume(state);
+    for (let i = 0; i < 60; i++, tick++) tr.see(tick, false, stepEcology(state, transferInput(target, tick, false), world));
+    const back = stepEcology(state, transferInput(target, tick, true), world);
+    assert.ok(back.events.some(e => e.type === "hazard-warning" && e.hazard === "brine"), "a reminder is shown on return");
+    tr.see(tick++, true, back);
+    for (let i = 0; i < 600 && tr.firstHarm === null; i++, tick++) tr.see(tick, true, stepEcology(state, transferInput(target, tick, true), world));
     const label = `${target}${viaSave ? " via save" : ""}`;
-    assert.ok(firstWarning !== null && firstHarm !== null, `${label}: a warning and harm both occur`);
-    assert.equal(firstWarning, 0, `${label}: the warning is delivered on the first controlled step`);
-    assert.ok((firstHarm - firstWarning) / 60 >= WARNING_LEAD, `${label}: warning ${firstWarning}, harm ${firstHarm}`);
+    assert.ok(tr.firstDelivered !== null && tr.firstHarm !== null, `${label}: a delivered warning and harm both occur`);
+    assert.ok((tr.firstHarm - tr.firstDelivered) / 60 >= WARNING_LEAD, `${label}: delivered ${tr.firstDelivered}, harm ${tr.firstHarm}`);
+  }
+});
+
+test("a warning never delivered (load pending while uncontrolled) is delivered on first control, and grace starts then", () => {
+  for (const target of ["hull", "diver"] as const) for (const viaSave of [true, false]) {
+    let state = createEcology();
+    const pending = { heat: 0, brine: 95, heatWarned: 0, brineWarned: 0 };
+    if (target === "hull") state.hulls.push({ id: "Dart_1", ...pending }); else state.diver = { ...pending };
+    if (viaSave) state = roundTripResume(state);
+    const tr = tracker(target), world = openWater();
+    let tick = 0;
+    for (let i = 0; i < 30; i++, tick++) tr.see(tick, false, stepEcology(state, transferInput(target, tick, false), world));
+    const start = tick;
+    for (let i = 0; i < 900 && tr.firstHarm === null; i++, tick++) tr.see(tick, true, stepEcology(state, transferInput(target, tick, true), world));
+    assert.equal(tr.firstDelivered, start, `${target}: delivered on the first controlled step`);
+    assert.ok(tr.firstHarm !== null && (tr.firstHarm - start) / 60 >= WARNING_LEAD, `${target}: harm ${tr.firstHarm}`);
+  }
+});
+
+test("alternating control cannot renew grace: 4 s on, 0.25 s away, ×30, with and without a save mid-alternation", () => {
+  for (const target of ["hull", "diver"] as const) for (const saveAt of [-1, 12]) {
+    let state = createEcology(), tick = 0;
+    const tr = tracker(target), world = openWater();
+    // Build the load to 100 through real controlled steps; the warnings are delivered.
+    for (let i = 0; i < 60 * 10; i++, tick++) tr.see(tick, true, stepEcology(state, transferInput(target, tick, true), world));
+    for (let cycle = 0; cycle < 30; cycle++) {
+      if (cycle === saveAt) state = roundTripResume(state);
+      for (let i = 0; i < 240; i++, tick++) tr.see(tick, true, stepEcology(state, transferInput(target, tick, true), world));
+      for (let i = 0; i < 15; i++, tick++) tr.see(tick, false, stepEcology(state, transferInput(target, tick, false), world));
+    }
+    const label = `${target}${saveAt >= 0 ? " with save" : ""}`;
+    assert.ok(tr.firstDelivered !== null && tr.firstHarm !== null, `${label}: harm occurs`);
+    assert.ok((tr.firstHarm - tr.firstDelivered) / 60 >= WARNING_LEAD, `${label}: no harm inside the grace`);
+    // Harm starts at the first controlled step that is both 5 s past delivery and at full load:
+    // load reaches 100 inside the first 10 s of exposure, so that is delivery + 5 s.
+    assert.ok((tr.firstHarm - tr.firstDelivered) / 60 <= WARNING_LEAD + 1 / 60 + 1e-9, `${label}: harm at most 5 s after delivery (${(tr.firstHarm - tr.firstDelivered) / 60} s)`);
+    // Hazard harm continues through the alternation: ~4 s of every 4.25 s at the brine rate.
+    const rate = target === "hull" ? EXPOSURE.brine.hullHarm : EXPOSURE.brine.diverHarm;
+    assert.ok(tr.harm > rate * 30 * 4 * 0.9, `${label}: sustained harm ${tr.harm.toFixed(1)}`);
   }
 });

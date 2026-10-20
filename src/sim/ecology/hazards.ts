@@ -128,12 +128,18 @@ const COUNTERS: Readonly<Record<"heat" | "brine", { suit: ProtectionId; hull: Pr
 
 export const emptyExposure = (): Exposure => ({ heat: 0, brine: 0, heatWarned: 0, brineWarned: 0 });
 
-/** Advance one exposure load by one fixed step. Returns harm per step for the
- * actor (diver health or hull health) and warnings. An episode starts with a
- * caption when the load reaches the first threshold (or already sits above it,
- * e.g. after `resumeExposure`); harm waits until that caption is WARNING_LEAD
- * seconds old, however fast the load rose or wherever in a cycle it began. */
-export function stepExposure(load: Exposure, sample: HazardSample, protection: Protection, diver: boolean, inRefuge: boolean): { harm: number; events: EcologyEvent[] } {
+/** Advance one exposure load by one fixed step for the controlled actor.
+ * Returns harm per step (diver health or hull health) and warnings.
+ *
+ * Episode rule: an episode begins when the load reaches the first threshold
+ * and its warning is delivered (shown) on the first controlled step at or
+ * above it; `*Warned` then counts seconds since that delivery, whether or not
+ * the actor stays controlled (see recoverExposure). Harm waits until the
+ * delivered warning is WARNING_LEAD seconds old: grace is granted once per
+ * episode. The episode ends only when the load falls below the first
+ * threshold. `remind` re-shows the current caption (after a control transfer
+ * or a load) without changing eligibility. */
+export function stepExposure(load: Exposure, sample: HazardSample, protection: Protection, diver: boolean, inRefuge: boolean, remind = false): { harm: number; events: EcologyEvent[] } {
   const events: EcologyEvent[] = [];
   let harm = 0;
   const first = EXPOSURE.warnings[0];
@@ -146,32 +152,34 @@ export function stepExposure(load: Exposure, sample: HazardSample, protection: P
     };
     load[kind] = over > 0 ? Math.min(100, before + over * rate.rate * ECOLOGY_DT) : Math.max(0, before - rate.recovery * ECOLOGY_DT);
     if (load[kind] < first) { load[warned] = 0; continue; }
+    const level = Math.max(first, Math.floor(load[kind] / 10) * 10);
     if (load[warned] === 0) {
-      warn(Math.max(first, Math.floor(load[kind] / 10) * 10));
+      // First delivery of this episode: grace starts now.
+      warn(level);
       load[warned] = ECOLOGY_DT;
     } else {
       load[warned] += ECOLOGY_DT;
-      for (const level of EXPOSURE.warnings.slice(1)) if (before < level && load[kind] >= level) warn(level);
+      let crossed = false;
+      for (const l of EXPOSURE.warnings.slice(1)) if (before < l && load[kind] >= l) { warn(l); crossed = true; }
+      if (remind && !crossed) warn(level);
     }
     if (load[kind] >= 100 && load[warned] >= WARNING_LEAD) harm += (diver ? rate.diverHarm : rate.hullHarm) * ECOLOGY_DT;
   }
   return { harm, events };
 }
 /** An actor nobody controls (a parked hull, or the diver while piloting)
- * only recovers. Any open warning episode is closed, so when control returns
- * above the first threshold the episode restarts with a *delivered* caption
- * and harm again waits WARNING_LEAD seconds after it. */
+ * recovers silently. A delivered episode keeps ageing while the load stays at
+ * or above the first threshold, so switching away never renews grace; an
+ * undelivered one stays pending (0) and is delivered on first control. Only
+ * recovery below the threshold ends the episode. */
 export function recoverExposure(load: Exposure): void {
-  load.heat = Math.max(0, load.heat - EXPOSURE.heat.recovery * ECOLOGY_DT);
-  load.brine = Math.max(0, load.brine - EXPOSURE.brine.recovery * ECOLOGY_DT);
-  load.heatWarned = 0;
-  load.brineWarned = 0;
-}
-/** Call once after loading a save: an exposure above the first threshold
- * starts a fresh warning episode, so a reload never resumes into silent harm. */
-export function resumeExposure(load: Exposure): void {
-  load.heatWarned = 0;
-  load.brineWarned = 0;
+  const first = EXPOSURE.warnings[0];
+  for (const kind of ["heat", "brine"] as const) {
+    const warned = kind === "heat" ? "heatWarned" : "brineWarned";
+    load[kind] = Math.max(0, load[kind] - EXPOSURE[kind].recovery * ECOLOGY_DT);
+    if (load[kind] < first) load[warned] = 0;
+    else if (load[warned] > 0) load[warned] += ECOLOGY_DT;
+  }
 }
 
 export type PressureBand = "clear" | "creak" | "stress" | "limit";

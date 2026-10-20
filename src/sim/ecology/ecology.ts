@@ -5,8 +5,8 @@ import { HAZARD_FIELDS } from "../../content/ecology/hazards.js";
 import type { Vec3 } from "../types.js";
 import { activeThreats, dormantReset, restingAgent, speciesOf, stepAgent } from "./agents.js";
 import { cueEvents, miteScatter, sailPositions, scavengerRetreat, schoolScattered } from "./cues.js";
-import { driftFrom, emptyExposure, fieldLevel, recoverExposure, resumeExposure, sampleHazards, stepExposure } from "./hazards.js";
-import { ECOLOGY_DT } from "./types.js";
+import { driftFrom, emptyExposure, fieldLevel, recoverExposure, sampleHazards, stepExposure } from "./hazards.js";
+import { DIVER_ACTOR, ECOLOGY_DT, NO_ACTOR } from "./types.js";
 import type { AgentMode, EcologyEvent, EcologyInput, EcologyState, EcologyStepResult, EcologyWorld, Exposure, Sense } from "./types.js";
 import { finite } from "./vector.js";
 
@@ -21,13 +21,14 @@ export const VEHICLE_ID = /^[a-zA-Z0-9_-]{1,80}$/;
 export const MAX_HULL_EXPOSURES = 8;
 
 export function createEcology(): EcologyState {
-  return { agents: THREAT_AGENT_IDS.map(restingAgent), deterrents: [], diver: emptyExposure(), hulls: [] };
+  return { agents: THREAT_AGENT_IDS.map(restingAgent), deterrents: [], diver: emptyExposure(), hulls: [], controlled: NO_ACTOR };
 }
-/** Call once after a save is loaded, before the first step: every exposure
- * already above the first threshold re-warns before it can harm. */
+/** Call once after a save is loaded, before the first step. Saved warning
+ * ages are kept (a delivered episode gets no fresh grace); the first step
+ * re-shows the controlled actor's current hazard caption, and a warning that
+ * was never delivered is delivered then, with grace starting from it. */
 export function resumeEcology(state: EcologyState): void {
-  resumeExposure(state.diver);
-  for (const h of state.hulls) resumeExposure(h);
+  state.controlled = NO_ACTOR;
 }
 function hullExposure(state: EcologyState, id: string): Exposure | null {
   if (!VEHICLE_ID.test(id)) return null;
@@ -61,12 +62,14 @@ export function stepEcology(state: EcologyState, input: EcologyInput, world: Eco
   // An ID outside the fleet contract takes no hull exposure rather than
   // touching any other entry.
   const load: Exposure | null = input.vehicleId === null ? state.diver : hullExposure(state, input.vehicleId);
+  const actor = input.vehicleId ?? DIVER_ACTOR, remind = state.controlled !== actor;
+  state.controlled = load ? actor : NO_ACTOR;
   if (load) {
-    const exposed = stepExposure(load, sample, input.protection, !input.vehicleId, s.inRefuge);
+    const exposed = stepExposure(load, sample, input.protection, !input.vehicleId, s.inRefuge, remind);
     events.push(...exposed.events);
     if (input.vehicleId) vehicleHealth += exposed.harm; else diverHealth += exposed.harm;
   }
-  // Uncontrolled actors recover silently and re-arm their warning for return.
+  // Uncontrolled actors recover silently; a delivered episode keeps ageing.
   if (input.vehicleId !== null) recoverExposure(state.diver);
   for (const hull of state.hulls) if (hull !== load) recoverExposure(hull);
   state.hulls = state.hulls.filter(h => h === load || h.heat > 0 || h.brine > 0);

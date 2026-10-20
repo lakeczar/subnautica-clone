@@ -145,11 +145,12 @@ test("hazard harm always follows an observable warning by at least five seconds:
   const actors: [HullId | null, ProtectionId[]][] = [[null, []], [null, ["heat_shroud"]], [null, ["brine_seals"]],
     ...(Object.keys(HULLS) as HullId[]).map((h): [HullId, ProtectionId[]] => [h, []]), ["dart", ["hull_heat_lining"]]];
   let checked = 0;
+  // Resumed loads use a pending (never delivered, age 0) warning: that is the
+  // only post-load case entitled to grace. A delivered episode is checked below.
   for (const c of cases) for (const [hull, fitted] of actors) for (let phase = 0; phase < 4; phase++) for (const resumed of [0, 39, 45, 85, 99.9, 100]) {
     const state = createEcology(), vehicleId = hull ? "Fleet_Hull-1" : null;
     if (resumed > 0) {
-      // A save taken mid-exposure, loaded and resumed: its earlier warning is gone.
-      const load = { heat: resumed, brine: resumed, heatWarned: 30, brineWarned: 30 };
+      const load = { heat: resumed, brine: resumed, heatWarned: 0, brineWarned: 0 };
       if (vehicleId) state.hulls.push({ id: vehicleId, ...load }); else state.diver = load;
       resumeEcology(state);
     }
@@ -168,6 +169,13 @@ test("hazard harm always follows an observable warning by at least five seconds:
     }
   }
   assert.ok(checked > 20, `harmful cases exercised: ${checked}`);
+  // A delivered episode resumed from a save gets a reminder, not fresh grace.
+  const plumeAt = { ...chimney, y: chimney.y + 20 }, state = createEcology();
+  state.diver = { heat: 100, brine: 0, heatWarned: 30, brineWarned: 0 };
+  resumeEcology(state);
+  const r = stepEcology(state, { tick: ventTick(1), stimulus: stimulus(plumeAt, { light: 0, noise: 0 }), protection: protectionFor(null, []), vehicleId: null }, openWater());
+  assert.ok(r.events.some(e => e.type === "hazard-warning" && e.hazard === "heat"), "the load re-shows the current caption");
+  assert.ok(r.effects.diverHealth > 0, "harm continues: the saved episode's grace was already spent");
 });
 test("brine sails mark a calm lane well above the layer", () => {
   const top = layerY("divide_dense_layer");

@@ -59,8 +59,10 @@ export interface DeployedDeterrent {
   position: Vec3;
   seconds: number;
 }
-/** Loads run 0..100. Each `*Warned` counts seconds since the current warning
- * episode's first caption (0 when no episode): harm waits for WARNING_LEAD. */
+/** Loads run 0..100. Each `*Warned` counts seconds since the current
+ * episode's warning was delivered (0: none delivered yet, or no episode).
+ * Harm waits until it reaches WARNING_LEAD; it is saved, so neither control
+ * transfers nor save/load can renew grace. */
 export interface Exposure {
   heat: number;
   brine: number;
@@ -77,7 +79,13 @@ export interface EcologyState {
   deterrents: DeployedDeterrent[];
   diver: Exposure;
   hulls: HullExposure[];
+  /** Actor controlled at the last step: a vehicle ID, DIVER_ACTOR, or
+   * NO_ACTOR before the first step after a load. A change triggers a hazard
+   * reminder caption; it never changes harm eligibility. */
+  controlled: string;
 }
+export const DIVER_ACTOR = "@diver";
+export const NO_ACTOR = "";
 /** Seconds from the first observable warning of an encounter or hazard
  * episode to any harm it can cause. A tested invariant. */
 export const WARNING_LEAD = 5;

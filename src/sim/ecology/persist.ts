@@ -2,6 +2,7 @@ import { THREAT_AGENT_IDS } from "../../content/ecology/species.js";
 import type { Deterrent, Sense } from "../../content/ecology/species.js";
 import { DETERRENT_SECONDS, MAX_DETERRENTS, MAX_HULL_EXPOSURES, VEHICLE_ID } from "./ecology.js";
 import { MAX_AWARENESS } from "./agents.js";
+import { DIVER_ACTOR, NO_ACTOR } from "./types.js";
 import type { AgentMode, EcologyState, Exposure } from "./types.js";
 
 /** Proposed persisted block `world.ecology`. Strict: unknown keys, missing
@@ -23,8 +24,8 @@ const exposureOk = (x: unknown): x is Exposure => record(x) && keys(x, EXPOSURE_
 /** `vehicleIds`, when given, is the composed save's fleet: every hull exposure
  * must belong to a vehicle that exists in the same save. */
 export function parseEcology(raw: unknown, options: { vehicleIds?: readonly string[] } = {}): EcologyState | string {
-  if (!record(raw) || !keys(raw, ["agents", "deterrents", "diver", "hulls"])) return "ecology: expected agents, deterrents, diver, hulls";
-  const { agents, deterrents, diver, hulls } = raw;
+  if (!record(raw) || !keys(raw, ["agents", "deterrents", "diver", "hulls", "controlled"])) return "ecology: expected agents, deterrents, diver, hulls, controlled";
+  const { agents, deterrents, diver, hulls, controlled } = raw;
   if (!Array.isArray(agents) || agents.length !== THREAT_AGENT_IDS.length) return "ecology.agents: must list the whole roster";
   for (const [i, a] of agents.entries()) {
     const id = THREAT_AGENT_IDS[i]!;
@@ -51,6 +52,8 @@ export function parseEcology(raw: unknown, options: { vehicleIds?: readonly stri
       return `ecology.hulls[${i}]`;
     seen.add(h.id);
   }
+  if (typeof controlled !== "string" || !(controlled === NO_ACTOR || controlled === DIVER_ACTOR || (VEHICLE_ID.test(controlled) && (!fleet || fleet.has(controlled)))))
+    return "ecology.controlled";
   return structuredClone(raw as unknown as EcologyState);
 }
 /** Plain JSON copy; the state already holds only stable IDs and numbers. */
