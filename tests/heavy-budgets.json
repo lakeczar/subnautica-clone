@@ -4,6 +4,7 @@
   "files": {
     "m2-region-render.heavy.test.ts": 2048,
     "render-cache.heavy.test.ts": 1536,
-    "renewal-render.heavy.test.ts": 1280
+    "renewal-render.heavy.test.ts": 1280,
+    "world-stream.heavy.test.ts": 1280
   }
 }
