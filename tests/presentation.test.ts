@@ -2030,6 +2030,8 @@ test("sound captions keep one line per cause: pressure, power, hull depth and hu
   const cases: [string, string, () => ReturnType<typeof createGame>, string][] = [
     ["alert.pressure", "[Suit pressure tone · beyond rated depth]", deep, "PRESSURE"],
     ["alert.power", "[Low-power chime]", () => piloted((v) => { v.charge = 10; }), "LOW POWER"],
+    // C1-R2 P3: at 0% the depleted banner names power too; one line, not two.
+    ["alert.power", "[Low-power chime]", () => piloted((v) => { v.charge = 0; }), "POWER DEPLETED"],
     ["alert.hull-stress", "[Hull creaks · near rated depth]", () => piloted((v) => { v.pose.position.y = -170; }), "HULL DEPTH"],
     ["hull.failure", "[Hull systems powering down]", () => piloted((v) => { v.disabled = true; v.health = 0; }), "HULL DISABLED"],
   ];
@@ -2043,4 +2045,10 @@ test("sound captions keep one line per cause: pressure, power, hull depth and hu
     view.audioCaption(caption(cue, text), clear);
     assert.equal(get("audio-caption").textContent, text, `${cue}: shown when no banner covers it`);
   }
+  // An unrelated low-hull banner alone does not hide a power caption.
+  const lowHull = piloted((v) => { v.health = 20; v.charge = 60; });
+  assert.ok(hazardBanners(lowHull).some((b) => b.text.startsWith("LOW HULL")));
+  view.resetPresentation();
+  view.audioCaption(caption("alert.power", "[Low-power chime]"), lowHull);
+  assert.equal(get("audio-caption").textContent, "[Low-power chime]");
 });

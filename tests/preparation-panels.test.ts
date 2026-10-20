@@ -645,3 +645,17 @@ test("only the newest record opens across later finds and reloads; a record the 
   panel.resetSession(); panel.refresh("notebook", structuredClone(s));
   assert.deepEqual(open(), ["C04"], "a reload starts from the default: newest only");
 });
+
+test("C3: later campaign rows fold under Later, and refit rows name their real tiers", (t) => {
+  const { panel, html } = panelFixture(t);
+  const s = createGame(); completeOpening(s);
+  for (const id of ["C05", "C06"] as const) discover(s, id);
+  panel.refresh("craft", s);
+  const later = html().match(/<details[^>]*>\s*<summary[^>]*>Later <small>(\d+)<\/small>/);
+  assert.ok(later && Number(later[1]) > 0, "a closed Later fold holds the unready campaign rows");
+  const laterSection = html().slice(html().indexOf("Later <small>"));
+  assert.match(laterSection, /data-recipe="suit_450"/);
+  assert.match(html(), /fitted suit 350 → 450 m/);
+  assert.match(html(), /Creel 350 → 450 m/);
+  assert.doesNotMatch(html(), /150 → 350 m[^<]*450/);
+});

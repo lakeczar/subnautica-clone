@@ -1,5 +1,5 @@
 import {
-  FUTURE_BLUEPRINTS, HULL_BUILD, HULLS, ITEMS, MATERIALS, MODULES, PLACES,
+  FUTURE_BLUEPRINTS, SUIT_RATINGS, HULL_BUILD, HULLS, ITEMS, MATERIALS, MODULES, PLACES,
   RECOVERY_STAGE, RECIPES, REGIONS, renewable, SOURCES, TECH_RECORDS, techRecord,
   type Recipe,
 } from "../content/registry.js";
@@ -12,7 +12,9 @@ import {
   facility, hasRoom, localBenchSite, materialStoragePreview, nearCanopyStop, nearPod,
   nearWorkshop, supportedServiceSite, usedCapacity,
 } from "../sim/inventory.js";
-import { craftingBlock, hullOutput, personalLimit, refitHull } from "../sim/progression.js";
+import { atSite, craftingBlock, hullOutput, personalLimit, refitHull, refitTier, suitRefit } from "../sim/progression.js";
+import { CAMPAIGN_RECIPES } from "../content/campaign/index.js";
+import { stopForSite, WORKING_STOPS } from "../content/stops.js";
 import { RECOVERY_NOTICES, recoverableHull, recoveryCommand, recoveryRouteFor } from "../sim/recovery.js";
 import { cellRechargePreview, distractionPreview, PULSE_CHARGE_COST, reserve, serviceRefusal, serviceState, serviceWouldRestore } from "../sim/vehicles.js";
 import { dartPerformance, installModuleRefusal, mountChangePreview, removeModuleRefusal } from "../sim/modules.js";
@@ -503,7 +505,11 @@ export class PanelView {
       const owned = hullOutput(r), dart = owned ? state.fleet.vehicles.find((v) => v.hull === owned) : undefined;
       // Ownership is live, independent of whichever validation check wins first.
       // In particular a seated owner still sees Current craft, with the site refusal.
+      // S9's later campaign work folds away until it is ready or at hand (C3).
+      const later = Object.hasOwn(CAMPAIGN_RECIPES, id) && block !== null && block.code !== "materials" &&
+        !(stopForSite(r.site) && atSite(state, r.site));
       const group = dart ? "current" : done ? "completed" : block === null ? "ready"
+        : later ? "later"
         : block.code === "needs" ? "locked"
         : block.code === "materials" || block.code === "rescue-low" ? "materials" : "blocked";
       return { id, r, done, block, dart, group };
@@ -541,22 +547,22 @@ export class PanelView {
         : state.player.interiorId === dart.id ? "occupied"
         : dart.berth ? "berthed" : inCradle ? "in cradle" : heading(state.player.pose.position, dart.pose.position);
       // One actionable reason in the row; the exact refusal stays in the details.
-      const place = PLACES[benchOf(r.site)];
+      const stop = stopForSite(r.site), place = stop ? { label: WORKING_STOPS[stop].label, position: WORKING_STOPS[stop].work } : PLACES[benchOf(r.site)];
       const missingSteps = r.needs.filter((n) => !state.knowledge.crafted.includes(n as RecipeId));
       const reason = !block ? undefined
         : dart ? `${HULLS[dart.hull].label} owned — ${location}`
         : block.code === "site" ? state.player.controlledVehicleId || state.player.interiorId ? "Leave the craft to use a bench"
-          : `At ${place.label}${benchOf(r.site) === "home_pod" || state.knowledge.markers.includes(benchOf(r.site)) || facility(state, benchOf(r.site)) ? ` · ${heading(state.player.pose.position, place.position)}` : ""}`
+          : `At ${place.label}${stop || benchOf(r.site) === "home_pod" || state.knowledge.markers.includes(benchOf(r.site)) || facility(state, benchOf(r.site)) ? ` · ${heading(state.player.pose.position, place.position)}` : ""}`
         : block.code === "needs" ? `Needs: ${missingSteps.map((n) => RECIPES[n as RecipeId].label).join(" → ")}`
-        : block.code === "restore" ? `First: ${isWorkshop ? RECIPES.restore_workshop.label : RECIPES.pod_repair.label}`
+        : block.code === "restore" ? stop ? block.message : `First: ${isWorkshop ? RECIPES.restore_workshop.label : RECIPES.pod_repair.label}`
         : block.code === "materials" ? `${fetchable ? "Bring" : "Need"} ${short.slice(0, 2).join(", ")}${short.length > 2 ? " …" : ""}`
         : block.message;
-      const refit = refitHull(id);
+      const refit = refitHull(id), tier = refitTier(id), suitTier = suitRefit(id);
       const sources = r.maintenance ? "Rescue stock only · protected from ordinary fabrication" : `Local sources: ${bins.length ? bins.map((c) => containerLabel(state, c)).join(" · ") : "none at this recipe’s bench"}${bins.some((c) => state.fleet.vehicles.some((v) => v.cargoId === c)) ? " (includes supported-cradle cargo)" : ""}`;
       const habitats = Object.entries(SOURCES).filter(([sourceId, source]) => source.item in r.cost && state.knowledge.scans.includes(sourceId));
       const detail = [
-        id === "suit_350" ? `<p class="refit-scope">${done ? "Fitted personal suit 350 m" : "Paid in-place refit · fitted suit 150 → 350 m"} · ${state.fleet.vehicles.filter((v) => !v.berth && v.hull !== "hearthline").map((v) => `${HULLS[v.hull].label} hull stays ${v.rating} m`).join(" · ") || "hull ratings are separate"}.</p>` : "",
-        refit ? `<p class="refit-scope">Hull refit · ${HULLS[refit].label} ${HULLS[refit].initialDepth} → 350 m · your suit limit is separate.</p>` : "",
+        suitTier ? `<p class="refit-scope">${done ? `Fitted personal suit ${suitTier.rating} m` : `Paid in-place refit · fitted suit ${SUIT_RATINGS[suitTier.from]} → ${suitTier.rating} m`} · ${state.fleet.vehicles.filter((v) => !v.berth && v.hull !== "hearthline").map((v) => `${HULLS[v.hull].label} hull stays ${v.rating} m`).join(" · ") || "hull ratings are separate"}.</p>` : "",
+        refit && tier ? `<p class="refit-scope">Hull refit · ${HULLS[refit].label} ${tier.from} → ${tier.rating} m · your suit limit is separate.</p>` : "",
         dart ? `<p>One ${HULLS[dart.hull].label} at a time · salvage its frame to rebuild.</p>` : "",
         done ? "<p>Current recipe reference</p>" : "",
         `<p>${bench} · ${restored ? "restored" : id === "pod_repair" || id === "restore_workshop" ? "repair available before restoration" : "restore services first"}${!atBench(r.site) ? " · away from this bench" : ""}${r.maintenance ? " · rescue stock only" : ""}</p>`,
@@ -566,7 +572,7 @@ export class PanelView {
         !done && habitats.length ? `<p class="recipe-sources">Known habitats: ${habitats.map(([, source]) => `${escapeHtml(source.label)} · ${REGIONS[source.region].label}`).join("; ")}.</p>` : "",
         !done && isWorkshop && !restored ? "<p>The unrestored workshop locker stays locked. Restore with carried materials or a nearby deployed buoy.</p>" : "",
       ].join("");
-      const verb = id === "pod_repair" ? "Repair" : id.startsWith("restore_") ? "Restore" : id === "suit_350" || refit ? "Refit"
+      const verb = id === "pod_repair" ? "Repair" : id.startsWith("restore_") ? "Restore" : suitTier || refit ? "Refit"
         : hullOutput(r) ? "Build" : id === "strip_frame" ? "Strip" : "Fabricate";
       const action = done ? `<span class="recipe-done">${completion}</span>`
         : button(verb, { type: "craft", recipeId: id }, block !== null, reason, r.label.toLowerCase().includes(verb.toLowerCase()) ? r.label : `${verb} · ${r.label}`);
@@ -578,7 +584,7 @@ export class PanelView {
       if (rows.length) html += `<section class="recipe-group" data-recipe-group="${group}"><h3>${label} <small>${rows.length}</small></h3>${rows.map(render).join("")}</section>`;
     }
     // Owned, locked and completed work share one row of closed folds.
-    const folds = ([["current", "owned-recipes", "Owned craft"], ["locked", "locked-recipes", "Locked"], ["completed", "completed-recipes", "Completed"]] as const)
+    const folds = ([["current", "owned-recipes", "Owned craft"], ["later", "later-recipes", "Later"], ["locked", "locked-recipes", "Locked"], ["completed", "completed-recipes", "Completed"]] as const)
       .map(([group, id, label]) => {
         const rows = recipes.filter((r) => r.group === group);
         return rows.length ? this.group(id, `${label} <small>${rows.length}</small>`, rows.map(render).join("")).replace("<details ", group === "current" ? '<details data-recipe-group="current" ' : "<details ") : "";

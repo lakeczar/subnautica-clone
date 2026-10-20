@@ -470,7 +470,7 @@ export class GameView {
   audioCaption(caption: Caption, state: GameState | null = this.latest): void {
     if (!caption.essential && !this.subtitles) return;
     const banner = CAPTION_BANNER[caption.cue];
-    if (banner && state && hazardBanners(state).some((b) => b.context === banner)) return;
+    if (banner && state && hazardBanners(state).some((b) => b.context === banner || b.covers?.includes(banner))) return;
     const element = this.get("audio-caption");
     element.textContent = caption.text;
     element.hidden = false;

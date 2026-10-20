@@ -530,7 +530,11 @@ function airSourceLabel(state: GameState): string {
     : `${air.kind === "emergency" ? "Emergency" : "Suit"} air · ${Math.ceil(air.remainingSeconds!)} s`;
 }
 
-export interface HazardBanner { context: NoticeContext | "pressure" | "health" | "hullDepth" | "power"; text: string }
+export interface HazardBanner {
+  context: NoticeContext | "pressure" | "health" | "hullDepth" | "power"; text: string;
+  /** Other caption causes this banner already states (power depleted names power). */
+  covers?: readonly string[];
+}
 /** The exact current-state list used for both visible warnings and coverage. */
 export function hazardBanners(state: GameState): HazardBanner[] {
   const warnings: HazardBanner[] = [];
@@ -541,7 +545,8 @@ export function hazardBanners(state: GameState): HazardBanner[] {
   if (!e.breathable && state.player.vitals.oxygen <= 35)
     warnings.push({ context: "oxygen", text: `LOW OXYGEN · ${state.player.vitals.oxygen.toFixed(0)}% · return to air now` });
   if (v && (v.charge === 0 || v.disabled))
-    warnings.push({ context: "hull", text: `${v.disabled ? "HULL DISABLED" : "POWER DEPLETED"} · ${air.kind === "suit" ? "emergency air exhausted · " : ""}${airLabel} · protected exit / reserve cell` });
+    warnings.push({ context: "hull", text: `${v.disabled ? "HULL DISABLED" : "POWER DEPLETED"} · ${air.kind === "suit" ? "emergency air exhausted · " : ""}${airLabel} · protected exit / reserve cell`,
+      ...(v.charge === 0 ? { covers: ["power"] } : {}) });
   if (v && hullDepth(v) > v.rating * 0.85)
     warnings.push({ context: "hullDepth", text: `HULL DEPTH · ${hullDepth(v).toFixed(0)} / ${v.rating} m · ascend before hull damage` });
   if (v && v.charge > 0 && v.charge < 25)
