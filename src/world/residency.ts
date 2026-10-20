@@ -28,6 +28,8 @@ export interface ResidencyBudget {
   /** Total GPU bytes of resident art, shown or hidden. */
   readonly gpuBytes: number;
   readonly uploadBytesPerFrame: number;
+  /** Time cap on uploads per frame, alongside the byte cap (always one). */
+  readonly uploadMsPerFrame: number;
   readonly buildMsPerFrame: number;
   /** Partially built units allowed at once. */
   readonly maxInFlight: number;
@@ -38,6 +40,7 @@ export const DEFAULT_BUDGET: ResidencyBudget = {
   cpuBytes: 256 * 1024 * 1024,
   gpuBytes: 256 * 1024 * 1024,
   uploadBytesPerFrame: 4 * 1024 * 1024,
+  uploadMsPerFrame: 4,
   buildMsPerFrame: 4,
   maxInFlight: 2,
   retainedUnits: 48,
@@ -68,6 +71,10 @@ export interface ResidencyStats {
   readonly hiddenGpuBytes: number;
   readonly buildMs: number;
   readonly buildSteps: number;
+  /** Longest single build step this frame: a factory that overruns its
+   * slice shows up here, not as a mystery hitch. */
+  readonly maxStepMs: number;
+  readonly uploadMs: number;
   readonly uploads: number;
   readonly uploadedBytes: number;
   /** Desired units not yet shown at their desired LOD. */
@@ -99,7 +106,8 @@ interface Want { readonly chunk: ChunkDescriptor; readonly lod: LodLevel; readon
  *    the budget, so the resident set is the nearest set that fits;
  * 2. cancels builds and discards prepared art that are no longer wanted;
  * 3. steps builds, nearest first, within `buildMsPerFrame`;
- * 4. uploads prepared art within `uploadBytesPerFrame` (at least one);
+ * 4. uploads prepared art within `uploadBytesPerFrame` and
+ *    `uploadMsPerFrame` (at least one);
  * 5. shows each wanted chunk at its LOD, keeping the previous LOD visible
  *    until the new one is ready so traversal never opens holes;
  * 6. evicts hidden units least recently used first, over the byte budget or
@@ -209,7 +217,7 @@ export function createResidency(options: {
       lastDesired = [...desired.values()];
       // 3. Builds, nearest first, within the time slice (always one step).
       const start = now();
-      let steps = 0;
+      let steps = 0, maxStepMs = 0;
       const queue = [...desired.values()].filter(w => {
         const u = units.get(key(w.chunk.id, w.lod));
         return !u || u.state === "building";
@@ -227,7 +235,9 @@ export function createResidency(options: {
           units.set(k, u);
         }
         while (u.build) {
+          const before = now();
           const r = u.build.next();
+          maxStepMs = Math.max(maxStepMs, now() - before);
           steps++;
           if (r.done) {
             u.build = null; u.prepared = r.value; u.state = "prepared"; totals.built++;
@@ -237,10 +247,12 @@ export function createResidency(options: {
       const buildMs = now() - start;
       // 4. Uploads, nearest first, within the byte cap (always one).
       let uploads = 0, uploadedBytes = 0;
+      const uploadStart = now();
       const ready = [...units.values()].filter(u => u.state === "prepared").sort((a, b) => a.rank - b.rank);
       for (const u of ready) {
         const bytes = u.prepared!.gpuBytes;
-        if (uploads > 0 && uploadedBytes + bytes > budget.uploadBytesPerFrame) break;
+        if (uploads > 0 && (uploadedBytes + bytes > budget.uploadBytesPerFrame ||
+          now() - uploadStart >= budget.uploadMsPerFrame)) break;
         const prepared = u.prepared!;
         u.prepared = null;
         u.art = prepared.upload();
@@ -249,6 +261,7 @@ export function createResidency(options: {
         uploads++; uploadedBytes += bytes; totals.uploaded++;
         learn(u.lod, u.art.cpuBytes, u.art.gpuBytes);
       }
+      const uploadMs = now() - uploadStart;
       // 5. Display: the desired LOD once it exists; until then keep whatever
       //    this chunk already shows, or bring back a hidden other LOD.
       let pending = 0;
@@ -284,7 +297,7 @@ export function createResidency(options: {
       last = {
         frame, desired: all.length, withinBudget: desired.size, building, prepared, shown, hidden: hiddenCount,
         cpuBytes: bytes.cpu, gpuBytes: bytes.gpu, shownGpuBytes: bytes.shownGpu, hiddenGpuBytes: bytes.hiddenGpu,
-        buildMs, buildSteps: steps, uploads, uploadedBytes, pending, totals: { ...totals },
+        buildMs, buildSteps: steps, maxStepMs, uploadMs, uploads, uploadedBytes, pending, totals: { ...totals },
       };
       return last;
     },

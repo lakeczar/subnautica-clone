@@ -14,7 +14,17 @@ export function seededRandom(seed: number): () => number {
   let s = seed >>> 0 || 1;
   return () => ((s = (1664525 * s + 1013904223) >>> 0) / 4294967296);
 }
-export const defaultContext = (floor: (x: number, z: number) => number): ChunkBuildContext => ({ floor, random: seededRandom });
+/** Build context whose `due()` turns true `stepMs` after `startStep()`; the
+ * kit loader starts the clock before resuming each factory step. */
+export function defaultContext(floor: (x: number, z: number) => number, stepMs = 0.75,
+  now: () => number = () => performance.now()): ChunkBuildContext & { startStep(): void } {
+  let deadline = Infinity;
+  return {
+    floor, random: seededRandom,
+    due: () => now() >= deadline,
+    startStep() { deadline = now() + stepMs; },
+  };
+}
 
 const GROUND: Record<string, readonly [string, string]> = {
   reef_shelf: [P.sand, P.stoneLight], island_shoal: [P.shore, P.sand], canopy_crown: [P.stoneLight, P.deep],
@@ -34,7 +44,7 @@ export const terrainFactory: ChunkArtFactory = {
     // Heights with a one-sample border, so edge normals match the neighbour's.
     for (let j = 0; j < side; j++) {
       for (let i = 0; i < side; i++) h[j * side + i] = ctx.floor(min.x + (i - 1) * spacing, min.z + (j - 1) * spacing);
-      if (j % 16 === 15) yield;
+      if (ctx.due()) yield;
     }
     const at = (i: number, j: number): number => h[(j + 1) * side + (i + 1)]!;
     const [light, dark] = GROUND[chunk.biome] ?? [P.sand, P.stoneLight];
@@ -51,11 +61,14 @@ export const terrainFactory: ChunkArtFactory = {
         const y = at(i, j), dx = (at(i + 1, j) - at(i - 1, j)) / (2 * spacing), dz = (at(i, j + 1) - at(i, j - 1)) / (2 * spacing);
         grid.push(b.vertex([min.x + i * spacing, y, min.z + j * spacing], [-dx, 1, -dz], colorAt(y, Math.hypot(dx, dz))));
       }
-      if (j % 16 === 15) yield;
+      if (ctx.due()) yield;
     }
-    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-      const a = grid[j * (n + 1) + i]!, c = grid[(j + 1) * (n + 1) + i]!;
-      b.triangle(a, c, a + 1); b.triangle(a + 1, c, c + 1);
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const a = grid[j * (n + 1) + i]!, c = grid[(j + 1) * (n + 1) + i]!;
+        b.triangle(a, c, a + 1); b.triangle(a + 1, c, c + 1);
+      }
+      if (ctx.due()) yield;
     }
     // Skirt: drop each border vertex by more than the coarse sampling error.
     const drop = Number(ref.params?.coarse ?? 8) * 1.5 + 2;
@@ -69,6 +82,7 @@ export const terrainFactory: ChunkArtFactory = {
       const lo1 = b.vertex([min.x + i1 * spacing, at(i1, j1) - drop, min.z + j1 * spacing], out, darkC);
       b.triangle(top0, lo0, top1); b.triangle(top1, lo0, lo1);
     }
+    yield;
     return { meshes: [b.build(`terrain.${lod}`)], instances: [] };
   },
 };
@@ -93,7 +107,7 @@ export const scatterFactory: ChunkArtFactory = {
       const x = min.x + rand() * (max.x - min.x), z = min.z + rand() * (max.z - min.z);
       const pick = rand() * total, yaw = rand() * Math.PI * 2, s = 0.6 + rand() * 0.9, tone = 0.82 + rand() * 0.3;
       const keep = rand(), tilt = (rand() - 0.5) * 0.25;
-      if (k % 256 === 255) yield;
+      if ((k & 31) === 31 && ctx.due()) yield;
       if (lod === "coarse" && keep > keepCoarse * (0.6 + s * 0.4)) continue;
       const y = ctx.floor(x, z);
       if (y > -1.2) continue; // underwater life only
@@ -105,6 +119,7 @@ export const scatterFactory: ChunkArtFactory = {
       for (let q = 0; q < 16; q++) batch.m.push(matrix[q]!);
       batch.t.push(tone, tone, tone, 1);
     }
+    yield;
     const instances: InstanceRecipe[] = [...batches].map(([template, b]) => ({
       template, matrices: new Float32Array(b.m), tints: new Float32Array(b.t),
     }));
@@ -130,7 +145,7 @@ export const setPieceFactory: ChunkArtFactory = {
       // Same draws per part at every LOD; coarse keeps every third part.
       const a = rand() * Math.PI * 2, r = 4 + rand() * 22, kind = rand(), yaw = rand() * Math.PI;
       const u = rand(), v = rand(), w = rand();
-      if (k % 24 === 23) yield;
+      if (ctx.due()) yield;
       if (!fine && k % 3) continue;
       const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r, y = ctx.floor(x, z);
       if (kind < 0.45) {
@@ -145,6 +160,7 @@ export const setPieceFactory: ChunkArtFactory = {
         b.box([x, y + 1.6, z], [3, 3, 5], pale, yaw);
       }
     }
+    yield;
     const mesh: MeshRecipe = b.build(`setpiece.${lod}`);
     return { meshes: [mesh], instances: [] };
   },

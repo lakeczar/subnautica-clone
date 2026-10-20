@@ -60,7 +60,8 @@ export function createKitLoader(options: {
   material: ShaderMaterial;
   templates: TemplateLibrary;
   factories: readonly ChunkArtFactory[];
-  context: ChunkBuildContext;
+  /** `startStep` (see `defaultContext`) is called before every factory step. */
+  context: ChunkBuildContext & { startStep?(): void };
 }): ChunkLoader & { readonly stats: KitLoaderStats } {
   const { scene, material, templates, context } = options;
   const factories = new Map(options.factories.map(f => [f.id, f] as const));
@@ -102,7 +103,18 @@ export function createKitLoader(options: {
       for (const ref of chunk.art) {
         const factory = factories.get(ref.factory);
         if (!factory) throw new Error(`No kit factory "${ref.factory}" for ${chunk.id}`);
-        const recipe = yield* factory.build(context, chunk, ref, lod);
+        // Step the factory by hand so each resume starts its time slice;
+        // `finally` forwards cancellation to the factory's own cleanup.
+        const steps = factory.build(context, chunk, ref, lod);
+        let recipe: ChunkRecipe;
+        try {
+          for (;;) {
+            context.startStep?.();
+            const r = steps.next();
+            if (r.done) { recipe = r.value; break; }
+            yield;
+          }
+        } finally { steps.return(undefined as never); }
         meshes.push(...recipe.meshes);
         for (const i of recipe.instances) {
           if (!templates.has(i.template)) throw new Error(`Unknown kit template ${i.template} in ${chunk.id}`);
