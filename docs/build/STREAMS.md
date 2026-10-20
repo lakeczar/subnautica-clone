@@ -160,3 +160,12 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **A1 R2 fixes done** at `8fd3ae3`: collision within 0.35 m everywhere (worst 0.34 m) checked by a dense 0.25 m grid test; 5,271 AABBs. The coordinator accepts the count for now; C3 measures the broad-phase cost, with an oriented-box/capsule collider kind as the polish fallback (it would cut boxes about 10× and restore curved shapes). A Sol R3 review is running.
 - **P1 R3 (Sol):** changes-needed (`review/p1-r3` `22aa4d1`). The R2 fixes are verified. P2: carrier loading asks for station keeping out of range. P2: a silently failed Creel refit passes, so every action's effect must be asserted. Back with the author.
 - **A1 R3 (Sol):** changes-needed (`review/a1-r3` `c62cfde`). The arch and ring are fixed and the envelope checks pass. P2: `works.pipes` is anchored outside the chunk bounds, so it is invisible but has 182 colliders. A small fix plus an invariant test; the coordinator inspects it without a further round.
+
+## Owner request (2026-10-20): world evolution
+- **Gap confirmed:** the world floor is a single heightfield, so it has steep cliffs but **no caves, overhangs or underground areas.** The owner wants caves, cliffs and underground areas in iteration 1, plus richer landmarks, creatures and resources.
+- **Noted for later (iteration 2):** an expanded map with a centralized hub/base and intermixed early/late biomes, like Subnautica's ring layout. Ours is currently a linear north-to-south progression.
+- **Research (Sol 6.1 high):**
+  - R1 layout and progression (`siltwake-research-r1-layout-progression`);
+  - R2 caves and underground, design plus technology (`siltwake-research-r2-caves`);
+  - R3 landmarks, creatures and resources (`siltwake-research-r3-landmarks-fauna`).
+- **Next:** the coordinator consolidates these into an iteration-1 plan (caves and a content density pass) and an iteration-2 map note.
