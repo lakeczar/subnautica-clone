@@ -95,6 +95,11 @@ const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
 /** Explicit receipts also own their one existing originless action sound. */
+/** Field receipts name the actual module, not a fixed Dart example. */
+function moduleName(s: GameState, itemId: string): string {
+  const kind = s.inventory.items.find((i) => i.id === itemId)?.kind;
+  return kind ? ITEMS[kind].label : "Module";
+}
 function actionResult(s: GameState, events: GameEvent[], summary: string, cue: "collect" | "craft" = "collect"): void {
   events.push({ type: "notice", channel: "action", message: s.feedback, summary }, { type: "sound", cue });
 }
@@ -161,12 +166,13 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     }
     case "install-module": {
       const no = installModule(s, c.vehicleId, c.itemId);
-      if (!no) actionResult(s, events, "Dart acoustic trim fitted");
+      if (!no) actionResult(s, events, `${moduleName(s, c.itemId)} fitted`);
       return no;
     }
     case "remove-module": {
       const no = removeModule(s, c.vehicleId, c.itemId, w);
-      if (!no) actionResult(s, events, "Dart acoustic trim removed · Dart hold");
+      const item = s.inventory.items.find((i) => i.id === c.itemId);
+      if (!no) actionResult(s, events, `${moduleName(s, c.itemId)} removed${item ? ` · ${containerLabel(s, item.containerId)}` : ""}`);
       return no;
     }
     case "eat":
