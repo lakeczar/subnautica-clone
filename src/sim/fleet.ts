@@ -51,6 +51,9 @@ export const MANTLE_HANDLING: HullHandling = {
   quiet: 2, cruise: 4, boost: 5, response: 2.2, turnRate: 1.3, drain: 100 / 800,
   loudness: { quiet: 0.1, cruise: 0.5, boost: 0.85 },
 };
+/** C3 (P1): the carrier's battery percent per second at its 3 m/s cruise. At the
+ * scout's 100/900 the yard-to-Divide-lee leg cost 58%; at this rate about 21%. */
+export const CARRIER_DRAIN = 100 / 2400;
 /** Handled hulls; the Dart, Spindle and carrier keep their own rules in step.ts. */
 export function hullHandling(hull: string): HullHandling | null {
   return hull === "creel" ? CREEL_HANDLING : hull === "hush" ? HUSH_HANDLING : hull === "mantle" ? MANTLE_HANDLING : null;

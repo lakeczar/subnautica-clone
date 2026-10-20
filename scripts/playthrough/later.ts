@@ -17,7 +17,7 @@ import { hullClearance, sweptHullClearance } from "../../src/sim/world.js";
 import { CARRIER_LAYOUT, carrierInteriorSolids, localToWorld } from "../../src/sim/carrier.js";
 import { createWorldQueries } from "../../src/sim/world.js";
 import type { GameCommand, Vec3, VehicleState } from "../../src/sim/types.js";
-import { board, craft, gather, interact, leaveCraft, move, procure, reach, unload } from "./actions.js";
+import { board, craft, gather, interact, leaveCraft, move, procure, reach, unload, eatIfHungry } from "./actions.js";
 import { campaignSite, need, s2Route, worksFace, worksFaceId } from "./content.js";
 import type { Missing } from "./content.js";
 import { Blocked, Driver, where } from "./driver.js";
@@ -663,9 +663,8 @@ const carrierDeep: Phase = {
   ],
   play(d) {
     boardCraft(d, "hearthline");
-    followS2(d, "route.isles.canopy_east");
-    followS2(d, "route.canopy_east.basin");
-    followS2(d, "route.basin.divide");
+    // A long carrier phase: eat from the galley pantry between legs (C3: eat() reaches it aboard).
+    for (const id of ["route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide"]) { eatIfHungry(d); followS2(d, id); }
     // Lattice: Hearthline 550 L6, Mantle L5, suit 800 L4, air assembly L2. S2's ledge
     // routes are medium-profile; the carrier flies swept local legs from the lee mooring
     // to hold station above each ledge.
@@ -682,7 +681,7 @@ const carrierDeep: Phase = {
       interact(d, "C07");
       carrierIn(d);
     }
-    for (const id of ["route.basin.divide", "route.canopy_east.basin", "route.isles.canopy_east"]) followS2(d, id, true);
+    for (const id of ["route.basin.divide", "route.canopy_east.basin", "route.isles.canopy_east"]) { eatIfHungry(d); followS2(d, id, true); }
     // At the yard: the 550 m refit and the Mantle, paid from the carrier stores.
     for (const recipe of ["hearthline_550", "mantle_base"]) {
       carrierOut(d);

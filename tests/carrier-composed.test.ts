@@ -5,6 +5,7 @@ import { createEnvelope, decodeSave } from "../src/save/codec.js";
 import { validState } from "../src/save/validation.js";
 import { CARRIER_LAYOUT, carrierInteriorSolids, emptySockets, fixtureGame, occupiedSockets } from "../src/sim/carrier.js";
 import { createWorldQueries } from "../src/sim/world.js";
+import { executeCommand } from "../src/sim/step.js";
 import { hullContactPose, hullMesh } from "../src/sim/hunterQueries.js";
 import { addItem, containerAccessible, transfer } from "../src/sim/inventory.js";
 import type { GameState, Vec3 } from "../src/sim/types.js";
@@ -89,4 +90,13 @@ test("C3 (P1): a berthed craft's hold opens from inside its carrier, and only th
   assert.equal(containerAccessible(s, dart.cargoId), true);
   const outside = structuredClone(s); outside.player.interiorId = null; outside.player.interiorPose = null; outside.player.mode = "swimming";
   assert.equal(containerAccessible(outside, dart.cargoId), false);
+});
+
+test("C3 (P1): aboard the Hearthline, the crew eats from its galley pantry", () => {
+  const s = fixtureGame(), h = s.fleet.vehicles.find((v) => v.hull === "hearthline")!;
+  addItem(s, "meal", 1, `${h.id}_pantry`);
+  s.player.vitals.food = 20;
+  const out = executeCommand(s, { type: "eat" }, createWorldQueries());
+  assert.ok(!out.events.some((e) => e.type === "notice" && e.error), JSON.stringify(out.events));
+  assert.equal(out.state.player.vitals.food, 90);
 });

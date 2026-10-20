@@ -225,6 +225,12 @@ export function eat(s: GameState): string | null {
       const h = cabinHull(s), cabin = h ? fittedCabin(s, h) : null;
       return h ? [h.cargoId, ...(cabin ? [cabinLockerId(cabin.id)] : [])] : [];
     })(),
+
+    // Aboard the Hearthline (helm or rooms): its stores and galley pantry.
+    ...(() => {
+      const c = s.fleet.vehicles.find((v) => v.hull === "hearthline" && (v.id === s.player.controlledVehicleId || v.id === s.player.interiorId));
+      return c ? [c.cargoId, `${c.id}_pantry`] : [];
+    })(),
   ];
   const meal = s.inventory.items.find(
     (i) => i.kind === "meal" && ids.includes(i.containerId),

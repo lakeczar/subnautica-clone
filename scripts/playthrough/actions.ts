@@ -9,7 +9,7 @@ import { eyeHeight } from "../../src/sim/state.js";
 import type { GameEvent, GameState, Vec3 } from "../../src/sim/types.js";
 import { Blocked, Driver, where } from "./driver.js";
 import { dist, faceEye, horizontal, route, travel } from "./travel.js";
-import { breathe, enter, HEADLAND_IN, nearHeadland, surfaceTo, toWater } from "./nav.js";
+import { atWorkshop, breathe, enter, HEADLAND_IN, inPod, nearHeadland, surfaceTo, toWater } from "./nav.js";
 import type { Refuge } from "./nav.js";
 import { personalLimit } from "../../src/sim/capabilities.js";
 import type { Waypoint } from "./travel.js";
@@ -73,6 +73,8 @@ export function reach(d: Driver, id: string): void {
     faceEye(d, host.center);
     if (aimedInteraction(d.state, d.world)?.id === id) return;
   }
+  // Ashore with an afloat target (a craft left at the landing): back to the water first.
+  if (d.state.player.mode === "walking" && host.center.y < -0.3 && !inPod(d) && !atWorkshop(d)) toWater(d);
   const poses = workPoses(d, id);
   const mode = d.state.player.mode;
   const pick = poses.find((p) => p.land === (mode === "walking")) ?? poses[0];

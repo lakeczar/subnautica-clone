@@ -33,7 +33,7 @@ import {
   toggleBuoy,
 } from "./progression.js";
 import {
-  ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, cabinWorld, cook, CREEL_CABIN, hullHandling,
+  ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, cabinWorld, cook, CARRIER_DRAIN, CREEL_CABIN, hullHandling,
   enterCabinFromHatch, enterCabinFromHelm, hullToWorld, leaveByHatch, registerRefuge, takeHelmFromCabin,
 } from "./fleet.js";
 import { aimedInteraction } from "./targeting.js";
@@ -678,7 +678,7 @@ export function stepGame(
     const drain =
       !v.disabled && v.charge > 0
         ? (d > 0.003
-            ? (handling ? handling.drain : 100 / 900) * (sprint ? (creel ? 1.6 : 1.7) : quiet ? (creel ? 0.6 : 0.65) : 1)
+            ? (handling ? handling.drain : v.hull === "hearthline" ? CARRIER_DRAIN : 100 / 900) * (sprint ? (creel ? 1.6 : 1.7) : quiet ? (creel ? 0.6 : 0.65) : 1)
             : 0.015) * DT
         : 0;
     v.charge = Math.max(0, v.charge - drain);
