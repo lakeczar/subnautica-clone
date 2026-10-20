@@ -103,4 +103,5 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **Running:** B1, GPU author, S1 (R1 fixes), S2, S5 (R1 fixes).
 - **Paused, in resume order:** S4 (R1 fixes), S3 (R1 fixes), S6 (R1 fixes). Each was told to commit and stop; resume with "continue".
   - S4 paused at `27de0fb`: S4-03 mostly done and S4-04 half done; S4-01, S4-02 and S4-05 not started; tests to update.
+  - S3 paused at `682bdd3`: S3-01 and S3-03 done but unrun; S3-02 (the Dart berth proposal) and the S3.md updates remain.
   - S6 paused at `ab59c89`: all five fixes are in source, but their tests, the lab re-measure and the doc updates remain.
