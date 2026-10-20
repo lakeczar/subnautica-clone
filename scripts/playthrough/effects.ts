@@ -1,17 +1,47 @@
 /** Effect verification. A command the game accepted is not proof that it did what
  * it says; after every accepted command the driver checks the effect on the real
- * state (before → after). A missing or wrong effect is a Blocked finding. */
+ * state (before → after). Inventory effects are conservation checks over the whole
+ * inventory ledger: exactly the requested quantities move, from the requested
+ * place, to the required place, and nothing else changes. Every command kind has a
+ * rule; an unknown kind fails closed. A missing or wrong effect is a Blocked finding. */
 import * as registry from "../../src/content/registry.js";
-import { HULLS, ITEMS, MATERIALS, RECIPES } from "../../src/content/registry.js";
-import type { RecipeId } from "../../src/content/registry.js";
+import { HULLS, ITEMS, MATERIALS, RECIPES, SOURCES } from "../../src/content/registry.js";
+import type { RecipeId, SourceId } from "../../src/content/registry.js";
 import { personalLimit } from "../../src/sim/capabilities.js";
-import type { GameCommand, GameState } from "../../src/sim/types.js";
+import { fabricationContainers } from "../../src/sim/inventory.js";
+import { aimedInteraction } from "../../src/sim/targeting.js";
+import type { GameCommand, GameEvent, GameState, ItemStack, WorldQueries } from "../../src/sim/types.js";
 
-const total = (s: GameState, kind: string): number =>
-  s.inventory.items.filter((i) => i.kind === kind).reduce((n, i) => n + i.quantity, 0);
-const inside = (s: GameState, kind: string, container: string): number =>
-  s.inventory.items.filter((i) => i.kind === kind && i.containerId === container).reduce((n, i) => n + i.quantity, 0);
 const vehicle = (s: GameState, id: string | undefined) => s.fleet.vehicles.find((v) => v.id === id);
+
+/** Quantity per (container, kind, fitting, provenance): the conserved ledger. */
+const keyOf = (i: Pick<ItemStack, "containerId" | "kind" | "fitted" | "provenance">): string =>
+  `${i.containerId}|${i.kind}|${i.fitted ?? "-"}|${i.provenance}`;
+function ledger(s: GameState): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const i of s.inventory.items) m.set(keyOf(i), (m.get(keyOf(i)) ?? 0) + i.quantity);
+  return m;
+}
+/** Nonzero ledger changes, before → after. */
+function changes(before: GameState, after: GameState): Map<string, number> {
+  const a = ledger(before), b = ledger(after), out = new Map<string, number>();
+  for (const k of new Set([...a.keys(), ...b.keys()])) {
+    const d = (b.get(k) ?? 0) - (a.get(k) ?? 0);
+    if (d !== 0) out.set(k, d);
+  }
+  return out;
+}
+/** The ledger changed exactly as `expected` (key → delta), and nowhere else. */
+function conserved(label: string, actual: Map<string, number>, expected: ReadonlyMap<string, number>): string[] {
+  const out: string[] = [];
+  for (const k of new Set([...actual.keys(), ...expected.keys()])) {
+    const got = actual.get(k) ?? 0, want = expected.get(k) ?? 0;
+    if (got !== want) out.push(`${label}: ${k} changed by ${got}, expected ${want}`);
+  }
+  return out;
+}
+const add = (m: Map<string, number>, k: string, d: number): void => { m.set(k, (m.get(k) ?? 0) + d); };
+const unchangedInventory = (label: string, before: GameState, after: GameState): string[] => conserved(label, changes(before, after), new Map());
 
 /** Hull refits by recipe: C3's REFIT_TIERS when present, else root's HULL_REFITS. */
 export function refitOf(id: string): { hull: string; rating: number } | null {
@@ -26,37 +56,70 @@ export function suitOf(id: string): number | null {
   if (refits?.[id]) return refits[id]!.rating;
   return id === "suit_150" ? 150 : id === "suit_350" ? 350 : null;
 }
+/** Fitted outputs of the game's craft rule (sim/progression.ts). */
+const FITTED_OUTPUTS: Readonly<Record<string, string>> = { essential_tools: "tools", suit_150: "suit", bobbin_kit: "recovery" };
 
 /** Everything a craft must have done. Returns problems; empty means verified. */
 export function craftEffect(before: GameState, after: GameState, id: RecipeId): string[] {
-  const r = RECIPES[id] as (typeof RECIPES)[RecipeId] & { output: string };
+  const r = RECIPES[id] as (typeof RECIPES)[RecipeId] & { output: string; site: string };
   const out: string[] = [];
   if (!(after.knowledge.crafted as string[]).includes(id)) out.push(`${id} is not recorded as crafted`);
-  // Materials: exactly the cost leaves the inventory (or the rescue stock pays).
+  const actual = changes(before, after), expected = new Map<string, number>();
+  // Cost: exactly the cost leaves, only from the bench's own containers, public stock only.
   if (r.maintenance) {
     const m0 = before.world.maintenance, m1 = after.world.maintenance;
     if (m0.alloy - m1.alloy !== 2 || m0.glass - m1.glass !== 1 || m0.membrane - m1.membrane !== 3)
       out.push(`${id} did not draw 2/1/3 rescue stock (alloy ${m0.alloy}→${m1.alloy}, glass ${m0.glass}→${m1.glass}, membrane ${m0.membrane}→${m1.membrane})`);
-  } else for (const [kind, n] of Object.entries(r.cost)) {
-    if (kind === r.output) continue;
-    const used = total(before, kind) - total(after, kind);
-    if (used !== n) out.push(`${id} consumed ${used} ${kind}, not ${n}`);
+  } else {
+    const bins = new Set(fabricationContainers(before, r.site as Parameters<typeof fabricationContainers>[1]));
+    for (const [kind, n] of Object.entries(r.cost) as [string, number][]) {
+      let taken = 0;
+      for (const [k, d] of actual) {
+        const [container, k2, fitted, provenance] = k.split("|");
+        if (k2 !== kind || d >= 0) continue;
+        if (!bins.has(container!) || fitted !== "-" || provenance !== "public")
+          out.push(`${id} took ${-d} ${kind} from ${container} (${fitted}, ${provenance}), outside the bench's stock`);
+        taken -= d;
+        expected.set(k, d);
+      }
+      if (taken !== n) out.push(`${id} consumed ${taken} ${kind}, not ${n}`);
+    }
   }
-  // Output.
+  // Output: the required place, fitting and quantity.
   const refit = refitOf(id), suit = suitOf(id);
   if (refit) {
     const raised = after.fleet.vehicles.filter((v) => v.hull === refit.hull && v.rating === refit.rating &&
       (vehicle(before, v.id)?.rating ?? 0) < refit.rating);
     if (raised.length !== 1) out.push(`${id} left no ${refit.hull} newly rated ${refit.rating} m (ratings: ${after.fleet.vehicles
       .filter((v) => v.hull === refit.hull).map((v) => v.rating).join(", ") || "none"})`);
-  } else if (suit) {
+  } else if (suit && id !== "suit_150") {
+    // An in-place refit: the one fitted suit changes kind in the equipment slot.
+    const old = before.inventory.items.find((i) => i.fitted === "suit");
+    if (!old) out.push(`${id}: no fitted suit to refit`);
+    else {
+      add(expected, keyOf(old), -1);
+      add(expected, keyOf({ ...old, kind: id as ItemStack["kind"] }), +1);
+      if (after.inventory.items.find((i) => i.id === old.id)?.kind !== id) out.push(`${id} did not refit suit ${old.id} in place`);
+    }
     if (personalLimit(after) !== suit) out.push(`${id} left the personal suit at ${personalLimit(after)} m, not ${suit} m`);
   } else if (Object.hasOwn(HULLS, r.output)) {
     const n0 = before.fleet.vehicles.filter((v) => v.hull === r.output).length, n1 = after.fleet.vehicles.filter((v) => v.hull === r.output).length;
     if (n1 !== n0 + 1) out.push(`${id} built ${n1 - n0} ${r.output} hulls, not 1`);
   } else if (Object.hasOwn(ITEMS, r.output)) {
-    const made = total(after, r.output) - total(before, r.output) + (Object.hasOwn(r.cost, r.output) ? (r.cost as Record<string, number>)[r.output]! : 0);
-    if (made !== r.quantity) out.push(`${id} produced ${made} ${r.output}, not ${r.quantity}`);
+    const fitted = FITTED_OUTPUTS[r.output];
+    // Mount packages go to the workshop locker when it has room after paying, else the
+    // diver hold; stripped frames to the locker; everything else to the diver hold.
+    const lockerFree = () => {
+      const c = before.inventory.containers.find((x) => x.id === "workshop_locker")!;
+      const used = before.inventory.items.filter((i) => i.containerId === c.id && !i.fitted).reduce((n, i) => n + ITEMS[i.kind].cu * i.quantity, 0);
+      const freed = [...actual].filter(([k, d]) => k.startsWith("workshop_locker|") && d < 0)
+        .reduce((n, [k, d]) => n - d * ITEMS[k.split("|")[1] as keyof typeof ITEMS].cu, 0);
+      return c.capacity - used + freed;
+    };
+    const to = fitted ? "equipment" : id === "strip_frame" ? "workshop_locker"
+      : r.output === "creel_cargo_rack" || r.output === "creel_cabin" ? (lockerFree() >= ITEMS[r.output].cu ? "workshop_locker" : "diver") : "diver";
+    add(expected, keyOf({ containerId: to, kind: r.output as ItemStack["kind"], fitted: (fitted ?? null) as ItemStack["fitted"],
+      provenance: r.maintenance ? "maintenance" : "public" }), r.quantity);
   } else if (r.output === "pod_buffer") {
     if (!after.story.works.repairs.includes("pod_buffer")) out.push("pod_buffer repair not recorded");
   } else if (r.output === "pod_repair" || r.output.startsWith("restore_")) {
@@ -72,60 +135,142 @@ export function craftEffect(before: GameState, after: GameState, id: RecipeId): 
     const rest = (s: GameState) => JSON.stringify({ ...s, inventory: null, knowledge: { ...s.knowledge, crafted: null }, feedback: null, sequence: null });
     if (rest(before) === rest(after)) out.push(`${id} (output ${r.output}) changed nothing beyond spending materials`);
   }
+  return [...out, ...conserved(id, actual, expected)];
+}
+
+/** A transfer: the requested stack loses exactly N, the destination gains exactly N
+ * of the same kind and provenance, nothing else moves; a whole stack keeps its ID. */
+export function transferEffect(c: Extract<GameCommand, { type: "transfer" }>, before: GameState, after: GameState): string[] {
+  const item = before.inventory.items.find((i) => i.id === c.itemId);
+  if (!item) return [`transfer of unknown item ${c.itemId}`];
+  const expected = new Map<string, number>();
+  add(expected, keyOf(item), -c.quantity);
+  add(expected, keyOf({ ...item, containerId: c.to, fitted: null }), c.quantity);
+  const out = conserved(`transfer ${c.itemId}`, changes(before, after), expected);
+  const now = after.inventory.items.find((i) => i.id === c.itemId);
+  if (c.quantity === item.quantity ? now?.containerId !== c.to : now?.containerId !== item.containerId || now.quantity !== item.quantity - c.quantity)
+    out.push(`transfer ${c.itemId}: the requested stack is not where and how large it should be`);
   return out;
 }
 
-/** Effects of the other commands the harness issues. Returns problems. */
-export function commandEffect(c: GameCommand, before: GameState, after: GameState): string[] {
+/** A bulk store: every selected public material stack in `from` arrives whole in `to`. */
+export function storeEffect(c: Extract<GameCommand, { type: "store-materials" }>, before: GameState, after: GameState): string[] {
+  const installed = new Set(before.fleet.vehicles.flatMap((v) => v.modules));
+  const selected = before.inventory.items.filter((i) => i.containerId === c.from && !i.fitted && i.provenance === "public" &&
+    Object.hasOwn(MATERIALS, i.kind) && !installed.has(i.id));
+  if (!selected.length) return ["store-materials selected nothing"];
+  const expected = new Map<string, number>();
+  for (const i of selected) { add(expected, keyOf(i), -i.quantity); add(expected, keyOf({ ...i, containerId: c.to }), i.quantity); }
+  return conserved(`store ${c.from} → ${c.to}`, changes(before, after), expected);
+}
+
+/** Effects of every command the harness issues. Returns problems. Exhaustive: an
+ * unknown kind fails closed. `world` and `events` describe the command's context. */
+export function commandEffect(c: GameCommand, before: GameState, after: GameState, world: WorldQueries, events: readonly GameEvent[]): string[] {
   const p = after.player;
-  switch (c.type) {
-    case "craft": return craftEffect(before, after, c.recipeId);
-    case "transfer": {
-      const item = before.inventory.items.find((i) => i.id === c.itemId);
-      if (!item) return [`transfer of unknown item ${c.itemId}`];
-      const moved = inside(after, item.kind, c.to) - inside(before, item.kind, c.to);
-      return moved === c.quantity ? [] : [`transfer moved ${moved} ${item.kind} into ${c.to}, not ${c.quantity}`];
-    }
-    case "store-materials": {
-      const left = after.inventory.items.filter((i) => i.containerId === c.from && Object.hasOwn(MATERIALS, i.kind) && i.provenance === "public" && !i.fitted);
-      const cu = (s: GameState, id: string) => s.inventory.items.filter((i) => i.containerId === id && !i.fitted).reduce((n, i) => n + ITEMS[i.kind].cu * i.quantity, 0);
-      return left.length ? [`store-materials left ${left.length} material stacks in ${c.from}`]
-        : cu(after, c.to) > cu(before, c.to) ? [] : [`store-materials added nothing to ${c.to}`];
-    }
+  const kind = (c as { type: string }).type;
+  switch (kind) {
+    case "craft": return craftEffect(before, after, (c as Extract<GameCommand, { type: "craft" }>).recipeId);
+    case "transfer": return transferEffect(c as Extract<GameCommand, { type: "transfer" }>, before, after);
+    case "store-materials": return storeEffect(c as Extract<GameCommand, { type: "store-materials" }>, before, after);
     case "service": {
-      const v = vehicle(after, c.vehicleId);
-      return v && v.charge === 100 && v.health === 100 && !v.disabled ? [] : [`service left ${c.vehicleId} at power ${v?.charge}, hull ${v?.health}`];
+      const id = (c as Extract<GameCommand, { type: "service" }>).vehicleId, v = vehicle(after, id);
+      return [...(v && v.charge === 100 && v.health === 100 && !v.disabled ? [] : [`service left ${id} at power ${v?.charge}, hull ${v?.health}`]),
+        ...unchangedInventory("service", before, after)];
     }
     case "reserve": {
-      const v0 = vehicle(before, c.vehicleId), v1 = vehicle(after, c.vehicleId);
-      return v0 && v1 && v1.charge > v0.charge ? [] : [`reserve cell added no power to ${c.vehicleId}`];
+      const id = (c as Extract<GameCommand, { type: "reserve" }>).vehicleId, v0 = vehicle(before, id), v1 = vehicle(after, id);
+      return [...(v0 && v1 && v1.charge > v0.charge ? [] : [`reserve cell added no power to ${id}`]), ...unchangedInventory("reserve", before, after)];
     }
     case "install-module": {
-      const v = vehicle(after, c.vehicleId);
-      return v?.modules.includes(c.itemId) ? [] : [`${c.itemId} is not installed on ${c.vehicleId}`];
+      const cm = c as Extract<GameCommand, { type: "install-module" }>, v = vehicle(after, cm.vehicleId);
+      const item = before.inventory.items.find((i) => i.id === cm.itemId), now = after.inventory.items.find((i) => i.id === cm.itemId);
+      if (!v?.modules.includes(cm.itemId) || !item || !now) return [`${cm.itemId} is not installed on ${cm.vehicleId}`];
+      // Only the package moves (a swapped-out mount may be stowed); the package keeps its identity.
+      const expected = new Map<string, number>();
+      add(expected, keyOf(item), -1); add(expected, keyOf(now), +1);
+      for (const old of before.fleet.vehicles.find((x) => x.id === cm.vehicleId)?.modules ?? []) {
+        const o0 = before.inventory.items.find((i) => i.id === old), o1 = after.inventory.items.find((i) => i.id === old);
+        if (o0 && o1 && keyOf(o0) !== keyOf(o1)) { add(expected, keyOf(o0), -1); add(expected, keyOf(o1), +1); }
+      }
+      return conserved(`install ${cm.itemId}`, changes(before, after), new Map([...expected].filter(([, d]) => d !== 0)));
     }
     case "recover": {
-      const v = vehicle(after, c.vehicleId);
-      if (c.method === "repair") return v && !v.disabled && v.health > 0 ? [] : [`repair left ${c.vehicleId} disabled`];
-      if (c.method === "salvage") return v ? [`salvage left ${c.vehicleId} in the fleet`] : [];
-      return after.recovery.operation?.vehicleId === c.vehicleId ? [] : [`tow of ${c.vehicleId} started no recovery operation`];
+      const cm = c as Extract<GameCommand, { type: "recover" }>, v = vehicle(after, cm.vehicleId);
+      if (cm.method === "salvage") return [`salvage is not verified by this harness (it never salvages)`];
+      const own = cm.method === "repair" ? (v && !v.disabled && v.health > 0 ? [] : [`repair left ${cm.vehicleId} disabled`])
+        : after.recovery.operation?.vehicleId === cm.vehicleId ? [] : [`tow of ${cm.vehicleId} started no recovery operation`];
+      return [...own, ...unchangedInventory(`recover ${cm.method}`, before, after)];
     }
-    case "arm-lift": return after.world.action?.kind === "arm" ? [] : ["tool arms did not start"];
-    case "eat": return p.vitals.food > before.player.vitals.food ? [] : ["eating raised no food"];
-    case "exit": return p.controlledVehicleId === null && p.interiorId === null ? [] : ["the diver is still aboard after exit"];
+    case "arm-lift": return [...(after.world.action?.kind === "arm" ? [] : ["tool arms did not start"]), ...unchangedInventory("arm-lift", before, after)];
+    case "eat": {
+      const delta = changes(before, after), meals = [...delta].filter(([k]) => k.split("|")[1] === "meal");
+      return [...(p.vitals.food > before.player.vitals.food ? [] : ["eating raised no food"]),
+        ...(delta.size === 1 && meals.length === 1 && meals[0]![1] === -1 ? [] : [`eating changed the inventory by ${JSON.stringify([...delta])}, not one meal`])];
+    }
+    case "exit": return [...(p.controlledVehicleId === null && p.interiorId === null ? [] : ["the diver is still aboard after exit"]),
+      ...unchangedInventory("exit", before, after)];
     case "carrier": {
-      const dock = after.fleet.docking;
-      switch (c.action) {
-        case "station-keep": return dock?.stationKeeping ? [] : ["station keeping is not engaged"];
-        case "helm": return p.mode === "piloting" && p.controlledVehicleId === dock?.vehicleId ? [] : ["not at the carrier helm"];
-        case "leave-helm": return p.mode === "interior" && p.interiorId === dock?.vehicleId ? [] : ["not in the carrier interior after leaving the helm"];
-        case "enter-interior": return p.mode === "interior" && p.interiorId === dock?.vehicleId ? [] : ["not in the carrier interior after entering"];
-        case "leave-interior": return p.mode === "swimming" && p.interiorId === null ? [] : ["still aboard after leaving the interior"];
-        case "launch": case "capture": return dock?.transaction?.vehicleId === c.vehicleId || (c.action === "launch"
-          ? vehicle(after, c.vehicleId)?.berth === null : !!vehicle(after, c.vehicleId)?.berth) ? [] : [`${c.action} of ${c.vehicleId} did not start`];
-        default: return [];
-      }
+      const cm = c as Extract<GameCommand, { type: "carrier" }>, dock = after.fleet.docking;
+      const own = (() => {
+        switch (cm.action) {
+          case "station-keep": return dock?.stationKeeping ? [] : ["station keeping is not engaged"];
+          case "helm": return p.mode === "piloting" && p.controlledVehicleId === dock?.vehicleId ? [] : ["not at the carrier helm"];
+          case "leave-helm": return p.mode === "interior" && p.interiorId === dock?.vehicleId ? [] : ["not in the carrier interior after leaving the helm"];
+          case "enter-interior": return p.mode === "interior" && p.interiorId === dock?.vehicleId ? [] : ["not in the carrier interior after entering"];
+          case "leave-interior": return p.mode === "swimming" && p.interiorId === null ? [] : ["still aboard after leaving the interior"];
+          case "launch": case "capture": return dock?.transaction?.vehicleId === cm.vehicleId || (cm.action === "launch"
+            ? vehicle(after, cm.vehicleId)?.berth === null : !!vehicle(after, cm.vehicleId)?.berth) ? [] : [`${cm.action} of ${cm.vehicleId} did not start`];
+          default: return [`carrier action ${cm.action} is not verified by this harness`];
+        }
+      })();
+      return [...own, ...unchangedInventory(`carrier ${cm.action}`, before, after)];
     }
-    default: return [];
+    case "interact": return interactEffect(before, after, world, events);
+    case "works": {
+      // Proposed C3 command: the works state must change; inventory may only lose
+      // what the works consume (assemblies, restoration stock), never gain.
+      const gains = [...changes(before, after)].filter(([, d]) => d > 0);
+      return [...(JSON.stringify(after.story.works) !== JSON.stringify(before.story.works) ? [] : ["the works state did not change"]),
+        ...gains.map(([k, d]) => `works added ${d} to ${k}`)];
+    }
+    case "resolution": return [...(after.story.resolution.phase !== before.story.resolution.phase ? [] : ["the resolution did not advance"]),
+      ...unchangedInventory("resolution", before, after)];
+    default: return [`command kind "${kind}" has no effect rule; refusing to vouch for it`];
   }
+}
+
+/** E: the effect depends on what was aimed at before the press. */
+function interactEffect(before: GameState, after: GameState, world: WorldQueries, events: readonly GameEvent[]): string[] {
+  if (before.opening.phase < 4)
+    return after.opening.phase > before.opening.phase ? unchangedInventory("opening", before, after) : ["the opening did not advance"];
+  if (before.player.controlledVehicleId)
+    return after.player.controlledVehicleId === null ? unchangedInventory("exit by E", before, after) : ["E at the helm did not exit"];
+  const t = aimedInteraction(before, world);
+  if (!t) return unchangedInventory("E on nothing", before, after);
+  const panel = events.some((e) => e.type === "interaction-panel");
+  if (t.kind === "source") {
+    const id = t.id as SourceId, def = SOURCES[id];
+    const n0 = before.world.resources.find((n) => n.id === id)!.stock, n1 = after.world.resources.find((n) => n.id === id)!.stock;
+    if (n1 === n0) {
+      // A timed action (frame lift, sorting, tending) starts instead of a pickup.
+      return after.world.action?.sourceId === id ? unchangedInventory(`start work at ${id}`, before, after)
+        : t.verb === "empty" ? unchangedInventory(`empty ${id}`, before, after) : [`E on ${id} took nothing and started nothing`];
+    }
+    const taken = n0 - n1, delta = changes(before, after);
+    const gains = [...delta].filter(([, d]) => d !== 0);
+    const ok = gains.length === 1 && gains[0]![1] === taken && ["diver", "buoy_hold"].includes(gains[0]![0].split("|")[0]!) &&
+      gains[0]![0].split("|")[1] === def.item && gains[0]![0].endsWith("|-|public");
+    return ok ? [] : [`collecting ${taken} from ${id} changed the inventory by ${JSON.stringify(gains)}`];
+  }
+  if (t.kind === "vehicle" && t.verb === "board")
+    return after.player.controlledVehicleId === t.id ? unchangedInventory(`board ${t.id}`, before, after) : [`E did not board ${t.id}`];
+  if (t.kind === "evidence" || t.kind === "record") {
+    const grew = JSON.stringify([after.knowledge.evidence, after.knowledge.journals, after.story.discoveries, after.knowledge.scans]) !==
+      JSON.stringify([before.knowledge.evidence, before.knowledge.journals, before.story.discoveries, before.knowledge.scans]);
+    return t.known && panel ? unchangedInventory(`review ${t.id}`, before, after)
+      : grew ? unchangedInventory(`read ${t.id}`, before, after) : [`reading ${t.id} recorded nothing`];
+  }
+  // Benches, mooring masts, rescue staging, cache and vehicle-hold panels: a panel opens, nothing else.
+  return panel ? unchangedInventory(`open ${t.id}`, before, after) : [`E on ${t.id} opened no panel and had no other rule`];
 }

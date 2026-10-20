@@ -106,7 +106,7 @@ export class Driver {
       return { ok: false, message: error.message, events: result.events };
     }
     this.accept(before, result.state, result.events);
-    const problems = commandEffect(command, before, result.state);
+    const problems = commandEffect(command, before, result.state, this.world, result.events);
     if (problems.length) throw new Blocked(`${JSON.stringify(command)} was accepted but ${problems.join("; ")}`, where(result.state));
     if (command.type === "craft") this.paid(command.recipeId);
     const notice = result.events.find((e): e is Extract<GameEvent, { type: "notice" }> => e.type === "notice");
