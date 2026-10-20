@@ -16,9 +16,9 @@ import { createCelMaterial, createGlassMaterial, updateOpticalUniforms } from ".
 import { createAtmosphere } from "../atmosphere.js";
 import { LabelMaterials } from "../landmarks.js";
 import { CARRIER_LAYOUT } from "../../sim/carrier.js";
-import { S3_HULLS, type Box, type HullSpec, type S3HullId } from "../../content/fleet/hulls.js";
+import { S3_HULLS, contactParts, type Box, type HullSpec, type S3HullId } from "../../content/fleet/hulls.js";
 import { HEARTHLINE_FIXTURES, HEARTHLINE_SOCKETS, type InteriorSolid } from "../../content/fleet/hearthlineInterior.js";
-import { fleetHullArt, hearthlineShellArt, setFleetPose, type FleetPose } from "./index.js";
+import { fleetContactPose, fleetHullArt, hearthlineShellArt, setFleetPose, type FleetPose } from "./index.js";
 import { formatFit, hullFit } from "./fit.js";
 
 type Overlay = "none" | "collider" | "berth" | "contact" | "solids";
@@ -30,6 +30,7 @@ interface ViewState {
   depth: Depth;
   cockpit: boolean;
   fold: number;
+  cargo: boolean;
   ramp: number;
   configuration: "compact" | "medium";
   openSlot: -1 | 0 | 1;
@@ -45,6 +46,7 @@ const state: ViewState = {
   depth: (params.get("depth") as Depth) ?? "deep",
   cockpit: params.get("cockpit") === "1",
   fold: Number(params.get("fold") ?? 0),
+  cargo: params.get("cargo") === "1",
   ramp: Number(params.get("ramp") ?? 0),
   configuration: params.get("config") === "medium" ? "medium" : "compact",
   openSlot: (Number(params.get("slot") ?? -1) as -1 | 0 | 1),
@@ -106,7 +108,7 @@ const solidBox = (s: InteriorSolid): Box => ({ min: [s.min.x, s.min.y, s.min.z],
 
 function spec(): HullSpec { return S3_HULLS[state.hull]; }
 function pose(): FleetPose {
-  return { fold: state.fold, ramp: state.ramp, cockpit: state.cockpit, occupied: state.sockets ? HEARTHLINE_SOCKETS.map((k) => k.id) : [] };
+  return { fold: state.fold, ramp: state.ramp, cargo: state.cargo, cockpit: state.cockpit, occupied: state.sockets ? HEARTHLINE_SOCKETS.map((k) => k.id) : [] };
 }
 
 function rebuild(): void {
@@ -132,14 +134,14 @@ function rebuild(): void {
     const e = s.berth.envelope;
     add(boxLines({ min: [-e.halfWidth, 0, -e.halfLength], max: [e.halfWidth, e.height, e.halfLength] }, "#f2b94d"));
   } else if (state.overlay === "contact") {
-    for (const part of state.hull === "spindle" && state.fold > .5 ? s.contactStowed! : s.contact) add(boxLines(part, "#7df0c8"));
+    for (const part of contactParts(state.hull, fleetContactPose(root))) add(boxLines(part, "#7df0c8"));
   } else if (state.overlay === "solids" && s.id === "hearthline") {
     for (const f of HEARTHLINE_FIXTURES) add(boxLines(solidBox(f), "#7df0c8"));
     for (const k of HEARTHLINE_SOCKETS) add(boxLines(solidBox(k.footprint), "#f2b94d"));
   }
   const report = hullFit(roots, s, describe(), {
     berth: !!s.berth && (s.id !== "spindle" || state.fold >= 1),
-    ...(s.id === "spindle" && state.fold >= 1 ? { contact: s.contactStowed! } : {}),
+    pose: fleetContactPose(root),
   });
   (document.getElementById("report") as HTMLPreElement).textContent = formatFit(report);
   canvas.dataset.fitIssues = String(report.issues.length);
@@ -231,6 +233,7 @@ function panel(): void {
       ["cockpit", state.cockpit, () => { state.cockpit = !state.cockpit; }],
       ...(state.hull === "spindle" ? [["folded", state.fold >= 1, () => { state.fold = state.fold >= 1 ? 0 : 1; }],
         ["half-fold", state.fold === .5, () => { state.fold = .5; }],
+        ["cargo", state.cargo, () => { state.cargo = !state.cargo; }],
         ["ramp", state.ramp > 0, () => { state.ramp = state.ramp > 0 ? 0 : 1; }]] as [string, boolean, () => void][] : []),
       ...(state.hull === "hearthline" ? [["compact", state.configuration === "compact", () => { state.configuration = "compact"; }],
         ["medium", state.configuration === "medium", () => { state.configuration = "medium"; }],
@@ -241,7 +244,7 @@ function panel(): void {
 
 function sync(): void {
   const q = new URLSearchParams({ hull: state.hull, view: state.view, overlay: state.overlay, depth: state.depth,
-    cockpit: state.cockpit ? "1" : "0", fold: String(state.fold), ramp: String(state.ramp), config: state.configuration,
+    cockpit: state.cockpit ? "1" : "0", fold: String(state.fold), cargo: state.cargo ? "1" : "0", ramp: String(state.ramp), config: state.configuration,
     slot: String(state.openSlot), sockets: state.sockets ? "1" : "0", panel: state.panel ? "1" : "0" });
   history.replaceState(null, "", `?${q}`);
   rebuild(); panel();

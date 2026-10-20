@@ -1,6 +1,6 @@
 import type { AbstractMesh, Mesh } from "@babylonjs/core";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
-import type { Box, HullSpec } from "../../content/fleet/hulls.js";
+import { contactParts, type Box, type ContactPose, type HullSpec, type S3HullId } from "../../content/fleet/hulls.js";
 
 /** Visible-geometry versus collider mismatch check. Pure over mesh vertex data;
  * reports mesh names only, never Babylon objects (tests/render-assert.ts). */
@@ -20,8 +20,9 @@ export interface FitReport {
 export interface FitOptions {
   /** Check the berth envelope too (hull stowed and aligned for a carrier rail). */
   readonly berth?: boolean;
-  /** Contact parts to check against; defaults to spec.contact. */
-  readonly contact?: HullSpec["contact"];
+  /** Pose the art was set to; contact parts come from contactParts(hull, pose),
+   * the same selector the viewer and the sim adapter use. No overrides. */
+  readonly pose?: ContactPose;
   readonly tolerance?: number;
   /** Allowed gap between the art and each envelope face before it is "loose". */
   readonly slack?: { readonly radius: number; readonly top: number; readonly bottom: number; readonly berth: number };
@@ -55,7 +56,7 @@ const inside = (b: Box, x: number, y: number, z: number, t: number): boolean =>
 
 export function hullFit(roots: readonly Mesh[], spec: HullSpec, state: string, options: FitOptions = {}): FitReport {
   const t = options.tolerance ?? .005, slack = options.slack ?? { radius: .35, top: .2, bottom: .12, berth: .3 };
-  const fill = options.fill ?? .8, contact = options.contact ?? spec.contact, c = spec.collider;
+  const fill = options.fill ?? .8, contact = contactParts(spec.id as S3HullId, options.pose ?? {}), c = spec.collider;
   const issues: FitIssue[] = [], min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
   const parts = contact.map(() => ({ min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }));
   let reach = 0, vertices = 0;

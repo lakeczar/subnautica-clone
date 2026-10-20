@@ -2,8 +2,8 @@ import type { Mesh, Scene, ShaderMaterial } from "@babylonjs/core";
 import type { Point } from "../geometry.js";
 import type { GeometryCache } from "../geometryCache.js";
 import { PALETTE as P } from "../palette.js";
-import { SPINDLE, SPINDLE_FLOAT as F, SPINDLE_RAMP as R, SPINDLE_STRUT as S } from "../../content/fleet/hulls.js";
-import { batchFor, child, glazing, lerp, loftAt } from "./common.js";
+import { SPINDLE, SPINDLE_FLOAT as F, SPINDLE_RAMP as R, SPINDLE_STRUT as S, spindleRampAngle, spindleStrut } from "../../content/fleet/hulls.js";
+import { batchFor, child, glazing, loftAt } from "./common.js";
 
 /** Island tender: a narrow porcelain surface hull, ochre outrigger floats with
  * solar decks on knee-jointed struts, an aft solar canopy over the pilot and a
@@ -75,8 +75,8 @@ export function spindleArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMater
     float.metadata = { side };
     for (const [k, z] of S.z.entries()) for (const part of ["upper", "lower"] as const) {
       const s = batchFor(scene, cel, cache, `${id}.strut.${side < 0 ? "port" : "starboard"}.${k}.${part}`, "spindle", `strut-${part}`);
-      s.tube([[0, 0, 0], [S.segment, 0, 0]], .045, part === "upper" ? P.steelLight : P.metal, 6);
-      s.ellipsoid([0, 0, 0], [.07, .07, .07], P.petrol, 8);
+      s.tube([[0, 0, 0], [S.segment, 0, 0]], S.tube, part === "upper" ? P.steelLight : P.metal, 6);
+      s.ellipsoid([0, 0, 0], [S.joint, S.joint, S.joint], P.petrol, 8);
       const strut = child(s.finish(.2), hull);
       strut.metadata = { side, z, part };
     }
@@ -115,28 +115,29 @@ export function spindleArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMater
     gauge.glow(gauge.box([.13, 0, 0], [.26, .01, .06], kind === "charge" ? P.amber : P.mint));
     child(gauge.finish(), fittings).position.set(left, 1.195, .95);
   }
-  setSpindlePose(hull, id, { fold: 0, ramp: 0 });
+  setSpindlePose(hull, id, { fold: 0, ramp: 0, cargo: false });
   return hull;
 }
 
-/** Fold 0 = outriggers deployed, 1 = stowed for a compact berth. Ramp 0 = closed
- * visor, 1 = lowered to a shore. Pure presentation; poses never enter state. */
-export function setSpindlePose(hull: Mesh, id: string, pose: { fold: number; ramp: number }): void {
-  const fold = Math.max(0, Math.min(1, pose.fold)), xf = lerp(F.deployedX, F.stowedX, fold);
+/** Spindle presentation pose. Fold 0 = outriggers deployed, 1 = stowed for a
+ * compact berth; ramp 0 = closed visor, 1 = lowered to a shore; cargo shows
+ * the dry cargo stack. Omitted fields keep their current value. Pure
+ * presentation; poses never enter state. contactParts uses the same kinematics. */
+export interface SpindlePose { readonly fold?: number; readonly ramp?: number; readonly cargo?: boolean }
+export function setSpindlePose(hull: Mesh, id: string, pose: SpindlePose): void {
+  const current = (hull.metadata as { spindle?: Required<SpindlePose> } | null)?.spindle ?? { fold: 0, ramp: 0, cargo: false };
+  const next = { fold: pose.fold ?? current.fold, ramp: pose.ramp ?? current.ramp, cargo: pose.cargo ?? current.cargo };
+  hull.metadata = { ...hull.metadata, spindle: next };
   for (const m of hull.getChildMeshes(true)) {
     const meta = m.metadata as { side?: number; z?: number; part?: string } | null;
-    if (m.name.startsWith(`${id}.outrigger.`)) m.position.x = meta!.side! * (xf - F.deployedX);
+    if (m.name.startsWith(`${id}.outrigger.`)) m.position.x = meta!.side! * (spindleStrut(next.fold, meta!.side!).floatX - F.deployedX);
     else if (m.name.startsWith(`${id}.strut.`)) {
-      const side = meta!.side!, hx = side * S.hingeX, fx = side * xf, dy = S.floatY - S.hingeY;
-      const half = Math.hypot(fx - hx, dy) / 2, rise = Math.sqrt(Math.max(0, S.segment * S.segment - half * half));
-      // Knee lifts perpendicular to the hinge–float line, always upward.
-      const ux = (fx - hx) / (2 * half), uy = dy / (2 * half);
-      const nx = -uy * side, ny = ux * side;
-      const kx = (hx + fx) / 2 + nx * rise, ky = (S.hingeY + S.floatY) / 2 + ny * rise;
-      const [ax, ay, bx, by] = meta!.part === "upper" ? [hx, S.hingeY, kx, ky] : [kx, ky, fx, S.floatY];
-      m.position.set(ax, ay, meta!.z!);
-      m.rotation.set(0, 0, Math.atan2(by - ay, bx - ax));
-    } else if (m.name === `${id}.ramp`) m.rotation.x = lerp(R.closed, R.open, Math.max(0, Math.min(1, pose.ramp)));
+      const { hinge, knee, foot } = spindleStrut(next.fold, meta!.side!);
+      const [a, b] = meta!.part === "upper" ? [hinge, knee] : [knee, foot];
+      m.position.set(a[0], a[1], meta!.z!);
+      m.rotation.set(0, 0, Math.atan2(b[1] - a[1], b[0] - a[0]));
+    } else if (m.name === `${id}.ramp`) m.rotation.x = spindleRampAngle(next.ramp);
+    else if (m.name === `${id}.cargo`) m.setEnabled(next.cargo);
   }
 }
 

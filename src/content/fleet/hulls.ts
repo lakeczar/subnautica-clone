@@ -44,11 +44,10 @@ export interface HullSpec {
   readonly collider: PilotingCollider;
   /** Null for the carrier, which is never berthed. */
   readonly berth: { readonly size: "compact" | "medium"; readonly envelope: BerthEnvelope } | null;
-  /** Part proxies for encounter contact (hunterQueries). The union encloses the
-   * visible hull; each part is filled by art on every axis. */
+  /** Pose-independent part proxies for encounter contact (hunterQueries).
+   * Never read this alone: contactParts(hull, pose) adds the posed parts
+   * (Spindle's outriggers, ramp and cargo) and is the only complete set. */
   readonly contact: readonly ContactPart[];
-  /** Spindle only: parts while the outriggers are folded for a berth. */
-  readonly contactStowed?: readonly ContactPart[];
   readonly pressure: { readonly initialDepth: number; readonly maximumDepth: number; readonly surfaceOnly: boolean };
   /** Hold matches B1's HULL_HOLD_CU proposal; crew counts seated occupants. */
   readonly capacity: { readonly holdCu: number; readonly crew: number };
@@ -89,15 +88,33 @@ export const HUSH: HullSpec = {
   ],
 };
 
-/** Surface tender. `contact` is deployed (outriggers out, ramp closed, cargo
- * stack shown: the largest state); `contactStowed` is folded for a compact
- * berth. Proposes height 2.1 (was 1.7) so a seated pilot fits under the solar
- * canopy, and berth half width 2.12 (was 2.4): the folded art is 2.06. */
+/** Surface tender. Its outriggers fold on knee struts, its bow ramp lowers and
+ * its cargo stack shows only while loaded, so its contact set is posed: see
+ * contactParts. Proposes height 2.1 (was 1.7) so a seated pilot fits under
+ * the solar canopy, and berth half width 2.12 (was 2.4): the folded art is 2.06. */
 export const SPINDLE_FLOAT = { deployedX: 3.05, stowedX: 1.75, y: .46, halfLength: 1.7, radius: .3, height: .36 } as const;
-/** Knee-jointed outrigger struts: hull hinge, float attachment, segment length. */
-export const SPINDLE_STRUT = { hingeX: .84, hingeY: 1.0, floatY: .86, segment: 1.18, z: [-.55, .75] } as const;
-/** Bow ramp hinge and length; closed leans back as a splash visor. */
-export const SPINDLE_RAMP = { hinge: [0, .48, -3.14] as Vec, length: .8, width: 1.3, closed: .25, open: -1.83 } as const;
+/** Knee-jointed outrigger struts: hull hinge, float attachment, segment length,
+ * tube radius and joint radius. */
+export const SPINDLE_STRUT = { hingeX: .84, hingeY: 1.0, floatY: .86, segment: 1.18, z: [-.55, .75], tube: .045, joint: .07 } as const;
+/** Bow ramp hinge and length; closed leans back as a splash visor. `depth` is
+ * the plate's local Z extent (front face to back rails). */
+export const SPINDLE_RAMP = { hinge: [0, .48, -3.14] as Vec, length: .8, width: 1.3, halfWidth: .65, depth: [-.065, .03], closed: .25, open: -1.83 } as const;
+const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+
+/** Strut geometry for one side (−1 port, +1 starboard) at a fold in [0, 1]:
+ * the float station and the knee, which lifts perpendicular to the
+ * hinge–float line. Shared by the art and the contact parts. */
+export function spindleStrut(fold: number, side: number): { floatX: number; hinge: readonly [number, number]; knee: readonly [number, number]; foot: readonly [number, number] } {
+  const S = SPINDLE_STRUT, F = SPINDLE_FLOAT;
+  const floatX = F.deployedX + (F.stowedX - F.deployedX) * clamp01(fold);
+  const hx = side * S.hingeX, fx = side * floatX, dy = S.floatY - S.hingeY;
+  const half = Math.hypot(fx - hx, dy) / 2, rise = Math.sqrt(Math.max(0, S.segment * S.segment - half * half));
+  const ux = (fx - hx) / (2 * half), uy = dy / (2 * half);
+  return { floatX, hinge: [hx, S.hingeY], foot: [fx, S.floatY],
+    knee: [(hx + fx) / 2 - uy * side * rise, (S.hingeY + S.floatY) / 2 + ux * side * rise] };
+}
+export const spindleRampAngle = (ramp: number): number => SPINDLE_RAMP.closed + (SPINDLE_RAMP.open - SPINDLE_RAMP.closed) * clamp01(ramp);
+
 export const SPINDLE: HullSpec = {
   id: "spindle", label: "Spindle", role: "surface island tender",
   dimensions: { length: 7.28, beam: 6.8, height: 2.08 },
@@ -106,18 +123,6 @@ export const SPINDLE: HullSpec = {
   contact: [
     box("spindle.hull", [-.92, 0, -3.64], [.92, 1.24, 3.68]),
     box("spindle.canopy", [-1.04, .5, .4], [1.04, 2.08, 3.0]),
-    box("spindle.ramp", [-.67, .44, -3.22], [.67, 1.3, -2.88]),
-    box("spindle.cargo", [-.74, .98, -2.65], [.74, 1.7, -.38]),
-    box("spindle.outrigger.port", [-3.4, .08, -1.75], [-.8, 1.44, 1.75]),
-    box("spindle.outrigger.starboard", [.8, .08, -1.75], [3.4, 1.44, 1.75]),
-  ],
-  contactStowed: [
-    box("spindle.hull", [-.92, 0, -3.64], [.92, 1.24, 3.68]),
-    box("spindle.canopy", [-1.04, .5, .4], [1.04, 2.08, 3.0]),
-    box("spindle.ramp", [-.67, .44, -3.22], [.67, 1.3, -2.88]),
-    box("spindle.cargo", [-.74, .98, -2.65], [.74, 1.7, -.38]),
-    box("spindle.outrigger.port", [-2.1, .08, -1.75], [-.8, 2.08, 1.75]),
-    box("spindle.outrigger.starboard", [.8, .08, -1.75], [2.1, 2.08, 1.75]),
   ],
   pressure: { initialDepth: 0, maximumDepth: 0, surfaceOnly: true },
   capacity: { holdCu: 96, crew: 1 },
@@ -209,3 +214,35 @@ export const HEARTHLINE: HullSpec = {
 
 export const S3_HULLS = { hush: HUSH, spindle: SPINDLE, mantle: MANTLE, hearthline: HEARTHLINE } as const;
 export type S3HullId = keyof typeof S3_HULLS;
+
+/** Presentation state that changes a hull's visible extent. Spindle only;
+ * omitted fields mean deployed (fold 0), ramp closed (0) and an empty hold. */
+export interface ContactPose { readonly fold?: number; readonly ramp?: number; readonly cargoLoaded?: boolean }
+
+/** The complete contact set for a hull in a pose: the one selector for the
+ * viewer, the fit tests and the sim adapter (hunterQueries). Spindle's posed
+ * parts are computed from the same kinematics its art uses; the cargo part
+ * exists only while the hold is loaded, as the cargo stack does. */
+export function contactParts(hull: S3HullId, pose: ContactPose = {}): readonly ContactPart[] {
+  const spec = S3_HULLS[hull];
+  if (hull !== "spindle") return spec.contact;
+  const S = SPINDLE_STRUT, F = SPINDLE_FLOAT, R = SPINDLE_RAMP, pad = .01;
+  const parts = [...spec.contact];
+  for (const side of [-1, 1]) {
+    const { floatX, knee } = spindleStrut(pose.fold ?? 0, side);
+    const inner = S.hingeX - S.joint - pad, outer = floatX + F.radius + .01 + pad;
+    const top = Math.max(F.y + F.height + .07, knee[1] + S.joint, S.hingeY + S.joint) + pad;
+    parts.push(box(`spindle.outrigger.${side < 0 ? "port" : "starboard"}`,
+      [side < 0 ? -outer : inner, F.y - F.height - pad, -F.halfLength - pad], [side < 0 ? -inner : outer, top, F.halfLength + pad]));
+  }
+  // Ramp plate corners rotated about the hinge's X axis.
+  const a = spindleRampAngle(pose.ramp ?? 0), ys: number[] = [], zs: number[] = [];
+  for (const ly of [0, R.length]) for (const lz of R.depth) {
+    ys.push(R.hinge[1] + ly * Math.cos(a) - lz * Math.sin(a));
+    zs.push(R.hinge[2] + ly * Math.sin(a) + lz * Math.cos(a));
+  }
+  parts.push(box("spindle.ramp", [-R.halfWidth - pad, Math.min(...ys) - pad, Math.min(...zs) - pad],
+    [R.halfWidth + pad, Math.max(...ys) + pad, Math.max(...zs) + pad]));
+  if (pose.cargoLoaded) parts.push(box("spindle.cargo", [-.74, .98, -2.65], [.74, 1.7, -.38]));
+  return parts;
+}
