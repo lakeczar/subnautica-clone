@@ -24,3 +24,13 @@ A harmless child probe read `/proc/self/cgroup`, then the corresponding files un
 ## GPU scope
 
 The affected test uses Babylon `NullEngine`; it does not rasterize using a GPU. Attaching the3090 will not move its Node allocations or test orchestration into VRAM. Actual browser WebGL drawing can benefit once passthrough/driver setup is accepted and executed. At incident recovery, PCI inventory still showed only QXL and `nvidia-smi` was absent. Do not claim NVIDIA acceleration yet. QXL driver loading was not implicated by this incident.
+
+## Shared heavy-check lock (2026-10-20, Opus coordinator)
+
+All builders and reviewers run render tests, full suites and other heavy jobs through `scripts/heavy-check.sh` (absolute path `/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh` works from any worktree):
+
+```sh
+/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh --deadline 900 npm test
+```
+
+It takes a machine-wide `flock` on `/work/tmp/siltwake-heavy-check.lock`, so only one heavy job runs at a time, and waits for it rather than overlapping. It then runs the command in a 6 GiB, zero-swap user scope with a deadline. `HEAVY_MEMORY_MAX` takes whole gigabytes, for example `2G`. Exit 124 means the deadline passed, and 137 usually means the job hit the cap. Light work (typecheck, build, focused non-render tests) doesn't need the lock.
