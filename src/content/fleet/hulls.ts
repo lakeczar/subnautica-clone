@@ -69,12 +69,12 @@ export const HUSH: HullSpec = {
   collider: { radius: 3.6, height: 2.1 },
   berth: { size: "compact", envelope: { halfWidth: 2.45, halfLength: 3.6, height: 2.1 } },
   contact: [
-    box("hush.body", [-.92, .36, -3.42], [.92, 1.98, 3.1]),
-    box("hush.blister", [-.78, 0, -2.5], [.78, .78, -.48]),
-    box("hush.wing.port", [-2.43, .7, -2.6], [-.85, 1.48, 2.2]),
-    box("hush.wing.starboard", [.85, .7, -2.6], [2.43, 1.48, 2.2]),
-    box("hush.winglet.port", [-2.43, .55, .95], [-2.13, 2.06, 2.24]),
-    box("hush.winglet.starboard", [2.13, .55, .95], [2.43, 2.06, 2.24]),
+    box("hush.body", [-.92, .38, -3.48], [.92, 2.0, 3.02]),
+    box("hush.blister", [-.78, 0, -2.46], [.78, .56, -.48]),
+    box("hush.wing.port", [-2.43, .88, -1.88], [-1.08, 1.4, 2.18]),
+    box("hush.wing.starboard", [1.08, .88, -1.88], [2.43, 1.4, 2.18]),
+    box("hush.winglet.port", [-2.43, .56, .98], [-2.13, 2.06, 2.24]),
+    box("hush.winglet.starboard", [2.13, .56, .98], [2.43, 2.06, 2.24]),
   ],
   pressure: { initialDepth: 220, maximumDepth: 450, surfaceOnly: false },
   capacity: { holdCu: 32, crew: 1 },
@@ -93,39 +93,43 @@ export const HUSH: HullSpec = {
  * `contactStowed` is folded for a compact berth. Proposes height 2.1 (was 1.7)
  * so a seated pilot fits under the solar canopy. */
 export const SPINDLE_FLOAT = { deployedX: 3.05, stowedX: 1.75, y: .46, halfLength: 1.7, radius: .3, height: .36 } as const;
+/** Knee-jointed outrigger struts: hull hinge, float attachment, segment length. */
+export const SPINDLE_STRUT = { hingeX: .84, hingeY: 1.0, floatY: .86, segment: 1.18, z: [-.55, .75] } as const;
+/** Bow ramp hinge and length; closed leans back as a splash visor. */
+export const SPINDLE_RAMP = { hinge: [0, .48, -3.14] as Vec, length: .85, width: 1.3, closed: .25, open: -1.83 } as const;
 export const SPINDLE: HullSpec = {
   id: "spindle", label: "Spindle", role: "surface island tender",
-  dimensions: { length: 7.2, beam: 6.82, height: 2.07 },
+  dimensions: { length: 7.28, beam: 6.8, height: 2.08 },
   collider: { radius: 4, height: 2.1 },
   berth: { size: "compact", envelope: { halfWidth: 2.4, halfLength: 3.7, height: 2.1 } },
   contact: [
-    box("spindle.hull", [-.9, 0, -3.64], [.9, 1.12, 3.62]),
-    box("spindle.canopy", [-1.02, 1.0, .42], [1.02, 2.07, 2.98]),
-    box("spindle.ramp", [-.72, .55, -3.64], [.72, 1.5, -2.82]),
-    box("spindle.outrigger.port", [-3.4, .1, -1.75], [-.84, 1.42, 1.75]),
-    box("spindle.outrigger.starboard", [.84, .1, -1.75], [3.4, 1.42, 1.75]),
+    box("spindle.hull", [-.92, 0, -3.64], [.92, 1.24, 3.68]),
+    box("spindle.canopy", [-1.04, .5, .4], [1.04, 2.08, 3.0]),
+    box("spindle.ramp", [-.7, .44, -3.22], [.7, 1.36, -2.82]),
+    box("spindle.outrigger.port", [-3.4, .08, -1.75], [-.8, 1.4, 1.75]),
+    box("spindle.outrigger.starboard", [.8, .08, -1.75], [3.4, 1.4, 1.75]),
   ],
   contactStowed: [
-    box("spindle.hull", [-.9, 0, -3.64], [.9, 1.12, 3.62]),
-    box("spindle.canopy", [-1.02, 1.0, .42], [1.02, 2.07, 2.98]),
-    box("spindle.ramp", [-.72, .55, -3.64], [.72, 1.5, -2.82]),
-    box("spindle.outrigger.port", [-2.12, .1, -1.75], [-.84, 2.06, 1.75]),
-    box("spindle.outrigger.starboard", [.84, .1, -1.75], [2.12, 2.06, 1.75]),
+    box("spindle.hull", [-.92, 0, -3.64], [.92, 1.24, 3.68]),
+    box("spindle.canopy", [-1.04, .5, .4], [1.04, 2.08, 3.0]),
+    box("spindle.ramp", [-.7, .44, -3.22], [.7, 1.36, -2.82]),
+    box("spindle.outrigger.port", [-2.1, .08, -1.75], [-.8, 2.08, 1.75]),
+    box("spindle.outrigger.starboard", [.8, .08, -1.75], [2.1, 2.08, 1.75]),
   ],
   pressure: { initialDepth: 0, maximumDepth: 0, surfaceOnly: true },
   capacity: { holdCu: 96, crew: 1 },
-  seat: [0, 1.55, 1.95],
+  seat: [0, 1.55, 2.0],
   access: [
-    { id: "spindle.access.ramp", kind: "ramp", at: [0, .95, -2.9], approach: [0, .4, -5.2] },
-    { id: "spindle.access.stern", kind: "swim_platform", at: [0, .5, 3.5], approach: [0, -.4, 4.4] },
+    { id: "spindle.access.ramp", kind: "ramp", at: [0, .48, -3.14], approach: [0, .4, -5.2] },
+    { id: "spindle.access.stern", kind: "swim_platform", at: [0, .5, 3.55], approach: [0, -.4, 4.4] },
   ],
   mounts: [
-    { id: "spindle.socket.port", kind: "equipment", at: [-.55, 2.06, 2.45], normal: [0, 1, 0], size: [.6, .3, .6],
+    { id: "spindle.socket.port", kind: "equipment", at: [-.9, .66, 2.55], normal: [-1, 0, 0], size: [.3, .45, .6],
       accepts: ["reserve_power", "directional_survey", "decoy_emitter", "camp_kit"] },
-    { id: "spindle.socket.starboard", kind: "equipment", at: [.55, 2.06, 2.45], normal: [0, 1, 0], size: [.6, .3, .6],
+    { id: "spindle.socket.starboard", kind: "equipment", at: [.9, .66, 2.55], normal: [1, 0, 0], size: [.3, .45, .6],
       accepts: ["reserve_power", "directional_survey", "decoy_emitter", "camp_kit"] },
-    { id: "spindle.cargo", kind: "cargo_deck", at: [0, .97, -1.15], normal: [0, 1, 0], size: [1.5, .9, 2.9], accepts: ["dry_cargo"] },
-    { id: "spindle.collar", kind: "rescue_collar", at: [0, .7, 3.6], normal: [0, 0, 1], size: [.4, .4, .1], accepts: ["bobbin_collar"] },
+    { id: "spindle.cargo", kind: "cargo_deck", at: [0, 1.0, -1.2], normal: [0, 1, 0], size: [1.5, .9, 3.0], accepts: ["dry_cargo"] },
+    { id: "spindle.collar", kind: "rescue_collar", at: [0, .74, 3.6], normal: [0, 0, 1], size: [.4, .4, .1], accepts: ["bobbin_collar"] },
   ],
 };
 
@@ -138,7 +142,7 @@ export const MANTLE: HullSpec = {
   contact: [
     box("mantle.bell", [-2.3, 0, -2.3], [2.3, 3.62, 2.3]),
     box("mantle.lift", [-.5, 3.4, -.25], [.5, 3.96, .25]),
-    box("mantle.jaw", [-.78, .32, -4.34], [.78, 1.3, -1.9]),
+    box("mantle.jaw", [-.78, .32, -4.38], [.78, 1.3, -1.9]),
     box("mantle.fins.port", [-2.87, .92, -.75], [-2.0, 2.62, 1.5]),
     box("mantle.fins.starboard", [2.0, .92, -.75], [2.87, 2.62, 1.5]),
     box("mantle.power", [-.82, .7, 1.9], [.82, 2.12, 3.36]),
@@ -161,18 +165,22 @@ export const MANTLE: HullSpec = {
 /** Carrier-local keel pontoons. Proposed to replace HEARTHLINE_KEEL (x 5.2..9.2),
  * whose inner faces crossed the lock transfer corridor that medium hulls sweep
  * (x up to ±5.9 at the lowered berth). The inner face now stays outboard of it. */
-export const HEARTHLINE_KEELS = { inner: 6.12, outer: 9.32, top: 3.2, halfLength: 14 } as const;
+export const HEARTHLINE_KEELS = { inner: 6.12, outer: 9.32, top: 3.2, halfLength: 14.5 } as const;
 /** House: the pressure hull around the deck, rooms and interior. */
-export const HEARTHLINE_HOUSE = { halfWidth: 6.6, bottom: 3.3, roof: 9.16, bow: -12.45, stern: 12.4 } as const;
+export const HEARTHLINE_HOUSE = { halfWidth: 6.6, skirt: 3.2, underside: 3.8, roof: 9.16, bow: -12.45, stern: 12.4 } as const;
+/** Window band on the house sides and bow, in the dry interval's height. */
+export const HEARTHLINE_WINDOWS = { low: 5.0, high: 7.1, bridge: [-11.5, -8.2], galley: [6.2, 8.4] } as const;
 export const HEARTHLINE: HullSpec = {
   id: "hearthline", label: "Hearthline", role: "inhabited carrier",
-  dimensions: { length: 28, beam: 18.64, height: 9.66 },
+  dimensions: { length: 29, beam: 18.64, height: 9.66 },
   collider: { radius: 17, height: 9.2, bottom: -.5 },
   berth: null,
   contact: [
-    box("hearthline.keel.port", [-HEARTHLINE_KEELS.outer, 0, -14], [-HEARTHLINE_KEELS.inner + .02, 3.32, 14]),
-    box("hearthline.keel.starboard", [HEARTHLINE_KEELS.inner - .02, 0, -14], [HEARTHLINE_KEELS.outer, 3.32, 14]),
-    box("hearthline.house", [-6.68, 3.2, -12.62], [6.68, 9.16, 12.48]),
+    box("hearthline.keel.port", [-HEARTHLINE_KEELS.outer, 0, -14.5], [-HEARTHLINE_KEELS.inner + .02, 3.32, 14.5]),
+    box("hearthline.keel.starboard", [HEARTHLINE_KEELS.inner - .02, 0, -14.5], [HEARTHLINE_KEELS.outer, 3.32, 14.5]),
+    box("hearthline.house", [-6.7, 3.2, -12.8], [6.7, 9.2, 12.5]),
+    // Boarding rails and step around the starboard vestibule hatch.
+    box("hearthline.vestibule", [6.6, 3.2, 7.95], [6.92, 6.25, 10.05]),
     // Configuration shell from carrierStructure (lock floor, throat plates, gate).
     box("hearthline.lock", [-6.08, -.5, -12.08], [6.08, 3.82, 5.78]),
   ],
