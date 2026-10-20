@@ -2,7 +2,7 @@
 
 These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.md). Where older docs conflict with them, this file wins. That includes the evidence rules in `DELIVERY_AND_ACCEPTANCE.md`, the Astra roles in `BUILD_GAME_REVISED.md`, and the historical `CONTRACTS.md` and `PLAN.md` text. The full owner scope stays the same: seven regions, three islands, six craft, Hearthline, both fleet strategies and one authored ending.
 
-**Duration (owner, 2026-10-20):** ten hours is **not** a target or a deadline. "Ten hours" was a proxy for a game with plenty of content. The goal is **more good content**: places, landmarks, caves, creatures, resources, discoveries and side rewards worth finding. This replaces the duration target in `BUILD_GAME_REVISED.md`. Never pad playtime with travel, grind or waiting. Don't cut good content to fit a length. There is also no schedule pressure: choose quality over speed.
+**Game design (owner, 2026-10-20):** [GAME-DIRECTION](GAME-DIRECTION.md) holds the owner-confirmed target, pacing rules, systems, fleet, caves and order of work. The length target is a **floor**: a skilled player on a first, blind, non-stop playthrough takes about 10 hours or more, organically and without padding. There is no ceiling, and playtests never trim good content.
 
 ## Priorities
 1. **A rough, complete campaign from start to ending comes first.** Polish follows once the whole chain is playable. Stop re-polishing the opening.

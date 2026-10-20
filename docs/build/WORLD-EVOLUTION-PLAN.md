@@ -1,5 +1,7 @@
 # World evolution plan (coordinator, 2026-10-20)
 
+> **Superseded in part by [GAME-DIRECTION](GAME-DIRECTION.md)** (owner-confirmed). Caves are now small and medium authored caves throughout, plus **four cave biomes** of 150–300 m: Isles, Canopy, Basin and Rift–Divide. The six-cave list below is folded into that. W2 (hub) and W3 (density) stand, inside the new order of work.
+
 **Source:** the owner asked for caves, cliffs and underground areas, richer landmarks, creatures and resources, and a more cohesive, hub-centred map. This plan draws on three Sol 6.1 high research reports:
 - [layout and progression](../research/WORLD-LAYOUT-PROGRESSION.md)
 - [caves and underground](../research/CAVES-UNDERGROUND.md)
