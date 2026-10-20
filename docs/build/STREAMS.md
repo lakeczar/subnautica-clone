@@ -12,7 +12,7 @@ Common to every stream:
 | ID | Outcome | Owns (new paths) | Port | State |
 | --- | --- | --- | --- | --- |
 | S1 | World runtime and scale | `src/world/*`, `src/render/kit/*`, `tools/scale-slice.*`, `tests/world-*.test.ts` | 5195 | dispatched |
-| S2 | Remaining regions and islands, authored | `src/content/regions/*`, `src/render/biomes/*` | 5199 | waits for S1's descriptor commit |
+| S2 | Remaining regions and islands, authored | `src/content/regions/*`, `src/render/biomes/*` | 5199 | dispatched from S1 `393030a` |
 | S3 | Fleet art and the Hearthline interior | `src/render/fleet/*`, `src/content/fleet/*`, `tools/fleet-viewer.*` | 5196 | dispatched |
 | S4 | Ecology, encounters and hazards | `src/sim/ecology/*`, `src/content/ecology/*`, `src/render/creatures/*`, `tools/creature-viewer.*` | 5197 | dispatched |
 | S5 | Campaign, evidence chain and ending | `src/content/story/*`, `src/sim/story/*`, `tests/story-*.test.ts` | — | dispatched |
@@ -76,3 +76,7 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - S6 `siltwake-s6-audio-6a0fa56`
 - GPU R3 review `siltwake-gpu-r3-sol-xhigh-8d6dba9`
 - B1 (earlier root session) `node:delegated-task:command%3Amcp%3A2cbf186c-627f-4d86-933f-50a2dde43454%3Adelegate-task%3Asiltwake-m2-b1-opus-high-7bd259c`
+
+## Ratified contracts
+- **S1 world frame (2026-10-20):** X −576..1472, Z −1632..160 (+Z north, +X east), Y −800..+100, with 128 m chunks and today's coordinates unchanged. The types live in S1's `src/world/types.ts` and `src/render/kit/types.ts` (`393030a`), described in `docs/build/streams/S1.md` on S1's branch. Placement follows `docs/WORLD_PROGRESSION.md`: Reef NW, Isles N/E rim, Canopy E shelf, Pale Basin centre, Rift SW, Divide S saddle, Meridian SE.
+- S2 live task: `siltwake-s2-regions-393030a`.
