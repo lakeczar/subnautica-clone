@@ -208,3 +208,9 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **SYS-1 R2 (Sol):** changes-needed (`review/sys-1-r2` `509d9b3`). Heat and strict-tier fixes are verified. One P2: an optional `berth.exterior` defaults to safe water; require it or refuse affected previews. **Queued** for the SYS-1 author when a slot frees (5 of 5 running).
 - **SYS-2 R2 fixes done** at `1a336bf`: per-death outstanding recoveries keyed by cache or loss, and a state-aware socket/host/kind check; 825 tests pass. Sol R3 running. The **SYS-1 R2 fix started** in the freed slot. Builders 5 of 5: C3, LC, CB, CY, SYS-1.
 - **SYS-1 R2 fix done** at `40f60fb`: `berth.exterior` required and the safe-water fallback removed; 834 tests pass. Sol R3 running. Builders 4 of 5: C3, LC, CB, CY.
+- **CB done** at `489ddfb` (`t3/siltwake-content-bible`, `t3-c679ebd1`): the bible, 8 region files, 4 cave-biome files and typed proposals with a placement and density test; 794 tests pass. Pacing estimates: main path 8.8 h, blind first playthrough ~11.2 h, everything 13.6 h. **Coordinator decisions:**
+  1. The 10 h floor is measured on a skilled *blind first playthrough* (per GAME-DIRECTION), so ~11.2 h meets it. Still lure players toward the Drop Cathedral and Rootways; never add errands.
+  2. The first craft (Dart, shore materials) is the tier-rule baseline.
+  3. Main-path copies of the standard and advanced outpost-kit plans are required (folded into SYS-2 or composition).
+
+  The hub crown pinnacle (about 240 m of new terrain) versus the apron fallback is decided with W2 after the experience audit. Sol R1 running. Builders 3 of 5: C3, LC, CY.
