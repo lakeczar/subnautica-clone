@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { CONTENT_VERSION, RECIPES, SOURCES, ITEMS, PLACES } from "../.test-build/src/content/registry.js";
+import { CAMPAIGN_RECIPES } from "../.test-build/src/content/campaign/index.js";
 import { LEGACY_TERRAIN_SOURCE_IDS } from "../.test-build/src/content/routes.js";
 import { createGame } from "../.test-build/src/sim/state.js";
 import { collect, completeOpening, craft, discover, toggleBuoy } from "../.test-build/src/sim/progression.js";
@@ -25,7 +26,7 @@ assert.equal(new Set(m1Ids).size, m1Ids.length, "each adopted M1 recipe is cover
 const m2b1Ids = ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "restore_canopy_stop", "creel_350", "dart_350"];
 // S5 works recipes wait on later content; tests/story-composed.test.ts audits them against the registry.
 const storyIds = ["service_power_assembly", "service_air_assembly", "pod_buffer"];
-assert.deepEqual(Object.keys(RECIPES).sort(), [...m1Ids, "suit_350", ...m2b1Ids, ...storyIds].sort(), "complete executable roster is M1 plus the separately checked M2 refits, M2-B1 fleet work and S5 works recipes");
+assert.deepEqual(Object.keys(RECIPES).sort(), [...m1Ids, "suit_350", ...m2b1Ids, ...storyIds, ...Object.keys(CAMPAIGN_RECIPES)].sort(), "complete roster is M1 plus the separately checked M2 refits, M2-B1 fleet work, S5 works recipes and S9 campaign recipes (check-campaign-economy.mjs)");
 assert.equal(new Set(delta.preCanopy).size, delta.preCanopy.length);
 for (const id of m1Ids) {
   const r = RECIPES[id];

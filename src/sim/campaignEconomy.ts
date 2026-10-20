@@ -119,6 +119,8 @@ export interface ScenarioResult {
   /** Units sorted out of finite host reserves, by material. */
   reserveUsed: Record<string, number>;
   remaining: Record<string, { exposed: number; reserve: number }>;
+  /** Deposits each purchase drew from. */
+  drawn: Record<string, SourceId[]>;
   /** Hauling trips per purchase with the best craft owned at the time. */
   trips: Record<string, number>;
   /** Units written off in the failed rescue. */
@@ -142,7 +144,7 @@ export function runScenario(strategy: EconomyStrategy, opts: ScenarioOptions = {
     if (SOURCES[id].item !== "meal" && !without.has(id)) stock.set(id, { exposed: SOURCES[id].stock, reserve: SOURCES[id].reserve });
   const caps: Caps = { suit: 60, hulls: {}, heat: false, brine: false, rack: false };
   const out: ScenarioResult = { strategy, solvent: true, shortfalls: [], acts: [], spent: {}, reserveUsed: {}, remaining: {},
-    trips: {}, lost: {}, rebuild: null, renewalCredited: 0, finalCaps: { suit: 0, hulls: {} } };
+    drawn: {}, trips: {}, lost: {}, rebuild: null, renewalCredited: 0, finalCaps: { suit: 0, hulls: {} } };
   const crafted: RecipeId[] = [];
   const add = (rec: Record<string, number>, k: string, n: number): void => { rec[k] = (rec[k] ?? 0) + n; };
 
@@ -159,6 +161,7 @@ export function runScenario(strategy: EconomyStrategy, opts: ScenarioOptions = {
           if (!take) continue;
           node[pass] -= take; need -= take;
           if (pass === "reserve") add(out.reserveUsed, kind, take);
+          if (!(out.drawn[label] ??= []).includes(id)) out.drawn[label].push(id);
           deepest = Math.max(deepest, -SOURCES[id].position.y);
         }
       if (need > 0) { out.solvent = false; out.shortfalls.push({ act: label, kind, short: need }); }

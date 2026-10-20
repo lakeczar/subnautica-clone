@@ -79,7 +79,7 @@ export const CAMPAIGN_HULL_ROLES = {
       name: "Quiet crossing of the hunter's fins",
       where: "Lantern Canopy lower grounding fins inside the sound hunter's territory",
       benefit: "Cruises at 6 m/s at loudness 0.2, under the 0.35 the hunter reacts to; a Dart must crawl at 3 m/s (4.2 with trim) to stay unnoticed.",
-      measure: "The 72 m territory takes 24 s instead of 48 s (34 s trimmed), with no warning call.",
+      measure: "Crossing the 144 m-wide territory takes 24 s instead of 48 s (34 s trimmed), with no warning call.",
     },
   },
   spindle: {

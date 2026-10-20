@@ -4,6 +4,7 @@ import {
   HULLS,
   isMountKind,
   ITEMS,
+  MATERIALS,
   MODULES,
   PLACES,
   RECIPES,
@@ -376,8 +377,7 @@ export function validState(value: unknown): value is GameState {
         !Object.entries(v.investment).every(
           ([a, b]) =>
             a in ITEMS &&
-            ["structural_alloy", "silica_glass", "flex_membrane", "conductive_crust",
-              "buoyant_resin", "tagged_frame"].includes(a) &&
+            (Object.hasOwn(MATERIALS, a) || a === "tagged_frame") &&
             int(b, 1, 50),
         ) ||
         !int(v.rating, 0, 800) ||
