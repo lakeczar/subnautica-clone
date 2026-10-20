@@ -48,7 +48,7 @@ export const HAZARD_FIELDS = {
   rift_warm_passage: {
     label: "Warm passage", kind: "heat", region: "thermal_rift",
     shape: { kind: "box", center: at("rift_split_chimney"), min: { x: -45, y: -6, z: -14 }, max: { x: -9, y: 24, z: 14 } },
-    intensity: 0.42, edge: 4,
+    intensity: 0.36, edge: 4,
     cue: "Pale fans close and the rock darkens; the suit reports a steady warm load.",
   },
   rift_passage_dark: {
@@ -60,7 +60,7 @@ export const HAZARD_FIELDS = {
   divide_dense_layer: {
     label: "Dense brine layer", kind: "brine", region: "brine_divide",
     shape: { kind: "layer", center: at("divide_saddle"), y: 10, min: { x: -140, y: 0, z: -110 }, max: { x: 140, y: 0, z: 110 } },
-    intensity: 1, edge: 2,
+    intensity: 1, edge: 1,
     cue: "A mirror-bright surface lies across the saddle; sails drift above it and nothing lives below.",
   },
   divide_downwelling: {
@@ -92,7 +92,9 @@ export const CURRENT_SPEED_SCALE = 1;
  * 0..100; warnings at 40 and 70 name the protection, harm starts at 100. */
 export const EXPOSURE = {
   heat: { rate: 20, recovery: 12, diverHarm: 8, hullHarm: 4 },
-  brine: { rate: 14, recovery: 10, diverHarm: 4, hullHarm: 2 },
+  // Brine is a slow equipment hazard (WORLD_PROGRESSION): warned, escapable by
+  // climbing a metre, and slow enough that it never outpaces an encounter.
+  brine: { rate: 14, recovery: 10, diverHarm: 1.5, hullHarm: 1 },
   warnings: [40, 70, 100] as const,
 } as const;
 export const UNPROTECTED = { heat: 0.3, brine: 0, current: 0.15 } as const;

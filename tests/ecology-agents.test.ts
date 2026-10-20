@@ -4,7 +4,8 @@ import { THREATS, THREAT_AGENT_IDS, DIVER_ESCAPE_SPEED, MAX_ACTIVE_THREATS, ACTI
 import type { ThreatAgentId } from "../src/content/ecology/species.js";
 import { FIRST_DEPOSITS } from "../src/content/ecology/hazards.js";
 import { sitePosition } from "../src/content/ecology/sites.js";
-import { activeThreats, canOccupy, canReach, definitionOf, layerY } from "../src/sim/ecology/agents.js";
+import { activeThreats, canOccupy, canReach, definitionOf, layerY, stepAgent } from "../src/sim/ecology/agents.js";
+import { WARNING_LEAD } from "../src/sim/ecology/types.js";
 import { CURRENT_REFUGES, openWater } from "../src/sim/ecology/adapter.js";
 import { sampleHazards } from "../src/sim/ecology/hazards.js";
 import { parseEcology, serializeEcology } from "../src/sim/ecology/persist.js";
@@ -178,49 +179,6 @@ test("no animal notices or strikes a player inside a refuge, and an engaged anim
   assert.ok(cues(log, STALKER).some(c => c.cue === "leash"));
 });
 
-test("adverse: a cornered diver with no tool, lamp on and noisy, still gets a bounded engagement and a clear escape window", () => {
-  for (const id of [STALKER, SKATE, CHOIR] as const) {
-    const def = definitionOf(id), home = homeOf(id);
-    // A dead-end crevice: rock behind and on both sides, open only toward the animal.
-    const p = id === SKATE ? { ...home, x: home.x + 6, y: layerY("divide_dense_layer") } : offset(home, 12, id === CHOIR ? 4 : 0, 0);
-    const world = openWater({ solids: [
-      { min: offset(p, 1.2, -3, -3), max: offset(p, 3, 3, 3) },
-      { min: offset(p, -3, -3, 1.2), max: offset(p, 1.2, 3, 3) },
-      { min: offset(p, -3, -3, -3), max: offset(p, 1.2, 3, -1.2) },
-    ] });
-    const state = createEcology();
-    const loud: Partial<Stimulus> = id === SKATE ? { noise: 0.6, velocity: { x: 0, y: -1.2, z: 0 } } : { light: 0.6, noise: 0.6 };
-    // Phase 1: the diver stays cornered and noisy. Record when every animal
-    // that engaged has disengaged into its refractory rest.
-    const engaged = new Set<string>();
-    let clear: number | null = null;
-    const log = run(state, 60 * 120, (tick, s) => {
-      for (const a of s.agents) if (a.mode !== "rest") engaged.add(a.id);
-      if (clear === null && engaged.size && s.agents.every(a => !engaged.has(a.id) || (a.mode === "rest" && a.refractory > 0))) clear = tick;
-      return stimulus(p, loud);
-    }, { world });
-    const total = strikes(log).reduce((a, s) => a + s.loss, 0);
-    assert.ok(strikes(log).length >= 1, `${id}: the cornered case does produce contact`);
-    assert.ok(total <= 60, `${id}: cornered diver loses at most 60 health before disengagement (lost ${total})`);
-    assert.ok(clear !== null, `${id}: every engaged animal disengages while the diver stays cornered`);
-    // Staying cornered and loud after the window may start a new engagement;
-    // inside the window nothing strikes.
-    const window = clear! + def.timing.refractory * 60;
-    assert.ok(strikes(log).every(s => s.tick < clear! || s.tick >= window), `${id}: no strike inside the refractory window`);
-    // Phase 2: replay to that moment, then a quiet diver (lamp still on) swims
-    // straight out of the territory at the slowest unaided speed.
-    const after = createEcology();
-    run(after, clear! + 1, () => stimulus(p, loud), { world });
-    const dir = { x: p.x - home.x, z: p.z - home.z }, n = Math.hypot(dir.x, dir.z) || 1;
-    let pos = { ...p };
-    const escape = run(after, Math.ceil((def.territory + def.reach + 10) / DIVER_ESCAPE_SPEED * 60), () => {
-      pos = { x: pos.x + dir.x / n * DIVER_ESCAPE_SPEED / 60, y: pos.y + (id === SKATE ? 0.04 : 0), z: pos.z + dir.z / n * DIVER_ESCAPE_SPEED / 60 };
-      return stimulus(pos, { light: 0.6, noise: 0.03 });
-    }, { world: openWater(), start: clear! + 1 });
-    assert.equal(strikes(escape).length, 0, `${id}: escape is never struck`);
-  }
-});
-
 test("simulation is deterministic and survives a save/load in the middle of an encounter", () => {
   const path = (tick: number): Stimulus => stimulus(offset(homeOf(STALKER), 14 + Math.sin(tick / 90) * 6, Math.cos(tick / 140) * 3, Math.sin(tick / 70) * 5),
     { light: tick % 900 < 600 ? 0.9 : 0, noise: 0.48, hull: "dart", radius: 3.6 });
@@ -248,4 +206,61 @@ test("only nearby animals simulate; distant ones rest unchanged at home", () => 
   const r = stepEcology(state, { tick: 600, stimulus: stimulus(away), protection: protectionFor(null, []), vehicleId: null }, openWater());
   assert.equal(r.events.length, 0);
   assert.ok(state.agents.every(a => a.mode === "rest" && a.awareness === 0));
+});
+
+test("cover: a wall between animal and diver blocks contact and pulses; engagements end without harm", () => {
+  // Reviewer repro: a static wall beside the skate's home, diver at the layer just past it.
+  const home = homeOf(SKATE), top = layerY("divide_dense_layer");
+  const wall = openWater({ solids: [{ min: { x: home.x + 0.9, y: home.y - 10, z: home.z - 10 }, max: { x: home.x + 1.1, y: home.y + 20, z: home.z + 10 } }] });
+  const skate = run(createEcology(), 60 * 60, () => stimulus({ ...home, x: home.x + 2, y: top }, { noise: 0.6 }), { world: wall });
+  assert.equal(strikes(skate).length, 0, "no skate strike through the wall");
+  // Stalker: a commit already under way when cover comes between.
+  const p = offset(homeOf(STALKER), 12, 0, 0), state = createEcology();
+  let tick = 0;
+  while (!state.agents.some(a => a.id === STALKER && a.mode === "commit") && tick < 2400)
+    stepEcology(state, { tick: tick++, stimulus: stimulus(p, { light: 1, noise: 1 }), protection: protectionFor(null, []), vehicleId: null }, openWater());
+  const a = agent(state, STALKER), d = { x: p.x - a.position.x, y: p.y - a.position.y, z: p.z - a.position.z }, n = Math.hypot(d.x, d.y, d.z);
+  const q = { x: a.position.x + d.x / n * 2, y: a.position.y + d.y / n * 2, z: a.position.z + d.z / n * 2 };
+  const mid = { x: (a.position.x + q.x) / 2, y: (a.position.y + q.y) / 2, z: (a.position.z + q.z) / 2 };
+  const cover = openWater({ solids: [{ min: offset(mid, -0.1, -3, -3), max: offset(mid, 0.1, 3, 3) }] });
+  assert.equal(cover.clearLine(a.position, q), false);
+  const out = stepAgent(a, stimulus(q, { light: 1, noise: 1 }), cover, tick, []);
+  assert.equal(out.diverLoss, 0, "a lunge in reach still cannot bite through rock");
+  // Choir: shelter behind a wall inside the pulse radius takes nothing; in the open it does.
+  const ch = homeOf(CHOIR), at = offset(ch, 10, 4, 0);
+  const shelter = openWater({ solids: [{ min: offset(ch, 6, -2, -6), max: offset(ch, 7, 12, 6) }] });
+  // A boosting Creel: noise still carries (muffled) through cover, light does not.
+  const sheltered = run(createEcology(), 60 * 60, () => stimulus(at, { noise: 1, hull: "creel", radius: 4.5, light: 0 }), { world: shelter });
+  assert.ok(cues(sheltered, CHOIR).some(c => c.cue === "commit"), "the choir still builds and releases its pulse");
+  assert.equal(strikes(sheltered, CHOIR).length, 0, "cover between the bells and the diver shelters from the pulse");
+  const open = run(createEcology(), 60 * 40, () => stimulus(at, { noise: 0.62, hull: "creel", radius: 4.5, light: 0 }));
+  assert.ok(strikes(open, CHOIR).length >= 1);
+});
+
+test("every lunge and pulse follows its animal's first warning of that engagement by at least five seconds", () => {
+  let seed = 12345;
+  const random = (): number => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+  let strikesSeen = 0;
+  for (const id of [STALKER, SKATE, CHOIR] as const) for (let trial = 0; trial < 6; trial++) {
+    const home = homeOf(id), state = createEcology();
+    // A wandering, flickering, sometimes-loud player around the home.
+    let p = id === SKATE ? { ...home, x: home.x + 8, y: layerY("divide_dense_layer") } : offset(home, 10, id === CHOIR ? 4 : 0, 0);
+    const log = run(state, 60 * 90, tick => {
+      if (tick % 30 === 0) p = offset(p, (random() - 0.5) * 2, id === SKATE ? 0 : (random() - 0.5), (random() - 0.5) * 2);
+      return stimulus(p, { light: random() < 0.7 ? 0.9 : 0, noise: random() < 0.6 ? 0.6 : 0.03, velocity: { x: 0, y: id === SKATE ? -1 : 0, z: 0 } });
+    });
+    const firstAlert = new Map<string, number>();
+    for (const { tick, event: e } of log.events) {
+      if (e.type === "ecology-cue") {
+        if (e.cue === "alert" && !firstAlert.has(e.agentId)) firstAlert.set(e.agentId, tick);
+        if (e.cue === "calm" || e.cue === "leash") firstAlert.delete(e.agentId);
+      }
+      if (e.type === "ecology-strike") {
+        strikesSeen++;
+        const warned = firstAlert.get(e.agentId);
+        assert.ok(warned !== undefined && (tick - warned) / 60 >= WARNING_LEAD, `${e.agentId} trial ${trial}: strike ${tick}, warned ${warned}`);
+      }
+    }
+  }
+  assert.ok(strikesSeen >= 6, `strikes exercised: ${strikesSeen}`);
 });

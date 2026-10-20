@@ -1,6 +1,6 @@
 import { THREAT_AGENT_IDS } from "../../content/ecology/species.js";
 import type { Deterrent, Sense } from "../../content/ecology/species.js";
-import { DETERRENT_SECONDS, MAX_DETERRENTS } from "./ecology.js";
+import { DETERRENT_SECONDS, MAX_DETERRENTS, MAX_HULL_EXPOSURES, VEHICLE_ID } from "./ecology.js";
 import { MAX_AWARENESS } from "./agents.js";
 import type { AgentMode, EcologyState, Exposure } from "./types.js";
 
@@ -12,12 +12,17 @@ const KINDS: readonly Deterrent[] = ["acoustic", "lure", "ink"];
 
 type Raw = Record<string, unknown>;
 const record = (x: unknown): x is Raw => typeof x === "object" && x !== null && !Array.isArray(x);
-const keys = (x: Raw, allowed: readonly string[]): boolean => Object.keys(x).length === allowed.length && allowed.every(k => k in x);
+// Own properties only: `__proto__`, `constructor` and other inherited names never count.
+const keys = (x: Raw, allowed: readonly string[]): boolean => Object.keys(x).length === allowed.length && allowed.every(k => Object.hasOwn(x, k));
 const num = (x: unknown, min: number, max: number): x is number => typeof x === "number" && Number.isFinite(x) && x >= min && x <= max;
 const point = (x: unknown): boolean => record(x) && keys(x, ["x", "y", "z"]) && [x.x, x.y, x.z].every(c => num(c, -1e5, 1e5));
-const exposureOk = (x: unknown): x is Exposure => record(x) && keys(x, ["heat", "brine"]) && num(x.heat, 0, 100) && num(x.brine, 0, 100);
+const EXPOSURE_KEYS = ["heat", "brine", "heatWarned", "brineWarned"] as const;
+const loads = (x: Raw): boolean => num(x.heat, 0, 100) && num(x.brine, 0, 100) && num(x.heatWarned, 0, 1e7) && num(x.brineWarned, 0, 1e7);
+const exposureOk = (x: unknown): x is Exposure => record(x) && keys(x, EXPOSURE_KEYS) && loads(x);
 
-export function parseEcology(raw: unknown): EcologyState | string {
+/** `vehicleIds`, when given, is the composed save's fleet: every hull exposure
+ * must belong to a vehicle that exists in the same save. */
+export function parseEcology(raw: unknown, options: { vehicleIds?: readonly string[] } = {}): EcologyState | string {
   if (!record(raw) || !keys(raw, ["agents", "deterrents", "diver", "hulls"])) return "ecology: expected agents, deterrents, diver, hulls";
   const { agents, deterrents, diver, hulls } = raw;
   if (!Array.isArray(agents) || agents.length !== THREAT_AGENT_IDS.length) return "ecology.agents: must list the whole roster";
@@ -38,7 +43,14 @@ export function parseEcology(raw: unknown): EcologyState | string {
         !num(d.seconds, 1e-9, DETERRENT_SECONDS[d.kind as Deterrent]))
       return `ecology.deterrents[${i}]`;
   if (!exposureOk(diver)) return "ecology.diver";
-  if (!record(hulls) || Object.entries(hulls).some(([id, e]) => !/^[a-z0-9_-]{1,64}$/.test(id) || !exposureOk(e))) return "ecology.hulls";
+  if (!Array.isArray(hulls) || hulls.length > MAX_HULL_EXPOSURES) return "ecology.hulls";
+  const seen = new Set<string>(), fleet = options.vehicleIds ? new Set(options.vehicleIds) : null;
+  for (const [i, h] of hulls.entries()) {
+    if (!record(h) || !keys(h, ["id", ...EXPOSURE_KEYS]) || typeof h.id !== "string" || !VEHICLE_ID.test(h.id) || !loads(h) ||
+        seen.has(h.id) || (fleet && !fleet.has(h.id)))
+      return `ecology.hulls[${i}]`;
+    seen.add(h.id);
+  }
   return structuredClone(raw as unknown as EcologyState);
 }
 /** Plain JSON copy; the state already holds only stable IDs and numbers. */

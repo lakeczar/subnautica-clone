@@ -49,7 +49,8 @@ export function createEmberMites(scene: Scene, cel: Material, name: string, lip:
   const parts = creatureParts(scene, cel, name, parent), random = seeded(523);
   const mites: { mesh: Mesh; home: Vec3; out: Vec3; phase: number; glow: Display }[] = [];
   for (let n = 0; n < count; n++) {
-    const a = random() * Math.PI * 2, r = 0.6 + random() * 2.2;
+    // Mites graze the lip ring itself, so a bare lip is the visible cue.
+    const a = random() * Math.PI * 2, r = 3.6 + random() * 0.7;
     const mesh = parts.part(`mite.${n}`, b => {
       b.ellipsoid([0, 0, 0], [0.13, 0.08, 0.18], P.orange, 6);
       b.ellipsoid([0, 0.04, -0.06], [0.08, 0.05, 0.08], P.ochre, 5);

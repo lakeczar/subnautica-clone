@@ -74,7 +74,7 @@ export const THREATS = {
     senses: { layer: { range: 36, weight: 1.6 }, noise: { range: 18, weight: 0.35 } },
     coverPass: 0.5,
     awareness: { alert: 1, investigate: 2.2, commit: 3.6, decay: 0.35 },
-    timing: { alert: 2.5, investigate: 4, commit: 3, withdraw: 7, refractory: 56 },
+    timing: { alert: 2.5, investigate: 4, commit: 3, withdraw: 4, refractory: 56 },
     maxCycles: 1,
     speed: { investigate: 2.2, commit: 8, withdraw: 3.5 },
     territory: 48, standOff: 7, reach: 3.2,
@@ -167,7 +167,8 @@ export const THREAT_AGENT_IDS = Object.keys(THREAT_ROSTER) as ThreatAgentId[];
 
 export interface CueSpawn { readonly species: CueSpeciesId; readonly home: SiteOffset; readonly hazard?: "rift_split_plume" | "basin_sediment_lane"; readonly lane?: readonly SiteOffset[] }
 export const CUE_ROSTER = {
-  rift_mites_lip: { species: "ember_mites", home: at("rift_split_chimney", 8, 3, 2), hazard: "rift_split_plume" },
+  // Centre of the pale chimney lip ring (render/creatures/hazards.ts: radius 3.5–4.4 m at +13.2 m).
+  rift_mites_lip: { species: "ember_mites", home: at("rift_split_chimney", 0, 13.25, 0), hazard: "rift_split_plume" },
   basin_scavengers_ridge: { species: "basin_scavengers", home: at("basin_wreck_ridge", 4, 0, -10), hazard: "basin_sediment_lane" },
   divide_sails_lane: {
     species: "brine_sails", home: at("divide_outer_ledge", 0, 10, 0),

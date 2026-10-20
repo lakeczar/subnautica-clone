@@ -54,8 +54,8 @@ const SCENARIOS: Record<string, Scenario> = {
     player: add(homeOf("district_choir_gallery"), 12, 4, 0), hull: "creel", noise: 0.62, lamp: false, toward: { x: -1, y: 0, z: 0 }, camera: [30, -2.3, 1.25],
   },
   plume: {
-    label: "Ember mites and the split chimney plume", focus: null, look: add(cueHome("rift_mites_lip"), -4, 14, 0),
-    player: add(cueHome("rift_mites_lip"), 30, 8, 10), hull: null, noise: 0.03, lamp: false, toward: { x: -1, y: 0, z: 0 }, start: 60 * 18, camera: [58, -2.0, 1.32],
+    label: "Ember mites and the split chimney plume", focus: null, look: add(cueHome("rift_mites_lip"), 0, 2, 0),
+    player: add(cueHome("rift_mites_lip"), 22, -2, 8), hull: null, noise: 0.03, lamp: false, toward: { x: -1, y: 0, z: 0 }, start: 60 * 18, camera: [26, -2.0, 1.15],
   },
   sails: {
     label: "Brine sails above the mirror layer", focus: null, look: add(homeOf("divide_skate_saddle"), -10, 20, -40),

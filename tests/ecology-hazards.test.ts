@@ -3,17 +3,17 @@ import assert from "node:assert/strict";
 import { EXPOSURE, FIRST_DEPOSITS, HAZARD_FIELDS, PROTECTION, UNPROTECTED } from "../src/content/ecology/hazards.js";
 import type { HazardFieldId, ProtectionId } from "../src/content/ecology/hazards.js";
 import { DETERRENT_KITS } from "../src/content/ecology/equipment.js";
-import { CUE_SPECIES } from "../src/content/ecology/species.js";
 import { sitePosition } from "../src/content/ecology/sites.js";
-import { SOURCES } from "../src/content/registry.js";
-import type { MaterialId } from "../src/content/registry.js";
-import { cycleLevel, driftFrom, pressureBand, pressureWarning, protectionFor, sampleHazards, secondsUntilActive, stepExposure } from "../src/sim/ecology/hazards.js";
+import { HULLS, SOURCES } from "../src/content/registry.js";
+import type { HullId, MaterialId } from "../src/content/registry.js";
+import { cycleLevel, driftFrom, emptyExposure, fieldLevel, pressureBand, pressureWarning, protectionFor, sampleHazards, secondsUntilActive, stepExposure } from "../src/sim/ecology/hazards.js";
 import { miteScatter, sailPositions, scavengerRetreat } from "../src/sim/ecology/cues.js";
 import { layerY } from "../src/sim/ecology/agents.js";
-import { createEcology, stepEcology } from "../src/sim/ecology/ecology.js";
+import { createEcology, resumeEcology, stepEcology } from "../src/sim/ecology/ecology.js";
 import { openWater } from "../src/sim/ecology/adapter.js";
+import { WARNING_LEAD } from "../src/sim/ecology/types.js";
 import type { EcologyEvent, Exposure } from "../src/sim/ecology/types.js";
-import { stimulus } from "./ecology-support.js";
+import { offset, stimulus } from "./ecology-support.js";
 
 const plume = HAZARD_FIELDS.rift_split_plume;
 const chimney = sitePosition(plume.shape.center);
@@ -31,7 +31,7 @@ test("cycled fields follow a deterministic trapezoid keyed to the saved tick", (
 
 /** Steps one exposure load along a path and collects warnings and harm. */
 function expose(path: (i: number) => { p: { x: number; y: number; z: number }; tick: number }, steps: number, fitted: ProtectionId[] = [], hull: null | "mantle" | "dart" = null) {
-  const load: Exposure = { heat: 0, brine: 0 }, events: EcologyEvent[] = [];
+  const load: Exposure = emptyExposure(), events: EcologyEvent[] = [];
   let harm = 0, peak = 0;
   for (let i = 0; i < steps; i++) {
     const { p, tick } = path(i);
@@ -52,7 +52,7 @@ test("a vent warns at 40, 70 and 100 naming the heat shroud before it harms; a s
   // Between vents the same column is at its quiet baseline: no load at all.
   const quiet = expose(i => ({ p: inside, tick: ventTick(1) + (plume.cycle.duration + plume.cycle.ramp + 2) * 60 + i }), 60 * 20);
   assert.equal(quiet.peak, 0);
-  const hullWarn = stepExposure({ heat: 39.99, brine: 0 }, sampleHazards(inside, ventTick(1)), protectionFor("dart", []), false, false);
+  const hullWarn = stepExposure({ ...emptyExposure(), heat: 39.99 }, sampleHazards(inside, ventTick(1)), protectionFor("dart", []), false, false);
   assert.ok(hullWarn.events.some(e => e.type === "hazard-warning" && e.protection.includes("hull_heat_lining")));
 });
 
@@ -107,23 +107,68 @@ test("every protective and deterrent material is reachable before the hazard or 
       assert.ok(tierOf(m) <= 150, `${id}: ${m} reachable from the reef, isles or upper Canopy`);
 });
 
-test("ember mites leave the lip several seconds before every vent; scavengers retreat before every surge", () => {
-  for (let n = 1; n <= 5; n++) {
-    let left: number | null = null;
-    for (let t = ventTick(n) - 60 * 20; t <= ventTick(n); t++) if (left === null && miteScatter(t).scatter >= 0.5) left = t;
-    assert.ok(left !== null && (ventTick(n) - left) / 60 >= CUE_SPECIES.ember_mites.lead - 2, `vent ${n}: ${left}`);
+test("ember mites leave the lip, and scavengers retreat, at least five seconds before each field starts rising", () => {
+  /** First tick at which a field rises above its quiet baseline (its hazardous onset). */
+  const onset = (id: "rift_split_plume" | "basin_sediment_lane", from: number): number => {
+    const base = HAZARD_FIELDS[id].baseline ?? 0;
+    let t = from;
+    while (fieldLevel(id, t) <= base + 1e-9) t++;
+    return t;
+  };
+  for (const [id, cue, period] of [["rift_split_plume", (t: number) => miteScatter(t).scatter, plume.cycle.period],
+    ["basin_sediment_lane", (t: number) => scavengerRetreat(t, null).retreat, HAZARD_FIELDS.basin_sediment_lane.cycle.period]] as const) {
+    let from = 0;
+    for (let n = 0; n < 5; n++) {
+      // Start each search while the field is quiet and the animals are back.
+      while (fieldLevel(id, from) > (HAZARD_FIELDS[id].baseline ?? 0) + 1e-9 || cue(from) > 0) from++;
+      const rise = onset(id, from);
+      let signalled = from;
+      while (cue(signalled) < 0.5) signalled++;
+      assert.ok((rise - signalled) / 60 >= WARNING_LEAD, `${id} cycle ${n}: cue ${((rise - signalled) / 60).toFixed(2)} s before onset`);
+      from = rise + Math.round(period * 30);
+    }
   }
-  const lane = HAZARD_FIELDS.basin_sediment_lane, surge = (n: number): number => Math.round((lane.cycle.start + n * lane.cycle.period) * 60);
-  for (let n = 1; n <= 4; n++) {
-    let hid: number | null = null;
-    for (let t = surge(n) - 60 * 20; t <= surge(n); t++) if (hid === null && scavengerRetreat(t, null).retreat >= 0.5) hid = t;
-    assert.ok(hid !== null && (surge(n) - hid) / 60 >= CUE_SPECIES.basin_scavengers.lead - 2);
-    assert.equal(scavengerRetreat(surge(n) - 60 * 30, null).retreat, 0, "they feed again between surges");
-  }
+  const surge = Math.round((HAZARD_FIELDS.basin_sediment_lane.cycle.start + HAZARD_FIELDS.basin_sediment_lane.cycle.period) * 60);
+  assert.equal(scavengerRetreat(surge - 60 * 30, null).retreat, 0, "they feed again between surges");
   const loudCreel = stimulus(sitePosition({ site: "basin_wreck_ridge", offset: { x: 4, y: 2, z: -6 } }), { hull: "creel", noise: 0.62, radius: 4.5 });
-  assert.equal(scavengerRetreat(surge(1) - 60 * 30, loudCreel).retreat, 1, "loud machinery sends them in too");
+  assert.equal(scavengerRetreat(surge - 60 * 30, loudCreel).retreat, 1, "loud machinery sends them in too");
 });
 
+test("hazard harm always follows an observable warning by at least five seconds: every field, phase, protection and resumed load", () => {
+  type Case = { field: "rift_split_plume" | "rift_warm_passage" | "divide_dense_layer"; at: { x: number; y: number; z: number } };
+  const saddle = sitePosition(HAZARD_FIELDS.divide_dense_layer.shape.center);
+  const cases: Case[] = [
+    { field: "rift_split_plume", at: { ...chimney, y: chimney.y + 20 } },
+    { field: "rift_warm_passage", at: offset(chimney, -26, 6, 0) },
+    { field: "divide_dense_layer", at: { ...saddle, x: saddle.x - 70, y: layerY("divide_dense_layer") - 4 } },
+  ];
+  const actors: [HullId | null, ProtectionId[]][] = [[null, []], [null, ["heat_shroud"]], [null, ["brine_seals"]],
+    ...(Object.keys(HULLS) as HullId[]).map((h): [HullId, ProtectionId[]] => [h, []]), ["dart", ["hull_heat_lining"]]];
+  let checked = 0;
+  for (const c of cases) for (const [hull, fitted] of actors) for (let phase = 0; phase < 4; phase++) for (const resumed of [0, 39, 45, 85, 99.9, 100]) {
+    const state = createEcology(), vehicleId = hull ? "Fleet_Hull-1" : null;
+    if (resumed > 0) {
+      // A save taken mid-exposure, loaded and resumed: its earlier warning is gone.
+      const load = { heat: resumed, brine: resumed, heatWarned: 30, brineWarned: 30 };
+      if (vehicleId) state.hulls.push({ id: vehicleId, ...load }); else state.diver = load;
+      resumeEcology(state);
+    }
+    const start = Math.round(phase / 4 * plume.cycle.period * 60);
+    let firstWarning: number | null = null, firstHarm: number | null = null;
+    for (let i = 0; i < 60 * 25 && firstHarm === null; i++) {
+      const r = stepEcology(state, { tick: start + i, stimulus: stimulus(c.at, { hull, radius: hull ? 3.6 : 0.4, light: 0, noise: 0 }),
+        protection: protectionFor(hull, fitted), vehicleId }, openWater());
+      if (firstWarning === null && r.events.some(e => e.type === "hazard-warning" && e.level >= 40)) firstWarning = i;
+      if (r.effects.diverHealth + r.effects.vehicleHealth > 0) firstHarm = i;
+    }
+    if (firstHarm !== null) {
+      checked++;
+      assert.ok(firstWarning !== null && (firstHarm - firstWarning) / 60 >= WARNING_LEAD - 1e-9,
+        `${c.field} ${hull ?? "diver"} ${fitted.join("+")} phase ${phase} resumed ${resumed}: warning ${firstWarning}, harm ${firstHarm}`);
+    }
+  }
+  assert.ok(checked > 20, `harmful cases exercised: ${checked}`);
+});
 test("brine sails mark a calm lane well above the layer", () => {
   const top = layerY("divide_dense_layer");
   for (let t = 0; t < 60 * 600; t += 120)
@@ -163,7 +208,7 @@ test("stepEcology reports field exposure, harm, drift and visibility for the con
   assert.ok(harm > 0 && state.diver.heat === 100);
   // Boarding a craft: the diver's load recovers while the hull takes exposure.
   const r = stepEcology(state, { tick: ventTick(1) + 720, stimulus: stimulus(inside, { hull: "dart", radius: 3.6, light: 0, noise: 0 }), protection: protectionFor("dart", []), vehicleId: "dart-1" }, openWater());
-  assert.ok(state.diver.heat < 100 && state.hulls["dart-1"]!.heat > 0 && r.effects.diverHealth === 0);
+  assert.ok(state.diver.heat < 100 && state.hulls.find(h => h.id === "dart-1")!.heat > 0 && r.effects.diverHealth === 0);
   const lane = sitePosition(HAZARD_FIELDS.basin_sediment_lane.shape.center);
   const surging = stepEcology(createEcology(), { tick: Math.round(HAZARD_FIELDS.basin_sediment_lane.cycle.start * 60 + 120), stimulus: stimulus(lane, { light: 0, noise: 0 }), protection: protectionFor(null, []), vehicleId: null }, openWater());
   assert.ok(surging.effects.visibility < 0.5 && surging.effects.drift.z > 0);

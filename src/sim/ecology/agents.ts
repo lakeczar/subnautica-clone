@@ -18,6 +18,8 @@ export const ACTIVATION_HYSTERESIS = 30;
 export const speciesOf = (id: ThreatAgentId): ThreatSpeciesId => THREAT_ROSTER[id].species;
 export const definitionOf = (id: ThreatAgentId): ThreatDefinition => THREATS[speciesOf(id)];
 export const homeOf = (id: ThreatAgentId): Vec3 => sitePosition(THREAT_ROSTER[id].home);
+/** Centre of the choir's pressure shell, matching the rendered pulse. */
+export const pulseOrigin = (id: ThreatAgentId): Vec3 => { const h = homeOf(id); return { x: h.x, y: h.y + 2, z: h.z }; };
 export function restingAgent(id: ThreatAgentId): AgentState {
   return { id, mode: "rest", position: homeOf(id), yaw: 0, awareness: 0, modeSeconds: 0, cycles: 0, refractory: 0, cue: null, struck: false };
 }
@@ -93,7 +95,7 @@ export function perceive(agent: AgentState, s: Stimulus, world: EcologyWorld, ti
     const band = clamp01(1 - Math.abs(s.position.y - layerY(def.habitat.field)) / 6);
     const f = clamp01(1 - Math.hypot(agent.position.x - s.position.x, agent.position.z - s.position.z) / senses.layer.range);
     const stir = clamp01(Math.abs(s.velocity.y) * 0.5 + Math.hypot(s.velocity.x, s.velocity.z) * 0.12 + s.noise * 0.5);
-    if (band * f * stir > 0) cues.push(["layer", senses.layer.weight * band * f * stir]);
+    if (band * f * stir > 0) cues.push(["layer", senses.layer.weight * band * f * stir * (line() ? 1 : def.coverPass)]);
   }
   let rate = 0, dominant: Sense | null = null, best = 0;
   for (const [sense, value] of cues) {
@@ -195,11 +197,14 @@ export function stepAgent(agent: AgentState, s: Stimulus, world: EcologyWorld, t
       break;
     case "commit": {
       if (def.strike.kind === "pulse") {
+        // Cover rule for the pressure pulse: it radiates from the bells and
+        // solid cover between them and the player shelters completely.
         if (agent.modeSeconds >= def.timing.commit) {
-          if (distance(home, s.position) <= def.reach + s.radius) strike(agent, def, s, out);
+          if (distance(home, s.position) <= def.reach + s.radius && world.clearLine(pulseOrigin(agent.id), s.position)) strike(agent, def, s, out);
           change("withdraw", "withdraw", def.captions.withdraw);
         }
-      } else if (!agent.struck && distance(agent.position, s.position) <= def.reach + s.radius) {
+      } else if (!agent.struck && distance(agent.position, s.position) <= def.reach + s.radius && world.clearLine(agent.position, s.position)) {
+        // Contact needs an open path: a lunge never reaches through rock.
         strike(agent, def, s, out);
         change("withdraw", "withdraw", def.captions.withdraw);
       } else if (agent.modeSeconds >= def.timing.commit) change("withdraw", "withdraw", def.captions.withdraw);
