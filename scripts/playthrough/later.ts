@@ -648,8 +648,12 @@ const carrierDeep: Phase = {
     ...sites("divide.lee_mooring", "isles.stack_yard"),
   ],
   play(d) {
+    // A long carrier phase (C3): eat, then carry meals; eat() reaches the diver hold and the galley aboard.
+    enter(d, "workshop");
+    eatIfHungry(d, 70);
+    procure(d, { meal: 4 }, "workshop", ISLES);
+    carry(d, { meal: 4 });
     boardCraft(d, "hearthline");
-    // A long carrier phase: eat from the galley pantry between legs (C3: eat() reaches it aboard).
     for (const id of ["route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide"]) { eatIfHungry(d); followS2(d, id); }
     // Lattice: Hearthline 550 L6, Mantle L5, suit 800 L4, air assembly L2. S2's ledge
     // routes are medium-profile; the carrier flies swept local legs from the lee mooring
