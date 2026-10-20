@@ -2,7 +2,7 @@
  * views. Content lives in src/content/systems/*. See docs/build/streams/SYS-2.md. */
 export { createSystems, validSystems } from "./state.js";
 export type { BeaconState, DecodeJob, OutpostState, PackedKit, PlanterState, PowerSource, SocketEntry, SystemsState } from "./state.js";
-export { accessible, carrierHost, carrierHostId, carrierOccupants, hostById, hostLocal, hostServices, installModule, listHosts,
+export { accessible, carrierHost, carrierHostId, carrierOccupants, forgetRemembered, hostById, hostLocal, hostServices, installModule, listHosts,
   locationPower, removeModule, workContainers } from "./hosts.js";
 export type { HostKind, HostPower, SocketHost, SocketSlot } from "./hosts.js";
 export { conservedTotals, deployOutpost, deployPreview, outpostLimit, packOutpost, packPreview, renameOutpost, siteProblem, sitePower,
@@ -19,3 +19,4 @@ export { buildJournal, searchJournal } from "./journal.js";
 export type { CreatureEntry, CycleEntry, FieldJournal, JournalEntry, JournalTab } from "./journal.js";
 export { advanceSystems } from "./step.js";
 export type { SystemsEvent } from "./step.js";
+export { incapacitateKeepingInstances, instanceProblems, retainsIdentity } from "./instances.js";

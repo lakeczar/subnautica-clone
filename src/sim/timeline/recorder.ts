@@ -13,6 +13,9 @@ export const TIMELINE_STORAGE_KEY = "siltwake.timeline.v1";
 export const TIMELINE_EVENT_CAP = 20_000;
 export const NOTE_MAX = 500;
 const STEPS = 60;
+/** A craft moving slower than this (m/s) is stationary at the helm, not travelling. */
+export const TRAVEL_MIN_SPEED = 0.5;
+const BREAKS: readonly string[] = ["new", "gather", "poi"];
 
 export interface RecorderOptions {
   /** No input for this long makes the rest idle waiting. Reading and looking
@@ -39,7 +42,12 @@ export interface TimelineRecorder {
   idleTicks: number;
   lastInputTick: number;
   idle: { tick: number; play: number; waiting: Set<string> } | null;
-  travel: { tick: number; play: number; playTicks: number; metres: number; hull: string; vehicleId: string; last: { x: number; y: number; z: number } } | null;
+  /** One piloting session. Its open `piece` is motion since the last point of
+   * interest; stationary helm time is kept apart and never counts as travel. */
+  travel: {
+    hull: string; vehicleId: string; last: { x: number; y: number; z: number };
+    piece: { tick: number; play: number; movingTicks: number; stationaryTicks: number; metres: number } | null;
+  } | null;
   deathPlay: number | null;
   region: string | null;
   regions: string[];
@@ -61,6 +69,8 @@ export function resumeRecorder(t: TimelineExport, options: RecorderOptions = {})
   rec.dropped = t.dropped;
   rec.playTicks = Math.round(t.session.end.play * STEPS);
   rec.idleTicks = Math.round(t.session.end.idle * STEPS);
+  // An unrecovered death keeps timing across the reload.
+  for (const e of t.events) rec.deathPlay = e.kind === "death" ? e.play : e.kind === "recovery" ? null : rec.deathPlay;
   rec.regions = [...new Set(t.events.filter((e) => (e.kind === "new" && e.what === "region") || e.kind === "region").map((e) => e.id ?? ""))];
   return rec;
 }
@@ -71,6 +81,8 @@ const at = (s: GameState): [number, number, number] => {
   return [Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.round(p.z * 10) / 10];
 };
 function push(rec: TimelineRecorder, e: TimelineEvent): void {
+  // A point of interest ends the current stretch of travel.
+  if (BREAKS.includes(e.kind)) closePiece(rec);
   if (rec.events.length >= TIMELINE_EVENT_CAP) { rec.dropped++; return; }
   rec.events.push(e);
 }
@@ -98,12 +110,17 @@ export function addNote(rec: TimelineRecorder, s: GameState, text: string, wall?
   return null;
 }
 
+function closePiece(rec: TimelineRecorder): void {
+  const t = rec.travel, p = t?.piece;
+  if (!t || !p) return;
+  t.piece = null;
+  const seconds = p.movingTicks / STEPS;
+  if (seconds >= 0.5) push(rec, { kind: "travel", tick: p.tick, play: p.play, seconds, stationary: p.stationaryTicks / STEPS,
+    metres: Math.round(p.metres), hull: t.hull, id: t.vehicleId, region: rec.region });
+}
 function closeTravel(rec: TimelineRecorder): void {
-  const t = rec.travel;
+  closePiece(rec);
   rec.travel = null;
-  if (!t) return;
-  const seconds = (rec.playTicks - t.playTicks) / STEPS;
-  if (seconds >= 0.5) push(rec, { kind: "travel", tick: t.tick, play: t.play, seconds, metres: Math.round(t.metres), hull: t.hull, id: t.vehicleId, region: rec.region });
 }
 function closeIdle(rec: TimelineRecorder, s: GameState): void {
   const i = rec.idle;
@@ -139,15 +156,20 @@ export function observe(rec: TimelineRecorder, s: GameState, ctx: ObserveContext
     }
   }
 
-  // Craft travel: continuous piloting while not idle.
+  // Craft travel: only steps where the piloted craft actually moves count.
   const v = s.player.controlledVehicleId ? s.fleet.vehicles.find((x) => x.id === s.player.controlledVehicleId) : null;
   if (rec.travel && (!v || v.id !== rec.travel.vehicleId || rec.idle)) closeTravel(rec);
   if (v && !rec.idle) {
     const p = v.pose.position;
-    if (!rec.travel) rec.travel = { tick: s.tick, play: play(rec), playTicks: rec.playTicks, metres: 0, hull: v.hull, vehicleId: v.id, last: { ...p } };
+    if (!rec.travel) rec.travel = { hull: v.hull, vehicleId: v.id, last: { ...p }, piece: null };
     else {
-      rec.travel.metres += Math.hypot(p.x - rec.travel.last.x, p.y - rec.travel.last.y, p.z - rec.travel.last.z);
-      rec.travel.last = { ...p };
+      const t = rec.travel, d = Math.hypot(p.x - t.last.x, p.y - t.last.y, p.z - t.last.z);
+      t.last = { ...p };
+      if (d >= TRAVEL_MIN_SPEED / STEPS) {
+        t.piece ??= { tick: s.tick, play: play(rec), movingTicks: 0, stationaryTicks: 0, metres: 0 };
+        t.piece.movingTicks++;
+        t.piece.metres += d;
+      } else if (t.piece) t.piece.stationaryTicks++;
     }
   }
 
@@ -197,7 +219,7 @@ export function recordSystemsEvents(rec: TimelineRecorder, s: GameState, events:
 
 /** A detached export with any open travel or idle span closed as of now. */
 export function exportTimeline(rec: TimelineRecorder, s: GameState): TimelineExport {
-  const copy: TimelineRecorder = { ...rec, events: [...rec.events], travel: rec.travel && { ...rec.travel }, idle: rec.idle && { ...rec.idle, waiting: new Set(rec.idle.waiting) } };
+  const copy: TimelineRecorder = { ...rec, events: [...rec.events], travel: rec.travel && { ...rec.travel, piece: rec.travel.piece && { ...rec.travel.piece } }, idle: rec.idle && { ...rec.idle, waiting: new Set(rec.idle.waiting) } };
   closeTravel(copy);
   closeIdle(copy, s);
   return {

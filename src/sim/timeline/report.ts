@@ -21,8 +21,10 @@ export interface TimelineEvent {
   quantity?: number;
   at?: [number, number, number];
   region?: string | null;
-  /** Span length (travel: play seconds; idle: idle seconds) or recovery time. */
+  /** Span length (travel: seconds in motion; idle: idle seconds) or recovery time. */
   seconds?: number;
+  /** Travel only: stationary helm seconds inside the piece, not counted as travel. */
+  stationary?: number;
   metres?: number;
   hull?: string;
   /** Idle only: background work that was running (decode, growth, ...). */
@@ -55,7 +57,7 @@ export function parseTimeline(text: string): { ok: true; value: TimelineExport }
   if (!Array.isArray(v.events) || !num(v.dropped)) return { ok: false, error: "Malformed events." };
   for (const [n, e] of v.events.entries())
     if (!obj(e) || typeof e.kind !== "string" || !KINDS.includes(e.kind) || !num(e.tick) || !num(e.play) ||
-      (e.seconds !== undefined && !num(e.seconds)) || (e.at !== undefined && !(Array.isArray(e.at) && e.at.length === 3 && e.at.every(num))))
+      (e.seconds !== undefined && !num(e.seconds)) || (e.stationary !== undefined && !num(e.stationary)) || (e.at !== undefined && !(Array.isArray(e.at) && e.at.length === 3 && e.at.every(num))))
       return { ok: false, error: `Malformed event ${n}.` };
   return { ok: true, value: v as unknown as TimelineExport };
 }
@@ -80,7 +82,7 @@ export interface TimelineAnalysis {
   newByKind: Record<string, number>;
   gaps: Gap[];
   longestGapMinutes: number;
-  travel: { count: number; minutes: number; byHull: Record<string, number>; emptyStretches: TravelStretch[] };
+  travel: { count: number; minutes: number; stationaryMinutes: number; byHull: Record<string, number>; emptyStretches: TravelStretch[] };
   idle: { count: number; minutes: number; waitingMinutes: number; longest: IdleStretch | null; listed: IdleStretch[] };
   gathering: { count: number; byItem: Record<string, number> };
   deaths: { count: number; recoverySeconds: number[]; unrecovered: number };
@@ -115,7 +117,9 @@ export function analyseTimeline(t: TimelineExport, thresholds: ReportThresholds 
   for (const tr of travels) {
     const seconds = tr.seconds ?? 0, hull = tr.hull ?? "craft";
     byHull[hull] = (byHull[hull] ?? 0) + seconds / 60;
-    const inside = breaks.filter((b) => b > tr.play && b < tr.play + seconds);
+    // The recorder already ends a piece at each point of interest and counts only
+    // motion; older producers' spans are split here instead.
+    const inside = tr.stationary !== undefined ? [] : breaks.filter((b) => b > tr.play && b < tr.play + seconds);
     let start = tr.play;
     for (const b of [...inside, tr.play + seconds]) {
       if (b - start > 0) emptyStretches.push({ play: start, seconds: b - start, hull, region: tr.region ?? null, flagged: b - start > thresholds.emptyTravelSeconds });
@@ -138,7 +142,8 @@ export function analyseTimeline(t: TimelineExport, thresholds: ReportThresholds 
     newByKind,
     gaps,
     longestGapMinutes: Math.max(0, ...gaps.map((g) => g.minutes)),
-    travel: { count: travels.length, minutes: travels.reduce((n, e) => n + (e.seconds ?? 0), 0) / 60, byHull,
+    travel: { count: travels.length, minutes: travels.reduce((n, e) => n + (e.seconds ?? 0), 0) / 60,
+      stationaryMinutes: travels.reduce((n, e) => n + (e.stationary ?? 0), 0) / 60, byHull,
       emptyStretches: emptyStretches.filter((s) => s.flagged).sort((a, b) => b.seconds - a.seconds) },
     idle: {
       count: idles.length, minutes: idles.reduce((n, i) => n + i.seconds, 0) / 60,
@@ -167,7 +172,7 @@ export function formatTimelineReport(a: TimelineAnalysis, thresholds: ReportThre
   const flagged = a.gaps.filter((g) => g.flagged);
   out.push("", `Gaps between new things (target ≤ ${thresholds.newGapMinutes} min): longest ${a.longestGapMinutes.toFixed(1)} min, ${flagged.length} over target`);
   for (const g of flagged) out.push(`  ${clock(g.fromPlay)} → ${clock(g.toPlay)}  ${g.minutes.toFixed(1)} min  after ${g.before}, before ${g.after}`);
-  out.push("", `Travel by craft: ${a.travel.count} legs, ${a.travel.minutes.toFixed(1)} min (${Object.entries(a.travel.byHull).map(([h, m]) => `${h} ${m.toFixed(1)}`).join(", ") || "none"})`);
+  out.push("", `Travel by craft: ${a.travel.count} stretches, ${a.travel.minutes.toFixed(1)} min in motion, ${a.travel.stationaryMinutes.toFixed(1)} min stationary at the helm (${Object.entries(a.travel.byHull).map(([h, m]) => `${h} ${m.toFixed(1)}`).join(", ") || "none"})`);
   out.push(`Empty travel over ${thresholds.emptyTravelSeconds} s: ${a.travel.emptyStretches.length}`);
   for (const s of a.travel.emptyStretches) out.push(`  ${clock(s.play)}  ${Math.round(s.seconds)} s  ${s.hull}${s.region ? ` · ${s.region}` : ""}`);
   out.push("", `Idle waiting: ${a.idle.count} stretches, ${a.idle.minutes.toFixed(1)} min, ${a.idle.waitingMinutes.toFixed(1)} min with background work running`);

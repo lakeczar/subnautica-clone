@@ -6,9 +6,10 @@ import { HEARTHLINE_SOCKETS } from "../src/content/fleet/hearthlineInterior.js";
 import { SEEDS } from "../src/content/systems/cultivation.js";
 import { MODULE_KINDS, MODULES, OUTPOST_TIER_ORDER, OUTPOST_TIERS } from "../src/content/systems/hosts.js";
 import { SYS2_BLUEPRINTS, SYS2_ITEMS, SYS2_RECIPES, SYS2_SOURCES, SYS2_TECH_RECORDS } from "../src/content/systems/items.js";
-import { carrierHost, carrierHostId, carrierOccupants, installModule, listHosts } from "../src/sim/systems/hosts.js";
+import { carrierHost, carrierHostId, carrierOccupants, installModule, listHosts, removeModule } from "../src/sim/systems/hosts.js";
 import { createSystems, validSystems } from "../src/sim/systems/state.js";
 import { makeVehicle } from "../src/sim/state.js";
+import { carrierInteriorSolids, fixtureGame } from "../src/sim/carrier.js";
 import { give, opened } from "./systems-support.js";
 
 test("proposed IDs don't collide with the registry and every reference resolves", () => {
@@ -95,4 +96,32 @@ test("validSystems accepts fresh and populated state and rejects malformed rows"
     { ...ok, categoriesOff: ["nope"] },
   ];
   for (const [n, v] of bad.entries()) assert.equal(validSystems(v), false, `case ${n}`);
+});
+
+test("carrier sockets stay in step: install → remove → reinstall updates docking.sockets and the interior solids; seeded fittings stay", () => {
+  const s = fixtureGame(), sys = createSystems(), h = s.fleet.vehicles.find((v) => v.hull === "hearthline")!;
+  s.player.interiorId = h.id;
+  s.player.controlledVehicleId = null;
+  const hostId = carrierHostId(h.id), socket = "hl.socket.fab.bench.1", decoder = give(s, "mod_decoder");
+  const solid = () => carrierInteriorSolids(s).some((x) => x.id === socket);
+  const sync = () => Object.assign(s.fleet.docking!.sockets, carrierOccupants(sys, h.id));
+  assert.equal(s.fleet.docking!.sockets[socket], null);
+  assert.equal(solid(), false);
+  assert.equal(installModule(s, sys, hostId, socket, decoder), null);
+  assert.equal(s.fleet.docking!.sockets[socket], "sample_analyser");
+  assert.equal(solid(), true);
+  sync();
+  assert.equal(removeModule(s, sys, hostId, socket), null);
+  sync();
+  assert.equal(s.fleet.docking!.sockets[socket], null, "a removal clears exactly the slot it filled");
+  assert.equal(solid(), false);
+  assert.equal(carrierHost(s, sys, h).sockets.find((k) => k.id === socket)!.occupant, null);
+  assert.equal(installModule(s, sys, hostId, socket, decoder), null, "reinstall works");
+  assert.equal(solid(), true);
+  // The fixture's seeded planter is a fitting without an item: it stays and refuses installs.
+  const planter = give(s, "mod_planter");
+  assert.match(installModule(s, sys, hostId, "hl.socket.galley.planter", planter) ?? "", /already holds the galley planter/);
+  assert.match(removeModule(s, sys, hostId, "hl.socket.galley.planter") ?? "", /belongs to the carrier fit-out/);
+  sync();
+  assert.equal(s.fleet.docking!.sockets["hl.socket.galley.planter"], "galley_planter");
 });

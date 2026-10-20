@@ -4,6 +4,8 @@ import { OUTPOST_TIERS } from "../src/content/systems/hosts.js";
 import { decodeViews, discoverSite, startDecode } from "../src/sim/systems/decoder.js";
 import { harvest, plant } from "../src/sim/systems/cultivation.js";
 import { hostById, installModule, moduleLockerId, outpostLockerId, removeModule } from "../src/sim/systems/hosts.js";
+import { usedCu } from "../src/sim/systems/ledger.js";
+import { validSystems } from "../src/sim/systems/state.js";
 import { conservedTotals, deployOutpost, deployPreview, packOutpost, packPreview, sitePower, upgradeOutpost, upgradePreview } from "../src/sim/systems/outposts.js";
 import { advanceSystems } from "../src/sim/systems/step.js";
 import type { GameState, Vec3 } from "../src/sim/types.js";
@@ -202,7 +204,8 @@ test("ADVERSE: packing mid-decode, mid-growth with a full locker loses and dupli
   // A cell-powered outpost: the charged reserve cell in its locker runs the decoder.
   give(s, "reserve_cell", 1, outpostLockerId(id));
   give(s, "structural_alloy", 3, outpostLockerId(id));
-  give(s, "meal", 2, outpostLockerId(id));
+  give(s, "meal", 24, outpostLockerId(id));
+  assert.equal(usedCu(s, outpostLockerId(id)), OUTPOST_TIERS.standard.lockerCu, "the locker is genuinely full");
   give(s, "seed_ribbon_fan", 1);
   assert.equal(plant(s, sys, id, "s1", "seed_ribbon_fan"), null);
   discoverSite(sys, "demo_relay_hut");
@@ -218,7 +221,7 @@ test("ADVERSE: packing mid-decode, mid-growth with a full locker loses and dupli
   give(s, "flex_membrane", 1);
   // Not enough room: refused with the numbers, nothing changes.
   before = snapshot(s, sys);
-  assert.match(packOutpost(s, sys, id) ?? "", /2 modules and the locker contents need 22 CU in diver hold; it has 16 free/);
+  assert.match(packOutpost(s, sys, id) ?? "", /2 modules and the locker contents need 44 CU in diver hold; it has 16 free/);
   assert.equal(snapshot(s, sys), before);
 
   diverCapacity(s, 64);
@@ -226,7 +229,7 @@ test("ADVERSE: packing mid-decode, mid-growth with a full locker loses and dupli
   const p = packPreview(s, sys, id);
   assert.equal(p.refusal, null);
   assert.deepEqual(p.loss.map((l) => [l.kind, l.quantity, l.from]), [["structural_alloy", 1, outpostLockerId(id)], ["flex_membrane", 1, "diver"]]);
-  assert.deepEqual(p.locker.map((m) => [m.kind, m.quantity]).sort(), [["meal", 2], ["reserve_cell", 1], ["structural_alloy", 2]]);
+  assert.deepEqual(p.locker.map((m) => [m.kind, m.quantity]).sort(), [["meal", 24], ["reserve_cell", 1], ["structural_alloy", 2]]);
   assert.deepEqual(p.work, [
     'Decode "Relay hut fragment" at 55% pauses and travels with its decoder module. It resumes when the module is socketed again.',
     "The ribbon fan crop at 23% stops growing while packed and carries on when the planter is socketed again.",
@@ -295,4 +298,58 @@ test("a redeploy with a remembered module left behind lists it and still deploys
   assert.equal(deployOutpost(s, sys, id, SPOTS.b, world), null);
   assert.equal(hostById(s, sys, id)!.sockets[0]!.occupant, null);
   assert.match(s.feedback, /remembered module isn't in your hold/);
+});
+
+test("packed layouts are semantic: duplicates, foreign sockets and shared kit IDs are invalid, and a tampered refit is refused untouched", () => {
+  const { s, sys } = opened();
+  diverCapacity(s, 40);
+  s.knowledge.blueprints.push("bp_outpost_standard" as never);
+  const id = deployAt(s, sys, SPOTS.a, "outpost_kit_standard");
+  const decoder = give(s, "mod_decoder");
+  installModule(s, sys, id, "s0", decoder);
+  give(s, "structural_alloy", 1);
+  give(s, "flex_membrane", 1);
+  assert.equal(packOutpost(s, sys, id), null);
+  assert.ok(validSystems(sys));
+  const layouts: [string, { socket: string; itemId: string }[]][] = [
+    ["a module is listed twice", [{ socket: "s0", itemId: decoder }, { socket: "s1", itemId: decoder }]],
+    ["a socket is listed twice", [{ socket: "s0", itemId: decoder }, { socket: "s0", itemId: "item_99" }]],
+    ["a socket isn't on this tier", [{ socket: "s3", itemId: decoder }]],
+    ["a socket isn't on this tier", [{ socket: "bridge", itemId: decoder }]],
+  ];
+  swimTo(s, SPOTS.b);
+  for (const [why, layout] of layouts) {
+    const imported = structuredClone(sys);
+    imported.packed[0]!.layout = layout;
+    assert.equal(validSystems(imported), false, why);
+    const before = snapshot(s, imported);
+    assert.equal(deployOutpost(s, imported, id, SPOTS.b, world), `This kit's remembered layout is inconsistent (${why}). Nothing deployed.`);
+    assert.equal(snapshot(s, imported), before);
+  }
+  assert.equal(validSystems({ ...sys, outposts: [{ id, tier: "basic", name: "Twin", position: SPOTS.c, region: null, power: "cells" }] }), false, "a kit and an outpost share an ID");
+  assert.equal(validSystems({ ...sys, sockets: [{ hostId: id, socket: "s0", itemId: "item_77", kind: "mod_relay" }] }), false, "a socket entry on a host that isn't deployed");
+  assert.equal(validSystems({ ...sys, sockets: [{ hostId: "home_pod", socket: "s0", itemId: decoder, kind: "mod_decoder" }] }), false, "remembered while installed");
+  assert.equal(validSystems({ ...sys, sockets: [{ hostId: "home_pod", socket: "s5", itemId: "item_77", kind: "mod_relay" }] }), false, "the pod has two sockets");
+  // The valid layout refits exactly once.
+  assert.equal(deployOutpost(s, sys, id, SPOTS.b, world), null);
+  assert.equal(conservedTotals(s, sys).mod_decoder, 1);
+  assert.ok(validSystems(sys));
+});
+
+test("installing a remembered module elsewhere drops it from the packed layout, so two places never claim it", () => {
+  const { s, sys } = opened();
+  diverCapacity(s, 40);
+  const id = deployAt(s, sys, SPOTS.a);
+  const decoder = give(s, "mod_decoder");
+  installModule(s, sys, id, "s0", decoder);
+  give(s, "structural_alloy", 1);
+  packOutpost(s, sys, id);
+  const other = deployAt(s, sys, SPOTS.c);
+  assert.equal(installModule(s, sys, other, "s0", decoder), null);
+  assert.deepEqual(sys.packed[0]!.layout, []);
+  assert.ok(validSystems(sys));
+  swimTo(s, SPOTS.b);
+  assert.equal(deployOutpost(s, sys, id, SPOTS.b, world), null);
+  assert.equal(conservedTotals(s, sys).mod_decoder, 1);
+  assert.equal(hostById(s, sys, other)!.sockets[0]!.occupant?.itemId, decoder);
 });

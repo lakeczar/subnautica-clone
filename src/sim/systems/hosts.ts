@@ -165,10 +165,18 @@ export function installModule(s: GameState, sys: SystemsState, hostId: string, s
   if (item.containerId === moduleLockerId(item.id)) return "A locker module can't hold itself.";
   s.inventory.items = s.inventory.items.filter((i) => i !== item);
   sys.sockets.push({ hostId, socket: socketId, itemId, kind: item.kind });
+  forgetRemembered(sys, itemId);
+  syncCarrierSocket(s, host, socketId, carrierOccupantName(socketId, module));
   if (module === "locker" && !s.inventory.containers.some((c) => c.id === moduleLockerId(itemId)))
     s.inventory.containers.push({ id: moduleLockerId(itemId), kind: "locker", capacity: MODULES.locker.lockerCu, ownerId: itemId });
   s.feedback = `${MODULES[module].label} installed at ${host.label}.`;
   return null;
+}
+
+/** An installed module leaves every packed kit's remembered layout, so no two
+ * places can claim it. */
+export function forgetRemembered(sys: SystemsState, itemId: string): void {
+  for (const p of sys.packed) p.layout = p.layout.filter((l) => l.itemId !== itemId);
 }
 
 /** Removes a module to `to` (default the diver hold). Its running work pauses and
@@ -184,18 +192,30 @@ export function removeModule(s: GameState, sys: SystemsState, hostId: string, so
     return "Choose a reachable container for the module.";
   if (freeCu(s, to) < cuOf(entry.kind)) return `${containerLabel(s, to)} needs ${cuOf(entry.kind)} CU free for the module. Nothing removed.`;
   sys.sockets = sys.sockets.filter((e) => e !== entry);
+  syncCarrierSocket(s, at.host, socketId, null);
   restoreInstance(s, entry.itemId, entry.kind, to);
   s.feedback = `${labelOf(entry.kind)} removed to ${containerLabel(s, to)}.`;
   return null;
 }
 
-/** CarrierState.sockets occupants for the modules SYS-2 installed in the
- * Hearthline, so its interior solids stay in step. Furniture is left alone. */
+/** The Hearthline occupant name a module takes in one of its sockets. */
+function carrierOccupantName(socketId: string, module: ModuleKind): string | null {
+  return HEARTHLINE_SOCKETS.find((k) => k.id === socketId)?.accepts.find((a) => CARRIER_OCCUPANTS[a] === module) ?? null;
+}
+/** Install and remove write through to CarrierState.sockets, so the interior
+ * solids follow at once and a removal clears exactly the slot it filled. Seeded
+ * fittings are never touched: a socket they occupy refuses installs. */
+function syncCarrierSocket(s: GameState, host: SocketHost, socketId: string, occupant: string | null): void {
+  const d = s.fleet.docking;
+  if (host.kind === "carrier" && d && carrierHostId(d.vehicleId) === host.id && Object.hasOwn(d.sockets, socketId)) d.sockets[socketId] = occupant;
+}
+/** CarrierState.sockets entries the installed SYS-2 modules imply. Install and
+ * remove already keep `docking.sockets` in step; this view is for validation,
+ * and merging it is idempotent. */
 export function carrierOccupants(sys: SystemsState, vehicleId: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const e of sys.sockets.filter((e) => e.hostId === carrierHostId(vehicleId))) {
-    const module = moduleOfItem(e.kind), socket = HEARTHLINE_SOCKETS.find((k) => k.id === e.socket);
-    const name = socket?.accepts.find((a) => CARRIER_OCCUPANTS[a] === module);
+    const module = moduleOfItem(e.kind), name = module && carrierOccupantName(e.socket, module);
     if (name) out[e.socket] = name;
   }
   return out;

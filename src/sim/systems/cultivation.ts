@@ -69,10 +69,17 @@ export function harvestPreview(s: GameState, sys: SystemsState, hostId: string, 
   const seed = SEEDS[crop.seed];
   if (!cropReady(crop)) return empty(`${seed.label} is ${Math.floor(100 * crop.progress / seed.growSeconds)}% grown.`);
   const need = cuOf(seed.produce) * seed.quantity + (replant ? 0 : cuOf(crop.seed));
-  const fits = (c: string): boolean => accessible(s, sys, c) && accepts(s, c, seed.produce) && freeCu(s, c) >= need;
+  // Both outputs land together, so the destination must take both: a pantry
+  // takes meals but not the cutting that grew them.
+  const fits = (c: string): boolean => accessible(s, sys, c) && accepts(s, c, seed.produce) &&
+    (replant || accepts(s, c, crop.seed)) && freeCu(s, c) >= need;
   const to = options.to !== undefined ? (fits(options.to) ? options.to : null)
     : [...at.lockers, "diver"].find((c) => s.inventory.containers.some((k) => k.id === c) && fits(c)) ?? null;
-  if (!to) return { ...empty(`The harvest needs ${need} CU free${options.to ? ` in ${containerLabel(s, options.to)}` : " in a locker here or your hold"}. Nothing harvested.`), produce: seed.produce, quantity: seed.quantity };
+  if (!to) {
+    const refused = options.to !== undefined && accessible(s, sys, options.to) && [seed.produce, ...(replant ? [] : [crop.seed])].find((k) => !accepts(s, options.to!, k));
+    return { ...empty(refused ? `${containerLabel(s, options.to!)} doesn't take ${labelOf(refused).toLowerCase()}. Harvest elsewhere, or replant the cutting. Nothing harvested.`
+      : `The harvest needs ${need} CU free${options.to ? ` in ${containerLabel(s, options.to)}` : " in a locker here or your hold"}. Nothing harvested.`), produce: seed.produce, quantity: seed.quantity };
+  }
   return { refusal: null, produce: seed.produce, quantity: seed.quantity, to, cutting: replant ? "replanted" : "returned" };
 }
 export function harvest(s: GameState, sys: SystemsState, hostId: string, socketId: string,

@@ -8,9 +8,10 @@ import { FIXED_HOSTS, moduleOfItem, OUTPOST_LIMIT, OUTPOST_SITING, OUTPOST_TIER_
 import type { OutpostTier } from "../../content/systems/hosts.js";
 import { containerLabel, distance } from "../inventory.js";
 import type { GameState, Vec3 } from "../types.js";
-import { accessible, outpostHost, outpostLockerId, workContainers } from "./hosts.js";
+import { accessible, forgetRemembered, outpostHost, outpostLockerId, workContainers } from "./hosts.js";
 import { accepts, applySpend, costText, cuOf, freeCu, labelOf, planSpend, restoreInstance } from "./ledger.js";
 import type { SpendLine } from "./ledger.js";
+import { layoutProblem } from "./state.js";
 import type { OutpostState, PowerSource, SystemsState } from "./state.js";
 
 export type Ground = "ledge" | "cave_floor" | "seabed" | "slope" | "structure" | "open_water";
@@ -83,11 +84,15 @@ export function deployPreview(s: GameState, sys: SystemsState, kitItemId: string
   if (near) return none(`Too close to ${near.label}. Outposts need ${OUTPOST_SITING.spacing} m of space.`, tier);
   const site = world.sample(position), problem = siteProblem(site);
   if (problem) return none(problem, tier);
+  if (sys.outposts.some((o) => o.id === kitItemId)) return none("That kit is already deployed.", tier);
   const packed = sys.packed.find((p) => p.itemId === kitItemId);
-  const layout = (packed?.layout ?? []).filter((l) => Number(l.socket.slice(1)) < OUTPOST_TIERS[tier].sockets);
+  const broken = packed && (packed.tier !== tier ? "its tier doesn't match the kit" : layoutProblem(packed));
+  if (broken) return none(`This kit's remembered layout is inconsistent (${broken}). Nothing deployed.`, tier);
+  const layout = packed?.layout ?? [];
+  // Only a loose module in the diver hold refits; an installed one stays where it is.
   const refit = layout.flatMap((l) => {
-    const m = s.inventory.items.find((i) => i.id === l.itemId && i.containerId === "diver" && moduleOfItem(i.kind));
-    return m ? [{ socket: l.socket, itemId: l.itemId, kind: m.kind }] : [];
+    const m = s.inventory.items.find((i) => i.id === l.itemId && i.containerId === "diver" && i.quantity === 1 && moduleOfItem(i.kind));
+    return m && !sys.sockets.some((e) => e.itemId === l.itemId) ? [{ socket: l.socket, itemId: l.itemId, kind: m.kind }] : [];
   });
   return {
     refusal: null, tier, power: sitePower(site), region: site.region, refit,
@@ -110,6 +115,7 @@ export function deployOutpost(s: GameState, sys: SystemsState, kitItemId: string
   for (const r of p.refit) {
     s.inventory.items = s.inventory.items.filter((i) => i.id !== r.itemId);
     sys.sockets.push({ hostId: outpost.id, socket: r.socket, itemId: r.itemId, kind: r.kind });
+    forgetRemembered(sys, r.itemId);
   }
   s.feedback = `${outpost.name} deployed · ${p.power} power${p.refit.length ? ` · ${p.refit.length} module${p.refit.length === 1 ? "" : "s"} refitted` : ""}${p.missing.length ? ` · ${p.missing.length} remembered module${p.missing.length === 1 ? " isn't" : "s aren't"} in your hold` : ""}.`;
   return null;

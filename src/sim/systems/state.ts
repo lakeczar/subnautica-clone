@@ -8,7 +8,8 @@ import { isSeed } from "../../content/systems/cultivation.js";
 import type { SeedKind } from "../../content/systems/cultivation.js";
 import { isDecodable } from "../../content/systems/decodes.js";
 import type { DecodableId } from "../../content/systems/decodes.js";
-import { OUTPOST_TIER_ORDER } from "../../content/systems/hosts.js";
+import { HEARTHLINE_SOCKETS } from "../../content/fleet/hearthlineInterior.js";
+import { FIXED_HOSTS, OUTPOST_TIER_ORDER, OUTPOST_TIERS } from "../../content/systems/hosts.js";
 import type { OutpostTier } from "../../content/systems/hosts.js";
 import { isSys2Item } from "../../content/systems/items.js";
 import { BEACON_CATEGORIES, BEACON_NAME_MAX } from "../../content/systems/navigation.js";
@@ -93,6 +94,7 @@ export function validSystems(v: unknown): v is SystemsState {
   if (!s.sockets.every((e) => record(e) && exactKeys(e as never, ["hostId", "socket", "itemId", "kind"]) &&
     id(e.hostId) && id(e.socket) && id(e.itemId) && isSys2Item(e.kind))) return false;
   if (!unique(s.sockets.map((e) => e.itemId)) || !unique(s.sockets.map((e) => `${e.hostId}/${e.socket}`))) return false;
+  if (!semanticallyConsistent(s)) return false;
   if (!s.found.every(isDecodable) || !s.decoded.every(isDecodable) || !unique(s.found) || !unique(s.decoded)) return false;
   if (!s.decoded.every((d) => s.found.includes(d))) return false;
   if (!s.decodes.every((j) => record(j) && exactKeys(j as never, ["moduleId", "decodable", "progress"]) && id(j.moduleId) &&
@@ -106,4 +108,33 @@ export function validSystems(v: unknown): v is SystemsState {
   if (!s.beaconsOff.every(id) || !unique(s.beaconsOff)) return false;
   if (!s.categoriesOff.every((c) => BEACON_CATEGORIES.includes(c)) || !unique(s.categoriesOff)) return false;
   return s.chart.every((c) => typeof c === "string" && /^-?\d{1,4}:-?\d{1,4}$/.test(c)) && unique(s.chart);
+}
+
+/** Outpost-local socket IDs are `s0`, `s1`, ... below the host's socket count. */
+export const socketIndex = (socket: string): number => /^s(0|[1-9]\d?)$/.test(socket) ? Number(socket.slice(1)) : -1;
+/** One packed layout refits each socket and each module at most once, within its tier. */
+export function layoutProblem(p: Pick<PackedKit, "tier" | "layout">): string | null {
+  const sockets = p.layout.map((l) => l.socket), items = p.layout.map((l) => l.itemId);
+  if (!unique(sockets)) return "a socket is listed twice";
+  if (!unique(items)) return "a module is listed twice";
+  if (sockets.some((k) => socketIndex(k) < 0 || socketIndex(k) >= OUTPOST_TIERS[p.tier].sockets)) return "a socket isn't on this tier";
+  return null;
+}
+/** Identity invariants between rows: every outpost and packed kit is distinct,
+ * each socket entry names a real socket of an existing host, and a module is
+ * remembered by at most one packed layout and never while installed. Inventory
+ * cross-checks (SYS-2.md) sit on top of this in the composed validator. */
+function semanticallyConsistent(s: SystemsState): boolean {
+  const outposts = s.outposts.map((o) => o.id), kits = s.packed.map((p) => p.itemId);
+  if (!unique([...outposts, ...kits])) return false;
+  if (s.packed.some((p) => layoutProblem(p) !== null)) return false;
+  const remembered = s.packed.flatMap((p) => p.layout.map((l) => l.itemId));
+  if (!unique(remembered) || remembered.some((m) => s.sockets.some((e) => e.itemId === m))) return false;
+  return s.sockets.every((e) => {
+    const outpost = s.outposts.find((o) => o.id === e.hostId);
+    if (outpost) return socketIndex(e.socket) >= 0 && socketIndex(e.socket) < OUTPOST_TIERS[outpost.tier].sockets;
+    if (Object.hasOwn(FIXED_HOSTS, e.hostId))
+      return socketIndex(e.socket) >= 0 && socketIndex(e.socket) < FIXED_HOSTS[e.hostId as keyof typeof FIXED_HOSTS].sockets;
+    return e.hostId.startsWith("carrier:") && HEARTHLINE_SOCKETS.some((k) => k.id === e.socket);
+  });
 }

@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { SEED_KINDS, SEEDS, seedCollectable } from "../src/content/systems/cultivation.js";
 import { advanceGrowth, cropViews, harvest, harvestPreview, plant } from "../src/sim/systems/cultivation.js";
-import { installModule, outpostLockerId, removeModule } from "../src/sim/systems/hosts.js";
+import { carrierCompartment } from "../src/sim/inventory.js";
+import { fixtureGame } from "../src/sim/carrier.js";
+import { createSystems } from "../src/sim/systems/state.js";
+import { carrierHostId, installModule, outpostLockerId, removeModule } from "../src/sim/systems/hosts.js";
 import { deployOutpost } from "../src/sim/systems/outposts.js";
 import type { GameState } from "../src/sim/types.js";
 import type { SystemsState } from "../src/sim/systems/state.js";
@@ -86,4 +89,23 @@ test("harvest refuses without room, and growth pauses while the planter is out o
   swimTo(s, SPOTS.b);
   assert.match(harvest(s, sys, id, "s0") ?? "", /Tend planters at Outpost 1/);
   assert.match(plant(s, sys, "home_pod", "s0", "seed_ribbon_fan") ?? "", /Tend planters at Home pod/);
+});
+
+test("a restricted container must take every output: the pantry takes meals but not the returned cutting", () => {
+  const s = fixtureGame(), sys = createSystems(), h = s.fleet.vehicles.find((v) => v.hull === "hearthline")!;
+  s.player.interiorId = h.id;
+  s.player.controlledVehicleId = null;
+  const hostId = carrierHostId(h.id), socket = "hl.socket.galley.wall";
+  assert.equal(installModule(s, sys, hostId, socket, give(s, "mod_planter")), null);
+  give(s, "seed_staple_cup", 1);
+  assert.equal(plant(s, sys, hostId, socket, "seed_staple_cup"), null);
+  grow(sys, SEEDS.seed_staple_cup.growSeconds);
+  const pantry = s.inventory.containers.find((c) => carrierCompartment(s, c.id)?.accepts === "food")!.id;
+  const before = snapshot(s, sys);
+  assert.equal(harvestPreview(s, sys, hostId, socket, { to: pantry, replant: false }).refusal,
+    "Hearthline pantry doesn't take staple cup cutting. Harvest elsewhere, or replant the cutting. Nothing harvested.");
+  assert.match(harvest(s, sys, hostId, socket, { to: pantry, replant: false }) ?? "", /doesn't take staple cup cutting/);
+  assert.equal(snapshot(s, sys), before);
+  assert.equal(harvest(s, sys, hostId, socket, { to: pantry }), null, "replanting keeps the cutting, so meals alone go to the pantry");
+  assert.deepEqual(s.inventory.items.filter((i) => i.containerId === pantry).map((i) => [i.kind, i.quantity]), [["meal", 2]]);
 });

@@ -8,7 +8,14 @@
 // Loads src/sim/timeline/report.ts directly through Node's type stripping
 // (Node >= 22.18 / 23.6); that file has no runtime imports by design.
 import { readFileSync } from "node:fs";
-import { analyseTimeline, DEFAULT_THRESHOLDS, formatTimelineReport, parseTimeline } from "../src/sim/timeline/report.ts";
+
+// package.json allows Node 22.12, but type stripping is on by default only from
+// 22.18 / 23.6. Say so plainly instead of failing inside the import.
+if (!process.features.typescript) {
+  console.error(`timeline-report needs Node 22.18+ or 23.6+ (type stripping); this is ${process.version}. Try: node --experimental-strip-types scripts/timeline-report.mjs ...`);
+  process.exit(2);
+}
+const { analyseTimeline, DEFAULT_THRESHOLDS, formatTimelineReport, parseTimeline } = await import("../src/sim/timeline/report.ts");
 
 const args = process.argv.slice(2);
 const files = [];
