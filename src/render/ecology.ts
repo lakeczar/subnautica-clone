@@ -1,3 +1,4 @@
+import { PLACED_SOURCE_IDS } from "../content/worldSources.js";
 import type { GeometryCache } from "./geometryCache.js";
 import type { Scene, ShaderMaterial, Mesh } from '@babylonjs/core';
 import { BASIN_SOURCE_IDS } from '../content/routes.js';
@@ -68,6 +69,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
   const flows: { mesh: Mesh; from: Point; to: Point; phase: number }[] = [];
   const grazers: { mesh: Mesh; x: number; y: number; z: number; phase: number }[] = [];
   for (const [id, source] of Object.entries(SOURCES)) {
+    if (PLACED_SOURCE_IDS.has(id)) continue;
     if (region && source.region !== region) continue;
     const { x, y, z } = source.position;
     if (source.asset === 'ribbons') {

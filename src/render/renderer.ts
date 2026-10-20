@@ -14,6 +14,7 @@ import { createEnvironment } from "./environment.js";
 import { createLandmarks, createNavigationSilhouettes, LabelMaterials } from "./landmarks.js";
 import { createEcology } from "./ecology.js";
 import { createCreatureLayer } from "./creatures/layer.js";
+import { createPlacedHosts } from "./placedHosts.js";
 import { ecologyView } from "../sim/ecology/ecology.js";
 import { lampOn, presentationStimulus } from "../sim/ecologyLink.js";
 import { createExpeditionActors, createExpeditionRegion, DART_SEAT } from "./expedition.js";
@@ -230,6 +231,7 @@ export function createRenderer(
     const cue = createTargetCue(scene);
     // S4's later-region species, cue animals, deterrents and field cues (C3).
     const creatures = createCreatureLayer(scene, cel);
+    const placed = createPlacedHosts(scene, cel);
     for (const mesh of creatures.meshes) mesh.renderingGroupId = 1;
     const instrumentation = new SceneInstrumentation(scene);
     let presented = 0;
@@ -346,6 +348,7 @@ export function createRenderer(
         updateOpticalUniforms([cel, glass, water, sky, cue.material], camera.position, state);
         cel.setFloat("underwater", underwater);
         cel.setFloat("lampOn", state && state.opening.phase >= 4 && lampOn(state) ? 1 : 0);
+        placed.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         if (state) creatures.update(ecologyView(state.world.ecology, state.tick, presentationStimulus(state)), time,
           { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         cel.setFloat("time", time);
@@ -402,6 +405,7 @@ export function createRenderer(
         engine.onContextRestoredObservable.remove(restored);
         art.dispose();
         creatures.dispose();
+        placed.dispose();
         instrumentation.dispose();
         cue.dispose();
         scene.dispose();

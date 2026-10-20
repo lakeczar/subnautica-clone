@@ -5,6 +5,7 @@
  * `SITES`, and each datum against the composed floor. Additive content: no
  * save schema change (S7). */
 import type { SourceDefinition } from "./registry.js";
+import { CAMPAIGN_SOURCES } from "./campaign/sources.js";
 
 export const WORLD_SOURCES = {
   // Splitspine Isles: the split stack and the storm-cut headland.
@@ -82,3 +83,7 @@ export const WORLD_SOURCES = {
   },
 } as const satisfies Record<string, SourceDefinition>;
 export type WorldSourceId = keyof typeof WORLD_SOURCES;
+/** Every source standing at an S2 site (S9's and C3's lifts). Their art is the
+ * proximity-streamed placed-host layer (render/placedHosts.ts), never a legacy
+ * region owner's. */
+export const PLACED_SOURCE_IDS: ReadonlySet<string> = new Set([...Object.keys(CAMPAIGN_SOURCES), ...Object.keys(WORLD_SOURCES)]);
