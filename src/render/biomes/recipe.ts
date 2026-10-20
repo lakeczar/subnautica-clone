@@ -81,6 +81,18 @@ export class RecipeBuilder {
     if (r0 > 1e-4) this.face(A, capColor ?? color);
   }
 
+  /** Vertical elliptical frustum from y0 to y1 (radii per end), faceted. */
+  vprism(x: number, z: number, y0: number, y1: number, rx0: number, rz0: number, rx1: number, rz1: number,
+    sides: number, color: Rgb, cap?: Rgb, twist = 0): void {
+    const ring = (y: number, rx: number, rz: number): P3[] => Array.from({ length: sides }, (_, i) => {
+      const t = (i / sides) * Math.PI * 2 + twist;
+      return [x + Math.cos(t) * rx, y, z + Math.sin(t) * rz] as P3;
+    });
+    const A = ring(y0, rx0, rz0), B = ring(y1, rx1, rz1);
+    for (let i = 0; i < sides; i++) { const j = (i + 1) % sides; this.face([A[j]!, A[i]!, B[i]!, B[j]!], color); }
+    if (cap) this.face([...B], cap);
+  }
+
   /** Tube along a path (faceted segments). */
   tube(path: readonly P3[], r: number, sides: number, color: Rgb): void {
     for (let i = 0; i < path.length - 1; i++) this.frustum(path[i]!, path[i + 1]!, r, r, sides, color, color);

@@ -204,7 +204,7 @@ function sampleAuthored(x: number, z: number, m: TerrainMasks): number {
     for (const [axis, crest, half] of [[BASIN_DISH_RIDGE, 268, 58], [BASIN_WRECK_RIDGE, 252, 48]] as const) {
       nearestOnPolyline(x, z, axis, hit);
       if (hit.d < half * 1.8) {
-        const r = Math.min(depth, crest + (hit.d / half) ** 2 * 70 + 6 * fbm(x, z, 20, 3, 21));
+        const r = Math.min(depth, crest + (hit.d / half) ** 2 * 46 + 6 * fbm(x, z, 20, 3, 21));
         const w = 1 - smooth(half * 1.2, half * 1.8, hit.d);
         depth = lerp(depth, r, w); m.ridge = Math.max(m.ridge, w);
       }

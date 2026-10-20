@@ -91,7 +91,7 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
       for (let i = 0; i < seg; i++) {
         const j = (i + 1) % seg;
         const col = (k + (i >> 1)) % 3 === 0 ? C.shell : C.porcelain;
-        b.face([prev[i]!, cur[i]!, cur[j]!, prev[j]!], hash2(i, k, s.id.length) > 0.82 ? C.steel : col);
+        b.face([prev[j]!, cur[j]!, cur[i]!, prev[i]!], hash2(i, k, s.id.length) > 0.82 ? C.steel : col);
       }
       prev = cur;
     }
@@ -126,13 +126,20 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
     else { b.frustum([x, base, z], [x, base + h, z], w / 2, w / 3, 5, C.petrol); b.box([x, base + h, z], [w * 1.6, 0.2, w * 1.6], C.ochre); }
   },
   split_chimney(b, s, fine) {
+    // Each half is a stack of eroded elliptical layers inscribed in its
+    // collision boxes, so the column tapers and bulges like built-up mineral.
     for (let k = 0; k < s.solids.length; k++) {
-      const sol = s.solids[k]!, inset = 1.2, layer = fine ? 8 : 24;
-      for (let y = sol.min.y; y < sol.max.y; y += layer) {
-        const t = (y - s.base) / (s.p.top! - s.base), y1 = Math.min(sol.max.y, y + layer);
-        const pinch = inset + 1.5 * Math.sin(y * 0.11 + k);
-        const col = mix(mix(C.dark, C.basalt, hash2(Math.floor(y / layer), k, 5) * 0.5 + 0.5), C.stone, t * 0.6);
-        b.aabb([sol.min.x + pinch, y, sol.min.z + pinch], [sol.max.x - pinch, y1, sol.max.z - pinch], col);
+      const sol = s.solids[k]!, layer = fine ? 6 : 20, sides = fine ? 9 : 6;
+      const cx = (sol.min.x + sol.max.x) / 2, cz = (sol.min.z + sol.max.z) / 2;
+      const hx = (sol.max.x - sol.min.x) / 2, hz = (sol.max.z - sol.min.z) / 2;
+      const radius = (y: number): number => 0.72 + 0.16 * Math.sin(y * 0.09 + k * 2) + 0.08 * hash2(Math.floor(y / layer), k, 9);
+      for (let y = sol.min.y; y < sol.max.y - 1e-6; y += layer) {
+        const y1 = Math.min(sol.max.y, y + layer), t = (y - s.base) / (s.p.top! - s.base);
+        const r0 = Math.min(0.98, radius(y)), r1 = Math.min(0.98, radius(y1));
+        const col = mix(mix(C.dark, C.basalt, hash2(Math.floor(y / layer), k, 5) * 0.5 + 0.5), C.stone, t * 0.55);
+        b.vprism(cx, cz, y, y1, hx * r0, hz * r0, hx * r1, hz * r1, sides, col, undefined, k * 0.4);
+        if (fine && hash2(Math.floor(y / layer), k, 11) > 0.45)
+          b.vprism(cx, cz, y1 - 0.8, y1 + 0.4, hx * Math.min(0.99, r1 + 0.06), hz * Math.min(0.99, r1 + 0.06), hx * r1, hz * r1, sides, C.pale2, undefined, k * 0.4);
       }
     }
     // Warm seam in the split and the glowing rims of the twin vents.

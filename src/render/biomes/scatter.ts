@@ -69,8 +69,8 @@ export const SCATTER_RULES: Readonly<Record<string, readonly Rule[]>> = {
     { template: "s2.debris.panel", spacing: 12, chance: 0.08, scale: [0.8, 1.4], align: 1, height: 0.2 },
   ],
   basin_wreck: [
-    { template: "s2.debris.panel", spacing: 4, chance: 0.35, scale: [0.8, 1.8], align: 1, weight: m => m.ridge, height: 0.3 },
-    { template: "s2.debris.pipe", spacing: 7, chance: 0.2, scale: [0.6, 1.4], align: 1, weight: m => m.ridge, coarse: 0.5, height: 0.6 },
+    { template: "s2.debris.panel", spacing: 4, chance: 0.4, scale: [0.8, 1.8], align: 1, weight: m => m.ridge, cluster: { scale: 26, above: 0.25 }, height: 0.3 },
+    { template: "s2.debris.pipe", spacing: 7, chance: 0.25, scale: [0.6, 1.4], align: 1, weight: m => m.ridge, cluster: { scale: 26, above: 0.15 }, coarse: 0.5, height: 0.6 },
     { template: "s2.rock.slab", spacing: 6, chance: 0.3, scale: [0.7, 1.6], align: 0.8, coarse: 0.4, height: 0.7 },
     { template: "s2.flora.tube", spacing: 5, chance: 0.3, scale: [0.8, 1.4], cluster: { scale: 20, above: -0.1 }, height: 1.1 },
     { template: "s2.flora.fan", spacing: 7, chance: 0.2, scale: [0.7, 1.2], weight: m => m.ridge, height: 1.4 },
@@ -93,9 +93,9 @@ export const SCATTER_RULES: Readonly<Record<string, readonly Rule[]>> = {
     { template: "s2.flora.ribbon", spacing: 5, chance: 0.25, scale: [0.8, 1.5], y: [BRINE_Y + 15, -320], height: 2.6 },
   ],
   divide_brine: [
-    { template: "s2.salt.crust", spacing: 5, chance: 0.45, scale: [0.8, 2.6], align: 1, coarse: 0.3, height: 0.2 },
-    { template: "s2.rock.boulder", spacing: 10, chance: 0.15, scale: [0.6, 1.6], align: 0.5, height: 1.2 },
-    { template: "s2.rock.shard", spacing: 12, chance: 0.1, scale: [0.5, 1], height: 2 },
+    { template: "s2.salt.crust", spacing: 5, chance: 0.45, scale: [0.8, 2.6], y: [-800, BRINE_Y], align: 1, coarse: 0.3, height: 0.2 },
+    { template: "s2.rock.boulder", spacing: 10, chance: 0.15, scale: [0.6, 1.6], y: [-800, BRINE_Y], align: 0.5, height: 1.2 },
+    { template: "s2.rock.shard", spacing: 12, chance: 0.1, scale: [0.5, 1], y: [-800, BRINE_Y], height: 2 },
   ],
   meridian_terraces: [
     { template: "s2.lamp", spacing: 22, chance: 0.5, scale: [1, 1], slope: [0, 0.3], weight: m => m.terrace, coarse: 1, height: 3.6 },

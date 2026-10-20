@@ -109,10 +109,10 @@ function brineMirror(floor: (x: number, z: number) => number, x0: number, z0: nu
     if (Math.min(floor(x, z), floor(x + step, z), floor(x, z + step), floor(x + step, z + step)) > BRINE_Y + 0.5) continue;
     const base = positions.length / 3;
     for (const [px, pz] of [[x, z], [x + step, z], [x + step, z + step], [x, z + step]] as const) {
-      const w = fbm(px, pz, 30, 2, 77);
+      const w = fbm(px, pz, 30, 2, 77), streak = fbm(px * 0.35, pz * 1.6, 18, 2, 78);
       positions.push(px, BRINE_Y + 0.25 * w, pz);
-      const c = w > 0.15 ? MIRROR2 : MIRROR;
-      colors.push(c[0] * 0.62, c[1] * 0.62, c[2] * 0.62, -1);
+      const c = streak > 0.2 ? MIRROR2 : MIRROR, k = 0.68 + 0.12 * Math.max(0, w);
+      colors.push(c[0] * k, c[1] * k, c[2] * k, -1);
     }
     indices.push(base, base + 3, base + 2, base, base + 2, base + 1);
   }

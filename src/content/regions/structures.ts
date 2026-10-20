@@ -1,5 +1,10 @@
 import type { RegionId } from "../registry.js";
 import type { Aabb } from "../../world/types.js";
+import { hash2 } from "./noise.js";
+import { ROUTES } from "./passages.js";
+import { RESCUE_PLANS } from "./rescue.js";
+import { SITES } from "./sites.js";
+import { MERIDIAN_CENTRE } from "./terrain.js";
 import { worldFloor } from "./worldFloor.js";
 
 /** Authored structures: one record drives both collision (axis-aligned solid
@@ -108,7 +113,37 @@ function divideGate(): StructureDef[] {
   ];
 }
 
-export const STRUCTURES: readonly StructureDef[] = [
+/** Habitation blocks along Meridian's three terrace arcs: the settlement's
+ * silhouette. Generated deterministically, then kept at least 26 m from
+ * every passage, rescue tether, padded site and authored structure. */
+function meridianBlocks(authored: readonly StructureDef[]): StructureDef[] {
+  const lanes = [...ROUTES.map(r => r.path), ...RESCUE_PLANS.flatMap(p => p.tethers)];
+  const near = (x: number, z: number, r: number): boolean =>
+    lanes.some(path => path.some((p, i) => {
+      const q = path[i + 1]; if (!q) return Math.hypot(p.x - x, p.z - z) < r;
+      const dx = q.x - p.x, dz = q.z - p.z, len2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - p.x) * dx + (z - p.z) * dz) / len2));
+      return Math.hypot(p.x + dx * t - x, p.z + dz * t - z) < r;
+    })) ||
+    SITES.some(s => s.region === "deep_district" && Math.hypot(s.at.x - x, s.at.z - z) < r + (s.pad?.radius ?? 0)) ||
+    authored.some(s => Math.hypot(s.x - x, s.z - z) < r);
+  const out: StructureDef[] = [];
+  const arcs = [{ r: 640, n: 11 }, { r: 480, n: 9 }, { r: 318, n: 7 }];
+  arcs.forEach(({ r, n }, k) => {
+    for (let i = 0; i < n; i++) {
+      const th = (100 + (i + 0.5) * 75 / n + 4 * hash2(i, k, 3)) * Math.PI / 180;
+      const x = MERIDIAN_CENTRE.x + Math.cos(th) * r, z = MERIDIAN_CENTRE.z + Math.sin(th) * r;
+      if (x < 960 || z > -1010) continue;
+      const w = 10 + 8 * (hash2(i, k, 5) * 0.5 + 0.5), d = 8 + 6 * (hash2(i, k, 6) * 0.5 + 0.5);
+      const h = 8 + 14 * (hash2(i, k, 7) * 0.5 + 0.5);
+      if (near(x, z, 26 + Math.max(w, d) / 2)) continue;
+      out.push(block("building")(`meridian.block_${k}_${i}`, "deep_district", Math.round(x), Math.round(z), { w: Math.round(w), h: Math.round(h), d: Math.round(d) }));
+    }
+  });
+  return out;
+}
+
+const AUTHORED: readonly StructureDef[] = [
   // Splitspine Isles.
   block("mast")("isles.stack_mast.mast", "island_chain", 452, 102, { w: 3, h: 26, d: 3 }, "isles.stack_mast", 46),
   block("hut")("isles.stack_mast.cabinet", "island_chain", 457.5, 100, { w: 3, h: 2.4, d: 2.4 }, "isles.stack_mast", 46),
@@ -171,6 +206,7 @@ export const STRUCTURES: readonly StructureDef[] = [
   block("post")("reef.hearth_drop.post_west", "refuge_reef", -254, -100, { w: 0.8, h: 10, d: 0.8 }, "reef.hearth_drop"),
   block("post")("reef.hearth_drop.post_east", "refuge_reef", -218, -100, { w: 0.8, h: 10, d: 0.8 }, "reef.hearth_drop"),
 ];
+export const STRUCTURES: readonly StructureDef[] = [...AUTHORED, ...meridianBlocks(AUTHORED)];
 
 export const STRUCTURE_SOLIDS: readonly { id: string; region: RegionId; bounds: Aabb }[] =
   STRUCTURES.flatMap(s => s.solids.map((bounds, i) => ({ id: s.solids.length > 1 ? `${s.id}.${i}` : s.id, region: s.region, bounds })));

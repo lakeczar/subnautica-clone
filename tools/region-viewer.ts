@@ -19,6 +19,7 @@ import { createCelMaterial } from "../src/render/materials.js";
 import { createAtmosphere } from "../src/render/atmosphere.js";
 import { createEnvironment } from "../src/render/environment.js";
 import { worldLayout, regionAtPoint } from "../src/content/regions/layout.js";
+import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { HAZARDS } from "../src/content/regions/hazards.js";
 import { ROUTES } from "../src/content/regions/passages.js";
 import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
@@ -34,11 +35,11 @@ export const VIEWS: Record<string, { pos: [number, number, number]; at: [number,
   crowns: { label: "Canopy: east crowns", pos: [585, -140, -245], at: [700, -112, -150] },
   dishes: { label: "Basin: dish field", pos: [418, -236, -488], at: [508, -262, -580] },
   wrecks: { label: "Basin: wreck ridge", pos: [720, -232, -470], at: [782, -250, -545] },
-  chimney: { label: "Rift: split chimney", pos: [-60, -282, -1150], at: [-165, -400, -1065] },
+  chimney: { label: "Rift: split chimney", pos: [-88, -296, -1128], at: [-165, -352, -1065] },
   ledges: { label: "Rift: cool ledges", pos: [140, -242, -985], at: [40, -258, -1050] },
   gate: { label: "Divide: gateworks", pos: [596, -372, -1176], at: [600, -352, -1262] },
-  mirror: { label: "Divide: mirror", pos: [470, -350, -1262], at: [480, -450, -1400] },
-  meridian: { label: "Meridian: from shelf", pos: [1092, -505, -1196], at: [1215, -540, -1319] },
+  mirror: { label: "Divide: mirror", pos: [712, -398, -1342], at: [560, -436, -1300] },
+  meridian: { label: "Meridian: from shelf", pos: [1118, -506, -1212], at: [1250, -600, -1400] },
   works: { label: "Meridian: deep works", pos: [1340, -742, -1480], at: [1440, -760, -1582] },
   escarp: { label: "Escarpment", pos: [1290, -462, -800], at: [1350, -478, -660] },
   drop: { label: "Reef: Hearth drop", pos: [-196, -22, -52], at: [-240, -80, -190] },
@@ -180,7 +181,8 @@ function setOverlay(kind: string, on: boolean): void {
 
 function go(name: string): void {
   const v = VIEWS[name]; if (!v) return;
-  camera.position.set(...v.pos); camera.setTarget(new Vector3(...v.at));
+  camera.position.set(v.pos[0], Math.max(v.pos[1], worldFloor(v.pos[0], v.pos[2]) + 3), v.pos[2]);
+  camera.setTarget(new Vector3(...v.at));
   for (const b of document.querySelectorAll<HTMLButtonElement>("#views button")) b.classList.toggle("on", b.dataset.view === name);
 }
 const views = document.getElementById("views")!, toggles = document.getElementById("toggles")!, status = document.getElementById("status")!;

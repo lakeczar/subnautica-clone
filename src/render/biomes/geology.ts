@@ -71,7 +71,7 @@ export function geologyColor(x: number, y: number, z: number, slope: number, reg
       const rock = stratum(x, y, z, 5, 51, C.slate, C.slate2, C.fracture);
       c = mix(rock, C.crystal, smooth(0.55, 0.9, fine) * (1 - steep) * smooth(-345, -385, y) * (y > -440 ? 1 : 0));
       if (y < -440) { c = mix(C.brineFloor, C.salt, smooth(0.2, 0.7, patch) * 0.6); ground = steep < 0.4; }
-      if (m.serviceLedge > 0.5) c = mix(C.worn, C.marking, smooth(0.86, 1, Math.sin(x * 0.5) * 0.5 + 0.5) * 0.7);
+      if (m.serviceLedge > 0.5 && steep < 0.35) c = mix(C.worn, C.marking, smooth(0.86, 1, Math.sin(x * 0.5) * 0.5 + 0.5) * 0.7);
       break;
     }
     case "deep_district": {
