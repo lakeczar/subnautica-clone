@@ -7,7 +7,7 @@ import type { AimedTarget, ReachPreview } from "../sim/targeting.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import { airSupply, exposure } from "../sim/survival.js";
 import { distractionPreview, exitBlock, hullDepth, serviceRefusal, serviceState } from "../sim/vehicles.js";
-import { ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, cabinEnterRefusal, fittedCabin } from "../sim/fleet.js";
+import { ARM_CHARGE, ARM_LIFT_SECONDS, armNearby, armTarget, cabinHull, cabinEnterRefusal, fittedCabin } from "../sim/fleet.js";
 import { usedCapacity } from "../sim/inventory.js";
 import type { GameState, NoticeContext, NoticeOptions, Vec3, WorldQueries } from "../sim/types.js";
 import { FACILITY_SOLIDS } from "../sim/world.js";
@@ -576,6 +576,8 @@ function atCradleRail(state: GameState): boolean {
 function creelWork(state: GameState): string {
   const arm = armTarget(state);
   if (arm) return `<kbd>E</kbd> ${arm.refusal ? escapeHtml(arm.refusal) : `Tool arms · ${escapeHtml(SOURCES[arm.sourceId].label)} · ${ARM_LIFT_SECONDS} s · ${ARM_CHARGE}% power`}<br />`;
+  const near = armNearby(state);
+  if (near) return `<kbd>E</kbd> Turn the bow to ${escapeHtml(SOURCES[near].label)} for the tool arms<br />`;
   const v = state.fleet.vehicles.find(a => a.id === state.player.controlledVehicleId);
   if (!v || !fittedCabin(state, v)) return "";
   const no = cabinEnterRefusal(state);

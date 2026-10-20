@@ -4,7 +4,7 @@ import { CREEL_BUILD_POSE, DART_BUILD_POSE, FRAME_ALLOY, HULL_COLLIDERS, ITEMS, 
 import { CANOPY_STOP } from "../src/content/routes.js";
 import { validState } from "../src/save/validation.js";
 import {
-  ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, CREEL_CABIN, CREEL_HANDLING, fittedCabin, fittedMount,
+  ARM_CHARGE, ARM_LIFT_SECONDS, armNearby, armTarget, cabinHull, CREEL_BOARDING, CREEL_CABIN, CREEL_HANDLING, fittedCabin, fittedMount,
   holdCapacity, hullToWorld, mobileRefugeBlock,
 } from "../src/sim/fleet.js";
 import { addItem, cabinLockerId, containerAccessible, supportedServiceSite, usedCapacity } from "../src/sim/inventory.js";
@@ -334,4 +334,24 @@ test("validator rejects laundered mounts, lockers, refuges, ratings and campaign
   ];
   for (const [name, mutate] of bad) { const t = structuredClone(s); mutate(t); assert.equal(validState(t), false, name); }
   assert.equal(holdCapacity(s, creelOf(s)), MODULES.creel_cabin.holdCu);
+});
+
+test("a diver can reboard the Creel exactly where its side exit leaves them, at any heading", () => {
+  for (const yaw of [0, 1.3, Math.PI, 4.6]) {
+    const s = creelFirst(); parkCreel(s, { x: 30, y: -3, z: 0 }, yaw); pilotCreel(s);
+    const out = executeCommand(s, { type: "exit" }, world);
+    assert.equal(out.state.player.mode, "swimming", message(out.events));
+    const t = out.state; face(t, hullToWorld(CREEL_BOARDING, creelOf(t)));
+    const back = executeCommand(t, { type: "interact" }, world);
+    assert.equal(back.state.player.controlledVehicleId, creelOf(t).id, `yaw ${yaw}: ${message(back.events)}`);
+    saveable(back.state);
+  }
+});
+
+test("near but out of arm reach, the HUD helper names the host so the pilot turns the bow", () => {
+  const s = creelFirst(), p = SOURCES.basin_frame_ridge.position;
+  parkCreel(s, { x: p.x, y: p.y + 5.5, z: p.z + 6.3 }, Math.PI); pilotCreel(s);
+  assert.equal(armTarget(s), null); assert.equal(armNearby(s), "basin_frame_ridge");
+  creelOf(s).pose.yaw = 0; s.player.pose.yaw = 0;
+  assert.equal(armTarget(s)?.sourceId, "basin_frame_ridge"); assert.equal(armNearby(s), null);
 });

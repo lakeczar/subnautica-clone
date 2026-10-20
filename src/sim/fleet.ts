@@ -70,8 +70,9 @@ export const CREEL_CABIN = {
   hatchOutside: { x: 0, y: 2.0, z: 3.65 },
   hatchExit: { x: 0, y: 1.2, z: 4.9 },
 } as const;
-/** Boarding/interaction datum on the pilot compartment roof hatch. */
-export const CREEL_BOARDING = { x: 0, y: 2.3, z: -1.7 } as const;
+/** Boarding/interaction datum on the pilot compartment's side hatch, on the same
+ * (+x) side as the exit point so a diver can always reboard where they left. */
+export const CREEL_BOARDING = { x: 1.2, y: 1.9, z: -1.7 } as const;
 /** Raised pilot compartment view datum; never a collider or saved pose. */
 export const CREEL_SEAT = { x: 0, y: 2.22, z: -1.8 } as const;
 /** Tool-arm reach datum at the guarded bow; the art stays inside the berth envelope. */
@@ -307,6 +308,16 @@ export function armTarget(s: Readonly<GameState>): ArmTarget | null {
     : !hasRoom(s as GameState, v.cargoId, cu) ? `Hold full · ${cu} CU needed for this lift. Store cargo or fit the rack.`
     : null;
   return { sourceId: id, refusal };
+}
+/** A stocked arm host near the piloted Creel but outside arm reach: the bow must
+ * turn or close in. Presentation only; never starts work. */
+export function armNearby(s: Readonly<GameState>, radius = 16): SourceId | null {
+  const v = s.fleet.vehicles.find((a) => a.id === s.player.controlledVehicleId);
+  if (!v || v.hull !== "creel" || armTarget(s)) return null;
+  return (Object.keys(SOURCES) as SourceId[]).filter(armHost)
+    .filter((id) => (s.world.resources.find((n) => n.id === id)?.stock ?? 0) > 0)
+    .map((id) => ({ id, d: distance(v.pose.position, SOURCES[id].position) }))
+    .filter((c) => c.d <= radius).sort((a, b) => a.d - b.d || a.id.localeCompare(b.id))[0]?.id ?? null;
 }
 export function equippedForLift(s: Readonly<GameState>): boolean {
   return equipped(s as GameState, "essential_tools");
