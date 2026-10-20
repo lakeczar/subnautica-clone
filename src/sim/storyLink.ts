@@ -229,10 +229,11 @@ export function useController(s: GameState): string | null {
 }
 
 /** Where each works action is performed: the gate panel, or the hall's faces. */
-const WORKS_HOST: Readonly<Record<WorksAction, Vec3Like>> = {
-  install_power: PLACED_HOSTS.gate_panel, install_air: PLACED_HOSTS.gate_panel, isolate: PLACED_HOSTS.gate_panel,
-  equalize: PLACED_HOSTS.gate_panel, open: PLACED_HOSTS.gate_panel, route_power: PLACED_HOSTS.gate_panel,
-  restore_hall: WORKS_FACES["works:hall"].position, restore_food: WORKS_FACES["works:food"].position,
+const GATE = [PLACED_HOSTS.gate_panel], BAY = [WORKS_FACES["works:hall"].position, WORKS_FACES["works:food"].position];
+/** The upper hall's two faces are one restoration bay: either restoration works from either. */
+const WORKS_HOST: Readonly<Record<WorksAction, readonly Vec3Like[]>> = {
+  install_power: GATE, install_air: GATE, isolate: GATE, equalize: GATE, open: GATE, route_power: GATE,
+  restore_hall: BAY, restore_food: BAY,
 };
 interface Vec3Like { readonly x: number; readonly y: number; readonly z: number }
 const WORKS_REACH = 4;
@@ -241,7 +242,7 @@ const atHost = (s: GameState, p: Vec3Like): boolean => !s.player.controlledVehic
 /** `{type:"works", action}`: one named S5 works action at its own host. */
 export function worksCommand(s: GameState, action: WorksAction): string | null {
   if (!Object.hasOwn(WORKS_HOST, action)) return "Unknown works action.";
-  if (!atHost(s, WORKS_HOST[action])) return action.startsWith("restore_") ? "Work at the upper hall's restoration bay." : "Use the gate panel in the gate hall.";
+  if (!WORKS_HOST[action].some((p) => atHost(s, p))) return action.startsWith("restore_") ? "Work at the upper hall's restoration bay." : "Use the gate panel in the gate hall.";
   const site = action === "restore_hall" || action === "restore_food" ? "meridian_upper_hall" : "meridian_gate_hall";
   const { ctx, bins } = worksContext(s, site);
   const outcome = worksAction(s.story, action, ctx);

@@ -9,7 +9,7 @@ import { createGame } from "../../src/sim/state.js";
 import { createWorldQueries } from "../../src/sim/world.js";
 import { cabinHull } from "../../src/sim/fleet.js";
 import type { GameCommand, GameEvent, GameState, VehicleState, WorldQueries } from "../../src/sim/types.js";
-import { freshMinima, lowerMinima } from "./timeline.js";
+import { emptyRun, freshMinima, lowerMinima } from "./timeline.js";
 import type { DiscoveryRecord, LegRecord, Minima, RunRecord } from "./timeline.js";
 
 /** The game refused a command or trapped the player. A finding, never something to work around. */
@@ -52,10 +52,7 @@ export class Driver {
 
   constructor(scenario: string, strategy: string, state: GameState = createGame()) {
     this.state = state;
-    this.run = {
-      scenario, strategy, outcome: "complete", ticks: 0, minutes: 0, wallMs: 0, phases: [], legs: [], saves: [],
-      discoveries: [], gathered: {}, spent: {}, refusals: [], failures: 0, checks: [], notes: [], hazards: {}, hazardLog: [],
-    };
+    this.run = emptyRun(scenario, strategy);
     for (const id of knownRecords(state)) this.known.add(id);
   }
 

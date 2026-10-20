@@ -13,6 +13,7 @@ import { board, craft, eatIfHungry, gather, interact, leaveCraft, move, openPane
 import { Blocked, Driver, where } from "./driver.js";
 import { enter } from "./nav.js";
 import type { Refuge } from "./nav.js";
+import type { Missing } from "./content.js";
 import { fly, pilotTo, turnTo } from "./routes.js";
 import { dist, route, travel, yawTo } from "./travel.js";
 
@@ -26,8 +27,8 @@ export interface PlayOptions {
 export interface Phase {
   id: string;
   title: string;
-  /** Content IDs this phase needs that the build lacks; empty when it can be played. */
-  missing(d: Driver): string[];
+  /** Content this phase needs that the build lacks; empty when it can be played. */
+  missing(d: Driver): Missing[];
   play(d: Driver, o: PlayOptions): void;
 }
 
