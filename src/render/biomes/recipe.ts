@@ -77,8 +77,9 @@ export class RecipeBuilder {
       const j = (i + 1) % sides;
       this.face([A[i]!, A[j]!, B[j]!, B[i]!], color);
     }
-    if (r1 > 1e-4) this.face([...B].reverse(), capColor ?? color);
-    if (r0 > 1e-4) this.face(A, capColor ?? color);
+    // Caps face outward along the axis: +w at `b`, -w at `a`.
+    if (r1 > 1e-4) this.face(B, capColor ?? color);
+    if (r0 > 1e-4) this.face([...A].reverse(), capColor ?? color);
   }
 
   /** Vertical elliptical frustum from y0 to y1 (radii per end), faceted. */
@@ -90,7 +91,7 @@ export class RecipeBuilder {
     });
     const A = ring(y0, rx0, rz0), B = ring(y1, rx1, rz1);
     for (let i = 0; i < sides; i++) { const j = (i + 1) % sides; this.face([A[j]!, A[i]!, B[i]!, B[j]!], color); }
-    if (cap) this.face([...B], cap);
+    if (cap) this.face([...B].reverse(), cap);
   }
 
   /** Tube along a path (faceted segments). */
