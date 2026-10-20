@@ -83,18 +83,18 @@ export const SCATTER_RULES: Readonly<Record<string, readonly Rule[]>> = {
   ],
   basin_sediment: [
     { template: "s2.rock.boulder", variants: BOULDERS, spacing: 14, chance: 0.12, scale: [0.6, 1.5], align: 0.4, coarse: 0.5, height: 1.2 },
-    { template: "s2.flora.tube", variants: TUBES, spacing: 18, chance: 0.4, clump: { members: [3, 7], radius: 3 }, scale: [0.8, 1.5], cluster: { scale: 40, above: 0.15 }, height: 1.9 },
+    { template: "s2.flora.tube", variants: TUBES, spacing: 18, chance: 0.3, clump: { members: [3, 7], radius: 3 }, scale: [0.8, 1.5], cluster: { scale: 40, above: 0.15 }, height: 1.9 },
     { template: "s2.debris.panel", spacing: 12, chance: 0.08, scale: [0.8, 1.4], align: 1, height: 0.2 },
   ],
   basin_wreck: [
     { template: "s2.debris.panel", spacing: 4, chance: 0.4, scale: [0.8, 1.8], align: 1, weight: m => m.ridge, cluster: { scale: 26, above: 0.25 }, height: 0.3 },
     { template: "s2.debris.pipe", spacing: 7, chance: 0.25, scale: [0.6, 1.4], align: 1, weight: m => m.ridge, cluster: { scale: 26, above: 0.15 }, coarse: 0.5, height: 0.6 },
     { template: "s2.rock.slab", variants: SLABS, spacing: 14, chance: 0.5, clump: { members: [2, 6], radius: 4 }, scale: [0.7, 1.6], align: 0.8, coarse: 0.4, height: 0.8 },
-    { template: "s2.flora.tube", variants: TUBES, spacing: 12, chance: 0.45, clump: { members: [3, 8], radius: 2.6 }, scale: [0.8, 1.4], cluster: { scale: 20, above: -0.1 }, height: 1.9 },
+    { template: "s2.flora.tube", variants: TUBES, spacing: 12, chance: 0.35, clump: { members: [3, 8], radius: 2.6 }, scale: [0.8, 1.4], cluster: { scale: 20, above: -0.1 }, height: 1.9 },
     { template: "s2.flora.fan", variants: fans("s2.flora.fan"), spacing: 15, chance: 0.4, clump: { members: [2, 6], radius: 3 }, scale: [0.7, 1.2], weight: m => m.ridge, height: 1.9 },
   ],
   rift_cool_flank: [
-    { template: "s2.flora.fan", variants: fans("s2.flora.fan"), spacing: 8, chance: 0.85, clump: { members: [5, 12], radius: 3.8 }, scale: [0.8, 1.7], weight: m => m.ledge * (0.4 + m.coolFlank), cluster: { scale: 26, above: -0.2 }, coarse: 0.2, height: 1.9, tints: WARM },
+    { template: "s2.flora.fan", variants: fans("s2.flora.fan"), spacing: 10, chance: 0.7, clump: { members: [4, 10], radius: 3.8 }, scale: [0.8, 1.7], weight: m => m.ledge * (0.4 + m.coolFlank), cluster: { scale: 26, above: -0.2 }, coarse: 0.2, height: 1.9, tints: WARM },
     { template: "s2.rock.slab", variants: SLABS, spacing: 15, chance: 0.5, clump: { members: [2, 5], radius: 4 }, scale: [0.7, 1.8], align: 0.9, coarse: 0.4, height: 0.8 },
     { template: "s2.rock.column", variants: COLUMNS, spacing: 10, chance: 0.18, scale: [0.6, 1.4], slope: [0.5, 9], height: 4 },
     { template: "s2.flora.tube", variants: TUBES, spacing: 6, chance: 0.2, scale: [0.8, 1.3], height: 1.9 },
@@ -178,15 +178,18 @@ export function blocked(x: number, z: number, top: number, radius: number, botto
 const L = TERRAIN_EXTENT;
 const legacy = (x: number, z: number): boolean => x >= L.minX && x <= L.maxX && z >= L.minZ && z <= L.maxZ;
 
-/** One rule's output: a typed buffer pair per silhouette, sized for every
- * candidate up front, so placement allocates nothing per instance. */
+/** One rule's output: a typed buffer pair per silhouette that doubles when
+ * full, so allocation follows what is placed rather than every candidate. */
 class Placements {
   private readonly out = new Map<string, { mats: Float32Array; tints: Float32Array; count: number }>();
-  constructor(private readonly cap: number) {}
   add(template: string, x: number, y: number, z: number, yaw: number, s: number, tiltX: number, tiltZ: number,
     t: readonly [number, number, number], v: number): void {
     let o = this.out.get(template);
-    if (!o) { o = { mats: new Float32Array(this.cap * 16), tints: new Float32Array(this.cap * 4), count: 0 }; this.out.set(template, o); }
+    if (!o) { o = { mats: new Float32Array(64 * 16), tints: new Float32Array(64 * 4), count: 0 }; this.out.set(template, o); }
+    if (o.count * 16 === o.mats.length) {
+      const mats = new Float32Array(o.mats.length * 2), tints = new Float32Array(o.tints.length * 2);
+      mats.set(o.mats); tints.set(o.tints); o.mats = mats; o.tints = tints;
+    }
     writeInstance(o.mats, o.count * 16, x, y, z, yaw, s, tiltX, tiltZ);
     o.tints[o.count * 4] = t[0] * v; o.tints[o.count * 4 + 1] = t[1] * v; o.tints[o.count * 4 + 2] = t[2] * v; o.tints[o.count * 4 + 3] = 1;
     o.count++;
@@ -234,8 +237,10 @@ function* scatterChunk(ctx: ChunkBuildContext, chunk: ChunkDescriptor, biome: st
       if (blocked(px, pz, y + rule.height * s, s)) return NaN;
       return y;
     };
-    const tilt = (px: number, pz: number): [number, number, number] => {
-      const gx = floor(px + 0.5, pz) - floor(px - 0.5, pz), gz = floor(px, pz + 0.5) - floor(px, pz - 0.5);
+    // Forward differences from the piece's own floor height: two more floor
+    // queries per piece rather than four.
+    const tilt = (px: number, y: number, pz: number): [number, number, number] => {
+      const gx = (floor(px + 0.5, pz) - y) * 2, gz = (floor(px, pz + 0.5) - y) * 2;
       return [gx, gz, Math.hypot(gx, gz)];
     };
     const align = rule.align ?? 0.15;
@@ -245,7 +250,7 @@ function* scatterChunk(ctx: ChunkBuildContext, chunk: ChunkDescriptor, biome: st
       const sp = rule.spacing, rad = rule.clump.radius, [lo, hi] = rule.clump.members;
       const i0 = Math.floor((min.x - rad) / sp), i1 = Math.floor((max.x + rad) / sp);
       const j0 = Math.floor((min.z - rad) / sp), j1 = Math.floor((max.z + rad) / sp);
-      const place = new Placements((i1 - i0 + 1) * (j1 - j0 + 1) * hi);
+      const place = new Placements();
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
         if (ctx.due()) yield;
         const rc = random(Math.floor((hash2(i, j, 811 + ri * 37 + biome.length) + 1) * 2147483647));
@@ -269,7 +274,7 @@ function* scatterChunk(ctx: ChunkBuildContext, chunk: ChunkDescriptor, biome: st
           const s = (rule.scale[0] + (rule.scale[1] - rule.scale[0]) * sv) * (1.15 - 0.5 * r / rad);
           const y = site(px, pz, s);
           if (Number.isNaN(y)) continue;
-          const [gx, gz, slope] = tilt(px, pz);
+          const [gx, gz, slope] = tilt(px, y, pz);
           if (rule.slope && (slope < rule.slope[0] || slope > rule.slope[1])) continue;
           const t = rule.tints?.[Math.floor(form * rule.tints.length)] ?? WHITE;
           place.add(stray < 0.75 ? colony : variantAt(rule, px, pz, (stray - 0.75) / 0.25, ri, 0), px, y - 0.05 * s, pz, yaw, s,
@@ -280,7 +285,7 @@ function* scatterChunk(ctx: ChunkBuildContext, chunk: ChunkDescriptor, biome: st
       continue;
     }
     const rnd = random(chunk.cell.ix * 7919 + chunk.cell.iz * 104729 + ri * 31337 + biome.length * 17);
-    const place = new Placements(Math.ceil((max.x - min.x) / rule.spacing) * Math.ceil((max.z - min.z) / rule.spacing) + 1);
+    const place = new Placements();
     for (let z = min.z; z < max.z; z += rule.spacing) for (let x = min.x; x < max.x; x += rule.spacing) {
       if (ctx.due()) yield;
       const px = x + rnd() * rule.spacing, pz = z + rnd() * rule.spacing;
@@ -292,7 +297,7 @@ function* scatterChunk(ctx: ChunkBuildContext, chunk: ChunkDescriptor, biome: st
       if (rule.cluster && fbm(px, pz, rule.cluster.scale, 2, 400 + ri) < rule.cluster.above) continue;
       const y = site(px, pz, s);
       if (Number.isNaN(y)) continue;
-      const [gx, gz, slope] = tilt(px, pz);
+      const [gx, gz, slope] = tilt(px, y, pz);
       if (rule.slope && (slope < rule.slope[0] || slope > rule.slope[1])) continue;
       const t = rule.tints?.[Math.floor(tint * rule.tints.length)] ?? WHITE;
       place.add(variantAt(rule, px, pz, tint, ri), px, y - 0.05 * s, pz, yaw, s, Math.atan(gz) * align, -Math.atan(gx) * align,
