@@ -1,4 +1,7 @@
-import type { ChunkArtFactory, ChunkRecipe, MeshRecipe } from "../kit/types.js";
+import type { ChunkArtFactory, ChunkBuildContext, ChunkRecipe, MeshRecipe } from "../kit/types.js";
+import type { ChunkDescriptor } from "../../world/types.js";
+import { decodeTerrain } from "./terrainCodec.js";
+import type { TerrainStore } from "./terrainAssets.js";
 import type { LodLevel, Rect } from "../../world/types.js";
 import { BORDER_STEP, COARSE, FINE, tessellate, type TessellationOptions } from "./tessellate.js";
 import { regionAtPoint } from "../../content/regions/layout.js";
@@ -28,9 +31,34 @@ export function terrainOptions(rect: Rect, lod: LodLevel): TessellationOptions {
   return { base: cut ? BORDER_STEP : o.base, tolerance: o.tolerance, min: o.min, ...(cut ? { hole: LEGACY } : {}) };
 }
 
+let store: TerrainStore | null = null;
+/** Use baked terrain assets (null: always tessellate live, the dev fallback). */
+export function setTerrainStore(next: TerrainStore | null): void { store = next; }
+export function terrainStore(): TerrainStore | null { return store; }
+
+/** `s2.terrain`: decodes the chunk's baked recipe when a store is set and has
+ * the file (fetch and decode are async and sliced by `due()`), otherwise
+ * builds it live. Both paths give the same recipe up to the codec's
+ * quantization; the live path is the bake's source and the test oracle. */
 export const terrainFactory: ChunkArtFactory = {
   id: "s2.terrain",
   *build(ctx, chunk, _ref, lod) {
+    const { min, max } = chunk.bounds, rect = { minX: min.x, maxX: max.x, minZ: min.z, maxZ: max.z };
+    if (store) {
+      const file = store.request(chunk.id);
+      // Usually cached already (neighbour and coarse-band prefetch); otherwise
+      // each step only checks whether the fetch has landed.
+      while (!file.settled) yield;
+      if (file.bytes) return { meshes: yield* decodeTerrain(file.bytes, rect, chunk.id, lod, ctx.due), instances: [] };
+    }
+    return yield* liveTerrain(ctx, chunk, lod);
+  },
+};
+
+/** The live recipe: error-bounded tessellation, normals, geology colours,
+ * legacy-seam skirt and brine mirror. Deterministic for a chunk and LOD. */
+export function* liveTerrain(ctx: ChunkBuildContext, chunk: ChunkDescriptor, lod: LodLevel): Generator<void, ChunkRecipe> {
+  {
     const { min, max } = chunk.bounds, rect = { minX: min.x, maxX: max.x, minZ: min.z, maxZ: max.z };
     const t = yield* tessellate(ctx.floor, rect, { ...terrainOptions(rect, lod), due: ctx.due });
     const positions = t.positions, normals: number[] = [], colors: number[] = [], indices = [...t.triangles];
@@ -66,8 +94,8 @@ export const terrainFactory: ChunkArtFactory = {
     const mirror = brineMirror(ctx.floor, min.x, min.z, max.x, max.z, chunk.id);
     if (mirror) meshes.push(mirror);
     return { meshes, instances: [] } satisfies ChunkRecipe;
-  },
-};
+  }
+}
 
 /** The dense brine's mirror: an unlit, softly varied sheet at BRINE_Y over
  * cells whose floor lies below it, south of the Divide crest. */

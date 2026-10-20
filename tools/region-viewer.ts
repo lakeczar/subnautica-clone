@@ -26,6 +26,8 @@ import { HAZARDS } from "../src/content/regions/hazards.js";
 import { ROUTES } from "../src/content/regions/passages.js";
 import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
 import { S2_FACTORIES, S2_TEMPLATE_LIBRARY, opticsAt, s2BuildContext } from "../src/render/biomes/index.js";
+import { setTerrainStore } from "../src/render/biomes/terrain.js";
+import { httpTerrainStore } from "../src/render/biomes/terrainAssets.js";
 
 export const VIEWS: Record<string, { pos: [number, number, number]; at: [number, number, number]; label: string }> = {
   stack: { label: "Isles: split stack", pos: [560, 18, 0], at: [470, 26, 95] },
@@ -70,6 +72,9 @@ const materials = [cel, kit, water, sky];
 createEnvironment(scene, cel, "terrain");
 for (const mesh of scene.meshes) if (mesh.name === "island.terrain") mesh.renderingGroupId = 1;
 
+// Baked terrain (npm run bake:terrain) unless `?live=1`; a missing file falls back to live tessellation.
+const terrainStore = params.get("live") === "1" ? null : httpTerrainStore("/terrain/");
+setTerrainStore(terrainStore);
 const layout = worldLayout();
 const map = createWorldMap(layout, spatialEntries());
 const templates = new TemplateLibrary([...templateRecipes(), ...S2_TEMPLATE_LIBRARY]);
@@ -128,6 +133,7 @@ go(params.get("view") ?? "stack");
 let frame = 0, peakGpu = 0;
 function tick(): void {
   const p = camera.position;
+  terrainStore?.prefetch(p);
   const st = residency.update({ x: p.x, y: p.y, z: p.z });
   peakGpu = Math.max(peakGpu, st.gpuBytes);
   const o = opticsAt(p.x, p.y, p.z), underwater = p.y < -0.08 ? 1 : 0;

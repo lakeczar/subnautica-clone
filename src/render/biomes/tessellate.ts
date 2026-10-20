@@ -64,8 +64,8 @@ export function planeDistance(ax: number, ay: number, az: number, bx: number, by
 
 /** Points along one chunk edge, refined from the floor along and beside the
  * edge only. `axis` "x" means the edge runs along X at fixed z = `at`. */
-export function borderPoints(floor: (x: number, z: number) => number, axis: "x" | "z", at: number,
-  lo: number, hi: number, cuts: readonly number[], min: number): number[] {
+export function* borderPoints(floor: (x: number, z: number) => number, axis: "x" | "z", at: number,
+  lo: number, hi: number, cuts: readonly number[], min: number, due: () => boolean = () => false): Generator<void, number[]> {
   const p = (u: number, w: number): [number, number] => axis === "x" ? [u, at + w] : [at + w, u];
   const f = (u: number, w: number): number => { const [x, z] = p(u, w); return floor(x, z); };
   const base: number[] = [];
@@ -93,10 +93,11 @@ export function borderPoints(floor: (x: number, z: number) => number, axis: "x" 
     }
     return false;
   };
-  const refine = (a: number, b: number): void => {
-    if (b - a > 2 * min - EPS && bad(a, b)) { const m = (a + b) / 2; refine(a, m); out.push(m); refine(m, b); }
-  };
-  for (let i = 0; i < base.length - 1; i++) { out.push(base[i]!); refine(base[i]!, base[i + 1]!); }
+  function* refine(a: number, b: number): Generator<void, void> {
+    if (due()) yield;
+    if (b - a > 2 * min - EPS && bad(a, b)) { const m = (a + b) / 2; yield* refine(a, m); out.push(m); yield* refine(m, b); }
+  }
+  for (let i = 0; i < base.length - 1; i++) { out.push(base[i]!); yield* refine(base[i]!, base[i + 1]!); }
   out.push(base.at(-1)!);
   return out;
 }
@@ -114,12 +115,12 @@ export function* tessellate(floor: (x: number, z: number) => number, rect: Rect,
   };
   const cutsX = hole ? [hole.minX, hole.maxX] : [], cutsZ = hole ? [hole.minZ, hole.maxZ] : [];
   // Shared border sets, keyed by line.
-  const border = new Map<string, number[]>([
-    [`z:${key(rect.minZ)}`, borderPoints(floor, "x", rect.minZ, rect.minX, rect.maxX, cutsX, BORDER_MIN)],
-    [`z:${key(rect.maxZ)}`, borderPoints(floor, "x", rect.maxZ, rect.minX, rect.maxX, cutsX, BORDER_MIN)],
-    [`x:${key(rect.minX)}`, borderPoints(floor, "z", rect.minX, rect.minZ, rect.maxZ, cutsZ, BORDER_MIN)],
-    [`x:${key(rect.maxX)}`, borderPoints(floor, "z", rect.maxX, rect.minZ, rect.maxZ, cutsZ, BORDER_MIN)],
-  ]);
+  // Shared border sets, keyed by line; refinement yields as it goes.
+  const border = new Map<string, number[]>();
+  border.set(`z:${key(rect.minZ)}`, yield* borderPoints(floor, "x", rect.minZ, rect.minX, rect.maxX, cutsX, BORDER_MIN, due));
+  border.set(`z:${key(rect.maxZ)}`, yield* borderPoints(floor, "x", rect.maxZ, rect.minX, rect.maxX, cutsX, BORDER_MIN, due));
+  border.set(`x:${key(rect.minX)}`, yield* borderPoints(floor, "z", rect.minX, rect.minZ, rect.maxZ, cutsZ, BORDER_MIN, due));
+  border.set(`x:${key(rect.maxX)}`, yield* borderPoints(floor, "z", rect.maxX, rect.minZ, rect.maxZ, cutsZ, BORDER_MIN, due));
   if (due()) yield;
   const borderHas = (line: string, u: number): boolean => {
     const pts = border.get(line);
