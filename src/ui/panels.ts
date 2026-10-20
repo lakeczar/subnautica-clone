@@ -21,8 +21,25 @@ import type { GameCommand, GameState, ItemStack, VehicleState, WorldQueries } fr
 import { bearing, escapeHtml, heading, recoveryDisplay } from "./format.js";
 
 export type PanelKind = "inventory" | "craft" | "notebook" | "carrier";
+
+/** A block owned by another stream, placed after a named built-in section:
+ * notebook "dive-check", "question", "interpretation", "findings", "field-notes",
+ * "refuge", "places", "habitats", "preparation", "plans", "return", "berth";
+ * Cargo "cargo"; Fabricate "fabricate". Unknown anchors append at the end.
+ * Render compact rows; put longer help behind `group` and actions through `button`. */
+export interface PanelSection {
+  id: string;
+  after: string;
+  render(state: GameState, kit: SectionKit): string;
+}
+export interface SectionKit {
+  button: CommandButton;
+  /** Native disclosure whose open state survives refreshes. */
+  group(id: string, label: string, body: string, initiallyOpen?: boolean): string;
+  escape(text: string): string;
+}
 /** `name` gives a short visible verb its full accessible name, e.g. "Repair" → "Repair · Pod regulator". */
-type CommandButton = (label: string, command: GameCommand, disabled?: boolean, reason?: string, name?: string) => string;
+export type CommandButton = (label: string, command: GameCommand, disabled?: boolean, reason?: string, name?: string) => string;
 
 /** Display names over the simulation's labels, so every destination stays distinct. */
 function containerLabel(state: GameState, id: string): string {
@@ -47,6 +64,7 @@ export class PanelView {
   private discardRenderedMoves = false;
   private highlightTimer = 0;
   private renderedKind: PanelKind | null = null;
+  private readonly sections = new Map<PanelKind, PanelSection[]>();
 
   constructor(private readonly root: HTMLElement, private readonly world: WorldQueries) {}
 
@@ -54,6 +72,21 @@ export class PanelView {
     const element = this.root.querySelector<T>(`#${id}`);
     if (!element) throw new Error(`Missing UI element ${id}`);
     return element;
+  }
+
+  /** Register an extension section; a repeated id replaces the earlier one. */
+  addSection(kind: PanelKind, section: PanelSection): void {
+    this.sections.set(kind, [...(this.sections.get(kind) ?? []).filter((s) => s.id !== section.id), section]);
+  }
+
+  private compose(kind: PanelKind, built: [string, string][], state: GameState, button: CommandButton): string {
+    const kit: SectionKit = { button, group: (id, label, body, open) => this.group(`${kind}:${id}`, label, body, open), escape: escapeHtml };
+    const extra = this.sections.get(kind) ?? [];
+    const anchors = new Set(built.map(([id]) => id));
+    const after = (anchor: string): string => extra.filter((s) => s.after === anchor)
+      .map((s) => `<section class="panel-extension" data-section="${escapeHtml(s.id)}">${s.render(state, kit)}</section>`).join("");
+    return built.map(([id, html]) => html + after(id)).join("") +
+      extra.filter((s) => !anchors.has(s.after)).map((s) => `<section class="panel-extension" data-section="${escapeHtml(s.id)}">${s.render(state, kit)}</section>`).join("");
   }
 
   command(action: string): GameCommand | undefined {
@@ -121,44 +154,11 @@ export class PanelView {
       nav.setAttribute("aria-current", nav.dataset.action === `${kind}-panel` ? "page" : "false");
     let html = "";
     if (kind === "inventory") {
-      html = this.hold(state, button);
+      html = this.compose(kind, [["cargo", this.hold(state, button)]], state, button);
     } else if (kind === "craft") {
-      html = this.fabricate(state, button);
+      html = this.compose(kind, [["fabricate", this.fabricate(state, button)]], state, button);
     } else if (kind === "notebook") {
-      html = this.diveCheck(state) + button("Request a regional hint", { type: "hint" });
-      const found = (id: string): boolean => state.knowledge.evidence.some((e) => e.id === id);
-      html += `<article class="next-question"><h3>Current question</h3><p>${found("C06") ? found("C05")
-        ? "The dated water change and inward movement are separate facts. What connects them? Keep the residents’ destination and the cause open while comparing the records."
-        : "What drove the dated sediment surge? The dormitory’s transfer tags are an independent lead; its record can be investigated in either order."
-        : found("C05") ? "Where did the inward transfer go? The southern dish’s boundary station may explain the water change; the tags alone do not establish the residents’ fate."
-        : found("C04") ? "What changed in the water before the equipment failed? Follow the fallen survey dishes beyond the lower Canopy crowns into Pale Basin."
-        : found("C02") && found("C03") ? "Why were the intake and workshop left behind? The upper laboratory beside the Canopy’s tall rib may preserve another observation." : found("C03") ? "Why were departure supplies left unused? The reef intake is an independent lead; the laboratory lies beyond the eastern buoyant crowns." : found("C02") ? "Why is the intake abandoned while its filters still live? The workshop by Splitspine’s landing may preserve a different account." : "Why is the pod damaged? Compare its regulator with the intake below the reef ribs, or investigate the workshop above the island landing."}</p>${found("C04") || found("C05") || found("C06") ? `<p class="expedition-payoff">${personalLimit(state) < 350 ? "Before Basin work: refit the fitted 150 m suit to 350 m at the restored workshop. Canopy crust and cured resin fund the refit; Dart’s 180 m hull reaches the first shelves." : `Basin preparation: suit 350 m${this.hullSummary(state)}. Keep exits on survey shelves you can reach, with air, power and cargo room for the return.`}${found("C05") ? " The dormitory rack's plans build a Creel workboat in the workshop slip; tagged frames on the Basin ridge feed hull refits and the dark outer-crown mooring." : ""}${found("C06") ? " The station's fracture survey rates a Creel hull ring to 350 m for the slope below." : ""}</p>` : ""}</article>`;
-      if (
-        state.knowledge.evidence.some((e) => e.id === "C02") &&
-        state.knowledge.evidence.some((e) => e.id === "C03")
-      )
-        html +=
-          '<p class="interpretation">Together: the living intake and unspent shore supplies suggest disrupted services. The reason people left these sites is still unconfirmed, whichever record you found first.</p>';
-      for (const found of state.knowledge.evidence) {
-        const e = EVIDENCE[found.id];
-        html += `<article class="finding" id="finding-${found.id}" tabindex="-1"><h3>${e.label}</h3><p class="provenance">Source · ${escapeHtml(found.provenance)}</p><p><b>Observed</b> · ${e.observation}</p><p><b>Hypothesis</b> · ${e.hypothesis}</p><p class="lead"><b>Regional lead</b> · ${e.lead}</p></article>`;
-      }
-      if (state.knowledge.scans.includes("filter_flow"))
-        html += '<article><h3>Current-facing filters</h3><p>Open fans face the current. Harvest loose membrane from downstream catch hollows.</p></article>';
-      for (const scan of state.knowledge.scans.filter(techRecord))
-        html += `<article class="tech-record"><h3>${escapeHtml(TECH_RECORDS[scan].label)}</h3><p>${escapeHtml(TECH_RECORDS[scan].text)}</p></article>`;
-      if (state.knowledge.journals.includes(OPTIONAL_RECORD.id))
-        html += `<article><h3>Personal record · optional</h3><p>${OPTIONAL_RECORD.text}</p></article>`;
-      else html += '<p class="optional-record">Personal field notes add context; they do not unlock the investigation.</p>';
-      html += this.knownHabitats(state);
-      html += this.group("dive-preparation", "Dive preparation & safety", `<p>Plan for at least a quarter of your air and power before refilling. Personal protection applies outside the hull; the upper laboratory needs suit 150 m, Basin work needs the paid 350 m refit. Carry a meal and charged cell.</p><p>Z quiet, cover and retreat cost no charge. G spends ${PULSE_CHARGE_COST} points from one carried cell, then a controlled-craft cell, for a 12-second directional distraction. Move quietly away; remote locker cells cannot pay. A full cell can instead supply up to 35% hull power locally.</p><p>Recharge local cells at a restored bench; hull service requires the supported craft nearby. Calls and injury remain visible with mute or opening captions off.</p>`);
-      const plans = Object.entries(FUTURE_BLUEPRINTS).filter(([id]) => state.knowledge.blueprints.includes(id as keyof typeof FUTURE_BLUEPRINTS));
-      if (plans.length) html += this.group("retained-plans", `Plans retained · ${plans.length}`, `<p>Research knowledge · construction not available yet.</p>${plans.map(([, label]) => `<p>${escapeHtml(label)}</p>`).join("")}`);
-      html += this.places(state);
-      html += this.refugeStatus(state);
-      html += this.returnInformation(state);
-      if (facility(state, "island_workshop"))
-        html += this.group("unfinished-berth", "The unfinished large berth", "<p>The carrier cradle needs complementary surveys and frame recovery from Pale Basin. It is a future construction opportunity; no campaign carrier is available here yet.</p>");
+      html = this.compose(kind, this.notebook(state, button), state, button);
     } else {
       const d = state.fleet.docking;
       html =
@@ -549,6 +549,42 @@ export class PanelView {
     return html;
   }
 
+  /** Ordered notebook sections. Story records stay whole; reference blocks collapse. */
+  private notebook(state: GameState, button: CommandButton): [string, string][] {
+    const found = (id: string): boolean => state.knowledge.evidence.some((e) => e.id === id);
+    const question = found("C06") ? found("C05")
+      ? "The dated water change and inward movement are separate facts. What connects them? Keep the residents’ destination and the cause open while comparing the records."
+      : "What drove the dated sediment surge? The dormitory’s transfer tags are an independent lead; its record can be investigated in either order."
+      : found("C05") ? "Where did the inward transfer go? The southern dish’s boundary station may explain the water change; the tags alone do not establish the residents’ fate."
+      : found("C04") ? "What changed in the water before the equipment failed? Follow the fallen survey dishes beyond the lower Canopy crowns into Pale Basin."
+      : found("C02") && found("C03") ? "Why were the intake and workshop left behind? The upper laboratory beside the Canopy’s tall rib may preserve another observation." : found("C03") ? "Why were departure supplies left unused? The reef intake is an independent lead; the laboratory lies beyond the eastern buoyant crowns." : found("C02") ? "Why is the intake abandoned while its filters still live? The workshop by Splitspine’s landing may preserve a different account." : "Why is the pod damaged? Compare its regulator with the intake below the reef ribs, or investigate the workshop above the island landing.";
+    const payoff = found("C04") || found("C05") || found("C06") ? `<p class="expedition-payoff">${personalLimit(state) < 350 ? "Before Basin work: refit the fitted 150 m suit to 350 m at the restored workshop. Canopy crust and cured resin fund the refit; Dart’s 180 m hull reaches the first shelves." : `Basin preparation: suit 350 m${this.hullSummary(state)}. Keep exits on survey shelves you can reach, with air, power and cargo room for the return.`}${found("C05") ? " The dormitory rack's plans build a Creel workboat in the workshop slip; tagged frames on the Basin ridge feed hull refits and the dark outer-crown mooring." : ""}${found("C06") ? " The station's fracture survey rates a Creel hull ring to 350 m for the slope below." : ""}</p>` : "";
+    const latest = state.knowledge.evidence.at(-1)?.id;
+    const findings = state.knowledge.evidence.map((f) => {
+      const e = EVIDENCE[f.id], key = `finding:${f.id}`;
+      return `<details class="panel-group finding" id="finding-${f.id}" tabindex="-1" data-panel-group="${key}"${(this.expansions.get(key) ?? f.id === latest) ? " open" : ""}><summary data-focus-key="group:${key}">${e.label}</summary><p class="provenance">Source · ${escapeHtml(f.provenance)}</p><p><b>Observed</b> · ${e.observation}</p><p><b>Hypothesis</b> · ${e.hypothesis}</p><p class="lead"><b>Regional lead</b> · ${e.lead}</p></details>`;
+    }).join("");
+    let notes = state.knowledge.scans.includes("filter_flow") ? '<article><h3>Current-facing filters</h3><p>Open fans face the current. Harvest loose membrane from downstream catch hollows.</p></article>' : "";
+    for (const scan of state.knowledge.scans.filter(techRecord))
+      notes += `<article class="tech-record"><h3>${escapeHtml(TECH_RECORDS[scan].label)}</h3><p>${escapeHtml(TECH_RECORDS[scan].text)}</p></article>`;
+    if (state.knowledge.journals.includes(OPTIONAL_RECORD.id)) notes += `<article><h3>Personal record · optional</h3><p>${OPTIONAL_RECORD.text}</p></article>`;
+    const plans = Object.entries(FUTURE_BLUEPRINTS).filter(([id]) => state.knowledge.blueprints.includes(id as keyof typeof FUTURE_BLUEPRINTS));
+    return [
+      ["dive-check", this.diveCheck(state, button("Hint", { type: "hint" }, false, undefined, "Request a regional hint"))],
+      ["question", `<article class="next-question"><h3>Current question</h3><p>${question}</p>${payoff}</article>`],
+      ["interpretation", found("C02") && found("C03") ? '<p class="interpretation">Together: the living intake and unspent shore supplies suggest disrupted services. The reason people left these sites is still unconfirmed, whichever record you found first.</p>' : ""],
+      ["findings", findings],
+      ["field-notes", notes],
+      ["refuge", this.refugeStatus(state)],
+      ["places", this.places(state)],
+      ["habitats", this.knownHabitats(state)],
+      ["preparation", this.group("dive-preparation", "Dive preparation & safety", `<p>Plan for at least a quarter of your air and power before refilling. Personal protection applies outside the hull; the upper laboratory needs suit 150 m, Basin work needs the paid 350 m refit. Carry a meal and charged cell.</p><p>Z quiet, cover and retreat cost no charge. G spends ${PULSE_CHARGE_COST} points from one carried cell, then a controlled-craft cell, for a 12-second directional distraction. Move quietly away; remote locker cells cannot pay. A full cell can instead supply up to 35% hull power locally.</p><p>Recharge local cells at a restored bench; hull service requires the supported craft nearby. Calls and injury remain visible with mute or opening captions off.</p>`)],
+      ["plans", plans.length ? this.group("retained-plans", `Plans retained <small>${plans.length}</small>`, `<p>Research knowledge · construction not available yet.</p>${plans.map(([, label]) => `<p>${escapeHtml(label)}</p>`).join("")}`) : ""],
+      ["return", this.returnInformation(state)],
+      ["berth", facility(state, "island_workshop") ? this.group("unfinished-berth", "The unfinished large berth", "<p>The carrier cradle needs complementary surveys and frame recovery from Pale Basin. It is a future construction opportunity; no campaign carrier is available here yet.</p>") : ""],
+    ];
+  }
+
   private hullSummary(state: GameState): string {
     const hulls = state.fleet.vehicles.filter((v) => !v.berth && v.hull !== "hearthline");
     return hulls.length ? ` · ${hulls.map((v) => `${HULLS[v.hull].label} hull ${v.rating} m`).join(" · ")}` : " · no hull yet";
@@ -564,11 +600,11 @@ export class PanelView {
     return `<p class="refuge-status"><b>Registered refuge</b> · Creel cabin${v ? ` · ${bearing(state.player.pose.position, v.pose.position)}` : ""} · ${block ? `unavailable now: ${escapeHtml(block.message)} · recovery falls back to the home pod` : "ready"}</p>`;
   }
 
-  private diveCheck(state: GameState): string {
+  private diveCheck(state: GameState, hint: string): string {
     const meals = state.inventory.items.filter((i) => i.kind === "meal" && i.containerId === "diver").reduce((n, i) => n + i.quantity, 0);
     const cells = state.inventory.items.filter((i) => i.kind === "reserve_cell" && i.containerId === "diver");
     const hulls = state.fleet.vehicles.filter((v) => !v.berth && v.hull !== "hearthline");
-    return `<article class="dive-check"><h3>Dive check</h3><p>Suit ${personalLimit(state)} m · Oxygen ${state.player.vitals.oxygen.toFixed(0)}% · Full-tank rating 180 s · Food ${state.player.vitals.food.toFixed(0)}% · Carried meals ${meals}</p><p>${cells.length ? cells.map((i) => `${escapeHtml(this.itemLabel(state, i))} ${(i.charge ?? 0).toFixed(0)}%`).join(" · ") : "No carried reserve cell"}${hulls.length ? ` · ${hulls.map((v) => `${HULLS[v.hull].label} ${v.rating} m · hull ${v.health.toFixed(0)}% · power ${v.charge.toFixed(0)}%${v.disabled ? " · disabled" : ""}`).join(" · ")}` : " · No craft"}</p></article>`;
+    return `<article class="dive-check"><div class="vessel-line"><h3>Dive check</h3><span>Suit ${personalLimit(state)} m · Oxygen ${state.player.vitals.oxygen.toFixed(0)}% · full tank 180 s · Food ${state.player.vitals.food.toFixed(0)}% · ${meals} meal${meals === 1 ? "" : "s"}</span><div class="service-actions">${hint}</div></div><p>${cells.length ? cells.map((i) => `${escapeHtml(this.itemLabel(state, i))} ${(i.charge ?? 0).toFixed(0)}%`).join(" · ") : "No carried reserve cell"}${hulls.length ? ` · ${hulls.map((v) => `${HULLS[v.hull].label} ${v.rating} m · hull ${v.health.toFixed(0)}% · power ${v.charge.toFixed(0)}%${v.disabled ? " · disabled" : ""}`).join(" · ")}` : " · No craft"}</p></article>`;
   }
 
   private protection(state: GameState): string {
@@ -586,12 +622,13 @@ export class PanelView {
   private knownHabitats(state: GameState): string {
     const known = Object.entries(SOURCES).filter(([id]) => state.knowledge.scans.includes(id));
     // The shared rule is stated once; each row carries only its own lifecycle.
-    return `<article class="habitat-notes"><h3>Known source habitats</h3>${known.length ? `<p class="habitat-legend">Living sheds regrow while you explore; finite stock does not. When none are ready, sort a reserve on site.</p>${known.map(([id, s]) => {
+    if (!known.length) return "";
+    return this.group("habitats", `Known habitats <small>${known.length}</small>`, `<article class="habitat-notes">${known.length ? `<p class="habitat-legend">Living sheds regrow while you explore; finite stock does not. When none are ready, sort a reserve on site.</p>${known.map(([id, s]) => {
       const stock = state.world.resources.find((r) => r.id === id), reserve = stock?.reserve ?? 0;
       const lifecycle = s.item === "meal" ? "Tended · when empty, tend 20 s for two more"
         : renewable(id) ? `Living shed · regrows to ${s.stock} ready` : reserve ? "Finite" : "Finite · no reserve left";
       return `<section class="known-source" data-lifecycle="${s.item === "meal" ? "tended" : renewable(id) ? "renewing" : "finite"}"><p><b>${ITEMS[s.item].label} · ${s.label}</b><br />${REGIONS[s.region].label} · ${s.context}<br /><small>${stock?.stock ?? 0} ready · ${reserve} in reserve · ${s.bundle} per gather · ${lifecycle}</small></p>${this.group(`scan:${id}`, "Field scan", `<p>${escapeHtml(s.scan)}</p>`)}</section>`;
-    }).join("")}` : "<p>No habitats recorded yet.</p>"}</article>`;
+    }).join("")}` : ""}</article>`);
   }
 
   private places(state: GameState): string {
@@ -603,7 +640,7 @@ export class PanelView {
         : "Flooded survey site · no refuge air or craft service";
       return `<p><b>${PLACES[id].label}</b> · ${bearing(state.player.pose.position, PLACES[id].position)}<br /><small>${capabilities}</small></p>`;
     });
-    return `<article class="known-places"><h3>Places</h3>${rows.join("")}</article>`;
+    return this.group("places", `Places <small>${rows.length}</small>`, `<article class="known-places">${rows.join("")}</article>`);
   }
 
   private returnInformation(state: GameState): string {

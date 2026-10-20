@@ -231,7 +231,7 @@ test("ordinary panel labels are readable; empty-inventory emergency food and ret
     assert.doesNotMatch(text, /\bitem_\w+\b/);
     if (kind === "inventory") assert.ok(commands().some((c) => c.type === "emergency-meal"));
     if (kind === "notebook") {
-      assert.match(text, /Full-tank rating 180 s/); assert.ok(!text.includes("Recovered research:"));
+      assert.match(text, /full tank 180 s/); assert.ok(!text.includes("Recovered research:"));
       assert.match(text, /Source ·.*Observed.*Hypothesis.*Regional lead/s);
       assert.match(text, /future construction opportunity; no campaign carrier is available here yet/);
     }
@@ -557,7 +557,7 @@ test("the fabricator lists only known plans; Basin plans add exactly the earned 
   assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells",
     "creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "creel_350"]), "Basin clues add the earned workboat rows");
   panel.refresh("notebook", s);
-  assert.match(html(), /Plans retained · 2/);
+  assert.match(html(), /Plans retained <small>2<\/small>/);
   assert.match(html(), /Research knowledge · construction not available yet\./);
 });
 
@@ -599,4 +599,23 @@ test("cabin and mooring lockers keep their own names; an unknown mooring stays o
   assert.equal(unfit.label, "Unfit · hold 64 CU"); assert.match(unfit.attrs, /aria-label="Unfit cargo rack into the Creel hold · hold 64 CU"/);
   const swap = controls().find((b) => b.command.type === "install-module")!;
   assert.equal(swap.label, "Swap · hold 40 CU"); assert.equal(swap.disabled, true); assert.match(swap.attrs, /aria-describedby=/);
+});
+
+test("the notebook keeps every record whole but opens only the newest; reference blocks collapse; extensions slot in by anchor", (t) => {
+  const { panel, html } = panelFixture(t);
+  const s = UI_SCENARIOS["notebook-late"](), latest = s.knowledge.evidence.at(-1)!.id;
+  panel.addSection("notebook", { id: "interpretations", after: "interpretation", render: (_, kit) => kit.group("pairs", "Interpretations", "<p>Paired reading</p>") });
+  panel.addSection("notebook", { id: "tail", after: "no-such-anchor", render: () => "<p>Appended</p>" });
+  panel.refresh("notebook", s);
+  for (const e of s.knowledge.evidence) {
+    assert.match(html(), new RegExp(`id="finding-${e.id}"[^>]*data-panel-group="finding:${e.id}"${e.id === latest ? " open" : ">"}`), e.id);
+    assert.match(html().split(`id="finding-${e.id}"`)[1]!.split("</details>")[0]!, /Source ·.*Observed.*Hypothesis.*Regional lead/);
+  }
+  for (const group of ["places", "habitats", "dive-preparation", "retained-plans", "return-recovery"])
+    assert.ok(!html().includes(`data-panel-group="${group}" open`), group);
+  assert.doesNotMatch(html(), /Personal field notes add context/);
+  assert.ok(html().indexOf('data-section="interpretations"') > html().indexOf('class="interpretation"'));
+  assert.ok(html().indexOf('data-section="interpretations"') < html().indexOf('id="finding-'));
+  assert.match(html(), /data-panel-group="notebook:pairs"/, "extension disclosures are namespaced by panel");
+  assert.ok(html().trimEnd().endsWith('<section class="panel-extension" data-section="tail"><p>Appended</p></section>'));
 });
