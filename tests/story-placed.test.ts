@@ -8,9 +8,9 @@ import { type ItemKind } from "../src/content/registry.js";
 import { addItem } from "../src/sim/inventory.js";
 import { interactions } from "../src/sim/progression.js";
 import { executeCommand, stepGame } from "../src/sim/step.js";
-import { recordStory } from "../src/sim/storyLink.js";
+import { recordStory, WORKS_MOORING_RADIUS } from "../src/sim/storyLink.js";
 import type { GameState } from "../src/sim/types.js";
-import { saveable, world } from "./b1-support.js";
+import { creelFirst, creelOf, saveable, world } from "./b1-support.js";
 import { faceTarget, NORMAL_VIEWS, protectedReadyState } from "./targeting-support.js";
 
 test("every later story site is placed at an S2 site; the gate hall is at 769 m; every host rests on S2's world", () => {
@@ -124,4 +124,24 @@ test("COMMANDS: {type:\"works\"} and {type:\"resolution\"} act only at their hos
   r = executeCommand(s, { type: "resolution", action: "begin", roster: "nobody" as never }, world);
   assert.match((r.events[0] as { message: string }).message, /roster/);
   saveable(s);
+});
+
+test("a craft moored by the upper hall's bay lends its hold to the restoration; one beyond the radius does not", () => {
+  let base = protectedReadyState(800);
+  for (const id of ["C07", "C08", "C09", "C10"]) base = use(base, id).state;
+  Object.assign(base.story.works, { power: true, air: true, gate: "open" });
+  // A Creel and its hold, from the B1 fixture that builds one.
+  const owner = creelFirst(), v = structuredClone(creelOf(owner));
+  base.fleet.vehicles.push(v);
+  base.inventory.containers.push(structuredClone(owner.inventory.containers.find((c) => c.id === v.cargoId)!));
+  // The hall's 22 CU of stock is more than a diver carries: it rides in the craft's hold.
+  for (const [k, q] of Object.entries(STORY_RECIPES.restore_upper_hall.cost)) addItem(base, k as ItemKind, q, v.cargoId);
+  const face = WORKS_FACES["works:hall"].position;
+  for (const [off, works] of [[WORKS_MOORING_RADIUS - 6, true], [WORKS_MOORING_RADIUS + 6, false]] as const) {
+    const s = structuredClone(base), craft = s.fleet.vehicles.find((x) => x.id === v.id)!;
+    craft.pose.position = { x: face.x, y: face.y + off, z: face.z };
+    const r = use(s, "works:hall");
+    assert.equal(r.state.story.works.hall, works, r.message);
+    assert.equal(r.state.inventory.items.some((i) => i.containerId === v.cargoId), !works, works ? "stock spent from the hold" : "nothing spent");
+  }
 });
