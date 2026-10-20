@@ -586,8 +586,8 @@ function creelWork(state: GameState): string {
 /** Specific verbs for B1 hosts and cabin fixtures; null keeps the generic verb. */
 function fixtureVerb(t: AimedTarget, state: GameState | null): string | null {
   if (t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES]?.item === "tagged_frame" && t.verb === "collect") return "Lift · 10 s";
-  if (t.id.endsWith(":hatch")) return "Enter cabin";
-  if (!t.id.startsWith("cabin:")) return null;
+  // Interior fixtures first: the cabin's own hatch leaves; an exterior hatch enters.
+  if (!t.id.startsWith("cabin:")) return t.id.endsWith(":hatch") ? "Enter cabin" : null;
   const v = state ? cabinHull(state) : undefined;
   return ({ "cabin:bunk": state?.player.mobileRefuge?.vehicleId === v?.id ? "Clear refuge registration" : "Register refuge",
     "cabin:cooker": "Cook", "cabin:locker": "Open locker", "cabin:helm": "Take helm", "cabin:hatch": "Leave by hatch" } as Record<string, string>)[t.id] ?? null;

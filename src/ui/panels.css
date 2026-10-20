@@ -59,11 +59,12 @@
 }
 .game-panel nav button[aria-current="page"] { background: #49635a; border-color: #e2cb97; color: #fff0cf; }
 .game-panel article, .game-panel button { overflow-wrap: anywhere; }
-.game-panel .panel-status { margin: 12px 0 8px; color: #e2ead8; font-size: 13px; }
-.game-panel .bench-direction, .game-panel .recipe-count-label { font-size: 13px; }
+.game-panel .panel-status { margin: 10px 0 4px; color: #e2ead8; font-size: 13px; }
 #panel-feedback { margin: 8px 0; padding: 8px 12px; border-left: 3px solid #d3c28c; background: #163b48fa; font-size: 13px; line-height: 1.5; pointer-events: none; }
 #panel-feedback.error { border-color: #ffc789; color: #ffe3bb; }
 .panel-group > summary { cursor: pointer; color: #ecedda; font-size: 14px; line-height: 1.6; }
+/* Closed disclosures read as a compact list. */
+.game-panel details.panel-group:not([open]) { margin: 5px 0; padding-block: 7px; }
 .game-panel summary:focus-visible { outline: 2px solid #f3d59c; outline-offset: 4px; border-radius: 2px; }
 .panel-group > summary small { margin-left: 8px; }
 .panel-group[open] > summary { margin-bottom: 10px; }
@@ -73,10 +74,9 @@
 .here-actions > h3 { margin: 12px 0 4px; color: #e9e3c6; }
 .here-actions > article { margin: 6px 0; padding: 8px 12px; }
 .here-row { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; font-size: 13px; }
-.here-row > .panel-action { max-width: 55%; }
-.item-row { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 6px 0; border-top: 1px solid #8bb5a440; }
+.item-row { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 3px 0; border-top: 1px solid #8bb5a440; }
 .item-row strong { font-size: 14px; font-weight: 500; }
-.item-row small { display: block; }
+.item-row small { margin-left: 10px; }
 .item-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: end; gap: 4px; }
 .row-move { position: relative; }
 .row-move > summary { cursor: pointer; padding: 4px 8px; color: #ecedda; font-size: 12px; border: 1px solid #b8c7a35e; border-radius: 3px; }
@@ -84,11 +84,12 @@
 .move-destinations { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
 .move-destinations > .panel-action { max-width: 220px; }
 .item-row button { padding: 6px 8px; font-size: 12px; }
-.service-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.storage-operands { display: flex; align-items: end; gap: 8px; }
-.storage-operands label { display: grid; flex: 1; min-width: 0; gap: 5px; font-size: 12px; }
+.service-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.storage-operands { display: flex; align-items: center; gap: 8px; }
+.storage-operands > h3 { margin: 0 6px 0 0; white-space: nowrap; }
+.storage-operands label { display: flex; flex: 1; align-items: center; min-width: 0; gap: 6px; font-size: 12px; white-space: nowrap; }
 .storage-operands > span { align-self: center; }
-.storage-operands select { width: 100%; min-width: 0; padding: 8px; border: 1px solid #b8c7a360; background: #183d48; color: #e4ead3; font-size: 13px; }
+.storage-operands select { width: 100%; min-width: 0; padding: 5px 6px; border: 1px solid #b8c7a360; background: #183d48; color: #e4ead3; font-size: 13px; }
 .storage-operands button { max-width: 270px; text-align: left; }
 .storage-operands > .panel-action { flex: 0 1 210px; }
 .game-panel .storage-quantities, .game-panel .storage-context { font-size: 13px; }
@@ -98,21 +99,45 @@
 .vessel-service > .panel-group { margin: 4px 0 0; padding: 0; border: 0; background: none; }
 .vessel-service > .panel-group > summary { font-size: 12px; }
 .service-full { color: #c4f0cf; font-size: 13px; }
-.fitting-choice { margin-top: 8px; }
-.bench-charge { margin-top: 12px; padding-top: 12px; border-top: 1px solid #b8c7a340; }
+/* Status and its actions share one line; recovery and detail follow beneath. */
+.vessel-line, .fitting-head { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; }
+.vessel-line > h3, .fitting-head > h3, .bench-charge h3 { margin: 0; }
+.vessel-line > span { color: #d2dfd2; font-size: 13px; }
+.vessel-line > .service-actions { margin: 0 0 0 auto; }
+.fitting-choice > span { font-size: 13px; }
+/* A blocked change keeps its one reason on the same line as the action. */
+.here-row > .panel-action, .vessel-line .panel-action { flex-direction: row-reverse; align-items: center; gap: 4px 10px; max-width: 70%; }
+.here-row .action-reason, .vessel-line .action-reason { text-align: right; }
+.here-row .panel-action > button, .vessel-line .panel-action > button { flex-shrink: 0; white-space: nowrap; }
+.here-actions button, .vessel-line button, .dive-check button, .carried .service-actions button { padding: 5px 10px; }
+.fitting-choice { margin-top: 4px; }
+.bench-charge { margin-top: 8px; padding-top: 8px; border-top: 1px solid #b8c7a340; }
 .no-charge-options { display: block; margin-top: 8px; }
-.recipe { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.recipe > div { flex: 1; min-width: 0; }
-.recipe > .panel-action { flex: 0 1 250px; text-align: left; }
-.recipe-costs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .ingredient { display: inline-block; color: #d6e7d3; font-size: 13px; }
 .ingredient.missing, .recipe-status { color: #ffe0ad !important; }
 .recipe-ready { color: #c4f0cf !important; }
-.recipe-group { margin-top: 14px; }
+/* Recipe rows: name and costs are the disclosure; one reason sits beside the action. */
+.game-panel .recipe { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px 16px; margin: 4px 0; padding: 7px 12px; }
+.recipe > .panel-group { flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; background: none; }
+.recipe > .panel-group > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; line-height: 1.5; }
+.recipe > .panel-group > summary { list-style: none; }
+.recipe > .panel-group > summary::-webkit-details-marker { display: none; }
+.recipe > .panel-group > summary::before { content: "▸"; margin-right: -8px; color: #a9c2b9; font-size: 11px; }
+.recipe > .panel-group[open] > summary::before { content: "▾"; }
+.recipe-name { color: #ecedda; font-size: 14px; }
+.recipe-costs { display: inline-flex; flex-wrap: wrap; gap: 0 12px; }
+.recipe > .panel-action { flex: 0 1 auto; flex-direction: row-reverse; align-items: center; gap: 4px 10px; max-width: 48%; }
+.recipe > .panel-action > button { margin: 0; padding: 5px 12px; white-space: nowrap; }
+.recipe .action-reason { text-align: right; }
+.game-panel .recipe-more p { margin: 4px 0; font-size: 12px; line-height: 1.5; }
+.recipe-done { align-self: center; color: #c4f0cf; font-size: 12px; }
+.recipe-group { margin-top: 10px; }
+.recipe-group > h3 { margin-bottom: 4px; }
+/* A row of closed disclosures; an opened one takes the full width below. */
+.panel-folds { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.game-panel .panel-folds > .panel-group { flex: 1 1 180px; margin: 0; padding: 8px 14px; }
+.panel-folds > .panel-group[open], .panel-folds > .panel-extension { flex-basis: 100%; order: 1; }
 .recipe-group > h3 { color: #e9e3c6; }
-.recipe .panel-group { padding: 0; margin: 5px 0 0; border: 0; background: none; }
-.recipe .panel-group > summary { font-size: 12px; }
-.recipe .panel-group > p { font-size: 12px; }
 .game-panel .dive-check p { font-size: 13px; }
 .game-panel .provenance { color: #d3dfc9; font-size: 12px; }
 .finding b { color: #f0d39a; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; }
@@ -133,8 +158,8 @@
   .game-panel h2 { font-size: 26px; }
   .panel-header nav { order: 2; width: 100%; }
   .recovery-choices { grid-template-columns: 1fr; }
-  .recipe { align-items: stretch; flex-direction: column; gap: 8px; }
-  .recipe > .panel-action { flex-basis: auto; }
+  .game-panel .recipe { align-items: stretch; flex-direction: column; gap: 6px; }
+  .recipe > .panel-action { max-width: none; justify-content: flex-end; }
   .here-row { flex-wrap: wrap; }
   .here-row > .panel-action { max-width: 100%; }
   .storage-operands { flex-wrap: wrap; }
