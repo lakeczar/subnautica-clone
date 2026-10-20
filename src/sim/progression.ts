@@ -478,7 +478,14 @@ export function hint(s: GameState): string {
     return "Bring four crust and four cured resin from the Canopy to the restored workshop for a 350 m suit refit, with two alloy and two membrane. Dart's 180 m hull reaches the first Basin shelf; your suit must protect the exit.";
   if (!has("C05") || !has("C06"))
     return "Follow the lower crowns to the fallen Basin dish. The flooded dormitory faces inward; a separate boundary station stands beside the southern dish. Both lie on the first shelf, with an open upper return east of the Canopy.";
-  return "Both Basin observations are retained. Store useful loose alloy and survey-fin crust at the workshop; the service and frame plans complement its fleet designs. The upper return and local rescue guides remain available.";
+  const creel = s.fleet.vehicles.find((v) => v.hull === "creel");
+  if (has("C05") && !s.knowledge.crafted.includes("creel_base"))
+    return "The dormitory rack's Creel plans are at the workshop bench: ten alloy, four glass, four membrane, four fin crust and two cured resin. It builds in the medium slip west of the landing; no Dart is required.";
+  if (creel && !s.inventory.items.some((i) => i.kind === "creel_cargo_rack" || i.kind === "creel_cabin"))
+    return "Make a cargo rack for bulk hauling or a refuge cabin for staying out, then fit it from Cargo with the Creel moored in its slip. Only one fits the major mount at a time.";
+  if (creel && !facility(s, "canopy_stop"))
+    return "Tagged frames rest on the Basin ridge beside the fallen dish. A Creel's tool arms load them without leaving the helm. One frame, two glass and two crust restore the dark mooring on the eastern Canopy margin.";
+  return "Both Basin observations are retained. The fracture below the boundary station holds more frames past a 240 m hull; a 350 m refit or a suited lift from the lip reaches them. The upper return and local rescue guides remain available.";
 }
 export const personalLimit = (s: GameState): number =>
   personalPressureLimit(s);
