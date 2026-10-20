@@ -13,7 +13,7 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 
 | Work | Owner | Branch / worktree | Owns | Next |
 | --- | --- | --- | --- | --- |
-| M2-B1: earned Creel and mobile refuge | Opus 5.5 high | `t3/earned-creel-mobile-refuge-loop` / `t3-b6aef8ec` | The roots listed in DIRECTION | Handoff, then a fresh Sol review |
+| M2-B1: earned Creel and mobile refuge | Opus 5.5 high | `t3/earned-creel-mobile-refuge-loop` / `t3-b6aef8ec` | The roots listed in DIRECTION | Done at `2cff245`; Sol R1 review running |
 | GPU enablement bundle | Opus 5.5 high (author) | `t3/enable-3090-gpu` / `t3-b9861fd3` | `docs/build/gpu-enablement/` | attach rolled back safely; the `qemu:commandline` fix is in progress |
 | New parallel streams | See [streams](STREAMS.md) | | | |
 
