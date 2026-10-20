@@ -156,6 +156,11 @@ export function boardAt(d: Driver, v: VehicleState): void {
 }
 /** Leave the helm, refusing if the exit is unsafe. */
 function exitHere(d: Driver): void { leaveCraft(d); }
+/** Moored at home: leave the helm and service the craft from its socket. */
+export function dockAndService(d: Driver, v: VehicleState): void {
+  leaveCraft(d);
+  d.command({ type: "service", vehicleId: v.id });
+}
 
 /** From the helm: exit, collect from each source while air allows, ferry the diver
  * hold into the craft hold, re-board. The craft stays parked within reach. */
@@ -215,7 +220,7 @@ const canopy: Phase = {
     pilotTo(d, "back to the lab parking", CANOPY_BASIN_ROUTE.labParking, { quiet: true });
     fly(d, "canopy_upper_back");
     fly(d, "dart_home");
-    exitHere(d);
+    dockAndService(d, d.vehicle("dart")!);
     // The Dart's hold counts at the workshop bench while it sits in its cradle.
     make(d, "suit_350", "workshop", ISLES);
   },
@@ -290,7 +295,7 @@ const survey: Phase = {
     pilotTo(d, "back to the station lane", { x: 216, y: -160, z: -232 });
     fly(d, "basin_return");
     fly(d, "dart_home");
-    leaveCraft(d);
+    dockAndService(d, dart());
     enter(d, "workshop");
   },
 };
@@ -310,7 +315,7 @@ const frames: Phase = {
     pilotTo(d, "back to the station lane", { x: 216, y: -160, z: -232 });
     fly(d, "basin_return");
     fly(d, "creel_home");
-    leaveCraft(d);
+    dockAndService(d, creel());
     enter(d, "workshop");
     const hold = creel().cargoId;
     d.command({ type: "store-materials", from: hold, to: "workshop_locker" });
@@ -322,6 +327,9 @@ const frames: Phase = {
  * holds, gathering any remainder from the isles and reef. */
 function carry(d: Driver, needs: Readonly<Partial<Record<ItemKind | "tagged_frame", number>>>): void {
   enter(d, "workshop");
+  // Travel light: everything but the load and one meal stays in the locker.
+  for (const i of [...d.state.inventory.items].filter((x) => x.containerId === "diver" && !x.fitted && !(x.kind in needs) && x.kind !== "meal"))
+    d.command({ type: "transfer", itemId: i.id, to: "workshop_locker", quantity: i.quantity });
   const bins = ["workshop_locker", ...d.state.fleet.vehicles.map((v) => v.cargoId)];
   const short: Partial<Record<ItemKind, number>> = {};
   for (const [kind, n] of Object.entries(needs) as [ItemKind, number][]) {
@@ -360,10 +368,11 @@ const refits: Phase = {
     returnToCraft(d, d.vehicle("dart")!);
     fly(d, "stop_to_head");
     fly(d, "dart_home");
-    leaveCraft(d);
+    dockAndService(d, d.vehicle("dart")!);
     enter(d, "workshop");
   },
 };
 
 export const LIVE_PHASES: readonly Phase[] = [opening, reef, isles, canopy, survey, creel, frames, refits];
+export const REFITS_PHASE = refits;
 export { BASIN_GEOMETRY, CANOPY_STOP, RECOVERY_SURFACE_OPERATOR, surface, surfaceTo, breathe };

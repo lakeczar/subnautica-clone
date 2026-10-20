@@ -25,9 +25,8 @@ export function target(d: Driver, id: string) {
 
 /** Would a player standing at `body` and looking at the host centre select `id`? */
 function aimsFrom(d: Driver, id: string, body: Vec3, mode: GameState["player"]["mode"], center: Vec3): boolean {
-  const probe = structuredClone(d.state);
-  probe.player.pose.position = { ...body };
-  probe.player.mode = mode;
+  // A read-only probe: the same state with only the player's pose replaced.
+  const probe: GameState = { ...d.state, player: { ...d.state.player, pose: { ...d.state.player.pose, position: { ...body } }, mode } };
   const eye = { ...body, y: body.y + eyeHeight(probe) };
   const h = horizontal(eye, center);
   probe.player.pose.yaw = Math.atan2(center.x - eye.x, -(center.z - eye.z));
@@ -55,7 +54,7 @@ export function workPoses(d: Driver, id: string): { body: Waypoint; land: boolea
     }
     for (const dy of [1.2, 0.4, 2, -0.4]) {
       const body = { x, y: t.position.y + dy, z };
-      if (body.y > -0.9 || d.world.groundHeight(x, z) > body.y - 0.1) continue;
+      if (body.y > -0.9 || d.world.groundHeight(x, z) > body.y - 0.1 || d.world.supportHeight(x, z, body.y) > body.y - 0.15) continue;
       if (dist(body, t.position) < INTERACTION_REACH - 0.2 && d.world.clearance(body, SWIM) &&
           aimsFrom(d, id, body, "swimming", host.center))
         out.push({ body: { ...body, tolerance: 0.3 }, land: false, cost: dist(here, body) });

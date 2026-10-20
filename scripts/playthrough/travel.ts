@@ -62,10 +62,14 @@ function steerDiver(d: Driver, target: Waypoint, route: Route, final: boolean, j
   const dy = ty - p.y;
   const yaw = h > 0.05 ? yawTo(p, target) : s.player.pose.yaw;
   const pitch = swimming ? clamp(Math.atan2(dy, Math.max(h, 1e-3)), -1.3, 1.3) : 0;
-  const distance = target.land ? h : Math.hypot(h, dy);
+  // A surface point is reached only with the airway above water (y >= -0.75).
+  const atSurface = !target.land && target.y >= -0.5;
+  const distance = target.land ? h : atSurface ? Math.hypot(h, Math.max(0, -0.75 - p.y) * 4) : Math.hypot(h, dy);
   const close = final ? (target.tolerance ?? 0.5) : (target.tolerance ?? 1.2);
-  const forward = distance <= close ? 0 : 1;
-  const vertical = swimming && !target.land && Math.abs(dy) > 0.6 && h < 2 ? Math.sign(dy) : jump ? 1 : 0;
+  const forward = h > close * 0.7 ? 1 : 0;
+  // Hold vertical input toward the target height: with a shallow pitch alone the
+  // simulation keeps a submerged diver level.
+  const vertical = swimming && !target.land && Math.abs(dy) > Math.min(0.25, close * 0.5) ? Math.sign(dy) : jump ? 1 : 0;
   return {
     distance,
     controls: [lookToward(d, yaw, pitch), {
@@ -114,6 +118,9 @@ export function travel(d: Driver, route: Route, label = route.id): void {
         const steer = pilot ? steerCraft(d, target, route, final) : steerDiver(d, target, route, final, jump);
         const close = final ? (target.tolerance ?? (pilot ? 1.5 : 0.5)) : (target.tolerance ?? (pilot ? 3 : 1.2));
         if (steer.distance <= close) break;
+        // Settled against the floor or a solid within a metre of a work pose: close enough;
+        // the caller's aim check decides whether the pose works.
+        if (!pilot && final && steer.distance < 1 && sinceBest > STEPS_PER_SECOND) break;
         if (steer.distance < best - 0.25) { best = steer.distance; sinceBest = 0; } else sinceBest++;
         if (sinceBest > 6 * STEPS_PER_SECOND || step > budget)
           throw new Blocked(`Route ${route.id} (${route.validation}) stalled ${steer.distance.toFixed(1)} m short of waypoint ${index} ` +

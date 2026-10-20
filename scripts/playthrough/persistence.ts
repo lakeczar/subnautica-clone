@@ -3,7 +3,7 @@
  * would, and require the reloaded state to hash exactly like the live one. Play
  * then continues from the reloaded state, so every later phase runs on a save. */
 import { createHash } from "node:crypto";
-import { createEnvelope, encodeSave } from "../../src/save/codec.js";
+import { createEnvelope, decodeSave, encodeSave } from "../../src/save/codec.js";
 import { SaveRepository } from "../../src/save/repository.js";
 import type { StoragePort } from "../../src/save/repository.js";
 import type { WriterLockPort } from "../../src/save/writer-lock.js";
@@ -54,7 +54,18 @@ export class SaveSlot {
     const loaded = slot.save.state, hash = stateHash(live), equal = stateHash(loaded) === hash;
     d.run.saves.push({ phase: d.phase, label, tick: live.tick, bytes: encoded.value.length, hash, equal });
     if (!equal) throw new Blocked(`Reloaded state at ${label} differs from the live state`);
+    this.snapshots.set(label, encoded.value);
     d.state = loaded;
     return loaded;
   }
+  /** Each milestone's exact save text, for scenarios that branch from it. */
+  readonly snapshots = new Map<string, string>();
 }
+
+/** Load a milestone save as Continue/Import would: decode and strictly validate. */
+export function loadSnapshot(text: string): GameState {
+  const decoded = decodeSave(text);
+  if (!decoded.ok) throw new Blocked(`Branch save does not load: ${decoded.error}`);
+  return decoded.value.state;
+}
+
