@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { EVIDENCE, HULLS, HULL_COLLIDERS, ITEMS, PLACES, RECIPES, SOURCES, FUTURE_BLUEPRINTS } from "../src/content/registry.js";
 import type { MaterialId, RecipeId } from "../src/content/registry.js";
 import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, CANOPY_BASIN_ROUTE, LEGACY_TERRAIN_SOURCE_IDS, LEGACY_WORLD_BOUNDS, WORLD_VERTICAL_BOUNDS } from "../src/content/routes.js";
-import { SOURCES as OLD_SOURCES } from "../src/save/legacy/registry.js";
 import { createGame } from "../src/sim/state.js";
 import { addItem, available, fabricationContainers, transfer } from "../src/sim/inventory.js";
 import { collect, completeOpening, craft, discover, personalLimit } from "../src/sim/progression.js";
@@ -44,8 +43,33 @@ function aimAt(s: GameState, id: string): void {
   s.player.pose.pitch = Math.atan2(dy, Math.hypot(dx, dz));
 }
 
+// Frozen expedition.3 terrain-shaping sources: id, position and whether it is a food school.
+const OLD_SOURCES: [string, number, number, number, boolean][] = [
+  ["reef_service_scraps_east", -9, -12, -6, false],
+  ["reef_service_scraps_west", -32, -28, -17, false],
+  ["reef_glass_ridge_north", -6, -8, 0, false],
+  ["reef_glass_ridge_south", -25, -22, -22, false],
+  ["reef_ribbon_catch_north", -15, -10, 1, false],
+  ["reef_ribbon_catch_south", -33, -25, -24, false],
+  ["island_workshop_scraps", 8, 1.2, -35, false],
+  ["island_headland_scraps", 32, -20, -36, false],
+  ["island_glass_ledge_east", 28, -10, -25, false],
+  ["island_glass_ledge_west", -15, -25, -40, false],
+  ["island_resin_cove_east", 35, -10, -32, false],
+  ["island_resin_cove_west", -18, -20, -36, false],
+  ["canopy_grounding_fins_upper", 93, -90, -96, false],
+  ["canopy_grounding_fins_lower", 136, -130, -135, false],
+  ["canopy_resin_lee_upper", 101, -100, -102, false],
+  ["canopy_resin_lee_lower", 144, -140, -143, false],
+  ["reef_edible_school_north", 4, -2, 3, true],
+  ["reef_edible_school_south", -4, -3, 6, true],
+  ["island_shore_crop_east", 13, 1.2, -35, true],
+  ["island_shore_crop_west", 5, 1.2, -38, true],
+];
+const OLD_POSITIONS = OLD_SOURCES.map(([, x, y, z]) => ({ x, y, z }));
+
 test("old terrain domain retains exact source order and equality on a half-metre grid and sensitive datums", () => {
-  assert.deepEqual(LEGACY_TERRAIN_SOURCE_IDS, Object.keys(OLD_SOURCES));
+  assert.deepEqual(LEGACY_TERRAIN_SOURCE_IDS, OLD_SOURCES.map(([id]) => id));
   // Independent accepted formula, using only frozen old definitions and original iteration order.
   function oldHeight(x: number, z: number): number {
     let h = -8.8 + Math.sin(x * .105) * .52 + Math.cos(z * .12) * .42 +
@@ -54,10 +78,10 @@ test("old terrain domain retains exact source order and equality on a half-metre
       18 * Math.exp(-((x - 19) ** 2 / 65 + (z + 64) ** 2 / 90)) -
       155 * Math.max(0, Math.min(1, (x - 42) / 60)) -
       22 * Math.exp(-((x + 32) ** 2 / 190 + (z + 24) ** 2 / 190));
-    for (const d of Object.values(OLD_SOURCES)) {
-      if (d.position.y > 0 || d.item === "meal") continue;
-      const w = Math.exp(-((x - d.position.x) ** 2 + (z - d.position.z) ** 2) / 18);
-      h = h * (1 - w) + (d.position.y - .8) * w;
+    for (const [, px, py, pz, meal] of OLD_SOURCES) {
+      if (py > 0 || meal) continue;
+      const w = Math.exp(-((x - px) ** 2 + (z - pz) ** 2) / 18);
+      h = h * (1 - w) + (py - .8) * w;
     }
     const smooth = (a: number, b: number, v: number): number => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
     const apron = smooth(1, 3, x) * (1 - smooth(16, 18, x)) * smooth(-44, -40, z) * (1 - smooth(-22, -18, z));
@@ -66,7 +90,7 @@ test("old terrain domain retains exact source order and equality on a half-metre
   }
   for (let x = -76; x <= 188; x += .5) for (let z = -184; z <= 66; z += .5)
     assert.equal(terrainHeight(x, z), oldHeight(x, z), `${x},${z}`);
-  for (const p of [...Object.values(OLD_SOURCES).map(s => s.position),
+  for (const p of [...OLD_POSITIONS,
     { x: 15.6, z: -17.3 }, { x: -13.4, z: -17.98 }, { x: 20, z: -22 },
     { x: 103, z: -122 }, { x: 109, z: -115 }, { x: 116, z: -126 }])
     for (const dx of [-.34, 0, .34, 3.6]) for (const dz of [-.34, 0, .34, 3.6])
