@@ -29,6 +29,11 @@ These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.m
 - **Current state:** `STATUS.md` (one page) and this file. History lives in `archive/` behind an index and is not loaded by default.
 - **Builder briefs:** about a page plus links, covering the player outcome, owned modules, shared interfaces, acceptance behaviors including one adverse case, checks and resource limits.
 
+## Concurrency (owner, 2026-10-20)
+- **At most 5 Opus builder threads run at once.** The coordinator is not counted. Sol reviewers are separate and don't count toward the 5.
+- **Paused streams queue.** They commit, stop cleanly, and resume in priority order as slots free up.
+- **Priority:** the critical path (B1 and its composition), then GPU, then the world foundation (S1 → S2), then fixes that block finishing the game (S5), then the rest.
+
 ## Shared ground rules for parallel builders
 - **Coordinates and IDs:** metres, Y-up, stable string IDs. One composed content registry; no second economy.
 - **Composition is the coordinator's job.** New streams write new modules plus a short interface note. The coordinator composes them into the shared roots: registry, `step.ts`, `app.ts`, `renderer.ts`, `package.json` and saves.

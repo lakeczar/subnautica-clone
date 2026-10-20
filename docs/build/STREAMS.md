@@ -98,3 +98,7 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **S1 R1 (Sol xhigh):** changes-needed (`review/s1` `55f335e`). P1: byte budgets are not enforced. Also mixed-LOD terrain cracks up to 8.5 m, and the legacy adapter needs spelling out. All accepted and back with the author; S2 to re-merge after the fix.
 - **S3 R1 (Sol xhigh):** changes-needed (`review/s3` `45405ba`). The Spindle contact-state fit is bypassed; frame updates clear sockets. There is also a **pre-existing production bug**: the Dart cannot use the starboard berth (5 cm overlap). S3 proposes the fix, and the coordinator applies it at composition.
 - **S4 R1 (Sol xhigh):** changes-needed (`review/s4` `dab1858`). The escape test removed walls (68 HP > 60), strikes go through cover, heat/brine warnings are 4.28 s, and persistence IDs are unsafe. All accepted and back with the author.
+
+## Concurrency queue (cap: 5 Opus builders)
+- **Running:** B1, GPU author, S1 (R1 fixes), S2, S5 (R1 fixes).
+- **Paused, in resume order:** S4 (R1 fixes), S3 (R1 fixes), S6 (R1 fixes). Each was told to commit and stop; resume with "continue".
