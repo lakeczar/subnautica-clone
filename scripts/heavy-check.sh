@@ -40,7 +40,7 @@ echo "$unit pid=$$ cwd=$PWD started=$(date -u +%FT%TZ) cmd=$*" >"$lock.owner"
 
 status=0
 SILTWAKE_HEAVY_LOCK_HELD=1 systemd-run --user --scope --quiet --unit="$unit" \
-  -p MemoryHigh="$(( ${max%G} * 1024 - 1024 ))M" -p MemoryMax="$max" -p MemorySwapMax=0 \
+  -p MemoryHigh="$(( ${max%G} * 1024 * 85 / 100 ))M" -p MemoryMax="$max" -p MemorySwapMax=0 \
   timeout --kill-after=10s "${deadline}s" "$@" || status=$?
 : >"$lock.owner"
 case "$status" in
