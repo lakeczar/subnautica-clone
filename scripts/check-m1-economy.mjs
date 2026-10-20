@@ -23,7 +23,9 @@ const m1Ids = [...delta.preCanopy, ...Object.keys(delta.optionalReturn)];
 assert.equal(new Set(m1Ids).size, m1Ids.length, "each adopted M1 recipe is covered exactly once");
 // M2-B1 recipes are runtime-checked separately by scripts/check-m2-b1-economy.mjs.
 const m2b1Ids = ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "restore_canopy_stop", "creel_350", "dart_350"];
-assert.deepEqual(Object.keys(RECIPES).sort(), [...m1Ids, "suit_350", ...m2b1Ids].sort(), "complete executable roster is M1 plus the separately checked M2 refits and M2-B1 fleet work");
+// S5 works recipes wait on later content; tests/story-composed.test.ts audits them against the registry.
+const storyIds = ["service_power_assembly", "service_air_assembly", "pod_buffer"];
+assert.deepEqual(Object.keys(RECIPES).sort(), [...m1Ids, "suit_350", ...m2b1Ids, ...storyIds].sort(), "complete executable roster is M1 plus the separately checked M2 refits, M2-B1 fleet work and S5 works recipes");
 assert.equal(new Set(delta.preCanopy).size, delta.preCanopy.length);
 for (const id of m1Ids) {
   const r = RECIPES[id];

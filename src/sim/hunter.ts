@@ -5,7 +5,7 @@ import type { GameState, Vec3, WorldPose, WorldQueries } from "./types.js";
 import { hullClearance, moveHull } from "./world.js";
 import { HEARTHLINE_KEEL as K } from "../content/encounterGeometry.js";
 import { vec, add, sub, scale, length, finite, unit, encounterRotation, inverseRotation,
-  hullMesh, closestOnMesh, inside, triangleBox, DIVER_MESH } from "./hunterQueries.js";
+  hullMesh, hullContactPose, closestOnMesh, inside, triangleBox, DIVER_MESH } from "./hunterQueries.js";
 import { boundDistance, carrierShell, escapePlane, escapePlaneGap, meshOccludes, translatedBoxSweep } from "./hunterQueries.js";
 import type { Triangle, ContactMesh, OrientedPiece, Separation } from "./hunterQueries.js";
 import type { ContactBox } from "../content/encounterGeometry.js";
@@ -26,7 +26,8 @@ function actorQuery(pose: WorldPose, hull: HullId | null, pitch: number, mesh = 
 }
 function actor(s: GameState): ActorQuery {
   const v=s.fleet.vehicles.find(v=>v.id===s.player.controlledVehicleId);
-  return actorQuery(v?.pose??s.player.pose,v?.hull??null,v?.hull==="dart"&&!v.berth?v.pose.pitch:0);
+  return actorQuery(v?.pose??s.player.pose,v?.hull??null,v?.hull==="dart"&&!v.berth?v.pose.pitch:0,
+    v?hullMesh(v.hull,hullContactPose(s,v)):DIVER_MESH);
 }
 /** Zero/vertical separation uses home-relative horizontal direction, then +X. */
 function outward(position: Vec3, target: Vec3): Vec3 {
@@ -101,7 +102,7 @@ function fleetObstacles(s: GameState): readonly Obstacle[] {
       const parent=s.fleet.vehicles.find(p=>p.id===v.berth!.carrierId);
       if(parent)pose={frame:"world",position:localToWorld(v.berth.pose.position,parent),yaw:parent.pose.yaw+v.berth.pose.yaw,pitch:0};
     }
-    if(v.id!==s.player.controlledVehicleId)result.push({id:v.id,query:actorQuery(pose,v.hull,v.hull==="dart"&&!v.berth?pose.pitch:0)});
+    if(v.id!==s.player.controlledVehicleId)result.push({id:v.id,query:actorQuery(pose,v.hull,v.hull==="dart"&&!v.berth?pose.pitch:0,hullMesh(v.hull,hullContactPose(s,v)))});
     if(v.hull==="hearthline"&&s.fleet.docking?.vehicleId===v.id) {
       const dock=s.fleet.docking,slot=dock.transaction?.phase==="lock"?dock.transaction.slot:undefined;
       result.push({id:v.id+"/shell",query:actorQuery(pose,v.hull,0,carrierShell(dock.configuration,slot))});

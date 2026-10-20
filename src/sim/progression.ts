@@ -1,6 +1,5 @@
 import {
   EVIDENCE,
-  EVIDENCE_BLUEPRINTS,
   FRAME_ALLOY,
   HULL_BUILD,
   HULL_HOLD_CU,
@@ -47,6 +46,7 @@ import {
 import { makeVehicle } from "./state.js";
 import { personalLimit as personalPressureLimit, safePersonalDepth } from "./capabilities.js";
 import { RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
+import { recordStory, storyInteractions } from "./storyLink.js";
 export interface Interaction {
   id: string;
   label: string;
@@ -84,6 +84,7 @@ export function interactions(s: GameState): Interaction[] {
     ...Object.entries(TECH_RECORDS).map(([id, r]) => ({
       id, label: r.label, position: r.position, kind: "record" as const,
     })),
+    ...storyInteractions(s),
   ];
   targets.push(
     {
@@ -139,27 +140,9 @@ export function interactions(s: GameState): Interaction[] {
       });
   return targets;
 }
+/** C01–C06 discovery: the story adapter keeps their saved record and side effects. */
 export function discover(s: GameState, id: EvidenceId): string {
-  const def = EVIDENCE[id];
-  if (!s.knowledge.evidence.some((e) => e.id === id))
-    s.knowledge.evidence.push({ id, tick: s.tick, provenance: def.provenance });
-  const add = (bp: GameState["knowledge"]["blueprints"][number]): void => {
-    if (!s.knowledge.blueprints.includes(bp)) s.knowledge.blueprints.push(bp);
-  };
-  for (const bp of EVIDENCE_BLUEPRINTS[id]) add(bp);
-  if (id === "C02") {
-    if (!s.knowledge.scans.includes("filter_flow"))
-      s.knowledge.scans.push("filter_flow");
-  }
-  if (id === "C04") {
-    s.world.facilities.find((f) => f.id === "canopy_lab")!.repaired = true;
-  }
-  const place = def.place;
-  if (!s.knowledge.markers.includes(place)) s.knowledge.markers.push(place);
-  // The C04 field sheet's service log names the dark mooring: a known place after
-  // the laboratory, exactly as migration appends it. Not a pin to new evidence.
-  if (id === "C04" && !s.knowledge.markers.includes("canopy_stop")) s.knowledge.markers.push("canopy_stop");
-  return `${def.label} recorded. ${def.lead}`;
+  return recordStory(s, id);
 }
 /** Inspecting an ordinary technical record keeps it and grants its plans, once. */
 export function readTechRecord(s: GameState, id: TechRecordId): string {
@@ -271,12 +254,12 @@ export function craftingBlock(
   if (r.once && s.knowledge.crafted.includes(id))
     return block("completed", "Already completed. The fabricated equipment or restored service is retained.");
   if (!r.needs.every((n) => s.knowledge.crafted.includes(n as RecipeId)))
-    return block("needs", "Earlier service work or equipment is still required.");
+    return block("needs", "Needs earlier work first.");
   if (id === "suit_350" && (s.inventory.items.filter(i => i.fitted === "suit").length !== 1 ||
       !s.inventory.items.some(i => i.kind === "suit_150" && i.fitted === "suit" && i.containerId === "equipment" && i.quantity === 1)))
     return block("equipment", "Bring the one fitted 150 m suit for its paid refit. Nothing consumed.");
   if (!atSite(s, r.site) || (r.site === "island_workshop" && !!s.player.interiorId))
-    return block("site", r.site === "canopy_stop" ? "Work at the outer-crown mooring's service mast." : "Use the fabrication bench at the required refuge.");
+    return block("site", r.site === "canopy_stop" ? "Work at the outer-crown mooring's service mast." : "Use this recipe’s bench.");
   if (
     (r.site === "pod_fabricator" && !facility(s, "pod_fabricator")) ||
     (r.site === "island_workshop" && id !== "restore_workshop" && !facility(s, "island_workshop"))
@@ -319,7 +302,7 @@ export function craftingBlock(
       ([kind, n]) => available(s, kind as ItemKind, bins) < n,
     )
   )
-    return block("materials", "Missing public materials. The bench uses your hold, its accessible locker, a nearby deployed buoy and craft at this site's supported cradle.");
+    return block("materials", "Missing materials at this bench.");
   if (id === "strip_frame") {
     const after = structuredClone(s);
     spend(after, r.cost, bins);
@@ -327,7 +310,8 @@ export function craftingBlock(
       return block("space", `Stripped alloy goes to the workshop locker; it needs ${ITEMS.structural_alloy.cu * FRAME_ALLOY} CU. Nothing consumed.`);
   }
   if (r.output === "reserve_cell" || r.output === "salvage_buoy" || r.output === "dart_acoustic_trim" ||
-      r.output === "creel_cargo_rack" || r.output === "creel_cabin") {
+      r.output === "creel_cargo_rack" || r.output === "creel_cabin" ||
+      r.output === "service_power_assembly" || r.output === "service_air_assembly") {
     const after = structuredClone(s);
     spend(after, r.cost, bins);
     const to = r.output === "creel_cargo_rack" || r.output === "creel_cabin" ? packageDestination(after) : "diver";
@@ -367,6 +351,9 @@ export function craft(
     s.world.facilities.find((f) => f.id === "island_workshop")!.repaired = true;
   else if (r.output === "restore_canopy_stop")
     s.world.facilities.find((f) => f.id === "canopy_stop")!.repaired = true;
+  else if (r.output === "pod_buffer") {
+    if (!s.story.works.repairs.includes("pod_buffer")) s.story.works.repairs.push("pod_buffer");
+  }
   else if (hull) {
     const vid = nextId(s, hull),
       cargoId = `${vid}_hold`,
@@ -426,6 +413,7 @@ export function craft(
       ? `${ITEMS[r.output as ItemKind].label} made · stowed in ${s.inventory.items.some((i) => i.kind === r.output && i.containerId === "workshop_locker") ? "the workshop locker" : "your hold"}. Fit it from Cargo with the Creel at a supported mooring.`
     : refit ? `${HULLS[refit].label} hull refitted · rated 350 m. Your suit limit is separate.`
     : id === "strip_frame" ? "Frame stripped · 8 structural alloy in the workshop locker."
+    : id === "pod_buffer" ? "Dispatch buffer fitted beside the regulator. Its log is readable now."
     : id === "restore_canopy_stop" ? "Outer-crown mooring restored · hull service, cell charging, a 48 CU locker and mount changes here. No air: the laboratory pocket remains the Canopy's refuge."
     : `${r.label} complete. ${id === "restore_workshop" ? "Air, healing, locker, charging and hull fabrication are now available." : id === "dart_base" ? "Dart is in the yellow launch cradle. Board it from the cockpit side." : ""}`;
   return null;
@@ -457,37 +445,6 @@ export function toggleBuoy(s: GameState): string | null {
     ? "Buoy deployed. Its cargo is a separate 24 CU container; it follows your local tow collar."
     : "Empty buoy packed.";
   return null;
-}
-export function hint(s: GameState): string {
-  s.knowledge.hintLevel = Math.min(3, s.knowledge.hintLevel + 1);
-  const has = (id: EvidenceId): boolean =>
-    s.knowledge.evidence.some((e) => e.id === id);
-  if (!has("C02") && !has("C03"))
-    return s.knowledge.hintLevel === 1
-      ? "Two visible leads: the twin reef ribs and Splitspine’s broken ridge."
-      : "Face north from the pod ramp. The reef ribs lie to your left; the island landing lies ahead.";
-  if (!has("C02"))
-    return "Inspect the intake pipes beneath the twin curved reef ribs. Follow open fans to their downstream catches.";
-  if (!has("C03"))
-    return "Find the low workshop platform at the southern foot of the split island ridge. Its ledger is beside unused panels.";
-  if (!s.knowledge.crafted.includes("dart_base"))
-    return "Prepare at the pod: tools, 150 m suit, buoy, a meal and charged reserve cells. Recharge local cells at its restored bench. Restore the island workshop, then build the Dart in its clear launch cradle.";
-  if (!has("C04"))
-    return s.knowledge.hintLevel < 3
-      ? "Follow the buoyant crowns east from the island. Quiet movement gives time to read the hunter’s warning."
-      : "Use the open upper crowns, above 150 m. The laboratory is tucked against the tall cover rib; the clear upper flank leads back to the island.";
-  if (!s.knowledge.crafted.includes("suit_350"))
-    return "Bring four crust and four cured resin from the Canopy to the restored workshop for a 350 m suit refit, with two alloy and two membrane. Dart's 180 m hull reaches the first Basin shelf; your suit must protect the exit.";
-  if (!has("C05") || !has("C06"))
-    return "Follow the lower crowns to the fallen Basin dish. The flooded dormitory faces inward; a separate boundary station stands beside the southern dish. Both lie on the first shelf, with an open upper return east of the Canopy.";
-  const creel = s.fleet.vehicles.find((v) => v.hull === "creel");
-  if (has("C05") && !s.knowledge.crafted.includes("creel_base"))
-    return "The dormitory rack's Creel plans are at the workshop bench: ten alloy, four glass, four membrane, four fin crust and two cured resin. It builds in the medium slip west of the landing; no Dart is required.";
-  if (creel && !s.inventory.items.some((i) => i.kind === "creel_cargo_rack" || i.kind === "creel_cabin"))
-    return "Make a cargo rack for bulk hauling or a refuge cabin for staying out, then fit it from Cargo with the Creel moored in its slip. Only one fits the major mount at a time.";
-  if (creel && !facility(s, "canopy_stop"))
-    return "Tagged frames rest on the Basin ridge beside the fallen dish. A Creel's tool arms load them without leaving the helm. One frame, two glass and two crust restore the dark mooring on the eastern Canopy margin.";
-  return "Both Basin observations are retained. The fracture below the boundary station holds more frames past a 240 m hull; a 350 m refit or a suited lift from the lip reaches them. The upper return and local rescue guides remain available.";
 }
 export const personalLimit = (s: GameState): number =>
   personalPressureLimit(s);

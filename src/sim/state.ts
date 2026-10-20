@@ -1,6 +1,7 @@
 import { HULLS, PLACES, SOURCES, THREAT_HOME } from "../content/registry.js";
 import type { GameState, VehicleState, Vec3 } from "./types.js";
 import { initialRenewal } from "./renewal.js";
+import { createStory } from "./story/state.js";
 export function createGame(): GameState {
   return {
     tick: 0,
@@ -96,6 +97,7 @@ export function createGame(): GameState {
       action: null,
     },
     fleet: { vehicles: [], docking: null },
+    story: createStory(),
     recovery: { operation: null, caches: [], losses: [] },
     metrics: {
       swimMetres: 0,

@@ -1,11 +1,28 @@
 import { CREEL_BUILD_POSE, DART_BUILD_POSE, HULLS, ITEMS, MATERIALS } from "../content/registry.js";
 import type { FabricationSite, ItemKind, MaterialId } from "../content/registry.js";
 import { CANOPY_STOP } from "../content/routes.js";
+import { HEARTHLINE_CONTAINERS } from "../content/fleet/hearthlineInterior.js";
 import type { Fitting, GameState, ItemStack, Vec3, VehicleState } from "./types.js";
 export const distance = (a: Vec3, b: Vec3): number =>
   Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 export const nextId = (s: GameState, prefix: string): string =>
   `${prefix}_${++s.sequence}`;
+/** Hearthline's hold beside its stores (the hull's own cargo container): named
+ * compartments, each a locker owned by the carrier that accepts one class of item. */
+export const CARRIER_COMPARTMENTS = HEARTHLINE_CONTAINERS.filter((c) => c.accepts !== "any")
+  .map((c) => ({ suffix: c.id.slice(c.id.indexOf(".") + 1), capacity: c.capacityCu, accepts: c.accepts as "food" | "fabrication" }));
+export const compartmentId = (carrierId: string, suffix: string): string => `${carrierId}_${suffix}`;
+export function carrierCompartment(s: GameState, id: string): { host: VehicleState; accepts: "food" | "fabrication" } | null {
+  const c = s.inventory.containers.find((c) => c.id === id && c.kind === "locker");
+  const host = c && s.fleet.vehicles.find((v) => v.id === c.ownerId && v.hull === "hearthline");
+  const spec = host && CARRIER_COMPARTMENTS.find((k) => compartmentId(host.id, k.suffix) === id);
+  return host && spec ? { host, accepts: spec.accepts } : null;
+}
+/** Pantry: meals. Fabrication: materials and tagged frames. Every other container takes anything. */
+export function containerAccepts(s: GameState, id: string, kind: ItemKind): boolean {
+  const c = carrierCompartment(s, id);
+  return !c || (c.accepts === "food" ? kind === "meal" : Object.hasOwn(MATERIALS, kind) || kind === "tagged_frame");
+}
 export function usedCapacity(s: GameState, containerId: string): number {
   return s.inventory.items
     .filter((i) => i.containerId === containerId && !i.fitted)
@@ -148,6 +165,8 @@ export function containerAccessible(s: GameState, id: string): boolean {
     return localBenchSite(s) === "island_workshop";
   if (id === "canopy_stop_locker")
     return localBenchSite(s) === "canopy_stop";
+  const compartment = carrierCompartment(s, id);
+  if (compartment) return s.player.interiorId === compartment.host.id && !compartment.host.disabled;
   const locker = s.inventory.containers.find((c) => c.id === id && c.kind === "locker" && c.ownerId !== "home_pod" &&
     c.ownerId !== "island_workshop" && c.ownerId !== "canopy_stop");
   if (locker) {
@@ -174,7 +193,9 @@ export function containerAccessible(s: GameState, id: string): boolean {
 }
 export function containerLabel(s: GameState, id: string): string {
   const v = s.fleet.vehicles.find((v) => v.cargoId === id);
-  if (v) return `${HULLS[v.hull].label} hold`;
+  if (v) return `${HULLS[v.hull].label} ${v.hull === "hearthline" ? "stores" : "hold"}`;
+  const compartment = carrierCompartment(s, id);
+  if (compartment) return `${HULLS.hearthline.label} ${compartment.accepts === "food" ? "pantry" : "fabrication locker"}`;
   if (id === "diver") return "diver hold";
   if (id === "canopy_stop_locker") return "mooring locker";
   if (s.inventory.items.some((i) => i.kind === "creel_cabin" && cabinLockerId(i.id) === id)) return "cabin locker";
@@ -208,6 +229,8 @@ export function materialStoragePreview(s: GameState, from: string, to: string): 
     ? "Choose two distinct, locally accessible cargo containers. Equipment cannot be stored."
     : !items.length
       ? "No public material stacks in the source. Meals, cells, tools and modules stay with their container."
+      : !containerAccepts(s, to, items[0]!.kind)
+        ? `${containerLabel(s, to)} holds meals only.`
       : !hasRoom(s, to, totalCu)
         ? `The destination needs ${totalCu} CU for all these materials. Nothing moved.`
         : null;
@@ -246,6 +269,8 @@ export function transfer(
     !containerAccessible(s, to)
   )
     return "Both containers must be present and accessible.";
+  if (!containerAccepts(s, to, i.kind))
+    return `${containerLabel(s, to)} does not take ${ITEMS[i.kind].label.toLowerCase()}.`;
   if (!hasRoom(s, to, ITEMS[i.kind].cu * quantity))
     return "The destination is full. Nothing moved.";
   if (quantity === i.quantity) i.containerId = to;

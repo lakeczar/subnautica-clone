@@ -523,7 +523,7 @@ test("notebook retains both early orders and omits unknown sources and an uncoll
     const snapshot = structuredClone(s);
     view.openPanel("notebook", s);
     const html = get("panel-content").innerHTML;
-    assert.ok(html.indexOf("Intake & living filters") < html.indexOf("Unspent departure supplies") === (order[0] === "C02"));
+    assert.ok(html.indexOf("Intake &amp; living filters") < html.indexOf("Unspent departure supplies") === (order[0] === "C02"));
     for (const finding of s.knowledge.evidence) assert.ok(html.includes(finding.provenance));
     assert.ok(!html.includes("Mara Sen / field method"));
     assert.ok(!html.includes("Upper grounding fins"), "undiscovered source is not revealed by a regional lead");
@@ -1117,7 +1117,7 @@ test("recipe focus follows its full command as shortage work becomes ready; comp
   const command: GameCommand = { type: "craft", recipeId: "pod_repair" };
   view.openPanel("craft", s);
   assert.equal(renderedControl(command).disabled, true); assert.equal(activateControl(renderedControl(command)), undefined);
-  assert.match(get("panel-content").innerHTML, /Missing public materials/);
+  assert.match(get("panel-content").innerHTML, /Missing materials at this bench/);
   addItem(s, "structural_alloy", 2, "diver"); addItem(s, "silica_glass", 1, "diver"); addItem(s, "flex_membrane", 2, "diver");
   view.refreshPanel(s); commandButton(command).focus();
   view.refreshPanel(s); assert.deepEqual(activeCommand(), command);
@@ -1993,4 +1993,24 @@ test("Creel mount changes keep keyboard focus on the mount row, not Return", (t)
   s = executeCommand(s, { type: "install-module", vehicleId: creel.id, itemId: rack }, world).state;
   view.refreshPanel(s);
   assert.equal(active()?.attrs["data-focus-key"], `mount:${creel.id}`, "fitting returns to the same row");
+});
+
+test("sound captions: essential warnings show with captions off, others follow the setting, and an on-screen banner is not repeated", (t) => {
+  const { view, get } = viewFixture(t);
+  const s = createGame(); completeOpening(s);
+  view.update(s, false);
+  view.audioSettings({ volume: 0, muted: true, subtitles: false });
+  view.audioCaption({ cue: "carrier.clamp", text: "[Berth clamps lock]", essential: false, dir: null }, s);
+  assert.equal(get("audio-caption").hidden, true, "non-essential follows captions off");
+  view.audioCaption({ cue: "alert.pressure", text: "[Suit pressure tone · beyond rated depth]", essential: true, dir: null }, s);
+  assert.equal(get("audio-caption").hidden, false);
+  assert.equal(get("audio-caption").textContent, "[Suit pressure tone · beyond rated depth]", "muted and captions off still shows essentials");
+  s.player.pose.position = { x: -20, y: -20, z: -10 }; s.player.mode = "swimming"; s.player.vitals.oxygen = 12;
+  view.audioCaption({ cue: "alert.oxygen", text: "[Low-air tone]", essential: true, dir: null }, s);
+  assert.equal(get("audio-caption").textContent, "[Suit pressure tone · beyond rated depth]", "LOW OXYGEN is already a banner");
+  view.audioSettings({ volume: .5, muted: false, subtitles: true });
+  view.audioCaption({ cue: "carrier.clamp", text: "[Berth clamps lock]", essential: false, dir: null }, s);
+  assert.equal(get("audio-caption").textContent, "[Berth clamps lock]");
+  view.resetPresentation();
+  assert.equal(get("audio-caption").hidden, true, "entering a session clears the caption");
 });

@@ -118,7 +118,7 @@ test("both Canopy approaches, Basin leg and alternate return sweep the actual Da
 test("paid refit preserves the single fitted instance, receipts, atomic money/material/capacity semantics and compatible authority", () => {
   let s = prepared(); const suit = structuredClone(s.inventory.items.find(i => i.kind === "suit_150")!);
   assert.equal(personalLimit(s), 150); assert.equal(capabilityLimit(s), 150);
-  const before = structuredClone(s); assert.match(craft(s, "suit_350", world)!, /Missing public/); assert.deepEqual(s, before);
+  const before = structuredClone(s); assert.match(craft(s, "suit_350", world)!, /Missing materials at this bench/); assert.deepEqual(s, before);
   payRefit(s);
   const funds = Object.fromEntries(Object.keys(RECIPES.suit_350.cost).map(k => [k, available(s, k as MaterialId, fabricationContainers(s, "island_workshop"))]));
   const paid = executeCommand(s, { type: "craft", recipeId: "suit_350" }, world); s = paid.state;

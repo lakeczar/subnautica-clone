@@ -183,7 +183,7 @@ test("fabrication, explicit transfers and bulk storage share only the actual ben
   assert.equal(supportedServiceSite(remote, rv), "home_pod");
   assert.equal(containerAccessible(remote, rv.cargoId), false);
   assert.ok(!fabricationContainers(remote, "island_workshop").includes(rv.cargoId));
-  refused(remote, { type: "craft", recipeId: "dart_acoustic_trim" }, /Missing public/);
+  refused(remote, { type: "craft", recipeId: "dart_acoustic_trim" }, /Missing materials at this bench/);
   remote.player.pose.position = { x: 0, y: 0.18, z: 14 };
   assert.ok(fabricationContainers(remote, "pod_fabricator").includes(rv.cargoId));
   remote.player.pose.position = { x: 50, y: -10, z: -65 }; remote.player.mode = "swimming";

@@ -1,10 +1,11 @@
 import type { GameCommand, GameState, NoticeOptions, Vec3, WorldQueries } from "../sim/types.js";
 import type { AimedTarget, ReachPreview } from "../sim/targeting.js";
-import type { AudioSettings } from "../audio/sound.js";
+import type { AudioSettings } from "../audio/director.js";
+import type { Caption } from "../audio/captions.js";
 import type { SaveSlot } from "../save/repository.js";
 import type { Quality } from "../render/renderer.js";
 import { PanelView, type PanelKind } from "./panels.js";
-import { HudView, type HudAim } from "./hud.js";
+import { hazardBanners, HudView, type HudAim } from "./hud.js";
 import type { ThreatDamage } from "./notices.js";
 
 export type { PanelKind } from "./panels.js";
@@ -30,10 +31,13 @@ export interface UiActions {
   settings(quality: Quality, sensitivity: number, invertY: boolean, mouseMode: "captured" | "drag", keyTurnSpeed: number): void;
 }
 
+/** How long one sound caption stays in the alert column. */
+const CAPTION_MS = 3000;
 export class GameView {
   private panelKind: PanelKind | null = null;
   private latest: GameState | null = null;
   private subtitles = true;
+  private captionTimer: ReturnType<typeof setTimeout> | undefined;
   readonly canvas: HTMLCanvasElement;
   private readonly abort = new AbortController();
   private readonly menu: HTMLElement;
@@ -61,7 +65,7 @@ export class GameView {
         <div id="hud-heading" class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
         <div class="hud-actions"><div id="hud-tools"><button data-action="inventory">Cargo <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button></div><button id="hud-pause" data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
         <div id="call-cue" class="call-cue" hidden><span id="call-dial" class="call-dial" aria-hidden="true"></span><span id="call-elevation" aria-hidden="true"></span><span id="call-direction" role="status" aria-live="polite" aria-atomic="true"></span></div><div class="hud-instruments"><div id="vitals" class="vitals"></div><div id="pitch-cue" class="pitch-cue" aria-label="Pitch" hidden></div></div><span id="hazard-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><span id="damage-announce" class="hud-sr" role="alert" aria-live="assertive" aria-atomic="true"></span><span id="action-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><div class="motion-guidance"><span id="surface-cue" class="surface-cue" hidden>Surface</span><div id="impact-notice" class="impact-notice" role="status" aria-live="polite" hidden></div><span id="blocked-ascent" class="blocked-ascent" role="status" aria-live="polite" hidden>Blocked above</span><div id="pilot-guidance" class="pilot-guidance" aria-label="Pilot exit guidance" hidden></div></div>
-        <section id="opening" class="opening" aria-label="Damaged pod opening" hidden><div aria-live="polite" aria-atomic="true"><span id="opening-progress" class="eyebrow">POD CHECK 1 / 4</span><h2 id="opening-title"></h2><p id="opening-caption"></p></div><div class="opening-actions"><button id="opening-act" data-action="opening">Act <kbd>E</kbd></button><button id="opening-skip" data-action="skip">Skip · hold <kbd>Space</kbd></button><label class="check"><input id="opening-subtitles" type="checkbox" checked /> Captions</label></div><small id="opening-detail"></small></section><div id="crosshair" class="crosshair" aria-hidden="true"></div><div class="encounter-stack"><div id="alert-stack" class="alert-stack"><div id="hazard" class="hazard" aria-live="off"></div></div><div id="interaction-stack" class="interaction-stack"><div id="interact-prompt" class="interact-prompt"></div><div id="action-result" class="action-result" hidden></div><button id="look-action" class="look-action" data-action="lock" hidden>Click to look</button></div></div>
+        <section id="opening" class="opening" aria-label="Damaged pod opening" hidden><div aria-live="polite" aria-atomic="true"><span id="opening-progress" class="eyebrow">POD CHECK 1 / 4</span><h2 id="opening-title"></h2><p id="opening-caption"></p></div><div class="opening-actions"><button id="opening-act" data-action="opening">Act <kbd>E</kbd></button><button id="opening-skip" data-action="skip">Skip · hold <kbd>Space</kbd></button><label class="check"><input id="opening-subtitles" type="checkbox" checked /> Captions</label></div><small id="opening-detail"></small></section><div id="crosshair" class="crosshair" aria-hidden="true"></div><div class="encounter-stack"><div id="alert-stack" class="alert-stack"><div id="hazard" class="hazard" aria-live="off"></div><p id="audio-caption" class="audio-caption" role="status" aria-live="polite" hidden></p></div><div id="interaction-stack" class="interaction-stack"><div id="interact-prompt" class="interact-prompt"></div><div id="action-result" class="action-result" hidden></div><button id="look-action" class="look-action" data-action="lock" hidden>Click to look</button></div></div>
         <div id="hud-bottom" class="hud-bottom"><div class="telemetry"><span class="depth"><b id="depth">0.0</b><small>m / DEPTH</small></span><span class="mode"><strong id="movement">On foot</strong><small id="refuge-distance">Home pod · 0 m</small></span></div>
         <div class="explore-note"><span id="cruise" hidden>FORWARD CRUISE · R TO STOP</span><p id="context-hint">Walk down the amber-edged ramp to the water.</p><small id="pulse-summary"></small><small id="control-hint"></small></div></div>
       </main>
@@ -451,6 +455,26 @@ export class GameView {
   resetPresentation(): void {
     this.panels.resetSession();
     this.hudPresentation.resetPresentation();
+    this.hideCaption();
+  }
+
+  /** S6 sound captions in the alert column. Essential warnings show even with
+   * captions off; a caption whose oxygen, food or hunter banner is already on
+   * screen is not repeated. */
+  audioCaption(caption: Caption, state: GameState | null = this.latest): void {
+    if (!caption.essential && !this.subtitles) return;
+    const banner = ({ "alert.oxygen": "oxygen", "alert.food": "food", "alert.threat-call": "threat" } as Partial<Record<string, string>>)[caption.cue];
+    if (banner && state && hazardBanners(state).some((b) => b.context === banner)) return;
+    const element = this.get("audio-caption");
+    element.textContent = caption.text;
+    element.hidden = false;
+    clearTimeout(this.captionTimer);
+    this.captionTimer = setTimeout(() => this.hideCaption(), CAPTION_MS);
+  }
+  private hideCaption(): void {
+    clearTimeout(this.captionTimer);
+    const element = this.root.querySelector<HTMLElement>("#audio-caption");
+    if (element) { element.hidden = true; element.textContent = ""; }
   }
 
   presentationStep(state: GameState): void { this.hudPresentation.presentationStep(state); }
@@ -481,6 +505,7 @@ export class GameView {
   }
 
   dispose(): void {
+    clearTimeout(this.captionTimer);
     this.panels.cancelFeedback();
     this.hudPresentation.dispose();
     this.abort.abort();
