@@ -67,6 +67,11 @@ export const STORY_SITES = {
     landmark: "Suspended laboratory by the tall rib.", cue: "Fauna school in clear upper water, not the dense channel.",
     approach: "Open upper crowns; quiet lower roots.", visible: "Add a specimen tray for the optional Mara journal.",
   },
+  canopy_stop: {
+    region: "suspended_garden", depth: 138, exit: 138, zone: "near", existing: true,
+    landmark: "Dark service mooring on the outer crowns.", cue: "A tagged mooring ring below the crown edge.",
+    approach: "Outer Canopy crowns, by Creel.", visible: "Unchanged.",
+  },
   basin_dormitory: {
     region: "silt_basin", depth: 166, exit: 166, zone: "near", existing: true,
     landmark: "Flooded dormitory below the first fallen dish.", cue: "Bundles face inward.", approach: "First Basin shelf.", visible: "Unchanged.",
