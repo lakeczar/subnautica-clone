@@ -54,7 +54,7 @@ In `tests/upgrades.test.ts`, "adverse: …":
 - **Already overheated** (R1), a change is judged by survival's own load rate: tolerated heat gives a margin of spare tolerance, otherwise `−(effective − tolerance) × heatLoad`. Zero stays the safe/unsafe boundary.
   - A 450 m Creel at 300 m in 0.9 core heat cannot drop its lining. Its load would rise from 0.15 to 0.55; on C3's real `stepExposure` that is 3 → 11 points per second.
   - A Dart swapping its exchanger for a lining (0.36 → 0.20) is allowed.
-- **Dry-berth warnings** (R1): a berthed change is checked against `berth.carrierDepth` and `berth.exterior`, the hazard sample at the launch lock. It gets one warning per hazard the new fit could not launch into: pressure, heat and brine, each tested separately. The change is still allowed.
+- **Dry-berth warnings** (R1): a berthed change is checked against `berth.carrierDepth` and `berth.exterior`, the hazard sample at the launch lock. Since R2 the sample is **required**: with no safe-water default, an unknown exterior can't certify a launch. It gets one warning per hazard the new fit could not launch into: pressure, heat and brine, each tested separately. The change is still allowed.
 - **Never stranded.** No change can make the hull less safe where it is. Emergency ballast is a powerless 40 m ascent.
 
 ## Effects interface (pure)
@@ -160,7 +160,7 @@ That is +6 crust, +2 resin and +2 membrane on the independent route, within its 
 - **`modules.ts`:** build a `FitTarget` and keep today's local-access and cabin checks in front of `installPreview`/`removePreview`. The target is:
   - `v.rating` and the fitted kinds;
   - the dock: home pod, workshop, restored stop, `carrier_berth`, outpost, or `service_head` when another Creel with the head is within 8 m;
-  - `hullDepth`; for a berthed craft, `berth: { carrierDepth, exterior }`, where exterior is the hazard sample at the carrier's launch lock;
+  - `hullDepth`; for a berthed craft, `berth: { carrierDepth, exterior }`, where `exterior` is the hazard sample at the carrier's launch lock. It is required; sample the hazards at the lock exit point;
   - the hazard sample (heat classified as `core` inside a cycled plume's shape, `burst` while its cycle is active, else `ambient`);
   - `usedCapacity` and `HULL_HOLD_CU`;
   - the carrier state and `inUse`.
@@ -207,3 +207,6 @@ That is +6 crust, +2 resin and +2 membrane on the independent route, within its 
 - **P2, dry-berth warnings.** `FitTarget.berth.exterior` is documented, and `launchWarnings` warns separately for pressure, heat and brine. Each has its own test, plus a no-warning case.
 - **P3, tier guard.** `tierStep` requires a strict increase, with a negative regression for 7 → 7.
 - **Notes.** The economy check is not a reachability proof, and unplaced materials are unbounded on this branch. The mast wording is reconciled. The 2/4 system-socket limit is left to composition.
+
+## R2 fix (Sol xhigh, changes-needed)
+- **P2, unknown launch exterior.** `FitTarget.berth.exterior` is now required, and the safe-water fallback is gone. The no-warning tests pass an explicit benign sample, and a type-level `@ts-expect-error` test keeps an omitted exterior a compile error.

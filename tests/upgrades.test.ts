@@ -200,7 +200,7 @@ test("adverse: removing the plating that keeps a deep hull safe is refused, with
   // Above its own rating the change is allowed.
   assert.equal(removePreview({ ...deep, depth: 340 }, "plating_ceramic#1").refusal, null);
   // In the carrier's dry berth it is allowed, but the player is told launch will wait.
-  const berthed = removePreview({ ...deep, berth: { carrierDepth: 390 }, dock: "carrier_berth" }, "plating_ceramic#1");
+  const berthed = removePreview({ ...deep, berth: { carrierDepth: 390, exterior: { heat: [], brine: 0 } }, dock: "carrier_berth" }, "plating_ceramic#1");
   assert.equal(berthed.refusal, null);
   assert.match(berthed.warnings[0]!, /carrier is at 390 m: the Dart \(rated 350 m\) cannot launch until the carrier rises above 350 m/);
 });
@@ -292,7 +292,11 @@ test("R1: dry-berth changes stay allowed but warn per hazard outside the lock", 
   assert.equal(pressure.refusal, null);
   assert.equal(pressure.warnings.length, 1);
   assert.match(pressure.warnings[0]!, /cannot launch until the carrier rises above 350 m/);
-  // Benign water outside the lock, or no exterior sample: no warning.
+  // Only an explicit benign sample outside the lock gives no warning.
   assert.deepEqual(removePreview({ ...lined, berth: berth({ heat: [], brine: 0 }) }, "hull_heat_lining#1").warnings, []);
-  assert.deepEqual(removePreview({ ...sealed, berth: { carrierDepth: 450 } }, "hull_brine_seals#1").warnings, []);
+  assert.deepEqual(removePreview({ ...sealed, berth: berth({ heat: [], brine: 0 }, 450) }, "hull_brine_seals#1").warnings, []);
+  // R2: the exterior sample is required; an unknown exterior cannot certify a safe launch.
+  // @ts-expect-error berth.exterior is required
+  const unknown: FitTarget["berth"] = { carrierDepth: 300 };
+  assert.ok(unknown);
 });

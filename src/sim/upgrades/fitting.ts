@@ -25,10 +25,10 @@ export interface FitTarget {
   /** Hull depth, metres. */
   readonly depth: number;
   /** In a dry carrier berth the hull feels no pressure or water. It launches at
-   * `carrierDepth` into `exterior`: the hazard sample at the carrier's launch lock
-   * (none when omitted). Changes stay allowed there, with a warning per hazard the
-   * new fit could not launch into. */
-  readonly berth: { readonly carrierDepth: number; readonly exterior?: Hazards } | null;
+   * `carrierDepth` into `exterior`: the hazard sample at the carrier's launch lock.
+   * Required: an unknown exterior must never read as safe water. Changes stay
+   * allowed there, with a warning per hazard the new fit could not launch into. */
+  readonly berth: { readonly carrierDepth: number; readonly exterior: Hazards } | null;
   /** Hazard sample at the hull (unused while berthed: see `berth.exterior`). */
   readonly hazards: Hazards;
   /** CU used in this hull's hold now, and its base hold (HULL_HOLD_CU). */
@@ -130,8 +130,8 @@ function safetyRefusal(t: FitTarget, before: CraftProfile, after: CraftProfile, 
  * launch into at the carrier's depth and lock exterior. */
 function launchWarnings(t: FitTarget, before: CraftProfile, after: CraftProfile): string[] {
   if (!t.berth) return [];
-  const { carrierDepth } = t.berth, hull = label(t.hull), outside = t.berth.exterior ?? { heat: [], brine: 0 };
-  return worsened(marginsAt(t.hull, carrierDepth, outside, before, after)).map((m) =>
+  const { carrierDepth, exterior } = t.berth, hull = label(t.hull);
+  return worsened(marginsAt(t.hull, carrierDepth, exterior, before, after)).map((m) =>
     m.axis === "pressure"
       ? `Safe in the dry berth, but the carrier is at ${Math.round(carrierDepth)} m: the ${hull} (rated ${after.rating} m) cannot launch until the carrier rises above ${after.rating} m or the fitting is restored.`
       : m.axis === "heat"
