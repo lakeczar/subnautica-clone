@@ -4,7 +4,7 @@ Each stream has one Opus 5.5/high owner in its own worktree, branched from the c
 
 Common to every stream:
 - **Read first:** `prompts/BUILD_GAME_REVISED.md`, the specification docs it points to, `docs/build/reviews/DIRECTION-AUDIT-SOL-XHIGH.md` and the current code. B1's in-progress interfaces are readable at `/home/worker/.t3/worktrees/subnautica-clone/t3-b6aef8ec`, read-only.
-- **Checks:** `npx tsc --noEmit` and your own new tests with `node --test` on your files only. Anything using Babylon or NullEngine goes through `scripts/heavy-check.sh` with `--test-concurrency=1`. Assertions on scene objects use `same()`-style name checks (see B1's `tests/render-assert.ts`), never deep equality on Babylon objects.
+- **Checks:** `npm test` (= `npm run test:fast`: typecheck plus every non-Babylon test, about 35 s, no lock) on every meaningful change. A test file that reaches Babylon or NullEngine must be named `*.heavy.test.ts`; the fast tier refuses a fast-named one and prints the rename. Heavy tests run with `npm run test:heavy`, which goes through `scripts/heavy-check.sh` one file at a time with a per-file memory budget (`tests/heavy-budgets.json`). Assertions on scene objects use `same()` and `digest()` from `tests/render-assert.ts`, never deep equality on Babylon objects or whole buffers. Content additions need no save-schema change; see [S7](streams/S7.md).
 - **Browser:** read `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md` first. Use only your assigned port and T3 preview tools, and close only what you opened. The shared browser is software-rendered (SwiftShader), so judge looks and behavior there, not frame rate.
 - **Branching:** commit early and often on your branch. Don't push, open a PR or start children. The coordinator reviews and integrates.
 - **Design freedom:** improve the design where it serves the established game. Flag anything that changes owner scope.
@@ -80,3 +80,59 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 ## Ratified contracts
 - **S1 world frame (2026-10-20):** X −576..1472, Z −1632..160 (+Z north, +X east), Y −800..+100, with 128 m chunks and today's coordinates unchanged. The types live in S1's `src/world/types.ts` and `src/render/kit/types.ts` (`393030a`), described in `docs/build/streams/S1.md` on S1's branch. Placement follows `docs/WORLD_PROGRESSION.md`: Reef NW, Isles N/E rim, Canopy E shelf, Pale Basin centre, Rift SW, Divide S saddle, Meridian SE.
 - S2 live task: `siltwake-s2-regions-393030a`.
+
+## Worktrees (2026-10-20; all resumed after the Claude usage-limit pause)
+- **S1:** `t3-466e13a2` `t3/world-runtime-scale`
+- **S2:** `t3-a50e5f9f` `t3/remaining-regions-islands`
+- **S3:** `t3-6eca1f89` `t3/fleet-art-hearthline-interior`
+- **S4:** `t3-a550755c` `t3/ecology-encounters-hazards`
+- **S5:** `t3-bd05c0c7` `t3/campaign-evidence-ending`
+- **S6:** `t3-74da9dce` `t3/siltwake-audio`
+- **B1:** `t3-b6aef8ec`
+- **GPU author:** `t3-b9861fd3`
+- **GPU R4 review:** `siltwake-gpu-r4-sol-xhigh-6cc4bec`, on candidate `6cc4bec` (the OVMF 64 GiB window for ReBAR)
+
+## Review outcomes
+- **S5 R1 (Sol xhigh):** changes-needed. The four blockers are accepted and back with the author; the report is `review/s5` `d6eb7e7`. C09 placement: the Meridian gate hall, recorded in WORLD_PROGRESSION. S2 places it there. Planner versus real registry is checked at composition.
+- **S6 R1 (Sol xhigh):** changes-needed (`review/s6` `1485704`). Wet path ignores pause and solo, warning causes get mislabelled, phrase lifetimes are short, plus boundary chatter and directional damage. All accepted and back with the author.
+- **S1 R1 (Sol xhigh):** changes-needed (`review/s1` `55f335e`). P1: byte budgets are not enforced. Also mixed-LOD terrain cracks up to 8.5 m, and the legacy adapter needs spelling out. All accepted and back with the author; S2 to re-merge after the fix.
+- **S3 R1 (Sol xhigh):** changes-needed (`review/s3` `45405ba`). The Spindle contact-state fit is bypassed; frame updates clear sockets. There is also a **pre-existing production bug**: the Dart cannot use the starboard berth (5 cm overlap). S3 proposes the fix, and the coordinator applies it at composition.
+- **S4 R1 (Sol xhigh):** changes-needed (`review/s4` `dab1858`). The escape test removed walls (68 HP > 60), strikes go through cover, heat/brine warnings are 4.28 s, and persistence IDs are unsafe. All accepted and back with the author.
+
+## Concurrency queue (cap: 5 Opus builders)
+- **Running (4):** S1 (R1 fixes), S6 (R1 fixes), S7 (test tiers and saves), S8 (concise menus). S4's fixes are done at `0bdc223` (design changed, worst loss 45.6 HP), with an R2 Sol review running. The fifth slot is held for composition once B1 is accepted. S3's fixes are done at `83afb45`, with an R2 Sol review running. S2 is done at `3c185ca`, with its Sol R1 review running. The GPU fix is done at `785503c` (`qemu:commandline` plus a pre-shutdown `domxml-to-native` gate), with an R5 Sol review running. B1 is done at `2cff245` (587/587 `npm run check`), and its Sol R1 review is running. S5's fixes are done at `476a044`; the coordinator reproduced 59/59 tests, and an R2 Sol review is running.
+- **Paused:** none. Each was told to commit and stop; resume with "continue".
+  - S4 paused at `27de0fb`: S4-03 mostly done and S4-04 half done; S4-01, S4-02 and S4-05 not started; tests to update.
+  - S3 paused at `682bdd3`: S3-01 and S3-03 done but unrun; S3-02 (the Dart berth proposal) and the S3.md updates remain.
+  - S6 paused at `ab59c89`: all five fixes are in source, but their tests, the lab re-measure and the doc updates remain.
+- **S2 decisions (coordinator):** the gate hall is at 769 m, beside the machinery at 770 m; S5's 700 m reference follows S2's site at composition. Also accepted: a Hearthline construction berth at the stack yard, the 950 m deep tether, and per-region optics. S2 must re-merge S1 after S1's R1 fixes.
+- **S3-02 decision:** option B, trimming the Dart's fins to a 2.45 m envelope with no save change, applied at composition and proven with S3's `transferMatrix`.
+- **S5 R2 (Sol xhigh): ACCEPTED** `476a044` (`review/s5-r2` `c61ed50`). S5-07, a non-blocking note that empty quote excerpts pass, gets a non-empty guard at composition. S5-05 stays a composition check.
+- **B1 ACCEPTED** (Sol R1, accept with nits), integrated at `ccf8c44`. The nits go to S8.
+- **S6 fixes done** at `230c7c1` (33/33 tests, lab 76/76). The R2 review waits for the Codex rate limit.
+- **Retried at 03:19 after the Codex 429s:** S3 R2 and S4 R2 continued; S1 R2 re-dispatched (`siltwake-s1-review-r2b-sol-21d9247`); S6 R2 dispatched (`siltwake-s6-review-r2-sol-230c7c1`).
+- **S2 R1 (Sol xhigh):** changes-needed (`review/s2` `f01b6f2`). P1: terrain triangles and LOD edges diverge from the floor, by up to 33.5 m. P2: the access/rescue proof stops short of attachment and tow outcome. Back with the author, who merges S1 `21d9247` first. The vistas are judged readable but still somewhat repetitive; polish comes later.
+- **S3 R2 (Sol xhigh): ACCEPTED** `83afb45` (`review/s3-r2` `0b86c64`), with no new findings and all 6 mutations caught. The Dart fin trim (option B) is applied at composition and proven by `transferMatrix`.
+- **S4 R2 (Sol xhigh):** changes-needed, narrowly (`review/s4-r2` `8a32962`). S4-06: inactive-actor recovery eats the post-load warning, leaving 3.28 s from warning to harm. S4-07: adverse-test mutations survive. The design is otherwise verified (capsule escapes at 28/28/45.6/18 HP). Back with the author.
+- **S1 R2 (Sol xhigh):** changes-needed (`review/s1-r2` `920cc60`). The R1 issues are resolved, but two new P2s turned up: S1-04, where tight LOD swaps hide terrain while reporting ready, and S1-05, where external reservations refuse fitting chunks. Back with the author (5th builder slot).
+- **S6 R2 (Sol xhigh):** changes-needed (`review/s6-r2` `c07e0a3`). Blocker S6-06: stealing an ambient-detail voice orphans its graph, leaving 120 nodes after 10 min, pause and reset. Non-blocking: mixed warning causes can reuse a stale notice, and pausing during a pursuit leaves a −74.8 dBFS residual. **Queued for the next free builder slot.** Report: `/home/worker/.t3/worktrees/subnautica-clone/t3-7202eb50/docs/build/reviews/S6-SOL-XHIGH-R2.md`.
+- **Builder queue (cap 5):** running S1, S2, S4 and S6 (all fixing review findings) and S7 (additive saves). S8 is done at `98dcf72` and in Sol R1 review.
+- **S8 copy proposals:** accepted. Drop stats from recipe names, shorten refusals, and have the service refusal mention moorings. Applied in the registry at composition.
+- **S4 R2 fixes done** at `8f01513` (37 tests; walls, accounting and vibration mutations now caught). A focused Sol R3 review is running. One builder slot is held for composition, which starts when S7 lands.
+- **S7 additive-content done** at `03d5839` (fast tests 544/544, heavy 9/9, browser import/export smoke). Sol R1 review running. **C1 composition** (Opus, 5th slot) started: merges S7 + S8 + S5 + S3 onto production, then wires the story and fleet in, applies the Dart trim and the copy proposals, and makes the planner use the real registry.
+- **S6 R2 fixes done** at `35fe1c4` (37 tests, lab 78/78, orphans 0, pause digitally silent). A focused Sol R3 review is running.
+- **S4 R3 (Sol xhigh):** changes-needed (`review/s4-r3` `f5595aa`). S4-06/07 are resolved, but S4-08: alternating control renews hazard grace forever (0 damage over 127 s). Back with the author with an explicit episode rule.
+- **S1 R2 fixes done** at `84bbc86` (39 fast and 7 heavy tests, 10/10 mutations). A focused Sol R3 review is running. S2 should re-merge `84bbc86`.
+- **S7 R1 (Sol xhigh):** changes-needed (`review/s7` `4020f8b`). No save defect found. Blockers: nested heavy-lock deadlock (root fixed `heavy-check.sh` at `3225577`) and a fast-tier guard that misses indirect and dynamic Babylon imports. Back with the author.
+- **S4 R3 fix done** at `4696f7a`: grace is once per episode and persists across switching and save/load, with a reminder caption via `ecology.controlled`. A focused Sol R4 review is running.
+- **S8 R1 (Sol xhigh):** changes-needed, small (`review/s8` `a74f5e2`). The production build has no shader errors and warnings are clear at all sizes. P2: notebook records stay expanded after later finds; P3: Creel mount focus jumps to Return. Back with the author.
+- **S8 R1 fixes done** at `ff2364f` (288 tests; newest-only notebook, mount focus, fits at 960x600). A focused Sol R2 review is running; C1 told to merge it.
+- **S1 R3 (Sol xhigh): ACCEPTED** `84bbc86` (`review/s1-r3` `78ec317`), with one P3: `settled` can be one frame early. **C2** (Opus) started: the renderer moves onto S1 streaming per the S1 migration plan, in files disjoint from C1.
+- **S6 R3 (Sol xhigh): ACCEPTED** `35fe1c4` (`review/s6-r3` `dec5151`), with no findings. Audio wiring was added to C1 scope.
+- **S4 R4 (Sol xhigh): ACCEPT-WITH-FIXES** `4696f7a` (`review/s4-r4` `7229b61`). The P3s S4-09 (max-age save becomes unloadable) and S4-10 (stale age shortens grace) are with the author; the coordinator inspects them. Ecology wiring goes to the next composition step after C1.
+- **S7 R1 fixes done** at `8355a21` (fast 549/549 in 25 s; heavy 9/9; runtime Babylon guard; nested lock fixed). A focused Sol R2 review is running.
+- **S4 FINAL: accepted at `854fdf1`.** The coordinator inspected the R4 P3 fixes (warning ages saturate at `MAX_WARNING_AGE`, stale ages are rejected or reset below 40%; 40 tests). Ready for composition.
+- **S8 R2 (Sol xhigh): ACCEPTED** `ff2364f` (`review/s8-r2` `950d04f`). Non-blocking notes: manual disclosure choices reset on reload (contrary to the author note), and 17 px of trailing scroll at 960x600 with all controls visible. Left for the polish pass.
+- **S7 R2 (Sol xhigh):** one P2, an evaluated-worker guard bypass (`review/s7-r2` `be625e6`). **Coordinator disposition:** non-blocking, because the guard targets accidents, not deliberate bypass. The author adds a static rule refusing worker/child_process/vm/eval in fast tests, and the coordinator inspects it. Otherwise clean.
+- **S2 R1 fixes done** at `29017b0` (continuous floor, adaptive tessellation, edge-matched LOD, full access/rescue proof, 15 world fixes, 17/17 tests). Watch-out: fine chunks cost 0.3–2 s CPU each. A Sol R2 review with a GPU traversal timing is running.
+- **S7 FINAL: accepted at `b395e68`** (the coordinator inspected the worker/vm/eval rule). **S7 and S8 are integrated into root.** The conflict in the notebook was resolved to S8 `notebook()` with the provenance by evidence ID (S7). Root fast tier 556/556, heavy 9/9 within budgets, build OK.

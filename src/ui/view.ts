@@ -50,6 +50,8 @@ export class GameView {
     actions: UiActions,
     world: WorldQueries,
   ) {
+    // Diagnostic scenarios stay out of the player's front door unless ?dev is set.
+    const developer = new URLSearchParams(globalThis.location?.search ?? "").has("dev");
     root.innerHTML = `
       <canvas id="ocean" tabindex="0" aria-label="Siltwake 3D reef. WASD to move, mouse or arrow keys to look. Escape opens the menu."></canvas>
       <div class="vignette" aria-hidden="true"></div>
@@ -66,25 +68,30 @@ export class GameView {
       <div id="menu" class="menu-screen" role="dialog" aria-modal="true" aria-labelledby="menu-title">
         <div class="menu-frame">
           <div class="wordmark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 28C11 9 18 6 20 6s9 3 15 22M7 28c8-6 18-6 26 0M12 35c5-3 11-3 16 0"/></svg><span>FIELD BUILD / M2</span></div>
-          <h1 id="menu-title">SILTWAKE</h1><p id="menu-subtitle" class="subtitle">A refuge. A reef. A first horizon.</p>
+          <h1 id="menu-title">SILTWAKE</h1>
           <p id="pause-reason" class="pause-reason" hidden></p>
           <section id="main-menu">
             <div class="menu-buttons"><button id="resume" class="primary" data-action="resume" hidden>Return to the water <span>↗</span></button>
             <button id="continue" class="primary" data-action="continue" disabled>Continue <span>↗</span></button>
             <button id="new-game" data-action="new">New expedition <span>+</span></button></div>
-            <div class="menu-tools"><button id="manual-save" data-action="save" hidden>Save locally</button><button id="export-game" data-action="export" hidden>Export save</button><button data-action="import">Import save</button></div>
+            <div class="menu-tools"><button id="manual-save" data-action="save" hidden>Save locally</button><button id="export-game" data-action="export" hidden>Export save</button><button data-action="import">Import save</button><button id="open-settings" data-action="settings">Settings</button></div>
             <p id="save-status" class="save-status"></p>
-            <details class="details"><summary>Controls & settings</summary>
-              <dl class="controls"><div><dt>W A S D</dt><dd>Move / swim</dd></div><div><dt>Mouse / ↑ ↓ ← →</dt><dd>Look around</dd></div><div><dt>Space / C</dt><dd>Rise or jump / dive</dd></div><div><dt>Shift</dt><dd>Move faster</dd></div><div><dt>R</dt><dd>Toggle forward cruise</dd></div><div><dt>E / Q / B / F / G</dt><dd>Interact / scan / buoy / meal / distract</dd></div><div><dt>Tab or I / K / J / H</dt><dd>Cargo / fabricate / notebook / hint</dd></div><div><dt>W / S · A / D</dt><dd>Pilot thrust · slide; look steers</dd></div><div><dt>X</dt><dd>Exit craft (hold while moving)</dd></div><div><dt>Z / V</dt><dd>Quiet movement / fixture controls</dd></div><div><dt>Esc / F5</dt><dd>Pause / save locally</dd></div></dl>
-              <div class="settings"><label>Rendering <select id="quality"><option value="rich">Rich · full viewport</option><option value="light">Light · lower resolution</option></select></label>
-              <label>Sensitivity <output id="sensitivity-value">1.0</output><input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label>Mouse look<select id="mouse-mode"><option value="captured">Captured</option><option value="drag">Drag</option></select></label><label>Key turn speed <output id="key-turn-value">1.0</output><input id="key-turn" type="range" min="0.5" max="2" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
-
-            </details>
-            <details class="details"><summary>Sound & captions</summary><div class="settings"><label>Volume <output id="volume-value">55%</output><input id="volume" type="range" min="0" max="1" step="0.05" value="0.55" /></label><label class="check"><input id="muted" type="checkbox" /> Mute</label><label class="check"><input id="subtitles" type="checkbox" checked /> Opening captions</label></div><p>Hazards, action results and notebook records remain readable with captions off. Audio starts after deliberate play input.</p></details><details class="details"><summary>Carrier feasibility fixture</summary><p>Separate seeded test of stationary interiors and isolated launch locks. Starting this replaces the Continue slot after confirmation; export your expedition first.</p><button data-action="fixture">Open seeded carrier fixture</button></details><details class="details"><summary>Save safety</summary><p>Autosaves run every 30 seconds of active exploration when local saving is enabled. Menu and background time do not advance the world. Local saves keep a previous valid generation and coordinate writers between tabs.</p><p>Use export to keep a portable file. Browser storage belongs to this site and can be cleared by the browser. Session-only expeditions need an export before closing.</p><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></details>
+            ${developer ? '<div class="menu-tools developer-tools"><button data-action="fixture">Dev · carrier fixture</button></div>' : ""}
+          </section>
+          <section id="settings-menu" class="settings-menu" aria-labelledby="settings-title" hidden>
+            <div class="settings-head"><h2 id="settings-title">Settings</h2><button id="settings-back" data-action="settings-back">Back <kbd>Esc</kbd></button></div>
+            <div class="settings-columns">
+              <dl class="controls" aria-label="Controls"><div><dt>W A S D</dt><dd>Move / swim</dd></div><div><dt>Mouse / ↑ ↓ ← →</dt><dd>Look</dd></div><div><dt>Space / C</dt><dd>Rise or jump / dive</dd></div><div><dt>Shift</dt><dd>Faster</dd></div><div><dt>R</dt><dd>Forward cruise</dd></div><div><dt>E / Q</dt><dd>Interact / scan</dd></div><div><dt>B / F / G</dt><dd>Buoy / meal / pulse</dd></div><div><dt>Tab or I / K / J / H</dt><dd>Cargo / fabricate / notebook / hint</dd></div><div><dt>W / S · A / D</dt><dd>Pilot thrust · slide</dd></div><div><dt>X</dt><dd>Exit craft (hold while moving)</dd></div><div><dt>Z</dt><dd>Quiet movement</dd></div>${developer ? "<div><dt>V</dt><dd>Carrier fixture panel</dd></div>" : ""}<div><dt>Esc / F5</dt><dd>Pause / save</dd></div></dl>
+              <div class="settings-fields">
+                <div class="settings"><label>Rendering <select id="quality"><option value="rich">Rich · full viewport</option><option value="light">Light · lower resolution</option></select></label>
+                <label>Sensitivity <output id="sensitivity-value">1.0</output><input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label>Mouse look<select id="mouse-mode"><option value="captured">Captured</option><option value="drag">Drag</option></select></label><label>Key turn speed <output id="key-turn-value">1.0</output><input id="key-turn" type="range" min="0.5" max="2" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
+                <div class="settings"><label>Volume <output id="volume-value">55%</output><input id="volume" type="range" min="0" max="1" step="0.05" value="0.55" /></label><label class="check"><input id="muted" type="checkbox" /> Mute</label><label class="check"><input id="subtitles" type="checkbox" checked /> Opening captions</label></div>
+                <div class="settings save-safety"><span>Autosave every 30 s of play · previous valid save kept</span><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></div>
+              </div>
+            </div>
           </section>
           <section id="confirmation" class="confirmation" hidden><h2 id="confirm-title"></h2><p id="confirm-detail"></p><div class="menu-buttons"><button id="confirm-accept" class="primary" data-action="confirm">Confirm</button><button data-action="cancel">Go back</button></div></section>
           <p id="save-operation" class="save-status" role="status" hidden>Reading a file or waiting to save safely… <button data-action="cancel">Cancel operation</button></p>
-          <p id="build-note" class="build-note"><span class="status-dot"></span> FIRST EXPEDITION<span>Pod, workshop, Dart, Canopy and the Basin survey. More of the campaign is in development.</span></p>
         </div>
         <div class="scene-caption" aria-hidden="true" hidden><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
       </div>
@@ -131,6 +138,8 @@ export class GameView {
       confirm: actions.confirm,
       cancel: actions.cancelConfirm,
       lock: actions.lockMouse,
+      settings: () => this.settingsView(true),
+      "settings-back": () => this.settingsView(false, true),
       import: () => {
         const input = this.get<HTMLInputElement>("import-file");
         input.value = "";
@@ -198,6 +207,13 @@ export class GameView {
     this.root.addEventListener(
       "keydown",
       (event) => {
+        // Esc steps back from settings before the runtime treats it as pause/resume.
+        if (event.key === "Escape" && !this.menu.hidden && !this.get("settings-menu").hidden) {
+          event.preventDefault();
+          event.stopPropagation();
+          this.settingsView(false, true);
+          return;
+        }
         if (!this.hud.hidden && !this.get("opening").hidden) {
           const controls = ["opening-act", "opening-skip", "opening-subtitles", "hud-pause"].map((id) => this.get(id));
           if (!this.get("session-warning").hidden)
@@ -335,8 +351,7 @@ export class GameView {
     this.get("manual-save").hidden = !hasSession;
     this.get("pause-reason").hidden = reason.length === 0;
     this.get("pause-reason").textContent = reason;
-    this.get("menu-subtitle").hidden = hasSession;
-    this.get("build-note").hidden = hasSession;
+    this.settingsView(false);
     if (this.wasPlaying)
       this.get(hasSession ? "resume" : "new-game").focus({
         preventScroll: true,
@@ -354,7 +369,17 @@ export class GameView {
     this.canvas.focus({ preventScroll: true });
   }
 
+  /** Settings replace the main menu in place, so neither view needs to scroll. */
+  private settingsView(open: boolean, restoreFocus = false): void {
+    const settings = this.get("settings-menu");
+    if (!open && settings.hidden) return;
+    settings.hidden = !open;
+    this.get("main-menu").hidden = open;
+    if (open || restoreFocus) this.get(open ? "settings-back" : "open-settings").focus({ preventScroll: true });
+  }
+
   confirmation(title: string, detail: string, accept: string): void {
+    this.get("settings-menu").hidden = true;
     this.get("main-menu").hidden = true;
     this.get("confirmation").hidden = false;
     this.get("confirm-title").textContent = title;

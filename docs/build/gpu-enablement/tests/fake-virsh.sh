@@ -14,6 +14,16 @@
 # backup_differs (security-info read succeeds with an extra element).
 # R2: start_response_lost (start boots the VM, then reports failure), fail_state (the worker's
 # state read fails), fail_state_on_read N (while off, the Nth state read and all later ones fail).
+# R3: define replaces the persistent definition with the given file (identity checked);
+# define_fail, define_fail_from N (the Nth define and later fail), define_noop, define_extra
+# (libvirt adds a controller), define_drops_qemu (the <qemu:commandline> block and namespace
+# are dropped), on_define_cmd (after a define).
+# R4: define and domxml-to-native apply libvirt 12.2.0's qemuValidateDomainDefSysinfo
+# (qemu_validate.c:1059-1081): a <sysinfo type='fwcfg'> entry not under "opt/" is invalid,
+# and one under "opt/ovmf/" or "opt/org.qemu/" is reserved. domxml-to-native prints a
+# QEMU argv (JSON -device vfio-pci per hostdev, the <qemu:arg> values appended, a secret
+# object that must never be recorded). Knobs: native_fail, native_drop_qemu, native_drop_vfio,
+# on_native_cmd (after it is called).
 # Hooks: on_start_cmd (script run after a successful start), on_start_fail_cmd (after a failed
 # start), on_attach_cmd (after an attach).
 S="${S:-/tmp/gpu-fake}"
@@ -31,11 +41,19 @@ while [ $# -gt 0 ]; do
     --security-info) secure=1 ;;
     --all|--name|--daemon) ;;
     --mode) shift ;;
+    --xml) xmlf="$2"; shift ;;
     *) pos+=("$1") ;;
   esac
   shift
 done
 verb="${pos[0]:-}"; dom="${pos[1]:-}"
+# libvirt's qemuValidateDomainDefSysinfo, applied to a definition file.
+validate_sysinfo() {
+  awk '/<sysinfo type=.fwcfg.>/{s=1} s && /<entry name=/{ n=$0; sub(/.*<entry name=./, "", n); sub(/\047.*/, "", n)
+      if (n !~ /^opt\//) { print "error: unsupported configuration: Invalid firmware name"; exit 1 }
+      if (n ~ /^opt\/ovmf\// || n ~ /^opt\/org\.qemu\//) { print "error: unsupported configuration: That firmware name is reserved"; exit 1 } }
+    /<\/sysinfo>/{s=0}' "$1" >&2
+}
 me() { [ "$dom" = "$UUID" ] || [ "$dom" = "$NAME" ]; }
 forbid() { echo "FORBIDDEN virsh ${pos[*]}" >> "$S/calls.log"; echo "error: forbidden in tests" >&2; exit 1; }
 
@@ -127,6 +145,37 @@ case "$verb" in
         { print }' "$S/cfg.xml" > "$S/cfg.new" && mv "$S/cfg.new" "$S/cfg.xml"
     fi
     echo "Device ${verb%-device}ed successfully" ;;
+  define)
+    f="${pos[1]:-}"; [ -f "$f" ] && grep -q "<uuid>$UUID</uuid>" "$f" || forbid
+    n=$(( $(get define_count || echo 0) + 1 )); echo "$n" > "$S/define_count"
+    validate_sysinfo "$f" || { echo "error: Failed to define domain from $f" >&2; exit 1; }
+    [ -f "$S/define_fail" ] && { echo "error: XML error: define failed" >&2; exit 1; }
+    [ -n "$(get define_fail_from)" ] && [ "$n" -ge "$(get define_fail_from)" ] && { echo "error: define failed" >&2; exit 1; }
+    [ -f "$S/define_noop" ] && { echo "Domain '$NAME' defined from $f"; exit 0; }
+    if [ -f "$S/define_drops_qemu" ]; then
+      awk 'NR == 1 {sub(/ xmlns:qemu=.[^ >]*/, "")} /<qemu:commandline>/{d=1} !d{print} /<\/qemu:commandline>/{d=0}' "$f" > "$S/cfg.xml"
+    else cp "$f" "$S/cfg.xml"; fi
+    [ -f "$S/define_extra" ] && sed -i "s#^  </devices>#    <controller type='pci' index='7' model='pcie-root-port'/>\n&#" "$S/cfg.xml"
+    [ -f "$S/on_define_cmd" ] && bash "$S/on_define_cmd"
+    echo "Domain '$NAME' defined from $f" ;;
+  domxml-to-native)
+    [ "${pos[1]:-}" = qemu-argv ] && [ -f "${xmlf:-}" ] || forbid
+    [ -f "$S/on_native_cmd" ] && bash "$S/on_native_cmd"
+    [ -f "$S/native_fail" ] && { echo "error: internal error: unable to build the command line" >&2; exit 1; }
+    validate_sysinfo "$xmlf" || exit 1
+    grep -q "<uuid>$UUID</uuid>" "$xmlf" || { echo "error: not factory-worker" >&2; exit 1; }
+    out="LC_ALL=C /usr/local/sbin/qemu -name guest=factory-worker,debug-threads=on -machine pc-q35-10.2"
+    out="$out -object '{\"qom-type\":\"secret\",\"id\":\"vnc0-secret0\",\"data\":\"c2VjcmV0LXBhc3N3b3Jk\",\"format\":\"base64\"}'"
+    i=0
+    if [ ! -f "$S/native_drop_vfio" ]; then
+      for fn in $(awk '/<hostdev /{h=1} h && /<source>/{s=1} h && s && /<address /{ f=$0; sub(/.*function=.0x/, "", f); sub(/[^0-9].*/, "", f); print f; s=0 } /<\/hostdev>/{h=0}' "$xmlf"); do
+        out="$out -device '{\"driver\":\"vfio-pci\",\"host\":\"0000:01:00.$fn\",\"id\":\"hostdev$i\",\"bus\":\"pci.6\",\"addr\":\"0x0.0x$fn\"}'"; i=$((i + 1))
+      done
+    fi
+    if [ ! -f "$S/native_drop_qemu" ]; then
+      while read -r v; do out="$out $v"; done < <(sed -n "s#^ *<qemu:arg value='\(.*\)'/>\$#\1#p" "$xmlf")
+    fi
+    echo "$out" ;;
   domtime)
     me || forbid
     [ "$(get state)" = running ] && [ ! -f "$S/agent_silent" ] || { echo "error: guest agent is not responding" >&2; exit 1; }

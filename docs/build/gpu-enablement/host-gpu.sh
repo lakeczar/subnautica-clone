@@ -8,8 +8,9 @@
 #
 # A real launch is one detached host-side run that needs nothing from its caller:
 # check -> verified backup -> arm 60 s (CANCEL file) -> take Fleet's lock -> check again
-# -> ACPI shutdown, never forced -> check again -> add or remove only our two <hostdev>
-# entries -> check again -> start -> verify -> result.json. Fleet's lock is held from
+# -> ACPI shutdown, never forced -> check again -> add or remove only our entries (two
+# <hostdev> and OVMF's 64-bit MMIO window size, see below) -> check again -> start -> verify
+# -> result.json. Fleet's lock is held from
 # before the shutdown until the start, so no other definition change and no recovery
 # start can interleave. --rehearsal does everything up to the shutdown, then stops.
 #
@@ -27,7 +28,21 @@ OURS="$GPU $AUD"
 GUEST_BUS=0x06          # pcie-root-port index 6: the only free port in today's definition
 ROOT_PORT_INDEX=6
 RESERVE_KIB=2621440     # host MemAvailable left once all guest RAM is pinned (2.5 GiB, includes QEMU overhead)
-MAX_PREF64_KIB=8388608  # refuse 64-bit prefetchable BARs above 8 GiB (resizable BAR): the guest window is 32 GiB
+# The card has resizable BAR enabled on this host (BAR1 32 GiB), which does not fit OVMF's
+# default 32 GiB 64-bit PCI window. Attach therefore also sets OVMF's window size through the
+# fw_cfg item OVMF reads, "opt/ovmf/X-PciMmio64Mb" (edk2 OvmfPkg PlatformInitLib MemDetect.c),
+# passed as exactly two QEMU arguments in <qemu:commandline>: "-fw_cfg" and
+# "name=opt/ovmf/X-PciMmio64Mb,string=N". libvirt's native <sysinfo type='fwcfg'> cannot carry
+# it: qemuValidateDomainDefSysinfo (libvirt 12.2.0 qemu_validate.c:1059-1081) rejects any
+# name under "opt/ovmf/" as "That firmware name is reserved" (the 2026-10-20 attach failed
+# there and rolled back). Every target definition is validated by "virsh domxml-to-native"
+# before the VM is stopped. The size is computed: the card's 64-bit
+# prefetchable BARs plus a margin for the other root ports' 64-bit padding (five ports x
+# 256 MiB observed in the guest), rounded up to a power of two, at least 64 GiB.
+FWCFG_NAME=opt/ovmf/X-PciMmio64Mb
+QEMU_NS="http://libvirt.org/schemas/domain/qemu/1.0"
+MIN_WINDOW_MIB=65536
+OTHER_PREF64_MARGIN_KIB=2097152
 
 HOME_DIR=/mnt/user/appdata/fleet-gpu
 RUNS="$HOME_DIR/runs"
@@ -116,10 +131,38 @@ hostdev_srcs() {
     h && /<\/hostdev>/ { if (!got) print "other"; h=0 }' | sort | paste -sd' ' -
 }
 strip_hostdev() { awk '/<hostdev /{skip=1} !skip{print} /<\/hostdev>/{skip=0}'; }
+# Our QEMU block, exactly as libvirt writes it back (before </domain>), with the
+# xmlns:qemu attribute it then puts on <domain>:
+#   <qemu:commandline>
+#     <qemu:arg value='-fw_cfg'/>
+#     <qemu:arg value='name=opt/ovmf/X-PciMmio64Mb,string=N'/>
+#   </qemu:commandline>
+qemu_block() { printf "  <qemu:commandline>\n    <qemu:arg value='-fw_cfg'/>\n    <qemu:arg value='name=%s,string=%s'/>\n  </qemu:commandline>" "$FWCFG_NAME" "$1"; }
+# Our window value: "" when the definition has no QEMU content at all, N when its only QEMU
+# content is exactly our block (and the namespace), "foreign" for anything else.
+fw_value() {
+  local x="$1" e ns n
+  e="$(grep -c 'qemu:' <<<"$x")"; ns="$(grep -c 'xmlns:qemu=' <<<"$x")"
+  [ "$e" = 0 ] && [ "$ns" = 0 ] && return 0
+  n="$(sed -n "s#^    <qemu:arg value='name=$FWCFG_NAME,string=\\([0-9][0-9]*\\)'/>\$#\\1#p" <<<"$x")"
+  if [ "$e" = 4 ] && [ "$ns" = 1 ] && [[ "$n" =~ ^[0-9]+$ ]] && [[ "$x" == *"$(qemu_block "$n")"* ]] \
+     && [[ "$(sed -n 1p <<<"$x")" == *" xmlns:qemu='$QEMU_NS'"* ]]; then
+    printf '%s' "$n"
+  else printf foreign; fi
+}
+# The state of our entries in a definition, as "<hostdev sources>|<window value>".
+ours_of() { printf '%s|%s' "$(hostdev_srcs <<<"$1")" "$(fw_value "$1")"; }
+ours_valid() { local h="${1%%|*}" f="${1#*|}"; { [ -z "$h" ] || [ "$h" = "$OURS" ]; } && [[ "$f" =~ ^[0-9]*$ ]]; }
+# The definition without our entries: every hostdev, our QEMU block and the namespace (only
+# ever used once ours_valid has excluded foreign hostdevs and QEMU content).
+strip_ours() {
+  awk -v ns=" xmlns:qemu='$QEMU_NS'" 'NR == 1 { i = index($0, ns); if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(ns)) }
+    /<hostdev /{skip=1} /^  <qemu:commandline>$/{skip=1} !skip{print} /<\/hostdev>/{skip=0} /^  <\/qemu:commandline>$/{skip=0}'
+}
 xml_mem() { sed -n "s/^ *<memory unit='KiB'>\([0-9]*\)<\/memory>.*/\1/p" | head -1; }
 names_gpu() { case " $(hostdev_srcs <<<"$1") " in *" $GPU "*|*" $AUD "*) return 0 ;; esac; return 1; }
 
-hostdev_xml() { # <function 0|1>: one of our two entries, as attach-device wants it
+hostdev_xml() { # <function 0|1>: one of our two entries
   local mf=""; [ "$1" = 0 ] && mf=" multifunction='on'"
   cat <<EOF
 <hostdev mode='subsystem' type='pci' managed='yes'>
@@ -199,7 +242,7 @@ check_bars() {
   fact "$GPU memory BARs:${bars:- none} (64-bit prefetchable ${pref64} KiB)"
   [ -n "$bar0" ] && [ "$total" -gt 0 ] || problem "no assigned memory BARs for $GPU"
   [ -n "$ok0" ] || problem "the host memory map does not show $GPU's BAR0 (map unreadable, not root, or BAR not assigned)"
-  [ "$pref64" -le "$MAX_PREF64_KIB" ] || problem "64-bit prefetchable BARs total ${pref64} KiB (resizable BAR?); the guest's 32 GiB window may not hold them"
+  CARD_PREF64_KIB="$pref64"; check_window
 }
 
 # No other VM that is not shut off may name either function. A stopped VM that names
@@ -221,6 +264,23 @@ check_other_vms() {
     fi
   done <<<"$list"
   fact "checked $names other VMs"
+}
+
+# The 64-bit window attach will configure: card + margin, a power of two of at least 64 GiB.
+# OVMF puts it above RAM, aligned to its size; it must end within the guest's physical
+# address bits (host-passthrough CPU, so the host's: "address sizes" in cpuinfo).
+check_window() {
+  local need w bits top base end limit
+  WINDOW_MIB=""
+  [[ "${CARD_PREF64_KIB:-}" =~ ^[0-9]+$ ]] && [[ "${VM_KIB:-}" =~ ^[0-9]+$ ]] || { problem "cannot size the 64-bit window"; return; }
+  need=$(( (CARD_PREF64_KIB + OTHER_PREF64_MARGIN_KIB + 1023) / 1024 ))
+  w=$MIN_WINDOW_MIB; while [ "$w" -lt "$need" ]; do w=$(( w * 2 )); done
+  bits="$(sed -n 's/^address sizes[[:space:]]*:[[:space:]]*\([0-9]*\) bits physical.*/\1/p' "$PROC/cpuinfo" 2>/dev/null | head -1)"
+  [[ "$bits" =~ ^[0-9]+$ ]] && [ "$bits" -ge 32 ] && [ "$bits" -le 52 ] || { problem "cannot read the CPU's physical address bits from $PROC/cpuinfo"; return; }
+  top=$(( 4194304 + VM_KIB )); base=$(( (top + w * 1024 - 1) / (w * 1024) * (w * 1024) )); end=$(( base + w * 1024 )); limit=$(( 1 << (bits - 10) ))
+  fact "64-bit window: card ${CARD_PREF64_KIB} KiB + ${OTHER_PREF64_MARGIN_KIB} KiB margin -> X-PciMmio64Mb=$w (${w} MiB) at about [$((base >> 20)) GiB, $((end >> 20)) GiB) of $((limit >> 20)) GiB ($bits physical bits)"
+  [ "$end" -le "$limit" ] || { problem "a ${w} MiB 64-bit window above ${VM_KIB} KiB of RAM does not fit in $bits physical address bits"; return; }
+  WINDOW_MIB="$w"
 }
 
 # The definition: q35, root port 6 present and nothing else on its bus.
@@ -261,27 +321,24 @@ examine() {
   if [ "$STATE" != "shut off" ]; then read_live LIVE || { problem "$READ_ERR"; return 0; }; fi
   VM_KIB="$(xml_mem <<<"$CFG")"
   [[ "${VM_KIB:-}" =~ ^[0-9]+$ ]] || problem "the VM's memory cannot be read from its definition"
-  local c l; c="$(hostdev_srcs <<<"$CFG")"; l="$(hostdev_srcs <<<"$LIVE")"
-  fact "$VM_NAME state '$STATE', memory ${VM_KIB:-?} KiB, hostdev defined '${c}' running '${l}'"
+  local c l; c="$(ours_of "$CFG")"; l="$(ours_of "$LIVE")"
+  fact "$VM_NAME state '$STATE', memory ${VM_KIB:-?} KiB, ours (hostdev|fw_cfg) defined '${c}' running '${l}'"
   check_definition "$(strip_hostdev <<<"$CFG")"
-  case "$1:$STATE:$c:$l" in
-    "attach:running::")            PLAN=full ;;
-    "attach:running:$OURS:$OURS")  PLAN=done ;;
-    "attach:shut off::")           PLAN=offline ;;
-    "attach:shut off:$OURS:")      PLAN=start ;;
-    "detach:running:$OURS:$OURS")  PLAN=full ;;
-    "detach:running::")            PLAN=done ;;
-    "detach:shut off:$OURS:")      PLAN=offline ;;
-    "detach:shut off::")           PLAN=start ;;
-    *) problem "state '$STATE' with hostdev defined '$c' and running '$l' is not one this script handles for $1" ;;
+  TARGET="|"
+  if [ "$1" = attach ]; then check_gpu; TARGET="$OURS|${WINDOW_MIB:-?}"; fi
+  ours_valid "$c" || { problem "the definition has hostdev, fw_cfg or QEMU entries that are not ours: '$c'"; return 0; }
+  case "$STATE" in
+    running)
+      ours_valid "$l" || { problem "the running VM has hostdev, fw_cfg or QEMU entries that are not ours: '$l'"; return 0; }
+      if [ "$c" = "$TARGET" ] && [ "$l" = "$TARGET" ]; then PLAN=done; else PLAN=full; fi ;;
+    "shut off") if [ "$c" = "$TARGET" ]; then PLAN=start; else PLAN=offline; fi ;;
+    *) problem "state '$STATE' is not one this script handles" ;;
   esac
   if [ "$1" = attach ] && [ "$PLAN" != done ]; then
-    check_gpu; check_other_vms
+    check_other_vms
     if [ "$PLAN" = full ]; then check_memory running; else check_memory off; fi
   fi
-  if [ "$1" = attach ] && [ "$PLAN" = done ]; then
-    [ "$(dev_driver "$GPU")" = vfio-pci ] || problem "running with the GPU but its host driver is $(dev_driver "$GPU")"
-  fi
+  fact "plan $PLAN: ours '$c' -> '$TARGET'"
   return 0
 }
 
@@ -294,13 +351,14 @@ recheck() {
   read_state st "$VM_UUID" || { problem "$READ_ERR"; return 1; }
   [ "$st" = "$1" ] || problem "the VM is '$st', expected '$1'"
   read_cfg cfg || { problem "$READ_ERR"; return 1; }
-  if [ "$(strip_hostdev <<<"$cfg")" != "$(strip_hostdev <<<"$REF")" ]; then
-    save changed-definition.xml "$cfg"; diff <(strip_hostdev <<<"$REF") <(strip_hostdev <<<"$cfg") > "$RUN_DIR/changed-definition.diff"
+  [ "$(ours_of "$cfg")" = "$2" ] || problem "ours (hostdev|fw_cfg) defined '$(ours_of "$cfg")', expected '$2'"
+  if ours_valid "$(ours_of "$cfg")" && [ "$(strip_ours <<<"$cfg")" != "$(strip_ours <<<"$REF")" ]; then
+    save changed-definition.xml "$cfg"; diff <(strip_ours <<<"$REF") <(strip_ours <<<"$cfg") > "$RUN_DIR/changed-definition.diff"
     problem "the definition changed since the run started (changed-definition.diff)"
   fi
-  [ "$(hostdev_srcs <<<"$cfg")" = "$2" ] || problem "hostdev defined '$(hostdev_srcs <<<"$cfg")', expected '$2'"
   if [ "$ACTION" = attach ]; then
-    check_gpu; check_other_vms
+    check_gpu; [ "$OURS|${WINDOW_MIB:-?}" = "$TARGET" ] || problem "the 64-bit window needed is now '${WINDOW_MIB:-?}', planned '${TARGET#*|}'"
+    check_other_vms
     if [ "$st" = running ]; then check_memory running; else check_memory off; fi
   fi
   print_check
@@ -334,13 +392,14 @@ tell_owner() {
 finish() { # <outcome> <exit code> <message>
   local level=alert launcher=unknown st srcs="" x
   FINISHED=1
+  tmp_clean
   release_fleet_lock
   st="$(domstate)"
-  if [ "$st" = running ]; then if read_live x; then srcs="$(hostdev_srcs <<<"$x")"; else srcs="unreadable"; fi; fi
+  if [ "$st" = running ]; then if read_live x; then srcs="$(ours_of "$x")"; else srcs="unreadable"; fi; fi
   [ -n "$LAUNCHER_PID" ] && { kill -0 "$LAUNCHER_PID" 2>/dev/null && launcher=yes || launcher=no; }
   set_phase finished "$1"
   log "RESULT $1 (exit $2): $3"
-  log "VM now: state '$st', running hostdev '$srcs'; all VMs:"; virsh list --all 2>&1 | sed 's/^/  | /'
+  log "VM now: state '$st', running ours (hostdev|fw_cfg) '$srcs'; all VMs:"; virsh list --all 2>&1 | sed 's/^/  | /'
   if ! save result.json "{\"run_id\":$(json_str "$RUN_ID"),\"action\":$(json_str "$ACTION"),\"outcome\":$(json_str "$1"),\"exit_code\":$2,\"message\":$(json_str "$3"),\"rehearsal\":$REHEARSAL,\"plan\":$(json_str "$PLAN"),\"last_phase\":$(json_str "$PHASE"),\"vm_state\":$(json_str "$st"),\"running_hostdev\":$(json_str "$srcs"),\"backup\":$(json_str "${BACKUP_FILE:-}"),\"script_sha256\":$(json_str "$SCRIPT_SHA"),\"pid\":$$,\"sid\":$(json_str "$SID"),\"launcher_pid\":$(json_str "$LAUNCHER_PID"),\"launcher_alive_at_finish\":$(json_str "$launcher"),\"overrides\":$(json_str "$(overrides)"),\"started_at\":$(json_str "$STARTED_AT"),\"finished_at\":$(json_str "$(ts)")}"; then
     log "RESULT NOT PUBLISHED: result.json could not be written"; set -- "$1" 32 "$3"
   fi
@@ -395,17 +454,68 @@ backup_definition() {
   BACKUP_FILE="$f"; save backup.sha256 "$(sha_of "$f")  $f"
 }
 
-# set_ours present|absent: add or remove exactly our two entries in the persistent definition.
-set_ours() {
-  local fn f cfg
+# The VM's own full definition (security info included, so passwords survive) without our
+# entries, plus the entries of <pair>: the hostdevs before "  </devices>", our QEMU block
+# before the final "</domain>" and the namespace on the first line. Anchors must be unique.
+build_target() { # <variable> <full definition without ours> <pair>; READ_ERR says why it failed
+  local __h="${3%%|*}" __f="${3#*|}" __hd="" __qb=""
+  [ "$(grep -c '^  </devices>$' <<<"$2")" = 1 ] && [ "$(grep -c '^</domain>$' <<<"$2")" = 1 ] && [ "$(sed -n '$p' <<<"$2")" = "</domain>" ] \
+    && [[ "$(sed -n 1p <<<"$2")" =~ ^\<domain\ [^\>]*\>$ ]] || { rd_fail "the definition's <domain>, </devices> or </domain> anchor is not unique"; return 1; }
+  [ -z "$__h" ] || __hd="$(hostdev_xml 0 | sed 's/^/    /'; hostdev_xml 1 | sed 's/^/    /')"
+  [ -z "$__f" ] || __qb="$(qemu_block "$__f")"
+  printf -v "$1" '%s' "$(HD="$__hd" QB="$__qb" NS=" xmlns:qemu='$QEMU_NS'" awk 'NR == 1 && ENVIRON["QB"] != "" { sub(/>$/, ENVIRON["NS"] ">") }
+    /^  <\/devices>$/ && ENVIRON["HD"] != "" { print ENVIRON["HD"] } /^<\/domain>$/ && ENVIRON["QB"] != "" { print ENVIRON["QB"] } { print }' <<<"$2")"
+}
+
+# Temporary files hold security info: root-only, in the host's /tmp, removed right after use
+# and, if the run is interrupted, by finish (R4-01).
+TMP_FILES=()
+tmp_new() { local __t; __t="$(umask 077; mktemp /tmp/fleet-gpu-define.XXXXXX)" || { rd_fail "cannot create a temporary file"; return 1; }; TMP_FILES+=("$__t"); printf -v "$1" '%s' "$__t"; }
+tmp_clean() { [ ${#TMP_FILES[@]} -eq 0 ] || rm -f -- "${TMP_FILES[@]}" 2>/dev/null; TMP_FILES=(); }
+
+# The pre-shutdown gate: build the exact target definition from the current one and let
+# libvirt parse, validate and turn it into a QEMU command line without touching any domain
+# ("virsh domxml-to-native qemu-argv"; libvirt's own validation runs, so the 2026-10-20
+# reserved-name failure would stop here). The argv must hold our -fw_cfg pair and a vfio-pci
+# device for each function. Only those lines are recorded: the argv can contain secrets.
+validate_target() { # <pair>
+  local full target tmp argv h="${1%%|*}" f="${1#*|}" fn line found=""
+  v_read full dumpxml --inactive --security-info "$VM_UUID" && xml_ok "$full" "$VM_NAME" "$VM_UUID" || { problem "gate: cannot read the full definition: $READ_ERR"; return 1; }
+  ours_valid "$(ours_of "$full")" || { problem "gate: the definition has entries that are not ours"; return 1; }
+  build_target target "$(strip_ours <<<"$full")" "$1" || { problem "gate: $READ_ERR"; return 1; }
+  tmp_new tmp || { problem "gate: $READ_ERR"; return 1; }
+  printf '%s\n' "$target" > "$tmp" && v_read argv domxml-to-native qemu-argv --xml "$tmp"; local rc=$?
+  tmp_clean
+  [ "$rc" = 0 ] || { problem "gate: libvirt rejects the target definition: ${READ_ERR}"; return 1; }
+  argv="$(tr ' ' '\n' <<<"$argv")"
+  if [ -n "$f" ]; then
+    grep -qxF -- "name=$FWCFG_NAME,string=$f" <<<"$argv" && grep -B1 -xF -- "name=$FWCFG_NAME,string=$f" <<<"$argv" | head -1 | grep -qxF -- -fw_cfg \
+      && found="-fw_cfg name=$FWCFG_NAME,string=$f" || problem "gate: the QEMU command line lacks '-fw_cfg name=$FWCFG_NAME,string=$f'"
+  else grep -qF -- "name=$FWCFG_NAME" <<<"$argv" && problem "gate: the QEMU command line still has $FWCFG_NAME"; fi
   for fn in 0 1; do
-    f="$RUN_DIR/hostdev-$fn.xml"; hostdev_xml "$fn" > "$f" || return 1
-    read_cfg cfg || return 1
-    case " $(hostdev_srcs <<<"$cfg") " in
-      *" 0000:01:00.$fn "*) [ "$1" = absent ] && { vdo detach-device "$VM_UUID" "$f" --config || return 1; } ;;
-      *) [ "$1" = present ] && { vdo attach-device "$VM_UUID" "$f" --config || return 1; } ;;
-    esac
+    line="$(grep -E "vfio-pci" <<<"$argv" | grep -E "\"host\":\"0000:01:00\.$fn\"|host=0000:01:00\.$fn([,']|$)" | head -1)"
+    if [ -n "$h" ]; then [ -n "$line" ] && found="$found | ${line//\'/}" || problem "gate: the QEMU command line has no vfio-pci device for 0000:01:00.$fn"
+    else [ -z "$line" ] || problem "gate: the QEMU command line still has vfio-pci 0000:01:00.$fn"; fi
   done
+  [ ${#PROBLEMS[@]} -eq 0 ] || return 1
+  log "gate: libvirt accepts the target; argv has: ${found:-no GPU entries (as intended)}"
+}
+
+# set_ours <pair>: make our entries in the persistent definition exactly <pair>, in one
+# "virsh define" of the full definition with only our entries changed. The file holds
+# security info: root-only, in /tmp, removed at once.
+set_ours() {
+  local full cur target tmp rc
+  v_read full dumpxml --inactive --security-info "$VM_UUID" || return 1
+  xml_ok "$full" "$VM_NAME" "$VM_UUID" || { rd_fail "the full definition is incomplete or not $VM_NAME"; return 1; }
+  cur="$(ours_of "$full")"
+  [ "$cur" = "$1" ] && return 0
+  ours_valid "$cur" || { rd_fail "the definition has entries that are not ours: '$cur'"; return 1; }
+  build_target target "$(strip_ours <<<"$full")" "$1" || return 1
+  tmp_new tmp || return 1
+  printf '%s\n' "$target" > "$tmp" && vdo define "$tmp"; rc=$?
+  tmp_clean
+  return "$rc"
 }
 
 # start_vm <label>: 0 once the VM is seen running, also when the start command failed but
@@ -434,29 +544,29 @@ start_failed() { # <start_vm status> <message>
 # The definition change, while off and under Fleet's lock. Afterwards the definition
 # without hostdev must equal what it was just before, with exactly our entries present or
 # absent. Otherwise it puts the entries back as they were; UNDO_FAILED says if that failed.
-change_definition() { # present|absent
-  local before after want=""; [ "$1" = present ] && want="$OURS"
+change_definition() { # <target pair>
+  local before after want="$1"
   read_cfg before || { log "cannot read the definition before the change: $READ_ERR"; return 1; }
   save definition-before-change.xml "$before"
   set_phase change "$1"
   if set_ours "$1" && read_cfg after; then
     save definition-after-change.xml "$after"
-    [ "$(hostdev_srcs <<<"$after")" = "$want" ] && [ "$(strip_hostdev <<<"$after")" = "$(strip_hostdev <<<"$before")" ] && return 0
-    diff <(strip_hostdev <<<"$before") <(strip_hostdev <<<"$after") > "$RUN_DIR/unexpected-diff.txt"
+    [ "$(ours_of "$after")" = "$want" ] && [ "$(strip_ours <<<"$after")" = "$(strip_ours <<<"$before")" ] && return 0
+    diff <(strip_ours <<<"$before") <(strip_ours <<<"$after") > "$RUN_DIR/unexpected-diff.txt"
     log "the definition changed in an unexpected way (unexpected-diff.txt); undoing"
   else
     log "the definition change failed (${READ_ERR:-see above}); undoing"
   fi
   local now
-  if [ -n "$(hostdev_srcs <<<"$before")" ]; then set_ours present; else set_ours absent; fi
+  set_ours "$(ours_of "$before")"
   read_cfg now && [ "$now" = "$before" ] || UNDO_FAILED=1
   return 1
 }
 
 # Start the VM without our change and finish, but only from what it can read now: state
-# shut off, a complete definition of this VM, and exactly the expected hostdev entries.
-# An unreadable state or definition, or other hostdev entries, leave the VM off for the owner.
-recover_start() { # <outcome> <code> <message> <expected hostdev sources>
+# shut off, a complete definition of this VM, and exactly the expected entries of ours.
+# An unreadable state or definition, or other entries, leave the VM off for the owner.
+recover_start() { # <outcome> <code> <message> <expected pair>
   local st now rc
   read_state st "$VM_UUID" || finish needs-owner 30 "$3; the VM's state cannot be read ($READ_ERR), so it was not started"
   case "$st" in
@@ -465,9 +575,9 @@ recover_start() { # <outcome> <code> <message> <expected hostdev sources>
     *) finish needs-owner 30 "$3; the VM is '$st', so it was not started" ;;
   esac
   read_cfg now || finish needs-owner 30 "$3; the definition cannot be read ($READ_ERR), so the VM was left off"
-  if [ "$(hostdev_srcs <<<"$now")" != "$4" ]; then
+  if [ "$(ours_of "$now")" != "$4" ]; then
     save definition-at-recovery.xml "$now"
-    finish needs-owner 30 "$3; hostdev entries are '$(hostdev_srcs <<<"$now")', expected '$4' (definition-at-recovery.xml), so the VM was left off"
+    finish needs-owner 30 "$3; entries (hostdev|fw_cfg) are '$(ours_of "$now")', expected '$4' (definition-at-recovery.xml), so the VM was left off"
   fi
   start_vm "without the change"; rc=$?
   if [ "$rc" = 1 ]; then sleep "$START_RETRY_DELAY"; start_vm "without the change, second try"; rc=$?; fi
@@ -479,31 +589,31 @@ recover_start() { # <outcome> <code> <message> <expected hostdev sources>
 # (none after a failed attach; ours again after a failed detach). If they do not, or the
 # definition cannot be read, the VM stays off for the owner. Any other difference left by
 # libvirt is recorded and the VM still starts: T3 matters more.
-start_back() { # <reason> <expected hostdev sources>
+start_back() { # <reason> <expected pair>
   local now srcs note="the definition is as it was"
   read_cfg now || finish needs-owner 30 "$1; the definition cannot be read to confirm our entries ($READ_ERR); VM left off"
-  srcs="$(hostdev_srcs <<<"$now")"
+  srcs="$(ours_of "$now")"
   if [ "$srcs" != "$2" ]; then
     save definition-after-undo.xml "$now"
-    finish needs-owner 30 "$1; hostdev entries are '$srcs' after the undo, expected '$2' (definition-after-undo.xml); VM left off"
+    finish needs-owner 30 "$1; entries (hostdev|fw_cfg) are '$srcs' after the undo, expected '$2' (definition-after-undo.xml); VM left off"
   fi
   if [ -n "${UNDO_FAILED:-}" ]; then save definition-after-undo.xml "$now"; note="the definition still differs from before (definition-after-undo.xml)"; fi
   recover_start rolled-back 20 "$1; $note" "$2"
 }
 
 remove_ours_and_start() { # <reason>: attach only; never returns
-  set_ours absent || UNDO_FAILED=1
-  local now; read_cfg now && [ "$(strip_hostdev <<<"$now")" = "$(strip_hostdev <<<"$REF")" ] || UNDO_FAILED=1
-  start_back "$1" ""
+  set_ours "|" || UNDO_FAILED=1
+  local now; read_cfg now && [ "$(strip_ours <<<"$now")" = "$(strip_ours <<<"$REF")" ] || UNDO_FAILED=1
+  start_back "$1" "|"
 }
 
 transition() {
-  local target=present want="$OURS" st
-  [ "$ACTION" = detach ] && { target=absent; want=""; }
+  local want="$TARGET" st
   set_phase locking "waiting for $FLEET_LOCK"
   take_fleet_lock || finish locked 11 "Fleet's lock stayed busy for $FLEET_LOCK_WAIT s; nothing was changed and the VM was not stopped"
   log "holding $FLEET_LOCK until the VM is started"
-  recheck "$STATE" "$REF_SRCS" || finish preflight-failed 10 "before the shutdown: ${PROBLEMS[*]}; nothing was changed"
+  recheck "$STATE" "$REF_OURS" || finish preflight-failed 10 "before the shutdown: ${PROBLEMS[*]}; nothing was changed"
+  PROBLEMS=(); validate_target "$TARGET" || finish preflight-failed 10 "before the shutdown: ${PROBLEMS[*]}; nothing was changed"
   if [ "$PLAN" = full ]; then
     shutdown_vm || finish shutdown-timeout 13 "still '$(domstate)' after $SHUTDOWN_TIMEOUT s; nothing was changed and nothing forced. Look at the VNC console"
   fi
@@ -513,37 +623,37 @@ transition() {
     running) finish restarted-elsewhere 21 "the VM is running again after the shutdown; someone else started it; nothing was changed" ;;
     *) finish needs-owner 30 "the VM is '$st' after the shutdown; nothing was changed" ;;
   esac
-  recheck "shut off" "$REF_SRCS" || recover_start backed-off 21 "after the shutdown: ${PROBLEMS[*]}; nothing was changed" "$REF_SRCS"
+  recheck "shut off" "$REF_OURS" || recover_start backed-off 21 "after the shutdown: ${PROBLEMS[*]}; nothing was changed" "$REF_OURS"
   if [ "$PLAN" != start ]; then
-    change_definition "$target" || start_back "the definition change did not come out as intended" "$REF_SRCS"
+    change_definition "$want" || start_back "the definition change did not come out as intended" "$REF_OURS"
   fi
   if ! recheck "shut off" "$want"; then
-    [ "$target" = present ] && remove_ours_and_start "just before the start: ${PROBLEMS[*]}"
-    recover_start backed-off 21 "the GPU entries were removed, then the check before the start failed: ${PROBLEMS[*]}" ""
+    [ "$ACTION" = attach ] && remove_ours_and_start "just before the start: ${PROBLEMS[*]}"
+    recover_start backed-off 21 "our entries were removed, then the check before the start failed: ${PROBLEMS[*]}" "|"
   fi
   local rc; start_vm "with the change"; rc=$?
   if [ "$rc" != 0 ]; then
     log "start failed; host messages:"; dmesg 2>/dev/null | grep -i -E 'vfio|DMAR|AMD-Vi' | tail -n 20 | sed 's/^/  | /'
     [ "$rc" = 1 ] || start_failed "$rc" "the start with the change failed"
-    [ "$target" = present ] && remove_ours_and_start "the VM did not start with the GPU"
+    [ "$ACTION" = attach ] && remove_ours_and_start "the VM did not start with the GPU"
     sleep "$START_RETRY_DELAY"; start_vm "second try"; rc=$?
     [ "$rc" = 0 ] || start_failed "$rc" "the VM did not start after removing the GPU"
   fi
   release_fleet_lock
   verify_running "$want"
   case $? in
-    0) finish "${ACTION}ed" 0 "the VM runs with the GPU $([ "$target" = present ] && echo attached || echo removed) and its guest agent answers" ;;
+    0) finish "${ACTION}ed" 0 "the VM runs with ours (hostdev|fw_cfg) '$want' and its guest agent answers" ;;
     1) finish started-unverified 22 "$VERIFY_ERR" ;;
-    *) finish guest-silent 22 "the VM runs, hostdev as intended, but $VERIFY_ERR; check the VNC console. To undo: launch $( [ "$target" = present ] && echo detach || echo attach)" ;;
+    *) finish guest-silent 22 "the VM runs, entries as intended, but $VERIFY_ERR; check the VNC console. To undo: launch $( [ "$ACTION" = attach ] && echo detach || echo attach)" ;;
   esac
 }
 
 # After the VM runs: its live definition reads back with exactly the intended entries,
 # then the guest agent answers. 1: entries wrong or unreadable; 2: agent silent.
-verify_running() { # <expected sources>
+verify_running() { # <expected pair>
   local x
   read_live x || { VERIFY_ERR="the running definition cannot be read ($READ_ERR)"; return 1; }
-  [ "$(hostdev_srcs <<<"$x")" = "$1" ] || { VERIFY_ERR="running hostdev is '$(hostdev_srcs <<<"$x")', expected '$1'"; return 1; }
+  [ "$(ours_of "$x")" = "$1" ] || { VERIFY_ERR="running entries (hostdev|fw_cfg) are '$(ours_of "$x")', expected '$1'"; return 1; }
   set_phase guest-agent "waiting up to $AGENT_TIMEOUT s"
   local end=$(( SECONDS + ${AGENT_TIMEOUT%.*} + 1 ))
   while [ "$SECONDS" -lt "$end" ]; do
@@ -640,18 +750,19 @@ cmd_run() {
   examine "$ACTION"; print_check
   log "plan: $PLAN"
   [ ${#PROBLEMS[@]} -eq 0 ] && [ "$PLAN" != unexpected ] || finish preflight-failed 10 "${PROBLEMS[*]}; nothing was changed"
-  REF="$CFG"; REF_SRCS="$(hostdev_srcs <<<"$CFG")"
+  REF="$CFG"; REF_OURS="$(ours_of "$CFG")"
   save definition-at-start.xml "$CFG" || finish preflight-failed 10 "cannot write the run's records; nothing was changed"
   if [ "$PLAN" = done ]; then
     [ "$REHEARSAL" = true ] && finish rehearsal-ok 0 "already ${ACTION}ed; a real run would do nothing"
-    if verify_running "$REF_SRCS"; then finish "already-${ACTION}ed" 0 "nothing to do"; else finish started-unverified 22 "${VERIFY_ERR}; nothing was changed"; fi
+    if verify_running "$REF_OURS"; then finish "already-${ACTION}ed" 0 "nothing to do"; else finish started-unverified 22 "${VERIFY_ERR}; nothing was changed"; fi
   fi
   backup_definition || finish preflight-failed 10 "no valid backup: $READ_ERR; nothing was changed"
   log "backup $BACKUP_FILE verified"
   if [ "$REHEARSAL" = true ]; then
     set_phase rehearsal "lock and boundary check, then holding $REHEARSAL_HOLD s"
     take_fleet_lock || finish locked 11 "Fleet's lock stayed busy for $FLEET_LOCK_WAIT s (rehearsal); nothing was changed"
-    recheck "$STATE" "$REF_SRCS" || finish preflight-failed 10 "boundary check: ${PROBLEMS[*]} (rehearsal); nothing was changed"
+    recheck "$STATE" "$REF_OURS" || finish preflight-failed 10 "boundary check: ${PROBLEMS[*]} (rehearsal); nothing was changed"
+    PROBLEMS=(); validate_target "$TARGET" || finish preflight-failed 10 "${PROBLEMS[*]} (rehearsal); nothing was changed"
     release_fleet_lock
     sleep "$REHEARSAL_HOLD"
     finish rehearsal-ok 0 "all checks pass, backup verified, plan '$PLAN'; nothing was changed"

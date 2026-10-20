@@ -30,6 +30,9 @@ BOOT_DIR="${GPU_BOOT_DIR:-/boot}"
 DEV_DIR="${GPU_DEV_DIR:-/dev}"
 FB_DEVICE="${GPU_FB_DEVICE:-/sys/class/graphics/fb0/device}"
 BOOT_ID_FILE="${GPU_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}"
+PCI_DIR="${GPU_PCI_DIR:-/sys/bus/pci/devices}"
+IOMEM_FILE="${GPU_IOMEM_FILE:-/proc/iomem}"
+FWCFG_FILE="${GPU_FWCFG_FILE:-/sys/firmware/qemu_fw_cfg/by_name/opt/ovmf/X-PciMmio64Mb/raw}"
 SCRATCH="${GPU_SCRATCH:-/work/tmp}"
 PROBE="$(cd "$(dirname "$0")" && pwd)/webgl-probe.mjs"
 PACKAGES="linux-headers-$KVER nvidia-kernel-dkms nvidia-driver-libs libgles-nvidia2 libegl-nvidia0 nvidia-vulkan-icd nvidia-smi"
@@ -116,6 +119,33 @@ check_pre() {
   services
 }
 
+# Resizable BAR: BAR1 is 32 GiB, so the host run enlarges OVMF's 64-bit window. Here BAR1
+# must be assigned and lie inside a root bus window of this boot's /proc/iomem (read as
+# root; unprivileged reads show zeros). QEMU's window starts at the lowest 64-bit BAR, so its
+# size is not the configured 64 GiB; containment is what matters.
+gpu_bars() {
+  local d dev="" res=() start end flags iom line s e win=""
+  for d in "$PCI_DIR"/*; do
+    [ "$(cat "$d/vendor" 2>/dev/null):$(cat "$d/device" 2>/dev/null)" = 0x10de:0x2204 ] && { dev="$d"; break; }
+  done
+  [ -n "$dev" ] || { fail "no 10de:2204 function in $PCI_DIR"; return; }
+  mapfile -t res < "$dev/resource" 2>/dev/null && [ ${#res[@]} -ge 3 ] || { fail "cannot read the BARs of $(basename "$dev")"; return; }
+  read -r start end flags <<<"${res[1]}"
+  [[ "$start $end $flags" =~ ^0x[0-9a-f]+\ 0x[0-9a-f]+\ 0x[0-9a-f]+$ ]] && [ "$((start))" -ne 0 ] && (( flags & 0x2000 )) \
+    || { fail "BAR1 of $(basename "$dev") is not assigned ('${res[1]}')"; return; }
+  if ! iom="$(sudo -n cat "$IOMEM_FILE" 2>/dev/null)" || [ -z "$iom" ]; then fail "cannot read $IOMEM_FILE as root"; return; fi
+  while IFS= read -r line; do
+    [[ "$line" =~ ^([0-9a-f]+)-([0-9a-f]+)\ :\ PCI\ Bus\ 0000:00$ ]] || continue
+    s=$((16#${BASH_REMATCH[1]})); e=$((16#${BASH_REMATCH[2]}))
+    (( s != 0 && s <= start && end <= e )) && win="${BASH_REMATCH[1]}-${BASH_REMATCH[2]} ($(( (e - s + 1) >> 30 )) GiB)"
+  done <<<"$iom"
+  local bar; bar="$(printf '%x-%x' "$start" "$end")"
+  [ -n "$win" ] && pass "BAR1 $bar ($(( (end - start + 1) >> 20 )) MiB) assigned inside root window $win" \
+    || fail "BAR1 $bar is not inside any 'PCI Bus 0000:00' window of $IOMEM_FILE"
+  local fw; if fw="$(sudo -n cat "$FWCFG_FILE" 2>/dev/null)" && [ -n "$fw" ]; then pass "OVMF received X-PciMmio64Mb=$fw"
+  else warn "fw_cfg X-PciMmio64Mb not visible in the guest (qemu_fw_cfg module not loaded?); the BAR1 check above is what counts"; fi
+}
+
 check_post() {
   local report="" commit="" fb pci smi
   while [ $# -gt 0 ]; do case "$1" in --commit) commit="${2:-}"; shift 2 ;; *) report="$1"; shift ;; esac; done
@@ -123,6 +153,7 @@ check_post() {
   if ! pci="$(lspci -nnk -d 10de:2204 2>/dev/null)"; then fail "lspci failed"
   elif grep -q 'Kernel driver in use: nvidia' <<<"$pci"; then pass "RTX 3090 present, driver nvidia: $(head -1 <<<"$pci")"
   else fail "RTX 3090 not present with the nvidia driver: $(tr '\n' ' ' <<<"$pci")"; fi
+  gpu_bars
   local mods; if ! mods="$(lsmod 2>/dev/null)" || [ -z "$mods" ]; then fail "cannot read the loaded modules"; elif grep -q '^nouveau ' <<<"$mods"; then fail "nouveau is loaded"; else pass "nouveau not loaded"; fi
   if smi="$(nvidia-smi --query-gpu=name,driver_version,pci.bus_id,memory.total --format=csv,noheader 2>&1)" && grep -q "RTX 3090, $DRIVER" <<<"$smi"; then pass "nvidia-smi: $smi"; else fail "nvidia-smi: $smi"; fi
   [ -r "$DEV_DIR/nvidia0" ] && [ -w "$DEV_DIR/nvidia0" ] && [ -w "$DEV_DIR/nvidiactl" ] && pass "$DEV_DIR/nvidia0 and nvidiactl usable by $USER" || fail "$DEV_DIR/nvidia* missing or not usable by $USER"
@@ -256,8 +287,12 @@ cmd_undo_plan() {
     [ -n "$p" ] || continue
     tsv_has "$p" "$STATE_DIR/before.tsv" && continue
     v="$(present_version "$p")"; [ -n "$v" ] || continue
-    if tsv_has "$p" "$after" "$v"; then ours="$ours $p"; else changed="$changed $p"; fi
-    pend="$(pending_status "$p")"; [ -z "$pend" ] || warn "pending: $p (${pend% *}): not fully configured; included in the removal below"
+    pend="$(pending_status "$p")"
+    if tsv_has "$p" "$after" "$v"; then
+      ours="$ours $p"; [ -z "$pend" ] || warn "pending: $p (${pend% *}): not fully configured; included in the removal below"
+    else
+      changed="$changed $p"; [ -z "$pend" ] || warn "pending: $p (${pend% *}) at another version than our install; left alone"
+    fi
   done < "$STATE_DIR/planned.txt"
   while IFS=$'\t' read -r p v _; do
     tsv_has "$p" "$STATE_DIR/before.tsv" || line_has "$p" "$STATE_DIR/planned.txt" || notours="$notours $p"

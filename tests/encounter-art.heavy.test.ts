@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { digest, same } from "./render-assert.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
@@ -44,8 +45,9 @@ test("hunter warning colors follow simulation state without moving geometry, lea
         const colors = (): number[][] => owned.map(m => Array.from(m.getVerticesData("color")!));
         const resting = colors();
         const buffers = owned.map(m => m.getVertexBuffer("color")!.getBuffer());
-        const geometry = owned.map(m => [Array.from(m.getVerticesData("position")!), Array.from(m.getVerticesData("normal")!), Array.from(m.getIndices()!)]);
-        const otherColors = scene.meshes.filter(m => !owned.includes(m as Mesh)).map(m => [m, Array.from(m.getVerticesData("color") ?? [])] as const);
+        const shape = (m: Mesh): string[] => [digest(m.getVerticesData("position")), digest(m.getVerticesData("normal")), digest(m.getIndices())];
+        const geometry = owned.map(shape);
+        const otherColors = scene.meshes.filter(m => !owned.includes(m as Mesh)).map(m => [m, digest(m.getVerticesData("color"))] as const);
         const counts = (): number[] => [scene.meshes.length, scene.materials.length, scene.geometries.length, scene.textures.length];
         expectedCounts ??= counts();
         assert.deepEqual(counts(), expectedCounts, "rebuild starts with bounded scene resources");
@@ -115,13 +117,13 @@ test("hunter warning colors follow simulation state without moving geometry, lea
         }
         assert.deepEqual(counts(), expectedCounts);
         owned.forEach((mesh, i) => {
-          assert.equal(mesh.material, cel);
-          assert.equal(mesh.getVertexBuffer("color")!.getBuffer(), buffers[i]);
-          assert.deepEqual([Array.from(mesh.getVerticesData("position")!), Array.from(mesh.getVerticesData("normal")!), Array.from(mesh.getIndices()!)], geometry[i]);
+          same(mesh.material, cel);
+          same(mesh.getVertexBuffer("color")!.getBuffer(), buffers[i], `${mesh.name} keeps its color buffer`);
+          assert.deepEqual(shape(mesh), geometry[i], `${mesh.name} geometry`);
           assert.ok([...mesh.position.asArray(), ...mesh.rotation.asArray(), ...mesh.scaling.asArray(), ...mesh.getVerticesData("color")!].every(Number.isFinite));
         });
         for (const [mesh, original] of otherColors)
-          assert.deepEqual(Array.from(mesh.getVerticesData("color") ?? []), original, "other art never brightens");
+          assert.equal(digest(mesh.getVerticesData("color")), original, `${mesh.name}: other art never brightens`);
         assert.ok(fins.every(m => m.parent === hunter));
         hunter.dispose(); // Includes authored child fins, never the shared material.
         assert.ok(owned.every(m => m.isDisposed()));

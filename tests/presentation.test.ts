@@ -19,6 +19,7 @@ import { ExpeditionSession } from "../src/runtime/session.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
 import { MemoryStorage, TestWriterLock, encoded, sample, settled } from "./persistence-support.js";
+import { UI_SCENARIOS } from "./ui-scenarios.js";
 
 /** Minimal DOM port for rendered buttons, replacement and command wiring. Native
  * keyboard/layout behavior is checked separately in the production browser. */
@@ -356,7 +357,7 @@ test("recipe quantities use the same supported-cradle inputs as fabrication, wit
   assert.match(recipe, /Structural alloy: 2 \/ 2/);
   assert.match(recipe, /Flexible membrane: 4 \/ 2/);
   assert.match(recipe, /Local sources:.*Dart hold.*supported-cradle cargo/);
-  click("Fabricate · Repair pod regulator & bench");
+  click("Repair");
   assert.deepEqual(commands, [{ type: "craft", recipeId: "pod_repair" }]);
   assert.deepEqual(s, snapshot, "view never consumes or moves ingredients");
   s.player.pose.position = { x: 10, y: 2, z: -35 };
@@ -397,7 +398,7 @@ test("bench cell recharge is an explicit pre-vessel command, separate from hull 
   view.openPanel("inventory", s);
   const html = get("panel-content").innerHTML;
   assert.match(html, /<h3>Local cells<\/h3>/);
-  assert.match(html, /Hull battery, health and emergency air require supported service beside the craft/);
+  assert.match(html, /Reserve cell 1 · Pod locker · 50 → 100%/);
   commandButton({ type: "recharge-cells" }).focus();
   s = executeCommand(s, { type: "recharge-cells" }, createWorldQueries()).state;
   view.refreshPanel(s);
@@ -456,7 +457,7 @@ test("trim UI distinguishes stored from installed, uses actual occupancy, and ex
   s.fleet.vehicles.push(v);
   s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
   view.openPanel("inventory", s);
-  assert.match(get("panel-content").innerHTML, /Dart acoustic trim · fabricated \/ stored/);
+  assert.match(get("panel-content").innerHTML, /Dart acoustic trim · Diver hold/);
   assert.match(get("panel-content").innerHTML, /Quiet 3 → 4\.2 · boost 11 → 9 m\/s · 1 socket · 2 CU/);
   assert.match(get("panel-content").innerHTML, /0 \/ 2 sockets · 0 \/ 32 CU hold/);
   const install: GameCommand = { type: "install-module", vehicleId: v.id, itemId: item.id };
@@ -1454,13 +1455,22 @@ test("ascent cue wins; rail help requires current forward rail-end contact, with
   view.cancelFeedback(); assert.equal(get("blocked-ascent").hidden, true);
 });
 
-test("empty opening detail and in-session subtitle hide while capture affordance remains until explicitly changed", (t) => {
-  const { view, get } = viewFixture(t), s = createGame(); view.update(s, false); view.showGame();
+test("the title menu has no tagline or build note, keeps settings in place, and Esc steps back from settings", (t) => {
+  const { view, get, root, key, active, markup } = viewFixture(t), s = createGame(); view.update(s, false); view.showGame();
   assert.equal(get("opening-detail").hidden, true);
-  view.showMenu(true); assert.equal(get("menu-subtitle").hidden, true);
-  assert.equal(get("build-note").hidden, true);
-  view.showMenu(false); assert.equal(get("menu-subtitle").hidden, false);
-  assert.equal(get("build-note").hidden, false);
+  view.showMenu(false);
+  assert.doesNotMatch(markup(), /id="menu-subtitle"|id="build-note"|A first horizon|in development/);
+  assert.doesNotMatch(markup(), /Carrier feasibility|data-action="fixture"/, "developer fixtures need ?dev");
+  assert.equal(get("settings-menu").hidden, true);
+  root.emit("click", { target: get("open-settings") });
+  assert.equal(get("settings-menu").hidden, false); assert.equal(get("main-menu").hidden, true);
+  assert.equal(active(), get("settings-back"));
+  const escape = key("Escape");
+  assert.equal(escape.stopped && escape.prevented, true, "the runtime does not also pause or resume");
+  assert.equal(get("settings-menu").hidden, true); assert.equal(get("main-menu").hidden, false);
+  assert.equal(active(), get("open-settings"));
+  root.emit("click", { target: get("open-settings") }); view.showMenu(true);
+  assert.equal(get("settings-menu").hidden, true, "re-opening the menu starts at the main view");
   completeOpening(s); view.update(s, false); view.showGame(); view.lookAction(true, true);
   for (let i = 0; i < 1000; i++) view.update(s, false);
   assert.equal(get("look-action").hidden, false); assert.match(get("look-action").textContent, /drag \/ arrows available/);
@@ -1948,4 +1958,39 @@ test("other notices preserve one ordinary bite onset and a later episode can ann
   view.resetPresentation(); v.disabled = false; v.health = 99.8;
   assert.equal(view.threatDamage(bite, s), true); wall(0);
   assert.equal(get("damage-announce").textContent, "Bitten · hull −0.2%");
+});
+
+test("B1 copy: the cabin's own aft hatch prompts leaving, and Creel mount receipts name the rack", (t) => {
+  const { view, get } = viewFixture(t), world = createWorldQueries();
+  const s = UI_SCENARIOS["creel-cabin"]();
+  faceTarget(s, "cabin:hatch");
+  const target = aimedInteraction(s, world);
+  assert.equal(target?.id, "cabin:hatch");
+  view.update(s, false); view.target(target);
+  assert.match(get("interact-prompt").innerHTML, /Leave by hatch/);
+  assert.doesNotMatch(get("interact-prompt").innerHTML, /Enter cabin/);
+  const slip = UI_SCENARIOS["creel-slip"](), creel = slip.fleet.vehicles.find(v => v.hull === "creel")!;
+  const rack = creel.modules[0]!;
+  const removed = executeCommand(slip, { type: "remove-module", vehicleId: creel.id, itemId: rack }, world);
+  const summary = (r: typeof removed) => r.events.flatMap(e => e.type === "notice" ? [e.summary] : []).join(" ");
+  assert.equal(summary(removed), "Creel cargo rack removed · Creel hold");
+  const refit = executeCommand(removed.state, { type: "install-module", vehicleId: creel.id, itemId: rack }, world);
+  assert.equal(summary(refit), "Creel cargo rack fitted");
+  assert.doesNotMatch(summary(removed) + summary(refit), /Dart|trim/);
+});
+
+test("Creel mount changes keep keyboard focus on the mount row, not Return", (t) => {
+  const { view, get, commandButton, active } = viewFixture(t), world = createWorldQueries();
+  let s = UI_SCENARIOS["creel-slip"](); const creel = s.fleet.vehicles.find(v => v.hull === "creel")!, rack = creel.modules[0]!;
+  view.openPanel("inventory", s);
+  commandButton({ type: "remove-module", vehicleId: creel.id, itemId: rack }).focus();
+  s = executeCommand(s, { type: "remove-module", vehicleId: creel.id, itemId: rack }, world).state;
+  assert.ok(!s.fleet.vehicles[0]!.modules.includes(rack));
+  view.refreshPanel(s);
+  assert.notEqual(active(), get("panel-return"));
+  assert.equal(active()?.attrs["data-focus-key"], `mount:${creel.id}`);
+  commandButton({ type: "install-module", vehicleId: creel.id, itemId: rack }).focus();
+  s = executeCommand(s, { type: "install-module", vehicleId: creel.id, itemId: rack }, world).state;
+  view.refreshPanel(s);
+  assert.equal(active()?.attrs["data-focus-key"], `mount:${creel.id}`, "fitting returns to the same row");
 });

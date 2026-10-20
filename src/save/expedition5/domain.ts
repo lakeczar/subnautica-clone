@@ -1,5 +1,5 @@
-/** Frozen schema3 expedition.4 domain at dae17fcf38ae2e08cb778ebb4c0a04df92eeb072
- * (production 35c2d22473ff17ed907c62362c25d17ed47cbcd0), generated from that build.
+/** Frozen schema4 expedition.5 domain at 7bd259c395542e2d58724417be66a1864c58c005
+ * (production eb712f1527439ec1f38f2c52ef61ac78989ba74c), generated from that build.
  * Decode-only. Never extend these definitions with current content. */
 export const BLUEPRINTS = ["bp_pod_checklist","bp_reef_recovery","bp_island_workshop","bp_carrier_workshop","bp_canopy_reinforcement","bp_creel_service","bp_carrier_basin","bp_rift_pressure"] as const;
 export const EVIDENCE = {
@@ -91,6 +91,13 @@ export const SOURCES = {
   "basin_survey_fins_east": {"item":"conductive_crust","stock":14,"reserve":8},
   "basin_survey_fins_west": {"item":"conductive_crust","stock":14,"reserve":8},
 } as const;
+export const SOURCE_RENEWAL = {
+  "reef_ribbon_catch_north": {"quantity":2,"intervalSteps":21600},
+  "reef_ribbon_catch_south": {"quantity":2,"intervalSteps":21600},
+  "canopy_resin_lee_upper": {"quantity":2,"intervalSteps":36000},
+  "canopy_resin_lee_lower": {"quantity":2,"intervalSteps":36000},
+} as const;
+export const RENEWABLE_SOURCE_IDS = ["reef_ribbon_catch_north","reef_ribbon_catch_south","canopy_resin_lee_upper","canopy_resin_lee_lower"] as const;
 export const MODULES = {"dart_acoustic_trim":{"hull":"dart"}} as const;
 export const WORLD_BOUNDS = {
   "minX": -76,

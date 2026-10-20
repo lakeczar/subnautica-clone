@@ -69,8 +69,7 @@ function hullComponents(hull: HullId): Triangle[][] {
     ...[-1, 1].flatMap(side => [
     box({ center: [side * K.offsetX, K.centerY, 0], size: K.size }),
     box({ center: [side * K.offsetX, K.capY, 0], size: K.capSize })])];
-  if (hull === "creel") return [box(C.body), box(C.cabin), box(C.window),
-    ...[-2.5, 2.5].map(x => box({ center: [x, .8, -2], size: C.toolSize }))];
+  if (hull === "creel") return [box(C.body), box(C.cabin), box(C.window), box(C.mount), ...C.tools.map(t => box(t))];
   if (hull === "spindle") return [loft(P.body), box(P.roof), ...[-2,2].flatMap(x=>[
     ellipsoid([x,.4,0],P.float.radius,8),box({center:[x/2,.55,0],size:[2,.15,.2]})])];
   return [loft(S.bow), loft(S.body), loft(S.inset), box(S.prow),

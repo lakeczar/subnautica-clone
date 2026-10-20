@@ -1,5 +1,5 @@
 import { terrainHeight } from "../sim/world.js";
-import { BASIN_GEOMETRY, BASIN_SOURCE_IDS } from "../content/routes.js";
+import { BASIN_GEOMETRY, ROUTE_TERRAIN_SOURCE_IDS } from "../content/routes.js";
 import { SOURCES } from "../content/registry.js";
 
 /** Render sampling only. The controller, saves and targeting still use the
@@ -12,8 +12,10 @@ export const WORKSHOP_DECK = { minX: 3, maxX: 16, minZ: -40, maxZ: -31, top: 1.2
  * are coarse; only work faces need sub-metre samples. */
 export const TERRAIN_EXTENT = {
   minX: -95, maxX: 205 + 40 * 300 / 190,
-  minZ: -202 - 50 * 290 / 178, maxZ: 88,
+  minZ: -202 - 80 * 290 / 178, maxZ: 88,
 } as const;
+/** M2-B1 fracture rows, appended south of the M2-A extension rows. */
+const FRACTURE_ROWS = [60, 70, 80] as const;
 
 export interface TerrainSurface {
   positions: number[];
@@ -27,7 +29,7 @@ const discontinuities = [
   { minX: 38, maxX: 54, minZ: -60, maxZ: -48 },
   ...BASIN_GEOMETRY.terrainPads,
 ] as const;
-const CONFORMITY_BOUNDS = { minX: 36, maxX: 250, minZ: -262, maxZ: -38 } as const;
+const CONFORMITY_BOUNDS = { minX: 36, maxX: 250, minZ: -334, maxZ: -38 } as const;
 const SMOOTH_ERROR = .095; // Margin below the .1 m submitted-float32 target.
 const LIMIT_STEP = 1e-7;
 type Point = readonly [number, number, number];
@@ -44,6 +46,7 @@ export function createTerrainSurface(): TerrainSurface {
   const zAxis = Array.from({ length: g.nz + 1 }, (_, i) => g.minZ + i / g.nz * g.sizeZ);
   for (let i = 10; i <= 40; i += 10) xAxis.push(205 + i * g.sizeX / g.nx);
   for (let i = 50; i >= 10; i -= 10) zAxis.unshift(g.minZ - i * g.sizeZ / g.nz);
+  for (const i of FRACTURE_ROWS) zAxis.unshift(g.minZ - i * g.sizeZ / g.nz);
   zAxis.sort((a, b) => a - b);
   const axis = (a: number, b: number, divisions: number, cuts: readonly number[]): number[] => {
     const values = Array.from({ length: divisions + 1 }, (_, i) => a + (b - a) * i / divisions);
@@ -107,7 +110,7 @@ export function createTerrainSurface(): TerrainSurface {
     // grid had arbitrary phase inside a much larger extension cell. Preserve
     // the stock/host support with bounded local sampling, then apply the same
     // geometric error criterion as the surrounding ledge.
-    for (const id of BASIN_SOURCE_IDS) {
+    for (const id of ROUTE_TERRAIN_SOURCE_IDS) {
       const p = SOURCES[id].position;
       if (x0 >= p.x + 4.6 || x1 <= p.x - 4.6 || z0 >= p.z + 4.6 || z1 <= p.z - 4.6) continue;
       for (let n = -11; n <= 11; n++) {

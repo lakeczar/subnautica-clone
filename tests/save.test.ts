@@ -4,7 +4,6 @@ import { createEnvelope, decodeSave, encodeSave, MAX_SAVE_BYTES } from "../src/s
 import { CARRIER_LAYOUT, carrierCommand, fixtureGame, localToWorld } from "../src/sim/carrier.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import { WORLD_VERTICAL_BOUNDS } from "../src/content/routes.js";
-import { SOURCES as LEGACY_SOURCES } from "../src/save/legacy/registry.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import type { CommitResult } from "../src/save/repository.js";
@@ -89,7 +88,7 @@ test("invalid JSON, unrecognized format, unsafe numeric ranges and nonempty futu
 });
 
 test("unsupported schema and different content are rejected without rewriting data", () => {
-  for (const version of [0, 5, 100, "1", null, ["1"], { toString: {} }]) {
+  for (const version of [0, 6, 100, "1", null, ["1"], { toString: {} }]) {
     const result = decodeSave(
       JSON.stringify({ ...sample(), schemaVersion: version }),
     );
@@ -150,7 +149,7 @@ test("invalid writes and rejected corrupt/future imports leave current AND backu
   // The runtime only offers import confirmation if decode succeeds.
   for (const text of [
     "{bad json}",
-    JSON.stringify({ ...sample(99), schemaVersion: 5 }),
+    JSON.stringify({ ...sample(99), schemaVersion: 6 }),
   ]) {
     const result = decodeSave(text);
     if (result.ok) await repo.commit(result.value);
@@ -353,41 +352,27 @@ test("oversized protected raw records cannot be discarded even by explicit repai
   assert.equal(storage.getItem(LOCAL_SAVE_KEY), before);
 });
 
-test("compatible schema2 carrier saves preserve all transforms; a newly covered walking pose relocates visibly once without writing", async () => {
+test("carrier saves preserve all transforms; a walking pose inside a sealed compartment refuses on decode and encode", () => {
   const s = fixtureGame(), h = s.fleet.vehicles[0]!;
   assert.equal(carrierCommand(s, "launch", "fixture_dart", createWorldQueries()), null);
   const meta = sample().meta, envelope = createEnvelope(s, meta);
   const safe = decodeSave(JSON.stringify(envelope));
   assert.equal(safe.ok, true);
   assert.deepEqual(safe.value, envelope);
-  // This was clear of the former craft proxy but now intersects its sealed fore wall.
+  const detached = structuredClone(envelope);
+  detached.state.player.pose.position.x += 0.02;
+  assert.equal(decodeSave(JSON.stringify(detached)).ok, false, "interior and world poses must agree");
+  // Clear of the former craft proxy but inside the sealed fore wall.
   s.player.interiorPose!.position = { x: -3, y: 4, z: -3.1 };
   s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
-  // A genuine schema2 closed-domain fixture; new sources belong only to schema3 and
-  // pristine renewal progress only to schema4.
-  assert.ok(s.world.renewal.every(r => r.progress === 0));
-  const { renewal: _renewal, ...world } = s.world;
-  const original = JSON.stringify({ ...envelope, schemaVersion: 2, contentVersion: "expedition.3",
-    state: { ...s, world: { ...world, resources: s.world.resources.filter(r => Object.hasOwn(LEGACY_SOURCES, r.id)) } } }), storage = new MemoryStorage();
-  storage.setItem(LOCAL_SAVE_KEY, JSON.stringify({ format: "siltwake.local", version: 1, current: original, previous: null, preserved: null }));
-  const raw = storage.getItem(LOCAL_SAVE_KEY), writes = storage.writes;
-  const repo = new SaveRepository(storage, new TestWriterLock());
-  const loaded = repo.load();
-  assert.ok(loaded.save);
-  assert.equal(storage.writes, writes);
-  assert.equal(storage.getItem(LOCAL_SAVE_KEY), raw);
-  assert.equal(loaded.save.schemaVersion, 4);
-  assert.equal(loaded.save.contentVersion, "expedition.5");
-  assert.match(loaded.save.state.migration!, /previous walking position.*moved/);
-  assert.deepEqual(loaded.save.state.player.interiorPose!.position, CARRIER_LAYOUT.helm);
-  assert.deepEqual(loaded.save.state.fleet, s.fleet);
-  assert.deepEqual(loaded.save.state.inventory, s.inventory);
-  assert.equal(encodeSave(envelope).ok, false, "current commands must never save a pose inside the new sealed shell");
-  const exported = encodeSave(loaded.save);
-  assert.equal(exported.ok, true);
-  const second = decodeSave(exported.value);
-  assert.equal(second.ok, true);
-  assert.deepEqual(second.value, loaded.save);
-  assert.equal((await repo.commit(loaded.save)).ok, true);
-  assert.equal(repo.backupText, original);
+  const raw = JSON.stringify(envelope), refused = decodeSave(raw);
+  assert.equal(refused.ok, false);
+  if (!refused.ok) assert.match(refused.error, /sealed carrier compartment/);
+  assert.equal(JSON.stringify(envelope), raw, "refusal never relocates or rewrites");
+  const write = encodeSave(envelope);
+  assert.equal(write.ok, false, "current commands must never save a pose inside the sealed shell");
+  if (!write.ok) assert.match(write.error, /sealed carrier compartment/);
+  s.player.interiorPose!.position = { ...CARRIER_LAYOUT.helm };
+  s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
+  assert.equal(encodeSave(envelope).ok, true, "the authored helm is clear");
 });

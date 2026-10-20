@@ -127,7 +127,6 @@ button:active:not(:disabled) {
 .wordmark span,
 .eyebrow,
 .scene-caption > span,
-.build-note,
 .heading small {
   font-size: 9px;
   letter-spacing: 0.22em;
@@ -139,14 +138,7 @@ h1 {
   font-size: clamp(46px, 5.3vw, 79px);
   line-height: 1.05;
   letter-spacing: 0.045em;
-  margin: 0 0 15px -0.055em;
-}
-.subtitle {
-  font-family: Georgia, "Times New Roman", serif;
-  font-style: italic;
-  font-size: 18px;
-  color: #bacdc6;
-  margin: 0 0 32px;
+  margin: 0 0 28px -0.055em;
 }
 .menu-buttons {
   display: flex;
@@ -205,33 +197,6 @@ h1 {
   max-height: 100px;
   overflow: auto;
 }
-.details {
-  border-top: 1px solid #9bb8a329;
-  padding: 11px 0;
-}
-.details summary {
-  font-size: 11px;
-  color: #cfdbc9;
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.details summary:after {
-  content: "+";
-  font-size: 17px;
-  font-weight: 300;
-  color: #91afa2;
-}
-.details[open] summary:after {
-  content: "−";
-}
-.details p {
-  font-size: 11px;
-  color: #a9c2b9;
-  line-height: 1.7;
-}
 .controls {
   margin: 18px 0 16px;
   display: grid;
@@ -287,44 +252,6 @@ h1 {
 .settings input[type="checkbox"] {
   accent-color: #dddaa9;
 }
-.control-note {
-  display: block;
-  font-size: 10px;
-  line-height: 1.6;
-  color: #8eafa5;
-  margin-top: 8px;
-}
-#lock-mouse {
-  padding: 6px 0;
-  border-bottom: 1px solid #8eaa9c50;
-  font-size: 11px;
-}
-.build-note {
-  margin: 28px 0 0;
-  color: #cfcca6;
-  letter-spacing: 0.11em;
-  line-height: 1.8;
-  font-size: 8px;
-}
-.build-note > span:last-child {
-  display: block;
-  color: #91ada4;
-  letter-spacing: 0.015em;
-  font-size: 10px;
-  font-weight: 400;
-  line-height: 1.65;
-  margin-top: 7px;
-  max-width: 348px;
-}
-.status-dot {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  background: #dbb570;
-  border-radius: 50%;
-  margin-right: 5px;
-  vertical-align: 1px;
-}
 .scene-caption {
   position: absolute;
   right: 5.5vw;
@@ -354,6 +281,57 @@ h1 {
   color: #dce2cd;
   font-size: 7px;
   letter-spacing: 0.17em;
+}
+/* Settings replace the main menu in place: controls beside the adjustable fields. */
+.menu-frame:has(> #settings-menu:not([hidden])) {
+  width: min(720px, calc(100vw - 64px));
+}
+.menu-screen:has(#settings-menu:not([hidden])) {
+  background: linear-gradient(90deg, #102a35f7 0%, #102a35ee 55%, #102a35c8 75%, #102a3560 100%);
+}
+.menu-frame:has(> #settings-menu:not([hidden])) .wordmark {
+  display: none;
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #9bb8a329;
+}
+.settings-head h2 {
+  margin: 0;
+  font: 400 22px Georgia, "Times New Roman", serif;
+  color: #e8dfbf;
+}
+.settings-head button {
+  padding: 6px 0;
+  border-bottom: 1px solid #8eaa9c50;
+  color: #c6d6ce;
+  font-size: 12px;
+}
+.settings-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 36px;
+}
+.settings-columns .controls {
+  margin: 12px 0;
+  gap: 7px;
+}
+.settings-fields > .settings:first-child {
+  border-top: 0;
+}
+.settings-fields > .settings {
+  gap: 9px;
+  padding: 10px 0;
+}
+.save-safety > span {
+  font-size: 11px;
+  color: #a9c2b9;
+}
+.save-safety .menu-tools {
+  margin: 0;
 }
 .pause-reason {
   font-size: 11px;
@@ -408,26 +386,20 @@ h1 {
   .scene-caption {
     display: none;
   }
+  .settings-columns {
+    grid-template-columns: 1fr;
+  }
 }
 @media (max-height: 780px) {
   .wordmark {
     margin-bottom: 17px;
   }
-  .subtitle {
-    margin-bottom: 24px;
-  }
   .menu-frame {
     margin-top: 22px;
     margin-bottom: 22px;
   }
-  .build-note {
-    margin-top: 18px;
-  }
   .save-status {
     margin-bottom: 16px;
-  }
-  .details {
-    padding: 9px 0;
   }
   h1 {
     font-size: 58px;

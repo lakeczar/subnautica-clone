@@ -4,7 +4,7 @@
 //
 //   TMPDIR=/work/tmp node webgl-probe.mjs --out DIR --playwright DIR/node_modules/playwright-core
 //       [--chrome PATH] [--dist GAME/dist --commit SHA [--port 5192] [--size 1920x1080]]
-//       [--expect 'RTX 3090'] [--allow-software]
+//       [--expect 'RTX 3090'] [--candidate NAME] [--allow-software]
 //   node webgl-probe.mjs --validate DIR/report.json [--commit SHA] [--boot-id ID] [--host NAME] [--max-age-min 360]
 //   node webgl-probe.mjs --self-test
 //
@@ -14,8 +14,12 @@
 // accelerated only if the renderer is the expected NVIDIA card (never SwiftShader,
 // llvmpipe or another GPU) and the draw reads back exactly, with no GL error or context loss.
 //
-// Game smoke (--dist): the probe serves the built game itself on 127.0.0.1:PORT, loads it
-// in the first accelerated candidate, starts a new expedition and waits for the game's own
+// Game smoke (--dist): the probe serves the built game itself on 127.0.0.1:PORT and tries the
+// accelerated candidates in order (gl-egl first: on factory-worker ANGLE-Vulkan loses the
+// context once during game startup). A failure in one candidate, a context loss included,
+// fails that candidate and moves on to the next; the first candidate whose smoke passes is
+// "chosen", and every attempt is kept in report.smokes. --candidate NAME pins one candidate
+// (probe and smoke only that one). Each smoke starts a new expedition and waits for the game's own
 // readiness (canvas data-ready/data-graphics, HUD shown). It then counts frames rendered by
 // the game's render loop (canvas data-frames, incremented per scene.render()), checks the
 // canvas image is a real scene, and fails on page errors, console errors, relevant WebGL
@@ -39,11 +43,36 @@ import { pathToFileURL } from "node:url";
 
 export const SCHEMA = "siltwake-gpu-probe/2";
 // Per-process switches for this probe's own browser only; the report records every result.
+// Order matters: the smoke tries accelerated candidates in this order. ANGLE GL-EGL comes first:
+// on factory-worker (RTX 3090, driver 550.163.01, Chrome 156) ANGLE-Vulkan lost the WebGL context
+// once during game startup in 4 of 4 runs, GL-EGL in 0 of 2 (2026-10-20).
 export const CANDIDATES = [
-  { name: "angle-vulkan", args: ["--use-angle=vulkan", "--enable-features=Vulkan", "--disable-vulkan-surface", "--ignore-gpu-blocklist"] },
   { name: "angle-gl-egl", args: ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"] },
+  { name: "angle-vulkan", args: ["--use-angle=vulkan", "--enable-features=Vulkan", "--disable-vulkan-surface", "--ignore-gpu-blocklist"] },
   { name: "chrome-default", args: [] },
 ];
+
+// Which candidates the smoke tries, in order: the accelerated ones; without any, under
+// --allow-software, the first that drew correctly (a functional harness check only).
+export function smokeOrder(results, allowSoftware = false) {
+  const acc = results.filter((r) => r.verdict?.accelerated).map((r) => r.name);
+  if (acc.length || !allowSoftware) return { names: acc, software: false };
+  const fb = results.find((r) => r.info?.webgl2 && r.drawJudgement?.passed);
+  return { names: fb ? [fb.name] : [], software: !!fb };
+}
+
+// Runs the smoke in each name until one passes. runOne(name) resolves to a smoke record with
+// .passed (or throws, which is a failed attempt). Returns every attempt and the passing one.
+export async function selectSmoke(names, runOne) {
+  const attempts = [];
+  for (const name of names) {
+    let a;
+    try { a = await runOne(name); } catch (e) { a = { candidate: name, error: String(e?.message ?? e).split("\n")[0], passed: false }; }
+    attempts.push(a);
+    if (a.passed) return { attempts, passed: a };
+  }
+  return { attempts, passed: null };
+}
 const SOFTWARE = /SwiftShader|Subzero|llvmpipe|lavapipe|softpipe|Software|Microsoft Basic Render/i;
 export const SMOKE_LIMITS = { minFrames: 10, minBuckets: 64, minLumaStd: 8, maxDominant: 0.85 };
 
@@ -128,6 +157,11 @@ export function validateReport(r, ctx = {}) {
     if (!d.passed) reasons.push(`chosen candidate's draw check: ${d.reasons.join("; ")}`);
   }
   const s = r.smoke;
+  if (Array.isArray(r.smokes) && r.smokes.length) {
+    const last = r.smokes[r.smokes.length - 1];
+    if (last.candidate !== r.chosen || !last.passed) reasons.push(`the last smoke attempt ('${last.candidate}') is not the chosen, passing one`);
+    if (r.smokes.slice(0, -1).some((a) => a.passed)) reasons.push("an earlier smoke attempt passed but was not chosen");
+  }
   if (!s) reasons.push("no smoke section");
   else {
     if (s.candidate !== r.chosen) reasons.push(`smoke ran in '${s.candidate}', not the chosen '${r.chosen}'`);
@@ -258,7 +292,7 @@ function drawInPage() {
 function parseArgs(argv) {
   const o = { chrome: path.join(os.homedir(), ".cache/ms-playwright/chromium-1248/chrome-linux64/chrome"), expect: "RTX 3090", port: 5192, size: "1920x1080", maxAgeMin: 360 };
   const flags = { "--self-test": "selfTest", "--allow-software": "allowSoftware" };
-  const values = ["--out", "--chrome", "--playwright", "--dist", "--commit", "--port", "--size", "--expect", "--validate", "--boot-id", "--host", "--max-age-min"];
+  const values = ["--out", "--chrome", "--playwright", "--dist", "--commit", "--port", "--size", "--expect", "--validate", "--boot-id", "--host", "--max-age-min", "--candidate"];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (flags[a]) o[flags[a]] = true;
@@ -365,13 +399,13 @@ export function fixtureReport({ bootId, host, commit, finishedAt }) {
   const s0 = { graphics: "available", ready: "true", hud: true, frames: "100", draws: "72", meshes: "92", triangles: "340439" };
   const observations = { first: s0, second: { ...s0, frames: "400" }, image: { distinctBuckets: 900, lumaStd: 40, dominantFraction: 0.2 }, pageErrors: [],
     console: [{ type: "warning", text: "[.WebGL-0x1]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels" }], contextLostEvents: 0 };
-  return { schema: SCHEMA, mode: "game-smoke", verdict: "accelerated-game-smoke-passed", exitCode: 0, host, finishedAt, chosen: "angle-vulkan", fixture: true,
-    candidates: [{ name: "angle-vulkan", browserVersion: "156.0.8078.4", info, draw }],
+  return { schema: SCHEMA, mode: "game-smoke", verdict: "accelerated-game-smoke-passed", exitCode: 0, host, finishedAt, chosen: "angle-gl-egl", fixture: true,
+    candidates: [{ name: "angle-gl-egl", browserVersion: "156.0.8078.4", info, draw }],
     device: { bootId, nvidiaSmi: "NVIDIA GeForce RTX 3090, 00000000:06:00.0, 550.163.01" },
-    smoke: { candidate: "angle-vulkan", browserVersion: "156.0.8078.4", info, observations, build: { commit, distSha256: "d" } } };
+    smoke: { candidate: "angle-gl-egl", browserVersion: "156.0.8078.4", info, observations, build: { commit, distSha256: "d" } } };
 }
 
-function selfTest() {
+async function selfTest() {
   let failed = 0;
   const check = (label, got, want) => { const ok = got === want; console.log(`${ok ? "ok  " : "FAIL"} ${label}`); if (!ok) failed++; };
   const r = (u) => ({ webgl2: true, unmaskedRenderer: u, unmaskedVendor: "" });
@@ -428,6 +462,26 @@ function selfTest() {
   const dec = decodePng(encodePng(w, h, rgb));
   check("png: decoding all five filters round-trips", dec.width === w && dec.height === h && Buffer.compare(dec.data, rgb) === 0, true);
   check("png: flat image stats show one colour", imageStats(decodePng(encodePng(8, 8, Buffer.alloc(8 * 8 * 3, 20)))).dominantFraction, 1);
+  // Smoke order and fallback (2026-10-20: ANGLE-Vulkan loses the context at game startup).
+  const res = (name, acc, draw = acc) => ({ name, verdict: { accelerated: acc }, info: { webgl2: true }, drawJudgement: { passed: draw } });
+  check("order: gl-egl is tried before vulkan", CANDIDATES[0].name === "angle-gl-egl" && CANDIDATES[1].name === "angle-vulkan", true);
+  check("order: accelerated candidates only, in list order", smokeOrder([res("angle-gl-egl", true), res("angle-vulkan", true), res("chrome-default", false)]).names.join(","), "angle-gl-egl,angle-vulkan");
+  check("order: no accelerated candidate and no --allow-software: nothing to smoke", smokeOrder([res("angle-gl-egl", false)]).names.length, 0);
+  check("order: --allow-software falls back to a drawing software candidate", smokeOrder([res("angle-vulkan", false, false), res("angle-gl-egl", false, true)], true).names.join(","), "angle-gl-egl");
+  const lostObs = { ...goodObs, contextLostEvents: 1 };
+  const runner = (table) => async (name) => { if (table[name] === "throw") throw new Error(`launch of ${name} failed`); return { candidate: name, passed: judgeSmoke(table[name]).passed }; };
+  let sel = await selectSmoke(["angle-vulkan", "angle-gl-egl"], runner({ "angle-vulkan": lostObs, "angle-gl-egl": goodObs }));
+  check("fallback: a context loss fails vulkan, gl-egl passes and is chosen", `${sel.attempts.map((a) => `${a.candidate}:${a.passed}`).join(",")}|${sel.passed?.candidate}`, "angle-vulkan:false,angle-gl-egl:true|angle-gl-egl");
+  sel = await selectSmoke(["angle-gl-egl", "angle-vulkan"], runner({ "angle-gl-egl": goodObs, "angle-vulkan": lostObs }));
+  check("selection: the first passing candidate is chosen and later ones are not run", `${sel.attempts.length}|${sel.passed?.candidate}`, "1|angle-gl-egl");
+  sel = await selectSmoke(["angle-gl-egl", "angle-vulkan"], runner({ "angle-gl-egl": "throw", "angle-vulkan": lostObs }));
+  check("fallback: a launch error is a failed attempt; nothing passes", `${sel.attempts.map((a) => a.passed).join(",")}|${sel.passed}|${!!sel.attempts[0].error}`, "false,false|null|true");
+  const multi = { ...good, chosen: "angle-gl-egl", candidates: [{ ...cand, name: "angle-vulkan" }, { ...cand, name: "angle-gl-egl" }],
+    smoke: { ...good.smoke, candidate: "angle-gl-egl" }, smokes: [{ candidate: "angle-vulkan", passed: false }, { ...good.smoke, candidate: "angle-gl-egl", passed: true }] };
+  check("validate: fallback report (vulkan lost, gl-egl passed and chosen) passes", v(multi), true);
+  check("validate: chosen is not the passing attempt fails", v({ ...multi, smokes: [{ ...good.smoke, candidate: "angle-gl-egl", passed: true }, { candidate: "angle-vulkan", passed: false }] }), false);
+  check("validate: an earlier passing attempt that was not chosen fails", v({ ...multi, smokes: [{ candidate: "angle-vulkan", passed: true }, { ...good.smoke, candidate: "angle-gl-egl", passed: true }] }), false);
+  check("validate: chosen with a context-lost smoke fails", v({ ...multi, smoke: { ...multi.smoke, observations: lostObs } }), false);
   console.log(`probe self-test failed ${failed}`);
   return failed ? 1 : 0;
 }
@@ -453,8 +507,13 @@ async function main() {
   const report = { schema: SCHEMA, mode: opts.dist ? "game-smoke" : "context", startedAt: new Date().toISOString(), host: os.hostname(), platform: `${os.type()} ${os.release()}`,
     chrome: opts.chrome, playwrightCore: createRequire(import.meta.url)(path.join(path.resolve(opts.playwright), "package.json")).version, expect: opts.expect,
     allowSoftware: !!opts.allowSoftware, device: deviceFacts(), candidates: [] };
-  let chosen = null, fallback = null;
-  for (const c of CANDIDATES) {
+  let list = CANDIDATES;
+  if (opts.candidate) {
+    list = CANDIDATES.filter((c) => c.name === opts.candidate);
+    if (!list.length) throw new Error(`unknown --candidate '${opts.candidate}'; known: ${CANDIDATES.map((c) => c.name).join(", ")}`);
+    report.pinned = opts.candidate;
+  }
+  for (const c of list) {
     let res;
     try { res = await probe(pw.chromium, opts, c); } catch (e) { res = { error: e.message.split("\n")[0] }; }
     res.classification = classify(res.info, expect);
@@ -462,28 +521,34 @@ async function main() {
     res.verdict = { accelerated: res.classification.accelerated && res.drawJudgement.passed };
     report.candidates.push({ name: c.name, args: c.args, ...res });
     console.log(`${c.name}: ${res.error ?? res.info?.unmaskedRenderer ?? "no renderer"}; draw ${res.drawJudgement.passed ? "ok" : res.drawJudgement.reasons[0]} -> ${res.verdict.accelerated ? "ACCELERATED" : res.classification.accelerated ? "draw failed" : res.classification.reason}`);
-    if (res.verdict.accelerated && !chosen) chosen = c;
-    if (res.info?.webgl2 && res.drawJudgement.passed && !fallback) fallback = c;
   }
-  report.chosen = chosen?.name ?? null;
-  let code = chosen ? 0 : 1;
-  const smokeWith = chosen ?? (opts.allowSoftware ? fallback : null);
-  if (opts.dist && smokeWith) {
+  const order = smokeOrder(report.candidates, !!opts.allowSoftware);
+  const anyAccelerated = !order.software && order.names.length > 0;
+  report.chosen = anyAccelerated ? order.names[0] : null;
+  let code = anyAccelerated ? 0 : 1;
+  if (opts.dist && order.names.length) {
     const build = { commit: opts.commit, dist: path.resolve(opts.dist), ...distIdentity(opts.dist) };
-    try {
-      const s = await smoke(pw.chromium, opts, smokeWith, opts.out, build);
-      s.classification = classify(s.info, expect);
-      s.judgement = judgeSmoke(s.observations);
-      s.passed = s.classification.accelerated && s.judgement.passed && s.info?.unmaskedRenderer === report.candidates.find((c) => c.name === smokeWith.name)?.info?.unmaskedRenderer;
-      s.functionalOnly = !chosen; // software run under --allow-software: proves the harness, not the GPU
-      report.smoke = s;
-      console.log(`smoke (${s.candidate}${s.functionalOnly ? ", SOFTWARE: functional check only" : ""}): ${s.info?.unmaskedRenderer ?? "no context"}; game rendered ${s.gameRenderedFrames} frames (${s.gameRenderedFramesPerSecond}/s headless); image ${s.observations.image?.distinctBuckets} buckets; ${s.judgement.passed ? "game checks pass" : s.judgement.reasons.join("; ")} -> ${s.passed ? "PASS" : "FAIL"}`);
-      if (chosen && !s.passed) code = 3;
-    } catch (e) {
-      report.smoke = { candidate: smokeWith.name, build, error: e.message.split("\n")[0], passed: false };
-      console.log(`smoke (${smokeWith.name}) failed: ${report.smoke.error}`);
-      if (chosen) code = 3;
-    }
+    const byName = (n) => CANDIDATES.find((c) => c.name === n);
+    const { attempts, passed } = await selectSmoke(order.names, async (name) => {
+      const sub = order.names.length > 1 ? path.join(opts.out, `smoke-${name}`) : opts.out;
+      mkdirSync(sub, { recursive: true });
+      try {
+        const s = await smoke(pw.chromium, opts, byName(name), sub, build);
+        s.classification = classify(s.info, expect);
+        s.judgement = judgeSmoke(s.observations);
+        s.passed = s.classification.accelerated && s.judgement.passed && s.info?.unmaskedRenderer === report.candidates.find((c) => c.name === name)?.info?.unmaskedRenderer;
+        s.functionalOnly = order.software; // software run under --allow-software: proves the harness, not the GPU
+        console.log(`smoke (${name}${s.functionalOnly ? ", SOFTWARE: functional check only" : ""}): ${s.info?.unmaskedRenderer ?? "no context"}; game rendered ${s.gameRenderedFrames} frames (${s.gameRenderedFramesPerSecond}/s headless); image ${s.observations.image?.distinctBuckets} buckets; ${s.judgement.passed ? "game checks pass" : s.judgement.reasons.join("; ")} -> ${s.passed ? "PASS" : "FAIL"}`);
+        if (order.software) s.passed = false; // never a passing accelerated smoke
+        return s;
+      } catch (e) {
+        console.log(`smoke (${name}) failed: ${e.message.split("\n")[0]}`);
+        return { candidate: name, build, error: e.message.split("\n")[0], passed: false };
+      }
+    });
+    report.smokes = attempts;
+    if (passed) { report.chosen = passed.candidate; report.smoke = passed; }
+    else { report.smoke = attempts[0]; if (anyAccelerated) code = 3; }
   } else if (opts.dist) report.smoke = { error: "no candidate to run the smoke in", passed: false };
   report.exitCode = code;
   report.verdict = code === 1 ? "not-accelerated" : code === 3 ? "accelerated-game-smoke-failed" : opts.dist ? "accelerated-game-smoke-passed" : "accelerated";

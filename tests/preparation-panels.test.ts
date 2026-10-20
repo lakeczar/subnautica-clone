@@ -10,6 +10,7 @@ import { disableVehicle } from "../src/sim/recovery.js";
 import { serviceRefusal, serviceWouldRestore } from "../src/sim/vehicles.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameCommand, GameState, WorldQueries } from "../src/sim/types.js";
+import { UI_SCENARIOS } from "./ui-scenarios.js";
 
 /** Panel-local port: checks construction/intent against real simulation commands.
  * Actual layout, native details and keyboard focus are exercised in the browser. */
@@ -52,7 +53,7 @@ function panelFixture(t: test.TestContext, world: WorldQueries = createWorldQuer
   const recipe = (id: string) => html().split(`data-recipe="${id}"`)[1]!.split("</article>")[0]!;
   const groupOf = (id: string) => {
     const before = html().slice(0, html().indexOf(`data-recipe="${id}"`));
-    return [...before.matchAll(/data-recipe-group="([^"]*)"|data-panel-group="(completed-recipes)"/g)].at(-1)?.slice(1).find(Boolean);
+    return [...before.matchAll(/data-recipe-group="([^"]*)"|data-panel-group="(completed-recipes|locked-recipes)"/g)].at(-1)?.slice(1).find(Boolean);
   };
   return { panel, get, html, commands, controls, recipe, groupOf };
 }
@@ -97,11 +98,12 @@ test("usable counts exclude inaccessible carried/elsewhere quantities without ov
   addItem(s, "conductive_crust", 30, "equipment", "tools");
   panel.refresh("craft", s);
   assert.equal(available(s, "conductive_crust", fabricationContainers(s, "island_workshop")), 9);
-  assert.match(recipe("dart_acoustic_trim"), /Conductive crust: 9 \/ 2.*\(\+5 elsewhere, unavailable here\)/);
+  assert.match(recipe("dart_acoustic_trim"), /Conductive crust: 9 \/ 2.*Not usable at this bench · Conductive crust: \+5 elsewhere/);
   assert.ok(!recipe("dart_acoustic_trim").includes("+2 carried"), "carried stock already usable is not added twice");
   s.player.mode = "piloting"; s.player.controlledVehicleId = v.id; s.player.pose = structuredClone(v.pose);
   panel.refresh("craft", s);
-  assert.match(recipe("dart_acoustic_trim"), /Conductive crust: 0 \/ 2.*\(\+2 carried, unavailable here\).*\(\+12 elsewhere, unavailable here\)/);
+  assert.match(recipe("dart_acoustic_trim"), /Conductive crust: 0 \/ 2.*Conductive crust: \+2 carried, \+12 elsewhere/);
+  assert.match(recipe("dart_acoustic_trim"), /Leave the craft to use a bench/, "a seated pilot gets the actionable site reason");
   assert.match(recipe("dart_acoustic_trim"), /away from this bench/);
 });
 
@@ -111,7 +113,7 @@ test("prerequisites are named and a site refusal with short stock stays blocked;
   s.player.pose.position = { x: 10, y: 2, z: -35 };
   addItem(s, "structural_alloy", 8, "workshop_locker");
   panel.refresh("craft", s);
-  assert.equal(groupOf("dart_base"), "blocked");
+  assert.equal(groupOf("dart_base"), "locked-recipes", "unmet prerequisites collapse");
   assert.match(recipe("dart_base"), /Needs: Restore workshop services.*Fit 150 m pressure suit/);
   assert.match(recipe("restore_workshop"), /Structural alloy: 0 \/ 3/);
   assert.match(html(), /repair needed; locker locked/);
@@ -120,7 +122,7 @@ test("prerequisites are named and a site refusal with short stock stays blocked;
   s.knowledge.crafted.push("pod_repair");
   panel.refresh("craft", s);
   assert.equal(groupOf("essential_tools"), "blocked", "wrong site wins even when materials are also missing");
-  assert.match(html(), /Required bench.*Home pod/);
+  assert.match(recipe("essential_tools"), /action-reason[^>]*>At Home pod · [NSEW]+ · \d+ m</, "the row names where to go");
 });
 
 test("protected maintenance counts are separate from abundant public stock and command refusal is atomic", (t) => {
@@ -229,7 +231,7 @@ test("ordinary panel labels are readable; empty-inventory emergency food and ret
     assert.doesNotMatch(text, /\bitem_\w+\b/);
     if (kind === "inventory") assert.ok(commands().some((c) => c.type === "emergency-meal"));
     if (kind === "notebook") {
-      assert.match(text, /Full-tank rating 180 s/); assert.ok(!text.includes("Recovered research:"));
+      assert.match(text, /full tank 180 s/); assert.ok(!text.includes("Recovered research:"));
       assert.match(text, /Source ·.*Observed.*Hypothesis.*Regional lead/s);
       assert.match(text, /future construction opportunity; no campaign carrier is available here yet/);
     }
@@ -437,7 +439,8 @@ test("M2 preparation presents the paid in-place personal refit beside the unchan
   assert.match(recipe("suit_350"), /Structural alloy: 2 \/ 2/);
   assert.match(recipe("suit_350"), /Conductive crust: 4 \/ 4/);
   assert.match(recipe("suit_350"), /Splitspine workshop bench · restored/);
-  assert.equal(refit().disabled, false); assert.equal(refit().label, "Refit fitted suit · 350 m");
+  assert.equal(refit().disabled, false); assert.equal(refit().label, "Refit");
+  assert.match(refit().attrs, /aria-label="Refit personal suit \/ 350 m"/);
   assert.deepEqual(s, before);
   const result = executeCommand(s, refit().command, createWorldQueries());
   assert.equal(result.events.some(e => e.type === "notice" && e.error), false);
@@ -457,7 +460,7 @@ test("M2 notebook preserves C06-first provenance, observation and inference, sho
   assert.match(html(), /D−12 profile; D0 \+00:35 trace and fractured slope/);
   assert.match(html(), /<b>Observed<\/b>.*Profiles dated/);
   assert.match(html(), /<b>Hypothesis<\/b>.*do not establish the extraction history/);
-  assert.match(html(), /Cool-flank pressure and service research/);
+  assert.match(html(), /Cool-flank personal pressure research beyond 350 m/);
   assert.match(html(), /Research knowledge · construction not available yet/);
   assert.doesNotMatch(html(), /id="finding-C04"|id="finding-C05"/);
   assert.ok(!commands().some(c => c.type === "craft"));
@@ -465,7 +468,7 @@ test("M2 notebook preserves C06-first provenance, observation and inference, sho
   discover(s, "C05"); discover(s, "C04"); panel.refresh("notebook", s);
   assert.deepEqual(s.knowledge.evidence[0], recorded[0], "later context cannot rewrite the early finding");
   assert.match(html(), /dated water change and inward movement are separate facts/);
-  assert.match(html(), /Creel interior and service plans/);
+  assert.match(html(), /Creel workboat/);
   assert.match(html(), /Carrier Basin frame and anchorage survey/);
   assert.doesNotMatch(html(), /Basin.*(?:not yet open|future expedition|later expedition)/);
 });
@@ -542,7 +545,7 @@ test("recovery names where an unknown Bobbin plan comes from; known habitats dis
   assert.doesNotMatch(html(), /\d+:\d\d|seconds? (?:left|remaining)|minutes?/i, "no regrowth countdown clutter");
 });
 
-test("the fabricator lists only known plans; Basin plans stay research without construction rows", (t) => {
+test("the fabricator lists only known plans; Basin plans add exactly the earned Creel rows, and carrier plans stay research", (t) => {
   const { panel, html } = panelFixture(t);
   const s = createGame(); completeOpening(s);
   panel.refresh("craft", s);
@@ -550,8 +553,87 @@ test("the fabricator lists only known plans; Basin plans stay research without c
   assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells"]));
   for (const id of ["C05", "C06"] as const) discover(s, id);
   panel.refresh("craft", s);
-  assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells"]), "Basin clues add no executable row");
+  // M2-B1: C05 pays off as the Creel, its two mounts and frame stripping; C06 as the Creel 350 refit.
+  assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells",
+    "creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "creel_350"]), "Basin clues add the earned workboat rows");
   panel.refresh("notebook", s);
-  assert.match(html(), /Plans retained · 3/);
+  assert.match(html(), /Plans retained <small>2<\/small>/);
   assert.match(html(), /Research knowledge · construction not available yet\./);
+});
+
+test("the first fabrication shows the next useful row with one reason; detail and prerequisite work collapse", (t) => {
+  const { panel, html, recipe, groupOf, controls } = panelFixture(t);
+  const s = UI_SCENARIOS["opening-fabrication"](), before = structuredClone(s);
+  panel.refresh("craft", s);
+  assert.equal(groupOf("pod_repair"), "blocked");
+  for (const id of ["essential_tools", "suit_150", "reserve_cells"]) assert.equal(groupOf(id), "locked-recipes", id);
+  assert.ok(!html().includes('data-panel-group="locked-recipes" open'), "locked work starts collapsed");
+  assert.equal(html().match(/class="action-reason"/g)?.length, 4, "one reason per row");
+  assert.match(recipe("pod_repair"), /action-reason[^>]*>At Home pod · [NSEW]+ · \d+ m</);
+  assert.ok(!/data-panel-group="recipe:[^"]*" open/.test(html()), "sources and preparation sit behind selection");
+  assert.match(recipe("pod_repair"), /Silica glass: 0 \/ 1.*Silica glass: \+2 carried/);
+  assert.doesNotMatch(html(), /Required bench|Have here \/ needed<\/p>|Material sources/, "no repeated bench guidance");
+  const repair = controls().find((b) => b.command.type === "craft" && b.command.recipeId === "pod_repair")!;
+  assert.equal(repair.label, "Repair"); assert.match(repair.attrs, /aria-label="Repair pod regulator &amp; bench"/);
+  assert.match(repair.attrs, /aria-describedby=/);
+  assert.deepEqual(s, before);
+});
+
+test("cabin and mooring lockers keep their own names; an unknown mooring stays off the map; mount rows are compact", (t) => {
+  const { panel, html, controls } = panelFixture(t);
+  const cabin = UI_SCENARIOS["creel-cabin"]();
+  panel.refresh("inventory", cabin);
+  assert.match(html(), /<option value="[^"]*_locker"[^>]*>Cabin locker · \d+ \/ 16 CU/);
+  assert.doesNotMatch(html(), /Visited cargo cache/, "no cache exists in this state");
+  assert.match(html(), /<h3>Cabin · powered · your refuge<\/h3>/);
+  assert.ok(controls().some((b) => b.command.type === "cabin" && b.command.action === "hatch" && b.label === "Leave by hatch"));
+  const early = UI_SCENARIOS["opening-fabrication"]();
+  panel.refresh("inventory", early);
+  assert.doesNotMatch(html(), /Mooring locker/, "the dark mooring is unknown at the start");
+  early.knowledge.markers.push("canopy_stop"); panel.refresh("inventory", early);
+  assert.match(html(), /<b>Mooring locker<\/b> · 0 \/ 48 CU · Out of reach/);
+  const slip = UI_SCENARIOS["creel-slip"]();
+  panel.refresh("inventory", slip);
+  assert.doesNotMatch(html(), /Unfitted packages stow|Meals, cells, tools and modules stay/, "no helper copy on routine rows");
+  const unfit = controls().find((b) => b.command.type === "remove-module")!;
+  assert.equal(unfit.label, "Unfit · hold 64 CU"); assert.match(unfit.attrs, /aria-label="Unfit cargo rack into the Creel hold · hold 64 CU"/);
+  const swap = controls().find((b) => b.command.type === "install-module")!;
+  assert.equal(swap.label, "Swap · hold 40 CU"); assert.equal(swap.disabled, true); assert.match(swap.attrs, /aria-describedby=/);
+});
+
+test("the notebook keeps every record whole but opens only the newest; reference blocks collapse; extensions slot in by anchor", (t) => {
+  const { panel, html } = panelFixture(t);
+  const s = UI_SCENARIOS["notebook-late"](), latest = s.knowledge.evidence.at(-1)!.id;
+  panel.addSection("notebook", { id: "interpretations", after: "interpretation", render: (_, kit) => kit.group("pairs", "Interpretations", "<p>Paired reading</p>") });
+  panel.addSection("notebook", { id: "tail", after: "no-such-anchor", render: () => "<p>Appended</p>" });
+  panel.refresh("notebook", s);
+  for (const e of s.knowledge.evidence) {
+    assert.match(html(), new RegExp(`id="finding-${e.id}"[^>]*data-panel-group="finding:${e.id}"${e.id === latest ? " open" : ">"}`), e.id);
+    assert.match(html().split(`id="finding-${e.id}"`)[1]!.split("</details>")[0]!, /Source ·.*Observed.*Hypothesis.*Regional lead/);
+  }
+  for (const group of ["places", "habitats", "dive-preparation", "retained-plans", "return-recovery"])
+    assert.ok(!html().includes(`data-panel-group="${group}" open`), group);
+  assert.doesNotMatch(html(), /Personal field notes add context/);
+  assert.ok(html().indexOf('data-section="interpretations"') > html().indexOf('class="interpretation"'));
+  assert.ok(html().indexOf('data-section="interpretations"') < html().indexOf('id="finding-'));
+  assert.match(html(), /data-panel-group="notebook:pairs"/, "extension disclosures are namespaced by panel");
+  assert.ok(html().trimEnd().endsWith('<section class="panel-extension" data-section="tail"><p>Appended</p></section>'));
+});
+
+test("only the newest record opens across later finds and reloads; a record the player opened stays open", (t) => {
+  const { panel, get, html } = panelFixture(t);
+  const s = UI_SCENARIOS["opening-fabrication"]();
+  const open = () => [...html().matchAll(/data-panel-group="finding:(C\d\d)" open/g)].map((m) => m[1]);
+  panel.refresh("notebook", s); assert.deepEqual(open(), ["C01"]);
+  panel.refresh("inventory", s); discover(s, "C02");
+  panel.refresh("notebook", s); assert.deepEqual(open(), ["C02"], "the earlier automatic choice is not sticky");
+  panel.refresh("craft", s); discover(s, "C03");
+  panel.refresh("notebook", s); assert.deepEqual(open(), ["C03"]);
+  get("panel-content").groups.find((g) => g.dataset.panelGroup === "finding:C01")!.open = true;
+  panel.refresh("notebook", s); discover(s, "C04"); panel.refresh("notebook", s);
+  assert.deepEqual(open(), ["C01", "C04"], "explicit intent survives; the newest still opens");
+  get("panel-content").groups.find((g) => g.dataset.panelGroup === "finding:C04")!.open = false;
+  panel.refresh("notebook", s); assert.deepEqual(open(), ["C01"], "closing the newest is also intent");
+  panel.resetSession(); panel.refresh("notebook", structuredClone(s));
+  assert.deepEqual(open(), ["C04"], "a reload starts from the default: newest only");
 });

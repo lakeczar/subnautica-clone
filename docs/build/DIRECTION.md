@@ -29,6 +29,11 @@ These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.m
 - **Current state:** `STATUS.md` (one page) and this file. History lives in `archive/` behind an index and is not loaded by default.
 - **Builder briefs:** about a page plus links, covering the player outcome, owned modules, shared interfaces, acceptance behaviors including one adverse case, checks and resource limits.
 
+## Concurrency (owner, 2026-10-20)
+- **At most 5 Opus builder threads run at once.** The coordinator is not counted. Sol reviewers are separate and don't count toward the 5.
+- **Paused streams queue.** They commit, stop cleanly, and resume in priority order as slots free up.
+- **Priority:** the critical path (B1 and its composition), then GPU, then the world foundation (S1 → S2), then fixes that block finishing the game (S5), then the rest.
+
 ## Shared ground rules for parallel builders
 - **Coordinates and IDs:** metres, Y-up, stable string IDs. One composed content registry; no second economy.
 - **Composition is the coordinator's job.** New streams write new modules plus a short interface note. The coordinator composes them into the shared roots: registry, `step.ts`, `app.ts`, `renderer.ts`, `package.json` and saves.
@@ -36,3 +41,5 @@ These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.m
 - **Persisted state:** a new stream that needs saved data proposes the fields in its interface note. The coordinator adds them in one schema change at integration.
 - **Presentation is event-driven.** Simulation owns the truth, story owns the text, UI owns the display and audio consumes events.
 - **Resources:** heavy jobs go through `scripts/heavy-check.sh`. Follow [WORKER_RESOURCE_LIMITS](WORKER_RESOURCE_LIMITS.md) and the browser rules (`/work/repos/fleet/BROWSER_RULES.md`, `docs/BROWSER_RULES.md`). Each builder gets its own preview port.
+
+**GPU browser (since 2026-10-20):** the shared T3 preview stays software-rendered (SwiftShader), so use it for looks and behaviour only. For frame-rate or GPU checks, launch a task-owned Chrome with `--use-gl=angle --use-angle=gl-egl --ignore-gpu-blocklist`, or run `docs/build/gpu-enablement/webgl-probe.mjs --candidate angle-gl-egl`. Avoid ANGLE-Vulkan, which loses the context at startup. Follow the browser rules and close what you open. Only one GPU-heavy browser job at a time, through `scripts/heavy-check.sh`.

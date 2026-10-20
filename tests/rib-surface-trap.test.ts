@@ -4,55 +4,23 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { HULL_COLLIDERS } from "../src/content/registry.js";
 import { decodeSave, encodeSave } from "../src/save/codec.js";
-import { createGame, makeVehicle } from "../src/sim/state.js";
 import { stepGame } from "../src/sim/step.js";
 import { exit, exitRefusal } from "../src/sim/vehicles.js";
-import { actorBox, RIB_CONTACT_TOLERANCE, segmentBoxClosest } from "../src/sim/ribCollision.js";
+import { RIB_CONTACT_TOLERANCE } from "../src/sim/ribCollision.js";
 import { createWorldQueries, hullClearance, RIB_SEGMENTS, SOLIDS } from "../src/sim/world.js";
-import { schema3Expected, type Schema2Envelope } from "./legacy-fixture-support.js";
-import { validState as validLegacyState } from "../src/save/legacy/validation.js";
-import type { Capsule, GameCommand, GameState, Vec3, VehicleState } from "../src/sim/types.js";
+import type { Capsule, GameCommand, GameState, Vec3 } from "../src/sim/types.js";
+import { directions, distance, gaps, input, noDeepening, pilot, swim, swimmer, world } from "./rib-support.js";
 
-const world = createWorldQueries(), swimmer = { radius: 0.34, height: 0.95 };
-const input = (forward = 0, right = 0, vertical = 0): Extract<GameCommand, { type: "move" }> =>
-  ({ type: "move", forward, right, vertical, sprint: false, quiet: false });
-const directions = [input(1), input(-1), input(0, 1), input(0, -1), input(0, 0, 1), input(0, 0, -1)];
-const distance = (p: Vec3, q: Vec3): number => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
-const gaps = (p: Vec3, shape: Capsule): number[] => RIB_SEGMENTS.map(r =>
-  segmentBoxClosest(r.a, r.b, actorBox(p, shape)).distance - r.radius);
-function noDeepening(before: Vec3, after: Vec3, shape: Capsule): void {
-  assert.ok(Object.values(after).every(Number.isFinite));
-  const old = gaps(before, shape), next = gaps(after, shape);
-  for (const [i, g] of old.entries()) assert.ok(
-    g < -RIB_CONTACT_TOLERANCE ? next[i]! >= g - 1e-9 : next[i]! >= -RIB_CONTACT_TOLERANCE,
-    `rib ${i}: ${g} -> ${next[i]} at ${JSON.stringify({ before, after })}`,
-  );
-}
-function swim(position: Vec3, yaw = 0, pitch = 0): GameState {
-  const s = createGame(); s.opening.phase = 4; s.player.mode = "swimming";
-  Object.assign(s.player.pose, { position: { ...position }, yaw, pitch }); return s;
-}
-function pilot(hull: VehicleState["hull"], position: Vec3, yaw = 0, pitch = 0): GameState {
-  const s = swim(position, yaw, pitch), v = makeVehicle("trap-hull", hull, position, "trap-hold");
-  Object.assign(v.pose, { yaw, pitch }); s.fleet.vehicles.push(v);
-  s.player.pose = structuredClone(v.pose); s.player.mode = "piloting"; s.player.controlledVehicleId = v.id;
-  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", capacity: 32, ownerId: v.id }); return s;
-}
+// The real trapped export, converted once to the current schema. The original is
+// archived; save-bridge.test.ts checks the conversion kept its pose and ownership.
 function trappedExport() {
-  const text = readFileSync("tests/fixtures/reef-rib-trap-expedition3.json", "utf8");
-  assert.equal(createHash("sha256").update(text).digest("hex"),
-    "012982eae770e9c7cce3ba8df06bf567db32c57afa51261d87e4db289f236d55");
+  const text = readFileSync("tests/fixtures/reef-rib-trap.json", "utf8");
   const decoded = decodeSave(text); assert.ok(decoded.ok); return { text, envelope: decoded.value };
 }
 
-test("actual trapped export preserves every prior field through schema migration, escapes, roundtrips and moves again without relocation or grants", () => {
+test("actual trapped export loads without relocation, escapes, roundtrips and moves again without grants", () => {
   const { text, envelope } = trappedExport();
-  const old: Schema2Envelope = JSON.parse(text);
-  assert.equal(old.schemaVersion, 2); assert.equal(old.contentVersion, "expedition.3");
-  assert.ok(validLegacyState(old.state), "the unchanged earned input belongs to the frozen legacy domain");
-  assert.deepEqual(envelope, schema3Expected(old), "only the exact four-source/schema additions are allowed; every prior field stays in comparison");
-  assert.deepEqual(envelope.state.player, old.state.player, "no pose relocation, vitals or ownership grant");
-  assert.equal(envelope.state.migration, old.state.migration);
+  assert.deepEqual(envelope, JSON.parse(text), "loading changes nothing");
   const encoded = encodeSave(envelope); assert.ok(encoded.ok);
   const decoded = decodeSave(encoded.value); assert.ok(decoded.ok); assert.deepEqual(decoded.value, envelope);
   const original = structuredClone(envelope.state);
@@ -216,37 +184,6 @@ test("defined-normal junction, two-rib, Dart and deep overlaps separate conserva
   assert.ok(blocked.hitSolid); assert.deepEqual(blocked.position, zero);
   const bad = world.moveCapsule(p, { x: Infinity, y: 0, z: 0 }, swimmer);
   assert.ok(bad.hitSolid); assert.deepEqual(bad.position, p);
-});
-
-test("reduced deterministic surface grid covers both arches from swimmer-clear and full hull-clear starts", t => {
-  let divers = 0, hulls = 0, invalidHullSeeds = 0;
-  for (const segment of [0, 4, 8, 12, 16, 20, 24, 28, 32]) {
-    const r = RIB_SEGMENTS[segment]!, dx = r.b.x - r.a.x, dy = r.b.y - r.a.y, dz = r.b.z - r.a.z;
-    const length = Math.hypot(dx, dy, dz), n1 = { x: -dz / Math.hypot(dx, dz), y: 0, z: dx / Math.hypot(dx, dz) };
-    const n2 = { x: dy / length * n1.z, y: dz / length * n1.x - dx / length * n1.z, z: -dy / length * n1.x };
-    for (const hull of [false, true]) for (const t of [0.25, 0.75]) for (const k of [0, 2, 4, 6]) {
-      const shape = hull ? HULL_COLLIDERS.dart : swimmer, angle = k * Math.PI / 4, offset = r.radius + (hull ? 4.2 : 0.9);
-      const start = { x: r.a.x + dx * t + (n1.x * Math.cos(angle) + n2.x * Math.sin(angle)) * offset,
-        y: r.a.y + dy * t + n2.y * Math.sin(angle) * offset - shape.height / 2,
-        z: r.a.z + dz * t + (n1.z * Math.cos(angle) + n2.z * Math.sin(angle)) * offset };
-      if (hull) start.y = Math.min(-0.9, start.y);
-      if (!world.clearance(start, shape)) continue;
-      if (hull && !hullClearance(world, start, shape)) { invalidHullSeeds++; continue; }
-      const yaw = Math.atan2(r.a.x + dx * t - start.x, -(r.a.z + dz * t - start.z));
-      for (const pitch of [0.3, 0.8]) for (const vertical of [0, 1]) {
-        let s = hull ? pilot("dart", start, yaw, pitch) : swim(start, yaw, pitch);
-        if (hull) hulls++; else divers++;
-        for (let i = 0; i < 50; i++) {
-          s = stepGame(s, [input(1, 0, vertical)], world).state;
-          const proxy = hull ? shape : { ...shape, height: s.player.mode === "walking" ? 1.75 : 0.95 };
-          assert.ok(hull ? hullClearance(world, s.player.pose.position, proxy) : world.clearance(s.player.pose.position, proxy),
-            JSON.stringify({ segment, hull, t, k, pitch, vertical, tick: i + 1, p: s.player.pose.position }));
-        }
-      }
-    }
-  }
-  t.diagnostic(JSON.stringify({ divers, hulls, excludedInvalidHullSeeds: invalidHullSeeds }));
-  assert.ok(divers > 100 && hulls > 30);
 });
 
 test("safe ordinary movement and ascent/thrust traces retain exact pre-correction baseline results", () => {

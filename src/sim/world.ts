@@ -1,6 +1,6 @@
 import { CANOPY_COVER, SOURCES } from "../content/registry.js";
-import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, LEGACY_TERRAIN_SOURCE_IDS,
-  LEGACY_WORLD_BOUNDS, ROUTE_WORLD_BOUNDS, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
+import { BASIN_FRACTURE, BASIN_GEOMETRY, CANOPY_MARGIN_RIBS, CANOPY_STOP, CREEL_SLIP_SOLIDS, LEGACY_TERRAIN_SOURCE_IDS, LEGACY_WORLD_BOUNDS,
+  M2A_BASIN_MIN_Z, ROUTE_TERRAIN_SOURCE_IDS, ROUTE_WORLD_BOUNDS, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
 import type { Capsule, MovementOptions, Vec3, WorldQueries } from "./types.js";
 import { actorBox, RIB_CONTACT_TOLERANCE, RIB_SLIDE_ITERATIONS, ribUpperHeight,
   segmentBoxClosest, sweptBoxIntersects, sweepBoxRib } from "./ribCollision.js";
@@ -64,6 +64,21 @@ export function legacyTerrainHeight(x: number, z: number): number {
   return height;
 }
 
+const smoothstep = (a: number, b: number, v: number): number => {
+  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+/** Additional depth south of the M2-A edge: a gentle terrace descent plus the
+ * boundary fracture trench. Zero at and north of z = -262, so the accepted Basin
+ * surface (to -260) is unchanged. */
+export function fractureDepth(x: number, z: number): number {
+  const f = BASIN_FRACTURE;
+  const shelf = f.shelfDrop * smoothstep(f.shelfStartZ, f.shelfFullZ, z);
+  const across = smoothstep(f.minX, f.fullMinX, x) * (1 - smoothstep(f.fullMaxX, f.maxX, x));
+  const lip = smoothstep(f.lipStartZ, f.lipFullZ, z);
+  return shelf + f.depth * Math.exp(-((z - f.centerZ) ** 2) / f.sigma2) * across * lip;
+}
+
 /** The old rectangle is bit-identical, including source order and zero-weight math.
  * Basin relief is local to the adjoining extension; its new sources never feed the old loop. */
 export function terrainHeight(x: number, z: number): number {
@@ -72,7 +87,8 @@ export function terrainHeight(x: number, z: number): number {
       z >= LEGACY_WORLD_BOUNDS.minZ && z <= LEGACY_WORLD_BOUNDS.maxZ) return height;
   const t = Math.max(0, Math.min(1, (-z - 184) / 76));
   height -= 36 * t * t * (3 - 2 * t) * Math.max(0, Math.min(1, (x - 74) / 24));
-  for (const id of BASIN_SOURCE_IDS) {
+  if (z < M2A_BASIN_MIN_Z) height -= fractureDepth(x, z);
+  for (const id of ROUTE_TERRAIN_SOURCE_IDS) {
     const source = SOURCES[id], r2 = (x - source.position.x) ** 2 + (z - source.position.z) ** 2;
     if (r2 >= 144) continue;
     const weight = (Math.exp(-r2 / 18) - Math.exp(-8)) / (1 - Math.exp(-8));
@@ -153,6 +169,8 @@ export const FACILITY_SOLIDS: readonly Solid[] = [
   { id: "workshop.bench", min: { x: 7.25, y: 1.25, z: -39.5 }, max: { x: 12.75, y: 2.25, z: -38.5 } },
   { id: "workshop.locker", min: { x: 14.55, y: 1.4, z: -37.3 }, max: { x: 15.25, y: 3.2, z: -35.9 } },
   { id: "canopy.bench", min: { x: 114.5, y: -118, z: -128.5 }, max: { x: 117.5, y: -117, z: -127.5 } },
+  ...CREEL_SLIP_SOLIDS,
+  ...CANOPY_STOP.solids,
   ...[3.3, 15.7].flatMap((x) => [-39.7, -32].map((z) => ({
     id: `workshop.post.${x}.${z}`, min: { x: x - 0.12, y: 1.2, z: z - 0.12 }, max: { x: x + 0.12, y: 5.4, z: z + 0.12 },
   }))),
@@ -241,6 +259,7 @@ export const SOLIDS: readonly Solid[] = [
     },
   })),
   ...BASIN_GEOMETRY.solids,
+  ...CANOPY_MARGIN_RIBS,
 ];
 
 type Axis = "x" | "y" | "z";

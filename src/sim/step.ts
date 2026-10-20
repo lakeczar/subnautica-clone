@@ -1,4 +1,4 @@
-import { EVIDENCE, HULLS, HULL_COLLIDERS, ITEMS, OPTIONAL_RECORD, renewable, SOURCES } from "../content/registry.js";
+import { EVIDENCE, HULLS, HULL_COLLIDERS, ITEMS, OPTIONAL_RECORD, renewable, SOURCES, techRecord } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
 import { createWorldQueries, hullFloor, moveHull, withinWorldBounds } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
@@ -28,9 +28,15 @@ import {
   completeOpening,
   craft,
   discover,
+  frameDestination,
   hint,
+  readTechRecord,
   toggleBuoy,
 } from "./progression.js";
+import {
+  ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, cabinWorld, cook, CREEL_CABIN, CREEL_HANDLING,
+  enterCabinFromHatch, enterCabinFromHelm, hullToWorld, leaveByHatch, registerRefuge, takeHelmFromCabin,
+} from "./fleet.js";
 import { aimedInteraction } from "./targeting.js";
 import { board, distraction, eat, exit, exitBlock, rechargeCells, reserve, service } from "./vehicles.js";
 import { dartPerformance, installModule, removeModule } from "./modules.js";
@@ -89,10 +95,20 @@ const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
 /** Explicit receipts also own their one existing originless action sound. */
+/** Field receipts name the actual module, not a fixed Dart example. */
+function moduleName(s: GameState, itemId: string): string {
+  const kind = s.inventory.items.find((i) => i.id === itemId)?.kind;
+  return kind ? ITEMS[kind].label : "Module";
+}
 function actionResult(s: GameState, events: GameEvent[], summary: string, cue: "collect" | "craft" = "collect"): void {
   events.push({ type: "notice", channel: "action", message: s.feedback, summary }, { type: "sound", cue });
 }
 function exitAction(s: GameState, w: WorldQueries, events: GameEvent[]): string | null {
+  if (cabinHull(s)) {
+    const no = leaveByHatch(s, w);
+    if (!no) actionResult(s, events, "Left the cabin");
+    return no;
+  }
   const block = exitBlock(s, w);
   if (block) {
     const v = s.fleet.vehicles.find(v => v.id === s.player.controlledVehicleId);
@@ -150,12 +166,13 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     }
     case "install-module": {
       const no = installModule(s, c.vehicleId, c.itemId);
-      if (!no) actionResult(s, events, "Dart acoustic trim fitted");
+      if (!no) actionResult(s, events, `${moduleName(s, c.itemId)} fitted`);
       return no;
     }
     case "remove-module": {
       const no = removeModule(s, c.vehicleId, c.itemId, w);
-      if (!no) actionResult(s, events, "Dart acoustic trim removed · Dart hold");
+      const item = s.inventory.items.find((i) => i.id === c.itemId);
+      if (!no) actionResult(s, events, `${moduleName(s, c.itemId)} removed${item ? ` · ${containerLabel(s, item.containerId)}` : ""}`);
       return no;
     }
     case "eat":
@@ -177,6 +194,26 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     }
     case "recover":
       return recoveryCommand(s, c.vehicleId, c.method, w);
+    case "cabin": {
+      const no = c.action === "enter" ? enterCabinFromHelm(s) : c.action === "helm" ? takeHelmFromCabin(s)
+        : c.action === "hatch" ? leaveByHatch(s, w) : cook(s);
+      if (!no) actionResult(s, events, c.action === "enter" ? "Station held · cabin" : c.action === "helm" ? "Piloting Creel"
+        : c.action === "hatch" ? "Left the cabin" : "Hot meal cooked");
+      return no;
+    }
+    case "register-refuge": {
+      const no = registerRefuge(s, c.vehicleId);
+      if (!no) actionResult(s, events, c.vehicleId ? "Cabin registered as refuge" : "Cabin registration cleared");
+      return no;
+    }
+    case "arm-lift": {
+      const target = armTarget(s);
+      if (!target) return "No salvage host within reach of the tool arms. Bring the bow within a few metres.";
+      if (target.refusal) return target.refusal;
+      s.world.action = { sourceId: target.sourceId, seconds: ARM_LIFT_SECONDS, kind: "arm" };
+      events.push({ type: "notice", channel: "action", message: `Tool arms on ${SOURCES[target.sourceId].label} · ${ARM_LIFT_SECONDS} s · hold position.` });
+      return null;
+    }
     case "hint":
       s.feedback = hint(s);
       return null;
@@ -279,7 +316,9 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         if (pickup) {
           const capacity = s.inventory.containers.find(c => c.id === pickup.destination)!.capacity;
           actionResult(s, events, `+${pickup.quantity} ${ITEMS[pickup.item].label} · ${containerLabel(s, pickup.destination)} ${usedCapacity(s, pickup.destination)}/${capacity} CU`);
-        } else if (!refusal && target.verb === "sort")
+        } else if (!refusal && SOURCES[id].item === "tagged_frame")
+          events.push({ type: "notice", channel: "action", message: "Lifting tagged frame · 10 seconds. Movement away cancels; pause freezes the lift." });
+        else if (!refusal && target.verb === "sort")
           events.push({ type: "notice", channel: "action", message: "Active tending started · 20 seconds. Movement away cancels; pause freezes tending." });
         return refusal;
       }
@@ -290,6 +329,27 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         }
         s.feedback = discover(s, target.id as EvidenceId);
         return null;
+      }
+      if (techRecord(target.id)) {
+        s.feedback = readTechRecord(s, target.id);
+        return null;
+      }
+      if (target.id.startsWith("cabin:")) {
+        const fixture = target.id.slice(6);
+        if (fixture === "locker") {
+          events.push({ type: "interaction-panel", panel: "inventory", targetId: target.id });
+          return null;
+        }
+        if (fixture === "bunk") {
+          const v = cabinHull(s)!;
+          return action(s, { type: "register-refuge", vehicleId: s.player.mobileRefuge?.vehicleId === v.id ? null : v.id }, w, events);
+        }
+        return action(s, { type: "cabin", action: fixture === "helm" ? "helm" : fixture === "hatch" ? "hatch" : "cook" }, w, events);
+      }
+      if (target.id.endsWith(":hatch")) {
+        const no = enterCabinFromHatch(s, target.id.slice(0, -6));
+        if (!no) actionResult(s, events, "Entered the cabin");
+        return no;
       }
       if (target.id === OPTIONAL_RECORD.id) {
         if (!s.knowledge.journals.includes(target.id))
@@ -310,7 +370,8 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         events.push({ type: "interaction-panel", panel: "inventory", targetId: target.id });
         return null;
       }
-      events.push({ type: "interaction-panel", panel: target.id === "rescue_staging" ? "inventory" : "craft", targetId: target.id });
+      events.push({ type: "interaction-panel", panel: target.id === "rescue_staging" ||
+        (target.id === "canopy_stop_services" && s.world.facilities.some(f => f.id === "canopy_stop" && f.repaired)) ? "inventory" : "craft", targetId: target.id });
       return null;
     }
   }
@@ -318,6 +379,28 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
 function updateAction(s: GameState): void {
   const a = s.world.action;
   if (!a) return;
+  if (a.kind === "arm") {
+    const target = armTarget(s);
+    if (!target || target.sourceId !== a.sourceId || target.refusal) {
+      s.world.action = null;
+      s.feedback = "Tool arms released · the bow left the host or the hold/power changed. Nothing lifted.";
+      return;
+    }
+    a.seconds -= DT;
+    if (a.seconds > 0) return;
+    const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId)!;
+    const def = SOURCES[a.sourceId], node = s.world.resources.find((n) => n.id === a.sourceId)!;
+    const n = Math.min(def.bundle, node.stock);
+    addItem(s, def.item, n, v.cargoId);
+    node.stock -= n;
+    v.charge = Math.max(0, v.charge - ARM_CHARGE);
+    s.metrics.powerUsed += ARM_CHARGE;
+    s.metrics.collections++;
+    if (!s.knowledge.scans.includes(a.sourceId)) s.knowledge.scans.push(a.sourceId);
+    s.feedback = `Tool arms · ${n} × ${ITEMS[def.item].label} → Creel hold · −${ARM_CHARGE}% power.`;
+    s.world.action = null;
+    return;
+  }
   if (
     distance(s.player.pose.position, SOURCES[a.sourceId].position) > 4 ||
     s.player.controlledVehicleId || !safePersonalDepth(s)
@@ -328,6 +411,26 @@ function updateAction(s: GameState): void {
   a.seconds -= DT;
   if (a.seconds > 0) return;
   const node = s.world.resources.find((n) => n.id === a.sourceId)!;
+  if (a.kind === "lift") {
+    const to = frameDestination(s);
+    if (!to || node.stock < 1) {
+      s.feedback = "No room for the frame now. Nothing lifted.";
+      s.world.action = null;
+      return;
+    }
+    addItem(s, "tagged_frame", 1, to);
+    node.stock--;
+    s.metrics.collections++;
+    if (!s.knowledge.scans.includes(a.sourceId)) s.knowledge.scans.push(a.sourceId);
+    const creel = s.fleet.vehicles.find((v) => v.cargoId === to);
+    if (creel) {
+      creel.charge = Math.max(0, creel.charge - ARM_CHARGE);
+      s.metrics.powerUsed += ARM_CHARGE;
+    }
+    s.feedback = `Tagged frame lifted → ${creel ? `Creel hold by its arms · −${ARM_CHARGE}% power` : to === "diver" ? "diver hold" : "buoy"}.`;
+    s.world.action = null;
+    return;
+  }
   if (a.kind === "sort") {
     const n = Math.min(2, node.reserve);
     node.reserve -= n;
@@ -346,6 +449,11 @@ function updateAction(s: GameState): void {
   }
   s.world.action = null;
 }
+/** Tool arms belong to the piloted Creel: leaving the helm by any command releases them. */
+function settleArm(s: GameState): void {
+  if (s.world.action?.kind === "arm" &&
+      s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId)?.hull !== "creel") s.world.action = null;
+}
 /** Menu transactions use the same rules without advancing survival or world time. */
 export function executeCommand(
   state: GameState,
@@ -355,6 +463,7 @@ export function executeCommand(
   const draft = structuredClone(state);
   const events: GameEvent[] = [];
   const no = action(draft, command, world, events);
+  settleArm(draft);
   if (no)
     return { state, events: events.some(e => e.type === "notice" && e.refusal)
       ? events : [{ type: "notice", channel: "action", message: no, error: true }] };
@@ -378,6 +487,7 @@ export function stepGame(
     const previous = s.feedback;
     const actionEvents: GameEvent[] = [];
     const no = action(s, c, world, actionEvents);
+    settleArm(s);
     if (s.player.controlledVehicleId !== state.player.controlledVehicleId ||
         s.player.mode !== state.player.mode || s.player.interiorId !== state.player.interiorId)
       movementActorStable = false;
@@ -426,6 +536,11 @@ export function stepGame(
   }
   yaw = ((yaw % TAU) + TAU) % TAU;
   const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
+  if (v?.hull === "creel") {
+    // A workboat turns deliberately: the hull and view follow a bounded heading rate.
+    const turn = ((yaw - v.pose.yaw + Math.PI * 3) % TAU) - Math.PI, limit = CREEL_HANDLING.turnRate * DT;
+    yaw = ((v.pose.yaw + clamp(turn, -limit, limit)) % TAU + TAU) % TAU;
+  }
   if (v?.hull === "hearthline") {
     const requestedYaw = yaw;
     yaw = constrainCarrierYaw(s, yaw);
@@ -447,7 +562,7 @@ export function stepGame(
         : v.hull === "hearthline"
           ? 3
           : v.hull === "creel"
-            ? 4
+            ? quiet ? CREEL_HANDLING.quiet : sprint ? CREEL_HANDLING.boost : CREEL_HANDLING.cruise
             : v.hull === "spindle"
               ? 7
               : quiet
@@ -470,8 +585,9 @@ export function stepGame(
         speed,
     };
     const previousSpeed = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z);
+    const response = v.hull === "creel" ? CREEL_HANDLING.response : 2.8;
     for (const a of ["x", "y", "z"] as const)
-      v.velocity[a] += (target[a] - v.velocity[a]) * Math.min(1, DT * 2.8);
+      v.velocity[a] += (target[a] - v.velocity[a]) * Math.min(1, DT * response);
     const delta = {
       x: v.velocity.x * DT,
       y: v.velocity.y * DT,
@@ -535,18 +651,32 @@ export function stepGame(
     s.player.mode = "piloting";
     const d = distance(old, s.player.pose.position);
     s.metrics.pilotMetres += d;
+    const creel = v.hull === "creel";
     const drain =
       !v.disabled && v.charge > 0
         ? (d > 0.003
-            ? (100 / 900) * (sprint ? 1.7 : quiet ? 0.65 : 1)
+            ? (creel ? CREEL_HANDLING.drain : 100 / 900) * (sprint ? (creel ? 1.6 : 1.7) : quiet ? (creel ? 0.6 : 0.65) : 1)
             : 0.015) * DT
         : 0;
     v.charge = Math.max(0, v.charge - drain);
     s.metrics.powerUsed += drain;
-    loudness = quiet ? 0.08 : sprint ? 1 : d > 0.003 ? 0.48 : 0.08;
+    loudness = creel
+      ? quiet ? CREEL_HANDLING.loudness.quiet : sprint ? CREEL_HANDLING.loudness.boost : d > 0.003 ? CREEL_HANDLING.loudness.cruise : 0.08
+      : quiet ? 0.08 : sprint ? 1 : d > 0.003 ? 0.48 : 0.08;
     if (move.hitBoundary) events.push({ type: "foundation-boundary" });
     if (move.hitBoundary || move.forwardBoundary) thrust = null;
     else if (thrust) thrust.actual = Math.hypot(move.position.x - old.x, move.position.z - old.z);
+  } else if (cabinHull(s)) {
+    // A fixed dry room on a stationary hull: walk in hull-local metres.
+    const h = cabinHull(s)!, local = s.player.interiorPose!;
+    const x = (Math.sin(yaw - h.pose.yaw) * forward + Math.cos(yaw - h.pose.yaw) * right) * 2.2 * DT,
+      z = (-Math.cos(yaw - h.pose.yaw) * forward + Math.sin(yaw - h.pose.yaw) * right) * 2.2 * DT;
+    const moved = cabinWorld().moveCapsule(local.position, { x, y: 0, z }, { radius: 0.34, height: 1.75 });
+    const walk = CREEL_CABIN.walk;
+    local.position = { x: clamp(moved.position.x, walk.minX, walk.maxX), y: CREEL_CABIN.floorY,
+      z: clamp(moved.position.z, walk.minZ, walk.maxZ) };
+    s.player.pose.position = hullToWorld(local.position, h);
+    s.player.mode = "interior";
   } else if (s.player.interiorId) {
     const h = carrierHull(s),
       local = s.player.interiorPose;

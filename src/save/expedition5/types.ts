@@ -1,6 +1,6 @@
-/** Frozen schema3 expedition.4 gameplay state shape at dae17fcf38ae2e08cb778ebb4c0a04df92eeb072.
- * Decode-only; the current shape lives in src/sim/types.ts. */
-import type { BLUEPRINTS, EVIDENCE, HULLS, ITEMS, PLACES, RECIPES, SOURCES } from "./domain.js";
+/** Frozen schema4 expedition.5 gameplay state shape at 7bd259c395542e2d58724417be66a1864c58c005.
+ * Decode-only; the current shape lives in src/sim/types.ts. Commands/events are omitted. */
+import type { BLUEPRINTS, EVIDENCE, HULLS, ITEMS, PLACES, RECIPES, SOURCES, SOURCE_RENEWAL } from "./domain.js";
 type PlaceId = keyof typeof PLACES;
 type ItemKind = keyof typeof ITEMS;
 type EvidenceId = keyof typeof EVIDENCE;
@@ -10,6 +10,7 @@ type MaterialId = "structural_alloy" | "silica_glass" | "flex_membrane" | "condu
 type BlueprintId = (typeof BLUEPRINTS)[number];
 type RecipeId = keyof typeof RECIPES;
 type SourceId = keyof typeof SOURCES;
+type RenewableSourceId = keyof typeof SOURCE_RENEWAL;
 type FacilityId = "home_pod" | "pod_fabricator" | "island_workshop" | "canopy_lab";
 type RecoveryRouteId = "canopy" | "basin";
 export interface Vec3 {
@@ -119,6 +120,9 @@ export interface GameState {
   };
   world: {
     resources: { id: SourceId; stock: number; reserve: number }[];
+    /** One entry per living shed, in SOURCE_RENEWAL order. Integer active expedition
+     * steps since its stock was last below the cap; zero whenever at or above it. */
+    renewal: { id: RenewableSourceId; progress: number }[];
     facilities: { id: FacilityId; repaired: boolean }[];
     maintenance: { alloy: number; glass: number; membrane: number };
     threat: {

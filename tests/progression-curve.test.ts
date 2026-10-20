@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  EVIDENCE, EVIDENCE_BLUEPRINTS, FUTURE_BLUEPRINTS, ITEMS, MATERIALS, RECIPES, RENEWABLE_SOURCE_IDS, SOURCES,
+  EVIDENCE, FUTURE_BLUEPRINTS, ITEMS, MATERIALS, RECIPES, RENEWABLE_SOURCE_IDS, SOURCES,
   type EvidenceId, type MaterialId, type RecipeId, type SourceId,
 } from "../src/content/registry.js";
 import { personalDepth } from "../src/sim/capabilities.js";
@@ -15,6 +15,9 @@ import type { GameState } from "../src/sim/types.js";
 
 const world = createWorldQueries();
 const ids = Object.keys(RECIPES) as RecipeId[];
+/** M2-B1 recipes. Their full earned chain is proved in tests/m2-b1-economy.test.ts. */
+const B1 = ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "restore_canopy_stop", "creel_350", "dart_350"] as const;
+const PRE_B1 = ids.filter((id) => !(B1 as readonly string[]).includes(id));
 const visible = (s: GameState) => ids.filter((id) => s.knowledge.blueprints.includes(RECIPES[id].bp));
 const POD = { x: 0, y: 0.18, z: 21.2 }, WORKSHOP = { x: 11, y: 1.2, z: -35 };
 function opened(): GameState { const s = createGame(); completeOpening(s); return s; }
@@ -32,6 +35,7 @@ test("New Game exposes only the pod checklist ladder; unknown or premature plans
     pod_repair: "materials", essential_tools: "needs", suit_150: "needs", reserve_cells: "needs",
     restore_workshop: "blueprint", salvage_buoy: "blueprint", bobbin_kit: "blueprint", dart_base: "blueprint",
     dart_acoustic_trim: "blueprint", suit_350: "blueprint",
+    ...Object.fromEntries(B1.map((id) => [id, "blueprint"])),
   }, "nothing beyond the first repair is attemptable; it still needs materials");
   // Even with every material at the right bench, unknown or later plans cannot be bypassed.
   for (const site of [POD, WORKSHOP]) {
@@ -53,11 +57,14 @@ test("each clue unlocks a bounded, exact plan set; every one of the 120 clue ord
   }
   assert.deepEqual(unlocks, {
     C01: [], C02: ["salvage_buoy", "bobbin_kit"], C03: ["restore_workshop", "dart_base"],
-    C04: ["dart_acoustic_trim", "suit_350"], C05: [], C06: [],
+    C04: ["dart_acoustic_trim", "suit_350", "restore_canopy_stop"],
+    C05: ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame"], C06: ["creel_350"],
   });
-  // Basin plans are research knowledge only; none is an executable recipe yet.
-  for (const bp of [...EVIDENCE_BLUEPRINTS.C05, ...EVIDENCE_BLUEPRINTS.C06])
-    assert.ok(Object.hasOwn(FUTURE_BLUEPRINTS, bp) && !ids.some((r) => (RECIPES[r].bp as string) === bp), bp);
+  // M2-B1: the Creel service plan is fully executable; carrier and deeper pressure
+  // research stay listed as future knowledge even where part of a plan now executes.
+  assert.ok(!Object.hasOwn(FUTURE_BLUEPRINTS, "bp_creel_service"));
+  for (const bp of ["bp_carrier_basin", "bp_rift_pressure"] as const) assert.ok(Object.hasOwn(FUTURE_BLUEPRINTS, bp), bp);
+  assert.ok(!ids.some((r) => (RECIPES[r].bp as string) === "bp_carrier_workshop"), "no carrier construction yet");
   const finals = new Set<string>();
   for (const order of permutations(["C02", "C03", "C04", "C05", "C06"] as const)) {
     const s = opened();
@@ -86,7 +93,7 @@ test("prerequisites are acyclic and each material is reachable at two patches wi
         personalDepth(SOURCES[s].position) <= limit);
       assert.ok(patches.length >= 2, `${id}: ${kind} within ${limit} m before the recipe exists`);
       const exposed = patches.reduce((n, s) => n + SOURCES[s].stock, 0);
-      const cost: Partial<Record<MaterialId, number>> = RECIPES[id].cost;
+      const cost: Partial<Record<string, number>> = RECIPES[id].cost;
       assert.ok(exposed >= cost[kind]!, `${id}: ${kind} from exposed stock alone`);
     }
   }
@@ -144,11 +151,11 @@ function earnedSequence(clues: readonly EvidenceId[]): { order: RecipeId[]; take
   if (!s.knowledge.crafted.includes("dart_acoustic_trim")) make("dart_acoustic_trim");
   assert.ok(s.world.renewal.every((r) => r.progress === 0), "no renewal time was credited");
   for (const id of RENEWABLE_SOURCE_IDS) assert.ok((taken[id] ?? 0) <= SOURCES[id].stock, `${id}: original exposed stock only`);
-  assert.deepEqual([...s.knowledge.crafted].sort(), [...ids].sort());
+  assert.deepEqual([...s.knowledge.crafted].sort(), [...PRE_B1].sort());
   return { order, taken };
 }
 
-test("every implemented recipe is earned from New Game on finite exposed stock with zero renewal, in either early clue order", () => {
+test("every pre-B1 recipe is earned from New Game on finite exposed stock with zero renewal, in either early clue order", () => {
   const reefFirst = earnedSequence(["C02", "C03", "C04", "C05", "C06"]);
   const islandFirst = earnedSequence(["C03", "C04", "C06", "C05", "C02"]);
   assert.deepEqual(reefFirst.order, ["pod_repair", "essential_tools", "suit_150", "reserve_cells", "salvage_buoy", "bobbin_kit",

@@ -1,33 +1,52 @@
-/** Frozen schema2 expedition.3 domain at c1ddb0a00ca950fda0da6008e4083023873b3369.
- * Decode-only. Never extend these definitions with current content. */
+/** Frozen schema4 expedition.5 validator at 7bd259c395542e2d58724417be66a1864c58c005.
+ * Decode-only: a schema4 record must satisfy exactly this domain before migration.
+ * Body copied verbatim from src/save/validation.ts; only the imports are replaced. */
 import {
+  BERTH_LOCAL,
   BLUEPRINTS,
+  CARRIER_INTERIOR,
+  CARRIER_SUPPORT,
   EVIDENCE,
+  EVIDENCE_BLUEPRINTS,
   HULLS,
   ITEMS,
+  LEGACY_WORLD_BOUNDS,
+  MODULES,
   PLACES,
   RECIPES,
+  RECOVERY_ATTACHMENT,
+  RENEWABLE_SOURCE_IDS,
+  SMALL_CRAFT_SOCKETS,
+  SOURCE_RENEWAL,
   SOURCES,
-} from "./registry.js";
+  WORLD_BOUNDS,
+  WORLD_VERTICAL_BOUNDS,
+} from "./domain.js";
 import type { GameState } from "./types.js";
 // Frozen validator dependencies: no imports from mutable simulation or content.
-const WORLD_BOUNDS = { minX: -76, maxX: 188, minZ: -184, maxZ: 66 } as const;
-const SMALL_CRAFT_SOCKETS = 2;
-const BERTH_LOCAL = [{ x: -3, y: 4, z: 1 }, { x: 3, y: 4, z: 1 }] as const;
-const CARRIER_LAYOUT = { interior: { minX: -4.7, maxX: 4.7, minZ: -11, maxZ: 10, y: 4 } } as const;
+const RECOVERY_ROUTES = {
+  canopy: { attachmentIndex: RECOVERY_ATTACHMENT.canopy },
+  basin: { attachmentIndex: RECOVERY_ATTACHMENT.basin },
+} as const;
+const CARRIER_LAYOUT = { interior: CARRIER_INTERIOR } as const;
+const renewable = (id: unknown): id is keyof typeof SOURCE_RENEWAL =>
+  typeof id === "string" && Object.hasOwn(SOURCE_RENEWAL, id);
+const renewalCap = (id: keyof typeof SOURCE_RENEWAL): number => SOURCES[id].stock;
 function usedCapacity(s: GameState, id: string): number {
   return s.inventory.items.filter(i => i.containerId === id && !i.fitted)
     .reduce((n, i) => n + ITEMS[i.kind].cu * i.quantity, 0);
 }
 function moduleItem(i: GameState["inventory"]["items"][number]): boolean {
-  return i.kind === "dart_acoustic_trim" && i.quantity === 1 && i.provenance === "public" && i.charge === null && i.fitted === null;
+  return Object.hasOwn(MODULES, i.kind) && i.quantity === 1 && i.provenance === "public" && i.charge === null && i.fitted === null;
 }
 function installedModuleValid(s: GameState, v: GameState["fleet"]["vehicles"][number], id: string): boolean {
   const i = s.inventory.items.find(i => i.id === id);
-  return v.modules.includes(id) && !!i && moduleItem(i) && v.hull === "dart" && i.containerId === v.cargoId;
+  return v.modules.includes(id) && !!i && moduleItem(i) && MODULES[i.kind as keyof typeof MODULES].hull === v.hull &&
+    i.containerId === v.cargoId;
 }
 function atCarrierSupport(h: GameState["fleet"]["vehicles"][number]): boolean {
-  return Math.hypot(h.pose.position.x - 65, h.pose.position.y + 0.9, h.pose.position.z - 12) < 4 &&
+  const p = h.pose.position;
+  return Math.hypot(p.x - CARRIER_SUPPORT.x, p.y - CARRIER_SUPPORT.y, p.z - CARRIER_SUPPORT.z) < 4 &&
     Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) < 0.05;
 }
 function localToWorld(local: GameState["player"]["pose"]["position"], h: GameState["fleet"]["vehicles"][number]): typeof local {
@@ -54,7 +73,7 @@ const worldVec = (v: unknown): boolean =>
   vec(v) &&
   record(v) &&
   n(v.x, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX) &&
-  n(v.y, -200, 100) &&
+  n(v.y, WORLD_VERTICAL_BOUNDS.minY, WORLD_VERTICAL_BOUNDS.maxY) &&
   n(v.z, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ);
 const pose = (v: unknown): boolean =>
   exact(v, ["frame", "position", "yaw", "pitch"]) &&
@@ -84,7 +103,7 @@ const known =
     typeof v === "string" && Object.hasOwn(registry, v);
 const sameKeys = (v: unknown, template: object): v is Record<string, unknown> =>
   exact(v, Object.keys(template));
-export function validState(value: unknown): value is GameState {
+export function validExpedition5State(value: unknown): value is GameState {
   if (
     !exact(value, [
       "tick",
@@ -228,7 +247,7 @@ export function validState(value: unknown): value is GameState {
     !stringSet(k.scans, 40, (v) => v === "filter_flow" || known(SOURCES)(v)) ||
     !array(
       k.evidence,
-      4,
+      Object.keys(EVIDENCE).length,
       (v) =>
         exact(v, ["id", "tick", "provenance"]) &&
         known(EVIDENCE)(v.id) &&
@@ -237,13 +256,26 @@ export function validState(value: unknown): value is GameState {
         v.provenance === EVIDENCE[v.id as keyof typeof EVIDENCE].provenance,
     ) ||
     !stringSet(k.journals, 1, (v) => v === "mara_reef_note") ||
-    !stringSet(k.markers, 5, known(PLACES)) ||
+    !stringSet(k.markers, Object.keys(PLACES).length, known(PLACES)) ||
     !stringSet(k.crafted, Object.keys(RECIPES).length, known(RECIPES)) ||
     !int(k.hintLevel, 0, 3)
   )
     return false;
   const w = value.world;
-  if (!exact(w, ["resources", "facilities", "maintenance", "threat", "action"]))
+  if (!exact(w, ["resources", "renewal", "facilities", "maintenance", "threat", "action"]))
+    return false;
+  if (
+    !array(
+      w.renewal,
+      RENEWABLE_SOURCE_IDS.length,
+      (v) =>
+        exact(v, ["id", "progress"]) &&
+        renewable(v.id) &&
+        int(v.progress, 0, SOURCE_RENEWAL[v.id].intervalSteps - 1),
+    ) ||
+    w.renewal.length !== RENEWABLE_SOURCE_IDS.length ||
+    !w.renewal.every((v, i) => record(v) && v.id === RENEWABLE_SOURCE_IDS[i])
+  )
     return false;
   if (
     !array(
@@ -442,16 +474,20 @@ export function validState(value: unknown): value is GameState {
       r.operation === null ||
       (exact(r.operation, [
         "vehicleId",
+        "routeId",
         "method",
         "phase",
         "position",
         "waypoint",
       ]) &&
         id(r.operation.vehicleId) &&
+        oneOf(r.operation.routeId, ["canopy", "basin"]) &&
         r.operation.method === "tow" &&
         oneOf(r.operation.phase, ["approach", "ready", "tow"]) &&
         worldVec(r.operation.position) &&
-        int(r.operation.waypoint, 0, 3))
+        int(r.operation.waypoint, 0, RECOVERY_ROUTES[r.operation.routeId as keyof typeof RECOVERY_ROUTES].attachmentIndex) &&
+        (r.operation.routeId === "canopy" || (r.operation.phase === "ready" ? r.operation.waypoint === 5 :
+          r.operation.phase === "approach" ? n(r.operation.waypoint, 1, 5) : n(r.operation.waypoint, 0, 4))))
     )
   )
     return false;
@@ -550,7 +586,7 @@ function semantic(s: GameState): boolean {
     if (
       !containers.some((c) => c.id === i.containerId) ||
       (i.containerId === "equipment") !== !!i.fitted ||
-      (i.fitted && fit[i.fitted] !== i.kind) ||
+      (i.fitted && (i.fitted === "suit" ? i.kind !== "suit_150" && i.kind !== "suit_350" : fit[i.fitted] !== i.kind)) ||
       (i.fitted && i.quantity !== 1) ||
       (i.kind === "reserve_cell") !== (i.charge !== null) ||
       (i.charge !== null && i.quantity !== 1) ||
@@ -572,7 +608,6 @@ function semantic(s: GameState): boolean {
   }
   for (const kind of [
     "essential_tools",
-    "suit_150",
     "salvage_buoy",
     "bobbin_kit",
     "reserve_cell",
@@ -590,17 +625,26 @@ function semantic(s: GameState): boolean {
     if (k.crafted.includes(kind === "reserve_cell" ? "reserve_cells" : kind) && n !== (kind === "reserve_cell" ? 2 : 1))
       return false;
   }
+  const suits = items.filter(i => i.kind === "suit_150" || i.kind === "suit_350");
+  if (suits.length !== (k.crafted.includes("suit_150") ? 1 : 0) ||
+      suits.some(i => i.quantity !== 1 || i.fitted !== "suit" ||
+        (i.kind === "suit_350") !== k.crafted.includes("suit_350"))) return false;
   if (items.some((i) => (i.kind === "essential_tools" && i.fitted !== "tools") ||
-    (i.kind === "suit_150" && i.fitted !== "suit") ||
+    ((i.kind === "suit_150" || i.kind === "suit_350") && i.fitted !== "suit") ||
     (i.kind === "bobbin_kit" && (i.fitted !== "recovery" || i.provenance !== "maintenance")))) return false;
   if (k.crafted.some((r) => !k.blueprints.includes(RECIPES[r].bp) || RECIPES[r].needs.some((id) => !k.crafted.includes(id as keyof typeof RECIPES)))) return false;
   for (const node of s.world.resources) {
     const def = SOURCES[node.id];
     if (node.stock + node.reserve > def.stock + def.reserve) return false;
   }
+  // Progress exists only below the cap, and only after active post-opening expedition steps.
+  for (const r of s.world.renewal)
+    if (r.progress !== 0 && (s.scenario !== "expedition" || s.opening.phase < 4 ||
+        s.world.resources.find((n) => n.id === r.id)!.stock >= renewalCap(r.id)))
+      return false;
   const expectedBlueprints = new Set<string>();
   for (const e of k.evidence) {
-    for (const bp of ({ C01: ["bp_pod_checklist"], C02: ["bp_reef_recovery"], C03: ["bp_island_workshop", "bp_carrier_workshop"], C04: ["bp_canopy_reinforcement"] } as const)[e.id]) expectedBlueprints.add(bp);
+    for (const bp of EVIDENCE_BLUEPRINTS[e.id]) expectedBlueprints.add(bp);
   }
   if (k.blueprints.length !== expectedBlueprints.size || k.blueprints.some((bp) => !expectedBlueprints.has(bp))) return false;
   const bi = items.find((i) => i.id === buoy.itemId);
@@ -742,16 +786,12 @@ function semantic(s: GameState): boolean {
     )
   )
     return false;
+  const op = s.recovery.operation;
+  if (op) {
+    const target = f.vehicles.find(v => v.id === op.vehicleId), loss = s.recovery.losses.find(l => l.vehicleId === op.vehicleId);
+    if (!target || target.hull !== "dart" || target.berth || !loss) return false;
+    const basin = loss.position.x > LEGACY_WORLD_BOUNDS.maxX || loss.position.z < LEGACY_WORLD_BOUNDS.minZ;
+    if ((op.routeId === "basin") !== basin) return false;
+  }
   return true;
-}
-/** expedition.2's closed domain, followed by the SAME strict structural/relational validator.
- * This revision adds one item/recipe ID and installed refs only; no new blueprint/source IDs.
- * Never let an old content tag smuggle current-domain data through migration. */
-export function validExpedition2Domain(value: unknown): boolean {
-  if (!record(value) || !record(value.inventory) || !record(value.knowledge) || !record(value.fleet)) return false;
-  return Array.isArray(value.inventory.items) && value.inventory.items.every((i: unknown) =>
-    record(i) && i.kind !== "dart_acoustic_trim") &&
-    Array.isArray(value.knowledge.crafted) && !value.knowledge.crafted.includes("dart_acoustic_trim") &&
-    Array.isArray(value.fleet.vehicles) && value.fleet.vehicles.every((v: unknown) =>
-      record(v) && Array.isArray(v.modules) && v.modules.length === 0);
 }

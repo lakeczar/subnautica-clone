@@ -9,8 +9,11 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.test.js",
-    "check": "npm run typecheck && npm test && npm run build"
+    "test:build": "node -e \"require('fs').rmSync('.test-build',{recursive:true,force:true})\" && tsc -p tsconfig.test.json",
+    "test:fast": "npm run typecheck && npm run test:build && node scripts/test-tier.mjs fast",
+    "test:heavy": "npm run test:build && scripts/heavy-check.sh --deadline 1200 node scripts/test-tier.mjs heavy",
+    "test": "npm run test:fast",
+    "check": "npm run test:fast && npm run test:heavy && npm run build"
   },
   "dependencies": { "@babylonjs/core": "9.31.0" },
   "devDependencies": {
