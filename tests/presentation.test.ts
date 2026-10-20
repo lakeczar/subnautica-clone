@@ -398,7 +398,7 @@ test("bench cell recharge is an explicit pre-vessel command, separate from hull 
   view.openPanel("inventory", s);
   const html = get("panel-content").innerHTML;
   assert.match(html, /<h3>Local cells<\/h3>/);
-  assert.match(html, /Hull battery, health and emergency air require supported service beside the craft/);
+  assert.match(html, /Reserve cell 1 · Pod locker · 50 → 100%/);
   commandButton({ type: "recharge-cells" }).focus();
   s = executeCommand(s, { type: "recharge-cells" }, createWorldQueries()).state;
   view.refreshPanel(s);
@@ -457,7 +457,7 @@ test("trim UI distinguishes stored from installed, uses actual occupancy, and ex
   s.fleet.vehicles.push(v);
   s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
   view.openPanel("inventory", s);
-  assert.match(get("panel-content").innerHTML, /Dart acoustic trim · fabricated \/ stored/);
+  assert.match(get("panel-content").innerHTML, /Dart acoustic trim · Diver hold/);
   assert.match(get("panel-content").innerHTML, /Quiet 3 → 4\.2 · boost 11 → 9 m\/s · 1 socket · 2 CU/);
   assert.match(get("panel-content").innerHTML, /0 \/ 2 sockets · 0 \/ 32 CU hold/);
   const install: GameCommand = { type: "install-module", vehicleId: v.id, itemId: item.id };

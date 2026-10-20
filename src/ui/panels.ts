@@ -247,6 +247,7 @@ export class PanelView {
   private knownContainer(state: GameState, id: string): boolean {
     if (id === "workshop_locker") return nearWorkshop(state) || facility(state, "island_workshop") || state.knowledge.markers.includes("island_workshop");
     if (id === "buoy_hold") return state.inventory.buoy.deployed;
+    if (id === "canopy_stop_locker") return nearCanopyStop(state) || facility(state, "canopy_stop") || state.knowledge.markers.includes("canopy_stop");
     return true;
   }
 
@@ -273,8 +274,7 @@ export class PanelView {
 
   private hold(state: GameState, button: CommandButton): string {
     const diver = state.inventory.containers.find((c) => c.id === "diver");
-    const retained = state.inventory.items.filter((i) => i.fitted);
-    let html = `<p class="panel-status">${this.protection(state)} · Carried ${usedCapacity(state, "diver")} / ${diver?.capacity ?? 0} CU${retained.length ? ` · ${retained.map((i) => escapeHtml(this.itemLabel(state, i))).join(" · ")}` : ""}</p>`;
+    let html = `<p class="panel-status">${this.protection(state)} · Carried ${usedCapacity(state, "diver")} / ${diver?.capacity ?? 0} CU</p>`;
     if (localBenchSite(state)) {
       const bins = state.inventory.containers.filter(c => containerAccessible(state, c.id)).map(c => c.id);
       const stock = (Object.keys(MATERIALS) as (keyof typeof MATERIALS)[]).map(kind => ({ kind, quantity: available(state, kind, bins) })).filter(s => s.quantity > 0);
@@ -299,18 +299,19 @@ export class PanelView {
     for (const v of here.filter((v) => v !== seated && !disabled.includes(v))) actions += this.vesselService(state, v, button);
     if (localBenchSite(state)) actions += this.benchRecharge(state, button);
     if (actions) html += `<section class="here-actions" aria-label="Here"><h3>Here</h3>${actions}</section>`;
-    html += `<article class="container carried" id="container-diver" data-focus-key="carried" tabindex="-1"><h3>Carried items</h3>${this.itemRows(state, "diver", button)}<div class="service-actions">${button("Eat a meal", { type: "eat" })}${button("Request emergency refuge meal", { type: "emergency-meal" })}${!state.inventory.buoy.itemId ? button("Deploy carried buoy", { type: "buoy" }, true, "Carry a reusable salvage buoy to deploy it.") : ""}</div></article>`;
+    html += `<article class="container carried" id="container-diver" data-focus-key="carried" tabindex="-1"><h3>Carried items</h3>${this.itemRows(state, "diver", button)}<div class="service-actions">${button("Eat a meal", { type: "eat" })}${button("Request emergency refuge meal", { type: "emergency-meal" })}</div></article>`;
     const bins = state.inventory.containers.filter((c) => c.id !== "diver" && containerAccessible(state, c.id));
     html += '<div class="container-grid">';
     for (const c of bins) {
       const name = c.kind === "equipment" ? "Retained equipment" : containerLabel(state, c.id);
       const body = `<div id="container-${escapeHtml(c.id)}" tabindex="-1">${this.itemRows(state, c.id, button)}</div>`;
-      html += this.group(`container:${c.id}`, `${escapeHtml(name)} <small>${usedCapacity(state, c.id)} / ${c.capacity} CU</small>`, body);
+      const fill = c.kind === "equipment" ? `${state.inventory.items.filter((i) => i.containerId === c.id).length} fitted` : `${usedCapacity(state, c.id)} / ${c.capacity} CU`;
+      html += this.group(`container:${c.id}`, `${escapeHtml(name)} <small>${fill}</small>`, body);
     }
     html += '</div>';
     html += this.powerPreparation(state, button);
     const distant = state.inventory.containers.filter((c) => !containerAccessible(state, c.id) && this.knownContainer(state, c.id));
-    let elsewhere = distant.map((c) => `<p><b>${escapeHtml(containerLabel(state, c.id))}</b> · ${usedCapacity(state, c.id)} / ${c.capacity} CU · ${c.id === "workshop_locker" && !facility(state, "island_workshop") ? "Locked · restore workshop services with carried materials or a nearby deployed buoy." : "Out of reach · approach to transfer."}</p>`).join("");
+    let elsewhere = distant.map((c) => `<p><b>${escapeHtml(containerLabel(state, c.id))}</b> · ${usedCapacity(state, c.id)} / ${c.capacity} CU · ${c.id === "workshop_locker" && !facility(state, "island_workshop") ? "Locked · restore workshop services" : "Out of reach"}</p>`).join("");
     for (const v of vessels.filter((v) => !here.includes(v) && !staged.includes(v))) elsewhere += this.vesselService(state, v, button);
     html += this.group("elsewhere", `Elsewhere <small>${distant.length} known container${distant.length === 1 ? "" : "s"}${vessels.some((v) => !here.includes(v) && v.disabled) ? " · disabled craft recovery" : ""}</small>`, elsewhere || "<p>No other known containers.</p>");
     if (state.recovery.operation || state.recovery.losses.length || state.recovery.caches.some((c) => state.inventory.items.some((i) => i.containerId === c.containerId)) || Object.values(RECOVERY_NOTICES).some((message) => message === state.feedback))
@@ -325,7 +326,10 @@ export class PanelView {
     const refusal = serviceRefusal(state, v.id);
     const cells = state.inventory.items.filter((i) => i.kind === "reserve_cell" && (i.containerId === "diver" || i.containerId === v.cargoId));
     const mount = v.hull === "creel" ? fittedMount(state, v) : null;
-    let html = `<article class="vessel-service" id="vessel-${escapeHtml(v.id)}" tabindex="-1" data-focus-key="vessel:${escapeHtml(v.id)}"><h3>${HULLS[v.hull].label}${v.disabled ? " · disabled transponder" : ""}</h3><p>${seated ? "Seated" : state.player.interiorId === v.id ? "In cabin" : bearing(state.player.pose.position, v.pose.position)} · power ${v.charge.toFixed(0)}% · hull ${v.health.toFixed(0)}% · hull ${v.rating} m / suit ${personalLimit(state)} m${v.hull === "creel" ? ` · ${mount ? mountLabel(mount.kind).toLowerCase() : "bare mount"} · hold ${usedCapacity(state, v.cargoId)} / ${holdCapacity(state, v)} CU` : ""}.</p>`;
+    const reserveNo = reserve(structuredClone(state), v.id);
+    const serviceActions = (): string => `<div class="service-actions">${readiness === "ready" && !serviceWouldRestore(state, v) ? '<span class="service-full">Fully serviced</span>'
+      : button("Service", { type: "service", vehicleId: v.id }, refusal !== null, refusal ?? undefined)}${local && reserveNo === null ? button("Use reserve cell for hull power", { type: "reserve", vehicleId: v.id }) : ""}</div>`;
+    let html = `<article class="vessel-service" id="vessel-${escapeHtml(v.id)}" tabindex="-1" data-focus-key="vessel:${escapeHtml(v.id)}"><div class="vessel-line"><h3>${HULLS[v.hull].label}${v.disabled ? " · disabled transponder" : ""}</h3><span>${seated ? "Seated" : state.player.interiorId === v.id ? "In cabin" : bearing(state.player.pose.position, v.pose.position)} · power ${v.charge.toFixed(0)}% · hull ${v.health.toFixed(0)}% · rated ${v.rating} m${v.hull === "creel" ? ` · ${mount ? mountLabel(mount.kind).toLowerCase() : "bare mount"} · hold ${usedCapacity(state, v.cargoId)} / ${holdCapacity(state, v)} CU` : ""}</span>${v.disabled ? "" : serviceActions()}</div>`;
     if (v.disabled && (v.hull === "dart" || v.hull === "creel")) {
       const creel = v.hull === "creel";
       const loss = state.recovery.losses.find(l => l.vehicleId === v.id && l.visited);
@@ -355,10 +359,8 @@ export class PanelView {
         : `<section class="recovery-choice"><h4>Salvage frame</h4><p class="recovery-cost">No materials · returns the frame’s ingredients</p><p>At the collar, within 7 m. Empty the hull, hold and module sockets first.</p><small>${escapeHtml(frame)} · ${cu} CU.<br />${destination ? `Return to ${destination}.` : eligibleHolds ? `Make ${cu} CU free in ${eligibleHolds}.` : `Requires a container large enough for the complete ${cu} CU return.`}${v.boundRepairs ? `<br />Past patches return ${patchAlloy} alloy / ${patchMembrane} membrane to rescue stock only (limits 14 / 7).` : ""}</small>${recovery("Salvage frame", "salvage")}</section>`}
       </div>`;
     }
-    const reserveNo = reserve(structuredClone(state), v.id);
-    const serviceAction = readiness === "ready" && !serviceWouldRestore(state, v) ? '<span class="service-full">Fully serviced</span>'
-      : button("Service", { type: "service", vehicleId: v.id }, refusal !== null, refusal ?? undefined);
-    html += `<div class="service-actions">${serviceAction}${local && reserveNo === null ? button("Use reserve cell for hull power", { type: "reserve", vehicleId: v.id }) : ""}</div>${this.group(`service:${v.id}`, "Reserve power & hull service", `<p>Cells in diver / this craft: ${cells.length ? cells.map((i) => `${escapeHtml(this.itemLabel(state, i))} · ${(i.charge ?? 0).toFixed(0)}%`).join(", ") : "none"}. A full cell supplies up to 35% hull power; a pulse spends 25 of that cell’s charge points. Reserve power requires the craft’s local socket.${reserveNo ? ` ${escapeHtml(reserveNo)}` : ""}</p><p>For routine service, approach within 7 m at pod waters or the restored workshop cradle; patch a disabled hull first. Supported service restores hull battery, health and emergency air, plus cells in your hold or this craft. For cells in the local locker or buoy, use Recharge local cells at the bench.</p>` )}</article>`;
+    // Disabled hulls show recovery choices before routine service.
+    html += `${v.disabled ? serviceActions() : ""}${this.group(`service:${v.id}`, "Reserve power & service", `<p>Cells in diver / this craft: ${cells.length ? cells.map((i) => `${escapeHtml(this.itemLabel(state, i))} · ${(i.charge ?? 0).toFixed(0)}%`).join(", ") : "none"}. A full cell gives up to 35% hull power at the craft’s socket; a pulse spends 25 points.${reserveNo ? ` ${escapeHtml(reserveNo)}` : ""}</p><p>Service within 7 m at pod waters, the restored workshop cradle or a restored mooring restores battery, hull, emergency air and cells aboard. Patch a disabled hull first; recharge locker cells at the bench.</p>`)}</article>`;
     return html;
   }
 
@@ -368,15 +370,15 @@ export class PanelView {
   private mountFitting(state: GameState, button: CommandButton, v: VehicleState): string {
     const mount = fittedMount(state, v);
     const packages = state.inventory.items.filter((i): i is ItemStack & { kind: MountKind } => isMountKind(i.kind) && i.fitted === null);
-    let html = `<article class="module-fitting mount-fitting" data-focus-key="mount:${escapeHtml(v.id)}" tabindex="-1"><h3>Creel mount · ${mount ? mountLabel(mount.kind) : "bare"}</h3><p class="trim-tradeoff">Rack 96 CU · cabin 40 CU + 16 CU locker, bunk, cooker · bare 64 CU</p>`;
-    for (const item of packages) {
-      const change = mountChangePreview(state, v.id, item.id);
-      const label = `${mount ? "Swap to" : "Fit"} ${mountLabel(item.kind).toLowerCase()} · hold ${MODULES[item.kind].holdCu} CU`;
-      html += `<section class="fitting-choice here-row"><small>${escapeHtml(containerLabel(state, item.containerId))}</small>${button(label, { type: "install-module", vehicleId: v.id, itemId: item.id }, change.refusal !== null, change.refusal ?? undefined)}</section>`;
-    }
+    let html = `<article class="module-fitting mount-fitting" data-focus-key="mount:${escapeHtml(v.id)}" tabindex="-1"><div class="fitting-head"><h3>Creel mount · ${mount ? mountLabel(mount.kind) : "bare"}</h3><small class="trim-tradeoff">Rack 96 CU · cabin 40 CU + 16 CU locker, bunk, cooker · bare 64 CU</small></div>`;
     if (mount) {
       const no = removeModuleRefusal(state, v.id, mount.id, this.world);
-      html += `<section class="fitting-choice here-row"><small>Unfitted packages stow in the Creel hold</small>${button(`Unfit ${mountLabel(mount.kind).toLowerCase()} · hold 64 CU`, { type: "remove-module", vehicleId: v.id, itemId: mount.id }, no !== null, no ?? undefined)}</section>`;
+      html += `<section class="fitting-choice here-row"><span>${mountLabel(mount.kind)} · fitted</span>${button("Unfit · hold 64 CU", { type: "remove-module", vehicleId: v.id, itemId: mount.id }, no !== null, no ?? undefined, `Unfit ${mountLabel(mount.kind).toLowerCase()} into the Creel hold · hold 64 CU`)}</section>`;
+    }
+    for (const item of packages) {
+      const change = mountChangePreview(state, v.id, item.id);
+      const verb = mount ? "Swap" : "Fit";
+      html += `<section class="fitting-choice here-row"><span>${mountLabel(item.kind)} · ${escapeHtml(containerLabel(state, item.containerId))}</span>${button(`${verb} · hold ${MODULES[item.kind].holdCu} CU`, { type: "install-module", vehicleId: v.id, itemId: item.id }, change.refusal !== null, change.refusal ?? undefined, `${mount ? "Swap to" : "Fit"} ${mountLabel(item.kind).toLowerCase()} · hold ${MODULES[item.kind].holdCu} CU`)}</section>`;
     }
     // Explicit stow path when a smaller mount would overfill the hold.
     const lockers = state.inventory.containers.filter((c) => c.kind === "locker" && c.id !== v.cargoId && containerAccessible(state, c.id));
@@ -385,31 +387,31 @@ export class PanelView {
       html += button(`Stow hold materials · ${stow.totalCu} CU → ${containerLabel(state, lockers[0]!.id)}`, { type: "store-materials", from: v.cargoId, to: lockers[0]!.id }, stow.refusal !== null, stow.refusal ?? undefined);
     for (const kind of ["creel_cargo_rack", "creel_cabin"] as const)
       if (!state.inventory.items.some((i) => i.kind === kind))
-        html += `<small>${mountLabel(kind)} not made · ${Object.entries(RECIPES[kind].cost).map(([k, q]) => `${q} ${ITEMS[k as ItemKind].label}`).join(" + ")} at the workshop.</small>`;
+        html += `<section class="fitting-choice here-row"><span>${mountLabel(kind)} · not made</span><small>${Object.entries(RECIPES[kind].cost).map(([k, q]) => `${q} ${ITEMS[k as ItemKind].label}`).join(" + ")} · workshop</small></section>`;
     return html + "</article>";
   }
 
   private cabinActions(state: GameState, button: CommandButton): string {
     const v = cabinHull(state)!, registered = state.player.mobileRefuge?.vehicleId === v.id;
     const block = registered ? mobileRefugeBlock(state, this.world) : null;
-    return `<article class="cabin-actions"><h3>Creel cabin · ${v.disabled ? "disabled hull" : v.charge > 0 ? "powered" : "unpowered"}${v.disabled || v.charge <= 0 ? ` · emergency air ${Math.ceil(v.emergencyAir)} s` : ""}</h3><p>${registered ? `Registered refuge${block ? ` · unavailable: ${escapeHtml(block.message)}` : ""}` : "Not your registered refuge"}</p><div class="service-actions">${button(registered ? "Clear refuge registration" : "Register cabin as refuge", { type: "register-refuge", vehicleId: registered ? null : v.id })}${button("Cook a hot meal", { type: "cabin", action: "cook" })}${button("Take the helm", { type: "cabin", action: "helm" })}${button("Leave by the hatch", { type: "cabin", action: "hatch" })}</div></article>`;
+    return `<article class="cabin-actions"><div class="vessel-line"><h3>Cabin · ${v.disabled ? "disabled hull" : v.charge > 0 ? "powered" : "unpowered"}${v.disabled || v.charge <= 0 ? ` · emergency air ${Math.ceil(v.emergencyAir)} s` : ""}${registered ? " · your refuge" : ""}</h3><div class="service-actions">${button(registered ? "Clear refuge" : "Register refuge", { type: "register-refuge", vehicleId: registered ? null : v.id }, false, undefined, registered ? "Clear refuge registration" : "Register cabin as refuge")}${button("Cook meal", { type: "cabin", action: "cook" })}${button("Take helm", { type: "cabin", action: "helm" })}${button("Leave by hatch", { type: "cabin", action: "hatch" })}</div></div>${block ? `<p class="recipe-status">Refuge unavailable: ${escapeHtml(block.message)}</p>` : ""}</article>`;
   }
 
   private powerPreparation(state: GameState, button: CommandButton): string {
     const pulse = distractionPreview(state);
     const cell = pulse.refusal === null ? state.inventory.items.find((i) => i.id === pulse.cellId) : undefined;
-    const summary = `Power <small>Pulse G · −${PULSE_CHARGE_COST} points${cell && pulse.refusal === null ? ` · next: ${escapeHtml(this.itemLabel(state, cell))} ${cell.charge!.toFixed(0)} → ${pulse.remainingCharge.toFixed(0)}%` : " · no usable pulse"} · recharge / reserve</small>`;
+    const summary = `Power <small>Pulse G · −${PULSE_CHARGE_COST} points${cell && pulse.refusal === null ? ` · ${escapeHtml(this.itemLabel(state, cell))} ${cell.charge!.toFixed(0)} → ${pulse.remainingCharge.toFixed(0)}%` : " · no usable cell"}</small>`;
     return this.group("power", summary, `<article class="power-preparation"><p><kbd>G</kbd> Directional pulse · ${PULSE_CHARGE_COST} charge points from one cell · 12 seconds.</p>${cell && pulse.refusal === null
       ? `<p class="recipe-ready">Next payment: ${escapeHtml(this.itemLabel(state, cell))} in ${escapeHtml(containerLabel(state, cell.containerId))} · ${cell.charge!.toFixed(0)} → ${pulse.remainingCharge.toFixed(0)}%.</p>`
       : `<p class="recipe-status">${escapeHtml(pulse.refusal ?? "")}${state.world.threat.distractionSeconds > 0 ? ` ${Math.ceil(state.world.threat.distractionSeconds)} seconds remain.` : ""}</p>`}
-      ${button(`Release pulse · ${PULSE_CHARGE_COST} cell points`, { type: "distraction" }, pulse.refusal !== null)}<small class="no-charge-options">No charge needed: Z quiet · cover behind the tall rib · retreat. A full cell can instead supply up to 35% hull power at the craft’s local socket.</small>
+      ${button(`Release pulse · ${PULSE_CHARGE_COST} cell points`, { type: "distraction" }, pulse.refusal !== null)}<small class="no-charge-options">No charge: Z quiet · cover · retreat.</small>
       ${localBenchSite(state) ? "" : this.benchRecharge(state, button)}</article>`);
   }
 
   private benchRecharge(state: GameState, button: CommandButton): string {
     const recharge = cellRechargePreview(state);
     const charging = recharge.cellIds.map((id) => state.inventory.items.find((i) => i.id === id)!);
-    return `<article class="bench-charge"><h3>Local cells</h3><div class="here-row"><span>${charging.length ? charging.map((i) => `${escapeHtml(this.itemLabel(state, i))} · ${escapeHtml(containerLabel(state, i.containerId))} · ${(i.charge ?? 0).toFixed(0)} → 100%`).join("<br />") : "Bench recharge · cells only"}</span>${button("Recharge local cells", { type: "recharge-cells" }, recharge.refusal !== null, recharge.refusal ?? undefined)}</div><small>Hull battery, health and emergency air require supported service beside the craft.</small></article>`;
+    return `<article class="bench-charge"><div class="here-row"><h3>Local cells</h3><span>${charging.length ? charging.map((i) => `${escapeHtml(this.itemLabel(state, i))} · ${escapeHtml(containerLabel(state, i.containerId))} · ${(i.charge ?? 0).toFixed(0)} → 100%`).join("<br />") : "Cells only · hull service is separate"}</span>${button("Recharge local cells", { type: "recharge-cells" }, recharge.refusal !== null, recharge.refusal ?? undefined)}</div></article>`;
   }
 
   private materialStorageControls(state: GameState, button: CommandButton): string {
@@ -429,8 +431,9 @@ export class PanelView {
     if (!this.storageFrom || !to) return this.storageNotice ? `<p class="storage-context">${escapeHtml(this.storageNotice)} Approach a local locker, deployed buoy or craft hold to store materials.</p>` : "";
     const preview = materialStoragePreview(state, this.storageFrom, to);
     const options = (choices: typeof bins, selected: string): string => choices.map((c) => `<option value="${escapeHtml(c.id)}"${c.id === selected ? " selected" : ""}>${escapeHtml(containerLabel(state, c.id))} · ${usedCapacity(state, c.id)} / ${c.capacity} CU</option>`).join("");
-    const reason = !preview.items.length ? "Meals, cells, tools and modules stay with their container." : preview.refusal ?? undefined;
-    return `<article class="bulk-storage" data-focus-key="storage" tabindex="-1"><h3>Store materials</h3><div class="storage-operands"><label>From<select id="storage-from" data-focus-key="storage-from">${options(bins, this.storageFrom)}</select></label><span aria-hidden="true">→</span><label>To<select id="storage-to" data-focus-key="storage-to">${options(destinations, to)}</select></label>${button(preview.items.length ? `Store · ${preview.totalCu} CU` : "Nothing to store", { type: "store-materials", from: this.storageFrom, to }, preview.refusal !== null, reason)}</div>${this.storageNotice ? `<p class="storage-context">${escapeHtml(this.storageNotice)} Using ${escapeHtml(containerLabel(state, to))}.</p>` : ""}${preview.items.length ? `<p class="storage-quantities">${Object.entries(preview.quantities).map(([k, q]) => `${q} × ${ITEMS[k as ItemKind].label}`).join(" · ")} · whole stacks</p>` : ""}</article>`;
+    // "Nothing to store" explains itself; only a real refusal gets a reason.
+    const reason = preview.items.length ? preview.refusal ?? undefined : undefined;
+    return `<article class="bulk-storage" data-focus-key="storage" tabindex="-1"><div class="storage-operands"><h3>Store materials</h3><label>From<select id="storage-from" data-focus-key="storage-from">${options(bins, this.storageFrom)}</select></label><span aria-hidden="true">→</span><label>To<select id="storage-to" data-focus-key="storage-to">${options(destinations, to)}</select></label>${button(preview.items.length ? `Store · ${preview.totalCu} CU` : "Nothing to store", { type: "store-materials", from: this.storageFrom, to }, preview.refusal !== null, reason)}</div>${this.storageNotice ? `<p class="storage-context">${escapeHtml(this.storageNotice)} Using ${escapeHtml(containerLabel(state, to))}.</p>` : ""}${preview.items.length ? `<p class="storage-quantities">${Object.entries(preview.quantities).map(([k, q]) => `${q} × ${ITEMS[k as ItemKind].label}`).join(" · ")} · whole stacks</p>` : ""}</article>`;
   }
 
   private moduleFitting(state: GameState, button: CommandButton, vessel?: VehicleState): string {
@@ -438,7 +441,7 @@ export class PanelView {
     const item = state.inventory.items.find((i) => i.kind === "dart_acoustic_trim");
     const spec = MODULES.dart_acoustic_trim;
     const cost = Object.entries(RECIPES.dart_acoustic_trim.cost).map(([k, q]) => `${q} ${ITEMS[k as ItemKind].label}`).join(" + ");
-    let html = `<article class="module-fitting"><h3>Dart acoustic trim · ${item ? state.fleet.vehicles.some((v) => v.modules.includes(item.id)) ? "installed" : "fabricated / stored" : "not fabricated"}</h3><p class="trim-tradeoff">Quiet 3 → ${spec.quietSpeed} · boost 11 → ${spec.boostSpeed} m/s · 1 socket · ${ITEMS.dart_acoustic_trim.cu} CU</p>${item ? `<small>${escapeHtml(containerLabel(state, item.containerId))}</small>` : `<small>Make at the workshop: ${escapeHtml(cost)}. Fit at the pod or restored workshop cradle.</small>`}`;
+    let html = `<article class="module-fitting"><div class="fitting-head"><h3>Dart acoustic trim · ${item ? state.fleet.vehicles.some((v) => v.modules.includes(item.id)) ? "installed" : escapeHtml(containerLabel(state, item.containerId)) : "not made"}</h3><small class="trim-tradeoff">Quiet 3 → ${spec.quietSpeed} · boost 11 → ${spec.boostSpeed} m/s · 1 socket · ${ITEMS.dart_acoustic_trim.cu} CU</small></div>${item ? "" : `<small>${escapeHtml(cost)} · workshop · fit at the pod or workshop cradle</small>`}`;
     for (const v of state.fleet.vehicles.filter((v) => v.hull === "dart" && (!vessel || vessel.id === v.id))) {
       const perf = dartPerformance(state, v.id)!;
       const installed = item && v.modules.includes(item.id);

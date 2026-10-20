@@ -578,3 +578,25 @@ test("the first fabrication shows the next useful row with one reason; detail an
   assert.match(repair.attrs, /aria-describedby=/);
   assert.deepEqual(s, before);
 });
+
+test("cabin and mooring lockers keep their own names; an unknown mooring stays off the map; mount rows are compact", (t) => {
+  const { panel, html, controls } = panelFixture(t);
+  const cabin = UI_SCENARIOS["creel-cabin"]();
+  panel.refresh("inventory", cabin);
+  assert.match(html(), /<option value="[^"]*_locker"[^>]*>Cabin locker · \d+ \/ 16 CU/);
+  assert.doesNotMatch(html(), /Visited cargo cache/, "no cache exists in this state");
+  assert.match(html(), /<h3>Cabin · powered · your refuge<\/h3>/);
+  assert.ok(controls().some((b) => b.command.type === "cabin" && b.command.action === "hatch" && b.label === "Leave by hatch"));
+  const early = UI_SCENARIOS["opening-fabrication"]();
+  panel.refresh("inventory", early);
+  assert.doesNotMatch(html(), /Mooring locker/, "the dark mooring is unknown at the start");
+  early.knowledge.markers.push("canopy_stop"); panel.refresh("inventory", early);
+  assert.match(html(), /<b>Mooring locker<\/b> · 0 \/ 48 CU · Out of reach/);
+  const slip = UI_SCENARIOS["creel-slip"]();
+  panel.refresh("inventory", slip);
+  assert.doesNotMatch(html(), /Unfitted packages stow|Meals, cells, tools and modules stay/, "no helper copy on routine rows");
+  const unfit = controls().find((b) => b.command.type === "remove-module")!;
+  assert.equal(unfit.label, "Unfit · hold 64 CU"); assert.match(unfit.attrs, /aria-label="Unfit cargo rack into the Creel hold · hold 64 CU"/);
+  const swap = controls().find((b) => b.command.type === "install-module")!;
+  assert.equal(swap.label, "Swap · hold 40 CU"); assert.equal(swap.disabled, true); assert.match(swap.attrs, /aria-describedby=/);
+});

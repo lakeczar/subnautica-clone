@@ -83,11 +83,12 @@
 .move-destinations { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
 .move-destinations > .panel-action { max-width: 220px; }
 .item-row button { padding: 6px 8px; font-size: 12px; }
-.service-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.storage-operands { display: flex; align-items: end; gap: 8px; }
-.storage-operands label { display: grid; flex: 1; min-width: 0; gap: 5px; font-size: 12px; }
+.service-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.storage-operands { display: flex; align-items: center; gap: 8px; }
+.storage-operands > h3 { margin: 0 6px 0 0; white-space: nowrap; }
+.storage-operands label { display: flex; flex: 1; align-items: center; min-width: 0; gap: 6px; font-size: 12px; }
 .storage-operands > span { align-self: center; }
-.storage-operands select { width: 100%; min-width: 0; padding: 8px; border: 1px solid #b8c7a360; background: #183d48; color: #e4ead3; font-size: 13px; }
+.storage-operands select { width: 100%; min-width: 0; padding: 5px 6px; border: 1px solid #b8c7a360; background: #183d48; color: #e4ead3; font-size: 13px; }
 .storage-operands button { max-width: 270px; text-align: left; }
 .storage-operands > .panel-action { flex: 0 1 210px; }
 .game-panel .storage-quantities, .game-panel .storage-context { font-size: 13px; }
@@ -97,8 +98,14 @@
 .vessel-service > .panel-group { margin: 4px 0 0; padding: 0; border: 0; background: none; }
 .vessel-service > .panel-group > summary { font-size: 12px; }
 .service-full { color: #c4f0cf; font-size: 13px; }
-.fitting-choice { margin-top: 8px; }
-.bench-charge { margin-top: 12px; padding-top: 12px; border-top: 1px solid #b8c7a340; }
+/* Status and its actions share one line; recovery and detail follow beneath. */
+.vessel-line, .fitting-head { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; }
+.vessel-line > h3, .fitting-head > h3, .bench-charge h3 { margin: 0; }
+.vessel-line > span { color: #d2dfd2; font-size: 13px; }
+.vessel-line > .service-actions { margin: 0 0 0 auto; }
+.fitting-choice > span { font-size: 13px; }
+.fitting-choice { margin-top: 4px; }
+.bench-charge { margin-top: 8px; padding-top: 8px; border-top: 1px solid #b8c7a340; }
 .no-charge-options { display: block; margin-top: 8px; }
 .ingredient { display: inline-block; color: #d6e7d3; font-size: 13px; }
 .ingredient.missing, .recipe-status { color: #ffe0ad !important; }
