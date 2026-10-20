@@ -56,6 +56,7 @@ export function fly(d: Driver, id: CraftRouteId | CraftRoute, options: { quiet?:
   const here = v.pose.position;
   const nearest = r.points.map((q, i) => ({ i, d: dist(q, here) })).sort((a, b) => a.d - b.d);
   let join = nearest.find(({ i }) => sweptHullClearance(d.world, [here, r.points[i]!], shape))?.i;
+  if (join === undefined && r.source.startsWith("harness: local leg")) join = 0;
   if (join === undefined) {
     // No point in a clear straight line (a ridge between): climb to the nearest first.
     join = nearest[0]!.i;

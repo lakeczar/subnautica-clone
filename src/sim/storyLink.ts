@@ -165,9 +165,17 @@ export const storyInteractions = (s: GameState) => [
 /** S5's works context from the diver's real surroundings: assemblies carried in
  * the diver hold; stock from the diver hold, a deployed buoy and any craft hold
  * within reach. */
+/** A craft moored within this of a works host lends its hold to the works, as a
+ * moored hold does at a restored stop's bench: the hall's restoration stock (22 CU)
+ * is more than a diver carries. */
+export const WORKS_MOORING_RADIUS = 30;
 function worksContext(s: GameState, site: StorySiteId): { ctx: WorksContext; bins: string[] } {
-  const bins = ["diver", ...s.inventory.containers.filter((c) => c.kind === "buoy" || c.kind === "vehicle").map((c) => c.id)
-    .filter((id) => containerAccessible(s, id))];
+  const hosts = site === "meridian_upper_hall" ? BAY : GATE;
+  const moored = s.fleet.vehicles.filter((v) => !v.berth && s.fleet.docking?.transaction?.vehicleId !== v.id &&
+    hosts.some((p) => Math.hypot(v.pose.position.x - p.x, v.pose.position.y - p.y, v.pose.position.z - p.z) < WORKS_MOORING_RADIUS))
+    .map((v) => v.cargoId);
+  const bins = [...new Set(["diver", ...s.inventory.containers.filter((c) => c.kind === "buoy" || c.kind === "vehicle").map((c) => c.id)
+    .filter((id) => containerAccessible(s, id)), ...moored])];
   return {
     bins,
     ctx: {
