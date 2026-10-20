@@ -67,6 +67,14 @@ export const EMPTY_STORY = {
 const SOCKET_IDS = ["hl.socket.bridge.survey", "hl.socket.bridge.launch", "hl.socket.fab.bench.1", "hl.socket.fab.bench.2",
   "hl.socket.stores.floor", "hl.socket.galley.planter", "hl.socket.galley.wall", "hl.socket.cabin.corner",
   "hl.socket.cabin.wall", "hl.socket.vestibule.wall"];
+/** S9's additive late-material sources at first stock, appended after every
+ * earlier source in New Game order (docs/build/streams/S9.md). */
+export const S9_RESOURCES = [
+  ["rift_ceramic_lip_north", 12, 8], ["rift_ceramic_lip_south", 12, 8], ["rift_ceramic_deep_seam", 16, 0],
+  ["rift_core_shoulder_north", 8, 6], ["rift_core_shoulder_west", 8, 6], ["rift_core_plume_seam", 16, 0],
+  ["divide_lattice_ledge_west", 12, 8], ["divide_lattice_ledge_east", 12, 8], ["divide_lattice_fissure", 20, 0],
+  ["meridian_cut_ceramic", 16, 0], ["meridian_service_cache", 12, 12],
+].map(([id, stock, reserve]) => ({ id: id as string, stock: stock as number, reserve: reserve as number }));
 export function withComposedFields<T extends { state: unknown }>(old: T): T {
   const s = structuredClone(old.state) as Record<string, any>;
   const out: Record<string, unknown> = {};
@@ -74,6 +82,8 @@ export function withComposedFields<T extends { state: unknown }>(old: T): T {
     out[k] = v;
     if (k === "fleet") out.story = structuredClone(EMPTY_STORY);
   }
+  const world = out.world as any;
+  for (const r of S9_RESOURCES) if (!world.resources.some((n: any) => n.id === r.id)) world.resources.push({ ...r });
   const docking = (out.fleet as any).docking;
   if (docking && !("sockets" in docking)) docking.sockets = Object.fromEntries(SOCKET_IDS.map((id) => [id, null]));
   const inv = out.inventory as any;
@@ -91,6 +101,11 @@ export function withComposedFields<T extends { state: unknown }>(old: T): T {
 export function withoutComposedFields(state: any): any {
   const { story, ...rest } = structuredClone(state);
   if (JSON.stringify(story) !== JSON.stringify(EMPTY_STORY)) throw new Error("story is not pristine");
+  for (const r of S9_RESOURCES) {
+    const n = rest.world.resources.find((x: any) => x.id === r.id);
+    if (!n || n.stock !== r.stock || n.reserve !== r.reserve) throw new Error(`${r.id} is not pristine`);
+  }
+  rest.world.resources = rest.world.resources.filter((x: any) => !S9_RESOURCES.some((r) => r.id === x.id));
   const docking = rest.fleet.docking;
   if (docking) {
     if (Object.values(docking.sockets).some((v) => v !== null)) throw new Error("carrier sockets are not empty");

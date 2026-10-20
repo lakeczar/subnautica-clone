@@ -3,7 +3,6 @@ import {
   FRAME_ALLOY,
   HULL_BUILD,
   HULL_HOLD_CU,
-  HULL_REFITS,
   HULLS,
   ITEMS,
   HULL_COLLIDERS,
@@ -11,9 +10,12 @@ import {
   PLACES,
   RECIPES,
   RECOVERY_STAGE,
+  REFIT_TIERS,
   SOURCES,
+  SUIT_REFITS,
   TECH_RECORDS,
 } from "../content/registry.js";
+import { CAMPAIGN_PENDING, CAMPAIGN_SITES } from "../content/campaign/index.js";
 import type {
   EvidenceId,
   HullOutput,
@@ -226,18 +228,35 @@ export function frameDestination(s: GameState): string | null {
   return containerAccessible(s, "buoy_hold") && hasRoom(s, "buoy_hold", cu) ? "buoy_hold" : null;
 }
 export type CraftingBlockCode = "opening" | "blueprint" | "completed" | "needs" | "site" |
-  "restore" | "duplicate-hull" | "clearance" | "materials" | "rescue-low" | "space" | "equipment" | "refit";
+  "restore" | "duplicate-hull" | "clearance" | "materials" | "rescue-low" | "space" | "equipment" | "refit" | "unplaced";
 const HULL_OUTPUTS: readonly string[] = ["dart", "creel"];
 export const hullOutput = (r: Recipe): HullOutput | null =>
   HULL_OUTPUTS.includes(r.output) ? r.output as HullOutput : null;
-/** The refit recipe's hull, if it is one. */
-export const refitHull = (id: RecipeId): HullOutput | null =>
-  id === "dart_350" ? "dart" : id === "creel_350" ? "creel" : null;
+/** A paid hull refit tier, if the recipe is one. */
+export const refitTier = (id: RecipeId) => Object.hasOwn(REFIT_TIERS, id) ? REFIT_TIERS[id as keyof typeof REFIT_TIERS] : null;
+/** The refit recipe's hull, if it is one the simulation can refit today. */
+export const refitHull = (id: RecipeId): HullOutput | null => {
+  const hull = refitTier(id)?.hull;
+  return hull === "dart" || hull === "creel" ? hull : null;
+};
+/** An in-place suit refit tier, if the recipe is one. */
+export const suitRefit = (id: RecipeId) => Object.hasOwn(SUIT_REFITS, id) ? SUIT_REFITS[id as keyof typeof SUIT_REFITS] : null;
+/** Why a registered campaign recipe cannot run yet: its site, hull or fitting is
+ * composed with the later world (S9 handoff). Null when it is executable. */
+export function pendingCampaignWork(id: RecipeId): string | null {
+  const why = CAMPAIGN_PENDING[id as keyof typeof CAMPAIGN_PENDING];
+  if (!why) return null;
+  const site = RECIPES[id].site;
+  const place = Object.hasOwn(CAMPAIGN_SITES, site) ? CAMPAIGN_SITES[site as keyof typeof CAMPAIGN_SITES].label : null;
+  return why === "fitting" ? "Plans recorded. This fitting is not available to fabricate yet."
+    : `Plans recorded. This work is done at the ${place ?? "yard"}, which is not reachable yet.`;
+}
 /** The owned hull a refit would modify: at the workshop cradle/slip, empty of crew. */
 export function refitTarget(s: GameState, hull: HullOutput) {
   return s.fleet.vehicles.find((v) => v.hull === hull && !v.berth) ?? null;
 }
 export function atSite(s: GameState, site: Recipe["site"]): boolean {
+  if (Object.hasOwn(CAMPAIGN_SITES, site)) return false;
   return site === "island_workshop" ? nearWorkshop(s) && !s.player.interiorId
     : site === "canopy_stop" ? nearCanopyStop(s) : nearPod(s);
 }
@@ -255,9 +274,12 @@ export function craftingBlock(
     return block("completed", "Already completed. The fabricated equipment or restored service is retained.");
   if (!r.needs.every((n) => s.knowledge.crafted.includes(n as RecipeId)))
     return block("needs", "Needs earlier work first.");
-  if (id === "suit_350" && (s.inventory.items.filter(i => i.fitted === "suit").length !== 1 ||
-      !s.inventory.items.some(i => i.kind === "suit_150" && i.fitted === "suit" && i.containerId === "equipment" && i.quantity === 1)))
-    return block("equipment", "Bring the one fitted 150 m suit for its paid refit. Nothing consumed.");
+  const pending = pendingCampaignWork(id);
+  if (pending) return block("unplaced", pending);
+  const suit = suitRefit(id);
+  if (suit && (s.inventory.items.filter(i => i.fitted === "suit").length !== 1 ||
+      !s.inventory.items.some(i => i.kind === suit.from && i.fitted === "suit" && i.containerId === "equipment" && i.quantity === 1)))
+    return block("equipment", `Bring the one fitted ${ITEMS[suit.from].label.replace(/ (refitted )?pressure suit$/, "")} suit for its paid refit. Nothing consumed.`);
   if (!atSite(s, r.site) || (r.site === "island_workshop" && !!s.player.interiorId))
     return block("site", r.site === "canopy_stop" ? "Work at the outer-crown mooring's service mast." : "Use this recipe’s bench.");
   if (
@@ -278,11 +300,12 @@ export function craftingBlock(
       return block("clearance", hull === "creel" ? "The medium slip is not clear. Move any craft out of it. Nothing consumed."
         : "Construction clearance is blocked. Nothing consumed.");
   }
-  const refit = refitHull(id);
-  if (refit) {
+  const refit = refitHull(id), tier = refitTier(id);
+  if (refit && tier) {
     const v = refitTarget(s, refit);
     if (!v) return block("refit", `Bring the ${HULLS[refit].label} to the workshop for this hull refit.`);
-    if (v.rating >= HULL_REFITS[refit].rating) return block("refit", `This ${HULLS[refit].label} is already rated ${v.rating} m.`);
+    if (v.rating >= tier.rating) return block("refit", `This ${HULLS[refit].label} is already rated ${v.rating} m.`);
+    if (v.rating !== tier.from) return block("refit", `Refit this ${HULLS[refit].label} to ${tier.from} m first.`);
     if (v.disabled) return block("refit", "Patch the disabled hull before refitting it.");
     if (s.player.controlledVehicleId === v.id || s.player.interiorId === v.id)
       return block("refit", "Leave the hull before its refit.");
@@ -344,7 +367,7 @@ export function craft(
     s.world.maintenance.glass--;
     s.world.maintenance.membrane -= 3;
   } else spend(s, r.cost, bins);
-  const hull = hullOutput(r), refit = refitHull(id);
+  const hull = hullOutput(r), refit = refitHull(id), tier = refitTier(id), suit = suitRefit(id);
   if (r.output === "pod_repair")
     s.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired = true;
   else if (r.output === "restore_workshop")
@@ -370,14 +393,14 @@ export function craft(
   } else if (refit) {
     // A paid refit is part of the frame: its materials return with any salvage.
     const v = refitTarget(s, refit)!;
-    v.rating = HULL_REFITS[refit].rating;
+    v.rating = tier!.rating;
     for (const [k, q] of Object.entries(r.cost) as [keyof typeof v.investment, number][])
       v.investment[k] = (v.investment[k] ?? 0) + q;
   } else if (id === "strip_frame") {
     addItem(s, "structural_alloy", FRAME_ALLOY, "workshop_locker");
-  } else if (r.output === "suit_350") {
+  } else if (suit) {
     // Refit the paid instance in place; its ID, fitting, container and earlier receipt survive.
-    s.inventory.items.find(i => i.kind === "suit_150" && i.fitted === "suit")!.kind = "suit_350";
+    s.inventory.items.find(i => i.kind === suit.from && i.fitted === "suit")!.kind = r.output as ItemKind;
   } else if (r.output === "creel_cargo_rack" || r.output === "creel_cabin") {
     const to = packageDestination(s)!;
     const item = addItem(s, r.output, 1, to);
@@ -411,7 +434,8 @@ export function craft(
     : id === "creel_base" ? "Creel built in the medium slip west of the landing. Board it from the cockpit side."
     : id === "creel_cargo_rack" || id === "creel_cabin"
       ? `${ITEMS[r.output as ItemKind].label} made · stowed in ${s.inventory.items.some((i) => i.kind === r.output && i.containerId === "workshop_locker") ? "the workshop locker" : "your hold"}. Fit it from Cargo with the Creel at a supported mooring.`
-    : refit ? `${HULLS[refit].label} hull refitted · rated 350 m. Your suit limit is separate.`
+    : refit ? `${HULLS[refit].label} hull refitted · rated ${tier!.rating} m. Your suit limit is separate.`
+    : suit && id !== "suit_350" ? `Suit refitted · ${suit.rating} m personal limit. Hull ratings are separate.`
     : id === "strip_frame" ? "Frame stripped · 8 structural alloy in the workshop locker."
     : id === "pod_buffer" ? "Dispatch buffer fitted beside the regulator. Its log is readable now."
     : id === "restore_canopy_stop" ? "Outer-crown mooring restored · hull service, cell charging, a 48 CU locker and mount changes here. No air: the laboratory pocket remains the Canopy's refuge."

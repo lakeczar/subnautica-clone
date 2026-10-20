@@ -38,10 +38,11 @@ export function reachable(site: Place, caps: Capabilities, gateIsOpen = false): 
   return stopRoute || carrierRoute;
 }
 
-export const materialReachable = (m: keyof typeof MATERIAL_SHELVES, caps: Capabilities): boolean =>
-  reachable({ ...MATERIAL_SHELVES[m], zone: "near" }, caps);
-const recipeReachable = (r: StoryRecipeId, caps: Capabilities): boolean =>
-  Object.keys(STORY_RECIPES[r].cost).every((m) => materialReachable(m as keyof typeof MATERIAL_SHELVES, caps));
+export type Shelves = Readonly<Record<keyof typeof MATERIAL_SHELVES, { depth: number; exit: number | null }>>;
+export const materialReachable = (m: keyof typeof MATERIAL_SHELVES, caps: Capabilities, shelves: Shelves = MATERIAL_SHELVES): boolean =>
+  reachable({ ...shelves[m], zone: "near" }, caps);
+const recipeReachable = (r: StoryRecipeId, caps: Capabilities, shelves: Shelves): boolean =>
+  Object.keys(STORY_RECIPES[r].cost).every((m) => materialReachable(m as keyof typeof MATERIAL_SHELVES, caps, shelves));
 
 export interface PlanOptions {
   /** Discoveries treated as damaged or missed. */
@@ -59,6 +60,8 @@ export interface CampaignModel {
   steps: Readonly<Record<string, CampaignStep>>;
   order: readonly string[];
   grants: Readonly<Record<string, { depth: number; exit: number | null; grants: readonly AnyBlueprint[] }>>;
+  /** First-access deposit per material; defaults to the proposal's MATERIAL_SHELVES. */
+  shelves?: Shelves;
 }
 export const proposalModel = (strategy: StrategyId): CampaignModel => ({
   steps: CAMPAIGN_STEPS, order: FLEET_STRATEGIES[strategy].steps, grants: EXTERNAL_GRANTS,
@@ -76,6 +79,7 @@ export function planCampaign(strategy: StrategyId, opts: PlanOptions = {}): Camp
   const s = createStory();
   const caps = { suit: 0, hulls: {} as Partial<Record<HullId, number>>, stops: new Set<StopId>() };
   const model = { ...proposalModel(strategy), ...opts.model };
+  const shelves = model.shelves ?? MATERIAL_SHELVES;
   const steps: string[] = [], external = new Set<AnyBlueprint>(), skip = new Set(opts.skip ?? []);
   let tick = 0;
   const plans = (): Set<AnyBlueprint> => new Set([...blueprints(s.discoveries), ...external]);
@@ -92,7 +96,7 @@ export function planCampaign(strategy: StrategyId, opts: PlanOptions = {}): Camp
     }
     for (const g of Object.values(model.grants))
       if (reachable({ ...g, zone: "near" }, caps)) for (const bp of g.grants) if (!external.has(bp)) { external.add(bp); progress = true; }
-    if (!s.works.repairs.includes("pod_buffer") && plans().has("bp_pod_buffer") && recipeReachable("pod_buffer", caps)) {
+    if (!s.works.repairs.includes("pod_buffer") && plans().has("bp_pod_buffer") && recipeReachable("pod_buffer", caps, shelves)) {
       s.works.repairs.push("pod_buffer");
       progress = true;
     }
@@ -101,14 +105,14 @@ export function planCampaign(strategy: StrategyId, opts: PlanOptions = {}): Camp
       if (!step) throw new Error(`Campaign step ${id} is not defined`);
       if (steps.includes(id) || !step.needs.every((n) => steps.includes(n))) continue;
       if (!step.blueprints.every((bp) => plans().has(bp))) continue;
-      if (!step.materials.every((m) => materialReachable(m, caps))) continue;
+      if (!step.materials.every((m) => materialReachable(m, caps, shelves))) continue;
       steps.push(id);
       if (step.suit) caps.suit = Math.max(caps.suit, step.suit);
       if (step.hull) caps.hulls[step.hull[0]] = Math.max(caps.hulls[step.hull[0]] ?? 0, step.hull[1]);
       if (step.stop) caps.stops.add(step.stop);
       progress = true;
     }
-    if (works(s, caps, plans())) progress = true;
+    if (works(s, caps, plans(), shelves)) progress = true;
   }
   let ending = false;
   if (reachable(STORY_SITES.meridian_inner_hall, caps, gateOpen(s.works)) && beginResolution(s, "meridian_inner_hall", ++tick).ok)
@@ -118,11 +122,11 @@ export function planCampaign(strategy: StrategyId, opts: PlanOptions = {}): Camp
 
 /** Tries each works action from where it is done, carrying freshly fabricated
  * assemblies and stock whenever their plans and materials are reachable. */
-function works(s: StoryState, caps: Capabilities, plans: ReadonlySet<AnyBlueprint>): boolean {
+function works(s: StoryState, caps: Capabilities, plans: ReadonlySet<AnyBlueprint>, shelves: Shelves): boolean {
   const recipeFor: Record<Assembly, StoryRecipeId> = {
     service_power_assembly: "service_power_assembly", service_air_assembly: "service_air_assembly",
   };
-  const can = (r: StoryRecipeId) => plans.has(STORY_RECIPES[r].bp) && recipeReachable(r, caps);
+  const can = (r: StoryRecipeId) => plans.has(STORY_RECIPES[r].bp) && recipeReachable(r, caps, shelves);
   let changed = false;
   const at = (action: WorksAction, site: "meridian_gate_hall" | "meridian_upper_hall") => {
     if (!reachable(STORY_SITES[site], caps)) return;

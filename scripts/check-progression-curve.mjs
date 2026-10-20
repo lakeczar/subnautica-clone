@@ -3,6 +3,8 @@
 import assert from "node:assert/strict";
 import { EVIDENCE, EVIDENCE_BLUEPRINTS, FUTURE_BLUEPRINTS, RECIPES, RENEWABLE_SOURCE_IDS, SOURCE_RENEWAL, SOURCES }
   from "../.test-build/src/content/registry.js";
+import { SUIT_RATINGS } from "../.test-build/src/content/registry.js";
+import { CAMPAIGN_SOURCE_SITES } from "../.test-build/src/content/campaign/index.js";
 import { personalDepth } from "../.test-build/src/sim/capabilities.js";
 import { completeOpening, craftingBlock, discover } from "../.test-build/src/sim/progression.js";
 import { advanceRenewal, renewalCap } from "../.test-build/src/sim/renewal.js";
@@ -27,12 +29,13 @@ const unlocks = Object.fromEntries(Object.keys(EVIDENCE).map(id => {
 }));
 
 // 3. Preceding personal protection and reachable source patches per recipe.
-const limit = id => Math.max(60, ...RECIPES[id].needs.map(n => n === "suit_350" ? 350 : n === "suit_150" ? 150 : limit(n)));
+const limit = id => Math.max(60, ...RECIPES[id].needs.map(n => Object.hasOwn(SUIT_RATINGS, n) ? SUIT_RATINGS[n] : limit(n)));
+const protectedDeposit = s => Object.hasOwn(CAMPAIGN_SOURCE_SITES, s) && CAMPAIGN_SOURCE_SITES[s].protection !== null;
 // S5 works recipes' plans come only from deep, unplaced sites; tests/story-composed.test.ts audits them.
 const STORY = ["service_power_assembly", "service_air_assembly", "pod_buffer"];
 const recipes = Object.fromEntries(ids.filter(id => !STORY.includes(id)).map(id => {
   const before = limit(id), materials = Object.fromEntries(Object.entries(RECIPES[id].cost).map(([kind, q]) => {
-    const patches = Object.keys(SOURCES).filter(s => SOURCES[s].item === kind && personalDepth(SOURCES[s].position) <= before);
+    const patches = Object.keys(SOURCES).filter(s => SOURCES[s].item === kind && personalDepth(SOURCES[s].position) <= before && !protectedDeposit(s));
     assert.ok(patches.length >= 2, `${id}: ${kind}`);
     return [kind, { quantity: q, patches: patches.length, exposed: patches.reduce((n, s) => n + SOURCES[s].stock, 0) }];
   }));

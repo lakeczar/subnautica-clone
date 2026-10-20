@@ -5,6 +5,8 @@ import {
   type EvidenceId, type MaterialId, type RecipeId, type SourceId,
 } from "../src/content/registry.js";
 import { personalDepth } from "../src/sim/capabilities.js";
+import { CAMPAIGN_RECIPES, CAMPAIGN_SOURCE_SITES } from "../src/content/campaign/index.js";
+import { SUIT_RATINGS } from "../src/content/registry.js";
 import { available, fabricationContainers, hasRoom, transfer } from "../src/sim/inventory.js";
 import { collectWithOutcome, completeOpening, craft, craftingBlock, discover } from "../src/sim/progression.js";
 import { createGame } from "../src/sim/state.js";
@@ -20,7 +22,10 @@ const B1 = ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "res
 /** S5 works recipes. Their plans come from evidence S2 has not placed yet, and two
  * use materials with no source yet; tests/story-composed.test.ts reports both. */
 const STORY = ["service_power_assembly", "service_air_assembly", "pod_buffer"] as const;
-const PRE_B1 = ids.filter((id) => !(B1 as readonly string[]).includes(id) && !(STORY as readonly string[]).includes(id));
+/** S9 campaign recipes; tests/campaign-*.test.ts prove their chain and economy. */
+const CAMPAIGN = Object.keys(CAMPAIGN_RECIPES) as RecipeId[];
+const PRE_B1 = ids.filter((id) => !(B1 as readonly string[]).includes(id) && !(STORY as readonly string[]).includes(id) &&
+  !(CAMPAIGN as readonly string[]).includes(id));
 const visible = (s: GameState) => ids.filter((id) => s.knowledge.blueprints.includes(RECIPES[id].bp));
 const POD = { x: 0, y: 0.18, z: 21.2 }, WORKSHOP = { x: 11, y: 1.2, z: -35 };
 function opened(): GameState { const s = createGame(); completeOpening(s); return s; }
@@ -40,6 +45,7 @@ test("New Game exposes only the pod checklist ladder; unknown or premature plans
     dart_acoustic_trim: "blueprint", suit_350: "blueprint",
     ...Object.fromEntries(B1.map((id) => [id, "blueprint"])),
     ...Object.fromEntries(STORY.map((id) => [id, "blueprint"])),
+    ...Object.fromEntries(CAMPAIGN.map((id) => [id, "blueprint"])),
   }, "nothing beyond the first repair is attemptable; it still needs materials");
   // Even with every material at the right bench, unknown or later plans cannot be bypassed.
   for (const site of [POD, WORKSHOP]) {
@@ -60,15 +66,18 @@ test("each clue unlocks a bounded, exact plan set; every one of the 120 clue ord
     unlocks[id] = visible(s).filter((r) => !before.includes(r));
   }
   assert.deepEqual(unlocks, {
-    C01: [], C02: ["salvage_buoy", "bobbin_kit"], C03: ["restore_workshop", "dart_base"],
-    C04: ["dart_acoustic_trim", "suit_350", "restore_canopy_stop"],
-    C05: ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame"], C06: ["creel_350"],
+    C01: [], C02: ["salvage_buoy", "bobbin_kit", "glow_lures", "startle_ink", "bobbin_deep_tether"],
+    C03: ["restore_workshop", "dart_base", "hearthline_base", "galley_planter"],
+    C04: ["dart_acoustic_trim", "suit_350", "restore_canopy_stop", "trim_vanes"],
+    C05: ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "hearthline_keel"],
+    C06: ["creel_350", "suit_450", "creel_450", "restore_rift_station", "hearthline_550", "heat_shroud", "hull_heat_lining"],
   });
   // M2-B1: the Creel service plan is fully executable; carrier and deeper pressure
   // research stay listed as future knowledge even where part of a plan now executes.
   assert.ok(!Object.hasOwn(FUTURE_BLUEPRINTS, "bp_creel_service"));
   for (const bp of ["bp_carrier_basin", "bp_rift_pressure"] as const) assert.ok(Object.hasOwn(FUTURE_BLUEPRINTS, bp), bp);
-  assert.ok(!ids.some((r) => (RECIPES[r].bp as string) === "bp_carrier_workshop"), "no carrier construction yet");
+  // S9: carrier construction is registered, done at the stack-yard berth C3 places.
+  assert.deepEqual(ids.filter((r) => (RECIPES[r].bp as string) === "bp_carrier_workshop"), ["hearthline_base", "galley_planter"]);
   const finals = new Set<string>();
   for (const order of permutations(["C02", "C03", "C04", "C05", "C06"] as const)) {
     const s = opened();
@@ -84,7 +93,8 @@ function limitBefore(id: RecipeId, seen = new Set<RecipeId>()): number {
   let limit = 60;
   for (const need of RECIPES[id].needs as readonly RecipeId[]) {
     if (seen.has(need)) assert.fail(`circular prerequisite through ${need}`);
-    limit = Math.max(limit, need === "suit_350" ? 350 : need === "suit_150" ? 150 : 60, limitBefore(need, new Set([...seen, need])));
+    limit = Math.max(limit, Object.hasOwn(SUIT_RATINGS, need) ? SUIT_RATINGS[need as keyof typeof SUIT_RATINGS] : 60,
+      limitBefore(need, new Set([...seen, need])));
   }
   return limit;
 }
@@ -94,8 +104,10 @@ test("prerequisites are acyclic and each material is reachable at two patches wi
   for (const id of ids.filter((id) => !(STORY as readonly string[]).includes(id))) {
     const limit = limitBefore(id);
     for (const kind of Object.keys(RECIPES[id].cost) as MaterialId[]) {
+      // First access never needs the protection a later deposit asks for.
       const patches = (Object.keys(SOURCES) as SourceId[]).filter((s) => SOURCES[s].item === kind &&
-        personalDepth(SOURCES[s].position) <= limit);
+        personalDepth(SOURCES[s].position) <= limit &&
+        !(Object.hasOwn(CAMPAIGN_SOURCE_SITES, s) && CAMPAIGN_SOURCE_SITES[s as keyof typeof CAMPAIGN_SOURCE_SITES].protection));
       assert.ok(patches.length >= 2, `${id}: ${kind} within ${limit} m before the recipe exists`);
       const exposed = patches.reduce((n, s) => n + SOURCES[s].stock, 0);
       const cost: Partial<Record<string, number>> = RECIPES[id].cost;
