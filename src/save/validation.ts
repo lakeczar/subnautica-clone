@@ -1,17 +1,19 @@
 import {
   BLUEPRINTS,
   EVIDENCE,
-  HULL_REFITS,
   HULLS,
   isMountKind,
   ITEMS,
   MODULES,
   PLACES,
   RECIPES,
+  REFIT_TIERS,
   RENEWABLE_SOURCE_IDS,
   renewable,
   SOURCE_RENEWAL,
   SOURCES,
+  SUIT_RATINGS,
+  SUIT_REFITS,
   TECH_RECORDS,
   techRecord,
 } from "../content/registry.js";
@@ -28,6 +30,10 @@ import { HEARTHLINE_SOCKETS } from "../content/fleet/hearthlineInterior.js";
 import { blueprints, validStory } from "../sim/story/index.js";
 import { registryEvidence, storyView } from "../sim/storyLink.js";
 import { createGame } from "../sim/state.js";
+const isSuit = (kind: string): boolean => Object.hasOwn(SUIT_RATINGS, kind);
+/** The one fitted suit is the highest refit tier crafted, or the 150 m suit. */
+const expectedSuit = (crafted: readonly string[]): string =>
+  (Object.keys(SUIT_REFITS) as (keyof typeof SUIT_REFITS)[]).filter((id) => crafted.includes(id)).at(-1) ?? "suit_150";
 export const record = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const exact = (v: unknown, keys: string[]): v is Record<string, unknown> =>
@@ -580,7 +586,7 @@ function semantic(s: GameState, fresh: GameState): boolean {
     if (
       !containers.some((c) => c.id === i.containerId) ||
       (i.containerId === "equipment") !== !!i.fitted ||
-      (i.fitted && (i.fitted === "suit" ? i.kind !== "suit_150" && i.kind !== "suit_350" : fit[i.fitted] !== i.kind)) ||
+      (i.fitted && (i.fitted === "suit" ? !isSuit(i.kind) : fit[i.fitted] !== i.kind)) ||
       (i.fitted && i.quantity !== 1) ||
       (i.kind === "reserve_cell") !== (i.charge !== null) ||
       (i.charge !== null && i.quantity !== 1) ||
@@ -630,12 +636,11 @@ function semantic(s: GameState, fresh: GameState): boolean {
     if (k.crafted.includes(kind === "reserve_cell" ? "reserve_cells" : kind) && n !== (kind === "reserve_cell" ? 2 : 1))
       return false;
   }
-  const suits = items.filter(i => i.kind === "suit_150" || i.kind === "suit_350");
+  const suits = items.filter(i => isSuit(i.kind));
   if (suits.length !== (k.crafted.includes("suit_150") ? 1 : 0) ||
-      suits.some(i => i.quantity !== 1 || i.fitted !== "suit" ||
-        (i.kind === "suit_350") !== k.crafted.includes("suit_350"))) return false;
+      suits.some(i => i.quantity !== 1 || i.fitted !== "suit" || i.kind !== expectedSuit(k.crafted))) return false;
   if (items.some((i) => (i.kind === "essential_tools" && i.fitted !== "tools") ||
-    ((i.kind === "suit_150" || i.kind === "suit_350") && i.fitted !== "suit") ||
+    (isSuit(i.kind) && i.fitted !== "suit") ||
     (i.kind === "bobbin_kit" && (i.fitted !== "recovery" || i.provenance !== "maintenance")))) return false;
   if (k.crafted.some((r) => !k.blueprints.includes(RECIPES[r].bp) || RECIPES[r].needs.some((id) => !k.crafted.includes(id as keyof typeof RECIPES)))) return false;
   for (const node of s.world.resources) {
@@ -704,13 +709,19 @@ function semantic(s: GameState, fresh: GameState): boolean {
       if (v.rating !== HULLS[v.hull].initialDepth) return false;
       continue;
     }
-    // Investment is exactly the paid build, plus the paid refit when rated above initial.
-    const hull = v.hull as "dart" | "creel", refit = HULL_REFITS[hull];
-    if (v.rating !== HULLS[hull].initialDepth && v.rating !== refit.rating) return false;
-    const refitted = v.rating === refit.rating;
-    if (refitted && !k.crafted.includes(refit.recipe)) return false;
+    // Investment is exactly the paid build, plus every paid refit tier up to its rating.
+    const hull = v.hull as "dart" | "creel";
+    const tiers: (keyof typeof REFIT_TIERS)[] = [];
+    for (let rating: number = HULLS[hull].initialDepth; rating !== v.rating;) {
+      const next = (Object.keys(REFIT_TIERS) as (keyof typeof REFIT_TIERS)[])
+        .find((id) => REFIT_TIERS[id].hull === hull && REFIT_TIERS[id].from === rating);
+      if (!next || REFIT_TIERS[next].rating > v.rating) return false;
+      tiers.push(next);
+      rating = REFIT_TIERS[next].rating;
+    }
+    if (tiers.some((id) => !k.crafted.includes(id))) return false;
     const expectedInvestment: Record<string, number> = { ...RECIPES[hull === "dart" ? "dart_base" : "creel_base"].cost };
-    if (refitted) for (const [m, q] of Object.entries(RECIPES[refit.recipe].cost)) expectedInvestment[m] = (expectedInvestment[m] ?? 0) + q;
+    for (const id of tiers) for (const [m, q] of Object.entries(RECIPES[id].cost)) expectedInvestment[m] = (expectedInvestment[m] ?? 0) + q;
     const actual = v.investment as Record<string, number>;
     if (Object.keys(actual).length !== Object.keys(expectedInvestment).length ||
         Object.entries(expectedInvestment).some(([m, q]) => actual[m] !== q)) return false;
