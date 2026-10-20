@@ -26,7 +26,7 @@ is()  { local name="$1"; shift; if "$@"; then ok "$name"; else bad "$name"; [ -n
 put() { printf '%s\n' "$2" > "$S/$1"; }
 called()     { grep -Eq -- "$1" "$S/calls.log"; }
 not_called() { ! grep -Eq -- "$1" "$S/calls.log"; }
-MUTATING='virsh (shutdown|start|attach-device|detach-device) '
+MUTATING='virsh (shutdown|start|attach-device|detach-device|define) '
 
 export GPU_SYSFS="$S/sys" GPU_MEMINFO="$S/meminfo" GPU_IOMEM="$S/iomem" GPU_PROC="$S/proc" GPU_PIDDIR="$S/run" \
   GPU_POLL=0.05 GPU_ARM_DELAY=0 GPU_SHUTDOWN_TIMEOUT=1 GPU_ACPI_RESEND=1 GPU_START_TIMEOUT=1 GPU_START_RETRY_DELAY=0 \
@@ -42,8 +42,9 @@ mkdev() {
   touch "$S/sys/kernel/iommu_groups/14/devices/$1"
 }
 
-# The host as it is expected to be: GPU and audio on vfio-pci in their own group, a
-# 256 MiB BAR1, no host framebuffer on the card, factory-worker running with 16 GiB
+# The host as the real rehearsal (2026-10-20) found it: GPU and audio on vfio-pci in their own
+# group, resizable BAR on (BAR1 32 GiB, BAR3 32 MiB), 39 physical address bits, no host
+# framebuffer on the card, factory-worker running with 16 GiB
 # (QEMU holds 15.5 GiB) and 7.5 GiB available; three stopped VMs, two naming the GPU.
 reset_fake() {
   rm -rf "$S" /tmp/fleet-gpu.lock /tmp/fleet-admin.lock "$RUNS"; mkdir -p "$S/sys/kernel/iommu_groups/14/devices" "$S/proc/4242" "$S/run"
@@ -51,15 +52,15 @@ reset_fake() {
   put state running; cp "$S/cfg.xml" "$S/live.xml"
   mkdev 0000:01:00.0 10de 2204 0x030000 vfio-pci
   mkdev 0000:01:00.1 10de 1aef 0x040300 vfio-pci
-  printf '%s\n' '0x00000000f6000000 0x00000000f6ffffff 0x0000000000040200' \
-    '0x0000004000000000 0x000000400fffffff 0x000000000014220c' '0x0000000000000000 0x0000000000000000 0x0000000000000000' \
-    '0x0000004010000000 0x0000004011ffffff 0x000000000014220c' '0x0000000000000000 0x0000000000000000 0x0000000000000000' \
-    '0x000000000000e000 0x000000000000e07f 0x0000000000040101' '0x00000000f7000000 0x00000000f707ffff 0x0000000000046200' \
+  printf '%s\n' '0x000000006b000000 0x000000006bffffff 0x0000000000040200' \
+    '0x0000006000000000 0x00000067ffffffff 0x000000000014220c' '0x0000000000000000 0x0000000000000000 0x0000000000000000' \
+    '0x0000006800000000 0x0000006801ffffff 0x000000000014220c' '0x0000000000000000 0x0000000000000000 0x0000000000000000' \
+    '0x000000000000e000 0x000000000000e07f 0x0000000000040101' '0x000000006c000000 0x000000006c07ffff 0x0000000000046200' \
     > "$S/sys/bus/pci/devices/0000:01:00.0/resource"
-  printf '%s\n' '00000000-00000fff : Reserved' 'f6000000-f6ffffff : 0000:01:00.0' '4000000000-400fffffff : 0000:01:00.0' > "$S/iomem"
+  printf '%s\n' '00000000-00000fff : Reserved' '  6b000000-6bffffff : 0000:01:00.0' '  6000000000-67ffffffff : 0000:01:00.0' > "$S/iomem"
   put host_free_kib 24117248; put vm_rss_kib 16252928
   echo 4242 > "$S/run/factory-worker.pid"; printf 'Name:\tqemu\nVmRSS:\t16252928 kB\n' > "$S/proc/4242/status"
-  printf 'model name\t: Fake CPU\n' > "$S/proc/cpuinfo"; echo "BOOT_IMAGE=/bzimage" > "$S/proc/cmdline"
+  printf 'model name\t: Fake CPU\naddress sizes\t: 39 bits physical, 48 bits virtual\n' > "$S/proc/cpuinfo"; echo "BOOT_IMAGE=/bzimage" > "$S/proc/cmdline"
   printf '%s\n' "Debian AI 13 Control" "Debian AI13 Inference" "Windows 11 Gaming" > "$S/others"
   echo running > "$S/vm-Debian AI 13 Control.state"; printf "<domain type='kvm'>\n  <name>Debian AI 13 Control</name>\n  <devices>\n  </devices>\n</domain>\n" > "$S/vm-Debian AI 13 Control.xml"
   for v in "Debian AI13 Inference" "Windows 11 Gaming"; do
@@ -87,15 +88,18 @@ launch() {
 outcome() { sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p' "$RD/result.json"; }
 code()    { sed -n 's/.*"exit_code":\([0-9]*\).*/\1/p' "$RD/result.json"; }
 srcs()    { awk '/<hostdev /{h=1;s=0} h&&/<source>/{s=1} h&&s&&/<address /{match($0,/function=.0x[01]/); print "0000:01:00." substr($0,RSTART+12,1); s=0} /<\/hostdev>/{h=0}' "$1" | sort | paste -sd' ' -; }
-same_as_fixture() { diff -q <(awk '/<hostdev /{k=1} !k{print} /<\/hostdev>/{k=0}' "$S/cfg.xml") "$SRC/fixtures/factory-worker.xml" > /dev/null; }
+same_as_fixture() { [ "$(awk '/<hostdev /{k=1} /<sysinfo type=.fwcfg.>/{k=1} !k{print} /<\/hostdev>/{k=0} /<\/sysinfo>/{k=0}' "$S/cfg.xml")" = "$(cat "$SRC/fixtures/factory-worker.xml")" ]; }
 state()   { cat "$S/state"; }
+is_fixture() { [ "$(cat "$S/cfg.xml")" = "$(cat "$SRC/fixtures/factory-worker.xml")" ]; }
+fw_of()   { sed -n "s#.*<entry name='opt/ovmf/X-PciMmio64Mb'>\([0-9]*\)</entry>.*#\1#p" "$1"; }
 
 echo "== read-only preflight"
 reset_fake
 out="$(bash "$SCRIPT" preflight attach 2>&1)"; rc=$?
 is "preflight passes on today's host shape" [ "$rc" = 0 ]
 is "preflight plans the full cold change" grep -q 'plan: full' <<<"$out"
-is "preflight reports BAR sizes and the group" grep -q '64-bit prefetchable 294912 KiB' <<<"$out"
+is "preflight reports BAR sizes and the group" grep -q '64-bit prefetchable 33587200 KiB' <<<"$out"
+is "preflight sizes the 64-bit window for the 32 GiB BAR: X-PciMmio64Mb=65536" grep -q 'X-PciMmio64Mb=65536' <<<"$out"
 is "preflight records stopped VMs naming the GPU" grep -q "stopped VM 'Windows 11 Gaming' also names the GPU" <<<"$out"
 is "preflight changes nothing" not_called "$MUTATING"
 
@@ -109,8 +113,10 @@ reset_fake; echo 0x2208 > "$S/sys/bus/pci/devices/0000:01:00.0/device"; refuse "
 reset_fake; rm "$S/sys/bus/pci/devices/0000:01:00.1/driver"; mkdir -p "$S/sys/bus/pci/drivers/snd_hda_intel"; ln -s "$S/sys/bus/pci/drivers/snd_hda_intel" "$S/sys/bus/pci/devices/0000:01:00.1/driver"
 refuse "audio function used by the host" "in use on the host by driver snd_hda_intel"
 reset_fake; mkdev 0000:00:14.0 8086 a36d 0x0c0330 xhci_hcd; refuse "IOMMU group shared with a USB controller" "also holds 0000:00:14.0"
-reset_fake; echo '4000000000-400fffffff : BOOTFB' >> "$S/iomem"; refuse "host framebuffer on BAR1" "host framebuffer 'BOOTFB' sits inside a BAR"
-reset_fake; sed -i '2s/.*/0x0000004000000000 0x00000047ffffffff 0x000000000014220c/' "$S/sys/bus/pci/devices/0000:01:00.0/resource"; refuse "32 GiB resizable BAR" "resizable BAR"
+reset_fake; echo '6000000000-602fffffff : BOOTFB' >> "$S/iomem"; refuse "host framebuffer on BAR1" "host framebuffer 'BOOTFB' sits inside a BAR"
+reset_fake; sed -i 's/39 bits physical/36 bits physical/' "$S/proc/cpuinfo"; refuse "64 GiB window beyond 36 physical address bits" "does not fit in 36 physical address bits"
+reset_fake; sed -i '2s/.*/0x0000006000000000 0x0000009fffffffff 0x000000000014220c/' "$S/sys/bus/pci/devices/0000:01:00.0/resource"; refuse "256 GiB BAR: a 512 GiB window cannot be addressed" "524288 MiB 64-bit window"
+reset_fake; printf 'model name\t: Fake CPU\n' > "$S/proc/cpuinfo"; refuse "physical address bits unreadable" "cannot read the CPU's physical address bits"
 reset_fake; echo running > "$S/vm-Windows 11 Gaming.state"; refuse "gaming VM running with the GPU" "VM 'Windows 11 Gaming' is 'running' and names the GPU"
 reset_fake; sed -i "s#bus='0x05' slot='0x00' function='0x0'/>#bus='0x06' slot='0x00' function='0x0'/>#" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"; refuse "root port 6 taken" "guest bus 0x06 is already used"
 reset_fake; printf 'Name:\tqemu\nVmRSS:\t9000000 kB\n' > "$S/proc/4242/status"; refuse "host short of memory to pin 16 GiB" "less than the 19398656 KiB needed"
@@ -144,8 +150,8 @@ is "VM running" [ "$(state)" = running ]
 is "both functions defined and running" [ "$(srcs "$S/cfg.xml")/$(srcs "$S/live.xml")" = "$OURS/$OURS" ]
 is "rest of the definition byte-identical" same_as_fixture
 is "guest addresses on root port 6, function 0 multifunction" grep -q "bus='0x06' slot='0x00' function='0x0' multifunction='on'" "$S/cfg.xml"
-is "ACPI shutdown, config-only attach, start, in that order" [ "$(grep -Eo "$MUTATING" "$S/calls.log" | paste -sd, -)" = "virsh shutdown ,virsh attach-device ,virsh attach-device ,virsh start " ]
-is "never forced, defined or live-attached" not_called 'FORBIDDEN|destroy|define |--live'
+is "ACPI shutdown, one define, start, in that order" [ "$(grep -Eo "$MUTATING" "$S/calls.log" | paste -sd, -)" = "virsh shutdown ,virsh define ,virsh start " ]
+is "never forced, live-attached or device-attached (one define is the only change)" not_called 'FORBIDDEN|destroy|--live|attach-device|detach-device'
 
 echo "== attach again: nothing to do"
 launch attach
@@ -155,7 +161,7 @@ is "no second shutdown" [ "$(grep -c 'virsh shutdown' "$S/calls.log")" = 1 ]
 echo "== detach restores only our change"
 launch detach
 is "detached, exit 0" [ "$(outcome)/$(code)" = detached/0 ]
-is "definition equals the original fixture exactly" diff -q "$S/cfg.xml" "$SRC/fixtures/factory-worker.xml"
+is "definition equals the original fixture exactly" is_fixture
 is "no hostdev running" [ -z "$(srcs "$S/live.xml")" ]
 
 echo "== detach refuses a hostdev that is not ours"
@@ -167,59 +173,59 @@ is "nothing changed" not_called "$MUTATING"
 reset_fake
 sed -i "s#^    <watchdog #    <hostdev mode='subsystem' type='usb' managed='yes'>\n      <source>\n        <vendor id='0x1234'/>\n      </source>\n    </hostdev>\n&#" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"
 out="$(bash "$SCRIPT" preflight attach 2>&1)"; rc=$?
-is "attach refuses a foreign hostdev too" eval '[ "$rc" = 10 ] && grep -q "hostdev defined '\''other'\''" <<<"$out"'
+is "attach refuses a foreign hostdev too" eval '[ "$rc" = 10 ] && grep -q "not ours: .other|" <<<"$out"'
 
 echo "== guest never powers off"
 reset_fake; touch "$S/shutdown_ignored"; launch attach
 is "shutdown-timeout, exit 13" [ "$(outcome)/$(code)" = shutdown-timeout/13 ]
-is "definition untouched" diff -q "$S/cfg.xml" "$SRC/fixtures/factory-worker.xml"
-is "nothing forced or started" not_called 'destroy|virsh start |attach-device'
+is "definition untouched" is_fixture
+is "nothing forced, defined or started" not_called 'destroy|virsh start |virsh define'
 is "ACPI was re-sent" [ "$(grep -c 'virsh shutdown' "$S/calls.log")" -ge 2 ]
 
 echo "== VM will not start with the GPU"
 reset_fake; put start_fail hostdev; launch attach
 is "rolled-back, exit 20" [ "$(outcome)/$(code)" = rolled-back/20 ]
-is "definition back to the original exactly" diff -q "$S/cfg.xml" "$SRC/fixtures/factory-worker.xml"
+is "definition back to the original exactly" is_fixture
 is "VM running without the GPU" [ "$(state)" = running ] && is "no hostdev live" [ -z "$(srcs "$S/live.xml")" ]
 
 echo "== VM will not start at all"
 reset_fake; put start_fail always; launch attach
 is "left-off, exit 30" [ "$(outcome)/$(code)" = left-off/30 ]
-is "definition back to the original" diff -q "$S/cfg.xml" "$SRC/fixtures/factory-worker.xml"
+is "definition back to the original" is_fixture
 
-echo "== second attach fails half way"
-reset_fake; put attach_fail_fn 1; launch attach
+echo "== the define fails"
+reset_fake; touch "$S/define_fail"; launch attach
 is "rolled-back, exit 20" [ "$(outcome)/$(code)" = rolled-back/20 ]
-is "function 0 removed again" diff -q "$S/cfg.xml" "$SRC/fixtures/factory-worker.xml"
+is "definition unchanged" is_fixture
 is "VM running" [ "$(state)" = running ]
 
 echo "== attach changes something else too"
-reset_fake; touch "$S/attach_extra"; launch attach
+reset_fake; touch "$S/define_extra"; launch attach
 is "GPU removed again and VM started: rolled-back, exit 20" [ "$(outcome)/$(code)/$(state)/$(srcs "$S/cfg.xml")" = "rolled-back/20/running/" ]
 is "the unexpected difference is recorded" grep -q "index='7'" "$RD/unexpected-diff.txt"
 is "the result says the definition still differs" grep -q 'still differs from before' "$RD/result.json"
 
 echo "== the undo cannot remove our entry"
-reset_fake; put attach_fail_fn 1; touch "$S/detach_noop"; launch attach
+reset_fake; touch "$S/define_extra"; put define_fail_from 2; launch attach
 is "needs-owner, exit 30, VM left off with the entry recorded" eval '[ "$(outcome)/$(code)/$(state)" = "needs-owner/30/shut off" ] && [ -s "$RD/definition-after-undo.xml" ]'
 is "not started with a half-attached GPU" not_called 'virsh start ' 
 
 echo "== someone changes the pins during the shutdown"
 reset_fake; put on_shutoff_cmd "sed -i \"s/cpuset='11'/cpuset='5'/\" $S/cfg.xml"; launch attach
 is "backed-off, exit 21 (was started-as-is; nothing is changed, so not a rollback)" [ "$(outcome)/$(code)" = backed-off/21 ]
-is "no attach" not_called 'attach-device'
+is "no attach" not_called 'virsh define'
 is "their change kept" grep -q "cpuset='5'" "$S/cfg.xml"
 is "VM running" [ "$(state)" = running ]
 
 echo "== someone starts it again after the shutdown"
 reset_fake; put restart_on_read 2; launch attach
-is "restarted-elsewhere, exit 21, no attach" eval '[ "$(outcome)/$(code)" = restarted-elsewhere/21 ] && not_called attach-device'
+is "restarted-elsewhere, exit 21, no attach" eval '[ "$(outcome)/$(code)" = restarted-elsewhere/21 ] && not_called "virsh define"'
 
 echo "== host memory taken while it was off"
 reset_fake; put on_shutoff_cmd "echo 12000000 > $S/host_free_kib"; launch attach
 is "checked before any change now: backed-off, exit 21, worker running" eval '[ "$(outcome)/$(code)/$(state)" = backed-off/21/running ]'
-is "definition untouched" diff -q "$S/cfg.xml" "$SRC/fixtures/factory-worker.xml"
-is "no attach" not_called 'attach-device'
+is "definition untouched" is_fixture
+is "no attach" not_called 'virsh define'
 
 echo "== guest agent silent after the start"
 reset_fake; touch "$S/agent_silent"; launch attach
@@ -248,7 +254,7 @@ echo "== re-entry: off, with our entries already defined"
 reset_fake; launch attach; echo "shut off" > "$S/state"; rm -f "$S/live.xml"; : > "$S/calls.log"
 printf 'MemTotal:       32637752 kB\nMemAvailable:   24117248 kB\n' > "$S/meminfo"
 launch attach
-is "attached by starting only" eval '[ "$(outcome)/$(code)" = attached/0 ] && not_called '\''shutdown|attach-device'\'''
+is "attached by starting only" eval '[ "$(outcome)/$(code)" = attached/0 ] && not_called '\''shutdown|virsh define'\'''
 
 
 echo "== R1-01: a failed or incomplete read is never taken as absence"
@@ -263,7 +269,7 @@ reset_fake; touch "$S/fail_peer_state"; fails_closed "peer state unreadable"
 reset_fake; touch "$S/fail_live_xml"; fails_closed "worker's running definition unreadable"
 reset_fake; touch "$S/fail_inactive_xml"; fails_closed "worker's persistent definition unreadable"
 reset_fake; rm "$S/iomem"; fails_closed "host memory map missing"
-reset_fake; sed -i -E 's/^[0-9a-f]+-[0-9a-f]+/00000000-00000000/' "$S/iomem"; fails_closed "host memory map without addresses (not root)"
+reset_fake; sed -i -E 's/^( *)[0-9a-f]+-[0-9a-f]+/\100000000-00000000/' "$S/iomem"; fails_closed "host memory map without addresses (not root)"
 reset_fake; chmod 000 "$S/sys/bus/pci/devices/0000:01:00.0/resource"; [ -r "$S/sys/bus/pci/devices/0000:01:00.0/resource" ] && rm "$S/sys/bus/pci/devices/0000:01:00.0/resource"; fails_closed "GPU BARs unreadable"
 reset_fake; rm -rf "$S/sys/kernel/iommu_groups/14/devices"; fails_closed "IOMMU group unreadable"
 reset_fake; touch "$S/fail_live_xml"; launch attach
@@ -278,15 +284,15 @@ is "start fails and the definition cannot be read back: needs-owner, VM left off
 
 echo "== R1-02: ownership and the whole definition are checked again at each boundary"
 reset_fake; put on_shutoff_cmd "echo running > '$S/vm-Windows 11 Gaming.state'"; launch attach
-is "gaming VM starts during the shutdown: no attach" not_called 'attach-device'
+is "gaming VM starts during the shutdown: no attach" not_called 'virsh define'
 is "gaming VM starts during the shutdown: not attached/0, worker running again" eval '[ "$(outcome)/$(code)" != attached/0 ] && [ "$(state)" = running ]'
 reset_fake; put on_shutoff_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml"; launch attach
-is "MAC changed during the shutdown: no attach, their edit kept" eval 'not_called '\''attach-device'\'' && grep -q '\''52:54:00:aa:bb:cc'\'' "$S/cfg.xml"'
+is "MAC changed during the shutdown: no attach, their edit kept" eval 'not_called '\''virsh define'\'' && grep -q '\''52:54:00:aa:bb:cc'\'' "$S/cfg.xml"'
 is "MAC changed during the shutdown: not attached/0" [ "$(outcome)/$(code)" != attached/0 ]
 reset_fake; put on_shutoff_cmd "rm $S/sys/bus/pci/devices/0000:01:00.1/driver; mkdir -p $S/sys/bus/pci/drivers/snd_hda_intel; ln -s $S/sys/bus/pci/drivers/snd_hda_intel $S/sys/bus/pci/devices/0000:01:00.1/driver"; launch attach
-is "host driver takes the audio function during the shutdown: no attach" not_called 'attach-device'
-reset_fake; put on_attach_cmd "echo running > '$S/vm-Windows 11 Gaming.state'"; launch attach
-is "gaming VM starts between attach and start: GPU entries removed again" eval '[ -z "$(srcs "$S/cfg.xml")" ] && diff -q "$S/cfg.xml" "$SRC/fixtures/factory-worker.xml" > /dev/null'
+is "host driver takes the audio function during the shutdown: no attach" not_called 'virsh define'
+reset_fake; put on_define_cmd "echo running > '$S/vm-Windows 11 Gaming.state'"; launch attach
+is "gaming VM starts between attach and start: GPU entries removed again" eval '[ -z "$(srcs "$S/cfg.xml")" ] && is_fixture'
 is "gaming VM starts between attach and start: not attached/0, worker running" eval '[ "$(outcome)/$(code)" != attached/0 ] && [ "$(state)" = running ]'
 
 echo "== R1-03: no shutdown without a complete, matching, durable backup"
@@ -332,6 +338,37 @@ reset_fake; put start_fail always; put on_start_fail_cmd "touch $S/fail_state"; 
 is "start fails and the state is then unknown: needs-owner saying so, not left-off" eval '[ "$(outcome)/$(code)" = needs-owner/30 ] && grep -q "cannot be read" "$RD/result.json"'
 reset_fake; put start_fail always; put on_shutoff_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml"; launch attach
 is "start fails and the VM is observed shut off: left-off" eval '[ "$(outcome)/$(code)/$(state)" = "left-off/30/shut off" ]'
+
+echo "== R3: the 64-bit MMIO window (OVMF fw_cfg) is ours, with the hostdevs"
+reset_fake; launch attach
+is "ReBAR attach: attached/0 with the hostdevs and X-PciMmio64Mb=65536 defined and running" eval '[ "$(outcome)/$(code)" = attached/0 ] && [ "$(srcs "$S/cfg.xml")" = "$OURS" ] && [ "$(fw_of "$S/cfg.xml")" = 65536 ] && [ "$(fw_of "$S/live.xml")" = 65536 ]'
+is "only our entries added: the rest of the definition byte-identical" same_as_fixture
+is "the fw_cfg entry is native libvirt sysinfo, no QEMU namespace" eval 'grep -q "<sysinfo type=.fwcfg.>" "$S/cfg.xml" && ! grep -q "qemu:" "$S/cfg.xml"'
+is "no file with security info left in /tmp" eval '[ -z "$(ls /tmp/fleet-gpu-define.* 2>/dev/null)" ]'
+launch detach
+is "detach removes the fw_cfg entry and the hostdevs: definition equals the original exactly" eval '[ "$(outcome)/$(code)" = detached/0 ] && is_fixture'
+
+reset_fake; launch attach; awk '/<sysinfo type=.fwcfg.>/{d=1} !d{print} /<\/sysinfo>/{d=0}' "$S/cfg.xml" > "$S/c" && mv "$S/c" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"; : > "$S/calls.log"
+launch attach
+is "fw_cfg entry dropped (form-view edit): attach again restores it with a cycle" eval '[ "$(outcome)/$(code)" = attached/0 ] && [ "$(fw_of "$S/cfg.xml")" = 65536 ] && called "virsh define"'
+
+foreign() { # <name> <sed expression adding something foreign>
+  reset_fake; sed -i "$2" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"
+  out="$(bash "$SCRIPT" preflight attach 2>&1)"; rc=$?
+  is "$1: attach refused, nothing changed" eval '[ "$rc" = 10 ] && grep -q "not ours" <<<"$out" && not_called "$MUTATING"'
+  out="$(bash "$SCRIPT" preflight detach 2>&1)"; rc=$?
+  is "$1: detach refused too" eval '[ "$rc" = 10 ] && grep -q "not ours" <<<"$out"'
+}
+foreign "foreign <qemu:commandline>" "s#^<domain type='kvm'>#<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>#; s#^</domain>#  <qemu:commandline>\n    <qemu:arg value='-fw_cfg'/>\n    <qemu:arg value='name=opt/ovmf/X-PciMmio64Mb,string=65536'/>\n  </qemu:commandline>\n</domain>#"
+foreign "foreign fw_cfg entry" "s#^  <os>#  <sysinfo type='fwcfg'>\n    <entry name='opt/com.example/x'>1</entry>\n  </sysinfo>\n  <os>#"
+foreign "our fw_cfg name as a file blob" "s#^  <os>#  <sysinfo type='fwcfg'>\n    <entry name='opt/ovmf/X-PciMmio64Mb' file='/tmp/x'/>\n  </sysinfo>\n  <os>#"
+
+reset_fake; put start_fail hostdev; launch attach
+is "start fails with the GPU: rolled back with the fw_cfg entry removed too" eval '[ "$(outcome)/$(code)/$(state)" = rolled-back/20/running ] && is_fixture'
+reset_fake; touch "$S/define_drops_sysinfo"; launch attach
+is "libvirt drops the fw_cfg sysinfo: unexpected, undone, never started with half the change" eval '[ "$(outcome)/$(code)" = rolled-back/20 ] && [ -z "$(srcs "$S/cfg.xml")" ] && [ -z "$(fw_of "$S/cfg.xml")" ]'
+reset_fake; put on_define_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml"; launch attach
+is "another change lands with our define: undone, not started as attached" eval '[ "$(outcome)" != attached ] && [ -z "$(fw_of "$S/cfg.xml")" ]'
 
 echo
 echo "passed $pass"
