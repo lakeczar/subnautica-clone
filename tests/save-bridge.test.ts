@@ -8,14 +8,14 @@ import { validExpedition5State } from "../src/save/expedition5/validation.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import { validState } from "../src/save/validation.js";
 import { ExpeditionSession } from "../src/runtime/session.js";
-import { BERTH_LOCAL, carrierCommand, fixtureGame, updateBerth } from "../src/sim/carrier.js";
+import { BERTH_LOCAL, carrierCommand, emptySockets, fixtureGame, updateBerth } from "../src/sim/carrier.js";
 import { addItem } from "../src/sim/inventory.js";
 import { completeOpening, discover } from "../src/sim/progression.js";
 import { createGame } from "../src/sim/state.js";
 import { executeCommand, stepGame } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameState } from "../src/sim/types.js";
-import { encoded, MemoryStorage, sample, settled, TestWriterLock } from "./persistence-support.js";
+import { encoded, MemoryStorage, sample, settled, TestWriterLock, withComposedFields } from "./persistence-support.js";
 import { CREEL_SOURCE_IDS, schema4Fixture, withCreel, type Schema4Envelope } from "./schema4-support.js";
 
 // Save policy (docs/build/streams/S7.md): schema 5 loads; schema 4 / expedition.5 is the
@@ -101,6 +101,7 @@ test("the frozen predecessor refuses current-only fields and cross-version tags 
 test("carrier prepared/lock transactions bridge with identity, and a fixture cannot launder into campaign ownership", () => {
   for (const configuration of ["compact", "medium"] as const) for (const phase of ["prepared", "lock"] as const) {
     const s = fixtureGame(), h = s.fleet.vehicles[0]!;
+    s.fleet.docking!.sockets = emptySockets(); // A schema 4 carrier had no socket occupants.
     if (configuration === "medium") {
       for (const [i, v] of s.fleet.vehicles.entries()) if (v.berth) { v.berth = null; v.pose.position = { x: 100 + i * 10, y: -1, z: -60 }; }
       s.fleet.docking!.configuration = "medium";
@@ -198,11 +199,15 @@ test("a refused older-build Import preserves the active session, journal and sou
   } finally { session.dispose(); }
 });
 
-test("converted earned fixtures are canonical current saves that keep the archived player, knowledge and fleet", () => {
+test("converted earned fixtures load as current saves, gaining only C1's additive fields, and keep the archived player, knowledge and fleet", () => {
   for (const [name, archived] of [["earned-c06.json", "earned-c06-expedition4.json"], ["reef-rib-trap.json", "reef-rib-trap-expedition3.json"]] as const) {
     const raw = fixture(name), out = decodeSave(raw);
     assert.ok(out.ok, out.ok ? "" : out.error);
-    assert.equal(encoded(out.value) + "\n", raw, `${name} is exactly what this build writes`);
+    // Written before C1's additive fields: loading adds exactly those, in New Game's order.
+    assert.deepEqual(out.value, withComposedFields(JSON.parse(raw)), `${name} gains only the additive fields`);
+    const written = encoded(out.value);
+    assert.equal(JSON.stringify(JSON.parse(written)), JSON.stringify(withComposedFields(JSON.parse(raw))), `${name} writes in canonical order`);
+    const again = decodeSave(written); assert.ok(again.ok); assert.equal(encoded(again.value), written, "the completed save is canonical");
     const original = JSON.parse(readFileSync(`tests/fixtures/archive/${archived}`, "utf8")) as { meta: unknown; state: GameState };
     const { mobileRefuge: _r, ...player } = out.value.state.player;
     assert.deepEqual(player, original.state.player, "no relocation, vitals or ownership change");

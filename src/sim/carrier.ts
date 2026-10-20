@@ -1,6 +1,7 @@
-import { BERTH_ENVELOPES, HULL_COLLIDERS, HULLS } from "../content/registry.js";
-import type { Capsule, CarrierState, GameState, Vec3, VehicleState, WorldQueries } from "./types.js";
-import { distance } from "./inventory.js";
+import { BERTH_ENVELOPES, HULL_COLLIDERS, HULL_HOLD_CU, HULLS } from "../content/registry.js";
+import type { Capsule, CarrierState, ContainerState, GameState, Vec3, VehicleState, WorldQueries } from "./types.js";
+import { CARRIER_COMPARTMENTS, compartmentId, distance } from "./inventory.js";
+import { HEARTHLINE_SOCKETS, hearthlineInteriorSolids } from "../content/fleet/hearthlineInterior.js";
 import { createGame, makeVehicle } from "./state.js";
 import { completeOpening } from "./progression.js";
 import { createWorldQueries, sweptHullClearance, withinWorldBounds, WORLD_BOUNDS, type HorizontalBounds, type Solid } from "./world.js";
@@ -79,9 +80,19 @@ function envelopeSolid(id: string, p: Vec3, shape: Capsule): Solid {
 export function atCarrierSupport(h: VehicleState): boolean {
   return distance(h.pose.position, CARRIER_SUPPORT) < 4 && Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) < 0.05;
 }
+/** Every Hearthline socket empty: New Game's and a pre-socket save's value. */
+export const emptySockets = (): Record<string, string | null> =>
+  Object.fromEntries(HEARTHLINE_SOCKETS.map((socket) => [socket.id, null]));
+export const occupiedSockets = (d: Pick<CarrierState, "sockets">): string[] =>
+  HEARTHLINE_SOCKETS.filter((socket) => d.sockets[socket.id] != null).map((socket) => socket.id);
+/** The carrier's pantry and fabrication compartments beside its stores (the cargo container). */
+export const carrierCompartmentContainers = (h: VehicleState): ContainerState[] =>
+  CARRIER_COMPARTMENTS.map((c) => ({ id: compartmentId(h.id, c.suffix), kind: "locker" as const, capacity: c.capacity, ownerId: h.id }));
 export function carrierInteriorSolids(s: GameState): Solid[] {
   const configuration = s.fleet.docking?.configuration ?? "compact";
   return [...carrierStructure(configuration),
+    // The interior kit: fixtures plus the footprint of every occupied socket.
+    ...hearthlineInteriorSolids(s.fleet.docking ? occupiedSockets(s.fleet.docking) : []),
     // Sealed compartments are not walking space, even when their craft is absent.
     ...carrierRooms(configuration),
     ...s.fleet.vehicles.filter((v) => v.berth).map((v) => envelopeSolid(`berth.${v.id}`, v.berth!.pose.position, transferEnvelope(v)))];
@@ -292,21 +303,17 @@ export function fixtureGame(): GameState {
     sequence: 0,
     completed: [],
     launchBlocked: false,
+    // Two seeded occupants show the interior kit's socket occupancy.
+    sockets: { ...emptySockets(), "hl.socket.galley.planter": "galley_planter", "hl.socket.bridge.survey": "directional_survey" },
   };
   for (const v of s.fleet.vehicles)
     s.inventory.containers.push({
       id: v.cargoId,
       kind: "vehicle",
-      capacity:
-        v.hull === "hearthline"
-          ? 256
-          : v.hull === "spindle"
-            ? 96
-            : v.hull === "creel"
-              ? 64
-              : 32,
+      capacity: HULL_HOLD_CU[v.hull],
       ownerId: v.id,
     });
+  s.inventory.containers.push(...carrierCompartmentContainers(h));
   s.inventory.items.push({
     id: "fixture_cargo",
     kind: "silica_glass",

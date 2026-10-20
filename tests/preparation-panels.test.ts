@@ -440,7 +440,7 @@ test("M2 preparation presents the paid in-place personal refit beside the unchan
   assert.match(recipe("suit_350"), /Conductive crust: 4 \/ 4/);
   assert.match(recipe("suit_350"), /Splitspine workshop bench · restored/);
   assert.equal(refit().disabled, false); assert.equal(refit().label, "Refit");
-  assert.match(refit().attrs, /aria-label="Refit personal suit \/ 350 m"/);
+  assert.match(refit().attrs, /aria-label="Suit refit · 350 m"/);
   assert.deepEqual(s, before);
   const result = executeCommand(s, refit().command, createWorldQueries());
   assert.equal(result.events.some(e => e.type === "notice" && e.error), false);

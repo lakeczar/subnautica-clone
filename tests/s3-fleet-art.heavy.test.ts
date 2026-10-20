@@ -1,3 +1,4 @@
+import { BERTH_ENVELOPES } from "../src/content/registry.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
@@ -219,7 +220,7 @@ test("Hearthline socket occupants survive ordinary frame updates unless occupanc
   });
 });
 
-test("S3-02: the Dart's real expedition art reaches its 2.5 m envelope half width", () => {
+test("S3-02 option B: the Dart's trimmed expedition art fills its 2.45 m envelope half width and no more", () => {
   withScene((scene, cel, glass, labels) => {
     const art = createExpeditionActors(scene, cel, glass, () => true, labels);
     const state = fixtureGame(), dart = state.fleet.vehicles.find((v) => v.hull === "dart")!;
@@ -237,6 +238,7 @@ test("S3-02: the Dart's real expedition art reaches its 2.5 m envelope half widt
     for (const [name, got, want] of [["half width", hw, m.halfWidth], ["min z", minZ, m.minZ], ["max z", maxZ, m.maxZ], ["height", top, m.height]] as const)
       assert.ok(Math.abs(got - want) < .006, `${name} ${got.toFixed(3)} vs recorded ${want}`);
     assert.ok(bottom > -.006, "nothing hangs below the keel datum");
+    assert.ok(hw <= BERTH_ENVELOPES.dart.halfWidth + 1e-6, `fin tips ${hw.toFixed(3)} inside the ${BERTH_ENVELOPES.dart.halfWidth} m berth envelope`);
     art.dispose();
   });
 });

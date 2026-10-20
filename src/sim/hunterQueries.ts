@@ -1,8 +1,9 @@
-import { CREEL_GEOMETRY as C, HEARTHLINE_KEEL as K, SCOUT_GEOMETRY as S, SPINDLE_GEOMETRY as P } from "../content/encounterGeometry.js";
+import { CREEL_GEOMETRY as C, SCOUT_GEOMETRY as S } from "../content/encounterGeometry.js";
+import { contactParts, type ContactPose, type S3HullId } from "../content/fleet/hulls.js";
 import type { ContactBox, LoftSection, Point3 } from "../content/encounterGeometry.js";
 import type { HullId } from "../content/registry.js";
-import type { Vec3 } from "./types.js";
-import { CARRIER_LAYOUT, carrierStructure } from "./carrier.js";
+import type { GameState, Vec3, VehicleState } from "./types.js";
+import { carrierStructure } from "./carrier.js";
 
 export type Triangle = readonly [Vec3, Vec3, Vec3];
 export const vec = (p: Point3): Vec3 => ({ x: p[0], y: p[1], z: p[2] });
@@ -47,31 +48,18 @@ export function box(b: ContactBox): Triangle[] {
     [p(-1,1,-1),p(1,1,-1),p(1,1,1),p(-1,1,1)], [p(-1,-1,-1),p(-1,-1,1),p(1,-1,1),p(1,-1,-1)]]
     .flatMap(points => face(points));
 }
-function ellipsoid(center: Point3, radius: Point3, segments: number): Triangle[] {
-  // Same rings/triangles as the authored Babylon sphere (diameter 2).
-  const rings: Vec3[][] = [], result: Triangle[] = [], count=segments+2;
-  for(let i=0;i<=count;i++) {
-    const theta=i/count*Math.PI, ring:Vec3[]=[];
-    for(let j=0;j<=2*count;j++) {const phi=j/(2*count)*Math.PI*2;
-      ring.push({x:center[0]+Math.sin(theta)*Math.cos(phi)*radius[0],y:center[1]+Math.cos(theta)*radius[1],z:center[2]-Math.sin(theta)*Math.sin(phi)*radius[2]});}
-    rings.push(ring);
-  }
-  for(let i=0;i<count;i++)for(let j=0;j<2*count;j++) {
-    if(i>0)result.push([rings[i]![j]!,rings[i]![j+1]!,rings[i+1]![j]!]);
-    if(i<count-1)result.push([rings[i+1]![j]!,rings[i]![j+1]!,rings[i+1]![j+1]!]);
-  }
-  return result;
-}
 /** Closed main primitives retain separate inside tests; canopy panes are open faces. */
-function hullComponents(hull: HullId): Triangle[][] {
-  if (hull === "hearthline") return [box({center:[0,9,0],size:[CARRIER_LAYOUT.deck.max.x-CARRIER_LAYOUT.deck.min.x+.6,.35,26]}),
-    box({center:[0,6.5,12],size:[CARRIER_LAYOUT.deck.max.x-CARRIER_LAYOUT.deck.min.x,5,.3]}),
-    ...[-1, 1].flatMap(side => [
-    box({ center: [side * K.offsetX, K.centerY, 0], size: K.size }),
-    box({ center: [side * K.offsetX, K.capY, 0], size: K.capSize })])];
+const s3Hull = (hull: HullId): hull is S3HullId => hull === "hush" || hull === "spindle" || hull === "mantle" || hull === "hearthline";
+/** The posed contact selector's input from state, as updateFleetHullArt derives
+ * it: Spindle stows its outriggers while berthed and shows cargo while loaded. */
+export function hullContactPose(s: Readonly<GameState>, v: Readonly<VehicleState>): ContactPose {
+  return v.hull === "spindle" ? { fold: v.berth ? 1 : 0, cargoLoaded: s.inventory.items.some((i) => i.containerId === v.cargoId && i.quantity > 0) } : {};
+}
+function hullComponents(hull: HullId, pose: ContactPose): Triangle[][] {
+  if (s3Hull(hull)) return contactParts(hull, pose).map((p) => box({
+    center: [(p.min[0] + p.max[0]) / 2, (p.min[1] + p.max[1]) / 2, (p.min[2] + p.max[2]) / 2],
+    size: [p.max[0] - p.min[0], p.max[1] - p.min[1], p.max[2] - p.min[2]] }));
   if (hull === "creel") return [box(C.body), box(C.cabin), box(C.window), box(C.mount), ...C.tools.map(t => box(t))];
-  if (hull === "spindle") return [loft(P.body), box(P.roof), ...[-2,2].flatMap(x=>[
-    ellipsoid([x,.4,0],P.float.radius,8),box({center:[x/2,.55,0],size:[2,.15,.2]})])];
   return [loft(S.bow), loft(S.body), loft(S.inset), box(S.prow),
     ...[-1.15, 1.15].flatMap(x => [box({ center: [x, .225, 1.3], size: [.18, .45, 2.8] }),
       box({ center: [x, .72, 2.5], size: [.16, 1.2, .18] })])];
@@ -128,20 +116,16 @@ export function contactMesh(components: readonly (readonly Triangle[])[], faces:
 }
 // Only authored, immutable local geometry lives across evaluations. Never cache
 // a GameState, world transform, contact, berth pose or visibility result here.
-const hullMeshes = new Map<HullId, ContactMesh>();
-export function hullMesh(hull: HullId): ContactMesh {
-  const cached = hullMeshes.get(hull); if (cached) return cached;
-  const components = hullComponents(hull), triangles = components.flat();
-  if(hull==="hearthline") {
-    for(const x of [CARRIER_LAYOUT.deck.min.x,CARRIER_LAYOUT.deck.max.x])
-      triangles.push(...face([[x,4.05,-12.5],[x,8.55,-12.5],[x,8.55,12.5],[x,4.05,12.5]]));
-    triangles.push(...face([[-6.3,3.9,-12],[6.3,3.9,-12],[6.3,8.9,-12],[-6.3,8.9,-12]]));
-  }
-  if (!["spindle", "creel", "hearthline"].includes(hull)) {
+const hullMeshes = new Map<string, ContactMesh>();
+export function hullMesh(hull: HullId, pose: ContactPose = {}): ContactMesh {
+  const key = `${hull}/${pose.fold ?? 0}/${pose.ramp ?? 0}/${pose.cargoLoaded ? 1 : 0}`;
+  const cached = hullMeshes.get(key); if (cached) return cached;
+  const components = hullComponents(hull, pose), triangles = components.flat();
+  if (hull === "dart") {
     triangles.push(...[S.canopy, S.starboard, S.port, S.aft].flatMap(points => face(points)));
     for (const side of [-1, 1]) triangles.push(...face([[side * 1.1, .7, .7], [side * S.finTip, .6, 1.8], [side * 1.1, .65, 2.4]]));
   }
-  const result = contactMesh(components,triangles); hullMeshes.set(hull, result); return result;
+  const result = contactMesh(components,triangles); hullMeshes.set(key, result); return result;
 }
 export const DIVER_MESH=contactMesh([box({center:[0,.475,0],size:[.68,.95,.68]})]);
 const shells=new Map<string,ContactMesh>();

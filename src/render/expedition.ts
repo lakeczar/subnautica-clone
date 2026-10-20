@@ -7,11 +7,11 @@ import {
   CANOPY_COVER,
   RECOVERY_STAGE,
 } from "../content/registry.js";
-import { HEARTHLINE_KEEL as HK, HUNTER_GEOMETRY as HG,
-  SCOUT_GEOMETRY as SG, SPINDLE_GEOMETRY as PG } from "../content/encounterGeometry.js";
+import { HUNTER_GEOMETRY as HG,
+  SCOUT_GEOMETRY as SG } from "../content/encounterGeometry.js";
 import { hunterPose } from "../sim/hunter.js";
 import type { GameState, VehicleState } from "../sim/types.js";
-import { CARRIER_LAYOUT, CARRIER_SUPPORT, carrierRooms, carrierStructure, launchPoint } from "../sim/carrier.js";
+import { CARRIER_SUPPORT, launchPoint, occupiedSockets } from "../sim/carrier.js";
 import { ArtBatch } from "./geometry.js";
 import type { Point } from "./geometry.js";
 import { PALETTE as P } from "./palette.js";

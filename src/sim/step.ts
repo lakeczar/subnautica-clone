@@ -29,7 +29,6 @@ import {
   craft,
   discover,
   frameDestination,
-  hint,
   readTechRecord,
   toggleBuoy,
 } from "./progression.js";
@@ -91,6 +90,7 @@ import { incapacitate, recoveryCommand, updateRecovery } from "./recovery.js";
 import { updateSurvival, updateThreat } from "./survival.js";
 import { safePersonalDepth } from "./capabilities.js";
 import { advanceRenewal, settleRenewal } from "./renewal.js";
+import { advanceStory, recordStory, storyHint, storyHost } from "./storyLink.js";
 const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
@@ -215,7 +215,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       return null;
     }
     case "hint":
-      s.feedback = hint(s);
+      s.feedback = storyHint(s);
       return null;
     case "mark":
       if (!s.knowledge.markers.includes(c.placeId))
@@ -351,10 +351,12 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         if (!no) actionResult(s, events, "Entered the cabin");
         return no;
       }
-      if (target.id === OPTIONAL_RECORD.id) {
-        if (!s.knowledge.journals.includes(target.id))
-          s.knowledge.journals.push(target.id);
-        s.feedback = OPTIONAL_RECORD.text;
+      if (target.id === OPTIONAL_RECORD.id || storyHost(target.id)) {
+        if (target.known && target.kind === "evidence") {
+          events.push({ type: "interaction-panel", panel: "notebook", targetId: target.id });
+          return null;
+        }
+        s.feedback = recordStory(s, target.id as typeof OPTIONAL_RECORD.id);
         return null;
       }
       if (target.kind === "vehicle" && target.verb === "board") {
@@ -846,6 +848,7 @@ export function stepGame(
   }
   updateAction(s);
   advanceRenewal(s);
+  advanceStory(s);
   updateBerth(s, world);
   const recoveryEvent = updateRecovery(s, world);
   if (recoveryEvent) events.push(recoveryEvent.type === "notice"

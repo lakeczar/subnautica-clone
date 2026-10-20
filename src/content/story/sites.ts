@@ -159,6 +159,10 @@ export const STORY_SITES = {
   },
 } as const satisfies Record<StorySiteId, StorySite>;
 
+/** Sites that exist in the composed world. A lead, hint or interaction is offered
+ * only at a placed site; S2 adds each site here as it places it. */
+export const placedSite = (site: StorySiteId): boolean => (STORY_SITES[site] as StorySite).existing === true;
+
 /** S2's placement checklist: each region's story sites and the items each holds. */
 export const PLACEMENTS = (Object.keys(STORY_SITES) as StorySiteId[]).reduce((by, site) => {
   (by[STORY_SITES[site].region] ??= []).push({ site, holds: DISCOVERY_IDS.filter((id) => siteOf(id) === site) });

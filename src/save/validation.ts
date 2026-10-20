@@ -21,10 +21,13 @@ import { CANISTER_CU } from "../sim/recovery.js";
 import { renewalCap } from "../sim/renewal.js";
 import { LEGACY_WORLD_BOUNDS, RECOVERY_ROUTES, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
 import type { GameState } from "../sim/types.js";
-import { usedCapacity } from "../sim/inventory.js";
+import { carrierCompartment, containerAccepts, usedCapacity } from "../sim/inventory.js";
 import { installedModuleValid, moduleItem, SMALL_CRAFT_SOCKETS } from "../sim/modules.js";
 import { WORLD_BOUNDS } from "../sim/world.js";
-import { atCarrierSupport, BERTH_LOCAL, CARRIER_LAYOUT, localToWorld } from "../sim/carrier.js";
+import { atCarrierSupport, BERTH_LOCAL, CARRIER_LAYOUT, carrierCompartmentContainers, localToWorld } from "../sim/carrier.js";
+import { HEARTHLINE_SOCKETS } from "../content/fleet/hearthlineInterior.js";
+import { validStory } from "../sim/story/index.js";
+import { registryEvidence } from "../sim/storyLink.js";
 import { createGame } from "../sim/state.js";
 export const record = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -89,6 +92,7 @@ export function validState(value: unknown): value is GameState {
       "knowledge",
       "world",
       "fleet",
+      "story",
       "recovery",
       "metrics",
       "feedback",
@@ -237,6 +241,15 @@ export function validState(value: unknown): value is GameState {
     !stringSet(k.markers, Object.keys(PLACES).length, known(PLACES)) ||
     !stringSet(k.crafted, Object.keys(RECIPES).length, known(RECIPES)) ||
     !int(k.hintLevel, 0, 3)
+  )
+    return false;
+  // S5's strict story guard, then the composed split: C01–C06 and the reef
+  // journal live only in knowledge; the pod buffer repair is its paid recipe.
+  const story = value.story;
+  if (
+    !validStory(story, value.tick as number) ||
+    story.discoveries.some((d) => registryEvidence(d.id) || d.id === "mara_reef_note") ||
+    story.works.repairs.includes("pod_buffer") !== (k.crafted as string[]).includes("pod_buffer")
   )
     return false;
   const w = value.world;
@@ -391,7 +404,14 @@ export function validState(value: unknown): value is GameState {
         "sequence",
         "completed",
         "launchBlocked",
+        "sockets",
       ]) ||
+      // Every interior socket, empty or holding one kind it accepts.
+      !exact(d.sockets, HEARTHLINE_SOCKETS.map((socket) => socket.id)) ||
+      !HEARTHLINE_SOCKETS.every((socket) => {
+        const held = (d.sockets as Record<string, unknown>)[socket.id];
+        return held === null || (typeof held === "string" && socket.accepts.includes(held));
+      }) ||
       !id(d.vehicleId) ||
       !oneOf(d.configuration, ["compact", "medium"]) ||
       !bool(d.stationKeeping) ||
@@ -522,6 +542,8 @@ function semantic(s: GameState, fresh: GameState): boolean {
     ...fresh.inventory.containers.map((c) => [c.id, c.kind, c.capacity, c.ownerId]),
     // Hold size follows hull and fitted mount; a stale capacity is invalid.
     ...f.vehicles.map((v) => [v.cargoId, "vehicle", holdCapacity(s, v), v.id]),
+    // The carrier's pantry and fabrication compartments beside its stores.
+    ...f.vehicles.filter((v) => v.hull === "hearthline").flatMap(carrierCompartmentContainers).map((c) => [c.id, c.kind, c.capacity, c.ownerId]),
     ...s.recovery.caches.map((c) => [c.containerId, "cache", c.id.startsWith("canister_") ? CANISTER_CU : 8, c.id]),
     // Each cabin package owns one persistent locker, fitted or stowed.
     ...items.filter((i) => i.kind === "creel_cabin").map((i) => [`${i.id}_locker`, "locker", MODULES.creel_cabin.lockerCu, i.id]),
@@ -540,6 +562,7 @@ function semantic(s: GameState, fresh: GameState): boolean {
   )
     return false;
   if (containers.some((c) => usedCapacity(s, c.id) > c.capacity)) return false;
+  if (items.some((i) => carrierCompartment(s, i.containerId) && !containerAccepts(s, i.containerId, i.kind))) return false;
   const fit = {
     tools: "essential_tools",
     suit: "suit_150",

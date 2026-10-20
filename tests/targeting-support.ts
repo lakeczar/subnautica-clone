@@ -69,6 +69,9 @@ export const NORMAL_VIEWS: readonly { id: string; position: Vec3; mode: Movement
   { id: "C03", position: { x: 10, y: 1.2, z: -36.3 }, mode: "walking" },
   { id: "C04", position: { x: 116, y: -118, z: -125.3 }, mode: "walking" },
   { id: "mara_reef_note", position: { x: -24, y: -8, z: -6.5 }, mode: "swimming" },
+  // C1 story fixtures at existing sites: the pod's back-wall checklist and the lab bench tray.
+  { id: "pod_checklist", position: { x: 0.6, y: 0.18, z: 22.4 }, mode: "walking" },
+  { id: "mara_specimen_tray", position: { x: 117.3, y: -118, z: -125.5 }, mode: "walking" },
   { id: "pod_services", position: { x: 1.5, y: 0.18, z: 23 }, mode: "walking" },
   { id: "workshop_services", position: { x: 11, y: 1.2, z: -36.5 }, mode: "walking" },
   { id: "rescue_staging", position: { x: 46, y: -12, z: -51.5 }, mode: "swimming" },

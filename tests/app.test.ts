@@ -360,12 +360,12 @@ test("app: gameplay panels and transactional actions freeze all simulation drain
   assert.equal(f.view.state!.tick, tick);
   assert.deepEqual(f.view.state!.player.vitals, vitals);
   f.view.actions.command({ type: "hint" });
-  assert.equal(f.view.state!.knowledge.hintLevel, 1);
+  assert.deepEqual(f.view.state!.story.hints, { L01: 1 }, "the first graduated reef hint");
   assert.equal(f.view.state!.tick, tick);
   f.window.dispatchEvent(new Event("blur"));
   f.window.dispatchEvent(new Event("focus"));
   f.view.actions.command({ type: "hint" });
-  assert.equal(f.view.state!.knowledge.hintLevel, 1);
+  assert.deepEqual(f.view.state!.story.hints, { L01: 1 }, "refused while blurred");
   assertPaused(f, tick);
   f.view.actions.resume();
   f.frames();

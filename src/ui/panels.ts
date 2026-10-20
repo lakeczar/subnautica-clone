@@ -552,7 +552,7 @@ export class PanelView {
       const verb = id === "pod_repair" ? "Repair" : id.startsWith("restore_") ? "Restore" : id === "suit_350" || refit ? "Refit"
         : hullOutput(r) ? "Build" : id === "strip_frame" ? "Strip" : "Fabricate";
       const action = done ? `<span class="recipe-done">${completion}</span>`
-        : button(verb, { type: "craft", recipeId: id }, block !== null, reason, r.label.startsWith(verb) ? r.label : `${verb} · ${r.label}`);
+        : button(verb, { type: "craft", recipeId: id }, block !== null, reason, r.label.toLowerCase().includes(verb.toLowerCase()) ? r.label : `${verb} · ${r.label}`);
       return `<article class="recipe" data-recipe="${id}" data-readiness="${dart ? "current" : done ? "completed" : block === null ? "ready" : "blocked"}" data-focus-key="recipe:${id}" tabindex="-1">${this.group(`recipe:${id}`, `<span class="recipe-name">${r.label}</span><span class="recipe-costs">${costs}</span>`, `<div class="recipe-more">${detail}</div>`)}${action}</article>`;
     };
     // The next useful work leads; prerequisites, completed work and owned craft collapse.

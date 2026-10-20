@@ -10,6 +10,7 @@ import type {
   RenewableSourceId,
   SourceId,
 } from "../content/registry.js";
+import type { StoryState } from "./story/state.js";
 import type { RecoveryRouteId } from "../content/routes.js";
 export interface Vec3 {
   x: number;
@@ -151,6 +152,10 @@ export interface GameState {
     } | null;
   };
   fleet: { vehicles: VehicleState[]; docking: CarrierState | null };
+  /** S5 story record. C01–C06 stay in knowledge.evidence and the reef journal in
+   * knowledge.journals, with their original ticks; this holds every later
+   * discovery, hint tiers, the works and the resolution. See sim/storyLink.ts. */
+  story: StoryState;
   recovery: {
     operation: {
       vehicleId: string;
