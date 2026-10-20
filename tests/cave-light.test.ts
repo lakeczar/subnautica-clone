@@ -43,6 +43,10 @@ function rockRanges(a: Vec3, b: Vec3, solids: readonly Solid[] = def.rock): [num
   return ranges;
 }
 const head = (p: Vec3): Vec3 => ({ ...p, y: p.y + 0.6 });
+/** The most surface skin a lamp ray may ignore, pinned here and NOT read
+ * from the implementation (R2-05): the shell lies at most 0.35 m inside its
+ * rock and the ray starts 0.3 m off the surface, so 0.5 m covers it. */
+const MAX_SKIN = 0.5;
 
 test("cave light: dark inside by path length from the openings, lit at the mouths and in the skylight beam", () => {
   const vault = def.rooms.find(r => r.id === "fanvault.vault")!, pocket = def.rooms.find(r => r.role === "pocket")!;
@@ -74,7 +78,7 @@ test("lamp: no ray through collision rock lights a surface; clear mouth and skyl
     for (const lamp of lamps) {
       const d = { x: lamp.x - p.x, y: lamp.y - p.y, z: lamp.z - p.z }, len = Math.hypot(d.x, d.y, d.z);
       if (len > 22 || len < 0.5 || n.x * d.x + n.y * d.y + n.z * d.z <= 0) continue;
-      const skip = LAMP_SKIN / len, rock = rockRanges(p, lamp).filter(([a, b]) => b > skip + 1e-6 && (b - Math.max(a, skip)) * len > 0.02);
+      const skip = MAX_SKIN / len, rock = rockRanges(p, lamp).filter(([a, b]) => b > skip + 1e-6 && (b - Math.max(a, skip)) * len > 0.02);
       const lit = lampVisible(field.rock, p, lamp);
       if (rock.length) { throughRock++; assert.equal(lit, false, `lamp at ${JSON.stringify(lamp)} lights ${JSON.stringify(p)} through rock`); }
       else if (rockRanges(p, lamp).every(([, b]) => b <= skip)) { open++; if (lit) openLit++; }
@@ -83,6 +87,14 @@ test("lamp: no ray through collision rock lights a surface; clear mouth and skyl
   assert.ok(throughRock > 2000, `${throughRock} rays cross rock`);
   assert.ok(openLit >= open * 0.98, `${open - openLit} of ${open} open rays blocked`);
   // R1's twelve shell-obstructed rays, each still crossing at least 1 m of rock.
+  assert.ok(LAMP_SKIN <= MAX_SKIN, `the lamp skips ${LAMP_SKIN} m of rock, more than ${MAX_SKIN}`);
+  // R2's control: rock that starts past the skin and ends before 2.5 m.
+  {
+    const p = { x: -284.432239, y: -19.577581, z: -49.374072 }, lamp = { x: -291, y: -23.2, z: -65 };
+    const len = Math.hypot(lamp.x - p.x, lamp.y - p.y, lamp.z - p.z), first = rockRanges(p, lamp).sort((u, w) => u[0] - w[0])[0]!;
+    assert.ok(first[0] * len > MAX_SKIN && first[1] * len < 2.5, `fixture: rock from ${first[0] * len} to ${first[1] * len} m`);
+    assert.equal(lampVisible(field.rock, p, lamp), false, "near rock past the skin must block");
+  }
   for (const [p, lamp] of R1_LEAKS) {
     const a = { x: p[0], y: p[1], z: p[2] }, b = { x: lamp[0], y: lamp[1], z: lamp[2] }, len = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
     assert.ok(Math.max(0, ...rockRanges(a, b).map(([u, w]) => (w - u) * len)) > 1, "fixture: the R1 ray still crosses rock");

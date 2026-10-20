@@ -12,20 +12,32 @@ import { createWorldQueries, type Solid } from "./world.js";
  * - **Full-shape ownership.** Inside a cave footprint only cave rock exists;
  *   outside it the exterior heightfield rules. A shape touching a footprint
  *   is tested against both owners over its WHOLE box, in clearance, in every
- *   sweep and in every slide; never by its centre alone. Here the exterior
+ *   sweep and in every slide; never by its centre alone. The exterior
  *   heightfield in a collar band round each footprint becomes conservative
- *   column solids (`collar`), so the existing continuous box sweep, its
- *   slides and its clearance see the exterior ground under every corner.
- * - **Legacy guards untouched.** Every query whose shape (and sweep) does not
- *   touch a footprint goes to the exterior world built with the ORIGINAL
- *   floor function, so `world.ts`'s identity-keyed legacy terrain columns and
- *   bench cut walls still apply. Caves (with their band) must keep clear of
- *   every guarded region (default: the legacy preserve, which contains them);
- *   construction throws otherwise.
+ *   column solids, so the existing continuous box sweep, its slides and its
+ *   clearance see the exterior ground under every corner. The band is wide
+ *   enough for the largest admitted shape touching the footprint plus one
+ *   sub-sweep and its slides; larger shapes are refused at a cave.
+ * - **Ownership per sub-sweep.** A move whose swept envelope touches a cave
+ *   advances in bounded sub-sweeps. Each sub-sweep whose own envelope (grown
+ *   by its length, which bounds its slides) touches a footprint runs in the
+ *   cave composite; every other one runs in the original exterior world, so
+ *   the model hands back as soon as the shape leaves the cave.
+ * - **Nothing exterior is dropped.** The composite holds every exterior
+ *   solid, so walls, structures and sight blockers anywhere along a sweep or
+ *   a sight line still count.
+ * - **Legacy guards untouched.** Queries and sub-sweeps that do not touch a
+ *   cave go to the exterior world built with the ORIGINAL floor function, so
+ *   `world.ts`'s identity-keyed legacy terrain columns and bench cut walls
+ *   still apply, including after crossing back out. Caves (with their band)
+ *   must keep clear of every guarded region (default: the legacy preserve,
+ *   which contains them); construction throws otherwise.
  * - **Support from below.** `supportHeight` near a cave reads rock tops and
  *   collar columns at or below the actor, never the roof above it.
  * - Cabin, carrier and other local worlds stay separate `createWorldQueries`
- *   instances; this adapter is only the exterior world's.
+ *   instances; this adapter is only the exterior world's. Away from caves the
+ *   exterior's existing floor policy (centre-sampled clearance, unswept
+ *   floor) is unchanged.
  *
  * Wrapping the floor function alone (`withCaveFloors`) is NOT enough: it
  * leaves clearance centre-sampled and changes the floor identity that keys
@@ -46,9 +58,9 @@ export interface CaveWorldOptions {
   readonly solids: readonly Solid[];
   readonly floor: (x: number, z: number) => number;
   readonly caves: readonly CaveOwner[];
-  /** Width of the exterior collar modelled as columns, metres. Larger than
-   * the largest shape that may touch a cave (a medium hull is 4.5). */
-  readonly band?: number;
+  /** Largest horizontal half-extent admitted at a cave, metres (a medium
+   * hull is 4.5). The collar band is sized from it. */
+  readonly maxHalfExtent?: number;
   /** Regions whose legacy terrain guards caves must keep clear of. */
   readonly guards?: readonly Rect[];
 }
@@ -81,8 +93,15 @@ function collarColumns(cave: CaveOwner, floor: (x: number, z: number) => number,
   return out;
 }
 
+/** Longest sub-sweep near a cave, metres. */
+export const CAVE_SUB_SWEEP = 0.5;
+
 export function createCaveWorldQueries(options: CaveWorldOptions): WorldQueries {
-  const { solids, floor, caves } = options, band = options.band ?? 5, guards = options.guards ?? [LEGACY_PRESERVE];
+  const { solids, floor, caves } = options, guards = options.guards ?? [LEGACY_PRESERVE];
+  const maxHalf = options.maxHalfExtent ?? 4.5;
+  // A shape touching a footprint reaches 2 x its half-extent beyond it, and
+  // one sub-sweep with its slides reaches CAVE_SUB_SWEEP further.
+  const band = 2 * maxHalf + CAVE_SUB_SWEEP + 0.5;
   for (const c of caves) for (const g of guards) {
     const f = c.footprint;
     if (f.minX - band < g.maxX && f.maxX + band > g.minX && f.minZ - band < g.maxZ && f.maxZ + band > g.minZ)
@@ -93,34 +112,41 @@ export function createCaveWorldQueries(options: CaveWorldOptions): WorldQueries 
     for (const c of caves) if (owns(c.footprint, x, z)) return c.baseY - 1;
     return floor(x, z);
   };
-  const near = (s: Solid): boolean => caves.some(c => overlaps(c.footprint, s, band + 2));
   const composite = createWorldQueries([
-    ...solids.filter(near), ...caves.flatMap(c => c.rock), ...caves.flatMap(c => collarColumns(c, floor, band, caves)),
+    ...solids, ...caves.flatMap(c => c.rock), ...caves.flatMap(c => collarColumns(c, floor, band, caves)),
   ], masked);
   const touches = (box: BoxBounds): boolean => caves.some(c => overlaps(c.footprint, box));
   const inBand = (x: number, z: number): boolean => caves.some(c => owns(
     { minX: c.footprint.minX - band, maxX: c.footprint.maxX + band, minZ: c.footprint.minZ - band, maxZ: c.footprint.maxZ + band }, x, z));
   const halfExtent = (s: Capsule): number => Math.max(s.halfWidth ?? s.radius, s.halfLength ?? s.radius);
+  const envelope = (p: Vec3, d: Vec3, shape: Capsule): BoxBounds => {
+    const e = union(actorBox(p, shape), actorBox({ x: p.x + d.x, y: p.y + d.y, z: p.z + d.z }, shape)), r = Math.hypot(d.x, d.y, d.z);
+    return { min: { x: e.min.x - r, y: e.min.y - r, z: e.min.z - r }, max: { x: e.max.x + r, y: e.max.y + r, z: e.max.z + r } };
+  };
 
   return {
     waterHeight: exterior.waterHeight,
     groundHeight: masked,
     supportHeight: (x, z, fromY) => inBand(x, z) ? composite.supportHeight(x, z, fromY) : exterior.supportHeight(x, z, fromY),
-    clearance: (origin, shape) => touches(actorBox(origin, shape)) ? composite.clearance(origin, shape) : exterior.clearance(origin, shape),
+    clearance: (origin, shape) => !touches(actorBox(origin, shape)) ? exterior.clearance(origin, shape)
+      : halfExtent(shape) <= maxHalf && composite.clearance(origin, shape),
+    // The composite holds every exterior solid and samples the same exterior
+    // floor outside footprints, so a sight line touching a cave loses nothing.
     lineOfSight: (a, b, ignore) => touches({ min: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), z: Math.min(a.z, b.z) },
       max: { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y), z: Math.max(a.z, b.z) } })
       ? composite.lineOfSight(a, b, ignore) : exterior.lineOfSight(a, b, ignore),
     moveCapsule(origin: Vec3, delta: Vec3, shape: Capsule, opts?: MovementOptions): MoveResult {
-      const end = { x: origin.x + delta.x, y: origin.y + delta.y, z: origin.z + delta.z };
-      if (!touches(union(actorBox(origin, shape), actorBox(end, shape)))) return exterior.moveCapsule(origin, delta, shape, opts);
-      // Near a cave every slice, and every slide inside it, stays within the
-      // modelled collar; a shape too large for the band is refused.
-      const reach = band - halfExtent(shape);
-      if (reach <= 0.1) return { position: { ...origin }, hitSolid: true, hitBoundary: false };
-      const slices = Math.max(1, Math.ceil(Math.hypot(delta.x, delta.y, delta.z) / (reach / 2)));
+      if (!touches(envelope(origin, delta, shape))) return exterior.moveCapsule(origin, delta, shape, opts);
+      if (halfExtent(shape) > maxHalf) return { position: { ...origin }, hitSolid: true, hitBoundary: false };
+      const slices = Math.max(1, Math.ceil(Math.hypot(delta.x, delta.y, delta.z) / CAVE_SUB_SWEEP));
+      const d = { x: delta.x / slices, y: delta.y / slices, z: delta.z / slices };
       let position = { ...origin }, hitSolid = false, hitBoundary = false;
       for (let i = 0; i < slices; i++) {
-        const r = composite.moveCapsule(position, { x: delta.x / slices, y: delta.y / slices, z: delta.z / slices }, shape, opts);
+        // Each sub-sweep picks its own owner: the cave composite while its
+        // envelope (slides included) touches a footprint, the original
+        // exterior world (legacy guards and all) once it does not.
+        const world = touches(envelope(position, d, shape)) ? composite : exterior;
+        const r = world.moveCapsule(position, d, shape, opts);
         position = r.position; hitSolid ||= r.hitSolid; hitBoundary ||= r.hitBoundary;
       }
       return { position, hitSolid, hitBoundary };

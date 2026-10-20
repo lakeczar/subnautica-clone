@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CRAFT_PROFILES } from "../src/content/regions/passages.js";
-import { createWorldQueries, SOLIDS, surfaceHeight } from "../src/sim/world.js";
+import { createWorldQueries, SOLIDS, surfaceHeight, type Solid } from "../src/sim/world.js";
 import { caveOwner, createCaveWorldQueries } from "../src/sim/caveWorld.js";
 import { withCaveFloors } from "../src/content/regions/caves.js";
 import type { Capsule, Vec3 } from "../src/sim/types.js";
 import { actorBox } from "../src/sim/ribCollision.js";
-import { def, DIVER, shift, shiftedFloor, SHIFT, world, wrapperWorld } from "./cave-support.js";
+import { worldFloor } from "../src/content/regions/worldFloor.js";
+import { def, DIVER, shift, shiftedFloor, SHIFT, world, worldWith, wrapperWorld } from "./cave-support.js";
 
 // W1-PRE R1-03: the prototype ownership adapter (`sim/caveWorld.ts`).
 const f = def.replacementFootprints[0]!;
@@ -104,4 +105,87 @@ test("support near a cave reads what is below the actor, never the roof above", 
   assert.ok(below <= p.y && below > p.y - 2, `support ${below} below ${p.y}`);
   assert.ok(above > p.y + 5, "the roof top is the support from above");
   assert.ok(world.groundHeight(p.x + SHIFT.x, p.z + SHIFT.z) < def.source.baseY, "the heightfield steps aside inside the footprint");
+});
+
+// --- R2-04: ownership is chosen per sub-sweep; nothing exterior is dropped ---
+
+test("R2 real Fanvault: an exterior wall beyond the collar still stops a move and blocks sight from the cave", () => {
+  const wall = { id: "r2.exterior.wall", min: { x: -284, y: -22, z: -32 }, max: { x: -281, y: 0, z: -31 } };
+  const a = { x: -282.8, y: -15, z: -40.1 }, d = { x: 0, y: 0, z: 12 };
+  const adapter = worldWith([wall]);
+  const direct = createWorldQueries([...def.rock, wall].map(s => ({ id: s.id, min: shift(s.min), max: shift(s.max) })),
+    (x, z) => withCaveFloors(worldFloor)(x - SHIFT.x, z - SHIFT.z));
+  assert.ok(adapter.clearance(shift(a), DIVER) && direct.clearance(shift(a), DIVER), "fixture: the start is clear");
+  const got = adapter.moveCapsule(shift(a), d, DIVER), want = direct.moveCapsule(shift(a), d, DIVER);
+  assert.ok(want.hitSolid && Math.abs(want.position.z - SHIFT.z - (-32.3412)) < 1e-3, "fixture: the wall stops the direct world");
+  // Same stop, up to the sweep's 1e-4-of-travel contact back-off (shorter sub-sweeps back off less).
+  assert.ok(got.hitSolid && Math.abs(got.position.z - want.position.z) < 2e-3 && got.position.z - SHIFT.z <= -32 - DIVER.radius + 1e-6,
+    `adapter stopped at ${got.position.z - SHIFT.z}`);
+  assert.equal(adapter.lineOfSight(shift(a), shift({ ...a, z: a.z + 12 })), false, "the wall blocks sight from inside the collar");
+});
+
+/** A synthetic empty cave (all water) 10 m square, to isolate the handover. */
+const empty = { id: "test.cave", footprint: { minX: 0, maxX: 10, minZ: 0, maxZ: 10 }, baseY: -30, rock: [] as Solid[] };
+const synthetic = (solids: Solid[], floor: (x: number, z: number) => number, rock: Solid[] = []) => ({
+  adapter: createCaveWorldQueries({ solids, floor, caves: [{ ...empty, rock }], guards: [] }),
+  exterior: createWorldQueries(solids, floor),
+});
+const flat = (): number => -20;
+const far = { id: "test.far.wall", min: { x: 19, y: -9, z: 4 }, max: { x: 20, y: 0, z: 6 } };
+
+test("crossing the collar outward: a distant exterior wall stops the move exactly as the exterior world does", () => {
+  const { adapter, exterior } = synthetic([far], flat), a = { x: 9, y: -8, z: 5 }, d = { x: 12, y: 0, z: 0 };
+  const got = adapter.moveCapsule(a, d, DIVER), want = exterior.moveCapsule(a, d, DIVER);
+  assert.ok(want.hitSolid && Math.abs(want.position.x - 18.6588) < 1e-3, "fixture");
+  assert.ok(got.hitSolid && Math.abs(got.position.x - want.position.x) < 2e-3 && got.position.x <= 19 - DIVER.radius + 1e-6, `stopped at ${got.position.x}`);
+  // A long sight line from inside the cave to well beyond the wall.
+  assert.equal(adapter.lineOfSight({ x: 5, y: -8, z: 5 }, { x: 60, y: -8, z: 5 }), false);
+  assert.equal(adapter.lineOfSight({ x: 5, y: -8, z: 5 }, { x: 60, y: -8, z: 30 }), exterior.lineOfSight({ x: 5, y: -8, z: 5 }, { x: 60, y: -8, z: 30 }));
+});
+
+test("crossing the collar inward: exterior walls on the way and cave rock inside both stop the move", () => {
+  const rock = [{ id: "test.cave.rock", min: { x: 2, y: -30, z: 0 }, max: { x: 4, y: 0, z: 10 } }];
+  const { adapter, exterior } = synthetic([far], flat, rock);
+  const fromFar = adapter.moveCapsule({ x: 30, y: -8, z: 5 }, { x: -25, y: 0, z: 0 }, DIVER);
+  const want = exterior.moveCapsule({ x: 30, y: -8, z: 5 }, { x: -25, y: 0, z: 0 }, DIVER);
+  assert.ok(fromFar.hitSolid && Math.abs(fromFar.position.x - want.position.x) < 1e-4 * 25 + 1e-6 && fromFar.position.x >= 20 + DIVER.radius - 1e-6,
+    `stopped at ${fromFar.position.x}`);
+  const inward = adapter.moveCapsule({ x: 15, y: -8, z: 5 }, { x: -14, y: 0, z: 0 }, DIVER);
+  assert.ok(inward.hitSolid && Math.abs(inward.position.x - 4.34) < 1e-3, `cave rock missed: ${inward.position.x}`);
+});
+
+test("a slide along a distant wall continues in the exterior world without entering it", () => {
+  const wall = { id: "test.slide.wall", min: { x: 19, y: -20, z: -20 }, max: { x: 20, y: 0, z: 30 } };
+  const { adapter, exterior } = synthetic([wall], flat), a = { x: 9, y: -8, z: 5 }, d = { x: 14, y: 0, z: 10 };
+  const got = adapter.moveCapsule(a, d, DIVER), want = exterior.moveCapsule(a, d, DIVER);
+  assert.ok(got.hitSolid && got.position.x <= 19 - DIVER.radius + 1e-6, `entered the wall at x ${got.position.x}`);
+  assert.ok(Math.abs(got.position.z - want.position.z) < 0.05 && got.position.z > a.z + 9, `slid to z ${got.position.z} (exterior ${want.position.z})`);
+  assert.equal(adapter.clearance(got.position, DIVER), true);
+});
+
+test("a ramp beside the collar: outside the cave model the move is the exterior world's own", () => {
+  // Exterior ground rises 2 m per metre from x = 15. The exterior world does
+  // not sweep its floor (step.ts lifts actors through support); the adapter
+  // must hand over to exactly that, not invent a different outcome.
+  const ramp = (x: number): number => x < 15 ? -10 : Math.min(0, -10 + (x - 15) * 2);
+  for (const solids of [[], [far]]) {
+    const { adapter, exterior } = synthetic(solids, (x) => ramp(x));
+    const a = { x: 9, y: -8, z: 5 }, d = { x: 12, y: 0, z: 0 };
+    const got = adapter.moveCapsule(a, d, DIVER), want = exterior.moveCapsule(a, d, DIVER);
+    assert.ok(Math.hypot(got.position.x - want.position.x, got.position.y - want.position.y, got.position.z - want.position.z) < 2e-3 &&
+      got.hitSolid === want.hitSolid, `${solids.length ? "walled" : "open"} ramp: adapter ${JSON.stringify(got)} vs exterior ${JSON.stringify(want)}`);
+    assert.equal(adapter.clearance(got.position, DIVER), exterior.clearance(got.position, DIVER));
+    assert.equal(adapter.lineOfSight(a, { x: 25, y: -8, z: 5 }), exterior.lineOfSight(a, { x: 25, y: -8, z: 5 }));
+    // Starting on the ramp side and moving in, the collar columns hold the ramp.
+    const up = { x: 16, y: ramp(16) + 0.02, z: 5 };
+    assert.equal(adapter.clearance(up, DIVER), true);
+  }
+});
+
+test("crossing back out restores the legacy guards (exterior world identity)", () => {
+  // Far from any cave, sliced or not, the adapter is the exterior world.
+  const legacy = createWorldQueries(SOLIDS, surfaceHeight);
+  const adapter = createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: [caveOwner(def)] });
+  const a = { x: 35, y: -13, z: -54 }, d = { x: 10, y: 0, z: 0 };
+  assert.deepEqual(adapter.moveCapsule(a, d, DIVER), legacy.moveCapsule(a, d, DIVER));
 });

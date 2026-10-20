@@ -1,6 +1,21 @@
 # W1-pre: Fanvault cave kit (handoff)
 
-Opus 5.5, branch `t3/siltwake-fanvault-cave` from `feat/siltwake-first-expedition` `fc46af8`. R0 was `fe00f5e`; this revision answers [Sol R1](../reviews/W1-PRE-SOL-XHIGH-R1.md) (see *R1 fixes*). New files only. No shared root, bake or `materials.ts` edit. Design basis: [CAVES-UNDERGROUND](../../research/CAVES-UNDERGROUND.md).
+Opus 5.5, branch `t3/siltwake-fanvault-cave` from `feat/siltwake-first-expedition` `fc46af8`. R0 was `fe00f5e` and R1 was `90d38b3`; this revision answers [Sol R1](../reviews/W1-PRE-SOL-XHIGH-R1.md) and [Sol R2](../reviews/W1-PRE-SOL-XHIGH-R2.md) (see *R1 fixes* and *R2 fixes*). New files only. No shared root, bake or `materials.ts` edit. Design basis: [CAVES-UNDERGROUND](../../research/CAVES-UNDERGROUND.md).
+
+## R2 fixes
+- **R2-04, ownership handover.** The adapter now picks ownership per bounded sub-sweep, at most `CAVE_SUB_SWEEP` (0.5 m), not once per move.
+  - **Per sub-sweep:** each sub-sweep whose envelope, grown by its own length to cover its slides, touches a footprint runs in the cave composite. Every other sub-sweep runs in the original exterior world, so the legacy guards apply again as soon as the shape leaves.
+  - **Composite roster:** the composite now holds every exterior solid, so walls along a sweep or a sight line can't drop out.
+  - **Collar band:** the band is sized as 2 × the largest admitted half-extent + one sub-sweep + 0.5 m (10 m for a medium hull). Larger shapes are refused at a cave.
+  - **Tests:**
+    - the real Fanvault wall stops at −32.34 and blocks sight (R2's repro);
+    - an outward collar crossing meets a distant wall, matching the exterior world;
+    - an inward crossing is stopped first by an exterior wall and then by cave rock;
+    - a slide along a far wall never enters it;
+    - long sight lines from inside a cave;
+    - a ramp beside the collar gets exactly the exterior world's outcome, open and walled;
+    - crossing back out restores the legacy bench guard.
+- **R2-05, lamp oracle.** The test pins `MAX_SKIN = 0.5` m independently of `LAMP_SKIN`, checks `LAMP_SKIN ≤ MAX_SKIN`, and uses `MAX_SKIN` for the blocked-ray oracle. It adds R2's control: rock from 2.02 to 2.36 m along the ray must block. A compiled `LAMP_SKIN` of 2.5 now fails the test.
 
 ## R1 fixes
 - **R1-01, the lamp-off test.** It is now a real swim. The full diver shape sweeps every hop from the last accepted pose, and destinations must clear. Hops follow only the path-length glow (a sun pool reads full light, so it guides nothing). Arrival must be clear exterior water entered through a mouth or the skylight. Starts are taken every metre along both routes. A sealed-cave negative control must fail.
@@ -49,16 +64,17 @@ Opus 5.5, branch `t3/siltwake-fanvault-cave` from `feat/siltwake-first-expeditio
 - **Room optics are one number** (`falloff`). Darkness is measured through water, never through rock, so no box-shaped light masks are needed.
 - **World-query contract (R1-03).** The prototype is `createCaveWorldQueries({ solids, floor, caves })`.
   - **Ownership:** inside a footprint only cave rock exists; outside it the exterior heightfield rules.
-  - **Full shape:** any query whose shape, or whose swept move, touches a footprint is answered over the whole actor box against both owners, in clearance, every sweep and every slide. The exterior heightfield in a 5 m collar band becomes conservative 0.5 m column solids, so the existing box CCD sees the ground under every corner.
-  - **Size and slicing:** shapes too large for the band (the carrier) are refused at a cave. Moves are sliced so slides stay inside the modelled band.
-  - **Legacy guards:** every query that doesn't touch a cave goes to `createWorldQueries(solids, floor)` with the original floor function. Its identity-keyed legacy terrain columns and bench cut walls are therefore preserved. Caves plus their band must stay clear of the legacy preserve, and construction throws otherwise.
+  - **Full shape:** any query whose shape touches a footprint is answered over the whole actor box against both owners, in clearance, every sweep and every slide. The exterior heightfield in a collar band (2 × the largest admitted half-extent + 1 m) becomes conservative 0.5 m column solids, so the existing box CCD sees the ground under every corner.
+  - **Per sub-sweep:** a move touching a cave advances in sub-sweeps of at most 0.5 m. Each one picks its owner from its own slide envelope: the cave composite, which holds every exterior solid plus cave rock and collar, or the original exterior world.
+  - **Size:** shapes above the admitted half-extent (the carrier) are refused at a cave.
+  - **Legacy guards:** every query or sub-sweep that doesn't touch a cave goes to `createWorldQueries(solids, floor)` with the original floor function. Its identity-keyed legacy terrain columns and bench cut walls are therefore preserved. Caves plus their band must stay clear of the legacy preserve, and construction throws otherwise.
   - **Support and floor:** `supportHeight` near a cave reads rock tops and collar columns at or below the actor. `groundHeight` is the masked floor.
   - **Local worlds:** cabin and carrier stay their own local worlds.
   - **Wiring:** this belongs in `sim/world.ts` after C3 (coordinator). Outside caves, the exterior world's existing floor policy (centre-sampled clearance; sweeps not floored) is unchanged and out of scope.
 - **Persisted state: none.** Geometry is static and the IDs are stable. Proposal for later: a `player.lampOn` flag plus an input binding (render-only today).
 
-## Checks (R1 revision)
-- `npm test`: **760/760**.
+## Checks (R2 revision)
+- `npm test`: **766/766**. The R1 checks below still hold. `tests/cave-world.test.ts` adds the six R2-04 handover tests, and the lamp test adds the R2-05 pinned-skin oracle and near-rock control.
   - **`tests/caves.test.ts`, geometry:**
     - the shell sits within 0.35 m of rock;
     - no room cell is inside rock;
@@ -110,7 +126,7 @@ Opus 5.5, branch `t3/siltwake-fanvault-cave` from `feat/siltwake-first-expeditio
    - Wire the *World-query contract* above, with `sim/caveWorld.ts` as the reference. Use `caveOwner(def)` for each cave and the original exterior floor function.
    - **Do not** just swap the floor for `withCaveFloors`. That leaves clearance centre-sampled, so a straddling diver passes with a corner 0.33 m in the ground, and it drops the legacy bench and ramp guards (the R1 bench case goes from 37.66 m to 45 m).
    - `tests/cave-world.test.ts` holds the straddle, swept-move, legacy-equality and refusal regressions. Port them to the wired world.
-   - Give cave rock and collar columns their own finer broad phase, about 8 m cells: there are about 6k boxes per cave.
+   - Give cave rock and collar columns their own finer broad phase, about 8 m cells: there are about 11k boxes per cave (1.5k rock and about 10k collar columns).
    - Validators (access, drape, rescue) and recovery must query the same adapter.
    - The tests and lab run in a frame shifted by (+300, +90) only because the baseline `WORLD_BOUNDS` is still the legacy rectangle. Drop `SHIFT` once C3's envelope bounds land.
 2. **`step.ts` / `hullFloor`.**
@@ -137,4 +153,5 @@ Opus 5.5, branch `t3/siltwake-fanvault-cave` from `feat/siltwake-first-expeditio
 - **Performance is barely measured.** R1 measured the lab vault at a 16.7 ms median frame on the 3090, which is a lab cadence, not a game budget. The lamp walk costs up to 200 voxel steps per lamp-lit cave fragment.
 - **Lamp shadowing is conservative.** It is per 0.5 m voxel, and a surface lit at a grazing angle near rock (Lambert below about 0.3) can fall in its own skin's shadow. Fragments outside the cave field are not occluded.
 - **Adapter collar is approximate.** Its columns are 0.5 m cells topped at the highest of nine floor samples plus 2 cm, so a shape at a cave edge can rest up to a few centimetres above the true ground. It is a prototype, not the wired world.
+- **Sub-sweeps change contact back-off.** Near caves, moves run as up to 0.5 m sub-sweeps, so the 1e-4 contact back-off is per sub-sweep: the shape stops up to a millimetre closer than one long sweep would. Outside the cave model, the exterior's unswept floor policy is unchanged; R2's ramp case gets exactly the exterior world's outcome.
 - **Not covered here:** no route, access or rescue validator knows about roofs yet (W1 and W2), and no saves are involved.
