@@ -14,13 +14,13 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 | Work | Owner | Branch / worktree | Owns | Next |
 | --- | --- | --- | --- | --- |
 | M2-B1: earned Creel and mobile refuge | Opus 5.5 high | `t3/earned-creel-mobile-refuge-loop` / `t3-b6aef8ec` | The roots listed in DIRECTION | Handoff, then a fresh Sol review |
-| GPU enablement bundle | Opus 5.5 high (author) | `t3/enable-3090-gpu` / `t3-b9861fd3` | `docs/build/gpu-enablement/` | Sol R3 review on `8d6dba9` is running |
+| GPU enablement bundle | Opus 5.5 high (author) | `t3/enable-3090-gpu` / `t3-b9861fd3` | `docs/build/gpu-enablement/` | R3 accepted; the MMIO-window fix is in progress |
 | New parallel streams | See [streams](STREAMS.md) | | | |
 
 **Next**
 1. GPU: R3 accepted → place the bundle in Fleet → the owner approves the rehearsal → install the guest driver → checkpoint → the owner approves the attach → run the 3090 browser smoke.
 2. B1 handoff → Sol review → integrate. Then: save simplification, test tiers, compose the parallel streams, the world scale slice, and a rough complete campaign.
 
-**Blocking:** none. All GPU findings so far are fixed; R3 is pending.
+**Blocking:** GPU attach. The real rehearsal `20261020T003504Z-f08a` ended `preflight-failed` with nothing changed. Resizable BAR on the host gives BAR1 32 GiB, but the guest's OVMF 64-bit window is exactly 32 GiB. The fix is a 64 GiB OVMF window (`X-PciMmio64Mb`) added with the hostdevs; the GPU author is implementing it, then a fresh Sol review and a new rehearsal follow. The fallback is the owner disabling ReBAR in the BIOS.
 
 **Unverified:** human pacing and enjoyment, the audible mix, 3090 rendering, full-world memory and eviction.
