@@ -7,3 +7,4 @@ These files are the append-only history up to 2026-10-19. They are kept for audi
 - [Opus coordinator handoff](OPUS_COORDINATOR_HANDOFF.md)
 - [VM upgrade handoff](VM_UPGRADE_HANDOFF.md)
 - `../reviews/`, `../evidence/` and `../tasks/` hold historical reviews, dispositions, integration receipts and briefs. Before relying on any of them, check them against [DIRECTION](../DIRECTION.md).
+- [STATUS-gpu-attach-2026-10-20.md](STATUS-gpu-attach-2026-10-20.md): the GPU attach procedure and second-attempt log, moved out of STATUS.
