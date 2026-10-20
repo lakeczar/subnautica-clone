@@ -10,6 +10,7 @@ import { disableVehicle } from "../src/sim/recovery.js";
 import { serviceRefusal, serviceWouldRestore } from "../src/sim/vehicles.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameCommand, GameState, WorldQueries } from "../src/sim/types.js";
+import { UI_SCENARIOS } from "./ui-scenarios.js";
 
 /** Panel-local port: checks construction/intent against real simulation commands.
  * Actual layout, native details and keyboard focus are exercised in the browser. */
@@ -52,7 +53,7 @@ function panelFixture(t: test.TestContext, world: WorldQueries = createWorldQuer
   const recipe = (id: string) => html().split(`data-recipe="${id}"`)[1]!.split("</article>")[0]!;
   const groupOf = (id: string) => {
     const before = html().slice(0, html().indexOf(`data-recipe="${id}"`));
-    return [...before.matchAll(/data-recipe-group="([^"]*)"|data-panel-group="(completed-recipes)"/g)].at(-1)?.slice(1).find(Boolean);
+    return [...before.matchAll(/data-recipe-group="([^"]*)"|data-panel-group="(completed-recipes|locked-recipes)"/g)].at(-1)?.slice(1).find(Boolean);
   };
   return { panel, get, html, commands, controls, recipe, groupOf };
 }
@@ -97,11 +98,12 @@ test("usable counts exclude inaccessible carried/elsewhere quantities without ov
   addItem(s, "conductive_crust", 30, "equipment", "tools");
   panel.refresh("craft", s);
   assert.equal(available(s, "conductive_crust", fabricationContainers(s, "island_workshop")), 9);
-  assert.match(recipe("dart_acoustic_trim"), /Conductive crust: 9 \/ 2.*\(\+5 elsewhere, unavailable here\)/);
+  assert.match(recipe("dart_acoustic_trim"), /Conductive crust: 9 \/ 2.*Not usable at this bench · Conductive crust: \+5 elsewhere/);
   assert.ok(!recipe("dart_acoustic_trim").includes("+2 carried"), "carried stock already usable is not added twice");
   s.player.mode = "piloting"; s.player.controlledVehicleId = v.id; s.player.pose = structuredClone(v.pose);
   panel.refresh("craft", s);
-  assert.match(recipe("dart_acoustic_trim"), /Conductive crust: 0 \/ 2.*\(\+2 carried, unavailable here\).*\(\+12 elsewhere, unavailable here\)/);
+  assert.match(recipe("dart_acoustic_trim"), /Conductive crust: 0 \/ 2.*Conductive crust: \+2 carried, \+12 elsewhere/);
+  assert.match(recipe("dart_acoustic_trim"), /Leave the craft to use a bench/, "a seated pilot gets the actionable site reason");
   assert.match(recipe("dart_acoustic_trim"), /away from this bench/);
 });
 
@@ -111,7 +113,7 @@ test("prerequisites are named and a site refusal with short stock stays blocked;
   s.player.pose.position = { x: 10, y: 2, z: -35 };
   addItem(s, "structural_alloy", 8, "workshop_locker");
   panel.refresh("craft", s);
-  assert.equal(groupOf("dart_base"), "blocked");
+  assert.equal(groupOf("dart_base"), "locked-recipes", "unmet prerequisites collapse");
   assert.match(recipe("dart_base"), /Needs: Restore workshop services.*Fit 150 m pressure suit/);
   assert.match(recipe("restore_workshop"), /Structural alloy: 0 \/ 3/);
   assert.match(html(), /repair needed; locker locked/);
@@ -120,7 +122,7 @@ test("prerequisites are named and a site refusal with short stock stays blocked;
   s.knowledge.crafted.push("pod_repair");
   panel.refresh("craft", s);
   assert.equal(groupOf("essential_tools"), "blocked", "wrong site wins even when materials are also missing");
-  assert.match(html(), /Required bench.*Home pod/);
+  assert.match(recipe("essential_tools"), /action-reason[^>]*>At Home pod · [NSEW]+ · \d+ m</, "the row names where to go");
 });
 
 test("protected maintenance counts are separate from abundant public stock and command refusal is atomic", (t) => {
@@ -437,7 +439,8 @@ test("M2 preparation presents the paid in-place personal refit beside the unchan
   assert.match(recipe("suit_350"), /Structural alloy: 2 \/ 2/);
   assert.match(recipe("suit_350"), /Conductive crust: 4 \/ 4/);
   assert.match(recipe("suit_350"), /Splitspine workshop bench · restored/);
-  assert.equal(refit().disabled, false); assert.equal(refit().label, "Refit fitted suit · 350 m");
+  assert.equal(refit().disabled, false); assert.equal(refit().label, "Refit");
+  assert.match(refit().attrs, /aria-label="Refit personal suit \/ 350 m"/);
   assert.deepEqual(s, before);
   const result = executeCommand(s, refit().command, createWorldQueries());
   assert.equal(result.events.some(e => e.type === "notice" && e.error), false);
@@ -556,4 +559,22 @@ test("the fabricator lists only known plans; Basin plans add exactly the earned 
   panel.refresh("notebook", s);
   assert.match(html(), /Plans retained · 2/);
   assert.match(html(), /Research knowledge · construction not available yet\./);
+});
+
+test("the first fabrication shows the next useful row with one reason; detail and prerequisite work collapse", (t) => {
+  const { panel, html, recipe, groupOf, controls } = panelFixture(t);
+  const s = UI_SCENARIOS["opening-fabrication"](), before = structuredClone(s);
+  panel.refresh("craft", s);
+  assert.equal(groupOf("pod_repair"), "blocked");
+  for (const id of ["essential_tools", "suit_150", "reserve_cells"]) assert.equal(groupOf(id), "locked-recipes", id);
+  assert.ok(!html().includes('data-panel-group="locked-recipes" open'), "locked work starts collapsed");
+  assert.equal(html().match(/class="action-reason"/g)?.length, 4, "one reason per row");
+  assert.match(recipe("pod_repair"), /action-reason[^>]*>At Home pod · [NSEW]+ · \d+ m</);
+  assert.ok(!/data-panel-group="recipe:[^"]*" open/.test(html()), "sources and preparation sit behind selection");
+  assert.match(recipe("pod_repair"), /Silica glass: 0 \/ 1.*Silica glass: \+2 carried/);
+  assert.doesNotMatch(html(), /Required bench|Have here \/ needed<\/p>|Material sources/, "no repeated bench guidance");
+  const repair = controls().find((b) => b.command.type === "craft" && b.command.recipeId === "pod_repair")!;
+  assert.equal(repair.label, "Repair"); assert.match(repair.attrs, /aria-label="Repair pod regulator &amp; bench"/);
+  assert.match(repair.attrs, /aria-describedby=/);
+  assert.deepEqual(s, before);
 });

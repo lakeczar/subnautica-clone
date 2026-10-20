@@ -11,9 +11,14 @@ export const escapeHtml = (s: string): string =>
       ]!,
   );
 
-export function bearing(from: Vec3, to: Vec3): string {
+/** Compass point and distance only, for compact rows: "NW · 20 m". */
+export function heading(from: Vec3, to: Vec3): string {
   const degrees = (Math.atan2(to.x - from.x, from.z - to.z) * 180 / Math.PI + 360) % 360;
-  return `${["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(degrees / 45) % 8]} · ${Math.round(distance(from, to))} m away · ${Math.max(0, -to.y).toFixed(0)} m depth`;
+  return `${["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(degrees / 45) % 8]} · ${Math.round(distance(from, to))} m`;
+}
+
+export function bearing(from: Vec3, to: Vec3): string {
+  return `${heading(from, to)} away · ${Math.max(0, -to.y).toFixed(0)} m depth`;
 }
 
 // Saved recovery notices are compatibility data. Only their display is softened.

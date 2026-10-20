@@ -7,7 +7,7 @@ import { RECOVERY_ROUTES, RECOVERY_SURFACE_OPERATOR } from "../content/routes.js
 import type { ItemKind, MountKind, RecipeId } from "../content/registry.js";
 import { isMountKind } from "../content/registry.js";
 import {
-  available, containerAccessible, distance, equipped, fabricationContainers,
+  available, containerAccessible, containerLabel as inventoryLabel, distance, equipped, fabricationContainers,
   facility, hasRoom, localBenchSite, materialStoragePreview, nearCanopyStop, nearPod,
   nearWorkshop, supportedServiceSite, usedCapacity,
 } from "../sim/inventory.js";
@@ -18,19 +18,20 @@ import { dartPerformance, installModuleRefusal, mountChangePreview, removeModule
 import { canisterSalvagePreview } from "../sim/recovery.js";
 import { cabinHull, fittedMount, holdCapacity, mobileRefugeBlock, mountLabel } from "../sim/fleet.js";
 import type { GameCommand, GameState, ItemStack, VehicleState, WorldQueries } from "../sim/types.js";
-import { bearing, escapeHtml, recoveryDisplay } from "./format.js";
+import { bearing, escapeHtml, heading, recoveryDisplay } from "./format.js";
 
 export type PanelKind = "inventory" | "craft" | "notebook" | "carrier";
-type CommandButton = (label: string, command: GameCommand, disabled?: boolean, reason?: string) => string;
+/** `name` gives a short visible verb its full accessible name, e.g. "Repair" → "Repair · Pod regulator". */
+type CommandButton = (label: string, command: GameCommand, disabled?: boolean, reason?: string, name?: string) => string;
 
+/** Display names over the simulation's labels, so every destination stays distinct. */
 function containerLabel(state: GameState, id: string): string {
-  if (id === "diver") return "Diver hold";
   if (id === "equipment") return "Retained equipment";
   if (id === "buoy_hold") return "Deployed buoy";
-  if (id === "pod_locker") return "Pod locker";
-  if (id === "workshop_locker") return "Workshop locker";
-  const v = state.fleet.vehicles.find((v) => v.cargoId === id);
-  return v ? `${HULLS[v.hull].label} hold` : "Visited cargo cache";
+  const cache = state.recovery.caches.find((c) => c.containerId === id);
+  if (cache) return cache.id.startsWith("canister") ? "Salvage canister" : "Visited cargo cache";
+  const label = inventoryLabel(state, id);
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 // GameView owns panel visibility, the latest state and all input listeners.
@@ -98,7 +99,7 @@ export class PanelView {
     this.renderedKind = kind;
     this.commands.clear();
     this.get("carrier-nav").hidden = state.scenario !== "carrier-fixture";
-    const button: CommandButton = (label, command, disabled = false, reason) => {
+    const button: CommandButton = (label, command, disabled = false, reason, name) => {
       const id = `command-${this.commands.size}`;
       this.commands.set(id, command);
       // Every operand identifies the action, independently of its label or render order.
@@ -108,7 +109,7 @@ export class PanelView {
         : command.type === "transfer" ? `move:${command.itemId}`
         : command.type === "service" || command.type === "reserve" ? `vessel:${command.vehicleId}`
         : command.type === "store-materials" ? "storage" : "";
-      return `<span class="panel-action"><button data-action="${id}" data-command-key="${escapeHtml(key)}" data-focus-fallback="${escapeHtml(fallback)}"${command.type === "craft" && !disabled ? ' class="primary"' : ""}${disabled ? " disabled" : ""}${reason ? ` aria-describedby="${id}-reason"` : ""}>${escapeHtml(label)}</button>${reason ? `<small class="action-reason" id="${id}-reason">${escapeHtml(reason)}</small>` : ""}</span>`;
+      return `<span class="panel-action"><button data-action="${id}" data-command-key="${escapeHtml(key)}" data-focus-fallback="${escapeHtml(fallback)}"${command.type === "craft" && !disabled ? ' class="primary"' : ""}${disabled ? " disabled" : ""}${name ? ` aria-label="${escapeHtml(name)}"` : ""}${reason ? ` aria-describedby="${id}-reason"` : ""}>${escapeHtml(label)}</button>${reason ? `<small class="action-reason" id="${id}-reason">${escapeHtml(reason)}</small>` : ""}</span>`;
     };
     this.get("panel-title").textContent = {
       inventory: "Cargo",
@@ -452,6 +453,10 @@ export class PanelView {
   }
 
   private fabricate(state: GameState, button: CommandButton): string {
+    const atPod = nearPod(state), atWorkshop = nearWorkshop(state) && !state.player.interiorId, atStop = nearCanopyStop(state);
+    const atBench = (site: Recipe["site"]): boolean => site === "island_workshop" ? atWorkshop : site === "canopy_stop" ? atStop : atPod;
+    const benchOf = (site: Recipe["site"]): "home_pod" | "island_workshop" | "canopy_stop" =>
+      site === "island_workshop" || site === "canopy_stop" ? site : "home_pod";
     const recipes = (Object.keys(RECIPES) as RecipeId[]).filter((id) => state.knowledge.blueprints.includes(RECIPES[id].bp)).map((id) => {
       const r = RECIPES[id];
       const done = r.once && state.knowledge.crafted.includes(id);
@@ -460,60 +465,82 @@ export class PanelView {
       // Ownership is live, independent of whichever validation check wins first.
       // In particular a seated owner still sees Current craft, with the site refusal.
       const group = dart ? "current" : done ? "completed" : block === null ? "ready"
+        : block.code === "needs" ? "locked"
         : block.code === "materials" || block.code === "rescue-low" ? "materials" : "blocked";
       return { id, r, done, block, dart, group };
     });
-    const atPod = nearPod(state), atWorkshop = nearWorkshop(state) && !state.player.interiorId, atStop = nearCanopyStop(state);
     const current = atPod ? `Home pod bench · ${facility(state, "pod_fabricator") ? "restored" : "repair needed"}`
       : atWorkshop ? `Splitspine workshop bench · ${facility(state, "island_workshop") ? "restored" : "repair needed; locker locked"}`
       : atStop ? `Outer-crown mooring mast · ${facility(state, "canopy_stop") ? "restored" : "dark; locker locked"}`
       : `No bench here${state.player.controlledVehicleId ? " · exit the craft to use a bench" : ""}`;
-    const benchOf = (site: Recipe["site"]): "home_pod" | "island_workshop" | "canopy_stop" =>
-      site === "island_workshop" || site === "canopy_stop" ? site : "home_pod";
-    const atBench = (site: Recipe["site"]): boolean => site === "island_workshop" ? atWorkshop : site === "canopy_stop" ? atStop : atPod;
-    const required = [...new Set(recipes.filter((r) => !r.done && !atBench(r.r.site)).map((r) => benchOf(r.r.site)))];
-    const directions = required.filter((id) => id === "home_pod" || state.knowledge.markers.includes(id) || facility(state, id))
-      .map((id) => `${PLACES[id].label} · ${bearing(state.player.pose.position, PLACES[id].position)}`);
-    let html = `<p class="panel-status">${current} · ${this.protection(state)}</p>${directions.length ? `<p class="bench-direction">Required bench${directions.length > 1 ? "es" : ""}: ${escapeHtml(directions.join(" · "))}</p>` : ""}<p class="recipe-count-label">Have here / needed</p>`;
+    let html = `<p class="panel-status">${current} · ${this.protection(state)}</p><p class="sr-only">Costs read have here / needed.</p>`;
     const render = ({ id, r, done, block, dart }: typeof recipes[number]): string => {
       const bins = fabricationContainers(state, r.site);
-      const missingSteps = r.needs.filter((n) => !state.knowledge.crafted.includes(n as RecipeId));
       const isWorkshop = r.site === "island_workshop", isStop = r.site === "canopy_stop";
-      const atSite = atBench(r.site);
       const restored = facility(state, isWorkshop ? "island_workshop" : isStop ? "canopy_stop" : "pod_fabricator");
       const bench = isWorkshop ? "Splitspine workshop bench" : isStop ? "Outer-crown mooring mast" : r.site === "home_pod" ? "Home pod repair bench" : "Home pod fabricator";
       const trim = state.inventory.items.find((i) => i.kind === "dart_acoustic_trim");
       const completion = id === "dart_acoustic_trim" ? trim && state.fleet.vehicles.some((v) => v.modules.includes(trim.id)) ? "installed" : "fabricated" : "completed";
+      const short: string[] = [], away: string[] = [];
+      let fetchable = true;
       const costs = Object.entries(r.cost).map(([k, q]) => {
         const kind = k as ItemKind;
         if (done) return `<span class="ingredient">${ITEMS[kind].label}: ${q}</span>`;
         const have = r.maintenance ? kind === "structural_alloy" ? state.world.maintenance.alloy : kind === "silica_glass" ? state.world.maintenance.glass : state.world.maintenance.membrane : available(state, kind, bins);
         const carried = r.maintenance || bins.includes("diver") ? 0 : available(state, kind, ["diver"]);
         const elsewhere = r.maintenance ? 0 : available(state, kind, state.inventory.containers.filter((c) => c.id !== "diver" && !bins.includes(c.id)).map((c) => c.id));
-        return `<span class="ingredient${have < q ? " missing" : ""}">${ITEMS[kind].label}: ${have} / ${q}${carried ? ` <small>(+${carried} carried, unavailable here)</small>` : ""}${elsewhere ? ` <small>(+${elsewhere} elsewhere, unavailable here)</small>` : ""}</span>`;
+        if (have < q) { short.push(`${q - have} ${ITEMS[kind].label}`); if (carried + elsewhere < q - have) fetchable = false; }
+        if (carried || elsewhere) away.push(`${ITEMS[kind].label}: ${[carried ? `+${carried} carried` : "", elsewhere ? `+${elsewhere} elsewhere` : ""].filter(Boolean).join(", ")}`);
+        return `<span class="ingredient${have < q ? " missing" : ""}">${ITEMS[kind].label}: ${have} / ${q}</span>`;
       }).join("");
-      const nextStep = block?.code === "needs" ? `Needs: ${missingSteps.map((n) => RECIPES[n as RecipeId].label).join(" → ")}`
-        : block?.code === "restore" ? `First: ${isWorkshop ? RECIPES.restore_workshop.label : RECIPES.pod_repair.label}`
-        : block?.code === "refit" ? block.message : "";
       const inCradle = dart && !dart.disabled && !dart.berth &&
         state.player.controlledVehicleId !== dart.id && state.player.interiorId !== dart.id &&
         supportedServiceSite(state, dart) === "island_workshop" && distance(dart.pose.position, HULL_BUILD[dart.hull as "dart" | "creel"].pose) < 1.5 &&
         Math.hypot(dart.velocity.x, dart.velocity.y, dart.velocity.z) < 0.2;
-      const location = !dart ? "" : dart.disabled ? `disabled · ${bearing(state.player.pose.position, dart.pose.position)}`
+      const location = !dart ? "" : dart.disabled ? `disabled · ${heading(state.player.pose.position, dart.pose.position)}`
         : state.player.controlledVehicleId === dart.id ? "piloting"
         : state.player.interiorId === dart.id ? "occupied"
-        : dart.berth ? "berthed" : inCradle ? "in cradle" : bearing(state.player.pose.position, dart.pose.position);
+        : dart.berth ? "berthed" : inCradle ? "in cradle" : heading(state.player.pose.position, dart.pose.position);
+      // One actionable reason in the row; the exact refusal stays in the details.
+      const place = PLACES[benchOf(r.site)];
+      const missingSteps = r.needs.filter((n) => !state.knowledge.crafted.includes(n as RecipeId));
+      const reason = !block ? undefined
+        : dart ? `${HULLS[dart.hull].label} owned — ${location}`
+        : block.code === "site" ? state.player.controlledVehicleId || state.player.interiorId ? "Leave the craft to use a bench"
+          : `At ${place.label}${benchOf(r.site) === "home_pod" || state.knowledge.markers.includes(benchOf(r.site)) || facility(state, benchOf(r.site)) ? ` · ${heading(state.player.pose.position, place.position)}` : ""}`
+        : block.code === "needs" ? `Needs: ${missingSteps.map((n) => RECIPES[n as RecipeId].label).join(" → ")}`
+        : block.code === "restore" ? `First: ${isWorkshop ? RECIPES.restore_workshop.label : RECIPES.pod_repair.label}`
+        : block.code === "materials" ? `${fetchable ? "Bring" : "Need"} ${short.slice(0, 2).join(", ")}${short.length > 2 ? " …" : ""}`
+        : block.message;
+      const refit = refitHull(id);
       const sources = r.maintenance ? "Rescue stock only · protected from ordinary fabrication" : `Local sources: ${bins.length ? bins.map((c) => containerLabel(state, c)).join(" · ") : "none at this recipe’s bench"}${bins.some((c) => state.fleet.vehicles.some((v) => v.cargoId === c)) ? " (includes supported-cradle cargo)" : ""}`;
       const habitats = Object.entries(SOURCES).filter(([sourceId, source]) => source.item in r.cost && state.knowledge.scans.includes(sourceId));
-      const refit = refitHull(id);
-      return `<article class="recipe" data-recipe="${id}" data-readiness="${dart ? "current" : done ? "completed" : block === null ? "ready" : "blocked"}" data-focus-key="recipe:${id}" tabindex="-1"><div><h3>${r.label}${dart ? ` · ${HULLS[dart.hull].label} owned — ${escapeHtml(location)}` : done ? ` · ${completion}` : ""}</h3>${id === "suit_350" ? `<p class="refit-scope">${done ? "Fitted personal suit 350 m" : "Paid in-place refit · fitted suit 150 → 350 m"} · ${state.fleet.vehicles.filter((v) => !v.berth && v.hull !== "hearthline").map((v) => `${HULLS[v.hull].label} hull stays ${v.rating} m`).join(" · ") || "hull ratings are separate"}.</p>` : ""}${refit ? `<p class="refit-scope">Hull refit · ${HULLS[refit].label} ${HULLS[refit].initialDepth} → 350 m · your suit limit is separate.</p>` : ""}${dart ? `<p>One ${HULLS[dart.hull].label} at a time · salvage its frame to rebuild.</p>` : ""}${done ? '<small>Current recipe reference</small>' : ""}<p class="recipe-costs">${costs}</p><small>${bench} · ${restored ? "restored" : id === "pod_repair" || id === "restore_workshop" ? "repair available before restoration" : "restore services first"}${!atSite ? " · away from this bench" : ""}${r.maintenance ? " · rescue stock only" : ""}</small>${nextStep ? `<p class="recipe-status">${escapeHtml(nextStep)}</p>` : ""}${done ? "" : this.group(`recipe-sources:${id}`, "Material sources", `<p class="recipe-sources">${escapeHtml(sources)}.</p>${habitats.length ? `<p class="recipe-sources">Known habitats: ${habitats.map(([, source]) => `${escapeHtml(source.label)} · ${REGIONS[source.region].label}`).join("; ")}. Full records in Notebook.</p>` : ""}${isWorkshop && !restored ? "<p>The unrestored workshop locker stays locked. Restore with carried materials or a nearby deployed buoy.</p>" : ""}`)}</div>${done ? "" : button(id === "suit_350" ? "Refit fitted suit · 350 m" : refit ? `Refit ${HULLS[refit].label} · 350 m` : id === "restore_canopy_stop" ? "Restore mooring" : `Fabricate · ${r.label}`, { type: "craft", recipeId: id }, block !== null, block?.message)}</article>`;
+      const detail = [
+        id === "suit_350" ? `<p class="refit-scope">${done ? "Fitted personal suit 350 m" : "Paid in-place refit · fitted suit 150 → 350 m"} · ${state.fleet.vehicles.filter((v) => !v.berth && v.hull !== "hearthline").map((v) => `${HULLS[v.hull].label} hull stays ${v.rating} m`).join(" · ") || "hull ratings are separate"}.</p>` : "",
+        refit ? `<p class="refit-scope">Hull refit · ${HULLS[refit].label} ${HULLS[refit].initialDepth} → 350 m · your suit limit is separate.</p>` : "",
+        dart ? `<p>One ${HULLS[dart.hull].label} at a time · salvage its frame to rebuild.</p>` : "",
+        `<p>${bench} · ${restored ? "restored" : id === "pod_repair" || id === "restore_workshop" ? "repair available before restoration" : "restore services first"}${!atBench(r.site) ? " · away from this bench" : ""}${r.maintenance ? " · rescue stock only" : ""}</p>`,
+        block && block.message !== reason ? `<p class="recipe-status">${escapeHtml(block.message)}</p>` : "",
+        away.length ? `<p class="recipe-sources">Not usable at this bench · ${escapeHtml(away.join(" · "))}</p>` : "",
+        done ? "" : `<p class="recipe-sources">${escapeHtml(sources)}.</p>`,
+        !done && habitats.length ? `<p class="recipe-sources">Known habitats: ${habitats.map(([, source]) => `${escapeHtml(source.label)} · ${REGIONS[source.region].label}`).join("; ")}.</p>` : "",
+        !done && isWorkshop && !restored ? "<p>The unrestored workshop locker stays locked. Restore with carried materials or a nearby deployed buoy.</p>" : "",
+      ].join("");
+      const verb = id === "pod_repair" ? "Repair" : id.startsWith("restore_") ? "Restore" : id === "suit_350" || refit ? "Refit"
+        : hullOutput(r) ? "Build" : id === "strip_frame" ? "Strip" : "Fabricate";
+      const action = done ? `<span class="recipe-done">${completion}</span>`
+        : button(verb, { type: "craft", recipeId: id }, block !== null, reason, r.label.startsWith(verb) ? r.label : `${verb} · ${r.label}`);
+      return `<article class="recipe" data-recipe="${id}" data-readiness="${dart ? "current" : done ? "completed" : block === null ? "ready" : "blocked"}" data-focus-key="recipe:${id}" tabindex="-1">${this.group(`recipe:${id}`, `<span class="recipe-name">${r.label}</span><span class="recipe-costs">${costs}</span>`, `<div class="recipe-more">${detail}</div>`)}${action}</article>`;
     };
-    for (const [group, label] of [["ready", "Ready here"], ["materials", "Needs materials"], ["blocked", "Needs preparation / another bench"], ["current", "Current craft"]] as const) {
+    // The next useful work leads; prerequisites, completed work and owned craft collapse.
+    for (const [group, label] of [["ready", "Ready"], ["materials", "Needs materials"], ["blocked", "Blocked"], ["current", "Owned craft"]] as const) {
       const rows = recipes.filter((r) => r.group === group);
       if (rows.length) html += `<section class="recipe-group" data-recipe-group="${group}"><h3>${label} <small>${rows.length}</small></h3>${rows.map(render).join("")}</section>`;
     }
-    const completed = recipes.filter((r) => r.done);
-    if (completed.length) html += this.group("completed-recipes", `Completed · <small>${completed.length}</small>`, completed.map(render).join(""));
+    const locked = recipes.filter((r) => r.group === "locked");
+    if (locked.length) html += this.group("locked-recipes", `Locked <small>${locked.length}</small>`, locked.map(render).join(""));
+    const completed = recipes.filter((r) => r.group === "completed");
+    if (completed.length) html += this.group("completed-recipes", `Completed <small>${completed.length}</small>`, completed.map(render).join(""));
     if (!recipes.length) html += "<p>Inspect the pod regulator to recover its checklist.</p>";
     return html;
   }

@@ -60,7 +60,6 @@
 .game-panel nav button[aria-current="page"] { background: #49635a; border-color: #e2cb97; color: #fff0cf; }
 .game-panel article, .game-panel button { overflow-wrap: anywhere; }
 .game-panel .panel-status { margin: 12px 0 8px; color: #e2ead8; font-size: 13px; }
-.game-panel .bench-direction, .game-panel .recipe-count-label { font-size: 13px; }
 #panel-feedback { margin: 8px 0; padding: 8px 12px; border-left: 3px solid #d3c28c; background: #163b48fa; font-size: 13px; line-height: 1.5; pointer-events: none; }
 #panel-feedback.error { border-color: #ffc789; color: #ffe3bb; }
 .panel-group > summary { cursor: pointer; color: #ecedda; font-size: 14px; line-height: 1.6; }
@@ -101,18 +100,27 @@
 .fitting-choice { margin-top: 8px; }
 .bench-charge { margin-top: 12px; padding-top: 12px; border-top: 1px solid #b8c7a340; }
 .no-charge-options { display: block; margin-top: 8px; }
-.recipe { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.recipe > div { flex: 1; min-width: 0; }
-.recipe > .panel-action { flex: 0 1 250px; text-align: left; }
-.recipe-costs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .ingredient { display: inline-block; color: #d6e7d3; font-size: 13px; }
 .ingredient.missing, .recipe-status { color: #ffe0ad !important; }
 .recipe-ready { color: #c4f0cf !important; }
-.recipe-group { margin-top: 14px; }
+/* Recipe rows: name and costs are the disclosure; one reason sits beside the action. */
+.game-panel .recipe { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px 16px; margin: 4px 0; padding: 7px 12px; }
+.recipe > .panel-group { flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; background: none; }
+.recipe > .panel-group > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; line-height: 1.5; }
+.recipe > .panel-group > summary { list-style: none; }
+.recipe > .panel-group > summary::-webkit-details-marker { display: none; }
+.recipe > .panel-group > summary::before { content: "▸"; margin-right: -8px; color: #a9c2b9; font-size: 11px; }
+.recipe > .panel-group[open] > summary::before { content: "▾"; }
+.recipe-name { color: #ecedda; font-size: 14px; }
+.recipe-costs { display: inline-flex; flex-wrap: wrap; gap: 0 12px; }
+.recipe > .panel-action { flex: 0 1 auto; flex-direction: row-reverse; align-items: center; gap: 4px 10px; max-width: 48%; }
+.recipe > .panel-action > button { margin: 0; padding: 5px 12px; white-space: nowrap; }
+.recipe .action-reason { text-align: right; }
+.game-panel .recipe-more p { margin: 4px 0; font-size: 12px; line-height: 1.5; }
+.recipe-done { align-self: center; color: #c4f0cf; font-size: 12px; }
+.recipe-group { margin-top: 10px; }
+.recipe-group > h3 { margin-bottom: 4px; }
 .recipe-group > h3 { color: #e9e3c6; }
-.recipe .panel-group { padding: 0; margin: 5px 0 0; border: 0; background: none; }
-.recipe .panel-group > summary { font-size: 12px; }
-.recipe .panel-group > p { font-size: 12px; }
 .game-panel .dive-check p { font-size: 13px; }
 .game-panel .provenance { color: #d3dfc9; font-size: 12px; }
 .finding b { color: #f0d39a; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; }
@@ -133,8 +141,8 @@
   .game-panel h2 { font-size: 26px; }
   .panel-header nav { order: 2; width: 100%; }
   .recovery-choices { grid-template-columns: 1fr; }
-  .recipe { align-items: stretch; flex-direction: column; gap: 8px; }
-  .recipe > .panel-action { flex-basis: auto; }
+  .game-panel .recipe { align-items: stretch; flex-direction: column; gap: 6px; }
+  .recipe > .panel-action { max-width: none; justify-content: flex-end; }
   .here-row { flex-wrap: wrap; }
   .here-row > .panel-action { max-width: 100%; }
   .storage-operands { flex-wrap: wrap; }
