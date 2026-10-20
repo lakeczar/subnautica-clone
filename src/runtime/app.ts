@@ -1,5 +1,6 @@
 import { armTarget, fittedCabin } from "../sim/fleet.js";
-import { Soundscape } from "../audio/sound.js";
+import { SiltwakeAudio } from "../audio/director.js";
+import { worldRegionAt } from "../render/regions.js";
 import { executeCommand, stepGame } from "../sim/step.js";
 import { createWorldQueries } from "../sim/world.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
@@ -72,7 +73,12 @@ function readSettings(): Settings {
 
 /** The single lifecycle owner. Simulation never touches the DOM, storage or Babylon. */
 export class SiltwakeApp {
-  private readonly sound = new Soundscape();
+  // Ambience follows C2's WorldMap, the map region selection uses; outside it, the last region holds.
+  private readonly sound = new SiltwakeAudio({
+    regionAt: worldRegionAt,
+    onCaption: (caption) => this.view.audioCaption(caption, this.state),
+  });
+  private resolutionPhase: string | null = null;
   private panelOpen = false;
   private readonly abort = new AbortController();
   private readonly clock = new FixedStepClock();
@@ -419,6 +425,9 @@ export class SiltwakeApp {
   private entered(): void {
     if (this.disposed) return;
     this.sessionGeneration++;
+    // A loaded save neither replays its history nor inherits old cooldowns.
+    this.sound.reset();
+    this.resolutionPhase = this.state?.story.resolution.phase ?? null;
     this.resetAscent();
     this.cancelGesture();
     this.view.resetPresentation();
@@ -482,24 +491,23 @@ export class SiltwakeApp {
       if (event.type === "sound" && event.source === "threat-call" && event.origin && this.state &&
         [event.origin.x, event.origin.y, event.origin.z].every(Number.isFinite))
         this.view.threatCall(event.origin, this.state);
-      if (event.type === "impact" && event.hullLoss > 0) {
-        this.view.impact(event.hullLoss, this.state);
-        this.sound.event({ type: "sound", cue: "impact" }, this.state);
-      }
+      if (event.type === "impact" && event.hullLoss > 0) this.view.impact(event.hullLoss, this.state);
       if (event.type === "interaction-panel") this.openPanel(event.panel, event.targetId);
-      this.sound.event(event, this.state);
     }
+    // One batch per step: the mapper reads impact and threat-damage itself and
+    // keeps the hunter's bearing on the single injury hit.
+    this.sound.events(events, this.state);
+    // S5's resolution scene begins: the ending piece plays once.
+    const phase = this.state?.story.resolution.phase ?? null;
+    if (phase === "first" && this.resolutionPhase === "none") this.sound.moment("ending");
+    this.resolutionPhase = phase;
     // Deliver injury after this batch's outcomes. The view observes the exact
     // installed step state before accepting its event target (including a
     // disabled, still-controlled hull). No frame-final health inference.
     const outcomeSpeaks = events.some(e => e.type === "notice" && e.channel === "hazard" &&
       (e.context === "hull" || e.context === "recovery"));
-    const damageCue = events.some(e => e.type === "impact" && e.hullLoss > 0 ||
-      e.type === "sound" && ["damage", "impact", "recovery"].includes(e.cue));
-    for (const event of events) if (event.type === "threat-damage" && this.active && this.state) {
-      if (this.view.threatDamage(event, this.state, outcomeSpeaks) && !damageCue)
-        this.sound.event({ type: "sound", cue: "damage" }, this.state);
-    }
+    for (const event of events) if (event.type === "threat-damage" && this.active && this.state)
+      this.view.threatDamage(event, this.state, outcomeSpeaks);
   }
 
   private resetAscent(resetThrust = true): void {

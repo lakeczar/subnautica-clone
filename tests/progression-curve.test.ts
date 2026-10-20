@@ -17,7 +17,10 @@ const world = createWorldQueries();
 const ids = Object.keys(RECIPES) as RecipeId[];
 /** M2-B1 recipes. Their full earned chain is proved in tests/m2-b1-economy.test.ts. */
 const B1 = ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "restore_canopy_stop", "creel_350", "dart_350"] as const;
-const PRE_B1 = ids.filter((id) => !(B1 as readonly string[]).includes(id));
+/** S5 works recipes. Their plans come from evidence S2 has not placed yet, and two
+ * use materials with no source yet; tests/story-composed.test.ts reports both. */
+const STORY = ["service_power_assembly", "service_air_assembly", "pod_buffer"] as const;
+const PRE_B1 = ids.filter((id) => !(B1 as readonly string[]).includes(id) && !(STORY as readonly string[]).includes(id));
 const visible = (s: GameState) => ids.filter((id) => s.knowledge.blueprints.includes(RECIPES[id].bp));
 const POD = { x: 0, y: 0.18, z: 21.2 }, WORKSHOP = { x: 11, y: 1.2, z: -35 };
 function opened(): GameState { const s = createGame(); completeOpening(s); return s; }
@@ -36,6 +39,7 @@ test("New Game exposes only the pod checklist ladder; unknown or premature plans
     restore_workshop: "blueprint", salvage_buoy: "blueprint", bobbin_kit: "blueprint", dart_base: "blueprint",
     dart_acoustic_trim: "blueprint", suit_350: "blueprint",
     ...Object.fromEntries(B1.map((id) => [id, "blueprint"])),
+    ...Object.fromEntries(STORY.map((id) => [id, "blueprint"])),
   }, "nothing beyond the first repair is attemptable; it still needs materials");
   // Even with every material at the right bench, unknown or later plans cannot be bypassed.
   for (const site of [POD, WORKSHOP]) {
@@ -86,7 +90,8 @@ function limitBefore(id: RecipeId, seen = new Set<RecipeId>()): number {
 }
 
 test("prerequisites are acyclic and each material is reachable at two patches with the preceding protection", () => {
-  for (const id of ids) {
+  // Story recipes' plans come only from deep sites; the composed campaign check covers them.
+  for (const id of ids.filter((id) => !(STORY as readonly string[]).includes(id))) {
     const limit = limitBefore(id);
     for (const kind of Object.keys(RECIPES[id].cost) as MaterialId[]) {
       const patches = (Object.keys(SOURCES) as SourceId[]).filter((s) => SOURCES[s].item === kind &&

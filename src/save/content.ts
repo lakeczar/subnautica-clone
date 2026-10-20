@@ -1,5 +1,8 @@
 import type { GameState } from "../sim/types.js";
 import { createGame } from "../sim/state.js";
+import { createStory } from "../sim/story/index.js";
+import { carrierCompartmentContainers, emptySockets } from "../sim/carrier.js";
+import { ITEMS } from "../content/registry.js";
 import { record } from "./validation.js";
 
 /** Content-roster entries every schema 5 save contains: New Game's rosters when
@@ -63,7 +66,47 @@ export function addNewContent(state: GameState): { ok: true; value: GameState } 
   }
   const world = record(state.world) ? { ...state.world, ...pick(next, ["resources", "renewal", "facilities"]) } : state.world;
   const inventory = record(state.inventory) && next.containers ? { ...state.inventory, containers: next.containers } : state.inventory;
-  return { ok: true, value: { ...state, world, inventory } as GameState };
+  const fields = addNewFields({ ...state, world, inventory } as GameState, template);
+  return fields.ok ? { ok: true, value: fields.value } : fields;
+}
+
+const SCHEMA5_CARRIER_HOLD_CU = 256;
+/** Fields added since schema 5 whose absence means exactly their first state:
+ * no schema 5 build could record a later story discovery, hint, works step,
+ * resolution or carrier socket occupant. `story` and `docking.sockets` start at
+ * New Game's value. A carrier's single 256 CU hold becomes its 192 CU stores
+ * plus empty pantry and fabrication compartments, refused if its contents do
+ * not fit the stores. Anything present is left for strict validation. */
+function addNewFields(state: GameState, template: GameState): { ok: true; value: GameState } | { ok: false; error: string } {
+  const out = { ...state } as GameState & Record<string, unknown>;
+  if (!Object.hasOwn(out, "story")) out.story = createStory();
+  const fleet = out.fleet as unknown;
+  if (record(fleet) && record(fleet.docking) && !Object.hasOwn(fleet.docking, "sockets"))
+    out.fleet = { ...out.fleet, docking: { ...out.fleet.docking!, sockets: emptySockets() } };
+  const inv = out.inventory as unknown;
+  if (!record(inv) || !Array.isArray(inv.containers) || !Array.isArray(inv.items) || !record(fleet) || !Array.isArray(fleet.vehicles))
+    return { ok: true, value: out };
+  let containers = inv.containers as GameState["inventory"]["containers"];
+  for (const v of fleet.vehicles as GameState["fleet"]["vehicles"]) {
+    if (!record(v) || v.hull !== "hearthline") continue;
+    const hold = containers.find((c) => record(c) && c.id === v.cargoId);
+    if (!hold || hold.capacity !== SCHEMA5_CARRIER_HOLD_CU) continue;
+    const used = (inv.items as GameState["inventory"]["items"]).filter((i) => record(i) && i.containerId === hold.id && !i.fitted)
+      .reduce((n, i) => n + (Object.hasOwn(ITEMS, i.kind) ? ITEMS[i.kind].cu * i.quantity : 0), 0);
+    const split = carrierCompartmentContainers(v), stores = SCHEMA5_CARRIER_HOLD_CU - split.reduce((n, c) => n + c.capacity, 0);
+    if (used > stores)
+      return { ok: false, error: `This carrier hold holds ${used} CU, more than its ${stores} CU stores. Move cargo out in the build that wrote it. Nothing was loaded.` };
+    containers = [...containers.map((c) => c === hold ? { ...c, capacity: stores } : c),
+      ...split.filter((c) => !containers.some((k) => record(k) && k.id === c.id))];
+  }
+  out.inventory = { ...out.inventory, containers };
+  return { ok: true, value: newGameOrder(out, template) };
+}
+/** New Game's key order, so a completed old save writes the same bytes as a new one.
+ * Unknown keys stay, last, for strict validation to refuse. */
+function newGameOrder<T extends object>(value: T, template: object): T {
+  const keys = [...Object.keys(template).filter((k) => Object.hasOwn(value, k)), ...Object.keys(value).filter((k) => !Object.hasOwn(template, k))];
+  return Object.fromEntries(keys.map((k) => [k, (value as Record<string, unknown>)[k]])) as T;
 }
 const pick = (o: Partial<Record<Roster, unknown[]>>, keys: Roster[]) =>
   Object.fromEntries(keys.filter((k) => o[k]).map((k) => [k, o[k]]));

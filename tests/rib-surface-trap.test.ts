@@ -1,3 +1,4 @@
+import { withComposedFields } from "./persistence-support.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -20,7 +21,7 @@ function trappedExport() {
 
 test("actual trapped export loads without relocation, escapes, roundtrips and moves again without grants", () => {
   const { text, envelope } = trappedExport();
-  assert.deepEqual(envelope, JSON.parse(text), "loading changes nothing");
+  assert.deepEqual(envelope, withComposedFields(JSON.parse(text)), "loading adds only C1's additive fields");
   const encoded = encodeSave(envelope); assert.ok(encoded.ok);
   const decoded = decodeSave(encoded.value); assert.ok(decoded.ok); assert.deepEqual(decoded.value, envelope);
   const original = structuredClone(envelope.state);
@@ -218,7 +219,7 @@ test("Spindle forced surface placement cannot cross an intervening solid between
   // regardless of its displacement. Endpoint clearance alone would allow tunnelling.
   const shelf = { id: "surface.shelf", min: { x: -65, y: -2, z: 20 }, max: { x: -45, y: -1.8, z: 40 } };
   const w = createWorldQueries([...SOLIDS, shelf]);
-  const start = { x: -55, y: -4, z: 30 }, shape = HULL_COLLIDERS.spindle;
+  const start = { x: -55, y: -4.4, z: 30 }, shape = HULL_COLLIDERS.spindle; // Below the shelf at the 2.1 m collider.
   assert.ok(hullClearance(w, start, shape)); assert.ok(hullClearance(w, { ...start, y: -0.4 }, shape));
   const next = stepGame(pilot("spindle", start), [input()], w).state;
   assert.deepEqual(next.player.pose.position, start, "no safe surface correction: retain the origin");

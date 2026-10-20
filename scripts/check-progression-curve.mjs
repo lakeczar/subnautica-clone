@@ -28,7 +28,9 @@ const unlocks = Object.fromEntries(Object.keys(EVIDENCE).map(id => {
 
 // 3. Preceding personal protection and reachable source patches per recipe.
 const limit = id => Math.max(60, ...RECIPES[id].needs.map(n => n === "suit_350" ? 350 : n === "suit_150" ? 150 : limit(n)));
-const recipes = Object.fromEntries(ids.map(id => {
+// S5 works recipes' plans come only from deep, unplaced sites; tests/story-composed.test.ts audits them.
+const STORY = ["service_power_assembly", "service_air_assembly", "pod_buffer"];
+const recipes = Object.fromEntries(ids.filter(id => !STORY.includes(id)).map(id => {
   const before = limit(id), materials = Object.fromEntries(Object.entries(RECIPES[id].cost).map(([kind, q]) => {
     const patches = Object.keys(SOURCES).filter(s => SOURCES[s].item === kind && personalDepth(SOURCES[s].position) <= before);
     assert.ok(patches.length >= 2, `${id}: ${kind}`);

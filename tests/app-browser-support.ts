@@ -62,6 +62,8 @@ export class GameView {
   blockedAscent(visible: boolean): void { this.blocked.push(visible); }
   blockedThrust(visible: boolean): void { this.thrustBlocked.push(visible); }
   audioSettings(): void {}
+  captions: { cue: string; text: string; essential: boolean }[] = [];
+  audioCaption(caption: { cue: string; text: string; essential: boolean }): void { this.captions.push({ cue: caption.cue, text: caption.text, essential: caption.essential }); }
   confirmation(): void {}
   cancelConfirmation(): void {}
   showMenu(_hasSession: boolean, reason = ""): void {

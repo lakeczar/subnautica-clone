@@ -126,18 +126,18 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
             message: `${label} ${limit}%. Return to air; the pod ramp and established refuges are safe.`,
             error: true,
           },
-          { type: "sound", cue: "warning" },
+          { type: "sound", cue: "warning", cause: "oxygen" },
         );
       }
   for (const limit of [20, 10])
     if (foodBefore > limit && p.vitals.food <= limit)
-      events.push({ type: "notice", channel: "hazard", context: "food", message: `Food ${limit}%. Hand-gather shallow staples or use an emergency refuge portion; ordinary swimming remains available.`, error: true }, { type: "sound", cue: "warning" });
+      events.push({ type: "notice", channel: "hazard", context: "food", message: `Food ${limit}%. Hand-gather shallow staples or use an emergency refuge portion; ordinary swimming remains available.`, error: true }, { type: "sound", cue: "warning", cause: "food" });
   if (s.tick % 300 === 0) {
     if (e.pressureDepth > personalLimit(s) && !v)
-      events.push({ type: "sound", cue: "warning" });
-    if (v && v.charge < 25) events.push({ type: "sound", cue: "warning" });
+      events.push({ type: "sound", cue: "warning", cause: "pressure" });
+    if (v && v.charge < 25) events.push({ type: "sound", cue: "warning", cause: "power" });
     if (v && v.hull !== "spindle" && hullDepth(v) > v.rating * 0.85)
-      events.push({ type: "sound", cue: "warning" });
+      events.push({ type: "sound", cue: "warning", cause: "hull-depth" });
   }
   if (p.vitals.health <= 0) {
     incapacitate(

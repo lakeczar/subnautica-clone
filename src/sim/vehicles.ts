@@ -68,7 +68,7 @@ export function distraction(s: GameState): string | null {
 }
 export function cellRechargePreview(s: GameState): { cellIds: string[]; refusal: string | null } {
   const site = localBenchSite(s);
-  if (!site) return { cellIds: [], refusal: "Use the restored pod fabricator or restored workshop bench to recharge local reserve cells." };
+  if (!site) return { cellIds: [], refusal: "Recharge at a restored bench." };
   const bins = fabricationContainers(s, site);
   const cells = s.inventory.items.filter((i) => i.kind === "reserve_cell" && !i.fitted && bins.includes(i.containerId));
   const cellIds = cells.filter((i) => (i.charge ?? 0) < 100).map((i) => i.id);
@@ -153,7 +153,7 @@ function checkService(s: GameState, id: string): ServiceCheck {
   if (!v || v.berth || distance(s.player.pose.position, v.pose.position) > 7)
     return { state: "away", refusal: "Approach the craft service socket locally." };
   if (!supportedServiceSite(s, v))
-    return { state: "unsupported", refusal: "Use pod waters or the restored workshop cradle for hull charging and routine repair. Field patches use rescue stock." };
+    return { state: "unsupported", refusal: "Service at pod waters, the workshop cradle or a restored mooring." };
   if (v.disabled)
     return { state: "patch", refusal: "Apply a rescue patch before routine charging." };
   return { state: "ready", refusal: null, vehicle: v };

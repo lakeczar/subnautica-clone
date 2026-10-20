@@ -1,6 +1,8 @@
 /** Stable saved identifiers. Labels and render mesh names are never saved references.
  * Seeded from WORLD_PROGRESSION / EXPEDITION_INTEGRATION, not a recipe balance. */
 export const CONTENT_VERSION = "expedition.6" as const;
+import { STORY_BLUEPRINT_LABELS, STORY_RECIPES } from "./story/evidence.js";
+import type { StoryBlueprintId } from "./story/evidence.js";
 
 export const REGIONS = {
   refuge_reef: { label: "Hearth Reef", depth: [0, 65] },
@@ -96,17 +98,19 @@ export const HULL_COLLIDERS = {
   // the slip rails and reef ribs beyond the visible hull.
   creel: { radius: 3.9, height: 3.6 },
   hush: { radius: 3.6, height: 2.1 },
-  spindle: { radius: 4, height: 1.7 },
+  spindle: { radius: 4, height: 2.1 },
   mantle: { radius: 4.5, height: 4 },
   hearthline: { radius: 17, height: 9.2, bottom: -0.5 },
 } as const satisfies Record<HullId, { radius: number; height: number; bottom?: number }>;
 /** Full upright authored hull bounds while aligned with a guided carrier rail.
  * Normal piloting retains the broader square HULL_COLLIDERS proxies. Metres from keel. */
 export const BERTH_ENVELOPES = {
-  dart: { radius: 3.6, halfWidth: 2.5, halfLength: 3.6, height: 2.1 },
-  spindle: { radius: 4, halfWidth: 2.4, halfLength: 3.7, height: 1.7 },
+  // S3-02 option B: the Dart's trimmed fins fit ½W 2.45, clear of the starboard room's inboard wall.
+  dart: { radius: 3.6, halfWidth: 2.45, halfLength: 3.6, height: 2.1 },
+  // S3: Spindle folded art; the height seats a pilot under the solar canopy.
+  spindle: { radius: 4, halfWidth: 2.12, halfLength: 3.7, height: 2.1 },
   creel: { radius: 4.5, halfWidth: 2.9, halfLength: 3.3, height: 3.6 },
-  hush: { radius: 3.6, halfWidth: 2.5, halfLength: 3.6, height: 2.1 },
+  hush: { radius: 3.6, halfWidth: 2.45, halfLength: 3.6, height: 2.1 },
   mantle: { radius: 4.5, halfWidth: 2.9, halfLength: 4.5, height: 4 },
 } as const;
 export const REMOTE_TOOLS = {
@@ -227,6 +231,9 @@ export const ITEMS = {
   tagged_frame: { label: "Tagged structural frame", cu: 10 },
   creel_cargo_rack: { label: "Creel cargo rack", cu: 6 },
   creel_cabin: { label: "Creel refuge cabin", cu: 8 },
+  // S5 works assemblies, carried to the gate hall's panel.
+  service_power_assembly: { label: "Portable service power assembly", cu: STORY_RECIPES.service_power_assembly.cu },
+  service_air_assembly: { label: "Portable air staging assembly", cu: STORY_RECIPES.service_air_assembly.cu },
 } as const;
 export type ItemKind = keyof typeof ITEMS;
 /** Alloy carried in one intact tagged frame. */
@@ -244,7 +251,9 @@ export type MountKind = "creel_cargo_rack" | "creel_cabin";
 export const isMountKind = (kind: unknown): kind is MountKind =>
   kind === "creel_cargo_rack" || kind === "creel_cabin";
 /** Base hold for each hull with no major mount fitted. */
-export const HULL_HOLD_CU = { dart: 32, creel: 64, hush: 32, spindle: 96, mantle: 32, hearthline: 256 } as const satisfies Record<HullId, number>;
+/** Hearthline's 192 CU is its stores; its 32 CU pantry and 32 CU fabrication
+ * compartments complete the 256 CU carrier hold (S3 HEARTHLINE_CONTAINERS). */
+export const HULL_HOLD_CU = { dart: 32, creel: 64, hush: 32, spindle: 96, mantle: 32, hearthline: 192 } as const satisfies Record<HullId, number>;
 /** Only paid hull refits raise a hull above its initial rating. */
 export const HULL_REFITS = { dart: { recipe: "dart_350", rating: 350 }, creel: { recipe: "creel_350", rating: 350 } } as const;
 export type BlueprintId =
@@ -256,7 +265,8 @@ export type BlueprintId =
   | "bp_creel_service"
   | "bp_carrier_basin"
   | "bp_rift_pressure"
-  | "bp_keel_survey";
+  | "bp_keel_survey"
+  | StoryBlueprintId;
 export type FacilityId =
   | "home_pod"
   | "pod_fabricator"
@@ -273,6 +283,7 @@ export const BLUEPRINTS: readonly BlueprintId[] = [
   "bp_carrier_basin",
   "bp_rift_pressure",
   "bp_keel_survey",
+  ...(Object.keys(STORY_BLUEPRINT_LABELS) as StoryBlueprintId[]),
 ];
 /** Retained research whose construction belongs to later tiers. Plans that are
  * partly executable list only the part that is still future knowledge. */
@@ -280,6 +291,9 @@ export const FUTURE_BLUEPRINTS = {
   bp_carrier_workshop: "Carrier workshop plans",
   bp_carrier_basin: "Carrier Basin frame and anchorage survey",
   bp_rift_pressure: "Cool-flank personal pressure research beyond 350 m",
+  bp_deep_service: STORY_BLUEPRINT_LABELS.bp_deep_service,
+  bp_works_hall: STORY_BLUEPRINT_LABELS.bp_works_hall,
+  bp_food_module: STORY_BLUEPRINT_LABELS.bp_food_module,
 } as const;
 export type CostKind = MaterialId | "tagged_frame";
 export type HullOutput = "dart" | "creel";
@@ -290,7 +304,7 @@ export interface Recipe {
   bp: BlueprintId;
   needs: readonly string[];
   site: FabricationSite;
-  output: ItemKind | HullOutput | "pod_repair" | "restore_workshop" | "restore_canopy_stop" | "dart_350" | "creel_350";
+  output: ItemKind | HullOutput | "pod_repair" | "restore_workshop" | "restore_canopy_stop" | "dart_350" | "creel_350" | "pod_buffer";
   quantity: number;
   once: boolean;
   maintenance: boolean;
@@ -342,7 +356,7 @@ export const RECIPES = {
     maintenance: false,
   },
   salvage_buoy: {
-    label: "Reusable salvage buoy / 24 CU",
+    label: "Salvage buoy",
     cost: { structural_alloy: 1, silica_glass: 1, flex_membrane: 2 },
     bp: "bp_reef_recovery",
     needs: ["essential_tools"],
@@ -353,7 +367,7 @@ export const RECIPES = {
     maintenance: false,
   },
   reserve_cells: {
-    label: "Two rechargeable reserve cells",
+    label: "Reserve cells ×2",
     cost: { structural_alloy: 2, silica_glass: 2, flex_membrane: 2 },
     bp: "bp_pod_checklist",
     needs: ["essential_tools"],
@@ -364,7 +378,7 @@ export const RECIPES = {
     maintenance: false,
   },
   bobbin_kit: {
-    label: "Bobbin / reusable local rescue collar",
+    label: "Bobbin rescue collar",
     cost: { structural_alloy: 2, silica_glass: 1, flex_membrane: 3 },
     bp: "bp_reef_recovery",
     needs: ["essential_tools"],
@@ -375,7 +389,7 @@ export const RECIPES = {
     maintenance: true,
   },
   dart_base: {
-    label: "Build Dart scout / 180 m",
+    label: "Dart scout",
     cost: { structural_alloy: 6, silica_glass: 3, flex_membrane: 2 },
     bp: "bp_island_workshop",
     needs: ["restore_workshop", "suit_150"],
@@ -397,7 +411,7 @@ export const RECIPES = {
     maintenance: false,
   },
   suit_350: {
-    label: "Refit personal suit / 350 m",
+    label: "Suit refit · 350 m",
     cost: { structural_alloy: 2, flex_membrane: 2, conductive_crust: 4, buoyant_resin: 4 },
     bp: "bp_canopy_reinforcement",
     needs: ["suit_150"],
@@ -409,7 +423,7 @@ export const RECIPES = {
   },
   // M2-B1. Creel-first is legal: no recipe here needs the Dart.
   creel_base: {
-    label: "Build Creel workboat / 240 m",
+    label: "Creel workboat",
     cost: { structural_alloy: 10, silica_glass: 4, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 },
     bp: "bp_creel_service",
     needs: ["restore_workshop", "suit_150"],
@@ -420,7 +434,7 @@ export const RECIPES = {
     maintenance: false,
   },
   creel_cargo_rack: {
-    label: "Creel cargo rack / 96 CU hold",
+    label: "Creel cargo rack",
     cost: { structural_alloy: 4, buoyant_resin: 2 },
     bp: "bp_creel_service",
     needs: ["creel_base"],
@@ -431,7 +445,7 @@ export const RECIPES = {
     maintenance: false,
   },
   creel_cabin: {
-    label: "Creel refuge cabin / bunk, cooker, locker",
+    label: "Creel refuge cabin",
     cost: { structural_alloy: 3, silica_glass: 3, flex_membrane: 4, conductive_crust: 1, buoyant_resin: 1 },
     bp: "bp_creel_service",
     needs: ["creel_base"],
@@ -442,7 +456,7 @@ export const RECIPES = {
     maintenance: false,
   },
   strip_frame: {
-    label: "Strip one tagged frame / 8 loose alloy",
+    label: "Strip tagged frame",
     cost: { tagged_frame: 1 },
     bp: "bp_carrier_basin",
     needs: ["restore_workshop", "suit_350"],
@@ -484,6 +498,41 @@ export const RECIPES = {
     output: "dart_350",
     quantity: 1,
     once: false,
+    maintenance: false,
+  },
+  // S5 story work that is fabricated. The hall and food module are restored on
+  // site through the works rules, from STORY_RECIPES' costs, not at a bench.
+  service_power_assembly: {
+    label: "Service power assembly",
+    cost: STORY_RECIPES.service_power_assembly.cost,
+    bp: "bp_service_power",
+    needs: ["restore_workshop"],
+    site: "island_workshop",
+    output: "service_power_assembly",
+    quantity: 1,
+    once: false,
+    maintenance: false,
+  },
+  service_air_assembly: {
+    label: "Air staging assembly",
+    cost: STORY_RECIPES.service_air_assembly.cost,
+    bp: "bp_service_air",
+    needs: ["restore_workshop"],
+    site: "island_workshop",
+    output: "service_air_assembly",
+    quantity: 1,
+    once: false,
+    maintenance: false,
+  },
+  pod_buffer: {
+    label: "Pod dispatch buffer",
+    cost: STORY_RECIPES.pod_buffer.cost,
+    bp: "bp_pod_buffer",
+    needs: ["pod_repair"],
+    site: "home_pod",
+    output: "pod_buffer",
+    quantity: 1,
+    once: true,
     maintenance: false,
   },
 } as const satisfies Record<string, Recipe>;

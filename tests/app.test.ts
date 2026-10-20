@@ -360,12 +360,12 @@ test("app: gameplay panels and transactional actions freeze all simulation drain
   assert.equal(f.view.state!.tick, tick);
   assert.deepEqual(f.view.state!.player.vitals, vitals);
   f.view.actions.command({ type: "hint" });
-  assert.equal(f.view.state!.knowledge.hintLevel, 1);
+  assert.deepEqual(f.view.state!.story.hints, { L01: 1 }, "the first graduated reef hint");
   assert.equal(f.view.state!.tick, tick);
   f.window.dispatchEvent(new Event("blur"));
   f.window.dispatchEvent(new Event("focus"));
   f.view.actions.command({ type: "hint" });
-  assert.equal(f.view.state!.knowledge.hintLevel, 1);
+  assert.deepEqual(f.view.state!.story.hints, { L01: 1 }, "refused while blurred");
   assertPaused(f, tick);
   f.view.actions.resume();
   f.frames();
@@ -775,10 +775,10 @@ for (const mode of ["idle", "investigate"] as const) {
 test("app: malformed/unmarked sound origins never reach the call view, while the same real events still reach audio", async (t) => {
   const f = await fixture(t), port = f.app as unknown as {
     events(events: import("../src/sim/types.js").GameEvent[]): void;
-    sound: { event: (e: import("../src/sim/types.js").GameEvent) => void };
+    sound: { events: (batch: readonly import("../src/sim/types.js").GameEvent[]) => void };
   };
   const sounds: import("../src/sim/types.js").GameEvent[] = [];
-  port.sound.event = e => { sounds.push(e); };
+  port.sound.events = batch => { sounds.push(...batch); };
   const origin = { x: 1, y: 2, z: 3 };
   const events: import("../src/sim/types.js").GameEvent[] = [
     { type: "sound", cue: "warning" }, { type: "sound", cue: "damage", origin },
@@ -940,7 +940,7 @@ test("app: thrust accumulator excludes missing, boundary, release/progress, tiny
 function appInjury(f: Fixture) {
   const port = f.app as unknown as {
     session: { state: GameState }; events(events: GameEvent[]): void; frame(now: number): void;
-    sound: { event(e: GameEvent): void };
+    sound: { events(batch: readonly GameEvent[]): void };
   };
   const s = port.session.state; completeOpening(s); s.tick = 16;
   s.player.mode = "piloting"; s.player.pose.position = { x: 132, y: -110, z: -112 };
@@ -950,14 +950,15 @@ function appInjury(f: Fixture) {
     modeSeconds: 0, distraction: null, distractionSeconds: 0 };
   s.world.threat.position = hunterStandOff(s);
   const bite: ThreatDamage = { type: "threat-damage", source: "hunter", target: { kind: "vehicle", vehicleId: v.id }, loss: .2, healthAfter: 99.8 };
-  const sounds: GameEvent[] = []; port.sound.event = e => { sounds.push(e); };
+  // Audio receives each step's batch once and unchanged; S6's mapper owns the single injury hit.
+  const sounds: GameEvent[] = []; port.sound.events = batch => { sounds.push(...batch); };
   f.view.actions.resume();
   return { port, s, v, bite, sounds };
 }
 
 test("app: several fixed steps in a frame deliver each actual bite once against its own installed state", async (t) => {
   const f = await fixture(t), { port, sounds } = appInjury(f);
-  f.frames(2);
+  f.frames(2); sounds.length = 0;
   const before = injuryDeliveries.get(f.view)!.length, health = port.session.state.fleet.vehicles[0]!.health;
   port.frame(10000);
   const delivered = injuryDeliveries.get(f.view)!.slice(before);
@@ -965,17 +966,17 @@ test("app: several fixed steps in a frame deliver each actual bite once against 
   assert.ok(delivered.every(d => d.accepted && d.target.kind === "vehicle" && d.target.vehicleId === "app-bite"));
   for (let i = 1; i < delivered.length; i++) assert.equal(delivered[i]!.tick, delivered[i - 1]!.tick + 1);
   assert.ok(Math.abs(health - port.session.state.fleet.vehicles[0]!.health - 1.6) < 1e-10);
-  assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage" && !e.origin).length, 1);
+  assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage" && !e.origin).length, 0, "the app synthesizes no injury cue");
+  assert.equal(sounds.filter(e => e.type === "threat-damage").length, 8, "each step's real bite reaches audio once");
 });
 
-test("app: onset audio yields to the batch's existing spatial damage, collision or recovery cue", async (t) => {
+test("app: audio receives every batch's injury, collision and recovery events unchanged, with no synthetic cue", async (t) => {
   const f = await fixture(t), { port, s, bite, sounds } = appInjury(f);
   const others: GameEvent[][] = [[], [{ type: "sound", cue: "damage", origin: { x: 133, y: -110, z: -112 } }],
     [{ type: "impact", hullLoss: .6, speed: 8, origin: { x: 132, y: -110, z: -112 } }], [{ type: "sound", cue: "recovery" }]];
   for (const cues of others) {
     f.view.cancelFeedback(); sounds.length = 0; port.events([bite, ...cues]);
-    assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage" && !e.origin).length, cues.length ? 0 : 1);
-    for (const cue of cues) assert.ok(sounds.includes(cue), "original event and spatial origin forwarded unchanged");
+    assert.deepEqual(sounds, [bite, ...cues], "the batch is forwarded as emitted");
     port.events([{ ...bite, loss: .1 }]);
     assert.ok(Math.abs(injuryPort(f.view).damage!.total - .3) < 1e-12);
   }
@@ -1069,8 +1070,8 @@ test("app: a later real pressure-disable batch cancels the real HUD onset withou
   assert.equal(get("damage-announce").textContent, "", "the real outcome notification cancels the deferred onset");
   assert.equal(get("impact-notice").textContent, "Bitten · hull −0.2%");
   assert.match(get("hazard-announce").textContent, /HULL DISABLED/);
-  assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage" && !e.origin).length, 1,
-    "the earlier valid onset audio is unchanged");
+  assert.equal(sounds.filter(e => e.type === "threat-damage").length, 1,
+    "the earlier valid bite reached audio once; the later disable batch adds no second bite");
 });
 
 test("app: region preparation runs only on settled idle screens, never during play, panels or session work", async (t) => {
@@ -1100,3 +1101,37 @@ test("app: region preparation runs only on settled idle screens, never during pl
   f.frames(30);
   assert.equal(f.renderer.prepares.length, hidden, "a hidden tab does no preparation");
 });
+
+/** Real command, panel and frame paths with the real director on S6's recording
+ * context: reads C02 by E, then pauses by Notebook or Menu before the next frame. */
+async function discoveryThenPause(t: test.TestContext, pauseBy: "notebook" | "menu" | null) {
+  const { SiltwakeAudio } = await import("../src/audio/director.js");
+  const { FakeContext, asContext } = await import("./audio-fake-context.js");
+  const { NORMAL_VIEWS } = await import("./targeting-support.js");
+  const at = NORMAL_VIEWS.find(v => v.id === "C02")!;
+  const initial = sample(0); completeOpening(initial.state);
+  initial.state.player.pose.position = { ...at.position }; initial.state.player.mode = at.mode; faceTarget(initial.state, "C02");
+  const f = await fixture(t, initial), ctx = new FakeContext();
+  const audio = new SiltwakeAudio({ createContext: () => asContext(ctx) });
+  (f.app as unknown as { sound: typeof audio }).sound = audio;
+  f.view.actions.resume(); f.frames(3);
+  const music = () => audio.stats()!.bus.music;
+  assert.equal(music(), 0, "baseline");
+  f.view.actions.command({ type: "interact" });
+  assert.ok(f.view.state!.knowledge.evidence.some(e => e.id === "C02"), "the read records C02 at once");
+  if (pauseBy === "notebook") f.view.actions.panel("notebook");
+  else if (pauseBy === "menu") f.view.actions.pause();
+  f.frames(30);
+  return { f, music };
+}
+test("app: control — a discovery read in play starts its phrase", async (t) => {
+  const { music } = await discoveryThenPause(t, null);
+  assert.equal(music(), 1);
+});
+for (const pauseBy of ["notebook", "menu"] as const)
+  test(`app: a discovery read just before ${pauseBy} stays silent while paused and never replays on resume`, async (t) => {
+    const { f, music } = await discoveryThenPause(t, pauseBy);
+    assert.equal(music(), 0, "no discovery phrase starts after the pause");
+    f.view.actions.resume(); f.frames(30);
+    assert.equal(music(), 0, "resume does not replay the missed phrase");
+  });

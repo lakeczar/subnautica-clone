@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
 import { GameView, type UiActions } from "../src/ui/view.js";
-import { HudView } from "../src/ui/hud.js";
+import { hazardBanners, HudView } from "../src/ui/hud.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
 import { completeOpening, discover } from "../src/sim/progression.js";
 import { incapacitate, RECOVERY_NOTICES } from "../src/sim/recovery.js";
@@ -523,7 +523,7 @@ test("notebook retains both early orders and omits unknown sources and an uncoll
     const snapshot = structuredClone(s);
     view.openPanel("notebook", s);
     const html = get("panel-content").innerHTML;
-    assert.ok(html.indexOf("Intake & living filters") < html.indexOf("Unspent departure supplies") === (order[0] === "C02"));
+    assert.ok(html.indexOf("Intake &amp; living filters") < html.indexOf("Unspent departure supplies") === (order[0] === "C02"));
     for (const finding of s.knowledge.evidence) assert.ok(html.includes(finding.provenance));
     assert.ok(!html.includes("Mara Sen / field method"));
     assert.ok(!html.includes("Upper grounding fins"), "undiscovered source is not revealed by a regional lead");
@@ -1117,7 +1117,7 @@ test("recipe focus follows its full command as shortage work becomes ready; comp
   const command: GameCommand = { type: "craft", recipeId: "pod_repair" };
   view.openPanel("craft", s);
   assert.equal(renderedControl(command).disabled, true); assert.equal(activateControl(renderedControl(command)), undefined);
-  assert.match(get("panel-content").innerHTML, /Missing public materials/);
+  assert.match(get("panel-content").innerHTML, /Missing materials at this bench/);
   addItem(s, "structural_alloy", 2, "diver"); addItem(s, "silica_glass", 1, "diver"); addItem(s, "flex_membrane", 2, "diver");
   view.refreshPanel(s); commandButton(command).focus();
   view.refreshPanel(s); assert.deepEqual(activeCommand(), command);
@@ -1993,4 +1993,53 @@ test("Creel mount changes keep keyboard focus on the mount row, not Return", (t)
   s = executeCommand(s, { type: "install-module", vehicleId: creel.id, itemId: rack }, world).state;
   view.refreshPanel(s);
   assert.equal(active()?.attrs["data-focus-key"], `mount:${creel.id}`, "fitting returns to the same row");
+});
+
+test("sound captions: essential warnings show with captions off, others follow the setting, and an on-screen banner is not repeated", (t) => {
+  const { view, get } = viewFixture(t);
+  const s = createGame(); completeOpening(s);
+  view.update(s, false);
+  view.audioSettings({ volume: 0, muted: true, subtitles: false });
+  view.audioCaption({ cue: "carrier.clamp", text: "[Berth clamps lock]", essential: false, dir: null }, s);
+  assert.equal(get("audio-caption").hidden, true, "non-essential follows captions off");
+  view.audioCaption({ cue: "alert.pressure", text: "[Suit pressure tone · beyond rated depth]", essential: true, dir: null }, s);
+  assert.equal(get("audio-caption").hidden, false);
+  assert.equal(get("audio-caption").textContent, "[Suit pressure tone · beyond rated depth]", "muted and captions off still shows essentials");
+  s.player.pose.position = { x: -20, y: -20, z: -10 }; s.player.mode = "swimming"; s.player.vitals.oxygen = 12;
+  view.audioCaption({ cue: "alert.oxygen", text: "[Low-air tone]", essential: true, dir: null }, s);
+  assert.equal(get("audio-caption").textContent, "[Suit pressure tone · beyond rated depth]", "LOW OXYGEN is already a banner");
+  view.audioSettings({ volume: .5, muted: false, subtitles: true });
+  view.audioCaption({ cue: "carrier.clamp", text: "[Berth clamps lock]", essential: false, dir: null }, s);
+  assert.equal(get("audio-caption").textContent, "[Berth clamps lock]");
+  view.resetPresentation();
+  assert.equal(get("audio-caption").hidden, true, "entering a session clears the caption");
+});
+
+test("sound captions keep one line per cause: pressure, power, hull depth and hull failure yield to their banners", (t) => {
+  const { view, get } = viewFixture(t);
+  const caption = (cue: string, text: string) => ({ cue, text, essential: true, dir: null }) as Parameters<typeof view.audioCaption>[0];
+  const piloted = (configure: (v: ReturnType<typeof makeVehicle>) => void) => {
+    const s = createGame(); completeOpening(s);
+    const v = makeVehicle("c1-dart", "dart", { x: 160, y: -60, z: -160 }, "c1-dart-hold");
+    configure(v); s.fleet.vehicles.push(v);
+    s.player.controlledVehicleId = v.id; s.player.mode = "piloting"; s.player.pose.position = { ...v.pose.position };
+    return s;
+  };
+  const deep = () => { const s = createGame(); completeOpening(s); s.player.mode = "swimming"; s.player.pose.position = { x: 160, y: -100, z: -160 }; return s; };
+  const cases: [string, string, () => ReturnType<typeof createGame>, string][] = [
+    ["alert.pressure", "[Suit pressure tone · beyond rated depth]", deep, "PRESSURE"],
+    ["alert.power", "[Low-power chime]", () => piloted((v) => { v.charge = 10; }), "LOW POWER"],
+    ["alert.hull-stress", "[Hull creaks · near rated depth]", () => piloted((v) => { v.pose.position.y = -170; }), "HULL DEPTH"],
+    ["hull.failure", "[Hull systems powering down]", () => piloted((v) => { v.disabled = true; v.health = 0; }), "HULL DISABLED"],
+  ];
+  for (const [cue, text, covered, banner] of cases) {
+    const s = covered();
+    assert.ok(hazardBanners(s).some((b) => b.text.startsWith(banner)), `${cue}: its banner is on screen`);
+    view.resetPresentation();
+    view.audioCaption(caption(cue, text), s);
+    assert.equal(get("audio-caption").hidden, true, `${cue}: the banner is the one visible line`);
+    const clear = createGame(); completeOpening(clear);
+    view.audioCaption(caption(cue, text), clear);
+    assert.equal(get("audio-caption").textContent, text, `${cue}: shown when no banner covers it`);
+  }
 });

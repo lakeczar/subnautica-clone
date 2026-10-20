@@ -54,3 +54,51 @@ export class TestWriterLock implements WriterLockPort {
   }
 }
 export async function settled(): Promise<void> { for (let i = 0; i < 15; i++) await Promise.resolve(); }
+
+/** C1's additive schema 5 fields, written independently of production code: an
+ * empty story, empty Hearthline sockets, and a carrier's 256 CU hold split into
+ * 192 CU stores plus empty 32 CU pantry and fabrication compartments. A save
+ * written before them gains exactly these on load, in New Game's key order. */
+export const EMPTY_STORY = {
+  discoveries: [], hints: {},
+  works: { power: false, air: false, gate: "sealed", equalizeSteps: 0, hall: false, food: false, hallPower: false, repairs: [] },
+  resolution: { phase: "none", first: null },
+} as const;
+const SOCKET_IDS = ["hl.socket.bridge.survey", "hl.socket.bridge.launch", "hl.socket.fab.bench.1", "hl.socket.fab.bench.2",
+  "hl.socket.stores.floor", "hl.socket.galley.planter", "hl.socket.galley.wall", "hl.socket.cabin.corner",
+  "hl.socket.cabin.wall", "hl.socket.vestibule.wall"];
+export function withComposedFields<T extends { state: unknown }>(old: T): T {
+  const s = structuredClone(old.state) as Record<string, any>;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(s)) {
+    out[k] = v;
+    if (k === "fleet") out.story = structuredClone(EMPTY_STORY);
+  }
+  const docking = (out.fleet as any).docking;
+  if (docking && !("sockets" in docking)) docking.sockets = Object.fromEntries(SOCKET_IDS.map((id) => [id, null]));
+  const inv = out.inventory as any;
+  for (const v of (out.fleet as any).vehicles) {
+    const hold = v.hull === "hearthline" && inv.containers.find((c: any) => c.id === v.cargoId && c.capacity === 256);
+    if (!hold) continue;
+    hold.capacity = 192;
+    inv.containers.push({ id: `${v.id}_pantry`, kind: "locker", capacity: 32, ownerId: v.id },
+      { id: `${v.id}_fabrication`, kind: "locker", capacity: 32, ownerId: v.id });
+  }
+  return { ...old, state: out };
+}
+/** Inverse of withComposedFields for a pristine current state, for building
+ * genuine pre-composition inputs. */
+export function withoutComposedFields(state: any): any {
+  const { story, ...rest } = structuredClone(state);
+  if (JSON.stringify(story) !== JSON.stringify(EMPTY_STORY)) throw new Error("story is not pristine");
+  const docking = rest.fleet.docking;
+  if (docking) {
+    if (Object.values(docking.sockets).some((v) => v !== null)) throw new Error("carrier sockets are not empty");
+    delete docking.sockets;
+  }
+  for (const v of rest.fleet.vehicles) if (v.hull === "hearthline") {
+    rest.inventory.containers = rest.inventory.containers.filter((c: any) => c.id !== `${v.id}_pantry` && c.id !== `${v.id}_fabrication`);
+    rest.inventory.containers.find((c: any) => c.id === v.cargoId).capacity = 256;
+  }
+  return rest;
+}

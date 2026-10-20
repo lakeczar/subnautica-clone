@@ -103,6 +103,8 @@ test("all sources, food, C01–C06, optional note and both rescue work faces ret
       assert.equal(result.state.world.resources.find(n => n.id === id)!.stock, SOURCES[id].stock - SOURCES[id].bundle);
     } else if (v.id in EVIDENCE) assert.ok(result.state.knowledge.evidence.some(e => e.id === v.id));
     else if (v.id === "mara_reef_note") assert.ok(result.state.knowledge.journals.includes(v.id));
+    else if (v.id === "pod_checklist" || v.id === "mara_specimen_tray")
+      assert.deepEqual(result.state.story.discoveries.map(d => d.id), [v.id], v.id);
     else if (v.id === "basin_keel_plate") assert.ok(result.state.knowledge.scans.includes(v.id) && result.state.knowledge.blueprints.includes("bp_keel_survey"));
     else assert.deepEqual(panels(result.events), [{ type: "interaction-panel", panel: v.id === "rescue_staging" ? "inventory" : "craft", targetId: v.id }]);
     saved(result.state);

@@ -177,13 +177,15 @@ test("the pinned carrier keeps every sign while compatible display materials fit
   const cue = createTargetCue(scene);
   const state = fixtureGame(); art.update(state);
   assert.ok(scene.meshes.filter(m => m.name.startsWith("label.")).length >= 20, "required signs remain present");
-  assert.ok(scene.materials.length <= 24, `carrier retains ${scene.materials.length} materials`);
+  // C1: S3's Hearthline names its seven rooms and its hull and drops the three old
+  // carrier signs; one shared material per sign text keeps the carrier at 26.
+  assert.ok(scene.materials.length <= 26, `carrier retains ${scene.materials.length} materials`);
   const signs = scene.meshes.filter(m => m.name === "label.DRY / ISOLATED");
   assert.equal(signs.length, 4);
   assert.ok(signs.every(m => m.material === signs[0]!.material), "fore/aft and berth signs share exactly the same raster/optics");
   const world = createWorldQueries();
   for (let i = 0; i < 3; i++) {
-    const shell = scene.getMeshByName("carrier.physical-compartments")!;
+    const shell = scene.getMeshByName("fixture_hearthline.shell")!;
     assert.equal(carrierCommand(state, "launch", "fixture_dart", world), null);
     updateBerth(state, world);
     art.update(state);
@@ -194,8 +196,7 @@ test("the pinned carrier keeps every sign while compatible display materials fit
     art.update(state);
     assert.equal(scene.meshes.filter(m => m.name === "label.TRANSFER / KEEP CLEAR").length, 0);
     assert.equal(scene.meshes.filter(m => m.name === "label.DRY / ISOLATED").length, 4);
-    // M2-B1 adds one island sign material (MEDIUM SLIP); the ≤ 24 budget above is unchanged.
-    assert.equal(scene.materials.length, 22, "interruption/rebuild releases obsolete sign material and texture ownership");
+    assert.equal(scene.materials.length, 26, "interruption/rebuild releases obsolete sign material and texture ownership");
   }
   art.dispose();
   cue.dispose();

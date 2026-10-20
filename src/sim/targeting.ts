@@ -3,6 +3,8 @@ import { distance } from "./inventory.js";
 import { interactions, type Interaction } from "./progression.js";
 import { eyeHeight } from "./state.js";
 import type { GameState, Vec3, WorldQueries } from "./types.js";
+import type { DiscoveryId } from "../content/story/evidence.js";
+import { storyHost, storyKnown } from "./storyLink.js";
 
 export interface AimRay { origin: Vec3; dir: Vec3 }
 export interface InteractionHost { center: Vec3; radius: number; solidIds: readonly string[] }
@@ -71,11 +73,11 @@ function describe(s: GameState, t: Interaction, host: InteractionHost): AimedTar
       break;
     }
     case "evidence":
-      known = s.knowledge.evidence.some(e => e.id === t.id);
+      known = storyKnown(s, t.id as DiscoveryId);
       verb = known ? "review" : "inspect";
       break;
     case "record":
-      known = s.knowledge.journals.includes(t.id);
+      known = storyHost(t.id) || t.id === "mara_reef_note" ? storyKnown(s, t.id as DiscoveryId) : false;
       verb = "read";
       break;
     case "vehicle": {

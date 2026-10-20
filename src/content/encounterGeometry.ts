@@ -13,6 +13,8 @@ export const SCOUT_GEOMETRY = {
   port: [[-.78, .85, -1.5], [-.9, .8, 1], [-.65, 1.95, .1]],
   aft: [[-.6, 1.96, .1], [.95, 1.96, .1], [.9, 1.1, 1.02], [-.78, 1.1, 1.02]],
   prow: { center: [0, .61, -2.2], size: [1.3, .2, .95] },
+  /** Swept side-fin tip half-width: S3-02 option B trims it to the 2.45 m berth envelope. */
+  finTip: 2.45,
 } as const;
 export const SPINDLE_GEOMETRY = {
   body: [{ z: -3.7, w: .1, low: 0, high: .4 }, { z: -1, w: .85, low: 0, high: 1 }, { z: 2.8, w: .7, low: .1, high: 1 }],
@@ -29,8 +31,9 @@ export const CREEL_GEOMETRY = {
   mount: { center: [0, 2.44, 1.325], size: [3.44, 2.12, 3.75] },
   tools: [{ center: [-1.3, .82, -2.95], size: [.5, .5, .75] }, { center: [1.3, .82, -2.95], size: [.5, .5, .75] }],
 } as const;
-export const HEARTHLINE_KEEL = { centerY: 1.5, offsetX: 7.2, size: [4, 3, 28],
-  capY: 2.9, capSize: [3, .8, 26] } as const;
+/** Twin keel pontoons as one box per side, from S3's HEARTHLINE_KEELS (x 6.12..9.32,
+ * keel datum to y 3.2, ±14.5), clear of the lock transfer corridor. */
+export const HEARTHLINE_KEEL = { centerY: 1.6, offsetX: 7.72, size: [3.2, 3.2, 29] } as const;
 export const HUNTER_GEOMETRY = {
   body: [{ z: -4, w: .36, low: .5, high: .68 }, { z: -3.3, w: .9, low: .34, high: .87 },
     { z: -1.8, w: 1.2, low: .12, high: 1.15 }, { z: 1, w: .7, low: .2, high: 1.05 }, { z: 4, w: .1, low: .4, high: .7 }],

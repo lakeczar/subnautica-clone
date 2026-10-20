@@ -10,6 +10,7 @@ import type {
   RenewableSourceId,
   SourceId,
 } from "../content/registry.js";
+import type { StoryState } from "./story/state.js";
 import type { RecoveryRouteId } from "../content/routes.js";
 export interface Vec3 {
   x: number;
@@ -104,6 +105,9 @@ export interface CarrierState {
   sequence: number;
   completed: string[];
   launchBlocked: boolean;
+  /** Hearthline interior sockets (HEARTHLINE_SOCKETS ids) and the occupant kind
+   * each holds, or null. Occupied footprints are walking solids. */
+  sockets: Record<string, string | null>;
 }
 export interface GameState {
   tick: number;
@@ -148,6 +152,10 @@ export interface GameState {
     } | null;
   };
   fleet: { vehicles: VehicleState[]; docking: CarrierState | null };
+  /** S5 story record. C01–C06 stay in knowledge.evidence and the reef journal in
+   * knowledge.journals, with their original ticks; this holds every later
+   * discovery, hint tiers, the works and the resolution. See sim/storyLink.ts. */
+  story: StoryState;
   recovery: {
     operation: {
       vehicleId: string;
@@ -258,6 +266,8 @@ export type GameEvent =
       origin?: Vec3;
       /** Only a positional warning call at an actual warn/pursue transition. */
       source?: "threat-call";
+      /** Why a centred warning sounds, set where it is emitted. Transient, never saved. */
+      cause?: "oxygen" | "food" | "pressure" | "power" | "hull-depth";
       cue:
         | "collect"
         | "craft"

@@ -165,3 +165,20 @@
   .storage-operands { flex-wrap: wrap; }
   .storage-operands button { max-width: none; }
 }
+
+/* S5 story notebook: questions with status chips, leads, readings and journals. */
+.story-question h3, .story-leads h3, .story-checklist h3 { margin-bottom: 4px; }
+.story-question .hypotheses { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.status-chip { display: inline-block; min-width: 76px; padding: 1px 6px; margin-right: 6px; border-radius: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; text-align: center; background: #ffffff14; color: #c8d6d2; }
+[data-status="supported"] .status-chip { background: #2f6f5f; color: #e6fff6; }
+[data-status="doubtful"] .status-chip { background: #6b5a2f; color: #ffeec4; }
+[data-status="ruled_out"] .status-chip { background: #4a3a40; color: #e4cdd4; }
+[data-status="established"] .status-chip { background: #e0ba7c; color: #231a0c; }
+[data-status="ruled_out"] { opacity: .72; }
+.story-answer { border-left: 3px solid #e0ba7c; padding-left: 8px; color: #ffe2a6; }
+.story-hint { display: block; margin-top: 2px; color: #b9d8cf; }
+.finding .reread b { color: #9fe0c9; }
+.first-read { opacity: .66; font-style: italic; }
+.story-checklist ul { list-style: none; padding: 0; margin: 0; }
+.story-checklist [data-met="true"] { color: #9fe0c9; }
+.journal-context { opacity: .75; font-size: 13px; }

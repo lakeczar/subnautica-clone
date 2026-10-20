@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ITEMS, RECIPES, RECOVERY_STAGE } from "../src/content/registry.js";
+import { HULL_HOLD_CU, ITEMS, RECIPES, RECOVERY_STAGE } from "../src/content/registry.js";
 import type { ItemKind } from "../src/content/registry.js";
 import type { GameCommand, GameState } from "../src/sim/types.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
@@ -11,7 +11,7 @@ import { executeCommand, stepGame } from "../src/sim/step.js";
 import { board, service } from "../src/sim/vehicles.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import { disableVehicle, incapacitate, recoveryCommand, RECOVERY_MOORING, updateRecovery } from "../src/sim/recovery.js";
-import { BERTH_LOCAL, CARRIER_LAYOUT, carrierCommand, fixtureGame, localToWorld, updateBerth } from "../src/sim/carrier.js";
+import { BERTH_LOCAL, CARRIER_LAYOUT, carrierCommand, carrierCompartmentContainers, fixtureGame, localToWorld, updateBerth } from "../src/sim/carrier.js";
 import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
 import { validState } from "../src/save/validation.js";
 
@@ -109,7 +109,7 @@ test("installation/removal require supported, unoccupied local access and no rec
   s.player.pose.position = { x: 74, y: -20, z: -60 }; s.player.mode = "swimming";
   refused(s, { type: "install-module", vehicleId: v.id, itemId: trim(s).id }, /supported|cradle/);
   assert.equal(board(s, v.id), null);
-  refused(s, { type: "install-module", vehicleId: v.id, itemId: trim(s).id }, /Exit.*occupied/);
+  refused(s, { type: "install-module", vehicleId: v.id, itemId: trim(s).id }, /Leave the hull/);
   const active = trimGame(true), av = active.fleet.vehicles[0]!;
   disableVehicle(active, av.id);
   active.recovery.operation = { vehicleId: av.id, routeId: "canopy", method: "tow", phase: "ready", position: { ...av.pose.position }, waypoint: 3 };
@@ -262,14 +262,14 @@ test("tow -> remove -> intact transfer -> salvage -> rebuild -> reinstall preser
 test("installed identity survives valid berth/launch transactions and immediate schema2 expedition.3 reload", () => {
   const s = trimGame(true), v = s.fleet.vehicles[0]!, fixture = fixtureGame(), h = fixture.fleet.vehicles[0]!;
   s.scenario = "carrier-fixture"; s.fleet.vehicles.push(h); s.fleet.docking = fixture.fleet.docking;
-  s.inventory.containers.push({ id: h.cargoId, kind: "vehicle", capacity: 256, ownerId: h.id });
+  s.inventory.containers.push({ id: h.cargoId, kind: "vehicle", capacity: HULL_HOLD_CU.hearthline, ownerId: h.id }, ...carrierCompartmentContainers(h));
   v.berth = { carrierId: h.id, slot: 0, pose: { frame: "carrier-local", position: { ...BERTH_LOCAL[0]! }, yaw: 0 } };
   v.pose.position = localToWorld(v.berth.pose.position, h);
   s.player.mode = "interior"; s.player.interiorId = h.id;
   s.player.interiorPose = { frame: "carrier-local", position: { ...CARRIER_LAYOUT.helm } };
   s.player.pose.position = localToWorld(CARRIER_LAYOUT.helm, h);
   const item = structuredClone(trim(s)); roundTrip(s);
-  refused(s, { type: "remove-module", vehicleId: v.id, itemId: item.id }, /occupied|unberthed/);
+  refused(s, { type: "remove-module", vehicleId: v.id, itemId: item.id }, /Leave the hull|unberthed/);
   assert.equal(carrierCommand(s, "launch", v.id, world), null); roundTrip(s);
   for (let n = 0; n < 32; n++) updateBerth(s, world);
   assert.equal(v.berth, null); assert.deepEqual(trim(s), item); assert.deepEqual(v.modules, [item.id]); roundTrip(s);
