@@ -3,7 +3,7 @@
 Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION](DIRECTION.md). History: [archive/](archive/README.md).
 
 **Current**
-- Accepted production is `ccf8c44` (M2-B1 earned Creel and mobile refuge): schema 5 / `expedition.6`.
+- Accepted production is the `feat/siltwake-first-expedition` HEAD: B1 plus S7 (test tiers and saves) plus S8 (concise menus). Saves are schema 5 / `expedition.6`, with additive content needing no bump. `npm test` passes 556/556 in 32 s, heavy passes 9/9 in 162 s, and the build passes.
 - The integration branch is `feat/siltwake-first-expedition`.
 - `main` and the public deployment are owner actions.
 

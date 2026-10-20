@@ -5,15 +5,18 @@
 //   node scripts/test-tier.mjs heavy [files...]   every *.heavy.test.js, one at a time
 //
 // Classification rule: a test file that reaches `@babylonjs` through its imports
-// is heavy and must be named `*.heavy.test.ts`. The fast tier refuses to run if a
-// fast-named file reaches Babylon, naming the import chain. Other expensive suites
-// may opt into the heavy tier by name.
+// is heavy and must be named `*.heavy.test.ts`. The fast tier enforces it twice:
+// before running, a static scan of each fast-named file's import graph refuses
+// with the import chain; while running, scripts/fast-guard.mjs fails any fast test
+// process that resolves a Babylon module (computed or otherwise hidden imports).
+// Other expensive suites may opt into the heavy tier by name.
 //
 // Heavy files run sequentially, each in its own `node --test --test-isolation=none`
 // process. A watchdog samples the process's peak RSS (VmHWM) and kills it at the
 // budget; the process also reports its exact `maxRSS` on exit. Budgets come from
-// tests/heavy-budgets.json (MiB per file, with a default). Run the heavy tier
-// through scripts/heavy-check.sh so only one heavy job uses the VM at a time.
+// tests/heavy-budgets.json (MiB per file, with a default). The heavy tier runs
+// only inside scripts/heavy-check.sh (which sets SILTWAKE_HEAVY_LOCK_HELD), so one
+// heavy job uses the VM at a time; `npm run test:heavy` does that.
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,6 +28,7 @@ const build = join(root, ".test-build");
 const testDir = join(build, "tests");
 const FAST_CONCURRENCY = 4;
 const FAST_HEAP_MIB = 1024;
+const ESCAPE_RE = /\bworker_threads\b|\bnew\s+Worker\s*\(|\bchild_process\b|["'](?:node:)?vm["']|(?<![\w.])eval\s*\(|\bnew\s+Function\s*\(/g;
 
 const [tier, ...requested] = process.argv.slice(2);
 if (tier !== "fast" && tier !== "heavy") {
@@ -39,24 +43,29 @@ const isHeavy = (file) => file.endsWith(".heavy.test.js");
 const all = readdirSync(testDir).filter((f) => f.endsWith(".test.js")).sort().map((f) => join(testDir, f));
 const files = requested.length ? requested.map((f) => resolve(f)) : all.filter((f) => isHeavy(f) === (tier === "heavy"));
 
-/** Static import graph of the compiled JS, applying the app-loader substitution
- * that app tests register, so a mocked renderer does not count as Babylon. */
+/** Static import graph of the compiled JS. The app-loader substitution applies
+ * only to entries that register it, so only a mocked renderer is exempt. */
 async function babylonChains(entries) {
   const loader = existsSync(join(testDir, "app-loader.js"))
     ? (await import(pathToFileURL(join(testDir, "app-loader.js")).href)).resolve : null;
   const next = (specifier, context) => ({ url: specifier.startsWith(".") ? new URL(specifier, context.parentURL).href : `bare:${specifier}` });
-  const edge = (specifier, parentURL) => (loader ? loader(specifier, { parentURL }, next) : next(specifier, { parentURL })).url;
   const importRe = /(?:^|[\s;])(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|(?:^|[\s;])import\s*["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
-  const graph = new Map();
-  const imports = (url) => {
+  const registersLoader = /register\(\s*["'][^"']*app-loader\.js["']/;
+  const graphs = { mocked: new Map(), real: new Map() };
+  const imports = (url, mocked) => {
+    const graph = graphs[mocked ? "mocked" : "real"];
     if (!graph.has(url)) {
       const text = readFileSync(fileURLToPath(url), "utf8");
-      graph.set(url, [...text.matchAll(importRe)].map((m) => edge(m[1] ?? m[2] ?? m[3], url)));
+      graph.set(url, [...text.matchAll(importRe)].map((m) => {
+        const specifier = m[1] ?? m[2] ?? m[3], context = { parentURL: url };
+        return (mocked && loader ? loader(specifier, context, next) : next(specifier, context)).url;
+      }));
     }
     return graph.get(url);
   };
   const found = new Map();
   for (const entry of entries) {
+    const mocked = registersLoader.test(readFileSync(entry, "utf8"));
     const start = pathToFileURL(entry).href, parent = new Map([[start, null]]), queue = [start];
     while (queue.length) {
       const url = queue.shift();
@@ -67,7 +76,7 @@ async function babylonChains(entries) {
         break;
       }
       if (url.startsWith("bare:") || !url.startsWith("file:") || !url.endsWith(".js")) continue;
-      for (const child of imports(url)) if (!parent.has(child)) { parent.set(child, url); queue.push(child); }
+      for (const child of imports(url, mocked)) if (!parent.has(child)) { parent.set(child, url); queue.push(child); }
     }
   }
   return found;
@@ -82,6 +91,26 @@ function run(command, args, options = {}) {
 }
 
 if (tier === "fast") {
+  const named = files.filter(isHeavy);
+  if (named.length) {
+    console.error(`test-tier: heavy files run only in the heavy tier: ${named.map((f) => basename(f)).join(", ")}`);
+    process.exit(2);
+  }
+  // Code that runs outside this process or its module graph escapes both guards,
+  // so fast test files may not spawn workers, child processes or evaluated code
+  // unless a comment states why: `// test-tier: allow-escape <reason>`.
+  const escapes = files.flatMap((file) => {
+    const text = readFileSync(file, "utf8");
+    if (/\/\/ test-tier: allow-escape \S/.test(text)) return [];
+    const found = [...new Set([...text.matchAll(ESCAPE_RE)].map((m) => m[0].replace(/\s+/g, " ")))];
+    return found.length ? [[file, found]] : [];
+  });
+  if (escapes.length) {
+    for (const [file, found] of escapes)
+      console.error(`test-tier: ${relative(build, file)} uses ${found.join(", ")}, which the fast-tier Babylon guard cannot see into. ` +
+        "Move it to a *.heavy.test.ts file, or add `// test-tier: allow-escape <reason>` if it cannot load Babylon.");
+    process.exit(1);
+  }
   const misplaced = await babylonChains(files.filter((f) => !isHeavy(f)));
   if (misplaced.size) {
     for (const [file, chain] of misplaced) {
@@ -95,13 +124,20 @@ if (tier === "fast") {
   // Each fast test process gets a 1 GiB V8 heap: a runaway assertion diff fails
   // that file quickly instead of exhausting the shared VM. Fast tests hold no
   // Babylon buffers, so the heap is their memory.
+  // Every fast test process preloads the Babylon guard.
+  const guard = pathToFileURL(join(root, "scripts", "fast-guard.mjs")).href;
   const { code } = await run(process.execPath, ["--test", `--test-concurrency=${FAST_CONCURRENCY}`, ...files],
-    { env: { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${FAST_HEAP_MIB}`.trim() } });
+    { env: { ...process.env,
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${FAST_HEAP_MIB} --import=${guard}`.trim() } });
   console.log(`test:fast ${files.length} files in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   process.exit(code ?? 1);
 }
 
 // Heavy tier.
+if (!process.env.SILTWAKE_HEAVY_LOCK_HELD) {
+  console.error("test-tier: the heavy tier runs under the shared lock. Use `npm run test:heavy`, or wrap it in scripts/heavy-check.sh.");
+  process.exit(2);
+}
 const budgets = JSON.parse(readFileSync(join(root, "tests", "heavy-budgets.json"), "utf8"));
 // SILTWAKE_HEAVY_BUDGET_MIB overrides every budget, e.g. to check that the watchdog fires.
 const budgetMiB = (file) => Number(process.env.SILTWAKE_HEAVY_BUDGET_MIB) ||
