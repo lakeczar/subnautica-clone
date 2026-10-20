@@ -243,12 +243,27 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
     });
   },
   works(b, s, fine) {
-    const sol = s.solids[0]!;
+    const sol = s.solids[0]!, h = sol.max.y - sol.min.y, mid = (sol.min.y + sol.max.y) / 2;
     b.aabb([sol.min.x, sol.min.y, sol.min.z], [sol.max.x, sol.max.y, sol.max.z], C.concrete, C.dark);
     for (let xx = sol.min.x + 3; xx < sol.max.x - 2; xx += 7) b.frustum([xx, sol.max.y, sol.min.z + 4], [xx, sol.max.y, sol.max.z - 4], 1.2, 1.2, fine ? 7 : 4, C.metal);
+    // A dark plinth with hazard bands, and pilasters dividing the faces
+    // into bays, all within a metre of the collider.
+    b.aabb([sol.min.x - 0.4, sol.min.y, sol.min.z - 0.4], [sol.max.x + 0.4, sol.min.y + 2.4, sol.max.z + 0.4], C.dark);
+    if (fine) {
+      for (let xx = sol.min.x + 1.5; xx < sol.max.x - 1; xx += 3) b.box([xx, sol.min.y + 2.5, sol.max.z + 0.42], [1.4, 0.3, 0.06], C.ochre, 0.3);
+      for (let xx = sol.min.x + 0.6; xx <= sol.max.x; xx += 6.5) for (const zf of [sol.min.z - 0.3, sol.max.z + 0.3]) b.box([xx, mid, zf], [1.2, h, 0.6], C.concrete2);
+      for (let zz = sol.min.z + 0.6; zz <= sol.max.z; zz += 6) for (const xf of [sol.min.x - 0.3, sol.max.x + 0.3]) b.box([xf, mid, zz], [0.6, h, 1.2], C.concrete2);
+    }
     glow(b, () => {
-      b.box([1430, sol.min.y + 1.6, sol.max.z + 0.05], [3.2, 2.8, 0.1], C.glow);
-      if (fine) for (let xx = sol.min.x + 4; xx < sol.max.x - 3; xx += 6) b.box([xx, sol.min.y + 8, sol.max.z + 0.05], [2, 0.7, 0.1], C.cyan);
+      b.box([1430, sol.min.y + 1.9, sol.max.z + 0.45], [4.2, 3.4, 0.1], C.glow);
+      if (fine) {
+        for (let xx = sol.min.x + 4; xx < sol.max.x - 3; xx += 6) b.box([xx, sol.min.y + 8, sol.max.z + 0.05], [2, 0.7, 0.1], C.cyan);
+        // A band of lit windows under the roofline on every face.
+        for (let xx = sol.min.x + 3.85; xx < sol.max.x - 2; xx += 6.5) for (const zf of [sol.min.z - 0.05, sol.max.z + 0.05])
+          if (hash2(Math.floor(xx), Math.floor(zf), 23) > -0.5) b.box([xx, sol.max.y - 4.5, zf], [3.6, 1.6, 0.1], hash2(Math.floor(xx), 5, 29) > 0.3 ? C.cyan : C.warm);
+        for (let zz = sol.min.z + 3.6; zz < sol.max.z - 2; zz += 6) for (const xf of [sol.min.x - 0.05, sol.max.x + 0.05])
+          if (hash2(Math.floor(zz), Math.floor(xf), 31) > -0.5) b.box([xf, sol.max.y - 4.5, zz], [0.1, 1.6, 3.4], C.warm);
+      }
     });
   },
 };

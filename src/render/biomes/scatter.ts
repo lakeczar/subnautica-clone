@@ -9,6 +9,7 @@ import { STRUCTURES } from "../../content/regions/structures.js";
 import { BRINE_Y, emptyMasks, terrainMasks, type TerrainMasks } from "../../content/regions/terrain.js";
 import { TERRAIN_EXTENT } from "../terrainSurface.js";
 import { writeInstance } from "./recipe.js";
+import { vistaMesh } from "./vistas.js";
 
 /** `s2.scatter`: dense instanced dressing per biome, placed by rules that
  * read the same masks the floor was carved with. Pale fans open on cool
@@ -130,7 +131,8 @@ export const SCATTER_RULES: Readonly<Record<string, readonly Rule[]>> = {
 };
 
 // --- Keep-out: open water the passages, tethers and moorings need ----------
-interface KeepPoint { x: number; z: number; y: number; r: number }
+/** Open water above (x, z): radius `r`, from just below `y` up to `y + head`. */
+interface KeepPoint { x: number; z: number; y: number; r: number; head: number }
 const KEEP_BUCKET = 64;
 let keep: Map<number, KeepPoint[]> | null = null;
 const kkey = (bx: number, bz: number): number => (bx + 1000) * 4096 + (bz + 1000);
@@ -146,27 +148,30 @@ function keepIndex(): Map<number, KeepPoint[]> {
         const k = kkey(bx, bz); if (!keep!.has(k)) keep!.set(k, []); keep!.get(k)!.push(p);
       }
   };
-  const line = (path: readonly { x: number; y: number; z: number }[], r: number, bottom: number): void => {
+  const line = (path: readonly { x: number; y: number; z: number }[], r: number, bottom: number, head: number): void => {
     for (let i = 0; i < path.length - 1; i++) {
       const a = path[i]!, b = path[i + 1]!, n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 3));
-      for (let k = 0; k <= n; k++) { const t = k / n; add({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, y: a.y + (b.y - a.y) * t + bottom, r }); }
+      for (let k = 0; k <= n; k++) { const t = k / n; add({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, y: a.y + (b.y - a.y) * t + bottom, r, head }); }
     }
   };
   for (const r of ROUTES) {
     if (r.role === "walk") continue;
     const c = CRAFT_PROFILES[r.profile];
-    line(r.path, Math.max(c.radius, r.kind === "open" ? r.minHalfWidth : c.radius) + 1, c.bottom);
+    line(r.path, Math.max(c.radius, r.kind === "open" ? r.minHalfWidth : c.radius) + 1, c.bottom, c.height + 4);
   }
-  for (const p of RESCUE_PLANS) for (const b of p.tethers) line(b, 5.5, 0);
-  for (const s of SITES) if (s.pad && typeof s.at.y === "number") add({ x: s.at.x, z: s.at.z, y: s.at.y + 40, r: s.pad.radius * (s.pad.flat ?? 0.55) });
+  for (const p of RESCUE_PLANS) for (const b of p.tethers) line(b, 5.5, 0, 4);
+  for (const s of SITES) if (s.pad && typeof s.at.y === "number") add({ x: s.at.x, z: s.at.z, y: s.at.y + 40, r: s.pad.radius * (s.pad.flat ?? 0.55), head: Infinity });
   for (const s of STRUCTURES) for (const b of s.solids)
-    add({ x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2, y: b.max.y + 40, r: Math.hypot(b.max.x - b.min.x, b.max.z - b.min.z) / 2 + 1.5 });
+    add({ x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2, y: b.max.y + 40, r: Math.hypot(b.max.x - b.min.x, b.max.z - b.min.z) / 2 + 1.5, head: Infinity });
   return keep;
 }
-function blocked(x: number, z: number, top: number, radius: number): boolean {
+/** True where a piece at (x, z) spanning `bottom`..`top` (scatter grows from
+ * the floor, so its bottom is unbounded) with `radius` would stand in open
+ * water a passage, tether, mooring or structure needs. */
+export function blocked(x: number, z: number, top: number, radius: number, bottom = -Infinity): boolean {
   const list = keepIndex().get(kkey(Math.floor(x / KEEP_BUCKET), Math.floor(z / KEEP_BUCKET)));
   if (!list) return false;
-  for (const p of list) if (top > p.y - 0.5 && Math.hypot(x - p.x, z - p.z) < p.r + radius) return true;
+  for (const p of list) if (top > p.y - 0.5 && bottom < p.y + p.head && Math.hypot(x - p.x, z - p.z) < p.r + radius) return true;
   return false;
 }
 
@@ -327,6 +332,9 @@ export const scatterFactory: ChunkArtFactory = {
     }
     const instances: InstanceRecipe[] = [];
     for (const b of [...biomes].sort()) instances.push(...yield* scatterChunk(ctx, chunk, b, lod === "fine"));
-    return { meshes: [], instances };
+    if (ctx.due()) yield;
+    // Composed set pieces anchored here (vistas.ts) ride with the dressing.
+    const vista = yield* vistaMesh(chunk, lod, ctx.floor, ctx.due);
+    return { meshes: vista ? [vista] : [], instances };
   },
 };
