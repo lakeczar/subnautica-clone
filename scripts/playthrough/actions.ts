@@ -52,14 +52,21 @@ export function workPoses(d: Driver, id: string): { body: Waypoint; land: boolea
           aimsFrom(d, id, body, "walking", host.center))
         out.push({ body: { ...body, land: true, tolerance: 0.35 }, land: true, cost: dist(here, body) });
     }
-    // Deeper candidates reach a craft floating at the surface (its handle at y -0.4).
-    for (const dy of [1.2, 0.4, 2, -0.4, -0.9, -1.4]) {
+    for (const dy of [1.2, 0.4, 2, -0.4]) {
       const body = { x, y: t.position.y + dy, z };
       if (body.y > -0.9 || d.world.groundHeight(x, z) > body.y - 0.1 || d.world.supportHeight(x, z, body.y) > body.y - 0.15) continue;
       if (dist(body, t.position) < INTERACTION_REACH - 0.2 && d.world.clearance(body, SWIM) &&
           aimsFrom(d, id, body, "swimming", host.center))
         out.push({ body: { ...body, tolerance: 0.3 }, land: false, cost: dist(here, body) });
     }
+  }
+  // Only when nothing else aims: a craft floating at the surface (its handle at
+  // y -0.4) is reached from just below it.
+  if (!out.length) for (const r of [1.4, 2.2, 3]) for (let k = 0; k < 16; k++) for (const dy of [-0.9, -1.4]) {
+    const a = (k / 16) * Math.PI * 2, body = { x: t.position.x + Math.cos(a) * r, y: t.position.y + dy, z: t.position.z + Math.sin(a) * r };
+    if (body.y > -0.9 || d.world.groundHeight(body.x, body.z) > body.y - 0.1) continue;
+    if (dist(body, t.position) < INTERACTION_REACH - 0.2 && d.world.clearance(body, SWIM) && aimsFrom(d, id, body, "swimming", host.center))
+      out.push({ body: { ...body, tolerance: 0.3 }, land: false, cost: dist(here, body) });
   }
   return out.sort((a, b) => a.cost - b.cost);
 }
