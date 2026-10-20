@@ -31,3 +31,5 @@
   - Commit it on your review branch. No production edits, push, PR or children.
   - Final reply: the verdict and the findings, briefly.
 - **Evidence:** `/home/worker/.local/share/siltwake-evidence/<id>-review/`.
+
+**GPU browser (since 2026-10-20):** the shared T3 preview stays software-rendered (SwiftShader), so use it for looks and behaviour only. For frame-rate or GPU checks, launch a task-owned Chrome with `--use-gl=angle --use-angle=gl-egl --ignore-gpu-blocklist`, or run `docs/build/gpu-enablement/webgl-probe.mjs --candidate angle-gl-egl`. Avoid ANGLE-Vulkan, which loses the context at startup. Follow the browser rules and close what you open. Only one GPU-heavy browser job at a time, through `scripts/heavy-check.sh`.

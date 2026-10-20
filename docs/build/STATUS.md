@@ -3,7 +3,7 @@
 Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION](DIRECTION.md). History: [archive/](archive/README.md).
 
 **Current**
-- Accepted production is `eb712f1`: schema 4 / `expedition.5`.
+- Accepted production is `ccf8c44` (M2-B1 earned Creel and mobile refuge): schema 5 / `expedition.6`.
 - The integration branch is `feat/siltwake-first-expedition`.
 - `main` and the public deployment are owner actions.
 
@@ -13,22 +13,19 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 
 | Work | Owner | Branch / worktree | Owns | Next |
 | --- | --- | --- | --- | --- |
-| M2-B1: earned Creel and mobile refuge | Opus 5.5 high | `t3/earned-creel-mobile-refuge-loop` / `t3-b6aef8ec` | The roots listed in DIRECTION | Done at `2cff245`; Sol R1 review running |
-| GPU enablement bundle | Opus 5.5 high (author) | `t3/enable-3090-gpu` / `t3-b9861fd3` | `docs/build/gpu-enablement/` | attach rolled back safely; the `qemu:commandline` fix is in progress |
+| M2-B1: earned Creel and mobile refuge | Opus 5.5 high | `t3/earned-creel-mobile-refuge-loop` / `t3-b6aef8ec` | The roots listed in DIRECTION | **Accepted** and integrated at `ccf8c44` |
+| GPU enablement bundle | Opus 5.5 high (author) | `t3/enable-3090-gpu` / `t3-b9861fd3` | `docs/build/gpu-enablement/` | **Done**: attached and verified |
 | New parallel streams | See [streams](STREAMS.md) | | | |
 
 **Next**
 1. GPU: R3 accepted → place the bundle in Fleet → the owner approves the rehearsal → install the guest driver → checkpoint → the owner approves the attach → run the 3090 browser smoke.
 2. B1 handoff → Sol review → integrate. Then: save simplification, test tiers, compose the parallel streams, the world scale slice, and a rough complete campaign.
 
-**Blocking:** GPU attach.
-- **First real attach:** run `20261020T032723Z-ae45` returned `rolled-back/20`. libvirt refused `<sysinfo type='fwcfg'>` with "That firmware name is reserved" (it reserves the `opt/ovmf/` prefix), so the VM restarted unchanged.
-- **Fix in progress** with the GPU author: carry the same `-fw_cfg` through `<qemu:commandline>`, and add a `virsh domxml-to-native` validation before shutdown.
-- **Then:** a focused Sol review, a rehearsal and the attach.
+**GPU: done (2026-10-20).** The RTX 3090 is attached and verified; see [LIVE-RESULT](gpu-enablement/LIVE-RESULT.md). Browser work that needs the GPU uses a task-owned Chrome with `--use-gl=angle --use-angle=gl-egl --ignore-gpu-blocklist`, per the README. The shared T3 preview stays software.
 
 **Stream reviews running** (fresh Sol xhigh; rules in [STREAM-REVIEW-RULES](STREAM-REVIEW-RULES.md)): S1 `171b7d7`, S3 `d058d27`, S4 `a6b3181`, S5 `58c8a6a`, S6 `cd9c13d`. B1 and S2 continue building. S4's design additions are accepted: lamp switch, nonlethal kits, one lunge at a time, 12 m refuge margin.
 
-**Unverified:** human pacing and enjoyment, the audible mix, 3090 rendering, full-world memory and eviction.
+**Unverified:** human pacing and enjoyment, the audible mix, representative 1080p/60 performance, full-world memory and eviction.
 
 ## GPU attach procedure (prepared 2026-10-20)
 **State:**
@@ -51,3 +48,13 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 3. Resume every builder with a short "continue" message: B1 (`siltwake-m2-b1-opus-high-7bd259c`) and S1–S6 (IDs in STREAMS).
 4. Tell the owner to resume the fleet-dashboard threads if they were interrupted.
 5. Record the outcome here and in Fleet `docs/STATE.md`, then fix R3-01 and R4-01.
+
+## GPU attach, second attempt (2026-10-20 04:10 UTC)
+- **Rehearsal** `20261020T040634Z-8a53` returned `rehearsal-ok`. The gate reported that libvirt accepts the target, and the argv has `-fw_cfg … X-PciMmio64Mb,string=65536` plus `vfio-pci` for `01:00.0` and `01:00.1`.
+- **Checkpoint:** all builders (S1, S6, S7, S8) and reviewers (B1, S2, S3-R2, S4-R2) were told to commit and stop. All worktrees are clean. `check pre` shows the same four dashboard baseline failures.
+- **Attach** submitted for owner approval.
+
+**After boot:**
+1. Read `result.json`.
+2. Run `check post` with the probe.
+3. Resume S1, S6, S7 and S8, and send "continue" to the four reviewers. Check each reviewer's summary first: some may already have finished.

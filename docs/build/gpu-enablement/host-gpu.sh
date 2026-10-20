@@ -31,11 +31,16 @@ RESERVE_KIB=2621440     # host MemAvailable left once all guest RAM is pinned (2
 # The card has resizable BAR enabled on this host (BAR1 32 GiB), which does not fit OVMF's
 # default 32 GiB 64-bit PCI window. Attach therefore also sets OVMF's window size through the
 # fw_cfg item OVMF reads, "opt/ovmf/X-PciMmio64Mb" (edk2 OvmfPkg PlatformInitLib MemDetect.c),
-# with libvirt's native <sysinfo type='fwcfg'> (libvirt >= 6.5; qemu_command.c turns it into
-# "-fw_cfg name=opt/ovmf/X-PciMmio64Mb,string=N"). The size is computed: the card's 64-bit
+# passed as exactly two QEMU arguments in <qemu:commandline>: "-fw_cfg" and
+# "name=opt/ovmf/X-PciMmio64Mb,string=N". libvirt's native <sysinfo type='fwcfg'> cannot carry
+# it: qemuValidateDomainDefSysinfo (libvirt 12.2.0 qemu_validate.c:1059-1081) rejects any
+# name under "opt/ovmf/" as "That firmware name is reserved" (the 2026-10-20 attach failed
+# there and rolled back). Every target definition is validated by "virsh domxml-to-native"
+# before the VM is stopped. The size is computed: the card's 64-bit
 # prefetchable BARs plus a margin for the other root ports' 64-bit padding (five ports x
 # 256 MiB observed in the guest), rounded up to a power of two, at least 64 GiB.
 FWCFG_NAME=opt/ovmf/X-PciMmio64Mb
+QEMU_NS="http://libvirt.org/schemas/domain/qemu/1.0"
 MIN_WINDOW_MIB=65536
 OTHER_PREF64_MARGIN_KIB=2097152
 
@@ -126,22 +131,34 @@ hostdev_srcs() {
     h && /<\/hostdev>/ { if (!got) print "other"; h=0 }' | sort | paste -sd' ' -
 }
 strip_hostdev() { awk '/<hostdev /{skip=1} !skip{print} /<\/hostdev>/{skip=0}'; }
-# Our fw_cfg value: "" without any fw_cfg sysinfo, the number for exactly one entry named
-# FWCFG_NAME with a numeric value, "foreign" for anything else (other names, file= blobs).
+# Our QEMU block, exactly as libvirt writes it back (before </domain>), with the
+# xmlns:qemu attribute it then puts on <domain>:
+#   <qemu:commandline>
+#     <qemu:arg value='-fw_cfg'/>
+#     <qemu:arg value='name=opt/ovmf/X-PciMmio64Mb,string=N'/>
+#   </qemu:commandline>
+qemu_block() { printf "  <qemu:commandline>\n    <qemu:arg value='-fw_cfg'/>\n    <qemu:arg value='name=%s,string=%s'/>\n  </qemu:commandline>" "$FWCFG_NAME" "$1"; }
+# Our window value: "" when the definition has no QEMU content at all, N when its only QEMU
+# content is exactly our block (and the namespace), "foreign" for anything else.
 fw_value() {
-  awk -v n="$FWCFG_NAME" '
-    /<sysinfo type=.fwcfg.>/ { s = 1; next }
-    s && /<\/sysinfo>/ { s = 0; next }
-    s && /<entry / { c++; if (index($0, "<entry name=\047" n "\047>") && match($0, />[0-9]+<\/entry>/)) v = substr($0, RSTART + 1, RLENGTH - 9); else bad = 1 }
-    END { if (bad || c > 1) print "foreign"; else if (c == 1) print v }'
+  local x="$1" e ns n
+  e="$(grep -c 'qemu:' <<<"$x")"; ns="$(grep -c 'xmlns:qemu=' <<<"$x")"
+  [ "$e" = 0 ] && [ "$ns" = 0 ] && return 0
+  n="$(sed -n "s#^    <qemu:arg value='name=$FWCFG_NAME,string=\\([0-9][0-9]*\\)'/>\$#\\1#p" <<<"$x")"
+  if [ "$e" = 4 ] && [ "$ns" = 1 ] && [[ "$n" =~ ^[0-9]+$ ]] && [[ "$x" == *"$(qemu_block "$n")"* ]] \
+     && [[ "$(sed -n 1p <<<"$x")" == *" xmlns:qemu='$QEMU_NS'"* ]]; then
+    printf '%s' "$n"
+  else printf foreign; fi
 }
-# The state of our entries in a definition, as "<hostdev sources>|<fw_cfg value>"; any QEMU
-# namespace element (<qemu:commandline>, <qemu:override>, ...) makes it "...+qemu" (foreign).
-ours_of() { local q=""; grep -q '<qemu:' <<<"$1" && q="+qemu"; printf '%s|%s%s' "$(hostdev_srcs <<<"$1")" "$(fw_value <<<"$1")" "$q"; }
+# The state of our entries in a definition, as "<hostdev sources>|<window value>".
+ours_of() { printf '%s|%s' "$(hostdev_srcs <<<"$1")" "$(fw_value "$1")"; }
 ours_valid() { local h="${1%%|*}" f="${1#*|}"; { [ -z "$h" ] || [ "$h" = "$OURS" ]; } && [[ "$f" =~ ^[0-9]*$ ]]; }
-# The definition without our entries: every hostdev and the fw_cfg sysinfo (only ever used
-# once ours_valid has excluded foreign hostdevs and fw_cfg entries).
-strip_ours() { awk '/<hostdev /{skip=1} /<sysinfo type=.fwcfg.>/{skip=1} !skip{print} /<\/hostdev>/{skip=0} /<\/sysinfo>/{skip=0}'; }
+# The definition without our entries: every hostdev, our QEMU block and the namespace (only
+# ever used once ours_valid has excluded foreign hostdevs and QEMU content).
+strip_ours() {
+  awk -v ns=" xmlns:qemu='$QEMU_NS'" 'NR == 1 { i = index($0, ns); if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(ns)) }
+    /<hostdev /{skip=1} /^  <qemu:commandline>$/{skip=1} !skip{print} /<\/hostdev>/{skip=0} /^  <\/qemu:commandline>$/{skip=0}'
+}
 xml_mem() { sed -n "s/^ *<memory unit='KiB'>\([0-9]*\)<\/memory>.*/\1/p" | head -1; }
 names_gpu() { case " $(hostdev_srcs <<<"$1") " in *" $GPU "*|*" $AUD "*) return 0 ;; esac; return 1; }
 
@@ -375,6 +392,7 @@ tell_owner() {
 finish() { # <outcome> <exit code> <message>
   local level=alert launcher=unknown st srcs="" x
   FINISHED=1
+  tmp_clean
   release_fleet_lock
   st="$(domstate)"
   if [ "$st" = running ]; then if read_live x; then srcs="$(ours_of "$x")"; else srcs="unreadable"; fi; fi
@@ -437,14 +455,50 @@ backup_definition() {
 }
 
 # The VM's own full definition (security info included, so passwords survive) without our
-# entries, plus the entries of <pair>: the hostdevs before "  </devices>", the fw_cfg sysinfo
-# before "  <os". Each anchor must occur exactly once.
-build_target() { # <full definition without ours> <pair>
-  local h="${2%%|*}" f="${2#*|}" hd="" sy=""
-  [ "$(grep -c '^  </devices>$' <<<"$1")" = 1 ] && [ "$(grep -cE '^  <os[ >]' <<<"$1")" = 1 ] || { rd_fail "the definition's </devices> or <os> anchor is not unique"; return 1; }
-  [ -z "$h" ] || hd="$(hostdev_xml 0 | sed 's/^/    /'; hostdev_xml 1 | sed 's/^/    /')"
-  [ -z "$f" ] || sy="$(printf "  <sysinfo type='fwcfg'>\n    <entry name='%s'>%s</entry>\n  </sysinfo>" "$FWCFG_NAME" "$f")"
-  HD="$hd" SY="$sy" awk '/^  <\/devices>$/ && ENVIRON["HD"] != "" { print ENVIRON["HD"] } /^  <os[ >]/ && ENVIRON["SY"] != "" { print ENVIRON["SY"] } { print }' <<<"$1"
+# entries, plus the entries of <pair>: the hostdevs before "  </devices>", our QEMU block
+# before the final "</domain>" and the namespace on the first line. Anchors must be unique.
+build_target() { # <variable> <full definition without ours> <pair>; READ_ERR says why it failed
+  local __h="${3%%|*}" __f="${3#*|}" __hd="" __qb=""
+  [ "$(grep -c '^  </devices>$' <<<"$2")" = 1 ] && [ "$(grep -c '^</domain>$' <<<"$2")" = 1 ] && [ "$(sed -n '$p' <<<"$2")" = "</domain>" ] \
+    && [[ "$(sed -n 1p <<<"$2")" =~ ^\<domain\ [^\>]*\>$ ]] || { rd_fail "the definition's <domain>, </devices> or </domain> anchor is not unique"; return 1; }
+  [ -z "$__h" ] || __hd="$(hostdev_xml 0 | sed 's/^/    /'; hostdev_xml 1 | sed 's/^/    /')"
+  [ -z "$__f" ] || __qb="$(qemu_block "$__f")"
+  printf -v "$1" '%s' "$(HD="$__hd" QB="$__qb" NS=" xmlns:qemu='$QEMU_NS'" awk 'NR == 1 && ENVIRON["QB"] != "" { sub(/>$/, ENVIRON["NS"] ">") }
+    /^  <\/devices>$/ && ENVIRON["HD"] != "" { print ENVIRON["HD"] } /^<\/domain>$/ && ENVIRON["QB"] != "" { print ENVIRON["QB"] } { print }' <<<"$2")"
+}
+
+# Temporary files hold security info: root-only, in the host's /tmp, removed right after use
+# and, if the run is interrupted, by finish (R4-01).
+TMP_FILES=()
+tmp_new() { local __t; __t="$(umask 077; mktemp /tmp/fleet-gpu-define.XXXXXX)" || { rd_fail "cannot create a temporary file"; return 1; }; TMP_FILES+=("$__t"); printf -v "$1" '%s' "$__t"; }
+tmp_clean() { [ ${#TMP_FILES[@]} -eq 0 ] || rm -f -- "${TMP_FILES[@]}" 2>/dev/null; TMP_FILES=(); }
+
+# The pre-shutdown gate: build the exact target definition from the current one and let
+# libvirt parse, validate and turn it into a QEMU command line without touching any domain
+# ("virsh domxml-to-native qemu-argv"; libvirt's own validation runs, so the 2026-10-20
+# reserved-name failure would stop here). The argv must hold our -fw_cfg pair and a vfio-pci
+# device for each function. Only those lines are recorded: the argv can contain secrets.
+validate_target() { # <pair>
+  local full target tmp argv h="${1%%|*}" f="${1#*|}" fn line found=""
+  v_read full dumpxml --inactive --security-info "$VM_UUID" && xml_ok "$full" "$VM_NAME" "$VM_UUID" || { problem "gate: cannot read the full definition: $READ_ERR"; return 1; }
+  ours_valid "$(ours_of "$full")" || { problem "gate: the definition has entries that are not ours"; return 1; }
+  build_target target "$(strip_ours <<<"$full")" "$1" || { problem "gate: $READ_ERR"; return 1; }
+  tmp_new tmp || { problem "gate: $READ_ERR"; return 1; }
+  printf '%s\n' "$target" > "$tmp" && v_read argv domxml-to-native qemu-argv --xml "$tmp"; local rc=$?
+  tmp_clean
+  [ "$rc" = 0 ] || { problem "gate: libvirt rejects the target definition: ${READ_ERR}"; return 1; }
+  argv="$(tr ' ' '\n' <<<"$argv")"
+  if [ -n "$f" ]; then
+    grep -qxF -- "name=$FWCFG_NAME,string=$f" <<<"$argv" && grep -B1 -xF -- "name=$FWCFG_NAME,string=$f" <<<"$argv" | head -1 | grep -qxF -- -fw_cfg \
+      && found="-fw_cfg name=$FWCFG_NAME,string=$f" || problem "gate: the QEMU command line lacks '-fw_cfg name=$FWCFG_NAME,string=$f'"
+  else grep -qF -- "name=$FWCFG_NAME" <<<"$argv" && problem "gate: the QEMU command line still has $FWCFG_NAME"; fi
+  for fn in 0 1; do
+    line="$(grep -E "vfio-pci" <<<"$argv" | grep -E "\"host\":\"0000:01:00\.$fn\"|host=0000:01:00\.$fn([,']|$)" | head -1)"
+    if [ -n "$h" ]; then [ -n "$line" ] && found="$found | ${line//\'/}" || problem "gate: the QEMU command line has no vfio-pci device for 0000:01:00.$fn"
+    else [ -z "$line" ] || problem "gate: the QEMU command line still has vfio-pci 0000:01:00.$fn"; fi
+  done
+  [ ${#PROBLEMS[@]} -eq 0 ] || return 1
+  log "gate: libvirt accepts the target; argv has: ${found:-no GPU entries (as intended)}"
 }
 
 # set_ours <pair>: make our entries in the persistent definition exactly <pair>, in one
@@ -457,10 +511,10 @@ set_ours() {
   cur="$(ours_of "$full")"
   [ "$cur" = "$1" ] && return 0
   ours_valid "$cur" || { rd_fail "the definition has entries that are not ours: '$cur'"; return 1; }
-  target="$(build_target "$(strip_ours <<<"$full")" "$1")" || return 1
-  tmp="$(umask 077; mktemp /tmp/fleet-gpu-define.XXXXXX)" || { rd_fail "cannot create a temporary file"; return 1; }
+  build_target target "$(strip_ours <<<"$full")" "$1" || return 1
+  tmp_new tmp || return 1
   printf '%s\n' "$target" > "$tmp" && vdo define "$tmp"; rc=$?
-  rm -f "$tmp"
+  tmp_clean
   return "$rc"
 }
 
@@ -559,6 +613,7 @@ transition() {
   take_fleet_lock || finish locked 11 "Fleet's lock stayed busy for $FLEET_LOCK_WAIT s; nothing was changed and the VM was not stopped"
   log "holding $FLEET_LOCK until the VM is started"
   recheck "$STATE" "$REF_OURS" || finish preflight-failed 10 "before the shutdown: ${PROBLEMS[*]}; nothing was changed"
+  PROBLEMS=(); validate_target "$TARGET" || finish preflight-failed 10 "before the shutdown: ${PROBLEMS[*]}; nothing was changed"
   if [ "$PLAN" = full ]; then
     shutdown_vm || finish shutdown-timeout 13 "still '$(domstate)' after $SHUTDOWN_TIMEOUT s; nothing was changed and nothing forced. Look at the VNC console"
   fi
@@ -707,6 +762,7 @@ cmd_run() {
     set_phase rehearsal "lock and boundary check, then holding $REHEARSAL_HOLD s"
     take_fleet_lock || finish locked 11 "Fleet's lock stayed busy for $FLEET_LOCK_WAIT s (rehearsal); nothing was changed"
     recheck "$STATE" "$REF_OURS" || finish preflight-failed 10 "boundary check: ${PROBLEMS[*]} (rehearsal); nothing was changed"
+    PROBLEMS=(); validate_target "$TARGET" || finish preflight-failed 10 "${PROBLEMS[*]} (rehearsal); nothing was changed"
     release_fleet_lock
     sleep "$REHEARSAL_HOLD"
     finish rehearsal-ok 0 "all checks pass, backup verified, plan '$PLAN'; nothing was changed"

@@ -78,8 +78,8 @@ SHA="$(sha256sum < "$SRC/host-gpu.sh" | cut -d' ' -f1)"
 
 # launch <action> [--rehearsal]: as the approved ask runs it; waits for result.json.
 launch() {
-  local out i
-  out="$(bash "$SCRIPT" launch "$1" --expect-sha256 "$SHA" --not-after $(( $(date +%s) + 600 )) "${@:2}" 2>&1)"
+  local out i script="${LAUNCH_SCRIPT:-$SCRIPT}" sha="${LAUNCH_SHA:-$SHA}"
+  out="$(bash "$script" launch "$1" --expect-sha256 "$sha" --not-after $(( $(date +%s) + 600 )) "${@:2}" 2>&1)"
   RID="$(sed -n 's/^Launched [a-z]* run \([^ ;]*\)[ ;].*/\1/p' <<<"$out")"; RD="$RUNS/$RID"
   [ -n "$RID" ] || { echo "     | launch said: $out"; return 1; }
   for i in $(seq 1 300); do [ -f "$RD/result.json" ] && break; sleep 0.1; done
@@ -88,10 +88,10 @@ launch() {
 outcome() { sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p' "$RD/result.json"; }
 code()    { sed -n 's/.*"exit_code":\([0-9]*\).*/\1/p' "$RD/result.json"; }
 srcs()    { awk '/<hostdev /{h=1;s=0} h&&/<source>/{s=1} h&&s&&/<address /{match($0,/function=.0x[01]/); print "0000:01:00." substr($0,RSTART+12,1); s=0} /<\/hostdev>/{h=0}' "$1" | sort | paste -sd' ' -; }
-same_as_fixture() { [ "$(awk '/<hostdev /{k=1} /<sysinfo type=.fwcfg.>/{k=1} !k{print} /<\/hostdev>/{k=0} /<\/sysinfo>/{k=0}' "$S/cfg.xml")" = "$(cat "$SRC/fixtures/factory-worker.xml")" ]; }
+same_as_fixture() { [ "$(awk 'NR == 1 {sub(/ xmlns:qemu=.http:\/\/libvirt.org\/schemas\/domain\/qemu\/1.0./, "")} /<hostdev /{k=1} /^  <qemu:commandline>$/{k=1} !k{print} /<\/hostdev>/{k=0} /^  <\/qemu:commandline>$/{k=0}' "$S/cfg.xml")" = "$(cat "$SRC/fixtures/factory-worker.xml")" ]; }
 state()   { cat "$S/state"; }
 is_fixture() { [ "$(cat "$S/cfg.xml")" = "$(cat "$SRC/fixtures/factory-worker.xml")" ]; }
-fw_of()   { sed -n "s#.*<entry name='opt/ovmf/X-PciMmio64Mb'>\([0-9]*\)</entry>.*#\1#p" "$1"; }
+fw_of()   { sed -n "s#^    <qemu:arg value='name=opt/ovmf/X-PciMmio64Mb,string=\([0-9]*\)'/>\$#\1#p" "$1"; }
 
 echo "== read-only preflight"
 reset_fake
@@ -339,19 +339,24 @@ is "start fails and the state is then unknown: needs-owner saying so, not left-o
 reset_fake; put start_fail always; put on_shutoff_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml"; launch attach
 is "start fails and the VM is observed shut off: left-off" eval '[ "$(outcome)/$(code)/$(state)" = "left-off/30/shut off" ]'
 
-echo "== R3: the 64-bit MMIO window (OVMF fw_cfg) is ours, with the hostdevs"
+echo "== R3/R4: the 64-bit MMIO window (-fw_cfg in <qemu:commandline>) is ours, with the hostdevs"
 reset_fake; launch attach
 is "ReBAR attach: attached/0 with the hostdevs and X-PciMmio64Mb=65536 defined and running" eval '[ "$(outcome)/$(code)" = attached/0 ] && [ "$(srcs "$S/cfg.xml")" = "$OURS" ] && [ "$(fw_of "$S/cfg.xml")" = 65536 ] && [ "$(fw_of "$S/live.xml")" = 65536 ]'
 is "only our entries added: the rest of the definition byte-identical" same_as_fixture
-is "the fw_cfg entry is native libvirt sysinfo, no QEMU namespace" eval 'grep -q "<sysinfo type=.fwcfg.>" "$S/cfg.xml" && ! grep -q "qemu:" "$S/cfg.xml"'
+is "the window is exactly our two <qemu:arg> with the namespace; no <sysinfo>" eval 'grep -q "^<domain type=.kvm. xmlns:qemu=.http://libvirt.org/schemas/domain/qemu/1.0.>$" "$S/cfg.xml" && [ "$(grep -c "<qemu:arg " "$S/cfg.xml")" = 2 ] && grep -q "^    <qemu:arg value=.-fw_cfg./>$" "$S/cfg.xml" && ! grep -q "<sysinfo" "$S/cfg.xml"'
+is "R4 gate: domxml-to-native ran before the shutdown" eval '[ "$(grep -Eo "virsh (domxml-to-native|shutdown|define|start) " "$S/calls.log" | paste -sd, -)" = "virsh domxml-to-native ,virsh shutdown ,virsh define ,virsh start " ]'
+is "R4 gate: the run records our -fw_cfg and both vfio-pci devices" eval 'grep -q "gate: libvirt accepts the target; argv has: -fw_cfg name=opt/ovmf/X-PciMmio64Mb,string=65536 | .*0000:01:00.0.* | .*0000:01:00.1" "$RD/run.log"'
+is "R4 gate: the argv secret is never recorded" eval '! grep -rq c2VjcmV0LXBhc3N3b3Jk "$RD"'
 is "no file with security info left in /tmp" eval '[ -z "$(ls /tmp/fleet-gpu-define.* 2>/dev/null)" ]'
 launch detach
-is "detach removes the fw_cfg entry and the hostdevs: definition equals the original exactly" eval '[ "$(outcome)/$(code)" = detached/0 ] && is_fixture'
+is "detach removes the QEMU block, the namespace and the hostdevs: definition equals the original exactly" eval '[ "$(outcome)/$(code)" = detached/0 ] && is_fixture'
 
-reset_fake; launch attach; awk '/<sysinfo type=.fwcfg.>/{d=1} !d{print} /<\/sysinfo>/{d=0}' "$S/cfg.xml" > "$S/c" && mv "$S/c" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"; : > "$S/calls.log"
+reset_fake; launch attach; awk 'NR == 1 {sub(/ xmlns:qemu=.[^ >]*/, "")} /<qemu:commandline>/{d=1} !d{print} /<\/qemu:commandline>/{d=0}' "$S/cfg.xml" > "$S/c" && mv "$S/c" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"; : > "$S/calls.log"
 launch attach
-is "fw_cfg entry dropped (form-view edit): attach again restores it with a cycle" eval '[ "$(outcome)/$(code)" = attached/0 ] && [ "$(fw_of "$S/cfg.xml")" = 65536 ] && called "virsh define"'
+is "QEMU block dropped (Unraid form-view edit): attach again restores it with a cycle" eval '[ "$(outcome)/$(code)" = attached/0 ] && [ "$(fw_of "$S/cfg.xml")" = 65536 ] && called "virsh define"'
 
+QB="  <qemu:commandline>\n    <qemu:arg value='-fw_cfg'/>\n    <qemu:arg value='name=opt/ovmf/X-PciMmio64Mb,string=65536'/>"
+NSX="s#^<domain type='kvm'>#<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>#"
 foreign() { # <name> <sed expression adding something foreign>
   reset_fake; sed -i "$2" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"
   out="$(bash "$SCRIPT" preflight attach 2>&1)"; rc=$?
@@ -359,16 +364,68 @@ foreign() { # <name> <sed expression adding something foreign>
   out="$(bash "$SCRIPT" preflight detach 2>&1)"; rc=$?
   is "$1: detach refused too" eval '[ "$rc" = 10 ] && grep -q "not ours" <<<"$out"'
 }
-foreign "foreign <qemu:commandline>" "s#^<domain type='kvm'>#<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>#; s#^</domain>#  <qemu:commandline>\n    <qemu:arg value='-fw_cfg'/>\n    <qemu:arg value='name=opt/ovmf/X-PciMmio64Mb,string=65536'/>\n  </qemu:commandline>\n</domain>#"
-foreign "foreign fw_cfg entry" "s#^  <os>#  <sysinfo type='fwcfg'>\n    <entry name='opt/com.example/x'>1</entry>\n  </sysinfo>\n  <os>#"
-foreign "our fw_cfg name as a file blob" "s#^  <os>#  <sysinfo type='fwcfg'>\n    <entry name='opt/ovmf/X-PciMmio64Mb' file='/tmp/x'/>\n  </sysinfo>\n  <os>#"
+foreign "another QEMU argument" "$NSX; s#^</domain>#  <qemu:commandline>\n    <qemu:arg value='-S'/>\n  </qemu:commandline>\n</domain>#"
+foreign "our pair plus an extra argument" "$NSX; s#^</domain>#$QB\n    <qemu:arg value='-no-hpet'/>\n  </qemu:commandline>\n</domain>#"
+foreign "our pair plus a <qemu:env>" "$NSX; s#^</domain>#$QB\n    <qemu:env name='X' value='1'/>\n  </qemu:commandline>\n</domain>#"
+foreign "our name with a file= blob" "$NSX; s#^</domain>#  <qemu:commandline>\n    <qemu:arg value='-fw_cfg'/>\n    <qemu:arg value='name=opt/ovmf/X-PciMmio64Mb,file=/tmp/x'/>\n  </qemu:commandline>\n</domain>#"
+foreign "<qemu:override>" "$NSX; s#^</domain>#  <qemu:override>\n    <qemu:device alias='x'/>\n  </qemu:override>\n</domain>#"
+foreign "<qemu:capabilities>" "$NSX; s#^</domain>#  <qemu:capabilities>\n    <qemu:add capability='blockdev'/>\n  </qemu:capabilities>\n</domain>#"
+reset_fake; sed -i "s#^  <os>#  <sysinfo type='fwcfg'>\n    <entry name='opt/com.example/x'>1</entry>\n  </sysinfo>\n  <os>#" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"; launch attach
+is "an unrelated (valid) fw_cfg sysinfo entry is just content: kept byte for byte" eval '[ "$(outcome)/$(code)" = attached/0 ] && grep -q "<entry name=.opt/com.example/x.>1</entry>" "$S/cfg.xml"'
 
 reset_fake; put start_fail hostdev; launch attach
-is "start fails with the GPU: rolled back with the fw_cfg entry removed too" eval '[ "$(outcome)/$(code)/$(state)" = rolled-back/20/running ] && is_fixture'
-reset_fake; touch "$S/define_drops_sysinfo"; launch attach
-is "libvirt drops the fw_cfg sysinfo: unexpected, undone, never started with half the change" eval '[ "$(outcome)/$(code)" = rolled-back/20 ] && [ -z "$(srcs "$S/cfg.xml")" ] && [ -z "$(fw_of "$S/cfg.xml")" ]'
+is "start fails with the GPU: rolled back with the QEMU block removed too" eval '[ "$(outcome)/$(code)/$(state)" = rolled-back/20/running ] && is_fixture'
+reset_fake; touch "$S/define_drops_qemu"; launch attach
+is "libvirt/Unraid drops the QEMU block: unexpected, undone, never started half-changed" eval '[ "$(outcome)/$(code)" = rolled-back/20 ] && [ -z "$(srcs "$S/cfg.xml")" ] && [ -z "$(fw_of "$S/cfg.xml")" ]'
 reset_fake; put on_define_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml"; launch attach
 is "another change lands with our define: undone, not started as attached" eval '[ "$(outcome)" != attached ] && [ -z "$(fw_of "$S/cfg.xml")" ]'
+
+echo "== R4: libvirt rejects a reserved fw_cfg name, and the gate catches it before any shutdown"
+reset_fake; printf "<domain type='kvm'>\n  <name>factory-worker</name>\n  <uuid>$UUID</uuid>\n  <sysinfo type='fwcfg'>\n    <entry name='opt/ovmf/X-PciMmio64Mb'>65536</entry>\n  </sysinfo>\n</domain>\n" > /tmp/reserved.xml
+out="$(virsh define /tmp/reserved.xml 2>&1)"; rc=$?
+is "the fake rejects opt/ovmf/ sysinfo as libvirt 12.2 does" eval '[ "$rc" != 0 ] && grep -q "That firmware name is reserved" <<<"$out"'
+out="$(virsh domxml-to-native qemu-argv --xml /tmp/reserved.xml 2>&1)"; rc=$?
+is "domxml-to-native rejects it the same way" eval '[ "$rc" != 0 ] && grep -q "That firmware name is reserved" <<<"$out"'
+# The 6cc4bec target (with its reserved <sysinfo> entry) built by this script, through the real gate:
+VAR="$HOME_DIR/host-gpu-6cc4bec-target.sh"
+python3 - "$SCRIPT" "$VAR" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+old = '[ -z "$__f" ] || __qb="$(qemu_block "$__f")"'
+new = old + "$'\\n'\"  <sysinfo type='fwcfg'>\"$'\\n'\"    <entry name='$FWCFG_NAME'>$__f</entry>\"$'\\n'\"  </sysinfo>\""
+assert s.count(old) == 1
+open(sys.argv[2], "w").write(s.replace(old, new))
+PY
+is "the variant script differs from the candidate only by the reserved block" eval '[ "$(diff "$SCRIPT" "$VAR" | grep -c "^>")" = 1 ]'
+reset_fake; LAUNCH_SCRIPT="$VAR" LAUNCH_SHA="$(sha256sum < "$VAR" | cut -d' ' -f1)" launch attach
+is "reserved-name target: preflight-failed, exit 10, says why" eval '[ "$(outcome)/$(code)" = preflight-failed/10 ] && grep -q "That firmware name is reserved" "$RD/result.json"'
+is "reserved-name target: the VM was never stopped or defined" eval 'not_called "virsh (shutdown|define|start) " && [ "$(state)" = running ]'
+rm -f "$VAR"
+
+echo "== R4: the gate fails closed"
+gate() { # <name> <knob> <expected text>
+  reset_fake; touch "$S/$2"; launch attach
+  is "$1: preflight-failed, exit 10, VM never stopped" eval '[ "$(outcome)/$(code)/$(state)" = preflight-failed/10/running ] && not_called "virsh (shutdown|define|start) "'
+  is "$1: says why" grep -q -- "$3" "$RD/result.json"
+}
+gate "domxml-to-native fails" native_fail "libvirt rejects the target definition"
+gate "argv without the -fw_cfg pair" native_drop_qemu "lacks '-fw_cfg name=opt/ovmf/X-PciMmio64Mb,string=65536'"
+gate "argv without vfio-pci" native_drop_vfio "no vfio-pci device for 0000:01:00.0"
+reset_fake; sed -i "s#^  </devices>#  </devices>\n  <!--\n  </devices>\n  -->#" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"; launch attach
+is "a target that cannot be built: preflight-failed with the reason (not an empty 'gate: ')" eval '[ "$(outcome)/$(code)" = preflight-failed/10 ] && grep -q "gate: the definition.s <domain>, </devices> or </domain> anchor is not unique" "$RD/result.json" && not_called "virsh (shutdown|define|start) "'
+reset_fake; touch "$S/native_fail"; launch attach --rehearsal
+is "the rehearsal runs the gate too: preflight-failed" eval '[ "$(outcome)/$(code)" = preflight-failed/10 ] && grep -q "(rehearsal)" "$RD/result.json"'
+reset_fake; launch attach --rehearsal
+is "rehearsal with a valid target: rehearsal-ok after the gate" eval '[ "$(outcome)/$(code)" = rehearsal-ok/0 ] && called "virsh domxml-to-native" && not_called "virsh (shutdown|define|start) "'
+reset_fake; launch attach; : > "$S/calls.log"; launch detach
+is "detach is gated too" eval '[ "$(outcome)/$(code)" = detached/0 ] && called "virsh domxml-to-native"'
+
+echo "== R4-01: an interrupted run leaves no temporary file with security info"
+killrun='kill -TERM $(sed -n "s/.*\"pid\":\([0-9]*\).*/\1/p" '"$RUNS"'/*/state.json | head -1)'
+reset_fake; put on_define_cmd "$killrun"; launch attach
+is "TERM during the define: aborted, and no /tmp/fleet-gpu-define.* left" eval '[ "$(outcome)" = aborted ] && [ -z "$(ls /tmp/fleet-gpu-define.* 2>/dev/null)" ]'
+reset_fake; put on_native_cmd "$killrun"; launch attach
+is "TERM during the gate: aborted, never stopped, no temporary file left" eval '[ "$(outcome)" = aborted ] && [ "$(state)" = running ] && [ -z "$(ls /tmp/fleet-gpu-define.* 2>/dev/null)" ]'
 
 echo
 echo "passed $pass"
