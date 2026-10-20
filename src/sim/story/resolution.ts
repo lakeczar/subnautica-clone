@@ -1,4 +1,4 @@
-/** The ending: physical requirements, a supervised first waking and the epilogue.
+/** The ending: physical requirements, a short supervised scene and the epilogue.
  * No personal journal or optional record is ever a requirement; optional finds
  * only vary a line of dialogue. Starting the resolution guarantees the notebook
  * can answer every central question, from the controller's summary if need be. */
@@ -42,7 +42,7 @@ const sceneLines = (s: StoryState, lines: readonly SceneLine[]): string[] =>
     .filter((l) => (!l.if || l.if.every((id) => found(s, id))) && (!l.unless || !l.unless.some((id) => found(s, id))))
     .map((l) => l.text);
 
-/** Opens one medically cleared bed. The default candidate is offered first. */
+/** Starts the closing scene with a roster choice; the default is offered first. */
 export function beginResolution(
   s: StoryState, site: StorySiteId | null, tick: number, candidate: RosterId = defaultCandidate(),
 ): { ok: boolean; message: string; lines: string[] } {

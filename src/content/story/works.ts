@@ -126,7 +126,7 @@ export type WorksStep =
   | "w_hall" | "w_food" | "w_route" | "w_begin";
 /** Practical hints for the works, three tiers each. `plans` replaces tiers 2–3
  * while the step's plans are unknown, naming where they are kept. Steps after the
- * gate are offered only once the waking question is open. */
+ * gate are offered only once the final question is open. */
 export const WORKS_HINTS = {
   w_power: {
     tiers: [

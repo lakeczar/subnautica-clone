@@ -40,7 +40,7 @@ export interface NotebookView {
   journals: JournalView[];
   leads: LeadView[];
   learned: { id: FactId; text: string }[];
-  /** The waking checklist, present only once its question is open. */
+  /** The final checklist, present only once its question is open. */
   resolution: RequirementView[] | null;
 }
 

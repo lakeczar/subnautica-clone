@@ -1,7 +1,7 @@
 /** Voluntary graduated hints. Each request raises one subject's tier by one:
  * restate what is known, then sharpen the region or landmark, then name the
  * approach and preparation. Hints never record a discovery or complete a step.
- * Once the waking question is open, practical works steps come before leads. */
+ * Once the final question is open, practical works steps come before leads. */
 import type { StorySiteId } from "../../content/story/evidence.js";
 import { LEADS } from "../../content/story/leads.js";
 import type { LeadId } from "../../content/story/leads.js";

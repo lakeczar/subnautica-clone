@@ -128,7 +128,7 @@ export const STORY_SITES = {
     region: "deep_district", depth: 740, exit: null, zone: "meridian", afterGate: true,
     landmark: "Dry hall behind the return gate.",
     cue: "Opens only once the return gate is open.",
-    approach: "Through the drained return gallery from the gate hall.",
+    approach: "Through the drained return gallery. Its service lock opens from the gate hall once the pressure matches; the crushed outer lock stays crushed.",
     visible: "Story-owned interior set (coordinator-authored). S2 provides the shell, the inner door and floor access.",
   },
 } as const satisfies Record<StorySiteId, StorySite>;

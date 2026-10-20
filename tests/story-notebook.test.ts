@@ -119,7 +119,7 @@ test("early late evidence: the service window first changes the question, not th
   const s = storyOf(["C01", "C13"]);
   const view = notebook(s);
   assert.equal(view.questions.find((q) => q.id === "Q2")!.answer?.startsWith("They went down"), true);
-  assert.ok(view.resolution, "the waking checklist opens immediately");
+  assert.ok(view.resolution, "the final checklist opens immediately");
   recordDiscovery(s, "C05", 3);
   const c05 = notebook(s).entries.find((e) => e.id === "C05")!;
   assert.equal(c05.reading, null);

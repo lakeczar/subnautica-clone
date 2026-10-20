@@ -184,7 +184,7 @@ export const LEADS = {
     hints: [
       "Something sealed below the gate hall still reports to the panels.",
       "The service window is at the lowest point of the district, beneath the gate hall's galleries.",
-      "Near 740 m, the deepest work in the campaign. Go with full air and the 800 m suit, and keep a reserve.",
+      "Near 740 m, the deepest dive yet. Go with full air and the 800 m suit, and keep a reserve.",
     ],
   },
   L14: {

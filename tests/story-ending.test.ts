@@ -8,7 +8,8 @@ import { EQUALIZE_STEPS, GALLERY_BAR, RESOLUTION_SCENES, WORKS_TEXT } from "../s
 import type { WorksAction } from "../src/content/story/works.js";
 import { blueprints, learned, recordDiscovery } from "../src/sim/story/knowledge.js";
 import { beginResolution, canBegin, completeResolution, requirements } from "../src/sim/story/resolution.js";
-import { createStory } from "../src/sim/story/state.js";
+import { planCampaign } from "../src/sim/story/reachability.js";
+import { createStory, validStory } from "../src/sim/story/state.js";
 import type { StoryState } from "../src/sim/story/state.js";
 import { advanceWorks, galleryBar, gatePanel, worksAction } from "../src/sim/story/works.js";
 import type { Assembly } from "../src/sim/story/works.js";
@@ -123,10 +124,10 @@ test("dialogue adapts to optional finds without requiring them", () => {
   assert.equal(a.lines.length, b.lines.length);
 });
 
-test("the epilogue closes the rescue, keeps the dead dead and varies on the mast", () => {
+test("the epilogue closes the story, keeps losses permanent and varies on the mast", () => {
   const s = storyOf(["C01", "C13"]);
   prepared(s);
-  assert.equal(completeResolution(s, { mastRestored: false }).ok, false, "the first waking comes first");
+  assert.equal(completeResolution(s, { mastRestored: false }).ok, false, "the closing scene comes first");
   beginResolution(s, "meridian_service_window", 9);
   const end = completeResolution(s, { mastRestored: true });
   assert.ok(end.ok);
@@ -146,4 +147,24 @@ test("final repair stock uses only established materials and fits a deep craft's
       bp_works_hall: ["C08", "district_controller"], bp_food_module: ["C10", "district_controller"] }[STORY_RECIPES[id].bp];
     for (const src of sources) assert.ok(blueprints([{ id: src as DiscoveryId, tick: 0 }]).has(STORY_RECIPES[id].bp), `${src} grants ${id}`);
   }
+});
+
+test("saved story state validates strictly and holds through a round trip at every stage", () => {
+  assert.ok(validStory(createStory()));
+  const s = storyOf(["C01", "C13"]);
+  for (const a of ["install_power", "install_air", "isolate", "equalize"] as const) {
+    act(s, a, GATE);
+    assert.ok(validStory(JSON.parse(JSON.stringify(s))), a);
+  }
+  advanceWorks(s, 100);
+  assert.ok(validStory(JSON.parse(JSON.stringify(s))), "mid-drain");
+  assert.ok(validStory(JSON.parse(JSON.stringify(planCampaign("carrier").story))), "completed");
+  const bad = (f: (x: StoryState) => void) => { const x: StoryState = JSON.parse(JSON.stringify(s)); f(x); return validStory(x); };
+  assert.equal(bad((x) => x.discoveries.push({ id: "C13", tick: 3 })), false, "duplicate");
+  assert.equal(bad((x) => (x.discoveries[0] as { id: string }).id = "C99"), false, "unknown ID");
+  assert.equal(bad((x) => { x.works.power = false; }), false, "isolated without power");
+  assert.equal(bad((x) => { x.works.equalizeSteps = EQUALIZE_STEPS + 1; }), false, "overrun");
+  assert.equal(bad((x) => { x.works.hallPower = true; }), false, "powered hall before the gate opens");
+  assert.equal(bad((x) => { x.resolution = { phase: "first", first: "iona" }; }), false, "ending before requirements");
+  assert.equal(bad((x) => { (x.hints as Record<string, number>).L01 = 4; }), false, "hint tier out of range");
 });
