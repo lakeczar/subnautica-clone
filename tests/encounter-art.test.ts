@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { same } from "./render-assert.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
@@ -115,7 +116,7 @@ test("hunter warning colors follow simulation state without moving geometry, lea
         }
         assert.deepEqual(counts(), expectedCounts);
         owned.forEach((mesh, i) => {
-          assert.equal(mesh.material, cel);
+          same(mesh.material, cel);
           assert.equal(mesh.getVertexBuffer("color")!.getBuffer(), buffers[i]);
           assert.deepEqual([Array.from(mesh.getVerticesData("position")!), Array.from(mesh.getVerticesData("normal")!), Array.from(mesh.getIndices()!)], geometry[i]);
           assert.ok([...mesh.position.asArray(), ...mesh.rotation.asArray(), ...mesh.scaling.asArray(), ...mesh.getVerticesData("color")!].every(Number.isFinite));

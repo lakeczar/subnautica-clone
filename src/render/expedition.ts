@@ -7,7 +7,7 @@ import {
   CANOPY_COVER,
   RECOVERY_STAGE,
 } from "../content/registry.js";
-import { CREEL_GEOMETRY as CG, HEARTHLINE_KEEL as HK, HUNTER_GEOMETRY as HG,
+import { HEARTHLINE_KEEL as HK, HUNTER_GEOMETRY as HG,
   SCOUT_GEOMETRY as SG, SPINDLE_GEOMETRY as PG } from "../content/encounterGeometry.js";
 import { hunterPose } from "../sim/hunter.js";
 import type { GameState, VehicleState } from "../sim/types.js";
@@ -20,6 +20,7 @@ import { FACILITY_SOLIDS, SOLIDS, terrainHeight } from "../sim/world.js";
 import { createObservationPane, wallWithOpening } from "./materials.js";
 import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
 import { pinnedVehicleIds, type RegionArt, type RenderRegion } from "./regions.js";
+import { b1Source, b1SourceArt, createB1Sites, creelArt, updateCreelArt } from "./fleetArt.js";
 
 /** Individual bent maintenance plates keep contact with the local surface.
  * Their pale service tags, folded edges and bolt holes distinguish salvage
@@ -160,6 +161,7 @@ function dartArt(
   labels?: LabelMaterials,
   cache?: GeometryCache,
 ): Mesh {
+  if (hull === "creel") return creelArt(scene, cel, glass, id, labels, cache);
   const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
   // Only the Dart's deterministic local batches opt in. Bump this generation
   // when its geometry, palette or contour recipe changes. Identity, pose,
@@ -227,11 +229,6 @@ function dartArt(
       b.box([x / 2, 0.55, 0], [2, 0.15, 0.2], P.metal);
     }
     b.box(PG.roof.center, PG.roof.size, P.glass);
-  } else if (hull === "creel") {
-    b.box(CG.body.center, CG.body.size, P.petrol);
-    b.box(CG.cabin.center, CG.cabin.size, P.porcelain);
-    b.box(CG.window.center, CG.window.size, P.glass);
-    for (const x of [-2.5, 2.5]) b.box([x, 0.8, -2], CG.toolSize, P.ochre);
   } else {
     b.loft(SG.bow, P.orange);
     b.loft(SG.body, P.metal);
@@ -440,9 +437,14 @@ export function createExpeditionRegion(
   const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
   const batch = (name: string): ArtBatch => new ArtBatch(name, scene, cel, cache && { owner: cache, key: `expedition:${region ?? "complete"}:${name}` });
   const initial = new Set(scene.meshes);
-  const sourceMeshes = new Map<string, Mesh>();
+  const sourceMeshes = new Map<string, Mesh>(), unitMeshes = new Map<string, Mesh[]>();
   for (const [id, s] of Object.entries(SOURCES)) {
     if (region && s.region !== region) continue;
+    if (b1Source(id)) {
+      const [first, ...units] = b1SourceArt(scene, cel, id, cache);
+      sourceMeshes.set(id, first!); unitMeshes.set(id, units);
+      continue;
+    }
     const b = batch("source." + id),
       { x, y: sourceY, z } = s.position,
       y = sourceY + (INTERACTION_HOSTS[id]?.renderOffsetY ?? 0);
@@ -891,6 +893,7 @@ export function createExpeditionRegion(
   makeSign("RESCUE", [46, 1.5, -53.9], 1.15);
   }
   if (include("silt_basin")) createBasinArt(scene, cel, cache, labels);
+  const sites = createB1Sites(scene, cel, glass, region, labels, cache);
   const meshes = scene.meshes.filter(m => !initial.has(m));
   let disposed = false;
   return {
@@ -898,6 +901,12 @@ export function createExpeditionRegion(
       if (disposed) return;
       for (const [id, mesh] of sourceMeshes)
         mesh.setEnabled(!state || !!state.world.resources.find(r => r.id === id && r.stock > 0));
+      // Finite frame stacks show one member per remaining unit.
+      for (const [id, units] of unitMeshes) {
+        const left = state ? state.world.resources.find(r => r.id === id)?.stock ?? 0 : units.length + 1;
+        units.forEach((unit, i) => unit.setEnabled(i + 1 < left));
+      }
+      sites.update(state);
     },
     dispose() { if (disposed) return; disposed = true; for (const mesh of meshes) mesh.dispose(); },
   };
@@ -1137,8 +1146,9 @@ export function createExpeditionActors(
         // uses the opposite sign, including in a right-handed scene.
         m.rotation.set(v.hull === "dart" && !v.berth ? v.pose.pitch : 0, -v.pose.yaw, 0);
         m.setEnabled(
-          s?.player.controlledVehicleId !== v.id || v.hull === "hearthline" || v.hull === "dart",
+          s?.player.controlledVehicleId !== v.id || v.hull === "hearthline" || v.hull === "dart" || v.hull === "creel",
         );
+        if (v.hull === "creel") updateCreelArt(m, s, v);
         for (const child of m.getChildMeshes())
           if (child.name === `${v.id}.cockpit`) child.setEnabled(s?.player.controlledVehicleId === v.id);
           else if (child.name === `${v.id}.instrument.charge`) child.scaling.x = Math.max(0, Math.min(1, v.charge / 100));

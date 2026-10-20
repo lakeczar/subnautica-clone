@@ -83,7 +83,7 @@ test("very narrow adjacent hosts resolve to deliberate center aim, stably across
 
 test("all sources, food, C01–C06, optional note and both rescue work faces retain collision-valid normal views and matching actions", () => {
   assert.deepEqual([...new Set(NORMAL_VIEWS.map(v => v.id))].sort(), interactions(readyState()).map(t => t.id).sort(),
-    "every actual host is covered, including the six added Basin hosts");
+    "every actual host is covered, including the Basin and M2-B1 hosts");
   assert.equal(NORMAL_VIEWS.length, interactions(readyState()).length + 1, "one additional view, with no missing or duplicated other hosts");
   assert.equal(NORMAL_VIEWS.filter(v => v.id === "rescue_staging").length, 2, "both work faces keep the same stable ID");
   for (const v of NORMAL_VIEWS) {
@@ -94,12 +94,16 @@ test("all sources, food, C01–C06, optional note and both rescue work faces ret
     assert.ok(world.lineOfSight(aimRay(s)!.origin, target!.host.center, target!.host.solidIds), v.id + " host LOS");
     const result = executeCommand(s, { type: "interact" }, world);
     assert.ok(!result.events.some(e => e.type === "notice" && e.error), v.id);
-    if (v.id in SOURCES) {
+    if (v.id in SOURCES && SOURCES[v.id as SourceId].item === "tagged_frame") {
+      // A frame is a timed, tool-cut lift; nothing is taken until it completes.
+      assert.deepEqual(result.state.world.action, { sourceId: v.id, seconds: 10, kind: "lift" }, v.id);
+    } else if (v.id in SOURCES) {
       assert.equal(result.state.metrics.collections, 1, v.id);
       const id = v.id as SourceId;
       assert.equal(result.state.world.resources.find(n => n.id === id)!.stock, SOURCES[id].stock - SOURCES[id].bundle);
     } else if (v.id in EVIDENCE) assert.ok(result.state.knowledge.evidence.some(e => e.id === v.id));
     else if (v.id === "mara_reef_note") assert.ok(result.state.knowledge.journals.includes(v.id));
+    else if (v.id === "basin_keel_plate") assert.ok(result.state.knowledge.scans.includes(v.id) && result.state.knowledge.blueprints.includes("bp_keel_survey"));
     else assert.deepEqual(panels(result.events), [{ type: "interaction-panel", panel: v.id === "rescue_staging" ? "inventory" : "craft", targetId: v.id }]);
     saved(result.state);
     s.player.pose.yaw += Math.PI;

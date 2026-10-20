@@ -14,6 +14,7 @@ import { createEnvironment } from "./environment.js";
 import { createLandmarks, createNavigationSilhouettes, LabelMaterials } from "./landmarks.js";
 import { createEcology } from "./ecology.js";
 import { createExpeditionActors, createExpeditionRegion, DART_SEAT } from "./expedition.js";
+import { CREEL_SEAT } from "../sim/fleet.js";
 import { createAtmosphere } from "./atmosphere.js";
 import { createRegionResidency, type RegionArt, type RenderRegion } from "./regions.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
@@ -231,11 +232,13 @@ export function createRenderer(
             );
             camera.rotation.z = Math.sin(t * 1.8) * 0.015 * (3 - phase);
           } else {
-            const dart = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId && v.hull === "dart");
-            if (dart) {
-              const hull = scene.getMeshByName(dart.id)!;
+            const seated = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId && (v.hull === "dart" || v.hull === "creel"));
+            const hull = seated ? scene.getMeshByName(seated.id) : null;
+            if (seated && hull) {
+              // Each hull's own view datum inside its real canopy or pilot compartment.
+              const seat = seated.hull === "creel" ? CREEL_SEAT : DART_SEAT;
               camera.position.copyFrom(Vector3.TransformCoordinates(
-                new Vector3(DART_SEAT.x, DART_SEAT.y, DART_SEAT.z),
+                new Vector3(seat.x, seat.y, seat.z),
                 hull.computeWorldMatrix(true),
               ));
             } else {
