@@ -165,7 +165,9 @@ export interface WorldMap<T = unknown> {
   readonly index: SpatialQuery<T>;
   region(id: RegionId): RegionDescriptor | undefined;
   chunk(id: ChunkId): ChunkDescriptor | undefined;
-  /** Region owning the chunk at `p`, or null outside every chunk. */
+  /** First region whose footprint contains p's X/Z (layout order), else the
+   * primary region of the chunk at `p`, else null. Not chunk-granular:
+   * a 128 m chunk may straddle compact regions. */
   regionAt(p: Readonly<Vec3>): RegionId | null;
   /** The layer containing p.y in p's column, else the nearest layer. */
   chunkAt(p: Readonly<Vec3>): ChunkDescriptor | null;
