@@ -14,8 +14,7 @@ import { createStory } from "../../src/sim/story/state.js";
 import { worksAction } from "../../src/sim/story/works.js";
 import { interactions } from "../../src/sim/progression.js";
 import { hullClearance, sweptHullClearance } from "../../src/sim/world.js";
-import { CARRIER_LAYOUT, carrierInteriorSolids, localToWorld } from "../../src/sim/carrier.js";
-import { createWorldQueries } from "../../src/sim/world.js";
+import { CARRIER_LAYOUT, localToWorld } from "../../src/sim/carrier.js";
 import type { GameCommand, Vec3, VehicleState } from "../../src/sim/types.js";
 import { board, craft, gather, interact, leaveCraft, move, procure, reach, unload } from "./actions.js";
 import { campaignSite, need, s2Route, worksFace, worksFaceId } from "./content.js";
@@ -23,9 +22,12 @@ import type { Missing } from "./content.js";
 import { Blocked, Driver, where } from "./driver.js";
 import { carry, dockAndService, make, stowHold } from "./live.js";
 import type { Phase, PlayOptions } from "./live.js";
-import { enter, gridPath } from "./nav.js";
+import { enter } from "./nav.js";
 import { fly, pilotTo } from "./routes.js";
 import { route, travel } from "./travel.js";
+import { carrier, carrierIn, carrierOut, exitCarrier, walkAboard } from "./carrierplay.js";
+import { cargoCu, ferryFromCarrier, ferryToCarrier, loads, moveCargo } from "./cargo.js";
+import type { Cargo } from "./cargo.js";
 
 const ISLES = ["island_chain", "refuge_reef"];
 const recipes = (...ids: string[]): Missing[] => ids.flatMap(need.recipe);
@@ -420,7 +422,6 @@ export function worksSite(action: WorksAction): StorySiteId {
 /** The interaction host the diver works at for a works site. */
 const worksHost = (site: StorySiteId): string => site === "meridian_gate_hall" ? "gate_panel" : worksFaceId(site);
 
-const ASSEMBLIES = { service_power_assembly: 1, service_air_assembly: 1 } as const;
 /** Hall and food restorations, from S5's recipe costs (22 + 8 CU). */
 const HALL_STOCK: Readonly<Record<string, number>> = (() => {
   const out: Record<string, number> = {};
@@ -428,29 +429,30 @@ const HALL_STOCK: Readonly<Record<string, number>> = (() => {
     for (const [k, n] of Object.entries(STORY_RECIPES[r].cost)) out[k] = (out[k] ?? 0) + (n as number);
   return out;
 })();
-const cuOf = (items: Readonly<Record<string, number>>): number =>
-  Object.entries(items).reduce((n, [k, q]) => n + ITEMS[k as ItemKind].cu * q, 0);
 
-/** Run works actions at one site: park by its host, carry what the diver can (16 CU)
- * from the sortie hold, act. ASSUME: like S9's stops, a craft moored at the work face
- * lends its hold to the works' `canPay`; the harness never exceeds a real capacity. */
-function worksVisit(d: Driver, actions: readonly WorksAction[], carryKinds: Readonly<Record<string, number>>): void {
+/** Run works actions at one site: park by its host, take the tracked cargo (and as
+ * much stock as the 16 CU diver can carry) out of the sortie hold beside the craft,
+ * then act at the host. ASSUME: like S9's stops, a craft moored at the work face lends
+ * its hold to the works' `canPay` for stock the diver cannot carry. */
+function worksVisit(d: Driver, actions: readonly WorksAction[], take: Cargo): void {
   const site = worksSite(actions[0]!);
   if (actions.some((a) => worksSite(a) !== site)) throw new Error(`works actions ${actions.join(", ")} span two sites`);
   const host = worksHost(site), craftId = d.occupied()!.id;
   sortie(d, hostAt(d, host), `${site} works`, () => {
     const v = d.state.fleet.vehicles.find((x) => x.id === craftId)!;
     reach(d, v.id);
-    for (const [kind, n] of Object.entries(carryKinds)) {
-      const want = Math.min(n, Math.floor(d.freeCu("diver") / ITEMS[kind as ItemKind].cu));
-      if (want > 0) move(d, kind as ItemKind, want, v.cargoId, "diver");
-    }
+    const first = loads(d, take, d.freeCu("diver"))[0];
+    if (take.ids.length && (!first || first.ids.length !== take.ids.length))
+      throw new Blocked(`The diver cannot carry the ${take.ids.length} assemblies at once`, where(d.state));
+    if (first) moveCargo(d, first, v.cargoId, "diver");
     reach(d, host);
     for (const action of actions) {
       worksStep(d, action);
       // 5,400 active steps; the panel shows progress while the diver waits in reach.
       if (action === "equalize") d.waitFor("the gate to equalize", 100, (s) => s.story.works.gate === "equalized");
     }
+    for (const id of take.ids)
+      if (d.state.inventory.items.some((i) => i.id === id)) throw new Blocked(`The works did not consume assembly ${id}`, where(d.state));
   });
 }
 const worksMissing = (): Missing[] => [
@@ -459,57 +461,90 @@ const worksMissing = (): Missing[] => [
   ...worksFace("meridian_upper_hall"),
   ...sites("meridian.gate_hall_panel"),
 ];
-/** Two loads: the assemblies (12 CU) for the gate procedure, then the hall and food
- * stock (30 CU) for the upper hall and the turbine routing. They ride together when
- * the sortie hold has room (Creel rack, 96 CU), else in two trips (Mantle, 32 CU),
- * reloading from the carrier stores between them. ASSUME: a berthed craft's hold is
- * reachable from the carrier interior. */
+/** Craft the two assemblies and stock the hall and food restorations, then load all
+ * of it into the moored Creel's hold at the workshop bench (both containers local).
+ * Returns the tracked cargo: assembly instance IDs and stock quantities. */
+export function stageWorksCargo(d: Driver): Cargo {
+  const creel = d.vehicle("creel");
+  if (!creel) throw new Blocked("No Creel to carry the works cargo", where(d.state));
+  const ids: string[] = [];
+  for (const recipe of ["service_power_assembly", "service_air_assembly"] as const) {
+    // The 6 CU output lands in the diver hold: travel light, then stow it in the
+    // moored Creel at once (the bench reaches both holds).
+    carry(d, {});
+    const before = new Set(d.state.inventory.items.map((i) => i.id));
+    make(d, recipe, "workshop", ISLES);
+    const made = d.state.inventory.items.find((i) => i.kind === recipe && !before.has(i.id));
+    if (!made) throw new Error(`harness: crafting ${recipe} produced no new item`);
+    ids.push(made.id);
+    moveCargo(d, { ids: [made.id], stock: {} }, "diver", creel.cargoId);
+  }
+  stockUp(d, HALL_STOCK);
+  enter(d, "workshop");
+  const cargo: Cargo = { ids, stock: { ...HALL_STOCK } };
+  const stockCu = cargoCu(d, { ids: [], stock: cargo.stock });
+  if (d.freeCu(creel.cargoId) < stockCu)
+    throw new Blocked(`The Creel hold has ${d.freeCu(creel.cargoId)} CU free; the works stock is ${stockCu} CU more`, where(d.state));
+  moveCargo(d, cargo, "workshop_locker", creel.cargoId);
+  return cargo;
+}
+/** The works by strategy. Creel: one trip, the rack holds all 42 CU. Carrier: the Creel
+ * ferries the cargo to the carrier at the yard (diver loads through the vestibule into
+ * the stores); at the shelf each Mantle trip is loaded from the stores through the
+ * vestibule after its launch, and fits the Mantle's free hold. */
 const works = (strategy: Strategy): Phase => ({
   id: "works", title: "The return-gate works: power, air, isolate, equalize, open; hall, food, turbine power",
   missing: worksMissing,
   play(d) {
-    make(d, "service_power_assembly", "workshop", ISLES);
-    make(d, "service_air_assembly", "workshop", ISLES);
-    enter(d, "workshop");
-    const sortieHold = d.vehicle(strategy === "creel" ? "creel" : "mantle")!;
-    const base = strategy === "creel" ? sortieHold : carrier(d);
-    // Everything goes to the base hold (Creel rack, or the carrier stores) first.
-    const load = (items: Readonly<Record<string, number>>, from: string, to: string): void => {
-      if (d.freeCu(to) < cuOf(items)) throw new Blocked(`${to} has ${d.freeCu(to)} CU free; the load needs ${cuOf(items)} CU`, where(d.state));
-      for (const [kind, n] of Object.entries(items)) {
-        const short = n - d.count(kind as ItemKind, [to]);
-        if (short > 0 && move(d, kind as ItemKind, short, from, to) < short) throw new Blocked(`${from} lacks ${short} ${kind} for the works`, where(d.state));
-      }
-    };
-    carry(d, {});
-    load(ASSEMBLIES, "diver", base.cargoId);
-    load(HALL_STOCK, "workshop_locker", base.cargoId);
+    const cargo = stageWorksCargo(d);
+    const assemblies: Cargo = { ids: cargo.ids, stock: {} }, stock: Cargo = { ids: [], stock: cargo.stock };
     const gate: WorksAction[] = ["install_power", "install_air", "isolate", "equalize", "open"];
     const hall: WorksAction[] = ["restore_hall", "restore_food"];
     if (strategy === "creel") {
       toMeridian(d, "creel");
-      worksVisit(d, gate, ASSEMBLIES);
-      worksVisit(d, hall, HALL_STOCK);
-      worksVisit(d, ["route_power"], {});
+      worksVisit(d, gate, assemblies);
+      worksVisit(d, hall, stock);
+      worksVisit(d, ["route_power"], { ids: [], stock: {} });
       fromMeridian(d, "creel");
       return;
     }
+    // Ferry to the carrier at the yard, then sail it to the district shelf.
+    const creel = d.vehicle("creel")!;
+    boardCraft(d, "creel");
+    fly(d, "creel_out");
+    followS2(d, "route.isles.workshop_stack");
+    const h = carrier(d), vestibule = localToWorld(CARRIER_LAYOUT.exteriorVestibule, h);
+    pilotTo(d, "beside the carrier", clearOfBuilds(d, "stack_yard", parkNear(d, { ...vestibule, y: vestibule.y - 6 })));
+    leaveCraft(d);
+    d.command({ type: "carrier", action: "station-keep" });
+    ferryToCarrier(d, creel.id, cargo);
+    carrierIn(d);
     carrierTo(d, CARRIER_TO_SHELF);
-    // The Mantle's free hold decides one trip or two (32 CU today: two).
-    const together = cuOf(ASSEMBLIES) + cuOf(HALL_STOCK) <= d.freeCu(sortieHold.cargoId);
-    const trips: [Readonly<Record<string, number>>, () => void][] = together
-      ? [[{ ...ASSEMBLIES, ...HALL_STOCK }, () => { worksVisit(d, gate, ASSEMBLIES); worksVisit(d, hall, HALL_STOCK); worksVisit(d, ["route_power"], {}); }]]
-      : [[ASSEMBLIES, () => worksVisit(d, gate, ASSEMBLIES)],
-        [HALL_STOCK, () => { worksVisit(d, hall, HALL_STOCK); worksVisit(d, ["route_power"], {}); }]];
+    const mantle = d.vehicle("mantle")!;
+    const together = cargoCu(d, cargo) <= d.freeCu(mantle.cargoId);
+    const trips: [Cargo, () => void][] = together
+      ? [[cargo, () => { worksVisit(d, gate, assemblies); worksVisit(d, hall, stock); worksVisit(d, ["route_power"], { ids: [], stock: {} }); }]]
+      : [[assemblies, () => worksVisit(d, gate, assemblies)],
+        [stock, () => { worksVisit(d, hall, stock); worksVisit(d, ["route_power"], { ids: [], stock: {} }); }]];
     for (const [items, visit] of trips) {
-      load(items, base.cargoId, sortieHold.cargoId);
-      launchMantle(d);
+      if (cargoCu(d, items) > d.freeCu(mantle.cargoId))
+        throw new Blocked(`The Mantle hold has ${d.freeCu(mantle.cargoId)} CU free; this trip needs ${cargoCu(d, items)} CU`, where(d.state));
+      d.command({ type: "carrier", action: "launch", vehicleId: mantle.id });
+      d.waitFor("the Mantle launch", 60, (s) => !s.fleet.docking?.transaction);
+      ferryFromCarrier(d, mantle.id, items);
+      exitCarrierToBoard(d, mantle.id);
       visit();
       mantleHome(d);
     }
     carrierHome(d, CARRIER_TO_SHELF);
   },
 });
+function exitCarrierToBoard(d: Driver, vehicleId: string): void {
+  exitCarrier(d);
+  reach(d, vehicleId);
+  board(d, vehicleId);
+}
+
 const ending = (strategy: Strategy): Phase => ({
   id: "ending", title: "Pod buffer and C14, then the district controller's resolution",
   missing: () => [
@@ -579,55 +614,6 @@ function stockUp(d: Driver, cost: Readonly<Record<string, number>>): void {
   for (const v of d.state.fleet.vehicles) stowHold(d, v);
 }
 
-// ASSUME (carrier): the Hearthline is piloted like any hull, station keeping frees the
-// helm, the diver walks the dry interior to the aft vestibule and leaves through it,
-// and re-enters within 5 m of the exterior vestibule (sim/carrier.ts today).
-const carrier = (d: Driver): VehicleState => {
-  const h = d.vehicle("hearthline");
-  if (!h) throw new Blocked("No Hearthline owned", where(d.state));
-  return h;
-};
-/** Compact berths leave one walkway between bow and stern: the 0.84 m strip between
- * the berth-room walls, passable only on centre lines near x 0.0–0.1 (game movement). */
-const COMPACT_LANE = { x: 0.05, aft: 5.6, fore: -3.4 } as const;
-/** Walk the dry interior in the carrier frame, routed around its rooms, fixtures and
- * berthed craft (the game's own interior solids, queried read-only). */
-function walkAboard(d: Driver, local: Vec3, label: string): void {
-  const h = carrier(d), here = d.state.player.interiorPose?.position;
-  if (!here) throw new Blocked(`Not inside the carrier to walk ${label}`, where(d.state));
-  const solids = createWorldQueries(carrierInteriorSolids(d.state), () => -200), b = CARRIER_LAYOUT.interior;
-  const open = (x: number, z: number): boolean => x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ &&
-    solids.clearance({ x, y: here.y + 0.02, z }, { radius: 0.36, height: 1.75 });
-  const leg = (from: Vec3, to: Vec3): Vec3[] => gridPath(from, to, here.y, 0.25, 2, open, "interior");
-  const crosses = d.state.fleet.docking?.configuration === "compact" &&
-    ((here.z > COMPACT_LANE.aft && local.z < COMPACT_LANE.fore) || (here.z < COMPACT_LANE.fore && local.z > COMPACT_LANE.aft));
-  let path: Vec3[];
-  if (crosses) {
-    const [near, far] = here.z > local.z ? [COMPACT_LANE.aft, COMPACT_LANE.fore] : [COMPACT_LANE.fore, COMPACT_LANE.aft];
-    const a = { x: COMPACT_LANE.x, y: here.y, z: near }, z = { x: COMPACT_LANE.x, y: here.y, z: far };
-    path = [...leg(here, a), z, ...leg(z, local)];
-  } else path = leg(here, local);
-  travel(d, route(`carrier ${label}`, "diver", "dry interior walk, A* over the interior solids, played",
-    path.map((q, i) => ({ ...localToWorld(q, h), land: true, tolerance: i === path.length - 1 ? 0.5 : 0.08 }))));
-}
-/** From the helm: hold station, walk aft and swim out of the vestibule. */
-function carrierOut(d: Driver): void {
-  d.command({ type: "carrier", action: "station-keep" });
-  d.command({ type: "carrier", action: "leave-helm" });
-  walkAboard(d, CARRIER_LAYOUT.vestibule, "to the vestibule");
-  d.command({ type: "carrier", action: "leave-interior" });
-}
-/** Back through the exterior vestibule, stow the diver hold in the stores, take the helm. */
-function carrierIn(d: Driver): void {
-  const h = carrier(d);
-  // Within 1 m: the interface also refuses beyond 15 m of the keel datum, and the
-  // vestibule sits 13.8 m out, so much of its 5 m entry radius is refused.
-  travel(d, route("to the carrier vestibule", "diver", "local swim, played", [{ ...localToWorld(CARRIER_LAYOUT.exteriorVestibule, h), tolerance: 1 }]));
-  d.command({ type: "carrier", action: "enter-interior" });
-  unload(d, "diver", h.cargoId);
-  walkAboard(d, CARRIER_LAYOUT.helm, "to the helm");
-  d.command({ type: "carrier", action: "helm" });
-}
 /** At an S2 carrier mooring that lists "charge": hold station and ask for service. A
  * refusal is recorded; the run goes on with whatever charge the carrier has. */
 function chargeAtMooring(d: Driver, site: string): void {

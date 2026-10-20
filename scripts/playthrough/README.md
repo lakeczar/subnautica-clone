@@ -11,13 +11,13 @@ The single exception is the labelled **travel helper** (`travel.ts`). It steers 
 - **Interior A\*** over the carrier's own interior solids.
 - **Short authored legs** for the pod ramp and the workshop apron.
 
-Read-only queries (targeting, clearance) choose where to stand. A refusal or a trap is reported as **blocked** with the position, power and hull, never worked around. Missing content is **pending C3** only if its key is on the versioned expected-pending list in `pending.ts` (S2/S5/S9 content not yet composed). Any other missing capability, such as a removed recipe or a route that no longer reaches, is **blocked**. A story host that isn't placed is **deferred** (recorded, run stays pending, phase still plays) on the same terms. The run also fails if a listed key is already present, so the list must be pruned at integration.
+Read-only queries (targeting, clearance) choose where to stand. A refusal or a trap is reported as **blocked** with the position, power and hull, never worked around. Missing content is **pending C3** only if its key is on the versioned expected-pending list in `pending.ts`. That list holds absent IDs (S9 recipes and sources, S5 hosts and sites) plus one condition, `bounds:b1-simulation`: the simulation still runs B1's bounds and the point lies inside S1's world frame. An ID that exists but can't be used (a site or route outside the composed bounds or S1's frame, a recipe S9 marks unplaced) gets a `broken:` or `refused:` key that is never listable, and blocks. So does any unlisted missing capability, such as a removed recipe. An optional module counts as absent only when its own file is missing; any error inside an existing module propagates. A story host that isn't placed is **deferred** (recorded, run stays pending, phase still plays) on the same terms. The run also fails if a listed key is already present, so the list must be pruned at integration.
 
 At every phase end the harness saves through the real `SaveRepository`, reloads with a fresh repository, requires an identical state hash, and continues from the reloaded state.
 
 ## Run
 - `npm run playthrough` runs all five scenarios, in about 3.3 min. Add `-- --jobs 3` to run the three New Game groups in parallel (about 1.7–2 min here). Other flags: `--scenario creel,carrier,creel-loss,reverse,no-optional` and `--json out.json` for the full timeline. No Babylon is loaded.
-- **Exit codes:** 0 means nothing is blocked, every check holds and the expected-pending list is current; pending is expected today. 1 means a blocker, a failed check, a stale list, or any `--jobs` child that crashed, was killed, timed out (`--child-timeout`, default 1800 s) or did not return every requested scenario exactly once.
+- **Exit codes:** 0 means nothing is blocked, every check holds and the expected-pending list is current; pending is expected today. 1 means a blocker, a failed check, a stale or malformed list, or any `--jobs` child that exited nonzero (even after writing a complete result), was killed, timed out (`--child-timeout`, default 1800 s) or did not return every requested scenario exactly once.
 - **Fast tier:** `tests/playthrough.test.ts` plays New Game through the reef with exact reloads. It also covers the refusal contract, keyed content checks, abnormal child outcomes, a removed recipe blocking, the list being current, S5's works sites and hull ratings.
 
 ## Scenarios and status
@@ -67,12 +67,15 @@ Prune `pending.ts` of the keys the run names as stale, then run `npm run playthr
 - the controller as `{ type: "resolution", action: "begin" | "complete", roster? }`;
 - the upper-hall work face as the interaction `works:meridian_upper_hall`. S5 puts `restore_hall` and `restore_food` there and every other works action at the gate hall (`gate_panel`); the harness reads these sites from S5's `worksAction`.
 
-**Works logistics:** the assemblies (12 CU) and the hall and food stock (30 CU) ride in one trip in the Creel rack (96 CU), or in two Mantle trips (32 CU) reloaded from the carrier stores. The diver never carries more than 16 CU. Every sortie refuses a hull rated below its site, and each strategy picks its own deep hull (Creel 800, or the Mantle from the carrier).
+**Works logistics** (`cargo.ts`): the two assemblies are tracked by item ID from crafting to consumption, with the hall and food stock tracked by count. Every move first checks that the game reports both containers locally accessible, so no remote transfer is ever attempted.
+- **Creel route:** everything rides in the Creel rack (96 CU), loaded at the workshop bench.
+- **Carrier route:** the Creel ferries the cargo to the carrier at the yard, a diver load at a time through the vestibule into the stores. At the shelf, each Mantle trip (32 CU: two trips) is loaded after its launch from the stores, out through the vestibule to the Mantle's side.
+
+The diver never carries more than 16 CU. Every sortie refuses a hull rated below its site, and each strategy picks its own deep hull (Creel 800, or the Mantle from the carrier).
 
 The harness probes both and reports "not wired" until they exist.
 
 **Assumptions** (marked ASSUME in `later.ts`):
-- a berthed Mantle's hold is reachable from the carrier interior;
 - a craft moored at a works face lends its hold to the works' `canPay`, as S9's stops do;
 - a new Mantle is captured from the carrier interface;
 - stop benches open with K at the work pose.

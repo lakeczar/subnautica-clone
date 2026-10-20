@@ -3,6 +3,9 @@
  * report "pending C3"; any other missing capability (a removed recipe, an existing
  * route that no longer reaches, an unplaced host not listed here) blocks the run.
  *
+ * Keys name ABSENT IDs (or the one uncomposed bounds condition). A present ID that
+ * cannot be used gets a `broken:`/`refused:` key, which this list never holds.
+ *
  * Update this list at integration: remove every key the composed build now has. The
  * run fails while any listed key is already present (see `staleExpected`), so the
  * list can only shrink as content lands. */
@@ -16,19 +19,14 @@ export const EXPECTED_PENDING: ReadonlySet<string> = new Set([
   "recipe:restore_rift_station", "recipe:restore_divide_stop",
   "recipe:hearthline_keel", "recipe:hearthline_base", "recipe:hearthline_550", "recipe:mantle_base",
   "hull:hearthline", "hull:mantle",
-  // S9 deposits at S2 sites, beyond B1's simulation bounds.
+  // S9 deposits, not in the root registry.
   "source:rift_ceramic_lip_north", "source:rift_ceramic_lip_south",
   "source:rift_core_shoulder_north", "source:rift_core_shoulder_west",
   "source:divide_lattice_ledge_west", "source:divide_lattice_ledge_east",
-  // S2 routes and sites the simulation cannot reach until the bounds are lifted.
-  "route:route.basin.legacy_anchorage", "route:route.basin.rift", "route:route.rift.ceramic",
-  "route:route.rift.west_return", "route:route.basin.reef_west", "route:route.basin.divide",
-  "route:route.divide.lattice_west", "route:route.divide.lattice_east", "route:route.divide.meridian_broad",
-  "route:route.divide.service_ledge", "route:route.meridian.terraces",
-  "route:route.isles.workshop_stack", "route:route.isles.stack_headland",
-  "route:route.isles.canopy_east", "route:route.canopy_east.basin",
-  "site:rift.materials_station", "site:divide.service_dock", "site:divide.lee_mooring", "site:isles.stack_yard",
-  "site:meridian.gate_hall", "site:meridian.gate_hall_panel", "site:meridian.staging_office", "site:meridian.staging_shelf",
+  // S2's routes and sites are present; the simulation still runs B1's bounds, so the
+  // ones beyond them are unreachable. Only that condition is pending: a route or site
+  // outside S1's frame, or outside the lifted bounds, is broken and blocks.
+  "bounds:b1-simulation",
   // S5 story sites and hosts not yet placed.
   "story-site:rift_materials_station", "story-site:divide_upper_dock", "story-site:divide_turbine_hall",
   "story-site:splitspine_field_shelter", "story-site:meridian_transfer_hall", "story-site:meridian_medical_annex",
@@ -44,3 +42,5 @@ export const EXPECTED_PENDING: ReadonlySet<string> = new Set([
 
 /** Listed keys this build already satisfies: the list is out of date. */
 export const staleExpected = (): string[] => [...EXPECTED_PENDING].filter((key) => !stillMissing(key));
+/** The list must only hold absent-ID keys, never a present-but-broken condition. */
+export const malformedExpected = (): string[] => [...EXPECTED_PENDING].filter((key) => /^(broken|refused|owned):/.test(key));

@@ -1,15 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { validState } from "../src/save/validation.js";
+import { SITES } from "../src/content/regions/sites.js";
+import type { ItemKind } from "../src/content/registry.js";
+import { fixtureGame } from "../src/sim/carrier.js";
+import { addItem } from "../src/sim/inventory.js";
+import { creelFirst } from "./b1-support.js";
+import { moveCargo, ferryFromCarrier, ferryToCarrier } from "../scripts/playthrough/cargo.js";
+import type { Cargo } from "../scripts/playthrough/cargo.js";
+import { enterCarrier } from "../scripts/playthrough/carrierplay.js";
 import { RECIPES } from "../src/content/registry.js";
 import { makeVehicle } from "../src/sim/state.js";
 import { collect, runGroups } from "../scripts/playthrough/parallel.js";
 import type { ChildOutcome } from "../scripts/playthrough/parallel.js";
-import { staleExpected } from "../scripts/playthrough/pending.js";
+import { malformedExpected, staleExpected } from "../scripts/playthrough/pending.js";
 import { emptyRun } from "../scripts/playthrough/timeline.js";
-import { loadCampaign, need } from "../scripts/playthrough/content.js";
+import { loadCampaign, need, optionalModule } from "../scripts/playthrough/content.js";
 import { Blocked, Driver } from "../scripts/playthrough/driver.js";
-import { CARRIER_LATER, CREEL_LATER, sortieHull, worksSite } from "../scripts/playthrough/later.js";
+import { CARRIER_LATER, CREEL_LATER, sortieHull, stageWorksCargo, worksSite } from "../scripts/playthrough/later.js";
 import { LIVE_PHASES } from "../scripts/playthrough/live.js";
 import { runPhases } from "../scripts/playthrough/runner.js";
 
@@ -76,7 +88,9 @@ test("a crashed, killed, timed-out or silent parallel child fails its whole grou
   for (const [name, outcome] of cases) {
     const runs = collect(group, outcome, () => "creel");
     assert.deepEqual(runs.map((r) => r.scenario), group, name);
-    const blocked = runs.filter((r) => r.outcome === "blocked" && r.checks.some((c) => c.name === "child process" && !c.ok));
+    // Every failure is a failing "child process" check (the run is blocked, or kept with
+    // its diagnostics when the child exited nonzero after a complete result).
+    const blocked = runs.filter((r) => r.checks.some((c) => c.name === "child process" && !c.ok));
     assert.equal(blocked.length, name === "clean" ? 0 : name === "a scenario missing" || name === "a scenario twice" ? 1 : 3, name);
   }
   // A launcher that throws still yields every requested scenario, blocked.
@@ -110,4 +124,74 @@ test("works follow S5's sites, and a hull is never sent below its rating", () =>
   d.state.fleet.vehicles[0]!.rating = 350;
   assert.throws(() => sortieHull(d, "creel", 600), /rated 350 m; the site is at 600 m/);
   assert.throws(() => sortieHull(d, "carrier", 600), /no mantle/);
+});
+
+test("R2: a missing dependency inside an existing optional module propagates; an absent module is null", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "p1-optional-"));
+  try {
+    fs.writeFileSync(path.join(dir, "index.js"), 'import "./p1_missing_dependency.js";\nexport const X = 1;\n');
+    await assert.rejects(optionalModule(pathToFileURL(path.join(dir, "index.js")).href), (e: { code?: string }) => e.code === "ERR_MODULE_NOT_FOUND");
+    assert.equal(await optionalModule(pathToFileURL(path.join(dir, "absent.js")).href), null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("R2: an S2 site that exists but is broken blocks; it is never pending", async () => {
+  await loadCampaign();
+  const site = SITES.find((s) => s.id === "rift.materials_station")!, work = site.work as { x: number } | undefined, at = site.at as { x: number };
+  const saved = { work: work?.x, at: at.x };
+  try {
+    if (work) work.x = 9000; at.x = 9000;
+    assert.deepEqual(need.site("rift.materials_station").map((m) => m.key), ["broken:site:rift.materials_station"]);
+    const run = await runPhases(new Driver("fast-broken-site", "creel"), CREEL_LATER.filter((p) => p.id === "rift"), { readOptional: true, reverse: false });
+    assert.equal(run.outcome, "blocked");
+    assert.match(run.phases[0]!.detail!.join(), /\[broken:site:rift\.materials_station\]/);
+  } finally { if (work) work.x = saved.work!; at.x = saved.at; }
+  // Healthy, it is only behind B1's bounds; and the list holds no present-but-broken keys.
+  assert.deepEqual(need.site("rift.materials_station").map((m) => m.key), ["bounds:b1-simulation"]);
+  assert.deepEqual(malformedExpected(), []);
+});
+
+test("R2: works cargo is tracked by item identity into the moored Creel's hold (seeded diagnostic, real commands)", () => {
+  // Seeded: an earned-equivalent Creel-first state, the two assembly plans, and the
+  // materials in the workshop locker. Everything after this is real commands.
+  const s = creelFirst(["creel_cargo_rack"]);
+  for (const bp of ["bp_service_power", "bp_service_air"] as const) s.knowledge.blueprints.push(bp);
+  for (const [k, n] of Object.entries({ thermal_core: 2, conductive_crust: 5, structural_alloy: 8, brine_lattice: 2, flex_membrane: 11,
+    silica_glass: 8, buoyant_resin: 4 })) addItem(s, k as ItemKind, n, "workshop_locker");
+  const d = new Driver("fast-works-cargo", "creel", s);
+  const creel = d.vehicle("creel")!, rack = d.state.inventory.items.find((i) => i.kind === "creel_cargo_rack")!;
+  d.command({ type: "install-module", vehicleId: creel.id, itemId: rack.id });
+  const cargo = stageWorksCargo(d);
+  assert.equal(cargo.ids.length, 2);
+  assert.deepEqual(cargo.ids.map((id) => d.state.inventory.items.find((i) => i.id === id)?.containerId), [creel.cargoId, creel.cargoId]);
+  assert.deepEqual(cargo.ids.map((id) => d.state.inventory.items.find((i) => i.id === id)!.kind), ["service_power_assembly", "service_air_assembly"]);
+  for (const [k, n] of Object.entries(cargo.stock)) assert.equal(d.count(k as ItemKind, [creel.cargoId]), n, k);
+  // The same instances come back out to the diver at the bench, where both are local.
+  moveCargo(d, { ids: cargo.ids, stock: {} }, creel.cargoId, "diver");
+  assert.deepEqual(cargo.ids.map((id) => d.state.inventory.items.find((i) => i.id === id)!.containerId), ["diver", "diver"]);
+  assert.equal(d.run.refusals.length, 0);
+});
+
+test("R2: carrier cargo moves only through the vestibule and the craft's side (seeded fixture, real commands)", () => {
+  // Seeded: the root carrier fixture, two assemblies and stock in its Creel's hold, the
+  // diver swimming beside that Creel. Everything after this is real commands.
+  const s = fixtureGame(), creel = s.fleet.vehicles.find((v) => v.hull === "creel")!, h = s.fleet.vehicles.find((v) => v.hull === "hearthline")!;
+  const a = addItem(s, "service_power_assembly", 1, creel.cargoId), b = addItem(s, "service_air_assembly", 1, creel.cargoId);
+  addItem(s, "silica_glass", 6, creel.cargoId);
+  s.player.pose.position = { x: creel.pose.position.x + 4, y: creel.pose.position.y, z: creel.pose.position.z };
+  Object.assign(s.player, { mode: "swimming", interiorId: null, interiorPose: null, controlledVehicleId: null });
+  const d = new Driver("fast-ferry", "carrier", s);
+  const cargo: Cargo = { ids: [a.id, b.id], stock: { silica_glass: 6 } };
+  // A remote transfer is refused by the harness before any command is issued.
+  d.state = { ...d.state, player: { ...d.state.player, pose: { ...d.state.player.pose, position: { x: 0, y: -1, z: 0 } } } };
+  assert.throws(() => moveCargo(d, cargo, creel.cargoId, h.cargoId), /no physical interface/);
+  assert.equal(d.run.refusals.length, 0);
+  d.state = s;
+  ferryToCarrier(d, creel.id, cargo);
+  assert.deepEqual([a.id, b.id].map((id) => d.state.inventory.items.find((i) => i.id === id)!.containerId), [h.cargoId, h.cargoId]);
+  assert.equal(d.count("silica_glass", [h.cargoId]), 6);
+  enterCarrier(d);
+  ferryFromCarrier(d, creel.id, { ids: [a.id, b.id], stock: {} });
+  assert.deepEqual([a.id, b.id].map((id) => d.state.inventory.items.find((i) => i.id === id)!.containerId), [creel.cargoId, creel.cargoId]);
+  assert.equal(d.run.refusals.length, 0);
 });

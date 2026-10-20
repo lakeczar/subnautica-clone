@@ -1,8 +1,7 @@
 /** Scenario groups in separate processes. A group is a New Game root and the
  * scenarios that branch from its saves. The launcher is injected (run.ts spawns
  * node; tests simulate crashes), and every requested scenario must come back
- * exactly once from a child that exited normally. Anything else is a blocked run,
- * never a silent omission. */
+ * exactly once from a child that exited 0. Anything else fails, never silently. */
 import { emptyRun } from "./timeline.js";
 import type { RunRecord } from "./timeline.js";
 
@@ -31,8 +30,7 @@ export function collect(group: readonly string[], outcome: ChildOutcome, strateg
     return run;
   });
   const how = `exit ${outcome.code ?? "none"}${outcome.signal ? `, signal ${outcome.signal}` : ""}${outcome.error ? `, ${outcome.error}` : ""}`;
-  // 0: clean; 1: the child itself reported blocked runs or failed checks (kept as reported).
-  if (outcome.error || outcome.signal || (outcome.code !== 0 && outcome.code !== 1)) return failed(`${how}; results discarded`);
+  if (outcome.error || outcome.signal) return failed(`${how}; results discarded`);
   if (!outcome.json) return failed(`${how}; no result written`);
   let runs: RunRecord[];
   try { runs = (JSON.parse(outcome.json) as { runs: RunRecord[] }).runs; } catch { return failed(`${how}; unreadable result`); }
@@ -45,6 +43,12 @@ export function collect(group: readonly string[], outcome: ChildOutcome, strateg
   }
   const extra = runs.filter((r) => !group.includes(r.scenario));
   if (extra.length) return failed(`${how}; unexpected results for ${extra.map((r) => r.scenario).join(", ")}`);
+  // Only a clean exit vouches for a result. A child that exited nonzero (a reported
+  // blocker, a stale list, or a crash after writing its JSON) keeps its diagnostics
+  // and fails its group.
+  if (outcome.code !== 0)
+    for (const run of out) if (!run.checks.some((c) => c.name === "child process" && !c.ok))
+      run.checks.push({ name: "child process", ok: false, detail: `${how}; the child did not finish cleanly` });
   return out;
 }
 
