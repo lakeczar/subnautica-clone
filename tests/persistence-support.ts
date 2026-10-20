@@ -1,3 +1,4 @@
+import { createEcology } from "../src/sim/ecology/ecology.js";
 import { WORLD_SOURCES } from "../src/content/worldSources.js";
 import { createGame } from '../src/sim/state.js';
 import { createEnvelope, encodeSave } from '../src/save/codec.js';
@@ -93,8 +94,12 @@ export function withComposedFields<T extends { state: unknown }>(old: T): T {
     if (k === "fleet") out.story = structuredClone(EMPTY_STORY);
   }
   const world = out.world as any;
-  for (const r of [...S9_RESOURCES, ...C3_RESOURCES]) if (!world.resources.some((n: any) => n.id === r.id)) world.resources.push({ ...r });
-  for (const f of C3_FACILITIES) if (!world.facilities.some((n: any) => n.id === f.id)) world.facilities.push({ ...f });
+  if (!("ecology" in world)) out.world = Object.fromEntries(Object.entries(world).flatMap(([k, v]) =>
+    k === "maintenance" ? [[k, v], ["ecology", createEcology()]] : [[k, v]]));
+  if (!("lamp" in (out.player as any))) out.player = { ...(out.player as any), lamp: true };
+  const composedWorld = out.world as any;
+  for (const r of [...S9_RESOURCES, ...C3_RESOURCES]) if (!composedWorld.resources.some((n: any) => n.id === r.id)) composedWorld.resources.push({ ...r });
+  for (const f of C3_FACILITIES) if (!composedWorld.facilities.some((n: any) => n.id === f.id)) composedWorld.facilities.push({ ...f });
   const containers = (out.inventory as any).containers;
   let at = containers.findIndex((c: any) => c.id === "canopy_stop_locker");
   for (const l of C3_LOCKERS) if (!containers.some((c: any) => c.id === l.id)) containers.splice(++at, 0, { ...l });
@@ -115,6 +120,9 @@ export function withComposedFields<T extends { state: unknown }>(old: T): T {
 export function withoutComposedFields(state: any): any {
   const { story, ...rest } = structuredClone(state);
   if (JSON.stringify(story) !== JSON.stringify(EMPTY_STORY)) throw new Error("story is not pristine");
+  if (JSON.stringify(rest.world.ecology) !== JSON.stringify(createEcology())) throw new Error("ecology is not pristine");
+  if (rest.player.lamp !== true) throw new Error("lamp is not at its first state");
+  delete rest.world.ecology; delete rest.player.lamp;
   for (const r of [...S9_RESOURCES, ...C3_RESOURCES]) {
     const n = rest.world.resources.find((x: any) => x.id === r.id);
     if (!n || n.stock !== r.stock || n.reserve !== r.reserve) throw new Error(`${r.id} is not pristine`);

@@ -189,5 +189,6 @@ test("campaign work not yet composed refuses with its reason, atomically, even w
   // C3 placed the yard, the Rift station, the Divide dock and the later hulls.
   for (const id of CAMPAIGN.filter((id) => !Object.hasOwn(CAMPAIGN_PENDING, id)))
     assert.ok(["suit_450", "suit_800", "creel_450", "creel_800", "restore_rift_station", "restore_divide_stop", "hearthline_keel",
-      "hearthline_base", "hearthline_550", "mantle_base", "hush_base", "spindle_base", "bobbin_deep_tether"].includes(id), id);
+      "hearthline_base", "hearthline_550", "mantle_base", "hush_base", "spindle_base", "bobbin_deep_tether",
+      "heat_shroud", "hull_heat_lining", "brine_seals", "hull_brine_seals", "trim_vanes", "glow_lures", "startle_ink"].includes(id), id);
 });

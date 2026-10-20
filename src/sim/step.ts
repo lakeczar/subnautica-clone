@@ -91,6 +91,7 @@ import { updateSurvival, updateThreat } from "./survival.js";
 import { safePersonalDepth } from "./capabilities.js";
 import { advanceRenewal, settleRenewal } from "./renewal.js";
 import { advanceStory, recordStory, storyHint, storyHost } from "./storyLink.js";
+import { placeDeterrent, releaseKit, toggleLamp, updateEcology } from "./ecologyLink.js";
 const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
@@ -228,8 +229,18 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         return null;
       }
       return carrierCommand(s, c.action, c.vehicleId, w);
-    case "distraction":
-      return distraction(s);
+    case "distraction": {
+      const no = distraction(s);
+      // S4: the paid pulse is also the acoustic deterrent, at its real target.
+      if (!no && s.world.threat.distraction) placeDeterrent(s, "acoustic", s.world.threat.distraction);
+      return no;
+    }
+    case "lamp":
+      return toggleLamp(s);
+    case "deploy-lure":
+      return releaseKit(s, "lure");
+    case "release-ink":
+      return releaseKit(s, "ink");
     case "emergency-meal":
       if (!nearPod(s) && !nearWorkshop(s))
         return "Emergency portions are issued at a refuge.";
@@ -856,6 +867,8 @@ export function stepGame(
     ? { ...recoveryEvent, channel: recoveryEvent.error ? "hazard" : "action", context: "recovery" }
     : recoveryEvent);
   updateThreat(s, loudness, events, world);
+  // S4 ecology beside the hunter, with the same loudness; a scan pulse disturbs.
+  updateEcology(s, loudness, commands.some((c) => c.type === "scan"), events, world);
   updateSurvival(s, events);
   // A command/berth transition or incapacity can replace the moving actor this step.
   // Emit only a measurement that still describes the original active actor and mode.

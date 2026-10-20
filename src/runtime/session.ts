@@ -2,6 +2,7 @@ import { fixtureGame } from "../sim/carrier.js";
 import { createGame } from "../sim/state.js";
 import type { GameState, NoticeOptions } from "../sim/types.js";
 import { createEnvelope, decodeSave, MAX_SAVE_BYTES } from "../save/codec.js";
+import { resumeEcology } from "../sim/ecology/ecology.js";
 import type { SaveEnvelope, SaveMetadata } from "../save/codec.js";
 import type { CommitFailure, SaveRepository } from "../save/repository.js";
 
@@ -121,6 +122,8 @@ export class ExpeditionSession {
     if (this.disposed) return;
     // The repository and active simulation must never share mutable state.
     this.state = structuredClone(save.state);
+    // S4: a resumed encounter or hazard re-shows its caption, with no fresh grace.
+    resumeEcology(this.state.world.ecology);
     this.meta = { ...save.meta };
     this.lastAutosaveTick = this.state.tick;
     this.automatic = autoSave;

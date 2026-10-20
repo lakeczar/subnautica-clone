@@ -1,6 +1,7 @@
 import type { GameState } from "../sim/types.js";
 import { createGame } from "../sim/state.js";
 import { createStory } from "../sim/story/index.js";
+import { createEcology } from "../sim/ecology/ecology.js";
 import { carrierCompartmentContainers, emptySockets } from "../sim/carrier.js";
 import { ITEMS } from "../content/registry.js";
 import { record } from "./validation.js";
@@ -76,10 +77,17 @@ const SCHEMA5_CARRIER_HOLD_CU = 256;
  * resolution or carrier socket occupant. `story` and `docking.sockets` start at
  * New Game's value. A carrier's single 256 CU hold becomes its 192 CU stores
  * plus empty pantry and fabrication compartments, refused if its contents do
- * not fit the stores. Anything present is left for strict validation. */
+ * not fit the stores. `world.ecology` and `player.lamp` start at New Game's
+ * value. Anything present is left for strict validation. */
 function addNewFields(state: GameState, template: GameState): { ok: true; value: GameState } | { ok: false; error: string } {
   const out = { ...state } as GameState & Record<string, unknown>;
   if (!Object.hasOwn(out, "story")) out.story = createStory();
+  // C3: S4's ecology and lamp switch. No earlier build could hold an encounter,
+  // deterrent or exposure, so their absence is exactly New Game's state.
+  if (record(out.world) && !Object.hasOwn(out.world, "ecology"))
+    out.world = newGameOrder({ ...out.world, ecology: createEcology() }, template.world);
+  if (record(out.player) && !Object.hasOwn(out.player, "lamp"))
+    out.player = newGameOrder({ ...out.player, lamp: true }, template.player);
   const fleet = out.fleet as unknown;
   if (record(fleet) && record(fleet.docking) && !Object.hasOwn(fleet.docking, "sockets"))
     out.fleet = { ...out.fleet, docking: { ...out.fleet.docking!, sockets: emptySockets() } };

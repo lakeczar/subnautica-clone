@@ -50,6 +50,8 @@ test("paid pulse selects diver before controlled cargo and stable cell IDs befor
   const expected = structuredClone(before);
   expected.inventory.items.find((i) => i.id === p.cellId)!.charge = 0;
   expected.world.threat.distraction = p.target; expected.world.threat.distractionSeconds = 12;
+  // S4: the paid pulse is also the acoustic deterrent at its real target.
+  expected.world.ecology.deterrents = [{ kind: "acoustic", position: { ...p.target! }, seconds: 12 }];
   expected.feedback = out.state.feedback;
   assert.deepEqual(out.state, expected);
   assert.match(out.state.feedback, /25 charge points.*0\.00 remain/);

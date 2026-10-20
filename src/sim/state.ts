@@ -1,3 +1,4 @@
+import { createEcology } from "./ecology/ecology.js";
 import { STOP_IDS, STOP_LOCKER_CU, WORKING_STOPS } from "../content/stops.js";
 import { HULLS, PLACES, SOURCES, THREAT_HOME } from "../content/registry.js";
 import type { GameState, VehicleState, Vec3 } from "./types.js";
@@ -25,6 +26,7 @@ export function createGame(): GameState {
       graceSeconds: 180,
       interiorPose: null,
       mobileRefuge: null,
+      lamp: true,
     },
     opening: { phase: 0, phaseTicks: 0 },
     inventory: {
@@ -94,6 +96,7 @@ export function createGame(): GameState {
         { id: "divide_dock", repaired: false },
       ],
       maintenance: { alloy: 16, glass: 1, membrane: 10 },
+      ecology: createEcology(),
       threat: {
         mode: "idle",
         position: { ...THREAT_HOME },

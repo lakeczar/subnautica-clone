@@ -19,6 +19,8 @@ import {
   techRecord,
 } from "../content/registry.js";
 import type { HullId, RecipeId } from "../content/registry.js";
+import { parseEcology } from "../sim/ecology/persist.js";
+import { isSuitProtection } from "../sim/ecologyLink.js";
 import { CREEL_CABIN, fittedMount, holdCapacity, hullToWorld } from "../sim/fleet.js";
 import { CANISTER_CU, recoverableHull, recoveryRouteFor } from "../sim/recovery.js";
 import { renewalCap } from "../sim/renewal.js";
@@ -142,7 +144,9 @@ export function validState(value: unknown): value is GameState {
       "graceSeconds",
       "interiorPose",
       "mobileRefuge",
+      "lamp",
     ]) ||
+    typeof p.lamp !== "boolean" ||
     !pose(p.pose) ||
     !vec(p.velocity) ||
     !Object.values(p.velocity as Record<string, unknown>).every((v) =>
@@ -198,7 +202,7 @@ export function validState(value: unknown): value is GameState {
         known(ITEMS)(v.kind) &&
         int(v.quantity, 1, 1000) &&
         id(v.containerId) &&
-        [null, "tools", "suit", "recovery", "buoy", "mount"].includes(
+        [null, "tools", "suit", "recovery", "buoy", "mount", "protection"].includes(
           v.fitted as null,
         ) &&
         [null, "public", "maintenance"].includes(v.provenance as null) &&
@@ -276,8 +280,12 @@ export function validState(value: unknown): value is GameState {
   )
     return false;
   const w = value.world;
-  if (!exact(w, ["resources", "renewal", "facilities", "maintenance", "threat", "action"]))
+  if (!exact(w, ["resources", "renewal", "facilities", "maintenance", "ecology", "threat", "action"]))
     return false;
+  // S4's strict parser: whole roster, bounded values, hull exposures only for this save's fleet.
+  const fleetIds = record(value.fleet) && Array.isArray(value.fleet.vehicles)
+    ? value.fleet.vehicles.map((v) => (record(v) ? v.id : null)).filter((x): x is string => typeof x === "string") : [];
+  if (typeof parseEcology(w.ecology, { vehicleIds: fleetIds }) === "string") return false;
   if (
     !array(
       w.renewal,
@@ -601,7 +609,8 @@ function semantic(s: GameState, fresh: GameState): boolean {
     if (
       !containers.some((c) => c.id === i.containerId) ||
       (i.containerId === "equipment") !== !!i.fitted ||
-      (i.fitted && (i.fitted === "suit" ? !isSuit(i.kind) : fit[i.fitted] !== i.kind)) ||
+      (i.fitted && (i.fitted === "suit" ? !isSuit(i.kind) : i.fitted === "protection" ? !isSuitProtection(i.kind)
+        : fit[i.fitted] !== i.kind)) ||
       (i.fitted && i.quantity !== 1) ||
       (i.kind === "reserve_cell") !== (i.charge !== null) ||
       (i.charge !== null && i.quantity !== 1) ||
@@ -651,6 +660,12 @@ function semantic(s: GameState, fresh: GameState): boolean {
     if (k.crafted.includes(kind === "reserve_cell" ? "reserve_cells" : kind) && n !== (kind === "reserve_cell" ? 2 : 1))
       return false;
   }
+  // S4 protections: one of each, only once its plans are paid; suit fittings are always worn.
+  for (const kind of ["heat_shroud", "brine_seals", "hull_heat_lining", "hull_brine_seals", "trim_vanes"] as const) {
+    const n = items.filter((i) => i.kind === kind).reduce((a, i) => a + i.quantity, 0);
+    if (n > 1 || (n > 0 && !k.crafted.includes(kind))) return false;
+  }
+  if (items.some((i) => isSuitProtection(i.kind) !== (i.fitted === "protection"))) return false;
   const suits = items.filter(i => isSuit(i.kind));
   if (suits.length !== (k.crafted.includes("suit_150") ? 1 : 0) ||
       suits.some(i => i.quantity !== 1 || i.fitted !== "suit" || i.kind !== expectedSuit(k.crafted))) return false;

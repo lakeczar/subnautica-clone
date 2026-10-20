@@ -377,6 +377,7 @@ test("directional distraction shortens its ray at every world edge/corner and sa
     const expected = structuredClone(before);
     expected.world.threat.distraction = target;
     expected.world.threat.distractionSeconds = 12;
+    expected.world.ecology.deterrents = [{ kind: "acoustic", position: { ...target }, seconds: 12 }];
     expected.inventory.items.find((i) => i.kind === "reserve_cell")!.charge = 75;
     expected.feedback = result.state.feedback;
     assert.deepEqual(result.state, expected, "only selected cell charge, pulse and success feedback change");

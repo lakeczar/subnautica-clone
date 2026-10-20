@@ -18,6 +18,7 @@ import {
 import { CAMPAIGN_PENDING, CAMPAIGN_SITES } from "../content/campaign/index.js";
 import { STOP_RESTORATIONS, stopForSite, WORKING_STOPS, type WorkingStopId } from "../content/stops.js";
 import { launchCarrier } from "./carrier.js";
+import { isSuitProtection } from "./ecologyLink.js";
 import type {
   EvidenceId,
   HullOutput,
@@ -437,7 +438,7 @@ export function craft(
           ? "suit"
           : r.output === "bobbin_kit"
             ? "recovery"
-            : null;
+            : isSuitProtection(r.output) ? "protection" : null;
     for (let q = 0; q < r.quantity; q++) {
       const item = addItem(
         s,

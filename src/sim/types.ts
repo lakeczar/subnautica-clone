@@ -1,3 +1,4 @@
+import type { EcologyEvent, EcologyState, ThreatSpeciesId } from "./ecology/types.js";
 import type {
   BlueprintId,
   EvidenceId,
@@ -40,10 +41,13 @@ export interface PlayerState {
   /** Deliberately registered mobile refuge: one Creel and its fitted cabin item.
    * Incapacity uses it only if it is still safe; otherwise the home pod. */
   mobileRefuge: { vehicleId: string; moduleId: string } | null;
+  /** S4 lamp switch (C3): the diver's or controlled craft's lamp. Default on. */
+  lamp: boolean;
 }
 /** `mount` marks a Creel major-mount package fitted in that hull's own hold
  * container; it is outside cargo capacity. Every other fitting lives in equipment. */
-export type Fitting = "tools" | "suit" | "recovery" | "buoy" | "mount" | null;
+/** `protection`: an S4 suit fitting (heat shroud, brine seals) worn in equipment. */
+export type Fitting = "tools" | "suit" | "recovery" | "buoy" | "mount" | "protection" | null;
 export interface ItemStack {
   id: string;
   kind: ItemKind;
@@ -136,6 +140,8 @@ export interface GameState {
     renewal: { id: RenewableSourceId; progress: number }[];
     facilities: { id: FacilityId; repaired: boolean }[];
     maintenance: { alloy: number; glass: number; membrane: number };
+    /** S4 ecology (C3): agents, deterrents and hazard exposures. */
+    ecology: EcologyState;
     threat: {
       mode: "idle" | "warn" | "investigate" | "pursue" | "disengage";
       position: Vec3;
@@ -217,6 +223,9 @@ export type GameCommand =
   | { type: "emergency-meal" }
   | { type: "hint" }
   | { type: "distraction" }
+  | { type: "lamp" }
+  | { type: "deploy-lure" }
+  | { type: "release-ink" }
   | { type: "mark"; placeId: PlaceId }
   | {
       type: "carrier";
@@ -235,7 +244,7 @@ export type GameCommand =
       vehicleId?: string;
     };
 export type NoticeChannel = "action" | "hazard" | "system" | "persistence";
-export type NoticeContext = "threat" | "oxygen" | "food" | "hull" | "recovery";
+export type NoticeContext = "threat" | "oxygen" | "food" | "hull" | "recovery" | "ecology";
 export type ExitRefusalCode = "not-piloting" | "carrier" | "depth" | "obstructed";
 export interface NoticeOptions {
   channel?: NoticeChannel;
@@ -250,7 +259,11 @@ export type GameEvent =
   | { type: "foundation-boundary" }
   | { type: "impact"; speed: number; hullLoss: number; origin: Vec3 }
   /** Actual positive hunter bite loss, before disable/incapacity. Transient, never saved. */
-  | { type: "threat-damage"; source: "hunter";
+  /** S4 encounter or hazard event, for audio mapping by its own fields. Transient. */
+  | { type: "ecology"; event: EcologyEvent }
+  | { type: "threat-damage"; source: "hunter" | "ecology";
+      /** Ecology strikes carry their animal's position and species. */
+      origin?: Vec3; species?: ThreatSpeciesId;
       target: { kind: "vehicle"; vehicleId: string } | { kind: "diver" };
       loss: number; healthAfter: number }
   /** One commanded upward attempt, in metres this step. Absence resets presentation. Never saved. */

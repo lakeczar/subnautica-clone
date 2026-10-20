@@ -203,9 +203,9 @@ export const CAMPAIGN_REFITS = {
 
 /** Campaign recipes the simulation cannot execute yet. `craftingBlock` refuses
  * them with this reason; the economy and planner still count them. C3 placed the
- * yard, the Rift station and the Divide dock, and the four later hulls. */
+ * yard, the Rift station and the Divide dock, the four later hulls, and S4's
+ * protections and kits. */
 export const CAMPAIGN_PENDING: Readonly<Partial<Record<CampaignRecipeId, "site" | "hull" | "fitting">>> = {
+  // A carrier socket occupant: sockets have no fitting command yet.
   galley_planter: "fitting",
-  heat_shroud: "fitting", hull_heat_lining: "fitting", brine_seals: "fitting", hull_brine_seals: "fitting",
-  trim_vanes: "fitting", glow_lures: "fitting", startle_ink: "fitting",
 };
