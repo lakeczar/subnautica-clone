@@ -1,3 +1,4 @@
+import { armTarget, fittedCabin } from "../sim/fleet.js";
 import { Soundscape } from "../audio/sound.js";
 import { executeCommand, stepGame } from "../sim/step.js";
 import { createWorldQueries } from "../sim/world.js";
@@ -264,6 +265,13 @@ export class SiltwakeApp {
         (event.target === this.view.canvas || document.activeElement === this.view.canvas)) {
         event.preventDefault();
         this.startGesture(event.code, "skip");
+        return;
+      }
+      // A piloted Creel keeps E as its work key: tool arms ahead, else its cabin. X exits.
+      const creel = this.state?.fleet.vehicles.find(v => v.id === this.state?.player.controlledVehicleId && v.hull === "creel");
+      if (event.code === "KeyE" && creel && this.state && (armTarget(this.state) || fittedCabin(this.state, creel))) {
+        event.preventDefault();
+        this.command(armTarget(this.state) ? { type: "arm-lift" } : { type: "cabin", action: "enter" });
         return;
       }
       if ((event.code === "KeyE" || event.code === "KeyX") &&

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { same } from "./render-assert.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
@@ -89,7 +90,7 @@ test("living sheds that regrow while their region is retained draw authoritative
 
   // Return: the same retained mesh re-attaches with the authoritative stock.
   art.update(at(s, REEF));
-  assert.strictEqual(work(NORTH), north); assert.strictEqual(work(SOUTH), south);
+  same(work(NORTH), north); same(work(SOUTH), south);
   assert.equal(drawn(NORTH), true, "regrown catch is visible on return");
   assert.equal(drawn(SOUTH), false, "a catch short of its boundary stays empty");
 
@@ -99,7 +100,7 @@ test("living sheds that regrow while their region is retained draw authoritative
   s = idle(s, 30);
   assert.deepEqual([node(s, SOUTH).stock, node(s, LOWER).stock], [2, 2]);
   art.update(at(s, CANOPY));
-  assert.strictEqual(work(UPPER), upper); assert.strictEqual(work(LOWER), lower);
+  same(work(UPPER), upper); same(work(LOWER), lower);
   assert.equal(drawn(UPPER) && drawn(LOWER), true, "both resin pockets show their regrown stock on return");
   assert.ok(hosted(UPPER) && hosted(LOWER), "the pocket host returns with its retained owner");
 

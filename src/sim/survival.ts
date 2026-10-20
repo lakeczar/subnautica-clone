@@ -41,9 +41,10 @@ export function exposure(s: GameState): {
     pressureDepth,
     airwayY,
     waterContact: p.y + 0.4 < 0 && !refuge && !v,
+    // A sealed cabin breathes its own powered or emergency supply, never the airway rule.
     breathable:
       refuge ||
-      airwayY >= 0 ||
+      (airwayY >= 0 && !cabin) ||
       (!!v && ((v.charge > 0 && !v.disabled) || v.emergencyAir > 0)),
     refuge,
   };
@@ -57,7 +58,7 @@ export function airSupply(s: GameState): {
     e = exposure(s);
   if (v && !cabin && v.charge > 0 && !v.disabled) return { kind: "craft", remainingSeconds: null };
   if (e.refuge) return { kind: "refuge", remainingSeconds: null };
-  if (e.airwayY >= 0) return { kind: "surface", remainingSeconds: null };
+  if (e.airwayY >= 0 && !cabin) return { kind: "surface", remainingSeconds: null };
   if (v && v.emergencyAir > 0) return { kind: "emergency", remainingSeconds: v.emergencyAir };
   return { kind: "suit", remainingSeconds: s.player.vitals.oxygen / SUIT_OXYGEN_DRAIN_PER_SECOND };
 }

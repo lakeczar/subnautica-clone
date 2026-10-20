@@ -49,31 +49,31 @@ export const CREEL_HANDLING: HullHandling = {
 /** Hull-local metres, keel reference, -Z is the bow. The fitted cabin is a fixed
  * dry room on the aft mount deck; art, walking solids and fixtures share these. */
 export const CREEL_CABIN = {
-  outer: { min: { x: -1.72, y: 1.38, z: -0.52 }, max: { x: 1.72, y: 3.5, z: 3.32 } },
+  outer: { min: { x: -1.72, y: 1.38, z: -0.55 }, max: { x: 1.72, y: 3.5, z: 3.2 } },
   floorY: 1.45,
-  walk: { minX: -1.26, maxX: 1.26, minZ: -0.06, maxZ: 2.86 },
+  walk: { minX: -1.26, maxX: 1.26, minZ: -0.1, maxZ: 2.75 },
   fittings: [
-    { id: "cabin.bunk", min: { x: 0.75, y: 1.45, z: 0.4 }, max: { x: 1.6, y: 1.95, z: 2.8 } },
-    { id: "cabin.galley", min: { x: -1.6, y: 1.45, z: -0.4 }, max: { x: -1.1, y: 2.35, z: 0.95 } },
-    { id: "cabin.locker", min: { x: -1.6, y: 1.45, z: 2.05 }, max: { x: -1.1, y: 3.0, z: 3.2 } },
+    { id: "cabin.bunk", min: { x: 0.75, y: 1.45, z: 0.35 }, max: { x: 1.6, y: 1.95, z: 2.75 } },
+    { id: "cabin.galley", min: { x: -1.6, y: 1.45, z: -0.5 }, max: { x: -1.1, y: 2.35, z: 0.85 } },
+    { id: "cabin.locker", min: { x: -1.6, y: 1.45, z: 2.0 }, max: { x: -1.1, y: 3.0, z: 3.14 } },
   ],
   fixtures: {
-    bunk: { x: 1.15, y: 2.05, z: 1.6 },
-    cooker: { x: -1.3, y: 2.45, z: 0.35 },
-    locker: { x: -1.3, y: 2.3, z: 2.6 },
-    helm: { x: 0, y: 2.25, z: -0.38 },
-    hatch: { x: 0, y: 2.2, z: 3.18 },
+    bunk: { x: 1.15, y: 2.05, z: 1.55 },
+    cooker: { x: -1.3, y: 2.45, z: 0.2 },
+    locker: { x: -1.3, y: 2.3, z: 2.55 },
+    helm: { x: 0, y: 2.25, z: -0.45 },
+    hatch: { x: 0, y: 2.2, z: 3.08 },
   },
-  helmEntry: { x: -0.35, z: 0.45 },
+  helmEntry: { x: -0.35, z: 0.3 },
   hatchEntry: { x: -0.35, z: 2.45 },
   /** Exterior hatch face (diver entry target) and exit point in the water. */
-  hatchOutside: { x: 0, y: 2.0, z: 3.75 },
+  hatchOutside: { x: 0, y: 2.0, z: 3.65 },
   hatchExit: { x: 0, y: 1.2, z: 4.9 },
 } as const;
 /** Raised pilot compartment view datum; never a collider or saved pose. */
-export const CREEL_SEAT = { x: 0, y: 2.22, z: -2.15 } as const;
-/** Tool-arm reach datum ahead of the flat bow. */
-export const CREEL_ARM = { x: 0, y: 0.7, z: -4.3, reach: 7.5 } as const;
+export const CREEL_SEAT = { x: 0, y: 2.22, z: -1.8 } as const;
+/** Tool-arm reach datum at the guarded bow; the art stays inside the berth envelope. */
+export const CREEL_ARM = { x: 0, y: 0.7, z: -3.3, reach: 7.5 } as const;
 export const ARM_LIFT_SECONDS = 6;
 export const ARM_CHARGE = 4;
 export const DIVER_LIFT_SECONDS = 10;

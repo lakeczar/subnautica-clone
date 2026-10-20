@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { same } from "./render-assert.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
@@ -110,7 +111,7 @@ test("Dart recipes preserve exact body, cockpit, gauges and fresh panes across i
     assert.notStrictEqual(a.getIndices(), b.getIndices());
   }
   assert.deepEqual(dartIdentity(scene, other.id), expected, "identity and controlled visibility are read from the current state");
-  assert.equal(scene.getMeshByName(`${dart.id}.cockpit`)!.isEnabled(), false);
+  same(scene.getMeshByName(`${dart.id}.cockpit`)!.isEnabled(), false);
   first.setVerticesData("color", new Float32Array(first.getTotalVertices() * 4));
   first.setIndices([0, 1, 2]);
   scene.getMeshByName(`${dart.id}.instrument.charge`)!.setVerticesData("position", new Float32Array(72));
@@ -150,7 +151,7 @@ test("a production regional revisit re-attaches retained art; after context loss
   scene.addMesh = function (...args) { created++; return addMesh.apply(this, args); };
   const hits = art.cacheStats.hits;
   state.player.pose.position = { x: 0, y: .18, z: 22 }; art.update(state);
-  assert.strictEqual(scene.getMeshByName(old.name), old, "a warm return re-attaches the same live handles");
+  same(scene.getMeshByName(old.name), old, "a warm return re-attaches the same live handles");
   assert.equal(art.cacheStats.hits, hits, "re-attachment reads no recipes");
   assert.deepEqual(identity(scene), expected, "re-attached art equals its first construction exactly");
   state.player.pose.position = { x: 178, y: -160, z: -208 }; art.update(state);
@@ -195,7 +196,8 @@ test("the pinned carrier keeps every sign while compatible display materials fit
     art.update(state);
     assert.equal(scene.meshes.filter(m => m.name === "label.TRANSFER / KEEP CLEAR").length, 0);
     assert.equal(scene.meshes.filter(m => m.name === "label.DRY / ISOLATED").length, 4);
-    assert.equal(scene.materials.length, 21, "interruption/rebuild releases obsolete sign material and texture ownership");
+    // M2-B1 adds one island sign material (MEDIUM SLIP); the ≤ 24 budget above is unchanged.
+    assert.equal(scene.materials.length, 22, "interruption/rebuild releases obsolete sign material and texture ownership");
   }
   art.dispose();
   cue.dispose();
@@ -256,7 +258,7 @@ test("identical display ownership releases on the last plane and reconstructs af
   const pool = new LabelMaterials(scene);
   const a = label(scene, "READABLE", [0, 0, 0], 1, 0, pool), b = label(scene, "READABLE", [1, 2, 3], 2, Math.PI, pool);
   const material = a.material!, texture = scene.textures[0]!;
-  assert.strictEqual(a.material, b.material); assert.equal(scene.textures.length, 1);
+  same(a.material, b.material); assert.equal(scene.textures.length, 1);
   let disposed = 0; material.onDisposeObservable.add(() => { disposed++; });
   a.dispose(); assert.equal(disposed, 0); assert.ok(scene.textures.includes(texture));
   b.dispose(); assert.equal(disposed, 1); assert.equal(scene.materials.length, 0); assert.equal(scene.textures.length, 0);

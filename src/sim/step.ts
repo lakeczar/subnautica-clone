@@ -443,6 +443,11 @@ function updateAction(s: GameState): void {
   }
   s.world.action = null;
 }
+/** Tool arms belong to the piloted Creel: leaving the helm by any command releases them. */
+function settleArm(s: GameState): void {
+  if (s.world.action?.kind === "arm" &&
+      s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId)?.hull !== "creel") s.world.action = null;
+}
 /** Menu transactions use the same rules without advancing survival or world time. */
 export function executeCommand(
   state: GameState,
@@ -452,6 +457,7 @@ export function executeCommand(
   const draft = structuredClone(state);
   const events: GameEvent[] = [];
   const no = action(draft, command, world, events);
+  settleArm(draft);
   if (no)
     return { state, events: events.some(e => e.type === "notice" && e.refusal)
       ? events : [{ type: "notice", channel: "action", message: no, error: true }] };
@@ -475,6 +481,7 @@ export function stepGame(
     const previous = s.feedback;
     const actionEvents: GameEvent[] = [];
     const no = action(s, c, world, actionEvents);
+    settleArm(s);
     if (s.player.controlledVehicleId !== state.player.controlledVehicleId ||
         s.player.mode !== state.player.mode || s.player.interiorId !== state.player.interiorId)
       movementActorStable = false;

@@ -451,7 +451,8 @@ export const RECIPES = {
   },
   restore_canopy_stop: {
     label: "Restore outer-crown service mooring",
-    cost: { tagged_frame: 1, silica_glass: 2, conductive_crust: 2, flex_membrane: 2 },
+    // One 14 CU diver load: the dark mooring's own locker is shut until restored.
+    cost: { tagged_frame: 1, silica_glass: 2, conductive_crust: 2 },
     bp: "bp_canopy_reinforcement",
     needs: ["essential_tools", "suit_350"],
     site: "canopy_stop",

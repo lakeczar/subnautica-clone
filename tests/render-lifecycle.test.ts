@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { same } from "./render-assert.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { createExpeditionArt, createExpeditionActors } from "../src/render/expedition.js";
@@ -64,11 +65,11 @@ test("production expedition art reconciles cache ownership, contents and replace
       art.update(loss);
       const mesh = scene.getMeshByName(cache.id)!;
       assert.ok(mesh?.isEnabled());
-      assert.equal(mesh.material, cel);
+      same(mesh.material, cel);
       assert.deepEqual(mesh.position.asArray(), [30, -4, 10]);
       art.update(replacement);
       assert.equal(mesh.isDisposed(), true, "absent cache geometry must be disposed");
-      assert.equal(scene.getMeshByName(cache.id), null);
+      same(scene.getMeshByName(cache.id), null);
       assert.equal(scene.meshes.length, baselineMeshes);
     }
     art.update(decoded.value.state);
@@ -76,7 +77,7 @@ test("production expedition art reconciles cache ownership, contents and replace
     const moved = structuredClone(loss);
     moved.recovery.caches[0]!.position = { x: 45, y: -6, z: -10 };
     art.update(moved);
-    assert.strictEqual(scene.getMeshByName(cache.id), retained);
+    same(scene.getMeshByName(cache.id), retained);
     assert.deepEqual(retained.position.asArray(), [45, -6, -10]);
     moved.inventory.items = moved.inventory.items.filter(i => i.containerId !== cache.containerId);
     art.update(moved);
@@ -102,7 +103,7 @@ test("production expedition art reconciles cache ownership, contents and replace
       art.update(i % 2 ? loss : otherLoss);
       assert.equal(scene.meshes.length, baselineMeshes + 1);
       assert.ok(scene.getMeshByName(i % 2 ? cache.id : otherId)?.isEnabled());
-      assert.equal(scene.getMeshByName(i % 2 ? otherId : cache.id), null);
+      same(scene.getMeshByName(i % 2 ? otherId : cache.id), null);
       assert.equal(scene.materials.length, baselineMaterials);
     }
     assert.equal(celDisposed, false);
@@ -156,10 +157,15 @@ test("production expedition art reconciles cache ownership, contents and replace
     changed.fleet.vehicles[0] = makeVehicle(dart.id, "creel", { x: 35, y: -8, z: 7 }, "other-hold");
     actors.update(changed);
     assert.ok(originalHull.isDisposed() && originalChildren.every(m => m.isDisposed()));
-    assert.equal(scene.getMeshByName(`${dart.id}.cockpit`), null, "same ID with a different hull cannot retain Dart children");
-    assert.equal(recipes.stats.hits, admitted.hits, "other hulls never read a Dart recipe");
-    assert.equal(recipes.stats.entries, admitted.entries);
+    // The Creel has its own cockpit; no Dart child may survive the hull change.
+    // Identity checks use === so a failure never inspects a cyclic Babylon graph.
     const creel = scene.getMeshByName(dart.id)!;
+    const cockpit = scene.getMeshByName(`${dart.id}.cockpit`);
+    assert.ok(cockpit === null || (!originalChildren.includes(cockpit) && !cockpit.isDisposed() && cockpit.parent === creel),
+      "same ID with a different hull cannot retain Dart children");
+    assert.equal(recipes.stats.hits, admitted.hits, "other hulls never read a Dart recipe");
+    assert.ok(recipes.stats.entries > admitted.entries, "the Creel admits only its own deterministic recipes");
+    const afterCreel = recipes.stats;
     const current = structuredClone(pilotSnapshot), vessel = current.fleet.vehicles[0]!;
     vessel.pose.position = { x: 47, y: -15, z: 9 }; vessel.pose.yaw = -.7; vessel.pose.pitch = .3;
     vessel.charge = 9; vessel.health = 24; vessel.disabled = true;
@@ -171,8 +177,8 @@ test("production expedition art reconciles cache ownership, contents and replace
     assert.deepEqual(rebuilt.rotation.asArray(), [.3, .7, 0]);
     assert.deepEqual([scene.getMeshByName(`${dart.id}.instrument.charge`)!.scaling.x,
       scene.getMeshByName(`${dart.id}.instrument.health`)!.scaling.x], [.09, .24]);
-    assert.equal(recipes.stats.entries, admitted.entries);
-    assert.equal(recipes.stats.bytes, admitted.bytes);
+    assert.equal(recipes.stats.entries, afterCreel.entries, "rebuilding the Dart admits no new recipe");
+    assert.equal(recipes.stats.bytes, afterCreel.bytes);
     current.player.controlledVehicleId = null;
     const retainedHull = scene.getMeshByName(dart.id)!;
     for (let i = 0; i < 5; i++) {
@@ -183,12 +189,12 @@ test("production expedition art reconciles cache ownership, contents and replace
       // A hidden hull is not updated; returning must read the current state.
       vessel.pose.position = i % 2 ? { x: 47, y: -15, z: 9 } : { x: 48, y: -14, z: 10 };
       resident = true; actors.setQuality?.(i % 2 ? "light" : "rich"); actors.update(current);
-      assert.strictEqual(scene.getMeshByName(dart.id), retainedHull, "returning re-shows the same live hierarchy");
+      same(scene.getMeshByName(dart.id), retainedHull, "returning re-shows the same live hierarchy");
       assert.ok(retainedHull.isEnabled());
       assert.deepEqual(scene.getMeshByName(dart.id)!.position.asArray(), i % 2 ? [47, -15, 9] : [48, -14, 10]);
-      assert.equal(scene.getMeshByName(`${dart.id}.cockpit`)!.isEnabled(), false);
+      same(scene.getMeshByName(`${dart.id}.cockpit`)!.isEnabled(), false);
       assert.equal(scene.getMeshByName(`${dart.id}.instrument.charge`)!.scaling.x, .09);
-      assert.equal(recipes.stats.entries, admitted.entries); assert.equal(recipes.stats.bytes, admitted.bytes);
+      assert.equal(recipes.stats.entries, afterCreel.entries); assert.equal(recipes.stats.bytes, afterCreel.bytes);
     }
     currentSnapshot.player.controlledVehicleId = null;
     vessel.pose.position = { x: 47, y: -15, z: 9 };
