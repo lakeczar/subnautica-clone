@@ -33,7 +33,7 @@ import {
   toggleBuoy,
 } from "./progression.js";
 import {
-  ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, cabinWorld, cook, CREEL_CABIN, CREEL_HANDLING,
+  ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, cabinWorld, cook, CREEL_CABIN, hullHandling,
   enterCabinFromHatch, enterCabinFromHelm, hullToWorld, leaveByHatch, registerRefuge, takeHelmFromCabin,
 } from "./fleet.js";
 import { aimedInteraction } from "./targeting.js";
@@ -538,9 +538,10 @@ export function stepGame(
   }
   yaw = ((yaw % TAU) + TAU) % TAU;
   const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
-  if (v?.hull === "creel") {
+  const handling = v ? hullHandling(v.hull) : null;
+  if (v && handling) {
     // A workboat turns deliberately: the hull and view follow a bounded heading rate.
-    const turn = ((yaw - v.pose.yaw + Math.PI * 3) % TAU) - Math.PI, limit = CREEL_HANDLING.turnRate * DT;
+    const turn = ((yaw - v.pose.yaw + Math.PI * 3) % TAU) - Math.PI, limit = handling.turnRate * DT;
     yaw = ((v.pose.yaw + clamp(turn, -limit, limit)) % TAU + TAU) % TAU;
   }
   if (v?.hull === "hearthline") {
@@ -563,8 +564,8 @@ export function stepGame(
         ? 0
         : v.hull === "hearthline"
           ? 3
-          : v.hull === "creel"
-            ? quiet ? CREEL_HANDLING.quiet : sprint ? CREEL_HANDLING.boost : CREEL_HANDLING.cruise
+          : handling
+            ? quiet ? handling.quiet : sprint ? handling.boost : handling.cruise
             : v.hull === "spindle"
               ? 7
               : quiet
@@ -587,7 +588,7 @@ export function stepGame(
         speed,
     };
     const previousSpeed = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z);
-    const response = v.hull === "creel" ? CREEL_HANDLING.response : 2.8;
+    const response = handling ? handling.response : 2.8;
     for (const a of ["x", "y", "z"] as const)
       v.velocity[a] += (target[a] - v.velocity[a]) * Math.min(1, DT * response);
     const delta = {
@@ -653,17 +654,17 @@ export function stepGame(
     s.player.mode = "piloting";
     const d = distance(old, s.player.pose.position);
     s.metrics.pilotMetres += d;
-    const creel = v.hull === "creel";
+    const creel = handling !== null;
     const drain =
       !v.disabled && v.charge > 0
         ? (d > 0.003
-            ? (creel ? CREEL_HANDLING.drain : 100 / 900) * (sprint ? (creel ? 1.6 : 1.7) : quiet ? (creel ? 0.6 : 0.65) : 1)
+            ? (handling ? handling.drain : 100 / 900) * (sprint ? (creel ? 1.6 : 1.7) : quiet ? (creel ? 0.6 : 0.65) : 1)
             : 0.015) * DT
         : 0;
     v.charge = Math.max(0, v.charge - drain);
     s.metrics.powerUsed += drain;
-    loudness = creel
-      ? quiet ? CREEL_HANDLING.loudness.quiet : sprint ? CREEL_HANDLING.loudness.boost : d > 0.003 ? CREEL_HANDLING.loudness.cruise : 0.08
+    loudness = handling
+      ? quiet ? handling.loudness.quiet : sprint ? handling.loudness.boost : d > 0.003 ? handling.loudness.cruise : 0.08
       : quiet ? 0.08 : sprint ? 1 : d > 0.003 ? 0.48 : 0.08;
     if (move.hitBoundary) events.push({ type: "foundation-boundary" });
     if (move.hitBoundary || move.forwardBoundary) thrust = null;

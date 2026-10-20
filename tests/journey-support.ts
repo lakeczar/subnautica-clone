@@ -35,7 +35,7 @@ export interface Drive {
  * advance within `reach` metres (or once passed); a stall of `stallSeconds`
  * without 0.5 m of progress fails with the actor's position. */
 export function drive(s: GameState, path: readonly Vec3[], options: {
-  reach?: number; stallSeconds?: number; quiet?: boolean; maxSteps?: number;
+  reach?: number; stallSeconds?: number; quiet?: boolean; sprint?: boolean; maxSteps?: number;
   between?: (s: GameState, step: number) => GameCommand | null;
 } = {}): Drive {
   const reach = options.reach ?? 5, stallSteps = (options.stallSeconds ?? 30) * 60;
@@ -60,7 +60,7 @@ export function drive(s: GameState, path: readonly Vec3[], options: {
       const commands: GameCommand[] = [
         { type: "look", yawDelta: clamp(yaw, -0.8, 0.8), pitchDelta: clamp(pitch, -0.8, 0.8) },
         { type: "move", forward: facing ? 1 : flat < 8 ? 0 : 0.25, right: 0,
-          vertical: piloting ? clamp(dy / 4, -1, 1) : 0, sprint: false, quiet: options.quiet ?? false },
+          vertical: piloting ? clamp(dy / 4, -1, 1) : 0, sprint: options.sprint ?? false, quiet: options.quiet ?? false },
       ];
       const more = options.between?.(s, steps);
       if (more) { commands.push(more); extra.push({ step: steps, command: more }); }

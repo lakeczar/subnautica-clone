@@ -18,6 +18,7 @@ import {
   TECH_RECORDS,
   techRecord,
 } from "../content/registry.js";
+import type { HullId, RecipeId } from "../content/registry.js";
 import { CREEL_CABIN, fittedMount, holdCapacity, hullToWorld } from "../sim/fleet.js";
 import { CANISTER_CU, recoverableHull, recoveryRouteFor } from "../sim/recovery.js";
 import { renewalCap } from "../sim/renewal.js";
@@ -75,6 +76,11 @@ const array = (
   check: (a: unknown) => boolean,
 ): v is unknown[] => Array.isArray(v) && v.length <= max && v.every(check);
 const unique = (a: readonly unknown[]): boolean => new Set(a).size === a.length;
+/** The recipes whose paid costs make up each campaign hull's frame. */
+const HULL_BUILD_RECIPES = {
+  dart: ["dart_base"], creel: ["creel_base"], hush: ["hush_base"], spindle: ["spindle_base"], mantle: ["mantle_base"],
+  hearthline: ["hearthline_keel", "hearthline_base"],
+} as const satisfies Record<HullId, readonly RecipeId[]>;
 /** B1's routes keep their exact indices; a deep S2 branch counts its own. */
 function validRecoveryWaypoint(routeId: string, phase: string, waypoint: unknown): boolean {
   const deep = deepRoute(routeId);
@@ -683,7 +689,11 @@ function semantic(s: GameState, fresh: GameState): boolean {
     s.world.facilities.find((f) => f.id === "island_workshop")!.repaired !==
       k.crafted.includes("restore_workshop") ||
     s.world.facilities.find((f) => f.id === "canopy_stop")!.repaired !==
-      k.crafted.includes("restore_canopy_stop")
+      k.crafted.includes("restore_canopy_stop") ||
+    s.world.facilities.find((f) => f.id === "rift_station")!.repaired !==
+      k.crafted.includes("restore_rift_station") ||
+    s.world.facilities.find((f) => f.id === "divide_dock")!.repaired !==
+      k.crafted.includes("restore_divide_stop")
   )
     return false;
   // Frame hosts have no reserve; timed lifts/arms work only their own host kinds.
@@ -700,12 +710,12 @@ function semantic(s: GameState, fresh: GameState): boolean {
     (k.evidence.length || k.crafted.length || items.length || f.vehicles.length)
   )
     return false;
-  // Campaign fleets: at most one earned Dart and one earned Creel.
+  // Campaign fleets: at most one earned hull of each kind; a docking interface
+  // exactly when the earned carrier exists.
   if (
     s.scenario === "expedition" &&
-    (f.docking ||
-      f.vehicles.some((v) => v.hull !== "dart" && v.hull !== "creel") ||
-      !unique(f.vehicles.map((v) => v.hull)))
+    (!unique(f.vehicles.map((v) => v.hull)) ||
+      !!f.docking !== f.vehicles.some((v) => v.hull === "hearthline"))
   )
     return false;
   for (const v of f.vehicles) {
@@ -719,7 +729,7 @@ function semantic(s: GameState, fresh: GameState): boolean {
       continue;
     }
     // Investment is exactly the paid build, plus every paid refit tier up to its rating.
-    const hull = v.hull as "dart" | "creel";
+    const hull = v.hull, builds = HULL_BUILD_RECIPES[hull];
     const tiers: (keyof typeof REFIT_TIERS)[] = [];
     for (let rating: number = HULLS[hull].initialDepth; rating !== v.rating;) {
       const next = (Object.keys(REFIT_TIERS) as (keyof typeof REFIT_TIERS)[])
@@ -729,12 +739,12 @@ function semantic(s: GameState, fresh: GameState): boolean {
       rating = REFIT_TIERS[next].rating;
     }
     if (tiers.some((id) => !k.crafted.includes(id))) return false;
-    const expectedInvestment: Record<string, number> = { ...RECIPES[hull === "dart" ? "dart_base" : "creel_base"].cost };
+    const expectedInvestment: Record<string, number> = {};
+    for (const id of builds) for (const [m, q] of Object.entries(RECIPES[id].cost)) expectedInvestment[m] = (expectedInvestment[m] ?? 0) + q;
     for (const id of tiers) for (const [m, q] of Object.entries(RECIPES[id].cost)) expectedInvestment[m] = (expectedInvestment[m] ?? 0) + q;
     const actual = v.investment as Record<string, number>;
     if (Object.keys(actual).length !== Object.keys(expectedInvestment).length ||
         Object.entries(expectedInvestment).some(([m, q]) => actual[m] !== q)) return false;
-    if (v.berth) return false;
   }
   // The registered refuge names a Creel and its fitted cabin, in a campaign.
   const r = s.player.mobileRefuge;
@@ -778,7 +788,6 @@ function semantic(s: GameState, fresh: GameState): boolean {
     if (
       !h ||
       h.hull !== "hearthline" ||
-      s.scenario !== "carrier-fixture" ||
       !unique(f.vehicles.filter((v) => v.berth).map((v) => v.berth!.slot))
     )
       return false;

@@ -77,7 +77,8 @@ export function advanceStory(s: GameState): void {
 export function storyCapabilities(s: GameState): Capabilities {
   const hulls: Partial<Record<HullId, number>> = {};
   for (const v of s.fleet.vehicles) if (!v.disabled) hulls[v.hull] = Math.max(hulls[v.hull] ?? 0, v.rating);
-  return { suit: personalLimit(s), hulls, stops: new Set(facility(s, "canopy_stop") ? ["stop_canopy"] : []) };
+  const stops = [...(facility(s, "canopy_stop") ? ["stop_canopy" as const] : []), ...(facility(s, "divide_dock") ? ["stop_divide_lee" as const] : [])];
+  return { suit: personalLimit(s), hulls, stops: new Set(stops) };
 }
 const leadReachable = (s: GameState, id: LeadId): boolean => reachable(STORY_SITES[LEADS[id].site], storyCapabilities(s));
 

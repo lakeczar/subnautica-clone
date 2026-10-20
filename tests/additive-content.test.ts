@@ -72,9 +72,9 @@ test("unknown, removed, missing-base, duplicate and malformed roster content is 
   withNewContent(() => {
     const unknown = good(); unknown.state.world.resources.push({ id: "rift_vent_future" as never, stock: 1, reserve: 0 });
     refused(JSON.stringify(unknown), /content this build does not have.*rift_vent_future/, "unknown source");
-    const facility = good(); facility.state.world.facilities.push({ id: "rift_station" as never, repaired: false });
+    const facility = good(); facility.state.world.facilities.push({ id: "future_station" as never, repaired: false });
     refused(JSON.stringify(facility), /content this build does not have/, "unknown facility");
-    const marker = good(); marker.state.knowledge.markers.push("rift_station" as never);
+    const marker = good(); marker.state.knowledge.markers.push("future_station" as never);
     refused(JSON.stringify(marker), /invalid/, "unknown place");
     const item = good(); addItem(item.state, "silica_glass", 1, "diver"); Reflect.set(item.state.inventory.items.at(-1)!, "kind", "rift_lens");
     refused(JSON.stringify(item), /invalid/, "unknown item");
@@ -86,7 +86,7 @@ test("unknown, removed, missing-base, duplicate and malformed roster content is 
   for (const [name, mutate] of [
     ["schema 5 source missing", (s: GameState) => { s.world.resources.splice(3, 1); }],
     ["schema 5 renewal missing", (s: GameState) => { s.world.renewal.pop(); }],
-    ["schema 5 facility missing", (s: GameState) => { s.world.facilities.pop(); }],
+    ["schema 5 facility missing", (s: GameState) => { s.world.facilities.splice(s.world.facilities.findIndex((f) => f.id === "canopy_stop"), 1); }],
     ["schema 5 locker missing", (s: GameState) => { s.inventory.containers.splice(2, 1); }],
     ["duplicate source", (s: GameState) => { s.world.resources.push({ ...s.world.resources[0]! }); }],
     ["malformed source", (s: GameState) => { Reflect.set(s.world.resources, 0, { id: 7, stock: 1, reserve: 0 }); }],

@@ -284,7 +284,7 @@ test("minimal prompt follows actual aimed actions across all real hosts, and is 
   const opening = readyState(); view.update(opening, false);
   assert.equal(get("interact-prompt").innerHTML, "", "known regulator to the side does not prompt at stand-up");
   for (const v of NORMAL_VIEWS) {
-    const s = v.position.y < -150 ? protectedReadyState(350) : v.position.y < -60 ? protectedReadyState(150) : readyState();
+    const s = v.position.y < -340 ? protectedReadyState(800) : v.position.y < -150 ? protectedReadyState(350) : v.position.y < -60 ? protectedReadyState(150) : readyState();
     s.player.pose.position = { ...v.position }; s.player.mode = v.mode; faceTarget(s, v.id);
     assert.ok(world.clearance(s.player.pose.position, { radius: 0.34, height: v.mode === "walking" ? 1.75 : 0.95 }), v.id + " body clearance");
     const before = structuredClone(s), target = aimedInteraction(s, world)!;

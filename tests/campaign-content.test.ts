@@ -172,7 +172,7 @@ test("paid Creel refits 350 → 450 → 800 at the slip, with the whole frame in
   assert.equal(REFIT_TIERS.creel_800.from, REFIT_TIERS.creel_450.rating);
 });
 
-test("work at sites C3 has not placed refuses with its reason, atomically, even when fully paid", () => {
+test("campaign work not yet composed refuses with its reason, atomically, even when fully paid", () => {
   const s = deepReady(); fund(s, "suit_450");
   for (const id of ["C03", "C05"] as const) recordStory(s, id);
   readTechRecord(s, "canopy_glider_log"); readTechRecord(s, "yard_tender_plate");
@@ -183,11 +183,11 @@ test("work at sites C3 has not placed refuses with its reason, atomically, even 
     const block = craftingBlock(c, id, world);
     assert.equal(block?.code, "unplaced", id);
     assert.match(block!.message, /^Plans recorded\. /, id);
-    if (r.site in CAMPAIGN_SITES) assert.ok(block!.message.includes(CAMPAIGN_SITES[r.site as keyof typeof CAMPAIGN_SITES].label), id);
     const before = structuredClone(c), result = executeCommand(c, { type: "craft", recipeId: id }, world);
     assert.equal(result.state, c, id); assert.deepEqual(c, before, id);
   }
-  // Executable today: the refit tiers at the workshop.
+  // C3 placed the yard, the Rift station, the Divide dock and the later hulls.
   for (const id of CAMPAIGN.filter((id) => !Object.hasOwn(CAMPAIGN_PENDING, id)))
-    assert.ok(["suit_450", "suit_800", "creel_450", "creel_800"].includes(id), id);
+    assert.ok(["suit_450", "suit_800", "creel_450", "creel_800", "restore_rift_station", "restore_divide_stop", "hearthline_keel",
+      "hearthline_base", "hearthline_550", "mantle_base", "hush_base", "spindle_base", "bobbin_deep_tether"].includes(id), id);
 });

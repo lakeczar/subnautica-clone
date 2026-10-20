@@ -5,6 +5,10 @@ import { HEARTHLINE_SOCKETS, hearthlineInteriorSolids } from "../content/fleet/h
 import { createGame, makeVehicle } from "./state.js";
 import { completeOpening } from "./progression.js";
 import { createWorldQueries, sweptHullClearance, withinWorldBounds, WORLD_BOUNDS, type HorizontalBounds, type Solid } from "./world.js";
+import { YARD_BUILD } from "../content/yard.js";
+import { SITES } from "../content/regions/sites.js";
+import { siteDatum } from "../content/regions/access.js";
+import { worldFloor } from "../content/regions/worldFloor.js";
 export const BERTH_LOCAL: readonly Vec3[] = [
   { x: -3, y: 4, z: 1 },
   { x: 3, y: 4, z: 1 },
@@ -77,8 +81,24 @@ function envelopeSolid(id: string, p: Vec3, shape: Capsule): Solid {
   const x = shape.halfWidth ?? shape.radius, z = shape.halfLength ?? shape.radius;
   return { id, min: { x: p.x - x, y: p.y + (shape.bottom ?? 0), z: p.z - z }, max: { x: p.x + x, y: p.y + shape.height, z: p.z + z } };
 }
+/** Supported carrier docks: the fixture's surface dock, the yard berth where the
+ * carrier is built, and every S2 mooring offering repair (S9: berths reconfigure
+ * only while moored where repair is available). */
+export const CARRIER_SUPPORTS: readonly Vec3[] = [
+  CARRIER_SUPPORT, YARD_BUILD.hearthline.pose,
+  ...SITES.filter((site) => site.role === "mooring" && site.services?.includes("repair")).map((site) => siteDatum(site, worldFloor)),
+];
 export function atCarrierSupport(h: VehicleState): boolean {
-  return distance(h.pose.position, CARRIER_SUPPORT) < 4 && Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) < 0.05;
+  return CARRIER_SUPPORTS.some((p) => distance(h.pose.position, p) < 4) && Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) < 0.05;
+}
+/** A newly fitted-out campaign carrier: empty berths and sockets, its pantry and
+ * fabrication compartments, station keeping in the yard berth. */
+export function launchCarrier(s: GameState, h: VehicleState): void {
+  s.fleet.docking = {
+    vehicleId: h.id, configuration: "compact", stationKeeping: true, supportedDock: atCarrierSupport(h),
+    transaction: null, sequence: 0, completed: [], launchBlocked: false, sockets: emptySockets(),
+  };
+  s.inventory.containers.push(...carrierCompartmentContainers(h));
 }
 /** Every Hearthline socket empty: New Game's and a pre-socket save's value. */
 export const emptySockets = (): Record<string, string | null> =>

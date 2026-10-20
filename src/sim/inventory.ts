@@ -1,6 +1,7 @@
 import { CREEL_BUILD_POSE, DART_BUILD_POSE, HULLS, ITEMS, MATERIALS } from "../content/registry.js";
 import type { FabricationSite, ItemKind, MaterialId } from "../content/registry.js";
 import { CANOPY_STOP } from "../content/routes.js";
+import { STOP_IDS, stopForSite, WORKING_STOPS, type WorkingStopId } from "../content/stops.js";
 import { HEARTHLINE_CONTAINERS } from "../content/fleet/hearthlineInterior.js";
 import type { Fitting, GameState, ItemStack, Vec3, VehicleState } from "./types.js";
 export const distance = (a: Vec3, b: Vec3): number =>
@@ -134,7 +135,22 @@ export function nearCanopyStop(s: GameState): boolean {
 export function facility(s: GameState, id: string): boolean {
   return s.world.facilities.some((f) => f.id === id && f.repaired);
 }
-export type ServiceSite = "home_pod" | "island_workshop" | "canopy_stop";
+export type ServiceSite = "home_pod" | "island_workshop" | "canopy_stop" | WorkingStopId;
+/** A working stop is usable: it needs no restoration, or it has been restored. */
+export function stopWorks(s: GameState, id: WorkingStopId): boolean {
+  const f = WORKING_STOPS[id].facility;
+  return f === null || facility(s, f);
+}
+/** The diver is at a working stop's work pose, on foot or swimming. */
+export function nearStop(s: GameState, id: WorkingStopId): boolean {
+  const stop = WORKING_STOPS[id];
+  return distance(s.player.pose.position, stop.work) < stop.workRadius &&
+    !s.player.controlledVehicleId && !s.player.interiorId;
+}
+/** A working stop with air the diver is breathing at (a refuge). */
+export function atAirStop(s: GameState): WorkingStopId | null {
+  return STOP_IDS.find((id) => WORKING_STOPS[id].air && nearStop(s, id) && stopWorks(s, id)) ?? null;
+}
 /** Cradle/mooring positions and service restoration rules, without player access grants.
  * The workshop serves both its scout cradle and the medium slip. */
 export function supportedServiceSite(s: GameState, v: VehicleState): ServiceSite | null {
@@ -146,7 +162,7 @@ export function supportedServiceSite(s: GameState, v: VehicleState): ServiceSite
     return "home_pod";
   if (distance(v.pose.position, CANOPY_STOP.mooring) < CANOPY_STOP.serviceRadius && facility(s, "canopy_stop"))
     return "canopy_stop";
-  return null;
+  return STOP_IDS.find((id) => stopWorks(s, id) && distance(v.pose.position, WORKING_STOPS[id].mooring) < WORKING_STOPS[id].serviceRadius) ?? null;
 }
 /** A restored bench the diver is actually using, not a nearby/remote craft. */
 export function localBenchSite(s: GameState): ServiceSite | null {
@@ -154,7 +170,7 @@ export function localBenchSite(s: GameState): ServiceSite | null {
   if (nearPod(s) && facility(s, "pod_fabricator")) return "home_pod";
   if (nearWorkshop(s) && facility(s, "island_workshop")) return "island_workshop";
   if (nearCanopyStop(s) && facility(s, "canopy_stop")) return "canopy_stop";
-  return null;
+  return STOP_IDS.find((id) => nearStop(s, id) && stopWorks(s, id)) ?? null;
 }
 /** The cabin locker container belongs to its cabin item, wherever that item is. */
 export const cabinLockerId = (cabinItemId: string): string => `${cabinItemId}_locker`;
@@ -165,10 +181,12 @@ export function containerAccessible(s: GameState, id: string): boolean {
     return localBenchSite(s) === "island_workshop";
   if (id === "canopy_stop_locker")
     return localBenchSite(s) === "canopy_stop";
+  const stopLocker = STOP_IDS.find((stop) => WORKING_STOPS[stop].locker === id);
+  if (stopLocker) return localBenchSite(s) === stopLocker;
   const compartment = carrierCompartment(s, id);
   if (compartment) return s.player.interiorId === compartment.host.id && !compartment.host.disabled;
   const locker = s.inventory.containers.find((c) => c.id === id && c.kind === "locker" && c.ownerId !== "home_pod" &&
-    c.ownerId !== "island_workshop" && c.ownerId !== "canopy_stop");
+    c.ownerId !== "island_workshop" && c.ownerId !== "canopy_stop" && !(STOP_IDS as readonly string[]).includes(c.ownerId));
   if (locker) {
     // A cabin locker opens only while its cabin is fitted: inside it, or at its hatch.
     const host = s.fleet.vehicles.find((v) => v.modules.includes(locker.ownerId));
@@ -198,6 +216,8 @@ export function containerLabel(s: GameState, id: string): string {
   if (compartment) return `${HULLS.hearthline.label} ${compartment.accepts === "food" ? "pantry" : "fabrication locker"}`;
   if (id === "diver") return "diver hold";
   if (id === "canopy_stop_locker") return "mooring locker";
+  const stopLocker = STOP_IDS.find((stop) => WORKING_STOPS[stop].locker === id);
+  if (stopLocker) return stopLocker === "stack_yard" ? "yard store" : `${WORKING_STOPS[stopLocker].label} locker`;
   if (s.inventory.items.some((i) => i.kind === "creel_cabin" && cabinLockerId(i.id) === id)) return "cabin locker";
   if (s.inventory.containers.find((c) => c.id === id)?.kind === "cache") return "cargo cache";
   return id.replaceAll("_", " ");
@@ -318,8 +338,19 @@ export function available(
 }
 export function fabricationContainers(
   s: GameState,
-  site: FabricationSite,
+  site: FabricationSite | WorkingStopId,
 ): string[] {
+  const stop = stopForSite(site);
+  if (stop) {
+    if (!nearStop(s, stop)) return [];
+    const locker = WORKING_STOPS[stop].locker;
+    return [
+      "diver",
+      ...(locker && containerAccessible(s, locker) ? [locker] : []),
+      ...(containerAccessible(s, "buoy_hold") ? ["buoy_hold"] : []),
+      ...s.fleet.vehicles.filter((v) => supportedServiceSite(s, v) === stop && containerAccessible(s, v.cargoId)).map((v) => v.cargoId),
+    ];
+  }
   const atSite = site === "island_workshop"
     ? nearWorkshop(s) && !s.player.interiorId
     : site === "canopy_stop" ? nearCanopyStop(s) : nearPod(s);

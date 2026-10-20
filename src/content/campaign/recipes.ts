@@ -201,13 +201,11 @@ export const CAMPAIGN_REFITS = {
   hearthline_550: { hull: "hearthline", from: 400, rating: 550 },
 } as const;
 
-/** Campaign recipes the simulation cannot execute until C3 composes their site,
- * hull or fitting. `craftingBlock` refuses them with this reason; the economy and
- * planner still count them. Refits at the workshop are executable today. */
+/** Campaign recipes the simulation cannot execute yet. `craftingBlock` refuses
+ * them with this reason; the economy and planner still count them. C3 placed the
+ * yard, the Rift station and the Divide dock, and the four later hulls. */
 export const CAMPAIGN_PENDING: Readonly<Partial<Record<CampaignRecipeId, "site" | "hull" | "fitting">>> = {
-  restore_rift_station: "site", restore_divide_stop: "site",
-  hearthline_keel: "site", hearthline_base: "hull", hearthline_550: "site", galley_planter: "fitting",
-  mantle_base: "hull", hush_base: "hull", spindle_base: "hull",
+  galley_planter: "fitting",
   heat_shroud: "fitting", hull_heat_lining: "fitting", brine_seals: "fitting", hull_brine_seals: "fitting",
-  trim_vanes: "fitting", glow_lures: "fitting", startle_ink: "fitting", bobbin_deep_tether: "fitting",
+  trim_vanes: "fitting", glow_lures: "fitting", startle_ink: "fitting",
 };

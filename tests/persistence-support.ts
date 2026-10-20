@@ -1,3 +1,4 @@
+import { WORLD_SOURCES } from "../src/content/worldSources.js";
 import { createGame } from '../src/sim/state.js';
 import { createEnvelope, encodeSave } from '../src/save/codec.js';
 import type { SaveEnvelope } from '../src/save/codec.js';
@@ -75,6 +76,15 @@ export const S9_RESOURCES = [
   ["divide_lattice_ledge_west", 12, 8], ["divide_lattice_ledge_east", 12, 8], ["divide_lattice_fissure", 20, 0],
   ["meridian_cut_ceramic", 16, 0], ["meridian_service_cache", 12, 12],
 ].map(([id, stock, reserve]) => ({ id: id as string, stock: stock as number, reserve: reserve as number }));
+/** C3's additive content: S2's remaining sources, the two restorable stops and
+ * the yard and stop lockers, each at New Game's first state and position. */
+export const C3_RESOURCES = Object.entries(WORLD_SOURCES).map(([id, d]) => ({ id, stock: d.stock as number, reserve: d.reserve as number }));
+export const C3_FACILITIES = [{ id: "rift_station", repaired: false }, { id: "divide_dock", repaired: false }];
+export const C3_LOCKERS = [
+  { id: "stack_yard_locker", kind: "locker", capacity: 48, ownerId: "stack_yard" },
+  { id: "rift_station_locker", kind: "locker", capacity: 48, ownerId: "rift_station" },
+  { id: "divide_dock_locker", kind: "locker", capacity: 48, ownerId: "divide_dock" },
+];
 export function withComposedFields<T extends { state: unknown }>(old: T): T {
   const s = structuredClone(old.state) as Record<string, any>;
   const out: Record<string, unknown> = {};
@@ -83,7 +93,11 @@ export function withComposedFields<T extends { state: unknown }>(old: T): T {
     if (k === "fleet") out.story = structuredClone(EMPTY_STORY);
   }
   const world = out.world as any;
-  for (const r of S9_RESOURCES) if (!world.resources.some((n: any) => n.id === r.id)) world.resources.push({ ...r });
+  for (const r of [...S9_RESOURCES, ...C3_RESOURCES]) if (!world.resources.some((n: any) => n.id === r.id)) world.resources.push({ ...r });
+  for (const f of C3_FACILITIES) if (!world.facilities.some((n: any) => n.id === f.id)) world.facilities.push({ ...f });
+  const containers = (out.inventory as any).containers;
+  let at = containers.findIndex((c: any) => c.id === "canopy_stop_locker");
+  for (const l of C3_LOCKERS) if (!containers.some((c: any) => c.id === l.id)) containers.splice(++at, 0, { ...l });
   const docking = (out.fleet as any).docking;
   if (docking && !("sockets" in docking)) docking.sockets = Object.fromEntries(SOCKET_IDS.map((id) => [id, null]));
   const inv = out.inventory as any;
@@ -101,11 +115,15 @@ export function withComposedFields<T extends { state: unknown }>(old: T): T {
 export function withoutComposedFields(state: any): any {
   const { story, ...rest } = structuredClone(state);
   if (JSON.stringify(story) !== JSON.stringify(EMPTY_STORY)) throw new Error("story is not pristine");
-  for (const r of S9_RESOURCES) {
+  for (const r of [...S9_RESOURCES, ...C3_RESOURCES]) {
     const n = rest.world.resources.find((x: any) => x.id === r.id);
     if (!n || n.stock !== r.stock || n.reserve !== r.reserve) throw new Error(`${r.id} is not pristine`);
   }
-  rest.world.resources = rest.world.resources.filter((x: any) => !S9_RESOURCES.some((r) => r.id === x.id));
+  rest.world.resources = rest.world.resources.filter((x: any) => ![...S9_RESOURCES, ...C3_RESOURCES].some((r) => r.id === x.id));
+  for (const f of C3_FACILITIES) if (rest.world.facilities.find((x: any) => x.id === f.id)?.repaired !== false) throw new Error(`${f.id} is not pristine`);
+  rest.world.facilities = rest.world.facilities.filter((x: any) => !C3_FACILITIES.some((f) => f.id === x.id));
+  if (rest.inventory.items.some((i: any) => C3_LOCKERS.some((l) => l.id === i.containerId))) throw new Error("stop lockers are not empty");
+  rest.inventory.containers = rest.inventory.containers.filter((c: any) => !C3_LOCKERS.some((l) => l.id === c.id));
   const docking = rest.fleet.docking;
   if (docking) {
     if (Object.values(docking.sockets).some((v) => v !== null)) throw new Error("carrier sockets are not empty");

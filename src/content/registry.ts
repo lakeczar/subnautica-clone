@@ -6,6 +6,9 @@ import type { StoryBlueprintId } from "./story/evidence.js";
 // S9 campaign content: later tiers, carrier, specialists, stops and late sources.
 import { CAMPAIGN_BLUEPRINT_LABELS, CAMPAIGN_ITEMS, CAMPAIGN_RECIPES, CAMPAIGN_REFITS, CAMPAIGN_SOURCES, CAMPAIGN_SUITS, CAMPAIGN_TECH_RECORDS } from "./campaign/index.js";
 import type { CampaignBlueprintId, CampaignOutput, CampaignSiteId } from "./campaign/index.js";
+// C3: S2's remaining sources, and S9 hull construction at the stack yard.
+import { WORLD_SOURCES } from "./worldSources.js";
+import { YARD_BUILD } from "./yard.js";
 
 export const REGIONS = {
   refuge_reef: { label: "Hearth Reef", depth: [0, 65] },
@@ -290,7 +293,10 @@ export type FacilityId =
   | "pod_fabricator"
   | "island_workshop"
   | "canopy_lab"
-  | "canopy_stop";
+  | "canopy_stop"
+  // C3: S9's restored service stops at S2's sites (content/stops.ts).
+  | "rift_station"
+  | "divide_dock";
 export const BLUEPRINTS: readonly BlueprintId[] = [
   "bp_pod_checklist",
   "bp_reef_recovery",
@@ -315,7 +321,7 @@ export const FUTURE_BLUEPRINTS = {
   bp_food_module: STORY_BLUEPRINT_LABELS.bp_food_module,
 } as const;
 export type CostKind = MaterialId | "tagged_frame";
-export type HullOutput = "dart" | "creel";
+export type HullOutput = "dart" | "creel" | "hush" | "spindle" | "mantle" | "hearthline";
 export type FabricationSite = "home_pod" | "pod_fabricator" | "island_workshop" | "canopy_stop" | CampaignSiteId;
 export interface Recipe {
   label: string;
@@ -931,6 +937,7 @@ export const SOURCES = {
     asset: "frames",
   },
   ...CAMPAIGN_SOURCES,
+  ...WORLD_SOURCES,
 } as const satisfies Record<string, SourceDefinition>;
 export type SourceId = keyof typeof SOURCES;
 /** Siltwake design, not a claim about another game: only these living sheds regrow,
@@ -1034,7 +1041,8 @@ export const CREEL_BUILD_YAW = Math.PI;
 export const HULL_BUILD = {
   dart: { pose: DART_BUILD_POSE, yaw: DART_BUILD_YAW },
   creel: { pose: CREEL_BUILD_POSE, yaw: CREEL_BUILD_YAW },
-} as const;
+  ...YARD_BUILD,
+} as const satisfies Record<HullOutput, { pose: { x: number; y: number; z: number }; yaw: number }>;
 /** Ordinary technical records: plates and logs, not story clues. Inspecting one
  * keeps its ID in knowledge.scans and grants the listed plans, order-independent. */
 export const TECH_RECORDS = {
@@ -1093,6 +1101,9 @@ export const INTERACTION_HOSTS: Readonly<Record<string, InteractionHostDefinitio
   basin_frame_fracture: { offset: { x: 0, y: 0.35, z: 0 }, radius: 1.2, renderOffsetY: 0 },
   basin_keel_plate: { offset: { x: 0, y: 0.2, z: 0 }, radius: 0.8 },
   canopy_stop_services: { offset: { x: 0, y: 0.9, z: 0 }, radius: 0.7 },
+  // C3: S2-placed hosts whose datum rests on the floor or beside their own furniture.
+  meridian_service_cache: { offset: { x: 0, y: 0.5, z: 0.2 }, radius: 0.9, solidIds: ["meridian.service_cache.cage"] },
+  yard_tender_plate: { offset: { x: 0, y: 0.7, z: 0 }, radius: 0.6 },
 };
 export const RECOVERY_STAGE = { x: 46, y: -12, z: -54 } as const;
 export const CANOPY_COVER = {

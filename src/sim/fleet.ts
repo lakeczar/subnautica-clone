@@ -1,3 +1,4 @@
+import { HUSH_HANDLING } from "../content/campaign/fleet.js";
 import { HULL_COLLIDERS, HULL_HOLD_CU, HULLS, ITEMS, MODULES, SOURCES, isMountKind } from "../content/registry.js";
 import type { MountKind, SourceId } from "../content/registry.js";
 import type { GameState, ItemStack, Vec3, VehicleState, WorldQueries } from "./types.js";
@@ -44,6 +45,16 @@ export const CREEL_HANDLING: HullHandling = {
   quiet: 2.5, cruise: 5, boost: 6.5, response: 1.7, turnRate: 1.1, drain: 100 / 700,
   loudness: { quiet: 0.12, cruise: 0.62, boost: 1 },
 };
+/** C3 proposal, untested tuning: the Mantle is a slow, precise deep service craft
+ * (S9: station keeping in the saddle downwelling). Hush uses S9's HUSH_HANDLING. */
+export const MANTLE_HANDLING: HullHandling = {
+  quiet: 2, cruise: 4, boost: 5, response: 2.2, turnRate: 1.3, drain: 100 / 800,
+  loudness: { quiet: 0.1, cruise: 0.5, boost: 0.85 },
+};
+/** Handled hulls; the Dart, Spindle and carrier keep their own rules in step.ts. */
+export function hullHandling(hull: string): HullHandling | null {
+  return hull === "creel" ? CREEL_HANDLING : hull === "hush" ? HUSH_HANDLING : hull === "mantle" ? MANTLE_HANDLING : null;
+}
 
 // ---------------------------------------------------------------- cabin
 /** Hull-local metres, keel reference, -Z is the bow. The fitted cabin is a fixed
