@@ -189,3 +189,12 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **W1-pre R3 (Sol): accept** (`review/w1-pre-r3` `2b57b8f`). Integrated at the merge of `0fc6c40`: 781 tests pass, build OK. P3 W1-PRE-06: use the 8 m cave index at integration (diver move plus support 42.9 → 18.9 µs).
 - **CB started:** a region content bible (lore and world) per region plus the 4 cave biomes, with typed proposals in `src/content/proposals/*`. Builders 5 of 5: C3, LC, SYS-1, SYS-2, CB.
 - **SYS-2 done** at `c910fea` (`feat/sys-2-bases-knowledge`, `t3-de5d23dc`): socket hosts, outposts, decoder, cultivation, survey and ping, beacons and chart, journal model, local play timeline and report; 810 tests pass. Its open question (the carrier bridge socket accepting `decoder`) is decided yes per GAME-DIRECTION, at composition. Sol R1 running. Builders 4 of 5: C3, LC, SYS-1, CB.
+- **2026-10-20, after the usage-limit reset:** C3, LC, SYS-1 and CB had hit the rate limit and were resumed. C3 is at `32c91c7`, where the Creel route reaches the ending. **SYS-2 R1 (Sol):** changes-needed (`review/sys-2-r1` `e91cf21`):
+  - F1 (P1): recovery re-IDs modules and orphans jobs;
+  - F2: a cutting goes into a container that rejects it;
+  - F3: the carrier bridge leaves a stale occupant;
+  - F4: duplicate layout references duplicate modules;
+  - F5: a stationary helm counts as travel;
+  - F6: reload loses an open death.
+
+  Back with the author. Builders 5 of 5.
