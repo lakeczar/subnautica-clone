@@ -3,7 +3,7 @@ import { sitePosition } from "../../content/ecology/sites.js";
 import { CUE_ROSTER, CUE_SPECIES } from "../../content/ecology/species.js";
 import type { CueAgentId } from "../../content/ecology/species.js";
 import type { Vec3 } from "../types.js";
-import { cycleLevel, secondsUntilActive } from "./hazards.js";
+import { cycleLevel, secondsUntilActive, secondsUntilRise } from "./hazards.js";
 import type { Stimulus } from "./types.js";
 import { clamp01, distance } from "./vector.js";
 
@@ -15,18 +15,18 @@ export const cueHome = (id: CueAgentId): Vec3 => sitePosition(CUE_ROSTER[id].hom
 /** 0..1 how far the mites have left the chimney lip; 1 for the whole vent. */
 export function miteScatter(tick: number): { scatter: number; secondsToVent: number } {
   const cycle = HAZARD_FIELDS[CUE_ROSTER.rift_mites_lip.hazard].cycle;
-  const lead = CUE_SPECIES.ember_mites.lead, until = secondsUntilActive(cycle, tick);
-  const active = cycleLevel(cycle, tick);
-  // Leave over the two seconds after `lead`, stay away while venting, return with the fall.
-  const leaving = until > 0 ? clamp01((lead - until) / 2) : 1;
-  return { scatter: Math.max(leaving, active), secondsToVent: until };
+  const lead = CUE_SPECIES.ember_mites.lead, rise = secondsUntilRise(cycle, tick);
+  // Leave over two seconds starting `lead` before the plume starts rising,
+  // stay away through the vent, return as it falls.
+  const leaving = rise > 0 ? clamp01((lead - rise) / 2) : 1;
+  return { scatter: Math.max(leaving, cycleLevel(cycle, tick)), secondsToVent: secondsUntilActive(cycle, tick) };
 }
 
 /** 0..1 how far the scavengers have backed into their burrows. */
 export function scavengerRetreat(tick: number, s: Stimulus | null): { retreat: number; machinery: boolean; secondsToSurge: number } {
   const cycle = HAZARD_FIELDS[CUE_ROSTER.basin_scavengers_ridge.hazard].cycle;
-  const lead = CUE_SPECIES.basin_scavengers.lead, until = secondsUntilActive(cycle, tick);
-  const surge = Math.max(until > 0 ? clamp01((lead - until) / 2) : 1, cycleLevel(cycle, tick));
+  const lead = CUE_SPECIES.basin_scavengers.lead, until = secondsUntilActive(cycle, tick), rise = secondsUntilRise(cycle, tick);
+  const surge = Math.max(rise > 0 ? clamp01((lead - rise) / 2) : 1, cycleLevel(cycle, tick));
   const machinery = !!s && s.hull !== null && s.noise >= CUE_SPECIES.basin_scavengers.machinery &&
     distance(s.position, cueHome("basin_scavengers_ridge")) < 14;
   return { retreat: Math.max(surge, machinery ? 1 : 0), machinery, secondsToSurge: until };

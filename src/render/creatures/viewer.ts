@@ -186,7 +186,7 @@ export function startCreatureViewer(canvas: HTMLCanvasElement, panel: HTMLElemen
     const lines = [
       `<b>${sc.label}</b>`, `t ${(tick / 60).toFixed(1)} s · lamp ${lamp ? "on" : "off"} · noise ${noise.toFixed(2)} · ${move}${pose ? ` · pose ${pose}` : ""}`,
       focus ? `${THREATS[speciesOf(focus.id)].label}: <b>${focus.mode}</b> · awareness ${focus.awareness.toFixed(2)} · refractory ${focus.refractory.toFixed(0)} s · cycles ${focus.cycles}` : "",
-      `At the player: heat ${h.heat.toFixed(2)} · brine ${h.brine.toFixed(2)} · current ${Math.hypot(h.flow.x, h.flow.y, h.flow.z).toFixed(2)} m/s · light ${h.ambient.toFixed(2)} · exposure heat ${(sc.hull ? state.hulls["viewer-hull"]?.heat ?? 0 : state.diver.heat).toFixed(0)}`,
+      `At the player: heat ${h.heat.toFixed(2)} · brine ${h.brine.toFixed(2)} · current ${Math.hypot(h.flow.x, h.flow.y, h.flow.z).toFixed(2)} m/s · light ${h.ambient.toFixed(2)} · exposure heat ${(sc.hull ? state.hulls.find(h => h.id === "viewer-hull")?.heat ?? 0 : state.diver.heat).toFixed(0)}`,
       scenarioId === "plume" ? `${CUE_SPECIES.ember_mites.label}: scatter ${ecologyView(state, tick, null).mites.scatter.toFixed(2)} · vent in ${ecologyView(state, tick, null).mites.secondsToVent.toFixed(1)} s` : "",
     ].filter(Boolean);
     info.innerHTML = lines.join("<br>");

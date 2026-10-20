@@ -59,17 +59,28 @@ export interface DeployedDeterrent {
   position: Vec3;
   seconds: number;
 }
+/** Loads run 0..100. Each `*Warned` counts seconds since the current warning
+ * episode's first caption (0 when no episode): harm waits for WARNING_LEAD. */
 export interface Exposure {
   heat: number;
   brine: number;
+  heatWarned: number;
+  brineWarned: number;
+}
+/** Hull loads keyed by fleet vehicle ID. An array, not an object map, so a
+ * saved or commanded ID can never resolve an inherited property. */
+export interface HullExposure extends Exposure {
+  readonly id: string;
 }
 export interface EcologyState {
   agents: AgentState[];
   deterrents: DeployedDeterrent[];
-  /** Diver exposure loads 0..100. Hull loads live beside each craft. */
   diver: Exposure;
-  hulls: Record<string, Exposure>;
+  hulls: HullExposure[];
 }
+/** Seconds from the first observable warning of an encounter or hazard
+ * episode to any harm it can cause. A tested invariant. */
+export const WARNING_LEAD = 5;
 
 export interface Protection {
   /** Tolerance below which a field causes no load. */

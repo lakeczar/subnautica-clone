@@ -5,7 +5,7 @@ import { HAZARD_FIELDS } from "../../content/ecology/hazards.js";
 import type { Vec3 } from "../types.js";
 import { activeThreats, dormantReset, restingAgent, speciesOf, stepAgent } from "./agents.js";
 import { cueEvents, miteScatter, sailPositions, scavengerRetreat, schoolScattered } from "./cues.js";
-import { driftFrom, fieldLevel, sampleHazards, stepExposure } from "./hazards.js";
+import { driftFrom, emptyExposure, fieldLevel, resumeExposure, sampleHazards, stepExposure } from "./hazards.js";
 import { ECOLOGY_DT } from "./types.js";
 import type { AgentMode, EcologyEvent, EcologyInput, EcologyState, EcologyStepResult, EcologyWorld, Exposure, Sense } from "./types.js";
 import { finite } from "./vector.js";
@@ -15,8 +15,29 @@ export const MAX_DETERRENTS = 6;
 /** A drifting glow lure rises slowly, so it leads an animal up and away. */
 export const LURE_RISE = 0.15;
 
+/** The fleet save contract's vehicle ID (src/save/validation.ts `id`). */
+export const VEHICLE_ID = /^[a-zA-Z0-9_-]{1,80}$/;
+/** Six craft plus Bobbin-era margin; recovered entries leave the list at zero. */
+export const MAX_HULL_EXPOSURES = 8;
+
 export function createEcology(): EcologyState {
-  return { agents: THREAT_AGENT_IDS.map(restingAgent), deterrents: [], diver: { heat: 0, brine: 0 }, hulls: {} };
+  return { agents: THREAT_AGENT_IDS.map(restingAgent), deterrents: [], diver: emptyExposure(), hulls: [] };
+}
+/** Call once after a save is loaded, before the first step: every exposure
+ * already above the first threshold re-warns before it can harm. */
+export function resumeEcology(state: EcologyState): void {
+  resumeExposure(state.diver);
+  for (const h of state.hulls) resumeExposure(h);
+}
+function hullExposure(state: EcologyState, id: string): Exposure | null {
+  if (!VEHICLE_ID.test(id)) return null;
+  let h = state.hulls.find(h => h.id === id);
+  if (!h) {
+    if (state.hulls.length >= MAX_HULL_EXPOSURES) state.hulls.shift();
+    h = { id, ...emptyExposure() };
+    state.hulls.push(h);
+  }
+  return h;
 }
 
 /** Advance ecology by one fixed step. Mutates `state` like the other step
@@ -37,17 +58,18 @@ export function stepEcology(state: EcologyState, input: EcologyInput, world: Eco
   const sample = sampleHazards(s.position, tick);
   let diverHealth = 0, vehicleHealth = 0;
   // The controlled actor takes field exposure; everyone else recovers.
-  const load: Exposure = input.vehicleId ? (state.hulls[input.vehicleId] ??= { heat: 0, brine: 0 }) : state.diver;
-  const exposed = stepExposure(load, sample, input.protection, !input.vehicleId, s.inRefuge);
-  events.push(...exposed.events);
-  if (input.vehicleId) vehicleHealth += exposed.harm; else diverHealth += exposed.harm;
-  const calm = { ...sample, heat: 0, brine: 0 };
-  if (input.vehicleId) stepExposure(state.diver, calm, input.protection, true, true);
-  for (const [id, hull] of Object.entries(state.hulls)) {
-    if (id === input.vehicleId) continue;
-    stepExposure(hull, calm, input.protection, false, true);
-    if (hull.heat === 0 && hull.brine === 0) delete state.hulls[id];
+  // An ID outside the fleet contract takes no hull exposure rather than
+  // touching any other entry.
+  const load: Exposure | null = input.vehicleId === null ? state.diver : hullExposure(state, input.vehicleId);
+  if (load) {
+    const exposed = stepExposure(load, sample, input.protection, !input.vehicleId, s.inRefuge);
+    events.push(...exposed.events);
+    if (input.vehicleId) vehicleHealth += exposed.harm; else diverHealth += exposed.harm;
   }
+  const calm = { ...sample, heat: 0, brine: 0 };
+  if (input.vehicleId !== null) stepExposure(state.diver, calm, input.protection, true, true);
+  for (const hull of state.hulls) if (hull !== load) stepExposure(hull, calm, input.protection, false, true);
+  state.hulls = state.hulls.filter(h => h === load || h.heat > 0 || h.brine > 0);
 
   const active = new Set(activeThreats(s.position));
   for (const agent of state.agents) {

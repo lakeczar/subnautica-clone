@@ -3,7 +3,7 @@ import type { HazardCycle, HazardFieldDefinition, HazardFieldId, HazardKind, Haz
 import { sitePosition } from "../../content/ecology/sites.js";
 import type { HullId } from "../../content/registry.js";
 import type { Vec3 } from "../types.js";
-import { ECOLOGY_DT } from "./types.js";
+import { ECOLOGY_DT, WARNING_LEAD } from "./types.js";
 import type { EcologyEvent, Exposure, Protection } from "./types.js";
 import { clamp01, v } from "./vector.js";
 
@@ -22,6 +22,13 @@ export function cycleLevel(cycle: HazardCycle, tick: number): number {
 export function secondsUntilActive(cycle: HazardCycle, tick: number): number {
   const t = (((tick / 60 - cycle.start) % cycle.period) + cycle.period) % cycle.period;
   return t < cycle.duration ? 0 : cycle.period - t;
+}
+/** Seconds until the field starts rising out of its quiet baseline (the
+ * hazardous onset); 0 while it is rising, active or falling. */
+export function secondsUntilRise(cycle: HazardCycle, tick: number): number {
+  if (cycleLevel(cycle, tick) > 0) return 0;
+  const t = (((tick / 60 - cycle.start) % cycle.period) + cycle.period) % cycle.period;
+  return cycle.period - cycle.ramp - t;
 }
 /** Field strength as a fraction of its peak, including the quiet baseline. */
 export function fieldLevel(id: HazardFieldId, tick: number): number {
@@ -108,34 +115,53 @@ const COUNTERS: Readonly<Record<"heat" | "brine", { suit: ProtectionId; hull: Pr
   heat: {
     suit: "heat_shroud", hull: "hull_heat_lining",
     caption: (level, diver) => level >= 100
-      ? `Heat load critical; ${diver ? "the suit is" : "the hull is"} taking damage. Leave the warm water for the pale cool ledges.`
+      ? `Heat load critical; ${diver ? "the suit" : "the hull"} will take damage within seconds. Leave the warm water for the pale cool ledges.`
       : `Heat load ${level}%. ${diver ? "A ceramic heat shroud" : "A hull heat lining"} would hold here; the first pressure ceramic lies on the cool flank lip. Pale ledges are cool.`,
   },
   brine: {
     suit: "brine_seals", hull: "hull_brine_seals",
     caption: (level, diver) => level >= 100
-      ? `Brine is etching ${diver ? "the suit joints" : "the hull seals"}. Climb above the mirror layer.`
+      ? `Brine will etch ${diver ? "the suit joints" : "the hull seals"} within seconds. Climb above the mirror layer.`
       : `Brine exposure ${level}%. ${diver ? "Lattice brine seals" : "Hull brine seals"} would hold here; lattice rinses out on the outer ledges above the layer.`,
   },
 };
 
+export const emptyExposure = (): Exposure => ({ heat: 0, brine: 0, heatWarned: 0, brineWarned: 0 });
+
 /** Advance one exposure load by one fixed step. Returns harm per step for the
- * actor (diver health or hull health) and threshold-crossing warnings. */
+ * actor (diver health or hull health) and warnings. An episode starts with a
+ * caption when the load reaches the first threshold (or already sits above it,
+ * e.g. after `resumeExposure`); harm waits until that caption is WARNING_LEAD
+ * seconds old, however fast the load rose or wherever in a cycle it began. */
 export function stepExposure(load: Exposure, sample: HazardSample, protection: Protection, diver: boolean, inRefuge: boolean): { harm: number; events: EcologyEvent[] } {
   const events: EcologyEvent[] = [];
   let harm = 0;
+  const first = EXPOSURE.warnings[0];
   for (const kind of ["heat", "brine"] as const) {
+    const warned = kind === "heat" ? "heatWarned" : "brineWarned";
     const before = load[kind], over = inRefuge ? 0 : sample[kind] - protection[kind];
-    const rate = EXPOSURE[kind];
+    const rate = EXPOSURE[kind], c = COUNTERS[kind];
+    const warn = (level: number): void => {
+      events.push({ type: "hazard-warning", hazard: kind, level, caption: c.caption(level, diver), protection: [diver ? c.suit : c.hull] });
+    };
     load[kind] = over > 0 ? Math.min(100, before + over * rate.rate * ECOLOGY_DT) : Math.max(0, before - rate.recovery * ECOLOGY_DT);
-    if (load[kind] >= 100) harm += (diver ? rate.diverHarm : rate.hullHarm) * ECOLOGY_DT;
-    for (const level of EXPOSURE.warnings)
-      if (before < level && load[kind] >= level) {
-        const c = COUNTERS[kind];
-        events.push({ type: "hazard-warning", hazard: kind, level, caption: c.caption(level, diver), protection: [diver ? c.suit : c.hull] });
-      }
+    if (load[kind] < first) { load[warned] = 0; continue; }
+    if (load[warned] === 0) {
+      warn(Math.max(first, Math.floor(load[kind] / 10) * 10));
+      load[warned] = ECOLOGY_DT;
+    } else {
+      load[warned] += ECOLOGY_DT;
+      for (const level of EXPOSURE.warnings.slice(1)) if (before < level && load[kind] >= level) warn(level);
+    }
+    if (load[kind] >= 100 && load[warned] >= WARNING_LEAD) harm += (diver ? rate.diverHarm : rate.hullHarm) * ECOLOGY_DT;
   }
   return { harm, events };
+}
+/** Call once after loading a save: an exposure above the first threshold
+ * starts a fresh warning episode, so a reload never resumes into silent harm. */
+export function resumeExposure(load: Exposure): void {
+  load.heatWarned = 0;
+  load.brineWarned = 0;
 }
 
 export type PressureBand = "clear" | "creak" | "stress" | "limit";
