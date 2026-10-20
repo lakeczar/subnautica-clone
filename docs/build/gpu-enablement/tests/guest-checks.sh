@@ -132,6 +132,10 @@ is "undo-plan lists the pending package" eval 'grep -q "pending: nvidia-kernel-d
 rm "$GF/config_fail"; installs_driver; run install --apply
 is "retry with apt's Conf repair line: accepted, exit 0" eval '[ "$RC" = 0 ] && grep -q "^Conf nvidia-kernel-dkms (1.0-1  \[amd64\])" "$(ls "$GF/state"/plan-*.txt | sort | tail -1)"'
 is "after the retry nvidia-kernel-dkms is configured (ii)" eval 'grep -q "^nvidia-kernel-dkms	1.0-1	ii " "$GF/db.tsv"'
+# R3-01: a pending package of ours whose version changed since our install is left alone, and said so.
+bare=1 reset_guest; echo nvidia-kernel-dkms > "$GF/config_fail"; run install --apply
+awk -F'\t' -v OFS='\t' '$1 == "nvidia-kernel-dkms" {$2 = "9.9"} {print}' "$GF/db.tsv" > "$GF/db.new" && mv "$GF/db.new" "$GF/db.tsv"; run undo-plan
+is "R3-01: changed pending package: left alone, never called 'included'" eval '! grep -q "nvidia-kernel-dkms.*included in the removal" <<<"$OUT" && grep -q "pending: nvidia-kernel-dkms (iF) at another version than our install; left alone" <<<"$OUT" && ! grep "sudo apt-get purge" <<<"$OUT" | grep -qw nvidia-kernel-dkms'
 bare=1 reset_guest; echo "Conf libc6 (2.41-12  [amd64])" > "$GF/sim_extra"; run install --apply
 is "Conf of a package that is neither new nor pending: refused" eval '[ "$RC" = 1 ] && grep -q "configures packages it does not install" <<<"$OUT"'
 bare=1 reset_guest; printf 'nvidia-kernel-dkms\t0.9-1\tiF \n' >> "$GF/db.tsv"; echo "Inst nvidia-kernel-dkms [0.9-1] (1.0-1 Debian:13.7/stable [amd64])" > "$GF/sim_extra"; run install --apply

@@ -287,8 +287,12 @@ cmd_undo_plan() {
     [ -n "$p" ] || continue
     tsv_has "$p" "$STATE_DIR/before.tsv" && continue
     v="$(present_version "$p")"; [ -n "$v" ] || continue
-    if tsv_has "$p" "$after" "$v"; then ours="$ours $p"; else changed="$changed $p"; fi
-    pend="$(pending_status "$p")"; [ -z "$pend" ] || warn "pending: $p (${pend% *}): not fully configured; included in the removal below"
+    pend="$(pending_status "$p")"
+    if tsv_has "$p" "$after" "$v"; then
+      ours="$ours $p"; [ -z "$pend" ] || warn "pending: $p (${pend% *}): not fully configured; included in the removal below"
+    else
+      changed="$changed $p"; [ -z "$pend" ] || warn "pending: $p (${pend% *}) at another version than our install; left alone"
+    fi
   done < "$STATE_DIR/planned.txt"
   while IFS=$'\t' read -r p v _; do
     tsv_has "$p" "$STATE_DIR/before.tsv" || line_has "$p" "$STATE_DIR/planned.txt" || notours="$notours $p"
