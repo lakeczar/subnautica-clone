@@ -182,3 +182,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
   - the floor wrapper breaks straddling clearance and the legacy guards.
 
   Back with the author.
+- **W1-pre R1 fixes done** at `90d38b3`: a real swept lamp-off retreat (82/82 starts exit), an exact voxel lamp walk checked against the 3090 on 2,734 rays, and a prototype adapter `src/sim/caveWorld.ts` with full-actor ownership and the legacy guards preserved; 760 tests pass. Sol R2 running.
