@@ -40,7 +40,9 @@ test("the preserve holds accepted B1's whole terrain, routes, sources and datums
   assert.equal(moved, 0, `B1 floor moved at ${moved} samples, first ${first}`);
   // Every registry source and B1 route/structure datum keeps its accepted floor.
   const datums: [string, number, number][] = [
-    ...Object.entries(SOURCES).map(([id, s]) => [id, s.position.x, s.position.z] as [string, number, number]),
+    // B1's own sources; sources lifted from S2 sites are authored outside the preserve.
+    ...Object.entries(SOURCES).filter(([id]) => !SITES.some(s => s.id === id))
+      .map(([id, s]) => [id, s.position.x, s.position.z] as [string, number, number]),
     ...Object.values(CANOPY_BASIN_ROUTE).flatMap(v => Array.isArray(v) ? v.map((q, i) => [`route.${i}`, q.x, q.z] as [string, number, number]) :
       typeof v === "object" ? [["route.pose", (v as { x: number }).x, (v as { z: number }).z] as [string, number, number]] : []),
     ...BASIN_GEOMETRY.solids.map(s => [s.id, (s.min.x + s.max.x) / 2, (s.min.z + s.max.z) / 2] as [string, number, number]),
