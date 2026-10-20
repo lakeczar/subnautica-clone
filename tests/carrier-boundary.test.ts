@@ -7,7 +7,11 @@ import { createWorldQueries, moveHull, WORLD_BOUNDS } from "../src/sim/world.js"
 import { BERTH_ENVELOPES, HULL_COLLIDERS } from "../src/content/registry.js";
 import { disableVehicle } from "../src/sim/recovery.js";
 import type { Vec3 } from "../src/sim/types.js";
-import { bounds, coherent, command, edges, meta, move, roundTrip, staged, world, worldMove } from "./carrier-boundary-support.js";
+import { bounds, coherent, command, edges, meta, move, NORTH_X, roundTrip, staged, world, worldMove } from "./carrier-boundary-support.js";
+
+/** B1's edge cases, re-anchored on the full envelope: B1's north edge sat at
+ * z 66 beside the reef; the envelope's is z 160, deep enough at NORTH_X. */
+const NZ = WORLD_BOUNDS.maxZ;
 
 test("ordinary production carrier ascent/reverse route remains coherent and saveable through the former tick 1681 failure", () => {
   let s = roundTrip(fixtureGame());
@@ -41,7 +45,7 @@ test("the existing carrier proxy encloses both berth layouts, interior and vesti
 
 test("retained valid near-edge saves neither snap to the new margin nor rotate attachments out of the world", () => {
   for (const configuration of ["compact", "medium"] as const) {
-    let s = staged(configuration, { x: 65, y: -1.5, z: 65 }, 0);
+    let s = staged(configuration, { x: NORTH_X, y: -1.5, z: NZ - 1 }, 0);
     const before = { ...s.fleet.vehicles[0]!.pose.position };
     s = roundTrip(s);
     for (let i = 0; i < 30; i++) {
@@ -116,7 +120,7 @@ test("legacy medium corner access either uses a physically clear dry passage or 
 });
 
 test("old overhanging interiors stop at the world plane while safe local walking and helm transitions remain available", () => {
-  let s = staged("compact", { x: 65, y: -24, z: 65 }, 0);
+  let s = staged("compact", { x: NORTH_X, y: -24, z: NZ - 1 }, 0);
   s = command(s, "station-keep");
   s = command(s, "leave-helm");
   for (let i = 0; i < 200; i++) {
@@ -159,7 +163,7 @@ test("restricting travel before a sweep preserves real obstruction/terrain check
 
 test("boundary launch/capture prepared and lock interruptions keep exactly one vehicle and preserve cargo", () => {
   for (const configuration of ["compact", "medium"] as const) for (const edge of edges) {
-    const yaw = (Math.atan2(65 - edge.x, -( -50 - edge.z)) + Math.PI * 2) % (Math.PI * 2);
+    const yaw = (Math.atan2(448 - edge.x, -(-736 - edge.z)) + Math.PI * 2) % (Math.PI * 2);
     let s = staged(configuration, { x: edge.x, y: -0.9, z: edge.z }, yaw);
     s = command(s, "station-keep");
     s = command(s, "leave-helm");
@@ -197,7 +201,7 @@ test("an impossible outward boundary launch/exit refuses atomically; empty suppo
   assert.ok(result.events.some((e) => e.type === "notice" && e.error));
   assert.deepEqual(result.state, before);
   coherent(result.state);
-  s = staged("compact", { x: 65, y: -0.9, z: 65 }, 0);
+  s = staged("compact", { x: NORTH_X, y: -0.9, z: NZ - 1 }, 0);
   s = command(s, "station-keep");
   s = command(s, "leave-helm");
   const denied = executeCommand(s, { type: "carrier", action: "leave-interior" }, world);
@@ -215,7 +219,7 @@ test("an impossible outward boundary launch/exit refuses atomically; empty suppo
 });
 
 test("a legacy turn stops at an intermediate arc extremum even when the requested endpoint fits", () => {
-  let s = staged("medium", { x: 65, y: -24, z: WORLD_BOUNDS.maxZ - 3.1 }, 4.7);
+  let s = staged("medium", { x: NORTH_X, y: -24, z: NZ - 3.1 }, 4.7);
   const h = s.fleet.vehicles[0]!;
   const endpoint = localToWorld(BERTH_LOCAL[0]!, { ...h, pose: { ...h.pose, yaw: 5.5 } });
   assert.ok(endpoint.z < WORLD_BOUNDS.maxZ);
@@ -262,7 +266,7 @@ test("supported boundary vestibule transitions stay inside the world and a legac
 });
 
 test("strict codec validation still rejects an out-of-world assembly instead of clamping individual attachments", () => {
-  const s = staged("compact", { x: 65, y: -1.5, z: 65 }, 0);
+  const s = staged("compact", { x: NORTH_X, y: -1.5, z: NZ - 1 }, 0);
   const h = s.fleet.vehicles[0]!;
   h.pose.position.z += 0.03;
   s.player.pose.position = { ...h.pose.position };
@@ -273,7 +277,7 @@ test("strict codec validation still rejects an out-of-world assembly instead of 
 });
 
 test("legacy corner contact uses the exact saved yaw representation without rounding an attached origin outside", () => {
-  let s = staged("compact", { x: -73.63397459521556, y: -0.9, z: -180.9019237876467 }, 2 * Math.PI / 3);
+  let s = staged("compact", { x: WORLD_BOUNDS.minX + 2.36602540478444, y: -0.9, z: WORLD_BOUNDS.minZ + 3.0980762123533 }, 2 * Math.PI / 3);
   for (let i = 0; i < 30; i++) {
     s = stepGame(s, [{ type: "look", yawDelta: -0.8, pitchDelta: 0 }], world).state;
     coherent(s);
@@ -281,7 +285,8 @@ test("legacy corner contact uses the exact saved yaw representation without roun
 });
 
 test("a requested legacy turn endpoint stays saveable when its recomputed arc endpoint rounds differently", () => {
-  const position = { x: 65, y: -24, z: 63.03314320575622 };
+  // Adjacent doubles at the north edge, re-derived by bisection for the envelope.
+  const position = { x: NORTH_X, y: -24, z: 157.03314320575623 };
   const before = staged("compact", position, 1.6680903988919056);
   const result = stepGame(before, [{ type: "look", yawDelta: -0.06564769841653488, pitchDelta: 0 }], world);
   coherent(result.state);
@@ -294,7 +299,7 @@ test("a requested legacy turn endpoint stays saveable when its recomputed arc en
 });
 
 test("a nearby safe legacy endpoint retains its exact requested heading", () => {
-  const position = { x: 65, y: -24, z: 63.03314320575621 };
+  const position = { x: NORTH_X, y: -24, z: 157.0331432057562 };
   const before = staged("compact", position, 1.6680903988919056);
   const result = stepGame(before, [{ type: "look", yawDelta: -0.06564769841653488, pitchDelta: 0 }], world);
   coherent(result.state);

@@ -300,5 +300,5 @@ test("unrelated walls, actual terrain, hull floor and boundary behavior still bl
   const terrain = createWorldQueries([], x => x > 2 ? -1 : -20);
   const moved = moveHull(terrain, { x: -4, y: -8, z: 0 }, { x: 10, y: 0, z: 0 }, HULL_COLLIDERS.dart);
   assert.ok(moved.hitSolid && moved.position.x < -1.59);
-  assert.ok(empty.moveCapsule(from, { x: 1000, y: 0, z: 0 }, swimmer).hitBoundary);
+  assert.ok(empty.moveCapsule(from, { x: 4000, y: 0, z: 0 }, swimmer).hitBoundary);
 });

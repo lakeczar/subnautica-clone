@@ -1,4 +1,4 @@
-import { ROUTE_WORLD_BOUNDS } from "../src/content/routes.js";
+import { WORLD_BOUNDS } from "../src/sim/world.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
@@ -1356,7 +1356,7 @@ test("an unavailable pulse names the actual reason instead of a bare refusal", (
   s.player.pose.position = { x: 90, y: -40, z: -90 }; s.player.mode = "swimming";
   s.world.threat.mode = "warn"; view.update(s, false);
   assert.equal(get("pulse-summary").textContent, "G · no cell with 25 charge · Z quiet / cover / retreat");
-  s.player.pose.position = { x: 90, y: -40, z: ROUTE_WORLD_BOUNDS.minZ }; s.player.pose.yaw = 0;
+  s.player.pose.position = { x: 90, y: -40, z: WORLD_BOUNDS.minZ }; s.player.pose.yaw = 0;
   view.update(s, false);
   assert.equal(get("pulse-summary").textContent, "G · face the survey area · Z quiet / cover / retreat");
 });

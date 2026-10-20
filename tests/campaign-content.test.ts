@@ -120,8 +120,8 @@ test("real collection at the late deposits follows the suit, and refused work ta
   const got = collectWithOutcome(s, lip);
   assert.equal(got.refusal, null); assert.deepEqual(got.pickup, { item: "pressure_ceramic", quantity: 2, destination: "diver" });
   assert.ok(s.knowledge.scans.includes(lip));
-  // B1's simulation bounds still end short of the Rift: C3 widens them with S2's world.
-  assert.equal(validState(s), false, "a pose at the Rift is outside today's saved-world bounds");
+  // C3 widened the simulation to S2's whole envelope: a pose at the Rift is saveable.
+  assert.equal(validState(s), true, "a pose at the Rift is inside the saved world");
   at(s, WORKSHOP_BENCH); saveable(s);
   const ledge = "divide_lattice_ledge_west" as const, before = s.world.resources.find((n) => n.id === ledge)!.stock;
   at(s, { ...SOURCES[ledge].position, y: SOURCES[ledge].position.y + 0.5 });

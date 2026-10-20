@@ -1,4 +1,4 @@
-import { fractureDepth, terrainHeight } from "../sim/world.js";
+import { fractureDepth, legacyWorldHeight as terrainHeight } from "../sim/terrain.js";
 import { PALETTE as P } from "./palette.js";
 import type { ChunkArtFactory, MeshRecipe } from "./kit/types.js";
 import { terrainSurfaceSteps, type TerrainSurface, type TerrainWindow } from "./terrainSurface.js";

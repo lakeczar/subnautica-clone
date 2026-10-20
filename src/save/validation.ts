@@ -47,9 +47,10 @@ const int = (v: unknown, a: number, b: number): v is number =>
   n(v, a, b) && Number.isInteger(v);
 const id = (v: unknown): v is string =>
   typeof v === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(v);
+/** Any finite vector inside the 2.0 x 1.8 km world frame (|x|, |z| <= 1632). */
 const vec = (v: unknown): boolean =>
   exact(v, ["x", "y", "z"]) &&
-  ["x", "y", "z"].every((k) => n(v[k], -1000, 1000));
+  ["x", "y", "z"].every((k) => n(v[k], -2048, 2048));
 const worldVec = (v: unknown): boolean =>
   vec(v) &&
   record(v) &&
