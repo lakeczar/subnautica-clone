@@ -148,7 +148,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "recovery.wake": {
-    bus: "alert", priority: 5, level: -14, cooldown: 3, maxInstances: 1, spatial: false,
+    bus: "alert", priority: 5, level: -13, cooldown: 3, maxInstances: 1, spatial: false,
     caption: "[Recovery tone · returning to refuge]", essential: true, wet: 0.5,
     sound: [
       n({ color: "brown", filter: "lowpass", freq: 300, to: 90, q: 0.7, at: 0, dur: 1.8, attack: 0.4, gain: 0.6 }),

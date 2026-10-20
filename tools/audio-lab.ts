@@ -5,7 +5,7 @@
  * The report is also exposed as window.__audioLab for scripted checks. */
 import { levels, OCTAVES, spectrum, type Levels, type Spectrum } from "../src/audio/analysis.js";
 import { CUES, CUE_IDS, cueDuration, type Bus, type CueId } from "../src/audio/cues.js";
-import { AudioEngine, type EngineStats } from "../src/audio/engine.js";
+import { AudioEngine, FADING_SLOT_LIMIT, type EngineStats } from "../src/audio/engine.js";
 import type { CueRequest } from "../src/audio/mapping.js";
 import { VOICE_LIMITS } from "../src/audio/mixer.js";
 import { HULL_LAYERS, REGION_AMBIENCE } from "../src/audio/profiles.js";
@@ -35,6 +35,10 @@ interface Scenario {
   scene(t: number): AudioScene;
   events?(t: number, frame: number): CueRequest[];
   solo?: Bus[];
+  /** Per-frame script after the scene update: pause, reset, region chatter. */
+  act?(engine: AudioEngine, t: number, frame: number): void;
+  /** Extra analysis windows, reported in Result.windows. */
+  windows?: Record<string, [number, number]>;
   check(r: Result): string[];
 }
 export interface Result {
@@ -53,6 +57,16 @@ export interface Result {
   /** Essential cues that were admitted, for the adverse case. */
   admittedEssential: number;
   requestedEssential: number;
+  /** Every cue request issued. */
+  requested: number;
+  peakNodes: number;
+  peakLayerNodes: number;
+  peakFadingSlots: number;
+  /** Longest unowned sounding graph seen at any frame (a fade is <= 0.05 s). */
+  maxUnownedTail: number;
+  /** First time after the last request when no cue voice sounds and none waits. */
+  drainedAt: number | null;
+  windows: Record<string, Levels>;
   failures: string[];
   buffer: AudioBuffer;
 }
@@ -65,6 +79,8 @@ const common = (r: Result): string[] => [
   ...BUSES.filter(b => r.peakBus[b] > VOICE_LIMITS.bus[b]).map(b => `${b} bus ${r.peakBus[b]} > ${VOICE_LIMITS.bus[b]}`),
 ];
 const range = (what: string, v: number, lo: number, hi: number): string[] => (v < lo || v > hi ? [`${what} ${v} outside ${lo}..${hi}`] : []);
+/** Digital silence for practical purposes: nothing above -100 dBFS. */
+const silent = (r: Result): string[] => (r.levels.peakDb > -100 ? [`not silent: peak ${r.levels.peakDb} dBFS`] : []);
 
 /** Momentary-max targets (LUFS at full volume) by cue class. Beds sit near -31. */
 const CLASS_TARGET = {
@@ -141,15 +157,60 @@ function scenarios(): Scenario[] {
       check: () => [],
     },
   );
-  // Adverse case: a burst of 400 mixed requests in two seconds over a busy scene.
+  // Silence and isolation (S6-01): pause and solos must silence wet paths too.
+  const busy = (t: number) => scene({ region: "refuge_reef", depth: 30, hull: "creel", throttle: 1, threat: { mode: t < 3 ? "warn" : "pursue", interest: 3, pan: -0.5, distance: 20, dir: "left" } });
+  const noisy = (_: number, f: number): CueRequest[] => (f % 40 === 5 ? [cue("alert.threat-call", { pan: -0.5, distance: 20, dir: "left" }), cue("action.scan"), cue("music.discovery")] : []);
+  out.push(
+    { id: "silence/paused-reef", group: "Silence and isolation", seconds: 8, window: [5, 8], scene: () => scene({ active: false, depth: 30 }), check: silent },
+    { id: "silence/all-buses-muted", group: "Silence and isolation", seconds: 8, window: [0.5, 8], solo: [], scene: busy, events: noisy, check: silent },
+    { id: "isolation/alert-solo-quiet-scene", group: "Silence and isolation", seconds: 8, window: [5, 8], solo: ["alert"], scene: () => scene({ depth: 30, hull: "creel", throttle: 1 }), check: silent },
+    { id: "isolation/music-solo-busy-scene", group: "Silence and isolation", seconds: 8, window: [0.5, 8], solo: ["music"], scene: busy,
+      events: (_, f) => (f % 40 === 5 ? [cue("alert.threat-call", { pan: -0.5, distance: 20, dir: "left" }), cue("action.scan")] : []), check: silent },
+    {
+      id: "silence/paused-panel-feedback", group: "Silence and isolation", seconds: 8, window: [6.5, 8],
+      windows: { feedback: [5, 5.8] }, scene: () => scene({ active: false, depth: 30 }),
+      events: (_, f) => (f === Math.round(5 * RATE / STEP) ? [cue("action.craft")] : []),
+      check: r => [...silent(r), ...((r.windows.feedback?.peakDb ?? -Infinity) < -40 ? ["paused panel feedback is inaudible"] : [])],
+    },
+  );
+  // Phrase lifetimes (S6-03): ownership until the graph ends; pause and reset reach it.
+  const atFrame = (t: number) => Math.round(t * RATE / STEP);
+  out.push(
+    { id: "lifecycle/phrase-overlap", group: "Phrase lifecycle", seconds: 9, window: [0, 9], solo: ["music"], scene: () => scene(),
+      events: (_, f) => (f === atFrame(0.1) ? [cue("music.blueprint")] : f === atFrame(2.3) ? [cue("music.discovery")] : []),
+      check: r => [...(r.peakBus.music > 1 ? ["two phrases owned"] : []), ...(r.maxUnownedTail > 0.05 ? [`unowned graph for ${r.maxUnownedTail.toFixed(3)} s`] : [])] },
+    { id: "lifecycle/pause-mid-ending", group: "Phrase lifecycle", seconds: 10, window: [6.6, 10], scene: t => scene({ active: t < 6 }),
+      events: (_, f) => (f === atFrame(1) ? [cue("music.ending")] : []),
+      check: r => [...silent(r), ...(r.maxUnownedTail > 0.05 ? [`unowned graph for ${r.maxUnownedTail.toFixed(3)} s`] : [])] },
+    // Window starts after the room's 2.6 s reverb tail; ownership is checked every frame.
+    { id: "lifecycle/reset-mid-phrase", group: "Phrase lifecycle", seconds: 8, window: [4.3, 8], solo: ["music"], scene: () => scene(),
+      events: (_, f) => (f === atFrame(0.5) ? [cue("music.discovery")] : []),
+      act: (e, _, f) => { if (f === atFrame(1.5)) e.reset(); },
+      check: r => [...silent(r), ...(r.maxUnownedTail > 0.05 ? [`unowned graph for ${r.maxUnownedTail.toFixed(3)} s`] : [])] },
+  );
+  // Boundary chatter (S6-04): reef/Canopy alternating every frame (R1 probe: 61 → 1,987 nodes), then every second.
+  let chatterRegion: RegionId = "refuge_reef";
+  out.push(
+    { id: "boundary/chatter-every-frame", group: "Boundary chatter", seconds: 9, window: [4, 9],
+      scene: t => scene({ region: t >= 4 && t < 7 ? chatterRegion : "refuge_reef" }),
+      act: (_, t, f) => { if (t >= 4 && t < 7) chatterRegion = f % 2 ? "suspended_garden" : "refuge_reef"; },
+      check: r => r.peakLayerNodes > r.layerNodesStart ? [`layer nodes rose ${r.layerNodesStart} → ${r.peakLayerNodes}`] : [] },
+    { id: "boundary/alternate-every-second", group: "Boundary chatter", seconds: 16, window: [3, 16],
+      scene: t => scene({ region: t >= 3 && t < 13 && Math.floor(t) % 2 ? "suspended_garden" : "refuge_reef" }),
+      check: r => [...(r.peakFadingSlots > FADING_SLOT_LIMIT ? [`${r.peakFadingSlots} fading slots`] : []),
+        ...(r.layerNodesEnd !== r.layerNodesStart ? [`layer nodes ${r.layerNodesStart} → ${r.layerNodesEnd}`] : [])] },
+  );
+  // Adverse case: exactly 400 mixed requests in two seconds over a busy scene,
+  // rendered until every voice has drained; play pauses at 46 s.
+  const burstFrames = [atFrame(2), atFrame(4)] as const, burstLen = burstFrames[1] - burstFrames[0];
   out.push({
-    id: "adverse/burst-400", group: "Adverse case", seconds: 12, window: [0, 12],
-    scene: () => scene({ region: "refuge_reef", depth: 30, hull: "dart", throttle: 1, boost: 1, threat: { mode: "pursue", interest: 4, pan: 0.3, distance: 15, dir: "right" } }),
+    id: "adverse/burst-400", group: "Adverse case", seconds: 48, window: [0, 46],
+    scene: t => scene({ active: t < 46, region: "refuge_reef", depth: 30, hull: "dart", throttle: 1, boost: 1, threat: { mode: "pursue", interest: 4, pan: 0.3, distance: 15, dir: "right" } }),
     events: (() => {
       const r = rng(4242);
-      return (t: number) => {
-        if (t < 2 || t >= 4) return [];
-        const n = Math.round(400 / (2 * RATE / STEP)), reqs: CueRequest[] = [];
+      return (_: number, f: number) => {
+        if (f < burstFrames[0] || f >= burstFrames[1]) return [];
+        const k = f - burstFrames[0], n = Math.floor(400 * (k + 1) / burstLen) - Math.floor(400 * k / burstLen), reqs: CueRequest[] = [];
         for (let i = 0; i < n; i++) {
           const id = CUE_IDS[Math.floor(r() * CUE_IDS.length)]!;
           reqs.push(cue(id, CUES[id].spatial ? { pan: r() * 2 - 1, distance: r() * 60, dir: "right" } : { intensity: r() }));
@@ -159,7 +220,11 @@ function scenarios(): Scenario[] {
     })(),
     check: r => [
       ...range("burst momentary max", r.levels.momentaryMaxLufs, -40, -6),
-      ...(r.layerNodesEnd !== r.layerNodesStart ? [`layer nodes ${r.layerNodesStart} → ${r.layerNodesEnd}`] : []),
+      ...(r.requested !== 400 ? [`issued ${r.requested} requests, not 400`] : []),
+      ...(r.drainedAt === null || r.drainedAt > 46 ? [`not drained before the pause (${r.drainedAt})`] : []),
+      ...(r.stats.voiceNodes !== 0 ? [`${r.stats.voiceNodes} voice nodes left at the end`] : []),
+      ...(r.nodesEnd !== r.layerNodesStart ? [`nodes ${r.layerNodesStart} → ${r.nodesEnd}`] : []),
+      ...(r.maxUnownedTail > 0.05 ? [`unowned graph for ${r.maxUnownedTail.toFixed(3)} s`] : []),
       ...(r.admittedEssential === 0 ? ["no essential warning got through"] : []),
     ],
   });
@@ -173,14 +238,17 @@ async function render(sc: Scenario): Promise<Result> {
   if (sc.solo) for (const b of BUSES) engine.setBusTrim(b, sc.solo.includes(b) ? 1 : 0);
   engine.update(sc.scene(0));
   const first = engine.stats(), nodesStart = first.liveNodes, layerNodesStart = first.liveNodes - first.voiceNodes;
-  let peakVoices = 0, admittedEssential = 0, requestedEssential = 0;
+  let peakVoices = 0, admittedEssential = 0, requestedEssential = 0, requested = 0, lastRequest = -1;
+  let peakNodes = nodesStart, peakLayerNodes = layerNodesStart, peakFadingSlots = 0, maxUnownedTail = 0, drainedAt: number | null = null;
   const peakBus = Object.fromEntries(BUSES.map(b => [b, 0])) as Record<Bus, number>;
   const frames = ctx.length / STEP;
   for (let f = 1; f < frames; f++) {
     const t = f * STEP / RATE;
     void ctx.suspend(t).then(() => {
+      sc.act?.(engine, t, f);
       engine.update(sc.scene(t));
       for (const r of sc.events?.(t, f) ?? []) {
+        requested++; lastRequest = t;
         if (CUES[r.cue].essential) requestedEssential++;
         const a = engine.play(r);
         if (a.play && CUES[r.cue].essential) admittedEssential++;
@@ -188,17 +256,26 @@ async function render(sc: Scenario): Promise<Result> {
       const s = engine.stats();
       peakVoices = Math.max(peakVoices, s.voices);
       for (const b of BUSES) peakBus[b] = Math.max(peakBus[b], s.bus[b]);
+      peakNodes = Math.max(peakNodes, s.liveNodes);
+      peakLayerNodes = Math.max(peakLayerNodes, s.liveNodes - s.voiceNodes);
+      peakFadingSlots = Math.max(peakFadingSlots, s.fadingSlots);
+      maxUnownedTail = Math.max(maxUnownedTail, s.unownedTail);
+      const cueVoices = s.voices - s.bus.ambience;
+      if (lastRequest >= 0 && t > lastRequest && drainedAt === null && cueVoices === 0 && s.pending === 0) drainedAt = t;
+      if (cueVoices > 0) drainedAt = null;
       void ctx.resume();
     });
   }
   const buffer = await ctx.startRendering();
   const stats = engine.stats(), nodesEnd = stats.liveNodes, layerNodesEnd = stats.liveNodes - stats.voiceNodes;
   engine.dispose();
-  const [a, b] = sc.window, start = Math.floor(a * RATE), end = Math.min(buffer.length, Math.floor(b * RATE));
-  const chans = [0, 1].map(c => buffer.getChannelData(c).slice(start, end));
+  const slice = ([a, b]: readonly [number, number]) => [0, 1].map(c => buffer.getChannelData(c).slice(Math.floor(a * RATE), Math.min(buffer.length, Math.floor(b * RATE))));
+  const chans = slice(sc.window);
+  const windows = Object.fromEntries(Object.entries(sc.windows ?? {}).map(([k, w]) => [k, levels(slice(w), RATE)]));
   const r: Result = {
     id: sc.id, group: sc.group, levels: levels(chans, RATE), spectrum: spectrum(chans, RATE),
-    peakVoices, peakBus, nodesStart, nodesEnd, layerNodesStart, layerNodesEnd, stats, admittedEssential, requestedEssential, failures: [], buffer,
+    peakVoices, peakBus, nodesStart, nodesEnd, layerNodesStart, layerNodesEnd, stats, admittedEssential, requestedEssential,
+    requested, peakNodes, peakLayerNodes, peakFadingSlots, maxUnownedTail, drainedAt, windows, failures: [], buffer,
   };
   r.failures = [...common(r), ...sc.check(r)];
   return r;
@@ -257,7 +334,7 @@ async function runAll(): Promise<Report> {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${r.id}</td><td class="num">${fmt(r.levels.lufs)}</td><td class="num">${fmt(r.levels.momentaryMaxLufs)}</td>`
       + `<td class="num">${fmt(r.levels.peakDb)}</td><td class="num">${fmt(r.levels.rmsDb)}</td><td class="num">${r.peakVoices}</td>`
-      + `<td class="num">${r.nodesEnd}</td><td>${svgBands(r.spectrum)}</td><td class="num">${r.spectrum.centroidHz} Hz</td>`
+      + `<td class="num">${r.peakNodes}</td><td>${svgBands(r.spectrum)}</td><td class="num">${r.spectrum.centroidHz} Hz</td>`
       + `<td class="${r.failures.length ? "fail" : "pass"}">${r.failures.length ? r.failures.join("; ") : "pass"}</td><td></td>`;
     const play = document.createElement("button");
     play.textContent = "▶"; play.title = "Play the rendered buffer";
