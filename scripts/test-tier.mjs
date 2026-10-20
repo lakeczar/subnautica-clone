@@ -24,6 +24,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const build = join(root, ".test-build");
 const testDir = join(build, "tests");
 const FAST_CONCURRENCY = 4;
+const FAST_HEAP_MIB = 1024;
 
 const [tier, ...requested] = process.argv.slice(2);
 if (tier !== "fast" && tier !== "heavy") {
@@ -91,14 +92,20 @@ if (tier === "fast") {
     process.exit(1);
   }
   const started = Date.now();
-  const { code } = await run(process.execPath, ["--test", `--test-concurrency=${FAST_CONCURRENCY}`, ...files]);
+  // Each fast test process gets a 1 GiB V8 heap: a runaway assertion diff fails
+  // that file quickly instead of exhausting the shared VM. Fast tests hold no
+  // Babylon buffers, so the heap is their memory.
+  const { code } = await run(process.execPath, ["--test", `--test-concurrency=${FAST_CONCURRENCY}`, ...files],
+    { env: { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${FAST_HEAP_MIB}`.trim() } });
   console.log(`test:fast ${files.length} files in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   process.exit(code ?? 1);
 }
 
 // Heavy tier.
 const budgets = JSON.parse(readFileSync(join(root, "tests", "heavy-budgets.json"), "utf8"));
-const budgetMiB = (file) => budgets.files?.[basename(file).replace(/\.js$/, ".ts")] ?? budgets.defaultMiB;
+// SILTWAKE_HEAVY_BUDGET_MIB overrides every budget, e.g. to check that the watchdog fires.
+const budgetMiB = (file) => Number(process.env.SILTWAKE_HEAVY_BUDGET_MIB) ||
+  (budgets.files?.[basename(file).replace(/\.js$/, ".ts")] ?? budgets.defaultMiB);
 const vmHwmKiB = (pid) => {
   try { return Number(/VmHWM:\s+(\d+)/.exec(readFileSync(`/proc/${pid}/status`, "utf8"))?.[1] ?? 0); } catch { return 0; }
 };
