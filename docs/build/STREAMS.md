@@ -199,3 +199,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 
   Back with the author. Builders 5 of 5.
 - **SYS-1 done** at `1bef219` (`feat/sys-1-upgrades-power`, `t3-88d63485`): 45 upgrades (common pool plus signatures), slot limits, depth-safe removal refusals, power sources with catches, air lines (27 m and Mantle 60 m), and an economy check; 832 tests pass. Advisory: S9 Creel refit costs fall per tier, against the tier rule; adjusted costs are proposed for composition. Sol R1 running. Builders 4 of 5: C3, LC, CB, SYS-2 (fixing).
+- **CY started:** a currents and cycles sandbox (authored current volumes, a cycle framework, 4 cycle prototypes with keep-or-cut assessments, a turbine stub), in new files only. Builders 5 of 5: C3, LC, CB, SYS-2 (fixing), CY.
