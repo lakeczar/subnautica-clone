@@ -337,9 +337,10 @@ const frames: Phase = {
  * holds, gathering any remainder from the isles and reef. */
 export function carry(d: Driver, needs: Readonly<Partial<Record<ItemKind | "tagged_frame", number>>>): void {
   enter(d, "workshop");
-  // Travel light: everything but the load and one meal stays in the locker.
+  // Travel light: everything but the load and three meals stays in the locker.
   for (const i of [...d.state.inventory.items].filter((x) => x.containerId === "diver" && !x.fitted && !(x.kind in needs) && x.kind !== "meal"))
     d.command({ type: "transfer", itemId: i.id, to: "workshop_locker", quantity: i.quantity });
+  if (!("meal" in needs) && d.count("meal", ["diver"]) > 3) move(d, "meal", d.count("meal", ["diver"]) - 3, "diver", "workshop_locker");
   const bins = ["workshop_locker", ...d.state.fleet.vehicles.map((v) => v.cargoId)];
   const short: Partial<Record<ItemKind, number>> = {};
   for (const [kind, n] of Object.entries(needs) as [ItemKind, number][]) {

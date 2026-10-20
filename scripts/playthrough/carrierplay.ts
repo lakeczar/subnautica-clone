@@ -56,9 +56,11 @@ export function carrierIn(d: Driver): void {
 
 /** Swim to the exterior vestibule and step into the dry interior (station keeping on). */
 export function enterCarrier(d: Driver): void {
-  const h = carrier(d);
+  const h = carrier(d), at = localToWorld(CARRIER_LAYOUT.exteriorVestibule, h), p = d.state.player.pose.position;
+  // A wall between (a yard cradle): over it near the surface, then down to the vestibule.
+  const over = d.world.lineOfSight(p, at) ? [] : [{ ...p, y: -2.5, tolerance: 2 }, { ...at, y: -2.5, tolerance: 2 }];
   // Within 1 m: the interface also refuses beyond 15 m of the keel datum.
-  travel(d, route("to the carrier vestibule", "diver", "local swim, played", [{ ...localToWorld(CARRIER_LAYOUT.exteriorVestibule, h), tolerance: 1 }]));
+  travel(d, route("to the carrier vestibule", "diver", "local swim, played", [...over, { ...at, tolerance: 1 }]));
   d.command({ type: "carrier", action: "enter-interior" });
 }
 /** From anywhere aboard: walk aft and leave through the vestibule. */

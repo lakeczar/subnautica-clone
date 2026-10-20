@@ -136,7 +136,13 @@ export function carrierTransferPath(s: GameState, v: VehicleState, slot: 0 | 1, 
 function transferRefusal(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture", world: WorldQueries): string | null {
   const dock = s.fleet.docking!, h = carrierHull(s)!, shape = transferEnvelope(v);
   if (dock.launchBlocked) return "Transfer corridor obstructed. Vehicle identity, cargo, charge and damage are unchanged.";
-  const path = carrierTransferPath(s, v, slot, type), local = path.map((p) => worldToLocal(p, h));
+  const path = carrierTransferPath(s, v, slot, type);
+  // The in-carrier keel route stays exactly carrier-local: at an oblique heading a
+  // world round trip lands the lock leg an ulp below the lock floor's top and grazes it.
+  const berth = BERTH_LOCAL[slot]!, lockY = CARRIER_LAYOUT.lockKeelY;
+  const inner = [berth, { ...berth, y: lockY }, { x: 0, y: lockY, z: berth.z }, CARRIER_LAYOUT.railTurn,
+    v.hull === "spindle" ? worldToLocal(launchPoint(h, v), h) : LAUNCH_LOCAL];
+  const local = type === "capture" ? [worldToLocal(v.pose.position, h), ...inner.reverse()] : inner;
   // The independent approach is outside the carrier. At the mouth, guided rails
   // align the hull; use its broader piloting envelope for that initial approach.
   const structure = carrierStructure(dock.configuration, slot);
@@ -149,7 +155,9 @@ function transferRefusal(s: GameState, v: VehicleState, slot: 0 | 1, type: "laun
   const worldShape = { ...shape, halfWidth: rx * cos + rz * sin, halfLength: rx * sin + rz * cos };
   const obstacles = s.fleet.vehicles.filter((a) => a.id !== v.id && a.id !== h.id && !a.berth)
     .map((a) => envelopeSolid(`craft.${a.id}`, a.pose.position, HULL_COLLIDERS[a.hull]));
-  const otherWorld = createWorldQueries(obstacles, () => -200);
+  // Other craft only, in world coordinates: no floor of its own (the composed world
+  // is checked separately), so a transfer below 200 m is not refused by a stand-in.
+  const otherWorld = createWorldQueries(obstacles, () => -1e4);
   if (!sweptHullClearance(localWorld, local, shape) ||
     !sweptHullClearance(world, path, worldShape) ||
     !sweptHullClearance(otherWorld, path, worldShape) ||

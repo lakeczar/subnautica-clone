@@ -104,10 +104,13 @@ export function reach(d: Driver, id: string): void {
     const p = d.state.player.pose.position;
     // Air is the nearest of the surface and a powered craft moored close by (a deep
     // sortie's own craft): budget the swim there and back to it, not up 600 m.
-    const craft = d.state.fleet.vehicles.filter((v) => !v.berth && !v.disabled && v.charge > 0 && dist(v.pose.position, p) < 40)
+    // The target itself counts when it is that craft (the swim back from a deep sortie).
+    const craft = d.state.fleet.vehicles.filter((v) => !v.berth && !v.disabled && v.charge > 0 && (dist(v.pose.position, p) < 40 || v.id === id))
       .map((v) => dist(v.pose.position, b)).sort((x, y) => x - y)[0];
     const toAir = Math.min(-b.y / 3, craft === undefined ? Infinity : craft / 3);
-    const direct = dist(p, b) < 30 && d.world.lineOfSight({ ...p, y: p.y + 0.5 }, { ...b, y: b.y + 0.5 }) &&
+    // Beside a powered craft a longer clear swim is direct (a craft held above a deep
+    // source at its rating); elsewhere 30 m, then up and down through open water.
+    const direct = dist(p, b) < (craft === undefined ? 30 : 70) && d.world.lineOfSight({ ...p, y: p.y + 0.5 }, { ...b, y: b.y + 0.5 }) &&
       airSeconds(d) > dist(p, b) / 3 + toAir + 25;
     if (direct) travel(d, route(`approach ${id}`, "diver", "local approach, played", [b]), `to ${id}`);
     else if (-p.y / 3 + 25 > airSeconds(d))

@@ -18,7 +18,7 @@ import { createStory } from "../../src/sim/story/state.js";
 import { worksAction } from "../../src/sim/story/works.js";
 import { interactions } from "../../src/sim/progression.js";
 import { hullClearance, sweptHullClearance } from "../../src/sim/world.js";
-import { CARRIER_LAYOUT, localToWorld } from "../../src/sim/carrier.js";
+import { CARRIER_LAYOUT, LAUNCH_LOCAL, launchPoint, localToWorld } from "../../src/sim/carrier.js";
 import { SERVICE_MOORINGS } from "../../src/content/stops.js";
 import type { GameCommand, Vec3, VehicleState } from "../../src/sim/types.js";
 import { board, craft, gather, interact, leaveCraft, move, procure, reach, unload, eatIfHungry } from "./actions.js";
@@ -62,10 +62,26 @@ function followS2(d: Driver, id: string, reverse = false): void {
 /** Long later phases (C3): eat at the workshop and carry three meals; eat()
  * reaches the diver hold anywhere, and followS2 eats between legs. */
 function provision(d: Driver): void {
+  ashoreFromCarrier(d);
   enter(d, "workshop");
   eatIfHungry(d, 70);
   procure(d, { meal: 3 }, "workshop", ISLES);
   carry(d, { meal: 3 });
+}
+/** Home from the carrier at the yard: service it at the stop, then ride the Creel
+ * moored beside it back to the workshop slip. */
+function ashoreFromCarrier(d: Driver): void {
+  const h = d.vehicle("hearthline");
+  if (!h || (d.state.player.controlledVehicleId !== h.id && d.state.player.interiorId !== h.id)) return;
+  d.command({ type: "carrier", action: "station-keep" }, { allowRefusal: true });
+  if (h.charge < 99 || h.health < 99) d.command({ type: "service", vehicleId: h.id }, { allowRefusal: true });
+  d.command({ type: "carrier", action: "leave-helm" }, { allowRefusal: true });
+  exitCarrier(d);
+  boardCraft(d, "creel");
+  pilotTo(d, "out of the yard", s2Route("route.isles.workshop_stack").path.at(-1)!);
+  followS2(d, "route.isles.workshop_stack", true);
+  fly(d, "creel_home");
+  dockAndService(d, d.vehicle("creel")!);
 }
 /** A keel pose near `point` the occupied hull can hold, reached from above. */
 function parkNear(d: Driver, point: Vec3): Vec3 {
@@ -368,9 +384,21 @@ function carrierHome(d: Driver, legs: readonly string[]): void {
 }
 /** The Mantle back into its medium berth from the vestibule side. */
 function mantleHome(d: Driver): void {
+  // Capture takes an idle craft within 13 m of the launch point, under the keel lock.
+  const mantle = d.vehicle("mantle")!, h = carrier(d);
+  // Line up astern on the corridor axis, then ease in to the launch point.
+  pilotTo(d, "astern of the launch corridor", localToWorld({ ...LAUNCH_LOCAL, y: LAUNCH_LOCAL.y - 1, z: LAUNCH_LOCAL.z - 10 }, h));
+  fly(d, { id: "into the launch corridor", source: "harness: local leg, swept", points: [{ ...launchPoint(h, mantle), tolerance: 1.5 }] });
   leaveCraft(d);
-  carrierIn(d);
-  d.command({ type: "carrier", action: "station-keep" });
+  d.waitFor("the Mantle to settle", 20, (s) => {
+    const v = s.fleet.vehicles.find((x) => x.id === mantle.id)!.velocity;
+    return Math.hypot(v.x, v.y, v.z) <= 1;
+  });
+  // Capture from the interface inside the vestibule: taking the helm would turn the
+  // carrier and swing the corridor off the waiting craft.
+  enterCarrier(d);
+  unload(d, "diver", h.cargoId);
+  d.command({ type: "carrier", action: "station-keep" }, { allowRefusal: true });
   d.command({ type: "carrier", action: "capture", vehicleId: d.vehicle("mantle")!.id });
   d.waitFor("the Mantle capture", 60, (s) => !s.fleet.docking?.transaction);
   d.command({ type: "carrier", action: "leave-helm" }, { allowRefusal: true });
@@ -532,7 +560,7 @@ export function stageWorksCargo(d: Driver): Cargo {
     carry(d, {});
     const before = new Set(d.state.inventory.items.map((i) => i.id));
     // Crust for the assemblies grows on the Canopy fins; the 800 m suit swims there (C3).
-    make(d, recipe, "workshop", [...ISLES, "suspended_garden"]);
+    make(d, recipe, "workshop", [...ISLES, "suspended_garden", "silt_basin"]);
     const made = d.state.inventory.items.find((i) => i.kind === recipe && !before.has(i.id));
     if (!made) throw new Error(`harness: crafting ${recipe} produced no new item`);
     ids.push(made.id);
@@ -684,7 +712,7 @@ function stockUp(d: Driver, cost: Readonly<Record<string, number>>): void {
     const left = n - d.count(kind as ItemKind, bins);
     if (left > 0) short[kind as ItemKind] = left;
   }
-  if (Object.keys(short).length) procure(d, short, "workshop", [...ISLES, "suspended_garden"]);
+  if (Object.keys(short).length) procure(d, short, "workshop", [...ISLES, "suspended_garden", "silt_basin"]);
   for (const v of d.state.fleet.vehicles) stowHold(d, v);
 }
 
@@ -711,27 +739,43 @@ function chargeAtMooring(d: Driver, site: string): void {
 /** Lattice from the 400 m carrier: hold station above the ledge and work it by suit. */
 function carrierHarvest(d: Driver, id: string, want: number): void {
   pilotTo(d, `carrier above ${id}`, parkNear(d, SOURCES[id as SourceId].position));
-  carrierOut(d);
-  gather(d, id as SourceId, want);
-  carrierIn(d);
+  // A diver load per trip out of the vestibule, stowed in the stores between.
+  for (let got = 0, trip = 0; trip < 6 && got < want; trip++) {
+    carrierOut(d);
+    const n = gather(d, id as SourceId, want - got);
+    carrierIn(d);
+    if (!n) break;
+    got += n;
+  }
 }
 
+/** The carrier route's suit 450, Hearthline 550, Mantle and suit 800 take 26 ceramic;
+ * the two Rift lips hold 24. The deep seam (398 m) is a 450 m suit dive from the
+ * 350 m Creel holding at 340 m above it, past the south lip. */
+function seamTrip(d: Driver, want: number): void {
+  const seam = SOURCES.rift_ceramic_deep_seam.position, lip = s2Route("route.rift.ceramic").path.at(-1)!;
+  provision(d);
+  boardCraft(d, "creel");
+  fly(d, "creel_out");
+  fly(d, "basin_outbound");
+  followS2(d, "route.basin.legacy_anchorage");
+  followS2(d, "route.basin.rift");
+  followS2(d, "route.rift.ceramic");
+  sortie(d, seam, "rift_ceramic_deep_seam", () => { gather(d, "rift_ceramic_deep_seam", want); }, { x: seam.x, y: -340, z: seam.z });
+  pilotTo(d, "back to the south lip", lip);
+  followS2(d, "route.rift.ceramic", true);
+  followS2(d, "route.basin.rift", true);
+  homeAndUnload(d, [["route.basin.legacy_anchorage", true]]);
+}
 const YARD_RECIPES = ["hearthline_550", "mantle_base"] as const satisfies readonly RecipeId[];
-/** From the carrier's helm at the yard: carry a recipe's cost out of the stores in
- * diver loads (all but the last into the yard locker) and fabricate at the work pose. */
+/** At the yard: the bench reaches the moored carrier's stores, like any moored hold. */
 function yardCraft(d: Driver, recipe: RecipeId): void {
-  const h = carrier(d), work = campaignSite("stack_yard")!.work, locker = "stack_yard_locker";
-  d.command({ type: "carrier", action: "station-keep" });
-  d.command({ type: "carrier", action: "leave-helm" });
-  unload(d, "diver", h.cargoId);
-  const trips = loads(d, { ids: [], stock: RECIPES[recipe].cost as Record<string, number> }, d.freeCu("diver"));
-  trips.forEach((load, i) => {
-    if (i > 0) enterCarrier(d);
-    moveCargo(d, load, h.cargoId, "diver");
-    exitCarrier(d);
-    toWorkPose(d, "stack_yard", work);
-    if (i < trips.length - 1) moveCargo(d, load, "diver", locker);
-  });
+  carrierOut(d);
+  toWorkPose(d, "stack_yard", campaignSite("stack_yard")!.work);
+  const stores = carrier(d).cargoId;
+  const short = Object.entries(RECIPES[recipe].cost as Record<string, number>)
+    .filter(([k, n]) => d.count(k as ItemKind, ["diver", stores]) < n).map(([k, n]) => `${k} ${d.count(k as ItemKind, ["diver", stores])}/${n}`);
+  if (short.length) throw new Blocked(`${recipe} at the yard: the stores and diver hold ${short.join(", ")}`, where(d.state));
   craft(d, recipe);
   carrierIn(d);
 }
@@ -762,17 +806,20 @@ const carrierDeep: Phase = {
   ],
   play(d) {
     provision(d);
-    // The yard's refit and Mantle are paid at the yard bench, which reaches the diver
-    // and the yard locker but not the carrier stores. Stock all but the Divide lattice
+    // The yard's refit and Mantle are paid from the carrier stores, which the yard
+    // bench reaches while the carrier is moored there. Stock all but the Divide lattice
     // into the stores now: the Creel brings it to the yard, the diver ferries it aboard.
     const yardCost: Record<string, number> = {};
     for (const recipe of YARD_RECIPES)
       for (const [kind, n] of Object.entries(RECIPES[recipe].cost as Record<string, number>))
         if (kind !== "brine_lattice") yardCost[kind] = (yardCost[kind] ?? 0) + n;
-    const stores = carrier(d).cargoId, creel = d.vehicle("creel")!;
+    const ceramic = [...YARD_RECIPES, "suit_800" as const].reduce((n, r) => n + ((RECIPES[r].cost as Record<string, number>).pressure_ceramic ?? 0), 0);
+    const held = d.count("pressure_ceramic", ["workshop_locker", "diver", ...d.state.fleet.vehicles.map((v) => v.cargoId)]);
+    if (held < ceramic) seamTrip(d, ceramic - held);
+    const hold = carrier(d).cargoId, creel = d.vehicle("creel")!;
     const ferry: Record<string, number> = {};
     for (const [kind, n] of Object.entries(yardCost)) {
-      const left = n - d.count(kind as ItemKind, [stores]);
+      const left = n - d.count(kind as ItemKind, [hold]);
       if (left > 0) ferry[kind] = left;
     }
     if (Object.keys(ferry).length) {
@@ -801,11 +848,30 @@ const carrierDeep: Phase = {
     for (const id of ["route.basin.divide", "route.canopy_east.basin", "route.isles.canopy_east"]) { eatIfHungry(d); followS2(d, id, true); }
     // At the yard: the 550 m refit and the Mantle, paid from the carrier stores.
     for (const recipe of YARD_RECIPES) yardCraft(d, recipe);
-    // ASSUME: the new Mantle is captured into the medium berth from the carrier interface.
-    d.command({ type: "carrier", action: "station-keep" });
-    d.command({ type: "carrier", action: "capture", vehicleId: d.vehicle("mantle")!.id });
-    d.waitFor("the Mantle capture", 60, (s) => !s.fleet.docking?.transaction);
-    if (!d.vehicle("mantle")!.berth) throw new Blocked("The Mantle is not berthed in the Hearthline", where(d.state));
+    // The new Mantle is captured into the medium berth from the carrier interface once
+    // flown into the launch corridor (C3: capture refuses a craft beyond 13 m of it).
+    // The empty carrier is rebuilt from two compact berths to one medium at the yard.
+    if (d.state.fleet.docking?.configuration !== "medium") {
+      d.command({ type: "carrier", action: "station-keep" });
+      d.command({ type: "carrier", action: "reconfigure" });
+    }
+    carrierOut(d);
+    boardCraft(d, "mantle");
+    // The Mantle's slip lies east of the cradle wall: round its south end.
+    pilotTo(d, "round the east cradle", { x: 503, y: -12, z: 28 });
+    pilotTo(d, "round the east cradle", { x: 483, y: -16.4, z: 28 });
+    mantleHome(d);
+    if (!d.vehicle("mantle")!.berth) throw new Blocked(`The Mantle is not berthed in the Hearthline: ${d.state.feedback}`, where(d.state));
+    // The suit refit is a workshop recipe: carry its Divide stock home in the diver hold
+    // and ride the Creel back from beside the carrier.
+    // Only the lattice is not at the workshop: the suit's and the works' air assembly's.
+    const stores = carrier(d).cargoId, lattice = (RECIPES.suit_800.cost as Record<string, number>).brine_lattice! +
+      (STORY_RECIPES.service_air_assembly.cost as Record<string, number>).brine_lattice!;
+    if (d.freeCu("diver") < lattice * ITEMS.brine_lattice.cu) move(d, "meal", d.count("meal", ["diver"]), "diver", stores);
+    const room = Math.floor(d.freeCu("diver") / ITEMS.brine_lattice.cu);
+    if (room < lattice) throw new Blocked(`The diver hold takes ${room} of the ${lattice} lattice for the workshop: ${d.state.inventory.items.filter((i) => i.containerId === "diver").map((i) => `${i.kind} ${i.quantity}`).join(", ")}`, where(d.state));
+    move(d, "brine_lattice", Math.min(lattice, d.count("brine_lattice", [stores])), stores, "diver");
+    ashoreFromCarrier(d);
     make(d, "suit_800" as RecipeId, "workshop", ISLES);
   },
 };
