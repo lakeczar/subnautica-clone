@@ -12,6 +12,14 @@ UUID=ce0a610b-0a40-b2eb-1bfb-5a7203a24e22
 OURS="0000:01:00.0 0000:01:00.1"
 pass=0 fail=0
 
+# R1-10: the fake infrastructure must be what the scripts reach, or nothing here means anything.
+mkdir -p /tmp/gpu-guard
+if [ "$(command -v virsh)" != /usr/local/sbin/virsh ] || ! S=/tmp/gpu-guard virsh version 2>/dev/null | grep -q '(fake)' \
+   || [ "$(command -v logger)" != /usr/local/sbin/logger ] || [ ! -x /usr/local/emhttp/webGui/scripts/notify ]; then
+  echo "FAIL the fake virsh/logger/notify are not the ones selected (PATH=$PATH, virsh=$(command -v virsh))"; echo; echo "passed 0"; echo "failed 1"; exit 1
+fi
+echo "ok   fake virsh, logger and notify selected (PATH=$PATH)"; pass=1
+
 ok()  { echo "ok   $*"; pass=$((pass + 1)); }
 bad() { echo "FAIL $*"; fail=$((fail + 1)); }
 is()  { local name="$1"; shift; if "$@"; then ok "$name"; else bad "$name"; [ -n "${RD:-}" ] && [ -f "$RD/run.log" ] && tail -n 15 "$RD/run.log" | sed 's/^/     | /'; fi; }
@@ -53,12 +61,12 @@ reset_fake() {
   echo 4242 > "$S/run/factory-worker.pid"; printf 'Name:\tqemu\nVmRSS:\t16252928 kB\n' > "$S/proc/4242/status"
   printf 'model name\t: Fake CPU\n' > "$S/proc/cpuinfo"; echo "BOOT_IMAGE=/bzimage" > "$S/proc/cmdline"
   printf '%s\n' "Debian AI 13 Control" "Debian AI13 Inference" "Windows 11 Gaming" > "$S/others"
-  echo running > "$S/vm-Debian AI 13 Control.state"; echo "<domain><name>Debian AI 13 Control</name></domain>" > "$S/vm-Debian AI 13 Control.xml"
+  echo running > "$S/vm-Debian AI 13 Control.state"; printf "<domain type='kvm'>\n  <name>Debian AI 13 Control</name>\n  <devices>\n  </devices>\n</domain>\n" > "$S/vm-Debian AI 13 Control.xml"
   for v in "Debian AI13 Inference" "Windows 11 Gaming"; do
     echo "shut off" > "$S/vm-$v.state"
-    { echo "<domain><name>$v</name><devices>"
-      for fn in 0 1; do printf "<hostdev mode='subsystem' type='pci' managed='yes'>\n<source>\n<address domain='0x0000' bus='0x01' slot='0x00' function='0x%s'/>\n</source>\n</hostdev>\n" "$fn"; done
-      echo "</devices></domain>"; } > "$S/vm-$v.xml"
+    { printf "<domain type='kvm'>\n  <name>%s</name>\n  <devices>\n" "$v"
+      for fn in 0 1; do printf "    <hostdev mode='subsystem' type='pci' managed='yes'>\n      <source>\n        <address domain='0x0000' bus='0x01' slot='0x00' function='0x%s'/>\n      </source>\n    </hostdev>\n" "$fn"; done
+      printf "  </devices>\n</domain>\n"; } > "$S/vm-$v.xml"
   done
   : > "$S/calls.log"; rm -f "$S/meminfo"; S="$S" bash /usr/local/sbin/virsh version > /dev/null
   printf 'MemTotal:       32637752 kB\nMemAvailable:   %s kB\n' $(( 24117248 - 16252928 )) > "$S/meminfo"
@@ -103,11 +111,11 @@ refuse "audio function used by the host" "in use on the host by driver snd_hda_i
 reset_fake; mkdev 0000:00:14.0 8086 a36d 0x0c0330 xhci_hcd; refuse "IOMMU group shared with a USB controller" "also holds 0000:00:14.0"
 reset_fake; echo '4000000000-400fffffff : BOOTFB' >> "$S/iomem"; refuse "host framebuffer on BAR1" "host framebuffer 'BOOTFB' sits inside a BAR"
 reset_fake; sed -i '2s/.*/0x0000004000000000 0x00000047ffffffff 0x000000000014220c/' "$S/sys/bus/pci/devices/0000:01:00.0/resource"; refuse "32 GiB resizable BAR" "resizable BAR"
-reset_fake; echo running > "$S/vm-Windows 11 Gaming.state"; refuse "gaming VM running with the GPU" "VM 'Windows 11 Gaming' is not shut off and names the GPU"
+reset_fake; echo running > "$S/vm-Windows 11 Gaming.state"; refuse "gaming VM running with the GPU" "VM 'Windows 11 Gaming' is 'running' and names the GPU"
 reset_fake; sed -i "s#bus='0x05' slot='0x00' function='0x0'/>#bus='0x06' slot='0x00' function='0x0'/>#" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"; refuse "root port 6 taken" "guest bus 0x06 is already used"
 reset_fake; printf 'Name:\tqemu\nVmRSS:\t9000000 kB\n' > "$S/proc/4242/status"; refuse "host short of memory to pin 16 GiB" "less than the 19398656 KiB needed"
 reset_fake; rm "$S/run/factory-worker.pid"; refuse "QEMU memory unreadable" "QEMU memory use cannot be read"
-reset_fake; sed -i "s#<uuid>.*</uuid>#<uuid>00000000-0b40-b2eb-1bfb-5a7203a24e22</uuid>#" "$S/cfg.xml"; refuse "different UUID" "does not have UUID"
+reset_fake; sed -i "s#<uuid>.*</uuid>#<uuid>00000000-0b40-b2eb-1bfb-5a7203a24e22</uuid>#" "$S/cfg.xml"; refuse "different UUID" "is incomplete or not the expected VM"
 
 echo "== launch guards"
 reset_fake
@@ -159,7 +167,7 @@ is "nothing changed" not_called "$MUTATING"
 reset_fake
 sed -i "s#^    <watchdog #    <hostdev mode='subsystem' type='usb' managed='yes'>\n      <source>\n        <vendor id='0x1234'/>\n      </source>\n    </hostdev>\n&#" "$S/cfg.xml"; cp "$S/cfg.xml" "$S/live.xml"
 out="$(bash "$SCRIPT" preflight attach 2>&1)"; rc=$?
-is "attach refuses a foreign hostdev too" [ "$rc" = 10 ] && grep -q "hostdev defined 'other'" <<<"$out"
+is "attach refuses a foreign hostdev too" eval '[ "$rc" = 10 ] && grep -q "hostdev defined '\''other'\''" <<<"$out"'
 
 echo "== guest never powers off"
 reset_fake; touch "$S/shutdown_ignored"; launch attach
@@ -193,24 +201,25 @@ is "the result says the definition still differs" grep -q 'still differs from be
 
 echo "== the undo cannot remove our entry"
 reset_fake; put attach_fail_fn 1; touch "$S/detach_noop"; launch attach
-is "needs-owner, exit 30, VM left off with the entry recorded" [ "$(outcome)/$(code)/$(state)" = "needs-owner/30/shut off" ] && [ -s "$RD/definition-after-undo.xml" ]
+is "needs-owner, exit 30, VM left off with the entry recorded" eval '[ "$(outcome)/$(code)/$(state)" = "needs-owner/30/shut off" ] && [ -s "$RD/definition-after-undo.xml" ]'
 is "not started with a half-attached GPU" not_called 'virsh start ' 
 
 echo "== someone changes the pins during the shutdown"
 reset_fake; put on_shutoff_cmd "sed -i \"s/cpuset='11'/cpuset='5'/\" $S/cfg.xml"; launch attach
-is "started-as-is, exit 21" [ "$(outcome)/$(code)" = started-as-is/21 ]
+is "backed-off, exit 21 (was started-as-is; nothing is changed, so not a rollback)" [ "$(outcome)/$(code)" = backed-off/21 ]
 is "no attach" not_called 'attach-device'
 is "their change kept" grep -q "cpuset='5'" "$S/cfg.xml"
 is "VM running" [ "$(state)" = running ]
 
 echo "== someone starts it again after the shutdown"
 reset_fake; put restart_on_read 2; launch attach
-is "restarted-elsewhere, exit 21, no attach" [ "$(outcome)/$(code)" = restarted-elsewhere/21 ] && not_called attach-device
+is "restarted-elsewhere, exit 21, no attach" eval '[ "$(outcome)/$(code)" = restarted-elsewhere/21 ] && not_called attach-device'
 
 echo "== host memory taken while it was off"
 reset_fake; put on_shutoff_cmd "echo 12000000 > $S/host_free_kib"; launch attach
-is "rolled-back, exit 20" [ "$(outcome)/$(code)" = rolled-back/20 ]
-is "definition back to the original" diff -q "$S/cfg.xml" "$SRC/fixtures/factory-worker.xml"
+is "checked before any change now: backed-off, exit 21, worker running" eval '[ "$(outcome)/$(code)/$(state)" = backed-off/21/running ]'
+is "definition untouched" diff -q "$S/cfg.xml" "$SRC/fixtures/factory-worker.xml"
+is "no attach" not_called 'attach-device'
 
 echo "== guest agent silent after the start"
 reset_fake; touch "$S/agent_silent"; launch attach
@@ -221,25 +230,84 @@ reset_fake
 out="$(GPU_ARM_DELAY=3 bash "$SCRIPT" launch attach --expect-sha256 "$SHA" --not-after $(( $(date +%s) + 600 )) 2>&1)"
 RID="$(sed -n 's/^Launched [a-z]* run \([^ ]*\) .*/\1/p' <<<"$out")"; RD="$RUNS/$RID"; echo cancel > "$RD/CANCEL"
 for i in $(seq 1 100); do [ -f "$RD/result.json" ] && break; sleep 0.1; done
-is "cancelled, exit 12, nothing changed" [ "$(outcome)/$(code)" = cancelled/12 ] && not_called "$MUTATING"
+is "cancelled, exit 12, nothing changed" eval '[ "$(outcome)/$(code)" = cancelled/12 ] && not_called "$MUTATING"'
 
 echo "== another run holds the lock"
 reset_fake; exec 7>/tmp/fleet-gpu.lock; flock -n 7
 launch attach
-is "locked, exit 11, nothing changed" [ "$(outcome)/$(code)" = locked/11 ] && not_called "$MUTATING"
+is "locked, exit 11, nothing changed" eval '[ "$(outcome)/$(code)" = locked/11 ] && not_called "$MUTATING"'
 exec 7>&-
 
-echo "== Fleet's lock busy after the shutdown"
+echo "== Fleet's lock busy (taken before the shutdown now)"
 reset_fake; exec 7>/tmp/fleet-admin.lock; flock -n 7
 launch attach
-is "started-as-is, exit 21, no attach, running" [ "$(outcome)/$(code)/$(state)" = started-as-is/21/running ] && not_called attach-device
+is "locked, exit 11, never shut down, running" eval '[ "$(outcome)/$(code)/$(state)" = locked/11/running ] && not_called "$MUTATING"'
 exec 7>&-
 
 echo "== re-entry: off, with our entries already defined"
 reset_fake; launch attach; echo "shut off" > "$S/state"; rm -f "$S/live.xml"; : > "$S/calls.log"
 printf 'MemTotal:       32637752 kB\nMemAvailable:   24117248 kB\n' > "$S/meminfo"
 launch attach
-is "attached by starting only" [ "$(outcome)/$(code)" = attached/0 ] && not_called 'shutdown|attach-device'
+is "attached by starting only" eval '[ "$(outcome)/$(code)" = attached/0 ] && not_called '\''shutdown|attach-device'\'''
+
+
+echo "== R1-01: a failed or incomplete read is never taken as absence"
+fails_closed() { # <name>: preflight must refuse and change nothing
+  out="$(bash "$SCRIPT" preflight attach 2>&1)"; rc=$?
+  is "$1: preflight refuses (exit $rc)" [ "$rc" != 0 ]
+  is "$1: nothing changed" not_called "$MUTATING"
+}
+reset_fake; touch "$S/fail_list"; fails_closed "VM list unreadable"
+reset_fake; echo running > "$S/vm-Windows 11 Gaming.state"; touch "$S/fail_peer_xml"; fails_closed "running peer's definition unreadable"
+reset_fake; touch "$S/fail_peer_state"; fails_closed "peer state unreadable"
+reset_fake; touch "$S/fail_live_xml"; fails_closed "worker's running definition unreadable"
+reset_fake; touch "$S/fail_inactive_xml"; fails_closed "worker's persistent definition unreadable"
+reset_fake; rm "$S/iomem"; fails_closed "host memory map missing"
+reset_fake; sed -i -E 's/^[0-9a-f]+-[0-9a-f]+/00000000-00000000/' "$S/iomem"; fails_closed "host memory map without addresses (not root)"
+reset_fake; chmod 000 "$S/sys/bus/pci/devices/0000:01:00.0/resource"; [ -r "$S/sys/bus/pci/devices/0000:01:00.0/resource" ] && rm "$S/sys/bus/pci/devices/0000:01:00.0/resource"; fails_closed "GPU BARs unreadable"
+reset_fake; rm -rf "$S/sys/kernel/iommu_groups/14/devices"; fails_closed "IOMMU group unreadable"
+reset_fake; touch "$S/fail_live_xml"; launch attach
+is "launch with an unreadable running definition: not attached, nothing changed" eval '[ "$(outcome)" != attached ] && not_called "$MUTATING"'
+reset_fake; put on_start_cmd "touch $S/fail_live_xml"; launch attach
+is "final check cannot read the running definition: not reported attached/0" [ "$(outcome)/$(code)" != attached/0 ]
+reset_fake; launch attach; put on_start_cmd "touch $S/fail_live_xml"; : > "$S/calls.log"; launch detach
+is "detach whose absence cannot be read back: not reported detached/0" [ "$(outcome)/$(code)" != detached/0 ]
+
+reset_fake; put start_fail hostdev; put on_start_fail_cmd "touch $S/fail_inactive_xml"; launch attach
+is "start fails and the definition cannot be read back: needs-owner, VM left off, never started unverified" eval '[ "$(outcome)/$(code)/$(state)" = "needs-owner/30/shut off" ] && [ "$(grep -c "virsh start " "$S/calls.log")" = 1 ]'
+
+echo "== R1-02: ownership and the whole definition are checked again at each boundary"
+reset_fake; put on_shutoff_cmd "echo running > '$S/vm-Windows 11 Gaming.state'"; launch attach
+is "gaming VM starts during the shutdown: no attach" not_called 'attach-device'
+is "gaming VM starts during the shutdown: not attached/0, worker running again" eval '[ "$(outcome)/$(code)" != attached/0 ] && [ "$(state)" = running ]'
+reset_fake; put on_shutoff_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml"; launch attach
+is "MAC changed during the shutdown: no attach, their edit kept" eval 'not_called '\''attach-device'\'' && grep -q '\''52:54:00:aa:bb:cc'\'' "$S/cfg.xml"'
+is "MAC changed during the shutdown: not attached/0" [ "$(outcome)/$(code)" != attached/0 ]
+reset_fake; put on_shutoff_cmd "rm $S/sys/bus/pci/devices/0000:01:00.1/driver; mkdir -p $S/sys/bus/pci/drivers/snd_hda_intel; ln -s $S/sys/bus/pci/drivers/snd_hda_intel $S/sys/bus/pci/devices/0000:01:00.1/driver"; launch attach
+is "host driver takes the audio function during the shutdown: no attach" not_called 'attach-device'
+reset_fake; put on_attach_cmd "echo running > '$S/vm-Windows 11 Gaming.state'"; launch attach
+is "gaming VM starts between attach and start: GPU entries removed again" eval '[ -z "$(srcs "$S/cfg.xml")" ] && diff -q "$S/cfg.xml" "$SRC/fixtures/factory-worker.xml" > /dev/null'
+is "gaming VM starts between attach and start: not attached/0, worker running" eval '[ "$(outcome)/$(code)" != attached/0 ] && [ "$(state)" = running ]'
+
+echo "== R1-03: no shutdown without a complete, matching, durable backup"
+reset_fake; touch "$S/truncated_backup"; launch attach
+is "truncated backup read: no shutdown or attach" not_called "$MUTATING"
+is "truncated backup read: refused" [ "$(code)" != 0 ]
+reset_fake; touch "$S/backup_differs"; launch attach
+is "backup differing from the checked definition: no shutdown" not_called "$MUTATING"
+reset_fake; mkdir -p /boot/config/fleet; rm -rf /boot/config/fleet/vm-backups; touch /boot/config/fleet/vm-backups; launch attach
+is "backup cannot be written: no shutdown" not_called "$MUTATING"
+rm -f /boot/config/fleet/vm-backups
+
+echo "== R1-08: a failed recovery start is never reported as started"
+reset_fake; exec 7>/tmp/fleet-admin.lock; flock -n 7; put start_fail always; launch attach
+is "Fleet's lock busy and starts failing: not started-as-is" [ "$(outcome)" != started-as-is ]
+is "Fleet's lock busy: the worker is not shut down while another operation holds it" eval 'not_called '\''virsh shutdown '\'' && [ "$(state)" = running ]'
+exec 7>&-
+reset_fake; put on_shutoff_cmd "sed -i \"s/cpuset='11'/cpuset='5'/\" $S/cfg.xml; echo always > $S/start_fail"; launch attach
+is "definition changed and the restart fails: reported left off (exit 30), not started" eval '[ "$(outcome)/$(code)" = left-off/30 ] && [ "$(state)" = "shut off" ]'
+reset_fake; put on_shutoff_cmd "echo running > '$S/vm-Windows 11 Gaming.state'; echo always > $S/start_fail"; launch attach
+is "conflict and the restart fails: reported left off (exit 30)" [ "$(outcome)/$(code)" = left-off/30 ]
 
 echo
 echo "passed $pass"

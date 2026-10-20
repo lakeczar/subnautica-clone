@@ -7,20 +7,27 @@
 #
 # Knobs (files in $S): shutdown_ignored, start_fail (always|hostdev), attach_fail_fn (0|1),
 # attach_extra (attach also adds a controller), detach_noop, on_shutoff_cmd (script run at
-# power-off), restart_on_read N (someone starts it at the Nth state read while off), agent_silent, host_free_kib (MemAvailable with the VM off), vm_rss_kib.
+# power-off), restart_on_read N (someone starts it at the Nth state read while off), agent_silent,
+# host_free_kib (MemAvailable with the VM off), vm_rss_kib.
+# Failed or broken reads (R1-01/R1-03): fail_list, fail_peer_xml, fail_peer_state, fail_live_xml,
+# fail_inactive_xml, truncated_backup (security-info read prints "<domain>" and fails),
+# backup_differs (security-info read succeeds with an extra element).
+# Hooks: on_start_cmd (script run after a successful start), on_start_fail_cmd (after a failed
+# start), on_attach_cmd (after an attach).
 S="${S:-/tmp/gpu-fake}"
 echo "virsh $*" >> "$S/calls.log"
 get() { cat "$S/$1" 2>/dev/null; }
 UUID=ce0a610b-0a40-b2eb-1bfb-5a7203a24e22
 NAME=factory-worker
 
-pos=(); inactive=""; config=""; live=""
+pos=(); inactive=""; config=""; live=""; secure=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --inactive) inactive=1 ;;
     --config) config=1 ;;
     --live) live=1 ;;
-    --security-info|--all|--name|--daemon) ;;
+    --security-info) secure=1 ;;
+    --all|--name|--daemon) ;;
     --mode) shift ;;
     *) pos+=("$1") ;;
   esac
@@ -45,17 +52,33 @@ has_src() { awk -v fn="$1" '/<hostdev /{h=1} h && /<address domain=.0x0000. bus=
 src_fn() { sed -n "s/.*<address domain='0x0000' bus='0x01' slot='0x00' function='0x\([01]\)'.*/\1/p" "$1" | head -1; }
 
 case "$verb" in
-  list) { echo "$NAME"; cat "$S/others" 2>/dev/null; } ;;
+  list) [ -f "$S/fail_list" ] && { echo "error: failed to connect to the hypervisor" >&2; exit 1; }
+    { echo "$NAME"; cat "$S/others" 2>/dev/null; } ;;
   domstate)
     if me && [ "$(get state)" = "shut off" ] && [ -f "$S/restart_on_read" ]; then
       n=$(( $(get restart_on_read) - 1 )); echo "$n" > "$S/restart_on_read"
       [ "$n" -le 0 ] && { echo running > "$S/state"; make_live; rm -f "$S/restart_on_read"; }
     fi
-    if me; then get state; else n="$dom"; [ -f "$S/vm-$n.state" ] && cat "$S/vm-$n.state" || { echo "error: no domain" >&2; exit 1; }; fi ;;
+    if me; then get state
+    else [ -f "$S/fail_peer_state" ] && { echo "error: cannot read state" >&2; exit 1; }
+      [ -f "$S/vm-$dom.state" ] && cat "$S/vm-$dom.state" || { echo "error: no domain" >&2; exit 1; }; fi ;;
   dumpxml)
     if me; then
-      if [ -n "$inactive" ] || [ "$(get state)" != running ]; then cat "$S/cfg.xml"; else cat "$S/live.xml"; fi
-    else cat "$S/vm-$dom.xml" 2>/dev/null || { echo "error: no domain" >&2; exit 1; }; fi ;;
+      if [ -n "$secure" ]; then
+        [ -f "$S/truncated_backup" ] && { echo "<domain>"; exit 1; }
+        sed '/^  <\/devices>/i\    <!-- secure -->' "$S/cfg.xml" > "$S/secure.xml"
+        if [ -f "$S/backup_differs" ]; then cat "$S/secure.xml"; else cat "$S/cfg.xml"; fi
+      elif [ -n "$inactive" ] || [ "$(get state)" != running ]; then
+        [ -f "$S/fail_inactive_xml" ] && { echo "error: internal error" >&2; exit 1; }
+        cat "$S/cfg.xml"
+      else
+        [ -f "$S/fail_live_xml" ] && { echo "error: internal error" >&2; exit 1; }
+        cat "$S/live.xml"
+      fi
+    else
+      [ -f "$S/fail_peer_xml" ] && { echo "error: internal error" >&2; exit 1; }
+      cat "$S/vm-$dom.xml" 2>/dev/null || { echo "error: no domain" >&2; exit 1; }
+    fi ;;
   shutdown)
     me || forbid
     [ "$(get state)" = running ] || { echo "error: domain is not running" >&2; exit 1; }
@@ -67,11 +90,14 @@ case "$verb" in
   start)
     me || forbid
     [ "$(get state)" = "shut off" ] || { echo "error: domain is already active" >&2; exit 1; }
+    fail_start() { [ -f "$S/on_start_fail_cmd" ] && bash "$S/on_start_fail_cmd"; echo "error: $1" >&2; exit 1; }
     case "$(get start_fail)" in
-      always) echo "error: Failed to start domain" >&2; exit 1 ;;
-      hostdev) grep -q '<hostdev ' "$S/cfg.xml" && { echo "error: vfio 0000:01:00.0: group 14 is not viable" >&2; exit 1; } ;;
+      always) fail_start "Failed to start domain" ;;
+      hostdev) grep -q '<hostdev ' "$S/cfg.xml" && fail_start "vfio 0000:01:00.0: group 14 is not viable" ;;
     esac
-    echo running > "$S/state"; make_live; meminfo; echo "Domain '$NAME' started" ;;
+    echo running > "$S/state"; make_live; meminfo
+    [ -f "$S/on_start_cmd" ] && bash "$S/on_start_cmd"
+    echo "Domain '$NAME' started" ;;
   attach-device|detach-device)
     me || forbid
     [ -n "$config" ] && [ -z "$live" ] || forbid
@@ -85,6 +111,7 @@ case "$verb" in
         sed 's/^/    /' "$f"
         [ -f "$S/attach_extra" ] && printf "    <controller type='pci' index='7' model='pcie-root-port'/>\n"
         sed -n '/^    <watchdog /,$p' "$S/cfg.xml"; } > "$S/cfg.new" && mv "$S/cfg.new" "$S/cfg.xml"
+      [ -f "$S/on_attach_cmd" ] && bash "$S/on_attach_cmd"
     else
       [ -f "$S/detach_noop" ] && exit 0
       has_src "$fn" || { echo "error: device not found" >&2; exit 1; }
