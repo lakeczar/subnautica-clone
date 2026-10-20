@@ -14,22 +14,18 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 | Work | Owner | Branch / worktree | Owns | Next |
 | --- | --- | --- | --- | --- |
 | M2-B1: earned Creel and mobile refuge | Opus 5.5 high | `t3/earned-creel-mobile-refuge-loop` / `t3-b6aef8ec` | The roots listed in DIRECTION | **Accepted** and integrated at `ccf8c44` |
-| GPU enablement bundle | Opus 5.5 high (author) | `t3/enable-3090-gpu` / `t3-b9861fd3` | `docs/build/gpu-enablement/` | attached on `785503c`; probe backend fix in progress |
+| GPU enablement bundle | Opus 5.5 high (author) | `t3/enable-3090-gpu` / `t3-b9861fd3` | `docs/build/gpu-enablement/` | **Done**: attached and verified |
 | New parallel streams | See [streams](STREAMS.md) | | | |
 
 **Next**
 1. GPU: R3 accepted → place the bundle in Fleet → the owner approves the rehearsal → install the guest driver → checkpoint → the owner approves the attach → run the 3090 browser smoke.
 2. B1 handoff → Sol review → integrate. Then: save simplification, test tiers, compose the parallel streams, the world scale slice, and a rough complete campaign.
 
-**GPU: attached, smoke pending (2026-10-20).**
-- **Attach:** run `20261020T041458Z-762c` returned `attached`/0. The guest sees the RTX 3090 at `06:00.0`; `nvidia-smi` shows driver 550.163.01 and 24 GiB.
-- **WebGL:** draws on the 3090 through both ANGLE-Vulkan and ANGLE-GL-EGL.
-- **Smoke:** with ANGLE-Vulkan, Chrome 156 loses the context once at game startup (4/4 runs; Babylon restores it). GL-EGL is clean (2/2).
-- **Fix in progress:** the GPU author is adding a backend fallback and `--candidate` to `webgl-probe.mjs`. Then the coordinator re-runs the probe and `check post`.
+**GPU: done (2026-10-20).** The RTX 3090 is attached and verified; see [LIVE-RESULT](gpu-enablement/LIVE-RESULT.md). Browser work that needs the GPU uses a task-owned Chrome with `--use-gl=angle --use-angle=gl-egl --ignore-gpu-blocklist`, per the README. The shared T3 preview stays software.
 
 **Stream reviews running** (fresh Sol xhigh; rules in [STREAM-REVIEW-RULES](STREAM-REVIEW-RULES.md)): S1 `171b7d7`, S3 `d058d27`, S4 `a6b3181`, S5 `58c8a6a`, S6 `cd9c13d`. B1 and S2 continue building. S4's design additions are accepted: lamp switch, nonlethal kits, one lunge at a time, 12 m refuge margin.
 
-**Unverified:** human pacing and enjoyment, the audible mix, 3090 rendering, full-world memory and eviction.
+**Unverified:** human pacing and enjoyment, the audible mix, representative 1080p/60 performance, full-world memory and eviction.
 
 ## GPU attach procedure (prepared 2026-10-20)
 **State:**
