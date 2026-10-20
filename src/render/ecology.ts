@@ -180,6 +180,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
       const mesh = b.finish(); mesh.unfreezeWorldMatrix();
       scavengers.push({ mesh, x: p.x - 2.4, z: p.z - 1.5, phase: i * Math.PI });
     }
+    basinWorksYard(batch("basin.works-yard"));
     const b = batch("basin.local-silt");
     for (let i = 0; i < 48; i++) {
       const x = (random() - .5) * 9, y = random() * 2, z = (random() - .5) * 7;
@@ -236,3 +237,50 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
   dispose() { if (disposed) return; disposed = true; for (const mesh of meshes) mesh.dispose(); },
   };
 }
+
+/** The boundary station's yard. The station stands on its pad above the
+ * silt with the fracture beyond its wall, so the dressing is what reads from
+ * the approach and over the wall: lamps on the pad's back corners, a lit
+ * survey mast rising above the wall, a feed pipe down to the dish spine, a
+ * lamp line along the fracture lip and pale tube colonies at the pillar's
+ * foot. Visual only; clear of the approach and return lanes, the work poses
+ * and the open recovery lift above the parking point. */
+function basinWorksYard(b: ArtBatch): void {
+  const lamp = (x: number, y: number, z: number, h: number, light: string): void => {
+    b.tube([[x, y, z], [x, y + h, z]], 0.11, P.petrol, 5);
+    b.box([x, y + h + 0.12, z], [0.8, 0.2, 0.8], P.metal);
+    b.glow(b.box([x, y + h - 0.35, z], [0.6, 0.5, 0.6], light));
+  };
+  lamp(208.6, -172, -245.1, 3.4, P.warm);
+  lamp(223.4, -172, -245.1, 3.4, P.warm);
+  // The survey mast: four legs, alternating braces, a lantern above the wall.
+  const mx = 230, mz = -251, base = terrainHeight(mx, mz) - 1, h = 50, half = 2.4, top = 0.5;
+  const legs = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
+  for (const [u, v] of legs) b.tube([[mx + u * half, terrainHeight(mx + u * half, mz + v * half) - 1, mz + v * half], [mx + u * top, base + h, mz + v * top]], 0.16, P.steelLight, 5);
+  for (let y = 4; y < h - 3; y += 5) {
+    const r0 = half + (top - half) * (y / h), r1 = half + (top - half) * ((y + 4) / h);
+    for (let i = 0; i < 4; i++) {
+      const [u0, v0] = legs[i]!, [u1, v1] = legs[(i + 1) % 4]!;
+      b.tube([[mx + u0 * r0, base + y, mz + v0 * r0], [mx + u1 * r1, base + y + 4, mz + v1 * r1]], 0.07, i % 2 ? P.steelLight : P.ochre, 4);
+    }
+  }
+  b.box([mx, base + h + 0.4, mz], [1.4, 0.8, 1.4], P.petrol);
+  b.glow(b.box([mx, base + h + 1.3, mz], [0.9, 1.1, 0.9], P.warm));
+  // Feed pipe from the station's west edge down the pillar to the dish spine.
+  b.tube([[207.4, -172.4, -241], [204.5, -176, -241], [202, -186, -238.5], [199.5, -186.5, -229], [198.6, -181.6, -222.4]], 0.45, P.metal, 8);
+  for (const [x, y, z] of [[204.5, -176, -241], [202, -186, -238.5], [199.5, -186.5, -229]] as const) b.tube([[x, y - 0.6, z], [x, y + 0.6, z]], 0.62, P.ochre, 8);
+  // A lamp line along the fracture lip, receding east to west.
+  for (let i = 0; i < 6; i++) {
+    const x = 190 + i * 10, z = -279 + (i % 2) * 1.5;
+    lamp(x, terrainHeight(x, z) - 0.2, z, 2.6 + (i % 3) * 0.5, i % 3 === 2 ? "#9fe6e0" : P.warm);
+  }
+  // Pale tube colonies at the foot of the station's pillar.
+  for (const [cx, cz, n] of [[204, -250, 7], [227, -238, 6], [212, -252, 5]] as const)
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.4 + cx, r = 0.5 + (i % 3) * 0.55, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r, y = terrainHeight(x, z) - 0.1, t = 0.8 + (i % 4) * 0.35;
+      b.tube([[x, y, z], [x, y + t, z]], 0.09, i % 2 ? P.porcelain : P.shell, 5);
+      b.tube([[x, y + t, z], [x, y + t + 0.1, z]], 0.12, P.ochre, 5);
+    }
+  b.finish(0.22);
+}
+
