@@ -54,6 +54,10 @@ export interface RegionLink {
   readonly minHalfWidth?: number;
   /** True when the inhabited carrier can make this crossing. */
   readonly carrier?: boolean;
+  /** Render hysteresis: a viewer inside this box who was last in `to` is
+   * still treated as in `to`, so a swimmer on the handover line does not swap
+   * detailed region art every step. Presentation only. */
+  readonly hold?: Aabb;
 }
 
 /** Where and how the player gets in. Hulls are hull-role IDs, capabilities are

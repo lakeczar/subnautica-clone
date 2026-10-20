@@ -1,5 +1,9 @@
-import { ROUTE_REGIONS } from "../content/routes.js";
+import type { RegionId } from "../content/registry.js";
 import type { GameState, Vec3 } from "../sim/types.js";
+import { createWorldMap } from "../world/map.js";
+import { boxContains, boxDistance } from "../world/frame.js";
+import type { WorldMap } from "../world/types.js";
+import { legacyLayout } from "./legacyWorld.js";
 
 /** Presentation residency only. Nothing here writes state or stops simulation. */
 export type RenderRegion = "refuge_reef" | "island_chain" | "suspended_garden" | "silt_basin";
@@ -11,51 +15,62 @@ export interface RegionArt {
    * owner is always reconciled by update(state) before it draws again. */
   suspend?(): void;
   resume?(): void;
+  /** Vertex and index bytes of the meshes this owner created, measured once
+   * when it was built (Babylon keeps a CPU copy, so CPU ~ GPU). */
+  readonly bytes?: number;
   dispose(): void;
 }
 
-/** Detailed owners plus retained (suspended) owners. Retention turns a warm
- * return into re-attachment instead of reconstruction; the limit bounds
- * resident geometry as the world grows beyond the current four regions. */
+const RENDER_REGIONS: ReadonlySet<string> = new Set<RenderRegion>(["refuge_reef", "island_chain", "suspended_garden", "silt_basin"]);
+const isRenderRegion = (id: RegionId | null | undefined): id is RenderRegion => !!id && RENDER_REGIONS.has(id);
+
+/** Retention never exceeds this many legacy owners, whatever their bytes. */
 export const RESIDENT_REGION_LIMIT = 4;
-const NEIGHBOURS: Readonly<Record<RenderRegion, readonly RenderRegion[]>> = {
-  refuge_reef: ["island_chain", "suspended_garden"],
-  island_chain: ["refuge_reef", "suspended_garden"],
-  suspended_garden: ["refuge_reef", "island_chain", "silt_basin"],
-  silt_basin: ["suspended_garden"],
-};
+/** Byte share of all legacy owners (detailed and retained) inside the world
+ * budget. Today's four owners fit it, so retention is unchanged; when bytes
+ * exceed it, retained owners are released least recently used first. */
+export const REGION_OWNER_BYTES = 96 * 1024 * 1024;
 
-export function renderRegionAt(p: Readonly<Vec3>): RenderRegion {
-  const basin = ROUTE_REGIONS.silt_basin.bounds, canopy = ROUTE_REGIONS.suspended_garden.bounds;
-  if (p.x >= basin.minX && p.z <= basin.maxZ) return "silt_basin";
-  // The outer return lane is east of the Canopy bounds, in the same visible
-  // corridor. Do not unload its landmark merely because a return crosses it.
-  if (p.x >= canopy.minX && p.z <= canopy.maxZ) return "suspended_garden";
-  if (p.z < -22 && p.x > -30 && p.x < 70) return "island_chain";
-  return "refuge_reef";
+let legacyMap: WorldMap | null = null;
+/** The legacy map: today's handover lines as footprints, prefetch zones as links. */
+export function legacyRegionMap(): WorldMap {
+  return legacyMap ??= createWorldMap(legacyLayout());
 }
 
-function adjoining(region: RenderRegion, p: Readonly<Vec3>): RenderRegion {
-  switch (region) {
-    case "silt_basin": return "suspended_garden";
-    case "suspended_garden": return p.z < -154 ? "silt_basin" : "refuge_reef";
-    case "island_chain": return p.x > 42 && p.z < -52 ? "suspended_garden" : "refuge_reef";
-    case "refuge_reef": return p.x > 48 && p.z < -48 ? "suspended_garden" : "island_chain";
+/** The region the viewer is in, except that `previous` is kept while the
+ * viewer is inside the `hold` box of the new region's link back to it. */
+export function primaryRegion(map: WorldMap, p: Readonly<Vec3>, previous: RegionId | null): RegionId | null {
+  const here = map.regionAt(p);
+  if (!previous || !here || here === previous) return here;
+  const back = map.region(here)?.adjacency.find(l => l.to === previous);
+  return back?.hold && boxContains(back.hold, p) ? previous : here;
+}
+/** The linked region drawn in detail beside `primary`: nearest portal, ties
+ * to the earlier link. */
+export function adjoiningRegion(map: WorldMap, primary: RegionId, p: Readonly<Vec3>): RegionId | null {
+  let best: RegionId | null = null, distance = Infinity;
+  for (const link of map.region(primary)?.adjacency ?? []) {
+    const d = boxDistance(link.portal, p);
+    if (d < distance) { best = link.to; distance = d; }
   }
+  return best;
 }
 
-/** Two adjoining detailed owners. Owners that leave the detailed pair are
- * suspended and retained, least recently used first out, within `limit`
- * resident regions; owners without suspend support are disposed as before.
- * Retained owners never draw, never count as resident for actors and are
- * reconciled against the current state on return. Silhouettes and pinned
- * moving actors have their own bounded lifetimes. */
+/** Two adjoining detailed owners, chosen from the world map. Owners that
+ * leave the detailed pair are suspended and retained, least recently used
+ * first out, within `limit` owners and `maxBytes`; owners without suspend
+ * support are disposed as before. Retained owners never draw, never count as
+ * resident for actors and are reconciled against the current state on
+ * return. Silhouettes and pinned moving actors have their own lifetimes. */
 export function createRegionResidency(
   create: (region: RenderRegion) => RegionArt,
-  limit = RESIDENT_REGION_LIMIT,
+  limit: number = RESIDENT_REGION_LIMIT,
+  options: { map?: WorldMap; maxBytes?: number } = {},
 ): RegionArt & {
   readonly active: readonly RenderRegion[];
   readonly retained: readonly RenderRegion[];
+  /** Bytes of every live and retained owner. */
+  readonly bytes: number;
   contains(position: Readonly<Vec3>): boolean;
   /** Construct one nearby non-resident owner directly into retention. Only
    * for idle presentation time; returns the prepared region, if any. */
@@ -63,12 +78,17 @@ export function createRegionResidency(
   /** Release retained owners whose buffers can no longer be trusted. */
   discardRetained(): void;
 } {
+  const map = options.map ?? legacyRegionMap(), maxBytes = options.maxBytes ?? REGION_OWNER_BYTES;
   const live = new Map<RenderRegion, RegionArt>(), kept = new Map<RenderRegion, RegionArt>();
-  let primary: RenderRegion | null = null, quality: RenderQuality = "rich", disposed = false;
+  let primary: RegionId | null = null, quality: RenderQuality = "rich", disposed = false;
   const capacity = Math.max(2, limit);
-  const trim = (room: number): void => {
+  const bytesOf = (owners: Iterable<RegionArt>): number => { let n = 0; for (const o of owners) n += o.bytes ?? 0; return n; };
+  const total = (): number => bytesOf(live.values()) + bytesOf(kept.values());
+  /** Release retained owners, oldest first, until `room` more owners of
+   * `roomBytes` fit both limits. */
+  const trim = (room: number, roomBytes = 0): void => {
     for (const [id, art] of kept) {
-      if (live.size + kept.size + room <= capacity) break;
+      if (live.size + kept.size + room <= capacity && total() + roomBytes <= maxBytes) break;
       kept.delete(id); art.dispose();
     }
   };
@@ -76,29 +96,30 @@ export function createRegionResidency(
     if (!art.suspend || !art.resume) { art.dispose(); return; }
     art.suspend(); kept.set(id, art);
   };
+  const wanted = (p: Readonly<Vec3>): Set<RenderRegion> => {
+    primary = primaryRegion(map, p, primary);
+    const pair = new Set<RenderRegion>();
+    if (isRenderRegion(primary)) pair.add(primary);
+    const next = primary && adjoiningRegion(map, primary, p);
+    if (isRenderRegion(next)) pair.add(next);
+    return pair;
+  };
   return {
     get active() { return [...live.keys()]; },
     get retained() { return [...kept.keys()]; },
-    contains(position) { return live.has(renderRegionAt(position)); },
+    get bytes() { return total(); },
+    contains(position) { const id = map.regionAt(position); return isRenderRegion(id) && live.has(id); },
     update(state) {
       if (disposed) return;
-      const p = state?.player.pose.position ?? { x: 0, y: 0, z: 22 };
-      let next = renderRegionAt(p);
-      // Eight metres of unsaved hysteresis across the shared southern edge.
-      // Save replacement still reconciles every handle against the new state.
-      const edge = ROUTE_REGIONS.silt_basin.bounds.maxZ;
-      if (primary === "suspended_garden" && next === "silt_basin" && p.z > edge - 8) next = primary;
-      if (primary === "silt_basin" && next === "suspended_garden" && p.z < edge + 8) next = primary;
-      primary = next;
-      const wanted = new Set([primary, adjoining(primary, p)]);
-      for (const [id, art] of live) if (!wanted.has(id)) { live.delete(id); retire(id, art); }
+      const want = wanted(state?.player.pose.position ?? { x: 0, y: 0, z: 22 });
+      for (const [id, art] of live) if (!want.has(id)) { live.delete(id); retire(id, art); }
       // Re-attach retained owners before any eviction for a cold construction.
-      for (const id of wanted) {
+      for (const id of want) {
         const art = kept.get(id);
         if (!art || live.has(id)) continue;
         kept.delete(id); art.resume!(); art.setQuality?.(quality); live.set(id, art);
       }
-      for (const id of wanted) if (!live.has(id)) {
+      for (const id of want) if (!live.has(id)) {
         trim(1);
         const art = create(id); art.setQuality?.(quality); live.set(id, art);
       }
@@ -107,16 +128,19 @@ export function createRegionResidency(
     },
     setQuality(next) { quality = next; for (const art of live.values()) art.setQuality?.(next); },
     prepare() {
-      if (disposed || !primary || live.size + kept.size >= capacity) return null;
-      const seen = new Set<RenderRegion>([primary]), queue: RenderRegion[] = [primary];
+      if (disposed || !isRenderRegion(primary) || live.size + kept.size >= capacity || total() >= maxBytes) return null;
+      const seen = new Set<RegionId>([primary]), queue: RegionId[] = [primary];
       for (let region = queue.shift(); region; region = queue.shift()) {
-        if (!live.has(region) && !kept.has(region)) {
+        if (isRenderRegion(region) && !live.has(region) && !kept.has(region)) {
           const art = create(region);
           if (!art.suspend || !art.resume) { art.dispose(); return null; }
           art.setQuality?.(quality); art.suspend(); kept.set(region, art);
-          return region;
+          // A prepared owner that does not fit the byte share is not kept.
+          trim(0);
+          return kept.has(region) ? region : null;
         }
-        for (const next of NEIGHBOURS[region]) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+        for (const link of map.region(region)?.adjacency ?? [])
+          if (!seen.has(link.to)) { seen.add(link.to); queue.push(link.to); }
       }
       return null;
     },
