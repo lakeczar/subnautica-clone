@@ -60,25 +60,27 @@ function regions(): RegionDescriptor[] {
   }));
 }
 
-/** Columns that hold some of today's refined terrain. */
-export function legacyTerrainColumn(r: Rect): boolean {
-  return rectsIntersect(r, TERRAIN_EXTENT);
+/** Columns that hold some of today's refined terrain inside `extent`. */
+export function legacyTerrainColumn(r: Rect, extent: Rect = TERRAIN_EXTENT): boolean {
+  return rectsIntersect(r, extent) && rectsIntersect(r, TERRAIN_EXTENT);
 }
 
-/** Adds today's terrain to every column it covers: `legacy.terrain` art on
- * the column's layer 0, creating that chunk when the layout has none. A
- * column holding only legacy terrain draws to the far plane (LEGACY_LOD). */
-export function withLegacyTerrain(layout: WorldLayout): WorldLayout {
+/** Adds today's terrain, clipped to `extent` (default: all of it), to every
+ * column it covers: `legacy.terrain` art on the column's layer 0, creating
+ * that chunk when the layout has none. A column holding only legacy terrain
+ * draws to the far plane (LEGACY_LOD). */
+export function withLegacyTerrain(layout: WorldLayout, extent: Rect = TERRAIN_EXTENT): WorldLayout {
   const { envelope, chunkSize } = layout;
   const chunks = [...layout.chunks];
   const at = new Map(chunks.map((c, i) => [c.id, i] as const));
   for (let ix = 0; ix < (envelope.max.x - envelope.min.x) / chunkSize; ix++)
     for (let iz = 0; iz < (envelope.max.z - envelope.min.z) / chunkSize; iz++) {
       const r = columnRect(ix, iz, envelope, chunkSize);
-      if (!legacyTerrainColumn(r)) continue;
+      if (!legacyTerrainColumn(r, extent)) continue;
       const cell = { ix, iz, layer: 0 }, id = chunkId(cell);
       const { minY, maxY } = sampleRange(terrainHeight, r, 8, 12);
-      const art = { factory: LEGACY_TERRAIN_FACTORY };
+      const art = extent === TERRAIN_EXTENT ? { factory: LEGACY_TERRAIN_FACTORY }
+        : { factory: LEGACY_TERRAIN_FACTORY, params: { minX: extent.minX, maxX: extent.maxX, minZ: extent.minZ, maxZ: extent.maxZ } };
       const existing = at.get(id);
       if (existing !== undefined) {
         const c = chunks[existing]!;
@@ -103,6 +105,6 @@ export function withLegacyTerrain(layout: WorldLayout): WorldLayout {
 }
 
 /** Today's world: the four route regions, with the refined terrain chunked. */
-export function legacyLayout(): WorldLayout {
-  return withLegacyTerrain({ envelope: env, chunkSize: CHUNK_SIZE, biomes: BIOMES, regions: regions(), chunks: [] });
+export function legacyLayout(extent: Rect = TERRAIN_EXTENT): WorldLayout {
+  return withLegacyTerrain({ envelope: env, chunkSize: CHUNK_SIZE, biomes: BIOMES, regions: regions(), chunks: [] }, extent);
 }

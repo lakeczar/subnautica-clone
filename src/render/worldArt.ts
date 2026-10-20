@@ -1,6 +1,7 @@
 import { terrainHeight } from "../sim/world.js";
 import { createWorldMap } from "../world/map.js";
-import type { SpatialEntry, WorldLayout, WorldMap } from "../world/types.js";
+import type { Rect, SpatialEntry, WorldLayout, WorldMap } from "../world/types.js";
+import { TERRAIN_EXTENT } from "./terrainSurface.js";
 import type { ChunkArtFactory, TemplateRecipe } from "./kit/types.js";
 import { legacyTerrainFactory } from "./legacyTerrain.js";
 import { legacyLayout, withLegacyTerrain } from "./legacyWorld.js";
@@ -19,13 +20,17 @@ export interface WorldArtPack {
   /** Physical floor for factories, until `terrainHeight` is the composed floor. */
   readonly floor?: (x: number, z: number) => number;
   readonly biomeAt?: (x: number, z: number) => string;
+  /** Where today's refined terrain is drawn (default `TERRAIN_EXTENT`): the
+   * pack that owns the layout draws everything outside it. */
+  readonly legacyExtent?: Rect;
 }
 
 export const LEGACY_ART: WorldArtPack = { id: "legacy", factories: [legacyTerrainFactory] };
 
 /** The composition list. A region stream plugs in by adding its pack here,
  * e.g. `{ id: "s2", factories: S2_FACTORIES, templates: S2_TEMPLATE_LIBRARY,
- * layout: worldLayout, entries: spatialEntries, floor: worldFloor, biomeAt }`.
+ * layout: worldLayout, entries: spatialEntries, floor: worldFloor, biomeAt,
+ * legacyExtent: <its exact preserve> }`.
  * The renderer reads only the composed result. */
 export const WORLD_ART: readonly WorldArtPack[] = [LEGACY_ART];
 
@@ -41,13 +46,13 @@ export interface ComposedWorld {
  * composition, not in play: two layouts or floors, a duplicate factory or
  * template, or a chunk naming an unregistered factory. */
 export function composeWorldArt(packs: readonly WorldArtPack[] = WORLD_ART): ComposedWorld {
-  const one = <K extends "layout" | "floor" | "biomeAt">(key: K): WorldArtPack[K] | undefined => {
+  const one = <K extends "layout" | "floor" | "biomeAt" | "legacyExtent">(key: K): WorldArtPack[K] | undefined => {
     const given = packs.filter(p => p[key]);
     if (given.length > 1) throw new Error(`World art: ${given.map(p => p.id).join(", ")} all supply ${key}.`);
     return given[0]?.[key];
   };
-  const authored = one("layout");
-  const layout = authored ? withLegacyTerrain(authored()) : legacyLayout();
+  const authored = one("layout"), extent = one("legacyExtent") ?? TERRAIN_EXTENT;
+  const layout = authored ? withLegacyTerrain(authored(), extent) : legacyLayout(extent);
   const factories = packs.flatMap(p => p.factories), templates = packs.flatMap(p => p.templates ?? []);
   const unique = (kind: string, ids: readonly string[]): void => {
     const seen = new Set<string>();

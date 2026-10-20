@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { legacyTerrainFactory, legacyTerrainWhole } from "../src/render/legacyTerrain.js";
 import { legacyLayout, legacyTerrainColumn } from "../src/render/legacyWorld.js";
+import { createTerrainSurface, terrainGridLines } from "../src/render/terrainSurface.js";
 import { defaultContext } from "../src/render/kit/factories.js";
 import { createWorldMap } from "../src/world/map.js";
 import { columnRect } from "../src/world/frame.js";
@@ -69,4 +70,33 @@ test("neighbouring chunks meet on shared vertices: every chunk-border edge is ma
   const crack = open.filter(([a, b]) => onBorder(a![0]!, a![2]!) && onBorder(b![0]!, b![2]!) &&
     a![0]! > -94 && a![0]! < 267 && a![2]! > -470 && a![2]! < 87);
   assert.equal(crack.length, 0, `open edges on interior chunk borders: ${JSON.stringify(crack.slice(0, 3))}`);
+});
+
+test("a configured extent keeps exactly the whole surface's triangles inside it: no double draw, no gap", () => {
+  const { x, z } = terrainGridLines();
+  // A grid-aligned extent cutting the Basin, as a region pack might preserve.
+  const extent = { minX: x[0]!, maxX: x.find(v => v > 200)!, minZ: z.find(v => v > -290)!, maxZ: z[z.length - 1]! };
+  const whole = createTerrainSurface(), p = whole.positions;
+  const key = (q: ArrayLike<number>, i: number, ix: ArrayLike<number>): string =>
+    [0, 1, 2].map(k => [0, 1, 2].map(a => Math.fround(q[ix[i + k]! * 3 + a]!)).join(",")).join("|");
+  const inside: string[] = [];
+  let outside = 0;
+  for (let i = 0; i < whole.indices.length; i += 3) {
+    const v = [0, 1, 2].map(k => whole.indices[i + k]! * 3);
+    const cx = v.reduce((n, a) => n + p[a]!, 0) / 3, cz = v.reduce((n, a) => n + p[a + 2]!, 0) / 3;
+    if (cx >= extent.minX && cx < extent.maxX && cz >= extent.minZ && cz < extent.maxZ) inside.push(key(p, i, whole.indices));
+    else outside++;
+  }
+  assert.ok(outside > 10_000, "the extent really cuts the surface");
+  const got: string[] = [];
+  for (const chunk of legacyLayout(extent).chunks) {
+    const g = legacyTerrainFactory.build({ ...defaultContext(terrainHeight), due: () => false }, chunk, chunk.art[0]!, "fine");
+    let r = g.next();
+    while (!r.done) r = g.next();
+    const m = r.value.meshes[0];
+    if (m) for (let i = 0; i < m.indices.length; i += 3) got.push(key(m.positions, i, m.indices));
+  }
+  inside.sort(); got.sort();
+  assert.equal(got.length, inside.length);
+  assert.ok(got.every((t, i) => t === inside[i]));
 });

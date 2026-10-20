@@ -60,12 +60,22 @@ export function* legacyTerrainRecipe(surface: TerrainSurface, name: string,
  * triangles whose centroid lies in the chunk's cell, with the closed walls of
  * its discontinuities (see `terrainSurfaceSteps`). Neighbouring chunks share
  * the surface's own vertices, so they meet without cracks. The surface has no
- * coarse form: both LODs are the same recipe. */
+ * coarse form: both LODs are the same recipe.
+ *
+ * Optional params `minX`/`maxX`/`minZ`/`maxZ` clip it to an extent, by the
+ * same centroid rule (half-open), so a region pack can own the rest. An edge
+ * on a terrain grid line (`terrainGridLines`) clips straight; elsewhere the
+ * cut follows the cells it crosses. Default: the whole `TERRAIN_EXTENT`. */
 export const legacyTerrainFactory: ChunkArtFactory = {
   id: LEGACY_TERRAIN_FACTORY,
-  *build(ctx, chunk) {
-    const window: TerrainWindow = { minX: chunk.bounds.min.x, maxX: chunk.bounds.max.x,
-      minZ: chunk.bounds.min.z, maxZ: chunk.bounds.max.z };
+  *build(ctx, chunk, ref) {
+    const clip = (key: "minX" | "maxX" | "minZ" | "maxZ", own: number, pick: (a: number, b: number) => number): number => {
+      const v = ref.params?.[key];
+      return typeof v === "number" ? pick(own, v) : own;
+    };
+    const window: TerrainWindow = { minX: clip("minX", chunk.bounds.min.x, Math.max), maxX: clip("maxX", chunk.bounds.max.x, Math.min),
+      minZ: clip("minZ", chunk.bounds.min.z, Math.max), maxZ: clip("maxZ", chunk.bounds.max.z, Math.min) };
+    if (!(window.minX < window.maxX && window.minZ < window.maxZ)) return { meshes: [], instances: [] };
     const surface = yield* terrainSurfaceSteps({ window, due: ctx.due });
     if (!surface.indices.length) return { meshes: [], instances: [] };
     return { meshes: [yield* legacyTerrainRecipe(surface, LEGACY_TERRAIN_FACTORY, ctx.due)], instances: [] };

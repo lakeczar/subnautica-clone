@@ -35,6 +35,18 @@ const LIMIT_STEP = 1e-7;
 type Point = readonly [number, number, number];
 interface Cell { a: number; b: number; c: number; d: number; conform: boolean; side: number }
 
+/** The surface's base grid lines (before local refinement), ascending: an
+ * extent edge on one of these clips the terrain along a straight line. */
+export function terrainGridLines(): { x: number[]; z: number[] } {
+  const g = TERRAIN_GRID;
+  const x = Array.from({ length: g.nx + 1 }, (_, i) => g.minX + i / g.nx * g.sizeX);
+  const z = Array.from({ length: g.nz + 1 }, (_, i) => g.minZ + i / g.nz * g.sizeZ);
+  for (let i = 10; i <= 40; i += 10) x.push(205 + i * g.sizeX / g.nx);
+  for (let i = 50; i >= 10; i -= 10) z.unshift(g.minZ - i * g.sizeZ / g.nz);
+  for (const i of FRACTURE_ROWS) z.unshift(g.minZ - i * g.sizeZ / g.nz);
+  return { x, z: z.sort((a, b) => a - b) };
+}
+
 /** Horizontal window, half-open: [minX, maxX) x [minZ, maxZ). */
 export interface TerrainWindow { readonly minX: number; readonly maxX: number; readonly minZ: number; readonly maxZ: number }
 /** Metres of surrounding cells a window refines with it, so every triangle it
@@ -68,12 +80,7 @@ export function* terrainSurfaceSteps(options: {
     (x >= window.minX && x < window.maxX && z >= window.minZ && z < window.maxZ);
   const g = TERRAIN_GRID, patch = RESOURCE_TERRAIN_BOUNDS, deck = WORKSHOP_DECK;
   const positions: number[] = [], indices: number[] = [], vertices = new Map<string, number>();
-  const xAxis = Array.from({ length: g.nx + 1 }, (_, i) => g.minX + i / g.nx * g.sizeX);
-  const zAxis = Array.from({ length: g.nz + 1 }, (_, i) => g.minZ + i / g.nz * g.sizeZ);
-  for (let i = 10; i <= 40; i += 10) xAxis.push(205 + i * g.sizeX / g.nx);
-  for (let i = 50; i >= 10; i -= 10) zAxis.unshift(g.minZ - i * g.sizeZ / g.nz);
-  for (const i of FRACTURE_ROWS) zAxis.unshift(g.minZ - i * g.sizeZ / g.nz);
-  zAxis.sort((a, b) => a - b);
+  const { x: xAxis, z: zAxis } = terrainGridLines();
   const axis = (a: number, b: number, divisions: number, cuts: readonly number[]): number[] => {
     const values = Array.from({ length: divisions + 1 }, (_, i) => a + (b - a) * i / divisions);
     for (const cut of cuts) if (cut > a && cut < b) values.push(cut);
@@ -112,6 +119,7 @@ export function* terrainSurfaceSteps(options: {
   if (!benchCrossingCache) for (const z of [bench.minZ, bench.maxZ]) {
     const delta = (x: number): number => height(x, z, -1) - terrainHeight(x, z);
     for (let a = bench.minX; a < bench.maxX; a += .25) {
+      if (due()) yield;
       let lo: number = a, hi = a + .25, flo = delta(lo);
       if (flo * delta(hi) >= 0) continue;
       for (let n = 0; n < 45; n++) {
@@ -127,7 +135,7 @@ export function* terrainSurfaceSteps(options: {
     const x0 = xAxis[x]!, x1 = xAxis[x + 1]!, z0 = zAxis[z]!, z1 = zAxis[z + 1]!;
     if (window && (x1 <= window.minX - halo || x0 >= window.maxX + halo ||
       z1 <= window.minZ - halo || z0 >= window.maxZ + halo)) continue;
-    if (x === nx - 1 && due()) yield;
+    if (due()) yield;
     const island = x0 < patch.maxX && x1 > patch.minX && z0 < patch.maxZ && z1 > patch.minZ;
     const cutsX: number[] = island ? [deck.minX, deck.maxX] : [];
     const cutsZ: number[] = island ? [deck.minZ, deck.maxZ] : [];
@@ -331,7 +339,9 @@ export function* terrainSurfaceSteps(options: {
   for (;;) {
     if (rebuild) { yield* lines(); fresh = null; }
     const refine = new Map<Cell, Cell[]>();
+    let checked = 0;
     for (const cell of cells) {
+      if ((++checked & 255) === 0 && due()) yield;
       if (fresh && !fresh.has(cell) && !touched(cell)) continue;
       if (due()) yield;
       // A refined edge can change a neighbour outside the primary patch too.
@@ -350,7 +360,13 @@ export function* terrainSurfaceSteps(options: {
         Math.max(...x.map(error)) < Math.max(...z.map(error)) ? x : z);
     }
     if (!refine.size) break;
-    cells = cells.flatMap(cell => refine.get(cell) ?? [cell]);
+    const next: Cell[] = [];
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i]!, parts = refine.get(cell);
+      if (parts) next.push(...parts); else next.push(cell);
+      if ((i & 1023) === 1023 && due()) yield;
+    }
+    cells = next;
     changedV.clear(); changedH.clear();
     fresh = new Set();
     for (const children of refine.values()) for (const child of children) {
@@ -364,7 +380,7 @@ export function* terrainSurfaceSteps(options: {
     keep(points.reduce((n, p) => n + p[0], 0) / points.length, points.reduce((n, p) => n + p[2], 0) / points.length);
   let emitted = 0;
   for (const cell of cells) {
-    if ((++emitted & 63) === 0 && due()) yield;
+    if ((++emitted & 15) === 0 && due()) yield;
     triangles(cell, (a, b, c, side) => {
       const points = [a, b, c];
       if (kept(a, b, c)) (side < 0 ? outer : tops).push(...points.map(vertex));
@@ -381,8 +397,8 @@ export function* terrainSurfaceSteps(options: {
   }
   // Closed-boundary triangles precede exterior ones for deterministic height
   // queries at the discontinuity itself. Rasterized walls close both limits.
-  indices.push(...tops);
-  for (const v of outer) indices.push(v);
+  for (let i = 0; i < tops.length; i++) { indices.push(tops[i]!); if ((i & 4095) === 4095 && due()) yield; }
+  for (let i = 0; i < outer.length; i++) { indices.push(outer[i]!); if ((i & 4095) === 4095 && due()) yield; }
   const same = (p: Point, q: Point): boolean => p.every((n, i) => n.toFixed(9) === q[i]!.toFixed(9));
   for (const pair of seams.values()) {
     if (pair.length !== 2) {
