@@ -102,3 +102,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 ## Concurrency queue (cap: 5 Opus builders)
 - **Running:** B1, GPU author, S1 (R1 fixes), S2, S5 (R1 fixes).
 - **Paused, in resume order:** S4 (R1 fixes), S3 (R1 fixes), S6 (R1 fixes). Each was told to commit and stop; resume with "continue".
+  - S6 paused at `ab59c89`: all five fixes are in source, but their tests, the lab re-measure and the doc updates remain.
