@@ -176,3 +176,9 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **P1 R4 fixes done** at `85e8fa9`: exact full-snapshot transactions for transfers, stores and crafts, with every command kind ruled and fail-closed; 748 tests pass, and the playthrough exits 0 serial and with `--jobs 3`. Focused Sol R5 review running.
 - **W1-pre started** (Opus, `siltwake-w1pre-cave-kit-opus-1686d2a`): the Fanvault cave contract, one-source solids and shell, a cave lighting prototype and `tools/cave-lab.html`, in new files only. The sim, bake and `materials.ts` wiring wait for C3. Builders: C3, P1, W1-pre (3 of 5).
 - **W1-pre done** at `fe00f5e` (`t3/siltwake-fanvault-cave`): the Fanvault loop, a diver-only 18–26 m vault with skylight, 1,504 rock boxes from one source, a cel-shader light field and lamp, and `tools/cave-lab.html`; 751 tests pass. Sol R1 review running.
+- **W1-pre R1 (Sol):** changes-needed (`review/w1-pre-r1` `be5360f`). The geometry is verified (shell within 0.31 m, no diver gaps, 16.7 ms on the 3090). Three P2s:
+  - the lamp-off test is not a real retreat;
+  - the lamp transmits 57% through rock;
+  - the floor wrapper breaks straddling clearance and the legacy guards.
+
+  Back with the author.
