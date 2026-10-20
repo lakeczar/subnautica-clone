@@ -111,3 +111,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **B1 ACCEPTED** (Sol R1, accept with nits), integrated at `ccf8c44`. The nits go to S8.
 - **S6 fixes done** at `230c7c1` (33/33 tests, lab 76/76). The R2 review waits for the Codex rate limit.
 - **Rate-limited (Codex 429), to retry:** S1 R2 review (`21d9247`), S3 R2 review (WIP `d00e9e7`), S4 R2 review (WIP `f9059c5`).
+- **S2 R1 (Sol xhigh):** changes-needed (`review/s2` `f01b6f2`). P1: terrain triangles and LOD edges diverge from the floor, by up to 33.5 m. P2: the access/rescue proof stops short of attachment and tow outcome. Back with the author, who merges S1 `21d9247` first. The vistas are judged readable but still somewhat repetitive; polish comes later.
