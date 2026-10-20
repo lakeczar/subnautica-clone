@@ -111,9 +111,20 @@ export interface ResidencyStats {
   readonly hiddenGpuBytes: number;
   /** True if accounted bytes exceeded the budget at the end of this frame. */
   readonly overBudget: boolean;
-  /** Chunks whose fine unit alone exceeds the budget and were shown coarse. */
+  /** Chunks whose fine unit alone exceeds the share and were shown coarse. */
   readonly demoted: number;
-  /** Chunks whose every LOD alone exceeds the budget: not built, not drawn. */
+  /** Chunks kept at their drawn LOD because the swap to the wanted LOD does
+   * not fit beside it: degraded, not a hole. */
+  readonly held: number;
+  /** Wanted chunks beyond the budget frontier (or not fitting the share left
+   * by external owners): not drawn this frame. */
+  readonly cut: number;
+  /** All admitted work is done and nothing is over budget: nothing changes
+   * until the viewer, the budget or the external share does. True in a
+   * stable degraded state (held/cut/refused); `isReady` is not. */
+  readonly settled: boolean;
+  /** Chunks whose measured coarse (or only) LOD exceeds the whole budget:
+   * not rebuilt, not drawn. */
   readonly refused: readonly RefusedUnit[];
   /** Builds not started this frame because their reservation did not fit. */
   readonly deferred: number;
@@ -177,7 +188,7 @@ export function createResidency(options: {
   loader: ChunkLoader;
   budget?: Partial<ResidencyBudget>;
   now?: () => number;
-  /** Cost guesses per LOD before a unit has been measured. */
+  /** Cost guesses per LOD before any unit of that LOD has been measured. */
   estimate?: Partial<Record<LodLevel, { cpu: number; gpu: number }>>;
 }) {
   const { map, loader } = options;
@@ -185,10 +196,13 @@ export function createResidency(options: {
   const now = options.now ?? (() => performance.now());
   const units = new Map<string, Unit>();
   const reach = Math.max(0, ...map.layout.chunks.map(c => c.lod.coarse + c.lod.hysteresis));
-  // Conservative per-LOD guess: never below the largest unit measured so far.
-  const guess: Record<LodLevel, Bytes> = {
-    fine: { ...DEFAULT_ESTIMATE.fine, ...options.estimate?.fine },
-    coarse: { ...DEFAULT_ESTIMATE.coarse, ...options.estimate?.coarse },
+  // Per-LOD guess for units never built: the configured estimate, then the
+  // running mean of measured units. Only a probe's reservation uses it; the
+  // budget itself is enforced by the post-build re-check, so one heavy chunk
+  // must not make every unknown chunk look too big to try.
+  const guess: Record<LodLevel, Bytes & { n: number }> = {
+    fine: { ...DEFAULT_ESTIMATE.fine, ...options.estimate?.fine, n: 0 },
+    coarse: { ...DEFAULT_ESTIMATE.coarse, ...options.estimate?.coarse, n: 0 },
   };
   const known = new Map<string, Bytes>();
   /** Bytes held outside this residency against the same budget (e.g. the
@@ -196,7 +210,11 @@ export function createResidency(options: {
   let external: Bytes = { cpu: 0, gpu: 0 };
   const totals = { built: 0, uploaded: 0, cancelled: 0, evicted: 0, discarded: 0, overBudgetDiscards: 0 };
   let frame = 0, disposed = false;
-  let last: ResidencyStats | null = null, lastDesired: Want[] = [], lastRefused: number[] = [];
+  let last: ResidencyStats | null = null;
+  /** Every wanted chunk this frame with the LOD it should show (after
+   * demotion), or null when refused. `isReady` checks these, not only the
+   * admitted set, so a cut or held chunk is never reported ready. */
+  let lastTargets: { readonly chunk: ChunkId; readonly lod: LodLevel | null; readonly distance: number }[] = [];
   const key = (id: ChunkId, lod: LodLevel): string => `${id}@${lod}`;
   const resident = (u: Unit | undefined): boolean => u?.state === "shown" || u?.state === "hidden";
   const shownOf = (id: ChunkId): Unit | undefined => {
@@ -206,19 +224,35 @@ export function createResidency(options: {
     }
     return undefined;
   };
-  /** Exact cost once built before; otherwise the guess clamped to the budget,
-   * so an unmeasured unit is built once to learn its size, never refused on
-   * a guess. Demotion and refusal only ever act on measured costs. */
+  /** Room left for chunks once external owners are counted. */
+  const share = (): Bytes => ({ cpu: budget.cpuBytes - external.cpu, gpu: budget.gpuBytes - external.gpu });
+  /** Exact cost once built before; otherwise the guess clamped to the share
+   * left after external owners, so an unmeasured unit is built once to learn
+   * its size and never refused on a guess. Refusal only ever acts on measured
+   * costs, and only against the whole budget (a permanent condition). */
   const estimate = (id: ChunkId, lod: LodLevel): Bytes & { exact: boolean } => {
     const k = known.get(key(id, lod));
     if (k) return { ...k, exact: true };
-    return { cpu: Math.min(guess[lod].cpu, budget.cpuBytes / budget.constructionFactor), gpu: Math.min(guess[lod].gpu, budget.gpuBytes), exact: false };
+    const room = share();
+    return { cpu: Math.max(0, Math.min(guess[lod].cpu, room.cpu / budget.constructionFactor)),
+      gpu: Math.max(0, Math.min(guess[lod].gpu, room.gpu)), exact: false };
+  };
+  /** What admitting this chunk/LOD costs now: the live unit's accounting if
+   * it exists, else the (scaled) reservation a build would take. */
+  const need = (id: ChunkId, lod: LodLevel): Bytes => {
+    const u = units.get(key(id, lod));
+    if (u) return cost(u);
+    const e = estimate(id, lod);
+    return { cpu: e.cpu * budget.constructionFactor, gpu: e.gpu };
   };
   const learn = (u: Unit, b: Bytes): void => {
     const k = known.get(u.key);
     const m = { cpu: Math.max(b.cpu, k?.cpu ?? 0), gpu: Math.max(b.gpu, k?.gpu ?? 0) };
+    if (!k) {
+      const g = guess[u.lod], n = g.n + 1;
+      guess[u.lod] = { cpu: g.n ? g.cpu + (m.cpu - g.cpu) / n : m.cpu, gpu: g.n ? g.gpu + (m.gpu - g.gpu) / n : m.gpu, n };
+    }
     known.set(u.key, m);
-    guess[u.lod] = { cpu: Math.max(guess[u.lod].cpu, m.cpu), gpu: Math.max(guess[u.lod].gpu, m.gpu) };
   };
   /** What a unit counts against the budget right now. */
   const cost = (u: Unit): Bytes => {
@@ -278,40 +312,93 @@ export function createResidency(options: {
       if (disposed) throw new Error("Residency is disposed.");
       frame++;
       const all = wants(viewer);
-      // 1. Frontier: nearest first, with exact or conservative costs, the
-      //    outgoing LOD of a pending swap, and the oversized-unit policy.
+      const swapping = new Set<string>();
+      const reserveFor = new Map<string, Bytes>();
+      // 1. Frontier, nearest first. Per chunk: pick the target LOD (demoting
+      //    a fine unit whose cost exceeds the share to coarse; refusing a
+      //    chunk only when a measured cost exceeds the whole budget), then
+      //    admit what fits:
+      //    - target already resident: its cost;
+      //    - other LOD drawn and resident: target + outgoing if the swap
+      //      fits; else keep the outgoing LOD drawn ("held", degraded but
+      //      never a hole); else, if the target alone fits, replace it (the
+      //      outgoing art becomes evictable, a brief hole is unavoidable);
+      //    - nothing resident: the target's reservation.
+      //    The first chunk that cannot be admitted at all ends admission
+      //    ("cut"); later chunks are only classified, so the drawn set stays
+      //    the nearest set that fits.
       const desired = new Map<string, Want>();
       const refused: RefusedUnit[] = [];
-      lastRefused = [];
-      let demoted = 0;
+      const targets: typeof lastTargets = [];
+      let demoted = 0, held = 0, cut = 0, full = false;
       const sum: Bytes = { ...external };
+      const room = share();
+      // No share left (external owners take it all): nothing is admitted.
+      const inShare = (c: Bytes): boolean => room.cpu > 0 && room.gpu > 0 && c.cpu <= room.cpu && c.gpu <= room.gpu;
+      const inBudget = (c: Bytes): boolean => c.cpu <= budget.cpuBytes && c.gpu <= budget.gpuBytes;
       for (const want of all) {
-        let w = want, c = estimate(w.chunk.id, w.lod);
-        if (!fits(c, external)) {
-          const coarse = estimate(w.chunk.id, "coarse");
-          if (w.lod === "fine" && fits(coarse, external)) { w = { ...w, lod: "coarse" }; c = coarse; demoted++; }
+        let w = want;
+        let c = need(w.chunk.id, w.lod);
+        if (!inShare(c)) {
+          const coarse = need(w.chunk.id, "coarse");
+          if (w.lod === "fine" && inShare(coarse)) { w = { ...w, lod: "coarse" }; c = coarse; demoted++; }
           else {
-            // Report the last LOD tried: coarse, when fine was too large too.
-            const tried = w.lod === "fine" ? { lod: "coarse" as const, ...coarse } : { lod: w.lod, ...c };
-            refused.push({ chunk: w.chunk.id, lod: tried.lod, cpuBytes: tried.cpu, gpuBytes: tried.gpu });
-            lastRefused.push(w.distance);
+            const tried = w.lod === "fine" ? "coarse" as const : w.lod;
+            const t = estimate(w.chunk.id, tried), tc = need(w.chunk.id, tried);
+            if (t.exact && !inBudget(tc)) {
+              refused.push({ chunk: w.chunk.id, lod: tried, cpuBytes: t.cpu, gpuBytes: t.gpu });
+              targets.push({ chunk: w.chunk.id, lod: null, distance: w.distance });
+              continue;
+            }
+            // Fits the budget but not what external owners leave: wait.
+            targets.push({ chunk: w.chunk.id, lod: tried, distance: w.distance });
+            cut++; full = true;
             continue;
           }
         }
-        const outgoing = units.get(key(w.chunk.id, other(w.lod)));
-        const swap = !resident(units.get(key(w.chunk.id, w.lod))) && resident(outgoing) ? cost(outgoing!) : { cpu: 0, gpu: 0 };
-        const next = { cpu: sum.cpu + c.cpu + swap.cpu, gpu: sum.gpu + c.gpu + swap.gpu };
-        if (!fits(next)) break;
-        sum.cpu = next.cpu; sum.gpu = next.gpu;
-        desired.set(key(w.chunk.id, w.lod), w);
+        targets.push({ chunk: w.chunk.id, lod: w.lod, distance: w.distance });
+        if (full) { cut++; continue; }
+        const tk = key(w.chunk.id, w.lod);
+        const target = units.get(tk), outgoing = units.get(key(w.chunk.id, other(w.lod)));
+        // A unit never measured is probed with whatever room remains here
+        // (never the largest unit seen elsewhere): built once, re-checked
+        // when its recipe exists, then costed exactly.
+        const probing = !target && !known.has(tk);
+        const none = { cpu: 0, gpu: 0 };
+        /** Admit `b` for the target (clamped when probing) plus `extra`
+         * bytes of already-resident art, which are never clamped. */
+        const add = (b: Bytes, extra: Bytes = none, forTarget = true): boolean => {
+          let t = b;
+          if (probing && forTarget) {
+            const left = { cpu: budget.cpuBytes - sum.cpu - extra.cpu, gpu: budget.gpuBytes - sum.gpu - extra.gpu };
+            if (left.cpu <= 0 || left.gpu <= 0) return false;
+            t = { cpu: Math.min(b.cpu, left.cpu), gpu: Math.min(b.gpu, left.gpu) };
+          }
+          if (!fits({ cpu: sum.cpu + t.cpu + extra.cpu, gpu: sum.gpu + t.gpu + extra.gpu })) return false;
+          sum.cpu += t.cpu + extra.cpu; sum.gpu += t.gpu + extra.gpu;
+          if (probing && forTarget) reserveFor.set(tk, { cpu: t.cpu / budget.constructionFactor, gpu: t.gpu });
+          return true;
+        };
+        if (resident(target) || !resident(outgoing)) {
+          if (add(c)) desired.set(tk, w);
+          else { cut++; full = true; }
+          continue;
+        }
+        const o = cost(outgoing!);
+        if (add(c, o)) {
+          desired.set(tk, w);
+          swapping.add(key(w.chunk.id, other(w.lod)));
+        } else if (add(none, o, false)) {
+          desired.set(key(w.chunk.id, other(w.lod)), { ...w, lod: other(w.lod) });
+          held++;
+        } else if (add(c)) desired.set(tk, w);
+        else { cut++; full = true; }
       }
+      lastTargets = targets;
       const desiredChunks = new Set([...desired.values()].map(w => w.chunk.id));
-      // Protected this frame: wanted targets and the fallback LOD they replace.
-      const protectedKeys = new Set<string>();
-      for (const w of desired.values()) {
-        protectedKeys.add(key(w.chunk.id, w.lod));
-        if (!resident(units.get(key(w.chunk.id, w.lod)))) protectedKeys.add(key(w.chunk.id, other(w.lod)));
-      }
+      // Protected this frame: admitted units and the outgoing LODs whose
+      // swap headroom was paid for. A replaced outgoing LOD is not protected.
+      const protectedKeys = new Set<string>([...desired.keys(), ...swapping]);
       // 2. Drop unwanted work; ranks refresh for what remains.
       for (const u of [...units.values()]) {
         const w = desired.get(u.key);
@@ -322,7 +409,6 @@ export function createResidency(options: {
           u.art!.setVisible(false); u.state = "hidden"; u.lastUsed = frame;
         }
       }
-      lastDesired = [...desired.values()];
       // 3. Builds, nearest first, within the time slice. A new build starts
       //    only when its reservation fits; a finished one is re-checked.
       const start = now();
@@ -339,7 +425,7 @@ export function createResidency(options: {
           let inFlight = 0;
           for (const x of units.values()) if (x.state === "building") inFlight++;
           if (inFlight >= budget.maxInFlight) continue;
-          const reserve = estimate(w.chunk.id, w.lod);
+          const reserve = reserveFor.get(k) ?? estimate(w.chunk.id, w.lod);
           if (!makeRoom({ cpu: reserve.cpu * budget.constructionFactor, gpu: reserve.gpu }, protectedKeys)) { deferred++; continue; }
           u = { key: k, chunk: w.chunk, lod: w.lod, state: "building", build: loader.build(w.chunk, w.lod), reserve,
             prepared: null, job: null, art: null, rank: w.rank, lastUsed: frame };
@@ -362,6 +448,7 @@ export function createResidency(options: {
         }
       }
       const buildMs = now() - start;
+      const discardsBefore = totals.overBudgetDiscards;
       // 4. Uploads, nearest first, in parts within the byte and time caps.
       //    Their GPU bytes are already reserved, so admission held at step 3.
       let uploads = 0, uploadedBytes = 0, uploadOverrunBytes = 0;
@@ -407,8 +494,9 @@ export function createResidency(options: {
           continue;
         }
         pending++;
-        if (fallback?.art && fallback.state === "hidden") { fallback.art.setVisible(true); fallback.state = "shown"; }
-        if (fallback) fallback.lastUsed = frame;
+        if (!fallback || !protectedKeys.has(fallback.key)) continue;
+        if (fallback.art && fallback.state === "hidden") { fallback.art.setVisible(true); fallback.state = "shown"; }
+        fallback.lastUsed = frame;
       }
       // 6. Evict hidden units (LRU) over the budget or retained count. Units
       //    shown or hidden this frame wait one frame unless bytes force it.
@@ -447,20 +535,25 @@ export function createResidency(options: {
       last = {
         frame, desired: all.length, withinBudget: desired.size, building, prepared, uploading, shown, hidden: hiddenCount,
         cpuBytes: bytes.cpu, gpuBytes: bytes.gpu, gpuAllocatedBytes, shownGpuBytes, hiddenGpuBytes,
-        overBudget: !fits(bytes), demoted, refused, deferred,
+        overBudget: !fits(bytes), demoted, held, cut, refused, deferred,
+        // Nothing in flight and nothing learned this frame: a build that
+        // completed may still reveal room for chunks cut this frame.
+        settled: fits(bytes) && building + prepared + uploading === 0 && pending === 0 && steps === 0 && uploads === 0 &&
+          totals.overBudgetDiscards === discardsBefore,
         buildMs, buildSteps: steps, maxStepMs, uploadMs, uploads, uploadedBytes, uploadOverrunBytes, pending,
         totals: { ...totals },
       };
       return last;
     },
     /** True when, as of the last update, the accounted bytes are within
-     * budget, nothing within `radius` was refused, and every wanted chunk
-     * within `radius` shows its desired LOD. A chunk demoted to coarse counts
-     * as ready at coarse; a refused chunk never does. */
+     * budget and every wanted chunk within `radius` shows its target LOD. A
+     * chunk demoted to coarse is ready at coarse. A refused, cut (no room) or
+     * held (kept at its old LOD) chunk is never ready: under byte pressure
+     * pass the radius that must be complete, or read `stats.settled`. */
     isReady(radius = Infinity): boolean {
       if (frame === 0 || !last || last.overBudget) return false;
-      if (lastRefused.some(d => d <= radius)) return false;
-      return lastDesired.every(w => w.distance > radius || units.get(key(w.chunk.id, w.lod))?.state === "shown");
+      return lastTargets.every(t => t.distance > radius ||
+        (t.lod !== null && units.get(key(t.chunk, t.lod))?.state === "shown"));
     },
     units(): UnitView[] {
       return [...units.values()].map(u => ({ key: u.key, chunk: u.chunk.id, region: u.chunk.region, lod: u.lod,

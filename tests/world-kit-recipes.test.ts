@@ -141,3 +141,26 @@ test("every kit factory keeps its steps short when the floor is expensive", () =
     assert.ok(worst <= 0.75 + 0.7, `${ref.factory}.${lod}: worst step ${worst.toFixed(2)} fake-ms over ${steps} steps`);
   }
 });
+
+test("REVIEW R2: shared polylines stay closed across 210/330 m steps and jagged bands, both axes, every LOD pair", () => {
+  const jagged = (x: number, z: number): number => -350 + .9 * x - 1.4 * z + (x >= 128 ? -210 : 0) + (z >= 128 ? 330 : 0)
+    + (Math.floor(z / 7) % 2 ? 90 : -90) + (Math.floor(x / 11) % 2 ? 120 : -120);
+  const built = new Map<string, MeshRecipe>();
+  const get = (ix: number, iz: number, lod: LodLevel): MeshRecipe => {
+    const k = `${ix}:${iz}:${lod}`;
+    if (!built.has(k)) {
+      const c = { id: k, cell: { ix, iz, layer: 0 }, region: "refuge_reef", biome: "reef_shelf",
+        lod: { fine: 112, coarse: 400, hysteresis: 16 }, art: [],
+        bounds: { min: { x: ix * 128, y: -1000, z: iz * 128 }, max: { x: (ix + 1) * 128, y: 500, z: (iz + 1) * 128 } } } as ChunkDescriptor;
+      const ctx = defaultContext(jagged, Infinity, () => 0);
+      built.set(k, drain(terrainFactory.build(ctx, c, { factory: "terrain" }, lod), ctx).meshes[0]!);
+    }
+    return built.get(k)!;
+  };
+  for (const [[ax, az], [bx, bz], axis] of [[[0, 0], [1, 0], 0], [[0, 0], [0, 1], 2]] as const)
+    for (const [la, lb] of LODS) {
+      const ea = boundary(get(ax, az, la), axis, 128), eb = boundary(get(bx, bz, lb), axis, 128);
+      assert.equal(ea.length, 65);
+      assert.deepEqual(ea, eb, `${axis === 0 ? "x" : "z"} edge ${la}/${lb}`);
+    }
+});
