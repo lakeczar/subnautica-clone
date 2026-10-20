@@ -13,6 +13,11 @@ import {
 } from "./inventory.js";
 import { personalDepth, personalLimit } from "./capabilities.js";
 import { WORLD_BOUNDS } from "./world.js";
+import { cabinHull, CREEL_BOARDING, fittedCabin, hullDepth, hullToWorld } from "./fleet.js";
+import { cabinLockerId } from "./inventory.js";
+export { hullDepth };
+/** Lateral cockpit-hatch exit offset: outside the Dart's canopy and the Creel's arm guards. */
+export const exitOffset = (v: VehicleState): number => v.hull === "creel" ? 3.4 : 3.1;
 
 export const PULSE_CHARGE_COST = 25;
 /** Why a pulse is refused, for compact presentation; `refusal` stays the full text. */
@@ -77,21 +82,19 @@ export function rechargeCells(s: GameState): string | null {
   s.feedback = `Recharged ${p.cellIds.length} local reserve ${p.cellIds.length === 1 ? "cell" : "cells"}.`;
   return null;
 }
-export const hullDepth = (v: VehicleState): number =>
-  Math.max(0, -(v.pose.position.y + 0.5));
 export function exitBlock(s: GameState, world: WorldQueries): { code: ExitRefusalCode; message: string } | null {
   const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
   if (!v) return { code: "not-piloting", message: "You are not piloting a craft." };
   if (v.hull === "hearthline")
     return { code: "carrier", message: "Engage station keeping, then leave the helm into the dry interior." };
   const exit = {
-    x: v.pose.position.x + Math.cos(v.pose.yaw) * 3.1,
+    x: v.pose.position.x + Math.cos(v.pose.yaw) * exitOffset(v),
     y: v.pose.position.y + 0.2,
-    z: v.pose.position.z + Math.sin(v.pose.yaw) * 3.1,
+    z: v.pose.position.z + Math.sin(v.pose.yaw) * exitOffset(v),
   };
   const depth = personalDepth(exit);
   if (depth > personalLimit(s))
-    return { code: "depth", message: `Exit exposure ${depth.toFixed(0)} m exceeds your ${personalLimit(s)} m personal suit. The ${HULLS[v.hull].initialDepth} m hull does not protect a diver outside.` };
+    return { code: "depth", message: `Exit exposure ${depth.toFixed(0)} m exceeds your ${personalLimit(s)} m personal suit. The ${v.rating} m hull does not protect a diver outside.` };
   if (!world.clearance(exit, { radius: 0.34, height: 0.95 }))
     return { code: "obstructed", message: "Exit side is obstructed. Move the craft to clear water before disembarking." };
   return null;
@@ -101,7 +104,10 @@ export function exitRefusal(s: GameState, world: WorldQueries): string | null {
 }
 export function board(s: GameState, id: string): string | null {
   const v = s.fleet.vehicles.find((v) => v.id === id);
-  if (!v || v.berth || distance(s.player.pose.position, v.pose.position) > 6)
+  // The Creel's access hatch is on its raised pilot compartment, not at the keel.
+  if (!v || v.berth || (v.hull === "creel"
+    ? distance(s.player.pose.position, hullToWorld(CREEL_BOARDING, v)) > 4.5
+    : distance(s.player.pose.position, v.pose.position) > 6))
     return "Approach the visible canopy access handle.";
   if (v.disabled || v.charge <= 0)
     return "Craft disabled or out of power. Its hold remains accessible; repair or insert a charged reserve cell locally.";
@@ -114,7 +120,9 @@ export function board(s: GameState, id: string): string | null {
   s.player.pose.yaw = v.pose.yaw;
   s.player.pose.pitch = v.pose.pitch;
   s.player.velocity = { ...v.velocity };
-  s.feedback = `${HULLS[v.hull].label} · mouse or arrows steer · W/S thrust · A/D slide.`;
+  s.feedback = v.hull === "creel"
+    ? `Creel · steady turns · W/S thrust · E tool arms on salvage ahead${fittedCabin(s, v) ? " · stop, then E for the cabin" : ""}.`
+    : `${HULLS[v.hull].label} · mouse or arrows steer · W/S thrust · A/D slide.`;
   return null;
 }
 export function exit(s: GameState, world: WorldQueries): string | null {
@@ -124,9 +132,9 @@ export function exit(s: GameState, world: WorldQueries): string | null {
     (v) => v.id === s.player.controlledVehicleId,
   )!;
   s.player.pose.position = {
-    x: v.pose.position.x + Math.cos(v.pose.yaw) * 3.1,
+    x: v.pose.position.x + Math.cos(v.pose.yaw) * exitOffset(v),
     y: v.pose.position.y + 0.2,
-    z: v.pose.position.z + Math.sin(v.pose.yaw) * 3.1,
+    z: v.pose.position.z + Math.sin(v.pose.yaw) * exitOffset(v),
   };
   s.player.controlledVehicleId = null;
   s.player.mode = "swimming";
@@ -210,6 +218,10 @@ export function eat(s: GameState): string | null {
             .cargoId,
         ]
       : []),
+    ...(() => {
+      const h = cabinHull(s), cabin = h ? fittedCabin(s, h) : null;
+      return h ? [h.cargoId, ...(cabin ? [cabinLockerId(cabin.id)] : [])] : [];
+    })(),
   ];
   const meal = s.inventory.items.find(
     (i) => i.kind === "meal" && ids.includes(i.containerId),

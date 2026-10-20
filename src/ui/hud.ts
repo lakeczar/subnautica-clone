@@ -7,6 +7,8 @@ import type { AimedTarget, ReachPreview } from "../sim/targeting.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import { airSupply, exposure } from "../sim/survival.js";
 import { distractionPreview, exitBlock, hullDepth, serviceRefusal, serviceState } from "../sim/vehicles.js";
+import { ARM_CHARGE, ARM_LIFT_SECONDS, armNearby, armTarget, cabinHull, cabinEnterRefusal, fittedCabin } from "../sim/fleet.js";
+import { usedCapacity } from "../sim/inventory.js";
 import type { GameState, NoticeContext, NoticeOptions, Vec3, WorldQueries } from "../sim/types.js";
 import { FACILITY_SOLIDS } from "../sim/world.js";
 import { escapeHtml, recoveryDisplay } from "./format.js";
@@ -102,10 +104,11 @@ export class HudView {
             ? "Splitspine shore"
             : "Hearth Reef";
     this.get("cruise").hidden = !cruise;
+    // The occupied hull: the pilot seat, or the Creel cabin the player stands in.
     const e = exposure(state),
       v = state.fleet.vehicles.find(
         (v) => v.id === state.player.controlledVehicleId,
-      );
+      ) ?? cabinHull(state);
     this.get("context-hint").textContent = state.world.action
       ? `Active ${state.world.action.kind} · ${Math.ceil(state.world.action.seconds)} s remaining`
       : state.recovery.operation
@@ -147,12 +150,12 @@ export class HudView {
     this.target(target, state, aim ? aim.preview : target ? null : reachPreview(state, this.world));
     const air = airSupply(state);
     const airLabel = airSourceLabel(state);
-    const service = mode === "piloting" && v?.hull === "dart" ? serviceState(state, v.id) : null;
+    const service = mode === "piloting" && (v?.hull === "dart" || v?.hull === "creel") ? serviceState(state, v.id) : null;
     const serviceLine = v && service === "ready" && serviceRefusal(state, v.id) === null ? "Service here · Tab"
       : service === "patch" ? "Patch hull first" : "";
     this.get("vitals").dataset.airSource = air.kind;
     this.get("vitals").innerHTML =
-      `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${escapeHtml(airLabel)}</small></div><div class="${this.damageFlashing("diver") ? "hull-impact" : ""}"><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}${this.impactVehicle === v.id && performance.now() < this.impactUntil || this.damageFlashing("vehicle", v.id) ? " hull-impact" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m</small>${serviceLine ? `<small class="service-hint">${serviceLine}</small>` : ""}</div>` : ""}`;
+      `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${escapeHtml(airLabel)}</small></div><div class="${this.damageFlashing("diver") ? "hull-impact" : ""}"><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}${this.impactVehicle === v.id && performance.now() < this.impactUntil || this.damageFlashing("vehicle", v.id) ? " hull-impact" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${v.rating} m${v.hull === "creel" ? ` · hold ${usedCapacity(state, v.cargoId)}/${state.inventory.containers.find(c => c.id === v.cargoId)?.capacity ?? 0} CU` : ""}</small>${serviceLine ? `<small class="service-hint">${serviceLine}</small>` : ""}</div>` : ""}`;
     const opening = state.opening.phase < 4;
     this.root.dataset.opening = String(opening);
     // Hide only routine exploration elements. Warnings, pause and the opening
@@ -196,7 +199,10 @@ export class HudView {
     }
     if (v) {
       const stopped = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) < 0.2;
-      const html = `<kbd>${this.exitKey}</kbd> ${block ? "Exit blocked" : `${deliberateExit(state) ? "Hold to exit" : "Exit"}`}${this.exitProgress !== null ? ` <progress aria-label="Exit hold" max="1" value="${this.exitProgress}"></progress>` : ""}${block || stopped ? `<small>${escapeHtml(block?.message ?? `Suit ${personalLimit(state)} m · hull ${HULLS[v.hull].initialDepth} m`)}</small>` : ""}`;
+      // The Creel's E is its work key: tool arms on a host ahead, else its cabin.
+      const work = v.hull === "creel" ? creelWork(state) : "";
+      const exitKey = v.hull === "creel" ? "X" : this.exitKey;
+      const html = `${work}<kbd>${exitKey}</kbd> ${block ? "Exit blocked" : `${deliberateExit(state) ? "Hold to exit" : "Exit"}`}${this.exitProgress !== null ? ` <progress aria-label="Exit hold" max="1" value="${this.exitProgress}"></progress>` : ""}${block || stopped ? `<small>${escapeHtml(block?.message ?? `Suit ${personalLimit(state)} m · hull ${v.rating} m`)}</small>` : ""}`;
       if (guidance.innerHTML !== html) guidance.innerHTML = html;
       guidance.classList.toggle("urgent", block !== null);
     }
@@ -209,7 +215,7 @@ export class HudView {
       ? `${t.verb === "empty" ? "" : "<kbd>E</kbd> "}${escapeHtml(t.kind === "vehicle" && state ? (() => {
           const v = state!.fleet.vehicles.find(v => v.id === t.id);
           return v ? `${HULLS[v.hull].label}${v.disabled ? " · disabled" : ""}` : t.label;
-        })() : t.label)} <small>${({ collect: "Collect", gather: "Gather", sort: t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Tend · 20 s" : "Sort · 20 s", inspect: "Inspect", review: "Notebook", read: "Read", board: "Board", recover: "Recover", open: "Open", use: "Use", empty: renewable(t.id) ? "Empty · regrowing" : "Empty" })[t.verb]}${state && equipped(state, "essential_tools") && !t.known && (t.kind === "source" || t.kind === "evidence") ? " · Q scan" : ""}</small>` : preview ? `${preview.label ? `${escapeHtml(preview.label)} · ` : ""}Move closer` : "";
+        })() : t.label)} <small>${fixtureVerb(t, state) ?? ({ collect: "Collect", gather: "Gather", sort: t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES].item === "meal" ? "Tend · 20 s" : "Sort · 20 s", inspect: "Inspect", review: "Notebook", read: "Read", board: "Board", recover: "Recover", open: "Open", use: "Use", empty: renewable(t.id) ? "Empty · regrowing" : "Empty" })[t.verb]}${state && equipped(state, "essential_tools") && !t.known && (t.kind === "source" || t.kind === "evidence") ? " · Q scan" : ""}</small>` : preview ? `${preview.label ? `${escapeHtml(preview.label)} · ` : ""}Move closer` : "";
     this.get("interact-prompt").dataset.preview = String(!t && !!preview);
     if (this.get("interact-prompt").innerHTML !== html) this.get("interact-prompt").innerHTML = html;
   }
@@ -518,7 +524,8 @@ function airSourceLabel(state: GameState): string {
   const air = airSupply(state);
   const v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
   return air.kind === "craft" && v ? `${HULLS[v.hull].label} air`
-    : air.kind === "refuge" ? `${nearPod(state) ? PLACES.home_pod.label : nearWorkshop(state) ? PLACES.island_workshop.label : inCanopyAir(state) ? PLACES.canopy_lab.label : "Hearthline"} air`
+    : air.kind === "refuge" ? `${nearPod(state) ? PLACES.home_pod.label : nearWorkshop(state) ? PLACES.island_workshop.label : inCanopyAir(state) ? PLACES.canopy_lab.label : cabinHull(state) ? "Creel cabin" : "Hearthline"} air`
+    : air.kind === "emergency" && cabinHull(state) ? `Cabin emergency air · ${Math.ceil(air.remainingSeconds!)} s`
     : air.kind === "surface" ? "Surface air"
     : `${air.kind === "emergency" ? "Emergency" : "Suit"} air · ${Math.ceil(air.remainingSeconds!)} s`;
 }
@@ -527,7 +534,7 @@ export interface HazardBanner { context: NoticeContext | "pressure" | "health" |
 /** The exact current-state list used for both visible warnings and coverage. */
 export function hazardBanners(state: GameState): HazardBanner[] {
   const warnings: HazardBanner[] = [];
-  const e = exposure(state), v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId), air = airSupply(state);
+  const e = exposure(state), v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId) ?? cabinHull(state), air = airSupply(state);
   const airLabel = airSourceLabel(state);
   if (!v && !e.refuge && e.pressureDepth > personalLimit(state))
     warnings.push({ context: "pressure", text: `PRESSURE · ${e.pressureDepth.toFixed(0)} m / personal ${personalLimit(state)} m · ascend now` });
@@ -535,8 +542,8 @@ export function hazardBanners(state: GameState): HazardBanner[] {
     warnings.push({ context: "oxygen", text: `LOW OXYGEN · ${state.player.vitals.oxygen.toFixed(0)}% · return to air now` });
   if (v && (v.charge === 0 || v.disabled))
     warnings.push({ context: "hull", text: `${v.disabled ? "HULL DISABLED" : "POWER DEPLETED"} · ${air.kind === "suit" ? "emergency air exhausted · " : ""}${airLabel} · protected exit / reserve cell` });
-  if (v && hullDepth(v) > HULLS[v.hull].initialDepth * 0.85)
-    warnings.push({ context: "hullDepth", text: `HULL DEPTH · ${hullDepth(v).toFixed(0)} / ${HULLS[v.hull].initialDepth} m · ascend before hull damage` });
+  if (v && hullDepth(v) > v.rating * 0.85)
+    warnings.push({ context: "hullDepth", text: `HULL DEPTH · ${hullDepth(v).toFixed(0)} / ${v.rating} m · ascend before hull damage` });
   if (v && v.charge > 0 && v.charge < 25)
     warnings.push({ context: "power", text: `LOW POWER · ${v.charge.toFixed(0)}% · reserve cell or supported service` });
   if (v && !v.disabled && v.health <= 25)
@@ -563,4 +570,25 @@ function atCradleRail(state: GameState): boolean {
     Math.abs(p.z - proxy.radius - s.max.z) < 0.15 &&
     p.x + proxy.radius > s.min.x && p.x - proxy.radius < s.max.x &&
     p.y + proxy.height > s.min.y && p.y < s.max.y);
+}
+
+/** Creel work line: tool arms on the host ahead, else the cabin when stopped. */
+function creelWork(state: GameState): string {
+  const arm = armTarget(state);
+  if (arm) return `<kbd>E</kbd> ${arm.refusal ? escapeHtml(arm.refusal) : `Tool arms · ${escapeHtml(SOURCES[arm.sourceId].label)} · ${ARM_LIFT_SECONDS} s · ${ARM_CHARGE}% power`}<br />`;
+  const near = armNearby(state);
+  if (near) return `<kbd>E</kbd> Turn the bow to ${escapeHtml(SOURCES[near].label)} for the tool arms<br />`;
+  const v = state.fleet.vehicles.find(a => a.id === state.player.controlledVehicleId);
+  if (!v || !fittedCabin(state, v)) return "";
+  const no = cabinEnterRefusal(state);
+  return `<kbd>E</kbd> ${no ? "Stop to enter cabin" : "Cabin · station held"}<br />`;
+}
+/** Specific verbs for B1 hosts and cabin fixtures; null keeps the generic verb. */
+function fixtureVerb(t: AimedTarget, state: GameState | null): string | null {
+  if (t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES]?.item === "tagged_frame" && t.verb === "collect") return "Lift · 10 s";
+  if (t.id.endsWith(":hatch")) return "Enter cabin";
+  if (!t.id.startsWith("cabin:")) return null;
+  const v = state ? cabinHull(state) : undefined;
+  return ({ "cabin:bunk": state?.player.mobileRefuge?.vehicleId === v?.id ? "Clear refuge registration" : "Register refuge",
+    "cabin:cooker": "Cook", "cabin:locker": "Open locker", "cabin:helm": "Take helm", "cabin:hatch": "Leave by hatch" } as Record<string, string>)[t.id] ?? null;
 }

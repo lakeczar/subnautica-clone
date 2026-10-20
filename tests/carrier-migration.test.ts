@@ -73,8 +73,8 @@ function assertMigrates(input: Schema2Envelope, legacyContent = false): SaveEnve
   // Every other field stays in comparison: vitals, fleet/cargo, inventory,
   // knowledge, tick and metadata.
   const expected = schema3Expected(source);
-  assert.equal(output.schemaVersion, 4);
-  assert.equal(output.contentVersion, "expedition.5");
+  assert.equal(output.schemaVersion, 5);
+  assert.equal(output.contentVersion, "expedition.6");
   expected.state.player.interiorPose!.position = { ...output.state.player.interiorPose!.position };
   expected.state.player.pose.position = { ...output.state.player.pose.position };
   expected.state.player.velocity = { x: 0, y: 0, z: 0 };

@@ -11,7 +11,7 @@ import { createGame } from "../src/sim/state.js";
 import { stepGame } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameState } from "../src/sim/types.js";
-import { historicalSchema3, schema2Fixture, type Schema3Envelope } from "./legacy-fixture-support.js";
+import { historicalSchema3, schema2Fixture, stripCreelAdditions, withCreel, type Schema3Envelope } from "./legacy-fixture-support.js";
 import { MemoryStorage, TestWriterLock } from "./persistence-support.js";
 
 const world = createWorldQueries();
@@ -21,9 +21,10 @@ const zero = () => RENEWABLE_SOURCE_IDS.map((id) => ({ id, progress: 0 }));
  * without the renewal field. Only pristine progress may be removed. */
 function schema3(s: GameState): Schema3Envelope {
   assert.deepEqual(s.world.renewal, zero());
-  const { renewal: _renewal, ...world } = structuredClone(s.world);
+  const current = stripCreelAdditions(s);
+  const { renewal: _renewal, ...world } = structuredClone(current.world);
   const old = { format: "siltwake.save", schemaVersion: 3, contentVersion: "expedition.4", meta: { ...meta },
-    state: { ...structuredClone(s), world } } as Schema3Envelope;
+    state: { ...structuredClone(current), world } } as Schema3Envelope;
   assert.ok(validExpedition4State(old.state), "fixture belongs to the frozen expedition.4 domain");
   return old;
 }
@@ -44,8 +45,8 @@ function progressed(): GameState {
 }
 function expectedCurrent(old: Schema3Envelope): SaveEnvelope {
   const { resources, ...rest } = structuredClone(old.state.world);
-  return { ...old, schemaVersion: 4, contentVersion: "expedition.5", meta: { ...old.meta },
-    state: { ...structuredClone(old.state), world: { resources, renewal: zero(), ...rest } } } as SaveEnvelope;
+  return withCreel({ ...old, schemaVersion: 4, contentVersion: "expedition.5", meta: { ...old.meta },
+    state: { ...structuredClone(old.state), world: { resources, renewal: zero(), ...rest } } });
 }
 
 test("schema3 / expedition.4 migrates by adding only zero renewal progress; depletion and every field are retained", () => {
@@ -143,7 +144,7 @@ test("Continue from a stored schema3 journal reads without writing; first save k
   assert.ok(committed.ok);
   const journal = JSON.parse(storage.getItem(LOCAL_SAVE_KEY)!);
   assert.equal(journal.previous, original, "the original expedition.4 generation remains byte-identical");
-  assert.equal(JSON.parse(journal.current).schemaVersion, 4);
+  assert.equal(JSON.parse(journal.current).schemaVersion, 5);
 });
 
 test("migrated state and its save → decode produce identical future execution with zero catch-up", () => {

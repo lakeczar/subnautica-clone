@@ -1,6 +1,6 @@
 /** Stable saved identifiers. Labels and render mesh names are never saved references.
  * Seeded from WORLD_PROGRESSION / EXPEDITION_INTEGRATION, not a recipe balance. */
-export const CONTENT_VERSION = "expedition.5" as const;
+export const CONTENT_VERSION = "expedition.6" as const;
 
 export const REGIONS = {
   refuge_reef: { label: "Hearth Reef", depth: [0, 65] },
@@ -91,7 +91,10 @@ export type HullId = keyof typeof HULLS;
 /** Conservative upright sweep envelopes enclose the authored hull silhouettes. */
 export const HULL_COLLIDERS = {
   dart: { radius: 3.6, height: 2.1 },
-  creel: { radius: 4.5, height: 3.6 },
+  // M2-B1: the drawn workboat is 3.9 × 6.6 m; 3.9 m bounds its rotated half-diagonal
+  // (√(1.95² + 3.3²) ≈ 3.83) at every heading. The fixture-era 4.5 m box snagged
+  // the slip rails and reef ribs beyond the visible hull.
+  creel: { radius: 3.9, height: 3.6 },
   hush: { radius: 3.6, height: 2.1 },
   spindle: { radius: 4, height: 1.7 },
   mantle: { radius: 4.5, height: 4 },
@@ -146,6 +149,11 @@ export const PLACES = {
     label: "Sediment boundary station",
     region: "silt_basin",
     position: { x: 216, y: -172, z: -240 },
+  },
+  canopy_stop: {
+    label: "Outer-crown service mooring",
+    region: "suspended_garden",
+    position: { x: 212, y: -138, z: -150 },
   },
 } as const satisfies Record<
   string,
@@ -214,13 +222,31 @@ export const ITEMS = {
   reserve_cell: { label: "Rechargeable reserve cell", cu: 2 },
   bobbin_kit: { label: "Bobbin / rescue collar", cu: 6 },
   dart_acoustic_trim: { label: "Dart acoustic trim", cu: 2 },
+  /** One salvaged, still-tagged structural member: structural alloy in an intact,
+   * bulky form. Not a ninth material; a workshop strips it to 8 loose alloy. */
+  tagged_frame: { label: "Tagged structural frame", cu: 10 },
+  creel_cargo_rack: { label: "Creel cargo rack", cu: 6 },
+  creel_cabin: { label: "Creel refuge cabin", cu: 8 },
 } as const;
 export type ItemKind = keyof typeof ITEMS;
-/** Installed references name ordinary cargo item instances; no separate fitting/container. */
+/** Alloy carried in one intact tagged frame. */
+export const FRAME_ALLOY = 8;
+/** Socket modules are ordinary hold items that keep counting in their hold
+ * (the M1 trim contract). The Creel's single major mount instead carries one
+ * fitted package (`fitted: "mount"`), outside cargo, which sets the hold size. */
 export const MODULES = {
-  dart_acoustic_trim: { hull: "dart", quietSpeed: 4.2, boostSpeed: 9 },
+  dart_acoustic_trim: { hull: "dart", slot: "socket", quietSpeed: 4.2, boostSpeed: 9 },
+  creel_cargo_rack: { hull: "creel", slot: "mount", holdCu: 96 },
+  creel_cabin: { hull: "creel", slot: "mount", holdCu: 40, lockerCu: 16 },
 } as const;
 export type ModuleKind = keyof typeof MODULES;
+export type MountKind = "creel_cargo_rack" | "creel_cabin";
+export const isMountKind = (kind: unknown): kind is MountKind =>
+  kind === "creel_cargo_rack" || kind === "creel_cabin";
+/** Base hold for each hull with no major mount fitted. */
+export const HULL_HOLD_CU = { dart: 32, creel: 64, hush: 32, spindle: 96, mantle: 32, hearthline: 256 } as const satisfies Record<HullId, number>;
+/** Only paid hull refits raise a hull above its initial rating. */
+export const HULL_REFITS = { dart: { recipe: "dart_350", rating: 350 }, creel: { recipe: "creel_350", rating: 350 } } as const;
 export type BlueprintId =
   | "bp_pod_checklist"
   | "bp_reef_recovery"
@@ -229,12 +255,14 @@ export type BlueprintId =
   | "bp_canopy_reinforcement"
   | "bp_creel_service"
   | "bp_carrier_basin"
-  | "bp_rift_pressure";
+  | "bp_rift_pressure"
+  | "bp_keel_survey";
 export type FacilityId =
   | "home_pod"
   | "pod_fabricator"
   | "island_workshop"
-  | "canopy_lab";
+  | "canopy_lab"
+  | "canopy_stop";
 export const BLUEPRINTS: readonly BlueprintId[] = [
   "bp_pod_checklist",
   "bp_reef_recovery",
@@ -244,21 +272,25 @@ export const BLUEPRINTS: readonly BlueprintId[] = [
   "bp_creel_service",
   "bp_carrier_basin",
   "bp_rift_pressure",
+  "bp_keel_survey",
 ];
-/** Knowledge for subsequent fleet/route construction; these are not fabricable hulls. */
+/** Retained research whose construction belongs to later tiers. Plans that are
+ * partly executable list only the part that is still future knowledge. */
 export const FUTURE_BLUEPRINTS = {
   bp_carrier_workshop: "Carrier workshop plans",
-  bp_creel_service: "Creel interior and service plans",
   bp_carrier_basin: "Carrier Basin frame and anchorage survey",
-  bp_rift_pressure: "Cool-flank pressure and service research",
+  bp_rift_pressure: "Cool-flank personal pressure research beyond 350 m",
 } as const;
+export type CostKind = MaterialId | "tagged_frame";
+export type HullOutput = "dart" | "creel";
+export type FabricationSite = "home_pod" | "pod_fabricator" | "island_workshop" | "canopy_stop";
 export interface Recipe {
   label: string;
-  cost: Partial<Record<MaterialId, number>>;
+  cost: Partial<Record<CostKind, number>>;
   bp: BlueprintId;
   needs: readonly string[];
-  site: "home_pod" | "pod_fabricator" | "island_workshop";
-  output: ItemKind | "dart" | "pod_repair" | "restore_workshop";
+  site: FabricationSite;
+  output: ItemKind | HullOutput | "pod_repair" | "restore_workshop" | "restore_canopy_stop" | "dart_350" | "creel_350";
   quantity: number;
   once: boolean;
   maintenance: boolean;
@@ -375,6 +407,85 @@ export const RECIPES = {
     once: true,
     maintenance: false,
   },
+  // M2-B1. Creel-first is legal: no recipe here needs the Dart.
+  creel_base: {
+    label: "Build Creel workboat / 240 m",
+    cost: { structural_alloy: 10, silica_glass: 4, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 },
+    bp: "bp_creel_service",
+    needs: ["restore_workshop", "suit_150"],
+    site: "island_workshop",
+    output: "creel",
+    quantity: 1,
+    once: false,
+    maintenance: false,
+  },
+  creel_cargo_rack: {
+    label: "Creel cargo rack / 96 CU hold",
+    cost: { structural_alloy: 4, buoyant_resin: 2 },
+    bp: "bp_creel_service",
+    needs: ["creel_base"],
+    site: "island_workshop",
+    output: "creel_cargo_rack",
+    quantity: 1,
+    once: true,
+    maintenance: false,
+  },
+  creel_cabin: {
+    label: "Creel refuge cabin / bunk, cooker, locker",
+    cost: { structural_alloy: 3, silica_glass: 3, flex_membrane: 4, conductive_crust: 1, buoyant_resin: 1 },
+    bp: "bp_creel_service",
+    needs: ["creel_base"],
+    site: "island_workshop",
+    output: "creel_cabin",
+    quantity: 1,
+    once: true,
+    maintenance: false,
+  },
+  strip_frame: {
+    label: "Strip one tagged frame / 8 loose alloy",
+    cost: { tagged_frame: 1 },
+    bp: "bp_carrier_basin",
+    needs: ["restore_workshop", "suit_350"],
+    site: "island_workshop",
+    output: "structural_alloy",
+    quantity: 8,
+    once: false,
+    maintenance: false,
+  },
+  restore_canopy_stop: {
+    label: "Restore outer-crown service mooring",
+    // One 14 CU diver load: the dark mooring's own locker is shut until restored.
+    cost: { tagged_frame: 1, silica_glass: 2, conductive_crust: 2 },
+    bp: "bp_canopy_reinforcement",
+    needs: ["essential_tools", "suit_350"],
+    site: "canopy_stop",
+    output: "restore_canopy_stop",
+    quantity: 1,
+    once: true,
+    maintenance: false,
+  },
+  creel_350: {
+    label: "Refit Creel hull / 350 m",
+    cost: { tagged_frame: 2, conductive_crust: 4, buoyant_resin: 2, flex_membrane: 2 },
+    bp: "bp_rift_pressure",
+    needs: ["creel_base", "suit_350"],
+    site: "island_workshop",
+    output: "creel_350",
+    quantity: 1,
+    once: false,
+    maintenance: false,
+  },
+  dart_350: {
+    label: "Refit Dart hull / 350 m",
+    cost: { tagged_frame: 1, conductive_crust: 3, buoyant_resin: 2, silica_glass: 1 },
+    bp: "bp_keel_survey",
+    needs: ["dart_base", "suit_350"],
+    site: "island_workshop",
+    output: "dart_350",
+    quantity: 1,
+    once: false,
+    maintenance: false,
+  },
 } as const satisfies Record<string, Recipe>;
 export type RecipeId = keyof typeof RECIPES;
 
@@ -382,7 +493,7 @@ export interface SourceDefinition {
   label: string;
   region: RegionId;
   position: { x: number; y: number; z: number };
-  item: MaterialId | "meal";
+  item: MaterialId | "meal" | "tagged_frame";
   stock: number;
   reserve: number;
   bundle: number;
@@ -685,6 +796,70 @@ export const SOURCES = {
     scan: "An independent western fin patch remains on the first Dart-accessible shelf. Read the host above the sediment before descending.",
     asset: "crust",
   },
+  // M2-B1 second membrane family: finite margin catches on the clear eastern
+  // crowns. Old shed, held by tether nets on two mineral ribs; it does not regrow.
+  canopy_ribbon_margin_north: {
+    label: "Northern margin ribbon net",
+    region: "suspended_garden",
+    position: { x: 223.6, y: -122, z: -130 },
+    item: "flex_membrane",
+    stock: 10,
+    reserve: 6,
+    bundle: 4,
+    context: "Shed filter ribbons drift out of the crowns and snag in the old tether net on this clear-water rib.",
+    scan: "Clear margin water carries loose ribbons from distant colonies. This net holds years of drift: finite, separate from the living reef catches.",
+    asset: "margin",
+  },
+  canopy_ribbon_margin_south: {
+    label: "Southern margin ribbon net",
+    region: "suspended_garden",
+    position: { x: 237.4, y: -128, z: -178 },
+    item: "flex_membrane",
+    stock: 10,
+    reserve: 6,
+    bundle: 4,
+    context: "A second margin rib, beside the outer return lane, holds its own tangle of shed ribbon.",
+    scan: "Two separate margin nets keep seal material within the 150 m suit envelope. Neither regrows; the reef catches still do.",
+    asset: "margin",
+  },
+  // Tagged frames: intact survey-frame members with service tags. Finite, no
+  // reserve. A diver lifts one in 10 s; a nearby Creel's arms take it directly.
+  basin_frame_ridge: {
+    label: "Tagged frame stack · ridge",
+    region: "silt_basin",
+    position: { x: 226, y: -171, z: -206 },
+    item: "tagged_frame",
+    stock: 3,
+    reserve: 0,
+    bundle: 1,
+    context: "Spare survey-frame members, still strapped and tagged, rest on the stable ridge beside the fallen dish.",
+    scan: "Each tagged member is one bulky 10 CU frame (8 alloy). A diver can lift one at a time; a workboat's arms load them straight into its hold.",
+    asset: "frames",
+  },
+  basin_frame_terrace: {
+    label: "Tagged frame stack · south terrace",
+    region: "silt_basin",
+    position: { x: 190, y: -198, z: -252 },
+    item: "tagged_frame",
+    stock: 3,
+    reserve: 0,
+    bundle: 1,
+    context: "Frame members slid from the station gantry onto the lower terrace, below the Dart's 180 m hull.",
+    scan: "The terrace lies beyond 180 m. A Creel reaches it; a Dart pilot parks on the ridge and lifts by suit.",
+    asset: "frames",
+  },
+  basin_frame_fracture: {
+    label: "Tagged frame spill · fracture",
+    region: "silt_basin",
+    position: { x: 196, y: -262, z: -293 },
+    item: "tagged_frame",
+    stock: 4,
+    reserve: 0,
+    bundle: 1,
+    context: "The slope break carried a whole gantry bay into the fracture floor.",
+    scan: "Fracture floor, about 260 m: beyond a 240 m Creel. A 350 m hull can work it directly; otherwise lift by suit from the lip.",
+    asset: "frames",
+  },
 } as const satisfies Record<string, SourceDefinition>;
 export type SourceId = keyof typeof SOURCES;
 /** Siltwake design, not a claim about another game: only these living sheds regrow,
@@ -745,7 +920,7 @@ export const EVIDENCE = {
     provenance: "Upper Canopy / field sheet and present fauna distribution",
     hypothesis:
       "Changing water chemistry may precede machinery failure. Predator avoidance is another possibility to investigate.",
-    lead: "Beyond the lower Canopy crowns, fallen survey dishes mark the edge of Pale Basin. The field sheet leaves that water an open question.",
+    lead: "Beyond the lower Canopy crowns, fallen survey dishes mark the edge of Pale Basin. The field sheet leaves that water an open question. Its service log names a dark mooring on the clear eastern margin, below the outer return.",
   },
   C05: {
     label: "Inward transfer tags",
@@ -781,6 +956,29 @@ export const OPTIONAL_RECORD = {
 export const DART_BUILD_POSE = { x: 20, y: -1.6, z: -22 } as const;
 /** Fabrication only: saved hulls and makeVehicle's neutral heading stay intact. */
 export const DART_BUILD_YAW = Math.PI;
+/** M2-B1 medium slip west of the workshop landing, clear of the Dart cradle,
+ * reef ribs and the starter rescue approach. Keel reference, metres. */
+export const CREEL_BUILD_POSE = { x: -6, y: -3.2, z: -26 } as const;
+export const CREEL_BUILD_YAW = Math.PI;
+export const HULL_BUILD = {
+  dart: { pose: DART_BUILD_POSE, yaw: DART_BUILD_YAW },
+  creel: { pose: CREEL_BUILD_POSE, yaw: CREEL_BUILD_YAW },
+} as const;
+/** Ordinary technical records: plates and logs, not story clues. Inspecting one
+ * keeps its ID in knowledge.scans and grants the listed plans, order-independent. */
+export const TECH_RECORDS = {
+  basin_keel_plate: {
+    label: "Survey dish keel plate",
+    region: "silt_basin",
+    position: { x: 172, y: -199.3, z: -256 },
+    text: "Pressure-ring plate from the fallen dish keel: a compact scout hull ring rated to 350 m, refitted from one tagged frame with fin crust and cured resin.",
+    blueprints: ["bp_keel_survey"],
+  },
+} as const satisfies Record<string, { label: string; region: RegionId; position: { x: number; y: number; z: number };
+  text: string; blueprints: readonly BlueprintId[] }>;
+export type TechRecordId = keyof typeof TECH_RECORDS;
+export const techRecord = (id: unknown): id is TechRecordId =>
+  typeof id === "string" && Object.hasOwn(TECH_RECORDS, id);
 export interface InteractionHostDefinition {
   offset?: { x: number; y: number; z: number };
   radius?: number;
@@ -816,6 +1014,13 @@ export const INTERACTION_HOSTS: Readonly<Record<string, InteractionHostDefinitio
   basin_ridge_salvage_south: { offset: { x: 0, y: 0.15, z: 0 }, radius: 1.1, renderOffsetY: 0 },
   basin_survey_fins_east: { offset: { x: 0, y: 0.25, z: 0 }, radius: 0.9, renderOffsetY: 0 },
   basin_survey_fins_west: { offset: { x: 0, y: 0.25, z: 0 }, radius: 0.9, renderOffsetY: 0 },
+  canopy_ribbon_margin_north: { offset: { x: 0, y: 0.35, z: 0 }, radius: 0.9 },
+  canopy_ribbon_margin_south: { offset: { x: 0, y: 0.35, z: 0 }, radius: 0.9 },
+  basin_frame_ridge: { offset: { x: 0, y: 0.35, z: 0 }, radius: 1.2, renderOffsetY: 0 },
+  basin_frame_terrace: { offset: { x: 0, y: 0.35, z: 0 }, radius: 1.2, renderOffsetY: 0 },
+  basin_frame_fracture: { offset: { x: 0, y: 0.35, z: 0 }, radius: 1.2, renderOffsetY: 0 },
+  basin_keel_plate: { offset: { x: 0, y: 0.2, z: 0 }, radius: 0.8 },
+  canopy_stop_services: { offset: { x: 0, y: 0.9, z: 0 }, radius: 0.7 },
 };
 export const RECOVERY_STAGE = { x: 46, y: -12, z: -54 } as const;
 export const CANOPY_COVER = {

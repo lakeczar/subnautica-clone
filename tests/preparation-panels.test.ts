@@ -457,7 +457,7 @@ test("M2 notebook preserves C06-first provenance, observation and inference, sho
   assert.match(html(), /D−12 profile; D0 \+00:35 trace and fractured slope/);
   assert.match(html(), /<b>Observed<\/b>.*Profiles dated/);
   assert.match(html(), /<b>Hypothesis<\/b>.*do not establish the extraction history/);
-  assert.match(html(), /Cool-flank pressure and service research/);
+  assert.match(html(), /Cool-flank personal pressure research beyond 350 m/);
   assert.match(html(), /Research knowledge · construction not available yet/);
   assert.doesNotMatch(html(), /id="finding-C04"|id="finding-C05"/);
   assert.ok(!commands().some(c => c.type === "craft"));
@@ -465,7 +465,7 @@ test("M2 notebook preserves C06-first provenance, observation and inference, sho
   discover(s, "C05"); discover(s, "C04"); panel.refresh("notebook", s);
   assert.deepEqual(s.knowledge.evidence[0], recorded[0], "later context cannot rewrite the early finding");
   assert.match(html(), /dated water change and inward movement are separate facts/);
-  assert.match(html(), /Creel interior and service plans/);
+  assert.match(html(), /Creel workboat/);
   assert.match(html(), /Carrier Basin frame and anchorage survey/);
   assert.doesNotMatch(html(), /Basin.*(?:not yet open|future expedition|later expedition)/);
 });
@@ -542,7 +542,7 @@ test("recovery names where an unknown Bobbin plan comes from; known habitats dis
   assert.doesNotMatch(html(), /\d+:\d\d|seconds? (?:left|remaining)|minutes?/i, "no regrowth countdown clutter");
 });
 
-test("the fabricator lists only known plans; Basin plans stay research without construction rows", (t) => {
+test("the fabricator lists only known plans; Basin plans add exactly the earned Creel rows, and carrier plans stay research", (t) => {
   const { panel, html } = panelFixture(t);
   const s = createGame(); completeOpening(s);
   panel.refresh("craft", s);
@@ -550,8 +550,10 @@ test("the fabricator lists only known plans; Basin plans stay research without c
   assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells"]));
   for (const id of ["C05", "C06"] as const) discover(s, id);
   panel.refresh("craft", s);
-  assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells"]), "Basin clues add no executable row");
+  // M2-B1: C05 pays off as the Creel, its two mounts and frame stripping; C06 as the Creel 350 refit.
+  assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells",
+    "creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "creel_350"]), "Basin clues add the earned workboat rows");
   panel.refresh("notebook", s);
-  assert.match(html(), /Plans retained · 3/);
+  assert.match(html(), /Plans retained · 2/);
   assert.match(html(), /Research knowledge · construction not available yet\./);
 });

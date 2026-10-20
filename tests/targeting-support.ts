@@ -77,4 +77,13 @@ export const NORMAL_VIEWS: readonly { id: string; position: Vec3; mode: Movement
   { id: "C06", position: { ...BASIN_GEOMETRY.station.workPose }, mode: "swimming" },
   // Additional view of the same stable host; keep the submerged M1 pose above.
   { id: "rescue_staging", position: { ...RECOVERY_SURFACE_OPERATOR, z: RECOVERY_SURFACE_OPERATOR.z + 2.5 }, mode: "swimming" },
+  // M2-B1 hosts: margin nets from clear water west of each ledge, frame stacks
+  // from just above their ledges, the keel plate and the mooring deck.
+  { id: "canopy_ribbon_margin_north", position: { x: 220.6, y: -121.6, z: -130 }, mode: "swimming" },
+  { id: "canopy_ribbon_margin_south", position: { x: 234.4, y: -127.6, z: -178 }, mode: "swimming" },
+  { id: "basin_frame_ridge", position: { x: 226, y: -169.6, z: -203 }, mode: "swimming" },
+  { id: "basin_frame_terrace", position: { x: 190, y: -196.6, z: -249 }, mode: "swimming" },
+  { id: "basin_frame_fracture", position: { x: 196, y: -260.6, z: -290 }, mode: "swimming" },
+  { id: "basin_keel_plate", position: { x: 172, y: -197.9, z: -253 }, mode: "swimming" },
+  { id: "canopy_stop_services", position: { x: 204, y: -137.9, z: -147.2 }, mode: "swimming" },
 ];

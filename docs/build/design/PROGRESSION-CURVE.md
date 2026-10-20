@@ -131,3 +131,23 @@ Recommendation: keep C03 = workshop + Dart; keep runtime canon C05 = Creel and s
 Optional Hush (Canopy) and Spindle (island) can join from step 2 onward.
 
 Each step needs one useful mission before the next improvement, and an ordinary-input round trip with the recorded return margin. Renewal stays outside every solvency claim.
+
+## 5. M2-B1 implemented: earned Creel, mounts, refuge, frames, mooring
+
+Claude Opus 5.5 / high, 2026-10-20, branch `t3/earned-creel-mobile-refuge-loop` on parent `7bd259c`. Runtime-checked by `tests/m2-b1-*.test.ts` and `scripts/check-m2-b1-economy.mjs`; play evidence in [M2-B1-OPUS](../evidence/M2-B1-OPUS.md). This replaces the §4 step 1–2 proposal where they differ; carrier, Hush/Spindle, Rift/Divide/District remain planned.
+
+| Item | Plan / source | Needs | Cost (A/G/M/C/R/frame) | Bench | Result |
+| --- | --- | --- | --- | --- | --- |
+| `creel_base` | `bp_creel_service` / C05 | restored workshop, suit 150 | 10/4/4/4/2/– | workshop medium slip | 240 m workboat, 64 CU bare hold, tool arms. **No Dart required.** |
+| `creel_cargo_rack` | C05 | Creel | 4/–/–/–/2/– | workshop | major mount: 96 CU hold |
+| `creel_cabin` | C05 | Creel | 3/3/4/1/1/– | workshop | major mount: 40 CU hold, dry cabin, bunk registration, galley, 16 CU locker |
+| `strip_frame` | `bp_carrier_basin` / C05 | workshop, suit 350 | –/–/–/–/–/1 | workshop | 8 loose alloy (frames are alloy in bulky 10 CU form, not a ninth material) |
+| `restore_canopy_stop` | C04 field sheet | tools, suit 350 | –/2/–/2/–/1 | mooring mast (138 m) | hull service, cell charging, 48 CU locker, mount changes; **no air** |
+| `creel_350` | `bp_rift_pressure` / C06 | Creel, suit 350 | –/–/2/4/2/2 | workshop slip | Creel hull 350 m (frame investment, returned on salvage) |
+| `dart_350` *(optional)* | `bp_keel_survey` / keel plate on the south terrace (~199 m) | Dart, suit 350 | –/1/–/3/2/1 | workshop cradle | Dart hull 350 m |
+
+Sources added (all finite, none renew): two margin ribbon nets, 10 + 6 reserve membrane each, ≤ 128 m in clear eastern Canopy water (the specified second membrane family); three tagged-frame hosts: ridge 3 (171 m, Dart-reachable), south terrace 3 (198 m, beyond a 180 m Dart), fracture floor 4 (262 m, beyond a 240 m Creel; reachable by a 350 m hull or a suited lift from the 230 m lip). **10 frames finite**: required B1 use 3 (mooring 1, Creel 350 2), optional 1 (Dart 350), leaving 6 (48 alloy) for the carrier frame work. No buoy or Creel is a recipe dependency of anything else.
+
+Order check (`scripts/check-m2-b1-economy.mjs`, zero renewal, staged positions): **Creel-first** (no Dart) 15 crafts and **Dart-first** 18 crafts both complete required + optional purchases from finite exposed stock, then lose the refitted Creel in the fracture and rebuild it entirely from the in-place salvage canister (76 CU, 6 diver trips, no new gathering). Same useful load (3 frames + 16 alloy) costs **3 transfers with a rack-fitted Creel vs 12 with Dart + buoy**, and the Dart route overflows 4 alloy.
+
+Unlock-pile disposition: C03 still gives workshop + Dart; C04 now adds only the mooring restoration to the trim/suit 350 pair; C05 gives the Creel family; C06 the Creel 350 refit; Dart 350 moved to a physical keel-plate record, as recommended in §4.

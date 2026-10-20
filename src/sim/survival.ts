@@ -1,4 +1,4 @@
-import { CANOPY_COVER, HULLS, THREAT_HOME } from "../content/registry.js";
+import { CANOPY_COVER, THREAT_HOME } from "../content/registry.js";
 import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
 import { createWorldQueries } from "./world.js";
 import { moveHunter } from "./hunter.js";
@@ -11,6 +11,7 @@ import {
 } from "./inventory.js";
 import { personalDepth, personalLimit } from "./capabilities.js";
 import { hullDepth } from "./vehicles.js";
+import { cabinHull, cabinPowered } from "./fleet.js";
 import { disableVehicle, incapacitate } from "./recovery.js";
 const DT = 1 / 60;
 export const SUIT_OXYGEN_DRAIN_PER_SECOND = 100 / 180;
@@ -23,23 +24,27 @@ export function exposure(s: GameState): {
   refuge: boolean;
 } {
   const p = s.player.pose.position;
+  const cabin = cabinHull(s);
   const refuge =
     nearPod(s) ||
     (nearWorkshop(s) && facility(s, "island_workshop")) ||
     inCanopyAir(s) ||
-    (s.player.mode === "interior" &&
+    (!!cabin && cabinPowered(cabin)) ||
+    (!cabin && s.player.mode === "interior" &&
       !!s.player.interiorId &&
       s.fleet.docking?.stationKeeping === true);
-  const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
+  // An occupied hull keeps its occupant dry: the pilot seat, or a fitted cabin.
+  const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId) ?? cabin;
   const airwayY = p.y + (s.player.mode === "swimming" ? 0.85 : 1.55),
     pressureDepth = personalDepth(p);
   return {
     pressureDepth,
     airwayY,
     waterContact: p.y + 0.4 < 0 && !refuge && !v,
+    // A sealed cabin breathes its own powered or emergency supply, never the airway rule.
     breathable:
       refuge ||
-      airwayY >= 0 ||
+      (airwayY >= 0 && !cabin) ||
       (!!v && ((v.charge > 0 && !v.disabled) || v.emergencyAir > 0)),
     refuge,
   };
@@ -49,18 +54,18 @@ export function airSupply(s: GameState): {
   kind: "craft" | "refuge" | "surface" | "emergency" | "suit";
   remainingSeconds: number | null;
 } {
-  const v = s.fleet.vehicles.find(v => v.id === s.player.controlledVehicleId),
+  const cabin = cabinHull(s), v = s.fleet.vehicles.find(v => v.id === s.player.controlledVehicleId) ?? cabin,
     e = exposure(s);
-  if (v && v.charge > 0 && !v.disabled) return { kind: "craft", remainingSeconds: null };
+  if (v && !cabin && v.charge > 0 && !v.disabled) return { kind: "craft", remainingSeconds: null };
   if (e.refuge) return { kind: "refuge", remainingSeconds: null };
-  if (e.airwayY >= 0) return { kind: "surface", remainingSeconds: null };
+  if (e.airwayY >= 0 && !cabin) return { kind: "surface", remainingSeconds: null };
   if (v && v.emergencyAir > 0) return { kind: "emergency", remainingSeconds: v.emergencyAir };
   return { kind: "suit", remainingSeconds: s.player.vitals.oxygen / SUIT_OXYGEN_DRAIN_PER_SECOND };
 }
 export function updateSurvival(s: GameState, events: GameEvent[]): void {
   if (s.opening.phase < 4) return;
   const p = s.player,
-    v = s.fleet.vehicles.find((v) => v.id === p.controlledVehicleId),
+    v = s.fleet.vehicles.find((v) => v.id === p.controlledVehicleId) ?? cabinHull(s),
     e = exposure(s),
     before = p.vitals.oxygen,
     foodBefore = p.vitals.food;
@@ -73,10 +78,10 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
     p.vitals.health -= (5 + (e.pressureDepth - personalLimit(s)) * 0.22) * DT;
   if (v) {
     const depth = hullDepth(v);
-    if (v.hull !== "spindle" && depth > HULLS[v.hull].initialDepth)
+    if (v.hull !== "spindle" && depth > v.rating)
       v.health = Math.max(
         0,
-        v.health - (3 + (depth - HULLS[v.hull].initialDepth) * 0.1) * DT,
+        v.health - (3 + (depth - v.rating) * 0.1) * DT,
       );
     if (v.hull === "spindle" && depth > 1)
       v.health = Math.max(0, v.health - 20 * DT);
@@ -88,7 +93,8 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
         type: "notice",
         channel: "hazard", context: "hull",
         message:
-          "Hull disabled. Emergency air is limited. Use a protected exit and return with the reusable rescue collar.",
+          cabinHull(s) ? "Hull disabled. The cabin is on its labelled emergency air. Leave by the hatch with a protected exit and return with the rescue collar."
+            : "Hull disabled. Emergency air is limited. Use a protected exit and return with the reusable rescue collar.",
         error: true,
       });
     }
@@ -130,7 +136,7 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
     if (e.pressureDepth > personalLimit(s) && !v)
       events.push({ type: "sound", cue: "warning" });
     if (v && v.charge < 25) events.push({ type: "sound", cue: "warning" });
-    if (v && v.hull !== "spindle" && hullDepth(v) > HULLS[v.hull].initialDepth * 0.85)
+    if (v && v.hull !== "spindle" && hullDepth(v) > v.rating * 0.85)
       events.push({ type: "sound", cue: "warning" });
   }
   if (p.vitals.health <= 0) {
@@ -224,7 +230,7 @@ export function updateThreat(
   if (motion.contact.biting && !behindCover(p, t.position) && !exposure(s).refuge && !t.distraction) {
     const v = s.fleet.vehicles.find(
       (v) => v.id === s.player.controlledVehicleId,
-    );
+    ) ?? cabinHull(s);
     if (v) {
       const before = v.health;
       v.health = Math.max(0, v.health - 12 * DT);

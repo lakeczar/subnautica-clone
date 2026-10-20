@@ -86,7 +86,7 @@ test("both Canopy approaches, Basin leg and alternate return sweep the actual Da
   }
   assert.ok(WORLD_BOUNDS.minZ < LEGACY_WORLD_BOUNDS.minZ && WORLD_BOUNDS.maxX > LEGACY_WORLD_BOUNDS.maxX);
   assert.ok(!world.clearance({ x: 230, y: WORLD_VERTICAL_BOUNDS.minY - .1, z: -250 }, { radius: .34, height: .95 }));
-  assert.equal(world.moveCapsule({ x: 230, y: -239, z: -250 }, { x: 0, y: -5, z: 0 }, { radius: .34, height: .95 }).position.y, -240);
+  assert.equal(world.moveCapsule({ x: 230, y: WORLD_VERTICAL_BOUNDS.minY + 1, z: -250 }, { x: 0, y: -5, z: 0 }, { radius: .34, height: .95 }).position.y, WORLD_VERTICAL_BOUNDS.minY);
   for (const pad of BASIN_GEOMETRY.terrainPads) for (const [x, z] of [[pad.minX, pad.minZ], [pad.maxX, pad.maxZ], [(pad.minX + pad.maxX) / 2, (pad.minZ + pad.maxZ) / 2]])
     assert.ok(terrainHeight(x!, z!) >= pad.y, "no accessible hollow beneath a new recovery obstruction");
 });
@@ -157,7 +157,9 @@ test("real flooded hosts are aimable from clear work poses, retain either eviden
     assert.deepEqual(s.knowledge.evidence.slice(-2).map(e => e.id), order);
     assert.equal(s.knowledge.journals.length, 0); assert.ok(!s.knowledge.markers.includes("home_pod") || s.knowledge.markers.length <= Object.keys(PLACES).length);
     for (const bp of ["bp_creel_service", "bp_carrier_basin", "bp_rift_pressure"] as const) assert.ok(s.knowledge.blueprints.includes(bp));
-    assert.ok(Object.values(RECIPES).every(r => r.output !== ("hearthline" as string) && r.output !== ("creel" as string)));
+    // M2-B1: C05's service plans now build the Creel; the carrier remains future knowledge.
+    assert.ok(Object.values(RECIPES).every(r => r.output !== ("hearthline" as string)));
+    assert.equal(RECIPES.creel_base.bp, "bp_creel_service");
     assert.ok(Object.hasOwn(FUTURE_BLUEPRINTS, "bp_carrier_basin"));
     assert.equal(BASIN_GEOMETRY.airVolumes.length, 0); assert.ok(SOLIDS.some(s => s.id === "basin.station.console"));
   }
