@@ -1,5 +1,4 @@
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
-import type { Geometry } from "@babylonjs/core/Meshes/geometry.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import "@babylonjs/core/Meshes/thinInstanceMesh.js";
@@ -26,29 +25,29 @@ export function uploadMesh(recipe: MeshRecipe, name: string, scene: Scene, mater
   return mesh;
 }
 
-/** Shared template geometry, one disabled source mesh per template and LOD.
- * Chunk batches share the source geometry's GPU buffers; only their
- * per-instance matrices and tints are per chunk. */
+/** Shared template recipes. Babylon stores thin-instance buffers on the
+ * GEOMETRY, so two batches can never share one Geometry: each batch gets its
+ * own geometry built from the template's same typed arrays. Babylon keeps a
+ * reference, not a copy, so CPU memory is shared and only the template's
+ * small vertex buffers repeat on the GPU (counted in each unit's gpuBytes). */
 export class TemplateLibrary {
-  private readonly sources = new Map<string, Mesh>();
+  private readonly recipes = new Map<string, MeshRecipe>();
+  /** CPU bytes of every template recipe, held once. */
   readonly bytes: number;
-  constructor(scene: Scene, material: ShaderMaterial, templates: readonly TemplateRecipe[]) {
+  constructor(templates: readonly TemplateRecipe[]) {
     let bytes = 0;
     for (const t of templates) for (const lod of ["fine", "coarse"] as const) {
-      const mesh = uploadMesh(t[lod], `kit.template.${t.id}.${lod}`, scene, material);
-      mesh.setEnabled(false);
-      this.sources.set(`${t.id}@${lod}`, mesh);
+      this.recipes.set(`${t.id}@${lod}`, t[lod]);
       bytes += meshBytes(t[lod]);
     }
     this.bytes = bytes;
   }
-  geometry(id: string, lod: LodLevel): Geometry {
-    const g = this.sources.get(`${id}@${lod}`)?.geometry;
-    if (!g) throw new Error(`Unknown kit template ${id}@${lod}`);
-    return g;
+  recipe(id: string, lod: LodLevel): MeshRecipe {
+    const r = this.recipes.get(`${id}@${lod}`);
+    if (!r) throw new Error(`Unknown kit template ${id}@${lod}`);
+    return r;
   }
-  has(id: string): boolean { return this.sources.has(`${id}@fine`); }
-  dispose(): void { for (const m of this.sources.values()) m.dispose(); this.sources.clear(); }
+  has(id: string): boolean { return this.recipes.has(`${id}@fine`); }
 }
 
 export interface KitLoaderStats { live: number; meshes: number }
@@ -71,28 +70,26 @@ export function createKitLoader(options: {
     for (const m of recipe.meshes) meshes.push(uploadMesh(m, `${chunk.id}.${lod}.${m.name}`, scene, material));
     for (const batch of recipe.instances) {
       if (!batch.matrices.length) continue;
-      const mesh = new Mesh(`${chunk.id}.${lod}.${batch.template}`, scene);
-      templates.geometry(batch.template, lod).applyToMesh(mesh);
+      const mesh = uploadMesh(templates.recipe(batch.template, lod), `${chunk.id}.${lod}.${batch.template}`, scene, material);
+      mesh.unfreezeWorldMatrix();
       mesh.thinInstanceSetBuffer("matrix", batch.matrices, 16, true);
       if (batch.tints) mesh.thinInstanceSetBuffer("instanceColor", batch.tints, 4, true);
       mesh.thinInstanceRefreshBoundingInfo();
-      mesh.material = material;
-      mesh.isPickable = false;
-      mesh.renderingGroupId = KIT_RENDERING_GROUP;
       mesh.freezeWorldMatrix();
       meshes.push(mesh);
     }
     for (const m of meshes) m.metadata = { chunk: chunk.id, region: chunk.region, lod };
     stats.live++; stats.meshes += meshes.length;
     let disposed = false;
+    // Template vertex buffers are per batch on the GPU, shared on the CPU.
+    const templateGpu = recipe.instances.reduce((n, i) => n + (i.matrices.length ? meshBytes(templates.recipe(i.template, lod)) : 0), 0);
     return {
       cpuBytes: bytes,
-      gpuBytes: bytes,
+      gpuBytes: bytes + templateGpu,
       setVisible(visible) { for (const m of meshes) m.setEnabled(visible); },
       dispose() {
         if (disposed) return;
         disposed = true;
-        // Shared template geometry survives: its source mesh still holds it.
         for (const m of meshes) m.dispose(false, false);
         stats.live--; stats.meshes -= meshes.length;
       },
@@ -114,9 +111,10 @@ export function createKitLoader(options: {
       }
       const recipe: ChunkRecipe = { meshes, instances };
       const bytes = meshes.reduce((n, m) => n + meshBytes(m), 0) + instances.reduce((n, i) => n + instanceBytes(i), 0);
+      const templateGpu = instances.reduce((n, i) => n + (i.matrices.length ? meshBytes(templates.recipe(i.template, lod)) : 0), 0);
       const prepared: PreparedArt = {
         cpuBytes: bytes,
-        gpuBytes: bytes,
+        gpuBytes: bytes + templateGpu,
         upload: () => upload(chunk, lod, recipe, bytes),
         discard() { /* plain arrays: dropping the reference frees them */ },
       };

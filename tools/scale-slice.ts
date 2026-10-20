@@ -46,7 +46,7 @@ const instrumentation = new SceneInstrumentation(scene);
 // World, residency and kit.
 const layout = createSliceLayout({ density: num("density", 1), setPieces: num("setpieces", 0.25), parts: num("parts", 240) });
 const map = createWorldMap(layout, sliceEntries());
-const templates = new TemplateLibrary(scene, kit, templateRecipes());
+const templates = new TemplateLibrary(templateRecipes());
 const loader = createKitLoader({ scene, material: kit, templates, factories: KIT_FACTORIES, context: defaultContext(sliceFloor) });
 const residency = createResidency({
   map, loader,

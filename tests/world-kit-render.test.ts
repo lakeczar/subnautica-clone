@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { createCelMaterial } from "../src/render/materials.js";
 import { createKitMaterial } from "../src/render/kit/material.js";
 import { createKitLoader, TemplateLibrary } from "../src/render/kit/loader.js";
@@ -49,9 +50,9 @@ test("factories are deterministic and coarse scatter is a subset of fine", () =>
     assert.equal(t.positions[v * 3 + 1], Math.fround(sliceFloor(t.positions[v * 3]!, t.positions[v * 3 + 2]!)));
 });
 
-test("kit uploads share template geometry and dispose back to the baseline", () => withScene(scene => {
+test("kit batches own geometry over shared template arrays and dispose back to the baseline", () => withScene(scene => {
   const kit = createKitMaterial(scene, createCelMaterial(scene));
-  const templates = new TemplateLibrary(scene, kit, templateRecipes());
+  const templates = new TemplateLibrary(templateRecipes());
   const baseline = { meshes: scene.meshes.length, geometries: scene.geometries.length };
   const loader = createKitLoader({ scene, material: kit, templates, factories: KIT_FACTORIES, context: ctx });
   const chunk = map.chunkAt({ x: 0, y: -10, z: 14 })!;
@@ -60,24 +61,28 @@ test("kit uploads share template geometry and dispose back to the baseline", () 
   const art = prepared.upload();
   const own = scene.meshes.filter(m => m.name.startsWith(`${chunk.id}.fine.`));
   assert.ok(own.some(m => m.name.endsWith(".terrain.fine")), "terrain mesh");
-  const batches = own.filter(m => m.hasThinInstances);
+  const batches = own.filter(m => m.hasThinInstances) as Mesh[];
   assert.ok(batches.length >= 3, `instance batches ${batches.length}`);
+  // Babylon keeps thin-instance buffers on the geometry: each batch owns one,
+  // built over the template's shared CPU arrays.
+  assert.equal(new Set(batches.map(b => b.geometry)).size, batches.length, "one geometry per batch");
   for (const b of batches) {
-    const template = scene.getMeshByName(`kit.template.${b.name.slice(`${chunk.id}.fine.`.length)}.fine`)!;
-    assert.equal(b.geometry === template.geometry, true, `${b.name} shares its template geometry`);
+    const template = templates.recipe(b.name.slice(`${chunk.id}.fine.`.length), "fine");
+    assert.equal(b.getVerticesData("position", false, false) === template.positions, true, `${b.name} shares template positions`);
+    assert.equal(b.thinInstanceCount > 0, true);
   }
-  assert.equal(scene.geometries.length - baseline.geometries, own.length - batches.length, "only merged meshes add geometry");
+  assert.equal(scene.geometries.length - baseline.geometries, own.length, "one geometry per mesh");
+  assert.equal(art.gpuBytes > prepared.cpuBytes, true, "per-batch template buffers are counted on the GPU");
   art.setVisible(false);
   assert.equal(own.every(m => !m.isEnabled()), true);
   art.dispose();
   assert.deepEqual({ meshes: scene.meshes.length, geometries: scene.geometries.length }, baseline);
-  assert.equal(templates.geometry("frond.tall", "fine").isDisposed(), false, "templates survive chunk disposal");
   assert.equal(loader.stats.live, 0);
 }));
 
 test("ADVERSE (real kit): fast traversal with pending construction leaves no stray meshes", () => withScene(scene => {
   const kit = createKitMaterial(scene, createCelMaterial(scene));
-  const templates = new TemplateLibrary(scene, kit, templateRecipes());
+  const templates = new TemplateLibrary(templateRecipes());
   const baseline = { meshes: scene.meshes.length, geometries: scene.geometries.length };
   const loader = createKitLoader({ scene, material: kit, templates, factories: KIT_FACTORIES, context: ctx });
   const residency = createResidency({ map, loader,
