@@ -187,3 +187,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **Owner design interview → [GAME-DIRECTION](GAME-DIRECTION.md)** (2026-10-20). Started LC (large-cave technology), SYS-1 (upgrades and power) and SYS-2 (outposts, decoder, cultivation, survey, chart, journal, timeline), in new files only. Builders 5 of 5: C3, W1-pre, LC, SYS-1, SYS-2.
 - **W1-pre R2 fixes done** at `0fc6c40`: owner chosen per sub-sweep (0.5 m steps, every exterior solid kept), and a pinned lamp-skin oracle; 766 tests pass. Sol R3 running.
 - **W1-pre R3 (Sol): accept** (`review/w1-pre-r3` `2b57b8f`). Integrated at the merge of `0fc6c40`: 781 tests pass, build OK. P3 W1-PRE-06: use the 8 m cave index at integration (diver move plus support 42.9 → 18.9 µs).
+- **CB started:** a region content bible (lore and world) per region plus the 4 cave biomes, with typed proposals in `src/content/proposals/*`. Builders 5 of 5: C3, LC, SYS-1, SYS-2, CB.

@@ -24,6 +24,7 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 | LC: large-cave technology proof (Canopy root caves, 250 m) | `siltwake-lc-large-cave-tech-opus-7519cfb` | Building |
 | SYS-1: fleet upgrades (common pool and signature upgrades) and power | `siltwake-sys1-upgrades-power-opus-7519cfb` | Building |
 | SYS-2: outposts, decoder, cultivation, survey, chart, journal, play timeline | `siltwake-sys2-bases-knowledge-opus-7519cfb` | Building |
+| CB: region content bible (landmarks, caves, creatures, resources, lost sites, 4 cave biomes) | `siltwake-cb-content-bible-opus-fc2f611` | Building |
 
 P1 (the playthrough harness) was accepted at R5 and integrated at `73d347a`.
 
