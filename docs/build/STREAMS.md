@@ -119,3 +119,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **Builder queue (cap 5):** running S1, S2, S4 and S6 (all fixing review findings) and S7 (additive saves). S8 is done at `98dcf72` and in Sol R1 review.
 - **S8 copy proposals:** accepted. Drop stats from recipe names, shorten refusals, and have the service refusal mention moorings. Applied in the registry at composition.
 - **S4 R2 fixes done** at `8f01513` (37 tests; walls, accounting and vibration mutations now caught). A focused Sol R3 review is running. One builder slot is held for composition, which starts when S7 lands.
+- **S7 additive-content done** at `03d5839` (fast tests 544/544, heavy 9/9, browser import/export smoke). Sol R1 review running. **C1 composition** (Opus, 5th slot) started: merges S7 + S8 + S5 + S3 onto production, then wires the story and fleet in, applies the Dart trim and the copy proposals, and makes the planner use the real registry.
