@@ -1978,3 +1978,19 @@ test("B1 copy: the cabin's own aft hatch prompts leaving, and Creel mount receip
   assert.equal(summary(refit), "Creel cargo rack fitted");
   assert.doesNotMatch(summary(removed) + summary(refit), /Dart|trim/);
 });
+
+test("Creel mount changes keep keyboard focus on the mount row, not Return", (t) => {
+  const { view, get, commandButton, active } = viewFixture(t), world = createWorldQueries();
+  let s = UI_SCENARIOS["creel-slip"](); const creel = s.fleet.vehicles.find(v => v.hull === "creel")!, rack = creel.modules[0]!;
+  view.openPanel("inventory", s);
+  commandButton({ type: "remove-module", vehicleId: creel.id, itemId: rack }).focus();
+  s = executeCommand(s, { type: "remove-module", vehicleId: creel.id, itemId: rack }, world).state;
+  assert.ok(!s.fleet.vehicles[0]!.modules.includes(rack));
+  view.refreshPanel(s);
+  assert.notEqual(active(), get("panel-return"));
+  assert.equal(active()?.attrs["data-focus-key"], `mount:${creel.id}`);
+  commandButton({ type: "install-module", vehicleId: creel.id, itemId: rack }).focus();
+  s = executeCommand(s, { type: "install-module", vehicleId: creel.id, itemId: rack }, world).state;
+  view.refreshPanel(s);
+  assert.equal(active()?.attrs["data-focus-key"], `mount:${creel.id}`, "fitting returns to the same row");
+});

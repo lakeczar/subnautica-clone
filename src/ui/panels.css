@@ -10,7 +10,7 @@
 .panel-frame {
   max-width: 1060px;
   margin: 0 auto;
-  padding: 0 24px 48px;
+  padding: 0 24px 16px;
 }
 .panel-chrome {
   position: sticky;
