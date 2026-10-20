@@ -69,6 +69,8 @@
 - **Gates:** each one passes the lean gate (one fresh Sol 6.1 xhigh review), and `npm run playthrough` must stay green on both strategies.
 
 ## Iteration 2: noted for later ("Option B")
+
+The owner prefers more good content to a fixed play length (2026-10-20). That makes this expansion more likely, once iteration 1's content proves the pipeline.
 - **Size:** a larger interleaved basin, about **3.2 × 2.8 km**, still reaching 780 m.
 - **Layout:**
   - the pod and main anchorage near the centre, with the three islands in an arc around home;
