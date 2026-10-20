@@ -42,6 +42,9 @@ export async function runPhases(d: Driver, phases: readonly Phase[], o: RunOptio
     d.onSpend = (cost) => addCounts(record.spent, cost as Record<string, number>);
     try {
       phase.play(d, o);
+      // The phase's purpose, checked on the real state before the milestone counts.
+      const problems = phase.verify(d);
+      if (problems.length) throw new Blocked(`${phase.id} finished without its outcome: ${problems.join("; ")}`);
       await slot.milestone(d, phase.id);
     } catch (error) {
       // A game refusal or trap is a finding; anything else is a harness bug, reported as such.

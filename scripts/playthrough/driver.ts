@@ -10,6 +10,7 @@ import { createWorldQueries } from "../../src/sim/world.js";
 import { cabinHull } from "../../src/sim/fleet.js";
 import type { GameCommand, GameEvent, GameState, VehicleState, WorldQueries } from "../../src/sim/types.js";
 import { emptyRun, freshMinima, lowerMinima } from "./timeline.js";
+import { commandEffect } from "./effects.js";
 import type { DiscoveryRecord, LegRecord, Minima, RunRecord } from "./timeline.js";
 
 /** The game refused a command or trapped the player. A finding, never something to work around. */
@@ -89,10 +90,14 @@ export class Driver {
     if (!done(this.state)) throw new Blocked(`Timed out waiting for ${label}: ${this.state.feedback}`, where(this.state));
   }
 
-  /** A key press or panel button. Throws Blocked on a refusal unless `refusal` is allowed. */
+  /** The command entry point: the game's executeCommand. Tests may substitute a
+   * faulty one to prove that a success response without its effect blocks. */
+  exec: typeof executeCommand = executeCommand;
+  /** A key press or panel button. Throws Blocked on a refusal unless `refusal` is
+   * allowed, and on an accepted command whose effect is missing from the state. */
   command(command: GameCommand, options: { allowRefusal?: boolean } = {}): { ok: boolean; message: string; events: GameEvent[] } {
     const before = this.state;
-    const result = executeCommand(before, command, this.world);
+    const result = this.exec(before, command, this.world);
     const error = result.events.find((e): e is Extract<GameEvent, { type: "notice" }> => e.type === "notice" && e.error === true);
     if (error) {
       this.run.refusals.push({ tick: before.tick, phase: this.phase, message: `${command.type}: ${error.message}` });
@@ -101,6 +106,8 @@ export class Driver {
       return { ok: false, message: error.message, events: result.events };
     }
     this.accept(before, result.state, result.events);
+    const problems = commandEffect(command, before, result.state, this.world, result.events);
+    if (problems.length) throw new Blocked(`${JSON.stringify(command)} was accepted but ${problems.join("; ")}`, where(result.state));
     if (command.type === "craft") this.paid(command.recipeId);
     const notice = result.events.find((e): e is Extract<GameEvent, { type: "notice" }> => e.type === "notice");
     return { ok: true, message: notice?.message ?? result.state.feedback, events: result.events };

@@ -1,6 +1,8 @@
 # Build direction (Opus coordinator, 2026-10-20)
 
-These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.md). Where older docs conflict with them, this file wins. That includes the evidence rules in `DELIVERY_AND_ACCEPTANCE.md`, the Astra roles in `BUILD_GAME_REVISED.md`, and the historical `CONTRACTS.md` and `PLAN.md` text. The full owner scope stays the same: a ten-hour campaign with seven regions, three islands, six craft, Hearthline, both fleet strategies and one authored ending.
+These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.md). Where older docs conflict with them, this file wins. That includes the evidence rules in `DELIVERY_AND_ACCEPTANCE.md`, the Astra roles in `BUILD_GAME_REVISED.md`, and the historical `CONTRACTS.md` and `PLAN.md` text. The full owner scope stays the same: seven regions, three islands, six craft, Hearthline, both fleet strategies and one authored ending.
+
+**Game design (owner, 2026-10-20):** [GAME-DIRECTION](GAME-DIRECTION.md) holds the owner-confirmed target, pacing rules, systems, fleet, caves and order of work. The length target is a **floor**: a skilled player on a first, blind, non-stop playthrough takes about 10 hours or more, organically and without padding. There is no ceiling, and playtests never trim good content.
 
 ## Priorities
 1. **A rough, complete campaign from start to ending comes first.** Polish follows once the whole chain is playable. Stop re-polishing the opening.

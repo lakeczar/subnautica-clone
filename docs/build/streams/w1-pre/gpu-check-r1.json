@@ -1,0 +1,41 @@
+{
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+  "glError": 0,
+  "rays": 2734,
+  "shellRays": 2714,
+  "blockedByGpu": 649,
+  "mismatches": [],
+  "mismatchCount": 0,
+  "controls": {
+    "blocked": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "clear": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "vaultMean": {
+    "lampOn": 38.14675962094908,
+    "lampOff": 22.773469690393515
+  },
+  "pageErrors": [],
+  "ok": true
+}

@@ -14,6 +14,8 @@ import { Blocked, Driver, where } from "./driver.js";
 import { enter } from "./nav.js";
 import type { Refuge } from "./nav.js";
 import type { Missing } from "./content.js";
+import { all, crafted, custom, facility, hull, known, mounted, suit } from "./outcomes.js";
+import type { Outcome } from "./outcomes.js";
 import { fly, pilotTo, turnTo } from "./routes.js";
 import { dist, route, travel, yawTo } from "./travel.js";
 
@@ -29,6 +31,8 @@ export interface Phase {
   title: string;
   /** Content this phase needs that the build lacks; empty when it can be played. */
   missing(d: Driver): Missing[];
+  /** What the phase must have achieved in the real state; any problem blocks it. */
+  verify: Outcome;
   play(d: Driver, o: PlayOptions): void;
 }
 
@@ -90,6 +94,7 @@ function provision(d: Driver, region: "reef" | "isles"): void {
 
 const opening: Phase = {
   id: "opening", title: "New Game and the pod opening",
+  verify: known("C01"),
   missing: () => [],
   play(d) {
     for (let i = 0; i < 4 && d.state.opening.phase < 4; i++) d.command({ type: "interact" });
@@ -99,6 +104,7 @@ const opening: Phase = {
 
 const reef: Phase = {
   id: "reef", title: "Reef gathering, pod repair, tools, 150 m suit, rescue kit",
+  verify: all(crafted("pod_repair", "essential_tools", "suit_150", "reserve_cells"), facility("pod_fabricator"), suit(150), known("pod_checklist"), (d) => d.knows("C02") || d.crafted("salvage_buoy") ? crafted("salvage_buoy", "bobbin_kit")(d) : []),
   missing: () => [],
   play(d, o) {
     // First dive: what the regulator needs, carried (the pod locker is open; the bench is not).
@@ -128,6 +134,7 @@ function reefRecords(d: Driver, o: PlayOptions): void {
 
 const isles: Phase = {
   id: "isles", title: "Splitspine workshop restored and the Dart built",
+  verify: all(crafted("restore_workshop", "dart_base", "salvage_buoy", "bobbin_kit"), facility("island_workshop"), hull("dart", 180), known("C02", "C03")),
   missing: () => [],
   play(d, o) {
     enter(d, "workshop");
@@ -196,6 +203,7 @@ function returnToCraft(d: Driver, v: VehicleState): void {
 
 const canopy: Phase = {
   id: "canopy", title: "Dart to the Canopy laboratory: C04, crust and resin, 350 m suit",
+  verify: all(crafted("suit_350"), suit(350), known("C04"), hull("dart")),
   missing: () => [],
   play(d, o) {
     const dart = d.vehicle("dart")!;
@@ -240,6 +248,7 @@ const canopy: Phase = {
 
 const creel: Phase = {
   id: "creel", title: "Creel built in the medium slip, cargo rack fitted",
+  verify: all(crafted("creel_base", "creel_cargo_rack"), hull("creel", 240), mounted("creel", "creel_cargo_rack")),
   missing: () => [],
   play(d) {
     make(d, "creel_base", "workshop", ISLES);
@@ -280,6 +289,7 @@ function armLift(d: Driver, id: SourceId, times: number): number {
 
 const survey: Phase = {
   id: "basin-survey", title: "Dart to the Pale Basin: C05, C06, the keel plate, Basin crust",
+  verify: all(known("C05", "C06", "basin_keel_plate"), hull("dart")),
   missing: () => [],
   play(d, o) {
     const dart = (): VehicleState => d.vehicle("dart")!;
@@ -312,6 +322,7 @@ const survey: Phase = {
 
 const frames: Phase = {
   id: "basin-frames", title: "Creel to the Basin: tagged frames and salvage by the tool arms",
+  verify: all(hull("creel"), custom("fewer than 4 tagged frames at the workshop", (d) => d.count("tagged_frame", ["workshop_locker"]) >= 4)),
   missing: () => [],
   play(d) {
     const creel = (): VehicleState => d.vehicle("creel")!;
@@ -357,6 +368,7 @@ export function carry(d: Driver, needs: Readonly<Partial<Record<ItemKind | "tagg
 
 const refits: Phase = {
   id: "refits", title: "Creel and Dart refits to 350 m, outer-crown mooring restored",
+  verify: all(crafted("creel_350", "dart_350", "restore_canopy_stop"), hull("creel", 350), hull("dart", 350), facility("canopy_stop")),
   missing: () => [],
   play(d) {
     make(d, "creel_350", "workshop", ISLES);

@@ -169,3 +169,32 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
   - R2 caves and underground, design plus technology (`siltwake-research-r2-caves`);
   - R3 landmarks, creatures and resources (`siltwake-research-r3-landmarks-fauna`).
 - **Next:** the coordinator consolidates these into an iteration-1 plan (caves and a content density pass) and an iteration-2 map note.
+- **A1 FINAL: accepted at `7b81cbb`.** The coordinator inspected the pipe fix and the both-direction invariant test. **Integrated into root at `dfdb727`:** fast 739/739, build OK. `VISTA_SOLIDS` is 5,195 boxes, and C3 appends them to the broad phase and measures the cost.
+- **World evolution research done**, and the plan is in [WORLD-EVOLUTION-PLAN](WORLD-EVOLUTION-PLAN.md). After C3: W1 caves (replacement volumes, 6 caves), W2 central hub and loops (Option A), W3 density pass. Iteration 2 (Option B, 3.2×2.8 km) is noted for later. Two S4/S2 conflicts were sent to C3.
+- **P1 R3 fixes done** at `5079dc0`: every accepted command's effect and every phase's purpose are verified, the diver station-keeps at the vestibule (13.8 m, inside 15 m), 747/747 tests pass, and `npm run playthrough` exits 0 serial and with `--jobs 3`. Focused Sol R4 review running (`review/p1-r4`).
+- **P1 R4 (Sol):** changes-needed (`review/p1-r4` `d82fac4`). P1-03, the silent refit and every earlier gate are verified. P1-05 is still open: the effect checks miss a wrong-source or duplicated transfer, a partial bulk store, and a craft output in the wrong container. Back with the author: full-snapshot conservation checks, plus making `commandEffect` fail closed.
+- **P1 R4 fixes done** at `85e8fa9`: exact full-snapshot transactions for transfers, stores and crafts, with every command kind ruled and fail-closed; 748 tests pass, and the playthrough exits 0 serial and with `--jobs 3`. Focused Sol R5 review running.
+- **W1-pre started** (Opus, `siltwake-w1pre-cave-kit-opus-1686d2a`): the Fanvault cave contract, one-source solids and shell, a cave lighting prototype and `tools/cave-lab.html`, in new files only. The sim, bake and `materials.ts` wiring wait for C3. Builders: C3, P1, W1-pre (3 of 5).
+- **W1-pre done** at `fe00f5e` (`t3/siltwake-fanvault-cave`): the Fanvault loop, a diver-only 18–26 m vault with skylight, 1,504 rock boxes from one source, a cel-shader light field and lamp, and `tools/cave-lab.html`; 751 tests pass. Sol R1 review running.
+- **W1-pre R1 (Sol):** changes-needed (`review/w1-pre-r1` `be5360f`). The geometry is verified (shell within 0.31 m, no diver gaps, 16.7 ms on the 3090). Three P2s:
+  - the lamp-off test is not a real retreat;
+  - the lamp transmits 57% through rock;
+  - the floor wrapper breaks straddling clearance and the legacy guards.
+
+  Back with the author.
+- **W1-pre R1 fixes done** at `90d38b3`: a real swept lamp-off retreat (82/82 starts exit), an exact voxel lamp walk checked against the 3090 on 2,734 rays, and a prototype adapter `src/sim/caveWorld.ts` with full-actor ownership and the legacy guards preserved; 760 tests pass. Sol R2 running.
+- **W1-pre R2 (Sol):** changes-needed (`review/w1-pre-r2` `803e9cf`). R1-01, R1-02 and the original R1-03 cases are verified. W1-PRE-04 (P2): the adapter picks the composite once per move, so distant exterior walls vanish. Plus a P3 lamp-skin oracle. Back with the author.
+- **Owner design interview → [GAME-DIRECTION](GAME-DIRECTION.md)** (2026-10-20). Started LC (large-cave technology), SYS-1 (upgrades and power) and SYS-2 (outposts, decoder, cultivation, survey, chart, journal, timeline), in new files only. Builders 5 of 5: C3, W1-pre, LC, SYS-1, SYS-2.
+- **W1-pre R2 fixes done** at `0fc6c40`: owner chosen per sub-sweep (0.5 m steps, every exterior solid kept), and a pinned lamp-skin oracle; 766 tests pass. Sol R3 running.
+- **W1-pre R3 (Sol): accept** (`review/w1-pre-r3` `2b57b8f`). Integrated at the merge of `0fc6c40`: 781 tests pass, build OK. P3 W1-PRE-06: use the 8 m cave index at integration (diver move plus support 42.9 → 18.9 µs).
+- **CB started:** a region content bible (lore and world) per region plus the 4 cave biomes, with typed proposals in `src/content/proposals/*`. Builders 5 of 5: C3, LC, SYS-1, SYS-2, CB.
+- **SYS-2 done** at `c910fea` (`feat/sys-2-bases-knowledge`, `t3-de5d23dc`): socket hosts, outposts, decoder, cultivation, survey and ping, beacons and chart, journal model, local play timeline and report; 810 tests pass. Its open question (the carrier bridge socket accepting `decoder`) is decided yes per GAME-DIRECTION, at composition. Sol R1 running. Builders 4 of 5: C3, LC, SYS-1, CB.
+- **2026-10-20, after the usage-limit reset:** C3, LC, SYS-1 and CB had hit the rate limit and were resumed. C3 is at `32c91c7`, where the Creel route reaches the ending. **SYS-2 R1 (Sol):** changes-needed (`review/sys-2-r1` `e91cf21`):
+  - F1 (P1): recovery re-IDs modules and orphans jobs;
+  - F2: a cutting goes into a container that rejects it;
+  - F3: the carrier bridge leaves a stale occupant;
+  - F4: duplicate layout references duplicate modules;
+  - F5: a stationary helm counts as travel;
+  - F6: reload loses an open death.
+
+  Back with the author. Builders 5 of 5.

@@ -33,6 +33,7 @@ import { route, travel } from "./travel.js";
 import { carrier, carrierIn, carrierOut, enterCarrier, exitCarrier, walkAboard } from "./carrierplay.js";
 import { cargoCu, ferryFromCarrier, ferryToCarrier, loads, moveCargo } from "./cargo.js";
 import type { Cargo } from "./cargo.js";
+import { all, berthed, crafted, custom, facility, hull, known, suit } from "./outcomes.js";
 
 const ISLES = ["island_chain", "refuge_reef"];
 const recipes = (...ids: string[]): Missing[] => ids.flatMap(need.recipe);
@@ -231,7 +232,6 @@ function boardHearthline(d: Driver): void {
     pilotTo(d, "beside the carrier", clearOfBuilds(d, "stack_yard", parkNear(d, { ...vestibule, y: vestibule.y - 6 })));
     leaveCraft(d);
   }
-  d.command({ type: "carrier", action: "station-keep" }, { allowRefusal: true });
   carrierIn(d);
 }
 function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
@@ -248,6 +248,7 @@ function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
  * then the 450 m suit and Creel refits. */
 const rift = (strategy: "creel" | "carrier"): Phase => ({
   id: "rift", title: "Ember Rift: station restored, ledger, ceramic and core; 450 m suit" + (strategy === "creel" ? " and Creel" : ""),
+  verify: all(crafted("restore_rift_station", "suit_450"), facility("rift_station"), suit(450), strategy === "creel" ? hull("creel", 450) : hull("creel")),
   missing: (d) => [
     ...recipes("suit_450", "restore_rift_station", ...(strategy === "creel" ? ["creel_450"] : [])),
     ...sources("rift_ceramic_lip_north", "rift_ceramic_lip_south", "rift_core_shoulder_north", "rift_core_shoulder_west"),
@@ -284,6 +285,7 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
 
 const divide: Phase = {
   id: "divide", title: "Mirror Divide: lattice, the upper dock restored, C07; Creel and suit to 800 m",
+  verify: all(crafted("restore_divide_stop", "creel_800", "suit_800"), facility("divide_dock"), hull("creel", 800), suit(800)),
   missing: (d) => [
     ...recipes("restore_divide_stop", "creel_800", "suit_800"),
     ...sources("divide_lattice_ledge_west", "divide_lattice_ledge_east"),
@@ -320,6 +322,7 @@ const divide: Phase = {
  * launched from the 550 m Hearthline at the Divide lee mooring on the carrier route. */
 const deepRecords = (strategy: Strategy): Phase => ({
   id: "deep-records", title: "Field shelter (C11) and the Divide turbine hall (C12)",
+  verify: (d) => ["C11", "C12"].filter((id) => !d.knows(id) && !d.deferred.includes(id)).map((id) => `${id} was neither found nor deferred`),
   missing: (d) => [
     ...anyPlaced("C11", "C12", "mara_last_page"),
     ...routes("route.isles.workshop_stack", "route.isles.stack_headland", "route.basin.divide",
@@ -465,6 +468,7 @@ function fromMeridian(d: Driver, strategy: Strategy): void {
 const meridian = (strategy: Strategy): Phase => ({
   id: "meridian", title: strategy === "creel" ? "Meridian District by the 800 m Creel: transfer hall, annex, gate hall, service window"
     : "Meridian by carrier: the 550 m Hearthline at the shelf, Mantle sorties",
+  verify: (d) => ["C08", "C10", "C09", "gate_panel", "C13", "district_controller"].filter((id) => !d.knows(id) && !d.deferred.includes(id)).map((id) => `${id} was neither found nor deferred`),
   missing: () => [...meridianMissing(),
     ...(strategy === "carrier" ? [...routes("route.divide.meridian_broad"), ...sites("meridian.staging_shelf")] : [])],
   play(d, o) {
@@ -581,6 +585,7 @@ export function stageWorksCargo(d: Driver): Cargo {
  * vestibule after its launch, and fits the Mantle's free hold. */
 const works = (strategy: Strategy): Phase => ({
   id: "works", title: "The return-gate works: power, air, isolate, equalize, open; hall, food, turbine power",
+  verify: custom("the works are incomplete (gate open, hall, food, hall power)", (d) => { const w = d.state.story.works; return w.gate === "open" && w.hall && w.food && w.hallPower; }),
   missing: worksMissing,
   play(d) {
     provision(d);
@@ -605,15 +610,10 @@ const works = (strategy: Strategy): Phase => ({
       return;
     }
     // Ferry to the carrier at the yard, then sail it to the district shelf.
-    const creel = d.vehicle("creel")!;
     boardCraft(d, "creel");
     fly(d, "creel_out");
     followS2(d, "route.isles.workshop_stack");
-    const h = carrier(d), vestibule = localToWorld(CARRIER_LAYOUT.exteriorVestibule, h);
-    pilotTo(d, "beside the carrier", clearOfBuilds(d, "stack_yard", parkNear(d, { ...vestibule, y: vestibule.y - 6 })));
-    leaveCraft(d);
-    d.command({ type: "carrier", action: "station-keep" });
-    ferryToCarrier(d, creel.id, cargo);
+    deliverToCarrier(d, cargo, "stack_yard");
     carrierIn(d);
     carrierTo(d, CARRIER_TO_SHELF);
     const mantle = d.vehicle("mantle")!;
@@ -635,6 +635,18 @@ const works = (strategy: Strategy): Phase => ({
     carrierHome(d, CARRIER_TO_SHELF);
   },
 });
+/** From the helm of the supply Creel near the carrier: moor beside it, clear of every
+ * build envelope, leave the helm, and ferry the cargo into its stores through the
+ * vestibule (station keeping engaged there, in range). Ends outside the carrier. */
+export function deliverToCarrier(d: Driver, cargo: Cargo, site: string | null): void {
+  const creel = d.occupied();
+  if (!creel || creel.hull !== "creel") throw new Error("harness: deliverToCarrier starts at the Creel's helm");
+  const h = carrier(d), vestibule = localToWorld(CARRIER_LAYOUT.exteriorVestibule, h);
+  const park = parkNear(d, { ...vestibule, y: vestibule.y - 6 });
+  pilotTo(d, "beside the carrier", site ? clearOfBuilds(d, site, park) : park);
+  leaveCraft(d);
+  ferryToCarrier(d, creel.id, cargo);
+}
 function exitCarrierToBoard(d: Driver, vehicleId: string): void {
   exitCarrier(d);
   reach(d, vehicleId);
@@ -643,6 +655,7 @@ function exitCarrierToBoard(d: Driver, vehicleId: string): void {
 
 const ending = (strategy: Strategy): Phase => ({
   id: "ending", title: "Pod buffer and C14, then the district controller's resolution",
+  verify: all(crafted("pod_buffer"), known("C14"), custom("the resolution is not complete", (d) => d.state.story.resolution.phase === "complete")),
   missing: () => [
     ...recipes("pod_buffer"),
     ...stories({ readOptional: true, reverse: false }, "C14", "district_controller"),
@@ -677,6 +690,7 @@ const ending = (strategy: Strategy): Phase => ({
 
 const hearthline: Phase = {
   id: "hearthline", title: "Hearthline keel and fit-out at the stack-yard berth",
+  verify: all(crafted("hearthline_keel", "hearthline_base"), hull("hearthline", 400)),
   missing: () => [
     ...recipes("hearthline_keel", "hearthline_base"),
     ...need.hull("hearthline"),
@@ -796,6 +810,7 @@ function boardHearthlineWith(d: Driver, cargo: Cargo): void {
 
 const carrierDeep: Phase = {
   id: "carrier-deep", title: "Hearthline to the Divide lee mooring: lattice from the 400 m carrier; 550 m refit, Mantle, 800 m suit",
+  verify: all(crafted("hearthline_550", "mantle_base", "suit_800"), hull("hearthline", 550), hull("mantle", 800), berthed("mantle"), suit(800)),
   missing: (d) => [
     ...recipes("hearthline_550", "mantle_base", "suit_800"),
     ...plans(d, "bp_deep_service", "C07", "rift_station_ledger"),
