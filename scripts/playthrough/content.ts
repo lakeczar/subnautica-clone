@@ -1,7 +1,7 @@
 /** What the build under test contains, for phases written ahead of their content.
  * Each check names one declared ID (S2 route, S5 story host, S9 recipe/source/site)
  * and reports it missing until C3 composes it. Nothing here changes the game. */
-import { HULLS, RECIPES, SOURCES } from "../../src/content/registry.js";
+import { EVIDENCE, HULLS, OPTIONAL_RECORD, RECIPES, SOURCES } from "../../src/content/registry.js";
 import { WORLD_VERTICAL_BOUNDS } from "../../src/content/routes.js";
 import { ROUTES } from "../../src/content/regions/passages.js";
 import type { RouteDef } from "../../src/content/regions/passages.js";
@@ -45,7 +45,8 @@ export const need = {
     if (!(DISCOVERY_IDS as readonly string[]).includes(id)) return [`story ID ${id} (S5)`];
     const out: string[] = [];
     if (!placedSite(siteOf(id as DiscoveryId))) out.push(`story site ${siteOf(id as DiscoveryId)} not placed (${id})`);
-    if (!storyHost(id)) out.push(`story host for ${id}`);
+    // A host: C01–C06 and the reef note are registry interactions; later records are story hosts.
+    if (!Object.hasOwn(EVIDENCE, id) && id !== OPTIONAL_RECORD.id && !storyHost(id)) out.push(`story host for ${id}`);
     return out;
   },
   /** An S2 route the simulation can follow end to end. */
