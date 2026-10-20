@@ -65,6 +65,10 @@ export interface ChunkMesh {
   readonly normals: Float32Array;
   readonly zones: Uint8Array;
   readonly indices: Uint32Array;
+  /** Fine only: node signs of the chunk's own nodes, bit-packed (1 = rock),
+   * node (i, j, k) at bit i + cells * (j + cells * k). The lamp's exact
+   * occupancy and the light grid's water both read it. */
+  readonly occupancy: Uint8Array | null;
   /** Fine only: collision-only seabed band triangles (positions, indices). */
   readonly band: { readonly positions: Float32Array; readonly indices: Uint32Array } | null;
   readonly stats: { readonly sampled: number; readonly skipped: number; readonly ms: number };
@@ -76,6 +80,11 @@ export interface ChunkMesh {
  * alone, which is the exact field there. */
 interface Samples { readonly lo: readonly [number, number, number]; readonly m: number; readonly v: Float64Array; sampled: number; skipped: number }
 const APRON_LO = 3, APRON_HI = 2;
+/** Bit of node (i, j, k) of a chunk's own nodes in `occupancy`. */
+export function occupied(occupancy: Uint8Array, cells: number, i: number, j: number, k: number): boolean {
+  const bit = i + cells * (j + cells * k);
+  return (occupancy[bit >> 3]! >> (bit & 7) & 1) === 1;
+}
 
 function sampleChunk(field: CaveField, l: CaveLattice, c: ChunkCoord): Samples {
   const N = l.cells, m = N + APRON_LO + APRON_HI, h = l.voxel, o = l.origin;
@@ -295,10 +304,16 @@ export function buildChunkMesh(field: CaveField, l: CaveLattice, c: ChunkCoord, 
   const collars = field.source.collars;
   const rectFor = (x: number, z: number): Rect | null => collars.find(r => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ) ?? null;
   const ownedOrBorder = (x: number, y: number, z: number): boolean => field.owned(x, y, z);
+  // A quad belongs to the cave when its lattice edge is owned, or lies within
+  // two voxels outside a collar (the clip then trims it to the collar edge, so
+  // no strip of seabed between the last owned edge and the edge is lost).
+  const reach = 2 * l.voxel * (lod === "fine" ? 1 : 2);
+  const emitOwned = (x: number, y: number, z: number): boolean => field.owned(x, y, z) ||
+    collars.some(r => x >= r.minX - reach && x < r.maxX + reach && z >= r.minZ - reach && z < r.maxZ + reach && y >= field.domain.min.y && y <= field.domain.max.y);
   let raw: Raw;
   if (lod === "fine") {
     const c0: [number, number, number] = [c.cx * N, c.cy * N, c.cz * N];
-    raw = surfaceNets(field, l, fineAt, c0, N, 1, (x, y, z) => field.owned(x, y, z));
+    raw = surfaceNets(field, l, fineAt, c0, N, 1, emitOwned);
     raw = clipOwned(raw, field, ownedOrBorder, rectFor, false);
   } else {
     // Coarse node G sits on fine node 2G and takes the most open of its 27.
@@ -309,7 +324,7 @@ export function buildChunkMesh(field: CaveField, l: CaveLattice, c: ChunkCoord, 
       return best;
     };
     const c0: [number, number, number] = [c.cx * N / 2, c.cy * N / 2, c.cz * N / 2];
-    raw = surfaceNets(field, l, coarseAt, c0, N / 2, 2, (x, y, z) => field.owned(x, y, z));
+    raw = surfaceNets(field, l, coarseAt, c0, N / 2, 2, emitOwned);
     raw = clipOwned(raw, field, ownedOrBorder, rectFor, false);
     // Coarse seabed in a collar sags into the dilation; lift exterior
     // vertices back onto the seabed (no carve is near them).
@@ -323,14 +338,25 @@ export function buildChunkMesh(field: CaveField, l: CaveLattice, c: ChunkCoord, 
   if (lod === "fine" && width > 0) {
     const ring = (x: number, z: number): Rect | null => collars.find(r => x >= r.minX - width && x < r.maxX + width && z >= r.minZ - width && z < r.maxZ + width) ?? null;
     // Unowned surfaces in the ring: the exterior seabed round the collar.
-    const inRing = (x: number, y: number, z: number): boolean => !rectFor(x, z) && ring(x, z) !== null &&
-      y >= field.domain.min.y && y <= field.domain.max.y && !field.owned(x, y, z);
+    const near = 2 * l.voxel;
+    const inRing = (x: number, y: number, z: number): boolean => ring(x, z) !== null && y >= field.domain.min.y && y <= field.domain.max.y &&
+      (rectFor(x, z) ? collars.some(r => x < r.minX + near || x >= r.maxX - near || z < r.minZ + near || z >= r.maxZ - near) && y > field.floor(x, z) - 3
+        : !field.owned(x, y, z));
     const c0: [number, number, number] = [c.cx * N, c.cy * N, c.cz * N];
     let b = surfaceNets(field, l, fineAt, c0, N, 1, inRing);
     b = clipOwned(b, field, (x, _y, z) => rectFor(x, z) === null, rectFor, true);
     if (b.indices.length) band = { positions: new Float32Array(b.positions), indices: new Uint32Array(b.indices) };
   }
-  return { key: chunkKey(c), coord: c, lod, ...toMesh(raw), band, stats: { sampled: s.sampled, skipped: s.skipped, ms: Date.now() - started } };
+  let occupancy: Uint8Array | null = null;
+  if (lod === "fine") {
+    occupancy = new Uint8Array(N * N * N / 8);
+    for (let k = 0; k < N; k++) for (let j = 0; j < N; j++) for (let i = 0; i < N; i++)
+      if (s.v[(i + APRON_LO) + m * ((j + APRON_LO) + m * (k + APRON_LO))]! < 0) {
+        const bit = i + N * (j + N * k);
+        occupancy[bit >> 3] = occupancy[bit >> 3]! | (1 << (bit & 7));
+      }
+  }
+  return { key: chunkKey(c), coord: c, lod, ...toMesh(raw), occupancy, band, stats: { sampled: s.sampled, skipped: s.skipped, ms: Date.now() - started } };
 }
 
 /** Chunks whose box may hold any surface (owned or band), in key order. */
