@@ -1,0 +1,706 @@
+import type { Solid } from "../../sim/world.js";
+import type { MeshRecipe } from "../../render/kit/types.js";
+import type { Aabb, LodLevel, Rect, Vec3 } from "../../world/types.js";
+import type { CaveDef, CaveRoom, CaveSource, CaveSurface, CarveSource, TerraceSource } from "./caves.js";
+import { fbm, smooth } from "./noise.js";
+import type { FloorFunction } from "./terrain.js";
+
+/** One-source cave geometry (Babylon-free, deterministic).
+ *
+ * The authored source is two signed distances (negative inside): exterior
+ * rock (the seabed plus stacked terraces) and carved open water (tubes,
+ * chambers, shafts, smoothly unioned). `rock = max(exterior, -water)`.
+ *
+ * 1. **Sample once.** Every 0.5 m voxel of the owned footprint, from
+ *    `baseY` to `topY`, is rock or water at its centre. A two-voxel pad
+ *    around the footprint samples the heightfield, so the shell meets the
+ *    surrounding seabed.
+ * 2. **Thick rock.** Collision keeps exactly the union of every 2 m cube
+ *    that fits in owned rock (a morphological opening). Rock thinner than a
+ *    solid can be is dropped from collision AND art together, and reported.
+ *    A greedy cover of that union with maximal boxes, each at least 2 m on
+ *    every side and overlapping freely, becomes the `Solid` roster.
+ * 3. **Shell.** Surface nets over the same opened occupancy. Each vertex
+ *    stands for one voxel corner on the rock boundary and lies within
+ *    `clamp` of it per axis, placed where the source distance crosses zero.
+ *    Every shell point is therefore within `clamp * sqrt(3)` (0.35 m fine)
+ *    of rock that is in the roster. Coarse samples 1 m voxels that are rock
+ *    only when all eight fine voxels are, so coarse water contains all fine
+ *    water: openings stay open and no tunnel is ever bridged. Both shells
+ *    end exactly on the heightfield at the footprint edge.
+ *
+ * Meshes are plain `MeshRecipe`s with integer cel alpha, clipped to the
+ * footprint and, for the bake, to 128 m columns (`clipMeshToRect`). */
+
+const AXES = ["x", "y", "z"] as const;
+const PAD = 2;
+const CUBE = 4; // 2 m of 0.5 m voxels
+const FINE_CLAMP = 0.2;
+const COARSE_CLAMP = 0.3;
+
+export interface CaveGrid {
+  readonly origin: Vec3;
+  readonly voxel: number;
+  readonly nx: number;
+  readonly ny: number;
+  readonly nz: number;
+}
+/** The sampled cave. Arrays are indexed `i + nx * (j + ny * k)`, i along X,
+ * j along Y, k along Z; voxel (i, j, k) has its centre at
+ * `origin + (i + 0.5, j + 0.5, k + 0.5) * voxel`. */
+export interface CaveVolume {
+  readonly grid: CaveGrid;
+  /** 1 = rock as collided and drawn: the opened rock inside the footprint,
+   * the heightfield in the pad outside it. */
+  readonly solid: Uint8Array;
+  /** Rock signed distance at each centre, metres (negative in rock). */
+  readonly field: Float32Array;
+  /** Room index + 1 of carved water under the exterior (the cave inside);
+   * 0 for rock and open exterior water. */
+  readonly room: Uint8Array;
+  /** 1 inside the owned footprint. */
+  readonly owned: Uint8Array;
+  readonly roomIds: readonly string[];
+}
+
+// --- Source distances -------------------------------------------------------
+
+function seedOf(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  return (h >>> 0) % 100000;
+}
+function smin(a: number, b: number, k: number): number {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - h * h * k * 0.25;
+}
+const pow = Math.pow;
+
+interface PreparedCarve {
+  readonly carve: CarveSource;
+  readonly room: number;
+  readonly seed: number;
+  readonly min: Vec3;
+  readonly max: Vec3;
+}
+/** Conservative bound of a carve's water, padded by its wobble and blend. */
+function carveBounds(c: CarveSource, pad: number): { min: Vec3; max: Vec3 } {
+  const p = pad + c.wobble + 0.5;
+  if (c.kind === "tube") {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const n of c.nodes) {
+      const r = n.width / 2;
+      minX = Math.min(minX, n.x - r); maxX = Math.max(maxX, n.x + r); minZ = Math.min(minZ, n.z - r); maxZ = Math.max(maxZ, n.z + r);
+      minY = Math.min(minY, n.floor); maxY = Math.max(maxY, n.floor + n.height);
+    }
+    return { min: { x: minX - p, y: minY - p, z: minZ - p }, max: { x: maxX + p, y: maxY + p, z: maxZ + p } };
+  }
+  if (c.kind === "chamber") {
+    const r = c.radii, o = c.center;
+    return { min: { x: o.x - r.x - p, y: Math.max(c.floor, o.y - r.down) - p, z: o.z - r.z - p },
+      max: { x: o.x + r.x + p, y: o.y + r.up + p, z: o.z + r.z + p } };
+  }
+  const r = c.radius + c.flare + p;
+  return { min: { x: c.center[0] - r, y: c.bottom - p, z: c.center[1] - r }, max: { x: c.center[0] + r, y: c.top + p, z: c.center[1] + r } };
+}
+
+const TUBE_EXPONENT = 3.4;
+function tubeDistance(c: Extract<CarveSource, { kind: "tube" }>, seed: number, x: number, y: number, z: number): number {
+  let best = Infinity;
+  const n1 = c.wobble * fbm(x + y * 0.6, z - y * 0.4, 4.5, 2, seed);
+  for (let s = 1; s < c.nodes.length; s++) {
+    const a = c.nodes[s - 1]!, b = c.nodes[s]!;
+    const ex = b.x - a.x, ez = b.z - a.z, len2 = ex * ex + ez * ez;
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / len2)) : 0;
+    const u = Math.hypot(x - (a.x + ex * t), z - (a.z + ez * t));
+    const floor = a.floor + (b.floor - a.floor) * t, width = a.width + (b.width - a.width) * t;
+    const height = a.height + (b.height - a.height) * t;
+    const hw = width / 2 + n1, hh = height * 0.58, v = Math.abs(y - (floor + height * 0.42));
+    const q = pow(pow(u / hw, TUBE_EXPONENT) + pow(v / hh, TUBE_EXPONENT), 1 / TUBE_EXPONENT);
+    const d = Math.max((q - 1) * Math.min(hw, hh), floor - y);
+    if (d < best) best = d;
+  }
+  return best;
+}
+function chamberDistance(c: Extract<CarveSource, { kind: "chamber" }>, seed: number, x: number, y: number, z: number): number {
+  const r = c.radii, o = c.center;
+  const dx = Math.abs(x - o.x) / r.x, dz = Math.abs(z - o.z) / r.z;
+  const rh = pow(pow(dx, 2.3) + pow(dz, 2.3), 1 / 2.3);
+  const up = y > o.y, dy = up ? (y - o.y) / r.up : (o.y - y) / r.down, nv = up ? 2 : 3;
+  const q = pow(pow(rh, nv) + pow(dy, nv), 1 / nv);
+  const scale = Math.min(r.x, r.z, up ? r.up : r.down);
+  const d = (q - 1) * scale - c.wobble * fbm(x + y * 0.7, z - y * 0.5, 5, 2, seed);
+  return Math.max(d, c.floor - y);
+}
+function shaftDistance(c: Extract<CarveSource, { kind: "shaft" }>, seed: number, x: number, y: number, z: number): number {
+  const radius = c.radius + c.flare * smooth(c.top - 4, c.top, y) + c.wobble * fbm(x + y, z - y, 3.5, 2, seed);
+  return Math.max(Math.hypot(x - c.center[0], z - c.center[1]) - radius, c.bottom - y, y - c.top);
+}
+function carveDistance(p: PreparedCarve, x: number, y: number, z: number): number {
+  const c = p.carve;
+  return c.kind === "tube" ? tubeDistance(c, p.seed, x, y, z)
+    : c.kind === "chamber" ? chamberDistance(c, p.seed, x, y, z) : shaftDistance(c, p.seed, x, y, z);
+}
+
+interface PreparedTerrace { readonly t: TerraceSource; readonly seed: number; readonly scale: number }
+/** Outline part of a terrace distance at one column (negative inside),
+ * before the batter. */
+function terraceOutline(p: PreparedTerrace, x: number, z: number): number {
+  const t = p.t, e = t.exponent;
+  const dx = Math.abs(x - t.center[0]) / t.radii[0], dz = Math.abs(z - t.center[1]) / t.radii[1];
+  return (pow(pow(dx, e) + pow(dz, e), 1 / e) - 1) * p.scale - t.wobble * fbm(x, z, t.wavelength, 2, p.seed);
+}
+
+/** Point queries on the authored source, for tests, art and the light field. */
+export interface CaveSampler {
+  /** Exterior rock distance: seabed and terraces, before carving. */
+  exterior(x: number, y: number, z: number): number;
+  /** Carved water distance and the room of the nearest carve (-1 if none). */
+  water(x: number, y: number, z: number): { distance: number; room: number };
+  /** Rock distance inside the owned footprint, the heightfield outside. */
+  rock(x: number, y: number, z: number): number;
+}
+export function caveSampler(source: CaveSource, floor: FloorFunction): CaveSampler {
+  const roomIndex = new Map(source.rooms.map((r, i) => [r.id, i]));
+  const carves: PreparedCarve[] = source.carves.map(c => {
+    const room = roomIndex.get(c.room);
+    if (room === undefined) throw new Error(`cave ${source.id}: carve ${c.id} names unknown room ${c.room}`);
+    return { carve: c, room, seed: seedOf(c.id), ...carveBounds(c, source.blend) };
+  });
+  const terraces: PreparedTerrace[] = source.terraces.map(t => ({ t, seed: seedOf(t.id), scale: Math.min(t.radii[0], t.radii[1]) }));
+  const f = source.footprint;
+  const exterior = (x: number, y: number, z: number): number => {
+    let d = y - floor(x, z);
+    for (const p of terraces) d = Math.min(d, Math.max(y - p.t.level, terraceOutline(p, x, z) - p.t.batter * Math.max(0, p.t.level - y)));
+    return d;
+  };
+  const water = (x: number, y: number, z: number): { distance: number; room: number } => {
+    let d = Infinity, best = Infinity, room = -1;
+    for (const p of carves) {
+      if (x < p.min.x || x > p.max.x || y < p.min.y || y > p.max.y || z < p.min.z || z > p.max.z) continue;
+      const c = carveDistance(p, x, y, z);
+      d = d === Infinity ? c : smin(d, c, source.blend);
+      if (c < best) { best = c; room = p.room; }
+    }
+    return { distance: d, room };
+  };
+  return {
+    exterior, water,
+    rock(x, y, z) {
+      if (!(x >= f.minX && x < f.maxX && z >= f.minZ && z < f.maxZ)) return y - floor(x, z);
+      if (y < source.baseY) return Math.max(-1, y - source.baseY);
+      return Math.max(exterior(x, y, z), -water(x, y, z).distance);
+    },
+  };
+}
+
+// --- Sampling -----------------------------------------------------------------
+
+function lattice(v: number, voxel: number): boolean {
+  return Math.abs(v / voxel - Math.round(v / voxel)) < 1e-9;
+}
+
+const volumes = new WeakMap<CaveDef, CaveVolume>();
+/** The sampled occupancy behind a generated definition. */
+export function caveVolume(def: CaveDef): CaveVolume {
+  const v = volumes.get(def);
+  if (!v) throw new Error(`cave ${def.id}: not built by buildCave`);
+  return v;
+}
+
+function sampleVolume(source: CaveSource, floor: FloorFunction, voxel: number): {
+  grid: CaveGrid; raw: Uint8Array; field: Float32Array; near: Uint8Array; under: Uint8Array; owned: Uint8Array;
+} {
+  const f = source.footprint;
+  for (const v of [f.minX, f.maxX, f.minZ, f.maxZ, source.baseY, source.topY])
+    if (!lattice(v, voxel)) throw new Error(`cave ${source.id}: ${v} is off the ${voxel} m lattice`);
+  const origin = { x: f.minX - PAD * voxel, y: source.baseY, z: f.minZ - PAD * voxel };
+  const nx = Math.round((f.maxX - f.minX) / voxel) + 2 * PAD, nz = Math.round((f.maxZ - f.minZ) / voxel) + 2 * PAD;
+  const ny = Math.round((source.topY - source.baseY) / voxel);
+  const n = nx * ny * nz;
+  // near: room + 1 of the nearest carve; under: beneath the exterior top.
+  const raw = new Uint8Array(n), field = new Float32Array(n), near = new Uint8Array(n), under = new Uint8Array(n), owned = new Uint8Array(n);
+  const sampler = caveSampler(source, floor);
+  const terraces = source.terraces.map(t => ({ t, seed: seedOf(t.id), scale: Math.min(t.radii[0], t.radii[1]) }));
+  const outline = new Float64Array(terraces.length);
+  for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
+    const x = origin.x + (i + 0.5) * voxel, z = origin.z + (k + 0.5) * voxel, ground = floor(x, z);
+    const inside = i >= PAD && i < nx - PAD && k >= PAD && k < nz - PAD;
+    if (inside) for (let t = 0; t < terraces.length; t++) outline[t] = terraceOutline(terraces[t]!, x, z);
+    for (let j = 0; j < ny; j++) {
+      const y = origin.y + (j + 0.5) * voxel, at = i + nx * (j + ny * k);
+      if (!inside) { field[at] = y - ground; raw[at] = y < ground ? 1 : 0; continue; }
+      owned[at] = 1;
+      let ext = y - ground;
+      for (let t = 0; t < terraces.length; t++) {
+        const p = terraces[t]!;
+        ext = Math.min(ext, Math.max(y - p.t.level, outline[t]! - p.t.batter * Math.max(0, p.t.level - y)));
+      }
+      let d = ext;
+      if (ext < 0) {
+        under[at] = 1;
+        const w = sampler.water(x, y, z);
+        d = Math.max(ext, -w.distance);
+        near[at] = w.room + 1;
+      }
+      field[at] = d; raw[at] = d < 0 ? 1 : 0;
+    }
+  }
+  return { grid: { origin, voxel, nx, ny, nz }, raw, field, near, under, owned };
+}
+
+// --- Thick rock -------------------------------------------------------------
+
+/** Summed-volume table over a 0/1 grid, (nx+1)(ny+1)(nz+1). */
+function summed(values: Uint8Array, nx: number, ny: number, nz: number): Int32Array {
+  const sx = nx + 1, sy = ny + 1, s = new Int32Array(sx * sy * (nz + 1));
+  for (let k = 1; k <= nz; k++) for (let j = 1; j <= ny; j++) for (let i = 1; i <= nx; i++) {
+    const at = i + sx * (j + sy * k);
+    s[at] = values[(i - 1) + nx * ((j - 1) + ny * (k - 1))]!
+      + s[at - 1]! + s[at - sx]! + s[at - sx * sy]!
+      - s[at - 1 - sx]! - s[at - 1 - sx * sy]! - s[at - sx - sx * sy]!
+      + s[at - 1 - sx - sx * sy]!;
+  }
+  return s;
+}
+/** Sum over the half-open voxel box [i0, i1) x [j0, j1) x [k0, k1). */
+function boxSum(s: Int32Array, nx: number, ny: number, i0: number, i1: number, j0: number, j1: number, k0: number, k1: number): number {
+  const sx = nx + 1, sy = ny + 1, a = (i: number, j: number, k: number): number => s[i + sx * (j + sy * k)]!;
+  return a(i1, j1, k1) - a(i0, j1, k1) - a(i1, j0, k1) - a(i1, j1, k0) + a(i0, j0, k1) + a(i0, j1, k0) + a(i1, j0, k0) - a(i0, j0, k0);
+}
+
+interface VoxelBox { i0: number; i1: number; j0: number; j1: number; k0: number; k1: number }
+
+/** Open owned rock by a 2 m cube, then cover the result with maximal boxes. */
+function thickRock(raw: Uint8Array, owned: Uint8Array, grid: CaveGrid): { opened: Uint8Array; boxes: VoxelBox[]; dropped: number } {
+  const { nx, ny, nz } = grid, n = nx * ny * nz;
+  const rock = new Uint8Array(n);
+  for (let at = 0; at < n; at++) rock[at] = raw[at]! & owned[at]!;
+  const S = summed(rock, nx, ny, nz), full = CUBE * CUBE * CUBE;
+  const fits = new Uint8Array(n);
+  for (let k = 0; k + CUBE <= nz; k++) for (let j = 0; j + CUBE <= ny; j++) for (let i = 0; i + CUBE <= nx; i++)
+    if (boxSum(S, nx, ny, i, i + CUBE, j, j + CUBE, k, k + CUBE) === full) fits[i + nx * (j + ny * k)] = 1;
+  const F = summed(fits, nx, ny, nz), opened = new Uint8Array(n);
+  let dropped = 0;
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const at = i + nx * (j + ny * k);
+    if (!rock[at]) continue;
+    if (boxSum(F, nx, ny, Math.max(0, i - CUBE + 1), i + 1, Math.max(0, j - CUBE + 1), j + 1, Math.max(0, k - CUBE + 1), k + 1) > 0) opened[at] = 1;
+    else dropped++;
+  }
+  const inRock = (b: VoxelBox): boolean => b.i0 >= 0 && b.j0 >= 0 && b.k0 >= 0 && b.i1 <= nx && b.j1 <= ny && b.k1 <= nz &&
+    boxSum(S, nx, ny, b.i0, b.i1, b.j0, b.j1, b.k0, b.k1) === (b.i1 - b.i0) * (b.j1 - b.j0) * (b.k1 - b.k0);
+  const grow = (b: VoxelBox, faces: readonly (keyof VoxelBox)[]): void => {
+    for (let moved = true; moved;) {
+      moved = false;
+      for (const face of faces) {
+        const step = face.endsWith("0") ? -1 : 1;
+        for (;;) {
+          const next = { ...b, [face]: b[face] + step };
+          if (!inRock(next)) break;
+          b[face] = next[face]; moved = true;
+        }
+      }
+    }
+  };
+  const covered = new Uint16Array(n), boxes: VoxelBox[] = [];
+  // Seed from the bottom up so deep slabs come first and terraces stack on them.
+  for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
+    const at = i + nx * (j + ny * k);
+    if (!opened[at] || covered[at]) continue;
+    // Every 2 m cube holding this voxel may seed; each grows in three face
+    // orders. Keep the candidate that covers the most still-uncovered rock.
+    let seed: VoxelBox | null = null;
+    for (let dk = 0; dk < CUBE && !seed; dk++) for (let dj = 0; dj < CUBE && !seed; dj++) for (let di = 0; di < CUBE && !seed; di++) {
+      const oi = i - di, oj = j - dj, ok = k - dk;
+      if (oi >= 0 && oj >= 0 && ok >= 0 && fits[oi + nx * (oj + ny * ok)])
+        seed = { i0: oi, i1: oi + CUBE, j0: oj, j1: oj + CUBE, k0: ok, k1: ok + CUBE };
+    }
+    if (!seed) throw new Error("cave rock: opened voxel without a fitting cube");
+    // Horizontal slabs first, then height, then widen again.
+    grow(seed, ["i0", "i1", "k0", "k1"]);
+    grow(seed, ["j0", "j1"]);
+    grow(seed, ["i0", "i1", "k0", "k1"]);
+    boxes.push(seed);
+    for (let bk = seed.k0; bk < seed.k1; bk++) for (let bj = seed.j0; bj < seed.j1; bj++) for (let bi = seed.i0; bi < seed.i1; bi++)
+      covered[bi + nx * (bj + ny * bk)] = covered[bi + nx * (bj + ny * bk)]! + 1;
+  }
+  // Drop boxes whose every voxel another box also covers, newest first.
+  const kept: VoxelBox[] = [];
+  for (let b = boxes.length - 1; b >= 0; b--) {
+    const box = boxes[b]!;
+    let redundant = true;
+    for (let bk = box.k0; bk < box.k1 && redundant; bk++) for (let bj = box.j0; bj < box.j1 && redundant; bj++)
+      for (let bi = box.i0; bi < box.i1; bi++) if (covered[bi + nx * (bj + ny * bk)]! < 2) { redundant = false; break; }
+    if (!redundant) { kept.push(box); continue; }
+    for (let bk = box.k0; bk < box.k1; bk++) for (let bj = box.j0; bj < box.j1; bj++) for (let bi = box.i0; bi < box.i1; bi++)
+      covered[bi + nx * (bj + ny * bk)] = covered[bi + nx * (bj + ny * bk)]! - 1;
+  }
+  kept.reverse();
+  return { opened, boxes: kept, dropped };
+}
+
+// --- Definition ---------------------------------------------------------------
+
+/** Generate a cave definition from its source. Pure and deterministic. */
+export function buildCave(source: CaveSource, floor: FloorFunction): CaveDef {
+  const started = Date.now();
+  const s = sampleVolume(source, floor, 0.5);
+  const { grid } = s, { nx, ny, nz, origin, voxel } = grid;
+  const { opened, boxes, dropped } = thickRock(s.raw, s.owned, grid);
+  const solid = new Uint8Array(s.raw.length);
+  for (let at = 0; at < solid.length; at++) solid[at] = s.owned[at] ? opened[at]! : s.raw[at]!;
+  // The cave inside: owned water beneath the exterior top, in the room of its
+  // nearest carve. Rock the opening dropped is water now, in the same room.
+  const room = new Uint8Array(solid.length);
+  for (let at = 0; at < solid.length; at++) if (s.owned[at] && !solid[at] && s.under[at] && !s.raw[at]) room[at] = s.near[at]!;
+  // Dropped slivers join the cave only where they touch its water; a lone
+  // seabed knob dropped at the collar stays open exterior water.
+  for (let pass = 0; pass < 3; pass++) for (let k = 1; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+    const at = i + nx * (j + ny * k);
+    if (room[at] || solid[at] || !s.raw[at] || !s.owned[at]) continue;
+    const sides = [1, -1, nx, -nx, nx * ny, -nx * ny];
+    if (sides.some(d => !solid[at + d] && !room[at + d] && !s.raw[at + d])) continue; // touches open water
+    for (const d of sides) if (room[at + d]) { room[at] = room[at + d]!; break; }
+  }
+  let rockVoxels = 0, top = -Infinity;
+  for (let at = 0; at < solid.length; at++) if (s.owned[at] && solid[at]) rockVoxels++;
+  const rock: Solid[] = boxes.map((b, n) => {
+    const min = { x: origin.x + b.i0 * voxel, y: origin.y + b.j0 * voxel, z: origin.z + b.k0 * voxel };
+    const max = { x: origin.x + b.i1 * voxel, y: origin.y + b.j1 * voxel, z: origin.z + b.k1 * voxel };
+    top = Math.max(top, max.y);
+    return { id: `${source.id}.rock.${String(n).padStart(4, "0")}`, min, max };
+  });
+  const roomBounds = source.rooms.map(() => ({ min: { x: Infinity, y: Infinity, z: Infinity }, max: { x: -Infinity, y: -Infinity, z: -Infinity } }));
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const r = room[i + nx * (j + ny * k)]!;
+    if (!r || solid[i + nx * (j + ny * k)]) continue;
+    const b = roomBounds[r - 1]!, x = origin.x + i * voxel, y = origin.y + j * voxel, z = origin.z + k * voxel;
+    b.min.x = Math.min(b.min.x, x); b.min.y = Math.min(b.min.y, y); b.min.z = Math.min(b.min.z, z);
+    b.max.x = Math.max(b.max.x, x + voxel); b.max.y = Math.max(b.max.y, y + voxel); b.max.z = Math.max(b.max.z, z + voxel);
+  }
+  const rooms: CaveRoom[] = source.rooms.map((r, i) => {
+    if (!Number.isFinite(roomBounds[i]!.min.x)) throw new Error(`cave ${source.id}: room ${r.id} has no water`);
+    return { ...r, bounds: roomBounds[i]!, portals: source.portals.filter(p => p.between.includes(r.id)).map(p => p.id) };
+  });
+  const f = source.footprint;
+  const surfaces: CaveSurface[] = [
+    { id: `${source.id}.shell.fine`, lod: "fine", voxel, clamp: FINE_CLAMP },
+    { id: `${source.id}.shell.coarse`, lod: "coarse", voxel: voxel * 2, clamp: COARSE_CLAMP },
+  ];
+  const def: CaveDef = {
+    id: source.id, label: source.label, region: source.region,
+    replacementFootprints: [f],
+    bounds: { min: { x: f.minX, y: source.baseY, z: f.minZ }, max: { x: f.maxX, y: Math.min(source.topY, top + 0.5), z: f.maxZ } },
+    rock, rooms, portals: source.portals, surfaces, routes: source.routes, staging: source.staging, source,
+    stats: { voxels: solid.length, rockVoxels, droppedVoxels: dropped, ms: Date.now() - started },
+  };
+  volumes.set(def, { grid, solid, field: s.field, room, owned: s.owned, roomIds: source.rooms.map(r => r.id) });
+  floors.set(def, floor);
+  return def;
+}
+const floors = new WeakMap<CaveDef, FloorFunction>();
+
+// --- Shell --------------------------------------------------------------------
+
+interface Lattice {
+  readonly grid: CaveGrid;
+  readonly solid: Uint8Array;
+  readonly field: Float32Array;
+  readonly room: Uint8Array;
+}
+/** 1 m lattice: rock only where all eight fine voxels are rock. */
+function coarsen(v: CaveVolume, sampler: CaveSampler): Lattice {
+  const g = v.grid, nx = g.nx / 2, ny = g.ny / 2, nz = g.nz / 2, voxel = g.voxel * 2;
+  if (![nx, ny, nz].every(Number.isInteger)) throw new Error("cave shell: fine grid must have even dimensions");
+  const solid = new Uint8Array(nx * ny * nz), field = new Float32Array(nx * ny * nz), room = new Uint8Array(nx * ny * nz);
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    let all = 1, r = 0;
+    for (let c = 0; c < 8; c++) {
+      const at = (2 * i + (c & 1)) + g.nx * ((2 * j + ((c >> 1) & 1)) + g.ny * (2 * k + (c >> 2)));
+      all &= v.solid[at]!; if (!r) r = v.room[at]!;
+    }
+    const at = i + nx * (j + ny * k);
+    solid[at] = all; room[at] = r;
+    field[at] = sampler.rock(g.origin.x + (i + 0.5) * voxel, g.origin.y + (j + 0.5) * voxel, g.origin.z + (k + 0.5) * voxel);
+  }
+  return { grid: { origin: g.origin, voxel, nx, ny, nz }, solid, field, room };
+}
+
+/** Raw surface: positions, per-vertex room (0 exterior) and triangles. */
+interface RawShell { positions: number[]; rooms: number[]; triangles: number[] }
+
+function surfaceNets(l: Lattice, clamp: number): RawShell {
+  const { grid, solid, field, room } = l, { nx, ny, nz, origin, voxel } = grid;
+  const dx = nx - 1, dy = ny - 1, dz = nz - 1;
+  const vertexOf = new Int32Array(dx * dy * dz).fill(-1);
+  const positions: number[] = [], rooms: number[] = [], triangles: number[] = [], corners: number[] = [];
+  const at = (i: number, j: number, k: number): number => i + nx * (j + ny * k);
+  for (let k = 0; k < dz; k++) for (let j = 0; j < dy; j++) for (let i = 0; i < dx; i++) {
+    let mask = 0;
+    for (let c = 0; c < 8; c++) mask |= solid[at(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2))]! << c;
+    if (mask === 0 || mask === 255) continue;
+    let sx = 0, sy = 0, sz = 0, count = 0, r = 0;
+    for (let c = 0; c < 8; c++) {
+      const ci = i + (c & 1), cj = j + ((c >> 1) & 1), ck = k + (c >> 2), a = at(ci, cj, ck);
+      if (!solid[a] && !r) r = room[a]!;
+      for (const [bit, di, dj, dk] of [[1, 1, 0, 0], [2, 0, 1, 0], [4, 0, 0, 1]] as const) {
+        if (c & bit) continue;
+        const b = at(ci + di, cj + dj, ck + dk), sa = solid[a]!, sb = solid[b]!;
+        if (sa === sb) continue;
+        const fa = field[a]!, fb = field[b]!;
+        // The source crossing, unless the opening disagreed with its sign.
+        const t = (fa < 0) === (sa === 1) && (fb < 0) === (sb === 1) && fa !== fb ? fa / (fa - fb) : 0.5;
+        sx += ci + di * t; sy += cj + dj * t; sz += ck + dk * t; count++;
+      }
+    }
+    // Lattice units from voxel centres; the shared corner is (i, j, k) + 1.
+    const cx = origin.x + (i + 1) * voxel, cy = origin.y + (j + 1) * voxel, cz = origin.z + (k + 1) * voxel;
+    const px = origin.x + (sx / count + 0.5) * voxel, py = origin.y + (sy / count + 0.5) * voxel, pz = origin.z + (sz / count + 0.5) * voxel;
+    vertexOf[i + dx * (j + dy * k)] = positions.length / 3;
+    corners.push(cx, cy, cz);
+    positions.push(Math.max(cx - clamp, Math.min(cx + clamp, px)), Math.max(cy - clamp, Math.min(cy + clamp, py)),
+      Math.max(cz - clamp, Math.min(cz + clamp, pz)));
+    rooms.push(r);
+  }
+  const cell = (i: number, j: number, k: number): number =>
+    i < 0 || j < 0 || k < 0 || i >= dx || j >= dy || k >= dz ? -1 : vertexOf[i + dx * (j + dy * k)]!;
+  const P = (v: number): [number, number, number] => [positions[v * 3]!, positions[v * 3 + 1]!, positions[v * 3 + 2]!];
+  const quad = (a: number, b: number, c: number, d: number, axis: number, sign: number): void => {
+    if (a < 0 || b < 0 || c < 0 || d < 0) return;
+    const pa = P(a), pb = P(b), pc = P(c), pd = P(d);
+    const long = Math.hypot(pa[0] - pc[0], pa[1] - pc[1], pa[2] - pc[2]) > Math.hypot(pb[0] - pd[0], pb[1] - pd[1], pb[2] - pd[2]);
+    const tris: [number, number, number][] = long ? [[a, b, d], [b, c, d]] : [[a, b, c], [a, c, d]];
+    for (const [u, v, w] of tris) {
+      const pu = P(u), pv = P(v), pw = P(w);
+      const e1 = [pv[0] - pu[0], pv[1] - pu[1], pv[2] - pu[2]], e2 = [pw[0] - pu[0], pw[1] - pu[1], pw[2] - pu[2]];
+      const nAxis = [e1[1]! * e2[2]! - e1[2]! * e2[1]!, e1[2]! * e2[0]! - e1[0]! * e2[2]!, e1[0]! * e2[1]! - e1[1]! * e2[0]!][axis]!;
+      if (nAxis * sign >= 0) triangles.push(u, v, w); else triangles.push(u, w, v);
+    }
+  };
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const s = solid[at(i, j, k)]!;
+    if (i + 1 < nx && s !== solid[at(i + 1, j, k)]) quad(cell(i, j - 1, k - 1), cell(i, j, k - 1), cell(i, j, k), cell(i, j - 1, k), 0, s ? 1 : -1);
+    if (j + 1 < ny && s !== solid[at(i, j + 1, k)]) quad(cell(i - 1, j, k - 1), cell(i, j, k - 1), cell(i, j, k), cell(i - 1, j, k), 1, s ? 1 : -1);
+    if (k + 1 < nz && s !== solid[at(i, j, k + 1)]) quad(cell(i - 1, j - 1, k), cell(i, j - 1, k), cell(i, j, k), cell(i - 1, j, k), 2, s ? 1 : -1);
+  }
+  relax(positions, corners, triangles, clamp);
+  return { positions, rooms, triangles };
+}
+
+/** Two damped Laplacian passes over the shell, each vertex held within
+ * `clamp` of its voxel corner per axis, so the rock bound still holds while
+ * the voxel staircase relaxes into slopes the cel bands draw cleanly. */
+function relax(positions: number[], corners: readonly number[], triangles: readonly number[], clamp: number): void {
+  const n = positions.length / 3, sum = new Float64Array(n * 3), count = new Uint16Array(n);
+  for (let pass = 0; pass < 2; pass++) {
+    sum.fill(0); count.fill(0);
+    for (let t = 0; t < triangles.length; t += 3) for (let e = 0; e < 3; e++) {
+      const a = triangles[t + e]!, b = triangles[t + (e + 1) % 3]!;
+      for (const [u, v] of [[a, b], [b, a]] as const) {
+        sum[u * 3] = sum[u * 3]! + positions[v * 3]!; sum[u * 3 + 1] = sum[u * 3 + 1]! + positions[v * 3 + 1]!;
+        sum[u * 3 + 2] = sum[u * 3 + 2]! + positions[v * 3 + 2]!; count[u] = count[u]! + 1;
+      }
+    }
+    for (let v = 0; v < n; v++) {
+      if (!count[v]) continue;
+      for (let a = 0; a < 3; a++) {
+        const target = positions[v * 3 + a]! * 0.5 + sum[v * 3 + a]! / count[v]! * 0.5, c = corners[v * 3 + a]!;
+        positions[v * 3 + a] = Math.max(c - clamp, Math.min(c + clamp, target));
+      }
+    }
+  }
+}
+
+function vertexNormals(positions: readonly number[], triangles: readonly number[]): Float32Array {
+  const n = new Float32Array(positions.length);
+  for (let t = 0; t < triangles.length; t += 3) {
+    const a = triangles[t]! * 3, b = triangles[t + 1]! * 3, c = triangles[t + 2]! * 3;
+    const ux = positions[b]! - positions[a]!, uy = positions[b + 1]! - positions[a + 1]!, uz = positions[b + 2]! - positions[a + 2]!;
+    const vx = positions[c]! - positions[a]!, vy = positions[c + 1]! - positions[a + 1]!, vz = positions[c + 2]! - positions[a + 2]!;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    for (const v of [a, b, c]) { n[v] = n[v]! + nx; n[v + 1] = n[v + 1]! + ny; n[v + 2] = n[v + 2]! + nz; }
+  }
+  for (let v = 0; v < n.length; v += 3) {
+    const l = Math.hypot(n[v]!, n[v + 1]!, n[v + 2]!) || 1;
+    n[v] = n[v]! / l; n[v + 1] = n[v + 1]! / l; n[v + 2] = n[v + 2]! / l;
+  }
+  return n;
+}
+
+// --- Colour -------------------------------------------------------------------
+
+type Rgb = readonly [number, number, number];
+const hex = (h: string): Rgb => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
+const mixRgb = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const PALETTE = {
+  top: hex("#cdd0ae"), top2: hex("#bfc6a2"), rim: hex("#dcb39a"),
+  strata: [hex("#b8b392"), hex("#a8a78a"), hex("#c6bf9f")] as const,
+  sand: hex("#b9d7b2"), sand2: hex("#a3c7a7"),
+  wall: hex("#6f8580"), wall2: hex("#62797a"), ceiling: hex("#53676a"), silt: hex("#8a9f90"), silt2: hex("#7e9486"),
+  amber: hex("#ffb45e"), teal: hex("#62e6d2"), violet: hex("#c6a1f2"),
+} as const;
+
+/** Unlit wayfinding colonies by each mouth, so an unlit diver can tell the
+ * two exits apart from inside; dim ones mark the catch pocket. */
+interface Glow { readonly at: Vec3; readonly radius: number; readonly color: Rgb; readonly room?: string }
+
+function shellColors(source: CaveSource, floor: FloorFunction, positions: Float32Array, normals: Float32Array,
+  rooms: Uint8Array, out: Float32Array): void {
+  const glows: Glow[] = [];
+  for (const p of source.portals) if (p.kind === "mouth") {
+    const inward = { x: -p.normal.x * 3, z: -p.normal.z * 3 };
+    glows.push({ at: { x: p.center.x + inward.x, y: p.center.y, z: p.center.z + inward.z }, radius: 4.6,
+      color: p.normal.z > 0 ? PALETTE.amber : PALETTE.teal });
+  }
+  const pocket = source.rooms.findIndex(r => r.role === "pocket");
+  const mouths = source.portals.filter(p => p.kind === "mouth");
+  for (let v = 0; v < positions.length / 3; v++) {
+    const x = positions[v * 3]!, y = positions[v * 3 + 1]!, z = positions[v * 3 + 2]!, ny = normals[v * 3 + 1]!;
+    const patch = fbm(x, z, 11, 2, 7101), fine = fbm(x + y, z - y, 3, 2, 7102);
+    let c: Rgb, alpha = 1;
+    const r = rooms[v]!;
+    if (r) {
+      // Inside: cool wet stone, darker overhead, silt on the floor.
+      c = ny > 0.55 ? mixRgb(PALETTE.silt, PALETTE.silt2, smooth(-0.2, 0.4, patch)) : ny < -0.45 ? PALETTE.ceiling
+        : mixRgb(PALETTE.wall, PALETTE.wall2, smooth(-0.3, 0.3, fine));
+      if (ny > 0.55) alpha = 0;
+      for (const g of glows) {
+        const d = Math.hypot(x - g.at.x, y - g.at.y, z - g.at.z);
+        if (d < g.radius && ny < 0.5 && fbm(x * 1.7, z * 1.7 + y, 2.2, 2, 7103) > 0.18 + 0.35 * d / g.radius) { c = g.color; alpha = -1; }
+      }
+      if (r - 1 === pocket && ny > 0.3 && fbm(x * 2, z * 2, 2.5, 2, 7104) > 0.42) { c = mixRgb(PALETTE.violet, PALETTE.silt, 0.35); alpha = -1; }
+    } else {
+      const ground = floor(x, z), collar = smooth(0.4, 1.6, y - ground);
+      const level = ny > 0.72;
+      const stone = level ? mixRgb(PALETTE.top, PALETTE.top2, smooth(-0.25, 0.35, patch))
+        : PALETTE.strata[Math.abs(Math.floor((y + 1.6 * fbm(x, z, 14, 2, 7105)) / 1.3)) % 3]!;
+      // A warm rim where a terrace top breaks over its riser: the fan edges.
+      const rimmed = level && ny < 0.93 ? mixRgb(stone, PALETTE.rim, 0.55) : stone;
+      const sand = mixRgb(PALETTE.sand, PALETTE.sand2, smooth(-0.2, 0.3, patch));
+      c = mixRgb(sand, rimmed, collar);
+      alpha = level ? 0 : 1;
+      // Grazing ink on the arch itself, the rock just round each opening, so
+      // its silhouette reads at distance without staining the face.
+      for (const m of mouths) {
+        const lateral = m.normal.z !== 0 ? Math.abs(x - m.center.x) : Math.abs(z - m.center.z);
+        const depth = m.normal.z !== 0 ? (z - m.center.z) * m.normal.z : (x - m.center.x) * m.normal.x;
+        const over = Math.max(lateral - m.clear.width / 2, y - (m.center.y + m.clear.height / 2));
+        if (depth > -1.5 && depth < 1.5 && over > 0 && over < 1.1 && y > m.center.y - m.clear.height / 2) alpha = 2;
+      }
+    }
+    const k = 1 + fine * 0.05;
+    out[v * 4] = c[0] * k; out[v * 4 + 1] = c[1] * k; out[v * 4 + 2] = c[2] * k; out[v * 4 + 3] = alpha;
+  }
+}
+
+// --- Clipping -----------------------------------------------------------------
+
+/** Clip a mesh to a horizontal rectangle (X/Z, closed), keeping shared
+ * vertices shared. New edge vertices interpolate position, normal and
+ * colour; alpha takes the nearer endpoint so the codec's integer rule holds. */
+export function clipMeshToRect(mesh: MeshRecipe, rect: Rect, name = mesh.name): MeshRecipe | null {
+  const P = mesh.positions, N = mesh.normals, C = mesh.colors, I = mesh.indices;
+  const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
+  const kept = new Map<number, number>(), cut = new Map<string, number>();
+  const keep = (v: number): number => {
+    let out = kept.get(v);
+    if (out === undefined) {
+      out = positions.length / 3; kept.set(v, out);
+      positions.push(P[v * 3]!, P[v * 3 + 1]!, P[v * 3 + 2]!); normals.push(N[v * 3]!, N[v * 3 + 1]!, N[v * 3 + 2]!);
+      colors.push(C[v * 4]!, C[v * 4 + 1]!, C[v * 4 + 2]!, C[v * 4 + 3]!);
+    }
+    return out;
+  };
+  // A clipped polygon vertex: an original vertex, or a point on an edge.
+  type Q = { key: string; v?: number; p: number[]; n: number[]; c: number[] };
+  const original = (v: number): Q => ({ key: `v${v}`, v, p: [P[v * 3]!, P[v * 3 + 1]!, P[v * 3 + 2]!],
+    n: [N[v * 3]!, N[v * 3 + 1]!, N[v * 3 + 2]!], c: [C[v * 4]!, C[v * 4 + 1]!, C[v * 4 + 2]!, C[v * 4 + 3]!] });
+  const emit = (q: Q): number => {
+    if (q.v !== undefined) return keep(q.v);
+    let out = cut.get(q.key);
+    if (out === undefined) {
+      out = positions.length / 3; cut.set(q.key, out);
+      const l = Math.hypot(q.n[0]!, q.n[1]!, q.n[2]!) || 1;
+      positions.push(...q.p); normals.push(q.n[0]! / l, q.n[1]! / l, q.n[2]! / l); colors.push(...q.c);
+    }
+    return out;
+  };
+  const planes: [0 | 2, number, number][] = [[0, rect.minX, 1], [0, rect.maxX, -1], [2, rect.minZ, 1], [2, rect.maxZ, -1]];
+  for (let t = 0; t < I.length; t += 3) {
+    let poly: Q[] = [original(I[t]!), original(I[t + 1]!), original(I[t + 2]!)];
+    for (const [axis, value, sign] of planes) {
+      const next: Q[] = [];
+      for (let e = 0; e < poly.length; e++) {
+        const a = poly[e]!, b = poly[(e + 1) % poly.length]!;
+        const da = (a.p[axis]! - value) * sign, db = (b.p[axis]! - value) * sign;
+        if (da >= 0) next.push(a);
+        if ((da >= 0) !== (db >= 0)) {
+          const s = da / (da - db), lerp = (u: number[], w: number[]): number[] => u.map((x, i) => x + (w[i]! - x) * s);
+          const [lo, hi] = a.key < b.key ? [a.key, b.key] : [b.key, a.key];
+          const c = lerp(a.c, b.c); c[3] = s < 0.5 ? a.c[3]! : b.c[3]!;
+          next.push({ key: `${lo}|${hi}|${axis}|${value}`, p: lerp(a.p, b.p), n: lerp(a.n, b.n), c });
+        }
+      }
+      poly = next;
+      if (poly.length < 3) break;
+    }
+    if (poly.length < 3) continue;
+    const ids = poly.map(emit);
+    for (let f = 1; f + 1 < ids.length; f++) indices.push(ids[0]!, ids[f]!, ids[f + 1]!);
+  }
+  if (!indices.length) return null;
+  return { name, positions: new Float32Array(positions), normals: new Float32Array(normals), colors: new Float32Array(colors),
+    indices: positions.length / 3 > 65535 ? new Uint32Array(indices) : new Uint16Array(indices) };
+}
+
+const shells = new WeakMap<CaveDef, Partial<Record<LodLevel, MeshRecipe>>>();
+/** The cave's shell at one LOD: exterior top, collar, mouths, walls, floor,
+ * roof and skylight as one cel mesh in world metres, clipped to the
+ * replacement footprint. Built once per definition and LOD. */
+export function caveShell(def: CaveDef, lod: LodLevel): MeshRecipe {
+  const cached = shells.get(def)?.[lod];
+  if (cached) return cached;
+  const volume = caveVolume(def), floor = floors.get(def)!;
+  const surface = def.surfaces.find(s => s.lod === lod)!;
+  const lattice: Lattice = lod === "fine" ? volume : coarsen(volume, caveSampler(def.source, floor));
+  const raw = surfaceNets(lattice, surface.clamp);
+  const positions = new Float32Array(raw.positions), normals = vertexNormals(raw.positions, raw.triangles);
+  const colors = new Float32Array(positions.length / 3 * 4);
+  shellColors(def.source, floor, positions, normals, new Uint8Array(raw.rooms), colors);
+  const whole: MeshRecipe = { name: surface.id, positions, normals, colors, indices: new Uint32Array(raw.triangles) };
+  const f = def.replacementFootprints[0]!;
+  const clipped = clipMeshToRect(whole, f, surface.id);
+  if (!clipped) throw new Error(`cave ${def.id}: empty ${lod} shell`);
+  // The collar edge sits exactly on the heightfield, so the seam with the
+  // surrounding terrain is the floor itself. Fine rock tops there lie within
+  // a quarter voxel of the floor, so the rock bound still holds.
+  // Coarse water-dominant voxels sag up to a voxel below the floor along the
+  // collar; lift that band back onto it (coarse makes no rock-bound promise).
+  const P = clipped.positions as Float32Array, edge = 1e-6, band = lod === "coarse" ? surface.voxel * 1.5 : 0;
+  for (let v = 0; v < P.length; v += 3) {
+    const x = P[v]!, z = P[v + 2]!, d = Math.min(x - f.minX, f.maxX - x, z - f.minZ, f.maxZ - z);
+    if (d < edge) P[v + 1] = floor(x, z);
+    else if (d < band) P[v + 1] = Math.max(P[v + 1]!, floor(x, z));
+  }
+  shells.set(def, { ...shells.get(def), [lod]: clipped });
+  return clipped;
+}
+
+/** Bake form: the shell split per 128 m column (layer-0 recipe parts). */
+export function caveShellByColumn(def: CaveDef, lod: LodLevel, columns: readonly { readonly id: string; readonly rect: Rect }[]): Map<string, MeshRecipe> {
+  const out = new Map<string, MeshRecipe>(), shell = caveShell(def, lod), f = def.replacementFootprints[0]!;
+  for (const c of columns) {
+    if (c.rect.maxX <= f.minX || c.rect.minX >= f.maxX || c.rect.maxZ <= f.minZ || c.rect.minZ >= f.maxZ) continue;
+    const part = clipMeshToRect(shell, c.rect, `${c.id}.cave.${def.id}`);
+    if (part) out.set(c.id, part);
+  }
+  return out;
+}
+
+/** Bounds of a set of solids, for diagnostics. */
+export function solidsBounds(solids: readonly Solid[]): Aabb {
+  const min = { x: Infinity, y: Infinity, z: Infinity }, max = { x: -Infinity, y: -Infinity, z: -Infinity };
+  for (const s of solids) for (const a of AXES) { min[a] = Math.min(min[a], s.min[a]); max[a] = Math.max(max[a], s.max[a]); }
+  return { min, max };
+}
