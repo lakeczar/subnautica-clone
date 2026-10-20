@@ -1,5 +1,9 @@
 # Build status
 
+## Current coordination and worker memory incident
+
+The owner requests **Opus5.5/high to coordinate this existing thread**, retaining a separate Opus builder and fresh Sol6.1/xhigh review. [Handoff](OPUS_COORDINATOR_HANDOFF.md) records exact live tasks and next actions. Before heavy tests, follow [worker resource limits](WORKER_RESOURCE_LIMITS.md): root stopped a recurring B1 full-suite memory exhaustion and verified recovery; B1 is isolating the cause under a6 GiB total-memory/zero-swap scope. The GPU author's incident acknowledgement was interim, with ordinal3 now finishing its report/checks/commits. Neither batch is accepted. NVIDIA is still absent from guest PCI inventory. Accepted production and full-game roadmap below remain unchanged.
+
 ## Current checkpoint — resumed after worker recovery
 
 The owner resumed the complete-game goal on 2026-10-19 and requested use of the RTX 3090. [Worker verification](evidence/WORKER-RESUME-20261019.md) confirms 16 GiB, six vCPUs, services/endpoints, increased agent limits and intact evidence. Our original host upgrade run timed out without changing memory; the later recovery is separately attributed. All 390 historical temporary paths now resolve to the verified disk-backed archive extraction. Production remains `eb712f1527439ec1f38f2c52ef61ac78989ba74c`.

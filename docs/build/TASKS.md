@@ -2,7 +2,7 @@
 
 Only the coordinator dispatches. Default cap is four active agents including coordinator. Completed historical planning workers are not active implementation tasks. A task with live nested work is unfinished. Check durable task status before retrying a launch; each T3 review round gets a fresh stable request ID.
 
-Current checkpoint: see the latest entry at the end of this ledger and [STATUS](STATUS.md). Earlier active/pending labels are historical snapshots, not current ownership.
+Current checkpoint: see the latest entry at the end of this ledger and [STATUS](STATUS.md). Earlier active/pending labels are historical snapshots, not current ownership. The owner-requested [Opus coordinator handoff](OPUS_COORDINATOR_HANDOFF.md) preserves existing task handles. Include [worker resource limits](WORKER_RESOURCE_LIMITS.md) in continuing build/review work.
 
 | Batch | Task/agent ID | Model/effort | Baseline / owned paths | State |
 | --- | --- | --- | --- | --- |
@@ -2131,3 +2131,14 @@ M2-B1 remains the sole game implementation owner on5191. Root plus the two Opus 
 The [M2-C brief](tasks/M2-C-OPUS.md) now carries the remaining connected Rift/Divide/District scope, first-access protection/material dependencies, Mantle and deep service, local recovery and complete canonical resolution by both fleet strategies. It is **prepared only**, with no new worker, source ownership or accepted implementation. Refresh it against accepted B1/B2 contracts and evidence before dispatch. The two strategies reach the same canonical ending; no new alternate ending is implied. Integrated M2 still needs fresh complete ordinary-input routes, its technical gate and the fresh Opus experience audit; M3/M4 retain their full scope.
 
 At this continuation root revalidated the exact GPU correction ordinal2 and B1 ordinal1 as running, with no pending questions/children. The prior goal turn was a verified wait on these live task handles. B1's partial checks/UI work and GPU's new regression work are author progress, not completed handoffs or acceptance. Root changed only coordination documents, checked local links and whitespace, and left both implementation owners undisturbed. No live infrastructure operation occurred.
+
+## Worker memory recovery and same-thread Opus coordination — 2026-10-19
+
+Root verified and stopped a second B1 `failures.sh` test tree after the owner's report of the earlier kill. The single render-lifecycle worker held approximately7.2 GiB RSS/3.8 GiB swap; recovery and verified cgroup limits are in [WORKER_RESOURCE_LIMITS](WORKER_RESOURCE_LIMITS.md). B1 ordinal1 remains the same sole game owner, acknowledges the stop and is diagnosing under a6 GiB total-memory/zero-swap scope before further full checks. No accepted production change.
+
+GPU correction ordinal2 returned an interim incident acknowledgement, not final corrected commits:225 offline checks pass, with one mutation inconclusive and report/commit unfinished. Root read that terminal fully, confirmed memory recovery and continued the same author:
+
+- Task `node:delegated-task:command%3Amcp%3A2cbf186c-627f-4d86-933f-50a2dde43454%3Athread-send%3Asiltwake-gpu-r1-finish-after-memory-20261019`, stable request `siltwake-gpu-r1-finish-after-memory-20261019`, ordinal3, Opus5.5/high.
+- Same original thread/worktree/ownership. Complete the meaningful affected mutation and final shell suite sequentially with a1 GiB/zero-swap scope and deadline, then report/commit. No live infrastructure changes or new browser work assigned.
+
+The owner now requests Opus5.5/high to manage the existing coordinating thread; [MODEL_POLICY](MODEL_POLICY.md) and [durable handoff](OPUS_COORDINATOR_HANDOFF.md) record the transition. Separate Opus builders and fresh complete Sol6.1/xhigh review remain. Model configuration/readback and queued continuation follow this committed checkpoint; the outgoing runtime does not claim to have changed models mid-response. Root plus the existing two authors occupies three slots, with no independent reviewer active. M2-B2/C, integrated M2, M3/M4 and actual GPU enablement remain required.

@@ -6,10 +6,12 @@ The owner replaces the earlier Sol-builder/Astra-plus-Sol review arrangement wit
 
 - **Builder: `claude-opus-5-5`, `effort: high`.** Default for gameplay, engineering, world/lore implementation, original graphics, UI/audio, integration fixes and meaningful tests.
 - **Reviewer: `gpt-6.1-sol`, `reasoningEffort: xhigh`.** One fresh non-author reviewer assesses each completed feature/batch and integrated milestone, alongside coordinator inspection. Routine Astra reviewer dispatches stop.
-- **Coordinator:** retains whole-game direction, dependencies, integration and durable state. The current Astra/xhigh coordinator does not add automatic Astra review subagents.
+- **Coordinator: `claude-opus-5-5`, `effort: high`, by the owner's later 2026-10-19 request.** Takes over this existing T3 thread, retaining whole-game direction, dependencies, integration and durable state. A separate Opus builder implements and a fresh Sol reviewer reviews; adding another coordination layer is unnecessary. The handoff is in [OPUS_COORDINATOR_HANDOFF](OPUS_COORDINATOR_HANDOFF.md).
 - **Additional design reviews:** retain the previously requested fresh non-author Opus/high stage-exit experience audits. The post-M3 dedicated design critique uses a fresh Sol6.1/xhigh reviewer under the revised reviewer choice. An author never independently accepts its own work.
 
 Verify requested models/efforts against the live catalog and record effective settings. Use committed baselines and isolated worktrees; only root dispatches within the live concurrency limit. An unavailable requested model is a reported limitation, not grounds for silent substitution.
+
+Before render tests or full checks on factory-worker, read [WORKER_RESOURCE_LIMITS](WORKER_RESOURCE_LIMITS.md). Include that boundary in delegated build/review work; concurrent agents do not imply concurrent heavy test jobs.
 
 ## Builder discretion
 
