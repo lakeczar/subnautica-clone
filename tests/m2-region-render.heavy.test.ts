@@ -153,7 +153,7 @@ test("remote parked hulls hide while unpinned, recovery and transferred assembli
   const snapshot = structuredClone(fixture);
   assembly.update(fixture);
   for (const id of pins) assert.ok(scene.getMeshByName(id), "actual remote pinned hulls are submitted, not merely listed");
-  assert.ok(scene.getMeshByName("carrier.physical-compartments"), "the carrier's shell stays with its pinned assembly");
+  assert.ok(scene.getMeshByName(`${carrier.id}.shell`), "the carrier's shell stays with its pinned assembly");
   assert.deepEqual(fixture, snapshot);
   assembly.update(null);
   for (const id of pins) same(scene.getMeshByName(id), null);
