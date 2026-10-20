@@ -83,44 +83,92 @@ void main(){
 export const CEL_UNIFORMS = ["world", "viewProjection", ...opticalUniforms, "lightDirection", "time", "underwater"];
 export const LIGHT_DIRECTION = new Vector3(-0.42, 0.85, -0.3);
 
+/** World-space value noise for the cel pass: aperiodic, so no surface
+ * treatment repeats on a grid the eye can find. */
+export const NOISE_SHADER = `
+float hash12(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+float vnoise(vec2 p){
+  vec2 i=floor(p),f=fract(p),u=f*f*(3.0-2.0*f);
+  return mix(mix(hash12(i),hash12(i+vec2(1,0)),u.x),mix(hash12(i+vec2(0,1)),hash12(i+vec2(1,1)),u.x),u.y);
+}
+// Distance from p to the nearest edge between drifting cells: the network
+// that refracted surface light draws on a shallow floor.
+float cellEdge(vec2 p,float t){
+  vec2 i=floor(p),f=fract(p); float a=8.0,b=8.0;
+  for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+    vec2 g=vec2(float(x),float(y)),h=vec2(hash12(i+g),hash12(i+g+19.19));
+    vec2 o=g+.5+.44*sin(t+6.2832*h)-f; float d=dot(o,o);
+    if(d<a){b=a;a=d;}else if(d<b)b=d;
+  }
+  return sqrt(b)-sqrt(a);
+}
+`;
+
 export const CEL_FRAGMENT = `
 precision highp float;
 varying vec3 vWorld; varying vec3 vNormal; varying vec4 vColor;
 uniform vec3 lightDirection; uniform float time; uniform float underwater;
 ${opticalShader}
+${NOISE_SHADER}
 void main(){
   vec3 n=normalize(vNormal); float d=dot(n,normalize(lightDirection));
   float band=d>.66?1.09:(d>.12?.91:(d>-.32?.69:.45));
   vec3 temperature=mix(vec3(.61,.83,1.04),vec3(1.07,1.035,.93),smoothstep(-.12,.75,d));
   vec3 shade=vColor.rgb*band*temperature;
-  // Ground alone carries alpha zero. Bounded, antialiased sediment relief
-  // breaks up a near-floor wash without lifting the eye or inventing support.
-  // This is shading on submitted triangles, not a displacement/collision rule.
+  // Ground alone carries alpha zero. Its relief is shading on submitted
+  // triangles, not a displacement/collision rule, and it is read from the
+  // place itself: soft-edged world-space patches everywhere, wave ripples only
+  // on flat, shallow, submerged sediment, in fields whose heading, wavelength
+  // and coverage change across the floor, and irregular strata on steep ground.
   float ground=step(0.0,vColor.a)*(1.0-step(.5,vColor.a));
-  float phase=vWorld.x*3.2+vWorld.z*.85+sin(vWorld.z*1.4)*.65;
-  float ripple=sin(phase);
-  float relief=mix(.67,1.02,smoothstep(-.6,.65,ripple));
-  relief=mix(relief,.85,smoothstep(.8,2.5,fwidth(phase)));
-  float grain=sin(vWorld.x*37.0+sin(vWorld.z*29.0))*sin(vWorld.z*41.0);
-  float grainFade=1.0-smoothstep(.12,.6,fwidth(vWorld.x*37.0)+fwidth(vWorld.z*41.0));
-  // A close down-look sees less than a metre of floor. The broad ripples alone
-  // can fill that view with one flat value, so retain a smaller sediment scale
-  // locally and fade it before it becomes a distant moire pattern.
-  float finePhase=vWorld.x*13.0+vWorld.z*5.0+sin(vWorld.z*7.0)*.5;
-  float fine=mix(.57,1.02,smoothstep(-.35,.5,sin(finePhase)));
-  float fineFade=(1.0-smoothstep(3.0,14.0,length(vWorld-cameraPosition)))*
-    (1.0-smoothstep(.7,2.5,fwidth(finePhase)));
-  shade*=mix(1.0,relief*mix(1.0,fine,fineFade)+grain*.035*grainFade,ground);
+  vec2 w=vWorld.xz; float depth=max(0.0,-vWorld.y);
+  float view=length(vWorld-cameraPosition);
+  float blot=vnoise(w*.043)*.62+vnoise(w*.17+7.3)*.38;
+  float tone=mix(.86,1.05,smoothstep(.4,.56,blot))-.07*smoothstep(.68,.78,vnoise(w*.09+3.7));
+  float level=smoothstep(.84,.97,n.y), wet=1.0-smoothstep(-.6,.2,vWorld.y);
+  float warp=(vnoise(w*.23)-.5)*2.6;
+  float pa=dot(w,vec2(.94,.34))*3.6+warp, pb=dot(w,vec2(.21,.98))*3.1+warp*1.3;
+  float ra=pow(.5+.5*sin(pa),2.2), rb=pow(.5+.5*sin(pb),2.2);
+  float heading=smoothstep(.35,.65,vnoise(w*.016+1.7));
+  float crest=mix(ra,rb,heading);
+  float cover=smoothstep(.3,.6,vnoise(w*.028+5.1))*smoothstep(.22,.55,vnoise(w*.13+2.9))*level*wet*
+    (1.0-.85*smoothstep(10.0,85.0,depth))*(1.0-.7*smoothstep(18.0,60.0,view));
+  float rippleFade=1.0-smoothstep(.5,1.4,max(fwidth(pa),fwidth(pb)));
+  float relief=1.0-.24*cover*rippleFade*(1.0-crest);
+  // Below the wave base the floor answers to current, not swell: long
+  // silt drifts at Basin depths, then sparse pale speckle in the deep.
+  vec2 cw=vec2(dot(w,vec2(.8,.6)),dot(w,vec2(-.6,.8)));
+  float drift=smoothstep(110.0,180.0,depth)*(1.0-smoothstep(300.0,380.0,depth))*level;
+  tone*=1.0-.13*drift*smoothstep(.45,.7,vnoise(vec2(cw.x*.03,cw.y*.16)+9.1));
+  float speck=smoothstep(.8,.88,vnoise(w*1.9+3.3))*(1.0-smoothstep(.3,.8,fwidth(w.x*1.9)+fwidth(w.y*1.9)));
+  tone*=1.0+.12*speck*smoothstep(260.0,340.0,depth);
+  float steep=1.0-smoothstep(.55,.85,n.y);
+  float strata=vnoise(vec2(vWorld.y*.55+vnoise(w*.05)*2.5,blot*3.0));
+  relief*=1.0-.09*steep*smoothstep(.45,.6,strata);
+  // A close down-look sees less than a metre of floor: keep a fine,
+  // aperiodic grain there and fade it before it can shimmer at distance.
+  float grain=vnoise(w*5.3)+vnoise(w*11.0+4.1)*.5-.75;
+  float grainFade=(1.0-smoothstep(4.0,22.0,view))*(1.0-smoothstep(.35,.9,fwidth(w.x*11.0)+fwidth(w.y*11.0)));
+  shade*=mix(1.0,tone*relief+grain*.06*grainFade,ground);
   float rim=pow(1.0-max(0.0,dot(n,normalize(cameraPosition-vWorld))),3.0);
   // Selective grazing ink is in the same opaque pass and receives the same
   // fog/depth test as its owner. No shells, through-wall lines or extra draws.
   float contour=smoothstep(.64,.96,rim)*max(0.0,vColor.a-1.0);
   shade=mix(shade,vec3(.035,.105,.13),contour*.78);
-  float wx=vWorld.x*.82+sin(vWorld.z*.49+time*.2)*.9+time*.15;
-  float wz=vWorld.z*.93+sin(vWorld.x*.44-time*.15)*.7;
-  float net=1.0-smoothstep(.012,.09,abs(sin(wx)*sin(wz)));
-  float caustic=net*smoothstep(.45,.95,n.y)*(1.0-smoothstep(-.8,-.1,vWorld.y));
-  shade+=vec3(.06,.10,.055)*caustic*underwater*exp(min(0.0,vWorld.y)*.025);
+  // Caustics: two drifting cell networks, combined so their crossings read as
+  // bright filaments, gated by a slow broad mask so light pools come and go
+  // rather than covering the floor as one net. Scaled with the lit colour,
+  // fading with depth and resolving to their average brightening at distance.
+  float sky=smoothstep(.3,.9,n.y)*(1.0-smoothstep(-.8,-.1,vWorld.y))*underwater;
+  if(sky>0.0&&vWorld.y>-70.0){
+    vec2 c=w*.52+(vec2(vnoise(w*.55+time*.12),vnoise(w*.55+vec2(5.2,1.3)-time*.1))-.5)*1.3;
+    float lines=1.0-smoothstep(.0,.075,cellEdge(c,time*.6));
+    float knots=1.0-smoothstep(.0,.3,cellEdge(c*.63+vec2(4.1,9.3),time*.45+2.0));
+    float pool=smoothstep(.35,.75,vnoise(w*.04+vec2(time*.04,-time*.03)));
+    float resolve=1.0-smoothstep(.2,.6,fwidth(c.x)+fwidth(c.y));
+    float light=mix(.06,lines*(.3+.7*knots),resolve)*(.2+.8*pool)*sky*exp(-depth*.035);
+    shade+=shade*vec3(.3,.36,.27)*light+vec3(.012,.02,.014)*light;
+  }
   // Authored diffuse warmth, bounded to the existing refuge interiors. This
   // shader owns the visible light pools; Babylon lamps cannot light this cel.
   float pod=step(abs(vWorld.x),2.94)*step(19.38,vWorld.z)*step(vWorld.z,24.01)*step(.15,vWorld.y)*step(vWorld.y,3.73);
