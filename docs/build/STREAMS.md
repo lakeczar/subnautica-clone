@@ -91,3 +91,6 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **B1:** `t3-b6aef8ec`
 - **GPU author:** `t3-b9861fd3`
 - **GPU R4 review:** `siltwake-gpu-r4-sol-xhigh-6cc4bec`, on candidate `6cc4bec` (the OVMF 64 GiB window for ReBAR)
+
+## Review outcomes
+- **S5 R1 (Sol xhigh):** changes-needed. The four blockers are accepted and back with the author; the report is `review/s5` `d6eb7e7`. C09 placement: the Meridian gate hall, recorded in WORLD_PROGRESSION. S2 places it there. Planner versus real registry is checked at composition.
