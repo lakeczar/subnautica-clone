@@ -76,7 +76,7 @@ export class CueMapper {
     let hurt: CueRequest | null = null;
     for (const e of batch) {
       if (isInjury(e)) {
-        if (!hurt) { hurt = this.injury(e, s, scene, origin); if (!heard) out.push(hurt); }
+        if (!hurt) { hurt = this.injury(e, s, scene, origin); if (!heard) out.push(hurt); this.injured = true; }
         else if (e.type === "threat-damage") hurt.intensity = Math.max(hurt.intensity, injuryIntensity(e.loss));
         continue;
       }
@@ -208,7 +208,6 @@ export class CueMapper {
     const origin = [own, batchOrigin, hunter].find(finite);
     const r = this.spatial("hit.damage", origin, scene);
     r.intensity = e.type === "threat-damage" ? injuryIntensity(e.loss) : 1;
-    this.injured = true;
     return r;
   }
 

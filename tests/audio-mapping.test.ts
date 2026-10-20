@@ -67,7 +67,7 @@ test("body and equipment alarms stay centred and name their cause; a threat call
   assert.equal(gate.caption(left, 0.5), null, "repeated captions collapse");
 });
 
-test("two simultaneous hull alarms stay distinct; a third cause falls back to the generic tone", () => {
+test("two simultaneous hull alarms stay distinct in producer order; a third falls back to the generic tone", () => {
   const m = new CueMapper(), s = createGame();
   completeOpening(s);
   const v = makeVehicle("alarm-dart", "dart", { x: 123, y: -175, z: -105 }, "alarm-hold");
@@ -79,9 +79,10 @@ test("two simultaneous hull alarms stay distinct; a third cause falls back to th
   m.observe(s, sceneOf(s), 0);
   const warning: GameEvent = { type: "sound", cue: "warning" };
   const cues = [warning, warning, warning].flatMap(e => m.event(e, s, sceneOf(s))).map(r => r.cue);
-  assert.deepEqual(cues, ["alert.hull-stress", "alert.power", "alert.body"]);
+  // updateSurvival emits pressure, then power, then hull-depth warnings.
+  assert.deepEqual(cues, ["alert.power", "alert.hull-stress", "alert.body"]);
   m.observe(s, sceneOf(s), 1);
-  assert.equal(m.event(warning, s, sceneOf(s))[0]!.cue, "alert.hull-stress", "causes reset each frame");
+  assert.equal(m.event(warning, s, sceneOf(s))[0]!.cue, "alert.power", "causes reset each frame");
 });
 
 test("impact thuds stay centred even with an origin; hunter damage pans", () => {

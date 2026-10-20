@@ -122,9 +122,12 @@ test("region and hull changes crossfade and retire their old layers", (t) => {
   const regions: RegionId[] = ["suspended_garden", "silt_basin", "thermal_rift", "brine_divide", "deep_district", "island_chain", "refuge_reef"];
   for (let lap = 0; lap < 3; lap++) for (const r of regions) {
     region = r;
-    advance(0.5);
+    advance(0.1);
+    audio.update(s, true);
+    advance(0.8); // past the ambience hold
     audio.update(s, true);
     assert.equal(audio.stats()!.ambience, r);
+    assert.ok(audio.stats()!.fadingSlots <= 2);
   }
   const v = makeVehicle("d", "dart", { x: -17, y: -12, z: -8 }, "h");
   s.fleet.vehicles.push(v);
