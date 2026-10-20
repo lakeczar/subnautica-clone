@@ -89,30 +89,33 @@ export const HUSH: HullSpec = {
   ],
 };
 
-/** Surface tender. `contact` is deployed (outriggers out, ramp closed);
- * `contactStowed` is folded for a compact berth. Proposes height 2.1 (was 1.7)
- * so a seated pilot fits under the solar canopy. */
+/** Surface tender. `contact` is deployed (outriggers out, ramp closed, cargo
+ * stack shown: the largest state); `contactStowed` is folded for a compact
+ * berth. Proposes height 2.1 (was 1.7) so a seated pilot fits under the solar
+ * canopy, and berth half width 2.12 (was 2.4): the folded art is 2.06. */
 export const SPINDLE_FLOAT = { deployedX: 3.05, stowedX: 1.75, y: .46, halfLength: 1.7, radius: .3, height: .36 } as const;
 /** Knee-jointed outrigger struts: hull hinge, float attachment, segment length. */
 export const SPINDLE_STRUT = { hingeX: .84, hingeY: 1.0, floatY: .86, segment: 1.18, z: [-.55, .75] } as const;
 /** Bow ramp hinge and length; closed leans back as a splash visor. */
-export const SPINDLE_RAMP = { hinge: [0, .48, -3.14] as Vec, length: .85, width: 1.3, closed: .25, open: -1.83 } as const;
+export const SPINDLE_RAMP = { hinge: [0, .48, -3.14] as Vec, length: .8, width: 1.3, closed: .25, open: -1.83 } as const;
 export const SPINDLE: HullSpec = {
   id: "spindle", label: "Spindle", role: "surface island tender",
   dimensions: { length: 7.28, beam: 6.8, height: 2.08 },
   collider: { radius: 4, height: 2.1 },
-  berth: { size: "compact", envelope: { halfWidth: 2.4, halfLength: 3.7, height: 2.1 } },
+  berth: { size: "compact", envelope: { halfWidth: 2.12, halfLength: 3.7, height: 2.1 } },
   contact: [
     box("spindle.hull", [-.92, 0, -3.64], [.92, 1.24, 3.68]),
     box("spindle.canopy", [-1.04, .5, .4], [1.04, 2.08, 3.0]),
-    box("spindle.ramp", [-.7, .44, -3.22], [.7, 1.36, -2.82]),
-    box("spindle.outrigger.port", [-3.4, .08, -1.75], [-.8, 1.4, 1.75]),
-    box("spindle.outrigger.starboard", [.8, .08, -1.75], [3.4, 1.4, 1.75]),
+    box("spindle.ramp", [-.67, .44, -3.22], [.67, 1.3, -2.88]),
+    box("spindle.cargo", [-.74, .98, -2.65], [.74, 1.7, -.38]),
+    box("spindle.outrigger.port", [-3.4, .08, -1.75], [-.8, 1.44, 1.75]),
+    box("spindle.outrigger.starboard", [.8, .08, -1.75], [3.4, 1.44, 1.75]),
   ],
   contactStowed: [
     box("spindle.hull", [-.92, 0, -3.64], [.92, 1.24, 3.68]),
     box("spindle.canopy", [-1.04, .5, .4], [1.04, 2.08, 3.0]),
-    box("spindle.ramp", [-.7, .44, -3.22], [.7, 1.36, -2.82]),
+    box("spindle.ramp", [-.67, .44, -3.22], [.67, 1.3, -2.88]),
+    box("spindle.cargo", [-.74, .98, -2.65], [.74, 1.7, -.38]),
     box("spindle.outrigger.port", [-2.1, .08, -1.75], [-.8, 2.08, 1.75]),
     box("spindle.outrigger.starboard", [.8, .08, -1.75], [2.1, 2.08, 1.75]),
   ],
@@ -140,7 +143,7 @@ export const MANTLE: HullSpec = {
   collider: { radius: 4.5, height: 4 },
   berth: { size: "medium", envelope: { halfWidth: 2.9, halfLength: 4.5, height: 4 } },
   contact: [
-    box("mantle.bell", [-2.3, 0, -2.3], [2.3, 3.62, 2.3]),
+    box("mantle.bell", [-2.34, 0, -2.34], [2.34, 3.6, 2.34]),
     box("mantle.lift", [-.5, 3.4, -.25], [.5, 3.96, .25]),
     box("mantle.jaw", [-.78, .32, -4.38], [.78, 1.3, -1.9]),
     box("mantle.fins.port", [-2.87, .92, -.75], [-2.0, 2.62, 1.5]),

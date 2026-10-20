@@ -116,3 +116,41 @@ export function formatFit(r: FitReport): string {
   ...(r.issues.length ? r.issues.map((i) => `  ✖ ${i.mesh}: ${i.check} — ${i.detail}`) : ["  ✔ no mismatch"]),
   ...r.parts.map((p) => `    ${p.id}: art x ${f(p.min[0]!)}..${f(p.max[0]!)} y ${f(p.min[1]!)}..${f(p.max[1]!)} z ${f(p.min[2]!)}..${f(p.max[2]!)}`)].join("\n");
 }
+
+/** Walking volume reachable by the interior capsule (r 0.34 × 1.75 m) inside
+ * CARRIER_LAYOUT.interior's clamp, carrier-local. */
+export const WALKING_VOLUME = { x: 4.7 + .34, minZ: -11 - .34, maxZ: 10 + .34, floor: 4.015, head: 4 + 1.75 } as const;
+export interface SolidBox { readonly id: string; readonly min: { x: number; y: number; z: number }; readonly max: { x: number; y: number; z: number } }
+
+/** Interior mismatch check: any visible vertex inside the walking volume must
+ * lie in a walking solid (no ghost geometry the player walks through), and
+ * every fixture solid must be filled by art (no invisible walls). */
+export function interiorFit(roots: readonly Mesh[], solids: readonly SolidBox[], fixtures: readonly SolidBox[],
+  options: { tolerance?: number; fill?: number } = {}): FitIssue[] {
+  const t = options.tolerance ?? .025, fill = options.fill ?? .9, w = WALKING_VOLUME, issues: FitIssue[] = [];
+  const within = (s: SolidBox, x: number, y: number, z: number): boolean =>
+    x >= s.min.x - t && x <= s.max.x + t && y >= s.min.y - t && y <= s.max.y + t && z >= s.min.z - t && z <= s.max.z + t;
+  const cover = fixtures.map(() => ({ min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }));
+  for (const { mesh, points } of localVertices(roots)) {
+    let worst: string | null = null;
+    for (let i = 0; i < points.length; i += 3) {
+      const x = points[i]!, y = points[i + 1]!, z = points[i + 2]!;
+      for (const [k, f] of fixtures.entries())
+        if (x >= f.min.x - .001 && x <= f.max.x + .001 && y >= f.min.y - .001 && y <= f.max.y + .001 && z >= f.min.z - .001 && z <= f.max.z + .001) {
+          const c = cover[k]!;
+          for (const [a, v] of [x, y, z].entries()) { c.min[a] = Math.min(c.min[a]!, v); c.max[a] = Math.max(c.max[a]!, v); }
+        }
+      const walkable = Math.abs(x) < w.x && z > w.minZ && z < w.maxZ && y > w.floor && y < w.head;
+      if (walkable && !solids.some((s) => within(s, x, y, z))) worst ??= `(${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`;
+    }
+    if (worst) issues.push({ mesh, check: "visible in walking space without a solid", detail: `vertex at ${worst}` });
+  }
+  for (const [k, f] of fixtures.entries()) {
+    const c = cover[k]!, size = [f.max.x - f.min.x, f.max.y - f.min.y, f.max.z - f.min.z];
+    for (const a of [0, 1, 2]) {
+      const covered = Math.max(0, c.max[a]! - c.min[a]!) / size[a]!;
+      if (!(covered >= fill)) { issues.push({ mesh: f.id, check: "solid without matching art", detail: `axis ${"xyz"[a]} ${(covered * 100).toFixed(0)}% drawn` }); break; }
+    }
+  }
+  return issues;
+}

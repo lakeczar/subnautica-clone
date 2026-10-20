@@ -52,7 +52,7 @@ export function spindleArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMater
   // Running lights at the canopy corners.
   for (const side of [-1, 1]) b.glow(b.box([side * .99, 2.0, .45], [.05, .05, .1], side < 0 ? P.amber : P.mint));
   const hull = b.finish(.45);
-  hull.unfreezeWorldMatrix();
+  hull.unfreezeWorldMatrix(); hull.renderingGroupId = 1;
   glazing(scene, glass, `${id}.glazing`, [[[-.6, 1.18, .86], [.6, 1.18, .86], [.62, 1.72, .7], [-.62, 1.72, .7]]], hull);
 
   // Outrigger floats with their solar decks, built at the deployed station.

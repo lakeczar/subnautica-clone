@@ -93,7 +93,7 @@ export function mantleArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMateri
   // Running lights at the bell shoulder.
   for (const side of [-1, 1]) b.glow(b.box([side * 2.07, 2.62, .2], [.04, .08, .14], side < 0 ? P.amber : P.mint));
   const hull = b.finish(.5);
-  hull.unfreezeWorldMatrix();
+  hull.unfreezeWorldMatrix(); hull.renderingGroupId = 1;
   glazing(scene, glass, `${id}.glazing`, [
     [ring(3, 11), ring(3, 12), ring(4, 12), ring(4, 11)],
     [ring(3, 12), ring(3, 13), ring(4, 13), ring(4, 12)],

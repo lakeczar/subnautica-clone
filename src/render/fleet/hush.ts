@@ -106,7 +106,7 @@ export function hushArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial
   // Running lights: amber port, mint starboard (as the Dart).
   for (const side of [-1, 1]) b.glow(b.box([side * 2.3, 1.31, .95], [.08, .04, .14], side < 0 ? P.amber : P.mint));
   const hull = b.finish(.5);
-  hull.unfreezeWorldMatrix();
+  hull.unfreezeWorldMatrix(); hull.renderingGroupId = 1;
   const blister = blisterRings();
   glazing(scene, glass, `${id}.glazing`, [
     [C.nose[0], C.nose[1], C.crown[1], C.crown[0]],

@@ -21,6 +21,14 @@ const SECTION: readonly (readonly [number, number])[] = [
 /** Section segments that carry the side window band (port, starboard). */
 const WINDOW_SEGMENTS = { port: 3, starboard: 11 } as const;
 const STATIONS = [H.bow, W.bridge[0], W.bridge[1], -2.8, 2.8, W.galley[0], W.galley[1], H.stern] as const;
+/** The roof steps down aft of the berth rooms (their roofs reach 8.48 m up to
+ * z 5.78): the full-height bridge and berths read forward, the home aft. */
+const AFT_ROOF = { from: W.galley[0], to: W.galley[1], scale: .5 } as const;
+const roofY = (y: number, z: number): number => {
+  if (y <= 7.6 || z <= AFT_ROOF.from) return y;
+  const t = Math.min(1, (z - AFT_ROOF.from) / (AFT_ROOF.to - AFT_ROOF.from));
+  return 7.6 + (y - 7.6) * (1 - t * (1 - AFT_ROOF.scale));
+};
 const keelSections = [
   { z: -K.halfLength, w: .9, low: 1.0, high: 2.6 }, { z: -12.6, w: 1.4, low: .22, high: 3.1 },
   { z: -10, w: 1.6, low: 0, high: K.top }, { z: 11, w: 1.6, low: 0, high: K.top },
@@ -53,7 +61,7 @@ export function hearthlineArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMa
     for (let z = -12.5; z <= -9; z += 1.15) b.glow(b.box([side * (K.inner + .015), 1.0, z], [.03, .12, .3], P.mint));
   }
   // The pressure house: an arch from keel to keel, windows cut from its sides.
-  const rings = STATIONS.map((z) => SECTION.map(([x, y]): Point => [x, y, z]));
+  const rings = STATIONS.map((z) => SECTION.map(([x, y]): Point => [x, roofY(y, z), z]));
   for (let i = 0; i < rings.length - 1; i++) {
     const glazed = (STATIONS[i] === W.bridge[0]) || (STATIONS[i] === W.galley[0]);
     for (let j = 0; j < SECTION.length - 1; j++) {
@@ -64,8 +72,8 @@ export function hearthlineArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMa
   }
   // Stern wall (convex part plus skirt ends) and the bow, which is the bridge.
   const end = (z: number, flip: boolean) => {
-    const outline: Point[] = [[-H.halfWidth, H.underside, z], [-H.halfWidth, 7.6, z], [-6.05, 8.75, z], [-4.9, H.roof, z],
-      [4.9, H.roof, z], [6.05, 8.75, z], [H.halfWidth, 7.6, z], [H.halfWidth, H.underside, z]];
+    const outline: Point[] = ([[-H.halfWidth, H.underside], [-H.halfWidth, 7.6], [-6.05, 8.75], [-4.9, H.roof],
+      [4.9, H.roof], [6.05, 8.75], [H.halfWidth, 7.6], [H.halfWidth, H.underside]] as const).map(([x, y]): Point => [x, roofY(y, z), z]);
     return flip ? outline.reverse() : outline;
   };
   b.face(end(H.stern, false), P.porcelain);
@@ -90,7 +98,7 @@ export function hearthlineArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMa
     // Pressure ribs between the windows: the house reads as a hull, not a box.
     for (const z of [-6.3, -4.1, -1.1, 1.6, 4.4, 10.5]) {
       if (side > 0 && Math.abs(z - 10.5) < .1) continue;
-      b.tube([[side * K.inner, H.skirt + .02, z], [side * (H.halfWidth + .03), H.skirt + .02, z], [side * (H.halfWidth + .03), 7.6, z], [side * 6.08, 8.77, z]], .06, P.shade, 5);
+      b.tube([[side * K.inner, H.skirt + .02, z], [side * (H.halfWidth + .03), H.skirt + .02, z], [side * (H.halfWidth + .03), 7.6, z], [side * 6.08, roofY(8.77, z), z]], .06, P.shade, 5);
     }
   }
   // Starboard vestibule hatch above the keel ledge, with rails and a step.
@@ -107,11 +115,11 @@ export function hearthlineArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMa
   b.ring([0, collar[1], H.stern + .02], [1, 0, 0], [0, 1, 0], .4, .26, P.shell, 14);
   for (const side of [-1, 1]) {
     b.glow(b.box([side * (H.halfWidth + .02), 8.0, H.bow + .4], [.04, .1, .3], side < 0 ? P.amber : P.mint));
-    b.glow(b.box([side * 4.2, 8.9, H.stern + .02], [.5, .08, .04], P.warm));
+    b.glow(b.box([side * 4.2, 8.1, H.stern + .02], [.5, .08, .04], P.warm));
   }
   // Roof: a raised spine, walkway grating and the four hull-module sockets.
-  b.box([0, H.roof + .01, 0], [3.2, .02, 22], P.metal);
-  for (let z = -10.5; z <= 10.5; z += 1.5) b.box([0, H.roof + .022, z], [3.0, .006, .05], P.steelLight);
+  b.box([0, H.roof + .01, -2.6], [3.2, .02, 17], P.metal);
+  for (let z = -10.5; z <= 5.5; z += 1.5) b.box([0, H.roof + .022, z], [3.0, .006, .05], P.steelLight);
   for (const m of HEARTHLINE.mounts.filter((k) => k.kind === "hull_module")) {
     b.ring([m.at[0], m.at[1] + .028, m.at[2]], [1, 0, 0], [0, 0, 1], 1.0, .78, P.ochre, 16);
     b.ellipsoid([m.at[0], m.at[1] + .012, m.at[2]], [.76, .01, .76], P.petrol, 12);
@@ -121,7 +129,7 @@ export function hearthlineArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMa
     }
   }
   const hull = b.finish(.35);
-  hull.unfreezeWorldMatrix();
+  hull.unfreezeWorldMatrix(); hull.renderingGroupId = 1;
   glazing(scene, glass, `${id}.glazing`, windowPanes(), hull);
   for (const side of [-1, 1]) {
     const sign = label(scene, "HEARTHLINE", [side * (H.halfWidth + .03), 7.9, -2], 4.4, side < 0 ? Math.PI / 2 : -Math.PI / 2, labels);
@@ -173,7 +181,7 @@ function interiorArt(scene: Scene, cel: ShaderMaterial, id: string, hull: Mesh, 
     const zc = (z0 + z1) / 2, len = z1 - z0;
     // Ceiling with warm light strips and petrol ribs.
     b.box([0, LINING.ceiling + .03, zc], [LINING.x * 2, .06, len], P.shell);
-    for (let x = -4.5; x <= 4.6; x += 3) b.glow(b.box([x, LINING.ceiling - .005, zc], [.22, .02, len - 1.2], P.warm));
+    for (let x = -4.5; x <= 4.6; x += 3) b.glow(b.box([x, LINING.ceiling - .005, zc], [.5, .02, len - 1.2], P.warm));
     for (let z = z0 + 1.6; z < z1 - .5; z += 2.4) b.box([0, LINING.ceiling - .02, z], [LINING.x * 2, .06, .14], P.petrol);
   }
   // Hull lining on both sides between the window openings, and the aft wall.
@@ -183,12 +191,16 @@ function interiorArt(scene: Scene, cel: ShaderMaterial, id: string, hull: Mesh, 
       wallWithOpening(b, [x + side * .02, 5.7, (z0 + z1) / 2], [.04, 3.4, z1 - z0], {
         center: [x, (W.low + W.high) / 2, z0 < 0 ? (W.bridge[0] + W.bridge[1]) / 2 : (W.galley[0] + W.galley[1]) / 2],
         width: z0 < 0 ? W.bridge[1] - W.bridge[0] : side < 0 ? W.galley[1] - W.galley[0] : 0, height: W.high - W.low, normal: "x",
-      }, P.porcelain);
+      }, P.crown);
       b.box([x, 4.3, (z0 + z1) / 2], [.06, .6, z1 - z0], P.metal);
+      // Cove light under the ceiling: the shared cel lights no interior, so the
+      // home's warmth is emissive (see the S3 note on a carrier warmth term).
+      b.glow(b.box([x - side * .03, LINING.ceiling - .12, (z0 + z1) / 2], [.03, .08, z1 - z0 - .4], P.warm));
       b.box([x, 4.62, (z0 + z1) / 2], [.07, .05, z1 - z0], P.ochre);
     }
   }
-  wallWithOpening(b, [0, 5.7, LINING.stern + .02], [LINING.x * 2, 3.4, .04], { center: [0, 0, 0], width: 0, height: 0, normal: "z" }, P.porcelain);
+  wallWithOpening(b, [0, 5.7, LINING.stern + .02], [LINING.x * 2, 3.4, .04], { center: [0, 0, 0], width: 0, height: 0, normal: "z" }, P.crown);
+  b.glow(b.box([0, LINING.ceiling - .12, LINING.stern - .01], [LINING.x * 2 - .4, .08, .03], P.warm));
   b.box([0, 4.3, LINING.stern], [LINING.x * 2, .6, .06], P.metal);
   // Room floors: bridge grating, fabrication hazard border, galley warm deck,
   // cabin rug, the yellow vestibule drain field (as the sim's prompt says).
@@ -204,6 +216,13 @@ function interiorArt(scene: Scene, cel: ShaderMaterial, id: string, hull: Mesh, 
   floor(-4.2, -1.4, 9.95, 11.5, P.coralRim, .009);
   floor(1.08, 6.2, 7.4, 11.8, P.ochre);
   for (let z = 7.7; z < 11.6; z += .3) floor(1.3, 6.0, z - .02, z + .02, P.petrol, .009);
+  // Inner face of the vestibule hatch on the starboard lining: the dry exit.
+  const hz = HEARTHLINE.access.find((a) => a.kind === "side_hatch")!.at[2], hx = LINING.x - .005;
+  b.panel([hx, 5.15, hz], [1.5, 2.3], .03, P.ochre, Math.PI / 2, .3);
+  b.panel([hx - .02, 5.15, hz], [1.2, 2.0], .02, P.shade, Math.PI / 2, .24);
+  b.ring([hx - .05, 5.4, hz], [0, 0, 1], [0, 1, 0], .26, .18, P.petrol, 12);
+  for (const dz of [-.85, .85]) b.box([hx - .03, 5.15, hz + dz], [.04, 1.6, .05], P.steelLight);
+  b.glow(b.box([hx - .01, 6.45, hz], [.02, .1, .5], P.mint));
   // Fixtures, each drawn on its solid.
   for (const f of HEARTHLINE_FIXTURES) fixtureArt(b, f);
   const interior = child(b.finish(.18), hull);
@@ -235,7 +254,8 @@ function fixtureArt(b: ArtBatch, f: InteriorSolid): void {
       const slope = (z: number): number => 5.15 - (z - f.min.z) * .25 / d + .006;
       for (const x of [-.78, 0, .78]) {
         b.face([[x + .3, slope(-8.5), -8.5], [x - .3, slope(-8.5), -8.5], [x - .3, slope(-8.0), -8.0], [x + .3, slope(-8.0), -8.0]], P.glass);
-        b.glow(b.box([x, slope(-8.2) + .003, -8.2], [.44, .004, .05], x === 0 ? P.mint : P.reflection));
+        b.glow(b.face([[x + .26, slope(-8.45) + .002, -8.45], [x - .26, slope(-8.45) + .002, -8.45], [x - .26, slope(-8.05) + .002, -8.05], [x + .26, slope(-8.05) + .002, -8.05]], x === 0 ? P.jade : P.glass));
+        b.glow(b.box([x, slope(-8.2) + .004, -8.2], [.4, .004, .04], x === 0 ? P.mint : P.reflection));
       }
       for (const x of [-.45, .45]) b.tube([[x, 4.93, -7.72], [x, 5.06, -7.6]], .025, P.metal, 5);
       b.ellipsoid([.45, 5.07, -7.58], [.045, .045, .045], P.ochre, 6);
@@ -261,7 +281,7 @@ function fixtureArt(b: ArtBatch, f: InteriorSolid): void {
       break;
     }
     case "hl.bulkhead.fore.port": case "hl.bulkhead.fore.starboard": case "hl.bulkhead.aft": {
-      b.bounds(f, P.porcelain);
+      b.bounds(f, P.crown);
       const along = w > d, t = along ? d : w;
       for (const off of [-1, 1]) {
         const p: Point = along ? [cx, 4.3, cz + off * (t / 2 + .004)] : [cx + off * (t / 2 + .004), 4.3, cz];
@@ -313,7 +333,7 @@ function fixtureArt(b: ArtBatch, f: InteriorSolid): void {
       for (const x of [f.min.x + .04, f.max.x - .04]) b.box([x, (4 + top) / 2, cz], [.06, top - 4, d], P.petrol);
       for (const y of [4.1, 4.9, 5.7]) {
         b.box([cx, y, cz], [w - .08, .04, d], P.metal);
-        for (let i = 0; i < 3; i++) b.box([f.min.x + .35 + i * .6, y + .16, cz], [.42, .28, d - .1], i % 2 ? P.ochre : P.steelLight);
+        for (let i = 0; i < 3; i++) b.box([f.min.x + w * (i + .5) / 3, y + .16, cz], [Math.min(.42, w / 3 - .1), .28, d - .1], i % 2 ? P.ochre : P.steelLight);
       }
       break;
     }
@@ -418,7 +438,7 @@ export function hearthlineShellArt(scene: Scene, cel: ShaderMaterial, glass: Sha
     const x = (x0 + x1) / 2, z = (z0 + z1) / 2;
     if (rooms.some((r) => x > r.min.x - CARRIER_LAYOUT.wall && x < r.max.x + CARRIER_LAYOUT.wall && z > r.min.z - CARRIER_LAYOUT.wall && z < r.max.z + CARRIER_LAYOUT.wall)) continue;
     b.box([x, LINING.ceiling + .03, z], [x1 - x0, .06, z1 - z0], P.shell);
-    if (x1 - x0 > .5 && z1 - z0 > 1.5) b.glow(b.box([x, LINING.ceiling - .005, z], [Math.min(.22, x1 - x0 - .2), .02, z1 - z0 - .6], P.warm));
+    if (x1 - x0 > .5 && z1 - z0 > 1.5) b.glow(b.box([x, LINING.ceiling - .005, z], [Math.min(.5, x1 - x0 - .2), .02, z1 - z0 - .6], P.warm));
   }
   const passage = configuration === "compact" ? [rooms[0]!.max.x + CARRIER_LAYOUT.wall, rooms[1]!.min.x - CARRIER_LAYOUT.wall] : [rooms[0]!.max.x + CARRIER_LAYOUT.wall, CARRIER_LAYOUT.interior.maxX];
   const px = (passage[0]! + passage[1]!) / 2;

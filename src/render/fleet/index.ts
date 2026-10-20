@@ -48,6 +48,8 @@ export function updateFleetHullArt(mesh: Mesh, state: GameState | null, v: Vehic
   const hull = v.hull as S3HullId;
   setFleetPose(mesh, hull, v.id, { cockpit: state?.player.controlledVehicleId === v.id, fold: v.berth ? 1 : 0, ramp: 0 });
   for (const c of mesh.getChildMeshes(true)) {
+    // Spindle's dry cargo stack shows while its hold carries anything.
+    if (c.name === `${v.id}.cargo`) c.setEnabled(!!state?.inventory.items.some((i) => i.containerId === v.cargoId && i.quantity > 0));
     if (c.name !== `${v.id}.cockpit`) continue;
     for (const g of c.getChildMeshes(true))
       if (g.name === `${v.id}.instrument.charge`) g.scaling.x = Math.max(0, Math.min(1, v.charge / 100));

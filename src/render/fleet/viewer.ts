@@ -154,11 +154,29 @@ function describe(): string {
   return bits.join(", ") || "default";
 }
 
-let sheet: ArcRotateCamera[] = [];
+let sheet: (ArcRotateCamera | FreeCamera)[] = [];
+const ROOM_SHEETS: Record<string, readonly string[]> = {
+  "rooms-fore": ["bridge", "bridge-aft", "fabrication", "stores"],
+  "rooms-aft": ["passage", "galley", "cabin", "vestibule"],
+};
 function aim(): void {
   for (const c of sheet) c.dispose();
   sheet = []; scene.activeCameras = [];
   const s = spec(), room = ROOMS[state.view];
+  const rooms = ROOM_SHEETS[state.view];
+  if (rooms && s.id === "hearthline") {
+    for (const [k, name] of rooms.entries()) {
+      const [p, t] = ROOMS[name]!;
+      const c = new FreeCamera(`viewer.sheet.${name}`, new Vector3(...p).add(origin), scene);
+      c.setTarget(new Vector3(...t).add(origin));
+      c.minZ = .05; c.maxZ = 450; c.fov = 1.1;
+      c.viewport = new Viewport((k % 2) * .5, k < 2 ? .5 : 0, .5, .5);
+      sheet.push(c);
+    }
+    orbit.detachControl(); eye.detachControl();
+    scene.activeCameras = sheet;
+    return;
+  }
   if (state.view === "sheet") {
     // Four orbit views in quadrants: one screenshot per hull.
     const size = Math.max(s.dimensions.length, s.dimensions.beam);
@@ -203,7 +221,7 @@ function panel(): void {
     return `<fieldset><legend>${legend}</legend>${items.map(([label, on], i) =>
       `<button id="${id}${i}" aria-pressed="${on}">${label}</button>`).join("")}</fieldset>`;
   };
-  const views = ["sheet", ...Object.keys(ORBITS), ...(state.hull === "hearthline" ? Object.keys(ROOMS) : ["pilot"])];
+  const views = ["sheet", ...Object.keys(ORBITS), ...(state.hull === "hearthline" ? [...Object.keys(ROOM_SHEETS), ...Object.keys(ROOMS)] : ["pilot"])];
   el.innerHTML = `<h1>S3 FLEET VIEWER</h1>` +
     group("Hull", (Object.keys(S3_HULLS) as S3HullId[]).map((h) => [S3_HULLS[h].label, state.hull === h, () => { state.hull = h; state.view = "three-quarter"; }])) +
     group("View", views.map((v) => [v, state.view === v, () => { state.view = v; }])) +
