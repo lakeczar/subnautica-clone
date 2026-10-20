@@ -1,6 +1,6 @@
 # SYS-2 bases and knowledge: interface and handoff
 
-Opus 5.5 high · branch `feat/sys-2-bases-knowledge` from `feat/siltwake-first-expedition` at `7519cfb` · new files only, story-neutral. These are rules, data and tests ready to compose. There is no final UI and no wiring. Revised for [Sol R1](../reviews/SYS-2-SOL-XHIGH-R1.md) (F1–F6 and both P3s) [Sol R2](../reviews/SYS-2-SOL-XHIGH-R2.md) (R2-F1, R2-F2) and [Sol R3](../reviews/SYS-2-SOL-XHIGH-R3.md) (R3-F1, R3-F2, plus the coordinator's main-path kit-plan decision); see the fix tables below.
+Opus 5.5 high · branch `feat/sys-2-bases-knowledge` from `feat/siltwake-first-expedition` at `7519cfb` · new files only, story-neutral. These are rules, data and tests ready to compose. There is no final UI and no wiring. Revised for [Sol R1](../reviews/SYS-2-SOL-XHIGH-R1.md) (F1–F6 and both P3s) [Sol R2](../reviews/SYS-2-SOL-XHIGH-R2.md) (R2-F1, R2-F2) [Sol R3](../reviews/SYS-2-SOL-XHIGH-R3.md) (R3-F1, R3-F2, plus the coordinator's main-path kit-plan decision) and [Sol R4](../reviews/SYS-2-SOL-XHIGH-R4.md) (R4-F1, by stack identity); see the fix tables below.
 
 ## What exists
 | Area | Content (`src/content/systems/`) | Rules (`src/sim/systems/`) |
@@ -33,6 +33,7 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
   - **Power and range:** a decoder needs power. Without a relay on its host, it works only within 250 m of the player.
   - **Results:** a completed decode grants plans and adds decode beacons for revealed sites, landmarks and hints.
   - **Main-path check:** `decoderPlanProblems(path)` checks that `bp_decoder` is granted on the main path, by a step that needs no decode, before any step that does. `mainPathPlanProblems(path)` adds the coordinator's rule: every plan in `MAIN_PATH_PLANS` (the decoder and all three outpost-kit tiers) is granted on the main path by a step that needs no decode. The independent route never depends on an optional decode for its kits; decodes may only grant copies.
+  - **Limit:** `MainPathStep` describes decode requirements only, so the check can't see a step that needs a kit plan (kit prerequisite order). It proves the copies/no-decode guarantee, not full route reachability; composition must check kit prerequisites in the route graph.
   - **Where the plans come from:** proposed main-path technical records in `SYS2_TECH_RECORDS`. The workshop outpost sheet gives the field-outpost and planter plans, and the workshop signal rack gives the decoder, relay and survey-station plans. The Canopy laboratory sheet gives standard-kit plans, and the Basin boundary station plate gives advanced-kit plans. Each `DEMO_MAIN_PATH` step names its record, and a test checks that the record carries those plans.
 - **Cultivation.**
   - **Crops:** staple cups (meal), salve frond (`field_salve`, medicine), ribbon fan (flex membrane), lumen bulb (`bio_cell`, charge 100) and pale crust (conductive crust, `sampling: "specimen"` for the Hush bay).
@@ -108,9 +109,10 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
   - a feedback key (proposed `N`) opens a one-line note: `addNote(rec, state, text, new Date().toISOString())`;
   - an export button saves `exportTimelineText` as a file.
   - **Travel** (F5) counts only steps where the piloted craft moves at 0.5 m/s or faster. Each travel event is one stretch of motion between points of interest (new things, gathers, sources), with its stationary helm seconds alongside. Time at a still helm is ordinary play, and the report shows it separately.
-  - **Deaths and recovery** (F6, R2-F1, R3-F1, R3-F2): each open death keeps its own play timestamp and a **ledger** of what it left. That's its craft losses still out (`loss:<vehicleId>`, any loss no other open death claims) and its cargo, as quantities per cache and item kind.
-    - **Retrieval:** each cargo line only shrinks, to what its cache holds now. Partial transfers count, and the player's own later deposits never extend a death. Putting cargo back doesn't raise what's owed; once retrieved, it's the player's deposit. A death closes only when every line reaches zero and every loss has ended, never on a mere decrease.
-    - **Salvage:** an in-place salvage ends the loss and creates a canister in the same step, so the death's obligation moves to that canister's contents (frame and hold) and closes once they're hauled. Salvage straight into a carried hold ends the loss with nothing left over, so it closes at once. A towed craft stays lost until it's patched or salvaged.
+  - **Deaths and recovery** (F6, R2-F1, R3-F1, R3-F2): each open death keeps its own play timestamp and a **ledger** of what it left. That's its craft losses still out (`loss:<vehicleId>`, any loss no other open death claims) and its cargo, as the specific **stacks** (by item ID) it put in its cache.
+    - **Retrieval by stack identity** (R4-F1): each cargo line follows one owed stack. `inventory.ts` keeps a stack's ID through whole moves and on the source of a partial transfer. Only quantity that leaves that stack counts: a drop since the last observation is retrieved, and a stack moved out of the cache or merged away counts as fully retrieved. Deposits, even of the same kind, are separate stacks and never add to what's owed. A line never owes more than its stack holds, which also clamps a tampered import. A death closes only when every line reaches zero and every loss has ended.
+    - **Ambiguous merges settle in the player's favour:** a partial deposit merges into a same-kind stack already in the cache, possibly an owed one. The increase adds nothing, and any later drop from that stack counts as retrieval. So the player can finish a recovery while some of their own merged deposit stays behind, but never the reverse.
+    - **Salvage:** an in-place salvage ends the loss and creates a canister in the same step, so the death's obligation moves to that canister's stacks (frame and hold) and closes once they're hauled. This relies on `salvageToCanister` always allocating a fresh cache; if salvage ever merges into an existing cache, it needs explicit attribution. Salvage straight into a carried hold ends the loss with nothing left over, so it closes at once. A towed craft stays lost until it's patched or salvaged.
     - **Events:** the death event carries the keys it started with. The recovery event carries `of` (the death's tick) and every key ever attributed, canisters included.
     - **Reload:** the export's session header carries the live ledger (`session.pending`). `resumeRecorder` restores it exactly, so any number of open deaths, partly hauled caches and canister handoffs survive a reload.
     - **Idle and nothing lost:** recovery time is play time, so idle is excluded. A death that left nothing closes at once, labelled `nothing-lost`. The report counts it separately and keeps it out of the recovery times. It measures asset recovery only, not the full disruption of a death, such as retracing the route.
@@ -127,7 +129,7 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
 - **Interactions:** no world placement or interaction wiring exists, and no beacon or outpost art.
 
 ## Checks
-- **`npm test`** (typecheck, test build, fast tier): **830/830 pass**. SYS-2 adds 76 tests in `tests/systems-*.test.ts` and `tests/timeline-*.test.ts` (56 at R1, 12 for its fixes, 3 for R2's, 5 for R3's and the plan decision).
+- **`npm test`** (typecheck, test build, fast tier): **832/832 pass**. SYS-2 adds 78 tests in `tests/systems-*.test.ts` and `tests/timeline-*.test.ts` (56 at R1, 12 for its fixes, 3 for R2's, 5 for R3's and the plan decision, 2 more for R4's).
 - **`npx tsc --noEmit -p tools/journal-lab.tsconfig.json`** is clean. The lab script was bundled with esbuild and run in Node against a DOM stub; it builds all 6 tabs, the chart and the pack preview.
 - **Heavy tier:** not run. No SYS-2 file reaches Babylon, and the fast tier's import guard confirms that for every new test.
 - **Browser:** no run, as briefed.
@@ -135,6 +137,7 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
 - **Sol R1 probes** (`probes.mjs`, each block run separately): every finding's block now fails its bug-reproducing assertion, except F1's. That block calls the unchanged `recovery.incapacitate` directly, which needs the one-line composed filter above.
 - **Sol R2 probes** (`r2/new-probes.mjs`, output redirected to `/work/tmp`): **9/9 pass**, including the four that reproduced R2-F1 and R2-F2. In `r2/r1-adapted-probes.mjs`, every block passes except the last. That block fakes a death with `failures++` and no cache or loss, then expects a timed recovery on `rescues++`. Under the R2-F1 rule such a death closes at once as `nothing-lost`, so `unrecovered` is 0 as asserted, but it has no recovery time. This is intended: there was nothing to recover.
 - **Sol R3 probes** (`r3/recovery-findings.mjs` and `r3/adverse-probes.mjs`, output redirected to `/work/tmp`): R3-F1 and R3-F2 pass, and all 8 adverse probes pass. The R2 probes still pass 9/9.
+- **Sol R4 probes** (`r4/ledger-probes.mjs`, redirected): 7/7 pass once one block compares only `cache`, `kind` and `quantity`. The new lines also carry `item` and `last`. The inflated-import case now clamps to real stock. The R3 and R2 probes still pass.
 
 ## R1 fixes
 | Finding | Fix | Test |
@@ -159,3 +162,8 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
 | R3-F1 canister salvage | a loss that ends with a new canister moves the death's obligation to the canister's contents; salvage into a carried hold closes at once; the ledger persists in `session.pending` | `timeline-recovery`: real Creel salvage, partial hauls, reload, exact time; real Dart salvage into the diver hold |
 | R3-F2 unrelated deposits | per-death cargo lines by cache and kind that only shrink; close only at zero | `timeline-recovery`: a meal deposited in the cache, reload; original cargo put back and taken again |
 | Coordinator: kit plans | `MAIN_PATH_PLANS`, `mainPathPlanProblems`; standard and advanced kit plans on main-path records; optional decodes grant copies only | `systems-decoder`: holds for the demo path; fails without the lab sheet, behind a decode, or without the field kit; records carry their plans |
+
+## R4 fix
+| Finding | Fix | Test |
+| --- | --- | --- |
+| R4-F1 same-kind deposits | ledger lines follow the owed stack IDs; only quantity leaving those stacks counts; deposits never add; merges settle in the player's favour; a line never exceeds its stack | `timeline-recovery`: helpers pick stacks by ID; the R4 repro through two reloads; put-back as its own stack; a merged deposit settling for the player |

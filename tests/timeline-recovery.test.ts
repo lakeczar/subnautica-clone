@@ -40,16 +40,22 @@ function session() {
       go();
       return s.recovery.caches.at(-1)!;
     },
-    take(cache: { position: GameState["player"]["pose"]["position"]; containerId: string }, kind: string, n: number) {
+    /** The one stack of `kind` in `container`; fails if there are several, so ambiguous picks can't hide. */
+    stack(container: string, kind: string): string {
+      const found = s.inventory.items.filter((i) => i.containerId === container && i.kind === kind);
+      assert.equal(found.length, 1, `one ${kind} stack in ${container}`);
+      return found[0]!.id;
+    },
+    /** Moves `n` from the named stack to the diver hold at the cache. */
+    take(cache: { position: GameState["player"]["pose"]["position"] }, itemId: string, n: number) {
       s.player.pose.position = { ...cache.position };
-      const stack = s.inventory.items.find((i) => i.containerId === cache.containerId && i.kind === kind)!;
-      assert.equal(transfer(s, stack.id, "diver", n), null);
+      assert.equal(transfer(s, itemId, "diver", n), null);
       go();
     },
-    put(cache: { position: GameState["player"]["pose"]["position"]; containerId: string }, kind: string, n: number) {
+    /** Moves `n` from the named diver stack into the cache. */
+    put(cache: { position: GameState["player"]["pose"]["position"]; containerId: string }, itemId: string, n: number) {
       s.player.pose.position = { ...cache.position };
-      const stack = s.inventory.items.find((i) => i.containerId === "diver" && i.kind === kind)!;
-      assert.equal(transfer(s, stack.id, cache.containerId, n), null);
+      assert.equal(transfer(s, itemId, cache.containerId, n), null);
       go();
     },
   };
@@ -91,15 +97,15 @@ test("R3-F1: in-place canister salvage hands the death's obligation to the canis
   assert.deepEqual(Object.fromEntries(owed.cargo.map((c) => [c.kind, c.quantity])),
     { structural_alloy: 10, silica_glass: 8, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 });
   // Haul part of it, reload, wait: still open with the exact remainder.
-  q.take(canister, "silica_glass", 8);
-  q.take(canister, "structural_alloy", 6);
+  q.take(canister, q.stack(canister.containerId, "silica_glass"), 8);
+  q.take(canister, q.stack(canister.containerId, "structural_alloy"), 6);
   q.reload();
   q.go(600);
   assert.deepEqual(Object.fromEntries(q.rec.pending[0]!.cargo.map((c) => [c.kind, c.quantity])),
     { structural_alloy: 4, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 });
   assert.equal(q.deaths().unrecovered, 1);
   for (const kind of ["structural_alloy", "flex_membrane", "conductive_crust", "buoyant_resin"])
-    q.take(canister, kind, q.s.inventory.items.find((i) => i.containerId === canister.containerId && i.kind === kind)!.quantity);
+    q.take(canister, q.stack(canister.containerId, kind), q.s.inventory.items.find((i) => i.containerId === canister.containerId && i.kind === kind)!.quantity);
   const [recovery] = q.recoveries();
   assert.ok(recovery);
   assert.ok(recovery.keys!.includes(`loss:${v.id}`) && recovery.keys!.includes(`cache:${canister.id}`));
@@ -129,32 +135,64 @@ test("R3-F1: salvage straight into a carried hold recovers at once", () => {
 test("R3-F2: replacement cargo deposited in the cache never keeps a recovered death open, through a reload", () => {
   const q = session();
   const cache = q.die({ x: -40, y: -10, z: -20 }, [["silica_glass", 2]]);
-  q.take(cache, "silica_glass", 1);
+  const lost = q.stack(cache.containerId, "silica_glass");
+  q.take(cache, lost, 1);
   addItem(q.s, "meal", 1, "diver");
-  q.put(cache, "meal", 1);
+  q.put(cache, q.stack("diver", "meal"), 1);
   q.reload();
-  assert.deepEqual(q.rec.pending[0]!.cargo, [{ cache: cache.id, kind: "silica_glass", quantity: 1 }]);
-  q.take(cache, "silica_glass", 1);
+  assert.deepEqual(q.rec.pending[0]!.cargo, [{ cache: cache.id, item: lost, kind: "silica_glass", quantity: 1, last: 1 }]);
+  q.take(cache, lost, 1);
   assert.equal(q.recoveries().length, 1, "all the lost glass is back; the meal is the player's own deposit");
   assert.deepEqual(q.s.inventory.items.filter((i) => i.containerId === cache.containerId).map((i) => i.kind), ["meal"]);
   assert.equal(q.deaths().unrecovered, 0);
 });
 
-test("R3-F2: putting retrieved cargo back neither closes the death early nor raises what's owed", () => {
+test("R4-F1: a same-kind deposit is its own stack; retrieving the original stack recovers, through a reload", () => {
   const q = session();
-  const cache = q.die({ x: -40, y: -10, z: -20 }, [["silica_glass", 2], ["flex_membrane", 2]]);
-  q.take(cache, "silica_glass", 2);
-  q.put(cache, "silica_glass", 1);
-  // One glass is back in the cache: still owed? No: the line only shrinks, so glass stays settled.
-  assert.deepEqual(q.rec.pending[0]!.cargo, [{ cache: cache.id, kind: "flex_membrane", quantity: 2 }]);
-  q.take(cache, "flex_membrane", 1);
-  assert.equal(q.recoveries().length, 0, "a partial retrieval is not a recovery");
+  const cache = q.die({ x: -40, y: -10, z: -20 }, [["silica_glass", 2]]);
+  const original = q.stack(cache.containerId, "silica_glass");
+  // A fresh glass in its own stack, deposited whole: it keeps its own ID in the cache.
+  const deposit = addItem(q.s, "silica_glass", 1, "diver").id;
+  assert.notEqual(deposit, original);
+  q.put(cache, deposit, 1);
+  assert.deepEqual(q.s.inventory.items.filter((i) => i.containerId === cache.containerId).map((i) => i.id).sort(), [original, deposit].sort());
   q.reload();
-  assert.deepEqual(q.rec.pending[0]!.cargo, [{ cache: cache.id, kind: "flex_membrane", quantity: 1 }]);
-  q.put(cache, "flex_membrane", 1);
-  q.take(cache, "flex_membrane", 1);
-  assert.equal(q.recoveries().length, 0, "taking back what was just returned is not the last of the lost membrane");
-  q.take(cache, "flex_membrane", 1);
+  assert.equal(q.recoveries().length, 0);
+  q.take(cache, original, 2);
+  assert.equal(q.recoveries().length, 1, "the original two glass are back; the deposit owes nothing");
+  assert.deepEqual(q.s.inventory.items.filter((i) => i.containerId === cache.containerId).map((i) => i.id), [deposit]);
+  q.reload();
+  assert.deepEqual([q.deaths().unrecovered, q.rec.pending.length], [0, 0]);
+});
+
+test("R4-F1: put-back variant: partial retrieval, the returned glass as its own stack, then the last original", () => {
+  const q = session();
+  const cache = q.die({ x: -40, y: -10, z: -20 }, [["silica_glass", 2]]);
+  const original = q.stack(cache.containerId, "silica_glass");
+  q.take(cache, original, 1);
+  const carried = q.stack("diver", "silica_glass");
+  assert.notEqual(carried, original, "a partial transfer leaves the original ID in the cache");
+  q.put(cache, carried, 1);
+  assert.deepEqual(q.rec.pending[0]!.cargo.map((c) => [c.item, c.quantity]), [[original, 1]]);
+  q.reload();
+  q.take(cache, carried, 1);
+  assert.equal(q.recoveries().length, 0, "taking back the returned stack is not the last original glass");
+  q.take(cache, original, 1);
   assert.equal(q.recoveries().length, 1);
   assert.equal(q.deaths().unrecovered, 0);
+});
+
+test("R4-F1: a deposit that merges into an owed stack settles in the player's favour", () => {
+  const q = session();
+  const cache = q.die({ x: -40, y: -10, z: -20 }, [["silica_glass", 2]]);
+  const original = q.stack(cache.containerId, "silica_glass");
+  addItem(q.s, "silica_glass", 2, "diver");
+  // A partial transfer into the cache merges into the original stack (inventory.ts addItem).
+  q.put(cache, q.stack("diver", "silica_glass"), 1);
+  assert.equal(q.s.inventory.items.find((i) => i.id === original)!.quantity, 3);
+  assert.deepEqual(q.rec.pending[0]!.cargo.map((c) => [c.quantity, c.last]), [[2, 3]], "the merge adds nothing to what's owed");
+  q.take(cache, original, 1);
+  q.take(cache, original, 1);
+  assert.equal(q.recoveries().length, 1, "two glass left the merged stack: the two lost are counted as back");
+  assert.equal(q.s.inventory.items.find((i) => i.id === original)!.quantity, 1);
 });

@@ -38,15 +38,17 @@ export interface TimelineEvent {
   wall?: string;
 }
 /** One death not yet recovered. `losses` are craft still lost (`recovery.losses`
- * vehicle IDs); `cargo` is what the death left, per cache and item kind. Lines only
- * shrink, so later deposits never extend a death. It closes when both are empty. */
+ * vehicle IDs); `cargo` is the specific stacks the death put in its cache (or a
+ * salvage canister), by stack ID. A line shrinks only when quantity leaves that
+ * stack; deposits never add to it. The death closes when both are empty. */
 export interface PendingRecovery {
   tick: number;
   play: number;
   /** Everything ever attributed: `cache:<id>` (death caches and salvage canisters), `loss:<vehicleId>`. */
   keys: string[];
   losses: string[];
-  cargo: { cache: string; kind: string; quantity: number }[];
+  /** `quantity` still owed from stack `item`; `last` is that stack's quantity at the last observation. */
+  cargo: { cache: string; item: string; kind: string; quantity: number; last: number }[];
 }
 /** `pending` is the live recovery ledger at export, so a reload resumes it exactly. */
 export interface TimelineSession { id: string; started: string; build?: string; end: { tick: number; play: number; idle: number }; pending?: PendingRecovery[] }
@@ -73,7 +75,8 @@ export function parseTimeline(text: string): { ok: true; value: TimelineExport }
   const strings = (a: unknown): boolean => Array.isArray(a) && a.every((x) => typeof x === "string");
   if (session.pending !== undefined && !(Array.isArray(session.pending) && session.pending.every((p) => obj(p) && num(p.tick) && num(p.play) &&
     strings(p.keys) && strings(p.losses) && Array.isArray(p.cargo) &&
-    p.cargo.every((c) => obj(c) && typeof c.cache === "string" && typeof c.kind === "string" && num(c.quantity) && c.quantity > 0))))
+    p.cargo.every((c) => obj(c) && typeof c.cache === "string" && typeof c.item === "string" && typeof c.kind === "string" &&
+      num(c.quantity) && c.quantity > 0 && num(c.last) && c.last >= 0))))
     return { ok: false, error: "Malformed pending recoveries." };
   if (!Array.isArray(v.events) || !num(v.dropped)) return { ok: false, error: "Malformed events." };
   for (const [n, e] of v.events.entries())

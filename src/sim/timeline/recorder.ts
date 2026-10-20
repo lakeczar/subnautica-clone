@@ -32,8 +32,8 @@ export interface ObserveContext {
 interface Snapshot {
   blueprints: number; scans: number; evidence: number; discoveries: number; crafted: number;
   vehicles: string[]; collections: number; failures: number;
-  /** Visited caches (death caches and salvage canisters): item quantity per kind in each. */
-  caches: Map<string, Map<string, number>>;
+  /** Visited caches (death caches and salvage canisters): their stacks by ID. */
+  caches: Map<string, Map<string, { kind: string; quantity: number }>>;
   stocks: Map<string, number>;
 }
 export interface TimelineRecorder {
@@ -90,18 +90,18 @@ function push(rec: TimelineRecorder, e: TimelineEvent): void {
   if (rec.events.length >= TIMELINE_EVENT_CAP) { rec.dropped++; return; }
   rec.events.push(e);
 }
-function cacheContents(s: GameState): Map<string, Map<string, number>> {
-  const byContainer = new Map(s.recovery.caches.map((c) => [c.containerId, new Map<string, number>()]));
-  for (const i of s.inventory.items) {
-    const kinds = byContainer.get(i.containerId);
-    if (kinds) kinds.set(i.kind, (kinds.get(i.kind) ?? 0) + i.quantity);
-  }
+/** Stacks in each visited cache: stack ID → { kind, quantity }. */
+function cacheContents(s: GameState): Map<string, Map<string, { kind: string; quantity: number }>> {
+  const byContainer = new Map(s.recovery.caches.map((c) => [c.containerId, new Map<string, { kind: string; quantity: number }>()]));
+  for (const i of s.inventory.items) byContainer.get(i.containerId)?.set(i.id, { kind: i.kind, quantity: i.quantity });
   return new Map(s.recovery.caches.map((c) => [c.id, byContainer.get(c.containerId)!]));
 }
 const clonePending = (p: readonly PendingRecovery[]): PendingRecovery[] =>
   p.map((x) => ({ ...x, keys: [...x.keys], losses: [...x.losses], cargo: x.cargo.map((c) => ({ ...c })) }));
+/** The stacks a death (or a salvage canister) put in a cache: the death owes exactly these. */
 const cargoOf = (now: Snapshot, cache: string): PendingRecovery["cargo"] =>
-  [...(now.caches.get(cache) ?? [])].filter(([, q]) => q > 0).map(([kind, quantity]) => ({ cache, kind, quantity }));
+  [...(now.caches.get(cache) ?? [])].filter(([, x]) => x.quantity > 0)
+    .map(([item, x]) => ({ cache, item, kind: x.kind, quantity: x.quantity, last: x.quantity }));
 function snapshot(s: GameState): Snapshot {
   return {
     blueprints: s.knowledge.blueprints.length, scans: s.knowledge.scans.length, evidence: s.knowledge.evidence.length,
@@ -232,9 +232,14 @@ export function observe(rec: TimelineRecorder, s: GameState, ctx: ObserveContext
  * - A loss that ends while a new canister appears (in-place salvage) hands its
  *   obligation to the canister's contents; a loss that ends otherwise (patch,
  *   salvage into a carried hold) is recovered.
- * - Each cargo line only shrinks, to what its cache holds now: retrievals count,
- *   deposits of anything never extend a death, and putting cargo back can't
- *   close one early.
+ * - Each cargo line follows one owed stack by ID (inventory.ts keeps a stack's ID
+ *   through whole moves and partial transfers out). Only quantity leaving that
+ *   stack counts: a drop since the last observation is retrieved, and a stack
+ *   moved out of the cache or merged away counts as fully retrieved. Deposits,
+ *   even of the same kind, are separate stacks and owe nothing.
+ * - A partial deposit can merge into an owed stack and make identity ambiguous.
+ *   That settles in the player's favour: the increase adds nothing, and any later
+ *   drop counts as retrieval.
  * Recovery time is play time, so idle waiting is excluded. A death that left
  * nothing closes at once as `nothing-lost`, counted apart from recovery times. */
 function settleRecoveries(rec: TimelineRecorder, s: GameState, now: Snapshot, fresh: string[], stamp: Omit<TimelineEvent, "kind">): void {
@@ -245,7 +250,13 @@ function settleRecoveries(rec: TimelineRecorder, s: GameState, now: Snapshot, fr
       const canister = canisters.shift();
       if (canister) { p.keys.push(`cache:${canister}`); p.cargo.push(...cargoOf(now, canister)); }
     }
-    for (const line of p.cargo) line.quantity = Math.min(line.quantity, now.caches.get(line.cache)?.get(line.kind) ?? 0);
+    for (const line of p.cargo) {
+      const q = now.caches.get(line.cache)?.get(line.item)?.quantity ?? 0;
+      if (q < line.last) line.quantity = Math.max(0, line.quantity - (line.last - q));
+      // A stack never owes more than it holds (this also clamps an inflated import).
+      line.quantity = Math.min(line.quantity, q);
+      line.last = q;
+    }
     p.cargo = p.cargo.filter((line) => line.quantity > 0);
     if (p.losses.length || p.cargo.length) continue;
     rec.pending = rec.pending.filter((x) => x !== p);
