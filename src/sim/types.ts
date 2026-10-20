@@ -104,6 +104,9 @@ export interface CarrierState {
   sequence: number;
   completed: string[];
   launchBlocked: boolean;
+  /** Hearthline interior sockets (HEARTHLINE_SOCKETS ids) and the occupant kind
+   * each holds, or null. Occupied footprints are walking solids. */
+  sockets: Record<string, string | null>;
 }
 export interface GameState {
   tick: number;

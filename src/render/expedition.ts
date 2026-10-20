@@ -21,6 +21,7 @@ import { createObservationPane, wallWithOpening } from "./materials.js";
 import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
 import { pinnedVehicleIds, type RegionArt, type RenderRegion } from "./regions.js";
 import { b1Source, b1SourceArt, createB1Sites, creelArt, updateCreelArt } from "./fleetArt.js";
+import { fleetHullArt, hearthlineShellArt, updateFleetHullArt } from "./fleet/index.js";
 
 /** Individual bent maintenance plates keep contact with the local surface.
  * Their pale service tags, folded edges and bolt holes distinguish salvage
@@ -77,237 +78,100 @@ function surfaceGlass(b: ArtBatch, x: number, z: number): void {
  * at most 3 mm proud of them; the capsule passage and the complete rail path stay
  * empty. Only the rendered fore/aft walls are cut around sealed observation
  * panes; the simulation's complete structural walls remain unchanged. */
-function carrierShellArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, configuration: "compact" | "medium", openSlot?: 0 | 1, labels?: LabelMaterials): Mesh {
-  const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
-  const b = new ArtBatch("carrier.physical-compartments", scene, cel);
-  const signs: Mesh[] = [];
-  const panes: { name: string; points: Point[] }[] = [];
-  for (const solid of carrierStructure(configuration, openSlot)) {
-    const room = carrierRooms(configuration).find(r => solid.id === r.id + ".fore" || solid.id === r.id + ".aft");
-    if (room) {
-      const a = solid.min, c = solid.max;
-      wallWithOpening(b, [(a.x + c.x) / 2, (a.y + c.y) / 2, (a.z + c.z) / 2], [c.x - a.x, c.y - a.y, c.z - a.z], {
-        center: [(room.min.x + room.max.x) / 2, room.min.y + 1.85, 0],
-        width: room.max.x - room.min.x - 1.04, height: 1.21, normal: "z",
-      }, P.petrol);
-    } else b.bounds(solid, solid.id.includes("gate") ? P.ochre : solid.id.includes("roof") ? P.shade : P.petrol);
-  }
-  for (const [slot, room] of carrierRooms(configuration).entries()) {
-    const { min: a, max: c } = room, w = c.x - a.x, length = c.z - a.z, cx = (a.x + c.x) / 2;
-    const accent = slot === 0 ? P.ochre : P.steelLight;
-    // Broad fore/aft bulkheads use human-scale service panels, a gasketed
-    // observation pane and bold berth identity, rather than blank white walls.
-    for (const [z, yaw] of [[a.z - CARRIER_LAYOUT.wall - 0.002, 0], [c.z + CARRIER_LAYOUT.wall + 0.002, Math.PI]] as const) {
-      const toward = yaw === 0 ? -1 : 1;
-      b.panel([cx, a.y + 0.65, z], [w - 0.14, 1.05], 0.016, P.metal, yaw);
-      const hole = { center: [cx, a.y + 1.85, z] as Point, width: w - 1.04, height: 1.21, normal: "z" as const };
-      // Cut all three backings, including the shade's .355 m upper overlap.
-      wallWithOpening(b, [cx, a.y + 3.15, z], [w - .14, 2.1, .016], hole, P.shade);
-      wallWithOpening(b, [cx, a.y + 1.85, z + toward * .001], [w - .8, 1.45, .018], hole, P.steelLight);
-      const x0 = cx - hole.width / 2, x1 = cx + hole.width / 2, y0 = hole.center[1] - .605, y1 = hole.center[1] + .605;
-      panes.push({ name: `carrier.pane.berth.${slot}.${toward}`, points: [
-        [x0, y0, z + toward * .02], [x1, y0, z + toward * .02],
-        [x1, y1, z + toward * .02], [x0, y1, z + toward * .02],
-      ] });
-      b.box([cx - w * 0.22, a.y + 2.22, z + toward * 0.003], [w * 0.31, 0.045, 0.004], P.reflection);
-      b.box([cx + w * 0.13, a.y + 1.85, z + toward * 0.003], [0.045, 1.14, 0.004], P.metal);
-      for (const x of [a.x + 0.16, c.x - 0.16]) {
-        b.box([x, a.y + 2.15, z + toward * 0.001], [0.1, 4.05, 0.008], P.porcelain);
-        for (const y of [a.y + 0.28, c.y - 0.28])
-          b.box([x, y, z + toward * 0.003], [0.14, 0.065, 0.006], accent);
-      }
-      b.box([cx, a.y + 0.18, z + toward * 0.002], [w - 0.4, 0.07, 0.007], accent);
-      b.box([cx, a.y + 2.7, z + toward * 0.002], [w - 0.8, 0.06, 0.007], openSlot === slot ? P.ochre : P.mint);
-      const name = configuration === "medium" ? "SERVICE BERTH" : slot === 0 ? "PORT / 01" : "STARBOARD / 02";
-      signs.push(makeSign(name, [cx, a.y + 3.4, z + toward * .022], Math.min(2.3, w - 1.05), yaw));
-      signs.push(makeSign(openSlot === slot ? "TRANSFER / KEEP CLEAR" : "DRY / ISOLATED", [cx, a.y + 0.65, z + toward * .022], Math.min(1.65, w - 0.9), yaw));
-    }
-    for (const [x, yaw] of [[a.x - CARRIER_LAYOUT.wall - 0.002, Math.PI / 2], [c.x + CARRIER_LAYOUT.wall + 0.002, -Math.PI / 2]] as const) {
-      // Side skins are flush. In particular, nothing projects into the 0.84 m
-      // central free width in the two-compact configuration.
-      const count = Math.ceil(length / 1.9), step = length / count;
-      for (let i = 0; i < count; i++) {
-        const z = a.z + step * (i + 0.5);
-        b.panel([x, a.y + 0.78, z], [step - 0.045, 1.4], 0.012, i % 2 ? P.metal : P.petrol, yaw, 0.06);
-        b.panel([x, a.y + 2.9, z], [step - 0.045, 2.7], 0.012, i % 2 ? P.porcelain : P.shade, yaw, 0.08);
-        b.panel([x + (yaw > 0 ? -0.001 : 0.001), a.y + 1.62, z], [step - 0.24, 0.13], 0.012, accent, yaw, 0.035);
-      }
-    }
-  }
-  // Existing deck and the sealed hatches remain authoritative. Painted tracks
-  // and chevrons explain the passage, not a new platform or service interaction.
-  const rooms = carrierRooms(configuration);
-  const passageMin = rooms[0]!.max.x + CARRIER_LAYOUT.wall;
-  const passageMax = configuration === "compact" ? rooms[1]!.min.x - CARRIER_LAYOUT.wall : CARRIER_LAYOUT.interior.maxX;
-  const passageX = (passageMin + passageMax) / 2;
-  for (let z = CARRIER_LAYOUT.deck.min.z + 1; z < CARRIER_LAYOUT.deck.max.z - 1; z += 0.85) {
-    for (const x of [passageX - 0.27, passageX + 0.27])
-      b.box([x, CARRIER_LAYOUT.deck.max.y + 0.002, z], [0.045, 0.004, 0.5], P.mint);
-  }
-  const mesh = b.finish();
-  mesh.unfreezeWorldMatrix();
-  mesh.renderingGroupId = 1;
-  for (const pane of panes) createObservationPane(scene, glass, pane.name, pane.points, mesh);
-  for (const sign of signs) sign.parent = mesh;
-  return mesh;
-}
-
 function dartArt(
   scene: Scene,
   cel: ShaderMaterial,
   glass: ShaderMaterial,
   id: string,
-  hull: VehicleState["hull"],
+  hull: "dart" | "creel",
   labels?: LabelMaterials,
   cache?: GeometryCache,
 ): Mesh {
   if (hull === "creel") return creelArt(scene, cel, glass, id, labels, cache);
-  const makeSign = (text: string, p: Point, width = 2, yaw = 0): Mesh => label(scene, text, p, width, yaw, labels);
   // Only the Dart's deterministic local batches opt in. Bump this generation
   // when its geometry, palette or contour recipe changes. Identity, pose,
   // glazing and gauge values belong to newly created live handles, never keys.
   const dartBatch = (name: string, part: string): ArtBatch => new ArtBatch(name, scene, cel,
-    cache && hull === "dart" ? { owner: cache, key: `expedition:dart-local:v1:${part}` } : undefined);
+    cache ? { owner: cache, key: `expedition:dart-local:v2:${part}` } : undefined);
   const b = dartBatch(id, "body-contour-0.55");
   const panes: { name: string; points: readonly Point[] }[] = [];
-  if (hull === "hearthline") {
-    const width = CARRIER_LAYOUT.deck.max.x - CARRIER_LAYOUT.deck.min.x;
-    b.box([0, 9, 0], [width + 0.6, 0.35, 26], P.porcelain);
-    for (const x of [CARRIER_LAYOUT.deck.min.x, CARRIER_LAYOUT.deck.max.x]) {
-      wallWithOpening(b, [x, 6.3, 0], [.6, 4.5, 25], {
-        center: [x, 6.5, 0], width: 16, height: 2.4, normal: "x",
-      }, P.porcelain);
-      panes.push({ name: `${id}.pane.side.${Math.sign(x)}`, points: [
-        [x, 5.3, -8], [x, 5.3, 8], [x, 7.7, 8], [x, 7.7, -8],
-      ] });
-      b.box([Math.sign(x) * HK.offsetX, HK.centerY, 0], HK.size, P.petrol);
-      b.box([Math.sign(x) * HK.offsetX, HK.capY, 0], HK.capSize, P.ochre);
-    }
-    wallWithOpening(b, [0, 6.4, -12], [width, 5, .3], {
-      center: [0, 6.6, -12], width: 8, height: 2.7, normal: "z",
-    }, P.petrol);
-    panes.push({ name: `${id}.pane.bridge`, points: [
-      [-4, 5.25, -12], [4, 5.25, -12], [4, 7.95, -12], [-4, 7.95, -12],
-    ] });
-    // The helm is a waist-high console, readable from the actual standing eye.
-    b.box([0, 4.55, -8], [3, 1.1, 1.2], P.petrol);
-    b.face([[-1.45, 5.14, -8.6], [1.45, 5.14, -8.6], [1.45, 4.95, -7.4], [-1.45, 4.95, -7.4]], P.metal);
-    for (const x of [-0.78, 0, 0.78]) {
-      b.panel([x, 5.15, -8.3], [0.65, 0.38], 0.055, P.glass, Math.PI);
-      b.box([x, 5.15, -8.235], [0.42, 0.035, 0.012], P.mint);
-      b.box([x, 5.02, -7.68], [0.38, 0.06, 0.22], P.ochre);
-    }
-    // Window mullions, pressure rib rhythm and wall-bound fittings sit outside
-    // the shared walking bounds, with no new interior service function.
-    for (const x of [-4, 0, 4])
-      b.box([x, 6.7, -11.75], [0.16, 2.95, 0.09], P.metal);
-    for (const x of [-3.3, 2.2])
-      b.face([[x, 7.55, -11.7], [x + .07, 7.55, -11.7], [x + 1.17, 6.25, -11.7], [x + 1.1, 6.25, -11.7]], P.reflection);
-    for (const side of [-1, 1]) {
-      const x = side * (CARRIER_LAYOUT.deck.max.x - 0.31);
-      for (let z = -10; z <= 10; z += 3.8) {
-        b.box([x, 6.3, z], [0.08, 4.5, 0.14], P.metal);
-        b.box([x - side * 0.06, 8.15, z], [0.05, 0.1, 2.5], P.warm);
-      }
-      b.box([x, 4.7, -8.5], [0.08, 0.85, 4.8], P.metal);
-    }
-    // Aft vestibule: a chamfered pressure frame and a flush, closed outer hatch.
-    b.panel([CARRIER_LAYOUT.vestibule.x, 5.5, 11.78], [2.6, 3.1], 0.08, P.metal, 0, 0.3);
-    b.panel([CARRIER_LAYOUT.vestibule.x, 5.5, 11.7], [2.2, 2.75], 0.05, P.shade, 0, 0.24);
-    b.box([4, 5.3, 11.63], [0.08, 2.0, 0.04], P.petrol);
-    b.box([4.8, 5.5, 11.59], [0.12, 0.48, 0.05], P.ochre);
-    b.box([0, 6.5, 12], [width, 5, 0.3], P.petrol);
-    // Inlays replace the old solid vestibule step and corridor-side crates.
-    // They guide the player to the unchanged aft interaction position.
-    b.box([3.8, 4.005, 9], [2, 0.01, 3.4], P.ochre);
-    for (const z of [6.5, 7.5, 8.5])
-      b.box([2.2, 4.011, z], [2.4, 0.008, 0.07], P.steelLight);
-  } else if (hull === "spindle") {
-    b.loft(PG.body, P.porcelain);
-    for (const x of [-2, 2]) {
-      b.ellipsoid([x, 0.4, 0], PG.float.radius, P.ochre, 8);
-      b.box([x / 2, 0.55, 0], [2, 0.15, 0.2], P.metal);
-    }
-    b.box(PG.roof.center, PG.roof.size, P.glass);
-  } else {
-    b.loft(SG.bow, P.orange);
-    b.loft(SG.body, P.metal);
-    b.loft(SG.inset, P.petrol);
-    b.box(SG.prow.center, SG.prow.size, P.ochre);
-    // Offset faceted canopy and broad framed stern drive, rather than paired engine tubes.
-    const canopy = SG.canopy;
-    panes.push({ name: `${id}.pane.forward`, points: canopy });
-    panes.push({ name: `${id}.pane.starboard`, points: SG.starboard });
-    panes.push({ name: `${id}.pane.port`, points: SG.port });
-    for (const x of [-1.15, 1.15]) {
-      // The guide shoes meet the shared keel datum; no artwork hangs below
-      // BERTH_ENVELOPES.dart during the sealed floor-hatch transfer.
-      b.box([x, 0.225, 1.3], [0.18, 0.45, 2.8], P.metal);
-      b.box([x, 0.72, 2.5], [0.16, 1.2, 0.18], P.ochre);
-      b.tube(
-        [
-          [x, 0.9, 0.9],
-          [x, 1.12, 0.9],
-          [x, 1.12, 1.8],
-        ],
-        0.04,
-        P.metal,
-        5,
-      );
-    }
-    b.box([0, 1.3, 2.5], [2.5, 0.16, 0.18], P.ochre);
-    b.box([0, 0.3, 2.5], [2.5, 0.18, 0.2], P.ochre);
-    b.ellipsoid([0, 0.8, 2.55], [0.3, 0.3, 0.1], P.ink, 8);
-    for (const x of [-1, 1]) {
-      b.face(
-        [
-          [x * 1.1, 0.7, 0.7],
-          [x * 2.5, 0.6, 1.8],
-          [x * 1.1, 0.65, 2.4],
-        ],
-        P.ochre,
-      );
-      for (let i = 0; i < 4; i++)
-        b.box([x * 1.48, 0.9, 0.5 + i * 0.22], [0.35, 0.05, 0.07], P.ink);
-    }
-    b.ellipsoid([0, 0.45, -3.1], [0.26, 0.14, 0.12], P.warm, 8);
+  b.loft(SG.bow, P.orange);
+  b.loft(SG.body, P.metal);
+  b.loft(SG.inset, P.petrol);
+  b.box(SG.prow.center, SG.prow.size, P.ochre);
+  // Offset faceted canopy and broad framed stern drive, rather than paired engine tubes.
+  const canopy = SG.canopy;
+  panes.push({ name: `${id}.pane.forward`, points: canopy });
+  panes.push({ name: `${id}.pane.starboard`, points: SG.starboard });
+  panes.push({ name: `${id}.pane.port`, points: SG.port });
+  for (const x of [-1.15, 1.15]) {
+    // The guide shoes meet the shared keel datum; no artwork hangs below
+    // BERTH_ENVELOPES.dart during the sealed floor-hatch transfer.
+    b.box([x, 0.225, 1.3], [0.18, 0.45, 2.8], P.metal);
+    b.box([x, 0.72, 2.5], [0.16, 1.2, 0.18], P.ochre);
     b.tube(
       [
-        [-0.75, 0.3, -2.9],
-        [0, 0.3, -3.55],
-        [0.75, 0.3, -2.9],
+        [x, 0.9, 0.9],
+        [x, 1.12, 0.9],
+        [x, 1.12, 1.8],
       ],
       0.04,
       P.metal,
-      6,
+      5,
     );
-    // Pressure gasket, low boarding grip and one service coupling adapt the
-    // original scout study. All extents remain inside the guided Dart envelope.
-    b.tube([canopy[0], canopy[1], canopy[2], canopy[3], canopy[0]], 0.024, P.petrol, 6);
-    b.tube([canopy[3], canopy[2]], .037, P.porcelain, 6);
-    b.tube([[-0.65, 1.95, 0.1], [-0.85, 0.95, 1.03], [1.15, 0.95, 1.03], [1, 1.95, 0.1]], 0.028, P.steelLight, 6);
-    panes.push({ name: `${id}.pane.aft`, points: SG.aft });
-    b.panel([-1.2, 0.82, 0.1], [0.44, 0.2], 0.04, P.ochre, Math.PI / 2, 0.04);
-    b.tube([[-1.29, 0.82, -0.04], [-1.29, 0.91, -0.04], [-1.29, 0.91, 0.22], [-1.29, 0.82, 0.22]], 0.025, P.steelLight, 5);
-    for (const x of [-1.35, 1.35]) {
-      b.panel([x, 0.7, -0.8], [0.25, 0.35], 0.04, P.shade, x < 0 ? Math.PI / 2 : -Math.PI / 2, 0.05);
-      b.ring([x, 0.75, 1.5], [1, 0, 0], [0, 0, 1], 0.2, 0.12, P.steelLight, 10);
-      b.ellipsoid([x, 0.72, 1.5], [0.105, 0.035, 0.105], P.ochre, 8);
-      for (let i = 0; i < 3; i++)
-        b.box([x, 0.78, 1.05 + i * 0.1], [0.34, 0.035, 0.045], P.metal);
-    }
-    b.ring([0, 0.8, 2.66], [1, 0, 0], [0, 1, 0], 0.32, 0.25, P.steelLight);
-    // Recessed service lines and warm chine flashes follow the existing loft.
-    for (const side of [-1, 1]) {
-      b.tube([[side * .73, .855, -2.1], [side * 1.24, .905, .1], [side * .77, .755, 2.45]], .018, P.seam, 4);
-      b.face([[side * 1.80, .30, .12], [side * 1.5, .60, .12], [side * 1.03, .59, 2.36], [side * 1.14, .37, 2.36]], P.orange);
-      b.glow(b.box([side * 2.28, .63, 1.65], [.10, .045, .18], side < 0 ? P.amber : P.mint));
-    }
   }
-  const mesh = b.finish(hull === "dart" ? .55 : .25);
+  b.box([0, 1.3, 2.5], [2.5, 0.16, 0.18], P.ochre);
+  b.box([0, 0.3, 2.5], [2.5, 0.18, 0.2], P.ochre);
+  b.ellipsoid([0, 0.8, 2.55], [0.3, 0.3, 0.1], P.ink, 8);
+  for (const x of [-1, 1]) {
+    b.face(
+      [
+        [x * 1.1, 0.7, 0.7],
+        [x * SG.finTip, 0.6, 1.8],
+        [x * 1.1, 0.65, 2.4],
+      ],
+      P.ochre,
+    );
+    for (let i = 0; i < 4; i++)
+      b.box([x * 1.48, 0.9, 0.5 + i * 0.22], [0.35, 0.05, 0.07], P.ink);
+  }
+  b.ellipsoid([0, 0.45, -3.1], [0.26, 0.14, 0.12], P.warm, 8);
+  b.tube(
+    [
+      [-0.75, 0.3, -2.9],
+      [0, 0.3, -3.55],
+      [0.75, 0.3, -2.9],
+    ],
+    0.04,
+    P.metal,
+    6,
+  );
+  // Pressure gasket, low boarding grip and one service coupling adapt the
+  // original scout study. All extents remain inside the guided Dart envelope.
+  b.tube([canopy[0], canopy[1], canopy[2], canopy[3], canopy[0]], 0.024, P.petrol, 6);
+  b.tube([canopy[3], canopy[2]], .037, P.porcelain, 6);
+  b.tube([[-0.65, 1.95, 0.1], [-0.85, 0.95, 1.03], [1.15, 0.95, 1.03], [1, 1.95, 0.1]], 0.028, P.steelLight, 6);
+  panes.push({ name: `${id}.pane.aft`, points: SG.aft });
+  b.panel([-1.2, 0.82, 0.1], [0.44, 0.2], 0.04, P.ochre, Math.PI / 2, 0.04);
+  b.tube([[-1.29, 0.82, -0.04], [-1.29, 0.91, -0.04], [-1.29, 0.91, 0.22], [-1.29, 0.82, 0.22]], 0.025, P.steelLight, 5);
+  for (const x of [-1.35, 1.35]) {
+    b.panel([x, 0.7, -0.8], [0.25, 0.35], 0.04, P.shade, x < 0 ? Math.PI / 2 : -Math.PI / 2, 0.05);
+    b.ring([x, 0.75, 1.5], [1, 0, 0], [0, 0, 1], 0.2, 0.12, P.steelLight, 10);
+    b.ellipsoid([x, 0.72, 1.5], [0.105, 0.035, 0.105], P.ochre, 8);
+    for (let i = 0; i < 3; i++)
+      b.box([x, 0.78, 1.05 + i * 0.1], [0.34, 0.035, 0.045], P.metal);
+  }
+  b.ring([0, 0.8, 2.66], [1, 0, 0], [0, 1, 0], 0.32, 0.25, P.steelLight);
+  // Recessed service lines and warm chine flashes follow the existing loft.
+  for (const side of [-1, 1]) {
+    b.tube([[side * .73, .855, -2.1], [side * 1.24, .905, .1], [side * .77, .755, 2.45]], .018, P.seam, 4);
+    b.face([[side * 1.80, .30, .12], [side * 1.5, .60, .12], [side * 1.03, .59, 2.36], [side * 1.14, .37, 2.36]], P.orange);
+    b.glow(b.box([side * 2.28, .63, 1.65], [.10, .045, .18], side < 0 ? P.amber : P.mint));
+  }
+  const mesh = b.finish(.55);
   mesh.unfreezeWorldMatrix();
   for (const pane of panes) createObservationPane(scene, glass, pane.name, pane.points, mesh);
-  if (hull === "dart") {
+  {
     // View-only fittings stay inside the existing canopy/keel envelope. The
     // actual hull and glazing remain visible in control; no swimming disguise.
     const cockpit = dartBatch(`${id}.cockpit`, "cockpit-contour-0");
@@ -338,13 +202,6 @@ function dartArt(
       bar.unfreezeWorldMatrix(); bar.parent = fittings; bar.position.set(left, .977, -.91);
       bar.renderingGroupId = 1;
     }
-  }
-  if (hull === "hearthline") {
-    for (const sign of [
-      makeSign("BRIDGE", [0, 7.9, -11.66], 2.4, Math.PI),
-      makeSign("AFT / VESTIBULE", [3.8, 7.45, 11.68], 2.7),
-      makeSign("HEARTHLINE / LAUNCH CONTROL", [-3.7, 6.0, -11.67], 2.7, Math.PI),
-    ]) sign.parent = mesh;
   }
   return mesh;
 }
@@ -1136,7 +993,8 @@ export function createExpeditionActors(
         let m = vehicles.get(v.id);
         if (m && m.metadata.hull !== v.hull) { m.dispose(); vehicles.delete(v.id); m = undefined; }
         if (!m) {
-          m = dartArt(scene, cel, glass, v.id, v.hull, labels, cache);
+          m = v.hull === "dart" || v.hull === "creel" ? dartArt(scene, cel, glass, v.id, v.hull, labels, cache)
+            : fleetHullArt(scene, cel, glass, v.id, v.hull, labels, cache);
           m.metadata = { hull: v.hull };
           m.renderingGroupId = 1;
           vehicles.set(v.id, m);
@@ -1145,10 +1003,11 @@ export function createExpeditionActors(
         // Semantic +yaw turns local -Z toward +X. Babylon's mesh Y rotation
         // uses the opposite sign, including in a right-handed scene.
         m.rotation.set(v.hull === "dart" && !v.berth ? v.pose.pitch : 0, -v.pose.yaw, 0);
-        m.setEnabled(
-          s?.player.controlledVehicleId !== v.id || v.hull === "hearthline" || v.hull === "dart" || v.hull === "creel",
-        );
+        // Every hull keeps its visible art and view-only cockpit while piloted.
+        m.setEnabled(true);
         if (v.hull === "creel") updateCreelArt(m, s, v);
+        else if (v.hull !== "dart") updateFleetHullArt(m, s, v,
+          v.hull === "hearthline" && s?.fleet.docking?.vehicleId === v.id ? occupiedSockets(s.fleet.docking) : undefined);
         for (const child of m.getChildMeshes())
           if (child.name === `${v.id}.cockpit`) child.setEnabled(s?.player.controlledVehicleId === v.id);
           else if (child.name === `${v.id}.instrument.charge`) child.scaling.x = Math.max(0, Math.min(1, v.charge / 100));
@@ -1178,7 +1037,7 @@ export function createExpeditionActors(
         carrierShell = null;
         shellKey = nextShellKey;
         if (h && dock && visibleVehicle(h)) {
-          carrierShell = carrierShellArt(scene, cel, glass, dock.configuration, openSlot, labels);
+          carrierShell = hearthlineShellArt(scene, cel, glass, h.id, dock.configuration, openSlot, labels);
         }
       }
       if (h) {

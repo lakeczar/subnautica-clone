@@ -139,7 +139,7 @@ export function hullMesh(hull: HullId): ContactMesh {
   }
   if (!["spindle", "creel", "hearthline"].includes(hull)) {
     triangles.push(...[S.canopy, S.starboard, S.port, S.aft].flatMap(points => face(points)));
-    for (const side of [-1, 1]) triangles.push(...face([[side * 1.1, .7, .7], [side * 2.5, .6, 1.8], [side * 1.1, .65, 2.4]]));
+    for (const side of [-1, 1]) triangles.push(...face([[side * 1.1, .7, .7], [side * S.finTip, .6, 1.8], [side * 1.1, .65, 2.4]]));
   }
   const result = contactMesh(components,triangles); hullMeshes.set(hull, result); return result;
 }

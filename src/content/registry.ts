@@ -96,17 +96,19 @@ export const HULL_COLLIDERS = {
   // the slip rails and reef ribs beyond the visible hull.
   creel: { radius: 3.9, height: 3.6 },
   hush: { radius: 3.6, height: 2.1 },
-  spindle: { radius: 4, height: 1.7 },
+  spindle: { radius: 4, height: 2.1 },
   mantle: { radius: 4.5, height: 4 },
   hearthline: { radius: 17, height: 9.2, bottom: -0.5 },
 } as const satisfies Record<HullId, { radius: number; height: number; bottom?: number }>;
 /** Full upright authored hull bounds while aligned with a guided carrier rail.
  * Normal piloting retains the broader square HULL_COLLIDERS proxies. Metres from keel. */
 export const BERTH_ENVELOPES = {
-  dart: { radius: 3.6, halfWidth: 2.5, halfLength: 3.6, height: 2.1 },
-  spindle: { radius: 4, halfWidth: 2.4, halfLength: 3.7, height: 1.7 },
+  // S3-02 option B: the Dart's trimmed fins fit ½W 2.45, clear of the starboard room's inboard wall.
+  dart: { radius: 3.6, halfWidth: 2.45, halfLength: 3.6, height: 2.1 },
+  // S3: Spindle folded art; the height seats a pilot under the solar canopy.
+  spindle: { radius: 4, halfWidth: 2.12, halfLength: 3.7, height: 2.1 },
   creel: { radius: 4.5, halfWidth: 2.9, halfLength: 3.3, height: 3.6 },
-  hush: { radius: 3.6, halfWidth: 2.5, halfLength: 3.6, height: 2.1 },
+  hush: { radius: 3.6, halfWidth: 2.45, halfLength: 3.6, height: 2.1 },
   mantle: { radius: 4.5, halfWidth: 2.9, halfLength: 4.5, height: 4 },
 } as const;
 export const REMOTE_TOOLS = {
