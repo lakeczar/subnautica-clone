@@ -214,3 +214,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
   3. Main-path copies of the standard and advanced outpost-kit plans are required (folded into SYS-2 or composition).
 
   The hub crown pinnacle (about 240 m of new terrain) versus the apron fallback is decided with W2 after the experience audit. Sol R1 running. Builders 3 of 5: C3, LC, CY.
+- **SYS-1 R3 (Sol): accept** (`review/sys-1-r3` `57c260f`). Integrated, new modules only: 834 tests pass, economy OK. Wiring follows C3.
