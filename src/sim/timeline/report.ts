@@ -29,6 +29,10 @@ export interface TimelineEvent {
   hull?: string;
   /** Idle only: background work that was running (decode, growth, ...). */
   waiting?: string[];
+  /** Death: what it left behind (`cache:<id>`, `loss:<vehicleId>`). Recovery: the same keys. */
+  keys?: string[];
+  /** Recovery only: the tick of the death it closes. */
+  of?: number;
   /** Notes only. */
   text?: string;
   wall?: string;
@@ -57,7 +61,8 @@ export function parseTimeline(text: string): { ok: true; value: TimelineExport }
   if (!Array.isArray(v.events) || !num(v.dropped)) return { ok: false, error: "Malformed events." };
   for (const [n, e] of v.events.entries())
     if (!obj(e) || typeof e.kind !== "string" || !KINDS.includes(e.kind) || !num(e.tick) || !num(e.play) ||
-      (e.seconds !== undefined && !num(e.seconds)) || (e.stationary !== undefined && !num(e.stationary)) || (e.at !== undefined && !(Array.isArray(e.at) && e.at.length === 3 && e.at.every(num))))
+      (e.seconds !== undefined && !num(e.seconds)) || (e.of !== undefined && !num(e.of)) ||
+      (e.keys !== undefined && !(Array.isArray(e.keys) && e.keys.every((k) => typeof k === "string"))) || (e.stationary !== undefined && !num(e.stationary)) || (e.at !== undefined && !(Array.isArray(e.at) && e.at.length === 3 && e.at.every(num))))
       return { ok: false, error: `Malformed event ${n}.` };
   return { ok: true, value: v as unknown as TimelineExport };
 }
@@ -85,7 +90,8 @@ export interface TimelineAnalysis {
   travel: { count: number; minutes: number; stationaryMinutes: number; byHull: Record<string, number>; emptyStretches: TravelStretch[] };
   idle: { count: number; minutes: number; waitingMinutes: number; longest: IdleStretch | null; listed: IdleStretch[] };
   gathering: { count: number; byItem: Record<string, number> };
-  deaths: { count: number; recoverySeconds: number[]; unrecovered: number };
+  /** `recoverySeconds` covers deaths that left something to recover; `nothingLost` the rest. */
+  deaths: { count: number; recoverySeconds: number[]; nothingLost: number; unrecovered: number };
   notes: { play: number; region: string | null; at: [number, number, number] | null; text: string; wall: string | null }[];
   dropped: number;
 }
@@ -133,7 +139,8 @@ export function analyseTimeline(t: TimelineExport, thresholds: ReportThresholds 
   const gathers = events.filter((e) => e.kind === "gather");
   for (const g of gathers) byItem[g.what ?? "unknown"] = (byItem[g.what ?? "unknown"] ?? 0) + (g.quantity ?? 1);
   const deaths = events.filter((e) => e.kind === "death");
-  const recoveries = events.filter((e) => e.kind === "recovery").map((e) => e.seconds ?? 0);
+  const recoveryEvents = events.filter((e) => e.kind === "recovery");
+  const recoveries = recoveryEvents.filter((e) => e.what !== "nothing-lost").map((e) => e.seconds ?? 0);
   return {
     session: t.session,
     playMinutes: end / 60,
@@ -152,7 +159,8 @@ export function analyseTimeline(t: TimelineExport, thresholds: ReportThresholds 
       listed: idles.filter((i) => i.seconds >= thresholds.idleListSeconds),
     },
     gathering: { count: gathers.length, byItem },
-    deaths: { count: deaths.length, recoverySeconds: recoveries, unrecovered: Math.max(0, deaths.length - recoveries.length) },
+    deaths: { count: deaths.length, recoverySeconds: recoveries, nothingLost: recoveryEvents.length - recoveries.length,
+      unrecovered: Math.max(0, deaths.length - recoveryEvents.length) },
     notes: events.filter((e) => e.kind === "note").map((e) => ({ play: e.play, region: e.region ?? null, at: e.at ?? null, text: e.text ?? "", wall: e.wall ?? null })),
     dropped: t.dropped,
   };
@@ -177,7 +185,7 @@ export function formatTimelineReport(a: TimelineAnalysis, thresholds: ReportThre
   for (const s of a.travel.emptyStretches) out.push(`  ${clock(s.play)}  ${Math.round(s.seconds)} s  ${s.hull}${s.region ? ` · ${s.region}` : ""}`);
   out.push("", `Idle waiting: ${a.idle.count} stretches, ${a.idle.minutes.toFixed(1)} min, ${a.idle.waitingMinutes.toFixed(1)} min with background work running`);
   for (const i of a.idle.listed) out.push(`  at play ${clock(i.play)}  ${Math.round(i.seconds)} s${i.waiting.length ? ` · waiting on ${i.waiting.join(", ")}` : ""}${i.region ? ` · ${i.region}` : ""}`);
-  out.push("", `Deaths: ${a.deaths.count} · recovered ${a.deaths.recoverySeconds.length}${a.deaths.recoverySeconds.length ? ` (${a.deaths.recoverySeconds.map((s) => `${Math.round(s)} s`).join(", ")})` : ""} · unrecovered ${a.deaths.unrecovered}`);
+  out.push("", `Deaths: ${a.deaths.count} · recovered ${a.deaths.recoverySeconds.length}${a.deaths.recoverySeconds.length ? ` (${a.deaths.recoverySeconds.map((s) => `${Math.round(s)} s`).join(", ")})` : ""} · nothing lost ${a.deaths.nothingLost} · unrecovered ${a.deaths.unrecovered}`);
   out.push(`Gathering: ${Object.entries(a.gathering.byItem).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}`);
   if (a.notes.length) {
     out.push("", `Feedback notes: ${a.notes.length}`);

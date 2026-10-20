@@ -7,6 +7,7 @@
  * in recovery.ts `incapacitate`; until then `incapacitateKeepingInstances` wraps it. */
 import { tierOfKit, moduleOfItem } from "../../content/systems/hosts.js";
 import { isDecoderItem } from "./decoder.js";
+import { carrierOccupants, hostById } from "./hosts.js";
 import { incapacitate } from "../recovery.js";
 import type { GameState, WorldQueries } from "../types.js";
 import type { SystemsState } from "./state.js";
@@ -25,6 +26,32 @@ export function incapacitateKeepingInstances(s: GameState, reason: string, world
   }
 }
 
+/** Every installed entry must be serviceable where it sits: its host exists (a
+ * disabled carrier still counts; availability is not existence), the socket is
+ * one that host exposes to modules, the item is a module the socket accepts,
+ * and a Hearthline slot carries the matching CarrierState occupant. Otherwise
+ * the module would be stranded: out of the inventory and unremovable. */
+export function socketProblems(s: GameState, sys: SystemsState): string[] {
+  const problems: string[] = [];
+  for (const e of sys.sockets) {
+    const at = `module ${e.itemId} in ${e.hostId}/${e.socket}`;
+    const module = moduleOfItem(e.kind);
+    if (!module) { problems.push(`${at}: ${e.kind} is not a socket module`); continue; }
+    const host = hostById(s, sys, e.hostId);
+    if (!host) { problems.push(`${at}: the host doesn't exist`); continue; }
+    const slot = host.sockets.find((k) => k.id === e.socket);
+    if (!slot) { problems.push(`${at}: ${host.label} has no module socket ${e.socket}`); continue; }
+    if (!slot.accepts.includes(module)) { problems.push(`${at}: the socket doesn't take the ${module}`); continue; }
+    if (host.kind === "carrier") {
+      const vehicleId = host.id.slice("carrier:".length), d = s.fleet.docking;
+      const expected = carrierOccupants(sys, vehicleId)[e.socket];
+      if (d?.vehicleId === vehicleId && d.sockets[e.socket] !== expected)
+        problems.push(`${at}: the carrier records ${d.sockets[e.socket] ?? "nothing"} there, not ${expected}`);
+    }
+  }
+  return problems;
+}
+
 /** Cross-checks between SYS-2 rows and the inventory, for the composed save
  * validator and tests. Empty when every reference resolves exactly once. */
 export function instanceProblems(s: GameState, sys: SystemsState): string[] {
@@ -33,6 +60,7 @@ export function instanceProblems(s: GameState, sys: SystemsState): string[] {
   for (const i of s.inventory.items) items.set(i.id, (items.get(i.id) ?? 0) + 1);
   for (const [id, n] of items) if (n > 1) problems.push(`item ${id} appears ${n} times`);
   for (const e of sys.sockets) if (items.has(e.itemId)) problems.push(`installed module ${e.itemId} is also in the inventory`);
+  problems.push(...socketProblems(s, sys));
   for (const o of sys.outposts) if (items.has(o.id)) problems.push(`deployed outpost ${o.id} is also a kit item`);
   for (const p of sys.packed) {
     const kit = s.inventory.items.find((i) => i.id === p.itemId);

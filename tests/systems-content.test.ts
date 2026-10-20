@@ -8,6 +8,8 @@ import { MODULE_KINDS, MODULES, OUTPOST_TIER_ORDER, OUTPOST_TIERS } from "../src
 import { SYS2_BLUEPRINTS, SYS2_ITEMS, SYS2_RECIPES, SYS2_SOURCES, SYS2_TECH_RECORDS } from "../src/content/systems/items.js";
 import { carrierHost, carrierHostId, carrierOccupants, installModule, listHosts, removeModule } from "../src/sim/systems/hosts.js";
 import { createSystems, validSystems } from "../src/sim/systems/state.js";
+import { instanceProblems } from "../src/sim/systems/instances.js";
+import { advanceDecodes, discoverSite, startDecode } from "../src/sim/systems/decoder.js";
 import { makeVehicle } from "../src/sim/state.js";
 import { carrierInteriorSolids, fixtureGame } from "../src/sim/carrier.js";
 import { give, opened } from "./systems-support.js";
@@ -124,4 +126,41 @@ test("carrier sockets stay in step: install → remove → reinstall updates doc
   assert.match(removeModule(s, sys, hostId, "hl.socket.galley.planter") ?? "", /belongs to the carrier fit-out/);
   sync();
   assert.equal(s.fleet.docking!.sockets["hl.socket.galley.planter"], "galley_planter");
+});
+
+test("composed validation rejects stranded modules: missing carrier, furniture-only or incompatible socket, non-module kind; a disabled carrier keeps its modules", () => {
+  const s = fixtureGame(), sys = createSystems(), h = s.fleet.vehicles.find((v) => v.hull === "hearthline")!;
+  s.player.interiorId = h.id;
+  s.player.controlledVehicleId = null;
+  const hostId = carrierHostId(h.id), socket = "hl.socket.fab.bench.1";
+  const decoder = give(s, "mod_decoder"), planter = give(s, "mod_planter");
+  assert.equal(installModule(s, sys, hostId, socket, decoder), null);
+  assert.equal(installModule(s, sys, hostId, "hl.socket.galley.wall", planter), null);
+  discoverSite(sys, "demo_relay_hut");
+  assert.equal(startDecode(s, sys, hostId, "demo_hut_fragment"), null);
+  advanceDecodes(s, sys, 99);
+  const composed = (x: typeof sys) => ({ shape: validSystems(x), cross: instanceProblems(s, x) });
+  assert.deepEqual(composed(sys), { shape: true, cross: [] });
+
+  const variant = (edit: (x: typeof sys) => void) => { const x = structuredClone(sys); edit(x); return composed(x); };
+  const missing = variant((x) => { x.sockets[0]!.hostId = "carrier:missing"; });
+  assert.match(missing.cross.join("\n"), /module .* in carrier:missing\/hl\.socket\.fab\.bench\.1: the host doesn't exist/);
+  const furniture = variant((x) => { x.sockets[0]!.socket = "hl.socket.cabin.wall"; });
+  assert.equal(furniture.shape, false);
+  assert.match(furniture.cross.join("\n"), /Hearthline has no module socket hl\.socket\.cabin\.wall/);
+  const wrongKind = variant((x) => { x.sockets[1]!.socket = "hl.socket.fab.bench.2"; });
+  assert.equal(wrongKind.shape, false);
+  assert.match(wrongKind.cross.join("\n"), /the socket doesn't take the planter/);
+  const notModule = variant((x) => { x.sockets.push({ hostId: "home_pod", socket: "s1", itemId: "item_900", kind: "nav_beacon" }); });
+  assert.match(notModule.cross.join("\n"), /nav_beacon is not a socket module/);
+
+  // The carrier's own occupant record must agree with the installed module.
+  s.fleet.docking!.sockets[socket] = null;
+  assert.match(instanceProblems(s, sys).join("\n"), /the carrier records nothing there, not sample_analyser/);
+  s.fleet.docking!.sockets[socket] = "sample_analyser";
+
+  // Availability is not existence: a disabled carrier keeps its modules validly.
+  h.disabled = true;
+  assert.deepEqual(composed(sys), { shape: true, cross: [] });
+  assert.match(removeModule(s, sys, hostId, socket) ?? "", /Hearthline is disabled/);
 });

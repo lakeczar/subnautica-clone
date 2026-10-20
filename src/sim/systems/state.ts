@@ -9,7 +9,7 @@ import type { SeedKind } from "../../content/systems/cultivation.js";
 import { isDecodable } from "../../content/systems/decodes.js";
 import type { DecodableId } from "../../content/systems/decodes.js";
 import { HEARTHLINE_SOCKETS } from "../../content/fleet/hearthlineInterior.js";
-import { FIXED_HOSTS, OUTPOST_TIER_ORDER, OUTPOST_TIERS } from "../../content/systems/hosts.js";
+import { CARRIER_OCCUPANTS, FIXED_HOSTS, moduleOfItem, OUTPOST_TIER_ORDER, OUTPOST_TIERS } from "../../content/systems/hosts.js";
 import type { OutpostTier } from "../../content/systems/hosts.js";
 import { isSys2Item } from "../../content/systems/items.js";
 import { BEACON_CATEGORIES, BEACON_NAME_MAX } from "../../content/systems/navigation.js";
@@ -121,7 +121,9 @@ export function layoutProblem(p: Pick<PackedKit, "tier" | "layout">): string | n
   return null;
 }
 /** Identity invariants between rows: every outpost and packed kit is distinct,
- * each socket entry names a real socket of an existing host, and a module is
+ * each socket entry names a real socket of an existing outpost or fixed host, or a
+ * Hearthline system socket that takes its module (whether that carrier exists is
+ * state: instanceProblems checks it), and a module is
  * remembered by at most one packed layout and never while installed. Inventory
  * cross-checks (SYS-2.md) sit on top of this in the composed validator. */
 function semanticallyConsistent(s: SystemsState): boolean {
@@ -135,6 +137,9 @@ function semanticallyConsistent(s: SystemsState): boolean {
     if (outpost) return socketIndex(e.socket) >= 0 && socketIndex(e.socket) < OUTPOST_TIERS[outpost.tier].sockets;
     if (Object.hasOwn(FIXED_HOSTS, e.hostId))
       return socketIndex(e.socket) >= 0 && socketIndex(e.socket) < FIXED_HOSTS[e.hostId as keyof typeof FIXED_HOSTS].sockets;
-    return e.hostId.startsWith("carrier:") && HEARTHLINE_SOCKETS.some((k) => k.id === e.socket);
+    // A Hearthline system socket that takes this module; furniture-only sockets never hold one.
+    const module = moduleOfItem(e.kind);
+    return e.hostId.startsWith("carrier:") && !!module &&
+      !!HEARTHLINE_SOCKETS.find((k) => k.id === e.socket)?.accepts.some((a) => CARRIER_OCCUPANTS[a] === module);
   });
 }

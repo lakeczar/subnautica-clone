@@ -52,7 +52,7 @@ test("empty travel is split at points of interest; idle waiting and deaths are s
   assert.ok(Math.abs(a.idle.waitingMinutes - 2.5) < 1e-9);
   assert.equal(a.idle.longest?.seconds, 150);
   assert.equal(a.idle.listed.length, 1);
-  assert.deepEqual(a.deaths, { count: 1, recoverySeconds: [240], unrecovered: 0 });
+  assert.deepEqual(a.deaths, { count: 1, recoverySeconds: [240], nothingLost: 0, unrecovered: 0 });
   assert.deepEqual(a.gathering.byItem, { silica_glass: 2, buoyant_resin: 2 });
   assert.equal(a.notes[0]!.text, "Lost the way back");
   const text = formatTimelineReport(a);

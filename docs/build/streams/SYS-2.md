@@ -1,6 +1,6 @@
 # SYS-2 bases and knowledge: interface and handoff
 
-Opus 5.5 high · branch `feat/sys-2-bases-knowledge` from `feat/siltwake-first-expedition` at `7519cfb` · new files only, story-neutral. These are rules, data and tests ready to compose. There is no final UI and no wiring. Revised for [Sol R1](../reviews/SYS-2-SOL-XHIGH-R1.md) (F1–F6 and both P3s; see "R1 fixes" below).
+Opus 5.5 high · branch `feat/sys-2-bases-knowledge` from `feat/siltwake-first-expedition` at `7519cfb` · new files only, story-neutral. These are rules, data and tests ready to compose. There is no final UI and no wiring. Revised for [Sol R1](../reviews/SYS-2-SOL-XHIGH-R1.md) (F1–F6 and both P3s) and [Sol R2](../reviews/SYS-2-SOL-XHIGH-R2.md) (R2-F1, R2-F2); see the fix tables below.
 
 ## What exists
 | Area | Content (`src/content/systems/`) | Rules (`src/sim/systems/`) |
@@ -60,12 +60,14 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
   - outpost IDs and packed-kit IDs are all distinct;
   - a packed layout lists each socket and each module once, and only sockets `s0`… below its tier's count;
   - a module is remembered by at most one packed layout, and never while installed;
-  - every socket entry names a real socket of a deployed outpost, a fixed host (`s0`… below its count) or a Hearthline system socket.
+  - every socket entry names a real socket of a deployed outpost or a fixed host (`s0`… below its count), or a Hearthline system socket whose `accepts` takes that entry's module. Furniture-only sockets never hold a module.
 - **Composed validator:** also call `instanceProblems(state, state.systems)` and require it to be empty. It checks that:
   - no item ID appears twice;
   - an installed module or a deployed outpost is not also an inventory item;
   - each packed kit has a matching kit item;
-  - each decode or crop references a decoder or planter that exists exactly once, installed or loose.
+  - each decode or crop references a decoder or planter that exists exactly once, installed or loose;
+  - every installed entry is serviceable where it sits (`socketProblems`, R2-F2): its host resolves through `hostById`, the socket is one that host exposes to modules, the item kind is a module that socket accepts, and on the Hearthline `docking.sockets` carries the matching occupant. A module that fails any of these would be out of the inventory and unremovable.
+  - **Existence, not availability:** a disabled carrier or an unrestored stop still resolves, so its modules stay valid. They simply can't be removed until the host works again.
 - **Containers:**
   - outpost lockers `${outpostId}_locker`, owned by the outpost;
   - locker-module containers `${itemId}_locker`, owned by the item, which outlive installs like the cabin locker does.
@@ -105,7 +107,7 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
   - a feedback key (proposed `N`) opens a one-line note: `addNote(rec, state, text, new Date().toISOString())`;
   - an export button saves `exportTimelineText` as a file.
   - **Travel** (F5) counts only steps where the piloted craft moves at 0.5 m/s or faster. Each travel event is one stretch of motion between points of interest (new things, gathers, sources), with its stationary helm seconds alongside. Time at a still helm is ordinary play, and the report shows it separately.
-  - **Reload** (F6): `resumeRecorder` restores an unrecovered death from the event history, so the recovery time carries across a reload, still excluding idle time.
+  - **Deaths and recovery** (F6, R2-F1): each death records what it left behind as keys, `cache:<id>` for the cache it created and `loss:<vehicleId>` for any craft loss no other open death claims. Every open death is kept with its own play timestamp, and it closes when all its keys resolve: its cache is empty or gone, and its loss entry is gone. A towed craft therefore counts as recovered once it's patched or salvaged at the bench. The recovery event carries `of` (the death's tick) and the same keys. `resumeRecorder` rebuilds the open deaths from death events with no matching recovery, and their resolution is read from the game state, so any number of outstanding deaths survive a reload. Recovery time is play time, so idle is excluded. A death that left nothing behind closes at once as `nothing-lost`; the report counts it apart and keeps it out of the recovery times.
   - Nothing is sent anywhere, and a test enforces this.
 - **UI:** render `buildJournal(s, s.systems, { creatures, cycles })`. The notebook tab carries S5's own `NotebookView`, so `ui/storyNotebook.ts` can keep rendering it.
   - **Slots:** the ecology owner fills `creatures`, and the cycles owner fills `cycles`.
@@ -119,12 +121,13 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
 - **Interactions:** no world placement or interaction wiring exists, and no beacon or outpost art.
 
 ## Checks
-- **`npm test`** (typecheck, test build, fast tier): **822/822 pass**. SYS-2 adds 68 tests in `tests/systems-*.test.ts` and `tests/timeline-*.test.ts` (56 at R1, 12 for its fixes).
+- **`npm test`** (typecheck, test build, fast tier): **825/825 pass**. SYS-2 adds 71 tests in `tests/systems-*.test.ts` and `tests/timeline-*.test.ts` (56 at R1, 12 for its fixes, 3 for R2's).
 - **`npx tsc --noEmit -p tools/journal-lab.tsconfig.json`** is clean. The lab script was bundled with esbuild and run in Node against a DOM stub; it builds all 6 tabs, the chart and the pack preview.
 - **Heavy tier:** not run. No SYS-2 file reaches Babylon, and the fast tier's import guard confirms that for every new test.
 - **Browser:** no run, as briefed.
 - **`timeline-report.mjs`:** run end to end by a test. It needs type stripping (Node ≥ 22.18 or 23.6, while `package.json` engines say ≥ 22.12). The script checks `process.features.typescript` and exits 2 with a plain message otherwise. At composition, raise `engines` to `>=22.18.0` or document `--experimental-strip-types`.
 - **Sol R1 probes** (`probes.mjs`, each block run separately): every finding's block now fails its bug-reproducing assertion, except F1's. That block calls the unchanged `recovery.incapacitate` directly, which needs the one-line composed filter above.
+- **Sol R2 probes** (`r2/new-probes.mjs`, output redirected to `/work/tmp`): **9/9 pass**, including the four that reproduced R2-F1 and R2-F2. In `r2/r1-adapted-probes.mjs`, every block passes except the last. That block fakes a death with `failures++` and no cache or loss, then expects a timed recovery on `rescues++`. Under the R2-F1 rule such a death closes at once as `nothing-lost`, so `unrecovered` is 0 as asserted, but it has no recovery time. This is intended: there was nothing to recover.
 
 ## R1 fixes
 | Finding | Fix | Test |
@@ -136,3 +139,9 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
 | F5 stationary helm | travel time from craft motion only; stretches split at points of interest; stationary time reported apart | `timeline-recorder`: still helm, leg with a 70 s stop, leg split by a discovery |
 | F6 reload death | resume restores the open death | `timeline-recorder`: death → export/reload → idle → rescue |
 | P3 | Node guard in the script; adverse locker really full | — |
+
+## R2 fixes
+| Finding | Fix | Test |
+| --- | --- | --- |
+| R2-F1 two outstanding deaths | each open death is kept with its own keys (`cache:`, `loss:`) and play time; it closes when all its keys resolve; resume rebuilds them from unmatched death events; nothing-lost deaths close at once | `timeline-recorder`: two real caches, recover the second, export/reload, idle, recover the first, with both times exact; a partly emptied cache keeps its death open; nothing-lost |
+| R2-F2 stranded carrier modules | `socketProblems` in `instanceProblems` resolves host, module socket, accepted kind and carrier occupant; `validSystems` also rejects furniture-only or incompatible Hearthline sockets | `systems-content`: missing carrier, furniture-only socket, planter on a fabrication bench, non-module kind, occupant mismatch; a disabled carrier stays valid |

@@ -31,9 +31,12 @@ export interface ObserveContext {
 }
 interface Snapshot {
   blueprints: number; scans: number; evidence: number; discoveries: number; crafted: number;
-  vehicles: string[]; collections: number; failures: number; rescues: number; losses: number; cacheItems: number;
+  vehicles: string[]; collections: number; failures: number;
+  /** Visited caches and the item quantity left in each. */
+  caches: Map<string, number>;
   stocks: Map<string, number>;
 }
+export interface PendingRecovery { tick: number; play: number; keys: string[] }
 export interface TimelineRecorder {
   session: { id: string; started: string; build?: string };
   events: TimelineEvent[];
@@ -48,7 +51,9 @@ export interface TimelineRecorder {
     hull: string; vehicleId: string; last: { x: number; y: number; z: number };
     piece: { tick: number; play: number; movingTicks: number; stationaryTicks: number; metres: number } | null;
   } | null;
-  deathPlay: number | null;
+  /** Every death not yet recovered: what it left behind (`cache:<id>`,
+   * `loss:<vehicleId>`) and its play timestamp. One closes when all its keys resolve. */
+  pending: PendingRecovery[];
   region: string | null;
   regions: string[];
   last: Snapshot | null;
@@ -58,7 +63,7 @@ export interface TimelineRecorder {
 export function createRecorder(session: { id: string; started: string; build?: string }, options: RecorderOptions = {}): TimelineRecorder {
   return {
     session: { ...session }, events: [], dropped: 0, playTicks: 0, idleTicks: 0, lastInputTick: -Infinity, idle: null, travel: null,
-    deathPlay: null, region: null, regions: [], last: null,
+    pending: [], region: null, regions: [], last: null,
     options: { idleAfterSeconds: options.idleAfterSeconds ?? 15, ...(options.regionAt ? { regionAt: options.regionAt } : {}) },
   };
 }
@@ -69,8 +74,11 @@ export function resumeRecorder(t: TimelineExport, options: RecorderOptions = {})
   rec.dropped = t.dropped;
   rec.playTicks = Math.round(t.session.end.play * STEPS);
   rec.idleTicks = Math.round(t.session.end.idle * STEPS);
-  // An unrecovered death keeps timing across the reload.
-  for (const e of t.events) rec.deathPlay = e.kind === "death" ? e.play : e.kind === "recovery" ? null : rec.deathPlay;
+  // Every unrecovered death keeps its timing across the reload. Whether its caches
+  // and losses are resolved is read from the game state at the next observation.
+  const closed = new Set(t.events.filter((e) => e.kind === "recovery" && e.of !== undefined).map((e) => e.of));
+  rec.pending = t.events.filter((e) => e.kind === "death" && e.keys && !closed.has(e.tick))
+    .map((e) => ({ tick: e.tick, play: e.play, keys: [...e.keys!] }));
   rec.regions = [...new Set(t.events.filter((e) => (e.kind === "new" && e.what === "region") || e.kind === "region").map((e) => e.id ?? ""))];
   return rec;
 }
@@ -87,12 +95,11 @@ function push(rec: TimelineRecorder, e: TimelineEvent): void {
   rec.events.push(e);
 }
 function snapshot(s: GameState): Snapshot {
-  const caches = new Set(s.recovery.caches.map((c) => c.containerId));
   return {
     blueprints: s.knowledge.blueprints.length, scans: s.knowledge.scans.length, evidence: s.knowledge.evidence.length,
     discoveries: s.story.discoveries.length, crafted: s.knowledge.crafted.length, vehicles: s.fleet.vehicles.map((v) => v.id),
-    collections: s.metrics.collections, failures: s.metrics.failures, rescues: s.metrics.rescues, losses: s.recovery.losses.length,
-    cacheItems: s.inventory.items.filter((i) => caches.has(i.containerId)).reduce((n, i) => n + i.quantity, 0),
+    collections: s.metrics.collections, failures: s.metrics.failures,
+    caches: new Map(s.recovery.caches.map((c) => [c.id, s.inventory.items.filter((i) => i.containerId === c.containerId).reduce((n, i) => n + i.quantity, 0)])),
     stocks: new Map(s.world.resources.map((r) => [r.id, r.stock])),
   };
 }
@@ -201,12 +208,30 @@ export function observe(rec: TimelineRecorder, s: GameState, ctx: ObserveContext
     }
   }
   if (now.failures > was.failures) {
-    push(rec, { kind: "death", ...stamp });
-    rec.deathPlay = play(rec);
+    // What this death left behind: the caches it created, and any loss no other
+    // open death already waits on.
+    const claimed = new Set(rec.pending.flatMap((p) => p.keys));
+    const keys = [...[...now.caches.keys()].filter((id) => !was.caches.has(id)).map((id) => `cache:${id}`),
+      ...s.recovery.losses.map((l) => `loss:${l.vehicleId}`)].filter((k) => !claimed.has(k));
+    push(rec, { kind: "death", keys, ...stamp });
+    rec.pending.push({ tick: s.tick, play: play(rec), keys });
   }
-  if (rec.deathPlay !== null && (now.rescues > was.rescues || now.losses < was.losses || now.cacheItems < was.cacheItems)) {
-    push(rec, { kind: "recovery", seconds: play(rec) - rec.deathPlay, ...stamp });
-    rec.deathPlay = null;
+  closeRecoveries(rec, s, now, stamp);
+}
+
+/** A key resolves when its cache is empty or gone, or its loss entry is gone. */
+function resolved(s: GameState, now: Snapshot, key: string): boolean {
+  const [kind, id] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+  return kind === "cache" ? !now.caches.get(id) : !s.recovery.losses.some((l) => l.vehicleId === id);
+}
+/** Each open death closes once everything it left is recovered; one with nothing
+ * left closes at once as `nothing-lost`. Recovery time is play time, so idle
+ * waiting is excluded. */
+function closeRecoveries(rec: TimelineRecorder, s: GameState, now: Snapshot, stamp: Omit<TimelineEvent, "kind">): void {
+  for (const p of [...rec.pending]) {
+    if (!p.keys.every((k) => resolved(s, now, k))) continue;
+    rec.pending = rec.pending.filter((x) => x !== p);
+    push(rec, { kind: "recovery", of: p.tick, keys: p.keys, seconds: play(rec) - p.play, ...(p.keys.length ? {} : { what: "nothing-lost" }), ...stamp });
   }
 }
 
@@ -219,7 +244,7 @@ export function recordSystemsEvents(rec: TimelineRecorder, s: GameState, events:
 
 /** A detached export with any open travel or idle span closed as of now. */
 export function exportTimeline(rec: TimelineRecorder, s: GameState): TimelineExport {
-  const copy: TimelineRecorder = { ...rec, events: [...rec.events], travel: rec.travel && { ...rec.travel, piece: rec.travel.piece && { ...rec.travel.piece } }, idle: rec.idle && { ...rec.idle, waiting: new Set(rec.idle.waiting) } };
+  const copy: TimelineRecorder = { ...rec, events: [...rec.events], pending: rec.pending.map((p) => ({ ...p, keys: [...p.keys] })), travel: rec.travel && { ...rec.travel, piece: rec.travel.piece && { ...rec.travel.piece } }, idle: rec.idle && { ...rec.idle, waiting: new Set(rec.idle.waiting) } };
   closeTravel(copy);
   closeIdle(copy, s);
   return {

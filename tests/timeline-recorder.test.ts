@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { completeOpening } from "../src/sim/progression.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
+import { addItem, transfer } from "../src/sim/inventory.js";
+import { incapacitate } from "../src/sim/recovery.js";
 import type { GameState } from "../src/sim/types.js";
 import { addNote, createRecorder, exportTimeline, exportTimelineText, NOTE_MAX, observe, recordSystemsEvents, resumeRecorder, TIMELINE_EVENT_CAP } from "../src/sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../src/sim/timeline/recorder.js";
@@ -226,26 +228,97 @@ test("a point of interest during a moving leg splits it into two stretches", () 
 test("an open death survives export and reload; the recovery time excludes idle waiting", () => {
   const { s, rec, step } = setup();
   s.metrics.failures++;
+  s.recovery.losses.push({ vehicleId: "dart_1", position: { x: 0, y: -5, z: 0 }, visited: true });
   step();
   step(60 * 10);
   const resumed = resumeRecorder(parseOk(exportTimelineText(rec, s)), { regionAt });
-  assert.equal(resumed.deathPlay, rec.deathPlay);
+  assert.deepEqual(resumed.pending, rec.pending);
+  assert.deepEqual(resumed.pending[0]!.keys, ["loss:dart_1"]);
   const tick = () => { s.tick++; };
   const go = (n: number, input: boolean) => { for (let i = 0; i < n; i++) { tick(); observe(resumed, s, { input }); } };
   go(1, true);
   go(60 * 50, false);
   go(60 * 5, true);
-  s.metrics.rescues++;
+  s.recovery.losses = [];
   go(1, true);
   const recovery = resumed.events.find((e) => e.kind === "recovery")!;
   // 10 s before the reload, then 1 + 15 (grace) + 5×60 + 1 steps of play; 35 idle seconds excluded.
   assert.ok(Math.abs(recovery.seconds! - (601 + 1 + 900 + 300 + 1) / 60) < 0.05, `${recovery.seconds}`);
-  assert.deepEqual(analyseTimeline(exportTimeline(resumed, s)).deaths, { count: 1, recoverySeconds: [recovery.seconds!], unrecovered: 0 });
+  assert.deepEqual(analyseTimeline(exportTimeline(resumed, s)).deaths, { count: 1, recoverySeconds: [recovery.seconds!], nothingLost: 0, unrecovered: 0 });
   // A recovered death is not reopened by a later reload.
-  assert.equal(resumeRecorder(exportTimeline(resumed, s)).deathPlay, null);
+  assert.deepEqual(resumeRecorder(exportTimeline(resumed, s)).pending, []);
 });
 function parseOk(text: string) {
   const r = parseTimeline(text);
   assert.ok(r.ok);
   return r.value;
 }
+
+test("two outstanding deaths: recover the second, reload, recover the first; each keeps its own cache and time", () => {
+  const { s, rec } = setup();
+  let live = rec;
+  const go = (n: number, input = true) => { for (let i = 0; i < n; i++) { s.tick++; observe(live, s, { input }); } };
+  const die = (at: { x: number; y: number; z: number }) => {
+    s.player.pose.position = { ...at };
+    s.player.mode = "swimming";
+    addItem(s, "silica_glass", 2, "diver");
+    incapacitate(s, "Test.");
+    go(1);
+    return s.recovery.caches.at(-1)!;
+  };
+  const retrieve = (cache: { position: { x: number; y: number; z: number }; containerId: string }) => {
+    s.player.pose.position = { ...cache.position };
+    for (const i of s.inventory.items.filter((x) => x.containerId === cache.containerId)) assert.equal(transfer(s, i.id, "diver", i.quantity), null);
+    go(1);
+  };
+  const first = die({ x: -40, y: -10, z: -20 });
+  const firstDeath = live.events.at(-1)!;
+  assert.deepEqual([firstDeath.kind, firstDeath.keys], ["death", [`cache:${first.id}`]]);
+  go(60);
+  const second = die({ x: 30, y: -10, z: -60 });
+  go(120);
+  retrieve(second);
+  let recoveries = live.events.filter((e) => e.kind === "recovery");
+  assert.equal(recoveries.length, 1);
+  assert.deepEqual(recoveries[0]!.keys, [`cache:${second.id}`]);
+  assert.ok(Math.abs(recoveries[0]!.seconds! - 121 / 60) < 0.02, `${recoveries[0]!.seconds}`);
+  assert.equal(live.pending.length, 1, "the first death is still open");
+
+  // Reload with the first death outstanding, wait idle a while, then retrieve it.
+  live = resumeRecorder(parseOk(exportTimelineText(live, s)), { regionAt });
+  assert.deepEqual(live.pending.map((p) => p.keys), [[`cache:${first.id}`]]);
+  go(1);
+  go(60 * 45, false);
+  go(60 * 2);
+  retrieve(first);
+  recoveries = live.events.filter((e) => e.kind === "recovery");
+  assert.equal(recoveries.length, 2);
+  assert.equal(recoveries[1]!.of, firstDeath.tick);
+  // Play since the first death: 1 + 60 + 1 + 120 + 1 before the reload, 1 + 15 s grace + 120 + 1 after; 30 idle seconds excluded.
+  assert.ok(Math.abs(recoveries[1]!.seconds! - (1 + 60 + 1 + 120 + 1 + 1 + 900 + 120 + 1) / 60) < 0.05, `${recoveries[1]!.seconds}`);
+  const deaths = analyseTimeline(exportTimeline(live, s)).deaths;
+  assert.deepEqual([deaths.count, deaths.recoverySeconds.length, deaths.unrecovered], [2, 2, 0]);
+});
+
+test("a partly emptied cache keeps its death open; a death that left nothing closes at once as nothing lost", () => {
+  const { s, rec, step } = setup();
+  s.player.pose.position = { x: -40, y: -10, z: -20 };
+  addItem(s, "silica_glass", 2, "diver");
+  addItem(s, "flex_membrane", 2, "diver");
+  incapacitate(s, "Test.");
+  step();
+  const cache = s.recovery.caches.at(-1)!;
+  s.player.pose.position = { ...cache.position };
+  const glass = s.inventory.items.find((i) => i.containerId === cache.containerId && i.kind === "silica_glass")!;
+  assert.equal(transfer(s, glass.id, "diver", 2), null);
+  step();
+  assert.equal(rec.events.filter((e) => e.kind === "recovery").length, 0);
+  // Stow the retrieved glass first, so this death drops nothing.
+  s.inventory.items.find((i) => i.kind === "silica_glass" && i.containerId === "diver")!.containerId = "pod_locker";
+  incapacitate(s, "Again.");
+  step();
+  const nothing = rec.events.filter((e) => e.kind === "recovery");
+  assert.deepEqual(nothing.map((e) => [e.what, e.seconds]), [["nothing-lost", 0]]);
+  const deaths = analyseTimeline(exportTimeline(rec, s)).deaths;
+  assert.deepEqual(deaths, { count: 2, recoverySeconds: [], nothingLost: 1, unrecovered: 1 });
+});
