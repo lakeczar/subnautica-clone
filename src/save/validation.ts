@@ -78,6 +78,8 @@ const array = (
   check: (a: unknown) => boolean,
 ): v is unknown[] => Array.isArray(v) && v.length <= max && v.every(check);
 const unique = (a: readonly unknown[]): boolean => new Set(a).size === a.length;
+/** Every distinct scan a save can hold: each source, each technical record and the reef filter flow. */
+const SCANNABLE_COUNT = Object.keys(SOURCES).length + Object.keys(TECH_RECORDS).length + 1;
 /** The recipes whose paid costs make up each campaign hull's frame. */
 const HULL_BUILD_RECIPES = {
   dart: ["dart_base"], creel: ["creel_base"], hush: ["hush_base"], spindle: ["spindle_base"], mantle: ["mantle_base"],
@@ -252,7 +254,8 @@ export function validState(value: unknown): value is GameState {
     !stringSet(k.blueprints, BLUEPRINTS.length, (v) =>
       BLUEPRINTS.includes(v as (typeof BLUEPRINTS)[number]),
     ) ||
-    !stringSet(k.scans, 48, (v) => v === "filter_flow" || known(SOURCES)(v) || techRecord(v)) ||
+    // Unique, known IDs only, so the bound is every scannable thing in the build.
+    !stringSet(k.scans, SCANNABLE_COUNT, (v) => v === "filter_flow" || known(SOURCES)(v) || techRecord(v)) ||
     !array(
       k.evidence,
       Object.keys(EVIDENCE).length,

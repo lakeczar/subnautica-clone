@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HULL_BUILD, HULL_COLLIDERS, RECIPES, type ItemKind, type RecipeId } from "../src/content/registry.js";
+import { HULL_BUILD, HULL_COLLIDERS, RECIPES, SOURCES, TECH_RECORDS, type ItemKind, type RecipeId } from "../src/content/registry.js";
 import { STOP_IDS, WORKING_STOPS, YARD_BUILD } from "../src/content/stops.js";
 import { SITES } from "../src/content/regions/sites.js";
 import { workPose, parkPose } from "../src/content/regions/access.js";
@@ -145,4 +145,16 @@ test("the yard builds the Hush, Spindle and Mantle on their slips, and the Heart
   assert.equal(validState(second), false);
   const orphan = structuredClone(s); orphan.fleet.docking = null;
   assert.equal(validState(orphan), false);
+});
+
+test("a save that has scanned every source, record and the filter flow validates (S9's 48-scan cap lifted)", () => {
+  const s = campaignReady();
+  s.knowledge.scans = [...new Set([...s.knowledge.scans, "filter_flow", ...Object.keys(SOURCES), ...Object.keys(TECH_RECORDS)])] as never;
+  // Reading every technical record grants its plans, as validation derives them.
+  for (const id of Object.keys(TECH_RECORDS) as (keyof typeof TECH_RECORDS)[]) for (const bp of TECH_RECORDS[id].blueprints)
+    if (!s.knowledge.blueprints.includes(bp)) s.knowledge.blueprints.push(bp);
+  assert.ok(s.knowledge.scans.length > 48);
+  saveable(s);
+  const dup = structuredClone(s); dup.knowledge.scans.push(dup.knowledge.scans[0]!);
+  assert.equal(validState(dup), false, "duplicates still refused");
 });
