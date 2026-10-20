@@ -41,17 +41,17 @@ interface Scenario {
 const add = (a: Vec3, x = 0, y = 0, z = 0): Vec3 => ({ x: a.x + x, y: a.y + y, z: a.z + z });
 const SCENARIOS: Record<string, Scenario> = {
   stalker: {
-    label: "Glare stalker · Ember Rift warm passage", focus: "rift_stalker_passage", look: add(homeOf("rift_stalker_passage"), 9, 0, 0),
-    player: add(homeOf("rift_stalker_passage"), 18, 0, 0), hull: "dart", noise: 0.48, lamp: true, toward: { x: -1, y: 0, z: 0 }, camera: [22, -2.2, 1.25],
+    label: "Glare stalker · Ember Rift warm passage", focus: "rift_stalker_passage", look: add(homeOf("rift_stalker_passage"), 8, 2, 3),
+    player: add(homeOf("rift_stalker_passage"), 18, 0, 0), hull: "dart", noise: 0.48, lamp: true, toward: { x: -1, y: 0, z: 0 }, camera: [17, -1.25, 1.32],
   },
   skate: {
     label: "Layer skate · Mirror Divide saddle", focus: "divide_skate_saddle", look: add(homeOf("divide_skate_saddle"), 3, 3, 0),
     player: { ...add(homeOf("divide_skate_saddle"), 6, 0, 0), y: layerY("divide_dense_layer") }, hull: null, noise: 0.14, lamp: true,
-    toward: { x: 0, y: -1, z: 0 }, velocity: { x: 0, y: -1.2, z: 0 }, camera: [20, -1.9, 1.38],
+    toward: { x: 0, y: -1, z: 0 }, velocity: { x: 0, y: -1.2, z: 0 }, camera: [20, -1.9, 1.05],
   },
   choir: {
     label: "Hollow choir · Meridian service gallery", focus: "district_choir_gallery", look: add(homeOf("district_choir_gallery"), 4, 3, 0),
-    player: add(homeOf("district_choir_gallery"), 12, 4, 0), hull: "creel", noise: 0.62, lamp: false, toward: { x: -1, y: 0, z: 0 }, camera: [30, -2.3, 1.2],
+    player: add(homeOf("district_choir_gallery"), 12, 4, 0), hull: "creel", noise: 0.62, lamp: false, toward: { x: -1, y: 0, z: 0 }, camera: [30, -2.3, 1.25],
   },
   plume: {
     label: "Ember mites and the split chimney plume", focus: null, look: add(cueHome("rift_mites_lip"), -4, 14, 0),
@@ -91,6 +91,7 @@ export function startCreatureViewer(canvas: HTMLCanvasElement, panel: HTMLElemen
     state = createEcology(); tick = sc.start ?? 0; player = { ...sc.player }; lamp = sc.lamp; noise = sc.noise; move = "hold"; log.length = 0;
     camera.setTarget(new Vector3(sc.look.x, sc.look.y, sc.look.z));
     [camera.radius, camera.alpha, camera.beta] = sc.camera;
+    frame();
     render();
   };
   const stimulus = (): Stimulus => {
@@ -148,8 +149,23 @@ export function startCreatureViewer(canvas: HTMLCanvasElement, panel: HTMLElemen
   }
   const until = Number(params.get("at") ?? 0) * 60;
   while (tick < until) step();
+  // Ease art postures with a few coarse updates (the art caps each at 0.1 s);
+  // no per-step uploads while fast-forwarding.
+  for (let k = 12; k > 0; k--) layer.update(ecologyView(state, tick, stimulus()), tick / 60 - k * 0.1, camera.position);
   if (params.get("paused") === "1") speed = 0;
+  frame();
   if (params.has("cam")) [camera.radius, camera.alpha, camera.beta] = params.get("cam")!.split(",").map(Number) as [number, number, number];
+
+  /** Side-on framing of the focus animal and the player, set once so the user can orbit. */
+  function frame(): void {
+    const focus = sc.focus ? state.agents.find(a => a.id === sc.focus) : null;
+    if (!focus) return;
+    const a = focus.position, dx = player.x - a.x, dz = player.z - a.z, n = Math.hypot(dx, dz) || 1;
+    camera.setTarget(new Vector3((a.x + player.x) / 2, (a.y + player.y) / 2 + 1, (a.z + player.z) / 2));
+    camera.alpha = Math.atan2(dx / n, -dz / n);
+    camera.beta = sc.camera[2];
+    camera.radius = Math.max(12, Math.hypot(dx, player.y - a.y, dz) * 1.25 + 6);
+  }
 
   function render(): void {
     const view = ecologyView(state, tick, stimulus());

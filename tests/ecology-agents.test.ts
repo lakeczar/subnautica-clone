@@ -101,7 +101,7 @@ test("layer skate cannot reach a diver above the layer, and never rises above it
   const state = createEcology(), top = layerY("divide_dense_layer");
   const p = { ...homeOf(SKATE), y: top + 5 };
   const log = run(state, 60 * 60, (_t, s) => {
-    for (const a of s.agents.filter(a => a.id.startsWith("divide_"))) assert.ok(a.position.y <= top + 1.5 + 1e-9, `${a.id} below layer`);
+    for (const a of s.agents.filter(a => a.id.startsWith("divide_"))) assert.ok(a.position.y <= top + THREATS.layer_skate.habitat.above + 1e-9, `${a.id} below layer`);
     return stimulus(p, { noise: 0.6, velocity: { x: 3, y: -1, z: 0 } });
   });
   assert.equal(strikes(log).length, 0);

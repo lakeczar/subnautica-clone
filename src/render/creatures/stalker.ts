@@ -22,14 +22,15 @@ export function createGlareStalker(scene: Scene, cel: Material, name: string, pa
   for (let i = 0; i < SEGMENTS; i++) {
     const r = radius(i);
     const mesh = parts.part(`segment.${i}`, b => {
-      b.ellipsoid([0, 0, 0], [r, r * 0.82, SPACING * 0.68], i % 2 ? "#4a3a5e" : P.plum, 9);
-      b.ellipsoid([0, -r * 0.35, 0], [r * 0.82, r * 0.42, SPACING * 0.6], "#c58f62", 8);
-      // Dorsal and ventral fin membrane with a pale edge carries the silhouette.
-      b.face([[0, r * 0.7, -SPACING * 0.5], [0, r * 0.7 + 0.32 - i * 0.02, -SPACING * 0.1], [0, r * 0.7 + 0.28 - i * 0.02, SPACING * 0.5], [0, r * 0.7, SPACING * 0.5]], P.coral);
-      b.tube([[0, r * 0.7 + 0.32 - i * 0.02, -SPACING * 0.1], [0, r * 0.7 + 0.28 - i * 0.02, SPACING * 0.5]], 0.018, P.coralRim, 4);
-      if (i > 2) b.face([[0, -r * 0.7, -SPACING * 0.4], [0, -r * 0.7 - 0.22, 0], [0, -r * 0.7, SPACING * 0.45]], P.petrol);
+      const next = radius(Math.min(SEGMENTS - 1, i + 1)), fin = 0.3 - i * 0.022;
+      b.ellipsoid([0, 0, 0], [r, r * 0.82, SPACING * 0.92], i % 2 ? "#4a3a5e" : P.plum, 10);
+      b.ellipsoid([0, -r * 0.35, 0.05], [r * 0.84, r * 0.44, SPACING * 0.85], "#c58f62", 9);
+      // One continuous dorsal membrane: each segment's panel meets the next.
+      b.face([[0, r * 0.66, -SPACING * 0.55], [0, r * 0.66 + fin, -SPACING * 0.2], [0, next * 0.66 + fin * 0.92, SPACING * 0.62], [0, next * 0.66, SPACING * 0.62]], P.coral);
+      b.tube([[0, r * 0.66 + fin, -SPACING * 0.2], [0, next * 0.66 + fin * 0.92, SPACING * 0.62]], 0.02, P.coralRim, 4);
+      if (i > 2) b.face([[0, -r * 0.7, -SPACING * 0.5], [0, -r * 0.7 - 0.2, 0], [0, -next * 0.7, SPACING * 0.62]], P.petrol);
       for (const side of [-1, 1])
-        for (const z of [-0.18, 0.2]) b.glow(b.ellipsoid([side * r * 0.86, r * 0.12, z], [0.06, 0.07, 0.08], P.amber, 6));
+        for (const z of [-0.18, 0.2]) b.glow(b.ellipsoid([side * r * 0.9, r * 0.1, z], [0.09, 0.1, 0.12], P.amber, 6));
       if (i === 0) {
         for (const side of [-1, 1]) {
           b.ellipsoid([side * 0.27, 0.16, -0.32], [0.09, 0.08, 0.08], P.ink, 7);
@@ -67,7 +68,7 @@ export function createGlareStalker(scene: Scene, cel: Material, name: string, pa
         x += Math.sin(heading) * SPACING;
         z += Math.cos(heading) * SPACING;
         // Light pattern by mode.
-        let gain = 0.45 + 0.3 * Math.sin(seconds * 1.3 - i * 0.7), lit = true;
+        let gain = 0.6 + 0.3 * Math.sin(seconds * 1.3 - i * 0.7), lit = true;
         if (mode === "alert") gain = 0.35 + 1.25 * Math.max(0, Math.sin(seconds * 9 - i * 0.95)) ** 4;
         else if (mode === "investigate") { const ph = seconds % 1.6; gain = ph < 0.16 || (ph > 0.34 && ph < 0.5) ? 1.5 : 0.3; }
         else if (mode === "commit") { gain = 0.25; lit = false; }

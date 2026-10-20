@@ -19,7 +19,7 @@ export function createHazardCues(scene: Scene, cel: Material, name: string, pare
   const rings: { mesh: Mesh; glow: Display; offset: number }[] = [];
   for (let i = 0; i < 7; i++) {
     const mesh = parts.part(`plume.ring.${i}`, b => {
-      revolve(b, [0, 0, 0], [[plume.shape.radius * 0.45, 0], [plume.shape.radius * 0.6, 1.4], [plume.shape.radius * 0.5, 2.8]], "#ffb36b", P.orange, 14);
+      revolve(b, [0, 0, 0], [[plume.shape.radius * 0.5, 0], [plume.shape.radius * 0.58, 0.35], [plume.shape.radius * 0.52, 0.7]], "#ffb36b", P.orange, 14);
     }, undefined, 0);
     rings.push({ mesh, glow: new Display(mesh, () => true), offset: i / 7 });
   }
@@ -28,11 +28,15 @@ export function createHazardCues(scene: Scene, cel: Material, name: string, pare
     revolve(b, [c.x, c.y + 12.6, c.z], [[3.5, 0], [4.4, 0.6]], "#e8d8b8", "#d9c49a", 12);
   });
   const layer = HAZARD_FIELDS.divide_dense_layer, lc = sitePosition(layer.shape.center), ly = lc.y + layer.shape.y;
+  // Sparse elongated glints rather than a solid sheet: the interface reads as
+  // a bright shimmering surface while the animal below it stays visible.
   const mirror = parts.part("divide.mirror", b => {
-    const size = 8, nx = 12, nz = 10;
-    for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) {
-      const x = lc.x - (nx * size) / 2 + i * size, z = lc.z - (nz * size) / 2 + k * size, wobble = (random() - 0.5) * 0.15;
-      b.face([[x, ly + wobble, z], [x + size, ly, z], [x + size, ly + wobble, z + size], [x, ly, z + size]], (i + k) % 2 ? P.reflection : "#b8dfe0");
+    const w = layer.shape.max.x - layer.shape.min.x, d = layer.shape.max.z - layer.shape.min.z;
+    for (let i = 0; i < 420; i++) {
+      const x = lc.x + (random() - 0.5) * w * 0.5, z = lc.z + (random() - 0.5) * d * 0.5;
+      const len = 2.5 + random() * 5, wid = 0.25 + random() * 0.55, a = 0.35 + (random() - 0.5) * 0.5;
+      const ux = Math.cos(a) * len, uz = Math.sin(a) * len, vx = -Math.sin(a) * wid, vz = Math.cos(a) * wid, y = ly + (random() - 0.5) * 0.12;
+      b.face([[x - ux, y, z - uz], [x + vx, y, z + vz], [x + ux, y, z + uz], [x - vx, y, z - vz]], i % 3 ? P.reflection : "#d8f0ec");
     }
   }, undefined, 0);
   const mirrorDisplay = new Display(mirror, () => true);
@@ -56,9 +60,11 @@ export function createHazardCues(scene: Scene, cel: Material, name: string, pare
       for (const r of rings) {
         const t = (r.offset + seconds * (0.05 + active * 0.25)) % 1;
         r.mesh.position.set(c.x, c.y + 12 + t * height, c.z);
-        r.mesh.scaling.setAll(0.8 + t * (0.6 + active));
+        // Between vents only two faint rings shimmer at the lip; a vent lights the column.
+        r.mesh.setEnabled(active > 0.05 || t < 0.3);
+        r.mesh.scaling.set(0.8 + t * (0.6 + active), 1 + active * 2, 0.8 + t * (0.6 + active));
         r.mesh.rotation.y = seconds * 0.2 + r.offset * 3;
-        r.glow.set((0.35 + active * 1.1) * (1 - t * 0.7), active > 0.05);
+        r.glow.set(active > 0.05 ? (0.5 + active) * (1 - t * 0.6) : 0.7, true);
       }
       const surge = levelOf(fields, "basin_sediment_lane");
       silt.setEnabled(surge > 0.12);

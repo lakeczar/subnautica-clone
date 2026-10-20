@@ -56,7 +56,7 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
     update(a: ThreatPose, seconds: number) {
       const dt = Math.min(0.1, seconds - last); last = seconds;
       const m = a.mode;
-      curl = smooth(curl, m === "alert" ? 0.45 : m === "investigate" ? 0.25 : 0, 3, dt);
+      curl = smooth(curl, m === "alert" ? 0.26 : m === "investigate" ? 0.14 : 0, 3, dt);
       sweep = smooth(sweep, m === "commit" ? 1 : 0, 6, dt);
       dimpleScale = smooth(dimpleScale, m === "alert" ? 0.7 : m === "investigate" ? 1.2 : m === "commit" ? 1.6 : 0, 2.5, dt);
       bulge = smooth(bulge, m === "commit" ? 0.6 : 0, 5, dt);
@@ -66,9 +66,9 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
       body.rotation.set(-sweep * 0.5, 0, 0);
       parts.root.rotation.set(0, -a.yaw, 0);
       for (const w of wings) {
-        const flap = Math.sin(seconds * beat) * (m === "rest" ? 0.12 : 0.22);
+        const flap = Math.sin(seconds * beat) * (m === "rest" ? 0.08 : 0.15);
         (w.inner.parent as TransformNode).rotation.set(-sweep * 0.5, 0, w.side * (curl + flap) - w.side * sweep * 0.2);
-        (w.outer.parent as TransformNode).rotation.set(0, w.side * sweep * 0.6, w.side * (curl * 1.4 + Math.sin(seconds * beat - 0.8) * 0.3));
+        (w.outer.parent as TransformNode).rotation.set(0, w.side * sweep * 0.6, w.side * (curl + Math.sin(seconds * beat - 0.8) * 0.18));
         w.spots.set(m === "rest" ? 0.5 : m === "commit" ? 0.2 : 0.9 + 0.5 * Math.sin(seconds * 6 + w.side), m !== "commit");
       }
       dimple.setEnabled(dimpleScale > 0.04);
