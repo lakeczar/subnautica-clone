@@ -14,17 +14,18 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 | Work | Owner | Branch / worktree | Owns | Next |
 | --- | --- | --- | --- | --- |
 | M2-B1: earned Creel and mobile refuge | Opus 5.5 high | `t3/earned-creel-mobile-refuge-loop` / `t3-b6aef8ec` | The roots listed in DIRECTION | Done at `2cff245`; Sol R1 review running |
-| GPU enablement bundle | Opus 5.5 high (author) | `t3/enable-3090-gpu` / `t3-b9861fd3` | `docs/build/gpu-enablement/` | attach rolled back safely; the `qemu:commandline` fix is in progress |
+| GPU enablement bundle | Opus 5.5 high (author) | `t3/enable-3090-gpu` / `t3-b9861fd3` | `docs/build/gpu-enablement/` | attached on `785503c`; probe backend fix in progress |
 | New parallel streams | See [streams](STREAMS.md) | | | |
 
 **Next**
 1. GPU: R3 accepted → place the bundle in Fleet → the owner approves the rehearsal → install the guest driver → checkpoint → the owner approves the attach → run the 3090 browser smoke.
 2. B1 handoff → Sol review → integrate. Then: save simplification, test tiers, compose the parallel streams, the world scale slice, and a rough complete campaign.
 
-**Blocking:** GPU attach.
-- **First real attach:** run `20261020T032723Z-ae45` returned `rolled-back/20`. libvirt refused `<sysinfo type='fwcfg'>` with "That firmware name is reserved" (it reserves the `opt/ovmf/` prefix), so the VM restarted unchanged.
-- **Fix in progress** with the GPU author: carry the same `-fw_cfg` through `<qemu:commandline>`, and add a `virsh domxml-to-native` validation before shutdown.
-- **Then:** a focused Sol review, a rehearsal and the attach.
+**GPU: attached, smoke pending (2026-10-20).**
+- **Attach:** run `20261020T041458Z-762c` returned `attached`/0. The guest sees the RTX 3090 at `06:00.0`; `nvidia-smi` shows driver 550.163.01 and 24 GiB.
+- **WebGL:** draws on the 3090 through both ANGLE-Vulkan and ANGLE-GL-EGL.
+- **Smoke:** with ANGLE-Vulkan, Chrome 156 loses the context once at game startup (4/4 runs; Babylon restores it). GL-EGL is clean (2/2).
+- **Fix in progress:** the GPU author is adding a backend fallback and `--candidate` to `webgl-probe.mjs`. Then the coordinator re-runs the probe and `check post`.
 
 **Stream reviews running** (fresh Sol xhigh; rules in [STREAM-REVIEW-RULES](STREAM-REVIEW-RULES.md)): S1 `171b7d7`, S3 `d058d27`, S4 `a6b3181`, S5 `58c8a6a`, S6 `cd9c13d`. B1 and S2 continue building. S4's design additions are accepted: lamp switch, nonlethal kits, one lunge at a time, 12 m refuge margin.
 
