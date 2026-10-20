@@ -100,9 +100,10 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **S4 R1 (Sol xhigh):** changes-needed (`review/s4` `dab1858`). The escape test removed walls (68 HP > 60), strikes go through cover, heat/brine warnings are 4.28 s, and persistence IDs are unsafe. All accepted and back with the author.
 
 ## Concurrency queue (cap: 5 Opus builders)
-- **Running:** S1 (R1 fixes), S4 (R1 fixes), S3 (R1 fixes), S6 (R1 fixes), S7 (test tiers and save simplification, on B1 `2cff245`). S2 is done at `3c185ca`, with its Sol R1 review running. The GPU fix is done at `785503c` (`qemu:commandline` plus a pre-shutdown `domxml-to-native` gate), with an R5 Sol review running. B1 is done at `2cff245` (587/587 `npm run check`), and its Sol R1 review is running. S5's fixes are done at `476a044`; the coordinator reproduced 59/59 tests, and an R2 Sol review is running.
+- **Running:** S1 (R1 fixes), S4 (R1 fixes), S6 (R1 fixes), S7 (test tiers and saves), S8 (concise menus, on B1 `2cff245`, port 5193). S3's fixes are done at `83afb45`, with an R2 Sol review running. S2 is done at `3c185ca`, with its Sol R1 review running. The GPU fix is done at `785503c` (`qemu:commandline` plus a pre-shutdown `domxml-to-native` gate), with an R5 Sol review running. B1 is done at `2cff245` (587/587 `npm run check`), and its Sol R1 review is running. S5's fixes are done at `476a044`; the coordinator reproduced 59/59 tests, and an R2 Sol review is running.
 - **Paused:** none. Each was told to commit and stop; resume with "continue".
   - S4 paused at `27de0fb`: S4-03 mostly done and S4-04 half done; S4-01, S4-02 and S4-05 not started; tests to update.
   - S3 paused at `682bdd3`: S3-01 and S3-03 done but unrun; S3-02 (the Dart berth proposal) and the S3.md updates remain.
   - S6 paused at `ab59c89`: all five fixes are in source, but their tests, the lab re-measure and the doc updates remain.
 - **S2 decisions (coordinator):** the gate hall is at 769 m, beside the machinery at 770 m; S5's 700 m reference follows S2's site at composition. Also accepted: a Hearthline construction berth at the stack yard, the 950 m deep tether, and per-region optics. S2 must re-merge S1 after S1's R1 fixes.
+- **S3-02 decision:** option B, trimming the Dart's fins to a 2.45 m envelope with no save change, applied at composition and proven with S3's `transferMatrix`.
