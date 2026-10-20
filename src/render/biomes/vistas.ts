@@ -38,23 +38,16 @@ const LIT: ReadonlySet<VistaTone> = new Set(["glow", "warm", "cyan"]);
 const glow = (b: RecipeBuilder, f: () => void): void => { const a = b.alpha; b.alpha = -1; f(); b.alpha = a; };
 const lerp3 = (a: P3, b: P3, t: number): P3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
-/** A solid set exactly as its collision: each block is its box, each tube
- * a faceted tube inside its segment boxes. Coarse LOD only drops facets. */
+/** A solid set exactly as its collision data: each block is its box, each
+ * tube a faceted tube inside its segment boxes, each piece its own facets.
+ * Coarse LOD only drops tube facets. */
 export function drawSolidSet(b: RecipeBuilder, s: VistaSet, fine: boolean): void {
-  s.blocks.forEach((k, i) => {
-    const top = k.top ? C[k.top] : undefined;
-    if (LIT.has(k.tone)) { glow(b, () => b.aabb([k.min.x, k.min.y, k.min.z], [k.max.x, k.max.y, k.max.z], C[k.tone], top)); return; }
-    if (!fine || (k.tone !== "stone" && k.tone !== "stoneDark")) { b.aabb([k.min.x, k.min.y, k.min.z], [k.max.x, k.max.y, k.max.z], C[k.tone], top); return; }
-    // Stone reads as a chamfered block: three overlapping boxes, each inset
-    // on two axes, in shifted shades. All of it stays inside the collision.
-    const e = Math.min(0.6, 0.18 * Math.min(k.max.x - k.min.x, k.max.y - k.min.y, k.max.z - k.min.z));
-    const shade = (f: number): Rgb => { const c = C[k.tone]; return [c[0] * f, c[1] * f, c[2] * f]; };
-    const j = 0.06 * hash2(i, s.id.length, 5);
-    b.aabb([k.min.x, k.min.y + e, k.min.z + e], [k.max.x, k.max.y - e, k.max.z - e], shade(0.92 + j));
-    b.aabb([k.min.x + e, k.min.y + e, k.min.z], [k.max.x - e, k.max.y - e, k.max.z], shade(1.04 - j));
-    b.aabb([k.min.x + e, k.min.y, k.min.z + e], [k.max.x - e, k.max.y, k.max.z - e], shade(0.86 + j), top ?? shade(1.12));
-  });
+  for (const k of s.blocks) {
+    const draw = (): void => b.aabb([k.min.x, k.min.y, k.min.z], [k.max.x, k.max.y, k.max.z], C[k.tone], k.top ? C[k.top] : undefined);
+    if (LIT.has(k.tone)) glow(b, draw); else draw();
+  }
   for (const t of s.tubes) b.tube(t.points.map(p => [p.x, p.y, p.z] as P3), t.radius, fine ? t.sides : Math.max(3, t.sides - 2), C[t.tone]);
+  for (const p of s.pieces) for (const f of p.facets) b.face(f.pts.map(q => [q.x, q.y, q.z] as P3), C[f.tone]);
 }
 
 // --- Dressing builders (visual-only, permeable) ------------------------------
@@ -153,10 +146,12 @@ export const VISTA_DRESSING: readonly VistaPart[] = [
   // and bulbs on the lip; bulb clusters mark the walls down the drop.
   { id: "drop.ribbons", x: -236, z: -116, draw: (b, _floor, fine) => {
     if (!fine) return;
-    ARCH.blocks.forEach((k, i) => {
-      if (!k.top) return;
+    ARCH.pieces.forEach((piece, i) => {
+      if (i < 3 || i > ARCH.pieces.length - 4) return;
+      const pts = piece.facets.flatMap(f => f.pts), low = pts.reduce((m, q) => q.y < m.y ? q : m);
+      const cz = pts.reduce((n, q) => n + q.z, 0) / pts.length;
       for (const s of [-1, 1]) {
-        const x = (k.min.x + k.max.x) / 2 + s * 0.6, z = s > 0 ? k.max.z + 0.05 : k.min.z - 0.05, y = k.min.y + 0.3;
+        const x = low.x + s * 0.6, z = cz + s * 1.2, y = low.y + 0.6;
         b.leaf([[x, y, z], [x + 0.3, y - 2.5 - (i % 3), z + s * 0.4], [x - 0.2, y - 5.5 - (i % 3), z + s * 0.6]], [0.5, 0.45, 0.08], [1, 0, 0], C.jade, C.lime);
       }
     });

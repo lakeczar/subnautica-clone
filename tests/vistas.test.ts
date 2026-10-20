@@ -21,17 +21,75 @@ const ctx: CheckContext = { floor: worldFloor, hazards: HAZARDS, solids: VISTA_S
 const none = (problems: readonly string[], what: string): void =>
   assert.equal(problems.length, 0, `${what}:\n- ${problems.slice(0, 12).join("\n- ")}`);
 
-test("every visible arch, plate and rib surface lies inside its set's collision", () => {
+/** Collision hugs the art: no art outside its set's solids (sampled over
+ * every triangle), and both faces across each box's thin axis touch the art
+ * or stand at most GAP off it at their centres — a diver may bump just before
+ * contact, never swim through and never meet an invisible wall. */
+const GAP = 0.35;
+const sub = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
+const cross = (a: Vec3, b: Vec3): Vec3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+/** Point to triangle distance (closest point by Voronoi region). */
+function pointTriangle(p: Vec3, a: Vec3, b: Vec3, c: Vec3): number {
+  const len = (q: Vec3): number => Math.sqrt(dot(q, q)), along = (o: Vec3, d: Vec3, t: number): Vec3 => ({ x: o.x + d.x * t, y: o.y + d.y * t, z: o.z + d.z * t });
+  const ab = sub(b, a), ac = sub(c, a), ap = sub(p, a), d1 = dot(ab, ap), d2 = dot(ac, ap);
+  if (d1 <= 0 && d2 <= 0) return len(ap);
+  const bp = sub(p, b), d3 = dot(ab, bp), d4 = dot(ac, bp);
+  if (d3 >= 0 && d4 <= d3) return len(bp);
+  if (d1 * d4 - d3 * d2 <= 0 && d1 >= 0 && d3 <= 0) return len(sub(p, along(a, ab, d1 / (d1 - d3))));
+  const cp = sub(p, c), d5 = dot(ab, cp), d6 = dot(ac, cp);
+  if (d6 >= 0 && d5 <= d6) return len(cp);
+  if (d5 * d2 - d1 * d6 <= 0 && d2 >= 0 && d6 <= 0) return len(sub(p, along(a, ac, d2 / (d2 - d6))));
+  if (d3 * d6 - d5 * d4 <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) return len(sub(p, along(b, sub(c, b), (d4 - d3) / ((d4 - d3) + (d5 - d6)))));
+  const n = cross(ab, ac);
+  return Math.abs(dot(n, ap)) / len(n);
+}
+/** Inside a set's convex parts: a block, a tube segment or a closed piece. */
+function insideArt(set: (typeof VISTA_SETS)[number], p: Vec3): boolean {
+  const e = 1e-3;
+  if (set.blocks.some(k => p.x >= k.min.x - e && p.x <= k.max.x + e && p.y >= k.min.y - e && p.y <= k.max.y + e && p.z >= k.min.z - e && p.z <= k.max.z + e)) return true;
+  for (const t of set.tubes) for (let i = 0; i < t.points.length - 1; i++) {
+    const a = t.points[i]!, d = sub(t.points[i + 1]!, a), l2 = dot(d, d), s = dot(sub(p, a), d) / l2;
+    if (s < 0 || s > 1) continue;
+    const r = sub(p, { x: a.x + d.x * s, y: a.y + d.y * s, z: a.z + d.z * s });
+    if (Math.sqrt(dot(r, r)) <= t.radius * Math.cos(Math.PI / Math.max(3, t.sides - 2))) return true;
+  }
+  return set.pieces.some(piece => piece.closed && piece.facets.every(f => {
+    const n = cross(sub(f.pts[1]!, f.pts[0]!), sub(f.pts[2]!, f.pts[0]!));
+    return dot(n, sub(p, f.pts[0]!)) <= e * Math.sqrt(dot(n, n));
+  }));
+}
+
+test("vista collision hugs its art: nothing pokes out, no face stands off more than 0.35 m", () => {
   const tol = 0.02;
   for (const set of VISTA_SETS) for (const fine of [true, false]) {
     const b = new RecipeBuilder();
     drawSolidSet(b, set, fine);
     const boxes = VISTA_SOLIDS.filter(s => s.id.startsWith(`vista.${set.id}.`)).map(s => s.bounds);
     assert.ok(boxes.length > 0 && b.vertexCount > 0, set.id);
-    for (let i = 0; i < b.positions.length; i += 3) {
-      const x = b.positions[i]!, y = b.positions[i + 1]!, z = b.positions[i + 2]!;
-      assert.ok(boxes.some(k => x >= k.min.x - tol && x <= k.max.x + tol && y >= k.min.y - tol && y <= k.max.y + tol && z >= k.min.z - tol && z <= k.max.z + tol),
-        `${set.id} (${fine ? "fine" : "coarse"}) draws outside its collision at ${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}`);
+    const P = b.positions, I = b.indices, at = (i: number): Vec3 => ({ x: P[i * 3]!, y: P[i * 3 + 1]!, z: P[i * 3 + 2]! });
+    for (let t = 0; t < I.length; t += 3) {
+      const A = at(I[t]!), B = at(I[t + 1]!), Cc = at(I[t + 2]!);
+      const n = Math.max(1, Math.ceil(Math.max(Math.sqrt(dot(sub(A, B), sub(A, B))), Math.sqrt(dot(sub(B, Cc), sub(B, Cc))), Math.sqrt(dot(sub(A, Cc), sub(A, Cc)))) / 0.25));
+      for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) {
+        const u = i / n, v = j / n, w = 1 - u - v;
+        const x = A.x * w + B.x * u + Cc.x * v, y = A.y * w + B.y * u + Cc.y * v, z = A.z * w + B.z * u + Cc.z * v;
+        assert.ok(boxes.some(k => x >= k.min.x - tol && x <= k.max.x + tol && y >= k.min.y - tol && y <= k.max.y + tol && z >= k.min.z - tol && z <= k.max.z + tol),
+          `${set.id} (${fine ? "fine" : "coarse"}) draws outside its collision at ${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}`);
+      }
+    }
+    if (!fine) continue;
+    for (const k of boxes) {
+      const ext = { x: k.max.x - k.min.x, y: k.max.y - k.min.y, z: k.max.z - k.min.z };
+      const axis = (["x", "y", "z"] as const).reduce((m, a) => ext[a] < ext[m] ? a : m);
+      const c = { x: (k.min.x + k.max.x) / 2, y: (k.min.y + k.max.y) / 2, z: (k.min.z + k.max.z) / 2 };
+      for (const side of [-1, 1]) {
+        // The face centre is inside the art, or no farther than GAP from it.
+        const o = { ...c, [axis]: side < 0 ? k.min[axis] : k.max[axis] };
+        let gap = insideArt(set, o) ? 0 : Infinity;
+        for (let t = 0; t < I.length && gap > GAP; t += 3) gap = Math.min(gap, pointTriangle(o, at(I[t]!), at(I[t + 1]!), at(I[t + 2]!)));
+        assert.ok(gap <= GAP + 0.02, `${set.id}: a solid stands ${gap.toFixed(2)} m off the art along ${axis} at ${o.x.toFixed(1)}, ${o.y.toFixed(1)}, ${o.z.toFixed(1)}`);
+      }
     }
   }
 });
