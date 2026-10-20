@@ -51,3 +51,13 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 3. Resume every builder with a short "continue" message: B1 (`siltwake-m2-b1-opus-high-7bd259c`) and S1–S6 (IDs in STREAMS).
 4. Tell the owner to resume the fleet-dashboard threads if they were interrupted.
 5. Record the outcome here and in Fleet `docs/STATE.md`, then fix R3-01 and R4-01.
+
+## GPU attach, second attempt (2026-10-20 04:10 UTC)
+- **Rehearsal** `20261020T040634Z-8a53` returned `rehearsal-ok`. The gate reported that libvirt accepts the target, and the argv has `-fw_cfg … X-PciMmio64Mb,string=65536` plus `vfio-pci` for `01:00.0` and `01:00.1`.
+- **Checkpoint:** all builders (S1, S6, S7, S8) and reviewers (B1, S2, S3-R2, S4-R2) were told to commit and stop. All worktrees are clean. `check pre` shows the same four dashboard baseline failures.
+- **Attach** submitted for owner approval.
+
+**After boot:**
+1. Read `result.json`.
+2. Run `check post` with the probe.
+3. Resume S1, S6, S7 and S8, and send "continue" to the four reviewers. Check each reviewer's summary first: some may already have finished.
