@@ -77,19 +77,21 @@ function entryText(id: DiscoveryId): { observed: string; provenance: string; rea
 export function entryView(id: DiscoveryId, foundTick: number, known: Learned): EntryView {
   const base = entryText(id);
   const rereads: readonly Reread[] = Object.hasOwn(REREADS, id) ? REREADS[id as keyof typeof REREADS] : [];
+  const satisfied = rereads.filter((r) => holds(known, r.when));
   const winners = new Map<string, Reread>();
-  for (const r of rereads) if (holds(known, r.when)) winners.set(r.axis, r);
-  const current = [...winners.values()];
-  const replacing = current.filter((r) => r.replaces);
-  const replacedAt = replacing.length ? Math.min(...replacing.map((r) => heldSince(known, r.when))) : Infinity;
+  for (const r of satisfied) winners.set(r.axis, r);
+  // Once any replacing row has held, the first reading stays replaced, even after a
+  // later non-replacing row on the same axis wins; history counts from the earliest.
+  const replacedAt = Math.min(...satisfied.filter((r) => r.replaces).map((r) => heldSince(known, r.when)));
+  const replaced = replacedAt < Infinity;
   return {
     id,
     label: labelOf(id),
     provenance: base.provenance,
     observed: base.observed,
-    reading: replacing.length ? null : base.reading,
-    firstRead: replacing.length && foundTick < replacedAt ? base.reading : null,
-    notes: current.map((r) => r.text),
+    reading: replaced ? null : base.reading,
+    firstRead: replaced && foundTick < replacedAt ? base.reading : null,
+    notes: [...winners.values()].map((r) => r.text),
   };
 }
 

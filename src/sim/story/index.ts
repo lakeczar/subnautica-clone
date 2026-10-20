@@ -11,5 +11,5 @@ export type { Hint, HintContext } from "./hints.js";
 export { advanceWorks, gateOpen, gatePanel, worksAction } from "./works.js";
 export type { Assembly, WorksContext, WorksOutcome } from "./works.js";
 export { beginResolution, canBegin, completeResolution, requirements, resolutionVisible } from "./resolution.js";
-export { planCampaign, reachable } from "./reachability.js";
-export type { Capabilities, CampaignPlan } from "./reachability.js";
+export { planCampaign, proposalModel, reachable } from "./reachability.js";
+export type { Capabilities, CampaignModel, CampaignPlan, PlanOptions } from "./reachability.js";

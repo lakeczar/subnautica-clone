@@ -168,3 +168,33 @@ test("saved story state validates strictly and holds through a round trip at eve
   assert.equal(bad((x) => { x.resolution = { phase: "first", first: "iona" }; }), false, "ending before requirements");
   assert.equal(bad((x) => { (x.hints as Record<string, number>).L01 = 4; }), false, "hint tier out of range");
 });
+
+test("adverse: the save guard rejects wrong types, coerced keys, impossible combinations and future ticks", () => {
+  const fresh = (): StoryState => createStory();
+  const rejects = (f: (x: Record<string, any>) => void, why: string, now?: number) => {
+    const x: Record<string, any> = JSON.parse(JSON.stringify(fresh()));
+    f(x);
+    assert.equal(validStory(x, now), false, why);
+  };
+  rejects((x) => { x.works.repairs = [["pod_buffer"]]; }, "array-valued repair ID");
+  rejects((x) => { x.works.repairs = ["pod_buffer", "pod_buffer"]; }, "duplicate repair");
+  rejects((x) => { x.works.repairs = ["restore_upper_hall"]; }, "a recipe that is not a story repair");
+  rejects((x) => { x.discoveries = [{ id: "C14", tick: 4 }]; }, "C14 without its repair");
+  rejects((x) => { x.discoveries = [{ id: "C01", tick: 1e100 }]; }, "unsafe tick");
+  rejects((x) => { x.discoveries = [{ id: "C01", tick: 1.5 }]; }, "fractional tick");
+  rejects((x) => { x.discoveries = [{ id: ["C01"], tick: 1 }]; }, "array-valued discovery ID");
+  rejects((x) => { x.discoveries = [{ id: "C01", tick: 1, extra: true }]; }, "extra discovery key");
+  rejects((x) => { x.discoveries = [{ id: "C01", tick: 11 }]; }, "tick after the enclosing game tick", 10);
+  rejects((x) => { x.works.gate = ["open"]; }, "array-valued gate stage");
+  rejects((x) => { x.resolution.phase = ["none"]; }, "array-valued phase");
+  rejects((x) => { x.surplus = 1; }, "unknown top-level key");
+  rejects((x) => { x.hints = { toString: 1 }; }, "inherited-name hint key");
+  const done: Record<string, any> = JSON.parse(JSON.stringify(planCampaign("carrier").story));
+  assert.equal(validStory(done), true);
+  done.resolution.first = ["iona"];
+  assert.equal(validStory(done), false, "array-valued roster ID");
+  const ok: Record<string, any> = JSON.parse(JSON.stringify(fresh()));
+  ok.works.repairs = ["pod_buffer"];
+  ok.discoveries = [{ id: "C01", tick: 1 }, { id: "C14", tick: 10 }];
+  assert.ok(validStory(ok, 10), "C14 with its repair, at the current tick");
+});

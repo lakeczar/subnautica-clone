@@ -41,6 +41,27 @@ export const STORY_SITES = {
     region: "island_chain", depth: 0, exit: null, zone: "near", existing: true,
     landmark: "Splitspine landing.", cue: "Shore crops and the workshop above.", approach: "Short swim from the pod.", visible: "Unchanged; no story items.",
   },
+  splitspine_headland_gantry: {
+    region: "island_chain", depth: 20, exit: 20, zone: "near",
+    landmark: "Damaged gantry on the storm-cut headland, its housing below the waterline.",
+    cue: "Tagged panels spilled below the gantry.",
+    approach: "Swim from the landing along the headland; starter gear reaches it.",
+    visible: "An open gantry housing with riveted plates; beside the existing headland scrap source.",
+  },
+  canopy_lower_fins: {
+    region: "suspended_garden", depth: 130, exit: 130, zone: "near",
+    landmark: "Lower grounding fins beyond the laboratory.",
+    cue: "Crust-coated fins; a survey post standing among them.",
+    approach: "Lower Canopy roots, inside the 150 m suit envelope.",
+    visible: "A survey post with a weatherproof sheet case, beside the existing lower fin source.",
+  },
+  basin_service_rack: {
+    region: "silt_basin", depth: 168, exit: 168, zone: "near",
+    landmark: "Service rack on the first Basin shelf, below the northern dish.",
+    cue: "A pressure sleeve strapped to the rack catches the light.",
+    approach: "First Basin shelf, same envelope as the dormitory.",
+    visible: "A freestanding rack with a sealed plan sleeve, near the northern ridge salvage.",
+  },
   canopy_lab: {
     region: "suspended_garden", depth: 117, exit: 117, zone: "near", existing: true,
     landmark: "Suspended laboratory by the tall rib.", cue: "Fauna school in clear upper water, not the dense channel.",

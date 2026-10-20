@@ -10,7 +10,7 @@ import type { StorySite } from "../../content/story/sites.js";
 import {
   CAMPAIGN_STEPS, CARRIER_SHELF_DEPTH, EXTERNAL_GRANTS, FLEET_STRATEGIES, MATERIAL_SHELVES, SORTIE_HULLS, SWIM_DEPTH,
 } from "../../content/story/strategies.js";
-import type { AnyBlueprint, CampaignStep, StepId, StopId, StrategyId } from "../../content/story/strategies.js";
+import type { AnyBlueprint, CampaignStep, StopId, StrategyId } from "../../content/story/strategies.js";
 import { EQUALIZE_STEPS } from "../../content/story/works.js";
 import type { WorksAction } from "../../content/story/works.js";
 import { blueprints, found, recordDiscovery } from "./knowledge.js";
@@ -50,11 +50,23 @@ export interface PlanOptions {
   optional?: boolean;
   /** Visit reachable discoveries in reverse ID order within each pass. */
   reverse?: boolean;
+  /** Replace the proposal tables, e.g. with steps derived from the composed recipe
+   * registry: `steps` keyed by step ID, `order` the strategy's step IDs, `grants`
+   * non-story plan sources. Defaults come from content/story/strategies.ts. */
+  model?: Partial<CampaignModel>;
 }
+export interface CampaignModel {
+  steps: Readonly<Record<string, CampaignStep>>;
+  order: readonly string[];
+  grants: Readonly<Record<string, { depth: number; exit: number | null; grants: readonly AnyBlueprint[] }>>;
+}
+export const proposalModel = (strategy: StrategyId): CampaignModel => ({
+  steps: CAMPAIGN_STEPS, order: FLEET_STRATEGIES[strategy].steps, grants: EXTERNAL_GRANTS,
+});
 export interface CampaignPlan {
   ending: boolean;
   story: StoryState;
-  steps: StepId[];
+  steps: string[];
   caps: Capabilities;
   /** Discoveries in the order the plan found them. */
   order: DiscoveryId[];
@@ -63,7 +75,8 @@ export interface CampaignPlan {
 export function planCampaign(strategy: StrategyId, opts: PlanOptions = {}): CampaignPlan {
   const s = createStory();
   const caps = { suit: 0, hulls: {} as Partial<Record<HullId, number>>, stops: new Set<StopId>() };
-  const steps: StepId[] = [], external = new Set<AnyBlueprint>(), skip = new Set(opts.skip ?? []);
+  const model = { ...proposalModel(strategy), ...opts.model };
+  const steps: string[] = [], external = new Set<AnyBlueprint>(), skip = new Set(opts.skip ?? []);
   let tick = 0;
   const plans = (): Set<AnyBlueprint> => new Set([...blueprints(s.discoveries), ...external]);
   const ids = opts.reverse ? [...DISCOVERY_IDS].reverse() : DISCOVERY_IDS;
@@ -77,15 +90,16 @@ export function planCampaign(strategy: StrategyId, opts: PlanOptions = {}): Camp
       recordDiscovery(s, id, ++tick);
       progress = true;
     }
-    for (const g of Object.values(EXTERNAL_GRANTS))
+    for (const g of Object.values(model.grants))
       if (reachable({ ...g, zone: "near" }, caps)) for (const bp of g.grants) if (!external.has(bp)) { external.add(bp); progress = true; }
     if (!s.works.repairs.includes("pod_buffer") && plans().has("bp_pod_buffer") && recipeReachable("pod_buffer", caps)) {
       s.works.repairs.push("pod_buffer");
       progress = true;
     }
-    for (const id of FLEET_STRATEGIES[strategy].steps) {
-      const step: CampaignStep = CAMPAIGN_STEPS[id];
-      if (steps.includes(id) || !step.needs.every((n) => steps.includes(n as StepId))) continue;
+    for (const id of model.order) {
+      const step = model.steps[id];
+      if (!step) throw new Error(`Campaign step ${id} is not defined`);
+      if (steps.includes(id) || !step.needs.every((n) => steps.includes(n))) continue;
       if (!step.blueprints.every((bp) => plans().has(bp))) continue;
       if (!step.materials.every((m) => materialReachable(m, caps))) continue;
       steps.push(id);

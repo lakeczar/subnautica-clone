@@ -24,7 +24,7 @@ export function nextWorksStep(s: StoryState): WorksStep | null {
   const known = learned(s.discoveries), w = s.works;
   const reveal = known.has("F17");
   if (s.resolution.phase !== "none") return null;
-  if (reveal || known.has("F13")) {
+  if (reveal || known.has("F23")) {
     if (!w.power) return "w_power";
     if (!w.air) return "w_air";
     if (w.gate === "sealed") return "w_isolate";

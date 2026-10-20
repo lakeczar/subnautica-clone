@@ -2,7 +2,7 @@
  * player text in content/registry.ts; this file adds their story metadata and the
  * full text of C07–C15, technical records and optional personal journals.
  * IDs and labels are safe to show before they are found; meaning lives in the text. */
-import type { EvidenceId, MaterialId, PlaceId, RegionId } from "../registry.js";
+import type { BlueprintId, EvidenceId, MaterialId, PlaceId, RegionId } from "../registry.js";
 
 /** Proposed sites beyond the registry PLACES. Region author (S2) places them; see sites.ts. */
 export type StorySiteId =
@@ -11,6 +11,9 @@ export type StorySiteId =
   | "divide_upper_dock"
   | "divide_turbine_hall"
   | "splitspine_field_shelter"
+  | "splitspine_headland_gantry"
+  | "canopy_lower_fins"
+  | "basin_service_rack"
   | "meridian_shelf"
   | "meridian_upper_hall"
   | "meridian_transfer_hall"
@@ -21,7 +24,9 @@ export type StorySiteId =
 
 export type StoryEvidenceId = EvidenceId | "C07" | "C08" | "C09" | "C10" | "C11" | "C12" | "C13" | "C14" | "C15";
 /** Durable technical records: non-optional, never personal. */
-export type RecordId = "rift_station_ledger" | "gate_panel" | "district_controller" | "inner_roster";
+export type RecordId =
+  | "rift_station_ledger" | "gate_panel" | "district_controller" | "inner_roster"
+  | "pod_checklist" | "gantry_plates" | "fin_survey_post" | "basin_service_rack";
 /** Optional personal journals. They deepen people and motives and never gate anything. */
 export type JournalId =
   | "mara_reef_note"
@@ -100,7 +105,7 @@ export const STORY_EVIDENCE = {
   C09: {
     label: "Return gate control",
     observation:
-      "The control log holds an authenticated order in Ren's voice: “Close the return.” The schematic shows the outer lock crushed under the slope, and a hydraulic service pipe far too narrow for a person.",
+      "The control log holds an authenticated order in Ren's voice: “Close the return.” The schematic shows the outer lock crushed under the slope, and a hydraulic service pipe far too narrow for a person. Its service note gives the order: independent power and air, isolate the diversion, equalize through the pipe, then open.",
     provenance: "Meridian gate hall / D0 +05:12 command log; gallery schematic",
     reading: "Murder, coercion or triage? The log gives the order and the time, not the reason.",
   },
@@ -122,7 +127,7 @@ export const STORY_EVIDENCE = {
   C12: {
     label: "Turbine hall recorder",
     observation:
-      "The backup recorder holds the whole gate sequence. Pressure falls to the documented threshold. Ren asks for the service-pipe option; it would drain the reserve before the occupied galleries are safe. Voices from the return gallery ask for two more minutes. Then: “Close the return.” A minute later the gallery trace floods.",
+      "The backup recorder holds the whole gate sequence. Pressure falls to the documented threshold. Ren asks for the service-pipe option and is refused: it would drain the reserve before the occupied galleries are safe. Voices from the return gallery ask for two more minutes. Nobody else gives an order on the channel. Then Ren: “Close the return.” A minute later the gallery trace floods. Six transponders go quiet.",
     provenance: "Mirror Divide turbine hall / D0 +05:04 to +05:13 recorder and pressure trace",
     reading:
       "It explains the order. It cannot say whether two more minutes would have saved six people or cost everyone else.",
@@ -173,7 +178,7 @@ export const RECORDS = {
     media: ["telemetry", "record"],
     optional: false,
     observation:
-      "The panel still runs. The sealed compartment draws all its supply through the turbine diversion. The outer lock reads crushed. A service procedure is listed: stage independent power and air, isolate the diversion, equalize the gallery through the hydraulic pipe, then open the human route. Its log is mirrored to the turbine hall recorder.",
+      "The panel still runs. The sealed compartment draws all its supply through the turbine diversion. The outer lock reads crushed. The hydraulic pipe is rated for water only. A service procedure is listed: stage independent power and air, isolate the diversion, equalize the gallery through the hydraulic pipe, then open the human route. Its log is mirrored to the turbine hall recorder.",
     provenance: "Meridian gate hall / live machinery panel and service procedure",
     reading: "Whatever is sealed in there still depends on that diversion. Opening the gate wrongly would flood it.",
   },
@@ -185,7 +190,7 @@ export const RECORDS = {
     media: ["record", "telemetry"],
     optional: false,
     observation:
-      "A maintenance controller, not a voice. Its recovery summary: extraction load on the supporting ridge, 14 fracture alarms in two years, each closed as an instrument fault; storm load; slope collapse; mast lost; brine saddle breached; dense, oxygen-poor water in the extraction circuits; 20 dead in the first hour. 198 consolidated; six outside assignments did not return. Return gate closed by access engineer Ren at the documented threshold; service-pipe option rejected. Outer lock crushed; hydraulic pipe not person-rated; isolating the diversion requires independent power and air. 192 entered suspension. Day 2,678: exterior viable, repair specialist dispatched; regulator fault logged. 191 occupants within thresholds. Unknown: whether a later closure would have been survivable.",
+      "A maintenance controller, not a voice. Its recovery summary: extraction load on the supporting ridge, 14 fracture alarms in two years, each closed as an instrument fault; storm load; slope collapse; mast lost; brine saddle breached; dense, oxygen-poor water in the extraction circuits; 20 dead in the first hour. 198 consolidated; six outside assignments did not return; 192 beds reserved. Return gate closed by access engineer Ren at the documented threshold; service-pipe option rejected. Outer lock crushed; hydraulic pipe not person-rated; isolating the diversion requires independent power and air; equalize through the pipe before opening. 192 entered suspension. Day 2,678: exterior viable, repair specialist dispatched; regulator fault logged on ascent. 191 occupants within thresholds. Bed 192, access engineer Ren: vacated at dispatch. Unknown: whether a later closure would have been survivable.",
     provenance: "Meridian lower service window / district controller recovery summary",
     reading: "Everything the machines knew, in one list. It does not judge, and it says what it cannot know.",
   },
@@ -197,11 +202,65 @@ export const RECORDS = {
     media: ["physical", "record"],
     optional: false,
     observation:
-      "Bed by bed, the hall's printed roster matches the window: 191 occupied, sealed and within thresholds. One frame stands open and empty.",
+      "Bed by bed, the hall's printed roster matches the window: 191 occupied, sealed and within thresholds. One frame stands open and empty, tagged REN · ACCESS. At the foot of the roster, six names are struck through: outside assignments, not returned.",
     provenance: "Meridian inner hall / printed bed roster and bed seals",
     reading: "The window was not lying. Every one of them is here.",
   },
-} as const satisfies Record<RecordId, StoryItemMeta & Omit<StoryText, "label"> & { label: string }>;
+  pod_checklist: {
+    label: "Pod service checklist",
+    site: "home_pod",
+    region: "refuge_reef",
+    tier: 0,
+    media: ["record"],
+    optional: false,
+    recovery: true,
+    observation: "A laminated checklist clipped inside the locker: regulator, bench and suit fittings, each with its parts listed.",
+    provenance: "Home pod / locker service checklist",
+    reading: "Whoever packed this pod expected it to need repairs.",
+  },
+  gantry_plates: {
+    label: "Gantry fabrication plates",
+    site: "splitspine_headland_gantry",
+    region: "island_chain",
+    tier: 1,
+    media: ["record", "physical"],
+    optional: false,
+    recovery: true,
+    observation:
+      "Plates riveted inside the headland gantry housing duplicate the workshop's fabrication set: scout hull frames, bench service, and the island half of a carrier frame survey.",
+    provenance: "Splitspine headland gantry / riveted fabrication plates",
+    reading: "A second copy of the workshop's plans, kept where the cranes worked.",
+  },
+  fin_survey_post: {
+    label: "Fin survey post",
+    site: "canopy_lower_fins",
+    region: "suspended_garden",
+    tier: 1,
+    media: ["record"],
+    optional: false,
+    recovery: true,
+    observation:
+      "A survey post among the lower grounding fins keeps the laboratory's bracing sheets: suit and hull reinforcement from fin crust and cured resin.",
+    provenance: "Lantern Canopy lower fins / survey post sheets",
+    reading: "The laboratory's reinforcement work, copied where the crust was gathered.",
+  },
+  basin_service_rack: {
+    label: "Basin service rack",
+    site: "basin_service_rack",
+    region: "silt_basin",
+    tier: 1,
+    media: ["record", "physical"],
+    optional: false,
+    recovery: true,
+    observation:
+      "A pressure-sleeved rack on the first shelf holds Creel interior and service plans and the Basin half of the carrier frame survey.",
+    provenance: "Pale Basin first shelf / service rack",
+    reading: "The yard kept its own copies of the work-sub and carrier plans.",
+  },
+} as const satisfies Record<RecordId, StoryItemMeta & Omit<StoryText, "label"> & { label: string; recovery?: true }>;
+/** Recovery records duplicate progression plans locally; they carry no story facts. */
+export const isRecovery = (id: DiscoveryId): boolean =>
+  Object.hasOwn(RECORDS, id) && "recovery" in RECORDS[id as RecordId];
 
 /** Optional personal journals. `mara_reef_note` keeps its text in the registry. */
 export const JOURNALS = {
@@ -250,7 +309,11 @@ export const STORY_GRANTS = {
   rift_station_ledger: ["bp_deep_service", "bp_rift_pressure"],
   gate_panel: ["bp_service_power", "bp_service_air"],
   district_controller: ["bp_works_hall", "bp_food_module"],
-} as const satisfies Partial<Record<DiscoveryId, readonly (StoryBlueprintId | "bp_rift_pressure")[]>>;
+  pod_checklist: ["bp_pod_checklist"],
+  gantry_plates: ["bp_island_workshop", "bp_carrier_workshop"],
+  fin_survey_post: ["bp_canopy_reinforcement"],
+  basin_service_rack: ["bp_creel_service", "bp_carrier_basin"],
+} as const satisfies Partial<Record<DiscoveryId, readonly (StoryBlueprintId | BlueprintId)[]>>;
 
 export const STORY_BLUEPRINT_LABELS = {
   bp_deep_service: "Deep service package · 800 m hull and suit",
@@ -316,3 +379,5 @@ export const siteOf = (id: DiscoveryId): StorySiteId =>
       : JOURNALS[id as JournalId].site;
 /** Discoveries that exist only once a story repair is made at their site. */
 export const UNLOCKED_BY = { C14: "pod_buffer" } as const satisfies Partial<Record<DiscoveryId, StoryRecipeId>>;
+/** The story repairs that can appear in saved state. */
+export const STORY_REPAIRS: readonly StoryRecipeId[] = [...new Set(Object.values(UNLOCKED_BY))];

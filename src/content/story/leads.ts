@@ -41,7 +41,7 @@ export const LEADS = {
     hints: [
       "The island's split ridge is visible from the pod. People worked there.",
       "The workshop is a low platform at the southern foot of the split ridge, above the landing.",
-      "Swim to the landing and walk up. The ledger sits on the bench beside unused panels.",
+      "Swim to the landing and walk up. The ledger sits on the bench beside unused panels; the headland gantry keeps a second set of plates.",
     ],
   },
   L03: {
@@ -54,7 +54,7 @@ export const LEADS = {
     hints: [
       "The intake and the workshop stopped at the same time. Someone else was measuring the water.",
       "East of the island, buoyant crowns rise off the shelf. The laboratory hangs on their clear upper flank, against the tall rib.",
-      "Stay on the open upper crowns, above 150 m. Move quietly near the tall rib; the territorial caller warns before it commits.",
+      "Stay on the open upper crowns, above 150 m. Move quietly near the tall rib; the territorial caller warns before it commits. A survey post among the lower fins keeps copies.",
     ],
   },
   L04: {
@@ -67,7 +67,7 @@ export const LEADS = {
     hints: [
       "The water records point down into Pale Basin, where people lived on the first shelf.",
       "Follow the lower crowns until fallen dishes rise out of pale sediment. The dormitory sits on the first shelf, facing inward.",
-      "The first shelf is deeper than 150 m: a 350 m suit protects the exit and the Dart's hull reaches the shelf. Pack a meal and a charged cell.",
+      "The first shelf is deeper than 150 m: a 350 m suit protects the exit and the Dart's hull reaches the shelf. Pack a meal and a charged cell. A service rack on the same shelf keeps plan copies.",
     ],
   },
   L05: {

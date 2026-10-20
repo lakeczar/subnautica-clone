@@ -72,7 +72,7 @@ export const QUESTIONS = {
         appears: [["F02"], ["F03"]],
         weakened: [["F05"]],
         ruledOut: [["F10"], ["F17"]],
-        settled: "Nobody sailed. They went down, not out.",
+        settled: "Nobody sailed. They were counted here, not gone.",
       },
       perished: {
         text: "They died in the disaster.",
@@ -124,8 +124,10 @@ export const QUESTIONS = {
       coerced: {
         text: "Someone forced the order on me.",
         appears: [["F12"]],
-        ruledOut: [["F16"]],
+        weakened: [["F16"]],
+        ruledOut: [["F25"]],
         settled: "Nobody forced it. The decision was mine.",
+        survivesAnswer: true,
       },
       triage: {
         text: "Triage: closing the gate saved everyone else.",
@@ -142,7 +144,7 @@ export const QUESTIONS = {
     },
     answer: {
       when: ["F12", "F16", "F21"],
-      text: "I gave the order at the documented threshold, after the pipe was refused. Six people were still working beyond the gate. Whether waiting would have saved them, the record cannot say.",
+      text: "I gave the order at the documented threshold, after the pipe was refused. Six people beyond the gate did not come back. Whether waiting would have saved them, the record cannot say.",
     },
   },
   Q4: {
@@ -167,7 +169,7 @@ export const QUESTIONS = {
         text: "A storm, and bad luck.",
         appears: [["F07"]],
         ruledOut: [["F15"]],
-        settled: "The storm was the trigger, not the cause.",
+        settled: "Not just bad luck. The ridge had been loaded for two years.",
       },
       undermined: {
         text: "The settlement undermined its own ground.",
@@ -177,8 +179,8 @@ export const QUESTIONS = {
       },
     },
     answer: {
-      when: ["F07", "F15"],
-      text: "Extraction thinned the Basin's ridge. A storm brought the slope down and dense water rose through the fractures. The warnings were measured, and written off.",
+      when: ["F07", "F15", "F22"],
+      text: "Extraction loaded the Basin's ridge for two years, and its fracture warnings were closed as faults. On disaster day the slope gave way and dense water rose.",
     },
   },
   Q5: {
@@ -213,7 +215,7 @@ export const REREADS = {
   ],
   C04: [
     { axis: "water", when: ["F07"], text: "The fauna read the dense water before the instruments did.", replaces: true },
-    { axis: "water", when: ["F15"], text: "This sheet is the first page of the record Mara's ridge surveys finish." },
+    { axis: "water", when: ["F15"], text: "The quiet channel was the first sign of a ridge under load." },
   ],
   C05: [
     { axis: "people", when: ["F10"], text: "The tagged bundles match a 198-person transfer. Inward was the plan.", replaces: true },
@@ -222,7 +224,7 @@ export const REREADS = {
     { axis: "gate", when: ["F12", "F16"], text: "Tavi saw who held the gate, not the pressure on it. Neither of us can see what waiting would have bought." },
   ],
   C06: [
-    { axis: "water", when: ["F15"], text: "The fractures follow the ridge the quotas thinned.", replaces: true },
+    { axis: "water", when: ["F15"], text: "The fractures follow the ridge the extraction loaded.", replaces: true },
   ],
   C07: [
     { axis: "self", when: ["F11"], text: "My seal is on the return gate's actuator too." },
@@ -242,6 +244,7 @@ export const REREADS = {
   ],
   C11: [
     { axis: "water", when: ["F07"], text: "Her ridge is the slope that came down under the Basin." },
+    { axis: "warnings", when: ["F22"], text: "Her warnings were not lost. They were closed as instrument faults." },
   ],
   C12: [
     { axis: "people", when: ["F17"], text: "The galleries that closure protected are still occupied." },

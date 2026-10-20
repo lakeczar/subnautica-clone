@@ -1,12 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { EVIDENCE_BLUEPRINTS } from "../src/content/registry.js";
 import { DISCOVERY_IDS, isOptional, STORY_GRANTS } from "../src/content/story/evidence.js";
 import type { DiscoveryId } from "../src/content/story/evidence.js";
 import { FACT_IDS, FACTS } from "../src/content/story/facts.js";
 import { CAMPAIGN_STEPS, FLEET_STRATEGIES } from "../src/content/story/strategies.js";
 import type { StrategyId } from "../src/content/story/strategies.js";
 import { learned } from "../src/sim/story/knowledge.js";
-import { planCampaign } from "../src/sim/story/reachability.js";
+import { planCampaign, proposalModel } from "../src/sim/story/reachability.js";
+import { completeOpening } from "../src/sim/progression.js";
+import { createGame } from "../src/sim/state.js";
 
 const STRATEGIES = Object.keys(FLEET_STRATEGIES) as StrategyId[];
 
@@ -50,13 +53,38 @@ test("the two strategies are distinct fleets", () => {
 });
 
 test("losing any one non-optional story source still reaches the ending", () => {
-  // C01–C05 are the opening, workshop and first-hull records owned with the
-  // registry; their single-source plans are a known limit for the coordinator.
-  const registryOwned = new Set<DiscoveryId>(["C01", "C02", "C03", "C04", "C05"]);
   for (const id of DISCOVERY_IDS) {
-    if (isOptional(id) || registryOwned.has(id)) continue;
+    if (isOptional(id)) continue;
     for (const strategy of STRATEGIES)
       assert.equal(planCampaign(strategy, { skip: [id] }).ending, true, `${strategy} without ${id}`);
+  }
+});
+
+test("each plan-carrying early find and its local recovery record are interchangeable", () => {
+  for (const [primary, recovery] of [["C01", "pod_checklist"], ["C03", "gantry_plates"], ["C04", "fin_survey_post"], ["C05", "basin_service_rack"]] as const)
+    for (const strategy of STRATEGIES) {
+      assert.equal(planCampaign(strategy, { skip: [recovery] }).ending, true, `${strategy} with only ${primary}`);
+      assert.equal(planCampaign(strategy, { skip: [primary] }).ending, true, `${strategy} with only ${recovery}`);
+      assert.equal(planCampaign(strategy, { skip: [primary, recovery] }).ending, false, `${strategy} needs one of ${primary}/${recovery}`);
+    }
+});
+
+test("the game's opening always records the first evidence and its plans", () => {
+  const s = createGame();
+  completeOpening(s);
+  assert.ok(s.knowledge.evidence.some((e) => e.id === "C01"));
+  for (const bp of EVIDENCE_BLUEPRINTS.C01) assert.ok(s.knowledge.blueprints.includes(bp), bp);
+});
+
+test("the planner runs on an injected step model, so composition can feed it registry dependencies", () => {
+  for (const strategy of STRATEGIES) {
+    const model = proposalModel(strategy);
+    assert.equal(planCampaign(strategy, { model }).ending, true);
+    const broken = { ...model.steps, suit_350: { ...model.steps.suit_350!, needs: ["suit_350"] } };
+    const plan = planCampaign(strategy, { model: { steps: broken } });
+    assert.equal(plan.ending, false, `${strategy} with a self-dependent refit`);
+    assert.ok(!plan.steps.includes("suit_350"));
+    assert.throws(() => planCampaign(strategy, { model: { order: [...model.order, "missing_step"] } }), /missing_step/);
   }
 });
 

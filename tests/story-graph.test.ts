@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
-import { REGIONS } from "../src/content/registry.js";
+import { EVIDENCE, EVIDENCE_BLUEPRINTS, REGIONS } from "../src/content/registry.js";
+import type { EvidenceId } from "../src/content/registry.js";
 import {
-  DISCOVERY_IDS, EVIDENCE_META, isOptional, JOURNALS, RECORDS, siteOf, STORY_EVIDENCE,
+  DISCOVERY_IDS, EVIDENCE_META, isOptional, isRecovery, JOURNALS, RECORDS, siteOf, STORY_EVIDENCE, STORY_GRANTS,
 } from "../src/content/story/evidence.js";
 import type { DiscoveryId, Medium, StoryEvidenceId } from "../src/content/story/evidence.js";
 import { FACT_IDS, FACTS } from "../src/content/story/facts.js";
@@ -14,6 +15,7 @@ import type { QuestionDefinition } from "../src/content/story/questions.js";
 import { PLACEMENTS, STORY_SITES } from "../src/content/story/sites.js";
 import type { StorySite } from "../src/content/story/sites.js";
 import { CAMPAIGN_STEPS } from "../src/content/story/strategies.js";
+import { learned } from "../src/sim/story/knowledge.js";
 import { RESOLUTION_REQUIREMENTS, RESOLUTION_ROSTER, WORKS_HINTS } from "../src/content/story/works.js";
 
 const mediaOf = (id: DiscoveryId): readonly Medium[] =>
@@ -24,11 +26,48 @@ const tierOf = (id: DiscoveryId): number =>
     : Object.hasOwn(RECORDS, id) ? RECORDS[id as keyof typeof RECORDS].tier : 9;
 const site = (id: DiscoveryId): StorySite => STORY_SITES[siteOf(id)];
 
+const playerText = (id: DiscoveryId): string =>
+  Object.hasOwn(EVIDENCE, id) ? `${EVIDENCE[id as EvidenceId].observation} ${EVIDENCE[id as EvidenceId].provenance}`
+    : Object.hasOwn(STORY_EVIDENCE, id) ? `${STORY_EVIDENCE[id as keyof typeof STORY_EVIDENCE].observation} ${STORY_EVIDENCE[id as keyof typeof STORY_EVIDENCE].provenance}`
+      : Object.hasOwn(RECORDS, id) ? `${RECORDS[id as keyof typeof RECORDS].observation} ${RECORDS[id as keyof typeof RECORDS].provenance}` : "";
+
 test("every critical fact has two or more non-optional sources", () => {
   for (const f of FACT_IDS) {
     const def = FACTS[f];
     assert.ok(def.sources.length > 0, f);
     if (def.critical) assert.ok(def.sources.filter((s) => !isOptional(s)).length >= 2, `${f} needs an alternate source`);
+  }
+});
+
+test("each source states every clause of each fact it establishes, in its own player text", () => {
+  for (const f of FACT_IDS) {
+    const def = FACTS[f];
+    assert.ok(def.clauses.length > 0, f);
+    for (const src of def.sources) {
+      const excerpts = def.support[src]!, text = playerText(src);
+      assert.ok(text, `${f}: ${src} has player text`);
+      assert.equal(excerpts.length, def.clauses.length, `${f}: ${src} supports each of ${def.clauses.join(" / ")}`);
+      excerpts.forEach((e, i) => assert.ok(text.includes(e), `${f} clause “${def.clauses[i]}” not stated by ${src}: “${e}”`));
+    }
+  }
+});
+
+test("one source alone establishes each fact it supports, and clauses it cannot state are split out", () => {
+  // The single-source rule is per discovery: knowing only one source yields the whole fact.
+  for (const f of FACT_IDS)
+    for (const src of FACTS[f].sources)
+      assert.ok(learned([{ id: src, tick: 1 }]).has(f), `${src} alone establishes ${f}`);
+  assert.equal(learned([{ id: "C11", tick: 1 }]).has("F22"), false, "the surveys alone do not show warnings were dismissed");
+  assert.equal(learned([{ id: "district_controller", tick: 1 }]).has("F14"), false, "the summary alone does not show consent");
+  assert.equal(learned([{ id: "C12", tick: 1 }]).has("F13"), false, "the recorder alone does not show the crushed lock");
+});
+
+test("every early plan-carrying find has a local recovery record with all its plans", () => {
+  for (const [primary, recovery] of [["C01", "pod_checklist"], ["C03", "gantry_plates"], ["C04", "fin_survey_post"], ["C05", "basin_service_rack"]] as const) {
+    assert.ok(isRecovery(recovery) && !isOptional(recovery));
+    assert.equal(RECORDS[recovery].region, EVIDENCE_META[primary].region, `${recovery} is local to ${primary}`);
+    for (const bp of EVIDENCE_BLUEPRINTS[primary]) assert.ok((STORY_GRANTS[recovery] as readonly string[]).includes(bp), `${recovery} grants ${bp}`);
+    for (const f of FACT_IDS) assert.ok(!FACTS[f].sources.includes(recovery), `${recovery} carries no story fact`);
   }
 });
 
@@ -71,7 +110,7 @@ test("leads are well formed, never depend on optional items, and cover the chain
   }
   // C01 is the opening; the inner hall roster lies behind the opened gate.
   for (const id of DISCOVERY_IDS)
-    if (!isOptional(id) && id !== "C01" && id !== "inner_roster") assert.ok(targeted.has(id), `no lead points to ${id}`);
+    if (!isOptional(id) && !isRecovery(id) && id !== "C01" && id !== "inner_roster") assert.ok(targeted.has(id), `no lead points to ${id}`);
   // Alternate routes into the chain: each target is offered by two or more finds.
   const singleSourced = new Set<DiscoveryId>(["C02", "C14"]);
   for (const [target, from] of offering)

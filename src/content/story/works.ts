@@ -113,7 +113,7 @@ export const EPILOGUE = {
   lines: [
     "Forty days later.",
     "The roster fills, one supervised bed at a time: 191 awake. Twenty died on the first day and six at the return gate. Their names stay by the inner door.",
-    "Communal stores and the food module carry the hall. Nobody gathers 191 meals.",
+    "Communal stores and the food module feed the hall. The first shared meal runs long.",
     "From the Splitspine lookout: morning on the reef, grazers on the ledges, voices on the shore.",
   ],
   mastRestored: "The mast carries a call outward. The supply ship is years away, but this time someone will be awake to answer.",

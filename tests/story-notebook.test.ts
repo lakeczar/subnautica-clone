@@ -55,6 +55,7 @@ test("any order of the same discoveries yields the same notebook", () => {
 test("every prefix of every order stays coherent", () => {
   for (const order of ORDERS) {
     const s = createStory();
+    const wasCurrent = new Map<DiscoveryId, string>(), replaced = new Set<DiscoveryId>();
     order.forEach((id, i) => {
       recordDiscovery(s, id, i + 1);
       const known = learned(s.discoveries), view = notebook(s);
@@ -70,9 +71,19 @@ test("every prefix of every order stays coherent", () => {
             assert.ok(h.status === "established" || h.status === "ruled_out" || def.hypotheses[h.id]!.survivesAnswer,
               `${q.id} answered while ${h.id} is still ${h.status} (after ${order.slice(0, i + 1).join(",")})`);
       }
+      const after = order.slice(0, i + 1).join(",");
       for (const e of view.entries) {
         assert.ok(e.reading !== null || e.notes.length > 0, `${e.id} has a current reading`);
         if (e.firstRead) assert.equal(e.reading, null, `${e.id} first read is never also current`);
+        // History: a replaced reading never returns, and a first read is exactly
+        // the reading that was current at an earlier prefix, or nothing.
+        if (e.reading !== null) {
+          assert.ok(!replaced.has(e.id), `${e.id} reading restored after replacement (after ${after})`);
+          wasCurrent.set(e.id, e.reading);
+        } else {
+          replaced.add(e.id);
+          assert.equal(e.firstRead, wasCurrent.get(e.id) ?? null, `${e.id} first read must be what was shown (after ${after})`);
+        }
       }
     });
   }
@@ -113,6 +124,29 @@ test("adverse: reverse discovery still reads coherently and never shows a stale 
 
   const ordered = notebook(storyOf(forward));
   assert.ok(ordered.entries.find((e) => e.id === "C05")!.firstRead, "in forward order the first guess is kept as history");
+});
+
+test("regression: a reading replaced before it was found never gains an invented first read", () => {
+  const s = storyOf(["C08", "C05"]);
+  const at = () => notebook(s).entries.find((e) => e.id === "C05")!;
+  assert.equal(at().reading, null);
+  assert.equal(at().firstRead, null);
+  recordDiscovery(s, "C13", 3);
+  assert.equal(at().reading, null);
+  assert.equal(at().firstRead, null, "C05's first reading was never current");
+});
+
+test("regression: a later non-replacing note on the same axis does not restore a replaced reading", () => {
+  const s = storyOf(["C04"]);
+  const at = () => notebook(s).entries.find((e) => e.id === "C04")!;
+  const first = at().reading;
+  assert.ok(first);
+  recordDiscovery(s, "C06", 2);
+  assert.equal(at().reading, null);
+  assert.equal(at().firstRead, first);
+  recordDiscovery(s, "C11", 3);
+  assert.equal(at().reading, null, "still replaced");
+  assert.equal(at().firstRead, first, "history kept");
 });
 
 test("early late evidence: the service window first changes the question, not the earlier entries' facts", () => {
