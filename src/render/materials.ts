@@ -6,6 +6,8 @@ import type { GameState } from "../sim/types.js";
 import { CARRIER_LAYOUT } from "../sim/carrier.js";
 import { ArtBatch } from "./geometry.js";
 import type { Point } from "./geometry.js";
+import "@babylonjs/core/Shaders/ShadersInclude/instancesDeclaration.js";
+import "@babylonjs/core/Shaders/ShadersInclude/instancesVertex.js";
 
 export const opticalUniforms = [
   "cameraPosition", "fogColor", "waterFogColor", "fogDensity",
@@ -57,18 +59,31 @@ vec3 opticalFog(vec3 color,vec3 point){
 }
 `;
 
-const vertex = `
+/** The cel vertex stage, instancing-aware. Without instances Babylon's
+ * includes reduce to `finalWorld = world`, so one material serves merged
+ * meshes and thin-instance batches; a per-instance tint multiplies the vertex
+ * colour and leaves the cel alpha meaning untouched. */
+export const CEL_VERTEX = `
 precision highp float;
 attribute vec3 position; attribute vec3 normal; attribute vec4 color;
-uniform mat4 world; uniform mat4 worldViewProjection;
+#include<instancesDeclaration>
+uniform mat4 viewProjection;
 varying vec3 vWorld; varying vec3 vNormal; varying vec4 vColor;
 void main(){
-  vWorld=(world*vec4(position,1.0)).xyz;
-  vNormal=normalize(mat3(world)*normal); vColor=color;
-  gl_Position=worldViewProjection*vec4(position,1.0);
+#include<instancesVertex>
+  vec4 w=finalWorld*vec4(position,1.0);
+  vWorld=w.xyz;
+  vNormal=normalize(mat3(finalWorld)*normal);
+  vColor=color;
+#ifdef INSTANCESCOLOR
+  vColor.rgb*=instanceColor.rgb;
+#endif
+  gl_Position=viewProjection*w;
 }`;
+export const CEL_UNIFORMS = ["world", "viewProjection", ...opticalUniforms, "lightDirection", "time", "underwater"];
+export const LIGHT_DIRECTION = new Vector3(-0.42, 0.85, -0.3);
 
-const fragment = `
+export const CEL_FRAGMENT = `
 precision highp float;
 varying vec3 vWorld; varying vec3 vNormal; varying vec4 vColor;
 uniform vec3 lightDirection; uniform float time; uniform float underwater;
@@ -131,13 +146,13 @@ function initializeOptics(material: ShaderMaterial): void {
 }
 
 export function createCelMaterial(scene: Scene): ShaderMaterial {
-  const material = new ShaderMaterial("siltwake.cel", scene, { vertexSource: vertex, fragmentSource: fragment }, {
+  const material = new ShaderMaterial("siltwake.cel", scene, { vertexSource: CEL_VERTEX, fragmentSource: CEL_FRAGMENT }, {
     attributes: ["position", "normal", "color"],
-    uniforms: ["world", "worldViewProjection", ...opticalUniforms, "lightDirection", "time", "underwater"],
+    uniforms: CEL_UNIFORMS,
   });
   material.backFaceCulling = false;
   initializeOptics(material);
-  material.setVector3("lightDirection", new Vector3(-0.42, 0.85, -0.3));
+  material.setVector3("lightDirection", LIGHT_DIRECTION);
   material.setFloat("time", 0);
   material.setFloat("underwater", 0);
   return material;
@@ -149,7 +164,7 @@ export function createCelMaterial(scene: Scene): ShaderMaterial {
  * orders panes within each half; opaque hull depth tests remain enabled. */
 export function createGlassMaterial(scene: Scene): ShaderMaterial {
   const material = new ShaderMaterial("siltwake.observation-glass", scene, {
-    vertexSource: vertex,
+    vertexSource: CEL_VERTEX,
     fragmentSource: `precision highp float;
       varying vec3 vWorld; varying vec3 vNormal; varying vec4 vColor;
       ${opticalShader}
@@ -162,7 +177,7 @@ export function createGlassMaterial(scene: Scene): ShaderMaterial {
       }`,
   }, {
     attributes: ["position", "normal", "color"],
-    uniforms: ["world", "worldViewProjection", ...opticalUniforms],
+    uniforms: ["world", "viewProjection", ...opticalUniforms],
     needAlphaBlending: true,
   });
   material.backFaceCulling = false;
