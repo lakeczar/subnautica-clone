@@ -7,26 +7,25 @@ import { Scene } from "@babylonjs/core/scene.js";
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
-import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
-import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import { CreateLines } from "@babylonjs/core/Meshes/Builders/linesBuilder.js";
-import { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
-import "@babylonjs/core/Meshes/thinInstanceMesh.js";
-import "@babylonjs/core/Shaders/ShadersInclude/instancesDeclaration.js";
-import "@babylonjs/core/Shaders/ShadersInclude/instancesVertex.js";
+import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation.js";
 import type { LinesMesh } from "@babylonjs/core/Meshes/linesMesh.js";
 import { createCelMaterial } from "../src/render/materials.js";
 import { createAtmosphere } from "../src/render/atmosphere.js";
 import { createEnvironment } from "../src/render/environment.js";
-import { worldLayout, regionAtPoint } from "../src/content/regions/layout.js";
+import { createKitMaterial } from "../src/render/kit/material.js";
+import { createKitLoader, TemplateLibrary } from "../src/render/kit/loader.js";
+import { KIT_FACTORIES } from "../src/render/kit/factories.js";
+import { templateRecipes } from "../src/render/kit/templates.js";
+import { createWorldMap } from "../src/world/map.js";
+import { createResidency } from "../src/world/residency.js";
+import { worldLayout } from "../src/content/regions/layout.js";
+import { spatialEntries } from "../src/content/regions/spatial.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { HAZARDS } from "../src/content/regions/hazards.js";
 import { ROUTES } from "../src/content/regions/passages.js";
 import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
-import { boxDistance } from "../src/world/frame.js";
-import type { ChunkDescriptor, LodLevel } from "../src/world/types.js";
-import type { ChunkRecipe, MeshRecipe } from "../src/render/kit/types.js";
-import { S2_BUILD_CONTEXT, S2_FACTORIES, S2_TEMPLATE_LIBRARY, opticsAt } from "../src/render/biomes/index.js";
+import { S2_FACTORIES, S2_TEMPLATE_LIBRARY, opticsAt, s2BuildContext } from "../src/render/biomes/index.js";
 
 export const VIEWS: Record<string, { pos: [number, number, number]; at: [number, number, number]; label: string }> = {
   stack: { label: "Isles: split stack", pos: [560, 18, 0], at: [470, 26, 95] },
@@ -39,7 +38,7 @@ export const VIEWS: Record<string, { pos: [number, number, number]; at: [number,
   ledges: { label: "Rift: cool ledges", pos: [140, -242, -985], at: [40, -258, -1050] },
   gate: { label: "Divide: gateworks", pos: [596, -372, -1176], at: [600, -352, -1262] },
   mirror: { label: "Divide: mirror", pos: [712, -398, -1342], at: [560, -436, -1300] },
-  meridian: { label: "Meridian: from shelf", pos: [1118, -506, -1212], at: [1250, -600, -1400] },
+  meridian: { label: "Meridian: terraces", pos: [1150, -586, -1372], at: [1262, -548, -1160] },
   works: { label: "Meridian: deep works", pos: [1340, -742, -1480], at: [1440, -760, -1582] },
   escarp: { label: "Escarpment", pos: [1290, -462, -800], at: [1350, -478, -660] },
   drop: { label: "Reef: Hearth drop", pos: [-196, -22, -52], at: [-240, -80, -190] },
@@ -47,8 +46,10 @@ export const VIEWS: Record<string, { pos: [number, number, number]; at: [number,
 };
 
 const params = new URLSearchParams(location.search);
+const MiB = 1024 * 1024;
 const canvas = document.getElementById("view") as HTMLCanvasElement;
-const engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: false });
+const engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: false }, true);
+engine.setHardwareScalingLevel(Number(params.get("scale") ?? 1));
 const scene = new Scene(engine);
 scene.useRightHandedSystem = true;
 const camera = new FreeCamera("viewer.camera", new Vector3(560, 18, 0), scene);
@@ -57,105 +58,27 @@ camera.keysUp = [87]; camera.keysDown = [83]; camera.keysLeft = [65]; camera.key
 camera.keysUpward = [69]; camera.keysDownward = [81];
 camera.speed = 2.5; camera.angularSensibility = 1800;
 camera.attachControl(canvas, true);
+const instrumentation = new SceneInstrumentation(scene);
 
+// The production cel fragment through S1's kit material, loader and
+// byte-budgeted residency: the same path the game will use.
 const cel = createCelMaterial(scene);
-/** Instanced variant of the shared cel shader (same fragment, same optics). */
-function instancedCel(): ShaderMaterial {
-  const path = cel.shaderPath as { vertexSource: string; fragmentSource: string };
-  const vertex = path.vertexSource
-    .replace("uniform mat4 world; uniform mat4 worldViewProjection;", "#include<instancesDeclaration>\nuniform mat4 viewProjection;")
-    .replace("vWorld=(world*vec4(position,1.0)).xyz;", "#include<instancesVertex>\n  vec4 wp=finalWorld*vec4(position,1.0); vWorld=wp.xyz;")
-    .replace("vNormal=normalize(mat3(world)*normal); vColor=color;",
-      "vNormal=normalize(mat3(finalWorld)*normal); vColor=color;\n#ifdef INSTANCESCOLOR\n  vColor.rgb*=instanceColor.rgb;\n#endif")
-    .replace("gl_Position=worldViewProjection*vec4(position,1.0);", "gl_Position=viewProjection*wp;");
-  if (vertex === path.vertexSource) throw new Error("cel vertex shader changed; update the viewer patch");
-  const m = new ShaderMaterial("s2.cel.instanced", scene, { vertexSource: vertex, fragmentSource: path.fragmentSource }, {
-    attributes: ["position", "normal", "color"],
-    uniforms: ["world", "viewProjection", "cameraPosition", "fogColor", "waterFogColor", "fogDensity", "carrierPosition",
-      "carrierYaw", "carrierPresent", "carrierAirMin", "carrierAirMax", "lightDirection", "time", "underwater"],
-  });
-  m.backFaceCulling = false;
-  m.setVector3("lightDirection", new Vector3(-0.42, 0.85, -0.3));
-  for (const k of ["carrierPresent", "carrierYaw"]) m.setFloat(k, 0);
-  for (const k of ["carrierPosition", "carrierAirMin", "carrierAirMax"]) m.setVector3(k, Vector3.Zero());
-  return m;
-}
-const celInst = instancedCel();
+const kit = createKitMaterial(scene, cel);
 const { water, sky } = createAtmosphere(scene);
-const materials = [cel, celInst, water, sky];
-
+const materials = [cel, kit, water, sky];
 // Today's terrain mesh, for seam checks against S2 chunks.
 createEnvironment(scene, cel, "terrain");
 for (const mesh of scene.meshes) if (mesh.name === "island.terrain") mesh.renderingGroupId = 1;
 
-function upload(r: MeshRecipe, name: string, material: ShaderMaterial): Mesh {
-  const mesh = new Mesh(name, scene), data = new VertexData();
-  data.positions = r.positions; data.normals = r.normals; data.colors = r.colors; data.indices = r.indices;
-  data.applyToMesh(mesh);
-  mesh.material = material; mesh.isPickable = false; mesh.renderingGroupId = 1;
-  mesh.freezeWorldMatrix();
-  return mesh;
-}
-// Thin-instance buffers live on a mesh's geometry, so every chunk gets its
-// own small copy of the template geometry (sharing it would mix buffers).
-const templates = new Map(S2_TEMPLATE_LIBRARY.map(t => [t.id, t] as const));
-
-interface Resident { lod: LodLevel; meshes: Mesh[]; }
 const layout = worldLayout();
-const factories = new Map(S2_FACTORIES.map(f => [f.id, f] as const));
-const resident = new Map<string, Resident>();
-let job: { chunk: ChunkDescriptor; lod: LodLevel; gen: Generator<void, ChunkRecipe>[]; done: ChunkRecipe[] } | null = null;
-let stats = { built: 0, buildMs: 0 };
-
-function attach(chunk: ChunkDescriptor, lod: LodLevel, recipes: ChunkRecipe[]): void {
-  const old = resident.get(chunk.id);
-  old?.meshes.forEach(m => m.dispose());
-  const meshes: Mesh[] = [];
-  for (const r of recipes) {
-    for (const m of r.meshes) meshes.push(upload(m, m.name, cel));
-    for (const inst of r.instances) {
-      const t = templates.get(inst.template);
-      if (!t) { console.warn("unknown template", inst.template); continue; }
-      const mesh = upload(lod === "fine" ? t.fine : t.coarse, `${chunk.id}.${inst.template}`, celInst);
-      mesh.thinInstanceSetBuffer("matrix", inst.matrices, 16, true);
-      if (inst.tints) mesh.thinInstanceSetBuffer("color", inst.tints, 4, true);
-      mesh.renderingGroupId = 1; mesh.isPickable = false;
-      meshes.push(mesh);
-    }
-  }
-  resident.set(chunk.id, { lod, meshes });
-}
-
-function stream(budgetMs: number): void {
-  const p = camera.position, t0 = performance.now();
-  // Evict beyond the coarse band plus hysteresis.
-  for (const [id, r] of resident) {
-    const c = layout.chunks.find(c => c.id === id)!;
-    if (boxDistance(c.bounds, p) > c.lod.coarse + c.lod.hysteresis) { r.meshes.forEach(m => m.dispose()); resident.delete(id); }
-  }
-  while (performance.now() - t0 < budgetMs) {
-    if (!job) {
-      let best: { c: ChunkDescriptor; lod: LodLevel; d: number } | null = null;
-      for (const c of layout.chunks) {
-        if (!c.art.length) continue;
-        const d = boxDistance(c.bounds, p);
-        if (d > c.lod.coarse) continue;
-        const cur = resident.get(c.id);
-        const want: LodLevel = d <= c.lod.fine || (cur?.lod === "fine" && d <= c.lod.fine + c.lod.hysteresis) ? "fine" : "coarse";
-        if (cur?.lod === want) continue;
-        if (!best || d < best.d) best = { c, lod: want, d };
-      }
-      if (!best) return;
-      job = { chunk: best.c, lod: best.lod, done: [],
-        gen: best.c.art.map(ref => factories.get(ref.factory)!.build(S2_BUILD_CONTEXT, best!.c, ref, best!.lod)) };
-    }
-    const g = job.gen[0]!;
-    const s = performance.now(), r = g.next();
-    stats.buildMs += performance.now() - s;
-    if (r.done) { job.done.push(r.value); job.gen.shift(); }
-    if (!job.gen.length) { attach(job.chunk, job.lod, job.done); stats.built++; job = null; }
-  }
-}
+const map = createWorldMap(layout, spatialEntries());
+const templates = new TemplateLibrary([...templateRecipes(), ...S2_TEMPLATE_LIBRARY]);
+const loader = createKitLoader({ scene, material: kit, templates, factories: [...KIT_FACTORIES, ...S2_FACTORIES], context: s2BuildContext() });
+const residency = createResidency({ map, loader, budget: {
+  cpuBytes: Number(params.get("budget") ?? 160) * MiB, gpuBytes: Number(params.get("budget") ?? 160) * MiB,
+  uploadBytesPerFrame: 4 * MiB, buildMsPerFrame: Number(params.get("build") ?? 8), maxInFlight: 2, retainedUnits: 48,
+} });
+engine.onContextLostObservable.add(() => residency.discardHidden());
 
 // Overlays: passages (carrier gold, small craft cyan), hazards, rescue tethers.
 const overlays = new Map<string, LinesMesh[]>();
@@ -202,32 +125,36 @@ window.addEventListener("keydown", e => { camera.speed = e.shiftKey ? 9 : 2.5; }
 window.addEventListener("keyup", e => { camera.speed = e.shiftKey ? 9 : 2.5; });
 go(params.get("view") ?? "stack");
 
-let time = 0;
-scene.onBeforeRenderObservable.add(() => {
-  time += engine.getDeltaTime() / 1000;
-  stream(40);
-  const p = camera.position, o = opticsAt(p.x, p.y, p.z);
-  const underwater = p.y < -0.08 ? 1 : 0;
+let frame = 0, peakGpu = 0;
+function tick(): void {
+  const p = camera.position;
+  const st = residency.update({ x: p.x, y: p.y, z: p.z });
+  peakGpu = Math.max(peakGpu, st.gpuBytes);
+  const o = opticsAt(p.x, p.y, p.z), underwater = p.y < -0.08 ? 1 : 0;
   const wf = Color3.Lerp(Color3.FromHexString(o.water), Color3.FromHexString(o.deep), o.depthMix);
   scene.clearColor = underwater ? new Color4(wf.r, wf.g, wf.b, 1) : Color4.FromHexString("#96c5b9ff");
   for (const m of materials) {
     m.setVector3("cameraPosition", p); m.setColor3("fogColor", Color3.FromHexString("#a5ccd1"));
     m.setColor3("waterFogColor", wf); m.setFloat("fogDensity", o.density);
+    for (const k of ["carrierPresent", "carrierYaw"]) m.setFloat(k, 0);
   }
-  for (const m of [cel, celInst]) { m.setFloat("underwater", underwater); m.setFloat("time", time); }
-  water.setFloat("time", time);
-});
-let frame = 0;
-engine.runRenderLoop(() => {
+  for (const m of [cel, kit]) { m.setFloat("underwater", underwater); m.setFloat("time", frame / 60); }
+  water.setFloat("time", frame / 60);
   scene.render();
-  if (++frame % 15 === 0) {
-    const p = camera.position;
-    const fine = [...resident.values()].filter(r => r.lod === "fine").length;
-    status.textContent = `${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}  ${regionAtPoint(p.x, p.z) ?? "outside"}\n` +
-      `chunks ${resident.size} (fine ${fine})  built ${stats.built}  build ${stats.buildMs.toFixed(0)} ms\n` +
-      `meshes ${scene.meshes.length}  fps ${engine.getFps().toFixed(0)}${job ? "  building…" : ""}`;
-    canvas.dataset.pending = job || [...layout.chunks].some(c => c.art.length && boxDistance(c.bounds, p) <= c.lod.coarse && !resident.has(c.id)) ? "true" : "false";
-  }
-});
+  frame++;
+  const ready = residency.isReady();
+  canvas.dataset.pending = ready ? "false" : "true";
+  if (frame % 10 === 0) status.textContent =
+    `${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}  ${map.regionAt(p) ?? "outside"}  depth ${Math.max(0, -p.y).toFixed(0)} m\n` +
+    `shown ${st.shown} hidden ${st.hidden} building ${st.building}  ${ready ? "ready" : "loading"}\n` +
+    `gpu ${(st.gpuBytes / MiB).toFixed(1)} MiB (peak ${(peakGpu / MiB).toFixed(1)})  draws ${instrumentation.drawCallsCounter.current}\n` +
+    `built ${st.totals.built} evicted ${st.totals.evicted}  step max ${st.maxStepMs.toFixed(1)} ms`;
+}
+// Background preview tabs throttle rAF; `loop=message` drives frames directly.
+if (params.get("loop") === "message") {
+  const channel = new MessageChannel();
+  channel.port1.onmessage = () => { engine.beginFrame(); tick(); engine.endFrame(); setTimeout(() => channel.port2.postMessage(0), 0); };
+  channel.port2.postMessage(0);
+} else engine.runRenderLoop(tick);
 window.addEventListener("resize", () => engine.resize());
-Object.assign(window, { s2viewer: { go, camera, resident, scene } });
+Object.assign(window, { s2viewer: { go, camera, residency, scene, map } });

@@ -76,9 +76,9 @@ export function geologyColor(x: number, y: number, z: number, slope: number, reg
     }
     case "deep_district": {
       if (m.terrace > 0.5 && steep < 0.5) {
-        const slabX = Math.floor(x / 9), slabZ = Math.floor(z / 9), k = hash2(slabX, slabZ, 61);
-        c = k < -0.4 ? C.worn : k < 0.5 ? C.paving : C.paving2;
-        c = mix(c, C.worn, smooth(0.2, 0.7, fine) * 0.5);
+        const slabX = Math.floor(x / 14), slabZ = Math.floor(z / 14), k = hash2(slabX, slabZ, 61);
+        c = mix(C.paving, C.paving2, 0.35 + 0.25 * k);
+        c = mix(c, C.worn, smooth(0.1, 0.7, fine) * 0.55 + smooth(0.3, 0.8, patch) * 0.25);
       } else c = m.escarpment > 0.4 ? stratum(x, y, z, 7, 62, C.escarp, C.escarp2, C.wall) : mix(C.terraceWall, C.worn, smooth(0, 0.6, fine));
       break;
     }

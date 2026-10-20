@@ -5,7 +5,7 @@ import type { AccessKind, AccessPoint, Aabb, BiomeDescriptor, ChunkArtRef, Chunk
 import { ROUTES } from "./passages.js";
 import { SITES } from "./sites.js";
 import { STRUCTURES } from "./structures.js";
-import { LEGACY_PRESERVE, terrainMasks, type TerrainMasks } from "./terrain.js";
+import { LEGACY_PRESERVE, MERIDIAN_CENTRE, MERIDIAN_TERRACES, terrainMasks, type TerrainMasks } from "./terrain.js";
 import { worldFloor } from "./worldFloor.js";
 
 /** S2 whole-world layout: biomes, seven region descriptors with footprints,
@@ -141,6 +141,14 @@ export function legacyCoverage(rect: Rect): "none" | "partial" | "full" {
   return rect.minX >= p.minX && rect.maxX <= p.maxX && rect.minZ >= p.minZ && rect.maxZ <= p.maxZ ? "full" : "partial";
 }
 
+/** Columns crossed by a Meridian terrace wall get facade art. */
+function meridianWall(rect: Rect): boolean {
+  if (rect.maxX < 950 || rect.minZ > -1030) return false;
+  const cx = (rect.minX + rect.maxX) / 2, cz = (rect.minZ + rect.maxZ) / 2;
+  const d = Math.hypot(cx - MERIDIAN_CENTRE.x, cz - MERIDIAN_CENTRE.z), half = Math.SQRT1_2 * CHUNK_SIZE;
+  return MERIDIAN_TERRACES.slice(1).some(t => Math.abs(d - t.outer) <= half + 4);
+}
+
 let chunkCache: ChunkDescriptor[] | null = null;
 function chunks(): ChunkDescriptor[] {
   if (chunkCache) return chunkCache;
@@ -165,7 +173,7 @@ function chunks(): ChunkDescriptor[] {
     const art: ChunkArtRef[] = legacy === "full" ? [] : [
       { factory: "s2.terrain", params: { legacy } },
       { factory: "s2.scatter", params: { biome } },
-      ...(here.length ? [{ factory: "s2.structures" }] : []),
+      ...(here.length || meridianWall(rect) ? [{ factory: "s2.structures" }] : []),
     ];
     const refuge = SITES.some(s => (s.role === "refuge" || s.role === "mooring") && rectContains(rect, s.at.x, s.at.z));
     const cell = { ix, iz, layer: 0 };

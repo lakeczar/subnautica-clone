@@ -1,7 +1,7 @@
-import type { ChunkArtFactory, InstanceRecipe } from "../kit/types.js";
+import type { ChunkArtFactory, ChunkBuildContext, InstanceRecipe } from "../kit/types.js";
 import type { ChunkDescriptor } from "../../world/types.js";
 import { regionAtPoint } from "../../content/regions/layout.js";
-import { fbm, seededStream, smooth } from "../../content/regions/noise.js";
+import { fbm, smooth } from "../../content/regions/noise.js";
 import { ROUTES, CRAFT_PROFILES } from "../../content/regions/passages.js";
 import { RESCUE_PLANS } from "../../content/regions/rescue.js";
 import { SITES } from "../../content/regions/sites.js";
@@ -152,20 +152,18 @@ function blocked(x: number, z: number, top: number, radius: number): boolean {
 const L = TERRAIN_EXTENT;
 const legacy = (x: number, z: number): boolean => x >= L.minX && x <= L.maxX && z >= L.minZ && z <= L.maxZ;
 
-function* scatterChunk(floor: (x: number, z: number) => number, random: (seed: number) => () => number,
-  chunk: ChunkDescriptor, biome: string, fine: boolean): Generator<void, InstanceRecipe[]> {
+function* scatterChunk(ctx: ChunkBuildContext, chunk: ChunkDescriptor, biome: string, fine: boolean): Generator<void, InstanceRecipe[]> {
+  const floor = ctx.floor, random = ctx.random;
   const rules = SCATTER_RULES[biome] ?? [];
   const { min, max } = chunk.bounds;
   // Masks on an 8 m lattice; rules read the nearest node.
   const mstep = 8, mn = Math.round((max.x - min.x) / mstep) + 1, masks: TerrainMasks[] = [];
   for (let j = 0; j < mn; j++) {
-    for (let i = 0; i < mn; i++) { masks.push(terrainMasks(min.x + i * mstep, min.z + j * mstep, emptyMasks())); if (i % 6 === 5) yield; }
-    yield;
+    for (let i = 0; i < mn; i++) { masks.push(terrainMasks(min.x + i * mstep, min.z + j * mstep, emptyMasks())); if (ctx.due()) yield; }
   }
   const maskAt = (x: number, z: number): TerrainMasks =>
     masks[Math.min(mn - 1, Math.round((z - min.z) / mstep)) * mn + Math.min(mn - 1, Math.round((x - min.x) / mstep))]!;
   const out: InstanceRecipe[] = [];
-  let work = 0;
   for (let ri = 0; ri < rules.length; ri++) {
     const rule = rules[ri]!;
     if (!fine && !rule.coarse) continue;
@@ -173,7 +171,7 @@ function* scatterChunk(floor: (x: number, z: number) => number, random: (seed: n
     const mats: number[] = [], tints: number[] = [];
     const tmp = new Float32Array(16);
     for (let z = min.z; z < max.z; z += rule.spacing) for (let x = min.x; x < max.x; x += rule.spacing) {
-      if (++work % 120 === 0) yield;
+      if (ctx.due()) yield;
       const px = x + rnd() * rule.spacing, pz = z + rnd() * rule.spacing;
       const roll = rnd(), s = rule.scale[0] + (rule.scale[1] - rule.scale[0]) * rnd(), yaw = rnd() * Math.PI * 2, tint = rnd();
       const keepCoarse = fine || rnd() < (rule.coarse ?? 0);
@@ -199,7 +197,6 @@ function* scatterChunk(floor: (x: number, z: number) => number, random: (seed: n
     }
     if (mats.length) out.push({ template: rule.template, matrices: new Float32Array(mats), tints: new Float32Array(tints) });
   }
-  yield;
   return out;
 }
 
@@ -227,12 +224,11 @@ export const scatterFactory: ChunkArtFactory = {
       for (let j = 0; j < 4; j++) {
         const x = chunk.bounds.min.x + 16 + i * 32, z = chunk.bounds.min.z + 16 + j * 32;
         biomes.add(biomeOf(x, z, terrainMasks(x, z)));
+        if (ctx.due()) yield;
       }
-      yield;
     }
     const instances: InstanceRecipe[] = [];
-    for (const b of [...biomes].sort()) instances.push(...yield* scatterChunk(ctx.floor, ctx.random, chunk, b, lod === "fine"));
+    for (const b of [...biomes].sort()) instances.push(...yield* scatterChunk(ctx, chunk, b, lod === "fine"));
     return { meshes: [], instances };
   },
 };
-export const defaultRandom = (seed: number): (() => number) => seededStream(seed);

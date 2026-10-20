@@ -1,5 +1,6 @@
 import type { ChunkArtFactory, MeshRecipe } from "../kit/types.js";
 import { STRUCTURES, type StructureDef } from "../../content/regions/structures.js";
+import { MERIDIAN_CENTRE, MERIDIAN_TERRACES, MERIDIAN_WALL } from "../../content/regions/terrain.js";
 import { hash2 } from "../../content/regions/noise.js";
 import { PALETTE } from "../palette.js";
 import { hex, mix, RecipeBuilder, type P3 } from "./recipe.js";
@@ -238,6 +239,41 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
   },
 };
 
+/** Cut-stone facades on Meridian's terrace walls, inside the chunk: panels
+ * standing just in front of the near-vertical floor cut, buttresses, and lit
+ * gallery windows. Visual only; the floor itself is the wall's collision. */
+function terraceWalls(b: RecipeBuilder, floor: (x: number, z: number) => number,
+  min: { x: number; z: number }, max: { x: number; z: number }, fine: boolean): void {
+  for (let w = 1; w < MERIDIAN_TERRACES.length; w++) {
+    const radius = MERIDIAN_TERRACES[w]!.outer, step = fine ? 6 : 12, front = radius - MERIDIAN_WALL - 2.4;
+    const span = Math.ceil(2 * Math.PI * radius / step);
+    for (let i = 0; i < span; i++) {
+      const a0 = i / span * Math.PI * 2, a1 = (i + 1) / span * Math.PI * 2;
+      const x0 = MERIDIAN_CENTRE.x + Math.cos(a0) * front, z0 = MERIDIAN_CENTRE.z + Math.sin(a0) * front;
+      const x1 = MERIDIAN_CENTRE.x + Math.cos(a1) * front, z1 = MERIDIAN_CENTRE.z + Math.sin(a1) * front;
+      const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+      if (mx < min.x || mx >= max.x || mz < min.z || mz >= max.z) continue;
+      if (mx < 950 || mz > -1030) continue;
+      const top = floor(MERIDIAN_CENTRE.x + Math.cos((a0 + a1) / 2) * (radius + MERIDIAN_WALL + 1), MERIDIAN_CENTRE.z + Math.sin((a0 + a1) / 2) * (radius + MERIDIAN_WALL + 1));
+      const bottom = floor(mx, mz) - 0.5;
+      if (top - bottom < 20) continue;
+      const k = hash2(i, w, 17), stone = k > 0.3 ? C.concrete2 : C.concrete;
+      b.face([[x0, bottom, z0], [x1, bottom, z1], [x1, top, z1], [x0, top, z0]], stone);
+      b.face([[x0, top, z0], [x1, top, z1], [x1, top + 0.6, z1], [x0, top + 0.6, z0]], C.ochre);
+      if (fine && i % 3 === 0) {
+        const nx = Math.cos(a0), nz = Math.sin(a0);
+        b.box([x0 - nx * 0.7, (bottom + top) / 2, z0 - nz * 0.7], [1.4, top - bottom, 1.4], C.concrete2, a0);
+      }
+      if (fine && k > -0.2) glow(b, () => {
+        for (const f of [0.22, 0.5]) {
+          const y = bottom + (top - bottom) * f, nx = Math.cos((a0 + a1) / 2), nz = Math.sin((a0 + a1) / 2);
+          b.box([mx - nx * 0.1, y, mz - nz * 0.1], [0.2, 1.1, step * 0.55], hash2(i, w + Math.round(f * 10), 4) > 0.2 ? C.warm : C.cyan, (a0 + a1) / 2);
+        }
+      });
+    }
+  }
+}
+
 export function structureMesh(list: readonly StructureDef[], name: string, fine: boolean): MeshRecipe | null {
   if (!list.length) return null;
   const b = new RecipeBuilder();
@@ -247,11 +283,13 @@ export function structureMesh(list: readonly StructureDef[], name: string, fine:
 
 export const structuresFactory: ChunkArtFactory = {
   id: "s2.structures",
-  *build(_ctx, chunk, _ref, lod) {
+  *build(ctx, chunk, _ref, lod) {
     const { min, max } = chunk.bounds;
     const here = STRUCTURES.filter(s => s.x >= min.x && s.x < max.x && s.z >= min.z && s.z < max.z);
-    yield;
-    const mesh = structureMesh(here, `${chunk.id}.structures`, lod === "fine");
-    return { meshes: mesh ? [mesh] : [], instances: [] };
+    const b = new RecipeBuilder();
+    for (const s of here) { DRAW[s.kind](b, s, lod === "fine"); if (ctx.due()) yield; }
+    if (ctx.due()) yield;
+    terraceWalls(b, ctx.floor, min, max, lod === "fine");
+    return { meshes: b.vertexCount ? [b.finish(`${chunk.id}.structures`, 0.25)] : [], instances: [] };
   },
 };

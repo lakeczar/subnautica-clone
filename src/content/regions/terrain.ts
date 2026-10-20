@@ -106,6 +106,8 @@ export const BRINE_Y = -440;
 /** Narrow exterior service ledge depth on the Divide's south face. */
 export const SERVICE_LEDGE_Y = -412;
 export const MERIDIAN_CENTRE = { x: 1490, z: -1650 } as const;
+/** Half-width of each terrace retaining wall (a near-vertical cut). */
+export const MERIDIAN_WALL = 2.5;
 /** Terrace outer radii (from MERIDIAN_CENTRE) and their floor depths. */
 export const MERIDIAN_TERRACES = [
   { outer: 700, depth: 520 }, { outer: 560, depth: 600 }, { outer: 400, depth: 680 }, { outer: 240, depth: 770 },
@@ -286,7 +288,7 @@ function sampleAuthored(x: number, z: number, m: TerrainMasks): number {
     let r: number = MERIDIAN_TERRACES[0].depth;
     for (let i = 1; i < MERIDIAN_TERRACES.length; i++) {
       const t = MERIDIAN_TERRACES[i]!, step = t.depth - MERIDIAN_TERRACES[i - 1]!.depth;
-      r += step * (1 - smooth(t.outer - 7, t.outer + 7, mr));
+      r += step * (1 - smooth(t.outer - MERIDIAN_WALL, t.outer + MERIDIAN_WALL, mr));
     }
     if (mr < 240) r += 10 * clamp01(0.5 + fbm(x, z, 30, 2, 61));
     const weight = (1 - smooth(700, 790, mr)) * smooth(870, 950, x) * smooth(-950, -1030, z);

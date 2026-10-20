@@ -37,8 +37,7 @@ export const terrainFactory: ChunkArtFactory = {
     const nx = xs.length, nz = zs.length;
     const h = new Float64Array(nx * nz);
     for (let j = 0; j < nz; j++) {
-      for (let i = 0; i < nx; i++) { h[j * nx + i] = ctx.floor(xs[i]!, zs[j]!); if (i % 48 === 47) yield; }
-      yield;
+      for (let i = 0; i < nx; i++) { h[j * nx + i] = ctx.floor(xs[i]!, zs[j]!); if (ctx.due()) yield; }
     }
     const at = (i: number, j: number): number => h[j * nx + i]!;
     const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
@@ -53,9 +52,8 @@ export const terrainFactory: ChunkArtFactory = {
         normals.push(-gx / len, 1 / len, -gz / len);
         terrainMasks(x, z, masks);
         geologyColor(x, y, z, Math.hypot(gx, gz), regionAtPoint(x, z) ?? "refuge_reef", masks, colors);
-        if (i % 6 === 5) yield;
+        if (ctx.due()) yield;
       }
-      yield;
     }
     const skipped = (i: number, j: number): boolean => insideLegacy(xs[i]!, xs[i + 1]!, zs[j]!, zs[j + 1]!);
     const v = (i: number, j: number): number => j * nx + i;
@@ -89,7 +87,7 @@ export const terrainFactory: ChunkArtFactory = {
       colors: new Float32Array(colors),
       indices: positions.length / 3 > 65535 ? new Uint32Array(indices) : new Uint16Array(indices),
     });
-    yield;
+    if (ctx.due()) yield;
     const mirror = brineMirror(ctx.floor, chunk.bounds.min.x, chunk.bounds.min.z, chunk.bounds.max.x, chunk.bounds.max.z, chunk.id);
     if (mirror) meshes.push(mirror);
     return { meshes, instances: [] } satisfies ChunkRecipe;
