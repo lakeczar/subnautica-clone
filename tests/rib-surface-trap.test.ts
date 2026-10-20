@@ -51,7 +51,9 @@ test("actual trapped export preserves every prior field through schema migration
   assert.equal(old.schemaVersion, 2); assert.equal(old.contentVersion, "expedition.3");
   assert.ok(validLegacyState(old.state), "the unchanged earned input belongs to the frozen legacy domain");
   assert.deepEqual(envelope, schema3Expected(old), "only the exact four-source/schema additions are allowed; every prior field stays in comparison");
-  assert.deepEqual(envelope.state.player, old.state.player, "no pose relocation, vitals or ownership grant");
+  const { mobileRefuge, ...player } = envelope.state.player;
+  assert.equal(mobileRefuge, null, "expedition.6 registers no mobile refuge");
+  assert.deepEqual(player, old.state.player, "no pose relocation, vitals or ownership grant");
   assert.equal(envelope.state.migration, old.state.migration);
   const encoded = encodeSave(envelope); assert.ok(encoded.ok);
   const decoded = decodeSave(encoded.value); assert.ok(decoded.ok); assert.deepEqual(decoded.value, envelope);

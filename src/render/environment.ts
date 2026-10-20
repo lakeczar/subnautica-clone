@@ -4,7 +4,7 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Scene } from "@babylonjs/core";
-import { terrainHeight, WORLD_BOUNDS } from "../sim/world.js";
+import { fractureDepth, terrainHeight, WORLD_BOUNDS } from "../sim/world.js";
 import { INTERACTION_HOSTS, renewable, SOURCES } from "../content/registry.js";
 import { BASIN_SOURCE_IDS } from "../content/routes.js";
 import { type RenderRegion } from "./regions.js";
@@ -103,7 +103,9 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: Re
     // pattern on the real slope, not a current/visibility simulation.
     const lane = Math.sin((px - 170) * .14 + pz * .08 + Math.sin(pz * .07) * 1.2);
     const sediment = Color3.FromHexString(lane > .3 ? "#638d8b" : "#335e70");
-    const color = Color3.Lerp(c, sediment, basin);
+    // The boundary fracture darkens with its own extra depth: fresh, unsorted slope.
+    const fracture = Math.max(0, Math.min(1, fractureDepth(px, pz) / 30));
+    const color = Color3.Lerp(Color3.Lerp(c, sediment, basin), Color3.FromHexString("#203f52"), fracture * .8);
     colors.push(color.r, color.g, color.b, 0); // Terrain-only relief in the shared cel pass.
   }
   data.positions = positions;

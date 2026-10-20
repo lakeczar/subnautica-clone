@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { same } from "./render-assert.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { createRegionalArt } from "../src/render/renderer.js";
@@ -67,7 +68,7 @@ test("production regional owners survive five return traversals, depletion, repl
     else retained.set(key, current);
     assert.ok(current[4]! <= 400_000 && current[5]! <= 650_000 && current[2]! <= 24, "provisional active scene budgets");
     if (art.active.includes("silt_basin")) {
-      assert.equal(scene.getMeshByName("source." + BASIN_SOURCE_IDS[0])!.isEnabled(), false);
+      same(scene.getMeshByName("source." + BASIN_SOURCE_IDS[0])!.isEnabled(), false);
       assert.ok(scene.getMeshByName("source-host." + BASIN_SOURCE_IDS[0])!.isEnabled(), "empty patch stays recognizable");
     }
   }
@@ -78,13 +79,13 @@ test("production regional owners survive five return traversals, depletion, repl
   replacement.world.resources.find(r => r.id === BASIN_SOURCE_IDS[0])!.stock = 1;
   const copy = structuredClone(replacement);
   art.update(replacement);
-  assert.strictEqual(scene.getMeshByName(depleted.name), depleted);
+  same(scene.getMeshByName(depleted.name), depleted);
   assert.ok(depleted.isEnabled(), "same-ID replacement reads actual stock instead of cached depletion");
   art.update(null);
   assert.ok(!scene.meshes.includes(depleted), "menu/null detaches remote regional geometry from drawing");
   replacement.world.resources.find(r => r.id === BASIN_SOURCE_IDS[0])!.stock = 0;
   art.update(replacement);
-  assert.strictEqual(scene.getMeshByName(depleted.name), depleted, "a retained Basin owner re-attaches");
+  same(scene.getMeshByName(depleted.name), depleted, "a retained Basin owner re-attaches");
   assert.ok(!depleted.isEnabled(), "re-attachment reads the replacement's actual depletion");
   art.update(null);
   replacement.world.resources.find(r => r.id === BASIN_SOURCE_IDS[0])!.stock = 1;
@@ -114,7 +115,7 @@ test("remote parked hulls hide while unpinned, recovery and transferred assembli
   const v = makeVehicle("remote-wreck", "dart", { x: 216, y: -166, z: -232 }, "remote-hold");
   v.health = 0; v.disabled = true; s.fleet.vehicles.push(v);
   art.update(s);
-  assert.equal(scene.getMeshByName(v.id), null, "a remote parked wreck has no retained detailed actor");
+  same(scene.getMeshByName(v.id), null, "a remote parked wreck has no retained detailed actor");
   s.recovery.operation = { vehicleId: v.id, routeId: "basin", method: "tow", phase: "approach", waypoint: 0, position: { x: 46, y: -12, z: -54 } };
   const before = structuredClone(s); art.update(s);
   const pinned = scene.getMeshByName(v.id)!;
@@ -129,13 +130,13 @@ test("remote parked hulls hide while unpinned, recovery and transferred assembli
   assert.ok(!pinned.isDisposed() && !pinned.isEnabled(), "an unpinned remote wreck is hidden, not drawn");
   s.player.pose.position = { x: 216, y: -166, z: -232 }; art.update(s);
   const reentered = scene.getMeshByName(v.id)!;
-  assert.strictEqual(reentered, pinned, "re-entry re-shows the retained hull instead of rebuilding it");
+  same(reentered, pinned, "re-entry re-shows the retained hull instead of rebuilding it");
   assert.ok(reentered.isEnabled());
   assert.deepEqual(reentered.position.asArray(), [216, -166, -232]);
   assert.equal(art.cacheStats.hits - admitted.hits, 0, "a re-shown Dart reads no recipes");
   assert.equal(s.fleet.vehicles[0]!.health, 0); assert.equal(s.fleet.vehicles[0]!.disabled, true);
   s.player.pose.position = { x: 0, y: .18, z: 22 }; s.player.controlledVehicleId = v.id; art.update(s);
-  assert.strictEqual(scene.getMeshByName(v.id), reentered, "occupied actor remains pinned across a regional boundary");
+  same(scene.getMeshByName(v.id), reentered, "occupied actor remains pinned across a regional boundary");
   art.update(null); assert.ok(reentered.isDisposed());
   art.dispose();
   assert.equal(art.cacheStats.entries, 0); assert.equal(art.cacheStats.bytes, 0);
@@ -155,7 +156,7 @@ test("remote parked hulls hide while unpinned, recovery and transferred assembli
   assert.ok(scene.getMeshByName("carrier.physical-compartments"), "the carrier's shell stays with its pinned assembly");
   assert.deepEqual(fixture, snapshot);
   assembly.update(null);
-  for (const id of pins) assert.equal(scene.getMeshByName(id), null);
+  for (const id of pins) same(scene.getMeshByName(id), null);
   assembly.dispose();
 }));
 

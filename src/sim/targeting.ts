@@ -32,8 +32,10 @@ const CENTERED = 1e-6;
 
 export function aimRay(s: GameState): AimRay | null {
   const { pose, mode, controlledVehicleId, interiorId } = s.player;
-  if (s.opening.phase < 4 || controlledVehicleId || interiorId ||
-      mode === "piloting" || mode === "interior" ||
+  // A Creel cabin is a fixed dry room with aimable fixtures; carrier interiors keep their panel controls.
+  const cabin = s.player.interiorPose?.frame === "hull-local";
+  if (s.opening.phase < 4 || controlledVehicleId || (interiorId && !cabin) ||
+      mode === "piloting" || (mode === "interior" && !cabin) ||
       !finite(pose.position) || !Number.isFinite(pose.yaw) || !Number.isFinite(pose.pitch)) return null;
   const cp = Math.cos(pose.pitch);
   return {

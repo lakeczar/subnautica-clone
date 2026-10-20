@@ -1,4 +1,4 @@
-import { PLACES, SOURCES, THREAT_HOME } from "../content/registry.js";
+import { HULLS, PLACES, SOURCES, THREAT_HOME } from "../content/registry.js";
 import type { GameState, VehicleState, Vec3 } from "./types.js";
 import { initialRenewal } from "./renewal.js";
 export function createGame(): GameState {
@@ -22,6 +22,7 @@ export function createGame(): GameState {
       starvationSeconds: 0,
       graceSeconds: 180,
       interiorPose: null,
+      mobileRefuge: null,
     },
     opening: { phase: 0, phaseTicks: 0 },
     inventory: {
@@ -46,6 +47,12 @@ export function createGame(): GameState {
           kind: "buoy",
           capacity: 24,
           ownerId: "salvage_buoy",
+        },
+        {
+          id: "canopy_stop_locker",
+          kind: "locker",
+          capacity: 48,
+          ownerId: "canopy_stop",
         },
       ],
       buoy: {
@@ -75,6 +82,7 @@ export function createGame(): GameState {
         { id: "pod_fabricator", repaired: false },
         { id: "island_workshop", repaired: false },
         { id: "canopy_lab", repaired: false },
+        { id: "canopy_stop", repaired: false },
       ],
       maintenance: { alloy: 16, glass: 1, membrane: 10 },
       threat: {
@@ -128,6 +136,7 @@ export function makeVehicle(
     cargoId,
     modules: [],
     investment: {},
+    rating: HULLS[hull].initialDepth,
     boundRepairs: 0,
     berth: null,
   };

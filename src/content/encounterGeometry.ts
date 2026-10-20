@@ -19,11 +19,15 @@ export const SPINDLE_GEOMETRY = {
   roof: { center: [0, 1.4, 0], size: [1.2, .12, 1.5] },
   float: { radius: [.32, .45, 2.6] },
 } as const;
+/** M2-B1 workboat envelopes shared with src/render/fleetArt.ts: low hull, raised
+ * pilot compartment, forward pane, guarded arms and the aft major-mount volume
+ * (cabin or rack; a bare mount is conservatively treated the same). */
 export const CREEL_GEOMETRY = {
-  body: { center: [0, .8, 0], size: [4, 1.5, 6.5] },
-  cabin: { center: [0, 2, -1], size: [3.5, 1.5, 2.5] },
-  window: { center: [0, 2, -2.3], size: [2.8, .9, .06] },
-  toolSize: [.6, .4, 3],
+  body: { center: [0, .69, .15], size: [3.96, 1.38, 6.2] },
+  cabin: { center: [0, 2.08, -1.675], size: [2.3, 1.4, 2.15] },
+  window: { center: [0, 2.08, -2.78], size: [1.9, .74, .06] },
+  mount: { center: [0, 2.44, 1.325], size: [3.44, 2.12, 3.75] },
+  tools: [{ center: [-1.3, .82, -2.95], size: [.5, .5, .75] }, { center: [1.3, .82, -2.95], size: [.5, .5, .75] }],
 } as const;
 export const HEARTHLINE_KEEL = { centerY: 1.5, offsetX: 7.2, size: [4, 3, 28],
   capY: 2.9, capSize: [3, .8, 26] } as const;

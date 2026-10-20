@@ -35,9 +35,14 @@ export interface PlayerState {
   interiorId: string | null;
   starvationSeconds: number;
   graceSeconds: number;
-  interiorPose: { frame: "carrier-local"; position: Vec3 } | null;
+  interiorPose: { frame: "carrier-local" | "hull-local"; position: Vec3 } | null;
+  /** Deliberately registered mobile refuge: one Creel and its fitted cabin item.
+   * Incapacity uses it only if it is still safe; otherwise the home pod. */
+  mobileRefuge: { vehicleId: string; moduleId: string } | null;
 }
-export type Fitting = "tools" | "suit" | "recovery" | "buoy" | null;
+/** `mount` marks a Creel major-mount package fitted in that hull's own hold
+ * container; it is outside cargo capacity. Every other fitting lives in equipment. */
+export type Fitting = "tools" | "suit" | "recovery" | "buoy" | "mount" | null;
 export interface ItemStack {
   id: string;
   kind: ItemKind;
@@ -68,9 +73,13 @@ export interface VehicleState {
   disabled: boolean;
   emergencyAir: number;
   cargoId: string;
-  /** Installed ordinary cargo item instance IDs, still counted in cargo capacity. */
+  /** Installed item instance IDs. Socket modules still count in cargo capacity;
+   * a fitted major-mount package (`fitted: "mount"`) does not. */
   modules: string[];
-  investment: Partial<Record<MaterialId, number>>;
+  /** Frame materials paid into this hull, including any paid refit. */
+  investment: Partial<Record<MaterialId | "tagged_frame", number>>;
+  /** Current hull pressure rating in metres: the initial rating or a paid refit. */
+  rating: number;
   boundRepairs: number;
   berth: {
     carrierId: string;
@@ -134,7 +143,8 @@ export interface GameState {
     action: {
       sourceId: SourceId;
       seconds: number;
-      kind: "sort" | "food" | "maintenance";
+      /** lift: diver frees one tagged frame (10 s). arm: the piloted Creel's tool arms load a host directly. */
+      kind: "sort" | "food" | "maintenance" | "lift" | "arm";
     } | null;
   };
   fleet: { vehicles: VehicleState[]; docking: CarrierState | null };
@@ -187,6 +197,12 @@ export type GameCommand =
   | { type: "service"; vehicleId: string }
   | { type: "recharge-cells" }
   | { type: "install-module"; vehicleId: string; itemId: string }
+  /** Leave the helm into the fitted Creel cabin (station held), or take the helm from it. */
+  | { type: "cabin"; action: "enter" | "helm" | "hatch" | "cook" }
+  /** Register (vehicleId) or clear (null) the mobile refuge at a cabin bunk. */
+  | { type: "register-refuge"; vehicleId: string | null }
+  /** Piloted Creel tool arms on the aimed salvage host ahead of the bow. */
+  | { type: "arm-lift" }
   | { type: "remove-module"; vehicleId: string; itemId: string }
   | { type: "reserve"; vehicleId: string }
   | { type: "recover"; vehicleId: string; method: "tow" | "repair" | "salvage" }
