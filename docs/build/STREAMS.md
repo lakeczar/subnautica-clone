@@ -108,3 +108,6 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **S2 decisions (coordinator):** the gate hall is at 769 m, beside the machinery at 770 m; S5's 700 m reference follows S2's site at composition. Also accepted: a Hearthline construction berth at the stack yard, the 950 m deep tether, and per-region optics. S2 must re-merge S1 after S1's R1 fixes.
 - **S3-02 decision:** option B, trimming the Dart's fins to a 2.45 m envelope with no save change, applied at composition and proven with S3's `transferMatrix`.
 - **S5 R2 (Sol xhigh): ACCEPTED** `476a044` (`review/s5-r2` `c61ed50`). S5-07, a non-blocking note that empty quote excerpts pass, gets a non-empty guard at composition. S5-05 stays a composition check.
+- **B1 ACCEPTED** (Sol R1, accept with nits), integrated at `ccf8c44`. The nits go to S8.
+- **S6 fixes done** at `230c7c1` (33/33 tests, lab 76/76). The R2 review waits for the Codex rate limit.
+- **Rate-limited (Codex 429), to retry:** S1 R2 review (`21d9247`), S3 R2 review (WIP `d00e9e7`), S4 R2 review (WIP `f9059c5`).
