@@ -125,7 +125,9 @@ void main(){
   vec2 w=vWorld.xz; float depth=max(0.0,-vWorld.y);
   float view=length(vWorld-cameraPosition);
   float blot=vnoise(w*.043)*.62+vnoise(w*.17+7.3)*.38;
-  float tone=mix(.86,1.05,smoothstep(.4,.56,blot))-.07*smoothstep(.68,.78,vnoise(w*.09+3.7));
+  // Patch contrast is firmer close by, where it carries material and depth.
+  float near=1.0-smoothstep(6.0,30.0,view);
+  float tone=mix(mix(.88,.82,near),1.04,smoothstep(.4,.56,blot))-mix(.06,.09,near)*smoothstep(.68,.78,vnoise(w*.09+3.7));
   float level=smoothstep(.84,.97,n.y), wet=1.0-smoothstep(-.6,.2,vWorld.y);
   float warp=(vnoise(w*.23)-.5)*2.6;
   float pa=dot(w,vec2(.94,.34))*3.6+warp, pb=dot(w,vec2(.21,.98))*3.1+warp*1.3;
@@ -136,6 +138,11 @@ void main(){
     (1.0-.85*smoothstep(10.0,85.0,depth))*(1.0-.7*smoothstep(18.0,60.0,view));
   float rippleFade=1.0-smoothstep(.5,1.4,max(fwidth(pa),fwidth(pb)));
   float relief=1.0-.24*cover*rippleFade*(1.0-crest);
+  // Close by, shallow level sand also shows small current-ripple marks
+  // across the big ripples, breaking up a pale near field.
+  float pm=dot(w,vec2(.6,.8))*12.5+warp*2.0+vnoise(w*1.3)*2.4, micro=pow(.5+.5*sin(pm),1.6);
+  float microFade=level*wet*(1.0-smoothstep(3.0,14.0,view))*(1.0-smoothstep(.6,1.4,fwidth(pm)))*(1.0-smoothstep(15.0,60.0,depth));
+  relief*=1.0-.13*microFade*smoothstep(.3,.6,vnoise(w*.4+8.2))*(1.0-micro);
   // Below the wave base the floor answers to current, not swell: long
   // silt drifts at Basin depths, then sparse pale speckle in the deep.
   vec2 cw=vec2(dot(w,vec2(.8,.6)),dot(w,vec2(-.6,.8)));
@@ -145,12 +152,15 @@ void main(){
   tone*=1.0+.12*speck*smoothstep(260.0,340.0,depth);
   float steep=1.0-smoothstep(.55,.85,n.y);
   float strata=vnoise(vec2(vWorld.y*.55+vnoise(w*.05)*2.5,blot*3.0));
-  relief*=1.0-.09*steep*smoothstep(.45,.6,strata);
+  relief*=1.0-.13*steep*smoothstep(.45,.6,strata);
   // A close down-look sees less than a metre of floor: keep a fine,
   // aperiodic grain there and fade it before it can shimmer at distance.
-  float grain=vnoise(w*5.3)+vnoise(w*11.0+4.1)*.5-.75;
+  float grain=vnoise(w*5.3)+vnoise(w*11.0+4.1)*.5+vnoise(w*23.0+1.7)*.3-.9;
   float grainFade=(1.0-smoothstep(4.0,22.0,view))*(1.0-smoothstep(.35,.9,fwidth(w.x*11.0)+fwidth(w.y*11.0)));
-  shade*=mix(1.0,tone*relief+grain*.06*grainFade,ground);
+  // Sparse grit: shell flecks and dark pebbles, near field only.
+  float grit=smoothstep(.87,.91,vnoise(w*6.2+6.6))-smoothstep(.88,.93,vnoise(w*5.1+2.2))*.8;
+  float gritFade=(1.0-smoothstep(3.0,16.0,view))*(1.0-smoothstep(.3,.8,fwidth(w.x*6.2)+fwidth(w.y*6.2)));
+  shade*=mix(1.0,tone*relief+grain*.1*grainFade+grit*.07*gritFade,ground);
   float rim=pow(1.0-max(0.0,dot(n,normalize(cameraPosition-vWorld))),3.0);
   // Selective grazing ink is in the same opaque pass and receives the same
   // fog/depth test as its owner. No shells, through-wall lines or extra draws.
@@ -167,7 +177,7 @@ void main(){
     float knots=1.0-smoothstep(.0,.3,cellEdge(c*.63+vec2(4.1,9.3),time*.45+2.0));
     float pool=smoothstep(.35,.75,vnoise(w*.04+vec2(time*.04,-time*.03)));
     float resolve=1.0-smoothstep(.2,.6,fwidth(c.x)+fwidth(c.y));
-    float light=mix(.06,lines*(.3+.7*knots),resolve)*(.2+.8*pool)*sky*exp(-depth*.035);
+    float light=mix(.035,lines*(.3+.7*knots),resolve)*(.2+.8*pool)*sky*exp(-depth*.035);
     shade+=shade*vec3(.3,.36,.27)*light+vec3(.012,.02,.014)*light;
   }
   // Authored diffuse warmth, bounded to the existing refuge interiors. This

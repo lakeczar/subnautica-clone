@@ -150,7 +150,9 @@ function keepIndex(): Map<number, KeepPoint[]> {
   };
   const line = (path: readonly { x: number; y: number; z: number }[], r: number, bottom: number, head: number): void => {
     for (let i = 0; i < path.length - 1; i++) {
-      const a = path[i]!, b = path[i + 1]!, n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 3));
+      // By 3D length: every 3 m, so the 4 m+ headroom columns overlap even
+      // where a tether drops straight down.
+      const a = path[i]!, b = path[i + 1]!, n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / 3));
       for (let k = 0; k <= n; k++) { const t = k / n; add({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, y: a.y + (b.y - a.y) * t + bottom, r, head }); }
     }
   };
@@ -165,6 +167,20 @@ function keepIndex(): Map<number, KeepPoint[]> {
     add({ x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2, y: b.max.y + 40, r: Math.hypot(b.max.x - b.min.x, b.max.z - b.min.z) / 2 + 1.5, head: Infinity });
   return keep;
 }
+/** True where an axis-aligned box overlaps any keep-out column. */
+export function blockedBox(min: { x: number; y: number; z: number }, max: { x: number; y: number; z: number }): boolean {
+  const index = keepIndex(), seen = new Set<KeepPoint>();
+  for (let bx = Math.floor(min.x / KEEP_BUCKET) - 1; bx <= Math.floor(max.x / KEEP_BUCKET) + 1; bx++)
+    for (let bz = Math.floor(min.z / KEEP_BUCKET) - 1; bz <= Math.floor(max.z / KEEP_BUCKET) + 1; bz++)
+      for (const p of index.get(kkey(bx, bz)) ?? []) {
+        if (seen.has(p)) continue;
+        seen.add(p);
+        const dx = Math.max(min.x - p.x, 0, p.x - max.x), dz = Math.max(min.z - p.z, 0, p.z - max.z);
+        if (max.y > p.y - 0.5 && min.y < p.y + p.head && Math.hypot(dx, dz) < p.r) return true;
+      }
+  return false;
+}
+
 /** True where a piece at (x, z) spanning `bottom`..`top` (scatter grows from
  * the floor, so its bottom is unbounded) with `radius` would stand in open
  * water a passage, tether, mooring or structure needs. */

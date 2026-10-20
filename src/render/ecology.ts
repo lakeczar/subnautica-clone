@@ -4,6 +4,7 @@ import { BASIN_SOURCE_IDS } from '../content/routes.js';
 import type { GameState } from '../sim/types.js';
 import type { RenderRegion, RenderQuality } from './regions.js';
 import { SOURCES } from '../content/registry.js';
+import { BASIN_YARD } from '../content/vistas.js';
 import { terrainHeight } from '../sim/world.js';
 import { ArtBatch, seeded } from './geometry.js';
 import type { Point } from './geometry.js';
@@ -238,23 +239,23 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
   };
 }
 
-/** The boundary station's yard. The station stands on its pad above the
- * silt with the fracture beyond its wall, so the dressing is what reads from
- * the approach and over the wall: lamps on the pad's back corners, a lit
- * survey mast rising above the wall, a feed pipe down to the dish spine, a
- * lamp line along the fracture lip and pale tube colonies at the pillar's
- * foot. Visual only; clear of the approach and return lanes, the work poses
- * and the open recovery lift above the parking point. */
+/** The boundary station's yard (layout in content/vistas.ts BASIN_YARD,
+ * where tests keep it off the Basin lanes). The station stands on its pad
+ * above the silt with the fracture beyond its wall, so the dressing is what
+ * reads from the approach and over the wall: lamps on the pad's back corners
+ * and along the fracture lip, an open survey mast above the wall, a thin
+ * conduit down to the dish spine and pale tube colonies at the pillar's
+ * foot. All of it thin and visual-only. */
 function basinWorksYard(b: ArtBatch): void {
   const lamp = (x: number, y: number, z: number, h: number, light: string): void => {
     b.tube([[x, y, z], [x, y + h, z]], 0.11, P.petrol, 5);
     b.box([x, y + h + 0.12, z], [0.8, 0.2, 0.8], P.metal);
     b.glow(b.box([x, y + h - 0.35, z], [0.6, 0.5, 0.6], light));
   };
-  lamp(208.6, -172, -245.1, 3.4, P.warm);
-  lamp(223.4, -172, -245.1, 3.4, P.warm);
+  BASIN_YARD.lamps.forEach((l, i) => lamp(l.x, l.y ?? terrainHeight(l.x, l.z) - 0.2, l.z, l.y === undefined ? 2.6 + (i % 3) * 0.5 : 3.4,
+    l.y === undefined && i % 3 === 1 ? "#9fe6e0" : P.warm));
   // The survey mast: four legs, alternating braces, a lantern above the wall.
-  const mx = 230, mz = -251, base = terrainHeight(mx, mz) - 1, h = 50, half = 2.4, top = 0.5;
+  const { x: mx, z: mz, h, half } = BASIN_YARD.mast, base = terrainHeight(mx, mz) - 1, top = 0.5;
   const legs = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
   for (const [u, v] of legs) b.tube([[mx + u * half, terrainHeight(mx + u * half, mz + v * half) - 1, mz + v * half], [mx + u * top, base + h, mz + v * top]], 0.16, P.steelLight, 5);
   for (let y = 4; y < h - 3; y += 5) {
@@ -266,16 +267,11 @@ function basinWorksYard(b: ArtBatch): void {
   }
   b.box([mx, base + h + 0.4, mz], [1.4, 0.8, 1.4], P.petrol);
   b.glow(b.box([mx, base + h + 1.3, mz], [0.9, 1.1, 0.9], P.warm));
-  // Feed pipe from the station's west edge down the pillar to the dish spine.
-  b.tube([[207.4, -172.4, -241], [204.5, -176, -241], [202, -186, -238.5], [199.5, -186.5, -229], [198.6, -181.6, -222.4]], 0.45, P.metal, 8);
-  for (const [x, y, z] of [[204.5, -176, -241], [202, -186, -238.5], [199.5, -186.5, -229]] as const) b.tube([[x, y - 0.6, z], [x, y + 0.6, z]], 0.62, P.ochre, 8);
-  // A lamp line along the fracture lip, receding east to west.
-  for (let i = 0; i < 6; i++) {
-    const x = 190 + i * 10, z = -279 + (i % 2) * 1.5;
-    lamp(x, terrainHeight(x, z) - 0.2, z, 2.6 + (i % 3) * 0.5, i % 3 === 2 ? "#9fe6e0" : P.warm);
-  }
+  // A thin conduit from the station's west edge down the pillar to the spine.
+  b.tube(BASIN_YARD.conduit.map(p => [...p] as Point), 0.22, P.metal, 6);
+  for (const [x, y, z] of BASIN_YARD.conduit.slice(1, -1)) b.tube([[x, y - 0.3, z], [x, y + 0.3, z]], 0.32, P.ochre, 6);
   // Pale tube colonies at the foot of the station's pillar.
-  for (const [cx, cz, n] of [[204, -250, 7], [227, -238, 6], [212, -252, 5]] as const)
+  for (const [cx, cz, n] of BASIN_YARD.tubes)
     for (let i = 0; i < n; i++) {
       const a = i * 2.4 + cx, r = 0.5 + (i % 3) * 0.55, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r, y = terrainHeight(x, z) - 0.1, t = 0.8 + (i % 4) * 0.35;
       b.tube([[x, y, z], [x, y + t, z]], 0.09, i % 2 ? P.porcelain : P.shell, 5);
@@ -283,4 +279,3 @@ function basinWorksYard(b: ArtBatch): void {
     }
   b.finish(0.22);
 }
-
