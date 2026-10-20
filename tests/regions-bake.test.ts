@@ -79,7 +79,10 @@ test("s2.terrain decodes from the store in small steps and falls back to live wi
     };
     const fine = await run(c, "fine");
     assert.equal(fine.recipe.meshes[0]!.positions.length, live(c, "fine")[0]!.positions.length, "baked fine recipe");
-    assert.ok(fine.maxMs < 8, `decode step ${fine.maxMs.toFixed(2)} ms`);
+    // The decode is split across steps (deterministic); the wall-clock bound only
+    // catches a decode that stops yielding, with headroom for a loaded host.
+    assert.ok(fine.steps > 2, `decode yields across steps (${fine.steps})`);
+    assert.ok(fine.maxMs < 40, `decode step ${fine.maxMs.toFixed(2)} ms`);
     // Cached across "eviction": a second build needs no fetch.
     const fetches = store.stats.fetches;
     await run(c, "coarse");

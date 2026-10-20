@@ -82,13 +82,13 @@ void main(){
 #endif
   gl_Position=viewProjection*w;
 }`;
-export const CEL_UNIFORMS = ["world", "viewProjection", ...opticalUniforms, "lightDirection", "time", "underwater"];
+export const CEL_UNIFORMS = ["world", "viewProjection", ...opticalUniforms, "lightDirection", "time", "underwater", "lampOn"];
 export const LIGHT_DIRECTION = new Vector3(-0.42, 0.85, -0.3);
 
 export const CEL_FRAGMENT = `
 precision highp float;
 varying vec3 vWorld; varying vec3 vNormal; varying vec4 vColor;
-uniform vec3 lightDirection; uniform float time; uniform float underwater;
+uniform vec3 lightDirection; uniform float time; uniform float underwater; uniform float lampOn;
 ${opticalShader}
 void main(){
   vec3 n=normalize(vNormal); float d=dot(n,normalize(lightDirection));
@@ -123,6 +123,11 @@ void main(){
   float net=1.0-smoothstep(.012,.09,abs(sin(wx)*sin(wz)));
   float caustic=net*smoothstep(.45,.95,n.y)*(1.0-smoothstep(-.8,-.1,vWorld.y));
   shade+=vec3(.06,.10,.055)*caustic*underwater*exp(min(0.0,vWorld.y)*.025);
+  // S4 lamp switch (C3): a warm pool on nearby surfaces facing the eye. Off,
+  // the deep world keeps only its ambient and animal light.
+  vec3 toEye=cameraPosition-vWorld; float eye=length(toEye);
+  float lampPool=lampOn*underwater*exp(-eye*.12)*(.3+.7*max(0.0,dot(n,toEye/max(eye,1e-3))));
+  shade=shade*(1.0+lampPool*.6)+vec3(.055,.048,.03)*lampPool;
   // Authored diffuse warmth, bounded to the existing refuge interiors. This
   // shader owns the visible light pools; Babylon lamps cannot light this cel.
   float pod=step(abs(vWorld.x),2.94)*step(19.38,vWorld.z)*step(vWorld.z,24.01)*step(.15,vWorld.y)*step(vWorld.y,3.73);
@@ -157,6 +162,7 @@ export function createCelMaterial(scene: Scene): ShaderMaterial {
   material.setVector3("lightDirection", LIGHT_DIRECTION);
   material.setFloat("time", 0);
   material.setFloat("underwater", 0);
+  material.setFloat("lampOn", 0);
   return material;
 }
 

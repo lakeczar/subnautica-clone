@@ -11,7 +11,8 @@ import { ecologyWorldFrom } from "./ecology/adapter.js";
 import { DETERRENT_SECONDS, MAX_DETERRENTS, stepEcology } from "./ecology/ecology.js";
 import { protectionFor } from "./ecology/hazards.js";
 import { stimulusFrom } from "./ecology/stimulus.js";
-import type { EcologyWorld } from "./ecology/types.js";
+import type { EcologyWorld, Stimulus } from "./ecology/types.js";
+import { hullHandling } from "./fleet.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import { facility, stopWorks } from "./inventory.js";
 import type { GameEvent, GameState, ItemStack, Vec3, WorldQueries } from "./types.js";
@@ -111,6 +112,15 @@ export function updateEcology(s: GameState, loudness: number, scanned: boolean, 
     });
     events.push({ type: "ecology", event: e });
   }
+}
+/** Presentation-only stimulus for render, HUD and audio, which never see the
+ * step's loudness: estimated from the actor's speed with step.ts's own levels.
+ * The simulation always uses the step's exact loudness. */
+export function presentationStimulus(s: GameState): Stimulus {
+  const v = controlled(s), m = v?.velocity ?? s.player.velocity, speed = Math.hypot(m.x, m.y, m.z);
+  const loudness = v ? speed > 0.5 ? hullHandling(v.hull)?.loudness.cruise ?? (v.hull === "dart" ? 0.48 : 0.3) : 0.08
+    : speed > 4.5 ? 0.6 : speed > 0.5 ? 0.14 : 0;
+  return stimulusFrom(s, loudness, { lamp: s.player.lamp });
 }
 /** The lamp actually lights: switched on, and a controlled craft has power. */
 export const lampOn = (s: GameState): boolean => {

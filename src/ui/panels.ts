@@ -21,6 +21,7 @@ import { cabinHull, fittedMount, holdCapacity, mobileRefugeBlock, mountLabel } f
 import type { GameCommand, GameState, ItemStack, VehicleState, WorldQueries } from "../sim/types.js";
 import { bearing, escapeHtml, heading, recoveryDisplay } from "./format.js";
 import { storyKnown } from "../sim/storyLink.js";
+import { registerEcologyNotes } from "./ecologyNotes.js";
 import { registerStoryNotebook } from "./storyNotebook.js";
 import { DISCOVERY_IDS, type DiscoveryId } from "../content/story/evidence.js";
 
@@ -79,6 +80,8 @@ export class PanelView {
   constructor(private readonly root: HTMLElement, private readonly world: WorldQueries) {
     // The story's notebook is composed through the same extension sections as any stream.
     registerStoryNotebook(this);
+    // S4's wildlife and hazard notes, the same way (C3).
+    registerEcologyNotes(this);
   }
 
   private get<T extends HTMLElement = HTMLElement>(id: string): T {
