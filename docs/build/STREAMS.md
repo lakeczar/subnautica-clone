@@ -129,3 +129,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **S8 R1 fixes done** at `ff2364f` (288 tests; newest-only notebook, mount focus, fits at 960x600). A focused Sol R2 review is running; C1 told to merge it.
 - **S1 R3 (Sol xhigh): ACCEPTED** `84bbc86` (`review/s1-r3` `78ec317`), with one P3: `settled` can be one frame early. **C2** (Opus) started: the renderer moves onto S1 streaming per the S1 migration plan, in files disjoint from C1.
 - **S6 R3 (Sol xhigh): ACCEPTED** `35fe1c4` (`review/s6-r3` `dec5151`), with no findings. Audio wiring was added to C1 scope.
+- **S4 R4 (Sol xhigh): ACCEPT-WITH-FIXES** `4696f7a` (`review/s4-r4` `7229b61`). The P3s S4-09 (max-age save becomes unloadable) and S4-10 (stale age shortens grace) are with the author; the coordinator inspects them. Ecology wiring goes to the next composition step after C1.
