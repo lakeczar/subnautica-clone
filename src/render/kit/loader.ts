@@ -4,7 +4,7 @@ import type { Scene } from "@babylonjs/core/scene.js";
 import "@babylonjs/core/Meshes/thinInstanceMesh.js";
 import type { ChunkLoader, PreparedArt, ResidentArt, UploadJob } from "../../world/residency.js";
 import type { ChunkDescriptor, LodLevel } from "../../world/types.js";
-import { meshBytes, splitMesh } from "./recipe.js";
+import { meshBytes, splitMeshSteps } from "./recipe.js";
 import type { ChunkArtFactory, ChunkBuildContext, ChunkRecipe, MeshRecipe, TemplateRecipe } from "./types.js";
 
 /** Kit meshes draw in the production scene's opaque group. */
@@ -112,10 +112,21 @@ export function createKitLoader(options: {
   };
   /** Cut a recipe into upload parts. Template vertex buffers are per batch
    * slice on the GPU and shared on the CPU, so each slice carries them. */
-  const partsOf = (lod: LodLevel, recipe: ChunkRecipe): Part[] => {
+  /** Run `steps`, starting a fresh time slice before every resume. */
+  const stepped = function* <T>(steps: Generator<void, T>): Generator<void, T> {
+    for (;;) {
+      context.startStep?.();
+      const r = steps.next();
+      if (r.done) return r.value;
+      yield;
+    }
+  };
+  const partsOf = function* (lod: LodLevel, recipe: ChunkRecipe): Generator<void, Part[]> {
     const parts: Part[] = [];
-    for (const m of recipe.meshes) for (const piece of splitMesh(m, maxPartBytes))
-      parts.push({ kind: "mesh", name: piece.name, mesh: piece, gpu: meshBytes(piece) });
+    for (const m of recipe.meshes) {
+      for (const piece of yield* stepped(splitMeshSteps(m, maxPartBytes, context.due)))
+        parts.push({ kind: "mesh", name: piece.name, mesh: piece, gpu: meshBytes(piece) });
+    }
     for (const batch of recipe.instances) {
       const count = batch.matrices.length / 16;
       if (!count) continue;
@@ -157,7 +168,7 @@ export function createKitLoader(options: {
         }
       }
       yield;
-      const parts = partsOf(lod, { meshes, instances });
+      const parts = yield* partsOf(lod, { meshes, instances });
       // CPU: the split arrays plus instance data (slices share one buffer).
       const cpuBytes = parts.reduce((n, p) => n + (p.kind === "mesh" ? p.gpu : instanceBytesOf(p)), 0);
       const gpuBytes = parts.reduce((n, p) => n + p.gpu, 0);
