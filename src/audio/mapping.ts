@@ -101,6 +101,7 @@ export class CueMapper {
       case "foundation-boundary": return [centred("alert.boundary")];
       case "impact": return e.hullLoss > 0 ? [centred("hit.impact", clamp01(0.4 + e.hullLoss / 20))] : [];
       case "threat-damage": return this.once(this.injury(e, s, scene));
+      case "ecology": return this.ecology(e.event, scene);
       case "movement-mode-changed": {
         const from = this.last?.mode ?? null;
         if (this.last) this.last.mode = e.mode;
@@ -194,6 +195,19 @@ export class CueMapper {
     return { cue, intensity: 1, pan: r.pan, distance: r.distance, dir: r.dir };
   }
 
+  /** S4 encounters and hazards, from the event's own fields (C3): the warning
+   * ladder is the positional warning call at the animal, louder as it closes;
+   * breaking off is the disengage cue; a field warning sounds the body alarm.
+   * Strikes arrive as threat-damage with the animal's origin. */
+  private ecology(e: Extract<GameEvent, { type: "ecology" }>["event"], scene: AudioScene): CueRequest[] {
+    if (e.type === "hazard-warning") return e.level > 0 ? [centred("alert.body", clamp01(e.level / 100))] : [];
+    if (e.type !== "ecology-cue") return [];
+    const stage = { alert: 0.55, investigate: 0.8, commit: 1 } as Partial<Record<typeof e.cue, number>>;
+    const level = stage[e.cue];
+    if (level !== undefined) return [{ ...this.spatial("alert.threat-call", e.origin, scene), intensity: level }];
+    return e.cue === "withdraw" || e.cue === "leash" || e.cue === "ink" || e.cue === "lure" ? [centred("threat.disengage")] : [];
+  }
+
   /** One injury per frame: later copies (the step's legacy sound, app-injected
    * feedback) are already heard, so they map to nothing. */
   private once(r: CueRequest): CueRequest[] {
@@ -205,7 +219,7 @@ export class CueMapper {
   /** Hunter injury, panned to the emission origin: the event's own, the batch's,
    * or the hunter's position in the same step. */
   private injury(e: Extract<GameEvent, { type: "threat-damage" | "sound" }>, s: GameState | null, scene: AudioScene, batchOrigin?: Vec3): CueRequest {
-    const own = e.type === "sound" ? e.origin : undefined;
+    const own = e.origin;
     const hunter = e.type === "threat-damage" && e.source === "hunter" ? s?.world.threat.position : undefined;
     const origin = [own, batchOrigin, hunter].find(finite);
     const r = this.spatial("hit.damage", origin, scene);

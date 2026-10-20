@@ -291,6 +291,8 @@ export class SiltwakeApp {
         KeyE: { type: "interact" }, KeyQ: { type: "scan" },
         KeyB: { type: "buoy" }, KeyF: { type: "eat" },
         KeyG: { type: "distraction" }, KeyH: { type: "hint" }, KeyX: { type: "exit" },
+        // S4: the lamp switch and the two nonlethal kits.
+        KeyL: { type: "lamp" }, KeyT: { type: "deploy-lure" }, KeyY: { type: "release-ink" },
       };
       const command = commands[event.code];
       if (command) { event.preventDefault(); this.command(command); }
@@ -349,7 +351,7 @@ export class SiltwakeApp {
           now - this.lastBoundaryNotice > 6000
         ) {
           this.view.notify(
-            "Survey edge · turn back toward the Canopy–Basin route.",
+            "World edge · open ocean beyond. Turn back toward the regions.",
             false, { channel: "system" },
           );
           this.lastBoundaryNotice = now;
