@@ -64,6 +64,8 @@ export interface Result {
   peakFadingSlots: number;
   /** Longest unowned sounding graph seen at any frame (a fade is <= 0.05 s). */
   maxUnownedTail: number;
+  /** Most built graphs without an allocator voice at any frame; must be 0. */
+  maxOrphans: number;
   /** First time after the last request when no cue voice sounds and none waits. */
   drainedAt: number | null;
   windows: Record<string, Levels>;
@@ -77,6 +79,7 @@ const common = (r: Result): string[] => [
   ...(Math.abs(r.levels.dc) > 0.002 ? [`DC ${r.levels.dc}`] : []),
   ...(r.peakVoices > VOICE_LIMITS.total ? [`${r.peakVoices} voices > ${VOICE_LIMITS.total}`] : []),
   ...BUSES.filter(b => r.peakBus[b] > VOICE_LIMITS.bus[b]).map(b => `${b} bus ${r.peakBus[b]} > ${VOICE_LIMITS.bus[b]}`),
+  ...(r.maxOrphans ? [`${r.maxOrphans} orphaned graphs`] : []),
 ];
 const range = (what: string, v: number, lo: number, hi: number): string[] => (v < lo || v > hi ? [`${what} ${v} outside ${lo}..${hi}`] : []);
 /** Digital silence for practical purposes: nothing above -100 dBFS. */
@@ -161,6 +164,15 @@ function scenarios(): Scenario[] {
   const busy = (t: number) => scene({ region: "refuge_reef", depth: 30, hull: "creel", throttle: 1, threat: { mode: t < 3 ? "warn" : "pursue", interest: 3, pan: -0.5, distance: 20, dir: "left" } });
   const noisy = (_: number, f: number): CueRequest[] => (f % 40 === 5 ? [cue("alert.threat-call", { pan: -0.5, distance: 20, dir: "left" }), cue("action.scan"), cue("music.discovery")] : []);
   out.push(
+    // R2 S6-08: pausing out of a pursuit must leave no pulse floor.
+    { id: "silence/pause-after-pursuit", group: "Silence and isolation", seconds: 8, window: [5, 8],
+      scene: t => scene({ active: t < 3, depth: 30, threat: { mode: "pursue", interest: 4, pan: 0.3, distance: 15, dir: "right" } }), check: silent },
+    // R2 S6-06: a long reef swim saturates the grain pool; stolen grains must stop and release.
+    { id: "silence/reef-300s-then-pause", group: "Silence and isolation", seconds: 306, window: [303, 306],
+      scene: t => scene({ active: t < 300, depth: 30 }),
+      check: r => [...silent(r), ...(r.stats.voiceNodes ? [`${r.stats.voiceNodes} voice nodes held after pause`] : []),
+        ...(r.stats.stolen === 0 ? ["grain pool never saturated; the run does not exercise stealing"] : []),
+        ...(r.nodesEnd !== r.layerNodesStart ? [`nodes ${r.layerNodesStart} → ${r.nodesEnd}`] : [])] },
     { id: "silence/paused-reef", group: "Silence and isolation", seconds: 8, window: [5, 8], scene: () => scene({ active: false, depth: 30 }), check: silent },
     { id: "silence/all-buses-muted", group: "Silence and isolation", seconds: 8, window: [0.5, 8], solo: [], scene: busy, events: noisy, check: silent },
     { id: "isolation/alert-solo-quiet-scene", group: "Silence and isolation", seconds: 8, window: [5, 8], solo: ["alert"], scene: () => scene({ depth: 30, hull: "creel", throttle: 1 }), check: silent },
@@ -239,7 +251,7 @@ async function render(sc: Scenario): Promise<Result> {
   engine.update(sc.scene(0));
   const first = engine.stats(), nodesStart = first.liveNodes, layerNodesStart = first.liveNodes - first.voiceNodes;
   let peakVoices = 0, admittedEssential = 0, requestedEssential = 0, requested = 0, lastRequest = -1;
-  let peakNodes = nodesStart, peakLayerNodes = layerNodesStart, peakFadingSlots = 0, maxUnownedTail = 0, drainedAt: number | null = null;
+  let peakNodes = nodesStart, peakLayerNodes = layerNodesStart, peakFadingSlots = 0, maxUnownedTail = 0, maxOrphans = 0, drainedAt: number | null = null;
   const peakBus = Object.fromEntries(BUSES.map(b => [b, 0])) as Record<Bus, number>;
   const frames = ctx.length / STEP;
   for (let f = 1; f < frames; f++) {
@@ -260,6 +272,7 @@ async function render(sc: Scenario): Promise<Result> {
       peakLayerNodes = Math.max(peakLayerNodes, s.liveNodes - s.voiceNodes);
       peakFadingSlots = Math.max(peakFadingSlots, s.fadingSlots);
       maxUnownedTail = Math.max(maxUnownedTail, s.unownedTail);
+      maxOrphans = Math.max(maxOrphans, s.orphans);
       const cueVoices = s.voices - s.bus.ambience;
       if (lastRequest >= 0 && t > lastRequest && drainedAt === null && cueVoices === 0 && s.pending === 0) drainedAt = t;
       if (cueVoices > 0) drainedAt = null;
@@ -275,7 +288,7 @@ async function render(sc: Scenario): Promise<Result> {
   const r: Result = {
     id: sc.id, group: sc.group, levels: levels(chans, RATE), spectrum: spectrum(chans, RATE),
     peakVoices, peakBus, nodesStart, nodesEnd, layerNodesStart, layerNodesEnd, stats, admittedEssential, requestedEssential,
-    requested, peakNodes, peakLayerNodes, peakFadingSlots, maxUnownedTail, drainedAt, windows, failures: [], buffer,
+    requested, peakNodes, peakLayerNodes, peakFadingSlots, maxUnownedTail, maxOrphans, drainedAt, windows, failures: [], buffer,
   };
   r.failures = [...common(r), ...sc.check(r)];
   return r;

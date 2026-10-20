@@ -71,6 +71,8 @@ export class CueMapper {
   /** Map one step's whole batch. Preferred over event(): duplicate injury
    * events collapse into one hit that keeps any emission origin in the batch. */
   events(batch: readonly GameEvent[], s: GameState | null, scene: AudioScene): CueRequest[] {
+    // Notices name only the warnings of their own step batch.
+    this.contexts = [];
     const origin = batch.find((e): e is Extract<GameEvent, { type: "sound" }> => e.type === "sound" && e.cue === "damage" && finite(e.origin))?.origin;
     const out: CueRequest[] = [], heard = this.injured;
     let hurt: CueRequest | null = null;
@@ -217,7 +219,13 @@ export class CueMapper {
    * Oxygen and food are never inferred from a live meter. */
   private bodyAlarm(e: Extract<GameEvent, { type: "sound" }>, scene: AudioScene): CueId {
     const explicit = (e as { cause?: WarningCause }).cause;
-    const named = explicit && CAUSE_CUE[explicit] ? CAUSE_CUE[explicit] : this.contexts.shift();
+    let named: CueId | undefined;
+    if (explicit && CAUSE_CUE[explicit]) {
+      named = CAUSE_CUE[explicit];
+      // The matching notice is spent on this warning, not left for the next one.
+      const i = this.contexts.indexOf(named);
+      if (i >= 0) this.contexts.splice(i, 1);
+    } else named = this.contexts.shift();
     if (named) { this.usedCauses.add(named); return named; }
     const live: CueId[] = [];
     if (scene.overPressure) live.push("alert.pressure");

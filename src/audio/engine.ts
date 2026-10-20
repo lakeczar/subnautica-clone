@@ -42,6 +42,8 @@ export interface EngineStats {
   unownedTail: number;
   /** Ambience slots currently fading out (revivable). */
   fadingSlots: number;
+  /** Built graphs with no allocator voice: always 0 unless ownership leaks. */
+  orphans: number;
   ambience: string | null;
   hull: string | null;
 }
@@ -253,6 +255,7 @@ export class AudioEngine {
       const duration = START_LEAD + soundLength(parts);
       const a = this.allocator.admit({ cue: "detail", bus: "ambience", priority: 0, cooldown: 0, maxInstances: 4, duration }, now);
       if (!a.play) continue;
+      for (const v of a.steal) this.stop(v.id, now);
       const pan = this.ctx.createStereoPanner(), send = this.ctx.createGain();
       pan.pan.value = (this.random() * 2 - 1) * 0.8;
       pan.connect(this.paths.ambience.dry);
@@ -327,7 +330,8 @@ export class AudioEngine {
       voices: this.allocator.count(), bus, peakVoices: s.peak, peakBus: { ...s.peakBus },
       started: s.started, merged: s.merged, masked: s.masked, full: s.full, deferred: s.deferred, stolen: s.stolen,
       pending: this.pending.length, liveNodes, voiceNodes,
-      unownedTail: Math.max(0, ...this.releasing.map(r => r.b.end - this.ctx.currentTime)), fadingSlots: this.fading.length, ambience: this.ambience?.key ?? null, hull: this.hull?.key ?? null,
+      unownedTail: Math.max(0, ...this.releasing.map(r => r.b.end - this.ctx.currentTime)), fadingSlots: this.fading.length,
+      orphans: [...this.built.keys()].filter(id => !this.allocator.voices.some(v => v.id === id)).length, ambience: this.ambience?.key ?? null, hull: this.hull?.key ?? null,
     };
   }
 

@@ -207,6 +207,8 @@ export class ThreatLayer extends Layer {
   private readonly presence: GainNode;
   private readonly pan: StereoPannerNode;
   private nextBeat = 0;
+  private pulsing = false;
+  private present = false;
   constructor(ctx: BaseAudioContext, dest: AudioNode, bank: NoiseBank, now: number) {
     super(ctx);
     const o = this.osc("sine", THREAT_LAYER.pulse.hz, now);
@@ -222,8 +224,18 @@ export class ThreatLayer extends Layer {
     const tense = mode === "warn" || mode === "investigate" || mode === "pursue";
     const bpm = mode === "pursue" ? THREAT_LAYER.pulse.bpmPursue : mode === "investigate" ? (THREAT_LAYER.pulse.bpmIdle + THREAT_LAYER.pulse.bpmPursue) / 2 : THREAT_LAYER.pulse.bpmIdle;
     const peak = dbToGain(THREAT_LAYER.pulse.level - (mode === "warn" ? 6 : mode === "investigate" ? 3 : 0));
-    if (!tense) this.nextBeat = 0;
-    else {
+    if (!tense) {
+      this.nextBeat = 0;
+      // Drop scheduled beats and the exponential floor: paused or calm means silent.
+      if (this.pulsing) {
+        const g = this.pulse.gain;
+        g.cancelScheduledValues(now);
+        g.setValueAtTime(g.value, now);
+        g.linearRampToValueAtTime(0, now + 0.03);
+        this.pulsing = false;
+      }
+    } else {
+      this.pulsing = true;
       if (this.nextBeat < now) this.nextBeat = now + 0.05;
       // Schedule only a short horizon; retargeting stays responsive to mode changes.
       while (this.nextBeat < now + 0.25) {
@@ -238,7 +250,17 @@ export class ThreatLayer extends Layer {
     }
     const near = Math.max(0, 1 - t.distance / THREAT_LAYER.presence.audibleWithin);
     set(this.pan.pan, t.pan, now, 0.15);
-    set(this.presence.gain, tense && near > 0 ? dbToGain(THREAT_LAYER.presence.level + listeningDb) * UNIT * near : 0, now, 0.3);
+    const g = this.presence.gain;
+    if (tense && near > 0) {
+      set(g, dbToGain(THREAT_LAYER.presence.level + listeningDb) * UNIT * near, now, 0.3);
+      this.present = true;
+    } else if (this.present) {
+      // A linear release reaches true zero; an exponential approach never does.
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.linearRampToValueAtTime(0, now + 0.4);
+      this.present = false;
+    }
   }
 }
 
