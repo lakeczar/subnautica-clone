@@ -20,6 +20,12 @@ if [[ $# -eq 0 ]]; then
   exit 2
 fi
 
+# Nested call (e.g. `npm run test:heavy` invoked through this script): the outer
+# call already holds the lock and the memory scope, so just run the command.
+if [[ -n "${SILTWAKE_HEAVY_LOCK_HELD:-}" ]]; then
+  exec timeout --kill-after=10s "${deadline}s" "$@"
+fi
+
 lock=/work/tmp/siltwake-heavy-check.lock
 mkdir -p "$(dirname "$lock")"
 max="${HEAVY_MEMORY_MAX:-6G}"
@@ -33,7 +39,7 @@ fi
 echo "$unit pid=$$ cwd=$PWD started=$(date -u +%FT%TZ) cmd=$*" >"$lock.owner"
 
 status=0
-systemd-run --user --scope --quiet --unit="$unit" \
+SILTWAKE_HEAVY_LOCK_HELD=1 systemd-run --user --scope --quiet --unit="$unit" \
   -p MemoryHigh="$(( ${max%G} * 1024 - 1024 ))M" -p MemoryMax="$max" -p MemorySwapMax=0 \
   timeout --kill-after=10s "${deadline}s" "$@" || status=$?
 : >"$lock.owner"
