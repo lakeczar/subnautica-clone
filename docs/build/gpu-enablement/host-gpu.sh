@@ -408,9 +408,27 @@ set_ours() {
   done
 }
 
-start_vm() { # <label>: 0 only once the VM is seen running
+# start_vm <label>: 0 once the VM is seen running, also when the start command failed but
+# the VM came up anyway (a lost response); it is then not started again. Otherwise it reads
+# the state: 1 observed shut off, 2 state unreadable, 3 any other state (START_STATE says which).
+start_vm() {
   set_phase start "$1"
-  vdo start "$VM_UUID" && wait_state running "$START_TIMEOUT"
+  if vdo start "$VM_UUID" && wait_state running "$START_TIMEOUT"; then START_STATE=running; return 0; fi
+  read_state START_STATE "$VM_UUID" || { START_STATE="unreadable: $READ_ERR"; return 2; }
+  case "$START_STATE" in
+    running) log "the start reported a failure, but the VM is running; it is not started again"; return 0 ;;
+    "shut off") return 1 ;;
+    *) return 3 ;;
+  esac
+}
+
+# A start that did not leave the VM running ends here: left-off only when it was seen shut off.
+start_failed() { # <start_vm status> <message>
+  case "$1" in
+    1) finish left-off 30 "$2; the VM is shut off. Start it from the VM page" ;;
+    2) finish needs-owner 30 "$2; the VM's state cannot be read ($START_STATE); nothing more was done" ;;
+    *) finish needs-owner 30 "$2; the VM is '$START_STATE'; nothing more was done" ;;
+  esac
 }
 
 # The definition change, while off and under Fleet's lock. Afterwards the definition
@@ -435,11 +453,26 @@ change_definition() { # present|absent
   return 1
 }
 
-# Start the VM without our change and finish. If it will not start, say so: left-off.
-recover_start() { # <outcome> <code> <message>
-  start_vm "without the change" || { sleep "$START_RETRY_DELAY"; start_vm "without the change, second try"; } \
-    || finish left-off 30 "$3; then the VM could not be started again and is '$(domstate)'. Start it from the VM page"
-  finish "$1" "$2" "$3; the VM runs without the change"
+# Start the VM without our change and finish, but only from what it can read now: state
+# shut off, a complete definition of this VM, and exactly the expected hostdev entries.
+# An unreadable state or definition, or other hostdev entries, leave the VM off for the owner.
+recover_start() { # <outcome> <code> <message> <expected hostdev sources>
+  local st now rc
+  read_state st "$VM_UUID" || finish needs-owner 30 "$3; the VM's state cannot be read ($READ_ERR), so it was not started"
+  case "$st" in
+    "shut off") ;;
+    running) finish restarted-elsewhere 21 "$3; the VM is already running (someone else started it)" ;;
+    *) finish needs-owner 30 "$3; the VM is '$st', so it was not started" ;;
+  esac
+  read_cfg now || finish needs-owner 30 "$3; the definition cannot be read ($READ_ERR), so the VM was left off"
+  if [ "$(hostdev_srcs <<<"$now")" != "$4" ]; then
+    save definition-at-recovery.xml "$now"
+    finish needs-owner 30 "$3; hostdev entries are '$(hostdev_srcs <<<"$now")', expected '$4' (definition-at-recovery.xml), so the VM was left off"
+  fi
+  start_vm "without the change"; rc=$?
+  if [ "$rc" = 1 ]; then sleep "$START_RETRY_DELAY"; start_vm "without the change, second try"; rc=$?; fi
+  [ "$rc" = 0 ] && finish "$1" "$2" "$3; the VM runs without the change"
+  start_failed "$rc" "$3; then the VM could not be started again"
 }
 
 # Start again after undoing our change. The hostdev entries must read back as <expected>
@@ -455,7 +488,7 @@ start_back() { # <reason> <expected hostdev sources>
     finish needs-owner 30 "$1; hostdev entries are '$srcs' after the undo, expected '$2' (definition-after-undo.xml); VM left off"
   fi
   if [ -n "${UNDO_FAILED:-}" ]; then save definition-after-undo.xml "$now"; note="the definition still differs from before (definition-after-undo.xml)"; fi
-  recover_start rolled-back 20 "$1; $note"
+  recover_start rolled-back 20 "$1; $note" "$2"
 }
 
 remove_ours_and_start() { # <reason>: attach only; never returns
@@ -480,19 +513,21 @@ transition() {
     running) finish restarted-elsewhere 21 "the VM is running again after the shutdown; someone else started it; nothing was changed" ;;
     *) finish needs-owner 30 "the VM is '$st' after the shutdown; nothing was changed" ;;
   esac
-  recheck "shut off" "$REF_SRCS" || recover_start backed-off 21 "after the shutdown: ${PROBLEMS[*]}; nothing was changed"
+  recheck "shut off" "$REF_SRCS" || recover_start backed-off 21 "after the shutdown: ${PROBLEMS[*]}; nothing was changed" "$REF_SRCS"
   if [ "$PLAN" != start ]; then
     change_definition "$target" || start_back "the definition change did not come out as intended" "$REF_SRCS"
   fi
   if ! recheck "shut off" "$want"; then
     [ "$target" = present ] && remove_ours_and_start "just before the start: ${PROBLEMS[*]}"
-    recover_start backed-off 21 "the GPU entries were removed, then the check before the start failed: ${PROBLEMS[*]}"
+    recover_start backed-off 21 "the GPU entries were removed, then the check before the start failed: ${PROBLEMS[*]}" ""
   fi
-  if ! start_vm "with the change"; then
+  local rc; start_vm "with the change"; rc=$?
+  if [ "$rc" != 0 ]; then
     log "start failed; host messages:"; dmesg 2>/dev/null | grep -i -E 'vfio|DMAR|AMD-Vi' | tail -n 20 | sed 's/^/  | /'
-    [ "$(domstate)" = "shut off" ] || finish needs-owner 30 "the start failed and the VM is '$(domstate)'; nothing more was done"
+    [ "$rc" = 1 ] || start_failed "$rc" "the start with the change failed"
     [ "$target" = present ] && remove_ours_and_start "the VM did not start with the GPU"
-    start_vm "second try" || finish left-off 30 "the VM did not start after removing the GPU and is '$(domstate)'; start it from the VM page"
+    sleep "$START_RETRY_DELAY"; start_vm "second try"; rc=$?
+    [ "$rc" = 0 ] || start_failed "$rc" "the VM did not start after removing the GPU"
   fi
   release_fleet_lock
   verify_running "$want"

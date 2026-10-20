@@ -1,6 +1,6 @@
 # RTX 3090 for factory-worker
 
-**Status (2026-10-19): R1 corrections prepared and offline-tested only.** No host file, VM definition, guest package, driver, service or browser setting has been changed, and no `ask` was submitted. Author: Opus 5.5/high (`claude-opus-5-5`, effort high), worktree `t3/enable-3090-gpu`. Round 1 (`e1a85c2`) was reviewed by Sol 6.1/xhigh with **REQUEST CHANGES**; [R1-FIX.md](R1-FIX.md) maps every finding to its correction and checks. Next: root inspection, a fresh Sol review of the whole bundle, then byte-identical placement in Fleet and the native-gated steps below. Nothing here shows a working GPU.
+**Status (2026-10-19): R1 corrections prepared and offline-tested only.** No host file, VM definition, guest package, driver, service or browser setting has been changed, and no `ask` was submitted. Author: Opus 5.5/high (`claude-opus-5-5`, effort high), worktree `t3/enable-3090-gpu`. Round 1 (`e1a85c2`) and round 2 (`c4d5191`) were reviewed by Sol 6.1/xhigh with **REQUEST CHANGES**; [R1-FIX.md](R1-FIX.md) and [R2-FIX.md](R2-FIX.md) map every finding to its correction and checks. Next: root inspection, a fresh Sol review of the whole bundle, then byte-identical placement in Fleet and the native-gated steps below. Nothing here shows a working GPU.
 
 ## What the GPU is for
 
@@ -78,10 +78,11 @@ The full backup with security info is `/boot/config/fleet/vm-backups/factory-wor
 | `rolled-back` | 20 | running without the change; definition as before, or the message names a remaining non-GPU difference |
 | `backed-off`, `restarted-elsewhere` | 21 | running, **nothing changed**: after the shutdown the definition, the card or another VM's ownership no longer matched, or someone started the VM |
 | `guest-silent`, `started-unverified` | 22 | running, but the guest agent is silent, or the live entries are wrong or unreadable |
-| `left-off`, `needs-owner` | 30 | **off**: a recovery start failed, or our entries could not be removed or confirmed; the message gives the state and what to do |
+| `left-off` | 30 | **observed shut off**: a start failed and the VM was then read as shut off; start it from the VM page |
+| `needs-owner` | 30 | **not started by the run**: after the shutdown the state or definition could not be read, or its hostdev entries were not the expected ones, or the state after a failed start is unreadable or unusual; the message gives what was observed |
 | `aborted` | 31 | launch again; the plan follows the VM's current state |
 
-Any recovery start that fails is `left-off`, never a started outcome. The plan always comes from the current state: running without the GPU → full; off without → attach and start; off with ours → start only; running with ours → nothing. Any other hostdev (including non-PCI) is refused; `detach` removes only our two entries.
+A recovery start happens only after a successful read of a shut-off state and a complete definition whose hostdev entries are exactly the expected ones; otherwise the VM stays off as `needs-owner`. After any failed start the run reads the state: running (for example a lost response after boot) counts as started and is not started again; shut off is `left-off`; unreadable or other is `needs-owner`. The plan always comes from the current state: running without the GPU → full; off without → attach and start; off with ours → start only; running with ours → nothing. Any other hostdev (including non-PCI) is refused; `detach` removes only our two entries.
 
 ## Procedure (root; native approval where marked)
 
@@ -100,7 +101,7 @@ U=/mnt/user/appdata/fleet-gpu; B=<placed bundle directory>; SRC=<game source com
    This is also the read-only host diagnostic. `ask-command.sh preflight` gives the checks synchronously if only facts are needed.
 3. **Guest driver** (guest-local, no reboot):
    - `bash $B/worker-gpu.sh install` simulates against the real archive in a private apt directory. It must show 38 new packages and no removal, upgrade, kernel, Xorg or CUDA.
-   - `bash $B/worker-gpu.sh install --apply` refuses a pre-existing `/etc/apt/sources.list.d/siltwake-gpu-nonfree.sources` it did not write. It records the system first (`/var/lib/siltwake-gpu/before.tsv`, manual marks), then checks the real plan the same way before installing. It records every plan and the result, and exits 1 on any apt or verification failure. A failed install is retried with the same command; the first attempt's record is kept.
+   - `bash $B/worker-gpu.sh install --apply` refuses a pre-existing `/etc/apt/sources.list.d/siltwake-gpu-nonfree.sources` it did not write. It records the system first (`/var/lib/siltwake-gpu/before.tsv`, manual marks), then checks the real plan the same way before installing. It records every plan and the result, and exits 1 on any apt or verification failure. A failed install is retried with the same command; the first attempt's record is kept. On a retry, packages dpkg left pending (for example `nvidia-kernel-dkms` half-configured `iF` after a failed DKMS build) are accepted only at their exact version and only for apt's `Conf` repair; upgrades and removals are still refused, and the install passes only once everything is configured (`ii`) and the module is built.
 4. **Checkpoint:** root's durable checkpoint of active work, repositories, worktrees and evidence; nothing that cannot pause. `bash $B/worker-gpu.sh check pre` must end `all checks pass` (exit 0).
 5. **Attach** (approval 2): `$H "ask run $(bash $B/ask-command.sh attach)"`, submitted only when the owner can approve within 30 minutes. A 60 s arm window follows (`echo cancel | $H files write $U/runs/<RUN_ID>/CANCEL`). Then Fleet's lock is taken and held to the start. Expect T3 and the worker to be gone for about 1–3 minutes.
 6. **After boot** (new root session):

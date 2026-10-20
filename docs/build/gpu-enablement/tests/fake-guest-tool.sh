@@ -10,12 +10,17 @@
 # modules_built (modinfo answers for any kernel). Knobs: dpkg_fail, aptmark_fail,
 # update_fail, sim_extra (extra plan lines), install_partial N, install_fail,
 # install_also (a package someone else installs meanwhile), purge_extra, journal_fail,
-# lsmod_fail, curl_fail, lspci_fail.
+# lsmod_fail, curl_fail, lspci_fail, config_fail PKG (PKG unpacks but its configuration
+# fails: dpkg leaves it "iF" and apt exits 100, as a failed DKMS build does).
+# Packages not "ii " in db.tsv are pending: a plan configures them with real apt's
+# "Conf pkg (version  [amd64])" line, and an install repairs them.
 GF="${GF:-/tmp/guest-fake}"
 me="$(basename "$0")"
 echo "$me $*" >> "$GF/calls.log"
 has() { [ -f "$GF/$1" ]; }
 ver_of() { awk -F'\t' -v p="$1" '$1 == p {print $2}' "$GF/db.tsv"; }
+status_of() { awk -F'\t' -v p="$1" '$1 == p {print $3}' "$GF/db.tsv"; }
+set_status() { awk -F'\t' -v OFS='\t' -v p="$1" -v s="$2" '$1 == p {$3 = s} {print}' "$GF/db.tsv" > "$GF/db.new" && mv "$GF/db.new" "$GF/db.tsv"; }
 
 # The plan for "install PKGS": every requested package not installed, plus deps.txt, plus sim_extra.
 plan_for() {
@@ -23,6 +28,7 @@ plan_for() {
   for p in "$@"; do [ -n "$(ver_of "$p")" ] || echo "Inst $p (1.0-1 Debian:13.7/stable [amd64])"; done
   [ -f "$GF/deps.txt" ] && while read -r p; do [ -n "$p" ] && [ -z "$(ver_of "$p")" ] && echo "Inst $p (1.0-1 Debian:13.7/stable [amd64])"; done < "$GF/deps.txt"
   [ -f "$GF/sim_extra" ] && cat "$GF/sim_extra"
+  awk -F'\t' '$3 != "ii " {printf "Conf %s (%s  [amd64])\n", $1, $2}' "$GF/db.tsv"
   return 0
 }
 
@@ -37,10 +43,16 @@ case "$me" in
         if [ -n "$sim" ]; then plan_for "${args[@]}"; exit 0; fi
         n=0; limit="$(cat "$GF/install_partial" 2>/dev/null)"
         has install_also && printf '%s\t9.9\tii \n' "$(cat "$GF/install_also")" >> "$GF/db.tsv"
+        cfail="$(cat "$GF/config_fail" 2>/dev/null)"
         while read -r _ p _; do
           [ -n "$limit" ] && [ "$n" -ge "$limit" ] && { echo "E: Sub-process /usr/bin/dpkg returned an error code (1)" >&2; exit 100; }
           printf '%s\t1.0-1\tii \n' "$p" >> "$GF/db.tsv"; n=$((n + 1))
         done < <(plan_for "${args[@]}" | grep '^Inst ')
+        for p in $(awk -F'\t' '$3 != "ii " {print $1}' "$GF/db.tsv"); do [ "$p" = "$cfail" ] || set_status "$p" "ii "; done
+        if [ -n "$cfail" ] && [ -n "$(ver_of "$cfail")" ]; then
+          set_status "$cfail" "iF "; echo "Error! Bad return status for module build on kernel" >&2
+          echo "E: Sub-process /usr/bin/dpkg returned an error code (1)" >&2; exit 100
+        fi
         has install_fail && { echo "E: post-install failed" >&2; exit 100; }
         exit 0 ;;
       purge)
@@ -54,7 +66,7 @@ case "$me" in
     has dpkg_fail && { echo "dpkg-query: error" >&2; exit 2; }
     fmt=""; pkg=""
     for a in "$@"; do case "$a" in -W) ;; -f=*) fmt="${a#-f=}" ;; *) pkg="$a" ;; esac; done
-    if [ -n "$pkg" ]; then v="$(ver_of "$pkg")"; [ -n "$v" ] || exit 1; printf 'ii \t%s' "$v"
+    if [ -n "$pkg" ]; then v="$(ver_of "$pkg")"; [ -n "$v" ] || exit 1; printf '%s\t%s' "$(status_of "$pkg")" "$v"
     else cat "$GF/db.tsv"; fi ;;
   journalctl) has journal_fail && { echo "Failed to get journal access" >&2; exit 1; }; cat "$GF/journal.txt" ;;
   lsmod) has lsmod_fail && exit 1; cat "$GF/lsmod.txt" ;;

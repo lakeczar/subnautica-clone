@@ -62,6 +62,10 @@ plan_has() { awk -v p="$2" '$1 == "Inst" && $2 == p {f = 1} END {exit !f}' <<<"$
 tsv_has() { awk -F'\t' -v p="$1" -v v="${3:-}" '$1 == p && (v == "" || $2 == v) {f = 1} END {exit !f}' "$2"; }  # <pkg> <file> [version]
 line_has() { awk -v p="$1" '$0 == p {f = 1} END {exit !f}' "$2"; }                              # <line> <file>
 installed_version() { dpkg-query -W -f='${db:Status-Abbrev}\t${Version}' "$1" 2>/dev/null | awk -F'\t' '$1 ~ /^ii/ {print $2}'; }
+# A package dpkg holds as pending (unpacked, half-configured, half-installed, awaiting
+# triggers: iU iF iH iW it), e.g. after a failed DKMS build: "<status> <version>".
+pending_status() { dpkg-query -W -f='${db:Status-Abbrev}\t${Version}' "$1" 2>/dev/null | awk -F'\t' '$1 ~ /^i[UFHWt]/ {sub(/ +$/, "", $1); print $1, $2}'; }
+present_version() { local v; v="$(installed_version "$1")"; [ -n "$v" ] || v="$(pending_status "$1" | cut -d' ' -f2)"; printf '%s' "$v"; }
 
 driver_installed() {
   local p missing="" mods newest
@@ -156,18 +160,27 @@ EOF
 }
 
 # plan_check <apt simulation>: refuses removals, upgrades, and kernel/Xorg/CUDA packages,
-# and requires every requested package to be installed by it or already. Prints the new packages.
+# and requires every requested package to be installed by it, already installed, or pending
+# at a version the plan only configures. Every "Conf" line must configure a package this plan
+# installs or one pending at exactly that version (the repair of a failed configuration).
 plan_check() {
-  local plan="$1" bad=0 p
+  local plan="$1" bad=0 p v pend conf_bad="" repaired=""
   grep -qE '^(Remv|Purg) ' <<<"$plan" && { fail "the apt plan removes packages: $(grep -E '^(Remv|Purg) ' <<<"$plan" | awk '{print $2}' | paste -sd' ' -)"; bad=1; }
   grep -qE '^Inst [^ ]+ \[' <<<"$plan" && { fail "the apt plan upgrades installed packages: $(grep -E '^Inst [^ ]+ \[' <<<"$plan" | awk '{print $2}' | paste -sd' ' -)"; bad=1; }
   grep -qE '^Inst (linux-image|xserver|xorg|[^ ]*cuda)' <<<"$plan" && { fail "the apt plan pulls a kernel, Xorg or CUDA: $(grep -E '^Inst (linux-image|xserver|xorg|[^ ]*cuda)' <<<"$plan" | awk '{print $2}' | paste -sd' ' -)"; bad=1; }
+  while read -r _ p v; do
+    v="${v#(}"; v="${v%% *}"
+    plan_has "$plan" "$p" && continue
+    pend="$(pending_status "$p")"
+    if [ -n "$pend" ] && [ "${pend#* }" = "$v" ]; then repaired="$repaired $p(${pend% *})"; else conf_bad="$conf_bad $p"; fi
+  done < <(grep -E '^Conf ' <<<"$plan")
+  [ -z "$conf_bad" ] || { fail "the apt plan configures packages it does not install and that are not pending at that version:$conf_bad"; bad=1; }
   for p in $PACKAGES; do
-    plan_has "$plan" "$p" || [ -n "$(installed_version "$p")" ] || { fail "the apt plan does not install $p"; bad=1; }
+    plan_has "$plan" "$p" || [ -n "$(installed_version "$p")" ] || [[ " $repaired " == *" $p("* ]] || { fail "the apt plan does not install $p"; bad=1; }
   done
   [ "$bad" = 0 ] || return 1
   NEW_PKGS="$(grep -E '^Inst [^ ]+ \(' <<<"$plan" | awk '{print $2}' | sort)"
-  pass "apt plan: $(grep -c '^Inst ' <<<"$plan") new packages, nothing removed or upgraded, no kernel/Xorg/CUDA"
+  pass "apt plan: $(grep -c '^Inst ' <<<"$plan") new packages, nothing removed or upgraded, no kernel/Xorg/CUDA${repaired:+; completes pending:$repaired}"
 }
 
 # Root-owned transaction records. Every write is checked.
@@ -235,15 +248,16 @@ cmd_install() {
 # attempt, and still installed at the version our install left. The removal is simulated; it
 # is refused if apt would also remove anything else.
 cmd_undo_plan() {
-  local ours="" p v after plan extra notours="" changed=""
+  local ours="" p v after plan extra notours="" changed="" pend
   [ -s "$STATE_DIR/before.tsv" ] && [ -s "$STATE_DIR/planned.txt" ] || { fail "no recorded install in $STATE_DIR; nothing to undo"; return 1; }
   after="$(ls "$STATE_DIR"/after-*.tsv 2>/dev/null | sort | tail -1)"
   [ -n "$after" ] || { fail "no after-*.tsv record; the install never reached apt"; return 1; }
   while IFS= read -r p; do
     [ -n "$p" ] || continue
     tsv_has "$p" "$STATE_DIR/before.tsv" && continue
-    v="$(installed_version "$p")"; [ -n "$v" ] || continue
+    v="$(present_version "$p")"; [ -n "$v" ] || continue
     if tsv_has "$p" "$after" "$v"; then ours="$ours $p"; else changed="$changed $p"; fi
+    pend="$(pending_status "$p")"; [ -z "$pend" ] || warn "pending: $p (${pend% *}): not fully configured; included in the removal below"
   done < "$STATE_DIR/planned.txt"
   while IFS=$'\t' read -r p v _; do
     tsv_has "$p" "$STATE_DIR/before.tsv" || line_has "$p" "$STATE_DIR/planned.txt" || notours="$notours $p"

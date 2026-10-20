@@ -309,6 +309,30 @@ is "definition changed and the restart fails: reported left off (exit 30), not s
 reset_fake; put on_shutoff_cmd "echo running > '$S/vm-Windows 11 Gaming.state'; echo always > $S/start_fail"; launch attach
 is "conflict and the restart fails: reported left off (exit 30)" [ "$(outcome)/$(code)" = left-off/30 ]
 
+echo "== R2-01: an unreadable state or definition after the shutdown never authorizes a start"
+reset_fake; put on_shutoff_cmd "touch $S/fail_inactive_xml"; launch attach
+is "definition unreadable after the shutdown: needs-owner, exit 30, VM left off" eval '[ "$(outcome)/$(code)" = needs-owner/30 ] && [ "$(state)" = "shut off" ]'
+is "definition unreadable after the shutdown: never started" not_called 'virsh start '
+reset_fake; put on_shutoff_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml; touch $S/fail_inactive_xml"; launch attach
+is "definition changed and unreadable: needs-owner, VM left off, never started, edit kept" eval '[ "$(outcome)/$(code)" = needs-owner/30 ] && [ "$(state)" = "shut off" ] && not_called "virsh start " && grep -q 52:54:00:aa:bb:cc "$S/cfg.xml"'
+# Seen shut off, read again by the transition, then the boundary check's state read fails.
+reset_fake; put fail_state_on_read 3; launch attach
+is "state unreadable at the check after the shutdown: needs-owner, never started" eval '[ "$(outcome)/$(code)" = needs-owner/30 ] && not_called "virsh start "'
+reset_fake; put on_shutoff_cmd "sed -i \"s#^    <watchdog #    <hostdev mode='subsystem' type='usb' managed='yes'>\\n      <source>\\n        <vendor id='0x1234'/>\\n      </source>\\n    </hostdev>\\n&#\" $S/cfg.xml"; launch attach
+is "someone adds a hostdev during the shutdown: needs-owner, not started with it" eval '[ "$(outcome)/$(code)" = needs-owner/30 ] && [ "$(state)" = "shut off" ] && not_called "virsh start "'
+reset_fake; put on_shutoff_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml"; launch attach
+is "readable external edit still recovers: backed-off, running, edit kept" eval '[ "$(outcome)/$(code)/$(state)" = backed-off/21/running ] && grep -q 52:54:00:aa:bb:cc "$S/cfg.xml"'
+
+echo "== R2-03: a failed start is judged by the VM's observed state"
+reset_fake; touch "$S/start_response_lost"; put on_shutoff_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml"; launch attach
+is "recovery start's response lost after boot: not left-off; running; one start" eval '[ "$(outcome)/$(code)/$(state)" = backed-off/21/running ] && [ "$(grep -c "virsh start " "$S/calls.log")" = 1 ]'
+reset_fake; touch "$S/start_response_lost"; launch attach
+is "main start's response lost after boot: attached, verified, one start" eval '[ "$(outcome)/$(code)/$(state)" = attached/0/running ] && [ "$(grep -c "virsh start " "$S/calls.log")" = 1 ]'
+reset_fake; put start_fail always; put on_start_fail_cmd "touch $S/fail_state"; put on_shutoff_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml"; launch attach
+is "start fails and the state is then unknown: needs-owner saying so, not left-off" eval '[ "$(outcome)/$(code)" = needs-owner/30 ] && grep -q "cannot be read" "$RD/result.json"'
+reset_fake; put start_fail always; put on_shutoff_cmd "sed -i 's/52:54:00:26:c2:c7/52:54:00:aa:bb:cc/' $S/cfg.xml"; launch attach
+is "start fails and the VM is observed shut off: left-off" eval '[ "$(outcome)/$(code)/$(state)" = "left-off/30/shut off" ]'
+
 echo
 echo "passed $pass"
 echo "failed $fail"

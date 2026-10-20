@@ -12,6 +12,8 @@
 # Failed or broken reads (R1-01/R1-03): fail_list, fail_peer_xml, fail_peer_state, fail_live_xml,
 # fail_inactive_xml, truncated_backup (security-info read prints "<domain>" and fails),
 # backup_differs (security-info read succeeds with an extra element).
+# R2: start_response_lost (start boots the VM, then reports failure), fail_state (the worker's
+# state read fails), fail_state_on_read N (while off, the Nth state read and all later ones fail).
 # Hooks: on_start_cmd (script run after a successful start), on_start_fail_cmd (after a failed
 # start), on_attach_cmd (after an attach).
 S="${S:-/tmp/gpu-fake}"
@@ -59,7 +61,11 @@ case "$verb" in
       n=$(( $(get restart_on_read) - 1 )); echo "$n" > "$S/restart_on_read"
       [ "$n" -le 0 ] && { echo running > "$S/state"; make_live; rm -f "$S/restart_on_read"; }
     fi
-    if me; then get state
+    if me && [ "$(get state)" = "shut off" ] && [ -f "$S/fail_state_on_read" ]; then
+      n=$(( $(get fail_state_on_read) - 1 )); echo "$n" > "$S/fail_state_on_read"
+      [ "$n" -le 0 ] && { touch "$S/fail_state"; rm -f "$S/fail_state_on_read"; }
+    fi
+    if me; then [ -f "$S/fail_state" ] && { echo "error: cannot read state" >&2; exit 1; }; get state
     else [ -f "$S/fail_peer_state" ] && { echo "error: cannot read state" >&2; exit 1; }
       [ -f "$S/vm-$dom.state" ] && cat "$S/vm-$dom.state" || { echo "error: no domain" >&2; exit 1; }; fi ;;
   dumpxml)
@@ -97,6 +103,7 @@ case "$verb" in
     esac
     echo running > "$S/state"; make_live; meminfo
     [ -f "$S/on_start_cmd" ] && bash "$S/on_start_cmd"
+    [ -f "$S/start_response_lost" ] && { echo "error: response lost after boot" >&2; exit 1; }
     echo "Domain '$NAME' started" ;;
   attach-device|detach-device)
     me || forbid
