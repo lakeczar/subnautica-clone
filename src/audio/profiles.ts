@@ -49,7 +49,7 @@ export const REGION_AMBIENCE: Readonly<Record<RegionId, AmbienceProfile>> = {
   },
   silt_basin: {
     label: "Pale Basin · muffled bowl, fallen dishes",
-    bed: { color: "brown", cutoff: 420, level: -30 },
+    bed: { color: "brown", cutoff: 420, level: -32 },
     swell: { rate: 0.04, depth: 0.25 },
     drone: { hz: [65.4, 98.1], level: -42, wave: "sine" },
     details: [{ kind: "silt", perMinute: 6, level: -36 }, { kind: "dish", perMinute: 2, level: -33 }],
@@ -57,9 +57,9 @@ export const REGION_AMBIENCE: Readonly<Record<RegionId, AmbienceProfile>> = {
   },
   thermal_rift: {
     label: "Ember Rift · rumbling chimneys, vent bursts",
-    bed: { color: "brown", cutoff: 260, level: -27 },
+    bed: { color: "brown", cutoff: 260, level: -30 },
     swell: { rate: 0.05, depth: 0.4 },
-    drone: { hz: [41.2, 82.4], level: -38, wave: "sine" },
+    drone: { hz: [41.2, 82.4], level: -41, wave: "sine" },
     details: [{ kind: "vent", perMinute: 8, level: -32 }, { kind: "groan", perMinute: 4, level: -34 }],
     wet: 0.4,
   },
@@ -94,7 +94,7 @@ export const SURFACE_AMBIENCE: AmbienceProfile = {
 /** Warm refuge bed: D add9 on soft triangles with a slow tremolo, plus ventilation. */
 export const REFUGE_BED = {
   chord: [146.8, 220, 329.6] as readonly number[],
-  level: -34,
+  level: -32,
   tremolo: 0.22,
   vent: { cutoff: 380, level: -40 },
   /** Outside ambience heard through the hull. */
@@ -133,7 +133,7 @@ export const HULL_LAYERS: Readonly<Record<HullId, HullLayer>> = {
     wash: { idle: 700, full: 2200, q: 1.2, level: -34 },
     hum: { hz: 220, level: -44 },
     flutter: { rate: 0, depth: 0 },
-    boostWhine: { from: 520, to: 880, level: -33 },
+    boostWhine: { from: 520, to: 880, level: -24 },
   },
   creel: {
     label: "Creel · workboat drone, mechanical clatter",

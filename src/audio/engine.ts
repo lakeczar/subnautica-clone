@@ -27,6 +27,8 @@ export interface EngineStats {
   pending: number;
   /** Nodes this engine currently holds, including continuous layers. */
   liveNodes: number;
+  /** Of those, nodes held by sounding or fading one-shot voices. */
+  voiceNodes: number;
   ambience: string | null;
   hull: string | null;
 }
@@ -91,6 +93,11 @@ export class AudioEngine {
   setVolume(v: number): void {
     if (this.disposed) return;
     this.volume.gain.setTargetAtTime(Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0)), this.ctx.currentTime, 0.025);
+  }
+
+  /** Static bus trim, for measurement solos in the audio lab. */
+  setBusTrim(bus: Bus, gain: number): void {
+    if (!this.disposed) this.buses[bus].gain.value = gain;
   }
 
   update(scene: AudioScene): void {
@@ -246,12 +253,14 @@ export class AudioEngine {
     let liveNodes = this.fixed.length + this.depth.nodeCount + this.refuge.nodeCount + this.threat.nodeCount + this.bobbin.nodeCount
       + (this.ambience?.nodeCount ?? 0) + (this.hull?.nodeCount ?? 0);
     for (const r of this.retiring) liveNodes += r.nodeCount;
-    for (const b of this.built.values()) liveNodes += b.nodes.length;
-    for (const r of this.releasing) liveNodes += r.b.nodes.length;
+    let voiceNodes = 0;
+    for (const b of this.built.values()) voiceNodes += b.nodes.length;
+    for (const r of this.releasing) voiceNodes += r.b.nodes.length;
+    liveNodes += voiceNodes;
     return {
       voices: this.allocator.count(), bus, peakVoices: s.peak, peakBus: { ...s.peakBus },
       started: s.started, merged: s.merged, masked: s.masked, full: s.full, deferred: s.deferred, stolen: s.stolen,
-      pending: this.pending.length, liveNodes, ambience: this.ambience?.key ?? null, hull: this.hull?.key ?? null,
+      pending: this.pending.length, liveNodes, voiceNodes, ambience: this.ambience?.key ?? null, hull: this.hull?.key ?? null,
     };
   }
 

@@ -64,7 +64,8 @@ export interface CueSpec {
   /** 1 action feedback · 2 transitions and music · 3 warnings · 4 contact and
    * creature calls · 5 critical outcomes · 6 the ending. Higher steals lower. */
   priority: number;
-  /** Peak level in dBFS at full volume before the master limiter. */
+  /** Voice trim in dB at full volume, calibrated in tools/audio-lab.html so the
+   * measured loudness lands in its class target (docs/build/streams/S6.md). */
   level: number;
   /** Minimum seconds between starts of the same cue key; later requests merge. */
   cooldown: number;
@@ -90,7 +91,7 @@ const D4 = 62, A4 = 69, G4 = 67, E4 = 64, F4 = 65, C5 = 72, D5 = 74, B3 = 59, A3
 
 export const CUES: Readonly<Record<CueId, CueSpec>> = {
   "action.collect": {
-    bus: "sfx", priority: 1, level: -18, cooldown: 0.08, maxInstances: 2, spatial: false,
+    bus: "sfx", priority: 1, level: -12, cooldown: 0.08, maxInstances: 2, spatial: false,
     caption: null, essential: false, wet: 0.15,
     sound: [
       t({ wave: "sine", freq: 880, to: 660, glide: 0.09, at: 0, dur: 0.22, attack: 0.004, gain: 0.7 }),
@@ -99,7 +100,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "action.craft": {
-    bus: "sfx", priority: 1, level: -17, cooldown: 0.3, maxInstances: 1, spatial: false,
+    bus: "sfx", priority: 1, level: -15, cooldown: 0.3, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.2,
     sound: [
       n({ color: "pink", filter: "bandpass", freq: 600, to: 1800, q: 3, at: 0, dur: 0.45, attack: 0.05, gain: 0.35 }),
@@ -109,7 +110,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "action.scan": {
-    bus: "sfx", priority: 1, level: -16, cooldown: 0.25, maxInstances: 1, spatial: false,
+    bus: "sfx", priority: 1, level: -19, cooldown: 0.25, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.5,
     sound: [
       t({ wave: "sine", freq: 620, to: 1450, glide: 0.32, at: 0, dur: 0.7, attack: 0.01, hold: 0.25, gain: 0.6, fm: { ratio: 3.01, index: 0.4, indexTo: 0 } }),
@@ -117,12 +118,12 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "action.panel": {
-    bus: "sfx", priority: 1, level: -26, cooldown: 0.1, maxInstances: 1, spatial: false,
+    bus: "sfx", priority: 1, level: 0, cooldown: 0.1, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0,
     sound: [n({ color: "white", filter: "bandpass", freq: 2200, q: 4, at: 0, dur: 0.035, attack: 0.001, gain: 1 })],
   },
   "action.refused": {
-    bus: "sfx", priority: 1, level: -20, cooldown: 0.4, maxInstances: 1, spatial: false,
+    bus: "sfx", priority: 1, level: -12, cooldown: 0.4, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.05,
     sound: [
       t({ wave: "triangle", freq: 196, at: 0, dur: 0.12, attack: 0.004, gain: 0.7, lowpass: 900 }),
@@ -138,7 +139,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "opening.pod": {
-    bus: "sfx", priority: 2, level: -17, cooldown: 1, maxInstances: 1, spatial: false,
+    bus: "sfx", priority: 2, level: -19, cooldown: 1, maxInstances: 1, spatial: false,
     caption: "[Pod systems hum awake]", essential: false, wet: 0.25,
     sound: [
       t({ wave: "sine", freq: 55, to: 110, glide: 1.1, at: 0, dur: 1.6, attack: 0.3, hold: 0.6, gain: 0.7 }),
@@ -156,7 +157,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "alert.oxygen": {
-    bus: "alert", priority: 3, level: -12, cooldown: 1.2, maxInstances: 1, spatial: false,
+    bus: "alert", priority: 3, level: -9, cooldown: 1.2, maxInstances: 1, spatial: false,
     caption: "[Low-air tone]", essential: true, wet: 0.05,
     sound: [
       t({ wave: "triangle", freq: 440, to: 523, glide: 0.12, at: 0, dur: 0.24, attack: 0.008, hold: 0.08, gain: 0.6, lowpass: 2400 }),
@@ -165,7 +166,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "alert.food": {
-    bus: "alert", priority: 3, level: -15, cooldown: 1.2, maxInstances: 1, spatial: false,
+    bus: "alert", priority: 3, level: -8, cooldown: 1.2, maxInstances: 1, spatial: false,
     caption: "[Food reserve tone]", essential: true, wet: 0.1,
     sound: [
       t({ wave: "sine", freq: 293.7, at: 0, dur: 0.35, attack: 0.01, gain: 0.6 }),
@@ -173,7 +174,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "alert.pressure": {
-    bus: "alert", priority: 3, level: -13, cooldown: 1.2, maxInstances: 1, spatial: false,
+    bus: "alert", priority: 3, level: -5, cooldown: 1.2, maxInstances: 1, spatial: false,
     caption: "[Suit pressure tone · beyond rated depth]", essential: true, wet: 0.1,
     sound: [
       t({ wave: "square", freq: 98, at: 0, dur: 0.2, attack: 0.01, gain: 0.5, lowpass: 600 }),
@@ -183,7 +184,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "alert.power": {
-    bus: "alert", priority: 3, level: -13, cooldown: 1.2, maxInstances: 1, spatial: false,
+    bus: "alert", priority: 3, level: -3, cooldown: 1.2, maxInstances: 1, spatial: false,
     caption: "[Low-power chime]", essential: true, wet: 0.1,
     sound: [
       t({ wave: "triangle", freq: 784, at: 0, dur: 0.14, attack: 0.004, gain: 0.5 }),
@@ -192,17 +193,20 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "alert.hull-stress": {
-    bus: "alert", priority: 3, level: -12, cooldown: 1.5, maxInstances: 1, spatial: false,
+    bus: "alert", priority: 3, level: -7, cooldown: 1.5, maxInstances: 1, spatial: false,
     caption: "[Hull creaks · near rated depth]", essential: true, wet: 0.3,
     sound: [
       n({ color: "white", filter: "bandpass", freq: 340, to: 170, q: 22, at: 0, dur: 1.1, attack: 0.15, hold: 0.3, gain: 1 }),
       n({ color: "brown", filter: "lowpass", freq: 160, q: 1, at: 0, dur: 0.9, attack: 0.2, gain: 0.4 }),
       t({ wave: "sine", freq: 72, to: 64, at: 0.1, dur: 1, attack: 0.2, gain: 0.3 }),
       n({ color: "white", filter: "bandpass", freq: 2600, q: 8, at: 0.55, dur: 0.06, attack: 0.002, gain: 0.25 }),
+      // Stress bands: a mid-range pair that stays legible over engine and rift rumble.
+      t({ wave: "triangle", freq: 523, to: 494, at: 0.05, dur: 0.32, attack: 0.01, hold: 0.1, gain: 0.35, lowpass: 2200 }),
+      t({ wave: "triangle", freq: 523, to: 466, at: 0.5, dur: 0.42, attack: 0.01, hold: 0.12, gain: 0.35, lowpass: 2200 }),
     ],
   },
   "alert.body": {
-    bus: "alert", priority: 3, level: -13, cooldown: 1.2, maxInstances: 1, spatial: false,
+    bus: "alert", priority: 3, level: -4, cooldown: 1.2, maxInstances: 1, spatial: false,
     caption: "[Warning tone]", essential: true, wet: 0.05,
     sound: [
       t({ wave: "triangle", freq: 280, at: 0, dur: 0.25, attack: 0.02, gain: 0.6 }),
@@ -210,7 +214,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "alert.threat-call": {
-    bus: "alert", priority: 4, level: -10, cooldown: 1.2, maxInstances: 1, spatial: true,
+    bus: "alert", priority: 4, level: -6, cooldown: 1.2, maxInstances: 1, spatial: true,
     caption: "[Paired hunter calls, {dir}]", essential: true, wet: 0.45,
     sound: [
       t({ wave: "sine", freq: 150, to: 112, glide: 0.32, at: 0, dur: 0.36, attack: 0.03, hold: 0.1, gain: 0.7, fm: { ratio: 1.51, index: 2.4, indexTo: 0.6 } }),
@@ -237,16 +241,18 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "hit.damage": {
-    bus: "alert", priority: 4, level: -12, cooldown: 0.4, maxInstances: 1, spatial: true,
+    bus: "alert", priority: 4, level: -1.5, cooldown: 0.4, maxInstances: 1, spatial: true,
     caption: "[Bite · taking damage]", essential: true, wet: 0.2,
     sound: [
       t({ wave: "sawtooth", freq: 66, to: 48, at: 0, dur: 0.32, attack: 0.004, gain: 0.6, lowpass: 520 }),
       n({ color: "white", filter: "bandpass", freq: 900, to: 400, q: 2, at: 0, dur: 0.18, attack: 0.002, gain: 0.6 }),
       n({ color: "brown", filter: "lowpass", freq: 500, q: 0.7, at: 0.02, dur: 0.3, attack: 0.004, gain: 0.5 }),
+      n({ color: "white", filter: "bandpass", freq: 1300, to: 600, q: 1.5, at: 0, dur: 0.24, attack: 0.002, hold: 0.04, gain: 0.6 }),
+      t({ wave: "triangle", freq: 440, to: 311, at: 0.01, dur: 0.3, attack: 0.003, hold: 0.05, gain: 0.35, lowpass: 1800 }),
     ],
   },
   "hull.failure": {
-    bus: "alert", priority: 5, level: -12, cooldown: 4, maxInstances: 1, spatial: false,
+    bus: "alert", priority: 5, level: -14, cooldown: 4, maxInstances: 1, spatial: false,
     caption: "[Hull systems powering down]", essential: true, wet: 0.35,
     sound: [
       t({ wave: "sawtooth", freq: 220, to: 38, at: 0, dur: 1.7, attack: 0.01, hold: 0.3, gain: 0.45, lowpass: 900 }),
@@ -255,7 +261,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "transition.submerge": {
-    bus: "sfx", priority: 2, level: -17, cooldown: 0.6, maxInstances: 1, spatial: false,
+    bus: "sfx", priority: 2, level: -4, cooldown: 0.6, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.2,
     sound: [
       n({ color: "white", filter: "bandpass", freq: 1500, to: 380, q: 1.5, at: 0, dur: 0.5, attack: 0.005, gain: 0.7 }),
@@ -265,15 +271,15 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "transition.surface": {
-    bus: "sfx", priority: 2, level: -18, cooldown: 0.6, maxInstances: 1, spatial: false,
+    bus: "sfx", priority: 2, level: -1, cooldown: 0.6, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.05,
     sound: [
-      n({ color: "white", filter: "highpass", freq: 1200, to: 3000, q: 0.7, at: 0, dur: 0.35, attack: 0.004, gain: 0.5 }),
+      n({ color: "white", filter: "bandpass", freq: 1800, to: 3200, q: 0.8, at: 0, dur: 0.35, attack: 0.004, gain: 0.5 }),
       n({ color: "pink", filter: "bandpass", freq: 700, q: 1, at: 0.04, dur: 0.4, attack: 0.02, gain: 0.35 }),
     ],
   },
   "transition.board": {
-    bus: "sfx", priority: 2, level: -16, cooldown: 0.6, maxInstances: 1, spatial: false,
+    bus: "sfx", priority: 2, level: -9, cooldown: 0.6, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.15,
     sound: [
       t({ wave: "sine", freq: 90, to: 60, glide: 0.08, at: 0, dur: 0.18, attack: 0.002, gain: 0.8 }),
@@ -282,7 +288,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "transition.disembark": {
-    bus: "sfx", priority: 2, level: -17, cooldown: 0.6, maxInstances: 1, spatial: false,
+    bus: "sfx", priority: 2, level: -11, cooldown: 0.6, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.15,
     sound: [
       n({ color: "white", filter: "highpass", freq: 1800, to: 3500, q: 0.7, at: 0, dur: 0.45, attack: 0.02, gain: 0.25 }),
@@ -291,7 +297,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "transition.interior": {
-    bus: "sfx", priority: 2, level: -19, cooldown: 0.6, maxInstances: 1, spatial: false,
+    bus: "sfx", priority: 2, level: -8, cooldown: 0.6, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.1,
     sound: [
       n({ color: "pink", filter: "bandpass", freq: 500, to: 1400, q: 2, at: 0, dur: 0.4, attack: 0.05, gain: 0.5 }),
@@ -324,7 +330,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     ],
   },
   "music.discovery": {
-    bus: "music", priority: 2, level: -16, cooldown: 8, maxInstances: 1, spatial: false,
+    bus: "music", priority: 2, level: -21, cooldown: 8, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.45,
     sound: {
       kind: "phrase", beat: 0.42,
@@ -336,12 +342,12 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     },
   },
   "music.blueprint": {
-    bus: "music", priority: 2, level: -18, cooldown: 4, maxInstances: 1, spatial: false,
+    bus: "music", priority: 2, level: -21, cooldown: 4, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.4,
     sound: { kind: "phrase", beat: 0.3, notes: [{ at: 0, midi: D4, beats: 1, gain: 0.8 }, { at: 1, midi: A4, beats: 3, gain: 0.8 }] },
   },
   "music.arrival": {
-    bus: "music", priority: 2, level: -17, cooldown: 20, maxInstances: 1, spatial: false,
+    bus: "music", priority: 2, level: -19, cooldown: 20, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.55,
     sound: {
       kind: "phrase", beat: 0.55,
@@ -350,7 +356,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     },
   },
   "music.homecoming": {
-    bus: "music", priority: 2, level: -17, cooldown: 30, maxInstances: 1, spatial: false,
+    bus: "music", priority: 2, level: -18, cooldown: 30, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.45,
     sound: {
       kind: "phrase", beat: 0.5,
@@ -359,7 +365,7 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
     },
   },
   "music.ending": {
-    bus: "music", priority: 6, level: -15, cooldown: 60, maxInstances: 1, spatial: false,
+    bus: "music", priority: 6, level: -17.5, cooldown: 60, maxInstances: 1, spatial: false,
     caption: null, essential: false, wet: 0.55,
     sound: {
       // i – VI – III – VII, then the motif settles on a major tonic: restrained, not triumphant.

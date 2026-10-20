@@ -174,10 +174,12 @@ export class HullSlot extends Layer {
   update(scene: AudioScene, now: number): void {
     const L = this.layer, th = scene.disabled ? 0 : scene.throttle, sag = scene.power < 0.25 ? 0.94 : 1;
     const live = scene.active && !scene.disabled && scene.power > 0;
-    set(this.motor.frequency, (L.motor.idle + (L.motor.full - L.motor.idle) * th) * sag, now, TAU_FAST * 2);
+    // Boost lifts the motor and doubles the wash on top of its own whine.
+    const lift = live && L.boost ? scene.boost : 0;
+    set(this.motor.frequency, (L.motor.idle + (L.motor.full - L.motor.idle) * th) * sag * (1 + 0.15 * lift), now, TAU_FAST * 2);
     set(this.motorGain.gain, live ? dbToGain(L.motor.level - 8 * (1 - th)) * (sag < 1 ? 0.7 : 1) : 0, now, 0.15);
     set(this.wash.frequency, L.wash.idle + (L.wash.full - L.wash.idle) * th, now, 0.2);
-    set(this.washGain.gain, scene.active ? dbToGain(L.wash.level) * UNIT * Math.max(0.12, th ** 1.5) : 0, now, 0.2);
+    set(this.washGain.gain, scene.active ? dbToGain(L.wash.level) * UNIT * Math.max(0.12, th ** 1.5) * (1 + lift) : 0, now, 0.2);
     set(this.humGain.gain, live ? dbToGain(L.hum.level) : 0, now, 0.3);
     if (this.whine && this.whineGain && L.boostWhine) {
       const b = live ? scene.boost : 0;

@@ -102,7 +102,7 @@ export class VoiceAllocator {
  * pulls ambience and music down; music lifts slightly over ambience. */
 export function duckLevels(voices: readonly Voice[], scene: Pick<AudioScene, "threat" | "active">): Record<Bus, number> {
   const d: Record<Bus, number> = { ambience: 1, vehicle: 1, sfx: 1, alert: 1, music: 1 };
-  if (voices.some(v => v.bus === "alert")) { d.ambience *= 0.5; d.vehicle *= 0.7; d.sfx *= 0.8; d.music *= 0.35; }
+  if (voices.some(v => v.bus === "alert")) { d.ambience *= 0.5; d.vehicle *= 0.5; d.sfx *= 0.8; d.music *= 0.35; }
   if (voices.some(v => v.bus === "music")) d.ambience *= 0.8;
   if (scene.active && scene.threat.mode === "pursue") { d.ambience *= 0.5; d.music *= 0.25; }
   return d;

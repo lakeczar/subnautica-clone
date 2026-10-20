@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Siltwake · audio lab (S6)</title>
+  <style>
+    :root { color-scheme: dark; --bg: #0b1418; --fg: #d8e6e3; --mute: #7f9a97; --ok: #6fd3a2; --bad: #ff8a7a; --bar: #4fb3c8; }
+    body { margin: 0; padding: 20px 24px; background: var(--bg); color: var(--fg); font: 13px/1.45 system-ui, sans-serif; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    p.note { color: var(--mute); margin: 0 0 14px; max-width: 70ch; }
+    button { background: #17323a; color: var(--fg); border: 1px solid #2a5260; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    table { border-collapse: collapse; margin-top: 14px; width: 100%; }
+    th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #1d3036; vertical-align: middle; white-space: nowrap; }
+    th { color: var(--mute); font-weight: 500; position: sticky; top: 0; background: var(--bg); }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.pass { color: var(--ok); } td.fail { color: var(--bad); }
+    tr.group td { color: var(--mute); padding-top: 14px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; border: 0; }
+    svg.spec { display: block; }
+    #summary { margin-top: 10px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Siltwake audio lab · S6</h1>
+  <p class="note">Every scenario renders offline through the same engine the game uses
+    (<code>OfflineAudioContext</code>, 48 kHz stereo, master volume 1.0; the game default is 0.55, −5.2 dB).
+    Levels use the measured window after layers settle. Spectra are octave bands, 31.5 Hz–16 kHz.
+    Numbers are machine measurements only; nobody has listened to this mix.</p>
+  <button id="run">Render all scenarios</button>
+  <span id="progress"></span>
+  <div id="summary"></div>
+  <table>
+    <thead><tr><th>Scenario</th><th class="num">LUFS</th><th class="num">Mom. max</th><th class="num">Peak dBFS</th><th class="num">RMS dBFS</th><th class="num">Voices max</th><th class="num">Nodes end</th><th>Octaves 31 Hz → 16 kHz</th><th class="num">Centroid</th><th>Checks</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <script type="module" src="./audio-lab.ts"></script>
+</body>
+</html>

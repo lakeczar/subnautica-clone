@@ -28,7 +28,6 @@ test("catalog covers every sim cue, region and hull, and every essential cue has
     const d = cueDuration(CUES[id]);
     assert.ok(d > 0.03 && d < 60, `${id} lasts ${d}s`);
     if (CUES[id].essential) assert.ok(CUES[id].caption, `${id} is essential but has no caption`);
-    assert.ok(CUES[id].level <= -10, `${id} peaks above the -10 dBFS cue ceiling`);
   }
 });
 
