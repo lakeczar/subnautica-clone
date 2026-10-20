@@ -7,7 +7,7 @@ import type { EcologyState } from "../src/sim/ecology/types.js";
 import { layerY } from "../src/sim/ecology/agents.js";
 import { EXPOSURE, HAZARD_FIELDS } from "../src/content/ecology/hazards.js";
 import { sitePosition } from "../src/content/ecology/sites.js";
-import { WARNING_LEAD } from "../src/sim/ecology/types.js";
+import { MAX_WARNING_AGE, WARNING_LEAD } from "../src/sim/ecology/types.js";
 import { ecologyWorldFrom } from "../src/sim/ecology/adapter.js";
 import { stimulusFrom } from "../src/sim/ecology/stimulus.js";
 import { protectionFor } from "../src/sim/ecology/hazards.js";
@@ -200,4 +200,35 @@ test("alternating control cannot renew grace: 4 s on, 0.25 s away, ×30, with an
     const rate = target === "hull" ? EXPOSURE.brine.hullHarm : EXPOSURE.brine.diverHarm;
     assert.ok(tr.harm > rate * 30 * 4 * 0.9, `${label}: sustained harm ${tr.harm.toFixed(1)}`);
   }
+});
+
+test("warning ages: a state at the maximum stays loadable after stepping; a stale age below the threshold is rejected and never shortens grace", () => {
+  const plume = { x: 90, y: -310, z: -500 }, world = openWater();
+  // S4-09: max age, controlled and uncontrolled, step -> save -> parse.
+  for (const controlledHull of [true, false]) {
+    const state = createEcology();
+    state.diver = { heat: 100, brine: 50, heatWarned: MAX_WARNING_AGE, brineWarned: MAX_WARNING_AGE };
+    state.hulls.push({ id: "Dart_1", heat: 100, brine: 50, heatWarned: MAX_WARNING_AGE, brineWarned: MAX_WARNING_AGE });
+    assert.notEqual(typeof parseEcology(JSON.parse(JSON.stringify(serializeEcology(state))), { vehicleIds: ["Dart_1"] }), "string", "max age parses");
+    for (let i = 0; i < 3; i++)
+      stepEcology(state, { tick: 2400 + i, stimulus: stimulus(plume, controlledHull ? { hull: "dart", radius: 3.6 } : {}),
+        protection: protectionFor(controlledHull ? "dart" : null, []), vehicleId: controlledHull ? "Dart_1" : null }, world);
+    const parsed = parseEcology(JSON.parse(JSON.stringify(serializeEcology(state))), { vehicleIds: ["Dart_1"] });
+    assert.notEqual(typeof parsed, "string", `stepped max-age state stays valid (${String(parsed)})`);
+    assert.ok([state.diver, ...state.hulls].every(e => e.heatWarned <= MAX_WARNING_AGE && e.brineWarned <= MAX_WARNING_AGE));
+  }
+  // S4-10: a non-zero age below 40% is rejected by the parser...
+  const base = JSON.parse(JSON.stringify(serializeEcology(createEcology())));
+  for (const [heat, heatWarned, ok] of [[39.9, 30, false], [0, 0.01, false], [39.9, 0, true], [40, 30, true]] as const)
+    assert.equal(typeof parseEcology({ ...base, diver: { heat, brine: 0, heatWarned, brineWarned: 0 } }) !== "string", ok, `heat ${heat} age ${heatWarned}`);
+  // ...and even an in-memory stale age is discarded when a new episode opens: full grace.
+  const stale = createEcology();
+  stale.diver = { heat: 39.9, brine: 0, heatWarned: 4.9, brineWarned: 0 };
+  let warning: number | null = null, harm: number | null = null;
+  for (let i = 0; i < 60 * 20 && harm === null; i++) {
+    const r = stepEcology(stale, { tick: 2400 + i, stimulus: stimulus({ x: 90, y: -310, z: -500 }, { light: 0, noise: 0 }), protection: protectionFor(null, []), vehicleId: null }, world);
+    if (warning === null && r.events.some(e => e.type === "hazard-warning" && e.hazard === "heat")) warning = i;
+    if (r.effects.diverHealth > 0) harm = i;
+  }
+  assert.ok(warning !== null && harm !== null && (harm - warning) / 60 >= WARNING_LEAD, `fresh grace: warning ${warning}, harm ${harm}`);
 });

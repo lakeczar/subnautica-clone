@@ -3,7 +3,7 @@ import type { HazardCycle, HazardFieldDefinition, HazardFieldId, HazardKind, Haz
 import { sitePosition } from "../../content/ecology/sites.js";
 import type { HullId } from "../../content/registry.js";
 import type { Vec3 } from "../types.js";
-import { ECOLOGY_DT, WARNING_LEAD } from "./types.js";
+import { ECOLOGY_DT, MAX_WARNING_AGE, WARNING_LEAD } from "./types.js";
 import type { EcologyEvent, Exposure, Protection } from "./types.js";
 import { clamp01, v } from "./vector.js";
 
@@ -153,12 +153,15 @@ export function stepExposure(load: Exposure, sample: HazardSample, protection: P
     load[kind] = over > 0 ? Math.min(100, before + over * rate.rate * ECOLOGY_DT) : Math.max(0, before - rate.recovery * ECOLOGY_DT);
     if (load[kind] < first) { load[warned] = 0; continue; }
     const level = Math.max(first, Math.floor(load[kind] / 10) * 10);
+    // Rising across the threshold always opens a fresh episode, whatever age
+    // a (hand-edited) state carried below it.
+    if (before < first) load[warned] = 0;
     if (load[warned] === 0) {
       // First delivery of this episode: grace starts now.
       warn(level);
       load[warned] = ECOLOGY_DT;
     } else {
-      load[warned] += ECOLOGY_DT;
+      load[warned] = Math.min(MAX_WARNING_AGE, load[warned] + ECOLOGY_DT);
       let crossed = false;
       for (const l of EXPOSURE.warnings.slice(1)) if (before < l && load[kind] >= l) { warn(l); crossed = true; }
       if (remind && !crossed) warn(level);
@@ -178,7 +181,7 @@ export function recoverExposure(load: Exposure): void {
     const warned = kind === "heat" ? "heatWarned" : "brineWarned";
     load[kind] = Math.max(0, load[kind] - EXPOSURE[kind].recovery * ECOLOGY_DT);
     if (load[kind] < first) load[warned] = 0;
-    else if (load[warned] > 0) load[warned] += ECOLOGY_DT;
+    else if (load[warned] > 0) load[warned] = Math.min(MAX_WARNING_AGE, load[warned] + ECOLOGY_DT);
   }
 }
 

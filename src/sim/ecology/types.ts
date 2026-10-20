@@ -89,6 +89,8 @@ export const NO_ACTOR = "";
 /** Seconds from the first observable warning of an encounter or hazard
  * episode to any harm it can cause. A tested invariant. */
 export const WARNING_LEAD = 5;
+/** Saved warning ages saturate here; the parser accepts exactly [0, MAX_WARNING_AGE]. */
+export const MAX_WARNING_AGE = 1e7;
 
 export interface Protection {
   /** Tolerance below which a field causes no load. */

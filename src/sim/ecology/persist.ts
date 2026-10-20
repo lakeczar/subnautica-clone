@@ -2,7 +2,8 @@ import { THREAT_AGENT_IDS } from "../../content/ecology/species.js";
 import type { Deterrent, Sense } from "../../content/ecology/species.js";
 import { DETERRENT_SECONDS, MAX_DETERRENTS, MAX_HULL_EXPOSURES, VEHICLE_ID } from "./ecology.js";
 import { MAX_AWARENESS } from "./agents.js";
-import { DIVER_ACTOR, NO_ACTOR } from "./types.js";
+import { DIVER_ACTOR, MAX_WARNING_AGE, NO_ACTOR } from "./types.js";
+import { EXPOSURE } from "../../content/ecology/hazards.js";
 import type { AgentMode, EcologyState, Exposure } from "./types.js";
 
 /** Proposed persisted block `world.ecology`. Strict: unknown keys, missing
@@ -18,7 +19,10 @@ const keys = (x: Raw, allowed: readonly string[]): boolean => Object.keys(x).len
 const num = (x: unknown, min: number, max: number): x is number => typeof x === "number" && Number.isFinite(x) && x >= min && x <= max;
 const point = (x: unknown): boolean => record(x) && keys(x, ["x", "y", "z"]) && [x.x, x.y, x.z].every(c => num(c, -1e5, 1e5));
 const EXPOSURE_KEYS = ["heat", "brine", "heatWarned", "brineWarned"] as const;
-const loads = (x: Raw): boolean => num(x.heat, 0, 100) && num(x.brine, 0, 100) && num(x.heatWarned, 0, 1e7) && num(x.brineWarned, 0, 1e7);
+// A warning age exists only inside an episode: below the first threshold it must be 0.
+const age = (load: unknown, warned: unknown): boolean =>
+  num(warned, 0, MAX_WARNING_AGE) && (warned === 0 || (num(load, 0, 100) && load >= EXPOSURE.warnings[0]));
+const loads = (x: Raw): boolean => num(x.heat, 0, 100) && num(x.brine, 0, 100) && age(x.heat, x.heatWarned) && age(x.brine, x.brineWarned);
 const exposureOk = (x: unknown): x is Exposure => record(x) && keys(x, EXPOSURE_KEYS) && loads(x);
 
 /** `vehicleIds`, when given, is the composed save's fleet: every hull exposure
