@@ -131,3 +131,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **S6 R3 (Sol xhigh): ACCEPTED** `35fe1c4` (`review/s6-r3` `dec5151`), with no findings. Audio wiring was added to C1 scope.
 - **S4 R4 (Sol xhigh): ACCEPT-WITH-FIXES** `4696f7a` (`review/s4-r4` `7229b61`). The P3s S4-09 (max-age save becomes unloadable) and S4-10 (stale age shortens grace) are with the author; the coordinator inspects them. Ecology wiring goes to the next composition step after C1.
 - **S7 R1 fixes done** at `8355a21` (fast 549/549 in 25 s; heavy 9/9; runtime Babylon guard; nested lock fixed). A focused Sol R2 review is running.
+- **S4 FINAL: accepted at `854fdf1`.** The coordinator inspected the R4 P3 fixes (warning ages saturate at `MAX_WARNING_AGE`, stale ages are rejected or reset below 40%; 40 tests). Ready for composition.
