@@ -4,6 +4,8 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh, Scene } from "@babylonjs/core";
 import type { GameState } from "../sim/types.js";
 import { CARRIER_LAYOUT } from "../sim/carrier.js";
+import { LEGACY_BLEND, LEGACY_PRESERVE } from "../content/regions/terrain.js";
+import { opticsAt } from "./biomes/optics.js";
 import { ArtBatch } from "./geometry.js";
 import type { Point } from "./geometry.js";
 import "@babylonjs/core/Shaders/ShadersInclude/instancesDeclaration.js";
@@ -251,15 +253,26 @@ export function updateOpticalUniforms(
   // at unchanged haze density, so wreck ridges and survey dishes read as dark
   // silhouettes. Blended across the Canopy edge and descent; render-only.
   const basin = blend(-168, -194, camera.z) * blend(92, 112, camera.x) * blend(116, 146, depth);
-  const waterFog = Color3.Lerp(
+  let waterFog = Color3.Lerp(
     Color3.Lerp(Color3.FromHexString("#237e89"), Color3.FromHexString("#0b3048"), blend(15, 190, depth)),
     Color3.FromHexString(BASIN_SILT), basin * .82);
+  let fogDensity = density;
+  // S2's per-region optics take over outside B1's area over the same 96 m the
+  // shared floor blends; inside the preserve the optics above are unchanged.
+  const p = LEGACY_PRESERVE;
+  const outside = Math.hypot(Math.max(0, p.minX - camera.x, camera.x - p.maxX), Math.max(0, p.minZ - camera.z, camera.z - p.maxZ));
+  if (outside > 0) {
+    const region = opticsAt(camera.x, camera.y, camera.z), w = blend(0, LEGACY_BLEND, outside);
+    const authored = Color3.Lerp(Color3.FromHexString(region.water), Color3.FromHexString(region.deep), region.depthMix);
+    waterFog = Color3.Lerp(waterFog, authored, w);
+    fogDensity = density * (1 - w) + region.density * w;
+  }
   const airFog = Color3.FromHexString("#a5ccd1");
   for (const material of materials) {
     material.setVector3("cameraPosition", camera);
     material.setColor3("fogColor", airFog);
     material.setColor3("waterFogColor", waterFog);
-    material.setFloat("fogDensity", density);
+    material.setFloat("fogDensity", fogDensity);
     material.setFloat("carrierPresent", h ? 1 : 0);
     material.setFloat("carrierYaw", h?.pose.yaw ?? 0);
     material.setVector3("carrierAirMin", new Vector3(CARRIER_LAYOUT.deck.min.x, CARRIER_LAYOUT.deck.max.y, CARRIER_LAYOUT.deck.min.z));

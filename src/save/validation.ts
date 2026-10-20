@@ -19,9 +19,10 @@ import {
   techRecord,
 } from "../content/registry.js";
 import { CREEL_CABIN, fittedMount, holdCapacity, hullToWorld } from "../sim/fleet.js";
-import { CANISTER_CU } from "../sim/recovery.js";
+import { CANISTER_CU, recoverableHull, recoveryRouteFor } from "../sim/recovery.js";
 import { renewalCap } from "../sim/renewal.js";
-import { LEGACY_WORLD_BOUNDS, RECOVERY_ROUTES, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
+import { RECOVERY_ROUTES, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
+import { deepRoute, recoveryRouteIds } from "../content/recoveryRoutes.js";
 import type { GameState } from "../sim/types.js";
 import { carrierCompartment, containerAccepts, usedCapacity } from "../sim/inventory.js";
 import { installedModuleValid, moduleItem, SMALL_CRAFT_SOCKETS } from "../sim/modules.js";
@@ -74,6 +75,15 @@ const array = (
   check: (a: unknown) => boolean,
 ): v is unknown[] => Array.isArray(v) && v.length <= max && v.every(check);
 const unique = (a: readonly unknown[]): boolean => new Set(a).size === a.length;
+/** B1's routes keep their exact indices; a deep S2 branch counts its own. */
+function validRecoveryWaypoint(routeId: string, phase: string, waypoint: unknown): boolean {
+  const deep = deepRoute(routeId);
+  if (deep) return int(waypoint, 0, deep.attachmentIndex) && (phase === "ready" ? waypoint === deep.attachmentIndex
+    : phase === "approach" ? waypoint >= 1 : waypoint <= deep.attachmentIndex - 1);
+  const legacy = RECOVERY_ROUTES[routeId as keyof typeof RECOVERY_ROUTES];
+  return int(waypoint, 0, legacy.attachmentIndex) && (routeId === "canopy" || (phase === "ready" ? waypoint === 5 :
+    phase === "approach" ? n(waypoint, 1, 5) : n(waypoint, 0, 4)));
+}
 const stringSet = (
   v: unknown,
   max: number,
@@ -483,13 +493,11 @@ export function validState(value: unknown): value is GameState {
         "waypoint",
       ]) &&
         id(r.operation.vehicleId) &&
-        oneOf(r.operation.routeId, ["canopy", "basin"]) &&
+        oneOf(r.operation.routeId, recoveryRouteIds()) &&
         r.operation.method === "tow" &&
         oneOf(r.operation.phase, ["approach", "ready", "tow"]) &&
         worldVec(r.operation.position) &&
-        int(r.operation.waypoint, 0, RECOVERY_ROUTES[r.operation.routeId as keyof typeof RECOVERY_ROUTES].attachmentIndex) &&
-        (r.operation.routeId === "canopy" || (r.operation.phase === "ready" ? r.operation.waypoint === 5 :
-          r.operation.phase === "approach" ? n(r.operation.waypoint, 1, 5) : n(r.operation.waypoint, 0, 4))))
+        validRecoveryWaypoint(r.operation.routeId as string, r.operation.phase as string, r.operation.waypoint))
     )
   )
     return false;
@@ -844,9 +852,9 @@ function semantic(s: GameState, fresh: GameState): boolean {
   const op = s.recovery.operation;
   if (op) {
     const target = f.vehicles.find(v => v.id === op.vehicleId), loss = s.recovery.losses.find(l => l.vehicleId === op.vehicleId);
-    if (!target || (target.hull !== "dart" && target.hull !== "creel") || target.berth || !loss) return false;
-    const basin = loss.position.x > LEGACY_WORLD_BOUNDS.maxX || loss.position.z < LEGACY_WORLD_BOUNDS.minZ;
-    if ((op.routeId === "basin") !== basin) return false;
+    if (!target || !recoverableHull(target.hull) || target.berth || !loss) return false;
+    // The route is the one chosen from the visited loss, never from the tow position.
+    if (op.routeId !== recoveryRouteFor(loss.position)) return false;
   }
   return true;
 }

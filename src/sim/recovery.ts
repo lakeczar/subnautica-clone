@@ -1,9 +1,10 @@
 import { createWorldQueries, moveHull, sweptHullClearance } from "./world.js";
-import { HULL_COLLIDERS, ITEMS, PLACES, RECOVERY_STAGE } from "../content/registry.js";
+import { HULL_COLLIDERS, HULLS, ITEMS, PLACES, RECOVERY_STAGE } from "../content/registry.js";
 import type { ItemKind } from "../content/registry.js";
 import { CREEL_CABIN, hullToWorld, mobileRefugeBlock } from "./fleet.js";
 import { cabinLockerId } from "./inventory.js";
-import { LEGACY_WORLD_BOUNDS, RECOVERY_ROUTES, RECOVERY_SURFACE_OPERATOR, type RecoveryRouteId } from "../content/routes.js";
+import { LEGACY_WORLD_BOUNDS, RECOVERY_ROUTES, RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
+import { deepRoute, deepRouteFor, insideB1Recovery, isLegacyRoute, STANDARD_TETHER, type RecoveryRouteId } from "../content/recoveryRoutes.js";
 import type { GameEvent, GameState, Vec3, VehicleState, WorldQueries } from "./types.js";
 import {
   addItem,
@@ -27,10 +28,17 @@ export const RECOVERY_NOTICES = {
   creelCompleted: "Creel moored at the shallow rescue bench, with its mount, cargo, damage and charge. Apply a bound field patch and reserve cell locally.",
   creelOccupied: `Bobbin recovery stopped: ${OCCUPIED_CREEL}`,
 } as const;
-/** Recoverable campaign hulls. Larger hulls belong to later fleet work. */
-export const recoverableHull = (hull: string): hull is "dart" | "creel" => hull === "dart" || hull === "creel";
-const notice = (s: GameState, vehicleId: string, dart: string, creel: string): string =>
-  s.fleet.vehicles.find((v) => v.id === vehicleId)?.hull === "creel" ? creel : dart;
+/** Recoverable campaign hulls: the scout, the workboat and the deep service craft.
+ * Hush and Spindle are compact like the Dart; the carrier is never towed. */
+export const recoverableHull = (hull: string): hull is "dart" | "creel" | "mantle" | "hush" | "spindle" =>
+  hull === "dart" || hull === "creel" || hull === "mantle" || hull === "hush" || hull === "spindle";
+/** A medium hull (Creel, Mantle) salvages into a canister and always proves its tow. */
+const mediumHull = (hull: string): boolean => hull === "creel" || hull === "mantle";
+const notice = (s: GameState, vehicleId: string, dart: string, creel: string): string => {
+  const hull = s.fleet.vehicles.find((v) => v.id === vehicleId)?.hull;
+  return hull === "creel" ? creel : hull === "mantle" ? creel.replaceAll("Creel", HULLS.mantle.label)
+    : hull && hull !== "dart" ? dart.replaceAll("Dart", HULLS[hull].label) : dart;
+};
 export function recoveryOccupancyRefusal(s: GameState, vehicleId: string): string | null {
   return s.player.controlledVehicleId === vehicleId || s.player.interiorId === vehicleId
     ? `Recovery unavailable: ${notice(s, vehicleId, OCCUPIED_RECOVERY, OCCUPIED_CREEL)}`
@@ -40,11 +48,15 @@ export function recoveryOccupancyRefusal(s: GameState, vehicleId: string): strin
 export const CANISTER_CU = 200;
 export const RECOVERY_MOORING = { x: RECOVERY_STAGE.x + 5, y: -11, z: RECOVERY_STAGE.z } as const;
 export const BOBBIN_COLLIDER = { radius: 0.25, height: 0.3 } as const;
-/** Chosen at initiation from the visited loss, never from render residency or tow position. */
-export function recoveryRouteFor(position: Readonly<Vec3>): RecoveryRouteId {
-  return position.x > LEGACY_WORLD_BOUNDS.maxX || position.z < LEGACY_WORLD_BOUNDS.minZ ? "basin" : "canopy";
+/** Chosen at initiation from the visited loss, never from render residency or tow
+ * position. B1's area keeps its two routes; elsewhere the nearest S2 tether
+ * branch end within reach, or null outside every surveyed corridor. */
+export function recoveryRouteFor(position: Readonly<Vec3>): RecoveryRouteId | null {
+  if (insideB1Recovery(position))
+    return position.x > LEGACY_WORLD_BOUNDS.maxX || position.z < LEGACY_WORLD_BOUNDS.minZ ? "basin" : "canopy";
+  return deepRouteFor(position);
 }
-function retainedRoute(s: GameState, vehicleId: string): RecoveryRouteId {
+function retainedRoute(s: GameState, vehicleId: string): RecoveryRouteId | null {
   return s.recovery.operation?.vehicleId === vehicleId ? s.recovery.operation.routeId :
     recoveryRouteFor(s.recovery.losses.find(l => l.vehicleId === vehicleId)?.position ??
       s.fleet.vehicles.find(v => v.id === vehicleId)!.pose.position);
@@ -52,15 +64,19 @@ function retainedRoute(s: GameState, vehicleId: string): RecoveryRouteId {
 const towShape = (s: GameState, vehicleId: string) =>
   HULL_COLLIDERS[s.fleet.vehicles.find((v) => v.id === vehicleId)?.hull ?? "dart"];
 function towWaypoints(position: Vec3, routeId: RecoveryRouteId): Vec3[] {
-  const route = RECOVERY_ROUTES[routeId];
+  const deep = deepRoute(routeId);
+  if (deep) return deep.tow.map(p => ({ ...p }));
+  const route = RECOVERY_ROUTES[routeId as keyof typeof RECOVERY_ROUTES];
   return [...route.tow.map(p => ({ ...p })), ...(routeId === "basin"
     ? [{ x: position.x, y: RECOVERY_ROUTES.basin.liftY, z: position.z }] : [])];
 }
 /** Detached complete keel path, including the visited attachment position. */
-export function recoveryTowPath(s: GameState, vehicleId: string, routeId: RecoveryRouteId = retainedRoute(s, vehicleId)): Vec3[] {
+export function recoveryTowPath(s: GameState, vehicleId: string, routeId: RecoveryRouteId = retainedRoute(s, vehicleId) ?? "canopy"): Vec3[] {
   const p = s.fleet.vehicles.find(v => v.id === vehicleId)!.pose.position;
   return [{ ...p }, ...towWaypoints(p, routeId).reverse()];
 }
+const attachmentIndex = (routeId: RecoveryRouteId): number =>
+  deepRoute(routeId)?.attachmentIndex ?? RECOVERY_ROUTES[routeId as keyof typeof RECOVERY_ROUTES].attachmentIndex;
 export function disableVehicle(s: GameState, id: string): void {
   const v = s.fleet.vehicles.find((v) => v.id === id);
   if (!v) return;
@@ -151,9 +167,11 @@ export function incapacitate(s: GameState, reason: string, world: WorldQueries =
   const where = cabin ? "your registered Creel cabin" : workshop ? "Splitspine workshop" : "the home pod";
   s.feedback = `${reason} You recovered at ${where}.${refused ? ` Registered cabin unavailable: ${refused.message}.` : ""} Knowledge and essential equipment remain. Ordinary cargo has a visited-site marker; disabled craft retain their hold and modules.`;
 }
-export function rescueWaypoints(s: GameState, vehicleId: string, routeId: RecoveryRouteId = retainedRoute(s, vehicleId)): Vec3[] {
+export function rescueWaypoints(s: GameState, vehicleId: string, routeId: RecoveryRouteId = retainedRoute(s, vehicleId) ?? "canopy"): Vec3[] {
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId)!;
-  const route = RECOVERY_ROUTES[routeId];
+  const deep = deepRoute(routeId);
+  if (deep) return [...deep.approach.map(p => ({ ...p })), { ...v.pose.position, y: v.pose.position.y + 1 }];
+  const route = RECOVERY_ROUTES[routeId as keyof typeof RECOVERY_ROUTES];
   return [
     ...route.approach.map(p => ({ ...p })),
     ...(routeId === "basin" ? [{ x: v.pose.position.x, y: RECOVERY_ROUTES.basin.liftY + 1, z: v.pose.position.z }] : []),
@@ -191,7 +209,8 @@ export function recoveryCommand(
   const v = s.fleet.vehicles.find((v) => v.id === id);
   if (!v || !v.disabled || v.berth || !recoverableHull(v.hull))
     return "Select a disabled, visited Dart transponder.";
-  const creel = v.hull === "creel", shape = HULL_COLLIDERS[v.hull];
+  const creel = mediumHull(v.hull), shape = HULL_COLLIDERS[v.hull];
+  const routeId = retainedRoute(s, id), deep = routeId ? deepRoute(routeId) : null;
   if (method !== "repair") {
     const occupied = recoveryOccupancyRefusal(s, id);
     if (occupied) return occupied;
@@ -199,9 +218,12 @@ export function recoveryCommand(
   if (!equipped(s, "bobbin_kit"))
     return "Fabricate the reusable Bobbin / collar from pod rescue stock first.";
   const local = distance(s.player.pose.position, v.pose.position) < 7,
-    atStage = distance(s.player.pose.position, RECOVERY_STAGE) < 7 || distance(s.player.pose.position, RECOVERY_SURFACE_OPERATOR) < 7;
+    atStage = deep ? distance(s.player.pose.position, deep.stage) < 7
+      : distance(s.player.pose.position, RECOVERY_STAGE) < 7 || distance(s.player.pose.position, RECOVERY_SURFACE_OPERATOR) < 7;
   if (!local && !atStage)
-    return "Travel to the shallow rescue staging bench east of Splitspine, or approach the exterior collar locally.";
+    return !routeId && method === "tow" ? "This loss is outside every surveyed rescue tether. Patch it locally, or salvage it in place."
+      : deep ? `Operate Bobbin from the ${deep.plan.slice("rescue.".length).replace("_", " ")} rescue stage on the surface above, or approach the exterior collar locally.`
+      : "Travel to the shallow rescue staging bench east of Splitspine, or approach the exterior collar locally.";
   if (method === "repair") {
     if (!local)
       return "A field patch must be applied at the actual hull collar. Tow to the shallow bench if personal depth prevents access.";
@@ -274,7 +296,7 @@ export function recoveryCommand(
     s.recovery.losses = s.recovery.losses.filter((l) => l.vehicleId !== id);
     s.recovery.operation = null;
     s.feedback = canister
-      ? `${creel ? "Creel" : "Dart"} salvaged in place · frame materials, modules and cargo sealed in a canister at this collar. Haul it home in trips; learned plans remain.`
+      ? `${HULLS[v.hull].label} salvaged in place · frame materials, modules and cargo sealed in a canister at this collar. Haul it home in trips; learned plans remain.`
       : "Frame materials recovered. Past patches return to rescue stock for future repairs. Learned Dart plans remain.";
     return null;
   }
@@ -283,24 +305,35 @@ export function recoveryCommand(
     if (op.vehicleId !== id)
       return "A local rescue operation is already staged.";
     if (op.phase === "ready") {
-      if ((op.routeId === "basin" || creel) && !sweptHullClearance(world, recoveryTowPath(s, id, op.routeId), shape))
+      if ((op.routeId === "basin" || creel || deepRoute(op.routeId)) && !sweptHullClearance(world, recoveryTowPath(s, id, op.routeId), shape))
         return notice(s, id, RECOVERY_NOTICES.blocked, RECOVERY_NOTICES.creelBlocked);
       op.phase = "tow";
-      op.waypoint = RECOVERY_ROUTES[op.routeId].attachmentIndex - 1;
+      op.waypoint = attachmentIndex(op.routeId) - 1;
       s.feedback =
         "Collar attached. Guided tow follows the surveyed clear flank back to the shallow bench.";
     } else return "Bobbin is moving along the local tether corridor.";
   } else {
-    const routeId = retainedRoute(s, id), route = RECOVERY_ROUTES[routeId];
-    if (routeId === "canopy" && distance(RECOVERY_STAGE, v.pose.position) > route.maximumTether)
+    if (!routeId) return "This loss is outside every surveyed rescue tether. Patch it locally, or salvage it in place.";
+    if (deep) {
+      const approach = rescueWaypoints(s, id, routeId);
+      const tetherLength = approach.slice(1).reduce((n, p, i) => n + distance(approach[i]!, p), 0);
+      if (tetherLength > deep.maximumTether)
+        return "The hull lies beyond this tether's reach. No hull, cargo or rescue stock moved; patch it locally or salvage it in place.";
+      if (tetherLength > STANDARD_TETHER && !s.inventory.items.some((i) => i.kind === "bobbin_deep_tether" && (i.containerId === "diver" || i.containerId === "equipment")))
+        return `This tether runs ${tetherLength.toFixed(0)} m; the standard reel carries ${STANDARD_TETHER} m. Carry the Bobbin deep tether reel.`;
+      if (!sweptHullClearance(world, approach, BOBBIN_COLLIDER) || !sweptHullClearance(world, recoveryTowPath(s, id, routeId), shape))
+        return "The surveyed tether or tow path is blocked. No hull, cargo or rescue stock moved; patch it locally or salvage it in place.";
+    }
+    const route = isLegacyRoute(routeId) ? RECOVERY_ROUTES[routeId] : null;
+    if (routeId === "canopy" && distance(RECOVERY_STAGE, v.pose.position) > route!.maximumTether)
       return "This loss is outside the implemented upper-Canopy tether corridor.";
     if (routeId === "basin") {
       const approach = rescueWaypoints(s, id, routeId);
       const tetherLength = approach.slice(1).reduce((n, p, i) => n + distance(approach[i]!, p), 0);
-      if (tetherLength > route.maximumTether || !sweptHullClearance(world, approach, BOBBIN_COLLIDER) ||
+      if (tetherLength > route!.maximumTether || !sweptHullClearance(world, approach, BOBBIN_COLLIDER) ||
           !sweptHullClearance(world, recoveryTowPath(s, id, routeId), shape))
         return "The surveyed Basin tether or extraction path is blocked. No hull, cargo or rescue stock moved; use a safe local collar or clear the obstruction.";
-    } else if (creel && !sweptHullClearance(world, recoveryTowPath(s, id, routeId), shape))
+    } else if (!deep && creel && !sweptHullClearance(world, recoveryTowPath(s, id, routeId), shape))
       // The medium hull's whole guided route is proved before any guide moves.
       return "The surveyed Canopy tow path cannot clear the Creel from here. No hull, cargo or rescue stock moved; patch it locally or salvage it in place.";
     s.recovery.operation = {
@@ -308,11 +341,12 @@ export function recoveryCommand(
       routeId,
       method: "tow",
       phase: local ? "tow" : "approach",
-      position: local ? { ...v.pose.position } : { ...RECOVERY_STAGE },
-      waypoint: local ? route.attachmentIndex - 1 : 1,
+      position: local ? { ...v.pose.position } : deep ? { ...deep.stage } : { ...RECOVERY_STAGE },
+      waypoint: local ? attachmentIndex(routeId) - 1 : 1,
     };
     s.feedback = local
-      ? "Collar attached locally. The guided shallow tow is underway."
+      ? deep ? "Collar attached locally. The guided tow climbs the surveyed tether to the surface stage." : "Collar attached locally. The guided shallow tow is underway."
+      : deep ? "Bobbin deployed down the surveyed tether. Follow its progress, then attach the collar."
       : "Bobbin deployed from the shallow staging bench. Follow its progress, then attach the collar.";
   }
   return null;
@@ -363,7 +397,7 @@ export function updateRecovery(s: GameState, world: WorldQueries): GameEvent | n
     }
     v.pose.position = move.position;
     op.position = { x: op.position.x + delta.x, y: op.position.y + delta.y, z: op.position.z + delta.z };
-  } else if (op.routeId === "basin") {
+  } else if (op.routeId === "basin" || deepRoute(op.routeId)) {
     const move = moveHull(world, origin, { x: next.x - origin.x, y: next.y - origin.y, z: next.z - origin.z }, BOBBIN_COLLIDER);
     if (move.hitSolid || move.hitBoundary || distance(move.position, next) > 0.001) {
       s.recovery.operation = null;
@@ -374,7 +408,7 @@ export function updateRecovery(s: GameState, world: WorldQueries): GameEvent | n
   } else op.position = next;
   if (d <= speed * DT) {
     if (op.phase === "approach") {
-      if (op.waypoint === RECOVERY_ROUTES[op.routeId].attachmentIndex) {
+      if (op.waypoint === attachmentIndex(op.routeId)) {
         op.phase = "ready";
         s.feedback = RECOVERY_NOTICES.ready;
         return { type: "notice", message: s.feedback };
@@ -385,7 +419,8 @@ export function updateRecovery(s: GameState, world: WorldQueries): GameEvent | n
       };
       s.recovery.operation = null;
       s.metrics.rescues++;
-      s.feedback = notice(s, v.id, RECOVERY_NOTICES.completed, RECOVERY_NOTICES.creelCompleted);
+      s.feedback = deepRoute(op.routeId) ? `${HULLS[v.hull].label} towed to the surface rescue stage, with its cargo, damage and charge. Apply a bound field patch and reserve cell here.`
+        : notice(s, v.id, RECOVERY_NOTICES.completed, RECOVERY_NOTICES.creelCompleted);
       return { type: "notice", message: s.feedback };
     } else op.waypoint--;
   }

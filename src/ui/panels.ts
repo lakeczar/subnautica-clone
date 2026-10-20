@@ -4,6 +4,7 @@ import {
   type Recipe,
 } from "../content/registry.js";
 import { RECOVERY_ROUTES, RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
+import { deepRoute, routeLabel } from "../content/recoveryRoutes.js";
 import type { ItemKind, MountKind, RecipeId } from "../content/registry.js";
 import { isMountKind } from "../content/registry.js";
 import {
@@ -12,7 +13,7 @@ import {
   nearWorkshop, supportedServiceSite, usedCapacity,
 } from "../sim/inventory.js";
 import { craftingBlock, hullOutput, personalLimit, refitHull } from "../sim/progression.js";
-import { RECOVERY_NOTICES, recoveryCommand, recoveryRouteFor } from "../sim/recovery.js";
+import { RECOVERY_NOTICES, recoverableHull, recoveryCommand, recoveryRouteFor } from "../sim/recovery.js";
 import { cellRechargePreview, distractionPreview, PULSE_CHARGE_COST, reserve, serviceRefusal, serviceState, serviceWouldRestore } from "../sim/vehicles.js";
 import { dartPerformance, installModuleRefusal, mountChangePreview, removeModuleRefusal } from "../sim/modules.js";
 import { canisterSalvagePreview } from "../sim/recovery.js";
@@ -359,11 +360,14 @@ export class PanelView {
     const serviceActions = (): string => `<div class="service-actions">${readiness === "ready" && !serviceWouldRestore(state, v) ? '<span class="service-full">Fully serviced</span>'
       : button("Service", { type: "service", vehicleId: v.id }, refusal !== null, refusal ?? undefined)}${local && reserveNo === null ? button("Use reserve cell for hull power", { type: "reserve", vehicleId: v.id }) : ""}</div>`;
     let html = `<article class="vessel-service" id="vessel-${escapeHtml(v.id)}" tabindex="-1" data-focus-key="vessel:${escapeHtml(v.id)}"><div class="vessel-line"><h3>${HULLS[v.hull].label}${v.disabled ? " · disabled transponder" : ""}</h3><span>${seated ? "Seated" : state.player.interiorId === v.id ? "In cabin" : bearing(state.player.pose.position, v.pose.position)} · power ${v.charge.toFixed(0)}% · hull ${v.health.toFixed(0)}% · rated ${v.rating} m${v.hull === "creel" ? ` · ${mount ? mountLabel(mount.kind).toLowerCase() : "bare mount"} · hold ${usedCapacity(state, v.cargoId)} / ${holdCapacity(state, v)} CU` : ""}</span>${v.disabled ? "" : serviceActions()}</div>`;
-    if (v.disabled && (v.hull === "dart" || v.hull === "creel")) {
-      const creel = v.hull === "creel";
+    if (v.disabled && recoverableHull(v.hull)) {
+      const creel = v.hull === "creel" || v.hull === "mantle";
       const loss = state.recovery.losses.find(l => l.vehicleId === v.id && l.visited);
       const routeId = state.recovery.operation?.vehicleId === v.id ? state.recovery.operation.routeId : recoveryRouteFor(loss?.position ?? v.pose.position);
-      const route = RECOVERY_ROUTES[routeId];
+      const deep = routeId ? deepRoute(routeId) : null;
+      const tether = deep ? `${routeLabel(routeId!)} · surface stage ${bearing(state.player.pose.position, deep.stage)} · ${deep.maximumTether} m tether limit`
+        : routeId === "basin" ? `Pale Basin · surveyed overhead lift and shallow return · ${RECOVERY_ROUTES.basin.maximumTether} m tether limit`
+        : routeId === "canopy" ? `Upper-Canopy corridor · ${RECOVERY_ROUTES.canopy.maximumTether} m tether limit` : "Outside every surveyed rescue tether";
       const frame = Object.entries(v.investment).map(([k, q]) => `${q} ${ITEMS[k as ItemKind].label}`).join(" / ") || "No frame materials recorded";
       const cu = Object.entries(v.investment).reduce((n, [k, q]) => n + ITEMS[k as ItemKind].cu * (q ?? 0), 0);
       const canister = creel || cu > 24 ? canisterSalvagePreview(state, v.id) : null;
@@ -383,7 +387,7 @@ export class PanelView {
       };
       html += `<p class="recovery-kit">${equipped(state, "bobbin_kit") ? "Bobbin kit retained" : `Requires Bobbin kit · ${state.knowledge.blueprints.includes(RECIPES.bobbin_kit.bp) ? "fabricate at the pod" : "plans at the reef intake"}`} · Rescue stock: ${state.world.maintenance.alloy} alloy / ${state.world.maintenance.membrane} membrane.</p><div class="recovery-choices" aria-label="${HULLS[v.hull].label} recovery choices">
         <section class="recovery-choice"><h4>Patch here</h4><p class="recovery-cost">2 alloy + 1 membrane · rescue stock</p><p>At the collar, within 7 m. Restores hull to 65%; keeps cargo and charge.</p>${recovery("Patch here", "repair")}</section>
-        <section class="recovery-choice"><h4>Tow home</h4><p class="recovery-cost">No materials · to the shallow rescue bench</p><p>Empty hull; cargo stays aboard. Start at the staging bench or collar, within 7 m.</p><small>${routeId === "basin" ? "Pale Basin · surveyed overhead lift and shallow return" : "Upper-Canopy corridor"} · ${route.maximumTether} m tether limit. Blocked routes stop the tow. No repair or recharge.</small>${recovery(state.recovery.operation?.vehicleId === v.id && state.recovery.operation.phase === "ready" ? "Attach collar / confirm tow" : "Tow home · deploy Bobbin", "tow")}</section>
+        <section class="recovery-choice"><h4>Tow home</h4><p class="recovery-cost">No materials · ${deep ? "up to the surface rescue stage" : "to the shallow rescue bench"}</p><p>Empty hull; cargo stays aboard. Start at the ${deep ? "surface stage" : "staging bench"} or collar, within 7 m.</p><small>${tether}. Blocked routes stop the tow. No repair or recharge.</small>${recovery(state.recovery.operation?.vehicleId === v.id && state.recovery.operation.phase === "ready" ? "Attach collar / confirm tow" : "Tow home · deploy Bobbin", "tow")}</section>
         ${canister ? `<section class="recovery-choice"><h4>Salvage in place</h4><p class="recovery-cost">No materials · one pressure canister at this collar</p><p>At the collar, within 7 m. Frame, fitted mount, hold${creel ? " and cabin locker" : ""} seal together; haul the canister home in trips.</p><small>${escapeHtml(frame)} · ${canister.cu} CU total.${v.boundRepairs ? `<br />Past patches return ${patchAlloy} alloy / ${patchMembrane} membrane to rescue stock only (limits 14 / 7).` : ""}</small>${recovery("Salvage into canister", "salvage")}</section>`
         : `<section class="recovery-choice"><h4>Salvage frame</h4><p class="recovery-cost">No materials · returns the frame’s ingredients</p><p>At the collar, within 7 m. Empty the hull, hold and module sockets first.</p><small>${escapeHtml(frame)} · ${cu} CU.<br />${destination ? `Return to ${destination}.` : eligibleHolds ? `Make ${cu} CU free in ${eligibleHolds}.` : `Requires a container large enough for the complete ${cu} CU return.`}${v.boundRepairs ? `<br />Past patches return ${patchAlloy} alloy / ${patchMembrane} membrane to rescue stock only (limits 14 / 7).` : ""}</small>${recovery("Salvage frame", "salvage")}</section>`}
       </div>`;
@@ -684,7 +688,7 @@ export class PanelView {
       const face = distance(state.player.pose.position, RECOVERY_SURFACE_OPERATOR) < distance(state.player.pose.position, RECOVERY_STAGE) ? RECOVERY_SURFACE_OPERATOR : RECOVERY_STAGE;
       html += `<p><b>Shallow rescue staging</b> · east of Splitspine · ${bearing(state.player.pose.position, face)}. Surface operator and ${Math.max(0, -RECOVERY_STAGE.y)} m bench serve the same station. Start a visited Dart’s Canopy or Basin tow here, or at its safe exterior collar. Only the surface work face has surface air.</p>`;
       const op = state.recovery.operation;
-      if (op) html += `<p class="recipe-status">Bobbin · ${op.routeId === "basin" ? "Pale Basin overhead lift" : "Upper-Canopy corridor"}: ${op.phase === "ready" ? "at the exterior collar — confirm tow in Cargo to attach" : op.phase === "tow" ? "guiding the original hull back to shallow staging" : "following the local tether corridor toward the collar"}. Progress pauses while this panel is open.</p>`;
+      if (op) html += `<p class="recipe-status">Bobbin · ${routeLabel(op.routeId)}: ${op.phase === "ready" ? "at the exterior collar — confirm tow in Cargo to attach" : op.phase === "tow" ? `guiding the original hull back to ${deepRoute(op.routeId) ? "its surface stage" : "shallow staging"}` : "following the local tether corridor toward the collar"}. Progress pauses while this panel is open.</p>`;
     }
     return this.group("return-recovery", "Return & recovery", html + "</article>", state.recovery.losses.length > 0 || state.recovery.operation !== null || state.recovery.caches.length > 0 || Object.values(RECOVERY_NOTICES).some((message) => message === state.feedback));
   }

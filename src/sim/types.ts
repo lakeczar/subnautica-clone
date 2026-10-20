@@ -11,7 +11,7 @@ import type {
   SourceId,
 } from "../content/registry.js";
 import type { StoryState } from "./story/state.js";
-import type { RecoveryRouteId } from "../content/routes.js";
+import type { RecoveryRouteId } from "../content/recoveryRoutes.js";
 export interface Vec3 {
   x: number;
   y: number;
