@@ -11,7 +11,6 @@ import { executeCommand, stepGame } from "../src/sim/step.js";
 import type { GameCommand, GameState } from "../src/sim/types.js";
 import { createWorldQueries, hullClearance, SOLIDS, sweptHullClearance } from "../src/sim/world.js";
 
-import { migrateSchema2Fixture } from "./legacy-fixture-support.js";
 const world = createWorldQueries();
 const meta = {
   sessionId: "recovery-occupancy-test",
@@ -113,7 +112,7 @@ test("paid occupied patch and reserve transfer keep their costs and identity wit
   roundTrip(s);
 });
 
-test("valid old occupied approach, ready and tow snapshots cancel once before movement without service", () => {
+test("valid saved occupied approach, ready and tow snapshots cancel once before movement without service", () => {
   for (const phase of ["approach", "ready", "tow"] as const) {
     let s = fixture();
     const v = s.fleet.vehicles[0]!;
@@ -122,7 +121,6 @@ test("valid old occupied approach, ready and tow snapshots cancel once before mo
     s.player.vitals.food = 70;
     s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase, waypoint: 2, position: { ...v.pose.position, y: v.pose.position.y + 1 } };
     s = roundTrip(s);
-    for (const version of ["expedition.2", "expedition.3"] as const) s = migrateSchema2Fixture(s, meta, version);
     const before = structuredClone(s), detached = structuredClone(s);
     const event = updateRecovery(detached, world);
     assert.deepEqual(detached, { ...before, recovery: { ...before.recovery, operation: null }, feedback: detached.feedback });
@@ -148,7 +146,7 @@ test("valid old occupied approach, ready and tow snapshots cancel once before mo
   }
 });
 
-test("cancelling an occupied old tow with exhausted cabin air does not refill air, charge or diver oxygen", () => {
+test("cancelling an occupied saved tow with exhausted cabin air does not refill air, charge or diver oxygen", () => {
   let s = fixture();
   const v = s.fleet.vehicles[0]!;
   v.emergencyAir = 0;
@@ -156,7 +154,6 @@ test("cancelling an occupied old tow with exhausted cabin air does not refill ai
   s.player.vitals.oxygen = 50;
   s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase: "tow", waypoint: 2, position: { ...v.pose.position } };
   s = roundTrip(s);
-  for (const version of ["expedition.2", "expedition.3"] as const) s = migrateSchema2Fixture(s, meta, version);
   const result = stepGame(s, [], world);
   assert.equal(result.state.recovery.operation, null);
   assert.equal(result.state.fleet.vehicles[0]!.emergencyAir, 0);

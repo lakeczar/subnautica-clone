@@ -1,0 +1,9 @@
+{
+  "comment": "Peak RSS budgets (MiB) per heavy test process. Healthy peaks measured 2026-10-20; budget is about 1.25x peak, rounded up. A file over budget fails.",
+  "defaultMiB": 1024,
+  "files": {
+    "m2-region-render.heavy.test.ts": 2048,
+    "render-cache.heavy.test.ts": 1536,
+    "renewal-render.heavy.test.ts": 1280
+  }
+}

@@ -32,7 +32,6 @@ import {
   updateRecovery,
 } from "../src/sim/recovery.js";
 import type { GameEvent, GameState } from "../src/sim/types.js";
-import { migrateSchema2Fixture } from "./legacy-fixture-support.js";
 const world = createWorldQueries();
 const ready = (): GameState => {
   const s = createGame();
@@ -670,7 +669,7 @@ test("automatic Bobbin ready and blocked transitions publish one notice through 
   assert.deepEqual(result.events.filter((e) => e.type === "notice"), [{ type: "notice", channel: "hazard", context: "recovery", message: result.state.feedback, error: true }]);
   assert.equal(stepGame(result.state, [], blocked).events.filter((e) => e.type === "notice").length, 0);
 });
-test("legacy operation phase cuts and attachment offsets resume a fully swept tow with immediately valid saves", () => {
+test("saved operation phase cuts and attachment offsets resume a fully swept tow with immediately valid saves", () => {
   const deep = { x: 95.29085223262864, y: -91.62861156955663, z: -98.03837674249381 };
   const keel = [RECOVERY_MOORING, { x: 57, y: -10, z: -65 }, { x: 80, y: -48, z: -89 }, deep];
   const cuts: { phase: "approach" | "ready" | "tow"; waypoint: number; offset: number }[] = [
@@ -693,8 +692,6 @@ test("legacy operation phase cuts and attachment offsets resume a fully swept to
       : { ...v.pose.position, y: v.pose.position.y + cut.offset };
     s.recovery.operation = { vehicleId: v.id, routeId: "canopy", method: "tow", phase: cut.phase, waypoint: cut.waypoint, position: { ...guide } };
     s = roundTrip(s);
-    for (const version of ["expedition.2", "expedition.3"] as const)
-      s = migrateSchema2Fixture(s, { sessionId: "legacy-operation-cuts", createdAt: "2026-10-17T12:00:00.000Z", savedAt: "2026-10-17T12:00:00.000Z" }, version);
     const before = structuredClone(s), notices: GameEvent[] = [];
     for (let i = 0; s.recovery.operation && i < 2500; i++) {
       if (s.recovery.operation.phase === "ready") {
