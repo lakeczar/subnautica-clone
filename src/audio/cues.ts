@@ -393,14 +393,23 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
 
 export const CUE_IDS = Object.keys(CUES) as CueId[];
 
-/** Upper bound on a cue's audible length in seconds, including its decay tail. */
-export function cueDuration(spec: CueSpec): number {
-  const s = spec.sound;
+/** Synthesis timing, shared with synth.ts so allocation always matches the
+ * graph: voices start START_LEAD after admission; every source stops STOP_PAD
+ * after its envelope; phrase notes ring NOTE_TAIL seconds past their beats and
+ * pad chords release over PAD_RELEASE seconds. */
+export const START_LEAD = 0.005, STOP_PAD = 0.02, NOTE_TAIL = 2.2, PAD_RELEASE = 1.5;
+
+/** Seconds from a sound's start time to its last source stop. */
+export function soundLength(s: readonly Part[] | Phrase): number {
   if ("kind" in s && s.kind === "phrase") {
-    const ends = [...s.notes.map(x => x.at + x.beats + 3), ...(s.pad ?? []).map(x => x.at + x.beats + 1.5)];
-    return Math.max(...ends) * s.beat + 0.1;
+    const notes = s.notes.map(x => x.at * s.beat + x.beats * s.beat + NOTE_TAIL);
+    const pads = (s.pad ?? []).map(x => x.at * s.beat + x.beats * s.beat + PAD_RELEASE);
+    return Math.max(...notes, ...pads) + STOP_PAD;
   }
-  return Math.max(...(s as readonly Part[]).map(p => p.at + p.dur)) + 0.05;
+  return Math.max(...(s as readonly Part[]).map(p => p.at + p.dur)) + STOP_PAD;
 }
+
+/** Seconds from admission until a cue's graph has stopped completely. */
+export const cueDuration = (spec: CueSpec): number => START_LEAD + soundLength(spec.sound);
 
 export const midiHz = (m: number): number => 440 * 2 ** ((m - 69) / 12);

@@ -95,6 +95,9 @@ export class VoiceAllocator {
     return { play: true, voice, steal: [...steal] };
   }
 
+  /** Forget cooldown history, e.g. on New/Continue, so nothing stays suppressed. */
+  clearHistory(): void { this.lastStart.clear(); }
+
   count(bus?: Bus): number { return bus ? this.voices.filter(v => v.bus === bus).length : this.voices.length; }
 }
 

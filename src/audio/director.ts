@@ -61,7 +61,7 @@ export class SiltwakeAudio {
   /** Once per frame, after the step's events. */
   update(s: GameState | null, active: boolean): void {
     if (this.disposed) return;
-    this.scene = sceneFromState(s, active, this.regionAt);
+    this.scene = sceneFromState(s, active, this.regionAt, this.scene.region);
     const derived = this.mapper.observe(s, this.scene, this.clock());
     this.engine?.setVolume(this.gain());
     this.engine?.update(this.scene);
@@ -71,13 +71,21 @@ export class SiltwakeAudio {
   /** One simulation event. Pass every event of a batch in order. */
   event(e: GameEvent, s: GameState | null): void {
     if (this.disposed) return;
-    // Pan against the listener at emission, not the previous frame.
-    if (s) this.scene = sceneFromState(s, this.scene.active, this.regionAt);
+    this.listen(s);
     for (const r of this.mapper.event(e, s, this.scene)) this.play(r);
   }
 
+  /** A whole step batch (preferred): duplicate injury events collapse into one
+   * hit that keeps the batch's emission origin. */
   events(batch: readonly GameEvent[], s: GameState | null): void {
-    for (const e of batch) this.event(e, s);
+    if (this.disposed) return;
+    this.listen(s);
+    for (const r of this.mapper.events(batch, s, this.scene)) this.play(r);
+  }
+
+  /** Pan against the listener at emission, not the previous frame. */
+  private listen(s: GameState | null): void {
+    if (s) this.scene = sceneFromState(s, this.scene.active, this.regionAt, this.scene.region);
   }
 
   /** Story-owned moments without a simulation event, e.g. the ending. */
@@ -89,7 +97,7 @@ export class SiltwakeAudio {
   reset(): void {
     this.mapper.reset();
     this.captions.reset();
-    this.engine?.silence();
+    this.engine?.reset();
   }
 
   stats(): EngineStats | null { return this.engine?.stats() ?? null; }

@@ -1,6 +1,6 @@
 /** WebAudio rendering of cue recipes. Works on any BaseAudioContext, so the
  * same graphs render live and in OfflineAudioContext analysis. */
-import { midiHz, type NoisePart, type Part, type Phrase, type TonePart } from "./cues.js";
+import { midiHz, NOTE_TAIL, PAD_RELEASE, STOP_PAD, type NoisePart, type Part, type Phrase, type TonePart } from "./cues.js";
 import type { DetailKind } from "./profiles.js";
 
 export const dbToGain = (db: number): number => 10 ** (db / 20);
@@ -95,12 +95,12 @@ function tone(ctx: BaseAudioContext, p: TonePart, when: number, dest: AudioNode,
     mg.gain.setValueAtTime(p.fm.index * f0, t0);
     if (p.fm.indexTo !== undefined) mg.gain.linearRampToValueAtTime(p.fm.indexTo * f0, t0 + p.dur);
     m.connect(mg); mg.connect(o.frequency);
-    m.start(t0); m.stop(t0 + p.dur + 0.02);
+    m.start(t0); m.stop(t0 + p.dur + STOP_PAD);
     b.nodes.push(m, mg); b.sources.push(m);
   }
-  o.start(t0); o.stop(t0 + p.dur + 0.02);
+  o.start(t0); o.stop(t0 + p.dur + STOP_PAD);
   b.nodes.push(o, env); b.sources.push(o);
-  b.end = Math.max(b.end, t0 + p.dur + 0.02);
+  b.end = Math.max(b.end, t0 + p.dur + STOP_PAD);
 }
 
 function noise(ctx: BaseAudioContext, p: NoisePart, when: number, dest: AudioNode, b: Built, bank: NoiseBank, r: () => number): void {
@@ -112,16 +112,16 @@ function noise(ctx: BaseAudioContext, p: NoisePart, when: number, dest: AudioNod
   if (p.to) f.frequency.exponentialRampToValueAtTime(p.to, t0 + p.dur);
   envelope(env.gain, t0, p.attack, p.hold ?? 0, p.dur, p.gain);
   src.connect(f); f.connect(env); env.connect(dest);
-  src.start(t0, r() * 2.5); src.stop(t0 + p.dur + 0.02);
+  src.start(t0, r() * 2.5); src.stop(t0 + p.dur + STOP_PAD);
   b.nodes.push(src, f, env); b.sources.push(src);
-  b.end = Math.max(b.end, t0 + p.dur + 0.02);
+  b.end = Math.max(b.end, t0 + p.dur + STOP_PAD);
 }
 
 /** Soft FM bells over a slow pad. One voice regardless of note count. */
 function phrase(ctx: BaseAudioContext, ph: Phrase, when: number, dest: AudioNode, b: Built): void {
   const beat = ph.beat;
   for (const chord of ph.pad ?? []) {
-    const t0 = when + chord.at * beat, dur = chord.beats * beat + 1.5;
+    const t0 = when + chord.at * beat, dur = chord.beats * beat + PAD_RELEASE;
     const f = ctx.createBiquadFilter();
     f.type = "lowpass"; f.frequency.value = 900; f.Q.value = 0.5;
     const env = ctx.createGain();
@@ -129,7 +129,7 @@ function phrase(ctx: BaseAudioContext, ph: Phrase, when: number, dest: AudioNode
     const g = chord.gain / Math.max(1, chord.midi.length) / 2;
     env.gain.setValueAtTime(0, t0);
     env.gain.linearRampToValueAtTime(g, t0 + Math.min(1.6, dur * 0.3));
-    env.gain.setValueAtTime(g, t0 + dur - 1.5);
+    env.gain.setValueAtTime(g, t0 + dur - PAD_RELEASE);
     env.gain.linearRampToValueAtTime(0, t0 + dur);
     f.connect(env); env.connect(dest);
     b.nodes.push(f, env);
@@ -137,13 +137,13 @@ function phrase(ctx: BaseAudioContext, ph: Phrase, when: number, dest: AudioNode
       const o = ctx.createOscillator();
       o.type = "triangle"; o.frequency.value = midiHz(m); o.detune.value = cents;
       o.connect(f);
-      o.start(t0); o.stop(t0 + dur + 0.02);
+      o.start(t0); o.stop(t0 + dur + STOP_PAD);
       b.nodes.push(o); b.sources.push(o);
     }
-    b.end = Math.max(b.end, t0 + dur + 0.02);
+    b.end = Math.max(b.end, t0 + dur + STOP_PAD);
   }
   for (const note of ph.notes) {
-    const t0 = when + note.at * beat, hz = midiHz(note.midi), dur = note.beats * beat + 2.2;
+    const t0 = when + note.at * beat, hz = midiHz(note.midi), dur = note.beats * beat + NOTE_TAIL;
     tone(ctx, { kind: "tone", wave: "sine", freq: hz, at: 0, dur, attack: 0.008, gain: note.gain, fm: { ratio: 2, index: 1.1, indexTo: 0.05 } }, t0, dest, b);
     tone(ctx, { kind: "tone", wave: "sine", freq: hz * 2, at: 0, dur: dur * 0.5, attack: 0.004, gain: note.gain * 0.12 }, t0, dest, b);
   }

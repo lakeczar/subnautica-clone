@@ -16,9 +16,10 @@ export class FakeParam {
 
 export class FakeNode {
   connections = 0;
+  readonly targets: unknown[] = [];
   disconnected = false;
   constructor(readonly ctx: FakeContext, readonly kind: string) { ctx.created.push(this); }
-  connect<T>(n: T): T { this.connections++; return n; }
+  connect<T>(n: T): T { this.connections++; this.targets.push(n); return n; }
   disconnect(): void { if (!this.disconnected) { this.disconnected = true; this.ctx.disconnects++; } }
 }
 class FakeSource extends FakeNode {
@@ -67,6 +68,8 @@ export class FakeContext {
   async resume(): Promise<void> { this.resumed++; this.state = "running"; }
   async close(): Promise<void> { this.closed++; this.state = "closed"; }
 
+  /** Live nodes that connect directly into `n` (an AudioParam target counts too). */
+  inbound(n: unknown): FakeNode[] { return this.created.filter(x => !x.disconnected && x.targets.includes(n)); }
   /** Nodes created and never disconnected. */
   get live(): number { return this.created.filter(n => !n.disconnected).length; }
   oscillators(): FakeOscillator[] { return this.created.filter((n): n is FakeOscillator => n instanceof FakeOscillator); }

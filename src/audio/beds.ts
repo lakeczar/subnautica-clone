@@ -48,7 +48,7 @@ export class AmbienceSlot extends Layer {
   private readonly lp: BiquadFilterNode;
   private readonly level: GainNode;
   private readonly send: GainNode;
-  constructor(ctx: BaseAudioContext, readonly profile: AmbienceProfile, readonly key: string, out: AudioNode, reverb: AudioNode, bank: NoiseBank, offset: number, now: number) {
+  constructor(ctx: BaseAudioContext, readonly profile: AmbienceProfile, readonly key: string, out: AudioNode, wet: AudioNode, bank: NoiseBank, offset: number, now: number) {
     super(ctx);
     const p = profile;
     this.fade = this.gain(0);
@@ -68,7 +68,7 @@ export class AmbienceSlot extends Layer {
     this.level.connect(this.fade);
     this.fade.connect(out);
     this.fade.connect(this.send);
-    this.send.connect(reverb);
+    this.send.connect(wet);
     set(this.fade.gain, 1, now, 0.8);
   }
   /** depth: metres; shelter muffles and lowers what is heard through a hull. */
@@ -83,6 +83,12 @@ export class AmbienceSlot extends Layer {
     this.fade.gain.setValueAtTime(this.fade.gain.value, now);
     this.fade.gain.linearRampToValueAtTime(0, now + seconds);
     return now + seconds + 0.05;
+  }
+  /** Revive a slot that is still fading out, from wherever its fade has reached. */
+  fadeIn(now: number): void {
+    this.fade.gain.cancelScheduledValues(now);
+    this.fade.gain.setValueAtTime(this.fade.gain.value, now);
+    set(this.fade.gain, 1, now, 0.8);
   }
 }
 
@@ -107,7 +113,7 @@ export class RefugeBed extends Layer {
   private readonly chord: GainNode;
   private readonly vent: GainNode;
   private readonly hum: GainNode;
-  constructor(ctx: BaseAudioContext, dest: AudioNode, reverb: AudioNode, bank: NoiseBank, now: number) {
+  constructor(ctx: BaseAudioContext, dest: AudioNode, wet: AudioNode, bank: NoiseBank, now: number) {
     super(ctx);
     this.bed = this.gain(0);
     this.chord = this.gain(0);
@@ -121,7 +127,7 @@ export class RefugeBed extends Layer {
     for (const hz of INTERIOR_BED.hum) this.osc("sine", hz, now).connect(this.hum);
     this.hum.connect(this.bed);
     const send = this.gain(0.2);
-    this.bed.connect(dest); this.bed.connect(send); send.connect(reverb);
+    this.bed.connect(dest); this.bed.connect(send); send.connect(wet);
   }
   update(scene: AudioScene, now: number): void {
     const on = scene.active && scene.shelter !== "open", interior = scene.shelter === "interior";

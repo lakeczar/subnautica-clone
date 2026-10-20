@@ -29,7 +29,7 @@ export interface AudioScene {
   /** 0..1 charge of the controlled hull; 1 when on foot. */
   power: number;
   disabled: boolean;
-  /** Personal pressure beyond the suit's rating while outside a hull. */
+  /** Personal pressure beyond the suit's rating outside a hull: survival's own warning condition. */
   overPressure: boolean;
   /** Bobbin is towing a disabled hull. */
   tow: boolean;
@@ -37,7 +37,11 @@ export interface AudioScene {
   listener: Listener;
 }
 
-export type RegionResolver = (position: Readonly<Vec3>) => RegionId;
+/** Region at a world position, or null outside every authored region (S1's
+ * `WorldMap.regionAt`). Outside the world the scene keeps its previous region. */
+export type RegionResolver = (position: Readonly<Vec3>) => RegionId | null;
+/** Before any region is known, e.g. a first frame outside the authored world. */
+export const OUTSIDE_FALLBACK: RegionId = "refuge_reef";
 
 const clamp = (v: number, lo = 0, hi = 1): number => Math.max(lo, Math.min(hi, Number.isFinite(v) ? v : lo));
 
@@ -60,9 +64,9 @@ function rating(v: VehicleState): number {
   return typeof paid === "number" && paid > 0 ? paid : HULLS[v.hull].initialDepth;
 }
 
-export function sceneFromState(s: GameState | null, active: boolean, regionAt: RegionResolver): AudioScene {
+export function sceneFromState(s: GameState | null, active: boolean, regionAt: RegionResolver, previous: RegionId = OUTSIDE_FALLBACK): AudioScene {
   if (!s) return {
-    active: false, region: "refuge_reef", depth: 0, medium: "air", shelter: "open", hull: null,
+    active: false, region: previous, depth: 0, medium: "air", shelter: "open", hull: null,
     throttle: 0, boost: 0, hullStress: 0, power: 1, disabled: false, overPressure: false, tow: false,
     threat: { mode: "idle", interest: 0, pan: 0, distance: Infinity, dir: "ahead" },
     listener: { position: { x: 0, y: 0, z: 0 }, yaw: 0 },
@@ -78,7 +82,7 @@ export function sceneFromState(s: GameState | null, active: boolean, regionAt: R
   const rel = finite(t.position) ? relate(listener, t.position) : { pan: 0, distance: Infinity, dir: "ahead" as const };
   return {
     active,
-    region: regionAt(listener.position),
+    region: regionAt(listener.position) ?? previous,
     depth: -listener.position.y,
     medium: e.airwayY >= 0 ? "air" : "water",
     shelter,
@@ -88,7 +92,7 @@ export function sceneFromState(s: GameState | null, active: boolean, regionAt: R
     hullStress: v ? (v.hull === "spindle" ? (hullDepth(v) > 1 ? 1 : 0) : clamp(hullDepth(v) / rating(v), 0, 2)) : 0,
     power: v ? clamp(v.charge / 100) : 1,
     disabled: v?.disabled ?? false,
-    overPressure: !v && shelter === "open" && personalDepth(listener.position) > personalLimit(s),
+    overPressure: !v && personalDepth(listener.position) > personalLimit(s),
     tow: s.recovery.operation?.phase === "tow",
     threat: { mode: t.mode, interest: Number.isFinite(t.interest) ? t.interest : 0, ...rel },
     listener,

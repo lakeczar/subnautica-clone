@@ -20,9 +20,13 @@ export interface CueRequest {
 /** Moments that have no simulation event yet; story/ending code calls these. */
 export type Moment = "ending" | "discovery" | "blueprint" | "arrival" | "homecoming";
 
-const BODY_ORDER: readonly CueId[] = ["alert.oxygen", "alert.pressure", "alert.hull-stress", "alert.power", "alert.food"];
-/** Hazard notice contexts that name the body alarm sounding beside them. */
+/** Hazard notice contexts that name the body alarm emitted right after them. */
 const CONTEXT_CUE: Partial<Record<NoticeContext, CueId>> = { oxygen: "alert.oxygen", food: "alert.food" };
+/** Proposed `cause` on centred warning events (docs/build/streams/S6.md). */
+export type WarningCause = "oxygen" | "food" | "pressure" | "power" | "hull-depth";
+const CAUSE_CUE: Record<WarningCause, CueId> = {
+  oxygen: "alert.oxygen", food: "alert.food", pressure: "alert.pressure", power: "alert.power", "hull-depth": "alert.hull-stress",
+};
 /** Away from any refuge this long turns the return chime into the homecoming phrase. */
 export const HOMECOMING_AFTER = 180;
 
@@ -50,8 +54,10 @@ export class CueMapper {
   private openSince = 0;
   /** Hazard notice contexts seen since the last observe(), in order. */
   private contexts: CueId[] = [];
-  /** Live alarm causes already named since the last observe(). */
+  /** Alarm causes already named since the last observe(), by notice or condition. */
   private readonly usedCauses = new Set<CueId>();
+  /** An injury has already been mapped since the last observe(). */
+  private injured = false;
 
   /** Forget everything, e.g. on New/Continue. The next observe() is a baseline. */
   reset(): void {
@@ -59,6 +65,24 @@ export class CueMapper {
     this.visited.clear();
     this.contexts = [];
     this.usedCauses.clear();
+    this.injured = false;
+  }
+
+  /** Map one step's whole batch. Preferred over event(): duplicate injury
+   * events collapse into one hit that keeps any emission origin in the batch. */
+  events(batch: readonly GameEvent[], s: GameState | null, scene: AudioScene): CueRequest[] {
+    const origin = batch.find((e): e is Extract<GameEvent, { type: "sound" }> => e.type === "sound" && e.cue === "damage" && finite(e.origin))?.origin;
+    const out: CueRequest[] = [], heard = this.injured;
+    let hurt: CueRequest | null = null;
+    for (const e of batch) {
+      if (isInjury(e)) {
+        if (!hurt) { hurt = this.injury(e, s, scene, origin); if (!heard) out.push(hurt); }
+        else if (e.type === "threat-damage") hurt.intensity = Math.max(hurt.intensity, injuryIntensity(e.loss));
+        continue;
+      }
+      out.push(...this.event(e, s, scene));
+    }
+    return out;
   }
 
   /** Map one simulation event. Call for every event of a step batch, in order,
@@ -74,7 +98,7 @@ export class CueMapper {
       case "interaction-panel": return [centred("action.panel")];
       case "foundation-boundary": return [centred("alert.boundary")];
       case "impact": return e.hullLoss > 0 ? [centred("hit.impact", clamp01(0.4 + e.hullLoss / 20))] : [];
-      case "threat-damage": return [centred("hit.damage", clamp01(0.5 + e.loss))];
+      case "threat-damage": return this.once(this.injury(e, s, scene));
       case "movement-mode-changed": {
         const from = this.last?.mode ?? null;
         if (this.last) this.last.mode = e.mode;
@@ -95,10 +119,10 @@ export class CueMapper {
           case "recovery": return [centred("recovery.wake")];
           // Equipment thuds never imply a direction, even with an origin.
           case "impact": return [centred("hit.impact")];
-          case "damage": return [this.spatial("hit.damage", e.origin, scene)];
+          case "damage": return this.once(this.injury(e, s, scene));
           case "warning":
             if (e.source === "threat-call" || finite(e.origin)) return [this.spatial("alert.threat-call", e.origin, scene)];
-            return [centred(this.bodyAlarm(s, scene))];
+            return [centred(this.bodyAlarm(e, scene))];
         }
       }
     }
@@ -109,6 +133,7 @@ export class CueMapper {
   observe(s: GameState | null, scene: AudioScene, now: number): CueRequest[] {
     this.contexts = [];
     this.usedCauses.clear();
+    this.injured = false;
     if (!s) { this.last = null; return []; }
     const dock = s.fleet.docking;
     const next: Snapshot = {
@@ -167,22 +192,45 @@ export class CueMapper {
     return { cue, intensity: 1, pan: r.pan, distance: r.distance, dir: r.dir };
   }
 
-  /** A centred warning names its cause: the hazard notice beside it, else the
-   * live condition, in severity order. Each cause is consumed once per batch so
-   * two simultaneous alarms stay distinct; any extra falls back to the generic tone. */
-  private bodyAlarm(s: GameState | null, scene: AudioScene): CueId {
-    const fromNotice = this.contexts.shift();
-    if (fromNotice) return fromNotice;
+  /** One injury per frame: later copies (the step's legacy sound, app-injected
+   * feedback) are already heard, so they map to nothing. */
+  private once(r: CueRequest): CueRequest[] {
+    if (this.injured) return [];
+    this.injured = true;
+    return [r];
+  }
+
+  /** Hunter injury, panned to the emission origin: the event's own, the batch's,
+   * or the hunter's position in the same step. */
+  private injury(e: Extract<GameEvent, { type: "threat-damage" | "sound" }>, s: GameState | null, scene: AudioScene, batchOrigin?: Vec3): CueRequest {
+    const own = e.type === "sound" ? e.origin : undefined;
+    const hunter = e.type === "threat-damage" && e.source === "hunter" ? s?.world.threat.position : undefined;
+    const origin = [own, batchOrigin, hunter].find(finite);
+    const r = this.spatial("hit.damage", origin, scene);
+    r.intensity = e.type === "threat-damage" ? injuryIntensity(e.loss) : 1;
+    this.injured = true;
+    return r;
+  }
+
+  /** A centred warning keeps its real cause: an explicit `cause`, else the
+   * oxygen/food notice emitted just before it, else the producer's own
+   * pressure → power → hull-depth conditions, each named once per frame.
+   * Oxygen and food are never inferred from a live meter. */
+  private bodyAlarm(e: Extract<GameEvent, { type: "sound" }>, scene: AudioScene): CueId {
+    const explicit = (e as { cause?: WarningCause }).cause;
+    const named = explicit && CAUSE_CUE[explicit] ? CAUSE_CUE[explicit] : this.contexts.shift();
+    if (named) { this.usedCauses.add(named); return named; }
     const live: CueId[] = [];
     if (scene.overPressure) live.push("alert.pressure");
-    if (scene.hull && scene.hullStress > 0.85) live.push("alert.hull-stress");
     if (scene.hull && scene.power < 0.25) live.push("alert.power");
-    if (s && s.player.vitals.food <= 20) live.push("alert.food");
-    if (s && s.player.vitals.oxygen <= 35 && !scene.hull && scene.shelter === "open") live.push("alert.oxygen");
-    live.sort((a, b) => BODY_ORDER.indexOf(a) - BODY_ORDER.indexOf(b));
+    if (scene.hull && scene.hull !== "spindle" && scene.hullStress > 0.85) live.push("alert.hull-stress");
     const pick = live.find(c => !this.usedCauses.has(c));
     if (!pick) return "alert.body";
     this.usedCauses.add(pick);
     return pick;
   }
 }
+
+const isInjury = (e: GameEvent): e is Extract<GameEvent, { type: "threat-damage" | "sound" }> =>
+  e.type === "threat-damage" || (e.type === "sound" && e.cue === "damage");
+const injuryIntensity = (loss: number): number => clamp01(0.5 + loss);
