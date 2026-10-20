@@ -80,3 +80,14 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 ## Ratified contracts
 - **S1 world frame (2026-10-20):** X −576..1472, Z −1632..160 (+Z north, +X east), Y −800..+100, with 128 m chunks and today's coordinates unchanged. The types live in S1's `src/world/types.ts` and `src/render/kit/types.ts` (`393030a`), described in `docs/build/streams/S1.md` on S1's branch. Placement follows `docs/WORLD_PROGRESSION.md`: Reef NW, Isles N/E rim, Canopy E shelf, Pale Basin centre, Rift SW, Divide S saddle, Meridian SE.
 - S2 live task: `siltwake-s2-regions-393030a`.
+
+## Worktrees (2026-10-20; all resumed after the Claude usage-limit pause)
+- **S1:** `t3-466e13a2` `t3/world-runtime-scale`
+- **S2:** `t3-a50e5f9f` `t3/remaining-regions-islands`
+- **S3:** `t3-6eca1f89` `t3/fleet-art-hearthline-interior`
+- **S4:** `t3-a550755c` `t3/ecology-encounters-hazards`
+- **S5:** `t3-bd05c0c7` `t3/campaign-evidence-ending`
+- **S6:** `t3-74da9dce` `t3/siltwake-audio`
+- **B1:** `t3-b6aef8ec`
+- **GPU author:** `t3-b9861fd3`
+- **GPU R4 review:** `siltwake-gpu-r4-sol-xhigh-6cc4bec`, on candidate `6cc4bec` (the OVMF 64 GiB window for ReBAR)
