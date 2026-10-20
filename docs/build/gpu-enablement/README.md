@@ -1,170 +1,158 @@
 # RTX 3090 for factory-worker
 
-**Status (2026-10-19): prepared and offline-tested only.** No host file, VM definition, guest package, driver, service or browser setting has been changed. No `ask` was submitted. Author: Opus 5.5/high (`claude-opus-5-5`, effort high) in worktree `t3/enable-3090-gpu` from `d8a812e`. Next steps: root's fresh Sol 6.1/xhigh review, then root places the operational files in Fleet and runs the native-gated steps below.
+**Status (2026-10-19): R1 corrections prepared and offline-tested only.** No host file, VM definition, guest package, driver, service or browser setting has been changed, and no `ask` was submitted. Author: Opus 5.5/high (`claude-opus-5-5`, effort high), worktree `t3/enable-3090-gpu`. Round 1 (`e1a85c2`) and round 2 (`c4d5191`) were reviewed by Sol 6.1/xhigh with **REQUEST CHANGES**; [R1-FIX.md](R1-FIX.md) and [R2-FIX.md](R2-FIX.md) map every finding to its correction and checks. Next: root inspection, a fresh Sol review of the whole bundle, then byte-identical placement in Fleet and the native-gated steps below. Nothing here shows a working GPU.
 
 ## What the GPU is for
 
 | Workload | Uses the 3090 after this? | Why |
 | --- | --- | --- |
-| Game smoke, captures and performance runs in a project-owned headless Chromium (`webgl-probe.mjs` or an equivalent Playwright launch) | **Yes, once verified** | WebGL2 through ANGLE on NVIDIA EGL/Vulkan |
-| T3's shared preview browser and `html_render` | **No** | T3 0.1.1-nightly.20261016.3203 launches its own pinned, hash-checked `chrome-headless-shell` with a hard-coded `--disable-gpu` (`ServerBrowserContexts.launchOptions` and `launchBrowser` in the T3 binary). It has no setting for this. Changing it is a T3 upstream feature, not a flag for us to change. |
-| Opus/Sol/Codex model inference | No | It runs remotely through the proxy. Model and provider routing are unchanged. |
-| TypeScript builds, Node tests, Vite | No | These are CPU work. |
-| CUDA tools | Not installed | Not needed for graphics. `libcuda1` and the toolkit are a separate, optional install if a real CUDA job appears. |
+| Game smoke, captures and performance runs in a project-owned headless Chromium (`webgl-probe.mjs`, or an equivalent Playwright launch with the switches it selects) | **Yes, once verified** | WebGL2 through ANGLE on NVIDIA EGL/Vulkan |
+| T3's shared preview browser and `html_render` | **No** | T3 0.1.1-nightly.20261016.3203 launches its own pinned, hash-checked `chrome-headless-shell` with a hard-coded `--disable-gpu` (`ServerBrowserContexts.launchOptions` and `launchBrowser`). It has no setting for this; it would need a T3 upstream feature. |
+| Opus/Sol/Codex model inference | No | It runs remotely through the proxy; routing is unchanged |
+| TypeScript builds, Node tests, Vite | No | CPU work |
+| CUDA tools | Not installed | Graphics need no CUDA; `libcuda1`/toolkit would be a separate install for a real CUDA job |
 
 ## The chain, and where each link is checked
 
-1. **Host:** `0000:01:00.0` (10de:2204, VGA) and `.1` (10de:1aef, audio), bound to `vfio-pci` or no driver, alone in their IOMMU group. No running VM may hold them, and no host framebuffer may sit in a BAR. → `host-gpu.sh` preflight
-2. **Definition:** two `<hostdev managed='yes'>` entries in factory-worker on its free `pcie-root-port` index 6 (guest bus 0x06), function 0 with `multifunction='on'`. Copied from the proven Windows/inference entries. Nothing else changes. QXL stays the primary display for VNC. → `host-gpu.sh` compares the rest of the definition byte for byte.
-3. **Cold start:** OVMF sizes the root port's windows for the card at boot. VFIO pins all 16 GiB of guest RAM. → `host-gpu.sh` start, live hostdev check, guest-agent answer
+1. **Host:** `0000:01:00.0` (10de:2204, VGA) and `.1` (10de:1aef, audio), bound to `vfio-pci` or no driver, alone in their IOMMU group (bridges allowed). No VM that is not shut off may name them, and no host framebuffer may sit in a BAR. → `host-gpu.sh`, checked at the start, before the shutdown, after it, and again just before the start.
+2. **Definition:** two `<hostdev managed='yes'>` entries in factory-worker on its free `pcie-root-port` index 6 (guest bus 0x06), function 0 with `multifunction='on'` (as in the proven Windows/inference entries). Everything else in the definition must read back byte for byte. QXL stays the primary display for VNC.
+3. **Cold start:** OVMF sizes the root port's windows for the card at boot. VFIO pins all 16 GiB of guest RAM. → start, live entries read back, guest agent answers.
 4. **Guest driver:** Debian 13 `nvidia-kernel-dkms` 550.163.01 built for the running kernel, with nouveau blacklisted. → `worker-gpu.sh check pre|post`, `nvidia-smi`
-5. **Userspace:** glvnd EGL vendor `10_nvidia.json`, GLES2, the NVIDIA Vulkan ICD. → `worker-gpu.sh`
-6. **Browser:** an isolated Chromium (Chrome for Testing 156.0.8078.4, already in `~/.cache/ms-playwright/chromium-1248`) with per-process ANGLE switches. `WEBGL_debug_renderer_info` must name the RTX 3090, and SwiftShader, llvmpipe and other cards are rejected. → `webgl-probe.mjs`
-7. **Game:** production build, New expedition, 5 s frame count, screenshot, page errors. → `webgl-probe.mjs --url`
+5. **Userspace:** glvnd EGL vendor `10_nvidia.json`, GLES2, the NVIDIA Vulkan ICD; `/dev/nvidia0` and `/dev/nvidiactl` usable by `worker`. → `worker-gpu.sh check post`
+6. **Browser:** an isolated Chromium (Chrome for Testing 156.0.8078.4 in `~/.cache/ms-playwright/chromium-1248`) per fixed candidate switch set. Accelerated means the unmasked renderer names the RTX 3090 (never SwiftShader, llvmpipe or another card) **and** a real shader draw of three colours reads back exactly with no GL error or context loss. → `webgl-probe.mjs`
+7. **Game:** the probe serves the production `dist/` itself and records its commit and file hashes. It starts a new expedition and waits for the game's own readiness (`#ocean` `data-graphics=available`, `data-ready=true`, HUD shown). It then counts frames from the game's render loop (`data-frames`, one per `scene.render()`) over 5 s, needing at least 10. It checks the canvas image alone (DOM overlays hidden) is a real scene, and fails on page errors, console errors, relevant WebGL warnings and context loss. → `webgl-probe.mjs --dist`, then `webgl-probe.mjs --validate` (called by `check post`), which re-derives the result from the raw observations for this commit, this boot and this host.
 
-A device that only appears in `lspci` passes link 3 and nothing after it.
+A device that only appears in `lspci` passes link 3 and nothing after it. The game frame count from headless Chromium is a functional signal, not a performance figure; 1080p/60 is not measured here.
 
 ## Why a cold change, not live hotplug
 
 Live attach would avoid a restart, but on this VM it cannot give a working 3090:
 
 - The only free root port, guest `00:01.5`, got **2 MiB** of 32-bit memory and **256 MiB** of 64-bit prefetchable memory from OVMF. The card needs 16 MiB (BAR0), 256 MiB + 32 MiB prefetchable (BAR1/BAR3) and a 512 KiB ROM.
-- QEMU q35 uses ACPI hotplug here (`_OSC: platform does not support [PCIeHotplug LTR]`, slots 0–6 in `/sys/bus/pci/slots`). In kernel 6.12 `acpiphp_glue.c` `enable_slot()` (lines 500–520), a hot-added non-bridge device only gets `__pci_bus_assign_resources()` inside the port's existing windows. Nothing releases or grows them. The result would be a device with unassigned BARs that the NVIDIA driver cannot use. It would still pin all guest RAM and hold the card.
-- Making room needs QEMU options or a guest PCI remove/rescan. Both are speculative on a live T3 host. A cold start lets OVMF size the window correctly.
+- q35 uses ACPI hotplug here (`_OSC: platform does not support [PCIeHotplug LTR]`). In kernel 6.12 `acpiphp_glue.c` `enable_slot()` (lines 500–520), a hot-added non-bridge device only gets `__pci_bus_assign_resources()` inside the port's existing windows; nothing grows them. The device would have unassigned BARs while still pinning all guest RAM and holding the card.
+- Making room needs QEMU options or a guest PCI remove/rescan, both speculative on a live T3 host. A cold start lets OVMF size the window. A guest reboot keeps the same QEMU process, so the power cycle is host-owned.
 
-So one restart is needed. It is a host-owned power cycle, because a guest reboot keeps the same QEMU process and would not pick up a new device.
+## The earlier 40-minute shutdown failure, and the QXL gate
 
-## The earlier 40-minute shutdown failure
+Run `20261019T203605Z-d291` failed (`shutdown-timeout`/13), and nothing here relabels it. In that boot the power key arrived at 15:38:06. PID 1 then blocked in the **qxl** DRM console path (`drm_modeset_lock … drm_fb_helper_pan_display … fbcon_switch … con_write`), after **65,643** `[TTM] Buffer eviction failed` since 2026-10-08. The recovery added `module_blacklist=qxl` to `GRUB_CMDLINE_LINUX_DEFAULT` (written 2026-10-19 16:24:33). The current boot has no qxl module and 0 TTM failures and hung tasks. The following reboot and power-off each took 1–2 s.
 
-Run `20261019T203605Z-d291` failed (`shutdown-timeout`/13), and nothing here relabels it. The guest journal shows what happened. The power key arrived at 15:38:06 and logind began powering off. PID 1 then sat in D state from 15:40 (`INFO: task systemd:1 blocked …`), in `drm_modeset_lock … drm_fb_helper_pan_display … fbcon_switch … con_write`, which is the **qxl** DRM console path. That boot had logged **65,643** `[TTM] Buffer eviction failed` since 2026-10-08 and repeated `qxl object_init failed`. The ACPI re-sends every 5 minutes changed nothing.
+That **supports** that the observed hang path is gone; it does **not guarantee** the next shutdown. Policy, enforced as FAIL by `worker-gpu.sh check pre`:
 
-The recovery added `module_blacklist=qxl` to `GRUB_CMDLINE_LINUX_DEFAULT` (`/etc/default/grub` and `grub.cfg` written 2026-10-19 16:24:33). The current boot has no qxl module, uses the EFI framebuffer, and has 0 TTM failures and 0 hung tasks. Since then, the next boot (still with qxl, but fresh) rebooted with `systemctl reboot` in about 2 s. The one after it, with qxl blacklisted, powered off from an ACPI power key in about 1 s, and the following boot took about 15 s.
+- `module_blacklist=qxl` must be on the running kernel and in `/etc/default/grub` for the next boot;
+- qxl must be unloaded;
+- this boot's kernel journal must be readable from its start (`Linux version`), with zero TTM failures and zero hung-task reports.
 
-This **supports** that the observed hang path is gone. It does **not guarantee** every future shutdown. So:
-
-- `worker-gpu.sh check pre` requires qxl unloaded, zero TTM failures and zero hung tasks in the current boot, plus an active guest agent.
-- The host run waits 10 minutes with one ACPI re-send. It **never forces**, and it changes nothing unless the VM really is off.
-
-Raw excerpts: `guest-shutdown-evidence.txt` under the evidence path below.
+The scripts check the recovery configuration and never edit it. The host run waits at most 10 minutes with one ACPI re-send, **never forces**, and changes nothing unless the VM really is off.
 
 ## Files
 
 | File | Runs on | Purpose |
 | --- | --- | --- |
-| `host-gpu.sh` | Unraid, root | `preflight` (default, read-only, prints host facts), `launch attach\|detach` (detached run), `status` |
-| `ask-command.sh` | worker | prints the exact hash-pinned `ask run` text: `preflight`, `rehearsal`, `attach`, `detach`; launches expire after 30 min |
-| `worker-gpu.sh` | worker | `check pre`, `check post [report.json]` (read-only); `install`/`uninstall` (dry run unless `--apply`) |
-| `webgl-probe.mjs` | worker | isolated WebGL2 renderer probe plus optional game smoke; `--self-test` |
-| `tests/run.sh` | worker | offline suite in bwrap with a fake `virsh` built from the real definition (`tests/fixtures/factory-worker.xml`, no secrets in it) |
+| `host-gpu.sh` | Unraid, root | `preflight [attach\|detach]` (default, read-only, prints host facts), `launch attach\|detach` (detached run), `status` |
+| `ask-command.sh` | worker | the exact hash-pinned `ask run` text: `preflight`, `rehearsal`, `attach`, `detach`; launches expire 30 min after the text is printed |
+| `worker-gpu.sh` | worker | `check pre`, `check post REPORT --commit SHA`, `install` (simulated, no root), `install --apply`, `undo-plan` (read-only) |
+| `webgl-probe.mjs` | worker | context probe + draw check, optional production game smoke, `--validate`, `--self-test` |
+| `tests/run.sh` | worker | the offline suite: host (fake `virsh` built from the real definition), guest (fake system tools, no network), ask text, probe logic |
+| `R1-FIX.md` | — | round-1 findings → corrections → checks |
 
-Host layout: `/mnt/user/appdata/fleet-gpu/host-gpu.sh` (staged) and `runs/<RUN_ID>/` containing `launch.json`, `state.json`, `run.log` (host facts included), `result.json`, `definition-*.xml`, `hostdev-[01].xml` and, when relevant, `unexpected-diff.txt` / `changed-while-off.xml`. A full definition backup with security info goes to `/boot/config/fleet/vm-backups/factory-worker-gpu-<RUN_ID>.xml`. Locks: `/tmp/fleet-gpu.lock`, plus Fleet's `/tmp/fleet-admin.lock` from power-off to start. Syslog tag `fleet-gpu`; an Unraid notification at the end of each run.
+Host records: `/mnt/user/appdata/fleet-gpu/host-gpu.sh` (staged) and `runs/<RUN_ID>/`. Each run folder holds:
+
+- `launch.json`, `state.json`, `run.log` (with host facts and every check) and `result.json`;
+- `definition-at-start.xml`, plus `definition-before-change.xml`/`-after-change.xml` and `hostdev-[01].xml`;
+- `backup.sha256`;
+- when relevant, `changed-definition.xml/.diff`, `unexpected-diff.txt` and `definition-after-undo.xml`.
+
+The full backup with security info is `/boot/config/fleet/vm-backups/factory-worker-gpu-<RUN_ID>.xml`, outside `files read`. Before any shutdown it must be a successful, complete read of this VM, equal to the checked definition apart from passwords, synced and read back. Locks: `/tmp/fleet-gpu.lock`, and Fleet's `/tmp/fleet-admin.lock` **from before the shutdown until the start**. Syslog tag `fleet-gpu`; an Unraid notification ends every run.
 
 ## Run outcomes (`result.json`)
 
 | Outcome | Exit | VM afterwards |
 | --- | --- | --- |
-| `attached` / `detached` | 0 | running with or without the GPU, entries live, guest agent answers |
-| `already-attached` / `already-detached` | 0 | not stopped |
-| `rehearsal-ok` | 0 | untouched |
-| `preflight-failed` | 10 | untouched; `message` says why |
-| `locked` / `cancelled` | 11 / 12 | untouched |
+| `attached` / `detached` | 0 | running with/without the GPU; live entries read back; guest agent answers |
+| `already-attached` / `already-detached` | 0 | not stopped (live entries read back) |
+| `rehearsal-ok` | 0 | untouched (checks, verified backup, Fleet lock, boundary check done) |
+| `preflight-failed` | 10 | untouched, still running; `message` lists every problem (including unreadable state) |
+| `locked` | 11 | untouched, **never stopped**: our run lock or Fleet's lock was busy |
+| `cancelled` | 12 | untouched |
 | `shutdown-timeout` | 13 | still running or stuck going down; nothing changed or forced; look at VNC |
-| `rolled-back` | 20 | running without the change; the definition is as before, or the message names a remaining non-GPU difference (`definition-after-undo.xml`) |
-| `started-as-is`, `restarted-elsewhere` | 21 | someone else changed or started the VM, or Fleet's lock was busy; their change is kept and ours is not made |
-| `guest-silent`, `started-unverified` | 22 | running with the intended entries, but the guest agent is silent or the live entries are wrong |
-| `left-off`, `needs-owner` | 30 | off: it would not start, or our entries could not be removed again; alert |
+| `rolled-back` | 20 | running without the change; definition as before, or the message names a remaining non-GPU difference |
+| `backed-off`, `restarted-elsewhere` | 21 | running, **nothing changed**: after the shutdown the definition, the card or another VM's ownership no longer matched, or someone started the VM |
+| `guest-silent`, `started-unverified` | 22 | running, but the guest agent is silent, or the live entries are wrong or unreadable |
+| `left-off` | 30 | **observed shut off**: a start failed and the VM was then read as shut off; start it from the VM page |
+| `needs-owner` | 30 | **not started by the run**: after the shutdown the state or definition could not be read, or its hostdev entries were not the expected ones, or the state after a failed start is unreadable or unusual; the message gives what was observed |
 | `aborted` | 31 | launch again; the plan follows the VM's current state |
 
-The plan always comes from the current state: running without the GPU → full; off without → attach and start; off with ours → start only; running with ours → nothing. Any other hostdev, including non-PCI ones, is refused. `detach` is the mirror image and removes only our two entries.
+A recovery start happens only after a successful read of a shut-off state and a complete definition whose hostdev entries are exactly the expected ones; otherwise the VM stays off as `needs-owner`. After any failed start the run reads the state: running (for example a lost response after boot) counts as started and is not started again; shut off is `left-off`; unreadable or other is `needs-owner`. The plan always comes from the current state: running without the GPU → full; off without → attach and start; off with ours → start only; running with ours → nothing. Any other hostdev (including non-PCI) is refused; `detach` removes only our two entries.
 
 ## Procedure (root; native approval where marked)
 
+Root places this bundle byte for byte in its chosen Fleet location after review (for example `/work/repos/fleet-vm-upgrade/unraid/gpu-enablement/`) and records the path, commit and hashes. `B` below is that directory.
+
 ```bash
 H='ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes unraid-admin'
-U=/mnt/user/appdata/fleet-gpu; B=<bundle directory>
+U=/mnt/user/appdata/fleet-gpu; B=<placed bundle directory>; SRC=<game source commit to smoke, e.g. eb712f1527439ec1f38f2c52ef61ac78989ba74c>
 ```
 
-1. **Stage** (no approval): `$H files write $U/host-gpu.sh < $B/host-gpu.sh`, then compare `$H files read $U/host-gpu.sh | sha256sum` with the reviewed hash.
-2. **Rehearsal** (approval 1, changes nothing): `$H "ask run $(bash $B/ask-command.sh rehearsal)"`. After approval, read `$U/runs/<RUN_ID>/{result.json,run.log}`. Accept only:
-   - `rehearsal-ok`/0, `launcher_alive_at_finish` `no`, and a `sid` different from `launch.json`'s `launcher_sid`;
-   - a plan of `full`, no PROBLEM lines, and facts that show 10de:2204/1aef, `vfio-pci` or `none`, a two-member group, the BAR sizes, and memory with `MemAvailable` + QEMU RSS ≥ 19,398,656 KiB.
+1. **Stage** (no approval): `$H files write $U/host-gpu.sh < $B/host-gpu.sh`; `$H files read $U/host-gpu.sh | sha256sum` must equal the reviewed hash.
+2. **Rehearsal** (approval 1, changes nothing): `$H "ask run $(bash $B/ask-command.sh rehearsal)"`. After approval read `$U/runs/<RUN_ID>/{result.json,run.log}`. Accept only:
+   - `rehearsal-ok`/0, `launcher_alive_at_finish` `no`, a `sid` different from `launch.json`'s `launcher_sid`, and a `backup` path;
+   - plan `full`, no PROBLEM lines, and facts showing 10de:2204/1aef, `vfio-pci` or `none`, the group members, BAR sizes with BAR0 seen in the host memory map, every other VM checked, and `MemAvailable` + QEMU RSS ≥ 19,398,656 KiB.
 
-   This is also the read-only host diagnostic. It shows `lspci -nnk`, `vfio-pci.cfg` and the kernel command line. `ask-command.sh preflight` gives the same checks synchronously in `ask result`, if root only needs the facts.
-3. **Guest driver** (guest-local, no reboot, no owner approval needed): `bash worker-gpu.sh install` (dry run), then `bash worker-gpu.sh install --apply`. It adds `/etc/apt/sources.list.d/siltwake-gpu-nonfree.sources` (`contrib non-free`) and installs `linux-headers-$(uname -r) nvidia-kernel-dkms nvidia-driver-libs libgles-nvidia2 libegl-nvidia0 nvidia-vulkan-icd nvidia-smi` with `--no-install-recommends`. That is 38 packages and about 138 MiB, with no kernel, Xorg or CUDA change. Nouveau is not loaded now, so nothing changes until the card appears.
-4. **Checkpoint**: root's durable checkpoint, and no shared work that cannot pause. `bash worker-gpu.sh check pre` must be all PASS.
-5. **Attach** (approval 2): `$H "ask run $(bash $B/ask-command.sh attach)"`. A 60 s arm window follows (`echo cancel | $H files write $U/runs/<RUN_ID>/CANCEL`). Expect the worker and T3 to be gone for about 1–3 minutes. Submit only when the owner can approve within 30 minutes; a later approval starts nothing.
+   This is also the read-only host diagnostic. `ask-command.sh preflight` gives the checks synchronously if only facts are needed.
+3. **Guest driver** (guest-local, no reboot):
+   - `bash $B/worker-gpu.sh install` simulates against the real archive in a private apt directory. It must show 38 new packages and no removal, upgrade, kernel, Xorg or CUDA.
+   - `bash $B/worker-gpu.sh install --apply` refuses a pre-existing `/etc/apt/sources.list.d/siltwake-gpu-nonfree.sources` it did not write. It records the system first (`/var/lib/siltwake-gpu/before.tsv`, manual marks), then checks the real plan the same way before installing. It records every plan and the result, and exits 1 on any apt or verification failure. A failed install is retried with the same command; the first attempt's record is kept. On a retry, packages dpkg left pending (for example `nvidia-kernel-dkms` half-configured `iF` after a failed DKMS build) are accepted only at their exact version and only for apt's `Conf` repair; upgrades and removals are still refused, and the install passes only once everything is configured (`ii`) and the module is built.
+4. **Checkpoint:** root's durable checkpoint of active work, repositories, worktrees and evidence; nothing that cannot pause. `bash $B/worker-gpu.sh check pre` must end `all checks pass` (exit 0).
+5. **Attach** (approval 2): `$H "ask run $(bash $B/ask-command.sh attach)"`, submitted only when the owner can approve within 30 minutes. A 60 s arm window follows (`echo cancel | $H files write $U/runs/<RUN_ID>/CANCEL`). Then Fleet's lock is taken and held to the start. Expect T3 and the worker to be gone for about 1–3 minutes.
 6. **After boot** (new root session):
-   - read `$H files read $U/runs/<RUN_ID>/result.json` and expect `attached`/0.
-   - run the probe:
+   - `$H files read $U/runs/<RUN_ID>/result.json` → `attached`/0.
+   - Build `$SRC` into a scratch `dist/` (`git archive $SRC | tar -x -C <dir> && npm ci && npx vite build`).
+   - Run the probe (it serves `dist/` itself on 127.0.0.1:5192 and closes everything it starts):
      ```bash
      npm install --prefix /work/tmp/gpu-enable --no-audit --no-fund playwright-core@1.64.1
-     # serve a production build on free port 5192
-     TMPDIR=/work/tmp node webgl-probe.mjs --out <evidence dir> \
-       --playwright /work/tmp/gpu-enable/node_modules/playwright-core --url http://127.0.0.1:5192/
+     TMPDIR=/work/tmp node $B/webgl-probe.mjs --out <evidence dir> --playwright /work/tmp/gpu-enable/node_modules/playwright-core \
+       --dist <dir>/dist --commit $SRC
+     bash $B/worker-gpu.sh check post <evidence dir>/report.json --commit $SRC
      ```
-   - run `bash worker-gpu.sh check post <evidence dir>/report.json`.
-   - update Fleet `machines.yaml` and `docs/STATE.md` in the same commit.
-7. **Undo**: `ask-command.sh detach` (another restart), then optionally `worker-gpu.sh uninstall --apply`, which purges exactly the recorded packages and removes our sources file. The owner can always run `bash /mnt/user/appdata/fleet-gpu/host-gpu.sh status`, or the same `launch` text, from the web terminal.
+     `check post` passes only with the 3090 on the nvidia driver, `nvidia-smi`, usable device nodes, the QXL/journal gate, services and endpoints, **and** a report that validates as a passing game smoke of `$SRC` in this boot on this host.
+   - Record resumed services/endpoints, CPU/memory/disks/autostart and unchanged repository/evidence checkpoints; update Fleet `machines.yaml` and `docs/STATE.md` together.
+   - Link this GPU-browser workflow from Fleet's operational docs and Siltwake's agent/browser guidance (root's integration step).
+7. **Undo:**
+   - The GPU: `ask-command.sh detach` (another restart).
+   - The packages, optionally afterwards: `bash $B/worker-gpu.sh undo-plan` is read-only. It lists only packages that one of our recorded plans newly installed, that were absent before, and that are still at the version we installed. It simulates their removal and refuses if apt would remove anything else. It names unrelated or changed packages it leaves alone, and the `apt-mark auto` and sources-file steps, and prints the commands for an operator to run by hand.
+   - The owner can always run `bash $U/host-gpu.sh status`, or the same `launch` text, from the web terminal.
 
-If the probe finds no accelerated candidate while `nvidia-smi` works, the report holds `chrome://gpu` for each candidate. Any further browser switch is a new reviewed change, not an ad-hoc edit.
+If no candidate is accelerated while `nvidia-smi` works, the report holds `chrome://gpu` text for each candidate. Any further browser switch is a new reviewed change.
 
 ## Owner decisions
 
-- **The card becomes factory-worker's.** factory-worker autostarts and stays on, so `Windows 11 Gaming` and `Debian AI13 Inference` cannot start while it holds the 3090; libvirt refuses with "in use". Their definitions are untouched. Gaming means `detach` (a worker restart) first, or a later switching tool.
-- **One worker restart** for attach and one for any detach.
-- **Host memory:** all 16 GiB of worker RAM becomes pinned, and the balloon is ineffective with VFIO. On 2026-10-19 the host had 31 GiB, 7.5 GiB available, Hermes 4 GiB and no host swap.
-- **VNC console:** OVMF may put the EFI console on the NVIDIA card. `check post` reports where it went. If it moved, adding `<rom bar='off'/>` to the GPU entry is a separate reviewed change.
+- **The card becomes factory-worker's.** It autostarts and stays on, so `Windows 11 Gaming`, `Debian AI13 Inference` and `Ubuntu AI 24_OLD` cannot start while it holds the 3090 (libvirt refuses). Their definitions are untouched. Gaming means `detach` first (a worker restart).
+- **One worker restart** for attach, and one for any detach.
+- **Host memory:** all 16 GiB of worker RAM becomes pinned; the balloon is ineffective with VFIO. On 2026-10-19 the host had 31 GiB, about 7.5 GiB available, Hermes 4 GiB and no swap.
+- **VNC console:** OVMF may put the EFI console on the NVIDIA card. `check post` reports where it went; `<rom bar='off'/>` would be a separate reviewed change.
 
-## Verified (read-only or offline, 2026-10-19)
+## Verified (read-only or offline)
 
-- Host via the helper: Unraid 7.3.2, 12 CPUs, 31 GiB, 7.5 GiB available, no swap. factory-worker runs with 16 GiB and 6 vCPUs, UUID as fixed, q35 `pc-q35-10.2`, OVMF pure-efi, no hostdev, QXL video, virtio balloon, and `pcie-root-port` indexes 1–6 with bus 0x06 unused. Windows 11 Gaming, Debian AI13 Inference **and Ubuntu AI 24_OLD** name `01:00.0`/`.1` (vfio, managed) and are all shut off. Hermes runs. No NVIDIA plugin is installed on the host.
-- Guest: Debian 13.7, kernel 6.12.111+deb13-amd64, no Secure Boot, gcc 14.2 (the kernel's compiler), no `unattended-upgrades`, 19 GiB free on `/`, `non-free`/`contrib` not enabled.
-- Package resolution against the live Debian 13 archive, in a private apt directory:
-  - adding `linux-headers-amd64` would also **upgrade the kernel to 6.12.113**, so headers are pinned to the running kernel;
-  - the pinned set is 38 packages.
-- Module build: the signed `nvidia-kernel-dkms_550.163.01-2` (sha256 `729d1721…0107`) built offline against the running kernel's headers, unprivileged and without network. `make` exited 0 in 57 s, with `vermagic 6.12.111+deb13-amd64 SMP preempt mod_unload modversions`. This shows build compatibility, not that the module loads.
-- Offline suite (`tests/run.sh`): **104 checks pass**, as 91 host-script, 5 ask-command and 8 classifier checks. They cover:
-  - every preflight refusal;
-  - hash and deadline guards;
-  - detached survival of a SIGKILLed launcher group;
-  - the full attach/detach;
-  - shutdown timeout without force;
-  - start failure and its rollback;
-  - a half-failed attach;
-  - an undo that cannot complete;
-  - concurrent definition changes and restarts;
-  - memory taken while off;
-  - a silent guest agent;
-  - CANCEL;
-  - both locks;
-  - re-entry.
+Round 1 (2026-10-19), still valid:
 
-  Five mutation trials (accepting any definition change, ignoring a host framebuffer, unverified undo, no deadline, a running VM only noted) each make the suite fail.
-- The probe was run on factory-worker Linux, with its own browser and temporary profile, then closed:
-  - `angle-vulkan` gave no WebGL2, and `angle-gl-egl` and the default both gave `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) …))`. All were correctly rejected, exit 1.
-  - The smoke against production `eb712f1` on port 5192 reached the pod opening ("Release restraint") with 0 page errors and 3 fps on SwiftShader, at 1280×800.
-  - This checks the harness only.
+- Host facts through the helper: Unraid 7.3.2, worker 16 GiB/6 vCPU, q35, no hostdev, root ports 1–6 with bus 0x06 free. The Windows, inference and Ubuntu-old definitions name the GPU and are shut off; Hermes runs.
+- Guest: Debian 13.7, kernel 6.12.111, no Secure Boot.
+- Debian 13 resolution: `linux-headers-amd64` would upgrade the kernel, so headers are pinned.
+- The signed DKMS source builds against the running kernel's headers. That is a build, not a load.
+
+Round-1 fix:
+
+- The offline suite with a hostile PATH, the reviewer's fixture against the corrected probe, a read-only real-archive dry run, and isolated software-renderer integration runs of the corrected probe on factory-worker. Details and numbers are in [R1-FIX.md](R1-FIX.md).
 
 ## Not verified (needs the real run)
 
-- Host facts behind the helper: the GPU's actual IDs, driver binding, IOMMU group, BAR sizes (resizable BAR?), host framebuffer, `vfio-pci.cfg`, QEMU RSS, and the libvirt pid-file path. The rehearsal reports all of them.
-- That OVMF fits the BARs, the guest boots with the card, the 550 module loads, and `nvidia-smi` shows the 3090.
-- Which ANGLE backend gives NVIDIA WebGL2 in headless Chromium 156, and real frame rates.
-- That the next ACPI shutdown completes. It is supported by the evidence above, but not guaranteed.
-- Libvirt's formatting matches between `attach --config` and its undo. A mismatch ends as `rolled-back` with the difference named, or `needs-owner` if our entries remain.
-
-## Evidence
-
-Persistent: `/home/worker/.local/share/siltwake-evidence/gpu-enablement-prep/`. It holds:
-
-- host status/observe/VM info, and all five VM definitions read with passwords redacted (none present);
-- guest shutdown and PCI excerpts;
-- the T3 preview-launch excerpt and kernel `acpiphp_glue.c` v6.12;
-- the apt simulations and install set, plus the gzipped module build log;
-- the test and mutation output, plus both probe reports and the smoke screenshot.
+- The GPU's actual IDs, binding, group, BAR sizes, host framebuffer, `vfio-pci.cfg`, QEMU RSS, libvirt pid path, and the security-info backup matching the plain definition on this libvirt. The rehearsal reports or checks all of them before any shutdown.
+- That libvirt formats the inactive definition identically before and after a power-off and after `attach --config`/its undo. A difference makes the run back off or report it; it never forces.
+- The next ACPI shutdown, OVMF BAR allocation, guest boot with the card, module load, `nvidia-smi`, device permissions, which ANGLE backend renders on the 3090, the draw check and game smoke on it, VNC framebuffer placement, and detach on real libvirt.
+- Any performance figure; a complete-game or 1080p/60 claim.
 
 ## Recommendations (not part of this change)
 
-- T3 upstream: an opt-in GPU setting for the server preview browser, so shared previews can use the card.
-- Fleet: a small `vm gpu attach|detach|status` verb built from this script, so switching the card to the gaming VM is one approved command.
-- Remove `module_blacklist=qxl` only together with a video-model decision (for example virtio), not casually.
+- T3 upstream: an opt-in GPU setting for the server preview browser.
+- Fleet: a small `vm gpu attach|detach|status` verb built from this script, for switching the card to the gaming VM.
+- Remove `module_blacklist=qxl` only together with a video-model decision (for example virtio).

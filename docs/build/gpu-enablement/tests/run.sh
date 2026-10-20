@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Offline tests for host-gpu.sh, ask-command.sh and webgl-probe.mjs's classifier.
+# Offline tests for host-gpu.sh, worker-gpu.sh, ask-command.sh and webgl-probe.mjs's decision logic.
 # No Unraid host, VM, GPU or network is used. Needs bubblewrap and node (factory-worker has both):
 #
 #   bash docs/build/gpu-enablement/tests/run.sh
 #
 # bwrap puts scratch folders over /mnt, /boot and /tmp and a fake virsh, logger and
 # Unraid notify over /usr/local, so the production script runs unchanged with its
-# real paths. Scratch lives under /work/tmp (disk) when it exists. Exit 1 on a failure.
+# real paths. The sandbox gets a fixed PATH (not the caller's), and checks.sh stops at
+# once unless the fake virsh is the one selected. Scratch lives under /work/tmp (disk)
+# when it exists. Exit 1 on a failure.
 set -euo pipefail
 command -v bwrap >/dev/null || { echo "needs bubblewrap: sudo apt-get install bubblewrap" >&2; exit 1; }
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -25,9 +27,22 @@ status=0
 bwrap --dev-bind / / --unshare-user --uid 0 --gid 0 \
   --tmpfs /usr/local --bind "$T/sbin" /usr/local/sbin --bind "$T/emhttp" /usr/local/emhttp \
   --bind "$T/mnt" /mnt --bind "$T/boot" /boot --bind "$T/tmp" /tmp \
-  env SRC="$T/src" bash "$T/src/checks.sh" > "$T/out.txt" 2>&1 || status=1
+  env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/tmp LANG=C.UTF-8 SRC="$T/src" \
+  bash "$T/src/checks.sh" > "$T/out.txt" 2>&1 || status=1
 cat "$T/out.txt"
 grep -q '^failed 0$' "$T/out.txt" || status=1
+
+echo "== guest: worker-gpu.sh (no network, real root read-only, fake system tools first on PATH)"
+mkdir -p "$T/fakebin" "$T/gtmp" "$T/gsrc/tests"
+cp "$here/../worker-gpu.sh" "$here/../webgl-probe.mjs" "$T/gsrc/"; cp "$here/guest-checks.sh" "$T/gsrc/tests/"
+cp "$here/fake-guest-tool.sh" "$T/fakebin/fake-guest-tool"; chmod +x "$T/fakebin/fake-guest-tool"
+for t in sudo apt-get apt-mark dpkg-query journalctl lsmod modinfo modprobe lspci nvidia-smi systemctl loginctl curl df; do ln -s fake-guest-tool "$T/fakebin/$t"; done
+node_dir="$(dirname "$(command -v node)")"
+bwrap --ro-bind / / --dev /dev --proc /proc --bind "$T/gtmp" /tmp --ro-bind "$T/fakebin" /tmp/fakebin --unshare-net --unshare-pid --die-with-parent \
+  env -i PATH="/tmp/fakebin:$node_dir:/usr/bin:/bin" HOME=/tmp USER=worker LANG=C.UTF-8 SRC="$T/gsrc" \
+  bash "$T/gsrc/tests/guest-checks.sh" > "$T/guest-out.txt" 2>&1 || status=1
+cat "$T/guest-out.txt"
+grep -q '^failed 0$' "$T/guest-out.txt" || status=1
 
 echo "== ask-command.sh"
 for a in preflight rehearsal attach detach; do
@@ -39,6 +54,6 @@ for a in preflight rehearsal attach detach; do
 done
 bash "$here/../ask-command.sh" bogus 2>/dev/null && { echo "FAIL ask accepts an unknown action"; status=1; } || echo "ok   ask refuses an unknown action"
 
-echo "== webgl-probe classifier"
+echo "== webgl-probe decision logic and report validation"
 node "$here/../webgl-probe.mjs" --self-test || status=1
 exit "$status"
