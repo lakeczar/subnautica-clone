@@ -24,7 +24,9 @@ function axis(lo: number, hi: number, step: number, cuts: readonly number[]): nu
   for (let t = lo; t < hi - 1e-9; t += step) v.push(t);
   v.push(hi);
   for (const c of cuts) if (c > lo + 1e-6 && c < hi - 1e-6) v.push(c);
-  return [...new Set(v.map(n => Math.round(n * 1e6) / 1e6))].sort((a, b) => a - b);
+  // Keep exact cut values (never rounded) so cells meet the legacy edge.
+  v.sort((a, b) => a - b);
+  return v.filter((n, i) => i === 0 || n - v[i - 1]! > 1e-6);
 }
 
 export const terrainFactory: ChunkArtFactory = {

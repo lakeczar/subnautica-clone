@@ -175,7 +175,7 @@ function* scatterChunk(ctx: ChunkBuildContext, chunk: ChunkDescriptor, biome: st
       const px = x + rnd() * rule.spacing, pz = z + rnd() * rule.spacing;
       const roll = rnd(), s = rule.scale[0] + (rule.scale[1] - rule.scale[0]) * rnd(), yaw = rnd() * Math.PI * 2, tint = rnd();
       const keepCoarse = fine || rnd() < (rule.coarse ?? 0);
-      if (!keepCoarse || legacy(px, pz)) continue;
+      if (!keepCoarse || legacy(px, pz) || px >= max.x || pz >= max.z) continue;
       if (biomeOf(px, pz, maskAt(px, pz)) !== biome) continue;
       const m = maskAt(px, pz), w = rule.weight ? rule.weight(m, 0) : 1;
       if (roll > rule.chance * Math.min(1.5, w)) continue;

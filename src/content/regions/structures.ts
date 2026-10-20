@@ -14,7 +14,7 @@ import { worldFloor } from "./worldFloor.js";
 export type StructureKind =
   | "mast" | "pier" | "cradle" | "shelter" | "pylon" | "dish" | "girder" | "hut" | "post"
   | "split_chimney" | "chimney_stub" | "station" | "tower" | "lintel" | "dock" | "building"
-  | "spire" | "gallery" | "works";
+  | "spire" | "gallery" | "works" | "hall";
 
 export interface StructureDef {
   readonly id: string;
@@ -85,6 +85,19 @@ function gallery(id: string, x: number, z: number, yaw: number, site: string): S
 
 /** Mooring marker pylons at authored bearings (degrees from +X toward +Z),
  * placed between the routes that use the bowl. */
+/** Open-fronted gate hall beside the works machinery: back and side walls,
+ * a roof, an evidence console on the back wall and a live control panel on
+ * the machinery-side wall. The north front stays open for a diver. */
+function gateHall(): StructureDef {
+  const b = -769, x0 = 1388, x1 = 1404, z0 = -1598, z1 = -1582, h = 7;
+  return { id: "meridian.gate_hall.hall", region: "deep_district", kind: "hall", x: 1396, z: -1590, base: b,
+    p: { h }, site: "meridian.gate_hall", solids: [
+      box(x0, b, z0, x1, b + h, z0 + 0.4), box(x0, b, z0, x0 + 0.4, b + h, z1), box(x1 - 0.4, b, z0, x1, b + h, z1),
+      box(x0, b + h, z0, x1, b + h + 0.4, z1), box(1394.5, b, z0 + 0.4, 1397.5, b + 1, z0 + 1.4),
+      box(x1 - 1, b + 0.6, -1589.5, x1 - 0.4, b + 2.2, -1586.5),
+    ] };
+}
+
 const pylons = (prefix: string, region: RegionId, x: number, z: number, r: number, h: number,
   bearings: readonly number[]): StructureDef[] =>
   bearings.map((deg, i) => block("pylon")(`${prefix}.pylon_${i}`, region,
@@ -173,7 +186,7 @@ const AUTHORED: readonly StructureDef[] = [
   block("girder")("basin.wreck.frame_3", "silt_basin", 796, -580, { w: 10, h: 3, d: 4 }, "basin.wreck_ridge"),
   block("girder")("basin.wreck.frame_4", "silt_basin", 770, -628, { w: 3, h: 4, d: 14 }, "basin.wreck_ridge"),
   block("post")("basin.wreck_tagboard.post", "silt_basin", 791, -501, { w: 3, h: 2.5, d: 0.5 }, "basin.wreck_tagboard"),
-  block("post")("basin.deep_marker.post", "silt_basin", 612, -752, { w: 0.6, h: 6, d: 0.6 }, "basin.deep_marker"),
+  block("post")("basin.deep_marker.post", "silt_basin", 610.8, -752, { w: 0.6, h: 6, d: 0.6 }, "basin.deep_marker"),
 
   // Ember Rift.
   splitChimney(),
@@ -184,13 +197,13 @@ const AUTHORED: readonly StructureDef[] = [
   block("chimney_stub")("rift.cool_chimneys.stub_4", "thermal_rift", 30, -1075, { w: 6, h: 15, d: 6 }, "rift.cool_chimneys"),
   block("station")("rift.materials_station.hull", "thermal_rift", 135.6, -920, { w: 14, h: 8, d: 10 }, "rift.materials_station", -262),
   ...pylons("rift.cool_mooring", "thermal_rift", 91.4, -887.5, 36, 14, [20, 200, 260]),
-  block("post")("rift.chimney_gauge.post", "thermal_rift", -102, -1114.4, { w: 0.6, h: 4, d: 0.6 }, "rift.chimney_gauge"),
-  block("post")("rift.shoulder_post.post", "thermal_rift", -140, -745, { w: 0.6, h: 4, d: 0.6 }, "rift.shoulder_post"),
+  block("post")("rift.chimney_gauge.post", "thermal_rift", -103.2, -1114.4, { w: 0.6, h: 4, d: 0.6 }, "rift.chimney_gauge"),
+  block("post")("rift.shoulder_post.post", "thermal_rift", -141.2, -745, { w: 0.6, h: 4, d: 0.6 }, "rift.shoulder_post"),
 
   // Mirror Divide.
   ...divideGate(),
   ...pylons("divide.lee_mooring", "brine_divide", 560, -1120, 52, 16, [50, 160, 270]),
-  block("post")("divide.ledge_sampler.post", "brine_divide", 344, -1182, { w: 0.8, h: 3, d: 0.8 }, "divide.ledge_sampler"),
+  block("post")("divide.ledge_sampler.post", "brine_divide", 342.8, -1182, { w: 0.8, h: 3, d: 0.8 }, "divide.ledge_sampler"),
 
   // Meridian District exterior.
   ...pylons("meridian.staging_shelf", "deep_district", 1080, -1160, 52, 18, [90, 230, 290]),
@@ -200,6 +213,7 @@ const AUTHORED: readonly StructureDef[] = [
   gallery("meridian.gallery_north.facade", 1298, -1131, Math.atan2(0.35, 0.94), "meridian.gallery_north"),
   gallery("meridian.gallery_south.facade", 1000, -1402, Math.atan2(0.896, 0.446), "meridian.gallery_south"),
   block("building")("meridian.archive.hull", "deep_district", 1288, -1405, { w: 14, h: 10, d: 14 }, "meridian.archive_terrace"),
+  gateHall(),
   block("works")("meridian.works.block", "deep_district", 1440, -1582, { w: 40, h: 30, d: 36 }, "meridian.deep_works"),
 
   // Hearth Reef: the drop's marker posts.

@@ -161,8 +161,10 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
   },
   station(b, s, fine) {
     const sol = s.solids[0]!, cx = s.x, cz = s.z, w = s.p.w!, h = s.p.h!, d = s.p.d!;
-    b.aabb([sol.min.x + 0.3, sol.min.y, sol.min.z + 0.3], [sol.max.x - 0.3, sol.max.y - 2, sol.max.z - 0.3], C.porcelain);
-    b.frustum([sol.min.x + 0.6, sol.max.y - 2.2, cz], [sol.max.x - 0.6, sol.max.y - 2.2, cz], d / 2 - 0.6, d / 2 - 0.6, fine ? 8 : 5, C.porcelain, C.petrol);
+    // Rounded roof whose crown touches the collider's top, never above it.
+    const roof = Math.min(d / 2 - 0.6, h / 2), axis = sol.max.y - roof;
+    b.aabb([sol.min.x + 0.3, sol.min.y, sol.min.z + 0.3], [sol.max.x - 0.3, axis, sol.max.z - 0.3], C.porcelain);
+    b.frustum([sol.min.x + 0.6, axis, cz], [sol.max.x - 0.6, axis, cz], roof, roof, fine ? 8 : 5, C.porcelain, C.petrol);
     b.aabb([sol.min.x, sol.min.y, sol.min.z], [sol.max.x, sol.min.y + 0.6, sol.max.z], C.petrol);
     if (fine) glow(b, () => {
       for (let i = 0; i < 4; i++) b.box([sol.min.x + 2.2 + i * (w - 4.4) / 3, sol.min.y + h * 0.45, sol.min.z - 0.02], [0.8, 0.8, 0.06], C.warm);
@@ -226,6 +228,18 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
     if (fine) glow(b, () => {
       b.box([s.x, s.base + 2.4, s.z], [3.4, 4.6, 0.3], C.glow, yaw);
       for (let t = -14; t <= 14; t += 3.5) if (Math.abs(t) > 6) b.box([s.x + ux * t, s.base + 8.6, s.z + uz * t], [2.2, 0.8, 6.2], C.warm, yaw);
+    });
+  },
+  hall(b, s, fine) {
+    const [back, west, east, roof, consoleBox, panel] = s.solids;
+    for (const sol of [back!, west!, east!]) b.aabb([sol.min.x, sol.min.y, sol.min.z], [sol.max.x, sol.max.y, sol.max.z], C.concrete, C.concrete2);
+    b.aabb([roof!.min.x - 0.6, roof!.min.y, roof!.min.z], [roof!.max.x + 0.6, roof!.max.y, roof!.max.z + 1.2], C.petrol);
+    b.aabb([consoleBox!.min.x, consoleBox!.min.y, consoleBox!.min.z], [consoleBox!.max.x, consoleBox!.max.y, consoleBox!.max.z], C.metal, C.steel);
+    b.aabb([panel!.min.x, panel!.min.y, panel!.min.z], [panel!.max.x, panel!.max.y, panel!.max.z], C.petrol);
+    glow(b, () => {
+      b.box([(panel!.min.x - 0.03), (panel!.min.y + panel!.max.y) / 2, (panel!.min.z + panel!.max.z) / 2], [0.04, 1.1, 2.4], C.cyan);
+      b.box([(consoleBox!.min.x + consoleBox!.max.x) / 2, consoleBox!.max.y + 0.02, consoleBox!.max.z - 0.3], [2.4, 0.04, 0.5], C.warm);
+      if (fine) for (const x of [roof!.min.x + 2, roof!.max.x - 2]) b.box([x, roof!.min.y - 0.15, roof!.max.z - 1], [0.6, 0.2, 0.6], C.glow);
     });
   },
   works(b, s, fine) {

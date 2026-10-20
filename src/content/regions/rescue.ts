@@ -106,6 +106,7 @@ const RAW_PLANS: readonly RescuePlan[] = [
     tethers: [
       [v(1360, S, -1470), v(1300, -640, -1400), v(1268, -674, -1384)],
       [v(1360, S, -1470), v(1400, -740, -1530), v(1430, -764, -1556)],
+      [v(1360, S, -1470), v(1396, -740, -1560), v(1396, -764, -1575)],
     ] },
   { id: "rescue.escarpment", region: "deep_district", stage: v(1346, S, -880), maximumTether: DEEP_TETHER,
     mooring: "canopy.east_mooring", approach: approach(v(1346, S, -880)),

@@ -3,6 +3,7 @@ import test from "node:test";
 import { REGIONS } from "../src/content/registry.js";
 import { SOLIDS, terrainHeight } from "../src/sim/world.js";
 import { CHUNK_SIZE, WORLD_ENVELOPE, chunkId, columnRect } from "../src/world/frame.js";
+import { createWorldMap, validateLayout } from "../src/world/map.js";
 import { corridorProblems, firstAccessProblems, lossCapable, rescueProblems, routeProblems, siteDatum,
   type CheckContext } from "../src/content/regions/access.js";
 import { footprintFloor } from "../src/content/regions/drape.js";
@@ -48,6 +49,10 @@ test("the shared floor keeps today's terrain exactly and covers the envelope", (
 
 test("the layout is a valid S1 layout with every region, column and spec adjacency", () => {
   const layout = worldLayout();
+  none(validateLayout(layout), "S1 validateLayout");
+  const map = createWorldMap(layout, spatialEntries());
+  assert.equal(map.regionAt({ x: 0, y: 0, z: 14 }), "refuge_reef", "pod resolves to the Reef by footprint");
+  for (const s of SITES) assert.equal(map.regionAt(siteDatum(s, worldFloor)), s.region, `${s.id} regionAt`);
   const cols = (WORLD_ENVELOPE.max.x - WORLD_ENVELOPE.min.x) / CHUNK_SIZE, rows = (WORLD_ENVELOPE.max.z - WORLD_ENVELOPE.min.z) / CHUNK_SIZE;
   assert.equal(layout.chunks.length, cols * rows);
   assert.deepEqual(new Set(layout.regions.map(r => r.id)), new Set(Object.keys(REGIONS)));
@@ -117,6 +122,22 @@ test("sites sit in their region and its specified depth band", () => {
   const entries = spatialEntries(), entryIds = new Set(entries.map(e => e.id));
   assert.equal(entryIds.size, entries.length, "spatial entry IDs are unique");
   for (const h of HAZARDS) assert.ok(entryIds.has(h.id));
+});
+
+test("interaction datums are reachable, never inside a solid; the gate hall hosts evidence and a live panel", () => {
+  for (const s of SITES) {
+    if (s.role !== "source" && s.role !== "story") continue;
+    const p = siteDatum(s, worldFloor);
+    for (const b of STRUCTURE_SOLIDS.map(x => x.bounds)) assert.ok(!(p.x > b.min.x + 0.01 && p.x < b.max.x - 0.01 && p.y > b.min.y + 0.01 &&
+      p.y < b.max.y - 0.01 && p.z > b.min.z + 0.01 && p.z < b.max.z - 0.01), `${s.id} datum inside a solid`);
+  }
+  const front = { x: 1396, y: -766.5, z: -1578 };
+  for (const id of ["meridian.gate_hall", "meridian.gate_hall_panel"]) {
+    const s = SITES.find(x => x.id === id)!, p = siteDatum(s, worldFloor), stand = { x: Math.min(p.x, 1401.8), y: -767.6, z: Math.max(p.z, -1594.8) };
+    assert.ok(s.region === "deep_district" && s.role === "story");
+    none(corridorProblems(id, [front, stand], ctx, { profile: "diver", margin: 0.1 }), `${id} diver access`);
+    assert.ok(Math.hypot(stand.x - p.x, stand.y - p.y, stand.z - p.z) < 1.5, `${id} within reach of a diver standing in the hall`);
+  }
 });
 
 test("structures rest on the floor and stay clear of today's solids", () => {
