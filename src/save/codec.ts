@@ -3,6 +3,7 @@ import type { GameState } from "../sim/types.js";
 import { carrierInteriorSolids } from "../sim/carrier.js";
 import { createWorldQueries } from "../sim/world.js";
 import { record, validState } from "./validation.js";
+import { addNewContent } from "./content.js";
 import { validExpedition5State } from "./expedition5/validation.js";
 import type { GameState as Expedition5State } from "./expedition5/types.js";
 import { SOURCES as EXPEDITION5_SOURCES } from "./expedition5/domain.js";
@@ -114,16 +115,19 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
       error: "The save metadata is invalid. Nothing was loaded.",
     };
   const bridge = d.schemaVersion === 4;
-  if (bridge ? !validExpedition5State(d.state) : !validState(d.state))
-    return {
-      ok: false,
-      error:
-        "Gameplay ownership, capacity, equipment, discovery, facility, recovery or berth data is invalid. Nothing was loaded.",
-    };
-  const s = bridge ? migrateCreel(d.state as Expedition5State) : d.state as GameState;
+  const invalid = {
+    ok: false as const,
+    error: "Gameplay ownership, capacity, equipment, discovery, facility, recovery or berth data is invalid. Nothing was loaded.",
+  };
+  if (bridge && !validExpedition5State(d.state)) return invalid;
+  // Content added since the save was written starts at New Game's first state;
+  // everything else, including the completed rosters, is then validated strictly.
+  const added = addNewContent(bridge ? migrateCreel(d.state as Expedition5State) : d.state as GameState);
+  if (!added.ok) return added;
+  const s = added.value;
+  if (!validState(s)) return invalid;
   if (blockedCarrierInterior(s))
     return { ok: false, error: "The current walking position intersects a sealed carrier compartment. Nothing was loaded." };
-  if (!validState(s)) return { ok: false, error: "The migrated gameplay state is invalid. The original record is unchanged." };
   return { ok: true, value: createEnvelope(s, m as unknown as SaveMetadata) };
 }
 export function createEnvelope(
