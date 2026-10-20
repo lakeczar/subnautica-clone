@@ -138,7 +138,8 @@ function along(s: number): Vec3 {
 // Measurement.
 interface Sample { frame: number; s: number; region: string | null; y: number; residencyMs: number; renderMs: number;
   intervalMs: number; draws: number; activeMeshes: number; cpuMiB: number; gpuMiB: number; hiddenMiB: number;
-  shown: number; hidden: number; building: number; prepared: number; uploads: number; buildMs: number }
+  shown: number; hidden: number; building: number; prepared: number; uploads: number; buildMs: number;
+  uploadMs: number; maxStepMs: number }
 const samples: Sample[] = [];
 const regionsShown = new Set<string>();
 let frame = 0, distance = 0, lastStamp = performance.now(), done = false;
@@ -158,6 +159,9 @@ const summary = () => {
     budgetMiB: residency.budget.gpuBytes / MiB, fixedMiB: +fixedMiB.toFixed(2),
     residencyMs: { p50: pct("residencyMs", .5), p95: pct("residencyMs", .95), max: worst.residencyMs },
     renderMs: { p50: pct("renderMs", .5), p95: pct("renderMs", .95), max: worst.renderMs },
+    buildMs: { p95: pct("buildMs", .95), max: Math.max(0, ...samples.filter(x => x.frame > 30).map(x => x.buildMs)) },
+    uploadMs: { p95: pct("uploadMs", .95), max: Math.max(0, ...samples.filter(x => x.frame > 30).map(x => x.uploadMs)) },
+    maxStepMs: { p95: pct("maxStepMs", .95), max: Math.max(0, ...samples.filter(x => x.frame > 30).map(x => x.maxStepMs)) },
     intervalMs: { p50: pct("intervalMs", .5), p95: pct("intervalMs", .95), max: worst.intervalMs },
     draws: { p50: pct("draws", .5), max: Math.max(0, ...samples.map(s => s.draws)) },
     peakMiB: { cpu: +(peak.cpu / MiB).toFixed(2), gpu: +(peak.gpu / MiB).toFixed(2) },
@@ -170,7 +174,7 @@ const summary = () => {
 (window as unknown as Record<string, unknown>).__slice = { summary, samples, residency, map, scene };
 
 const forward = new Vector3(0, 0, -1);
-engine.runRenderLoop(() => {
+function tick(): void {
   if (done) return;
   const stamp = performance.now(), intervalMs = stamp - lastStamp;
   lastStamp = stamp;
@@ -216,13 +220,14 @@ engine.runRenderLoop(() => {
     renderMs: +(t2 - t1).toFixed(2), intervalMs: +intervalMs.toFixed(1), draws: instrumentation.drawCallsCounter.current,
     activeMeshes: scene.getActiveMeshes().length, cpuMiB: +(st.cpuBytes / MiB).toFixed(2), gpuMiB: +(st.gpuBytes / MiB).toFixed(2),
     hiddenMiB: +(st.hiddenGpuBytes / MiB).toFixed(2), shown: st.shown, hidden: st.hidden, building: st.building,
-    prepared: st.prepared, uploads: st.uploads, buildMs: +st.buildMs.toFixed(2) });
+    prepared: st.prepared, uploads: st.uploads, buildMs: +st.buildMs.toFixed(2), uploadMs: +st.uploadMs.toFixed(2),
+    maxStepMs: +st.maxStepMs.toFixed(2) });
   if (samples.length > 20000) samples.splice(0, samples.length - 20000);
 
   if (frame % 4 === 0 || distance >= total) hud.textContent = [
     `route ${route}  ${Math.round(distance)}/${Math.round(total)} m  frame ${frame}`,
     `at ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}  ${region ?? "-"}  depth ${Math.max(0, -p.y).toFixed(0)} m`,
-    `residency ${(t1 - t0).toFixed(1)} ms (build ${st.buildMs.toFixed(1)})  render ${(t2 - t1).toFixed(1)} ms  interval ${intervalMs.toFixed(0)} ms`,
+    `residency ${(t1 - t0).toFixed(1)} ms (build ${st.buildMs.toFixed(1)}, step ${st.maxStepMs.toFixed(1)}, upload ${st.uploadMs.toFixed(1)})  render ${(t2 - t1).toFixed(1)} ms  interval ${intervalMs.toFixed(0)} ms`,
     `draws ${instrumentation.drawCallsCounter.current}  active meshes ${scene.getActiveMeshes().length}`,
     `units shown ${st.shown}  hidden ${st.hidden}  building ${st.building}  prepared ${st.prepared}  pending ${st.pending}`,
     `resident cpu ${(st.cpuBytes / MiB).toFixed(1)} / gpu ${(st.gpuBytes / MiB).toFixed(1)} MiB (hidden ${(st.hiddenGpuBytes / MiB).toFixed(1)})  + fixed ${fixedMiB.toFixed(1)}`,
@@ -236,5 +241,15 @@ engine.runRenderLoop(() => {
     done = true;
     hud.textContent += `\nDONE`;
   }
-});
+}
+// rAF is throttled in background tabs; `loop=message` drives frames through
+// a MessageChannel instead, so the interval measures the frame's own work.
+if (q.get("loop") === "message") {
+  const channel = new MessageChannel();
+  channel.port1.onmessage = () => {
+    engine.beginFrame(); tick(); engine.endFrame();
+    if (!done) channel.port2.postMessage(0);
+  };
+  channel.port2.postMessage(0);
+} else engine.runRenderLoop(tick);
 window.addEventListener("resize", () => engine.resize());
