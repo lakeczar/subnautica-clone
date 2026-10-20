@@ -34,6 +34,7 @@ test("the light field's sun is the cel light direction", () => {
 test("cave material, field texture and shell build and dispose in a scene", () => {
   const engine = new NullEngine(), scene = new Scene(engine);
   // NullEngine has no GL context for 3D textures; stand in a raw texture.
+  // The shader path itself runs on a GPU in tools/cave-gpu-check.mjs.
   Object.assign(engine, { createRawTexture3D: (_: unknown, w: number, h: number, d: number) =>
     Object.assign(new InternalTexture(engine, InternalTextureSource.Raw3D), { width: w, height: h, depth: d, is3D: true }) });
   try {
@@ -49,9 +50,9 @@ test("cave material, field texture and shell build and dispose in a scene", () =
     data.applyToMesh(mesh);
     mesh.material = material;
     assert.equal(mesh.getTotalVertices(), shell.positions.length / 3);
-    assert.equal(scene.textures.filter(t => t.is3D).length, 2, "the empty field and the Fanvault field");
+    assert.equal(scene.textures.filter(t => t.is3D).length, 4, "empty and Fanvault light fields and rock grids");
     lighting.setField(null);
-    assert.equal(scene.textures.filter(t => t.is3D).length, 1, "switching caves frees the old field");
+    assert.equal(scene.textures.filter(t => t.is3D).length, 2, "switching caves frees the old field and rock");
     lighting.dispose();
     assert.equal(scene.textures.filter(t => t.is3D).length, 0);
   } finally { scene.dispose(); engine.dispose(); }

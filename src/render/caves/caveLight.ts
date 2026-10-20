@@ -1,4 +1,4 @@
-import { DEFAULT_DAYLIGHT, DISTANCE_RANGE, type DaylightCurve } from "./lightField.js";
+import { DEFAULT_DAYLIGHT, DISTANCE_RANGE, LAMP_SKIN, LAMP_WALK_STEPS, type DaylightCurve } from "./lightField.js";
 
 /** Cave darkness and the diver lamp for the cel pass (Babylon-free GLSL).
  *
@@ -11,8 +11,9 @@ import { DEFAULT_DAYLIGHT, DISTANCE_RANGE, type DaylightCurve } from "./lightFie
  * - a fog medium that darkens with the same daylight, so an exterior-bright
  *   fog cannot wash out a dark cave, while open water seen through a mouth
  *   keeps its brightness (the exit glows);
- * - a lamp cone with banded falloff and banded Lambert terms, stopped by
- *   rock through a short march in the field, plus a faint in-water beam.
+ * - a lamp cone with banded falloff and banded Lambert terms, stopped by any
+ *   collision-rock voxel its ray crosses (an exact, unfiltered 3D DDA walk,
+ *   mirrored by `lampVisible` in `lightField.ts`), plus a faint in-water beam.
  * Unlit (alpha -1) colour stays unlit: wayfinding colonies glow in the dark.
  *
  * `injectCaveLight` splices this into the production fragment at four
@@ -20,10 +21,10 @@ import { DEFAULT_DAYLIGHT, DISTANCE_RANGE, type DaylightCurve } from "./lightFie
  * the lamp off it changes nothing. */
 
 export const CAVE_UNIFORMS = [
-  "caveFieldMin", "caveFieldSize", "caveActive", "caveCurve",
+  "caveFieldMin", "caveFieldSize", "caveActive", "caveCurve", "caveRockMin", "caveRockVoxel", "caveRockDims",
   "lampPosition", "lampDirection", "lampParams", "lampColor",
 ] as const;
-export const CAVE_SAMPLERS = ["caveField"] as const;
+export const CAVE_SAMPLERS = ["caveField", "caveRock"] as const;
 
 export interface LampSettings {
   /** Metres of reach. */
@@ -49,6 +50,8 @@ export function lampUniform(on: boolean, lamp: LampSettings = DEFAULT_LAMP): [nu
 export const CAVE_LIGHT_SHADER = `
 uniform highp sampler3D caveField; uniform vec3 caveFieldMin; uniform vec3 caveFieldSize; uniform float caveActive;
 uniform vec4 caveCurve;
+// Exact collision occupancy, R8, fetched unfiltered (texelFetch only).
+uniform highp sampler3D caveRock; uniform vec3 caveRockMin; uniform float caveRockVoxel; uniform vec3 caveRockDims;
 uniform vec3 lampPosition; uniform vec3 lampDirection; uniform vec4 lampParams; uniform vec3 lampColor;
 // r: daylight path, g: sun, b: rock, a: inside. Open water outside the field.
 vec4 caveAt(vec3 p){
@@ -73,14 +76,28 @@ float caveDaylight(vec4 c){
 float caveMedium(vec4 c){
   return mix(1.0,caveCurve.z+(1.0-caveCurve.z)*exp(-c.r*caveCurve.x*.8),c.a);
 }
-float lampOcclusion(vec3 p,vec3 lamp){
-  vec3 d=lamp-p; float len=length(d);
-  float steps=clamp(ceil(len/.7),1.0,28.0), block=0.0;
-  for(int i=1;i<28;i++){
-    if(float(i)>=steps)break;
-    block=max(block,smoothstep(.5,.75,caveAt(p+d*(float(i)/steps)).b));
+// 1 when no rock voxel lies on p->lamp past the surface skin; 0 otherwise.
+// Walks every voxel the ray crosses (Amanatides-Woo), like lampVisible().
+float lampVisible(vec3 p,vec3 lamp){
+  if(caveActive<.5)return 1.0;
+  vec3 a=(p-caveRockMin)/caveRockVoxel,d=(lamp-caveRockMin)/caveRockVoxel-a;
+  float len=length(d)*caveRockVoxel;
+  if(len<1e-6)return 1.0;
+  float tSkip=${LAMP_SKIN.toFixed(2)}/len,tEnter=0.0;
+  vec3 cell=floor(a),stp=sign(d);
+  vec3 tDelta=vec3(d.x!=0.0?abs(1.0/d.x):1e30,d.y!=0.0?abs(1.0/d.y):1e30,d.z!=0.0?abs(1.0/d.z):1e30);
+  vec3 tMax=vec3(d.x!=0.0?(cell.x+(d.x>0.0?1.0:0.0)-a.x)/d.x:1e30,d.y!=0.0?(cell.y+(d.y>0.0?1.0:0.0)-a.y)/d.y:1e30,
+    d.z!=0.0?(cell.z+(d.z>0.0?1.0:0.0)-a.z)/d.z:1e30);
+  for(int i=0;i<${LAMP_WALK_STEPS};i++){
+    if(tEnter>1.0)return 1.0;
+    float tExit=min(tMax.x,min(tMax.y,tMax.z));
+    if(tExit>tSkip&&all(greaterThanEqual(cell,vec3(0.0)))&&all(lessThan(cell,caveRockDims))&&
+      texelFetch(caveRock,ivec3(cell),0).r>.5)return 0.0;
+    if(tMax.x<=tMax.y&&tMax.x<=tMax.z){cell.x+=stp.x;tEnter=tMax.x;tMax.x+=tDelta.x;}
+    else if(tMax.y<=tMax.z){cell.y+=stp.y;tEnter=tMax.y;tMax.y+=tDelta.y;}
+    else{cell.z+=stp.z;tEnter=tMax.z;tMax.z+=tDelta.z;}
   }
-  return 1.0-block;
+  return 0.0;
 }
 vec3 caveLamp(vec3 p,vec3 n,vec3 albedo){
   if(lampParams.x<.5)return vec3(0.0);
@@ -91,12 +108,13 @@ vec3 caveLamp(vec3 p,vec3 n,vec3 albedo){
   if(cone<=0.0)return vec3(0.0);
   float lam=dot(n,l);
   // Cel: three Lambert bands and three range rings, like the sun's bands.
-  float band=lam>.55?1.0:(lam>.2?.72:(lam>-.05?.42:0.0));
+  float band=lam>.55?1.0:(lam>.2?.72:(lam>0.0?.42:0.0));
   float fall=1.0-dist/lampParams.y;
   float ring=fall>.55?1.0:(fall>.25?.66:.36*smoothstep(0.0,.08,fall));
   // A bright core with a soft spill, not a hard disc.
   float edge=mix(.5,1.0,smoothstep(.45,.6,cone))*smoothstep(0.0,.3,cone);
-  return albedo*lampColor*band*ring*edge*lampOcclusion(p+n*.3,lampPosition);
+  if(band==0.0)return vec3(0.0);
+  return albedo*lampColor*band*ring*edge*lampVisible(p+n*.3,lampPosition);
 }
 vec3 caveShade(vec3 shade,vec3 n,vec4 c){
   float day=caveDaylight(c);

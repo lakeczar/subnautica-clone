@@ -284,7 +284,21 @@ const FANVAULT_SOURCE: CaveSource = {
     "the north mouth glows amber and the south mouth teal from inside. Optional; no first-access stock.",
 };
 
+/** Owned footprints may share an edge (they are half-open) but must not
+ * overlap: there is no union policy for two caves owning one column, so the
+ * first-match floor lookup and concatenated rock would silently disagree.
+ * Throws until such a policy exists. */
+export function assertDisjointFootprints(sources: readonly CaveSource[]): void {
+  const all = sources.map(s => ({ id: s.id, r: s.footprint }));
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+    const a = all[i]!.r, b = all[j]!.r;
+    if (a.minX < b.maxX && b.minX < a.maxX && a.minZ < b.maxZ && b.minZ < a.maxZ)
+      throw new Error(`caves ${all[i]!.id} and ${all[j]!.id}: overlapping footprints have no union policy`);
+  }
+}
+
 export const CAVE_SOURCES: readonly CaveSource[] = [FANVAULT_SOURCE];
+assertDisjointFootprints(CAVE_SOURCES);
 
 const built = new WeakMap<FloorFunction, Map<string, CaveDef>>();
 /** The generated definition, built once per floor function on first use.
@@ -317,11 +331,15 @@ export function caveSourceAt(x: number, z: number): CaveSource | null {
   return null;
 }
 
-/** The floor half of the W1 terrain-query adapter, as a pure prototype:
- * inside an owned footprint the heightfield steps aside (the cave's rock
- * supplies floor, walls and roof), so the floor drops below the cave's base.
- * It is pointwise, so a shape straddling a mouth samples both owners. Pair
- * it with the cave rock in the solid roster. */
+/** The floor the heightfield leaves once caves own their footprints:
+ * below the cave's base inside one, the exterior floor elsewhere.
+ *
+ * NOT an adapter on its own (W1-PRE R1): `createWorldQueries` samples a
+ * supplied floor only at an actor's centre in clearance and never in sweeps,
+ * so a straddling shape can bury a corner in exterior ground; and replacing
+ * the floor function switches off `world.ts`'s identity-keyed legacy terrain
+ * guards. Full-shape ownership lives in the adapter prototype
+ * `sim/caveWorld.ts`, which uses this only for cave-touching queries. */
 export function withCaveFloors(floor: FloorFunction): FloorFunction {
   return (x, z) => {
     const cave = caveSourceAt(x, z);

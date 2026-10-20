@@ -12,11 +12,16 @@ import type { Vec3 } from "../../world/types.js";
  *   (`CaveRoom.falloff`), over `DISTANCE_RANGE` metres;
  * - G: direct sun: the fraction of the texel that sees the sky along the
  *   cel light direction (the skylight's beam);
- * - B: rock fraction, which the lamp marches to stop at walls;
+ * - B: rock fraction (diagnostic only: filtered, it is not a visibility test);
  * - A: how much of the texel is the cave inside rather than open water.
  * Rock texels copy their nearest water texel, so a surface sampled at its
  * own position reads the water in front of it. The shader (`caveLight.ts`)
- * turns these into banded cel lighting; `caveDaylight` mirrors its curve. */
+ * turns these into banded cel lighting; `caveDaylight` mirrors its curve.
+ *
+ * Lamp visibility does NOT use the filtered field. `rock` is the exact
+ * collision occupancy (the 0.5 m voxels the rock solids cover, plus the
+ * heightfield pad), fetched unfiltered, and `lampVisible` walks every voxel a
+ * ray crosses (3D DDA). The shader runs the same walk. */
 
 /** The cel pass's `LIGHT_DIRECTION` (render/materials.ts), normalised. A
  * heavy test pins the two together. */
@@ -39,6 +44,49 @@ export interface CaveLightField {
   readonly nz: number;
   /** RGBA8, X fastest, then Y, then Z (WebGL 3D texture order). */
   readonly data: Uint8Array;
+  /** Exact rock occupancy for lamp visibility: R8, 255 = rock (reads 1.0 in
+   * the shader), 0 = water, same order. */
+  readonly rock: RockGrid;
+}
+export interface RockGrid {
+  readonly min: Vec3;
+  readonly voxel: number;
+  readonly nx: number;
+  readonly ny: number;
+  readonly nz: number;
+  readonly data: Uint8Array;
+}
+
+/** Ray length near the lit surface ignored by the lamp walk, metres. The
+ * shell lies up to 0.35 m inside its rock and the walk starts 0.3 m off the
+ * surface, so this skips only the surface's own skin; every solid is at least
+ * 2 m thick, so a ray through rock is still inside it past the skip. */
+export const LAMP_SKIN = 0.45;
+/** Voxel steps the lamp walk may take (a 22 m ray crosses at most 3 x 44). */
+export const LAMP_WALK_STEPS = 200;
+
+/** True when no rock voxel lies on the segment p -> lamp beyond `skip`
+ * metres from p. Mirrors `lampVisible` in the shader step for step. A walk
+ * that runs out of steps reports blocked. */
+export function lampVisible(rock: RockGrid, p: Vec3, lamp: Vec3, skip = LAMP_SKIN): boolean {
+  const a = [(p.x - rock.min.x) / rock.voxel, (p.y - rock.min.y) / rock.voxel, (p.z - rock.min.z) / rock.voxel];
+  const b = [(lamp.x - rock.min.x) / rock.voxel, (lamp.y - rock.min.y) / rock.voxel, (lamp.z - rock.min.z) / rock.voxel];
+  const d = [b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!], length = Math.hypot(d[0]!, d[1]!, d[2]!) * rock.voxel;
+  if (length < 1e-6) return true;
+  const tSkip = skip / length, dims = [rock.nx, rock.ny, rock.nz];
+  const cell = a.map(Math.floor), step = d.map(v => v > 0 ? 1 : v < 0 ? -1 : 0);
+  const tDelta = d.map(v => v !== 0 ? Math.abs(1 / v) : 1e30);
+  const tMax = d.map((v, k) => v !== 0 ? (cell[k]! + (v > 0 ? 1 : 0) - a[k]!) / v : 1e30);
+  let tEnter = 0;
+  for (let i = 0; i < LAMP_WALK_STEPS; i++) {
+    if (tEnter > 1) return true;
+    const tExit = Math.min(tMax[0]!, tMax[1]!, tMax[2]!);
+    if (tExit > tSkip && cell.every((c, k) => c >= 0 && c < dims[k]!) &&
+        rock.data[cell[0]! + rock.nx * (cell[1]! + rock.ny * cell[2]!)]! > 127) return false;
+    const k = tMax[0]! <= tMax[1]! && tMax[0]! <= tMax[2]! ? 0 : tMax[1]! <= tMax[2]! ? 1 : 2;
+    cell[k] = cell[k]! + step[k]!; tEnter = tMax[k]!; tMax[k] = tMax[k]! + tDelta[k]!;
+  }
+  return false;
 }
 
 /** Cel daylight curve, shared by the shader and tests. */
@@ -194,6 +242,7 @@ export function caveLightField(def: CaveDef, floor: (x: number, z: number) => nu
   }
   const field: CaveLightField = {
     caveId: def.id, min: { ...g.origin }, size: { x: nx * texel, y: ny * texel, z: nz * texel }, texel, nx, ny, nz, data,
+    rock: { min: { ...g.origin }, voxel: g.voxel, nx: g.nx, ny: g.ny, nz: g.nz, data: volume.solid.map(v => v ? 255 : 0) },
   };
   fields.set(def, field);
   return field;

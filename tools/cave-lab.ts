@@ -18,17 +18,19 @@ import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js
 import type { LinesMesh } from "@babylonjs/core/Meshes/linesMesh.js";
 import { createAtmosphere } from "../src/render/atmosphere.js";
 import { createCaveCelMaterial, CaveLighting } from "../src/render/caves/caveMaterial.js";
+import { CAVE_LIGHT_SHADER } from "../src/render/caves/caveLight.js";
 import { caveLightField, caveDaylight, sampleLightField } from "../src/render/caves/lightField.js";
 import { opticsAt } from "../src/render/biomes/optics.js";
 import { tessellate, FINE, BORDER_STEP } from "../src/render/biomes/tessellate.js";
 import { geologyColor } from "../src/render/biomes/geology.js";
 import type { MeshRecipe } from "../src/render/kit/types.js";
-import { caveDef, withCaveFloors, EXTERIOR } from "../src/content/regions/caves.js";
+import { caveDef, EXTERIOR } from "../src/content/regions/caves.js";
 import { caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
 import { emptyMasks, terrainMasks } from "../src/content/regions/terrain.js";
-import { createWorldQueries } from "../src/sim/world.js";
+import { caveOwner, createCaveWorldQueries } from "../src/sim/caveWorld.js";
+import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
 import { columnRect } from "../src/world/frame.js";
 import type { Rect } from "../src/world/types.js";
 
@@ -70,9 +72,14 @@ const buildMs = performance.now() - started;
 // widens it to the envelope), so the lab sweeps the diver in a frame shifted
 // into it. Sweeps are translation-invariant; drop SHIFT once C3 lands.
 const SHIFT = { x: 300, z: 90 };
-const caveFloor = withCaveFloors(worldFloor);
-const world = createWorldQueries(def.rock.map(s => ({ id: s.id, min: { ...s.min, x: s.min.x + SHIFT.x, z: s.min.z + SHIFT.z },
-  max: { ...s.max, x: s.max.x + SHIFT.x, z: s.max.z + SHIFT.z } })), (x, z) => caveFloor(x - SHIFT.x, z - SHIFT.z));
+// The prototype ownership adapter (sim/caveWorld.ts): full-shape cave and
+// exterior ownership, the exterior heightfield outside the footprint.
+const shiftRect = (r: { minX: number; maxX: number; minZ: number; maxZ: number }) =>
+  ({ minX: r.minX + SHIFT.x, maxX: r.maxX + SHIFT.x, minZ: r.minZ + SHIFT.z, maxZ: r.maxZ + SHIFT.z });
+const owner = caveOwner(def);
+const world = createCaveWorldQueries({ solids: [], floor: (x, z) => worldFloor(x - SHIFT.x, z - SHIFT.z), guards: [shiftRect(LEGACY_PRESERVE)],
+  caves: [{ ...owner, footprint: shiftRect(owner.footprint), rock: owner.rock.map(s => ({ id: s.id,
+    min: { ...s.min, x: s.min.x + SHIFT.x, z: s.min.z + SHIFT.z }, max: { ...s.max, x: s.max.x + SHIFT.x, z: s.max.z + SHIFT.z } })) }] });
 
 const cel = createCaveCelMaterial(scene);
 const { water, sky } = createAtmosphere(scene);
@@ -294,4 +301,55 @@ async function show(name: string, lamp = state.lamp, lod = state.lod): Promise<v
   state.lamp = lamp; state.lod = lod; applyLod(); go(name);
   await settle();
 }
-Object.assign(window, { caveLab: { go, show, settle, camera, scene, def, field, world, state, setOverlay, applyLod, VIEWS } });
+/** GPU control for lamp visibility: runs the production `lampVisible` GLSL
+ * on its own WebGL2 context with this cave's textures, 64 rays per draw into
+ * an offscreen target (one fragment per ray). Returns 0 (blocked) or 1 (lit)
+ * per ray, to compare with the CPU walk. */
+function lampProbe(rays: readonly { p: P; lamp: P }[]): { values: number[]; renderer: string; error: number } {
+  const BATCH = 64, c = document.createElement("canvas"); c.width = BATCH; c.height = 1;
+  const gl = c.getContext("webgl2", { antialias: false })!, program = gl.createProgram()!;
+  const add = (type: number, source: string): void => {
+    const sh = gl.createShader(type)!; gl.shaderSource(sh, source); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh) ?? "compile");
+    gl.attachShader(program, sh); gl.deleteShader(sh);
+  };
+  add(gl.VERTEX_SHADER, "#version 300 es\nvoid main(){vec2 p=gl_VertexID==0?vec2(-1,-1):gl_VertexID==1?vec2(3,-1):vec2(-1,3);gl_Position=vec4(p,0,1);}");
+  add(gl.FRAGMENT_SHADER, "#version 300 es\nprecision highp float;\n" + CAVE_LIGHT_SHADER.split("vec3 caveLamp")[0] +
+    `\nuniform vec3 testP[${BATCH}],testLamp[${BATCH}];out vec4 color;` +
+    "void main(){int i=int(gl_FragCoord.x);color=vec4(lampVisible(testP[i],testLamp[i]),0,0,1);}");
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) ?? "link");
+  gl.useProgram(program);
+  const texture = (unit: number, w: number, h: number, d: number, data: Uint8Array, rgba: boolean): void => {
+    const t = gl.createTexture()!; gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_3D, t);
+    const filter = rgba ? gl.LINEAR : gl.NEAREST;
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, filter); gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, filter);
+    for (const k of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T, gl.TEXTURE_WRAP_R]) gl.texParameteri(gl.TEXTURE_3D, k, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage3D(gl.TEXTURE_3D, 0, rgba ? gl.RGBA8 : gl.R8, w, h, d, 0, rgba ? gl.RGBA : gl.RED, gl.UNSIGNED_BYTE, data);
+  };
+  const r = field.rock;
+  texture(0, field.nx, field.ny, field.nz, field.data, true); texture(1, r.nx, r.ny, r.nz, r.data, false);
+  const target = gl.createTexture()!; gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, target);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, BATCH, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  const fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target, 0);
+  const u = (name: string) => gl.getUniformLocation(program, name);
+  gl.uniform1i(u("caveField"), 0); gl.uniform1i(u("caveRock"), 1); gl.uniform1f(u("caveActive"), 1);
+  gl.uniform3f(u("caveFieldMin"), field.min.x, field.min.y, field.min.z); gl.uniform3f(u("caveFieldSize"), field.size.x, field.size.y, field.size.z);
+  gl.uniform3f(u("caveRockMin"), r.min.x, r.min.y, r.min.z); gl.uniform1f(u("caveRockVoxel"), r.voxel); gl.uniform3f(u("caveRockDims"), r.nx, r.ny, r.nz);
+  const values: number[] = [], pixels = new Uint8Array(BATCH * 4);
+  for (let at = 0; at < rays.length; at += BATCH) {
+    const batch = rays.slice(at, at + BATCH), ps = new Float32Array(BATCH * 3), ls = new Float32Array(BATCH * 3);
+    batch.forEach((ray, i) => { ps.set([ray.p.x, ray.p.y, ray.p.z], i * 3); ls.set([ray.lamp.x, ray.lamp.y, ray.lamp.z], i * 3); });
+    gl.uniform3fv(u("testP[0]"), ps); gl.uniform3fv(u("testLamp[0]"), ls);
+    gl.viewport(0, 0, BATCH, 1); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.readPixels(0, 0, BATCH, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    for (let i = 0; i < batch.length; i++) values.push(pixels[i * 4]! / 255);
+  }
+  const info = gl.getExtension("WEBGL_debug_renderer_info");
+  const result = { values, renderer: String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)), error: gl.getError() };
+  gl.getExtension("WEBGL_lose_context")?.loseContext();
+  return result;
+}
+Object.assign(window, { caveLab: { lampProbe, go, show, settle, camera, scene, def, field, world, state, setOverlay, applyLod, VIEWS } });
