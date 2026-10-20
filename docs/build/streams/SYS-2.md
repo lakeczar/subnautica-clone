@@ -1,6 +1,6 @@
 # SYS-2 bases and knowledge: interface and handoff
 
-Opus 5.5 high · branch `feat/sys-2-bases-knowledge` from `feat/siltwake-first-expedition` at `7519cfb` · new files only, story-neutral. These are rules, data and tests ready to compose. There is no final UI and no wiring. Revised for [Sol R1](../reviews/SYS-2-SOL-XHIGH-R1.md) (F1–F6 and both P3s) and [Sol R2](../reviews/SYS-2-SOL-XHIGH-R2.md) (R2-F1, R2-F2); see the fix tables below.
+Opus 5.5 high · branch `feat/sys-2-bases-knowledge` from `feat/siltwake-first-expedition` at `7519cfb` · new files only, story-neutral. These are rules, data and tests ready to compose. There is no final UI and no wiring. Revised for [Sol R1](../reviews/SYS-2-SOL-XHIGH-R1.md) (F1–F6 and both P3s) [Sol R2](../reviews/SYS-2-SOL-XHIGH-R2.md) (R2-F1, R2-F2) and [Sol R3](../reviews/SYS-2-SOL-XHIGH-R3.md) (R3-F1, R3-F2, plus the coordinator's main-path kit-plan decision); see the fix tables below.
 
 ## What exists
 | Area | Content (`src/content/systems/`) | Rules (`src/sim/systems/`) |
@@ -32,7 +32,8 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
   - **Timing:** decodes take 3, 6, 10 or 15 minutes of play.
   - **Power and range:** a decoder needs power. Without a relay on its host, it works only within 250 m of the player.
   - **Results:** a completed decode grants plans and adds decode beacons for revealed sites, landmarks and hints.
-  - **Main-path check:** `decoderPlanProblems(path)` checks that `bp_decoder` is granted on the main path, by a step that needs no decode, before any step that does.
+  - **Main-path check:** `decoderPlanProblems(path)` checks that `bp_decoder` is granted on the main path, by a step that needs no decode, before any step that does. `mainPathPlanProblems(path)` adds the coordinator's rule: every plan in `MAIN_PATH_PLANS` (the decoder and all three outpost-kit tiers) is granted on the main path by a step that needs no decode. The independent route never depends on an optional decode for its kits; decodes may only grant copies.
+  - **Where the plans come from:** proposed main-path technical records in `SYS2_TECH_RECORDS`. The workshop outpost sheet gives the field-outpost and planter plans, and the workshop signal rack gives the decoder, relay and survey-station plans. The Canopy laboratory sheet gives standard-kit plans, and the Basin boundary station plate gives advanced-kit plans. Each `DEMO_MAIN_PATH` step names its record, and a test checks that the record carries those plans.
 - **Cultivation.**
   - **Crops:** staple cups (meal), salve frond (`field_salve`, medicine), ribbon fan (flex membrane), lumen bulb (`bio_cell`, charge 100) and pale crust (conductive crust, `sampling: "specimen"` for the Hush bay).
   - **Growth** takes 6–10 minutes of play, only while the planter is socketed.
@@ -107,27 +108,33 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
   - a feedback key (proposed `N`) opens a one-line note: `addNote(rec, state, text, new Date().toISOString())`;
   - an export button saves `exportTimelineText` as a file.
   - **Travel** (F5) counts only steps where the piloted craft moves at 0.5 m/s or faster. Each travel event is one stretch of motion between points of interest (new things, gathers, sources), with its stationary helm seconds alongside. Time at a still helm is ordinary play, and the report shows it separately.
-  - **Deaths and recovery** (F6, R2-F1): each death records what it left behind as keys, `cache:<id>` for the cache it created and `loss:<vehicleId>` for any craft loss no other open death claims. Every open death is kept with its own play timestamp, and it closes when all its keys resolve: its cache is empty or gone, and its loss entry is gone. A towed craft therefore counts as recovered once it's patched or salvaged at the bench. The recovery event carries `of` (the death's tick) and the same keys. `resumeRecorder` rebuilds the open deaths from death events with no matching recovery, and their resolution is read from the game state, so any number of outstanding deaths survive a reload. Recovery time is play time, so idle is excluded. A death that left nothing behind closes at once as `nothing-lost`; the report counts it apart and keeps it out of the recovery times.
+  - **Deaths and recovery** (F6, R2-F1, R3-F1, R3-F2): each open death keeps its own play timestamp and a **ledger** of what it left. That's its craft losses still out (`loss:<vehicleId>`, any loss no other open death claims) and its cargo, as quantities per cache and item kind.
+    - **Retrieval:** each cargo line only shrinks, to what its cache holds now. Partial transfers count, and the player's own later deposits never extend a death. Putting cargo back doesn't raise what's owed; once retrieved, it's the player's deposit. A death closes only when every line reaches zero and every loss has ended, never on a mere decrease.
+    - **Salvage:** an in-place salvage ends the loss and creates a canister in the same step, so the death's obligation moves to that canister's contents (frame and hold) and closes once they're hauled. Salvage straight into a carried hold ends the loss with nothing left over, so it closes at once. A towed craft stays lost until it's patched or salvaged.
+    - **Events:** the death event carries the keys it started with. The recovery event carries `of` (the death's tick) and every key ever attributed, canisters included.
+    - **Reload:** the export's session header carries the live ledger (`session.pending`). `resumeRecorder` restores it exactly, so any number of open deaths, partly hauled caches and canister handoffs survive a reload.
+    - **Idle and nothing lost:** recovery time is play time, so idle is excluded. A death that left nothing closes at once, labelled `nothing-lost`. The report counts it separately and keeps it out of the recovery times. It measures asset recovery only, not the full disruption of a death, such as retracing the route.
   - Nothing is sent anywhere, and a test enforces this.
 - **UI:** render `buildJournal(s, s.systems, { creatures, cycles })`. The notebook tab carries S5's own `NotebookView`, so `ui/storyNotebook.ts` can keep rendering it.
   - **Slots:** the ecology owner fills `creatures`, and the cycles owner fills `cycles`.
   - **Lab:** `tools/journal-lab.html` mocks the tabs, search, a chart and the outpost pack preview. Run `npx vite --port 5199 --strictPort --host 127.0.0.1`, then open `/tools/journal-lab.html`.
 
 ## Stubbed or placeholder
-- **Lost sites, decodables and main path:** all `demo_*` rows are placeholders. The lore owner supplies real sites and texts, and the coordinator feeds P1's route into `decoderPlanProblems`.
+- **Lost sites, decodables and main path:** all `demo_*` rows are placeholders. The lore owner supplies real sites and texts, and the coordinator feeds P1's route into `mainPathPlanProblems` (which includes `decoderPlanProblems`). The four proposed main-path records' positions are datums the world owner may move.
 - **Power:** `locationPower` is a stand-in. A cell-powered host runs while any charged cell sits in its locker, with no drain modelled.
 - **Not wired:** the charger and the small fabricator are listed as services (`hostServices`), but charging and bench recipes at outposts are not wired.
 - **Proposed numbers:** `field_salve` has no healing effect yet. Seed patch positions and every balance number are proposals.
 - **Interactions:** no world placement or interaction wiring exists, and no beacon or outpost art.
 
 ## Checks
-- **`npm test`** (typecheck, test build, fast tier): **825/825 pass**. SYS-2 adds 71 tests in `tests/systems-*.test.ts` and `tests/timeline-*.test.ts` (56 at R1, 12 for its fixes, 3 for R2's).
+- **`npm test`** (typecheck, test build, fast tier): **830/830 pass**. SYS-2 adds 76 tests in `tests/systems-*.test.ts` and `tests/timeline-*.test.ts` (56 at R1, 12 for its fixes, 3 for R2's, 5 for R3's and the plan decision).
 - **`npx tsc --noEmit -p tools/journal-lab.tsconfig.json`** is clean. The lab script was bundled with esbuild and run in Node against a DOM stub; it builds all 6 tabs, the chart and the pack preview.
 - **Heavy tier:** not run. No SYS-2 file reaches Babylon, and the fast tier's import guard confirms that for every new test.
 - **Browser:** no run, as briefed.
 - **`timeline-report.mjs`:** run end to end by a test. It needs type stripping (Node ≥ 22.18 or 23.6, while `package.json` engines say ≥ 22.12). The script checks `process.features.typescript` and exits 2 with a plain message otherwise. At composition, raise `engines` to `>=22.18.0` or document `--experimental-strip-types`.
 - **Sol R1 probes** (`probes.mjs`, each block run separately): every finding's block now fails its bug-reproducing assertion, except F1's. That block calls the unchanged `recovery.incapacitate` directly, which needs the one-line composed filter above.
 - **Sol R2 probes** (`r2/new-probes.mjs`, output redirected to `/work/tmp`): **9/9 pass**, including the four that reproduced R2-F1 and R2-F2. In `r2/r1-adapted-probes.mjs`, every block passes except the last. That block fakes a death with `failures++` and no cache or loss, then expects a timed recovery on `rescues++`. Under the R2-F1 rule such a death closes at once as `nothing-lost`, so `unrecovered` is 0 as asserted, but it has no recovery time. This is intended: there was nothing to recover.
+- **Sol R3 probes** (`r3/recovery-findings.mjs` and `r3/adverse-probes.mjs`, output redirected to `/work/tmp`): R3-F1 and R3-F2 pass, and all 8 adverse probes pass. The R2 probes still pass 9/9.
 
 ## R1 fixes
 | Finding | Fix | Test |
@@ -145,3 +152,10 @@ Proposed rows for the registry are in `content/systems/items.ts`: `SYS2_ITEMS`, 
 | --- | --- | --- |
 | R2-F1 two outstanding deaths | each open death is kept with its own keys (`cache:`, `loss:`) and play time; it closes when all its keys resolve; resume rebuilds them from unmatched death events; nothing-lost deaths close at once | `timeline-recorder`: two real caches, recover the second, export/reload, idle, recover the first, with both times exact; a partly emptied cache keeps its death open; nothing-lost |
 | R2-F2 stranded carrier modules | `socketProblems` in `instanceProblems` resolves host, module socket, accepted kind and carrier occupant; `validSystems` also rejects furniture-only or incompatible Hearthline sockets | `systems-content`: missing carrier, furniture-only socket, planter on a fabrication bench, non-module kind, occupant mismatch; a disabled carrier stays valid |
+
+## R3 fixes
+| Finding | Fix | Test |
+| --- | --- | --- |
+| R3-F1 canister salvage | a loss that ends with a new canister moves the death's obligation to the canister's contents; salvage into a carried hold closes at once; the ledger persists in `session.pending` | `timeline-recovery`: real Creel salvage, partial hauls, reload, exact time; real Dart salvage into the diver hold |
+| R3-F2 unrelated deposits | per-death cargo lines by cache and kind that only shrink; close only at zero | `timeline-recovery`: a meal deposited in the cache, reload; original cargo put back and taken again |
+| Coordinator: kit plans | `MAIN_PATH_PLANS`, `mainPathPlanProblems`; standard and advanced kit plans on main-path records; optional decodes grant copies only | `systems-decoder`: holds for the demo path; fails without the lab sheet, behind a decode, or without the field kit; records carry their plans |

@@ -37,7 +37,19 @@ export interface TimelineEvent {
   text?: string;
   wall?: string;
 }
-export interface TimelineSession { id: string; started: string; build?: string; end: { tick: number; play: number; idle: number } }
+/** One death not yet recovered. `losses` are craft still lost (`recovery.losses`
+ * vehicle IDs); `cargo` is what the death left, per cache and item kind. Lines only
+ * shrink, so later deposits never extend a death. It closes when both are empty. */
+export interface PendingRecovery {
+  tick: number;
+  play: number;
+  /** Everything ever attributed: `cache:<id>` (death caches and salvage canisters), `loss:<vehicleId>`. */
+  keys: string[];
+  losses: string[];
+  cargo: { cache: string; kind: string; quantity: number }[];
+}
+/** `pending` is the live recovery ledger at export, so a reload resumes it exactly. */
+export interface TimelineSession { id: string; started: string; build?: string; end: { tick: number; play: number; idle: number }; pending?: PendingRecovery[] }
 export interface TimelineExport { format: typeof TIMELINE_FORMAT; version: typeof TIMELINE_VERSION; session: TimelineSession; dropped: number; events: TimelineEvent[] }
 
 /** One event per line inside a JSON document: diffable and easy to skim. */
@@ -58,6 +70,11 @@ export function parseTimeline(text: string): { ok: true; value: TimelineExport }
   const session = v.session;
   if (!obj(session) || typeof session.id !== "string" || typeof session.started !== "string" || !obj(session.end) ||
     !num(session.end.tick) || !num(session.end.play) || !num(session.end.idle)) return { ok: false, error: "Malformed session header." };
+  const strings = (a: unknown): boolean => Array.isArray(a) && a.every((x) => typeof x === "string");
+  if (session.pending !== undefined && !(Array.isArray(session.pending) && session.pending.every((p) => obj(p) && num(p.tick) && num(p.play) &&
+    strings(p.keys) && strings(p.losses) && Array.isArray(p.cargo) &&
+    p.cargo.every((c) => obj(c) && typeof c.cache === "string" && typeof c.kind === "string" && num(c.quantity) && c.quantity > 0))))
+    return { ok: false, error: "Malformed pending recoveries." };
   if (!Array.isArray(v.events) || !num(v.dropped)) return { ok: false, error: "Malformed events." };
   for (const [n, e] of v.events.entries())
     if (!obj(e) || typeof e.kind !== "string" || !KINDS.includes(e.kind) || !num(e.tick) || !num(e.play) ||

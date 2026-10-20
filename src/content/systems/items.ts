@@ -124,8 +124,10 @@ export const SYS2_SOURCES = {
 } as const satisfies Record<string, SeedSourceDefinition>;
 export type Sys2SourceId = keyof typeof SYS2_SOURCES;
 
-/** Ordinary technical records proposed for TECH_RECORDS. The decoder record sits
- * on the main path at the Splitspine workshop, readable without decoding. */
+/** Ordinary technical records proposed for TECH_RECORDS, all on the main path and
+ * readable without decoding. Coordinator decision (content bible): the main path
+ * carries copies of every outpost-kit tier's plans, so the independent route never
+ * depends on an optional decode for its kits; decodes may grant further copies. */
 export const SYS2_TECH_RECORDS = {
   workshop_outpost_sheet: {
     label: "Workshop field-outpost sheet", region: "island_chain", position: { x: 12, y: 2.2, z: -37.5 },
@@ -136,6 +138,16 @@ export const SYS2_TECH_RECORDS = {
     label: "Workshop signal rack", region: "island_chain", position: { x: 9, y: 2.2, z: -38.5 },
     text: "A signal rack with a working decoder board and its wiring plan. A relay plan is pinned beside it.",
     blueprints: ["bp_decoder", "bp_signal_relay", "bp_survey_station"],
+  },
+  canopy_lab_outpost_sheet: {
+    label: "Laboratory outpost frame sheet", region: "suspended_garden", position: { x: 117.5, y: -117.2, z: -124.5 },
+    text: "A field sheet for a three-socket outpost frame, braced with fin crust for the deeper shelves.",
+    blueprints: ["bp_outpost_standard"],
+  },
+  basin_station_outpost_frame: {
+    label: "Boundary station frame plate", region: "silt_basin", position: { x: 217.5, y: -171, z: -242 },
+    text: "Pressure-frame plate for a five-socket outpost, rated with ceramic bracing for the Rift shoulder.",
+    blueprints: ["bp_outpost_advanced"],
   },
 } as const satisfies Record<string, { label: string; region: RegionId; position: { x: number; y: number; z: number };
   text: string; blueprints: readonly Sys2BlueprintId[] }>;

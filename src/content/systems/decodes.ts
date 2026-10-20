@@ -50,6 +50,7 @@ export const DECODABLES = {
   },
   demo_cairn_survey: {
     label: "Cairn survey log", site: "demo_survey_cairn", region: "suspended_garden", size: "log",
+    // An optional decode: this is an early copy of plans the main path also grants.
     gates: ["demo_cairn_terminal"], blueprints: ["bp_outpost_standard"], story: false,
     reveals: [
       { id: "demo_vault", label: "Instrument vault", category: "site", position: { x: 230, y: -185, z: -265 }, radius: 80 },
@@ -73,10 +74,18 @@ export interface MainPathStep {
   id: string;
   grants: readonly string[];
   needsDecoded: readonly string[];
+  /** The technical record (SYS2_TECH_RECORDS) that supplies the grants, if any. */
+  record?: string;
 }
+/** Plans the independent route depends on: each must be granted on the main path
+ * by a step that needs no decode. Decodes may only grant extra copies. */
+export const MAIN_PATH_PLANS = ["bp_decoder", "bp_field_outpost", "bp_outpost_standard", "bp_outpost_advanced"] as const;
 export const DEMO_MAIN_PATH: readonly MainPathStep[] = [
   { id: "pod_checklist", grants: ["bp_pod_checklist"], needsDecoded: [] },
-  { id: "workshop", grants: ["bp_island_workshop", "bp_field_outpost"], needsDecoded: [] },
-  { id: "workshop_signal_rack", grants: ["bp_decoder", "bp_signal_relay"], needsDecoded: [] },
+  { id: "workshop", grants: ["bp_island_workshop"], needsDecoded: [] },
+  { id: "workshop_outpost_sheet", grants: ["bp_field_outpost", "bp_cultivation"], needsDecoded: [], record: "workshop_outpost_sheet" },
+  { id: "workshop_signal_rack", grants: ["bp_decoder", "bp_signal_relay", "bp_survey_station"], needsDecoded: [], record: "workshop_decoder_rack" },
+  { id: "canopy_lab_outpost_sheet", grants: ["bp_outpost_standard"], needsDecoded: [], record: "canopy_lab_outpost_sheet" },
+  { id: "basin_station_outpost_frame", grants: ["bp_outpost_advanced"], needsDecoded: [], record: "basin_station_outpost_frame" },
   { id: "basin_vault", grants: [], needsDecoded: ["demo_vault_archive"] },
 ];

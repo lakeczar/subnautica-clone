@@ -1,7 +1,7 @@
 /** The decoder and lost-site framework. Sites are found by visiting them; their
  * data then decodes in the background on a powered decoder module. Without a
  * relay a decoder works only while the player is near its host. */
-import { DECODABLE_IDS, DECODABLES, DECODE_MINUTES, DECODER_LOCAL_RANGE } from "../../content/systems/decodes.js";
+import { DECODABLE_IDS, DECODABLES, DECODE_MINUTES, DECODER_LOCAL_RANGE, MAIN_PATH_PLANS } from "../../content/systems/decodes.js";
 import type { DecodableDefinition, DecodableId, MainPathStep } from "../../content/systems/decodes.js";
 import { moduleOfItem } from "../../content/systems/hosts.js";
 import type { BlueprintId } from "../../content/registry.js";
@@ -132,5 +132,20 @@ export function decoderPlanProblems(path: readonly MainPathStep[], decoderBluepr
     for (const d of step.needsDecoded)
       if (!Object.hasOwn(decodables, d)) problems.push(`"${step.id}" needs an unknown decodable ${d}.`);
   });
+  return problems;
+}
+
+/** The wider guarantee: every plan the independent route depends on (decoder,
+ * all three outpost-kit tiers) is granted on the main path by a step that needs no
+ * decode, and the decoder rule above holds. Empty when held. */
+export function mainPathPlanProblems(path: readonly MainPathStep[], plans: readonly string[] = MAIN_PATH_PLANS,
+  decodables: Readonly<Record<string, unknown>> = DECODABLES): string[] {
+  const problems = decoderPlanProblems(path, "bp_decoder", decodables);
+  for (const plan of plans.filter((p) => p !== "bp_decoder")) {
+    const steps = path.filter((step) => step.grants.includes(plan));
+    if (!steps.length) problems.push(`${plan} is not granted anywhere on the main path.`);
+    else if (steps.every((step) => step.needsDecoded.length))
+      problems.push(`${plan} is granted on the main path only behind a decode (${steps.map((x) => `"${x.id}"`).join(", ")}).`);
+  }
   return problems;
 }

@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DECODABLE_IDS, DECODABLES, DECODE_MINUTES, DEMO_MAIN_PATH, LOST_SITES } from "../src/content/systems/decodes.js";
-import { advanceDecodes, decodeSeconds, decodeViews, decoderPlanProblems, discoverSite, knownSites, recordReadable, startDecode } from "../src/sim/systems/decoder.js";
+import { DECODABLE_IDS, DECODABLES, DECODE_MINUTES, DEMO_MAIN_PATH, LOST_SITES, MAIN_PATH_PLANS } from "../src/content/systems/decodes.js";
+import { OUTPOST_TIER_ORDER, OUTPOST_TIERS } from "../src/content/systems/hosts.js";
+import { SYS2_TECH_RECORDS } from "../src/content/systems/items.js";
+import { advanceDecodes, decodeSeconds, decodeViews, decoderPlanProblems, mainPathPlanProblems, discoverSite, knownSites, recordReadable, startDecode } from "../src/sim/systems/decoder.js";
 import { installModule, outpostLockerId, removeModule } from "../src/sim/systems/hosts.js";
 import { deployOutpost } from "../src/sim/systems/outposts.js";
 import type { GameState } from "../src/sim/types.js";
@@ -151,7 +153,7 @@ test("decode progress belongs to the decoder module: removed it pauses, socketed
 
 test("the main-path check: decoder plans are granted before any decode the path needs", () => {
   assert.deepEqual(decoderPlanProblems(DEMO_MAIN_PATH), []);
-  const late = [...DEMO_MAIN_PATH.filter((p) => p.id !== "workshop_signal_rack"), DEMO_MAIN_PATH[2]!];
+  const late = [...DEMO_MAIN_PATH.filter((p) => p.id !== "workshop_signal_rack"), DEMO_MAIN_PATH.find((p) => p.id === "workshop_signal_rack")!];
   assert.match(decoderPlanProblems(late).join("\n"), /"basin_vault" needs demo_vault_archive before the decoder plans/);
   const gated = DEMO_MAIN_PATH.map((p) => p.id === "workshop_signal_rack" ? { ...p, needsDecoded: ["demo_hut_fragment"] } : p);
   assert.match(decoderPlanProblems(gated).join("\n"), /granted at "workshop_signal_rack", which itself needs a decode/);
@@ -162,4 +164,27 @@ test("the main-path check: decoder plans are granted before any decode the path 
   // Story decodes in the demo data are needed on the path, after the plans.
   for (const id of DECODABLE_IDS.filter((d) => DECODABLES[d].story))
     assert.ok(DEMO_MAIN_PATH.some((p) => (p.needsDecoded as readonly string[]).includes(id)), id);
+});
+
+test("the main path grants every outpost-kit tier's plans and the decoder's, never behind a decode", () => {
+  for (const t of OUTPOST_TIER_ORDER) assert.ok((MAIN_PATH_PLANS as readonly string[]).includes(OUTPOST_TIERS[t].bp), t);
+  assert.ok((MAIN_PATH_PLANS as readonly string[]).includes("bp_decoder"));
+  assert.deepEqual(mainPathPlanProblems(DEMO_MAIN_PATH), []);
+  // Each grant comes from a real proposed record that carries those plans.
+  for (const step of DEMO_MAIN_PATH.filter((p) => p.record)) {
+    const record = SYS2_TECH_RECORDS[step.record as keyof typeof SYS2_TECH_RECORDS];
+    assert.ok(record, step.id);
+    for (const bp of step.grants) assert.ok((record.blueprints as readonly string[]).includes(bp), `${step.id} grants ${bp}`);
+  }
+  for (const plan of MAIN_PATH_PLANS)
+    assert.ok(DEMO_MAIN_PATH.some((p) => p.record && !p.needsDecoded.length && p.grants.includes(plan)), `${plan} has a record on the path`);
+  // Optional decodes may grant copies, but the path must not rely on them.
+  const withoutLab = DEMO_MAIN_PATH.filter((p) => p.id !== "canopy_lab_outpost_sheet");
+  assert.match(mainPathPlanProblems(withoutLab).join("\n"), /bp_outpost_standard is not granted anywhere on the main path/);
+  const behindDecode = DEMO_MAIN_PATH.map((p) => p.id === "basin_station_outpost_frame" ? { ...p, needsDecoded: ["demo_cairn_survey"] } : p);
+  assert.match(mainPathPlanProblems(behindDecode).join("\n"), /bp_outpost_advanced is granted on the main path only behind a decode \("basin_station_outpost_frame"\)/);
+  const noFieldKit = DEMO_MAIN_PATH.filter((p) => p.id !== "workshop_outpost_sheet");
+  assert.match(mainPathPlanProblems(noFieldKit).join("\n"), /bp_field_outpost is not granted/);
+  assert.ok(DECODABLES.demo_cairn_survey.story === false && (DECODABLES.demo_cairn_survey.blueprints as readonly string[]).includes("bp_outpost_standard"),
+    "the optional cairn decode is an early copy, not the source");
 });
