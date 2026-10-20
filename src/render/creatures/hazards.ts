@@ -23,10 +23,8 @@ export function createHazardCues(scene: Scene, cel: Material, name: string, pare
     }, undefined, 0);
     rings.push({ mesh, glow: new Display(mesh, () => true), offset: i / 7 });
   }
-  const chimney = parts.part("plume.chimney", b => {
-    revolve(b, [c.x, c.y - 2, c.z], [[7, 0], [5.5, 6], [4.2, 12], [3.4, 15]], "#4d3a3a", "#6b4a3d", 12);
-    revolve(b, [c.x, c.y + 12.6, c.z], [[3.5, 0], [4.4, 0.6]], "#e8d8b8", "#d9c49a", 12);
-  });
+  // The chimney itself is S2's region art (`rift.split_chimney.columns`); the
+  // field's centre is its lip, so the rings rise from there.
   const layer = HAZARD_FIELDS.divide_dense_layer, lc = sitePosition(layer.shape.center), ly = lc.y + layer.shape.y;
   // Sparse elongated glints rather than a solid sheet: the interface reads as
   // a bright shimmering surface while the animal below it stays visible.
@@ -52,14 +50,14 @@ export function createHazardCues(scene: Scene, cel: Material, name: string, pare
   }, undefined, 0);
   const levelOf = (fields: readonly { id: HazardFieldId; level: number }[], id: HazardFieldId): number => fields.find(f => f.id === id)?.level ?? 0;
   return {
-    root: parts.root, meshes: [...rings.map(r => r.mesh), chimney, mirror, silt],
+    root: parts.root, meshes: [...rings.map(r => r.mesh), mirror, silt],
     update(fields: readonly { id: HazardFieldId; level: number }[], seconds: number) {
       // Baseline 0.3 reads as faint shimmer; the vent is bright, fast and tall.
       const heat = levelOf(fields, "rift_split_plume"), active = Math.max(0, (heat - (plume.baseline ?? 0)) / (1 - (plume.baseline ?? 0)));
       const height = plume.shape.top * (0.25 + 0.75 * active);
       for (const r of rings) {
         const t = (r.offset + seconds * (0.05 + active * 0.25)) % 1;
-        r.mesh.position.set(c.x, c.y + 12 + t * height, c.z);
+        r.mesh.position.set(c.x, c.y + t * height, c.z);
         // Between vents only two faint rings shimmer at the lip; a vent lights the column.
         r.mesh.setEnabled(active > 0.05 || t < 0.3);
         r.mesh.scaling.set(0.8 + t * (0.6 + active), 1 + active * 2, 0.8 + t * (0.6 + active));

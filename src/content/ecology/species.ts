@@ -159,20 +159,21 @@ export const THREAT_ROSTER = {
   rift_stalker_chimney: { species: "glare_stalker", home: at("rift_split_chimney", -14, 12, 6) },
   divide_skate_saddle: { species: "layer_skate", home: at("divide_saddle", 0, 4, 0) },
   divide_skate_east: { species: "layer_skate", home: at("divide_saddle", 60, 4, 30) },
-  district_choir_gallery: { species: "hollow_choir", home: at("district_gallery", 0, 2, 0) },
-  district_choir_terrace: { species: "hollow_choir", home: at("district_gallery", 70, 8, -40) },
+  district_choir_gallery: { species: "hollow_choir", home: at("district_gallery", 0, 1.5, 0) },
+  district_choir_terrace: { species: "hollow_choir", home: at("district_gallery", 30, 1.5, -11) },
 } as const satisfies Record<string, ThreatSpawn>;
 export type ThreatAgentId = keyof typeof THREAT_ROSTER;
 export const THREAT_AGENT_IDS = Object.keys(THREAT_ROSTER) as ThreatAgentId[];
 
 export interface CueSpawn { readonly species: CueSpeciesId; readonly home: SiteOffset; readonly hazard?: "rift_split_plume" | "basin_sediment_lane"; readonly lane?: readonly SiteOffset[] }
 export const CUE_ROSTER = {
-  // Centre of the pale chimney lip ring (render/creatures/hazards.ts: radius 3.5–4.4 m at +13.2 m).
-  rift_mites_lip: { species: "ember_mites", home: at("rift_split_chimney", 0, 13.25, 0), hazard: "rift_split_plume" },
+  // On S2's chimney lip, over the slot between the two columns.
+  rift_mites_lip: { species: "ember_mites", home: at("rift_split_chimney", 0, 0.75, 0), hazard: "rift_split_plume" },
   basin_scavengers_ridge: { species: "basin_scavengers", home: at("basin_wreck_ridge", 4, 0, -10), hazard: "basin_sediment_lane" },
+  // Over the brine, south of S2's crest current: the calm crossing toward the gateworks.
   divide_sails_lane: {
-    species: "brine_sails", home: at("divide_outer_ledge", 0, 10, 0),
-    lane: [at("divide_outer_ledge", 0, 10, 0), at("divide_saddle", -30, 32, -46), at("divide_saddle", 60, 34, -50), at("divide_saddle", 130, 28, -20)],
+    species: "brine_sails", home: at("divide_saddle", -120, 30, 110),
+    lane: [at("divide_saddle", -120, 30, 110), at("divide_saddle", -30, 32, -46), at("divide_saddle", 60, 34, -50), at("divide_saddle", 130, 28, -20)],
   },
   canopy_school_crown: { species: "canopy_school", home: at("canopy_crown") },
 } as const satisfies Record<string, CueSpawn>;

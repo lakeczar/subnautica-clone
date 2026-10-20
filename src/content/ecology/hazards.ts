@@ -59,19 +59,22 @@ export const HAZARD_FIELDS = {
   },
   divide_dense_layer: {
     label: "Dense brine layer", kind: "brine", region: "brine_divide",
-    shape: { kind: "layer", center: at("divide_saddle"), y: 10, min: { x: -140, y: 0, z: -110 }, max: { x: 140, y: 0, z: 110 } },
+    // S2's brine volume: X 180..950, Z -1632..-1280, interface at BRINE_Y -440.
+    shape: { kind: "layer", center: at("divide_saddle"), y: 10, min: { x: -385, y: 0, z: -176 }, max: { x: 385, y: 0, z: 176 } },
     intensity: 1, edge: 1,
     cue: "A mirror-bright surface lies across the saddle; sails drift above it and nothing lives below.",
   },
   divide_downwelling: {
     label: "Saddle downwelling", kind: "current", region: "brine_divide",
-    shape: { kind: "box", center: at("divide_saddle"), min: { x: -28, y: 4, z: -22 }, max: { x: 28, y: 44, z: 22 } },
-    intensity: 1.1, edge: 6, flow: { x: 0.6, y: -0.8, z: 0 },
-    cue: "Filter ribbons on the saddle all point down toward the mirror layer; suspended grains streak past.",
+    // S2's `hazard.divide.crest_current` over the crest: X 200..960, Y -372..-330, Z -1282..-1215.
+    shape: { kind: "box", center: at("divide_saddle"), min: { x: -365, y: 78, z: 174 }, max: { x: 395, y: 120, z: 241 } },
+    intensity: 1.1, edge: 6, flow: { x: 0, y: -0.6, z: -0.8 },
+    cue: "Filter ribbons on the crest all lean south and down toward the mirror layer; suspended grains streak past.",
   },
   basin_sediment_lane: {
     label: "Basin plume lane", kind: "sediment", region: "silt_basin",
-    shape: { kind: "box", center: at("basin_wreck_ridge"), min: { x: -7, y: -3, z: -42 }, max: { x: 7, y: 15, z: 42 } },
+    // S2's `hazard.basin.plume_south` lane off the fractured south slope.
+    shape: { kind: "box", center: at("basin_wreck_ridge"), min: { x: -163, y: -136, z: -328 }, max: { x: 117, y: -64, z: -88 } },
     intensity: 0.8, edge: 4, baseline: 0.08, flow: { x: 0, y: 0, z: 1 },
     cycle: { period: 100, start: 50, duration: 16, ramp: 4 },
     cue: "Scavengers back into their burrows and the lane's floor lifts in a slow grey wall.",

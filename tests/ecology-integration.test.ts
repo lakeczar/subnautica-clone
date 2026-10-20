@@ -76,7 +76,7 @@ test("the stimulus is derived from today's GameState and the adapter wraps today
 test("hull exposure follows the fleet ID contract, is bounded, cross-checked, and never touches inherited properties", () => {
   const roundTrip = (state: ReturnType<typeof createEcology>, vehicleIds?: string[]) =>
     parseEcology(JSON.parse(JSON.stringify(serializeEcology(state))), vehicleIds ? { vehicleIds } : {});
-  const plume = { x: 90, y: -310, z: -500 };
+  const plume = { ...sitePosition(HAZARD_FIELDS.rift_split_plume.shape.center), y: sitePosition(HAZARD_FIELDS.rift_split_plume.shape.center).y + 20 };
   // Every hull type, mixed-case and 80-character IDs: parse -> step -> parse.
   for (const [hull, id] of [...(Object.keys(HULLS) as HullId[]).map(h => [h, `${h}_Hull-A`] as const), ["dart", "D".repeat(80)] as const]) {
     let state = roundTrip(createEcology()) as ReturnType<typeof createEcology>;
@@ -203,7 +203,7 @@ test("alternating control cannot renew grace: 4 s on, 0.25 s away, ×30, with an
 });
 
 test("warning ages: a state at the maximum stays loadable after stepping; a stale age below the threshold is rejected and never shortens grace", () => {
-  const plume = { x: 90, y: -310, z: -500 }, world = openWater();
+  const plume = { ...sitePosition(HAZARD_FIELDS.rift_split_plume.shape.center), y: sitePosition(HAZARD_FIELDS.rift_split_plume.shape.center).y + 20 }, world = openWater();
   // S4-09: max age, controlled and uncontrolled, step -> save -> parse.
   for (const controlledHull of [true, false]) {
     const state = createEcology();
@@ -226,7 +226,7 @@ test("warning ages: a state at the maximum stays loadable after stepping; a stal
   stale.diver = { heat: 39.9, brine: 0, heatWarned: 4.9, brineWarned: 0 };
   let warning: number | null = null, harm: number | null = null;
   for (let i = 0; i < 60 * 20 && harm === null; i++) {
-    const r = stepEcology(stale, { tick: 2400 + i, stimulus: stimulus({ x: 90, y: -310, z: -500 }, { light: 0, noise: 0 }), protection: protectionFor(null, []), vehicleId: null }, world);
+    const r = stepEcology(stale, { tick: 2400 + i, stimulus: stimulus(plume, { light: 0, noise: 0 }), protection: protectionFor(null, []), vehicleId: null }, world);
     if (warning === null && r.events.some(e => e.type === "hazard-warning" && e.hazard === "heat")) warning = i;
     if (r.effects.diverHealth > 0) harm = i;
   }

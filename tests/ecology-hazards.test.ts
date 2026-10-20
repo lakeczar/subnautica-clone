@@ -187,7 +187,8 @@ test("brine sails mark a calm lane well above the layer", () => {
 });
 
 test("the saddle downwelling pushes a Hush hard and a Mantle barely; resin trim vanes help", () => {
-  const f = HAZARD_FIELDS.divide_downwelling, c = sitePosition(f.shape.center), p = { ...c, y: c.y + 20 };
+  const f = HAZARD_FIELDS.divide_downwelling, c = sitePosition(f.shape.center);
+  const p = { x: c.x + (f.shape.min.x + f.shape.max.x) / 2, y: c.y + (f.shape.min.y + f.shape.max.y) / 2, z: c.z + (f.shape.min.z + f.shape.max.z) / 2 };
   const s = sampleHazards(p, 0), speed = (v: { x: number; y: number; z: number }): number => Math.hypot(v.x, v.y, v.z);
   const hush = speed(driftFrom(s, protectionFor("hush", []))), trimmed = speed(driftFrom(s, protectionFor("hush", ["trim_vanes"])));
   const mantle = speed(driftFrom(s, protectionFor("mantle", [])));
@@ -217,7 +218,8 @@ test("stepEcology reports field exposure, harm, drift and visibility for the con
   // Boarding a craft: the diver's load recovers while the hull takes exposure.
   const r = stepEcology(state, { tick: ventTick(1) + 720, stimulus: stimulus(inside, { hull: "dart", radius: 3.6, light: 0, noise: 0 }), protection: protectionFor("dart", []), vehicleId: "dart-1" }, openWater());
   assert.ok(state.diver.heat < 100 && state.hulls.find(h => h.id === "dart-1")!.heat > 0 && r.effects.diverHealth === 0);
-  const lane = sitePosition(HAZARD_FIELDS.basin_sediment_lane.shape.center);
+  const box = HAZARD_FIELDS.basin_sediment_lane.shape, anchor = sitePosition(box.center);
+  const lane = { x: anchor.x + (box.min.x + box.max.x) / 2, y: anchor.y + (box.min.y + box.max.y) / 2, z: anchor.z + (box.min.z + box.max.z) / 2 };
   const surging = stepEcology(createEcology(), { tick: Math.round(HAZARD_FIELDS.basin_sediment_lane.cycle.start * 60 + 120), stimulus: stimulus(lane, { light: 0, noise: 0 }), protection: protectionFor(null, []), vehicleId: null }, openWater());
   assert.ok(surging.effects.visibility < 0.5 && surging.effects.drift.z > 0);
   const fieldIds = Object.keys(HAZARD_FIELDS) as HazardFieldId[];
