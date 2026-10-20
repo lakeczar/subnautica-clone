@@ -20,7 +20,7 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 | Work | Branch / worktree | State |
 | --- | --- | --- |
 | C3: compose the playable world and ecology | `t3/compose-playable-world-ecology` / `t3-8e10510b` | Building |
-| W1-pre: Fanvault cave kit and cave lab | `t3/siltwake-fanvault-cave` / `t3-cfb3bfb4` | Fixing Sol R2 (W1-PRE-04) |
+| W1-pre: Fanvault cave kit and cave lab | integrated | **Accepted** at R3; wiring follows C3 |
 | LC: large-cave technology proof (Canopy root caves, 250 m) | `siltwake-lc-large-cave-tech-opus-7519cfb` | Building |
 | SYS-1: fleet upgrades (common pool and signature upgrades) and power | `siltwake-sys1-upgrades-power-opus-7519cfb` | Building |
 | SYS-2: outposts, decoder, cultivation, survey, chart, journal, play timeline | `siltwake-sys2-bases-knowledge-opus-7519cfb` | Building |
