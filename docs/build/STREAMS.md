@@ -170,3 +170,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
   - R3 landmarks, creatures and resources (`siltwake-research-r3-landmarks-fauna`).
 - **Next:** the coordinator consolidates these into an iteration-1 plan (caves and a content density pass) and an iteration-2 map note.
 - **A1 FINAL: accepted at `7b81cbb`.** The coordinator inspected the pipe fix and the both-direction invariant test. **Integrated into root at `dfdb727`:** fast 739/739, build OK. `VISTA_SOLIDS` is 5,195 boxes, and C3 appends them to the broad phase and measures the cost.
+- **World evolution research done**, and the plan is in [WORLD-EVOLUTION-PLAN](WORLD-EVOLUTION-PLAN.md). After C3: W1 caves (replacement volumes, 6 caves), W2 central hub and loops (Option A), W3 density pass. Iteration 2 (Option B, 3.2×2.8 km) is noted for later. Two S4/S2 conflicts were sent to C3.
