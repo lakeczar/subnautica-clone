@@ -19,7 +19,7 @@ import type { Capabilities, NotebookView, StoryState, WorksContext, WorksOutcome
 import { available, containerAccessible, facility, removeQuantity, spend } from "./inventory.js";
 import { PLACED_HOSTS, WORKS_FACES, type PlacedHostId, type WorksFaceId } from "../content/story/placements.js";
 import { STORY_RECIPES, type StorySiteId } from "../content/story/evidence.js";
-import { WORKS_TEXT, type WorksAction } from "../content/story/works.js";
+import { RESOLUTION_ROSTER, WORKS_TEXT, type RosterId, type WorksAction } from "../content/story/works.js";
 import type { ItemKind } from "../content/registry.js";
 import { personalLimit } from "./capabilities.js";
 import type { GameState } from "./types.js";
@@ -223,6 +223,44 @@ export function useController(s: GameState): string | null {
   }
   if (s.story.resolution.phase === "complete") { s.feedback = "The district rests. The controller's work is done."; return null; }
   const begun = beginResolution(s.story, "meridian_service_window", s.tick);
+  if (!begun.ok) return begun.message;
+  s.feedback = [begun.message, ...begun.lines].join(" ");
+  return null;
+}
+
+/** Where each works action is performed: the gate panel, or the hall's faces. */
+const WORKS_HOST: Readonly<Record<WorksAction, Vec3Like>> = {
+  install_power: PLACED_HOSTS.gate_panel, install_air: PLACED_HOSTS.gate_panel, isolate: PLACED_HOSTS.gate_panel,
+  equalize: PLACED_HOSTS.gate_panel, open: PLACED_HOSTS.gate_panel, route_power: PLACED_HOSTS.gate_panel,
+  restore_hall: WORKS_FACES["works:hall"].position, restore_food: WORKS_FACES["works:food"].position,
+};
+interface Vec3Like { readonly x: number; readonly y: number; readonly z: number }
+const WORKS_REACH = 4;
+const atHost = (s: GameState, p: Vec3Like): boolean => !s.player.controlledVehicleId &&
+  Math.hypot(s.player.pose.position.x - p.x, s.player.pose.position.y - p.y, s.player.pose.position.z - p.z) <= WORKS_REACH;
+/** `{type:"works", action}`: one named S5 works action at its own host. */
+export function worksCommand(s: GameState, action: WorksAction): string | null {
+  if (!Object.hasOwn(WORKS_HOST, action)) return "Unknown works action.";
+  if (!atHost(s, WORKS_HOST[action])) return action.startsWith("restore_") ? "Work at the upper hall's restoration bay." : "Use the gate panel in the gate hall.";
+  const site = action === "restore_hall" || action === "restore_food" ? "meridian_upper_hall" : "meridian_gate_hall";
+  const { ctx, bins } = worksContext(s, site);
+  const outcome = worksAction(s.story, action, ctx);
+  if (!outcome.ok) return outcome.message;
+  s.feedback = applyWorks(s, outcome, bins);
+  return null;
+}
+/** `{type:"resolution", action, roster?}`: the controller, once its record is read. */
+export function resolutionCommand(s: GameState, action: "begin" | "complete", roster?: RosterId): string | null {
+  if (!atHost(s, PLACED_HOSTS.district_controller)) return "Use the district controller at the lower service window.";
+  if (!storyKnown(s, "district_controller")) return "Read the district controller first.";
+  if (action === "complete") {
+    const done = completeResolution(s.story, { mastRestored: false });
+    if (!done.ok) return "The closing scene has not begun, or has already ended.";
+    s.feedback = done.lines.join(" ");
+    return null;
+  }
+  if (roster !== undefined && !Object.hasOwn(RESOLUTION_ROSTER, roster)) return "Choose someone on the controller's roster.";
+  const begun = beginResolution(s.story, "meridian_service_window", s.tick, roster);
   if (!begun.ok) return begun.message;
   s.feedback = [begun.message, ...begun.lines].join(" ");
   return null;

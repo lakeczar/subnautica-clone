@@ -82,3 +82,11 @@ test("C3 (P1): the compact Hearthline's bow-to-stern walkway passes a capsule on
     assert.ok(p.z <= bow, `lane x ${x} passes the berth rooms (stopped at z ${p.z.toFixed(2)})`);
   }
 });
+
+test("C3 (P1): a berthed craft's hold opens from inside its carrier, and only there", () => {
+  const s = fixtureGame(), dart = s.fleet.vehicles.find((v) => v.hull === "dart" && v.berth)!;
+  assert.ok(s.player.interiorId, "the fixture starts aboard");
+  assert.equal(containerAccessible(s, dart.cargoId), true);
+  const outside = structuredClone(s); outside.player.interiorId = null; outside.player.interiorPose = null; outside.player.mode = "swimming";
+  assert.equal(containerAccessible(outside, dart.cargoId), false);
+});

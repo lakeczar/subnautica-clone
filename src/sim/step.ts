@@ -90,7 +90,7 @@ import { incapacitate, recoveryCommand, updateRecovery } from "./recovery.js";
 import { updateSurvival, updateThreat } from "./survival.js";
 import { safePersonalDepth } from "./capabilities.js";
 import { advanceRenewal, settleRenewal } from "./renewal.js";
-import { advanceStory, recordStory, storyHint, storyHost, useController, useGatePanel, useWorksFace } from "./storyLink.js";
+import { advanceStory, recordStory, resolutionCommand, storyHint, storyHost, useController, useGatePanel, useWorksFace, worksCommand } from "./storyLink.js";
 import type { WorksFaceId } from "../content/story/placements.js";
 import { placeDeterrent, releaseKit, toggleLamp, updateEcology } from "./ecologyLink.js";
 const clamp = (v: number, a: number, b: number): number =>
@@ -236,6 +236,10 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       if (!no && s.world.threat.distraction) placeDeterrent(s, "acoustic", s.world.threat.distraction);
       return no;
     }
+    case "works":
+      return worksCommand(s, c.action);
+    case "resolution":
+      return resolutionCommand(s, c.action, c.roster);
     case "lamp":
       return toggleLamp(s);
     case "deploy-lure":

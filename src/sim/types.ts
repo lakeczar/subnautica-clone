@@ -1,3 +1,4 @@
+import type { RosterId, WorksAction } from "../content/story/works.js";
 import type { EcologyEvent, EcologyState, ThreatSpeciesId } from "./ecology/types.js";
 import type {
   BlueprintId,
@@ -223,6 +224,8 @@ export type GameCommand =
   | { type: "emergency-meal" }
   | { type: "hint" }
   | { type: "distraction" }
+  | { type: "works"; action: WorksAction }
+  | { type: "resolution"; action: "begin" | "complete"; roster?: RosterId }
   | { type: "lamp" }
   | { type: "deploy-lure" }
   | { type: "release-ink" }

@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HULL_BUILD, HULL_COLLIDERS, RECIPES, SOURCES, TECH_RECORDS, type ItemKind, type RecipeId } from "../src/content/registry.js";
-import { STOP_IDS, WORKING_STOPS, YARD_BUILD } from "../src/content/stops.js";
+import { SERVICE_MOORINGS, STOP_IDS, WORKING_STOPS, YARD_BUILD } from "../src/content/stops.js";
+import { fixtureGame, updateBerth } from "../src/sim/carrier.js";
+import { serviceRefusal } from "../src/sim/vehicles.js";
 import { SITES } from "../src/content/regions/sites.js";
 import { workPose, parkPose } from "../src/content/regions/access.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
@@ -173,4 +175,20 @@ test("P1: a craft at the yard mooring never blocks a build; a craft in a slip is
   parkCreel(s, YARD_BUILD.hush.pose);
   at(s, yard.work); stock(s, "hush_base", "stack_yard_locker");
   assert.match(craftingBlock(s, "hush_base", world)!.message, /Creel sits in the Hush's build slip/);
+});
+
+test("P1: every S2 charging mooring serves a moored hull, the carrier from its own helm", () => {
+  assert.deepEqual(SERVICE_MOORINGS.map((m) => m.id).sort(),
+    ["basin.anchorage", "canopy.east_mooring", "divide.lee_mooring", "meridian.staging_shelf", "rift.cool_mooring"]);
+  const s = fixtureGame(), h = s.fleet.vehicles.find((v) => v.hull === "hearthline")!;
+  const lee = SERVICE_MOORINGS.find((m) => m.id === "divide.lee_mooring")!.position;
+  h.pose.position = { ...lee }; h.charge = 12; updateBerth(s, world);
+  const helm = executeCommand(s, { type: "carrier", action: "helm" }, world).state;
+  const served = executeCommand(helm, { type: "service", vehicleId: h.id }, world);
+  assert.ok(!served.events.some((e) => e.type === "notice" && e.error), JSON.stringify(served.events));
+  assert.equal(served.state.fleet.vehicles.find((v) => v.id === h.id)!.charge, 100);
+  // Away from any mooring the same helm is refused, with the stops named.
+  const away = structuredClone(helm); away.fleet.vehicles.find((v) => v.id === h.id)!.pose.position.x += 200;
+  away.player.pose.position.x += 200;
+  assert.match(serviceRefusal(away, h.id)!, /charging mooring/);
 });

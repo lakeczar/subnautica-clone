@@ -99,3 +99,29 @@ test("ADVERSE: the controller refuses the closing scene while any requirement is
   assert.match(r.message, /Not yet safe/);
   assert.equal(r.state, s); assert.deepEqual(s, before);
 });
+
+test("COMMANDS: {type:\"works\"} and {type:\"resolution\"} act only at their hosts, with S5's own refusals", () => {
+  let s = protectedReadyState(800);
+  for (const id of ["C07", "C08", "C09", "C10", "C13", "district_controller"]) s = use(s, id).state;
+  const at = (id: string) => { const v = NORMAL_VIEWS.find((x) => x.id === id)!; s.player.pose.position = { ...v.position }; s.player.mode = v.mode; };
+  // Away from the gate panel the command names where it works.
+  at("C13");
+  let r = executeCommand(s, { type: "works", action: "isolate" }, world);
+  assert.match((r.events[0] as { message: string }).message, /gate panel/);
+  at("gate_panel");
+  r = executeCommand(s, { type: "works", action: "isolate" }, world);
+  assert.ok(r.events.some((e) => e.type === "notice" && e.error), "isolation waits for both assemblies");
+  addItem(s, "service_power_assembly", 1, "diver"); addItem(s, "service_air_assembly", 1, "diver");
+  for (const action of ["install_power", "install_air", "isolate", "equalize"] as const) {
+    r = executeCommand(s, { type: "works", action }, world);
+    assert.ok(!r.events.some((e) => e.type === "notice" && e.error), action); s = r.state;
+  }
+  assert.equal(s.story.works.gate, "equalizing");
+  // The controller refuses to begin while requirements are unmet, and a bad roster.
+  at("district_controller");
+  r = executeCommand(s, { type: "resolution", action: "begin" }, world);
+  assert.match((r.events[0] as { message: string }).message, /Not yet safe/);
+  r = executeCommand(s, { type: "resolution", action: "begin", roster: "nobody" as never }, world);
+  assert.match((r.events[0] as { message: string }).message, /roster/);
+  saveable(s);
+});

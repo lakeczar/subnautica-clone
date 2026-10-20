@@ -204,6 +204,8 @@ export function containerAccessible(s: GameState, id: string): boolean {
   const cache = s.recovery.caches.find((c) => c.containerId === id);
   if (cache) return distance(s.player.pose.position, cache.position) < 4;
   const v = s.fleet.vehicles.find((v) => v.cargoId === id);
+  // A berthed craft's hold opens from inside its carrier (the dry berth room).
+  if (v?.berth && s.player.interiorId === v.berth.carrierId && s.fleet.docking?.transaction?.vehicleId !== v.id) return true;
   const bench = localBenchSite(s);
   return (
     !!v && !v.berth && s.fleet.docking?.transaction?.vehicleId !== v.id &&
