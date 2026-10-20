@@ -1,4 +1,6 @@
 import type { ChunkArtFactory, ChunkRecipe, MeshRecipe } from "../kit/types.js";
+import type { LodLevel, Rect } from "../../world/types.js";
+import { BORDER_STEP, COARSE, FINE, tessellate, type TessellationOptions } from "./tessellate.js";
 import { regionAtPoint } from "../../content/regions/layout.js";
 import { fbm } from "../../content/regions/noise.js";
 import { BRINE_Y, emptyMasks, terrainMasks } from "../../content/regions/terrain.js";
@@ -7,81 +9,52 @@ import { geologyColor } from "./geology.js";
 import { hex } from "./recipe.js";
 
 /** `s2.terrain`: the shared floor as one mesh per chunk, sampled only from
- * `ctx.floor`. Fine LOD samples every 2 m, coarse every 8 m. Where the chunk
- * overlaps today's terrain mesh (TERRAIN_EXTENT) the grid gains lines exactly
- * on that mesh's edge, cells inside it are left to the existing renderer, and
- * a short skirt closes any sub-centimetre crack along the seam. Brine chunks
- * also get the mirror sheet at the dense interface. */
+ * `ctx.floor` and tessellated to a bounded error (see `tessellate.ts`):
+ * fine within 0.2 m and coarse within 1 m of the floor, measured to each
+ * triangle's plane. Chunk edges are identical for every LOD and neighbour.
+ * Cells inside today's terrain mesh (TERRAIN_EXTENT) are left to the existing
+ * renderer, with a short skirt along that seam. Brine chunks also get the
+ * mirror sheet at the dense interface. */
 const LEGACY = TERRAIN_EXTENT;
 const SKIRT = 1.5;
 const MIRROR = hex("#a9b8dc"), MIRROR2 = hex("#c7d0ea");
+const NORMAL_STEP = 0.25;
 
-const insideLegacy = (x0: number, x1: number, z0: number, z1: number): boolean =>
-  x0 >= LEGACY.minX - 1e-9 && x1 <= LEGACY.maxX + 1e-9 && z0 >= LEGACY.minZ - 1e-9 && z1 <= LEGACY.maxZ + 1e-9;
-
-function axis(lo: number, hi: number, step: number, cuts: readonly number[]): number[] {
-  const v: number[] = [];
-  for (let t = lo; t < hi - 1e-9; t += step) v.push(t);
-  v.push(hi);
-  for (const c of cuts) if (c > lo + 1e-6 && c < hi - 1e-6) v.push(c);
-  // Keep exact cut values (never rounded) so cells meet the legacy edge.
-  v.sort((a, b) => a - b);
-  return v.filter((n, i) => i === 0 || n - v[i - 1]! > 1e-6);
+export function terrainOptions(rect: Rect, lod: LodLevel): TessellationOptions {
+  const cut = rect.minX < LEGACY.maxX && rect.maxX > LEGACY.minX && rect.minZ < LEGACY.maxZ && rect.maxZ > LEGACY.minZ;
+  const o = lod === "fine" ? FINE : COARSE;
+  // Chunks cut by the legacy edge keep the border step as their base so the
+  // edge's extra lines never split a cell off the shared border lattice.
+  return { base: cut ? BORDER_STEP : o.base, tolerance: o.tolerance, min: o.min, ...(cut ? { hole: LEGACY } : {}) };
 }
 
 export const terrainFactory: ChunkArtFactory = {
   id: "s2.terrain",
   *build(ctx, chunk, _ref, lod) {
-    const step = lod === "fine" ? 2 : 8;
-    const { min, max } = chunk.bounds;
-    const xs = axis(min.x, max.x, step, [LEGACY.minX, LEGACY.maxX]);
-    const zs = axis(min.z, max.z, step, [LEGACY.minZ, LEGACY.maxZ]);
-    const nx = xs.length, nz = zs.length;
-    const h = new Float64Array(nx * nz);
-    for (let j = 0; j < nz; j++) {
-      for (let i = 0; i < nx; i++) { h[j * nx + i] = ctx.floor(xs[i]!, zs[j]!); if (ctx.due()) yield; }
-    }
-    const at = (i: number, j: number): number => h[j * nx + i]!;
-    const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
+    const { min, max } = chunk.bounds, rect = { minX: min.x, maxX: max.x, minZ: min.z, maxZ: max.z };
+    const t = yield* tessellate(ctx.floor, rect, { ...terrainOptions(rect, lod), due: ctx.due });
+    const positions = t.positions, normals: number[] = [], colors: number[] = [], indices = [...t.triangles];
     const masks = emptyMasks();
-    for (let j = 0; j < nz; j++) {
-      for (let i = 0; i < nx; i++) {
-        const x = xs[i]!, z = zs[j]!, y = at(i, j);
-        const i0 = Math.max(0, i - 1), i1 = Math.min(nx - 1, i + 1), j0 = Math.max(0, j - 1), j1 = Math.min(nz - 1, j + 1);
-        const gx = (at(i1, j) - at(i0, j)) / (xs[i1]! - xs[i0]!), gz = (at(i, j1) - at(i, j0)) / (zs[j1]! - zs[j0]!);
-        const len = Math.hypot(gx, 1, gz);
-        positions.push(x, y, z);
-        normals.push(-gx / len, 1 / len, -gz / len);
-        terrainMasks(x, z, masks);
-        geologyColor(x, y, z, Math.hypot(gx, gz), regionAtPoint(x, z) ?? "refuge_reef", masks, colors);
-        if (ctx.due()) yield;
-      }
+    for (let v = 0; v < positions.length; v += 3) {
+      const x = positions[v]!, y = positions[v + 1]!, z = positions[v + 2]!;
+      // Forward differences from the vertex's own height: a function of the
+      // point alone, so both chunks sharing an edge vertex agree.
+      const gx = (ctx.floor(x + NORMAL_STEP, z) - y) / NORMAL_STEP, gz = (ctx.floor(x, z + NORMAL_STEP) - y) / NORMAL_STEP;
+      const len = Math.hypot(gx, 1, gz);
+      normals.push(-gx / len, 1 / len, -gz / len);
+      terrainMasks(x, z, masks);
+      geologyColor(x, y, z, Math.hypot(gx, gz), regionAtPoint(x, z) ?? "refuge_reef", masks, colors);
+      if (ctx.due()) yield;
     }
-    const skipped = (i: number, j: number): boolean => insideLegacy(xs[i]!, xs[i + 1]!, zs[j]!, zs[j + 1]!);
-    const v = (i: number, j: number): number => j * nx + i;
-    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
-      if (skipped(i, j)) continue;
-      // Alternate the diagonal so long slopes do not facet in one direction.
-      if ((i + j) % 2) indices.push(v(i, j), v(i, j + 1), v(i + 1, j), v(i + 1, j), v(i, j + 1), v(i + 1, j + 1));
-      else indices.push(v(i, j), v(i, j + 1), v(i + 1, j + 1), v(i, j), v(i + 1, j + 1), v(i + 1, j));
-    }
-    // Seam skirt: a short wall below each kept cell edge that borders the
-    // legacy mesh, sharing the edge's own vertices on top.
-    const skirt = (a: number, b: number): void => {
-      const base = positions.length / 3;
+    // Seam skirt below each edge facing the legacy mesh, sharing its top vertices.
+    for (let e = 0; e < t.skirtEdges.length; e += 2) {
+      const a = t.skirtEdges[e]!, b = t.skirtEdges[e + 1]!, base = positions.length / 3;
       for (const k of [a, b]) {
         positions.push(positions[k * 3]!, positions[k * 3 + 1]! - SKIRT, positions[k * 3 + 2]!);
         normals.push(normals[k * 3]!, normals[k * 3 + 1]!, normals[k * 3 + 2]!);
         colors.push(colors[k * 4]! * 0.8, colors[k * 4 + 1]! * 0.8, colors[k * 4 + 2]! * 0.8, 1);
       }
       indices.push(a, b, base + 1, a, base + 1, base);
-    };
-    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
-      if (skipped(i, j)) continue;
-      if (i > 0 && skipped(i - 1, j)) skirt(v(i, j), v(i, j + 1));
-      if (i < nx - 2 && skipped(i + 1, j)) skirt(v(i + 1, j), v(i + 1, j + 1));
-      if (j > 0 && skipped(i, j - 1)) skirt(v(i, j), v(i + 1, j));
-      if (j < nz - 2 && skipped(i, j + 1)) skirt(v(i, j + 1), v(i + 1, j + 1));
     }
     const meshes: MeshRecipe[] = [];
     if (indices.length) meshes.push({
@@ -90,7 +63,7 @@ export const terrainFactory: ChunkArtFactory = {
       indices: positions.length / 3 > 65535 ? new Uint32Array(indices) : new Uint16Array(indices),
     });
     if (ctx.due()) yield;
-    const mirror = brineMirror(ctx.floor, chunk.bounds.min.x, chunk.bounds.min.z, chunk.bounds.max.x, chunk.bounds.max.z, chunk.id);
+    const mirror = brineMirror(ctx.floor, min.x, min.z, max.x, max.z, chunk.id);
     if (mirror) meshes.push(mirror);
     return { meshes, instances: [] } satisfies ChunkRecipe;
   },
