@@ -189,7 +189,10 @@ test("actual source and persistent-host triangles stay supported, visible and st
       assert.ok(high < (id.startsWith("basin_survey_fins_") ? 1.05 : .65), `${prefix}${id}: no floating/large obstruction (${high})`);
     }
     const world = createWorldQueries();
-    for (const view of NORMAL_VIEWS) {
+    // B1's submitted terrain covers B1's extent; hosts C3 placed at S2's sites stand on
+    // S2's streamed terrain instead (regions-art, story-placed and targeting cover them).
+    const b1 = (p: { x: number; z: number }) => p.x >= TERRAIN_EXTENT.minX && p.x <= TERRAIN_EXTENT.maxX && p.z >= TERRAIN_EXTENT.minZ && p.z <= TERRAIN_EXTENT.maxZ;
+    for (const view of NORMAL_VIEWS.filter((v) => b1(v.position))) {
       const s = readyState(); s.player.pose.position = { ...view.position }; s.player.mode = view.mode; faceTarget(s, view.id);
       const target = aimedInteraction(s, world), ray = aimRay(s)!;
       assert.equal(target?.id, view.id, "all retained and Basin target views remain valid");
