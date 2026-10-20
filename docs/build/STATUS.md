@@ -24,3 +24,25 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 **Blocking:** GPU attach. The real rehearsal `20261020T003504Z-f08a` ended `preflight-failed` with nothing changed. Resizable BAR on the host gives BAR1 32 GiB, but the guest's OVMF 64-bit window is exactly 32 GiB. The fix is a 64 GiB OVMF window (`X-PciMmio64Mb`) added with the hostdevs; the GPU author is implementing it, then a fresh Sol review and a new rehearsal follow. The fallback is the owner disabling ReBAR in the BIOS.
 
 **Unverified:** human pacing and enjoyment, the audible mix, 3090 rendering, full-world memory and eviction.
+
+## GPU attach procedure (prepared 2026-10-20)
+**State:**
+- The rehearsal `20261020T025739Z-cc7c` returned `rehearsal-ok`, with a verified backup at `/boot/config/fleet/vm-backups/factory-worker-gpu-20261020T025739Z-cc7c.xml`.
+- The guest driver, nvidia 550.163.01, is installed and built (`~/.local/share/siltwake-evidence/gpu-live/install-apply.log`).
+- `check pre` passes everything except `fleet-dashboard-v2` and `:9110`. The fleet-dashboard project disabled that service on purpose (the dashboard moved to the Mac at about 02:53 UTC), so treat it as the baseline.
+
+**The owner chose to wait** for the fleet-dashboard project's two running agents before the restart.
+
+**Before the attach:**
+1. Steer B1 and S1–S6 to commit their work-in-progress and finish their turn. `/tmp` is tmpfs and is lost at reboot.
+2. Run `worker-gpu.sh check pre`.
+3. Submit `ask run $(bash $B/ask-command.sh attach)` and have the owner approve within 30 minutes.
+
+`B=/work/repos/fleet-vm-upgrade/unraid/gpu-enablement`.
+
+**After boot** (resumed root session):
+1. `ssh unraid-admin files read /mnt/user/appdata/fleet-gpu/runs/<RUN_ID>/result.json` should read `attached`/0.
+2. Build `eb712f1` into a scratch `dist`, then run `webgl-probe.mjs` and `check post`. Follow the README procedure, step 6.
+3. Resume every builder with a short "continue" message: B1 (`siltwake-m2-b1-opus-high-7bd259c`) and S1–S6 (IDs in STREAMS).
+4. Tell the owner to resume the fleet-dashboard threads if they were interrupted.
+5. Record the outcome here and in Fleet `docs/STATE.md`, then fix R3-01 and R4-01.
