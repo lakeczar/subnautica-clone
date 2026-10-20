@@ -68,10 +68,20 @@ function ledgered(map: WorldMap, cost: Cost, budget: Partial<ResidencyBudget>,
     assert.ok(ledger.gpu <= cap.gpu, `frame ${s.frame}: ${ledger.gpu} GPU bytes allocated > ${cap.gpu}`);
     assert.ok(s.cpuBytes >= ledger.cpu && s.gpuBytes >= ledger.gpu, "accounting never under-counts");
     assert.equal(s.overBudget, false, "never over budget at frame end");
-    if (residency.isReady()) assert.ok(s.cpuBytes <= cap.cpu && s.gpuBytes <= cap.gpu, "ready implies within budget");
+    if (residency.isReady()) {
+      assert.ok(s.cpuBytes <= cap.cpu && s.gpuBytes <= cap.gpu, "ready implies within budget");
+      assert.ok(s.cut === 0 && s.held === 0 && s.refused.length === 0, "ready implies every wanted chunk is drawn at its target");
+    }
     return s;
   };
-  return { residency, ledger, builds, frame };
+  /** Frames until nothing more will change, then the settled stats. */
+  const settle = (p: Vec3, limit = 400) => {
+    let s = frame(p);
+    for (let i = 0; i < limit && !s.settled; i++) s = frame(p);
+    assert.ok(s.settled, "settles");
+    return s;
+  };
+  return { residency, ledger, builds, frame, settle };
 }
 
 test("REVIEW S1-01 probe: four 4 MiB units against a 6 MiB budget never exceed it", () => {
@@ -81,10 +91,12 @@ test("REVIEW S1-01 probe: four 4 MiB units against a 6 MiB budget never exceed i
   const map = { layout: { chunks }, chunksWithin: () => chunks.map((chunk, i) => ({ chunk, distance: i })) } as unknown as WorldMap;
   const h = ledgered(map, () => 4 * MiB, { cpuBytes: 6 * MiB, gpuBytes: 6 * MiB, uploadBytesPerFrame: MiB, buildMsPerFrame: 4 });
   for (let i = 0; i < 40; i++) h.frame({ x: 0, y: 0, z: 0 });
-  const s = h.residency.stats!;
+  const s = h.settle({ x: 0, y: 0, z: 0 });
   assert.equal(s.shown, 1, "only the nearest fits");
   assert.equal(s.withinBudget, 1);
-  assert.equal(h.residency.isReady(), true);
+  assert.equal(s.cut, 3, "the rest is reported cut");
+  assert.equal(h.residency.isReady(0), true, "the nearest chunk is complete");
+  assert.equal(h.residency.isReady(), false, "the whole view is not");
   assert.ok(h.ledger.cpu <= 6 * MiB && h.ledger.gpu <= 6 * MiB);
 });
 
@@ -107,9 +119,9 @@ test("mixed unit costs (0.25..6 MiB fine) stay within a 24 MiB budget on every f
   const cost: Cost = (c, lod) => { const fine = (0.25 + (hash(c) % 1000) / 1000 * 5.75) * MiB; return lod === "fine" ? fine : fine / 8; };
   const h = ledgered(map, cost, { cpuBytes: 24 * MiB, gpuBytes: 24 * MiB, uploadBytesPerFrame: 4 * MiB, retainedUnits: 64 });
   walk(h.frame);
-  const s = h.residency.stats!;
+  const s = h.settle(tour[tour.length - 1]!);
   assert.ok(s.totals.evicted > 0 && s.shown > 0);
-  assert.equal(h.residency.isReady(), true);
+  assert.equal(h.residency.isReady(0), true);
 });
 
 test("LOD-swap pressure: the outgoing LOD counts until the new one replaces it", () => {
@@ -161,8 +173,9 @@ test("a chunk far heavier than every chunk measured so far is caught when its re
     { estimate: { fine: { cpu: 64 * 1024, gpu: 64 * 1024 }, coarse: { cpu: 16 * 1024, gpu: 16 * 1024 } } });
   for (let i = 0; i < 120; i++) h.frame({ x: 0, y: -3, z: 14 });
   for (let i = 1; i <= 40; i++) h.frame({ x: 160 * i / 40, y: -3 - 117 * i / 40, z: 14 - 154 * i / 40 });
-  for (let i = 0; i < 200 && !h.residency.isReady(); i++) h.frame({ x: 160, y: -120, z: -140 });
-  assert.equal(h.residency.isReady(), true);
+  const s = h.settle({ x: 160, y: -120, z: -140 });
+  assert.equal(h.residency.isReady(0), true);
+  assert.ok(s.cut > 0, "with 11 of 12 MiB in one chunk, farther chunks are cut and reported");
   assert.ok(h.residency.stats!.totals.overBudgetDiscards >= 1, "the underestimated recipe was re-checked and dropped");
   assert.ok(h.residency.units().some(u => u.chunk === heavy.id && u.lod === "fine" && u.state === "shown"),
     "the heavy chunk is shown once room is made");
@@ -190,7 +203,7 @@ test("incremental uploads stay within the per-frame upload cap", () => {
 
 test("bytes held outside the residency (legacy owners) shrink its share of the budget", () => {
   const h = ledgered(map, (_c, lod) => (lod === "fine" ? MiB : 256 * 1024), { cpuBytes: 16 * MiB, gpuBytes: 16 * MiB });
-  for (let i = 0; i < 200 && !h.residency.isReady(); i++) h.frame({ x: 0, y: -3, z: 14 });
+  h.settle({ x: 0, y: -3, z: 14 });
   const before = h.residency.stats!.gpuBytes;
   assert.ok(before > 8 * MiB, `fills the budget first (${before} B)`);
   h.residency.setExternalBytes({ cpu: 8 * MiB, gpu: 8 * MiB });
@@ -199,5 +212,159 @@ test("bytes held outside the residency (legacy owners) shrink its share of the b
     assert.ok(h.ledger.gpu + 8 * MiB <= 16 * MiB, `frame ${s.frame}: chunk art ${h.ledger.gpu} B + 8 MiB external`);
     assert.equal(s.overBudget, false);
   }
+  const s = h.settle({ x: 0, y: -3, z: 14 });
+  assert.ok(s.cut > 0 && h.residency.isReady(0), "the nearest chunks stay; the rest is reported cut");
+});
+
+/** The reviewer's single-chunk stub: distance is the viewer's x. */
+function solo(cost: Record<LodLevel, number>, limit: number,
+  estimate?: Partial<Record<LodLevel, { cpu: number; gpu: number }>>) {
+  const chunk = { id: "solo", region: "refuge_reef", priority: 0, lod: { fine: 112, coarse: 400, hysteresis: 16 },
+    bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 128, y: 1, z: 128 } } };
+  const stub = { layout: { chunks: [chunk] }, chunksWithin: (v: Vec3) => [{ chunk, distance: v.x }] } as unknown as WorldMap;
+  return ledgered(stub, (_c, lod) => cost[lod], { cpuBytes: limit, gpuBytes: limit }, estimate ? { estimate } : {});
+}
+
+test("REVIEW S1-04: a tight swap keeps the drawn LOD, reports it held, and never reports ready", () => {
+  const h = solo({ fine: 3 * MiB, coarse: MiB }, 3 * MiB, { fine: { cpu: 3 * MiB, gpu: 3 * MiB }, coarse: { cpu: MiB, gpu: MiB } });
+  for (let i = 0; i < 100; i++) h.frame({ x: 200, y: 0, z: 0 });
+  assert.equal(h.residency.stats!.shown, 1);
+  assert.equal(h.residency.isReady(), true, "coarse at 200 m is the target");
+  for (let i = 0; i < 100; i++) {
+    const s = h.frame({ x: 0, y: 0, z: 0 });
+    assert.equal(s.shown, 1, `frame ${s.frame}: the chunk is always drawn`);
+  }
+  const s = h.residency.stats!;
+  assert.deepEqual(h.residency.units().filter(u => u.state === "shown").map(u => u.lod), ["coarse"]);
+  assert.equal(s.held, 1);
+  assert.equal(s.settled, true, "a stable degraded state");
+  assert.equal(h.residency.isReady(), false);
+  assert.ok((h.builds.get("solo@fine") ?? 0) <= 1, "no rebuild loop while held");
+});
+
+test("REVIEW S1-04: when the swap fits, the outgoing LOD is drawn until the new one replaces it", () => {
+  const h = solo({ fine: 2 * MiB, coarse: MiB }, 3 * MiB);
+  for (let i = 0; i < 60; i++) h.frame({ x: 200, y: 0, z: 0 });
+  for (let i = 0; i < 60; i++) assert.equal(h.frame({ x: 0, y: 0, z: 0 }).shown, 1);
+  assert.deepEqual(h.residency.units().filter(u => u.state === "shown").map(u => u.lod), ["fine"]);
   assert.equal(h.residency.isReady(), true);
+});
+
+test("REVIEW S1-05: an unmeasured unit that fits beside external owners is measured, not refused", () => {
+  const h = solo({ fine: 1024, coarse: 1024 }, MiB);
+  h.residency.setExternalBytes({ cpu: 900 * 1024, gpu: 900 * 1024 });
+  for (let i = 0; i < 100; i++) h.frame({ x: 0, y: 0, z: 0 });
+  assert.ok((h.builds.get("solo@fine") ?? 0) >= 1, "built to learn its size");
+  assert.equal(h.residency.stats!.shown, 1);
+  assert.equal(h.residency.stats!.refused.length, 0);
+  assert.equal(h.residency.isReady(), true);
+});
+
+test("S1-05: one heavy chunk does not make every unmeasured chunk look too big to build", () => {
+  // Measuring an 8 MiB fine unit used to raise the guess for every unknown
+  // fine unit, cutting the whole view at 1.5 of 6 MiB.
+  const home = map.chunkAt({ x: 0, y: -3, z: 14 })!;
+  const h = ledgered(map, (c, lod) => (c.id === home.id ? (lod === "fine" ? 8 * MiB : MiB) : lod === "fine" ? 192 * 1024 : 32 * 1024),
+    { cpuBytes: 6 * MiB, gpuBytes: 6 * MiB });
+  const s = h.settle({ x: 0, y: -3, z: 14 }, 800);
+  assert.equal(s.cut, 0, `${s.cut} chunks cut`);
+  assert.equal(h.residency.isReady(), true);
+});
+
+test("an external share larger than a measured unit waits, then admits it when the share shrinks", () => {
+  const h = solo({ fine: 512 * 1024, coarse: 128 * 1024 }, MiB);
+  h.settle({ x: 0, y: 0, z: 0 });
+  h.residency.setExternalBytes({ cpu: 900 * 1024, gpu: 900 * 1024 });
+  const s = h.settle({ x: 0, y: 0, z: 0 });
+  assert.equal(s.refused.length, 0, "measured within the budget: waiting, not refused");
+  assert.equal(h.residency.isReady(), false);
+  h.residency.setExternalBytes({ cpu: 0, gpu: 0 });
+  h.settle({ x: 0, y: 0, z: 0 });
+  assert.equal(h.residency.isReady(), true);
+});
+
+test("REVIEW R2: an underestimated recipe is rejected before it uploads over protected art", () => {
+  const ids = ["small1", "small2", "heavy"];
+  const chunks = ids.map(id => ({ id, region: "refuge_reef", lod: { fine: 112, coarse: 400, hysteresis: 16 } }));
+  const stub = { layout: { chunks }, chunksWithin: (p: Vec3) =>
+    (p.x ? [chunks[2]!, ...chunks.slice(0, 2)] : chunks.slice(0, 2)).map((chunk, distance) => ({ chunk, distance })) } as unknown as WorldMap;
+  let allocated = 0;
+  const loader = { *build(chunk: { id: string }) {
+    const bytes = chunk.id === "heavy" ? 11 * MiB : MiB;
+    return { cpuBytes: bytes, gpuBytes: bytes, discard() {}, upload() {
+      assert.ok(allocated + bytes <= 12 * MiB, `upload ${chunk.id} would allocate ${allocated + bytes} B`);
+      allocated += bytes;
+      return { cpuBytes: bytes, gpuBytes: bytes, setVisible() {}, dispose() { allocated -= bytes; } };
+    } };
+  } } as unknown as ChunkLoader;
+  const r = createResidency({ map: stub, loader, budget: { cpuBytes: 12 * MiB, gpuBytes: 12 * MiB, uploadBytesPerFrame: 32 * MiB }, now: () => 0 });
+  try {
+    r.update({ x: 0, y: 0, z: 0 });
+    assert.equal(allocated, 2 * MiB);
+    assert.equal(r.update({ x: 1, y: 0, z: 0 }).overBudget, false);
+  } finally { r.dispose(); assert.equal(allocated, 0); }
+});
+
+test("REVIEW R2: readiness is false whenever external owners alone exceed the budget", () => {
+  const chunk = { id: "far", region: "refuge_reef", lod: { fine: 112, coarse: 400, hysteresis: 16 } };
+  const stub = { layout: { chunks: [chunk] }, chunksWithin: () => [{ chunk, distance: 200 }] } as unknown as WorldMap;
+  const loader = { *build() { throw new Error("not reached"); } } as unknown as ChunkLoader;
+  const r = createResidency({ map: stub, loader, budget: { cpuBytes: MiB, gpuBytes: MiB } });
+  try {
+    r.setExternalBytes({ cpu: 2 * MiB, gpu: 2 * MiB });
+    r.update({ x: 0, y: 0, z: 0 });
+    assert.equal(r.isReady(0), false);
+    assert.equal(r.stats!.overBudget, true);
+  } finally { r.dispose(); }
+});
+
+test("REVIEW R2: accounted CPU covers a suspended build's partial arrays", () => {
+  const chunk = { id: "partial", region: "refuge_reef", lod: { fine: 112, coarse: 400, hysteresis: 16 } };
+  const stub = { layout: { chunks: [chunk] }, chunksWithin: () => [{ chunk, distance: 0 }] } as unknown as WorldMap;
+  let clock = 0, partial: Uint8Array | null = null;
+  const loader = { *build() {
+    try {
+      partial = new Uint8Array(128 * 1024); clock += 2; yield;
+      return { cpuBytes: 128 * 1024, gpuBytes: 128 * 1024, discard() {}, upload() { throw new Error("not reached"); } };
+    } finally { partial = null; }
+  } } as unknown as ChunkLoader;
+  const r = createResidency({ map: stub, loader, budget: { cpuBytes: 2 * MiB, gpuBytes: 2 * MiB, buildMsPerFrame: 1 }, now: () => clock });
+  try {
+    const s = r.update({ x: 0, y: 0, z: 0 });
+    assert.equal(s.building, 1);
+    assert.ok(s.cpuBytes >= partial!.byteLength, "suspended partial allocations must be reserved");
+  } finally { r.dispose(); assert.equal(partial, null); }
+});
+
+/** Two stub chunks: "near" at the viewer's x, "far" 200 m beyond it. */
+function pair(cost: (id: string, lod: LodLevel) => number, limit: number,
+  estimate?: Partial<Record<LodLevel, { cpu: number; gpu: number }>>) {
+  const mk = (id: string) => ({ id, region: "refuge_reef", priority: 0, lod: { fine: 112, coarse: 400, hysteresis: 16 },
+    bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } } });
+  const near = mk("near"), far = mk("far");
+  const stub = { layout: { chunks: [near, far] },
+    chunksWithin: (v: Vec3) => [{ chunk: near, distance: v.x }, { chunk: far, distance: v.x + 200 }] } as unknown as WorldMap;
+  return ledgered(stub, (c, lod) => cost(c.id, lod), { cpuBytes: limit, gpuBytes: limit }, estimate ? { estimate } : {});
+}
+
+test("an unknown unit is probed with the room that remains, even when its guess is larger", () => {
+  // Nothing coarse has been measured, so far's guess stays at 4 MiB while
+  // only 1 MiB remains beside near; far actually costs 64 KiB.
+  const h = pair((id, lod) => (id === "near" ? 5 * MiB : lod === "coarse" ? 64 * 1024 : 5 * MiB), 6 * MiB,
+    { fine: { cpu: 5 * MiB, gpu: 5 * MiB }, coarse: { cpu: 4 * MiB, gpu: 4 * MiB } });
+  const s = h.settle({ x: 0, y: 0, z: 0 });
+  assert.equal(s.cut, 0);
+  assert.equal(s.shown, 2);
+  assert.equal(h.residency.isReady(), true);
+});
+
+test("external owners shrinking the share demote a measured fine unit instead of dropping the chunk", () => {
+  const h = solo({ fine: 600 * 1024, coarse: 100 * 1024 }, MiB);
+  h.settle({ x: 0, y: 0, z: 0 });
+  assert.equal(h.residency.isReady(), true);
+  h.residency.setExternalBytes({ cpu: 600 * 1024, gpu: 600 * 1024 });
+  const s = h.settle({ x: 0, y: 0, z: 0 });
+  assert.equal(s.demoted, 1);
+  assert.deepEqual(h.residency.units().filter(u => u.state === "shown").map(u => u.lod), ["coarse"]);
+  assert.equal(h.residency.isReady(), true, "coarse is the target within the share");
 });

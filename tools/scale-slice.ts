@@ -233,6 +233,7 @@ function tick(): void {
     `residency ${(t1 - t0).toFixed(1)} ms (build ${st.buildMs.toFixed(1)}, step ${st.maxStepMs.toFixed(1)}, upload ${st.uploadMs.toFixed(1)})  render ${(t2 - t1).toFixed(1)} ms  interval ${intervalMs.toFixed(0)} ms`,
     `draws ${instrumentation.drawCallsCounter.current}  active meshes ${scene.getActiveMeshes().length}`,
     `units shown ${st.shown}  hidden ${st.hidden}  building ${st.building}  prepared ${st.prepared}  pending ${st.pending}`,
+    `held ${st.held}  cut ${st.cut}  refused ${st.refused.length}  ${residency.isReady() ? "ready" : st.settled ? "settled (degraded)" : "loading"}`,
     `resident cpu ${(st.cpuBytes / MiB).toFixed(1)} / gpu ${(st.gpuBytes / MiB).toFixed(1)} MiB (hidden ${(st.hiddenGpuBytes / MiB).toFixed(1)})  + fixed ${fixedMiB.toFixed(1)}`,
     `budget ${(residency.budget.gpuBytes / MiB).toFixed(0)} MiB  peak gpu ${(peak.gpu / MiB).toFixed(1)}`,
     `regions shown ${shown.join(" ")}`,
@@ -240,7 +241,8 @@ function tick(): void {
     `worst residency ${worst.residencyMs.toFixed(1)} ms  worst interval ${worst.intervalMs.toFixed(0)} ms`,
     `${gl.renderer}`,
   ].join("\n");
-  if ((distance >= total && residency.isReady()) || frame >= stopAfter) {
+  // Ready, or settled in a reported degraded state (held/cut/refused).
+  if ((distance >= total && (residency.isReady() || st.settled)) || frame >= stopAfter) {
     done = true;
     hud.textContent += `\nDONE`;
   }

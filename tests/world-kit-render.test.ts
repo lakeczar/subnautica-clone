@@ -164,3 +164,47 @@ test("REVIEW S1-01 (real kit): a coarse chunk that cannot fit is refused, report
   assert.equal(residency.isReady(), false);
   residency.dispose();
 }));
+
+function soloKit(scene: Scene, cap: number) {
+  const home = { x: 0, y: -3, z: 14 };
+  const chunk = { ...map.chunkAt(home)!, art: [{ factory: "terrain" }] };
+  const solo = createWorldMap({ ...layout, chunks: [chunk] });
+  const loader = createKitLoader({ scene, material: createKitMaterial(scene, createCelMaterial(scene)),
+    templates: new TemplateLibrary(templateRecipes()), factories: KIT_FACTORIES, context: ctx, maxPartBytes: 32 * 1024 });
+  const residency = createResidency({ map: solo, loader, budget: { cpuBytes: cap, gpuBytes: cap, uploadBytesPerFrame: cap } });
+  const enabled = (): number => scene.meshes.filter(m => m.name.startsWith("chunk:") && m.isEnabled()).length;
+  return { home, chunk, residency, enabled };
+}
+
+test("REVIEW S1-04 (real kit): approaching coarse terrain under 256 KiB never leaves the chunk undrawn", () => withScene(scene => {
+  const h = soloKit(scene, 256 * 1024);
+  for (let i = 0; i < 150; i++) h.residency.update({ x: h.chunk.bounds.max.x + 150, y: -3, z: 14 });
+  assert.equal(h.residency.stats!.shown, 1, "coarse is initially shown");
+  for (let i = 0; i < 150; i++) {
+    const s = h.residency.update(h.home);
+    assert.ok(h.enabled() > 0, `frame ${s.frame}: terrain drawn`);
+    assert.ok(s.gpuBytes <= 256 * 1024 && !s.overBudget);
+  }
+  const s = h.residency.stats!;
+  // Fine (~239 KB) fits alone but not beside the drawn coarse (~23 KB):
+  // the chunk is held at coarse, reported, and settled; never ready.
+  assert.equal(s.held, 1);
+  assert.equal(s.settled, true);
+  assert.equal(h.residency.isReady(), false);
+  h.residency.dispose();
+}));
+
+test("REVIEW S1-05 (real kit): terrain that fits the share left by external owners is measured and drawn", () => withScene(scene => {
+  const h = soloKit(scene, 1024 * 1024);
+  h.residency.setExternalBytes({ cpu: 900 * 1024, gpu: 900 * 1024 });
+  for (let i = 0; i < 150; i++) {
+    const s = h.residency.update(h.home);
+    assert.ok(s.gpuBytes <= 1024 * 1024 && !s.overBudget, `frame ${s.frame}`);
+  }
+  const s = h.residency.stats!;
+  assert.equal(s.refused.length, 0);
+  assert.equal(s.shown, 1);
+  assert.deepEqual(h.residency.units().filter(u => u.state === "shown").map(u => u.lod), ["coarse"], "fine (~239 KB) demoted");
+  assert.equal(h.residency.isReady(), true);
+  h.residency.dispose();
+}));
