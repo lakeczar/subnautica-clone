@@ -29,9 +29,9 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 **State:**
 - The rehearsal `20261020T025739Z-cc7c` returned `rehearsal-ok`, with a verified backup at `/boot/config/fleet/vm-backups/factory-worker-gpu-20261020T025739Z-cc7c.xml`.
 - The guest driver, nvidia 550.163.01, is installed and built (`~/.local/share/siltwake-evidence/gpu-live/install-apply.log`).
-- `check pre` passes everything except `fleet-dashboard-v2` and `:9110`. The fleet-dashboard project disabled that service on purpose (the dashboard moved to the Mac at about 02:53 UTC), so treat it as the baseline.
+- `check pre` (03:25 UTC) passes everything except `fleet-dashboard` and `fleet-dashboard-v2`, with `:9100` and `:9110` down. The fleet-dashboard project disabled both on purpose when the dashboard moved to the Mac (Fleet PR #19), so treat them as the baseline.
 
-**The owner chose to wait** for the fleet-dashboard project's two running agents before the restart.
+**The owner said go at 03:25 UTC.** All builders committed and idle. The fleet-dashboard project's own agents may be interrupted.
 
 **Before the attach:**
 1. Steer B1 and S1–S6 to commit their work-in-progress and finish their turn. `/tmp` is tmpfs and is lost at reboot.
