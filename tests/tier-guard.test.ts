@@ -1,3 +1,4 @@
+// test-tier: allow-escape the guard tests run the tier runner on probe files in child processes.
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -65,4 +66,20 @@ test("heavy files are refused by the fast tier, and the heavy tier refuses to ru
   const unlockedEnv = { ...env }; delete unlockedEnv.SILTWAKE_HEAVY_LOCK_HELD;
   const unlocked = spawnSync(process.execPath, ["scripts/test-tier.mjs", "heavy", heavy], { cwd: root, encoding: "utf8", env: unlockedEnv });
   assert.equal(unlocked.status, 2); assert.match(unlocked.stderr, /npm run test:heavy/);
+});
+
+test("fast files that spawn workers, processes or evaluated code are refused unless they say why", () => {
+  for (const [name, body, used] of [
+    ["worker", `import { Worker } from "node:worker_threads";\nnew Worker("import('@" + "babylonjs/core/Engines/nullEngine.js')", { eval: true });`, /worker_threads/],
+    ["spawn", `import { spawnSync } from "node:child_process";`, /child_process/],
+    ["vm", `import vm from "node:vm";`, /"node:vm"/],
+    ["eval", `eval("1 + 1");`, /eval\(/],
+  ] as const) {
+    const out = fast(probe(`escape-${name}`, body));
+    assert.equal(out.status, 1, name);
+    assert.match(out.stderr, used, name);
+    assert.match(out.stderr, /allow-escape/, name);
+  }
+  const allowed = fast(probe("escape-allowed", `// test-tier: allow-escape probe of the documented escape comment\nimport { spawnSync } from "node:child_process";\nvoid spawnSync;`));
+  assert.equal(allowed.status, 0, allowed.stdout + allowed.stderr);
 });

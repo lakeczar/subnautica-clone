@@ -28,6 +28,7 @@ const build = join(root, ".test-build");
 const testDir = join(build, "tests");
 const FAST_CONCURRENCY = 4;
 const FAST_HEAP_MIB = 1024;
+const ESCAPE_RE = /\bworker_threads\b|\bnew\s+Worker\s*\(|\bchild_process\b|["'](?:node:)?vm["']|(?<![\w.])eval\s*\(|\bnew\s+Function\s*\(/g;
 
 const [tier, ...requested] = process.argv.slice(2);
 if (tier !== "fast" && tier !== "heavy") {
@@ -94,6 +95,21 @@ if (tier === "fast") {
   if (named.length) {
     console.error(`test-tier: heavy files run only in the heavy tier: ${named.map((f) => basename(f)).join(", ")}`);
     process.exit(2);
+  }
+  // Code that runs outside this process or its module graph escapes both guards,
+  // so fast test files may not spawn workers, child processes or evaluated code
+  // unless a comment states why: `// test-tier: allow-escape <reason>`.
+  const escapes = files.flatMap((file) => {
+    const text = readFileSync(file, "utf8");
+    if (/\/\/ test-tier: allow-escape \S/.test(text)) return [];
+    const found = [...new Set([...text.matchAll(ESCAPE_RE)].map((m) => m[0].replace(/\s+/g, " ")))];
+    return found.length ? [[file, found]] : [];
+  });
+  if (escapes.length) {
+    for (const [file, found] of escapes)
+      console.error(`test-tier: ${relative(build, file)} uses ${found.join(", ")}, which the fast-tier Babylon guard cannot see into. ` +
+        "Move it to a *.heavy.test.ts file, or add `// test-tier: allow-escape <reason>` if it cannot load Babylon.");
+    process.exit(1);
   }
   const misplaced = await babylonChains(files.filter((f) => !isHeavy(f)));
   if (misplaced.size) {
