@@ -147,3 +147,37 @@ export function writeMatrix(out: Float32Array, offset: number, x: number, y: num
   out[offset + 8] = r02 * scale[2]; out[offset + 9] = r12 * scale[2]; out[offset + 10] = r22 * scale[2]; out[offset + 11] = 0;
   out[offset + 12] = x; out[offset + 13] = y; out[offset + 14] = z; out[offset + 15] = 1;
 }
+
+/** Split a mesh into parts of at most about `maxBytes` each, by consecutive
+ * triangles with vertex remapping, so no single upload part exceeds a
+ * per-frame upload cap. A mesh already within the cap is returned as is. */
+export function splitMesh(m: MeshRecipe, maxBytes: number): MeshRecipe[] {
+  if (meshBytes(m) <= maxBytes) return [m];
+  const parts: MeshRecipe[] = [];
+  const VERTEX = 40, INDEX = 4;
+  let remap = new Map<number, number>(), p: number[] = [], n: number[] = [], c: number[] = [], idx: number[] = [];
+  const flush = (): void => {
+    if (!idx.length) return;
+    const big = p.length / 3 > 65535;
+    parts.push({ name: `${m.name}.${parts.length}`, positions: new Float32Array(p), normals: new Float32Array(n),
+      colors: new Float32Array(c), indices: big ? new Uint32Array(idx) : new Uint16Array(idx) });
+    remap = new Map(); p = []; n = []; c = []; idx = [];
+  };
+  for (let t = 0; t < m.indices.length; t += 3) {
+    const tri = [m.indices[t]!, m.indices[t + 1]!, m.indices[t + 2]!];
+    const fresh = tri.filter(v => !remap.has(v)).length;
+    if (idx.length && (remap.size + fresh) * VERTEX + (idx.length + 3) * INDEX > maxBytes) flush();
+    for (const v of tri) {
+      let k = remap.get(v);
+      if (k === undefined) {
+        k = remap.size; remap.set(v, k);
+        p.push(m.positions[v * 3]!, m.positions[v * 3 + 1]!, m.positions[v * 3 + 2]!);
+        n.push(m.normals[v * 3]!, m.normals[v * 3 + 1]!, m.normals[v * 3 + 2]!);
+        c.push(m.colors[v * 4]!, m.colors[v * 4 + 1]!, m.colors[v * 4 + 2]!, m.colors[v * 4 + 3]!);
+      }
+      idx.push(k);
+    }
+  }
+  flush();
+  return parts;
+}

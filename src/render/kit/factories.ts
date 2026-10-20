@@ -34,20 +34,29 @@ const GROUND: Record<string, readonly [string, string]> = {
 };
 
 /** Heightfield terrain on the chunk cell, sampled from the physical floor.
- * Fine 2 m, coarse 8 m spacing; a skirt hides cracks against a neighbour at
- * the other LOD. Alpha 0 marks ground for the cel shader's sediment relief. */
+ * Every LOD shares one border: the floor sampled at the FINE spacing along
+ * all four edges (heights, normals and colours from the same samples). Fine
+ * terrain is a full fine grid; coarse terrain is a coarse interior lattice
+ * zipped to that fine border ring. Two chunks therefore meet on identical
+ * edge polylines whatever LOD either shows, on both axes: no cracks and no
+ * skirts. Alpha 0 marks ground for the cel shader's sediment relief. */
 export const terrainFactory: ChunkArtFactory = {
   id: "terrain",
   *build(ctx, chunk, ref, lod) {
-    const spacing = lod === "fine" ? Number(ref.params?.fine ?? 2) : Number(ref.params?.coarse ?? 8);
-    const { min, max } = chunk.bounds, n = Math.round((max.x - min.x) / spacing);
-    const side = n + 3, h = new Float64Array(side * side);
-    // Heights with a one-sample border, so edge normals match the neighbour's.
-    for (let j = 0; j < side; j++) {
-      for (let i = 0; i < side; i++) h[j * side + i] = ctx.floor(min.x + (i - 1) * spacing, min.z + (j - 1) * spacing);
-      if (ctx.due()) yield;
-    }
-    const at = (i: number, j: number): number => h[(j + 1) * side + (i + 1)]!;
+    const f = Number(ref.params?.fine ?? 2), S = lod === "fine" ? f : Number(ref.params?.coarse ?? 8);
+    const { min, max } = chunk.bounds, m = Math.round((max.x - min.x) / f);
+    // Coarse needs a whole number of fine steps per coarse step and at least
+    // one interior lattice row; otherwise it is the fine layout.
+    const r = Math.round(S / f), n = Math.round(m / r);
+    const zipped = r > 1 && Math.abs(r * f - S) < 1e-9 && n * r === m && n >= 3;
+    // Lazy floor samples on the fine lattice, with a one-sample margin.
+    const side = m + 3, h = new Float64Array(side * side).fill(NaN);
+    const H = (i: number, j: number): number => {
+      const k = (j + 1) * side + (i + 1);
+      let y = h[k]!;
+      if (Number.isNaN(y)) h[k] = y = ctx.floor(min.x + i * f, min.z + j * f);
+      return y;
+    };
     // Ground palette blended on a 16 m world lattice: every lattice point
     // averages the biomes within 16 m, so chunks agree along shared edges.
     const LATTICE = 16;
@@ -68,7 +77,6 @@ export const terrainFactory: ChunkArtFactory = {
       lattice.set(k, out);
       return out;
     };
-    const b = new RecipeBuilder();
     const colorAt = (x: number, z: number, y: number, slope: number): Rgba => {
       const lx = Math.floor(x / LATTICE) * LATTICE, lz = Math.floor(z / LATTICE) * LATTICE;
       const fx = (x - lx) / LATTICE, fz = (z - lz) / LATTICE;
@@ -81,33 +89,64 @@ export const terrainFactory: ChunkArtFactory = {
       }
       return [out[0]!, out[1]!, out[2]!, 0];
     };
-    const grid: number[] = [];
-    for (let j = 0; j <= n; j++) {
-      for (let i = 0; i <= n; i++) {
-        const y = at(i, j), dx = (at(i + 1, j) - at(i - 1, j)) / (2 * spacing), dz = (at(i, j + 1) - at(i, j - 1)) / (2 * spacing);
-        grid.push(b.vertex([min.x + i * spacing, y, min.z + j * spacing], [-dx, 1, -dz],
-          colorAt(min.x + i * spacing, min.z + j * spacing, y, Math.hypot(dx, dz))));
+    const b = new RecipeBuilder();
+    /** Vertex at fine-lattice (i, j); normals by central difference `d` steps. */
+    const vertex = (i: number, j: number, d: number): number => {
+      const y = H(i, j), dx = (H(i + d, j) - H(i - d, j)) / (2 * d * f), dz = (H(i, j + d) - H(i, j - d)) / (2 * d * f);
+      const x = min.x + i * f, z = min.z + j * f;
+      return b.vertex([x, y, z], [-dx, 1, -dz], colorAt(x, z, y, Math.hypot(dx, dz)));
+    };
+    if (!zipped) {
+      const grid: number[] = [];
+      for (let j = 0; j <= m; j++) {
+        for (let i = 0; i <= m; i++) {
+          grid.push(vertex(i, j, 1));
+          if ((i & 7) === 7 && ctx.due()) yield;
+        }
       }
-      if (ctx.due()) yield;
-    }
-    for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) {
-        const a = grid[j * (n + 1) + i]!, c = grid[(j + 1) * (n + 1) + i]!;
-        b.triangle(a, c, a + 1); b.triangle(a + 1, c, c + 1);
+      for (let j = 0; j < m; j++) {
+        for (let i = 0; i < m; i++) {
+          const a = grid[j * (m + 1) + i]!, c = grid[(j + 1) * (m + 1) + i]!;
+          b.triangle(a, c, a + 1); b.triangle(a + 1, c, c + 1);
+        }
+        if (ctx.due()) yield;
       }
-      if (ctx.due()) yield;
-    }
-    // Skirt: drop each border vertex by more than the coarse sampling error.
-    const drop = Number(ref.params?.coarse ?? 8) * 1.5 + 2;
-    const border = (k: number, edge: number): [number, number] =>
-      edge === 0 ? [k, 0] : edge === 1 ? [n, k] : edge === 2 ? [n - k, n] : [0, n - k];
-    for (let edge = 0; edge < 4; edge++) for (let k = 0; k < n; k++) {
-      const [i0, j0] = border(k, edge), [i1, j1] = border(k + 1, edge);
-      const top0 = grid[j0 * (n + 1) + i0]!, top1 = grid[j1 * (n + 1) + i1]!;
-      const out: [number, number, number] = edge === 0 ? [0, 0, -1] : edge === 1 ? [1, 0, 0] : edge === 2 ? [0, 0, 1] : [-1, 0, 0];
-      const lo0 = b.vertex([min.x + i0 * spacing, at(i0, j0) - drop, min.z + j0 * spacing], out, colorAt(min.x + i0 * spacing, min.z + j0 * spacing, -900, 1));
-      const lo1 = b.vertex([min.x + i1 * spacing, at(i1, j1) - drop, min.z + j1 * spacing], out, colorAt(min.x + i1 * spacing, min.z + j1 * spacing, -900, 1));
-      b.triangle(top0, lo0, top1); b.triangle(top1, lo0, lo1);
+    } else {
+      // Fine border ring, shared by corners.
+      const ring = new Map<string, number>();
+      const border = (i: number, j: number): number => {
+        const k = `${i},${j}`;
+        let v = ring.get(k);
+        if (v === undefined) ring.set(k, v = vertex(i, j, 1));
+        return v;
+      };
+      // Coarse interior lattice I, J in 1..n-1 (fine units I*r, J*r).
+      const inner: number[] = [];
+      for (let J = 1; J <= n - 1; J++) {
+        for (let I = 1; I <= n - 1; I++) {
+          inner.push(vertex(I * r, J * r, r));
+          if ((I & 3) === 3 && ctx.due()) yield;
+        }
+      }
+      const at = (I: number, J: number): number => inner[(J - 1) * (n - 1) + (I - 1)]!;
+      for (let J = 1; J < n - 1; J++) for (let I = 1; I < n - 1; I++) {
+        const a = at(I, J), c = at(I, J + 1);
+        b.triangle(a, c, at(I + 1, J)); b.triangle(at(I + 1, J), c, at(I + 1, J + 1));
+      }
+      // Zip each edge: fine outer points (param t) to the inner row (I*r).
+      // The four strips meet on the corner diagonals and tile the frame.
+      const edges: [(t: number) => number, (I: number) => number][] = [
+        [t => border(t, 0), I => at(I, 1)], [t => border(t, m), I => at(I, n - 1)],
+        [t => border(0, t), J => at(1, J)], [t => border(m, t), J => at(n - 1, J)],
+      ];
+      for (const [outer, row] of edges) {
+        let t = 0, I = 1;
+        while (t < m || I < n - 1) {
+          if (I >= n - 1 || (t < m && t + 1 <= (I + 1) * r)) { b.triangle(outer(t), outer(t + 1), row(I)); t++; }
+          else { b.triangle(outer(t), row(I + 1), row(I)); I++; }
+          if (ctx.due()) yield;
+        }
+      }
     }
     yield;
     return { meshes: [b.build(`terrain.${lod}`)], instances: [] };

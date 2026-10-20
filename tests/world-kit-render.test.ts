@@ -107,3 +107,60 @@ test("ADVERSE (real kit): fast traversal with pending construction leaves no str
   residency.dispose();
   assert.deepEqual({ meshes: scene.meshes.length, geometries: scene.geometries.length }, baseline);
 }));
+
+/** Bytes really held by chunk meshes: vertex data, indices, instance buffers. */
+function chunkSceneBytes(scene: Scene): number {
+  let bytes = 0;
+  for (const mesh of scene.meshes) {
+    if (!mesh.name.startsWith("chunk:")) continue;
+    const m = mesh as Mesh;
+    for (const kind of ["position", "normal", "color"]) {
+      const data = m.getVerticesData(kind, false, false, true);
+      if (data) bytes += (data as Float32Array).byteLength ?? data.length * 4;
+    }
+    const indices = m.getIndices(false, true);
+    if (indices) bytes += (indices as Uint16Array).byteLength ?? indices.length * 4;
+    if (m.hasThinInstances) bytes += m.thinInstanceCount * 64 + (m.getVertexBuffer("instanceColor") ? m.thinInstanceCount * 16 : 0);
+  }
+  return bytes;
+}
+
+test("REVIEW S1-01 (real kit): an over-budget fine chunk is shown coarse and never exceeds the budget", () => withScene(scene => {
+  const p = { x: 0, y: -3, z: 14 };
+  const one = { ...map.chunkAt(p)!, art: [{ factory: "terrain" }] };
+  const solo = createWorldMap({ ...layout, chunks: [one] });
+  const loader = createKitLoader({ scene, material: createKitMaterial(scene, createCelMaterial(scene)),
+    templates: new TemplateLibrary(templateRecipes()), factories: KIT_FACTORIES, context: ctx, maxPartBytes: 32 * 1024 });
+  const budget = 64 * 1024;
+  const residency = createResidency({ map: solo, loader,
+    budget: { cpuBytes: budget, gpuBytes: budget, uploadBytesPerFrame: budget } });
+  for (let i = 0; i < 100; i++) {
+    const s = residency.update(p);
+    const actual = chunkSceneBytes(scene);
+    assert.ok(actual <= s.gpuBytes && s.gpuBytes <= budget, `frame ${i}: ${actual} B in scene, ${s.gpuBytes} accounted, budget ${budget}`);
+    assert.equal(s.uploadOverrunBytes, 0);
+  }
+  const s = residency.stats!;
+  assert.equal(residency.isReady(), true);
+  assert.ok(s.demoted === 1 && s.totals.overBudgetDiscards >= 1, "fine was measured once, dropped, and the chunk demoted");
+  assert.deepEqual(residency.units().filter(u => u.state === "shown").map(u => u.key), [`${one.id}@coarse`]);
+  residency.dispose();
+  assert.equal(scene.meshes.filter(m => m.name.startsWith("chunk:")).length, 0);
+}));
+
+test("REVIEW S1-01 (real kit): a coarse chunk that cannot fit is refused, reported, and not ready", () => withScene(scene => {
+  const p = { x: 0, y: -3, z: 14 };
+  const one = { ...map.chunkAt(p)!, art: [{ factory: "terrain" }] };
+  const solo = createWorldMap({ ...layout, chunks: [one] });
+  const loader = createKitLoader({ scene, material: createKitMaterial(scene, createCelMaterial(scene)),
+    templates: new TemplateLibrary(templateRecipes()), factories: KIT_FACTORIES, context: ctx, maxPartBytes: 4 * 1024 });
+  const budget = 8 * 1024;
+  const residency = createResidency({ map: solo, loader, budget: { cpuBytes: budget, gpuBytes: budget, uploadBytesPerFrame: budget } });
+  for (let i = 0; i < 100; i++) {
+    const s = residency.update(p);
+    assert.ok(chunkSceneBytes(scene) <= budget && s.gpuBytes <= budget, `frame ${i}`);
+  }
+  assert.deepEqual(residency.stats!.refused.map(r => `${r.chunk}@${r.lod}`), [`${one.id}@coarse`]);
+  assert.equal(residency.isReady(), false);
+  residency.dispose();
+}));
