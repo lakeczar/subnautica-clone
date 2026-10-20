@@ -90,7 +90,8 @@ import { incapacitate, recoveryCommand, updateRecovery } from "./recovery.js";
 import { updateSurvival, updateThreat } from "./survival.js";
 import { safePersonalDepth } from "./capabilities.js";
 import { advanceRenewal, settleRenewal } from "./renewal.js";
-import { advanceStory, recordStory, storyHint, storyHost } from "./storyLink.js";
+import { advanceStory, recordStory, storyHint, storyHost, useController, useGatePanel, useWorksFace } from "./storyLink.js";
+import type { WorksFaceId } from "../content/story/placements.js";
 import { placeDeterrent, releaseKit, toggleLamp, updateEcology } from "./ecologyLink.js";
 const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
@@ -362,6 +363,10 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         if (!no) actionResult(s, events, "Entered the cabin");
         return no;
       }
+      if (target.id.startsWith("works:")) return useWorksFace(s, target.id as WorksFaceId);
+      // Once read, the live gate panel works the procedure and the controller the ending.
+      if (target.known && target.id === "gate_panel") return useGatePanel(s);
+      if (target.known && target.id === "district_controller") return useController(s);
       if (target.id === OPTIONAL_RECORD.id || storyHost(target.id)) {
         if (target.known && target.kind === "evidence") {
           events.push({ type: "interaction-panel", panel: "notebook", targetId: target.id });

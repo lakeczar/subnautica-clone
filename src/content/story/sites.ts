@@ -5,6 +5,7 @@
  * PLACEMENTS groups them by region. */
 import type { RegionId } from "../registry.js";
 import { DISCOVERY_IDS, siteOf } from "./evidence.js";
+import { STORY_PLACEMENTS, type PlacedStorySiteId } from "./placements.js";
 import type { DiscoveryId, StorySiteId } from "./evidence.js";
 
 export interface StorySite {
@@ -23,7 +24,7 @@ export interface StorySite {
   visible: string;
 }
 
-export const STORY_SITES = {
+const PROPOSED_SITES = {
   home_pod: {
     region: "refuge_reef", depth: 0, exit: 0, zone: "near", existing: true,
     landmark: "The pod on its reef ramp.", cue: "Damaged regulator; navigation unit dark.",
@@ -159,9 +160,19 @@ export const STORY_SITES = {
   },
 } as const satisfies Record<StorySiteId, StorySite>;
 
+/** S5's sites with C3's placements applied: a placed site takes its S2 site's
+ * real depths (the gate hall at 769 m, not the proposed 700 m). */
+export const STORY_SITES: Readonly<Record<StorySiteId, StorySite>> = Object.fromEntries(
+  (Object.keys(PROPOSED_SITES) as StorySiteId[]).map((id) => {
+    const placed = Object.hasOwn(STORY_PLACEMENTS, id) ? STORY_PLACEMENTS[id as PlacedStorySiteId] : null;
+    return [id, placed ? { ...PROPOSED_SITES[id], depth: placed.depth, exit: placed.exit } : PROPOSED_SITES[id]];
+  }),
+) as Record<StorySiteId, StorySite>;
+
 /** Sites that exist in the composed world. A lead, hint or interaction is offered
- * only at a placed site; S2 adds each site here as it places it. */
-export const placedSite = (site: StorySiteId): boolean => (STORY_SITES[site] as StorySite).existing === true;
+ * only at a placed site: the registry's own, and those C3 placed at S2's sites. */
+export const placedSite = (site: StorySiteId): boolean =>
+  STORY_SITES[site].existing === true || Object.hasOwn(STORY_PLACEMENTS, site);
 
 /** S2's placement checklist: each region's story sites and the items each holds. */
 export const PLACEMENTS = (Object.keys(STORY_SITES) as StorySiteId[]).reduce((by, site) => {

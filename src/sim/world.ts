@@ -118,6 +118,13 @@ export const FACILITY_SOLIDS: readonly Solid[] = [
     id: `workshop.post.${x}.${z}`, min: { x: x - 0.12, y: 1.2, z: z - 0.12 }, max: { x: x + 0.12, y: 5.4, z: z + 0.12 },
   }))),
 ];
+/** Authored regional collision outside B1's area, in the indexed broad phase
+ * with every other solid. Later solid lists (A1's `VISTA_SOLIDS`) append here,
+ * each as `{ id, bounds }` records with IDs unique across the roster. */
+export const REGION_SOLIDS: readonly Solid[] = [
+  // S2's regional structures (130 boxes).
+  ...STRUCTURE_SOLIDS,
+].map(s => ({ id: s.id, min: s.bounds.min, max: s.bounds.max }));
 export const SOLIDS: readonly Solid[] = [
   POD_DECK,
   ...FACILITY_SOLIDS,
@@ -203,8 +210,7 @@ export const SOLIDS: readonly Solid[] = [
   })),
   ...BASIN_GEOMETRY.solids,
   ...CANOPY_MARGIN_RIBS,
-  // S2's regional structures (130 boxes); the indexed broad phase keeps cost local.
-  ...STRUCTURE_SOLIDS.map(s => ({ id: s.id, min: s.bounds.min, max: s.bounds.max })),
+  ...REGION_SOLIDS,
 ];
 
 type Axis = "x" | "y" | "z";

@@ -13,9 +13,14 @@ import type { DiscoveryId } from "../content/story/evidence.js";
 import { LEADS } from "../content/story/leads.js";
 import type { LeadId } from "../content/story/leads.js";
 import { placedSite, STORY_SITES } from "../content/story/sites.js";
-import { advanceWorks, found, mergeDiscoveries, notebook, openLeads, reachable, recordDiscovery, requestHint } from "./story/index.js";
-import type { Capabilities, NotebookView, StoryState } from "./story/index.js";
-import { facility } from "./inventory.js";
+import { advanceWorks, beginResolution, completeResolution, found, gateOpen, gatePanel, mergeDiscoveries, notebook, openLeads, reachable,
+  recordDiscovery, requestHint, worksAction } from "./story/index.js";
+import type { Capabilities, NotebookView, StoryState, WorksContext, WorksOutcome } from "./story/index.js";
+import { available, containerAccessible, facility, removeQuantity, spend } from "./inventory.js";
+import { PLACED_HOSTS, WORKS_FACES, type PlacedHostId, type WorksFaceId } from "../content/story/placements.js";
+import { STORY_RECIPES, type StorySiteId } from "../content/story/evidence.js";
+import { WORKS_TEXT, type WorksAction } from "../content/story/works.js";
+import type { ItemKind } from "../content/registry.js";
 import { personalLimit } from "./capabilities.js";
 import type { GameState } from "./types.js";
 
@@ -134,14 +139,91 @@ export const STORY_HOSTS = {
   pod_checklist: { position: { x: -1.45, y: 1.15, z: 22.55 }, kind: "record" },
   mara_specimen_tray: { position: { x: 117.1, y: -116.9, z: -128.1 }, kind: "record" },
   C14: { position: { x: -2.78, y: 1.2, z: 20.2 }, kind: "evidence" },
+  // C3: every later discovery at its S2 site (content/story/placements.ts).
+  ...Object.fromEntries((Object.keys(PLACED_HOSTS) as PlacedHostId[]).map((id) =>
+    [id, { position: PLACED_HOSTS[id], kind: /^C\d\d$/.test(id) ? "evidence" as const : "record" as const }])) as
+    Record<PlacedHostId, { position: { x: number; y: number; z: number }; kind: "record" | "evidence" }>,
 } as const satisfies Partial<Record<DiscoveryId, { position: { x: number; y: number; z: number }; kind: "record" | "evidence" }>>;
 export type StoryHostId = keyof typeof STORY_HOSTS;
 export const storyHost = (id: string): id is StoryHostId => Object.hasOwn(STORY_HOSTS, id);
 export function storyHostVisible(s: GameState, id: StoryHostId): boolean {
-  if (!placedSite(siteOf(id))) return false;
+  const site = siteOf(id);
+  if (!placedSite(site)) return false;
+  // The inner hall opens only once the return gate is open.
+  if (STORY_SITES[site].afterGate && !gateOpen(s.story.works)) return false;
   return id !== "C14" || s.story.works.repairs.includes("pod_buffer");
 }
-/** Interaction targets for the visible story fixtures. */
-export const storyInteractions = (s: GameState) => (Object.keys(STORY_HOSTS) as StoryHostId[])
-  .filter((id) => storyHostVisible(s, id))
-  .map((id) => ({ id, label: labelOf(id), position: { ...STORY_HOSTS[id].position }, kind: STORY_HOSTS[id].kind }));
+/** Interaction targets for the visible story fixtures and the upper hall's work faces. */
+export const storyInteractions = (s: GameState) => [
+  ...(Object.keys(STORY_HOSTS) as StoryHostId[])
+    .filter((id) => storyHostVisible(s, id))
+    .map((id) => ({ id, label: labelOf(id), position: { ...STORY_HOSTS[id].position }, kind: STORY_HOSTS[id].kind })),
+  ...(Object.keys(WORKS_FACES) as WorksFaceId[]).map((id) =>
+    ({ id, label: WORKS_FACES[id].label, position: { ...WORKS_FACES[id].position }, kind: "service" as const })),
+];
+
+/** S5's works context from the diver's real surroundings: assemblies carried in
+ * the diver hold; stock from the diver hold, a deployed buoy and any craft hold
+ * within reach. */
+function worksContext(s: GameState, site: StorySiteId): { ctx: WorksContext; bins: string[] } {
+  const bins = ["diver", ...s.inventory.containers.filter((c) => c.kind === "buoy" || c.kind === "vehicle").map((c) => c.id)
+    .filter((id) => containerAccessible(s, id))];
+  return {
+    bins,
+    ctx: {
+      site,
+      carries: (a) => s.inventory.items.some((i) => i.kind === a && i.containerId === "diver"),
+      canPay: (r) => Object.entries(STORY_RECIPES[r].cost).every(([k, q]) => available(s, k as ItemKind, bins) >= q),
+      blueprints: new Set(s.knowledge.blueprints),
+    },
+  };
+}
+function applyWorks(s: GameState, outcome: WorksOutcome, bins: string[]): string {
+  if (outcome.ok && outcome.consume) {
+    if (outcome.consume === "service_power_assembly" || outcome.consume === "service_air_assembly")
+      removeQuantity(s, s.inventory.items.find((i) => i.kind === outcome.consume && i.containerId === "diver")!, 1);
+    else spend(s, STORY_RECIPES[outcome.consume].cost, bins);
+  }
+  return outcome.message;
+}
+/** The live gate panel: each use performs the next step of the readable procedure
+ * (stage power, stage air, isolate, equalize, open, route power to the hall). */
+export function useGatePanel(s: GameState): string | null {
+  const w = s.story.works, { ctx, bins } = worksContext(s, "meridian_gate_hall");
+  const next: WorksAction | null = !w.power && ctx.carries("service_power_assembly") ? "install_power"
+    : !w.air && ctx.carries("service_air_assembly") ? "install_air"
+    : w.gate === "sealed" && w.power && w.air ? "isolate" : w.gate === "isolated" ? "equalize"
+    : w.gate === "equalized" ? "open" : w.gate === "open" && w.hall && !w.hallPower ? "route_power" : null;
+  const panel = gatePanel(w);
+  if (!next) {
+    s.feedback = `${panel.status} ${panel.lines.join(" · ")}.${!w.power ? ` ${WORKS_TEXT.install_power.missing}` : !w.air ? ` ${WORKS_TEXT.install_air.missing}` : ""}`;
+    return null;
+  }
+  const outcome = worksAction(s.story, next, ctx);
+  if (!outcome.ok) return outcome.message;
+  s.feedback = applyWorks(s, outcome, bins);
+  return null;
+}
+/** The upper hall's restoration faces, from carried stock. */
+export function useWorksFace(s: GameState, id: WorksFaceId): string | null {
+  const { ctx, bins } = worksContext(s, "meridian_upper_hall");
+  const outcome = worksAction(s.story, WORKS_FACES[id].action, ctx);
+  if (!outcome.ok) return outcome.message;
+  s.feedback = applyWorks(s, outcome, bins);
+  return null;
+}
+/** The district controller: once its record is read, it begins the closing
+ * scene when every requirement is met (default roster), then the epilogue. */
+export function useController(s: GameState): string | null {
+  if (s.story.resolution.phase === "first") {
+    const done = completeResolution(s.story, { mastRestored: false });
+    if (!done.ok) return "The closing scene has already ended.";
+    s.feedback = done.lines.join(" ");
+    return null;
+  }
+  if (s.story.resolution.phase === "complete") { s.feedback = "The district rests. The controller's work is done."; return null; }
+  const begun = beginResolution(s.story, "meridian_service_window", s.tick);
+  if (!begun.ok) return begun.message;
+  s.feedback = [begun.message, ...begun.lines].join(" ");
+  return null;
+}

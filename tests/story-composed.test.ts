@@ -65,7 +65,11 @@ test("H gives graduated reef hints, then practical preparation for an unreachabl
   for (const id of ["suit_350", "dart_base", "creel_base", "creel_cargo_rack", "restore_canopy_stop"] as const) all.knowledge.crafted.push(id);
   all.inventory.items.push({ id: "rack_1", kind: "creel_cargo_rack", quantity: 1, containerId: "diver", fitted: null, charge: null, provenance: "public" });
   all.world.facilities.find((f) => f.id === "canopy_stop")!.repaired = true;
-  assert.equal(storyHint(all), FRONTIER_HINT, "once the placed chain is done, hints never name unbuilt sites");
+  // C3 placed the later sites: the next hint is a placed lead's graduated hint, never the frontier
+  // and never an unbuilt site.
+  const next = storyHint(all);
+  assert.notEqual(next, FRONTIER_HINT);
+  assert.ok(Object.values(LEADS).some((l) => (l.hints as readonly string[]).includes(next) && placedSite(l.site)), next);
 });
 
 test("the works machinery advances exactly once per active simulation step and survives a reload", () => {
@@ -121,11 +125,10 @@ test("composed planner: every strategy step is a real recipe, and both strategie
     assert.equal(plan.ending, true, strategy);
     assert.deepEqual([...plan.steps].sort(), report.map((a) => a.step).sort(), "every step completes");
     assert.equal(planCampaign(strategy, { model: registryModel(strategy), reverse: true }).ending, true, `${strategy} reversed`);
-    // Against today's placed story sites only, the ending waits for S2's composed world.
+    // C3 placed every story site at S2's: skipping only unplaced sites still reaches the ending.
+    assert.deepEqual(UNPLACED, [], "every story site is placed");
     const today = planCampaign(strategy, { model: registryModel(strategy), skip: UNPLACED });
-    assert.equal(today.ending, false, "the ending needs the story sites S2 places");
-    assert.deepEqual(today.order.filter((id) => !["C01", "C02", "C03", "pod_checklist", "C04", "C05", "C06"].includes(id)), [],
-      "today's placed records are the only ones found");
+    assert.equal(today.ending, true, `${strategy} reaches the ending in the composed world`);
   }
   const independent = planRegistryCampaign("independent"), carrier = planRegistryCampaign("carrier");
   assert.deepEqual(independent.caps.hulls, { dart: 350, creel: 800 });
