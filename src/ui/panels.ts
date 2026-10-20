@@ -519,6 +519,7 @@ export class PanelView {
         id === "suit_350" ? `<p class="refit-scope">${done ? "Fitted personal suit 350 m" : "Paid in-place refit · fitted suit 150 → 350 m"} · ${state.fleet.vehicles.filter((v) => !v.berth && v.hull !== "hearthline").map((v) => `${HULLS[v.hull].label} hull stays ${v.rating} m`).join(" · ") || "hull ratings are separate"}.</p>` : "",
         refit ? `<p class="refit-scope">Hull refit · ${HULLS[refit].label} ${HULLS[refit].initialDepth} → 350 m · your suit limit is separate.</p>` : "",
         dart ? `<p>One ${HULLS[dart.hull].label} at a time · salvage its frame to rebuild.</p>` : "",
+        done ? "<p>Current recipe reference</p>" : "",
         `<p>${bench} · ${restored ? "restored" : id === "pod_repair" || id === "restore_workshop" ? "repair available before restoration" : "restore services first"}${!atBench(r.site) ? " · away from this bench" : ""}${r.maintenance ? " · rescue stock only" : ""}</p>`,
         block && block.message !== reason ? `<p class="recipe-status">${escapeHtml(block.message)}</p>` : "",
         away.length ? `<p class="recipe-sources">Not usable at this bench · ${escapeHtml(away.join(" · "))}</p>` : "",

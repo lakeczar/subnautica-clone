@@ -356,7 +356,7 @@ test("recipe quantities use the same supported-cradle inputs as fabrication, wit
   assert.match(recipe, /Structural alloy: 2 \/ 2/);
   assert.match(recipe, /Flexible membrane: 4 \/ 2/);
   assert.match(recipe, /Local sources:.*Dart hold.*supported-cradle cargo/);
-  click("Fabricate · Repair pod regulator & bench");
+  click("Repair");
   assert.deepEqual(commands, [{ type: "craft", recipeId: "pod_repair" }]);
   assert.deepEqual(s, snapshot, "view never consumes or moves ingredients");
   s.player.pose.position = { x: 10, y: 2, z: -35 };
@@ -1454,13 +1454,22 @@ test("ascent cue wins; rail help requires current forward rail-end contact, with
   view.cancelFeedback(); assert.equal(get("blocked-ascent").hidden, true);
 });
 
-test("empty opening detail and in-session subtitle hide while capture affordance remains until explicitly changed", (t) => {
-  const { view, get } = viewFixture(t), s = createGame(); view.update(s, false); view.showGame();
+test("the title menu has no tagline or build note, keeps settings in place, and Esc steps back from settings", (t) => {
+  const { view, get, root, key, active, markup } = viewFixture(t), s = createGame(); view.update(s, false); view.showGame();
   assert.equal(get("opening-detail").hidden, true);
-  view.showMenu(true); assert.equal(get("menu-subtitle").hidden, true);
-  assert.equal(get("build-note").hidden, true);
-  view.showMenu(false); assert.equal(get("menu-subtitle").hidden, false);
-  assert.equal(get("build-note").hidden, false);
+  view.showMenu(false);
+  assert.doesNotMatch(markup(), /id="menu-subtitle"|id="build-note"|A first horizon|in development/);
+  assert.doesNotMatch(markup(), /Carrier feasibility|data-action="fixture"/, "developer fixtures need ?dev");
+  assert.equal(get("settings-menu").hidden, true);
+  root.emit("click", { target: get("open-settings") });
+  assert.equal(get("settings-menu").hidden, false); assert.equal(get("main-menu").hidden, true);
+  assert.equal(active(), get("settings-back"));
+  const escape = key("Escape");
+  assert.equal(escape.stopped && escape.prevented, true, "the runtime does not also pause or resume");
+  assert.equal(get("settings-menu").hidden, true); assert.equal(get("main-menu").hidden, false);
+  assert.equal(active(), get("open-settings"));
+  root.emit("click", { target: get("open-settings") }); view.showMenu(true);
+  assert.equal(get("settings-menu").hidden, true, "re-opening the menu starts at the main view");
   completeOpening(s); view.update(s, false); view.showGame(); view.lookAction(true, true);
   for (let i = 0; i < 1000; i++) view.update(s, false);
   assert.equal(get("look-action").hidden, false); assert.match(get("look-action").textContent, /drag \/ arrows available/);
