@@ -106,7 +106,7 @@
   align-items: center;
   pointer-events: none;
 }
-.alert-stack:not(:has(.hazard:not(:empty))) { display: none; }
+.alert-stack:not(:has(.hazard:not(:empty), .audio-caption:not([hidden]))) { display: none; }
 .hazard, #notification {
   max-width: min(700px, 100%);
   padding: 9px 12px;
@@ -219,3 +219,6 @@
   .motion-guidance { grid-row: 3; }
   .opening { grid-column: 1 / -1; grid-row: 4 / 6; }
 }
+
+/* S6 sound captions: one line under the hazard banners, in the same alert column. */
+.audio-caption { margin: 6px 0 0; padding: 4px 10px; max-width: 34em; border-left: 3px solid #e0ba7c; background: #071a24cc; color: #f3ead2; font-size: 14px; letter-spacing: .02em; }

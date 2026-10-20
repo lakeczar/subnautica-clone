@@ -1994,3 +1994,23 @@ test("Creel mount changes keep keyboard focus on the mount row, not Return", (t)
   view.refreshPanel(s);
   assert.equal(active()?.attrs["data-focus-key"], `mount:${creel.id}`, "fitting returns to the same row");
 });
+
+test("sound captions: essential warnings show with captions off, others follow the setting, and an on-screen banner is not repeated", (t) => {
+  const { view, get } = viewFixture(t);
+  const s = createGame(); completeOpening(s);
+  view.update(s, false);
+  view.audioSettings({ volume: 0, muted: true, subtitles: false });
+  view.audioCaption({ cue: "carrier.clamp", text: "[Berth clamps lock]", essential: false, dir: null }, s);
+  assert.equal(get("audio-caption").hidden, true, "non-essential follows captions off");
+  view.audioCaption({ cue: "alert.pressure", text: "[Suit pressure tone · beyond rated depth]", essential: true, dir: null }, s);
+  assert.equal(get("audio-caption").hidden, false);
+  assert.equal(get("audio-caption").textContent, "[Suit pressure tone · beyond rated depth]", "muted and captions off still shows essentials");
+  s.player.pose.position = { x: -20, y: -20, z: -10 }; s.player.mode = "swimming"; s.player.vitals.oxygen = 12;
+  view.audioCaption({ cue: "alert.oxygen", text: "[Low-air tone]", essential: true, dir: null }, s);
+  assert.equal(get("audio-caption").textContent, "[Suit pressure tone · beyond rated depth]", "LOW OXYGEN is already a banner");
+  view.audioSettings({ volume: .5, muted: false, subtitles: true });
+  view.audioCaption({ cue: "carrier.clamp", text: "[Berth clamps lock]", essential: false, dir: null }, s);
+  assert.equal(get("audio-caption").textContent, "[Berth clamps lock]");
+  view.resetPresentation();
+  assert.equal(get("audio-caption").hidden, true, "entering a session clears the caption");
+});

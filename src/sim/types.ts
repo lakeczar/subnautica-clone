@@ -266,6 +266,8 @@ export type GameEvent =
       origin?: Vec3;
       /** Only a positional warning call at an actual warn/pursue transition. */
       source?: "threat-call";
+      /** Why a centred warning sounds, set where it is emitted. Transient, never saved. */
+      cause?: "oxygen" | "food" | "pressure" | "power" | "hull-depth";
       cue:
         | "collect"
         | "craft"
