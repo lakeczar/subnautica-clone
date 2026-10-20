@@ -91,7 +91,10 @@ export type HullId = keyof typeof HULLS;
 /** Conservative upright sweep envelopes enclose the authored hull silhouettes. */
 export const HULL_COLLIDERS = {
   dart: { radius: 3.6, height: 2.1 },
-  creel: { radius: 4.5, height: 3.6 },
+  // M2-B1: the drawn workboat is 3.9 × 6.6 m; 3.9 m bounds its rotated half-diagonal
+  // (√(1.95² + 3.3²) ≈ 3.83) at every heading. The fixture-era 4.5 m box snagged
+  // the slip rails and reef ribs beyond the visible hull.
+  creel: { radius: 3.9, height: 3.6 },
   hush: { radius: 3.6, height: 2.1 },
   spindle: { radius: 4, height: 1.7 },
   mantle: { radius: 4.5, height: 4 },
