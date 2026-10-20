@@ -11,9 +11,10 @@ import { FLOOR_PADS, type FloorPad } from "./sites.js";
  *
  * Metres, +Y up, water at Y = 0, +X east, +Z north. */
 
-/** Contains the legacy render mesh (`TERRAIN_EXTENT`: X -95..268.2,
- * Z -283.5..88) and the route bounds (X -76..248, Z -260..66). */
-export const LEGACY_PRESERVE = { minX: -96, maxX: 272, minZ: -288, maxZ: 88 } as const;
+/** Contains accepted B1's whole render mesh (`TERRAIN_EXTENT`: X -95..268.16,
+ * Z -332.34..88, including the fracture rows south of the Basin) and its route
+ * bounds (X -76..248, Z -320..66). Inside it the floor IS `terrainHeight`. */
+export const LEGACY_PRESERVE = { minX: -96, maxX: 272, minZ: -336, maxZ: 88 } as const;
 export const LEGACY_BLEND = 96;
 
 export type FloorFunction = (x: number, z: number) => number;

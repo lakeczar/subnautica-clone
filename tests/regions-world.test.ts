@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { REGIONS } from "../src/content/registry.js";
+import { REGIONS, SOURCES } from "../src/content/registry.js";
 import { SOLIDS, terrainHeight } from "../src/sim/world.js";
 import { CHUNK_SIZE, WORLD_ENVELOPE, chunkId, columnRect } from "../src/world/frame.js";
 import { createWorldMap, validateLayout } from "../src/world/map.js";
@@ -9,7 +9,9 @@ import { corridorProblems, FINAL_SWIM, firstAccess, firstAccessProblems, inside,
 import type { Vec3 } from "../src/world/types.js";
 import { footprintFloor } from "../src/content/regions/drape.js";
 import { HAZARDS } from "../src/content/regions/hazards.js";
-import { regionAtPoint, worldLayout } from "../src/content/regions/layout.js";
+import { regionAtPoint, S2_TERRAIN_SKIP, worldLayout } from "../src/content/regions/layout.js";
+import { BASIN_GEOMETRY, CANOPY_BASIN_ROUTE, CANOPY_STOP, RECOVERY_ROUTES, ROUTE_WORLD_BOUNDS } from "../src/content/routes.js";
+import { TERRAIN_EXTENT } from "../src/render/terrainSurface.js";
 import { ROUTES } from "../src/content/regions/passages.js";
 import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
 import { FLOOR_PADS, SITES } from "../src/content/regions/sites.js";
@@ -24,6 +26,33 @@ const ctx: CheckContext = {
 };
 const none = (problems: readonly string[], what: string): void =>
   assert.equal(problems.length, 0, `${what}:\n- ${problems.slice(0, 20).join("\n- ")}`);
+
+test("the preserve holds accepted B1's whole terrain, routes, sources and datums exactly", () => {
+  const p = LEGACY_PRESERVE, skip = S2_TERRAIN_SKIP;
+  // The preserve contains B1's rendered mesh (the S2 skip extent) and its route bounds.
+  for (const b of [skip, ROUTE_WORLD_BOUNDS])
+    assert.ok(b.minX >= p.minX && b.maxX <= p.maxX && b.minZ >= p.minZ && b.maxZ <= p.maxZ, "preserve contains B1 extent");
+  assert.deepEqual(skip, { minX: TERRAIN_EXTENT.minX, maxX: TERRAIN_EXTENT.maxX, minZ: TERRAIN_EXTENT.minZ, maxZ: TERRAIN_EXTENT.maxZ });
+  // Bit-exact on a 0.5 m lattice over B1's whole terrain extent, including the fracture rows.
+  let moved = 0, first = "";
+  for (let x: number = skip.minX; x <= skip.maxX; x += 0.5) for (let z: number = skip.minZ; z <= skip.maxZ; z += 0.5)
+    if (!Object.is(worldFloor(x, z), terrainHeight(x, z))) { moved++; first ||= `${x}, ${z}`; }
+  assert.equal(moved, 0, `B1 floor moved at ${moved} samples, first ${first}`);
+  // Every registry source and B1 route/structure datum keeps its accepted floor.
+  const datums: [string, number, number][] = [
+    ...Object.entries(SOURCES).map(([id, s]) => [id, s.position.x, s.position.z] as [string, number, number]),
+    ...Object.values(CANOPY_BASIN_ROUTE).flatMap(v => Array.isArray(v) ? v.map((q, i) => [`route.${i}`, q.x, q.z] as [string, number, number]) :
+      typeof v === "object" ? [["route.pose", (v as { x: number }).x, (v as { z: number }).z] as [string, number, number]] : []),
+    ...BASIN_GEOMETRY.solids.map(s => [s.id, (s.min.x + s.max.x) / 2, (s.min.z + s.max.z) / 2] as [string, number, number]),
+    ...Object.values(RECOVERY_ROUTES).flatMap(r => [...r.tow, ...r.approach].map(q => ["recovery", q.x, q.z] as [string, number, number])),
+    ["canopy.stop.work", CANOPY_STOP.work.x, CANOPY_STOP.work.z], ["canopy.stop.mooring", CANOPY_STOP.mooring.x, CANOPY_STOP.mooring.z],
+  ];
+  for (const [id, x, z] of datums) {
+    assert.ok(x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ, `${id} inside the preserve`);
+    assert.ok(Object.is(worldFloor(x, z), terrainHeight(x, z)), `${id}: floor moved at ${x}, ${z}`);
+  }
+  assert.ok(datums.some(([id]) => id === "basin_frame_fracture"), "includes B1's fracture frame");
+});
 
 test("the shared floor keeps today's terrain exactly and covers the envelope", () => {
   const p = LEGACY_PRESERVE;

@@ -5,7 +5,8 @@ import type { AccessKind, AccessPoint, Aabb, BiomeDescriptor, ChunkArtRef, Chunk
 import { ROUTES } from "./passages.js";
 import { SITES } from "./sites.js";
 import { STRUCTURES } from "./structures.js";
-import { LEGACY_PRESERVE, MERIDIAN_CENTRE, MERIDIAN_TERRACES, terrainMasks, type TerrainMasks } from "./terrain.js";
+import { TERRAIN_EXTENT } from "../../render/terrainSurface.js";
+import { MERIDIAN_CENTRE, MERIDIAN_TERRACES, terrainMasks, type TerrainMasks } from "./terrain.js";
 import { worldFloor } from "./worldFloor.js";
 
 /** S2 whole-world layout: biomes, seven region descriptors with footprints,
@@ -133,9 +134,13 @@ export function biomeAt(x: number, z: number, m: TerrainMasks = terrainMasks(x, 
   }
 }
 
+/** The extent S2 terrain leaves to the legacy terrain mesh (C2's legacy
+ * terrain factory draws exactly this): accepted B1's `TERRAIN_EXTENT`. */
+export const S2_TERRAIN_SKIP: Rect = { minX: TERRAIN_EXTENT.minX, maxX: TERRAIN_EXTENT.maxX, minZ: TERRAIN_EXTENT.minZ, maxZ: TERRAIN_EXTENT.maxZ };
+
 /** Legacy coverage of a column: the existing renderer owns that terrain. */
 export function legacyCoverage(rect: Rect): "none" | "partial" | "full" {
-  const p = LEGACY_PRESERVE;
+  const p = S2_TERRAIN_SKIP;
   const inter = rect.minX < p.maxX && rect.maxX > p.minX && rect.minZ < p.maxZ && rect.maxZ > p.minZ;
   if (!inter) return "none";
   return rect.minX >= p.minX && rect.maxX <= p.maxX && rect.minZ >= p.minZ && rect.maxZ <= p.maxZ ? "full" : "partial";
