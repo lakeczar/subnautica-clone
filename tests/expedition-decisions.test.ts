@@ -193,9 +193,13 @@ test("fabrication, explicit transfers and bulk storage share only the actual ben
   assert.equal(containerAccessible(remote, rv.cargoId), false);
 });
 
-test("berthed craft and capture transactions never grant cargo access even at arm's reach", () => {
+test("berthed craft open only from inside their carrier, and capture transactions never grant cargo access", () => {
   const s = fixtureGame(), v = s.fleet.vehicles.find((v) => v.hull === "dart")!;
-  assert.equal(containerAccessible(s, v.cargoId), false);
+  // C3 (P1): the dry berth room is reached from inside the carrier, never from the water.
+  assert.equal(containerAccessible(s, v.cargoId), true, "aboard the carrier");
+  const outside = structuredClone(s); outside.player.interiorId = null; outside.player.interiorPose = null; outside.player.mode = "swimming";
+  outside.player.pose.position = { ...v.pose.position };
+  assert.equal(containerAccessible(outside, v.cargoId), false, "never from outside, even at arm's reach");
   v.berth = null;
   s.fleet.docking!.transaction = { id: "test_capture", type: "capture", vehicleId: v.id, slot: 0, phase: "prepared", ticks: 0 };
   assert.ok(validState(s));
