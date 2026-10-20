@@ -77,10 +77,12 @@ const BIOMES: readonly BiomeDescriptor[] = [
   { id: "reef_shelf", label: "Reef shelf" },
   { id: "island_shoal", label: "Island shoal" },
   { id: "canopy_crown", label: "Canopy crown" },
-  { id: "silt_bowl", label: "Silt bowl", lod: { fine: 128 } },
-  { id: "thermal_fracture", label: "Thermal fracture" },
-  { id: "brine_saddle", label: "Brine saddle" },
-  { id: "research_terrace", label: "Research terrace" },
+  // Deep water fog (density ~0.023/m below 175 m) hides everything past
+  // ~200 m, so deep biomes stop drawing much sooner than the shelf.
+  { id: "silt_bowl", label: "Silt bowl", lod: { fine: 112, coarse: 300 } },
+  { id: "thermal_fracture", label: "Thermal fracture", lod: { coarse: 240 } },
+  { id: "brine_saddle", label: "Brine saddle", lod: { coarse: 240 } },
+  { id: "research_terrace", label: "Research terrace", lod: { coarse: 240 } },
 ];
 const BIOME_OF: Record<RegionId, string> = {
   refuge_reef: "reef_shelf", island_chain: "island_shoal", suspended_garden: "canopy_crown",
@@ -138,15 +140,21 @@ export const SCATTER_DENSITY: Readonly<Record<string, number>> = {
   thermal_fracture: 1.6, brine_saddle: 1.1, research_terrace: 1.8,
 };
 
-export function createSliceLayout(options: { density?: number } = {}): WorldLayout {
+/** `density` multiplies scatter; `setPieces` (0..1) is the share of chunks
+ * that also carry a heavy merged set piece of `parts` parts. */
+export function createSliceLayout(options: { density?: number; setPieces?: number; parts?: number } = {}): WorldLayout {
   const base = { envelope: WORLD_ENVELOPE, chunkSize: CHUNK_SIZE, biomes: BIOMES, regions: regions() };
   const pod = { x: 0, z: 20 };
   const chunks = deriveTerrainChunks(base, {
     terrainRange: r => sampleRange(sliceFloor, r, 8, 6),
-    art: (_region, biome) => [
-      { factory: "terrain" },
-      { factory: "scatter", params: { density: (SCATTER_DENSITY[biome] ?? 1) * (options.density ?? 1) } },
-    ],
+    art: (_region, biome, r) => {
+      const hash = (Math.imul(Math.floor(r.minX / CHUNK_SIZE) + 4099, 73856093) ^ Math.imul(Math.floor(r.minZ / CHUNK_SIZE) + 4099, 19349663)) >>> 0;
+      return [
+        { factory: "terrain" },
+        { factory: "scatter", params: { density: (SCATTER_DENSITY[biome] ?? 1) * (options.density ?? 1) } },
+        ...((hash % 1000) / 1000 < (options.setPieces ?? 0) ? [{ factory: "setpiece", params: { parts: options.parts ?? 240 } }] : []),
+      ];
+    },
     priority: (_region, r) => (pod.x >= r.minX && pod.x < r.maxX && pod.z >= r.minZ && pod.z < r.maxZ ? 1 : undefined),
   });
   return { ...base, chunks };
