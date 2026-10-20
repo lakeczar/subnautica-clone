@@ -6,15 +6,20 @@
  * Assumptions C3 should confirm (or adapt here) are marked ASSUME. */
 import { HULL_BUILD, HULL_COLLIDERS, ITEMS, RECIPES, SOURCES } from "../../src/content/registry.js";
 import type { ItemKind, RecipeId, SourceId } from "../../src/content/registry.js";
-import { isOptional } from "../../src/content/story/evidence.js";
-import type { DiscoveryId } from "../../src/content/story/evidence.js";
+import { isOptional, STORY_RECIPES } from "../../src/content/story/evidence.js";
+import type { DiscoveryId, StorySiteId } from "../../src/content/story/evidence.js";
+import { WORKS_TEXT } from "../../src/content/story/works.js";
+import type { WorksAction } from "../../src/content/story/works.js";
+import { createStory } from "../../src/sim/story/state.js";
+import { worksAction } from "../../src/sim/story/works.js";
 import { interactions } from "../../src/sim/progression.js";
 import { hullClearance, sweptHullClearance } from "../../src/sim/world.js";
 import { CARRIER_LAYOUT, carrierInteriorSolids, localToWorld } from "../../src/sim/carrier.js";
 import { createWorldQueries } from "../../src/sim/world.js";
 import type { GameCommand, Vec3, VehicleState } from "../../src/sim/types.js";
 import { board, craft, gather, interact, leaveCraft, move, procure, reach, unload } from "./actions.js";
-import { campaignSite, need, s2Route } from "./content.js";
+import { campaignSite, need, s2Route, worksFace, worksFaceId } from "./content.js";
+import type { Missing } from "./content.js";
 import { Blocked, Driver, where } from "./driver.js";
 import { carry, dockAndService, make, stowHold } from "./live.js";
 import type { Phase, PlayOptions } from "./live.js";
@@ -23,19 +28,19 @@ import { fly, pilotTo } from "./routes.js";
 import { route, travel } from "./travel.js";
 
 const ISLES = ["island_chain", "refuge_reef"];
-const recipes = (...ids: string[]): string[] => ids.flatMap(need.recipe);
-const sources = (...ids: string[]): string[] => ids.flatMap(need.source);
-const stories = (o: PlayOptions, ...ids: string[]): string[] =>
+const recipes = (...ids: string[]): Missing[] => ids.flatMap(need.recipe);
+const sources = (...ids: string[]): Missing[] => ids.flatMap(need.source);
+const stories = (o: PlayOptions, ...ids: string[]): Missing[] =>
   ids.filter((id) => o.readOptional || !isOptional(id as DiscoveryId)).flatMap(need.story);
-const routes = (...ids: string[]): string[] => ids.flatMap(need.route);
+const routes = (...ids: string[]): Missing[] => ids.flatMap(need.route);
 /** A plan known now, or a placed story host that grants it. */
-const plans = (d: Driver, bp: string, ...hosts: string[]): string[] =>
+const plans = (d: Driver, bp: string, ...hosts: string[]): Missing[] =>
   (d.state.knowledge.blueprints as readonly string[]).includes(bp) || hosts.some((h) => need.story(h).length === 0) ? []
-    : [`plans ${bp}: none of its sources (${hosts.join(", ")}) is placed`];
+    : [{ key: `plans:${bp}`, text: `plans ${bp}: none of its sources (${hosts.join(", ")}) is placed` }, ...hosts.flatMap(need.story)];
 /** A phase that only reads story hosts has nothing to play until one is placed. */
-const anyPlaced = (...ids: string[]): string[] =>
-  ids.some((id) => need.story(id).length === 0) ? [] : [`a placed story host among ${ids.join(", ")}`];
-const sites = (...ids: string[]): string[] => ids.flatMap(need.site);
+const anyPlaced = (...ids: string[]): Missing[] =>
+  ids.some((id) => need.story(id).length === 0) ? [] : ids.flatMap(need.story);
+const sites = (...ids: string[]): Missing[] => ids.flatMap(need.site);
 
 // ------------------------------------------------------------------------ helpers
 
@@ -100,6 +105,8 @@ function toWorkPose(d: Driver, site: string, work: Vec3): void {
 function sortie(d: Driver, at: Vec3, label: string, work: () => void): void {
   const v = d.occupied()!;
   const s2park = hullClearance(d.world, at, HULL_COLLIDERS[v.hull]) ? at : parkNear(d, at);
+  // Never take a hull below its rating: that is a choice of craft, not a route.
+  if (-s2park.y > v.rating) throw new Blocked(`The ${v.hull} (rated ${v.rating} m) would park at ${(-s2park.y).toFixed(0)} m for ${label}`, where(d.state));
   pilotTo(d, `park for ${label}`, s2park);
   leaveCraft(d);
   work();
@@ -198,7 +205,7 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
     ...sources("rift_ceramic_lip_north", "rift_ceramic_lip_south", "rift_core_shoulder_north", "rift_core_shoulder_west"),
     ...routes("route.basin.legacy_anchorage", "route.basin.rift", "route.rift.ceramic", "route.rift.west_return", "route.basin.reef_west"),
     ...sites("rift.materials_station"),
-    ...(d.vehicle("creel") ? [] : ["an owned Creel"]),
+    ...(d.vehicle("creel") ? [] : [{ key: "owned:creel", text: "an owned Creel" }]),
   ],
   play(d, o) {
     carryFromWorkshop(d, RECIPES[("restore_rift_station" as RecipeId)].cost as Record<string, number>);
@@ -261,13 +268,15 @@ const divide: Phase = {
 };
 
 /** The isles field shelter (C11, reachable early, read here) and the Divide
- * turbine hall (C12, 600 m). */
-const deepRecords: Phase = {
+ * turbine hall (C12, about 600 m): the 800 m Creel on its route, or the Mantle
+ * launched from the 550 m Hearthline at the Divide lee mooring on the carrier route. */
+const deepRecords = (strategy: Strategy): Phase => ({
   id: "deep-records", title: "Field shelter (C11) and the Divide turbine hall (C12)",
   missing: (d) => [
     ...anyPlaced("C11", "C12", "mara_last_page"),
-    ...routes("route.isles.workshop_stack", "route.isles.stack_headland", "route.basin.divide"),
-    ...(d.vehicle("dart") ? [] : ["an owned Dart"]),
+    ...routes("route.isles.workshop_stack", "route.isles.stack_headland", "route.basin.divide",
+      ...(strategy === "carrier" ? ["route.isles.canopy_east", "route.canopy_east.basin"] : [])),
+    ...(d.vehicle("dart") ? [] : [{ key: "owned:dart", text: "an owned Dart" }]),
   ],
   play(d, o) {
     // Surface run to the headland shelter in the Dart.
@@ -281,16 +290,57 @@ const deepRecords: Phase = {
     followS2(d, "route.isles.workshop_stack", true);
     fly(d, "dart_home");
     dockAndService(d, d.vehicle("dart")!);
-    // The turbine hall at 600 m needs the 800 m Creel and suit.
-    boardCraft(d, "creel");
-    fly(d, "creel_out");
-    fly(d, "basin_outbound");
-    followS2(d, "route.basin.legacy_anchorage");
-    followS2(d, "route.basin.divide");
-    story(d, "C12", o);
-    homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
+    if (need.story("C12").length) { d.deferred.push("C12"); return; }
+    const depth = -hostAt(d, "C12").y;
+    const hull = sortieHull(d, strategy, depth);
+    if (hull === "creel") {
+      boardCraft(d, "creel");
+      fly(d, "creel_out");
+      fly(d, "basin_outbound");
+      followS2(d, "route.basin.legacy_anchorage");
+      followS2(d, "route.basin.divide");
+      story(d, "C12", o);
+      homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
+    } else {
+      carrierTo(d, CARRIER_TO_DIVIDE);
+      launchMantle(d);
+      story(d, "C12", o);
+      mantleHome(d);
+      carrierHome(d, CARRIER_TO_DIVIDE);
+    }
   },
-};
+});
+
+/** The hull a strategy sends to work at `depth`: the Creel on its route, the Mantle
+ * (from the carrier) on the carrier route; each must be rated for the depth. */
+export function sortieHull(d: Driver, strategy: Strategy, depth: number): "creel" | "mantle" {
+  const hull = strategy === "creel" ? "creel" : "mantle";
+  const v = d.vehicle(hull);
+  if (!v) throw new Blocked(`The ${strategy} route has no ${hull} for a ${depth.toFixed(0)} m site`, where(d.state));
+  if (v.rating < depth + 5) throw new Blocked(`The ${hull} is rated ${v.rating} m; the site is at ${depth.toFixed(0)} m`, where(d.state));
+  return hull;
+}
+const CARRIER_TO_DIVIDE = ["route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide"] as const;
+const CARRIER_TO_SHELF = [...CARRIER_TO_DIVIDE, "route.divide.meridian_broad"] as const;
+function carrierTo(d: Driver, legs: readonly string[]): void {
+  boardCraft(d, "hearthline");
+  for (const id of legs) followS2(d, id);
+  d.command({ type: "carrier", action: "station-keep" });
+  d.command({ type: "carrier", action: "leave-helm" });
+}
+function carrierHome(d: Driver, legs: readonly string[]): void {
+  boardCraft(d, "hearthline");
+  for (const id of [...legs].reverse()) followS2(d, id, true);
+}
+/** The Mantle back into its medium berth from the vestibule side. */
+function mantleHome(d: Driver): void {
+  leaveCraft(d);
+  carrierIn(d);
+  d.command({ type: "carrier", action: "station-keep" });
+  d.command({ type: "carrier", action: "capture", vehicleId: d.vehicle("mantle")!.id });
+  d.waitFor("the Mantle capture", 60, (s) => !s.fleet.docking?.transaction);
+  d.command({ type: "carrier", action: "leave-helm" }, { allowRefusal: true });
+}
 
 // ------------------------------------------------------------------ Meridian, works, ending
 
@@ -307,7 +357,7 @@ function worksStep(d: Driver, action: string): void {
   if (JSON.stringify(d.state.story.works) === before) throw new Blocked(`Works command "${action}" changed nothing: not wired`, where(d.state));
 }
 
-const meridianMissing = (): string[] => [
+const meridianMissing = (): Missing[] => [
   ...anyPlaced("C08", "C10", "C09", "gate_panel", "C13", "district_controller", "iona_ledger_note"),
   ...routes("route.divide.service_ledge", "route.meridian.terraces"),
   ...sites("meridian.gate_hall", "meridian.gate_hall_panel", "meridian.staging_office"),
@@ -324,10 +374,7 @@ function toMeridian(d: Driver, strategy: Strategy): void {
     for (const id of ["route.basin.legacy_anchorage", "route.basin.divide", "route.divide.service_ledge"]) followS2(d, id);
     return;
   }
-  boardCraft(d, "hearthline");
-  for (const id of ["route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide", "route.divide.meridian_broad"]) followS2(d, id);
-  d.command({ type: "carrier", action: "station-keep" });
-  d.command({ type: "carrier", action: "leave-helm" });
+  carrierTo(d, CARRIER_TO_SHELF);
   launchMantle(d);
 }
 function launchMantle(d: Driver): void {
@@ -343,14 +390,8 @@ function fromMeridian(d: Driver, strategy: Strategy): void {
     homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
     return;
   }
-  // Mantle back into its berth, then the carrier home to the yard.
-  leaveCraft(d);
-  carrierIn(d);
-  d.command({ type: "carrier", action: "station-keep" });
-  d.command({ type: "carrier", action: "capture", vehicleId: d.vehicle("mantle")!.id });
-  d.waitFor("the Mantle capture", 60, (s) => !s.fleet.docking?.transaction);
-  d.command({ type: "carrier", action: "helm" });
-  for (const id of ["route.divide.meridian_broad", "route.basin.divide", "route.canopy_east.basin", "route.isles.canopy_east"]) followS2(d, id, true);
+  mantleHome(d);
+  carrierHome(d, CARRIER_TO_SHELF);
 }
 
 const meridian = (strategy: Strategy): Phase => ({
@@ -366,38 +407,62 @@ const meridian = (strategy: Strategy): Phase => ({
   },
 });
 
-/** Works cargo: the two assemblies (12 CU) plus hall (22 CU) and food (8 CU) stock. */
-const WORKS_STOCK: Readonly<Record<string, number>> = {
-  structural_alloy: 6, silica_glass: 6, flex_membrane: 7, buoyant_resin: 4, conductive_crust: 1,
-};
-/** The gate-hall procedure and the upper-hall restorations, from the diver at the panel. */
-function gateWorks(d: Driver, hull: VehicleState["hull"]): void {
-  sortie(d, hostAt(d, "gate_panel"), "gate hall works", () => {
-    const v = d.vehicle(hull)!;
+/** S5's own site for each works action, read from its rules: the one site where
+ * worksAction does not refuse with "the right part of the works". */
+export function worksSite(action: WorksAction): StorySiteId {
+  for (const site of ["meridian_gate_hall", "meridian_upper_hall"] as const) {
+    const story = createStory();
+    const out = worksAction(story, action, { site, carries: () => false, canPay: () => false, blueprints: new Set() });
+    if (out.message !== WORKS_TEXT.site) return site;
+  }
+  throw new Error(`S5 accepts works action ${action} at neither hall`);
+}
+/** The interaction host the diver works at for a works site. */
+const worksHost = (site: StorySiteId): string => site === "meridian_gate_hall" ? "gate_panel" : worksFaceId(site);
+
+const ASSEMBLIES = { service_power_assembly: 1, service_air_assembly: 1 } as const;
+/** Hall and food restorations, from S5's recipe costs (22 + 8 CU). */
+const HALL_STOCK: Readonly<Record<string, number>> = (() => {
+  const out: Record<string, number> = {};
+  for (const r of ["restore_upper_hall", "restore_food_module"] as const)
+    for (const [k, n] of Object.entries(STORY_RECIPES[r].cost)) out[k] = (out[k] ?? 0) + (n as number);
+  return out;
+})();
+const cuOf = (items: Readonly<Record<string, number>>): number =>
+  Object.entries(items).reduce((n, [k, q]) => n + ITEMS[k as ItemKind].cu * q, 0);
+
+/** Run works actions at one site: park by its host, carry what the diver can (16 CU)
+ * from the sortie hold, act. ASSUME: like S9's stops, a craft moored at the work face
+ * lends its hold to the works' `canPay`; the harness never exceeds a real capacity. */
+function worksVisit(d: Driver, actions: readonly WorksAction[], carryKinds: Readonly<Record<string, number>>): void {
+  const site = worksSite(actions[0]!);
+  if (actions.some((a) => worksSite(a) !== site)) throw new Error(`works actions ${actions.join(", ")} span two sites`);
+  const host = worksHost(site), craftId = d.occupied()!.id;
+  sortie(d, hostAt(d, host), `${site} works`, () => {
+    const v = d.state.fleet.vehicles.find((x) => x.id === craftId)!;
     reach(d, v.id);
-    for (const kind of ["service_power_assembly", "service_air_assembly"] as const) move(d, kind, 1, v.cargoId, "diver");
-    reach(d, "gate_panel");
-    for (const a of ["install_power", "install_air", "isolate", "equalize"]) worksStep(d, a);
-    // 5,400 active steps; the panel shows progress while the diver waits in reach.
-    d.waitFor("the gate to equalize", 100, (s) => s.story.works.gate === "equalized");
-    worksStep(d, "open");
-  });
-  sortie(d, hostAt(d, "gate_panel"), "upper hall restoration", () => {
-    const v = d.vehicle(hull)!;
-    reach(d, v.id);
-    for (const [kind, n] of Object.entries(WORKS_STOCK)) move(d, kind as ItemKind, n, v.cargoId, "diver");
-    worksStep(d, "restore_hall");
-    worksStep(d, "restore_food");
-    worksStep(d, "route_power");
+    for (const [kind, n] of Object.entries(carryKinds)) {
+      const want = Math.min(n, Math.floor(d.freeCu("diver") / ITEMS[kind as ItemKind].cu));
+      if (want > 0) move(d, kind as ItemKind, want, v.cargoId, "diver");
+    }
+    reach(d, host);
+    for (const action of actions) {
+      worksStep(d, action);
+      // 5,400 active steps; the panel shows progress while the diver waits in reach.
+      if (action === "equalize") d.waitFor("the gate to equalize", 100, (s) => s.story.works.gate === "equalized");
+    }
   });
 }
-const worksMissing = (): string[] => [
+const worksMissing = (): Missing[] => [
   ...recipes("service_power_assembly", "service_air_assembly"),
   ...stories({ readOptional: true, reverse: false }, "gate_panel"),
+  ...worksFace("meridian_upper_hall"),
   ...sites("meridian.gate_hall_panel"),
 ];
-/** Assemblies and stock ride in the sortie hull's hold (Creel), or in the carrier
- * stores and then the berthed Mantle's hold. ASSUME: a berthed craft's hold is
+/** Two loads: the assemblies (12 CU) for the gate procedure, then the hall and food
+ * stock (30 CU) for the upper hall and the turbine routing. They ride together when
+ * the sortie hold has room (Creel rack, 96 CU), else in two trips (Mantle, 32 CU),
+ * reloading from the carrier stores between them. ASSUME: a berthed craft's hold is
  * reachable from the carrier interior. */
 const works = (strategy: Strategy): Phase => ({
   id: "works", title: "The return-gate works: power, air, isolate, equalize, open; hall, food, turbine power",
@@ -406,25 +471,45 @@ const works = (strategy: Strategy): Phase => ({
     make(d, "service_power_assembly", "workshop", ISLES);
     make(d, "service_air_assembly", "workshop", ISLES);
     enter(d, "workshop");
-    const hold = d.vehicle(strategy === "creel" ? "creel" : "hearthline")!.cargoId;
-    for (const kind of ["service_power_assembly", "service_air_assembly"] as const) move(d, kind, 1, "diver", hold);
-    for (const [kind, n] of Object.entries(WORKS_STOCK)) move(d, kind as ItemKind, n, "workshop_locker", hold);
-    if (strategy === "carrier") {
-      boardCraft(d, "hearthline");
-      for (const id of ["route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide", "route.divide.meridian_broad"]) followS2(d, id);
-      d.command({ type: "carrier", action: "station-keep" });
-      d.command({ type: "carrier", action: "leave-helm" });
-      const mantle = d.vehicle("mantle")!;
-      // ASSUME: the berthed Mantle's hold is reachable from the carrier interior.
-      for (const i of [...d.state.inventory.items].filter((x) => x.containerId === hold))
-        d.command({ type: "transfer", itemId: i.id, to: mantle.cargoId, quantity: i.quantity });
+    const sortieHold = d.vehicle(strategy === "creel" ? "creel" : "mantle")!;
+    const base = strategy === "creel" ? sortieHold : carrier(d);
+    // Everything goes to the base hold (Creel rack, or the carrier stores) first.
+    const load = (items: Readonly<Record<string, number>>, from: string, to: string): void => {
+      if (d.freeCu(to) < cuOf(items)) throw new Blocked(`${to} has ${d.freeCu(to)} CU free; the load needs ${cuOf(items)} CU`, where(d.state));
+      for (const [kind, n] of Object.entries(items)) {
+        const short = n - d.count(kind as ItemKind, [to]);
+        if (short > 0 && move(d, kind as ItemKind, short, from, to) < short) throw new Blocked(`${from} lacks ${short} ${kind} for the works`, where(d.state));
+      }
+    };
+    carry(d, {});
+    load(ASSEMBLIES, "diver", base.cargoId);
+    load(HALL_STOCK, "workshop_locker", base.cargoId);
+    const gate: WorksAction[] = ["install_power", "install_air", "isolate", "equalize", "open"];
+    const hall: WorksAction[] = ["restore_hall", "restore_food"];
+    if (strategy === "creel") {
+      toMeridian(d, "creel");
+      worksVisit(d, gate, ASSEMBLIES);
+      worksVisit(d, hall, HALL_STOCK);
+      worksVisit(d, ["route_power"], {});
+      fromMeridian(d, "creel");
+      return;
+    }
+    carrierTo(d, CARRIER_TO_SHELF);
+    // The Mantle's free hold decides one trip or two (32 CU today: two).
+    const together = cuOf(ASSEMBLIES) + cuOf(HALL_STOCK) <= d.freeCu(sortieHold.cargoId);
+    const trips: [Readonly<Record<string, number>>, () => void][] = together
+      ? [[{ ...ASSEMBLIES, ...HALL_STOCK }, () => { worksVisit(d, gate, ASSEMBLIES); worksVisit(d, hall, HALL_STOCK); worksVisit(d, ["route_power"], {}); }]]
+      : [[ASSEMBLIES, () => worksVisit(d, gate, ASSEMBLIES)],
+        [HALL_STOCK, () => { worksVisit(d, hall, HALL_STOCK); worksVisit(d, ["route_power"], {}); }]];
+    for (const [items, visit] of trips) {
+      load(items, base.cargoId, sortieHold.cargoId);
       launchMantle(d);
-    } else toMeridian(d, "creel");
-    gateWorks(d, strategy === "creel" ? "creel" : "mantle");
-    fromMeridian(d, strategy);
+      visit();
+      mantleHome(d);
+    }
+    carrierHome(d, CARRIER_TO_SHELF);
   },
 });
-
 const ending = (strategy: Strategy): Phase => ({
   id: "ending", title: "Pod buffer and C14, then the district controller's resolution",
   missing: () => [
@@ -611,5 +696,5 @@ const carrierDeep: Phase = {
   },
 };
 
-export const CREEL_LATER: readonly Phase[] = [rift("creel"), divide, deepRecords, meridian("creel"), works("creel"), ending("creel")];
-export const CARRIER_LATER: readonly Phase[] = [rift("carrier"), hearthline, carrierDeep, deepRecords, meridian("carrier"), works("carrier"), ending("carrier")];
+export const CREEL_LATER: readonly Phase[] = [rift("creel"), divide, deepRecords("creel"), meridian("creel"), works("creel"), ending("creel")];
+export const CARRIER_LATER: readonly Phase[] = [rift("carrier"), hearthline, carrierDeep, deepRecords("carrier"), meridian("carrier"), works("carrier"), ending("carrier")];

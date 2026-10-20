@@ -103,3 +103,8 @@ export function lowerMinima(into: Minima, from: Minima): void {
 export function addCounts(into: Record<string, number>, from: Readonly<Record<string, number>>): void {
   for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n;
 }
+
+export const emptyRun = (scenario: string, strategy: string): RunRecord => ({
+  scenario, strategy, outcome: "complete", ticks: 0, minutes: 0, wallMs: 0, phases: [], legs: [], saves: [],
+  discoveries: [], gathered: {}, spent: {}, refusals: [], failures: 0, checks: [], notes: [], hazards: {}, hazardLog: [],
+});

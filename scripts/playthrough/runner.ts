@@ -5,6 +5,8 @@ import { Blocked } from "./driver.js";
 import type { Driver } from "./driver.js";
 import type { Phase, PlayOptions } from "./live.js";
 import { SaveSlot } from "./persistence.js";
+import { need } from "./content.js";
+import { EXPECTED_PENDING } from "./pending.js";
 import { addCounts, freshMinima } from "./timeline.js";
 import type { PhaseRecord, RunRecord } from "./timeline.js";
 
@@ -21,18 +23,16 @@ export async function runPhases(d: Driver, phases: readonly Phase[], o: RunOptio
       id: phase.id, title: phase.title, status: "pass", startTick: d.state.tick, ticks: 0,
       gathered: {}, spent: {}, crafted: [], discoveries: [], minima: freshMinima(),
     };
-    const missing = phase.missing(d);
-    if (stopped) {
-      record.status = missing.length ? "pending-c3" : "skipped";
-      if (missing.length) record.detail = missing;
+    // Only content on the versioned expected-pending list may be pending; anything
+    // else missing is a regression or an unexpected gap, and blocks.
+    const missing = phase.missing(d), unexpected = missing.filter((m) => !EXPECTED_PENDING.has(m.key));
+    if (stopped || missing.length) {
+      record.status = unexpected.length ? "blocked" : missing.length ? "pending-c3" : "skipped";
+      if (unexpected.length) record.detail = unexpected.map((m) => `unexpected missing content [${m.key}]: ${m.text}`);
+      else if (missing.length) record.detail = missing.map((m) => m.text);
       d.run.phases.push(record);
-      continue;
-    }
-    if (missing.length) {
-      record.status = "pending-c3";
-      record.detail = missing;
-      d.run.phases.push(record);
-      stopped = "pending-c3";
+      if (unexpected.length) stopped = "blocked";
+      else if (!stopped) stopped = "pending-c3";
       continue;
     }
     d.beginPhase(phase.id);
@@ -53,12 +53,22 @@ export async function runPhases(d: Driver, phases: readonly Phase[], o: RunOptio
     record.crafted = d.state.knowledge.crafted.filter((id) => !crafted.has(id));
     record.discoveries = d.run.discoveries.slice(discoveries).map((r) => r.id);
     record.minima = d.phaseMinimaSoFar();
-    if (d.deferred.length > deferred) record.deferred = d.deferred.slice(deferred);
+    if (d.deferred.length > deferred) {
+      record.deferred = d.deferred.slice(deferred);
+      // A deferred read is pending only while its host is expected-pending content.
+      const bad = record.deferred.flatMap((id) => need.story(id)).filter((m) => !EXPECTED_PENDING.has(m.key));
+      if (bad.length && record.status === "pass") {
+        record.status = "blocked";
+        record.detail = bad.map((m) => `unexpected missing content [${m.key}]: ${m.text}`);
+        stopped = "blocked";
+      }
+    }
     d.run.phases.push(record);
     if (o.verbose) console.log(`  ${phase.id.padEnd(16)} ${record.status.padEnd(10)} ${String(record.ticks).padStart(7)} ticks` +
       `${record.detail ? `  ${record.detail.join("; ")}` : ""}`);
   }
-  d.run.outcome = stopped === "blocked" ? "blocked" : stopped === "pending-c3" || d.deferred.length ? "pending-c3" : "complete";
+  d.run.outcome = stopped === "blocked" || d.run.phases.some((p) => p.status === "blocked") ? "blocked"
+    : stopped === "pending-c3" || d.deferred.length ? "pending-c3" : "complete";
   d.run.ticks = d.state.tick;
   d.run.minutes = Math.round(d.state.tick / 60 / 6) / 10;
   d.run.wallMs += Math.round(performance.now() - t0);
