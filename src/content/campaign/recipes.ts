@@ -44,8 +44,8 @@ export const CAMPAIGN_RECIPES = {
   suit_800: {
     label: "Suit refit · 800 m",
     // The deep service package's personal exit protection: ceramic shell, lattice
-    // exposure filters, a core suit heater for the cold deep water, membrane seals.
-    cost: { pressure_ceramic: 4, brine_lattice: 4, thermal_core: 1, flex_membrane: 2 },
+    // exposure filters and seals, a core suit heater for the cold deep water.
+    cost: { pressure_ceramic: 4, brine_lattice: 4, thermal_core: 1, flex_membrane: 1 },
     bp: "bp_deep_service", needs: ["suit_450"], site: "island_workshop",
     output: "suit_800", quantity: 1, once: true, maintenance: false,
   },
@@ -83,8 +83,9 @@ export const CAMPAIGN_RECIPES = {
   // ------------------------------------------------------------ Hearthline
   hearthline_keel: {
     label: "Lay Hearthline keel",
-    // Basin frame survey: tagged frames and alloy form the twin keels; resin trims the empty hull for floating out.
-    cost: { tagged_frame: 4, structural_alloy: 8, buoyant_resin: 6 },
+    // Basin frame survey: two intact tagged frames set the keel spine, bulk wreck alloy the
+    // twin pontoons; resin trims the empty hull for floating out.
+    cost: { tagged_frame: 2, structural_alloy: 16, buoyant_resin: 6 },
     bp: "bp_carrier_basin", needs: ["restore_workshop", "creel_base", "suit_350"], site: "stack_yard",
     output: "hearthline_keel", quantity: 1, once: false, maintenance: false,
   },
@@ -98,8 +99,8 @@ export const CAMPAIGN_RECIPES = {
   },
   hearthline_550: {
     label: "Refit Hearthline hull / 550 m",
-    // Ceramic plating on both dorsal hull modules; lattice seals for the deeper lock; membrane gaskets.
-    cost: { pressure_ceramic: 10, brine_lattice: 6, flex_membrane: 2 },
+    // Ceramic plating on both dorsal hull modules; lattice seals for the deeper lock.
+    cost: { pressure_ceramic: 10, brine_lattice: 6 },
     bp: "bp_rift_pressure", needs: ["hearthline_base", "suit_450"], site: "stack_yard",
     output: "hearthline_550", quantity: 1, once: false, maintenance: false,
   },
@@ -113,9 +114,9 @@ export const CAMPAIGN_RECIPES = {
   // ------------------------------------------------------------ deep and optional craft
   mantle_base: {
     label: "Mantle deep service craft",
-    // Ceramic bell, core cooling fins and service power, lattice seals, a frame for the
-    // skid ring and jaw, alloy fittings, glass ports, crust station-keeping controls.
-    cost: { pressure_ceramic: 8, thermal_core: 4, brine_lattice: 5, tagged_frame: 1, structural_alloy: 4, silica_glass: 3, conductive_crust: 4 },
+    // Ceramic bell, core cooling fins and service power, lattice seals, alloy skid ring and
+    // jaw, glass ports, crust station-keeping controls.
+    cost: { pressure_ceramic: 8, thermal_core: 4, brine_lattice: 5, structural_alloy: 8, silica_glass: 3, conductive_crust: 4 },
     bp: "bp_deep_service", needs: ["restore_workshop", "suit_450"], site: "stack_yard",
     output: "mantle", quantity: 1, once: false, maintenance: false,
   },
@@ -130,7 +131,7 @@ export const CAMPAIGN_RECIPES = {
     label: "Spindle island tender",
     // Alloy hull and ramp, resin outrigger floats, glass solar canopy, membrane fold seals, crust charge control.
     cost: { structural_alloy: 6, buoyant_resin: 4, silica_glass: 2, flex_membrane: 2, conductive_crust: 2 },
-    bp: "bp_spindle_tender", needs: ["restore_workshop"], site: "stack_yard",
+    bp: "bp_spindle_tender", needs: ["restore_workshop", "suit_150"], site: "stack_yard",
     output: "spindle", quantity: 1, once: false, maintenance: false,
   },
   // ------------------------------------------------------------ S4 protection and kits
@@ -181,7 +182,7 @@ export const CAMPAIGN_RECIPES = {
   bobbin_deep_tether: {
     label: "Bobbin deep tether",
     // S2's 950 m reel: shed membrane braid, an alloy spool, resin buoyancy beads. Shallow stock only.
-    cost: { flex_membrane: 3, structural_alloy: 1, buoyant_resin: 1 },
+    cost: { flex_membrane: 2, structural_alloy: 2, buoyant_resin: 1 },
     bp: "bp_reef_recovery", needs: ["bobbin_kit"], site: "pod_fabricator",
     output: "bobbin_deep_tether", quantity: 1, once: true, maintenance: false,
   },
