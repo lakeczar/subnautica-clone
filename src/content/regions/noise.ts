@@ -60,22 +60,38 @@ export function seededStream(initial: number): () => number {
 }
 
 /** Nearest point on a polyline (XZ). `s` is arc length from the first point,
- * `side` is positive left of travel when looking down +Y with +X east, +Z north. */
+ * `side` is +1 left of travel (looking down +Y, +X east, +Z north), -1 right.
+ * `side` uses the vertex pseudo-normal where the nearest feature is an inner
+ * vertex, so it only changes sign across the line itself. `s` can still jump
+ * on the inner side of a bend: callers that need continuity use `along`. */
 export interface PolylineHit { d: number; s: number; length: number; side: number; tx: number; tz: number }
 export function nearestOnPolyline(x: number, z: number, pts: readonly (readonly [number, number])[], out: PolylineHit): PolylineHit {
   let best = Infinity, bestS = 0, side = 0, run = 0, tx = 1, tz = 0;
-  for (let i = 0; i < pts.length - 1; i++) {
+  const n = pts.length - 1;
+  for (let i = 0; i < n; i++) {
     const [ax, az] = pts[i]!, [bx, bz] = pts[i + 1]!;
     const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
     const t = clamp01(((x - ax) * dx + (z - az) * dz) / (len * len));
     const px = ax + dx * t, pz = az + dz * t, d = Math.hypot(x - px, z - pz);
     if (d < best) {
-      best = d; bestS = run + t * len;
-      side = dx * (z - az) - dz * (x - ax);
-      tx = dx / len; tz = dz / len;
+      best = d; bestS = run + t * len; tx = dx / len; tz = dz / len;
+      // Left normal of this segment, or the averaged normal at an inner vertex.
+      let nx = -dz / len, nz = dx / len;
+      const j = t <= 0 && i > 0 ? i - 1 : t >= 1 && i < n - 1 ? i + 1 : -1;
+      if (j >= 0) {
+        const [cx, cz] = pts[j]!, [ex, ez] = pts[j + 1]!, l2 = Math.hypot(ex - cx, ez - cz);
+        nx += -(ez - cz) / l2; nz += (ex - cx) / l2;
+      }
+      side = nx * (x - px) + nz * (z - pz);
     }
     run += len;
   }
   out.d = best; out.s = bestS; out.length = run; out.side = side >= 0 ? 1 : -1; out.tx = tx; out.tz = tz;
   return out;
+}
+
+/** Continuous fraction along a polyline's overall chord (0 first, 1 last). */
+export function along(x: number, z: number, pts: readonly (readonly [number, number])[]): number {
+  const [ax, az] = pts[0]!, [bx, bz] = pts[pts.length - 1]!, dx = bx - ax, dz = bz - az;
+  return clamp01(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz));
 }

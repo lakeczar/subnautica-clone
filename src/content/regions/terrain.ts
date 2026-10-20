@@ -1,4 +1,4 @@
-import { clamp01, fbm, lerp, nearestOnPolyline, ridged, smooth, valueNoise, type PolylineHit } from "./noise.js";
+import { along, clamp01, fbm, lerp, nearestOnPolyline, ridged, smooth, valueNoise, type PolylineHit } from "./noise.js";
 import { FLOOR_PADS, type FloorPad } from "./sites.js";
 
 /** The one physical floor for the whole 2048 x 1792 m world.
@@ -98,7 +98,9 @@ export const RIFT_AXIS: readonly (readonly [number, number])[] = [
 ];
 /** Mirror Divide crest, west (Rift flank) to east (Meridian). */
 export const DIVIDE_RIDGE: readonly (readonly [number, number])[] = [
-  [190, -1205], [330, -1228], [460, -1250], [600, -1262], [740, -1254], [860, -1232], [975, -1205],
+  // The end points extend each end segment straight past the weighted zone,
+  // so the sides of the crest never swap across an end-point wedge.
+  [-20, -1170.5], [190, -1205], [330, -1228], [460, -1250], [600, -1262], [740, -1254], [860, -1232], [975, -1205], [1147.5, -1164.5],
 ];
 export const DIVIDE_GATE_X = 600;
 /** Dense brine interface (the "mirror"). Below this, south of the ridge, is brine. */
@@ -150,11 +152,13 @@ function seaStack(x: number, z: number, m: TerrainMasks): number {
   // A ramp hugs the south-west face: 120 degrees of arc from the south
   // landing (+3.4) to the plateau (+46), about 0.55 m/m for a walker.
   const theta = Math.atan2(dz, dx) * 180 / Math.PI;
-  const phi = (((-116 - theta) % 360) + 360) % 360;
-  if (r >= 32.5 && r <= 41.5 && phi <= 120) h = 3.4 + (plateau - 3.4) * Math.min(1, phi / 110);
+  // Signed arc from the ramp's foot, so the band blends in on both ends.
+  const phi = ((((-116 - theta) % 360) + 540) % 360) - 180;
+  const band = smooth(30.5, 33.5, r) * (1 - smooth(40.5, 44.5, r)) * smooth(-14, -4, phi) * (1 - smooth(118, 136, phi));
+  if (band > 0) h = lerp(h, 3.4 + (plateau - 3.4) * clamp01(phi / 110), band);
   // The split: a sinuous water cleft running north-south through the stack.
   const cx = stackCleftX(z), half = Math.abs(x - cx);
-  if (r < 150) h = Math.min(h, lerp(-9.5, h, Math.max(smooth(7, 9.5, half), smooth(130, 150, r))));
+  if (r < 150) h = Math.min(h, lerp(-9.5, h, Math.max(smooth(7, 11, half), smooth(130, 150, r))));
   // Yard berth: a dredged cove in the stack's southern lee.
   const berth = Math.hypot(x - 470, z + 6);
   if (berth < 70) h = Math.min(h, lerp(-34, h, smooth(42, 68, berth)));
@@ -193,7 +197,7 @@ function sampleAuthored(x: number, z: number, m: TerrainMasks): number {
   if (m.reef > 0) depth -= m.reef * 3 * fbm(x, z, 22, 3, 11);
   nearestOnPolyline(x, z, HEARTH_DROP, hit);
   if (hit.d < 60) {
-    const t = hit.s / hit.length, floor = lerp(36, 172, t);
+    const t = along(x, z, HEARTH_DROP), floor = lerp(36, 172, t);
     const wall = smooth(16, 34, hit.d);
     depth = lerp(Math.max(depth, floor + 10 * (1 - hit.d / 16)), depth, wall);
   }
@@ -225,7 +229,7 @@ function sampleAuthored(x: number, z: number, m: TerrainMasks): number {
   if (m.canopy > 0) {
     for (const k of CANOPY_RIBS) {
       const zc = k + 18 * Math.sin(x / 110 + k);
-      const gap = valueNoise(x / 85, k, 31) > -0.25 ? 1 : 0;
+      const gap = smooth(-0.35, -0.15, valueNoise(x / 85, k, 31));
       const mooring = smooth(60, 90, Math.hypot(x - 620, z + 200));
       const rib = m.canopy * gap * mooring * (1 - smooth(5, 17, Math.abs(z - zc)));
       depth -= rib * (15 + 5 * fbm(x, z, 18, 2, 32));
@@ -236,12 +240,12 @@ function sampleAuthored(x: number, z: number, m: TerrainMasks): number {
   // Ember Rift: trench, stepped ledges and a cooled south-east flank.
   nearestOnPolyline(x, z, RIFT_AXIS, hit);
   if (hit.d < 380) {
-    const t = hit.s / hit.length, d = hit.d, se = hit.side > 0;
-    const w = 32 + 14 * valueNoise(hit.s / 90, 0.5, 41);
+    const t = along(x, z, RIFT_AXIS), d = hit.d, se = hit.side > 0;
+    const w = 32 + 14 * valueNoise(x / 90, z / 90, 41);
     const trench = lerp(280, 430, smooth(0, 0.12, t)) + 110 * smooth(0.1, 0.42, t) - 22 * smooth(0.72, 1, t);
     const head = smooth(0, 0.14, t);
     const lower = lerp(262, se ? 306 : 314, head), upper = lerp(255, se ? 262 : 287, head);
-    const lowW = 40 + 16 * valueNoise(hit.s / 120, 3.5, 42), upW = 62 + 26 * valueNoise(hit.s / 140, 5.5, 43);
+    const lowW = 40 + 16 * valueNoise(x / 120, z / 120, 42), upW = 62 + 26 * valueNoise(x / 140, z / 140, 43);
     const e1 = w, e2 = e1 + 26, e3 = e2 + lowW, e4 = e3 + 15, e5 = e4 + upW;
     let r: number;
     if (d < e1) r = trench + 8 * (1 - (d / e1) ** 2);
@@ -250,20 +254,23 @@ function sampleAuthored(x: number, z: number, m: TerrainMasks): number {
     else if (d < e4) r = lerp(lower, upper, smooth(e3, e4, d));
     else r = upper;
     // Pale strata: the ledges step in 3 m layers where they are exposed.
-    if (d >= e2) { const q = r / 3; r = lerp(r, Math.round(q) * 3, 0.35); }
+    // Pale strata: a continuous staircase (flat treads, 0.9 m risers every
+    // 3 m), faded in past the trench lip so it adds no edge of its own.
+    const q = r / 3, k = Math.floor(q), stair = (k + smooth(0.35, 0.65, q - k)) * 3;
+    r = lerp(r, stair, 0.35 * smooth(e2 - 4, e2 + 4, d));
     const weight = (1 - smooth(e5, e5 + 100, d)) * smooth(-0.01, 0.04, t);
     depth = lerp(depth, r, weight);
     m.rift = weight; m.trench = weight * (1 - smooth(e1, e2, d));
     m.ledge = weight * smooth(e1 + 10, e2, d) * (1 - smooth(e5, e5 + 40, d));
     m.coolFlank = se ? m.ledge : 0;
-    amp = lerp(amp, d < e2 ? 3.2 : 1.1, weight);
+    amp = lerp(amp, lerp(3.2, 1.1, smooth(e2 - 6, e2 + 6, d)), weight);
   }
 
   // Mirror Divide: fractured E-W ridge, the gateworks notch, brine to the south.
   nearestOnPolyline(x, z, DIVIDE_RIDGE, hit);
   if (hit.d < 270 && x > 120 && x < 1060) {
     const d = hit.d, north = hit.side > 0;
-    let crest = 358 + 9 * valueNoise(hit.s / 60, 0.5, 51);
+    let crest = 358 + 9 * valueNoise(x / 60, z / 60, 51);
     crest += 60 * (1 - smooth(18, 46, Math.abs(x - DIVIDE_GATE_X)));
     crest += 34 * (1 - smooth(10, 26, Math.abs(x - 362))) + 40 * (1 - smooth(12, 30, Math.abs(x - 818)));
     let r: number;
@@ -290,7 +297,7 @@ function sampleAuthored(x: number, z: number, m: TerrainMasks): number {
       const t = MERIDIAN_TERRACES[i]!, step = t.depth - MERIDIAN_TERRACES[i - 1]!.depth;
       r += step * (1 - smooth(t.outer - MERIDIAN_WALL, t.outer + MERIDIAN_WALL, mr));
     }
-    if (mr < 240) r += 10 * clamp01(0.5 + fbm(x, z, 30, 2, 61));
+    r += 10 * clamp01(0.5 + fbm(x, z, 30, 2, 61)) * (1 - smooth(228, 236, mr));
     const weight = (1 - smooth(700, 790, mr)) * smooth(870, 950, x) * smooth(-950, -1030, z);
     depth = lerp(depth, r, weight);
     m.meridian = weight; m.terrace = weight * (1 - smooth(690, 720, mr));
@@ -307,7 +314,7 @@ function sampleAuthored(x: number, z: number, m: TerrainMasks): number {
     else r = ledge + 95 * smooth(-280, -470, z) * smooth(-24, -80, dx);
     depth = lerp(depth, r, esc);
     m.escarpment = esc;
-    amp = lerp(amp, Math.abs(dx) <= 24 ? 0.8 : 4.5, esc);
+    amp = lerp(amp, lerp(0.8, 4.5, smooth(20, 30, Math.abs(dx))), esc);
   }
 
   // Geology relief: ridged outcrops on rock, softer elsewhere.
