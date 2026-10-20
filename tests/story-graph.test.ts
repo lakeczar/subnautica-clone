@@ -39,6 +39,13 @@ test("every critical fact has two or more non-optional sources", () => {
   }
 });
 
+/** A quote certifies a clause only if it holds at least one word. */
+const quotable = (e: string): boolean => /\p{L}{2,}/u.test(e.trim());
+test("the quote guard refuses empty and wordless excerpts", () => {
+  for (const bad of ["", "   ", " · ", "—"]) assert.equal(quotable(bad), false, JSON.stringify(bad));
+  assert.ok(quotable("scored by deep pressure"));
+});
+
 test("each source states every clause of each fact it establishes, in its own player text", () => {
   for (const f of FACT_IDS) {
     const def = FACTS[f];
@@ -47,7 +54,11 @@ test("each source states every clause of each fact it establishes, in its own pl
       const excerpts = def.support[src]!, text = playerText(src);
       assert.ok(text, `${f}: ${src} has player text`);
       assert.equal(excerpts.length, def.clauses.length, `${f}: ${src} supports each of ${def.clauses.join(" / ")}`);
-      excerpts.forEach((e, i) => assert.ok(text.includes(e), `${f} clause “${def.clauses[i]}” not stated by ${src}: “${e}”`));
+      excerpts.forEach((e, i) => {
+        // S5-07: an empty or whitespace excerpt is contained in any text, so it would certify nothing.
+        assert.ok(quotable(e), `${f} clause “${def.clauses[i]}” has an empty quote from ${src}`);
+        assert.ok(text.includes(e), `${f} clause “${def.clauses[i]}” not stated by ${src}: “${e}”`);
+      });
     }
   }
 });

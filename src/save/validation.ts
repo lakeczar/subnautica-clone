@@ -1,7 +1,6 @@
 import {
   BLUEPRINTS,
   EVIDENCE,
-  EVIDENCE_BLUEPRINTS,
   HULL_REFITS,
   HULLS,
   isMountKind,
@@ -26,8 +25,8 @@ import { installedModuleValid, moduleItem, SMALL_CRAFT_SOCKETS } from "../sim/mo
 import { WORLD_BOUNDS } from "../sim/world.js";
 import { atCarrierSupport, BERTH_LOCAL, CARRIER_LAYOUT, carrierCompartmentContainers, localToWorld } from "../sim/carrier.js";
 import { HEARTHLINE_SOCKETS } from "../content/fleet/hearthlineInterior.js";
-import { validStory } from "../sim/story/index.js";
-import { registryEvidence } from "../sim/storyLink.js";
+import { blueprints, validStory } from "../sim/story/index.js";
+import { registryEvidence, storyView } from "../sim/storyLink.js";
 import { createGame } from "../sim/state.js";
 export const record = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -648,10 +647,8 @@ function semantic(s: GameState, fresh: GameState): boolean {
     if (r.progress !== 0 && (s.scenario !== "expedition" || s.opening.phase < 4 ||
         s.world.resources.find((n) => n.id === r.id)!.stock >= renewalCap(r.id)))
       return false;
-  const expectedBlueprints = new Set<string>();
-  for (const e of k.evidence) {
-    for (const bp of EVIDENCE_BLUEPRINTS[e.id]) expectedBlueprints.add(bp);
-  }
+  // Plans follow from every story discovery (C01–C06, records, journals) plus technical records.
+  const expectedBlueprints = new Set<string>(blueprints(storyView(s).discoveries));
   for (const scan of k.scans) if (techRecord(scan)) for (const bp of TECH_RECORDS[scan].blueprints) expectedBlueprints.add(bp);
   if (k.blueprints.length !== expectedBlueprints.size || k.blueprints.some((bp) => !expectedBlueprints.has(bp))) return false;
   const bi = items.find((i) => i.id === buoy.itemId);

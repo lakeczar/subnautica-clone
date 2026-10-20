@@ -22,6 +22,7 @@ import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, RECOVERY_SURFACE_OPERATOR } from "../
 import { pinnedVehicleIds, type RegionArt, type RenderRegion } from "./regions.js";
 import { b1Source, b1SourceArt, createB1Sites, creelArt, updateCreelArt } from "./fleetArt.js";
 import { fleetHullArt, hearthlineShellArt, updateFleetHullArt } from "./fleet/index.js";
+import { STORY_HOSTS, storyHostVisible, type StoryHostId } from "../sim/storyLink.js";
 
 /** Individual bent maintenance plates keep contact with the local surface.
  * Their pale service tags, folded edges and bolt holes distinguish salvage
@@ -940,6 +941,22 @@ export function createExpeditionActors(
   }
   const mooringMesh = mooring.finish();
   const mooringSign = makeSign("SUPPORTED SURVEY MOORING", [CARRIER_SUPPORT.x + 9, 3, CARRIER_SUPPORT.z + 14], 5);
+  // Story fixtures composed at existing sites, on the same datums as their hosts.
+  const story = new Map<StoryHostId, Mesh>();
+  const checklist = new ArtBatch("story.pod_checklist", scene, cel), cp = STORY_HOSTS.pod_checklist.position;
+  checklist.box([cp.x, cp.y, cp.z + .07], [.5, .64, .03], P.porcelain);
+  checklist.box([cp.x, cp.y + .27, cp.z + .05], [.18, .05, .02], P.ochre);
+  for (let i = 0; i < 5; i++) checklist.box([cp.x - .04, cp.y + .15 - i * .1, cp.z + .052], [.34, .018, .006], P.ink);
+  story.set("pod_checklist", checklist.finish());
+  const tray = new ArtBatch("story.mara_specimen_tray", scene, cel), tp = STORY_HOSTS.mara_specimen_tray.position;
+  tray.box([tp.x, tp.y - .03, tp.z], [.5, .05, .34], P.ochre);
+  for (const [dx, dz, c] of [[-.15, -.07, P.coral], [0, .06, P.jade], [.14, -.05, P.lime]] as const)
+    tray.ellipsoid([tp.x + dx, tp.y + .02, tp.z + dz], [.05, .035, .05], c, 8);
+  story.set("mara_specimen_tray", tray.finish());
+  const buffer = new ArtBatch("story.C14", scene, cel), bp = STORY_HOSTS.C14.position;
+  buffer.box([bp.x - .04, bp.y, bp.z], [.16, .3, .3], P.petrol);
+  buffer.glow(buffer.box([bp.x + .045, bp.y + .08, bp.z], [.012, .04, .2], P.mint));
+  story.set("C14", buffer.finish());
   const vehicles = new Map<string, Mesh>(),
     caches = new Map<string, Mesh>();
   let carrierShell: Mesh | null = null, shellKey = "";
@@ -949,6 +966,7 @@ export function createExpeditionActors(
       if (disposed) return;
       const pins = pinnedVehicleIds(s);
       const visibleVehicle = (v: VehicleState): boolean => pins.has(v.id) || resident(v.pose.position);
+      for (const [id, mesh] of story) mesh.setEnabled(!!s && s.opening.phase === 4 && storyHostVisible(s, id) && resident(STORY_HOSTS[id].position));
       mooringMesh.setEnabled(s?.scenario === "carrier-fixture");
       mooringSign.setEnabled(s?.scenario === "carrier-fixture");
       restraintMesh.setEnabled(!!s && s.opening.phase === 0);
