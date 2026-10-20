@@ -70,6 +70,8 @@ export const CREEL_CABIN = {
   hatchOutside: { x: 0, y: 2.0, z: 3.65 },
   hatchExit: { x: 0, y: 1.2, z: 4.9 },
 } as const;
+/** Boarding/interaction datum on the pilot compartment roof hatch. */
+export const CREEL_BOARDING = { x: 0, y: 2.3, z: -1.7 } as const;
 /** Raised pilot compartment view datum; never a collider or saved pose. */
 export const CREEL_SEAT = { x: 0, y: 2.22, z: -1.8 } as const;
 /** Tool-arm reach datum at the guarded bow; the art stays inside the berth envelope. */

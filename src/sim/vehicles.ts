@@ -13,7 +13,7 @@ import {
 } from "./inventory.js";
 import { personalDepth, personalLimit } from "./capabilities.js";
 import { WORLD_BOUNDS } from "./world.js";
-import { cabinHull, fittedCabin, hullDepth } from "./fleet.js";
+import { cabinHull, CREEL_BOARDING, fittedCabin, hullDepth, hullToWorld } from "./fleet.js";
 import { cabinLockerId } from "./inventory.js";
 export { hullDepth };
 /** Lateral cockpit-hatch exit offset: outside the Dart's canopy and the Creel's arm guards. */
@@ -104,7 +104,10 @@ export function exitRefusal(s: GameState, world: WorldQueries): string | null {
 }
 export function board(s: GameState, id: string): string | null {
   const v = s.fleet.vehicles.find((v) => v.id === id);
-  if (!v || v.berth || distance(s.player.pose.position, v.pose.position) > 6)
+  // The Creel's access hatch is on its raised pilot compartment, not at the keel.
+  if (!v || v.berth || (v.hull === "creel"
+    ? distance(s.player.pose.position, hullToWorld(CREEL_BOARDING, v)) > 4.5
+    : distance(s.player.pose.position, v.pose.position) > 6))
     return "Approach the visible canopy access handle.";
   if (v.disabled || v.charge <= 0)
     return "Craft disabled or out of power. Its hold remains accessible; repair or insert a charged reserve cell locally.";

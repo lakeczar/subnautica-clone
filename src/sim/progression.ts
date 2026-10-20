@@ -25,7 +25,7 @@ import type {
   TechRecordId,
 } from "../content/registry.js";
 import { CANOPY_STOP } from "../content/routes.js";
-import { CREEL_CABIN, cabinHull, fittedCabin, hullToWorld, DIVER_LIFT_SECONDS } from "./fleet.js";
+import { CREEL_BOARDING, CREEL_CABIN, cabinHull, fittedCabin, hullToWorld, DIVER_LIFT_SECONDS } from "./fleet.js";
 import type { GameState, Vec3, WorldQueries } from "./types.js";
 import { hullClearance } from "./world.js";
 import {
@@ -121,7 +121,9 @@ export function interactions(s: GameState): Interaction[] {
         label: v.disabled || v.charge <= 0
           ? `${HULLS[v.hull].label} · disabled`
           : HULLS[v.hull].label,
-        position: { ...v.pose.position, y: v.pose.position.y + 0.6 },
+        // A Creel boards at its raised pilot compartment, reachable from beside
+        // the hull; the scout keeps its accepted low canopy datum.
+        position: v.hull === "creel" ? hullToWorld(CREEL_BOARDING, v) : { ...v.pose.position, y: v.pose.position.y + 0.6 },
         kind: "vehicle",
       });
   for (const v of s.fleet.vehicles)
