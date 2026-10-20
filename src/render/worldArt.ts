@@ -5,6 +5,7 @@ import { TERRAIN_EXTENT } from "./terrainSurface.js";
 import type { ChunkArtFactory, TemplateRecipe } from "./kit/types.js";
 import { legacyTerrainFactory } from "./legacyTerrain.js";
 import { legacyLayout, withLegacyTerrain } from "./legacyWorld.js";
+import { S2_ART } from "./biomes/pack.js";
 
 /** One stream's chunk art: factories registered by ID, the templates they
  * instance, and optionally the authored world layout they draw. */
@@ -32,7 +33,7 @@ export const LEGACY_ART: WorldArtPack = { id: "legacy", factories: [legacyTerrai
  * layout: worldLayout, entries: spatialEntries, floor: worldFloor, biomeAt,
  * legacyExtent: <its exact preserve> }`.
  * The renderer reads only the composed result. */
-export const WORLD_ART: readonly WorldArtPack[] = [LEGACY_ART];
+export const WORLD_ART: readonly WorldArtPack[] = [LEGACY_ART, S2_ART];
 
 export interface ComposedWorld {
   readonly map: WorldMap;

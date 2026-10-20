@@ -8,6 +8,7 @@ import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { createRegionalArt, NEAR_WORLD } from "../src/render/renderer.js";
 import { createCelMaterial, createGlassMaterial } from "../src/render/materials.js";
 import { REGION_OWNER_BYTES } from "../src/render/regions.js";
+import { composeWorldArt, LEGACY_ART } from "../src/render/worldArt.js";
 import { CANOPY_BASIN_ROUTE } from "../src/content/routes.js";
 import { protectedReadyState } from "./targeting-support.js";
 import type { Vec3 } from "../src/sim/types.js";
@@ -42,7 +43,9 @@ const chunkMeshes = (scene: Scene) => scene.meshes.filter(m => m.name.startsWith
 
 test("the terrain streams in chunks: nearby ground first, the rest within budget, regions and chunks under one budget", () => sceneTest(scene => {
   const cel = createCelMaterial(scene), glass = createGlassMaterial(scene);
-  const art = createRegionalArt(scene, cel, glass);
+  // Today's refined terrain alone (the legacy pack): S2's composed regions
+  // stream through the same path in regions-stream.heavy.test.ts.
+  const art = createRegionalArt(scene, cel, glass, { world: composeWorldArt([LEGACY_ART]) });
   const state = protectedReadyState(350);
   const pod: Vec3 = { x: 0, y: 1.2, z: 22 };
   state.player.pose.position = { ...pod };
