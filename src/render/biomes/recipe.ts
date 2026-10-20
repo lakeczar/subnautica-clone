@@ -138,20 +138,15 @@ export class RecipeBuilder {
 
 /** Babylon-layout instance matrix: scale, tilt about X, tilt about Z, yaw
  * about +Y, then translate. Rows 0..2 hold the images of the template's X/Y/Z
- * axes (row-vector convention), translation sits at 12..14. */
-export function instanceMatrix(out: Float32Array, at: number, p: P3, yaw: number, s: P3, tiltX = 0, tiltZ = 0): void {
+ * axes (row-vector convention), translation sits at 12..14. Allocation-free:
+ * scatter writes tens of thousands of these per chunk. */
+export function writeInstance(out: Float32Array, at: number, x: number, y: number, z: number, yaw: number,
+  s: number, tiltX = 0, tiltZ = 0): void {
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cx = Math.cos(tiltX), sx = Math.sin(tiltX), cz = Math.cos(tiltZ), sz = Math.sin(tiltZ);
-  const rotate = (v: P3): P3 => {
-    const x1 = v[0], y1 = v[1] * cx - v[2] * sx, z1 = v[1] * sx + v[2] * cx;
-    const x2 = x1 * cz - y1 * sz, y2 = x1 * sz + y1 * cz;
-    return [x2 * cy + z1 * sy, y2, -x2 * sy + z1 * cy];
-  };
-  const axes: P3[] = [rotate([1, 0, 0]), rotate([0, 1, 0]), rotate([0, 0, 1])];
-  for (let i = 0; i < 3; i++) {
-    out[at + i * 4] = axes[i]![0] * s[i]!; out[at + i * 4 + 1] = axes[i]![1] * s[i]!; out[at + i * 4 + 2] = axes[i]![2] * s[i]!;
-    out[at + i * 4 + 3] = 0;
-  }
-  out[at + 12] = p[0]; out[at + 13] = p[1]; out[at + 14] = p[2]; out[at + 15] = 1;
+  out[at] = cz * cy * s; out[at + 1] = sz * s; out[at + 2] = -cz * sy * s; out[at + 3] = 0;
+  out[at + 4] = (-cx * sz * cy + sx * sy) * s; out[at + 5] = cx * cz * s; out[at + 6] = (cx * sz * sy + sx * cy) * s; out[at + 7] = 0;
+  out[at + 8] = (sx * sz * cy + cx * sy) * s; out[at + 9] = -sx * cz * s; out[at + 10] = (-sx * sz * sy + cx * cy) * s; out[at + 11] = 0;
+  out[at + 12] = x; out[at + 13] = y; out[at + 14] = z; out[at + 15] = 1;
 }
 
 /** Apply an instance matrix to a template-local point (row-vector convention). */

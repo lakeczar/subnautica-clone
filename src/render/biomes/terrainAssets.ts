@@ -40,6 +40,9 @@ export function createTerrainStore(options: {
 }): TerrainStore {
   const cap = options.cacheBytes ?? 48 * 1024 * 1024;
   const cache = new Map<string, Uint8Array>(), inFlight = new Map<string, { settled: boolean; bytes: Uint8Array | null }>();
+  // Chunks with no baked file (legacy-only columns, or a failed fetch) are
+  // remembered, so prefetch never asks for them again.
+  const absent = new Set<string>();
   const stats = { cachedBytes: 0, files: 0, fetches: 0, misses: 0, failures: 0 };
   const remember = (id: string, bytes: Uint8Array): void => {
     const old = cache.get(id);
@@ -54,11 +57,12 @@ export function createTerrainStore(options: {
   const start = (id: string): { settled: boolean; bytes: Uint8Array | null } => {
     const pending = inFlight.get(id);
     if (pending) return pending;
+    if (absent.has(id)) return { settled: true, bytes: null };
     const job = { settled: false, bytes: null as Uint8Array | null };
     inFlight.set(id, job); stats.fetches++;
     options.fetchFile(terrainFileName(id)).then(c => c ? inflate(c) : null).then(bytes => {
-      job.bytes = bytes; if (bytes) remember(id, bytes); else stats.failures++;
-    }, () => { stats.failures++; }).finally(() => { job.settled = true; inFlight.delete(id); });
+      job.bytes = bytes; if (bytes) remember(id, bytes); else { absent.add(id); stats.failures++; }
+    }, () => { absent.add(id); stats.failures++; }).finally(() => { job.settled = true; inFlight.delete(id); });
     return job;
   };
   const neighbours = (id: string): string[] => {
@@ -78,7 +82,7 @@ export function createTerrainStore(options: {
       // Touch for LRU order.
       if (hit) { cache.delete(id); cache.set(id, hit); return { settled: true, bytes: hit }; }
       stats.misses++;
-      for (const n of neighbours(id)) if (!cache.has(n)) start(n);
+      for (const n of neighbours(id)) if (!cache.has(n) && !absent.has(n)) start(n);
       return start(id);
     },
     prefetch(p, radius = 520) {
@@ -87,7 +91,7 @@ export function createTerrainStore(options: {
       const z0 = Math.max(0, Math.floor((p.z - radius - env.min.z) / CHUNK_SIZE)), z1 = Math.min((env.max.z - env.min.z) / CHUNK_SIZE - 1, Math.floor((p.z + radius - env.min.z) / CHUNK_SIZE));
       for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
         const id = `chunk:${ix}:${iz}:0`;
-        if (!cache.has(id)) start(id);
+        if (!cache.has(id) && !absent.has(id)) start(id);
       }
     },
   };

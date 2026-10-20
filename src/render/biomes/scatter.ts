@@ -8,7 +8,7 @@ import { SITES } from "../../content/regions/sites.js";
 import { STRUCTURES } from "../../content/regions/structures.js";
 import { BRINE_Y, emptyMasks, terrainMasks, type TerrainMasks } from "../../content/regions/terrain.js";
 import { TERRAIN_EXTENT } from "../terrainSurface.js";
-import { instanceMatrix } from "./recipe.js";
+import { writeInstance } from "./recipe.js";
 
 /** `s2.scatter`: dense instanced dressing per biome, placed by rules that
  * read the same masks the floor was carved with. Pale fans open on cool
@@ -35,6 +35,7 @@ interface Rule {
   /** Rise above the floor in metres at scale 1, for keep-out tests. */
   height: number;
 }
+const WHITE = [1, 1, 1] as const;
 const WARM = [[1, 0.95, 0.9], [1.05, 1, 0.92], [0.92, 0.95, 1]] as const;
 const GREEN = [[1, 1, 1], [0.9, 1.05, 0.95], [1.08, 1.02, 0.9]] as const;
 
@@ -171,8 +172,10 @@ function* scatterChunk(ctx: ChunkBuildContext, chunk: ChunkDescriptor, biome: st
     const rule = rules[ri]!;
     if (!fine && !rule.coarse) continue;
     const rnd = random(chunk.cell.ix * 7919 + chunk.cell.iz * 104729 + ri * 31337 + biome.length * 17);
-    const mats: number[] = [], tints: number[] = [];
-    const tmp = new Float32Array(16);
+    // Typed arrays sized for every candidate cell: no growth, no garbage.
+    const cap = Math.ceil((max.x - min.x) / rule.spacing) * Math.ceil((max.z - min.z) / rule.spacing) + 1;
+    const mats = new Float32Array(cap * 16), tints = new Float32Array(cap * 4);
+    let count = 0;
     for (let z = min.z; z < max.z; z += rule.spacing) for (let x = min.x; x < max.x; x += rule.spacing) {
       if (ctx.due()) yield;
       const px = x + rnd() * rule.spacing, pz = z + rnd() * rule.spacing;
@@ -192,13 +195,13 @@ function* scatterChunk(ctx: ChunkBuildContext, chunk: ChunkDescriptor, biome: st
         !rule.template.startsWith("s2.rock")) continue;
       if (blocked(px, pz, y + rule.height * s, s)) continue;
       const align = rule.align ?? 0.15;
-      instanceMatrix(tmp, 0, [px, y - 0.05 * s, pz], yaw, [s, s, s], Math.atan(gz) * align, -Math.atan(gx) * align);
-      for (let k = 0; k < 16; k++) mats.push(tmp[k]!);
-      const t = rule.tints?.[Math.floor(tint * rule.tints.length)] ?? [1, 1, 1];
+      writeInstance(mats, count * 16, px, y - 0.05 * s, pz, yaw, s, Math.atan(gz) * align, -Math.atan(gx) * align);
+      const t = rule.tints?.[Math.floor(tint * rule.tints.length)] ?? WHITE;
       const v = 0.93 + 0.14 * smooth(0, 1, tint);
-      tints.push(t[0] * v, t[1] * v, t[2] * v, 1);
+      tints[count * 4] = t[0] * v; tints[count * 4 + 1] = t[1] * v; tints[count * 4 + 2] = t[2] * v; tints[count * 4 + 3] = 1;
+      count++;
     }
-    if (mats.length) out.push({ template: rule.template, matrices: new Float32Array(mats), tints: new Float32Array(tints) });
+    if (count) out.push({ template: rule.template, matrices: mats.slice(0, count * 16), tints: tints.slice(0, count * 4) });
   }
   return out;
 }

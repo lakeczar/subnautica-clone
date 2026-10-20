@@ -117,6 +117,8 @@ export const MERIDIAN_TERRACES = [
 ] as const;
 const BASIN_DISH_RIDGE: readonly (readonly [number, number])[] = [[410, -505], [500, -560], [590, -615]];
 const BASIN_WRECK_RIDGE: readonly (readonly [number, number])[] = [[770, -400], [786, -520], [778, -650]];
+/** Basin ridges: axis, crest depth, half-width. Hoisted: the floor runs per sample. */
+const BASIN_RIDGES = [[BASIN_DISH_RIDGE, 268, 58], [BASIN_WRECK_RIDGE, 252, 48]] as const;
 const HEARTH_DROP: readonly (readonly [number, number])[] = [[-236, -96], [-246, -172], [-240, -262], [-226, -330]];
 export const SEA_STACK = { x: 470, z: 95 } as const;
 /** Centre line of the stack's water cleft. */
@@ -208,7 +210,7 @@ function sampleAuthored(x: number, z: number, m: TerrainMasks): number {
   m.basin = Math.max(1 - smooth(470, 600, bowl),
     smooth(-90, -240, z) * smooth(-470, -620, z) * smooth(-40, -120, x)); // west lobe
   if (m.basin > 0) {
-    for (const [axis, crest, half] of [[BASIN_DISH_RIDGE, 268, 58], [BASIN_WRECK_RIDGE, 252, 48]] as const) {
+    for (const [axis, crest, half] of BASIN_RIDGES) {
       nearestOnPolyline(x, z, axis, hit);
       if (hit.d < half * 1.8) {
         const r = Math.min(depth, crest + (hit.d / half) ** 2 * 46 + 6 * fbm(x, z, 20, 3, 21));

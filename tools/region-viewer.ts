@@ -78,7 +78,23 @@ setTerrainStore(terrainStore);
 const layout = worldLayout();
 const map = createWorldMap(layout, spatialEntries());
 const templates = new TemplateLibrary([...templateRecipes(), ...S2_TEMPLATE_LIBRARY]);
-const loader = createKitLoader({ scene, material: kit, templates, factories: [...KIT_FACTORIES, ...S2_FACTORIES], context: s2BuildContext() });
+// Dev diagnostics: the slowest single step per factory, with its chunk and LOD.
+const slowSteps: Record<string, { ms: number; chunk: string; lod: string; step: number }> = {};
+const timed = (f: (typeof S2_FACTORIES)[number]): (typeof S2_FACTORIES)[number] => ({
+  id: f.id,
+  *build(ctx, chunk, ref, lod) {
+    const g = f.build(ctx, chunk, ref, lod);
+    try {
+      for (let step = 0; ; step++) {
+        const t = performance.now(), r = g.next(), ms = performance.now() - t, worst = slowSteps[f.id];
+        if (!worst || ms > worst.ms) slowSteps[f.id] = { ms, chunk: chunk.id, lod, step };
+        if (r.done) return r.value;
+        yield;
+      }
+    } finally { g.return(undefined as never); }
+  },
+});
+const loader = createKitLoader({ scene, material: kit, templates, factories: [...KIT_FACTORIES, ...S2_FACTORIES.map(timed)], context: s2BuildContext() });
 const residency = createResidency({ map, loader, budget: {
   cpuBytes: Number(params.get("budget") ?? 160) * MiB, gpuBytes: Number(params.get("budget") ?? 160) * MiB,
   uploadBytesPerFrame: 4 * MiB, buildMsPerFrame: Number(params.get("build") ?? 8), maxInFlight: 2, retainedUnits: 48,
@@ -163,4 +179,4 @@ if (params.get("loop") === "message") {
   channel.port2.postMessage(0);
 } else engine.runRenderLoop(tick);
 window.addEventListener("resize", () => engine.resize());
-Object.assign(window, { s2viewer: { go, camera, residency, scene, map } });
+Object.assign(window, { s2viewer: { go, camera, residency, scene, map, slowSteps, terrainStore } });

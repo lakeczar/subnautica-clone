@@ -97,3 +97,15 @@ test("the decompressed-file cache stays within its byte bound", async () => {
   await new Promise(r => setTimeout(r, 50));
   assert.ok(store.stats.cachedBytes <= size * 4 && store.stats.files <= 4, `${store.stats.cachedBytes} bytes in ${store.stats.files} files`);
 });
+
+test("a chunk without a baked file is fetched once, then remembered as absent", async () => {
+  let fetches = 0;
+  const store = createTerrainStore({ fetchFile: async () => { fetches++; return null; } });
+  const p = { x: -64, y: 0, z: -96 };
+  store.prefetch(p, 200);
+  await new Promise(r => setTimeout(r, 20));
+  const first = fetches;
+  for (let i = 0; i < 5; i++) { store.prefetch(p, 200); await new Promise(r => setTimeout(r, 5)); }
+  assert.ok(first > 0 && fetches === first, `refetched missing files: ${first} then ${fetches}`);
+  assert.equal(store.request("chunk:4:11:0").settled, true);
+});
