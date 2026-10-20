@@ -15,19 +15,23 @@ Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION]
 
 **GPU:** the RTX 3090 is attached and verified. See [LIVE-RESULT](gpu-enablement/LIVE-RESULT.md); the procedure is archived in [archive](archive/STATUS-gpu-attach-2026-10-20.md). GPU browser work uses a task-owned Chrome with `--use-gl=angle --use-angle=gl-egl --ignore-gpu-blocklist`. The shared T3 preview stays software.
 
-**Active work** (5 Opus builders max)
+**Active work** (5 of 5 Opus builders)
 
-| Work | Owner | Branch / worktree | State |
-| --- | --- | --- | --- |
-| C3: composing the playable world and ecology (S4/S9 wiring, one physical world in the runtime, pending list pruned, P1 bugs 1–5) | Opus 5.5 high | `t3/compose-playable-world-ecology` / `t3-8e10510b` | Building. The P1 merge is in, `pending.ts` is empty and bug 5 is fixed. The research conflicts were sent. |
-| P1: campaign playthrough harness | Opus 5.5 high | `t3/campaign-playthrough-harness` / `t3-6639fa97` | R3 fixes at `5079dc0`. The Sol R4 review is running. |
+| Work | Branch / worktree | State |
+| --- | --- | --- |
+| C3: compose the playable world and ecology | `t3/compose-playable-world-ecology` / `t3-8e10510b` | Building |
+| W1-pre: Fanvault cave kit and cave lab | `t3/siltwake-fanvault-cave` / `t3-cfb3bfb4` | Fixing Sol R2 (W1-PRE-04) |
+| LC: large-cave technology proof (Canopy root caves, 250 m) | `siltwake-lc-large-cave-tech-opus-7519cfb` | Building |
+| SYS-1: fleet upgrades (common pool and signature upgrades) and power | `siltwake-sys1-upgrades-power-opus-7519cfb` | Building |
+| SYS-2: outposts, decoder, cultivation, survey, chart, journal, play timeline | `siltwake-sys2-bases-knowledge-opus-7519cfb` | Building |
+
+P1 (the playthrough harness) was accepted at R5 and integrated at `73d347a`.
 
 **Next**
-1. P1 R4, then integrate. C3 handoff → Sol review → integrate.
-2. A full playthrough of both routes on the 3090. Then a fresh Opus experience audit to exit the stage.
-3. Iteration 1 of the [world evolution plan](WORLD-EVOLUTION-PLAN.md): W1 caves, W2 central hub and loops, and W3 landmark, creature and resource density. It runs in parallel with the polish stage: an oriented collider if the `VISTA_SOLIDS` cost matters, plus the S8 nits.
-4. Remaining campaign production toward the finale.
+1. C3 handoff → Sol review → integrate. Then both routes to the ending on the 3090, then the experience audit.
+2. Compose W1-pre, SYS-1 and SYS-2 after C3, in one schema change. Then build the Canopy cave biome on the LC technology.
+3. Follow the order of work in [GAME-DIRECTION](GAME-DIRECTION.md).
 
-**Not in the world yet:** caves, overhangs and underground spaces, because the floor is a single heightfield. W1 covers them.
+**Not in the world yet:** caves and the systems in GAME-DIRECTION. The cave kit, the large-cave technology and the systems are being built in new files, to be composed after C3.
 
 **Unverified:** human pacing and enjoyment, the audible mix, representative 1080p/60 performance, full-world memory and eviction.
