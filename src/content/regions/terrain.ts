@@ -114,6 +114,8 @@ const BASIN_DISH_RIDGE: readonly (readonly [number, number])[] = [[410, -505], [
 const BASIN_WRECK_RIDGE: readonly (readonly [number, number])[] = [[770, -400], [786, -520], [778, -650]];
 const HEARTH_DROP: readonly (readonly [number, number])[] = [[-236, -96], [-246, -172], [-240, -262], [-226, -330]];
 export const SEA_STACK = { x: 470, z: 95 } as const;
+/** Centre line of the stack's water cleft. */
+export const stackCleftX = (z: number): number => SEA_STACK.x + 3 * Math.sin(z / 14);
 export const HEADLAND = { a: [955, -8] as const, b: [1125, 108] as const };
 const ESCARPMENT_DEPTH: readonly (readonly [number, number])[] = [
   [-1080, 522], [-900, 505], [-760, 482], [-620, 452], [-500, 404], [-420, 332], [-340, 248], [-280, 215],
@@ -122,7 +124,7 @@ const CANOPY_RIBS = [-70, -152, -238, -306] as const;
 
 const hit: PolylineHit = { d: 0, s: 0, length: 0, side: 0, tx: 1, tz: 0 };
 
-function escarpmentLedgeDepth(z: number): number {
+export function escarpmentLedgeDepth(z: number): number {
   const t = ESCARPMENT_DEPTH;
   if (z <= t[0]![0]) return t[0]![1];
   for (let i = 1; i < t.length; i++) {
@@ -147,10 +149,10 @@ function seaStack(x: number, z: number, m: TerrainMasks): number {
   // landing (+3.4) to the plateau (+46), about 0.55 m/m for a walker.
   const theta = Math.atan2(dz, dx) * 180 / Math.PI;
   const phi = (((-116 - theta) % 360) + 360) % 360;
-  if (r >= 32.5 && r <= 41.5 && phi <= 120) h = 3.4 + (plateau - 3.4) * phi / 120 + 0.05 * Math.sin(r);
+  if (r >= 32.5 && r <= 41.5 && phi <= 120) h = 3.4 + (plateau - 3.4) * Math.min(1, phi / 110);
   // The split: a sinuous water cleft running north-south through the stack.
-  const cx = SEA_STACK.x + 3 * Math.sin(z / 14), half = Math.abs(x - cx);
-  if (r < 150) h = Math.min(h, lerp(-9.5, h, Math.max(smooth(6, 8.6, half), smooth(130, 150, r))));
+  const cx = stackCleftX(z), half = Math.abs(x - cx);
+  if (r < 150) h = Math.min(h, lerp(-9.5, h, Math.max(smooth(7, 9.5, half), smooth(130, 150, r))));
   // Yard berth: a dredged cove in the stack's southern lee.
   const berth = Math.hypot(x - 470, z + 6);
   if (berth < 70) h = Math.min(h, lerp(-34, h, smooth(42, 68, berth)));
@@ -167,7 +169,7 @@ function headland(x: number, z: number, m: TerrainMasks): number {
   const e = (u / 175) ** 2 + (v / 118) ** 2;
   if (e > 1.4) return -Infinity;
   const shoal = -14 - 52 * smooth(0.5, 1.25, e) + 1.4 * fbm(x, z, 30, 3, 81);
-  const ground = 2.5 + 85.5 * smooth(-118, 100, u) + 1.6 * fbm(x, z, 14, 3, 82);
+  const ground = 2.5 + 85.5 * smooth(-118, 100, u) + 1.1 * fbm(x, z, 18, 3, 82);
   let land = lerp(ground, 2.2 + 0.6 * fbm(x, z, 7, 2, 83), smooth(-16, -64, v));
   // Storm-cut: sheer cliffs face north-west and north-east.
   land = lerp(land, -24, smooth(30, 39, v + 3 * Math.sin(u / 9)));

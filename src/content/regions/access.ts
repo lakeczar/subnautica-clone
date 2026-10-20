@@ -1,0 +1,252 @@
+import { SOURCES, type MaterialId } from "../registry.js";
+import type { Aabb, Vec3 } from "../../world/types.js";
+import type { HazardDef } from "./hazards.js";
+import { footprintFloor } from "./drape.js";
+import { ACCESS_TIERS, CRAFT_PROFILES, ROUTES, type AccessTierId, type CraftProfileId, type RouteDef } from "./passages.js";
+import { RESCUE_PLANS, type RescuePlan } from "./rescue.js";
+import { SITES, type SiteDef } from "./sites.js";
+import type { FloorFunction } from "./terrain.js";
+
+/** Pure checks over S2 spatial data. Tests and the region viewer call these;
+ * every problem is a short readable string naming the place. */
+
+export interface CheckContext {
+  readonly floor: FloorFunction;
+  readonly solids: readonly { readonly id: string; readonly bounds: Aabb }[];
+  readonly hazards?: readonly HazardDef[];
+}
+
+const fmt = (p: Readonly<Vec3>): string => `(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)})`;
+
+export { footprintFloor };
+
+/** Points every `step` metres along a polyline, including both ends. */
+export function samplePath(path: readonly Readonly<Vec3>[], step = 1): Vec3[] {
+  const out: Vec3[] = [];
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i]!, b = path[i + 1]!;
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / step));
+    for (let k = 0; k < n; k++) {
+      const t = k / n;
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t });
+    }
+  }
+  if (path.length) out.push({ ...path.at(-1)! });
+  return out;
+}
+export const pathLength = (path: readonly Readonly<Vec3>[]): number =>
+  path.slice(1).reduce((n, b, i) => n + Math.hypot(b.x - path[i]!.x, b.y - path[i]!.y, b.z - path[i]!.z), 0);
+
+/** Upright box of a hull profile at a keel point. */
+function hullBox(p: Readonly<Vec3>, profile: CraftProfileId, pad = 0): Aabb {
+  const c = CRAFT_PROFILES[profile];
+  return { min: { x: p.x - c.radius - pad, y: p.y + c.bottom - pad, z: p.z - c.radius - pad },
+    max: { x: p.x + c.radius + pad, y: p.y + c.height + pad, z: p.z + c.radius + pad } };
+}
+const overlaps = (a: Aabb, b: Aabb): boolean =>
+  a.min.x < b.max.x && a.max.x > b.min.x && a.min.y < b.max.y && a.max.y > b.min.y && a.min.z < b.max.z && a.max.z > b.min.z;
+export const inside = (b: Aabb, p: Readonly<Vec3>, pad = 0): boolean =>
+  p.x >= b.min.x - pad && p.x <= b.max.x + pad && p.y >= b.min.y - pad && p.y <= b.max.y + pad &&
+  p.z >= b.min.z - pad && p.z <= b.max.z + pad;
+
+export interface CorridorOptions {
+  profile: CraftProfileId;
+  /** Lateral half-width the floor must stay below keel level. */
+  halfWidth?: number;
+  /** Deepest allowed keel depth (positive metres). */
+  maxDepth?: number;
+  /** Protections available; hazards needing others are forbidden. */
+  protections?: readonly string[];
+  /** Extra vertical margin above the swept floor. */
+  margin?: number;
+  step?: number;
+}
+/** Problems with sweeping `profile` along `path`. Reports the first failure
+ * of each kind only, so one bad leg yields a readable message. */
+export function corridorProblems(name: string, path: readonly Readonly<Vec3>[], ctx: CheckContext, o: CorridorOptions): string[] {
+  const c = CRAFT_PROFILES[o.profile], out: string[] = [], seen = new Set<string>();
+  const once = (key: string, msg: string): void => { if (!seen.has(key)) { seen.add(key); out.push(`${name}: ${msg}`); } };
+  const margin = o.margin ?? 0.05;
+  const pts = samplePath(path, o.step ?? 1);
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i]!;
+    const keel = p.y + c.bottom, ground = footprintFloor(ctx.floor, p.x, p.z, c.radius);
+    if (keel < ground + margin) once("ground", `grounds at ${fmt(p)}; floor ${ground.toFixed(1)}`);
+    if (o.maxDepth !== undefined && -keel > o.maxDepth) once("depth", `keel ${(-keel).toFixed(0)} m exceeds ${o.maxDepth} m at ${fmt(p)}`);
+    if (o.halfWidth && o.halfWidth > c.radius) {
+      const q = pts[Math.min(pts.length - 1, i + 1)]!, r = pts[Math.max(0, i - 1)]!;
+      const dx = q.x - r.x, dz = q.z - r.z, len = Math.hypot(dx, dz);
+      if (len > 1e-6) {
+        const nx = -dz / len, nz = dx / len;
+        for (const s of [-1, 1]) {
+          const x = p.x + nx * s * o.halfWidth, z = p.z + nz * s * o.halfWidth;
+          if (ctx.floor(x, z) > keel) once("width", `narrower than ${o.halfWidth} m at ${fmt(p)}`);
+        }
+      }
+    }
+    const hb = hullBox(p, o.profile);
+    for (const s of ctx.solids) if (overlaps(hb, s.bounds)) once(`solid:${s.id}`, `hits ${s.id} at ${fmt(p)}`);
+    for (const h of ctx.hazards ?? []) {
+      if (!h.protection || o.protections?.includes(h.protection)) continue;
+      if (overlaps(hb, h.bounds)) once(`hazard:${h.id}`, `enters ${h.id} (needs ${h.protection}) at ${fmt(p)}`);
+    }
+  }
+  return out;
+}
+
+/** Walkable land: the sim refuses a step rising more than 1.15 m per metre;
+ * keep a margin. Returns problems for walk routes (y resolved on floor). */
+export function walkProblems(route: RouteDef, floor: FloorFunction, maxGradient = 0.9): string[] {
+  const pts = samplePath(route.path.map(p => ({ ...p, y: 0 })), 0.5), out: string[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1]!, b = pts[i]!, run = Math.hypot(b.x - a.x, b.z - a.z);
+    const ha = floor(a.x, a.z), hb = floor(b.x, b.z);
+    if (hb < -0.4) { out.push(`${route.id}: path leaves land at ${fmt({ ...b, y: hb })}`); break; }
+    if (run > 1e-6 && Math.abs(hb - ha) / run > maxGradient) {
+      out.push(`${route.id}: gradient ${(Math.abs(hb - ha) / run).toFixed(2)} at ${fmt({ ...b, y: hb })}`); break;
+    }
+  }
+  return out;
+}
+
+export function routeProblems(route: RouteDef, ctx: CheckContext): string[] {
+  if (route.role === "walk") return walkProblems(route, ctx.floor);
+  const tier = ACCESS_TIERS[route.tier];
+  return corridorProblems(route.id, route.path, ctx, {
+    profile: route.profile, halfWidth: route.minHalfWidth, protections: tier.protections,
+    maxDepth: route.carrier ? tier.depth : tier.depth - 10, margin: route.profile === "carrier" ? 0.5 : 0.4,
+  });
+}
+
+// --- First access: reachability before protection ---------------------------
+export interface FirstAccessPlan {
+  readonly material: MaterialId;
+  /** The configuration a player holds BEFORE using this material. */
+  readonly tier: AccessTierId;
+  /** Route chain from a place that tier already reaches. */
+  readonly chains: readonly (readonly string[])[];
+}
+export const FIRST_ACCESS: readonly FirstAccessPlan[] = [
+  { material: "pressure_ceramic", tier: "reinforced", chains: [
+    ["route.legacy.reef_canopy", "route.legacy.canopy_basin", "route.basin.legacy_anchorage", "route.basin.rift", "route.rift.ceramic"],
+  ] },
+  { material: "thermal_core", tier: "reinforced", chains: [
+    ["route.legacy.reef_canopy", "route.legacy.canopy_basin", "route.basin.legacy_anchorage", "route.basin.rift", "route.rift.core"],
+  ] },
+  { material: "brine_lattice", tier: "service", chains: [
+    ["route.legacy.reef_canopy", "route.legacy.canopy_basin", "route.basin.legacy_anchorage", "route.basin.divide", "route.divide.lattice_west"],
+    ["route.legacy.reef_canopy", "route.legacy.canopy_basin", "route.basin.legacy_anchorage", "route.basin.divide", "route.divide.lattice_east"],
+    ["route.legacy.reef_canopy", "route.legacy.canopy_basin", "route.basin.legacy_anchorage", "route.basin.rift", "route.rift.ceramic", "route.rift.divide_flank"],
+  ] },
+];
+/** Deposits must sit this far inside the preceding tier's rating, routes 10 m. */
+export const DEPOSIT_DEPTH_MARGIN = 25;
+/** A route reaches a deposit when it parks within a short diver swim. */
+export const FIRST_ACCESS_REACH = 10;
+
+/** Every mandatory first-access deposit is reachable with the preceding tier,
+ * along a chain that never exceeds its depth or enters a hazard needing
+ * protection it lacks; each material has at least two such deposits. */
+export function firstAccessProblems(ctx: CheckContext): string[] {
+  const out: string[] = [];
+  const routes = new Map(ROUTES.map(r => [r.id, r] as const));
+  for (const plan of FIRST_ACCESS) {
+    const tier = ACCESS_TIERS[plan.tier];
+    const deposits = SITES.filter(s => s.role === "source" && s.material === plan.material && s.firstAccess);
+    if (deposits.length < 2) out.push(`${plan.material}: only ${deposits.length} first-access deposits`);
+    const reached = new Set<string>();
+    for (const chain of plan.chains) {
+      const path: Vec3[] = [];
+      for (const id of chain) {
+        const r = routes.get(id);
+        if (!r) { out.push(`${plan.material}: unknown route ${id}`); continue; }
+        if (path.length) {
+          const a = path.at(-1)!, b = r.path[0]!;
+          if (Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) > 3) out.push(`${plan.material}: ${id} does not start where the chain ends`);
+        }
+        path.push(...r.path);
+        out.push(...corridorProblems(`${plan.material} via ${id}`, r.path, ctx, {
+          profile: r.legacy ? r.profile : "medium", maxDepth: tier.depth - 10, protections: tier.protections, margin: 0.3,
+        }).filter(p => !(r.legacy && p.includes("hits"))));
+      }
+      for (const d of deposits) {
+        const at = siteDatum(d, ctx.floor);
+        if (path.some(p => Math.hypot(p.x - at.x, p.y - at.y, p.z - at.z) <= FIRST_ACCESS_REACH)) reached.add(d.id);
+      }
+    }
+    for (const d of deposits) {
+      const depth = -siteDatum(d, ctx.floor).y;
+      if (depth > tier.depth - DEPOSIT_DEPTH_MARGIN) out.push(`${d.id}: ${depth.toFixed(0)} m is beyond ${plan.tier} (${tier.depth} m) less margin`);
+      if (!reached.has(d.id)) out.push(`${d.id}: no ${plan.tier} route chain reaches it`);
+      for (const h of ctx.hazards ?? []) if (h.protection && inside(h.bounds, siteDatum(d, ctx.floor), 2))
+        out.push(`${d.id}: lies in ${h.id} (needs ${h.protection})`);
+    }
+  }
+  // Early materials come from the existing registry sources.
+  const early: readonly [MaterialId, AccessTierId][] = [
+    ["structural_alloy", "starter"], ["silica_glass", "starter"], ["flex_membrane", "starter"],
+    ["conductive_crust", "early"], ["buoyant_resin", "early"],
+  ];
+  for (const [material, tierId] of early) {
+    const ok = Object.values(SOURCES).filter(s => s.item === material && -s.position.y <= ACCESS_TIERS[tierId].depth - 10);
+    if (ok.length < 2) out.push(`${material}: fewer than two sources within ${tierId}`);
+  }
+  return out;
+}
+
+export function siteDatum(s: SiteDef, floor: FloorFunction): Vec3 {
+  return { x: s.at.x, y: s.at.y === "floor" ? floor(s.at.x, s.at.z) + (s.lift ?? 0) : s.at.y, z: s.at.z };
+}
+export function siteBox(s: SiteDef, floor: FloorFunction): Aabb {
+  const p = siteDatum(s, floor), h = s.half ?? { x: 1.5, y: 1.5, z: 1.5 };
+  return { min: { x: p.x - h.x, y: p.y - h.y, z: p.z - h.z }, max: { x: p.x + h.x, y: p.y + h.y, z: p.z + h.z } };
+}
+
+// --- Rescue access -------------------------------------------------------------
+/** Loss-capable: a place a hull or diver can be disabled deeper than the
+ * basic suit's reach. Story volumes are not places to be lost. */
+export const LOSS_DEPTH = 150;
+export function lossCapable(s: SiteDef, floor: FloorFunction): boolean {
+  return s.role !== "volume" && s.role !== "rescue_stage" && -siteDatum(s, floor).y > LOSS_DEPTH;
+}
+export const COVER_PAD = 30, SHELF_REACH = 60;
+
+/** Each deep loss-capable site has a surface stage reached by swimming from
+ * the pod, and a clear tether branch within reach of it. */
+export function rescueProblems(ctx: CheckContext, plans: readonly RescuePlan[] = RESCUE_PLANS): string[] {
+  const out: string[] = [];
+  const protective = (ctx.hazards ?? []).filter(h => h.protection);
+  for (const plan of plans) {
+    if (plan.stage.y < -1) out.push(`${plan.id}: stage is not at the surface`);
+    const a = plan.approach;
+    if (Math.hypot(a[0]!.x, a[0]!.z - 6) > 3) out.push(`${plan.id}: approach does not start at the pod`);
+    const end = a.at(-1)!;
+    if (Math.hypot(end.x - plan.stage.x, end.z - plan.stage.z) > 3) out.push(`${plan.id}: approach does not end at the stage`);
+    for (const p of samplePath(a, 2)) {
+      if (p.y < -1) { out.push(`${plan.id}: approach leaves the surface at ${fmt(p)}`); break; }
+      if (ctx.floor(p.x, p.z) > -1.2) { out.push(`${plan.id}: approach crosses land or shoal at ${fmt(p)}`); break; }
+    }
+    plan.tethers.forEach((branch, i) => {
+      const s0 = branch[0]!;
+      if (Math.hypot(s0.x - plan.stage.x, s0.y - plan.stage.y, s0.z - plan.stage.z) > 1) out.push(`${plan.id}#${i}: branch does not start at the stage`);
+      const len = pathLength(branch);
+      if (len > plan.maximumTether) out.push(`${plan.id}#${i}: tether ${len.toFixed(0)} m exceeds ${plan.maximumTether} m`);
+      out.push(...corridorProblems(`${plan.id}#${i}`, branch, { ...ctx, hazards: protective },
+        { profile: "medium", protections: [], margin: 0.3, step: 1.5 }));
+    });
+  }
+  const vertices = plans.flatMap(p => p.tethers.flatMap(b => b.slice(1).map(v => ({ v, plan: p }))));
+  const moorings = new Set(plans.map(p => p.mooring));
+  for (const id of moorings) if (!SITES.some(s => s.id === id)) out.push(`rescue mooring ${id} is not a site`);
+  for (const s of SITES) {
+    if (!lossCapable(s, ctx.floor)) continue;
+    const at = siteDatum(s, ctx.floor), box = siteBox(s, ctx.floor);
+    const work = s.role !== "landmark" && s.role !== "entrance";
+    const hazard = protective.find(h => inside(h.bounds, at));
+    const covered = hazard && work
+      ? vertices.some(({ v }) => Math.hypot(v.x - at.x, v.y - at.y, v.z - at.z) <= SHELF_REACH && !protective.some(h => inside(h.bounds, v)))
+      : vertices.some(({ v }) => inside(box, v, COVER_PAD) && !protective.some(h => inside(h.bounds, v)));
+    if (!covered) out.push(`${s.id}: no rescue tether reaches ${fmt(at)}${hazard ? ` (in ${hazard.id})` : ""}`);
+  }
+  return out;
+}

@@ -1,7 +1,8 @@
 import { CANOPY_BASIN_ROUTE } from "../routes.js";
 import type { RegionId } from "../registry.js";
 import type { RegionLinkKind, Vec3 } from "../../world/types.js";
-import { SEA_STACK } from "./terrain.js";
+import { drape } from "./drape.js";
+import { DIVIDE_RIDGE, SEA_STACK, SERVICE_LEDGE_Y, escarpmentLedgeDepth, escarpmentLedgeX, stackCleftX } from "./terrain.js";
 
 /** Access tiers: the configuration a player has when they first need a place.
  * `depth` is the conservative working depth for both the craft and the
@@ -54,13 +55,13 @@ const v = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
 
 /** The stack ramp, sampled on the same arc the floor carves (terrain.ts). */
 function stackRamp(): Vec3[] {
-  const out: Vec3[] = [v(449, 4.2, 62)];
-  for (let i = 0; i <= 24; i++) {
-    const phi = i * 5, theta = (-116 - phi) * Math.PI / 180, r = 37;
-    const x = SEA_STACK.x + r * Math.cos(theta), z = SEA_STACK.z + r * Math.sin(theta) / 1.08;
-    out.push(v(x, 3.4 + (46 - 3.4) * phi / 120 + 0.9, z));
-  }
-  out.push(v(452, 46.9, 102));
+  const out: Vec3[] = [v(449, NaN, 62)];
+  const at = (phi: number, r: number): Vec3 => {
+    const theta = (-116 - phi) * Math.PI / 180;
+    return v(SEA_STACK.x + r * Math.cos(theta), NaN, SEA_STACK.z + r * Math.sin(theta) / 1.08);
+  };
+  for (let phi = 0; phi <= 115; phi += 5) out.push(at(phi, 37));
+  out.push(at(115, 30), v(455, NaN, 98));
   return out;
 }
 /** Headland crest walk: beach, shelter, meadow, summit. */
@@ -68,23 +69,45 @@ function headlandWalk(): Vec3[] {
   const a = [955, -8], b = [1125, 108], len = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!);
   const ux = (b[0]! - a[0]!) / len, uz = (b[1]! - a[1]!) / len;
   const out: Vec3[] = [];
-  for (let u = -114; u <= 92; u += 6) {
+  for (let u = -104; u <= 92; u += 6) {
     const s = u + len / 2, vv = -8;
     out.push(v(a[0]! + s * ux - vv * uz, NaN, a[1]! + s * uz + vv * ux));
   }
   return out;
 }
 
-export const ROUTES: readonly RouteDef[] = [
+/** The Divide's cut bench: `d` metres south of the crest, gate to Meridian. */
+function serviceBench(d = 62): Vec3[] {
+  const out: Vec3[] = [];
+  for (let x = 620; x <= 980; x += 30) {
+    for (let i = 0; i < DIVIDE_RIDGE.length - 1; i++) {
+      const [ax, az] = DIVIDE_RIDGE[i]!, [bx, bz] = DIVIDE_RIDGE[i + 1]!;
+      if (x < ax || x > bx) continue;
+      const t = (x - ax) / (bx - ax), len = Math.hypot(bx - ax, bz - az);
+      const sx = (bz - az) / len, sz = -(bx - ax) / len;
+      out.push(v(x + sx * d, SERVICE_LEDGE_Y + 1, az + (bz - az) * t + sz * d));
+      break;
+    }
+  }
+  return out;
+}
+/** The escarpment's surveyed ledge, south to north. */
+function escarpmentLedge(): Vec3[] {
+  const out: Vec3[] = [];
+  for (let z = -1000; z <= -340; z += 30) out.push(v(escarpmentLedgeX(z), -escarpmentLedgeDepth(z) + 6, z));
+  return out;
+}
+
+const RAW_ROUTES: readonly RouteDef[] = [
   // Existing first loop, unchanged.
   { id: "route.legacy.reef_canopy", from: "refuge_reef", to: "suspended_garden", kind: "open", role: "first_loop",
     carrier: false, minHalfWidth: CANOPY_BASIN_ROUTE.minimumHalfWidth, profile: "small", tier: "early",
     path: CANOPY_BASIN_ROUTE.upper, legacy: true },
   { id: "route.legacy.canopy_basin", from: "suspended_garden", to: "silt_basin", kind: "open", role: "first_loop",
-    carrier: false, minHalfWidth: CANOPY_BASIN_ROUTE.minimumHalfWidth, profile: "small", tier: "early",
+    carrier: false, minHalfWidth: CANOPY_BASIN_ROUTE.minimumHalfWidth, profile: "small", tier: "reinforced",
     path: CANOPY_BASIN_ROUTE.basin, legacy: true },
   { id: "route.legacy.basin_return", from: "silt_basin", to: "refuge_reef", kind: "open", role: "first_loop",
-    carrier: false, minHalfWidth: CANOPY_BASIN_ROUTE.minimumHalfWidth, profile: "small", tier: "early",
+    carrier: false, minHalfWidth: CANOPY_BASIN_ROUTE.minimumHalfWidth, profile: "small", tier: "reinforced",
     path: CANOPY_BASIN_ROUTE.returnLoop, legacy: true },
   { id: "route.legacy.reef_isles", from: "refuge_reef", to: "island_chain", kind: "land", role: "first_loop",
     carrier: false, minHalfWidth: 2, profile: "diver", tier: "starter",
@@ -100,7 +123,7 @@ export const ROUTES: readonly RouteDef[] = [
     path: [v(470, -0.5, -40), v(700, -0.5, -50), v(900, -0.5, -45), v(944, -0.5, -22)] },
   { id: "route.isles.stack_cleft", from: "island_chain", to: "island_chain", kind: "passage", role: "shortcut",
     carrier: false, minHalfWidth: 5.5, profile: "small", tier: "early",
-    path: [v(467, -4, 20), v(468, -4, 60), v(470, -4, 95), v(472, -4, 130), v(472, -4, 152)],
+    path: Array.from({ length: 27 }, (_, i) => v(stackCleftX(22 + i * 5), -4, 22 + i * 5)),
     note: "The split: small craft only. Shortcut from the yard to the north rim." },
   { id: "walk.isles.stack_ramp", from: "island_chain", to: "island_chain", kind: "land", role: "walk",
     carrier: false, minHalfWidth: 3, profile: "diver", tier: "starter", path: stackRamp() },
@@ -111,9 +134,9 @@ export const ROUTES: readonly RouteDef[] = [
   // Isles -> Canopy east -> Basin: the carrier's early working line.
   { id: "route.isles.canopy_east", from: "island_chain", to: "suspended_garden", kind: "open", role: "carrier",
     carrier: true, minHalfWidth: 30, profile: "carrier", tier: "carrier",
-    path: [v(470, -12, -6), v(500, -30, -60), v(560, -80, -120), v(600, -130, -170), v(620, -160, -200)] },
+    path: [v(470, -12, -6), v(470, -20, -50), v(520, -60, -110), v(580, -110, -160), v(620, -160, -200)] },
   { id: "route.isles.headland_canopy", from: "island_chain", to: "suspended_garden", kind: "open", role: "primary",
-    carrier: false, minHalfWidth: 8, profile: "medium", tier: "early",
+    carrier: false, minHalfWidth: 8, profile: "medium", tier: "reinforced",
     path: [v(944, -2, -22), v(920, -40, -90), v(840, -100, -150), v(720, -140, -190), v(640, -156, -200)] },
   { id: "route.canopy_east.basin", from: "suspended_garden", to: "silt_basin", kind: "open", role: "carrier",
     carrier: true, minHalfWidth: 30, profile: "carrier", tier: "carrier",
@@ -129,6 +152,11 @@ export const ROUTES: readonly RouteDef[] = [
   { id: "route.basin.wreck_south", from: "silt_basin", to: "silt_basin", kind: "open", role: "primary",
     carrier: false, minHalfWidth: 8, profile: "medium", tier: "reinforced",
     path: [v(780, -248, -444), v(786, -246, -530), v(783, -250, -612)] },
+
+  { id: "route.basin.legacy_anchorage", from: "silt_basin", to: "silt_basin", kind: "open", role: "primary",
+    carrier: false, minHalfWidth: 8, profile: "small", tier: "reinforced",
+    path: [v(216, -166, -232), v(216, -150, -228), v(260, -175, -290), v(300, -212, -370), v(360, -240, -430)],
+    note: "Joins the existing Basin route end to the full Basin's anchorage." },
 
   // Basin -> Rift: carrier anchorage to cool-flank mooring, then deposits.
   { id: "route.basin.rift", from: "silt_basin", to: "thermal_rift", kind: "open", role: "carrier",
@@ -164,10 +192,10 @@ export const ROUTES: readonly RouteDef[] = [
     carrier: true, minHalfWidth: 30, profile: "carrier", tier: "carrier",
     path: [v(360, -240, -430), v(300, -290, -600), v(330, -330, -760), v(430, -360, -900),
       v(520, -378, -1020), v(560, -390, -1120)] },
-  { id: "route.divide.lattice_east", from: "brine_divide", to: "brine_divide", kind: "ledge", role: "primary",
+  { id: "route.divide.lattice_east", from: "brine_divide", to: "brine_divide", kind: "open", role: "primary",
     carrier: false, minHalfWidth: 8, profile: "medium", tier: "service",
     path: [v(560, -390, -1120), v(660, -380, -1160), v(749, -370, -1191)] },
-  { id: "route.divide.lattice_west", from: "brine_divide", to: "brine_divide", kind: "ledge", role: "primary",
+  { id: "route.divide.lattice_west", from: "brine_divide", to: "brine_divide", kind: "open", role: "primary",
     carrier: false, minHalfWidth: 8, profile: "medium", tier: "service",
     path: [v(560, -390, -1120), v(450, -376, -1160), v(336.5, -360, -1188.5)] },
 
@@ -177,19 +205,30 @@ export const ROUTES: readonly RouteDef[] = [
     path: [v(560, -390, -1120), v(760, -378, -1128), v(900, -370, -1136), v(980, -440, -1150), v(1080, -520, -1160)] },
   { id: "route.divide.service_ledge", from: "brine_divide", to: "deep_district", kind: "ledge", role: "service",
     carrier: false, minHalfWidth: 8, profile: "medium", tier: "deep",
-    path: [v(632, -366, -1230), v(600, -400, -1250), v(600, -405, -1285), v(620, -411, -1323),
-      v(700, -411, -1318), v(771, -411, -1311), v(874, -411, -1293), v(977, -411, -1270),
-      v(1000, -450, -1300), v(1005, -520, -1360), v(1000, -592, -1400)],
+    path: [v(632, -372, -1224), v(600, -400, -1250), v(600, -405, -1285), ...serviceBench(),
+      v(1000, -450, -1300), v(1012, -520, -1370), v(1010.8, -594, -1407.4)],
     note: "Small craft only: a 16 m bench 30 m above the mirror. Shortcut to the lower terraces." },
 
   // Meridian exterior and the escarpment return.
   { id: "route.meridian.terraces", from: "deep_district", to: "deep_district", kind: "open", role: "primary",
     carrier: false, minHalfWidth: 8, profile: "medium", tier: "deep",
-    path: [v(1080, -520, -1160), v(1150, -512, -1240), v(1190, -590, -1300), v(1279, -672, -1396), v(1400, -762, -1530)] },
+    path: [v(1080, -520, -1160), v(1150, -512, -1240), v(1170, -588, -1300), v(1240, -596, -1360),
+      v(1268, -674, -1384), v(1300, -680, -1385), v(1320, -690, -1420), v(1400, -762, -1530)] },
   { id: "route.meridian.escarpment", from: "deep_district", to: "suspended_garden", kind: "ledge", role: "shortcut",
     carrier: false, minHalfWidth: 8, profile: "medium", tier: "deep",
-    path: [v(1080, -520, -1160), v(1220, -512, -1080), v(1370, -505, -1000), v(1371, -497, -900),
-      v(1330, -474, -760), v(1365, -444, -620), v(1348, -396, -500), v(1345, -324, -420),
-      v(1350, -240, -340), v(1300, -214, -300), v(1150, -196, -270), v(900, -172, -232), v(620, -160, -200)],
-    note: "Surveyed outer escarpment: deep exposure most of the way, a return line to the Canopy mooring." },
+    path: [v(1080, -520, -1160), v(1160, -510, -1160), v(1240, -510, -1090), ...escarpmentLedge(), v(1300, -214, -300)],
+    note: "Surveyed outer escarpment: deep exposure most of the way, a return line to the Canopy." },
+  { id: "route.canopy_east.margin", from: "suspended_garden", to: "suspended_garden", kind: "open", role: "shortcut",
+    carrier: false, minHalfWidth: 8, profile: "medium", tier: "reinforced",
+    path: [v(1300, -214, -300), v(1150, -196, -270), v(900, -172, -232), v(620, -160, -200)],
+    note: "Escarpment head west along the Canopy's lower margin to the mooring." },
 ];
+
+/** Authored keel lines laid over the shared floor (see `drape`). Legacy,
+ * surface and walking paths are kept exactly as written. */
+export const ROUTES: readonly RouteDef[] = RAW_ROUTES.map(r => {
+  if (r.legacy || r.role === "walk" || r.role === "surface") return r;
+  const c = CRAFT_PROFILES[r.profile];
+  const radius = Math.max(c.radius, r.kind === "passage" || r.kind === "ledge" ? c.radius : r.minHalfWidth);
+  return { ...r, path: drape(r.path, radius, r.profile === "carrier" ? 3 : 1.5) };
+});
