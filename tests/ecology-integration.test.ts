@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseEcology, serializeEcology } from "../src/sim/ecology/persist.js";
-import { createEcology, stepEcology } from "../src/sim/ecology/ecology.js";
+import { createEcology, resumeEcology, stepEcology } from "../src/sim/ecology/ecology.js";
+import { layerY } from "../src/sim/ecology/agents.js";
+import { HAZARD_FIELDS } from "../src/content/ecology/hazards.js";
+import { sitePosition } from "../src/content/ecology/sites.js";
+import { WARNING_LEAD } from "../src/sim/ecology/types.js";
 import { ecologyWorldFrom } from "../src/sim/ecology/adapter.js";
 import { stimulusFrom } from "../src/sim/ecology/stimulus.js";
 import { protectionFor } from "../src/sim/ecology/hazards.js";
@@ -103,4 +107,42 @@ test("hull exposure follows the fleet ID contract, is bounded, cross-checked, an
   reject("object map from an older draft", { "dart-1": { heat: 1, brine: 0 } });
   reject("inherited-key exposure", [JSON.parse('{"__proto__":{"id":"x"},"heat":1,"brine":0,"heatWarned":0,"brineWarned":0}')]);
   assert.notEqual(typeof parseEcology({ ...base, hulls: [entry("dart-1")] }, { vehicleIds: ["dart-1"] }), "string");
+});
+
+test("control transfer: an uncontrolled actor recovers silently, and on return harm waits five seconds after a delivered warning", () => {
+  const saddle = sitePosition(HAZARD_FIELDS.divide_dense_layer.shape.center);
+  const p = { ...saddle, x: saddle.x - 70, y: layerY("divide_dense_layer") - 1 };
+  // The reviewer's cases: load in brine as one actor, step out (other actor
+  // just above the layer), optionally save/load, then return to the exposed actor.
+  for (const target of ["hull", "diver"] as const) for (const viaSave of [true, false]) {
+    let state = createEcology(), tick = 0;
+    const input = (t: number, controlled: boolean) => {
+      const hull = controlled === (target === "hull") ? "dart" as const : null;
+      return { tick: t, stimulus: stimulus(controlled ? p : { ...p, y: p.y + 2.2 }, { hull, light: 0, noise: 0 }),
+        protection: protectionFor(hull, []), vehicleId: hull ? "Dart_1" : null };
+    };
+    const world = openWater();
+    for (; tick < 600; tick++) stepEcology(state, input(tick, true), world);
+    stepEcology(state, input(tick++, false), world);
+    if (viaSave) {
+      const parsed = parseEcology(JSON.parse(JSON.stringify(serializeEcology(state))), { vehicleIds: ["Dart_1"] });
+      assert.notEqual(typeof parsed, "string", String(parsed));
+      state = parsed as typeof state;
+      resumeEcology(state);
+    }
+    for (let i = 0; i < 60; i++, tick++) {
+      const r = stepEcology(state, input(tick, false), world);
+      assert.equal(r.events.filter(e => e.type === "hazard-warning" && e.hazard === "brine").length, 0, "nothing is warned for an actor nobody controls");
+    }
+    let firstWarning: number | null = null, firstHarm: number | null = null;
+    for (let i = 0; i < 600 && firstHarm === null; i++, tick++) {
+      const r = stepEcology(state, input(tick, true), world);
+      if (firstWarning === null && r.events.some(e => e.type === "hazard-warning" && e.hazard === "brine")) firstWarning = i;
+      if ((target === "hull" ? r.effects.vehicleHealth : r.effects.diverHealth) > 0) firstHarm = i;
+    }
+    const label = `${target}${viaSave ? " via save" : ""}`;
+    assert.ok(firstWarning !== null && firstHarm !== null, `${label}: a warning and harm both occur`);
+    assert.equal(firstWarning, 0, `${label}: the warning is delivered on the first controlled step`);
+    assert.ok((firstHarm - firstWarning) / 60 >= WARNING_LEAD, `${label}: warning ${firstWarning}, harm ${firstHarm}`);
+  }
 });

@@ -157,6 +157,16 @@ export function stepExposure(load: Exposure, sample: HazardSample, protection: P
   }
   return { harm, events };
 }
+/** An actor nobody controls (a parked hull, or the diver while piloting)
+ * only recovers. Any open warning episode is closed, so when control returns
+ * above the first threshold the episode restarts with a *delivered* caption
+ * and harm again waits WARNING_LEAD seconds after it. */
+export function recoverExposure(load: Exposure): void {
+  load.heat = Math.max(0, load.heat - EXPOSURE.heat.recovery * ECOLOGY_DT);
+  load.brine = Math.max(0, load.brine - EXPOSURE.brine.recovery * ECOLOGY_DT);
+  load.heatWarned = 0;
+  load.brineWarned = 0;
+}
 /** Call once after loading a save: an exposure above the first threshold
  * starts a fresh warning episode, so a reload never resumes into silent harm. */
 export function resumeExposure(load: Exposure): void {

@@ -4,7 +4,7 @@ import { THREATS, THREAT_AGENT_IDS, DIVER_ESCAPE_SPEED, MAX_ACTIVE_THREATS, ACTI
 import type { ThreatAgentId } from "../src/content/ecology/species.js";
 import { FIRST_DEPOSITS } from "../src/content/ecology/hazards.js";
 import { sitePosition } from "../src/content/ecology/sites.js";
-import { activeThreats, canOccupy, canReach, definitionOf, layerY, stepAgent } from "../src/sim/ecology/agents.js";
+import { activeThreats, canOccupy, canReach, definitionOf, layerY, perceive, stepAgent } from "../src/sim/ecology/agents.js";
 import { WARNING_LEAD } from "../src/sim/ecology/types.js";
 import { CURRENT_REFUGES, openWater } from "../src/sim/ecology/adapter.js";
 import { sampleHazards } from "../src/sim/ecology/hazards.js";
@@ -263,4 +263,15 @@ test("every lunge and pulse follows its animal's first warning of that engagemen
     }
   }
   assert.ok(strikesSeen >= 6, `strikes exercised: ${strikesSeen}`);
+});
+
+test("layer vibration through rock is muffled by the skate's cover factor, not blocked or passed whole", () => {
+  const home = homeOf(SKATE), top = layerY("divide_dense_layer"), s = stimulus({ ...home, x: home.x + 6, y: top }, { noise: 0, light: 0, velocity: { x: 0, y: -1.2, z: 0 } });
+  const a = { ...agent(createEcology(), SKATE) };
+  const open = perceive(a, s, openWater(), 0, []);
+  const wall = openWater({ solids: [{ min: { x: home.x + 2.9, y: home.y - 10, z: home.z - 10 }, max: { x: home.x + 3.1, y: home.y + 20, z: home.z + 10 } }] });
+  const covered = perceive(a, s, wall, 0, []);
+  assert.equal(open.dominant, "layer");
+  assert.ok(open.rate > 0 && Math.abs(covered.rate - open.rate * THREATS.layer_skate.coverPass) < 1e-9,
+    `covered ${covered.rate} = open ${open.rate} × ${THREATS.layer_skate.coverPass}`);
 });

@@ -5,7 +5,7 @@ import { HAZARD_FIELDS } from "../../content/ecology/hazards.js";
 import type { Vec3 } from "../types.js";
 import { activeThreats, dormantReset, restingAgent, speciesOf, stepAgent } from "./agents.js";
 import { cueEvents, miteScatter, sailPositions, scavengerRetreat, schoolScattered } from "./cues.js";
-import { driftFrom, emptyExposure, fieldLevel, resumeExposure, sampleHazards, stepExposure } from "./hazards.js";
+import { driftFrom, emptyExposure, fieldLevel, recoverExposure, resumeExposure, sampleHazards, stepExposure } from "./hazards.js";
 import { ECOLOGY_DT } from "./types.js";
 import type { AgentMode, EcologyEvent, EcologyInput, EcologyState, EcologyStepResult, EcologyWorld, Exposure, Sense } from "./types.js";
 import { finite } from "./vector.js";
@@ -66,9 +66,9 @@ export function stepEcology(state: EcologyState, input: EcologyInput, world: Eco
     events.push(...exposed.events);
     if (input.vehicleId) vehicleHealth += exposed.harm; else diverHealth += exposed.harm;
   }
-  const calm = { ...sample, heat: 0, brine: 0 };
-  if (input.vehicleId !== null) stepExposure(state.diver, calm, input.protection, true, true);
-  for (const hull of state.hulls) if (hull !== load) stepExposure(hull, calm, input.protection, false, true);
+  // Uncontrolled actors recover silently and re-arm their warning for return.
+  if (input.vehicleId !== null) recoverExposure(state.diver);
+  for (const hull of state.hulls) if (hull !== load) recoverExposure(hull);
   state.hulls = state.hulls.filter(h => h === load || h.heat > 0 || h.brine > 0);
 
   const active = new Set(activeThreats(s.position));
