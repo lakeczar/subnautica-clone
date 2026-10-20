@@ -119,3 +119,7 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **Builder queue (cap 5):** running S1, S2, S4 and S6 (all fixing review findings) and S7 (additive saves). S8 is done at `98dcf72` and in Sol R1 review.
 - **S8 copy proposals:** accepted. Drop stats from recipe names, shorten refusals, and have the service refusal mention moorings. Applied in the registry at composition.
 - **S4 R2 fixes done** at `8f01513` (37 tests; walls, accounting and vibration mutations now caught). A focused Sol R3 review is running. One builder slot is held for composition, which starts when S7 lands.
+- **S7 additive-content done** at `03d5839` (fast tests 544/544, heavy 9/9, browser import/export smoke). Sol R1 review running. **C1 composition** (Opus, 5th slot) started: merges S7 + S8 + S5 + S3 onto production, then wires the story and fleet in, applies the Dart trim and the copy proposals, and makes the planner use the real registry.
+- **S6 R2 fixes done** at `35fe1c4` (37 tests, lab 78/78, orphans 0, pause digitally silent). A focused Sol R3 review is running.
+- **S4 R3 (Sol xhigh):** changes-needed (`review/s4-r3` `f5595aa`). S4-06/07 are resolved, but S4-08: alternating control renews hazard grace forever (0 damage over 127 s). Back with the author with an explicit episode rule.
+- **S1 R2 fixes done** at `84bbc86` (39 fast and 7 heavy tests, 10/10 mutations). A focused Sol R3 review is running. S2 should re-merge `84bbc86`.
