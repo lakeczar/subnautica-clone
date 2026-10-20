@@ -1,5 +1,5 @@
 import {
-  EVIDENCE, FUTURE_BLUEPRINTS, HULL_BUILD, HULLS, ITEMS, MATERIALS, MODULES, OPTIONAL_RECORD, PLACES,
+  FUTURE_BLUEPRINTS, HULL_BUILD, HULLS, ITEMS, MATERIALS, MODULES, PLACES,
   RECOVERY_STAGE, RECIPES, REGIONS, renewable, SOURCES, TECH_RECORDS, techRecord,
   type Recipe,
 } from "../content/registry.js";
@@ -19,6 +19,11 @@ import { canisterSalvagePreview } from "../sim/recovery.js";
 import { cabinHull, fittedMount, holdCapacity, mobileRefugeBlock, mountLabel } from "../sim/fleet.js";
 import type { GameCommand, GameState, ItemStack, VehicleState, WorldQueries } from "../sim/types.js";
 import { bearing, escapeHtml, heading, recoveryDisplay } from "./format.js";
+import { storyKnown } from "../sim/storyLink.js";
+import { registerStoryNotebook } from "./storyNotebook.js";
+import { DISCOVERY_IDS, type DiscoveryId } from "../content/story/evidence.js";
+
+const isDiscovery = (id: string): id is DiscoveryId => (DISCOVERY_IDS as readonly string[]).includes(id);
 
 export type PanelKind = "inventory" | "craft" | "notebook" | "carrier";
 
@@ -35,9 +40,11 @@ export interface PanelSection {
 export interface SectionKit {
   button: CommandButton;
   /** Native disclosure whose open state survives refreshes. */
-  group(id: string, label: string, body: string, initiallyOpen?: boolean): string;
+  group(id: string, label: string, body: string, initiallyOpen?: boolean, attrs?: GroupAttrs): string;
   escape(text: string): string;
 }
+/** Optional element id (a focus target) and extra class for a disclosure. */
+export interface GroupAttrs { id?: string; className?: string }
 /** `name` gives a short visible verb its full accessible name, e.g. "Repair" → "Repair · Pod regulator". */
 export type CommandButton = (label: string, command: GameCommand, disabled?: boolean, reason?: string, name?: string) => string;
 
@@ -68,7 +75,10 @@ export class PanelView {
   private renderedKind: PanelKind | null = null;
   private readonly sections = new Map<PanelKind, PanelSection[]>();
 
-  constructor(private readonly root: HTMLElement, private readonly world: WorldQueries) {}
+  constructor(private readonly root: HTMLElement, private readonly world: WorldQueries) {
+    // The story's notebook is composed through the same extension sections as any stream.
+    registerStoryNotebook(this);
+  }
 
   private get<T extends HTMLElement = HTMLElement>(id: string): T {
     const element = this.root.querySelector<T>(`#${id}`);
@@ -84,7 +94,7 @@ export class PanelView {
   /** Built sections in order, each followed by its extensions. Consecutive
    * `fold` sections share one row of closed disclosures. */
   private compose(kind: PanelKind, built: [id: string, html: string, fold?: boolean][], state: GameState, button: CommandButton): string {
-    const kit: SectionKit = { button, group: (id, label, body, open) => this.group(`${kind}:${id}`, label, body, open), escape: escapeHtml };
+    const kit: SectionKit = { button, group: (id, label, body, open, attrs) => this.group(`${kind}:${id}`, label, body, open, attrs), escape: escapeHtml };
     const extra = this.sections.get(kind) ?? [];
     const anchors = new Set(built.map(([id]) => id));
     const after = (anchor: string): string => extra.filter((s) => s.after === anchor)
@@ -235,10 +245,10 @@ export class PanelView {
     this.get("panel-feedback").hidden = true;
   }
 
-  private group(id: string, label: string, body: string, initiallyOpen = false): string {
+  private group(id: string, label: string, body: string, initiallyOpen = false, attrs: GroupAttrs = {}): string {
     const move = id.startsWith("move:");
     this.renderedDefaults.set(id, initiallyOpen);
-    return `<details class="${move ? "row-move" : "panel-group"}" data-panel-group="${escapeHtml(id)}"${(this.expansions.get(id) ?? initiallyOpen) ? " open" : ""}><summary data-focus-key="${move ? "" : "group:"}${escapeHtml(id)}">${label}</summary>${body}</details>`;
+    return `<details class="${move ? "row-move" : "panel-group"}${attrs.className ? ` ${escapeHtml(attrs.className)}` : ""}"${attrs.id ? ` id="${escapeHtml(attrs.id)}" tabindex="-1"` : ""} data-panel-group="${escapeHtml(id)}"${(this.expansions.get(id) ?? initiallyOpen) ? " open" : ""}><summary data-focus-key="${move ? "" : "group:"}${escapeHtml(id)}">${label}</summary>${body}</details>`;
   }
 
   private itemLabel(state: GameState, item: ItemStack): string {
@@ -574,29 +584,17 @@ export class PanelView {
   /** Ordered notebook sections. Story records stay whole; reference blocks collapse. */
   private notebook(state: GameState, button: CommandButton): [string, string, boolean?][] {
     const found = (id: string): boolean => state.knowledge.evidence.some((e) => e.id === id);
-    const question = found("C06") ? found("C05")
-      ? "The dated water change and inward movement are separate facts. What connects them? Keep the residents’ destination and the cause open while comparing the records."
-      : "What drove the dated sediment surge? The dormitory’s transfer tags are an independent lead; its record can be investigated in either order."
-      : found("C05") ? "Where did the inward transfer go? The southern dish’s boundary station may explain the water change; the tags alone do not establish the residents’ fate."
-      : found("C04") ? "What changed in the water before the equipment failed? Follow the fallen survey dishes beyond the lower Canopy crowns into Pale Basin."
-      : found("C02") && found("C03") ? "Why were the intake and workshop left behind? The upper laboratory beside the Canopy’s tall rib may preserve another observation." : found("C03") ? "Why were departure supplies left unused? The reef intake is an independent lead; the laboratory lies beyond the eastern buoyant crowns." : found("C02") ? "Why is the intake abandoned while its filters still live? The workshop by Splitspine’s landing may preserve a different account." : "Why is the pod damaged? Compare its regulator with the intake below the reef ribs, or investigate the workshop above the island landing.";
     const payoff = found("C04") || found("C05") || found("C06") ? `<p class="expedition-payoff">${personalLimit(state) < 350 ? "Before Basin work: refit the fitted 150 m suit to 350 m at the restored workshop. Canopy crust and cured resin fund the refit; Dart’s 180 m hull reaches the first shelves." : `Basin preparation: suit 350 m${this.hullSummary(state)}. Keep exits on survey shelves you can reach, with air, power and cargo room for the return.`}${found("C05") ? " The dormitory rack's plans build a Creel workboat in the workshop slip; tagged frames on the Basin ridge feed hull refits and the dark outer-crown mooring." : ""}${found("C06") ? " The station's fracture survey rates a Creel hull ring to 350 m for the slope below." : ""}</p>` : "";
-    const latest = state.knowledge.evidence.at(-1)?.id;
-    const findings = state.knowledge.evidence.map((f) => {
-      const e = EVIDENCE[f.id], key = `finding:${f.id}`;
-      this.renderedDefaults.set(key, f.id === latest);
-      return `<details class="panel-group finding" id="finding-${f.id}" tabindex="-1" data-panel-group="${key}"${(this.expansions.get(key) ?? f.id === latest) ? " open" : ""}><summary data-focus-key="group:${key}">${e.label}</summary><p class="provenance">Source · ${escapeHtml(e.provenance)}</p><p><b>Observed</b> · ${e.observation}</p><p><b>Hypothesis</b> · ${e.hypothesis}</p><p class="lead"><b>Regional lead</b> · ${e.lead}</p></details>`;
-    }).join("");
     let notes = state.knowledge.scans.includes("filter_flow") ? '<article><h3>Current-facing filters</h3><p>Open fans face the current. Harvest loose membrane from downstream catch hollows.</p></article>' : "";
     for (const scan of state.knowledge.scans.filter(techRecord))
       notes += `<article class="tech-record"><h3>${escapeHtml(TECH_RECORDS[scan].label)}</h3><p>${escapeHtml(TECH_RECORDS[scan].text)}</p></article>`;
-    if (state.knowledge.journals.includes(OPTIONAL_RECORD.id)) notes += `<article><h3>Personal record · optional</h3><p>${OPTIONAL_RECORD.text}</p></article>`;
     const plans = Object.entries(FUTURE_BLUEPRINTS).filter(([id]) => state.knowledge.blueprints.includes(id as keyof typeof FUTURE_BLUEPRINTS));
     return [
       ["dive-check", this.diveCheck(state, button("Hint", { type: "hint" }, false, undefined, "Request a regional hint"))],
-      ["question", `<article class="next-question"><h3>Current question</h3><p>${question}</p>${payoff}</article>`],
-      ["interpretation", found("C02") && found("C03") ? '<p class="interpretation">Together: the living intake and unspent shore supplies suggest disrupted services. The reason people left these sites is still unconfirmed, whichever record you found first.</p>' : ""],
-      ["findings", findings],
+      // The story's questions, leads and readings slot in after these anchors (ui/storyNotebook.ts).
+      ["question", payoff ? `<article class="next-question"><h3>Preparation</h3>${payoff}</article>` : ""],
+      ["interpretation", ""],
+      ["findings", ""],
       ["field-notes", notes],
       ["refuge", this.refugeStatus(state)],
       ["places", this.places(state), true],
@@ -693,7 +691,7 @@ export class PanelView {
 
   focusTarget(kind: PanelKind, state: GameState, targetId: string): void {
     let id: string | null = null;
-    if (kind === "notebook" && state.knowledge.evidence.some(e => e.id === targetId)) id = `finding-${targetId}`;
+    if (kind === "notebook" && isDiscovery(targetId) && storyKnown(state, targetId)) id = `finding-${targetId}`;
     if (kind === "inventory") {
       const cache = state.recovery.caches.find(c => c.id === targetId);
       if (cache) id = `container-${cache.containerId}`;

@@ -523,7 +523,7 @@ test("notebook retains both early orders and omits unknown sources and an uncoll
     const snapshot = structuredClone(s);
     view.openPanel("notebook", s);
     const html = get("panel-content").innerHTML;
-    assert.ok(html.indexOf("Intake & living filters") < html.indexOf("Unspent departure supplies") === (order[0] === "C02"));
+    assert.ok(html.indexOf("Intake &amp; living filters") < html.indexOf("Unspent departure supplies") === (order[0] === "C02"));
     for (const finding of s.knowledge.evidence) assert.ok(html.includes(finding.provenance));
     assert.ok(!html.includes("Mara Sen / field method"));
     assert.ok(!html.includes("Upper grounding fins"), "undiscovered source is not revealed by a regional lead");

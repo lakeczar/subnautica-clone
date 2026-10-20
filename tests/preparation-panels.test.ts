@@ -232,7 +232,7 @@ test("ordinary panel labels are readable; empty-inventory emergency food and ret
     if (kind === "inventory") assert.ok(commands().some((c) => c.type === "emergency-meal"));
     if (kind === "notebook") {
       assert.match(text, /full tank 180 s/); assert.ok(!text.includes("Recovered research:"));
-      assert.match(text, /Source ·.*Observed.*Hypothesis.*Regional lead/s);
+      assert.match(text, /Source ·.*Observed.*(?:Hypothesis|Read again)/s);
       assert.match(text, /future construction opportunity; no campaign carrier is available here yet/);
     }
   }
@@ -456,7 +456,8 @@ test("M2 notebook preserves C06-first provenance, observation and inference, sho
   const { panel, html, commands } = panelFixture(t), s = createGame(); completeOpening(s); discover(s, "C06");
   const recorded = structuredClone(s.knowledge.evidence), before = structuredClone(s);
   panel.refresh("notebook", s);
-  assert.match(html(), /independent lead.*either order/);
+  assert.match(html(), /What changed the water\?/, "the story's question opens from the C06 record alone");
+  assert.match(html(), /data-status="supported"><span class="status-chip">Supported<\/span> Dense water spread before the machines failed/);
   assert.match(html(), /D−12 profile; D0 \+00:35 trace and fractured slope/);
   assert.match(html(), /<b>Observed<\/b>.*Profiles dated/);
   assert.match(html(), /<b>Hypothesis<\/b>.*do not establish the extraction history/);
@@ -467,7 +468,9 @@ test("M2 notebook preserves C06-first provenance, observation and inference, sho
   assert.deepEqual(s, before);
   discover(s, "C05"); discover(s, "C04"); panel.refresh("notebook", s);
   assert.deepEqual(s.knowledge.evidence[0], recorded[0], "later context cannot rewrite the early finding");
-  assert.match(html(), /dated water change and inward movement are separate facts/);
+  assert.match(html(), /Where did everyone go\?/);
+  assert.match(html(), /data-status="established"><span class="status-chip">Established<\/span> Dense water spread/, "the corroborated reading settles");
+  assert.match(html(), /Read again<\/b> · The fauna read the dense water before the instruments did/, "C04 is reread in the light of C06");
   assert.match(html(), /Creel workboat/);
   assert.match(html(), /Carrier Basin frame and anchorage survey/);
   assert.doesNotMatch(html(), /Basin.*(?:not yet open|future expedition|later expedition)/);
@@ -608,13 +611,13 @@ test("the notebook keeps every record whole but opens only the newest; reference
   panel.addSection("notebook", { id: "tail", after: "no-such-anchor", render: () => "<p>Appended</p>" });
   panel.refresh("notebook", s);
   for (const e of s.knowledge.evidence) {
-    assert.match(html(), new RegExp(`id="finding-${e.id}"[^>]*data-panel-group="finding:${e.id}"${e.id === latest ? " open" : ">"}`), e.id);
-    assert.match(html().split(`id="finding-${e.id}"`)[1]!.split("</details>")[0]!, /Source ·.*Observed.*Hypothesis.*Regional lead/);
+    assert.match(html(), new RegExp(`id="finding-${e.id}"[^>]*data-panel-group="notebook:finding:${e.id}"${e.id === latest ? " open" : ">"}`), e.id);
+    assert.match(html().split(`id="finding-${e.id}"`)[1]!.split("</details>")[0]!, /Source ·.*Observed.*(?:Hypothesis|Read again)/);
   }
   for (const group of ["places", "habitats", "dive-preparation", "retained-plans", "return-recovery"])
     assert.ok(!html().includes(`data-panel-group="${group}" open`), group);
   assert.doesNotMatch(html(), /Personal field notes add context/);
-  assert.ok(html().indexOf('data-section="interpretations"') > html().indexOf('class="interpretation"'));
+  assert.ok(html().indexOf('data-section="interpretations"') > html().indexOf('data-section="story-questions"'));
   assert.ok(html().indexOf('data-section="interpretations"') < html().indexOf('id="finding-'));
   assert.match(html(), /data-panel-group="notebook:pairs"/, "extension disclosures are namespaced by panel");
   assert.ok(html().trimEnd().endsWith('<section class="panel-extension" data-section="tail"><p>Appended</p></section>'));
@@ -623,16 +626,16 @@ test("the notebook keeps every record whole but opens only the newest; reference
 test("only the newest record opens across later finds and reloads; a record the player opened stays open", (t) => {
   const { panel, get, html } = panelFixture(t);
   const s = UI_SCENARIOS["opening-fabrication"]();
-  const open = () => [...html().matchAll(/data-panel-group="finding:(C\d\d)" open/g)].map((m) => m[1]);
+  const open = () => [...html().matchAll(/data-panel-group="notebook:finding:(C\d\d)" open/g)].map((m) => m[1]);
   panel.refresh("notebook", s); assert.deepEqual(open(), ["C01"]);
   panel.refresh("inventory", s); discover(s, "C02");
   panel.refresh("notebook", s); assert.deepEqual(open(), ["C02"], "the earlier automatic choice is not sticky");
   panel.refresh("craft", s); discover(s, "C03");
   panel.refresh("notebook", s); assert.deepEqual(open(), ["C03"]);
-  get("panel-content").groups.find((g) => g.dataset.panelGroup === "finding:C01")!.open = true;
+  get("panel-content").groups.find((g) => g.dataset.panelGroup === "notebook:finding:C01")!.open = true;
   panel.refresh("notebook", s); discover(s, "C04"); panel.refresh("notebook", s);
   assert.deepEqual(open(), ["C01", "C04"], "explicit intent survives; the newest still opens");
-  get("panel-content").groups.find((g) => g.dataset.panelGroup === "finding:C04")!.open = false;
+  get("panel-content").groups.find((g) => g.dataset.panelGroup === "notebook:finding:C04")!.open = false;
   panel.refresh("notebook", s); assert.deepEqual(open(), ["C01"], "closing the newest is also intent");
   panel.resetSession(); panel.refresh("notebook", structuredClone(s));
   assert.deepEqual(open(), ["C04"], "a reload starts from the default: newest only");
