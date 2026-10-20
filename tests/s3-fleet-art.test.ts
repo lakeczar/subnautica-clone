@@ -8,10 +8,12 @@ import { createCelMaterial, createGlassMaterial } from "../src/render/materials.
 import { LabelMaterials } from "../src/render/landmarks.js";
 import { GeometryCache } from "../src/render/geometryCache.js";
 import { fleetContactPose, fleetHullArt, hearthlineShellArt, setFleetPose, updateFleetHullArt } from "../src/render/fleet/index.js";
-import { formatFit, hullFit, interiorFit, type FitReport } from "../src/render/fleet/fit.js";
+import { formatFit, hullFit, interiorFit, localVertices, type FitReport } from "../src/render/fleet/fit.js";
+import { createExpeditionActors } from "../src/render/expedition.js";
+import { DART_BERTH } from "../src/content/fleet/dart.js";
 import { S3_HULLS, SPINDLE, contactParts, type S3HullId } from "../src/content/fleet/hulls.js";
 import { HEARTHLINE_FIXTURES, HEARTHLINE_SOCKETS, hearthlineInteriorSolids } from "../src/content/fleet/hearthlineInterior.js";
-import { carrierRooms, carrierStructure } from "../src/sim/carrier.js";
+import { carrierRooms, carrierStructure, fixtureGame } from "../src/sim/carrier.js";
 import { makeVehicle, createGame } from "../src/sim/state.js";
 
 /** Only the label canvas is stubbed; meshes and materials run on NullEngine. */
@@ -214,5 +216,27 @@ test("Hearthline socket occupants survive ordinary frame updates unless occupanc
     updateFleetHullArt(m, state, v, []);
     assert.equal(shown(), 0, "an explicit empty list clears them");
     m.dispose(false, false);
+  });
+});
+
+test("S3-02: the Dart's real expedition art reaches its 2.5 m envelope half width", () => {
+  withScene((scene, cel, glass, labels) => {
+    const art = createExpeditionActors(scene, cel, glass, () => true, labels);
+    const state = fixtureGame(), dart = state.fleet.vehicles.find((v) => v.hull === "dart")!;
+    art.update(state);
+    const mesh = scene.getMeshByName(dart.id) as Mesh;
+    assert.ok(mesh, "the Dart actor exists");
+    let hw = 0, minZ = Infinity, maxZ = -Infinity, top = 0, bottom = Infinity;
+    for (const { points } of localVertices([mesh]))
+      for (let i = 0; i < points.length; i += 3) {
+        hw = Math.max(hw, Math.abs(points[i]!)); top = Math.max(top, points[i + 1]!); bottom = Math.min(bottom, points[i + 1]!);
+        minZ = Math.min(minZ, points[i + 2]!); maxZ = Math.max(maxZ, points[i + 2]!);
+      }
+    console.log(`dart art: half width ${hw.toFixed(3)}, y ${bottom.toFixed(3)}..${top.toFixed(3)}, z ${minZ.toFixed(3)}..${maxZ.toFixed(3)}`);
+    const m = DART_BERTH.measured;
+    for (const [name, got, want] of [["half width", hw, m.halfWidth], ["min z", minZ, m.minZ], ["max z", maxZ, m.maxZ], ["height", top, m.height]] as const)
+      assert.ok(Math.abs(got - want) < .006, `${name} ${got.toFixed(3)} vs recorded ${want}`);
+    assert.ok(bottom > -.006, "nothing hangs below the keel datum");
+    art.dispose();
   });
 });
