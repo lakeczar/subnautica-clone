@@ -1,6 +1,7 @@
 import type { RegionId } from "../registry.js";
 import type { Vec3 } from "../../world/types.js";
 import { drape } from "./drape.js";
+import { ROUTES } from "./passages.js";
 
 /** Local rescue access for every deep, loss-capable S2 site
  * (FLEET_AND_SURVIVAL "Recovery without erasing the expedition").
@@ -24,6 +25,9 @@ export interface RescuePlan {
   readonly maximumTether: number;
   /** Safe repair mooring or refuge site reached along the tethers. */
   readonly mooring: string;
+  /** Tow waypoints from the top of a branch to the mooring, where the
+   * straight line would cross terrain. */
+  readonly towVia?: readonly Readonly<Vec3>[];
 }
 
 const v = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
@@ -33,6 +37,13 @@ const TRUNK = [v(0, S, 6), v(40, S, -10), v(60, S, -90)];
 const approach = (...rest: Vec3[]): Vec3[] => [...TRUNK, ...rest];
 /** Proposed deep kit tether; legacy Basin route uses 650 m. */
 export const DEEP_TETHER = 950;
+
+/** The escarpment route, from the survey post back to the staging shelf. */
+function escarpmentTowVia(): Vec3[] {
+  const r = ROUTES.find(x => x.id === "route.meridian.escarpment")!;
+  const i = r.path.findIndex(p => p.z >= -880);
+  return r.path.slice(0, Math.max(1, i)).reverse().map(p => ({ ...p }));
+}
 
 const RAW_PLANS: readonly RescuePlan[] = [
   { id: "rescue.canopy_east", region: "suspended_garden", stage: v(640, S, -210), maximumTether: 400,
@@ -65,7 +76,7 @@ const RAW_PLANS: readonly RescuePlan[] = [
     mooring: "rift.cool_mooring", approach: approach(v(100, S, -900)),
     tethers: [
       [v(100, S, -900), v(92, -292, -888)],
-      [v(100, S, -900), v(120, -240, -935), v(136, -252, -934)],
+      [v(100, S, -900), v(130, -240, -900), v(136, -250, -904)],
       [v(100, S, -900), v(120, -240, -935), v(95.6, -254, -962), v(42, -246, -1030)],
       [v(100, S, -900), v(120, -240, -935), v(42, -246, -1030), v(-6.8, -260, -1092),
         v(-60, -282, -1114), v(-96, -298, -1106), v(-126, -372, -1084), v(-96, -298, -1106), v(-125, -300, -1062)],
@@ -109,7 +120,8 @@ const RAW_PLANS: readonly RescuePlan[] = [
       [v(1360, S, -1470), v(1396, -740, -1560), v(1396, -764, -1575)],
     ] },
   { id: "rescue.escarpment", region: "deep_district", stage: v(1346, S, -880), maximumTether: DEEP_TETHER,
-    mooring: "canopy.east_mooring", approach: approach(v(1346, S, -880)),
+    // Tow south along the surveyed escarpment ledge to the district shelf.
+    mooring: "meridian.staging_shelf", towVia: escarpmentTowVia(), approach: approach(v(1346, S, -880)),
     tethers: [
       [v(1346, S, -880), v(1346, -494, -880)],
       [v(1346, S, -880), v(1366, -460, -960), v(1366, -500, -1000)],

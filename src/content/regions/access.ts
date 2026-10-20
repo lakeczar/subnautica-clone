@@ -141,21 +141,29 @@ export const FIRST_ACCESS: readonly FirstAccessPlan[] = [
 ];
 /** Deposits must sit this far inside the preceding tier's rating, routes 10 m. */
 export const DEPOSIT_DEPTH_MARGIN = 25;
-/** A route reaches a deposit when it parks within a short diver swim. */
-export const FIRST_ACCESS_REACH = 10;
+/** Longest final swim from where the craft waits on a route to the work pose. */
+export const FINAL_SWIM = 40;
 
-/** Every mandatory first-access deposit is reachable with the preceding tier,
+/** The final connection to one first-access deposit: the craft waits at a
+ * vertex of a validated route chain, and the diver swims `leg` to the work pose. */
+export interface FirstAccessLeg { readonly site: string; readonly chain: number; readonly leg: readonly Vec3[] }
+
+/** Every mandatory first-access deposit is reachable with the preceding tier:
  * along a chain that never exceeds its depth or enters a hazard needing
- * protection it lacks; each material has at least two such deposits. */
+ * protection it lacks, then by a clear diver swim to the deposit's work pose
+ * under the same limits. Each material has at least two such deposits. */
 export function firstAccessProblems(ctx: CheckContext): string[] {
-  const out: string[] = [];
+  return firstAccess(ctx).problems;
+}
+export function firstAccess(ctx: CheckContext): { problems: string[]; legs: FirstAccessLeg[] } {
+  const out: string[] = [], legs: FirstAccessLeg[] = [];
   const routes = new Map(ROUTES.map(r => [r.id, r] as const));
   for (const plan of FIRST_ACCESS) {
     const tier = ACCESS_TIERS[plan.tier];
     const deposits = SITES.filter(s => s.role === "source" && s.material === plan.material && s.firstAccess);
     if (deposits.length < 2) out.push(`${plan.material}: only ${deposits.length} first-access deposits`);
-    const reached = new Set<string>();
-    for (const chain of plan.chains) {
+    const reached = new Map<string, string[]>();
+    plan.chains.forEach((chain, ci) => {
       const path: Vec3[] = [];
       for (const id of chain) {
         const r = routes.get(id);
@@ -170,15 +178,25 @@ export function firstAccessProblems(ctx: CheckContext): string[] {
         }).filter(p => !(r.legacy && p.includes("hits"))));
       }
       for (const d of deposits) {
-        const at = siteDatum(d, ctx.floor);
-        if (path.some(p => Math.hypot(p.x - at.x, p.y - at.y, p.z - at.z) <= FIRST_ACCESS_REACH)) reached.add(d.id);
+        const work = workPose(d, ctx.floor);
+        // Try the waiting points nearest the deposit first; the first clear swim wins.
+        const near = path.filter(p => Math.hypot(p.x - work.x, p.y - work.y, p.z - work.z) <= FINAL_SWIM)
+          .sort((p, q) => Math.hypot(p.x - work.x, p.y - work.y, p.z - work.z) - Math.hypot(q.x - work.x, q.y - work.y, q.z - work.z));
+        const why: string[] = [];
+        for (const from of near.slice(0, 8)) {
+          const leg = [from, work];
+          const p = corridorProblems(`${d.id} final swim`, leg, ctx, { profile: "diver", maxDepth: tier.depth, protections: tier.protections, margin: 0.05, step: 0.25 });
+          if (!p.length) { legs.push({ site: d.id, chain: ci, leg }); reached.set(d.id, []); break; }
+          why.push(...p);
+        }
+        if (!reached.has(d.id) && why.length) reached.set(`${d.id}?`, why.slice(0, 2));
       }
-    }
+    });
     for (const d of deposits) {
       const depth = -siteDatum(d, ctx.floor).y;
       if (depth > tier.depth - DEPOSIT_DEPTH_MARGIN) out.push(`${d.id}: ${depth.toFixed(0)} m is beyond ${plan.tier} (${tier.depth} m) less margin`);
-      if (!reached.has(d.id)) out.push(`${d.id}: no ${plan.tier} route chain reaches it`);
-      for (const h of ctx.hazards ?? []) if (h.protection && inside(h.bounds, siteDatum(d, ctx.floor), 2))
+      if (!reached.has(d.id)) out.push(`${d.id}: no clear ${plan.tier} final swim from a route chain${reached.has(`${d.id}?`) ? ` (${reached.get(`${d.id}?`)!.join("; ")})` : ""}`);
+      for (const h of ctx.hazards ?? []) if (h.protection && inside(h.bounds, workPose(d, ctx.floor), 2))
         out.push(`${d.id}: lies in ${h.id} (needs ${h.protection})`);
     }
   }
@@ -191,11 +209,23 @@ export function firstAccessProblems(ctx: CheckContext): string[] {
     const ok = Object.values(SOURCES).filter(s => s.item === material && -s.position.y <= ACCESS_TIERS[tierId].depth - 10);
     if (ok.length < 2) out.push(`${material}: fewer than two sources within ${tierId}`);
   }
-  return out;
+  return { problems: out, legs };
 }
 
 export function siteDatum(s: SiteDef, floor: FloorFunction): Vec3 {
   return { x: s.at.x, y: s.at.y === "floor" ? floor(s.at.x, s.at.z) + (s.lift ?? 0) : s.at.y, z: s.at.z };
+}
+/** Diver work pose (feet) for collection or interaction. */
+export function workPose(s: SiteDef, floor: FloorFunction): Vec3 {
+  if (s.work) return { ...s.work };
+  const d = siteDatum(s, floor);
+  return { x: d.x, y: d.y + 0.3, z: d.z };
+}
+/** Keel pose where a medium craft waits for the diver (and is attached if lost). */
+export function parkPose(s: SiteDef, floor: FloorFunction): Vec3 {
+  if (s.role === "mooring" && !s.park) return siteDatum(s, floor);
+  const w = workPose(s, floor), c = CRAFT_PROFILES.medium, x = s.park?.x ?? w.x, z = s.park?.z ?? w.z;
+  return { x, y: s.park?.y ?? Math.max(w.y + 3.5, footprintFloor(floor, x, z, c.radius) + 1.5), z };
 }
 export function siteBox(s: SiteDef, floor: FloorFunction): Aabb {
   const p = siteDatum(s, floor), h = s.half ?? { x: 1.5, y: 1.5, z: 1.5 };
@@ -209,13 +239,44 @@ export const LOSS_DEPTH = 150;
 export function lossCapable(s: SiteDef, floor: FloorFunction): boolean {
   return s.role !== "volume" && s.role !== "rescue_stage" && -siteDatum(s, floor).y > LOSS_DEPTH;
 }
-export const COVER_PAD = 30, SHELF_REACH = 60;
+export const COVER_PAD = 30;
+/** Longest last connection from a tether vertex to the attachment pose. */
+export const ATTACH_REACH = 40;
+/** Longest emergency transfer out of a protective hazard: the plume seam's
+ * is a winched lift up the 110 m trench wall to the lip shelf. */
+export const EMERGENCY_REACH = 140;
+/** Sites a diver works at or a craft waits by; landmarks and entrances are
+ * areas, covered by a tether reaching their extent. */
+const workSite = (s: SiteDef): boolean => s.role === "source" || s.role === "story" || s.role === "refuge" || s.role === "mooring";
+
+/** One proved recovery: Bobbin follows `plan`'s tether `branch` to `vertex`,
+ * then `attach` to the lost hull; Bobbin itself reaches the diver's work pose
+ * by `bobbin`; `emergency` (if any) first moves the hull out of a hazard; the
+ * hull is then towed along `tow` to `mooring`, which offers repair. */
+export interface RescueOutcome {
+  readonly site: string;
+  readonly plan: string;
+  readonly branch: number;
+  readonly vertex: number;
+  readonly attach: readonly Vec3[];
+  readonly bobbin: readonly Vec3[];
+  readonly emergency?: readonly Vec3[];
+  readonly tow: readonly Vec3[];
+  readonly mooring: string;
+}
 
 /** Each deep loss-capable site has a surface stage reached by swimming from
- * the pod, and a clear tether branch within reach of it. */
+ * the pod, a clear tether all the way to the attachment pose, Bobbin access
+ * to the work pose, an explicit emergency transfer where the work is inside
+ * a protective hazard, and a continuous tow to a repair mooring. */
 export function rescueProblems(ctx: CheckContext, plans: readonly RescuePlan[] = RESCUE_PLANS): string[] {
-  const out: string[] = [];
+  return rescue(ctx, plans).problems;
+}
+export function rescue(ctx: CheckContext, plans: readonly RescuePlan[] = RESCUE_PLANS): { problems: string[]; outcomes: RescueOutcome[] } {
+  const out: string[] = [], outcomes: RescueOutcome[] = [];
   const protective = (ctx.hazards ?? []).filter(h => h.protection);
+  const safe: CheckContext = { ...ctx, hazards: protective };
+  const sites = new Map(SITES.map(s => [s.id, s] as const));
   for (const plan of plans) {
     if (plan.stage.y < -1) out.push(`${plan.id}: stage is not at the surface`);
     const a = plan.approach;
@@ -231,22 +292,77 @@ export function rescueProblems(ctx: CheckContext, plans: readonly RescuePlan[] =
       if (Math.hypot(s0.x - plan.stage.x, s0.y - plan.stage.y, s0.z - plan.stage.z) > 1) out.push(`${plan.id}#${i}: branch does not start at the stage`);
       const len = pathLength(branch);
       if (len > plan.maximumTether) out.push(`${plan.id}#${i}: tether ${len.toFixed(0)} m exceeds ${plan.maximumTether} m`);
-      out.push(...corridorProblems(`${plan.id}#${i}`, branch, { ...ctx, hazards: protective },
-        { profile: "medium", protections: [], margin: 0.3, step: 1.5 }));
+      out.push(...corridorProblems(`${plan.id}#${i}`, branch, safe, { profile: "medium", protections: [], margin: 0.3, step: 1.5 }));
     });
+    const m = sites.get(plan.mooring);
+    if (!m) out.push(`${plan.id}: mooring ${plan.mooring} is not a site`);
+    else if (!(m.role === "mooring" || m.role === "refuge") || !m.services?.includes("repair"))
+      out.push(`${plan.id}: ${plan.mooring} is not a repair mooring (role ${m.role}, services ${m.services?.join(",") || "none"})`);
   }
-  const vertices = plans.flatMap(p => p.tethers.flatMap(b => b.slice(1).map(v => ({ v, plan: p }))));
-  const moorings = new Set(plans.map(p => p.mooring));
-  for (const id of moorings) if (!SITES.some(s => s.id === id)) out.push(`rescue mooring ${id} is not a site`);
+  const tetherVertices = plans.flatMap(p => p.tethers.flatMap(b => b.slice(1)));
   for (const s of SITES) {
     if (!lossCapable(s, ctx.floor)) continue;
-    const at = siteDatum(s, ctx.floor), box = siteBox(s, ctx.floor);
-    const work = s.role !== "landmark" && s.role !== "entrance";
-    const hazard = protective.find(h => inside(h.bounds, at));
-    const covered = hazard && work
-      ? vertices.some(({ v }) => Math.hypot(v.x - at.x, v.y - at.y, v.z - at.z) <= SHELF_REACH && !protective.some(h => inside(h.bounds, v)))
-      : vertices.some(({ v }) => inside(box, v, COVER_PAD) && !protective.some(h => inside(h.bounds, v)));
-    if (!covered) out.push(`${s.id}: no rescue tether reaches ${fmt(at)}${hazard ? ` (in ${hazard.id})` : ""}`);
+    if (!workSite(s)) {
+      // An area: some clear tether vertex reaches into its extent.
+      const box = siteBox(s, ctx.floor);
+      if (!tetherVertices.some(v => inside(box, v, COVER_PAD) && !protective.some(h => inside(h.bounds, v))))
+        out.push(`${s.id}: no rescue tether reaches its area`);
+      continue;
+    }
+    const work = workPose(s, ctx.floor), hazard = protective.find(h => inside(h.bounds, work));
+    const why: string[] = [];
+    // Emergency transfer: explicit, short, clear, ending outside every protective hazard.
+    let emergency: readonly Vec3[] | undefined;
+    if (hazard) {
+      const e = s.emergency;
+      if (!e || e.length < 2) { out.push(`${s.id}: work pose in ${hazard.id} without an emergency transfer`); continue; }
+      // Cargo or a diver moved by hand: a diver-sized path, allowed through the hazard it leaves.
+      const p = [...corridorProblems(`${s.id} emergency`, e, { ...ctx, hazards: [] }, { profile: "diver", margin: 0.05, step: 0.5 })];
+      if (Math.hypot(e[0]!.x - work.x, e[0]!.y - work.y, e[0]!.z - work.z) > 6) p.push(`${s.id}: emergency transfer does not start at the work pose`);
+      if (pathLength(e) > EMERGENCY_REACH) p.push(`${s.id}: emergency transfer longer than ${EMERGENCY_REACH} m`);
+      if (protective.some(h => inside(h.bounds, e.at(-1)!, 5))) p.push(`${s.id}: emergency transfer ends in or beside a protective hazard`);
+      if (p.length) { out.push(...p); continue; }
+      emergency = e;
+    }
+    const target = emergency ? emergency.at(-1)! : parkPose(s, ctx.floor);
+    // Bobbin reaches the work pose from where the hull waits (diver-sized).
+    const bobbin = emergency ? [target] : [target, work];
+    if (!emergency) {
+      const p = corridorProblems(`${s.id} bobbin`, bobbin, safe, { profile: "diver", margin: 0.05, step: 0.25 });
+      if (p.length) { out.push(`${s.id}: Bobbin cannot reach the work pose: ${p[0]}`); continue; }
+      const hb = corridorProblems(`${s.id} park`, [target], safe, { profile: "medium", margin: 0.3 });
+      if (hb.length) { out.push(`${s.id}: no clear park pose: ${hb[0]}`); continue; }
+    }
+    // Candidate attachments: tether vertices near the target, nearest first.
+    const candidates: { plan: RescuePlan; branch: number; vertex: number; d: number }[] = [];
+    for (const plan of plans) plan.tethers.forEach((b, bi) => b.forEach((v, vi) => {
+      if (vi === 0) return;
+      const d = Math.hypot(v.x - target.x, v.y - target.y, v.z - target.z);
+      if (d <= ATTACH_REACH) candidates.push({ plan, branch: bi, vertex: vi, d });
+    }));
+    candidates.sort((a, b) => a.d - b.d);
+    let found: RescueOutcome | null = null;
+    for (const c of candidates.slice(0, 12)) {
+      const branch = c.plan.tethers[c.branch]!, v = branch[c.vertex]!;
+      const attach = [v, target];
+      if (pathLength(branch.slice(0, c.vertex + 1)) + c.d > c.plan.maximumTether) { why.push(`${c.plan.id}#${c.branch} too short`); continue; }
+      const pa = corridorProblems(`${s.id} attach`, attach, safe, { profile: "medium", margin: 0.3, step: 0.5 });
+      if (pa.length) { why.push(pa[0]!); continue; }
+      const m = sites.get(c.plan.mooring);
+      if (!m) continue;
+      const tow = [target, ...branch.slice(1, c.vertex + 1).reverse(), ...(c.plan.towVia ?? []), parkPose(m, ctx.floor)];
+      const pt = corridorProblems(`${s.id} tow`, tow, safe, { profile: "medium", margin: 0.3, step: 1.5 });
+      if (pt.length) { why.push(pt[0]!); continue; }
+      found = { site: s.id, plan: c.plan.id, branch: c.branch, vertex: c.vertex, attach, bobbin,
+        ...(emergency ? { emergency } : {}), tow, mooring: c.plan.mooring };
+      break;
+    }
+    if (!found) out.push(`${s.id}: no proved rescue (${candidates.length ? why.slice(0, 2).join("; ") : `no tether within ${ATTACH_REACH} m of ${fmt(target)}`})`);
+    else {
+      const m = sites.get(found.mooring)!;
+      if (!(m.role === "mooring" || m.role === "refuge") || !m.services?.includes("repair")) out.push(`${s.id}: tow ends at ${found.mooring}, not a repair mooring`);
+      outcomes.push(found);
+    }
   }
-  return out;
+  return { problems: out, outcomes };
 }

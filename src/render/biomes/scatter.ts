@@ -116,6 +116,9 @@ interface KeepPoint { x: number; z: number; y: number; r: number }
 const KEEP_BUCKET = 64;
 let keep: Map<number, KeepPoint[]> | null = null;
 const kkey = (bx: number, bz: number): number => (bx + 1000) * 4096 + (bz + 1000);
+/** Build the keep-out index ahead of the first chunk (a one-time cost of a
+ * few milliseconds), so no scatter build step pays for it. */
+export function prewarmScatter(): void { keepIndex(); }
 function keepIndex(): Map<number, KeepPoint[]> {
   if (keep) return keep;
   keep = new Map();

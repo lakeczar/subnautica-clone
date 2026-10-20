@@ -142,8 +142,8 @@ function tick(): void {
   water.setFloat("time", frame / 60);
   scene.render();
   frame++;
-  const ready = residency.isReady();
-  canvas.dataset.pending = ready ? "false" : "true";
+  const ready = residency.isReady(250);
+  canvas.dataset.pending = ready || st.settled ? "false" : "true";
   if (frame % 10 === 0) status.textContent =
     `${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}  ${map.regionAt(p) ?? "outside"}  depth ${Math.max(0, -p.y).toFixed(0)} m\n` +
     `shown ${st.shown} hidden ${st.hidden} building ${st.building}  ${ready ? "ready" : "loading"}\n` +

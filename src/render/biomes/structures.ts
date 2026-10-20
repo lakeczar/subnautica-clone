@@ -256,12 +256,13 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
 /** Cut-stone facades on Meridian's terrace walls, inside the chunk: panels
  * standing just in front of the near-vertical floor cut, buttresses, and lit
  * gallery windows. Visual only; the floor itself is the wall's collision. */
-function terraceWalls(b: RecipeBuilder, floor: (x: number, z: number) => number,
-  min: { x: number; z: number }, max: { x: number; z: number }, fine: boolean): void {
+function* terraceWalls(b: RecipeBuilder, floor: (x: number, z: number) => number, due: () => boolean,
+  min: { x: number; z: number }, max: { x: number; z: number }, fine: boolean): Generator<void, void> {
   for (let w = 1; w < MERIDIAN_TERRACES.length; w++) {
     const radius = MERIDIAN_TERRACES[w]!.outer, step = fine ? 6 : 12, front = radius - MERIDIAN_WALL - 2.4;
     const span = Math.ceil(2 * Math.PI * radius / step);
     for (let i = 0; i < span; i++) {
+      if (due()) yield;
       const a0 = i / span * Math.PI * 2, a1 = (i + 1) / span * Math.PI * 2;
       const x0 = MERIDIAN_CENTRE.x + Math.cos(a0) * front, z0 = MERIDIAN_CENTRE.z + Math.sin(a0) * front;
       const x1 = MERIDIAN_CENTRE.x + Math.cos(a1) * front, z1 = MERIDIAN_CENTRE.z + Math.sin(a1) * front;
@@ -303,7 +304,7 @@ export const structuresFactory: ChunkArtFactory = {
     const b = new RecipeBuilder();
     for (const s of here) { DRAW[s.kind](b, s, lod === "fine"); if (ctx.due()) yield; }
     if (ctx.due()) yield;
-    terraceWalls(b, ctx.floor, min, max, lod === "fine");
+    yield* terraceWalls(b, ctx.floor, ctx.due, min, max, lod === "fine");
     return { meshes: b.vertexCount ? [b.finish(`${chunk.id}.structures`, 0.25)] : [], instances: [] };
   },
 };

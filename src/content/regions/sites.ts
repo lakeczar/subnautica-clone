@@ -45,7 +45,20 @@ export interface SiteDef {
   readonly interior?: boolean;
   /** Short design note for S4/S5/coordinator. Not player text. */
   readonly note?: string;
+  /** Diver work pose (feet): where collection or interaction happens.
+   * Default: 0.3 m above the datum. */
+  readonly work?: { readonly x: number; readonly y: number; readonly z: number };
+  /** Keel pose where a craft waits while the diver works, and where a lost
+   * hull is attached for rescue. Default: above the work pose, clear of the
+   * floor under a medium hull. */
+  readonly park?: { readonly x: number; readonly y?: number; readonly z: number };
+  /** Explicit emergency transfer out of a protective hazard: from the work
+   * pose to a shelf outside it, where rescue attaches instead. */
+  readonly emergency?: readonly { readonly x: number; readonly y: number; readonly z: number }[];
+  /** Services a refuge or mooring offers. Rescue tows need "repair". */
+  readonly services?: readonly SiteService[];
 }
+export type SiteService = "repair" | "charge" | "rest" | "meal";
 
 const src = (id: string, region: RegionId, label: string, material: MaterialId | "meal",
   x: number, y: number | "floor", z: number, condition: string, stock: readonly [number, number, number],
@@ -72,7 +85,7 @@ export const SITES: readonly SiteDef[] = [
   { id: "isles.stack_cleft", region: "island_chain", role: "landmark", label: "The split",
     at: { x: 470, y: -5, z: 95 }, half: { x: 7, y: 5, z: 70 },
     note: "Small-craft-only passage, 12 m wide at the waterline, floor 9.5 m." },
-  { id: "isles.stack_yard", region: "island_chain", role: "mooring", label: "Splitspine yard berth",
+  { id: "isles.stack_yard", services: ["repair"], region: "island_chain", role: "mooring", label: "Splitspine yard berth",
     at: { x: 470, y: -12, z: -6 }, half: { x: 26, y: 12, z: 26 },
     note: "PROPOSAL: Hearthline construction berth in the stack's dredged southern lee (floor -34)." },
   src("isles_stack_glass_east", "island_chain", "Stack surf ledge glass", "silica_glass", 538, -1.5, 100,
@@ -85,7 +98,7 @@ export const SITES: readonly SiteDef[] = [
   { id: "isles.headland_summit", region: "island_chain", role: "landmark", label: "Headland summit", vista: true,
     at: { x: 1112, y: "floor", z: 106 }, half: { x: 4, y: 3, z: 4 },
     note: "Highest land in the basin (+88 m); looks down the north and east storm cliffs." },
-  { id: "isles.headland_shelter", region: "island_chain", role: "refuge", label: "Headland field shelter",
+  { id: "isles.headland_shelter", services: ["rest", "charge", "meal"], region: "island_chain", role: "refuge", label: "Headland field shelter",
     at: { x: 983.5, y: 10, z: -5.6 }, pad: { radius: 26, flat: 0.28 }, half: { x: 4, y: 2.5, z: 3.5 },
     note: "Rest locker, meal issue and a charging point. Interior record site for the revisit lead." },
   { id: "isles.headland_records", region: "island_chain", role: "story", label: "Field shelter records",
@@ -101,7 +114,7 @@ export const SITES: readonly SiteDef[] = [
     "Surf below the storm cliff keeps glass nodules scoured clean.", [8, 2, 8]),
 
   // ---------------------------------------------------------------- Lantern Canopy (east shelf)
-  { id: "canopy.east_mooring", region: "suspended_garden", role: "mooring", label: "East Canopy mooring bowl",
+  { id: "canopy.east_mooring", services: ["repair", "charge"], region: "suspended_garden", role: "mooring", label: "East Canopy mooring bowl",
     at: { x: 620, y: -160, z: -200 }, pad: { radius: 62, drop: 6, flat: 0.62 }, half: { x: 30, y: 10, z: 30 },
     note: "Hearthline mooring (160 m). Ribs part around a clear turning bowl." },
   { id: "canopy.east_crowns", region: "suspended_garden", role: "landmark", label: "Lantern crowns", vista: true,
@@ -117,7 +130,7 @@ export const SITES: readonly SiteDef[] = [
     at: { x: 1300, y: "floor", z: -300 }, lift: 8, half: { x: 20, y: 10, z: 20 } },
 
   // ---------------------------------------------------------------- Pale Basin
-  { id: "basin.anchorage", region: "silt_basin", role: "mooring", label: "Pale Basin anchorage",
+  { id: "basin.anchorage", services: ["repair", "charge"], region: "silt_basin", role: "mooring", label: "Pale Basin anchorage",
     at: { x: 360, y: -240, z: -430 }, pad: { radius: 62, drop: 6, flat: 0.62 }, half: { x: 30, y: 10, z: 30 },
     note: "Hearthline anchorage (240 m) on the north-west terrace, outside every plume lane." },
   { id: "basin.dish_field", region: "silt_basin", role: "landmark", label: "Dish field", vista: true,
@@ -149,7 +162,7 @@ export const SITES: readonly SiteDef[] = [
   { id: "basin.pale_floor", region: "silt_basin", role: "landmark", label: "Pale floor", vista: true,
     at: { x: 620, y: "floor", z: -760 }, half: { x: 60, y: 8, z: 60 },
     note: "Deepest bowl (380 m); bright rippled sediment and sinking-grain curtains." },
-  { id: "basin.deep_marker", region: "silt_basin", role: "story", label: "Sounding marker",
+  { id: "basin.deep_marker", park: { x: 618, z: -752 }, region: "silt_basin", role: "story", label: "Sounding marker",
     at: { x: 612, y: "floor", z: -752 }, lift: 1, half: { x: 1, y: 2, z: 1 } },
   { id: "basin.west_gate", region: "silt_basin", role: "entrance", label: "Hearth drop foot",
     at: { x: -228, y: -160, z: -318 }, half: { x: 16, y: 10, z: 16 },
@@ -158,13 +171,13 @@ export const SITES: readonly SiteDef[] = [
   // ---------------------------------------------------------------- Ember Rift
   { id: "rift.head", region: "thermal_rift", role: "entrance", label: "Rift head",
     at: { x: 172, y: -256, z: -606 }, half: { x: 25, y: 12, z: 25 } },
-  { id: "rift.cool_mooring", region: "thermal_rift", role: "mooring", label: "Cool flank mooring",
+  { id: "rift.cool_mooring", services: ["repair", "charge"], region: "thermal_rift", role: "mooring", label: "Cool flank mooring",
     at: { x: 91.4, y: -300, z: -887.5 }, pad: { radius: 46, drop: 6, flat: 0.58 }, half: { x: 24, y: 10, z: 24 },
     note: "Hearthline mooring (300 m) on the cooled south-east lower ledge." },
-  { id: "rift.materials_station", region: "thermal_rift", role: "refuge", label: "Materials station",
+  { id: "rift.materials_station", work: { x: 135.6, y: -261.7, z: -913.5 }, park: { x: 135.6, z: -905 }, services: ["rest", "charge", "repair"], region: "thermal_rift", role: "refuge", label: "Materials station",
     at: { x: 135.6, y: -262, z: -920 }, pad: { radius: 16 }, half: { x: 7, y: 4, z: 5 }, interior: true,
     note: "Compact pressure station on the cool flank. Rest locker, charging, ceramic test racks." },
-  { id: "rift.station_log", region: "thermal_rift", role: "story", label: "Station test racks",
+  { id: "rift.station_log", park: { x: 137, z: -905 }, region: "thermal_rift", role: "story", label: "Station test racks",
     at: { x: 137, y: -261, z: -913.6 }, half: { x: 1, y: 0.8, z: 0.8 } },
   { id: "rift.cool_chimneys", region: "thermal_rift", role: "landmark", label: "Cool chimneys",
     at: { x: 40, y: -250, z: -1030 }, half: { x: 70, y: 18, z: 70 },
@@ -183,7 +196,8 @@ export const SITES: readonly SiteDef[] = [
     { firstAccess: true }),
   src("rift_core_plume_seam", "thermal_rift", "Plume-side seam", "thermal_core", -126, -430, -1084,
     "Richer core beside the active chimney. Work it between plume pulses or with thermal protection.", [16, 2, 0],
-    { note: "Optional richer seam; never the first core." }),
+    { note: "Optional richer seam; never the first core.",
+      emergency: [{ x: -126, y: -430.5, z: -1084 }, { x: -126, y: -320, z: -1084 }, { x: -108, y: -300, z: -1090 }] }),
   src("rift_ceramic_deep_seam", "thermal_rift", "Deep wall seam", "pressure_ceramic", -232, -398, -1150,
     "Thick pale strata in the trench wall below the shoulders. Better yield, not first access.", [16, 2, 0],
     { note: "Optional deeper seam." }),
@@ -199,16 +213,16 @@ export const SITES: readonly SiteDef[] = [
     note: "Cooled flank exit toward the Divide's western ridge." },
 
   // ---------------------------------------------------------------- Mirror Divide
-  { id: "divide.lee_mooring", region: "brine_divide", role: "mooring", label: "Divide lee mooring",
+  { id: "divide.lee_mooring", services: ["repair", "charge"], region: "brine_divide", role: "mooring", label: "Divide lee mooring",
     at: { x: 560, y: -390, z: -1120 }, pad: { radius: 60, drop: 6, flat: 0.6 }, half: { x: 30, y: 10, z: 30 },
     note: "Hearthline mooring (390 m) in the ridge's northern lee, above any brine." },
   { id: "divide.gateworks", region: "brine_divide", role: "landmark", label: "Gateworks", vista: true,
     at: { x: 600, y: -365, z: -1262 }, half: { x: 45, y: 50, z: 14 },
     note: "Two tall towers and a lintel across the ridge's central notch." },
-  { id: "divide.service_dock", region: "brine_divide", role: "refuge", label: "Upper service dock",
+  { id: "divide.service_dock", park: { x: 632, y: -364, z: -1224 }, services: ["rest", "charge", "repair"], region: "brine_divide", role: "refuge", label: "Upper service dock",
     at: { x: 632, y: -365, z: -1238 }, half: { x: 8, y: 3, z: 6 }, interior: true,
     note: "Restored service stop: charging, rest locker, docking collar for small craft." },
-  { id: "divide.gate_control", region: "brine_divide", role: "story", label: "Gate control room",
+  { id: "divide.gate_control", park: { x: 570, y: -379, z: -1240 }, region: "brine_divide", role: "story", label: "Gate control room",
     at: { x: 570, y: "floor", z: -1252 }, lift: 1.5, half: { x: 4, y: 3, z: 4 }, interior: true },
   { id: "divide.mirror_overlook", region: "brine_divide", role: "landmark", label: "Mirror overlook", vista: true,
     at: { x: 470, y: "floor", z: -1268 }, lift: 1, half: { x: 12, y: 6, z: 12 },
@@ -221,7 +235,8 @@ export const SITES: readonly SiteDef[] = [
     { firstAccess: true }),
   src("divide_lattice_fissure", "brine_divide", "Protected fissure", "brine_lattice", 520, -480, -1360,
     "Richer crystals deep in a fissure below the mirror. Needs chemical protection; never first access.", [20, 2, 0],
-    { note: "Optional richer stock inside brine." }),
+    { note: "Optional richer stock inside brine.",
+      emergency: [{ x: 520, y: -480.5, z: -1360 }, { x: 520, y: -428, z: -1360 }] }),
   { id: "divide.ledge_sampler", region: "brine_divide", role: "story", label: "Ledge sampler",
     at: { x: 344, y: "floor", z: -1182 }, lift: 0.8, half: { x: 1, y: 1.5, z: 1 } },
   { id: "divide.service_ledge", region: "brine_divide", role: "entrance", label: "Service ledge west end",
@@ -229,29 +244,29 @@ export const SITES: readonly SiteDef[] = [
     note: "Narrow cut bench above the mirror: small craft only, toward Meridian's lower terraces." },
 
   // ---------------------------------------------------------------- Meridian District (exterior)
-  { id: "meridian.staging_shelf", region: "deep_district", role: "mooring", label: "District staging shelf",
+  { id: "meridian.staging_shelf", services: ["repair", "charge"], region: "deep_district", role: "mooring", label: "District staging shelf",
     at: { x: 1080, y: -520, z: -1160 }, pad: { radius: 60, drop: 6, flat: 0.6 }, half: { x: 30, y: 10, z: 30 },
     note: "Upgraded Hearthline stops here (520 m) and sends smaller craft down." },
-  { id: "meridian.staging_office", region: "deep_district", role: "refuge", label: "Staging office",
+  { id: "meridian.staging_office", work: { x: 1132, y: -519.7, z: -1116.5 }, park: { x: 1132, z: -1106 }, services: ["rest", "charge"], region: "deep_district", role: "refuge", label: "Staging office",
     at: { x: 1132, y: -520, z: -1118 }, half: { x: 9, y: 5, z: 6 }, interior: true,
     note: "Exterior service stop: air lock, charging, rest locker. Interior not built by S2." },
   { id: "meridian.spire", region: "deep_district", role: "landmark", label: "Meridian spire", vista: true,
     at: { x: 1215, y: -535, z: -1319 }, half: { x: 9, y: 65, z: 9 },
     note: "Signal spire on the second terrace; its lit crown clears the shelf edge." },
-  { id: "meridian.gallery_north", region: "deep_district", role: "story", label: "North service gallery",
+  { id: "meridian.gallery_north", park: { x: 1302, z: -1146 }, region: "deep_district", role: "story", label: "North service gallery",
     at: { x: 1298, y: -597, z: -1135 }, half: { x: 4, y: 3, z: 4 }, interior: true },
-  { id: "meridian.gallery_south", region: "deep_district", role: "story", label: "South service gallery",
+  { id: "meridian.gallery_south", park: { x: 1012, z: -1408 }, region: "deep_district", role: "story", label: "South service gallery",
     at: { x: 1000, y: -597, z: -1406 }, half: { x: 4, y: 3, z: 4 }, interior: true },
-  { id: "meridian.archive_terrace", region: "deep_district", role: "story", label: "Archive terrace",
+  { id: "meridian.archive_terrace", park: { x: 1270, z: -1390 }, region: "deep_district", role: "story", label: "Archive terrace",
     at: { x: 1279, y: -679, z: -1396 }, half: { x: 6, y: 4, z: 6 }, interior: true },
   { id: "meridian.deep_works", region: "deep_district", role: "landmark", label: "Deep works", vista: true,
     at: { x: 1400, y: -770, z: -1530 }, half: { x: 50, y: 20, z: 50 } },
-  { id: "meridian.works_hatch", region: "deep_district", role: "story", label: "Works hatch",
+  { id: "meridian.works_hatch", park: { x: 1430, z: -1550 }, region: "deep_district", role: "story", label: "Works hatch",
     at: { x: 1430, y: -769, z: -1560 }, half: { x: 3, y: 2, z: 3 }, interior: true },
-  { id: "meridian.gate_hall", region: "deep_district", role: "story", label: "Gate hall",
+  { id: "meridian.gate_hall", park: { x: 1396, z: -1570 }, region: "deep_district", role: "story", label: "Gate hall",
     at: { x: 1396, y: -767.8, z: -1595.4 }, pad: { radius: 16, drop: 1.2, flat: 0.7 }, half: { x: 1.2, y: 0.8, z: 0.6 },
     note: "Evidence console on the hall's back wall, beside the gate machinery. Coordinator ID meridian_gate_hall (C09)." },
-  { id: "meridian.gate_hall_panel", region: "deep_district", role: "story", label: "Gate hall live control panel",
+  { id: "meridian.gate_hall_panel", park: { x: 1396, z: -1570 }, region: "deep_district", role: "story", label: "Gate hall live control panel",
     at: { x: 1402.6, y: -767.6, z: -1588 }, half: { x: 0.6, y: 0.9, z: 1.2 },
     note: "Live control panel on the hall's machinery-side wall; a separate interaction host from the evidence console." },
   { id: "meridian.machinery_boundary", region: "deep_district", role: "volume", label: "Machinery boundary",

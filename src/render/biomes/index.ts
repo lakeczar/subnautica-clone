@@ -2,7 +2,7 @@ import type { ChunkArtFactory, ChunkBuildContext, TemplateRecipe } from "../kit/
 import { defaultContext } from "../kit/factories.js";
 import { biomeAt } from "../../content/regions/layout.js";
 import { worldFloor } from "../../content/regions/worldFloor.js";
-import { scatterFactory } from "./scatter.js";
+import { prewarmScatter, scatterFactory } from "./scatter.js";
 import { structuresFactory } from "./structures.js";
 import { terrainFactory } from "./terrain.js";
 import { S2_TEMPLATES } from "./templates.js";
@@ -13,6 +13,7 @@ export const S2_FACTORIES: readonly ChunkArtFactory[] = [terrainFactory, scatter
 export const S2_TEMPLATE_LIBRARY: readonly TemplateRecipe[] = S2_TEMPLATES;
 /** The kit's build context over the shared floor, with S2 biomes. */
 export function s2BuildContext(stepMs = 0.75): ChunkBuildContext & { startStep(): void } {
+  prewarmScatter();
   return defaultContext(worldFloor, stepMs, undefined, biomeAt);
 }
 export { REGION_OPTICS, opticsAt } from "./optics.js";
