@@ -254,12 +254,12 @@ export function craftingBlock(
   if (r.once && s.knowledge.crafted.includes(id))
     return block("completed", "Already completed. The fabricated equipment or restored service is retained.");
   if (!r.needs.every((n) => s.knowledge.crafted.includes(n as RecipeId)))
-    return block("needs", "Earlier service work or equipment is still required.");
+    return block("needs", "Needs earlier work first.");
   if (id === "suit_350" && (s.inventory.items.filter(i => i.fitted === "suit").length !== 1 ||
       !s.inventory.items.some(i => i.kind === "suit_150" && i.fitted === "suit" && i.containerId === "equipment" && i.quantity === 1)))
     return block("equipment", "Bring the one fitted 150 m suit for its paid refit. Nothing consumed.");
   if (!atSite(s, r.site) || (r.site === "island_workshop" && !!s.player.interiorId))
-    return block("site", r.site === "canopy_stop" ? "Work at the outer-crown mooring's service mast." : "Use the fabrication bench at the required refuge.");
+    return block("site", r.site === "canopy_stop" ? "Work at the outer-crown mooring's service mast." : "Use this recipe’s bench.");
   if (
     (r.site === "pod_fabricator" && !facility(s, "pod_fabricator")) ||
     (r.site === "island_workshop" && id !== "restore_workshop" && !facility(s, "island_workshop"))
@@ -302,7 +302,7 @@ export function craftingBlock(
       ([kind, n]) => available(s, kind as ItemKind, bins) < n,
     )
   )
-    return block("materials", "Missing public materials. The bench uses your hold, its accessible locker, a nearby deployed buoy and craft at this site's supported cradle.");
+    return block("materials", "Missing materials at this bench.");
   if (id === "strip_frame") {
     const after = structuredClone(s);
     spend(after, r.cost, bins);

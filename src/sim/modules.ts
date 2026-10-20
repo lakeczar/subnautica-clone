@@ -52,7 +52,7 @@ export function dartPerformance(s: GameState, vehicleId: string): DartPerformanc
 }
 function localModuleAccessRefusal(s: GameState, v: VehicleState): string | null {
   if (s.player.controlledVehicleId || s.player.interiorId)
-    return "Exit the occupied hull safely before working on its module collar.";
+    return "Leave the hull to change its modules.";
   if (v.berth || s.recovery.operation || s.fleet.docking?.transaction)
     return "Finish recovery or berth work and use an unberthed hull before changing modules.";
   if (!containerAccessible(s, v.cargoId) && distance(s.player.pose.position, v.pose.position) >= 7)
@@ -85,7 +85,7 @@ export function mountChangePreview(s: GameState, vehicleId: string, itemId: stri
   if (!supportedServiceSite(s, v)) return result("Change the major mount at pod waters, the workshop slip or a restored service mooring.");
   if (itemId !== null && (!next || !moduleItem(next) || next.fitted !== null || !s.knowledge.crafted.includes(next.kind)))
     return result("Choose an intact, stowed Creel rack or cabin package.");
-  if (next && !containerAccessible(s, next.containerId)) return result("Bring the package into locally accessible cargo first.");
+  if (next && !containerAccessible(s, next.containerId)) return result("Bring the package here first.");
   if (!current && !next) return result("No mount is fitted.");
   const stowTo = next ? next.containerId : v.cargoId;
   const capacityAfter = next ? MODULES[next.kind].holdCu : holdCapacity(s, { ...v, modules: [] });

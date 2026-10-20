@@ -1117,7 +1117,7 @@ test("recipe focus follows its full command as shortage work becomes ready; comp
   const command: GameCommand = { type: "craft", recipeId: "pod_repair" };
   view.openPanel("craft", s);
   assert.equal(renderedControl(command).disabled, true); assert.equal(activateControl(renderedControl(command)), undefined);
-  assert.match(get("panel-content").innerHTML, /Missing public materials/);
+  assert.match(get("panel-content").innerHTML, /Missing materials at this bench/);
   addItem(s, "structural_alloy", 2, "diver"); addItem(s, "silica_glass", 1, "diver"); addItem(s, "flex_membrane", 2, "diver");
   view.refreshPanel(s); commandButton(command).focus();
   view.refreshPanel(s); assert.deepEqual(activeCommand(), command);

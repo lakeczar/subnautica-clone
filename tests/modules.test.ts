@@ -109,7 +109,7 @@ test("installation/removal require supported, unoccupied local access and no rec
   s.player.pose.position = { x: 74, y: -20, z: -60 }; s.player.mode = "swimming";
   refused(s, { type: "install-module", vehicleId: v.id, itemId: trim(s).id }, /supported|cradle/);
   assert.equal(board(s, v.id), null);
-  refused(s, { type: "install-module", vehicleId: v.id, itemId: trim(s).id }, /Exit.*occupied/);
+  refused(s, { type: "install-module", vehicleId: v.id, itemId: trim(s).id }, /Leave the hull/);
   const active = trimGame(true), av = active.fleet.vehicles[0]!;
   disableVehicle(active, av.id);
   active.recovery.operation = { vehicleId: av.id, routeId: "canopy", method: "tow", phase: "ready", position: { ...av.pose.position }, waypoint: 3 };
@@ -269,7 +269,7 @@ test("installed identity survives valid berth/launch transactions and immediate 
   s.player.interiorPose = { frame: "carrier-local", position: { ...CARRIER_LAYOUT.helm } };
   s.player.pose.position = localToWorld(CARRIER_LAYOUT.helm, h);
   const item = structuredClone(trim(s)); roundTrip(s);
-  refused(s, { type: "remove-module", vehicleId: v.id, itemId: item.id }, /occupied|unberthed/);
+  refused(s, { type: "remove-module", vehicleId: v.id, itemId: item.id }, /Leave the hull|unberthed/);
   assert.equal(carrierCommand(s, "launch", v.id, world), null); roundTrip(s);
   for (let n = 0; n < 32; n++) updateBerth(s, world);
   assert.equal(v.berth, null); assert.deepEqual(trim(s), item); assert.deepEqual(v.modules, [item.id]); roundTrip(s);

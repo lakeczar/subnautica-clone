@@ -376,7 +376,7 @@ test("one trim tradeoff keeps socket costs and exact fitting/removal prerequisit
   out.state.player.controlledVehicleId = v.id; out.state.player.mode = "piloting"; out.state.player.pose = structuredClone(v.pose);
   panel.refresh("inventory", out.state);
   assert.equal(controls().find((b) => b.command.type === "remove-module")!.disabled, true);
-  assert.match(html(), /Exit the occupied hull safely/);
+  assert.match(html(), /Leave the hull to change its modules/);
   assert.ok(out.state.fleet.vehicles[0]!.modules.includes(trim.id));
 });
 
