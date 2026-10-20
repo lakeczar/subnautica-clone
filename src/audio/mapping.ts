@@ -79,9 +79,10 @@ export class CueMapper {
         const from = this.last?.mode ?? null;
         if (this.last) this.last.mode = e.mode;
         if (from === null || from === e.mode) return [];
+        // Helm to cabin or carrier interior is a door, not a hatch to open water.
+        if (e.mode === "interior" || from === "interior") return [centred("transition.interior")];
         if (e.mode === "piloting") return [centred("transition.board")];
         if (from === "piloting") return [centred("transition.disembark")];
-        if (e.mode === "interior" || from === "interior") return [centred("transition.interior")];
         return [];
       }
       case "sound": {
