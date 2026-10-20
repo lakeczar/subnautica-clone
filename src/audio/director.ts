@@ -1,7 +1,7 @@
 /** SiltwakeAudio: the S6 replacement for `Soundscape`, with the same lifecycle
  * surface so app.ts swaps one import. Owns the live AudioContext; everything
  * it plays goes through the pure mapper and the engine. */
-import { renderRegionAt } from "../render/regions.js";
+import { worldRegionAt } from "../render/regions.js";
 import type { GameEvent, GameState } from "../sim/types.js";
 import { CaptionGate, type Caption } from "./captions.js";
 import { AudioEngine, type EngineStats } from "./engine.js";
@@ -40,7 +40,7 @@ export class SiltwakeAudio {
   private scene: AudioScene;
 
   constructor(private readonly options: AudioOptions = {}) {
-    this.regionAt = options.regionAt ?? renderRegionAt;
+    this.regionAt = options.regionAt ?? worldRegionAt;
     this.clock = options.clock ?? (() => performance.now() / 1000);
     this.scene = sceneFromState(null, false, this.regionAt);
   }
@@ -58,14 +58,17 @@ export class SiltwakeAudio {
     if (this.context.state !== "running") void this.context.resume().catch(() => {});
   }
 
-  /** Once per frame, after the step's events. */
+  /** Once per frame, after the step's events. Inactive (paused, menu, panel)
+   * updates still observe state, so nothing replays on resume, but drop the
+   * state-derived cues they would start: pause stays silent. Deliberate
+   * panel-action feedback arrives through events(), not here. */
   update(s: GameState | null, active: boolean): void {
     if (this.disposed) return;
     this.scene = sceneFromState(s, active, this.regionAt, this.scene.region);
     const derived = this.mapper.observe(s, this.scene, this.clock());
     this.engine?.setVolume(this.gain());
     this.engine?.update(this.scene);
-    for (const r of derived) this.play(r);
+    if (active) for (const r of derived) this.play(r);
   }
 
   /** One simulation event. Pass every event of a batch in order. */

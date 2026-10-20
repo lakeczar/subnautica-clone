@@ -1101,3 +1101,37 @@ test("app: region preparation runs only on settled idle screens, never during pl
   f.frames(30);
   assert.equal(f.renderer.prepares.length, hidden, "a hidden tab does no preparation");
 });
+
+/** Real command, panel and frame paths with the real director on S6's recording
+ * context: reads C02 by E, then pauses by Notebook or Menu before the next frame. */
+async function discoveryThenPause(t: test.TestContext, pauseBy: "notebook" | "menu" | null) {
+  const { SiltwakeAudio } = await import("../src/audio/director.js");
+  const { FakeContext, asContext } = await import("./audio-fake-context.js");
+  const { NORMAL_VIEWS } = await import("./targeting-support.js");
+  const at = NORMAL_VIEWS.find(v => v.id === "C02")!;
+  const initial = sample(0); completeOpening(initial.state);
+  initial.state.player.pose.position = { ...at.position }; initial.state.player.mode = at.mode; faceTarget(initial.state, "C02");
+  const f = await fixture(t, initial), ctx = new FakeContext();
+  const audio = new SiltwakeAudio({ createContext: () => asContext(ctx) });
+  (f.app as unknown as { sound: typeof audio }).sound = audio;
+  f.view.actions.resume(); f.frames(3);
+  const music = () => audio.stats()!.bus.music;
+  assert.equal(music(), 0, "baseline");
+  f.view.actions.command({ type: "interact" });
+  assert.ok(f.view.state!.knowledge.evidence.some(e => e.id === "C02"), "the read records C02 at once");
+  if (pauseBy === "notebook") f.view.actions.panel("notebook");
+  else if (pauseBy === "menu") f.view.actions.pause();
+  f.frames(30);
+  return { f, music };
+}
+test("app: control — a discovery read in play starts its phrase", async (t) => {
+  const { music } = await discoveryThenPause(t, null);
+  assert.equal(music(), 1);
+});
+for (const pauseBy of ["notebook", "menu"] as const)
+  test(`app: a discovery read just before ${pauseBy} stays silent while paused and never replays on resume`, async (t) => {
+    const { f, music } = await discoveryThenPause(t, pauseBy);
+    assert.equal(music(), 0, "no discovery phrase starts after the pause");
+    f.view.actions.resume(); f.frames(30);
+    assert.equal(music(), 0, "resume does not replay the missed phrase");
+  });

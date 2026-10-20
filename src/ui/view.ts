@@ -33,6 +33,12 @@ export interface UiActions {
 
 /** How long one sound caption stays in the alert column. */
 const CAPTION_MS = 3000;
+/** Warning captions and the hazard banner that already names the same cause:
+ * one visible line per cause. */
+const CAPTION_BANNER: Partial<Record<string, string>> = {
+  "alert.oxygen": "oxygen", "alert.food": "food", "alert.threat-call": "threat",
+  "alert.pressure": "pressure", "alert.power": "power", "alert.hull-stress": "hullDepth", "hull.failure": "hull",
+};
 export class GameView {
   private panelKind: PanelKind | null = null;
   private latest: GameState | null = null;
@@ -459,11 +465,11 @@ export class GameView {
   }
 
   /** S6 sound captions in the alert column. Essential warnings show even with
-   * captions off; a caption whose oxygen, food or hunter banner is already on
-   * screen is not repeated. */
+   * captions off; a caption whose cause already has a hazard banner on screen
+   * is not repeated. */
   audioCaption(caption: Caption, state: GameState | null = this.latest): void {
     if (!caption.essential && !this.subtitles) return;
-    const banner = ({ "alert.oxygen": "oxygen", "alert.food": "food", "alert.threat-call": "threat" } as Partial<Record<string, string>>)[caption.cue];
+    const banner = CAPTION_BANNER[caption.cue];
     if (banner && state && hazardBanners(state).some((b) => b.context === banner)) return;
     const element = this.get("audio-caption");
     element.textContent = caption.text;

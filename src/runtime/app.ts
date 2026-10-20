@@ -1,6 +1,6 @@
 import { armTarget, fittedCabin } from "../sim/fleet.js";
 import { SiltwakeAudio } from "../audio/director.js";
-import { renderRegionAt } from "../render/regions.js";
+import { worldRegionAt } from "../render/regions.js";
 import { executeCommand, stepGame } from "../sim/step.js";
 import { createWorldQueries } from "../sim/world.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
@@ -73,9 +73,9 @@ function readSettings(): Settings {
 
 /** The single lifecycle owner. Simulation never touches the DOM, storage or Babylon. */
 export class SiltwakeApp {
-  // Today's render regions resolve the ambience until C2 moves the renderer onto S1's WorldMap.
+  // Ambience follows C2's WorldMap, the map region selection uses; outside it, the last region holds.
   private readonly sound = new SiltwakeAudio({
-    regionAt: renderRegionAt,
+    regionAt: worldRegionAt,
     onCaption: (caption) => this.view.audioCaption(caption, this.state),
   });
   private resolutionPhase: string | null = null;

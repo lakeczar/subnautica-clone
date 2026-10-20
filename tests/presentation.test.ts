@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
 import { GameView, type UiActions } from "../src/ui/view.js";
-import { HudView } from "../src/ui/hud.js";
+import { hazardBanners, HudView } from "../src/ui/hud.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
 import { completeOpening, discover } from "../src/sim/progression.js";
 import { incapacitate, RECOVERY_NOTICES } from "../src/sim/recovery.js";
@@ -2013,4 +2013,33 @@ test("sound captions: essential warnings show with captions off, others follow t
   assert.equal(get("audio-caption").textContent, "[Berth clamps lock]");
   view.resetPresentation();
   assert.equal(get("audio-caption").hidden, true, "entering a session clears the caption");
+});
+
+test("sound captions keep one line per cause: pressure, power, hull depth and hull failure yield to their banners", (t) => {
+  const { view, get } = viewFixture(t);
+  const caption = (cue: string, text: string) => ({ cue, text, essential: true, dir: null }) as Parameters<typeof view.audioCaption>[0];
+  const piloted = (configure: (v: ReturnType<typeof makeVehicle>) => void) => {
+    const s = createGame(); completeOpening(s);
+    const v = makeVehicle("c1-dart", "dart", { x: 160, y: -60, z: -160 }, "c1-dart-hold");
+    configure(v); s.fleet.vehicles.push(v);
+    s.player.controlledVehicleId = v.id; s.player.mode = "piloting"; s.player.pose.position = { ...v.pose.position };
+    return s;
+  };
+  const deep = () => { const s = createGame(); completeOpening(s); s.player.mode = "swimming"; s.player.pose.position = { x: 160, y: -100, z: -160 }; return s; };
+  const cases: [string, string, () => ReturnType<typeof createGame>, string][] = [
+    ["alert.pressure", "[Suit pressure tone · beyond rated depth]", deep, "PRESSURE"],
+    ["alert.power", "[Low-power chime]", () => piloted((v) => { v.charge = 10; }), "LOW POWER"],
+    ["alert.hull-stress", "[Hull creaks · near rated depth]", () => piloted((v) => { v.pose.position.y = -170; }), "HULL DEPTH"],
+    ["hull.failure", "[Hull systems powering down]", () => piloted((v) => { v.disabled = true; v.health = 0; }), "HULL DISABLED"],
+  ];
+  for (const [cue, text, covered, banner] of cases) {
+    const s = covered();
+    assert.ok(hazardBanners(s).some((b) => b.text.startsWith(banner)), `${cue}: its banner is on screen`);
+    view.resetPresentation();
+    view.audioCaption(caption(cue, text), s);
+    assert.equal(get("audio-caption").hidden, true, `${cue}: the banner is the one visible line`);
+    const clear = createGame(); completeOpening(clear);
+    view.audioCaption(caption(cue, text), clear);
+    assert.equal(get("audio-caption").textContent, text, `${cue}: shown when no banner covers it`);
+  }
 });

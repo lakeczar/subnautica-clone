@@ -37,6 +37,10 @@ export function legacyRegionMap(): WorldMap {
   return legacyMap ??= createWorldMap(legacyLayout());
 }
 
+/** The world map's region at a point, or null outside every authored footprint
+ * (audio keeps its previous region then, per S6). Region selection uses the same map. */
+export const worldRegionAt = (p: Readonly<Vec3>): RegionId | null => legacyRegionMap().regionAt(p);
+
 /** The region the viewer is in, except that `previous` is kept while the
  * viewer is inside the `hold` box of the new region's link back to it. */
 export function primaryRegion(map: WorldMap, p: Readonly<Vec3>, previous: RegionId | null): RegionId | null {
