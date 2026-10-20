@@ -38,10 +38,17 @@ export interface ChunkBuildContext {
   floor(x: number, z: number): number;
   /** Deterministic per-chunk random stream. */
   random(seed: number): () => number;
+  /** True once the current build step has used its time slice. Factories
+   * check it in inner loops and `yield` when it turns true, so a step stays
+   * short however expensive the floor or the art is. */
+  due(): boolean;
+  /** Biome at a world position (by region footprint), for blending palettes
+   * across chunk edges. Optional: without it a chunk uses its own biome. */
+  biomeAt?(x: number, z: number): string;
 }
 
 /** A render factory, registered under `id` and referenced from descriptors.
- * `build` yields between bounded units of work (aim for <= 1 ms each) and
+ * `build` yields whenever `ctx.due()` is true (and may yield more often) and
  * returns the recipe. Returning early through `Iterator.return` cancels it. */
 export interface ChunkArtFactory {
   readonly id: string;
