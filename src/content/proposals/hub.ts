@@ -1,0 +1,110 @@
+/** The central hub spur (WORLD-EVOLUTION W2, Option A): a Hearth Reef spur of
+ * reef-capped pinnacles from the shallow south apron to a 45–60 m crown near
+ * the map centre. Everything but the apron needs new W2 terrain (`reshape`).
+ * Fallback if a 240 m pinnacle is too costly: put the crown station on the
+ * existing south apron (about 20 m deep, 330 m south of the pod). */
+import { p, place, prop, rect, site } from "./refs.js";
+import type { AreaProposal } from "./types.js";
+
+export const HUB: AreaProposal = {
+  area: "hub_spur",
+  caveStyle: "Hearth Reef's limestone arches, carried out on the spur: short arches through each pinnacle and one tall shaft through the crown.",
+  caveResident: "vault_glimmer",
+  landmarks: [
+    { id: "hub.crown", area: "hub_spur", role: "anchor", status: "new", label: "Spur crown",
+      at: p(330, -48, -560), anchor: "reshape", near: [site("basin.anchorage"), site("rift.head"), site("basin.dish_field")],
+      see: "A reef-capped pinnacle rising out of the Basin to 48 m, a ring of crown rays circling it, a beacon house on its summit.",
+      why: "The shared junction: Canopy, Basin, Rift and the Divide approach are each one short leg away; seen from the Canopy edge and the Rift head." },
+    { id: "hub.apron", area: "hub_spur", role: "cluster", status: "extend", label: "South apron",
+      at: p(-20, -18.9, -320), anchor: "floor", near: [place("home_pod")],
+      see: "The flat shallow apron south of the pod, where the spur begins as a line of reef heads.", why: "The spur's root, and the fallback hub site." },
+    { id: "hub.step_one", area: "hub_spur", role: "cluster", status: "new", label: "First step",
+      at: p(80, -40, -400), anchor: "reshape", near: [site("basin.west_gate")],
+      see: "A reef pinnacle topped with fans, an arch through its shoulder.", why: "A diver's stepping stone with the Basin's first shelf in view below." },
+    { id: "hub.step_two", area: "hub_spur", role: "cluster", status: "new", label: "Second step",
+      at: p(190, -45, -470), anchor: "reshape", near: [site("rift.head")],
+      see: "A second pinnacle, its north face cracked open and glowing faintly with glimmers.", why: "The last hop before the crown; the Rift head opens to the south." },
+    { id: "hub.crown_station", area: "hub_spur", role: "cluster", status: "new", label: "Crown station",
+      at: p(326, -50, -552), anchor: "reshape", near: [prop("hub.crown")],
+      see: "A small restorable stop on the crown's lee, solar mast above it, mooring rings for small craft.",
+      why: "Charging, rest and the beacon array: the logistics centre that keeps home relevant." },
+    { id: "hub.rim_balcony", area: "hub_spur", role: "cluster", status: "new", label: "Crown balcony",
+      at: p(350, -120, -520), anchor: "reshape", near: [site("basin.anchorage")],
+      see: "A ledge on the crown's north flank looking down on the carrier anchorage and across to the dishes.", why: "Where the carrier and the hub meet." },
+  ],
+  caves: [
+    { id: "hub_apron_hollow", area: "hub_spur", size: "small", status: "new", label: "Apron hollow",
+      mouth: p(-20, -26.3, -348), anchor: "floor", footprint: rect(-32, -8, -360, -340), depth: [22, 32], admits: "diver",
+      layout: "A 14 m hollow at the apron's south lip, the first arch of the spur.", contents: ["Glimmer ceiling"], links: [],
+      resident: "vault_glimmer", near: [prop("hub.apron")] },
+    { id: "hub_step_arch", area: "hub_spur", size: "small", status: "new", label: "Step arch",
+      mouth: p(80, -40, -400), anchor: "reshape", footprint: rect(68, 92, -412, -388), depth: [36, 48], admits: "diver",
+      layout: "A 16 m arch tunnel through the first step's shoulder.", contents: ["Shelter on the spur crossing"], links: [prop("hub_glimmer_crack")],
+      resident: "vault_glimmer", near: [prop("hub.step_one")] },
+    { id: "hub_glimmer_crack", area: "hub_spur", size: "small", status: "new", label: "Glimmer crack",
+      mouth: p(190, -50, -470), anchor: "reshape", footprint: rect(178, 202, -482, -458), depth: [44, 60], admits: "diver",
+      layout: "An 18 m crack through the second step, ceiling thick with glimmers.", contents: ["Glimmer mats leaning toward the crown side"], links: [prop("hub_step_arch")],
+      resident: "vault_glimmer", near: [prop("hub.step_two")] },
+    { id: "hub_crown_shaft", area: "hub_spur", size: "medium", status: "new", label: "Crown shaft",
+      mouth: p(330, -48, -560), anchor: "reshape", footprint: rect(300, 360, -590, -530), depth: [48, 140], admits: "small",
+      layout: "A wide shaft from the crown top down through the pinnacle, a Dart-wide spiral, opening onto the north flank at 140 m above the anchorage.",
+      contents: ["The fastest safe way from the hub to Basin depth"], links: [], resident: "vault_glimmer", near: [prop("hub.crown")] },
+  ],
+  creatures: [
+    { species: "reef_school", where: "Around every pinnacle" },
+    { species: "ledge_grazer", where: "Crown summit ledges" },
+    { species: "crown_rays", where: "A wide ring around the crown" },
+    { species: "vault_glimmer", where: "Spur caves", note: "Shared with the reef." },
+  ],
+  resources: [
+    { id: "hub_crown_glass", area: "hub_spur", kind: "exterior", item: "silica_glass", label: "Crown grazer ledges",
+      at: p(334, -50, -566), anchor: "reshape", stock: [8, 2, 8], renewable: false,
+      condition: "Grazers scrape the crown's summit ledges.", near: [prop("hub.crown")] },
+    { id: "hub_crown_cups", area: "hub_spur", kind: "exterior", item: "meal", label: "Crown staple cups",
+      at: p(322, -52, -548), anchor: "reshape", stock: [8, 2, 0], renewable: false,
+      condition: "Cups in the crown's lee.", near: [prop("hub.crown_station")] },
+    { id: "hub_shaft_crust", area: "hub_spur", kind: "cave_favoured", item: "conductive_crust", label: "Shaft fins",
+      at: p(330, -110, -560), anchor: "reshape", stock: [6, 2, 0], renewable: false, inCave: "hub_crown_shaft",
+      condition: "Fins grounded in the shaft wall below the reef cap.", near: [prop("hub_crown_shaft")] },
+  ],
+  sideRewards: [
+    { id: "hub.station_service", area: "hub_spur", kind: "service", label: "Crown station",
+      at: p(326, -50, -552), anchor: "reshape", reward: "Restored: charging, rest, a locker, and the beacon array that switches decoded landmark beacons on as a set.",
+      near: [prop("hub.crown_station")] },
+    { id: "hub.shaft_window", area: "hub_spur", kind: "view", label: "Shaft window",
+      at: p(350, -120, -520), anchor: "reshape", reward: "The shaft's lower mouth frames the anchorage, the dishes and, on a clear day, the Rift glow.",
+      near: [prop("hub_crown_shaft")] },
+  ],
+  lostSites: [
+    { id: "hub.beacon_house", area: "hub_spur", label: "Beacon house", at: p(335, -48, -565), anchor: "reshape",
+      see: "A cylindrical beacon house on the crown summit, its lamp dead, a chart cabinet sealed.",
+      decodes: [{ id: "hub_beacon_archive", label: "Beacon chart archive", size: "archive", gates: ["hub_chart_cabinet"],
+        blueprints: ["bp_beacon_array"], story: false,
+        reveals: [
+          { id: "hub_mark_dishes", label: "Dish field", category: "landmark", target: site("basin.dish_field"), radius: 120 },
+          { id: "hub_mark_crowns", label: "Lantern crowns", category: "landmark", target: site("canopy.east_crowns"), radius: 120 },
+          { id: "hub_mark_chimney", label: "Split chimney", category: "landmark", target: site("rift.split_chimney"), radius: 120 },
+          { id: "hub_mark_gateworks", label: "Gateworks", category: "landmark", target: site("divide.gateworks"), radius: 120 },
+          { id: "hub_mark_spire", label: "Signal spire", category: "landmark", target: site("meridian.spire"), radius: 120 },
+        ],
+        logs: [
+          "The expedition's beacon plan for the whole basin, one light per landmark.",
+          "A maintenance list of which beacons failed first, and where.",
+        ] }],
+      near: [prop("hub.crown")] },
+  ],
+  cycles: [
+    { id: "hub.ray_pass", area: "hub_spur", label: "Ray pass", period: 180, active: 20,
+      purpose: "The crown rays' ring passes low over the station.", alternative: "Nothing waits on it.", verdict: "likely_cut",
+      note: "Spectacle, not a cycle. Keep the rays; drop the clock." },
+  ],
+  minutes: { mainPath: 20, full: 40 },
+  pacing: [
+    { at: 0, beat: "South apron and the first steps", kind: "area", ref: prop("hub.apron") },
+    { at: 10, beat: "The crown and its rays", kind: "discovery", ref: prop("hub.crown") },
+    { at: 18, beat: "Restore the crown station", kind: "tool", ref: prop("hub.crown_station") },
+    { at: 28, beat: "Crown shaft down to Basin depth", kind: "area", ref: prop("hub_crown_shaft") },
+    { at: 36, beat: "Beacon chart archive decoded", kind: "discovery", ref: prop("hub.beacon_house") },
+  ],
+};
+
