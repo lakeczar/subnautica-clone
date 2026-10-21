@@ -33,34 +33,34 @@ const hex = (h: string): Rgb => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.s
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const SAND: Rgb = hex("#9db8a4"), SAND2: Rgb = hex("#8aa894"), LIP: Rgb = hex("#c7b38d");
 
-/** Rock colours for a chunk mesh. Alpha: 0 floors (ground relief), 1 walls
- * and ceilings, 2 (grazing ink) on the rim of each exterior opening. */
+/** The exterior seabed's cel colour (alpha 0, ground relief). Shared with
+ * whatever draws the heightfield round a collar, so the seam is invisible. */
+export function seabedColor(x: number, z: number, ny: number): [number, number, number, number] {
+  const patch = wallNoise(x * 0.35, 0, z * 0.35, 9002), grain = wallNoise(x * 1.7, 0, z * 1.7, 9001);
+  const c = mix(mix(SAND, SAND2, 0.5 + 0.5 * patch), LIP, Math.max(0, Math.min(1, (0.85 - ny) * 1.5)) * 0.4), k = 1 + grain * 0.05;
+  return [c[0] * k, c[1] * k, c[2] * k, 0];
+}
+
+/** Rock colours for a chunk mesh. Cave rock is plain cel (alpha 1): its
+ * floors, walls and ceilings differ by palette, not by ground relief. The
+ * exterior seabed in a collar is `seabedColor`. */
 export function rockColors(cave: LargeCave, m: ChunkMesh, light: Float32Array): Float32Array {
   const zones = cave.source.zones.map(z => ({ floor: hex(z.palette.floor), wall: hex(z.palette.wall), ceiling: hex(z.palette.ceiling), accent: hex(z.palette.accent) }));
   const P = m.positions, N = m.normals, Z = m.zones, out = new Float32Array(P.length / 3 * 4);
-  const mouths = cave.source.portals.filter(p => p.between.includes("exterior"));
   for (let v = 0; v < P.length / 3; v++) {
     const x = P[v * 3]!, y = P[v * 3 + 1]!, z = P[v * 3 + 2]!, ny = N[v * 3 + 1]!, zone = Z[v]! - 1;
+    if (zone < 0) { out.set(seabedColor(x, z, ny), v * 4); continue; }
     const grain = wallNoise(x * 1.7, y * 1.7, z * 1.7, 9001), patch = wallNoise(x * 0.35, y * 0.2, z * 0.35, 9002);
-    let c: Rgb, alpha = 1;
-    if (zone < 0) {
-      c = mix(SAND, SAND2, 0.5 + 0.5 * patch); alpha = ny > 0.6 ? 0 : 1;
-      if (ny <= 0.6) c = mix(c, LIP, 0.35);
-    } else {
-      const p = zones[zone]!;
-      c = ny > 0.55 ? mix(p.floor, p.wall, 0.25 + 0.25 * patch) : ny < -0.4 ? p.ceiling : mix(p.wall, p.ceiling, 0.3 + 0.3 * patch);
-      if (ny > 0.55) alpha = 0;
-      // Stains where life lights the rock.
-      const g = light[v * 4 + 1]! + light[v * 4 + 2]! + light[v * 4 + 3]!;
-      if (g > 0.12) c = mix(c, p.accent, Math.min(0.32, (g - 0.12) * 0.5));
-    }
-    // Ink round each opening's lip so a mouth reads at distance.
-    for (const mo of mouths) {
-      const d = Math.hypot(x - mo.center.x, y - mo.center.y, z - mo.center.z), r = Math.max(mo.clear.width, mo.clear.height) / 2;
-      if (zone < 0 && d > r * 0.8 && d < r * 1.25) alpha = 2;
-    }
+    const p = zones[zone]!;
+    // Floors blend into walls and walls into ceilings, so no band edge follows the mesh.
+    const up = Math.max(0, Math.min(1, (ny - 0.35) / 0.4)), down = Math.max(0, Math.min(1, (-ny - 0.2) / 0.4));
+    let c = mix(mix(p.wall, p.ceiling, 0.3 + 0.3 * patch), p.floor, up);
+    c = mix(c, p.ceiling, down * 0.7);
+    // Stains where life lights the rock.
+    const g = light[v * 4 + 1]! + light[v * 4 + 2]! + light[v * 4 + 3]!;
+    if (g > 0.12) c = mix(c, p.accent, Math.min(0.32, (g - 0.12) * 0.5));
     const k = 1 + grain * 0.07;
-    out[v * 4] = c[0] * k; out[v * 4 + 1] = c[1] * k; out[v * 4 + 2] = c[2] * k; out[v * 4 + 3] = alpha;
+    out[v * 4] = c[0] * k; out[v * 4 + 1] = c[1] * k; out[v * 4 + 2] = c[2] * k; out[v * 4 + 3] = 1;
   }
   return out;
 }
@@ -107,7 +107,7 @@ function lifeGeometry(B: Builder, p: LifePlacement, color: Rgb): void {
     }
   } else if (p.kind === "root_tip") {
     // A hanging tapered prism (normal points down from a ceiling).
-    const len = 0.9 * s, w = 0.16 * s, tip = add(o, n, len);
+    const len = 0.55 * s, w = 0.07 * s, tip = add(o, n, len);
     const ring = [t, b, [-t[0], -t[1], -t[2]] as Rgb, [-b[0], -b[1], -b[2]] as Rgb];
     for (let k = 0; k < 4; k++) {
       const u = ring[k]!, v = ring[(k + 1) % 4]!;
@@ -120,7 +120,7 @@ function lifeGeometry(B: Builder, p: LifePlacement, color: Rgb): void {
       const a0 = k * Math.PI / 3, a1 = (k + 1) * Math.PI / 3;
       const u = add([t[0] * Math.cos(a0), t[1] * Math.cos(a0), t[2] * Math.cos(a0)], b, Math.sin(a0));
       const v = add([t[0] * Math.cos(a1), t[1] * Math.cos(a1), t[2] * Math.cos(a1)], b, Math.sin(a1));
-      tri(B, top, add(o, u, r), add(o, v, r), n, k % 2 ? color : dim);
+      tri(B, top, add(o, u, r), add(o, v, r), n, color);
     }
   } else {
     // Silt glow: a flat irregular patch just off the floor.

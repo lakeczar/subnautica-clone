@@ -1,4 +1,4 @@
-import type { LargeCaveSource } from "./largeCave.js";
+import type { BlockRock, LargeCaveSource, TunnelNode } from "./largeCave.js";
 import { EXTERIOR } from "./largeCave.js";
 
 /** The Canopy root caves: the first cave biome, the large-cave proof.
@@ -13,18 +13,94 @@ import { EXTERIOR } from "./largeCave.js";
  *   Crown hollow, a craft-wide sinkhole. Root columns line both sides and
  *   leave a 12 m craft lane; amber root tips glow overhead.
  * - **Collapsed gallery**: the hall's west arm, half-choked by fallen roof.
- *   A work sub weaves through; a diver can take the squeeze beside it.
+ *   A Dart or Creel weaves through; a diver can take the squeeze beside it.
  * - **Glow garden**: a broad chamber of teal and violet fronds, the
  *   brightest place inside, with a diver-only grotto.
  * - **Hub**: the central chamber round one great root, ringed with glowing
- *   tips: the landmark you steer by. Exits to every zone, the Scarp mouth on
- *   the lower terrace and a diver crawlway up to the knoll.
+ *   colonies: the landmark you steer by. Exits to every zone, the Scarp
+ *   mouth on the lower terrace and a diver crawl up to the knoll.
  * - **Deep pool**: a steep drop east of the hub to a cold, rose-lit pool at
  *   about 190 m, below the Canopy's rating: a soft depth gate.
  *
- * The main circuit (Crown hollow, hall, east run, hub, low run, garden,
- * gallery, hall) is 13-16 m wide and 10-12 m high: a Creel or Mantle fits,
- * except the gallery, which only the Creel threads. Side passages are 3 m. */
+ * The main circuit (Crown hollow, hall, east run, hub, low run, garden) is
+ * 14-16 m wide and 10-12 m high: a Creel or Mantle fits. The gallery's fallen
+ * roof leaves a 9.5 m lane (small craft only). Side passages are 3 m. Craft
+ * routes ride the tunnels' own centrelines, so they move with the tunnels. */
+
+/** Keel datum a craft rides at: `lift` metres over a tunnel node's floor. */
+const ride = (n: TunnelNode, lift: number): { x: number; y: number; z: number } => ({ x: n.x, y: n.y + lift, z: n.z });
+/** A portal centred in a tunnel's section at node `n`. */
+const section = (n: TunnelNode): { x: number; y: number; z: number } => ({ x: n.x, y: n.y + n.height * 0.42, z: n.z });
+
+const EAST_RUN: readonly TunnelNode[] = [
+  { x: 768, y: -130.5, z: -104, width: 15, height: 11 },
+  { x: 790, y: -133, z: -112, width: 15, height: 11 },
+  { x: 806, y: -139, z: -124, width: 15, height: 11 },
+  { x: 816, y: -144.5, z: -134, width: 16, height: 11 },
+];
+const SCARP_RUN: readonly TunnelNode[] = [
+  { x: 812, y: -150, z: -158, width: 15, height: 11.5 },
+  { x: 804, y: -151.5, z: -170, width: 15, height: 11.5 },
+  { x: 797, y: -153, z: -180, width: 16, height: 11.5 },
+  { x: 793, y: -154, z: -192, width: 16, height: 12 },
+];
+const LOW_RUN: readonly TunnelNode[] = [
+  { x: 800, y: -150.5, z: -150, width: 15, height: 10.5 },
+  { x: 768, y: -152.5, z: -153, width: 15, height: 10.5 },
+  { x: 736, y: -153.5, z: -152, width: 15, height: 10.5 },
+  { x: 700, y: -153.5, z: -146, width: 15, height: 10.5 },
+];
+const GALLERY: readonly TunnelNode[] = [
+  { x: 718, y: -130, z: -101, width: 15, height: 10 },
+  { x: 696, y: -133, z: -108, width: 15, height: 10 },
+  { x: 680, y: -138, z: -117, width: 15, height: 10 },
+  { x: 671, y: -146, z: -128, width: 15, height: 10 },
+];
+const POOL_DROP: readonly TunnelNode[] = [
+  { x: 836, y: -150, z: -150, width: 14, height: 11 },
+  { x: 846, y: -159, z: -154, width: 14, height: 11 },
+  { x: 853, y: -171, z: -158, width: 14, height: 11 },
+  { x: 858, y: -180, z: -160, width: 14, height: 11 },
+];
+const SQUEEZE: readonly TunnelNode[] = [
+  { x: 724, y: -130, z: -110, width: 3.4, height: 3 },
+  { x: 708, y: -132, z: -118, width: 3.2, height: 3 },
+  { x: 694, y: -137, z: -128, width: 3.2, height: 3 },
+  { x: 684, y: -144, z: -132, width: 3.4, height: 3 },
+];
+const CRAWL: readonly TunnelNode[] = [
+  { x: 834, y: -143, z: -130, width: 3.4, height: 3 },
+  { x: 841, y: -134, z: -118, width: 3.2, height: 3 },
+  { x: 845, y: -124, z: -106, width: 3.2, height: 3 },
+  { x: 844, y: -113, z: -94, width: 3.2, height: 3 },
+  { x: 847, y: -102, z: -82, width: 3.4, height: 3.2 },
+  { x: 849, y: -96, z: -74, width: 3.6, height: 3.4 },
+];
+const TANGLE: readonly TunnelNode[] = [
+  { x: 732, y: -128.5, z: -92, width: 3.4, height: 3 },
+  { x: 728, y: -127.5, z: -82, width: 3.4, height: 3 },
+];
+const GROTTO: readonly TunnelNode[] = [
+  { x: 684, y: -154.5, z: -153, width: 3.4, height: 3 },
+  { x: 690, y: -156, z: -159, width: 3.4, height: 3 },
+];
+
+/** Fallen roof in the gallery: one block per segment, on alternating sides
+ * of the centreline, reaching 3 m into the 15 m tunnel. The 12 m lane
+ * left takes a Dart's fixed-axis 7.2 m proxy even where the gallery runs
+ * diagonally (it needs up to 7.2 x (|cos| + |sin|) = 10.2 m). */
+const FALLS: BlockRock[] = GALLERY.slice(0, 3).map((a, i) => {
+  const b = GALLERY[i + 1]!, dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz), side = i % 2 ? -1 : 1;
+  const lx = -dz / l * side, lz = dx / l * side, floor = (a.y + b.y) / 2;
+  return { kind: "block", id: `canopy_roots.fall.${i + 1}`, center: { x: (a.x + b.x) / 2 + lx * 6.9, y: floor + 2.2, z: (a.z + b.z) / 2 + lz * 6.9 },
+    half: { x: 3.6, y: 2.6, z: 2.4 }, yaw: Math.atan2(-dz / l, dx / l), round: 0.8 };
+});
+/** The lane past each block: its segment's midpoint, 1.4 m to the open
+ * side, where the Dart's square proxy clears block and wall on a diagonal. */
+const WEAVE = GALLERY.slice(0, 3).map((a, i) => {
+  const b = GALLERY[i + 1]!, dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz), side = i % 2 ? -1 : 1;
+  return { x: (a.x + b.x) / 2 + dz / l * side * 1.4, y: (a.y + b.y) / 2 + 2.2, z: (a.z + b.z) / 2 - dx / l * side * 1.4 };
+});
 
 export const CANOPY_ROOT_CAVES: LargeCaveSource = {
   id: "canopy_roots",
@@ -35,9 +111,9 @@ export const CANOPY_ROOT_CAVES: LargeCaveSource = {
   voxel: 0.5,
   collars: [
     // Crown hollow (north, craft), Scarp mouth (south, craft), knoll crawl (diver).
-    { minX: 728, maxX: 778, minZ: -100, maxZ: -52 },
+    { minX: 728, maxX: 782, minZ: -104, maxZ: -48 },
     { minX: 774, maxX: 826, minZ: -204, maxZ: -160 },
-    { minX: 834, maxX: 864, minZ: -94, maxZ: -60 },
+    { minX: 834, maxX: 864, minZ: -94, maxZ: -56 },
   ],
   roofMin: 4,
   blend: 3,
@@ -64,120 +140,78 @@ export const CANOPY_ROOT_CAVES: LargeCaveSource = {
   carves: [
     // Crown hollow: a sinkhole from the shelf into the hall's east end.
     { kind: "shaft", id: "canopy_roots.crown_hollow", zone: "canopy_roots.hall", wobble: 0.7,
-      bottom: { x: 754, y: -124, z: -94 }, top: { x: 756, y: -80, z: -72 }, radius: 7.5, flare: 5 },
+      bottom: { x: 754, y: -124, z: -96 }, top: { x: 757, y: -80, z: -72 }, radius: 9.5, flare: 5 },
     { kind: "chamber", id: "canopy_roots.hall", zone: "canopy_roots.hall", wobble: 0.8,
-      center: { x: 742, y: -126, z: -100 }, radii: { x: 30, z: 12.5, up: 7.5, down: 5.5 }, yaw: 0.06, floor: -131 },
-    // Hall to hub.
-    { kind: "tunnel", id: "canopy_roots.east_run", zone: "canopy_roots.hub", wobble: 0.6, nodes: [
-      { x: 766, y: -130.5, z: -104, width: 14, height: 10.5 },
-      { x: 790, y: -133, z: -112, width: 14, height: 10.5 },
-      { x: 806, y: -138.5, z: -124, width: 14, height: 10.5 },
-      { x: 816, y: -144, z: -134, width: 15, height: 10.5 },
-    ] },
+      center: { x: 742, y: -126, z: -100 }, radii: { x: 31, z: 12.5, up: 7.5, down: 5.5 }, yaw: 0.06, floor: -131 },
+    { kind: "tunnel", id: "canopy_roots.east_run", zone: "canopy_roots.hub", wobble: 0.6, nodes: EAST_RUN },
     { kind: "chamber", id: "canopy_roots.hub", zone: "canopy_roots.hub", wobble: 0.8,
       center: { x: 820, y: -145, z: -146 }, radii: { x: 21, z: 18, up: 9, down: 7 }, yaw: -0.2, floor: -151 },
-    // Hub to the Scarp mouth on the lower terrace.
-    { kind: "tunnel", id: "canopy_roots.scarp_run", zone: "canopy_roots.hub", wobble: 0.6, nodes: [
-      { x: 812, y: -150, z: -158, width: 14, height: 11 },
-      { x: 804, y: -151.5, z: -170, width: 14, height: 11 },
-      { x: 797, y: -153, z: -180, width: 15, height: 11 },
-      { x: 793, y: -154, z: -192, width: 16, height: 12 },
-    ] },
-    // Hub to the garden.
-    { kind: "tunnel", id: "canopy_roots.low_run", zone: "canopy_roots.garden", wobble: 0.6, nodes: [
-      { x: 800, y: -150, z: -150, width: 13.5, height: 10 },
-      { x: 768, y: -152, z: -153, width: 13.5, height: 10 },
-      { x: 736, y: -153, z: -152, width: 13.5, height: 10 },
-      { x: 700, y: -153, z: -146, width: 14, height: 10 },
-    ] },
+    { kind: "tunnel", id: "canopy_roots.scarp_run", zone: "canopy_roots.hub", wobble: 0.6, nodes: SCARP_RUN },
+    { kind: "tunnel", id: "canopy_roots.low_run", zone: "canopy_roots.garden", wobble: 0.6, nodes: LOW_RUN },
     { kind: "chamber", id: "canopy_roots.garden", zone: "canopy_roots.garden", wobble: 0.9,
       center: { x: 676, y: -150, z: -140 }, radii: { x: 22, z: 17, up: 8, down: 6 }, yaw: 0.25, floor: -155 },
-    // Hall's west arm to the garden: the collapsed gallery.
-    { kind: "tunnel", id: "canopy_roots.gallery", zone: "canopy_roots.gallery", wobble: 0.9, nodes: [
-      { x: 716, y: -130, z: -101, width: 13, height: 10 },
-      { x: 694, y: -133, z: -108, width: 13, height: 10 },
-      { x: 678, y: -138, z: -117, width: 13, height: 10 },
-      { x: 671, y: -146, z: -127, width: 13.5, height: 10 },
-    ] },
-    // Deep pool: a steep drop east of the hub.
-    { kind: "tunnel", id: "canopy_roots.pool_drop", zone: "canopy_roots.pool", wobble: 0.6, nodes: [
-      { x: 836, y: -150, z: -150, width: 13, height: 11 },
-      { x: 846, y: -159, z: -154, width: 13, height: 11 },
-      { x: 853, y: -171, z: -158, width: 13, height: 11 },
-      { x: 858, y: -180, z: -160, width: 14, height: 11 },
-    ] },
+    { kind: "tunnel", id: "canopy_roots.gallery", zone: "canopy_roots.gallery", wobble: 0.7, nodes: GALLERY },
+    { kind: "tunnel", id: "canopy_roots.pool_drop", zone: "canopy_roots.pool", wobble: 0.6, nodes: POOL_DROP },
     { kind: "chamber", id: "canopy_roots.pool", zone: "canopy_roots.pool", wobble: 0.7,
       center: { x: 862, y: -182, z: -162 }, radii: { x: 13, z: 12, up: 7, down: 5 }, yaw: 0.4, floor: -187 },
     // Diver-only side passages.
-    { kind: "tunnel", id: "canopy_roots.squeeze", zone: "canopy_roots.passage", wobble: 0.35, nodes: [
-      { x: 724, y: -130, z: -110, width: 3.4, height: 3 },
-      { x: 708, y: -132, z: -118, width: 3, height: 2.8 },
-      { x: 694, y: -137, z: -128, width: 3.2, height: 2.8 },
-      { x: 684, y: -144, z: -132, width: 3.4, height: 3 },
-    ] },
-    { kind: "tunnel", id: "canopy_roots.tangle_throat", zone: "canopy_roots.passage", wobble: 0.35, nodes: [
-      { x: 732, y: -128, z: -90, width: 3.2, height: 3 },
-      { x: 728, y: -127.5, z: -82, width: 3, height: 2.8 },
-    ] },
+    { kind: "tunnel", id: "canopy_roots.squeeze", zone: "canopy_roots.passage", wobble: 0.3, nodes: SQUEEZE },
+    { kind: "tunnel", id: "canopy_roots.tangle_throat", zone: "canopy_roots.passage", wobble: 0.3, nodes: TANGLE },
     { kind: "chamber", id: "canopy_roots.tangle", zone: "canopy_roots.passage", wobble: 0.45,
       center: { x: 726, y: -125.5, z: -77 }, radii: { x: 4.5, z: 4, up: 3, down: 2.5 }, yaw: 0, floor: -127.5 },
-    { kind: "tunnel", id: "canopy_roots.grotto_throat", zone: "canopy_roots.passage", wobble: 0.35, nodes: [
-      { x: 684, y: -154.5, z: -153, width: 3.2, height: 3 },
-      { x: 690, y: -156, z: -159, width: 3, height: 2.8 },
-    ] },
+    { kind: "tunnel", id: "canopy_roots.grotto_throat", zone: "canopy_roots.passage", wobble: 0.3, nodes: GROTTO },
     { kind: "chamber", id: "canopy_roots.grotto", zone: "canopy_roots.passage", wobble: 0.45,
       center: { x: 694, y: -156, z: -164 }, radii: { x: 4.5, z: 4.2, up: 2.8, down: 2.5 }, yaw: 0, floor: -158 },
-    { kind: "tunnel", id: "canopy_roots.knoll_crawl", zone: "canopy_roots.passage", wobble: 0.35, nodes: [
-      { x: 834, y: -143, z: -130, width: 3.4, height: 3 },
-      { x: 841, y: -134, z: -118, width: 3, height: 2.8 },
-      { x: 845, y: -124, z: -106, width: 3, height: 2.8 },
-      { x: 843, y: -113, z: -94, width: 3, height: 2.8 },
-      { x: 847, y: -101, z: -80, width: 3.2, height: 3 },
-      { x: 849, y: -93, z: -70, width: 3.6, height: 3.2 },
-    ] },
+    { kind: "tunnel", id: "canopy_roots.knoll_crawl", zone: "canopy_roots.passage", wobble: 0.3, nodes: CRAWL },
+    // The crawl breaks the knoll's seabed through a short chimney.
+    { kind: "shaft", id: "canopy_roots.knoll_chimney", zone: "canopy_roots.passage", wobble: 0.25,
+      bottom: { x: 849, y: -95, z: -74 }, top: { x: 850, y: -84, z: -70 }, radius: 1.9, flare: 0.8 },
   ],
   rocks: [
     // Root hall: columns along both sides of a 12 m lane (z -106..-94).
     { kind: "pillar", id: "canopy_roots.root.h1", a: { x: 722, y: -118, z: -90 }, b: { x: 726, y: -132, z: -92 }, radiusA: 1.3, radiusB: 2, wobble: 0.3 },
     { kind: "pillar", id: "canopy_roots.root.h2", a: { x: 740, y: -118.5, z: -89.5 }, b: { x: 737, y: -132, z: -91 }, radiusA: 1.2, radiusB: 1.8, wobble: 0.3 },
-    { kind: "pillar", id: "canopy_roots.root.h3", a: { x: 716, y: -119, z: -109 }, b: { x: 720, y: -132, z: -108.5 }, radiusA: 1.4, radiusB: 2.1, wobble: 0.3 },
-    { kind: "pillar", id: "canopy_roots.root.h4", a: { x: 742, y: -119, z: -110 }, b: { x: 746, y: -132, z: -108.5 }, radiusA: 1.2, radiusB: 1.9, wobble: 0.3 },
-    { kind: "pillar", id: "canopy_roots.root.h5", a: { x: 764, y: -120, z: -109 }, b: { x: 760, y: -132, z: -108 }, radiusA: 1.1, radiusB: 1.7, wobble: 0.3 },
+    { kind: "pillar", id: "canopy_roots.root.h3", a: { x: 716, y: -119, z: -109.5 }, b: { x: 720, y: -132, z: -109 }, radiusA: 1.4, radiusB: 2.1, wobble: 0.3 },
+    { kind: "pillar", id: "canopy_roots.root.h4", a: { x: 742, y: -119, z: -110 }, b: { x: 746, y: -132, z: -109 }, radiusA: 1.2, radiusB: 1.9, wobble: 0.3 },
     // The hub's great root.
     { kind: "pillar", id: "canopy_roots.root.hub", a: { x: 823, y: -134, z: -143 }, b: { x: 818, y: -152, z: -148 }, radiusA: 2.2, radiusB: 3.4, wobble: 0.4 },
-    // Fallen roof in the gallery, from alternate walls (a 10 m lane).
-    { kind: "block", id: "canopy_roots.fall.1", center: { x: 708, y: -129.5, z: -98.5 }, half: { x: 4, y: 2.5, z: 3 }, yaw: 0.3, round: 0.8 },
-    { kind: "block", id: "canopy_roots.fall.2", center: { x: 692, y: -131, z: -114 }, half: { x: 4.5, y: 3, z: 2.5 }, yaw: -0.5, round: 0.9 },
-    { kind: "block", id: "canopy_roots.fall.3", center: { x: 682, y: -135.5, z: -112 }, half: { x: 3, y: 2.5, z: 3 }, yaw: 0.8, round: 0.8 },
+    ...FALLS,
   ],
   portals: [
     { id: "canopy_roots.mouth.crown", kind: "mouth", label: "Crown hollow", between: ["canopy_roots.hall", EXTERIOR],
-      center: { x: 756, y: -84, z: -74 }, normal: { x: 0, y: 1, z: 0 }, clear: { width: 14, height: 14 }, admits: ["diver", "small", "medium"] },
+      center: { x: 756.5, y: -86, z: -76 }, normal: { x: 0, y: 1, z: 0 }, clear: { width: 13, height: 13 }, admits: ["diver", "small", "medium"] },
     { id: "canopy_roots.mouth.scarp", kind: "mouth", label: "Scarp mouth", between: ["canopy_roots.hub", EXTERIOR],
-      center: { x: 795, y: -148, z: -186 }, normal: { x: 0, y: 0, z: -1 }, clear: { width: 13, height: 10 }, admits: ["diver", "small", "medium"] },
-    { id: "canopy_roots.mouth.knoll", kind: "back_entrance", label: "Knoll crawl", between: ["canopy_roots.passage", EXTERIOR],
-      center: { x: 849, y: -91.5, z: -70 }, normal: { x: 0, y: 1, z: 0 }, clear: { width: 2.6, height: 2.6 }, admits: ["diver"] },
+      center: section(SCARP_RUN[3]!), normal: { x: -0.3, y: 0, z: -0.95 }, clear: { width: 12, height: 8.5 }, admits: ["diver", "small", "medium"] },
+    { id: "canopy_roots.mouth.knoll", kind: "back_entrance", label: "Knoll chimney", between: ["canopy_roots.passage", EXTERIOR],
+      center: { x: 849.6, y: -88, z: -71.5 }, normal: { x: 0, y: 1, z: 0 }, clear: { width: 2.2, height: 2.2 }, admits: ["diver"] },
     { id: "canopy_roots.throat.east", kind: "throat", label: "East run", between: ["canopy_roots.hall", "canopy_roots.hub"],
-      center: { x: 790, y: -127.5, z: -112 }, normal: { x: 0.8, y: 0, z: -0.6 }, clear: { width: 12, height: 9 }, admits: ["diver", "small", "medium"] },
+      center: section(EAST_RUN[1]!), normal: { x: 0.8, y: 0, z: -0.6 }, clear: { width: 11, height: 8 }, admits: ["diver", "small", "medium"] },
     { id: "canopy_roots.throat.low", kind: "throat", label: "Low run", between: ["canopy_roots.hub", "canopy_roots.garden"],
-      center: { x: 750, y: -147.5, z: -152.5 }, normal: { x: -1, y: 0, z: 0 }, clear: { width: 12, height: 8.5 }, admits: ["diver", "small", "medium"] },
+      center: section(LOW_RUN[2]!), normal: { x: -1, y: 0, z: 0 }, clear: { width: 11, height: 8 }, admits: ["diver", "small", "medium"] },
     { id: "canopy_roots.throat.gallery", kind: "throat", label: "Gallery", between: ["canopy_roots.hall", "canopy_roots.gallery"],
-      center: { x: 700, y: -127, z: -106 }, normal: { x: -0.9, y: 0, z: -0.4 }, clear: { width: 10, height: 8 }, admits: ["diver", "small"] },
+      center: section(GALLERY[0]!), normal: { x: -0.95, y: 0, z: -0.3 }, clear: { width: 9, height: 7 }, admits: ["diver", "small"] },
     { id: "canopy_roots.throat.garden", kind: "throat", label: "Gallery foot", between: ["canopy_roots.gallery", "canopy_roots.garden"],
-      center: { x: 672, y: -140, z: -126 }, normal: { x: 0, y: 0, z: -1 }, clear: { width: 11, height: 8 }, admits: ["diver", "small", "medium"] },
+      center: section(GALLERY[3]!), normal: { x: -0.6, y: 0, z: -0.8 }, clear: { width: 9, height: 7 }, admits: ["diver", "small"] },
     { id: "canopy_roots.throat.pool", kind: "throat", label: "Pool drop", between: ["canopy_roots.hub", "canopy_roots.pool"],
-      center: { x: 846, y: -153.5, z: -154 }, normal: { x: 0.9, y: -0.3, z: -0.3 }, clear: { width: 11, height: 9 }, admits: ["diver", "small", "medium"] },
+      center: section(POOL_DROP[1]!), normal: { x: 0.9, y: 0, z: -0.4 }, clear: { width: 11, height: 7 }, admits: ["diver", "small", "medium"] },
+    { id: "canopy_roots.throat.crawl", kind: "throat", label: "Knoll crawl foot", between: ["canopy_roots.hub", "canopy_roots.passage"],
+      center: section(CRAWL[1]!), normal: { x: 0.5, y: 0, z: 0.87 }, clear: { width: 2, height: 2 }, admits: ["diver"] },
+    { id: "canopy_roots.throat.grotto", kind: "throat", label: "Grotto", between: ["canopy_roots.garden", "canopy_roots.passage"],
+      center: section(GROTTO[0]!), normal: { x: 0.6, y: 0, z: -0.8 }, clear: { width: 2.2, height: 2 }, admits: ["diver"] },
+    { id: "canopy_roots.throat.tangle", kind: "throat", label: "Root tangle", between: ["canopy_roots.hall", "canopy_roots.passage"],
+      center: section(TANGLE[0]!), normal: { x: -0.4, y: 0, z: 0.92 }, clear: { width: 2.2, height: 2 }, admits: ["diver"] },
     { id: "canopy_roots.throat.squeeze", kind: "throat", label: "Squeeze", between: ["canopy_roots.hall", "canopy_roots.passage"],
-      center: { x: 708, y: -130.6, z: -118 }, normal: { x: -0.8, y: 0, z: -0.5 }, clear: { width: 2.2, height: 2 }, admits: ["diver"] },
+      center: section(SQUEEZE[1]!), normal: { x: -0.9, y: 0, z: -0.45 }, clear: { width: 2.2, height: 2 }, admits: ["diver"] },
   ],
   life: [
-    { id: "canopy_roots.life.hall_tips", zone: "canopy_roots.hall", kind: "root_tip", at: { x: 742, y: -120, z: -100 }, radius: 26, count: 90, color: "#ffb45e", light: 0.35, reach: 7 },
+    { id: "canopy_roots.life.hall_tips", zone: "canopy_roots.hall", kind: "root_tip", at: { x: 742, y: -120, z: -100 }, radius: 26, count: 55, color: "#ffb45e", light: 0.35, reach: 7 },
     { id: "canopy_roots.life.hollow_tips", zone: "canopy_roots.hall", kind: "root_tip", at: { x: 754, y: -118, z: -92 }, radius: 9, count: 30, color: "#ffc978", light: 0.3, reach: 6 },
     { id: "canopy_roots.life.gallery_pale", zone: "canopy_roots.gallery", kind: "colony", at: { x: 693, y: -132, z: -110 }, radius: 14, count: 34, color: "#a9d4ff", light: 0.18, reach: 5 },
     { id: "canopy_roots.life.garden_teal", zone: "canopy_roots.garden", kind: "frond", at: { x: 676, y: -153, z: -140 }, radius: 21, count: 260, color: "#62e6d2", light: 0.8, reach: 11 },
     { id: "canopy_roots.life.garden_violet", zone: "canopy_roots.garden", kind: "frond", at: { x: 666, y: -152, z: -146 }, radius: 13, count: 110, color: "#c6a1f2", light: 0.55, reach: 9 },
     { id: "canopy_roots.life.grotto", zone: "canopy_roots.passage", kind: "colony", at: { x: 694, y: -157, z: -164 }, radius: 4.5, count: 24, color: "#c6a1f2", light: 0.4, reach: 5 },
-    { id: "canopy_roots.life.hub_ring", zone: "canopy_roots.hub", kind: "root_tip", at: { x: 820, y: -145, z: -146 }, radius: 9, count: 80, color: "#c9e06a", light: 0.7, reach: 13 },
+    { id: "canopy_roots.life.hub_ring", zone: "canopy_roots.hub", kind: "colony", at: { x: 820, y: -144, z: -146 }, radius: 6.5, count: 70, color: "#c9e06a", light: 0.7, reach: 13 },
+    { id: "canopy_roots.life.hub_tips", zone: "canopy_roots.hub", kind: "root_tip", at: { x: 820, y: -137, z: -146 }, radius: 14, count: 40, color: "#d8ea8a", light: 0.3, reach: 7 },
     { id: "canopy_roots.life.pool_silt", zone: "canopy_roots.pool", kind: "silt_glow", at: { x: 862, y: -186, z: -162 }, radius: 12, count: 120, color: "#f08aa0", light: 0.45, reach: 8 },
     { id: "canopy_roots.life.tangle", zone: "canopy_roots.passage", kind: "colony", at: { x: 726, y: -126, z: -77 }, radius: 4.5, count: 18, color: "#ffb45e", light: 0.35, reach: 5 },
   ],
@@ -190,34 +224,31 @@ export const CANOPY_ROOT_CAVES: LargeCaveSource = {
     { id: "canopy_roots.find.pool_crystal", zone: "canopy_roots.pool", kind: "cave_crystal", at: { x: 864, y: -186.5, z: -164 }, note: "Cold-grown crystal; needs the depth refit." },
   ],
   routes: [
+    // Outside to outside on the Mantle's own box: down the hollow, hall, east run, hub, Scarp mouth.
     { id: "canopy_roots.route.craft_loop", profile: "medium", role: "loop", path: [
-      { x: 758, y: -72, z: -66 }, { x: 756, y: -86, z: -74 }, { x: 755, y: -104, z: -84 }, { x: 752, y: -126, z: -96 },
-      { x: 770, y: -127.5, z: -104 }, { x: 790, y: -130, z: -112 }, { x: 806, y: -135.5, z: -124 }, { x: 816, y: -141, z: -134 },
-      { x: 812, y: -147.5, z: -150 }, { x: 806, y: -148.5, z: -168 }, { x: 797, y: -150, z: -180 }, { x: 793, y: -151, z: -192 },
-      { x: 791, y: -151, z: -206 },
+      { x: 757.5, y: -66, z: -69 }, { x: 757, y: -78, z: -72 }, { x: 755.8, y: -98, z: -82.5 }, { x: 754.5, y: -120.5, z: -94 }, { x: 760, y: -128, z: -100 },
+      ...EAST_RUN.map(n => ride(n, 3)), { x: 806, y: -147, z: -150 }, ...SCARP_RUN.map(n => ride(n, 3)), { x: 792, y: -150.5, z: -208 },
     ] },
+    // Hub, low run, garden, gallery past the fallen roof, hall: the small-craft loop.
     { id: "canopy_roots.route.west_loop", profile: "small", role: "loop", path: [
-      { x: 812, y: -147.5, z: -150 }, { x: 800, y: -148, z: -150 }, { x: 768, y: -150, z: -153 }, { x: 736, y: -151, z: -152 },
-      { x: 700, y: -151, z: -146 }, { x: 680, y: -152, z: -140 }, { x: 671, y: -146, z: -128 }, { x: 678, y: -136, z: -117 },
-      { x: 694, y: -131, z: -107 }, { x: 716, y: -128, z: -101 }, { x: 742, y: -128, z: -100 },
+      { x: 809, y: -147, z: -150 }, ...LOW_RUN.map(n => ride(n, 2.5)), { x: 680, y: -152.5, z: -140 }, { x: 674, y: -150, z: -134 },
+      ...[...GALLERY].reverse().flatMap((n, i) => i === 0 ? [ride(n, 2.5)] : [WEAVE[GALLERY.length - 1 - i]!, ride(n, 2.5)]),
+      { x: 742, y: -128.5, z: -100 },
     ] },
-    { id: "canopy_roots.route.pool_spur", profile: "small", role: "spur", path: [
-      { x: 826, y: -148.5, z: -148 }, { x: 836, y: -148, z: -150 }, { x: 846, y: -157, z: -154 }, { x: 853, y: -169, z: -158 },
-      { x: 860, y: -184, z: -161 },
+    { id: "canopy_roots.route.pool_spur", profile: "medium", role: "spur", path: [
+      { x: 830, y: -147.5, z: -154 }, ...POOL_DROP.map(n => ride(n, 3)), { x: 862, y: -184, z: -162 },
     ] },
     { id: "canopy_roots.route.squeeze", profile: "diver", role: "loop", path: [
-      { x: 742, y: -129, z: -103 }, { x: 724, y: -129.5, z: -110 }, { x: 708, y: -131.6, z: -118 }, { x: 694, y: -136.6, z: -128 },
-      { x: 684, y: -143.5, z: -132 }, { x: 676, y: -150, z: -138 },
+      { x: 736, y: -129.5, z: -104 }, ...SQUEEZE.map(n => ride(n, 0.9)), { x: 678, y: -150, z: -138 },
     ] },
     { id: "canopy_roots.route.knoll", profile: "diver", role: "exit", path: [
-      { x: 826, y: -149, z: -140 }, { x: 834, y: -142.5, z: -130 }, { x: 841, y: -133.5, z: -118 }, { x: 845, y: -123.5, z: -106 },
-      { x: 843, y: -112.5, z: -94 }, { x: 847, y: -100.5, z: -80 }, { x: 849, y: -92.5, z: -70 }, { x: 850, y: -85, z: -62 },
+      { x: 828, y: -148.5, z: -138 }, ...CRAWL.map(n => ride(n, 0.9)), { x: 849.5, y: -90, z: -72 }, { x: 850, y: -82, z: -70 },
     ] },
     { id: "canopy_roots.route.grotto", profile: "diver", role: "spur", path: [
-      { x: 680, y: -153.5, z: -148 }, { x: 684, y: -154, z: -153 }, { x: 690, y: -155.5, z: -159 }, { x: 694, y: -157, z: -164 },
+      { x: 680, y: -153.5, z: -148 }, ...GROTTO.map(n => ride(n, 0.9)), { x: 694, y: -157, z: -164 },
     ] },
     { id: "canopy_roots.route.tangle", profile: "diver", role: "spur", path: [
-      { x: 734, y: -129, z: -96 }, { x: 732, y: -127.5, z: -90 }, { x: 728, y: -127, z: -82 }, { x: 726, y: -126.5, z: -77 },
+      { x: 734, y: -129, z: -97 }, ...TANGLE.map(n => ride(n, 0.9)), { x: 726, y: -126.5, z: -77 },
     ] },
   ],
   staging: [

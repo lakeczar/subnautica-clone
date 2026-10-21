@@ -64,6 +64,8 @@ export interface LoadedCave {
   readonly collision: CaveCollision;
   /** Decode one chunk (art + occupancy); the caller time-slices. */
   chunk(index: number): BakedChunk;
+  /** Lamp occupancy per collision chunk index, kept from the load. */
+  occupancy(collisionIndex: number): Uint8Array | null;
   readonly index: ReadonlyMap<string, number>;
   readonly ms: number;
 }
@@ -78,12 +80,13 @@ export function loadCaveBake(source: LargeCaveSource, buffer: Uint8Array): Loade
   const ownership: CaveOwnership = { domain: source.domain, collars: source.collars, roofMin: source.roofMin, voxel: h.ground.voxel, gx: h.ground.gx, gz: h.ground.gz, ground };
   const nx = Math.round((source.domain.max.x - source.domain.min.x) / source.chunk), ny = Math.round((source.domain.max.y - source.domain.min.y) / source.chunk);
   const collision = createCollision(source.id, ownership, source.chunk, 0, h.chunks.map(c => c.cx + nx * (c.cy + ny * c.cz)));
-  const index = new Map<string, number>();
+  const index = new Map<string, number>(), occupancy = new Map<number, Uint8Array>();
   h.chunks.forEach((e, i) => {
     index.set(`${e.cx}:${e.cy}:${e.cz}`, i);
     const c = bakeChunk(bake, i), k = chunkIndex(collision, e.cx, e.cy, e.cz);
     const art = { positions: c.fine.positions, indices: c.fine.indices instanceof Uint32Array ? c.fine.indices : new Uint32Array(c.fine.indices) };
     collision.colliders[k] = buildCollider(`${e.cx}:${e.cy}:${e.cz}`, k, art, c.band);
+    occupancy.set(k, c.occupancy);
   });
-  return { source, bake, collision, chunk: i => bakeChunk(bake, i), index, ms: Date.now() - started };
+  return { source, bake, collision, chunk: i => bakeChunk(bake, i), occupancy: k => occupancy.get(k) ?? null, index, ms: Date.now() - started };
 }

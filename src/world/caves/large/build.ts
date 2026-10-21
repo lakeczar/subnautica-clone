@@ -71,13 +71,16 @@ export function buildCollision(cave: LargeCave, coords: readonly ChunkCoord[] = 
 }
 
 /** Chunks whose box (grown by `pad`) meets a point set: for tests and labs
- * that only need collision near a few places. */
+ * that only need collision near a few places. Whole columns are included,
+ * because containment reads a vertical ray to the owned top. */
 export function chunksNear(cave: LargeCave, points: readonly { x: number; y: number; z: number }[], pad: number): ChunkCoord[] {
   const o = cave.lattice.origin, C = cave.lattice.chunk;
-  return cave.chunks.filter(c => points.some(p =>
+  const near = cave.chunks.filter(c => points.some(p =>
     p.x >= o.x + c.cx * C - pad && p.x <= o.x + (c.cx + 1) * C + pad &&
     p.y >= o.y + c.cy * C - pad && p.y <= o.y + (c.cy + 1) * C + pad &&
     p.z >= o.z + c.cz * C - pad && p.z <= o.z + (c.cz + 1) * C + pad));
+  const columns = new Set(near.map(c => `${c.cx}:${c.cz}`));
+  return cave.chunks.filter(c => columns.has(`${c.cx}:${c.cz}`));
 }
 
 export { collisionComplete };

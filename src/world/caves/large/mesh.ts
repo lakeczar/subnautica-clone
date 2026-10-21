@@ -158,7 +158,9 @@ function surfaceNets(field: CaveField, l: CaveLattice, values: (gi: number, gj: 
     out.positions.push(x, y, z);
     out.normals.push(gx / gl, gy / gl, gz / gl);
     // The zone of the water in front of the surface.
-    out.zones.push(field.zoneAt(x + gx / gl * 0.6, y + gy / gl * 0.6, z + gz / gl * 0.6) + 1);
+    // Only water a carve actually holds counts: seabed near a mouth stays exterior.
+    const w = field.water(x + gx / gl * 0.6, y + gy / gl * 0.6, z + gz / gl * 0.6);
+    out.zones.push(w.distance < 1 ? w.zone + 1 : 0);
     vertexOf[at] = id;
     return id;
   };
