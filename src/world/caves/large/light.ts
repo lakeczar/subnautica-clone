@@ -170,9 +170,11 @@ export function vertexLight(grid: LightGrid, positions: Float32Array, normals: F
   for (let v = 0; v < positions.length / 3; v++) {
     const x = positions[v * 3]! + normals[v * 3]! * offset, y = positions[v * 3 + 1]! + normals[v * 3 + 1]! * offset, z = positions[v * 3 + 2]! + normals[v * 3 + 2]! * offset;
     const cell = nearestWater(cellOf, grid.kind, Math.floor(x - o.x), Math.floor(y - o.y), Math.floor(z - o.z));
-    // No grid cell: open water above the seabed is daylit, anything else dark.
-    if (cell < 0) { out[v * 4] = !cave.field.owned(x, y, z) || y > cave.field.floor(x, z) ? 1 : 0; continue; }
-    out[v * 4] = grid.kind[cell] === 2 ? 1 : Math.exp(-grid.path[cell]! / REF);
+    // Open water above the seabed is daylit by definition (the grid's 1 m
+    // cells cannot resolve a seabed vertex's own cell); below it the path rules.
+    const open = !cave.field.owned(x, y, z) || y > cave.field.floor(x, z);
+    if (cell < 0) { out[v * 4] = open ? 1 : 0; continue; }
+    out[v * 4] = open || grid.kind[cell] === 2 ? 1 : Math.exp(-grid.path[cell]! / REF);
     out[v * 4 + 1] = grid.glow[cell * 3]!; out[v * 4 + 2] = grid.glow[cell * 3 + 1]!; out[v * 4 + 3] = grid.glow[cell * 3 + 2]!;
   }
   return out;
