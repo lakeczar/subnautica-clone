@@ -230,3 +230,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **CB R2 loop fix done** at `ac40de9`: all 15 medium caves have a real chamber cycle, passage edges with a named closing passage, and a cycle test with a self-test; 799 tests pass. Sol R3 running.
 - **CY R2 (Sol): accept** (`review/cy-r2` `362a508`). Integrated, new modules only: 955 tests pass, build OK. Keep or cut is recorded in the merge commit (owner may override).
 - **C3 progress:** `e0c4ea3` shows the harness reaching the ending on **both routes** (`npm run playthrough` exits 0, 5/5 complete). The handoff should be close. **CA-2 started:** Canopy and Basin small and medium caves, with no kit or lab edits (they go to CA-1) and its own lab page. Builders 4 of 5: C3, LC, CA-1, CA-2; one slot held for C3 review fixes.
+- **CB R3 (Sol): accept** (`review/cb-r3` `211634b`). Integrated (docs plus typed proposals): 973 tests pass.
