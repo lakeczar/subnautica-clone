@@ -21,8 +21,9 @@ export interface ThreatCue {
   /** Inside the cone the camera shows: the animal itself is the cue. */
   readonly onScreen: boolean;
 }
-/** Approximate half-angles of the visible view (16:9-ish at Babylon's 0.8 rad fov). */
-export const VIEW_HALF = { horizontal: 0.62, vertical: 0.36 } as const;
+/** Approximate half-angles of the visible view (16:9-ish at Babylon's 0.8 rad fov).
+ * A piloted craft's dash hides the water below `sill`. */
+export const VIEW_HALF = { horizontal: 0.62, vertical: 0.36, sill: 0.15 } as const;
 
 type HunterMode = GameState["world"]["threat"]["mode"];
 const HUNTER_STAGE: Partial<Record<HunterMode, ThreatStage>> = { warn: "warning", investigate: "closing", pursue: "attack" };
@@ -49,11 +50,11 @@ export function viewBearing(state: GameState, point: Vec3): { bearing: number; e
 /** Every engaged threat, nearest first. Empty in a refuge, before the opening ends or outside the expedition. */
 export function threatCues(state: GameState): ThreatCue[] {
   if (state.opening.phase < 4 || state.scenario !== "expedition" || exposure(state).refuge) return [];
-  const out: ThreatCue[] = [];
+  const out: ThreatCue[] = [], below = state.player.mode === "piloting" ? VIEW_HALF.sill : VIEW_HALF.vertical;
   const add = (id: string, label: string, stage: ThreatStage, at: Vec3): void => {
     const b = viewBearing(state, at);
     out.push({ id, label, stage, ...b,
-      onScreen: Math.abs(b.bearing) < VIEW_HALF.horizontal && Math.abs(b.elevation) < VIEW_HALF.vertical });
+      onScreen: Math.abs(b.bearing) < VIEW_HALF.horizontal && b.elevation < VIEW_HALF.vertical && b.elevation > -below });
   };
   const t = state.world.threat, hunter = HUNTER_STAGE[t.mode];
   if (hunter) add("sound-hunter", "Sound hunter", hunter, { ...t.position, y: t.position.y + 0.7 });

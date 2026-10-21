@@ -189,6 +189,9 @@ test("the edge cue points at an engaged threat off screen, flashes toward a bite
   assert.ok(edgePoint({ bearing: 0.1, elevation: 1.2 }).y < 15, "above reads at the top edge");
   s.world.threat.position = { x: 132, y: -109, z: -112 - 15 };
   assert.equal(threatCues(s)[0]!.onScreen, true, "dead ahead: the animal is the cue");
+  s.world.threat.position = { x: 132, y: -114, z: -112 - 12 };
+  assert.equal(threatCues(s)[0]!.onScreen, false, "ahead but under the dash: the edge cue still points");
+  assert.ok(edgePoint(threatCues(s)[0]!).y > 85, "at the bottom edge");
   for (const mode of ["warn", "investigate", "pursue"] as const) assert.match(hunterBanner(mode)!, /Z quiet/);
   assert.match(hunterBanner("warn")!, /L lamp off/); assert.equal(hunterBanner("idle"), null);
   // An ecology animal engaged behind the actor.
