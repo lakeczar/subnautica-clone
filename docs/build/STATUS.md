@@ -3,14 +3,17 @@
 Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION](DIRECTION.md). Streams and review log: [STREAMS](STREAMS.md). History: [archive/](archive/README.md).
 
 **Current**
-- **Accepted and integrated** on `feat/siltwake-first-expedition`:
-  - B1, S7, S8, C2 and S1: the streaming renderer;
-  - S2: the full 2.0×1.8 km world with baked terrain;
-  - C1: the S3, S5 and S6 wiring;
-  - A1: vistas with collision.
-- **Root checks:** fast 739/739, heavy all pass, build OK, bake verify 220/220, and all 4 economy scripts pass.
-- **Also accepted and folded into C3:** S9 (`a67c76a`) and S4 (`854fdf1`).
-- **Saves:** schema 5 / `expedition.6`. Additive content needs no bump.
+- **Milestone (2026-10-20): a rough complete game.** C3 is integrated at `a21e764`, and both fleet routes reach the ending in `npm run playthrough`, with all 5 scenarios complete and milestone reloads matching. Root checks: 1,071 fast tests pass, and the build is OK.
+- **Accepted:**
+  - B1, S1–S9, C1, C2, C3, A1 and P1;
+  - W1-pre (the cave kit);
+  - SYS-1 (upgrades and power);
+  - SYS-2 (bases and knowledge);
+  - CY (currents and cycles);
+  - CB (the content bible).
+
+  W1-pre, SYS-1, SYS-2 and CY are **merged but not yet wired into the game**.
+- **Saves:** schema 5 / `expedition.6`.
 - **Owner actions:** `main` and the public deployment.
 
 **GPU:** the RTX 3090 is attached and verified. See [LIVE-RESULT](gpu-enablement/LIVE-RESULT.md); the procedure is archived in [archive](archive/STATUS-gpu-attach-2026-10-20.md). GPU browser work uses a task-owned Chrome with `--use-gl=angle --use-angle=gl-egl --ignore-gpu-blocklist`. The shared T3 preview stays software.
