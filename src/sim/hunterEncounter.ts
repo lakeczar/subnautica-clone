@@ -23,11 +23,6 @@ const FIRST_CONTACT = H.contactSeconds - 1e-6;
 export const HUNTER_TERRITORY = 72;
 export type HunterMode = GameState["world"]["threat"]["mode"];
 
-/** Horizontal angle of `point` from the actor's view heading: 0 ahead, +right. */
-export function viewAzimuth(s: GameState, point: Vec3): number {
-  const p = s.player.pose.position, yaw = s.player.pose.yaw, dx = point.x - p.x, dz = point.z - p.z;
-  return Math.atan2(dx * Math.cos(yaw) + dz * Math.sin(yaw), dx * Math.sin(yaw) - dz * Math.cos(yaw));
-}
 /** Angle between the actor's view (heading and pitch, from its eye) and `point`. */
 export function viewAngle(s: GameState, point: Vec3): number {
   const p = s.player.pose.position, yaw = s.player.pose.yaw, pitch = s.player.pose.pitch;

@@ -41,10 +41,10 @@ export const HUNTER_GEOMETRY = {
   // Includes tail, both animated fins and .045 rad body roll, at every yaw.
   worldEnvelope: { radius: 4.65, bottom: -1.23, height: 2.91 },
   localEnvelope: { min: [-3.55, -1.07, -4.05], max: [3.55, 2.71, 4.5] },
-  mouthGap: .5, reach: .65, investigateGap: 4, withdrawalGap: 3.5,
+  mouthGap: .5, reach: .65, withdrawalGap: 3.5,
   // ENC-1: a 2 s withdrawal after each bite (was 3 s cycles) paces the ramp.
   cycleSeconds: 4, contactSeconds: 2,
-  approachSpeed: 7, investigateSpeed: 3, yieldSpeed: 13,
+  approachSpeed: 7, yieldSpeed: 13,
 } as const;
 /** Conservative actor-separation pieces; each animated art triangle fits a
  * piece. The long fins do not turn the narrow rostrum into a square face. */
