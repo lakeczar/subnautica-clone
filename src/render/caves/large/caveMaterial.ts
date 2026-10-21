@@ -5,7 +5,7 @@ import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { Vector3, Vector4 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import "@babylonjs/core/Engines/Extensions/engine.rawTexture.js";
-import { CEL_FRAGMENT, CEL_UNIFORMS, CEL_VERTEX, LIGHT_DIRECTION } from "../../materials.js";
+import { BASE_CEL_FRAGMENT, CEL_UNIFORMS, CEL_VERTEX, LIGHT_DIRECTION } from "../../materials.js";
 import type { RockGrid } from "../lightField.js";
 import { windowCentre, windowJob, type OccupancySource } from "../../../world/caves/large/lampWindow.js";
 import type { Vec3 } from "../../../world/types.js";
@@ -17,7 +17,9 @@ import { CAVE_CURVE, DEFAULT_LAMP, LARGE_CAVE_ATTRIBUTE, LARGE_CAVE_SAMPLERS, LA
  * centre moves. INTEGRATION: `materials.ts` would own the splice (see LC.md). */
 
 const RED = 6; // Constants.TEXTUREFORMAT_R
-const STAGES = injectLargeCaveLight(CEL_VERTEX, CEL_FRAGMENT);
+// The base cel stage, not the W1-spliced one: a biome's light is per vertex,
+// and its lamp (the occupancy-walked cone) replaces the base eye pool.
+const STAGES = injectLargeCaveLight(CEL_VERTEX, BASE_CEL_FRAGMENT);
 
 export function createLargeCaveMaterial(scene: Scene, name = "lc.cave.cel"): ShaderMaterial {
   const material = new ShaderMaterial(name, scene, { vertexSource: STAGES.vertex, fragmentSource: STAGES.fragment }, {
@@ -27,6 +29,7 @@ export function createLargeCaveMaterial(scene: Scene, name = "lc.cave.cel"): Sha
   material.setVector3("lightDirection", LIGHT_DIRECTION);
   material.setFloat("time", 0);
   material.setFloat("underwater", 1);
+  material.setFloat("lampOn", 0);
   material.setVector3("cameraPosition", Vector3.Zero());
   material.setColor3("fogColor", Color3.FromHexString("#a5ccd1"));
   material.setColor3("waterFogColor", Color3.FromHexString("#237e89"));
