@@ -1,0 +1,156 @@
+{
+ "value": {
+  "which": "after",
+  "shots": [
+   {
+    "name": "reef-10m",
+    "file": "01-after-reef-10m.jpg",
+    "mean": 132.8,
+    "darkShare": 0
+   },
+   {
+    "name": "basin-240m",
+    "file": "02-after-basin-240m.jpg",
+    "mean": 38.5,
+    "darkShare": 0.268
+   },
+   {
+    "name": "rift-head-diver-down-trench",
+    "file": "03-after-rift-head-diver-down-trench.jpg",
+    "mean": 30.9,
+    "darkShare": 0.402
+   },
+   {
+    "name": "rift-head-diver-lamp-off",
+    "file": "04-after-rift-head-diver-lamp-off.jpg",
+    "mean": 27.5,
+    "darkShare": 0.477
+   },
+   {
+    "name": "rift-300m",
+    "file": "05-after-rift-300m.jpg",
+    "mean": 27,
+    "darkShare": 0.672
+   },
+   {
+    "name": "divide-395m-lamp-on",
+    "file": "06-after-divide-395m-lamp-on.jpg",
+    "mean": 18,
+    "darkShare": 0.863
+   },
+   {
+    "name": "divide-395m-lamp-off",
+    "file": "07-after-divide-395m-lamp-off.jpg",
+    "mean": 13.9,
+    "darkShare": 0.917
+   },
+   {
+    "name": "divide-395m-diver-lamp-off-craft",
+    "file": "08-after-divide-395m-diver-lamp-off-craft.jpg",
+    "mean": 7.1,
+    "darkShare": 0.974
+   },
+   {
+    "name": "divide-395m-diver-lamp-off-craft-b",
+    "file": "09-after-divide-395m-diver-lamp-off-craft-b.jpg",
+    "mean": 12.1,
+    "darkShare": 0.89
+   },
+   {
+    "name": "divide-395m-diver-lamp-off-way-up",
+    "file": "10-after-divide-395m-diver-lamp-off-way-up.jpg",
+    "mean": 26.1,
+    "darkShare": 0.269
+   },
+   {
+    "name": "meridian-590m",
+    "file": "11-after-meridian-590m.jpg",
+    "mean": 15.5,
+    "darkShare": 0.87
+   },
+   {
+    "name": "creel-arm-pitch",
+    "file": "12-after-creel-arm-pitch.jpg",
+    "mean": 61.3,
+    "darkShare": 0.001
+   }
+  ],
+  "segments": [
+   {
+    "label": "reef 10 m: swim west",
+    "frames": 362,
+    "fps": 60,
+    "p50": 16.7,
+    "p95": 16.7,
+    "worst": 16.8
+   },
+   {
+    "label": "Basin 240 m: Creel cruise",
+    "frames": 481,
+    "fps": 60,
+    "p50": 16.7,
+    "p95": 16.7,
+    "worst": 16.8
+   },
+   {
+    "label": "Rift 300 m: Creel cruise",
+    "frames": 481,
+    "fps": 60,
+    "p50": 16.7,
+    "p95": 16.8,
+    "worst": 16.8
+   },
+   {
+    "label": "Divide 395 m: Creel cruise, lamp off",
+    "frames": 481,
+    "fps": 60,
+    "p50": 16.7,
+    "p95": 16.7,
+    "worst": 16.8
+   },
+   {
+    "label": "Meridian 590 m: Creel cruise",
+    "frames": 481,
+    "fps": 60,
+    "p50": 16.7,
+    "p95": 16.8,
+    "worst": 16.8
+   }
+  ],
+  "notes": [
+   {
+    "reef": {
+     "arrived": true,
+     "seconds": 8.935
+    }
+   },
+   {
+    "diverFromCraft": 15.8
+   }
+  ],
+  "errors": []
+ },
+ "state": {
+  "cam": [
+   226.203,
+   -164.504,
+   -203.279
+  ],
+  "bearing": 0,
+  "pitch": -69,
+  "depth": 166.1,
+  "region": "Pale Basin",
+  "movement": "Piloting",
+  "vitals": "O₂ 100% Creel air HEALTH 100 FOOD 51 F · eat meal CREEL 81% power Hull 100% · 166 / 240 m · hold 4/96 CU",
+  "prompt": "",
+  "menu": false,
+  "panel": "",
+  "graphics": "available",
+  "ready": "true",
+  "lights": "12/194",
+  "work": "1.00",
+  "cave": "",
+  "regions": "suspended_garden,silt_basin"
+ },
+ "errors": []
+}
