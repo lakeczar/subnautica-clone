@@ -359,7 +359,7 @@ export function craftingBlock(
     if (!to || !hasRoom(after, to, ITEMS[r.output as ItemKind].cu * r.quantity))
       return block("space", placement === "package"
         ? `The ${ITEMS[r.output as ItemKind].cu} CU package needs room in the workshop locker or your hold. Nothing consumed.`
-        : `${ITEMS[r.output as ItemKind].label} needs ${ITEMS[r.output as ItemKind].cu * r.quantity} CU in your hold. Nothing consumed.`);
+        : "Output would not fit your hold. Nothing consumed.");
   }
   return null;
 }
