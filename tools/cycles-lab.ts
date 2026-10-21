@@ -28,7 +28,7 @@ import { BLOOM, CANDIDATES, LAB_SOLIDS, LAB_START, LAB_VOLUMES, VENT_COLUMN, WAR
 import { FixedStepClock } from "../src/sim/clock.js";
 import { period, secondsAt, secondsUntil, TICKS_PER_SECOND } from "../src/sim/cycles/cycle.js";
 import { journalEntry } from "../src/sim/cycles/observe.js";
-import { shapeBounds } from "../src/sim/currents/flow.js";
+import { shapeBounds, volumeBounds } from "../src/sim/currents/flow.js";
 import { createSandbox, initialSandbox, stepSandbox } from "../src/sim/currents/sandbox.js";
 import type { SandboxInput, SandboxReadout } from "../src/sim/currents/sandbox.js";
 import type { Vec3 } from "../src/sim/types.js";
@@ -117,7 +117,7 @@ let grappleLine: LinesMesh | null = null;
 
 // --- Flow streaks ---------------------------------------------------------------
 const STREAKS = params.get("streaks") === "0" ? 0 : 700;
-const seeds = LAB_VOLUMES.map(vol => shapeBounds(vol.shape));
+const seeds = LAB_VOLUMES.map(volumeBounds);
 let rng = 12345;
 const random = (): number => ((rng = (rng * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 const streaks = Array.from({ length: STREAKS }, () => ({ p: { x: 0, y: 0, z: 0 }, age: 0 }));
@@ -245,7 +245,8 @@ function update(): void {
     for (const e of last.events) {
       const text = e.type === "cycle-seen" ? `Journal: ${CYCLE_BY_ID.get(e.cycleId)!.label} seen`
         : e.type === "cycle-measured" ? `Journal: ${CYCLE_BY_ID.get(e.cycleId)!.label} · ${e.phase} timed${e.complete ? " (full cycle)" : ""}`
-        : e.type === "pick" ? `Picked ${e.units} at the ${e.bed} bed` : e.message;
+        : e.type === "pick" ? `Picked ${e.units} at the ${e.bed} bed`
+        : e.type === "impact" ? `Impact at ${e.closing.toFixed(1)} m/s: −${e.loss.toFixed(2)} hull` : e.message;
       log.unshift(`${secondsAt(state.tick).toFixed(0)} s  ${text}`); log.length = Math.min(log.length, 6);
     }
   }

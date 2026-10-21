@@ -23,6 +23,7 @@ import { createWorldQueries, moveHull } from "../world.js";
 import { createCurrentField } from "./flow.js";
 import type { CurrentField } from "./flow.js";
 import { respondToFlow } from "./motion.js";
+import { dampIntoFace, impactLoss, moveDiverWithCurrent, moveHullWithCurrent } from "./move.js";
 import type { FlowResponse } from "./motion.js";
 import { turbineRate } from "./turbine.js";
 import type { HoldMode } from "./types.js";
@@ -82,7 +83,11 @@ export interface SandboxReadout {
   bloomLeft: number;
   /** Picks left at the warden's rich node this round (2 units each). */
   nodeLeft: number;
-  events: (ObservationEvent | { type: "pick"; bed: "bloom" | "ordinary" | "node"; units: number } | { type: "grapple"; message: string })[];
+  /** The drive this step (before drift) and the ground velocity the sweep was asked for. */
+  drive: Vec3;
+  ground: Vec3;
+  events: (ObservationEvent | { type: "pick"; bed: "bloom" | "ordinary" | "node"; units: number } | { type: "grapple"; message: string }
+    | { type: "impact"; closing: number; loss: number })[];
 }
 
 export interface Sandbox {
@@ -144,7 +149,6 @@ export function stepSandbox(s: SandboxState, input: SandboxInput, lab: Sandbox):
   const speed = !powered ? 0 : input.quiet ? a.quiet : input.sprint ? a.boost : a.cruise;
 
   // ---- drive (step.ts shapes)
-  const previous = len(s.velocity);
   if (diver) {
     const n = Math.max(1, Math.hypot(forward, right));
     forward /= n; right /= n;
@@ -195,24 +199,13 @@ export function stepSandbox(s: SandboxState, input: SandboxInput, lab: Sandbox):
   const away = sub(s.position, WARDEN.den), awayN = Math.max(1e-6, Math.hypot(away.x, away.z));
   const push = shove ? { x: (away.x / awayN) * WARDEN.shove, y: 0, z: (away.z / awayN) * WARDEN.shove } : { x: 0, y: 0, z: 0 };
 
-  // ---- one swept move of drive + drift (+ shove)
-  const total = { x: s.velocity.x + response.drift.x + push.x, y: s.velocity.y + response.drift.y + push.y,
-    z: s.velocity.z + response.drift.z + push.z };
-  const delta = { x: total.x * DT, y: total.y * DT, z: total.z * DT };
-  const top = diver ? -0.5 : -0.9;
-  if (s.position.y + delta.y > top) delta.y = Math.min(delta.y, Math.max(0, top - s.position.y));
-  let hitSolid = false;
-  const from = { ...s.position };
-  if (diver) {
-    const slices = Math.max(1, Math.ceil(len(delta) / 0.12));
-    for (let i = 0; i < slices; i++) {
-      const moved = lab.world.moveCapsule(s.position, { x: delta.x / slices, y: delta.y / slices, z: delta.z / slices }, a.shape);
-      s.position = moved.position; hitSolid ||= moved.hitSolid;
-    }
-  } else {
-    const moved = moveHull(lab.world, s.position, delta, a.shape);
-    s.position = moved.position; hitSolid = moved.hitSolid;
-  }
+  // ---- one swept move of drive + drift (+ shove), through the composed adapter
+  const drive = { ...s.velocity };
+  const carried = { x: response.drift.x + push.x, y: response.drift.y + push.y, z: response.drift.z + push.z };
+  const moved = diver ? moveDiverWithCurrent(lab.world, s.position, drive, carried, a.shape, DT)
+    : moveHullWithCurrent(lab.world, s.position, drive, carried, a.shape, DT);
+  s.position = moved.position;
+  const hitSolid = moved.hitSolid;
   if (s.grapple) {
     // SYS-1 grappleStep: a hull past the line's length is pulled back onto it,
     // here through a sweep so the line can never pull it into rock.
@@ -224,20 +217,12 @@ export function stepSandbox(s: SandboxState, input: SandboxInput, lab: Sandbox):
     }
   }
 
-  // ---- impact (drive only, step.ts's rule) and contact damping
+  // ---- impact (only the drive closing into the face) and face-only damping
   let impact = 0;
   if (!diver && hitSolid) {
-    if (previous > 4) { impact = Math.min(s.health, (previous - 4) * DT * 10); s.health -= impact; }
-    // Damp only the drive pushing into the face (the travel the sweep refused),
-    // and keep the slide. step.ts halves all horizontal drive on any contact,
-    // which lets a current pressing a hull onto rock stall it along the face;
-    // the CY handoff proposes this rule instead.
-    const lost = sub(delta, sub(s.position, from)), n = len(lost);
-    if (n > 1e-9) {
-      const into = (s.velocity.x * lost.x + s.velocity.y * lost.y + s.velocity.z * lost.z) / n;
-      if (into > 0) s.velocity = { x: s.velocity.x - lost.x / n * into * 0.5, y: s.velocity.y - lost.y / n * into * 0.5,
-        z: s.velocity.z - lost.z / n * into * 0.5 };
-    }
+    impact = Math.min(s.health, impactLoss(moved.closing, DT));
+    if (impact > 0) { s.health -= impact; events.push({ type: "impact", closing: moved.closing, loss: impact }); }
+    s.velocity = dampIntoFace(s.velocity, moved.refused);
   }
   // ---- drain: "driving" is the drive, never displacement, so drifting is not cruising
   let drain = 0, turbine = 0;
@@ -291,6 +276,7 @@ export function stepSandbox(s: SandboxState, input: SandboxInput, lab: Sandbox):
 
   s.tick++;
   return { flow: sample.flow, flowSpeed: sample.speed, response, hold, drain, turbine, hitSolid, impact, cycles, open,
+    drive, ground: { x: drive.x + carried.x, y: drive.y + carried.y, z: drive.z + carried.z },
     ventHeat: heat, warden, wardenShove: shove, bloomLeft,
     nodeLeft: NODE_PICKS - s.picks.node, events };
 }

@@ -60,8 +60,10 @@ export function directionOf(v: CurrentVolumeDef): Vec3 {
 /** 0..1 share of the volume's flow at `p`, lees included. */
 export function volumeWeight(v: CurrentVolumeDef, p: Vec3): number {
   const depth = insideDepth(v.shape, p);
-  if (depth <= 0) return 0;
-  let w = v.edge > 0 ? smooth(depth / v.edge) : 1;
+  let w: number;
+  if (v.falloff === "outside") w = depth >= 0 ? 1 : v.edge > 0 ? Math.max(0, 1 + depth / v.edge) : 0;
+  else w = depth <= 0 ? 0 : v.edge > 0 ? smooth(depth / v.edge) : 1;
+  if (w <= 0) return 0;
   for (const lee of v.lees ?? []) {
     const ins = Math.min(p.x - lee.min.x, lee.max.x - p.x, p.y - lee.min.y, lee.max.y - p.y, p.z - lee.min.z, lee.max.z - p.z);
     if (ins > 0) w *= 1 - (v.edge > 0 ? smooth(ins / v.edge) : 1);
@@ -69,7 +71,12 @@ export function volumeWeight(v: CurrentVolumeDef, p: Vec3): number {
   return w;
 }
 
-/** Conservative world box of a shape, for the broad phase. */
+/** Conservative world box of a volume's flow, edge included, for the broad phase. */
+export function volumeBounds(v: CurrentVolumeDef): { min: Vec3; max: Vec3 } {
+  const b = shapeBounds(v.shape), g = v.falloff === "outside" ? v.edge : 0;
+  return { min: { x: b.min.x - g, y: b.min.y - g, z: b.min.z - g }, max: { x: b.max.x + g, y: b.max.y + g, z: b.max.z + g } };
+}
+/** Conservative world box of a shape. */
 export function shapeBounds(shape: CurrentShape): { min: Vec3; max: Vec3 } {
   if (shape.kind === "tube") {
     const r = shape.radius;
@@ -92,6 +99,7 @@ export function volumeProblems(v: CurrentVolumeDef, cycles: ReadonlyMap<string, 
   if (v.shape.kind === "box" && !(v.shape.half.x > 0 && v.shape.half.y > 0 && v.shape.half.z > 0)) out.push(`${v.id}: empty box`);
   if (v.shape.kind === "tube" && !(v.shape.radius > 0)) out.push(`${v.id}: empty tube`);
   if (v.cycle && !cycles.has(v.cycle)) out.push(`${v.id}: unknown cycle ${v.cycle}`);
+  if (v.baseline !== undefined && !(v.baseline >= 0 && v.baseline < 1 && v.cycle)) out.push(`${v.id}: a baseline must be in [0, 1) on a cycled volume`);
   if (!v.cue.trim()) out.push(`${v.id}: no cue`);
   return out;
 }
@@ -100,7 +108,7 @@ export function createCurrentField(volumes: readonly CurrentVolumeDef[], cycles:
   const entries = volumes.map(v => {
     const problems = volumeProblems(v, cycles);
     if (problems.length) throw new Error(problems.join("; "));
-    return { v, dir: directionOf(v), box: shapeBounds(v.shape), cycle: v.cycle ? cycles.get(v.cycle)! : null };
+    return { v, dir: directionOf(v), box: volumeBounds(v), cycle: v.cycle ? cycles.get(v.cycle)! : null, base: v.baseline ?? 0 };
   });
   const evaluate = (p: Vec3, level: (cycle: CycleDef | null) => number): FlowSample => {
     let x = 0, y = 0, z = 0;
@@ -110,7 +118,7 @@ export function createCurrentField(volumes: readonly CurrentVolumeDef[], cycles:
       if (p.x < b.min.x || p.x > b.max.x || p.y < b.min.y || p.y > b.max.y || p.z < b.min.z || p.z > b.max.z) continue;
       const weight = volumeWeight(e.v, p);
       if (weight <= 0) continue;
-      const l = level(e.cycle), k = e.v.strength * l * weight;
+      const l = e.base + (1 - e.base) * level(e.cycle), k = weight * l * e.v.strength;
       contributing.push({ id: e.v.id, weight, level: l });
       x += e.dir.x * k; y += e.dir.y * k; z += e.dir.z * k;
     }

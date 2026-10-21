@@ -5,7 +5,7 @@ import type { ActorId } from "../src/content/currents/actors.js";
 import { CYCLE_BY_ID, SPILL_SLACK } from "../src/content/currents/cycles.js";
 import { CANDIDATES, EDGE, EDGE_RACE, GULLY, LAB_SOLIDS, LAB_VOLUMES, SPILL, VENT_COLUMN, WARDEN } from "../src/content/currents/lab.js";
 import { createCurrentField, insideDepth, MAX_FLOW, volumeProblems, volumeWeight } from "../src/sim/currents/flow.js";
-import { exposure, MOTION, respondToFlow } from "../src/sim/currents/motion.js";
+import { exposure, limitToReach, MOTION, respondToFlow } from "../src/sim/currents/motion.js";
 import { createSandbox, initialSandbox, stepSandbox, ventHeat, wardenAt } from "../src/sim/currents/sandbox.js";
 import type { Sandbox, SandboxInput, SandboxState } from "../src/sim/currents/sandbox.js";
 import { TURBINE, turbineNet, turbineRate } from "../src/sim/currents/turbine.js";
@@ -109,39 +109,59 @@ test("motion: drift is flow × (1 − authority); idle actors drift, holds cance
   assert.ok(near(flat.drift.x, 2) && flat.extraDrain === 0, "an unpowered hull cannot hold");
 });
 
-test("motion: no riding — along the flow you go at the faster of drive and drift, never their sum", () => {
+test("motion: no riding — with input, progress in every direction stays within still-water travel or letting go", () => {
+  // The reach set: for every direction w, (drive + drift)·w ≤ max(|drive|, drift·w).
+  const dirs: Vec3[] = [];
+  for (let i = 0; i < 96; i++) { const yv = 1 - (2 * i + 1) / 96, r = Math.sqrt(1 - yv * yv), t = i * 2.39996; dirs.push(v(Math.cos(t) * r, yv, Math.sin(t) * r)); }
+  const dot = (p: Vec3, q: Vec3) => p.x * q.x + p.y * q.y + p.z * q.z;
+  let checked = 0;
   for (const id of Object.keys(ACTORS) as ActorId[]) {
     const a = ACTORS[id];
-    for (let i = 0; i < 400; i++) {
-      const ang = i * 2.399, f = 0.5 + (i % 8);
-      const flow = v(Math.cos(ang) * f, Math.sin(i * 1.7) * f * 0.3, Math.sin(ang) * f);
-      const drive = v(a.cruise * Math.cos(i * 0.9), 0, a.cruise * Math.sin(i * 0.9));
-      const r = respondToFlow(flow, a, drive, "station");
-      const d = Math.hypot(flow.x, flow.y, flow.z) * exposure(a), n = v(flow.x / Math.hypot(flow.x, flow.y, flow.z), flow.y / Math.hypot(flow.x, flow.y, flow.z), flow.z / Math.hypot(flow.x, flow.y, flow.z));
-      const dot = (p: Vec3, q: Vec3) => p.x * q.x + p.y * q.y + p.z * q.z;
-      const g = v(drive.x + r.drift.x, drive.y + r.drift.y, drive.z + r.drift.z), uf = dot(drive, n);
-      // Downstream: max(drive, drift); upstream: drive + drift; across: the drive is untouched.
-      assert.ok(near(dot(g, n), uf > 0 ? Math.max(uf, d) : uf + d, 1e-9), `${id} sample ${i}`);
-      const gp = v(g.x - n.x * dot(g, n), g.y - n.y * dot(g, n), g.z - n.z * dot(g, n));
-      const up = v(drive.x - n.x * uf, drive.y - n.y * uf, drive.z - n.z * uf);
-      assert.ok(near(gp.x, up.x, 1e-9) && near(gp.y, up.y, 1e-9) && near(gp.z, up.z, 1e-9), `${id} sample ${i}: sideways drive changed`);
-      assert.ok(Math.hypot(g.x, g.y, g.z) <= Math.max(a.cruise, Math.hypot(d, Math.hypot(up.x, up.y, up.z))) + 1e-9, `${id} sample ${i}: carried`);
+    for (const speed of [a.quiet, a.cruise, a.boost]) for (let h = 0; h < 24; h++) for (const pitch of [0, 0.5, -0.9]) for (const f of [0.3, 1.1, 4, 6.5, 8]) {
+      const yaw = h * Math.PI / 12, drive = v(Math.sin(yaw) * Math.cos(pitch) * speed, Math.sin(pitch) * speed, -Math.cos(yaw) * Math.cos(pitch) * speed);
+      const flow = v(f * Math.cos(h * 0.7), f * 0.2 * Math.sin(h), f * Math.sin(h * 0.7));
+      const r = respondToFlow(flow, a, drive, "station"), k = exposure(a), d = v(flow.x * k, flow.y * k, flow.z * k);
+      const g = v(drive.x + r.drift.x, drive.y + r.drift.y, drive.z + r.drift.z);
+      for (const w of [...dirs, v(drive.x / speed, drive.y / speed, drive.z / speed)])
+        assert.ok(dot(g, w) <= Math.max(speed, dot(d, w)) + 1e-9, `${id} ${speed} m/s yaw ${h} pitch ${pitch} flow ${f}: gains along ${JSON.stringify(w)}`);
+      assert.ok(Math.hypot(g.x, g.y, g.z) <= Math.max(speed, Math.hypot(d.x, d.y, d.z)) + 1e-9, `${id}: faster than both`);
+      checked++;
     }
   }
-  const diver = ACTORS.diver;
-  const tail = respondToFlow(v(4, 0, 0), diver, v(3.4, 0, 0), "none");
-  assert.ok(near(tail.drift.x, 0) && tail.headwind === 0, "a slower tailwind adds nothing");
-  const fast = respondToFlow(v(8, 0, 0), diver, v(3.4, 0, 0), "none");
-  assert.ok(near(3.4 + fast.drift.x, 8 * 0.85), "a faster one carries you at its own speed, not the sum");
+  assert.ok(checked > 1500);
+  const diver = ACTORS.diver, s2 = Math.SQRT1_2 * 3.4;
+  // The review's cases: a 45° diver in 4 m/s, a boosting Hush in 8 m/s.
+  const diag = respondToFlow(v(4, 0, 0), diver, v(s2, 0, -s2), "none");
+  assert.ok(Math.hypot(s2 + diag.drift.x, diag.drift.y, -s2 + diag.drift.z) <= 3.4 + 1e-9);
+  const hush = respondToFlow(v(8, 0, 0), ACTORS.hush, v(7.5 * Math.SQRT1_2, 0, -7.5 * Math.SQRT1_2), "none");
+  assert.ok(Math.hypot(7.5 * Math.SQRT1_2 + hush.drift.x, 0, -7.5 * Math.SQRT1_2 + hush.drift.z) <= 7.5 + 1e-9);
+  // Kept: upstream resistance in full, a downstream push while crossing, involuntary drift.
   const head = respondToFlow(v(-4, 0, 0), diver, v(3.4, 0, 0), "none");
   assert.ok(near(head.drift.x, -3.4) && near(head.headwind, 3.4), "headwind: a diver in 4 m/s just holds");
-  const cross = respondToFlow(v(0, 0, 4), diver, v(3.4, 0, 0), "none");
-  assert.ok(near(cross.drift.z, 3.4) && cross.drift.x === 0, "sideways travel keeps the whole drive");
-  const diagonal = respondToFlow(v(4, 0, 0), diver, v(1.7, 0, -2.94), "none");
-  assert.ok(diagonal.drift.z === 0 && near(diagonal.drift.x, 3.4 - 1.7), "a diagonal heading is never pushed back along its own path");
-  assert.equal(cross.extraDrain, 0, "the diver has no battery to drain");
-  const dartCross = respondToFlow(v(0, 0, 4), ACTORS.dart, v(8, 0, 0), "none");
-  assert.ok(dartCross.extraDrain > 0, "crossing costs a hull power");
+  const back = respondToFlow(v(-8, 0, 0), diver, v(3.4, 0, 0), "none");
+  assert.ok(near(3.4 + back.drift.x, 3.4 - 6.8), "a stronger current pushes you back by the difference");
+  for (const f of [1, 4, 8]) {
+    const cross = respondToFlow(v(0, 0, f), diver, v(3.4, 0, 0), "none");
+    assert.ok(cross.drift.z > 0.3 * f * exposure(diver) && 3.4 + cross.drift.x > 0, `crossing ${f} m/s: swept downstream and still crossing`);
+  }
+  assert.deepEqual(respondToFlow(v(4, 0, 0), diver, v(0, 0, 0), "none").drift, v(4 * 0.85, 0, 0), "letting go drifts");
+  const tail = respondToFlow(v(8, 0, 0), diver, v(3.4, 0, 0), "none");
+  assert.ok(near(3.4 + tail.drift.x, 8 * 0.85), "a faster tailwind carries you at its own speed, as letting go would");
+  assert.equal(respondToFlow(v(0, 0, 4), diver, v(3.4, 0, 0), "none").extraDrain, 0, "the diver has no battery to drain");
+  assert.ok(respondToFlow(v(0, 0, 4), ACTORS.dart, v(8, 0, 0), "none").extraDrain > 0, "crossing costs a hull power");
+});
+
+test("motion: the reach limit leaves reachable motion alone and is continuous", () => {
+  const d = v(5, 0, 0);
+  for (const g of [v(4, 0.5, 0), v(-3, 0, 0), v(0, 0, 3), v(1, 1, 1)]) assert.deepEqual(limitToReach(g, 3.4, d), g);
+  assert.deepEqual(limitToReach(v(9, 0, 0), 3.4, d), d, "beyond the drift: the drift");
+  let worst = 0;
+  for (let i = 0; i < 2000; i++) {
+    const g = v(Math.cos(i) * (i % 13), Math.sin(i * 0.37) * 3, Math.sin(i) * (i % 11)), e = v(1e-6, -1e-6, 1e-6);
+    const a = limitToReach(g, 3.4, d), b = limitToReach(v(g.x + e.x, g.y + e.y, g.z + e.z), 3.4, d);
+    worst = Math.max(worst, Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z));
+  }
+  assert.ok(worst < 1e-5, `jump ${worst}`);
 });
 
 // ------------------------------------------------------------------ collision safety
@@ -185,6 +205,9 @@ test("collision: fast hulls racing along rock in a strong cross-flow slide, neve
     const s = initialSandbox(id, v(wall - a.shape.radius - 0.5, -20, -20));
     const { readouts } = run(s, basin, 12, () => ({ forward: 1, yaw: 0, sprint: true }));
     assert.ok(readouts.every(r => r.flowSpeed > 7) && s.position.x + a.shape.radius <= wall + 1e-6, id);
+    assert.ok(readouts.filter(r => r.hitSolid).length > 100, `${id} slid along the face`);
+    assert.equal(s.health, 100, `${id}: sliding along rock under a cross-current is not an impact`);
+    assert.ok(readouts.every(r => !r.events.some(e => e.type === "impact")), `${id}: no impact events`);
     assert.ok(s.position.z < -40, `${id} still made progress along the face (${s.position.z.toFixed(1)})`);
     // A flat hull pressed onto rock by the current alone takes no damage.
     const dead = initialSandbox(id, v(wall - a.shape.radius - 15, -20, -60));
@@ -251,7 +274,9 @@ test("adverse: a powerless diver pinned on rock at a strong current's edge escap
   mid.oxygen = 20;
   run(mid, lab, 3, () => ({}));
   const notch = (EDGE.notchZ[0] + EDGE.notchZ[1]) / 2;
-  run(mid, lab, 4, st => toward(st, v(EDGE.cliffX + 2, -25, notch)), st => st.position.x > EDGE.cliffX + 0.5);
+  // Across a current stronger than the diver progress is slow by design; it still gets there.
+  const into = run(mid, lab, 15, st => toward(st, v(EDGE.cliffX + 2, -25, notch)), st => st.position.x > EDGE.cliffX + 0.5);
+  assert.ok(into.stoppedAt !== null && into.stoppedAt < 10, `into the notch in ${into.stoppedAt} s`);
   run(mid, lab, 10, () => ({}));
   assert.ok(mid.position.x > EDGE.cliffX && field.sample(mid.position, mid.tick).speed < 0.05 * EDGE_RACE.strength,
     `resting in the lee at ${JSON.stringify(mid.position)}`);

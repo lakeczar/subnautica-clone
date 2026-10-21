@@ -19,11 +19,18 @@ export interface CurrentVolumeDef {
   readonly direction?: Vec3;
   /** Peak flow speed, m/s. */
   readonly strength: number;
-  /** Metres inside the boundary over which flow rises from 0 to full. The
-   * authored shape is the outer limit of any flow. */
+  /** Metres over which the flow fades at the boundary. With the default
+   * `inside` falloff it rises from 0 at the boundary to full `edge` metres
+   * in (smoothly), so the authored shape is the outer limit of any flow. */
   readonly edge: number;
+  /** `outside`: full inside the shape, fading linearly to 0 over `edge`
+   * metres beyond it: S4's `shapeWeight`, for migrated hazard fields. */
+  readonly falloff?: "inside" | "outside";
   /** A cycle whose 0..1 level scales the strength. */
   readonly cycle?: string;
+  /** Share of the strength that stays while the cycle is at 0 (S4's
+   * `baseline`): the scale is baseline + (1 − baseline) × level. */
+  readonly baseline?: number;
   /** Sheltered pockets (behind a boulder, in a notch) where this volume's flow
    * is stilled, with the same soft edge. */
   readonly lees?: readonly { readonly min: Vec3; readonly max: Vec3 }[];
