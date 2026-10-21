@@ -115,7 +115,18 @@ export interface PinState {
   readonly active: boolean;
 }
 
-/** Pins for a viewer, and a map view the residency reads them through. */
+/** Longest look-ahead the local pins cover, metres: with a 2 m coverage
+ * reach and a craft box up to 9 m, the pinned envelope stays under one 32 m
+ * chunk wide, so it spans at most 2 x 2 x 2 chunks (`LOCAL_CHUNKS`). */
+export const MAX_LOOKAHEAD = 8;
+export const LOCAL_CHUNKS = 8;
+export const COVERAGE_REACH = 2;
+
+/** Pins for a viewer, and a map view the residency reads them through.
+ * While active, exactly the pinned chunks are wanted fine (the viewer's zone,
+ * every zone one portal away, and the chunks round the actor's look-ahead
+ * envelope) and every other cave chunk exactly coarse, so the art the cave
+ * needs is bounded by `caveArtMinimum`. */
 export class CavePins {
   private state: PinState = { zone: -1, fine: new Set(), active: false };
   readonly view: WorldMap;
@@ -127,9 +138,11 @@ export class CavePins {
       chunksWithin: (p, radius) => {
         const out: { chunk: ChunkDescriptor; distance: number }[] = [];
         for (const chunk of inner.layout.chunks) {
+          const b = lod(chunk);
           let distance = boxDistance(chunk.bounds, p);
-          if (this.state.fine.has(chunk.id)) distance = Math.min(distance, lod(chunk).fine - 1);
-          else if (this.state.active) distance = Math.min(distance, lod(chunk).coarse - 1);
+          if (this.state.fine.has(chunk.id)) distance = Math.min(distance, b.fine - 1);
+          // Unpinned: coarse, never fine (even close by, and past hysteresis).
+          else if (this.state.active) distance = Math.max(b.fine + b.hysteresis, Math.min(distance, b.coarse - 1));
           if (distance <= radius) out.push({ chunk, distance });
         }
         return out.sort((a, b) => a.distance - b.distance || (a.chunk.id < b.chunk.id ? -1 : 1));
@@ -137,8 +150,10 @@ export class CavePins {
     };
   }
   get current(): PinState { return this.state; }
-  /** Recompute pins for a viewer position. */
-  update(viewer: Vec3): PinState {
+  /** Recompute pins for a viewer position, and optionally the actor's box
+   * and how far ahead it may move before the next update (clamped to
+   * `MAX_LOOKAHEAD`). */
+  update(viewer: Vec3, actor?: { min: Vec3; max: Vec3 }, lookahead = 0): PinState {
     const cm = this.cm, d = cm.cave.source.domain;
     const active = boxDistance(d, viewer) <= this.activation;
     let zone = active ? cm.cave.field.zoneAt(viewer.x, viewer.y, viewer.z) : -1;
@@ -146,8 +161,66 @@ export class CavePins {
     if (active && zone < 0) zone = nearestMouthZone(cm, viewer);
     const zones = zone >= 0 ? new Set([zone, ...cm.neighbours(zone)]) : new Set<number>();
     const fine = new Set(cm.refs.filter(r => r.zones.some(z => zones.has(z))).map(r => r.id));
+    if (active && actor) for (const id of touchedChunks(cm, actor, COVERAGE_REACH + Math.min(MAX_LOOKAHEAD, lookahead))) fine.add(id);
     this.state = { zone, fine, active };
     return this.state;
+  }
+}
+
+/** Chunk IDs whose box comes within `reach` of a box. */
+export function touchedChunks(cm: CaveMap, box: { min: Vec3; max: Vec3 }, reach: number): ChunkId[] {
+  return cm.refs.filter(r => {
+    const b = cm.map.chunk(r.id)!.bounds;
+    return b.min.x <= box.max.x + reach && b.max.x >= box.min.x - reach && b.min.y <= box.max.y + reach &&
+      b.max.y >= box.min.y - reach && b.min.z <= box.max.z + reach && b.max.z >= box.min.z - reach;
+  }).map(r => r.id);
+}
+
+/** Art bytes of one chunk at each LOD (fine includes its life mesh). */
+export type CaveArtCost = (id: ChunkId) => { readonly fine: number; readonly coarse: number };
+
+/** The least art share (bytes, CPU and GPU alike: the loader keeps one copy
+ * of each array on each side) under which the pins always fit: every chunk
+ * coarse, plus the fine increment of the costliest pinned zone set, plus
+ * `LOCAL_CHUNKS` of the costliest fine increments for the look-ahead. The
+ * world must give the cave at least this beside its fixed bytes before the
+ * player may enter; `CaveGate` enforces safety if it ever does not. */
+export function caveArtMinimum(cm: CaveMap, cost: CaveArtCost): number {
+  let coarse = 0;
+  const extra = new Map<ChunkId, number>();
+  for (const r of cm.refs) { const c = cost(r.id); coarse += c.coarse; extra.set(r.id, Math.max(0, c.fine - c.coarse)); }
+  let zoneSet = 0;
+  for (let z = 0; z < cm.cave.source.zones.length; z++) {
+    const zones = new Set([z, ...cm.neighbours(z)]);
+    let sum = 0;
+    for (const r of cm.refs) if (r.zones.some(q => zones.has(q))) sum += extra.get(r.id)!;
+    zoneSet = Math.max(zoneSet, sum);
+  }
+  const local = [...extra.values()].sort((a, b) => b - a).slice(0, LOCAL_CHUNKS).reduce((n, v) => n + v, 0);
+  return coarse + zoneSet + local;
+}
+
+/** The movement gate: the safe response whenever coverage cannot be kept
+ * (cold entry, a zone change before its chunks arrive, a turn into an
+ * unloaded passage, or the art share shrinking after entry). A move is
+ * allowed only when the actor's box at the destination, grown by
+ * `COVERAGE_REACH`, touches no chunk that is not drawn fine and the
+ * destination's zone has every chunk drawn. Otherwise the actor holds
+ * (and may still retreat into covered space). */
+export class CaveGate {
+  /** Frames refused, and why the latest refusal happened. */
+  readonly stats = { refused: 0, reason: "" };
+  constructor(private readonly cm: CaveMap) {}
+  allows(shown: ReadonlyMap<ChunkId, LodLevel>, destination: { min: Vec3; max: Vec3 }): boolean {
+    const c = { x: (destination.min.x + destination.max.x) / 2, y: (destination.min.y + destination.max.y) / 2, z: (destination.min.z + destination.max.z) / 2 };
+    const near = boxDistance(this.cm.cave.source.domain, c) <= COVERAGE_REACH + 16;
+    if (!near) return true;
+    let zone = this.cm.cave.field.zoneAt(c.x, c.y, c.z);
+    if (zone < 0) zone = nearestMouthZone(this.cm, c);
+    const problems = coverageProblems(this.cm, shown, destination, COVERAGE_REACH, zone);
+    if (!problems.length) return true;
+    this.stats.refused++; this.stats.reason = problems[0]!;
+    return false;
   }
 }
 

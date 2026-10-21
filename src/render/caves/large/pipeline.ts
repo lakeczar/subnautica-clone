@@ -1,5 +1,5 @@
 import type { LargeCaveSource } from "../../../content/caves/largeCave.js";
-import { buildCollision, createLargeCave, type LargeCave } from "../../../world/caves/large/build.js";
+import { buildCollision, createLargeCave, type BakedLayout, type LargeCave } from "../../../world/caves/large/build.js";
 import { bakeChunk, bakeGround, encodeBake, readBake, type Bake, type BakedChunk, type BakeInput } from "../../../world/caves/large/bake.js";
 import { buildCollider, chunkIndex, createCollision, type CaveCollision } from "../../../world/caves/large/collision.js";
 import type { FloorFunction } from "../../../world/caves/large/field.js";
@@ -66,7 +66,16 @@ export interface LoadedCave {
   chunk(index: number): BakedChunk;
   /** Lamp occupancy per collision chunk index, kept from the load. */
   occupancy(collisionIndex: number): Uint8Array | null;
+  readonly occupancies: ReadonlyMap<number, Uint8Array>;
   readonly index: ReadonlyMap<string, number>;
+  /** The seabed lattice and surface-chunk list, for `createLargeCave`. */
+  readonly layout: BakedLayout;
+  /** Every buffer this cave keeps for as long as it is loaded (whole
+   * ArrayBuffers, each once): the decompressed bake (art is decoded from it
+   * on demand), the colliders, the seabed lattice and the lamp occupancy.
+   * They are fixed CPU bytes: count them before any art is admitted. */
+  readonly retained: readonly { readonly name: string; readonly bytes: number }[];
+  readonly retainedBytes: number;
   readonly ms: number;
 }
 
@@ -88,5 +97,25 @@ export function loadCaveBake(source: LargeCaveSource, buffer: Uint8Array): Loade
     collision.colliders[k] = buildCollider(`${e.cx}:${e.cy}:${e.cz}`, k, art, c.band);
     occupancy.set(k, c.occupancy);
   });
-  return { source, bake, collision, chunk: i => bakeChunk(bake, i), occupancy: k => occupancy.get(k) ?? null, index, ms: Date.now() - started };
+  const retained = retainedBuffers(bake, collision, occupancy);
+  return { source, bake, collision, chunk: i => bakeChunk(bake, i), occupancy: k => occupancy.get(k) ?? null, occupancies: occupancy, index,
+    layout: { ownership, chunks: h.chunks.map(c => ({ cx: c.cx, cy: c.cy, cz: c.cz })) },
+    retained, retainedBytes: retained.reduce((n, r) => n + r.bytes, 0), ms: Date.now() - started };
+}
+
+/** Whole ArrayBuffers behind the loaded cave, each counted once. */
+function retainedBuffers(bake: Bake, collision: CaveCollision, occupancy: ReadonlyMap<number, Uint8Array>): { name: string; bytes: number }[] {
+  const seen = new Set<ArrayBufferLike>(), out: { name: string; bytes: number }[] = [];
+  const add = (name: string, a: ArrayBufferView): void => {
+    if (seen.has(a.buffer)) return;
+    seen.add(a.buffer);
+    const last = out[out.length - 1];
+    if (last?.name === name) out[out.length - 1] = { name, bytes: last.bytes + a.buffer.byteLength };
+    else out.push({ name, bytes: a.buffer.byteLength });
+  };
+  add("bake", bake.buffer);
+  add("ground", collision.ownership.ground);
+  for (const k of collision.colliders) if (k) for (const a of [k.positions, k.tris, k.band, k.nodes, k.meta]) add("colliders", a);
+  for (const o of occupancy.values()) add("occupancy", o);
+  return out;
 }

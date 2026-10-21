@@ -2,70 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { CANOPY_ROOT_CAVES as S } from "../src/content/caves/canopyRootCaves.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
-import { actorBox } from "../src/sim/ribCollision.js";
-import type { Vec3 } from "../src/sim/types.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
-import { caveWorldMap, CavePins, coverageProblems, shownLods } from "../src/world/caves/large/streaming.js";
-import { createResidency, type ChunkLoader, type PreparedArt, type ResidentArt } from "../src/world/residency.js";
+import { caveArtMinimum, caveWorldMap, CavePins, touchedChunks } from "../src/world/caves/large/streaming.js";
+import { simulate, syntheticCost } from "./large-cave-stream-support.js";
 import { validateLayout } from "../src/world/map.js";
-import type { WorldMap } from "../src/world/types.js";
 import { DART } from "./large-cave-support.js";
 
 // LC streaming: the Canopy's chunks through S1 residency, and the adverse
-// case: a fast craft crossing the biome while chunks are still constructing
-// must never touch rock that is not drawn fine, nor enter a zone with an
-// undrawn chunk. Builds and uploads cost simulated time on a fake clock.
+// case: a fast craft crossing the biome while chunks are still constructing,
+// or after its art share shrinks, must never move while touching rock that
+// is not drawn fine or sitting in a zone with an undrawn chunk.
 const cave = createLargeCave(S, worldFloor);
 const cm = caveWorldMap(cave);
-/** Tighter bands than the default: what a memory-squeezed tuning might pick. */
-const tight = caveWorldMap(cave, { fine: 32, coarse: 96, hysteresis: 8 });
 
-/** A loader whose builds take `buildMs` per step (fine 3 steps, coarse 1). */
-function fakeLoader(clock: { t: number }, buildMs: number): ChunkLoader {
-  return {
-    *build(_chunk, lod) {
-      for (let i = 0; i < (lod === "fine" ? 3 : 1); i++) { clock.t += buildMs; yield; }
-      const bytes = lod === "fine" ? 420 * 1024 : 110 * 1024;
-      const art: PreparedArt = {
-        cpuBytes: bytes, gpuBytes: bytes, discard() {},
-        upload(): ResidentArt { clock.t += 1; return { cpuBytes: bytes, gpuBytes: bytes, setVisible() {}, dispose() {} }; },
-      };
-      return art;
-    },
-  };
-}
-
-/** A tight share of S1's 256 MiB: about a coarse floor plus two zones fine. */
-const BUDGET_MIB = 32;
-interface Run { readyFrames: number; frames: number; failures: string[]; maxShownMiB: number }
-function traverse(path: readonly Vec3[], speed: number, map: WorldMap, pins: CavePins | null, budgetMiB = BUDGET_MIB, cmap = cm): Run {
-  const clock = { t: 0 };
-  const residency = createResidency({ map, loader: fakeLoader(clock, 2.5), now: () => clock.t,
-    budget: { cpuBytes: budgetMiB * 1048576, gpuBytes: budgetMiB * 1048576, buildMsPerFrame: 4, uploadMsPerFrame: 4 } });
-  let p = { ...path[0]! }, wp = 1, frames = 0, readyFrames = -1, maxShown = 0;
-  const failures: string[] = [];
-  const check = (): string[] => {
-    const eye = { x: p.x, y: p.y + 1.4, z: p.z };
-    pins?.update(eye);
-    const zone = pins ? pins.current.zone : cave.field.zoneAt(eye.x, eye.y, eye.z);
-    const stats = residency.update(eye);
-    maxShown = Math.max(maxShown, stats.gpuBytes);
-    return coverageProblems(cmap, shownLods(residency.units()), actorBox(p, DART), 2, zone);
-  };
-  // Cold entry: held outside the hollow until what it touches and its zone are drawn.
-  for (let i = 0; i < 2000 && readyFrames < 0; i++) { clock.t += 16.7; if (!check().length && i > 1) readyFrames = i; }
-  assert.ok(readyFrames >= 0, "the cave never became enterable");
-  while (wp < path.length && frames < 20000) {
-    const g = path[wp]!, dx = g.x - p.x, dy = g.y - p.y, dz = g.z - p.z, l = Math.hypot(dx, dy, dz);
-    if (l < 0.5) { wp++; continue; }
-    const s = Math.min(speed / 60, l);
-    p = { x: p.x + dx / l * s, y: p.y + dy / l * s, z: p.z + dz / l * s };
-    clock.t += 16.7; frames++;
-    const problems = check();
-    if (problems.length) failures.push(`frame ${frames} at (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}): ${problems[0]}`);
-  }
-  return { readyFrames, frames, failures, maxShownMiB: maxShown / 1048576 };
-}
+/** Fixed cave bytes (collision, occupancy, bake, lamp window), counted as external. */
+const FIXED = 40 * 1048576;
 
 /** The craft loop out and back, the west loop and the pool spur, joined. */
 const tour = (() => {
@@ -99,17 +50,54 @@ test("LC streaming: pins put the viewer's zone and its neighbours fine, and the 
   assert.ok(!far.active && far.fine.size === 0);
 });
 
-test("LC adverse: a Dart at boost and at overdrive crosses the biome while chunks construct, never meeting undrawn rock", () => {
-  for (const [speed, map] of [[11, cm], [16, cm], [16, tight]] as const) {
-    const pins = new CavePins(map), r = traverse(tour, speed, pins.view, pins, BUDGET_MIB, map);
-    assert.deepEqual(r.failures.slice(0, 3), [], `at ${speed} m/s, fine band ${map.map.layout.chunks[0]!.lod.fine} m`);
-    assert.ok(r.frames > 1500, `the tour is ${r.frames} frames`);
-    assert.ok(r.maxShownMiB <= BUDGET_MIB, `held ${r.maxShownMiB.toFixed(1)} MiB`);
+test("LC-04 pins: neighbour zones are pinned fine, other zones are not, and unpinned chunks are only ever wanted coarse", () => {
+  const pins = new CavePins(cm), at = { x: 742, y: -126, z: -100 };
+  const state = pins.update(at);
+  const id = (z: string): number => S.zones.findIndex(q => q.id === z);
+  const hall = id("canopy_roots.hall"), hub = id("canopy_roots.hub"), pool = id("canopy_roots.pool");
+  // Independently of `neighbours`: the hall's portals lead to the hub, the gallery and the passages; not the pool.
+  const only = (z: number) => cm.refs.filter(r => r.zones.length === 1 && r.zones[0] === z);
+  assert.ok(only(hub).length > 0 && only(hub).every(r => state.fine.has(r.id)), "hub chunks (a neighbour) are pinned fine");
+  assert.ok(only(pool).length > 0 && only(pool).every(r => !state.fine.has(r.id)), "pool chunks (two portals away) are not");
+  assert.ok(!cm.neighbours(hall).includes(pool));
+  for (const w of pins.view.chunksWithin(at, 10000))
+    if (!state.fine.has(w.chunk.id)) assert.ok(w.distance >= w.chunk.lod.fine + w.chunk.lod.hysteresis && w.distance < w.chunk.lod.coarse, `${w.chunk.id} wanted fine unpinned`);
+  // The actor's look-ahead pins the chunks round its box too.
+  const box = { min: { x: 700, y: -150, z: -150 }, max: { x: 704, y: -148, z: -146 } };
+  const withActor = pins.update(at, box, 6);
+  for (const t of touchedChunks(cm, box, 8)) assert.ok(withActor.fine.has(t));
+});
+
+const minimum = caveArtMinimum(cm, syntheticCost);
+const sim = (o: Partial<Parameters<typeof simulate>[0]>) =>
+  simulate({ cm, cost: syntheticCost, budgetBytes: FIXED + minimum, fixedBytes: FIXED, path: tour, speed: 16, shape: DART, gate: true, ...o });
+
+test("LC-02 adverse: with the minimum share, a Dart at boost and overdrive tours the biome while uneven chunks construct, never held or uncovered", () => {
+  for (const speed of [11, 16]) {
+    const r = sim({ speed });
+    assert.ok(r.finished && r.frames > 2000, `tour unfinished at ${speed} m/s`);
+    assert.equal(r.unsafeMetres, 0, r.firstUnsafe);
+    assert.equal(r.heldAfterEntry, 0, "the minimum share never needs the gate");
+    assert.equal(r.cutFrames, 0, "no pinned or coarse-floor chunk is ever cut");
+    assert.ok(r.maxAccountedBytes <= FIXED + minimum);
   }
 });
 
-test("LC adverse control: on the same tight bands and budget, distance alone meets undrawn rock", () => {
-  const r = traverse(tour, 16, tight.map, null, BUDGET_MIB, tight);
-  assert.ok(r.failures.length > 0, "the control should fail: pins are what keep the craft covered");
-  if (process.env.LC_VERBOSE) console.log(`control: ${r.failures.length} uncovered frames of ${r.frames}; first ${r.failures[0]}`);
+test("LC-02 adverse: the share shrinks after entry (another owner reserves bytes): the gate holds, nothing moves uncovered, and the tour resumes", () => {
+  const events = [{ frame: 600, otherBytes: Math.round(minimum * 0.6) }, { frame: 1400, otherBytes: 0 }];
+  const r = sim({ shareEvents: events });
+  assert.equal(r.unsafeMetres, 0, r.firstUnsafe);
+  assert.ok(r.heldAfterEntry > 0, "the gate is what kept it safe");
+  assert.ok(r.finished, "it resumes once the share returns");
+  // Control: the same squeeze without the gate drives into undrawn space.
+  const control = sim({ shareEvents: events, gate: false });
+  assert.ok(control.unsafeMetres > 5, `control moved only ${control.unsafeMetres.toFixed(1)} m uncovered`);
+});
+
+test("LC-02 adverse: a share below the minimum from the start never moves uncovered (the explicit fallback is to hold)", () => {
+  const r = sim({ budgetBytes: FIXED + minimum * 0.5, maxFrames: 4000 });
+  assert.equal(r.unsafeMetres, 0, r.firstUnsafe);
+  assert.ok(r.heldAfterEntry > 0);
+  const control = sim({ budgetBytes: FIXED + minimum * 0.5, maxFrames: 4000, gate: false });
+  assert.ok(control.unsafeMetres > 5);
 });

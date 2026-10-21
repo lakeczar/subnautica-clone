@@ -110,3 +110,16 @@ test("shared interface: a small cave and a cave biome answer in one composed wor
   assert.ok(below <= q.y && below > q.y - 2, `support ${below} below ${q.y}`);
   assert.ok(world.caveAt(actorBox(shift(q), DIVER))?.id === "fanvault" && world.caveAt(actorBox(inVault, DIVER))?.id === "test_vault");
 });
+
+test("LC-04: exterior walls still stop a move and block sight, inside a cave sub-sweep's reach and after it", () => {
+  const flat = (): number => -100;
+  for (const wallX of [4.5, 14]) {
+    const wall = { id: `r1.wall.${wallX}`, min: { x: wallX, y: -80, z: -10 }, max: { x: wallX + 0.05, y: -40, z: -3 } };
+    const box = boxCaveCollider({ id: "r1.owner", footprint: { minX: 0, maxX: 4, minZ: -10, maxZ: -4 }, baseY: -100, rock: [] }, flat, 10);
+    const shared = composeCaveWorld({ exterior: createWorldQueries([wall], flat), solids: [wall], floor: flat, caves: [box] });
+    const a = { x: 3, y: -60, z: -7 };
+    const r = shared.moveCapsule(a, { x: 30, y: 0, z: 0 }, DIVER);
+    assert.ok(r.hitSolid && r.position.x < wallX - DIVER.radius + 1e-3 && r.position.x > wallX - DIVER.radius - 0.01, `wall at ${wallX}: stopped at ${r.position.x}`);
+    assert.equal(shared.lineOfSight(a, { x: 33, y: -60, z: -7 }), false, `wall at ${wallX} blocks sight`);
+  }
+});

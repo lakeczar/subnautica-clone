@@ -3,6 +3,7 @@ import type { LodLevel } from "../../types.js";
 import { buildCollider, chunkIndex, collisionComplete, createCollision, type CaveCollision } from "./collision.js";
 import { CAVE_SUB_SWEEP } from "./compose.js";
 import { compileField, validateOwnership, type CaveField, type FloorFunction } from "./field.js";
+import type { CaveOwnership } from "./ownership.js";
 import { buildChunkMesh, caveLattice, chunkKey, surfaceChunks, type CaveLattice, type ChunkCoord, type ChunkMesh } from "./mesh.js";
 
 /** A cave biome built from its source (Babylon-free).
@@ -31,9 +32,17 @@ export interface LargeCave {
   dropMeshes(): void;
 }
 
-export function createLargeCave(source: LargeCaveSource, floor: FloorFunction): LargeCave {
-  const field = compileField(source, floor);
-  const problems = validateOwnership(field);
+/** From a verified bake: its seabed lattice and surface-chunk list, so the
+ * runtime keeps one ground array and skips the field-wide passes. */
+export interface BakedLayout {
+  readonly ownership: CaveOwnership;
+  readonly chunks: readonly ChunkCoord[];
+}
+
+export function createLargeCave(source: LargeCaveSource, floor: FloorFunction, baked?: BakedLayout): LargeCave {
+  const field = compileField(source, floor, baked?.ownership);
+  // A bake was validated when it was built, and its source hash matches.
+  const problems = baked ? [] : validateOwnership(field);
   if (problems.length) throw new Error(`cave ${source.id}: ownership problems:\n- ${problems.join("\n- ")}`);
   const lattice = caveLattice(field);
   for (const r of source.collars) {
@@ -41,7 +50,7 @@ export function createLargeCave(source: LargeCaveSource, floor: FloorFunction): 
     if (r.minX - COLLISION_BAND < d.min.x || r.maxX + COLLISION_BAND > d.max.x || r.minZ - COLLISION_BAND < d.min.z || r.maxZ + COLLISION_BAND > d.max.z)
       throw new Error(`cave ${source.id}: collar and its ${COLLISION_BAND} m band must lie inside the domain`);
   }
-  const chunks = surfaceChunks(field, lattice, COLLISION_BAND);
+  const chunks = baked ? [...baked.chunks] : surfaceChunks(field, lattice, COLLISION_BAND);
   const collision = createCollision(source.id, field.ownership, source.chunk, COLLISION_BAND,
     chunks.map(c => c.cx + lattice.nx * (c.cy + lattice.ny * c.cz)));
   const cache = new Map<string, ChunkMesh>();

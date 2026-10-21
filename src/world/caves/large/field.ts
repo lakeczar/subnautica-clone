@@ -245,7 +245,9 @@ export interface CaveField {
 }
 
 
-export function compileField(source: LargeCaveSource, floor: FloorFunction): CaveField {
+/** `ownership` lets a loaded bake share its seabed lattice instead of
+ * sampling a second copy. */
+export function compileField(source: LargeCaveSource, floor: FloorFunction, ownership?: CaveOwnership): CaveField {
   const d = source.domain, C = source.chunk, h = source.voxel;
   for (const v of [d.max.x - d.min.x, d.max.y - d.min.y, d.max.z - d.min.z])
     if (!(v > 0) || Math.abs(v / C - Math.round(v / C)) > 1e-9) throw new Error(`cave ${source.id}: domain side ${v} is not a whole number of ${C} m chunks`);
@@ -297,7 +299,7 @@ export function compileField(source: LargeCaveSource, floor: FloorFunction): Cav
     if (carve !== -2) total = smin(total, current, source.blend);
     return { distance: total, zone };
   };
-  const ownership = createOwnership(d, source.collars, source.roofMin, h, floor);
+  ownership ??= createOwnership(d, source.collars, source.roofMin, h, floor);
   const inCollar = (x: number, z: number): boolean => collarAt(ownership, x, z) !== null;
   const capOf = (x: number, z: number): number => capAt(ownership, x, z);
   const field: CaveField = {

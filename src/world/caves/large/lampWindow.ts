@@ -17,6 +17,9 @@ import { capAt } from "./ownership.js";
 
 export const WINDOW_SIZE = 128;
 export const WINDOW_SNAP = 8;
+/** Bytes of one window (R8). A re-centre stages a second one while the
+ * shown one stays bound, so reserve `2 * WINDOW_BYTES` CPU and one on the GPU. */
+export const WINDOW_BYTES = WINDOW_SIZE ** 3;
 
 export interface OccupancySource {
   readonly collision: CaveCollision;
