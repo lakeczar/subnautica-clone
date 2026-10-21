@@ -2,6 +2,7 @@ import { fixtureGame } from "../sim/carrier.js";
 import { createGame } from "../sim/state.js";
 import type { GameState, NoticeOptions } from "../sim/types.js";
 import { createEnvelope, decodeSave, MAX_SAVE_BYTES } from "../save/codec.js";
+import { resumeEcology } from "../sim/ecology/ecology.js";
 import type { SaveEnvelope, SaveMetadata } from "../save/codec.js";
 import type { CommitFailure, SaveRepository } from "../save/repository.js";
 
@@ -35,6 +36,8 @@ const sessionFallback = (code: CommitFailure): boolean =>
 
 /** Owns the expedition and its one pending read/write/choice. No DOM or renderer.
  * SiltwakeApp supplies presentation and advances state only through fixed updates. */
+/** Steps between automatic retries after a refused (unsaveable) moment: 5 s. */
+export const UNSAVEABLE_RETRY_TICKS = 300;
 export class ExpeditionSession {
   state: GameState | null = null;
   private meta: SaveMetadata | null = null;
@@ -61,6 +64,8 @@ export class ExpeditionSession {
     return this.automatic;
   }
   get persistenceMessage(): string {
+    if (this.state && this.automatic && this.unsaveable)
+      return "This moment cannot be saved; automatic saving retries every few seconds. Your last saved record is unchanged.";
     if (this.state && !this.automatic)
       return "Local autosave is off. Export save before closing this page; you can explicitly retry Save locally.";
     if (!this.repository.canWrite)
@@ -121,6 +126,8 @@ export class ExpeditionSession {
     if (this.disposed) return;
     // The repository and active simulation must never share mutable state.
     this.state = structuredClone(save.state);
+    // S4: a resumed encounter or hazard re-shows its caption, with no fresh grace.
+    resumeEcology(this.state.world.ecology);
     this.meta = { ...save.meta };
     this.lastAutosaveTick = this.state.tick;
     this.automatic = autoSave;
@@ -299,10 +306,13 @@ export class ExpeditionSession {
       this.idle &&
       this.automatic &&
       this.state &&
-      this.state.tick - this.lastAutosaveTick >= 1800
+      this.state.tick - this.lastAutosaveTick >= (this.unsaveable ? UNSAVEABLE_RETRY_TICKS : 1800)
     )
       void this.save(false);
   }
+  /** The last write was refused because this moment fails save validation (not a
+   * storage failure): automatic saving stays on and retries sooner. */
+  private unsaveable = false;
 
   private async save(manual: boolean, replaceProtected = false): Promise<void> {
     const save = this.envelope();
@@ -316,13 +326,25 @@ export class ExpeditionSession {
       operation.abort.signal,
     );
     if (!this.current(operation)) return;
-    this.automatic = result.ok;
+    // A moment that fails validation is transient (C3-R1): keep automatic saving
+    // on and retry soon; storage failures still disable it until a manual save.
+    const invalid = !result.ok && result.code === "invalid", wasUnsaveable = this.unsaveable;
+    this.automatic = result.ok || (invalid && this.automatic);
+    this.unsaveable = invalid;
     this.finish(operation);
     if (result.ok) {
       if (manual)
         this.events.notify(
           "Saved locally",
           false, { channel: "persistence" },
+        );
+      else if (wasUnsaveable)
+        this.events.notify("Saved locally · automatic saving resumed", false, { channel: "persistence" });
+    } else if (invalid && this.automatic) {
+      if (manual || !wasUnsaveable)
+        this.events.notify(
+          `${result.error} This moment cannot be saved; automatic saving will try again in a few seconds.`,
+          true, { channel: "persistence" },
         );
     } else if (result.code !== "cancelled")
       this.events.notify(

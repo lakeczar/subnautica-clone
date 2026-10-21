@@ -1,4 +1,4 @@
-import { ROUTE_WORLD_BOUNDS } from "../src/content/routes.js";
+import { WORLD_BOUNDS } from "../src/sim/world.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
@@ -284,7 +284,7 @@ test("minimal prompt follows actual aimed actions across all real hosts, and is 
   const opening = readyState(); view.update(opening, false);
   assert.equal(get("interact-prompt").innerHTML, "", "known regulator to the side does not prompt at stand-up");
   for (const v of NORMAL_VIEWS) {
-    const s = v.position.y < -150 ? protectedReadyState(350) : v.position.y < -60 ? protectedReadyState(150) : readyState();
+    const s = v.position.y < -340 ? protectedReadyState(800) : v.position.y < -150 ? protectedReadyState(350) : v.position.y < -60 ? protectedReadyState(150) : readyState();
     s.player.pose.position = { ...v.position }; s.player.mode = v.mode; faceTarget(s, v.id);
     assert.ok(world.clearance(s.player.pose.position, { radius: 0.34, height: v.mode === "walking" ? 1.75 : 0.95 }), v.id + " body clearance");
     const before = structuredClone(s), target = aimedInteraction(s, world)!;
@@ -298,6 +298,7 @@ test("minimal prompt follows actual aimed actions across all real hosts, and is 
     assert.equal(prompt.includes("Q scan"), hasScanner && !target.known && (target.kind === "source" || target.kind === "evidence"),
       "scan promises require actual fitted tools and an unknown scannable host");
     const result = executeCommand(s, { type: "interact" }, world);
+    if (v.id.startsWith("works:")) continue; // a refusal until plans and stock arrive (targeting.test)
     assert.ok(!result.events.some(e => e.type === "notice" && e.error), v.id);
     const save = createEnvelope(result.state, { sessionId: "normal-prompt-hosts", createdAt: "2026-10-18T06:00:00.000Z", savedAt: "2026-10-18T06:00:00.000Z" });
     const encodedSave = encodeSave(save); assert.ok(encodedSave.ok, encodedSave.ok ? "" : encodedSave.error);
@@ -1356,7 +1357,7 @@ test("an unavailable pulse names the actual reason instead of a bare refusal", (
   s.player.pose.position = { x: 90, y: -40, z: -90 }; s.player.mode = "swimming";
   s.world.threat.mode = "warn"; view.update(s, false);
   assert.equal(get("pulse-summary").textContent, "G · no cell with 25 charge · Z quiet / cover / retreat");
-  s.player.pose.position = { x: 90, y: -40, z: ROUTE_WORLD_BOUNDS.minZ }; s.player.pose.yaw = 0;
+  s.player.pose.position = { x: 90, y: -40, z: WORLD_BOUNDS.minZ }; s.player.pose.yaw = 0;
   view.update(s, false);
   assert.equal(get("pulse-summary").textContent, "G · face the survey area · Z quiet / cover / retreat");
 });
@@ -2029,6 +2030,8 @@ test("sound captions keep one line per cause: pressure, power, hull depth and hu
   const cases: [string, string, () => ReturnType<typeof createGame>, string][] = [
     ["alert.pressure", "[Suit pressure tone · beyond rated depth]", deep, "PRESSURE"],
     ["alert.power", "[Low-power chime]", () => piloted((v) => { v.charge = 10; }), "LOW POWER"],
+    // C1-R2 P3: at 0% the depleted banner names power too; one line, not two.
+    ["alert.power", "[Low-power chime]", () => piloted((v) => { v.charge = 0; }), "POWER DEPLETED"],
     ["alert.hull-stress", "[Hull creaks · near rated depth]", () => piloted((v) => { v.pose.position.y = -170; }), "HULL DEPTH"],
     ["hull.failure", "[Hull systems powering down]", () => piloted((v) => { v.disabled = true; v.health = 0; }), "HULL DISABLED"],
   ];
@@ -2041,5 +2044,28 @@ test("sound captions keep one line per cause: pressure, power, hull depth and hu
     const clear = createGame(); completeOpening(clear);
     view.audioCaption(caption(cue, text), clear);
     assert.equal(get("audio-caption").textContent, text, `${cue}: shown when no banner covers it`);
+  }
+  // An unrelated low-hull banner alone does not hide a power caption.
+  const lowHull = piloted((v) => { v.health = 20; v.charge = 60; });
+  assert.ok(hazardBanners(lowHull).some((b) => b.text.startsWith("LOW HULL")));
+  view.resetPresentation();
+  view.audioCaption(caption("alert.power", "[Low-power chime]"), lowHull);
+  assert.equal(get("audio-caption").textContent, "[Low-power chime]");
+});
+
+test("C3: beyond B1's area the HUD names S2's region and drops B1's area hints", (t) => {
+  const { view, get } = viewFixture(t);
+  const s = createGame(); completeOpening(s);
+  s.player.mode = "swimming";
+  for (const [p, name] of [
+    [{ x: 0, y: -2, z: 10 }, "Hearth Reef"],
+    [{ x: 120, y: -150, z: -1000 }, "Ember Rift"],
+    [{ x: 560, y: -390, z: -1120 }, "Mirror Divide"],
+    [{ x: 1300, y: -600, z: -1150 }, "Meridian District"],
+  ] as const) {
+    s.player.pose.position = { ...p };
+    view.update(s, false);
+    assert.equal(get("region-name").textContent, name, JSON.stringify(p));
+    if (name !== "Hearth Reef") assert.doesNotMatch(get("context-hint").textContent ?? "", /Pale Basin|upper crowns/);
   }
 });

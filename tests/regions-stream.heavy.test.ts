@@ -41,6 +41,12 @@ function chunkBytes(scene: Scene): number {
   return bytes;
 }
 
+/** A work clock: every read advances 0.01 ms, so each frame's construction
+ * budget is a fixed amount of work whatever the host load (these tests failed
+ * once under machine load with the wall clock). Streaming, budgets and
+ * settlement are asserted exactly as before. */
+function workClock(): () => number { let t = 0; return () => (t += 0.01); }
+
 test("WORLD_ART composes S2 with legacy terrain over exactly the shared skip extent", () => {
   assert.equal(S2_TERRAIN_SKIP, TERRAIN_EXTENT, "S2 skips exactly what the legacy pack draws");
   assert.deepEqual(WORLD_ART.map(p => p.id), ["legacy", "s2"]);
@@ -57,7 +63,7 @@ test("WORLD_ART composes S2 with legacy terrain over exactly the shared skip ext
 
 test("S2 regions stream through the real renderer within budget, then settle", () => sceneTest(scene => {
   const cel = createCelMaterial(scene), glass = createGlassMaterial(scene);
-  const art = createRegionalArt(scene, cel, glass);
+  const art = createRegionalArt(scene, cel, glass, { now: workClock() });
   const state = protectedReadyState(350);
   // The pod (legacy and S2 columns side by side), the stack yard, the Rift.
   for (const p of [{ x: 0, y: 1.2, z: 22 }, { x: 470, y: -12, z: -6 }, { x: 91, y: -300, z: -888 }] as Vec3[]) {

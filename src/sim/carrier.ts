@@ -5,9 +5,15 @@ import { HEARTHLINE_SOCKETS, hearthlineInteriorSolids } from "../content/fleet/h
 import { createGame, makeVehicle } from "./state.js";
 import { completeOpening } from "./progression.js";
 import { createWorldQueries, sweptHullClearance, withinWorldBounds, WORLD_BOUNDS, type HorizontalBounds, type Solid } from "./world.js";
+import { YARD_BUILD } from "../content/yard.js";
+import { SITES } from "../content/regions/sites.js";
+import { siteDatum } from "../content/regions/access.js";
+import { worldFloor } from "../content/regions/worldFloor.js";
 export const BERTH_LOCAL: readonly Vec3[] = [
   { x: -3, y: 4, z: 1 },
-  { x: 3, y: 4, z: 1 },
+  // C3 (P1): the compact rooms' inboard walls stand at -0.55 and 0.75 (each Dart
+  // envelope meets its wall), so the bow-to-stern walkway is 1.14 m, not 0.84 m.
+  { x: 3.2, y: 4, z: 1 },
 ];
 export const LAUNCH_LOCAL = { x: 0, y: -3, z: -17 };
 export const CARRIER_SUPPORT = { x: 65, y: -0.9, z: 12 };
@@ -18,8 +24,8 @@ export const CARRIER_LAYOUT = {
   wall: 0.08,
   deck: { min: { x: -6.3, y: 3.8, z: -12 }, max: { x: 6.3, y: 4, z: 12 } },
   compact: [
-    { id: "carrier.berth.port", min: { x: -6, y: 4, z: -2.8 }, max: { x: -0.45, y: 8.4, z: 4.8 } },
-    { id: "carrier.berth.starboard", min: { x: 0.55, y: 4, z: -2.8 }, max: { x: 6, y: 8.4, z: 4.8 } },
+    { id: "carrier.berth.port", min: { x: -6, y: 4, z: -2.8 }, max: { x: -0.55, y: 8.4, z: 4.8 } },
+    { id: "carrier.berth.starboard", min: { x: 0.75, y: 4, z: -2.8 }, max: { x: 6, y: 8.4, z: 4.8 } },
   ],
   medium: { id: "carrier.berth.medium", min: { x: -6, y: 4, z: -3.7 }, max: { x: 0.1, y: 8.4, z: 5.7 } },
   lock: { id: "carrier.lock", min: { x: -6, y: HULL_COLLIDERS.hearthline.bottom, z: -3.7 }, max: { x: 6, y: 3.8, z: 5.7 } },
@@ -77,8 +83,24 @@ function envelopeSolid(id: string, p: Vec3, shape: Capsule): Solid {
   const x = shape.halfWidth ?? shape.radius, z = shape.halfLength ?? shape.radius;
   return { id, min: { x: p.x - x, y: p.y + (shape.bottom ?? 0), z: p.z - z }, max: { x: p.x + x, y: p.y + shape.height, z: p.z + z } };
 }
+/** Supported carrier docks: the fixture's surface dock, the yard berth where the
+ * carrier is built, and every S2 mooring offering repair (S9: berths reconfigure
+ * only while moored where repair is available). */
+export const CARRIER_SUPPORTS: readonly Vec3[] = [
+  CARRIER_SUPPORT, YARD_BUILD.hearthline.pose,
+  ...SITES.filter((site) => site.role === "mooring" && site.services?.includes("repair")).map((site) => siteDatum(site, worldFloor)),
+];
 export function atCarrierSupport(h: VehicleState): boolean {
-  return distance(h.pose.position, CARRIER_SUPPORT) < 4 && Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) < 0.05;
+  return CARRIER_SUPPORTS.some((p) => distance(h.pose.position, p) < 4) && Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) < 0.05;
+}
+/** A newly fitted-out campaign carrier: empty berths and sockets, its pantry and
+ * fabrication compartments, station keeping in the yard berth. */
+export function launchCarrier(s: GameState, h: VehicleState): void {
+  s.fleet.docking = {
+    vehicleId: h.id, configuration: "compact", stationKeeping: true, supportedDock: atCarrierSupport(h),
+    transaction: null, sequence: 0, completed: [], launchBlocked: false, sockets: emptySockets(),
+  };
+  s.inventory.containers.push(...carrierCompartmentContainers(h));
 }
 /** Every Hearthline socket empty: New Game's and a pre-socket save's value. */
 export const emptySockets = (): Record<string, string | null> =>
@@ -114,7 +136,13 @@ export function carrierTransferPath(s: GameState, v: VehicleState, slot: 0 | 1, 
 function transferRefusal(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture", world: WorldQueries): string | null {
   const dock = s.fleet.docking!, h = carrierHull(s)!, shape = transferEnvelope(v);
   if (dock.launchBlocked) return "Transfer corridor obstructed. Vehicle identity, cargo, charge and damage are unchanged.";
-  const path = carrierTransferPath(s, v, slot, type), local = path.map((p) => worldToLocal(p, h));
+  const path = carrierTransferPath(s, v, slot, type);
+  // The in-carrier keel route stays exactly carrier-local: at an oblique heading a
+  // world round trip lands the lock leg an ulp below the lock floor's top and grazes it.
+  const berth = BERTH_LOCAL[slot]!, lockY = CARRIER_LAYOUT.lockKeelY;
+  const inner = [berth, { ...berth, y: lockY }, { x: 0, y: lockY, z: berth.z }, CARRIER_LAYOUT.railTurn,
+    v.hull === "spindle" ? worldToLocal(launchPoint(h, v), h) : LAUNCH_LOCAL];
+  const local = type === "capture" ? [worldToLocal(v.pose.position, h), ...inner.reverse()] : inner;
   // The independent approach is outside the carrier. At the mouth, guided rails
   // align the hull; use its broader piloting envelope for that initial approach.
   const structure = carrierStructure(dock.configuration, slot);
@@ -127,7 +155,9 @@ function transferRefusal(s: GameState, v: VehicleState, slot: 0 | 1, type: "laun
   const worldShape = { ...shape, halfWidth: rx * cos + rz * sin, halfLength: rx * sin + rz * cos };
   const obstacles = s.fleet.vehicles.filter((a) => a.id !== v.id && a.id !== h.id && !a.berth)
     .map((a) => envelopeSolid(`craft.${a.id}`, a.pose.position, HULL_COLLIDERS[a.hull]));
-  const otherWorld = createWorldQueries(obstacles, () => -200);
+  // Other craft only, in world coordinates: no floor of its own (the composed world
+  // is checked separately), so a transfer below 200 m is not refused by a stand-in.
+  const otherWorld = createWorldQueries(obstacles, () => -1e4);
   if (!sweptHullClearance(localWorld, local, shape) ||
     !sweptHullClearance(world, path, worldShape) ||
     !sweptHullClearance(otherWorld, path, worldShape) ||
@@ -341,10 +371,13 @@ export function carrierCommand(
   const dock = s.fleet.docking,
     h = carrierHull(s);
   if (!dock || !h) return "No carrier interface is present in this expedition.";
+  // The interface is the hull or its exterior vestibule (13.8 m aft of the keel,
+  // entered within 5 m): measuring only from the keel refused 39% of that zone.
   if (
     s.player.interiorId !== h.id &&
     s.player.controlledVehicleId !== h.id &&
-    distance(s.player.pose.position, h.pose.position) > 15
+    distance(s.player.pose.position, h.pose.position) > 15 &&
+    distance(s.player.pose.position, localToWorld(CARRIER_LAYOUT.exteriorVestibule, h)) > 5
   )
     return "Approach the carrier interface locally.";
   if (action === "leave-interior") {

@@ -1,3 +1,5 @@
+import { createEcology } from "./ecology/ecology.js";
+import { STOP_IDS, STOP_LOCKER_CU, WORKING_STOPS } from "../content/stops.js";
 import { HULLS, PLACES, SOURCES, THREAT_HOME } from "../content/registry.js";
 import type { GameState, VehicleState, Vec3 } from "./types.js";
 import { initialRenewal } from "./renewal.js";
@@ -24,6 +26,7 @@ export function createGame(): GameState {
       graceSeconds: 180,
       interiorPose: null,
       mobileRefuge: null,
+      lamp: true,
     },
     opening: { phase: 0, phaseTicks: 0 },
     inventory: {
@@ -55,6 +58,11 @@ export function createGame(): GameState {
           capacity: 48,
           ownerId: "canopy_stop",
         },
+        // C3: S9's yard store and restored-stop lockers at S2's sites.
+        ...STOP_IDS.flatMap((id) => {
+          const locker = WORKING_STOPS[id].locker;
+          return locker ? [{ id: locker, kind: "locker" as const, capacity: STOP_LOCKER_CU, ownerId: id }] : [];
+        }),
       ],
       buoy: {
         itemId: null,
@@ -84,8 +92,11 @@ export function createGame(): GameState {
         { id: "island_workshop", repaired: false },
         { id: "canopy_lab", repaired: false },
         { id: "canopy_stop", repaired: false },
+        { id: "rift_station", repaired: false },
+        { id: "divide_dock", repaired: false },
       ],
       maintenance: { alloy: 16, glass: 1, membrane: 10 },
+      ecology: createEcology(),
       threat: {
         mode: "idle",
         position: { ...THREAT_HOME },

@@ -8,6 +8,7 @@ import type { ItemKind, RecipeId, SourceId } from "../src/content/registry.js";
 import type { GameCommand, GameEvent, GameState, Vec3, WorldQueries } from "../src/sim/types.js";
 import { createGame, eyeHeight, makeVehicle } from "../src/sim/state.js";
 import { collect, collectWithOutcome, craft, craftingBlock, craftingRefusal, discover, interactions, toggleBuoy } from "../src/sim/progression.js";
+import { CAMPAIGN_RECIPES } from "../src/content/campaign/index.js";
 import { addItem, transfer, usedCapacity } from "../src/sim/inventory.js";
 import { aimedInteraction, interactionHost, INTERACTION_REACH, PREVIEW_REACH, reachPreview } from "../src/sim/targeting.js";
 import { service, serviceRefusal, serviceState, serviceWouldRestore } from "../src/sim/vehicles.js";
@@ -330,7 +331,8 @@ test("crafting reason codes preserve all recipe messages, precedence and pure ou
     : code === "space" && id === "strip_frame" ? "Stripped alloy goes to the workshop locker; it needs 16 CU. Nothing consumed."
     : messages[code];
   const refitHull = (id: RecipeId) => id === "dart_350" ? "dart" : id === "creel_350" ? "creel" : null;
-  for (const id of Object.keys(RECIPES) as RecipeId[]) {
+  // S9 campaign recipes have their own reason matrix in tests/campaign-content.test.ts.
+  for (const id of (Object.keys(RECIPES) as RecipeId[]).filter((id) => !Object.hasOwn(CAMPAIGN_RECIPES, id))) {
     const r = RECIPES[id], s = id === "suit_350" ? protectedReadyState(150) : readyState();
     s.knowledge.blueprints.push(r.bp);
     s.knowledge.crafted = [...new Set<RecipeId>([...s.knowledge.crafted, ...r.needs])];

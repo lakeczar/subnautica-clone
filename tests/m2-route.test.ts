@@ -5,7 +5,7 @@ import type { MaterialId, RecipeId } from "../src/content/registry.js";
 import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, CANOPY_BASIN_ROUTE, LEGACY_TERRAIN_SOURCE_IDS, LEGACY_WORLD_BOUNDS, WORLD_VERTICAL_BOUNDS } from "../src/content/routes.js";
 import { createGame } from "../src/sim/state.js";
 import { addItem, available, fabricationContainers, transfer } from "../src/sim/inventory.js";
-import { collect, completeOpening, craft, discover, personalLimit } from "../src/sim/progression.js";
+import { collect, completeOpening, craft, discover, pendingCampaignWork, personalLimit } from "../src/sim/progression.js";
 import { personalLimit as capabilityLimit, personalDepth } from "../src/sim/capabilities.js";
 import { aimedInteraction, interactionHost } from "../src/sim/targeting.js";
 import { interactions } from "../src/sim/progression.js";
@@ -181,8 +181,11 @@ test("real flooded hosts are aimable from clear work poses, retain either eviden
     assert.deepEqual(s.knowledge.evidence.slice(-2).map(e => e.id), order);
     assert.equal(s.knowledge.journals.length, 0); assert.ok(!s.knowledge.markers.includes("home_pod") || s.knowledge.markers.length <= Object.keys(PLACES).length);
     for (const bp of ["bp_creel_service", "bp_carrier_basin", "bp_rift_pressure"] as const) assert.ok(s.knowledge.blueprints.includes(bp));
-    // M2-B1: C05's service plans now build the Creel; the carrier remains future knowledge.
-    assert.ok(Object.values(RECIPES).every(r => r.output !== ("hearthline" as string)));
+    // M2-B1: C05's service plans now build the Creel. S9's carrier keel and fit-out are
+    // done at S2's stack-yard berth, which C3 placed.
+    for (const id of ["hearthline_keel", "hearthline_base"] as const) {
+      assert.equal(pendingCampaignWork(id), null, id); assert.equal(RECIPES[id].site, "stack_yard", id);
+    }
     assert.equal(RECIPES.creel_base.bp, "bp_creel_service");
     assert.ok(Object.hasOwn(FUTURE_BLUEPRINTS, "bp_carrier_basin"));
     assert.equal(BASIN_GEOMETRY.airVolumes.length, 0); assert.ok(SOLIDS.some(s => s.id === "basin.station.console"));

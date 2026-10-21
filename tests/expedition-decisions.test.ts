@@ -50,6 +50,8 @@ test("paid pulse selects diver before controlled cargo and stable cell IDs befor
   const expected = structuredClone(before);
   expected.inventory.items.find((i) => i.id === p.cellId)!.charge = 0;
   expected.world.threat.distraction = p.target; expected.world.threat.distractionSeconds = 12;
+  // S4: the paid pulse is also the acoustic deterrent at its real target.
+  expected.world.ecology.deterrents = [{ kind: "acoustic", position: { ...p.target! }, seconds: 12 }];
   expected.feedback = out.state.feedback;
   assert.deepEqual(out.state, expected);
   assert.match(out.state.feedback, /25 charge points.*0\.00 remain/);
@@ -191,9 +193,13 @@ test("fabrication, explicit transfers and bulk storage share only the actual ben
   assert.equal(containerAccessible(remote, rv.cargoId), false);
 });
 
-test("berthed craft and capture transactions never grant cargo access even at arm's reach", () => {
+test("berthed craft open only from inside their carrier, and capture transactions never grant cargo access", () => {
   const s = fixtureGame(), v = s.fleet.vehicles.find((v) => v.hull === "dart")!;
-  assert.equal(containerAccessible(s, v.cargoId), false);
+  // C3 (P1): the dry berth room is reached from inside the carrier, never from the water.
+  assert.equal(containerAccessible(s, v.cargoId), true, "aboard the carrier");
+  const outside = structuredClone(s); outside.player.interiorId = null; outside.player.interiorPose = null; outside.player.mode = "swimming";
+  outside.player.pose.position = { ...v.pose.position };
+  assert.equal(containerAccessible(outside, v.cargoId), false, "never from outside, even at arm's reach");
   v.berth = null;
   s.fleet.docking!.transaction = { id: "test_capture", type: "capture", vehicleId: v.id, slot: 0, phase: "prepared", ticks: 0 };
   assert.ok(validState(s));

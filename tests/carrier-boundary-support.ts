@@ -59,9 +59,11 @@ export function command(s: GameState, action: Extract<GameCommand, { type: "carr
   return result.state;
 }
 export const bounds = carrierTravelBounds();
+/** A north-edge column in open water (floor below -79 m within the carrier's reach). */
+export const NORTH_X = 1400;
 export const edges = [
   { x: bounds.minX, z: 0, dx: -1, dz: 0 }, { x: bounds.maxX, z: 0, dx: 1, dz: 0 },
-  { x: 65, z: bounds.minZ, dx: 0, dz: -1 }, { x: 65, z: bounds.maxZ, dx: 0, dz: 1 },
+  { x: 65, z: bounds.minZ, dx: 0, dz: -1 }, { x: NORTH_X, z: bounds.maxZ, dx: 0, dz: 1 },
   ...[-1, 1].flatMap((dx) => [-1, 1].map((dz) => ({ x: dx < 0 ? bounds.minX : bounds.maxX,
     z: dz < 0 ? bounds.minZ : bounds.maxZ, dx, dz }))),
 ];

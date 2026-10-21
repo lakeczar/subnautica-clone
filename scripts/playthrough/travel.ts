@@ -92,6 +92,17 @@ function steerCraft(d: Driver, target: Waypoint, route: Route, final: boolean): 
   if (final) forward *= clamp((distance - 0.5) / Math.max(4, speed * 1.6), 0, 1);
   const close = final ? (target.tolerance ?? 1.5) : (target.tolerance ?? 3);
   if (distance <= close) forward = 0;
+  // Almost straight up or down (a park pose below its approach): level off and use the
+  // vertical thrusters; pitching forward would circle the point on a bounded turn.
+  if (h < 1.5 && Math.abs(dy) > close) {
+    return {
+      distance,
+      controls: [lookToward(d, v.pose.yaw, 0), {
+        type: "move", forward: 0, right: 0, vertical: Math.sign(dy) * clamp(Math.abs(dy) / 4, 0.3, 1),
+        sprint: false, ...(route.quiet ? { quiet: true } : {}),
+      }],
+    };
+  }
   return {
     distance,
     controls: [lookToward(d, yaw, pitch), {
@@ -121,6 +132,8 @@ export function travel(d: Driver, route: Route, label = route.id): void {
         // Settled against the floor or a solid within a metre of a work pose: close enough;
         // the caller's aim check decides whether the pose works.
         if (!pilot && final && steer.distance < 1 && sinceBest > STEPS_PER_SECOND) break;
+        // A passing point the diver is held 2.5 m off (a moored hull's flank): go on to the next.
+        if (!pilot && !final && steer.distance < 2.5 && sinceBest > 2 * STEPS_PER_SECOND) break;
         if (steer.distance < best - 0.25) { best = steer.distance; sinceBest = 0; } else sinceBest++;
         if (sinceBest > 6 * STEPS_PER_SECOND || step > budget)
           throw new Blocked(`Route ${route.id} (${route.validation}) stalled ${steer.distance.toFixed(1)} m short of waypoint ${index} ` +

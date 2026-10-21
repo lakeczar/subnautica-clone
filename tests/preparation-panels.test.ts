@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PanelView } from "../src/ui/panels.js";
-import { DART_BUILD_POSE, RECIPES, SOURCES, type ItemKind } from "../src/content/registry.js";
+import { DART_BUILD_POSE, RECIPES, SOURCES, type ItemKind, type RecipeId } from "../src/content/registry.js";
+import { CAMPAIGN_RECIPES } from "../src/content/campaign/index.js";
 import { addItem, available, fabricationContainers, materialStoragePreview, usedCapacity } from "../src/sim/inventory.js";
 import { completeOpening, craftingRefusal, discover } from "../src/sim/progression.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
@@ -557,8 +558,12 @@ test("the fabricator lists only known plans; Basin plans add exactly the earned 
   for (const id of ["C05", "C06"] as const) discover(s, id);
   panel.refresh("craft", s);
   // M2-B1: C05 pays off as the Creel, its two mounts and frame stripping; C06 as the Creel 350 refit.
+  // S9: the carrier survey and the cool-flank research also list their campaign rows.
+  const campaign = Object.keys(CAMPAIGN_RECIPES).filter((id) => s.knowledge.blueprints.includes(RECIPES[id as RecipeId].bp));
+  assert.deepEqual(campaign.sort(), ["creel_450", "hearthline_550", "hearthline_keel", "heat_shroud", "hull_heat_lining",
+    "restore_rift_station", "suit_450"]);
   assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells",
-    "creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "creel_350"]), "Basin clues add the earned workboat rows");
+    "creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "creel_350", ...campaign]), "Basin clues add the earned workboat rows");
   panel.refresh("notebook", s);
   assert.match(html(), /Plans retained <small>2<\/small>/);
   assert.match(html(), /Research knowledge · construction not available yet\./);
@@ -639,4 +644,18 @@ test("only the newest record opens across later finds and reloads; a record the 
   panel.refresh("notebook", s); assert.deepEqual(open(), ["C01"], "closing the newest is also intent");
   panel.resetSession(); panel.refresh("notebook", structuredClone(s));
   assert.deepEqual(open(), ["C04"], "a reload starts from the default: newest only");
+});
+
+test("C3: later campaign rows fold under Later, and refit rows name their real tiers", (t) => {
+  const { panel, html } = panelFixture(t);
+  const s = createGame(); completeOpening(s);
+  for (const id of ["C05", "C06"] as const) discover(s, id);
+  panel.refresh("craft", s);
+  const later = html().match(/<details[^>]*>\s*<summary[^>]*>Later <small>(\d+)<\/small>/);
+  assert.ok(later && Number(later[1]) > 0, "a closed Later fold holds the unready campaign rows");
+  const laterSection = html().slice(html().indexOf("Later <small>"));
+  assert.match(laterSection, /data-recipe="suit_450"/);
+  assert.match(html(), /fitted suit 350 → 450 m/);
+  assert.match(html(), /Creel 350 → 450 m/);
+  assert.doesNotMatch(html(), /150 → 350 m[^<]*450/);
 });

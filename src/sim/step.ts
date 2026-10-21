@@ -33,7 +33,7 @@ import {
   toggleBuoy,
 } from "./progression.js";
 import {
-  ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, cabinWorld, cook, CREEL_CABIN, CREEL_HANDLING,
+  ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, cabinWorld, cook, CARRIER_DRAIN, CREEL_CABIN, hullHandling,
   enterCabinFromHatch, enterCabinFromHelm, hullToWorld, leaveByHatch, registerRefuge, takeHelmFromCabin,
 } from "./fleet.js";
 import { aimedInteraction } from "./targeting.js";
@@ -90,7 +90,9 @@ import { incapacitate, recoveryCommand, updateRecovery } from "./recovery.js";
 import { updateSurvival, updateThreat } from "./survival.js";
 import { safePersonalDepth } from "./capabilities.js";
 import { advanceRenewal, settleRenewal } from "./renewal.js";
-import { advanceStory, recordStory, storyHint, storyHost } from "./storyLink.js";
+import { advanceStory, recordStory, resolutionCommand, storyHint, storyHost, useController, useGatePanel, useWorksFace, worksCommand } from "./storyLink.js";
+import type { WorksFaceId } from "../content/story/placements.js";
+import { placeDeterrent, releaseKit, toggleLamp, updateEcology } from "./ecologyLink.js";
 const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
@@ -228,8 +230,22 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         return null;
       }
       return carrierCommand(s, c.action, c.vehicleId, w);
-    case "distraction":
-      return distraction(s);
+    case "distraction": {
+      const no = distraction(s);
+      // S4: the paid pulse is also the acoustic deterrent, at its real target.
+      if (!no && s.world.threat.distraction) placeDeterrent(s, "acoustic", s.world.threat.distraction);
+      return no;
+    }
+    case "works":
+      return worksCommand(s, c.action);
+    case "resolution":
+      return resolutionCommand(s, c.action, c.roster);
+    case "lamp":
+      return toggleLamp(s);
+    case "deploy-lure":
+      return releaseKit(s, "lure");
+    case "release-ink":
+      return releaseKit(s, "ink");
     case "emergency-meal":
       if (!nearPod(s) && !nearWorkshop(s))
         return "Emergency portions are issued at a refuge.";
@@ -351,6 +367,10 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         if (!no) actionResult(s, events, "Entered the cabin");
         return no;
       }
+      if (target.id.startsWith("works:")) return useWorksFace(s, target.id as WorksFaceId);
+      // Once read, the live gate panel works the procedure and the controller the ending.
+      if (target.known && target.id === "gate_panel") return useGatePanel(s);
+      if (target.known && target.id === "district_controller") return useController(s);
       if (target.id === OPTIONAL_RECORD.id || storyHost(target.id)) {
         if (target.known && target.kind === "evidence") {
           events.push({ type: "interaction-panel", panel: "notebook", targetId: target.id });
@@ -538,9 +558,10 @@ export function stepGame(
   }
   yaw = ((yaw % TAU) + TAU) % TAU;
   const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
-  if (v?.hull === "creel") {
+  const handling = v ? hullHandling(v.hull) : null;
+  if (v && handling) {
     // A workboat turns deliberately: the hull and view follow a bounded heading rate.
-    const turn = ((yaw - v.pose.yaw + Math.PI * 3) % TAU) - Math.PI, limit = CREEL_HANDLING.turnRate * DT;
+    const turn = ((yaw - v.pose.yaw + Math.PI * 3) % TAU) - Math.PI, limit = handling.turnRate * DT;
     yaw = ((v.pose.yaw + clamp(turn, -limit, limit)) % TAU + TAU) % TAU;
   }
   if (v?.hull === "hearthline") {
@@ -563,8 +584,8 @@ export function stepGame(
         ? 0
         : v.hull === "hearthline"
           ? 3
-          : v.hull === "creel"
-            ? quiet ? CREEL_HANDLING.quiet : sprint ? CREEL_HANDLING.boost : CREEL_HANDLING.cruise
+          : handling
+            ? quiet ? handling.quiet : sprint ? handling.boost : handling.cruise
             : v.hull === "spindle"
               ? 7
               : quiet
@@ -587,7 +608,7 @@ export function stepGame(
         speed,
     };
     const previousSpeed = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z);
-    const response = v.hull === "creel" ? CREEL_HANDLING.response : 2.8;
+    const response = handling ? handling.response : 2.8;
     for (const a of ["x", "y", "z"] as const)
       v.velocity[a] += (target[a] - v.velocity[a]) * Math.min(1, DT * response);
     const delta = {
@@ -653,17 +674,17 @@ export function stepGame(
     s.player.mode = "piloting";
     const d = distance(old, s.player.pose.position);
     s.metrics.pilotMetres += d;
-    const creel = v.hull === "creel";
+    const creel = handling !== null;
     const drain =
       !v.disabled && v.charge > 0
         ? (d > 0.003
-            ? (creel ? CREEL_HANDLING.drain : 100 / 900) * (sprint ? (creel ? 1.6 : 1.7) : quiet ? (creel ? 0.6 : 0.65) : 1)
+            ? (handling ? handling.drain : v.hull === "hearthline" ? CARRIER_DRAIN : 100 / 900) * (sprint ? (creel ? 1.6 : 1.7) : quiet ? (creel ? 0.6 : 0.65) : 1)
             : 0.015) * DT
         : 0;
     v.charge = Math.max(0, v.charge - drain);
     s.metrics.powerUsed += drain;
-    loudness = creel
-      ? quiet ? CREEL_HANDLING.loudness.quiet : sprint ? CREEL_HANDLING.loudness.boost : d > 0.003 ? CREEL_HANDLING.loudness.cruise : 0.08
+    loudness = handling
+      ? quiet ? handling.loudness.quiet : sprint ? handling.loudness.boost : d > 0.003 ? handling.loudness.cruise : 0.08
       : quiet ? 0.08 : sprint ? 1 : d > 0.003 ? 0.48 : 0.08;
     if (move.hitBoundary) events.push({ type: "foundation-boundary" });
     if (move.hitBoundary || move.forwardBoundary) thrust = null;
@@ -855,6 +876,8 @@ export function stepGame(
     ? { ...recoveryEvent, channel: recoveryEvent.error ? "hazard" : "action", context: "recovery" }
     : recoveryEvent);
   updateThreat(s, loudness, events, world);
+  // S4 ecology beside the hunter, with the same loudness; a scan pulse disturbs.
+  updateEcology(s, loudness, commands.some((c) => c.type === "scan"), events, world);
   updateSurvival(s, events);
   // A command/berth transition or incapacity can replace the moving actor this step.
   // Emit only a measurement that still describes the original active actor and mode.

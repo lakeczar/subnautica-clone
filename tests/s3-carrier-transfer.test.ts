@@ -19,24 +19,28 @@ test("every compact hull launches and captures in both slots, and both medium hu
   ], "the matrix covered every hull in every slot");
 });
 
-test("the registry carries S3's hull data and the trimmed Dart envelope, with the berth datums unchanged", () => {
+test("the registry carries S3's hull data and the trimmed Dart envelope, with C3's widened walkway datums", () => {
   assert.equal(BERTH_ENVELOPES.dart.halfWidth, DART_BERTH.trimmedHalfWidth);
   for (const [hull, spec] of [["hush", HUSH], ["spindle", SPINDLE], ["mantle", MANTLE]] as const) {
     const e = BERTH_ENVELOPES[hull], s = spec.berth!.envelope;
     assert.deepEqual([e.halfWidth, e.halfLength, e.height], [s.halfWidth, s.halfLength, s.height], hull);
     assert.deepEqual([HULL_COLLIDERS[hull].radius, HULL_COLLIDERS[hull].height], [spec.collider.radius, spec.collider.height], hull);
   }
-  assert.deepEqual(BERTH_LOCAL.map((p) => p.x), [-3, 3]);
+  // C3 (P1): the starboard berth moved 0.2 m outboard with its room, widening the walkway.
+  assert.deepEqual(BERTH_LOCAL.map((p) => p.x), [-3, 3.2]);
 });
 
-test("adverse: the pre-composition envelopes still refuse exactly the Dart and Hush starboard transfers", () => {
+test("adverse: the pre-composition envelopes still refuse exactly the Dart and Hush transfers", () => {
   const before = structuredClone({ e: BERTH_ENVELOPES, c: HULL_COLLIDERS, b: BERTH_LOCAL });
   const failures = refused(transferMatrix({
     envelopes: { dart: { halfWidth: DART_BERTH.current.halfWidth }, hush: { halfWidth: 2.5 }, spindle: { halfWidth: 2.4, height: 1.7 } },
     colliders: { spindle: { height: 1.7 } },
   }));
+  // C3's walkway puts both inboard walls at the trimmed envelope, so the untrimmed
+  // ½W 2.5 now crosses a wall in both slots (before, only starboard).
   assert.deepEqual(failures.map((f) => f.split(":")[0]), [
-    "dart slot 1 launch", "dart slot 1 capture", "hush slot 1 launch", "hush slot 1 capture",
+    "dart slot 0 launch", "dart slot 0 capture", "dart slot 1 launch", "dart slot 1 capture",
+    "hush slot 0 launch", "hush slot 0 capture", "hush slot 1 launch", "hush slot 1 capture",
   ], failures.join("\n"));
   assert.ok(failures.every((f) => f.includes("Transfer corridor obstructed")));
   assert.deepEqual({ e: BERTH_ENVELOPES, c: HULL_COLLIDERS, b: BERTH_LOCAL }, before, "the helper restores every patched value");

@@ -216,7 +216,9 @@ function contactAt(s: GameState, position: Vec3, world: WorldQueries, a: ActorQu
     surface=add(a.pose.position,encounterRotation(candidate,a.pose.yaw,a.pitch));
   }
   const gap=length(sub(pose.mouth,surface));
-  const clear=hullClearance(world,position,H.worldEnvelope) && world.lineOfSight(pose.mouth,surface) &&
+  // Contact out of reach is never clear: skip the sight line, which samples the
+  // floor every 0.15 m and would otherwise run from the Canopy to a distant actor.
+  const clear=gap<=H.reach && hullClearance(world,position,H.worldEnvelope) && world.lineOfSight(pose.mouth,surface) &&
     !nearby(obstacles,position).some(o=>intersects(o.query,position,{yaw:0,roll:0},[fleetBox])) && !fleetOccludes(obstacles,pose.mouth,surface);
   return {mouth:pose.mouth,surface,gap,penetrating,clear,
     biting:s.world.threat.mode==="pursue"&&!hunterPhase(s).withdrawing&&!penetrating&&clear&&gap<=H.reach};

@@ -1,24 +1,31 @@
 import {
   BLUEPRINTS,
   EVIDENCE,
-  HULL_REFITS,
   HULLS,
   isMountKind,
   ITEMS,
+  MATERIALS,
   MODULES,
   PLACES,
   RECIPES,
+  REFIT_TIERS,
   RENEWABLE_SOURCE_IDS,
   renewable,
   SOURCE_RENEWAL,
   SOURCES,
+  SUIT_RATINGS,
+  SUIT_REFITS,
   TECH_RECORDS,
   techRecord,
 } from "../content/registry.js";
+import type { HullId, RecipeId } from "../content/registry.js";
+import { parseEcology } from "../sim/ecology/persist.js";
+import { isSuitProtection } from "../sim/ecologyLink.js";
 import { CREEL_CABIN, fittedMount, holdCapacity, hullToWorld } from "../sim/fleet.js";
-import { CANISTER_CU } from "../sim/recovery.js";
+import { CANISTER_CU, recoverableHull, recoveryRouteFor } from "../sim/recovery.js";
 import { renewalCap } from "../sim/renewal.js";
-import { LEGACY_WORLD_BOUNDS, RECOVERY_ROUTES, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
+import { RECOVERY_ROUTES, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
+import { deepRoute, recoveryRouteIds } from "../content/recoveryRoutes.js";
 import type { GameState } from "../sim/types.js";
 import { carrierCompartment, containerAccepts, usedCapacity } from "../sim/inventory.js";
 import { installedModuleValid, moduleItem, SMALL_CRAFT_SOCKETS } from "../sim/modules.js";
@@ -28,6 +35,10 @@ import { HEARTHLINE_SOCKETS } from "../content/fleet/hearthlineInterior.js";
 import { blueprints, validStory } from "../sim/story/index.js";
 import { registryEvidence, storyView } from "../sim/storyLink.js";
 import { createGame } from "../sim/state.js";
+const isSuit = (kind: string): boolean => Object.hasOwn(SUIT_RATINGS, kind);
+/** The one fitted suit is the highest refit tier crafted, or the 150 m suit. */
+const expectedSuit = (crafted: readonly string[]): string =>
+  (Object.keys(SUIT_REFITS) as (keyof typeof SUIT_REFITS)[]).filter((id) => crafted.includes(id)).at(-1) ?? "suit_150";
 export const record = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const exact = (v: unknown, keys: string[]): v is Record<string, unknown> =>
@@ -40,9 +51,10 @@ const int = (v: unknown, a: number, b: number): v is number =>
   n(v, a, b) && Number.isInteger(v);
 const id = (v: unknown): v is string =>
   typeof v === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(v);
+/** Any finite vector inside the 2.0 x 1.8 km world frame (|x|, |z| <= 1632). */
 const vec = (v: unknown): boolean =>
   exact(v, ["x", "y", "z"]) &&
-  ["x", "y", "z"].every((k) => n(v[k], -1000, 1000));
+  ["x", "y", "z"].every((k) => n(v[k], -2048, 2048));
 const worldVec = (v: unknown): boolean =>
   vec(v) &&
   record(v) &&
@@ -66,6 +78,22 @@ const array = (
   check: (a: unknown) => boolean,
 ): v is unknown[] => Array.isArray(v) && v.length <= max && v.every(check);
 const unique = (a: readonly unknown[]): boolean => new Set(a).size === a.length;
+/** Every distinct scan a save can hold: each source, each technical record and the reef filter flow. */
+const SCANNABLE_COUNT = Object.keys(SOURCES).length + Object.keys(TECH_RECORDS).length + 1;
+/** The recipes whose paid costs make up each campaign hull's frame. */
+const HULL_BUILD_RECIPES = {
+  dart: ["dart_base"], creel: ["creel_base"], hush: ["hush_base"], spindle: ["spindle_base"], mantle: ["mantle_base"],
+  hearthline: ["hearthline_keel", "hearthline_base"],
+} as const satisfies Record<HullId, readonly RecipeId[]>;
+/** B1's routes keep their exact indices; a deep S2 branch counts its own. */
+function validRecoveryWaypoint(routeId: string, phase: string, waypoint: unknown): boolean {
+  const deep = deepRoute(routeId);
+  if (deep) return int(waypoint, 0, deep.attachmentIndex) && (phase === "ready" ? waypoint === deep.attachmentIndex
+    : phase === "approach" ? waypoint >= 1 : waypoint <= deep.attachmentIndex - 1);
+  const legacy = RECOVERY_ROUTES[routeId as keyof typeof RECOVERY_ROUTES];
+  return int(waypoint, 0, legacy.attachmentIndex) && (routeId === "canopy" || (phase === "ready" ? waypoint === 5 :
+    phase === "approach" ? n(waypoint, 1, 5) : n(waypoint, 0, 4)));
+}
 const stringSet = (
   v: unknown,
   max: number,
@@ -118,7 +146,9 @@ export function validState(value: unknown): value is GameState {
       "graceSeconds",
       "interiorPose",
       "mobileRefuge",
+      "lamp",
     ]) ||
+    typeof p.lamp !== "boolean" ||
     !pose(p.pose) ||
     !vec(p.velocity) ||
     !Object.values(p.velocity as Record<string, unknown>).every((v) =>
@@ -174,7 +204,7 @@ export function validState(value: unknown): value is GameState {
         known(ITEMS)(v.kind) &&
         int(v.quantity, 1, 1000) &&
         id(v.containerId) &&
-        [null, "tools", "suit", "recovery", "buoy", "mount"].includes(
+        [null, "tools", "suit", "recovery", "buoy", "mount", "protection"].includes(
           v.fitted as null,
         ) &&
         [null, "public", "maintenance"].includes(v.provenance as null) &&
@@ -224,7 +254,8 @@ export function validState(value: unknown): value is GameState {
     !stringSet(k.blueprints, BLUEPRINTS.length, (v) =>
       BLUEPRINTS.includes(v as (typeof BLUEPRINTS)[number]),
     ) ||
-    !stringSet(k.scans, 48, (v) => v === "filter_flow" || known(SOURCES)(v) || techRecord(v)) ||
+    // Unique, known IDs only, so the bound is every scannable thing in the build.
+    !stringSet(k.scans, SCANNABLE_COUNT, (v) => v === "filter_flow" || known(SOURCES)(v) || techRecord(v)) ||
     !array(
       k.evidence,
       Object.keys(EVIDENCE).length,
@@ -252,8 +283,12 @@ export function validState(value: unknown): value is GameState {
   )
     return false;
   const w = value.world;
-  if (!exact(w, ["resources", "renewal", "facilities", "maintenance", "threat", "action"]))
+  if (!exact(w, ["resources", "renewal", "facilities", "maintenance", "ecology", "threat", "action"]))
     return false;
+  // S4's strict parser: whole roster, bounded values, hull exposures only for this save's fleet.
+  const fleetIds = record(value.fleet) && Array.isArray(value.fleet.vehicles)
+    ? value.fleet.vehicles.map((v) => (record(v) ? v.id : null)).filter((x): x is string => typeof x === "string") : [];
+  if (typeof parseEcology(w.ecology, { vehicleIds: fleetIds }) === "string") return false;
   if (
     !array(
       w.renewal,
@@ -370,8 +405,7 @@ export function validState(value: unknown): value is GameState {
         !Object.entries(v.investment).every(
           ([a, b]) =>
             a in ITEMS &&
-            ["structural_alloy", "silica_glass", "flex_membrane", "conductive_crust",
-              "buoyant_resin", "tagged_frame"].includes(a) &&
+            (Object.hasOwn(MATERIALS, a) || a === "tagged_frame") &&
             int(b, 1, 50),
         ) ||
         !int(v.rating, 0, 800) ||
@@ -476,13 +510,11 @@ export function validState(value: unknown): value is GameState {
         "waypoint",
       ]) &&
         id(r.operation.vehicleId) &&
-        oneOf(r.operation.routeId, ["canopy", "basin"]) &&
+        oneOf(r.operation.routeId, recoveryRouteIds()) &&
         r.operation.method === "tow" &&
         oneOf(r.operation.phase, ["approach", "ready", "tow"]) &&
         worldVec(r.operation.position) &&
-        int(r.operation.waypoint, 0, RECOVERY_ROUTES[r.operation.routeId as keyof typeof RECOVERY_ROUTES].attachmentIndex) &&
-        (r.operation.routeId === "canopy" || (r.operation.phase === "ready" ? r.operation.waypoint === 5 :
-          r.operation.phase === "approach" ? n(r.operation.waypoint, 1, 5) : n(r.operation.waypoint, 0, 4))))
+        validRecoveryWaypoint(r.operation.routeId as string, r.operation.phase as string, r.operation.waypoint))
     )
   )
     return false;
@@ -580,7 +612,8 @@ function semantic(s: GameState, fresh: GameState): boolean {
     if (
       !containers.some((c) => c.id === i.containerId) ||
       (i.containerId === "equipment") !== !!i.fitted ||
-      (i.fitted && (i.fitted === "suit" ? i.kind !== "suit_150" && i.kind !== "suit_350" : fit[i.fitted] !== i.kind)) ||
+      (i.fitted && (i.fitted === "suit" ? !isSuit(i.kind) : i.fitted === "protection" ? !isSuitProtection(i.kind)
+        : fit[i.fitted] !== i.kind)) ||
       (i.fitted && i.quantity !== 1) ||
       (i.kind === "reserve_cell") !== (i.charge !== null) ||
       (i.charge !== null && i.quantity !== 1) ||
@@ -630,12 +663,17 @@ function semantic(s: GameState, fresh: GameState): boolean {
     if (k.crafted.includes(kind === "reserve_cell" ? "reserve_cells" : kind) && n !== (kind === "reserve_cell" ? 2 : 1))
       return false;
   }
-  const suits = items.filter(i => i.kind === "suit_150" || i.kind === "suit_350");
+  // S4 protections: one of each, only once its plans are paid; suit fittings are always worn.
+  for (const kind of ["heat_shroud", "brine_seals", "hull_heat_lining", "hull_brine_seals", "trim_vanes"] as const) {
+    const n = items.filter((i) => i.kind === kind).reduce((a, i) => a + i.quantity, 0);
+    if (n > 1 || (n > 0 && !k.crafted.includes(kind))) return false;
+  }
+  if (items.some((i) => isSuitProtection(i.kind) !== (i.fitted === "protection"))) return false;
+  const suits = items.filter(i => isSuit(i.kind));
   if (suits.length !== (k.crafted.includes("suit_150") ? 1 : 0) ||
-      suits.some(i => i.quantity !== 1 || i.fitted !== "suit" ||
-        (i.kind === "suit_350") !== k.crafted.includes("suit_350"))) return false;
+      suits.some(i => i.quantity !== 1 || i.fitted !== "suit" || i.kind !== expectedSuit(k.crafted))) return false;
   if (items.some((i) => (i.kind === "essential_tools" && i.fitted !== "tools") ||
-    ((i.kind === "suit_150" || i.kind === "suit_350") && i.fitted !== "suit") ||
+    (isSuit(i.kind) && i.fitted !== "suit") ||
     (i.kind === "bobbin_kit" && (i.fitted !== "recovery" || i.provenance !== "maintenance")))) return false;
   if (k.crafted.some((r) => !k.blueprints.includes(RECIPES[r].bp) || RECIPES[r].needs.some((id) => !k.crafted.includes(id as keyof typeof RECIPES)))) return false;
   for (const node of s.world.resources) {
@@ -669,7 +707,11 @@ function semantic(s: GameState, fresh: GameState): boolean {
     s.world.facilities.find((f) => f.id === "island_workshop")!.repaired !==
       k.crafted.includes("restore_workshop") ||
     s.world.facilities.find((f) => f.id === "canopy_stop")!.repaired !==
-      k.crafted.includes("restore_canopy_stop")
+      k.crafted.includes("restore_canopy_stop") ||
+    s.world.facilities.find((f) => f.id === "rift_station")!.repaired !==
+      k.crafted.includes("restore_rift_station") ||
+    s.world.facilities.find((f) => f.id === "divide_dock")!.repaired !==
+      k.crafted.includes("restore_divide_stop")
   )
     return false;
   // Frame hosts have no reserve; timed lifts/arms work only their own host kinds.
@@ -686,12 +728,12 @@ function semantic(s: GameState, fresh: GameState): boolean {
     (k.evidence.length || k.crafted.length || items.length || f.vehicles.length)
   )
     return false;
-  // Campaign fleets: at most one earned Dart and one earned Creel.
+  // Campaign fleets: at most one earned hull of each kind; a docking interface
+  // exactly when the earned carrier exists.
   if (
     s.scenario === "expedition" &&
-    (f.docking ||
-      f.vehicles.some((v) => v.hull !== "dart" && v.hull !== "creel") ||
-      !unique(f.vehicles.map((v) => v.hull)))
+    (!unique(f.vehicles.map((v) => v.hull)) ||
+      !!f.docking !== f.vehicles.some((v) => v.hull === "hearthline"))
   )
     return false;
   for (const v of f.vehicles) {
@@ -704,17 +746,23 @@ function semantic(s: GameState, fresh: GameState): boolean {
       if (v.rating !== HULLS[v.hull].initialDepth) return false;
       continue;
     }
-    // Investment is exactly the paid build, plus the paid refit when rated above initial.
-    const hull = v.hull as "dart" | "creel", refit = HULL_REFITS[hull];
-    if (v.rating !== HULLS[hull].initialDepth && v.rating !== refit.rating) return false;
-    const refitted = v.rating === refit.rating;
-    if (refitted && !k.crafted.includes(refit.recipe)) return false;
-    const expectedInvestment: Record<string, number> = { ...RECIPES[hull === "dart" ? "dart_base" : "creel_base"].cost };
-    if (refitted) for (const [m, q] of Object.entries(RECIPES[refit.recipe].cost)) expectedInvestment[m] = (expectedInvestment[m] ?? 0) + q;
+    // Investment is exactly the paid build, plus every paid refit tier up to its rating.
+    const hull = v.hull, builds = HULL_BUILD_RECIPES[hull];
+    const tiers: (keyof typeof REFIT_TIERS)[] = [];
+    for (let rating: number = HULLS[hull].initialDepth; rating !== v.rating;) {
+      const next = (Object.keys(REFIT_TIERS) as (keyof typeof REFIT_TIERS)[])
+        .find((id) => REFIT_TIERS[id].hull === hull && REFIT_TIERS[id].from === rating);
+      if (!next || REFIT_TIERS[next].rating > v.rating) return false;
+      tiers.push(next);
+      rating = REFIT_TIERS[next].rating;
+    }
+    if (tiers.some((id) => !k.crafted.includes(id))) return false;
+    const expectedInvestment: Record<string, number> = {};
+    for (const id of builds) for (const [m, q] of Object.entries(RECIPES[id].cost)) expectedInvestment[m] = (expectedInvestment[m] ?? 0) + q;
+    for (const id of tiers) for (const [m, q] of Object.entries(RECIPES[id].cost)) expectedInvestment[m] = (expectedInvestment[m] ?? 0) + q;
     const actual = v.investment as Record<string, number>;
     if (Object.keys(actual).length !== Object.keys(expectedInvestment).length ||
         Object.entries(expectedInvestment).some(([m, q]) => actual[m] !== q)) return false;
-    if (v.berth) return false;
   }
   // The registered refuge names a Creel and its fitted cabin, in a campaign.
   const r = s.player.mobileRefuge;
@@ -758,7 +806,6 @@ function semantic(s: GameState, fresh: GameState): boolean {
     if (
       !h ||
       h.hull !== "hearthline" ||
-      s.scenario !== "carrier-fixture" ||
       !unique(f.vehicles.filter((v) => v.berth).map((v) => v.berth!.slot))
     )
       return false;
@@ -832,9 +879,9 @@ function semantic(s: GameState, fresh: GameState): boolean {
   const op = s.recovery.operation;
   if (op) {
     const target = f.vehicles.find(v => v.id === op.vehicleId), loss = s.recovery.losses.find(l => l.vehicleId === op.vehicleId);
-    if (!target || (target.hull !== "dart" && target.hull !== "creel") || target.berth || !loss) return false;
-    const basin = loss.position.x > LEGACY_WORLD_BOUNDS.maxX || loss.position.z < LEGACY_WORLD_BOUNDS.minZ;
-    if ((op.routeId === "basin") !== basin) return false;
+    if (!target || !recoverableHull(target.hull) || target.berth || !loss) return false;
+    // The route is the one chosen from the visited loss, never from the tow position.
+    if (op.routeId !== recoveryRouteFor(loss.position)) return false;
   }
   return true;
 }

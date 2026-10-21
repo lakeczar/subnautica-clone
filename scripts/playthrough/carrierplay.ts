@@ -58,8 +58,10 @@ export function carrierIn(d: Driver): void {
  * interface answers only within 15 m of the keel datum, and the vestibule is 13.8 m
  * out), then step into the dry interior. */
 export function enterCarrier(d: Driver): void {
-  const h = carrier(d);
-  travel(d, route("to the carrier vestibule", "diver", "local swim, played", [{ ...localToWorld(CARRIER_LAYOUT.exteriorVestibule, h), tolerance: 1 }]));
+  const h = carrier(d), at = localToWorld(CARRIER_LAYOUT.exteriorVestibule, h), p = d.state.player.pose.position;
+  // A wall between (a yard cradle): over it near the surface, then down to the vestibule.
+  const over = d.world.lineOfSight(p, at) ? [] : [{ ...p, y: -2.5, tolerance: 2 }, { ...at, y: -2.5, tolerance: 2 }];
+  travel(d, route("to the carrier vestibule", "diver", "local swim, played", [...over, { ...at, tolerance: 1 }]));
   const keel = Math.hypot(d.state.player.pose.position.x - h.pose.position.x, d.state.player.pose.position.y - h.pose.position.y,
     d.state.player.pose.position.z - h.pose.position.z);
   if (keel > 15) throw new Blocked(`At the exterior vestibule the diver is ${keel.toFixed(1)} m from the carrier keel; its interface answers within 15 m`, where(d.state));

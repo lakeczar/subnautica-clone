@@ -1,4 +1,4 @@
-import { terrainHeight } from "../sim/world.js";
+import { legacyWorldHeight as terrainHeight } from "../sim/terrain.js";
 import { BASIN_GEOMETRY, ROUTE_TERRAIN_SOURCE_IDS } from "../content/routes.js";
 import { SOURCES } from "../content/registry.js";
 

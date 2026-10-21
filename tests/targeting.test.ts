@@ -1,7 +1,9 @@
 import test from "node:test";
+import { CAMPAIGN_SOURCES, CAMPAIGN_TECH_RECORDS } from "../src/content/campaign/index.js";
 import assert from "node:assert/strict";
-import { EVIDENCE, RECIPES, SOURCES, type ItemKind, type SourceId } from "../src/content/registry.js";
+import { EVIDENCE, RECIPES, SOURCES, TECH_RECORDS, type ItemKind, type SourceId } from "../src/content/registry.js";
 import { aimRay, aimedInteraction, interactionHost } from "../src/sim/targeting.js";
+import { storyHost } from "../src/sim/storyLink.js";
 import { interactions, discover, craft } from "../src/sim/progression.js";
 import { createWorldQueries, RIB_SEGMENTS, SOLIDS, type Solid } from "../src/sim/world.js";
 import { addItem, distance } from "../src/sim/inventory.js";
@@ -82,19 +84,27 @@ test("very narrow adjacent hosts resolve to deliberate center aim, stably across
 });
 
 test("all sources, food, C01–C06, optional note and both rescue work faces retain collision-valid normal views and matching actions", () => {
+  // Including the S9 and C3 hosts lifted from S2's sites in the later regions.
+  for (const id of [...Object.keys(CAMPAIGN_SOURCES), ...Object.keys(CAMPAIGN_TECH_RECORDS)])
+    assert.ok(NORMAL_VIEWS.some(v => v.id === id), id);
   assert.deepEqual([...new Set(NORMAL_VIEWS.map(v => v.id))].sort(), interactions(readyState()).map(t => t.id).sort(),
-    "every actual host is covered, including the Basin and M2-B1 hosts");
+    "every actual host is covered, including the Basin, M2-B1 and later-region hosts");
   assert.equal(NORMAL_VIEWS.length, interactions(readyState()).length + 1, "one additional view, with no missing or duplicated other hosts");
   assert.equal(NORMAL_VIEWS.filter(v => v.id === "rescue_staging").length, 2, "both work faces keep the same stable ID");
   for (const v of NORMAL_VIEWS) {
-    const s = v.position.y < -150 ? protectedReadyState(350) : v.position.y < -60 ? protectedReadyState(150) : readyState();
+    const s = v.position.y < -340 ? protectedReadyState(800) : v.position.y < -150 ? protectedReadyState(350) : v.position.y < -60 ? protectedReadyState(150) : readyState();
     s.player.pose.position = { ...v.position }; s.player.mode = v.mode; faceTarget(s, v.id);
     assert.ok(world.clearance(s.player.pose.position, { radius: 0.34, height: v.mode === "walking" ? 1.75 : 0.95 }), v.id + " body clearance");
     const target = aimedInteraction(s, world); assert.equal(target?.id, v.id, v.id);
     assert.ok(world.lineOfSight(aimRay(s)!.origin, target!.host.center, target!.host.solidIds), v.id + " host LOS");
     const result = executeCommand(s, { type: "interact" }, world);
-    assert.ok(!result.events.some(e => e.type === "notice" && e.error), v.id);
-    if (v.id in SOURCES && SOURCES[v.id as SourceId].item === "tagged_frame") {
+    if (v.id.startsWith("works:")) {
+      // The upper hall's faces need their plans and stock; the refusal says so and changes nothing.
+      assert.ok(result.events.some(e => e.type === "notice" && e.error), v.id);
+      assert.equal(result.state, s, v.id);
+    } else assert.ok(!result.events.some(e => e.type === "notice" && e.error), v.id);
+    if (v.id.startsWith("works:")) { /* refusal checked above */ }
+    else if (v.id in SOURCES && SOURCES[v.id as SourceId].item === "tagged_frame") {
       // A frame is a timed, tool-cut lift; nothing is taken until it completes.
       assert.deepEqual(result.state.world.action, { sourceId: v.id, seconds: 10, kind: "lift" }, v.id);
     } else if (v.id in SOURCES) {
@@ -103,9 +113,12 @@ test("all sources, food, C01–C06, optional note and both rescue work faces ret
       assert.equal(result.state.world.resources.find(n => n.id === id)!.stock, SOURCES[id].stock - SOURCES[id].bundle);
     } else if (v.id in EVIDENCE) assert.ok(result.state.knowledge.evidence.some(e => e.id === v.id));
     else if (v.id === "mara_reef_note") assert.ok(result.state.knowledge.journals.includes(v.id));
-    else if (v.id === "pod_checklist" || v.id === "mara_specimen_tray")
-      assert.deepEqual(result.state.story.discoveries.map(d => d.id), [v.id], v.id);
+    else if (storyHost(v.id))
+      // S5's rules may record a linked find alongside (the access log names C07's dock).
+      assert.ok(result.state.story.discoveries.some(d => d.id === v.id), v.id);
     else if (v.id === "basin_keel_plate") assert.ok(result.state.knowledge.scans.includes(v.id) && result.state.knowledge.blueprints.includes("bp_keel_survey"));
+    else if (v.id in TECH_RECORDS) assert.ok(result.state.knowledge.scans.includes(v.id) &&
+      TECH_RECORDS[v.id as keyof typeof TECH_RECORDS].blueprints.every(bp => result.state.knowledge.blueprints.includes(bp)), v.id);
     else assert.deepEqual(panels(result.events), [{ type: "interaction-panel", panel: v.id === "rescue_staging" ? "inventory" : "craft", targetId: v.id }]);
     saved(result.state);
     s.player.pose.yaw += Math.PI;

@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import { HEARTHLINE_FIXTURES, HEARTHLINE_SOCKETS } from "../src/content/fleet/hearthlineInterior.js";
 import { createEnvelope, decodeSave } from "../src/save/codec.js";
 import { validState } from "../src/save/validation.js";
-import { carrierInteriorSolids, emptySockets, fixtureGame, occupiedSockets } from "../src/sim/carrier.js";
+import { CARRIER_LAYOUT, carrierInteriorSolids, emptySockets, fixtureGame, occupiedSockets } from "../src/sim/carrier.js";
+import { createWorldQueries } from "../src/sim/world.js";
+import { executeCommand } from "../src/sim/step.js";
 import { hullContactPose, hullMesh } from "../src/sim/hunterQueries.js";
 import { addItem, containerAccessible, transfer } from "../src/sim/inventory.js";
-import type { GameState } from "../src/sim/types.js";
+import type { GameState, Vec3 } from "../src/sim/types.js";
 import { encoded, withComposedFields, withoutComposedFields } from "./persistence-support.js";
 
 const meta = { sessionId: "carrier-composed-01", createdAt: "2026-10-20T00:00:00.000Z", savedAt: "2026-10-20T00:00:00.000Z" };
@@ -67,4 +69,34 @@ test("hunter contact follows S3's posed parts: a berthed Spindle presents its st
   assert.ok(hullMesh("spindle", hullContactPose(s, spindle)).bounds.max.y >= stowed.max.y, "loaded cargo adds its stack");
   const keel = hullMesh("hearthline").bounds;
   assert.ok(Math.abs(keel.max.x - 9.32) < .01, "carrier contact uses S3's keels");
+});
+
+test("C3 (P1): the compact Hearthline's bow-to-stern walkway passes a capsule on lanes off the centre line", () => {
+  const s = fixtureGame(), local = createWorldQueries(carrierInteriorSolids(s), () => -200), shape = { radius: 0.34, height: 1.75 };
+  const b = CARRIER_LAYOUT.interior;
+  // The strip spans x -0.47..0.67: any lane within 0.2 m of its centre (0.1) passes.
+  for (const x of [-0.1, 0, 0.1, 0.2, 0.3]) {
+    let p: Vec3 = { x, y: b.y, z: b.maxZ - 0.5 };
+    // Through the whole strip between the berth rooms (z 4.88 .. -2.88), into the open bow deck.
+    const bow = CARRIER_LAYOUT.compact[0].min.z - 0.8;
+    for (let i = 0; i < 400 && p.z > bow; i++) p = local.moveCapsule(p, { x: 0, y: 0, z: -0.05 }, shape).position;
+    assert.ok(p.z <= bow, `lane x ${x} passes the berth rooms (stopped at z ${p.z.toFixed(2)})`);
+  }
+});
+
+test("C3 (P1): a berthed craft's hold opens from inside its carrier, and only there", () => {
+  const s = fixtureGame(), dart = s.fleet.vehicles.find((v) => v.hull === "dart" && v.berth)!;
+  assert.ok(s.player.interiorId, "the fixture starts aboard");
+  assert.equal(containerAccessible(s, dart.cargoId), true);
+  const outside = structuredClone(s); outside.player.interiorId = null; outside.player.interiorPose = null; outside.player.mode = "swimming";
+  assert.equal(containerAccessible(outside, dart.cargoId), false);
+});
+
+test("C3 (P1): aboard the Hearthline, the crew eats from its galley pantry", () => {
+  const s = fixtureGame(), h = s.fleet.vehicles.find((v) => v.hull === "hearthline")!;
+  addItem(s, "meal", 1, `${h.id}_pantry`);
+  s.player.vitals.food = 20;
+  const out = executeCommand(s, { type: "eat" }, createWorldQueries());
+  assert.ok(!out.events.some((e) => e.type === "notice" && e.error), JSON.stringify(out.events));
+  assert.equal(out.state.player.vitals.food, 90);
 });

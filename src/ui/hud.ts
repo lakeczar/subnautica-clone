@@ -1,4 +1,6 @@
-import { HULLS, HULL_COLLIDERS, OPENING, PLACES, renewable, SOURCES } from "../content/registry.js";
+import { HULLS, HULL_COLLIDERS, OPENING, PLACES, REGIONS, renewable, SOURCES } from "../content/registry.js";
+import { regionAtPoint } from "../content/regions/layout.js";
+import { LEGACY_PRESERVE } from "../content/regions/terrain.js";
 import { ROUTE_REGIONS } from "../content/routes.js";
 import { inCanopyAir, nearPod, nearWorkshop, equipped } from "../sim/inventory.js";
 import { personalLimit } from "../sim/progression.js";
@@ -93,9 +95,13 @@ export class HudView {
     const home = PLACES.home_pod.position;
     this.get("refuge-distance").textContent =
       `Home pod · ${Math.round(Math.hypot(p.x - home.x, p.z - home.z))} m`;
+    const preserve = LEGACY_PRESERVE, legacy = p.x >= preserve.minX && p.x <= preserve.maxX && p.z >= preserve.minZ && p.z <= preserve.maxZ;
+    const composed = legacy ? null : regionAtPoint(p.x, p.z);
     this.get("region-name").textContent =
       state.scenario === "carrier-fixture"
         ? "Carrier test fixture"
+        // C3: beyond B1's area, S2's region footprints name the place.
+        : composed ? REGIONS[composed].label
         : p.x >= ROUTE_REGIONS.silt_basin.bounds.minX && p.z < ROUTE_REGIONS.silt_basin.bounds.maxZ
           ? "Pale Basin"
         : p.x > 62
@@ -118,6 +124,9 @@ export class HudView {
           : v?.hull === "dart" && p.x > 15 && p.x < 25 && p.z < -16 && p.z > -29
             ? Math.abs(Math.atan2(Math.sin(v.pose.yaw - Math.PI), Math.cos(v.pose.yaw - Math.PI))) > 0.6
               ? "Turn to the open lane" : ""
+          // B1's area hints; beyond it the region name already says where you are.
+          : !legacy
+            ? ""
           : p.x >= ROUTE_REGIONS.silt_basin.bounds.minX && p.z < ROUTE_REGIONS.silt_basin.bounds.maxZ
             ? "Pale Basin · flooded survey sites · no refuge air"
           : p.x > 68
@@ -530,7 +539,11 @@ function airSourceLabel(state: GameState): string {
     : `${air.kind === "emergency" ? "Emergency" : "Suit"} air · ${Math.ceil(air.remainingSeconds!)} s`;
 }
 
-export interface HazardBanner { context: NoticeContext | "pressure" | "health" | "hullDepth" | "power"; text: string }
+export interface HazardBanner {
+  context: NoticeContext | "pressure" | "health" | "hullDepth" | "power"; text: string;
+  /** Other caption causes this banner already states (power depleted names power). */
+  covers?: readonly string[];
+}
 /** The exact current-state list used for both visible warnings and coverage. */
 export function hazardBanners(state: GameState): HazardBanner[] {
   const warnings: HazardBanner[] = [];
@@ -541,7 +554,8 @@ export function hazardBanners(state: GameState): HazardBanner[] {
   if (!e.breathable && state.player.vitals.oxygen <= 35)
     warnings.push({ context: "oxygen", text: `LOW OXYGEN · ${state.player.vitals.oxygen.toFixed(0)}% · return to air now` });
   if (v && (v.charge === 0 || v.disabled))
-    warnings.push({ context: "hull", text: `${v.disabled ? "HULL DISABLED" : "POWER DEPLETED"} · ${air.kind === "suit" ? "emergency air exhausted · " : ""}${airLabel} · protected exit / reserve cell` });
+    warnings.push({ context: "hull", text: `${v.disabled ? "HULL DISABLED" : "POWER DEPLETED"} · ${air.kind === "suit" ? "emergency air exhausted · " : ""}${airLabel} · protected exit / reserve cell`,
+      ...(v.charge === 0 ? { covers: ["power"] } : {}) });
   if (v && hullDepth(v) > v.rating * 0.85)
     warnings.push({ context: "hullDepth", text: `HULL DEPTH · ${hullDepth(v).toFixed(0)} / ${v.rating} m · ascend before hull damage` });
   if (v && v.charge > 0 && v.charge < 25)

@@ -20,9 +20,12 @@ import { STRUCTURES, STRUCTURE_SOLIDS } from "../src/content/regions/structures.
 import { LEGACY_BLEND, LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 
+/** The simulation roster now includes S2's structures; "today's" solids are the rest. */
+const S2_SOLID_IDS = new Set(STRUCTURE_SOLIDS.map(s => s.id));
+const LEGACY_SOLIDS = SOLIDS.filter(s => !S2_SOLID_IDS.has(s.id));
 const ctx: CheckContext = {
   floor: worldFloor, hazards: HAZARDS,
-  solids: [...STRUCTURE_SOLIDS, ...SOLIDS.map(s => ({ id: s.id, bounds: { min: s.min, max: s.max } }))],
+  solids: [...STRUCTURE_SOLIDS, ...LEGACY_SOLIDS.map(s => ({ id: s.id, bounds: { min: s.min, max: s.max } }))],
 };
 const none = (problems: readonly string[], what: string): void =>
   assert.equal(problems.length, 0, `${what}:\n- ${problems.slice(0, 20).join("\n- ")}`);
@@ -40,7 +43,9 @@ test("the preserve holds accepted B1's whole terrain, routes, sources and datums
   assert.equal(moved, 0, `B1 floor moved at ${moved} samples, first ${first}`);
   // Every registry source and B1 route/structure datum keeps its accepted floor.
   const datums: [string, number, number][] = [
-    ...Object.entries(SOURCES).map(([id, s]) => [id, s.position.x, s.position.z] as [string, number, number]),
+    // B1's own sources; sources lifted from S2 sites are authored outside the preserve.
+    ...Object.entries(SOURCES).filter(([id]) => !SITES.some(s => s.id === id))
+      .map(([id, s]) => [id, s.position.x, s.position.z] as [string, number, number]),
     ...Object.values(CANOPY_BASIN_ROUTE).flatMap(v => Array.isArray(v) ? v.map((q, i) => [`route.${i}`, q.x, q.z] as [string, number, number]) :
       typeof v === "object" ? [["route.pose", (v as { x: number }).x, (v as { z: number }).z] as [string, number, number]] : []),
     ...BASIN_GEOMETRY.solids.map(s => [s.id, (s.min.x + s.max.x) / 2, (s.min.z + s.max.z) / 2] as [string, number, number]),
@@ -174,7 +179,7 @@ test("structures rest on the floor and stay clear of today's solids", () => {
   for (const s of STRUCTURES) {
     for (const b of s.solids) {
       assert.ok(b.min.x < b.max.x && b.min.y < b.max.y && b.min.z < b.max.z, s.id);
-      for (const l of SOLIDS) assert.ok(!(b.min.x < l.max.x && b.max.x > l.min.x && b.min.y < l.max.y && b.max.y > l.min.y &&
+      for (const l of LEGACY_SOLIDS) assert.ok(!(b.min.x < l.max.x && b.max.x > l.min.x && b.min.y < l.max.y && b.max.y > l.min.y &&
         b.min.z < l.max.z && b.max.z > l.min.z), `${s.id} overlaps ${l.id}`);
     }
     const lowest = Math.min(...s.solids.map(b => b.min.y));

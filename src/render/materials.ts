@@ -4,6 +4,8 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh, Scene } from "@babylonjs/core";
 import type { GameState } from "../sim/types.js";
 import { CARRIER_LAYOUT } from "../sim/carrier.js";
+import { LEGACY_BLEND, LEGACY_PRESERVE } from "../content/regions/terrain.js";
+import { opticsAt } from "./biomes/optics.js";
 import { ArtBatch } from "./geometry.js";
 import type { Point } from "./geometry.js";
 import "@babylonjs/core/Shaders/ShadersInclude/instancesDeclaration.js";
@@ -80,7 +82,7 @@ void main(){
 #endif
   gl_Position=viewProjection*w;
 }`;
-export const CEL_UNIFORMS = ["world", "viewProjection", ...opticalUniforms, "lightDirection", "time", "underwater"];
+export const CEL_UNIFORMS = ["world", "viewProjection", ...opticalUniforms, "lightDirection", "time", "underwater", "lampOn"];
 export const LIGHT_DIRECTION = new Vector3(-0.42, 0.85, -0.3);
 
 /** World-space value noise for the cel pass: aperiodic, so no surface
@@ -107,7 +109,7 @@ float cellEdge(vec2 p,float t){
 export const CEL_FRAGMENT = `
 precision highp float;
 varying vec3 vWorld; varying vec3 vNormal; varying vec4 vColor;
-uniform vec3 lightDirection; uniform float time; uniform float underwater;
+uniform vec3 lightDirection; uniform float time; uniform float underwater; uniform float lampOn;
 ${opticalShader}
 ${NOISE_SHADER}
 void main(){
@@ -180,6 +182,11 @@ void main(){
     float light=mix(.035,lines*(.3+.7*knots),resolve)*(.2+.8*pool)*sky*exp(-depth*.035);
     shade+=shade*vec3(.3,.36,.27)*light+vec3(.012,.02,.014)*light;
   }
+  // S4 lamp switch (C3): a warm pool on nearby surfaces facing the eye. Off,
+  // the deep world keeps only its ambient and animal light.
+  vec3 toEye=cameraPosition-vWorld; float eye=length(toEye);
+  float lampPool=lampOn*underwater*exp(-eye*.12)*(.3+.7*max(0.0,dot(n,toEye/max(eye,1e-3))));
+  shade=shade*(1.0+lampPool*.6)+vec3(.055,.048,.03)*lampPool;
   // Authored diffuse warmth, bounded to the existing refuge interiors. This
   // shader owns the visible light pools; Babylon lamps cannot light this cel.
   float pod=step(abs(vWorld.x),2.94)*step(19.38,vWorld.z)*step(vWorld.z,24.01)*step(.15,vWorld.y)*step(vWorld.y,3.73);
@@ -214,6 +221,7 @@ export function createCelMaterial(scene: Scene): ShaderMaterial {
   material.setVector3("lightDirection", LIGHT_DIRECTION);
   material.setFloat("time", 0);
   material.setFloat("underwater", 0);
+  material.setFloat("lampOn", 0);
   return material;
 }
 
@@ -310,15 +318,26 @@ export function updateOpticalUniforms(
   // at unchanged haze density, so wreck ridges and survey dishes read as dark
   // silhouettes. Blended across the Canopy edge and descent; render-only.
   const basin = blend(-168, -194, camera.z) * blend(92, 112, camera.x) * blend(116, 146, depth);
-  const waterFog = Color3.Lerp(
+  let waterFog = Color3.Lerp(
     Color3.Lerp(Color3.FromHexString("#237e89"), Color3.FromHexString("#0b3048"), blend(15, 190, depth)),
     Color3.FromHexString(BASIN_SILT), basin * .82);
+  let fogDensity = density;
+  // S2's per-region optics take over outside B1's area over the same 96 m the
+  // shared floor blends; inside the preserve the optics above are unchanged.
+  const p = LEGACY_PRESERVE;
+  const outside = Math.hypot(Math.max(0, p.minX - camera.x, camera.x - p.maxX), Math.max(0, p.minZ - camera.z, camera.z - p.maxZ));
+  if (outside > 0) {
+    const region = opticsAt(camera.x, camera.y, camera.z), w = blend(0, LEGACY_BLEND, outside);
+    const authored = Color3.Lerp(Color3.FromHexString(region.water), Color3.FromHexString(region.deep), region.depthMix);
+    waterFog = Color3.Lerp(waterFog, authored, w);
+    fogDensity = density * (1 - w) + region.density * w;
+  }
   const airFog = Color3.FromHexString("#a5ccd1");
   for (const material of materials) {
     material.setVector3("cameraPosition", camera);
     material.setColor3("fogColor", airFog);
     material.setColor3("waterFogColor", waterFog);
-    material.setFloat("fogDensity", density);
+    material.setFloat("fogDensity", fogDensity);
     material.setFloat("carrierPresent", h ? 1 : 0);
     material.setFloat("carrierYaw", h?.pose.yaw ?? 0);
     material.setVector3("carrierAirMin", new Vector3(CARRIER_LAYOUT.deck.min.x, CARRIER_LAYOUT.deck.max.y, CARRIER_LAYOUT.deck.min.z));

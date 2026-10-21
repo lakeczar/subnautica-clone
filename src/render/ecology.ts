@@ -1,3 +1,4 @@
+import { PLACED_SOURCE_IDS } from "../content/worldSources.js";
 import type { GeometryCache } from "./geometryCache.js";
 import type { Scene, ShaderMaterial, Mesh } from '@babylonjs/core';
 import { BASIN_SOURCE_IDS } from '../content/routes.js';
@@ -6,6 +7,8 @@ import type { RenderRegion, RenderQuality } from './regions.js';
 import { SOURCES } from '../content/registry.js';
 import { BASIN_YARD } from '../content/vistas.js';
 import { terrainHeight } from '../sim/world.js';
+import { ecologyView } from '../sim/ecology/ecology.js';
+import { presentationStimulus } from '../sim/ecologyLink.js';
 import { ArtBatch, seeded } from './geometry.js';
 import type { Point } from './geometry.js';
 import { PALETTE as P } from './palette.js';
@@ -67,6 +70,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
   const flows: { mesh: Mesh; from: Point; to: Point; phase: number }[] = [];
   const grazers: { mesh: Mesh; x: number; y: number; z: number; phase: number }[] = [];
   for (const [id, source] of Object.entries(SOURCES)) {
+    if (PLACED_SOURCE_IDS.has(id)) continue;
     if (region && source.region !== region) continue;
     const { x, y, z } = source.position;
     if (source.asset === 'ribbons') {
@@ -194,6 +198,8 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
     if (disposed) return;
     const craft = state?.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
     const machinery = craft ? Math.hypot(craft.velocity.x, craft.velocity.y, craft.velocity.z) : 0;
+    // S4's harbinger rules drive the existing school and scavengers (C3).
+    const cues = state ? ecologyView(state.world.ecology, state.tick, presentationStimulus(state)) : null;
 
     flows.forEach(({ mesh, from, to, phase }) => {
       const t = (seconds / 7 + phase) % 1;
@@ -208,7 +214,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
     });
     schools.forEach(({ mesh: school, canopy }, i) => {
       const angle = seconds * (canopy ? .08 : .065) + i * 2;
-      const scatter = canopy && machinery > 3 ? 3 : 0;
+      const scatter = canopy && cues?.schoolScattered ? 3 : 0;
       if (!canopy)
         school.position.set(-15 + Math.cos(angle) * 10, -4.3 + Math.sin(angle * 2) * .6, -6 + Math.sin(angle) * 8);
       else
@@ -217,7 +223,7 @@ export function createEcology(scene: Scene, cel: ShaderMaterial, region?: Render
     });
     scavengers.forEach(({ mesh, x, z, phase }) => {
       const nearby = state && Math.hypot(state.player.pose.position.x - x, state.player.pose.position.z - z) < 12;
-      const retreat = nearby && machinery > 1 ? 1.3 : 0;
+      const retreat = Math.max(nearby && machinery > 1 ? 1.3 : 0, (cues?.scavengers.retreat ?? 0) * 1.3);
       const px = x + Math.sin(seconds * .16 + phase) * .6 - retreat;
       const pz = z + Math.cos(seconds * .16 + phase) * .45;
       mesh.position.set(px, terrainHeight(px, pz) + .02, pz);

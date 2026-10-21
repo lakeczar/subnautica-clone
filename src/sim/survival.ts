@@ -3,6 +3,7 @@ import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
 import { createWorldQueries } from "./world.js";
 import { moveHunter } from "./hunter.js";
 import {
+  atAirStop,
   distance,
   facility,
   inCanopyAir,
@@ -29,6 +30,7 @@ export function exposure(s: GameState): {
     nearPod(s) ||
     (nearWorkshop(s) && facility(s, "island_workshop")) ||
     inCanopyAir(s) ||
+    atAirStop(s) !== null ||
     (!!cabin && cabinPowered(cabin)) ||
     (!cabin && s.player.mode === "interior" &&
       !!s.player.interiorId &&

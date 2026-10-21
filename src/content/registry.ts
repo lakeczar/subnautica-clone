@@ -3,6 +3,12 @@
 export const CONTENT_VERSION = "expedition.6" as const;
 import { STORY_BLUEPRINT_LABELS, STORY_RECIPES } from "./story/evidence.js";
 import type { StoryBlueprintId } from "./story/evidence.js";
+// S9 campaign content: later tiers, carrier, specialists, stops and late sources.
+import { CAMPAIGN_BLUEPRINT_LABELS, CAMPAIGN_ITEMS, CAMPAIGN_RECIPES, CAMPAIGN_REFITS, CAMPAIGN_SOURCES, CAMPAIGN_SUITS, CAMPAIGN_TECH_RECORDS } from "./campaign/index.js";
+import type { CampaignBlueprintId, CampaignOutput, CampaignSiteId } from "./campaign/index.js";
+// C3: S2's remaining sources, and S9 hull construction at the stack yard.
+import { WORLD_SOURCES } from "./worldSources.js";
+import { YARD_BUILD } from "./yard.js";
 
 export const REGIONS = {
   refuge_reef: { label: "Hearth Reef", depth: [0, 65] },
@@ -234,6 +240,7 @@ export const ITEMS = {
   // S5 works assemblies, carried to the gate hall's panel.
   service_power_assembly: { label: "Portable service power assembly", cu: STORY_RECIPES.service_power_assembly.cu },
   service_air_assembly: { label: "Portable air staging assembly", cu: STORY_RECIPES.service_air_assembly.cu },
+  ...CAMPAIGN_ITEMS,
 } as const;
 export type ItemKind = keyof typeof ITEMS;
 /** Alloy carried in one intact tagged frame. */
@@ -256,6 +263,19 @@ export const isMountKind = (kind: unknown): kind is MountKind =>
 export const HULL_HOLD_CU = { dart: 32, creel: 64, hush: 32, spindle: 96, mantle: 32, hearthline: 192 } as const satisfies Record<HullId, number>;
 /** Only paid hull refits raise a hull above its initial rating. */
 export const HULL_REFITS = { dart: { recipe: "dart_350", rating: 350 }, creel: { recipe: "creel_350", rating: 350 } } as const;
+/** Every paid hull refit, by recipe: it raises a hull rated `from` to `rating`.
+ * HULL_REFITS keeps the first tier per hull. */
+export const REFIT_TIERS = {
+  dart_350: { hull: "dart", from: HULLS.dart.initialDepth, rating: 350 },
+  creel_350: { hull: "creel", from: HULLS.creel.initialDepth, rating: 350 },
+  ...CAMPAIGN_REFITS,
+} as const satisfies Record<string, { hull: HullId; from: number; rating: number }>;
+export type RefitRecipeId = keyof typeof REFIT_TIERS;
+/** Personal pressure suits by item, and the in-place refit that produces each. */
+export const SUIT_RATINGS = { suit_150: 150, suit_350: 350, suit_450: 450, suit_800: 800 } as const;
+export type SuitKind = keyof typeof SUIT_RATINGS;
+export const SUIT_REFITS = { suit_350: { from: "suit_150", rating: 350 }, ...CAMPAIGN_SUITS } as const satisfies
+  Record<string, { from: SuitKind; rating: number }>;
 export type BlueprintId =
   | "bp_pod_checklist"
   | "bp_reef_recovery"
@@ -266,13 +286,17 @@ export type BlueprintId =
   | "bp_carrier_basin"
   | "bp_rift_pressure"
   | "bp_keel_survey"
-  | StoryBlueprintId;
+  | StoryBlueprintId
+  | CampaignBlueprintId;
 export type FacilityId =
   | "home_pod"
   | "pod_fabricator"
   | "island_workshop"
   | "canopy_lab"
-  | "canopy_stop";
+  | "canopy_stop"
+  // C3: S9's restored service stops at S2's sites (content/stops.ts).
+  | "rift_station"
+  | "divide_dock";
 export const BLUEPRINTS: readonly BlueprintId[] = [
   "bp_pod_checklist",
   "bp_reef_recovery",
@@ -284,6 +308,7 @@ export const BLUEPRINTS: readonly BlueprintId[] = [
   "bp_rift_pressure",
   "bp_keel_survey",
   ...(Object.keys(STORY_BLUEPRINT_LABELS) as StoryBlueprintId[]),
+  ...(Object.keys(CAMPAIGN_BLUEPRINT_LABELS) as CampaignBlueprintId[]),
 ];
 /** Retained research whose construction belongs to later tiers. Plans that are
  * partly executable list only the part that is still future knowledge. */
@@ -296,15 +321,16 @@ export const FUTURE_BLUEPRINTS = {
   bp_food_module: STORY_BLUEPRINT_LABELS.bp_food_module,
 } as const;
 export type CostKind = MaterialId | "tagged_frame";
-export type HullOutput = "dart" | "creel";
-export type FabricationSite = "home_pod" | "pod_fabricator" | "island_workshop" | "canopy_stop";
+export type HullOutput = "dart" | "creel" | "hush" | "spindle" | "mantle" | "hearthline";
+export type FabricationSite = "home_pod" | "pod_fabricator" | "island_workshop" | "canopy_stop" | CampaignSiteId;
 export interface Recipe {
   label: string;
   cost: Partial<Record<CostKind, number>>;
   bp: BlueprintId;
   needs: readonly string[];
   site: FabricationSite;
-  output: ItemKind | HullOutput | "pod_repair" | "restore_workshop" | "restore_canopy_stop" | "dart_350" | "creel_350" | "pod_buffer";
+  output: ItemKind | HullOutput | "pod_repair" | "restore_workshop" | "restore_canopy_stop" | "dart_350" | "creel_350" | "pod_buffer"
+    | CampaignOutput;
   quantity: number;
   once: boolean;
   maintenance: boolean;
@@ -535,6 +561,7 @@ export const RECIPES = {
     once: true,
     maintenance: false,
   },
+  ...CAMPAIGN_RECIPES,
 } as const satisfies Record<string, Recipe>;
 export type RecipeId = keyof typeof RECIPES;
 
@@ -909,6 +936,8 @@ export const SOURCES = {
     scan: "Fracture floor, about 260 m: beyond a 240 m Creel. A 350 m hull can work it directly; otherwise lift by suit from the lip.",
     asset: "frames",
   },
+  ...CAMPAIGN_SOURCES,
+  ...WORLD_SOURCES,
 } as const satisfies Record<string, SourceDefinition>;
 export type SourceId = keyof typeof SOURCES;
 /** Siltwake design, not a claim about another game: only these living sheds regrow,
@@ -1012,7 +1041,8 @@ export const CREEL_BUILD_YAW = Math.PI;
 export const HULL_BUILD = {
   dart: { pose: DART_BUILD_POSE, yaw: DART_BUILD_YAW },
   creel: { pose: CREEL_BUILD_POSE, yaw: CREEL_BUILD_YAW },
-} as const;
+  ...YARD_BUILD,
+} as const satisfies Record<HullOutput, { pose: { x: number; y: number; z: number }; yaw: number }>;
 /** Ordinary technical records: plates and logs, not story clues. Inspecting one
  * keeps its ID in knowledge.scans and grants the listed plans, order-independent. */
 export const TECH_RECORDS = {
@@ -1023,6 +1053,7 @@ export const TECH_RECORDS = {
     text: "Pressure-ring plate from the fallen dish keel: a compact scout hull ring rated to 350 m, refitted from one tagged frame with fin crust and cured resin.",
     blueprints: ["bp_keel_survey"],
   },
+  ...CAMPAIGN_TECH_RECORDS,
 } as const satisfies Record<string, { label: string; region: RegionId; position: { x: number; y: number; z: number };
   text: string; blueprints: readonly BlueprintId[] }>;
 export type TechRecordId = keyof typeof TECH_RECORDS;
@@ -1070,6 +1101,9 @@ export const INTERACTION_HOSTS: Readonly<Record<string, InteractionHostDefinitio
   basin_frame_fracture: { offset: { x: 0, y: 0.35, z: 0 }, radius: 1.2, renderOffsetY: 0 },
   basin_keel_plate: { offset: { x: 0, y: 0.2, z: 0 }, radius: 0.8 },
   canopy_stop_services: { offset: { x: 0, y: 0.9, z: 0 }, radius: 0.7 },
+  // C3: S2-placed hosts whose datum rests on the floor or beside their own furniture.
+  meridian_service_cache: { offset: { x: 0, y: 0.5, z: 0.2 }, radius: 0.9, solidIds: ["meridian.service_cache.cage"] },
+  yard_tender_plate: { offset: { x: 0, y: 0.7, z: 0 }, radius: 0.6 },
 };
 export const RECOVERY_STAGE = { x: 46, y: -12, z: -54 } as const;
 export const CANOPY_COVER = {

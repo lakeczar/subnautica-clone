@@ -7,6 +7,7 @@ import { addItem } from "../src/sim/inventory.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import { validState } from "../src/save/validation.js";
 import { interactionHost } from "../src/sim/targeting.js";
+import { recordStory } from "../src/sim/storyLink.js";
 import type { GameState, MovementMode, Vec3 } from "../src/sim/types.js";
 
 export function readyState(): GameState {
@@ -14,12 +15,15 @@ export function readyState(): GameState {
 }
 /** Explicit funded diagnostic, not earned traversal. Uses real paid prerequisites
  * and an in-place refit, with valid receipts/IDs. readyState() stays unequipped. */
-export function protectedReadyState(limit: 150 | 350): GameState {
+export function protectedReadyState(limit: 150 | 350 | 800): GameState {
   const s = readyState(), pose = structuredClone(s.player.pose), world = createWorldQueries();
   discover(s, "C02");
   const ids = limit === 150 ? ["pod_repair", "essential_tools", "suit_150"] as const
-    : ["pod_repair", "essential_tools", "suit_150", "restore_workshop", "suit_350"] as const;
-  if (limit === 350) { discover(s, "C03"); discover(s, "C04"); }
+    : limit === 350 ? ["pod_repair", "essential_tools", "suit_150", "restore_workshop", "suit_350"] as const
+    : ["pod_repair", "essential_tools", "suit_150", "restore_workshop", "suit_350", "suit_450", "suit_800"] as const;
+  if (limit !== 150) { discover(s, "C03"); discover(s, "C04"); }
+  // The 450/800 m refits: the cool-flank and deep-service plans (S9).
+  if (limit === 800) { discover(s, "C06"); recordStory(s, "C07"); }
   for (const id of ids) {
     const recipe = RECIPES[id];
     if (recipe.site === "island_workshop") s.player.pose.position = { x: 10, y: 1.2, z: -34 };
@@ -89,4 +93,48 @@ export const NORMAL_VIEWS: readonly { id: string; position: Vec3; mode: Movement
   { id: "basin_frame_fracture", position: { x: 196, y: -260.6, z: -290 }, mode: "swimming" },
   { id: "basin_keel_plate", position: { x: 172, y: -197.9, z: -253 }, mode: "swimming" },
   { id: "canopy_stop_services", position: { x: 204, y: -137.9, z: -147.2 }, mode: "swimming" },
+  // C3: hosts S9 and C3 lifted from S2 sites, found by a collision-checked search
+  // and fixed here (clear body, aimed host, clear sight line, successful interact).
+  {id: "rift_ceramic_lip_north", position: {x: 98.1, y: -257.4, z: -965.9}, mode: "swimming"},
+  {id: "rift_ceramic_lip_south", position: {x: -4.3, y: -265.4, z: -1090.2}, mode: "swimming"},
+  {id: "rift_ceramic_deep_seam", position: {x: -229.5, y: -397.4, z: -1150}, mode: "swimming"},
+  {id: "rift_core_shoulder_north", position: {x: -95.1, y: -289.4, z: -747.7}, mode: "swimming"},
+  {id: "rift_core_shoulder_west", position: {x: -304.6, y: -288.4, z: -1043.2}, mode: "swimming"},
+  {id: "rift_core_plume_seam", position: {x: -123.5, y: -429.4, z: -1084}, mode: "swimming"},
+  {id: "divide_lattice_ledge_west", position: {x: 339, y: -365.4, z: -1188.5}, mode: "swimming"},
+  {id: "divide_lattice_ledge_east", position: {x: 751.5, y: -374.4, z: -1191}, mode: "swimming"},
+  {id: "divide_lattice_fissure", position: {x: 522.5, y: -479.4, z: -1360}, mode: "swimming"},
+  {id: "meridian_cut_ceramic", position: {x: 1172.5, y: -603.4, z: -1396}, mode: "swimming"},
+  {id: "meridian_service_cache", position: {x: 1152.5, y: -519.4, z: -1103.8}, mode: "swimming"},
+  {id: "isles_stack_glass_east", position: {x: 540.5, y: -0.9, z: 100}, mode: "swimming"},
+  {id: "isles_stack_resin_cove", position: {x: 410.5, y: -2.9, z: 48}, mode: "swimming"},
+  {id: "isles_headland_crops", position: {x: 1004.8, y: 15.103, z: -4.7}, mode: "walking"},
+  {id: "isles_headland_resin_cove", position: {x: 966.9, y: -2.4, z: -37.9}, mode: "swimming"},
+  {id: "isles_headland_glass_ledge", position: {x: 1122.8, y: -0.9, z: 117}, mode: "swimming"},
+  {id: "canopy_east_resin_lee", position: {x: 670.5, y: -167.4, z: -232}, mode: "swimming"},
+  {id: "canopy_east_fins", position: {x: 590.5, y: -163.4, z: -168}, mode: "swimming"},
+  {id: "basin_dish_fins", position: {x: 464.5, y: -267.4, z: -544}, mode: "swimming"},
+  {id: "basin_wreck_frames_north", position: {x: 782.5, y: -253.4, z: -444}, mode: "swimming"},
+  {id: "basin_wreck_panels_south", position: {x: 785.5, y: -255.4, z: -612}, mode: "swimming"},
+  {id: "canopy_glider_log", position: {x: 648.5, y: -165.4, z: -178}, mode: "swimming"},
+  {id: "yard_tender_plate", position: {x: 451.5, y: 3.945, z: 62}, mode: "walking"},
+  // C3: S5 records and works faces placed at S2 sites, by the same search.
+  {id: "gantry_plates", position: {x: 467.5, y: -5.64, z: 102}, mode: "swimming"},
+  {id: "fin_survey_post", position: {x: 139.9, y: -134.05, z: -135.8}, mode: "swimming"},
+  {id: "basin_service_rack", position: {x: 165.5, y: -165.94, z: -206}, mode: "swimming"},
+  {id: "rift_station_ledger", position: {x: 139.5, y: -260.4, z: -913.6}, mode: "swimming"},
+  {id: "C07", position: {x: 630.5, y: -364.3, z: -1236}, mode: "swimming"},
+  {id: "ren_access_log", position: {x: 633, y: -364.3, z: -1244}, mode: "swimming"},
+  {id: "C12", position: {x: 572.5, y: -393.92, z: -1252}, mode: "swimming"},
+  {id: "C11", position: {x: 986.81, y: 10, z: -5.443}, mode: "walking"},
+  {id: "mara_last_page", position: {x: 985.8, y: 10, z: -6.4}, mode: "walking"},
+  {id: "C08", position: {x: 1002.5, y: -598.34, z: -1406}, mode: "swimming"},
+  {id: "C10", position: {x: 1281.5, y: -678.47, z: -1396}, mode: "swimming"},
+  {id: "iona_ledger_note", position: {x: 1284, y: -678.48, z: -1396}, mode: "swimming"},
+  {id: "C09", position: {x: 1398.5, y: -767.2, z: -1595.4}, mode: "swimming"},
+  {id: "gate_panel", position: {x: 1402.6, y: -767, z: -1585.5}, mode: "swimming"},
+  {id: "C13", position: {x: 1432.5, y: -768.46, z: -1560}, mode: "swimming"},
+  {id: "district_controller", position: {x: 1435.5, y: -768.47, z: -1560}, mode: "swimming"},
+  {id: "works:hall", position: {x: 1296.5, y: -598.72, z: -1145}, mode: "swimming"},
+  {id: "works:food", position: {x: 1304.5, y: -598.7, z: -1146}, mode: "swimming"},
 ];

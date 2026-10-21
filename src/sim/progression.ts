@@ -3,7 +3,6 @@ import {
   FRAME_ALLOY,
   HULL_BUILD,
   HULL_HOLD_CU,
-  HULL_REFITS,
   HULLS,
   ITEMS,
   HULL_COLLIDERS,
@@ -11,9 +10,15 @@ import {
   PLACES,
   RECIPES,
   RECOVERY_STAGE,
+  REFIT_TIERS,
   SOURCES,
+  SUIT_REFITS,
   TECH_RECORDS,
 } from "../content/registry.js";
+import { CAMPAIGN_PENDING, CAMPAIGN_SITES } from "../content/campaign/index.js";
+import { STOP_RESTORATIONS, stopForSite, WORKING_STOPS, type WorkingStopId } from "../content/stops.js";
+import { launchCarrier } from "./carrier.js";
+import { isSuitProtection } from "./ecologyLink.js";
 import type {
   EvidenceId,
   HullOutput,
@@ -38,6 +43,8 @@ import {
   hasRoom,
   nearCanopyStop,
   nearPod,
+  nearStop,
+  stopWorks,
   nearWorkshop,
   nextId,
   spend,
@@ -226,18 +233,35 @@ export function frameDestination(s: GameState): string | null {
   return containerAccessible(s, "buoy_hold") && hasRoom(s, "buoy_hold", cu) ? "buoy_hold" : null;
 }
 export type CraftingBlockCode = "opening" | "blueprint" | "completed" | "needs" | "site" |
-  "restore" | "duplicate-hull" | "clearance" | "materials" | "rescue-low" | "space" | "equipment" | "refit";
-const HULL_OUTPUTS: readonly string[] = ["dart", "creel"];
+  "restore" | "duplicate-hull" | "clearance" | "materials" | "rescue-low" | "space" | "equipment" | "refit" | "unplaced";
+const HULL_OUTPUTS: readonly string[] = ["dart", "creel", "hush", "spindle", "mantle", "hearthline"];
 export const hullOutput = (r: Recipe): HullOutput | null =>
   HULL_OUTPUTS.includes(r.output) ? r.output as HullOutput : null;
-/** The refit recipe's hull, if it is one. */
-export const refitHull = (id: RecipeId): HullOutput | null =>
-  id === "dart_350" ? "dart" : id === "creel_350" ? "creel" : null;
+/** A paid hull refit tier, if the recipe is one. */
+export const refitTier = (id: RecipeId) => Object.hasOwn(REFIT_TIERS, id) ? REFIT_TIERS[id as keyof typeof REFIT_TIERS] : null;
+/** The refit recipe's hull. */
+export const refitHull = (id: RecipeId): HullOutput | null => refitTier(id)?.hull ?? null;
+/** An in-place suit refit tier, if the recipe is one. */
+export const suitRefit = (id: RecipeId) => Object.hasOwn(SUIT_REFITS, id) ? SUIT_REFITS[id as keyof typeof SUIT_REFITS] : null;
+/** Why a registered campaign recipe cannot run yet: its site, hull or fitting is
+ * composed with the later world (S9 handoff). Null when it is executable. */
+export function pendingCampaignWork(id: RecipeId): string | null {
+  const why = CAMPAIGN_PENDING[id as keyof typeof CAMPAIGN_PENDING];
+  if (!why) return null;
+  const site = RECIPES[id].site;
+  const place = Object.hasOwn(CAMPAIGN_SITES, site) ? CAMPAIGN_SITES[site as keyof typeof CAMPAIGN_SITES].label : null;
+  return why === "fitting" ? "Plans recorded. This fitting is not available to fabricate yet."
+    : `Plans recorded. This work is done at the ${place ?? "yard"}, which is not reachable yet.`;
+}
 /** The owned hull a refit would modify: at the workshop cradle/slip, empty of crew. */
 export function refitTarget(s: GameState, hull: HullOutput) {
   return s.fleet.vehicles.find((v) => v.hull === hull && !v.berth) ?? null;
 }
+const restorationOf = (stop: WorkingStopId): string | null =>
+  (Object.keys(STOP_RESTORATIONS) as (keyof typeof STOP_RESTORATIONS)[]).find((r) => STOP_RESTORATIONS[r] === stop) ?? null;
 export function atSite(s: GameState, site: Recipe["site"]): boolean {
+  const stop = stopForSite(site);
+  if (stop) return nearStop(s, stop);
   return site === "island_workshop" ? nearWorkshop(s) && !s.player.interiorId
     : site === "canopy_stop" ? nearCanopyStop(s) : nearPod(s);
 }
@@ -255,11 +279,19 @@ export function craftingBlock(
     return block("completed", "Already completed. The fabricated equipment or restored service is retained.");
   if (!r.needs.every((n) => s.knowledge.crafted.includes(n as RecipeId)))
     return block("needs", "Needs earlier work first.");
-  if (id === "suit_350" && (s.inventory.items.filter(i => i.fitted === "suit").length !== 1 ||
-      !s.inventory.items.some(i => i.kind === "suit_150" && i.fitted === "suit" && i.containerId === "equipment" && i.quantity === 1)))
-    return block("equipment", "Bring the one fitted 150 m suit for its paid refit. Nothing consumed.");
+  const pending = pendingCampaignWork(id);
+  if (pending) return block("unplaced", pending);
+  const suit = suitRefit(id);
+  if (suit && (s.inventory.items.filter(i => i.fitted === "suit").length !== 1 ||
+      !s.inventory.items.some(i => i.kind === suit.from && i.fitted === "suit" && i.containerId === "equipment" && i.quantity === 1)))
+    return block("equipment", `Bring the one fitted ${ITEMS[suit.from].label.replace(/ (refitted )?pressure suit$/, "")} suit for its paid refit. Nothing consumed.`);
+  const stop = stopForSite(r.site);
   if (!atSite(s, r.site) || (r.site === "island_workshop" && !!s.player.interiorId))
-    return block("site", r.site === "canopy_stop" ? "Work at the outer-crown mooring's service mast." : "Use this recipe’s bench.");
+    return block("site", r.site === "canopy_stop" ? "Work at the outer-crown mooring's service mast."
+      : stop ? `Work at the ${WORKING_STOPS[stop].label}.` : "Use this recipe’s bench.");
+  // A restored stop's other work waits for its restoration.
+  if (stop && !stopWorks(s, stop) && r.output !== restorationOf(stop))
+    return block("restore", `Restore the ${WORKING_STOPS[stop].label} first.`);
   if (
     (r.site === "pod_fabricator" && !facility(s, "pod_fabricator")) ||
     (r.site === "island_workshop" && id !== "restore_workshop" && !facility(s, "island_workshop"))
@@ -268,26 +300,34 @@ export function craftingBlock(
   const hull = hullOutput(r);
   if (hull && s.fleet.vehicles.some((v) => v.hull === hull))
     return block("duplicate-hull", `A ${HULLS[hull].label} already exists. Recover its frame or cargo instead of duplicating it.`);
+  if (id === "hearthline_keel" && s.knowledge.crafted.includes("hearthline_keel") && !s.fleet.vehicles.some((v) => v.hull === "hearthline"))
+    return block("duplicate-hull", "The Hearthline keel is already laid in the yard berth. Fit it out.");
   if (hull) {
     const build = HULL_BUILD[hull], shape = HULL_COLLIDERS[hull];
-    const occupied = s.fleet.vehicles.some((v) => !v.berth &&
+    const occupant = s.fleet.vehicles.find((v) => !v.berth &&
       Math.abs(v.pose.position.x - build.pose.x) < shape.radius + HULL_COLLIDERS[v.hull].radius &&
       Math.abs(v.pose.position.z - build.pose.z) < shape.radius + HULL_COLLIDERS[v.hull].radius &&
       Math.abs(v.pose.position.y - build.pose.y) < Math.max(shape.height, HULL_COLLIDERS[v.hull].height));
-    if (occupied || !hullClearance(world, build.pose, shape))
+    if (occupant || !hullClearance(world, build.pose, shape))
       return block("clearance", hull === "creel" ? "The medium slip is not clear. Move any craft out of it. Nothing consumed."
+        : occupant ? `The ${HULLS[occupant.hull].label} sits in the ${HULLS[hull].label}'s build slip. Move it out (the yard mooring is west of the cradles). Nothing consumed.`
         : "Construction clearance is blocked. Nothing consumed.");
   }
-  const refit = refitHull(id);
-  if (refit) {
+  const refit = refitHull(id), tier = refitTier(id);
+  if (refit && tier) {
     const v = refitTarget(s, refit);
     if (!v) return block("refit", `Bring the ${HULLS[refit].label} to the workshop for this hull refit.`);
-    if (v.rating >= HULL_REFITS[refit].rating) return block("refit", `This ${HULLS[refit].label} is already rated ${v.rating} m.`);
+    if (v.rating >= tier.rating) return block("refit", `This ${HULLS[refit].label} is already rated ${v.rating} m.`);
+    if (v.rating !== tier.from) return block("refit", `Refit this ${HULLS[refit].label} to ${tier.from} m first.`);
     if (v.disabled) return block("refit", "Patch the disabled hull before refitting it.");
     if (s.player.controlledVehicleId === v.id || s.player.interiorId === v.id)
       return block("refit", "Leave the hull before its refit.");
-    if (supportedServiceSite(s, v) !== "island_workshop")
-      return block("refit", `Moor the ${HULLS[refit].label} in its workshop cradle or slip for the refit.`);
+    const refitSite = r.site === "stack_yard" ? "stack_yard" : "island_workshop";
+    if (refit === "hearthline" && (s.player.controlledVehicleId === v.id || s.player.interiorId === v.id))
+      return block("refit", "Leave the carrier before its refit.");
+    if (supportedServiceSite(s, v) !== refitSite)
+      return block("refit", refitSite === "stack_yard" ? `Moor the ${HULLS[refit].label} in the yard berth for the refit.`
+        : `Moor the ${HULLS[refit].label} in its workshop cradle or slip for the refit.`);
   }
   const bins = fabricationContainers(s, r.site);
   if (r.maintenance) {
@@ -309,18 +349,34 @@ export function craftingBlock(
     if (!hasRoom(after, "workshop_locker", ITEMS.structural_alloy.cu * FRAME_ALLOY))
       return block("space", `Stripped alloy goes to the workshop locker; it needs ${ITEMS.structural_alloy.cu * FRAME_ALLOY} CU. Nothing consumed.`);
   }
-  if (r.output === "reserve_cell" || r.output === "salvage_buoy" || r.output === "dart_acoustic_trim" ||
-      r.output === "creel_cargo_rack" || r.output === "creel_cabin" ||
-      r.output === "service_power_assembly" || r.output === "service_air_assembly") {
+  // Every carried output (C3-R1-1): after the ingredients are spent, the whole
+  // output must fit where craft() puts it, or nothing is consumed.
+  const placement = outputPlacement(id);
+  if (placement === "package" || placement === "diver") {
     const after = structuredClone(s);
-    spend(after, r.cost, bins);
-    const to = r.output === "creel_cargo_rack" || r.output === "creel_cabin" ? packageDestination(after) : "diver";
-    if (!to || !hasRoom(after, to, ITEMS[r.output].cu * r.quantity))
-      return block("space", r.output === "creel_cargo_rack" || r.output === "creel_cabin"
-        ? `The ${ITEMS[r.output].cu} CU package needs room in the workshop locker or your hold. Nothing consumed.`
+    if (!r.maintenance) spend(after, r.cost, bins);
+    const to = placement === "package" ? packageDestination(after) : "diver";
+    if (!to || !hasRoom(after, to, ITEMS[r.output as ItemKind].cu * r.quantity))
+      return block("space", placement === "package"
+        ? `The ${ITEMS[r.output as ItemKind].cu} CU package needs room in the workshop locker or your hold. Nothing consumed.`
         : "Output would not fit your hold. Nothing consumed.");
   }
   return null;
+}
+/** The fitting slot of an output that is worn rather than carried. */
+function outputFitting(output: string): "tools" | "suit" | "recovery" | "protection" | null {
+  return output === "essential_tools" ? "tools" : output === "suit_150" ? "suit" : output === "bobbin_kit" ? "recovery"
+    : isSuitProtection(output) ? "protection" : null;
+}
+/** Where craft() puts a recipe's output: a facility, hull or in-place change
+ * ("none"), a fitting ("equipment"), a mount package, or the diver hold. */
+export function outputPlacement(id: RecipeId): "none" | "equipment" | "package" | "diver" {
+  const r: Recipe = RECIPES[id];
+  if (["pod_repair", "restore_workshop", "restore_canopy_stop", "restore_rift_station", "restore_divide_stop",
+    "hearthline_keel", "pod_buffer"].includes(r.output) || hullOutput(r) || refitHull(id) || suitRefit(id) || id === "strip_frame")
+    return "none";
+  if (r.output === "creel_cargo_rack" || r.output === "creel_cabin") return "package";
+  return outputFitting(r.output) ? "equipment" : "diver";
 }
 /** Mount packages are bulky: the workshop locker first, then the diver hold. */
 function packageDestination(s: GameState): string | null {
@@ -344,13 +400,16 @@ export function craft(
     s.world.maintenance.glass--;
     s.world.maintenance.membrane -= 3;
   } else spend(s, r.cost, bins);
-  const hull = hullOutput(r), refit = refitHull(id);
+  const hull = hullOutput(r), refit = refitHull(id), tier = refitTier(id), suit = suitRefit(id);
   if (r.output === "pod_repair")
     s.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired = true;
   else if (r.output === "restore_workshop")
     s.world.facilities.find((f) => f.id === "island_workshop")!.repaired = true;
   else if (r.output === "restore_canopy_stop")
     s.world.facilities.find((f) => f.id === "canopy_stop")!.repaired = true;
+  else if (r.output === "restore_rift_station" || r.output === "restore_divide_stop")
+    s.world.facilities.find((f) => f.id === STOP_RESTORATIONS[r.output as keyof typeof STOP_RESTORATIONS])!.repaired = true;
+  else if (r.output === "hearthline_keel") { /* The laid keel is a recorded stage; the fit-out launches the hull. */ }
   else if (r.output === "pod_buffer") {
     if (!s.story.works.repairs.includes("pod_buffer")) s.story.works.repairs.push("pod_buffer");
   }
@@ -360,6 +419,9 @@ export function craft(
       v = makeVehicle(vid, hull, HULL_BUILD[hull].pose, cargoId);
     v.pose.yaw = HULL_BUILD[hull].yaw;
     v.investment = { ...r.cost };
+    // The carrier's frame is both stages: the laid keel and the fit-out.
+    if (hull === "hearthline") for (const [k, q] of Object.entries(RECIPES.hearthline_keel.cost) as [keyof typeof v.investment, number][])
+      v.investment[k] = (v.investment[k] ?? 0) + q;
     s.fleet.vehicles.push(v);
     s.inventory.containers.push({
       id: cargoId,
@@ -367,17 +429,18 @@ export function craft(
       capacity: HULL_HOLD_CU[hull],
       ownerId: vid,
     });
+    if (hull === "hearthline") launchCarrier(s, v);
   } else if (refit) {
     // A paid refit is part of the frame: its materials return with any salvage.
     const v = refitTarget(s, refit)!;
-    v.rating = HULL_REFITS[refit].rating;
+    v.rating = tier!.rating;
     for (const [k, q] of Object.entries(r.cost) as [keyof typeof v.investment, number][])
       v.investment[k] = (v.investment[k] ?? 0) + q;
   } else if (id === "strip_frame") {
     addItem(s, "structural_alloy", FRAME_ALLOY, "workshop_locker");
-  } else if (r.output === "suit_350") {
+  } else if (suit) {
     // Refit the paid instance in place; its ID, fitting, container and earlier receipt survive.
-    s.inventory.items.find(i => i.kind === "suit_150" && i.fitted === "suit")!.kind = "suit_350";
+    s.inventory.items.find(i => i.kind === suit.from && i.fitted === "suit")!.kind = r.output as ItemKind;
   } else if (r.output === "creel_cargo_rack" || r.output === "creel_cabin") {
     const to = packageDestination(s)!;
     const item = addItem(s, r.output, 1, to);
@@ -385,14 +448,7 @@ export function craft(
     if (r.output === "creel_cabin")
       s.inventory.containers.push({ id: `${item.id}_locker`, kind: "locker", capacity: 16, ownerId: item.id });
   } else {
-    const fitted =
-      r.output === "essential_tools"
-        ? "tools"
-        : r.output === "suit_150"
-          ? "suit"
-          : r.output === "bobbin_kit"
-            ? "recovery"
-            : null;
+    const fitted = outputFitting(r.output);
     for (let q = 0; q < r.quantity; q++) {
       const item = addItem(
         s,
@@ -411,7 +467,13 @@ export function craft(
     : id === "creel_base" ? "Creel built in the medium slip west of the landing. Board it from the cockpit side."
     : id === "creel_cargo_rack" || id === "creel_cabin"
       ? `${ITEMS[r.output as ItemKind].label} made · stowed in ${s.inventory.items.some((i) => i.kind === r.output && i.containerId === "workshop_locker") ? "the workshop locker" : "your hold"}. Fit it from Cargo with the Creel at a supported mooring.`
-    : refit ? `${HULLS[refit].label} hull refitted · rated 350 m. Your suit limit is separate.`
+    : refit ? `${HULLS[refit].label} hull refitted · rated ${tier!.rating} m. Your suit limit is separate.`
+    : id === "hearthline_keel" ? "Hearthline keel laid in the yard berth: frame spine and pontoons. Fit it out here to launch the carrier."
+    : id === "hearthline_base" ? "Hearthline launched in the yard berth: dry rooms, two berths, galley and fabrication. Take the helm from the bridge."
+    : hull && hull !== "dart" && hull !== "creel" ? `${HULLS[hull].label} built on the yard slip · board it from its access side.`
+    : id === "restore_rift_station" || id === "restore_divide_stop"
+      ? `${WORKING_STOPS[id === "restore_rift_station" ? "rift_station" : "divide_dock"].label} restored · ${WORKING_STOPS[id === "restore_rift_station" ? "rift_station" : "divide_dock"].offers}.`
+    : suit && id !== "suit_350" ? `Suit refitted · ${suit.rating} m personal limit. Hull ratings are separate.`
     : id === "strip_frame" ? "Frame stripped · 8 structural alloy in the workshop locker."
     : id === "pod_buffer" ? "Dispatch buffer fitted beside the regulator. Its log is readable now."
     : id === "restore_canopy_stop" ? "Outer-crown mooring restored · hull service, cell charging, a 48 CU locker and mount changes here. No air: the laboratory pocket remains the Canopy's refuge."

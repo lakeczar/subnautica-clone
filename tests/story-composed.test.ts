@@ -65,7 +65,11 @@ test("H gives graduated reef hints, then practical preparation for an unreachabl
   for (const id of ["suit_350", "dart_base", "creel_base", "creel_cargo_rack", "restore_canopy_stop"] as const) all.knowledge.crafted.push(id);
   all.inventory.items.push({ id: "rack_1", kind: "creel_cargo_rack", quantity: 1, containerId: "diver", fitted: null, charge: null, provenance: "public" });
   all.world.facilities.find((f) => f.id === "canopy_stop")!.repaired = true;
-  assert.equal(storyHint(all), FRONTIER_HINT, "once the placed chain is done, hints never name unbuilt sites");
+  // C3 placed the later sites: the next hint is a placed lead's graduated hint, never the frontier
+  // and never an unbuilt site.
+  const next = storyHint(all);
+  assert.notEqual(next, FRONTIER_HINT);
+  assert.ok(Object.values(LEADS).some((l) => (l.hints as readonly string[]).includes(next) && placedSite(l.site)), next);
 });
 
 test("the works machinery advances exactly once per active simulation step and survives a reload", () => {
@@ -111,28 +115,36 @@ test("adverse: strict validation refuses a story that duplicates, back-dates or 
   assert.ok(validState(paid), "a paid buffer repair agrees in both places");
 });
 
-test("composed planner: every strategy step with a real recipe is earned from real content; the rest wait only on unbuilt content", () => {
+test("composed planner: every strategy step is a real recipe, and both strategies reach the ending on the real registry", () => {
   for (const strategy of ["independent", "carrier"] as const) {
     const report = audit(strategy);
-    const real = report.filter((a) => a.recipe);
-    assert.deepEqual(real.map((a) => a.step), ["suit_150", "dart", "suit_350", "creel", "dart_350", "creel_350", "stop_canopy"]);
-    assert.deepEqual(real.filter((a) => a.blocked.length), [], "real recipes have sourced materials, stock and frames");
-    for (const a of report.filter((a) => !a.recipe)) assert.equal(a.blocked[0], "no recipe", a.step);
-    // Against today's world: unplaced story sites are skipped, as a player would find them.
+    assert.ok(report.every((a) => a.recipe), "every step has a real recipe");
+    assert.deepEqual(report.filter((a) => a.blocked.length), [], "real recipes have sourced materials, stock and frames");
+    // With S2's sites placed, the real recipes, deposits and plan sources reach the ending.
+    const plan = planRegistryCampaign(strategy);
+    assert.equal(plan.ending, true, strategy);
+    assert.deepEqual([...plan.steps].sort(), report.map((a) => a.step).sort(), "every step completes");
+    assert.equal(planCampaign(strategy, { model: registryModel(strategy), reverse: true }).ending, true, `${strategy} reversed`);
+    // C3 placed every story site at S2's: skipping only unplaced sites still reaches the ending.
+    assert.deepEqual(UNPLACED, [], "every story site is placed");
     const today = planCampaign(strategy, { model: registryModel(strategy), skip: UNPLACED });
-    assert.deepEqual([...today.steps].sort(), real.map((a) => a.step).sort(), "every real step completes");
-    assert.deepEqual(today.order, ["C01", "C02", "C03", "pod_checklist", "C04", "C05", "C06"]);
-    assert.equal(today.ending, false, "the ending needs content S2 and later tiers add");
-    // With S2's sites and S5's proposal for the unbuilt steps, the real recipes still lead to the ending.
-    const later = planRegistryCampaign(strategy, "proposal");
-    assert.equal(later.ending, true, strategy);
-    assert.deepEqual(later.steps.filter((id) => real.some((a) => a.step === id)).sort(), real.map((a) => a.step).sort());
+    assert.equal(today.ending, true, `${strategy} reaches the ending in the composed world`);
   }
-  assert.deepEqual(audit("carrier").filter((a) => !a.recipe).map((a) => `${a.step}: ${a.blocked.join(", ")}`), [
-    "suit_450: no recipe, no pressure_ceramic source",
-    "hearthline_400: no recipe",
-    "hearthline_550: no recipe, no pressure_ceramic source, no brine_lattice source",
-    "mantle: no recipe, no pressure_ceramic source, no thermal_core source, no brine_lattice source",
-    "suit_800: no recipe, no pressure_ceramic source, no brine_lattice source",
-  ]);
+  const independent = planRegistryCampaign("independent"), carrier = planRegistryCampaign("carrier");
+  assert.deepEqual(independent.caps.hulls, { dart: 350, creel: 800 });
+  assert.deepEqual(carrier.caps.hulls, { dart: 350, creel: 350, hearthline: 550, mantle: 800 });
+  assert.equal(independent.caps.suit, 800); assert.equal(carrier.caps.suit, 800);
+  assert.ok(independent.caps.stops.has("stop_divide_lee") && !carrier.caps.stops.has("stop_divide_lee"));
+});
+
+test("composed planner: the real first deposits, not the proposal shelves, gate each tier", () => {
+  const shelves = registryModel("independent").shelves!;
+  assert.deepEqual([shelves.pressure_ceramic.depth, shelves.thermal_core.depth, shelves.brine_lattice.depth], [258, 289, 366]);
+  // Without both ceramic lips the only ceramic is deeper than any 350 m configuration: no 450 tier, no ending.
+  const deeper = { ...shelves, pressure_ceramic: { depth: 398, exit: 398 } };
+  for (const strategy of ["independent", "carrier"] as const) {
+    const plan = planCampaign(strategy, { model: { ...registryModel(strategy), shelves: deeper } });
+    assert.equal(plan.ending, false, strategy);
+    assert.ok(!plan.steps.includes("suit_450"), strategy);
+  }
 });

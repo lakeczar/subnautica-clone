@@ -9,7 +9,7 @@ import { eyeHeight } from "../../src/sim/state.js";
 import type { GameEvent, GameState, Vec3 } from "../../src/sim/types.js";
 import { Blocked, Driver, where } from "./driver.js";
 import { dist, faceEye, horizontal, route, travel } from "./travel.js";
-import { breathe, enter, surfaceTo, toWater } from "./nav.js";
+import { atWorkshop, breathe, enter, HEADLAND_IN, inPod, nearHeadland, surfaceTo, toWater } from "./nav.js";
 import type { Refuge } from "./nav.js";
 import { personalLimit } from "../../src/sim/capabilities.js";
 import type { Waypoint } from "./travel.js";
@@ -60,6 +60,14 @@ export function workPoses(d: Driver, id: string): { body: Waypoint; land: boolea
         out.push({ body: { ...body, tolerance: 0.3 }, land: false, cost: dist(here, body) });
     }
   }
+  // Only when nothing else aims: a craft floating at the surface (its handle at
+  // y -0.4) is reached from just below it.
+  if (!out.length) for (const r of [1.4, 2.2, 3]) for (let k = 0; k < 16; k++) for (const dy of [-0.9, -1.4]) {
+    const a = (k / 16) * Math.PI * 2, body = { x: t.position.x + Math.cos(a) * r, y: t.position.y + dy, z: t.position.z + Math.sin(a) * r };
+    if (body.y > -0.9 || d.world.groundHeight(body.x, body.z) > body.y - 0.1) continue;
+    if (dist(body, t.position) < INTERACTION_REACH - 0.2 && d.world.clearance(body, SWIM) && aimsFrom(d, id, body, "swimming", host.center))
+      out.push({ body: { ...body, tolerance: 0.3 }, land: false, cost: dist(here, body) });
+  }
   return out.sort((a, b) => a.cost - b.cost);
 }
 
@@ -73,6 +81,8 @@ export function reach(d: Driver, id: string): void {
     faceEye(d, host.center);
     if (aimedInteraction(d.state, d.world)?.id === id) return;
   }
+  // Ashore with an afloat target (a craft left at the landing): back to the water first.
+  if (d.state.player.mode === "walking" && host.center.y < -0.3 && !inPod(d) && !atWorkshop(d)) toWater(d);
   const poses = workPoses(d, id);
   const mode = d.state.player.mode;
   const pick = poses.find((p) => p.land === (mode === "walking")) ?? poses[0];
@@ -82,15 +92,30 @@ export function reach(d: Driver, id: string): void {
     if (mode !== "walking") {
       if (Math.hypot(b.x - 10, b.z + 35) < 12) enter(d, "workshop");
       else if (Math.hypot(b.x, b.z - 18) < 8) enter(d, "pod");
+      else if (nearHeadland(b)) {
+        surfaceTo(d, HEADLAND_IN[0]!);
+        travel(d, route("headland landing in", "diver", "S2 headland landing, played", HEADLAND_IN));
+      }
       else throw new Blocked(`${id} stands ashore with no authored landing`, where(d.state));
     }
     travel(d, route(`approach ${id}`, "diver", "local approach, played", [b]), `to ${id}`);
   } else {
     if (mode === "walking") toWater(d);
     const p = d.state.player.pose.position;
-    const direct = dist(p, b) < 30 && d.world.lineOfSight({ ...p, y: p.y + 0.5 }, { ...b, y: b.y + 0.5 }) &&
-      airSeconds(d) > dist(p, b) / 3 + -b.y / 3 + 25;
+    // Air is the nearest of the surface and a powered craft moored close by (a deep
+    // sortie's own craft): budget the swim there and back to it, not up 600 m.
+    // The target itself counts when it is that craft (the swim back from a deep sortie).
+    const craft = d.state.fleet.vehicles.filter((v) => !v.berth && !v.disabled && v.charge > 0 && (dist(v.pose.position, p) < 40 || v.id === id))
+      .map((v) => dist(v.pose.position, b)).sort((x, y) => x - y)[0];
+    const toAir = Math.min(-b.y / 3, craft === undefined ? Infinity : craft / 3);
+    // Beside a powered craft a longer clear swim is direct (a craft held above a deep
+    // source at its rating); elsewhere 30 m, then up and down through open water.
+    const direct = dist(p, b) < (craft === undefined ? 30 : 70) && d.world.lineOfSight({ ...p, y: p.y + 0.5 }, { ...b, y: b.y + 0.5 }) &&
+      airSeconds(d) > dist(p, b) / 3 + toAir + 25;
     if (direct) travel(d, route(`approach ${id}`, "diver", "local approach, played", [b]), `to ${id}`);
+    else if (-p.y / 3 + 25 > airSeconds(d))
+      // Surfacing from here would drown the diver: name it instead of trying.
+      throw new Blocked(`No clear swim to ${id} within reach of the craft, and the surface (${(-p.y).toFixed(0)} m up) is beyond suit air`, where(d.state));
     else {
       surfaceTo(d, b);
       breathe(d);

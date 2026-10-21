@@ -2,6 +2,7 @@ import type { RegionId } from "../registry.js";
 import type { Aabb } from "../../world/types.js";
 import { BRINE_Y, RIFT_AXIS } from "./terrain.js";
 import type { Protection } from "./passages.js";
+import { HAZARD_FIELDS } from "../ecology/hazards.js";
 
 /** Hazard volumes the ecology stream (S4) attaches behaviour to. Boxes are
  * conservative: a point inside is exposed. `protection` names the gear that
@@ -54,7 +55,10 @@ export const HAZARDS: readonly HazardDef[] = [
     bounds: box(-198, -548, -1098, -132, -215, -1032),
     cue: "A visible warm column over the split chimney; drifting particles rise fast inside it." },
   { id: "hazard.rift.chimney_pulse", region: "thermal_rift", kind: "heat", protection: "thermal",
-    bounds: box(-210, -548, -1110, -112, -380, -1020), cycle: { periodS: 90, activeS: 35 },
+    // C3: one clock for the chimney. The pulse IS S4's split-plume field (its period,
+    // vent window, mites, rings, captions and harm), keyed to the saved tick.
+    bounds: box(-210, -548, -1110, -112, -380, -1020),
+    cycle: { periodS: HAZARD_FIELDS.rift_split_plume.cycle.period, activeS: HAZARD_FIELDS.rift_split_plume.cycle.duration },
     cue: "The chimney breathes: fans beside it close a few seconds before each warm pulse spreads." },
   { id: "hazard.rift.vent_field", region: "thermal_rift", kind: "heat", protection: "thermal",
     bounds: box(-330, -570, -1300, -250, -440, -1210),

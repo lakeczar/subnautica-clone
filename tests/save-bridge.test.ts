@@ -209,7 +209,7 @@ test("converted earned fixtures load as current saves, gaining only C1's additiv
     assert.equal(JSON.stringify(JSON.parse(written)), JSON.stringify(withComposedFields(JSON.parse(raw))), `${name} writes in canonical order`);
     const again = decodeSave(written); assert.ok(again.ok); assert.equal(encoded(again.value), written, "the completed save is canonical");
     const original = JSON.parse(readFileSync(`tests/fixtures/archive/${archived}`, "utf8")) as { meta: unknown; state: GameState };
-    const { mobileRefuge: _r, ...player } = out.value.state.player;
+    const { mobileRefuge: _r, lamp: _lamp, ...player } = out.value.state.player;
     assert.deepEqual(player, original.state.player, "no relocation, vitals or ownership change");
     assert.deepEqual(out.value.meta, original.meta);
     assert.equal(out.value.state.tick, original.state.tick);

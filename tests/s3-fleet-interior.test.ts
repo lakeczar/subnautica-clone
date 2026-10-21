@@ -1,3 +1,4 @@
+import { BERTH_LOCAL } from "../src/sim/carrier.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { BERTH_ENVELOPES, HULL_COLLIDERS } from "../src/content/registry.js";
@@ -120,7 +121,7 @@ test("Proposed hull envelopes fit their carrier berth rooms and the lock; keels 
     const berth = hull.berth!, e = berth.envelope;
     const rooms = berth.size === "compact" ? CARRIER_LAYOUT.compact : [CARRIER_LAYOUT.medium];
     for (const [slot, room] of rooms.entries()) {
-      const c = slot === 0 ? { x: -3, z: 1 } : { x: 3, z: 1 };
+      const c = BERTH_LOCAL[slot]!;
       assert.ok(c.x - e.halfWidth >= room.min.x - 1e-9 && c.x + e.halfWidth <= room.max.x + 1e-9, `${hull.id} width fits ${room.id}`);
       assert.ok(c.z - e.halfLength >= room.min.z - 1e-9 && c.z + e.halfLength <= room.max.z + 1e-9, `${hull.id} length fits ${room.id}`);
       assert.ok(4 + e.height <= room.max.y, `${hull.id} height fits ${room.id}`);

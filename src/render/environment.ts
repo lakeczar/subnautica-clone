@@ -1,7 +1,8 @@
+import { PLACED_SOURCE_IDS } from "../content/worldSources.js";
 import type { GeometryCache } from "./geometryCache.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Scene } from "@babylonjs/core";
-import { terrainHeight, WORLD_BOUNDS } from "../sim/world.js";
+import { terrainHeight } from "../sim/world.js";
 import { INTERACTION_HOSTS, renewable, SOURCES } from "../content/registry.js";
 import { BASIN_SOURCE_IDS } from "../content/routes.js";
 import { type RenderRegion } from "./regions.js";
@@ -123,6 +124,7 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: Re
   // and tagged alloy sits on a fallen service frame. Hosts persist after harvest.
   // These skins sample the authoritative height field; they add no art-only shelf.
   for (const [id, source] of Object.entries(SOURCES)) {
+    if (PLACED_SOURCE_IDS.has(id)) continue;
     if (region && source.region !== region) continue;
     const { x, z } = source.position;
     if (BASIN_SOURCE_IDS.some(s => s === id)) {
@@ -231,29 +233,4 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: Re
   }
   if (!region || region === "refuge_reef" || region === "island_chain") stones.finish();
 
-  if (region && region !== "refuge_reef") return;
-  // Edge buoys are navigation context for this deliberately bounded early build.
-  const buoys = batch("foundation.edge-buoys");
-  for (const [x, z] of [
-    [WORLD_BOUNDS.minX + 2, 12],
-    [WORLD_BOUNDS.maxX - 2, 12],
-    [-38, WORLD_BOUNDS.maxZ - 2],
-    [38, WORLD_BOUNDS.maxZ - 2],
-    [-38, WORLD_BOUNDS.minZ + 2],
-    [48, WORLD_BOUNDS.minZ + 2],
-  ]) {
-    if (x === undefined || z === undefined) continue;
-    buoys.ellipsoid([x, 0.02, z], [0.45, 0.38, 0.45], P.ochre, 8);
-    buoys.tube(
-      [
-        [x, 0, z],
-        [x, 1.7, z],
-      ],
-      0.045,
-      P.petrol,
-      5,
-    );
-    buoys.box([x, 1.55, z], [0.48, 0.23, 0.04], P.porcelain);
-  }
-  buoys.finish();
 }

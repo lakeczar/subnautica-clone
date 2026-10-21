@@ -6,7 +6,8 @@ export const LEGACY_WORLD_BOUNDS = { minX: -76, maxX: 188, minZ: -184, maxZ: 66 
 export const ROUTE_WORLD_BOUNDS = { ...LEGACY_WORLD_BOUNDS, maxX: 248, minZ: -320 } as const;
 /** The M2-A Basin edge. Terrain north of it is unchanged by the fracture extension. */
 export const M2A_BASIN_MIN_Z = -260;
-export const WORLD_VERTICAL_BOUNDS = { minY: -300, maxY: 100 } as const;
+/** The S1 world frame: down to the deepest authored floor (about -785 m). */
+export const WORLD_VERTICAL_BOUNDS = { minY: -800, maxY: 100 } as const;
 
 /** Closed source order of the accepted heightfield. New patches MUST NOT enter it. */
 export const LEGACY_TERRAIN_SOURCE_IDS = [

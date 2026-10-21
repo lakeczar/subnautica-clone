@@ -5,7 +5,7 @@ import { SOURCES as EXPEDITION5_SOURCES } from "../src/save/expedition5/domain.j
 import { validExpedition5State } from "../src/save/expedition5/validation.js";
 import type { SaveEnvelope, SaveMetadata } from "../src/save/codec.js";
 import type { GameState } from "../src/sim/types.js";
-import { withComposedFields, withoutComposedFields } from "./persistence-support.js";
+import { C3_RESOURCES, S9_RESOURCES, withComposedFields, withoutComposedFields } from "./persistence-support.js";
 
 // Schema 4 / expedition.5 is the only bridged predecessor. Remove this file, the
 // bridge tests and src/save/expedition5/ together when the bridge retires.
@@ -16,9 +16,9 @@ export interface Schema4Envelope {
   meta: SaveMetadata;
   state: Expedition5State;
 }
-/** expedition.6 source IDs, in registry order. */
+/** expedition.6 source IDs, in registry order. Later additive sources (S9, C3) arrive with the composed fields. */
 export const CREEL_SOURCE_IDS = (Object.keys(SOURCES) as (keyof typeof SOURCES)[])
-  .filter(id => !Object.hasOwn(EXPEDITION5_SOURCES, id));
+  .filter(id => !Object.hasOwn(EXPEDITION5_SOURCES, id) && ![...S9_RESOURCES, ...C3_RESOURCES].some(r => r.id === id));
 /** Inverse of the declared expedition.6 additions, for constructing genuine schema4
  * inputs from pristine current states. Asserts nothing paid/earned is laundered. */
 export function stripCreelAdditions(state: GameState): Expedition5State {

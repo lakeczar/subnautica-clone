@@ -17,6 +17,15 @@ const POD_BENCH: Waypoint = { x: 0.6, y: 0.18, z: 19.6, land: true, tolerance: 0
 const WORKSHOP_OUT: Waypoint[] = [{ x: 10, y: 1.2, z: -31, land: true }, { x: 10, y: 0, z: -27.5, land: true }, { x: 10, y: -0.5, z: -25.5 }];
 const WORKSHOP_IN: Waypoint[] = [{ x: 10, y: -0.5, z: -25.5 }, { x: 10, y: 0, z: -28.5, land: true }, { x: 10, y: 1.2, z: -32, land: true }];
 const WORKSHOP_BENCH: Waypoint = { x: 10, y: 1.2, z: -35.2, land: true, tolerance: 0.3 };
+/** S2's headland landing (isles.headland_landing) and the 0.55 m/m slope up to the
+ * field shelter's terrace (C3): the only shore the harness walks besides the
+ * pod ramp and the workshop apron. */
+export const HEADLAND_IN: Waypoint[] = [{ x: 946, y: -0.5, z: -14 }, { x: 954.2, y: 0.71, z: -12.3, land: true },
+  { x: 966.4, y: 6.89, z: -9.7, land: true }, { x: 976, y: 9.86, z: -11.5, land: true },
+  // Round to the shelter hut's one door, in its south wall (x 982.6..984.4).
+  { x: 983.5, y: 10, z: -11.5, land: true }, { x: 983.5, y: 10, z: -7.5, land: true }];
+const HEADLAND_OUT: Waypoint[] = [...HEADLAND_IN].reverse().map((p, i, all) => i === all.length - 1 ? { ...p, land: false } : { ...p });
+export const nearHeadland = (p: { x: number; z: number }): boolean => Math.hypot(p.x - 970, p.z + 8) < 40;
 
 export const inPod = (d: Driver): boolean => nearPod(d.state);
 export const atWorkshop = (d: Driver): boolean => nearWorkshop(d.state);
@@ -30,6 +39,7 @@ export function toWater(d: Driver): void {
     [{ ...CANOPY_BASIN_ROUTE.labDiverInside, land: true }, { ...CANOPY_BASIN_ROUTE.labDiverEntry }]));
   else if (p.z > 4) travel(d, route("pod ramp out", "diver", "authored pod ramp, played", POD_OUT));
   else if (p.z < -24 && p.x > -5 && p.x < 25) travel(d, route("workshop apron out", "diver", "authored apron, played", WORKSHOP_OUT));
+  else if (nearHeadland(p)) travel(d, route("headland landing out", "diver", "S2 headland landing, played", HEADLAND_OUT));
   else throw new Blocked("Walking somewhere with no authored water entry", where(d.state));
 }
 
@@ -50,11 +60,15 @@ const swimmable = (d: Driver, x: number, z: number): boolean =>
 /** A* over a horizontal grid of `cell` metres, then shortcut by straight clear
  * segments. `open(x, z)` is a read-only world query; the path is played afterwards. */
 export function gridPath(from: Vec3, to: Vec3, y: number, cell: number, pad: number,
-  open: (x: number, z: number) => boolean, label: string): Vec3[] {
+  open: (x: number, z: number) => boolean, label: string, pass?: (x: number, z: number) => boolean): Vec3[] {
   const a = { x: from.x, y, z: from.z }, b = { x: to.x, y, z: to.z };
   const clear = (p: Vec3, q: Vec3): boolean => {
     const n = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.z - p.z) / (cell / 4)));
     for (let i = 0; i <= n; i++) if (!open(p.x + (q.x - p.x) * i / n, p.z + (q.z - p.z) * i / n)) return false;
+    return true;
+  };
+  const edge = (p: Vec3, q: Vec3): boolean => {
+    for (let i = 1; i < 8; i++) if (!pass!(p.x + (q.x - p.x) * i / 8, p.z + (q.z - p.z) * i / 8)) return false;
     return true;
   };
   if (clear(a, b)) return [b];
@@ -80,6 +94,8 @@ export function gridPath(from: Vec3, to: Vec3, y: number, cell: number, pad: num
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
       const ni = i + di, nj = j + dj;
       if (ni < 0 || nj < 0 || ni >= w || nj >= h || !(ok(ni, nj) || (ni === ti && nj === tj))) continue;
+      // Two open cells with a thin wall between (a cradle side) are not neighbours.
+      if (pass && !edge(at(i, j), at(ni, nj))) continue;
       const cost = g.get(key(i, j))! + Math.hypot(di, dj);
       if (cost < (g.get(key(ni, nj)) ?? Infinity)) {
         g.set(key(ni, nj), cost); came.set(key(ni, nj), key(i, j));
@@ -102,7 +118,8 @@ export function gridPath(from: Vec3, to: Vec3, y: number, cell: number, pad: num
 /** Surface route over open water (2 m grid). */
 export function surfacePath(d: Driver, from: Vec3, to: Vec3): Waypoint[] {
   try {
-    return gridPath(from, to, SURFACE_Y, 2, 40, (x, z) => swimmable(d, x, z), "surface")
+    return gridPath(from, to, SURFACE_Y, 2, 40, (x, z) => swimmable(d, x, z), "surface",
+      (x, z) => d.world.clearance({ x, y: SURFACE_Y, z }, { radius: SWIM.radius, height: SWIM.height }))
       .map((p, i, all) => i < all.length - 1 ? { ...p, tolerance: 0.6 } : p);
   } catch (e) {
     throw e instanceof Blocked ? new Blocked(e.message, where(d.state)) : e;

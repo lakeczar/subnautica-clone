@@ -124,9 +124,10 @@ export const need = {
     return builder ? need.recipe(builder[0]) : miss(`hull:${id}`, `no recipe builds the ${id}`);
   },
 };
-/** ASSUME/proposal: C3 hosts S5's upper-hall work face (restore_hall, restore_food) as
- * the interaction `works:<site>`; the gate hall's works use the `gate_panel` host. */
-export const worksFaceId = (site: string): string => `works:${site}`;
+/** C3's real hosts: the upper hall's restoration bay faces are `works:hall` and
+ * `works:food` ({type:"works"} restores either from either); the gate hall's
+ * works use the `gate_panel` host. */
+export const worksFaceId = (site: string): string => site === "meridian_upper_hall" ? "works:hall" : `works:${site}`;
 export function worksFace(site: string): Missing[] {
   return interactions(createGame()).some((t) => t.id === worksFaceId(site)) ? []
     : miss(`works-face:${site}`, `no works face host ${worksFaceId(site)} for S5's ${site}`);
