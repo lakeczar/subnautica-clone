@@ -22,19 +22,31 @@
     "source": "bake",
     "packedBytes": 6174762,
     "rawBytes": 12997104,
-    "fetchMs": 80.20000000298023,
-    "collisionMs": 780.8999999910593,
-    "mapMs": 975.3000000119209,
+    "fetchMs": 84.3999999910593,
+    "collisionMs": 844,
+    "mapMs": 4.9000000059604645,
     "collisionBytes": 20753191,
-    "occupancyBytes": 2949120,
-    "readyMs": 3225.7000000029802
+    "retained": [
+      {
+        "name": "bake",
+        "bytes": 12997104
+      },
+      {
+        "name": "colliders",
+        "bytes": 19963171
+      }
+    ],
+    "retainedBytes": 32960275,
+    "fixedCpu": 37154579,
+    "artMinimum": 20488294,
+    "readyMs": 2558.7999999970198
   },
   "runs": [
     {
       "route": "canopy_roots.route.craft_loop",
       "mode": "dart",
       "speed": 11,
-      "seconds": 22.682,
+      "seconds": 22.675,
       "finished": true,
       "end": {
         "x": 792.0128350174409,
@@ -45,31 +57,33 @@
       "dt": {
         "p50": 16.69999998807907,
         "p95": 16.80000001192093,
-        "p99": 17.599999994039536,
-        "max": 22.099999994039536
+        "p99": 17.400000005960464,
+        "max": 20.200000002980232
       },
       "cpu": {
         "p50": 0.29999999701976776,
         "p95": 0.5999999940395355,
-        "max": 1.9000000059604645
+        "max": 4.600000008940697
       },
-      "gpuMs": 4.0246272,
+      "gpuMs": 3.2683690666666667,
       "residencyMs": {
         "p95": 0.30000001192092896,
         "max": 3.5
       },
       "lampMs": {
         "p95": 1.6000000089406967,
-        "max": 1.8999999910593033
+        "max": 6.700000002980232
       },
       "step": {
         "calls": 1361,
-        "meanUs": 59.29463661654218,
-        "maxUs": 700.0000029802322
+        "meanUs": 47.391623641794695,
+        "maxUs": 299.99999701976776
       },
       "coverage": {
         "frames": 1361,
         "failures": 0,
+        "unsafeMetres": 0,
+        "exposedStill": 0,
         "first": ""
       },
       "residency": {
@@ -80,12 +94,12 @@
         "prepared": 0,
         "uploading": 0,
         "shown": 90,
-        "hidden": 29,
-        "cpuBytes": 40703233,
-        "gpuBytes": 17000922,
-        "gpuAllocatedBytes": 14903770,
-        "shownGpuBytes": 14474918,
-        "hiddenGpuBytes": 428852,
+        "hidden": 11,
+        "cpuBytes": 51634279,
+        "gpuBytes": 16576852,
+        "gpuAllocatedBytes": 14479700,
+        "shownGpuBytes": 14170066,
+        "hiddenGpuBytes": 309634,
         "overBudget": false,
         "demoted": 0,
         "held": 0,
@@ -102,8 +116,8 @@
         "uploadOverrunBytes": 0,
         "pending": 0,
         "totals": {
-          "built": 119,
-          "uploaded": 119,
+          "built": 101,
+          "uploaded": 101,
           "cancelled": 0,
           "evicted": 0,
           "discarded": 0,
@@ -116,7 +130,7 @@
       "route": "canopy_roots.route.west_loop",
       "mode": "dart",
       "speed": 11,
-      "seconds": 21.711,
+      "seconds": 21.713,
       "finished": true,
       "end": {
         "x": 739.5075838131922,
@@ -125,33 +139,35 @@
       },
       "frames": 1303,
       "dt": {
-        "p50": 16.69999998807907,
+        "p50": 16.700000002980232,
         "p95": 16.799999997019768,
-        "p99": 16.899999991059303,
-        "max": 19.5
+        "p99": 17.100000008940697,
+        "max": 19.700000002980232
       },
       "cpu": {
         "p50": 0.29999999701976776,
         "p95": 0.4000000059604645,
-        "max": 1.0999999940395355
+        "max": 4.299999997019768
       },
-      "gpuMs": 4.341028571428572,
+      "gpuMs": 3.5501419354838712,
       "residencyMs": {
-        "p95": 0.29999999701976776,
-        "max": 8.300000011920929
+        "p95": 0.30000001192092896,
+        "max": 5.199999988079071
       },
       "lampMs": {
         "p95": 1.6000000089406967,
-        "max": 1.7000000029802322
+        "max": 2.4000000059604645
       },
       "step": {
         "calls": 1303,
-        "meanUs": 51.112816423886756,
-        "maxUs": 299.99999701976776
+        "meanUs": 44.89639276783007,
+        "maxUs": 300.00001192092896
       },
       "coverage": {
         "frames": 1303,
         "failures": 0,
+        "unsafeMetres": 0,
+        "exposedStill": 0,
         "first": ""
       },
       "residency": {
@@ -162,12 +178,12 @@
         "prepared": 0,
         "uploading": 0,
         "shown": 90,
-        "hidden": 48,
-        "cpuBytes": 40666041,
-        "gpuBytes": 16963730,
-        "gpuAllocatedBytes": 14866578,
+        "hidden": 39,
+        "cpuBytes": 52689491,
+        "gpuBytes": 17632064,
+        "gpuAllocatedBytes": 15534912,
         "shownGpuBytes": 13308166,
-        "hiddenGpuBytes": 1558412,
+        "hiddenGpuBytes": 2226746,
         "overBudget": false,
         "demoted": 0,
         "held": 0,
@@ -184,10 +200,10 @@
         "uploadOverrunBytes": 0,
         "pending": 0,
         "totals": {
-          "built": 161,
-          "uploaded": 161,
+          "built": 129,
+          "uploaded": 129,
           "cancelled": 0,
-          "evicted": 23,
+          "evicted": 0,
           "discarded": 0,
           "overBudgetDiscards": 0
         }
@@ -198,7 +214,7 @@
       "route": "canopy_roots.route.craft_loop",
       "mode": "creel",
       "speed": 6.5,
-      "seconds": 38.303,
+      "seconds": 38.298,
       "finished": true,
       "end": {
         "x": 792.0272659159943,
@@ -208,32 +224,34 @@
       "frames": 2298,
       "dt": {
         "p50": 16.69999998807907,
-        "p95": 16.80000001192093,
-        "p99": 17.299999997019768,
-        "max": 23
+        "p95": 16.799999997019768,
+        "p99": 16.900000005960464,
+        "max": 23.799999997019768
       },
       "cpu": {
-        "p50": 0.29999999701976776,
-        "p95": 0.7000000029802322,
-        "max": 1.3999999910593033
+        "p50": 0.20000000298023224,
+        "p95": 0.4000000059604645,
+        "max": 2.5
       },
-      "gpuMs": 4.1398784,
+      "gpuMs": 3.430161066666667,
       "residencyMs": {
-        "p95": 0.7999999970197678,
-        "max": 7.200000002980232
+        "p95": 0.30000001192092896,
+        "max": 0.6000000089406967
       },
       "lampMs": {
-        "p95": 1.7000000029802322,
-        "max": 2.699999988079071
+        "p95": 1.5999999940395355,
+        "max": 7.5
       },
       "step": {
         "calls": 2297,
-        "meanUs": 60.60078341804176,
-        "maxUs": 299.99999701976776
+        "meanUs": 40.35698715556846,
+        "maxUs": 200.00000298023224
       },
       "coverage": {
         "frames": 2298,
         "failures": 0,
+        "unsafeMetres": 0,
+        "exposedStill": 0,
         "first": ""
       },
       "residency": {
@@ -244,12 +262,12 @@
         "prepared": 0,
         "uploading": 0,
         "shown": 90,
-        "hidden": 48,
-        "cpuBytes": 41427845,
-        "gpuBytes": 17725534,
-        "gpuAllocatedBytes": 15628382,
-        "shownGpuBytes": 14474918,
-        "hiddenGpuBytes": 1153464,
+        "hidden": 39,
+        "cpuBytes": 52689491,
+        "gpuBytes": 17632064,
+        "gpuAllocatedBytes": 15534912,
+        "shownGpuBytes": 14170066,
+        "hiddenGpuBytes": 1364846,
         "overBudget": false,
         "demoted": 0,
         "held": 0,
@@ -266,10 +284,10 @@
         "uploadOverrunBytes": 0,
         "pending": 0,
         "totals": {
-          "built": 181,
-          "uploaded": 181,
+          "built": 129,
+          "uploaded": 129,
           "cancelled": 0,
-          "evicted": 43,
+          "evicted": 0,
           "discarded": 0,
           "overBudgetDiscards": 0
         }
@@ -290,32 +308,34 @@
       "frames": 832,
       "dt": {
         "p50": 16.700000002980232,
-        "p95": 16.799999997019768,
-        "p99": 16.900000005960464,
-        "max": 20.799999997019768
+        "p95": 16.80000001192093,
+        "p99": 17.200000002980232,
+        "max": 19.700000002980232
       },
       "cpu": {
         "p50": 0.29999999701976776,
         "p95": 0.4000000059604645,
-        "max": 1.5
+        "max": 0.6000000089406967
       },
-      "gpuMs": 4.403297523809524,
+      "gpuMs": 3.668727741935484,
       "residencyMs": {
         "p95": 0.30000001192092896,
-        "max": 3.0999999940395355
+        "max": 0.6000000089406967
       },
       "lampMs": {
-        "p95": 1.6000000089406967,
-        "max": 2.800000011920929
+        "p95": 1.5999999940395355,
+        "max": 1.7000000029802322
       },
       "step": {
         "calls": 832,
-        "meanUs": 41.225961570699624,
-        "maxUs": 300.00001192092896
+        "meanUs": 34.735576733230396,
+        "maxUs": 200.00000298023224
       },
       "coverage": {
         "frames": 832,
         "failures": 0,
+        "unsafeMetres": 0,
+        "exposedStill": 0,
         "first": ""
       },
       "residency": {
@@ -326,12 +346,12 @@
         "prepared": 0,
         "uploading": 0,
         "shown": 90,
-        "hidden": 48,
-        "cpuBytes": 41240449,
-        "gpuBytes": 17538138,
-        "gpuAllocatedBytes": 15440986,
+        "hidden": 39,
+        "cpuBytes": 52689491,
+        "gpuBytes": 17632064,
+        "gpuAllocatedBytes": 15534912,
         "shownGpuBytes": 12546060,
-        "hiddenGpuBytes": 2894926,
+        "hiddenGpuBytes": 2988852,
         "overBudget": false,
         "demoted": 0,
         "held": 0,
@@ -348,10 +368,10 @@
         "uploadOverrunBytes": 0,
         "pending": 0,
         "totals": {
-          "built": 191,
-          "uploaded": 191,
+          "built": 129,
+          "uploaded": 129,
           "cancelled": 0,
-          "evicted": 53,
+          "evicted": 0,
           "discarded": 0,
           "overBudgetDiscards": 0
         }
@@ -362,7 +382,7 @@
       "route": "canopy_roots.route.pool_spur",
       "mode": "dart",
       "speed": 16,
-      "seconds": 4.298,
+      "seconds": 4.301,
       "finished": true,
       "end": {
         "x": 861.2951337530334,
@@ -371,33 +391,35 @@
       },
       "frames": 258,
       "dt": {
-        "p50": 16.700000002980232,
+        "p50": 16.69999998807907,
         "p95": 16.900000005960464,
-        "p99": 18.700000002980232,
-        "max": 19.700000002980232
+        "p99": 18.400000005960464,
+        "max": 21.099999994039536
       },
       "cpu": {
-        "p50": 0.29999999701976776,
-        "p95": 0.4000000059604645,
-        "max": 0.7999999970197678
+        "p50": 0.20000000298023224,
+        "p95": 0.30000001192092896,
+        "max": 1
       },
-      "gpuMs": 3.7974528,
+      "gpuMs": 3.517506064516129,
       "residencyMs": {
-        "p95": 0.3999999910593033,
-        "max": 7.5
+        "p95": 0.4000000059604645,
+        "max": 7.399999991059303
       },
       "lampMs": {
         "p95": 1.6000000089406967,
-        "max": 2.5
+        "max": 1.7000000029802322
       },
       "step": {
         "calls": 258,
-        "meanUs": 82.55813940781955,
-        "maxUs": 300.00001192092896
+        "meanUs": 70.15503885210022,
+        "maxUs": 200.00000298023224
       },
       "coverage": {
         "frames": 258,
         "failures": 0,
+        "unsafeMetres": 0,
+        "exposedStill": 0,
         "first": ""
       },
       "residency": {
@@ -409,11 +431,11 @@
         "uploading": 0,
         "shown": 90,
         "hidden": 48,
-        "cpuBytes": 42186737,
-        "gpuBytes": 18484426,
-        "gpuAllocatedBytes": 16387274,
-        "shownGpuBytes": 9187612,
-        "hiddenGpuBytes": 7199662,
+        "cpuBytes": 53556203,
+        "gpuBytes": 18498776,
+        "gpuAllocatedBytes": 16401624,
+        "shownGpuBytes": 8952862,
+        "hiddenGpuBytes": 7448762,
         "overBudget": false,
         "demoted": 0,
         "held": 0,
@@ -430,10 +452,10 @@
         "uploadOverrunBytes": 0,
         "pending": 0,
         "totals": {
-          "built": 213,
-          "uploaded": 213,
+          "built": 147,
+          "uploaded": 147,
           "cancelled": 0,
-          "evicted": 75,
+          "evicted": 9,
           "discarded": 0,
           "overBudgetDiscards": 0
         }
@@ -441,10 +463,169 @@
       "draws": 7
     }
   ],
+  "stress": [
+    {
+      "case": "budget 32 MiB",
+      "shareOk": false,
+      "fixed": {
+        "cpu": 37154579,
+        "gpu": 2097152
+      },
+      "artMinimum": 20488294,
+      "gated": 726,
+      "coverage": {
+        "frames": 0,
+        "failures": 0,
+        "unsafeMetres": 0,
+        "exposedStill": 0,
+        "first": ""
+      },
+      "position": {
+        "x": 757.5,
+        "y": -66,
+        "z": -69
+      },
+      "held": true,
+      "residency": {
+        "frame": 727,
+        "desired": 90,
+        "withinBudget": 0,
+        "building": 0,
+        "prepared": 0,
+        "uploading": 0,
+        "shown": 0,
+        "hidden": 0,
+        "cpuBytes": 37154579,
+        "gpuBytes": 2097152,
+        "gpuAllocatedBytes": 0,
+        "shownGpuBytes": 0,
+        "hiddenGpuBytes": 0,
+        "overBudget": true,
+        "demoted": 0,
+        "held": 0,
+        "cut": 90,
+        "refused": [],
+        "deferred": 0,
+        "settled": false,
+        "buildMs": 0,
+        "buildSteps": 0,
+        "maxStepMs": 0,
+        "uploadMs": 0,
+        "uploads": 0,
+        "uploadedBytes": 0,
+        "uploadOverrunBytes": 0,
+        "pending": 0,
+        "totals": {
+          "built": 0,
+          "uploaded": 0,
+          "cancelled": 0,
+          "evicted": 0,
+          "discarded": 0,
+          "overBudgetDiscards": 0
+        }
+      }
+    },
+    {
+      "case": "share reduced by 16 MiB after entry",
+      "budgetMiB": 59,
+      "before": {
+        "gated": 2,
+        "p": {
+          "x": 755.1396660065442,
+          "y": -107.10889962293626,
+          "z": -88.36463060300012
+        }
+      },
+      "during": {
+        "gated": 242,
+        "p": {
+          "x": 755.1396660065442,
+          "y": -107.10889962293626,
+          "z": -88.36463060300012
+        },
+        "held": true
+      },
+      "finished": true,
+      "report": {
+        "frames": 1233,
+        "dt": {
+          "p50": 16.69999998807907,
+          "p95": 16.80000001192093,
+          "p99": 18,
+          "max": 20.099999994039536
+        },
+        "cpu": {
+          "p50": 0.29999999701976776,
+          "p95": 0.5999999940395355,
+          "max": 3.5999999940395355
+        },
+        "gpuMs": 3.059513806451613,
+        "residencyMs": {
+          "p95": 0.30000001192092896,
+          "max": 8.199999988079071
+        },
+        "lampMs": {
+          "p95": 1.6000000089406967,
+          "max": 1.8999999910593033
+        },
+        "step": {
+          "calls": 1239,
+          "meanUs": 58.75706202421966,
+          "maxUs": 1099.9999940395355
+        },
+        "coverage": {
+          "frames": 1237,
+          "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 246,
+          "first": ""
+        },
+        "residency": {
+          "frame": 1240,
+          "desired": 90,
+          "withinBudget": 90,
+          "building": 0,
+          "prepared": 0,
+          "uploading": 0,
+          "shown": 90,
+          "hidden": 15,
+          "cpuBytes": 51984573,
+          "gpuBytes": 16927146,
+          "gpuAllocatedBytes": 14829994,
+          "shownGpuBytes": 14420988,
+          "hiddenGpuBytes": 409006,
+          "overBudget": false,
+          "demoted": 0,
+          "held": 0,
+          "cut": 0,
+          "refused": [],
+          "deferred": 0,
+          "settled": true,
+          "buildMs": 0,
+          "buildSteps": 0,
+          "maxStepMs": 0,
+          "uploadMs": 0,
+          "uploads": 0,
+          "uploadedBytes": 0,
+          "uploadOverrunBytes": 0,
+          "pending": 0,
+          "totals": {
+            "built": 158,
+            "uploaded": 158,
+            "cancelled": 0,
+            "evicted": 53,
+            "discarded": 0,
+            "overBudgetDiscards": 0
+          }
+        },
+        "draws": 3
+      }
+    }
+  ],
   "drive": {
     "reachedWaypoints": 14,
     "of": 14,
-    "seconds": 26.743,
+    "seconds": 23.126,
     "log": [
       {
         "label": "start",
@@ -455,268 +636,302 @@
         },
         "held": false,
         "cov": {
-          "frames": 4,
+          "frames": 5,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 1",
         "p": {
-          "x": 757.1145980010557,
-          "y": -76.60934666921364,
-          "z": -71.01851945116962
+          "x": 757.0885070927878,
+          "y": -76.71579519246657,
+          "z": -71.11624972856184
         },
         "held": false,
         "cov": {
-          "frames": 67,
+          "frames": 69,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 2",
         "p": {
-          "x": 755.7637587544502,
-          "y": -97.55474710423043,
-          "z": -82.84031718131517
+          "x": 755.7608235090872,
+          "y": -97.68763954617867,
+          "z": -82.87612081707844
         },
         "held": false,
         "cov": {
-          "frames": 235,
+          "frames": 237,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 3",
         "p": {
-          "x": 754.4583847753358,
-          "y": -120.15606969203473,
-          "z": -94.37394117452365
+          "x": 754.4536357252514,
+          "y": -120.2848560392001,
+          "z": -94.41339330333312
         },
         "held": false,
         "cov": {
-          "frames": 412,
+          "frames": 414,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 4",
         "p": {
-          "x": 758.0538179773248,
-          "y": -127.13264264692388,
-          "z": -98.85981106145354
+          "x": 758.090066483764,
+          "y": -127.23390955016319,
+          "z": -98.89652487171185
         },
         "held": false,
         "cov": {
-          "frames": 475,
+          "frames": 477,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 5",
         "p": {
-          "x": 766.9979500299644,
-          "y": -129.45373169836085,
-          "z": -103.93229375324661
+          "x": 767.2004902205758,
+          "y": -129.51147722091451,
+          "z": -104.03577461516952
         },
         "held": false,
         "cov": {
-          "frames": 538,
+          "frames": 541,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 6",
         "p": {
-          "x": 789.0961766271898,
-          "y": -130.558182949058,
-          "z": -111.734719121407
+          "x": 789.2926991466024,
+          "y": -130.55856258008666,
+          "z": -111.79498375254767
         },
         "held": false,
         "cov": {
-          "frames": 667,
+          "frames": 670,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 7",
         "p": {
-          "x": 804.0037982510837,
-          "y": -134.87007364427862,
-          "z": -121.89594352152136
+          "x": 804.1420303536557,
+          "y": -134.92915188791414,
+          "z": -121.99666257662182
         },
         "held": false,
         "cov": {
-          "frames": 772,
+          "frames": 775,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 8",
         "p": {
-          "x": 816.0744698319885,
-          "y": -141.3945693200559,
-          "z": -134.02877392605174
+          "x": 814.045636075605,
+          "y": -140.01504548814827,
+          "z": -131.90467751501154
         },
         "held": false,
         "cov": {
-          "frames": 877,
+          "frames": 860,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 9",
         "p": {
-          "x": 808.4112618897418,
-          "y": -147.9388049633624,
-          "z": -147.08057560983963
+          "x": 807.1543164125914,
+          "y": -146.70310779537857,
+          "z": -149.11782500013166
         },
         "held": false,
         "cov": {
-          "frames": 1240,
+          "frames": 986,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 10",
         "p": {
-          "x": 809.0356685134433,
-          "y": -147.97544302384333,
-          "z": -156.68309874419603
+          "x": 808.7075399487637,
+          "y": -148.44876785043516,
+          "z": -157.76710212827538
         },
         "held": false,
         "cov": {
-          "frames": 1303,
+          "frames": 1050,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 11",
         "p": {
-          "x": 805.9887505842057,
-          "y": -148.99056535838116,
-          "z": -169.29881143315896
+          "x": 804.8556549532575,
+          "y": -149.2058247675358,
+          "z": -169.34442405925657
         },
         "held": false,
         "cov": {
-          "frames": 1387,
+          "frames": 1161,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 12",
         "p": {
-          "x": 797.2016672516656,
-          "y": -150.56314297117603,
-          "z": -179.51482652501605
+          "x": 797.7465671648055,
+          "y": -150.35942439229387,
+          "z": -177.98937806796488
         },
         "held": false,
         "cov": {
-          "frames": 1462,
+          "frames": 1224,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 13",
         "p": {
-          "x": 792.753944345197,
-          "y": -151.74349795841508,
-          "z": -189.80722352843827
+          "x": 793.4649133283847,
+          "y": -151.4923977262852,
+          "z": -188.4813613853134
         },
         "held": false,
         "cov": {
-          "frames": 1525,
+          "frames": 1287,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "waypoint 14",
         "p": {
-          "x": 791.776595334617,
-          "y": -151.8255497754002,
-          "z": -205.05900946755455
+          "x": 791.8553059218061,
+          "y": -151.64787703828154,
+          "z": -207.70375168186243
         },
         "held": false,
         "cov": {
-          "frames": 1609,
+          "frames": 1393,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       },
       {
         "label": "end",
         "p": {
-          "x": 791.776595334617,
-          "y": -151.8255497754002,
-          "z": -205.05900946755455
+          "x": 791.8553059218061,
+          "y": -151.64787703828154,
+          "z": -207.70375168186243
         },
         "held": false,
         "cov": {
-          "frames": 1609,
+          "frames": 1393,
           "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
           "first": ""
         }
       }
     ],
     "report": {
-      "frames": 1617,
+      "frames": 1399,
       "dt": {
         "p50": 16.69999998807907,
-        "p95": 16.899999991059303,
-        "p99": 17.299999997019768,
-        "max": 37.20000000298023
+        "p95": 16.900000005960464,
+        "p99": 17.799999997019768,
+        "max": 37.900000005960464
       },
       "cpu": {
-        "p50": 0.29999999701976776,
-        "p95": 0.5999999940395355,
-        "max": 11.799999997019768
+        "p50": 0.4000000059604645,
+        "p95": 0.800000011920929,
+        "max": 10.300000011920929
       },
-      "gpuMs": 3.275458206896552,
+      "gpuMs": 2.779631483870968,
       "residencyMs": {
-        "p95": 0.30000001192092896,
-        "max": 18.19999998807907
+        "p95": 1,
+        "max": 9.799999997019768
       },
       "lampMs": {
-        "p95": 1.6000000089406967,
-        "max": 6
+        "p95": 2,
+        "max": 4
       },
       "step": {
-        "calls": 1611,
-        "meanUs": 75.6052140028561,
-        "maxUs": 1500
+        "calls": 1399,
+        "meanUs": 99.71408180631511,
+        "maxUs": 4200.000002980232
       },
       "coverage": {
-        "frames": 1612,
+        "frames": 1396,
         "failures": 0,
+        "unsafeMetres": 0,
+        "exposedStill": 0,
         "first": ""
       },
       "residency": {
-        "frame": 1617,
+        "frame": 1399,
         "desired": 90,
         "withinBudget": 90,
         "building": 0,
         "prepared": 0,
         "uploading": 0,
         "shown": 90,
-        "hidden": 29,
-        "cpuBytes": 40703233,
-        "gpuBytes": 17000922,
-        "gpuAllocatedBytes": 14903770,
-        "shownGpuBytes": 14474918,
-        "hiddenGpuBytes": 428852,
+        "hidden": 11,
+        "cpuBytes": 51634279,
+        "gpuBytes": 16576852,
+        "gpuAllocatedBytes": 14479700,
+        "shownGpuBytes": 14170066,
+        "hiddenGpuBytes": 309634,
         "overBudget": false,
         "demoted": 0,
         "held": 0,
@@ -733,8 +948,8 @@
         "uploadOverrunBytes": 0,
         "pending": 0,
         "totals": {
-          "built": 119,
-          "uploaded": 119,
+          "built": 101,
+          "uploaded": 101,
           "cancelled": 0,
           "evicted": 0,
           "discarded": 0,
