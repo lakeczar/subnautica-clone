@@ -28,6 +28,26 @@ test("Canopy: ownership holds, the biome is about 250 m with 4-5 main zones and 
   assert.ok(S.sockets.every(s => !/[A-Z]/.test(s.kind)));
 });
 
+test("Canopy field: continuous round every surface (no primitive culled while it still shapes the rock)", () => {
+  // A culled piece shows as a step: two points 0.1 m apart whose values
+  // differ by far more than their distance.
+  const rnd = random(31), anchors = S.routes.flatMap(r => r.path);
+  let worst = 0, at = "";
+  for (let i = 0; i < 20000; i++) {
+    const a = anchors[Math.floor(rnd() * anchors.length)]!;
+    const p = { x: a.x + (rnd() - 0.5) * 24, y: a.y + (rnd() - 0.5) * 24, z: a.z + (rnd() - 0.5) * 24 };
+    const d = [rnd() - 0.5, rnd() - 0.5, rnd() - 0.5], l = Math.hypot(...d) / 0.1;
+    const q = { x: p.x + d[0]! / l, y: p.y + d[1]! / l, z: p.z + d[2]! / l };
+    // Deep in rock the field may fall back to the seabed distance (still rock):
+    // only the band round the surface shapes meshes, light and sweeps.
+    const fp = field.rock(p.x, p.y, p.z), fq = field.rock(q.x, q.y, q.z);
+    if (Math.min(Math.abs(fp), Math.abs(fq)) > 1) continue;
+    const jump = Math.abs(fp - fq);
+    if (jump > worst) { worst = jump; at = JSON.stringify(p); }
+  }
+  assert.ok(worst < 0.3, `field steps ${worst.toFixed(2)} m over 0.1 m near ${at}`);
+});
+
 test("Canopy portals: each clear rectangle is open water and admits exactly its profiles", () => {
   for (const p of S.portals) {
     const n = p.normal, nl = Math.hypot(n.x, n.y, n.z), u = Math.abs(n.y / nl) > 0.9 ? { x: 1, y: 0, z: 0 } : { x: -n.z / Math.hypot(n.x, n.z), y: 0, z: n.x / Math.hypot(n.x, n.z) };

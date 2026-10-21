@@ -25,7 +25,7 @@ export const VAULT: LargeCaveSource = {
   ],
   carves: [
     { kind: "chamber", id: "vault.main", zone: "vault.main", wobble: 0.5, center: { x: 32, y: -70, z: 24 }, radii: { x: 13, z: 11, up: 7, down: 5 }, yaw: 0, floor: -74 },
-    { kind: "shaft", id: "vault.shaft", zone: "vault.main", wobble: 0.4, bottom: { x: 32, y: -66, z: 30 }, top: { x: 32, y: -38, z: 40 }, radius: 4.5, flare: 2 },
+    { kind: "shaft", id: "vault.shaft", zone: "vault.main", wobble: 0.4, bottom: { x: 32, y: -66, z: 30 }, top: { x: 32, y: -40, z: 40 }, radius: 4.5, flare: 2 },
     { kind: "tunnel", id: "vault.squeeze", zone: "vault.side", wobble: 0.25, nodes: [
       { x: 20, y: -73, z: 22, width: 2.8, height: 2.6 }, { x: 15, y: -73, z: 18, width: 2.6, height: 2.5 }, { x: 11, y: -73.5, z: 14, width: 2.8, height: 2.6 },
     ] },

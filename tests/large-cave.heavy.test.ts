@@ -61,20 +61,22 @@ test("Canopy coarse LOD never crosses any route's profile box", () => {
   }
 });
 
-test("Canopy agreement: 40,000 independent probes over the whole biome agree with collision", () => {
-  const rnd = random(23), d = S.domain;
+test("Canopy agreement: 40,000 independent probes round every route agree with collision", () => {
+  const rnd = random(23), anchors = S.routes.flatMap(r => r.path);
   let checked = 0;
   const wrong: string[] = [];
   for (let i = 0; i < 40000; i++) {
-    const p = { x: d.min.x + rnd() * (d.max.x - d.min.x), y: -195 + rnd() * 120, z: d.min.z + rnd() * (d.max.z - d.min.z) };
-    // Near the cave only: within 6 m of carved water.
-    if (!cave.field.owned(p.x, p.y, p.z) || cave.field.water(p.x, p.y, p.z).distance > 6) continue;
+    // Uniform in a 16 m cube round a random route point: walls, floors,
+    // roofs, pillars and blocks all fall inside these.
+    const a = anchors[Math.floor(rnd() * anchors.length)]!;
+    const p = { x: a.x + (rnd() - 0.5) * 16, y: a.y + (rnd() - 0.5) * 16, z: a.z + (rnd() - 0.5) * 16 };
+    if (!cave.field.owned(p.x, p.y, p.z)) continue;
     const f = cave.field.rock(p.x, p.y, p.z);
     if (Math.abs(f) < 0.35) continue;
     checked++;
     if ((f < 0) !== inRock(p)) wrong.push(`(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}) field ${f.toFixed(2)}`);
   }
-  assert.ok(checked > 5000, `only ${checked} probes near the cave`);
+  assert.ok(checked > 20000, `only ${checked} probes near the cave`);
   assert.deepEqual(wrong.slice(0, 5), []);
 });
 

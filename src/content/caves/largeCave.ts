@@ -52,7 +52,8 @@ export interface ChamberCarve extends CarveBase {
   /** Flat water floor, metres (clips the lower half). */
   readonly floor: number;
 }
-/** A round shaft from `bottom` to `top`, widening by `flare` at the top. */
+/** A round shaft from `bottom` to `top` with rounded ends, widening by
+ * `flare` towards the top. */
 export interface ShaftCarve extends CarveBase {
   readonly kind: "shaft";
   readonly bottom: Vec3;
