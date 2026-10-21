@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Siltwake · field journal lab (SYS-2)</title>
+  <style>
+    :root { color-scheme: dark; --bg: #0b1418; --panel: #10222a; --fg: #d8e6e3; --mute: #7f9a97; --line: #1d3036; --accent: #4fb3c8; }
+    body { margin: 0; padding: 18px 22px; background: var(--bg); color: var(--fg); font: 13px/1.45 system-ui, sans-serif; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    p.note { color: var(--mute); margin: 0 0 12px; max-width: 80ch; }
+    nav { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+    nav button { background: #17323a; color: var(--fg); border: 1px solid #2a5260; border-radius: 6px 6px 0 0; padding: 6px 12px; cursor: pointer; }
+    nav button.on { background: var(--accent); color: #062026; border-color: var(--accent); }
+    nav small, h3 small { color: var(--mute); font-weight: 400; }
+    nav button.on small { color: #0b3b45; }
+    #q { width: min(520px, 100%); padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); color: var(--fg); border-radius: 6px; margin-bottom: 10px; }
+    .cols { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; }
+    main { background: var(--panel); border-radius: 8px; padding: 8px 14px; max-height: 76vh; overflow: auto; }
+    aside { background: var(--panel); border-radius: 8px; padding: 8px 14px; }
+    h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); margin: 14px 0 6px; }
+    details.entry { border-bottom: 1px solid var(--line); padding: 5px 0; }
+    details.entry summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    details.entry .title { font-weight: 600; }
+    details.entry .sub { color: var(--mute); }
+    details.entry p { margin: 4px 0 4px 16px; }
+    details.entry[data-status="unknown"] .title::after { content: " ?"; color: #f2b94d; }
+    details.entry[data-status="locked"] .title::before { content: "🔒 "; }
+    details.entry[data-status="active"] .title::before { content: "◔ "; color: var(--accent); }
+    .tag { font-size: 11px; padding: 0 6px; border-radius: 8px; background: #17323a; color: var(--mute); }
+    .from { font-size: 11px; color: var(--accent); margin-top: 6px; text-transform: uppercase; }
+    .empty { color: var(--mute); }
+  </style>
+</head>
+<body>
+  <h1>Siltwake field journal lab · SYS-2</h1>
+  <p class="note">A rough mock over a scripted mid-game state: one standard outpost with a decoder, planter and survey station, one decode finished and one running,
+    a growing planter, demo creatures and a demo cycle. Tabs, sections, folding entries and search come from the
+    <code>buildJournal</code> model; the layout is not the final UI.</p>
+  <div id="app"></div>
+  <script type="module" src="./journal-lab.ts"></script>
+</body>
+</html>
