@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ExpeditionSession } from "../src/runtime/session.js";
+import { ExpeditionSession, UNSAVEABLE_RETRY_TICKS } from "../src/runtime/session.js";
+import { addItem } from "../src/sim/inventory.js";
 import { MAX_SAVE_BYTES } from "../src/save/codec.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import type { NoticeOptions } from "../src/sim/types.js";
@@ -160,4 +161,27 @@ test("legacy callbacks taking only message/error remain compatible", async () =>
     changed() {}, pause() {}, entered() {}, notify(message, error) { received.push([message, error]); },
   });
   session.newGame(); await settled(); assert.equal(received.length, 1); assert.equal(received[0]![1], false);
+});
+
+test("C3-R1: an unsaveable moment keeps automatic saving on, retries soon and resumes when the state is valid", async () => {
+  const f = await seeded(); f.session.continueGame();
+  const s = f.session.state!; s.tick += 1800;
+  // Diagnostic overflow: 30 CU in the 16 CU diver hold fails save validation.
+  addItem(s, "meal", 30, "diver");
+  const before = f.storage.getItem(LOCAL_SAVE_KEY);
+  f.session.autosave(); await settled();
+  assert.match(last(f, "persistence", true).message, /cannot be saved; automatic saving will try again/);
+  assert.equal(f.session.autoSaveAllowed, true);
+  assert.match(f.session.persistenceMessage, /retries every few seconds/);
+  assert.equal(f.storage.getItem(LOCAL_SAVE_KEY), before, "the last valid record is untouched");
+  // Still unsaveable: the retry is quiet.
+  const count = f.notices.length;
+  s.tick += UNSAVEABLE_RETRY_TICKS; f.session.autosave(); await settled();
+  assert.equal(f.notices.length, count);
+  // Valid again: the next retry writes and says so.
+  s.inventory.items = s.inventory.items.filter((i) => !(i.kind === "meal" && i.quantity === 30));
+  s.tick += UNSAVEABLE_RETRY_TICKS; f.session.autosave(); await settled();
+  assert.equal(last(f, "persistence", false).message, "Saved locally · automatic saving resumed");
+  assert.equal(f.repository.status.save?.state.tick, s.tick);
+  assert.equal(f.session.persistenceMessage, "");
 });

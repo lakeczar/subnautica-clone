@@ -12,6 +12,7 @@ import { DETERRENT_SECONDS, MAX_DETERRENTS, stepEcology } from "./ecology/ecolog
 import { protectionFor } from "./ecology/hazards.js";
 import { stimulusFrom } from "./ecology/stimulus.js";
 import type { EcologyWorld, Stimulus } from "./ecology/types.js";
+import { NO_ACTOR } from "./ecology/types.js";
 import { hullHandling } from "./fleet.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import { facility, stopWorks } from "./inventory.js";
@@ -127,3 +128,11 @@ export const lampOn = (s: GameState): boolean => {
   const v = controlled(s);
   return s.player.lamp && (!v || (v.charge > 0 && !v.disabled));
 };
+
+/** A vehicle leaving the fleet (salvage) takes its hull exposure with it, and a
+ * controlled-actor sentinel naming it returns to "none", in the same transaction. */
+export function forgetEcologyHull(s: GameState, vehicleId: string): void {
+  const e = s.world.ecology;
+  e.hulls = e.hulls.filter((h) => h.id !== vehicleId);
+  if (e.controlled === vehicleId) e.controlled = NO_ACTOR;
+}

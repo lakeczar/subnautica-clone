@@ -349,18 +349,34 @@ export function craftingBlock(
     if (!hasRoom(after, "workshop_locker", ITEMS.structural_alloy.cu * FRAME_ALLOY))
       return block("space", `Stripped alloy goes to the workshop locker; it needs ${ITEMS.structural_alloy.cu * FRAME_ALLOY} CU. Nothing consumed.`);
   }
-  if (r.output === "reserve_cell" || r.output === "salvage_buoy" || r.output === "dart_acoustic_trim" ||
-      r.output === "creel_cargo_rack" || r.output === "creel_cabin" ||
-      r.output === "service_power_assembly" || r.output === "service_air_assembly") {
+  // Every carried output (C3-R1-1): after the ingredients are spent, the whole
+  // output must fit where craft() puts it, or nothing is consumed.
+  const placement = outputPlacement(id);
+  if (placement === "package" || placement === "diver") {
     const after = structuredClone(s);
-    spend(after, r.cost, bins);
-    const to = r.output === "creel_cargo_rack" || r.output === "creel_cabin" ? packageDestination(after) : "diver";
-    if (!to || !hasRoom(after, to, ITEMS[r.output].cu * r.quantity))
-      return block("space", r.output === "creel_cargo_rack" || r.output === "creel_cabin"
-        ? `The ${ITEMS[r.output].cu} CU package needs room in the workshop locker or your hold. Nothing consumed.`
-        : "Output would not fit your hold. Nothing consumed.");
+    if (!r.maintenance) spend(after, r.cost, bins);
+    const to = placement === "package" ? packageDestination(after) : "diver";
+    if (!to || !hasRoom(after, to, ITEMS[r.output as ItemKind].cu * r.quantity))
+      return block("space", placement === "package"
+        ? `The ${ITEMS[r.output as ItemKind].cu} CU package needs room in the workshop locker or your hold. Nothing consumed.`
+        : `${ITEMS[r.output as ItemKind].label} needs ${ITEMS[r.output as ItemKind].cu * r.quantity} CU in your hold. Nothing consumed.`);
   }
   return null;
+}
+/** The fitting slot of an output that is worn rather than carried. */
+function outputFitting(output: string): "tools" | "suit" | "recovery" | "protection" | null {
+  return output === "essential_tools" ? "tools" : output === "suit_150" ? "suit" : output === "bobbin_kit" ? "recovery"
+    : isSuitProtection(output) ? "protection" : null;
+}
+/** Where craft() puts a recipe's output: a facility, hull or in-place change
+ * ("none"), a fitting ("equipment"), a mount package, or the diver hold. */
+export function outputPlacement(id: RecipeId): "none" | "equipment" | "package" | "diver" {
+  const r: Recipe = RECIPES[id];
+  if (["pod_repair", "restore_workshop", "restore_canopy_stop", "restore_rift_station", "restore_divide_stop",
+    "hearthline_keel", "pod_buffer"].includes(r.output) || hullOutput(r) || refitHull(id) || suitRefit(id) || id === "strip_frame")
+    return "none";
+  if (r.output === "creel_cargo_rack" || r.output === "creel_cabin") return "package";
+  return outputFitting(r.output) ? "equipment" : "diver";
 }
 /** Mount packages are bulky: the workshop locker first, then the diver hold. */
 function packageDestination(s: GameState): string | null {
@@ -432,14 +448,7 @@ export function craft(
     if (r.output === "creel_cabin")
       s.inventory.containers.push({ id: `${item.id}_locker`, kind: "locker", capacity: 16, ownerId: item.id });
   } else {
-    const fitted =
-      r.output === "essential_tools"
-        ? "tools"
-        : r.output === "suit_150"
-          ? "suit"
-          : r.output === "bobbin_kit"
-            ? "recovery"
-            : isSuitProtection(r.output) ? "protection" : null;
+    const fitted = outputFitting(r.output);
     for (let q = 0; q < r.quantity; q++) {
       const item = addItem(
         s,

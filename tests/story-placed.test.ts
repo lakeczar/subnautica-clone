@@ -137,7 +137,9 @@ test("a craft moored by the upper hall's bay lends its hold to the restoration; 
   // The hall's 22 CU of stock is more than a diver carries: it rides in the craft's hold.
   for (const [k, q] of Object.entries(STORY_RECIPES.restore_upper_hall.cost)) addItem(base, k as ItemKind, q, v.cargoId);
   const face = WORKS_FACES["works:hall"].position;
-  for (const [off, works] of [[WORKS_MOORING_RADIUS - 6, true], [WORKS_MOORING_RADIUS + 6, false]] as const) {
+  // The promised radius is 30 m, pinned on its own: paid at 29 m, refused at 31 m.
+  assert.equal(WORKS_MOORING_RADIUS, 30);
+  for (const [off, works] of [[29, true], [31, false]] as const) {
     const s = structuredClone(base), craft = s.fleet.vehicles.find((x) => x.id === v.id)!;
     craft.pose.position = { x: face.x, y: face.y + off, z: face.z };
     const r = use(s, "works:hall");

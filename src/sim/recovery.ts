@@ -16,6 +16,7 @@ import {
   removeQuantity,
 } from "./inventory.js";
 import { safePersonalDepth } from "./capabilities.js";
+import { forgetEcologyHull } from "./ecologyLink.js";
 const DT = 1 / 60;
 const OCCUPIED_RECOVERY = "the Dart is occupied. Tow and salvage require an empty hull. Exit only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.";
 const OCCUPIED_CREEL = "the Creel is occupied. Tow and salvage require an empty hull. Leave the helm or cabin only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.";
@@ -293,6 +294,8 @@ export function recoveryCommand(
     s.inventory.containers = s.inventory.containers.filter(
       (a) => a.id !== v.cargoId,
     );
+    // C3-R1-2: the hull's ecology exposure leaves with it; other hulls keep theirs.
+    forgetEcologyHull(s, id);
     s.recovery.losses = s.recovery.losses.filter((l) => l.vehicleId !== id);
     s.recovery.operation = null;
     s.feedback = canister
