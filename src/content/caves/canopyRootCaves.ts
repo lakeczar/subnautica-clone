@@ -257,7 +257,11 @@ export const CANOPY_ROOT_CAVES: LargeCaveSource = {
     { id: "canopy_roots.stage.hub", label: "Hub floor (outpost spot)", position: { x: 806, y: -150.5, z: -146 }, radius: 7, profiles: ["small"] },
   ],
   proposal: {
-    location: "Lantern Canopy east crowns, X 624..880, Z -224..-32 (S2 world frame); clear of route.isles.canopy_east and the east mooring",
+    // LC sandbox site. The placement of record is CB's `canopy_rootways`
+    // (Lantern Rootways, X 880..1100, src/content/proposals/caveBiomes.ts);
+    // CB puts three small caves inside this domain, so the two must not
+    // both be placed. See docs/build/streams/LC.md.
+    location: "LC sandbox only: Lantern Canopy east crowns, X 624..880, Z -224..-32, beside CB's Lantern Rootways (X 880..1100)",
     depth: "Crown hollow lip about 85 m; hall 120-131 m; hub and garden 140-155 m; Scarp mouth on the 150 m terrace; deep pool about 187 m",
   },
   note: "LC proof biome. Blockout geometry; finds and life are proposals, not registry content.",
