@@ -159,7 +159,7 @@ CPU per Canopy-sized biome; the GPU holds only art and the lamp window.
   - **Load by proximity.** Load a biome's collider and bake only within a few hundred metres of its mouths, so four biomes never hold four fixed sets at once.
 
 ## Checks (R1 revision)
-- **Fast tier:** `npm run test:fast` passes **1,118/1,118** (108 files). There are 34 large-cave tests in five files:
+- **Fast tier:** `npm run test:fast` passes **1,118/1,118** (108 files). There are 30 large-cave fast tests in four files:
   - `tests/large-cave.test.ts`, on the fixture biome:
     - ownership and its negative control;
     - chunk-seam closure;
