@@ -240,3 +240,12 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **CA-1 near done** at `0ed2219`: 18 Reef and Isles caves plus the Fanvault, 1,096 tests pass, every one of 1,515 lamp-off starts escapes. The adverse-case rerun is queued on the heavy lock. **Performance flag:** 153,092 cave boxes loaded, diver step 97.8 µs with the 8 m index. Caves for four regions will be more, so composition must budget query cost. **Lock contention:** the M2 audit holds the heavy lock up to 2 h; asked it to split into jobs of at most 30 minutes.
 - **Owner decision:** hub = central pinnacle (A). The crown station is deliberately better than the pod: staged restoration, refit bench, dock, large lockers, 6 sockets, survey, wake at the last rested base. Recorded in GAME-DIRECTION. **W2 queued** after C4 stage A.
 - **C4 stage A done** at `b08747f` (`t3/integrate-world-systems`, `t3-75d095f9`): caves and currents composed into the real game, the Fanvault in the world, a 220-chunk rebake verified, playthrough 5/5, 1,088 tests pass, 3090 keyboard run at 60 fps. Design changes to judge: a 0.6 m underwater step-up for swimmers, and hull damage only from drive into a face. Sol R1 running. C4 holds for the stage B go-ahead.
+- **M2 stage-exit Opus experience audit** (`review/m2-opus-audit` `b6a9b5b`, report now in root). Verdict: the opening is clear and charming, and both routes finish. The deep half is a well-lit commute; the carrier runs through a dev panel; only the Dart and Creel earn their place.
+  - **Estimate:** skilled blind first-timer about 4–6 h (Creel route) and 6–8 h (carrier route), with 40–50% of that repeated travel.
+  - **Dispositions:**
+    - **#1 depth darkness, #6 camera, #10 Rift warmth:** to **ATM-1** (started, based on C4 stage A `b08747f`).
+    - **#3 refits at restored stops, Dart 450, outposts; #5 objective and practical hints; #7 signature roles; #8 gaps via decoder; #9 journal, menus, HUD header, title; save re-import:** folded into **C4 stage B**.
+    - **#2 carrier dev panel and helm view:** queued **UX-1**, after C4 B (it touches the UI).
+    - **#4 hunter readability:** queued **ENC-1**.
+    - **#10 mid-route points of interest and landmarks:** the CB density pass, after the cave builders.
+  - Builders 5 of 5: C4, ATM-1, LC, CA-1, CA-2.
