@@ -208,6 +208,7 @@ export function commandEffect(c: GameCommand, before: GameState, after: GameStat
       return [...(p.vitals.food > before.player.vitals.food ? [] : ["eating raised no food"]),
         ...(delta.size === 1 && meals.length === 1 && meals[0]![1] === -1 ? [] : [`eating changed the inventory by ${JSON.stringify([...delta])}, not one meal`])];
     }
+    case "lamp": return [...(p.lamp !== before.player.lamp ? [] : ["the lamp did not switch"]), ...unchangedInventory("lamp", before, after)];
     case "exit": return [...(p.controlledVehicleId === null && p.interiorId === null ? [] : ["the diver is still aboard after exit"]),
       ...unchangedInventory("exit", before, after)];
     case "carrier": {

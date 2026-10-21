@@ -2052,3 +2052,20 @@ test("sound captions keep one line per cause: pressure, power, hull depth and hu
   view.audioCaption(caption("alert.power", "[Low-power chime]"), lowHull);
   assert.equal(get("audio-caption").textContent, "[Low-power chime]");
 });
+
+test("C3: beyond B1's area the HUD names S2's region and drops B1's area hints", (t) => {
+  const { view, get } = viewFixture(t);
+  const s = createGame(); completeOpening(s);
+  s.player.mode = "swimming";
+  for (const [p, name] of [
+    [{ x: 0, y: -2, z: 10 }, "Hearth Reef"],
+    [{ x: 120, y: -150, z: -1000 }, "Ember Rift"],
+    [{ x: 560, y: -390, z: -1120 }, "Mirror Divide"],
+    [{ x: 1300, y: -600, z: -1150 }, "Meridian District"],
+  ] as const) {
+    s.player.pose.position = { ...p };
+    view.update(s, false);
+    assert.equal(get("region-name").textContent, name, JSON.stringify(p));
+    if (name !== "Hearth Reef") assert.doesNotMatch(get("context-hint").textContent ?? "", /Pale Basin|upper crowns/);
+  }
+});
