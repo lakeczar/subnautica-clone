@@ -261,3 +261,10 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **LC R1 fixes done** at `9e39508` (rebased onto C4A): whole-box two-owner clearance; a streaming movement gate with `caveArtMinimum` (19.5 MiB for the Canopy); every retained buffer counted (37.2 MB fixed per biome; four-biome estimate ~126–147 MiB). 1,118 tests pass. Sol R2 running. Builders 4 of 5: C4, CA-1, CA-2, W2.
 - **CA-3 started:** Rift, Divide and Meridian small and medium caves from the bible (hazard-aware escape, story-neutral Meridian), in new files with its own lab page. Builders 5 of 5: C4, CA-1, CA-2, CA-3, W2.
 - **ENC-1 R1 (Sol):** changes-needed (`review/enc-1-r1` `ed17ba8`). P2: the warning knockback can disable a quiet, dark craft against rock. P2: saves with interest above 7 defeat the quiet escape. P3s: the view-gate test and the cadence (bites actually ~2.5 s apart). Merge note: conflict with C4B in `ui/view.ts`. **The fix run was paused for the cap and is queued** behind CA-1, which still has a pending run. Builders 5 of 5: C4, CA-1, CA-2, CA-3, W2.
+- **LC R2 (Sol):** changes-needed (`review/lc-r2` `bb21683`). LC-01, LC-03 and LC-04 are closed (exact buffer count of 32.96 MB, 78/78 buried hull poses refused). **LC-02 is still open:** under sustained pressure the gate refuses even physically clear retreats (stranding), and minimum-share admission is not enforced. **Coordinator direction for the fix:**
+  - keep the occupied biome's coarse LOD (plus the mouths and collar) permanently pinned as a non-revocable reservation counted at admission;
+  - the gate requires only coarse coverage, which is guaranteed, and fine LOD is opportunistic;
+  - admission is enforced (hold outside the mouth if the reservation can't be made);
+  - regression: keep the pressure and actually back out to exterior water, with a forward-into-uncovered control.
+
+  **Queued** for the next free slot, after ENC-1.
