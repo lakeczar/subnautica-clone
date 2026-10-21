@@ -189,7 +189,11 @@ test("brine sails mark a calm lane well above the layer", () => {
 test("the saddle downwelling pushes a Hush hard and a Mantle barely; resin trim vanes help", () => {
   const f = HAZARD_FIELDS.divide_downwelling, c = sitePosition(f.shape.center);
   const p = { x: c.x + (f.shape.min.x + f.shape.max.x) / 2, y: c.y + (f.shape.min.y + f.shape.max.y) / 2, z: c.z + (f.shape.min.z + f.shape.max.z) / 2 };
-  const s = sampleHazards(p, 0), speed = (v: { x: number; y: number; z: number }): number => Math.hypot(v.x, v.y, v.z);
+  // C4: the downwelling slackens on a cycle; sample it running, then slack.
+  const running = Math.round((f.cycle.start + 1) * 60), slack = Math.round((f.cycle.start + f.cycle.duration + f.cycle.ramp + 2) * 60);
+  assert.ok(Math.hypot(sampleHazards(p, slack).flow.x, sampleHazards(p, slack).flow.y, sampleHazards(p, slack).flow.z) <
+    0.2 * Math.hypot(sampleHazards(p, running).flow.x, sampleHazards(p, running).flow.y, sampleHazards(p, running).flow.z), "slack water is weak");
+  const s = sampleHazards(p, running), speed = (v: { x: number; y: number; z: number }): number => Math.hypot(v.x, v.y, v.z);
   const hush = speed(driftFrom(s, protectionFor("hush", []))), trimmed = speed(driftFrom(s, protectionFor("hush", ["trim_vanes"])));
   const mantle = speed(driftFrom(s, protectionFor("mantle", [])));
   assert.ok(hush > 0.7 && trimmed < hush && mantle < 0.2 && driftFrom(s, protectionFor("hush", [])).y < 0);

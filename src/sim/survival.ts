@@ -1,6 +1,6 @@
 import { CANOPY_COVER, THREAT_HOME } from "../content/registry.js";
 import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
-import { createWorldQueries } from "./world.js";
+import { gameWorld } from "./world.js";
 import { moveHunter } from "./hunter.js";
 import {
   atAirStop,
@@ -178,7 +178,7 @@ export function updateThreat(
   s: GameState,
   loudness: number,
   events: GameEvent[],
-  world: WorldQueries = createWorldQueries(),
+  world: WorldQueries = gameWorld(),
 ): void {
   if (s.opening.phase < 4 || s.scenario !== "expedition") return;
   const t = s.world.threat,

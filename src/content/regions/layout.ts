@@ -8,6 +8,7 @@ import { STRUCTURES } from "./structures.js";
 import { TERRAIN_EXTENT } from "../../render/terrainSurface.js";
 import { MERIDIAN_CENTRE, MERIDIAN_TERRACES, terrainMasks, type TerrainMasks } from "./terrain.js";
 import { worldFloor } from "./worldFloor.js";
+import { CAVE_SOURCES } from "./caves.js";
 
 /** S2 whole-world layout: biomes, seven region descriptors with footprints,
  * adjacency derived from the authored passages, entrances, and one terrain
@@ -172,6 +173,9 @@ function chunks(): ChunkDescriptor[] {
     }
     const here = STRUCTURES.filter(s => rectContains({ ...rect, maxX: rect.maxX - 1e-9, maxZ: rect.maxZ - 1e-9 }, s.x, s.z));
     for (const s of here) for (const b of s.solids) { lo = Math.min(lo, b.min.y); hi = Math.max(hi, b.max.y); }
+    // W1 caves draw and collide from their base to their terrace tops.
+    for (const c of CAVE_SOURCES) if (c.footprint.minX < rect.maxX && c.footprint.maxX > rect.minX &&
+      c.footprint.minZ < rect.maxZ && c.footprint.maxZ > rect.minZ) { lo = Math.min(lo, c.baseY); hi = Math.max(hi, c.topY); }
     const biome = [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]![0];
     const region = regionAtPoint(cx, cz) ?? "refuge_reef";
     const legacy = legacyCoverage(rect);

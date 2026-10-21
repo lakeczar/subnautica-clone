@@ -15,7 +15,11 @@ import type { Rect } from "../../world/types.js";
  *   cracks or skirts between ordinary chunks. Cells touching an edge may
  *   only split where the edge has a point.
  * - **Hole.** Cells inside `hole` (today's terrain mesh) are omitted; a short
- *   skirt hangs from every edge facing it, as before. */
+ *   skirt hangs from every edge facing it, as before.
+ * - **Pits.** Cells inside any of `pits` (W1 cave replacement footprints) are
+ *   omitted the same way, skirt included. A pit's edges cut the base lattice,
+ *   and cut a chunk border only where the pit reaches that border line, so a
+ *   neighbour given the same pit emits the identical edge. */
 export interface TessellationOptions {
   /** Base cell size, metres (a power of two times the border step). */
   base: number;
@@ -24,6 +28,7 @@ export interface TessellationOptions {
   /** Smallest cell, metres. */
   min: number;
   hole?: Rect;
+  pits?: readonly Rect[];
   /** Called between units of work; return true to yield. */
   due?: () => boolean;
 }
@@ -105,7 +110,8 @@ export function* borderPoints(floor: (x: number, z: number) => number, axis: "x"
 interface Cell { x0: number; x1: number; z0: number; z1: number; sig: string; err: number }
 
 export function* tessellate(floor: (x: number, z: number) => number, rect: Rect, o: TessellationOptions): Generator<void, Tessellation> {
-  const due = o.due ?? (() => false), hole = o.hole;
+  const due = o.due ?? (() => false), hole = o.hole, pits = o.pits ?? [];
+  const holes = [...(hole ? [hole] : []), ...pits];
   const heights = new Map<number, number>();
   const H = (x: number, z: number): number => {
     const k = pkey(x, z);
@@ -114,13 +120,17 @@ export function* tessellate(floor: (x: number, z: number) => number, rect: Rect,
     return y;
   };
   const cutsX = hole ? [hole.minX, hole.maxX] : [], cutsZ = hole ? [hole.minZ, hole.maxZ] : [];
+  /** Border cuts on one line: the hole's, plus each pit reaching the line. */
+  const lineCuts = (axis: "x" | "z", at: number): number[] => [...(axis === "x" ? cutsX : cutsZ),
+    ...pits.filter(p => axis === "x" ? p.minZ <= at + EPS && p.maxZ >= at - EPS : p.minX <= at + EPS && p.maxX >= at - EPS)
+      .flatMap(p => axis === "x" ? [p.minX, p.maxX] : [p.minZ, p.maxZ])];
   // Shared border sets, keyed by line.
   // Shared border sets, keyed by line; refinement yields as it goes.
   const border = new Map<string, number[]>();
-  border.set(`z:${key(rect.minZ)}`, yield* borderPoints(floor, "x", rect.minZ, rect.minX, rect.maxX, cutsX, BORDER_MIN, due));
-  border.set(`z:${key(rect.maxZ)}`, yield* borderPoints(floor, "x", rect.maxZ, rect.minX, rect.maxX, cutsX, BORDER_MIN, due));
-  border.set(`x:${key(rect.minX)}`, yield* borderPoints(floor, "z", rect.minX, rect.minZ, rect.maxZ, cutsZ, BORDER_MIN, due));
-  border.set(`x:${key(rect.maxX)}`, yield* borderPoints(floor, "z", rect.maxX, rect.minZ, rect.maxZ, cutsZ, BORDER_MIN, due));
+  border.set(`z:${key(rect.minZ)}`, yield* borderPoints(floor, "x", rect.minZ, rect.minX, rect.maxX, lineCuts("x", rect.minZ), BORDER_MIN, due));
+  border.set(`z:${key(rect.maxZ)}`, yield* borderPoints(floor, "x", rect.maxZ, rect.minX, rect.maxX, lineCuts("x", rect.maxZ), BORDER_MIN, due));
+  border.set(`x:${key(rect.minX)}`, yield* borderPoints(floor, "z", rect.minX, rect.minZ, rect.maxZ, lineCuts("z", rect.minX), BORDER_MIN, due));
+  border.set(`x:${key(rect.maxX)}`, yield* borderPoints(floor, "z", rect.maxX, rect.minZ, rect.maxZ, lineCuts("z", rect.maxX), BORDER_MIN, due));
   if (due()) yield;
   const borderHas = (line: string, u: number): boolean => {
     const pts = border.get(line);
@@ -138,9 +148,11 @@ export function* tessellate(floor: (x: number, z: number) => number, rect: Rect,
     v.sort((p, q) => p - q);
     return v.filter((n, i) => i === 0 || n - v[i - 1]! > 1e-6);
   };
-  const xs = axisOf(rect.minX, rect.maxX, cutsX), zs = axisOf(rect.minZ, rect.maxZ, cutsZ);
-  const inHole = (c: { x0: number; x1: number; z0: number; z1: number }): boolean => !!hole &&
-    c.x0 >= hole.minX - EPS && c.x1 <= hole.maxX + EPS && c.z0 >= hole.minZ - EPS && c.z1 <= hole.maxZ + EPS;
+  const xs = axisOf(rect.minX, rect.maxX, [...cutsX, ...pits.flatMap(p => [p.minX, p.maxX])]);
+  const zs = axisOf(rect.minZ, rect.maxZ, [...cutsZ, ...pits.flatMap(p => [p.minZ, p.maxZ])]);
+  const within = (c: { x0: number; x1: number; z0: number; z1: number }, h: Rect, e: number): boolean =>
+    c.x0 >= h.minX - e && c.x1 <= h.maxX + e && c.z0 >= h.minZ - e && c.z1 <= h.maxZ + e;
+  const inHole = (c: { x0: number; x1: number; z0: number; z1: number }): boolean => holes.some(h => within(c, h, EPS));
   let cells: Cell[] = [];
   for (let j = 0; j < zs.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) {
     const c = { x0: xs[i]!, x1: xs[i + 1]!, z0: zs[j]!, z1: zs[j + 1]!, sig: "", err: -1 };
@@ -249,8 +261,8 @@ export function* tessellate(floor: (x: number, z: number) => number, rect: Rect,
   for (const c of cells) {
     const poly = polygon(c);
     for (const t of triangles(c, poly)) tris.push(...t.map(p => vertex(p[0], p[1])));
-    if (hole) {
-      // Sides facing the hole: the neighbouring area across that side is inside it.
+    if (holes.length) {
+      // Sides facing a hole: the neighbouring area across that side is inside it.
       const sides: [[number, number], [number, number], { x0: number; x1: number; z0: number; z1: number }][] = [
         [[c.x0, c.z0], [c.x0, c.z1], { x0: c.x0 - EPS * 10, x1: c.x0, z0: c.z0, z1: c.z1 }],
         [[c.x1, c.z0], [c.x1, c.z1], { x0: c.x1, x1: c.x1 + EPS * 10, z0: c.z0, z1: c.z1 }],
@@ -258,7 +270,7 @@ export function* tessellate(floor: (x: number, z: number) => number, rect: Rect,
         [[c.x0, c.z1], [c.x1, c.z1], { x0: c.x0, x1: c.x1, z0: c.z1, z1: c.z1 + EPS * 10 }],
       ];
       for (const [a, b, beyond] of sides) {
-        if (!(beyond.x0 >= hole.minX - 1e-6 && beyond.x1 <= hole.maxX + 1e-6 && beyond.z0 >= hole.minZ - 1e-6 && beyond.z1 <= hole.maxZ + 1e-6)) continue;
+        if (!holes.some(h => within(beyond, h, 1e-6))) continue;
         const pts = poly.filter(p => (a[0] === b[0] ? Math.abs(p[0] - a[0]) < EPS : Math.abs(p[1] - a[1]) < EPS))
           .sort((p, q) => a[0] === b[0] ? p[1] - q[1] : p[0] - q[0]);
         for (let i = 0; i < pts.length - 1; i++) skirtEdges.push(vertex(...pts[i]!), vertex(...pts[i + 1]!));

@@ -4,13 +4,16 @@ import { BASIN_GEOMETRY, CANOPY_MARGIN_RIBS, CANOPY_STOP, CREEL_SLIP_SOLIDS, LEG
 import { STRUCTURE_SOLIDS } from "../content/regions/structures.js";
 import { VISTA_SOLIDS } from "../content/vistas.js";
 import { worldFloor } from "../content/regions/worldFloor.js";
+import { caves, type CaveDef } from "../content/regions/caves.js";
+import { LEGACY_PRESERVE } from "../content/regions/terrain.js";
 import { WORLD_ENVELOPE } from "../world/frame.js";
+import type { Rect } from "../world/types.js";
 import { legacyTerrainHeight, RESCUE_BENCH } from "./terrain.js";
 import type { Capsule, MovementOptions, Vec3, WorldQueries } from "./types.js";
 import { createSpatialIndex } from "../world/spatialIndex.js";
 import { solidEntries } from "../world/queries.js";
 import type { SpatialQuery } from "../world/types.js";
-import { actorBox, RIB_CONTACT_TOLERANCE, RIB_SLIDE_ITERATIONS, ribUpperHeight,
+import { actorBox, type BoxBounds, RIB_CONTACT_TOLERANCE, RIB_SLIDE_ITERATIONS, ribUpperHeight,
   segmentBoxClosest, sweptBoxIntersects, sweepBoxRib } from "./ribCollision.js";
 
 export const WATER_Y = 0;
@@ -445,18 +448,20 @@ const BROAD_PHASE_MIN = 48;
  * order, gives the exact same answer because the narrow phase still decides. */
 const BROAD_PHASE_MARGIN = 1;
 const TALL = 1e6;
-const broadPhases = new WeakMap<readonly Solid[], SpatialQuery<Solid> | null>();
-/** The roster's spatial index, built once per roster array, or null for a
- * short roster or one holding an invalid box (whose full scan must still see
- * it and refuse, exactly as before). */
-function broadPhase(solids: readonly Solid[]): SpatialQuery<Solid> | null {
-  let index = broadPhases.get(solids);
+const broadPhases = new WeakMap<readonly Solid[], Map<number, SpatialQuery<Solid> | null>>();
+/** The roster's spatial index, built once per roster array and cell size, or
+ * null for a short roster or one holding an invalid box (whose full scan must
+ * still see it and refuse, exactly as before). */
+function broadPhase(solids: readonly Solid[], cellSize = 32): SpatialQuery<Solid> | null {
+  let bySize = broadPhases.get(solids);
+  if (!bySize) broadPhases.set(solids, bySize = new Map());
+  let index = bySize.get(cellSize);
   if (index === undefined) {
     index = solids.length >= BROAD_PHASE_MIN && solids.every(s => finitePoint(s.min) && finitePoint(s.max) &&
       AXES.every(axis => s.min[axis] <= s.max[axis]))
-      ? createSpatialIndex(solidEntries(solids))
+      ? createSpatialIndex(solidEntries(solids), cellSize)
       : null;
-    broadPhases.set(solids, index);
+    bySize.set(cellSize, index);
   }
   return index;
 }
@@ -469,14 +474,18 @@ const grown = (box: { min: Vec3; max: Vec3 }, by: number): { min: Vec3; max: Vec
  * solids narrow each call to the solids near it through a spatial index
  * (cost follows nearby solids, not the whole world); the narrow phase is the
  * same either way, so results are identical (tests/world-queries.test.ts).
- * `broadPhase: false` forces the full scan, for that comparison. */
+ * `broadPhase: false` forces the full scan, for that comparison; `cellSize`
+ * sets the index's X/Z cell (the cave composite uses a finer one).
+ *
+ * This is the raw world, with no caves. The game's exterior world, caves
+ * included, is `gameWorld()`. */
 export function createWorldQueries(
   solids: readonly Solid[] = SOLIDS,
   floorHeight: (x: number, z: number) => number = surfaceHeight,
-  options: { broadPhase?: boolean } = {},
+  options: { broadPhase?: boolean; cellSize?: number } = {},
 ): WorldQueries {
   const worldTerrain = floorHeight === surfaceHeight || floorHeight === terrainHeight;
-  const index = options.broadPhase === false ? null : broadPhase(solids);
+  const index = options.broadPhase === false ? null : broadPhase(solids, options.cellSize);
   const near = (box: { min: Vec3; max: Vec3 }): readonly Solid[] =>
     index ? index.inBox(box, ["solid"]).map(e => e.data!) : solids;
   return {
@@ -660,6 +669,154 @@ export function createWorldQueries(
       };
     },
   };
+}
+
+// --- Caves (W1) ---------------------------------------------------------------
+
+/** A cave as the world queries see it: its owned footprint, the depth below
+ * which the heightfield steps aside, and its one-source rock. */
+export interface CaveOwner {
+  readonly id: string;
+  readonly footprint: Rect;
+  /** The heightfield steps aside below this inside the footprint. */
+  readonly baseY: number;
+  readonly rock: readonly Solid[];
+}
+export const caveOwner = (def: CaveDef): CaveOwner =>
+  ({ id: def.id, footprint: def.replacementFootprints[0]!, baseY: def.source.baseY, rock: def.rock });
+
+export interface CaveWorldOptions {
+  /** Exterior solids and the ORIGINAL exterior floor function. */
+  readonly solids: readonly Solid[];
+  readonly floor: (x: number, z: number) => number;
+  readonly caves: readonly CaveOwner[];
+  /** Largest horizontal half-extent admitted at a cave, metres (a medium
+   * hull is 4.5). The collar band is sized from it. */
+  readonly maxHalfExtent?: number;
+  /** Regions whose legacy terrain guards caves must keep clear of. */
+  readonly guards?: readonly Rect[];
+}
+
+/** Longest sub-sweep near a cave, metres. */
+export const CAVE_SUB_SWEEP = 0.5;
+/** X/Z cell of the cave composite's broad phase: about 11k rock and collar
+ * boxes per cave, so 8 m cells (W1-PRE-06: diver move plus support 42.9 →
+ * 18.9 µs against 32 m). */
+export const CAVE_INDEX_CELL = 8;
+const COLLAR_CELL = 0.5;
+const rectOverlaps = (r: Rect, b: BoxBounds, pad = 0): boolean =>
+  b.min.x < r.maxX + pad && b.max.x > r.minX - pad && b.min.z < r.maxZ + pad && b.max.z > r.minZ - pad;
+const owns = (r: Rect, x: number, z: number): boolean => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ;
+const union = (a: BoxBounds, b: BoxBounds): BoxBounds => ({
+  min: { x: Math.min(a.min.x, b.min.x), y: Math.min(a.min.y, b.min.y), z: Math.min(a.min.z, b.min.z) },
+  max: { x: Math.max(a.max.x, b.max.x), y: Math.max(a.max.y, b.max.y), z: Math.max(a.max.z, b.max.z) },
+});
+
+/** Exterior ground in the collar band as columns: each 0.5 m cell outside
+ * every footprint, topped at the highest of nine floor samples plus 2 cm. */
+function collarColumns(cave: CaveOwner, floor: (x: number, z: number) => number, band: number,
+  all: readonly CaveOwner[]): Solid[] {
+  const f = cave.footprint, out: Solid[] = [];
+  for (let x = f.minX - band; x < f.maxX + band - 1e-9; x += COLLAR_CELL)
+    for (let z = f.minZ - band; z < f.maxZ + band - 1e-9; z += COLLAR_CELL) {
+      if (all.some(c => owns(c.footprint, x + COLLAR_CELL / 2, z + COLLAR_CELL / 2))) continue;
+      let top = -Infinity, low = Infinity;
+      for (let i = 0; i <= 2; i++) for (let k = 0; k <= 2; k++) {
+        const h = floor(x + i * COLLAR_CELL / 2, z + k * COLLAR_CELL / 2);
+        top = Math.max(top, h); low = Math.min(low, h);
+      }
+      out.push({ id: `${cave.id}.collar.${out.length}`, min: { x, y: Math.min(cave.baseY, low - 4), z },
+        max: { x: x + COLLAR_CELL, y: top + 0.02, z: z + COLLAR_CELL } });
+    }
+  return out;
+}
+
+/** The exterior world with caves (the W1 world-query contract).
+ * - **Full-shape ownership.** Inside a cave footprint only cave rock exists;
+ *   outside it the exterior heightfield rules. A shape touching a footprint
+ *   is tested against both owners over its WHOLE box, in clearance, in every
+ *   sweep and in every slide. The exterior heightfield in a collar band round
+ *   each footprint becomes conservative column solids, so the box sweep sees
+ *   the ground under every corner. The band covers the largest admitted shape
+ *   plus one sub-sweep and its slides; larger shapes are refused at a cave.
+ * - **Ownership per sub-sweep.** A move whose swept envelope touches a cave
+ *   advances in sub-sweeps of at most `CAVE_SUB_SWEEP`. Each picks its owner
+ *   from its own slide envelope: the cave composite (every exterior solid,
+ *   cave rock and collar, on the finer index) or the original exterior world.
+ * - **Legacy guards untouched.** Everything that does not touch a cave goes
+ *   to the exterior world built with the ORIGINAL floor function, so its
+ *   identity-keyed terrain columns and bench cut walls still apply. Caves and
+ *   their band must keep clear of the guarded regions; construction throws.
+ * - **Support from below.** `supportHeight` near a cave reads rock tops and
+ *   collar columns at or below the actor, never the roof above it;
+ *   `groundHeight` is the masked floor (`baseY − 1` inside a footprint).
+ * Cabin, carrier and other local worlds stay plain `createWorldQueries`. */
+export function createCaveWorldQueries(options: CaveWorldOptions): WorldQueries {
+  const { solids, floor, caves: owners } = options, guards = options.guards ?? [LEGACY_PRESERVE];
+  const maxHalf = options.maxHalfExtent ?? 4.5;
+  // A shape touching a footprint reaches 2 x its half-extent beyond it, and
+  // one sub-sweep with its slides reaches CAVE_SUB_SWEEP further.
+  const band = 2 * maxHalf + CAVE_SUB_SWEEP + 0.5;
+  for (const c of owners) for (const g of guards) {
+    const f = c.footprint;
+    if (f.minX - band < g.maxX && f.maxX + band > g.minX && f.minZ - band < g.maxZ && f.maxZ + band > g.minZ)
+      throw new Error(`cave ${c.id}: footprint and collar band reach a legacy-guarded region`);
+  }
+  const exterior = createWorldQueries(solids, floor);
+  if (!owners.length) return exterior;
+  const masked = (x: number, z: number): number => {
+    for (const c of owners) if (owns(c.footprint, x, z)) return c.baseY - 1;
+    return floor(x, z);
+  };
+  const composite = createWorldQueries([
+    ...solids, ...owners.flatMap(c => c.rock), ...owners.flatMap(c => collarColumns(c, floor, band, owners)),
+  ], masked, { cellSize: CAVE_INDEX_CELL });
+  const touches = (box: BoxBounds): boolean => owners.some(c => rectOverlaps(c.footprint, box));
+  const inBand = (x: number, z: number): boolean => owners.some(c => owns(
+    { minX: c.footprint.minX - band, maxX: c.footprint.maxX + band, minZ: c.footprint.minZ - band, maxZ: c.footprint.maxZ + band }, x, z));
+  const halfExtent = (s: Capsule): number => Math.max(s.halfWidth ?? s.radius, s.halfLength ?? s.radius);
+  const envelope = (p: Vec3, d: Vec3, shape: Capsule): BoxBounds => {
+    const e = union(actorBox(p, shape), actorBox({ x: p.x + d.x, y: p.y + d.y, z: p.z + d.z }, shape)), r = Math.hypot(d.x, d.y, d.z);
+    return { min: { x: e.min.x - r, y: e.min.y - r, z: e.min.z - r }, max: { x: e.max.x + r, y: e.max.y + r, z: e.max.z + r } };
+  };
+  return {
+    waterHeight: exterior.waterHeight,
+    groundHeight: masked,
+    supportHeight: (x, z, fromY) => inBand(x, z) ? composite.supportHeight(x, z, fromY) : exterior.supportHeight(x, z, fromY),
+    clearance: (origin, shape) => !touches(actorBox(origin, shape)) ? exterior.clearance(origin, shape)
+      : halfExtent(shape) <= maxHalf && composite.clearance(origin, shape),
+    // The composite holds every exterior solid and samples the same exterior
+    // floor outside footprints, so a sight line touching a cave loses nothing.
+    lineOfSight: (a, b, ignore) => touches({ min: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), z: Math.min(a.z, b.z) },
+      max: { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y), z: Math.max(a.z, b.z) } })
+      ? composite.lineOfSight(a, b, ignore) : exterior.lineOfSight(a, b, ignore),
+    moveCapsule(origin, delta, shape, opts) {
+      if (!finitePoint(origin) || !finitePoint(delta) || !touches(envelope(origin, delta, shape)))
+        return exterior.moveCapsule(origin, delta, shape, opts);
+      if (halfExtent(shape) > maxHalf) return { position: { ...origin }, hitSolid: true, hitBoundary: false };
+      const slices = Math.max(1, Math.ceil(Math.hypot(delta.x, delta.y, delta.z) / CAVE_SUB_SWEEP));
+      const d = { x: delta.x / slices, y: delta.y / slices, z: delta.z / slices };
+      let position = { ...origin }, hitSolid = false, hitBoundary = false;
+      for (let i = 0; i < slices; i++) {
+        // Each sub-sweep picks its own owner: the cave composite while its
+        // envelope (slides included) touches a footprint, the original
+        // exterior world (legacy guards and all) once it does not.
+        const world = touches(envelope(position, d, shape)) ? composite : exterior;
+        const r = world.moveCapsule(position, d, shape, opts);
+        position = r.position; hitSolid ||= r.hitSolid; hitBoundary ||= r.hitBoundary;
+      }
+      return { position, hitSolid, hitBoundary };
+    },
+  };
+}
+
+let composedWorld: WorldQueries | null = null;
+/** The game's exterior world: every solid on the shared floor, with the W1
+ * caves owning their footprints. Built once, on first use (cave generation
+ * takes a fraction of a second). The runtime, recovery, survival, the
+ * validators and the playthrough harness all query this one world. */
+export function gameWorld(): WorldQueries {
+  return composedWorld ??= createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: caves(worldFloor).map(caveOwner) });
 }
 
 /** Hull keel floor sampled across its conservative circular footprint. */

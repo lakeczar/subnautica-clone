@@ -10,6 +10,7 @@ import { BRINE_Y, emptyMasks, terrainMasks, type TerrainMasks } from "../../cont
 import { TERRAIN_EXTENT } from "../terrainSurface.js";
 import { writeInstance } from "./recipe.js";
 import { vistaMesh } from "./vistas.js";
+import { CAVE_SOURCES } from "../../content/regions/caves.js";
 
 /** `s2.scatter`: dense instanced dressing per biome, placed by rules that
  * read the same masks the floor was carved with. Pale fans open on cool
@@ -193,6 +194,10 @@ export function blocked(x: number, z: number, top: number, radius: number, botto
 
 const L = TERRAIN_EXTENT;
 const legacy = (x: number, z: number): boolean => x >= L.minX && x <= L.maxX && z >= L.minZ && z <= L.maxZ;
+/** Inside a W1 cave's replacement footprint (plus a metre): the heightfield is
+ * not the floor there, so nothing is scattered on it. */
+const caved = (x: number, z: number): boolean => CAVE_SOURCES.some(({ footprint: f }) =>
+  x >= f.minX - 1 && x <= f.maxX + 1 && z >= f.minZ - 1 && z <= f.maxZ + 1);
 
 /** One rule's output: a typed buffer pair per silhouette that doubles when
  * full, so allocation follows what is placed rather than every candidate. */
@@ -245,7 +250,7 @@ function* scatterChunk(ctx: ChunkBuildContext, chunk: ChunkDescriptor, biome: st
     if (!fine && !rule.coarse) continue;
     /** The checks every piece passes; returns its floor height or NaN. */
     const site = (px: number, pz: number, s: number): number => {
-      if (legacy(px, pz) || biomeOf(px, pz, maskAt(px, pz)) !== biome) return NaN;
+      if (legacy(px, pz) || caved(px, pz) || biomeOf(px, pz, maskAt(px, pz)) !== biome) return NaN;
       const y = floor(px, pz);
       if (rule.y && (y < rule.y[0] || y > rule.y[1])) return NaN;
       if (y > 0 && !rule.template.startsWith("s2.flora.grass") && !rule.template.startsWith("s2.flora.shrub") &&

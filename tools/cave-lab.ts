@@ -29,8 +29,7 @@ import { caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
 import { emptyMasks, terrainMasks } from "../src/content/regions/terrain.js";
-import { caveOwner, createCaveWorldQueries } from "../src/sim/caveWorld.js";
-import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
+import { gameWorld } from "../src/sim/world.js";
 import { columnRect } from "../src/world/frame.js";
 import type { Rect } from "../src/world/types.js";
 
@@ -68,18 +67,10 @@ const def = caveDef("fanvault", worldFloor);
 const shells = { fine: caveShell(def, "fine"), coarse: caveShell(def, "coarse") };
 const field = caveLightField(def, worldFloor);
 const buildMs = performance.now() - started;
-// The baseline's WORLD_BOUNDS still ends at the legacy route rectangle (C3
-// widens it to the envelope), so the lab sweeps the diver in a frame shifted
-// into it. Sweeps are translation-invariant; drop SHIFT once C3 lands.
-const SHIFT = { x: 300, z: 90 };
-// The prototype ownership adapter (sim/caveWorld.ts): full-shape cave and
-// exterior ownership, the exterior heightfield outside the footprint.
-const shiftRect = (r: { minX: number; maxX: number; minZ: number; maxZ: number }) =>
-  ({ minX: r.minX + SHIFT.x, maxX: r.maxX + SHIFT.x, minZ: r.minZ + SHIFT.z, maxZ: r.maxZ + SHIFT.z });
-const owner = caveOwner(def);
-const world = createCaveWorldQueries({ solids: [], floor: (x, z) => worldFloor(x - SHIFT.x, z - SHIFT.z), guards: [shiftRect(LEGACY_PRESERVE)],
-  caves: [{ ...owner, footprint: shiftRect(owner.footprint), rock: owner.rock.map(s => ({ id: s.id,
-    min: { ...s.min, x: s.min.x + SHIFT.x, z: s.min.z + SHIFT.z }, max: { ...s.max, x: s.max.x + SHIFT.x, z: s.max.z + SHIFT.z } })) }] });
+// The game's own world (C4): every solid, the shared floor and the caves.
+// The lab used to sweep in a shifted frame; C3's envelope made that moot.
+const SHIFT = { x: 0, z: 0 };
+const world = gameWorld();
 
 const cel = createCaveCelMaterial(scene);
 const { water, sky } = createAtmosphere(scene);

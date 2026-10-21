@@ -10,6 +10,8 @@ import { BRINE_Y, emptyMasks, terrainMasks } from "../../content/regions/terrain
 import { TERRAIN_EXTENT } from "../terrainSurface.js";
 import { geologyColor } from "./geology.js";
 import { hex } from "./recipe.js";
+import { CAVE_SOURCES, caves } from "../../content/regions/caves.js";
+import { caveShellByColumn } from "../../content/regions/caveGeometry.js";
 
 /** `s2.terrain`: the shared floor as one mesh per chunk, sampled only from
  * `ctx.floor` and tessellated to a bounded error (see `tessellate.ts`):
@@ -25,10 +27,20 @@ const NORMAL_STEP = 0.25;
 
 export function terrainOptions(rect: Rect, lod: LodLevel): TessellationOptions {
   const cut = rect.minX < LEGACY.maxX && rect.maxX > LEGACY.minX && rect.minZ < LEGACY.maxZ && rect.maxZ > LEGACY.minZ;
+  // W1 caves own their footprints: the floor there is the cave's shell. A
+  // footprint touching the closed chunk rect is passed, so both neighbours of
+  // a shared border agree on its cuts.
+  const pits = caveFootprintsTouching(rect);
   const o = lod === "fine" ? FINE : COARSE;
-  // Chunks cut by the legacy edge keep the border step as their base so the
-  // edge's extra lines never split a cell off the shared border lattice.
-  return { base: cut ? BORDER_STEP : o.base, tolerance: o.tolerance, min: o.min, ...(cut ? { hole: LEGACY } : {}) };
+  // Chunks cut by the legacy edge or a cave keep the border step as their base
+  // so the extra lines never split a cell off the shared border lattice.
+  return { base: cut || pits.length ? BORDER_STEP : o.base, tolerance: o.tolerance, min: o.min,
+    ...(cut ? { hole: LEGACY } : {}), ...(pits.length ? { pits } : {}) };
+}
+/** Cave replacement footprints touching a closed rectangle. */
+export function caveFootprintsTouching(rect: Rect): Rect[] {
+  return CAVE_SOURCES.map(c => c.footprint)
+    .filter(f => f.minX <= rect.maxX && f.maxX >= rect.minX && f.minZ <= rect.maxZ && f.maxZ >= rect.minZ);
 }
 
 /** `undefined`: automatic, i.e. the baked `terrain/` beside the page in a
@@ -98,6 +110,15 @@ export function* liveTerrain(ctx: ChunkBuildContext, chunk: ChunkDescriptor, lod
       indices: positions.length / 3 > 65535 ? new Uint32Array(indices) : new Uint16Array(indices),
     });
     if (ctx.due()) yield;
+    // W1 cave shells for this column, clipped to it (layer-0 recipe parts).
+    // Their collar edge lies on the floor, so the seam is the floor itself.
+    if (caveFootprintsTouching(rect).length)
+      for (const def of caves(ctx.floor)) {
+        const part = caveShellByColumn(def, lod, [{ id: chunk.id, rect }]).get(chunk.id);
+        // Named so the codec's suffix round-trips: `<chunk>.cave-<id>`.
+        if (part) meshes.push({ ...part, name: `${chunk.id}.cave-${def.id}` });
+        if (ctx.due()) yield;
+      }
     const mirror = brineMirror(ctx.floor, min.x, min.z, max.x, max.z, chunk.id);
     if (mirror) meshes.push(mirror);
     return { meshes, instances: [] } satisfies ChunkRecipe;

@@ -4,7 +4,7 @@ import { caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
 import { CRAFT_PROFILES } from "../src/content/regions/passages.js";
-import { createWorldQueries, type Solid } from "../src/sim/world.js";
+import { createWorldQueries, gameWorld, type Solid } from "../src/sim/world.js";
 import { caveOwner, createCaveWorldQueries } from "../src/sim/caveWorld.js";
 import type { Capsule, Vec3 } from "../src/sim/types.js";
 import { boxDistance } from "../src/world/frame.js";
@@ -16,10 +16,9 @@ export const source = def.source;
 export const DIVER: Capsule = CRAFT_PROFILES.diver;
 export const SMALL: Capsule = CRAFT_PROFILES.small;
 export const fine = caveShell(def, "fine"), coarse = caveShell(def, "coarse");
-// The baseline's WORLD_BOUNDS still ends at the legacy route rectangle; C3
-// widens it to the S1 envelope. Until then the physical checks run in a frame
-// shifted into it. Sweeps, support and clearance are translation-invariant.
-export const SHIFT = { x: 300, y: 0, z: 90 };
+// C4: C3's envelope bounds landed, so the physical checks run in the real
+// frame (the shift helpers are kept, at zero, so the cave tests read as before).
+export const SHIFT = { x: 0, y: 0, z: 0 };
 export const shift = (p: Readonly<Vec3>): Vec3 => ({ x: p.x + SHIFT.x, y: p.y, z: p.z + SHIFT.z });
 export const shiftSolid = (s: Solid): Solid => ({ id: s.id, min: shift(s.min), max: shift(s.max) });
 export const shiftRect = (r: Rect): Rect => ({ minX: r.minX + SHIFT.x, maxX: r.maxX + SHIFT.x, minZ: r.minZ + SHIFT.z, maxZ: r.maxZ + SHIFT.z });
@@ -31,7 +30,8 @@ export function worldWith(extra: readonly Solid[] = []) {
   return createCaveWorldQueries({ solids: extra.map(shiftSolid), floor: shiftedFloor, guards: [shiftRect(LEGACY_PRESERVE)],
     caves: [{ ...owner, footprint: shiftRect(owner.footprint), rock: owner.rock.map(shiftSolid) }] });
 }
-export const world = worldWith();
+/** The wired game world (C4): every solid, the shared floor and the caves. */
+export const world = gameWorld();
 /** The R1 floor-wrapper-only world, kept to show what it misses. */
 export const caveFloor = withCaveFloors(worldFloor);
 export const wrapperWorld = createWorldQueries(def.rock.map(shiftSolid), (x, z) => caveFloor(x - SHIFT.x, z - SHIFT.z));

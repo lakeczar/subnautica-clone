@@ -6,7 +6,7 @@ import { ITEMS, RECIPES, SOURCES, techRecord } from "../../src/content/registry.
 import type { ItemKind, RecipeId } from "../../src/content/registry.js";
 import { executeCommand, stepGame } from "../../src/sim/step.js";
 import { createGame } from "../../src/sim/state.js";
-import { createWorldQueries } from "../../src/sim/world.js";
+import { gameWorld } from "../../src/sim/world.js";
 import { cabinHull } from "../../src/sim/fleet.js";
 import type { GameCommand, GameEvent, GameState, VehicleState, WorldQueries } from "../../src/sim/types.js";
 import { emptyRun, freshMinima, lowerMinima } from "./timeline.js";
@@ -42,7 +42,7 @@ export function knownRecords(s: GameState): string[] {
 
 export class Driver {
   state: GameState;
-  readonly world: WorldQueries = createWorldQueries();
+  readonly world: WorldQueries = gameWorld();
   readonly run: RunRecord;
   phase = "";
   private leg: LegRecord | null = null;
