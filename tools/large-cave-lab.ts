@@ -35,7 +35,8 @@ import { createCaveLoader } from "../src/render/caves/large/loader.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
 import { collisionBytes } from "../src/world/caves/large/collision.js";
 import { composeCaveWorld, hullFloorFromSupport, largeCaveCollider } from "../src/world/caves/large/compose.js";
-import { caveWorldMap, CavePins, coverageProblems, shownLods } from "../src/world/caves/large/streaming.js";
+import { caveArtMinimum, caveWorldMap, CaveGate, CavePins, COVERAGE_REACH, coverageProblems, shownLods } from "../src/world/caves/large/streaming.js";
+import { WINDOW_BYTES } from "../src/world/caves/large/lampWindow.js";
 import { chunkKey } from "../src/world/caves/large/mesh.js";
 import { createResidency } from "../src/world/residency.js";
 import type { LodLevel } from "../src/world/types.js";
@@ -75,11 +76,10 @@ const loadedBytes = await loadBytes();
 const tFetched = performance.now();
 const loaded: LoadedCave = loadCaveBake(S, loadedBytes.bytes);
 const tCollision = performance.now();
-const cave = createLargeCave(S, worldFloor);
+// The map from the bake's own layout: one seabed lattice, no field-wide pass.
+const cave = createLargeCave(S, worldFloor, loaded.layout);
 const cm = caveWorldMap(cave);
 const tMap = performance.now();
-if (cave.chunks.map(chunkKey).join() !== loaded.bake.header.chunks.map(c => `${c.cx}:${c.cy}:${c.cz}`).join())
-  throw new Error("lab: the bake's chunk list differs from the source's (stale bake?)");
 
 // --- Collision: the production exterior world, composed with the cave ---------
 const world = composeCaveWorld({ exterior: createWorldQueries(), solids: SOLIDS, floor: surfaceHeight, caves: [largeCaveCollider(loaded.collision)] });
@@ -127,8 +127,17 @@ const loader = createCaveLoader({ scene, material: caveMaterial, source: {
 } });
 const residency = createResidency({ map: pins.view, loader, budget: { cpuBytes: budgetMiB * 1048576, gpuBytes: budgetMiB * 1048576 } });
 const residentCollision = collisionBytes(loaded.collision);
-let occupancyBytes = 0;
-for (const c of cave.chunks) occupancyBytes += loaded.occupancy(c.cx + cave.lattice.nx * (c.cy + cave.lattice.ny * c.cz))?.byteLength ?? 0;
+// Fixed bytes, counted before any art is admitted (LC-03): every buffer the
+// loaded cave keeps, plus the lamp window shown and staged (CPU) and bound (GPU).
+const fixed = { cpu: loaded.retainedBytes + 2 * WINDOW_BYTES, gpu: WINDOW_BYTES };
+// Other owners' share (a URL knob and `lcLab.reserveOther` for pressure tests).
+let other = Number(params.get("other") ?? 0) * 1048576;
+const external = (): void => residency.setExternalBytes({ cpu: fixed.cpu + other, gpu: fixed.gpu + other });
+external();
+const artCost = (id: string): { fine: number; coarse: number } => loaded.artCost[loaded.index.get(chunkKey(cm.byId(id)!.coord))!]!;
+const artMinimum = caveArtMinimum(cm, artCost);
+const gate = new CaveGate(cm);
+const shareOk = (): boolean => budgetMiB * 1048576 - fixed.cpu - other >= artMinimum && budgetMiB * 1048576 - fixed.gpu - other >= artMinimum;
 
 // --- Player -------------------------------------------------------------------
 type Mode = "diver" | "dart" | "creel" | "free";
@@ -191,11 +200,18 @@ function step(): void {
       z: state.position.z + (f.z * inp.forward + Math.sin(state.yaw) * inp.right) * sp * DT };
     return;
   }
-  if (state.held) return;
-  const t = performance.now();
+  const t = performance.now(), before = { ...state.position }, velocity = { ...state.velocity };
   if (state.mode === "diver") swim(); else pilot(SHAPES[state.mode], state.mode);
   const us = (performance.now() - t) * 1000;
   stepCost.calls++; stepCost.us += us; stepCost.maxUs = Math.max(stepCost.maxUs, us);
+  // The gate (LC-02), against what this frame will draw: a move whose
+  // destination is not covered is refused and the craft stops. Cold entry,
+  // zone changes, turns and a shrinking share all land here.
+  state.held = !gate.allows(shown, actorBox(state.position, SHAPES[state.mode]));
+  if (state.held) {
+    state.position = before; state.velocity = { x: 0, y: 0, z: 0 }; void velocity;
+    gated++;
+  } else moved = Math.hypot(state.position.x - before.x, state.position.y - before.y, state.position.z - before.z);
 }
 /** The diver as `step.ts` swims: speed, slices of 0.12 m, support snap. */
 function swim(): void {
@@ -282,32 +298,40 @@ function show(name: string, lamp?: boolean): void {
 
 // --- Per-frame ------------------------------------------------------------------
 const frames: { frame: number; dt: number; cpu: number; gpu: number; residencyMs: number; lampMs: number }[] = [];
-const coverage = { frames: 0, failures: 0, first: "" };
-let lastFrame = performance.now(), accumulator = 0, frame = 0, readyAt = 0;
+/** failures: frames that moved while the drawn frame left the actor uncovered. */
+const coverage = { frames: 0, failures: 0, unsafeMetres: 0, exposedStill: 0, first: "" };
+let lastFrame = performance.now(), accumulator = 0, frame = 0, readyAt = 0, moved = 0, gated = 0;
+let shown: ReadonlyMap<string, LodLevel> = new Map();
 function zoneOf(p: Vec3): number { return cave.field.owned(p.x, p.y, p.z) && p.y < worldFloor(p.x, p.z) ? cave.field.zoneAt(p.x, p.y, p.z) : -1; }
 const hex = (h: string): [number, number, number] => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
 function frameUpdate(): void {
   const now = performance.now(), dt = now - lastFrame; lastFrame = now;
+  // 1. Residency for this frame first, round the current pose and its look-ahead.
+  const eye0 = { x: state.position.x, y: state.position.y + EYE[state.mode], z: state.position.z };
+  const r0 = performance.now();
+  if (state.mode !== "free") pins.update(eye0, actorBox(state.position, SHAPES[state.mode]), Math.hypot(state.velocity.x, state.velocity.y, state.velocity.z) * 0.5);
+  else pins.update(eye0);
+  const stats = residency.update(eye0);
+  shown = shownLods(residency.units());
+  const r1 = performance.now();
+  // 2. Gated steps against what this frame draws.
   accumulator = Math.min(accumulator + dt / 1000, 0.25);
+  moved = 0;
   while (accumulator >= DT) { step(); accumulator -= DT; }
+  if (state.mode !== "free" && !state.held && !readyAt && frame > 2) readyAt = performance.now();
   const eye = { x: state.position.x, y: state.position.y + EYE[state.mode], z: state.position.z };
   camera.position.set(eye.x, eye.y, eye.z);
   const dir = new Vector3(Math.sin(state.yaw) * Math.cos(state.pitch), Math.sin(state.pitch), -Math.cos(state.yaw) * Math.cos(state.pitch));
   camera.setTarget(camera.position.add(dir));
-  const r0 = performance.now();
-  pins.update(eye);
-  const stats = residency.update(eye);
-  residency.setExternalBytes({ cpu: residentCollision + occupancyBytes + (lampWindow.grid?.data.byteLength ?? 0), gpu: lampWindow.stats.bytes });
-  const r1 = performance.now();
+  const r1b = performance.now();
   lampWindow.update(eye);
   const r2 = performance.now();
-  // Cold entry: hold the player until its zone and every chunk it touches are drawn fine.
-  const shown = shownLods(residency.units());
-  if (state.mode !== "free") {
-    const box = actorBox(state.position, SHAPES[state.mode]);
-    const problems = coverageProblems(cm, shown, box, 2, pins.current.zone);
-    if (state.held) { if (!problems.length && frame > 2) { state.held = false; readyAt = performance.now(); } }
-    else { coverage.frames++; if (problems.length) { coverage.failures++; coverage.first ||= `${frame}: ${problems[0]}`; } }
+  // 3. The invariant on the frame about to be drawn: no metre moved while uncovered.
+  if (state.mode !== "free" && readyAt) {
+    const problems = coverageProblems(cm, shown, actorBox(state.position, SHAPES[state.mode]), COVERAGE_REACH, pins.current.zone);
+    coverage.frames++;
+    if (problems.length && moved > 0) { coverage.failures++; coverage.unsafeMetres += moved; coverage.first ||= `${frame}: ${problems[0]}`; }
+    else if (problems.length) coverage.exposedStill++;
   }
   // Optics: exterior water from the shared optics; the cave tint from the zone.
   updateOpticalUniforms(optics, camera.position, null);
@@ -323,7 +347,7 @@ function frameUpdate(): void {
   const c0 = performance.now();
   scene.render();
   const cpu = performance.now() - c0;
-  frames.push({ frame, dt, cpu, gpu: gpuTimer.gpuFrameTimeCounter.lastSecAverage / 1e6, residencyMs: r1 - r0, lampMs: r2 - r1 });
+  frames.push({ frame, dt, cpu, gpu: gpuTimer.gpuFrameTimeCounter.lastSecAverage / 1e6, residencyMs: r1 - r0, lampMs: r2 - r1b });
   if (frames.length > 20000) frames.splice(0, 10000);
   frame++;
   canvas.dataset.frame = String(frame);
@@ -337,13 +361,13 @@ function hud(stats: ReturnType<typeof residency.update>, zone: number): void {
   const units = residency.units().filter(u => u.state === "shown"), fine = units.filter(u => u.lod === "fine").length;
   const recent = frames.slice(-120), p = (k: "dt" | "cpu", q: number) => [...recent.map(f => f[k])].sort((a, b) => a - b)[Math.floor(q * (recent.length - 1))] ?? 0;
   el.textContent = [
-    `${state.mode}${state.held ? " (held: cave streaming in)" : ""}  ${zone >= 0 ? S.zones[zone]!.label : "outside"}  depth ${(-state.position.y).toFixed(1)} m`,
+    `${state.mode}${state.held ? ` (held: ${shareOk() ? "cave streaming in" : "cave art share below its minimum"})` : ""}  ${zone >= 0 ? S.zones[zone]!.label : "outside"}  depth ${(-state.position.y).toFixed(1)} m`,
     `speed ${Math.hypot(state.velocity.x, state.velocity.y, state.velocity.z).toFixed(1)} m/s  lamp ${state.lamp ? "on" : "off"} (L)`,
     `frame p50 ${p("dt", 0.5).toFixed(1)} p95 ${p("dt", 0.95).toFixed(1)} ms  cpu ${p("cpu", 0.5).toFixed(1)} ms  draws ${instrumentation.drawCallsCounter.current}`,
     `chunks shown ${units.length} (fine ${fine})  pending ${stats.pending}  ${stats.settled ? "settled" : "streaming"}`,
-    `art cpu ${(stats.cpuBytes / 1048576).toFixed(1)} / gpu ${(stats.gpuBytes / 1048576).toFixed(1)} MiB (budget ${budgetMiB})`,
+    `accounted cpu ${(stats.cpuBytes / 1048576).toFixed(1)} / gpu ${(stats.gpuBytes / 1048576).toFixed(1)} MiB of ${budgetMiB} (fixed ${(fixed.cpu / 1048576).toFixed(1)} cpu, art minimum ${(artMinimum / 1048576).toFixed(1)})`,
     `collision ${(residentCollision / 1048576).toFixed(1)} MiB resident  step ${(stepCost.us / Math.max(1, stepCost.calls)).toFixed(0)} µs (max ${stepCost.maxUs.toFixed(0)})`,
-    `lamp window builds ${lampWindow.stats.built}  coverage misses ${coverage.failures}/${coverage.frames}`,
+    `lamp window builds ${lampWindow.stats.built}  gated ${gated}  unsafe moves ${coverage.failures}/${coverage.frames}`,
     `load: ${loadedBytes.source} ${(loadedBytes.packed / 1048576).toFixed(1)} MiB packed, collision ${(tCollision - tFetched).toFixed(0)} ms`,
   ].join("\n");
 }
@@ -367,9 +391,12 @@ addEventListener("resize", () => engine.resize());
 
 const percentile = (a: number[], q: number): number => { const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * s.length))] ?? 0; };
 (window as unknown as { lcLab: unknown }).lcLab = {
-  scene, engine, state, residency, world, cave, loaded, pins, lampWindow, coverage, frames, stepCost, show, setMode, VIEWS,
+  scene, engine, state, residency, world, cave, loaded, pins, lampWindow, coverage, frames, stepCost, show, setMode, VIEWS, gate,
+  fixed, artMinimum, get gated() { return gated; }, shareOk,
+  /** Another owner reserves (or releases) bytes of the shared budget. */
+  reserveOther(bytes: number) { other = bytes; external(); },
   load: { source: loadedBytes.source, packedBytes: loadedBytes.packed, rawBytes: loadedBytes.bytes.byteLength, fetchMs: tFetched - t0,
-    collisionMs: tCollision - tFetched, mapMs: tMap - tCollision, collisionBytes: residentCollision, occupancyBytes },
+    collisionMs: tCollision - tFetched, mapMs: tMap - tCollision, collisionBytes: residentCollision, retained: loaded.retained, retainedBytes: loaded.retainedBytes, fixedCpu: fixed.cpu, artMinimum },
   get readyMs() { return readyAt ? readyAt - t0 : null; },
   /** Drive a route through the same input path as the keys (boost on). */
   autopilot(routeId: string, mode: Exclude<Mode, "free">, speed: number | null = null) {

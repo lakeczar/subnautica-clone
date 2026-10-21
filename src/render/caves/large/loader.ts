@@ -3,7 +3,7 @@ import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js
 import type { Scene } from "@babylonjs/core/scene.js";
 import type { ChunkLoader, PreparedArt, ResidentArt, UploadJob } from "../../../world/residency.js";
 import type { ChunkDescriptor, LodLevel } from "../../../world/types.js";
-import type { ArtArrays } from "../../../world/caves/large/bake.js";
+import { artBytes, type ArtArrays } from "../../../world/caves/large/bake.js";
 import { KIT_RENDERING_GROUP } from "../../kit/loader.js";
 import { LARGE_CAVE_ATTRIBUTE } from "./caveShader.js";
 
@@ -20,8 +20,7 @@ export interface CaveArtSource {
   art(chunk: ChunkDescriptor, lod: LodLevel): { rock: ArtArrays; life: ArtArrays | null };
 }
 
-export const artBytes = (a: ArtArrays): number =>
-  a.positions.byteLength + a.normals.byteLength + a.colors.byteLength + a.light.byteLength + a.indices.byteLength;
+export { artBytes };
 
 function upload(a: ArtArrays, name: string, scene: Scene, material: ShaderMaterial, meta: Record<string, unknown>): Mesh {
   const mesh = new Mesh(name, scene);

@@ -18,6 +18,10 @@ export interface ArtArrays {
   readonly light: Float32Array;
   readonly indices: Uint16Array | Uint32Array;
 }
+/** Bytes the renderer keeps of one art set (each array once on CPU and GPU). */
+export const artBytes = (a: ArtArrays): number =>
+  a.positions.byteLength + a.normals.byteLength + a.colors.byteLength + a.light.byteLength + a.indices.byteLength;
+
 export interface BakedChunk {
   readonly coord: ChunkCoord;
   readonly fine: ArtArrays;

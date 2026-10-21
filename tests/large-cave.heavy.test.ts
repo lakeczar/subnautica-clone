@@ -14,7 +14,10 @@ import { encodeCave, loadCaveBake, prepareCave } from "../src/render/caves/large
 import { createLargeCaveMaterial } from "../src/render/caves/large/caveMaterial.js";
 import { artBytes, createCaveLoader } from "../src/render/caves/large/loader.js";
 import { boxOverlapsTriangle, buildCollider, caveRockAt, chunkIndex, createCandidates, createCollision, gatherTriangles } from "../src/world/caves/large/collision.js";
-import { caveWorldMap, CavePins } from "../src/world/caves/large/streaming.js";
+import { caveArtMinimum, caveWorldMap, CavePins } from "../src/world/caves/large/streaming.js";
+import { createLargeCave } from "../src/world/caves/large/build.js";
+import { WINDOW_BYTES } from "../src/world/caves/large/lampWindow.js";
+import { simulate } from "./large-cave-stream-support.js";
 import { chunkKey } from "../src/world/caves/large/mesh.js";
 import { createResidency } from "../src/world/residency.js";
 import { boxSamples, productionWorld, random, seek } from "./large-cave-support.js";
@@ -118,4 +121,52 @@ test("Canopy bake: every decoded collider equals the live one; collision never d
     assert.equal(scene.meshes.filter(m => m.name.startsWith("chunk:")).length, 0, "every chunk mesh disposed");
     assert.equal(answer(), before, "collision answers changed with art residency");
   } finally { scene.dispose(); engine.dispose(); }
+});
+
+/** Every distinct ArrayBuffer reachable through an object graph's own
+ * properties, arrays, Maps and Sets (functions are not entered). */
+function reachableBuffers(roots: readonly unknown[]): Map<ArrayBufferLike, string> {
+  const seen = new Set<unknown>(), found = new Map<ArrayBufferLike, string>(), stack: [unknown, string][] = roots.map((r, i) => [r, `root${i}`]);
+  while (stack.length) {
+    const [v, path] = stack.pop()!;
+    if (v === null || typeof v !== "object" || seen.has(v)) continue;
+    seen.add(v);
+    if (ArrayBuffer.isView(v)) { if (!found.has(v.buffer)) found.set(v.buffer, path); continue; }
+    if (v instanceof ArrayBuffer) { if (!found.has(v)) found.set(v, path); continue; }
+    if (v instanceof Map) { for (const [k, x] of v) { stack.push([k, `${path}.key`], [x, `${path}.value`]); } continue; }
+    if (v instanceof Set) { for (const x of v) stack.push([x, `${path}.item`]); continue; }
+    if (Array.isArray(v)) { if (v.length && typeof v[0] === "number") continue; v.forEach((x, i) => stack.push([x, `${path}[${i}]`])); continue; }
+    for (const [k, x] of Object.entries(v)) stack.push([x, `${path}.${k}`]);
+  }
+  return found;
+}
+
+test("LC-03: every buffer a loaded cave keeps is in its accounted fixed bytes (independent enumeration)", () => {
+  const loaded = loadCaveBake(S, encodeCave(prepared)), runtime = createLargeCave(S, worldFloor, loaded.layout);
+  const buffers = reachableBuffers([loaded, runtime, caveWorldMap(runtime)]);
+  const total = [...buffers.keys()].reduce((n, b) => n + b.byteLength, 0);
+  assert.equal(total, loaded.retainedBytes, `enumerated ${total} bytes in ${buffers.size} buffers, accounted ${loaded.retainedBytes}: ` +
+    JSON.stringify(loaded.retained));
+  // The runtime map shares the bake's seabed lattice instead of sampling another.
+  assert.equal(runtime.field.ownership.ground, loaded.collision.ownership.ground);
+  assert.ok(loaded.retained.some(r => r.name === "bake" && r.bytes >= 12e6), "the decompressed bake is counted");
+});
+
+test("LC-02 with the Canopy's real chunk costs and fixed bytes: the minimum share tours clean; a 16 MiB cut after entry holds, never moves uncovered", () => {
+  const loaded = loadCaveBake(S, encodeCave(prepared)), runtime = createLargeCave(S, worldFloor, loaded.layout), cm = caveWorldMap(runtime);
+  const cost = (id: string) => loaded.artCost[loaded.index.get(chunkKey(cm.byId(id)!.coord))!]!;
+  const fixedBytes = loaded.retainedBytes + 2 * WINDOW_BYTES, minimum = caveArtMinimum(cm, cost);
+  const r = (id: string) => S.routes.find(x => x.id === id)!.path;
+  const tour = [...r("canopy_roots.route.craft_loop").slice(0, 9), ...r("canopy_roots.route.pool_spur"), ...[...r("canopy_roots.route.pool_spur")].reverse(),
+    ...r("canopy_roots.route.west_loop")];
+  const run = (o: Partial<Parameters<typeof simulate>[0]>) => simulate({ cm, cost, budgetBytes: fixedBytes + minimum, fixedBytes, path: tour, speed: 16,
+    shape: CRAFT_PROFILES.small, gate: true, ...o });
+  const clean = run({});
+  assert.ok(clean.finished && clean.unsafeMetres === 0 && clean.heldAfterEntry === 0 && clean.cutFrames === 0, JSON.stringify(clean));
+  const squeezed = run({ shareEvents: [{ frame: clean.readyFrame + 400, otherBytes: 16 * 1048576 }, { frame: clean.readyFrame + 900, otherBytes: 0 }] });
+  assert.equal(squeezed.unsafeMetres, 0, squeezed.firstUnsafe);
+  assert.ok(squeezed.finished && squeezed.heldAfterEntry > 0, JSON.stringify(squeezed));
+  const control = run({ shareEvents: [{ frame: clean.readyFrame + 400, otherBytes: 16 * 1048576 }, { frame: clean.readyFrame + 900, otherBytes: 0 }], gate: false });
+  assert.ok(control.unsafeMetres > 1, `control moved ${control.unsafeMetres.toFixed(1)} m uncovered`);
+  if (process.env.LC_VERBOSE) console.log(JSON.stringify({ fixedMiB: fixedBytes / 1048576, minimumMiB: minimum / 1048576, clean, squeezed, control: control.unsafeMetres }));
 });

@@ -12,6 +12,7 @@
 //            Dart at boost along the craft loop and the west loop, the Creel
 //            along the craft loop, and a diver through the squeeze, with frame,
 //            step and residency numbers and the coverage invariant.
+// - stress:  LC-02/03 pressure: the R1 32 MiB budget, and a share cut after entry.
 // - drive:   one ordinary-control run: real key presses and mouse drags.
 // Writes <outdir>/lc-gpu.json. Closes everything it opened.
 // Env: LC_PLAYWRIGHT (playwright-core dir), LC_CHROME (binary).
@@ -85,6 +86,43 @@ try {
     await page.screenshot({ path: join(out, "measure-end.png") });
     await page.close();
   }
+  if (what === "stress" || what === "all") {
+    // LC-02/03 on the real loader and chunk costs. (1) The R1 budget of
+    // 32 MiB: with every retained byte counted the cave's art share is below
+    // its minimum, so the gate holds the Dart at the hollow and nothing moves
+    // uncovered. (2) A budget with the minimum share plus 4 MiB: after
+    // entry another owner reserves 16 MiB for 4 s mid-run, then releases it.
+    result.stress = [];
+    {
+      const page = await open("hud=0&mode=dart&budget=32");
+      await page.evaluate(() => window.lcLab.autopilot("canopy_roots.route.craft_loop", "dart", 16));
+      await page.waitForTimeout(12000);
+      result.stress.push({ case: "budget 32 MiB", ...(await page.evaluate(() => ({ shareOk: window.lcLab.shareOk(), fixed: window.lcLab.fixed,
+        artMinimum: window.lcLab.artMinimum, gated: window.lcLab.gated, coverage: { ...window.lcLab.coverage }, position: window.lcLab.state.position,
+        held: window.lcLab.state.held, residency: window.lcLab.residency.stats }))) });
+      await page.screenshot({ path: join(out, "stress-budget32.png") });
+      await page.close();
+    }
+    {
+      const probe = await open("hud=0&mode=free");
+      const need = await probe.evaluate(() => Math.ceil((Math.max(window.lcLab.fixed.cpu, window.lcLab.fixed.gpu) + window.lcLab.artMinimum) / 1048576) + 4);
+      await probe.close();
+      const page = await open(`hud=0&mode=dart&budget=${need}`);
+      await page.waitForFunction(() => window.lcLab.readyMs !== null, null, { timeout: 120000 });
+      const start = await page.evaluate(() => { window.lcLab.autopilot("canopy_roots.route.craft_loop", "dart", 16); return window.lcLab.frameCount(); });
+      await page.waitForTimeout(4000);
+      const before = await page.evaluate(() => ({ gated: window.lcLab.gated, p: { ...window.lcLab.state.position } }));
+      await page.evaluate(() => window.lcLab.reserveOther(16 * 1048576));
+      await page.waitForTimeout(4000);
+      const during = await page.evaluate(() => ({ gated: window.lcLab.gated, p: { ...window.lcLab.state.position }, held: window.lcLab.state.held }));
+      await page.screenshot({ path: join(out, "stress-share-reduced.png") });
+      await page.evaluate(() => window.lcLab.reserveOther(0));
+      await page.waitForFunction(() => window.lcLab.state.autopilot === null, null, { timeout: 120000 }).catch(() => {});
+      result.stress.push({ case: "share reduced by 16 MiB after entry", budgetMiB: need, before, during,
+        finished: await page.evaluate(() => window.lcLab.state.autopilot === null), report: await page.evaluate(f => window.lcLab.report(f), start) });
+      await page.close();
+    }
+  }
   if (what === "drive" || what === "all") {
     // Ordinary control: from the shelf, keys and drags only.
     const page = await open("mode=dart");
@@ -119,7 +157,8 @@ try {
     result.drive = { ...result.drive, log, report: await page.evaluate(() => window.lcLab.report()) };
     await page.close();
   }
-  failed = result.errors.length > 0 || (result.runs ?? []).some(r => r.coverage.failures > 0) || (result.drive?.report.coverage.failures ?? 0) > 0;
+  failed = result.errors.length > 0 || (result.runs ?? []).some(r => r.coverage.failures > 0) || (result.drive?.report.coverage.failures ?? 0) > 0 ||
+    (result.stress ?? []).some(x => (x.coverage ?? x.report.coverage).failures > 0);
 } finally {
   await browser.close();
   await server.close();

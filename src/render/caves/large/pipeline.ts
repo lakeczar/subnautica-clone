@@ -1,6 +1,6 @@
 import type { LargeCaveSource } from "../../../content/caves/largeCave.js";
 import { buildCollision, createLargeCave, type BakedLayout, type LargeCave } from "../../../world/caves/large/build.js";
-import { bakeChunk, bakeGround, encodeBake, readBake, type Bake, type BakedChunk, type BakeInput } from "../../../world/caves/large/bake.js";
+import { artBytes, bakeChunk, bakeGround, encodeBake, readBake, type Bake, type BakedChunk, type BakeInput } from "../../../world/caves/large/bake.js";
 import { buildCollider, chunkIndex, createCollision, type CaveCollision } from "../../../world/caves/large/collision.js";
 import type { FloorFunction } from "../../../world/caves/large/field.js";
 import { placeLife, type LifePlacement } from "../../../world/caves/large/life.js";
@@ -76,6 +76,8 @@ export interface LoadedCave {
    * They are fixed CPU bytes: count them before any art is admitted. */
   readonly retained: readonly { readonly name: string; readonly bytes: number }[];
   readonly retainedBytes: number;
+  /** Art bytes per chunk (by bake index): fine with its life, and coarse. */
+  readonly artCost: readonly { readonly fine: number; readonly coarse: number }[];
   readonly ms: number;
 }
 
@@ -89,18 +91,19 @@ export function loadCaveBake(source: LargeCaveSource, buffer: Uint8Array): Loade
   const ownership: CaveOwnership = { domain: source.domain, collars: source.collars, roofMin: source.roofMin, voxel: h.ground.voxel, gx: h.ground.gx, gz: h.ground.gz, ground };
   const nx = Math.round((source.domain.max.x - source.domain.min.x) / source.chunk), ny = Math.round((source.domain.max.y - source.domain.min.y) / source.chunk);
   const collision = createCollision(source.id, ownership, source.chunk, 0, h.chunks.map(c => c.cx + nx * (c.cy + ny * c.cz)));
-  const index = new Map<string, number>(), occupancy = new Map<number, Uint8Array>();
+  const index = new Map<string, number>(), occupancy = new Map<number, Uint8Array>(), artCost: { fine: number; coarse: number }[] = [];
   h.chunks.forEach((e, i) => {
     index.set(`${e.cx}:${e.cy}:${e.cz}`, i);
     const c = bakeChunk(bake, i), k = chunkIndex(collision, e.cx, e.cy, e.cz);
     const art = { positions: c.fine.positions, indices: c.fine.indices instanceof Uint32Array ? c.fine.indices : new Uint32Array(c.fine.indices) };
     collision.colliders[k] = buildCollider(`${e.cx}:${e.cy}:${e.cz}`, k, art, c.band);
     occupancy.set(k, c.occupancy);
+    artCost.push({ fine: artBytes(c.fine) + (c.life ? artBytes(c.life) : 0), coarse: artBytes(c.coarse) });
   });
   const retained = retainedBuffers(bake, collision, occupancy);
   return { source, bake, collision, chunk: i => bakeChunk(bake, i), occupancy: k => occupancy.get(k) ?? null, occupancies: occupancy, index,
     layout: { ownership, chunks: h.chunks.map(c => ({ cx: c.cx, cy: c.cy, cz: c.cz })) },
-    retained, retainedBytes: retained.reduce((n, r) => n + r.bytes, 0), ms: Date.now() - started };
+    retained, retainedBytes: retained.reduce((n, r) => n + r.bytes, 0), artCost, ms: Date.now() - started };
 }
 
 /** Whole ArrayBuffers behind the loaded cave, each counted once. */
