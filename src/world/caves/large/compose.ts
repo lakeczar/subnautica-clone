@@ -7,7 +7,7 @@ import {
   boxOverlapsTriangle, caveRockAt, caveSegmentClear, caveSupport, createCandidates, gatherTriangles,
   sweepBoxBox, sweepBoxTriangle, type CaveCollision, type SweepHit,
 } from "./collision.js";
-import { boxTouchesOwned, collarAt, owns } from "./ownership.js";
+import { boxTouchesOwned, capAt, collarAt, owns } from "./ownership.js";
 
 /** One world-query interface for every cave (proposal for `sim/world.ts`).
  *
@@ -51,6 +51,9 @@ export interface CaveCollider {
   masksGround(x: number, z: number): boolean;
   /** Whether the point is owned by this cave (sight lines skip the exterior floor there). */
   ownsPoint(p: Vec3): boolean;
+  /** The Y interval of column (x, z) this cave owns, or null. Inside it the
+   * cave alone says what is rock; outside it the exterior floor does. */
+  ownedSpan(x: number, z: number): readonly [number, number] | null;
   readonly baseY: number;
 }
 
@@ -78,12 +81,24 @@ export function largeCaveCollider(col: CaveCollision): CaveCollider {
     blocked(c, e) {
       gatherTriangles(col, { min: { x: c.x - e.x - 0.01, y: c.y - e.y - 0.01, z: c.z - e.z - 0.01 }, max: { x: c.x + e.x + 0.01, y: c.y + e.y + 0.01, z: c.z + e.z + 0.01 } }, cand);
       for (let t = 0; t < cand.count; t++) if (boxOverlapsTriangle(c.x, c.y, c.z, e.x, e.y, e.z, cand.v, t * 9, 0.001)) return true;
-      return caveRockAt(col, c);
+      // No surface crosses the box, so each owned part of it is wholly rock
+      // or wholly water: test the centre and the (slightly inset) corners
+      // that this cave owns. The unowned part is the composer's to check.
+      for (let q = -1; q < 8; q++) {
+        const p = q < 0 ? c : { x: c.x + ((q & 1) ? 1 : -1) * (e.x - 0.01), y: c.y + ((q & 2) ? 1 : -1) * (e.y - 0.01), z: c.z + ((q & 4) ? 1 : -1) * (e.z - 0.01) };
+        if (owns(o, p.x, p.y, p.z) && caveRockAt(col, p)) return true;
+      }
+      return false;
     },
     segmentClear: (a, b) => caveSegmentClear(col, a, b),
     support: (x, z, fromY) => caveSupport(col, x, z, fromY),
     masksGround: (x, z) => collarAt(o, x, z) !== null,
     ownsPoint: p => owns(o, p.x, p.y, p.z),
+    ownedSpan(x, z) {
+      const d = o.domain;
+      if (x < d.min.x || x > d.max.x || z < d.min.z || z > d.max.z) return null;
+      return [d.min.y, capAt(o, x, z)];
+    },
   };
 }
 
@@ -169,6 +184,25 @@ export function composeCaveWorld(options: CaveWorldOptions): CaveWorld {
     return { position: pos, hit: any };
   }
 
+  /** Full-shape ownership for the part of a box no cave owns: sample its
+   * footprint (at most 0.5 m apart, edges included) and, in every column,
+   * require the box below that column's exterior floor to lie inside some
+   * cave's owned span. Deep cave water under an overhead seabed is owned, so
+   * it passes; a box buried in exterior ground beside a collar does not. */
+  function buriedInExterior(box: Aabb): boolean {
+    const nx = Math.max(2, Math.ceil((box.max.x - box.min.x) / 0.5) + 1), nz = Math.max(2, Math.ceil((box.max.z - box.min.z) / 0.5) + 1);
+    for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) {
+      const x = box.min.x + (box.max.x - box.min.x) * i / (nx - 1), z = box.min.z + (box.max.z - box.min.z) * k / (nz - 1);
+      // Owned spans covering the whole box need no floor sample (deep caves).
+      const spans = caves.map(cv => cv.ownedSpan(x, z)).filter((v): v is readonly [number, number] => v !== null);
+      const covered = (lo: number, hi: number): boolean => spans.some(([a, b]) => a <= lo && hi <= b);
+      if (covered(box.min.y, box.max.y)) continue;
+      const top = Math.min(box.max.y, floor(x, z) - 0.02);
+      if (box.min.y < top && !covered(box.min.y, top)) return true;
+    }
+    return false;
+  }
+
   const world: CaveWorld = {
     counters,
     waterHeight: exterior.waterHeight,
@@ -192,6 +226,7 @@ export function composeCaveWorld(options: CaveWorldOptions): CaveWorld {
       if (!owners.length) return exterior.clearance(origin, shape);
       if (!finite(origin) || Math.max(e.x, e.z) > maxHalf) return false;
       if (owners.some(cave => cave.blocked(c, e))) return false;
+      if (buriedInExterior(box)) return false;
       return !nearSolids(box).some(s => origin.x + e.x > s.min.x + 0.001 && origin.x - e.x < s.max.x - 0.001 &&
         origin.z + e.z > s.min.z + 0.001 && origin.z - e.z < s.max.z - 0.001 && box.max.y > s.min.y + 0.001 && box.min.y < s.max.y - 0.001);
     },

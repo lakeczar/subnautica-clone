@@ -78,6 +78,8 @@ export function boxCaveCollider(owner: BoxCaveOwner, floor: (x: number, z: numbe
       return h;
     },
     masksGround: inFoot,
+    // The footprint's whole column replaces the heightfield.
+    ownedSpan: (x, z) => inFoot(x, z) ? [-Infinity, Infinity] : null,
     ownsPoint: (p: Vec3) => inFoot(p.x, p.z),
   };
 }

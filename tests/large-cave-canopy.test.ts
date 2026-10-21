@@ -92,6 +92,23 @@ test("Canopy routes: every route's profile box is in open water along its whole 
   }
 });
 
+test("Canopy LC-01: the R1 buried collar-straddling poses are refused through the production world", () => {
+  const points = [[727.8, -60], [727.8, -90], [781.9, -60], [826.2, -190], [833.8, -60]] as const;
+  buildCollision(cave, chunksNear(cave, points.map(([x, z]) => ({ x, y: worldFloor(x, z), z })), 12));
+  const world = productionWorld(cave), hull = CRAFT_PROFILES.medium;
+  for (const [x, z] of points) {
+    const feet = { x, y: worldFloor(x, z) - 1.3, z };
+    assert.equal(world.clearance(feet, DIVER), false, `diver buried at ${JSON.stringify(feet)}`);
+    const keel = { x: x + (x < 760 ? -3.5 : 3.5), y: worldFloor(x, z) - 1, z };
+    assert.equal(world.clearance(keel, hull), false, `hull keel 1 m under the seabed at ${JSON.stringify(keel)}`);
+  }
+  // Control: a pose 0.5 m above the seabed at the first point is accepted.
+  const [x, z] = points[0];
+  let top = -Infinity;
+  for (const q of boxSamples({ x, y: 0, z }, DIVER)) top = Math.max(top, worldFloor(q.x, q.z));
+  assert.equal(world.clearance({ x, y: top + 0.5, z }, DIVER), true);
+});
+
 test("Canopy diver spurs: real sweeps thread the squeeze, the crawl, the tangle and the grotto", () => {
   const spurs = S.routes.filter(r => r.profile === "diver");
   buildCollision(cave, chunksNear(cave, spurs.flatMap(r => r.path), 14));

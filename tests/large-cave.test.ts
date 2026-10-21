@@ -190,6 +190,32 @@ test("LC mouth: a craft straddling the collar edge never buries a corner in eith
   assert.ok(down.reached && down.poses.every(q => !buried(q, DIVER)), "down the shaft");
 });
 
+test("LC-01 clearance: a box buried in exterior ground beside a collar is refused on both sides, for diver and hull", () => {
+  // The R1 repro: centre unowned at X 21.8, box reaching into the collar at X 22.
+  assert.equal(world.clearance({ x: 21.8, y: -45, z: 40 }, DIVER), false);
+  const r = VAULT.collars[0]!;
+  for (const shape of [DIVER, DART]) {
+    const h = shape.radius;
+    for (const [x, z, side] of [[r.minX - h + 0.2, 40, "outside, west"], [r.minX + h - 0.2, 40, "inside, west"],
+      [32, r.maxZ + h - 0.2, "outside, north"], [32, r.maxZ - h + 0.2, "inside, north"]] as const) {
+      // Wholly buried: the box's top 0.35 m under the lowest seabed it spans.
+      let lowest = Infinity;
+      for (const q of boxSamples({ x, y: 0, z }, shape)) lowest = Math.min(lowest, vaultFloor(q.x, q.z));
+      const buriedPose = { x, y: lowest - 0.35 - shape.height, z };
+      assert.equal(world.clearance(buriedPose, shape), false, `${shape.radius} m shape buried ${side} of the collar edge`);
+      // Partly buried: feet 0.3 m under the seabed.
+      let highest = -Infinity;
+      for (const q of boxSamples({ x, y: 0, z }, shape)) highest = Math.max(highest, vaultFloor(q.x, q.z));
+      assert.equal(world.clearance({ x, y: highest - 0.3, z }, shape), false, `${shape.radius} m shape half-buried ${side}`);
+      // Control: the same column, standing clear above the seabed, is accepted.
+      assert.equal(world.clearance({ x, y: highest + 0.6, z }, shape), true, `${shape.radius} m shape above the seabed ${side}`);
+    }
+  }
+  // Deep cave water under an overhead seabed stays clear (owned, not buried).
+  assert.ok(world.clearance(centre, DIVER), "diver in the chamber");
+  assert.ok(world.clearance({ x: 26, y: -72, z: 26 }, DART), "Dart in the chamber");
+});
+
 test("LC sight and support: rock blocks sight; support reads the floor below, never the roof", () => {
   assert.equal(world.lineOfSight({ x: 24, y: -71, z: 24 }, { x: 40, y: -71, z: 28 }), true);
   assert.equal(world.lineOfSight({ x: 30, y: -70, z: 20 }, { x: 38, y: -70, z: 20 }), false, "the pillar blocks sight");
