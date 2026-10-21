@@ -8,6 +8,7 @@ import { LEGACY_BLEND, LEGACY_PRESERVE } from "../content/regions/terrain.js";
 import { opticsAt } from "./biomes/optics.js";
 import { ArtBatch } from "./geometry.js";
 import type { Point } from "./geometry.js";
+import { CAVE_SAMPLERS, CAVE_UNIFORMS, injectCaveLight } from "./caves/caveLight.js";
 import "@babylonjs/core/Shaders/ShadersInclude/instancesDeclaration.js";
 import "@babylonjs/core/Shaders/ShadersInclude/instancesVertex.js";
 
@@ -82,7 +83,11 @@ void main(){
 #endif
   gl_Position=viewProjection*w;
 }`;
-export const CEL_UNIFORMS = ["world", "viewProjection", ...opticalUniforms, "lightDirection", "time", "underwater", "lampOn"];
+export const CEL_UNIFORMS = ["world", "viewProjection", ...opticalUniforms, "lightDirection", "time", "underwater", "lampOn",
+  ...CAVE_UNIFORMS];
+/** The cave light field and exact rock occupancy (W1). The rock texture must
+ * stay R8 with nearest filtering and 255 = rock (`caves/caveMaterial.ts`). */
+export const CEL_SAMPLERS = [...CAVE_SAMPLERS];
 export const LIGHT_DIRECTION = new Vector3(-0.42, 0.85, -0.3);
 
 /** World-space value noise for the cel pass: aperiodic, so no surface
@@ -106,7 +111,8 @@ float cellEdge(vec2 p,float t){
 }
 `;
 
-export const CEL_FRAGMENT = `
+/** The cel fragment before the cave splice (tests hold the splice to it). */
+export const BASE_CEL_FRAGMENT = `
 precision highp float;
 varying vec3 vWorld; varying vec3 vNormal; varying vec4 vColor;
 uniform vec3 lightDirection; uniform float time; uniform float underwater; uniform float lampOn;
@@ -198,6 +204,11 @@ void main(){
   shade=mix(shade,vColor.rgb*1.12,step(vColor.a,-.5));
   gl_FragColor=vec4(opticalFog(shade,vWorld),1.0);
 }`;
+/** The production cel fragment with W1 cave light spliced in once: banded
+ * darkness by path length inside the active cave, sun-only caustics, a fog
+ * medium that darkens inside, and the diver lamp cone stopped by rock.
+ * Outside a cave field with the lamp off it is the base fragment's result. */
+export const CEL_FRAGMENT = injectCaveLight(BASE_CEL_FRAGMENT);
 
 function initializeOptics(material: ShaderMaterial): void {
   material.setVector3("cameraPosition", Vector3.Zero());
@@ -214,7 +225,7 @@ function initializeOptics(material: ShaderMaterial): void {
 export function createCelMaterial(scene: Scene): ShaderMaterial {
   const material = new ShaderMaterial("siltwake.cel", scene, { vertexSource: CEL_VERTEX, fragmentSource: CEL_FRAGMENT }, {
     attributes: ["position", "normal", "color"],
-    uniforms: CEL_UNIFORMS,
+    uniforms: CEL_UNIFORMS, samplers: CEL_SAMPLERS,
   });
   material.backFaceCulling = false;
   initializeOptics(material);

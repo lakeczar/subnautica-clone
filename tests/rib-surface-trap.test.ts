@@ -110,7 +110,9 @@ test("clear Dart approaches cannot generate a trapped hull and contact remains e
     const out = stepGame(s, [{ ...input(1, 0, 1), sprint }], world); s = out.state;
     const actual = distance(before.player.pose.position, s.player.pose.position);
     assert.ok(Math.abs(s.metrics.pilotMetres - before.metrics.pilotMetres - actual) < 1e-12);
-    const drain = (actual > 0.003 ? 100 / 900 * (sprint ? 1.7 : 1) : 0.015) / 60;
+    // C4 (CY): drain follows the drive, not displacement; pressing into
+    // contact under full input costs cruise power.
+    const drain = 100 / 900 * (sprint ? 1.7 : 1) / 60;
     assert.ok(Math.abs(s.metrics.powerUsed - before.metrics.powerUsed - drain) < 1e-12);
     const impacts = out.events.filter(e => e.type === "impact");
     assert.ok(impacts.length <= 1, "retry cannot cause a second impact");

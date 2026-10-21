@@ -92,7 +92,15 @@ import { safePersonalDepth } from "./capabilities.js";
 import { advanceRenewal, settleRenewal } from "./renewal.js";
 import { advanceStory, recordStory, resolutionCommand, storyHint, storyHost, useController, useGatePanel, useWorksFace, worksCommand } from "./storyLink.js";
 import type { WorksFaceId } from "../content/story/placements.js";
-import { placeDeterrent, releaseKit, toggleLamp, updateEcology } from "./ecologyLink.js";
+import { fittedProtections, placeDeterrent, releaseKit, toggleLamp, updateEcology } from "./ecologyLink.js";
+import { protectionFor } from "./ecology/hazards.js";
+import { MOTION, respondToFlow } from "./currents/motion.js";
+import { dampIntoFace, impactLoss, supportedDrift } from "./currents/move.js";
+import { flowAt, worldCurrents } from "./currents/world.js";
+import { ACTORS as CURRENT_ACTORS } from "../content/currents/actors.js";
+const ZERO: Vec3 = { x: 0, y: 0, z: 0 };
+/** Highest rock lip a swimmer glides up onto, metres (one cave voxel, plus margin). */
+const SWIM_LIP = 0.6;
 const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
@@ -607,7 +615,6 @@ export function stepGame(
         (-Math.cos(yaw) * forward * Math.cos(pitch) + Math.sin(yaw) * right) *
         speed,
     };
-    const previousSpeed = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z);
     const response = handling ? handling.response : 2.8;
     for (const a of ["x", "y", "z"] as const)
       v.velocity[a] += (target[a] - v.velocity[a]) * Math.min(1, DT * response);
@@ -616,11 +623,21 @@ export function stepGame(
       y: v.velocity.y * DT,
       z: v.velocity.z * DT,
     };
-    if (speed > 0 && v.hull !== "spindle" && target.y > 0 && delta.y > 0)
+    // CY currents: one flow sample before the move. The drift joins the drive
+    // inside the hull's own sweep; `v.velocity` stays the drive alone.
+    const powered = !v.disabled && v.charge > 0, drive = { ...v.velocity };
+    const cruiseDrain = handling ? handling.drain : v.hull === "hearthline" ? CARRIER_DRAIN : 100 / 900;
+    const current = v.berth ? null : respondToFlow(flowAt(v.pose.position, s.tick).flow, {
+      id: v.hull, authority: protectionFor(v.hull, fittedProtections(s)).current, cruise: CURRENT_ACTORS[v.hull].cruise, drain: cruiseDrain,
+    }, drive, powered && Math.hypot(target.x, target.y, target.z) < MOTION.stopped ? "station" : "none", powered);
+    const driftDelta = current ? { x: current.drift.x * DT, y: current.drift.y * DT, z: current.drift.z * DT } : ZERO;
+    // Ascent and thrust samples measure still-water propulsion only.
+    const drifting = driftDelta.x !== 0 || driftDelta.y !== 0 || driftDelta.z !== 0;
+    if (!drifting && speed > 0 && v.hull !== "spindle" && target.y > 0 && delta.y > 0)
       ascent = { type: "ascent-sample", actorId: v.id, requestedRise: delta.y,
         actualRise: 0, solidLimitedRise: 0, surfaceLimitedRise: 0 };
     const requested = Math.hypot(delta.x, delta.z);
-    if (v.hull === "dart" && speed > 0 && forwardIntent && Number.isFinite(requested) && requested > 1e-5 &&
+    if (!drifting && v.hull === "dart" && speed > 0 && forwardIntent && Number.isFinite(requested) && requested > 1e-5 &&
         delta.x * Math.sin(yaw) - delta.z * Math.cos(yaw) > 0)
       thrust = { type: "thrust-sample", actorId: v.id, requested, actual: 0, solidLimited: 0, supportLimited: 0 };
     // Observe the existing sweeps before moveHull's separate terrain correction.
@@ -628,7 +645,13 @@ export function stepGame(
     const attempt = ascent;
     const forwardAttempt = thrust;
     const shape = HULL_COLLIDERS[v.hull], hullOrigin = { ...v.pose.position };
+    let requestedTravel = delta, floorRefused = false;
     const constrained = surfaceMove(world, hullOrigin, delta, shape, d => {
+      floorRefused = false;
+      // Drift may descend only to the floor margin (move.ts `supportedDrift`).
+      const drifted = drifting ? supportedDrift(world, hullOrigin, d, driftDelta, shape) : ZERO;
+      const travel = { x: d.x + drifted.x, y: d.y + drifted.y, z: d.z + drifted.z };
+      requestedTravel = travel;
       let solidRise = 0, solidThrust = 0, supportThrust = 0, forwardBoundary = false;
       const measuredWorld: WorldQueries = attempt || forwardAttempt ? { ...world, moveCapsule(origin, slice, proxy) {
         const result = world.moveCapsule(origin, slice, proxy);
@@ -640,9 +663,9 @@ export function stepGame(
         if (forwardAttempt && result.hitBoundary) forwardBoundary = true;
         return result;
       } } : world;
-      const moved = moveHull(measuredWorld, hullOrigin, d, shape,
+      const moved = moveHull(measuredWorld, hullOrigin, travel, shape,
         v.hull === "hearthline" ? carrierTravelBounds() : undefined,
-        forwardAttempt ? rejected => { supportThrust += rejected; } : undefined);
+        rejected => { floorRefused = true; if (forwardAttempt) supportThrust += rejected; });
       return { ...moved, solidRise, solidThrust, supportThrust, forwardBoundary };
     }, move => v.hull === "spindle" ? -0.4 : Math.min(-0.9, move.position.y), true);
     const move = constrained.move;
@@ -656,16 +679,27 @@ export function stepGame(
       // Discarded ordinary attempts never contribute support from their retry.
       thrust.supportLimited = constrained.rolledBack ? 0 : move.supportThrust;
     }
-    if (move.hitSolid && previousSpeed > 4) {
+    // CY contact rules: the refused travel is the face's direction. Only the
+    // drive closing into it is an impact, and only that part is damped, so a
+    // hull pressed along rock by a current keeps its slide and its health.
+    // When the floor guard refuses a slice it discards the slice's rise too,
+    // but the face is the floor: rising is never travel into it.
+    const lostY = requestedTravel.y - (move.position.y - hullOrigin.y);
+    const lost = { x: requestedTravel.x - (move.position.x - hullOrigin.x),
+      y: constrained.limited ? 0 : floorRefused ? Math.min(0, lostY) : lostY,
+      z: requestedTravel.z - (move.position.z - hullOrigin.z) };
+    const lostLength = Math.hypot(lost.x, lost.y, lost.z);
+    const refused = move.hitSolid && lostLength > 1e-9
+      ? { x: lost.x / lostLength, y: lost.y / lostLength, z: lost.z / lostLength } : null;
+    const closing = refused ? Math.max(0, drive.x * refused.x + drive.y * refused.y + drive.z * refused.z) : 0;
+    const impact = impactLoss(closing, DT);
+    if (impact > 0) {
       const before = v.health;
-      v.health = Math.max(0, v.health - (previousSpeed - 4) * DT * 10);
+      v.health = Math.max(0, v.health - impact);
       const hullLoss = before - v.health;
-      if (hullLoss > 0) events.push({ type: "impact", speed: previousSpeed, hullLoss, origin: { ...move.position } });
+      if (hullLoss > 0) events.push({ type: "impact", speed: closing, hullLoss, origin: { ...move.position } });
     }
-    if (move.hitSolid) {
-      v.velocity.x *= 0.5;
-      v.velocity.z *= 0.5;
-    }
+    v.velocity = dampIntoFace(v.velocity, refused);
     v.pose.position = move.position;
     v.pose.yaw = yaw;
     v.pose.pitch = pitch;
@@ -675,17 +709,19 @@ export function stepGame(
     const d = distance(old, s.player.pose.position);
     s.metrics.pilotMetres += d;
     const creel = handling !== null;
+    // "Moving" is the drive, not displacement: drifting is not cruising.
+    const moving = Math.hypot(drive.x, drive.y, drive.z) * DT > 0.003;
     const drain =
-      !v.disabled && v.charge > 0
-        ? (d > 0.003
-            ? (handling ? handling.drain : v.hull === "hearthline" ? CARRIER_DRAIN : 100 / 900) * (sprint ? (creel ? 1.6 : 1.7) : quiet ? (creel ? 0.6 : 0.65) : 1)
-            : 0.015) * DT
+      powered
+        ? ((moving
+            ? cruiseDrain * (sprint ? (creel ? 1.6 : 1.7) : quiet ? (creel ? 0.6 : 0.65) : 1)
+            : 0.015) + (current?.extraDrain ?? 0)) * DT
         : 0;
     v.charge = Math.max(0, v.charge - drain);
     s.metrics.powerUsed += drain;
     loudness = handling
-      ? quiet ? handling.loudness.quiet : sprint ? handling.loudness.boost : d > 0.003 ? handling.loudness.cruise : 0.08
-      : quiet ? 0.08 : sprint ? 1 : d > 0.003 ? 0.48 : 0.08;
+      ? quiet ? handling.loudness.quiet : sprint ? handling.loudness.boost : moving ? handling.loudness.cruise : 0.08
+      : quiet ? 0.08 : sprint ? 1 : moving ? 0.48 : 0.08;
     if (move.hitBoundary) events.push({ type: "foundation-boundary" });
     if (move.hitBoundary || move.forwardBoundary) thrust = null;
     else if (thrust) thrust.actual = Math.hypot(move.position.x - old.x, move.position.z - old.z);
@@ -776,26 +812,38 @@ export function stepGame(
       vy *= speed / magnitude;
       vz *= speed / magnitude;
     }
-    if (mode === "swimming" && vertical * 2.8 + Math.sin(pitch) * forward * speed > 0 && vy > 0)
+    // CY currents, swimming only: the drift joins the swim inside each slice,
+    // so support, the cliff guard and the surface cap still apply to it. The
+    // diver holds nothing and pays only time and position, never health.
+    const swimCurrent = mode === "swimming" ? respondToFlow(flowAt(old, s.tick).flow,
+      { id: "diver", authority: protectionFor(null, fittedProtections(s)).current, cruise: speed, drain: 0 },
+      { x: vx, y: vy, z: vz }, "none") : null;
+    const drift = swimCurrent?.drift ?? ZERO;
+    const drifting = drift.x !== 0 || drift.y !== 0 || drift.z !== 0;
+    if (!drifting && mode === "swimming" && vertical * 2.8 + Math.sin(pitch) * forward * speed > 0 && vy > 0)
       ascent = { type: "ascent-sample", actorId: null, requestedRise: 0,
         actualRise: 0, solidLimitedRise: 0, surfaceLimitedRise: 0 };
     let position = { ...old },
       hitBoundary = false;
-    const slices = Math.max(1, Math.ceil((magnitude * DT) / 0.12)),
+    const slices = Math.max(1, Math.ceil((Math.hypot(vx + drift.x, vy + drift.y, vz + drift.z) * DT) / 0.12)),
       capsule = { radius: 0.34, height: mode === "walking" ? 1.75 : 0.95 };
     for (let i = 0; i < slices; i++) {
       const delta = {
-        x: (vx * DT) / slices,
-        y: (vy * DT) / slices,
-        z: (vz * DT) / slices,
+        x: ((vx + drift.x) * DT) / slices,
+        y: ((vy + drift.y) * DT) / slices,
+        z: ((vz + drift.z) * DT) / slices,
       };
       const requestedRise = Math.max(0, delta.y);
       if (ascent) ascent.requestedRise += requestedRise;
-      const nextFloor = world.groundHeight(
+      // The cliff guard reads support from below, never the raw heightfield:
+      // inside a cave footprint the heightfield steps aside, and a mouth
+      // threshold must not read as a 17 m wall.
+      const nextFloor = world.supportHeight(
           position.x + delta.x,
           position.z + delta.z,
+          position.y,
         ),
-        currentFloor = world.groundHeight(position.x, position.z);
+        currentFloor = world.supportHeight(position.x, position.z, position.y);
       if (
         nextFloor > position.y + 0.22 &&
         nextFloor - currentFloor > Math.hypot(delta.x, delta.z) * 1.15 + 0.015
@@ -817,7 +865,28 @@ export function stepGame(
         delta.y = nextSupport - position.y;
       const sliceOrigin = { ...position };
       const constrained = surfaceMove(world, sliceOrigin, delta, capsule, d => {
-        const move = world.moveCapsule(sliceOrigin, d, capsule);
+        let move = world.moveCapsule(sliceOrigin, d, capsule);
+        // A swimmer gliding along a floor of rock boxes (a cave's 0.5 m
+        // terraces) meets each riser as a face. When the joint sweep is
+        // stopped and a lip at most SWIM_LIP above lies just ahead, rise onto
+        // it first, then travel on; kept only if it gets further.
+        if (mode === "swimming" && move.hitSolid && (d.x !== 0 || d.z !== 0)) {
+          // The lip is under the box's leading edge: read the whole footprint.
+          let lip = -Infinity;
+          for (const [ox, oz] of [[0, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]] as const)
+            lip = Math.max(lip, world.supportHeight(sliceOrigin.x + d.x + ox * capsule.radius, sliceOrigin.z + d.z + oz * capsule.radius,
+              sliceOrigin.y + SWIM_LIP));
+          const rise = lip + 0.01 - sliceOrigin.y;
+          // Only under water: never a climb onto a float or out at the surface.
+          if (rise > Math.max(0, d.y) && rise <= SWIM_LIP && sliceOrigin.y + rise + capsule.height < -0.5) {
+            const up = world.moveCapsule(sliceOrigin, { x: 0, y: rise, z: 0 }, capsule);
+            if (!up.hitSolid && !up.hitBoundary) {
+              const across = world.moveCapsule(up.position, { x: d.x, y: 0, z: d.z }, capsule);
+              const progress = (q: Vec3): number => Math.hypot(q.x - sliceOrigin.x, q.z - sliceOrigin.z);
+              if (progress(across.position) > progress(move.position) + 1e-6) move = across;
+            }
+          }
+        }
         const solidRise = move.hitSolid && requestedRise > 0
           ? Math.max(0, sliceOrigin.y + Math.max(0, d.y) - move.position.y) : 0;
         const floor = world.supportHeight(move.position.x, move.position.z, move.position.y);
@@ -857,6 +926,16 @@ export function stepGame(
   }
   if (s.player.mode !== state.player.mode)
     events.push({ type: "movement-mode-changed", mode: s.player.mode });
+  // A current's readable cue, once, as the swimmer or craft enters its flow.
+  if (s.player.mode === "swimming" || s.player.mode === "piloting") {
+    const felt = (c: { weight: number; level: number }): boolean => c.weight * c.level > 0.05;
+    const was = new Set(flowAt(old, state.tick).volumes.filter(felt).map(c => c.id));
+    for (const c of flowAt(s.player.pose.position, s.tick).volumes)
+      if (!was.has(c.id) && felt(c)) {
+        const def = worldCurrents().volumes.find(volume => volume.id === c.id);
+        if (def) events.push({ type: "notice", channel: "hazard", context: "ecology", message: `${def.label} · ${def.cue}` });
+      }
+  }
   const buoy = s.inventory.buoy;
   if (
     buoy.deployed &&

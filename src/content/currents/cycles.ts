@@ -20,6 +20,17 @@ export const SEDIMENT_SURGE: CycleDef = fromHazardCycle("cycle.basin.sediment_su
   { active: "surging", quiet: "settled", rise: "lifting", fall: "settling" },
   [{ phase: "rise", leadS: 8, cue: "Scavengers back into their burrows as the lane floor lifts." }]);
 
+/** C4: the Divide crest downwelling slackens (CB `divide.crest_slack`): it runs
+ * 52 s, eases over 4 s, lies slack 30 s (at S4's baseline) and builds over 4 s.
+ * The worst wait for slack water is 56 s. The Divide's one slackening current. */
+export const S4_CREST_SLACK = { period: 90, start: 12, duration: 52, ramp: 4 } as const;
+/** Share of the downwelling that keeps running in slack water. */
+export const CREST_SLACK_BASELINE = 0.15;
+export const CREST_SLACK: CycleDef = fromHazardCycle("cycle.divide.crest_slack", "Crest slack water", S4_CREST_SLACK,
+  { active: "running", quiet: "slack", rise: "building", fall: "easing" },
+  [{ phase: "fall", leadS: 5, cue: "The crest ribbons start to stand upright: the downwelling is about to slacken." },
+    { phase: "rise", leadS: 5, cue: "The crest ribbons lean south again and grains streak past: the downwelling is about to run." }]);
+
 /** Candidate b: a cross-flow spill that slackens. Worst wait for the lull is
  * the surge plus both ramps, 42 s; the lull itself is 18 s. */
 export const SPILL_SLACK: CycleDef = {
@@ -65,5 +76,13 @@ export const WARDEN_ROUND: CycleDef = {
   ],
 };
 
-export const CYCLES: readonly CycleDef[] = [CHIMNEY_PULSE, SEDIMENT_SURGE, SPILL_SLACK, LANTERN_BLOOM, WARDEN_ROUND];
+/** The cycles running in the game world. Owner keep-or-cut (CY, recorded
+ * 2026-10-20): the vent pulse is kept; slackening currents at most one or two
+ * per region (the Divide crest); the lantern bloom is dropped as a clock (its
+ * reward is regrowth, SYS-2); the warden's round waits for a real creature;
+ * the turbine is only a Hearthline mooring-anchor perk (SYS-1, stage B). */
+export const WORLD_CYCLES: readonly CycleDef[] = [CHIMNEY_PULSE, SEDIMENT_SURGE, CREST_SLACK];
+export const WORLD_CYCLE_BY_ID: ReadonlyMap<string, CycleDef> = new Map(WORLD_CYCLES.map(c => [c.id, c]));
+
+export const CYCLES: readonly CycleDef[] = [CHIMNEY_PULSE, SEDIMENT_SURGE, CREST_SLACK, SPILL_SLACK, LANTERN_BLOOM, WARDEN_ROUND];
 export const CYCLE_BY_ID: ReadonlyMap<string, CycleDef> = new Map(CYCLES.map(c => [c.id, c]));

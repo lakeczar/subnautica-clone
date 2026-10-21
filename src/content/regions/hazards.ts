@@ -19,7 +19,8 @@ export interface HazardDef {
   readonly protection: Protection | null;
   /** What the player can observe before exposure (never colour alone). */
   readonly cue: string;
-  readonly cycle?: { readonly periodS: number; readonly activeS: number };
+  /** The framework cycle (`content/currents/cycles.ts`) that times it. */
+  readonly cycle?: string;
 }
 
 const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Aabb =>
@@ -55,10 +56,10 @@ export const HAZARDS: readonly HazardDef[] = [
     bounds: box(-198, -548, -1098, -132, -215, -1032),
     cue: "A visible warm column over the split chimney; drifting particles rise fast inside it." },
   { id: "hazard.rift.chimney_pulse", region: "thermal_rift", kind: "heat", protection: "thermal",
-    // C3: one clock for the chimney. The pulse IS S4's split-plume field (its period,
-    // vent window, mites, rings, captions and harm), keyed to the saved tick.
+    // One clock for the chimney: the pulse IS S4's split-plume field (its period,
+    // vent window, mites, rings, captions and harm), on the cycle framework (C4).
     bounds: box(-210, -548, -1110, -112, -380, -1020),
-    cycle: { periodS: HAZARD_FIELDS.rift_split_plume.cycle.period, activeS: HAZARD_FIELDS.rift_split_plume.cycle.duration },
+    cycle: HAZARD_FIELDS.rift_split_plume.cycleId,
     cue: "The chimney breathes: fans beside it close a few seconds before each warm pulse spreads." },
   { id: "hazard.rift.vent_field", region: "thermal_rift", kind: "heat", protection: "thermal",
     bounds: box(-330, -570, -1300, -250, -440, -1210),

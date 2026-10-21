@@ -1,5 +1,6 @@
 /** C3: S4's ecology composed into the fixed step, beside the sound hunter.
- * Health and drift come only from `stepEcology`'s effects; S4's events become
+ * Health comes only from `stepEcology`'s effects (drift is the current field's,
+ * moved in step.ts since C4); S4's events become
  * hazard notices (their captions are the text equivalent of each cue), the
  * presentation-only `threat-damage` for strikes, and one `ecology` event that
  * S6's mapper turns into audio from the event's own fields. */
@@ -14,10 +15,8 @@ import { stimulusFrom } from "./ecology/stimulus.js";
 import type { EcologyWorld, Stimulus } from "./ecology/types.js";
 import { NO_ACTOR } from "./ecology/types.js";
 import { hullHandling } from "./fleet.js";
-import { FIXED_SECONDS as DT } from "./clock.js";
 import { facility, stopWorks } from "./inventory.js";
 import type { GameEvent, GameState, ItemStack, Vec3, WorldQueries } from "./types.js";
-import { moveHull } from "./world.js";
 
 /** Suit fittings worn in the diver's equipment, and hull protections that work
  * for the hull whose hold carries them (like the Dart's socket modules). */
@@ -79,8 +78,8 @@ export function toggleLamp(s: GameState): string | null {
   return null;
 }
 
-/** One ecology step, after movement and the hunter. Applies health and drift
- * from `effects` only, then reports presentation events. */
+/** One ecology step, after movement and the hunter. Applies health from
+ * `effects` only, then reports presentation events. */
 export function updateEcology(s: GameState, loudness: number, scanned: boolean, events: GameEvent[], world: WorldQueries): void {
   if (s.opening.phase < 4 || s.scenario !== "expedition") return;
   const v = controlled(s);
@@ -88,21 +87,11 @@ export function updateEcology(s: GameState, loudness: number, scanned: boolean, 
   const result = stepEcology(s.world.ecology, {
     tick: s.tick, stimulus, protection: protectionFor(v?.hull ?? null, fittedProtections(s)), vehicleId: v?.id ?? null,
   }, ecologyWorldFrom(world, ecologyRefuges(s)));
-  const { diverHealth, vehicleHealth, drift } = result.effects;
+  // Health only: currents move actors in step.ts's own sweep (CY, the single
+  // movement owner), so ecology's `effects.drift` is never applied here.
+  const { diverHealth, vehicleHealth } = result.effects;
   if (v && vehicleHealth > 0) v.health = Math.max(0, v.health - vehicleHealth);
   if (!v && diverHealth > 0) s.player.vitals.health -= diverHealth;
-  // Drift is another swept move of the actor, never a teleport through rock.
-  const d = { x: drift.x * DT, y: drift.y * DT, z: drift.z * DT };
-  if ((d.x || d.y || d.z) && [d.x, d.y, d.z].every(Number.isFinite)) {
-    if (v && !v.berth) {
-      const moved = moveHull(world, v.pose.position, d, HULL_COLLIDERS[v.hull]);
-      v.pose.position = moved.position;
-      s.player.pose.position = { ...moved.position };
-    } else if (!v && s.player.mode === "swimming") {
-      const moved = world.moveCapsule(s.player.pose.position, { ...d, y: Math.min(d.y, -0.5 - s.player.pose.position.y) }, { radius: 0.34, height: 0.95 });
-      s.player.pose.position = moved.position;
-    }
-  }
   for (const e of result.events) {
     if (e.type === "ecology-cue") events.push({ type: "notice", channel: "hazard", context: "ecology", message: e.caption });
     else if (e.type === "hazard-warning") events.push({ type: "notice", channel: "hazard", context: "ecology", message: e.caption, error: e.level >= 70 });

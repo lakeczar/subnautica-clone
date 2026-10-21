@@ -2,7 +2,7 @@ import { armTarget, fittedCabin } from "../sim/fleet.js";
 import { SiltwakeAudio } from "../audio/director.js";
 import { worldRegionAt } from "../render/regions.js";
 import { executeCommand, stepGame } from "../sim/step.js";
-import { createWorldQueries, SOLIDS, surfaceHeight } from "../sim/world.js";
+import { gameWorld } from "../sim/world.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
@@ -83,9 +83,10 @@ export class SiltwakeApp {
   private readonly abort = new AbortController();
   private readonly clock = new FixedStepClock();
   /** The composed physical world: `worldFloor` (B1's heightfield inside the
-   * preserve, S2's authored floor outside) and every solid, B1's, S2's
-   * STRUCTURE_SOLIDS and A1's VISTA_SOLIDS, in the indexed broad phase. */
-  private readonly world = createWorldQueries(SOLIDS, surfaceHeight);
+   * preserve, S2's authored floor outside), every solid (B1's, S2's
+   * STRUCTURE_SOLIDS and A1's VISTA_SOLIDS) in the indexed broad phase, and
+   * the W1 caves owning their footprints. */
+  private readonly world = gameWorld();
   private readonly repository = new SaveRepository(
     storagePort(),
     browserWriterLock(navigator.locks),

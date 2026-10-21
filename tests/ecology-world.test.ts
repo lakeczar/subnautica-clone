@@ -1,4 +1,6 @@
 import test from "node:test";
+import { CHIMNEY_PULSE } from "../src/content/currents/cycles.js";
+import { period } from "../src/sim/cycles/cycle.js";
 import assert from "node:assert/strict";
 import { FIRST_DEPOSITS, HAZARD_FIELDS, UNPROTECTED } from "../src/content/ecology/hazards.js";
 import { sitePosition } from "../src/content/ecology/sites.js";
@@ -101,7 +103,11 @@ test("REAL WORLD ADVERSE: a diver lit and loud in the stalker's warm passage, th
 
 test("one clock at the chimney: S2's pulse is S4's plume field, and the brine cue never denies the skate", () => {
   const pulse = HAZARDS.find((h) => h.id === "hazard.rift.chimney_pulse")!, plume = HAZARD_FIELDS.rift_split_plume;
-  assert.deepEqual(pulse.cycle, { periodS: plume.cycle.period, activeS: plume.cycle.duration });
+  // C4: both name the framework's chimney cycle, which runs S4's numbers.
+  assert.equal(pulse.cycle, plume.cycleId);
+  assert.equal(plume.cycleId, CHIMNEY_PULSE.id);
+  assert.equal(period(CHIMNEY_PULSE), plume.cycle.period);
+  assert.equal(CHIMNEY_PULSE.offset, plume.cycle.start);
   assert.doesNotMatch(HAZARD_FIELDS.divide_dense_layer.cue, /nothing lives/);
 });
 

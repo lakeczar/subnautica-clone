@@ -1,4 +1,6 @@
 import type { HullId, MaterialId, RegionId } from "../registry.js";
+import { CHIMNEY_PULSE, CREST_SLACK, CREST_SLACK_BASELINE, S4_CREST_SLACK, S4_SEDIMENT_LANE, S4_SPLIT_PLUME, SEDIMENT_SURGE,
+  SPLIT_PLUME_BASELINE } from "../currents/cycles.js";
 import { at } from "./sites.js";
 import type { SiteOffset } from "./sites.js";
 
@@ -31,6 +33,9 @@ export interface HazardFieldDefinition {
   /** Fraction of intensity that remains while a cycled field is quiet. */
   readonly baseline?: number;
   readonly cycle?: HazardCycle;
+  /** The cycle framework's clock for `cycle` (C4): its numbers are the same
+   * object, and `sim/ecology/hazards.ts` evaluates it with the framework. */
+  readonly cycleId?: string;
   /** Unit direction for current and sediment drift. */
   readonly flow?: Vec;
   /** What the player can observe before harm, never color alone. */
@@ -41,8 +46,8 @@ export const HAZARD_FIELDS = {
   rift_split_plume: {
     label: "Split chimney plume", kind: "heat", region: "thermal_rift",
     shape: { kind: "cylinder", center: at("rift_split_chimney"), radius: 10, bottom: -2, top: 72 },
-    intensity: 1, edge: 6, baseline: 0.3,
-    cycle: { period: 75, start: 30, duration: 18, ramp: 3 },
+    intensity: 1, edge: 6, baseline: SPLIT_PLUME_BASELINE,
+    cycle: S4_SPLIT_PLUME, cycleId: CHIMNEY_PULSE.id,
     cue: "Ember mites leave the chimney lip, the water above it shimmers and a low roar builds before each vent.",
   },
   rift_warm_passage: {
@@ -69,14 +74,16 @@ export const HAZARD_FIELDS = {
     // S2's `hazard.divide.crest_current` over the crest: X 200..960, Y -372..-330, Z -1282..-1215.
     shape: { kind: "box", center: at("divide_saddle"), min: { x: -365, y: 78, z: 174 }, max: { x: 395, y: 120, z: 241 } },
     intensity: 1.1, edge: 6, flow: { x: 0, y: -0.6, z: -0.8 },
-    cue: "Filter ribbons on the crest all lean south and down toward the mirror layer; suspended grains streak past.",
+    // C4: the Divide's one slackening current (CB `divide.crest_slack`).
+    baseline: CREST_SLACK_BASELINE, cycle: S4_CREST_SLACK, cycleId: CREST_SLACK.id,
+    cue: "Filter ribbons on the crest all lean south and down toward the mirror layer; suspended grains streak past. In slack water they stand upright.",
   },
   basin_sediment_lane: {
     label: "Basin plume lane", kind: "sediment", region: "silt_basin",
     // S2's `hazard.basin.plume_south` lane off the fractured south slope.
     shape: { kind: "box", center: at("basin_wreck_ridge"), min: { x: -163, y: -136, z: -328 }, max: { x: 117, y: -64, z: -88 } },
     intensity: 0.8, edge: 4, baseline: 0.08, flow: { x: 0, y: 0, z: 1 },
-    cycle: { period: 100, start: 50, duration: 16, ramp: 4 },
+    cycle: S4_SEDIMENT_LANE, cycleId: SEDIMENT_SURGE.id,
     cue: "Scavengers back into their burrows and the lane's floor lifts in a slow grey wall.",
   },
   district_gallery_dark: {

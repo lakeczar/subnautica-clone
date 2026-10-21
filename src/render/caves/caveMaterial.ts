@@ -5,26 +5,24 @@ import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { Vector3, Vector4 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import "@babylonjs/core/Engines/Extensions/engine.rawTexture.js";
-import { CEL_FRAGMENT, CEL_UNIFORMS, CEL_VERTEX, LIGHT_DIRECTION } from "../materials.js";
-import { CAVE_SAMPLERS, CAVE_UNIFORMS, DEFAULT_LAMP, curveUniform, injectCaveLight, lampUniform, type LampSettings } from "./caveLight.js";
+import { CEL_FRAGMENT, CEL_SAMPLERS, CEL_UNIFORMS, CEL_VERTEX, LIGHT_DIRECTION } from "../materials.js";
+import { DEFAULT_LAMP, curveUniform, lampUniform, type LampSettings } from "./caveLight.js";
 import type { CaveLightField } from "./lightField.js";
 
-/** Babylon side of cave light: a cel material with the cave splice, the
- * light field and the exact rock occupancy as 3D textures, and per-frame lamp
- * and field uniforms. A prototype for the lab; `docs/build/streams/W1-PRE.md`
- * lists the changes `materials.ts` needs to make this the production pass. */
+/** Babylon side of cave light: the light field and the exact rock occupancy
+ * as 3D textures, and per-frame lamp and field uniforms, for any material on
+ * the production cel fragment (which carries the cave splice since C4). */
 
 const RGBA = 5; // Constants.TEXTUREFORMAT_RGBA
 const RED = 6; // Constants.TEXTUREFORMAT_R
-/** INTEGRATION: this splices the production fragment here. Once
- * `materials.ts` owns the splice, take its fragment as is: splicing an
- * already spliced fragment throws (its fog anchor is gone). */
-export const CAVE_CEL_FRAGMENT = injectCaveLight(CEL_FRAGMENT);
+/** `materials.ts` owns the one splice; splicing again would throw (its fog
+ * anchor is gone), so this is the production fragment as is. */
+export const CAVE_CEL_FRAGMENT = CEL_FRAGMENT;
 
 /** The production cel stages plus cave light, as the kit material is made. */
 export function createCaveCelMaterial(scene: Scene, name = "cave.cel"): ShaderMaterial {
   const material = new ShaderMaterial(name, scene, { vertexSource: CEL_VERTEX, fragmentSource: CAVE_CEL_FRAGMENT }, {
-    attributes: ["position", "normal", "color"], uniforms: [...CEL_UNIFORMS, ...CAVE_UNIFORMS], samplers: [...CAVE_SAMPLERS],
+    attributes: ["position", "normal", "color"], uniforms: CEL_UNIFORMS, samplers: CEL_SAMPLERS,
   }, true);
   material.backFaceCulling = false;
   material.setVector3("lightDirection", LIGHT_DIRECTION);

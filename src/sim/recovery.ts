@@ -1,4 +1,4 @@
-import { createWorldQueries, moveHull, sweptHullClearance } from "./world.js";
+import { gameWorld, moveHull, sweptHullClearance } from "./world.js";
 import { HULL_COLLIDERS, HULLS, ITEMS, PLACES, RECOVERY_STAGE } from "../content/registry.js";
 import type { ItemKind } from "../content/registry.js";
 import { CREEL_CABIN, hullToWorld, mobileRefugeBlock } from "./fleet.js";
@@ -91,7 +91,7 @@ export function disableVehicle(s: GameState, id: string): void {
       visited: true,
     });
 }
-export function incapacitate(s: GameState, reason: string, world: WorldQueries = createWorldQueries()): void {
+export function incapacitate(s: GameState, reason: string, world: WorldQueries = gameWorld()): void {
   const p = s.player,
     lossPosition = { ...p.pose.position };
   if (p.controlledVehicleId) disableVehicle(s, p.controlledVehicleId);
@@ -205,7 +205,7 @@ export function recoveryCommand(
   s: GameState,
   id: string,
   method: "tow" | "repair" | "salvage",
-  world: WorldQueries = createWorldQueries(),
+  world: WorldQueries = gameWorld(),
 ): string | null {
   const v = s.fleet.vehicles.find((v) => v.id === id);
   if (!v || !v.disabled || v.berth || !recoverableHull(v.hull))

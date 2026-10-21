@@ -30,6 +30,8 @@ import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Geometry } from "@babylonjs/core/Meshes/geometry.js";
 import { GeometryCache } from "./geometryCache.js";
+import { createCaveView } from "./caves/caveView.js";
+import { createCurrentStreaks } from "./currentStreaks.js";
 
 export type Quality = "rich" | "light";
 export interface GameRenderer {
@@ -224,6 +226,10 @@ export function createRenderer(
     camera.fov = 1.02;
     scene.activeCamera = camera;
     const cel = createCelMaterial(scene);
+    // W1 cave light on the one cel material: the active cave's field and the lamp.
+    const caveView = createCaveView(scene, [cel]);
+    // Visible currents: grit streaks carried by the real flow field.
+    const streaks = createCurrentStreaks(scene, cel);
     const glass = createGlassMaterial(scene);
     const art = createRegionalArt(scene, cel, glass);
     for (const mesh of scene.meshes) mesh.renderingGroupId = 1;
@@ -348,6 +354,11 @@ export function createRenderer(
         updateOpticalUniforms([cel, glass, water, sky, cue.material], camera.position, state);
         cel.setFloat("underwater", underwater);
         cel.setFloat("lampOn", state && state.opening.phase >= 4 && lampOn(state) ? 1 : 0);
+        caveView.update(camera.position, camera.getTarget().subtract(camera.position),
+          !!state && state.opening.phase >= 4 && lampOn(state) && underwater === 1);
+        canvas.dataset.cave = caveView.active ?? "";
+        streaks.update(camera.position, state?.tick ?? 0, !!state && state.opening.phase >= 4 && underwater === 1);
+        canvas.dataset.currentStreaks = String(streaks.shown);
         placed.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         if (state) creatures.update(ecologyView(state.world.ecology, state.tick, presentationStimulus(state)), time,
           { x: camera.position.x, y: camera.position.y, z: camera.position.z });
@@ -385,6 +396,7 @@ export function createRenderer(
       },
       prepare() {
         if (disposed || !available) return false;
+        if (caveView.prepare()) return true;
         const start = performance.now();
         const region = art.prepare();
         if (!region) return false;
@@ -406,6 +418,8 @@ export function createRenderer(
         art.dispose();
         creatures.dispose();
         placed.dispose();
+        caveView.dispose();
+        streaks.dispose();
         instrumentation.dispose();
         cue.dispose();
         scene.dispose();

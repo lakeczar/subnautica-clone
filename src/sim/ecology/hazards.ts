@@ -6,29 +6,42 @@ import type { Vec3 } from "../types.js";
 import { ECOLOGY_DT, MAX_WARNING_AGE, WARNING_LEAD } from "./types.js";
 import type { EcologyEvent, Exposure, Protection } from "./types.js";
 import { clamp01, v } from "./vector.js";
+import { cycleLevel as frameworkLevel, fromHazardCycle, secondsAt, secondsUntil } from "../cycles/cycle.js";
+import type { CycleDef } from "../cycles/cycle.js";
+import { WORLD_CYCLES } from "../../content/currents/cycles.js";
 
 const FIELD_IDS = Object.keys(HAZARD_FIELDS) as HazardFieldId[];
 const field = (id: HazardFieldId): HazardFieldDefinition => HAZARD_FIELDS[id];
 
+/** C4: S4's hazard clocks run on the cycle framework (`sim/cycles`). Each
+ * field's `cycle` numbers are the same object as its framework cycle
+ * (`cycleId`), so the trapezoid below is the framework's, tick for tick. */
+const FRAMEWORK = new Map<HazardCycle, CycleDef>(WORLD_CYCLES.map(c => [hazardShapeOf(c), c] as const).filter(([s]) => s !== null) as [HazardCycle, CycleDef][]);
+function hazardShapeOf(c: CycleDef): HazardCycle | null {
+  for (const id of FIELD_IDS) if (field(id).cycleId === c.id) return field(id).cycle ?? null;
+  return null;
+}
+const adHoc = new WeakMap<HazardCycle, CycleDef>();
+/** The framework cycle running `cycle`: the field's named one, or (for a
+ * shape not in the world table) one built from the same numbers. */
+export function frameworkCycle(cycle: HazardCycle): CycleDef {
+  let c = FRAMEWORK.get(cycle) ?? adHoc.get(cycle);
+  if (!c) adHoc.set(cycle, c = fromHazardCycle("cycle.hazard", "Hazard cycle", cycle, { active: "active", quiet: "quiet" }));
+  return c;
+}
 /** 0..1 activity of a cycled field at a tick: a trapezoid with linear ramps. */
 export function cycleLevel(cycle: HazardCycle, tick: number): number {
-  const t = (((tick / 60 - cycle.start) % cycle.period) + cycle.period) % cycle.period;
-  if (t < cycle.duration) return 1;
-  if (t < cycle.duration + cycle.ramp) return 1 - (t - cycle.duration) / cycle.ramp;
-  if (t > cycle.period - cycle.ramp) return (t - (cycle.period - cycle.ramp)) / cycle.ramp;
-  return 0;
+  return frameworkLevel(frameworkCycle(cycle), secondsAt(tick));
 }
 /** Seconds until the active window next begins; 0 while it is active. */
 export function secondsUntilActive(cycle: HazardCycle, tick: number): number {
-  const t = (((tick / 60 - cycle.start) % cycle.period) + cycle.period) % cycle.period;
-  return t < cycle.duration ? 0 : cycle.period - t;
+  return secondsUntil(frameworkCycle(cycle), secondsAt(tick), "active");
 }
 /** Seconds until the field starts rising out of its quiet baseline (the
  * hazardous onset); 0 while it is rising, active or falling. */
 export function secondsUntilRise(cycle: HazardCycle, tick: number): number {
   if (cycleLevel(cycle, tick) > 0) return 0;
-  const t = (((tick / 60 - cycle.start) % cycle.period) + cycle.period) % cycle.period;
-  return cycle.period - cycle.ramp - t;
+  return secondsUntil(frameworkCycle(cycle), secondsAt(tick), cycle.ramp > 0 ? "rise" : "active");
 }
 /** Field strength as a fraction of its peak, including the quiet baseline. */
 export function fieldLevel(id: HazardFieldId, tick: number): number {

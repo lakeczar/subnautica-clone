@@ -4,7 +4,7 @@ import type { MountKind, SourceId } from "../content/registry.js";
 import type { GameState, ItemStack, Vec3, VehicleState, WorldQueries } from "./types.js";
 import { cabinLockerId, distance, equipped, hasRoom, removeQuantity } from "./inventory.js";
 import { personalDepth, personalLimit } from "./capabilities.js";
-import { createWorldQueries, hullClearance, type Solid } from "./world.js";
+import { createWorldQueries, gameWorld, hullClearance, type Solid } from "./world.js";
 
 /** Current hull rating: the initial HULLS value or a paid refit stored on the hull. */
 export const hullRating = (v: Readonly<VehicleState>): number => v.rating;
@@ -260,7 +260,7 @@ const REFUGE_BLOCKS: Record<RefugeBlockCode, string> = {
 };
 /** Safety of the registered cabin as a recovery destination, checked at the moment
  * of use. Never grants air by itself; a refused cabin falls back to the pod. */
-export function mobileRefugeBlock(s: Readonly<GameState>, world: WorldQueries = createWorldQueries()): RefugeBlock | null {
+export function mobileRefugeBlock(s: Readonly<GameState>, world: WorldQueries = gameWorld()): RefugeBlock | null {
   const r = s.player.mobileRefuge;
   if (!r) return null;
   const block = (code: RefugeBlockCode): RefugeBlock => ({ code, message: REFUGE_BLOCKS[code] });
