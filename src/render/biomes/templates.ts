@@ -105,15 +105,20 @@ export const S2_TEMPLATES: readonly TemplateRecipe[] = [
   }),
   template("s2.rock.shard", 0.2, (b, fine) => {
     const s: [number, number, number, number][] = fine ? [[0, 0, 1.7, 0.08], [0.3, 0.1, 1.1, -0.35], [-0.25, -0.2, 0.9, 0.4]] : [[0, 0, 1.7, 0]];
+    // Faintly luminous (alpha -0.3, ATM-1): the Divide's crystals glow a little in the dark.
+    b.alpha = -0.3;
     for (const [x, z, h, lean] of s) b.frustum([x, 0, z], [x + lean * 0.5, h, z], 0.22, 0.01, fine ? 6 : 4, P.crystal, P.crystalDeep);
+    b.alpha = 1;
   }),
   template("s2.rock.shard.spray", 0.2, (b, fine) => {
     // Shards radiating from one seam, longest leaning outward.
     const n = fine ? 7 : 3;
+    b.alpha = -0.3;
     for (let i = 0; i < n; i++) {
       const a = i / n * Math.PI * 2 + 0.4, r = 0.55 + 0.6 * ((i * 5) % 3) / 2, h = 0.8 + 1.3 * ((i * 3) % 4) / 3;
       b.frustum([Math.cos(a) * 0.12, 0, Math.sin(a) * 0.12], [Math.cos(a) * r, h, Math.sin(a) * r], 0.16, 0.01, fine ? 5 : 4, i % 3 ? P.crystal : P.violet, P.crystalDeep);
     }
+    b.alpha = 1;
   }),
   ...FAN_FORMS.flatMap(([suffix, blades]) => [
     template(`s2.flora.fan${suffix}`, 0.12, (b, fine) => { for (const s of blades) fan(b, fine, P.porcelain, P.coralRim, s); }),

@@ -18,7 +18,10 @@ import { DEFAULT_DAYLIGHT, DISTANCE_RANGE, LAMP_SKIN, LAMP_WALK_STEPS, type Dayl
  *
  * `injectCaveLight` splices this into the production fragment at four
  * anchors and fails loudly if any anchor moved. Outside a cave field with
- * the lamp off it changes nothing. */
+ * the lamp off it changes nothing. The lamp's weight and beam also follow
+ * the depth light (`daylightAt`, render/lighting/depthLight.ts, declared
+ * earlier in the production fragment), so the same cone is the main light
+ * in the deep. */
 
 export const CAVE_UNIFORMS = [
   "caveFieldMin", "caveFieldSize", "caveActive", "caveCurve", "caveRockMin", "caveRockVoxel", "caveRockDims",
@@ -35,7 +38,9 @@ export interface LampSettings {
   /** Linear RGB, already scaled by intensity. */
   readonly color: readonly [number, number, number];
 }
-export const DEFAULT_LAMP: LampSettings = { range: 22, inner: 15, outer: 30, color: [0.95, 0.88, 0.74] };
+/** The one lamp, in caves and open water alike (ATM-1 made it the main light
+ * below about 200 m: longer and brighter than W1's 22 m cave lamp). */
+export const DEFAULT_LAMP: LampSettings = { range: 32, inner: 15, outer: 33, color: [1.15, 1.05, 0.88] };
 
 /** `caveCurve` uniform: metres per stored unit / falloff, floor, fog floor, posterise mix. */
 export function curveUniform(curve: DaylightCurve = DEFAULT_DAYLIGHT, posterise = 0.55): [number, number, number, number] {
@@ -118,14 +123,17 @@ vec3 caveLamp(vec3 p,vec3 n,vec3 albedo){
 }
 vec3 caveShade(vec3 shade,vec3 n,vec4 c){
   float day=caveDaylight(c);
-  // In daylight a lamp is a faint pool; in the dark it is the light.
-  return shade*day+caveLamp(vWorld,n,vColor.rgb)*(1.0-.78*day);
+  // In daylight a lamp is a faint pool; in the dark (a cave, or the deep's
+  // depth light, daylightAt) it is the light.
+  return shade*day+caveLamp(vWorld,n,vColor.rgb)*(1.0-.78*day*daylightAt(vWorld));
 }
 vec3 caveFog(vec3 shade,vec3 p,vec4 c){
   vec3 fogged=opticalFog(shade,p), medium=opticalFog(vec3(0.0),p);
   vec3 v=p-cameraPosition; float dist=length(v);
-  float beam=lampParams.x*smoothstep(lampParams.z,1.0,dot(v/max(dist,.001),lampDirection))*(1.0-exp(-dist*.06))
-    *(1.0-caveDaylight(caveAt(cameraPosition)))*.22;
+  // Open deep water scatters a fainter beam than a cave's close walls return.
+  float inside=1.0-caveDaylight(caveAt(cameraPosition));
+  float beam=lampParams.x*smoothstep(lampParams.z,1.0,dot(v/max(dist,.001),lampDirection))*(1.0-exp(-min(dist,lampParams.y)*.06))
+    *(1.0-(1.0-inside)*daylightAt(cameraPosition))*(.07+.15*inside);
   return fogged-medium+medium*caveMedium(c)+lampColor*beam;
 }
 `;
