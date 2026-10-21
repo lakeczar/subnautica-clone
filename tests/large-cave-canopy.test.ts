@@ -8,7 +8,7 @@ import { buildCollision, chunksNear, COLLISION_BAND, createLargeCave } from "../
 import { buildChunkMesh } from "../src/world/caves/large/mesh.js";
 import { caveRockAt } from "../src/world/caves/large/collision.js";
 import { validateOwnership } from "../src/world/caves/large/field.js";
-import { DIVER, boxSamples, composedWith, random, seek } from "./large-cave-support.js";
+import { DIVER, boxSamples, productionWorld, random, seek } from "./large-cave-support.js";
 
 // LC: the Canopy root caves' authored guarantees, read from the field (fast),
 // plus real sweeps along the diver-only spurs.
@@ -95,7 +95,7 @@ test("Canopy routes: every route's profile box is in open water along its whole 
 test("Canopy diver spurs: real sweeps thread the squeeze, the crawl, the tangle and the grotto", () => {
   const spurs = S.routes.filter(r => r.profile === "diver");
   buildCollision(cave, chunksNear(cave, spurs.flatMap(r => r.path), 14));
-  const world = composedWith(cave, worldFloor, { x: -690, y: 0, z: 0 });
+  const world = productionWorld(cave);
   for (const r of spurs) {
     const run = seek(world, r.path, DIVER, 3.4);
     assert.ok(run.reached, `${r.id}: the diver did not get through`);

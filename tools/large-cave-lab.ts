@@ -25,7 +25,7 @@ import { createAtmosphere } from "../src/render/atmosphere.js";
 import { createCelMaterial, updateOpticalUniforms } from "../src/render/materials.js";
 import { CANOPY_ROOT_CAVES as S } from "../src/content/caves/canopyRootCaves.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
-import { createWorldQueries } from "../src/sim/world.js";
+import { createWorldQueries, SOLIDS, surfaceHeight } from "../src/sim/world.js";
 import { actorBox } from "../src/sim/ribCollision.js";
 import type { Capsule, Vec3 } from "../src/sim/types.js";
 import { encodeCave, loadCaveBake, prepareCave, type LoadedCave } from "../src/render/caves/large/pipeline.js";
@@ -34,7 +34,7 @@ import { seabedColor } from "../src/render/caves/large/art.js";
 import { createCaveLoader } from "../src/render/caves/large/loader.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
 import { collisionBytes } from "../src/world/caves/large/collision.js";
-import { composeCaveWorld, hullFloorFromSupport, largeCaveCollider, translatedWorld } from "../src/world/caves/large/compose.js";
+import { composeCaveWorld, hullFloorFromSupport, largeCaveCollider } from "../src/world/caves/large/compose.js";
 import { caveWorldMap, CavePins, coverageProblems, shownLods } from "../src/world/caves/large/streaming.js";
 import { chunkKey } from "../src/world/caves/large/mesh.js";
 import { createResidency } from "../src/world/residency.js";
@@ -81,12 +81,8 @@ const tMap = performance.now();
 if (cave.chunks.map(chunkKey).join() !== loaded.bake.header.chunks.map(c => `${c.cx}:${c.cy}:${c.cz}`).join())
   throw new Error("lab: the bake's chunk list differs from the source's (stale bake?)");
 
-// --- Collision: the real exterior world in a frame inside WORLD_BOUNDS ---------
-// The baseline WORLD_BOUNDS is still the legacy route rectangle (C3 widens
-// it), so the exterior world runs shifted; queries translate in and out.
-const OFFSET = { x: -690, y: 0, z: 0 };
-const exterior = translatedWorld(createWorldQueries([], (x, z) => worldFloor(x - OFFSET.x, z - OFFSET.z)), OFFSET);
-const world = composeCaveWorld({ exterior, solids: [], floor: worldFloor, caves: [largeCaveCollider(loaded.collision)] });
+// --- Collision: the production exterior world, composed with the cave ---------
+const world = composeCaveWorld({ exterior: createWorldQueries(), solids: SOLIDS, floor: surfaceHeight, caves: [largeCaveCollider(loaded.collision)] });
 
 // --- Materials, atmosphere and the exterior seabed ----------------------------
 const caveMaterial = createLargeCaveMaterial(scene);

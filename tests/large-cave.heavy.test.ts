@@ -17,12 +17,11 @@ import { boxOverlapsTriangle, buildCollider, caveRockAt, chunkIndex, createCandi
 import { caveWorldMap, CavePins } from "../src/world/caves/large/streaming.js";
 import { chunkKey } from "../src/world/caves/large/mesh.js";
 import { createResidency } from "../src/world/residency.js";
-import { boxSamples, composedWith, random, seek } from "./large-cave-support.js";
+import { boxSamples, productionWorld, random, seek } from "./large-cave-support.js";
 
 const prepared = prepareCave(S, worldFloor);
 const cave = prepared.cave;
-const OFFSET = { x: -690, y: 0, z: 0 };
-const world = composedWith(cave, worldFloor, OFFSET);
+const world = productionWorld(cave);
 const inRock = (q: Vec3): boolean => caveRockAt(cave.collision, q);
 
 test("Canopy craft routes: real sweeps take each admitted hull through, never into rock", () => {

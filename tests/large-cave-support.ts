@@ -1,7 +1,7 @@
 import type { LargeCaveSource } from "../src/content/caves/largeCave.js";
 import { EXTERIOR } from "../src/content/caves/largeCave.js";
 import type { Capsule, Vec3 } from "../src/sim/types.js";
-import { createWorldQueries } from "../src/sim/world.js";
+import { createWorldQueries, SOLIDS, surfaceHeight } from "../src/sim/world.js";
 import { buildCollision, createLargeCave, type LargeCave } from "../src/world/caves/large/build.js";
 import { composeCaveWorld, largeCaveCollider, translatedWorld, type CaveWorld } from "../src/world/caves/large/compose.js";
 
@@ -89,4 +89,11 @@ export function seek(world: CaveWorld, path: readonly Vec3[], shape: Capsule, sp
     p = r.position; poses.push(p);
   }
   return { reached: wp >= path.length, poses, stalls };
+}
+
+/** A cave composed with the production exterior world, in the real frame:
+ * `createWorldQueries()` (every world solid, the one physical floor) and the
+ * same solids and floor for the composer. */
+export function productionWorld(cave: LargeCave): CaveWorld {
+  return composeCaveWorld({ exterior: createWorldQueries(), solids: SOLIDS, floor: surfaceHeight, caves: [largeCaveCollider(cave.collision)] });
 }
