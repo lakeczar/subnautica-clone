@@ -78,10 +78,14 @@ export interface CaveProposal {
   readonly water: { readonly length: number; readonly width: number; readonly height: number };
   /** Named openings to open water. Small caves have one or more; medium caves two or more. */
   readonly exits: readonly string[];
-  /** Medium caves: 2–5 named chambers. */
+  /** Medium caves: 2–5 named chambers, distinct from each other and from the exits. */
   readonly chambers?: readonly string[];
-  /** Medium caves: the through-route, from one exit via two or more chambers to another exit. */
-  readonly loop?: { readonly from: string; readonly via: readonly string[]; readonly to: string };
+  /** Medium caves: the chamber graph. Each passage joins two chambers, or an exit to
+   * its chamber. The chambers alone must contain a cycle (GAME-DIRECTION's loop):
+   * a way round inside the cave, not just a way through it. */
+  readonly passages?: readonly CavePassage[];
+  /** The passage that closes the loop; without it the chambers would only chain. */
+  readonly loopCloser?: string;
   /** Small caves joined by crawlways share a network ID. */
   readonly network?: string;
   readonly layout: string;
@@ -93,6 +97,14 @@ export interface CaveProposal {
   /** The region's own cave resident, where it lives here. */
   readonly resident?: SpeciesId;
   readonly near: readonly Ref[];
+}
+
+export interface CavePassage {
+  readonly id: string;
+  readonly from: string;
+  readonly to: string;
+  /** Who fits through it, or how it runs. */
+  readonly note?: string;
 }
 
 export type CaveBiomeId = "isles_undercroft" | "canopy_rootways" | "basin_ridge_vaults" | "rift_divide_seam";

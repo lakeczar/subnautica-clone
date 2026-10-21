@@ -47,8 +47,9 @@ export const HUB: AreaProposal = {
       resident: "vault_glimmer", near: [prop("hub.step_two")] },
     { id: "hub_crown_shaft", area: "hub_spur", size: "medium", status: "new", label: "Crown shaft",
       mouth: p(330, -48, -560), anchor: "reshape", footprint: rect(300, 360, -590, -530), depth: [48, 120], admits: "small", water: { length: 40, width: 30, height: 72 }, exits: ["crown mouth", "flank mouth"],
-      chambers: ["crown bowl", "spiral shaft", "diver chimney", "flank chamber"], loop: { from: "crown mouth", via: ["crown bowl", "spiral shaft", "flank chamber"], to: "flank mouth" },
-      layout: "Through the crown: the crown mouth into a crown bowl, a Dart-wide spiral shaft (with a parallel diver chimney) down to a flank chamber, and a flank mouth at 120 m over the anchorage.",
+      chambers: ["crown bowl", "spiral shaft", "flank chamber", "diver chimney"], loopCloser: "chimney_top",
+      passages: [{ id: "crown_mouth", from: "crown mouth", to: "crown bowl" }, { id: "flank_mouth", from: "flank mouth", to: "flank chamber" }, { id: "bowl_shaft", from: "crown bowl", to: "spiral shaft", note: "Dart-wide" }, { id: "shaft_flank", from: "spiral shaft", to: "flank chamber", note: "Dart-wide" }, { id: "chimney_low", from: "flank chamber", to: "diver chimney", note: "diver" }, { id: "chimney_top", from: "diver chimney", to: "crown bowl", note: "diver" }],
+      layout: "Through the crown: the crown mouth into a crown bowl, a Dart-wide spiral shaft down to a flank chamber and a flank mouth at 120 m over the anchorage. A parallel diver chimney climbs from the flank chamber back to the crown bowl.",
       contents: ["The fastest safe way from the hub to Basin depth"], links: [], resident: "vault_glimmer", near: [prop("hub.crown")] },
   ],
   creatures: [

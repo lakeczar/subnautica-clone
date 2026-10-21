@@ -270,16 +270,63 @@ test("caves: water extent and topology fit the size classes (GAME-DIRECTION cave
     const longest = Math.max(length, width, height);
     if (c.size === "small") {
       assert.ok(longest >= 10 && longest <= 25, `${c.id}: small cave's longest water extent ${longest} m`);
-      assert.ok(c.exits.length >= 1 && !c.chambers && !c.loop, `${c.id}: a small cave has exits and no chamber plan`);
+      assert.ok(c.exits.length >= 1 && new Set(c.exits).size === c.exits.length && !c.chambers && !c.passages, `${c.id}: a small cave has distinct exits and no chamber plan`);
     } else {
       assert.ok(longest >= 30 && longest <= 80, `${c.id}: medium cave's longest water extent ${longest} m`);
-      const ch = c.chambers ?? [], loop = c.loop;
-      assert.ok(ch.length >= 2 && ch.length <= 5, `${c.id}: ${ch.length} chambers`);
-      assert.ok(c.exits.length >= 2, `${c.id}: needs two or more exits`);
-      assert.ok(loop && loop.from !== loop.to && c.exits.includes(loop.from) && c.exits.includes(loop.to), `${c.id}: the loop must run exit to exit`);
-      assert.ok(loop!.via.length >= 2 && loop!.via.every(v => ch.includes(v)), `${c.id}: the loop passes two or more named chambers`);
+      assert.deepEqual(caveGraphProblems(c.chambers ?? [], c.exits, c.passages ?? []), [], `${c.id}: chamber graph`);
+      // The declared closing passage is what makes it a loop: without it, the chambers only chain.
+      assert.ok(c.loopCloser && (c.passages ?? []).some(p => p.id === c.loopCloser), `${c.id}: names no closing passage`);
+      const opened = (c.passages ?? []).filter(p => p.id !== c.loopCloser);
+      assert.ok(caveGraphProblems(c.chambers ?? [], c.exits, opened).some(p => p.startsWith("no loop")), `${c.id}: still loops without ${c.loopCloser}`);
     }
   }
+});
+
+/** Problems with a medium cave's chamber graph: distinct named chambers (2–5) and
+ * exits (2+), passages joining known nodes (never exit to exit), every exit attached,
+ * everything connected, and a cycle among the chambers alone. Parallel passages
+ * between the same two chambers do not count as a loop. */
+function caveGraphProblems(chambers: readonly string[], exits: readonly string[], passages: readonly { id: string; from: string; to: string }[]): string[] {
+  const out: string[] = [];
+  const ch = new Set(chambers), ex = new Set(exits);
+  if (ch.size !== chambers.length) out.push("repeated chamber names");
+  if (ex.size !== exits.length) out.push("repeated exit names");
+  if (chambers.some(c => ex.has(c))) out.push("a chamber shares an exit's name");
+  if (ch.size < 2 || ch.size > 5) out.push(`${ch.size} distinct chambers`);
+  if (ex.size < 2) out.push(`${ex.size} distinct exits`);
+  if (new Set(passages.map(p => p.id)).size !== passages.length) out.push("repeated passage ids");
+  for (const p of passages) {
+    if (![p.from, p.to].every(n => ch.has(n) || ex.has(n))) out.push(`${p.id} joins an unknown node`);
+    if (ex.has(p.from) && ex.has(p.to)) out.push(`${p.id} joins two exits`);
+    if (p.from === p.to) out.push(`${p.id} joins a node to itself`);
+  }
+  for (const e of ex) if (!passages.some(p => (p.from === e && ch.has(p.to)) || (p.to === e && ch.has(p.from)))) out.push(`exit ${e} is not attached`);
+  // Connectivity over all nodes.
+  const nodes = [...ch, ...ex], adj = new Map(nodes.map(n => [n, new Set<string>()]));
+  for (const p of passages) if (adj.has(p.from) && adj.has(p.to)) { adj.get(p.from)!.add(p.to); adj.get(p.to)!.add(p.from); }
+  const seen = new Set<string>(), stack = nodes.slice(0, 1);
+  while (stack.length) { const n = stack.pop()!; if (seen.has(n)) continue; seen.add(n); stack.push(...adj.get(n)!); }
+  if (nodes.length && seen.size !== nodes.length) out.push("not every chamber and exit is connected");
+  // Cycle among chambers in the simple graph: edges > nodes - components.
+  const pairs = new Set(passages.filter(p => ch.has(p.from) && ch.has(p.to) && p.from !== p.to).map(p => [p.from, p.to].sort().join("|")));
+  const parent = new Map([...ch].map(n => [n, n])), find = (n: string): string => parent.get(n) === n ? n : find(parent.get(n)!);
+  let components = ch.size;
+  for (const pr of pairs) { const [x, y] = pr.split("|") as [string, string]; const a = find(x), b = find(y); if (a !== b) { parent.set(a, b); components--; } }
+  if (pairs.size <= ch.size - components) out.push("no loop among the chambers: they only chain");
+  return out;
+}
+
+test("the cave-graph check itself rejects chains, repeated rooms and exit-to-exit links", () => {
+  const exits = ["a mouth", "b mouth"];
+  const ring = [{ id: "ma", from: "a mouth", to: "one" }, { id: "mb", from: "b mouth", to: "two" },
+    { id: "p1", from: "one", to: "two" }, { id: "p2", from: "two", to: "three" }, { id: "p3", from: "three", to: "one" }];
+  assert.deepEqual(caveGraphProblems(["one", "two", "three"], exits, ring), []);
+  assert.ok(caveGraphProblems(["one", "two", "three"], exits, ring.filter(p => p.id !== "p3")).some(p => p.startsWith("no loop")), "a chain is not a loop");
+  assert.ok(caveGraphProblems(["only room", "only room"], exits, [{ id: "ma", from: "a mouth", to: "only room" }, { id: "mb", from: "b mouth", to: "only room" }])
+    .includes("repeated chamber names"), "one repeated room is caught");
+  assert.ok(caveGraphProblems(["one", "two"], exits, [...ring.slice(0, 3), { id: "p4", from: "one", to: "two" }]).some(p => p.startsWith("no loop")),
+    "two parallel passages between the same pair do not make a loop");
+  assert.ok(caveGraphProblems(["one", "two", "three"], exits, [...ring, { id: "x", from: "a mouth", to: "b mouth" }]).includes("x joins two exits"));
 });
 
 // Tier rule (CB-01). Costs: registry RECIPES live, S9/SYS-1 from the checked snapshot.

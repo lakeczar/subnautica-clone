@@ -159,7 +159,7 @@ How materials, tiers, upgrades, outposts and decodes pull the player outward on 
 
 | Step | Optional upgrades (SYS-1) | Outposts and systems (SYS-2) | Lost-site decodes that pay off | Tier rule |
 | --- | --- | --- | --- | --- |
-| **A place to breathe** | `cell_bank_1`, `flare_launcher`, `emergency_ballast` | — | `reef_pumphouse_log` | Baseline: the 150 m suit is built from shore stock before any craft (see TRANSITIONS). |
+| **A place to breathe** | `cell_bank_1`, `flare_launcher`, `emergency_ballast` | — | `reef_pumphouse_log` | Baseline (approved): the 150 m suit is built from shore stock before any craft (see TRANSITIONS). |
 | **First craft and the decoder** | `plating_alloy`, `drive_tuning_1`, `floodlights_1`, `dart_overdrive` | `bp_field_outpost`, `bp_decoder`, `bp_survey_station`, `bp_cultivation` | `isles_tide_store_fragment`, `isles_strain_gauge_log` | The Dart is the baseline first craft (coordinator). The Creel, Hush and Spindle each need one tagged frame from the 150 m rim stack, at the early tier's limit. |
 | **Reinforced to 350 m** | `silent_running`, `dart_range_tagger`, `dart_wide_sonar`, `creel_cutting_arm`, `creel_grapple` | `bp_outpost_standard` | `canopy_basket_log`, `canopy_roots_store_archive`, `basin_pumphead_log`, `hub_beacon_archive` | Every 350 m transition needs a tagged frame; the shallowest frames are the 150 m rim stack, at the early tier's limit. No frame is shallower. |
 | **Ceramic and core: 450 m service** | `plating_ceramic`, `hull_heat_lining`, `thermal_exchanger`, `cell_bank_2`, `floodlights_2`, `drive_tuning_2` | `bp_outpost_advanced`, `bp_outpost_thermal_tap` | `rift_borehole_log`, `basin_vault_archive` | Workable core is first found at the 350 m lower ledges, at the reinforced tier's limit; the 290 m shoulders show inclusions too thin to work. Ceramic (258 m) is the step's other rare material, not its frontier. |
@@ -209,7 +209,7 @@ For each transition:
 
 | Transition | Recipe owner | Produces | Previous tier (limit) | Reach while building | Frontier material × needed | First found at | Proposed recipe change | Exception |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `suit_150` | registry | `early` | `starter` (60 m) | `starter` (60 m) | — | — | — | pending-owner: Built from shore stock before any craft exists, like the first craft. Nothing is workable below 60 m without it. Proposed as part of the same baseline; needs explicit confirmation. |
+| `suit_150` | registry | `early` | `starter` (60 m) | `starter` (60 m) | — | — | — | coordinator-2026-10-20: Built from shore stock before any craft exists; nothing is workable below 60 m without it. Approved as a baseline alongside the Dart (coordinator, R2). |
 | `dart_base` | registry | `early` | `early` (150 m) | `early` (150 m) | — | — | — | coordinator-2026-10-20: The Dart is the first craft and the tier rule's baseline. |
 | `creel_base` | registry | `early` | `early` (150 m) | `early` (150 m) | `tagged_frame` × 1 | canopy_rim_frames (150 m) | +1 `tagged_frame`, -8 `structural_alloy` | — |
 | `hush_base` | S9 | `early` | `early` (150 m) | `early` (150 m) | `tagged_frame` × 1 | canopy_rim_frames (150 m) | +1 `tagged_frame`, -4 `structural_alloy` | — |
@@ -244,7 +244,7 @@ For each transition:
 - The Creel, Hush, Spindle and 350 m suit each need one tagged frame, taken from the 150 m rim stack before deeper frames are in reach. Each swaps out alloy, so their bulk barely changes.
 - These are recipe and source proposals for their owners: the registry, S9 and SYS-1 recipes, and S2/S9 sources. The P1 playthrough route and the economy scripts (SYS-1 `upgrade-economy.mjs`, C3's campaign economy) must be rerun once composed.
 - SYS-1's economy treats a frontier as first found within (previous reach, this reach]. Under the moved sources it still passes, but frames at exactly 150 m become "common base" in its arithmetic; SYS-1 should check its tier-line results at composition.
-- **Exceptions:** the Dart is the baseline (coordinator, R1). The 150 m suit is built from shore stock before any craft and has nothing reachable at 60 m. It is proposed as the same baseline and **needs explicit confirmation**.
+- **Exceptions:** two approved baselines (coordinator): the Dart, the first craft (R1), and the 150 m suit, built from shore stock before any craft with nothing reachable at 60 m (R2).
 
 ## Adverse case: skip every optional cave and lost site
 
@@ -316,7 +316,7 @@ Plans: every required recipe's plan comes from evidence and technical records al
 ## Decisions received (R1) and what is still open
 
 - **Pacing:** measured on a blind first playthrough; the estimates here stay hypotheses until calibrated with the timeline.
-- **Tier-rule baseline:** the Dart, the first craft. **Still open:** confirm that the 150 m suit shares that baseline (see the tier rule).
+- **Tier-rule baseline:** the Dart, the first craft (R1), and the 150 m suit alongside it (R2).
 - **Outpost-kit plans:** main-path copies are required; SYS-2 is handling them.
 - **Hub crown versus apron:** decided later with W2.
 - **Still open, for owners:** the recipe deltas (registry, S9, SYS-1) and source changes (S2/S9) in [the tier rule](#the-tier-rule-per-transition). The turbine hall (C12) and Meridian's interiors still have no world placement; the bible marks only their exterior approaches.

@@ -47,11 +47,11 @@ Three small arch caves on the spur and one medium shaft through the crown. The s
 | `hub_step_arch` | 80, -40, -400 ⟂ | 68..92 × -412..-388 | 16 × 5 × 12 | 36–48 | north mouth, south mouth | — | A 16 m arch tunnel through the first step's shoulder. | Shelter on the spur crossing | `hub_glimmer_crack` |
 | `hub_glimmer_crack` | 190, -50, -470 ⟂ | 178..202 × -482..-458 | 18 × 3 × 16 | 44–60 | north mouth, crown-side mouth | — | An 18 m crack through the second step, ceiling thick with glimmers. | Glimmer mats leaning toward the crown side | `hub_step_arch` |
 
-**Medium caves (1)**: water 30–80 m, 2–5 named chambers, a through-loop from one exit to another; the main hall takes the craft listed.
+**Medium caves (1)**: water 30–80 m, 2–5 named chambers joined so that the chambers form a loop (a way round inside the cave, not only a way through), and two or more exits; the main hall takes the craft listed. ↺ marks the passage that closes the loop.
 
-| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Hall admits | Chambers | Loop | Exits | Layout | Contents |
+| ID | Mouth (x, y, z) | Footprint | Water m | Depth m | Hall admits | Chambers | Passages | Exits | Layout | Contents |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `hub_crown_shaft` | 330, -48, -560 ⟂ | 300..360 × -590..-530 | 40 × 30 × 72 | 48–120 | small | crown bowl, spiral shaft, diver chimney, flank chamber | crown mouth → crown bowl → spiral shaft → flank chamber → flank mouth | crown mouth, flank mouth | Through the crown: the crown mouth into a crown bowl, a Dart-wide spiral shaft (with a parallel diver chimney) down to a flank chamber, and a flank mouth at 120 m over the anchorage. | The fastest safe way from the hub to Basin depth |
+| `hub_crown_shaft` | 330, -48, -560 ⟂ | 300..360 × -590..-530 | 40 × 30 × 72 | 48–120 | small | crown bowl, spiral shaft, flank chamber, diver chimney | crown mouth – crown bowl; flank mouth – flank chamber; crown bowl – spiral shaft; spiral shaft – flank chamber; flank chamber – diver chimney; diver chimney – crown bowl ↺ | crown mouth, flank mouth | Through the crown: the crown mouth into a crown bowl, a Dart-wide spiral shaft down to a flank chamber and a flank mouth at 120 m over the anchorage. A parallel diver chimney climbs from the flank chamber back to the crown bowl. | The fastest safe way from the hub to Basin depth |
 
 ## 4. Creatures
 

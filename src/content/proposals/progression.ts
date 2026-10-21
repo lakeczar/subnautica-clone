@@ -36,7 +36,7 @@ export const TIER_STEPS: readonly TierStep[] = [
     independent: "Short dives from the pod; the workshop landing on foot.",
     carrier: "Identical: both routes share the opening.",
     pull: "Crowns visible east of Splitspine; the C03 lead names the Canopy laboratory.",
-    ruleNote: "Baseline: the 150 m suit is built from shore stock before any craft (see TRANSITIONS)." },
+    ruleNote: "Baseline (approved): the 150 m suit is built from shore stock before any craft (see TRANSITIONS)." },
   { id: "t1_first_craft", label: "First craft and the decoder", reach: "early", areas: ["island_chain", "refuge_reef", "suspended_garden"],
     unlocks: ["restore_workshop", "dart_base", "creel_base", "creel_cargo_rack", "creel_cabin"],
     upgrades: ["plating_alloy", "drive_tuning_1", "floodlights_1", "dart_overdrive"],
@@ -159,13 +159,13 @@ export interface Transition {
   readonly frontier: CostKind | null;
   readonly delta: Partial<Record<CostKind, number>>;
   /** Set only for an approved or pending exception to the rule. */
-  readonly baseline?: { readonly decision: "coordinator-2026-10-20" | "pending-owner"; readonly why: string };
+  readonly baseline?: { readonly decision: "coordinator-2026-10-20"; readonly why: string };
 }
 
 export const TRANSITIONS: readonly Transition[] = [
   { id: "suit_150", recipes: ["suit_150"], owner: "registry", kind: "suit", produces: "early", previous: "starter", reach: "starter",
     frontier: null, delta: {},
-    baseline: { decision: "pending-owner", why: "Built from shore stock before any craft exists, like the first craft. Nothing is workable below 60 m without it. Proposed as part of the same baseline; needs explicit confirmation." } },
+    baseline: { decision: "coordinator-2026-10-20", why: "Built from shore stock before any craft exists; nothing is workable below 60 m without it. Approved as a baseline alongside the Dart (coordinator, R2)." } },
   { id: "dart_base", recipes: ["dart_base"], owner: "registry", kind: "new_craft", produces: "early", previous: "early", reach: "early",
     frontier: null, delta: {}, baseline: { decision: "coordinator-2026-10-20", why: "The Dart is the first craft and the tier rule's baseline." } },
   { id: "creel_base", recipes: ["creel_base"], owner: "registry", kind: "new_craft", produces: "early", previous: "early", reach: "early",
