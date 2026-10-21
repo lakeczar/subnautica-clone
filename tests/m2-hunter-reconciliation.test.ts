@@ -8,6 +8,7 @@ import { fixtureGame, localToWorld } from "../src/sim/carrier.js";
 import { carrierShell, encounterRotation, inverseRotation, hullMesh, inside, triangleBox, add, sub, vec,
   meshOccludes } from "../src/sim/hunterQueries.js";
 import { HUNTER_PART_ENVELOPES as parts, HUNTER_GEOMETRY as H } from "../src/content/encounterGeometry.js";
+import { HUNTER_ENCOUNTER } from "../src/content/ecology/encounter.js";
 import type { GameState, Vec3, VehicleState } from "../src/sim/types.js";
 import type { Triangle } from "../src/sim/hunterQueries.js";
 
@@ -157,16 +158,18 @@ test("level fallback preserves safe contact and damage rates at nearby parked-Da
       assert.ok(hunter.hunterFleetSweep(s,start,end,from,hunter.hunterPose(s)));
       assert.ok(hullClearance(world,end,H.worldEnvelope));
       for(const event of events)if(event.type==="threat-damage") {
-        const contact=hunter.hunterContact(s,end,world);
+        // ENC-1: the bite starts this cycle's withdrawal; probe its contact phase.
+        const probe=structuredClone(s);probe.world.threat.modeSeconds=Math.floor(s.world.threat.modeSeconds/H.cycleSeconds)*H.cycleSeconds;
+        const contact=hunter.hunterContact(probe,end,world);
         assert.ok(!penetrating&&contact.biting&&contact.clear&&!contact.penetrating&&contact.gap<=H.reach);
         assert.ok(!hunter.hunterFleetObstruction(s).penetrating);
-        assert.deepEqual(event.target,{kind:"diver"});assert.ok(event.loss>0&&event.loss<=10/60+1e-10);
+        assert.deepEqual(event.target,{kind:"diver"});assert.ok(event.loss>0&&event.loss<=Math.max(...HUNTER_ENCOUNTER.bites.diver)+1e-10);
         damage+=event.loss;if(firstContact<0)firstContact=i;
       }
     }
     assert.ok(firstContact>=0&&firstContact<180,`${yaw}/${height}: bounded resumed approach`);
     assert.ok(damage>10,`${yaw}/${height}: meaningful danger`);assert.deepEqual(s.fleet.vehicles,vehicle);
-    assert.equal(s.world.threat.mode,"pursue");assert.equal(s.world.threat.interest,12);
+    assert.equal(s.world.threat.mode,"pursue");assert.equal(s.world.threat.interest,HUNTER_ENCOUNTER.interest.max);
   }
 });
 

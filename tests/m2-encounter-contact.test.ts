@@ -26,7 +26,10 @@ test("post-sweep contact uses the real mouth and visible skin for every controll
       const s=fixture(hull), v=s.fleet.vehicles[0]; if(v){v.pose.yaw=yaw;v.pose.pitch=hull==="dart"?.55:0;}
       for(let i=0;i<180;i++) {s.tick++;const events:GameEvent[]=[];updateThreat(s,1,events,empty);
         for(const event of events.filter(e=>e.type==="threat-damage")) {
-          const c=hunterContact(s,s.world.threat.position,empty);
+          // ENC-1: a bite sends the animal into this cycle's withdrawal; probe
+          // the same pose at the cycle's contact phase.
+          const probe=structuredClone(s);probe.world.threat.modeSeconds=Math.floor(s.world.threat.modeSeconds/H.cycleSeconds)*H.cycleSeconds;
+          const c=hunterContact(probe,s.world.threat.position,empty);
           assert.ok(c.biting&&c.clear&&!c.penetrating);assert.ok(c.gap<=H.reach);assert.ok(event.loss>0);
         }
       }
@@ -38,19 +41,23 @@ test("post-sweep contact uses the real mouth and visible skin for every controll
   }
 });
 
-test("stationary loudness-one rule fixtures fail within 30 seconds with repeated separated contacts at unchanged rates",()=>{
+test("stationary loudness-one rule fixtures fail within 30 seconds through a ramp of separated bites",()=>{
   for(const hull of [null,"dart"] as const) {
-    const s=fixture(hull);let first=-1,last=-1,bites=0;const breaks:number[]=[];
+    const s=fixture(hull);let first=-1,last=-1;const losses:number[]=[],breaks:number[]=[];
     for(let i=0;i<2400;i++) {
       s.tick++;const events:GameEvent[]=[];updateThreat(s,1,events,empty);
-      const damage=events.find(e=>e.type==="threat-damage");
-      if(damage?.type==="threat-damage") {
-        first=first<0?i:first;if(last>=0&&i>last+1)breaks.push((i-last-1)/60);last=i;bites++;
-        assert.ok(damage.loss<=(hull?12:10)/60+1e-10);
+      const damage=events.filter(e=>e.type==="threat-damage");
+      assert.ok(damage.length<=1,"one bite per step");
+      if(damage[0]?.type==="threat-damage") {
+        first=first<0?i:first;if(last>=0)breaks.push((i-last)/60);last=i;losses.push(damage[0].loss);
       }
       if((s.fleet.vehicles[0]?.health??s.player.vitals.health)<=0)break;
     }
-    assert.ok(bites>100&&breaks.length>=2);assert.ok((last-first)/60<=30);
+    // ENC-1: a warning bump first, then each bite at least as hard, never two in a contact cycle.
+    assert.ok(losses.length>=5,JSON.stringify(losses));assert.equal(losses[0],6);
+    // The final bite takes only what is left.
+    assert.ok(losses.slice(0,-1).every((loss,i)=>i===0||loss>=losses[i-1]!-1e-9),JSON.stringify(losses));
+    assert.ok((last-first)/60<=30);
     assert.ok(breaks.every(seconds=>seconds>=.75),JSON.stringify(breaks));
   }
 });
@@ -81,10 +88,10 @@ test("investigation stands off; withdrawal keeps its nose toward the actor and c
 
 test("phase is finite, saved-timer derived and stable across boundaries and large timers",()=>{
   const s=fixture();
-  for(const seconds of [0,1.999999,2,2.999999,3,1e12,Number.MAX_VALUE]) {
+  for(const seconds of [0,1.999999,2,3.999999,4,1e12,Number.MAX_VALUE]) {
     s.world.threat.modeSeconds=seconds;const p=hunterPhase(s);
-    assert.ok(Number.isFinite(p.seconds)&&p.seconds>=0&&p.seconds<3);
-    assert.equal(p.withdrawing,p.seconds>=2);
+    assert.ok(Number.isFinite(p.seconds)&&p.seconds>=0&&p.seconds<H.cycleSeconds);
+    assert.equal(p.withdrawing,p.seconds>=H.contactSeconds);
     assert.deepEqual(hunterPose(s),hunterPose(structuredClone(s)));
   }
 });
