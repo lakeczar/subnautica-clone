@@ -15,13 +15,13 @@ Opus 5.5, branch `t3/large-cave-biome-lab`, rebased on `feat/siltwake-first-expe
   - **Sight and support** use rays against the same triangles.
 - **Agreement.** Art and collision are the same Float32 triangles: **0 m** apart at fine, and the bake decodes to the same bits.
 
-**Why not W1's boxes at scale (option A).** Same field and chunks, measured on the 47 chunks along the craft loop (`voxelBoxes.ts`, [`lc/compare.txt`](lc/compare.txt)):
+**Why not W1's boxes at scale (option A).** Same field and chunks, measured on the 45 chunks along the craft loop (`voxelBoxes.ts`, [`lc/compare.txt`](lc/compare.txt)):
 
 | | A: voxel boxes + `createWorldQueries` | B: triangle BVH (chosen) |
 | --- | --- | --- |
 | Size | 22.4k boxes, ~1 MiB | 312k triangles, 12.6 MiB |
-| Build (same host and run) | 57 s | 14 s |
-| Creel step / diver step | 65 µs / 21 µs | 5.8 µs / 3.0 µs |
+| Build (same host and run) | 53 s | 16 s |
+| Creel step / diver step | 56 µs / 21 µs | 4.8 µs / 1.9 µs |
 | Creel sliding along the hall wall at 15° (of 58 m requested) | 11.6 m: snags on the staircase | 38.8 m |
 | Diver, same | 36.7 m | 44.7 m |
 | Art vs collision | staircase vs smooth shell (W1 clamps it to 0.35 m) | identical |
@@ -29,33 +29,33 @@ Opus 5.5, branch `t3/large-cave-biome-lab`, rebased on `feat/siltwake-first-expe
 Boxes cost less memory, but fixed-axis actor boxes catch on every voxel step of a curved wall. For a craft in a 250 m cave that is the dominant feel problem.
 
 ## Measurements (RTX 3090, ANGLE GL-EGL, headless 1600×900; `tools/large-cave-lab.gpu.mjs`)
-Two full passes on the same scene. All runs below drive through the lab's real input path at boost, with real collision; "coverage" is the adverse-case invariant checked every frame.
+Final pass on the rebased code (C3's production exterior, 5,406 world solids). Every run drives the lab's real input path at boost with real collision. "Coverage" is the adverse-case invariant, checked every frame.
 
 | Run | Frame p50 / p95 / p99 | GPU | Render CPU p95 | Step (move, support, hull floor) | Coverage misses |
 | --- | --- | --- | --- | --- | --- |
-| Dart, craft loop, hollow to Scarp mouth, 11 m/s | 16.7 / 17.1 / 18.8 ms | 4.0 ms | 0.8 ms | 63 µs (max 0.4 ms) | 0 / 1,362 |
-| Dart, west loop through the gallery, 11 m/s | 16.7 / 16.8 / 17.1 ms | 4.1 ms | 0.5 ms | 58 µs | 0 / 1,303 |
-| Creel, craft loop, 6.5 m/s | 16.7 / 16.8 / 17.1 ms | 4.1 ms | 0.7 ms | 69 µs | 0 / 2,297 |
-| Diver, squeeze, 5.2 m/s | 16.7 / 16.8 / 17.0 ms | 4.3 ms | 0.5 ms | 47 µs | 0 / 832 |
-| Dart, pool drop at overdrive, 16 m/s | 16.7 / 16.8 / 17.8 ms | 3.9 ms | 0.4 ms | 81 µs | 0 / 258 |
-| **Ordinary control:** real key holds and mouse drags, hollow to Scarp mouth | 16.7 / 17.0 / 19.0 ms | 3.3 ms | 0.8 ms | 77 µs | 0 / 1,616 (14 of 14 waypoints, 27 s) |
+| Dart, craft loop, hollow to Scarp mouth, 11 m/s | 16.7 / 16.8 / 17.6 ms | 4.0 ms | 0.6 ms | 59 µs (max 0.7 ms) | 0 / 1,361 |
+| Dart, west loop through the gallery, 11 m/s | 16.7 / 16.8 / 16.9 ms | 4.3 ms | 0.4 ms | 51 µs | 0 / 1,303 |
+| Creel, craft loop, 6.5 m/s | 16.7 / 16.8 / 17.3 ms | 4.1 ms | 0.7 ms | 61 µs | 0 / 2,298 |
+| Diver, squeeze, 5.2 m/s | 16.7 / 16.8 / 16.9 ms | 4.4 ms | 0.4 ms | 41 µs | 0 / 832 |
+| Dart, pool drop at overdrive, 16 m/s | 16.7 / 16.9 / 18.7 ms | 3.8 ms | 0.4 ms | 83 µs | 0 / 258 |
+| **Ordinary control:** real key holds and mouse drags, hollow to Scarp mouth | 16.7 / 16.9 / 17.3 ms | 3.3 ms | 0.6 ms | 76 µs (max 1.5 ms) | 0 / 1,612 (14 of 14 waypoints, 27 s) |
 
-- **Frame time.** Frames are vsync-capped at 60 Hz, and the GPU has 4× headroom. A pass on a busier host gave p95 18.3–19.3 ms; there the CPU-only comparison also ran 2× slower, so that is host contention, not the cave.
-- **Spikes.** Worst single frames were 20–38 ms, plus one 119 ms frame right after the first cold entry in one pass.
+- **Frame time.** Frames are vsync-capped at 60 Hz, and the GPU has 4× headroom. The worst single frames were 19–37 ms.
+- **A regression found and fixed while measuring.** Composed with the production world, a step first cost 300–800 µs, because the composer scanned all 5,406 exterior solids. It now uses the shared 32 m index. A fast test guards a diver move at under 150 µs; it measures about 2.5 µs.
 - **Lamp-window rebuild:** p95 1.6–1.9 ms per frame, time-sliced.
 - **Residency update:** p95 0.3–0.8 ms.
-- **Collision query cost per step** (no rendering; [`lc/compare.txt`](lc/compare.txt)): about 6–8 µs for a Creel move and 3–4 µs for a diver move. The lab's step adds support reads and the hull floor.
+- **Collision query cost per step** (no rendering; [`lc/compare.txt`](lc/compare.txt)): about 5–7 µs for a Creel move and 2–3 µs for a diver move. The lab's step adds support reads and the hull floor.
 - **Resident bytes:**
   - collision 20.8 MB;
   - lamp occupancy 2.9 MB (CPU) and a 2 MB window texture;
   - art for all 90 chunks: 17–18.5 MB on the GPU, the same plus Babylon's copies on the CPU;
   - S1 accounted total about 41 MB of the 256 MiB budget.
 - **Bake:** 90 chunks; 397k fine, 103k coarse and 4.6k life triangles. 13.0 MB raw, **6.2 MB zlib**. Building from source takes about 1 min offline. `--verify` reports 0 collider mismatches between bake and live.
-- **Cold entry,** from page load to control (the Dart held at the hollow until its zone and touched chunks are drawn fine): **4.1 s**, made up of:
+- **Cold entry,** from page load to control (the Dart held at the hollow until its zone and touched chunks are drawn fine): **3.2 s**, made up of:
   - fetch 0.08 s;
   - decoding and indexing every collider 0.8 s;
-  - recompiling the field and surface-chunk list 1.1 s (a baked map would drop this);
-  - shaders and residency to readiness about 2 s.
+  - recompiling the field and surface-chunk list 1.0 s (a baked map would drop this);
+  - shaders and residency to readiness about 1.3 s.
 
 ## Streaming and light
 - **Streaming** (`streaming.ts`). The cave's chunks form their own S1 `WorldLayout`: 32 m columns, one layer per occupied slab. A second `createResidency` runs over it under the shared budget (`setExternalBytes` both ways).
@@ -115,7 +115,7 @@ The content bible (accepted after this brief) places the Canopy cave biome as **
 5. **Persisted state:** none. A cave's IDs are stable; the lamp flag is W1's proposal.
 
 ## Checks
-- **Fast tier:** `npm run test:fast` passes **1,096/1,096** (106 files) on the rebased branch. The 25 large-cave tests:
+- **Fast tier:** `npm run test:fast` passes **1,096/1,096** (106 files) on the rebased branch, before the composer index fix. The 25 large-cave tests also pass after it:
   - `tests/large-cave.test.ts` (fixture biome):
     - ownership and its negative control;
     - chunk-seam closure;
@@ -137,7 +137,7 @@ The content bible (accepted after this brief) places the Canopy cave biome as **
     - real sweeps along each diver spur against the production exterior.
   - `tests/large-cave-streaming.test.ts`: the layout, the pins, and the adverse case with its control.
   - `tests/large-cave-shared.test.ts`: the W1 Fanvault through the composer.
-- **Heavy tier:** `scripts/heavy-check.sh … large-cave.heavy.test.js` passes 4/4 at a 410 MiB peak:
+- **Heavy tier:** `scripts/heavy-check.sh … large-cave.heavy.test.js` passes 4/4 at a 412 MiB peak:
   - every craft route with its admitted hull, against the production world;
   - coarse vs every route;
   - 40,000 probes round all routes, 0 disagreeing;

@@ -1,7 +1,7 @@
-chunks 45; B: 311729 tris, 12.6 MiB, mesh+bvh 29534 ms; A: 22444 boxes, ~1.0 MiB as Float64 (+objects), 90285 ms
-creel seek A {"reached":true,"waypoint":15,"stalls":0,"travelled":203.5,"usPerStep":84.6}
-creel seek B {"reached":true,"waypoint":15,"stalls":0,"travelled":203.5,"usPerStep":8.1}
-diver seek A {"reached":true,"waypoint":15,"stalls":0,"travelled":203.3,"usPerStep":22.2}
-diver seek B {"reached":true,"waypoint":15,"stalls":0,"travelled":203.3,"usPerStep":3.7}
+chunks 45; B: 311729 tris, 12.6 MiB, mesh+bvh 16283 ms; A: 22444 boxes, ~1.0 MiB as Float64 (+objects), 52906 ms
+creel seek A {"reached":true,"waypoint":15,"stalls":0,"travelled":203.5,"usPerStep":56.2}
+creel seek B {"reached":true,"waypoint":15,"stalls":0,"travelled":203.5,"usPerStep":4.8}
+diver seek A {"reached":true,"waypoint":15,"stalls":0,"travelled":203.3,"usPerStep":21.3}
+diver seek B {"reached":true,"waypoint":15,"stalls":0,"travelled":203.3,"usPerStep":1.9}
 diver graze A {"alongWall":36.7,"requested":58} B {"alongWall":44.7,"requested":58}
 creel graze A {"alongWall":11.6,"requested":58} B {"alongWall":38.8,"requested":58}
