@@ -102,6 +102,12 @@ test("Canopy diver spurs: real sweeps thread the squeeze, the crawl, the tangle 
     const buried = run.poses.flatMap(p => boxSamples(p, DIVER)).find(q => caveRockAt(cave.collision, q));
     assert.equal(buried, undefined, `${r.id}: diver inside rock at ${JSON.stringify(buried)}`);
   }
+  // Cost guard: the composer must broad-phase the production world's
+  // thousands of exterior solids (a linear scan made every move ~0.5 ms).
+  const route = S.routes.find(r => r.id === "canopy_roots.route.squeeze")!.path;
+  const started = performance.now(), run = seek(world, route, DIVER, 3.4);
+  const perMove = (performance.now() - started) / run.poses.length;
+  assert.ok(perMove < 0.15, `a diver move costs ${(perMove * 1000).toFixed(0)} µs`);
   // Independent dense probes round the squeeze agree with the collision mesh.
   const rnd = random(19);
   let checked = 0;

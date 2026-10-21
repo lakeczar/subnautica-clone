@@ -1,6 +1,8 @@
 import type { Solid } from "../../../sim/world.js";
 import type { Capsule, MoveResult, MovementOptions, Vec3, WorldQueries } from "../../../sim/types.js";
 import type { Aabb } from "../../types.js";
+import { createSpatialIndex } from "../../spatialIndex.js";
+import { solidEntries } from "../../queries.js";
 import {
   boxOverlapsTriangle, caveRockAt, caveSegmentClear, caveSupport, createCandidates, gatherTriangles,
   sweepBoxBox, sweepBoxTriangle, type CaveCollision, type SweepHit,
@@ -119,8 +121,9 @@ export function composeCaveWorld(options: CaveWorldOptions): CaveWorld {
   const counters = { caveSweeps: 0, exteriorSweeps: 0 };
   const touched = (box: Aabb): CaveCollider[] => caves.filter(c => c.touches(box));
   const hit: SweepHit = { t: 0, nx: 0, ny: 0, nz: 0, start: false }, best: SweepHit = { t: 0, nx: 0, ny: 0, nz: 0, start: false };
-  const nearSolids = (box: Aabb): Solid[] => solids.filter(s => s.min.x <= box.max.x && s.max.x >= box.min.x &&
-    s.min.y <= box.max.y && s.max.y >= box.min.y && s.min.z <= box.max.z && s.max.z >= box.min.z);
+  // The same 32 m broad phase the exterior world uses (thousands of solids).
+  const index = createSpatialIndex(solidEntries(solids));
+  const nearSolids = (box: Aabb): Solid[] => index.inBox(box, ["solid"]).map(e => e.data!);
 
   /** One cave sub-sweep with slides against its caves and nearby solids. */
   function slide(origin: Vec3, delta: Vec3, shape: Capsule, owners: readonly CaveCollider[]): { position: Vec3; hit: boolean } {
@@ -180,7 +183,7 @@ export function composeCaveWorld(options: CaveWorldOptions): CaveWorld {
       if (!owners.length) return exterior.supportHeight(x, z, fromY);
       let h = -Infinity;
       for (const c of owners) h = Math.max(h, c.support(x, z, fromY + 0.25));
-      for (const s of solids) if (x >= s.min.x && x <= s.max.x && z >= s.min.z && z <= s.max.z && fromY >= s.max.y - 0.25) h = Math.max(h, s.max.y);
+      for (const s of nearSolids({ min: { x, y: -1e5, z }, max: { x, y: 1e5, z } })) if (x >= s.min.x && x <= s.max.x && z >= s.min.z && z <= s.max.z && fromY >= s.max.y - 0.25) h = Math.max(h, s.max.y);
       return h === -Infinity ? Math.min(...owners.map(c => c.baseY)) - 1 : h;
     },
     clearance(origin, shape) {
