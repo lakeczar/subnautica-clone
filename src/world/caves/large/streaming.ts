@@ -203,7 +203,9 @@ export function caveArtMinimum(cm: CaveMap, cost: CaveArtCost, residency: { inFl
   // Units S1 has not measured yet are probed at its per-LOD guess (1 MiB fine
   // by default), up to `inFlight` at once.
   const probes = (residency.inFlight ?? 2) * Math.max(residency.estimate ?? 1048576, sorted[0] ?? 0);
-  return coarse + zoneSet + local + probes;
+  // Never more than holding every chunk at both LODs at once.
+  const everything = coarse + sorted.reduce((n, v) => n + v, 0);
+  return Math.min(coarse + zoneSet + local, everything) + probes;
 }
 
 /** The movement gate: the safe response whenever coverage cannot be kept
