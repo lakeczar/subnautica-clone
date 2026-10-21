@@ -236,3 +236,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **C3 R1 fixes done** at `8eeb99e`: output placement checked for every carried output, salvage clears ecology ownership, autosave retries after a validation refusal, P3 pins, root merged; 1,071 tests pass, playthrough 5/5. Sol R2 running.
 - **C3 R2 (Sol): accept** (`review/c3-r2` `6804b76`). **Integrated at `a21e764`.** On root: 1,071 tests pass, build OK, and `playthrough --jobs 3` reaches all 5 endings (14 saves matched, no blockers). **Milestone: a rough complete game, finishable on both routes.** P3: a stale autosave notice shows briefly after a New Game save.
 - **Started:** C4 (compose systems in two stages) and the M2 stage-exit Opus experience audit (`siltwake-m2-experience-audit-opus-ffc9847`). Builders 5 of 5: C4, audit, LC, CA-1, CA-2.
+- **Usage-limit reset:** C4, the M2 audit, LC and CA-1 had hit the limit and were resumed; CA-2 was already running. Builders 5 of 5.
