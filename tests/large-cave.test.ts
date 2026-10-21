@@ -4,6 +4,7 @@ import type { Vec3 } from "../src/sim/types.js";
 import { actorBox } from "../src/sim/ribCollision.js";
 import { lampVisible } from "../src/render/caves/lightField.js";
 import { buildChunkMesh } from "../src/world/caves/large/mesh.js";
+import { COLLISION_BAND } from "../src/world/caves/large/build.js";
 import { bakeChunk, encodeBake, readBake } from "../src/world/caves/large/bake.js";
 import { buildCollider, caveRockAt, caveSegmentClear, chunkIndex, createCandidates, gatherTriangles, boxOverlapsTriangle } from "../src/world/caves/large/collision.js";
 import { compileField, validateOwnership } from "../src/world/caves/large/field.js";
@@ -59,6 +60,15 @@ test("LC mesh: deterministic, and chunk seams share their border vertices exactl
     return !onCollar && !onDomain;
   });
   assert.equal(open.length, 0, `open edges inside the cave: ${open.slice(0, 5).map(([k, n]) => `${k} x${n}`).join("; ")}`);
+});
+
+test("LC sampling: skipping bricks no primitive reaches changes no vertex", () => {
+  for (const c of cave.chunks) for (const lod of ["fine", "coarse"] as const) {
+    const fast = cave.mesh(c, lod), full = buildChunkMesh(cave.field, cave.lattice, c, lod, { band: lod === "fine" ? COLLISION_BAND : 0, exhaustive: true });
+    assert.deepEqual([...full.positions], [...fast.positions], `chunk ${fast.key} ${lod}`);
+    assert.deepEqual([...full.indices], [...fast.indices], `chunk ${fast.key} ${lod}`);
+    assert.ok(fast.stats.skipped > 0 || lod === "coarse", "the fixture exercises skipping");
+  }
 });
 
 test("LC agreement: art is the collision mesh; independent dense probes agree within 0.35 m", () => {

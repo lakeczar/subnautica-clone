@@ -68,9 +68,16 @@ interface Piece {
   readonly carve: number;
   readonly zone: number;
   readonly water: boolean;
+  /** Where the piece is evaluated: far enough out that culling it changes
+   * nothing near any surface. */
   readonly box: Box;
+  /** Where its surface can be: its own extent, wobble and smooth-union reach. */
+  readonly core: Box;
   distance(x: number, y: number, z: number): number;
 }
+
+const grown = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, r: number): Box =>
+  ({ minX: x0 - r, minY: y0 - r, minZ: z0 - r, maxX: x1 + r, maxY: y1 + r, maxZ: z1 + r });
 
 const TUNNEL_EXPONENT = 3.2;
 /** Catmull-Rom points through the nodes, about every `step` metres. */
@@ -98,7 +105,14 @@ export function tunnelSamples(nodes: readonly TunnelNode[], step = 2): TunnelNod
   return out;
 }
 
-function tunnelPieces(c: Extract<LargeCaveCarve, { kind: "tunnel" }>, carve: number, zone: number, pad: number): Piece[] {
+/** A tunnel piece's surface bound: its section grown by `margin` in the
+ * section's scaled distance. */
+function tunnelCore(a: TunnelNode, b: TunnelNode, scale: number, margin: number): Box {
+  const g = 1 + margin / scale, r = Math.max(a.width, b.width) / 2 * g;
+  return { minX: Math.min(a.x, b.x) - r, maxX: Math.max(a.x, b.x) + r, minZ: Math.min(a.z, b.z) - r, maxZ: Math.max(a.z, b.z) + r,
+    minY: Math.min(a.y, b.y) - margin, maxY: Math.max(a.y + a.height * (0.42 + 0.58 * g), b.y + b.height * (0.42 + 0.58 * g)) };
+}
+function tunnelPieces(c: Extract<LargeCaveCarve, { kind: "tunnel" }>, carve: number, zone: number, pad: number, core: number): Piece[] {
   const pts = tunnelSamples(c.nodes), seed = seedOf(c.id), pieces: Piece[] = [];
   for (let s = 1; s < pts.length; s++) {
     const a = pts[s - 1]!, b = pts[s]!;
@@ -112,6 +126,7 @@ function tunnelPieces(c: Extract<LargeCaveCarve, { kind: "tunnel" }>, carve: num
       carve, zone, water: true,
       box: { minX: Math.min(a.x, b.x) - r, maxX: Math.max(a.x, b.x) + r, minZ: Math.min(a.z, b.z) - r, maxZ: Math.max(a.z, b.z) + r,
         minY: Math.min(a.y, b.y) - c.wobble - pad, maxY: top + c.wobble },
+      core: tunnelCore(a, b, scale, c.wobble + core),
       distance(x, y, z) {
         const t = len2 > 0 ? Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / len2)) : 0;
         const u = Math.hypot(x - (a.x + ex * t), z - (a.z + ez * t));
@@ -126,9 +141,11 @@ function tunnelPieces(c: Extract<LargeCaveCarve, { kind: "tunnel" }>, carve: num
   return pieces;
 }
 
-function carvePieces(c: LargeCaveCarve, carve: number, zone: number, pad: number): Piece[] {
+/** `pad` sizes the evaluation box, `core` the surface box: smooth union
+ * moves a surface out by at most blend / 4. */
+function carvePieces(c: LargeCaveCarve, carve: number, zone: number, pad: number, core = pad): Piece[] {
   const seed = seedOf(c.id);
-  if (c.kind === "tunnel") return tunnelPieces(c, carve, zone, pad);
+  if (c.kind === "tunnel") return tunnelPieces(c, carve, zone, pad, core);
   if (c.kind === "chamber") {
     // Scaled distance (see `distance`): it reaches `pad` at (1 + pad / scale) radii.
     const r = c.radii, o = c.center, cos = Math.cos(c.yaw), sin = Math.sin(c.yaw);
@@ -137,6 +154,10 @@ function carvePieces(c: LargeCaveCarve, carve: number, zone: number, pad: number
       carve, zone, water: true,
       box: { minX: o.x - reach, maxX: o.x + reach, minZ: o.z - reach, maxZ: o.z + reach,
         minY: Math.max(c.floor - pad, o.y - r.down * grow) - c.wobble, maxY: o.y + r.up * grow + c.wobble },
+      // Noise and smooth union move the surface by `c.wobble + core` in the
+      // scaled distance, so by that over `scale` in radii.
+      core: (() => { const g = 1 + (c.wobble + core) / Math.min(r.x, r.z, r.up, r.down), h = Math.max(r.x, r.z) * g;
+        return { minX: o.x - h, maxX: o.x + h, minZ: o.z - h, maxZ: o.z + h, minY: Math.max(c.floor - c.wobble - core, o.y - r.down * g), maxY: o.y + r.up * g }; })(),
       distance(x, y, z) {
         const lx = (x - o.x) * cos - (z - o.z) * sin, lz = (x - o.x) * sin + (z - o.z) * cos;
         const dx = Math.abs(lx) / r.x, dz = Math.abs(lz) / r.z;
@@ -156,6 +177,7 @@ function carvePieces(c: LargeCaveCarve, carve: number, zone: number, pad: number
     // Rounded ends reach a full radius past both end points, in Y too.
     box: { minX: Math.min(a.x, b.x) - reach, maxX: Math.max(a.x, b.x) + reach, minY: Math.min(a.y, b.y) - reach,
       maxY: Math.max(a.y, b.y) + reach, minZ: Math.min(a.z, b.z) - reach, maxZ: Math.max(a.z, b.z) + reach },
+    core: grown(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.y, b.y), Math.max(a.z, b.z), c.radius + c.flare + c.wobble + core),
     distance(x, y, z) {
       const t = Math.max(0, Math.min(1, ((x - a.x) * ax + (y - a.y) * ay + (z - a.z) * az) / len2));
       const radius = c.radius + c.flare * t * t + c.wobble * wallNoise(x, y, z, seed);
@@ -174,6 +196,7 @@ function rockPiece(r: LargeCaveRock, pad: number): Piece {
       carve: -1, zone: -1, water: false,
       box: { minX: Math.min(a.x, b.x) - reach, maxX: Math.max(a.x, b.x) + reach, minY: Math.min(a.y, b.y) - reach,
         maxY: Math.max(a.y, b.y) + reach, minZ: Math.min(a.z, b.z) - reach, maxZ: Math.max(a.z, b.z) + reach },
+      core: grown(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.y, b.y), Math.max(a.z, b.z), Math.max(r.radiusA, r.radiusB) + r.wobble + 0.5),
       distance(x, y, z) {
         const t = Math.max(0, Math.min(1, ((x - a.x) * ax + (y - a.y) * ay + (z - a.z) * az) / len2));
         const radius = r.radiusA + (r.radiusB - r.radiusA) * t;
@@ -185,6 +208,7 @@ function rockPiece(r: LargeCaveRock, pad: number): Piece {
   return {
     carve: -1, zone: -1, water: false,
     box: { minX: o.x - reach, maxX: o.x + reach, minY: o.y - h.y - pad, maxY: o.y + h.y + pad, minZ: o.z - reach, maxZ: o.z + reach },
+    core: grown(o.x, o.y, o.z, o.x, o.y, o.z, Math.max(Math.hypot(h.x, h.z), h.y) + 0.5),
     distance(x, y, z) {
       const lx = Math.abs((x - o.x) * cos - (z - o.z) * sin) - (h.x - r.round), ly = Math.abs(y - o.y) - (h.y - r.round);
       const lz = Math.abs((x - o.x) * sin + (z - o.z) * cos) - (h.z - r.round);
@@ -238,7 +262,7 @@ export function compileField(source: LargeCaveSource, floor: FloorFunction): Cav
   source.carves.forEach((c, i) => {
     const zone = zoneIndex.get(c.zone);
     if (zone === undefined) throw new Error(`cave ${source.id}: carve ${c.id} names unknown zone ${c.zone}`);
-    pieces.push(...carvePieces(c, i, zone, pad));
+    pieces.push(...carvePieces(c, i, zone, pad, source.blend * 0.25 + 0.5));
   });
   // Rock joins by a hard min: its box must reach past the surface band.
   for (const r of source.rocks) pieces.push(rockPiece(r, 1.5));
@@ -297,7 +321,7 @@ export function compileField(source: LargeCaveSource, floor: FloorFunction): Cav
       const z0 = ci(box.min.z, d.min.z, nz), z1 = ci(box.max.z, d.min.z, nz);
       for (let k = z0; k <= z1; k++) for (let j = y0; j <= y1; j++) for (let a = x0; a <= x1; a++)
         for (const i of cells[a + nx * (j + ny * k)]!) {
-          const b = pieces[i]!.box;
+          const b = pieces[i]!.core;
           if (b.maxX >= box.min.x && b.minX <= box.max.x && b.maxY >= box.min.y && b.minY <= box.max.y && b.maxZ >= box.min.z && b.minZ <= box.max.z) return true;
         }
       for (const r of source.collars) {

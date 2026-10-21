@@ -86,7 +86,7 @@ export function occupied(occupancy: Uint8Array, cells: number, i: number, j: num
   return (occupancy[bit >> 3]! >> (bit & 7) & 1) === 1;
 }
 
-function sampleChunk(field: CaveField, l: CaveLattice, c: ChunkCoord): Samples {
+function sampleChunk(field: CaveField, l: CaveLattice, c: ChunkCoord, exhaustive = false): Samples {
   const N = l.cells, m = N + APRON_LO + APRON_HI, h = l.voxel, o = l.origin;
   const lo: [number, number, number] = [c.cx * N - APRON_LO, c.cy * N - APRON_LO, c.cz * N - APRON_LO];
   const v = new Float64Array(m * m * m);
@@ -100,7 +100,7 @@ function sampleChunk(field: CaveField, l: CaveLattice, c: ChunkCoord): Samples {
       min: { x: o.x + (lo[0] + bi) * h - 1, y: o.y + (lo[1] + bj) * h - 1, z: o.z + (lo[2] + bk) * h - 1 },
       max: { x: o.x + (lo[0] + i1 - 1) * h + 1, y: o.y + (lo[1] + j1 - 1) * h + 1, z: o.z + (lo[2] + k1 - 1) * h + 1 },
     };
-    const full = field.mayHaveSurface(box);
+    const full = exhaustive || field.mayHaveSurface(box);
     for (let k = bk; k < k1; k++) for (let j = bj; j < j1; j++) for (let i = bi; i < i1; i++) {
       const y = o.y + (lo[1] + j) * h, at = i + m * (j + m * k);
       if (full) { v[at] = field.rock(o.x + (lo[0] + i) * h, y, o.z + (lo[2] + k) * h, floors[i + m * k]); sampled++; }
@@ -295,13 +295,15 @@ const toMesh = (raw: Raw): { positions: Float32Array; normals: Float32Array; zon
 export interface MeshOptions {
   /** Collision band width round collars, metres (0: none). */
   readonly band?: number;
+  /** Sample every node, skipping no brick (tests: skipping must change nothing). */
+  readonly exhaustive?: boolean;
 }
 
 /** Build one chunk at one LOD. Pure: the same field and chunk always give
  * the same arrays. */
 export function buildChunkMesh(field: CaveField, l: CaveLattice, c: ChunkCoord, lod: LodLevel, options: MeshOptions = {}): ChunkMesh {
   const started = Date.now();
-  const s = sampleChunk(field, l, c), N = l.cells, m = s.m;
+  const s = sampleChunk(field, l, c, options.exhaustive), N = l.cells, m = s.m;
   const fineAt = (gi: number, gj: number, gk: number): number => s.v[(gi - s.lo[0]) + m * ((gj - s.lo[1]) + m * (gk - s.lo[2]))]!;
   const collars = field.source.collars;
   const rectFor = (x: number, z: number): Rect | null => collars.find(r => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ) ?? null;

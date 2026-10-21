@@ -4,7 +4,8 @@ import { CANOPY_ROOT_CAVES as S } from "../src/content/caves/canopyRootCaves.js"
 import { CRAFT_PROFILES } from "../src/content/regions/passages.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import type { Vec3 } from "../src/sim/types.js";
-import { buildCollision, chunksNear, createLargeCave } from "../src/world/caves/large/build.js";
+import { buildCollision, chunksNear, COLLISION_BAND, createLargeCave } from "../src/world/caves/large/build.js";
+import { buildChunkMesh } from "../src/world/caves/large/mesh.js";
 import { caveRockAt } from "../src/world/caves/large/collision.js";
 import { validateOwnership } from "../src/world/caves/large/field.js";
 import { DIVER, boxSamples, composedWith, random, seek } from "./large-cave-support.js";
@@ -46,6 +47,17 @@ test("Canopy field: continuous round every surface (no primitive culled while it
     if (jump > worst) { worst = jump; at = JSON.stringify(p); }
   }
   assert.ok(worst < 0.3, `field steps ${worst.toFixed(2)} m over 0.1 m near ${at}`);
+});
+
+test("Canopy sampling: the hall's and the Crown hollow's chunks are identical with no brick skipped", () => {
+  for (const at of [{ x: 742, y: -126, z: -100 }, { x: 756, y: -100, z: -84 }]) {
+    const c = chunksNear(cave, [at], 0).find(k => cave.lattice.origin.y + k.cy * 32 <= at.y && at.y < cave.lattice.origin.y + (k.cy + 1) * 32 &&
+      cave.lattice.origin.x + k.cx * 32 <= at.x && at.x < cave.lattice.origin.x + (k.cx + 1) * 32 && cave.lattice.origin.z + k.cz * 32 <= at.z && at.z < cave.lattice.origin.z + (k.cz + 1) * 32)!;
+    const fast = cave.mesh(c, "fine"), full = buildChunkMesh(field, cave.lattice, c, "fine", { band: COLLISION_BAND, exhaustive: true });
+    assert.ok(fast.stats.skipped > 0, "skipping happened");
+    assert.deepEqual([...full.positions], [...fast.positions]);
+    assert.deepEqual([...full.indices], [...fast.indices]);
+  }
 });
 
 test("Canopy portals: each clear rectangle is open water and admits exactly its profiles", () => {
