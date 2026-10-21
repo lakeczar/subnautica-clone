@@ -49,9 +49,17 @@ export function rockColors(cave: LargeCave, m: ChunkMesh, light: Float32Array): 
   const P = m.positions, N = m.normals, Z = m.zones, out = new Float32Array(P.length / 3 * 4);
   for (let v = 0; v < P.length / 3; v++) {
     const x = P[v * 3]!, y = P[v * 3 + 1]!, z = P[v * 3 + 2]!, ny = N[v * 3 + 1]!, zone = Z[v]! - 1;
-    // The seabed itself (round a mouth too) keeps the seabed's colour, so no
-    // stepped zone edge shows on the apron outside an opening.
-    if (zone < 0 || (ny > 0.5 && Math.abs(y - cave.field.floor(x, z)) < 0.6)) { out.set(seabedColor(x, z, ny), v * 4); continue; }
+    if (zone < 0) { out.set(seabedColor(x, z, ny), v * 4); continue; }
+    // Floors just under the seabed (the apron and trench of a mouth) blend
+    // from seabed to cave floor by depth, so the change follows a smooth
+    // contour rather than the mesh's zone edge.
+    const below = cave.field.floor(x, z) - y;
+    if (ny > 0.5 && below < 3) {
+      const sb = seabedColor(x, z, ny), f = hex(cave.source.zones[zone]!.palette.floor), t = Math.max(0, Math.min(1, (below - 0.3) / 2.7));
+      const k = t * t * (3 - 2 * t);
+      out[v * 4] = sb[0] + (f[0] - sb[0]) * k; out[v * 4 + 1] = sb[1] + (f[1] - sb[1]) * k; out[v * 4 + 2] = sb[2] + (f[2] - sb[2]) * k; out[v * 4 + 3] = 0;
+      continue;
+    }
     const grain = wallNoise(x * 1.7, y * 1.7, z * 1.7, 9001), patch = wallNoise(x * 0.35, y * 0.2, z * 0.35, 9002);
     const p = zones[zone]!;
     // Floors blend into walls and walls into ceilings, so no band edge follows the mesh.

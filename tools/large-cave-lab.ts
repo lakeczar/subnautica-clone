@@ -317,7 +317,9 @@ function frameUpdate(): void {
   updateOpticalUniforms(optics, camera.position, null);
   const zone = zoneOf(eye), z = zone >= 0 ? S.zones[zone]! : null;
   const fogTint = z ? hex(z.fog.color) : [1, 1, 1] as [number, number, number];
-  caveMaterial.setFloat("fogDensity", z ? z.fog.density : 0.0105 + 0.012);
+  // Inside, the zone's own haze; outside, the shared optics (so a collar's
+  // seabed, drawn by the cave material, hazes exactly like the heightfield).
+  if (z) caveMaterial.setFloat("fogDensity", z.fog.density);
   const base = hex("#0b3048"), tint: [number, number, number] = z ? [fogTint[0] / base[0], fogTint[1] / base[1], fogTint[2] / base[2]].map(v => Math.min(2, v)) as [number, number, number] : [1, 1, 1];
   lampWindow.apply({ on: state.lamp, position: { x: eye.x + dir.x * 0.3, y: eye.y - 0.15, z: eye.z + dir.z * 0.3 }, direction: { x: dir.x, y: dir.y, z: dir.z } }, tint, z ? 1 : 0);
   if (xray) for (const m of optics) m.setFloat("fogDensity", 0.0015);

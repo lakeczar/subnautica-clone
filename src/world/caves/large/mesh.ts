@@ -79,7 +79,10 @@ export interface ChunkMesh {
  * primitive and no collar seabed in reach are filled from the exterior floor
  * alone, which is the exact field there. */
 interface Samples { readonly lo: readonly [number, number, number]; readonly m: number; readonly v: Float64Array; sampled: number; skipped: number }
-const APRON_LO = 3, APRON_HI = 2;
+// Fine cells need nodes c0 - 1 .. c0 + N; coarse cells (every second node, each
+// the most open of 27) need c0 - 3 .. c0 + N + 1; smooth normals take one
+// more coarse node of central differences each side.
+const APRON_LO = 5, APRON_HI = 4;
 /** Bit of node (i, j, k) of a chunk's own nodes in `occupancy`. */
 export function occupied(occupancy: Uint8Array, cells: number, i: number, j: number, k: number): boolean {
   const bit = i + cells * (j + cells * k);
@@ -148,10 +151,17 @@ function surfaceNets(field: CaveField, l: CaveLattice, values: (gi: number, gj: 
     }
     const fx = sx / n, fy = sy / n, fz = sz / n;
     // Trilinear gradient at (fx, fy, fz): towards larger values, the water.
-    const c = corner;
-    const gx = (1 - fy) * (1 - fz) * (c[1]! - c[0]!) + fy * (1 - fz) * (c[3]! - c[2]!) + (1 - fy) * fz * (c[5]! - c[4]!) + fy * fz * (c[7]! - c[6]!);
-    const gy = (1 - fx) * (1 - fz) * (c[2]! - c[0]!) + fx * (1 - fz) * (c[3]! - c[1]!) + (1 - fx) * fz * (c[6]! - c[4]!) + fx * fz * (c[7]! - c[5]!);
-    const gz = (1 - fx) * (1 - fy) * (c[4]! - c[0]!) + fx * (1 - fy) * (c[5]! - c[1]!) + (1 - fx) * fy * (c[6]! - c[2]!) + fx * fy * (c[7]! - c[3]!);
+    // Smooth normal: central-difference gradients at the eight corners,
+    // trilinearly blended. Neighbouring cells share corner gradients, so
+    // shading runs on across cells (and chunks) with no staircase.
+    let gx = 0, gy = 0, gz = 0;
+    for (let q = 0; q < 8; q++) {
+      const qa = a + (q & 1), qb = b + ((q >> 1) & 1), qe = e + (q >> 2);
+      const w = ((q & 1) ? fx : 1 - fx) * (((q >> 1) & 1) ? fy : 1 - fy) * ((q >> 2) ? fz : 1 - fz);
+      gx += w * (node(qa + 1, qb, qe) - node(qa - 1, qb, qe));
+      gy += w * (node(qa, qb + 1, qe) - node(qa, qb - 1, qe));
+      gz += w * (node(qa, qb, qe + 1) - node(qa, qb, qe - 1));
+    }
     const gl = Math.hypot(gx, gy, gz) || 1;
     const x = snap(o.x + (c0[0] - 1 + a + fx) * h), y = snap(o.y + (c0[1] - 1 + b + fy) * h), z = snap(o.z + (c0[2] - 1 + e + fz) * h);
     id = out.positions.length / 3;
