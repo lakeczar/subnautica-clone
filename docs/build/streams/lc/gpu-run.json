@@ -1,0 +1,22 @@
+{
+  "what": "shots",
+  "errors": [],
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+  "shots": [
+    "01-approach.png",
+    "02-hollow.png",
+    "03-hall.png",
+    "04-gallery.png",
+    "05-garden.png",
+    "06-lowrun.png",
+    "07-hub.png",
+    "08-pool.png",
+    "09-scarp.png",
+    "10-crawl.png",
+    "11-overview.png",
+    "hall-lamp-off.png",
+    "gallery-lamp-off.png",
+    "garden-lamp-off.png"
+  ],
+  "ok": true
+}
