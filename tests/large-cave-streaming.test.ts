@@ -78,7 +78,8 @@ test("LC-02 adverse: with the minimum share, a Dart at boost and overdrive tours
     assert.ok(r.finished && r.frames > 2000, `tour unfinished at ${speed} m/s`);
     assert.equal(r.unsafeMetres, 0, r.firstUnsafe);
     assert.equal(r.heldAfterEntry, 0, "the minimum share never needs the gate");
-    assert.equal(r.cutFrames, 0, "no pinned or coarse-floor chunk is ever cut");
+    assert.ok(r.settledFrame > 0 && r.settledFrame < r.frames / 4, `residency settled at frame ${r.settledFrame} of ${r.frames}`);
+    assert.equal(r.cutFramesAfterSettle, 0, "once S1 has measured its units, no pinned or coarse-floor chunk is ever cut");
     assert.ok(r.maxAccountedBytes <= FIXED + minimum);
   }
 });

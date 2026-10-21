@@ -162,7 +162,7 @@ test("LC-02 with the Canopy's real chunk costs and fixed bytes: the minimum shar
   const run = (o: Partial<Parameters<typeof simulate>[0]>) => simulate({ cm, cost, budgetBytes: fixedBytes + minimum, fixedBytes, path: tour, speed: 16,
     shape: CRAFT_PROFILES.small, gate: true, ...o });
   const clean = run({});
-  assert.ok(clean.finished && clean.unsafeMetres === 0 && clean.heldAfterEntry === 0 && clean.cutFrames === 0, JSON.stringify(clean));
+  assert.ok(clean.finished && clean.unsafeMetres === 0 && clean.heldAfterEntry === 0 && clean.cutFramesAfterSettle === 0 && clean.settledFrame > 0 && clean.settledFrame < clean.frames / 4, JSON.stringify(clean));
   const squeezed = run({ shareEvents: [{ frame: clean.readyFrame + 400, otherBytes: 16 * 1048576 }, { frame: clean.readyFrame + 900, otherBytes: 0 }] });
   assert.equal(squeezed.unsafeMetres, 0, squeezed.firstUnsafe);
   assert.ok(squeezed.finished && squeezed.heldAfterEntry > 0, JSON.stringify(squeezed));

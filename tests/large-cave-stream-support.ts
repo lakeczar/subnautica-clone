@@ -27,6 +27,8 @@ export interface SimOptions {
   readonly gate: boolean;
   readonly shareEvents?: readonly ShareEvent[];
   readonly maxFrames?: number;
+  /** S1's per-LOD cost guess for units it has not built yet. */
+  readonly estimate?: { readonly fine: { cpu: number; gpu: number }; readonly coarse: { cpu: number; gpu: number } };
 }
 export interface SimResult {
   readonly readyFrame: number;
@@ -41,6 +43,11 @@ export interface SimResult {
   readonly exposedStillFrames: number;
   /** Frames after entry where residency cut or demoted a wanted chunk. */
   readonly cutFrames: number;
+  /** The same, after residency first settled: cuts before that are S1
+   * probing units it has never built (cold start), not a shortage. */
+  readonly cutFramesAfterSettle: number;
+  /** Frame residency first settled, or -1. */
+  readonly settledFrame: number;
   readonly maxAccountedBytes: number;
   readonly firstUnsafe: string;
 }
@@ -63,12 +70,12 @@ function costLoader(clock: { t: number }, cost: CaveArtCost): ChunkLoader {
 export function simulate(o: SimOptions): SimResult {
   const clock = { t: 0 }, pins = new CavePins(o.cm), gate = new CaveGate(o.cm);
   const residency = createResidency({ map: pins.view, loader: costLoader(clock, o.cost), now: () => clock.t,
-    budget: { cpuBytes: o.budgetBytes, gpuBytes: o.budgetBytes, buildMsPerFrame: 4, uploadMsPerFrame: 4 } });
+    budget: { cpuBytes: o.budgetBytes, gpuBytes: o.budgetBytes, buildMsPerFrame: 4, uploadMsPerFrame: 4 }, ...(o.estimate ? { estimate: o.estimate } : {}) });
   let other = 0;
   const external = (): void => residency.setExternalBytes({ cpu: o.fixedBytes + other, gpu: other });
   external();
   let p = { ...o.path[0]! }, wp = 1, frame = 0, readyFrame = -1, held = 0, unsafeMetres = 0, unsafeFrames = 0, still = 0, cuts = 0, maxBytes = 0;
-  let firstUnsafe = "";
+  let firstUnsafe = "", settledOnce = false, cutsSettled = 0, settledFrame = -1;
   const step = o.speed / 60;
   while (wp < o.path.length && frame < (o.maxFrames ?? 30000)) {
     frame++; clock.t += 16.7;
@@ -86,7 +93,8 @@ export function simulate(o: SimOptions): SimResult {
     const entered = readyFrame >= 0;
     const allowed = entered && !o.gate ? true : gate.allows(shown, actorBox(next, o.shape));
     if (!entered) { if (allowed) readyFrame = frame; else continue; }
-    if (entered && (stats.cut || stats.demoted)) cuts++;
+    if (stats.settled && !settledOnce) { settledOnce = true; settledFrame = frame; }
+    if (entered && (stats.cut || stats.demoted)) { cuts++; if (settledOnce) cutsSettled++; }
     // 3. Move or hold, then judge the drawn frame.
     const zone = (q: Vec3): number => { const z = o.cm.cave.field.zoneAt(q.x, q.y + 1.4, q.z); return z >= 0 ? z : pins.current.zone; };
     if (allowed) {
@@ -99,7 +107,7 @@ export function simulate(o: SimOptions): SimResult {
     }
   }
   return { readyFrame, frames: frame, finished: wp >= o.path.length, heldAfterEntry: held, unsafeMetres, unsafeFrames,
-    exposedStillFrames: still, cutFrames: cuts, maxAccountedBytes: maxBytes, firstUnsafe };
+    exposedStillFrames: still, cutFrames: cuts, cutFramesAfterSettle: cutsSettled, settledFrame, maxAccountedBytes: maxBytes, firstUnsafe };
 }
 
 /** Deterministic, uneven synthetic chunk costs: 60-900 KiB fine, a quarter coarse. */
