@@ -93,18 +93,30 @@ try {
     const box = await canvas.boundingBox();
     const drag = async (dx, dy) => { await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
       await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy, { steps: 8 }); await page.mouse.up(); };
-    const hold = async (key, ms) => { await page.keyboard.down(key); await page.waitForTimeout(ms); await page.keyboard.up(key); };
     const log = [];
     const snap = async (label) => log.push({ label, ...(await page.evaluate(() => ({ p: window.lcLab.state.position, held: window.lcLab.state.held, cov: { ...window.lcLab.coverage } }))) });
     await snap("start");
-    // Down the Crown hollow (the Dart starts above it, nose down), then on into the hall.
-    await page.keyboard.down("Shift"); await hold("w", 4500); await snap("hollow");
-    await drag(-60, 140); await hold("w", 2500); await snap("hall");
-    await drag(-420, 0); await hold("w", 3000); await snap("hall west");
-    await drag(500, 0); await hold("w", 5000); await snap("east run");
-    await page.keyboard.up("Shift");
+    // Ordinary control, closed loop: every 200 ms read what a player sees
+    // (position and heading), then steer with a mouse drag towards the next
+    // landmark of the craft loop while holding W and Shift.
+    const route = await page.evaluate(() => window.lcLab.cave.source.routes.find(r => r.id === "canopy_roots.route.craft_loop").path);
+    await page.keyboard.down("Shift"); await page.keyboard.down("w");
+    let wp = 1;
+    const started = Date.now();
+    while (wp < route.length && Date.now() - started < 90000) {
+      const s = await page.evaluate(() => ({ p: window.lcLab.state.position, yaw: window.lcLab.state.yaw, pitch: window.lcLab.state.pitch }));
+      const g = route[wp], dx = g.x - s.p.x, dy = g.y - (s.p.y + 1), dz = g.z - s.p.z, l = Math.hypot(dx, dy, dz);
+      if (l < 4) { wp++; await snap(`waypoint ${wp - 1}`); continue; }
+      let dyaw = Math.atan2(dx, -dz) - s.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
+      const dpitch = Math.atan2(dy, Math.hypot(dx, dz)) - s.pitch;
+      if (Math.abs(dyaw) > 0.02 || Math.abs(dpitch) > 0.02) await drag(Math.max(-300, Math.min(300, dyaw / 0.004)), Math.max(-300, Math.min(300, -dpitch / 0.004)));
+      await page.waitForTimeout(200);
+    }
+    await page.keyboard.up("w"); await page.keyboard.up("Shift");
+    await snap("end");
+    result.drive = { reachedWaypoints: wp - 1, of: route.length - 1, seconds: (Date.now() - started) / 1000 };
     await page.screenshot({ path: join(out, "drive-end.png") });
-    result.drive = { log, report: await page.evaluate(() => window.lcLab.report()) };
+    result.drive = { ...result.drive, log, report: await page.evaluate(() => window.lcLab.report()) };
     await page.close();
   }
   failed = result.errors.length > 0 || (result.runs ?? []).some(r => r.coverage.failures > 0) || (result.drive?.report.coverage.failures ?? 0) > 0;

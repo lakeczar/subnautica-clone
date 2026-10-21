@@ -2,7 +2,7 @@ import type { RockGrid } from "../../../render/caves/lightField.js";
 import type { Vec3 } from "../../types.js";
 import { chunkIndex, type CaveCollision } from "./collision.js";
 import { occupied } from "./mesh.js";
-import { owns } from "./ownership.js";
+import { capAt } from "./ownership.js";
 
 /** The lamp's exact occupancy round the viewer (Babylon-free).
  *
@@ -29,26 +29,30 @@ export function windowCentre(p: Vec3, snap = WINDOW_SNAP): Vec3 {
   return { x: Math.round(p.x / snap) * snap, y: Math.round(p.y / snap) * snap, z: Math.round(p.z / snap) * snap };
 }
 
-/** Build the window round `centre` in steps of `slab` Z rows per yield. */
-export function* windowJob(src: OccupancySource, centre: Vec3, size = WINDOW_SIZE, slab = 8): Generator<void, RockGrid> {
+/** Build the window round `centre`, yielding after every `slab` Z slices
+ * (one slice is 128 x 128 voxels, a fraction of a millisecond). */
+export function* windowJob(src: OccupancySource, centre: Vec3, size = WINDOW_SIZE, slab = 1): Generator<void, RockGrid> {
   const c = src.collision, o = c.origin, own = c.ownership, h = own.voxel, N = src.cells;
   // Window voxel (i, j, k) is lattice node g0 + (i, j, k); its centre is the node.
   const g0 = [Math.round((centre.x - o.x) / h) - size / 2, Math.round((centre.y - o.y) / h) - size / 2, Math.round((centre.z - o.z) / h) - size / 2];
   const data = new Uint8Array(size * size * size);
   for (let k = 0; k < size; k++) {
-    for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
-      const gx = g0[0]! + i, gy = g0[1]! + j, gz = g0[2]! + k;
-      const cx = Math.floor(gx / N), cy = Math.floor(gy / N), cz = Math.floor(gz / N);
-      let rock: boolean;
-      const inside = cx >= 0 && cy >= 0 && cz >= 0 && cx < c.nx && cy < c.ny && cz < c.nz;
-      const bits = inside ? src.occupancy(chunkIndex(c, cx, cy, cz)) : null;
-      if (bits) rock = occupied(bits, N, gx - cx * N, gy - cy * N, gz - cz * N);
-      else {
-        const x = o.x + gx * h, y = o.y + gy * h, z = o.z + gz * h;
-        const fi = Math.max(0, Math.min(own.gx - 1, gx)), fk = Math.max(0, Math.min(own.gz - 1, gz));
-        rock = owns(own, x, y, z) || y < own.ground[fi + own.gx * fk]!;
+    const gz = g0[2]! + k, cz = Math.floor(gz / N), z = o.z + gz * h, fk = Math.max(0, Math.min(own.gz - 1, gz));
+    for (let i = 0; i < size; i++) {
+      const gx = g0[0]! + i, cx = Math.floor(gx / N), x = o.x + gx * h, fi = Math.max(0, Math.min(own.gx - 1, gx));
+      // Outside surface chunks: rock up to the owned top (cap or domain
+      // top) inside the domain, and under the seabed everywhere.
+      const inX = cx >= 0 && cx < c.nx && cz >= 0 && cz < c.nz;
+      const ground = own.ground[fi + own.gx * fk]!;
+      const top = inX && x >= own.domain.min.x && x <= own.domain.max.x && z >= own.domain.min.z && z <= own.domain.max.z ? capAt(own, x, z) : -Infinity;
+      let bits: Uint8Array | null = null, bitsCy = -1;
+      for (let j = 0; j < size; j++) {
+        const gy = g0[1]! + j, cy = Math.floor(gy / N), y = o.y + gy * h;
+        if (cy !== bitsCy) { bitsCy = cy; bits = inX && cy >= 0 && cy < c.ny ? src.occupancy(chunkIndex(c, cx, cy, cz)) : null; }
+        const rock = bits ? occupied(bits, N, gx - cx * N, gy - cy * N, gz - cz * N)
+          : (y >= own.domain.min.y && y <= top) || y < ground;
+        if (rock) data[i + size * (j + size * k)] = 255;
       }
-      if (rock) data[i + size * (j + size * k)] = 255;
     }
     if (k % slab === slab - 1) yield;
   }

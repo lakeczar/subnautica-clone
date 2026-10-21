@@ -145,7 +145,8 @@ const state = {
   mode: (params.get("mode") ?? "diver") as Mode,
   position: { x: 758, y: -72, z: -66 } as Vec3,
   velocity: { x: 0, y: 0, z: 0 } as Vec3,
-  yaw: Math.PI, pitch: -0.5,
+  // Facing down into the Crown hollow from the shelf.
+  yaw: -0.32, pitch: -0.9,
   lamp: params.get("lamp") !== "0",
   input: { forward: 0, right: 0, vertical: 0, boost: false },
   autopilot: null as null | { path: Vec3[]; index: number; speed: number | null },
