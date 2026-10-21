@@ -55,7 +55,9 @@ class Reader {
   constructor(private readonly buf: Uint8Array, offset: number) { this.o = offset; }
   u32(): number { const v = new DataView(this.buf.buffer, this.buf.byteOffset + this.o, 4).getUint32(0, true); this.o += 4; return v; }
   align(): void { this.o += (4 - (this.o % 4)) % 4; }
-  raw(): Uint8Array { const n = this.u32(); this.align(); const out = this.buf.slice(this.o, this.o + n); this.o += n; this.align(); return out; }
+  /** A view into the bake, never a copy (the same in Node and browsers):
+   * occupancy, ground and indices live inside the retained bake buffer. */
+  raw(): Uint8Array { const n = this.u32(); this.align(); const out = this.buf.subarray(this.o, this.o + n); this.o += n; this.align(); return out; }
 }
 
 function quantise(p: Float32Array, base: readonly number[], snap: boolean): Uint16Array {

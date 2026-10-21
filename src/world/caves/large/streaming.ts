@@ -181,23 +181,29 @@ export type CaveArtCost = (id: ChunkId) => { readonly fine: number; readonly coa
 
 /** The least art share (bytes, CPU and GPU alike: the loader keeps one copy
  * of each array on each side) under which the pins always fit: every chunk
- * coarse, plus the fine increment of the costliest pinned zone set, plus
- * `LOCAL_CHUNKS` of the costliest fine increments for the look-ahead. The
+ * coarse, plus the costliest pinned zone set fine, plus `LOCAL_CHUNKS` of the
+ * costliest fine units for the look-ahead, plus S1's probe reservations. The
  * world must give the cave at least this beside its fixed bytes before the
  * player may enter; `CaveGate` enforces safety if it ever does not. */
-export function caveArtMinimum(cm: CaveMap, cost: CaveArtCost): number {
+export function caveArtMinimum(cm: CaveMap, cost: CaveArtCost, residency: { inFlight?: number; estimate?: number } = {}): number {
   let coarse = 0;
-  const extra = new Map<ChunkId, number>();
-  for (const r of cm.refs) { const c = cost(r.id); coarse += c.coarse; extra.set(r.id, Math.max(0, c.fine - c.coarse)); }
+  const fine = new Map<ChunkId, number>();
+  for (const r of cm.refs) { const c = cost(r.id); coarse += c.coarse; fine.set(r.id, c.fine); }
+  // A pinned set's fine units in full: during a coarse-to-fine swap S1 keeps
+  // the outgoing coarse drawn, so the coarse copies stay counted beside them.
   let zoneSet = 0;
   for (let z = 0; z < cm.cave.source.zones.length; z++) {
     const zones = new Set([z, ...cm.neighbours(z)]);
     let sum = 0;
-    for (const r of cm.refs) if (r.zones.some(q => zones.has(q))) sum += extra.get(r.id)!;
+    for (const r of cm.refs) if (r.zones.some(q => zones.has(q))) sum += fine.get(r.id)!;
     zoneSet = Math.max(zoneSet, sum);
   }
-  const local = [...extra.values()].sort((a, b) => b - a).slice(0, LOCAL_CHUNKS).reduce((n, v) => n + v, 0);
-  return coarse + zoneSet + local;
+  const sorted = [...fine.values()].sort((a, b) => b - a);
+  const local = sorted.slice(0, LOCAL_CHUNKS).reduce((n, v) => n + v, 0);
+  // Units S1 has not measured yet are probed at its per-LOD guess (1 MiB fine
+  // by default), up to `inFlight` at once.
+  const probes = (residency.inFlight ?? 2) * Math.max(residency.estimate ?? 1048576, sorted[0] ?? 0);
+  return coarse + zoneSet + local + probes;
 }
 
 /** The movement gate: the safe response whenever coverage cannot be kept
