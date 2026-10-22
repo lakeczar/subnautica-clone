@@ -4,6 +4,7 @@ import type { Aabb, LodLevel, Rect, Vec3 } from "../../world/types.js";
 import type { CraftProfileId } from "./passages.js";
 import type { FloorFunction } from "./terrain.js";
 import { buildCave } from "./caveGeometry.js";
+import { HUB_CAVE_SOURCES } from "./hubCaves.js";
 
 /** W1 cave replacement volumes (Babylon-free).
  *
@@ -297,7 +298,7 @@ export function assertDisjointFootprints(sources: readonly CaveSource[]): void {
   }
 }
 
-export const CAVE_SOURCES: readonly CaveSource[] = [FANVAULT_SOURCE];
+export const CAVE_SOURCES: readonly CaveSource[] = [FANVAULT_SOURCE, ...HUB_CAVE_SOURCES];
 assertDisjointFootprints(CAVE_SOURCES);
 
 const built = new WeakMap<FloorFunction, Map<string, CaveDef>>();

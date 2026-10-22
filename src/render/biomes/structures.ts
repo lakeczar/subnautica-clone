@@ -211,6 +211,15 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
       b.box([(sol.min.x + sol.max.x) / 2, sol.min.y + h * 0.12, sol.max.z + 0.04], [1.6, 2.2, 0.06], C.glow);
     });
   },
+  beacon(b, s, fine) {
+    // A round beacon house inside its square collider: tapering wall, a
+    // gallery ring, the lit lamp room and a cap.
+    const sol = s.solids[0]!, x = s.x, z = s.z, top = sol.max.y, r = (sol.max.x - sol.min.x) / 2, n = fine ? 10 : 6;
+    b.frustum([x, sol.min.y, z], [x, top - 2.4, z], r, r * 0.84, n, C.porcelain, C.petrol);
+    b.frustum([x, top - 2.4, z], [x, top - 2.1, z], r, r, n, C.petrol);
+    glow(b, () => b.frustum([x, top - 2.1, z], [x, top - 0.6, z], r * 0.55, r * 0.55, n, C.glow));
+    b.frustum([x, top - 0.6, z], [x, top, z], r * 0.62, 0.2, n, C.petrol);
+  },
   spire(b, s, fine) {
     const sol = s.solids[0]!, x = s.x, z = s.z, top = sol.max.y;
     b.frustum([x, sol.min.y, z], [x, top - 6, z], 4.6, 2.2, 4, C.concrete, C.steel, Math.PI / 4);

@@ -134,13 +134,16 @@ test("placements sit on today's floor, in the right region", () => {
 
 test("caves: size classes, footprints disjoint, outside the opening's preserve, clear of existing datums", () => {
   const P = LEGACY_PRESERVE;
-  const rects = [...caves.map(c => ({ id: c.id, r: c.footprint })), ...CAVE_SOURCES.map(c => ({ id: c.id, r: c.footprint }))];
+  // A proposal built as a real cave (W2's hub caves) is checked by its own
+  // cave tests; the proposal stands in for nothing once the source exists.
+  const built = new Set(CAVE_SOURCES.map(c => c.id)), planned = caves.filter(c => !built.has(c.id));
+  const rects = [...planned.map(c => ({ id: c.id, r: c.footprint })), ...CAVE_SOURCES.map(c => ({ id: c.id, r: c.footprint }))];
   for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++)
     assert.ok(!overlaps(rects[i]!.r, rects[j]!.r), `${rects[i]!.id} overlaps ${rects[j]!.id}`);
   const datums = [...SITES.map(s => ({ id: s.id, ...s.at })), ...Object.entries(SOURCES).map(([id, s]) => ({ id, ...s.position })),
     ...Object.entries(PLACES).map(([id, s]) => ({ id, ...s.position })), ...VISTA_SETS.map(v => ({ id: v.id, ...v.anchor })),
     ...STRUCTURES.map(s => ({ id: s.id, x: s.x, z: s.z }))];
-  for (const c of caves) {
+  for (const c of planned) {
     const f = c.footprint, w = f.maxX - f.minX, d = f.maxZ - f.minZ, long = Math.max(w, d);
     if (c.size === "small") { assert.ok(long >= 10 && long <= 40, `${c.id}: small footprint ${w}×${d}`); assert.equal(c.admits, "diver", `${c.id}: small caves are diver-only`); }
     else { assert.ok(long >= 40 && long <= 100, `${c.id}: medium footprint ${w}×${d}`); assert.notEqual(c.admits, "diver", `${c.id}: a medium hall takes small craft`); }
