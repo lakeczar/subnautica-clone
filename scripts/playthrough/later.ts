@@ -265,11 +265,13 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
     ...(d.vehicle("creel") ? [] : [{ key: "owned:creel", text: "an owned Creel" }]),
   ],
   play(d, o) {
+    if (strategy === "creel") stageForwardBase(d);
     carryFromWorkshop(d, RECIPES[("restore_rift_station" as RecipeId)].cost as Record<string, number>);
     boardCraft(d, "creel");
     fly(d, "creel_out");
     fly(d, "basin_outbound");
     followS2(d, "route.basin.legacy_anchorage");
+    if (strategy === "creel") deployForwardBase(d);
     followS2(d, "route.basin.rift");
     siteCraft(d, "rift_station", "restore_rift_station");
     story(d, "rift_station_ledger", o);
@@ -282,6 +284,17 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
     // (carrier: keel K2, Mantle K4). C4 (CB): the shoulder's inclusions are too thin;
     // the first workable core is the 350 m lower ledge below it.
     harvest(d, "rift_core_lower_north", 10, { sort: true });
+    if (strategy === "creel") {
+      // C4: the restored station does the 450 m refits, and the forward outpost at the
+      // anchorage charges the Creel and holds the Divide stock: no trip home between.
+      for (const recipe of ["suit_450", "creel_450"] as const) siteCraft(d, "rift_station", recipe);
+      followS2(d, "route.basin.rift", true);
+      atForwardBase(d, "take the Divide stock and charge", (id) => {
+        for (const i of [...d.state.inventory.items].filter((x) => x.containerId === `${id}_locker` && x.kind !== "reserve_cell"))
+          d.command({ type: "transfer", itemId: i.id, to: "diver", quantity: i.quantity });
+      });
+      return;
+    }
     pilotTo(d, "up to the western return", RIFT_WEST_RETURN);
     followS2(d, "route.rift.west_return");
     followS2(d, "route.basin.reef_west");
@@ -289,13 +302,60 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
     dockAndService(d, d.vehicle("creel")!);
     stowHold(d, d.vehicle("creel")!);
     make(d, "suit_450" as RecipeId, "workshop", ISLES);
-    if (strategy === "creel") make(d, "creel_450" as RecipeId, "workshop", ISLES);
   },
 });
 
+/** The forward base (C4, independent route): a basic outpost on the Basin
+ * anchorage ledge where the Rift and Divide routes part. */
+const FORWARD_BASE = { x: 360, y: -245.4, z: -430 } as const;
+const DIVIDE_STOCK = { structural_alloy: 3, silica_glass: 3, conductive_crust: 3 } as const;
+const forwardBase = (d: Driver): string | null => d.state.systems.outposts.find((o) => Math.hypot(o.position.x - FORWARD_BASE.x, o.position.z - FORWARD_BASE.z) < 6)?.id ?? null;
+/** At the workshop: the kit, two charged cells, the Divide dock's stock and the
+ * 450 m refits' common materials go into the moored Creel's hold. */
+function stageForwardBase(d: Driver): void {
+  const creel = d.vehicle("creel")!;
+  if (d.count("reserve_cell", [creel.cargoId, "pod_locker", "diver"]) < 2) make(d, "reserve_cells", "pod", ISLES);
+  enter(d, "pod");
+  unload(d, "pod_locker", "diver", ["outpost_kit_basic", "reserve_cell"]);
+  const refits: Record<string, number> = { ...DIVIDE_STOCK };
+  for (const r of ["suit_450", "creel_450"] as const)
+    for (const [k, n] of Object.entries(RECIPES[r].cost as Record<string, number>))
+      if (k !== "pressure_ceramic" && k !== "thermal_core") refits[k] = (refits[k] ?? 0) + n;
+  stockUp(d, refits);
+  enter(d, "workshop");
+  unload(d, "diver", creel.cargoId, ["outpost_kit_basic", "reserve_cell"]);
+  for (const [k, n] of Object.entries(refits)) {
+    const left = n - d.count(k as ItemKind, [creel.cargoId]);
+    if (left > 0) move(d, k as ItemKind, left, "workshop_locker", creel.cargoId);
+  }
+}
+/** Park by the forward base's ledge, swim to it, act, swim back and board. */
+function atForwardBase(d: Driver, label: string, work: (outpostId: string) => void): void {
+  sortie(d, FORWARD_BASE, `forward base: ${label}`, () => {
+    const id = forwardBase(d);
+    if (!id) throw new Blocked("No forward outpost on the anchorage ledge", where(d.state));
+    travel(d, route("to the forward outpost", "diver", "local swim, played", [{ ...FORWARD_BASE, y: FORWARD_BASE.y + 1, tolerance: 1.5 }]));
+    work(id);
+  });
+  // Charged from the outpost's cells, not a stop.
+  const v = d.occupied()!;
+  if (v.charge < 99) { leaveCraft(d); reach(d, v.id); d.command({ type: "service", vehicleId: v.id }); board(d, v.id); }
+}
+function deployForwardBase(d: Driver): void {
+  sortie(d, FORWARD_BASE, "deploy the forward outpost", () => {
+    loadDiver(d, { outpost_kit_basic: 1, reserve_cell: 2, ...DIVIDE_STOCK });
+    travel(d, route("to the anchorage ledge", "diver", "local swim, played", [{ ...FORWARD_BASE, y: FORWARD_BASE.y + 1, tolerance: 1 }]));
+    const kit = d.state.inventory.items.find((i) => i.kind === "outpost_kit_basic" && i.containerId === "diver")!;
+    d.command({ type: "deploy-outpost", itemId: kit.id, name: "Anchorage" });
+    for (const i of [...d.state.inventory.items].filter((x) => x.containerId === "diver" && (x.kind === "reserve_cell" || x.kind in DIVIDE_STOCK)))
+      d.command({ type: "transfer", itemId: i.id, to: `${kit.id}_locker`, quantity: i.quantity });
+  });
+}
+
 const divide: Phase = {
   id: "divide", title: "Mirror Divide: lattice, the upper dock restored, C07; Creel and suit to 800 m",
-  verify: all(crafted("restore_divide_stop", "creel_800", "suit_800"), facility("divide_dock"), hull("creel", 800), suit(800)),
+  verify: all(crafted("restore_divide_stop", "creel_800", "suit_800"), facility("divide_dock"), hull("creel", 800), suit(800),
+    custom("the forward outpost was never deployed and packed", (d) => d.run.strategy !== "creel" || (d.state.systems.outposts.length === 0 && d.state.inventory.items.some((i) => i.kind === "outpost_kit_basic")))),
   missing: (d) => [
     ...recipes("restore_divide_stop", "creel_800", "suit_800"),
     ...sources("divide_lattice_ledge_west", "divide_lattice_ledge_east", "divide_lattice_flank_north"),
@@ -305,11 +365,15 @@ const divide: Phase = {
     ...plans(d, "bp_deep_service", "C07", "rift_station_ledger"),
   ],
   play(d, o) {
-    carryFromWorkshop(d, { structural_alloy: 3, silica_glass: 3, conductive_crust: 3 });
+    // C4: from the forward outpost (the Divide stock already in the diver hold), or from home.
+    const forward = forwardBase(d) !== null && Math.hypot(d.state.player.pose.position.x - FORWARD_BASE.x, d.state.player.pose.position.z - FORWARD_BASE.z) < 40;
+    if (!forward) carryFromWorkshop(d, DIVIDE_STOCK);
     boardCraft(d, "creel");
-    fly(d, "creel_out");
-    fly(d, "basin_outbound");
-    followS2(d, "route.basin.legacy_anchorage");
+    if (!forward) {
+      fly(d, "creel_out");
+      fly(d, "basin_outbound");
+      followS2(d, "route.basin.legacy_anchorage");
+    }
     followS2(d, "route.basin.divide");
     // Lattice: Creel 800 L5, suit 800 L4, the dock L2, air assembly L2.
     followS2(d, "route.divide.lattice_west");
@@ -326,7 +390,10 @@ const divide: Phase = {
     story(d, "C07", o);
     story(d, "ren_access_log", o);
     siteCraft(d, "divide_dock", "restore_divide_stop");
-    homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
+    followS2(d, "route.basin.divide", true);
+    // Packed on the way home: the kit keeps its identity for the next frontier.
+    if (forwardBase(d)) atForwardBase(d, "pack it", (id) => { d.command({ type: "pack-outpost", outpostId: id, to: "diver" }); });
+    homeAndUnload(d, [["route.basin.legacy_anchorage", true]]);
     make(d, "creel_800" as RecipeId, "workshop", ISLES);
     make(d, "suit_800" as RecipeId, "workshop", ISLES);
   },
@@ -543,7 +610,9 @@ function worksVisit(d: Driver, actions: readonly WorksAction[], take: Cargo): vo
     const v = d.state.fleet.vehicles.find((x) => x.id === craftId)!;
     reach(d, v.id);
     // Room for the assemblies: the diver's meals wait in the hold for this visit.
-    const meals = cargoCu(d, take) > d.freeCu("diver") ? d.count("meal", ["diver"]) : 0;
+    // Only as many as the hold takes beside the cargo still in it.
+    const meals = cargoCu(d, take) > d.freeCu("diver")
+      ? Math.min(d.count("meal", ["diver"]), Math.floor(d.freeCu(v.cargoId) / ITEMS.meal.cu)) : 0;
     if (meals) move(d, "meal", meals, "diver", v.cargoId);
     const first = loads(d, take, d.freeCu("diver"))[0];
     if (take.ids.length && (!first || first.ids.length !== take.ids.length))
@@ -765,12 +834,14 @@ function chargeAtMooring(d: Driver, site: string): void {
   d.command({ type: "carrier", action: "helm" }); // releases station keeping
 }
 /** Lattice from the 400 m carrier: hold station above the ledge and work it by suit. */
-function carrierHarvest(d: Driver, id: string, want: number): void {
-  pilotTo(d, `carrier above ${id}`, parkNear(d, SOURCES[id as SourceId].position));
+function carrierHarvest(d: Driver, id: string, want: number, options: { sort?: boolean } = {}): void {
+  // Within the carrier's rating: a deeper deposit is a suit dive from 395 m.
+  const at = SOURCES[id as SourceId].position, rating = carrier(d).rating;
+  pilotTo(d, `carrier above ${id}`, parkNear(d, { ...at, y: Math.max(at.y, -(rating - 5) - 5) }));
   // A diver load per trip out of the vestibule, stowed in the stores between.
   for (let got = 0, trip = 0; trip < 6 && got < want; trip++) {
     carrierOut(d);
-    const n = gather(d, id as SourceId, want - got);
+    const n = gather(d, id as SourceId, want - got, options);
     carrierIn(d);
     if (!n) break;
     got += n;
@@ -829,7 +900,7 @@ const carrierDeep: Phase = {
     ...recipes("hearthline_550", "mantle_base", "suit_800"),
     ...plans(d, "bp_deep_service", "C07", "rift_station_ledger"),
     ...need.hull("mantle"),
-    ...sources("divide_lattice_ledge_west", "divide_lattice_ledge_east"),
+    ...sources("divide_lattice_ledge_west", "divide_lattice_ledge_east", "divide_lattice_flank_north"),
     ...routes("route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide"),
     ...sites("divide.lee_mooring", "isles.stack_yard"),
   ],
@@ -866,6 +937,9 @@ const carrierDeep: Phase = {
     carrierHarvest(d, "divide_lattice_ledge_west", 10);
     pilotTo(d, "back to the lee mooring", lee);
     carrierHarvest(d, "divide_lattice_ledge_east", 10);
+    // C4 (CB): the ledges hold one rinsed crystal each. Workable lattice lines the
+    // 450 m east flank, below the carrier's 400 m: the 450 m suit dives to it.
+    carrierHarvest(d, "divide_lattice_flank_north", 18, { sort: true });
     pilotTo(d, "back to the lee mooring", lee);
     if (need.story("C07").length) d.deferred.push("C07");
     else {

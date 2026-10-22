@@ -10,6 +10,8 @@ import type { RecipeId, SourceId } from "../../src/content/registry.js";
 import { personalLimit } from "../../src/sim/capabilities.js";
 import { fabricationContainers } from "../../src/sim/inventory.js";
 import { aimedInteraction } from "../../src/sim/targeting.js";
+import { craftSite } from "../../src/sim/progression.js";
+import { outpostChargerFor } from "../../src/sim/systemsLink.js";
 import type { GameCommand, GameEvent, GameState, ItemStack, WorldQueries } from "../../src/sim/types.js";
 
 const vehicle = (s: GameState, id: string | undefined) => s.fleet.vehicles.find((v) => v.id === id);
@@ -71,7 +73,8 @@ export function craftEffect(before: GameState, after: GameState, id: RecipeId): 
     if (m0.alloy - m1.alloy !== 2 || m0.glass - m1.glass !== 1 || m0.membrane - m1.membrane !== 3)
       out.push(`${id} did not draw 2/1/3 rescue stock (alloy ${m0.alloy}→${m1.alloy}, glass ${m0.glass}→${m1.glass}, membrane ${m0.membrane}→${m1.membrane})`);
   } else {
-    const bins = new Set(fabricationContainers(before, r.site as Parameters<typeof fabricationContainers>[1]));
+    // C4: the bench the recipe ran at (a refit at its tier's restored stop pays there).
+    const bins = new Set(fabricationContainers(before, craftSite(before, id)));
     for (const [kind, n] of Object.entries(r.cost) as [string, number][]) {
       let taken = 0;
       for (const [k, d] of actual) {
@@ -174,8 +177,10 @@ export function commandEffect(c: GameCommand, before: GameState, after: GameStat
     case "transfer": return transferEffect(c as Extract<GameCommand, { type: "transfer" }>, before, after);
     case "store-materials": return storeEffect(c as Extract<GameCommand, { type: "store-materials" }>, before, after);
     case "service": {
-      const id = (c as Extract<GameCommand, { type: "service" }>).vehicleId, v = vehicle(after, id);
-      return [...(v && v.charge === 100 && v.health === 100 && !v.disabled ? [] : [`service left ${id} at power ${v?.charge}, hull ${v?.health}`]),
+      const id = (c as Extract<GameCommand, { type: "service" }>).vehicleId, v = vehicle(after, id), v0 = vehicle(before, id);
+      // C4: a field outpost's charger only charges (cells outposts as far as their cells go).
+      const charger = !!outpostChargerFor(before, id) && v0 !== undefined && v !== undefined && v.charge > v0.charge && v.health === v0.health;
+      return [...(charger || (v && v.charge === 100 && v.health === 100 && !v.disabled) ? [] : [`service left ${id} at power ${v?.charge}, hull ${v?.health}`]),
         ...unchangedInventory("service", before, after)];
     }
     case "reserve": {
@@ -238,6 +243,43 @@ export function commandEffect(c: GameCommand, before: GameState, after: GameStat
     }
     case "resolution": return [...(after.story.resolution.phase !== before.story.resolution.phase ? [] : ["the resolution did not advance"]),
       ...unchangedInventory("resolution", before, after)];
+    // C4 systems. Modules and kits keep their identity: an installed module leaves
+    // the inventory into a socket, a deployed kit into the world, and back.
+    case "install-host-module": {
+      const cm = c as Extract<GameCommand, { type: "install-host-module" }>, item = before.inventory.items.find((i) => i.id === cm.itemId);
+      const socketed = after.systems.sockets.some((e) => e.hostId === cm.hostId && e.socket === cm.socket && e.itemId === cm.itemId);
+      if (!item || !socketed) return [`${cm.itemId} is not in ${cm.hostId} ${cm.socket}`];
+      return conserved(`install ${cm.itemId}`, changes(before, after), new Map([[keyOf(item), -1]]));
+    }
+    case "deploy-outpost": {
+      const cm = c as Extract<GameCommand, { type: "deploy-outpost" }>, item = before.inventory.items.find((i) => i.id === cm.itemId);
+      if (!item || !after.systems.outposts.some((o) => o.id === cm.itemId)) return [`kit ${cm.itemId} was not deployed`];
+      return conserved(`deploy ${cm.itemId}`, changes(before, after), new Map([[keyOf(item), -1]]));
+    }
+    case "pack-outpost": {
+      const cm = c as Extract<GameCommand, { type: "pack-outpost" }>;
+      const kit = after.inventory.items.find((i) => i.id === cm.outpostId);
+      if (after.systems.outposts.some((o) => o.id === cm.outpostId) || !kit) return [`outpost ${cm.outpostId} was not packed into its kit`];
+      // The kit returns with its identity; only the pack's anchor and seal material is spent.
+      const gains = [...changes(before, after)].filter(([k, d]) => d > 0 && k.split("|")[1] !== kit.kind);
+      return gains.map(([k, d]) => `packing added ${d} to ${k}`);
+    }
+    case "start-decode": {
+      const cm = c as Extract<GameCommand, { type: "start-decode" }>;
+      return [...(after.systems.decodes.some((j) => j.decodable === cm.decodable) ? [] : [`decode of ${cm.decodable} did not start`]),
+        ...unchangedInventory("start-decode", before, after)];
+    }
+    case "plant": {
+      const cm = c as Extract<GameCommand, { type: "plant" }>, delta = [...changes(before, after)];
+      return [...(after.systems.planters.length === before.systems.planters.length + 1 ? [] : ["nothing was planted"]),
+        ...(delta.length === 1 && delta[0]![0].split("|")[1] === cm.seed && delta[0]![1] === -1 ? [] : [`planting changed the inventory by ${JSON.stringify(delta)}`])];
+    }
+    case "harvest": {
+      const delta = [...changes(before, after)];
+      return delta.length && delta.every(([, d]) => d > 0) ? [] : [`harvest changed the inventory by ${JSON.stringify(delta)}`];
+    }
+    case "rest": return [...(after.player.refugeId !== before.player.refugeId || after.player.refugeId ? [] : ["resting recorded no base"]),
+      ...unchangedInventory("rest", before, after)];
     default: return [`command kind "${kind}" has no effect rule; refusing to vouch for it`];
   }
 }

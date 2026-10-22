@@ -279,6 +279,77 @@ const creel: Phase = {
   },
 };
 
+// ------------------------------------------------------------------------- systems (C4)
+
+/** The Dart's run west to the old intake pump house, a lost site 380 m off the pod. */
+const PUMPHOUSE_RUN = [{ x: 20, y: -1.6, z: -12 }, { x: 20, y: -3, z: 2 }, { x: -200, y: -4, z: -8 }, { x: -377, y: -18, z: -20 }] as const;
+const recordRead = (d: Driver, id: string): void => {
+  if (d.state.knowledge.scans.includes(id)) return;
+  d.legOf(`read ${id}`, "work", () => { interact(d, id); });
+  if (!d.state.knowledge.scans.includes(id)) throw new Blocked(`Reading ${id} recorded nothing: ${d.state.feedback}`, where(d.state));
+};
+const firstItem = (d: Driver, kind: string): string => {
+  const i = d.state.inventory.items.find((x) => x.kind === kind && x.containerId === "diver");
+  if (!i) throw new Blocked(`No ${kind} in the diver hold`, where(d.state));
+  return i.id;
+};
+
+/** C4: the main-path kit plan and the signal rack at the workshop; a decoder and a
+ * planter socketed at home, an upgrade fitted to the Creel, a lost site found by
+ * Dart and its log set decoding in the background. */
+const systems: Phase = {
+  id: "systems", title: "Workshop records: outpost kit, decoder and planter; plating fitted; a lost site decoding",
+  verify: all(crafted("outpost_kit_basic", "mod_decoder", "mod_planter", "plating_alloy"), mounted("creel", "plating_alloy"),
+    custom("no decode running or done", (d) => d.state.systems.decodes.length > 0 || d.state.systems.decoded.length > 0),
+    custom("nothing growing", (d) => d.state.systems.planters.length > 0)),
+  missing: () => [],
+  play(d) {
+    const regions = [...ISLES, "suspended_garden", "silt_basin"];
+    enter(d, "workshop");
+    recordRead(d, "workshop_outpost_sheet");
+    recordRead(d, "workshop_decoder_rack");
+    make(d, "plating_alloy", "workshop", regions);
+    const creel = d.vehicle("creel")!;
+    d.command({ type: "install-module", vehicleId: creel.id, itemId: firstItem(d, "plating_alloy") });
+    make(d, "mod_decoder", "workshop", regions);
+    d.command({ type: "install-host-module", hostId: "island_workshop", socket: "s0", itemId: firstItem(d, "mod_decoder") });
+    make(d, "outpost_kit_basic", "pod", REEF);
+    make(d, "mod_planter", "pod", ISLES);
+    // A staple cutting from the nursery beside the pod, planted in the pod's own socket.
+    gather(d, "reef_staple_cuttings", 1);
+    enter(d, "pod");
+    d.command({ type: "install-host-module", hostId: "home_pod", socket: "s0", itemId: firstItem(d, "mod_planter") });
+    d.command({ type: "plant", hostId: "home_pod", socket: "s0", seed: "seed_staple_cup" });
+    unload(d, "diver", "pod_locker", ["outpost_kit_basic"]);
+    // The pump house: within 10 m the Dart's pilot captures the site's records.
+    const dart = d.vehicle("dart")!;
+    reach(d, dart.id);
+    boardAt(d, dart);
+    fly(d, { id: "pump house run", source: "harness: local leg, swept", points: [{ ...dart.pose.position }, ...PUMPHOUSE_RUN] });
+    if (!d.state.systems.found.includes("reef_pumphouse_log")) throw new Blocked("The pump house's log was not found from 10 m", where(d.state));
+    fly(d, { id: "pump house return", source: "harness: local leg, swept", points: [...[...PUMPHOUSE_RUN].reverse(), { x: 20, y: -1.6, z: -21 }] });
+    dockAndService(d, d.vehicle("dart")!);
+    enter(d, "workshop");
+    d.command({ type: "start-decode", hostId: "island_workshop", socket: "s0", decodable: "reef_pumphouse_log" });
+  },
+};
+
+/** End of the refits: the staple cups harvested at the pod and the pump-house log
+ * decoded at the workshop (waiting at the bench for whatever is left). */
+function systemsPayoff(d: Driver): void {
+  enter(d, "pod");
+  const crop = d.state.systems.planters[0];
+  if (crop) {
+    d.waitFor("the staple cups to ripen", 400, (s) => (s.systems.planters[0]?.progress ?? 0) >= 360);
+    const meals = d.count("meal", ["diver", "pod_locker"]);
+    d.command({ type: "harvest", hostId: "home_pod", socket: "s0" });
+    d.run.checks.push({ name: "staple cups harvested at the pod", ok: d.count("meal", ["diver", "pod_locker"]) > meals, detail: d.state.feedback });
+  }
+  enter(d, "workshop");
+  d.waitFor("the pump-house decode", 400, (s) => s.systems.decoded.includes("reef_pumphouse_log"));
+  if (!d.state.knowledge.blueprints.includes("bp_small_fabricator")) throw new Blocked("The decode granted no field fabricator plan", where(d.state));
+}
+
 // ------------------------------------------------------------------------- Basin
 
 /** Bring the Creel's bow over an arm host and let its tool arms lift until empty or full. */
@@ -383,7 +454,9 @@ export function carry(d: Driver, needs: Readonly<Partial<Record<ItemKind | "tagg
 
 const refits: Phase = {
   id: "refits", title: "Creel and Dart refits to 350 m, outer-crown mooring restored",
-  verify: all(crafted("creel_350", "dart_350", "restore_canopy_stop"), hull("creel", 350), hull("dart", 350), facility("canopy_stop")),
+  verify: all(crafted("creel_350", "dart_350", "restore_canopy_stop"), hull("creel", 350), hull("dart", 350), facility("canopy_stop"),
+    custom("the pump-house log is not decoded", (d) => d.state.systems.decoded.includes("reef_pumphouse_log")),
+    custom("no staple cups harvested", (d) => d.run.checks.some((c) => c.name === "staple cups harvested at the pod" && c.ok))),
   missing: () => [],
   play(d) {
     make(d, "creel_350", "workshop", ISLES);
@@ -410,8 +483,9 @@ const refits: Phase = {
     fly(d, "dart_home");
     dockAndService(d, d.vehicle("dart")!);
     enter(d, "workshop");
+    systemsPayoff(d);
   },
 };
 
-export const LIVE_PHASES: readonly Phase[] = [opening, reef, isles, canopy, survey, creel, frames, refits];
+export const LIVE_PHASES: readonly Phase[] = [opening, reef, isles, canopy, survey, creel, systems, frames, refits];
 export const REFITS_PHASE = refits;
