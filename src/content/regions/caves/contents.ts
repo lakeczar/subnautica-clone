@@ -85,7 +85,7 @@ export const ISLES_CAVE_CONTENTS: readonly CaveContent[] = [
     "A storm-tossed survey float wedged at the back of the undercut."),
   c("isles_east_ledge_cave.clappers", "isles_east_ledge_cave", "undercut", "resident", "tide_clapper", "wall", [1149.75, -20.25, 37.25],
     "Clappers along the lip side of the undercut."),
-  c("isles_blowhole.stash", "isles_blowhole", "ledge", "find", "isles.blowhole_stash", "floor", [1070.25, 0, 131.25],
+  c("isles_blowhole.stash", "isles_blowhole", "ledge", "find", "isles.blowhole_stash", "floor", [1069, 0, 131.5],
     "The dry-ledge stash (side reward): meals and two beacons, above the waterline."),
   c("isles_blowhole.clappers", "isles_blowhole", "surge", "resident", "tide_clapper", "wall", [1071.75, -14.25, 129.75],
     "Clappers ahead of the surge in the blowhole's throat."),

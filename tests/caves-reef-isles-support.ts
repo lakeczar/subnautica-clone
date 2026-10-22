@@ -504,7 +504,9 @@ export function lodFailures(id: string): string[] {
       if (!owner) continue;
       for (const lod of ["fine", "coarse"] as const) {
         if (r.profile === "diver") {
-          const q = { ...p, y: p.y + 0.45 };
+          // Feet above a swimmer's surface line (-0.5) are a diver standing on
+          // rock (a wading shelf, a dry ledge): clear the body above the floor.
+          const q = { ...p, y: p.y + (p.y > -0.5 + 1e-6 ? 1.1 : 0.45) };
           if (kit(owner).grids[lod](q, 0.8).some(([u, v, w]) => pointTriangleDistance(q, u, v, w) < 0.6)) {
             out.push(`${r.id}: ${lod} shell within 0.6 m at ${JSON.stringify(q)}`); break;
           }

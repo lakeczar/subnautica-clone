@@ -258,8 +258,14 @@ const EAST_LEDGE: CaveSource = {
 
 // --- Blowhole -------------------------------------------------------------------------
 // A basalt stack fallen against the north cliff foot (the cliff itself stays
-// heightfield). A surge cave runs in from the north and a chimney climbs to a
-// dry ledge just above the waterline, open to the sky at the stack's top.
+// heightfield). A surge cave runs in from the north; a chimney rises from it
+// to the waterline and on, open to the sky at the stack's top (daylight and
+// air, not a way out: nothing climbs it). At the waterline a wading shelf
+// leads to a dry ledge. The game's movement fixes their heights: a swimmer
+// floats with its feet at -0.5 and stands where support is at least -0.55,
+// and steps up at most 0.22 m without a jump. So the shelf's rock tops out at
+// -0.5 (swim on, stand up), and the dry ledge one 0.5 m voxel higher, at 0
+// (a walker's jump). The cliff view is from the mouth's apron, not the ledge.
 
 const BLOWHOLE: CaveSource = {
   id: "isles_blowhole",
@@ -275,7 +281,8 @@ const BLOWHOLE: CaveSource = {
     tube("isles_blowhole.carve.surge", "isles_blowhole.surge", 0.2, [n(1072, 141, -14.5, 3.4, 4), n(1072, 137, -15.5, 3.4, 4.2)]),
     chamber("isles_blowhole.carve.chamber", "isles_blowhole.surge", 0.3, p(1072, -14, 133), { x: 3.6, z: 3.4, up: 3, down: 2.4 }, -16.5),
     shaft("isles_blowhole.carve.chimney", "isles_blowhole.chimney", 0.15, [1073, 131.5], 1.5, 0.4, -15, 6.5),
-    chamber("isles_blowhole.carve.ledge", "isles_blowhole.ledge", 0.15, p(1070.2, 1, 131.5), { x: 1.6, z: 1.4, up: 1.2, down: 1 }, 0.2),
+    chamber("isles_blowhole.carve.shelf", "isles_blowhole.ledge", 0.1, p(1071.3, 0.9, 131.5), { x: 1.1, z: 1.4, up: 1.6, down: 1.4 }, -0.45),
+    chamber("isles_blowhole.carve.ledge", "isles_blowhole.ledge", 0.1, p(1069.6, 1.2, 131.5), { x: 1.5, z: 1.4, up: 1.3, down: 1 }, 0.2),
   ],
   blend: 1,
   rooms: [
@@ -286,19 +293,22 @@ const BLOWHOLE: CaveSource = {
   portals: [
     portal("isles_blowhole.mouth.surge", "mouth", "Cliff-foot mouth", ["isles_blowhole.surge", OUT], p(1072, -12.9, 140.6), "+z", 2.6, 3),
     portal("isles_blowhole.throat.chimney", "throat", "Chimney foot", ["isles_blowhole.surge", "isles_blowhole.chimney"], p(1073, -11, 131.5), "+y", 2, 2),
-    portal("isles_blowhole.throat.ledge", "throat", "Dry ledge", ["isles_blowhole.chimney", "isles_blowhole.ledge"], p(1071.6, 1.2, 131.5), "-x", 1.6, 1.6),
-    portal("isles_blowhole.skylight.top", "skylight", "Chimney top", ["isles_blowhole.chimney", OUT], p(1073, 4.5, 131.5), "+y", 2, 2),
+    portal("isles_blowhole.throat.ledge", "throat", "Wading shelf", ["isles_blowhole.chimney", "isles_blowhole.ledge"], p(1071.6, 0.6, 131.5), "-x", 1.6, 1.6),
+    // Daylight and air only: a diver surfaces under it but cannot climb out.
+    portal("isles_blowhole.skylight.top", "skylight", "Chimney top (light)", ["isles_blowhole.chimney", OUT], p(1073, 4.5, 131.5), "+y", 2, 2),
   ],
   routes: [
-    route("isles_blowhole.route.up", "loop", [
-      p(1072, -13.4, 145), p(1072, -13.9, 141), p(1072, -14.6, 137), p(1072, -15.6, 133), p(1073, -13, 131.5), p(1073, -5, 131.5),
-      p(1073, 0.5, 131.5), p(1073, 7.5, 131.5),
+    // The way back from the dry ledge: off the step, off the shelf into the
+    // chimney, down it and out the mouth. Reversed, it is the way in.
+    route("isles_blowhole.route.ledge", "exit", [
+      p(1069.5, 0.01, 131.5), p(1070.84, 0.01, 131.5), p(1070.9, -0.49, 131.5), p(1072.8, -0.5, 131.5), p(1073, -5, 131.5), p(1073, -13, 131.5),
+      p(1072, -15.6, 133), p(1072, -14.6, 137), p(1072, -13.9, 141), p(1072, -13.4, 145),
     ]),
-    route("isles_blowhole.route.ledge", "exit", [p(1070, 0.4, 131.5), p(1073, 0.6, 131.5), p(1073, 7.5, 131.5)]),
+    route("isles_blowhole.route.surge", "exit", [p(1072, -15.6, 133), p(1072, -14.6, 137), p(1072, -13.9, 141), p(1072, -13.4, 145)]),
   ],
   staging: [],
-  note: "A 15 m surge cave in a stack at the north cliff foot, up a chimney to a dry ledge stash just above the waterline " +
-    "and out of the stack's top, with a view along the north cliff. Waterline walking support is not validated yet.",
+  note: "A 15 m surge cave in a stack at the north cliff foot, up a chimney to the waterline: a diver surfaces under the " +
+    "open top, swims onto a wading shelf, stands, and jumps up onto a dry ledge stash. One way out, the cliff-foot mouth.",
   style: ISLES_STYLE,
 };
 
