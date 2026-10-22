@@ -3,7 +3,9 @@ import type { Solid } from "../../sim/world.js";
 import type { Aabb, LodLevel, Rect, Vec3 } from "../../world/types.js";
 import type { CraftProfileId } from "./passages.js";
 import type { FloorFunction } from "./terrain.js";
-import { buildCave } from "./caveGeometry.js";
+import { buildCave, sharesEdge } from "./caveGeometry.js";
+import { ISLES_CAVES } from "./caves/isles.js";
+import { REEF_CAVES } from "./caves/reef.js";
 
 /** W1 cave replacement volumes (Babylon-free).
  *
@@ -105,8 +107,10 @@ export interface CavePortal {
 export interface CaveRoute {
   readonly id: string;
   readonly profile: CraftProfileId;
-  /** `loop`: in one mouth, out the other. `exit`: from deep inside to open water. */
-  readonly role: "loop" | "exit";
+  /** `loop`: in one mouth, out the other. `exit`: from deep inside to open
+   * water. `link`: through a crawl into an edge-neighbour cave and on out of
+   * it (CA-1); its path may leave this cave's footprint. */
+  readonly role: "loop" | "exit" | "link";
   /** Pose datums (diver feet), outside to outside for a loop. */
   readonly path: readonly Readonly<Vec3>[];
 }
@@ -120,6 +124,18 @@ export interface CaveStaging {
   /** Clear radius for parking and turning. */
   readonly radius: number;
   readonly profiles: readonly CraftProfileId[];
+}
+
+/** Regional dressing of the shell (CA-1). Without one a cave draws in the
+ * W1-pre Fanvault colours. */
+export interface CaveStyle {
+  /** Pale banded limestone with warm rims (Reef), or black-green wave-cut
+   * basalt with polished ceilings and pale wet floors (Isles). */
+  readonly rock: "limestone" | "basalt";
+  /** The resident drawn on the shell: unlit glimmer mats on ceilings whose
+   * streaks run toward the nearest mouth, or pale clapper shells in bands
+   * along the walls and lips. */
+  readonly resident: "vault_glimmer" | "tide_clapper";
 }
 
 export interface CaveSource {
@@ -142,6 +158,7 @@ export interface CaveSource {
   readonly staging: readonly CaveStaging[];
   /** Short design note. Not player text. */
   readonly note: string;
+  readonly style?: CaveStyle;
 }
 
 // --- Derived definition -------------------------------------------------------
@@ -297,8 +314,17 @@ export function assertDisjointFootprints(sources: readonly CaveSource[]): void {
   }
 }
 
+/** The caves in the game: `gameWorld()`, the terrain bake's pits and shells,
+ * scatter, chunk bounds and the cave view all follow this list (C4's hook). */
 export const CAVE_SOURCES: readonly CaveSource[] = [FANVAULT_SOURCE];
-assertDisjointFootprints(CAVE_SOURCES);
+/** Every authored kit cave, in the game or not yet: what `caveDef` resolves
+ * and what linked caves and the disjointness check see, so a cave builds the
+ * same before and after it joins `CAVE_SOURCES`. CA-1's Reef and Isles caves
+ * are authored and tested here; adding them to the game is C4's step
+ * (docs/build/streams/CA-1.md). Add a linked network whole: a cave's shell
+ * stops at a shared seam where its neighbour's begins. */
+export const AUTHORED_CAVE_SOURCES: readonly CaveSource[] = [FANVAULT_SOURCE, ...REEF_CAVES, ...ISLES_CAVES];
+assertDisjointFootprints(AUTHORED_CAVE_SOURCES);
 
 const built = new WeakMap<FloorFunction, Map<string, CaveDef>>();
 /** The generated definition, built once per floor function on first use.
@@ -310,9 +336,9 @@ export function caveDef(id: string, floor: FloorFunction): CaveDef {
   if (!byId) built.set(floor, byId = new Map());
   let def = byId.get(id);
   if (!def) {
-    const source = CAVE_SOURCES.find(s => s.id === id);
+    const source = AUTHORED_CAVE_SOURCES.find(s => s.id === id);
     if (!source) throw new Error(`Unknown cave: ${id}`);
-    def = buildCave(source, floor);
+    def = buildCave(source, floor, AUTHORED_CAVE_SOURCES.filter(s => s !== source && sharesEdge(s.footprint, source.footprint)));
     byId.set(id, def);
   }
   return def;

@@ -1,10 +1,16 @@
-/** W1-pre cave lab (dev only): the Fanvault loop beside its reef terrain,
- * with cave light, a lamp and collision. Run under Vite on your own port:
+/** Cave lab (dev only): every authored kit cave beside its seabed, with cave
+ * light, a lamp, LOD, overlays and the diver's own collision. W1-pre built it
+ * for the Fanvault; CA-1 adds a cave list and every Reef and Isles cave.
+ * Run under Vite on your own port:
  *   npx vite --port <port> --strictPort --host 127.0.0.1
- *   open http://127.0.0.1:<port>/tools/cave-lab.html
- * Drag to look, WASD/QE to swim, Shift for speed. L lamp, K LOD, C collision.
- * URL: ?view=<name>&lamp=0|1&lod=fine|coarse&overlay=solids,portals,routes,rooms&shell=0&slice=<y>&collide=0&hud=0&loop=message
- * `window.caveLab` exposes the scene, camera and helpers for scripted runs. */
+ *   open http://127.0.0.1:<port>/tools/cave-lab.html?cave=<id>
+ * Drag to look, WASD/QE to swim, Shift for speed. L lamp, K LOD, C collision,
+ * [ and ] previous and next cave.
+ * URL: ?cave=<id>&view=<name>&lamp=0|1&lod=fine|coarse&overlay=solids,portals,routes,rooms,contents&shell=0&slice=<y>
+ *      &collide=0&hud=0&loop=message
+ * The selected cave loads with its network (every cave within 40 m), so
+ * crawls can be swum through. `window.caveLab` exposes the scene, camera and
+ * helpers for scripted runs. */
 import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
@@ -19,21 +25,21 @@ import type { LinesMesh } from "@babylonjs/core/Meshes/linesMesh.js";
 import { createAtmosphere } from "../src/render/atmosphere.js";
 import { createCaveCelMaterial, CaveLighting } from "../src/render/caves/caveMaterial.js";
 import { CAVE_LIGHT_SHADER } from "../src/render/caves/caveLight.js";
-import { caveLightField, caveDaylight, sampleLightField } from "../src/render/caves/lightField.js";
+import { caveLightField, caveDaylight, sampleLightField, type CaveLightField } from "../src/render/caves/lightField.js";
 import { opticsAt } from "../src/render/biomes/optics.js";
-import { tessellate, FINE, BORDER_STEP } from "../src/render/biomes/tessellate.js";
 import { geologyColor } from "../src/render/biomes/geology.js";
 import type { MeshRecipe } from "../src/render/kit/types.js";
-import { caveDef, EXTERIOR } from "../src/content/regions/caves.js";
+import { AUTHORED_CAVE_SOURCES, caveDef, EXTERIOR, type CaveDef } from "../src/content/regions/caves.js";
+import { CAVE_CONTENTS } from "../src/content/regions/caves/contents.js";
 import { caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
 import { emptyMasks, terrainMasks } from "../src/content/regions/terrain.js";
-import { gameWorld } from "../src/sim/world.js";
-import { columnRect } from "../src/world/frame.js";
-import type { Rect } from "../src/world/types.js";
+import { caveOwner, createCaveWorldQueries, SOLIDS, surfaceHeight } from "../src/sim/world.js";
 
-const VIEWS: Record<string, { pos: [number, number, number]; at: [number, number, number]; label: string }> = {
+type View = { pos: [number, number, number]; at: [number, number, number]; label: string };
+/** The Fanvault's hand-set bookmarks (W1-pre); other caves get generated ones. */
+const FANVAULT_VIEWS: Record<string, View> = {
   approach: { label: "North approach", pos: [-268, -14.5, -27], at: [-279, -16, -46] },
   north: { label: "North mouth (in)", pos: [-279.6, -16.6, -45], at: [-287, -22.5, -59] },
   vault: { label: "Vault", pos: [-285, -21.5, -60], at: [-291, -24.5, -69.5] },
@@ -48,12 +54,19 @@ const VIEWS: Record<string, { pos: [number, number, number]; at: [number, number
 };
 
 const params = new URLSearchParams(location.search);
+const caveId = AUTHORED_CAVE_SOURCES.some(s => s.id === params.get("cave")) ? params.get("cave")! : "fanvault";
+const main = AUTHORED_CAVE_SOURCES.find(s => s.id === caveId)!;
+/** The selected cave and every cave within 40 m: its network. */
+const near = (r: typeof main.footprint, pad: number): boolean =>
+  r.minX < main.footprint.maxX + pad && r.maxX > main.footprint.minX - pad && r.minZ < main.footprint.maxZ + pad && r.maxZ > main.footprint.minZ - pad;
+const loaded = AUTHORED_CAVE_SOURCES.filter(s => s === main || near(s.footprint, 40));
+
 const canvas = document.getElementById("view") as HTMLCanvasElement;
 const engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: false }, true);
 engine.setHardwareScalingLevel(Number(params.get("scale") ?? 1));
 const scene = new Scene(engine);
 scene.useRightHandedSystem = true;
-const camera = new FreeCamera("lab.camera", new Vector3(-268, -15, -27), scene);
+const camera = new FreeCamera("lab.camera", new Vector3(0, -10, 0), scene);
 camera.minZ = 0.1; camera.maxZ = 450; camera.fov = 1.02;
 camera.keysUp = [87]; camera.keysDown = [83]; camera.keysLeft = [65]; camera.keysRight = [68];
 camera.keysUpward = [69]; camera.keysDownward = [81];
@@ -61,22 +74,33 @@ camera.speed = 0.35; camera.angularSensibility = 1800; camera.inertia = 0.6;
 camera.attachControl(canvas, true);
 const instrumentation = new SceneInstrumentation(scene);
 
-// --- The cave, built from its one source ------------------------------------
+// --- The caves, each built from its one source ---------------------------------
 const started = performance.now();
-const def = caveDef("fanvault", worldFloor);
-const shells = { fine: caveShell(def, "fine"), coarse: caveShell(def, "coarse") };
-const field = caveLightField(def, worldFloor);
+const defs: CaveDef[] = loaded.map(s => caveDef(s.id, worldFloor));
+const def = defs[loaded.indexOf(main)]!;
+const shellsOf = new Map(defs.map(d => [d.id, { fine: caveShell(d, "fine"), coarse: caveShell(d, "coarse") }]));
+const fields = new Map(defs.map(d => [d.id, caveLightField(d, worldFloor)]));
+const field: CaveLightField = fields.get(def.id)!;
 const buildMs = performance.now() - started;
-// The game's own world (C4): every solid, the shared floor and the caves.
-// The lab used to sweep in a shifted frame; C3's envelope made that moot.
-const SHIFT = { x: 0, z: 0 };
-const world = gameWorld();
+// The game's world as `gameWorld()` composes it (C4): every solid on the
+// shared floor, with the loaded caves owning their footprints, so a cave
+// that is authored but not yet in CAVE_SOURCES swims as it will in the game.
+const world = createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: defs.map(caveOwner) });
 
 const cel = createCaveCelMaterial(scene);
 const { water, sky } = createAtmosphere(scene);
 const materials: ShaderMaterial[] = [cel, water, sky];
 const lighting = new CaveLighting(scene, [cel]);
-lighting.setField(field);
+let lit: string | null = null;
+/** One cave is lit as dark at a time: the one owning the camera's column, else the nearest. */
+function lightNearest(p: Vector3): void {
+  let best = def, bestD = Infinity;
+  for (const d of defs) {
+    const f = d.replacementFootprints[0]!, dx = Math.max(f.minX - p.x, 0, p.x - f.maxX), dz = Math.max(f.minZ - p.z, 0, p.z - f.maxZ);
+    if (Math.hypot(dx, dz) < bestD) { bestD = Math.hypot(dx, dz); best = d; }
+  }
+  if (best.id !== lit) { lit = best.id; lighting.setField(fields.get(best.id)!); }
+}
 
 function meshOf(recipe: MeshRecipe, name = recipe.name): Mesh {
   const mesh = new Mesh(name, scene), data = new VertexData();
@@ -86,43 +110,83 @@ function meshOf(recipe: MeshRecipe, name = recipe.name): Mesh {
   mesh.material = cel; mesh.isPickable = false; mesh.renderingGroupId = 1; mesh.freezeWorldMatrix();
   return mesh;
 }
-const shellMeshes = { fine: meshOf(shells.fine), coarse: meshOf(shells.coarse) };
+const shellMeshes = defs.map(d => ({ fine: meshOf(shellsOf.get(d.id)!.fine), coarse: meshOf(shellsOf.get(d.id)!.coarse) }));
 
-// --- Surrounding reef: the live terrain recipe with the footprint as a hole --
-const footprint = def.replacementFootprints[0]!;
-function terrainColumn(rect: Rect): MeshRecipe | null {
-  const cut = rect.minX < footprint.maxX && rect.maxX > footprint.minX && rect.minZ < footprint.maxZ && rect.maxZ > footprint.minZ;
-  const g = tessellate(worldFloor, rect, { ...FINE, base: cut ? BORDER_STEP : FINE.base, ...(cut ? { hole: footprint } : {}) });
-  let r = g.next();
-  while (!r.done) r = g.next();
-  const t = r.value, positions = t.positions, normals: number[] = [], colors: number[] = [], indices = [...t.triangles];
+/** The loaded network's footprints plus 60 m: the seabed drawn round them. */
+const box = { minX: Math.min(...loaded.map(s => s.footprint.minX)) - 60, maxX: Math.max(...loaded.map(s => s.footprint.maxX)) + 60,
+  minZ: Math.min(...loaded.map(s => s.footprint.minZ)) - 60, maxZ: Math.max(...loaded.map(s => s.footprint.maxZ)) + 60 };
+// --- Surrounding seabed: the shared floor on a 0.5 m grid, skipping every
+// cave-owned cell (the bake will cut the same holes; see W1-PRE).
+const owned = (x: number, z: number): boolean => AUTHORED_CAVE_SOURCES.some(s => x >= s.footprint.minX && x < s.footprint.maxX && z >= s.footprint.minZ && z < s.footprint.maxZ);
+function seabed(): MeshRecipe {
+  const step = 0.5, x0 = box.minX + 20, x1 = box.maxX - 20, z0 = box.minZ + 20, z1 = box.maxZ - 20;
+  const nx = Math.round((x1 - x0) / step), nz = Math.round((z1 - z0) / step), positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
   const masks = emptyMasks();
-  for (let v = 0; v < positions.length; v += 3) {
-    const x = positions[v]!, y = positions[v + 1]!, z = positions[v + 2]!;
+  for (let k = 0; k <= nz; k++) for (let i = 0; i <= nx; i++) {
+    const x = x0 + i * step, z = z0 + k * step, y = worldFloor(x, z);
     const gx = (worldFloor(x + 0.25, z) - y) / 0.25, gz = (worldFloor(x, z + 0.25) - y) / 0.25, len = Math.hypot(gx, 1, gz);
-    normals.push(-gx / len, 1 / len, -gz / len);
+    positions.push(x, y, z); normals.push(-gx / len, 1 / len, -gz / len);
     terrainMasks(x, z, masks);
     geologyColor(x, y, z, Math.hypot(gx, gz), regionAtPoint(x, z) ?? "refuge_reef", masks, colors);
   }
-  // The same short skirt the bake hangs at a hole edge.
-  for (let e = 0; e < t.skirtEdges.length; e += 2) {
-    const a = t.skirtEdges[e]!, b = t.skirtEdges[e + 1]!, base = positions.length / 3;
-    for (const k of [a, b]) {
-      positions.push(positions[k * 3]!, positions[k * 3 + 1]! - 1.5, positions[k * 3 + 2]!);
-      normals.push(normals[k * 3]!, normals[k * 3 + 1]!, normals[k * 3 + 2]!);
-      colors.push(colors[k * 4]! * 0.8, colors[k * 4 + 1]! * 0.8, colors[k * 4 + 2]! * 0.8, 1);
-    }
-    indices.push(a, b, base + 1, a, base + 1, base);
+  for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
+    if (owned(x0 + (i + 0.5) * step, z0 + (k + 0.5) * step)) continue;
+    const a = i + (nx + 1) * k, b = a + 1, c = a + nx + 1, d = c + 1;
+    indices.push(a, c, b, b, c, d);
   }
-  if (!indices.length) return null;
-  return { name: `lab.terrain.${rect.minX}.${rect.minZ}`, positions: new Float32Array(positions), normals: new Float32Array(normals),
-    colors: new Float32Array(colors), indices: new Uint32Array(indices) };
+  return { name: "lab.seabed", positions: new Float32Array(positions), normals: new Float32Array(normals), colors: new Float32Array(colors),
+    indices: new Uint32Array(indices) };
 }
-let terrainVertices = 0;
-for (const ix of [1, 2, 3]) for (const iz of [11, 12]) {
-  const recipe = terrainColumn(columnRect(ix, iz));
-  if (recipe) { meshOf(recipe); terrainVertices += recipe.positions.length / 3; }
+const terrain = seabed();
+meshOf(terrain);
+const terrainVertices = terrain.positions.length / 3;
+
+const DIVER = { radius: 0.34, height: 0.95 }, EYE = 0.6;
+
+// --- Bookmarks ----------------------------------------------------------------
+/** Generated views for a kit cave: outside and inside each mouth, every room,
+ * an overview and a plan. */
+function viewsFor(d: CaveDef): Record<string, View> {
+  if (d.id === "fanvault") return FANVAULT_VIEWS;
+  const out: Record<string, View> = {}, b = d.bounds, c = { x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2 };
+  const roomsY = Math.min(...d.rooms.map(r => r.bounds.min.y));
+  // A camera pose a diver could hold that sees its target.
+  const usable = (pos: [number, number, number], at: [number, number, number]): boolean =>
+    world.clearance({ x: pos[0], y: pos[1] - EYE, z: pos[2] }, DIVER) && world.lineOfSight({ x: pos[0], y: pos[1], z: pos[2] }, { x: at[0], y: at[1], z: at[2] });
+  for (const m of d.portals.filter(p => p.kind === "mouth")) {
+    const key = m.id.slice(d.id.length + 1).replace(/\./g, "_"), o = m.center, n = m.normal, far = Math.max(10, m.clear.width * 1.6);
+    const at: [number, number, number] = [o.x, o.y, o.z];
+    let pos: [number, number, number] = [o.x + n.x * far, o.y + 1.5, o.z + n.z * far];
+    search: for (const k of [1, 0.7, 0.5, 1.4, 1.8]) for (const up of [1.5, 3.5, 6, 0.5]) {
+      const cand: [number, number, number] = [o.x + n.x * far * k, o.y + up, o.z + n.z * far * k];
+      if (usable(cand, at)) { pos = cand; break search; }
+    }
+    out[key] = { label: `${m.label} (outside)`, pos, at };
+    out[`${key}_in`] = { label: `${m.label} (inside)`, pos: [o.x - n.x * 2, o.y + 0.5, o.z - n.z * 2], at: [o.x - n.x * 12, o.y - 1, o.z - n.z * 12] };
+  }
+  const v = caveVolume(d), g = v.grid;
+  d.rooms.forEach((r, ri) => {
+    const rb = r.bounds, alongX = rb.max.x - rb.min.x > rb.max.z - rb.min.z, reach = (alongX ? rb.max.x - rb.min.x : rb.max.z - rb.min.z) * 0.4;
+    // From the room's own clear water nearest its middle, a diver's height
+    // over its floor and below the waterline, looking along its long axis.
+    const want = { x: (rb.min.x + rb.max.x) / 2 - (alongX ? reach : 0), y: rb.min.y + 1.6, z: (rb.min.z + rb.max.z) / 2 - (alongX ? 0 : reach) };
+    let pos: [number, number, number] = [want.x, Math.min(want.y, -1), want.z], best = Infinity;
+    for (let k = 0; k < g.nz; k += 2) for (let j = 0; j < g.ny; j += 2) for (let i = 0; i < g.nx; i += 2) {
+      const at = i + g.nx * (j + g.ny * k);
+      if (v.room[at] !== ri + 1 || v.solid[at]) continue;
+      const p = { x: g.origin.x + (i + 0.5) * g.voxel, y: g.origin.y + (j + 0.5) * g.voxel + EYE, z: g.origin.z + (k + 0.5) * g.voxel };
+      const dist = Math.hypot(p.x - want.x, (p.y - want.y) * 2, p.z - want.z);
+      if (p.y < -0.8 && dist < best && world.clearance({ x: p.x, y: p.y - EYE, z: p.z }, DIVER)) { best = dist; pos = [p.x, p.y, p.z]; }
+    }
+    const look: [number, number, number] = [pos[0] + (alongX ? 2 * reach : 0), pos[1] - 0.5, pos[2] + (alongX ? 0 : 2 * reach)];
+    out[r.id.slice(d.id.length + 1)] = { label: r.label, pos, at: look };
+  });
+  const span = Math.max(b.max.x - b.min.x, b.max.z - b.min.z);
+  out.overview = { label: "Overview", pos: [c.x + span * 0.7, b.max.y + span * 0.35, c.z - span * 0.7], at: [c.x, roomsY + 4, c.z] };
+  out.plan = { label: "Plan (above)", pos: [c.x, b.max.y + span * 1.2, c.z + 0.01], at: [c.x, roomsY, c.z] };
+  return out;
 }
+const VIEWS = viewsFor(def);
 
 // --- Overlays ---------------------------------------------------------------
 const overlays = new Map<string, LinesMesh>();
@@ -135,32 +199,42 @@ function boxLines(min: P, max: P): Vector3[][] {
     out.push([c(a & 1, (a >> 1) & 1, a >> 2), c(b & 1, (b >> 1) & 1, b >> 2)]);
   return out;
 }
+const CONTENT_COLORS = { resource: new Color3(0.2, 1, 0.5), resident: new Color3(0.6, 0.9, 1), find: new Color3(1, 0.85, 0.3) } as const;
 function overlay(kind: string): LinesMesh {
   const lines: Vector3[][] = [], colors: Color4[][] = [];
   const add = (l: Vector3[], c: Color3): void => { lines.push(l); colors.push(l.map(() => new Color4(c.r, c.g, c.b, 1))); };
-  // The rock as a plan slice: every box crossing one height (`?slice=`, else
-  // the camera's), drawn at that height. Hide the shell to read the cave plan.
-  if (kind === "solids") {
-    const y = Number(params.get("slice") ?? camera.position.y);
-    for (const s of def.rock) if (s.min.y <= y && s.max.y >= y) {
-      const a = new Vector3(s.min.x, y, s.min.z), b = new Vector3(s.max.x, y, s.min.z), c = new Vector3(s.max.x, y, s.max.z), d = new Vector3(s.min.x, y, s.max.z);
-      add([a, b, c, d, a], new Color3(1, 0.55, 0.15));
+  for (const d of defs) {
+    // The rock as a plan slice: every box crossing one height (`?slice=`, else
+    // the camera's), drawn at that height. Hide the shell to read the cave plan.
+    if (kind === "solids") {
+      const y = Number(params.get("slice") ?? camera.position.y);
+      for (const s of d.rock) if (s.min.y <= y && s.max.y >= y) {
+        const a = new Vector3(s.min.x, y, s.min.z), b = new Vector3(s.max.x, y, s.min.z), c = new Vector3(s.max.x, y, s.max.z), e = new Vector3(s.min.x, y, s.max.z);
+        add([a, b, c, e, a], new Color3(1, 0.55, 0.15));
+      }
+    }
+    if (kind === "rooms") for (const r of d.rooms) for (const l of boxLines(r.bounds.min, r.bounds.max)) add(l, new Color3(0.4, 0.6, 1));
+    if (kind === "routes") for (const r of d.routes)
+      add(r.path.map(v3), r.profile !== "diver" ? new Color3(1, 0.55, 0.1) : r.role === "exit" ? new Color3(0.9, 0.9, 0.3) : new Color3(1, 0.3, 0.9));
+    if (kind === "portals") for (const p of d.portals) {
+      const c = p.kind === "mouth" ? new Color3(0.3, 1, 0.4) : p.kind === "skylight" ? new Color3(1, 0.95, 0.3) : new Color3(0.3, 0.9, 1);
+      const w = p.clear.width / 2, h = p.clear.height / 2, o = p.center;
+      const corners = p.normal.y !== 0
+        ? [[-w, 0, -h], [w, 0, -h], [w, 0, h], [-w, 0, h]]
+        : p.normal.z !== 0 ? [[-w, -h, 0], [w, -h, 0], [w, h, 0], [-w, h, 0]] : [[0, -h, -w], [0, -h, w], [0, h, w], [0, h, -w]];
+      const pts = corners.map(([x, y, z]) => new Vector3(o.x + x!, o.y + y!, o.z + z!));
+      add([...pts, pts[0]!], c);
+      add([v3(o), new Vector3(o.x + p.normal.x * 2, o.y + p.normal.y * 2, o.z + p.normal.z * 2)], c);
+    }
+    if (kind === "contents") for (const c of CAVE_CONTENTS.filter(x => x.cave === d.id)) {
+      const o = c.at, s = 0.6, col = CONTENT_COLORS[c.kind];
+      add([new Vector3(o.x - s, o.y, o.z), new Vector3(o.x + s, o.y, o.z)], col);
+      add([new Vector3(o.x, o.y - s, o.z), new Vector3(o.x, o.y + s, o.z)], col);
+      add([new Vector3(o.x, o.y, o.z - s), new Vector3(o.x, o.y, o.z + s)], col);
     }
   }
-  if (kind === "rooms") for (const r of def.rooms) for (const l of boxLines(r.bounds.min, r.bounds.max)) add(l, new Color3(0.4, 0.6, 1));
-  if (kind === "routes") for (const r of def.routes) add(r.path.map(v3), r.role === "loop" ? new Color3(1, 0.3, 0.9) : new Color3(0.9, 0.9, 0.3));
-  if (kind === "portals") for (const p of def.portals) {
-    const c = p.kind === "mouth" ? new Color3(0.3, 1, 0.4) : p.kind === "skylight" ? new Color3(1, 0.95, 0.3) : new Color3(0.3, 0.9, 1);
-    const w = p.clear.width / 2, h = p.clear.height / 2, o = p.center;
-    const corners = p.normal.y !== 0
-      ? [[-w, 0, -h], [w, 0, -h], [w, 0, h], [-w, 0, h]]
-      : p.normal.z !== 0 ? [[-w, -h, 0], [w, -h, 0], [w, h, 0], [-w, h, 0]] : [[0, -h, -w], [0, -h, w], [0, h, w], [0, h, -w]];
-    const pts = corners.map(([x, y, z]) => new Vector3(o.x + x!, o.y + y!, o.z + z!));
-    add([...pts, pts[0]!], c);
-    add([v3(o), new Vector3(o.x + p.normal.x * 2, o.y + p.normal.y * 2, o.z + p.normal.z * 2)], c);
-  }
   const mesh = CreateLineSystem(`lab.overlay.${kind}`, { lines, colors }, scene);
-  // Rock boxes are depth-tested with the art; the paths draw on top.
+  // Rock boxes are depth-tested with the art; the paths and markers draw on top.
   mesh.renderingGroupId = kind === "solids" || kind === "rooms" ? 1 : 2; mesh.isPickable = false;
   return mesh;
 }
@@ -172,13 +246,12 @@ function setOverlay(kind: string, on: boolean): void {
 // --- State and controls -----------------------------------------------------
 const state = { lamp: params.get("lamp") !== "0", lod: (params.get("lod") === "coarse" ? "coarse" : "fine") as "fine" | "coarse",
   collide: params.get("collide") !== "0", shell: params.get("shell") !== "0" };
-const DIVER = { radius: 0.34, height: 0.95 }, EYE = 0.6;
 function applyLod(): void {
-  shellMeshes.fine.setEnabled(state.shell && state.lod === "fine");
-  shellMeshes.coarse.setEnabled(state.shell && state.lod === "coarse");
+  for (const m of shellMeshes) { m.fine.setEnabled(state.shell && state.lod === "fine"); m.coarse.setEnabled(state.shell && state.lod === "coarse"); }
 }
 applyLod();
 
+let last = camera.position.clone();
 function go(name: string): void {
   const v = VIEWS[name]; if (!v) return;
   camera.position.set(...v.pos);
@@ -187,6 +260,24 @@ function go(name: string): void {
   for (const b of document.querySelectorAll<HTMLButtonElement>("#views button")) b.classList.toggle("on", b.dataset.view === name);
 }
 const views = document.getElementById("views")!, toggles = document.getElementById("toggles")!, status = document.getElementById("status")!;
+// The cave list: every authored kit cave by region; picking one reloads the lab on it.
+const picker = document.createElement("select");
+picker.id = "cave";
+for (const region of [...new Set(AUTHORED_CAVE_SOURCES.map(s => s.region))]) {
+  const group = document.createElement("optgroup"); group.label = region;
+  for (const s of AUTHORED_CAVE_SOURCES.filter(x => x.region === region)) {
+    const o = document.createElement("option"); o.value = s.id; o.textContent = `${s.label} (${s.id})`; o.selected = s.id === caveId;
+    group.appendChild(o);
+  }
+  picker.appendChild(group);
+}
+function select(id: string): void {
+  const next = new URLSearchParams(params); next.set("cave", id); next.delete("view");
+  location.search = `?${next}`;
+}
+picker.onchange = () => select(picker.value);
+views.appendChild(picker);
+views.appendChild(document.createElement("br"));
 for (const [k, v] of Object.entries(VIEWS)) {
   const b = document.createElement("button"); b.textContent = v.label; b.dataset.view = k;
   b.onclick = () => { go(k); params.set("view", k); history.replaceState(null, "", `?${params}`); };
@@ -204,7 +295,7 @@ toggle("coarse (K)", () => state.lod === "coarse", () => { state.lod = state.lod
 toggle("collide (C)", () => state.collide, () => { state.collide = !state.collide; });
 toggle("shell", () => state.shell, () => { state.shell = !state.shell; applyLod(); });
 const requested = (params.get("overlay") ?? "").split(",");
-for (const kind of ["solids", "portals", "routes", "rooms"]) {
+for (const kind of ["solids", "portals", "routes", "rooms", "contents"]) {
   let on = requested.includes(kind);
   if (on) setOverlay(kind, true);
   toggle(kind, () => on, () => { on = !on; setOverlay(kind, on); });
@@ -214,20 +305,22 @@ window.addEventListener("keydown", e => {
   if (e.code === "KeyL") buttons["lamp (L)"]!.click();
   if (e.code === "KeyK") buttons["coarse (K)"]!.click();
   if (e.code === "KeyC") buttons["collide (C)"]!.click();
+  const at = AUTHORED_CAVE_SOURCES.findIndex(s => s.id === caveId);
+  if (e.code === "BracketRight") select(AUTHORED_CAVE_SOURCES[(at + 1) % AUTHORED_CAVE_SOURCES.length]!.id);
+  if (e.code === "BracketLeft") select(AUTHORED_CAVE_SOURCES[(at + AUTHORED_CAVE_SOURCES.length - 1) % AUTHORED_CAVE_SOURCES.length]!.id);
 });
 window.addEventListener("keyup", e => { camera.speed = e.shiftKey ? 1.2 : 0.35; });
 document.getElementById("hide")!.onclick = () => document.getElementById("panel")!.classList.toggle("hidden");
 if (params.get("hud") === "0") document.getElementById("panel")!.classList.add("hidden");
-let last = camera.position.clone();
-go(params.get("view") ?? "approach");
+go(params.get("view") ?? Object.keys(VIEWS)[0]!);
 
 // Free swim with the diver's own collision: the camera proposes a move and
 // the world sweeps the diver box from the last accepted pose.
 function swim(): void {
   if (!state.collide) { last = camera.position.clone(); return; }
-  const from = { x: last.x + SHIFT.x, y: last.y - EYE, z: last.z + SHIFT.z }, to = camera.position;
+  const from = { x: last.x, y: last.y - EYE, z: last.z }, to = camera.position;
   const moved = world.moveCapsule(from, { x: to.x - last.x, y: to.y - last.y, z: to.z - last.z }, DIVER);
-  camera.position.set(moved.position.x - SHIFT.x, moved.position.y + EYE, moved.position.z - SHIFT.z);
+  camera.position.set(moved.position.x, moved.position.y + EYE, moved.position.z);
   // A blocked swim stops: no inertia keeps pressing the camera into rock.
   if (moved.hitSolid) camera.cameraDirection.setAll(0);
   last = camera.position.clone();
@@ -237,7 +330,10 @@ function swim(): void {
 scene.onBeforeCameraRenderObservable.add(swim);
 
 const roomAt = (): string => {
-  const g = caveVolume(def).grid, v = caveVolume(def), p = camera.position;
+  const p = camera.position;
+  const owner = defs.find(d => { const f = d.replacementFootprints[0]!; return p.x >= f.minX && p.x < f.maxX && p.z >= f.minZ && p.z < f.maxZ; });
+  if (!owner) return EXTERIOR;
+  const v = caveVolume(owner), g = v.grid;
   const i = Math.floor((p.x - g.origin.x) / g.voxel), j = Math.floor((p.y - EYE - g.origin.y) / g.voxel), k = Math.floor((p.z - g.origin.z) / g.voxel);
   if (i < 0 || j < 0 || k < 0 || i >= g.nx || j >= g.ny || k >= g.nz) return EXTERIOR;
   const r = v.room[i + g.nx * (j + g.ny * k)]!;
@@ -248,6 +344,7 @@ let frame = 0;
 const timer = { last: performance.now(), fps: 0 };
 function tick(): void {
   const p = camera.position;
+  lightNearest(p);
   const o = opticsAt(p.x, p.y, p.z), underwater = p.y < -0.08 ? 1 : 0;
   const wf = Color3.Lerp(Color3.FromHexString(o.water), Color3.FromHexString(o.deep), o.depthMix);
   scene.clearColor = underwater ? new Color4(wf.r, wf.g, wf.b, 1) : Color4.FromHexString("#96c5b9ff");
@@ -266,11 +363,12 @@ function tick(): void {
   const now = performance.now();
   if (frame % 15 === 0) {
     timer.fps = 15000 / (now - timer.last); timer.last = now;
-    const c = sampleLightField(field, { x: p.x, y: p.y, z: p.z });
+    const c = sampleLightField(fields.get(lit ?? def.id)!, { x: p.x, y: p.y, z: p.z });
+    const shells = shellsOf.get(lit ?? def.id)!;
     status.textContent =
       `${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}  depth ${Math.max(0, -p.y).toFixed(1)} m  ${roomAt()}\n` +
-      `daylight ${caveDaylight(c.r, c.g, c.a).toFixed(2)}  sun ${c.g.toFixed(2)}  lamp ${state.lamp ? "on" : "off"}  ${state.lod}\n` +
-      `rock ${def.rock.length} solids  shell ${shells[state.lod].positions.length / 3} verts  terrain ${terrainVertices}\n` +
+      `daylight ${caveDaylight(c.r, c.g, c.a).toFixed(2)}  sun ${c.g.toFixed(2)}  lamp ${state.lamp ? "on" : "off"}  ${state.lod}  lit ${lit}\n` +
+      `${loaded.length} caves  rock ${defs.reduce((n, d) => n + d.rock.length, 0)} solids  shell ${shells[state.lod].positions.length / 3} verts  seabed ${terrainVertices}\n` +
       `build ${buildMs.toFixed(0)} ms  draws ${instrumentation.drawCallsCounter.current}  ${timer.fps.toFixed(0)} fps  ${engine.webGLVersion > 1 ? "webgl2" : "webgl1"}`;
   }
   canvas.dataset.frame = String(frame);
@@ -343,4 +441,27 @@ function lampProbe(rays: readonly { p: P; lamp: P }[]): { values: number[]; rend
   gl.getExtension("WEBGL_lose_context")?.loseContext();
   return result;
 }
-Object.assign(window, { caveLab: { lampProbe, go, show, settle, camera, scene, def, field, world, state, setOverlay, applyLod, VIEWS } });
+/** Scripted capture (`?shots=<receiver URL>&queue=<id,id,...>`): shoots this
+ * cave from outside a mouth in daylight and in its largest chamber with the
+ * lamp off, POSTs both PNGs to the receiver, then moves on down the queue. */
+async function captureQueue(base: string): Promise<void> {
+  const keys = Object.keys(VIEWS), rooms = def.rooms.slice().sort((a, b) => Number(b.role === "chamber") - Number(a.role === "chamber") ||
+    (b.bounds.max.x - b.bounds.min.x) * (b.bounds.max.z - b.bounds.min.z) - (a.bounds.max.x - a.bounds.min.x) * (a.bounds.max.z - a.bounds.min.z));
+  const day = params.get("day") ?? keys.find(k => !k.endsWith("_in") && (k.startsWith("mouth") || k === "approach")) ?? keys[0]!;
+  const dark = params.get("dark") ?? rooms.map(r => r.id.slice(def.id.length + 1)).find(k => keys.includes(k)) ?? keys[1]!;
+  for (const [name, view, lamp] of [[`${def.id}-day.png`, day, true], [`${def.id}-dark.png`, dark, false]] as const) {
+    await show(view, lamp, "fine");
+    await settle(2);
+    const blob = await new Promise<Blob | null>(done => canvas.toBlob(done, "image/png"));
+    if (blob) await fetch(`${base}/${name}`, { method: "POST", body: blob });
+  }
+  const queue = (params.get("queue") ?? "").split(",").filter(Boolean);
+  if (queue.length) {
+    const next = new URLSearchParams(params); next.set("cave", queue[0]!); next.set("queue", queue.slice(1).join(","));
+    next.delete("view"); next.delete("day"); next.delete("dark");
+    location.search = `?${next}`;
+  }
+}
+if (params.get("shots")) void settle(4).then(() => captureQueue(params.get("shots")!));
+Object.assign(window, { caveLab: { lampProbe, go, show, settle, select, camera, scene, def, defs, field, fields, world, state, setOverlay, applyLod, VIEWS,
+  caves: AUTHORED_CAVE_SOURCES.map(s => s.id) } });
