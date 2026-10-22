@@ -249,9 +249,9 @@ function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
 
 // --------------------------------------------------------------- Creel route (independent)
 
-/** C4: where S2's western return leaves the Rift shoulder, and the Divide's
- * east-ledge route end and a hold over the 450 m north flank. */
-const RIFT_WEST_RETURN = { x: -97.6, y: -280, z: -747.7 } as const;
+/** C4: the Divide's east-ledge route end and a hold over the 450 m north flank.
+ * (HUB-2: the carrier route now returns from the Rift by the crown, not the
+ * western return.) */
 const DIVIDE_EAST_LEDGE = { x: 749, y: -368, z: -1191 } as const;
 const DIVIDE_LEE = { x: 560, y: -390, z: -1120 } as const;
 const DIVIDE_FLANK_PARK = { x: 958, y: -438, z: -1128 } as const;
@@ -260,23 +260,33 @@ const DIVIDE_FLANK_PARK = { x: 958, y: -438, z: -1128 } as const;
  * then the 450 m suit and Creel refits. */
 const rift = (strategy: "creel" | "carrier"): Phase => ({
   id: "rift", title: "Ember Rift: station restored, ledger, ceramic and core; 450 m suit" + (strategy === "creel" ? " and Creel" : ""),
-  verify: all(crafted("restore_rift_station", "suit_450"), facility("rift_station"), suit(450), strategy === "creel" ? hull("creel", 450) : hull("creel")),
+  verify: all(crafted("restore_rift_station", "suit_450"), facility("rift_station"), suit(450), strategy === "creel" ? hull("creel", 450) : hull("creel"),
+    // HUB-2: the carrier route restores the crown station on the way and refits the suit there.
+    ...(strategy === "carrier" ? [crafted("restore_crown_power", "restore_crown_dock"), facility("crown_dock")] : [])),
   missing: (d) => [
-    ...recipes("suit_450", "restore_rift_station", ...(strategy === "creel" ? ["creel_450"] : [])),
+    ...recipes("suit_450", "restore_rift_station", ...(strategy === "creel" ? ["creel_450"] : ["restore_crown_power", "restore_crown_dock"])),
+    ...(strategy === "carrier" ? [...routes("route.hub.balcony"), ...sites("hub.crown_station")] : []),
     ...sources("rift_ceramic_lip_north", "rift_ceramic_lip_south", "rift_core_lower_north", "rift_core_lower_west"),
-    ...routes("route.basin.legacy_anchorage", "route.basin.rift", "route.rift.ceramic", "route.rift.west_return", "route.basin.reef_west"),
+    ...routes("route.basin.legacy_anchorage", "route.basin.rift", "route.rift.ceramic"),
     ...sites("rift.materials_station"),
     ...(d.vehicle("creel") ? [] : [{ key: "owned:creel", text: "an owned Creel" }]),
   ],
   play(d, o) {
     // The independent route stages the station's restoration in the Creel hold with the rest.
     if (strategy === "creel") stageForwardBase(d);
-    else carryFromWorkshop(d, RECIPES[("restore_rift_station" as RecipeId)].cost as Record<string, number>);
+    else stageCrown(d);
     boardCraft(d, "creel");
     fly(d, "creel_out");
     fly(d, "basin_outbound");
     followS2(d, "route.basin.legacy_anchorage");
     if (strategy === "creel") deployForwardBase(d);
+    else {
+      // HUB-2: up the crown's north cliff from the anchorage to restore power and air,
+      // then the dock and fabricator, each a diver load from the hold; back down.
+      followS2(d, "route.hub.balcony");
+      for (const stage of ["restore_crown_power", "restore_crown_dock"] as const) siteCraft(d, "crown_station", stage);
+      followS2(d, "route.hub.balcony", true);
+    }
     followS2(d, "route.basin.rift");
     siteCraft(d, "rift_station", "restore_rift_station");
     story(d, "rift_station_ledger", o);
@@ -301,15 +311,30 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
       });
       return;
     }
-    pilotTo(d, "up to the western return", RIFT_WEST_RETURN);
-    followS2(d, "route.rift.west_return");
-    followS2(d, "route.basin.reef_west");
-    fly(d, "reef_to_slip");
-    dockAndService(d, d.vehicle("creel")!);
-    stowHold(d, d.vehicle("creel")!);
-    make(d, "suit_450" as RecipeId, "workshop", ISLES);
+    // HUB-2: the crown's bench refits the suit from the moored Creel's hold, and its
+    // dock charges the Creel, instead of the long way home to the island workshop.
+    followS2(d, "route.basin.rift", true);
+    followS2(d, "route.hub.balcony");
+    siteCraft(d, "crown_station", "suit_450");
+    homeAndUnload(d, [["route.hub.balcony", true], ["route.basin.legacy_anchorage", true]]);
   },
 });
+
+/** HUB-2, carrier route: the Rift station's and the crown station's first two
+ * restorations, and the 450 m suit's common materials, into the Creel's hold at
+ * the workshop (ceramic and core come from the Rift itself). */
+function stageCrown(d: Driver): void {
+  const creel = d.vehicle("creel")!, needs: Record<string, number> = {};
+  for (const r of ["restore_rift_station", "restore_crown_power", "restore_crown_dock", "suit_450"] as const)
+    for (const [k, n] of Object.entries(RECIPES[r].cost as Record<string, number>))
+      if (k !== "pressure_ceramic" && k !== "thermal_core") needs[k] = (needs[k] ?? 0) + n;
+  stockUp(d, needs);
+  enter(d, "workshop");
+  for (const [k, n] of Object.entries(needs)) {
+    const left = n - d.count(k as ItemKind, [creel.cargoId]);
+    if (left > 0) move(d, k as ItemKind, left, "workshop_locker", creel.cargoId);
+  }
+}
 
 /** The forward base (C4, independent route): a basic outpost on the Basin
  * anchorage ledge where the Rift and Divide routes part. */

@@ -18,6 +18,11 @@ export const CAMPAIGN_SITES = {
     label: "Mirror Divide upper service dock", s2: "divide.service_dock", region: "brine_divide",
     work: { x: 632, y: -365, z: -1238 }, depth: 365,
   },
+  /** HUB-2: the crown station on W2's summit (content/hub/crownStation.ts). */
+  crown_station: {
+    label: "Crown station", s2: "hub.crown_station", region: "silt_basin",
+    work: { x: 319, y: -56.4, z: -542.4 }, depth: 56,
+  },
 } as const satisfies Record<string, {
   label: string; s2: string; region: RegionId; work: { x: number; y: number; z: number }; depth: number;
 }>;
@@ -41,6 +46,11 @@ export const SERVICE_STOPS = {
     label: "Mirror Divide upper service dock", recipe: "restore_divide_stop", site: "divide_dock", depth: 365,
     services: ["air", "rest", "charge", "repair", "locker", "mounts"], planner: "stop_divide_lee",
     purpose: "The Creel route's forward base: deep sorties to the district start and end here.",
+  },
+  stop_crown: {
+    label: "Crown station", recipe: "restore_crown_power", site: "crown_station", depth: 56,
+    services: ["air", "rest", "charge", "repair", "locker", "mounts"], planner: null,
+    purpose: "The hub at the map's centre: air and the fastest bunk first, then the dock, the full bench and the survey array.",
   },
   stop_meridian: {
     label: "District staging office", recipe: null, site: "meridian.staging_office", depth: 520,

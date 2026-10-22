@@ -13,6 +13,7 @@ import { cabinHull, cabinPowered } from "./fleet.js";
 import { disableVehicle, incapacitate } from "./recovery.js";
 import { airLineFor, effectiveRating } from "./fittings.js";
 import { isRestBase, type RestBaseId } from "../content/bases.js";
+import { bunkHealRate } from "./hub/crownStation.js";
 const DT = 1 / 60;
 export const SUIT_OXYGEN_DRAIN_PER_SECOND = 100 / 180;
 /** These are fixed simulation reference points. Renderer eye interpolation is never read. */
@@ -121,7 +122,8 @@ export function updateSurvival(s: GameState, events: GameEvent[]): void {
   } else p.starvationSeconds = 0;
   if (e.refuge) {
     if (p.vitals.food > 0)
-      p.vitals.health = Math.min(100, p.vitals.health + 1.8 * DT);
+      // HUB-2: the crown station's bunk heals three times as fast as any other refuge.
+      p.vitals.health = Math.min(100, p.vitals.health + bunkHealRate(s) * DT);
     // Resting at a restored base's bunk makes it where you wake (owner, C4).
     const base = restBaseHere(s);
     if (base) p.refugeId = base;
