@@ -147,6 +147,8 @@ export interface ResidencyStats {
 /** Metres of rank a priority point is worth: a refuge (priority 1) loads as
  * if it were this much closer, and is evicted as if it were that much nearer. */
 const PRIORITY_METRES = 64;
+/** Hidden units released per frame when only the retained count is over. */
+const MAX_TRIMS_PER_FRAME = 1;
 
 interface Bytes { cpu: number; gpu: number }
 interface Unit {
@@ -503,12 +505,17 @@ export function createResidency(options: {
       //    shown or hidden this frame wait one frame unless bytes force it.
       const hidden = [...units.values()].filter(u => u.state === "hidden")
         .sort((a, b) => a.lastUsed - b.lastUsed || b.rank - a.rank);
-      let kept = hidden.length;
+      let kept = hidden.length, trimmed = 0;
       for (const u of hidden) {
         const overBytes = !fits(accounted());
         if (!overBytes && (kept <= budget.retainedUnits || u.lastUsed >= frame)) break;
         if (!overBytes && protectedKeys.has(u.key)) continue;
+        // Trimming retention past the count is spread over frames (CW-1: a
+        // fast traversal dropped several chunks' meshes in one 100 ms frame);
+        // bytes over budget still evict at once.
+        if (!overBytes && trimmed >= MAX_TRIMS_PER_FRAME) break;
         release(u, "evicted"); kept--;
+        if (!overBytes) trimmed++;
       }
       // Last resort (art larger than its recipe said): drop the farthest
       // shown and in-progress units until the budget holds again.

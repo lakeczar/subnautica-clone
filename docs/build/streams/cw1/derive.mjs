@@ -57,7 +57,12 @@ while (left.length) {
 function leg(a, b) {
   const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 6));
   let hi = -Infinity;
-  for (let i = 0; i <= n; i++) { const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n; hi = Math.max(hi, worldFloor(x, z)); }
+  for (let i = 0; i <= n; i++) {
+    const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n;
+    hi = Math.max(hi, worldFloor(x, z));
+    // Cave terraces stand above the seabed: clear each cave's envelope too.
+    for (const c of CAVE_SOURCES) { const f = c.footprint; if (x > f.minX - 6 && x < f.maxX + 6 && z > f.minZ - 6 && z < f.maxZ + 6) hi = Math.max(hi, c.topY - 10); }
+  }
   const y = Math.min(-2, Math.max(DEEPEST, hi + 14));
   return [{ x: a.x, y, z: a.z, cruise: true }, { x: b.x, y, z: b.z, cruise: true }];
 }
