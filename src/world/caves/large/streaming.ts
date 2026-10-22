@@ -378,13 +378,22 @@ export class CaveAdmission {
     this.fixedOwner = `${o.id}.fixed`; this.safetyOwner = `${o.id}.safety`;
   }
   get admitted(): boolean { return this.safety?.complete === true; }
+  /** True while the biome's fixed bytes are reserved: its bake, colliders and
+   * lamp windows may be (and must only be) resident while this holds. */
+  get loaded(): boolean { return this.arbiter.holds(this.fixedOwner); }
+  /** Reserve the fixed bytes BEFORE loading the bake, colliders and lamp
+   * windows (`priority` when the player is in or touching the cave). False:
+   * do not load. Idempotent. */
+  load(priority = false): boolean { return this.arbiter.reserve(this.fixedOwner, this.o.fixed, priority); }
   update(actor: { min: Vec3; max: Vec3 }, eye: Vec3, now: number, buildMs = 3, clock: () => number = () => now): AdmissionUpdate {
     const own = this.cm.cave.field.ownership, d = this.cm.cave.source.domain;
     const inside = boxTouchesOwned(own, actor), dist = boxDistance(d, eye);
-    if (!inside && dist > (this.o.releaseAt ?? 200)) { this.release(); return { state: "away", holding: false, rescue: null, message: "" }; }
+    // Leaving only drops the safety set: the fixed bytes stay reserved until
+    // the buffers they count are really unloaded (`unload`).
+    if (!inside && dist > (this.o.releaseAt ?? 200)) { this.releaseSafety(); return { state: "away", holding: false, rescue: null, message: "" }; }
     if (inside || dist <= (this.o.activation ?? 160)) {
       const sb = { cpu: this.o.safety, gpu: this.o.safety };
-      if (this.arbiter.reserve(this.fixedOwner, this.o.fixed, inside) && !this.safety && this.arbiter.reserve(this.safetyOwner, sb, inside))
+      if (this.load(inside) && !this.safety && this.arbiter.reserve(this.safetyOwner, sb, inside))
         this.safety = new CaveSafetySet(this.cm, this.loader, eye);
     }
     this.safety?.step(buildMs, clock);
@@ -392,38 +401,60 @@ export class CaveAdmission {
     if (!inside) { this.loadingSince = -1; return { state: "waiting", holding: false, rescue: null, message: "Waiting for room to load the cave" }; }
     if (this.loadingSince < 0) this.loadingSince = now;
     if (!this.safety && now - this.loadingSince >= (this.o.rescueAfterMs ?? 4000)) {
-      this.loadingSince = -1;
-      return { state: "rescue", holding: true, rescue: this.rescueTarget(actor),
-        message: "Not enough memory to load this cave: you were moved to the water outside its nearest mouth." };
+      const target = this.rescueTarget(actor);
+      if (target) {
+        this.loadingSince = -1;
+        return { state: "rescue", holding: true, rescue: target,
+          message: "Not enough memory to load this cave: you were moved to the water outside it." };
+      }
+      // Nowhere verified to go: stay paused and search again after another wait.
+      this.loadingSince = now;
+      return { state: "loading", holding: true, rescue: null,
+        message: "Cannot load this cave or find safe water outside it: still loading, retrying…" };
     }
     return { state: "loading", holding: true, rescue: null, message: "Loading cave…" };
   }
-  /** Exterior water just outside the nearest mouth an actor of this size fits. */
-  rescueTarget(actor: { min: Vec3; max: Vec3 }): Vec3 {
+  /** A VERIFIED relocation for an actor of this size, or null. Candidates, in
+   * order: along each mouth it fits, nearest first; the biome's staging
+   * points; then a widened ring of points above the domain round the actor.
+   * Every candidate passes the same checks: water above the seabed, clear of
+   * owned space by the gate's reach, and `clear(feet)` for this actor. */
+  rescueTarget(actor: { min: Vec3; max: Vec3 }): Vec3 | null {
     const s = this.cm.cave.source, own = this.cm.cave.field.ownership, floor = this.cm.cave.field.floor;
     const hx = (actor.max.x - actor.min.x) / 2, hz = (actor.max.z - actor.min.z) / 2, h = actor.max.y - actor.min.y;
     const at = { x: (actor.min.x + actor.max.x) / 2, y: actor.min.y, z: (actor.min.z + actor.max.z) / 2 };
     // Clear of owned space by the gate's reach and a margin, so the player can move off it while unadmitted.
     const m = COVERAGE_REACH + 0.5;
     const box = (p: Vec3) => ({ min: { x: p.x - hx - m, y: p.y - m, z: p.z - hz - m }, max: { x: p.x + hx + m, y: p.y + h + m, z: p.z + hz + m } });
+    const ok = (p: Vec3): boolean => p.y + h < -0.5 && p.y > floor(p.x, p.z) && !boxTouchesOwned(own, box(p)) && (this.o.clear?.(p) ?? true);
+    const lift = (p: Vec3): Vec3 => ({ ...p, y: Math.max(p.y, floor(p.x, p.z) + 0.5) });
     const mouths = s.portals.filter(p => p.between.includes(EXTERIOR) && p.clear.width >= 2 * Math.max(hx, hz) + 0.5)
       .sort((a, b) => Math.hypot(a.center.x - at.x, a.center.y - at.y, a.center.z - at.z) - Math.hypot(b.center.x - at.x, b.center.y - at.y, b.center.z - at.z));
-    for (const m of mouths) {
-      const n = m.normal, l = Math.hypot(n.x, n.y, n.z);
+    for (const mo of mouths) {
+      const n = mo.normal, l = Math.hypot(n.x, n.y, n.z);
       for (let t = 0; t <= 80; t += 0.5) {
-        const p = { x: m.center.x + n.x / l * t, y: m.center.y + n.y / l * t - h / 2, z: m.center.z + n.z / l * t };
-        p.y = Math.max(p.y, floor(p.x, p.z) + 0.5);
-        if (!boxTouchesOwned(own, box(p)) && (this.o.clear?.(p) ?? true)) return p;
+        const p = lift({ x: mo.center.x + n.x / l * t, y: mo.center.y + n.y / l * t - h / 2, z: mo.center.z + n.z / l * t });
+        if (ok(p)) return p;
       }
     }
-    // No mouth fits: straight up out of the domain, above the seabed.
-    const p = { ...at, y: Math.max(s.domain.max.y + COVERAGE_REACH + 1, floor(at.x, at.z) + 0.5) };
-    return p;
+    for (const st of s.staging) { const p = lift({ ...st.position, y: st.position.y + 0.5 }); if (ok(p)) return p; }
+    // Widened: rings above the domain round the actor, nearest first.
+    for (let r = 0; r <= 96; r += 8) for (let a = 0; a < (r ? 16 : 1); a++) {
+      const x = at.x + r * Math.cos(a * Math.PI / 8), z = at.z + r * Math.sin(a * Math.PI / 8);
+      for (const up of [COVERAGE_REACH + 1, COVERAGE_REACH + 6, COVERAGE_REACH + 16]) {
+        const p = lift({ x, y: s.domain.max.y + up, z });
+        if (ok(p)) return p;
+      }
+    }
+    return null;
   }
-  release(): void {
+  /** Drop the safety set (the player has left); the fixed bytes stay. */
+  releaseSafety(): void {
     this.safety?.dispose(); this.safety = null; this.loadingSince = -1;
-    this.arbiter.release(this.safetyOwner); this.arbiter.release(this.fixedOwner);
+    this.arbiter.release(this.safetyOwner);
   }
+  /** Call AFTER the bake, colliders and lamp windows are freed: returns their bytes. */
+  unload(): void { this.releaseSafety(); this.arbiter.release(this.fixedOwner); }
 }
 
 /** The movement gate.

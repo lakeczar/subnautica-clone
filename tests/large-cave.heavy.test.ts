@@ -14,7 +14,7 @@ import { encodeCave, loadCaveBake, prepareCave } from "../src/render/caves/large
 import { createLargeCaveMaterial } from "../src/render/caves/large/caveMaterial.js";
 import { artBytes, createCaveLoader } from "../src/render/caves/large/loader.js";
 import { boxOverlapsTriangle, buildCollider, caveRockAt, chunkIndex, createCandidates, createCollision, gatherTriangles } from "../src/world/caves/large/collision.js";
-import { caveFineShare, caveSafetyBytes, caveWorldMap, CavePins } from "../src/world/caves/large/streaming.js";
+import { CaveAdmission, CaveArbiter, caveFineShare, caveSafetyBytes, caveWorldMap, CavePins } from "../src/world/caves/large/streaming.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
 import { WINDOW_BYTES } from "../src/world/caves/large/lampWindow.js";
 import { outside, simulate } from "./large-cave-stream-support.js";
@@ -141,6 +141,9 @@ function reachableBuffers(roots: readonly unknown[]): Map<ArrayBufferLike, strin
   return found;
 }
 
+const r0 = () => S.routes.find(x => x.id === "canopy_roots.route.craft_loop")!.path[5]!;
+const enumerated = (...roots: unknown[]): number => [...reachableBuffers(roots).keys()].reduce((n, b) => n + b.byteLength, 0);
+
 test("LC-03: every buffer a loaded cave keeps is in its accounted fixed bytes (independent enumeration)", () => {
   const loaded = loadCaveBake(S, encodeCave(prepared)), runtime = createLargeCave(S, worldFloor, loaded.layout);
   const buffers = reachableBuffers([loaded, runtime, caveWorldMap(runtime)]);
@@ -150,6 +153,20 @@ test("LC-03: every buffer a loaded cave keeps is in its accounted fixed bytes (i
   // The runtime map shares the bake's seabed lattice instead of sampling another.
   assert.equal(runtime.field.ownership.ground, loaded.collision.ownership.ground);
   assert.ok(loaded.retained.some(r => r.name === "bake" && r.bytes >= 12e6), "the decompressed bake is counted");
+  // R4: depart, a competing allocation, return. The loaded buffers stay counted throughout.
+  const cm = caveWorldMap(runtime), cost = (id: string) => loaded.artCost[loaded.index.get(chunkKey(cm.byId(id)!.coord))!]!;
+  const fixed = loaded.retainedBytes + 2 * WINDOW_BYTES, safety = caveSafetyBytes(cm, cost), budget = fixed + safety + 4 * 1048576;
+  const arbiter = new CaveArbiter({ cpu: budget, gpu: budget });
+  const instant = { *build() { yield; return { cpuBytes: 1, gpuBytes: 1, discard() {}, upload: () => ({ cpuBytes: 1, gpuBytes: 1, setVisible() {}, dispose() {} }) }; } };
+  const adm = new CaveAdmission(cm, arbiter, instant, { id: "canopy", fixed: { cpu: fixed, gpu: WINDOW_BYTES }, safety });
+  assert.ok(adm.load());
+  const dart = CRAFT_PROFILES.small, near = { x: 758, y: -56, z: -62 }, far = { x: 1100, y: -56, z: -62 };
+  assert.equal(adm.update(actorBox(near, dart), near, 0).state, "admitted");
+  assert.equal(adm.update(actorBox(far, dart), far, 1).state, "away");
+  const other = arbiter.request("other", { cpu: 1e12, gpu: 1e12 });
+  assert.ok(other.cpu + enumerated(loaded, runtime) <= budget, `grant ${other.cpu} + retained ${loaded.retainedBytes} > ${budget}`);
+  adm.update(actorBox(r0(), dart), r0(), 2);
+  assert.ok(adm.admitted && arbiter.committed().cpu <= budget, "re-admitted on return within the budget");
 });
 
 test("LC-02 with the Canopy's real chunk costs and fixed bytes: under sustained pressure the craft goes in and backs out; below fixed + safety it waits outside", () => {

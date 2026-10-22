@@ -155,24 +155,25 @@ const instantLoader = { *build() { yield; return { cpuBytes: 1, gpuBytes: 1, dis
  * holds, the simulation clock is paused (no survival tick); on rescue the
  * diver is relocated, then swims straight up through the gate; real
  * `updateSurvival` runs on every unpaused frame. */
-function reloadRun(budget: number, seconds: number, rescueAfterMs: number, other?: number) {
+function reloadRun(budget: number, seconds: number, rescueAfterMs: number, other?: number, clear?: (feet: Vec3) => boolean) {
   const arbiter = new CaveArbiter({ cpu: budget, gpu: budget });
   if (other) arbiter.request("exterior.art", { cpu: other, gpu: other });
-  const admission = new CaveAdmission(cm, arbiter, instantLoader, { id: "canopy", fixed: { cpu: FIXED, gpu: 0 }, safety: SAFETY, rescueAfterMs });
+  const admission = new CaveAdmission(cm, arbiter, instantLoader, { id: "canopy", fixed: { cpu: FIXED, gpu: 0 }, safety: SAFETY, rescueAfterMs, ...(clear ? { clear } : {}) });
   const gate = new CaveGate(cm), s = diverAt(HALL), events: GameEvent[] = [];
   let paused = 0, ticked = 0, rescued: Vec3 | null = null, minOxygen = 100, message = "";
+  const messages = new Set<string>();
   for (let f = 0; f < seconds * 60; f++) {
     const p = s.player.pose.position, now = f * 1000 / 60;
     const u = admission.update(actorBox(p, DIVER_SHAPE), { x: p.x, y: p.y + 0.8, z: p.z }, now);
-    if (u.rescue) { s.player.pose.position = { ...u.rescue }; rescued = { ...u.rescue }; message = u.message; continue; }
-    if (u.holding) { paused++; message ||= u.message; continue; }
+    if (u.rescue) { s.player.pose.position = { ...u.rescue }; rescued = { ...u.rescue }; message = u.message; messages.add(u.message); continue; }
+    if (u.holding) { paused++; message ||= u.message; messages.add(u.message); continue; }
     // Unpaused: swim up 3.4 m/s through the gate (stays at the surface once there).
     const next = { ...p, y: Math.min(-0.5, p.y + 3.4 / 60) };
     if (gate.allows(admission.safety ? admission.safety.drawn(new Map()) : new Map(), actorBox(next, DIVER_SHAPE), admission.admitted)) s.player.pose.position = next;
     s.tick++; updateSurvival(s, events); ticked++;
     minOxygen = Math.min(minOxygen, s.player.vitals.oxygen);
   }
-  return { s, paused, ticked, rescued, minOxygen, message, admission, arbiter, events };
+  return { s, paused, ticked, rescued, minOxygen, message, messages, admission, arbiter, events };
 }
 
 test("LC-02 (R3) reload inside a biome the budget cannot admit: the clock is paused while loading, then the diver is moved outside the nearest mouth and lives", () => {
@@ -182,7 +183,7 @@ test("LC-02 (R3) reload inside a biome the budget cannot admit: the clock is pau
   assert.ok(r.paused >= 239 && r.paused <= 242, `loaded (paused) for ${r.paused} frames, about 4 s`);
   assert.ok(r.rescued && outside(cm, r.rescued, DIVER_SHAPE), `rescued to ${JSON.stringify(r.rescued)}`);
   assert.ok(r.rescued!.y > worldFloor(r.rescued!.x, r.rescued!.z), "the rescue point is water above the seabed");
-  assert.match(r.message, /moved to the water outside its nearest mouth/);
+  assert.match(r.message, /moved to the water outside it/);
   assert.ok(r.ticked > 180 * 60, `survival ran ${r.ticked / 60} s, past a full air supply`);
   assert.ok(!r.events.some(e => e.type === "sound" && e.cue === "recovery") && r.s.player.vitals.health > 0, "the diver was never incapacitated");
   assert.ok(r.minOxygen > 0, `oxygen fell to ${r.minOxygen}`);
@@ -224,4 +225,50 @@ test("LC-05 two biomes' fine residencies active at once split one remainder: the
   assert.ok(both > 500, `both fine residencies active together for ${both} frames`);
   assert.ok(worst <= free, `fine art together ${(worst / 1048576).toFixed(2)} MiB > the ${(free / 1048576).toFixed(0)} MiB remainder`);
   assert.ok(arbiter.committed().cpu <= total);
+});
+
+test("LC-03 (R4) leaving a biome drops only its safety set: the fixed bytes stay reserved while its buffers are loaded, through a competing allocation and a return", () => {
+  const total = FIXED + SAFETY + 6 * 1048576, arbiter = new CaveArbiter({ cpu: total, gpu: total });
+  const admission = new CaveAdmission(cm, arbiter, instantLoader, { id: "canopy", fixed: { cpu: FIXED, gpu: 0 }, safety: SAFETY });
+  assert.ok(admission.load(), "reserve before loading");
+  const at = (p: Vec3, now: number) => admission.update(actorBox(p, DART), { x: p.x, y: p.y + 1.4, z: p.z }, now);
+  const within = (): void => { const c = arbiter.committed(); assert.ok(c.cpu <= total && c.gpu <= total, `committed ${c.cpu} > ${total}`); };
+  assert.equal(at(OUTSIDE, 0).state, "admitted");
+  // Depart well beyond the release distance.
+  const far = { x: 1100, y: -56, z: -62 };
+  assert.equal(at(far, 100).state, "away");
+  assert.ok(admission.loaded && arbiter.holds("canopy.fixed") && !arbiter.holds("canopy.safety"), "fixed bytes still reserved; safety released");
+  // Another owner asks for everything: it gets everything but the loaded cave's fixed bytes.
+  const g = arbiter.request("other", { cpu: 1e12, gpu: 1e12 });
+  assert.equal(g.cpu, total - FIXED, "the competing grant leaves the retained buffers counted");
+  within();
+  // Return: waiting outside (no priority), then priority once inside, with the fixed bytes held throughout.
+  assert.equal(at(OUTSIDE, 200).state, "waiting");
+  within();
+  const deep = r("canopy_roots.route.craft_loop")[5]!;
+  assert.equal(at(deep, 300).state, "admitted");
+  within();
+  assert.ok(arbiter.granted("other").cpu <= total - FIXED - SAFETY);
+  // Only an explicit unload (after the buffers are freed) returns the fixed bytes.
+  admission.unload();
+  assert.ok(!admission.loaded && arbiter.committed().cpu === arbiter.granted("other").cpu);
+});
+
+test("LC-06 (R4) every rescue candidate is verified: with mouths rejected it uses a checked fallback; with everything rejected it stays paused and retries", () => {
+  const budget = FIXED + SAFETY - 1048576;
+  const mouths = S.portals.filter(p => p.between.includes("exterior")).map(p => p.center);
+  // (1) Every mouth candidate rejected (anything within 40 m of a mouth).
+  const farFromMouths = (q: Vec3): boolean => mouths.every(m => Math.hypot(q.x - m.x, q.z - m.z) > 40);
+  const a = reloadRun(budget, 200, 4000, undefined, farFromMouths);
+  assert.ok(a.rescued && farFromMouths(a.rescued) && outside(cm, a.rescued, DIVER_SHAPE), `checked fallback: ${JSON.stringify(a.rescued)}`);
+  assert.ok(a.rescued!.y > worldFloor(a.rescued!.x, a.rescued!.z) && a.rescued!.y < -0.5);
+  assert.ok(a.minOxygen > 0 && a.ticked > 0, "survival resumed only after a verified relocation");
+  // (2) Every candidate rejected, the final fallback included: never relocated, paused, retrying.
+  const b = reloadRun(budget, 200, 4000, undefined, () => false);
+  assert.equal(b.rescued, null, "no unchecked relocation");
+  assert.ok(b.ticked === 0 && b.paused === 200 * 60 && b.s.player.vitals.oxygen === 100, "the clock stayed paused");
+  assert.ok([...b.messages].some(m => /retrying/.test(m)), [...b.messages].join(" | "));
+  // (3) The search itself: no unverified point is ever returned.
+  const adm = new CaveAdmission(cm, new CaveArbiter({ cpu: budget, gpu: budget }), instantLoader, { id: "x", fixed: { cpu: FIXED, gpu: 0 }, safety: SAFETY, clear: () => false });
+  assert.equal(adm.rescueTarget(actorBox(HALL, DIVER_SHAPE)), null);
 });

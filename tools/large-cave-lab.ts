@@ -148,6 +148,11 @@ const reserveOther = (bytes: number): void => { arbiter.request("other", { cpu: 
 reserveOther(Number(params.get("other") ?? 0) * 1048576);
 const caveAdmission = new CaveAdmission(cm, arbiter, loader, { id: "canopy", fixed, safety: safetyBytes, rescueAfterMs: Number(params.get("rescue") ?? 4000),
   clear: feet => world.clearance(feet, state.mode === "free" ? SHAPES.diver : SHAPES[state.mode]) });
+// The lab has already loaded the bake, colliders and lamp window: reserve
+// their bytes now, before any other owner can take them. (The game reserves
+// first and loads only on success.)
+const fixedHeld = caveAdmission.load(true);
+if (!fixedHeld) console.warn("lab: the budget cannot hold this cave's fixed bytes; it is loaded anyway (lab only)");
 const admitted = (): boolean => caveAdmission.admitted;
 let admissionState: AdmissionUpdate = { state: "away", holding: false, rescue: null, message: "" };
 let banner = "", bannerUntil = 0, rescues = 0, pausedFrames = 0;
@@ -434,7 +439,7 @@ const percentile = (a: number[], q: number): number => { const s = [...a].sort((
   fixed, safetyBytes, fineShare, arbiter, get gated() { return gated; }, admitted, holdReason,
   get admission() { return { ...admissionState, rescues, pausedFrames }; },
   /** Drop this cave's reservations (as on leaving it, or before a fresh reload). */
-  releaseCave() { caveAdmission.release(); },
+  releaseCave() { caveAdmission.unload(); caveAdmission.load(true); },
   /** Restore the player at a pose, as a save reload would. */
   restore(p: Vec3, mode: Exclude<Mode, "free">) { state.mode = mode; state.position = { ...p }; state.velocity = { x: 0, y: 0, z: 0 }; state.autopilot = null; },
   /** Another owner asks for (or releases) bytes of the shared budget; it gets only what reservations leave. */

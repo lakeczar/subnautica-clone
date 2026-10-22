@@ -86,6 +86,8 @@ export function createSim(o: SimOptions) {
   // The admission controller (fixed + coarse safety, priority when inside, loading and rescue);
   // the no-safety control reserves only the fixed bytes.
   const admission = useSafety ? new CaveAdmission(o.cm, arbiter, loader, { id, fixed: { cpu: o.fixedBytes, gpu: 0 }, safety: safetyBytes }) : null;
+  // The cave's buffers count from the moment they load: reserve before loading.
+  admission?.load();
   const fixedHeld = useSafety ? false : arbiter.reserve(`${id}.fixed`, { cpu: o.fixedBytes, gpu: 0 });
   let holding = 0, rescues = 0, fineCpu = 0;
   let p = { ...o.path[0]! }, wp = 1, frame = 0, admittedFrame = -1, heldIn = 0, heldOut = 0, unsafeMetres = 0, unsafeFrames = 0, inside = 0, coarse = 0;
@@ -95,7 +97,7 @@ export function createSim(o: SimOptions) {
     unsafeMetres, unsafeFrames, insideUnadmitted: inside, coarseFrames: coarse, final: p, firstUnsafe, reason: gate.stats.reason, holdingFrames: holding, rescues });
   return {
     get done() { return wp >= o.path.length || frame >= (o.maxFrames ?? 30000); },
-    release() { admission?.release(); arbiter.release(`${id}.fixed`); arbiter.release(`${id}.fine`); fine.dispose(); },
+    release() { admission?.unload(); arbiter.release(`${id}.fixed`); arbiter.release(`${id}.fine`); fine.dispose(); },
     /** The fine residency's own accounted bytes (excluding its external share). */
     get fineBytes() { return fineCpu; },
     result,
