@@ -4,18 +4,20 @@
  * always end it. Ecology threats lunge from where they were seen, softer first.
  * Every engaged threat has a directional edge cue beside its caption. */
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { HUNTER_ENCOUNTER as E, FIRST_STRIKE_SHARE } from "../src/content/ecology/encounter.js";
 import { HUNTER_GEOMETRY as H } from "../src/content/encounterGeometry.js";
 import { THREATS } from "../src/content/ecology/species.js";
 import { CANOPY_BASIN_ROUTE } from "../src/content/routes.js";
-import { THREAT_HOME } from "../src/content/registry.js";
+import { HULL_COLLIDERS, THREAT_HOME } from "../src/content/registry.js";
 import type { HullId } from "../src/content/registry.js";
 import { createGame, makeVehicle } from "../src/sim/state.js";
 import { completeOpening } from "../src/sim/progression.js";
 import { addItem } from "../src/sim/inventory.js";
 import { stepGame } from "../src/sim/step.js";
-import { createWorldQueries } from "../src/sim/world.js";
+import { createWorldQueries, gameWorld } from "../src/sim/world.js";
+import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
 import { hunterStandOff } from "../src/sim/hunter.js";
 import { approachCaption, HUNTER_CAPTIONS, hunterBody, updateThreat, viewAngle } from "../src/sim/hunterEncounter.js";
 import { homeOf, SEEN_CONE, UNSEEN_COMMIT_DELAY } from "../src/sim/ecology/agents.js";
@@ -243,4 +245,144 @@ test("ecology threats lunge from where they were seen, softer the first time, an
   // Deterrence is unchanged: dark and quiet is never noticed.
   const dark = createEcology(), log = run(dark, 60 * 40, () => stimulus(offset(homeOf(STALKER), 10, 0, 0), { light: 0, noise: 0.03, facing }));
   assert.equal(strikes(log).length, 0);
+});
+
+// ---------------------------------------------------------------- Sol R1 regressions
+
+/** A stationary, quiet, dark craft in pursuit at `at`, hunter at its clear stand-off. */
+function stillPursuit(hull: HullId, at: Vec3, hp: number, from: Vec3): GameState {
+  const s = createGame(); completeOpening(s); s.tick = 16; addItem(s, "suit_150", 1, "equipment", "suit");
+  s.player.mode = "piloting"; s.player.lamp = false; s.player.pose.position = { ...at };
+  const v = makeVehicle("enc1-r1", hull, at, "enc1-r1-hold"); v.health = hp;
+  s.fleet.vehicles.push(v); s.player.controlledVehicleId = v.id;
+  s.world.threat = { mode: "pursue", position: { ...from }, interest: E.interest.max, modeSeconds: 0, distraction: null, distractionSeconds: 0 };
+  s.world.threat.position = hunterStandOff(s);
+  return s;
+}
+const still: GameCommand = { type: "move", forward: 0, right: 0, vertical: 0, sprint: false, quiet: true };
+
+test("R1 ENC-1-01: the warning bump's push never turns into collision damage beside real rock", () => {
+  const rock = gameWorld();
+  // Each hull just clear of canopy.cover's west face (bitten from the west, pushed east into it)
+  // and of canopy.lab.back's outer face (bitten from the south, pushed north into it).
+  let ran = 0;
+  for (const hull of ["dart", "creel", "mantle"] as const) for (const face of ["cover", "lab"] as const) for (const hp of [0.1, 0.6, 3]) {
+    const r0 = HULL_COLLIDERS[hull].radius + 0.03;
+    const at = face === "cover" ? { x: 103 - r0, y: -100, z: -118.5 } : { x: 116, y: -116, z: -130 - r0 };
+    const from = face === "cover" ? { ...at, x: at.x - 15 } : { ...at, z: at.z - 15 };
+    assert.ok(rock.clearance(at, HULL_COLLIDERS[hull]), `${hull} starts clear of ${face}`);
+    let s = stillPursuit(hull, at, hp, from);
+    ran++;
+    const events: GameEvent[] = [];
+    for (let i = 0; i < 180; i++) { const r = stepGame(s, [still], rock); s = r.state; events.push(...r.events); }
+    const v = s.fleet.vehicles[0]!, label = `${hull} at ${face} from ${hp}`;
+    assert.ok(events.some(e => e.type === "notice" && e.message === HUNTER_CAPTIONS.bump) || hp <= 1, `${label}: the bump landed`);
+    assert.ok(rock.clearance(v.pose.position, HULL_COLLIDERS[hull]), `${label}: never pushed into rock`);
+    assert.equal(events.filter(e => e.type === "impact").length, 0, `${label}: the push is never an impact`);
+    assert.equal(v.disabled, false, label);
+    assert.ok(v.health >= Math.min(hp, 1) - 1e-9, `${label}: kept ${v.health}`);
+    assert.ok(Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) < 1.5, `${label}: the push adds no propulsion`);
+  }
+  assert.equal(ran, 18);
+  // Ordinary powered collision into the same rock still damages.
+  let s = stillPursuit("dart", { x: 99.38, y: -100, z: -118.5 }, 100, { x: 84.38, y: -100, z: -118.5 });
+  // canopy.cover is east of this position: face it and drive in.
+  s.world.threat.mode = "idle"; s.player.pose.yaw = Math.PI / 2; s.fleet.vehicles[0]!.pose.yaw = Math.PI / 2;
+  s.fleet.vehicles[0]!.velocity = { x: 8, y: 0, z: 0 };
+  let hit = 0;
+  for (let i = 0; i < 60; i++) {
+    const r = stepGame(s, [{ type: "move", forward: 1, right: 0, vertical: 0, sprint: true }], rock); s = r.state;
+    hit += r.events.filter(e => e.type === "impact").length;
+  }
+  assert.ok(hit > 0 && s.fleet.vehicles[0]!.health < 100, "powered collisions keep their damage");
+  // In open water the bump still pushes the craft away from the mouth, without velocity.
+  const open = pursuit("dart"), v0 = { ...open.fleet.vehicles[0]!.pose.position }, mouth = { ...open.world.threat.position };
+  const r = stepGame(open, [], empty), v = r.state.fleet.vehicles[0]!;
+  assert.equal(bites(r.events).length, 1);
+  const away = (v.pose.position.x - v0.x) * (v0.x - mouth.x) + (v.pose.position.z - v0.z) * (v0.z - mouth.z);
+  assert.ok(away > 0 && Math.hypot(v.pose.position.x - v0.x, v.pose.position.z - v0.z) <= E.knock.dart + 1e-9);
+  assert.deepEqual(r.state.player.pose.position, v.pose.position);
+});
+
+test("R1 ENC-1-02: a validated save at the old interest maximum still loses the hunter when quiet and dark", () => {
+  for (const interest of [E.interest.max, 12]) {
+    const fixture = decodeSave(readFileSync("tests/fixtures/earned-c06.json", "utf8"));
+    assert.ok(fixture.ok, fixture.ok ? "" : fixture.error);
+    let s = fixture.value.state;
+    const v = s.fleet.vehicles.find(v => v.hull === "dart")!;
+    v.pose = { ...v.pose, position: { x: 132, y: -110, z: -112 }, yaw: 0, pitch: 0 }; v.velocity = { x: 0, y: 0, z: 0 }; v.health = 3;
+    s.player.controlledVehicleId = v.id; s.player.mode = "piloting"; s.player.pose = structuredClone(v.pose);
+    s.player.velocity = { x: 0, y: 0, z: 0 }; s.player.lamp = false;
+    s.world.threat = { mode: "pursue", position: { x: 147, y: -110, z: -112 }, interest, modeSeconds: 0, distraction: null, distractionSeconds: 0 };
+    s.world.threat.position = hunterStandOff(s);
+    const encoded = encodeSave(createEnvelope(s, fixture.value.meta));
+    assert.ok(encoded.ok, encoded.ok ? "" : encoded.error);
+    const loaded = decodeSave(encoded.value);
+    assert.ok(loaded.ok, loaded.ok ? "" : loaded.error);
+    s = loaded.value.state; assert.equal(s.world.threat.interest, interest, "the schema accepts it");
+    let ended = -1;
+    for (let i = 0; i < 60 * 10 && ended < 0; i++) {
+      s = stepGame(s, [still], gameWorld()).state;
+      assert.ok(s.world.threat.interest <= E.interest.max, "normalised on every update");
+      if (s.world.threat.mode === "disengage") ended = i;
+    }
+    const after = s.fleet.vehicles.find(x => x.id === v.id)!;
+    assert.ok(ended >= 0 && ended / 60 <= E.interest.max / E.interest.dark + 0.1, `interest ${interest}: ended at ${ended / 60} s`);
+    assert.equal(after.disabled, false, `interest ${interest}`); assert.ok(after.health >= 1 - 1e-9, `interest ${interest}: ${after.health}`);
+  }
+});
+
+test("R1 view gate: an investigation off the view waits for the view or the timeout before it pursues", () => {
+  const setup = (): GameState => {
+    const s = pursuit("dart"); s.world.threat.mode = "investigate"; s.world.threat.modeSeconds = E.pursuit.earliest + 0.1;
+    return s;
+  };
+  // Turned away from the animal on every step: no pursuit until the latest moment, then pursuit.
+  const away = setup(); let pursuedAt = -1;
+  for (let i = 0; i < 60 * 8 && pursuedAt < 0; i++) {
+    const t = away.world.threat.position, p = away.player.pose.position;
+    away.player.pose.yaw = Math.atan2(-(t.x - p.x), (t.z - p.z));
+    away.player.pose.pitch = 0;
+    away.tick++; updateThreat(away, 1, [], empty);
+    assert.ok(away.world.threat.mode === "investigate" || away.world.threat.mode === "pursue");
+    if (away.world.threat.mode === "pursue") pursuedAt = away.world.threat.modeSeconds;
+    else assert.ok(viewAngle(away, hunterBody(away)) > E.pursuit.view || away.world.threat.modeSeconds > E.pursuit.latest ||
+      Math.hypot(t.x - p.x, t.y - p.y, t.z - p.z) >= E.pursuit.range, "only a seen animal pursues early");
+  }
+  assert.ok(pursuedAt >= 0, "the timeout keeps the threat real");
+  const log: string[] = [];
+  const timedOut = setup(); for (let i = 0; i < 60 * 8; i++) {
+    const t = timedOut.world.threat.position, p = timedOut.player.pose.position;
+    timedOut.player.pose.yaw = Math.atan2(-(t.x - p.x), (t.z - p.z)); timedOut.tick++;
+    const before = timedOut.world.threat.modeSeconds; updateThreat(timedOut, 1, [], empty);
+    if (timedOut.world.threat.mode === "pursue") { log.push(`pursue after ${before.toFixed(2)} s`); assert.ok(before + 1 / 60 >= E.pursuit.latest - 1e-9, log.join()); break; }
+  }
+  assert.equal(log.length, 1, "turned away, it pursues only at the timeout");
+  // Facing it, inside range: it pursues as soon as it is seen, before the timeout.
+  const seen = setup(); let seenAt = -1;
+  for (let i = 0; i < 60 * 8 && seenAt < 0; i++) {
+    const t = hunterBody(seen), p = seen.player.pose.position;
+    seen.player.pose.yaw = Math.atan2(t.x - p.x, -(t.z - p.z));
+    seen.player.pose.pitch = Math.atan2(t.y - p.y - 1.05, Math.hypot(t.x - p.x, t.z - p.z));
+    seen.tick++; const before = seen.world.threat.modeSeconds; updateThreat(seen, 1, [], empty);
+    if (seen.world.threat.mode === "pursue") seenAt = before;
+  }
+  assert.ok(seenAt >= 0 && seenAt < E.pursuit.latest - 0.5, `seen: pursued after ${seenAt} s`);
+});
+
+test("R1 cadence: a loud craft that stays is bitten about every 4 s, and disabled about 20 s after the bump", () => {
+  // Loudness 1 throughout: a craft that keeps its engine loud and stays put.
+  for (const hull of ["dart", "creel"] as const) {
+    const s = pursuit(hull), at: number[] = [], losses: number[] = [];
+    for (let i = 0; i < 60 * 40 && health(s) > 0; i++) {
+      s.tick++; const events: GameEvent[] = []; updateThreat(s, 1, events, empty);
+      for (const b of bites(events)) { at.push(i / 60); losses.push(b.loss); }
+    }
+    assert.equal(health(s), 0, `${hull}: still disabled`);
+    const gaps = at.slice(1).map((t, i) => t - at[i]!);
+    assert.ok(gaps.length >= 4 && gaps.every(g => g >= 3.5 && g <= 4.5), `${hull}: gaps ${JSON.stringify(gaps)}`);
+    const total = at.at(-1)! - at[0]!;
+    assert.ok(total >= 16 && total <= 24, `${hull}: bump to disabled in ${total} s`);
+    assert.deepEqual(losses.slice(0, 5), [...E.bites.vehicle]);
+  }
 });

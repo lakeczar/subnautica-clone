@@ -44,9 +44,11 @@ test("a first hull bite is a warning bump: one transient event with its origin, 
   assert.ok(!result.events.some(e => e.type === "impact")); assert.deepEqual(s, before);
   assert.deepEqual(Object.keys(hits[0]!).sort(), ["healthAfter", "loss", "origin", "source", "target", "type"]);
   assert.doesNotMatch(JSON.stringify(result.state), /threat-damage|healthAfter|biteLoss|lastBite/);
-  // The bump pushes the craft away from the mouth and starts this cycle's withdrawal.
-  const v = result.state.fleet.vehicles[0]!, t = result.state.world.threat.position;
-  assert.ok(v.velocity.x * (v.pose.position.x - t.x) + v.velocity.z * (v.pose.position.z - t.z) > 0);
+  // The bump pushes the craft away from the mouth (a swept displacement that
+  // leaves velocity alone, R1 ENC-1-01) and starts this cycle's withdrawal.
+  const v = result.state.fleet.vehicles[0]!, t = result.state.world.threat.position, was = s.fleet.vehicles[0]!;
+  assert.ok((v.pose.position.x - was.pose.position.x) * (was.pose.position.x - t.x) + (v.pose.position.z - was.pose.position.z) * (was.pose.position.z - t.z) > 0);
+  assert.ok(Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) < 1e-6, "the push is not propulsion");
   assert.equal(hunterPhase(result.state).withdrawing, true);
   assert.ok(result.events.some(e => e.type === "notice" && /warning bump/i.test(e.message)));
 });

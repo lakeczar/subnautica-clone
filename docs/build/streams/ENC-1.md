@@ -1,6 +1,14 @@
 # ENC-1: threats you can see and read
 
-Opus 5.5 high. Branch `t3/enc-1-readable-threats`, from C4 stage A at `b08747f`. Code `5c76abb` (evidence built from it). Answers M2 audit issue #4.
+Opus 5.5 high. Branch `t3/enc-1-readable-threats`, rebased onto root `82248e7` (C4 stage A and ATM-1). R0 code `5c76abb` (the 3090 evidence below was built from it); R1 fixes in the commit after it. Answers M2 audit issue #4.
+
+## R1 fixes (Sol R1, changes-needed)
+- **ENC-1-01 (P2), the bump's knockback could disable a craft against rock.** The knockback is now one swept, level displacement through the hull's own `moveHull`. It stops at rock and never touches velocity, so `step.ts` can't charge it as an impact. Ordinary powered collisions keep their damage. The distances are 0.8 m for the Dart and Hush, 0.6 m for the Spindle, 0.5 m for the Creel and 0.45 m for the Mantle; the carrier and the diver take none.
+- **ENC-1-02 (P2), a save could carry interest 12 past the escape.** Interest is now clamped to the new maximum, 7, at the start of every update, decay included, so a loaded 12 is normalised on its first step. The schema still accepts 12.
+- **P3, view gate:** a new test turns the actor away from the investigating animal on every step. It must not pursue before the 10 s timeout, and it must pursue at it. Facing the animal, it pursues early.
+- **P3, cadence:** each bite now starts a 3.5 s withdrawal (`cycleSeconds` 5.5, `contactSeconds` 2). With the return swim, a loud craft that stays is bitten about every 4 s (3.98 s measured) and disabled about 20 s after the bump. A test pins gaps of 3.5–4.5 s and 16–24 s from bump to disabled.
+- **The new tests were checked against their defects.** Each fails when its fix is reverted in the compiled code: velocity knockback, no clamp, no view gate, or the 4 s cycle. The rock test runs 18 composed 3 s cases: the Dart, Creel and Mantle, at `canopy.cover` and `canopy.lab.back`, at hull 0.1, 0.6 and 3. The interest test round-trips the `earned-c06` fixture through `encodeSave`/`decodeSave` at interest 7 and 12.
+- **Merge note for C4 B:** in `ui/view.ts`, keep both `#threat-edge` and C4's region and objective header. In `ecology/stimulus.ts`, keep both `facing` and C4's profile-based lamp output.
 
 ## Outcome
 The Canopy sound hunter now teaches rather than kills:
@@ -8,9 +16,9 @@ The Canopy sound hunter now teaches rather than kills:
 - **Paired calls:** it swims toward the noise, and an edge pulse points at it.
 - **Investigating:** it makes a **silhouette pass**, weaving in profile about 11 m across the bow along the view's heading and pitch. It begins its pursuit only once it is within 18 m and inside a 0.55 rad cone of the view; after 10 s it pursues regardless.
 - **Pursuit:**
-  - **The first contact is a 6% warning bump with knockback and a caption.** It never takes the last point of hull.
-  - **Then one bite per 4 s contact cycle,** ramping 10 → 15 → 20 → 25 (the diver's ramp is 10 → 14 → 18 → 22).
-  - **A loud craft that stays is still disabled,** about 18 s after the bump.
+  - **The first contact is a 6% warning bump that pushes the craft back and shows a caption.** It never takes the last point of hull, and the push never turns into collision damage.
+  - **Then bites about every 4 s,** ramping 10 → 15 → 20 → 25 (the diver's ramp is 10 → 14 → 18 → 22).
+  - **A loud craft that stays is still disabled,** about 20 s after the bump.
   - **Quiet and dark ends it** in about 2 s; quiet with the lamp on in about 5 s; cover or a boosted retreat end it too.
 - **Ecology threats** (glare stalker, layer skate; the hollow choir is sessile):
   - their stand-off leans toward the actor's view;
@@ -30,7 +38,7 @@ The Canopy sound hunter now teaches rather than kills:
   - `hunterPassPoint` drives the investigate target and its facing;
   - warn now closes at 4 m/s to 24 m;
   - `H.investigateGap` and `H.investigateSpeed` are retired.
-- **`content/encounterGeometry.ts`:** `cycleSeconds` goes from 3 to 4, giving a 2 s withdrawal after each bite.
+- **`content/encounterGeometry.ts`:** `cycleSeconds` goes from 3 to 5.5, giving a 3.5 s withdrawal after each bite.
 - **Ecology (`sim/ecology/*`):**
   - `Stimulus.facing` is optional; without it there are no view rules, so S4's fixtures are unchanged;
   - `stimulusFrom` fills it in;
@@ -47,14 +55,20 @@ The Canopy sound hunter now teaches rather than kills:
   - The damage sound fires once per bite, not every 60 ticks.
   - Investigate emits a `threat` notice.
   - The positional `threat-call` still fires at warn and pursue only.
-- **Saves:** no persisted change. The bite cycle is derived from the saved `modeSeconds`: pursuit time holds just before cycle 0's withdrawal until the bump lands, and each bite jumps to its cycle's withdrawal. Interest is now capped at 7, which the validator's range accepts.
+- **Saves:** no persisted change. The bite cycle is derived from the saved `modeSeconds`: pursuit time holds just before cycle 0's withdrawal until the bump lands, and each bite jumps to its cycle's withdrawal. Interest is clamped to 7 on every update; the validator still accepts up to 12, and a loaded 12 is normalised on its first step.
 
 ## The reserve cell: a hint, not an economy change
 The save validator pins exactly two crafted cells, so a third (starter) cell would need a schema change. Quiet running fully counters the hunter without G. So the fix is information at the two moments it matters:
 - **the approach caption,** which says "Your reserve cells are in the pod locker; carry one…" or "G spends 25…", depending on what is carried;
 - **the cargo panel's dive check.**
 
-## Checks (at `5c76abb`)
+## Checks
+**R1, on root `82248e7`:**
+- **`npm run test:fast`:** 1,109 out of 1,109 pass, including 11 ENC-1 tests (4 of them new).
+- **Heavy tests:** `encounter-art` and `ecology-render` pass.
+- **`npm run playthrough`:** exit 0. All 5 scenarios pass, with no blockers, and both routes reach the ending. Milestone reloads match in every scenario (14 or 15 saves each).
+
+**R0, at `5c76abb`:**
 - **`npm run test:fast`:** 1,095 out of 1,095 pass, 7 of them new; the baseline was 1,088.
 - **The existing hunter tests that pinned 12%/s continuous bites were rewritten to the new contract,** without loosening their geometry checks. They are in `m2-threat-damage`, `m2-encounter-contact`, `m2-hunter-reconciliation`, `expedition`, `encounter-signals` and `app`. Contact assertions now probe the bite's own contact phase.
 - **All ecology suites pass unchanged,** including `ecology-adverse`.
@@ -69,6 +83,8 @@ Setup: ANGLE GL-EGL on the RTX 3090, keys only. The save was derived headless wi
 2. Investigate: the silhouette pass in view ([02](enc1/02-silhouette-pass-in-view.webp), [03](enc1/03-pass-closing-ahead.webp)).
 3. Pursuit: the bump, 100 → 94, with a flash and caption ([04](enc1/04-warning-bump-flash-and-caption.webp)). Staying loud brought the ramp bite, 94 → 84 ([05](enc1/05-ramp-bite-edge-flash.webp)).
 4. L plus Z and backing away: "Calls fading" after about 2 s, at 84% hull ([06](enc1/06-quiet-dark-disengaged.webp)).
+
+R0 knockback and cadence; R1 changes only those two, and the sequence above is otherwise unchanged.
 
 **Run B (holding Z on the same route):** never noticed; arrived at the lab parking at 100% hull ([07](enc1/07-quiet-run-never-noticed.webp)).
 

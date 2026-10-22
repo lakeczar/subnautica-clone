@@ -5,7 +5,7 @@
  * survival.ts (which re-exports `updateThreat`); geometry stays in hunter.ts. */
 import { HUNTER_ENCOUNTER as E } from "../content/ecology/encounter.js";
 import { HUNTER_GEOMETRY as H } from "../content/encounterGeometry.js";
-import { THREAT_HOME } from "../content/registry.js";
+import { HULL_COLLIDERS, THREAT_HOME } from "../content/registry.js";
 import { lampOn } from "./ecologyLink.js";
 import { cabinHull } from "./fleet.js";
 import { moveHunter } from "./hunter.js";
@@ -14,7 +14,7 @@ import { distance } from "./inventory.js";
 import { behindCover, exposure } from "./survival.js";
 import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
 import { PULSE_CHARGE_COST } from "./vehicles.js";
-import { gameWorld } from "./world.js";
+import { gameWorld, moveHull } from "./world.js";
 
 const DT = 1 / 60;
 /** Latest pursuit time before the warning bump: just inside cycle 0's contact phase. */
@@ -92,6 +92,9 @@ export function updateThreat(
     t.distractionSeconds = Math.max(0, t.distractionSeconds - DT);
     if (!t.distractionSeconds) t.distraction = null;
   }
+  // The cap holds on every step, not only while loud: a save from before
+  // ENC-1 can carry up to 12, which would outlast the quiet, dark escape.
+  t.interest = Math.min(E.interest.max, t.interest);
   if (territory && !cover && loudness > 0.35)
     t.interest = Math.min(E.interest.max, t.interest + loudness * DT * 2);
   else t.interest = Math.max(0, t.interest - DT * (cover ? E.interest.cover : lampOn(s) ? E.interest.lit : E.interest.dark));
@@ -128,12 +131,12 @@ export function updateThreat(
     change("idle");
   const motion = moveHunter(s, world);
   t.position = motion.position;
-  if (motion.contact.biting && !behindCover(p, t.position) && !exposure(s).refuge && !t.distraction) bite(s, events);
+  if (motion.contact.biting && !behindCover(p, t.position) && !exposure(s).refuge && !t.distraction) bite(s, events, world);
 }
 
 /** One bite, then withdrawal for the rest of this contact cycle. The warning
  * bump (cycle 0) never takes the last point of health. */
-function bite(s: GameState, events: GameEvent[]): void {
+function bite(s: GameState, events: GameEvent[], world: WorldQueries): void {
   const t = s.world.threat, cycle = biteCycle(t.modeSeconds);
   const controlled = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
   const v = controlled ?? cabinHull(s);
@@ -147,11 +150,15 @@ function bite(s: GameState, events: GameEvent[]): void {
       target: { kind: "vehicle", vehicleId: v.id }, loss, healthAfter: v.health });
     const knock = controlled ? E.knock[controlled.hull] : 0, dx = v.pose.position.x - t.position.x, dz = v.pose.position.z - t.position.z;
     const n = Math.hypot(dx, dz);
-    // A bite that disables leaves the wreck where it was lost.
+    // A level push through the hull's own sweep: it stops at rock and leaves
+    // velocity alone, so it can never be charged as a collision. A bite that
+    // disables leaves the wreck where it was lost.
     if (knock > 0 && n > 1e-6 && v.health > 0) {
-      v.velocity.x += dx / n * knock;
-      v.velocity.z += dz / n * knock;
-      s.player.velocity = { ...v.velocity };
+      const moved = moveHull(world, v.pose.position, { x: dx / n * knock, y: 0, z: dz / n * knock }, HULL_COLLIDERS[controlled!.hull]);
+      if (Number.isFinite(moved.position.x) && Number.isFinite(moved.position.z)) {
+        v.pose.position = { ...v.pose.position, x: moved.position.x, z: moved.position.z };
+        s.player.pose.position = { ...v.pose.position };
+      }
     }
   } else {
     const before = s.player.vitals.health;

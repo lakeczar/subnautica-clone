@@ -24,11 +24,12 @@ test("post-sweep contact uses the real mouth and visible skin for every controll
   for(const hull of [null,"dart","hush","mantle","creel","spindle","hearthline"] as const) {
     for(const yaw of [0,.7,Math.PI,-1.4]) {
       const s=fixture(hull), v=s.fleet.vehicles[0]; if(v){v.pose.yaw=yaw;v.pose.pitch=hull==="dart"?.55:0;}
-      for(let i=0;i<180;i++) {s.tick++;const events:GameEvent[]=[];updateThreat(s,1,events,empty);
+      for(let i=0;i<180;i++) {s.tick++;const before=structuredClone(s),events:GameEvent[]=[];updateThreat(s,1,events,empty);
         for(const event of events.filter(e=>e.type==="threat-damage")) {
-          // ENC-1: a bite sends the animal into this cycle's withdrawal; probe
-          // the same pose at the cycle's contact phase.
-          const probe=structuredClone(s);probe.world.threat.modeSeconds=Math.floor(s.world.threat.modeSeconds/H.cycleSeconds)*H.cycleSeconds;
+          // ENC-1: a bite sends the animal into this cycle's withdrawal and pushes
+          // the craft away; probe the animal's bite pose against the actor as it
+          // was bitten, at the cycle's contact phase.
+          const probe=structuredClone(before);probe.world.threat.modeSeconds=Math.floor(s.world.threat.modeSeconds/H.cycleSeconds)*H.cycleSeconds;
           const c=hunterContact(probe,s.world.threat.position,empty);
           assert.ok(c.biting&&c.clear&&!c.penetrating);assert.ok(c.gap<=H.reach);assert.ok(event.loss>0);
         }
