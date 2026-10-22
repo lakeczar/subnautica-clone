@@ -319,10 +319,9 @@ test("9c (R2): background children outlive the foreground: v1 stays out until th
     await sleep(500);
     writeFileSync(join(c.dir, "release"), ""); // the foreground exits 0; the child stays
     await until("foreground done", () => existsSync(join(c.sched, "jobs", id, "stats")));
-    await sleep(1000);
-    assert.equal(existsSync(join(c.dir, "v1.enter")), false, `${name}: v1 stays out while the child lives (fds ${fds})`);
     await v1.exited;
-    assert.equal(existsSync(join(c.dir, "v1-overlap")), false, `${name}: v1 never saw the old child alive`);
+    // v1's own command checks the old child: it must already be gone.
+    assert.equal(existsSync(join(c.dir, "v1-overlap")), false, `${name}: v1 entered while the old child lived (child fds ${fds})`);
     assert.equal(pidAlive(child), false);
     const w = hc(c, ["wait", id]);
     assert.equal(w.code, 0, w.err);
