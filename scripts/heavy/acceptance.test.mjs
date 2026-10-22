@@ -191,6 +191,7 @@ test("7: an exclusive job drains the lane and runs alone, express included", asy
   assert.equal(rx.tokens, 4); assert.equal(rx.memMiB, 6144); assert.equal(rx.gpu, true);
   assert.ok(rx.context && rx.context.samples >= 1, "load and PSI recorded for the measurement");
   assert.match(readFileSync(join(c.sched, "jobs", X, "output.log"), "utf8"), /cpus=4 lease=yes/);
+  assert.doesNotMatch(readFileSync(join(c.sched, "ledger.jsonl"), "utf8"), /legacy-holder/, "a v2 exclusive job is not mistaken for a v1 holder");
 });
 
 test("8: the job survives its caller; a fresh wait returns its code; resubmitting joins the same ticket", async () => {
@@ -287,7 +288,11 @@ test("12: legacy bridge: a v1 holder blocks v2; a v1 waiter pauses v2 until it r
   const v1 = join(c.dir, "heavy-check-v1.sh");
   const v1src = spawnSync("git", ["-C", here, "show", "1ccce66:scripts/heavy-check.sh"], { encoding: "utf8" }).stdout;
   writeFileSync(v1, v1src.replace("/work/tmp/siltwake-heavy-check.lock", c.legacy).replace('unit="siltwake-heavy-', `unit="sched1test-v1-${c.n}-`), { mode: 0o755 });
-  const v1run = (cmd) => spawn("bash", [v1, "--deadline", "60", "sh", "-c", cmd], { cwd: c.dir, env: c.env, stdio: "ignore" });
+  const v1run = (cmd) => {
+    const child = spawn("bash", [v1, "--deadline", "60", "sh", "-c", cmd], { cwd: c.dir, env: c.env, stdio: "ignore" });
+    child.exited = new Promise((r) => child.on("exit", r));
+    return child;
+  };
   // (a) v1 holds the lock: v2 waits.
   const holder = v1run(`date +%s%3N > ${c.dir}/v1a.start; sleep 4; date +%s%3N > ${c.dir}/v1a.end`);
   await until("v1 holder", () => existsSync(join(c.dir, "v1a.start")));
@@ -296,7 +301,7 @@ test("12: legacy bridge: a v1 holder blocks v2; a v1 waiter pauses v2 until it r
   assert.equal(blockedBy(c, a), "legacy");
   const ra = await done(c, a);
   assert.ok(ra.admittedAt >= Number(readFileSync(join(c.dir, "v1a.end"), "utf8")), "v2 ran after the v1 holder");
-  await new Promise((r) => holder.on("exit", r));
+  await holder.exited;
   // (b) v2 running (shared); a v1 waiter arrives; a later v2 job waits until the v1 job has run.
   const b = submit(c, c.wt("b"), "--class", "quick", "--", "sleep", "4");
   await running(c, b);
@@ -310,7 +315,7 @@ test("12: legacy bridge: a v1 holder blocks v2; a v1 waiter pauses v2 until it r
   const v1start = Number(readFileSync(join(c.dir, "v1b.start"), "utf8"));
   assert.ok(v1start >= rb.endedAt - 50, "v1 never overlapped the v2 job");
   assert.ok(rd.admittedAt >= v1start, "the paused v2 job ran after the v1 waiter acquired");
-  await new Promise((r) => waiter.on("exit", r));
+  await waiter.exited;
   assert.equal(statSync(c.legacy).ino, inode);
   const events = readFileSync(join(c.sched, "ledger.jsonl"), "utf8");
   assert.match(events, /"event":"legacy-holder"/, "v1 acquisitions are recorded");

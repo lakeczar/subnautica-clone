@@ -7,6 +7,9 @@
 # took effect (WORKER_RESOURCE_LIMITS: verify before the heavy command), runs
 # the command under its deadline, then saves the scope's own accounting
 # (memory.peak, OOM kills, CPU time) before the scope empties and disappears.
+# The scope is delegated: the heavy test runner may move these processes into a
+# leaf and give each test file a child cgroup (scripts/heavy-containment.mjs);
+# the paths below stay the scope's own.
 jobdir=$1 deadline=$2 expect_max=$3
 shift 3
 cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
@@ -23,6 +26,7 @@ rc=$?
   echo "rc=$rc"
   echo "peak=$(cat "$cg/memory.peak" 2>/dev/null)"
   sed -n 's/^oom_kill /oom_kill=/p' "$cg/memory.events"
+  sed -n 's/^oom /oom_local=/p' "$cg/memory.events.local"
   sed -n 's/^usage_usec /usage_usec=/p' "$cg/cpu.stat"
 } >"$jobdir/stats"
 exit "$rc"

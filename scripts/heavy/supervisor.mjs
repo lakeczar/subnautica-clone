@@ -6,7 +6,7 @@
 // Started by `submit` in its own session (and its own systemd scope, so the
 // agent's tool call ending does not take it down). It enqueues the ticket,
 // admits it when the plan says so, holds the legacy lock in shared mode for
-// the run (exclusive for an exclusive job), runs the command in a capped scope
+// the run, runs the command in a capped scope
 // in the heavy slice, records the result and the ledger line, and frees the
 // reservation. If it dies, the next transaction stops its scope and frees it.
 import { spawn, spawnSync } from "node:child_process";
@@ -109,7 +109,10 @@ function tryAdmit() {
     const p = plan(state, now, host, cfg);
     const mine = p.admit.find((a) => a.id === id);
     if (!mine) return { changed, result: p.blocked[id] ?? "queued" };
-    bridgeFd = flockFd(cfg.legacyLock, { shared: !t.req.exclusive });
+    // Always shared, exclusive jobs included: shared already shuts v1 out, the
+    // plan keeps an exclusive job alone, and an exclusive (WRITE) holder of the
+    // old lock then always means a v1 caller, which the ledger records.
+    bridgeFd = flockFd(cfg.legacyLock, { shared: true });
     if (bridgeFd == null) return { changed, result: "legacy" };
     unit = `${cfg.unitPrefix}-${basename(t.worktree).replace(/[^A-Za-z0-9_.-]/g, "_")}-${id}`;
     Object.assign(t, { state: "running", admittedAt: now, express: mine.express, unit, mode, hostAtAdmit: { nproc: host.nproc, memAvailableMiB: host.memAvailableMiB } });
@@ -148,7 +151,7 @@ const args = [
   // SCHED-1). At MemoryMax the kernel still reclaims page cache before it
   // OOM-kills, so the job gets an explicit OOM instead.
   "-p", `MemoryMax=${req.memMiB}M`, "-p", "MemoryHigh=infinity", "-p", "MemorySwapMax=0",
-  "-p", `CPUWeight=${Math.min(10000, req.tokens * 100)}`, "-p", "TimeoutStopSec=10s",
+  "-p", `CPUWeight=${Math.min(10000, req.tokens * 100)}`, "-p", "TimeoutStopSec=10s", "-p", "Delegate=yes",
   "sh", join(here, "scope-run.sh"), dir, String(req.deadline), String(memBytes), ...t.argv,
 ];
 const context = req.exclusive ? { samples: 0, load1Max: 0, cpuSomeMax: 0, memFullMax: 0 } : null;
@@ -169,15 +172,18 @@ const leftovers = scopeActive(unit);
 if (leftovers) systemctl("stop", `${unit}.scope`); // descendants that outlived the command
 const ranS = (Date.now() - started) / 1000;
 let code = rawCode ?? 128 + (signal === "SIGKILL" ? 9 : 15), label = null;
-const oomKills = Number(stats.oom_kill ?? 0);
+// oom_kill counts kills anywhere in the scope, including a sub-limit such as a
+// heavy test file's own budget cgroup; only an OOM at the scope's own limit
+// (memory.events.local) means the job outgrew its reservation.
+const oomKills = Number(stats.oom_kill ?? 0), reservationOom = Number(stats.oom_local ?? 0) > 0;
 if (cancelRequested || existsSync(join(dir, "cancelled"))) { code = 75; label = "cancelled"; }
 else if (existsSync(join(dir, "refused"))) label = "refused: scope limits not applied";
-else if (oomKills > 0 && code !== 0) {
+else if (reservationOom && code !== 0) {
   code = 137;
   label = `oom: class ${req.class} reservation ${req.memMiB} MiB; rerun with --class exclusive or --mem <more> (up to the class maximum)`;
 } else if ((code === 124 || code === 137) && ranS >= req.deadline - 1) { code = 124; label = `deadline ${req.deadline}s exceeded`; }
 else if (code === 137 || signal) label = "killed";
-if (oomKills > 0 && code === 0) note(`warning: ${oomKills} process(es) in the job were OOM-killed, but the command exited 0`);
+if (oomKills > 0 && !label) note(`${oomKills} process(es) were OOM-killed inside the job by a sub-limit (for example a heavy test file's budget), not by its ${req.memMiB} MiB reservation`);
 if (context && (context.cpuSomeMax >= 10 || context.memFullMax >= 1)) context.disturbed = true;
 
 const result = {
@@ -186,7 +192,7 @@ const result = {
   submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), ranS: Math.round(ranS * 10) / 10,
   peakMiB: stats.peak ? Math.ceil(Number(stats.peak) / 1048576) : null,
   cpuS: stats.usage_usec ? Math.round(Number(stats.usage_usec) / 1e5) / 10 : null,
-  oomKills, leftovers, head: tree.head, dirty: tree.dirty, headAtAdmit: treeAtAdmit.head, dirtyAtAdmit: treeAtAdmit.dirty,
+  oomKills, reservationOom, leftovers, head: tree.head, dirty: tree.dirty, headAtAdmit: treeAtAdmit.head, dirtyAtAdmit: treeAtAdmit.dirty,
   changedTree, context,
 };
 writeJsonAtomic(join(dir, "exit.json"), result);

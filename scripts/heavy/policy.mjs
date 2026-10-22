@@ -105,7 +105,9 @@ export function resolveRequest(opts, { T, M, mode = "normal" }) {
  * mode the job holds the whole lane, as in v1, so only the v1 variables are set
  * and TT-1's own defaults apply. */
 export function jobEnv(ticket, req, cfg = DEFAULTS) {
-  const env = { SILTWAKE_JOB_TICKET: ticket.id, SILTWAKE_HEAVY_LOCK_HELD: "1" };
+  // The scope is delegated (Delegate=yes), so TT-1's heavy runner may give each
+  // test file a child cgroup inside the job's reservation.
+  const env = { SILTWAKE_JOB_TICKET: ticket.id, SILTWAKE_HEAVY_LOCK_HELD: "1", SILTWAKE_HEAVY_CGROUP: "delegated" };
   if (req.gpu) env.SILTWAKE_GPU_LEASE = ticket.id;
   if (req.serial) return env;
   Object.assign(env, {
