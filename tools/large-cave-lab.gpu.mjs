@@ -137,7 +137,32 @@ try {
       await page.waitForFunction(() => window.lcLab.state.autopilot === null, null, { timeout: 120000 }).catch(() => {});
       result.stress.push({ case: "budget 48 MiB: every free byte taken after entry and kept", end: await snap(page),
         finished: await page.evaluate(() => window.lcLab.state.autopilot === null), report: await page.evaluate(f => window.lcLab.report(f), start) });
-      await page.screenshot({ path: join(out, "stress-48-coarse.png") });
+      await page.close();
+    }
+    // (4) R3: reload a diver inside the hall at 38 MiB (fixed fits, fixed + safety does not).
+    {
+      const page = await open("hud=0&mode=diver&budget=38&rescue=4000");
+      await page.evaluate(() => window.lcLab.restore({ x: 742, y: -126, z: -100 }, "diver"));
+      await page.waitForTimeout(1500);
+      const loading = await page.evaluate(() => ({ ...window.lcLab.admission, overlay: getComputedStyle(document.getElementById("loading")).display }));
+      await page.screenshot({ path: join(out, "stress-reload38-loading.png") });
+      await page.waitForFunction(() => window.lcLab.admission.rescues > 0, null, { timeout: 15000 }).catch(() => {});
+      const rescued = await snap(page), message = await page.evaluate(() => document.getElementById("message").textContent);
+      await page.screenshot({ path: join(out, "stress-reload38-rescued.png") });
+      await page.locator("canvas").focus();
+      await page.keyboard.down("e"); await page.waitForTimeout(1000); await page.keyboard.up("e");
+      const after = await snap(page);
+      result.stress.push({ case: "reload inside at 38 MiB: loading, then rescue outside the nearest mouth", loading, rescued, message,
+        upMoved: after.p.y - rescued.p.y, end: after });
+      await page.close();
+    }
+    // (5) R3: reload inside at 59 MiB while another owner already holds every free byte: priority admission.
+    {
+      const page = await open("hud=0&mode=diver&budget=59");
+      await page.evaluate(() => { window.lcLab.releaseCave(); window.lcLab.reserveOther(1e12); window.lcLab.restore({ x: 742, y: -126, z: -100 }, "diver"); });
+      await page.waitForFunction(() => window.lcLab.admitted(), null, { timeout: 15000 }).catch(() => {});
+      const adm = await page.evaluate(() => ({ ...window.lcLab.admission, otherCpu: window.lcLab.arbiter.granted("other").cpu }));
+      result.stress.push({ case: "reload inside at 59 MiB under full pressure: priority admission", admission: adm, end: await snap(page) });
       await page.close();
     }
   }
@@ -178,7 +203,9 @@ try {
   failed = result.errors.length > 0 || (result.runs ?? []).some(r => r.coverage.failures > 0) || (result.drive?.report.coverage.failures ?? 0) > 0 ||
     (result.stress ?? []).some(x => ((x.end ?? x).coverage).failures > 0) ||
     (result.stress?.length && (result.stress[0].admitted || !result.stress[0].outside || !result.stress[1].end.outside || !(result.stress[1].keyMoved > 0.5) ||
-      result.stress[1].retreatGated > 0 || !result.stress[2].finished));
+      result.stress[1].retreatGated > 0 || !result.stress[2].finished ||
+      result.stress[3].loading.overlay !== "grid" || !result.stress[3].rescued.outside || !(result.stress[3].upMoved > 1) ||
+      !result.stress[4].admission.state.startsWith("admitted") || result.stress[4].admission.rescues > 0));
 } finally {
   await browser.close();
   await server.close();

@@ -1,6 +1,32 @@
 # LC: large-cave technology (handoff)
 
-Opus 5.5, branch `t3/large-cave-biome-lab`, rebased on `feat/siltwake-first-expedition` after C4 stage A (`bf892e1`). This revision answers [Sol R2](../reviews/LC-SOL-XHIGH-R2.md) (LC-02); see *R2 fix*. R1's fixes follow it. New files only: `src/content/caves/*`, `src/world/caves/large/*`, `src/render/caves/large/*`, `tools/large-cave-lab.*`, `tests/large-cave*`. No shared root, save or `package.json` edit. Source SHA: see the commit that adds this page.
+Opus 5.5, branch `t3/large-cave-biome-lab`, rebased on `feat/siltwake-first-expedition` after C4 stage A (`bf892e1`). This revision answers [Sol R3](../reviews/LC-SOL-XHIGH-R3.md) (LC-02 reload, LC-05); see *R3 fix*. The R2 and R1 fixes follow it. New files only: `src/content/caves/*`, `src/world/caves/large/*`, `src/render/caves/large/*`, `tools/large-cave-lab.*`, `tests/large-cave*`. No shared root, save or `package.json` edit. Source SHA: see the commit that adds this page.
+
+## R3 fix: LC-02 reload inside an unadmitted biome, LC-05 one shared remainder
+R3 found two problems:
+- **Drowning on reload.** A reload inside a biome the budget could not admit (38 MiB: fixed bytes fit, fixed plus safety, 39.0 MiB, do not) held the diver forever, and real survival drowned them at 180 s.
+- **Double spending.** Two fine residencies each spent the same budget remainder.
+
+**`CaveAdmission`** (`streaming.ts`) is now the one admission state machine. It is the contract C4 wires:
+
+| State | When | Composition does |
+| --- | --- | --- |
+| `away` | far from the biome | nothing; its reservations are released |
+| `waiting` | near, outside owned space, not admitted | the simulation runs; the gate keeps the player out of the mouth; show "Waiting for room to load the cave" |
+| `loading` (`holding: true`) | **in or touching owned space**, not yet admitted (a reload, a teleport, or the safety set still building) | **pause the simulation clock** (no oxygen, exposure, power, damage, AI or cycle ticks), keep rendering, show **"Loading cave…"** |
+| `rescue` (`holding: true`, `rescue: Vec3`) | loading has lasted `rescueAfterMs` (4 s) and even a priority reservation cannot fit | **relocate** the player (or craft) to `rescue`, which is exterior water just outside the nearest mouth it fits, clear of the gate's reach and checked by `clear(feet)` against the exterior world. Show the message, then resume. It is a teleport, never travel through undrawn space. |
+| `admitted` | fixed plus coarse safety held and built | normal play; the gate guarantees movement |
+
+- **(a) Priority.** In or touching the cave, the biome's fixed and safety reservations are made with `priority`: the arbiter shrinks other owners' revocable grants, newest first, to fit, *before* the clock resumes. Approaching from outside, they are made without priority, and the player waits outside the mouth if denied.
+- **(b) Loading.** `update(...).holding` is the flag. On a save load inside a biome, call `update` before the first simulation tick, and keep the clock paused while it holds. A load whose budget fits takes a frame or two (the coarse set is 3.6 MiB).
+- **(c) Rescue.** The only way out of a budget that can never admit the biome. It needs `clear(feet)` from the composed exterior world for the actor's shape.
+- **LC-05.** Opportunistic owners register with `arbiter.opportunistic(owner, weight)`. Each gets an **exclusive share** of the one remainder (total less every reservation and grant), and sets its residency's external bytes to `arbiter.externalFor(owner)`. S1 then keeps construction reservations and hidden art inside that share. Two fine residencies, or a fine residency and exterior art, never spend the same bytes.
+- **Regressions** (`tests/large-cave-streaming.test.ts`):
+  - **Denied reload.** A diver reloads in the hall at fixed plus safety minus 1 MiB. It is paused about 4 s, rescued to exterior water outside the nearest mouth, swims up, and **real `updateSurvival` runs for more than 180 s (a full air supply) without incapacitation**. The same reload with no rescue stays paused: survival never ticks and oxygen stays at 100.
+  - **Pause mutation.** Ticking survival while holding drowns the held diver, and the test fails.
+  - **Priority reload.** Another owner holds every free byte, the diver reloads inside, the reservation preempts the grant, admission happens before the clock resumes, and a craft then retreats from deep in the hall to exterior water under the same pressure.
+  - **LC-05.** Two biomes are admitted with both fine residencies active together for hundreds of frames. Their art together never exceeds the free remainder. Giving each the whole remainder, as before, fails the test (16 MiB against 8).
+- **On the 3090:** see *Measurements, R3 pressure runs*.
 
 ## R2 fix: LC-02, a safety reservation instead of a stranding gate
 R2 found that the R1 gate stranded the player. Under sustained pressure, residency evicted chunks of the player's own zone, the gate (which wanted every touched chunk drawn fine) refused even a physically clear reverse move, and the player could not move. Admission was only advisory: a 48 MiB session entered with too small a share and froze. The contract is now (`streaming.ts`):
@@ -78,6 +104,14 @@ R2 found that the R1 gate stranded the player. Under sustained pressure, residen
 Boxes cost less memory, but fixed-axis actor boxes catch on every voxel step of a curved wall. For a craft in a 250 m cave that is the dominant feel problem.
 
 ## Measurements (RTX 3090, ANGLE GL-EGL, headless 1600×900; `tools/large-cave-lab.gpu.mjs`)
+**R3 pressure runs** (real loader; [`lc/gpu-run-r3.json`](lc/gpu-run-r3.json)):
+- **Diver reloaded in the Root hall at 38 MiB:** "Loading cave…" is shown with the clock paused, then the diver is rescued to (756.5, −61.5, −76), outside the Crown hollow, with the message. Holding E then rises 2.8 m.
+- **Diver reloaded in the hall at 59 MiB after another owner took every free byte:** admitted by priority in 7 paused frames, and the other grant shrinks to 20 MB.
+- **R2 cases rerun:**
+  - 32 MiB: waits outside;
+  - 59 MiB, 16 MiB kept: reverses 2.0 m, then retreats to exterior water with 0 gated and 0 unsafe frames;
+  - 48 MiB, full pressure: the craft loop finishes on coarse, 0 unsafe.
+
 These come from the R1-fix pass on the code rebased onto C4 stage A: the production exterior world, the per-frame gate, and fixed bytes counted. Every run drives the lab's real input path at boost with real collision. "Unsafe" means frames that moved while the drawn frame left the actor uncovered.
 
 | Run | Frame p50 / p95 / p99 | GPU | Render CPU p95 | Step (move, support, hull floor) | Unsafe |
@@ -159,8 +193,15 @@ The content bible (accepted after this brief) places the Canopy cave biome as **
    - Generalise the terrain bake's `hole` to `holes[]` for collars, and draw the heightfield with `seabedColor` so the collar seam disappears.
 4. **Renderer and memory.**
    - **Material.** Keep `createLargeCaveMaterial` as a separate material: it splices `BASE_CEL_FRAGMENT`, and exterior meshes have no `caveLight` attribute. Add it to `updateOpticalUniforms`, and call `LampWindow.update` and `apply` each frame.
-   - **One arbiter for the whole budget.** Every owner goes through a `CaveArbiter`-style arbiter: exterior art, creatures, fleet, and each biome. A biome **reserves** its fixed bytes (`retainedBytes` plus two lamp windows) when it loads, and its coarse safety set (`caveSafetyBytes`) at admission. Neither can be revoked. Opportunistic residencies, including each biome's fine residency, take only what no grant holds, via `setExternalBytes(arbiter.committed())`.
-   - **Admission and gate.** Run `CaveSafetySet` and the per-frame `CaveGate` in movement: admission, then residency, then the gated move, then the render. **Never let the player into owned space unadmitted**: hold them outside the mouth with the reason shown. Keep the reload hold.
+   - **One arbiter for the whole budget.** Every owner goes through a `CaveArbiter`-style arbiter: exterior art, creatures, fleet, and each biome.
+     - **Reservations:** a biome's fixed bytes (`retainedBytes` plus two lamp windows) and its coarse safety set (`caveSafetyBytes`), through `CaveAdmission`. They cannot be revoked; priority applies when the player is inside.
+     - **Opportunistic owners:** each biome's fine residency and the exterior art register with `arbiter.opportunistic`, and set `setExternalBytes(arbiter.externalFor(owner))`, so their shares are disjoint (LC-05).
+   - **Admission, pause and rescue.** Per frame: `CaveAdmission.update`, then the residencies, then the gated move, then the render.
+     - **While `holding`,** pause the simulation clock and show "Loading cave…".
+     - **On `rescue`,** relocate the player to the given point and show the message.
+     - **On a save load inside a biome,** run admission before the first tick.
+
+     **Never let the player into owned space unadmitted**, and never let a hold run the survival clock.
    - **Distant caves.** **Evict distant cave art:** only the biome the player is in, or about to enter, keeps art resident. Load collision and fixed buffers by proximity too (see the estimate below), not all four at boot.
 5. **Persisted state:** none. A cave's IDs are stable; the lamp flag is W1's proposal.
 
@@ -189,8 +230,8 @@ CPU per Canopy-sized biome; the GPU holds only art and the lamp window.
   - **A lighter collider.** `Uint16` chunk-local indices, positions shared with the art, a coarser band and a smaller BVH node format. This would roughly halve the 19 MiB.
   - **Load by proximity.** Load a biome's collider and bake only within a few hundred metres of its mouths, so four biomes never hold four fixed sets at once.
 
-## Checks (R2 revision; LC-02 details in *R2 fix*)
-- **Fast tier:** `npm run test:fast` passes **1,120/1,120** (108 files). There are 32 large-cave fast tests in four files:
+## Checks (R3 revision; LC-02 and LC-05 details in *R3 fix* and *R2 fix*)
+- **Fast tier:** `npm run test:fast` passes **1,123/1,123** (108 files). There are 35 large-cave fast tests in four files:
   - `tests/large-cave.test.ts`, on the fixture biome:
     - ownership and its negative control;
     - chunk-seam closure;
@@ -213,12 +254,13 @@ CPU per Canopy-sized biome; the GPU holds only art and the lamp window.
   - `tests/large-cave-streaming.test.ts`:
     - the layout;
     - **LC-04:** neighbour pinning asserted from portals, with unpinned chunks wanted only coarse;
-    - **LC-02:** the arbiter's reservations; admitted tours at 11 and 16 m/s; sustained pressure in and back out; the no-safety and no-gate controls; cold admission below and just above fixed + safety; two competing biomes.
+    - **LC-02:** the arbiter's reservations; admitted tours at 11 and 16 m/s; sustained pressure in and back out; the no-safety and no-gate controls; cold admission below and just above fixed + safety; two competing biomes. **R3:** a denied inside reload paused, rescued, and alive through real survival for more than 180 s; a priority inside reload.
+    - **LC-05:** two simultaneous fine residencies stay inside one remainder.
   - `tests/large-cave-shared.test.ts`:
     - the W1 Fanvault through the composer;
     - **LC-04:** exterior walls inside and past a cave sub-sweep stop moves and sight.
   - Mutations: disabling exterior-solid sweeps in the composer fails the LC-04 wall test, and removing the neighbour pins fails LC-04 and LC-02.
-- **Heavy tier:** `scripts/heavy-check.sh … large-cave.heavy.test.js` passes **6/6** at a 457 MiB peak:
+- **Heavy tier:** `scripts/heavy-check.sh … large-cave.heavy.test.js` passes **6/6** at a 467 MiB peak:
   - craft routes against the production world;
   - coarse vs every route;
   - 40,000 probes, 0 disagreeing;
@@ -244,7 +286,7 @@ See *R2 fix*. In short:
 | ![](lc/05-garden.png) Glow garden: glow lights the rock through water only | ![](lc/07-hub.png) Hub: the great root; the Scarp mouth glows on the left |
 | ![](lc/04-gallery.png) Collapsed gallery: a fallen block in the lamp | ![](lc/08-pool.png) Deep pool, about 187 m |
 | ![](lc/09-scarp.png) Scarp mouth from the lower terrace | ![](lc/11-overview.png) Plan (seabed hidden): hall, east run, hub, low run, garden, gallery, pool, crawl |
-| ![](lc/stress-budget32.png) Budget 32 MiB, below fixed + coarse safety: the Dart waits above the Crown hollow, not admitted | |
+| ![](lc/stress-budget32.png) Budget 32 MiB, below fixed + coarse safety: the Dart waits above the Crown hollow, not admitted | ![](lc/stress-reload38-loading.png) Reload inside at 38 MiB: "Loading cave…", clock paused, before the rescue |
 
 ## Limits
 - **Collision memory.** It is about 20× W1's boxes per metre of cave: 19 MiB of colliders plus a 13 MB bake resident per biome. See *Memory for four biomes*.

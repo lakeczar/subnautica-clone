@@ -35,9 +35,8 @@ import { createCaveLoader } from "../src/render/caves/large/loader.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
 import { collisionBytes } from "../src/world/caves/large/collision.js";
 import { composeCaveWorld, hullFloorFromSupport, largeCaveCollider } from "../src/world/caves/large/compose.js";
-import { CaveArbiter, caveFineShare, caveSafetyBytes, CaveSafetySet, caveWorldMap, CaveGate, CavePins, COVERAGE_REACH, coverageProblems, shownLods } from "../src/world/caves/large/streaming.js";
+import { CaveAdmission, CaveArbiter, caveFineShare, caveSafetyBytes, type AdmissionUpdate, caveWorldMap, CaveGate, CavePins, COVERAGE_REACH, coverageProblems, shownLods } from "../src/world/caves/large/streaming.js";
 import { boxTouchesOwned } from "../src/world/caves/large/ownership.js";
-import { boxDistance } from "../src/world/frame.js";
 import { WINDOW_BYTES } from "../src/world/caves/large/lampWindow.js";
 import { chunkKey } from "../src/world/caves/large/mesh.js";
 import { createResidency } from "../src/world/residency.js";
@@ -45,6 +44,7 @@ import type { LodLevel } from "../src/world/types.js";
 
 const params = new URLSearchParams(location.search);
 const note = document.getElementById("note")!;
+const loadingEl = document.getElementById("loading")!, messageEl = document.getElementById("message")!;
 const canvas = document.getElementById("view") as HTMLCanvasElement;
 const engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: false }, true);
 engine.setHardwareScalingLevel(Number(params.get("scale") ?? 1));
@@ -134,30 +134,36 @@ const residentCollision = collisionBytes(loaded.collision);
 // Fixed bytes, counted before any art is admitted (LC-03): every buffer the
 // loaded cave keeps, plus the lamp window shown and staged (CPU) and bound (GPU).
 const fixed = { cpu: loaded.retainedBytes + 2 * WINDOW_BYTES, gpu: WINDOW_BYTES };
-// The shared budget (LC-02): the cave's fixed bytes are reserved at load and
-// its coarse safety set at admission; both are non-revocable. Other owners
-// (`?other=` and `lcLab.reserveOther`) get only what those leave.
+// The shared budget (LC-02): `CaveAdmission` reserves this cave's fixed bytes
+// and coarse safety set, non-revocably, with top priority once the player is
+// in or touching the cave (a reload included). Other owners (`?other=`,
+// `lcLab.reserveOther`) get only what reservations leave; the fine residency
+// gets an exclusive share of the remainder (LC-05).
 const arbiter = new CaveArbiter({ cpu: budgetMiB * 1048576, gpu: budgetMiB * 1048576 });
-const fixedHeld = arbiter.reserve("canopy.fixed", fixed);
+arbiter.opportunistic("canopy.fine");
 const artCost = (id: string): { fine: number; coarse: number } => loaded.artCost[loaded.index.get(chunkKey(cm.byId(id)!.coord))!]!;
 const safetyBytes = caveSafetyBytes(cm, artCost), fineShare = caveFineShare(cm, artCost);
 const gate = new CaveGate(cm);
-let safety: CaveSafetySet | null = null;
 const reserveOther = (bytes: number): void => { arbiter.request("other", { cpu: bytes, gpu: bytes }); };
 reserveOther(Number(params.get("other") ?? 0) * 1048576);
-const admitted = (): boolean => safety?.complete === true;
-/** Admission and release, each frame: reserve the coarse safety set (all or
- * nothing) within reach of the biome; release it once well away. */
+const caveAdmission = new CaveAdmission(cm, arbiter, loader, { id: "canopy", fixed, safety: safetyBytes, rescueAfterMs: Number(params.get("rescue") ?? 4000),
+  clear: feet => world.clearance(feet, state.mode === "free" ? SHAPES.diver : SHAPES[state.mode]) });
+const admitted = (): boolean => caveAdmission.admitted;
+let admissionState: AdmissionUpdate = { state: "away", holding: false, rescue: null, message: "" };
+let banner = "", bannerUntil = 0, rescues = 0, pausedFrames = 0;
+/** Admission each frame. While `holding` the game is LOADING: the simulation
+ * clock (here, every step) is paused. A rescue relocates the player. */
 function admission(eye: Vec3): void {
-  const near = boxDistance(S.domain, eye) <= 160;
-  if (near && !safety && fixedHeld && arbiter.reserve("canopy.safety", { cpu: safetyBytes, gpu: safetyBytes })) safety = new CaveSafetySet(cm, loader, eye);
-  if (!near && safety && boxDistance(S.domain, eye) > 200) { safety.dispose(); safety = null; arbiter.release("canopy.safety"); }
-  safety?.step(3, () => performance.now());
-  const c = arbiter.committed();
-  residency.setExternalBytes({ cpu: c.cpu, gpu: c.gpu });
+  const box = state.mode === "free" ? { min: eye, max: eye } : actorBox(state.position, SHAPES[state.mode]);
+  admissionState = caveAdmission.update(box, eye, performance.now(), 3, () => performance.now());
+  if (admissionState.rescue) {
+    state.position = { ...admissionState.rescue }; state.velocity = { x: 0, y: 0, z: 0 }; state.autopilot = null;
+    banner = admissionState.message; bannerUntil = performance.now() + 6000; rescues++;
+  }
+  residency.setExternalBytes(arbiter.externalFor("canopy.fine"));
 }
-const holdReason = (): string => !fixedHeld || !safety ? "not admitted: the budget cannot reserve this cave's fixed bytes and coarse safety set"
-  : !safety.complete ? "admitting: coarse safety set loading" : gate.stats.reason;
+const holdReason = (): string => admissionState.holding ? admissionState.message
+  : !admitted() ? "not admitted: the budget cannot reserve this cave's fixed bytes and coarse safety set" : gate.stats.reason;
 
 // --- Player -------------------------------------------------------------------
 type Mode = "diver" | "dart" | "creel" | "free";
@@ -221,6 +227,8 @@ function step(): void {
       z: state.position.z + (f.z * inp.forward + Math.sin(state.yaw) * inp.right) * sp * DT };
     return;
   }
+  // Loading (admission pending while in the cave): the simulation clock is paused.
+  if (admissionState.holding) { pausedFrames++; state.held = true; return; }
   const t = performance.now(), before = { ...state.position }, velocity = { ...state.velocity };
   if (state.mode === "diver") swim(); else pilot(SHAPES[state.mode], state.mode);
   const us = (performance.now() - t) * 1000;
@@ -335,9 +343,11 @@ function frameUpdate(): void {
   else pins.update(eye0);
   admission(eye0);
   const stats = residency.update(eye0);
-  const fineShown = shownLods(residency.units());
+  const fineShown = shownLods(residency.units()), safety = caveAdmission.safety;
   safety?.present(fineShown);
   drawn = safety ? safety.drawn(fineShown) : fineShown;
+  loadingEl.style.display = admissionState.holding ? "grid" : "none";
+  messageEl.textContent = performance.now() < bannerUntil ? banner : "";
   const r1 = performance.now();
   // 2. Gated steps against what this frame draws.
   accumulator = Math.min(accumulator + dt / 1000, 0.25);
@@ -422,6 +432,11 @@ const percentile = (a: number[], q: number): number => { const s = [...a].sort((
 (window as unknown as { lcLab: unknown }).lcLab = {
   scene, engine, state, residency, world, cave, loaded, pins, lampWindow, coverage, frames, stepCost, show, setMode, VIEWS, gate,
   fixed, safetyBytes, fineShare, arbiter, get gated() { return gated; }, admitted, holdReason,
+  get admission() { return { ...admissionState, rescues, pausedFrames }; },
+  /** Drop this cave's reservations (as on leaving it, or before a fresh reload). */
+  releaseCave() { caveAdmission.release(); },
+  /** Restore the player at a pose, as a save reload would. */
+  restore(p: Vec3, mode: Exclude<Mode, "free">) { state.mode = mode; state.position = { ...p }; state.velocity = { x: 0, y: 0, z: 0 }; state.autopilot = null; },
   /** Another owner asks for (or releases) bytes of the shared budget; it gets only what reservations leave. */
   reserveOther,
   load: { source: loadedBytes.source, packedBytes: loadedBytes.packed, rawBytes: loadedBytes.bytes.byteLength, fetchMs: tFetched - t0,

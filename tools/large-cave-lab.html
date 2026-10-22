@@ -12,12 +12,16 @@
       #panel button.on { background: #b8862f; border-color: #e6a139; color: #102f3d; }
       #status { white-space: pre; margin-top: 6px; color: #b9d7cf; font: 11px/1.35 ui-monospace, monospace; }
       #panel.hidden > :not(#hide) { display: none; }
+      #loading { position: fixed; inset: 0; display: grid; place-items: center; font-size: 20px; color: #e8f1ee; background: #06161cb0; pointer-events: none; }
+      #message { position: fixed; bottom: 24px; left: 0; right: 0; text-align: center; font-size: 15px; color: #ffd9a0; pointer-events: none; }
       #note { position: fixed; inset: 0; display: grid; place-items: center; font-size: 15px; color: #b9d7cf; pointer-events: none; }
     </style>
   </head>
   <body>
     <canvas id="view" tabindex="0"></canvas>
     <div id="note">Loading the Canopy root caves…</div>
+    <div id="loading" style="display:none">Loading cave…</div>
+    <div id="message"></div>
     <div id="panel"><button id="hide">≡</button><div id="views"></div><div id="toggles"></div><div id="status"></div></div>
     <script type="module" src="./large-cave-lab.ts"></script>
   </body>
