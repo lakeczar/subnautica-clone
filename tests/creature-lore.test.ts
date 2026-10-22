@@ -9,6 +9,7 @@ import { regionAtPoint } from "../src/content/regions/layout.js";
 import { ROUTES } from "../src/content/regions/passages.js";
 import { SITES } from "../src/content/regions/sites.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
+import { createWorldQueries } from "../src/sim/world.js";
 import { AREAS, CAVE_BIOMES, CR1_INTERFACE, FAUNA_SITES, FIELD_GUIDE, FOUND_NOTES, HINT_RADIUS, SPECIES } from "../src/content/proposals/index.js";
 import type { FaunaSite, Point, Ref } from "../src/content/proposals/index.js";
 
@@ -48,6 +49,11 @@ test("every species in every roster, and every new one, has exactly one field-gu
   }
 });
 
+/** Every player-facing text of an entry, its window included. */
+const guideTexts = (e: (typeof FIELD_GUIDE)[number]): [string, string][] => [
+  ...(["title", "hint", "eats", "leaves", "spawns", "behaviour", "protectionText"] as const).map(k => [k, e[k]] as [string, string]),
+  ...(e.window ? [["window", e.window.text] as [string, string]] : []),
+];
 const HARVEST = /\b(edible|cook\w*|harvest\w*|catch\w*|nets?|netted|gather\w*|collect\w*|good eating|meal|food|roe|tasty|pan)\b/i;
 const THREATS = new Set(SPECIES.filter(s => s.role === "threat").map(s => s.id));
 
@@ -57,8 +63,8 @@ test("protected and observed animals never read as harvestable; threats, rare re
   for (const e of FIELD_GUIDE) {
     if (e.protection !== "protected" && e.protection !== "observe") continue;
     assert.deepEqual(e.yields, [], `${e.species}: nothing is taken from a ${e.protection} animal`);
-    for (const k of ["title", "hint", "eats", "leaves", "spawns", "behaviour", "protectionText"] as const) {
-      const hit = e[k].match(HARVEST);
+    for (const [k, text] of guideTexts(e)) {
+      const hit = text.match(HARVEST);
       assert.equal(hit, null, `${e.species}.${k} reads as harvestable: "${hit?.[0]}"`);
     }
     assert.match(e.protectionText, /\b(leave|nothing|not|never)\b/i, `${e.species}: say plainly that it is left alone`);
@@ -138,11 +144,17 @@ const caveRects = [...AUTHORED_CAVE_SOURCES, ...CANOPY_BASIN_SOURCES].map(c => (
   .concat(caves.map(c => ({ id: c.id, r: c.footprint })));
 const inRect = (r: { minX: number; maxX: number; minZ: number; maxZ: number }, x: number, z: number) => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ;
 
+const SIGHT = createWorldQueries([], worldFloor);
+
 test("placements sit on the floor or in water, in their region, outside caves unless declared, and falls stay off routes", () => {
   for (const f of FAUNA_SITES) {
     const { x, y, z } = f.at, floor = worldFloor(x, z);
-    if (f.anchor === "floor") assert.ok(Math.abs(y - floor) <= 4, `${f.id}: y ${y} vs floor ${floor.toFixed(1)}`);
-    if (f.anchor === "water") assert.ok(y > floor + 1 && y <= 0, `${f.id}: water at ${y}, floor ${floor.toFixed(1)}`);
+    // A visible datum clears terrain: ground datums sit 0.3–1.5 m above the floor (CR-1 uses
+    // +0.8), water datums at least a metre up, and production sight reaches each from above.
+    if (f.anchor === "floor") assert.ok(y - floor >= 0.3 && y - floor <= 1.5, `${f.id}: y ${y} is ${(y - floor).toFixed(2)} m from the floor (want 0.3–1.5)`);
+    if (f.anchor === "water") assert.ok(y >= floor + 1 && y <= 0, `${f.id}: water at ${y}, floor ${floor.toFixed(1)}`);
+    if (f.anchor === "floor" || f.anchor === "water")
+      assert.ok(SIGHT.lineOfSight({ x, y: Math.max(y, floor) + 2, z }, f.at), `${f.id}: not visible from 2 m above (production lineOfSight)`);
     assert.notEqual(f.anchor, "land", `${f.id}: creature grounds are under water`);
     const region = regionAtPoint(x, z);
     assert.equal(region, f.area === "hub_spur" ? "silt_basin" : f.area, `${f.id}: lies in ${region}`);
@@ -226,4 +238,73 @@ test("the field guide and notes are written up for builders", () => {
   for (const e of FIELD_GUIDE) assert.ok(doc.includes(`\`${e.species}\``), `FIELD-GUIDE.md does not cover ${e.species}`);
   for (const id of [...FOUND_NOTES.map(n => n.id), ...FAUNA_SITES.map(f => f.id)]) assert.ok(doc.includes(id), `FIELD-GUIDE.md does not mention ${id}`);
   assert.ok(bible.includes("FIELD-GUIDE.md"), "BIBLE.md links the field guide");
+});
+
+// Threat-window prose safety (CB-2-03). Any sentence about a threat that tells the player
+// to act, or says the way is clear, must sit in that threat's safe phase; the clause that
+// gives the go-ahead must not name the dangerous phase. Structural: human review still
+// judges the advice itself.
+const ACT = /\b(work|gather|take|cross|pass|go|sweep|collect|walk|swim)\b|\b(is|are|stays?|lies?) (clear|empty|yours|safe|quiet)\b/i;
+const WINDOW_RULES: Readonly<Record<string, { name: RegExp; safe: RegExp; danger: RegExp }>> = {
+  "cycle.canopy.hunter_feeding": { name: /\b(singer|sound hunter|hunter)\b|^Watch which way it goes/i,
+    safe: /\b(gone|away|out east|leaves|feeding east|feeds east|feed east)\b/i,
+    danger: /\b(it'?s home|it is home|at home|is back|on its way back|coming back|returns?|returning)\b/i },
+  "cycle.rift.stalker_feeding": { name: /\bstalkers?\b|\bchimney\b/i,
+    safe: /\b(vents?|venting|blows|in the wash|plume'?s rising wash)\b/i,
+    danger: /\b(stops?|stopped|between vents|come down|coming down|quiet chimney)\b/i },
+  "cycle.divide.skate_rest": { name: /\bskates?\b|\bcrest\b/i,
+    safe: /\bslack\b/i,
+    danger: /\b(running|runs|downwelling is on|current is on|rising)\b/i },
+  "cycle.meridian.choir_rest": { name: /\b(bells?|choir)\b/i,
+    safe: /\b(close|closed|closes|rest|resting)\b/i,
+    danger: /\b(humming|hum rises|swell\w*|while (they|the bells) sing|as they sing|singing)\b/i },
+};
+/** `about`: the text is about this threat (its notes and its own entry), so sentences that
+ * refer to it by pronoun or by phase count too; otherwise only sentences that name it. */
+function windowProseProblems(cycle: string, text: string, about = true): string[] {
+  const rule = WINDOW_RULES[cycle]!, out: string[] = [];
+  for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+    // In a text about the threat, a sentence counts when it names it, its phases, or "it/they".
+    const relevant = rule.name.test(sentence) || (about && (rule.safe.test(sentence) || rule.danger.test(sentence) || /\b(it|its|it's|they|them)\b/i.test(sentence)));
+    if (!relevant) continue;
+    for (const clause of sentence.split(/;\s*/)) {
+      if (!ACT.test(clause)) continue;
+      if (!rule.safe.test(sentence)) out.push(`no safe phase: "${clause}"`);
+      if (rule.danger.test(clause)) out.push(`go-ahead in the dangerous phase: "${clause}"`);
+    }
+  }
+  return out;
+}
+/** The texts that speak about a window: its notes and the threat's own entry,
+ * and any other entry that names the threat. */
+function windowTexts(cycle: string): [string, string, boolean][] {
+  const species = cr1Cycles[cycle]!, rule = WINDOW_RULES[cycle]!;
+  const notes = FOUND_NOTES.filter(n => n.hints.some(h => h.target === cycle)).map(n => [n.id, n.text, true] as [string, string, boolean]);
+  const own = guideTexts(guide.get(species as never)!).filter(([k]) => k === "hint" || k === "window").map(([k, t]) => [`${species}.${k}`, t, true] as [string, string, boolean]);
+  const others = FIELD_GUIDE.filter(e => e.species !== species).flatMap(e => guideTexts(e).filter(([, t]) => rule.name.test(t))
+    .map(([k, t]) => [`${e.species}.${k}`, t, false] as [string, string, boolean]));
+  return [...notes, ...own, ...others];
+}
+
+test("threat-window advice only gives a go-ahead in the safe phase", () => {
+  for (const cycle of Object.keys(cr1Cycles)) {
+    assert.ok(WINDOW_RULES[cycle], `${cycle}: no prose rule`);
+    const texts = windowTexts(cycle);
+    assert.ok(texts.some(([, t]) => windowProseProblems(cycle, t).length === 0 && ACT.test(t) && WINDOW_RULES[cycle]!.safe.test(t)), `${cycle}: no text gives the safe go-ahead`);
+    for (const [where, text, about] of texts) assert.deepEqual(windowProseProblems(cycle, text, about), [], `${where}`);
+  }
+});
+
+test("the window-prose and protection checks catch the review's mutations", () => {
+  const lab = FOUND_NOTES.find(n => n.id === "note_lab_feeding_card")!.text;
+  const reversed = lab.replace("While it's gone, work the home crowns.", "While it's home, work the home crowns.");
+  assert.notEqual(reversed, lab);
+  assert.ok(windowProseProblems("cycle.canopy.hunter_feeding", reversed).length > 0, "reversed hunter advice passes");
+  assert.ok(windowProseProblems("cycle.rift.stalker_feeding", "When it stops, the passage is empty.").length > 0, "stalker advice in the wrong phase passes");
+  assert.ok(windowProseProblems("cycle.divide.skate_rest", "Cross while the crest is running.").length > 0, "skate advice in the wrong phase passes");
+  assert.ok(windowProseProblems("cycle.meridian.choir_rest", "Pass the bells while they are humming.").length > 0, "choir advice in the wrong phase passes");
+  assert.match("Take its young as food.", HARVEST, "harvest wording in a window is caught by the protection scan");
+  const hunter = guide.get("canopy_sound_hunter")!;
+  assert.ok(guideTexts({ ...hunter, window: { ...hunter.window!, text: "Take its young as food." } }).some(([k, t]) => k === "window" && HARVEST.test(t)),
+    "window text is part of the protection scan");
 });

@@ -21,7 +21,8 @@
 - **Every ground is regrowth-style** (CR-1): stock regrows to a cap on its own timer. Notes speak of beds that "refill" or "come back", never of waiting for a season.
 - **Every threat has a natural window** with CR-1's cycle ID, taught by an always-readable note at the nearest stop or lab and by its field-guide hint.
 - **Every placement is hinted** by at least one note, through a landmark within 200 m whose name appears in the note's own words.
-- **Placements** sit on today's floor or in open water, in their region, outside every built and proposed cave unless they declare the cave, and carcass falls stay 30 m or more off every route.
+- **Placements** are visible: ground datums sit 0.3–1.5 m above today's floor (CR-1's convention is +0.8), water datums at least 1 m up, and production `lineOfSight` reaches each from 2 m above. They lie in their region, outside every built and proposed cave unless they declare the cave, and carcass falls stay 30 m or more off every route.
+- **Window advice is safe:** any sentence about a threat that says to act, or that the way is clear, must sit in that threat's safe phase (feeding away, venting, slack, bells closed), and the go-ahead clause must not name the dangerous phase. This is a structural check; the advice itself still gets human review.
 
 ## Matching CR-1
 CR-1 (`t3/natural-threat-windows`) owns the mechanics. Its interface note (`docs/build/streams/CR-1.md`, `50642f5`) published the item, ground, fall and cycle IDs; `CR1_INTERFACE` snapshots them, and the test compares the snapshot with the composed registry whenever CR-1's rows land.
@@ -568,7 +569,7 @@ Coordinates are metres (x east, y up with water at 0, z north). ⟂ marks a poin
 | `reef_fish_ribs` | fish | CR-1 | `reef_school` | `small_fish` | -24, -8.1, -2 | — | Small silver fish turning over the intake apron beside the ribs, pausing in their shade. |
 | `reef_roe_nursery` | spawning | CR-1 | `reef_school` | `roe_cluster` | -196, -15.8, 44 | — | Amber roe clusters stuck among the thickest staple cups on the nursery flats; the school circles low over them. |
 | `reef_shed_moults` | moult | CR-1 | `ledge_grazer` | `flex_membrane` | -158, -13.1, -18 | — | Papery grazer moults caught in the lee of the lookout ridge, below the line of fresh scars. |
-| `reef_trap_ribs_lee` | trap spot | CB-2 | `reef_school` | — | -40, -8.7, 20 | — | A flat sand patch west of the ribs where the school's loop narrows on its way back from the pod. |
+| `reef_trap_ribs_lee` | trap spot | CB-2 | `reef_school` | — | -40, -7.86, 20 | — | A flat sand patch west of the ribs where the school's loop narrows on its way back from the pod. |
 
 ### Splitspine Isles
 
@@ -577,7 +578,7 @@ Coordinates are metres (x east, y up with water at 0, z north). ⟂ marks a poin
 | `isles_fish_split` | fish | CR-1 | `reef_school` | `small_fish` | 470, -3.5, 88 | — | Small fish hang in the sheltered water of the split, out of the swell. |
 | `isles_roe_cove` | spawning | CR-1 | `reef_school` | `roe_cluster` | 950, -10.2, -30 | — | Roe strung along the cove's eddy line, where drift settles and the water is warmest. |
 | `isles_shed_shells` | moult | CR-1 | `tide_clapper`, `shore_buttons` | `planter_feed` | 1125, -13.2, 20 | — | Empty clapper valves and button plates rolled into a gully below the button ledges. |
-| `isles_trap_stack_east` | trap spot | CB-2 | `reef_school` | — | 520, -9.6, 40 | — | A ledge off the split's south-east mouth where the fish leave the channel at the turn of the tide. |
+| `isles_trap_stack_east` | trap spot | CB-2 | `reef_school` | — | 520, -8.77, 40 | — | A ledge off the split's south-east mouth where the fish leave the channel at the turn of the tide. |
 
 ### Lantern Canopy
 
@@ -591,7 +592,7 @@ Coordinates are metres (x east, y up with water at 0, z north). ⟂ marks a poin
 | ID | Kind | Owner | Animal | Takes | At (x, y, z) | Cave | What you see |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `hub_fish_crown` | fish | CB-2 | `reef_school` | `small_fish` | 294, -60, -560 | — | A reef school sheltering on the crown's west flank, out of the rays' circle. |
-| `hub_ray_eggcases` | protected spawn | CB-2 | `crown_rays` | — | 330, -74.2, -596 | — | Leathery egg cases wedged in the crown's south crevices, each the size of a diver. |
+| `hub_ray_eggcases` | protected spawn | CB-2 | `crown_rays` | — | 330, -73.36, -596 | — | Leathery egg cases wedged in the crown's south crevices, each the size of a diver. |
 
 ### Pale Basin
 
@@ -599,9 +600,9 @@ Coordinates are metres (x east, y up with water at 0, z north). ⟂ marks a poin
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `basin_fish_ridge` | fish | CR-1 | `reef_school` | `small_fish` | 770, -255.4, -530 | — | A small group of fish over the wreck ridge, above the silt line. |
 | `basin_scavenger_casts` | shed | CR-1 | `basin_scavengers` | `planter_feed` | 800, -255.7, -600 | — | Coiled casts outside the scavengers' burrows on the wreck ridge's south end. |
-| `basin_trap_ridge_north` | trap spot | CB-2 | `reef_school` | — | 770, -253.2, -470 | — | Firm ground at the wreck ridge's north end, by the big frames, where the ridge fish turn. |
-| `fall_basin_west` | carcass fall | CR-1 | `pale_drifter` | `fall_basin_west_hide` (`flex_membrane`), `fall_basin_west_bone` (`planter_feed`) | 520, -296.7, -480 | — | A great curved ribcage on the dish field, north of the great dish, scavengers working it, hide hanging in sheets. |
-| `fall_basin_east` | carcass fall | CR-1 | `pale_drifter` | `fall_basin_east_hide` (`flex_membrane`) | 700, -242.4, -380 | — | An older fall on the terrace north-west of the wreck ridge, half silted, its hide gone leathery. |
+| `basin_trap_ridge_north` | trap spot | CB-2 | `reef_school` | — | 770, -252.37, -470 | — | Firm ground at the wreck ridge's north end, by the big frames, where the ridge fish turn. |
+| `fall_basin_west` | carcass fall | CR-1 | `pale_drifter` | `fall_basin_west_hide` (`flex_membrane`), `fall_basin_west_bone` (`planter_feed`) | 520, -295.95, -480 | — | A great curved ribcage on the dish field, north of the great dish, scavengers working it, hide hanging in sheets. |
+| `fall_basin_east` | carcass fall | CR-1 | `pale_drifter` | `fall_basin_east_hide` (`flex_membrane`) | 700, -241.6, -380 | — | An older fall on the terrace north-west of the wreck ridge, half silted, its hide gone leathery. |
 
 ### Ember Rift
 
@@ -614,21 +615,22 @@ Coordinates are metres (x east, y up with water at 0, z north). ⟂ marks a poin
 
 | ID | Kind | Owner | Animal | Takes | At (x, y, z) | Cave | What you see |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `divide_picker_moults` | moult | CB-2 | `seam_pickers` | `planter_feed` | 426, -359.6, -1200 | — | Three-lobed picker shells collected in the boulder gaps of the picker rocks. |
-| `fall_divide_lee` | carcass fall | CR-1 | `pale_drifter` | `fall_divide_lee_crust` (`conductive_crust`), `fall_divide_lee_bone` (`planter_feed`) | 420, -388.1, -1130 | — | Bones crusted over on the lee shelf west of the mooring, sails passing high above. |
-| `divide_skate_eggcases` | protected spawn | CR-1 | `layer_skate` | — | 424, -386.5, -1146 | — | Leathery egg cases tethered to the rock of the clear lee shelf, shadows moving inside. |
+| `divide_picker_moults` | moult | CB-2 | `seam_pickers` | `planter_feed` | 426, -358.8, -1200 | — | Three-lobed picker shells collected in the boulder gaps of the picker rocks. |
+| `fall_divide_lee` | carcass fall | CR-1 | `pale_drifter` | `fall_divide_lee_crust` (`conductive_crust`), `fall_divide_lee_bone` (`planter_feed`) | 420, -387.26, -1130 | — | Bones crusted over on the lee shelf west of the mooring, sails passing high above. |
+| `divide_skate_eggcases` | protected spawn | CR-1 | `layer_skate` | — | 424, -383.56, -1146 | — | Leathery egg cases tethered to the rock of the clear lee shelf, shadows moving inside. |
 
 ### Meridian
 
 | ID | Kind | Owner | Animal | Takes | At (x, y, z) | Cave | What you see |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `meridian_scavenger_casts` | shed | CB-2 | `basin_scavengers` | `planter_feed` | 1170, -527, -1080 | — | Casts on the stable service ledge east of the staging office, scavengers in the frame racks. |
+| `meridian_scavenger_casts` | shed | CB-2 | `basin_scavengers` | `planter_feed` | 1170, -526.21, -1080 | — | Casts on the stable service ledge east of the staging office, scavengers in the frame racks. |
 
 ## Differences from CR-1's draft
 
 Positions for CR-1's IDs follow CR-1's working-tree draft (`src/content/fauna/grounds.ts`, uncommitted on 2026-10-22). Two points for CR-1:
 - **`isles_fish_split`:** CR-1's datum is at 7.6 m deep, inside the Splitstack Undercroft's proposed carve domain (the domain's top is 4 m). The split itself is open water, so this bible raises the datum to 3.5 m. Either keep that, or have the undercroft's builder trim the domain off the cleft.
-- **`divide_skate_eggcases`:** on the clear lee shelf, above the brine the skates live in. The field guide explains it: it is the one time a skate leaves the dense water, to tether its cases where the brine cannot smother them. If CR-1 moves them below the mirror, the dock board and the field guide must change too (the test will say so).
+- **`divide_skate_eggcases`:** CR-1's draft datum (y −386.5) was 2.1 m inside the shelf. It is now grounded at **(424, −383.56, −1146)**, floor −384.36 plus 0.8, on the clear lee shelf above the brine the skates live in. The field guide explains it: it is the one time a skate leaves the dense water, to tether its cases where the brine cannot smother them. If CR-1 moves them below the mirror, the dock board and the field guide must change too (the test will say so).
+- **Datums raised to floor + 0.8** so they clear terrain and pass production sight (CR-1's falls first; the rest are CB-2's): `fall_basin_west` y −295.95, `fall_basin_east` y −241.6, `fall_divide_lee` y −387.26, `hub_ray_eggcases` y −73.36, `reef_trap_ribs_lee` y −7.86, `isles_trap_stack_east` y −8.77, `basin_trap_ridge_north` y −252.37, `divide_picker_moults` y −358.8, `meridian_scavenger_casts` y −526.21. X and Z are unchanged.
 - **Falls:** CR-1 placed all three on shelves 36–66 m from routes, which meets the 30 m rule. The pump crew's note names the dish field and the wreck ridge, not the pump heads; the note stays in the pump-head cabinet because the pump crew logged them.
 
 ## Builder notes and open points
