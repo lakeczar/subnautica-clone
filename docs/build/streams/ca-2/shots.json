@@ -1,0 +1,68 @@
+{
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+  "shots": [
+    {
+      "id": "canopy_knot_hollow",
+      "day": "canopy_knot_hollow-day.jpg",
+      "dark": "canopy_knot_hollow-lamp-off.jpg"
+    },
+    {
+      "id": "canopy_eastcrown",
+      "day": "canopy_eastcrown-day.jpg",
+      "dark": "canopy_eastcrown-lamp-off.jpg"
+    },
+    {
+      "id": "canopy_lee_hollow",
+      "day": "canopy_lee_hollow-day.jpg",
+      "dark": "canopy_lee_hollow-lamp-off.jpg"
+    },
+    {
+      "id": "canopy_fin_cleft",
+      "day": "canopy_fin_cleft-day.jpg",
+      "dark": "canopy_fin_cleft-lamp-off.jpg"
+    },
+    {
+      "id": "canopy_root_arch",
+      "day": "canopy_root_arch-day.jpg",
+      "dark": "canopy_root_arch-lamp-off.jpg"
+    },
+    {
+      "id": "canopy_lantern_hall",
+      "day": "canopy_lantern_hall-day.jpg",
+      "dark": "canopy_lantern_hall-lamp-off.jpg"
+    },
+    {
+      "id": "basin_culvert_north",
+      "day": "basin_culvert_north-day.jpg",
+      "dark": "basin_culvert_north-lamp-off.jpg"
+    },
+    {
+      "id": "basin_burrow_warren",
+      "day": "basin_burrow_warren-day.jpg",
+      "dark": "basin_burrow_warren-lamp-off.jpg"
+    },
+    {
+      "id": "basin_buried_hut",
+      "day": "basin_buried_hut-day.jpg",
+      "dark": "basin_buried_hut-lamp-off.jpg"
+    },
+    {
+      "id": "basin_fracture_pocket",
+      "day": "basin_fracture_pocket-day.jpg",
+      "dark": "basin_fracture_pocket-lamp-off.jpg"
+    },
+    {
+      "id": "basin_west_rim",
+      "day": "basin_west_rim-day.jpg",
+      "dark": "basin_west_rim-lamp-off.jpg"
+    },
+    {
+      "id": "basin_dish_lee_vault",
+      "day": "basin_dish_lee_vault-day.jpg",
+      "dark": "basin_dish_lee_vault-lamp-off.jpg"
+    }
+  ],
+  "errors": [
+    "canopy_knot_hollow: Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}
