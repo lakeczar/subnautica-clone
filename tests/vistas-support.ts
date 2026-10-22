@@ -1,6 +1,6 @@
 // Shared by tests/vistas.test.ts and its heavy tier file (TT-1); not a test file itself.
 import assert from "node:assert/strict";
-import { type CheckContext } from "../src/content/regions/access.js";
+import type { CheckContext } from "../src/content/regions/access.js";
 import { HAZARDS } from "../src/content/regions/hazards.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { VISTA_SOLIDS } from "../src/content/vistas.js";

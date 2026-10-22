@@ -6,7 +6,7 @@ import { STRUCTURES } from "../src/content/regions/structures.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import type { Vec3 } from "../src/world/types.js";
 import { RecipeBuilder } from "../src/render/biomes/recipe.js";
-import { type VistaPart } from "../src/render/biomes/vistas.js";
+import type { VistaPart } from "../src/render/biomes/vistas.js";
 import { LANDMARK_LIGHTS } from "../src/render/poi/landmarks.js";
 
 type Mesh = { positions: readonly number[] | Float32Array; colors: readonly number[] | Float32Array };

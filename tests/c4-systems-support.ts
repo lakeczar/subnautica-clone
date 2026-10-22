@@ -1,6 +1,6 @@
 // Shared by tests/c4-systems.test.ts and its heavy tier file (TT-1); not a test file itself.
 import assert from "node:assert/strict";
-import { type RecipeId } from "../src/content/registry.js";
+import type { RecipeId } from "../src/content/registry.js";
 import { decodeSave, encodeSave, createEnvelope } from "../src/save/codec.js";
 import { validState } from "../src/save/validation.js";
 import { addItem } from "../src/sim/inventory.js";
