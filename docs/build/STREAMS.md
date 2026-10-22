@@ -307,3 +307,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
     - P2: cycle timings are revealed by scanning instead of observation.
   - **Queued first** (C4 author) for the next free slot, ahead of CA-2. This blocks the owner playtest.
 - **CA-1 R2 (Sol): accept** (`review/ca-1-r2` `4cafc37`); 42 unclamped routes pass, and forward surface swimming reaches the shelf. **Integrated** (caves not yet switched on; the kit Float64 light fix is now on root): 1,123 tests pass, build OK. P3: surface step-up, for C4.
+- **W2 phase-1 fixes done** at `985608c`: CA-1's border-cuts patch, extended to the legacy edge, with an every-border, every-LOD regression; a light-distance regression; phase 2 marked as an unwired proposal. Sol R2 running. **C4B R1 fixes started** in the freed slot (plus the surface step-up and a root merge with CA-1). Builders 5 of 5: CA-3, ENC-1, POI-1, LC, C4. Queue: CA-2 fix.
