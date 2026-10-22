@@ -1,7 +1,7 @@
 /** CR-1: creatures composed into the fixed step. One command hook (cooking,
  * bait, planter feed, the trap) and one per-step hook (trap catch and watching
  * the threats' natural windows). Each refusal changes nothing. */
-import { THREAT_WINDOWS, WINDOW_IDS } from "../../content/fauna/windows.js";
+import { SKATE_LAYING_SITE, THREAT_WINDOWS, WINDOW_IDS } from "../../content/fauna/windows.js";
 import type { WindowId } from "../../content/fauna/windows.js";
 import { speciesOf } from "../ecology/agents.js";
 import { observeCycle } from "../cycles/observe.js";
@@ -30,13 +30,13 @@ export function faunaCommand(s: GameState, c: GameCommand): string | null | unde
   }
 }
 
-/** Where each window's animal is now, for watching it: the laying visit is
- * also seen at the lee shelf. */
+/** Where each window's animal is now, for watching it. The laying visit is
+ * watched at the lee shelf: the laying skates, or their egg cases between visits. */
 function animals(s: GameState, id: WindowId): Vec3[] {
   const species = THREAT_WINDOWS[id].species;
   if (species === "canopy_sound_hunter") return [s.world.threat.position];
-  const roster = s.world.ecology.agents.filter((a) => speciesOf(a.id) === species).map((a) => a.position);
-  return id === "layer_skate_laying" ? [...roster, ...layingSkates(s.tick).map((k) => k.position)] : roster;
+  if (id === "layer_skate_laying") { const k = layingSkates(s.tick); return k.length ? k.map((x) => x.position) : [{ ...SKATE_LAYING_SITE }]; }
+  return s.world.ecology.agents.filter((a) => speciesOf(a.id) === species).map((a) => a.position);
 }
 /** One active step: trap catch, then watch each threat's natural window. The
  * first sight names it with a short caption; the journal's cycles tab times it. */

@@ -58,7 +58,9 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
       const m = a.mode;
       curl = smooth(curl, m === "alert" ? 0.26 : m === "investigate" ? 0.14 : 0, 3, dt);
       sweep = smooth(sweep, m === "commit" ? 1 : 0, 6, dt);
-      dimpleScale = smooth(dimpleScale, m === "alert" ? 0.7 : m === "investigate" ? 1.2 : m === "commit" ? 1.6 : 0, 2.5, dt);
+      // CR-1: a patrolling skate trails a faint ripple across the mirror; resting
+      // deep (its natural window) it leaves the mirror still.
+      dimpleScale = smooth(dimpleScale, m === "alert" ? 0.7 : m === "investigate" ? 1.2 : m === "commit" ? 1.6 : a.busy ? 0 : 0.4, 2.5, dt);
       bulge = smooth(bulge, m === "commit" ? 0.6 : 0, 5, dt);
       const beat = a.busy ? 0.5 : m === "investigate" ? 2.6 : m === "commit" ? 3.4 : 0.9;
       parts.root.position.set(a.position.x, a.position.y, a.position.z);

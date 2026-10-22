@@ -16,6 +16,7 @@ const { CANOPY_BASIN_ROUTE } = await import(path.join(build, "src/content/routes
 const { HUNTER_FEEDING_SPOT } = await import(path.join(build, "src/content/fauna/windows.js"));
 const { sitePosition } = await import(path.join(build, "src/content/ecology/sites.js"));
 const { homeOf, layerY } = await import(path.join(build, "src/sim/ecology/agents.js"));
+const { FAUNA_SOURCES } = await import(path.join(build, "src/content/fauna/grounds.js"));
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json", ".wasm": "application/wasm", ".bin": "application/octet-stream" };
 const root = path.resolve(dist);
 const server = createServer((req, res) => {
@@ -48,7 +49,7 @@ async function read() {
   });
 }
 const pos = (s) => ({ x: s.cam[0], y: s.cam[1] - eye, z: s.cam[2] });
-const health = (s) => Number(/(?:Hull|Health) (\d+)%/.exec(s.vitals)?.[1] ?? NaN);
+const health = (s) => Number(/HEALTH (\d+)/i.exec(s.vitals)?.[1] ?? NaN);
 async function shot(name) {
   const file = path.join(out, `${scene}-${String(result.shots.filter((f) => path.basename(f).startsWith(scene + "-")).length + 1).padStart(2, "0")}-${name}.png`);
   await page.screenshot({ path: file }); result.shots.push(file); note("screenshot", file);
@@ -114,7 +115,10 @@ const button = (label) => page.locator(`button:has-text("${label}")`).first();
 
 const SCENES = {
   async ribs() {
-    const s0 = await load("ribs"); result.scenes.ribs.notes.prompt = s0.prompt;
+    const s0 = await load("ribs"), school = FAUNA_SOURCES.reef_fish_ribs.position, eyeAt = { x: s0.cam[0], y: s0.cam[1], z: s0.cam[2] };
+    // Turn onto the school with the arrow keys, as a player would.
+    await watch(3, { yaw: yawTo(eyeAt, school), pitch: pitchTo(eyeAt, { ...school, y: school.y - 0.2 }) });
+    result.scenes.ribs.notes.prompt = (await read()).prompt;
     await shot("school-catch-prompt");
     for (let i = 0; i < 2; i++) { await tap("KeyE"); await page.waitForTimeout(900); const s = await read(); await observe(s); result.scenes.ribs.notes[`catch${i}`] = s.notices; }
     await shot("caught-with-net");
