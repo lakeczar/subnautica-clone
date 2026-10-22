@@ -1,6 +1,8 @@
 import type { RegionId } from "../registry.js";
 import type { Aabb, Vec3 } from "../../world/types.js";
 import { parkPose, sweepHull, workPose } from "./access.js";
+import { AUTHORED_CAVE_SOURCES } from "./caves.js";
+import { CANOPY_BASIN_GROUPS } from "./caves/index.js";
 import { dishArt, dishScatterKeep, type DishArt } from "./dishGeometry.js";
 import { pieceSolids } from "../vistaKit.js";
 import { hash2 } from "./noise.js";
@@ -58,8 +60,8 @@ const block = (kind: StructureKind): Make => (id, region, x, z, p, site, base) =
 
 /** A fallen survey dish: art and collision both from `dishGeometry.ts`
  * (rim, frame and hub within 0.35 m, the bowl's panels within 1 m, its
- * hollow open). Where a passage or rescue tether runs through it, or a
- * site's work or park pose sits in it, that part is missing (0.5 m clear of
+ * hollow open). Where a passage or rescue tether runs through it, a site's
+ * work or park pose sits in it, or a cave owns the ground, that part is missing (0.5 m clear of
  * the craft's swept hull, 0.3 m of the actor at a pose). Scatter keeps to the
  * rim footings it always kept to. */
 function dish(id: string, x: number, z: number, radius: number, tilt: number, facing: number, site: string): StructureDef {
@@ -86,7 +88,9 @@ function dish(id: string, x: number, z: number, radius: number, tilt: number, fa
       box(k.x - m.radius - e, k.y + m.bottom - e, k.z - m.radius - e, k.x + m.radius + e, k.y + m.height + 50, k.z + m.radius + e)];
   });
   const overlaps = (a: Aabb, b: Aabb): boolean => a.min.x < b.max.x && a.max.x > b.min.x && a.min.y < b.max.y && a.max.y > b.min.y && a.min.z < b.max.z && a.max.z > b.min.z;
-  const art = dishArt(p, k => poses.some(q => overlaps(k, q)) || lanes.some(l => sweepHull(l.a, l.b, l.profile, pad(k)) !== null));
+  // Caves own their footprints' columns (and a 2 m collar).
+  const caved = (k: Aabb): boolean => [...AUTHORED_CAVE_SOURCES, ...CANOPY_BASIN_GROUPS.map(g => g.source)].some(({ footprint: f }) => k.min.x < f.maxX + 2 && k.max.x > f.minX - 2 && k.min.z < f.maxZ + 2 && k.max.z > f.minZ - 2);
+  const art = dishArt(p, k => caved(k) || poses.some(q => overlaps(k, q)) || lanes.some(l => sweepHull(l.a, l.b, l.profile, pad(k)) !== null));
   return { id, region: "silt_basin", kind: "dish", x, z, base, p: { radius, tilt, facing }, solids: [...art.solids.frame, ...art.solids.bowl], site,
     dish: art, keep: [...dishScatterKeep(p, (cx, cz) => footprintBase(cx, cz, 1, 1)),
       // The feed's pieces (fallen in the silt beside the dish), one box each.
