@@ -420,3 +420,30 @@ kbd {
 .interaction-focus { outline: 2px solid #d8b269; outline-offset: 4px; }
 #opening-skip progress, .pilot-guidance progress { width: 70px; height: 6px; accent-color: #e5bc78; vertical-align: middle; }
 @media (prefers-reduced-motion: reduce) { .hull-impact, .interaction-focus { transition: none; } }
+
+/* C4: systems screens, the objective line and the feedback note. Functional; polish later. */
+.hud-objective { margin: 2px 0 0; max-width: 34ch; font-size: 12px; line-height: 1.3; color: #d9e6cf; opacity: 0.9; }
+.objective { margin: 0 0 10px; padding: 8px 10px; border-left: 3px solid #d6dcb8; background: #18383e99; }
+.objective.recovery { border-left-color: #e2a35a; }
+.journal-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
+.journal-tabs button[aria-current="page"] { background: #d6dcb8; color: #183d43; }
+.journal-entry p { margin: 2px 0; }
+.journal-entry .log { padding-left: 10px; border-left: 2px solid #a9ba8c55; font-style: italic; }
+.host h3 small, .fit-craft h3 small { font-weight: 400; opacity: 0.8; }
+.sockets { list-style: none; padding: 0; margin: 4px 0; }
+.sockets li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid #ffffff12; }
+.fit-craft ul { list-style: none; padding: 0; }
+.fit-craft li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 0; }
+.fit-craft .losses { opacity: 0.8; }
+.fit-craft .warning { color: #e2a35a; }
+.chart { width: 100%; max-height: 360px; background: #0d2a30; border: 1px solid #ffffff22; }
+.chart .chart-explored { fill: #2b5b5f; }
+.chart .chart-scanned { fill: #3f7a6c; }
+.chart .chart-decoded { fill: #59718f; }
+.chart .chart-source { fill: #d6dcb8; }
+.chart .chart-site { fill: #e2a35a; }
+.chart .chart-beacon { fill: #9fd0e0; }
+.chart .chart-you { fill: #ffffff; }
+.note-entry { position: fixed; left: 50%; bottom: 18%; transform: translateX(-50%); width: min(560px, 90vw); padding: 12px;
+  background: #102c31f2; border: 1px solid #d6dcb880; display: grid; gap: 6px; z-index: 40; }
+.note-entry input { font: inherit; padding: 6px 8px; }

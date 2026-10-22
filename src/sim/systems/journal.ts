@@ -32,7 +32,12 @@ export interface FieldJournal { tabs: JournalTab[]; notebook: NotebookView }
 /** Creature slot, filled by the ecology owner. */
 export interface CreatureEntry { id: string; label: string; region: RegionId; behaviour: string; notes?: readonly string[]; danger?: "harmless" | "cue" | "den" | "hunter" }
 /** Cycle slot, filled by the cycles owner: seen cycles with their timings. */
-export interface CycleEntry { id: string; label: string; region: RegionId; periodSeconds: number; windowSeconds: number; alternative: string }
+/** C4: timings are null until watched (CY's observer); `phases` lists each phase's
+ * measured length or "not yet timed", and `cues` the warnings learned. */
+export interface CycleEntry {
+  id: string; label: string; region: RegionId; periodSeconds: number | null; windowSeconds: number | null; alternative: string;
+  phases?: readonly string[]; cues?: readonly string[];
+}
 export interface JournalInput {
   notebook?: NotebookView;
   creatures?: readonly CreatureEntry[];
@@ -185,8 +190,9 @@ export function buildJournal(s: GameState, sys: SystemsState, input: JournalInpu
     tags: [region(c.region), ...(c.danger ? [c.danger] : [])], status: "known",
   }));
   const cycles = (input.cycles ?? []).map((c): JournalEntry => ({
-    id: `cycle:${c.id}`, title: c.label, subtitle: `${region(c.region)} · every ${minutes(c.periodSeconds)} · lasts ${minutes(c.windowSeconds)}`,
-    lines: [`Otherwise: ${c.alternative}`], tags: [region(c.region)], status: "known",
+    id: `cycle:${c.id}`, title: c.label,
+    subtitle: `${region(c.region)} · ${c.periodSeconds === null ? "period not yet timed" : `every ${minutes(c.periodSeconds)}`}${c.windowSeconds === null ? "" : ` · lasts ${minutes(c.windowSeconds)}`}`,
+    lines: [...(c.phases ?? []), ...(c.cues ?? []), `Otherwise: ${c.alternative}`], tags: [region(c.region)], status: "known",
   }));
   return {
     notebook,

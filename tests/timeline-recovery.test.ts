@@ -95,16 +95,16 @@ test("R3-F1: in-place canister salvage hands the death's obligation to the canis
   assert.deepEqual(owed.losses, []);
   assert.ok(owed.keys.includes(`cache:${canister.id}`));
   assert.deepEqual(Object.fromEntries(owed.cargo.map((c) => [c.kind, c.quantity])),
-    { structural_alloy: 10, silica_glass: 8, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 });
+    { tagged_frame: 1, structural_alloy: 2, silica_glass: 8, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 });
   // Haul part of it, reload, wait: still open with the exact remainder.
   q.take(canister, q.stack(canister.containerId, "silica_glass"), 8);
-  q.take(canister, q.stack(canister.containerId, "structural_alloy"), 6);
+  q.take(canister, q.stack(canister.containerId, "structural_alloy"), 2);
   q.reload();
   q.go(600);
   assert.deepEqual(Object.fromEntries(q.rec.pending[0]!.cargo.map((c) => [c.kind, c.quantity])),
-    { structural_alloy: 4, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 });
+    { tagged_frame: 1, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 });
   assert.equal(q.deaths().unrecovered, 1);
-  for (const kind of ["structural_alloy", "flex_membrane", "conductive_crust", "buoyant_resin"])
+  for (const kind of ["tagged_frame", "flex_membrane", "conductive_crust", "buoyant_resin"])
     q.take(canister, q.stack(canister.containerId, kind), q.s.inventory.items.find((i) => i.containerId === canister.containerId && i.kind === kind)!.quantity);
   const [recovery] = q.recoveries();
   assert.ok(recovery);

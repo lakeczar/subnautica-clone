@@ -5,6 +5,8 @@ import { EVIDENCE, EVIDENCE_BLUEPRINTS, FUTURE_BLUEPRINTS, RECIPES, RENEWABLE_SO
   from "../.test-build/src/content/registry.js";
 import { SUIT_RATINGS } from "../.test-build/src/content/registry.js";
 import { CAMPAIGN_SOURCE_SITES } from "../.test-build/src/content/campaign/index.js";
+import { HOST_KNOWLEDGE_RECIPES, UPGRADE_RECIPES, UPGRADE_REFIT_RECIPES } from "../.test-build/src/content/upgrades/registry.js";
+import { SYS2_RECIPES } from "../.test-build/src/content/systems/items.js";
 import { personalDepth } from "../.test-build/src/sim/capabilities.js";
 import { completeOpening, craftingBlock, discover } from "../.test-build/src/sim/progression.js";
 import { advanceRenewal, renewalCap } from "../.test-build/src/sim/renewal.js";
@@ -55,7 +57,10 @@ const renewal = Object.fromEntries(RENEWABLE_SOURCE_IDS.map(id => {
     finiteReserve: SOURCES[id].reserve, emptyToCapActiveMinutes: steps * FIXED_SECONDS / 60 }];
 }));
 const finite = kind => Object.values(SOURCES).filter(s => s.item === kind).reduce((n, s) => n + s.stock + s.reserve, 0);
-const demand = kind => ids.reduce((n, id) => n + (RECIPES[id].maintenance ? 0 : RECIPES[id].cost[kind] ?? 0), 0);
+// C4's optional upgrades and SYS-2 modules are not progression demand: the upgrade
+// economy (scripts/upgrade-economy.mjs) and the campaign ledger's optional spend own them.
+const C4 = new Set(Object.keys({ ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES, ...SYS2_RECIPES }));
+const demand = kind => ids.filter(id => !C4.has(id)).reduce((n, id) => n + (RECIPES[id].maintenance ? 0 : RECIPES[id].cost[kind] ?? 0), 0);
 const solvency = Object.fromEntries(["flex_membrane", "buoyant_resin"].map(k => [k, { implementedDemand: demand(k), finiteStockAndReserve: finite(k) }]));
 for (const [k, v] of Object.entries(solvency)) assert.ok(v.finiteStockAndReserve >= v.implementedDemand, `${k}: zero-renewal solvency`);
 

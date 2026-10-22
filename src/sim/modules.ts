@@ -1,4 +1,8 @@
-import { ITEMS, MODULES, isMountKind } from "../content/registry.js";
+import { HULLS, ITEMS, MODULES, isMountKind } from "../content/registry.js";
+import { upgradeId } from "../content/upgrades/catalogue.js";
+import type { UpgradeId } from "../content/upgrades/catalogue.js";
+import { slotOf } from "./upgrades/fitting.js";
+import { applyUpgradePreview, upgradeInstallPreview, upgradeRemovePreview } from "./fittings.js";
 import type { ModuleKind, MountKind } from "../content/registry.js";
 import type { GameState, ItemStack, VehicleState, WorldQueries } from "./types.js";
 import { cabinLockerId, containerAccessible, containerLabel, distance, equipped, hasRoom, supportedServiceSite, usedCapacity } from "./inventory.js";
@@ -8,17 +12,22 @@ import { fittedMount, holdCapacity, mountLabel } from "./fleet.js";
 export const SMALL_CRAFT_SOCKETS = 2;
 /** An intact, ordinary module instance. Socket modules are never fitted; a mount
  * package is either stowed (null) or fitted on a Creel's major mount ("mount"). */
-export function moduleItem(item: ItemStack): item is ItemStack & { kind: ModuleKind } {
-  return Object.hasOwn(MODULES, item.kind) && item.quantity === 1 &&
+export function moduleItem(item: ItemStack): item is ItemStack & { kind: ModuleKind | UpgradeId } {
+  return (Object.hasOwn(MODULES, item.kind) || upgradeId(item.kind)) && item.quantity === 1 &&
     item.provenance === "public" && item.charge === null &&
-    (item.fitted === null || (item.fitted === "mount" && isMountKind(item.kind)));
+    (item.fitted === null || (item.fitted === "mount" && (isMountKind(item.kind) || upgradeId(item.kind))));
 }
-/** Socket modules remain capacity-counted hold items; a mount is fitted in that hold. */
+/** Socket modules remain capacity-counted hold items; every other slot's module
+ * is fitted in that hold, outside cargo (C4: SYS-1's slots). */
 export function installedModuleValid(s: GameState, v: VehicleState, itemId: string): boolean {
   const item = s.inventory.items.find((i) => i.id === itemId);
-  return v.modules.includes(itemId) && !!item && moduleItem(item) && MODULES[item.kind].hull === v.hull &&
-    item.containerId === v.cargoId && (MODULES[item.kind].slot === "mount") === (item.fitted === "mount");
+  if (!v.modules.includes(itemId) || !item || !moduleItem(item) || item.containerId !== v.cargoId || !upgradeId(item.kind)) return false;
+  const slot = slotOf(v.hull, item.kind);
+  return !!slot && slot !== "refit" && (slot === "socket") === (item.fitted === null);
 }
+/** Socket modules fitted to a hull now. */
+export const socketsUsed = (s: GameState, v: VehicleState): number =>
+  v.modules.filter((id) => { const k = s.inventory.items.find((i) => i.id === id)?.kind; return !!k && upgradeId(k) && slotOf(v.hull, k) === "socket"; }).length;
 export interface DartPerformance {
   acousticTrim: boolean;
   quietSpeed: number;
@@ -33,8 +42,9 @@ export interface DartPerformance {
 export function dartPerformance(s: GameState, vehicleId: string): DartPerformance | null {
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId);
   if (!v || v.hull !== "dart") return null;
-  const acousticTrim = v.modules.length === 1 && installedModuleValid(s, v, v.modules[0]!) &&
-    s.fleet.vehicles.filter((a) => a.modules.includes(v.modules[0]!)).length === 1 &&
+  const trimId = v.modules.find((id) => s.inventory.items.find((i) => i.id === id)?.kind === "dart_acoustic_trim");
+  const acousticTrim = !!trimId && installedModuleValid(s, v, trimId) &&
+    s.fleet.vehicles.filter((a) => a.modules.includes(trimId)).length === 1 &&
     s.inventory.items.filter((i) => i.kind === "dart_acoustic_trim").length === 1 &&
     s.knowledge.crafted.includes("dart_acoustic_trim");
   return {
@@ -42,7 +52,7 @@ export function dartPerformance(s: GameState, vehicleId: string): DartPerformanc
     quietSpeed: acousticTrim ? MODULES.dart_acoustic_trim.quietSpeed : 3,
     normalSpeed: 8,
     boostSpeed: acousticTrim ? MODULES.dart_acoustic_trim.boostSpeed : 11,
-    socketsUsed: v.modules.length,
+    socketsUsed: socketsUsed(s, v),
     sockets: SMALL_CRAFT_SOCKETS,
     cargoCu: acousticTrim ? ITEMS.dart_acoustic_trim.cu : 0,
     description: acousticTrim
@@ -51,12 +61,16 @@ export function dartPerformance(s: GameState, vehicleId: string): DartPerformanc
   };
 }
 function localModuleAccessRefusal(s: GameState, v: VehicleState): string | null {
+  // The carrier's own fittings change from inside it (SYS-1: yard or supported mooring).
+  if (v.hull === "hearthline") return s.player.interiorId === v.id ? null : "Change the Hearthline's fittings from inside it.";
+  // SYS-1: a berthed hull is fitted from inside its carrier, between berth moves.
+  if (v.berth && s.player.interiorId === v.berth.carrierId && !s.fleet.docking?.transaction && !s.recovery.operation) return null;
   if (s.player.controlledVehicleId || s.player.interiorId)
     return "Leave the hull to change its modules.";
   if (v.berth || s.recovery.operation || s.fleet.docking?.transaction)
     return "Finish recovery or berth work and use an unberthed hull before changing modules.";
   if (!containerAccessible(s, v.cargoId) && distance(s.player.pose.position, v.pose.position) >= 7)
-    return `Approach this ${v.hull === "creel" ? "Creel" : "Dart"}'s local cradle or exterior collar.`;
+    return `Approach this ${HULLS[v.hull].label}'s local cradle or exterior collar.`;
   return null;
 }
 /** Exact capacity outcome of fitting `next` (or nothing) to this Creel's mount. */
@@ -122,9 +136,30 @@ function applyMountChange(s: GameState, change: MountChange): void {
   }
   s.inventory.containers.find((c) => c.id === v.cargoId)!.capacity = change.capacityAfter;
 }
-export function installModuleRefusal(s: GameState, vehicleId: string, itemId: string): string | null {
+/** SYS-1 path: every upgrade other than the M1 trim and the Creel mount packages. */
+function upgradeRefusal(s: GameState, vehicleId: string, itemId: string, replace?: string): string | null {
+  const v = s.fleet.vehicles.find((a) => a.id === vehicleId), item = s.inventory.items.find((i) => i.id === itemId);
+  if (!v) return "Choose an owned craft.";
+  if (!item || !moduleItem(item) || item.fitted !== null || !upgradeId(item.kind)) return "Choose an intact upgrade module.";
+  const no = localModuleAccessRefusal(s, v);
+  if (no) return no;
+  if (!containerAccessible(s, item.containerId)) return "Bring the module into locally accessible cargo first.";
+  if (s.fleet.vehicles.some((a) => a.modules.includes(itemId))) return "This module is already installed. Remove it first.";
+  if (slotOf(v.hull, item.kind) === "major" && fittedMount(s, v)) return "The major mount holds a rack or cabin. Unfit it first. Nothing changed.";
+  if (item.containerId !== v.cargoId && slotOf(v.hull, item.kind) === "socket" && !hasRoom(s, v.cargoId, ITEMS[item.kind].cu))
+    return `Make ${ITEMS[item.kind].cu} CU room in the ${HULLS[v.hull].label} hold for the module. Nothing changed.`;
+  return upgradeInstallPreview(s, v, item, replace).refusal;
+}
+const sys1Path = (kind: string): boolean => upgradeId(kind) && kind !== "dart_acoustic_trim" && !isMountKind(kind);
+export function installModuleRefusal(s: GameState, vehicleId: string, itemId: string, replace?: string): string | null {
   const candidate = s.inventory.items.find((i) => i.id === itemId);
-  if (candidate && isMountKind(candidate.kind)) return mountChangePreview(s, vehicleId, itemId).refusal;
+  if (candidate && isMountKind(candidate.kind)) {
+    const v = s.fleet.vehicles.find((a) => a.id === vehicleId);
+    if (v && v.modules.some((m) => s.inventory.items.find((i) => i.id === m)?.kind === "creel_service_head"))
+      return "The major mount holds the service head. Unfit it first. Nothing changed.";
+    return mountChangePreview(s, vehicleId, itemId).refusal;
+  }
+  if (candidate && sys1Path(candidate.kind)) return upgradeRefusal(s, vehicleId, itemId, replace);
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId);
   if (!v || v.hull !== "dart") return "Choose an owned Dart for this acoustic trim.";
   const no = localModuleAccessRefusal(s, v);
@@ -135,17 +170,23 @@ export function installModuleRefusal(s: GameState, vehicleId: string, itemId: st
     return "Choose the intact, fabricated Dart acoustic trim item.";
   if (!containerAccessible(s, item.containerId)) return "Bring the module into locally accessible cargo first.";
   if (s.fleet.vehicles.some((a) => a.modules.includes(itemId))) return "This module is already installed. Remove it first.";
-  if (v.modules.length >= SMALL_CRAFT_SOCKETS) return "Both small-craft sockets are occupied. Remove a module first.";
+  if (socketsUsed(s, v) >= SMALL_CRAFT_SOCKETS) return "Both small-craft sockets are occupied. Remove a module first.";
   if (v.modules.some((id) => s.inventory.items.find((i) => i.id === id)?.kind === item.kind))
     return "This Dart already has acoustic trim. Remove it before installing another.";
   if (item.containerId !== v.cargoId && !hasRoom(s, v.cargoId, ITEMS[item.kind].cu))
     return "Make 2 CU room in the Dart hold before relocating the module. Nothing changed.";
   return null;
 }
-export function installModule(s: GameState, vehicleId: string, itemId: string): string | null {
-  const no = installModuleRefusal(s, vehicleId, itemId);
+export function installModule(s: GameState, vehicleId: string, itemId: string, replace?: string): string | null {
+  const no = installModuleRefusal(s, vehicleId, itemId, replace);
   if (no) return no;
   const mount = s.inventory.items.find((i) => i.id === itemId)!;
+  if (sys1Path(mount.kind)) {
+    const v = s.fleet.vehicles.find((a) => a.id === vehicleId)!, preview = upgradeInstallPreview(s, v, mount, replace);
+    applyUpgradePreview(s, v, preview);
+    s.feedback = `${ITEMS[mount.kind].label} fitted${preview.displaced ? ` · ${ITEMS[s.inventory.items.find((i) => i.id === preview.displaced!.itemId)!.kind].label} returned to the hold` : ""}.${preview.warnings.length ? ` ${preview.warnings.join(" ")}` : ""}`;
+    return null;
+  }
   if (isMountKind(mount.kind)) {
     const change = mountChangePreview(s, vehicleId, itemId);
     applyMountChange(s, change);
@@ -160,6 +201,11 @@ export function installModule(s: GameState, vehicleId: string, itemId: string): 
 }
 export function removeModuleRefusal(s: GameState, vehicleId: string, itemId: string, world: WorldQueries): string | null {
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId);
+  const fittedKind = s.inventory.items.find((i) => i.id === itemId)?.kind;
+  if (v && fittedKind && sys1Path(fittedKind) && v.modules.includes(itemId)) {
+    const no = localModuleAccessRefusal(s, v);
+    return no ?? upgradeRemovePreview(s, v, itemId).refusal;
+  }
   const mount = v?.hull === "creel" ? fittedMount(s, v) : null;
   if (mount && mount.id === itemId) {
     const change = mountChangePreview(s, vehicleId, null);
@@ -197,6 +243,12 @@ export function removeModule(s: GameState, vehicleId: string, itemId: string, wo
   const no = removeModuleRefusal(s, vehicleId, itemId, world);
   if (no) return no;
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId)!;
+  const kind = s.inventory.items.find((i) => i.id === itemId)!.kind;
+  if (sys1Path(kind)) {
+    applyUpgradePreview(s, v, upgradeRemovePreview(s, v, itemId));
+    s.feedback = `${ITEMS[kind].label} removed · intact in the ${HULLS[v.hull].label} hold.`;
+    return null;
+  }
   const mount = v.hull === "creel" ? fittedMount(s, v) : null;
   if (mount && mount.id === itemId) {
     applyMountChange(s, { vehicleId, current: mount, next: null, stowTo: v.cargoId,

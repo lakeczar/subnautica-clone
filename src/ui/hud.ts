@@ -8,7 +8,8 @@ import { deliberateExit } from "../runtime/input.js";
 import type { AimedTarget, ReachPreview } from "../sim/targeting.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import { airSupply, exposure } from "../sim/survival.js";
-import { distractionPreview, exitBlock, hullDepth, serviceRefusal, serviceState } from "../sim/vehicles.js";
+import { distractionPreview, exitBlock, hullDepth, serviceState } from "../sim/vehicles.js";
+import { servicePreview } from "../sim/serviceLink.js";
 import { ARM_CHARGE, ARM_LIFT_SECONDS, armNearby, armTarget, cabinHull, cabinEnterRefusal, fittedCabin } from "../sim/fleet.js";
 import { usedCapacity } from "../sim/inventory.js";
 import type { GameState, NoticeContext, NoticeOptions, Vec3, WorldQueries } from "../sim/types.js";
@@ -164,8 +165,9 @@ export class HudView {
     const air = airSupply(state);
     const airLabel = airSourceLabel(state);
     const service = mode === "piloting" && (v?.hull === "dart" || v?.hull === "creel") ? serviceState(state, v.id) : null;
-    const serviceLine = v && service === "ready" && serviceRefusal(state, v.id) === null ? "Service here · Tab"
-      : service === "patch" ? "Patch hull first" : "";
+    const preview = service && v ? servicePreview(state, v.id) : null;
+    const serviceLine = !v || !preview ? "" : preview.kind === "outpost" ? (preview.refusal ? "" : "Outpost charger · Tab")
+      : service === "ready" && preview.refusal === null ? "Service here · Tab" : service === "patch" ? "Patch hull first" : "";
     this.get("vitals").dataset.airSource = air.kind;
     this.get("vitals").innerHTML =
       `<div class="${state.player.vitals.oxygen < 35 ? "urgent" : ""}"><span>O₂</span><b>${state.player.vitals.oxygen.toFixed(0)}%</b><i style="--fill:${state.player.vitals.oxygen}%"></i><small>${escapeHtml(airLabel)}</small></div><div class="${this.damageFlashing("diver") ? "hull-impact" : ""}"><span>HEALTH</span><b>${state.player.vitals.health.toFixed(0)}</b><i style="--fill:${state.player.vitals.health}%"></i></div><div><span>FOOD</span><b>${state.player.vitals.food.toFixed(0)}</b><i style="--fill:${state.player.vitals.food}%"></i><small>${state.player.vitals.food === 0 ? "Grace / gather normally" : "F · eat meal"}</small></div>${v ? `<div class="${v.charge < 25 ? "urgent" : ""}${this.impactVehicle === v.id && performance.now() < this.impactUntil || this.damageFlashing("vehicle", v.id) ? " hull-impact" : ""}"><span>${HULLS[v.hull].label.toUpperCase()}</span><b>${v.charge.toFixed(0)}% power</b><small>Hull ${v.health.toFixed(0)}% · ${hullDepth(v).toFixed(0)} / ${v.rating} m${v.hull === "creel" ? ` · hold ${usedCapacity(state, v.cargoId)}/${state.inventory.containers.find(c => c.id === v.cargoId)?.capacity ?? 0} CU` : ""}</small>${serviceLine ? `<small class="service-hint">${serviceLine}</small>` : ""}</div>` : ""}`;

@@ -8,6 +8,8 @@ import type { CostKind, HullId, MaterialId, RecipeId, SourceId } from "../conten
 import { CAMPAIGN_SOURCE_SITES } from "../content/campaign/index.js";
 import { CAMPAIGN_STEPS, FLEET_STRATEGIES, MATERIAL_SHELVES, SWIM_DEPTH } from "../content/story/strategies.js";
 import type { AnyBlueprint, CampaignStep, StepId, StrategyId } from "../content/story/strategies.js";
+import { OUTPOST_TIER_ORDER, OUTPOST_TIERS } from "../content/systems/hosts.js";
+import type { OutpostTier } from "../content/systems/hosts.js";
 import { planCampaign } from "./story/index.js";
 import type { CampaignModel, CampaignPlan, Shelves } from "./story/index.js";
 
@@ -100,3 +102,39 @@ export function registryModel(strategy: StrategyId): CampaignModel {
 }
 export const planRegistryCampaign = (strategy: StrategyId): CampaignPlan =>
   planCampaign(strategy, { model: registryModel(strategy) });
+
+/** One outpost tier's plan on the route: the shallowest main-path record that
+ * grants it and the first strategy step after which a diver reaches it. */
+export interface KitPlanStop {
+  readonly tier: OutpostTier;
+  readonly record: string | null;
+  readonly depth: number;
+  /** Index into the strategy's steps; -1 before any step, null when unreachable. */
+  readonly after: number | null;
+}
+/** CB (C4): the main-path outpost-kit plans stay reachable in tier order. Lost-site
+ * copies are optional extras and never count here. */
+export function kitPlanRoute(strategy: StrategyId): KitPlanStop[] {
+  const order = FLEET_STRATEGIES[strategy].steps as readonly StepId[];
+  // Personal reach after each step: the deepest suit fitted so far.
+  const reach = order.map((_, i) => Math.max(SWIM_DEPTH, ...order.slice(0, i + 1)
+    .map((id) => (CAMPAIGN_STEPS[id] as CampaignStep).suit ?? 0)));
+  return OUTPOST_TIER_ORDER.map((tier) => {
+    const bp = OUTPOST_TIERS[tier].bp;
+    const found = Object.entries(REAL_GRANTS).filter(([, g]) => (g.grants as readonly string[]).includes(bp))
+      .sort(([, a], [, b]) => a.depth - b.depth)[0];
+    if (!found) return { tier, record: null, depth: Infinity, after: null };
+    const depth = found[1].depth, i = reach.findIndex((r) => r >= depth);
+    return { tier, record: found[0], depth, after: depth <= SWIM_DEPTH ? -1 : i < 0 ? null : i };
+  });
+}
+/** Problems with the kit route: a missing or unreachable plan, or tiers out of order. */
+export function kitPlanProblems(strategy: StrategyId): string[] {
+  const route = kitPlanRoute(strategy), out: string[] = [];
+  route.forEach((k, i) => {
+    if (k.after === null) out.push(`${k.tier} kit plan ${k.record ? `at ${k.depth} m is beyond every ${strategy} step` : "has no main-path record"}`);
+    const prev = route[i - 1];
+    if (prev && prev.after !== null && k.after !== null && k.after < prev.after) out.push(`${k.tier} kit plan comes before the ${prev.tier} plan`);
+  });
+  return out;
+}

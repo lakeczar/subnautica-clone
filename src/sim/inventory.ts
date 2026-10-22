@@ -4,6 +4,10 @@ import { CANOPY_STOP } from "../content/routes.js";
 import { MOORING_SERVICE_RADIUS, SERVICE_MOORINGS, STOP_IDS, stopForSite, WORKING_STOPS, type WorkingStopId } from "../content/stops.js";
 import { HEARTHLINE_CONTAINERS } from "../content/fleet/hearthlineInterior.js";
 import type { Fitting, GameState, ItemStack, Vec3, VehicleState } from "./types.js";
+import { FIXED_HOSTS, HOST_REACH, moduleOfItem } from "../content/systems/hosts.js";
+import { isSys2Item, SYS2_ITEMS } from "../content/systems/items.js";
+/** A beached Spindle's ramp reaches this far up the shore (C4). */
+export const SHORE_RAMP_REACH = 10;
 export const distance = (a: Vec3, b: Vec3): number =>
   Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 export const nextId = (s: GameState, prefix: string): string =>
@@ -54,8 +58,7 @@ export function addItem(
       i.charge === null,
   );
   if (
-    stack &&
-    [
+    stack && ([
       "structural_alloy",
       "silica_glass",
       "flex_membrane",
@@ -66,7 +69,7 @@ export function addItem(
       "brine_lattice",
       "meal",
       "tagged_frame",
-    ].includes(kind)
+    ].includes(kind) || (isSys2Item(kind) && SYS2_ITEMS[kind].stack))
   ) {
     stack.quantity += quantity;
     return stack;
@@ -77,7 +80,7 @@ export function addItem(
     quantity,
     containerId,
     fitted,
-    charge: kind === "reserve_cell" ? 100 : null,
+    charge: kind === "reserve_cell" || kind === "bio_cell" ? 100 : null,
     provenance,
   };
   s.inventory.items.push(item);
@@ -188,6 +191,22 @@ export function containerAccessible(s: GameState, id: string): boolean {
   if (stopLocker) return localBenchSite(s) === stopLocker;
   const compartment = carrierCompartment(s, id);
   if (compartment) return s.player.interiorId === compartment.host.id && !compartment.host.disabled;
+  // C4 (SYS-2): an outpost's locker at that outpost; a locker module's container
+  // only where the module is installed and its host works.
+  const onFoot = !s.player.controlledVehicleId && !s.player.interiorId;
+  const outpost = s.systems.outposts.find((o) => `${o.id}_locker` === id);
+  if (outpost) return onFoot && distance(s.player.pose.position, outpost.position) <= HOST_REACH;
+  const moduleOwner = s.inventory.containers.find((c) => c.id === id && c.kind === "locker" && moduleOfItem(
+    s.inventory.items.find((i) => i.id === c.ownerId)?.kind ?? "") === "locker");
+  if (moduleOwner || s.systems.sockets.some((e) => `${e.itemId}_locker` === id)) {
+    const entry = s.systems.sockets.find((e) => `${e.itemId}_locker` === id);
+    if (!entry) return false;
+    if (entry.hostId.startsWith("carrier:")) return s.player.interiorId === entry.hostId.slice(8);
+    const fixed = FIXED_HOSTS[entry.hostId as keyof typeof FIXED_HOSTS];
+    if (fixed) return onFoot && (fixed.facility === null || facility(s, fixed.facility)) && distance(s.player.pose.position, fixed.position) <= 8;
+    const host = s.systems.outposts.find((o) => o.id === entry.hostId);
+    return !!host && onFoot && distance(s.player.pose.position, host.position) <= HOST_REACH;
+  }
   const locker = s.inventory.containers.find((c) => c.id === id && c.kind === "locker" && c.ownerId !== "home_pod" &&
     c.ownerId !== "island_workshop" && c.ownerId !== "canopy_stop" && !(STOP_IDS as readonly string[]).includes(c.ownerId));
   if (locker) {
@@ -207,6 +226,10 @@ export function containerAccessible(s: GameState, id: string): boolean {
   // A berthed craft's hold opens from inside its carrier (the dry berth room).
   if (v?.berth && s.player.interiorId === v.berth.carrierId && s.fleet.docking?.transaction?.vehicleId !== v.id) return true;
   const bench = localBenchSite(s);
+  // C4: a beached Spindle with a shore ramp loads from the shore itself.
+  if (v?.hull === "spindle" && !v.berth && onFoot && s.player.pose.position.y > 0 &&
+      v.modules.some((m) => s.inventory.items.find((i) => i.id === m)?.kind === "spindle_shore_ramp") &&
+      distance(s.player.pose.position, v.pose.position) < SHORE_RAMP_REACH) return true;
   return (
     !!v && !v.berth && s.fleet.docking?.transaction?.vehicleId !== v.id &&
     (v.id === s.player.controlledVehicleId || v.id === s.player.interiorId ||
@@ -224,6 +247,10 @@ export function containerLabel(s: GameState, id: string): string {
   const stopLocker = STOP_IDS.find((stop) => WORKING_STOPS[stop].locker === id);
   if (stopLocker) return stopLocker === "stack_yard" ? "yard store" : `${WORKING_STOPS[stopLocker].label} locker`;
   if (s.inventory.items.some((i) => i.kind === "creel_cabin" && cabinLockerId(i.id) === id)) return "cabin locker";
+  const outpost = s.systems.outposts.find((o) => `${o.id}_locker` === id);
+  if (outpost) return `${outpost.name} locker`;
+  if (s.systems.sockets.some((e) => `${e.itemId}_locker` === id) ||
+      s.inventory.items.some((i) => i.kind === "mod_locker" && `${i.id}_locker` === id)) return "locker module";
   if (s.inventory.containers.find((c) => c.id === id)?.kind === "cache") return "cargo cache";
   return id.replaceAll("_", " ");
 }

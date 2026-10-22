@@ -1,3 +1,4 @@
+import type { CycleObservation } from "./cycles/observe.js";
 import type { RosterId, WorksAction } from "../content/story/works.js";
 import type { EcologyEvent, EcologyState, ThreatSpeciesId } from "./ecology/types.js";
 import type {
@@ -14,6 +15,10 @@ import type {
 } from "../content/registry.js";
 import type { StoryState } from "./story/state.js";
 import type { RecoveryRouteId } from "../content/recoveryRoutes.js";
+import type { RestBaseId } from "../content/bases.js";
+import type { SystemsState } from "./systems/state.js";
+import type { SystemsEvent } from "./systems/step.js";
+import type { FlareState, UpgradeRuntime } from "./upgrades/tools.js";
 export interface Vec3 {
   x: number;
   y: number;
@@ -33,7 +38,8 @@ export interface PlayerState {
   velocity: Vec3;
   mode: MovementMode;
   vitals: { health: number; oxygen: number; food: number };
-  refugeId: PlaceId;
+  /** The last restored base with a bunk the diver rested at: where they wake (C4). */
+  refugeId: RestBaseId;
   controlledVehicleId: string | null;
   interiorId: string | null;
   starvationSeconds: number;
@@ -92,6 +98,10 @@ export interface VehicleState {
     slot: 0 | 1;
     pose: { frame: "carrier-local"; position: Vec3; yaw: number };
   } | null;
+  /** SYS-1 upgrade runtime (C4): flares, ballast, overdrive, anchor. */
+  upgrades: UpgradeRuntime;
+  /** A bio-cell feeding this hull: stock-battery percent still to come. */
+  bioFeed: { remaining: number } | null;
 }
 export interface BerthTransaction {
   id: string;
@@ -133,6 +143,8 @@ export interface GameState {
     markers: PlaceId[];
     crafted: RecipeId[];
     hintLevel: number;
+    /** C4: what the player has watched of each world cycle (CY's observer). */
+    cycles: CycleObservation[];
   };
   world: {
     resources: { id: SourceId; stock: number; reserve: number }[];
@@ -151,6 +163,8 @@ export interface GameState {
       distraction: Vec3 | null;
       distractionSeconds: number;
     };
+    /** Burning flares fired by craft launchers (C4). */
+    flares: FlareState[];
     action: {
       sourceId: SourceId;
       seconds: number;
@@ -159,6 +173,8 @@ export interface GameState {
     } | null;
   };
   fleet: { vehicles: VehicleState[]; docking: CarrierState | null };
+  /** SYS-2 bases and knowledge (C4): outposts, sockets, decodes, planters, beacons, chart. */
+  systems: SystemsState;
   /** S5 story record. C01–C06 stay in knowledge.evidence and the reef journal in
    * knowledge.journals, with their original ticks; this holds every later
    * discovery, hint tiers, the works and the resolution. See sim/storyLink.ts. */
@@ -211,7 +227,7 @@ export type GameCommand =
   | { type: "exit" }
   | { type: "service"; vehicleId: string }
   | { type: "recharge-cells" }
-  | { type: "install-module"; vehicleId: string; itemId: string }
+  | { type: "install-module"; vehicleId: string; itemId: string; replace?: string }
   /** Leave the helm into the fitted Creel cabin (station held), or take the helm from it. */
   | { type: "cabin"; action: "enter" | "helm" | "hatch" | "cook" }
   /** Register (vehicleId) or clear (null) the mobile refuge at a cabin bunk. */
@@ -230,6 +246,25 @@ export type GameCommand =
   | { type: "deploy-lure" }
   | { type: "release-ink" }
   | { type: "mark"; placeId: PlaceId }
+  // C4: SYS-1 upgrade actions and fitting.
+  | { type: "upgrade"; action: "overdrive" | "flare" | "ballast" | "anchor" | "listen" | "sample" | "rearm" | "bio-cell"; vehicleId?: string; itemId?: string }
+  // C4: SYS-2 bases and knowledge.
+  | { type: "deploy-outpost"; itemId: string; name?: string }
+  | { type: "pack-outpost"; outpostId: string; to?: string }
+  | { type: "upgrade-outpost"; outpostId: string }
+  | { type: "install-host-module"; hostId: string; socket: string; itemId: string }
+  | { type: "remove-host-module"; hostId: string; socket: string; to?: string }
+  | { type: "start-decode"; hostId: string; socket: string; decodable: string }
+  | { type: "plant"; hostId: string; socket: string; seed: string }
+  | { type: "harvest"; hostId: string; socket: string; to?: string; replant?: boolean }
+  | { type: "place-beacon"; name: string }
+  | { type: "collect-beacon"; beaconId: string }
+  | { type: "beacon-switch"; beaconId?: string; category?: string; on: boolean }
+  | { type: "ping" }
+  | { type: "survey"; hostId: string }
+  | { type: "rest" }
+  /** C4B-02: the carrier's charger module charges every berthed craft from the carrier. */
+  | { type: "charge-berths"; carrierId: string }
   | {
       type: "carrier";
       action:
@@ -274,7 +309,9 @@ export type GameEvent =
       solidLimitedRise: number; surfaceLimitedRise: number }
   /** Horizontal metres from this step's commanded Dart movement. Never saved. */
   | { type: "thrust-sample"; actorId: string; requested: number; actual: number; solidLimited: number; supportLimited: number }
-  | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook"; targetId: string }
+  /** SYS-2 background work for the local play timeline (C4). Transient, never saved. */
+  | { type: "systems"; event: SystemsEvent }
+  | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook" | "systems" | "journal"; targetId: string }
   | ({ type: "notice"; message: string; error?: boolean } & NoticeOptions)
   | {
       type: "sound";

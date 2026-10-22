@@ -33,12 +33,12 @@ import {
   toggleBuoy,
 } from "./progression.js";
 import {
-  ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, cabinWorld, cook, CARRIER_DRAIN, CREEL_CABIN, hullHandling,
+  ARM_CHARGE, ARM_LIFT_SECONDS, armTarget, cabinHull, cabinWorld, cook, CREEL_CABIN, hullHandling,
   enterCabinFromHatch, enterCabinFromHelm, hullToWorld, leaveByHatch, registerRefuge, takeHelmFromCabin,
 } from "./fleet.js";
 import { aimedInteraction } from "./targeting.js";
-import { board, distraction, eat, exit, exitBlock, rechargeCells, reserve, service } from "./vehicles.js";
-import { dartPerformance, installModule, removeModule } from "./modules.js";
+import { board, distraction, eat, exit, exitBlock, rechargeCells, reserve } from "./vehicles.js";
+import { installModule, removeModule } from "./modules.js";
 import {
   carrierCommand,
   carrierHull,
@@ -97,10 +97,23 @@ import { protectionFor } from "./ecology/hazards.js";
 import { MOTION, respondToFlow } from "./currents/motion.js";
 import { dampIntoFace, impactLoss, supportedDrift } from "./currents/move.js";
 import { flowAt, worldCurrents } from "./currents/world.js";
-import { ACTORS as CURRENT_ACTORS } from "../content/currents/actors.js";
+import { stepUpgrades, upgradeAction } from "./fittings.js";
+import { stepSystems, systemsCommand } from "./systemsLink.js";
+import { serviceCommand, servicePreview } from "./serviceLink.js";
+import { observeWorldCycles } from "./cyclesLink.js";
+import { REST_BASES } from "../content/bases.js";
+import { currentObjective } from "./objective.js";
+import { DECODABLES } from "../content/systems/decodes.js";
+import { readLostSite } from "./systemsLink.js";
+import { restBaseHere } from "./survival.js";
+import { vehicleProfile } from "./fittings.js";
+import { hullDamage, motion } from "./upgrades/effects.js";
+import { BALLAST, ballastStep, overdriveMotion } from "./upgrades/tools.js";
 const ZERO: Vec3 = { x: 0, y: 0, z: 0 };
 /** Highest rock lip a swimmer glides up onto, metres (one cave voxel, plus margin). */
 const SWIM_LIP = 0.6;
+/** How far under the surface cap a swimmer still counts as at the surface. */
+const SURFACE_STEP = 0.005;
 const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
@@ -147,6 +160,11 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     }
     return null;
   }
+  const systems = systemsCommand(s, c, w);
+  if (systems !== undefined) {
+    if (systems === null && s.feedback) actionResult(s, events, s.feedback);
+    return systems;
+  }
   switch (c.type) {
     case "craft": {
       const no = craft(s, c.recipeId, w);
@@ -175,7 +193,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       return no;
     }
     case "install-module": {
-      const no = installModule(s, c.vehicleId, c.itemId);
+      const no = installModule(s, c.vehicleId, c.itemId, c.replace);
       if (!no) actionResult(s, events, `${moduleName(s, c.itemId)} fitted`);
       return no;
     }
@@ -192,8 +210,10 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     case "exit":
       return exitAction(s, w, events);
     case "service": {
-      const no = service(s, c.vehicleId);
-      if (!no) actionResult(s, events, `${HULLS[s.fleet.vehicles.find(v => v.id === c.vehicleId)!.hull].label} serviced`);
+      // C4: the composed service; beside a field outpost its charger charges the craft.
+      const charging = servicePreview(s, c.vehicleId).kind === "outpost";
+      const no = serviceCommand(s, c.vehicleId);
+      if (!no) actionResult(s, events, `${HULLS[s.fleet.vehicles.find(v => v.id === c.vehicleId)!.hull].label} ${charging ? "charged" : "serviced"}`);
       return no;
     }
     case "reserve": {
@@ -224,9 +244,14 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       events.push({ type: "notice", channel: "action", message: `Tool arms on ${SOURCES[target.sourceId].label} · ${ARM_LIFT_SECONDS} s · hold position.` });
       return null;
     }
-    case "hint":
-      s.feedback = storyHint(s);
+    case "hint": {
+      // Practical step first, the story's graduated hint second; while a craft is
+      // disabled or cargo is cached, the recovery steps (M2 audit #5).
+      const objective = currentObjective(s), flavour = storyHint(s);
+      s.feedback = objective.kind === "recovery" ? objective.step
+        : objective.kind === "story" ? flavour : `${objective.step} ${flavour === objective.step ? "" : `· ${flavour}`}`.trim();
       return null;
+    }
     case "mark":
       if (!s.knowledge.markers.includes(c.placeId))
         return "Only visited places can be marked.";
@@ -250,6 +275,20 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       return resolutionCommand(s, c.action, c.roster);
     case "lamp":
       return toggleLamp(s);
+    case "upgrade": {
+      const no = upgradeAction(s, c.action, w, c.itemId);
+      // A flare is a bright light that sight hunters turn to: S4's lure, at the flare.
+      if (!no && c.action === "flare") placeDeterrent(s, "lure", s.world.flares.at(-1)!.position);
+      if (!no) actionResult(s, events, s.feedback);
+      return no;
+    }
+    case "rest": {
+      const base = restBaseHere(s);
+      if (!base) return "Rest at a restored base's bunk: the pod, the workshop or a restored stop with air.";
+      s.player.refugeId = base;
+      s.feedback = `Resting at ${REST_BASES[base].label}. You will wake here if you are incapacitated.`;
+      return null;
+    }
     case "deploy-lure":
       return releaseKit(s, "lure");
     case "release-ink":
@@ -329,8 +368,10 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       }
       if (target.kind === "source") {
         const id = target.id as SourceId;
-        if (target.verb === "empty") {
-          events.push({ type: "notice", channel: "action", message: `${target.label} · Empty${renewable(id) ? " · regrowing" : ""}.` });
+        if (target.verb === "empty" || target.verb === "inspect") {
+          // A scan-only site (C4, CB: never stocked) reads its scan instead of "Empty".
+          events.push({ type: "notice", channel: "action", message: target.verb === "inspect" ? `${target.label} · ${SOURCES[id].scan}`
+            : `${target.label} · Empty${renewable(id) ? " · regrowing" : ""}.` });
           return null;
         }
         if (target.verb === "sort" && SOURCES[id].item !== "meal")
@@ -352,6 +393,18 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
           return null;
         }
         s.feedback = discover(s, target.id as EvidenceId);
+        return null;
+      }
+      // C4: a lost site's records stay unreadable until decoded; outposts and
+      // placed beacons open the base panel.
+      if (target.id.startsWith("lost:")) {
+        s.feedback = readLostSite(s, target.id.slice(5));
+        if (s.systems.decoded.some((d) => DECODABLES[d].site === target.id.slice(5)))
+          events.push({ type: "interaction-panel", panel: "journal", targetId: target.id });
+        return null;
+      }
+      if (target.id.startsWith("outpost:") || target.id.startsWith("beacon:")) {
+        events.push({ type: "interaction-panel", panel: "systems", targetId: target.id });
         return null;
       }
       if (techRecord(target.id)) {
@@ -404,6 +457,8 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         (target.id === "canopy_stop_services" && s.world.facilities.some(f => f.id === "canopy_stop" && f.repaired)) ? "inventory" : "craft", targetId: target.id });
       return null;
     }
+    default:
+      return "That command is not available here.";
   }
 }
 function updateAction(s: GameState): void {
@@ -586,21 +641,12 @@ export function stepGame(
   if (v) {
     const dock = s.fleet.docking,
       station = v.hull === "hearthline" && dock?.stationKeeping;
-    const performance = dartPerformance(s, v.id);
-    const speed =
-      v.disabled || v.charge <= 0 || station
-        ? 0
-        : v.hull === "hearthline"
-          ? 3
-          : handling
-            ? quiet ? handling.quiet : sprint ? handling.boost : handling.cruise
-            : v.hull === "spindle"
-              ? 7
-              : quiet
-                ? performance?.quietSpeed ?? 3
-                : sprint
-                  ? performance?.boostSpeed ?? 11
-                  : 8;
+    // SYS-1 (C4): every hull's speed, loudness and drain come from its profile:
+    // the hull base plus fitted upgrades, wrapped by a running overdrive.
+    const profile = vehicleProfile(s, v), lampLit = s.player.lamp && v.charge > 0 && !v.disabled;
+    const modeName = quiet ? "quiet" as const : sprint ? "boost" as const : "cruise" as const;
+    const pilot = overdriveMotion(profile, v.upgrades, s.tick, motion(profile, modeName, { lamp: lampLit }));
+    const speed = v.disabled || v.charge <= 0 || station ? 0 : pilot.speed;
     const forwardIntent = forward > 0.5 && Math.abs(right) <= 0.1;
     const n = Math.max(1, Math.hypot(forward, right, vertical));
     forward /= n;
@@ -626,11 +672,15 @@ export function stepGame(
     // CY currents: one flow sample before the move. The drift joins the drive
     // inside the hull's own sweep; `v.velocity` stays the drive alone.
     const powered = !v.disabled && v.charge > 0, drive = { ...v.velocity };
-    const cruiseDrain = handling ? handling.drain : v.hull === "hearthline" ? CARRIER_DRAIN : 100 / 900;
+    const cruiseDrain = profile.drain / profile.capacity;
+    const stopped = Math.hypot(target.x, target.y, target.z) < MOTION.stopped;
     const current = v.berth ? null : respondToFlow(flowAt(v.pose.position, s.tick).flow, {
-      id: v.hull, authority: protectionFor(v.hull, fittedProtections(s)).current, cruise: CURRENT_ACTORS[v.hull].cruise, drain: cruiseDrain,
-    }, drive, powered && Math.hypot(target.x, target.y, target.z) < MOTION.stopped ? "station" : "none", powered);
+      id: v.hull, authority: profile.current, cruise: profile.speed.cruise, drain: cruiseDrain,
+    }, drive, v.upgrades.anchored && stopped ? "anchor" : powered && stopped ? "station" : "none", powered);
     const driftDelta = current ? { x: current.drift.x * DT, y: current.drift.y * DT, z: current.drift.z * DT } : ZERO;
+    // Emergency ballast: a mechanical rise through the same sweep, power or not.
+    const ballast = ballastStep(v.upgrades, Math.max(0, -(v.pose.position.y + 0.5)), DT);
+    v.upgrades = ballast.runtime;
     // Ascent and thrust samples measure still-water propulsion only.
     const drifting = driftDelta.x !== 0 || driftDelta.y !== 0 || driftDelta.z !== 0;
     if (!drifting && speed > 0 && v.hull !== "spindle" && target.y > 0 && delta.y > 0)
@@ -650,7 +700,7 @@ export function stepGame(
       floorRefused = false;
       // Drift may descend only to the floor margin (move.ts `supportedDrift`).
       const drifted = drifting ? supportedDrift(world, hullOrigin, d, driftDelta, shape) : ZERO;
-      const travel = { x: d.x + drifted.x, y: d.y + drifted.y, z: d.z + drifted.z };
+      const travel = { x: d.x + drifted.x, y: d.y + drifted.y + ballast.rise, z: d.z + drifted.z };
       requestedTravel = travel;
       let solidRise = 0, solidThrust = 0, supportThrust = 0, forwardBoundary = false;
       const measuredWorld: WorldQueries = attempt || forwardAttempt ? { ...world, moveCapsule(origin, slice, proxy) {
@@ -692,7 +742,7 @@ export function stepGame(
     const refused = move.hitSolid && lostLength > 1e-9
       ? { x: lost.x / lostLength, y: lost.y / lostLength, z: lost.z / lostLength } : null;
     const closing = refused ? Math.max(0, drive.x * refused.x + drive.y * refused.y + drive.z * refused.z) : 0;
-    const impact = impactLoss(closing, DT);
+    const impact = hullDamage(profile, impactLoss(closing, DT));
     if (impact > 0) {
       const before = v.health;
       v.health = Math.max(0, v.health - impact);
@@ -708,20 +758,14 @@ export function stepGame(
     s.player.mode = "piloting";
     const d = distance(old, s.player.pose.position);
     s.metrics.pilotMetres += d;
-    const creel = handling !== null;
     // "Moving" is the drive, not displacement: drifting is not cruising.
     const moving = Math.hypot(drive.x, drive.y, drive.z) * DT > 0.003;
-    const drain =
-      powered
-        ? ((moving
-            ? cruiseDrain * (sprint ? (creel ? 1.6 : 1.7) : quiet ? (creel ? 0.6 : 0.65) : 1)
-            : 0.015) + (current?.extraDrain ?? 0)) * DT
-        : 0;
+    const idle = motion(profile, "idle", { lamp: lampLit });
+    const drain = powered ? ((moving ? pilot.drain : idle.drain) + (current?.extraDrain ?? 0)) * DT : 0;
     v.charge = Math.max(0, v.charge - drain);
     s.metrics.powerUsed += drain;
-    loudness = handling
-      ? quiet ? handling.loudness.quiet : sprint ? handling.loudness.boost : moving ? handling.loudness.cruise : 0.08
-      : quiet ? 0.08 : sprint ? 1 : moving ? 0.48 : 0.08;
+    loudness = Math.max(quiet ? pilot.loudness : sprint || moving ? pilot.loudness : idle.loudness,
+      ballast.rise > 0 ? BALLAST.loudness : 0);
     if (move.hitBoundary) events.push({ type: "foundation-boundary" });
     if (move.hitBoundary || move.forwardBoundary) thrust = null;
     else if (thrust) thrust.actual = Math.hypot(move.position.x - old.x, move.position.z - old.z);
@@ -865,7 +909,7 @@ export function stepGame(
         delta.y = nextSupport - position.y;
       const sliceOrigin = { ...position };
       const constrained = surfaceMove(world, sliceOrigin, delta, capsule, d => {
-        let move = world.moveCapsule(sliceOrigin, d, capsule);
+        let move = world.moveCapsule(sliceOrigin, d, capsule), waded = false;
         // A swimmer gliding along a floor of rock boxes (a cave's 0.5 m
         // terraces) meets each riser as a face. When the joint sweep is
         // stopped and a lip at most SWIM_LIP above lies just ahead, rise onto
@@ -878,12 +922,21 @@ export function stepGame(
               sliceOrigin.y + SWIM_LIP));
           const rise = lip + 0.01 - sliceOrigin.y;
           // Only under water: never a climb onto a float or out at the surface.
-          if (rise > Math.max(0, d.y) && rise <= SWIM_LIP && sliceOrigin.y + rise + capsule.height < -0.5) {
+          // At the surface too (CA-1 P3): a diver at or just under the cap steps onto
+          // a lip that is itself at or under the waterline (a wading shelf), never
+          // onto dry rock or a float.
+          const submerged = sliceOrigin.y + rise + capsule.height < -0.5;
+          // A shelf, not a rib's edge: one body width ahead is still standable floor.
+          const dl = Math.hypot(d.x, d.z), ahead = (k: number) => world.supportHeight(
+            sliceOrigin.x + d.x / dl * k, sliceOrigin.z + d.z / dl * k, sliceOrigin.y + SWIM_LIP);
+          const wading = sliceOrigin.y >= -0.5 - SURFACE_STEP && lip <= -0.5 + 1e-6 &&
+            ahead(capsule.radius * 3) >= -0.55 && ahead(capsule.radius * 3) <= -0.5 + 1e-6;
+          if (rise > Math.max(0, d.y) && rise <= SWIM_LIP && (submerged || wading)) {
             const up = world.moveCapsule(sliceOrigin, { x: 0, y: rise, z: 0 }, capsule);
             if (!up.hitSolid && !up.hitBoundary) {
               const across = world.moveCapsule(up.position, { x: d.x, y: 0, z: d.z }, capsule);
               const progress = (q: Vec3): number => Math.hypot(q.x - sliceOrigin.x, q.z - sliceOrigin.z);
-              if (progress(across.position) > progress(move.position) + 1e-6) move = across;
+              if (progress(across.position) > progress(move.position) + 1e-6) { move = across; waded = !submerged; }
             }
           }
         }
@@ -891,12 +944,14 @@ export function stepGame(
           ? Math.max(0, sliceOrigin.y + Math.max(0, d.y) - move.position.y) : 0;
         const floor = world.supportHeight(move.position.x, move.position.z, move.position.y);
         const supported = move.position.y < floor;
-        return { ...move, solidRise, floor, supported };
+        return { ...move, solidRise, floor, supported, waded };
       }, move => {
         // Support is another vertical correction, just like the water cap.
         // Validate its whole path before accepting it near a cliff/adjacent solid.
+        // A surface step onto a wading shelf stands on its edge: the cap does not
+        // push the body back into the lip it just rose onto.
         const y = Math.max(move.position.y, move.floor);
-        return mode === "swimming" && old.y <= -0.5 && move.floor < -0.55 ? Math.min(-0.5, y) : y;
+        return mode === "swimming" && old.y <= -0.5 && move.floor < -0.55 && !move.waded ? Math.min(-0.5, y) : y;
       });
       if (ascent) {
         ascent.solidLimitedRise += constrained.rolledBack ? requestedRise : constrained.move.solidRise;
@@ -947,6 +1002,10 @@ export function stepGame(
         (s.player.pose.position[a] - buoy.position[a]) * DT * 2;
   }
   updateAction(s);
+  stepUpgrades(s, new Set(s.fleet.vehicles.filter((a) => distance(a.pose.position,
+    state.fleet.vehicles.find((b) => b.id === a.id)?.pose.position ?? a.pose.position) > 0.003).map((a) => a.id)));
+  stepSystems(s, events);
+  observeWorldCycles(s, world, events);
   advanceRenewal(s);
   advanceStory(s);
   updateBerth(s, world);

@@ -7,8 +7,10 @@ import {
 import { personalDepth } from "../src/sim/capabilities.js";
 import { CAMPAIGN_RECIPES, CAMPAIGN_SOURCE_SITES } from "../src/content/campaign/index.js";
 import { SUIT_RATINGS } from "../src/content/registry.js";
-import { available, fabricationContainers, hasRoom, transfer } from "../src/sim/inventory.js";
-import { collectWithOutcome, completeOpening, craft, craftingBlock, discover } from "../src/sim/progression.js";
+import { addItem, available, fabricationContainers, hasRoom, transfer } from "../src/sim/inventory.js";
+import { HOST_KNOWLEDGE_RECIPES, UPGRADE_RECIPES, UPGRADE_REFIT_RECIPES } from "../src/content/upgrades/registry.js";
+import { SYS2_RECIPES } from "../src/content/systems/items.js";
+import { collectWithOutcome, completeOpening, craft, craftingBlock, discover, frameDestination } from "../src/sim/progression.js";
 import { createGame } from "../src/sim/state.js";
 import { executeCommand } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
@@ -24,8 +26,11 @@ const B1 = ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "res
 const STORY = ["service_power_assembly", "service_air_assembly", "pod_buffer"] as const;
 /** S9 campaign recipes; tests/campaign-*.test.ts prove their chain and economy. */
 const CAMPAIGN = Object.keys(CAMPAIGN_RECIPES) as RecipeId[];
+/** C4's SYS-1 upgrade, refit and host-knowledge recipes and SYS-2's kits and
+ * modules; tests/c4-systems.test.ts and the upgrade economy check prove them. */
+const C4 = Object.keys({ ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES, ...SYS2_RECIPES }) as RecipeId[];
 const PRE_B1 = ids.filter((id) => !(B1 as readonly string[]).includes(id) && !(STORY as readonly string[]).includes(id) &&
-  !(CAMPAIGN as readonly string[]).includes(id));
+  !(CAMPAIGN as readonly string[]).includes(id) && !(C4 as readonly string[]).includes(id));
 const visible = (s: GameState) => ids.filter((id) => s.knowledge.blueprints.includes(RECIPES[id].bp));
 const POD = { x: 0, y: 0.18, z: 21.2 }, WORKSHOP = { x: 11, y: 1.2, z: -35 };
 function opened(): GameState { const s = createGame(); completeOpening(s); return s; }
@@ -46,6 +51,7 @@ test("New Game exposes only the pod checklist ladder; unknown or premature plans
     ...Object.fromEntries(B1.map((id) => [id, "blueprint"])),
     ...Object.fromEntries(STORY.map((id) => [id, "blueprint"])),
     ...Object.fromEntries(CAMPAIGN.map((id) => [id, "blueprint"])),
+    ...Object.fromEntries(C4.map((id) => [id, "blueprint"])),
   }, "nothing beyond the first repair is attemptable; it still needs materials");
   // Even with every material at the right bench, unknown or later plans cannot be bypassed.
   for (const site of [POD, WORKSHOP]) {
@@ -66,18 +72,22 @@ test("each clue unlocks a bounded, exact plan set; every one of the 120 clue ord
     unlocks[id] = visible(s).filter((r) => !before.includes(r));
   }
   assert.deepEqual(unlocks, {
-    C01: [], C02: ["salvage_buoy", "bobbin_kit", "glow_lures", "startle_ink", "bobbin_deep_tether"],
-    C03: ["restore_workshop", "dart_base", "hearthline_base", "galley_planter"],
-    C04: ["dart_acoustic_trim", "suit_350", "restore_canopy_stop", "trim_vanes"],
-    C05: ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "hearthline_keel"],
-    C06: ["creel_350", "suit_450", "creel_450", "restore_rift_station", "hearthline_550", "heat_shroud", "hull_heat_lining"],
+    // C4: each clue's plans also carry the SYS-1 upgrades drawn on them.
+    C01: [], C02: ["salvage_buoy", "bobbin_kit", "glow_lures", "startle_ink", "bobbin_deep_tether", "flare_launcher", "emergency_ballast"],
+    C03: ["restore_workshop", "dart_base", "hearthline_base", "galley_planter", "plating_alloy", "cell_bank_1", "drive_tuning_1",
+      "floodlights_1", "dart_overdrive", "hearthline_system_bay", "hearthline_mooring_anchor", "outpost_network_1"],
+    C04: ["dart_acoustic_trim", "suit_350", "restore_canopy_stop", "trim_vanes", "silent_running", "chart_live_position"],
+    C05: ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "hearthline_keel", "creel_service_head"],
+    C06: ["creel_350", "suit_450", "creel_450", "restore_rift_station", "hearthline_550", "heat_shroud", "hull_heat_lining",
+      "plating_ceramic", "cell_bank_2", "drive_tuning_2", "thermal_exchanger", "floodlights_2", "hush_450", "dart_450"],
   });
   // M2-B1: the Creel service plan is fully executable; carrier and deeper pressure
   // research stay listed as future knowledge even where part of a plan now executes.
   assert.ok(!Object.hasOwn(FUTURE_BLUEPRINTS, "bp_creel_service"));
   for (const bp of ["bp_carrier_basin", "bp_rift_pressure"] as const) assert.ok(Object.hasOwn(FUTURE_BLUEPRINTS, bp), bp);
   // S9: carrier construction is registered, done at the stack-yard berth C3 places.
-  assert.deepEqual(ids.filter((r) => (RECIPES[r].bp as string) === "bp_carrier_workshop"), ["hearthline_base", "galley_planter"]);
+  assert.deepEqual(ids.filter((r) => (RECIPES[r].bp as string) === "bp_carrier_workshop"),
+    ["hearthline_base", "galley_planter", "hearthline_system_bay", "hearthline_mooring_anchor"]);
   const finals = new Set<string>();
   for (const order of permutations(["C02", "C03", "C04", "C05", "C06"] as const)) {
     const s = opened();
@@ -124,7 +134,8 @@ function earnedSequence(clues: readonly EvidenceId[]): { order: RecipeId[]; take
   const depositAt = (site: "pod" | "workshop"): void => {
     s.player.pose.position = { ...(site === "pod" ? POD : WORKSHOP) };
     const locker = site === "pod" ? "pod_locker" : "workshop_locker";
-    for (const item of s.inventory.items.filter((i) => i.containerId === "diver" && Object.hasOwn(MATERIALS, i.kind)))
+    // C4: a 10 CU frame lift needs the hold cleared of the kit made so far too.
+    for (const item of s.inventory.items.filter((i) => i.containerId === "diver" && (Object.hasOwn(MATERIALS, i.kind) || i.kind !== "tagged_frame")))
       assert.equal(transfer(s, item.id, locker, item.quantity), null);
   };
   const make = (id: RecipeId): void => {
@@ -136,7 +147,7 @@ function earnedSequence(clues: readonly EvidenceId[]): { order: RecipeId[]; take
       for (const src of (Object.keys(SOURCES) as SourceId[]).filter((x) => SOURCES[x].item === k)) {
         const node = s.world.resources.find((n) => n.id === src)!;
         while (need > 0 && node.stock > 0) {
-          if (!hasRoom(s, "diver", ITEMS[k].cu * SOURCES[src].bundle)) {
+          if (!hasRoom(s, "diver", ITEMS[k].cu * SOURCES[src].bundle) || ((k as string) === "tagged_frame" && !frameDestination(s))) {
             assert.ok(lockerReady, `${id}: carried load must fit before the locker is restored`);
             depositAt(site);
           }
@@ -145,6 +156,13 @@ function earnedSequence(clues: readonly EvidenceId[]): { order: RecipeId[]; take
             : s.inventory.items.some((i) => i.kind === "suit_150") ? 150 : 60)) break;
           const got = collectWithOutcome(s, src);
           assert.equal(got.refusal, null, `${id}: ${src}`);
+          if ((k as string) === "tagged_frame") {
+            // C4: suit_350's frame is a timed lift; staged here as its completion does, without play time.
+            assert.deepEqual(s.world.action, { sourceId: src, seconds: 10, kind: "lift" });
+            addItem(s, "tagged_frame", 1, frameDestination(s)!); node.stock--; s.world.action = null;
+            need -= 1; taken[src] = (taken[src] ?? 0) + 1;
+            continue;
+          }
           need -= got.pickup!.quantity; taken[src] = (taken[src] ?? 0) + got.pickup!.quantity;
         }
       }

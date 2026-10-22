@@ -14,12 +14,24 @@ import { makeVehicle } from "../src/sim/state.js";
 import { carrierInteriorSolids, fixtureGame } from "../src/sim/carrier.js";
 import { give, opened } from "./systems-support.js";
 
-test("proposed IDs don't collide with the registry and every reference resolves", () => {
-  for (const k of Object.keys(SYS2_ITEMS)) assert.ok(!Object.hasOwn(ITEMS, k), `item ${k}`);
-  for (const k of Object.keys(SYS2_RECIPES)) assert.ok(!Object.hasOwn(RECIPES, k), `recipe ${k}`);
-  for (const k of Object.keys(SYS2_SOURCES)) assert.ok(!Object.hasOwn(SOURCES, k), `source ${k}`);
-  for (const k of Object.keys(SYS2_TECH_RECORDS)) assert.ok(!Object.hasOwn(TECH_RECORDS, k), `record ${k}`);
-  for (const k of Object.keys(SYS2_BLUEPRINTS)) assert.ok(!(BLUEPRINTS as readonly string[]).includes(k), `blueprint ${k}`);
+test("SYS-2's rows are composed into the registry unchanged (C4) and every reference resolves", () => {
+  // Items keep label and volume; stacking stays SYS-2's rule (inventory reads SYS2_ITEMS).
+  for (const [k, v] of Object.entries(SYS2_ITEMS)) assert.deepEqual((ITEMS as Record<string, unknown>)[k], { label: v.label, cu: v.cu }, `item ${k}`);
+  // Recipes keep their rows; those paying crust also wait for the 150 m suit.
+  for (const [k, r] of Object.entries(SYS2_RECIPES))
+    assert.deepEqual((RECIPES as Record<string, unknown>)[k], "conductive_crust" in r.cost ? { ...r, needs: [...r.needs, "suit_150"] } : r, `recipe ${k}`);
+  // Seed patches keep their rows; only each datum is lowered onto the composed floor.
+  for (const [k, src] of Object.entries(SYS2_SOURCES)) {
+    const placed = (SOURCES as unknown as Record<string, typeof src>)[k]!;
+    assert.deepEqual({ ...placed, position: { ...placed.position, y: src.position.y } }, src, `source ${k}`);
+  }
+  // Records keep their rows; the signal rack is composed off the workshop's back wall.
+  for (const [k, r] of Object.entries(SYS2_TECH_RECORDS)) {
+    const placed = (TECH_RECORDS as unknown as Record<string, typeof r>)[k]!;
+    assert.deepEqual({ ...placed, position: r.position }, r, `record ${k}`);
+    if (k !== "workshop_decoder_rack") assert.deepEqual(placed.position, r.position, k);
+  }
+  for (const k of Object.keys(SYS2_BLUEPRINTS)) assert.ok((BLUEPRINTS as readonly string[]).includes(k), `blueprint ${k}`);
   for (const [id, r] of Object.entries(SYS2_RECIPES)) {
     assert.ok(Object.hasOwn(SYS2_ITEMS, r.output), `${id} output`);
     for (const k of Object.keys(r.cost)) assert.ok(Object.hasOwn(MATERIALS, k) || k === "tagged_frame", `${id} cost ${k}`);
@@ -70,8 +82,11 @@ test("the carrier is a socket host: Hearthline system sockets take modules and w
   assert.equal(installModule(s, sys, host.id, "hl.socket.galley.planter", planter), null);
   assert.deepEqual(carrierOccupants(sys, h.id), { "hl.socket.galley.planter": "galley_planter" });
   const decoder = give(s, "mod_decoder");
-  assert.match(installModule(s, sys, host.id, "hl.socket.bridge.survey", decoder) ?? "", /not the decoder/);
-  assert.equal(installModule(s, sys, host.id, "hl.socket.fab.bench.1", decoder), null);
+  // C4: the bridge survey socket takes the decoder too (it refuses a planter).
+  assert.match(installModule(s, sys, host.id, "hl.socket.bridge.survey", give(s, "mod_planter")) ?? "", /not the planter/);
+  assert.equal(installModule(s, sys, host.id, "hl.socket.bridge.survey", decoder), null);
+  assert.equal(carrierOccupants(sys, h.id)["hl.socket.bridge.survey"], "decoder");
+  assert.equal(installModule(s, sys, host.id, "hl.socket.fab.bench.1", give(s, "mod_decoder")), null);
   assert.equal(carrierOccupants(sys, h.id)["hl.socket.fab.bench.1"], "sample_analyser");
 });
 
