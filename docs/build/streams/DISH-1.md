@@ -1,6 +1,6 @@
 # DISH-1: the Basin dishes collide where they are drawn; POI pacing sees in 3D
 
-Opus 5.5 high. Branch `t3/dish-rim-collision` from root `4dcf3ad`. It answers two findings from Sol's POI-1 review ([report](../reviews/POI-1-SOL-XHIGH-R1.md)):
+Opus 5.5 high. Branch `t3/dish-rim-collision` from root `4dcf3ad`; code `3e5d8b4`, merged with root `d9099e0` (CA-3, CB-2) at `bca41a6`. It answers two findings from Sol's POI-1 review ([report](../reviews/POI-1-SOL-XHIGH-R1.md)):
 - **POI-1-02 (P2):** the dish rims stood up to 12.9 m above their collision, and a diver swam through them.
 - **POI-1-01 (P3):** the pacing test ignored height and occlusion.
 
@@ -38,7 +38,7 @@ Opus 5.5 high. Branch `t3/dish-rim-collision` from root `4dcf3ad`. It answers tw
 - **Dish solids:** 4,855 (1,403 + 2,404 + 1,048), against 39 before.
 
 ## Checks
-- **`npm run test:fast`:** 1,244/1,244. New fast tests in `tests/dishes.test.ts`:
+- **`npm run test:fast`:** 1,244/1,244 at `3e5d8b4`; 1,264/1,264 after the root merge. New fast tests in `tests/dishes.test.ts`:
   - **production sweeps:** the world stops a diver at every rim crossing, in and out, and at every bowl panel, from below and from inside;
   - **adverse control:** the old rim blocks let more than 100 crossings straight through;
   - **open bowls:** the dish sites' poses fit, and a craft descends to its park pose;
