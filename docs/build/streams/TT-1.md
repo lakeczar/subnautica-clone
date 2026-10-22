@@ -121,3 +121,25 @@ The only heavy change that is not a verbatim move: `regions-bake`'s six-chunk de
 - `npm run test:heavy` through `heavy-check.sh`: 57 files and 434 tests pass in 293 s, every peak within budget.
 - The fast tier also passes with `SILTWAKE_BUILD_CACHE=off`, cold.
 - Evidence and probe scripts are in `/work/tmp/tt1/` (timing runs, profiles, `verbatim.py`).
+
+## Paused for VM restart (2026-10-22, R1 fixes in progress)
+
+**Done** (committed; fast tier 1,264/1,264 pass at `41e2aea` plus the dishes move):
+- R1-1: `scripts/heavy-containment.mjs`. Per-file child cgroups when `heavy-check.sh` delegates (`Delegate=yes`, `SILTWAKE_HEAVY_CGROUP=delegated`); otherwise process-group accounting, one file at a time. The pool follows the scope's `memory.max` and `SILTWAKE_JOB_CPUS`. `exclusive` timing files are listed in `tests/heavy-budgets.json`. The regression is `tests/heavy-tier.heavy.test.ts`.
+- R1-2: `caves-deep-perf` times generation through `withoutBuildCache`.
+- R1-3: fills measured in main-thread CPU, once when nested; tested in `tier-guard`.
+- R1-4: the budget probe burns measured CPU. It passes the reviewer's 10% CPU scope command.
+- R1-5: runtime and format namespace in `closureHash`.
+- DISH-1's new `dishes.test.ts` was 10.3 s alone (over the 10 s budget). Its whole-world access test moved to `dishes.heavy.test.ts`, leaving a routes smoke (now 3.2 s).
+
+**In flight:** the containment regression ran once through `heavy-check.sh` before the pause.
+- **cgroup mode:** it reported the regression file itself KILLED. `memory.events` counts OOM kills in descendant cgroups too (the nested probe's intended kill), so `finish()` should read `memory.events.local`.
+- **Process-group mode:** it printed no summary row. Not yet debugged.
+
+**Next steps:**
+1. Fix both modes and rerun `heavy-tier.heavy.test.ts` through `heavy-check.sh`.
+2. Measure `regions-bake.heavy`'s whole-tree peak (bake process plus workers) and set its budget.
+3. Run the full `npm run test:heavy`.
+4. Update `verbatim.py` for the regions-bake refactor and the dishes move.
+5. Correct the handoff counts: 40 moved before dishes (39 verbatim plus 1 helper refactor), now 41 with dishes; 56 heavy files before, now 58.
+6. Write the R1 responses here, commit, push, and notify the coordinator.
