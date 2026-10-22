@@ -156,6 +156,18 @@ try {
         upMoved: after.p.y - rescued.p.y, end: after });
       await page.close();
     }
+    // (6) R4: admitted, then depart past the release distance; another owner asks for everything.
+    {
+      const page = await open("hud=0&mode=dart&budget=59");
+      await page.waitForFunction(() => window.lcLab.admitted(), null, { timeout: 30000 }).catch(() => {});
+      await page.evaluate(() => window.lcLab.restore({ x: 1100, y: -56, z: -62 }, "dart"));
+      await page.waitForTimeout(500);
+      const dep = await page.evaluate(() => { window.lcLab.reserveOther(1e12); const a = window.lcLab.arbiter;
+        return { state: window.lcLab.admission.state, fixedHeld: a.holds("canopy.fixed"), safetyHeld: a.holds("canopy.safety"),
+          other: a.granted("other").cpu, committed: a.committed().cpu, total: a.total.cpu, retained: window.lcLab.load.retainedBytes, fixed: window.lcLab.fixed.cpu }; });
+      result.stress.push({ case: "depart, then another owner asks for everything", departure: dep });
+      await page.close();
+    }
     // (5) R3: reload inside at 59 MiB while another owner already holds every free byte: priority admission.
     {
       const page = await open("hud=0&mode=diver&budget=59");
@@ -201,11 +213,12 @@ try {
     await page.close();
   }
   failed = result.errors.length > 0 || (result.runs ?? []).some(r => r.coverage.failures > 0) || (result.drive?.report.coverage.failures ?? 0) > 0 ||
-    (result.stress ?? []).some(x => ((x.end ?? x).coverage).failures > 0) ||
+    (result.stress ?? []).some(x => ((x.end ?? x).coverage?.failures ?? 0) > 0) ||
     (result.stress?.length && (result.stress[0].admitted || !result.stress[0].outside || !result.stress[1].end.outside || !(result.stress[1].keyMoved > 0.5) ||
       result.stress[1].retreatGated > 0 || !result.stress[2].finished ||
       result.stress[3].loading.overlay !== "grid" || !result.stress[3].rescued.outside || !(result.stress[3].upMoved > 1) ||
-      !result.stress[4].admission.state.startsWith("admitted") || result.stress[4].admission.rescues > 0));
+      !result.stress[5].admission.state.startsWith("admitted") || result.stress[5].admission.rescues > 0 ||
+      !result.stress[4].departure.fixedHeld || result.stress[4].departure.other + result.stress[4].departure.fixed > result.stress[4].departure.total));
 } finally {
   await browser.close();
   await server.close();

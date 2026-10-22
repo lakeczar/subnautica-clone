@@ -1,6 +1,35 @@
 # LC: large-cave technology (handoff)
 
-Opus 5.5, branch `t3/large-cave-biome-lab`, rebased on `feat/siltwake-first-expedition` after C4 stage A (`bf892e1`). This revision answers [Sol R3](../reviews/LC-SOL-XHIGH-R3.md) (LC-02 reload, LC-05); see *R3 fix*. The R2 and R1 fixes follow it. New files only: `src/content/caves/*`, `src/world/caves/large/*`, `src/render/caves/large/*`, `tools/large-cave-lab.*`, `tests/large-cave*`. No shared root, save or `package.json` edit. Source SHA: see the commit that adds this page.
+Opus 5.5, branch `t3/large-cave-biome-lab`, rebased on `feat/siltwake-first-expedition` after C4 stage A (`bf892e1`). This revision answers [Sol R4](../reviews/LC-SOL-XHIGH-R4.md) (LC-03 reopened, LC-06); see *R4 fix*. The R3, R2 and R1 fixes follow it. New files only: `src/content/caves/*`, `src/world/caves/large/*`, `src/render/caves/large/*`, `tools/large-cave-lab.*`, `tests/large-cave*`. No shared root, save or `package.json` edit. Source SHA: see the commit that adds this page.
+
+## R4 fix: fixed bytes live as long as the buffers; every rescue is verified
+- **LC-03 (reopened): departure released fixed bytes while their buffers stayed loaded.** `CaveAdmission` now separates the two lifetimes:
+  - `load()` reserves the fixed bytes *before* the bake, colliders and lamp windows load; on `false`, don't load. `loaded` reports the reservation.
+  - Going `away` calls `releaseSafety()`: only the coarse safety set is dropped.
+  - `unload()` returns the fixed bytes, and is called **only after** those buffers are freed.
+
+  The lab reserves at load with priority (its buffers are already resident).
+  - **Fast regression:** admit, depart past the release distance, then another owner asks for everything. It is granted exactly `total − fixed`. The return waits outside, then is re-admitted by priority inside, with committed bytes within the total at every step. Only `unload()` returns the fixed bytes.
+  - **Heavy regression:** the same sequence on the real loaded Canopy: the competing grant plus the independently enumerated retained buffers stays within the budget.
+  - **Mutation:** making `away` unload (R3's behaviour) fails the fast regression.
+- **LC-06: an exhausted rescue search returned an unchecked point.** `rescueTarget` now returns a verified point or `null`. Candidates, in order:
+  1. along each mouth the actor fits, nearest first;
+  2. the biome's staging points;
+  3. widened rings above the domain round the actor (to 96 m, three heights).
+
+  Every candidate passes the same checks: under water, above the seabed, clear of owned space by the gate's reach plus a margin, and `clear(feet)` for this actor. On `null` the controller **stays in the paused loading state**, shows "Cannot load this cave or find safe water outside it: still loading, retrying…", and searches again after another `rescueAfterMs`. It never relocates unchecked.
+  - **Regressions:**
+    - with every mouth candidate rejected, the rescue uses a checked fallback that satisfies the predicate, and survival resumes only after it;
+    - with everything rejected, the final fallback included, nothing is relocated, the clock stays paused for 200 s with oxygen at 100, and the retry message is shown;
+    - `rescueTarget` returns `null` when the predicate rejects everything.
+  - **Mutation:** returning the old unchecked fallback fails the regression.
+- **On the 3090, real loader** ([`lc/gpu-run-r4.json`](lc/gpu-run-r4.json)):
+  - **Departure:** the Dart is admitted at 59 MiB, then moved past the release distance, and another owner asks for everything. State `away`, fixed bytes still held, safety released, and the other owner gets 24.7 MB = total − fixed (the retained buffers are 33.0 MB inside the 37.2 MB fixed reservation).
+  - **Earlier cases:** all R2 and R3 stress cases rerun `ok`.
+- **Composition (updates the R3 table):**
+  - **Lifetime.** Reserve with `load()` before loading a biome's buffers; call `releaseSafety()` on leaving (automatic in `update`); call `unload()` only after freeing the buffers (proximity unloading, C4).
+  - **`clear(feet)`.** Supply it from the composed exterior world for the actor's real shape.
+  - **A failed rescue** stays `loading`: keep the clock paused and show the message.
 
 ## R3 fix: LC-02 reload inside an unadmitted biome, LC-05 one shared remainder
 R3 found two problems:
@@ -11,10 +40,10 @@ R3 found two problems:
 
 | State | When | Composition does |
 | --- | --- | --- |
-| `away` | far from the biome | nothing; its reservations are released |
+| `away` | far from the biome | nothing; its safety set is released, its fixed bytes stay reserved until `unload()` (R4) |
 | `waiting` | near, outside owned space, not admitted | the simulation runs; the gate keeps the player out of the mouth; show "Waiting for room to load the cave" |
 | `loading` (`holding: true`) | **in or touching owned space**, not yet admitted (a reload, a teleport, or the safety set still building) | **pause the simulation clock** (no oxygen, exposure, power, damage, AI or cycle ticks), keep rendering, show **"Loading cave…"** |
-| `rescue` (`holding: true`, `rescue: Vec3`) | loading has lasted `rescueAfterMs` (4 s) and even a priority reservation cannot fit | **relocate** the player (or craft) to `rescue`, which is exterior water just outside the nearest mouth it fits, clear of the gate's reach and checked by `clear(feet)` against the exterior world. Show the message, then resume. It is a teleport, never travel through undrawn space. |
+| `rescue` (`holding: true`, `rescue: Vec3`) | loading has lasted `rescueAfterMs` (4 s), even a priority reservation cannot fit, and a **verified** point exists (R4) | **relocate** the player (or craft) to `rescue`. The point is exterior water just outside the nearest mouth it fits, or a staging point, or a widened ring above the domain; it is clear of the gate's reach and checked by `clear(feet)` against the exterior world. Show the message, then resume. It is a teleport, never travel through undrawn space. If no point passes, the state stays `loading` and retries. |
 | `admitted` | fixed plus coarse safety held and built | normal play; the gate guarantees movement |
 
 - **(a) Priority.** In or touching the cave, the biome's fixed and safety reservations are made with `priority`: the arbiter shrinks other owners' revocable grants, newest first, to fit, *before* the clock resumes. Approaching from outside, they are made without priority, and the player waits outside the mouth if denied.
@@ -231,7 +260,7 @@ CPU per Canopy-sized biome; the GPU holds only art and the lamp window.
   - **Load by proximity.** Load a biome's collider and bake only within a few hundred metres of its mouths, so four biomes never hold four fixed sets at once.
 
 ## Checks (R3 revision; LC-02 and LC-05 details in *R3 fix* and *R2 fix*)
-- **Fast tier:** `npm run test:fast` passes **1,123/1,123** (108 files). There are 35 large-cave fast tests in four files:
+- **Fast tier:** `npm run test:fast` passes **1,125/1,125** (108 files). There are 37 large-cave fast tests in four files:
   - `tests/large-cave.test.ts`, on the fixture biome:
     - ownership and its negative control;
     - chunk-seam closure;
@@ -260,7 +289,7 @@ CPU per Canopy-sized biome; the GPU holds only art and the lamp window.
     - the W1 Fanvault through the composer;
     - **LC-04:** exterior walls inside and past a cave sub-sweep stop moves and sight.
   - Mutations: disabling exterior-solid sweeps in the composer fails the LC-04 wall test, and removing the neighbour pins fails LC-04 and LC-02.
-- **Heavy tier:** `scripts/heavy-check.sh … large-cave.heavy.test.js` passes **6/6** at a 467 MiB peak:
+- **Heavy tier:** `scripts/heavy-check.sh … large-cave.heavy.test.js` passes **6/6** at a 470 MiB peak:
   - craft routes against the production world;
   - coarse vs every route;
   - 40,000 probes, 0 disagreeing;
