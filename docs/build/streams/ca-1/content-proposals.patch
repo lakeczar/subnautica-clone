@@ -1,0 +1,40 @@
+diff --git a/tests/content-proposals.test.ts b/tests/content-proposals.test.ts
+index 611bad2..a9c678c 100644
+--- a/tests/content-proposals.test.ts
++++ b/tests/content-proposals.test.ts
+@@ -31,6 +31,8 @@ const proposalIds = [
+ ].map(x => x.id);
+ const proposalSet = new Set(proposalIds);
+ const caveIds = new Set([...caves.map(c => c.id), ...CAVE_BIOMES.map(b => b.id), ...CAVE_SOURCES.map(c => c.id)]);
++/** Kit caves that implement no proposal (CA-1 authors proposals under their own IDs, which are the same caves, not collisions). */
++const kitOnlyCaves = CAVE_SOURCES.filter(c => !caves.some(p => p.id === c.id));
+ 
+ /** World position of a reference, y included where it is known. Story sites go
+  * through STORY_SITE_PLACEMENTS; unplaced ones (story structure) return null. */
+@@ -70,7 +72,7 @@ test("proposal IDs are unique and never reuse an existing site, source or cave I
+   for (const id of proposalIds) { assert.ok(!seen.has(id), `duplicate proposal ID ${id}`); seen.add(id); }
+   for (const id of proposalIds) {
+     assert.ok(/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/.test(id), `${id}: IDs are lower snake_case, dot-separated`);
+-    assert.ok(!SITES.some(s => s.id === id) && !Object.hasOwn(SOURCES, id) && !CAVE_SOURCES.some(c => c.id === id), `${id} collides with existing content`);
++    assert.ok(!SITES.some(s => s.id === id) && !Object.hasOwn(SOURCES, id) && !kitOnlyCaves.some(c => c.id === id), `${id} collides with existing content`);
+   }
+ });
+ 
+@@ -134,7 +136,7 @@ test("placements sit on today's floor, in the right region", () => {
+ 
+ test("caves: size classes, footprints disjoint, outside the opening's preserve, clear of existing datums", () => {
+   const P = LEGACY_PRESERVE;
+-  const rects = [...caves.map(c => ({ id: c.id, r: c.footprint })), ...CAVE_SOURCES.map(c => ({ id: c.id, r: c.footprint }))];
++  const rects = [...caves.map(c => ({ id: c.id, r: c.footprint })), ...kitOnlyCaves.map(c => ({ id: c.id, r: c.footprint }))];
+   for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++)
+     assert.ok(!overlaps(rects[i]!.r, rects[j]!.r), `${rects[i]!.id} overlaps ${rects[j]!.id}`);
+   const datums = [...SITES.map(s => ({ id: s.id, ...s.at })), ...Object.entries(SOURCES).map(([id, s]) => ({ id, ...s.position })),
+@@ -186,7 +188,7 @@ test("each area meets the bible's density targets", () => {
+   for (const a of AREAS) {
+     const hub = a.area === "hub_spur";
+     const anchors = a.landmarks.filter(l => l.role === "anchor").length, all = a.landmarks.length;
+-    const existingSmall = a.area === "hub_spur" ? 0 : CAVE_SOURCES.filter(c => c.region === a.area).length;
++    const existingSmall = a.area === "hub_spur" ? 0 : kitOnlyCaves.filter(c => c.region === a.area).length;
+     const small = a.caves.filter(c => c.size === "small").length + existingSmall, medium = a.caves.filter(c => c.size === "medium").length;
+     const roles = a.creatures.map(c => SPECIES.find(s => s.id === c.species)!.role);
+     assert.ok(hub ? anchors >= 1 : anchors >= 2 && anchors <= 3, `${a.area}: ${anchors} anchors`);

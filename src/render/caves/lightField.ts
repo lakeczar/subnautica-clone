@@ -170,7 +170,9 @@ export function caveLightField(def: CaveDef, floor: (x: number, z: number) => nu
   }
   // Daylight path length: shortest path through water from open water.
   const scale = def.rooms.map(r => REFERENCE_FALLOFF / r.falloff);
-  const distance = new Float32Array(n).fill(Infinity), heap = new Heap();
+  // Doubles, as the heap keys are: a float32 copy that rounds down would make
+  // its own entry look stale on pop, and that texel would never expand.
+  const distance = new Float64Array(n).fill(Infinity), heap = new Heap();
   for (let t = 0; t < n; t++) if (rockCount[t]! < 8 && outside[t]! >= inside[t]!) { distance[t] = 0; heap.push(0, t); }
   while (heap.size) {
     const [d, t] = heap.pop();
