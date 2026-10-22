@@ -51,22 +51,24 @@ export const POI_DRESSING: readonly VistaPart[] = [
     for (let k = 0; k < SOUNDING.floats; k++) { const f = soundingFloat(k); pts.push([f.x, f.y - 0.7, f.z]); }
     for (let i = 0; i < pts.length - 1; i++) b.tube([pts[i]!, [pts[i + 1]![0], pts[i + 1]![1], pts[i + 1]![2]]], 0.09, 3, C.steel);
   } },
-  // The fall: mint growth along the spine and among the ribs, the gathering.
-  { id: "poi.basin.fall.growth", x: FALL.x + 2, z: FALL.z, draw: (b, floor, fine) => {
-    for (let i = 0; i < 9; i++) {
-      const x = FALL.x - FALL.length * 0.45 + FALL.length * 0.9 * i / 8 + hash2(i, 7, 1), z = FALL.z + 2.5 + hash2(i, 7, 2) * 3.5;
-      colony(b, floor, x, z, 6, i + 30, i % 3 ? C.mint : C.cyan, fine);
-    }
-  } },
+  // The fall: mint growth along the spine and among the ribs, the gathering
+  // (three parts, so no one part holds up the chunk build).
+  ...[0, 1, 2].map((part): VistaPart => ({ id: `poi.basin.fall.growth.${part}`, x: FALL.x - FALL.length * 0.3 + FALL.length * 0.3 * part, z: FALL.z + 3,
+    draw: (b, floor, fine) => {
+      for (let i = part * 3; i < part * 3 + 3; i++) {
+        const x = FALL.x - FALL.length * 0.45 + FALL.length * 0.9 * i / 8 + hash2(i, 7, 1), z = FALL.z + 2.5 + hash2(i, 7, 2) * 3.5;
+        colony(b, floor, x, z, 6, i + 30, i % 3 ? C.mint : C.cyan, fine);
+      }
+    } })),
   // Float tethers.
   { id: "poi.divide.float_line.tethers", x: FLOAT_LINE[2]!.x + 1, z: FLOAT_LINE[2]!.z, draw: (b) => {
     FLOAT_LINE.forEach((a, k) => { const f = floatAt(k); b.tube([[a.x, a.y + 0.8, a.z], [f.x, f.y - 0.7, f.z]], 0.07, 3, C.steel); });
   } },
-  // The supply run: three cables on the floor from box to box, on to the pylon.
-  { id: "poi.meridian.supply_cable.run", x: SUPPLY[2]!.x + 1, z: SUPPLY[2]!.z, draw: (b, floor, fine) => {
-    const end = { x: 1071, z: -1105 }, line = [...SUPPLY.map(p => ({ x: p.x, z: p.z })), end];
-    for (const [o, color] of [[-0.45, C.petrol], [0, C.ochre], [0.45, C.petrol]] as const) {
-      const pts: P3[] = [];
+  // The supply run: three cables on the floor from box to box, on to the
+  // pylon, one part each.
+  ...([[-0.45, C.petrol], [0, C.ochre], [0.45, C.petrol]] as const).map(([o, color], part): VistaPart => ({
+    id: `poi.meridian.supply_cable.run.${part}`, x: SUPPLY[2]!.x + 1 + part, z: SUPPLY[2]!.z, draw: (b, floor, fine) => {
+      const end = { x: 1071, z: -1105 }, line = [...SUPPLY.map(p => ({ x: p.x, z: p.z })), end], pts: P3[] = [];
       for (let i = 0; i < line.length - 1; i++) {
         const a = line[i]!, c = line[i + 1]!, n = Math.ceil(Math.hypot(c.x - a.x, c.z - a.z) / (fine ? 3 : 8));
         for (let k = i ? 1 : 0; k <= n; k++) { const x = a.x + (c.x - a.x) * k / n, z = a.z + (c.z - a.z) * k / n + o; pts.push([x, floor(x, z) + 0.2, z]); }
@@ -82,8 +84,7 @@ export const POI_DRESSING: readonly VistaPart[] = [
           if (run >= 8) { run = 0; b.ellipsoid([c[0], c[1] + 0.1, c[2]], [0.35, 0.3, 0.35], C.warm, 2, fine ? 5 : 4); }
         }
       });
-    }
-  } },
+    } })),
   // Lines trailing from the wreck's gunwales into the brine.
   { id: "poi.divide.mirror_wreck.lines", x: WRECK.x + 1, z: WRECK.z, draw: (b, _floor, fine) => {
     if (!fine) return;

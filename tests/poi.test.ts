@@ -150,7 +150,7 @@ test("every POI is registered once, built from sets and dressing, and lit at bot
   for (const s of POI_SETS) assert.equal(VISTA_SETS.filter(v => v.id === s.id).length, 1, `${s.id} is in VISTA_SETS once`);
   for (const p of POI_DRESSING) assert.equal(VISTA_DRESSING.filter(v => v.id === p.id).length, 1, `${p.id} is in VISTA_DRESSING once`);
   for (const s of POI_SETS) assert.ok(ids.has(s.id) || ids.has(s.id.replace(/\.[^.]+$/, "")), `${s.id} belongs to a POI`);
-  for (const p of POI_DRESSING) assert.ok(ids.has(p.id.replace(/\.[^.]+$/, "")), `${p.id} belongs to a POI`);
+  for (const p of POI_DRESSING) assert.ok(POIS.some(q => p.id.startsWith(`${q.id}.`)), `${p.id} belongs to a POI`);
   for (const p of POIS) {
     assert.ok(DEEP_LEGS.some(l => l.id === p.leg), `${p.id}: unknown leg ${p.leg}`);
     for (const fine of [true, false]) {

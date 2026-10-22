@@ -93,7 +93,9 @@ export const CARRIER_CLEAR = 42, ROUTE_CLEAR = 12;
 export const SEAM_DARK: readonly { minX: number; maxX: number; minZ: number; maxZ: number }[] = [{ minX: 108, maxX: 190, minZ: -866, maxZ: -760 }];
 const dark = (p: Vec3): boolean => SEAM_DARK.some(r => p.x > r.minX && p.x < r.maxX && p.z > r.minZ && p.z < r.maxZ);
 /** Seams run from the head down both walls; each part draws `SEAM_PART` m. */
-export const SEAM_FROM = 24, SEAM_TO = 444, SEAM_PART = 60, SEAM_STEP = 8, SEAM_DASH = 3.5;
+/** Parts are short so each builds in about a millisecond: the chunk build
+ * can only pause between parts. */
+export const SEAM_FROM = 24, SEAM_TO = 444, SEAM_PART = 16, SEAM_STEP = 8, SEAM_DASH = 3.5;
 /** Where the wall `side` of the trench crosses `frac` of the way from the
  * trench floor to the ledge, `s` metres down the axis, or null where the
  * wall is too low to be a cliff. */
@@ -106,10 +108,10 @@ export function seamPoint(floor: Floor, s: number, side: number, frac: number): 
   const y = bottom + (ledge - bottom) * frac;
   // The cliff itself stands within 80 m of the axis; a crossing further out
   // is the shoulder beyond it, not the wall.
-  let lo = 8, hi = 8;
-  while (hi < 80 && floor(...at(hi)) < y) { lo = hi; hi += 2; }
+  let lo = 12, hi = 12;
+  while (hi < 80 && floor(...at(hi)) < y) { lo = hi; hi += 3; }
   if (hi >= 80) return null;
-  for (let i = 0; i < 18; i++) { const m = (lo + hi) / 2; if (floor(...at(m)) < y) lo = m; else hi = m; }
+  for (let i = 0; i < 9; i++) { const m = (lo + hi) / 2; if (floor(...at(m)) < y) lo = m; else hi = m; }
   const [x, z] = at(hi);
   return { x, y, z };
 }
