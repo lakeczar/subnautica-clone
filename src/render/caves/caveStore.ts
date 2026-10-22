@@ -32,7 +32,7 @@ interface Manifest {
 
 export function httpCaveStore(base: string, options: { readonly keepLight?: number } = {}): CaveStore {
   const root = new URL(base, globalThis.location?.href ?? "http://localhost/");
-  const keep = options.keepLight ?? 6;
+  const keep = options.keepLight ?? 12;
   const stats = { fetches: 0, failures: 0, lightBytes: 0, collisionMs: 0 };
   const fetchBytes = async (name: string): Promise<Uint8Array | null> => {
     stats.fetches++;

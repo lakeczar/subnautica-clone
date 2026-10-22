@@ -26,7 +26,7 @@ export interface KitStreamOptions {
   readonly uploadRange: number;
 }
 export const KIT_STREAM: KitStreamOptions = {
-  prefetch: 360, lookAhead: 12, evict: 520, evictFar: 900, budgetMs: 2, maxBoxes: 220_000, lightRange: 300, uploadRange: 140,
+  prefetch: 360, lookAhead: 12, evict: 520, evictFar: 900, budgetMs: 2, maxBoxes: 220_000, lightRange: 260, uploadRange: 140,
 };
 
 export interface KitStreamFrame {

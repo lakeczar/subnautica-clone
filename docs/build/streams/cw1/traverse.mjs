@@ -117,7 +117,8 @@ try {
     if (i === 0) continue;
     const ok = await goto(p, { tol: p.cave ? 4 : 7, label: p.cave ?? `cruise#${i}`, boost: !p.cave || true });
     if (p.cave) {
-      (ok ? result.reached : result.skipped).push(p.cave);
+      const q = pos(await read());
+      if (ok) result.reached.push(p.cave); else result.skipped.push({ cave: p.cave, metres: +Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z).toFixed(1) });
       s = await read();
       note(ok ? "at" : "near", p.cave, "active light", s.cave || "-", "depth", s.depth);
       if (caveIndex++ % 4 === 0) await shot(p.cave);

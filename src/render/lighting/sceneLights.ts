@@ -173,9 +173,15 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       const seated = state?.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
       const hull = seated ? hullOf(seated.id) : null;
       const lights: PointLight[] = [];
+      // A newly streamed frozen mesh's lights (thousands of thin instances
+      // for some scatter) are placed once and cached; place a bounded number
+      // per frame (CW-1), so a new chunk's lights join over a few frames.
+      const placeUntil = performance.now() + 2;
       for (const e of entries.values())
-        if (e.active && !e.mesh.isDisposed() && e.mesh.isEnabled() && !(hull && (e.mesh === hull || e.mesh.isDescendantOf(hull))))
+        if (e.active && !e.mesh.isDisposed() && e.mesh.isEnabled() && !(hull && (e.mesh === hull || e.mesh.isDescendantOf(hull)))) {
+          if (!e.world && e.mesh.isWorldMatrixFrozen && !e.mesh.parent && performance.now() > placeUntil) continue;
           for (const l of toWorld(e)) lights.push(l);
+        }
       for (const v of vents) lights.push(v);
       // Parked craft: a blinking marker light, always sent, nearest two.
       const blinkOn = (time % BLINK) < BLINK * BLINK_ON;
