@@ -42,7 +42,7 @@ On the **carrier route**, the playthrough now restores the first two stages on i
 - **UI:** the Fabricate status line names a working stop's bench, and the HUD's air source names an air stop. Both read "No bench here" and "Hearthline air" at every C3 stop before. The crown's stages fold into "Later" away from the crown, like S9's stops.
 
 ## Checks
-- `npm test`: __FAST__. `tests/crown-station.test.ts` (6), through `PanelProbe` and `executeCommand`:
+- `npm test`: **1,229/1,229**. `tests/crown-station.test.ts` (6), through `PanelProbe` and `executeCommand`:
   - **Stages:** each stage paid at the door through Fabricate. Exactly the cost leaves, it pays once, a short payment and an unpaid press change nothing, the order holds, and each save round-trips.
   - **Dock:** Cargo's Service is disabled and refused at stage 1, and charges 12% → 100% and repairs 20 → 100 from stage 2. Out of reach, no service. The stores open with the dock.
   - **Bench:** the recipe split holds for every recipe. A paid `glow_lures` comes from a crown store; a paid `creel_450` comes from the moored Creel's hold. The bench is refused at stage 1 and for a hull away from the dock.
@@ -55,9 +55,17 @@ On the **carrier route**, the playthrough now restores the first two stages on i
   - the composed-field helpers (`persistence-support`);
   - the stop-pose exemption (the crown's door and dock are its own);
   - the M1 reason matrix, which now excludes hub recipes.
-- Heavy: __HEAVY__.
+- **Heavy** (`heavy-check.sh`): **29/29 files** (765 s).
 - `npm run build`: OK; the bake re-ran (220 chunks).
-- `npm run playthrough -- --jobs 2`: __PLAY__.
+- `npm run playthrough -- --jobs 2 --child-timeout 5400`: **exit 0, 5/5 complete, no blockers**, every milestone reload matched.
+  - **Play times:** creel 199.3 min, carrier 360.6, creel-loss 208.9, reverse 204.4, no-optional 198.5.
+  - **Child timeout:** the default 1,800 s timeout killed one child on the loaded shared machine before any result (a wall-clock limit, not a game failure), so the run uses a longer one.
+  - **Carrier with the crown:**
+    - Root `e91a69b`'s carrier takes 322.1 min; with the crown it takes **+38.5 min (+12%)**.
+    - Rift +10.6: gathering the stages' 31 CU and the climb.
+    - Hearthline +8.1, carrier-deep +12.3, works +7.4: later phases re-gather, because the stages draw on the same finite base stock.
+    - The return through the crown's bench and dock replaces the workshop trip.
+  - **Coordinator note:** the bot uses only the crown's refit and dock, not its later benefits, so this is an upper bound on its cost. It's worth a look in the economy pass.
 - **3090, ordinary keys and keyboard focus** ([play](hub2/play.mjs), [derive](hub2/derive.mjs), [record](hub2/play.json)). It ran in a task-owned headless Chrome on ANGLE GL-EGL ("NVIDIA GeForce RTX 3090"), through `heavy-check.sh`, closed at the end, with 0 errors.
   - **Save:** derived headlessly. Stage 1 was restored by the harness's commands; the dock stage's materials in the diver hold and the Creel's 30% charge are **staged**.
   - **Session:** K → Tab ×7 → Enter restores the dock; a 15 m swim to the Creel; Tab (Cargo) → Tab ×7 → Enter on Service brings the Creel to 100%.
