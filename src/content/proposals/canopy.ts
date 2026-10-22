@@ -142,7 +142,7 @@ export const CANOPY: AreaProposal = {
   lostSites: [
     { id: "canopy.basket_site", area: "suspended_garden", label: "Fallen tether basket", at: p(760, -108.6, -100), anchor: "floor",
       see: "A log unit clamped in the basket frame, its screen dark.",
-      decodes: [{ id: "canopy_basket_log", label: "Tether crew log", size: "log", gates: ["canopy_basket_unit"],
+      decodes: [{ id: "canopy_basket_log", label: "Tether crew log", size: "log", gates: ["canopy_basket_unit", "note_tether_aside"],
         blueprints: ["bp_outpost_standard"], story: false,
         reveals: [
           { id: "canopy_site_rootways", label: "Holdfast ring", category: "site", target: prop("canopy_rootways.front_mouth"), radius: 50 },

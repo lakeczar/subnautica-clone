@@ -158,14 +158,16 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 - **Acceptance:** a fast Dart traversal of every region and cave mouth shows no frame over about 33 ms caused by streaming, and no hold state is ever reached.
 
 ## Creatures (owner, 2026-10-22)
-- **No guide or helper animals.** There are no creatures that lead you to resources or guide you through passages.
+- **Helper creatures are allowed** (owner, corrected 2026-10-22). Animals whose natural behaviour helps the player are fine, for example glimmers leaning toward moving water at exits, a school you can follow, or a creature that gathers where a resource is. Use them where they feel natural, not as quest markers.
 - **Every threat has a non-combat way through** that comes from its natural behaviour: feeding, patrol rhythm, resting, being distracted by other animals, territory edges. Timing and observation, not only avoiding the bite.
 - **Creatures as resources** (coordinator recommendation; the owner may adjust):
   - **Shed and byproducts (core):** collect, without harm, what animals leave: shed shells and membranes, weaver resin, mite mineral grit, and casts that fertilise planters. Each resident's home is worth visiting.
   - **Small common fish:** catch by hand or net and **cook** them. A **fish-trap outpost module** catches slowly in the background. **Threats, rare residents and story animals are never harvested.**
   - **Bait and lures** made from small catches steer threats through their natural behaviour.
   - **A few authored carcass falls:** static landmarks with scavengers and salvage, as environmental storytelling.
-  - **Later or optional:** a breeding tank; seasonal roe as regrowth, not a timed wait; glowing creatures in a jar as a light. Bio-cells already exist.
+  - **Seasonal roe and spawning grounds (in scope):** roe clusters regrow at authored grounds, as a rich capped food, never a timed wait. Protected species' eggs are never harvestable.
+  - **Later or optional:** a breeding tank; glowing creatures in a jar as a light. Bio-cells already exist.
+  - **Players learn all of this in-world:** a creature field guide (log entries per species: diet, sheds, spawning, natural behaviour, protection) and found notes (season logs, spawning records, a cook's notebook, a trapper's tally) that hint where roe, shed grounds, trap spots and carcass falls are, without map markers. Some notes are readable only after decoding.
 - **Cooking stays one interaction with portions.** Food never decays, per FLEET_AND_SURVIVAL.
 
 ## Cave and interior loading (owner, 2026-10-22)

@@ -124,7 +124,7 @@ export const RIFT: AreaProposal = {
   lostSites: [
     { id: "rift.borehole_site", area: "thermal_rift", label: "Core borehole rig", at: p(-420, -251.4, -900), anchor: "floor",
       see: "A field hut by the rig, its logger dark and its vent pipe still warm.",
-      decodes: [{ id: "rift_borehole_log", label: "Drill logger", size: "log", gates: ["rift_borehole_logger"],
+      decodes: [{ id: "rift_borehole_log", label: "Drill logger", size: "log", gates: ["rift_borehole_logger", "note_drill_crew"],
         blueprints: ["bp_outpost_thermal_tap"], story: false,
         reveals: [
           { id: "rift_site_west_tube", label: "West tube", category: "site", target: prop("rift_west_tube"), radius: 50 },

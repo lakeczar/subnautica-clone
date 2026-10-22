@@ -4,6 +4,8 @@ import { hash2 } from "../../content/regions/noise.js";
 import { ESCARPMENT_MARKERS, RING, RING_PATH, VISTA_SETS, type VistaSet, type VistaTone } from "../../content/vistas.js";
 import { PALETTE } from "../palette.js";
 import { hex, RecipeBuilder, type P3, type Rgb } from "./recipe.js";
+import { POI_DRESSING } from "../poi/dressing.js";
+import { LANDMARK_LIGHTS } from "../poi/landmarks.js";
 
 /** Composed set pieces: one authored vista per priority area, built from
  * the bookmark camera's point of view (tools/region-viewer.ts VIEWS).
@@ -31,9 +33,9 @@ const C = {
   warm: hex(PALETTE.warm), glow: hex("#ffd27a"), cyan: hex("#9fe6e0"), concrete: hex("#8e9a98"), concrete2: hex("#b8c0b9"),
   stone: hex("#6f8d8a"), stoneDark: hex("#4a676b"), basalt: hex(PALETTE.basalt), coral: hex("#e48a70"), coralRim: hex(PALETTE.coralRim),
   amber: hex(PALETTE.amber), jade: hex(PALETTE.jade), lime: hex(PALETTE.lime), teal: hex("#2f8a85"), plum: hex(PALETTE.plum),
-  violet: hex(PALETTE.violet),
+  violet: hex(PALETTE.violet), bone: hex("#d9d2bf"), ember: hex("#ff9a4a"), mint: hex("#8ff0c4"), lilac: hex("#cdb8ff"),
 } as const;
-const LIT: ReadonlySet<VistaTone> = new Set(["glow", "warm", "cyan"]);
+const LIT: ReadonlySet<VistaTone> = new Set(["glow", "warm", "cyan", "ember", "mint", "lilac"]);
 
 const glow = (b: RecipeBuilder, f: () => void): void => { const a = b.alpha; b.alpha = -1; f(); b.alpha = a; };
 const lerp3 = (a: P3, b: P3, t: number): P3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
@@ -197,13 +199,18 @@ export const VISTA_DRESSING: readonly VistaPart[] = [
     const face = RING.z - RING.thick - 0.04;
     glow(b, () => { for (let i = 1; i < RING_POINTS.length - 1; i += fine ? 2 : 4) b.box([RING_POINTS[i]!.x, RING_POINTS[i]!.y, face], [0.9, 0.9, 0.06], i % 4 === 1 ? C.cyan : C.warm); });
   } },
+  // POI-1: the deep legs' points of interest (`render/poi/dressing.ts`).
+  ...POI_DRESSING,
 ];
 
-/** Solid sets and dressing anchored in this chunk, as one cel mesh (or
- * null). Yields between parts when the build step's slice is used. */
+/** Solid sets, dressing and landmark lights (`render/poi/landmarks.ts`,
+ * which hug existing structures and terrain) anchored in this chunk, as one
+ * cel mesh (or null). Yields between parts when the build step's slice is
+ * used. */
 export function* vistaMesh(chunk: ChunkDescriptor, lod: LodLevel, floor: Floor, due: () => boolean): Generator<void, MeshRecipe | null> {
   const { min, max } = chunk.bounds, inside = (x: number, z: number): boolean => x >= min.x && x < max.x && z >= min.z && z < max.z;
-  const sets = VISTA_SETS.filter(s => inside(s.anchor.x, s.anchor.z)), dressing = VISTA_DRESSING.filter(p => inside(p.x, p.z));
+  const sets = VISTA_SETS.filter(s => inside(s.anchor.x, s.anchor.z));
+  const dressing = [...VISTA_DRESSING, ...LANDMARK_LIGHTS].filter(p => inside(p.x, p.z));
   if (!sets.length && !dressing.length) return null;
   const b = new RecipeBuilder(), fine = lod === "fine";
   for (const s of sets) { if (due()) yield; drawSolidSet(b, s, fine); }

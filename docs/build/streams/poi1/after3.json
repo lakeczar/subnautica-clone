@@ -1,0 +1,368 @@
+{
+ "value": {
+  "which": "after",
+  "legs": [
+   {
+    "id": "basin_rift",
+    "route": "route.basin.rift",
+    "reverse": false,
+    "waypoints": [
+     {
+      "i": 1,
+      "draws": 111,
+      "lights": "12/127",
+      "vertices": 434900,
+      "meshes": 510,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 2,
+      "draws": 112,
+      "lights": "12/130",
+      "vertices": 449444,
+      "meshes": 553,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 3,
+      "draws": 121,
+      "lights": "12/134",
+      "vertices": 472193,
+      "meshes": 620,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 4,
+      "draws": 147,
+      "lights": "12/137",
+      "vertices": 484733,
+      "meshes": 662,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 5,
+      "draws": 143,
+      "lights": "12/138",
+      "vertices": 485277,
+      "meshes": 669,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 6,
+      "draws": 147,
+      "lights": "12/140",
+      "vertices": 489436,
+      "meshes": 702,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 7,
+      "draws": 157,
+      "lights": "12/142",
+      "vertices": 521549,
+      "meshes": 795,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 8,
+      "draws": 163,
+      "lights": "12/144",
+      "vertices": 534303,
+      "meshes": 832,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 9,
+      "draws": 146,
+      "lights": "12/144",
+      "vertices": 534303,
+      "meshes": 832,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 10,
+      "draws": 156,
+      "lights": "12/147",
+      "vertices": 544689,
+      "meshes": 879,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 11,
+      "draws": 167,
+      "lights": "12/151",
+      "vertices": 557729,
+      "meshes": 919,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 12,
+      "draws": 148,
+      "lights": "12/149",
+      "vertices": 554184,
+      "meshes": 914,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 13,
+      "draws": 153,
+      "lights": "12/149",
+      "vertices": 537909,
+      "meshes": 902,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 14,
+      "draws": 168,
+      "lights": "12/147",
+      "vertices": 545848,
+      "meshes": 923,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "shots": [
+     {
+      "name": "basin_rift-start",
+      "range": 44,
+      "file": "01-after-basin_rift-start.jpg",
+      "mean": 40.7,
+      "darkShare": 0.087,
+      "draws": 113,
+      "lights": "12/126",
+      "vertices": 433201,
+      "meshes": 500,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "poi": "poi.rift.trench_span",
+      "kind": "glimpse",
+      "name": "basin_rift-rift.trench_span-glimpse",
+      "range": 246,
+      "file": "02-after-basin_rift-rift.trench_span-glimpse.jpg",
+      "mean": 26.8,
+      "darkShare": 0.635,
+      "draws": 176,
+      "lights": "12/144",
+      "vertices": 534303,
+      "meshes": 832,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "poi": "poi.rift.trench_span",
+      "kind": "pass",
+      "name": "basin_rift-rift.trench_span-pass",
+      "range": 103,
+      "file": "03-after-basin_rift-rift.trench_span-pass.jpg",
+      "mean": 27.7,
+      "darkShare": 0.617,
+      "draws": 142,
+      "lights": "12/149",
+      "vertices": 537909,
+      "meshes": 902,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "stalls": [],
+    "seconds": 123.4,
+    "flyingSeconds": 117.1,
+    "frames": {
+     "frames": 6908,
+     "fps": 58.8,
+     "p50": 16.7,
+     "p95": 16.8,
+     "p99": 33.3,
+     "worst": 116.6
+    },
+    "drawsMax": 168,
+    "drawsMean": 146
+   }
+  ],
+  "views": [
+   {
+    "save": "view-spire",
+    "target": {
+     "x": 1215,
+     "y": -485,
+     "z": -1319
+    },
+    "on": {
+     "name": "view-spire-lamp-on",
+     "range": 247,
+     "file": "04-after-view-spire-lamp-on.jpg",
+     "mean": 13.7,
+     "darkShare": 0.766,
+     "draws": 86,
+     "lights": "12/160",
+     "vertices": 414450,
+     "meshes": 803,
+     "regions": "silt_basin,suspended_garden"
+    },
+    "off": {
+     "name": "view-spire-lamp-toggled",
+     "range": null,
+     "file": "05-after-view-spire-lamp-toggled.jpg",
+     "mean": 13.1,
+     "darkShare": 0.766,
+     "draws": 86,
+     "lights": "12/160",
+     "vertices": 414450,
+     "meshes": 803,
+     "regions": "silt_basin,suspended_garden"
+    }
+   },
+   {
+    "save": "view-gateworks",
+    "target": {
+     "x": 600,
+     "y": -345,
+     "z": -1262
+    },
+    "on": {
+     "name": "view-gateworks-lamp-on",
+     "range": 250,
+     "file": "06-after-view-gateworks-lamp-on.jpg",
+     "mean": 16.9,
+     "darkShare": 0.739,
+     "draws": 128,
+     "lights": "12/186",
+     "vertices": 525259,
+     "meshes": 854,
+     "regions": "silt_basin,suspended_garden"
+    },
+    "off": {
+     "name": "view-gateworks-lamp-toggled",
+     "range": null,
+     "file": "07-after-view-gateworks-lamp-toggled.jpg",
+     "mean": 15.3,
+     "darkShare": 0.752,
+     "draws": 128,
+     "lights": "12/186",
+     "vertices": 525259,
+     "meshes": 854,
+     "regions": "silt_basin,suspended_garden"
+    }
+   },
+   {
+    "save": "view-rift-head",
+    "target": {
+     "x": 90,
+     "y": -290,
+     "z": -720
+    },
+    "on": {
+     "name": "view-rift-head-lamp-on",
+     "range": 260,
+     "file": "08-after-view-rift-head-lamp-on.jpg",
+     "mean": 43.6,
+     "darkShare": 0.275,
+     "draws": 153,
+     "lights": "12/179",
+     "vertices": 625246,
+     "meshes": 897,
+     "regions": "silt_basin,suspended_garden"
+    },
+    "off": {
+     "name": "view-rift-head-lamp-toggled",
+     "range": null,
+     "file": "09-after-view-rift-head-lamp-toggled.jpg",
+     "mean": 43,
+     "darkShare": 0.276,
+     "draws": 153,
+     "lights": "12/179",
+     "vertices": 625246,
+     "meshes": 897,
+     "regions": "silt_basin,suspended_garden"
+    }
+   },
+   {
+    "save": "view-dishes",
+    "target": {
+     "x": 508,
+     "y": -255,
+     "z": -572
+    },
+    "on": {
+     "name": "view-dishes-lamp-on",
+     "range": 300,
+     "file": "10-after-view-dishes-lamp-on.jpg",
+     "mean": 47.2,
+     "darkShare": 0.128,
+     "draws": 120,
+     "lights": "12/184",
+     "vertices": 602724,
+     "meshes": 860,
+     "regions": "silt_basin,suspended_garden"
+    },
+    "off": {
+     "name": "view-dishes-lamp-toggled",
+     "range": null,
+     "file": "11-after-view-dishes-lamp-toggled.jpg",
+     "mean": 46.7,
+     "darkShare": 0.129,
+     "draws": 120,
+     "lights": "12/184",
+     "vertices": 602724,
+     "meshes": 860,
+     "regions": "silt_basin,suspended_garden"
+    }
+   },
+   {
+    "save": "view-wreck",
+    "target": {
+     "x": 780,
+     "y": -242,
+     "z": -605
+    },
+    "on": {
+     "name": "view-wreck-lamp-on",
+     "range": 274,
+     "file": "12-after-view-wreck-lamp-on.jpg",
+     "mean": 44.6,
+     "darkShare": 0.01,
+     "draws": 118,
+     "lights": "12/174",
+     "vertices": 669925,
+     "meshes": 892,
+     "regions": "silt_basin,suspended_garden"
+    },
+    "off": {
+     "name": "view-wreck-lamp-toggled",
+     "range": null,
+     "file": "13-after-view-wreck-lamp-toggled.jpg",
+     "mean": 43.5,
+     "darkShare": 0.01,
+     "draws": 118,
+     "lights": "12/174",
+     "vertices": 669925,
+     "meshes": 892,
+     "regions": "silt_basin,suspended_garden"
+    }
+   }
+  ],
+  "errors": [],
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)"
+ },
+ "state": {
+  "cam": [
+   560.812,
+   -233.136,
+   -440.912
+  ],
+  "bearing": 52,
+  "pitch": 0,
+  "depth": 235,
+  "region": "Pale Basin",
+  "movement": "Piloting",
+  "vitals": "O₂ 100% Creel air HEALTH 100 FOOD 49 F · eat meal CREEL 60% power Hull 100% · 235 / 450 m · hold 5/96 CU",
+  "prompt": "",
+  "menu": false,
+  "panel": "",
+  "graphics": "available",
+  "ready": "true",
+  "lights": "12/174",
+  "work": "0.00",
+  "cave": "",
+  "regions": "silt_basin,suspended_garden"
+ },
+ "errors": []
+}

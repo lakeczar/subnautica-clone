@@ -42,3 +42,17 @@
 - **Meridian's deep interiors** (upper hall, transfer hall, annex, gate hall, service window, inner hall) stay with the story structure. The bible's Meridian caves are exterior cut voids that never enter them.
 - **The cast pass** names the voices in the logs. Until then, logs are signed by role.
 - **New lost sites** added later follow the six rules above and get a row here, not in owner-facing files.
+
+## Creature lore (CB-2)
+
+The field guide and found notes ([FIELD-GUIDE](../content/FIELD-GUIDE.md)) are deliberately story-light. These are the only canon touches; every rule above still holds (nothing dated after disaster day, no counts, no gate, no suspension).
+
+| Note / entry | Who and when | Canon touch | Constraint |
+| --- | --- | --- | --- |
+| `note_trapper_tally` (tide store, after decode) | Tavi Orr, Season 8 | Tavi kept trap pots with the yard spares: a maintenance diver's ordinary side job, and a human beat before the player meets Tavi's later notes. | Signed "T. Orr" only. Never mention a partner, the six or the gate. |
+| `note_reef_season`, `note_basin_tray` | Mara Sen, Season 2 and D−210 | Mara's field method (timing animals) continues her existing voice: "I time this" echoes her tray note about the fans. | Ecology only. No extraction, brine or prediction content: those belong to C06, C11 and her journals. |
+| `note_allotment_margin` | Allotment rota, D−3 | The last ordinary days in the district, like the uncollected crop. | No names from the six; no mention of the refuge or of transfers. |
+| `note_office_board`, `note_dock_board`, `note_station_margin`, `note_lab_feeding_card` | Shift boards, D−96 to D−12 | People lived and worked alongside the threats and knew their rhythms; the windows are old crew knowledge, not new magic. | Practical only. |
+| `pale_drifter` falls | Never seen alive | Ordinary deaths of an open-water animal; the newest Basin fall is "this season" in the pump crew's note, i.e. before the disaster, so years-old by the campaign. The present-day state (scavengers still on it, hide still hanging) is plausible for a giant fall in cold deep water. | Never tie a fall to the disaster or to the extraction. |
+| Threat windows | Field guide and boards | Behaviour of animals, unchanged by the disaster. | No threat is described as changed, angered or caused by people. |
+| `cable_tender` | Field guide | "Live lines" stay the cue from the bible: the district still draws power. | As before: never through the machinery boundary. |

@@ -120,7 +120,7 @@ export const MERIDIAN: AreaProposal = {
   lostSites: [
     { id: "meridian.allotments_site", area: "deep_district", label: "Terrace allotments", at: p(1150, -600, -1250), anchor: "floor",
       see: "A rota board with a sealed data tag on the allotment post.",
-      decodes: [{ id: "meridian_allotment_log", label: "Allotment rota", size: "log", gates: ["meridian_allotment_tag"],
+      decodes: [{ id: "meridian_allotment_log", label: "Allotment rota", size: "log", gates: ["meridian_allotment_tag", "note_allotment_margin"],
         blueprints: [], story: false,
         reveals: [
           { id: "meridian_site_culvert", label: "Escarpment culvert", category: "site", target: prop("meridian_escarp_culvert"), radius: 60 },
