@@ -93,7 +93,7 @@ test("no route, rescue tether, site, source or place sits inside a cave footprin
   for (const s of SITES) assert.ok(!inFootprint({ x: s.at.x, y: 0, z: s.at.z }), `site ${s.id}`);
   for (const [id, s] of Object.entries(SOURCES)) assert.ok(!inFootprint(s.position), `source ${id}`);
   for (const [id, p] of Object.entries(PLACES)) assert.ok(!inFootprint(p.position), `place ${id}`);
-  assert.equal(CAVE_SOURCES.length, 1);
+  assert.ok(CAVE_SOURCES.some(c => c.id === "fanvault"), "the Fanvault is a cave source (W2 adds the hub caves beside it)");
 });
 
 test("a diver swims the Fanvault loop with ordinary controls: in the north mouth, through the vault, out the south", () => {

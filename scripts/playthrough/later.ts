@@ -626,10 +626,11 @@ function worksVisit(d: Driver, actions: readonly WorksAction[], take: Cargo): vo
   sortie(d, hostAt(d, host), `${site} works`, () => {
     const v = d.state.fleet.vehicles.find((x) => x.id === craftId)!;
     reach(d, v.id);
-    // Room for the assemblies: the diver's meals wait in the hold for this visit.
-    // Only as many as the hold takes beside the cargo still in it.
-    const meals = cargoCu(d, take) > d.freeCu("diver")
-      ? Math.min(d.count("meal", ["diver"]), Math.floor(d.freeCu(v.cargoId) / ITEMS.meal.cu)) : 0;
+    // Room for the assemblies: as many of the diver's meals as that needs wait in
+    // the hold for this visit, no more than the hold has room for (W2: a works
+    // trip can fill the Mantle's hold, so stowing every meal could be refused).
+    const mealCu = ITEMS.meal.cu, short = cargoCu(d, take) - d.freeCu("diver");
+    const meals = short > 0 ? Math.min(d.count("meal", ["diver"]), Math.ceil(short / mealCu), Math.floor(d.freeCu(v.cargoId) / mealCu)) : 0;
     if (meals) move(d, "meal", meals, "diver", v.cargoId);
     const first = loads(d, take, d.freeCu("diver"))[0];
     if (take.ids.length && (!first || first.ids.length !== take.ids.length))

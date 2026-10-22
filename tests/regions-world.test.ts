@@ -153,7 +153,10 @@ test("sites sit in their region and its specified depth band", () => {
     assert.equal(regionAtPoint(s.at.x, s.at.z), s.region, `${s.id} lies outside ${s.region}`);
     const [lo, hi] = REGIONS[s.region].depth, depth = -siteDatum(s, worldFloor).y;
     assert.ok(depth >= Math.min(lo, 0) - 100 && depth <= hi + 20, `${s.id} at ${depth.toFixed(0)} m outside ${s.region} ${lo}-${hi}`);
-    if (s.role !== "landmark" && s.role !== "volume" && s.region !== "island_chain")
+    // W2's hub spur is a Hearth Reef spur inside the Basin footprint: it keeps
+    // the reef's shallow band down to its rim balcony, never the Basin's.
+    if (s.id.startsWith("hub.")) assert.ok(depth <= 130 || s.role === "landmark", `${s.id} at ${depth.toFixed(0)} m is below the hub band`);
+    else if (s.role !== "landmark" && s.role !== "volume" && s.region !== "island_chain")
       assert.ok(depth >= lo - 20, `${s.id} at ${depth.toFixed(0)} m shallower than ${s.region}`);
   }
   const entries = spatialEntries(), entryIds = new Set(entries.map(e => e.id));
