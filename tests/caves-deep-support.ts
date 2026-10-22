@@ -244,8 +244,12 @@ export function shellProblems(c: DeepCave): string[] {
   }
   if (inside) out.push(`${c.source.id}: ${inside} of ${cells} room cells inside rock`);
   if (cells < 500) out.push(`${c.source.id}: only ${cells} room cells`);
+  // CW-1 edge rock: a box clipped at the footprint may be thinner across that
+  // edge (the exterior ground continues it); nowhere else.
+  const onEdge = (s: { min: Vec3; max: Vec3 }, a: "x" | "y" | "z"): boolean =>
+    a === "x" ? s.min.x === f.minX || s.max.x === f.maxX : a === "z" ? s.min.z === f.minZ || s.max.z === f.maxZ : false;
   for (const s of def.rock) for (const a of ["x", "y", "z"] as const)
-    if (s.max[a] - s.min[a] < MIN_ROCK - 1e-9) { out.push(`${s.id} thinner than ${MIN_ROCK} m on ${a}`); break; }
+    if (s.max[a] - s.min[a] < MIN_ROCK - 1e-9 && !onEdge(s, a)) { out.push(`${s.id} thinner than ${MIN_ROCK} m on ${a}`); break; }
   // Thin rock is dropped from art and collision together; keep it rare.
   if (def.stats.droppedVoxels > def.stats.rockVoxels * 0.025) out.push(`${c.source.id}: ${def.stats.droppedVoxels} of ${def.stats.rockVoxels} rock voxels dropped as thin`);
   return out;
