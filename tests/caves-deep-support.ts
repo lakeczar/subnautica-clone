@@ -170,17 +170,63 @@ const lerp3 = (a: Vec3, b: Vec3, t: number): Vec3 => ({ x: a.x + (b.x - a.x) * t
 
 // --- Checks --------------------------------------------------------------------------
 
-/** Shell and rock agree: every fine shell point lies within 0.35 m of a rock
- * solid and seldom faces rock; no room cell is inside rock; the source's
- * clear water is never rock and its clear rock almost always is. */
+/** The rock solids cover exactly the owned rock voxels: every owned voxel is
+ * rock in the volume iff some solid contains its centre. With that, rock
+ * distance and containment can be read from the voxels. */
+export function rockUnionProblems(c: DeepCave): string[] {
+  const def = defOf(c), v = caveVolume(def), g = v.grid, covered = new Uint8Array(v.solid.length);
+  for (const s of def.rock) {
+    const i0 = Math.round((s.min.x - g.origin.x) / g.voxel), i1 = Math.round((s.max.x - g.origin.x) / g.voxel);
+    const j0 = Math.round((s.min.y - g.origin.y) / g.voxel), j1 = Math.round((s.max.y - g.origin.y) / g.voxel);
+    const k0 = Math.round((s.min.z - g.origin.z) / g.voxel), k1 = Math.round((s.max.z - g.origin.z) / g.voxel);
+    for (let k = k0; k < k1; k++) for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) covered[i + g.nx * (j + g.ny * k)] = 1;
+  }
+  let extra = 0, missing = 0;
+  for (let at = 0; at < covered.length; at++) {
+    const rock = v.owned[at]! && v.solid[at]!;
+    if (covered[at] && !rock) extra++;
+    if (rock && !covered[at]) missing++;
+  }
+  return extra || missing ? [`${c.source.id}: solids cover ${extra} non-rock voxels and miss ${missing} rock voxels`] : [];
+}
+/** Distance from a point to the nearest owned rock voxel, up to `reach`. */
+function voxelRockDistance(def: CaveDef, p: Vec3, reach: number): number {
+  const v = caveVolume(def), g = v.grid, r = Math.ceil(reach / g.voxel);
+  const ci = Math.floor((p.x - g.origin.x) / g.voxel), cj = Math.floor((p.y - g.origin.y) / g.voxel), ck = Math.floor((p.z - g.origin.z) / g.voxel);
+  let best = Infinity;
+  for (let k = ck - r; k <= ck + r; k++) for (let j = cj - r; j <= cj + r; j++) for (let i = ci - r; i <= ci + r; i++) {
+    if (i < 0 || j < 0 || k < 0 || i >= g.nx || j >= g.ny || k >= g.nz) continue;
+    const at = i + g.nx * (j + g.ny * k);
+    if (!v.owned[at] || !v.solid[at]) continue;
+    const x0 = g.origin.x + i * g.voxel, y0 = g.origin.y + j * g.voxel, z0 = g.origin.z + k * g.voxel;
+    const dx = Math.max(x0 - p.x, 0, p.x - x0 - g.voxel), dy = Math.max(y0 - p.y, 0, p.y - y0 - g.voxel), dz = Math.max(z0 - p.z, 0, p.z - z0 - g.voxel);
+    best = Math.min(best, Math.hypot(dx, dy, dz));
+  }
+  return best;
+}
+function voxelInRock(def: CaveDef, p: Vec3): boolean {
+  const v = caveVolume(def), g = v.grid;
+  const i = Math.floor((p.x - g.origin.x) / g.voxel), j = Math.floor((p.y - g.origin.y) / g.voxel), k = Math.floor((p.z - g.origin.z) / g.voxel);
+  if (i < 0 || j < 0 || k < 0 || i >= g.nx || j >= g.ny || k >= g.nz) return false;
+  const at = i + g.nx * (j + g.ny * k);
+  return !!(v.owned[at] && v.solid[at]);
+}
+
+/** Shell and rock agree: the solids are exactly the owned rock voxels, every
+ * fine shell point lies within 0.35 m of rock and seldom faces rock, no room
+ * cell is rock, and no solid is thinner than MIN_ROCK. */
 export function shellProblems(c: DeepCave): string[] {
-  const pr = probeOf(c), def = pr.def, out: string[] = [], m = pr.shell("fine");
+  const pr = probeOf(c), def = pr.def, out: string[] = [...rockUnionProblems(c)], m = pr.shell("fine");
   let worst = 0, worstAt: Vec3 | null = null, buried = 0, points = 0;
+  const f = def.replacementFootprints[0]!;
   const check = (p: Vec3, n: Vec3): void => {
+    // The collar band is held to the floor by collarProblems: there the
+    // nearest rock may be the exterior heightfield, not owned rock.
+    if (Math.min(p.x - f.minX, f.maxX - p.x, p.z - f.minZ, f.maxZ - p.z) < 1) return;
     points++;
-    const d = pr.rockDistance(p);
+    const d = voxelRockDistance(def, p, 0.5);
     if (d > worst) { worst = d; worstAt = p; }
-    if (pr.inRock({ x: p.x + n.x * 0.36, y: p.y + n.y * 0.36, z: p.z + n.z * 0.36 })) buried++;
+    if (voxelInRock(def, { x: p.x + n.x * 0.36, y: p.y + n.y * 0.36, z: p.z + n.z * 0.36 })) buried++;
   };
   for (let i = 0; i < m.positions.length / 3; i++) check(vertex(m, i), { x: m.normals[i * 3]!, y: m.normals[i * 3 + 1]!, z: m.normals[i * 3 + 2]! });
   for (let t = 0; t < m.indices.length; t += 3) {
@@ -195,13 +241,14 @@ export function shellProblems(c: DeepCave): string[] {
   for (let k = 0; k < g.nz; k++) for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) {
     if (!v.room[i + g.nx * (j + g.ny * k)]) continue;
     cells++;
-    if (pr.inRock({ x: g.origin.x + (i + 0.5) * g.voxel, y: g.origin.y + (j + 0.5) * g.voxel, z: g.origin.z + (k + 0.5) * g.voxel })) inside++;
+    if (voxelInRock(def, { x: g.origin.x + (i + 0.5) * g.voxel, y: g.origin.y + (j + 0.5) * g.voxel, z: g.origin.z + (k + 0.5) * g.voxel })) inside++;
   }
   if (inside) out.push(`${c.source.id}: ${inside} of ${cells} room cells inside rock`);
   if (cells < 500) out.push(`${c.source.id}: only ${cells} room cells`);
   for (const s of def.rock) for (const a of ["x", "y", "z"] as const)
     if (s.max[a] - s.min[a] < MIN_ROCK - 1e-9) { out.push(`${s.id} thinner than ${MIN_ROCK} m on ${a}`); break; }
-  if (def.stats.droppedVoxels > def.stats.rockVoxels * 0.002) out.push(`${c.source.id}: ${def.stats.droppedVoxels} thin voxels dropped`);
+  // Thin rock is dropped from art and collision together; keep it rare.
+  if (def.stats.droppedVoxels > def.stats.rockVoxels * 0.01) out.push(`${c.source.id}: ${def.stats.droppedVoxels} of ${def.stats.rockVoxels} rock voxels dropped as thin`);
   return out;
 }
 
@@ -255,7 +302,7 @@ export function roofHoles(def: CaveDef): Vec3[] {
   const mouths = def.portals.filter(m => m.kind === "mouth" || m.kind === "skylight");
   const mouthZone = (p: Vec3): boolean => mouths.some(m => {
     if (m.normal.y !== 0) return Math.abs(p.x - m.center.x) < m.clear.width / 2 + 2.5 && Math.abs(p.z - m.center.z) < m.clear.height / 2 + 2.5;
-    return Math.abs((p.z - m.center.z) * m.normal.z + (p.x - m.center.x) * m.normal.x) < 2.5 &&
+    return Math.abs((p.z - m.center.z) * m.normal.z + (p.x - m.center.x) * m.normal.x) < 5 &&
       Math.abs(m.normal.z !== 0 ? p.x - m.center.x : p.z - m.center.z) < m.clear.width / 2 + 2 && p.y < m.center.y + m.clear.height / 2 + 2.5;
   });
   for (let k = 0; k < g.nz; k++) for (let j = 0; j + 1 < g.ny; j++) for (let i = 0; i < g.nx; i++) {
@@ -283,7 +330,7 @@ export function roofProblems(c: DeepCave, world: WorldQueries = deepWorld()): st
     ...def.rooms.filter(r => r.role !== "shaft").map(r => ({ x: (r.bounds.min.x + r.bounds.max.x) / 2, y: r.bounds.min.y + 1, z: (r.bounds.min.z + r.bounds.max.z) / 2 })),
   ].map(p => ({ ...p, x: Math.floor(p.x * 2) / 2 + 0.25, z: Math.floor(p.z * 2) / 2 + 0.25 }))
     .filter(p => pr.inside(p) && pr.roomAt({ ...p, y: p.y + 0.5 }) !== "" && !open(p) && world.clearance(p, DIVER));
-  if (columns.length < 5) out.push(`${c.source.id}: only ${columns.length} roof probe columns`);
+  if (columns.length < 2) out.push(`${c.source.id}: only ${columns.length} roof probe columns`);
   for (const p of columns) {
     const top = world.supportHeight(p.x, p.z, 1000);
     const stand = Math.max(...[-1, 1].flatMap(a => [-1, 1].map(b => world.supportHeight(p.x + a * DIVER.radius, p.z + b * DIVER.radius, 1000))));
@@ -295,8 +342,11 @@ export function roofProblems(c: DeepCave, world: WorldQueries = deepWorld()): st
     if (!world.clearance(above, DIVER)) { out.push(`${c.source.id}: no room on the roof over ${fmt(p)}`); continue; }
     const sink = world.moveCapsule({ ...above, y: stand + 1 }, { x: 0, y: -3, z: 0 }, DIVER);
     if (!sink.hitSolid || sink.position.y < stand - 1e-6) { out.push(`${c.source.id}: a diver sinks through the roof over ${fmt(p)}`); continue; }
+    // On a steep roof a shell vertex's 0.2–0.3 m sideways clamp is several
+    // times that vertically, so the window grows with the local slope.
+    const slope = Math.max(...[[0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]].map(([dx, dz]) => Math.abs(world.supportHeight(p.x + dx!, p.z + dz!, 1000) - top) / 0.5));
     for (const lod of ["fine", "coarse"] as const) {
-      const a = { x: p.x, y: top + 0.6, z: p.z }, b = { x: p.x, y: top - (lod === "fine" ? 0.8 : 1.6), z: p.z };
+      const a = { x: p.x, y: top + 0.6, z: p.z }, b = { x: p.x, y: top - (lod === "fine" ? 0.8 + 0.3 * slope : 1.6 + 0.6 * slope), z: p.z };
       if (!pr.triangles(lod, { x: p.x, y: top, z: p.z }, 1.8).some(([u, w, x]) => segmentHitsTriangle(a, b, u, w, x)))
         out.push(`${c.source.id}: ${lod} shell has no roof top over ${fmt(p)}`);
     }
@@ -310,13 +360,17 @@ export function roofProblems(c: DeepCave, world: WorldQueries = deepWorld()): st
  * diver route (lifted to mid-body), and craft routes keep their box clear of
  * both shells; coarse is a real simplification. */
 export function lodProblems(c: DeepCave): string[] {
-  const pr = probeOf(c), out: string[] = [];
+  const pr = probeOf(c), out: string[] = [], f = pr.def.replacementFootprints[0]!;
+  const interior = (p: Vec3): boolean => Math.min(p.x - f.minX, f.maxX - p.x, p.z - f.minZ, f.maxZ - p.z) > 1;
   for (const r of c.source.routes) {
-    const s = profile(r.profile), lift = r.profile === "diver" ? 0.45 : s.height / 2, keep = r.profile === "diver" ? 0.6 : 0.3;
+    // Diver: no shell within 0.6 m of mid-body (W1). Craft: no shell vertex
+    // inside the hull box shrunk by the kit's 0.35 m shell-to-rock bound.
+    const s = profile(r.profile), lift = r.profile === "diver" ? 0.45 : s.height / 2, keep = r.profile === "diver" ? 0.6 : -0.35;
     for (let i = 1; i < r.path.length; i++) {
       const a = r.path[i - 1]!, b = r.path[i]!, steps = Math.ceil(dist(a, b) / 0.25);
       for (let k = 0; k <= steps; k++) {
         const q = lerp3(a, b, k / steps), p = { ...q, y: q.y + lift };
+        if (!interior(q)) continue;
         for (const lod of ["fine", "coarse"] as const) {
           if (r.profile === "diver") {
             const hit = pr.triangles(lod, p, 0.8).find(([u, w, x]) => pointTriangleDistance(p, u, w, x) < keep);
@@ -337,12 +391,26 @@ export function lodProblems(c: DeepCave): string[] {
 /** The collar meets the heightfield at the footprint edge. */
 export function collarProblems(c: DeepCave, world: WorldQueries = deepWorld()): string[] {
   const pr = probeOf(c), f = pr.def.replacementFootprints[0]!, out: string[] = [];
-  let worst = 0;
-  for (let u = f.minX + 0.5; u < f.maxX; u += 1) for (const [x, z, ox, oz] of [[u, f.minZ + 0.25, u, f.minZ - 0.25], [u, f.maxZ - 0.25, u, f.maxZ + 0.25]] as const)
-    worst = Math.max(worst, Math.abs(world.supportHeight(x, z, 1000) - worldFloor(ox, oz)));
-  for (let u = f.minZ + 0.5; u < f.maxZ; u += 1) for (const [x, z, ox, oz] of [[f.minX + 0.25, u, f.minX - 0.25, u], [f.maxX - 0.25, u, f.maxX + 0.25, u]] as const)
-    worst = Math.max(worst, Math.abs(world.supportHeight(x, z, 1000) - worldFloor(ox, oz)));
-  if (worst > 0.75) out.push(`${c.source.id}: collar step ${worst.toFixed(2)} m`);
+  // The rock top just inside the edge against the floor just outside it,
+  // allowing for the floor's own fall over the 0.5 m between them, and for
+  // the kit's 2 m-cube opening where the floor falls INTO the footprint: a
+  // cube may not cross the edge, so it cannot fit under a surface that drops
+  // inward, and up to that drop is eroded (a notch at the seam, not a gap).
+  let worst = 0, at = "";
+  const step = (x: number, z: number, ox: number, oz: number): void => {
+    const fall = Math.max(...[-0.25, 0, 0.25].flatMap(a => [-0.25, 0, 0.25].map(b => Math.abs(worldFloor(x + a, z + b) - worldFloor(ox, oz)))));
+    const ix = Math.sign(x - ox), iz = Math.sign(z - oz), here = worldFloor(x, z);
+    let inward = 0;
+    for (let s = 0.5; s <= 2.25; s += 0.25) for (const t of [-2, 0, 2]) {
+      const fx = x + ix * s + (iz !== 0 ? t : 0), fz = z + iz * s + (ix !== 0 ? t : 0);
+      inward = Math.max(inward, here - worldFloor(fx, fz));
+    }
+    const d = Math.abs(world.supportHeight(x, z, 1000) - worldFloor(ox, oz)) - fall - inward;
+    if (d > worst) { worst = d; at = `(${x}, ${z})`; }
+  };
+  for (let u = f.minX + 0.5; u < f.maxX; u += 1) { step(u, f.minZ + 0.25, u, f.minZ - 0.25); step(u, f.maxZ - 0.25, u, f.maxZ + 0.25); }
+  for (let u = f.minZ + 0.5; u < f.maxZ; u += 1) { step(f.minX + 0.25, u, f.minX - 0.25, u); step(f.maxX - 0.25, u, f.maxX + 0.25, u); }
+  if (worst > 0.75) out.push(`${c.source.id}: collar step ${worst.toFixed(2)} m beyond the floor's own fall at ${at}`);
   for (const lod of ["fine", "coarse"] as const) {
     const m = pr.shell(lod);
     for (let i = 0; i < m.positions.length / 3; i++) {

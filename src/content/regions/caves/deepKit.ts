@@ -85,7 +85,7 @@ export interface CaveCue {
   readonly points: readonly Vec3[];
   /** Unlit RGB in 0..1. Two exits of one cave never share a colour. */
   readonly color: readonly [number, number, number];
-  readonly meaning: "exit" | "heat_breath" | "dense_water" | "live_line";
+  readonly meaning: "exit" | "heat_breath" | "dense_water" | "live_line" | "resident";
   readonly exit?: string;
   readonly read: string;
 }
