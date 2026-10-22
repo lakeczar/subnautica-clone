@@ -77,3 +77,12 @@ export function httpCaveStore(base: string, options: { readonly keepLight?: numb
     stats,
   };
 }
+
+let store: CaveStore | null | undefined;
+/** The game's cave store: the baked `caves/` beside the page in a browser,
+ * none elsewhere (Node tests and tools generate live). */
+export function gameCaveStore(): CaveStore | null {
+  if (store === undefined)
+    store = typeof document !== "undefined" && typeof fetch === "function" ? httpCaveStore(new URL("caves/", document.baseURI).href) : null;
+  return store;
+}

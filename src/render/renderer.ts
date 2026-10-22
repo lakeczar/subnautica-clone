@@ -25,13 +25,18 @@ import { createRegionResidency, REGION_OWNER_BYTES, RESIDENT_REGION_LIMIT, type 
 import { composeWorldArt, type ComposedWorld } from "./worldArt.js";
 import { createKitLoader, TemplateLibrary } from "./kit/loader.js";
 import { defaultContext } from "./kit/factories.js";
-import { createResidency, type Residency, type ResidencyBudget, type ResidencyStats } from "../world/residency.js";
+import { createResidency, DEFAULT_BUDGET, type Residency, type ResidencyBudget, type ResidencyStats } from "../world/residency.js";
+import { CaveArbiter } from "../world/caves/large/streaming.js";
 import type { Vec3 } from "../sim/types.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Geometry } from "@babylonjs/core/Meshes/geometry.js";
 import { GeometryCache } from "./geometryCache.js";
-import { createCaveView } from "./caves/caveView.js";
+import { createCaveView, liveCaveFields, type CaveFieldSource } from "./caves/caveView.js";
+import { gameCaveStore } from "./caves/caveStore.js";
+import { createKitStreamer, type KitStreamFrame } from "../world/caves/kitStream.js";
+import { terrainStore } from "./biomes/terrain.js";
+import { CAVE_SOURCES } from "../content/regions/caves.js";
 import { createCurrentStreaks } from "./currentStreaks.js";
 import { createHubArt } from "./hub.js";
 
@@ -68,7 +73,15 @@ const VISIBLE_WORLD = 200;
  * terrain, and any composed region pack) follows `stream(viewer)`. */
 export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, options: {
   world?: ComposedWorld; budget?: Partial<ResidencyBudget>; now?: () => number;
+  /** Bytes other owners hold this frame (CW-1: cave collision, light fields
+   * and their textures), reserved before the chunks' share is set. */
+  held?: () => { readonly cpu: number; readonly gpu: number };
 } = {}): RegionArt & {
+  /** One arbiter for the whole world budget (LC-05): the legacy region
+   * owners and cave data hold reservations; the chunk residency is the
+   * opportunistic "world" owner and draws only its exclusive share, so a
+   * cave biome's reservations (placed later) shrink it, never overlap it. */
+  readonly arbiter: CaveArbiter;
   readonly active: readonly RenderRegion[];
   readonly retained: readonly RenderRegion[];
   prepare(): RenderRegion | null;
@@ -91,7 +104,10 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
     scene, material: cel, templates: new TemplateLibrary(world.templates), factories: world.factories,
     context: defaultContext(world.floor, 0.75, now, world.biomeAt),
   });
-  const residency = createResidency({ map: world.map, loader, budget: { ...WORLD_BUDGET, ...options.budget }, now });
+  const budget = { ...DEFAULT_BUDGET, ...WORLD_BUDGET, ...options.budget };
+  const residency = createResidency({ map: world.map, loader, budget, now });
+  const arbiter = new CaveArbiter({ cpu: budget.cpuBytes, gpu: budget.gpuBytes });
+  arbiter.opportunistic("world");
   const navigation = createNavigationSilhouettes(scene, cel);
   const regions = createRegionResidency(region => {
     const before = new Set(scene.meshes);
@@ -143,6 +159,7 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
     get active() { return regions.active; },
     get retained() { return regions.retained; },
     get residency() { return residency; },
+    arbiter,
     get regionBytes() { return regions.bytes; },
     prepare() { return disposed ? null : regions.prepare(); },
     get cacheStats() { return cache.stats; },
@@ -154,8 +171,14 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
     stream(viewer, streaming = {}) {
       if (disposed) return null;
       const start = now();
-      // Legacy owners and chunks share one budget: chunks get what is left.
-      residency.setExternalBytes({ cpu: regions.bytes, gpu: regions.bytes });
+      // Legacy owners, cave data and chunks share one budget through the
+      // arbiter: owners holding live buffers re-reserve what they hold (with
+      // priority: they already exist), and chunks get the world's share.
+      const held = options.held?.() ?? { cpu: 0, gpu: 0 };
+      for (const [owner, bytes] of [["regions", { cpu: regions.bytes, gpu: regions.bytes }], ["caves", held]] as const) {
+        arbiter.release(owner); arbiter.reserve(owner, bytes, true);
+      }
+      residency.setExternalBytes(arbiter.externalFor("world"));
       let stats = residency.update(viewer);
       const near = streaming.nearRadius;
       while (near !== undefined && !stats.settled && !residency.isReady(near) && now() - start < CATCH_UP_MS)
@@ -228,12 +251,31 @@ export function createRenderer(
     camera.fov = 1.02;
     scene.activeCamera = camera;
     const cel = createCelMaterial(scene);
-    // W1 cave light on the one cel material: the active cave's field and the lamp.
-    const caveView = createCaveView(scene, [cel]);
+    // W1 cave light on the one cel material: the active cave's field and the
+    // lamp. CW-1: fields come baked from the cave store, fetched ahead by the
+    // streamer (generation only without a bake).
+    const caves = gameCaveStore();
+    const fields: CaveFieldSource = caves ? {
+      field: id => caves.light(id) ?? (caves.lightSettled(id) ? liveCaveFields.field(id) : null),
+      settled: id => caves.lightSettled(id),
+    } : liveCaveFields;
+    const caveView = createCaveView(scene, [cel], fields);
+    // CW-1 streaming: cave collision built ahead by proximity and heading,
+    // evicted behind and far first; light fields fetched and uploaded ahead;
+    // terrain files fetched toward where the viewer is heading.
+    const caveWorld = gameWorld();
+    const streamer = createKitStreamer(caveWorld.kitCaves, new Map(CAVE_SOURCES.map(c => [c.id, c.footprint])));
+    let lastStream: { at: Vector3; time: number } | null = null, velocity = Vector3.Zero(), streamFrames = 0;
+    let streamFrame: KitStreamFrame | null = null, worstCaveBuildMs = 0;
     // Visible currents: grit streaks carried by the real flow field.
     const streaks = createCurrentStreaks(scene, cel);
     const glass = createGlassMaterial(scene);
-    const art = createRegionalArt(scene, cel, glass);
+    // Cave bytes for the arbiter: collision composites (about 160 B a box),
+    // decoded light fields, and their textures on the GPU.
+    const art = createRegionalArt(scene, cel, glass, { held: () => ({
+      cpu: caveWorld.kitCaves.stats.residentBoxes * 160 + (caves?.stats.lightBytes ?? 0),
+      gpu: caveView.stats.textureBytes,
+    }) });
     for (const mesh of scene.meshes) mesh.renderingGroupId = 1;
     const { water, sky } = createAtmosphere(scene);
     // ATM-1: emissive art, Rift vents, cockpit instruments and parked-craft
@@ -359,9 +401,30 @@ export function createRenderer(
         canvas.dataset.localLights = `${lights.stats.sent}/${lights.stats.known}`;
         cel.setFloat("underwater", underwater);
         cel.setFloat("lampOn", state && state.opening.phase >= 4 && lampOn(state) ? 1 : 0);
+        // Viewer velocity (smoothed) for heading-aware prefetch; a jump resets it.
+        const nowMs = performance.now();
+        if (lastStream && !jumped && nowMs > lastStream.time) {
+          const v = camera.position.subtract(lastStream.at).scale(1000 / (nowMs - lastStream.time));
+          velocity = Vector3.Lerp(velocity, v, 0.1);
+        } else velocity = Vector3.Zero();
+        lastStream = { at: camera.position.clone(), time: nowMs };
+        // Records must have landed before the streamer builds from them;
+        // without a store (or a bake) clusters generate live.
+        if (!caves || caves.settled) {
+          streamFrame = streamer.update(camera.position, velocity);
+          worstCaveBuildMs = Math.max(worstCaveBuildMs, streamFrame.buildMs);
+          caveView.stream(streamFrame.light, streamFrame.upload);
+          caves?.retainLight(streamFrame.light);
+        }
+        if (++streamFrames % 30 === 0) terrainStore()?.prefetch(camera.position.add(velocity.scale(streamer.options.lookAhead)), 520);
         caveView.update(lamp ?? camera.position, camera.getTarget().subtract(camera.position),
           !!state && state.opening.phase >= 4 && lampOn(state) && underwater === 1);
         canvas.dataset.cave = caveView.active ?? "";
+        const ks = caveWorld.kitCaves.stats;
+        canvas.dataset.caveStream = JSON.stringify({ sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes,
+          stepMs: +ks.maxStepMs.toFixed(2), buildMs: +worstCaveBuildMs.toFixed(2), pending: streamFrame?.pending ?? -1,
+          missing: caveView.stats.missing, uploads: caveView.stats.uploads, lightBytes: caves?.stats.lightBytes ?? 0,
+          textureBytes: caveView.stats.textureBytes, records: caves ? !!caves.collision : null, recordsMs: caves?.stats.collisionMs ?? 0 });
         streaks.update(camera.position, state?.tick ?? 0, !!state && state.opening.phase >= 4 && underwater === 1);
         canvas.dataset.currentStreaks = String(streaks.shown);
         placed.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });

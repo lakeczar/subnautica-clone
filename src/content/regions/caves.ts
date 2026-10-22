@@ -9,6 +9,7 @@ import { ISLES_CAVES } from "./caves/isles.js";
 import { REEF_CAVES } from "./caves/reef.js";
 import { CANOPY_BASIN_GROUPS, groupDef, type CaveGroup } from "./caves/index.js";
 import { styledShell } from "./caves/style.js";
+import { DEEP_CAVE_SOURCES } from "./caves/deepCaves.js";
 import { HUB_CAVE_SOURCES } from "./hubCaves.js";
 
 /** W1 cave replacement volumes (Babylon-free).
@@ -319,14 +320,14 @@ const GROUPS: ReadonlyMap<string, CaveGroup> = new Map(CANOPY_BASIN_GROUPS.map(g
  * - the Fanvault (W1) and W2's hub caves;
  * - CA-1's Reef and Isles caves (linked networks whole: a cave's shell stops
  *   at a shared seam where its neighbour's begins);
- * - CA-2's Canopy and Basin groups.
+ * - CA-2's Canopy and Basin groups;
+ * - CA-3's Rift, Divide and Meridian caves: plain kit sources in their
+ *   region's shell palette (`caveGeometry.ts`), whose hazard fields S4's
+ *   sampler reads (`DEEP_CAVE_HAZARDS`).
  *
- * CA-3's Rift, Divide and Meridian caves join with one line,
- * `...DEEP_CAVE_SOURCES`: they are plain kit sources, take their region's
- * shell palette (`caveGeometry.ts`), and the bake, streaming and admission
- * follow from this list. */
+ * The bake, streaming, admission and current masking follow from this list. */
 export const CAVE_SOURCES: readonly CaveSource[] = [
-  FANVAULT_SOURCE, ...HUB_CAVE_SOURCES, ...REEF_CAVES, ...ISLES_CAVES, ...CANOPY_BASIN_GROUPS.map(g => g.source),
+  FANVAULT_SOURCE, ...HUB_CAVE_SOURCES, ...REEF_CAVES, ...ISLES_CAVES, ...CANOPY_BASIN_GROUPS.map(g => g.source), ...DEEP_CAVE_SOURCES,
 ];
 /** Every authored kit cave. Every one is in the game now; the name stays for
  * the authoring tests and labs that resolve any authored cave. */

@@ -9,6 +9,7 @@ import { clamp01, v } from "./vector.js";
 import { cycleLevel as frameworkLevel, fromHazardCycle, secondsAt, secondsUntil } from "../cycles/cycle.js";
 import type { CycleDef } from "../cycles/cycle.js";
 import { WORLD_CYCLES } from "../../content/currents/cycles.js";
+import { DEEP_CAVE_HAZARDS } from "../../content/regions/caves/deepCaves.js";
 
 const FIELD_IDS = Object.keys(HAZARD_FIELDS) as HazardFieldId[];
 const field = (id: HazardFieldId): HazardFieldDefinition => HAZARD_FIELDS[id];
@@ -100,12 +101,27 @@ export function sampleHazards(p: Vec3, tick: number): HazardSample {
       flow = { x: flow.x + f.flow.x * k, y: flow.y + f.flow.y * k, z: flow.z + f.flow.z * k };
     }
   }
+  // CA-3's cave fields (CW-1): heat breaths and brine pools, same rule; they
+  // carry no flow and are not world fields, so `fields` stays the world's.
+  for (const f of DEEP_CAVE_HAZARDS) {
+    const level = caveFieldLevel(f, p, tick);
+    if (level > 1e-9) out[f.kind] = Math.max(out[f.kind], level);
+  }
   return {
     heat: out.heat, brine: out.brine, sediment: out.sediment, darkness: out.darkness, flow,
     ambient: ambientLight(p.y) * (1 - out.darkness),
     visibility: clamp01(1 - out.sediment * 0.85 - out.brine * 0.3),
     fields,
   };
+}
+
+/** A cave field's level at a point (CA-3's rule, S4's for a field outside
+ * `HAZARD_FIELDS`): shape weight × cycle over its baseline × intensity. */
+export function caveFieldLevel(f: HazardFieldDefinition, p: Vec3, tick: number): number {
+  const w = shapeWeight(f.shape, f.edge, p);
+  if (w <= 0) return 0;
+  const base = f.baseline ?? 0, level = f.cycle ? base + (1 - base) * cycleLevel(f.cycle, tick) : 1;
+  return w * level * f.intensity;
 }
 
 /** Diver suit or controlled hull tolerance from fitted protection IDs. */

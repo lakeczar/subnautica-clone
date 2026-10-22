@@ -1,8 +1,12 @@
 import { armTarget, fittedCabin } from "../sim/fleet.js";
 import { SiltwakeAudio } from "../audio/director.js";
 import { worldRegionAt } from "../render/regions.js";
-import { executeCommand, stepGame } from "../sim/step.js";
-import { gameWorld } from "../sim/world.js";
+import { executeCommand, relocateForCave, stepGame } from "../sim/step.js";
+import { gameWorld, setKitCaveRecords } from "../sim/world.js";
+import { actorBox } from "../sim/ribCollision.js";
+import { HULL_COLLIDERS } from "../content/registry.js";
+import { gameCaveStore } from "../render/caves/caveStore.js";
+import { createCaveRuntime, type CaveHold } from "../world/caves/admission.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
@@ -39,6 +43,8 @@ const DEFAULT_SETTINGS: Settings = {
 };
 const SETTINGS_KEY = "siltwake.settings.v1";
 const BLOCKED_ASCENT_SECONDS = 0.45;
+/** The swimming diver's box (step.ts), for cave admission. */
+const DIVER_SHAPE = { radius: 0.34, height: 0.95 };
 const ASCENT_EPSILON = 1e-5;
 /** Lets a pause or menu draw before idle region preparation may block a frame. */
 const IDLE_PREPARE_MS = 250;
@@ -93,6 +99,20 @@ export class SiltwakeApp {
    * STRUCTURE_SOLIDS and A1's VISTA_SOLIDS) in the indexed broad phase, and
    * the W1 caves owning their footprints. */
   private readonly world = gameWorld();
+  /** CW-1 cave admission: kit-cave collision built before the actor reaches
+   * it (held only if its records have not arrived), cave biomes through LC's
+   * contract, and the guaranteed refuge. Never expected in ordinary play. */
+  private readonly caveStore = gameCaveStore();
+  private recordsSet = false;
+  private caveHolding = false;
+  private readonly caves = createCaveRuntime({
+    world: this.world,
+    canGenerate: () => !this.caveStore || (this.caveStore.settled && !this.caveStore.collision),
+    clear: (feet) => {
+      const s = this.state, v = s?.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId);
+      return this.world.clearance(feet, v ? HULL_COLLIDERS[v.hull] : DIVER_SHAPE);
+    },
+  });
   private readonly repository = new SaveRepository(
     storagePort(),
     browserWriterLock(navigator.locks),
@@ -345,9 +365,35 @@ export class SiltwakeApp {
     );
   }
 
+  /** Cave admission for the controlled actor, before anything steps (CW-1). */
+  private caveAdmission(now: number): CaveHold | null {
+    const s = this.state;
+    if (!s || s.opening.phase < 4 || s.player.mode === "interior") return null;
+    const v = s.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId);
+    const feet = v ? v.pose.position : s.player.pose.position;
+    const hold = this.caves.update(actorBox(feet, v ? HULL_COLLIDERS[v.hull] : DIVER_SHAPE), feet,
+      { x: feet.x, y: feet.y + 0.8, z: feet.z }, now);
+    if (hold.relocate) {
+      this.session.state = relocateForCave(s, hold.relocate);
+      this.view.notify(hold.message, false, { channel: "system" });
+      this.dirty = true;
+    } else if (hold.holding && !this.caveHolding) this.view.notify(hold.message, false, { channel: "system" });
+    this.caveHolding = hold.holding && !hold.relocate;
+    this.view.canvas.dataset.caveHold = hold.state;
+    return hold;
+  }
+
   private frame(now: number): void {
     if (this.disposed) return;
-    this.clock.advance(now, this.active, () => {
+    // Baked cave records, once they land (the pack is fetched at start).
+    if (!this.recordsSet && (!this.caveStore || this.caveStore.settled)) {
+      if (this.caveStore?.collision) setKitCaveRecords(this.caveStore.collision);
+      this.recordsSet = true;
+    }
+    // While a cave holds, the simulation clock is paused (no oxygen, exposure,
+    // power or AI ticks); rendering carries on.
+    const hold = this.active ? this.caveAdmission(now) : null;
+    this.clock.advance(now, this.active && !hold?.holding, () => {
       if (!this.state || !this.active) return;
       const gesture = this.sampleGesture();
       const controls = this.input?.sample() ?? [];
@@ -502,6 +548,9 @@ export class SiltwakeApp {
     this.resetAscent();
     this.cancelGesture();
     this.view.resetPresentation();
+    // A save loaded beside or inside a cave: admit it now, behind the load
+    // screen, before the first tick (a hold carries on into play otherwise).
+    if (this.recordsSet) this.caveAdmission(performance.now());
     if (this.state) this.view.update(this.state, false);
     const automatically = this.entryCanResume;
     this.entryCanResume = false;

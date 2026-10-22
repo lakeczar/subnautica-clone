@@ -1,6 +1,6 @@
 import { EVIDENCE, HULLS, HULL_COLLIDERS, ITEMS, OPTIONAL_RECORD, renewable, SOURCES, techRecord } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
-import { createWorldQueries, hullFloor, moveHull, withinWorldBounds } from "./world.js";
+import { createWorldQueries, hullFloor, moveHull, withinWorldBounds, type CaveWorld } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import type {
   GameCommand,
@@ -98,6 +98,7 @@ import { protectionFor } from "./ecology/hazards.js";
 import { MOTION, respondToFlow } from "./currents/motion.js";
 import { dampIntoFace, impactLoss, supportedDrift } from "./currents/move.js";
 import { flowAt, worldCurrents } from "./currents/world.js";
+import type { FlowSample } from "./currents/flow.js";
 import { stepUpgrades, upgradeAction } from "./fittings.js";
 import { stepSystems, systemsCommand } from "./systemsLink.js";
 import { serviceCommand, servicePreview } from "./serviceLink.js";
@@ -560,6 +561,17 @@ export function executeCommand(
     );
   return { state: draft, events };
 }
+/** Still water: carved cave water shelters from every current (CW-1). */
+const STILL_WATER: FlowSample = { flow: { x: 0, y: 0, z: 0 }, speed: 0, volumes: [] };
+/** The current that moves an actor at `p`: the world's flow field, except in
+ * a kit cave's carved water (its inside), where it is still. Authored flow
+ * volumes know nothing of rock, so without this a crest downwelling blew
+ * through CA-3's "sheltered" crest hollow and lintel galleries and drifted a
+ * resting diver into the brine (Sol, CA-3 R1). Exterior flow, and the
+ * caves' own heat and brine, are untouched. */
+export function flowHere(world: WorldQueries, p: Vec3, tick: number): FlowSample {
+  return "kitCaves" in world && (world as CaveWorld).kitCaves.inside(p) ? STILL_WATER : flowAt(p, tick);
+}
 export function stepGame(
   state: GameState,
   commands: readonly GameCommand[],
@@ -675,7 +687,7 @@ export function stepGame(
     const powered = !v.disabled && v.charge > 0, drive = { ...v.velocity };
     const cruiseDrain = profile.drain / profile.capacity;
     const stopped = Math.hypot(target.x, target.y, target.z) < MOTION.stopped;
-    const current = v.berth ? null : respondToFlow(flowAt(v.pose.position, s.tick).flow, {
+    const current = v.berth ? null : respondToFlow(flowHere(world, v.pose.position, s.tick).flow, {
       id: v.hull, authority: profile.current, cruise: profile.speed.cruise, drain: cruiseDrain,
     }, drive, v.upgrades.anchored && stopped ? "anchor" : powered && stopped ? "station" : "none", powered);
     const driftDelta = current ? { x: current.drift.x * DT, y: current.drift.y * DT, z: current.drift.z * DT } : ZERO;
@@ -860,7 +872,7 @@ export function stepGame(
     // CY currents, swimming only: the drift joins the swim inside each slice,
     // so support, the cliff guard and the surface cap still apply to it. The
     // diver holds nothing and pays only time and position, never health.
-    const swimCurrent = mode === "swimming" ? respondToFlow(flowAt(old, s.tick).flow,
+    const swimCurrent = mode === "swimming" ? respondToFlow(flowHere(world, old, s.tick).flow,
       { id: "diver", authority: protectionFor(null, fittedProtections(s)).current, cruise: speed, drain: 0 },
       { x: vx, y: vy, z: vz }, "none") : null;
     const drift = swimCurrent?.drift ?? ZERO;
@@ -985,8 +997,8 @@ export function stepGame(
   // A current's readable cue, once, as the swimmer or craft enters its flow.
   if (s.player.mode === "swimming" || s.player.mode === "piloting") {
     const felt = (c: { weight: number; level: number }): boolean => c.weight * c.level > 0.05;
-    const was = new Set(flowAt(old, state.tick).volumes.filter(felt).map(c => c.id));
-    for (const c of flowAt(s.player.pose.position, s.tick).volumes)
+    const was = new Set(flowHere(world, old, state.tick).volumes.filter(felt).map(c => c.id));
+    for (const c of flowHere(world, s.player.pose.position, s.tick).volumes)
       if (!was.has(c.id) && felt(c)) {
         const def = worldCurrents().volumes.find(volume => volume.id === c.id);
         if (def) events.push({ type: "notice", channel: "hazard", context: "ecology", message: `${def.label} · ${def.cue}` });
