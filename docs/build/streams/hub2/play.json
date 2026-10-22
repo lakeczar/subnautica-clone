@@ -1,0 +1,38 @@
+{
+ "commit": "ccdc2c2+working-tree",
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "segments": [
+  {
+   "label": "door \u2192 beside the Creel",
+   "seconds": 4.7,
+   "frames": 283,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  },
+  {
+   "label": "hold at the dock",
+   "seconds": 4,
+   "frames": 240,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  }
+ ],
+ "errors": [],
+ "ok": true,
+ "checks": {
+  "fabricateBefore": "Return Esc Fabricate Cargo Fabricate Journal Base Fit Paused No bench here \u00b7 Suit 450 m \u00b7 Dart hull 350 m Costs read have here / needed. Ready 1 Restore the crown dock and fabricator Structural alloy: 4 / 4 Conductive crust: 3 / 3 Buoyant resin: 3 / 3 Silica glass: 2 / 2 Restore Not here 23 Dart aco",
+  "pressed Restore the crown dock and fabricator": "7 Tabs",
+  "restoredNotice": " | | | | | ",
+  "cargoBefore": "Return Esc Cargo Cargo Fabricate Journal Base Fit Paused Suit 450 m \u00b7 Dart hull 350 m \u00b7 Carried 0 / 16 CU Here Creel mount \u00b7 Cargo rack Rack 96 CU \u00b7 cabin 40 CU + 16 CU locker, bunk, cooker \u00b7 bare 64 CU Cargo rack \u00b7 fitted Unfit \u00b7 hold 64 CU Refuge cabin \u00b7 not made 3 Structural alloy + 3 Silica glas",
+  "pressed Service": "7 Tabs",
+  "cargoAfter": "Return Esc Cargo Cargo Fabricate Journal Base Fit Paused Serviced: hull, power and emergency air full. Cells in your hold and this craft charged. Cargo and modules kept. Suit 450 m \u00b7 Dart hull 350 m \u00b7 Carried 0 / 16 CU Here Creel mount \u00b7 Cargo rack Rack 96 CU \u00b7 cabin 40 CU + 16 CU locker, bunk, cook"
+ }
+}

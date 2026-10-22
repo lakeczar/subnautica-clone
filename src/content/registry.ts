@@ -5,6 +5,7 @@ import { STORY_BLUEPRINT_LABELS, STORY_RECIPES } from "./story/evidence.js";
 import type { StoryBlueprintId } from "./story/evidence.js";
 // S9 campaign content: later tiers, carrier, specialists, stops and late sources.
 import { CAMPAIGN_BLUEPRINT_LABELS, CAMPAIGN_ITEMS, CAMPAIGN_RECIPES, CAMPAIGN_REFITS, CAMPAIGN_SOURCES, CAMPAIGN_SUITS, CAMPAIGN_TECH_RECORDS } from "./campaign/index.js";
+import { HUB_RECIPES, type HubOutput } from "./hub/recipes.js";
 import type { CampaignBlueprintId, CampaignOutput, CampaignSiteId } from "./campaign/index.js";
 // C3: S2's remaining sources, and S9 hull construction at the stack yard.
 import { WORLD_SOURCES } from "./worldSources.js";
@@ -310,7 +311,11 @@ export type FacilityId =
   | "canopy_stop"
   // C3: S9's restored service stops at S2's sites (content/stops.ts).
   | "rift_station"
-  | "divide_dock";
+  | "divide_dock"
+  // HUB-2: the crown station's three restoration stages (content/hub/crownStation.ts).
+  | "crown_power"
+  | "crown_dock"
+  | "crown_survey";
 export const BLUEPRINTS: readonly BlueprintId[] = [
   "bp_pod_checklist",
   "bp_reef_recovery",
@@ -345,7 +350,7 @@ export interface Recipe {
   needs: readonly string[];
   site: FabricationSite;
   output: ItemKind | HullOutput | "pod_repair" | "restore_workshop" | "restore_canopy_stop" | "dart_350" | "creel_350" | "pod_buffer"
-    | CampaignOutput | UpgradeRefitId | HostKnowledgeId;
+    | CampaignOutput | UpgradeRefitId | HostKnowledgeId | HubOutput;
   quantity: number;
   once: boolean;
   maintenance: boolean;
@@ -579,6 +584,8 @@ export const RECIPES = {
     maintenance: false,
   },
   ...CAMPAIGN_RECIPES,
+  // HUB-2: the crown station's restoration stages.
+  ...HUB_RECIPES,
   // C4: SYS-1 upgrades whose effects run, its new refits and host knowledge; SYS-2's kits and modules.
   ...(UPGRADE_RECIPES as { readonly [K in keyof typeof UPGRADE_RECIPES]: Recipe }),
   ...(UPGRADE_REFIT_RECIPES as { readonly [K in keyof typeof UPGRADE_REFIT_RECIPES]: Recipe }),

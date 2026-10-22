@@ -5,6 +5,7 @@ import { ROUTES } from "./passages.js";
 import { RESCUE_PLANS } from "./rescue.js";
 import { SITES } from "./sites.js";
 import { MERIDIAN_CENTRE } from "./terrain.js";
+import { CROWN_MAST } from "../hub/crownStation.js";
 import { worldFloor } from "./worldFloor.js";
 
 /** Authored structures: one record drives both collision (axis-aligned solid
@@ -14,7 +15,7 @@ import { worldFloor } from "./worldFloor.js";
 export type StructureKind =
   | "mast" | "pier" | "cradle" | "shelter" | "pylon" | "dish" | "girder" | "hut" | "post"
   | "split_chimney" | "chimney_stub" | "station" | "tower" | "lintel" | "dock" | "building"
-  | "spire" | "gallery" | "works" | "hall" | "beacon";
+  | "spire" | "gallery" | "works" | "hall" | "beacon" | "beacon_mast";
 
 export interface StructureDef {
   readonly id: string;
@@ -103,6 +104,13 @@ const pylons = (prefix: string, region: RegionId, x: number, z: number, r: numbe
   bearings.map((deg, i) => block("pylon")(`${prefix}.pylon_${i}`, region,
     x + Math.cos(deg * Math.PI / 180) * r, z + Math.sin(deg * Math.PI / 180) * r, { w: 2, h, d: 2 }, prefix));
 
+/** HUB-2: the crown's surface mast, from the summit to above the waterline
+ * (content/hub/crownStation.ts CROWN_MAST). Tall enough for the far layer. */
+function crownMast(): StructureDef {
+  const m = CROWN_MAST, base = footprintBase(m.x, m.z, m.half, m.half) - 0.4;
+  return block("beacon_mast")("hub.crown_mast.mast", "silt_basin", m.x, m.z, { w: m.half * 2, h: m.top - base, d: m.half * 2 },
+    "hub.crown_station", base);
+}
 function splitChimney(): StructureDef {
   const base = -548, s: Aabb[] = [
     box(-196, base, -1093, -168, -420, -1037), box(-191, -420, -1088, -168, -300, -1042),
@@ -192,6 +200,7 @@ const AUTHORED: readonly StructureDef[] = [
   block("beacon")("hub.beacon_house.house", "silt_basin", 341, -567, { w: 5, h: 14, d: 5 }, "hub.beacon_house"),
   block("station")("hub.crown_station.hull", "silt_basin", 319, -547, { w: 9, h: 7, d: 6 }, "hub.crown_station"),
   block("mast")("hub.crown_station.mast", "silt_basin", 316, -538, { w: 3, h: 22, d: 3 }, "hub.crown_station"),
+  crownMast(),
 
   // Ember Rift.
   splitChimney(),

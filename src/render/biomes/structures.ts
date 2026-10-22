@@ -211,6 +211,16 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
       b.box([(sol.min.x + sol.max.x) / 2, sol.min.y + h * 0.12, sol.max.z + 0.04], [1.6, 2.2, 0.06], C.glow);
     });
   },
+  beacon_mast(b, s, fine) {
+    // HUB-2: a slim lattice tower from the summit to the surface, banded so it
+    // reads against open water, with its lamp cage at the top (the lamp's
+    // light itself is the hub art's flare).
+    const sol = s.solids[0]!, x = s.x, z = s.z, r = (sol.max.x - sol.min.x) / 2, top = sol.max.y;
+    b.frustum([x, sol.min.y, z], [x, top - 2, z], r, r * 0.6, fine ? 6 : 4, C.steel);
+    for (let y = sol.min.y + 6; y < top - 3; y += fine ? 6 : 12) b.frustum([x, y, z], [x, y + 0.8, z], r * 1.15, r * 1.1, fine ? 6 : 4, C.ochre);
+    glow(b, () => b.frustum([x, top - 2, z], [x, top - 0.6, z], r * 0.9, r * 0.9, fine ? 8 : 4, C.glow));
+    b.frustum([x, top - 0.6, z], [x, top, z], r, 0.15, fine ? 6 : 4, C.petrol);
+  },
   beacon(b, s, fine) {
     // A round beacon house inside its square collider: tapering wall, a
     // gallery ring, the lit lamp room and a cap.

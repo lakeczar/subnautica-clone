@@ -14,7 +14,7 @@
 import { DECODABLES, DECODE_LOGS, DECODER_LOCAL_RANGE, LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import type { DecodableId } from "../content/systems/decodes.js";
 import { isSeed } from "../content/systems/cultivation.js";
-import { MODULES, OUTPOST_SITING } from "../content/systems/hosts.js";
+import { FIXED_HOSTS, MODULES, OUTPOST_SITING } from "../content/systems/hosts.js";
 import { BEACON_CATEGORIES } from "../content/systems/navigation.js";
 import type { BeaconCategory } from "../content/systems/navigation.js";
 import { HAZARDS } from "../content/regions/hazards.js";
@@ -64,7 +64,12 @@ export function systemsContext(s: GameState): DecoderContext {
   return { power: hostPower, relayed: (host) => mastWithin(s, host.position, DECODER_LOCAL_RANGE * RADIO_MAST.factor) };
 }
 /** Survey tier at a host: SYS-1's arrays are not composed yet; a mast adds one. */
-export const surveyTierAt = (s: GameState, host: SocketHost): number => Math.min(3, mastWithin(s, host.position, MAST_REACH) ? 1 : 0);
+export const surveyTierAt = (s: GameState, host: SocketHost): number => {
+  // HUB-2: a fixed host's built-in array has its own tier (the crown's is 300 m).
+  const fixed = Object.hasOwn(FIXED_HOSTS, host.id) ? FIXED_HOSTS[host.id as keyof typeof FIXED_HOSTS] : null;
+  const own = fixed && "surveyTier" in fixed ? fixed.surveyTier : 0;
+  return Math.min(3, Math.max(own, mastWithin(s, host.position, MAST_REACH) ? 1 : 0));
+};
 export const outpostRules = (s: GameState) => ({ limitBonus: outpostLimitBonus(s.knowledge.crafted) });
 export const chartOptions = (s: GameState) => ({ livePosition: livePosition(s.knowledge.crafted) });
 

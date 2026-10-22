@@ -23,6 +23,8 @@ export const REST_BASES = {
   rift_station: { label: WORKING_STOPS.rift_station.label, facility: "rift_station", wake: WORKING_STOPS.rift_station.work },
   divide_dock: { label: WORKING_STOPS.divide_dock.label, facility: "divide_dock", wake: WORKING_STOPS.divide_dock.work },
   meridian_office: { label: WORKING_STOPS.meridian_office.label, facility: null, wake: WORKING_STOPS.meridian_office.work },
+  // HUB-2: the bunk works with the first stage (power and air).
+  crown_station: { label: WORKING_STOPS.crown_station.label, facility: "crown_power", wake: WORKING_STOPS.crown_station.work },
 } as const satisfies Record<string, RestBase>;
 export type RestBaseId = keyof typeof REST_BASES;
 export const REST_BASE_IDS = Object.keys(REST_BASES) as RestBaseId[];

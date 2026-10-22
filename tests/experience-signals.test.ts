@@ -1,3 +1,4 @@
+import { HUB_RECIPES } from "../src/content/hub/recipes.js";
 import test from "node:test";
 import { CANOPY_STOP } from "../src/content/routes.js";
 import { CREEL_BUILD_POSE, DART_BUILD_POSE, ITEMS } from "../src/content/registry.js";
@@ -339,7 +340,9 @@ test("crafting reason codes preserve all recipe messages, precedence and pure ou
   // S9 campaign recipes have their own reason matrix in tests/campaign-content.test.ts.
   // C4's upgrade, refit, host-knowledge and SYS-2 recipes are covered in tests/c4-systems.test.ts.
   const c4 = { ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES, ...SYS2_RECIPES };
-  for (const id of (Object.keys(RECIPES) as RecipeId[]).filter((id) => !Object.hasOwn(CAMPAIGN_RECIPES, id) && !Object.hasOwn(c4, id))) {
+  // HUB-2's crown station stages are covered in tests/crown-station.test.ts.
+  for (const id of (Object.keys(RECIPES) as RecipeId[]).filter((id) => !Object.hasOwn(CAMPAIGN_RECIPES, id) && !Object.hasOwn(c4, id) &&
+    !Object.hasOwn(HUB_RECIPES, id))) {
     const r = RECIPES[id], s = id === "suit_350" ? protectedReadyState(150) : readyState();
     s.knowledge.blueprints.push(r.bp);
     s.knowledge.crafted = [...new Set<RecipeId>([...s.knowledge.crafted, ...r.needs as RecipeId[]])];
