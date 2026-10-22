@@ -49,7 +49,7 @@ async function read() {
 }
 const pos = (s) => ({ x: s.cam[0], y: s.cam[1] - eye, z: s.cam[2] });
 /** Closed-loop piloting to a point with the ordinary keys; false when it gives up (logged, the tour goes on). */
-async function goto(t, { tol = 4, label = "", boost = true, timeout = 150 } = {}) {
+async function goto(t, { tol = 4, label = "", boost = true, timeout = 100 } = {}) {
   const start = performance.now(); let best = Infinity, bestAt = start, recoveries = 0;
   for (;;) {
     const s = await read();
@@ -62,7 +62,7 @@ async function goto(t, { tol = 4, label = "", boost = true, timeout = 150 } = {}
       await releaseAll(); await key("KeyS", true); await key("Space", true); await page.waitForTimeout(1200); await releaseAll();
       bestAt = performance.now(); best = Infinity; continue;
     }
-    if (performance.now() - bestAt > 15000 || performance.now() - start > timeout * 1000) {
+    if (performance.now() - bestAt > 10000 || performance.now() - start > timeout * 1000) {
       await releaseAll(); note("skip", label, `${d3.toFixed(1)} m short at ${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}`); return false;
     }
     const yaw = s.bearing * Math.PI / 180, want = h > 1.5 ? Math.atan2(dx, -dz) : yaw, err = wrap(want - yaw);

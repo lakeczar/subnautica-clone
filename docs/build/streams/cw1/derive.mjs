@@ -53,8 +53,8 @@ while (left.length) {
   left.sort((a, b) => Math.hypot(a.at.x - last.x, a.at.z - last.z) - Math.hypot(b.at.x - last.x, b.at.z - last.z));
   tour.push(left.shift());
 }
-/** Cruise legs: rise, cross at least 14 m above the highest floor (and no deeper than 440 m), descend. */
-function leg(a, b) {
+/** The highest obstacle on a straight leg: the floor, and each cave's top. */
+function ceilingAlong(a, b) {
   const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 6));
   let hi = -Infinity;
   for (let i = 0; i <= n; i++) {
@@ -63,8 +63,31 @@ function leg(a, b) {
     // Cave terraces stand above the seabed: clear each cave's envelope too.
     for (const c of CAVE_SOURCES) { const f = c.footprint; if (x > f.minX - 6 && x < f.maxX + 6 && z > f.minZ - 6 && z < f.maxZ + 6) hi = Math.max(hi, c.topY - 10); }
   }
-  const y = Math.min(-2, Math.max(DEEPEST, hi + 14));
-  return [{ x: a.x, y, z: a.z, cruise: true }, { x: b.x, y, z: b.z, cruise: true }];
+  return hi;
+}
+/** A leg's plan points: straight if it can cruise 14 m clear (and at least
+ * 6 m under the surface), else bent round islands and shallows through a
+ * detour beside its middle. */
+function route(a, b, depth = 0) {
+  if (ceilingAlong(a, b) <= -20 || depth >= 3) return [b];
+  const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+  const px = -(b.z - a.z) / len, pz = (b.x - a.x) / len;
+  for (const off of [60, 120, 200, 300, 450]) for (const side of [1, -1]) {
+    const m = { x: mx + px * off * side, z: mz + pz * off * side };
+    if (ceilingAlong(a, m) <= -20 && ceilingAlong(m, b) <= -20) return [m, b];
+  }
+  const m = { x: mx + px * 200, z: mz + pz * 200 };
+  return [...route(a, m, depth + 1), ...route(m, b, depth + 1)];
+}
+function leg(a, b) {
+  const corners = [a, ...route(a, b)], out = [];
+  for (let i = 1; i < corners.length; i++) {
+    const p = corners[i - 1], q = corners[i];
+    const y = Math.min(-6, Math.max(DEEPEST, ceilingAlong(p, q) + 14));
+    if (i === 1) out.push({ x: p.x, y, z: p.z, cruise: true });
+    out.push({ x: q.x, y, z: q.z, cruise: true });
+  }
+  return out;
 }
 const points = [{ ...tour[0].at, cave: tour[0].cave }];
 for (let i = 1; i < tour.length; i++) {

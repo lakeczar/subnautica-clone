@@ -20,7 +20,9 @@ import { emissiveScan, lightFromCluster, lightUniforms, selectLights, type Light
 export interface SceneLights {
   update(state: GameState | null, eye: Vector3, daylight: number, time: number): void;
   /** Lights sent last frame, emissive meshes known, meshes waiting for a scan. */
-  readonly stats: { readonly sent: number; readonly known: number; readonly pending: number };
+  readonly stats: { readonly sent: number; readonly known: number; readonly pending: number;
+    /** Last update's time scanning new meshes, placing lights, and choosing them, ms. */
+    readonly scanMs: number; readonly placeMs: number; readonly selectMs: number; readonly placed: number };
   dispose(): void;
 }
 
@@ -148,7 +150,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     if (!h || h.isDisposed()) { h = (scene.getMeshByName(id) as Mesh | null) ?? undefined; if (h) hulls.set(id, h); }
     return h ?? null;
   };
-  let sent = 0;
+  let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0;
   const send = (u: ReturnType<typeof lightUniforms>, halo: number): void => {
     for (const m of targets) {
       m.setArray4("localLightPos", u.position);
@@ -159,7 +161,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
   };
   send(lightUniforms([]), 0);
   return {
-    get stats() { return { sent, known: entries.size, pending: pending.size }; },
+    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed }; },
     update(state, eye, daylight, time) {
       // Scan new meshes in a bounded slice per frame, resuming a large one.
       const until = performance.now() + 1.5;
@@ -172,6 +174,8 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       // the compartment: its soft instrument light stands in for them.
       const seated = state?.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
       const hull = seated ? hullOf(seated.id) : null;
+      scanMs = performance.now() - (until - 1.5);
+      const placeStart = performance.now();
       const lights: PointLight[] = [];
       // A newly streamed frozen mesh's lights (thousands of thin instances
       // for some scatter) are placed once and cached; place a bounded number
@@ -182,6 +186,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
           if (!e.world && e.mesh.isWorldMatrixFrozen && !e.mesh.parent && performance.now() > placeUntil) continue;
           for (const l of toWorld(e)) lights.push(l);
         }
+      placeMs = performance.now() - placeStart; placed = lights.length;
       for (const v of vents) lights.push(v);
       // Parked craft: a blinking marker light, always sent, nearest two.
       const blinkOn = (time % BLINK) < BLINK * BLINK_ON;
@@ -206,7 +211,9 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
         const at = Vector3.TransformCoordinates(new Vector3(inst.at.x, inst.at.y, inst.at.z), hull.computeWorldMatrix(true));
         lights.push({ x: at.x, y: at.y, z: at.z, radius: inst.radius, strength: 0.2, reserved: true, noHalo: true, r: 0.78, g: 0.92, b: 1 });
       }
+      const selectStart = performance.now();
       const chosen = selectLights(lights, eye);
+      selectMs = performance.now() - selectStart;
       sent = chosen.length;
       send(lightUniforms(chosen), 1 - 0.9 * daylight);
     },
