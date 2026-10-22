@@ -18,7 +18,7 @@ import { DECODABLES, DECODE_LOGS } from "../content/systems/decodes.js";
 import { isSeed, SEEDS } from "../content/systems/cultivation.js";
 import { MODULES as HOST_MODULES, OUTPOST_TIERS, tierOfKit } from "../content/systems/hosts.js";
 import { PLAYER_BEACON_LIMIT, BEACON_CATEGORIES } from "../content/systems/navigation.js";
-import { period } from "../sim/cycles/cycle.js";
+import { journalEntry } from "../sim/cycles/observe.js";
 import { distance } from "../sim/inventory.js";
 import { fitTarget, vehicleProfile, upgradeInstallPreview, upgradeRemovePreview, dockOf } from "../sim/fittings.js";
 import { slotCapacity, slotOf } from "../sim/upgrades/fitting.js";
@@ -28,7 +28,8 @@ import {
 } from "../sim/systems/index.js";
 import type { JournalTabId } from "../sim/systems/journal.js";
 import type { CreatureEntry, CycleEntry } from "../sim/systems/index.js";
-import { chartOptions, deployPoint, hostPower, hostPowerReason, outpostRules, siteQuery, systemsContext } from "../sim/systemsLink.js";
+import { berthChargePlan, chartOptions, deployPoint, hostPower, hostPowerReason, OUTPOST_SERVICE_RADIUS, outpostRules, siteQuery, systemsContext } from "../sim/systemsLink.js";
+import { serviceLabel, servicePreview } from "../sim/serviceLink.js";
 import { currentObjective } from "../sim/objective.js";
 import type { GameState, WorldQueries } from "../sim/types.js";
 import { bearing, escapeHtml } from "./format.js";
@@ -79,9 +80,24 @@ export function basePanel(s: GameState, world: WorldQueries, button: CommandButt
     let extra = "";
     if (outpost) {
       const pack = packPreview(s, sys, outpost.id), up = upgradePreview(s, sys, outpost.id);
-      extra = `<div class="service-actions">${button("Pack up", { type: "pack-outpost", outpostId: outpost.id }, !!pack.refusal, pack.refusal ?? undefined)}${
+      // The outpost's charger: each craft moored within its reach, through the same
+      // composed preview as Cargo's Service (real power payment shown).
+      const moored = s.fleet.vehicles.filter((v) => !v.berth && v.hull !== "hearthline" && distance(v.pose.position, host.position) <= OUTPOST_SERVICE_RADIUS);
+      const charges = moored.map((v) => {
+        const p = servicePreview(s, v.id);
+        return p.kind === "outpost"
+          ? `<p>${button(serviceLabel(p), { type: "service", vehicleId: v.id }, !!p.refusal, p.refusal ?? `Pays ${p.plan.cost}.`)}${p.refusal ? "" : ` <small>Pays ${esc(p.plan.cost)}.</small>`}</p>`
+          : "";
+      }).join("");
+      extra = `${charges}<div class="service-actions">${button("Pack up", { type: "pack-outpost", outpostId: outpost.id }, !!pack.refusal, pack.refusal ?? undefined)}${
         up.to ? button(`Upgrade to ${up.to}`, { type: "upgrade-outpost", outpostId: outpost.id }, !!up.refusal, up.refusal ?? undefined) : ""}</div>${
         group(`pack:${outpost.id}`, "Pack preview", `<p>Spends ${pack.loss.map((l) => `${l.quantity} ${esc(label(l.kind))}`).join(", ") || "nothing"}. Moves ${pack.locker.length} locker stack${pack.locker.length === 1 ? "" : "s"} and ${pack.modules.length} module${pack.modules.length === 1 ? "" : "s"} to your hold (${pack.needCu} CU, ${pack.freeCu} free).</p>${pack.work.map((w) => `<p>${esc(w)}</p>`).join("")}`)}`;
+    }
+    // The carrier's charging dock: a socketed charger fills the berths from the carrier.
+    if (host.kind === "carrier") {
+      const carrierId = host.id.slice("carrier:".length), plan = berthChargePlan(s, carrierId);
+      if (plan && plan.craft.length) extra += `<p>${button("Charge berthed craft", { type: "charge-berths", carrierId }, !!plan.refusal, plan.refusal ?? undefined)}${plan.refusal ? ""
+        : ` <small>${plan.craft.map((c) => `${esc(HULLS[s.fleet.vehicles.find((v) => v.id === c.id)!.hull].label)} ${Math.round(c.from)}% → ${Math.round(c.to)}%`).join(" · ")} · carrier ${Math.round(plan.carrierFrom)}% → ${Math.round(plan.carrierTo)}%</small>`}</p>`;
     }
     html += `<article class="host"><h3>${esc(host.label)} <small>${esc(host.kind)} · ${powered ? `${esc(host.power === "plant" ? "station power" : host.power)} power` : `no power: ${esc(reason ?? "")}`}</small></h3>${host.unique ? `<p><small>${esc(host.unique)}</small></p>` : ""}<ul class="sockets">${rows}</ul>${extra}</article>`;
   }
@@ -159,14 +175,18 @@ function creatures(s: GameState): CreatureEntry[] {
     ...Object.entries(CUE_SPECIES).filter(([, c]) => regions.has(c.region)).map(([id, c]) => ({ id, label: c.label, region: c.region, behaviour: c.scan, danger: "cue" as const })),
   ];
 }
-/** Natural cycles near where you have explored, with their timings. */
+/** Natural cycles the player has watched (C4B-07): only timings seen from a
+ * phase's start to its end, from the saved observation records. */
 function cycles(s: GameState): CycleEntry[] {
-  const regions = new Set(s.knowledge.scans.filter((id) => Object.hasOwn(SOURCES, id)).map((id) => SOURCES[id as keyof typeof SOURCES].region as RegionId));
-  return Object.values(HAZARD_FIELDS).flatMap((f) => {
-    const id = "cycleId" in f ? f.cycleId : null, c = id ? WORLD_CYCLES.find((x) => x.id === id) : undefined;
-    if (!c || !regions.has(f.region)) return [];
-    const active = c.phases.filter((p) => p.level === 1).reduce((n, p) => n + p.seconds, 0);
-    return [{ id: c.id, label: c.label, region: f.region, periodSeconds: period(c), windowSeconds: active, alternative: f.cue }];
+  return s.knowledge.cycles.flatMap((record) => {
+    const c = WORLD_CYCLES.find((x) => x.id === record.cycleId);
+    const f = Object.values(HAZARD_FIELDS).find((x) => "cycleId" in x && x.cycleId === record.cycleId);
+    if (!c || !f) return [];
+    const e = journalEntry(c, record), active = c.phases.filter((p) => p.level === 1);
+    const window = active.every((p) => record.measured.includes(p.id)) ? active.reduce((n, p) => n + p.seconds, 0) : null;
+    return [{ id: c.id, label: c.label, region: f.region, periodSeconds: e.periodS, windowSeconds: window, alternative: f.cue,
+      phases: e.phases.map((p) => `${p.label}: ${p.seconds === null ? "not yet timed" : mins(p.seconds)}`),
+      cues: e.cues.map((w) => `${w.leadS} s before: ${w.cue}`) }];
   });
 }
 export const JOURNAL_TABS: readonly JournalTabId[] = ["notebook", "materials", "tech", "creatures", "cycles", "decodes"];

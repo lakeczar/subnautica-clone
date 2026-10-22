@@ -1,3 +1,4 @@
+import type { CycleObservation } from "./cycles/observe.js";
 import type { RosterId, WorksAction } from "../content/story/works.js";
 import type { EcologyEvent, EcologyState, ThreatSpeciesId } from "./ecology/types.js";
 import type {
@@ -142,6 +143,8 @@ export interface GameState {
     markers: PlaceId[];
     crafted: RecipeId[];
     hintLevel: number;
+    /** C4: what the player has watched of each world cycle (CY's observer). */
+    cycles: CycleObservation[];
   };
   world: {
     resources: { id: SourceId; stock: number; reserve: number }[];
@@ -260,6 +263,8 @@ export type GameCommand =
   | { type: "ping" }
   | { type: "survey"; hostId: string }
   | { type: "rest" }
+  /** C4B-02: the carrier's charger module charges every berthed craft from the carrier. */
+  | { type: "charge-berths"; carrierId: string }
   | {
       type: "carrier";
       action:

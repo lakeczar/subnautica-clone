@@ -38,6 +38,7 @@ export type BridgeResult = { ok: true; value: GameState } | { ok: false; error: 
 function schema6Field(s: Record<string, unknown>): string | null {
   if (Object.hasOwn(s, "systems")) return "systems";
   if (record(s.world) && Object.hasOwn(s.world, "flares")) return "world.flares";
+  if (record(s.knowledge) && Object.hasOwn(s.knowledge, "cycles")) return "knowledge.cycles";
   const fleet = s.fleet;
   if (record(fleet) && Array.isArray(fleet.vehicles))
     for (const v of fleet.vehicles) if (record(v) && (Object.hasOwn(v, "upgrades") || Object.hasOwn(v, "bioFeed"))) return "vehicle upgrades";
@@ -55,6 +56,7 @@ export function bridgeSchema5(input: unknown): BridgeResult {
   // Additive state at New Game's value, in New Game's key order (codec re-orders).
   (s as unknown as Record<string, unknown>).systems = createSystems();
   if (record(s.world)) s.world = { ...s.world, flares: [] } as GameState["world"];
+  if (record(s.knowledge)) s.knowledge = { ...s.knowledge, cycles: [] };
   if (!record(s.fleet) || !Array.isArray(s.fleet.vehicles) || !record(s.inventory) || !Array.isArray(s.inventory.items))
     return { ok: true, value: s };
   for (const v of s.fleet.vehicles) {

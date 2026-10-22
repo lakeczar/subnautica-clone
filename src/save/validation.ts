@@ -1,3 +1,5 @@
+import { WORLD_CYCLE_BY_ID, WORLD_CYCLES } from "../content/currents/cycles.js";
+import { validObservation } from "../sim/cycles/observe.js";
 import {
   BLUEPRINTS,
   EVIDENCE,
@@ -272,7 +274,13 @@ export function validState(value: unknown): value is GameState {
       "markers",
       "crafted",
       "hintLevel",
+      "cycles",
     ]) ||
+    // CY's validObservation per world cycle, each cycle once, never ahead of the clock.
+    !array(k.cycles, WORLD_CYCLES.length, (v) => {
+      const c = WORLD_CYCLE_BY_ID.get((v as { cycleId?: string })?.cycleId ?? "");
+      return !!c && validObservation(c, v) && (v as { firstSeen: number }).firstSeen <= (value.tick as number);
+    }) || new Set((k.cycles as { cycleId: string }[]).map((c) => c.cycleId)).size !== (k.cycles as unknown[]).length ||
     !stringSet(k.blueprints, BLUEPRINTS.length, (v) =>
       BLUEPRINTS.includes(v as (typeof BLUEPRINTS)[number]),
     ) ||

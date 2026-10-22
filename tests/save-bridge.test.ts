@@ -49,6 +49,7 @@ function schema5(state: GameState): string {
   const s = structuredClone(state) as unknown as Record<string, any>;
   delete s.systems;
   delete s.world.flares;
+  delete s.knowledge.cycles;
   for (const v of s.fleet.vehicles) { delete v.upgrades; delete v.bioFeed; }
   return JSON.stringify({ ...createEnvelope(state, meta), schemaVersion: 5, contentVersion: "expedition.6", state: s });
 }

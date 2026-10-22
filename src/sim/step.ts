@@ -37,7 +37,7 @@ import {
   enterCabinFromHatch, enterCabinFromHelm, hullToWorld, leaveByHatch, registerRefuge, takeHelmFromCabin,
 } from "./fleet.js";
 import { aimedInteraction } from "./targeting.js";
-import { board, distraction, eat, exit, exitBlock, rechargeCells, reserve, service } from "./vehicles.js";
+import { board, distraction, eat, exit, exitBlock, rechargeCells, reserve } from "./vehicles.js";
 import { installModule, removeModule } from "./modules.js";
 import {
   carrierCommand,
@@ -98,7 +98,9 @@ import { MOTION, respondToFlow } from "./currents/motion.js";
 import { dampIntoFace, impactLoss, supportedDrift } from "./currents/move.js";
 import { flowAt, worldCurrents } from "./currents/world.js";
 import { stepUpgrades, upgradeAction } from "./fittings.js";
-import { outpostCharge, outpostChargerFor, stepSystems, systemsCommand } from "./systemsLink.js";
+import { stepSystems, systemsCommand } from "./systemsLink.js";
+import { serviceCommand, servicePreview } from "./serviceLink.js";
+import { observeWorldCycles } from "./cyclesLink.js";
 import { REST_BASES } from "../content/bases.js";
 import { currentObjective } from "./objective.js";
 import { DECODABLES } from "../content/systems/decodes.js";
@@ -110,6 +112,8 @@ import { BALLAST, ballastStep, overdriveMotion } from "./upgrades/tools.js";
 const ZERO: Vec3 = { x: 0, y: 0, z: 0 };
 /** Highest rock lip a swimmer glides up onto, metres (one cave voxel, plus margin). */
 const SWIM_LIP = 0.6;
+/** How far under the surface cap a swimmer still counts as at the surface. */
+const SURFACE_STEP = 0.005;
 const clamp = (v: number, a: number, b: number): number =>
   Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
 const TAU = Math.PI * 2;
@@ -206,10 +210,10 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     case "exit":
       return exitAction(s, w, events);
     case "service": {
-      // C4: a field outpost's charger services craft moored within its reach.
-      const no = outpostChargerFor(s, c.vehicleId) && service(s, c.vehicleId) !== null
-        ? outpostCharge(s, c.vehicleId) : service(s, c.vehicleId);
-      if (!no) actionResult(s, events, `${HULLS[s.fleet.vehicles.find(v => v.id === c.vehicleId)!.hull].label} serviced`);
+      // C4: the composed service; beside a field outpost its charger charges the craft.
+      const charging = servicePreview(s, c.vehicleId).kind === "outpost";
+      const no = serviceCommand(s, c.vehicleId);
+      if (!no) actionResult(s, events, `${HULLS[s.fleet.vehicles.find(v => v.id === c.vehicleId)!.hull].label} ${charging ? "charged" : "serviced"}`);
       return no;
     }
     case "reserve": {
@@ -905,7 +909,7 @@ export function stepGame(
         delta.y = nextSupport - position.y;
       const sliceOrigin = { ...position };
       const constrained = surfaceMove(world, sliceOrigin, delta, capsule, d => {
-        let move = world.moveCapsule(sliceOrigin, d, capsule);
+        let move = world.moveCapsule(sliceOrigin, d, capsule), waded = false;
         // A swimmer gliding along a floor of rock boxes (a cave's 0.5 m
         // terraces) meets each riser as a face. When the joint sweep is
         // stopped and a lip at most SWIM_LIP above lies just ahead, rise onto
@@ -918,12 +922,21 @@ export function stepGame(
               sliceOrigin.y + SWIM_LIP));
           const rise = lip + 0.01 - sliceOrigin.y;
           // Only under water: never a climb onto a float or out at the surface.
-          if (rise > Math.max(0, d.y) && rise <= SWIM_LIP && sliceOrigin.y + rise + capsule.height < -0.5) {
+          // At the surface too (CA-1 P3): a diver at or just under the cap steps onto
+          // a lip that is itself at or under the waterline (a wading shelf), never
+          // onto dry rock or a float.
+          const submerged = sliceOrigin.y + rise + capsule.height < -0.5;
+          // A shelf, not a rib's edge: one body width ahead is still standable floor.
+          const dl = Math.hypot(d.x, d.z), ahead = (k: number) => world.supportHeight(
+            sliceOrigin.x + d.x / dl * k, sliceOrigin.z + d.z / dl * k, sliceOrigin.y + SWIM_LIP);
+          const wading = sliceOrigin.y >= -0.5 - SURFACE_STEP && lip <= -0.5 + 1e-6 &&
+            ahead(capsule.radius * 3) >= -0.55 && ahead(capsule.radius * 3) <= -0.5 + 1e-6;
+          if (rise > Math.max(0, d.y) && rise <= SWIM_LIP && (submerged || wading)) {
             const up = world.moveCapsule(sliceOrigin, { x: 0, y: rise, z: 0 }, capsule);
             if (!up.hitSolid && !up.hitBoundary) {
               const across = world.moveCapsule(up.position, { x: d.x, y: 0, z: d.z }, capsule);
               const progress = (q: Vec3): number => Math.hypot(q.x - sliceOrigin.x, q.z - sliceOrigin.z);
-              if (progress(across.position) > progress(move.position) + 1e-6) move = across;
+              if (progress(across.position) > progress(move.position) + 1e-6) { move = across; waded = !submerged; }
             }
           }
         }
@@ -931,12 +944,14 @@ export function stepGame(
           ? Math.max(0, sliceOrigin.y + Math.max(0, d.y) - move.position.y) : 0;
         const floor = world.supportHeight(move.position.x, move.position.z, move.position.y);
         const supported = move.position.y < floor;
-        return { ...move, solidRise, floor, supported };
+        return { ...move, solidRise, floor, supported, waded };
       }, move => {
         // Support is another vertical correction, just like the water cap.
         // Validate its whole path before accepting it near a cliff/adjacent solid.
+        // A surface step onto a wading shelf stands on its edge: the cap does not
+        // push the body back into the lip it just rose onto.
         const y = Math.max(move.position.y, move.floor);
-        return mode === "swimming" && old.y <= -0.5 && move.floor < -0.55 ? Math.min(-0.5, y) : y;
+        return mode === "swimming" && old.y <= -0.5 && move.floor < -0.55 && !move.waded ? Math.min(-0.5, y) : y;
       });
       if (ascent) {
         ascent.solidLimitedRise += constrained.rolledBack ? requestedRise : constrained.move.solidRise;
@@ -990,6 +1005,7 @@ export function stepGame(
   stepUpgrades(s, new Set(s.fleet.vehicles.filter((a) => distance(a.pose.position,
     state.fleet.vehicles.find((b) => b.id === a.id)?.pose.position ?? a.pose.position) > 0.003).map((a) => a.id)));
   stepSystems(s, events);
+  observeWorldCycles(s, world, events);
   advanceRenewal(s);
   advanceStory(s);
   updateBerth(s, world);

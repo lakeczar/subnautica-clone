@@ -80,6 +80,7 @@ export function createGame(): GameState {
       markers: ["home_pod"],
       crafted: [],
       hintLevel: 0,
+      cycles: [],
     },
     world: {
       resources: Object.entries(SOURCES).map(([id, s]) => ({

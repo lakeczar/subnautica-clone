@@ -25,7 +25,7 @@ import { distance } from "./inventory.js";
 import { effectiveRating, vehicleProfile } from "./fittings.js";
 import { hostPowerState, hostDrainStep } from "./power/hosts.js";
 import type { HostCell, HostPowerInput } from "./power/hosts.js";
-import { cellTransfer } from "./power/charging.js";
+import { cellTransfer, dockCharge } from "./power/charging.js";
 import { livePosition, MAST_REACH, outpostLimitBonus } from "./upgrades/hosts.js";
 import { RADIO_MAST } from "./upgrades/tools.js";
 import {
@@ -119,21 +119,83 @@ export function outpostChargerFor(s: GameState, vehicleId: string): SocketHost |
   if (!v || v.berth || v.hull === "hearthline") return null;
   return listHosts(s, s.systems).find((h) => h.kind === "outpost" && distance(h.position, v.pose.position) <= OUTPOST_SERVICE_RADIUS) ?? null;
 }
-export function outpostCharge(s: GameState, vehicleId: string): string | null {
-  const v = s.fleet.vehicles.find((a) => a.id === vehicleId)!, host = outpostChargerFor(s, vehicleId);
-  if (!host) return "Moor within 14 m of a field outpost to use its charger.";
-  if (!hostPower(host, s)) return `${host.label} has no power: ${hostPowerReason(s, host) ?? "check its supply"}.`;
-  const cap = vehicleProfile(s, v).capacity;
-  if (host.power !== "cells") { v.charge = 100; s.feedback = `${HULLS[v.hull].label} charged at ${host.label}.`; return null; }
+/** What an outpost's charger would do for this craft, read-only. Cells outposts
+ * pay from their locker's reserve cells (`cellTransfer`, at the craft's capacity),
+ * emptiest first; plant, solar and thermal outposts charge from their own source. */
+export interface OutpostChargePlan {
+  readonly host: SocketHost;
+  readonly refusal: string | null;
+  readonly from: number;
+  readonly to: number;
+  /** Reserve-cell charge drawn from the locker, in cell percent, by item. */
+  readonly cells: readonly { readonly id: string; readonly charge: number }[];
+  /** The power payment, in words. */
+  readonly cost: string;
+}
+export function outpostChargePlan(s: GameState, vehicleId: string): OutpostChargePlan | null {
+  const v = s.fleet.vehicles.find((a) => a.id === vehicleId), host = outpostChargerFor(s, vehicleId);
+  if (!v || !host) return null;
+  const plan = (refusal: string | null, to = v.charge, cells: { id: string; charge: number }[] = [], cost = ""): OutpostChargePlan =>
+    ({ host, refusal, from: v.charge, to, cells, cost });
+  if (v.disabled) return plan("Apply a rescue patch before routine charging.");
+  if (!hostPower(host, s)) return plan(`${host.label} has no power: ${hostPowerReason(s, host) ?? "check its supply"}.`);
+  if (v.charge >= 100) return plan("Battery already full.");
+  if (host.power !== "cells") return plan(null, 100, [], `${host.power} power, no cells spent`);
+  const cap = vehicleProfile(s, v).capacity, out: { id: string; charge: number }[] = [];
   let charge = v.charge;
-  for (const cell of s.inventory.items.filter((i) => host.lockers.includes(i.containerId) && i.kind === "reserve_cell" && (i.charge ?? 0) > 0)) {
-    const t = cellTransfer(cell.charge ?? 0, charge, cap);
-    charge = t.craftCharge; cell.charge = t.cellCharge;
+  const stock = s.inventory.items.filter((i) => host.lockers.includes(i.containerId) && i.kind === "reserve_cell" && (i.charge ?? 0) > 0)
+    .sort((a, b) => (a.charge ?? 0) - (b.charge ?? 0) || a.id.localeCompare(b.id));
+  for (const cell of stock) {
     if (charge >= 100) break;
+    const t = cellTransfer(cell.charge ?? 0, charge, cap);
+    if (t.craftCharge > charge) out.push({ id: cell.id, charge: t.cellCharge });
+    charge = t.craftCharge;
   }
-  if (charge <= v.charge + 1e-9) return `${host.label}'s cells are spent. Bring charged reserve cells.`;
-  s.feedback = `${HULLS[v.hull].label} charged from ${host.label}'s cells · ${Math.round(v.charge)}% → ${Math.round(charge)}%.`;
-  v.charge = charge;
+  if (charge <= v.charge + 1e-9) return plan(`${host.label}'s cells are spent. Bring charged reserve cells.`);
+  const spent = out.reduce((n, c) => n + ((stock.find((x) => x.id === c.id)!.charge ?? 0) - c.charge), 0);
+  return plan(null, charge, out, `${Math.round(spent)}% of the locker's reserve-cell charge`);
+}
+export function outpostCharge(s: GameState, vehicleId: string): string | null {
+  const p = outpostChargePlan(s, vehicleId);
+  if (!p) return "Moor within 14 m of a field outpost to use its charger.";
+  if (p.refusal) return p.refusal;
+  const v = s.fleet.vehicles.find((a) => a.id === vehicleId)!;
+  for (const c of p.cells) s.inventory.items.find((i) => i.id === c.id)!.charge = c.charge;
+  v.charge = p.to;
+  s.feedback = `${HULLS[v.hull].label} charged at ${p.host.label} · ${Math.round(p.from)}% → ${Math.round(p.to)}% · ${p.cost}.`;
+  return null;
+}
+
+/** The carrier's charging dock (SYS-1 `dockCharge`), read-only: a socketed,
+ * powered charger module fills berthed craft in berth order, each percent paid
+ * from the carrier's battery at the craft's capacity, keeping its last 20%. */
+export interface BerthChargePlan {
+  readonly refusal: string | null;
+  readonly craft: readonly { readonly id: string; readonly from: number; readonly to: number }[];
+  readonly carrierFrom: number;
+  readonly carrierTo: number;
+}
+export function berthChargePlan(s: GameState, carrierId: string): BerthChargePlan | null {
+  const h = s.fleet.vehicles.find((v) => v.id === carrierId && v.hull === "hearthline");
+  if (!h) return null;
+  const hostId = `carrier:${h.id}`, host = hostById(s, s.systems, hostId);
+  const charger = s.systems.sockets.some((e) => e.hostId === hostId && e.kind === "mod_charger");
+  const berthed = s.fleet.vehicles.filter((v) => v.berth?.carrierId === h.id && v.hull !== "hearthline")
+    .sort((a, b) => a.berth!.slot - b.berth!.slot);
+  const plan = (refusal: string | null, charges = berthed.map((v) => v.charge), carrierTo = h.charge): BerthChargePlan =>
+    ({ refusal, craft: berthed.map((v, i) => ({ id: v.id, from: v.charge, to: charges[i]! })), carrierFrom: h.charge, carrierTo });
+  if (charger && host && !hostPower(host, s)) return plan(`The carrier's system sockets have no power: ${hostPowerReason(s, host) ?? ""}`.trim());
+  const r = dockCharge(charger, h.charge, berthed.map((v) => ({ hull: v.hull as Exclude<typeof v.hull, "hearthline">, charge: v.charge, capacity: vehicleProfile(s, v).capacity })));
+  return plan(r.refusal, [...r.charges], r.carrierCharge);
+}
+export function chargeBerths(s: GameState, carrierId: string): string | null {
+  if (s.player.interiorId !== carrierId && s.player.controlledVehicleId !== carrierId) return "Charge the berths from inside the carrier.";
+  const p = berthChargePlan(s, carrierId);
+  if (!p) return "Choose the carrier.";
+  if (p.refusal) return p.refusal;
+  for (const c of p.craft) s.fleet.vehicles.find((v) => v.id === c.id)!.charge = c.to;
+  s.fleet.vehicles.find((v) => v.id === carrierId)!.charge = p.carrierTo;
+  s.feedback = `Berths charged · ${p.craft.map((c) => `${Math.round(c.from)}% → ${Math.round(c.to)}%`).join(", ")} · carrier ${Math.round(p.carrierFrom)}% → ${Math.round(p.carrierTo)}%.`;
   return null;
 }
 
@@ -149,6 +211,7 @@ export function systemsCommand(s: GameState, c: GameCommand, world: WorldQueries
       return no;
     }
     case "pack-outpost": return packOutpost(s, sys, c.outpostId, c.to);
+    case "charge-berths": return chargeBerths(s, c.carrierId);
     case "upgrade-outpost": return upgradeOutpost(s, sys, c.outpostId);
     case "install-host-module": return carrierSocketRefusal(s, c.hostId) ?? installModule(s, sys, c.hostId, c.socket, c.itemId);
     case "remove-host-module": return removeModule(s, sys, c.hostId, c.socket, c.to);

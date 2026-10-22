@@ -98,6 +98,9 @@ export interface Protection {
   readonly brine: number;
   /** 0..1 share of a current the actor can hold against. */
   readonly current: number;
+  /** × the heat-load rate while heat is over tolerance (C4: SYS-1's thermal
+   * exchanger, 0.6). Absent means 1. */
+  readonly heatLoad?: number;
 }
 
 export type EcologyCommand =

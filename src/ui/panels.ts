@@ -16,7 +16,8 @@ import { atSite, craftingBlock, craftSite, hullOutput, personalLimit, recipeSite
 import { CAMPAIGN_RECIPES } from "../content/campaign/index.js";
 import { stopForSite, WORKING_STOPS } from "../content/stops.js";
 import { RECOVERY_NOTICES, recoverableHull, recoveryCommand, recoveryRouteFor } from "../sim/recovery.js";
-import { cellRechargePreview, distractionPreview, PULSE_CHARGE_COST, reserve, serviceRefusal, serviceState, serviceWouldRestore } from "../sim/vehicles.js";
+import { cellRechargePreview, distractionPreview, PULSE_CHARGE_COST, reserve, serviceState, serviceWouldRestore } from "../sim/vehicles.js";
+import { serviceLabel, servicePreview } from "../sim/serviceLink.js";
 import { dartPerformance, installModuleRefusal, mountChangePreview, removeModuleRefusal } from "../sim/modules.js";
 import { canisterSalvagePreview } from "../sim/recovery.js";
 import { cabinHull, fittedMount, holdCapacity, mobileRefugeBlock, mountLabel } from "../sim/fleet.js";
@@ -380,12 +381,13 @@ export class PanelView {
     const local = distance(state.player.pose.position, v.pose.position) <= 7;
     const seated = state.player.controlledVehicleId === v.id;
     const readiness = serviceState(state, v.id);
-    const refusal = serviceRefusal(state, v.id);
+    // C4: the composed preview: a supported site services; a field outpost charges.
+    const preview = servicePreview(state, v.id), refusal = preview.refusal;
     const cells = state.inventory.items.filter((i) => i.kind === "reserve_cell" && (i.containerId === "diver" || i.containerId === v.cargoId));
     const mount = v.hull === "creel" ? fittedMount(state, v) : null;
     const reserveNo = reserve(structuredClone(state), v.id);
     const serviceActions = (): string => `<div class="service-actions">${readiness === "ready" && !serviceWouldRestore(state, v) ? '<span class="service-full">Fully serviced</span>'
-      : button("Service", { type: "service", vehicleId: v.id }, refusal !== null, refusal ?? undefined)}${local && reserveNo === null ? button("Use reserve cell for hull power", { type: "reserve", vehicleId: v.id }) : ""}</div>`;
+      : button(serviceLabel(preview), { type: "service", vehicleId: v.id }, refusal !== null, refusal ?? (preview.kind === "outpost" ? `Pays ${preview.plan.cost}.` : undefined))}${local && reserveNo === null ? button("Use reserve cell for hull power", { type: "reserve", vehicleId: v.id }) : ""}</div>`;
     let html = `<article class="vessel-service" id="vessel-${escapeHtml(v.id)}" tabindex="-1" data-focus-key="vessel:${escapeHtml(v.id)}"><div class="vessel-line"><h3>${HULLS[v.hull].label}${v.disabled ? " · disabled transponder" : ""}</h3><span>${seated ? "Seated" : state.player.interiorId === v.id ? "In cabin" : bearing(state.player.pose.position, v.pose.position)} · power ${v.charge.toFixed(0)}% · hull ${v.health.toFixed(0)}% · rated ${v.rating} m${v.hull === "creel" ? ` · ${mount ? mountLabel(mount.kind).toLowerCase() : "bare mount"} · hold ${usedCapacity(state, v.cargoId)} / ${holdCapacity(state, v)} CU` : ""}</span>${v.disabled ? "" : serviceActions()}</div>`;
     if (v.disabled && recoverableHull(v.hull)) {
       const creel = v.hull === "creel" || v.hull === "mantle";

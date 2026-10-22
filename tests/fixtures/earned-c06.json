@@ -307,7 +307,8 @@
         "dart_base",
         "suit_350"
       ],
-      "hintLevel": 0
+      "hintLevel": 0,
+      "cycles": []
     },
     "world": {
       "resources": [

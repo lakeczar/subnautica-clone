@@ -28,6 +28,7 @@ import { Blocked, Driver, where } from "./driver.js";
 import { carry, dockAndService, make, stowHold } from "./live.js";
 import type { Phase, PlayOptions } from "./live.js";
 import { enter } from "./nav.js";
+import { pressButton } from "./ui.js";
 import { fly, pilotTo } from "./routes.js";
 import { route, travel } from "./travel.js";
 import { carrier, carrierIn, carrierOut, enterCarrier, exitCarrier, walkAboard } from "./carrierplay.js";
@@ -345,9 +346,10 @@ function atForwardBase(d: Driver, label: string, work: (outpostId: string) => vo
     travel(d, route("to the forward outpost", "diver", "local swim, played", [{ ...FORWARD_BASE, y: FORWARD_BASE.y + 1, tolerance: 1.5 }]));
     work(id);
   });
-  // Charged from the outpost's cells, not a stop.
+  // Charged from the outpost's cells, not a stop: the Cargo panel's charge button,
+  // as a player presses it beside the moored Creel.
   const v = d.occupied()!;
-  if (v.charge < 99) { leaveCraft(d); reach(d, v.id); d.command({ type: "service", vehicleId: v.id }); board(d, v.id); }
+  if (v.charge < 99) { leaveCraft(d); reach(d, v.id); pressButton(d, "inventory", /^Charge at /); board(d, v.id); }
 }
 function deployForwardBase(d: Driver): void {
   sortie(d, FORWARD_BASE, "deploy the forward outpost", () => {

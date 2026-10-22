@@ -15,6 +15,8 @@ import { personalDepth, personalLimit } from "./capabilities.js";
 import { WORLD_BOUNDS } from "./world.js";
 import { cabinHull, CREEL_BOARDING, fittedCabin, hullDepth, hullToWorld } from "./fleet.js";
 import { cabinLockerId } from "./inventory.js";
+import { cellTransfer } from "./power/charging.js";
+import { vehicleProfile } from "./fittings.js";
 export { hullDepth };
 /** Lateral cockpit-hatch exit offset: outside the Dart's canopy and the Creel's arm guards. */
 export const exitOffset = (v: VehicleState): number => v.hull === "creel" ? 3.4 : 3.1;
@@ -203,9 +205,10 @@ export function reserve(s: GameState, id: string): string | null {
   );
   if (!cell) return "Bring a charged reusable reserve cell.";
   if (v.charge >= 100) return "Battery already full. Cell retained.";
-  const amount = Math.min((35 * (cell.charge ?? 0)) / 100, 100 - v.charge);
-  v.charge += amount;
-  cell.charge = Math.max(0, (cell.charge ?? 0) - (amount / 35) * 100);
+  // C4 (SYS-1): one cell holds a fixed energy; a bigger bank gains less of its own percent.
+  const t = cellTransfer(cell.charge ?? 0, v.charge, vehicleProfile(s, v).capacity), amount = t.craftCharge - v.charge;
+  v.charge = t.craftCharge;
+  cell.charge = t.cellCharge;
   s.feedback = `Added ${amount.toFixed(0)}% hull power from a reserve cell. Recharge local cells at a restored pod or workshop bench.`;
   return null;
 }

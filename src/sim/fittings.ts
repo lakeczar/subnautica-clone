@@ -18,7 +18,7 @@ import { isSeed, SEEDS } from "../content/systems/cultivation.js";
 import { SYS2_SOURCES } from "../content/systems/items.js";
 import { fieldLevel, protectionFor, sampleHazards, shapeWeight } from "./ecology/hazards.js";
 import type { Protection } from "./ecology/types.js";
-import { BERTH_LOCAL, localToWorld } from "./carrier.js";
+import { launchPoint } from "./carrier.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import { addItem, distance, hasRoom, supportedServiceSite, usedCapacity } from "./inventory.js";
 import { airLineSupply, type AirLineCraft, type AirLineSupply } from "./power/airline.js";
@@ -93,12 +93,10 @@ export function dockOf(s: Readonly<GameState>, v: Readonly<VehicleState>): DockK
     vehicleProfile(s, o).tools.includes("service_head") && distance(o.pose.position, v.pose.position) <= 8);
   return head ? "service_head" : null;
 }
-/** The carrier's launch-lock exterior: where a berthed hull would leave the lock. */
-export function launchLockPosition(carrier: Readonly<VehicleState>, slot: 0 | 1): Vec3 {
-  const local = BERTH_LOCAL[slot] ?? BERTH_LOCAL[0]!;
-  const p = localToWorld(local, carrier as VehicleState);
-  return { x: p.x, y: p.y - 2, z: p.z };
-}
+/** The carrier's launch-lock exterior: the point a berthed hull leaves at, the
+ * carrier's own `launchPoint` (C4B-05), not the berth inside the hull. */
+export const launchLockPosition = (carrier: Readonly<VehicleState>, v: Readonly<VehicleState>): Vec3 =>
+  launchPoint(carrier as VehicleState, v as VehicleState);
 export function fitTarget(s: Readonly<GameState>, v: Readonly<VehicleState>): FitTarget {
   const carrier = v.berth ? s.fleet.vehicles.find((h) => h.id === v.berth!.carrierId) : undefined;
   const fitted = fittedList(s, v);
@@ -110,7 +108,7 @@ export function fitTarget(s: Readonly<GameState>, v: Readonly<VehicleState>): Fi
     depth: depthOf(v.pose.position),
     // SYS-1 R2: the exterior must be the real hazard sample at the launch lock.
     berth: v.berth && carrier ? { carrierDepth: depthOf(carrier.pose.position),
-      exterior: hazardsAt(launchLockPosition(carrier, v.berth.slot), s.tick) } : null,
+      exterior: hazardsAt(launchLockPosition(carrier, v), s.tick) } : null,
     hazards: v.berth ? NO_HAZARD : hazardsAt(v.pose.position, s.tick),
     hold: { usedCu: usedCapacity(s as GameState, v.cargoId), baseCu: HULL_HOLD_CU[v.hull] },
     ...(v.hull === "hearthline" && docking?.vehicleId === v.id ? { carrier: {
@@ -154,7 +152,9 @@ export function actorProtection(s: GameState, suitFitted: Parameters<typeof prot
   if (!v) return protectionFor(null, suitFitted);
   const p = vehicleProfile(s, v);
   const ambientOnly = hazardsAt(v.pose.position, s.tick).heat.every((h) => h.kind === "ambient");
-  return { heat: p.ambientHeatImmune && ambientOnly ? Math.max(p.heat, 1) : p.heat, brine: p.brine, current: p.current };
+  // SYS-1's classified exposure (heatExposure): the shroud ignores ambient heat
+  // only; the exchanger slows the load in any heat over tolerance.
+  return { heat: p.ambientHeatImmune && ambientOnly ? Math.max(p.heat, 1) : p.heat, brine: p.brine, current: p.current, heatLoad: p.heatLoad };
 }
 
 // ---------------------------------------------------------------- actions

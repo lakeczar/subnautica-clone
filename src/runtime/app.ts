@@ -19,6 +19,7 @@ import type { PanelKind } from "../ui/view.js";
 import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY } from "../sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../sim/timeline/recorder.js";
 import { parseTimeline } from "../sim/timeline/report.js";
+import { controlsActive } from "../sim/timeline/activity.js";
 import { regionAtPoint } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
 
@@ -358,7 +359,7 @@ export class SiltwakeApp {
       );
       this.session.state = result.state;
       this.events(result.events);
-      this.observeTimeline(result.state, controls, result.events);
+      this.observeTimeline(result.state, [...controls, ...gesture], result.events);
       this.observeAscent(result.events);
       this.observeThrust(result.events);
       this.view.presentationStep(result.state);
@@ -445,7 +446,10 @@ export class SiltwakeApp {
   /** The play timeline: one observation per active step, kept in localStorage. */
   private observeTimeline(s: GameState, controls: readonly GameCommand[], events: readonly GameEvent[]): void {
     if (!this.timeline) return;
-    const input = controls.some((c) => c.type !== "move" || c.forward !== 0 || c.right !== 0 || c.vertical !== 0);
+    // A zero look or move is not input; a command or panel action since the last
+    // observation is (C4B-06).
+    const input = controlsActive(controls) || this.timelineActivity;
+    this.timelineActivity = false;
     const waiting = [...(s.systems.decodes.length ? ["decode"] : []), ...(s.systems.planters.length ? ["growth"] : [])];
     observe(this.timeline, s, { input, waiting });
     const systems = events.flatMap((e) => e.type === "systems" ? [e.event] : []);
@@ -630,7 +634,10 @@ export class SiltwakeApp {
     this.view.blockedThrust(this.thrustSeconds + 1e-9 >= 0.5, s);
   }
 
+  /** A command or panel action since the last timeline observation. */
+  private timelineActivity = false;
   private command(command: GameCommand): void {
+    this.timelineActivity = true;
     if (
       !this.state ||
       this.disposed ||
@@ -664,6 +671,7 @@ export class SiltwakeApp {
     )
       return;
     this.pause("", true);
+    this.timelineActivity = true;
     this.panelOpen = true;
     this.view.openPanel(kind, this.state, targetId);
     this.dirty = true;
