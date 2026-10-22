@@ -193,12 +193,14 @@ const arch: VistaPiece[] = beam(ARCH_LINE, i => [archHalfWidth(i), 2.2 + 0.4 * (
 // --- The sets ---------------------------------------------------------------
 
 export const POIS: readonly PoiDef[] = [
+  // The middle float of the middle cable, at the bottom of its 14 m sag.
   { id: "poi.rift.trench_span", region: "thermal_rift", kind: "cable_span", leg: "basin_rift", label: "Cable span over the trench",
-    beacon: lerp(SPAN_POSTS[0]!, SPAN_POSTS[1]!, 0.5) },
+    beacon: (() => { const m = lerp(SPAN_POSTS[0]!, SPAN_POSTS[1]!, 0.5); return v(m.x, m.y + SPAN_POST_H - 0.6 - 14, m.z); })() },
   { id: "poi.basin.sounding_line", region: "silt_basin", kind: "buoy_line", leg: "basin_divide", label: "Sounding line",
     beacon: soundingFloat(SOUNDING.floats - 1) },
+  // The middle colony of the growth gathered on it (render/poi/dressing.ts).
   { id: "poi.basin.fall", region: "silt_basin", kind: "gathering", leg: "basin_divide", label: "The fall",
-    beacon: v(FALL.x, floor(FALL.x, FALL.z) + 4, FALL.z) },
+    beacon: (() => { const x = FALL.x + hash2(4, 7, 1), z = FALL.z + 2.5 + hash2(4, 7, 2) * 3.5; return v(x, floor(x, z) + 1, z); })() },
   { id: "poi.divide.float_line", region: "brine_divide", kind: "float_line", leg: "divide_meridian", label: "Float line", beacon: floatAt(5) },
   { id: "poi.meridian.supply_cable", region: "deep_district", kind: "cable_run", leg: "divide_meridian", label: "Supply cable",
     beacon: v(SUPPLY[3]!.x, SUPPLY[3]!.y + 1.4, SUPPLY[3]!.z) },

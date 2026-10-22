@@ -1,7 +1,9 @@
 import type { RegionId } from "../registry.js";
-import type { Aabb } from "../../world/types.js";
+import type { Aabb, Vec3 } from "../../world/types.js";
+import { sweepHull } from "./access.js";
+import { dishArt, dishScatterKeep, type DishArt } from "./dishGeometry.js";
 import { hash2 } from "./noise.js";
-import { ROUTES } from "./passages.js";
+import { ROUTES, type CraftProfileId } from "./passages.js";
 import { RESCUE_PLANS } from "./rescue.js";
 import { SITES } from "./sites.js";
 import { MERIDIAN_CENTRE } from "./terrain.js";
@@ -29,6 +31,10 @@ export interface StructureDef {
   readonly solids: readonly Aabb[];
   /** Site this structure dresses, when any. */
   readonly site?: string;
+  /** Where scatter must not grow, when not the solids themselves (dishes). */
+  readonly keep?: readonly Aabb[];
+  /** A dish's shapes, drawn exactly as collided. */
+  readonly dish?: DishArt;
 }
 
 const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Aabb =>
@@ -49,22 +55,27 @@ const block = (kind: StructureKind): Make => (id, region, x, z, p, site, base) =
   return { id, region, kind, x, z, base: b, p, solids: [box(x - w / 2, b, z - d / 2, x + w / 2, b + h, z + d / 2)], ...(site ? { site } : {}) };
 };
 
-/** A ring of rim blocks plus a hub: the visible dish shell is open inside. */
+/** A fallen survey dish: art and collision both from `dishGeometry.ts`
+ * (rim, frame and hub within 0.35 m, the bowl's panels within 1 m, its
+ * hollow open). Where a passage or rescue tether runs through it, that part
+ * is missing (0.5 m clear of the craft's swept hull). Scatter keeps to the
+ * rim footings it always kept to. */
 function dish(id: string, x: number, z: number, radius: number, tilt: number, facing: number, site: string): StructureDef {
-  const base = footprintBase(x, z, radius * 0.7, radius * 0.7) - 0.6;
-  const solids: Aabb[] = [];
-  const n = 12, seg = 2 * Math.PI * radius / n;
-  for (let i = 0; i < n; i++) {
-    const a = (i + 0.5) / n * Math.PI * 2;
-    const rise = radius * Math.sin(tilt) * (1 + Math.cos(a - facing)) / 2;
-    const cx = x + Math.cos(a) * radius, cz = z + Math.sin(a) * radius;
-    const lo = footprintBase(cx, cz, 1, 1) - 0.4;
-    const top = base + 2.2 + rise;
-    const half = Math.max(1.2, seg * 0.36);
-    solids.push(box(cx - half, Math.min(lo, top - 2), cz - half, cx + half, top, cz + half));
-  }
-  solids.push(box(x - radius * 0.14, base, z - radius * 0.14, x + radius * 0.14, base + 3.2, z + radius * 0.14));
-  return { id, region: "silt_basin", kind: "dish", x, z, base, p: { radius, tilt, facing }, solids, site };
+  const base = footprintBase(x, z, radius * 0.7, radius * 0.7) - 0.6, p = { id, x, z, base, radius, tilt, facing };
+  const reach = radius * 1.6 + 20, lanes: { a: Vec3; b: Vec3; profile: CraftProfileId }[] = [];
+  const add = (path: readonly Readonly<Vec3>[], profile: CraftProfileId): void => {
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1]!, b = path[i]!, dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2));
+      if (Math.hypot(a.x + dx * t - x, a.z + dz * t - z) < reach) lanes.push({ a, b, profile });
+    }
+  };
+  for (const r of ROUTES) if (r.role !== "walk") add(r.path, r.profile);
+  for (const plan of RESCUE_PLANS) for (const branch of plan.tethers) add(branch, "medium");
+  const pad = (k: Aabb): Aabb => ({ min: { x: k.min.x - 0.5, y: k.min.y - 0.5, z: k.min.z - 0.5 }, max: { x: k.max.x + 0.5, y: k.max.y + 0.5, z: k.max.z + 0.5 } });
+  const art = dishArt(p, k => lanes.some(l => sweepHull(l.a, l.b, l.profile, pad(k)) !== null));
+  return { id, region: "silt_basin", kind: "dish", x, z, base, p: { radius, tilt, facing }, solids: [...art.solids.frame, ...art.solids.bowl], site,
+    dish: art, keep: dishScatterKeep(p, (cx, cz) => footprintBase(cx, cz, 1, 1)) };
 }
 
 /** A straight facade along `yaw` built from short axis-aligned pieces with a

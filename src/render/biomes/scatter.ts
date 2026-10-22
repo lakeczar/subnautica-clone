@@ -172,7 +172,7 @@ function keepIndex(): Map<number, KeepPoint[]> {
   }
   for (const p of RESCUE_PLANS) for (const b of p.tethers) line(b, 5.5, 0, 4);
   for (const s of SITES) if (s.pad && typeof s.at.y === "number") add({ x: s.at.x, z: s.at.z, y: s.at.y + 40, r: s.pad.radius * (s.pad.flat ?? 0.55), head: Infinity });
-  for (const s of STRUCTURES) for (const b of s.solids)
+  for (const s of STRUCTURES) for (const b of s.keep ?? s.solids)
     add({ x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2, y: b.max.y + 40, r: Math.hypot(b.max.x - b.min.x, b.max.z - b.min.z) / 2 + 1.5, head: Infinity });
   return keep;
 }
