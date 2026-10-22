@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { heavyJobGuard } from "./build-guard.mjs";
-import { alive, scopePopulated, self } from "./state.mjs";
+import { alive, legacyLockInfo, scopePopulated, self } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, "heavy-check.mjs");
@@ -342,6 +342,64 @@ test("9d (R2): a job whose foreground cannot end is stopped at its whole-job dea
   assert.match(w.err, /deadline 2s exceeded/);
   const took = (Date.now() - started) / 1000;
   assert.ok(took < 40, `stopped after ${took}s`);
+  assert.equal(scopePopulated(t.unit), false);
+  assert.equal(state(c).tickets[id], undefined);
+});
+
+test("9e (R3): holder SIGKILLed with a real v1 waiter: v1 never sees an old payload alive (running, leftover stop, serial)", async () => {
+  const closes = [process.execPath, "-e", "const {spawn}=require('node:child_process'),fs=require('node:fs');" +
+    "spawn('python3',['-c','import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); open(\"child.pid\",\"w\").write(str(os.getpid())); time.sleep(120)'],{stdio:'ignore',detached:true}).unref();" +
+    "fs.writeFileSync('ready','');setInterval(()=>{if(fs.existsSync('release'))process.exit(0)},40);"];
+  const foreground = ["python3", "-c", "import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); open('child.pid','w').write(str(os.getpid())); open('ready','w').close(); time.sleep(120)"];
+  const inherits = ["sh", "-c", "sleep 120 & echo $! > child.pid; : > ready; while [ ! -f release ]; do sleep 0.05; done; exit 0"];
+  for (const [name, argv, phase, mode] of [
+    ["running-closes", closes, "running", "normal"],
+    ["running-inherits", inherits, "running", "normal"],
+    ["leftover-stop", closes, "stopping", "normal"],
+    ["serial", foreground, "running", "serial"],
+  ]) {
+    const c = context(`holder-killed-${name}`, { mode });
+    writeFileSync(c.legacy, "");
+    const id = submit(c, c.dir, "--class", "quick", "--mem", "256M", "--deadline", "60", "--", ...argv);
+    await until("child", () => existsSync(join(c.dir, "child.pid")) && existsSync(join(c.dir, "ready")));
+    const t = await holderOf(c, id);
+    const child = Number(readFileSync(join(c.dir, "child.pid"), "utf8"));
+    const v1 = v1Script(c)(`if kill -0 $(cat child.pid) 2>/dev/null; then : > v1-overlap; fi; date +%s%3N > v1.enter`);
+    await until("v1 waiting", () => legacyLockInfo(c.legacy).waiter);
+    if (phase === "stopping") {
+      writeFileSync(join(c.dir, "release"), "");
+      await until("leftover stop", () => existsSync(join(c.sched, "jobs", id, "stats")) &&
+        spawnSync("systemctl", ["--user", "is-active", `${t.unit}.scope`], { encoding: "utf8" }).stdout.trim() === "deactivating");
+    }
+    const killedAt = Date.now();
+    killOwned(t.holder);
+    await v1.exited;
+    const entered = Number(readFileSync(join(c.dir, "v1.enter"), "utf8"));
+    assert.equal(existsSync(join(c.dir, "v1-overlap")), false, `${name}: v1 entered ${entered - killedAt} ms after the holder died, with the old payload alive`);
+    assert.equal(pidAlive(child), false, name);
+    const w = hc(c, ["wait", id]);
+    assert.ok([0, 137].includes(w.code), `${name}: ${w.err}`);
+    assert.equal(state(c).tickets[id], undefined, `${name}: reservation reclaimed`);
+    assert.equal(scopePopulated(t.unit), false);
+  }
+});
+
+test("9f (R3): a failed stop at the deadline is retried until the job is gone", async () => {
+  const c = context("deadline-retry");
+  const bin = join(c.dir, "bin"), real = spawnSync("sh", ["-c", "command -v systemctl"], { encoding: "utf8" }).stdout.trim();
+  mkdirSync(bin);
+  writeFileSync(join(bin, "systemctl"), `#!/bin/sh\ncase " $* " in *" stop "*) if [ -f '${c.dir}/fail-stop-once' ]; then rm '${c.dir}/fail-stop-once'; : > '${c.dir}/stop-failed'; echo 'injected stop failure' >&2; exit 1; fi;; esac\nexec '${real}' "$@"\n`, { mode: 0o755 });
+  const env = { PATH: `${bin}:${process.env.PATH}` };
+  const r = hc(c, ["submit", "--class", "quick", "--mem", "256M", "--deadline", "1", "--", "sh", "-c", "kill -STOP $PPID; : > ready; sleep 120"], { cwd: c.dir, env });
+  const id = r.out.trim();
+  await until("ready", () => existsSync(join(c.dir, "ready")));
+  const t = await holderOf(c, id);
+  writeFileSync(join(c.dir, "fail-stop-once"), "");
+  await until("the backstop's stop failed", () => existsSync(join(c.dir, "stop-failed")), 30000);
+  const w = hc(c, ["wait", id]);
+  assert.equal(w.code, 124, w.err);
+  assert.match(w.err, /deadline 1s exceeded/);
+  assert.match(readFileSync(join(c.sched, "jobs", id, "output.log"), "utf8"), /failed .*retrying until it is empty/);
   assert.equal(scopePopulated(t.unit), false);
   assert.equal(state(c).tickets[id], undefined);
 });
