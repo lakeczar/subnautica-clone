@@ -35,9 +35,9 @@ const MIRROR_SOURCE: CaveSource = {
   ],
   carves: [
     chamber("divide_mirror.carve.pocket", "divide_mirror.pocket", [400, -357.5, -1240], [5.5, 4.5, 3, 2.5], -360.5),
-    chamber("divide_mirror.carve.pool", "divide_mirror.pool", [401, -361, -1240.5], [3.2, 2.6, 0.6, 1.8], -362.8, 0.25),
+    chamber("divide_mirror.carve.pool", "divide_mirror.pool", [402, -361, -1238.5], [2.6, 2.2, 0.6, 1.8], -362.8, 0.2),
     tube("divide_mirror.carve.mouth", "divide_mirror.ledge", [[400, -1236, -359.5, 3.4, 3.2], [400, -1232, -357, 3.4, 3.2], [400, -1227, -355, 3.4, 3.2]]),
-    shaft("divide_mirror.carve.crack", "divide_mirror.crack", [400.5, -1245.4], 1.45, 0, -367.5, -360, 0.15),
+    shaft("divide_mirror.carve.crack", "divide_mirror.crack", [400.5, -1244], 1.45, 0, -367.5, -359.5, 0.15),
   ],
   blend: 1.1,
   rooms: [
@@ -48,14 +48,14 @@ const MIRROR_SOURCE: CaveSource = {
   ],
   portals: [
     portal("divide_mirror.mouth.ledge", "mouth", "Ledge mouth", "divide_mirror.ledge", EXTERIOR, v(400, -355.4, -1232), "+z", 2.2, 2.2),
-    portal("divide_mirror.throat.crack", "throat", "Seam crack", "divide_mirror.pocket", "divide_mirror.crack", v(400.5, -361, -1245.2), "-y", 1.2, 1.2),
+    portal("divide_mirror.throat.crack", "throat", "Seam crack", "divide_mirror.pocket", "divide_mirror.crack", v(400.5, -361, -1244), "-y", 1.2, 1.2),
   ],
   routes: [
     route("divide_mirror.route.rim", "diver", "exit", [
-      [403.5, -358.4, -1238], [400, -357.4, -1236], [400, -356.4, -1234], [400, -354.87, -1230], [400, -354.5, -1228], [400, -354.5, -1226],
+      [400, -359.4, -1240], [400, -356.4, -1233], [400, -354.87, -1229], [400, -354.5, -1227], [400, -354.5, -1226],
     ]),
     route("divide_mirror.route.crack", "diver", "exit", [
-      [400.5, -364.3, -1245.2], [400.5, -361.86, -1245.2], [400, -356.39, -1234], [400, -354.85, -1229], [400, -354.5, -1227], [400, -354.5, -1226],
+      [400.5, -364.4, -1244], [400.5, -359.39, -1243], [400, -356.38, -1233.33], [400, -354.87, -1228.67], [400, -354.5, -1226.67], [400, -354.5, -1226],
     ]),
   ],
   staging: [
@@ -69,24 +69,24 @@ const MIRROR: DeepCave = {
   exits: { "ledge mouth": "divide_mirror.mouth.ledge" },
   contents: [
     { id: "divide_mirror.cress", kind: "seed", bible: { kind: "resource", id: "divide_pocket_cress" }, room: "divide_mirror.pocket",
-      at: v(404.2, -360.2, -1238.6), item: "seed_mirror_cress", stock: 3, read: "Cress on the pool rim; it tears unless sampled gently." },
+      at: v(404.6, -360.2, -1240.4), item: "seed_mirror_cress", stock: 3, read: "Cress on the pool rim; it tears unless sampled gently." },
     { id: "divide_mirror.rim", kind: "scan", bible: { kind: "line", cave: "divide_mirror_pocket", line: "A pool rim to read" }, room: "divide_mirror.pool",
-      at: v(401, -361.3, -1240.5), read: "Lavender crystal on the rim, black water below the sheen: dense water never mixes upward." },
+      at: v(402, -361.3, -1238.5), read: "Lavender crystal on the rim, black water below the sheen: dense water never mixes upward." },
     { id: "divide_mirror.seam_link", kind: "shortcut", bible: { kind: "link", cave: "divide_mirror_pocket", id: "rift_divide_seam.pocket_drop" }, room: "divide_mirror.crack",
-      at: v(400.5, -367, -1245.2), read: "The crack's floor is brine and rubble: the seam's galleries lie beyond (back entrance, opened by the cave biome)." },
+      at: v(400.5, -367, -1244), read: "The crack's floor is brine and rubble: the seam's galleries lie beyond (back entrance, opened by the cave biome)." },
   ],
   cues: [
     { id: "divide_mirror.cue.skimmers", species: "brine_skimmer", kind: "pool_edge", room: "divide_mirror.pool", meaning: "dense_water", color: SKIMMER,
-      points: [v(398.2, -360.9, -1240.5), v(401, -360.9, -1238.2), v(403.8, -360.9, -1240.5)], read: "Skimmers skate just above the pool: dense water lies under them." },
+      points: [v(399.8, -360.9, -1238.5), v(402, -360.9, -1236.7), v(404.2, -360.9, -1238.5)], read: "Skimmers skate just above the pool: dense water lies under them." },
     { id: "divide_mirror.cue.crack", species: "brine_skimmer", kind: "pool_edge", room: "divide_mirror.crack", meaning: "dense_water", color: SKIMMER,
-      points: [v(399.6, -366.2, -1245.2), v(401.4, -366.2, -1245.2)], read: "Two skimmers hold over the crack's floor: brine below." },
+      points: [v(399.6, -366.2, -1244), v(401.4, -366.2, -1244)], read: "Two skimmers hold over the crack's floor: brine below." },
     { id: "divide_mirror.cue.ledge", kind: "colony", room: "divide_mirror.ledge", meaning: "exit", exit: "divide_mirror.mouth.ledge", color: TEAL,
       points: [v(398.4, -356.5, -1234), v(401.6, -356.5, -1234)], read: "Teal colonies inside the ledge mouth." },
   ],
   hazards: [
-    brinePool("divide_mirror_pocket.brine.pool", "divide_mirror_pocket", "divide_saddle", 397.5, 404.5, -1243.5, -1237.5, -361.5,
+    brinePool("divide_mirror_pocket.brine.pool", "divide_mirror_pocket", "divide_saddle", 399, 405, -1241, -1236, -361.5,
       "A mirror sheen a metre below the pocket's rim; skimmers skate over it."),
-    brinePool("divide_mirror_pocket.brine.crack", "divide_mirror_pocket", "divide_saddle", 398.8, 402.2, -1247.1, -1243.7, -366,
+    brinePool("divide_mirror_pocket.brine.crack", "divide_mirror_pocket", "divide_saddle", 398.8, 402.2, -1245.7, -1242.3, -366,
       "The crack's floor shines: the seam's brine has seeped up into the choke."),
   ],
 };
@@ -120,7 +120,7 @@ const HOLLOW_SOURCE: CaveSource = {
   ],
   routes: [
     route("divide_hollow.route.exit", "diver", "exit", [
-      [690, -366.4, -1214], [690, -366.4, -1203.5], [690, -367.4, -1199.75], [690, -369.9, -1196],
+      [690, -366.4, -1214], [690, -366.4, -1203.5], [690, -366.88, -1201], [690, -370.52, -1196],
     ]),
   ],
   staging: [
@@ -165,7 +165,7 @@ const EAST_SOURCE: CaveSource = {
   carves: [
     tube("divide_east.carve.mouth", "divide_east.mouth_passage", [[808, -1235, -399.4, 3.4, 3.2], [803, -1235, -399.5, 3.4, 3.2], [800, -1235, -399.5, 3.6, 3.2]]),
     chamber("divide_east.carve.lower", "divide_east.lower", [797, -397.5, -1235], [4.5, 4, 2.6, 2], -399.5),
-    chamber("divide_east.carve.lower_pool", "divide_east.lower_pool", [796, -399.8, -1235.5], [2.6, 2.4, 0.5, 1.5], -401.3, 0.2),
+    chamber("divide_east.carve.lower_pool", "divide_east.lower_pool", [799.5, -399.8, -1232.2], [1.8, 1.4, 0.5, 1.4], -401.2, 0.15),
     shaft("divide_east.carve.shaft", "divide_east.shaft", [793.5, -1236], 1.4, 0, -398, -389.5, 0.2),
     chamber("divide_east.carve.upper", "divide_east.upper", [790.5, -389, -1235], [3.6, 3.4, 2.4, 1.8], -390.8),
     chamber("divide_east.carve.upper_pool", "divide_east.upper_pool", [789.5, -391.2, -1234.5], [2.2, 2, 0.4, 1.4], -392.6, 0.2),
@@ -185,11 +185,10 @@ const EAST_SOURCE: CaveSource = {
   ],
   routes: [
     route("divide_east.route.lower", "diver", "exit", [
-      [798.5, -399.4, -1233], [799.75, -398.88, -1234], [809, -398.4, -1235], [811, -398.4, -1235],
+      [796, -398.9, -1235], [808, -398.37, -1235], [811, -398.37, -1235],
     ]),
     route("divide_east.route.upper", "diver", "exit", [
-      [791.5, -390.4, -1233.5], [793, -390.4, -1235], [793.5, -393.4, -1236], [795.83, -400.37, -1236], [799.67, -398.9, -1235.33], [808, -398.37, -1235],
-      [811, -398.37, -1235],
+      [791.5, -390.4, -1233.5], [793, -390.4, -1235], [793.5, -393.4, -1236], [795.86, -398.9, -1235.86], [809, -398.38, -1235], [811, -398.38, -1235],
     ]),
   ],
   staging: [
@@ -207,7 +206,7 @@ const EAST: DeepCave = {
   ],
   cues: [
     { id: "divide_east.cue.lower", species: "brine_skimmer", kind: "pool_edge", room: "divide_east.lower_pool", meaning: "dense_water", color: SKIMMER,
-      points: [v(794, -400.2, -1235.5), v(798, -400.2, -1235.5)], read: "Skimmers over the lower mirror." },
+      points: [v(798, -400.2, -1232.2), v(801, -400.2, -1232.2)], read: "Skimmers over the lower mirror." },
     { id: "divide_east.cue.upper", species: "brine_skimmer", kind: "pool_edge", room: "divide_east.upper_pool", meaning: "dense_water", color: SKIMMER,
       points: [v(788, -391.4, -1234.5), v(791, -391.4, -1234.5)], read: "And skimmers over the upper one." },
     { id: "divide_east.cue.mouth", kind: "colony", room: "divide_east.mouth_passage", meaning: "exit", exit: "divide_east.mouth.flank", color: TEAL,
@@ -216,7 +215,7 @@ const EAST: DeepCave = {
       points: [v(794.7, -391, -1236), v(794.7, -397, -1236)], read: "Teal glimmers down the climb: the way out is below." },
   ],
   hazards: [
-    brinePool("divide_east_pocket.brine.lower", "divide_east_pocket", "divide_saddle", 793.4, 798.6, -1237.9, -1233.1, -400.6,
+    brinePool("divide_east_pocket.brine.lower", "divide_east_pocket", "divide_saddle", 797.5, 801.5, -1233.8, -1230.6, -400.6,
       "The lower mirror, a metre under the pocket's floor."),
     brinePool("divide_east_pocket.brine.upper", "divide_east_pocket", "divide_saddle", 787.3, 791.7, -1236.5, -1232.5, -391.8,
       "The upper mirror, eight metres higher, trapped in its own basin."),
@@ -357,6 +356,7 @@ const LINTEL_SOURCE: CaveSource = {
     tube("divide_lintel.carve.east", "divide_lintel.east_gallery", [
       [735, -1250, -360.5, 13, 8], [735, -1264, -361.5, 13, 8], [735, -1274, -362.3, 13, 8], [735, -1286, -362.6, 13, 8], [735, -1302, -362.8, 13, 8],
     ]),
+    chamber("divide_lintel.carve.sump", "divide_lintel.bay_sump", [722, -363.4, -1283.5], [3, 2, 0.6, 1.6], -365, 0.15),
     tube("divide_lintel.carve.crawl", "divide_lintel.cable_crawl", [[710, -1252, -358.6, 3.2, 3], [720, -1252, -359, 3.2, 3], [730, -1252, -359.6, 3.2, 3]], 0.15),
   ],
   blend: 1.6,
@@ -365,6 +365,7 @@ const LINTEL_SOURCE: CaveSource = {
     room("divide_lintel.service_bay", "chamber", "Service bay", 14),
     room("divide_lintel.east_gallery", "passage", "East gallery", 14),
     room("divide_lintel.cable_crawl", "passage", "Cable crawl", 10),
+    room("divide_lintel.bay_sump", "pocket", "Bay sump", 8),
   ],
   portals: [
     portal("divide_lintel.mouth.crest", "mouth", "Crest mouth", "divide_lintel.west_gallery", EXTERIOR, v(705, -354.4, -1234), "+z", 10, 4.8, ["diver", "medium"]),
@@ -372,9 +373,9 @@ const LINTEL_SOURCE: CaveSource = {
   ],
   routes: [
     route("divide_lintel.route.crossing", "medium", "loop", [
-      [705, -357.4, -1218], [705, -356.37, -1221], [705, -356.33, -1233], [705, -357.3, -1244.4], [705, -359.27, -1258], [705, -360.27, -1266],
-      [705.6, -361.3, -1273.2], [708.8, -362.28, -1278], [720, -362.26, -1278], [732, -362.28, -1278], [735, -362.27, -1283], [735, -362.26, -1296.57],
-      [735, -362.29, -1299.43], [735, -364.27, -1308],
+      [705, -359.17, -1218], [705, -356.36, -1221], [705, -356.34, -1233], [705, -357.26, -1244.4], [705, -359.28, -1258], [705, -360.29, -1266],
+      [705.6, -361.26, -1273.2], [708.8, -362.27, -1278], [720, -362.26, -1278], [733.5, -362.27, -1280.5], [735, -362.26, -1293.86], [735, -362.26, -1299.43],
+      [735, -366.41, -1308],
     ]),
     route("divide_lintel.route.crawl", "diver", "loop", [
       [705, -358.9, -1220], [705, -356.9, -1225.71], [705, -356.9, -1237.14], [705, -356.9, -1240], [710, -358.4, -1252], [722.5, -358.4, -1252],
@@ -409,36 +410,41 @@ const LINTEL: DeepCave = {
       points: [v(699.5, -355, -1238), v(710.5, -355, -1238)], read: "Amber colonies frame the crest mouth from inside." },
     { id: "divide_lintel.cue.south", kind: "colony", room: "divide_lintel.east_gallery", meaning: "exit", exit: "divide_lintel.mouth.south", color: TEAL,
       points: [v(729.5, -360, -1289), v(740.5, -360, -1289)], read: "Teal colonies frame the south-face mouth." },
-    { id: "divide_lintel.cue.crawl", species: "brine_skimmer", kind: "glimmer", room: "divide_lintel.cable_crawl", meaning: "resident", color: LAVENDER,
-      points: [v(710, -357.5, -1252), v(728, -358, -1252)], read: "Lavender crystal along the old cable run; the crawl is dry of brine." },
+    { id: "divide_lintel.cue.crawl", kind: "glimmer", room: "divide_lintel.cable_crawl", meaning: "exit", exit: "divide_lintel.mouth.crest", color: LAVENDER,
+      points: [v(710, -357.5, -1252), v(728, -358, -1252)], read: "Lavender crystal along the old cable run back toward the west gallery." },
+    { id: "divide_lintel.cue.sump", species: "brine_skimmer", kind: "pool_edge", room: "divide_lintel.bay_sump", meaning: "dense_water", color: SKIMMER,
+      points: [v(720, -363.6, -1283.5), v(724, -363.6, -1283.5)], read: "Skimmers over a sump in the bay floor: brine collected where the bay was cut." },
   ],
-  hazards: [],
+  hazards: [
+    brinePool("divide_lintel_galleries.brine.sump", "divide_lintel_galleries", "divide_saddle", 718.5, 725.5, -1286, -1281, -364,
+      "A mirror in the bay's floor sump, a metre and a half under the floor."),
+  ],
 };
 
 // --- Brine cistern (medium) ---------------------------------------------------------------------
 
 /** In the east flank north of the brine field, where the 450 m contour runs
- * in clear water (the bible footprint lay across the bench route and its
- * 450 m rim inside the brine field). The crest mouth opens on the flank into
- * the north rim; a Creel runs west along it to the landing, south through
- * the south way and east along the south rim, over a sunken lake whose
- * floor is a trapped brine pool. Rich lattice grows on the lake's rim at
- * 450 m, a metre above the mirror. A diver back gallery leaves the south rim
- * for the south-face mouth. */
+ * in clear water: 38 m north of the flank's south lattice ledge, which stays
+ * exterior (the bible footprint lay across the bench route, its 450 m rim
+ * inside the brine field, and on that ledge). The crest mouth opens on the
+ * flank into the north rim; a Creel crosses over a sunken lake whose floor is
+ * a trapped brine pool, turns in the hall and leaves the way it came. Rich
+ * lattice grows on the west landing's rim at 450 m, a metre above the mirror.
+ * A diver back gallery leaves the south rim for the south-face mouth. */
 const CISTERN_SOURCE: CaveSource = {
   id: "divide_brine_cistern",
   label: "Brine cistern",
   region: "brine_divide",
-  footprint: { minX: 882, maxX: 916, minZ: -1270, maxZ: -1228 },
-  baseY: -469,
-  topY: -359,
+  footprint: { minX: 886, maxX: 924, minZ: -1233, maxZ: -1192 },
+  baseY: -481,
+  topY: -360,
   terraces: [],
   carves: [
-    tube("divide_cistern.carve.mouth", "divide_cistern.north_rim", [[922, -1238, -446, 11.5, 7.5], [900, -1238, -446.5, 11.5, 7.5]]),
-    chamber("divide_cistern.carve.north_rim", "divide_cistern.north_rim", [896, -444.5, -1244], [10, 10, 6.5, 9], -453.5),
-    chamber("divide_cistern.carve.south_rim", "divide_cistern.south_rim", [896, -444.5, -1254], [10, 10, 6.5, 9], -453.5),
-    chamber("divide_cistern.carve.landing", "divide_cistern.west_landing", [887.5, -447, -1249], [3, 6, 3.5, 3], -450),
-    tube("divide_cistern.carve.back", "divide_cistern.back_gallery", [[903, -1261, -447, 3.2, 3], [908, -1263.5, -446, 3.2, 3], [915, -1265, -445.4, 3.2, 3]], 0.15),
+    tube("divide_cistern.carve.mouth", "divide_cistern.north_rim", [[930, -1200, -446, 11.5, 7.5], [897, -1200, -446.5, 11.5, 7.5]]),
+    chamber("divide_cistern.carve.north_rim", "divide_cistern.north_rim", [902, -444.5, -1207], [8.5, 10, 6.5, 9], -453.5),
+    chamber("divide_cistern.carve.south_rim", "divide_cistern.south_rim", [902, -444.5, -1217], [8.5, 10, 6.5, 9], -453.5),
+    chamber("divide_cistern.carve.landing", "divide_cistern.west_landing", [892.5, -447, -1212], [3, 6, 3.5, 3], -450),
+    tube("divide_cistern.carve.back", "divide_cistern.back_gallery", [[905, -1224.5, -447, 3.2, 3], [908, -1225.5, -447, 3.2, 3], [913, -1228, -446, 3.2, 3], [920, -1229.5, -445.4, 3.2, 3]], 0.15),
   ],
   blend: 1.6,
   rooms: [
@@ -448,27 +454,27 @@ const CISTERN_SOURCE: CaveSource = {
     room("divide_cistern.back_gallery", "passage", "Back gallery", 10),
   ],
   portals: [
-    portal("divide_cistern.mouth.crest", "mouth", "Crest mouth (flank)", "divide_cistern.north_rim", EXTERIOR, v(913, -443.2, -1238), "+x", 10, 4.8, ["diver", "medium"]),
-    portal("divide_cistern.mouth.south", "mouth", "South-face mouth (flank)", "divide_cistern.back_gallery", EXTERIOR, v(909.5, -444.6, -1264), "+x", 1.6, 1.6),
+    portal("divide_cistern.mouth.crest", "mouth", "Crest mouth (flank)", "divide_cistern.north_rim", EXTERIOR, v(919.5, -443.2, -1200), "+x", 10, 4.8, ["diver", "medium"]),
+    portal("divide_cistern.mouth.south", "mouth", "South-face mouth (flank)", "divide_cistern.back_gallery", EXTERIOR, v(915.5, -444.6, -1228.6), "+x", 1.6, 1.6),
   ],
   routes: [
     route("divide_cistern.route.hall", "medium", "exit", [
-      [896, -449.2, -1255], [899, -446.3, -1241.5], [902, -445.78, -1239], [914, -445.76, -1238], [918, -445.8, -1238], [920, -446.29, -1238],
-      [926, -448.2, -1238],
+      [902, -449.2, -1217], [902, -446.77, -1204], [902, -446.3, -1202], [908, -445.77, -1200], [922, -445.7, -1200], [928, -445.69, -1200],
+      [934, -448.2, -1200],
     ]),
     route("divide_cistern.route.back", "diver", "exit", [
-      [900, -450.04, -1257], [903.5, -445.87, -1260.62], [906.38, -445.38, -1262.43], [911.5, -445.39, -1264.25], [920, -449.24, -1265],
+      [900, -448.4, -1220], [908, -445.9, -1225.5], [910.5, -445.4, -1226.75], [915.8, -445.38, -1228.6], [925, -447.2, -1229.5],
     ]),
     route("divide_cistern.route.lattice", "diver", "exit", [
-      [887.5, -449.9, -1249], [888.88, -449.9, -1248.25], [899.99, -450.94, -1241.45], [903.33, -446.37, -1239.33], [905, -445.86, -1239], [910, -445.4, -1238],
-      [914, -445.4, -1238], [922, -449.6, -1238],
+      [892.5, -449.4, -1212], [895.88, -448.8, -1209.75], [906, -448.51, -1202], [907.33, -446.39, -1201.67], [908.67, -445.87, -1201.33], [912.67, -445.4, -1200.33],
+      [922.73, -445.38, -1200], [930, -447.8, -1200],
     ]),
   ],
   staging: [
-    { id: "divide_cistern.parking", role: "craft_parking", label: "Flank station-keeping off the crest mouth", position: v(926, -444, -1238), radius: 8, profiles: ["small", "medium"] },
+    { id: "divide_cistern.parking", role: "craft_parking", label: "Flank station-keeping off the crest mouth", position: v(934, -444, -1200), radius: 8, profiles: ["small", "medium"] },
   ],
-  note: "CA-3 medium. A lake inside a cave: the craft ring runs over a brine pool whose rim holds lattice at exactly 450 m. " +
-    "Hall: Creel (450/800) and Mantle; keel above 447 m.",
+  note: "CA-3 medium. A lake inside a cave: the hall runs over a brine pool whose west rim holds lattice at exactly 450 m. " +
+    "Hall: Creel (450/800) and Mantle; keel above 447 m. The craft turns in the hall; the diver ring is landing - rims - landing.",
 };
 
 const CISTERN: DeepCave = {
@@ -485,21 +491,21 @@ const CISTERN: DeepCave = {
   },
   contents: [
     { id: "divide_cistern.lattice", kind: "resource", bible: { kind: "resource", id: "divide_cistern_lattice" }, room: "divide_cistern.west_landing",
-      at: v(887.5, -450, -1249), item: "brine_lattice", stock: 16, read: "Crystal fans round the lake's west rim at 450 m, a metre above the mirror." },
+      at: v(892.5, -450, -1212), item: "brine_lattice", stock: 16, read: "Crystal fans round the lake's west rim at 450 m, a metre above the mirror." },
     { id: "divide_cistern.lake_view", kind: "view", bible: { kind: "reward", id: "divide.cistern_lake" }, room: "divide_cistern.north_rim",
-      at: v(902, -448, -1246), read: "A mirror lake inside the cave, skimmers fanning over it." },
+      at: v(903, -448, -1209), read: "A mirror lake inside the cave, skimmers fanning over it." },
   ],
   cues: [
     { id: "divide_cistern.cue.skimmers", species: "brine_skimmer", kind: "pool_edge", room: "divide_cistern.north_rim", meaning: "dense_water", color: SKIMMER,
-      points: [v(898, -450.4, -1243), v(905, -450.4, -1249), v(898, -450.4, -1255)], read: "Skimmers fan over the lake and resettle on the same pool." },
+      points: [v(897, -450.4, -1206), v(905, -450.4, -1212), v(897, -450.4, -1218)], read: "Skimmers fan over the lake and resettle on the same pool." },
     { id: "divide_cistern.cue.crest", kind: "colony", room: "divide_cistern.north_rim", meaning: "exit", exit: "divide_cistern.mouth.crest", color: TEAL,
-      points: [v(909, -444, -1232), v(909, -444, -1242)], read: "Teal colonies frame the crest mouth from inside." },
+      points: [v(916, -444, -1195), v(916, -444, -1205)], read: "Teal colonies frame the crest mouth from inside." },
     { id: "divide_cistern.cue.south", kind: "glimmer", room: "divide_cistern.back_gallery", meaning: "exit", exit: "divide_cistern.mouth.south", color: AMBER,
-      points: [v(904, -445, -1263), v(908.5, -444.5, -1264)], read: "Amber glimmers lead along the back gallery to the south-face mouth." },
+      points: [v(909, -445, -1225.5), v(913, -444.5, -1228)], read: "Amber glimmers lead along the back gallery to the south-face mouth." },
   ],
   hazards: [
-    brinePool("divide_brine_cistern.brine.lake", "divide_brine_cistern", "divide_saddle", 886, 908.5, -1264.5, -1233.5, -451,
-      "The lake's floor is a mirror at 451 m; the rim and the rings above it stay clear."),
+    brinePool("divide_brine_cistern.brine.lake", "divide_brine_cistern", "divide_saddle", 890, 911.5, -1228.5, -1195.5, -451,
+      "The lake's floor is a mirror at 451 m; the rim and the hall above it stay clear."),
   ],
 };
 

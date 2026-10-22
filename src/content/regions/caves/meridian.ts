@@ -55,12 +55,15 @@ const FOOTING: DeepCave = {
   source: FOOTING_SOURCE, bible: ["meridian_footing_void"], size: "small", style: "cut_void",
   exits: { "shelf-edge mouth": "meridian_footing.mouth.shelf" },
   contents: [
-    { id: "meridian_footing.alcove_cache", kind: "cache", bible: { kind: "line", cave: "meridian_footing_void", line: "Service alcove (cache)" },
+    { id: "meridian_footing.alcove_cache", kind: "cache", bible: { kind: "reward", id: "meridian.service_alcove" },
       room: "meridian_footing.alcove", at: v(1050, -521.6, -1219.6), read: "A service locker in the alcove wall, its seal intact: repair stock." },
   ],
   cues: [
     { id: "meridian_footing.cue.brackets", kind: "glimmer", room: "meridian_footing.gallery", meaning: "exit", exit: "meridian_footing.mouth.shelf", color: BRACKET,
       points: [v(1053, -519, -1226.8), v(1047, -519, -1226.8), v(1043, -519, -1226.8)], read: "Dead lamp brackets every few metres, their reflectors catching the mouth's glow." },
+    { id: "meridian_footing.cue.line", species: "cable_tender", kind: "live_line", room: "meridian_footing.gallery", meaning: "live_line", color: TENDER, feeds: "meridian.spire",
+      points: [v(1054, -518.9, -1223.3), v(1048, -518.9, -1223.3), v(1043, -518.9, -1223.3)],
+      read: "A few tenders on the gallery's one live cable, running out under the shelf toward the spire's feed." },
     { id: "meridian_footing.cue.mouth", kind: "colony", room: "meridian_footing.gallery", meaning: "exit", exit: "meridian_footing.mouth.shelf", color: TEAL,
       points: [v(1043.5, -519.5, -1223.4), v(1043.5, -519.5, -1226.6)], read: "Teal colonies inside the shelf-edge mouth." },
   ],
@@ -121,6 +124,8 @@ const CULVERT: DeepCave = {
       read: "A chain of tenders pulses along one cable: it still carries current, out to the terrace and on toward the spire." },
     { id: "meridian_culvert.cue.duct", species: "cable_tender", kind: "live_line", room: "meridian_culvert.duct", meaning: "live_line", color: TENDER, feeds: "meridian.spire",
       points: [v(1231.5, -597, -1146), v(1231.5, -581, -1146), v(1231.3, -578.6, -1152)], read: "A second strand of tenders climbs the duct to its opening." },
+    { id: "meridian_culvert.cue.duct_mouth", kind: "glimmer", room: "meridian_culvert.duct", meaning: "exit", exit: "meridian_culvert.mouth.duct", color: AMBER,
+      points: [v(1229.6, -578.4, -1150), v(1229.6, -578.4, -1154)], read: "Amber glimmers at the duct's end, where it opens on the wall." },
     { id: "meridian_culvert.cue.mouth", kind: "colony", room: "meridian_culvert.culvert", meaning: "exit", exit: "meridian_culvert.mouth.terrace", color: TEAL,
       points: [v(1230.8, -598.5, -1153), v(1233.2, -598.5, -1153)], read: "Teal colonies inside the terrace mouth." },
   ],
@@ -264,6 +269,9 @@ const CRACK: DeepCave = {
       room: "meridian_crack.slot", at: v(1126, -622, -1478), read: "The slot looks straight down the wall to the third terrace." },
   ],
   cues: [
+    { id: "meridian_crack.cue.line", species: "cable_tender", kind: "live_line", room: "meridian_crack.cleft", meaning: "live_line", color: TENDER, feeds: "meridian_cut_ceramic",
+      points: [v(1117.4, -601, -1478.6), v(1117.4, -611, -1478.6), v(1117.4, -621, -1478.6)],
+      read: "Tenders climb a live cable down the cleft and out the slot toward the cut strata's work lamps." },
     { id: "meridian_crack.cue.slot", kind: "colony", room: "meridian_crack.slot", meaning: "exit", exit: "meridian_crack.mouth.slot", color: TEAL,
       points: [v(1124, -621.2, -1477), v(1124, -621.2, -1479)], read: "Teal colonies by the wall slot." },
     { id: "meridian_crack.cue.cleft", kind: "glimmer", room: "meridian_crack.cleft", meaning: "exit", exit: "meridian_crack.mouth.terrace", color: AMBER,
@@ -332,7 +340,7 @@ const WINDOW: DeepCave = {
   hall: { profile: "medium", craft: ["creel", "mantle"], note: "Keel 520-555 m: only the Creel's 800 m refit and the Mantle are rated; the 9 m box clears window, gallery shaft and sump." },
   graph: {
     chambers: { "window room": ["meridian_window.window_room"], gallery: ["meridian_window.gallery"], "sump room": ["meridian_window.sump_room"] },
-    loopCloser: { passage: "service stair", rooms: ["meridian_window.stair"] },
+    loopCloser: { passage: "service_stair", rooms: ["meridian_window.stair"] },
   },
   contents: [
     { id: "meridian_window.ceramic", kind: "resource", bible: { kind: "resource", id: "meridian_window_ceramic" }, room: "meridian_window.sump_room",
@@ -409,10 +417,10 @@ const CULVERT_E: DeepCave = {
   hall: { profile: "medium", craft: ["creel", "mantle"], note: "Keel 503-536 m: the Creel's 800 m refit and the Mantle; the craft rises through the ledge sump onto the return ledge." },
   graph: {
     chambers: { "lower culvert": ["meridian_escarp.lower_culvert"], "upper chamber": ["meridian_escarp.upper_chamber"], "overflow tunnel": ["meridian_escarp.overflow"] },
-    loopCloser: { passage: "overflow tunnel", rooms: ["meridian_escarp.overflow"] },
+    loopCloser: { passage: "overflow_out", rooms: ["meridian_escarp.overflow"] },
   },
   contents: [
-    { id: "meridian_escarp.ledge_reveal", kind: "view", bible: { kind: "line", cave: "meridian_escarp_culvert", line: "The exterior return ledge revealed" },
+    { id: "meridian_escarp.ledge_reveal", kind: "shortcut", bible: { kind: "reward", id: "meridian.return_ledge" },
       room: "meridian_escarp.ledge_sump", at: v(1342, -512, -974), read: "Rising out of the sump: the return ledge runs north along the escarpment toward the Canopy." },
   ],
   cues: [

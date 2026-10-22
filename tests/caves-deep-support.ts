@@ -369,7 +369,7 @@ export function lodProblems(c: DeepCave): string[] {
   for (const r of c.source.routes) {
     // Diver: no shell within 0.6 m of mid-body (W1). Craft: no shell vertex
     // inside the hull box shrunk by the kit's 0.35 m shell-to-rock bound.
-    const s = profile(r.profile), lift = r.profile === "diver" ? 0.45 : s.height / 2, keep = r.profile === "diver" ? 0.6 : -0.35;
+    const s = profile(r.profile), lift = r.profile === "diver" ? 0.45 : s.height / 2;
     for (let i = 1; i < r.path.length; i++) {
       const a = r.path[i - 1]!, b = r.path[i]!, steps = Math.ceil(dist(a, b) / 0.25);
       for (let k = 0; k <= steps; k++) {
@@ -377,6 +377,9 @@ export function lodProblems(c: DeepCave): string[] {
         // Inside the cave's own water only: in front of a mouth the seabed shell is near by design.
         if (!interior(q) || pr.roomAt(p) === "") continue;
         for (const lod of ["fine", "coarse"] as const) {
+          // Craft: the coarse lattice is a metre, so hold it to the hull box
+          // less one coarse voxel.
+          const keep = r.profile === "diver" ? 0.6 : lod === "fine" ? -0.35 : -1;
           if (r.profile === "diver") {
             const hit = pr.triangles(lod, p, 0.8).find(([u, w, x]) => pointTriangleDistance(p, u, w, x) < keep);
             if (hit) { out.push(`${r.id}: ${lod} shell within ${keep} m at ${fmt(p)}`); k = steps; i = r.path.length; break; }
