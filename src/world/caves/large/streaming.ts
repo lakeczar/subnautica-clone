@@ -207,41 +207,74 @@ export function caveFineShare(cm: CaveMap, cost: CaveArtCost, residency: { inFli
   return Math.min(zoneSet + local, sorted.reduce((n, v) => n + v, 0)) + probes;
 }
 
-/** Shared-budget arbiter. Reservations (`reserve`) are all-or-nothing and
- * NON-REVOCABLE until their owner releases them; requests (`request`) are
- * granted only from what reservations and earlier grants leave. A cave's
- * fixed bytes and its coarse safety set are reservations, so no other owner
- * can take them; opportunistic art (a cave's fine residency) uses whatever
- * no grant holds and shrinks when one arrives. */
+type Bytes = { cpu: number; gpu: number };
+
+/** Shared-budget arbiter.
+ * - **Reservations** (`reserve`) are all-or-nothing and NON-REVOCABLE until
+ *   their owner releases them. A `priority` reservation (the biome the player
+ *   is in) may shrink revocable grants, newest first, to fit.
+ * - **Grants** (`request`) are revocable: granted from what reservations and
+ *   earlier grants leave, and shrunk by a priority reservation (`granted`
+ *   tells an owner what it still has).
+ * - **Opportunistic owners** (`share`) split ONE remainder (total less every
+ *   reservation and grant) into exclusive shares by weight, so two fine
+ *   residencies never spend the same bytes. Each sets its residency's
+ *   external bytes to `total - share`, so S1 keeps its construction
+ *   reservations and hidden art inside that share. */
 export class CaveArbiter {
-  private readonly held = new Map<string, { cpu: number; gpu: number; fixed: boolean }>();
+  private readonly held = new Map<string, Bytes & { fixed: boolean; order: number }>();
+  private readonly weights = new Map<string, number>();
+  private order = 0;
   constructor(readonly total: { readonly cpu: number; readonly gpu: number }) {}
-  private sum(except?: string): { cpu: number; gpu: number } {
+  private sum(except?: string, fixedOnly = false): Bytes {
     let cpu = 0, gpu = 0;
-    for (const [k, v] of this.held) if (k !== except) { cpu += v.cpu; gpu += v.gpu; }
+    for (const [k, v] of this.held) if (k !== except && (!fixedOnly || v.fixed)) { cpu += v.cpu; gpu += v.gpu; }
     return { cpu, gpu };
   }
   /** Reserve exactly `bytes`, or nothing. True when held (already or now). */
-  reserve(owner: string, bytes: { cpu: number; gpu: number }): boolean {
+  reserve(owner: string, bytes: Bytes, priority = false): boolean {
     const h = this.held.get(owner);
     if (h?.fixed) return h.cpu >= bytes.cpu && h.gpu >= bytes.gpu;
-    const used = this.sum(owner);
-    if (used.cpu + bytes.cpu > this.total.cpu || used.gpu + bytes.gpu > this.total.gpu) return false;
-    this.held.set(owner, { ...bytes, fixed: true });
+    const fits = (u: Bytes): boolean => u.cpu + bytes.cpu <= this.total.cpu && u.gpu + bytes.gpu <= this.total.gpu;
+    if (!fits(this.sum(owner))) {
+      if (!priority || !fits(this.sum(owner, true))) return false;
+      // Shrink revocable grants, newest first, until it fits.
+      const grants = [...this.held].filter(([k, v]) => k !== owner && !v.fixed).sort((a, b) => b[1].order - a[1].order);
+      for (const [, g] of grants) {
+        const used = this.sum(owner);
+        const over = { cpu: Math.max(0, used.cpu + bytes.cpu - this.total.cpu), gpu: Math.max(0, used.gpu + bytes.gpu - this.total.gpu) };
+        g.cpu -= Math.min(g.cpu, over.cpu); g.gpu -= Math.min(g.gpu, over.gpu);
+        if (fits(this.sum(owner))) break;
+      }
+    }
+    this.held.set(owner, { ...bytes, fixed: true, order: this.order++ });
     return true;
   }
   /** Ask for up to `bytes`; returns what is granted (replacing the last grant). */
-  request(owner: string, bytes: { cpu: number; gpu: number }): { cpu: number; gpu: number } {
+  request(owner: string, bytes: Bytes): Bytes {
     if (this.held.get(owner)?.fixed) throw new Error(`arbiter: ${owner} holds a reservation`);
     const used = this.sum(owner);
     const g = { cpu: Math.max(0, Math.min(bytes.cpu, this.total.cpu - used.cpu)), gpu: Math.max(0, Math.min(bytes.gpu, this.total.gpu - used.gpu)) };
-    this.held.set(owner, { ...g, fixed: false });
+    this.held.set(owner, { ...g, fixed: false, order: this.order++ });
     return g;
   }
-  release(owner: string): void { this.held.delete(owner); }
+  /** What a grant still holds (after any priority shrink). */
+  granted(owner: string): Bytes { const h = this.held.get(owner); return h ? { cpu: h.cpu, gpu: h.gpu } : { cpu: 0, gpu: 0 }; }
+  release(owner: string): void { this.held.delete(owner); this.weights.delete(owner); }
   holds(owner: string): boolean { return this.held.get(owner)?.fixed === true; }
-  /** Everything held: the external bytes an opportunistic residency must leave. */
-  committed(): { cpu: number; gpu: number } { return this.sum(); }
+  /** Every reservation and grant. */
+  committed(): Bytes { return this.sum(); }
+  /** Register (or reweight) an opportunistic owner. */
+  opportunistic(owner: string, weight = 1): void { this.weights.set(owner, weight); }
+  /** An opportunistic owner's exclusive share of the one remainder. */
+  share(owner: string): Bytes {
+    const w = this.weights.get(owner) ?? 0, all = [...this.weights.values()].reduce((n, v) => n + v, 0);
+    if (!w || !all) return { cpu: 0, gpu: 0 };
+    const c = this.sum();
+    return { cpu: Math.max(0, Math.floor((this.total.cpu - c.cpu) * w / all)), gpu: Math.max(0, Math.floor((this.total.gpu - c.gpu) * w / all)) };
+  }
+  /** External bytes for an opportunistic residency budgeted at `total`. */
+  externalFor(owner: string): Bytes { const sh = this.share(owner); return { cpu: this.total.cpu - sh.cpu, gpu: this.total.gpu - sh.gpu }; }
 }
 
 /** The coarse safety set: every chunk of a biome built at coarse and kept
@@ -290,6 +323,106 @@ export class CaveSafetySet {
     this.building?.gen.return(undefined as never);
     for (const a of this.arts.values()) a.dispose();
     this.arts.clear(); this.building = null; this.pending.length = 0;
+  }
+}
+
+export type AdmissionState = "away" | "waiting" | "loading" | "admitted" | "rescue";
+export interface AdmissionUpdate {
+  readonly state: AdmissionState;
+  /** True while the player is in or touching the cave without admission:
+   * the game is LOADING. Composition pauses the simulation clock (no oxygen,
+   * exposure, power, damage or AI ticks) and shows "loading cave…". */
+  readonly holding: boolean;
+  /** When set, relocate the player here (exterior water just outside the
+   * nearest admitting mouth) and show `message`. Never travel: teleport. */
+  readonly rescue: Vec3 | null;
+  readonly message: string;
+}
+export interface AdmissionOptions {
+  readonly id: string;
+  /** The biome's fixed bytes (colliders, bake, lamp windows). */
+  readonly fixed: Bytes;
+  /** Coarse safety set bytes (`caveSafetyBytes`), CPU and GPU. */
+  readonly safety: number;
+  /** Reserve within this distance of the domain; release beyond `releaseAt`. */
+  readonly activation?: number;
+  readonly releaseAt?: number;
+  /** Loading longer than this with the reservation still denied relocates. */
+  readonly rescueAfterMs?: number;
+  /** Whether the exterior world accepts the actor at a point (rescue targets). */
+  readonly clear?: (feet: Vec3) => boolean;
+}
+
+/** Admission for one biome: the occupied biome's fixed bytes and coarse
+ * safety set are reserved with TOP PRIORITY (shrinking other owners'
+ * revocable grants) the moment the player is in or touching the cave,
+ * whether by travel or by a reload; an approaching player reserves without
+ * priority and waits outside the mouth if denied. Per frame:
+ * - **away / waiting:** outside owned space; the sim runs; the gate keeps the
+ *   player out until admitted.
+ * - **loading:** in or touching owned space, not yet admitted (a reload, or
+ *   the safety set still building): `holding` is true and composition pauses
+ *   the simulation clock, so oxygen cannot run out while it waits.
+ * - **rescue:** loading has lasted `rescueAfterMs` and even a priority
+ *   reservation cannot fit (the budget is smaller than fixed plus safety):
+ *   return the nearest mouth's exterior water as a relocation target. The
+ *   player is moved there, never through undrawn space.
+ * - **admitted:** the safety set is built; the gate guarantees movement. */
+export class CaveAdmission {
+  safety: CaveSafetySet | null = null;
+  private loadingSince = -1;
+  private readonly fixedOwner: string;
+  private readonly safetyOwner: string;
+  constructor(private readonly cm: CaveMap, private readonly arbiter: CaveArbiter, private readonly loader: ChunkLoader,
+    private readonly o: AdmissionOptions) {
+    this.fixedOwner = `${o.id}.fixed`; this.safetyOwner = `${o.id}.safety`;
+  }
+  get admitted(): boolean { return this.safety?.complete === true; }
+  update(actor: { min: Vec3; max: Vec3 }, eye: Vec3, now: number, buildMs = 3, clock: () => number = () => now): AdmissionUpdate {
+    const own = this.cm.cave.field.ownership, d = this.cm.cave.source.domain;
+    const inside = boxTouchesOwned(own, actor), dist = boxDistance(d, eye);
+    if (!inside && dist > (this.o.releaseAt ?? 200)) { this.release(); return { state: "away", holding: false, rescue: null, message: "" }; }
+    if (inside || dist <= (this.o.activation ?? 160)) {
+      const sb = { cpu: this.o.safety, gpu: this.o.safety };
+      if (this.arbiter.reserve(this.fixedOwner, this.o.fixed, inside) && !this.safety && this.arbiter.reserve(this.safetyOwner, sb, inside))
+        this.safety = new CaveSafetySet(this.cm, this.loader, eye);
+    }
+    this.safety?.step(buildMs, clock);
+    if (this.admitted) { this.loadingSince = -1; return { state: "admitted", holding: false, rescue: null, message: "" }; }
+    if (!inside) { this.loadingSince = -1; return { state: "waiting", holding: false, rescue: null, message: "Waiting for room to load the cave" }; }
+    if (this.loadingSince < 0) this.loadingSince = now;
+    if (!this.safety && now - this.loadingSince >= (this.o.rescueAfterMs ?? 4000)) {
+      this.loadingSince = -1;
+      return { state: "rescue", holding: true, rescue: this.rescueTarget(actor),
+        message: "Not enough memory to load this cave: you were moved to the water outside its nearest mouth." };
+    }
+    return { state: "loading", holding: true, rescue: null, message: "Loading cave…" };
+  }
+  /** Exterior water just outside the nearest mouth an actor of this size fits. */
+  rescueTarget(actor: { min: Vec3; max: Vec3 }): Vec3 {
+    const s = this.cm.cave.source, own = this.cm.cave.field.ownership, floor = this.cm.cave.field.floor;
+    const hx = (actor.max.x - actor.min.x) / 2, hz = (actor.max.z - actor.min.z) / 2, h = actor.max.y - actor.min.y;
+    const at = { x: (actor.min.x + actor.max.x) / 2, y: actor.min.y, z: (actor.min.z + actor.max.z) / 2 };
+    // Clear of owned space by the gate's reach and a margin, so the player can move off it while unadmitted.
+    const m = COVERAGE_REACH + 0.5;
+    const box = (p: Vec3) => ({ min: { x: p.x - hx - m, y: p.y - m, z: p.z - hz - m }, max: { x: p.x + hx + m, y: p.y + h + m, z: p.z + hz + m } });
+    const mouths = s.portals.filter(p => p.between.includes(EXTERIOR) && p.clear.width >= 2 * Math.max(hx, hz) + 0.5)
+      .sort((a, b) => Math.hypot(a.center.x - at.x, a.center.y - at.y, a.center.z - at.z) - Math.hypot(b.center.x - at.x, b.center.y - at.y, b.center.z - at.z));
+    for (const m of mouths) {
+      const n = m.normal, l = Math.hypot(n.x, n.y, n.z);
+      for (let t = 0; t <= 80; t += 0.5) {
+        const p = { x: m.center.x + n.x / l * t, y: m.center.y + n.y / l * t - h / 2, z: m.center.z + n.z / l * t };
+        p.y = Math.max(p.y, floor(p.x, p.z) + 0.5);
+        if (!boxTouchesOwned(own, box(p)) && (this.o.clear?.(p) ?? true)) return p;
+      }
+    }
+    // No mouth fits: straight up out of the domain, above the seabed.
+    const p = { ...at, y: Math.max(s.domain.max.y + COVERAGE_REACH + 1, floor(at.x, at.z) + 0.5) };
+    return p;
+  }
+  release(): void {
+    this.safety?.dispose(); this.safety = null; this.loadingSince = -1;
+    this.arbiter.release(this.safetyOwner); this.arbiter.release(this.fixedOwner);
   }
 }
 

@@ -1,6 +1,6 @@
 import type { Capsule, Vec3 } from "../src/sim/types.js";
 import { actorBox } from "../src/sim/ribCollision.js";
-import { CaveArbiter, CaveGate, CavePins, CaveSafetySet, caveSafetyBytes, COVERAGE_REACH, coverageProblems, shownLods, type CaveArtCost, type CaveMap } from "../src/world/caves/large/streaming.js";
+import { CaveAdmission, CaveArbiter, CaveGate, CavePins, caveSafetyBytes, COVERAGE_REACH, coverageProblems, shownLods, type CaveArtCost, type CaveMap } from "../src/world/caves/large/streaming.js";
 import { boxTouchesOwned } from "../src/world/caves/large/ownership.js";
 import { createResidency, type ChunkLoader, type PreparedArt, type ResidentArt } from "../src/world/residency.js";
 
@@ -55,6 +55,9 @@ export interface SimResult {
   readonly final: Vec3;
   readonly firstUnsafe: string;
   readonly reason: string;
+  /** Frames spent loading (simulation clock paused), and relocations to a mouth. */
+  readonly holdingFrames: number;
+  readonly rescues: number;
 }
 
 /** Builds take 2.5 ms per 128 KiB step; the recipe costs `cost`. */
@@ -79,16 +82,22 @@ export function createSim(o: SimOptions) {
   const loader = costLoader(clock, o.cost), safetyBytes = caveSafetyBytes(o.cm, o.cost), useSafety = o.safety ?? true;
   const fine = createResidency({ map: pins.view, loader, now: () => clock.t,
     budget: { cpuBytes: arbiter.total.cpu, gpuBytes: arbiter.total.gpu, buildMsPerFrame: 4, uploadMsPerFrame: 4 } });
-  const fixedHeld = arbiter.reserve(`${id}.fixed`, { cpu: o.fixedBytes, gpu: 0 });
-  let safety: CaveSafetySet | null = null;
+  arbiter.opportunistic(`${id}.fine`);
+  // The admission controller (fixed + coarse safety, priority when inside, loading and rescue);
+  // the no-safety control reserves only the fixed bytes.
+  const admission = useSafety ? new CaveAdmission(o.cm, arbiter, loader, { id, fixed: { cpu: o.fixedBytes, gpu: 0 }, safety: safetyBytes }) : null;
+  const fixedHeld = useSafety ? false : arbiter.reserve(`${id}.fixed`, { cpu: o.fixedBytes, gpu: 0 });
+  let holding = 0, rescues = 0, fineCpu = 0;
   let p = { ...o.path[0]! }, wp = 1, frame = 0, admittedFrame = -1, heldIn = 0, heldOut = 0, unsafeMetres = 0, unsafeFrames = 0, inside = 0, coarse = 0;
   let firstUnsafe = "";
   const own = o.cm.cave.field.ownership;
   const result = (): SimResult => ({ admittedFrame, frames: frame, finished: wp >= o.path.length, heldInside: heldIn, heldOutside: heldOut,
-    unsafeMetres, unsafeFrames, insideUnadmitted: inside, coarseFrames: coarse, final: p, firstUnsafe, reason: gate.stats.reason });
+    unsafeMetres, unsafeFrames, insideUnadmitted: inside, coarseFrames: coarse, final: p, firstUnsafe, reason: gate.stats.reason, holdingFrames: holding, rescues });
   return {
     get done() { return wp >= o.path.length || frame >= (o.maxFrames ?? 30000); },
-    release() { safety?.dispose(); safety = null; arbiter.release(`${id}.safety`); arbiter.release(`${id}.fixed`); fine.dispose(); },
+    release() { admission?.release(); arbiter.release(`${id}.fixed`); arbiter.release(`${id}.fine`); fine.dispose(); },
+    /** The fine residency's own accounted bytes (excluding its external share). */
+    get fineBytes() { return fineCpu; },
     result,
     step(): void {
       frame++; clock.t += 16.7;
@@ -98,16 +107,18 @@ export function createSim(o: SimOptions) {
       const s = Math.min(o.speed / 60, l), next = { x: p.x + dx / l * s, y: p.y + dy / l * s, z: p.z + dz / l * s };
       // 1. Admission: the fixed bytes and the coarse safety set, all or nothing.
       const eye = { x: p.x, y: p.y + 1.4, z: p.z };
-      if (useSafety && fixedHeld && !safety && arbiter.reserve(`${id}.safety`, { cpu: safetyBytes, gpu: safetyBytes }))
-        safety = new CaveSafetySet(o.cm, loader, eye);
-      safety?.step(4, () => clock.t);
-      const admitted = useSafety ? safety?.complete === true : fixedHeld;
+      const adm = admission?.update(actorBox(p, o.shape), eye, clock.t, 4, () => clock.t);
+      if (adm?.rescue) { p = { ...adm.rescue }; rescues++; return; }
+      if (adm?.holding) { holding++; return; } // loading: the simulation clock is paused
+      const safety = admission?.safety ?? null;
+      const admitted = admission ? admission.admitted : fixedHeld;
       if (admitted && admittedFrame < 0) admittedFrame = frame;
-      // 2. Opportunistic fine art in whatever no grant holds.
+      // 2. Opportunistic fine art in this owner's exclusive share of the remainder.
       pins.update(eye, actorBox(p, o.shape), o.speed * 0.5);
-      const c = arbiter.committed();
-      fine.setExternalBytes({ cpu: c.cpu, gpu: c.gpu });
-      fine.update(eye);
+      const ext = arbiter.externalFor(`${id}.fine`);
+      fine.setExternalBytes(ext);
+      const st = fine.update(eye);
+      fineCpu = st.cpuBytes - ext.cpu;
       const fineShown = shownLods(fine.units());
       const drawn = safety ? safety.drawn(fineShown) : fineShown;
       // 3. The gate against what this frame draws, then move or hold.

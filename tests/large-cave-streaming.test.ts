@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import { CANOPY_ROOT_CAVES as S } from "../src/content/caves/canopyRootCaves.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
-import { CaveArbiter, caveFineShare, caveSafetyBytes, caveWorldMap, CaveGate, CavePins, touchedChunks } from "../src/world/caves/large/streaming.js";
+import { CaveAdmission, CaveArbiter, caveFineShare, caveSafetyBytes, caveWorldMap, CaveGate, CavePins, touchedChunks } from "../src/world/caves/large/streaming.js";
 import { actorBox } from "../src/sim/ribCollision.js";
-import type { Vec3 } from "../src/sim/types.js";
+import type { GameEvent, Vec3 } from "../src/sim/types.js";
+import { createGame } from "../src/sim/state.js";
+import { completeOpening } from "../src/sim/progression.js";
+import { updateSurvival } from "../src/sim/survival.js";
 import { createSim, outside, simulate, syntheticCost } from "./large-cave-stream-support.js";
 import { validateLayout } from "../src/world/map.js";
 import { DART } from "./large-cave-support.js";
@@ -130,4 +133,95 @@ test("LC-02 two biomes competing for one budget: the second waits outside until 
   while (!b.done) b.step();
   const rb = b.result();
   assert.ok(rb.finished && rb.admittedFrame > 0 && rb.unsafeMetres === 0 && rb.heldInside === 0, `second biome: ${JSON.stringify(rb)}`);
+});
+
+// --- R3: reload inside a biome, loading state, rescue, shared remainder ---
+
+const HALL: Vec3 = { x: 742, y: -126, z: -100 };
+const DIVER_SHAPE = { radius: 0.34, height: 0.95 };
+/** A ready diver with a fitted 150 m suit (the hall is at 126 m). */
+function diverAt(p: Vec3) {
+  const s = createGame();
+  completeOpening(s);
+  s.inventory.items.push({ id: "lc.suit", kind: "suit_150", quantity: 1, containerId: "equipment", fitted: "suit", charge: null, provenance: "public" });
+  s.player.controlledVehicleId = null;
+  s.player.pose.position = { ...p };
+  s.player.vitals.oxygen = 100; s.player.vitals.health = 100;
+  return s;
+}
+const instantLoader = { *build() { yield; return { cpuBytes: 1, gpuBytes: 1, discard() {}, upload: () => ({ cpuBytes: 1, gpuBytes: 1, setVisible() {}, dispose() {} }) }; } };
+
+/** Run a reload at `start` for `seconds`: admission each frame; while it
+ * holds, the simulation clock is paused (no survival tick); on rescue the
+ * diver is relocated, then swims straight up through the gate; real
+ * `updateSurvival` runs on every unpaused frame. */
+function reloadRun(budget: number, seconds: number, rescueAfterMs: number, other?: number) {
+  const arbiter = new CaveArbiter({ cpu: budget, gpu: budget });
+  if (other) arbiter.request("exterior.art", { cpu: other, gpu: other });
+  const admission = new CaveAdmission(cm, arbiter, instantLoader, { id: "canopy", fixed: { cpu: FIXED, gpu: 0 }, safety: SAFETY, rescueAfterMs });
+  const gate = new CaveGate(cm), s = diverAt(HALL), events: GameEvent[] = [];
+  let paused = 0, ticked = 0, rescued: Vec3 | null = null, minOxygen = 100, message = "";
+  for (let f = 0; f < seconds * 60; f++) {
+    const p = s.player.pose.position, now = f * 1000 / 60;
+    const u = admission.update(actorBox(p, DIVER_SHAPE), { x: p.x, y: p.y + 0.8, z: p.z }, now);
+    if (u.rescue) { s.player.pose.position = { ...u.rescue }; rescued = { ...u.rescue }; message = u.message; continue; }
+    if (u.holding) { paused++; message ||= u.message; continue; }
+    // Unpaused: swim up 3.4 m/s through the gate (stays at the surface once there).
+    const next = { ...p, y: Math.min(-0.5, p.y + 3.4 / 60) };
+    if (gate.allows(admission.safety ? admission.safety.drawn(new Map()) : new Map(), actorBox(next, DIVER_SHAPE), admission.admitted)) s.player.pose.position = next;
+    s.tick++; updateSurvival(s, events); ticked++;
+    minOxygen = Math.min(minOxygen, s.player.vitals.oxygen);
+  }
+  return { s, paused, ticked, rescued, minOxygen, message, admission, arbiter, events };
+}
+
+test("LC-02 (R3) reload inside a biome the budget cannot admit: the clock is paused while loading, then the diver is moved outside the nearest mouth and lives", () => {
+  // Fixed fits, fixed + safety does not (the R3 38 MiB case).
+  const budget = FIXED + SAFETY - 1048576;
+  const r = reloadRun(budget, 240, 4000);
+  assert.ok(r.paused >= 239 && r.paused <= 242, `loaded (paused) for ${r.paused} frames, about 4 s`);
+  assert.ok(r.rescued && outside(cm, r.rescued, DIVER_SHAPE), `rescued to ${JSON.stringify(r.rescued)}`);
+  assert.ok(r.rescued!.y > worldFloor(r.rescued!.x, r.rescued!.z), "the rescue point is water above the seabed");
+  assert.match(r.message, /moved to the water outside its nearest mouth/);
+  assert.ok(r.ticked > 180 * 60, `survival ran ${r.ticked / 60} s, past a full air supply`);
+  assert.ok(!r.events.some(e => e.type === "sound" && e.cue === "recovery") && r.s.player.vitals.health > 0, "the diver was never incapacitated");
+  assert.ok(r.minOxygen > 0, `oxygen fell to ${r.minOxygen}`);
+  assert.ok(r.s.player.pose.position.y >= -0.6, "the diver surfaced");
+  // Without a rescue the hold is a paused load: survival never ticks, oxygen is untouched.
+  const held = reloadRun(budget, 240, Infinity);
+  assert.ok(held.paused === 240 * 60 && held.ticked === 0 && held.s.player.vitals.oxygen === 100 && held.message === "Loading cave…");
+});
+
+test("LC-02 (R3) reload inside while other owners hold the budget: the occupied biome's reservation takes priority before the clock resumes", () => {
+  const budget = FIXED + SAFETY + 4 * 1048576;
+  // Another owner holds every free byte before the reload.
+  const res = reloadRun(budget, 30, 4000, budget);
+  assert.ok(res.admission.admitted && !res.rescued, "admitted in place, no rescue");
+  assert.ok(res.paused <= 3, `paused ${res.paused} frames`);
+  assert.ok(res.arbiter.granted("exterior.art").cpu <= 4 * 1048576, "the other owner's grant was shrunk");
+  assert.ok(res.minOxygen > 0 && res.ticked > 25 * 60, "the clock resumed at once and the diver is fine");
+  // And with real streaming: from the hall back out to exterior water under the same pressure.
+  const back = simulate({ cm, cost: syntheticCost, budgetBytes: budget, fixedBytes: FIXED, speed: 11, shape: DART, gate: true,
+    path: [r("canopy_roots.route.craft_loop")[5]!, ...r("canopy_roots.route.craft_loop").slice(1, 5).reverse(), OUTSIDE], shareEvents: [{ frame: 1, otherBytes: budget }] });
+  assert.ok(back.finished && back.unsafeMetres === 0 && back.rescues === 0 && outside(cm, back.final, DART), JSON.stringify(back));
+});
+
+test("LC-05 two biomes' fine residencies active at once split one remainder: their art together never exceeds it", () => {
+  const free = 8 * 1048576, total = 2 * (FIXED + SAFETY) + free;
+  const arbiter = new CaveArbiter({ cpu: total, gpu: total });
+  const base = { cm, cost: syntheticCost, budgetBytes: 0, fixedBytes: FIXED, speed: 11, shape: DART, gate: true, arbiter };
+  const a = createSim({ ...base, id: "a", path: tour }), b = createSim({ ...base, id: "b", path: tour });
+  let worst = 0, frames = 0, both = 0;
+  while ((!a.done || !b.done) && frames < 4000) {
+    if (!a.done) a.step();
+    if (!b.done) b.step();
+    frames++;
+    const sum = a.fineBytes + b.fineBytes;
+    worst = Math.max(worst, sum);
+    if (a.fineBytes > 0 && b.fineBytes > 0) both++;
+  }
+  assert.ok(a.result().admittedFrame > 0 && b.result().admittedFrame > 0, "both biomes admitted");
+  assert.ok(both > 500, `both fine residencies active together for ${both} frames`);
+  assert.ok(worst <= free, `fine art together ${(worst / 1048576).toFixed(2)} MiB > the ${(free / 1048576).toFixed(0)} MiB remainder`);
+  assert.ok(arbiter.committed().cpu <= total);
 });
