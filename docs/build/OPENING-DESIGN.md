@@ -34,6 +34,7 @@
 - **The 150 m suit** moves later, after the Dart, from the Canopy expedition. That keeps the island's deep passage (the Under-Stair) a return reason.
 - **Garden clarification:** the island's sinkhole is a **hidden overgrown garden to explore** (a place and a view, with a few seeds). The **mid-game plot** is where you learn the planter and grow your own food.
 - **Routine places sit at the waterline.** The pod and the workshop cove (keyhole cove, workshop at +2 m on the slipway, craft dock and charging cradle) are reached by swimming or craft with no climbing. Up-hill places (station, lookout, garden) are discovery destinations, not daily stops.
+  - **This is not a "no backtracking" rule** (owner 2026-10-22). It only means hubs and services stay easy to reach. **Purposeful backtracking is wanted:** a secret on the mountaintop or a locked spot that needs a key item or resource you only get or understand later. The player should get the "hmm, what does this mean?… Aha, I know where to go" moment, from what they've seen or read in logs. Gates must be legible in hindsight, not arbitrary.
 - **Dependencies:**
   - HUB-2 adds a surface mast or buoy light above the crown, in the far layer.
   - The Under-Stair (about 200 m, down to 140 m) uses the large-cave technology.

@@ -175,6 +175,10 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 - **Built interiors** (district halls, vault buildings, stations, the carrier): **two-door seals and airlocks** with a short animation are welcome. They double as atmosphere and as a load buffer.
 - **Seeing far stays intact:** an always-resident **far layer** of cheap landmark silhouettes plus their lights, so distant landmarks show while detail streams in.
 
+## Backtracking (owner, 2026-10-22)
+- **Hubs and service points** (pod, workshop cove, crown station, outposts) stay easy to reach, at the waterline or a dock.
+- **Purposeful backtracking is wanted.** Gates you see before you can open them (a sealed hatch, a mountaintop secret, a jammed mechanism) are resolved by a key item, resource or knowledge found later. The player connects the dots from what they saw and read: "what does this mean?… aha!" Gates must be noticeable when first met and legible in hindsight, never arbitrary or empty-travel padding.
+
 ## Atmosphere
 All five matter, in this priority:
 1. **light and depth:** water colour, darkness, the lamp, god rays;
