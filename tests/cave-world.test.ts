@@ -94,8 +94,12 @@ test("a cave reaching legacy-guarded terrain, or a hull too big for the collar, 
   const inside = { ...caveOwner(def), footprint: { minX: 20, maxX: 72, minZ: -80, maxZ: -28 } };
   assert.throws(() => createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: [inside] }), /legacy-guarded/);
   const carrier: Capsule = CRAFT_PROFILES.carrier;
-  const r = world.moveCapsule(shift({ x: f.maxX + 1, y: -5, z: -60 }), { x: -2, y: 0, z: 0 }, carrier);
-  assert.ok(r.hitSolid && r.position.x === f.maxX + 1 + SHIFT.x, "a carrier-sized shape at a cave is refused, not half-checked");
+  // CW-1 (CA-2's vertical test): refused where it reaches the cave's height,
+  // free well above it (the Fanvault's ceiling, its `topY`, is -8).
+  const low = world.moveCapsule(shift({ x: f.maxX + 1, y: -12, z: -60 }), { x: -2, y: 0, z: 0 }, carrier);
+  assert.ok(low.hitSolid && low.position.x === f.maxX + 1 + SHIFT.x, "a carrier-sized shape at a cave is refused, not half-checked");
+  const high = world.moveCapsule(shift({ x: f.maxX + 1, y: -5, z: -60 }), { x: -2, y: 0, z: 0 }, carrier);
+  assert.ok(!high.hitSolid && high.position.x === f.maxX - 1 + SHIFT.x, "a carrier over the cave's ceiling is the exterior's");
 });
 
 test("support near a cave reads what is below the actor, never the roof above", () => {

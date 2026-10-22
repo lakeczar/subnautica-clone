@@ -38,16 +38,22 @@ export interface LampState {
   readonly direction: Vector3;
 }
 
-/** Owns the active cave's textures and feeds every cave material. One cave
- * is active at a time (the nearest); others draw as open water. */
+/** Owns the cave textures and feeds every cave material. One cave is active
+ * at a time; others draw as open water. CW-1: textures are kept per field
+ * (up to `keep`, least recently bound dropped), so switching between nearby
+ * caves only binds, and `upload` lets the streamer create a field's textures
+ * ahead of use, one field per frame. */
 export class CaveLighting {
   private field: CaveLightField | null = null;
   private light: RawTexture3D;
   private rock: RawTexture3D;
   private readonly emptyLight: RawTexture3D;
   private readonly emptyRock: RawTexture3D;
+  private readonly cached = new Map<CaveLightField, { light: RawTexture3D; rock: RawTexture3D; bytes: number }>();
+  /** Textures created (uploads) and the bytes they hold on the GPU. */
+  readonly stats = { uploads: 0, textures: 0, bytes: 0 };
   constructor(private readonly scene: Scene, private readonly materials: readonly ShaderMaterial[],
-    private readonly lamp: LampSettings = DEFAULT_LAMP) {
+    private readonly lamp: LampSettings = DEFAULT_LAMP, private readonly keep = 4) {
     this.emptyLight = this.make(new Uint8Array([0, 255, 0, 0]), 1, 1, 1, RGBA, Texture.BILINEAR_SAMPLINGMODE);
     this.emptyRock = this.make(new Uint8Array([0]), 1, 1, 1, RED, Texture.NEAREST_SAMPLINGMODE);
     this.light = this.emptyLight; this.rock = this.emptyRock;
@@ -58,15 +64,34 @@ export class CaveLighting {
     t.wrapU = t.wrapV = t.wrapR = Texture.CLAMP_ADDRESSMODE;
     return t;
   }
+  /** Whether a field's textures exist. */
+  has(field: CaveLightField): boolean { return this.cached.has(field); }
+  /** Create a field's textures now (the streamer calls this ahead of use). */
+  upload(field: CaveLightField): void {
+    if (this.cached.has(field)) return;
+    const light = this.make(field.data, field.nx, field.ny, field.nz, RGBA, Texture.BILINEAR_SAMPLINGMODE);
+    const rock = this.make(field.rock.data, field.rock.nx, field.rock.ny, field.rock.nz, RED, Texture.NEAREST_SAMPLINGMODE);
+    const bytes = field.data.byteLength + field.rock.data.byteLength;
+    this.cached.set(field, { light, rock, bytes });
+    this.stats.uploads++; this.stats.textures = this.cached.size * 2; this.stats.bytes += bytes;
+    // Least recently bound first; the active field is never dropped.
+    for (const [f, t] of this.cached) {
+      if (this.cached.size <= this.keep) break;
+      if (f === this.field || f === field) continue;
+      t.light.dispose(); t.rock.dispose(); this.cached.delete(f);
+      this.stats.textures = this.cached.size * 2; this.stats.bytes -= t.bytes;
+    }
+  }
   /** Activate a cave's field, or none. */
   setField(field: CaveLightField | null): void {
     if (field === this.field) return;
-    if (this.light !== this.emptyLight) this.light.dispose();
-    if (this.rock !== this.emptyRock) this.rock.dispose();
     this.field = field;
-    this.light = field ? this.make(field.data, field.nx, field.ny, field.nz, RGBA, Texture.BILINEAR_SAMPLINGMODE) : this.emptyLight;
-    this.rock = field ? this.make(field.rock.data, field.rock.nx, field.rock.ny, field.rock.nz, RED, Texture.NEAREST_SAMPLINGMODE)
-      : this.emptyRock;
+    if (!field) { this.light = this.emptyLight; this.rock = this.emptyRock; return; }
+    this.upload(field);
+    const t = this.cached.get(field)!;
+    // Re-insert: most recently bound last.
+    this.cached.delete(field); this.cached.set(field, t);
+    this.light = t.light; this.rock = t.rock;
   }
   /** Per frame: field, curve and lamp uniforms on every material. */
   apply(lamp: LampState): void {
@@ -88,8 +113,8 @@ export class CaveLighting {
     }
   }
   dispose(): void {
-    if (this.light !== this.emptyLight) this.light.dispose();
-    if (this.rock !== this.emptyRock) this.rock.dispose();
+    for (const t of this.cached.values()) { t.light.dispose(); t.rock.dispose(); }
+    this.cached.clear();
     this.emptyLight.dispose(); this.emptyRock.dispose();
   }
 }

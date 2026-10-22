@@ -1,7 +1,7 @@
 import type { Solid } from "../../sim/world.js";
 import type { MeshRecipe } from "../../render/kit/types.js";
 import type { Aabb, LodLevel, Rect, Vec3 } from "../../world/types.js";
-import type { CaveDef, CaveRoom, CaveSource, CaveSurface, CarveSource, TerraceSource } from "./caves.js";
+import type { CaveDef, CaveRoom, CaveSource, CaveStyle, CaveSurface, CarveSource, TerraceSource } from "./caves.js";
 import { fbm, smooth } from "./noise.js";
 import type { FloorFunction } from "./terrain.js";
 
@@ -180,6 +180,20 @@ export interface CaveSampler {
 }
 
 const ownsPoint = (r: Rect, x: number, z: number): boolean => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ;
+
+/** Owned footprints may share an edge (they are half-open) but must not
+ * overlap: there is no union policy for two caves owning one column, so the
+ * first-match floor lookup and concatenated rock would silently disagree.
+ * Throws until such a policy exists. (Here, not in `caves.ts`, so content
+ * modules can check without a value import from the registry.) */
+export function assertDisjointFootprints(sources: readonly CaveSource[]): void {
+  const all = sources.map(s => ({ id: s.id, r: s.footprint }));
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+    const a = all[i]!.r, b = all[j]!.r;
+    if (a.minX < b.maxX && b.minX < a.maxX && a.minZ < b.maxZ && b.minZ < a.maxZ)
+      throw new Error(`caves ${all[i]!.id} and ${all[j]!.id}: overlapping footprints have no union policy`);
+  }
+}
 /** Two footprints touch along a side for a positive length: a crawl may
  * cross there, and each samples the other's source in its pad. */
 export function sharesEdge(a: Rect, b: Rect): boolean {
@@ -691,7 +705,32 @@ const STYLE_PALETTES = {
     wall: hex("#3c4b4b"), wall2: hex("#34423f"), ceiling: hex("#566c6b"), floor: hex("#a7b3a2"), floor2: hex("#96a593"),
     mouths: [hex("#8ff0c4"), hex("#ffcf7a"), hex("#a8d8ff")],
   },
+  lava_glass: {
+    top: hex("#3a3537"), top2: hex("#433c3e"), rim: hex("#b8673c"), strata: [hex("#2c2729"), hex("#342e30"), hex("#3e3638")] as const,
+    sand: hex("#73685e"), sand2: hex("#665c53"),
+    wall: hex("#2f2c30"), wall2: hex("#38323a"), ceiling: hex("#242126"), floor: hex("#51443d"), floor2: hex("#463b35"),
+    mouths: [hex("#ff8a3d"), hex("#ffc070"), hex("#ff6a4a")],
+  },
+  brine_stone: {
+    top: hex("#a9a5ba"), top2: hex("#9f9bb0"), rim: hex("#d6cee8"), strata: [hex("#918da5"), hex("#87839c"), hex("#9c98b0")] as const,
+    sand: hex("#bab6c8"), sand2: hex("#aca8bc"),
+    wall: hex("#615d75"), wall2: hex("#59556b"), ceiling: hex("#49465d"), floor: hex("#bcc6de"), floor2: hex("#acb7d1"),
+    mouths: [hex("#c2abff"), hex("#92dbff"), hex("#e6caff")],
+  },
+  cut_masonry: {
+    top: hex("#8e9188"), top2: hex("#84877e"), rim: hex("#cbbb90"), strata: [hex("#787a71"), hex("#6e7068"), hex("#82847b")] as const,
+    sand: hex("#9c9c8e"), sand2: hex("#909082"),
+    wall: hex("#5c5f5a"), wall2: hex("#545751"), ceiling: hex("#454841"), floor: hex("#7f8176"), floor2: hex("#75776d"),
+    mouths: [hex("#ffd47c"), hex("#a1e2d2"), hex("#f4ba82")],
+  },
 } as const;
+/** Default palettes of the regions whose caves set no style (CW-1): the deep
+ * regions. Reef, Isles, Canopy, Basin and the hub keep their own looks. */
+const REGION_STYLES: Partial<Record<CaveSource["region"], CaveStyle>> = {
+  thermal_rift: { rock: "lava_glass" },
+  brine_divide: { rock: "brine_stone" },
+  deep_district: { rock: "cut_masonry" },
+};
 const GLIMMER_HEAD = hex("#d8ffe9"), GLIMMER_TAIL = hex("#5fc9b4"), CLAPPER = hex("#e6dcc2"), CLAPPER2 = hex("#c9bfa6");
 
 /** The styled cave shell: regional stone, mouth colonies and the resident.
@@ -760,7 +799,8 @@ function styledColors(source: CaveSource, style: NonNullable<CaveSource["style"]
 
 function shellColors(source: CaveSource, floor: FloorFunction, positions: Float32Array, normals: Float32Array,
   rooms: Uint8Array, out: Float32Array): void {
-  if (source.style) return styledColors(source, source.style, floor, positions, normals, rooms, out);
+  const style = source.style ?? REGION_STYLES[source.region];
+  if (style) return styledColors(source, style, floor, positions, normals, rooms, out);
   const glows: Glow[] = [];
   for (const p of source.portals) if (p.kind === "mouth") {
     const inward = { x: -p.normal.x * 3, z: -p.normal.z * 3 };
@@ -916,8 +956,9 @@ export function caveShell(def: CaveDef, lod: LodLevel): MeshRecipe {
 }
 
 /** Bake form: the shell split per 128 m column (layer-0 recipe parts). */
-export function caveShellByColumn(def: CaveDef, lod: LodLevel, columns: readonly { readonly id: string; readonly rect: Rect }[]): Map<string, MeshRecipe> {
-  const out = new Map<string, MeshRecipe>(), shell = caveShell(def, lod), f = def.replacementFootprints[0]!;
+export function caveShellByColumn(def: CaveDef, lod: LodLevel, columns: readonly { readonly id: string; readonly rect: Rect }[],
+  shell: MeshRecipe = caveShell(def, lod)): Map<string, MeshRecipe> {
+  const out = new Map<string, MeshRecipe>(), f = def.replacementFootprints[0]!;
   for (const c of columns) {
     if (c.rect.maxX <= f.minX || c.rect.minX >= f.maxX || c.rect.maxZ <= f.minZ || c.rect.minZ >= f.maxZ) continue;
     const part = clipMeshToRect(shell, c.rect, `${c.id}.cave.${def.id}`);

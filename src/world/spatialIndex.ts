@@ -10,16 +10,28 @@ export function createSpatialIndex<T = unknown>(
   cellSize = 32,
   oversizeCells = 256,
 ): SpatialQuery<T> {
+  const build = buildSpatialIndex(entries, cellSize, oversizeCells, Infinity);
+  for (let r = build.next(); ; r = build.next()) if (r.done) return r.value;
+}
+
+/** `createSpatialIndex` in slices: yields after every `slice` entries, so a
+ * large roster (a cave cluster's 10k+ boxes) indexes inside a frame budget.
+ * The finished index is identical. */
+export function* buildSpatialIndex<T = unknown>(
+  entries: readonly SpatialEntry<T>[],
+  cellSize = 32,
+  oversizeCells = 256,
+  slice = 2048,
+): Generator<void, SpatialQuery<T>> {
   const list = [...entries];
   const byId = new Map<string, SpatialEntry<T>>();
-  const order = new Map<SpatialEntry<T>, number>();
   for (const [i, entry] of list.entries()) {
     if (byId.has(entry.id)) throw new Error(`Duplicate spatial entry id: ${entry.id}`);
     const { min, max } = entry.bounds;
     if (![min.x, min.y, min.z, max.x, max.y, max.z].every(Number.isFinite) ||
       min.x > max.x || min.y > max.y || min.z > max.z) throw new Error(`Invalid bounds for spatial entry: ${entry.id}`);
     byId.set(entry.id, entry);
-    order.set(entry, i);
+    if ((i + 1) % slice === 0) yield;
   }
   const cells = new Map<number, number[]>(), oversize: number[] = [];
   // Cell keys pack signed indices; +/-2^15 cells of 32 m covers +/-1000 km.
@@ -33,6 +45,7 @@ export function createSpatialIndex<T = unknown>(
       const k = key(ix, iz), bucket = cells.get(k);
       if (bucket) bucket.push(i); else cells.set(k, [i]);
     }
+    if ((i + 1) % slice === 0) yield;
   }
   const seen = new Uint32Array(list.length);
   let stamp = 0;

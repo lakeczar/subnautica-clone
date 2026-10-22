@@ -262,3 +262,31 @@ export function sampleLightField(field: CaveLightField, p: Vec3): { r: number; g
   const t = (i + field.nx * (j + field.ny * k)) * 4, d = field.data;
   return { r: d[t]! / 255, g: d[t + 1]! / 255, b: d[t + 2]! / 255, a: d[t + 3]! / 255 };
 }
+
+// --- Bake codec (CW-1) -----------------------------------------------------------
+
+const LIGHT_MAGIC = 0x3146434c; // "LCF1"
+/** A light field as bytes: magic, header length, JSON header (padded to 4),
+ * the RGBA field, then the R8 rock grid. `public/caves/light/<id>.bin`. */
+export function encodeLightField(f: CaveLightField): Uint8Array {
+  const header = { caveId: f.caveId, min: f.min, size: f.size, texel: f.texel, nx: f.nx, ny: f.ny, nz: f.nz,
+    rock: { min: f.rock.min, voxel: f.rock.voxel, nx: f.rock.nx, ny: f.rock.ny, nz: f.rock.nz } };
+  const json = new TextEncoder().encode(JSON.stringify(header)), pad = (4 - json.length % 4) % 4;
+  const out = new Uint8Array(8 + json.length + pad + f.data.length + f.rock.data.length), view = new DataView(out.buffer);
+  view.setUint32(0, LIGHT_MAGIC, true); view.setUint32(4, json.length + pad, true);
+  out.set(json, 8);
+  for (let i = 0; i < pad; i++) out[8 + json.length + i] = 0x20;
+  out.set(f.data, 8 + json.length + pad);
+  out.set(f.rock.data, 8 + json.length + pad + f.data.length);
+  return out;
+}
+export function decodeLightField(bytes: Uint8Array): CaveLightField {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(0, true) !== LIGHT_MAGIC) throw new Error("cave light field: bad magic");
+  const length = view.getUint32(4, true);
+  const h = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + length))) as Omit<CaveLightField, "data" | "rock"> & {
+    rock: Omit<RockGrid, "data"> };
+  const start = 8 + length, n = h.nx * h.ny * h.nz * 4, r = h.rock.nx * h.rock.ny * h.rock.nz;
+  if (bytes.byteLength !== start + n + r) throw new Error(`cave light field ${h.caveId}: size mismatch`);
+  return { ...h, data: bytes.slice(start, start + n), rock: { ...h.rock, data: bytes.slice(start + n, start + n + r) } };
+}
