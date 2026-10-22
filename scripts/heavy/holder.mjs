@@ -10,13 +10,17 @@
 // processes keep or close:
 // - it claims the ticket under the state lock before launching (a ticket that
 //   recovery already finished is never launched);
-// - it holds the v1 bridge (fd 3) for as long as it lives, and passes no lock
-//   to the job;
+// - it holds the v1 bridge (fd 3) for as long as it lives, and passes it to the
+//   job's launcher, whose in-scope wrapper hands it to the scope's anchor
+//   (anchor.sh) before the command starts. The anchor ignores TERM and dies
+//   only with the scope's last processes, so v1 stays out until the job's
+//   cgroup is gone even if this holder is SIGKILLed. The command never holds it;
 // - it launches the job scope with BindsTo= its own scope, so if the holder is
 //   killed, systemd stops the job too;
 // - when the foreground command completes, or at the whole-job deadline, it
-//   stops the job scope, then waits until the job's cgroup reports
-//   `populated 0` (or the unit is gone), failing closed on query errors;
+//   stops the job scope, retrying failed stops with backoff, then waits until
+//   the job's cgroup reports `populated 0` (or the unit is gone), failing
+//   closed on query errors;
 // - only then does it release the worktree marker, write the result and free
 //   the reservation, and exit, which releases the bridge.
 // Liveness for recovery is cgroup-based: while this scope or the job scope
@@ -27,8 +31,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { jobEnv, sliceLimits, tokensFor } from "./policy.mjs";
 import {
-  cgroupRead, cpuContext, gitTree, jobDir, ledger, loadConfig, readFileSafe, readJson, scopePopulated, self, systemctl,
-  transaction, writeJsonAtomic,
+  cgroupRead, cpuContext, gitTree, jobDir, ledger, loadConfig, readFileSafe, readJson, releaseAnchorIfAlone, scopePopulated,
+  self, systemctl, transaction, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -51,10 +55,26 @@ const t = transaction(cfg, (state) => {
 if (!t || !request) process.exit(0);
 
 let stopping = null; // why the job scope is being stopped, once it is
+let child = null, launched = false, foregroundDone = false;
 const unit = t.unit, holderUnit = t.holderUnit;
+/** Stops the job and keeps at it until its cgroup is empty: a failed or
+ * ineffective stop is retried with backoff, whether or not the foreground has
+ * ended, and a launcher that has not registered the scope yet is killed. */
 const stopJob = (why) => {
-  if (!stopping) stopping = why;
-  systemctl("stop", "--no-block", `${unit}.scope`);
+  if (stopping) return;
+  stopping = why;
+  (async () => {
+    let delay = 500, reported = false;
+    while (!foregroundDone || scopePopulated(unit)) {
+      if (releaseAnchorIfAlone(cfg, id)) { await sleep(200); continue; }
+      if (!scopePopulated(unit) && child && !foregroundDone) { child.kill("SIGKILL"); await sleep(200); continue; } // not yet registered
+      const r = systemctl("stop", "--no-block", `${unit}.scope`);
+      if (r.status === 0) { delay = 500; await sleep(1000); continue; }
+      if (!reported) { note(`stopping ${unit} failed (${(r.stderr ?? "").trim() || `exit ${r.status}`}); retrying until it is empty`); reported = true; }
+      await sleep(delay);
+      delay = Math.min(delay * 2, 10000);
+    }
+  })();
 };
 // Stopping this holder (or its scope) stops the job, and the holder still waits
 // for the job's cgroup to empty before it releases anything.
@@ -107,22 +127,26 @@ const backstop = setTimeout(() => stopJob(`deadline ${req.deadline}s exceeded`),
 // gate, again inside the scope before the command starts (scope-run.sh).
 const cancelledEarly = existsSync(join(dir, "cancelled"));
 if (cancelledEarly) writeFileSync(join(dir, "not-started"), "");
-const child = cancelledEarly ? null
-  : spawn("systemd-run", args, { cwd: t.cwd, env: { ...process.env, ...jobEnv(t, req, cfg) }, stdio: ["ignore", out, out] });
+// fd 3: the bridge, for the scope's anchor (scope-run.sh closes it for the command).
+child = cancelledEarly ? null
+  : spawn("systemd-run", args, { cwd: t.cwd, env: { ...process.env, ...jobEnv(t, req, cfg) }, stdio: ["ignore", out, out, 3] });
+launched = Boolean(child);
 const [rawCode, signal] = !child ? [75, null] : await new Promise((done) => {
   child.on("exit", (code, sig) => done([code, sig]));
   child.on("error", (err) => { appendFileSync(outPath, `heavy-check: could not start systemd-run: ${err.message}\n`); done([70, null]); });
 });
+foregroundDone = true;
 closeSync(out);
 
 // 3. The foreground has ended: anything left in the scope is stopped, and the
 // reservation, marker and bridge are kept until the cgroup is conclusively
 // empty (scopePopulated fails closed). The backstop stays armed meanwhile.
-const leftovers = child ? scopePopulated(unit) : false;
+// Only the anchor left: let it go. Anything else: stop the scope.
+const leftovers = launched && scopePopulated(unit) && !releaseAnchorIfAlone(cfg, id);
 if (leftovers) stopJob("leftovers");
 for (let i = 1; scopePopulated(unit); i++) {
+  if (i % 25 === 0 && !releaseAnchorIfAlone(cfg, id)) stopJob("leftovers");
   if (i === 150) note(`${unit} still has processes 30 s after stopping; keeping the reservation until it is empty`);
-  if (i % 50 === 0) stopJob(stopping ?? "leftovers");
   await sleep(200);
 }
 clearTimeout(backstop);

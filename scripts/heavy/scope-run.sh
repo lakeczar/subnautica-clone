@@ -1,7 +1,8 @@
 #!/bin/sh
-# Runs inside a heavy-check v2 job scope (started by supervisor.mjs).
+# Runs inside a heavy-check v2 job scope (started by holder.mjs).
 #
 #   scope-run.sh JOBDIR DEADLINE_S EXPECTED_MEMORY_MAX_BYTES COMMAND [ARGS...]
+#   fd 3: the legacy bridge lock (shared), from the ticket's holder
 #
 # Records the scope's cgroup, refuses to run unless the scope's memory limits
 # took effect (WORKER_RESOURCE_LIMITS: verify before the heavy command), runs
@@ -20,6 +21,12 @@ if [ "$max" != "$expect_max" ] || [ "$swap" != 0 ]; then
   : >"$jobdir/refused"
   exit 70
 fi
+# The anchor takes over the bridge inside this scope before anything else runs
+# here, so v1 stays out until the scope's last process is gone (anchor.sh). The
+# command never holds the bridge: fd 3 is closed for it.
+sh "$(dirname "$0")/anchor.sh" 9<&3 &
+echo $! >"$jobdir/anchor.pid"
+exec 3<&-
 # Launch gate, shared with `heavy-check cancel`: a cancel recorded before this
 # point means the command never starts; after it, cancel stops the scope.
 exec 5>>"$jobdir/gate"
@@ -31,8 +38,8 @@ fi
 : >"$jobdir/started"
 flock -u 5
 exec 5>&-
-# The job's lifetime is this scope's cgroup: the ticket's holder (holder.mjs)
-# keeps the bridge and the reservation until the cgroup is empty.
+# The job's lifetime is this scope's cgroup: the anchor keeps the bridge, and
+# the ticket's holder (holder.mjs) the reservation, until the cgroup is empty.
 timeout --kill-after=10s "${deadline}s" "$@"
 rc=$?
 {

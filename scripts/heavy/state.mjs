@@ -9,7 +9,7 @@
 // drops it if this process dies. The legacy bridge holds the v1 lock file the
 // same way, for the length of a job.
 import { spawnSync } from "node:child_process";
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
@@ -153,6 +153,36 @@ export function stopScope(unit, { block = true, waitS = 0 } = {}) {
   return false;
 }
 
+/** Every process in a job's cgroup subtree (delegated child cgroups
+ * included), from the cgroup path its wrapper recorded; null if unreadable. */
+export function jobProcs(cfg, id) {
+  const root = readFileSafe(join(jobDir(cfg, id), "cgroup"));
+  if (!root) return null;
+  const pids = [];
+  const walk = (dir) => {
+    for (const pid of (readFileSync(join(dir, "cgroup.procs"), "utf8").match(/\d+/g) ?? [])) pids.push(Number(pid));
+    for (const e of readdirSync(dir, { withFileTypes: true })) if (e.isDirectory()) walk(join(dir, e.name));
+  };
+  try { walk(root); } catch { return null; }
+  return pids;
+}
+
+const parentOf = (pid) => {
+  try { const st = readFileSync(`/proc/${pid}/stat`, "utf8"); return Number(st.slice(st.lastIndexOf(")") + 2).split(" ")[1]); } catch { return null; }
+};
+
+/** When the job scope holds nothing but its anchor (and the anchor's sleep),
+ * tells the anchor to exit, so the bridge is released as the cgroup empties
+ * rather than at the end of a stop grace (anchor.sh). The anchor is signalled
+ * only if its recorded PID is in this job's cgroup. Returns true if it did. */
+export function releaseAnchorIfAlone(cfg, id) {
+  const anchor = Number(readFileSafe(join(jobDir(cfg, id), "anchor.pid")));
+  const procs = jobProcs(cfg, id);
+  if (!anchor || !procs?.includes(anchor)) return false;
+  if (!procs.every((pid) => pid === anchor || parentOf(pid) === anchor)) return false;
+  try { process.kill(anchor, "SIGUSR1"); return true; } catch { return false; }
+}
+
 /** Who holds or waits for the legacy (v1) lock file, from /proc/locks. Blocked
  * waiters show as "->" lines on the file's device:inode. A v1 caller always
  * takes it exclusively (WRITE); v2 jobs hold it shared (READ) and never block. */
@@ -236,7 +266,9 @@ export function reconcile(cfg, state) {
       const owner = t.holder ? [t.holderUnit] : [t.supervisorUnit, t.holderUnit];
       if ((!t.holder && alive(t.supervisor)) || owner.some((u) => u && scopePopulated(u))) continue;
       if (t.unit && scopePopulated(t.unit)) {
-        stopScope(t.unit, { block: false }); // keep the reservation until the cgroup is empty
+        // Keep the reservation until the cgroup is empty. The anchor keeps v1
+        // out meanwhile, and is let go once it is the last one left.
+        if (!releaseAnchorIfAlone(cfg, t.id)) stopScope(t.unit, { block: false });
         if (!t.orphaned) { t.orphaned = Date.now(); changed = true; ledger(cfg, { event: "orphaned", ticket: t.id, worktree: t.worktree }); }
         continue;
       }
