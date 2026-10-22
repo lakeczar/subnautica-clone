@@ -14,6 +14,7 @@ import type { Vec3 } from "../src/world/types.js";
 import { blocked, blockedBox, prewarmScatter } from "../src/render/biomes/scatter.js";
 import { RecipeBuilder } from "../src/render/biomes/recipe.js";
 import { drawSolidSet, VISTA_DRESSING, vistaMesh } from "../src/render/biomes/vistas.js";
+import { LANDMARK_LIGHTS } from "../src/render/poi/landmarks.js";
 
 /** Composed vistas (A1). Solid-looking pieces are drawn only from the shapes
  * that are also their collision (`VISTA_SOLIDS`); everything else is thin,
@@ -67,7 +68,8 @@ test("thin dressing stays out of every keep-out and is deterministic", () => {
   for (const [k, { id, mesh }] of a.entries()) {
     assert.deepEqual(mesh.positions, again[k]!.mesh.positions, `${id} differs between builds`);
     assert.ok(mesh.positions.every(Number.isFinite) && mesh.normals.every(Number.isFinite), `${id} finite`);
-    for (let i = 3; i < mesh.colors.length; i += 4) assert.ok(mesh.colors[i] === -1 || mesh.colors[i]! >= 1, `${id} alpha ${mesh.colors[i]}`);
+    // Unlit (-1), faintly luminous (-0.3, ATM-1's crystal glow) or plain.
+    for (let i = 3; i < mesh.colors.length; i += 4) assert.ok(mesh.colors[i] === -1 || Math.abs(mesh.colors[i]! + 0.3) < 1e-6 || mesh.colors[i]! >= 1, `${id} alpha ${mesh.colors[i]}`);
     assert.ok(coarse[k]!.mesh.positions.length <= mesh.positions.length, `${id} coarse is not cheaper`);
   }
   for (const fine of [true, false]) for (const { id, mesh } of fine ? a : coarse) {
@@ -114,7 +116,7 @@ test("INVARIANT (A1-R3-01): every vista set is drawn exactly once by a real chun
   // Control: the old pipe anchor lay past the world's east edge.
   assert.equal(owners(1478, -1590), 0, "an anchor outside the world has no owning chunk");
   for (const s of VISTA_SETS) assert.equal(owners(s.anchor.x, s.anchor.z), 1, `${s.id}: anchor must be owned by exactly one scatter chunk`);
-  for (const p of VISTA_DRESSING) assert.equal(owners(p.x, p.z), 1, `${p.id}: anchor must be owned by exactly one scatter chunk`);
+  for (const p of [...VISTA_DRESSING, ...LANDMARK_LIGHTS]) assert.equal(owners(p.x, p.z), 1, `${p.id}: anchor must be owned by exactly one scatter chunk`);
   const E = WORLD_ENVELOPE;
   for (const s of VISTA_SOLIDS) assert.ok(s.bounds.min.x >= E.min.x && s.bounds.max.x <= E.max.x && s.bounds.min.z >= E.min.z && s.bounds.max.z <= E.max.z,
     `${s.id} lies outside the world envelope`);
@@ -129,7 +131,7 @@ test("INVARIANT (A1-R3-01): every vista set is drawn exactly once by a real chun
       assert.ok((b.vertexCount > 0) === (solids > 0), `${s.id}: ${b.vertexCount} art vertices but ${solids} solids`);
       n += b.vertexCount;
     }
-    for (const p of VISTA_DRESSING) { const b = new RecipeBuilder(); p.draw(b, worldFloor, lod === "fine"); n += b.vertexCount; }
+    for (const p of [...VISTA_DRESSING, ...LANDMARK_LIGHTS]) { const b = new RecipeBuilder(); p.draw(b, worldFloor, lod === "fine"); n += b.vertexCount; }
     return n;
   };
   // ...and through the real chunk path, the chunks emit exactly that art once.

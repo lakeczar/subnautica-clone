@@ -67,6 +67,8 @@ These are hypotheses, not measurements. The floor is measured on a blind first p
 
 ## Creatures
 
+**Field guide and found notes (CB-2):** what each animal eats, leaves, where it spawns, its natural behaviour and threat windows, and what you may take, plus the notes that hint at roe beds, shed grounds, trap spots and carcass falls. See [FIELD-GUIDE.md](FIELD-GUIDE.md).
+
 Each region has 3–6 types, usually at most one threat and at least two benign or cue animals. Every roster is in its region file.
 
 | Species | Label | Status | Role | Cave-dweller | Areas | Build cost | Defined in |
@@ -95,6 +97,7 @@ Each region has 3–6 types, usually at most one threat and at least two benign 
 | `brine_skimmer` | Brine skimmers | new | cue | yes | Mirror Divide | art | this bible |
 | `cable_tender` | Cable tenders | new | cue | yes | Meridian | art + behaviour | this bible |
 | `crown_rays` | Crown rays | new | benign | no | Hub spur | art | this bible |
+| `pale_drifter` | Pale drifters | new (CB-2) | benign | no | Pale Basin, Mirror Divide | art | this bible; seen only as carcass falls and far silhouettes |
 
 Build order: the cheap ones first (existing placements, glimmers and wakeglow, which are particles plus one rule). Then the cave residents that carry a cycle cue (clappers, crawlers). The research's four expensive animals come last; each region still works without them.
 

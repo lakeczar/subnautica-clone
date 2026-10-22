@@ -158,7 +158,7 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 - **Acceptance:** a fast Dart traversal of every region and cave mouth shows no frame over about 33 ms caused by streaming, and no hold state is ever reached.
 
 ## Creatures (owner, 2026-10-22)
-- **No guide or helper animals.** There are no creatures that lead you to resources or guide you through passages.
+- **Helper creatures are allowed** (owner, corrected 2026-10-22). Animals whose natural behaviour helps the player are fine, for example glimmers leaning toward moving water at exits, a school you can follow, or a creature that gathers where a resource is. Use them where they feel natural, not as quest markers.
 - **Every threat has a non-combat way through** that comes from its natural behaviour: feeding, patrol rhythm, resting, being distracted by other animals, territory edges. Timing and observation, not only avoiding the bite.
 - **Creatures as resources** (coordinator recommendation; the owner may adjust):
   - **Shed and byproducts (core):** collect, without harm, what animals leave: shed shells and membranes, weaver resin, mite mineral grit, and casts that fertilise planters. Each resident's home is worth visiting.

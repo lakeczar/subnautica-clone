@@ -161,7 +161,9 @@ export type SpeciesId =
   | "canopy_floaters" | "shore_buttons" | "silt_combs" | "seam_pickers"
   // new here
   | "vault_glimmer" | "tide_clapper" | "resin_weaver" | "knot_eel" | "wakeglow_drift"
-  | "kiln_crawler" | "brine_skimmer" | "cable_tender" | "crown_rays";
+  | "kiln_crawler" | "brine_skimmer" | "cable_tender" | "crown_rays"
+  // CB-2: the open-water animal whose remains make the carcass falls
+  | "pale_drifter";
 export type SpeciesRole = "threat" | "den" | "cue" | "benign" | "food";
 export interface SpeciesProposal {
   readonly id: SpeciesId;
