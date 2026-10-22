@@ -1,6 +1,6 @@
 # CA-3: Rift, Divide and Meridian small and medium caves (handoff)
 
-Opus 5.5 high. Branch `t3/rift-divide-meridian-caves`, rebased onto `feat/siltwake-first-expedition` at `4d3a7b9` (CA-1 integrated). R1 fixes below answer [Sol R1](../reviews/CA-3-SOL-XHIGH-R1.md) (on `review/ca-3-r1`). New files only, except one line in a kit file (see *Kit touch*). **Not registered** in `CAVE_SOURCES`; the step is below. Bible: [ember-rift](../../content/regions/ember-rift.md), [mirror-divide](../../content/regions/mirror-divide.md), [meridian](../../content/regions/meridian.md).
+Opus 5.5 high. Branch `t3/rift-divide-meridian-caves`, rebased onto `feat/siltwake-first-expedition` at `82a46ea` (CA-1, CA-2, W2's hub caves and C4 stage B integrated). R1 fixes below answer [Sol R1](../reviews/CA-3-SOL-XHIGH-R1.md) (on `review/ca-3-r1`). New files only, except one line in a kit file (see *Kit touch*). **Not registered** in `CAVE_SOURCES`; the step is below. Bible: [ember-rift](../../content/regions/ember-rift.md), [mirror-divide](../../content/regions/mirror-divide.md), [meridian](../../content/regions/meridian.md).
 
 ## R1 fixes
 - **CA-3-01, content in rock.**
@@ -22,6 +22,12 @@ Opus 5.5 high. Branch `t3/rift-divide-meridian-caves`, rebased onto `feat/siltwa
     - each route's exit must load nothing at the peak.
 
     Zeroing every intensity fails it (negative control in the file).
+- **Rebase onto root at `82a46ea`.** `DEEP_CAVE_SOURCES` stays separate, unregistered.
+  - The tests now compose root as it is: `AUTHORED_CAVE_SOURCES` through `caveDef` (the Fanvault, W2's hub caves, CA-1's Reef and Isles) and CA-2's `CANOPY_BASIN_GROUPS` through `groupDef`.
+  - The fast disjointness check covers all 35 of those plus the 20 deep sources.
+  - `deepWorld` composes those within 64 m of a deep footprint. Today that is only `basin_west_rim` (18 m from the kiln tube); the next nearest is 247 m away. World queries are local, so the rest only cost memory. With all 35, the dark file peaked at 996 of its 1,024 MiB.
+  - The cost test loads all 35.
+  - **Dart halls:** C4 raised the Dart's last refit to 450 m (M2 audit #3), so the lintel galleries (keel above 362 m) and the cistern (above 447 m) now list the Dart. The fast test requires it, and the heavy route check sweeps the Dart's hull through both halls.
 - **Kiln niche, corrected:** the reviewer's real-step runs from inside the end-vent niche at load 90 and peak breath cost **11–14 health** (10.6–15.5 s). My earlier "about 5" came from the constant-speed model. At load 70 it costs nothing. This is an optional warned risk: the warnings come at 40 and 70, and the crawlers lead the breath by 5 s.
 
 ## Outcome
@@ -43,8 +49,8 @@ All 21 bible small and medium caves for the three deep regions are built with th
 | `divide_east_pocket` | small | 782..822 × -1247..-1223 | 387–401 | 23 × 8 × 14.5 | flank mouth | diver | brine (two pools) | 8 m |
 | `divide_lee_burrow` | small | 456..482 × -1097..-1073 | 389–394 | 19 × 6.5 × 5 | shelf mouth | diver | — | 1 m |
 | `divide_fissure_window` | small | 533..557 × -1336..-1316 | 423–437 | 12.5 × 17.5 × 14 | fissure mouth, window | diver | — | 4 m |
-| `divide_lintel_galleries` | medium | 686..754 × -1300..-1228 | 349–365 | 49 × 64 × 16 | crest mouth, south-face mouth | Creel, Mantle, Hush | brine (bay sump) | 4 m |
-| `divide_brine_cistern` | medium | 886..924 × -1233..-1192 | 438–454 | 33 × 35.5 × 15.5 | crest mouth, south-face mouth | Creel, Mantle, Hush | brine (lake) | 81 m |
+| `divide_lintel_galleries` | medium | 686..754 × -1300..-1228 | 349–365 | 49 × 64 × 16 | crest mouth, south-face mouth | Dart, Creel, Mantle, Hush | brine (bay sump) | 4 m |
+| `divide_brine_cistern` | medium | 886..924 × -1233..-1192 | 438–454 | 33 × 35.5 × 15.5 | crest mouth, south-face mouth | Dart, Creel, Mantle, Hush | brine (lake) | 81 m |
 | `meridian_footing_void` | small | 1038..1062 × -1237..-1213 | 517–522 | 18.5 × 8.5 × 5 | shelf-edge mouth | diver | — | — |
 | `meridian_culvert_north` | small | 1224..1240 × -1164..-1136 | 577–600 | 5 × 18 × 23 | terrace mouth, cable duct | diver | — | 31 m |
 | `meridian_spire_footing` | small | 1170..1194 × -1370..-1346 | 595–601 | 12.5 × 18 × 6 | footing mouth | diver | — | 11 m |
@@ -65,16 +71,17 @@ Each has two or more exits. Craft legs run along the axes, because the clearance
 
 **Halls are rated for their depth.** A hall lists only craft whose collider fits its profile *and* whose rating reaches its deepest keel:
 - **Rift halls (273–291 m):** the Dart's 350 m refit and the Hush.
-- **Divide and Meridian halls (349–537 m):** the medium profile. The Dart is not rated, and the Hush is optional and only reaches 450 m, so the Creel 450/800 and Mantle are listed. The fast test fails if a rated, fitting hull is left off the list.
+- **Divide and Meridian halls (349–537 m):** the medium profile, with the Creel 450/800 and the Mantle. Root's C4 raised the Dart's last refit to 450 m (M2 audit #3), so the lintel galleries (keel above 362 m) and the cistern (above 447 m) also list the Dart; the Meridian halls are deeper than 450 m. The Hush is optional and reaches 450 m. The fast test fails if a rated, fitting hull is left off the list.
 
 ## Files
 - `src/content/regions/caves/{rift,divide,meridian}.ts` hold the sources and typed layer.
 - `deepKit.ts` holds the constructors and the typed layer's types (`DeepCave`, `CaveContent`, `CaveCue`, `CaveHazard`, `CaveHall`, `CaveGraph`), plus `KILN_BREATH` and the field builders `heatBox`, `heatVent` and `brinePool`.
 - `deep.ts` holds `DEEP_CAVES`, `DEEP_CAVE_SOURCES`, `DEEP_CAVE_HAZARDS` and `sampleDeepHazards`. The last is S4's `sampleHazards` plus the cave fields, using the same rule.
 - **Tests:**
-  - `tests/caves-deep.test.ts` (fast, 8);
-  - `caves-deep.heavy.test.ts` (geometry, 90);
+  - `tests/caves-deep.test.ts` (fast, 9);
+  - `caves-deep.heavy.test.ts` (geometry, content and targeting, 111);
   - `caves-deep-dark.heavy.test.ts` (lamp-off, hazards, adverse case: 31);
+  - `caves-deep-hazard-step.heavy.test.ts` (positive danger controls through `stepGame`, 8);
   - `caves-deep-perf.heavy.test.ts` (cost);
   - shared checks in `caves-deep-support.ts`.
 - **Lab:** `tools/cave-lab-deep.html` and `.ts` (with its own tsconfig).
@@ -83,17 +90,19 @@ Each has two or more exits. Craft legs run along the axes, because the clearance
   - **Running it:** `npx vite --port <port> --strictPort --host 127.0.0.1`, then `/tools/cave-lab-deep.html?cave=rift_kiln_tube`.
 - **GPU shots:** `tools/cave-deep-shots.mjs` (through `heavy-check.sh`).
 
-## Checks (code at `8a64355`)
-- **`npm test`:** 1,106/1,106, including the 8 new fast tests. `npm run build`: OK; the bake is unchanged while the caves are unregistered.
-- **Heavy, through `heavy-check.sh`:**
+## Checks (R1, on `82a46ea`)
+- **`npm test`:** 1,201/1,201, including the 9 fast tests here.
+- **Heavy, through `heavy-check.sh`** (one 248 s job, load average about 17):
 
   | File | Time | Peak RSS (MiB) | Tests |
   | --- | --- | --- | --- |
-  | `caves-deep.heavy` | 20.3 s | 625 | 90/90 |
-  | `caves-deep-dark.heavy` | 61.8 s | 596 | 31/31 |
-  | `caves-deep-perf.heavy` | 9.6 s | 438 | 1/1 |
+  | `caves-deep.heavy` | 47.2 s | 640 | 111/111 |
+  | `caves-deep-dark.heavy` | 121.3 s | 934 | 31/31 |
+  | `caves-deep-hazard-step.heavy` | 23.1 s | 439 | 8/8 |
+  | `caves-deep-perf.heavy` | 56.6 s | 814 | 1/1 |
 
-  Root's `cave-light.heavy` still passes after the kit touch (203 MiB).
+  The dark file is the closest to the 1,024 MiB cap. Its world is 382 MiB, mostly these 20 caves; the rest is light fields and retreat searches.
+  Phase 1 (code at `8a64355`): `npm run build` OK, with the bake unchanged while the caves are unregistered. Root's `cave-light.heavy` still passed after the kit touch (203 MiB).
 - **Per cave (heavy):**
   - shell and rock agree (solids are exactly the owned rock voxels, and the shell sits within 0.35 m of rock);
   - every portal's clear rectangle is free of rock and of both shells;
@@ -131,7 +140,8 @@ The other 31 shots are in [`ca-3/`](ca-3/).
 
 ## Numbers
 - **Build:** 20 caves, **9.4 M voxels, 19,628 rock boxes** plus about 133,760 collar columns, **2.5 s to build all 20** on the shared VM (largest: cistern 1.66 M voxels in 0.65 s, lintel 1.57 M, window gallery 1.25 M, kiln 1.05 M). Root's Fanvault alone: 1,504 boxes and about 9,920 collar columns.
-- **Query cost:** a diver step (1/60 s swim plus support) inside these caves, with root's caves loaded, costs **33.4 µs** (9,075 steps), against 21.8 µs inside the Fanvault in the root world.
+- **Query cost:** a diver step (1/60 s swim plus support) inside these caves, with root's caves loaded, costs **33.4 µs** (9,075 steps), against 21.8 µs inside the Fanvault in the root world (phase 1, quiet host).
+  - **R1, on `82a46ea`:** root now has 35 caves (56,281 rock boxes, about 268,960 collar columns). The step costs **58.2 µs** inside these caves against **82.2 µs** inside root's caves (28,600 steps). The host load average was about 17, so read the ratio, not the absolute numbers: the deep caves cost no more per step than root's own.
 - **Load:** heavy, but within budget. The concern is **first-use build time**: `gameWorld()` builds every cave on first use, so with CA-1's 18 caves, CA-2 and W2 added, startup grows by seconds. I'd build caves per region lazily, or bake the rock, before all four streams land.
 
 ## Darkness and hazards

@@ -386,15 +386,15 @@ const LINTEL_SOURCE: CaveSource = {
   staging: [
     { id: "divide_lintel.parking", role: "craft_parking", label: "Crest parking north of the lintel galleries", position: v(716, -353.8, -1214), radius: 9, profiles: ["small", "medium"] },
   ],
-  note: "CA-3 medium. Loop: west gallery - service bay - east gallery - cable crawl. Hall: Creel 450/800 and Mantle (medium profile); " +
-    "keel above 362 m, below the Dart's 350 m rating, so the Dart is not listed.",
+  note: "CA-3 medium. Loop: west gallery - service bay - east gallery - cable crawl. Hall: medium profile, keel above 362 m: " +
+    "the Dart's 450 m refit, the Creel 450/800, the Mantle and the Hush.",
 };
 
 const LINTEL: DeepCave = {
   source: LINTEL_SOURCE, bible: ["divide_lintel_galleries"], size: "medium", style: "brine_pocket",
   exits: { "crest mouth": "divide_lintel.mouth.crest", "south-face mouth": "divide_lintel.mouth.south" },
-  hall: { profile: "medium", craft: ["creel", "mantle", "hush"],
-    note: "Keel 355-362 m: the Creel's 450 m refit, the Mantle and (small, optional) the Hush; the Dart's 350 m limit is too shallow." },
+  hall: { profile: "medium", craft: ["dart", "creel", "mantle", "hush"],
+    note: "Keel 355-362 m: the Dart's 450 m refit (C4's M2 audit raised it from 350), the Creel's 450 m refit, the Mantle and (small, optional) the Hush." },
   graph: {
     chambers: { "west gallery": ["divide_lintel.west_gallery"], "service bay": ["divide_lintel.service_bay"], "east gallery": ["divide_lintel.east_gallery"] },
     loopCloser: { passage: "cable_crawl", rooms: ["divide_lintel.cable_crawl"] },
@@ -474,14 +474,14 @@ const CISTERN_SOURCE: CaveSource = {
     { id: "divide_cistern.parking", role: "craft_parking", label: "Flank station-keeping off the crest mouth", position: v(934, -444, -1200), radius: 8, profiles: ["small", "medium"] },
   ],
   note: "CA-3 medium. A lake inside a cave: the hall runs over a brine pool whose west rim holds lattice at exactly 450 m. " +
-    "Hall: Creel (450/800) and Mantle; keel above 447 m. The craft turns in the hall; the diver ring is landing - rims - landing.",
+    "Hall: Dart (450), Creel (450/800), Mantle and Hush; keel above 447 m. The craft turns in the hall; the diver ring is landing - rims - landing.",
 };
 
 const CISTERN: DeepCave = {
   source: CISTERN_SOURCE, bible: ["divide_brine_cistern"], size: "medium", style: "brine_pocket",
   exits: { "crest mouth": "divide_cistern.mouth.crest", "south-face mouth": "divide_cistern.mouth.south" },
-  hall: { profile: "medium", craft: ["creel", "mantle", "hush"],
-    note: "Keel above 447 m: inside the Creel's 450 m refit; the Mantle (800) and the optional Hush (450) also fit." },
+  hall: { profile: "medium", craft: ["dart", "creel", "mantle", "hush"],
+    note: "Keel above 447 m: inside the Dart's and the Creel's 450 m refits; the Mantle (800) and the optional Hush (450) also fit." },
   graph: {
     chambers: { "west landing": ["divide_cistern.west_landing"], "north rim": ["divide_cistern.north_rim"], "south rim": ["divide_cistern.south_rim"],
       "back gallery": ["divide_cistern.back_gallery"] },

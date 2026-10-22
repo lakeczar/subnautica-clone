@@ -5,6 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assertDisjointFootprints, AUTHORED_CAVE_SOURCES, EXTERIOR } from "../src/content/regions/caves.js";
+import { CANOPY_BASIN_SOURCES } from "../src/content/regions/caves/index.js";
 import { DEEP_CAVES, DEEP_CAVE_HAZARDS, DEEP_CAVE_SOURCES, caveFieldLevel, sampleDeepHazards } from "../src/content/regions/caves/deep.js";
 import { EXTERIOR as DEEP_EXTERIOR, KILN_BREATH, type DeepCave } from "../src/content/regions/caves/deepKit.js";
 import { readFileSync } from "node:fs";
@@ -72,7 +73,7 @@ test("every bible small and medium cave for the Rift, Divide and Meridian is rea
 });
 
 test("caves own disjoint footprints in their region, clear of the preserve, datums, structures, routes and story sites", () => {
-  assert.doesNotThrow(() => assertDisjointFootprints([...AUTHORED_CAVE_SOURCES.filter(s => !DEEP_CAVE_SOURCES.includes(s)), ...DEEP_CAVE_SOURCES]));
+  assert.doesNotThrow(() => assertDisjointFootprints([...AUTHORED_CAVE_SOURCES.filter(s => !DEEP_CAVE_SOURCES.includes(s)), ...CANOPY_BASIN_SOURCES, ...DEEP_CAVE_SOURCES]));
   const storySites = Object.values(STORY_PLACEMENTS).map(p => SITES.find(s => s.id === p.s2)).filter(s => !!s);
   for (const s of DEEP_CAVE_SOURCES) {
     const f = s.footprint;

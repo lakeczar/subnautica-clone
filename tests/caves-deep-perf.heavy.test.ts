@@ -4,6 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AUTHORED_CAVE_SOURCES, caveDef } from "../src/content/regions/caves.js";
+import { CANOPY_BASIN_GROUPS, groupDef } from "../src/content/regions/caves/index.js";
 import { buildCave } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { DEEP_CAVES } from "../src/content/regions/caves/deep.js";
@@ -45,8 +46,8 @@ test("cost: build, rock boxes, collar columns and per-step diver queries with ro
     rows.push(`${c.source.id}: ${def.rock.length} rock boxes, ${(def.stats.voxels / 1e6).toFixed(2)} M voxels, ${took.toFixed(0)} ms`);
     assert.ok(def.rock.length < 5000, `${c.source.id}: ${def.rock.length} boxes`);
   }
-  const root = AUTHORED_CAVE_SOURCES.map(s => caveDef(s.id, worldFloor));
-  const rootRock = root.reduce((n, d) => n + d.rock.length, 0), rootCollar = AUTHORED_CAVE_SOURCES.reduce((n, s) => n + collarColumns(s.footprint), 0);
+  const root = [...AUTHORED_CAVE_SOURCES.map(s => caveDef(s.id, worldFloor)), ...CANOPY_BASIN_GROUPS.map(g => groupDef(g, worldFloor))];
+  const rootRock = root.reduce((n, d) => n + d.rock.length, 0), rootCollar = [...AUTHORED_CAVE_SOURCES, ...CANOPY_BASIN_GROUPS.map(g => g.source)].reduce((n, s) => n + collarColumns(s.footprint), 0);
   for (const r of rows) t.diagnostic(r);
   t.diagnostic(`deep caves: ${DEEP_CAVES.length}, ${rock} rock boxes + ~${Math.round(collar)} collar columns, ${(voxels / 1e6).toFixed(1)} M voxels, build ${(ms / 1000).toFixed(1)} s`);
   t.diagnostic(`root caves: ${root.length}, ${rootRock} rock boxes + ~${Math.round(rootCollar)} collar columns`);
@@ -55,7 +56,7 @@ test("cost: build, rock boxes, collar columns and per-step diver queries with ro
   const rootWorld = createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: root.map(caveOwner) });
   const base = stepCost(rootWorld, root.flatMap(d => d.routes.filter(r => r.profile === "diver")));
   t.diagnostic(`diver step (move + support) inside the deep caves, composed world: ${deep.us.toFixed(1)} µs over ${deep.steps} steps`);
-  t.diagnostic(`same step inside root's authored caves (Fanvault, Reef, Isles), root world: ${base.us.toFixed(1)} µs over ${base.steps} steps`);
+  t.diagnostic(`same step inside root's authored caves (Fanvault, hub, Reef, Isles) and CA-2's, root world: ${base.us.toFixed(1)} µs over ${base.steps} steps`);
   assert.ok(deep.us < 400, `${deep.us.toFixed(1)} µs per diver step`);
   assert.ok(ms < 60000, `${(ms / 1000).toFixed(1)} s to build`);
 });
