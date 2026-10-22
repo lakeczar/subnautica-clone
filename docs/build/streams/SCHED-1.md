@@ -2,7 +2,8 @@
 
 Builder: Opus 5.5, branch `t3/sched-1-heavy-queue`. **R1 and R2 fixes applied:**
 - R1: review `506f3a4`, `docs/build/reviews/SCHED-1-SOL-XHIGH-R1.md` on `review/sched-1-r1`; see [R1 responses](#r1-review-responses).
-- R2: review `5ae3b3a`, `docs/build/reviews/SCHED-1-SOL-XHIGH-R2.md` on `review/sched-1-r2`; see [R2 responses](#r2-review-responses). Design: `DECISION-OPUS.md` on `research/perf-decision` (`fd4cdcd`), approved by the owner on 2026-10-22. It is built in its five phases. Phases 3 (slice install) and 5 (canary and cut-over) are the coordinator's steps below. The branch is merged up to `feat/siltwake-first-expedition` `f0eb2b1`.
+- R2: review `5ae3b3a`, `docs/build/reviews/SCHED-1-SOL-XHIGH-R2.md` on `review/sched-1-r2`; see [R2 responses](#r2-review-responses).
+- R3: review `89352de`, `docs/build/reviews/SCHED-1-SOL-XHIGH-R3.md` on `review/sched-1-r3`; see [R3 responses](#r3-review-responses). Design: `DECISION-OPUS.md` on `research/perf-decision` (`fd4cdcd`), approved by the owner on 2026-10-22. It is built in its five phases. Phases 3 (slice install) and 5 (canary and cut-over) are the coordinator's steps below. The branch is merged up to `feat/siltwake-first-expedition` `f0eb2b1`.
 
 ## What's built
 
@@ -18,10 +19,14 @@ Builder: Opus 5.5, branch `t3/sched-1-heavy-queue`. **R1 and R2 fixes applied:**
 - `holder.mjs` (R2): owns an admitted job's whole lifetime, in its own scope `<prefix>-hold-<ticket>`. It:
   - claims the ticket under the state lock, and never launches a ticket that recovery already finished;
   - holds the bridge, inherited from the supervisor's admission, so there is no gap;
-  - launches the job scope (capped, delegated, in `siltwake-heavy.slice`, `BindsTo=` the holder) and passes it no lock;
-  - stops the scope once the foreground ends, or at the whole-job deadline;
+  - launches the job scope (capped, delegated, in `siltwake-heavy.slice`, `BindsTo=` the holder) and hands the bridge to the scope's anchor (R3);
+  - stops the scope once the foreground ends, or at the whole-job deadline, retrying failed stops with backoff until the cgroup is empty (R3);
   - waits until the job's cgroup reports `populated 0`, failing closed on query errors;
   - then removes the worktree marker, writes the result and ledger, frees the reservation, and exits, which releases the bridge.
+- `anchor.sh` (R3): a tiny process inside the job scope that holds the bridge (shared) for as long as the scope lives.
+  - **Startup:** `scope-run.sh` starts it before the command and closes the bridge fd for the command.
+  - **Stops:** it ignores TERM, so it dies only in the scope's final SIGKILL, with everything else.
+  - **Normal path:** the holder, or recovery, sends it USR1 once it (and its sleep) are all that is left in the cgroup.
 - `scope-run.sh`: runs inside the job's scope. It checks the scope's limits, applies the deadline, and records `memory.peak`, OOM kills and CPU time before the scope disappears.
 - `heavy-check.mjs`: the CLI (`run`, `submit`, `wait`, `status`, `log`, `cancel`) and the nested-call check.
 - `install.sh`: installs a versioned, immutable copy and the `current` symlink, creates state (`mode=serial` when new), optionally installs the slice unit, and uninstalls.
@@ -52,7 +57,7 @@ Builder: Opus 5.5, branch `t3/sched-1-heavy-queue`. **R1 and R2 fixes applied:**
 4. **Known commands get their class without `--class`:** the playthrough, the heavy tier and the terrain bake, plus the large-cave lab bake as `exclusive`. Otherwise v1-style calls would be clamped to `standard`'s 20 minutes.
 5. **A job's lifetime is its cgroup, owned by a per-ticket holder.** (Revised in R1 and again in R2; see the R2 responses.)
    - **Holder lives:** it keeps the v1 bridge and the reservation until the job's cgroup is conclusively empty, whatever descriptors the job's processes keep or close.
-   - **Holder killed:** `BindsTo` stops the job. Recovery (any transaction, `wait`, `status`, `cancel`) keeps the reservation until that cgroup is empty, then finishes the ticket.
+   - **Holder killed:** `BindsTo` stops the job. The scope's anchor keeps v1 out until the scope's last process is gone (R3). Recovery (any transaction, `wait`, `status`, `cancel`) keeps the reservation until that cgroup is empty, then finishes the ticket.
 6. **Supervisors run in their own scope,** so stopping an agent's cgroup does not orphan its job.
 7. **TT-1 r1 compatibility.** Job scopes are `Delegate=yes` with `SILTWAKE_HEAVY_CGROUP=delegated`, so TT-1's per-file cgroups nest inside the job's cap. Only an OOM at the scope's own limit (`memory.events.local`) is labelled a reservation OOM. A per-file budget kill keeps the job's own exit code, plus a note.
 8. **Slice limits follow the machine.** Once `--slice` is installed, supervisors correct the slice's `CPUQuota` (`(T+1)×100%`) and `MemoryMax` (`M` + 2 GiB) at runtime, so a vCPU change needs no reinstall.
@@ -65,7 +70,7 @@ Builder: Opus 5.5, branch `t3/sched-1-heavy-queue`. **R1 and R2 fixes applied:**
 ## Acceptance results
 
 **Commands:**
-- `node --test --test-concurrency=1 scripts/heavy/acceptance.test.mjs` uses private state, slice, units and lock, with sleep and allocation payloads. After R2 it passes 20 of 20: the decision's tests except 4, plus 6b, 9b, 9c, 9d, 12b and 14b.
+- `node --test --test-concurrency=1 scripts/heavy/acceptance.test.mjs` uses private state, slice, units and lock, with sleep and allocation payloads. After R3 it passes 22 of 22: the decision's tests except 4, plus 6b, 9b, 9c, 9d, 9e, 9f, 12b and 14b. The R3 tests 9e and 9f fail on the R2 code (`c562bed`).
 - `tests/heavy-sched-policy.test.ts` passed 18 of 18, and `tests/bake-terrain-store.test.ts` 4 of 4.
 - `npm test` passed 1,287 tests in 126 files.
 - **The reviewer's probes, rerun on the R1 code** (copied to private paths):
@@ -88,6 +93,8 @@ Builder: Opus 5.5, branch `t3/sched-1-heavy-queue`. **R1 and R2 fixes applied:**
 | 9b | Stopping scope (R1, F2) | pass: TERM-resistant payload, scope `deactivating`, holder killed: an exclusive job stays `blocked-by lane` and the old job stays reserved until the cgroup is empty; the exclusive payload then sees the old PID gone |
 | 9c | Background children (R2-F1, R2-F2) | pass, two cases: a shell `sleep 120 &` that inherits every descriptor, and a TERM-ignoring Python child started by Node `spawn` with `stdio: 'ignore'` (fds 0–2 only). In each the foreground exits 0 with the supervisor gone and a real v1 waiter queued. v1's own command never sees the old child alive. In the TERM-ignoring case v1 waits out the 10 s stop grace. `wait` returns 0 with `leftovers: true`, and the scope is empty |
 | 9d | Whole-job deadline (R2-F2) | pass: the payload SIGSTOPs its own `timeout`, so the foreground can't end; the holder's backstop stops the scope at deadline + 15 s; a lone `wait` returns 124 "deadline 2s exceeded" |
+| 9e | Holder SIGKILL with a real v1 waiter (R3-F1) | pass, four cases: TERM-ignoring Node-spawned child (fds 0–2), inheriting shell child, holder killed during the leftover stop (`deactivating`), and a TERM-ignoring foreground in serial mode. v1's own command never sees the old payload alive, the child is dead when v1 enters, a lone `wait` finishes, and the reservation is reclaimed |
+| 9f | Deadline stop retry (R3-F2) | pass: the foreground SIGSTOPs its `timeout`; the backstop's first `systemctl stop` fails (PATH wrapper, once); the holder retries; `wait` returns 124 "deadline 1s exceeded" and the scope is empty |
 | 10 | Cancel and expiry (R1: launch window added) | pass: queued removal; running cancel returns only when the scope is empty (75); queue limit gives 75; a cancel while scope creation is held gives exit 75 "cancelled before start" and the command never runs |
 | 11 | `wait` | pass: `--max` gives 99 with a position line; then the job's code; 124 and 0 |
 | 12 | Legacy bridge | pass: with the real v1 script (`1ccce66`), a v1 holder blocks v2; a v1 waiter pauses v2 until it has run; the inode is unchanged |
@@ -207,6 +214,27 @@ The coordinator directed one scheduler-owned, cgroup-based lifetime mechanism in
 
 **Test hazard to flag for the R2 probes:** the supervisor now exits right after the handoff. Probes that `process.kill(t.supervisor.pid, …)` after admission would signal a dead PID, which the system may have reused. The acceptance helpers kill only processes verified by PID plus start time (`killOwned`). The equivalent crash point is now the holder (`t.holder`).
 
+## R3 review responses
+
+**R3-F1 (P1), holder SIGKILL released the bridge: fixed as directed, with an in-scope anchor (`anchor.sh`).**
+- **The fd path:** the holder passes its bridge fd to the job's launcher, and `scope-run.sh` hands it to the anchor (as fd 9) before the launch gate and the command. From the moment the launcher is spawned, the fd is carried by the launcher, then `scope-run.sh`, then the anchor, so there's no gap. The command runs with fd 3 closed, so it never holds the bridge.
+- **The anchor's life:** it ignores TERM, so a stop of the scope, including `BindsTo` after the holder dies, can't end it before the final SIGKILL. That kill takes it together with every other process in the scope. Kernel exclusion against v1 therefore lasts exactly as long as the job's cgroup.
+- **No 10 s wait on the normal path:** the holder, or recovery when the holder is dead, sends USR1 once the cgroup holds only the anchor and its sleep. The anchor PID is verified as a member of that cgroup first. Normal jobs still finish in about 0.7 s.
+- **Serial mode** uses the same path.
+- **Regression 9e:** the reviewer's four holder-kill cases with a real v1 waiter. All four failed on `c562bed` and pass now.
+- **Belt and braces:** the holder also still holds its own bridge reference.
+
+**R3-F2 (P2), the deadline backstop was one-shot: fixed.**
+- **Retrying stop:** `stopJob` now runs a stop loop. It checks every `systemctl stop` result, retries failures with backoff (0.5 s, doubling to 10 s), notes the first failure in the job log, and keeps going until the cgroup is conclusively empty, whether or not the foreground has ended.
+- **Pending launch:** if the scope isn't registered yet while the launch is still pending, it kills its own launcher.
+- **Regression 9f:** the reviewer's probe, with the first stop failing once. It hung on `c562bed` and returns 124 now.
+
+**Residual P3s (recorded, not built):**
+- **A job can kill its own anchor.** A command that deliberately SIGKILLs processes in its own scope, such as a `pkill` aimed at everything, could kill the anchor early. That reopens only the v1 window and only while the holder is also dead. v2 accounting is unaffected.
+- **The anchor counts against the job's memory reservation:** one `sh` plus one `sleep`, about 1 MB. TT-1's runner moves it into its leaf cgroup along with the job's own processes, which is harmless.
+- **Stopping a job scope by hand** (`systemctl --user stop`) while its holder is dead takes the full 10 s grace, unless recovery runs meanwhile and releases the anchor once it is alone.
+- **The dead-holder test hazard from R2 still applies to probes:** kill `t.holder` only after verifying its PID and start time.
+
 ## Known limits and follow-ups
 
 - **Process cost:** every queued ticket has a Node supervisor of about 45 MB, and every `run` or `wait` caller a follower.
@@ -226,7 +254,7 @@ The coordinator directed one scheduler-owned, cgroup-based lifetime mechanism in
 - **The legacy nested-call check trusts the `siltwake-heavy-*` scope name.**
 - **Without `--slice` there is no aggregate CPU quota.** Per-job caps and the pool still bound memory.
 - **The terrain store keeps 20 entries,** about 400 MB, in `/work/tmp/siltwake-terrain-store`.
-- **Residual bridge gap (narrowed in R2).** Only a SIGKILL of the *holder* itself releases the bridge before the job's cgroup is empty. `BindsTo` then stops the job, but a TERM-ignoring process can linger for the 10 s stop grace while v1 enters. The v2 reservation is still held until the cgroup is empty. Supervisor death, and any descriptor behaviour of the job, no longer opens a gap.
+- **Bridge gap: closed in R3** by the in-scope anchor. Only the P3 above remains: a job killing its own anchor while its holder is also dead.
 - **Next stream (decision §3):** the `stepGame` per-tick clone.
 
 **Incident (mine).** While testing the terrain store, a bad test command (`/usr/bin/time` is absent) ran **one cold terrain bake outside the heavy lock**: 35 s, 4 workers. A second bake started for up to 12 s before `timeout` stopped it. Both ended; nothing else was affected. I redid the test with a guard that refuses to bake.
