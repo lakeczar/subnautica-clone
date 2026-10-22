@@ -350,3 +350,15 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 ### 2026-10-22 21:20Z — perf decision started
 - Perf B landed at `0d9b9f3` (19:53Z). The coordinator missed the completion wake; a Sol stall investigation is running (report outside the repo, `/work/tmp/coordinator-stall-2026-10-22/REPORT.md`).
 - An Opus decision agent (`siltwake-perf-decision-opus-34a961f`) is arguing out A, B and C toward a heavy-check v2 design, written to `research/perf-decision:docs/build/perf/DECISION-OPUS.md`. Nothing is implemented until the owner picks.
+
+### 2026-10-22 ~21:45Z — stall found, HUB-2 merged, perf decided, SCHED-1 started
+- **Stall cause:** a coordinator Stop (19:45) disposed the completion wakes of all running children. "Continue" doesn't re-arm them (report: `/work/tmp/coordinator-stall-2026-10-22/REPORT.md`). Disposed and still running: CW-1, CR-1, TT-1. Reconcile them with `task_status` on every wake.
+- **HUB-2:** Sol R1 accepts (`review/hub-2-r1` `afea2b5`); merged `--no-ff`.
+  - Follow-up P3 **HUB-2-01**: the stage-order test passes with the prerequisite removed.
+  - The mast GPU spot-check didn't run (lock timeouts); it moves to the CW-1 integration check.
+- **DISH-1** (POI-1 follow-ups) is done at `b3ea752` on `t3/dish-rim-collision`; Sol R1 is running. For the owner to look at: the feed tripods now lie fallen, and some rim segments are broken away.
+- **Perf decision:** Opus `fd4cdcd` (`research/perf-decision`). Owner choices:
+  - build the queue now;
+  - the rule becomes "admitted through the queue", with performance numbers from exclusive mode only;
+  - VM: ask for 8 vCPU and keep 16 GiB.
+- **SCHED-1** (Opus, `t3/sched-1-heavy-queue`) is building it. Next after it: the `stepGame` state-copy speed-up.
