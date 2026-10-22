@@ -64,7 +64,12 @@ export function createLargeCave(source: LargeCaveSource, floor: FloorFunction, b
     mesh(c, lod) {
       const k = `${chunkKey(c)}@${lod}`;
       let m = cache.get(k);
-      if (!m) { m = buildChunkMesh(field, lattice, c, lod, { band: lod === "fine" ? COLLISION_BAND : 0 }); cache.set(k, m); }
+      if (!m) {
+        // Pure in the layout's source and floor, so a cached layout's meshes may come from the build cache too.
+        m = cachedBuild(key && { key: `large-mesh:${k}:${key.key}`, modules: key.modules },
+          () => buildChunkMesh(field, lattice, c, lod, { band: lod === "fine" ? COLLISION_BAND : 0 }));
+        cache.set(k, m);
+      }
       return m;
     },
     dropMeshes() { cache.clear(); },

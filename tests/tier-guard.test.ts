@@ -83,3 +83,15 @@ test("fast files that spawn workers, processes or evaluated code are refused unl
   const allowed = fast(probe("escape-allowed", `// test-tier: allow-escape probe of the documented escape comment\nimport { spawnSync } from "node:child_process";\nvoid spawnSync;`));
   assert.equal(allowed.status, 0, allowed.stdout + allowed.stderr);
 });
+
+test("a fast file over its CPU budget fails the tier; over the target it only warns", () => {
+  const file = probe("slow", "const end = Date.now() + 400;\nwhile (Date.now() < end);");
+  const tier = (warn: string, budget: string) => spawnSync(process.execPath, ["scripts/test-tier.mjs", "fast", file],
+    { cwd: root, encoding: "utf8", env: { ...env, SILTWAKE_FAST_FILE_WARN_S: warn, SILTWAKE_FAST_FILE_BUDGET_S: budget } });
+  const failed = tier("0", "0.1");
+  assert.equal(failed.status, 1, failed.stdout + failed.stderr);
+  assert.match(failed.stderr, /slow\.test\.js used [\d.]+ s CPU, over the 0\.1 s fast-file budget/);
+  const warned = tier("0.1", "0");
+  assert.equal(warned.status, 0, warned.stdout + warned.stderr);
+  assert.match(warned.stderr, /warning: slow\.test\.js used [\d.]+ s CPU, over the 0\.1 s fast-file target/);
+});

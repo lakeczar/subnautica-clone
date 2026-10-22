@@ -39,13 +39,19 @@ export const world = gameWorld();
 export const caveFloor = withCaveFloors(worldFloor);
 export const wrapperWorld = createWorldQueries(def.rock.map(shiftSolid), (x, z) => caveFloor(x - SHIFT.x, z - SHIFT.z));
 
-// The rock on a 2 m X/Z bucket grid, for the many point queries below.
-const BUCKET = 2, buckets = new Map<number, Solid[]>();
+// The rock on a 2 m X/Z bucket grid, and in 2 m cells for the many point
+// queries below (a solid containing a point, or within `reach` of it,
+// overlaps a cell within `reach`; TT-1).
+const BUCKET = 2, buckets = new Map<number, Solid[]>(), cells = new Map<number, Solid[]>();
 const bucketKey = (i: number, k: number): number => (i + 10000) * 20000 + (k + 10000);
+const cellKey = (i: number, j: number, k: number): number => bucketKey(i, k) * 4000 + (j + 2000);
 for (const s of def.rock)
   for (let i = Math.floor(s.min.x / BUCKET); i <= Math.floor(s.max.x / BUCKET); i++)
-    for (let k = Math.floor(s.min.z / BUCKET); k <= Math.floor(s.max.z / BUCKET); k++)
+    for (let k = Math.floor(s.min.z / BUCKET); k <= Math.floor(s.max.z / BUCKET); k++) {
       (buckets.get(bucketKey(i, k)) ?? buckets.set(bucketKey(i, k), []).get(bucketKey(i, k))!).push(s);
+      for (let j = Math.floor(s.min.y / BUCKET); j <= Math.floor(s.max.y / BUCKET); j++)
+        (cells.get(cellKey(i, j, k)) ?? cells.set(cellKey(i, j, k), []).get(cellKey(i, j, k))!).push(s);
+    }
 export function nearRock(p: Readonly<Vec3>, reach: number, visit: (s: Solid) => boolean | void): void {
   const seen = new Set<Solid>();
   for (let i = Math.floor((p.x - reach) / BUCKET); i <= Math.floor((p.x + reach) / BUCKET); i++)
@@ -56,10 +62,21 @@ export function nearRock(p: Readonly<Vec3>, reach: number, visit: (s: Solid) => 
 export const inside = (p: Readonly<Vec3>, s: Solid, margin = 1e-9): boolean =>
   p.x > s.min.x + margin && p.x < s.max.x - margin && p.y > s.min.y + margin && p.y < s.max.y - margin &&
   p.z > s.min.z + margin && p.z < s.max.z - margin;
-export const inRock = (p: Readonly<Vec3>): boolean => { let hit = false; nearRock(p, 0, s => (hit = inside(p, s))); return hit; };
+export const inRock = (p: Readonly<Vec3>): boolean =>
+  (cells.get(cellKey(Math.floor(p.x / BUCKET), Math.floor(p.y / BUCKET), Math.floor(p.z / BUCKET))) ?? []).some(s => inside(p, s));
+/** Distance to the nearest rock: exact within `reach`, otherwise some value above it (Infinity if none is near). */
 export const rockDistance = (p: Readonly<Vec3>, reach = 1): number => {
   let best = Infinity;
-  nearRock(p, reach, s => { best = Math.min(best, boxDistance(s, p)); return best === 0; });
+  const seen = new Set<Solid>();
+  for (let i = Math.floor((p.x - reach) / BUCKET); i <= Math.floor((p.x + reach) / BUCKET); i++)
+    for (let k = Math.floor((p.z - reach) / BUCKET); k <= Math.floor((p.z + reach) / BUCKET); k++)
+      for (let j = Math.floor((p.y - reach) / BUCKET); j <= Math.floor((p.y + reach) / BUCKET); j++)
+        for (const s of cells.get(cellKey(i, j, k)) ?? []) {
+          if (seen.has(s)) continue;
+          seen.add(s);
+          best = Math.min(best, boxDistance(s, p));
+          if (best === 0) return 0;
+        }
   return best;
 };
 export const vertex = (m: MeshRecipe, v: number): Vec3 => ({ x: m.positions[v * 3]!, y: m.positions[v * 3 + 1]!, z: m.positions[v * 3 + 2]! });

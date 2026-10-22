@@ -13,7 +13,7 @@
 // misses is reported to scripts/test-file-timing.mjs, so a cold cache does not
 // count against a fast file's budget. SILTWAKE_BUILD_CACHE=off disables the store.
 import { createHash } from "node:crypto";
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { deserialize, serialize } from "node:v8";
@@ -52,15 +52,20 @@ export function pruneBuildCache({ maxAgeHours = 24, keep = 24 } = {}) {
   });
 }
 
-if (process.env.SILTWAKE_BUILD_CACHE !== "off") {
+/** A store over `root`: entries filed under the closure hash of their modules. */
+export function createStore(root) {
   const dirs = new Map();
   const fileOf = (key, modules) => {
     const scope = [...modules].sort().join("\n");
-    if (!dirs.has(scope)) dirs.set(scope, join(cacheRoot, closureHash(modules)));
-    return join(dirs.get(scope), `${createHash("sha256").update(key).digest("hex").slice(0, 32)}.bin`);
+    let dir = dirs.get(scope);
+    if (!dir) {
+      dirs.set(scope, dir = join(root, closureHash(modules)));
+      // Mark the directory used, so pruning by age drops only unused ones.
+      try { const now = new Date(); utimesSync(dir, now, now); } catch { /* not created yet */ }
+    }
+    return join(dir, `${createHash("sha256").update(key).digest("hex").slice(0, 32)}.bin`);
   };
-  globalThis.__siltwakeBuildCacheMissMs = 0;
-  globalThis.__siltwakeBuildCache = {
+  return {
     get(key, modules) {
       try {
         const entry = deserialize(readFileSync(fileOf(key, modules)));
@@ -68,7 +73,7 @@ if (process.env.SILTWAKE_BUILD_CACHE !== "off") {
       } catch { return undefined; }
     },
     set(key, modules, value, buildMs) {
-      globalThis.__siltwakeBuildCacheMissMs += buildMs;
+      globalThis.__siltwakeBuildCacheMissMs = (globalThis.__siltwakeBuildCacheMissMs ?? 0) + buildMs;
       const file = fileOf(key, modules), temp = `${file}.${process.pid}.tmp`;
       try {
         mkdirSync(dirname(file), { recursive: true });
@@ -78,3 +83,5 @@ if (process.env.SILTWAKE_BUILD_CACHE !== "off") {
     },
   };
 }
+
+if (process.env.SILTWAKE_BUILD_CACHE !== "off") globalThis.__siltwakeBuildCache = createStore(cacheRoot);

@@ -55,15 +55,19 @@ export function dataKey(value: unknown): string | undefined {
 }
 
 /** A cache key for data built on `floor` from `data`, with the modules it
- * depends on, or undefined when the floor is unnamed or the data uncacheable. */
+ * depends on, or undefined when the floor is unnamed, the data uncacheable or
+ * no store is installed (the game serialises nothing). */
 export function floorKey(kind: string, floor: object, data: unknown, module: string): CacheKey | undefined {
+  if (!installed()) return undefined;
   const id = names.get(floor), text = id && dataKey(data);
   return id && text !== undefined ? { key: `${kind}:${id.name}:${text}`, modules: [module, ...id.modules] } : undefined;
 }
 
+const installed = (): BuildCacheStore | undefined => (globalThis as { [STORE]?: BuildCacheStore })[STORE];
+
 /** `build()`, served from the installed store when there is one and `key` is set. */
 export function cachedBuild<T>(key: CacheKey | undefined, build: () => T): T {
-  const store = (globalThis as { [STORE]?: BuildCacheStore })[STORE];
+  const store = installed();
   if (!store || key === undefined || bypass) return build();
   const hit = store.get(key.key, key.modules);
   if (hit !== undefined) return hit as T;
