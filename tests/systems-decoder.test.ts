@@ -26,10 +26,9 @@ const run = (s: GameState, sys: SystemsState, seconds: number, ctx = {}) => {
   return out;
 };
 
-test("demo decodables are story-neutral placeholders taking 3–15 minutes", () => {
-  assert.ok(DECODABLE_IDS.length >= 3);
+test("demo decodables are story-neutral placeholders; every decodable (CB's lost sites too) takes 3–15 minutes", () => {
+  assert.ok(DECODABLE_IDS.filter((id) => id.startsWith("demo_")).length >= 3);
   for (const id of DECODABLE_IDS) {
-    assert.match(id, /^demo_/);
     const d = DECODABLES[id];
     assert.ok(Object.hasOwn(LOST_SITES, d.site), `${id} site`);
     const minutes = DECODE_MINUTES[d.size];

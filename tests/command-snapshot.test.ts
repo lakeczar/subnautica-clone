@@ -75,7 +75,8 @@ test("field repair during a paused local tow closes its operation in the same sa
   s = stepGame(s, [], world).state;
   assert.deepEqual(s.fleet.vehicles[1]!.pose.position, pose);
   assert.equal(s.fleet.vehicles[1]!.cargoId, before.cargoId);
-  assert.equal(s.fleet.vehicles[1]!.charge, before.charge);
+  // C4: the swimming diver breathes from the parked Dart's air line, a tiny draw.
+  assert.ok(Math.abs(s.fleet.vehicles[1]!.charge - before.charge) < 0.001);
   snapshot(s);
 });
 

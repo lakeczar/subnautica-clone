@@ -65,21 +65,27 @@ export function registrySources(protection: Protections = {}): SourceView[] {
   return [...placed, ...fallback];
 }
 
-const ordinary = (s: SourceView): boolean => !s.cave && s.protection === null;
-/** Shallowest ordinary (non-cave, unprotected) source of a material. */
+const ordinary = (s: SourceView): boolean => !s.cave && s.protection === null && s.units !== 0;
+/** CB: a rare early sample is a taste, never a frontier: one unit to scan. */
+const TASTE_UNITS = 1;
+/** Shallowest ordinary (non-cave, unprotected, not scan-only) source of a material;
+ * tastes are skipped. */
 export function firstDepth(sources: readonly SourceView[], kind: CostKind): number {
-  return Math.min(Infinity, ...sources.filter((s) => s.item === kind && ordinary(s)).map((s) => s.depth));
+  return Math.min(Infinity, ...sources.filter((s) => s.item === kind && ordinary(s) && (s.units === null || s.units > TASTE_UNITS))
+    .map((s) => s.depth));
 }
-/** Materials a tier-1 player can already work: the common base. Everything else is rare. */
+/** Materials a tier-1 player works short of its limit: the common base. Everything else is rare. */
 export function commonBase(sources: readonly SourceView[]): CostKind[] {
-  return [...COST_KINDS].filter((k): k is CostKind => isCostKind(k) && firstDepth(sources, k) <= reachLimit(1));
+  return [...COST_KINDS].filter((k): k is CostKind => isCostKind(k) && firstDepth(sources, k) < reachLimit(1));
 }
-/** Materials that a tier's reach opens: first found beyond the previous tier's limit. */
+/** Materials that open a tier: first found at or beyond the previous tier's limit
+ * (CB's tier rule, which puts each frontier exactly at that limit: frames at
+ * 150 m, core at 350 m) and short of this tier's own. */
 export function frontierMaterials(sources: readonly SourceView[], tier: ReachTier): CostKind[] {
   return [...COST_KINDS].filter((k): k is CostKind => {
     if (!isCostKind(k)) return false;
     const d = firstDepth(sources, k);
-    return d > reachLimit((tier - 1) as 0 | ReachTier) && d <= reachLimit(tier);
+    return d >= reachLimit((tier - 1) as 0 | ReachTier) && d < reachLimit(tier);
   });
 }
 
@@ -108,9 +114,12 @@ export function upgradeRow(sources: readonly SourceView[], id: EconomyId): Upgra
     if (reach.some((s) => !s.placed)) regionLevel.push(kind);
     else shortfalls.push({ kind, need, have: units });
   }
-  const frontierKinds = frontierMaterials(sources, d.tier);
-  const used = cost.map(([k]) => k).filter((k) => frontierKinds.includes(k));
-  const refit = "refit" in d;
+  // A depth refit needs a material first found at or beyond the previous tier's
+  // limit and within its own new rating (CB's tier rule: frames at 150 m for the
+  // 350 m refits, core at 350 m for 450 m; the carrier's 550 m refit takes
+  // lattice from 450 m, beyond its 400 m).
+  const refit = "refit" in d ? (d as { refit: { rating: number } }).refit : null, floor = reachLimit((d.tier - 1) as 0 | ReachTier);
+  const used = cost.map(([k]) => k).filter((k) => { const at = firstDepth(sources, k); return !!refit && at >= floor && at <= refit.rating; });
   return { id, tier: d.tier, limit, owner: "registry" in d ? "registry" : "SYS-1", shortfalls, regionLevel, caveOnly,
     frontier: refit ? { ok: used.length > 0, materials: used } : null };
 }
@@ -217,7 +226,7 @@ export function checkUpgradeEconomy(sources: readonly SourceView[] = registrySou
     for (const s of r.shortfalls) failures.push(`${r.id}: needs ${s.need} ${s.kind} but only ${s.have} is reachable within ${r.limit} m`);
     for (const k of r.caveOnly) failures.push(`${r.id}: ${k} is found only in caves`);
     if (r.frontier && !r.frontier.ok)
-      (r.owner === "SYS-1" ? failures : advisories).push(`${r.id}: no material first found beyond ${reachLimit((r.tier - 1) as 0 | ReachTier)} m`);
+      (r.owner === "SYS-1" ? failures : advisories).push(`${r.id}: no material first found at or beyond ${reachLimit((r.tier - 1) as 0 | ReachTier)} m`);
   }
   for (const l of lines.filter((l) => !l.ok))
     (l.owner === "SYS-1" ? failures : advisories).push(`${l.from} → ${l.to}: common base ${l.commonBefore} → ${l.commonAfter}, new rare [${l.newRare.join(", ")}]`);

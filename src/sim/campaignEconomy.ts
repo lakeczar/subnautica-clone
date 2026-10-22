@@ -45,7 +45,9 @@ const extra = (recipe: RecipeId): Act => ({ kind: "craft", recipe, optional: tru
 export const REQUIRED: Record<EconomyStrategy, readonly Act[]> = {
   independent: [...PREFIX.map(craft), ...["creel_450", "restore_rift_station", "restore_divide_stop", "creel_800", "suit_800"]
     .map((r) => craft(r as RecipeId)), ...STORY_TAIL],
-  carrier: [...PREFIX.map(craft), ...["hearthline_keel", "hearthline_base", "hearthline_550", "mantle_base", "suit_800"]
+  // C4: core now opens the carrier (CB), and lattice lies at 450 m, past the
+  // carrier's 400 m: the Dart's 450 m refit is the scout that fetches it.
+  carrier: [...PREFIX.map(craft), ...["hearthline_keel", "hearthline_base", "dart_450", "hearthline_550", "mantle_base", "suit_800"]
     .map((r) => craft(r as RecipeId)), ...STORY_TAIL],
 };
 /** One credible optional spend per strategy, placed where a player would buy it. */

@@ -65,7 +65,7 @@ export function beaconViews(s: GameState, sys: SystemsState): BeaconView[] {
     ...sys.outposts.map((o) => ({ id: `outpost:${o.id}`, name: o.name, category: "outpost" as const, position: o.position })),
     ...(Object.keys(FIXED_HOSTS) as FixedHostId[]).filter((id) => {
       const d = FIXED_HOSTS[id];
-      return d.facility === null || facility(s, d.facility) || s.knowledge.markers.includes(id);
+      return d.facility === null || facility(s, d.facility) || (s.knowledge.markers as string[]).includes(id);
     }).map((id) => ({ id: `stop:${id}`, name: FIXED_HOSTS[id].label, category: "stop" as const, position: FIXED_HOSTS[id].position })),
   ];
   return [...derived.map((d) => ({ ...d, removable: false })), ...sys.beacons.map((b) => ({ id: b.id, name: b.name, category: b.category, position: b.position, removable: b.source === "player" }))]

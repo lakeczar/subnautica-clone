@@ -279,7 +279,8 @@ test("a disabled Creel tows home from the Basin with mount and cargo, or salvage
   assert.equal(inside.find((i) => i.id === rack)?.fitted, null, "the rack survives intact");
   for (const [k, q] of Object.entries(RECIPES.creel_base.cost))
     assert.ok(inside.filter((i) => i.kind === k).reduce((n, i) => n + i.quantity, 0) >= q, `${k} returned`);
-  assert.equal(inside.filter((i) => i.kind === "tagged_frame").reduce((n, i) => n + i.quantity, 0), 3);
+  // The three carried frames plus the hull's own (C4: CB's creel_base frame).
+  assert.equal(inside.filter((i) => i.kind === "tagged_frame").reduce((n, i) => n + i.quantity, 0), 4);
   saveable(salvage);
 });
 
@@ -289,7 +290,7 @@ test("paid 350 m refits are part of the frame: strict investment, refit receipt 
   for (const [k, q] of Object.entries(RECIPES.creel_350.cost)) addItem(s, k as keyof typeof ITEMS, q, "workshop_locker");
   assert.equal(craft(s, "creel_350", world), null);
   const v = creelOf(s); assert.equal(v.rating, 350);
-  assert.equal(v.investment.tagged_frame, 2);
+  assert.equal(v.investment.tagged_frame, RECIPES.creel_base.cost.tagged_frame + RECIPES.creel_350.cost.tagged_frame);
   assert.equal(craftingBlock(s, "creel_350", world)?.code, "refit");
   saveable(s);
   const tampered = structuredClone(s); creelOf(tampered).investment.tagged_frame = 1;

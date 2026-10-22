@@ -158,11 +158,21 @@ export const UPGRADES = {
     benefit: "Brine tolerance +0.8: deliberate dense-layer descents.",
     tradeoff: "Uses a hull bay.",
   },
+  trim_vanes: {
+    label: "Resin trim vanes", layer: "common", line: "trim", tier: 2, fits: SMALL,
+    // S4's protection, composed into the catalogue (C4): same ID and cost.
+    cost: { buoyant_resin: 2, structural_alloy: 1 }, cu: 3, plan: "bp_canopy_reinforcement", registry: "trim_vanes",
+    effect: { current: 0.25 },
+    benefit: "Current authority +0.25: small hulls hold their line in the saddle downwelling.",
+    tradeoff: "Uses a socket and 3 CU of hold.",
+  },
   // ------------------------------------------------------------ power
   cell_bank_1: {
     label: "Extended cell bank", layer: "common", line: "cells", tier: 1, fits: SOCKET_OR_CARRIER_BAY,
     // Alloy cradle, a glass separator, crust plates.
-    cost: { structural_alloy: 3, silica_glass: 1, conductive_crust: 2 }, cu: 3, plan: "bp_pod_checklist",
+    // C4: the workshop records' plan, not the pod checklist's: the bank needs a
+    // craft, and the pod ladder stays the opening's own.
+    cost: { structural_alloy: 3, silica_glass: 1, conductive_crust: 2 }, cu: 3, plan: "bp_island_workshop",
     effect: { capacity: 1.5 },
     benefit: "Battery capacity ×1.5.",
     tradeoff: "A socket and 3 CU of hold on small craft.",
@@ -259,6 +269,14 @@ export const UPGRADES = {
     refit: { from: 350, rating: 450 }, registry: "creel_450", effect: {},
     benefit: "Hull rating 350 → 450 m.", tradeoff: "Permanent; the materials stay in the hull.",
   },
+  dart_450: {
+    label: "Dart hull refit · 450 m", layer: "common", line: "depth", tier: 2, fits: { dart: "refit" },
+    // C4 (M2 audit #3): a fast scout for the Rift and Divide. Ceramic ring inserts; one
+    // core from the 350 m lower ledges is the tier rule's frontier material.
+    cost: { pressure_ceramic: 4, thermal_core: 1, conductive_crust: 4, buoyant_resin: 2, silica_glass: 1 }, cu: 0, plan: "bp_rift_pressure",
+    refit: { from: 350, rating: 450 }, registry: "dart_450", effect: {},
+    benefit: "Hull rating 350 → 450 m: the fastest craft reaches the Rift floor and the Divide crest.", tradeoff: "Permanent; the materials stay in the hull.",
+  },
   creel_800: {
     label: "Creel hull refit · 800 m", layer: "common", line: "depth", tier: 3, fits: { creel: "refit" },
     cost: { pressure_ceramic: 8, brine_lattice: 5, thermal_core: 3, silica_glass: 2 }, cu: 0, plan: "bp_deep_service",
@@ -269,14 +287,15 @@ export const UPGRADES = {
     label: "Hush hull refit · 350 m", layer: "common", line: "depth", tier: 2, fits: { hush: "refit" },
     // A tagged frame member for the spar ring; crust and resin as the Dart's refit; glass for the blister.
     cost: { tagged_frame: 1, conductive_crust: 3, buoyant_resin: 3, silica_glass: 1 }, cu: 0, plan: "bp_hush_survey",
-    refit: { from: 220, rating: 350 }, effect: {},
+    refit: { from: 220, rating: 350 }, registry: "hush_350", effect: {},
     benefit: "Hull rating 220 → 350 m.", tradeoff: "Permanent; the materials stay in the hull.",
   },
   hush_450: {
     label: "Hush hull refit · 450 m", layer: "common", line: "depth", tier: 2, fits: { hush: "refit" },
     // Ceramic pressure ring; more of the tier-1 crust, resin and seals.
-    cost: { pressure_ceramic: 4, conductive_crust: 3, buoyant_resin: 3, flex_membrane: 2 }, cu: 0, plan: "bp_rift_pressure",
-    refit: { from: 350, rating: 450 }, effect: {},
+    // CB tier rule: the 450 m transition needs one core from the 350 m lower ledges.
+    cost: { pressure_ceramic: 4, thermal_core: 1, conductive_crust: 3, buoyant_resin: 3, flex_membrane: 2 }, cu: 0, plan: "bp_rift_pressure",
+    refit: { from: 350, rating: 450 }, registry: "hush_450", effect: {},
     benefit: "Hull rating 350 → 450 m.", tradeoff: "Permanent; the materials stay in the hull.",
   },
 

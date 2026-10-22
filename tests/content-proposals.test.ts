@@ -70,6 +70,13 @@ test("proposal IDs are unique and never reuse an existing site, source or cave I
   for (const id of proposalIds) { assert.ok(!seen.has(id), `duplicate proposal ID ${id}`); seen.add(id); }
   for (const id of proposalIds) {
     assert.ok(/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/.test(id), `${id}: IDs are lower snake_case, dot-separated`);
+    // C4 lifted CB's frontier deposits into the registry under their proposal IDs, at
+    // the same datum or within a few metres (the rim frames sit where the bed lies 0.8 m below).
+    if (LIFTED.has(id)) {
+      const src = SOURCES[id as keyof typeof SOURCES], prop = resources.find(r => r.id === id)!;
+      assert.ok(src && Math.hypot(src.position.x - prop.at.x, src.position.z - prop.at.z) <= 5, `${id}: lifted source moved`);
+      continue;
+    }
     assert.ok(!collides(id), `${id} collides with existing content`);
   }
 });
@@ -348,6 +355,16 @@ test("the cave-graph check itself rejects chains, repeated rooms and exit-to-exi
 // Tier rule (CB-01). Costs: registry RECIPES live, S9/SYS-1 from the checked snapshot.
 type Cost = Partial<Record<CostKind, number>>;
 const rawCost = (id: string): Cost => (Object.hasOwn(RECIPES, id) ? (RECIPES as Record<string, { cost: Cost }>)[id]!.cost : RECIPE_SNAPSHOTS.costs[id])!;
+/** CB's frontier deposits, lifted into the registry by C4. */
+const LIFTED = new Set(["canopy_rim_frames", "rift_core_lower_north", "rift_core_lower_west", "divide_lattice_flank_north", "divide_lattice_flank_south"]);
+/** Registry costs before C4 applied CB's deltas (S9 and SYS-1 ones are RECIPE_SNAPSHOTS). */
+const PRE_C4: Record<string, Cost> = {
+  creel_base: { structural_alloy: 10, silica_glass: 4, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 },
+  suit_350: { structural_alloy: 2, flex_membrane: 2, conductive_crust: 4, buoyant_resin: 4 },
+};
+const baseCost = (id: string): Cost => PRE_C4[id] ?? RECIPE_SNAPSHOTS.costs[id] ?? rawCost(id);
+/** Which recipe carries a transition's delta once composed (the Hearthline's on its keel). */
+const deltaRecipe = (tr: { recipes: readonly string[] }): string => tr.recipes.includes("hearthline_keel") ? "hearthline_keel" : tr.recipes[0]!;
 const COST_KINDS = new Set<string>([...Object.keys(MATERIALS), "tagged_frame"]);
 interface WorldSource { id: string; item: string; depth: number; units: number; cave: boolean; sample: boolean; exterior: boolean }
 function worldSources(): WorldSource[] {
@@ -381,14 +398,18 @@ test("tier rule: every craft and suit transition needs a frontier material at or
   const common = new Set([...COST_KINDS].filter(k => world.some(s => s.item === k && !s.sample && s.exterior && s.depth <= ACCESS_TIERS.early.depth)));
   const ladder = Object.keys(ACCESS_TIERS);
   for (const tr of TRANSITIONS) {
-    const cost: Cost = {};
+    const cost: Cost = {}, live: Cost = {};
     for (const r of tr.recipes) {
-      const c = rawCost(r);
-      assert.ok(c, `${tr.id}: no cost known for ${r}`);
+      const c = baseCost(r), l = rawCost(r);
+      assert.ok(c && l, `${tr.id}: no cost known for ${r}`);
       for (const [k, v] of Object.entries(c)) cost[k as CostKind] = (cost[k as CostKind] ?? 0) + v!;
+      for (const [k, v] of Object.entries(l)) live[k as CostKind] = (live[k as CostKind] ?? 0) + v!;
     }
     for (const [k, v] of Object.entries(tr.delta)) cost[k as CostKind] = (cost[k as CostKind] ?? 0) + v!;
     for (const [k, v] of Object.entries(cost)) assert.ok(v! >= 0, `${tr.id}: delta leaves ${k} at ${v}`);
+    // C4 composed every delta: the live recipes now cost exactly the proposal.
+    for (const k of new Set([...Object.keys(cost), ...Object.keys(live)]) as Set<CostKind>)
+      assert.equal(live[k] ?? 0, cost[k] ?? 0, `${tr.id}: composed ${k} differs from the proposed delta`);
     assert.ok(ladder.includes(tr.previous) && ladder.includes(tr.reach), `${tr.id}: unknown access tier`);
     const limit = ACCESS_TIERS[tr.previous].depth, reach = ACCESS_TIERS[tr.reach].depth;
     assert.ok(reach >= limit, `${tr.id}: reach ${reach} is shallower than the limit ${limit}`);
@@ -413,9 +434,14 @@ test("recipe snapshots match the composed S9 and SYS-1 files when present", asyn
   const s9 = await tryLoad("../src/content/campaign/recipes.js") as { CAMPAIGN_RECIPES: Record<string, { cost: Cost }> } | null;
   const sys1 = await tryLoad("../src/content/upgrades/catalogue.js") as { UPGRADES: Record<string, { cost: Cost }> } | null;
   if (!s9 && !sys1) t.diagnostic("S9 and SYS-1 are not composed on this branch yet; snapshot comparison deferred");
-  for (const [id, cost] of Object.entries(RECIPE_SNAPSHOTS.costs)) {
+  // C4 applied CB's deltas: the composed cost is the snapshot plus its transition's delta.
+  const deltas = new Map<string, Cost>();
+  for (const tr of TRANSITIONS) if (Object.keys(tr.delta).length) deltas.set(deltaRecipe(tr), tr.delta);
+  for (const [id, snapshot] of Object.entries(RECIPE_SNAPSHOTS.costs)) {
     const live = s9?.CAMPAIGN_RECIPES[id]?.cost ?? sys1?.UPGRADES[id]?.cost;
-    if (live) assert.deepEqual(live, cost, `${id}: snapshot differs from the composed recipe`);
+    const cost: Cost = { ...snapshot };
+    for (const [k, v] of Object.entries(deltas.get(id) ?? {})) { cost[k as CostKind] = (cost[k as CostKind] ?? 0) + v!; if (!cost[k as CostKind]) delete cost[k as CostKind]; }
+    if (live) assert.deepEqual(Object.fromEntries(Object.entries(live).sort()), Object.fromEntries(Object.entries(cost).sort()), `${id}: composed recipe differs from snapshot + CB delta`);
   }
 });
 

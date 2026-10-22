@@ -10,7 +10,8 @@ import { HULL_COLLIDERS, PLACES } from "../content/registry.js";
 import { STOP_IDS, WORKING_STOPS } from "../content/stops.js";
 import { ecologyWorldFrom } from "./ecology/adapter.js";
 import { DETERRENT_SECONDS, MAX_DETERRENTS, stepEcology } from "./ecology/ecology.js";
-import { protectionFor } from "./ecology/hazards.js";
+import { actorProtection, vehicleProfile } from "./fittings.js";
+import { hullDamage } from "./upgrades/effects.js";
 import { stimulusFrom } from "./ecology/stimulus.js";
 import type { EcologyWorld, Stimulus } from "./ecology/types.js";
 import { NO_ACTOR } from "./ecology/types.js";
@@ -28,9 +29,11 @@ const isHullProtection = (kind: string): kind is (typeof HULL_PROTECTIONS)[numbe
   (HULL_PROTECTIONS as readonly string[]).includes(kind);
 
 const controlled = (s: GameState) => s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId) ?? null;
+/** C4: hull protections are fitted upgrades (SYS-1), read through the hull's
+ * profile; this lists the hull's fitted ones, or the diver's worn suit fittings. */
 export function fittedProtections(s: GameState): ProtectionId[] {
   const v = controlled(s);
-  return v ? s.inventory.items.filter((i) => i.containerId === v.cargoId && isHullProtection(i.kind)).map((i) => i.kind as ProtectionId)
+  return v ? s.inventory.items.filter((i) => v.modules.includes(i.id) && isHullProtection(i.kind)).map((i) => i.kind as ProtectionId)
     : s.inventory.items.filter((i) => i.containerId === "equipment" && i.fitted === "protection" && isSuitProtection(i.kind))
       .map((i) => i.kind as ProtectionId);
 }
@@ -85,12 +88,12 @@ export function updateEcology(s: GameState, loudness: number, scanned: boolean, 
   const v = controlled(s);
   const stimulus = stimulusFrom(s, loudness, { lamp: s.player.lamp, scanned });
   const result = stepEcology(s.world.ecology, {
-    tick: s.tick, stimulus, protection: protectionFor(v?.hull ?? null, fittedProtections(s)), vehicleId: v?.id ?? null,
+    tick: s.tick, stimulus, protection: actorProtection(s, v ? [] : fittedProtections(s)), vehicleId: v?.id ?? null,
   }, ecologyWorldFrom(world, ecologyRefuges(s)));
   // Health only: currents move actors in step.ts's own sweep (CY, the single
   // movement owner), so ecology's `effects.drift` is never applied here.
   const { diverHealth, vehicleHealth } = result.effects;
-  if (v && vehicleHealth > 0) v.health = Math.max(0, v.health - vehicleHealth);
+  if (v && vehicleHealth > 0) v.health = Math.max(0, v.health - hullDamage(vehicleProfile(s, v), vehicleHealth));
   if (!v && diverHealth > 0) s.player.vitals.health -= diverHealth;
   for (const e of result.events) {
     if (e.type === "ecology-cue") events.push({ type: "notice", channel: "hazard", context: "ecology", message: e.caption });

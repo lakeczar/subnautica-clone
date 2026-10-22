@@ -42,9 +42,10 @@ export const CAMPAIGN_SOURCES = {
     region: "thermal_rift",
     position: { x: -97.6, y: -290, z: -747.7 },
     item: "thermal_core",
-    stock: 8, reserve: 6, bundle: 1,
-    context: "On the quiet north-west shoulder no shimmer rises; stable core inclusions show as dark nodes in the rock.",
-    scan: "No shimmer, no warm current: an inactive shoulder. Its core inclusions are stable to cut.",
+    stock: 0, reserve: 0, bundle: 1,
+    // CB (C4): scan-only. Too thin to work here; workable core is on the 350 m lower ledge.
+    context: "On the quiet north-west shoulder no shimmer rises; thin core inclusions show as dark nodes in the rock.",
+    scan: "Core inclusions, too thin to cut here. Followed down the cool wall, the seam thickens at the 350 m lower ledge.",
     asset: "core",
   },
   rift_core_shoulder_west: {
@@ -52,9 +53,9 @@ export const CAMPAIGN_SOURCES = {
     region: "thermal_rift",
     position: { x: -307.1, y: -289, z: -1043.2 },
     item: "thermal_core",
-    stock: 8, reserve: 6, bundle: 1,
-    context: "A second inactive shoulder; fans open and the water is still, so the inclusions are safe to work.",
-    scan: "A second quiet shoulder keeps a core supply independent of the north one.",
+    stock: 0, reserve: 0, bundle: 1,
+    context: "A second inactive shoulder; fans open and the water is still. The inclusions are thin threads.",
+    scan: "Too thin to work. The west wall's ledge at 350 m holds the thick nodes.",
     asset: "core",
   },
   rift_core_plume_seam: {
@@ -73,9 +74,10 @@ export const CAMPAIGN_SOURCES = {
     region: "brine_divide",
     position: { x: 336.5, y: -366, z: -1188.5 },
     item: "brine_lattice",
-    stock: 12, reserve: 8, bundle: 2,
-    context: "Rinsed crystals line the north ledges where the water stays clear above the dense layer.",
-    scan: "Clear flushed water above the mirror rinses the crystals. No chemical protection is needed up here.",
+    // CB (C4): one rinsed crystal, a taste. Thick fans grow on the 450 m east flank.
+    stock: 1, reserve: 0, bundle: 1,
+    context: "One rinsed crystal on the north ledge where the water stays clear above the dense layer.",
+    scan: "Brine lattice, rinsed by clear water. Thick fans of it line the 450 m ledges on the Divide's east flank.",
     asset: "lattice",
   },
   divide_lattice_ledge_east: {
@@ -83,9 +85,9 @@ export const CAMPAIGN_SOURCES = {
     region: "brine_divide",
     position: { x: 749, y: -375, z: -1191 },
     item: "brine_lattice",
-    stock: 12, reserve: 8, bundle: 2,
-    context: "Sail animals trace the clear lane over this ledge; crystals grow where the flow is steady.",
-    scan: "Where the sails drift, the lane is clear and calm. A second outer ledge holds its own lattice.",
+    stock: 1, reserve: 0, bundle: 1,
+    context: "Sail animals trace the clear lane over this ledge; a single crystal grows where the flow is steady.",
+    scan: "A rinsed crystal, a taste of lattice. The workable ledges are on the 450 m east flank.",
     asset: "lattice",
   },
   divide_lattice_fissure: {
@@ -123,19 +125,20 @@ export const CAMPAIGN_SOURCES = {
 export type CampaignSourceId = keyof typeof CAMPAIGN_SOURCES;
 
 /** S2 site per source (`src/content/regions/sites.ts`), and what working it needs
- * beyond pressure. `first` marks the mandatory first-access deposits. */
+ * beyond pressure. `first` marks the mandatory first-access deposits (C4: CB moved
+ * core's and lattice's to `c4Sources.ts` FIRST_WORKABLE; shoulders and ledges are tastes). */
 export const CAMPAIGN_SOURCE_SITES: Readonly<Record<CampaignSourceId, {
   site: string; first: boolean; protection: "heat" | "brine" | null;
 }>> = {
   rift_ceramic_lip_north: { site: "rift_ceramic_lip_north", first: true, protection: null },
   rift_ceramic_lip_south: { site: "rift_ceramic_lip_south", first: true, protection: null },
   rift_ceramic_deep_seam: { site: "rift_ceramic_deep_seam", first: false, protection: null },
-  rift_core_shoulder_north: { site: "rift_core_shoulder_north", first: true, protection: null },
-  rift_core_shoulder_west: { site: "rift_core_shoulder_west", first: true, protection: null },
+  rift_core_shoulder_north: { site: "rift_core_shoulder_north", first: false, protection: null },
+  rift_core_shoulder_west: { site: "rift_core_shoulder_west", first: false, protection: null },
   // Workable by plume timing too; the ledger counts it only with protection.
   rift_core_plume_seam: { site: "rift_core_plume_seam", first: false, protection: "heat" },
-  divide_lattice_ledge_west: { site: "divide_lattice_ledge_west", first: true, protection: null },
-  divide_lattice_ledge_east: { site: "divide_lattice_ledge_east", first: true, protection: null },
+  divide_lattice_ledge_west: { site: "divide_lattice_ledge_west", first: false, protection: null },
+  divide_lattice_ledge_east: { site: "divide_lattice_ledge_east", first: false, protection: null },
   divide_lattice_fissure: { site: "divide_lattice_fissure", first: false, protection: "brine" },
   meridian_cut_ceramic: { site: "meridian_cut_ceramic", first: false, protection: null },
   meridian_service_cache: { site: "meridian_service_cache", first: false, protection: null },

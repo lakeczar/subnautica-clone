@@ -123,7 +123,7 @@ export const HEARTHLINE_STATIONS: readonly Station[] = [
 
 export const HEARTHLINE_SOCKETS: readonly Socket[] = [
   { id: "hl.socket.bridge.survey", room: "bridge", kind: "equipment", yaw: 0,
-    footprint: solid("hl.socket.bridge.survey", [-5.6, 5.0, -11.1], [-4.6, 5.55, -10.3]), accepts: ["directional_survey", "sonar_plotter", "relay_receiver"] },
+    footprint: solid("hl.socket.bridge.survey", [-5.6, 5.0, -11.1], [-4.6, 5.55, -10.3]), accepts: ["directional_survey", "sonar_plotter", "relay_receiver", "decoder"] },
   { id: "hl.socket.bridge.launch", room: "bridge", kind: "equipment", yaw: 0,
     footprint: solid("hl.socket.bridge.launch", [4.6, 5.0, -11.1], [5.6, 5.55, -10.3]), accepts: ["berth_monitor", "relay_receiver", "beacon_console"] },
   { id: "hl.socket.fab.bench.1", room: "fabrication", kind: "equipment", yaw: Math.PI,

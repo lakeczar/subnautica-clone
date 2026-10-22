@@ -2,24 +2,25 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { HULLS, SOURCES } from "../src/content/registry.js";
+import { SOURCES } from "../src/content/registry.js";
 import { createEnvelope, decodeSave, encodeSave, type SaveEnvelope } from "../src/save/codec.js";
-import { validExpedition5State } from "../src/save/expedition5/validation.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import { validState } from "../src/save/validation.js";
 import { ExpeditionSession } from "../src/runtime/session.js";
-import { BERTH_LOCAL, carrierCommand, emptySockets, fixtureGame, updateBerth } from "../src/sim/carrier.js";
 import { addItem } from "../src/sim/inventory.js";
 import { completeOpening, discover } from "../src/sim/progression.js";
 import { createGame } from "../src/sim/state.js";
-import { executeCommand, stepGame } from "../src/sim/step.js";
+import { executeCommand } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameState } from "../src/sim/types.js";
-import { encoded, MemoryStorage, sample, settled, TestWriterLock, withComposedFields } from "./persistence-support.js";
-import { CREEL_SOURCE_IDS, schema4Fixture, withCreel, type Schema4Envelope } from "./schema4-support.js";
+import { encoded, MemoryStorage, sample, settled, TestWriterLock } from "./persistence-support.js";
+import { creelFirst, creelOf, fund } from "./b1-support.js";
+import { createSystems } from "../src/sim/systems/state.js";
+import { initialRuntime } from "../src/sim/upgrades/tools.js";
+import { vehicleProfile } from "../src/sim/fittings.js";
 
-// Save policy (docs/build/streams/S7.md): schema 5 loads; schema 4 / expedition.5 is the
-// one bridged predecessor; schemas 1–3 are refused as older development builds.
+// Save policy (DIRECTION): schema 6 loads; schema 5 / expedition.6 is the one bridged
+// predecessor (C4); schemas 1–4 are refused as older development builds.
 const world = createWorldQueries();
 const meta = { sessionId: "save-bridge-test-01", createdAt: "2026-10-18T00:00:00.000Z", savedAt: "2026-10-19T00:00:00.000Z" };
 const fixture = (name: string) => readFileSync(`tests/fixtures/${name}`, "utf8");
@@ -42,110 +43,82 @@ function progressed(): GameState {
 const older = (schemaVersion: number, contentVersion: string) =>
   JSON.stringify({ ...createEnvelope(createGame(), meta), schemaVersion, contentVersion });
 
-test("a schema4 / expedition.5 export validates against the frozen predecessor, then gains only the declared expedition.6 additions", () => {
-  const raw = fixture("diagnostic-depleted-expedition5.json"), old = JSON.parse(raw) as Schema4Envelope;
-  assert.equal(old.schemaVersion, 4); assert.ok(validExpedition5State(old.state));
-  const out = decodeSave(raw); assert.ok(out.ok, out.ok ? "" : out.error);
-  assert.deepEqual(out.value, withCreel(old), "depleted stock, renewal progress and every old field retained");
-  assert.equal(JSON.stringify(JSON.parse(raw)), JSON.stringify(old), "decoding never mutates its input");
-  const s = out.value.state;
-  assert.equal(s.player.mobileRefuge, null, "no mobile refuge is auto-registered");
-  for (const v of s.fleet.vehicles) assert.equal(v.rating, HULLS[v.hull].initialDepth);
-  assert.ok(!s.world.facilities.find((f) => f.id === "canopy_stop")!.repaired, "nothing restored for free");
-  for (const id of CREEL_SOURCE_IDS)
-    assert.deepEqual(s.world.resources.find((n) => n.id === id), { id, stock: SOURCES[id].stock, reserve: SOURCES[id].reserve });
-  const written = encodeSave(out.value); assert.ok(written.ok, "the bridged game is immediately saveable");
-  const again = decodeSave(written.value); assert.ok(again.ok); assert.deepEqual(again.value, out.value);
+/** A real schema 5 export: today's state without the schema 6 fields, under the
+ * schema 5 / expedition.6 tags (what the previous build wrote). */
+function schema5(state: GameState): string {
+  const s = structuredClone(state) as unknown as Record<string, any>;
+  delete s.systems;
+  delete s.world.flares;
+  delete s.knowledge.cycles;
+  for (const v of s.fleet.vehicles) { delete v.upgrades; delete v.bioFeed; }
+  return JSON.stringify({ ...createEnvelope(state, meta), schemaVersion: 5, contentVersion: "expedition.6", state: s });
+}
+
+test("a schema 5 save bridges once: New Game's systems slice, carried trim vanes fitted, reduced stock clamped", () => {
+  // A Creel carrying resin trim vanes in its hold: under schema 5 they protected it.
+  const s = creelFirst();
+  fund(s, "trim_vanes");
+  const v = creelOf(s), vanes = s.inventory.items.find((i) => i.kind === "trim_vanes")!;
+  vanes.containerId = v.cargoId;
+  // A core shoulder still holding schema 5's stock (now a scan-only site).
+  Object.assign(s.world.resources.find((r) => r.id === "rift_core_shoulder_north")!, { stock: 8, reserve: 6 });
+  const out = decodeSave(schema5(s));
+  assert.ok(out.ok, out.ok ? "" : out.error);
+  const b = out.value.state, creel = b.fleet.vehicles.find((x) => x.id === v.id)!;
+  assert.deepEqual(b.systems, createSystems());
+  assert.deepEqual(b.world.flares, []);
+  assert.deepEqual(creel.upgrades, initialRuntime());
+  assert.equal(creel.bioFeed, null);
+  assert.deepEqual(creel.modules, [vanes.id], "the carried vanes now sit in a socket");
+  assert.equal(b.inventory.items.find((i) => i.id === vanes.id)!.fitted, null, "a socket module stays a hold item");
+  assert.ok(Math.abs(vehicleProfile(b, creel).current - (vehicleProfile(b, { ...creel, modules: [] }).current + 0.25)) < 1e-9, "and it protects as before");
+  assert.deepEqual(b.world.resources.find((r) => r.id === "rift_core_shoulder_north"), { id: "rift_core_shoulder_north", stock: 0, reserve: 0 });
+  assert.equal(out.value.schemaVersion, 6);
+  // Written once, it is a canonical schema 6 save that reads back unchanged.
+  const written = encoded(out.value), again = decodeSave(written);
+  assert.ok(again.ok); assert.deepEqual(again.value, out.value);
 });
 
-test("a seeded schema4 game with depletion and living-shed progress bridges exactly and resumes identically", () => {
-  const s = progressed(), old = schema4Fixture(s, meta), raw = JSON.stringify(old);
-  const out = decodeSave(raw); assert.ok(out.ok, out.ok ? "" : out.error);
-  assert.deepEqual(out.value, withCreel(old));
-  assert.deepEqual(out.value.state, s, "the pristine-Creel source state round-trips through the bridge");
-  // Zero catch-up: the bridged state and its save → decode execute identically.
-  let direct = out.value.state;
-  direct.player.pose.position = { ...SOURCES.reef_ribbon_catch_north.position }; direct.player.mode = "swimming";
-  const reread = decodeSave(encoded({ ...out.value, state: direct })); assert.ok(reread.ok);
-  let resumed = reread.value.state;
-  const idle = [{ type: "move", forward: 0, right: 0, vertical: 0, sprint: false } as const];
-  for (let i = 0; i < 90; i++) { direct = stepGame(direct, idle, world).state; resumed = stepGame(resumed, idle, world).state; }
-  assert.deepEqual(JSON.parse(JSON.stringify(resumed)), JSON.parse(JSON.stringify(direct)), "JSON canonicalizes -0");
-  assert.equal(direct.world.renewal.find((r) => r.id === "reef_ribbon_catch_north")!.progress, 777 + 90);
-});
-
-test("the frozen predecessor refuses current-only fields and cross-version tags before bridging", () => {
-  const clean = schema4Fixture(progressed(), meta);
-  assert.ok(decodeSave(JSON.stringify(clean)).ok);
-  const mutations: ((d: Schema4Envelope) => void)[] = [
-    (d) => { Object.assign(d.state.player, { mobileRefuge: null }); },
-    (d) => { (d.state.world.facilities as unknown[]).push({ id: "canopy_stop", repaired: true }); },
-    (d) => { (d.state.world.resources as unknown[]).push({ id: "basin_frame_ridge", stock: 3, reserve: 0 }); },
-    (d) => { (d.state.inventory.items as unknown[]).push({ id: "item_99", kind: "tagged_frame", quantity: 1, containerId: "diver", fitted: null, charge: null, provenance: "public" }); },
-    (d) => { d.state.world.resources[4]!.reserve = SOURCES.reef_ribbon_catch_north.reserve + 1; },
-    (d) => { d.state.world.renewal.pop(); },
-    (d) => { d.state.inventory.containers[0]!.capacity++; },
-    (d) => { Reflect.set(d.state, "renewal", []); },
-    (d) => { d.contentVersion = "expedition.6" as never; },
-  ];
-  for (const [i, mutate] of mutations.entries()) {
-    const bad = structuredClone(clean); mutate(bad);
-    assert.equal(decodeSave(JSON.stringify(bad)).ok, false, `mutation ${i}`);
-  }
-  const current = createEnvelope(progressed(), meta);
-  for (const contentVersion of ["expedition.5", "expedition.4", "foundation.1"])
-    assert.equal(decodeSave(JSON.stringify({ ...current, contentVersion })).ok, false, contentVersion);
-  assert.equal(decodeSave(JSON.stringify({ ...current, schemaVersion: 4 })).ok, false, "a current state cannot borrow the bridge");
-});
-
-test("carrier prepared/lock transactions bridge with identity, and a fixture cannot launder into campaign ownership", () => {
-  for (const configuration of ["compact", "medium"] as const) for (const phase of ["prepared", "lock"] as const) {
-    const s = fixtureGame(), h = s.fleet.vehicles[0]!;
-    s.fleet.docking!.sockets = emptySockets(); // A schema 4 carrier had no socket occupants.
-    if (configuration === "medium") {
-      for (const [i, v] of s.fleet.vehicles.entries()) if (v.berth) { v.berth = null; v.pose.position = { x: 100 + i * 10, y: -1, z: -60 }; }
-      s.fleet.docking!.configuration = "medium";
-      s.fleet.vehicles[3]!.berth = { carrierId: h.id, slot: 0, pose: { frame: "carrier-local", position: { ...BERTH_LOCAL[0]! }, yaw: 0 } };
-      updateBerth(s, world);
-    }
-    assert.equal(carrierCommand(s, "launch", configuration === "compact" ? "fixture_dart" : "fixture_creel", world), null);
-    s.fleet.docking!.transaction!.phase = phase; s.fleet.docking!.transaction!.ticks = phase === "lock" ? 10 : 0;
-    const out = decodeSave(JSON.stringify(schema4Fixture(s, meta))); assert.ok(out.ok, out.ok ? "" : out.error);
-    assert.deepEqual(out.value.state, s);
-    out.value.state.scenario = "expedition";
-    assert.equal(encodeSave(out.value).ok, false, "fixture cannot launder into campaign ownership");
+test("a schema 5 save holding any schema 6 field, or mixed tags, is refused before bridging", () => {
+  const base = JSON.parse(schema5(progressed()));
+  const withSystems = structuredClone(base); withSystems.state.systems = createSystems();
+  const withFlares = structuredClone(base); withFlares.state.world.flares = [];
+  for (const [raw, pattern] of [[withSystems, /only schema 6 writes/], [withFlares, /only schema 6 writes/],
+    [{ ...base, contentVersion: "expedition.7" }, /another content version/], [{ ...base, schemaVersion: 6 }, /another content version/]] as const) {
+    const out = decodeSave(JSON.stringify(raw));
+    assert.equal(out.ok, false); if (!out.ok) assert.match(out.error, pattern);
   }
 });
 
-test("Continue from a stored schema4 journal reads without writing; the first save keeps the original as previous", async () => {
-  const old = schema4Fixture(progressed(), meta), original = JSON.stringify(old), storage = new MemoryStorage();
+test("Continue from a stored schema 5 journal reads without writing; the first save keeps the original as previous", async () => {
+  const original = schema5(progressed()), storage = new MemoryStorage();
   storage.setItem(LOCAL_SAVE_KEY, JSON.stringify({ format: "siltwake.local", version: 1, current: original, previous: null, preserved: null }));
   const raw = storage.getItem(LOCAL_SAVE_KEY), writes = storage.writes;
   const repo = new SaveRepository(storage, new TestWriterLock());
   const loaded = repo.load();
   assert.ok(loaded.save);
-  assert.deepEqual(loaded.save, withCreel(old));
   assert.equal(storage.writes, writes, "reading never writes");
   assert.equal(storage.getItem(LOCAL_SAVE_KEY), raw);
   assert.ok((await repo.commit(loaded.save)).ok);
   const journal = JSON.parse(storage.getItem(LOCAL_SAVE_KEY)!);
-  assert.equal(journal.previous, original, "the original expedition.5 generation remains byte-identical");
-  assert.equal(JSON.parse(journal.current).schemaVersion, 5);
+  assert.equal(journal.previous, original, "the original schema 5 generation remains byte-identical");
+  assert.equal(JSON.parse(journal.current).schemaVersion, 6);
 });
 
-test("schemas 1–3 are refused as older development builds, including the archived real exports", () => {
+test("schemas 1–4 are refused as older development builds, including the archived real exports", () => {
   const sources = [
     older(1, "foundation.1"), older(2, "expedition.2"), older(2, "expedition.3"), older(3, "expedition.4"),
     readFileSync("tests/fixtures/archive/reef-rib-trap-expedition3.json", "utf8"),
     readFileSync("tests/fixtures/archive/earned-c06-expedition4.json", "utf8"),
+    readFileSync("tests/fixtures/archive/diagnostic-depleted-expedition5.schema4.json", "utf8"),
   ];
   for (const raw of sources) {
     const out = decodeSave(raw);
     assert.equal(out.ok, false);
-    if (!out.ok) assert.match(out.error, /older development build.*schema [123]\).*Keep the original file/);
+    if (!out.ok) assert.match(out.error, /older development build.*schema [1234]\).*Keep the original file/);
   }
-  for (const schemaVersion of [0, 6, 99]) {
-    const out = decodeSave(older(schemaVersion, "expedition.6"));
+  for (const schemaVersion of [0, 7, 99]) {
+    const out = decodeSave(older(schemaVersion, "expedition.7"));
     assert.equal(out.ok, false); if (!out.ok) assert.match(out.error, /unsupported/);
   }
 });
@@ -199,27 +172,20 @@ test("a refused older-build Import preserves the active session, journal and sou
   } finally { session.dispose(); }
 });
 
-test("converted earned fixtures load as current saves, gaining only C1's additive fields, and keep the archived player, knowledge and fleet", () => {
-  for (const [name, archived] of [["earned-c06.json", "earned-c06-expedition4.json"], ["reef-rib-trap.json", "reef-rib-trap-expedition3.json"]] as const) {
+test("named fixtures were converted once to schema 6; the archived originals are evidence, never rewritten", () => {
+  for (const [name, archived] of [["earned-c06.json", "earned-c06.schema5.json"], ["reef-rib-trap.json", "reef-rib-trap.schema5.json"]] as const) {
     const raw = fixture(name), out = decodeSave(raw);
     assert.ok(out.ok, out.ok ? "" : out.error);
-    // Written before C1's additive fields: loading adds exactly those, in New Game's order.
-    assert.deepEqual(out.value, withComposedFields(JSON.parse(raw)), `${name} gains only the additive fields`);
+    assert.equal(JSON.parse(raw).schemaVersion, 6);
     const written = encoded(out.value);
-    assert.equal(JSON.stringify(JSON.parse(written)), JSON.stringify(withComposedFields(JSON.parse(raw))), `${name} writes in canonical order`);
-    const again = decodeSave(written); assert.ok(again.ok); assert.equal(encoded(again.value), written, "the completed save is canonical");
-    const original = JSON.parse(readFileSync(`tests/fixtures/archive/${archived}`, "utf8")) as { meta: unknown; state: GameState };
-    const { mobileRefuge: _r, lamp: _lamp, ...player } = out.value.state.player;
-    assert.deepEqual(player, original.state.player, "no relocation, vitals or ownership change");
-    assert.deepEqual(out.value.meta, original.meta);
-    assert.equal(out.value.state.tick, original.state.tick);
-    assert.deepEqual(out.value.state.knowledge.evidence, original.state.knowledge.evidence);
-    assert.deepEqual(out.value.state.inventory.items, original.state.inventory.items);
-    assert.deepEqual(out.value.state.fleet.vehicles.map(({ rating: _rating, ...v }) => v), original.state.fleet.vehicles);
+    assert.equal(JSON.stringify(JSON.parse(written)), JSON.stringify(JSON.parse(raw)), `${name} is already canonical`);
+    // The archived schema 5 original still bridges to exactly this save.
+    const bridged = decodeSave(readFileSync(`tests/fixtures/archive/${archived}`, "utf8"));
+    assert.ok(bridged.ok); assert.deepEqual(bridged.value, out.value);
   }
-  // The archived originals are evidence; they are never rewritten.
+  assert.equal(sha(readFileSync("tests/fixtures/archive/earned-c06.schema5.json", "utf8")), "7729a4a2132890d207647120d650126eaf7f6e0806b44988c4a887c686f4286f");
+  assert.equal(sha(readFileSync("tests/fixtures/archive/reef-rib-trap.schema5.json", "utf8")), "eee910ad3ebcf775b77ad068e986c68818211059d4c35b784ae3e174cf9891bf");
   assert.equal(sha(readFileSync("tests/fixtures/archive/earned-c06-expedition4.json", "utf8")), "45840e6659e9aed6a98d0c0eed67761f5af8dfaab8d9c32ea051f48d652b4e44");
-  assert.equal(sha(readFileSync("tests/fixtures/archive/reef-rib-trap-expedition3.json", "utf8")), "012982eae770e9c7cce3ba8df06bf567db32c57afa51261d87e4db289f236d55");
   // The earned game is directly playable: its Notebook and fabricator list the C05 workboat.
   const earned = decodeSave(fixture("earned-c06.json")); assert.ok(earned.ok);
   assert.ok(earned.value.state.knowledge.markers.includes("canopy_stop"), "a found C04 names the mooring");

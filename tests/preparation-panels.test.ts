@@ -1,4 +1,5 @@
 import test from "node:test";
+import { HOST_KNOWLEDGE_RECIPES, UPGRADE_RECIPES, UPGRADE_REFIT_RECIPES } from "../src/content/upgrades/registry.js";
 import assert from "node:assert/strict";
 import { PanelView } from "../src/ui/panels.js";
 import { DART_BUILD_POSE, RECIPES, SOURCES, type ItemKind, type RecipeId } from "../src/content/registry.js";
@@ -46,11 +47,12 @@ function panelFixture(t: test.TestContext, world: WorldQueries = createWorldQuer
   const root = { querySelector: (selector: string) => get(selector.slice(1)), querySelectorAll: () => [] };
   const panel = new PanelView(root as unknown as HTMLElement, world);
   const html = () => get("panel-content").innerHTML;
-  const commands = (): GameCommand[] => [...html().matchAll(/data-action="([^"]*)"/g)].map((m) => panel.command(m[1]!)!);
+  // Game commands only: the journal's tab buttons (C4) are view actions.
+  const commands = (): GameCommand[] => [...html().matchAll(/data-action="([^"]*)"/g)].flatMap((m) => panel.command(m[1]!) ?? []);
   const controls = () => [...html().matchAll(/<button\b([^>]*)>([^<]*)<\/button>/g)].map((m) => ({
     command: panel.command(m[1]!.match(/data-action="([^"]*)"/)![1]!)!,
     disabled: /\sdisabled(?:\s|$)/.test(m[1]!), label: m[2]!, attrs: m[1]!,
-  }));
+  })).filter((b) => b.command !== undefined);
   const recipe = (id: string) => html().split(`data-recipe="${id}"`)[1]!.split("</article>")[0]!;
   const groupOf = (id: string) => {
     const before = html().slice(0, html().indexOf(`data-recipe="${id}"`));
@@ -437,9 +439,11 @@ test("M2 preparation presents the paid in-place personal refit beside the unchan
   assert.match(html(), /Suit 150 m · Dart hull 180 m/);
   assert.match(recipe("suit_350"), /Paid in-place refit · fitted suit 150 → 350 m/);
   assert.match(recipe("suit_350"), /Dart hull stays 180 m/);
-  assert.match(recipe("suit_350"), /Structural alloy: 2 \/ 2/);
+  // C4 (CB): the 350 m refit's frontier material is one tagged frame from the 150 m rim.
+  assert.match(recipe("suit_350"), /Tagged structural frame: 1 \/ 1/);
   assert.match(recipe("suit_350"), /Conductive crust: 4 \/ 4/);
-  assert.match(recipe("suit_350"), /Splitspine workshop bench · restored/);
+  // C4 (M2 audit #3): the restored stop of the refit's tier also does it.
+  assert.match(recipe("suit_350"), /Splitspine workshop bench or the outer-crown mooring · restored/);
   assert.equal(refit().disabled, false); assert.equal(refit().label, "Refit");
   assert.match(refit().attrs, /aria-label="Suit refit · 350 m"/);
   assert.deepEqual(s, before);
@@ -562,8 +566,13 @@ test("the fabricator lists only known plans; Basin plans add exactly the earned 
   const campaign = Object.keys(CAMPAIGN_RECIPES).filter((id) => s.knowledge.blueprints.includes(RECIPES[id as RecipeId].bp));
   assert.deepEqual(campaign.sort(), ["creel_450", "hearthline_550", "hearthline_keel", "heat_shroud", "hull_heat_lining",
     "restore_rift_station", "suit_450"]);
+  // C4: the same plans carry the SYS-1 upgrades drawn on them.
+  const c4 = Object.keys({ ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES })
+    .filter((id) => s.knowledge.blueprints.includes(RECIPES[id as RecipeId].bp));
+  assert.deepEqual(c4.sort(), ["cell_bank_2", "creel_service_head", "dart_450", "drive_tuning_2", "floodlights_2", "hush_450",
+    "plating_ceramic", "thermal_exchanger"]);
   assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells",
-    "creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "creel_350", ...campaign]), "Basin clues add the earned workboat rows");
+    "creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "creel_350", ...campaign, ...c4]), "Basin clues add the earned workboat rows");
   panel.refresh("notebook", s);
   assert.match(html(), /Plans retained <small>2<\/small>/);
   assert.match(html(), /Research knowledge · construction not available yet\./);
@@ -625,7 +634,8 @@ test("the notebook keeps every record whole but opens only the newest; reference
   assert.ok(html().indexOf('data-section="interpretations"') > html().indexOf('data-section="story-questions"'));
   assert.ok(html().indexOf('data-section="interpretations"') < html().indexOf('id="finding-'));
   assert.match(html(), /data-panel-group="notebook:pairs"/, "extension disclosures are namespaced by panel");
-  assert.ok(html().trimEnd().endsWith('<section class="panel-extension" data-section="tail"><p>Appended</p></section>'));
+  // C4: the notebook is the journal's first tab; its extensions still close it.
+  assert.ok(html().trimEnd().endsWith('<section class="panel-extension" data-section="tail"><p>Appended</p></section></div>'));
 });
 
 test("only the newest record opens across later finds and reloads; a record the player opened stays open", (t) => {

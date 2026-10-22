@@ -1,5 +1,7 @@
 // Run after npm test (compiled production modules). Only the registry is runtime authority.
 import assert from "node:assert/strict";
+import { HOST_KNOWLEDGE_RECIPES, UPGRADE_RECIPES, UPGRADE_REFIT_RECIPES } from "../.test-build/src/content/upgrades/registry.js";
+import { SYS2_RECIPES } from "../.test-build/src/content/systems/items.js";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { CONTENT_VERSION, RECIPES, SOURCES, ITEMS, PLACES } from "../.test-build/src/content/registry.js";
@@ -18,7 +20,7 @@ const candidate = JSON.parse(proposalText);
 const delta = JSON.parse(read("../docs/build/design/M1-PLAY-ECONOMY.json"));
 assert.equal(createHash("sha256").update(proposalText).digest("hex"), delta.historicalProposalSha256, "historical proposal must remain unchanged");
 assert.equal(delta.contentVersion, "expedition.3", "historical adoption retains its original content tag");
-assert.equal(CONTENT_VERSION, "expedition.6", "check the current executable content separately");
+assert.equal(CONTENT_VERSION, "expedition.7", "check the current executable content separately");
 assert.deepEqual(Object.keys(delta.costOverrides).sort(), ["essential_tools", "restore_workshop", "suit_150"]);
 const m1Ids = [...delta.preCanopy, ...Object.keys(delta.optionalReturn)];
 assert.equal(new Set(m1Ids).size, m1Ids.length, "each adopted M1 recipe is covered exactly once");
@@ -26,7 +28,9 @@ assert.equal(new Set(m1Ids).size, m1Ids.length, "each adopted M1 recipe is cover
 const m2b1Ids = ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "restore_canopy_stop", "creel_350", "dart_350"];
 // S5 works recipes wait on later content; tests/story-composed.test.ts audits them against the registry.
 const storyIds = ["service_power_assembly", "service_air_assembly", "pod_buffer"];
-assert.deepEqual(Object.keys(RECIPES).sort(), [...m1Ids, "suit_350", ...m2b1Ids, ...storyIds, ...Object.keys(CAMPAIGN_RECIPES)].sort(), "complete roster is M1 plus the separately checked M2 refits, M2-B1 fleet work, S5 works recipes and S9 campaign recipes (check-campaign-economy.mjs)");
+// C4's upgrade, refit, host-knowledge and SYS-2 recipes: scripts/upgrade-economy.mjs and tests/c4-systems.test.ts.
+const c4Ids = Object.keys({ ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES, ...SYS2_RECIPES });
+assert.deepEqual(Object.keys(RECIPES).sort(), [...m1Ids, "suit_350", ...m2b1Ids, ...storyIds, ...Object.keys(CAMPAIGN_RECIPES), ...c4Ids].sort(), "complete roster is M1 plus the separately checked M2 refits, M2-B1 fleet work, S5 works recipes, S9 campaign recipes (check-campaign-economy.mjs) and C4 systems");
 assert.equal(new Set(delta.preCanopy).size, delta.preCanopy.length);
 for (const id of m1Ids) {
   const r = RECIPES[id];

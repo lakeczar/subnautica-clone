@@ -37,11 +37,11 @@ test("modules and kits are identity items; seeds, beacons and produce are not", 
   for (const k of ["seed_staple_cup", "nav_beacon", "field_salve", "bio_cell", "structural_alloy"]) assert.ok(!retainsIdentity(k), k);
 });
 
-test("the unadapted incapacity rule would orphan a paused decode: the reason for the SYS-2 rule", () => {
+test("the composed incapacity rule keeps a paused decode's decoder (C4 adopted the SYS-2 rule)", () => {
   const { s, sys, decoder } = midDecode();
   incapacitate(s, "Test.");
-  assert.ok(!s.inventory.items.some((i) => i.id === decoder));
-  assert.match(instanceProblems(s, sys).join("\n"), /decode demo_hut_fragment references missing decoder/);
+  assert.equal(s.inventory.items.find((i) => i.id === decoder)?.containerId, "diver");
+  assert.deepEqual(instanceProblems(s, sys), []);
 });
 
 test("death → cache → retrieval: identity items stay with the diver, ordinary cargo caches, the decode resumes", () => {

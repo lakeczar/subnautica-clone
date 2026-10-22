@@ -89,7 +89,7 @@ test("first later deposits lie inside the preceding configuration and outside ev
 test("every protective and deterrent material is reachable before the hazard or animal it counters", () => {
   const early = new Map<MaterialId, number>();
   for (const s of Object.values(SOURCES))
-    if (s.item !== "meal" && s.item !== "tagged_frame") early.set(s.item, Math.min(early.get(s.item) ?? Infinity, -s.position.y));
+    if (s.item !== "meal" && s.item !== "tagged_frame" && !s.item.startsWith("seed_")) early.set(s.item as MaterialId, Math.min(early.get(s.item as MaterialId) ?? Infinity, -s.position.y));
   const tierOf = (m: MaterialId): number => {
     if (m in FIRST_DEPOSITS) return FIRST_DEPOSITS[m as keyof typeof FIRST_DEPOSITS].configuration;
     const depth = early.get(m);
