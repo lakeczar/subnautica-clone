@@ -284,3 +284,12 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
     - (d) the arbiter allocates one shared remainder across fine residencies;
     - (e) regressions advance real survival past a full air supply while held.
   - Not yet wired into the game, so there is no player risk now. **Queued first** for the next slot, ahead of the CA-2 fix.
+- **W2 R1 (Sol):** changes-needed (`review/w2-r1` `a8d1fab`). Both routes complete, the light-field fix is correct (W2, CA-1 and CA-2 fix the same Float32/Float64 mismatch), and the GPU landmark checks passed.
+  - **Findings:**
+    - W2-01: hub cave cuts off the 4 m grid crack terrain borders by 2–6 cm, the same defect as CA-1's `border-cuts.patch`;
+    - W2-02/03/04: phase-2 station rows don't execute against C4, stage 1 bypasses the paid dock, and the bench predicate is incomplete;
+    - W2-05 (P3): a light regression test.
+  - **Coordinator decision:** split W2.
+    - **Phase 1** (terrain, caves, beacon, rays, light fix) is the acceptance target. Fix W2-01 by adopting CA-1's union-of-cuts border patch on the W2 branch, which owns terrain, and add the light regression.
+    - **Phase 2 (crown station)** is **deferred** to a composition task after C4 stage B is accepted, with W2-02, 03 and 04 folded in there.
+  - **Queue order:** LC R3 fix, W2 phase-1 fix, CA-2 fix.
