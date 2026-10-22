@@ -8,6 +8,8 @@ import { caveLightField, type CaveLightField } from "./lightField.js";
 
 /** Within this many metres of a footprint, a cave's light field is active. */
 export const CAVE_ACTIVE_RANGE = 60;
+/** Caves whose textures are made ahead: the cache keeps four, one is active. */
+const UPLOAD_AHEAD = 3;
 
 /** Where light fields come from: the baked store in the browser (null while
  * a field is fetched), or generation (Node, tools, a dev build without a
@@ -73,8 +75,9 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
       near = light;
       if (live) return;
       for (const id of light) source.field(id);
-      // One new texture set per frame, nearest first.
-      for (const id of upload) {
+      // One new texture set per frame, nearest first, and never more caves
+      // than the texture cache keeps (more would evict and re-upload forever).
+      for (const id of upload.slice(0, UPLOAD_AHEAD)) {
         const f = source.field(id);
         if (f && !lighting.has(f)) { lighting.upload(f); break; }
       }

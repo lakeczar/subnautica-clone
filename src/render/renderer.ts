@@ -344,8 +344,10 @@ export function createRenderer(
         if (disposed || !available) return;
         const time = state ? state.tick / 60 : 0;
         const activationStart = performance.now();
+        const timedParts = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
         const priorRegions = art.active.join(",");
         art.update(state);
+        const regionsMs = performance.now() - activationStart;
         canvas.dataset.regions = art.active.join(",");
         if (priorRegions !== canvas.dataset.regions) {
           canvas.dataset.activationMs = (performance.now() - activationStart).toFixed(3);
@@ -402,8 +404,10 @@ export function createRenderer(
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
         const fog = Color3.FromHexString(interior ? "#486e76" : underwater ? "#226e7e" : "#96c5b9");
         scene.clearColor = new Color4(fog.r, fog.g, fog.b, 1);
+        const tLights = timedParts ? performance.now() : 0;
         const optics = updateOpticalUniforms([cel, glass, water, sky, cue.material], camera.position, state);
         lights.update(state, camera.position, optics.ambient, time);
+        const lightsMs = timedParts ? performance.now() - tLights : 0;
         canvas.dataset.localLights = `${lights.stats.sent}/${lights.stats.known}`;
         cel.setFloat("underwater", underwater);
         cel.setFloat("lampOn", state && state.opening.phase >= 4 && lampOn(state) ? 1 : 0);
@@ -435,12 +439,14 @@ export function createRenderer(
           textureBytes: caveView.stats.textureBytes, records: caves ? !!caves.collision : null, recordsMs: caves?.stats.collisionMs ?? 0 });
         streaks.update(camera.position, state?.tick ?? 0, !!state && state.opening.phase >= 4 && underwater === 1);
         canvas.dataset.currentStreaks = String(streaks.shown);
+        const tActors = timedParts ? performance.now() : 0;
         placed.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         hub.update(time, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         far.update();
         canvas.dataset.farLandmarks = String(far.shown);
         if (state) creatures.update(ecologyView(state.world.ecology, state.tick, presentationStimulus(state)), time,
           { x: camera.position.x, y: camera.position.y, z: camera.position.z });
+        const actorsMs = timedParts ? performance.now() - tActors : 0;
         cel.setFloat("time", time);
         water.setFloat("time", time);
         sky.setFloat("time", time);
@@ -449,6 +455,7 @@ export function createRenderer(
         const tRender = timed ? performance.now() : 0;
         scene.render();
         if (timed) (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent = {
+          regions: +regionsMs.toFixed(2), lights: +lightsMs.toFixed(2), actors: +actorsMs.toFixed(2),
           chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2),
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),

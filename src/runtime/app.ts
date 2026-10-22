@@ -389,7 +389,7 @@ export class SiltwakeApp {
     // that defines `__siltwakePerf` gets one entry per frame.
     const perf = (globalThis as { __siltwakePerf?: unknown[] }).__siltwakePerf;
     const started = perf ? performance.now() : 0;
-    let simMs = 0, steps = 0;
+    let simMs = 0, steps = 0, saveMs = 0;
     // Baked cave records, once they land (the pack is fetched at start).
     if (!this.recordsSet && (!this.caveStore || this.caveStore.settled)) {
       if (this.caveStore?.collision) setKitCaveRecords(this.caveStore.collision);
@@ -401,11 +401,12 @@ export class SiltwakeApp {
     this.clock.advance(now, this.active && !hold?.holding, () => {
       if (!this.state || !this.active) return;
       const stepStart = perf ? performance.now() : 0;
-      try { this.step(now); } finally { if (perf) { simMs += performance.now() - stepStart; steps++; } }
+      try { this.step(now); } finally { if (perf) { simMs += performance.now() - stepStart; steps++; saveMs += this.lastSaveMs; } }
     });
     const presentStart = perf ? performance.now() : 0;
     this.present(now);
-    if (perf) perf.push({ at: now, total: performance.now() - started, sim: simMs, steps, present: performance.now() - presentStart,
+    if (perf) perf.push({ at: now, total: performance.now() - started, sim: simMs, steps, save: saveMs, present: performance.now() - presentStart,
+      hud: this.lastHudMs,
       parts: (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent ?? null, hold: hold?.state ?? null });
     this.frameId = requestAnimationFrame((time) => this.frame(time));
   }
@@ -439,8 +440,13 @@ export class SiltwakeApp {
         );
         this.lastBoundaryNotice = now;
       }
+    const saveStart = performance.now();
     this.session.autosave();
+    this.lastSaveMs = performance.now() - saveStart;
   }
+  /** Measurement only: the last step's autosave and the last HUD update, ms. */
+  private lastSaveMs = 0;
+  private lastHudMs = 0;
 
   /** Everything after the steps: aim, HUD, the renderer, idle preparation, sound. */
   private present(now: number): void {
@@ -448,9 +454,11 @@ export class SiltwakeApp {
     const preview = this.active && this.state && !target ? reachPreview(this.state, this.world) : null;
     const aim = { target, preview };
     if (this.state && now - this.hudTime > 90) {
+      const hudStart = performance.now();
       this.view.update(this.state, this.input?.cruise ?? false, this.forwardThrust, aim);
       this.hudTime = now;
-    }
+      this.lastHudMs = performance.now() - hudStart;
+    } else this.lastHudMs = 0;
     if (this.state) this.view.target(target, preview);
     if (
       this.renderer &&
@@ -571,12 +579,27 @@ export class SiltwakeApp {
     // A save loaded beside or inside a cave: admit it now, behind the load
     // screen, before the first tick (a hold carries on into play otherwise).
     if (this.recordsSet) this.caveAdmission(performance.now());
+    // CW-1: the legacy region owners are monolithic builds (up to half a
+    // second each); make every one now, into retention, behind the load, so
+    // crossing into a region during play only re-attaches it.
+    this.warmRegions();
     if (this.state) this.view.update(this.state, false);
     const automatically = this.entryCanResume;
     this.entryCanResume = false;
     if (!automatically || !this.resume())
       this.pause("Expedition ready. Resume when ready.", false);
     else if (navigator.userActivation?.isActive) this.requestCapture();
+  }
+
+  /** Build every nearby legacy region owner into retention (bounded). */
+  private warmRegions(): void {
+    if (!this.renderer || !this.graphicsAvailable || !this.state) return;
+    try {
+      this.renderer.present(this.state);
+      for (let i = 0; i < 8 && this.renderer.prepare(); i++);
+    } catch (error) {
+      this.view.graphicsError(errorText(error));
+    }
   }
 
   private resume(capture = false): boolean {

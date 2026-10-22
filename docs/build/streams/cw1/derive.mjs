@@ -11,7 +11,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 const [repo, out, segArg] = process.argv.slice(2), B = path.join(repo, ".test-build/");
-const SEGMENTS = Number(segArg ?? 4);
+const SEGMENTS = Number(segArg ?? 8);
 mkdirSync(out, { recursive: true });
 const { CAVE_SOURCES } = await import(B + "src/content/regions/caves.js");
 const { worldFloor } = await import(B + "src/content/regions/worldFloor.js");
@@ -33,15 +33,17 @@ function clearNear(p, n) {
 const stops = [];
 for (const s of CAVE_SOURCES) {
   const mouths = s.portals.filter(p => p.kind === "mouth").sort((a, b) => b.clear.width * b.clear.height - a.clear.width * a.clear.height);
-  let q = null, via = "";
+  let q = null, via = "", outer = null;
   for (const m of mouths) {
     const n = Math.hypot(m.normal.x, m.normal.z) > 0.5 ? m.normal : { x: 0, z: 0 };
     q = clearNear({ x: m.center.x + n.x * 6, y: m.center.y, z: m.center.z + n.z * 6 }, n.x || n.z ? n : { x: 1, z: 0 });
+    // Leave and arrive along the mouth's own normal, out from under any overhang.
+    if (q && (n.x || n.z)) outer = clearNear({ x: q.x + n.x * 16, y: q.y + 3, z: q.z + n.z * 16 }, n);
     if (q) { via = m.id; break; }
   }
   if (!q) { const f = s.footprint; q = clearNear({ x: (f.minX + f.maxX) / 2, y: s.topY + 4, z: (f.minZ + f.maxZ) / 2 }, { x: 1, z: 0 }); via = "above"; }
   if (!q) throw new Error(`no clear stop for ${s.id}`);
-  stops.push({ cave: s.id, region: s.region, via, at: q, mouthY: mouths[0]?.center.y ?? null });
+  stops.push({ cave: s.id, region: s.region, via, at: q, outer: outer ?? q, mouthY: mouths[0]?.center.y ?? null });
 }
 // Greedy tour from the Fanvault (beside the pod).
 const tour = [stops.find(s => s.cave === "fanvault")];
@@ -60,7 +62,10 @@ function leg(a, b) {
   return [{ x: a.x, y, z: a.z, cruise: true }, { x: b.x, y, z: b.z, cruise: true }];
 }
 const points = [{ ...tour[0].at, cave: tour[0].cave }];
-for (let i = 1; i < tour.length; i++) points.push(...leg(tour[i - 1].at, tour[i].at), { ...tour[i].at, cave: tour[i].cave });
+for (let i = 1; i < tour.length; i++) {
+  const a = tour[i - 1], b = tour[i];
+  points.push({ ...a.outer }, ...leg(a.outer, b.outer), { ...b.outer }, { ...b.at, cave: b.cave });
+}
 let total = 0;
 for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
 // Segments of equal length, each starting at a cave stop.
