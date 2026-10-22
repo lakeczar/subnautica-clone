@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Siltwake · LC large-cave lab (dev)</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #06161c; overflow: hidden; font: 12px/1.35 system-ui, sans-serif; color: #e8f1ee; }
+      canvas { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+      #panel { position: fixed; top: 8px; left: 8px; max-width: 380px; background: #071c24d8; border: 1px solid #2f5d68; border-radius: 6px; padding: 8px; }
+      #panel button { margin: 2px; padding: 2px 6px; font: inherit; color: #e8f1ee; background: #1d4652; border: 1px solid #3a7380; border-radius: 4px; cursor: pointer; }
+      #panel button.on { background: #b8862f; border-color: #e6a139; color: #102f3d; }
+      #status { white-space: pre; margin-top: 6px; color: #b9d7cf; font: 11px/1.35 ui-monospace, monospace; }
+      #panel.hidden > :not(#hide) { display: none; }
+      #loading { position: fixed; inset: 0; display: grid; place-items: center; font-size: 20px; color: #e8f1ee; background: #06161cb0; pointer-events: none; }
+      #message { position: fixed; bottom: 24px; left: 0; right: 0; text-align: center; font-size: 15px; color: #ffd9a0; pointer-events: none; }
+      #note { position: fixed; inset: 0; display: grid; place-items: center; font-size: 15px; color: #b9d7cf; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="view" tabindex="0"></canvas>
+    <div id="note">Loading the Canopy root caves…</div>
+    <div id="loading" style="display:none">Loading cave…</div>
+    <div id="message"></div>
+    <div id="panel"><button id="hide">≡</button><div id="views"></div><div id="toggles"></div><div id="status"></div></div>
+    <script type="module" src="./large-cave-lab.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,286 @@
+{
+  "what": "stress",
+  "errors": [],
+  "stress": [
+    {
+      "case": "budget 32 MiB: below fixed + coarse safety",
+      "p": {
+        "x": 757.5,
+        "y": -61.99205325941489,
+        "z": -69
+      },
+      "held": true,
+      "admitted": false,
+      "outside": true,
+      "reason": "not admitted: the budget cannot reserve this cave's fixed bytes and coarse safety set",
+      "gated": 571,
+      "coverage": {
+        "frames": 0,
+        "failures": 0,
+        "unsafeMetres": 0,
+        "exposedStill": 0,
+        "coarseFrames": 0,
+        "first": ""
+      },
+      "shown": 57,
+      "cut": 0
+    },
+    {
+      "case": "budget 59 MiB: 16 MiB taken after entry and kept; reverse key, then back out",
+      "reachedWaypoint": 3,
+      "pressed": {
+        "p": {
+          "x": 755.1399799826976,
+          "y": -107.08646826784076,
+          "z": -88.36452469588299
+        },
+        "held": false,
+        "admitted": true,
+        "outside": false,
+        "reason": "",
+        "gated": 0,
+        "coverage": {
+          "frames": 325,
+          "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
+          "coarseFrames": 0,
+          "first": ""
+        },
+        "shown": 19,
+        "cut": 38
+      },
+      "keyMoved": 2.0287183579055452,
+      "retreatGated": 0,
+      "end": {
+        "p": {
+          "x": 757.9466232286127,
+          "y": -58.90112648513187,
+          "z": -62.88732547478376
+        },
+        "held": false,
+        "admitted": true,
+        "outside": true,
+        "reason": "",
+        "gated": 0,
+        "coverage": {
+          "frames": 709,
+          "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
+          "coarseFrames": 0,
+          "first": ""
+        },
+        "shown": 19,
+        "cut": 38
+      }
+    },
+    {
+      "case": "budget 48 MiB: every free byte taken after entry and kept",
+      "end": {
+        "p": {
+          "x": 791.7882787677105,
+          "y": -151.18696569223636,
+          "z": -205.78248951657605
+        },
+        "held": false,
+        "admitted": true,
+        "outside": false,
+        "reason": "",
+        "gated": 0,
+        "coverage": {
+          "frames": 960,
+          "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
+          "coarseFrames": 960,
+          "first": ""
+        },
+        "shown": 0,
+        "cut": 68
+      },
+      "finished": true,
+      "report": {
+        "frames": 997,
+        "dt": {
+          "p50": 16.69999998807907,
+          "p95": 18.700000017881393,
+          "p99": 21.19999998807907,
+          "max": 25.19999998807907
+        },
+        "cpu": {
+          "p50": 0.699999988079071,
+          "p95": 3.800000011920929,
+          "max": 10.199999988079071
+        },
+        "gpuMs": 3.3052769523809524,
+        "residencyMs": {
+          "p95": 0.5,
+          "max": 9.300000011920929
+        },
+        "lampMs": {
+          "p95": 2.5,
+          "max": 6.199999988079071
+        },
+        "step": {
+          "calls": 1008,
+          "meanUs": 125.89285732616507,
+          "maxUs": 4199.999988079071
+        },
+        "coverage": {
+          "frames": 960,
+          "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
+          "coarseFrames": 960,
+          "first": ""
+        },
+        "residency": {
+          "frame": 1004,
+          "desired": 68,
+          "withinBudget": 0,
+          "building": 0,
+          "prepared": 0,
+          "uploading": 0,
+          "shown": 0,
+          "hidden": 0,
+          "cpuBytes": 50331648,
+          "gpuBytes": 50331648,
+          "gpuAllocatedBytes": 0,
+          "shownGpuBytes": 0,
+          "hiddenGpuBytes": 0,
+          "overBudget": false,
+          "demoted": 0,
+          "held": 0,
+          "cut": 68,
+          "refused": [],
+          "deferred": 0,
+          "settled": true,
+          "buildMs": 0,
+          "buildSteps": 0,
+          "maxStepMs": 0,
+          "uploadMs": 0.09999999403953552,
+          "uploads": 0,
+          "uploadedBytes": 0,
+          "uploadOverrunBytes": 0,
+          "pending": 0,
+          "totals": {
+            "built": 40,
+            "uploaded": 39,
+            "cancelled": 0,
+            "evicted": 39,
+            "discarded": 0,
+            "overBudgetDiscards": 1
+          }
+        },
+        "draws": 3
+      }
+    },
+    {
+      "case": "reload inside at 38 MiB: loading, then rescue outside the nearest mouth",
+      "loading": {
+        "state": "loading",
+        "holding": true,
+        "rescue": null,
+        "message": "Loading cave…",
+        "rescues": 0,
+        "pausedFrames": 90,
+        "overlay": "grid"
+      },
+      "rescued": {
+        "p": {
+          "x": 756.5,
+          "y": -61.475,
+          "z": -76
+        },
+        "held": true,
+        "admitted": false,
+        "outside": true,
+        "reason": "Not enough memory to load this cave: you were moved to the water outside it.",
+        "gated": 0,
+        "coverage": {
+          "frames": 0,
+          "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
+          "coarseFrames": 0,
+          "first": ""
+        },
+        "shown": 7,
+        "cut": 50
+      },
+      "message": "Not enough memory to load this cave: you were moved to the water outside it.",
+      "upMoved": 2.8466666666666782,
+      "end": {
+        "p": {
+          "x": 756.5,
+          "y": -58.62833333333332,
+          "z": -76
+        },
+        "held": false,
+        "admitted": false,
+        "outside": true,
+        "reason": "not admitted: the budget cannot reserve this cave's fixed bytes and coarse safety set",
+        "gated": 0,
+        "coverage": {
+          "frames": 0,
+          "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
+          "coarseFrames": 0,
+          "first": ""
+        },
+        "shown": 10,
+        "cut": 47
+      }
+    },
+    {
+      "case": "depart, then another owner asks for everything",
+      "departure": {
+        "state": "away",
+        "fixedHeld": true,
+        "safetyHeld": false,
+        "other": 24711405,
+        "committed": 61865984,
+        "total": 61865984,
+        "retained": 32960275,
+        "fixed": 37154579
+      }
+    },
+    {
+      "case": "reload inside at 59 MiB under full pressure: priority admission",
+      "admission": {
+        "state": "admitted",
+        "holding": false,
+        "rescue": null,
+        "message": "",
+        "rescues": 0,
+        "pausedFrames": 25,
+        "otherCpu": 20973757
+      },
+      "end": {
+        "p": {
+          "x": 742,
+          "y": -126,
+          "z": -100
+        },
+        "held": false,
+        "admitted": true,
+        "outside": false,
+        "reason": "",
+        "gated": 0,
+        "coverage": {
+          "frames": 1,
+          "failures": 0,
+          "unsafeMetres": 0,
+          "exposedStill": 0,
+          "coarseFrames": 1,
+          "first": ""
+        },
+        "shown": 0,
+        "cut": 57
+      }
+    }
+  ],
+  "ok": true
+}
