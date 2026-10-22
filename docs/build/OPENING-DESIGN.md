@@ -19,6 +19,8 @@
 - **Return reasons:**
   1. a **sealed hatch** whose code comes from a **decode**;
   2. a **deeper flooded passage** under the island, reached with the 150 m suit.
-- **Thread structure:** overlapping threads, like a Venn diagram, with different outputs. Still open: how to handle a player who doesn't finish every thread.
-- **Garden:** still open. Proposed: an abandoned plot found elsewhere grows into your own garden, so you rely less on scavenging.
+- **Thread structure (A + C, owner 2026-10-22):** three overlapping threads (a survival manual, a scientist's field journal, a wreck and its crew's records), each with different outputs.
+  - **Leaving:** you need the core thread plus **any one** of the other two. Each gives a different route to what the Dart needs.
+  - **Unfinished threads** stay open leads, and later regions refer back to them, pulling the player home naturally.
+- **Garden (owner 2026-10-22):** **not** on the starting island. The abandoned overgrown plot is a **mid-game** discovery, farther out. You take cuttings and seeds there, find the planter recipe, build your first planter at a base, and from then on grow food at home, with upgrades later. The starting island feeds you through gathering, fishing and cooking.
 - **Art direction:** still open. The owner wants options and research.
