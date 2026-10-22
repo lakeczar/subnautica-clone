@@ -35,7 +35,7 @@ const ground = (g: Ground): Ground => g;
 export const FAUNA_SOURCES = {
   // ------------------------------------------------------------ fish grounds
   reef_fish_ribs: ground({
-    label: "Rib school", region: "refuge_reef", position: { x: -28, y: -7, z: 6 },
+    label: "Rib school", region: "refuge_reef", position: { x: -24, y: -8.1, z: -2 },
     item: "small_fish", stock: 4, reserve: 0, bundle: 1, asset: "fish",
     context: "Small silver fish turn over the intake apron beside the ribs; a slow hand closes on one.",
     scan: "Common reef fish. The school regathers a fish every four minutes or so. Cook two into a meal, or release one as bait.",
@@ -112,7 +112,7 @@ export const FAUNA_SOURCES = {
   }),
   // CB-2: crawler moults in the kiln tube (CA-3's cave, not yet registered).
   rift_crawler_moults: ground({
-    label: "Crawler moults", region: "thermal_rift", position: { x: 130, y: -305.5, z: -800 },
+    label: "Crawler moults", region: "thermal_rift", position: { x: 130, y: -306, z: -800 },
     item: "planter_feed", stock: 3, reserve: 0, bundle: 1, asset: "shells",
     context: "Pale kiln-crawler moults packed into the cracks of the tube's upper wall.",
     scan: "Kiln crawlers moult as they grow; the old shells crush into planter feed. More are shed over time.",
@@ -126,21 +126,21 @@ export const FAUNA_SOURCES = {
   }),
   // CB-2: casts on Meridian's stable service ledge, outside the choir's reach.
   meridian_scavenger_casts: ground({
-    label: "Ledge casts", region: "deep_district", position: { x: 1170, y: -526.2, z: -1080 },
+    label: "Ledge casts", region: "deep_district", position: { x: 1170, y: -526.21, z: -1080 },
     item: "planter_feed", stock: 3, reserve: 0, bundle: 1, asset: "casts",
     context: "Scavenger casts on the stable ledge east of the staging office.",
     scan: "Scavenger casts make good planter feed. The scavengers leave more every few minutes.",
   }),
   // ------------------------------------------------------------ protected
   divide_skate_eggcases: ground({
-    label: "Skate egg cases", region: "brine_divide", position: { x: 424, y: -383.6, z: -1146 },
+    label: "Skate egg cases", region: "brine_divide", position: { x: 424, y: -383.56, z: -1146 },
     item: "roe_cluster", stock: 0, reserve: 0, bundle: 0, asset: "eggcases",
     context: "Leathery egg cases tethered to the rock of the clear lee shelf, above the brine, shadows moving inside.",
     scan: "Layer skate egg cases. The skates leave the dense water only to lay here. They are protected: look, don't take.",
   }),
   // CB-2: crown-ray egg cases in the crown's south crevices. Rare residents: protected.
   hub_ray_eggcases: ground({
-    label: "Ray egg cases", region: "silt_basin", position: { x: 330, y: -70.5, z: -596 },
+    label: "Ray egg cases", region: "silt_basin", position: { x: 330, y: -73.36, z: -596 },
     item: "roe_cluster", stock: 0, reserve: 0, bundle: 0, asset: "eggcases",
     context: "Leathery egg cases wedged in the crown's south crevices, each the size of a diver.",
     scan: "Crown-ray egg cases. The rays are protected: look, don't take.",
@@ -250,12 +250,13 @@ export type CarcassFallId = keyof typeof CARCASS_FALLS;
 /** CB-2: ledges where fish run past, so a trap socketed at a host nearby
  * catches at full rate (TRAP.nearRange). No item: a place, not a source. */
 export const TRAP_SPOTS = {
-  reef_trap_ribs_lee: { region: "refuge_reef", position: { x: -40, y: -8.7, z: 20 } },
-  isles_trap_stack_east: { region: "island_chain", position: { x: 520, y: -9.6, z: 40 } },
-  basin_trap_ridge_north: { region: "silt_basin", position: { x: 770, y: -253.2, z: -470 } },
+  reef_trap_ribs_lee: { region: "refuge_reef", position: { x: -40, y: -7.86, z: 20 } },
+  isles_trap_stack_east: { region: "island_chain", position: { x: 520, y: -8.77, z: 40 } },
+  basin_trap_ridge_north: { region: "silt_basin", position: { x: 770, y: -252.37, z: -470 } },
 } as const satisfies Record<string, { region: RegionId; position: { x: number; y: number; z: number } }>;
 export type TrapSpotId = keyof typeof TRAP_SPOTS;
 
-/** Grounds that lie inside a cave by design (CB-2), by cave ID. The kiln tube is
- * CA-3's and not yet registered; until it is, the moults lie on its floor line. */
+/** Grounds that lie inside a cave by design (CB-2), by cave ID: CA-3's kiln tube. */
 export const FAUNA_IN_CAVE: Readonly<Partial<Record<FaunaSourceId, string>>> = { rift_crawler_moults: "rift_kiln_tube" };
+/* Datums follow CB-2's accepted placements (src/content/proposals/fauna.ts):
+ * ground and scan points sit clear of terrain, floor + 0.8 where they lie on it. */

@@ -81,7 +81,7 @@ export const WINDOW_SPOTS: Readonly<Record<ThreatAgentId, SiteOffset | "deep" | 
 export const SKATE_REST_DEPTH = 14;
 /** Where the skates lay: their egg cases on the lee shelf, above the brine
  * (`divide_skate_eggcases`). While laying they circle it this close. */
-export const SKATE_LAYING_SITE = { x: 424, y: -380.5, z: -1146 } as const;
+export const SKATE_LAYING_SITE = { x: 424, y: -380.56, z: -1146 } as const;
 export const SKATE_LAYING_RADIUS = 5;
 /** Leaving to lay, the saddle skates head north and down under the mirror, out
  * of sight of anyone at the saddle, toward the shelf (metres from home). */

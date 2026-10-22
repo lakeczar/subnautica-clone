@@ -434,7 +434,8 @@ test("grounds sit on the composed floor outside every cave; carcass falls stand 
     // (or on a ledge above it: the ray egg cases sit on the crown's rock).
     const support = p.y - w.supportHeight(p.x, p.z, p.y + 0.5);
     if (GROUNDS[id as FaunaSourceId].kind === "fish") assert.ok(above >= 0.5 && above <= 25, `${id} is ${above.toFixed(2)} m above the floor`);
-    else if (id !== "canopy_roe_crowns") assert.ok(Math.min(above, support) >= 0.5 && Math.min(above, support) <= 2.6 || (support >= 0.5 && support <= 2.6), `${id} is ${above.toFixed(2)} m above the floor`);
+    // The crawler moults lie on the kiln tube's own floor (CA-3), not the terrain.
+    else if (id !== "canopy_roe_crowns" && !FAUNA_IN_CAVE[id as FaunaSourceId]) assert.ok(Math.min(above, support) >= 0.5 && Math.min(above, support) <= 2.6 || (support >= 0.5 && support <= 2.6), `${id} is ${above.toFixed(2)} m above the floor`);
     for (const c of AUTHORED_CAVE_SOURCES.filter((c) => (FAUNA_IN_CAVE as Record<string, string | undefined>)[id] !== c.id)) {
       const f = c.footprint;
       assert.ok(!(p.x >= f.minX - 4 && p.x <= f.maxX + 4 && p.z >= f.minZ - 4 && p.z <= f.maxZ + 4), `${id} in or at cave ${c.id}`);
