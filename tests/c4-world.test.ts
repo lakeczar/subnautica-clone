@@ -18,7 +18,7 @@ import { protectionFor, sampleHazards } from "../src/sim/ecology/hazards.js";
 import { FIXED_SECONDS as DT } from "../src/sim/clock.js";
 import { completeOpening } from "../src/sim/progression.js";
 import { createGame } from "../src/sim/state.js";
-import { stepGame } from "../src/sim/step.js";
+import { flowHere, stepGame } from "../src/sim/step.js";
 import type { GameCommand, GameEvent, GameState, Vec3 } from "../src/sim/types.js";
 import { CAVE_INDEX_CELL, createCaveWorldQueries, createWorldQueries, gameWorld, hullClearance, hullFloor, SOLIDS, surfaceHeight, caveOwner,
   type Solid } from "../src/sim/world.js";
@@ -234,7 +234,8 @@ test("the shelf race is placed by the CY content rules: strong, cued, in water, 
 });
 
 test("a powerless diver anywhere in the shelf race reaches still water within 25 s, unharmed", () => {
-  const still = (p: Vec3, tick: number): boolean => flowAt(p, tick).speed < 0.1;
+  // The flow that moves the diver: cave water is still (CW-1; the Shelf lip's lies under the race).
+  const still = (p: Vec3, tick: number): boolean => flowHere(world, p, tick).speed < 0.1;
   for (const t of [0.05, 0.3, 0.55, 0.8]) for (const [side, lift] of [[0, 1.5], [3.5, 1], [-3.5, 1], [0, 4]] as const) {
     const p0 = along(t, lift), p = { ...p0, x: p0.x + side };
     if (!world.clearance(p, DIVER) || volumeWeight(race, p) < 0.3) continue;

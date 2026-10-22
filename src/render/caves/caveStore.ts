@@ -82,7 +82,11 @@ let store: CaveStore | null | undefined;
 /** The game's cave store: the baked `caves/` beside the page in a browser,
  * none elsewhere (Node tests and tools generate live). */
 export function gameCaveStore(): CaveStore | null {
-  if (store === undefined)
-    store = typeof document !== "undefined" && typeof fetch === "function" ? httpCaveStore(new URL("caves/", document.baseURI).href) : null;
+  if (store === undefined) {
+    let base: string | null = null;
+    // Only a real page with a usable base URL (not Node's test doubles).
+    try { base = typeof document !== "undefined" && typeof fetch === "function" ? new URL("caves/", document.baseURI).href : null; } catch { base = null; }
+    store = base ? httpCaveStore(base) : null;
+  }
   return store;
 }

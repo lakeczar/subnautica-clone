@@ -2,16 +2,14 @@
 // Each check returns a list of problems (empty = pass) so the tests assert
 // `[]` and print what broke, and the dev loop can call the same code.
 import { AUTHORED_CAVE_SOURCES, caveDef, EXTERIOR, MIN_ROCK, type CaveDef, type CavePortal } from "../src/content/regions/caves.js";
-import { buildCave, caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
+import { caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { CRAFT_PROFILES, type CraftProfileId } from "../src/content/regions/passages.js";
 import { DEEP_CAVES, sampleDeepHazards } from "../src/content/regions/caves/deep.js";
 import { contentHost, type DeepCave } from "../src/content/regions/caves/deepKit.js";
-import { CANOPY_BASIN_GROUPS, groupDef } from "../src/content/regions/caves/index.js";
-import { caveOwner, createCaveWorldQueries, hullClearance, hullFloor, SOLIDS, surfaceHeight, sweptHullClearance, type Solid } from "../src/sim/world.js";
+import { caveOwner, createCaveWorldQueries, gameWorld, hullClearance, hullFloor, SOLIDS, surfaceHeight, sweptHullClearance, type Solid } from "../src/sim/world.js";
 import { HULL_COLLIDERS, HULLS, type HullId } from "../src/content/registry.js";
 import type { Capsule, Vec3, WorldQueries } from "../src/sim/types.js";
-import type { Rect } from "../src/world/types.js";
 import { boxDistance } from "../src/world/frame.js";
 import type { MeshRecipe } from "../src/render/kit/types.js";
 import { caveDaylight, caveLightField, sampleLightField, type CaveLightField } from "../src/render/caves/lightField.js";
@@ -31,32 +29,17 @@ const ROOT_IDS = new Set(AUTHORED_CAVE_SOURCES.map(s => s.id));
 const defs = new Map<string, CaveDef>();
 export function defOf(c: DeepCave): CaveDef {
   let d = defs.get(c.source.id);
-  if (!d) defs.set(c.source.id, d = buildCave(c.source, worldFloor));
+  if (!d) defs.set(c.source.id, d = caveDef(c.source.id, worldFloor));
   return d;
 }
 export const deepDefs = (): CaveDef[] => DEEP_CAVES.map(defOf);
 let deep: WorldQueries | null = null;
 /** Root caves this close to a deep footprint join `deepWorld`. */
 export const NEIGHBOUR = 64;
-const rectGap = (a: Rect, b: Rect): number =>
-  Math.hypot(Math.max(0, a.minX - b.maxX, b.minX - a.maxX), Math.max(0, a.minZ - b.maxZ, b.minZ - a.maxZ));
-/** The exterior world as it will be once registered: every solid, the shared
- * floor, root's authored caves, CA-2's and these caves owning their footprints. */
+/** The game's own world (CW-1 registered these caves): every solid, the
+ * shared floor and every kit cave, clusters built as queries reach them. */
 export function deepWorld(): WorldQueries {
-  if (!deep) {
-    // Root's authored caves (the Fanvault, W2's hub caves, CA-1's Reef and
-    // Isles) as root composes them, and CA-2's Canopy and Basin groups: those
-    // within NEIGHBOUR of a deep footprint (queries are local; the rest are
-    // 247 m or more away and only cost memory). The disjointness test and the
-    // cost test take them all.
-    const near = (f: Rect): boolean => DEEP_CAVES.some(c => rectGap(f, c.source.footprint) <= NEIGHBOUR);
-    const root = [
-      ...AUTHORED_CAVE_SOURCES.filter(s => near(s.footprint) && !DEEP_CAVES.some(c => c.source.id === s.id)).map(s => caveDef(s.id, worldFloor)),
-      ...CANOPY_BASIN_GROUPS.filter(g => near(g.source.footprint)).map(g => groupDef(g, worldFloor)),
-    ];
-    deep = createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: [...root, ...deepDefs()].map(caveOwner) });
-  }
-  return deep;
+  return deep ??= gameWorld();
 }
 /** A one-cave world with extra exterior solids, for negative controls. */
 export function worldWith(c: DeepCave, extra: readonly Solid[]): WorldQueries {

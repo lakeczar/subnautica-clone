@@ -60,7 +60,8 @@ const RAW_PLANS: readonly RescuePlan[] = [
       [v(440, S, -470), v(450, -220, -520), v(462, -260, -546), v(440, -258, -528)],
       [v(440, S, -470), v(450, -220, -520), v(500, -250, -560), v(532, -262, -545)],
       [v(440, S, -470), v(450, -220, -520), v(500, -250, -560), v(492, -262, -600), v(578, -256, -612)],
-      [v(440, S, -470), v(560, -300, -680), v(612, -372, -748), v(620, -374, -760)],
+      // East of CA-2's dish-lee vault (CW-1): the branch used to dive through its terraces.
+      [v(440, S, -470), v(590, -285, -690), v(612, -372, -748), v(620, -374, -760)],
     ] },
   { id: "rescue.basin_east", region: "silt_basin", stage: v(760, S, -520), maximumTether: 500, mooring: "basin.anchorage",
     approach: approach(v(760, S, -520)),
@@ -101,7 +102,8 @@ const RAW_PLANS: readonly RescuePlan[] = [
       [v(560, S, -1150), v(680, -300, -1170), v(749, -368, -1191)],
       [v(560, S, -1150), v(610, -330, -1215), v(632, -372, -1224), v(600, -390, -1240), v(570, -390, -1250)],
       [v(560, S, -1150), v(610, -330, -1215), v(632, -372, -1224), v(600, -400, -1250), v(600, -400, -1262),
-        v(600, -405, -1285), v(620, -406, -1324), v(520, -432, -1336)],
+        // South of CA-3's fissure window (CW-1): the last leg used to cross its rock.
+        v(600, -405, -1285), v(620, -406, -1324), v(545, -425, -1350), v(520, -432, -1336)],
     ] },
   { id: "rescue.meridian", region: "deep_district", stage: v(1100, S, -1180), maximumTether: DEEP_TETHER,
     mooring: "meridian.staging_shelf", approach: approach(v(1100, S, -1180)),
@@ -110,7 +112,8 @@ const RAW_PLANS: readonly RescuePlan[] = [
       [v(1100, S, -1180), v(1120, -480, -1110), v(1132, -514, -1110), v(1150, -512, -1093)],
       [v(1100, S, -1180), v(1200, -480, -1300), v(1210, -540, -1306)],
       [v(1100, S, -1180), v(1250, -500, -1150), v(1302, -594, -1143)],
-      [v(1100, S, -1180), v(1040, -500, -1300), v(1010.8, -594, -1407.4)],
+      // East of CA-3's window gallery (CW-1): the bend used to lie inside it.
+      [v(1100, S, -1180), v(1062, -500, -1300), v(1062, -560, -1340), v(1010.8, -594, -1407.4)],
       [v(1100, S, -1180), v(1150, -480, -1360), v(1172, -598, -1394)],
     ] },
   { id: "rescue.meridian_works", region: "deep_district", stage: v(1360, S, -1470), maximumTether: DEEP_TETHER,
