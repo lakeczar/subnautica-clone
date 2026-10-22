@@ -1,10 +1,7 @@
-import { CANOPY_COVER, THREAT_HOME } from "../content/registry.js";
-import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
-import { gameWorld } from "./world.js";
-import { moveHunter } from "./hunter.js";
+import { CANOPY_COVER } from "../content/registry.js";
+import type { GameEvent, GameState, Vec3 } from "./types.js";
 import {
   atAirStop,
-  distance,
   facility,
   inCanopyAir,
   nearPod,
@@ -174,77 +171,5 @@ export function behindCover(player: Vec3, hunter: Vec3): boolean {
   }
   return true;
 }
-export function updateThreat(
-  s: GameState,
-  loudness: number,
-  events: GameEvent[],
-  world: WorldQueries = gameWorld(),
-): void {
-  if (s.opening.phase < 4 || s.scenario !== "expedition") return;
-  const t = s.world.threat,
-    p = s.player.pose.position;
-  const d = distance(t.position, p),
-    territory = distance(p, THREAT_HOME) < 72 && !exposure(s).refuge;
-  const cover = behindCover(p, t.position);
-  t.modeSeconds += DT;
-  if (t.distractionSeconds > 0) {
-    t.distractionSeconds = Math.max(0, t.distractionSeconds - DT);
-    if (!t.distractionSeconds) t.distraction = null;
-  }
-  if (territory && !cover && loudness > 0.35)
-    t.interest = Math.min(12, t.interest + loudness * DT * 2);
-  else t.interest = Math.max(0, t.interest - DT * (cover ? 3 : 1.1));
-  const change = (mode: typeof t.mode): void => {
-    if (mode === t.mode) return;
-    t.mode = mode;
-    t.modeSeconds = 0;
-    if (mode === "warn" || mode === "pursue")
-      events.push(
-        {
-          type: "notice",
-          channel: "hazard", context: "threat",
-          message:
-            mode === "warn"
-              ? "Paired warning calls. The hunter turns toward you. Slow down or reach cover."
-              : "The hunter is pursuing. Break sight behind the tall rib or retreat to the clear upper flank.",
-          error: true,
-        },
-        { type: "sound", cue: "warning", origin: { ...t.position }, source: "threat-call" },
-      );
-  };
-  if (!territory || (cover && t.modeSeconds > 1) || t.distraction) {
-    if (t.mode !== "idle") change("disengage");
-  } else if (t.mode === "idle" && t.interest > 0.65) change("warn");
-  else if (t.mode === "warn" && t.modeSeconds > 3)
-    change(t.interest > 1 ? "investigate" : "disengage");
-  else if (t.mode === "investigate" && t.modeSeconds > 4)
-    change(t.interest > 3 ? "pursue" : "disengage");
-  else if (t.mode === "pursue" && (t.interest < 1 || d > 62))
-    change("disengage");
-  else if (
-    t.mode === "disengage" &&
-    t.modeSeconds > 5 &&
-    distance(t.position, THREAT_HOME) < 4
-  )
-    change("idle");
-  const motion = moveHunter(s, world);
-  t.position = motion.position;
-  if (motion.contact.biting && !behindCover(p, t.position) && !exposure(s).refuge && !t.distraction) {
-    const v = s.fleet.vehicles.find(
-      (v) => v.id === s.player.controlledVehicleId,
-    ) ?? cabinHull(s);
-    if (v) {
-      const before = v.health;
-      v.health = Math.max(0, v.health - 12 * DT);
-      const loss = before - v.health;
-      if (loss > 0) events.push({ type: "threat-damage", source: "hunter",
-        target: { kind: "vehicle", vehicleId: v.id }, loss, healthAfter: v.health });
-    } else {
-      const before = s.player.vitals.health;
-      s.player.vitals.health -= 10 * DT;
-      const healthAfter = Math.max(0, s.player.vitals.health), loss = Math.max(0, before - healthAfter);
-      if (loss > 0) events.push({ type: "threat-damage", source: "hunter", target: { kind: "diver" }, loss, healthAfter });
-    }
-    if (s.tick % 60 === 0) events.push({ type: "sound", cue: "damage", origin: { ...t.position } });
-  }
-}
+/** ENC-1: the sound hunter's encounter lives in hunterEncounter.ts. */
+export { updateThreat } from "./hunterEncounter.js";

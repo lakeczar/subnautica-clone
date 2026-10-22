@@ -1,4 +1,5 @@
 import { HAZARD_FIELDS } from "../../content/ecology/hazards.js";
+import { FIRST_STRIKE_SHARE, VIEW_BIAS } from "../../content/ecology/encounter.js";
 import { sitePosition } from "../../content/ecology/sites.js";
 import { ACTIVATION_RADIUS, MAX_ACTIVE_THREATS, REFUGE_MARGIN, THREATS, THREAT_AGENT_IDS, THREAT_ROSTER } from "../../content/ecology/species.js";
 import type { Deterrent, Sense, ThreatAgentId, ThreatDefinition, ThreatSpeciesId } from "../../content/ecology/species.js";
@@ -192,7 +193,8 @@ export function stepAgent(agent: AgentState, s: Stimulus, world: EcologyWorld, t
       else if (agent.modeSeconds >= def.timing.alert && agent.awareness < def.awareness.alert * 0.5) change("rest", "calm", def.captions.withdraw);
       break;
     case "investigate":
-      if (mayCommit && agent.modeSeconds >= def.timing.investigate && agent.awareness >= def.awareness.commit) change("commit", "commit", def.captions.commit);
+      if (mayCommit && agent.modeSeconds >= def.timing.investigate && agent.awareness >= def.awareness.commit &&
+          (seenBy(agent, def, s) || agent.modeSeconds >= def.timing.investigate + UNSEEN_COMMIT_DELAY)) change("commit", "commit", def.captions.commit);
       else if (agent.awareness < def.awareness.alert * 0.6) change("withdraw", "withdraw", def.captions.withdraw);
       break;
     case "commit": {
@@ -228,8 +230,13 @@ export function stepAgent(agent: AgentState, s: Stimulus, world: EcologyWorld, t
   let target = home, speed = 0, face = s.position;
   if (lureTarget) { target = lureTarget; speed = def.speed.investigate; face = lureTarget; }
   else if (agent.mode === "investigate") {
+    // ENC-1: the stand-off bearing leans toward the actor's view, so the
+    // animal that may lunge holds where it can be seen.
     const away = sub(agent.position, s.position), n = length(away);
-    target = n > 1e-6 ? add(s.position, scale(away, def.standOff / n)) : agent.position;
+    const unitAway = n > 1e-6 ? scale(away, 1 / n) : null;
+    const lean = unitAway && s.facing ? add(scale(unitAway, 1 - VIEW_BIAS), scale(s.facing, VIEW_BIAS)) : unitAway;
+    const m = lean ? length(lean) : 0;
+    target = lean && m > 1e-6 ? add(s.position, scale(lean, def.standOff / m)) : agent.position;
     speed = def.speed.investigate;
   } else if (agent.mode === "commit") { target = s.position; speed = def.speed.commit; }
   else if (agent.mode === "withdraw" || agent.mode === "rest") {
@@ -240,9 +247,23 @@ export function stepAgent(agent: AgentState, s: Stimulus, world: EcologyWorld, t
   agent.yaw = yawToward(agent.position, face, agent.yaw);
   return out;
 }
+/** Seconds past its investigation an unseen animal waits before it may lunge anyway. */
+export const UNSEEN_COMMIT_DELAY = 6;
+/** Half-angle of the view cone in which an investigating animal counts as seen. */
+export const SEEN_CONE = 0.75;
+/** Is the animal (or a sessile colony's swelling display) inside the actor's
+ * view? Without a facing the stimulus carries no view rules. */
+export function seenBy(agent: AgentState, def: ThreatDefinition, s: Stimulus): boolean {
+  if (!s.facing || def.strike.kind === "pulse") return true;
+  const d = sub(agent.position, s.position), n = length(d);
+  if (n < 1e-6) return true;
+  return (d.x * s.facing.x + d.y * s.facing.y + d.z * s.facing.z) / n >= Math.cos(SEEN_CONE);
+}
 function strike(agent: AgentState, def: ThreatDefinition, s: Stimulus, out: AgentStepOutput): void {
   agent.struck = true;
-  const target = s.hull ? "vehicle" : "diver", loss = s.hull ? def.strike.hull : def.strike.diver;
+  // ENC-1 ramp: the first strike of an engagement is a lighter warning.
+  const share = agent.cycles === 0 ? FIRST_STRIKE_SHARE : 1;
+  const target = s.hull ? "vehicle" : "diver", loss = (s.hull ? def.strike.hull : def.strike.diver) * share;
   if (s.hull) out.hullLoss += loss; else out.diverLoss += loss;
   out.events.push({ type: "ecology-strike", agentId: agent.id, species: speciesOf(agent.id), target, loss, origin: { ...agent.position } });
 }

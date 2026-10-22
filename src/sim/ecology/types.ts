@@ -34,6 +34,8 @@ export interface Stimulus {
   /** Contact radius of the diver or hull. */
   readonly radius: number;
   readonly inRefuge: boolean;
+  /** ENC-1: unit view direction (heading and pitch). Absent: no view rules. */
+  readonly facing?: Vec3;
 }
 
 export type AgentMode = "rest" | "alert" | "investigate" | "commit" | "withdraw";

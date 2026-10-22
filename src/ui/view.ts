@@ -67,6 +67,7 @@ export class GameView {
       <div class="vignette" aria-hidden="true"></div>
       <div class="experience-layout">
       <main id="hud" hidden aria-label="Exploration display">
+        <div id="threat-edge" class="threat-edge" aria-hidden="true" hidden></div>
         <div class="hud-top"><div id="hud-region" class="region"><span class="eyebrow">SILTWAKE / FIRST EXPEDITION</span><strong id="region-name">Hearth Reef</strong></div>
         <div id="hud-heading" class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
         <div class="hud-actions"><div id="hud-tools"><button data-action="inventory">Cargo <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button></div><button id="hud-pause" data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
