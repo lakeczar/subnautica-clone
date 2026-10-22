@@ -385,6 +385,11 @@ export class SiltwakeApp {
 
   private frame(now: number): void {
     if (this.disposed) return;
+    // Frame timing for measurement harnesses only (CW-1 traversal): a page
+    // that defines `__siltwakePerf` gets one entry per frame.
+    const perf = (globalThis as { __siltwakePerf?: unknown[] }).__siltwakePerf;
+    const started = perf ? performance.now() : 0;
+    let simMs = 0, steps = 0;
     // Baked cave records, once they land (the pack is fetched at start).
     if (!this.recordsSet && (!this.caveStore || this.caveStore.settled)) {
       if (this.caveStore?.collision) setKitCaveRecords(this.caveStore.collision);
@@ -395,34 +400,50 @@ export class SiltwakeApp {
     const hold = this.active ? this.caveAdmission(now) : null;
     this.clock.advance(now, this.active && !hold?.holding, () => {
       if (!this.state || !this.active) return;
-      const gesture = this.sampleGesture();
-      const controls = this.input?.sample() ?? [];
-      this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
-      const result = stepGame(
-        this.state,
-        [...controls, ...gesture],
-        this.world,
-      );
-      this.session.state = result.state;
-      this.events(result.events);
-      this.observeTimeline(result.state, [...controls, ...gesture], result.events);
-      this.observeAscent(result.events);
-      this.observeThrust(result.events);
-      this.view.presentationStep(result.state);
-      this.validateGesture();
-      for (const event of result.events)
-        if (
-          event.type === "foundation-boundary" &&
-          now - this.lastBoundaryNotice > 6000
-        ) {
-          this.view.notify(
-            "World edge · open ocean beyond. Turn back toward the regions.",
-            false, { channel: "system" },
-          );
-          this.lastBoundaryNotice = now;
-        }
-      this.session.autosave();
+      const stepStart = perf ? performance.now() : 0;
+      try { this.step(now); } finally { if (perf) { simMs += performance.now() - stepStart; steps++; } }
     });
+    const presentStart = perf ? performance.now() : 0;
+    this.present(now);
+    if (perf) perf.push({ at: now, total: performance.now() - started, sim: simMs, steps, present: performance.now() - presentStart,
+      parts: (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent ?? null, hold: hold?.state ?? null });
+    this.frameId = requestAnimationFrame((time) => this.frame(time));
+  }
+
+  /** One fixed simulation step with this frame's input. */
+  private step(now: number): void {
+    if (!this.state || !this.active) return;
+    const gesture = this.sampleGesture();
+    const controls = this.input?.sample() ?? [];
+    this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
+    const result = stepGame(
+      this.state,
+      [...controls, ...gesture],
+      this.world,
+    );
+    this.session.state = result.state;
+    this.events(result.events);
+    this.observeTimeline(result.state, [...controls, ...gesture], result.events);
+    this.observeAscent(result.events);
+    this.observeThrust(result.events);
+    this.view.presentationStep(result.state);
+    this.validateGesture();
+    for (const event of result.events)
+      if (
+        event.type === "foundation-boundary" &&
+        now - this.lastBoundaryNotice > 6000
+      ) {
+        this.view.notify(
+          "World edge · open ocean beyond. Turn back toward the regions.",
+          false, { channel: "system" },
+        );
+        this.lastBoundaryNotice = now;
+      }
+    this.session.autosave();
+  }
+
+  /** Everything after the steps: aim, HUD, the renderer, idle preparation, sound. */
+  private present(now: number): void {
     const target = this.active && this.state ? aimedInteraction(this.state, this.world) : null;
     const preview = this.active && this.state && !target ? reachPreview(this.state, this.world) : null;
     const aim = { target, preview };
@@ -462,7 +483,6 @@ export class SiltwakeApp {
       }
     }
     this.sound.update(this.state, this.active);
-    this.frameId = requestAnimationFrame((time) => this.frame(time));
   }
 
   private syncSessionUi(): void {

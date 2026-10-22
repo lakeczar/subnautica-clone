@@ -390,7 +390,10 @@ export function createRenderer(
         lastViewer = camera.position.clone();
         const cinematic = !state || state.opening.phase < 4;
         const extraMs = cinematic ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
+        const timed = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
+        const tStream = timed ? performance.now() : 0;
         const world = art.stream(camera.position, { ...(jumped ? { nearRadius: NEAR_WORLD } : {}), extraMs });
+        const chunkMs = timed ? performance.now() - tStream : 0;
         cue.update(state ? overlay?.target ?? overlay?.preview ?? null : null, camera.position, !!overlay?.target);
         const interior = !!state && (inCanopyAir(state) || state.player.mode === "interior");
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
@@ -410,6 +413,7 @@ export function createRenderer(
         lastStream = { at: camera.position.clone(), time: nowMs };
         // Records must have landed before the streamer builds from them;
         // without a store (or a bake) clusters generate live.
+        const tCaves = timed ? performance.now() : 0;
         if (!caves || caves.settled) {
           streamFrame = streamer.update(camera.position, velocity);
           worstCaveBuildMs = Math.max(worstCaveBuildMs, streamFrame.buildMs);
@@ -419,6 +423,7 @@ export function createRenderer(
         if (++streamFrames % 30 === 0) terrainStore()?.prefetch(camera.position.add(velocity.scale(streamer.options.lookAhead)), 520);
         caveView.update(lamp ?? camera.position, camera.getTarget().subtract(camera.position),
           !!state && state.opening.phase >= 4 && lampOn(state) && underwater === 1);
+        const caveMs = timed ? performance.now() - tCaves : 0;
         canvas.dataset.cave = caveView.active ?? "";
         const ks = caveWorld.kitCaves.stats;
         canvas.dataset.caveStream = JSON.stringify({ sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes,
@@ -436,7 +441,13 @@ export function createRenderer(
         sky.setFloat("time", time);
         canvas.dataset.water = underwater ? "underwater" : "above";
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
+        const tRender = timed ? performance.now() : 0;
         scene.render();
+        if (timed) (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent = {
+          chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2),
+          buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
+          uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
+        };
         canvas.dataset.meshes = String(scene.meshes.length);
         canvas.dataset.vertices = String(scene.meshes.reduce((n, m) => n + m.getTotalVertices(), 0));
         canvas.dataset.triangles = String(scene.meshes.reduce((n, m) => n + m.getTotalIndices() / 3, 0));

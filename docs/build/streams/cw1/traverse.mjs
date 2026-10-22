@@ -1,0 +1,155 @@
+// CW-1 acceptance on the RTX 3090: a fast Dart traversal of every region and
+// every cave mouth, one segment per job (each under 30 minutes). Task-owned
+// headless Chrome (ANGLE GL-EGL), the built game served from `dist`, the
+// segment's derived save imported through the menu, then ordinary keys only:
+// W, Shift (boost), arrows, Space and C, closed loop on the HUD bearing and
+// pitch and the canvas camera position (C3's driver).
+// Measured: cold start (navigation to playable), every rAF gap, every frame's
+// own work (`__siltwakePerf`: simulation, chunk streaming, cave streaming,
+// render), cave holds, streaming counters, resident bytes and JS heap.
+// usage: node traverse.mjs <dist> <plan.json> <save.json> <segment> <outdir> <port>
+import { createRequire } from "node:module";
+import { createServer } from "node:http";
+import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+const require = createRequire("/work/tmp/gpu-prep/pw/");
+const { chromium } = require("playwright-core");
+const [dist, planFile, saveFile, segArg, out, port] = process.argv.slice(2);
+const segment = Number(segArg), plan = JSON.parse(readFileSync(planFile, "utf8")), points = plan.segments[segment];
+mkdirSync(out, { recursive: true });
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json", ".bin": "application/octet-stream" };
+const root = path.resolve(dist);
+const server = createServer((req, res) => {
+  const rel = decodeURIComponent((req.url ?? "/").split("?")[0]);
+  const file = path.resolve(root, "." + (rel.endsWith("/") ? rel + "index.html" : rel));
+  if (!file.startsWith(root + path.sep) || !existsSync(file) || statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
+  res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream", "cache-control": "no-store" });
+  res.end(readFileSync(file));
+});
+await new Promise((r) => server.listen(Number(port), "127.0.0.1", r));
+const log = [];
+const note = (...a) => { const line = `[${(performance.now() / 1000).toFixed(1)}s] ${a.join(" ")}`; log.push(line); console.log(line); };
+const result = { commit: readFileSync(path.join(dist, "COMMIT"), "utf8").trim(), segment, caves: points.filter(p => p.cave).map(p => p.cave),
+  reached: [], skipped: [], shots: [], errors: [], holds: [], long: [], recoveries: 0 };
+const browser = await chromium.launch({ executablePath: `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`,
+  headless: true, args: ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist", "--enable-precise-memory-info", "--cw1-traverse"], timeout: 30000 });
+let page;
+const held = new Set();
+const key = async (k, on) => { if (on && !held.has(k)) { held.add(k); await page.keyboard.down(k); } else if (!on && held.has(k)) { held.delete(k); await page.keyboard.up(k); } };
+const releaseAll = async () => { for (const k of [...held]) await key(k, false); };
+const wrap = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+let eye = 0;
+async function read() {
+  return page.evaluate(() => {
+    const c = document.querySelector("#ocean").dataset, q = (s) => document.querySelector(s);
+    const pitch = Number(/(-?\d+)/.exec(q("#pitch-cue")?.getAttribute("aria-label") ?? "Pitch 0")?.[1] ?? 0);
+    return { cam: (c.cameraPosition ?? "0,0,0").split(",").map(Number), bearing: parseFloat(q("#bearing")?.textContent ?? "0"), pitch,
+      depth: parseFloat(q("#depth")?.textContent ?? "0"), cave: c.cave ?? "", hold: c.caveHold ?? "", vitals: q("#vitals")?.innerText.replace(/\s+/g, " ") ?? "" };
+  });
+}
+const pos = (s) => ({ x: s.cam[0], y: s.cam[1] - eye, z: s.cam[2] });
+/** Closed-loop piloting to a point with the ordinary keys; false when it gives up (logged, the tour goes on). */
+async function goto(t, { tol = 4, label = "", boost = true, timeout = 150 } = {}) {
+  const start = performance.now(); let best = Infinity, bestAt = start, recoveries = 0;
+  for (;;) {
+    const s = await read();
+    if (s.hold && s.hold !== "clear") result.holds.push({ t: +(performance.now() / 1000).toFixed(1), hold: s.hold, label });
+    const p = pos(s), dx = t.x - p.x, dy = t.y - p.y, dz = t.z - p.z, h = Math.hypot(dx, dz), d3 = Math.hypot(h, dy);
+    if (d3 <= tol) { await releaseAll(); return true; }
+    if (d3 < best - 0.3) { best = d3; bestAt = performance.now(); }
+    if (performance.now() - bestAt > 5000 && recoveries < 3) {
+      recoveries++; result.recoveries++; note("recover", label, `${d3.toFixed(1)} m short`);
+      await releaseAll(); await key("KeyS", true); await key("Space", true); await page.waitForTimeout(1200); await releaseAll();
+      bestAt = performance.now(); best = Infinity; continue;
+    }
+    if (performance.now() - bestAt > 15000 || performance.now() - start > timeout * 1000) {
+      await releaseAll(); note("skip", label, `${d3.toFixed(1)} m short at ${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}`); return false;
+    }
+    const yaw = s.bearing * Math.PI / 180, want = h > 1.5 ? Math.atan2(dx, -dz) : yaw, err = wrap(want - yaw);
+    await key("ArrowRight", err > 0.04); await key("ArrowLeft", err < -0.04);
+    await key("ArrowUp", s.pitch < -2); await key("ArrowDown", s.pitch > 2);
+    await key("KeyW", Math.abs(err) < (h > 12 ? 0.5 : 0.3) && h > tol * 0.5);
+    await key("ShiftLeft", boost && h > 25 && Math.abs(err) < 0.3);
+    await key("Space", dy > 1); await key("KeyC", dy < -1);
+    await page.waitForTimeout(40);
+  }
+}
+async function shot(name) {
+  const file = path.join(out, `s${segment}-${String(result.shots.length + 1).padStart(2, "0")}-${name}.jpg`);
+  await page.screenshot({ path: file, type: "jpeg", quality: 82 }); result.shots.push(path.basename(file)); note("screenshot", file);
+}
+const quant = (s, f) => s.length ? +s[Math.min(s.length - 1, Math.floor(s.length * f))].toFixed(1) : null;
+try {
+  const context = await browser.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+  page = await context.newPage();
+  page.on("pageerror", (e) => result.errors.push(e.message));
+  page.on("response", (r) => { if (r.status() >= 400) result.errors.push(`HTTP ${r.status()} ${r.url()}`); });
+  page.on("console", (m) => { if (m.type() === "error") result.errors.push(m.text().slice(0, 300)); });
+  await page.addInitScript(() => {
+    window.__siltwakePerf = []; window.__gaps = [];
+    let last = 0; const loop = (now) => { if (last) window.__gaps.push([now, now - last]); last = now; requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+  });
+  const t0 = Date.now();
+  await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load", timeout: 60000 });
+  result.renderer = await page.evaluate(() => { const g = document.createElement("canvas").getContext("webgl2"); const e = g.getExtension("WEBGL_debug_renderer_info"); return g.getParameter(e.UNMASKED_RENDERER_WEBGL); });
+  note("renderer", result.renderer);
+  if (!/RTX 3090/.test(result.renderer)) throw new Error(`not the RTX 3090: ${result.renderer}`);
+  await page.waitForFunction(() => document.querySelector("#ocean")?.dataset.graphics === "available", null, { timeout: 60000 });
+  await page.locator("#new-game").waitFor({ state: "visible", timeout: 60000 });
+  const title = Date.now() - t0;
+  await page.locator("#import-file").setInputFiles(saveFile);
+  await page.waitForTimeout(300);
+  if (await page.locator("#confirmation").isVisible().catch(() => false)) await page.locator("#confirm-accept").click();
+  await page.waitForFunction(() => !document.querySelector("#hud")?.hidden && document.querySelector("#ocean").dataset.ready === "true", null, { timeout: 120000 });
+  const playable = Date.now() - t0;
+  const records = await page.evaluate(() => JSON.parse(document.querySelector("#ocean").dataset.caveStream ?? "{}"));
+  result.coldStart = { titleMs: title, playableMs: playable, collisionPackMs: records.recordsMs, records: records.records };
+  note("cold start", JSON.stringify(result.coldStart));
+  await page.locator("#ocean").click();
+  await page.waitForTimeout(1000);
+  let s = await read(); eye = s.cam[1] + s.depth;
+  note("loaded", JSON.stringify({ cam: s.cam, depth: s.depth, vitals: s.vitals }));
+  // Measured from here: the traversal itself.
+  await page.evaluate(() => { window.__siltwakePerf.length = 0; window.__gaps.length = 0; });
+  const started = performance.now();
+  let caveIndex = 0;
+  for (const [i, p] of points.entries()) {
+    if (i === 0) continue;
+    const ok = await goto(p, { tol: p.cave ? 4 : 7, label: p.cave ?? `cruise#${i}`, boost: !p.cave || true });
+    if (p.cave) {
+      (ok ? result.reached : result.skipped).push(p.cave);
+      s = await read();
+      note(ok ? "at" : "near", p.cave, "active light", s.cave || "-", "depth", s.depth);
+      if (caveIndex++ % 4 === 0) await shot(p.cave);
+    }
+  }
+  result.seconds = +((performance.now() - started) / 1000).toFixed(1);
+  const data = await page.evaluate(() => ({ gaps: window.__gaps, perf: window.__siltwakePerf, stream: JSON.parse(document.querySelector("#ocean").dataset.caveStream ?? "{}"),
+    cpu: Number(document.querySelector("#ocean").dataset.residentCpu ?? 0), gpu: Number(document.querySelector("#ocean").dataset.residentGpu ?? 0),
+    regionBytes: Number(document.querySelector("#ocean").dataset.regionBytes ?? 0),
+    heap: performance.memory ? { used: performance.memory.usedJSHeapSize, total: performance.memory.totalJSHeapSize } : null }));
+  const gaps = data.gaps.map(([, g]) => g).sort((a, b) => a - b);
+  result.frames = { count: gaps.length, p50: quant(gaps, 0.5), p95: quant(gaps, 0.95), p99: quant(gaps, 0.99), max: gaps.length ? +gaps.at(-1).toFixed(1) : null,
+    over33: gaps.filter(g => g > 33.4).length, over50: gaps.filter(g => g > 50).length };
+  const work = data.perf.map(e => e.total).sort((a, b) => a - b);
+  result.work = { p50: quant(work, 0.5), p95: quant(work, 0.95), p99: quant(work, 0.99), max: work.length ? +work.at(-1).toFixed(1) : null,
+    over33: work.filter(w => w > 33.4).length };
+  // Every long gap with the work of the frame that ran in it.
+  for (const [at, g] of data.gaps) if (g > 33.4) {
+    const e = data.perf.find(x => x.at >= at - g - 1 && x.at <= at + 1) ?? null;
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+  }
+  result.streamingMax = data.perf.reduce((m, e) => ({ chunks: Math.max(m.chunks, e.parts?.chunks ?? 0), caves: Math.max(m.caves, e.parts?.caves ?? 0) }), { chunks: 0, caves: 0 });
+  result.holdFrames = data.perf.filter(e => e.hold && e.hold !== "clear").length;
+  result.stream = data.stream;
+  result.memory = { residentCpuMiB: +(data.cpu / 1048576).toFixed(1), residentGpuMiB: +(data.gpu / 1048576).toFixed(1), regionMiB: +(data.regionBytes / 1048576).toFixed(1),
+    budgetMiB: 256, heapMiB: data.heap ? +(data.heap.used / 1048576).toFixed(1) : null };
+  note("result", JSON.stringify({ frames: result.frames, work: result.work, holds: result.holdFrames, memory: result.memory, stream: result.stream }));
+} catch (error) {
+  result.errors.push(String(error?.stack ?? error)); note("error", String(error));
+} finally {
+  writeFileSync(path.join(out, `segment-${segment}.json`), JSON.stringify(result, null, 1));
+  writeFileSync(path.join(out, `segment-${segment}.log`), log.join("\n"));
+  await browser.close().catch(() => {});
+  server.close();
+}

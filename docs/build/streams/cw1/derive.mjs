@@ -1,0 +1,106 @@
+// CW-1 traversal plan and saves (headless, the game's own rules and world).
+// A Dart tour that passes every kit cave's mouths (55 caves, all seven regions):
+// at each cave it drops to a point a few metres outside a mouth (at most
+// 340 m deep: the playthrough's Dart has its 350 m refit), between caves it
+// cruises at least 14 m over the highest floor on the leg. The tour is cut
+// into segments, each started from its own save: the creel route's state
+// after its refits phase (the real Dart and suits), the Dart moved to the
+// segment's first stop at full charge, the diver aboard. So every browser
+// job stays under 30 minutes.
+// usage: node derive.mjs <repo> <outdir> [segments]
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+const [repo, out, segArg] = process.argv.slice(2), B = path.join(repo, ".test-build/");
+const SEGMENTS = Number(segArg ?? 4);
+mkdirSync(out, { recursive: true });
+const { CAVE_SOURCES } = await import(B + "src/content/regions/caves.js");
+const { worldFloor } = await import(B + "src/content/regions/worldFloor.js");
+const { gameWorld, hullClearance } = await import(B + "src/sim/world.js");
+const { HULL_COLLIDERS } = await import(B + "src/content/registry.js");
+const { createEnvelope, encodeSave, decodeSave } = await import(B + "src/save/codec.js");
+const world = gameWorld(), DART = HULL_COLLIDERS.dart, DEEPEST = -340;
+const clamp = (y, x, z) => Math.min(-2, Math.max(DEEPEST, worldFloor(x, z) + 3, y));
+/** A clear Dart pose near `p`: step outward along `n`, then up, until it fits. */
+function clearNear(p, n) {
+  for (let out = 0; out <= 24; out += 2) for (const up of [0, 2, 4, 7, 10]) {
+    const q = { x: p.x + n.x * out, z: p.z + n.z * out, y: 0 };
+    q.y = clamp(p.y + up, q.x, q.z);
+    if (hullClearance(world, q, DART)) return q;
+  }
+  return null;
+}
+// One stop per cave: outside its first mouth (largest first), else above its footprint.
+const stops = [];
+for (const s of CAVE_SOURCES) {
+  const mouths = s.portals.filter(p => p.kind === "mouth").sort((a, b) => b.clear.width * b.clear.height - a.clear.width * a.clear.height);
+  let q = null, via = "";
+  for (const m of mouths) {
+    const n = Math.hypot(m.normal.x, m.normal.z) > 0.5 ? m.normal : { x: 0, z: 0 };
+    q = clearNear({ x: m.center.x + n.x * 6, y: m.center.y, z: m.center.z + n.z * 6 }, n.x || n.z ? n : { x: 1, z: 0 });
+    if (q) { via = m.id; break; }
+  }
+  if (!q) { const f = s.footprint; q = clearNear({ x: (f.minX + f.maxX) / 2, y: s.topY + 4, z: (f.minZ + f.maxZ) / 2 }, { x: 1, z: 0 }); via = "above"; }
+  if (!q) throw new Error(`no clear stop for ${s.id}`);
+  stops.push({ cave: s.id, region: s.region, via, at: q, mouthY: mouths[0]?.center.y ?? null });
+}
+// Greedy tour from the Fanvault (beside the pod).
+const tour = [stops.find(s => s.cave === "fanvault")];
+const left = stops.filter(s => s !== tour[0]);
+while (left.length) {
+  const last = tour.at(-1).at;
+  left.sort((a, b) => Math.hypot(a.at.x - last.x, a.at.z - last.z) - Math.hypot(b.at.x - last.x, b.at.z - last.z));
+  tour.push(left.shift());
+}
+/** Cruise legs: rise, cross at least 14 m above the highest floor (and no deeper than 440 m), descend. */
+function leg(a, b) {
+  const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 6));
+  let hi = -Infinity;
+  for (let i = 0; i <= n; i++) { const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n; hi = Math.max(hi, worldFloor(x, z)); }
+  const y = Math.min(-2, Math.max(DEEPEST, hi + 14));
+  return [{ x: a.x, y, z: a.z, cruise: true }, { x: b.x, y, z: b.z, cruise: true }];
+}
+const points = [{ ...tour[0].at, cave: tour[0].cave }];
+for (let i = 1; i < tour.length; i++) points.push(...leg(tour[i - 1].at, tour[i].at), { ...tour[i].at, cave: tour[i].cave });
+let total = 0;
+for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
+// Segments of equal length, each starting at a cave stop.
+const per = total / SEGMENTS, segments = [];
+let acc = 0, start = 0;
+for (let i = 1; i < points.length; i++) {
+  acc += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
+  if ((acc >= per && points[i].cave && segments.length < SEGMENTS - 1) || i === points.length - 1) {
+    segments.push(points.slice(start, i + 1)); start = i; acc = 0;
+  }
+}
+// The real late state: the creel route through its refits phase.
+const { Driver } = await import(B + "scripts/playthrough/driver.js");
+const { LIVE_PHASES } = await import(B + "scripts/playthrough/live.js");
+const { SaveSlot, loadSnapshot } = await import(B + "scripts/playthrough/persistence.js");
+const { runPhases } = await import(B + "scripts/playthrough/runner.js");
+await (await import(B + "scripts/playthrough/content.js")).loadCampaign();
+const slot = new SaveSlot("cw1-traversal");
+const run = await runPhases(new Driver("creel", "creel"), LIVE_PHASES, { readOptional: true, reverse: false, verbose: false }, slot);
+console.log(run.phases.map((p) => `${p.id}:${p.status}`).join(" "));
+const base = loadSnapshot(slot.snapshots.get("refits"));
+segments.forEach((seg, k) => {
+  const s = structuredClone(base), dart = s.fleet.vehicles.find(v => v.hull === "dart");
+  if (!dart || dart.rating < 350) throw new Error("no 350 m Dart in the refits state");
+  const p0 = seg[0];
+  dart.pose = { ...dart.pose, frame: "world", position: { x: p0.x, y: p0.y, z: p0.z }, yaw: 0, pitch: 0 };
+  dart.velocity = { x: 0, y: 0, z: 0 }; dart.charge = 100; dart.health = 100; dart.disabled = false;
+  s.player.controlledVehicleId = dart.id; s.player.mode = "piloting"; s.player.interiorId = null; s.player.interiorPose = null;
+  s.player.pose = { frame: "world", position: { ...dart.pose.position }, yaw: 0, pitch: 0 };
+  s.player.vitals = { health: 100, oxygen: 100, food: 100 };
+  const meta = { sessionId: "cw1-traversal", createdAt: "2026-10-22T00:00:00.000Z",
+    savedAt: new Date(Date.parse("2026-10-22T00:00:00.000Z") + s.tick * 1000 / 60).toISOString() };
+  const e = encodeSave(createEnvelope(s, meta));
+  if (!e.ok) throw new Error(`segment ${k}: ${e.error}`);
+  const back = decodeSave(e.value);
+  if (!back.ok) throw new Error(`segment ${k}: ${back.error}`);
+  writeFileSync(path.join(out, `seg${k}.json`), e.value);
+});
+writeFileSync(path.join(out, "plan.json"), JSON.stringify({ totalMetres: Math.round(total), stops: tour, segments }, null, 1));
+console.log(`${tour.length} caves, ${Math.round(total)} m, ${segments.length} segments:`,
+  segments.map(s => `${s.filter(p => p.cave).length} caves`).join(", "));
+console.log("regions", [...new Set(tour.map(s => s.region))].join(", "));
+console.log("stops above the mouth (deeper than 340 m or no clear mouth):", stops.filter(s => s.via === "above" || (s.mouthY ?? 0) < DEEPEST).map(s => s.cave).join(", "));
