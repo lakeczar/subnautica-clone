@@ -1,6 +1,6 @@
 import { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Vector3, Vector4 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh, Scene } from "@babylonjs/core";
 import type { GameState } from "../sim/types.js";
 import { CARRIER_LAYOUT } from "../sim/carrier.js";
@@ -9,11 +9,14 @@ import { opticsAt } from "./biomes/optics.js";
 import { ArtBatch } from "./geometry.js";
 import type { Point } from "./geometry.js";
 import { CAVE_SAMPLERS, CAVE_UNIFORMS, injectCaveLight } from "./caves/caveLight.js";
+import { DEPTH_LIGHT_SHADER, DEPTH_UNIFORMS, GOD_RAYS_SHADER, WATER_MEDIUM_SHADER, waterLightAt,
+  type WaterLight } from "./lighting/depthLight.js";
+import { LOCAL_LIGHT_SHADER, LOCAL_LIGHT_UNIFORMS } from "./lighting/localLights.js";
 import "@babylonjs/core/Shaders/ShadersInclude/instancesDeclaration.js";
 import "@babylonjs/core/Shaders/ShadersInclude/instancesVertex.js";
 
 export const opticalUniforms = [
-  "cameraPosition", "fogColor", "waterFogColor", "fogDensity",
+  "cameraPosition", "fogColor", "waterFogColor", "fogDensity", "fogUp", "fogDown",
   "carrierPosition", "carrierYaw", "carrierPresent", "carrierAirMin", "carrierAirMax",
 ];
 
@@ -22,12 +25,14 @@ export const opticalUniforms = [
  * remains the air authority. Keep this render-only dependency in sync until
  * those bounds have a shared descriptor. The carrier interval reads
  * the shared dry deck/room layout and is transformed with the rendered hull.
- * Subtract only the part of each air interval that is actually below Y=0. */
+ * Subtract only the part of each air interval that is actually below Y=0.
+ * The water's colour depends on the ray's direction (ATM-1): darker looking
+ * down, a faint surface glow looking up from depth. */
 export const opticalShader = `
 uniform vec3 cameraPosition; uniform vec3 fogColor; uniform vec3 waterFogColor;
 uniform float fogDensity; uniform vec3 carrierPosition; uniform float carrierYaw;
 uniform float carrierPresent; uniform vec3 carrierAirMin; uniform vec3 carrierAirMax;
-vec2 boxInterval(vec3 a,vec3 b,vec3 low,vec3 high,vec2 clip){
+${WATER_MEDIUM_SHADER}vec2 boxInterval(vec3 a,vec3 b,vec3 low,vec3 high,vec2 clip){
   vec3 d=b-a;
   vec3 safe=vec3(abs(d.x)<.00001?.00001:d.x,abs(d.y)<.00001?.00001:d.y,abs(d.z)<.00001?.00001:d.z);
   vec3 p=(low-a)/safe,q=(high-a)/safe;
@@ -57,7 +62,7 @@ vec3 opticalFog(vec3 color,vec3 point){
   // Air has its own clear haze. A dry room does not clear the wet portion of
   // an exterior ray; distant underwater objects may still disappear entirely.
   float haze=1.0-exp(-fogDensity*wet-dry*.0018);
-  vec3 medium=mix(fogColor,waterFogColor,wet/max(.0001,wet+dry*.08));
+  vec3 medium=mix(fogColor,waterMedium((point-cameraPosition)/max(distance,.0001)),wet/max(.0001,wet+dry*.08));
   return mix(color,medium,clamp(haze,0.0,.9999));
 }
 `;
@@ -84,7 +89,7 @@ void main(){
   gl_Position=viewProjection*w;
 }`;
 export const CEL_UNIFORMS = ["world", "viewProjection", ...opticalUniforms, "lightDirection", "time", "underwater", "lampOn",
-  ...CAVE_UNIFORMS];
+  ...CAVE_UNIFORMS, ...DEPTH_UNIFORMS, ...LOCAL_LIGHT_UNIFORMS];
 /** The cave light field and exact rock occupancy (W1). The rock texture must
  * stay R8 with nearest filtering and 255 = rock (`caves/caveMaterial.ts`). */
 export const CEL_SAMPLERS = [...CAVE_SAMPLERS];
@@ -118,6 +123,9 @@ varying vec3 vWorld; varying vec3 vNormal; varying vec4 vColor;
 uniform vec3 lightDirection; uniform float time; uniform float underwater; uniform float lampOn;
 ${opticalShader}
 ${NOISE_SHADER}
+${DEPTH_LIGHT_SHADER}
+${LOCAL_LIGHT_SHADER}
+${GOD_RAYS_SHADER}
 void main(){
   // Thin two-sided parts (fans, fronds, ribbons) light the side in view.
   vec3 n=normalize(vNormal); float d=dot(n,normalize(lightDirection));
@@ -188,21 +196,29 @@ void main(){
     float light=mix(.035,lines*(.3+.7*knots),resolve)*(.2+.8*pool)*sky*exp(-depth*.035);
     shade+=shade*vec3(.3,.36,.27)*light+vec3(.012,.02,.014)*light;
   }
-  // S4 lamp switch (C3): a warm pool on nearby surfaces facing the eye. Off,
-  // the deep world keeps only its ambient and animal light.
-  vec3 toEye=cameraPosition-vWorld; float eye=length(toEye);
-  float lampPool=lampOn*underwater*exp(-eye*.12)*(.3+.7*max(0.0,dot(n,toEye/max(eye,1e-3))));
-  shade=shade*(1.0+lampPool*.6)+vec3(.055,.048,.03)*lampPool;
   // Authored diffuse warmth, bounded to the existing refuge interiors. This
   // shader owns the visible light pools; Babylon lamps cannot light this cel.
   float pod=step(abs(vWorld.x),2.94)*step(19.38,vWorld.z)*step(vWorld.z,24.01)*step(.15,vWorld.y)*step(vWorld.y,3.73);
   float lab=step(111.28,vWorld.x)*step(vWorld.x,120.61)*step(-129.72,vWorld.z)*step(vWorld.z,-122.39)*step(-118.03,vWorld.y)*step(vWorld.y,-113.97);
+  // ATM-1 depth light: daylight falls with the surface's own depth and takes
+  // the region's colour. Dry rooms (pod, lab, carrier air) keep their light.
+  // The lamp (cave splice) and local lights below are what is left to see by.
+  vec3 cl=carrierLocal(vWorld);
+  float room=max(max(pod,lab),carrierPresent*step(carrierAirMin.x,cl.x)*step(cl.x,carrierAirMax.x)*
+    step(carrierAirMin.y,cl.y)*step(cl.y,carrierAirMax.y)*step(carrierAirMin.z,cl.z)*step(cl.z,carrierAirMax.z));
+  shade*=mix(depthLightAt(vWorld),vec3(1.0),room);
   vec3 pd=(vWorld-vec3(.7,2.6,21.4))*vec3(.22,.35,.30);
   vec3 ld=(vWorld-vec3(114.5,-115.1,-127.4))*vec3(.19,.28,.22);
   float warmth=pod*exp(-dot(pd,pd))*.75+lab*exp(-dot(ld,ld))*.9;
   shade=shade*mix(vec3(1.0),vec3(1.23,1.05,.79),warmth)+vec3(.095,.042,.009)*warmth;
   shade=mix(shade,vColor.rgb*1.12,step(vColor.a,-.5));
+  // Local lights in the dark (emissive art, vents, cockpit instruments) and
+  // faintly luminous art (alpha -0.3, Divide crystals) glowing on its own.
+  float lit=step(-.5,vColor.a), faint=lit*(1.0-step(-.1,vColor.a)), dark=1.0-.85*mix(daylightAt(vWorld),1.0,room);
+  shade+=lit*vColor.rgb*localLight(vWorld,n)*dark;
+  shade=max(shade,faint*vColor.rgb*.55*dark);
   gl_FragColor=vec4(opticalFog(shade,vWorld),1.0);
+  gl_FragColor.rgb+=(localHalo(vWorld)+godRayLight(vWorld))*underwater;
 }`;
 /** The production cel fragment with W1 cave light spliced in once: banded
  * darkness by path length inside the active cave, sun-only caustics, a fog
@@ -243,19 +259,22 @@ export function createCelMaterial(scene: Scene): ShaderMaterial {
 export function createGlassMaterial(scene: Scene): ShaderMaterial {
   const material = new ShaderMaterial("siltwake.observation-glass", scene, {
     vertexSource: CEL_VERTEX,
+    // The pane's sheen is reflected daylight: it dims with depth like every
+    // lit surface (ATM-1), so deep glass no longer veils the dark.
     fragmentSource: `precision highp float;
       varying vec3 vWorld; varying vec3 vNormal; varying vec4 vColor;
       ${opticalShader}
+      ${DEPTH_LIGHT_SHADER}
       void main(){
         if(vWorld.y*vColor.a<0.0)discard;
         vec3 view=normalize(cameraPosition-vWorld);
         float fresnel=pow(1.0-abs(dot(normalize(vNormal),view)),4.0);
-        vec3 tint=mix(vColor.rgb,vec3(.62,.81,.77),fresnel*.55);
+        vec3 tint=mix(vColor.rgb,vec3(.62,.81,.77),fresnel*.55)*depthLightAt(vWorld);
         gl_FragColor=vec4(opticalFog(tint,vWorld),.075+fresnel*.27);
       }`,
   }, {
     attributes: ["position", "normal", "color"],
-    uniforms: ["world", "viewProjection", ...opticalUniforms],
+    uniforms: ["world", "viewProjection", ...opticalUniforms, ...DEPTH_UNIFORMS],
     needAlphaBlending: true,
   });
   material.backFaceCulling = false;
@@ -313,9 +332,13 @@ export function wallWithOpening(
 
 const BASIN_SILT = "#4f807c";
 
+/** Per-frame optics for every optical material at the camera. The region
+ * optics choose the water's colour and haze; the depth light (ATM-1) then
+ * darkens and tightens it with depth and adds the up/down gradient. Returns
+ * that depth light for the renderer's lamp and local lights. */
 export function updateOpticalUniforms(
   materials: readonly ShaderMaterial[], camera: Vector3, state: GameState | null,
-): void {
+): WaterLight {
   const h = state?.fleet.vehicles.find(v => v.id === state.fleet.docking?.vehicleId);
   const depth = Math.max(0, -camera.y);
   const blend = (low: number, high: number, value: number): number => {
@@ -344,15 +367,22 @@ export function updateOpticalUniforms(
     fogDensity = density * (1 - w) + region.density * w;
   }
   const airFog = Color3.FromHexString("#a5ccd1");
+  const light = waterLightAt(camera.x, camera.y, camera.z, [waterFog.r, waterFog.g, waterFog.b], fogDensity);
+  const fog = new Color3(...light.fog);
   for (const material of materials) {
     material.setVector3("cameraPosition", camera);
     material.setColor3("fogColor", airFog);
-    material.setColor3("waterFogColor", waterFog);
-    material.setFloat("fogDensity", fogDensity);
+    material.setColor3("waterFogColor", fog);
+    material.setFloat("fogDensity", light.density);
+    material.setVector4("fogUp", new Vector4(...light.up));
+    material.setVector4("fogDown", new Vector4(...light.down));
+    material.setVector4("depthLight", new Vector4(...light.surface));
+    material.setFloat("godRays", light.rays);
     material.setFloat("carrierPresent", h ? 1 : 0);
     material.setFloat("carrierYaw", h?.pose.yaw ?? 0);
     material.setVector3("carrierAirMin", new Vector3(CARRIER_LAYOUT.deck.min.x, CARRIER_LAYOUT.deck.max.y, CARRIER_LAYOUT.deck.min.z));
     material.setVector3("carrierAirMax", new Vector3(CARRIER_LAYOUT.deck.max.x, CARRIER_LAYOUT.compact[0].max.y, CARRIER_LAYOUT.deck.max.z));
     if (h) material.setVector3("carrierPosition", new Vector3(h.pose.position.x, h.pose.position.y, h.pose.position.z));
   }
+  return light;
 }

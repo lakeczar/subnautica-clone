@@ -6,6 +6,7 @@ import { Scene } from "@babylonjs/core/scene.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { createRegionalArt } from "../src/render/renderer.js";
 import { createCelMaterial, createGlassMaterial, updateOpticalUniforms } from "../src/render/materials.js";
+import { fogDensityScale, fogLightAt, regionLightAt } from "../src/render/lighting/depthLight.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { createGame } from "../src/sim/state.js";
@@ -269,7 +270,12 @@ test("identical display ownership releases on the last plane and reconstructs af
   assert.throws(() => pool.acquire("READABLE"), /Disposed/);
 }));
 
-test("Pale Basin water is silt-pale at depth, unchanged on the Canopy route and continuous across its edge", () => sceneTest(scene => {
+// ATM-1: the region optics still choose the water's colour and haze; the depth
+// light then darkens and tightens it with depth (render/lighting/depthLight.ts).
+// So the Canopy route keeps its hue and, in the shallows, its exact colour; at
+// depth the expected water is the old colour times the depth light, and the
+// Basin is compared with route water under the same depth light.
+test("Pale Basin water is silt-pale at depth, the Canopy route keeps its hue under the depth light, continuous across the edge", () => sceneTest(scene => {
   const cel = createCelMaterial(scene);
   const fog = (x: number, y: number, z: number) => {
     updateOpticalUniforms([cel], new Vector3(x, y, z), null);
@@ -278,12 +284,17 @@ test("Pale Basin water is silt-pale at depth, unchanged on the Canopy route and 
   };
   const deep = (depth: number) => Color3.Lerp(Color3.FromHexString("#237e89"), Color3.FromHexString("#0b3048"),
     ((t: number) => t * t * (3 - 2 * t))(Math.max(0, Math.min(1, (depth - 15) / 175))));
-  for (const [x, y, z] of [[57, -10, -65], [126, -118, -120], [146, -142, -166], [0, -4, 10]] as const)
-    assert.ok(fog(x, y, z).c.equalsWithEpsilon(deep(-y), 1e-6), `route pose ${x},${y},${z} keeps its existing water`);
+  const lit = (depth: number, x: number, z: number) => deep(depth).scale(fogLightAt(depth, regionLightAt(x, z).gain));
+  for (const [x, y, z] of [[57, -10, -65], [0, -4, 10]] as const)
+    assert.ok(fog(x, y, z).c.equalsWithEpsilon(deep(-y), 1e-6), `shallow route pose ${x},${y},${z} keeps its existing water`);
+  for (const [x, y, z] of [[126, -118, -120], [146, -142, -166]] as const)
+    assert.ok(fog(x, y, z).c.equalsWithEpsilon(lit(-y, x, z), 1e-6), `route pose ${x},${y},${z}: its water, darkened by depth`);
   const parking = fog(172, -153, -196), site = fog(216, -166, -232);
-  assert.ok(parking.luminance > deep(153).toLuminance() * 2 && site.luminance > deep(166).toLuminance() * 2, "Basin water reads pale");
+  assert.ok(parking.luminance > lit(153, 126, -120).toLuminance() * 2 && site.luminance > lit(166, 126, -120).toLuminance() * 2,
+    "Basin water reads pale beside route water at the same depth");
   const blend = (low: number, high: number, v: number) => { const t = Math.max(0, Math.min(1, (v - low) / (high - low))); return t * t * (3 - 2 * t); };
-  assert.ok(Math.abs(parking.density - (.009 + blend(98, 175, 153) * .014)) < 1e-9, "haze density is unchanged");
+  assert.ok(Math.abs(parking.density - (.009 + blend(98, 175, 153) * .014) * fogDensityScale(153)) < 1e-9,
+    "haze density is the region's, tightened only by the depth light");
   let previous = fog(162, -152, -160).luminance;
   for (let z = -161; z >= -200; z--) {
     const next = fog(162, -152, z).luminance;
