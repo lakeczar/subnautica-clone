@@ -145,6 +145,7 @@ test("W2-03: the dock serves through Cargo's Service only from the dock stage; s
   assert.equal(supportedServiceSite(s, v), null);
   // Stage 1 opens the locker and the refuge; the stores wait for the dock.
   const one = restored(1);
+  assert.match(probe.text("craft", one), /Crown station bench · restored/, "Fabricate names the crown's bench");
   assert.ok(containerAccessible(one, CROWN_STATION.locker));
   for (const c of CROWN_STATION.stores) assert.ok(!containerAccessible(one, c) && containerAccessible(restored(2), c), c);
   const cu = [CROWN_STATION.locker, ...CROWN_STATION.stores].reduce((n, id) => n + one.inventory.containers.find((c) => c.id === id)!.capacity, 0);

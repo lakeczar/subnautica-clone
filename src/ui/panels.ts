@@ -10,11 +10,11 @@ import { isMountKind } from "../content/registry.js";
 import {
   available, containerAccessible, containerLabel as inventoryLabel, distance, equipped, fabricationContainers,
   facility, hasRoom, localBenchSite, materialStoragePreview, nearCanopyStop, nearPod,
-  nearWorkshop, supportedServiceSite, usedCapacity,
+  nearStop, nearWorkshop, stopWorks, supportedServiceSite, usedCapacity,
 } from "../sim/inventory.js";
 import { atSite, craftingBlock, craftSite, hullOutput, personalLimit, recipeSites, refitHull, refitTier, suitRefit } from "../sim/progression.js";
 import { CAMPAIGN_RECIPES } from "../content/campaign/index.js";
-import { stopForSite, WORKING_STOPS } from "../content/stops.js";
+import { STOP_IDS, stopForSite, WORKING_STOPS } from "../content/stops.js";
 import { HUB_RECIPES } from "../content/hub/recipes.js";
 import { RECOVERY_NOTICES, recoverableHull, recoveryCommand, recoveryRouteFor } from "../sim/recovery.js";
 import { cellRechargePreview, distractionPreview, PULSE_CHARGE_COST, reserve, serviceState, serviceWouldRestore } from "../sim/vehicles.js";
@@ -520,6 +520,7 @@ export class PanelView {
 
   private fabricate(state: GameState, button: CommandButton): string {
     const atPod = nearPod(state), atWorkshop = nearWorkshop(state) && !state.player.interiorId, atStop = nearCanopyStop(state);
+    const workingStop = STOP_IDS.find((id) => WORKING_STOPS[id].fabrication !== null && nearStop(state, id)) ?? null;
     const atBench = (site: Recipe["site"]): boolean => site === "island_workshop" ? atWorkshop : site === "canopy_stop" ? atStop : atPod;
     const benchOf = (site: Recipe["site"]): "home_pod" | "island_workshop" | "canopy_stop" =>
       site === "island_workshop" || site === "canopy_stop" ? site : "home_pod";
@@ -542,6 +543,8 @@ export class PanelView {
     const current = atPod ? `Home pod bench · ${facility(state, "pod_fabricator") ? "restored" : "repair needed"}`
       : atWorkshop ? `Splitspine workshop bench · ${facility(state, "island_workshop") ? "restored" : "repair needed; locker locked"}`
       : atStop ? `Outer-crown mooring mast · ${facility(state, "canopy_stop") ? "restored" : "dark; locker locked"}`
+      // HUB-2: a working stop's bench (the crown station's, the Rift station's, the Divide dock's).
+      : workingStop ? `${WORKING_STOPS[workingStop].label} bench · ${stopWorks(state, workingStop) ? "restored" : "restoration needed"}`
       : `No bench here${state.player.controlledVehicleId ? " · exit the craft to use a bench" : ""}`;
     let html = `<p class="panel-status">${current} · ${this.protection(state)}</p><p class="sr-only">Costs read have here / needed.</p>`;
     const render = ({ id, r, done, block, dart }: typeof recipes[number]): string => {
