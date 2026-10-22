@@ -178,6 +178,7 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 ## Backtracking (owner, 2026-10-22)
 - **Hubs and service points** (pod, workshop cove, crown station, outposts) stay easy to reach, at the waterline or a dock.
 - **Purposeful backtracking is wanted.** Gates you see before you can open them (a sealed hatch, a mountaintop secret, a jammed mechanism) are resolved by a key item, resource or knowledge found later. The player connects the dots from what they saw and read: "what does this mean?… aha!" Gates must be noticeable when first met and legible in hindsight, never arbitrary or empty-travel padding.
+- **Don't overdo it.** Use a few, spaced out, never back-to-back backtracking. The general principle: place **key elements that make the player wonder "what is this for?"**, then let the threads and logs lead them to discover what to use there. Pacing comes first.
 
 ## Atmosphere
 All five matter, in this priority:
