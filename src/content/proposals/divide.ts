@@ -125,7 +125,7 @@ export const DIVIDE: AreaProposal = {
   lostSites: [
     { id: "divide.mixing_site", area: "brine_divide", label: "Mixing-line station", at: p(880, -379.2, -1150), anchor: "floor",
       see: "A sensor house at the foot of a buoy chain, its logger sealed.",
-      decodes: [{ id: "divide_mixing_log", label: "Mixing-line logger", size: "log", gates: ["divide_mixing_logger"],
+      decodes: [{ id: "divide_mixing_log", label: "Mixing-line logger", size: "log", gates: ["divide_mixing_logger", "note_mixing_aside"],
         blueprints: ["bp_current_turbine"], story: false,
         reveals: [
           { id: "divide_site_cistern", label: "Brine cistern", category: "site", target: prop("divide_brine_cistern"), radius: 60 },

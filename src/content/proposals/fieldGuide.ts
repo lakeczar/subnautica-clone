@@ -1,0 +1,257 @@
+/** CB-2 creature field guide: one journal entry per species, shown in the
+ * journal's creatures tab once the animal is seen (or scanned, for the ones
+ * that are hard to notice). Player text, in the scanner's observational voice.
+ *
+ * Owner rule: practical hint first, flavour second. `hint` is the first line
+ * shown; the rest follow in field order. Protection is phrased in-world:
+ * threats, rare residents and story animals never read as food, and a
+ * protected animal's eggs are never something to take (the test checks both).
+ * `yields` names only what an animal leaves behind, or a common fish and its
+ * roe, with the grounds where it collects (`fauna.ts` or registry sources). */
+import type { FaunaItem } from "./fauna.js";
+import type { SpeciesId } from "./types.js";
+
+/**
+ * - `food`: a common fish; it and its roe may be taken.
+ * - `spawn_only`: its roe may be gathered; the school itself is left alone.
+ * - `shed_only`: take what it leaves (moults, shells, nests, grit, casts), never the animal.
+ * - `observe`: nothing to take; watch it.
+ * - `protected`: a threat, a rare resident or a story animal. Nothing is taken from it, its young or its eggs.
+ * - `remains`: never reachable alive; its fall is fair salvage.
+ */
+export type Protection = "food" | "spawn_only" | "shed_only" | "observe" | "protected" | "remains";
+
+export interface FieldGuideEntry {
+  readonly species: SpeciesId;
+  /** Journal heading (player text). */
+  readonly title: string;
+  readonly unlock: "seen" | "scanned";
+  readonly protection: Protection;
+  /** What the player may take, and where it gathers. Empty for observe and protected animals. */
+  readonly yields: readonly { readonly item: FaunaItem; readonly grounds: readonly string[] }[];
+  /** Threats: the natural window that lets you past, by CR-1 cycle ID. */
+  readonly window?: { readonly cycle: string; readonly text: string };
+  /** First line: the practical hint. */
+  readonly hint: string;
+  readonly eats: string;
+  readonly leaves: string;
+  readonly spawns: string;
+  readonly behaviour: string;
+  /** In-world statement of what you may and may not take. */
+  readonly protectionText: string;
+}
+
+export const FIELD_GUIDE: readonly FieldGuideEntry[] = [
+  // ---------------------------------------------------------------- common and food
+  { species: "reef_school", title: "Reef school", unlock: "seen", protection: "food",
+    yields: [{ item: "small_fish", grounds: ["reef_fish_ribs", "isles_fish_split", "basin_fish_ridge", "hub_fish_crown"] },
+      { item: "roe_cluster", grounds: ["reef_roe_nursery", "isles_roe_cove"] }],
+    hint: "Reach in where the school pauses in shade; a net takes two at a time. Roe sticks to the thickest cup beds and the warm side of sheltered coves.",
+    eats: "Grazes the film on cup beds and picks at whatever the fans let drift past.",
+    leaves: "Nothing worth collecting, except its roe.",
+    spawns: "Lays roe in clusters on dense staple cups and along still cove eddies; the beds fill again on their own after you take from them.",
+    behaviour: "Loops the same openings over and over and tightens into a ball when a craft speeds past. Common everywhere the water is clear and shallow.",
+    protectionText: "Common and quick to recover. Take what you need for a meal; the school carries on." },
+  { species: "canopy_school", title: "Lantern school", unlock: "seen", protection: "spawn_only",
+    yields: [{ item: "roe_cluster", grounds: ["canopy_roe_crowns"] }],
+    hint: "Its roe hangs in the fronds of the crowns above the laboratory, in the singer's home water. Gather while the singer is away feeding east.",
+    eats: "Plankton held in the clear upper water.",
+    leaves: "Roe strings in the crowns' fronds.",
+    spawns: "In the home crowns above the laboratory, where the fronds are densest; the strings regrow after a gathering.",
+    behaviour: "Holds in clear water above the dense channel and scatters at loud machinery. A broken school means anything listening has heard you too.",
+    protectionText: "Gather the roe; leave the school in the water. It is how the crowns tell you something is listening." },
+  // ---------------------------------------------------------------- what they leave
+  { species: "ledge_grazer", title: "Ledge grazer", unlock: "seen", protection: "shed_only",
+    yields: [{ item: "flex_membrane", grounds: ["reef_shed_moults"] }],
+    hint: "Follow the fresh scars: glass sits in them, and the grazers' old skins collect in the lee below the ridge.",
+    eats: "The film on wave-exposed rock, scraped off with a hard lip.",
+    leaves: "Bright scars with glass in them, and papery moulted skins that make good membrane.",
+    spawns: "Out of sight in crevices; young appear on the ledges already grazing.",
+    behaviour: "Works a ridge in a line and drifts off when a craft boosts close, coming back once it passes.",
+    protectionText: "Take the moults and the glass they uncover. Leave the grazers on their ledges." },
+  { species: "filter_ribbon", title: "Filter-ribbon colony", unlock: "seen", protection: "shed_only",
+    yields: [{ item: "flex_membrane", grounds: ["reef_ribbon_catch_north", "reef_ribbon_catch_south"] }],
+    hint: "Face the way the fans lean and swim downstream: shed ribbons pile in the first sheltered catch.",
+    eats: "Whatever the current carries into its fans.",
+    leaves: "Shed ribbons, which the current carries into lee catches. The catches fill again over time.",
+    spawns: "Buds new fans upstream of the old ones.",
+    behaviour: "Leans into the current and closes in dense or silty water. Open fans mean clear water ahead.",
+    protectionText: "Take the shed, never the colony." },
+  { species: "tide_clapper", title: "Tide clappers", unlock: "seen", protection: "shed_only",
+    yields: [{ item: "planter_feed", grounds: ["isles_shed_shells"] }],
+    hint: "When the clapping runs along the wall, hold on or tuck into a side pocket: the surge comes a few seconds later.",
+    eats: "What each surge brings in.",
+    leaves: "Empty valves that roll out of the caves into gullies, good crushed for planters.",
+    spawns: "On the undercut walls; spat settles in the lines left by older shells.",
+    behaviour: "Shut in a rippling run before every surge. A touch closes one shell and nothing else.",
+    protectionText: "Pick up the empty valves. Leave the living shells on the wall." },
+  { species: "shore_buttons", title: "Shore buttons", unlock: "seen", protection: "shed_only",
+    yields: [{ item: "planter_feed", grounds: ["isles_shed_shells"] }],
+    hint: "Their cast plates wash into the gully below the button ledges with the clappers' shells.",
+    eats: "Film on wet rock, at the splash line.",
+    leaves: "Overlapping plates they outgrow and drop.",
+    spawns: "In the splash zone, when the ledges stay wet longest.",
+    behaviour: "Clamp shut as footsteps come near and open again after a still minute. Harmless.",
+    protectionText: "Take the dropped plates. Leave the buttons where they cling." },
+  { species: "resin_weaver", title: "Resin weavers", unlock: "seen", protection: "shed_only",
+    yields: [{ item: "buoyant_resin", grounds: ["canopy_weaver_resin", "canopy_rootways_weaver_resin"] }],
+    hint: "An empty nest has no weaver at the door: that one is cured resin and free to take.",
+    eats: "Small drift caught in the hollows.",
+    leaves: "Nests packed from shed resin, abandoned when the weaver moves on.",
+    spawns: "Inside occupied nests; the young move out to start their own.",
+    behaviour: "Freezes at loud machinery and backs into the nest under a direct lamp.",
+    protectionText: "Take empty nests only. An occupied nest has a weaver at the door; leave it." },
+  { species: "ember_mites", title: "Ember mites", unlock: "seen", protection: "shed_only",
+    yields: [{ item: "conductive_crust", grounds: ["rift_mite_grit"] }],
+    hint: "When the lip is bare, the plume is coming. Their grit drifts onto the cool shoulder balcony facing the split; collect it there, away from the lip.",
+    eats: "Mineral film on the chimney lip.",
+    leaves: "Fine dark grit that settles on cooler ledges below, crust-rich.",
+    spawns: "In the warm lip itself; nobody reaches it.",
+    behaviour: "Leaves the lip a few seconds before every vent and returns after.",
+    protectionText: "Sweep the grit from the cool ledges. Leave the mites to their lip." },
+  { species: "basin_scavengers", title: "Basin scavengers", unlock: "seen", protection: "shed_only",
+    yields: [{ item: "planter_feed", grounds: ["basin_scavenger_casts", "meridian_scavenger_casts"] }],
+    hint: "An empty lane is a plume lane. Their casts heap at the burrow mouths; planters grow faster for them.",
+    eats: "Anything that settles near stable wreckage, and every fall that comes down.",
+    leaves: "Coiled casts at the burrows, the best planter feed in the basin.",
+    spawns: "Deep in the burrows, where nothing else goes.",
+    behaviour: "Feeds beside stable ground and backs into the burrows before a sediment surge or loud machinery.",
+    protectionText: "Take the casts from the burrow mouths. Leave the burrows and the scavengers in them." },
+  { species: "kiln_crawler", title: "Kiln crawlers", unlock: "seen", protection: "shed_only",
+    yields: [{ item: "planter_feed", grounds: ["rift_crawler_moults"] }],
+    hint: "When they file into the cracks, the tube is about to breathe heat; wait in a niche or take the cool tube. Their moults line the cracks of the cooler walls.",
+    eats: "Mineral film on warm tube walls.",
+    leaves: "Pale moults packed into wall cracks, good crushed for planters.",
+    spawns: "In the warmest cracks, out of reach.",
+    behaviour: "Files into cracks just before a heat breath and comes out as it fades.",
+    protectionText: "Take the moults from the cracks. Leave the crawlers on the walls." },
+  { species: "seam_pickers", title: "Seam pickers", unlock: "seen", protection: "shed_only",
+    yields: [{ item: "planter_feed", grounds: ["divide_picker_moults"] }],
+    hint: "Where pickers walk, the water is rinsed and clear. Their outgrown shells collect in the gaps of the picker rocks.",
+    eats: "Film on rinsed crystal and rock.",
+    leaves: "Small three-lobed shells, outgrown and dropped.",
+    spawns: "On the rinsed ledges, never below the mirror.",
+    behaviour: "Scatter into cracks when a craft boosts close and come straight back.",
+    protectionText: "Take the dropped shells. Leave the pickers on the ledges." },
+  // ---------------------------------------------------------------- watch, take nothing
+  { species: "vault_glimmer", title: "Vault glimmers", unlock: "seen", protection: "observe",
+    yields: [],
+    hint: "Lamp off, and the mats lean toward the moving water of the nearest mouth: that is the way out.",
+    eats: "Particles drawn in by the cave's breathing.",
+    leaves: "Nothing.",
+    spawns: "Within the mats; a mat thickens year on year.",
+    behaviour: "Dims inside a lamp cone and brightens again a few seconds after it moves on.",
+    protectionText: "There is nothing to take. Leave the mats on the ceilings; they are the cave's signposts." },
+  { species: "silt_combs", title: "Silt combs", unlock: "seen", protection: "observe",
+    yields: [],
+    hint: "Combs stand only on firm ground above the silt line. Where they grow, a craft can settle.",
+    eats: "Fine sediment strained through rigid plates.",
+    leaves: "Nothing.",
+    spawns: "Spreads by budding along firm ridges.",
+    behaviour: "Sessile. Rows of combs mark where surges do not reach.",
+    protectionText: "Nothing to take. Leave them standing; they mark safe ground." },
+  { species: "wakeglow_drift", title: "Wakeglow drift", unlock: "scanned", protection: "observe",
+    yields: [],
+    hint: "Your own wake glows for about a minute in still vault water. Lamp off, follow it back.",
+    eats: "Too small to say.",
+    leaves: "Light, briefly.",
+    spawns: "Unknown; it is always there in still water.",
+    behaviour: "Lights wherever something moves through it, and craft wakes glow brighter.",
+    protectionText: "Nothing to take." },
+  { species: "cable_tender", title: "Cable tenders", unlock: "seen", protection: "observe",
+    yields: [],
+    hint: "Tenders cluster only on lines that still carry current: follow a chain of them and you follow live power.",
+    eats: "Something in the faint warmth of a live line.",
+    leaves: "Nothing.",
+    spawns: "Along the cables; young chains are short.",
+    behaviour: "Pulses slowly, faster under a lamp, and drifts a metre off at loud machinery.",
+    protectionText: "Nothing to take. Leave the chains on the lines." },
+  { species: "pale_drifter", title: "Pale drifter (remains)", unlock: "scanned", protection: "remains",
+    yields: [{ item: "flex_membrane", grounds: ["fall_basin_west_hide", "fall_basin_east_hide"] },
+      { item: "planter_feed", grounds: ["fall_basin_west_bone", "fall_divide_lee_bone"] },
+      { item: "conductive_crust", grounds: ["fall_divide_lee_crust"] }],
+    hint: "A fall feeds scavengers for years. Hide hangs from the newest ones; old bone crusts over in dense water.",
+    eats: "Plankton in the open water beyond the rim, by the ton.",
+    leaves: "Its whole body, once, when it sinks.",
+    spawns: "Far from here.",
+    behaviour: "Never seen alive this side of the rim, only as a silhouette in the far water.",
+    protectionText: "Its remains are fair salvage. Take hide and bone; the scavengers will not miss a little." },
+  // ---------------------------------------------------------------- protected
+  { species: "brine_sails", title: "Brine sails", unlock: "seen", protection: "protected",
+    yields: [],
+    hint: "Sails drift the calm lanes well above the dense layer. They are one sign of a calm lane, not the only one: ribbons and drift show it too.",
+    eats: "Plankton concentrated above the mixing line.",
+    leaves: "Nothing you would find.",
+    spawns: "Somewhere along the outer lanes; young sails are rarely seen.",
+    behaviour: "Glides slowly where the downwelling is weakest.",
+    protectionText: "Few and slow to replace. Leave them alone." },
+  { species: "canopy_floaters", title: "Canopy floaters", unlock: "seen", protection: "protected",
+    yields: [],
+    hint: "Where floaters tend the bladders, cured resin rolls into the lee below them.",
+    eats: "The film their brushes sweep from the bladders.",
+    leaves: "Nothing of their own; the resin is the bladders' doing.",
+    spawns: "Among young bladders, in the floater nursery.",
+    behaviour: "Drifts apart from loud machinery and regroups after a minute.",
+    protectionText: "Leave them be. They keep the crowns afloat." },
+  { species: "brine_skimmer", title: "Brine skimmers", unlock: "seen", protection: "protected",
+    yields: [],
+    hint: "Where skimmers fan out over a pocket floor, there is dense water below, shimmer or not.",
+    eats: "What the dense water's edge concentrates.",
+    leaves: "Nothing.",
+    spawns: "Over the pools they skim; the eggs float at the edge of the brine.",
+    behaviour: "Scatters in a fan and settles back on the same pool.",
+    protectionText: "There are not many. Leave them and their eggs." },
+  { species: "knot_eel", title: "Knot eels", unlock: "seen", protection: "protected",
+    yields: [],
+    hint: "Hold a lamp on the hole for a few seconds and the eel withdraws; or take the other passage. It never leaves its hole.",
+    eats: "Whatever swims past its knot.",
+    leaves: "Nothing.",
+    spawns: "In the knot holes of the oldest roots.",
+    behaviour: "Rattles from a distance, flares closer, and nips only a diver who stays.",
+    protectionText: "Leave it in its hole." },
+  { species: "crown_rays", title: "Crown rays", unlock: "seen", protection: "protected",
+    yields: [],
+    hint: "The rays circle wide around a loud craft. Their egg cases wedge in the crown's south crevices; leave them where they are.",
+    eats: "Small life in the crown's upwelling.",
+    leaves: "Egg cases, which are not to be touched.",
+    spawns: "On the crown itself, in its southern crevices.",
+    behaviour: "Rings the crown slowly, always the same way round.",
+    protectionText: "Rare. Nothing is taken from them, and their egg cases stay on the crown." },
+  // ---------------------------------------------------------------- threats: natural windows
+  { species: "canopy_sound_hunter", title: "Sound hunter", unlock: "seen", protection: "protected",
+    yields: [],
+    window: { cycle: "cycle.canopy.hunter_feeding", text: "It leaves its home crowns to feed on the lantern school's east shoals, then comes back. While it is away, the home crowns are quiet." },
+    hint: "Watch which way it goes: when it leaves to feed east, the lab crowns are yours. Coming back, it is listening.",
+    eats: "The lantern school, mostly, in the east shoals.",
+    leaves: "Nothing.",
+    spawns: "Not seen.",
+    behaviour: "Warns, approaches, commits and disengages; acceleration, scans and heavy extraction draw it.",
+    protectionText: "Not prey and not to be hunted. Go around it, or go while it feeds." },
+  { species: "glare_stalker", title: "Glare stalker", unlock: "seen", protection: "protected",
+    yields: [],
+    window: { cycle: "cycle.rift.stalker_feeding", text: "While the split chimney vents, both stalkers feed in the plume's rising wash; the warm passage behind them is empty." },
+    hint: "When the chimney vents, they feed in the wash: that is when the passage is clear. Dark lamps and cool water lose them at any time.",
+    eats: "Whatever the plume carries up.",
+    leaves: "Nothing.",
+    spawns: "Somewhere warm and dark.",
+    behaviour: "Hunts light in warm passages and never crosses into cool water.",
+    protectionText: "Not prey and not to be hunted. A released fish draws it off; nothing is taken from it." },
+  { species: "layer_skate", title: "Layer skate", unlock: "seen", protection: "protected",
+    yields: [],
+    window: { cycle: "cycle.divide.skate_rest", text: "In crest slack water, when nothing drifts down onto the mirror, the skates settle to the floor and rest." },
+    hint: "When the crest goes slack, nothing drifts down for them and the skates settle on the floor: cross then, slowly. Their egg cases are tethered on the clear lee shelf by the west ledge; never touch them.",
+    eats: "What the downwelling drops onto the mirror.",
+    leaves: "Egg cases tethered on the lee shelf, which are not to be touched.",
+    spawns: "The one time a skate leaves the dense water: it rises to tether its egg cases on the clear lee shelf, where the brine cannot smother them.",
+    behaviour: "Feels vibration at the layer's surface and surges no more than a few metres above it.",
+    protectionText: "Not prey and not to be hunted. Its egg cases stay where they lie." },
+  { species: "hollow_choir", title: "Hollow choir", unlock: "seen", protection: "protected",
+    yields: [],
+    window: { cycle: "cycle.meridian.choir_rest", text: "The bells close to rest and barely hear." },
+    hint: "When the bells close, they barely hear: pass then. A sound somewhere else spends their chorus.",
+    eats: "What the gallery water carries in.",
+    leaves: "Nothing.",
+    spawns: "Buds new bells along the colony's edge.",
+    behaviour: "A rising hum precedes a pressure pulse; afterwards the bells fall quiet and close.",
+    protectionText: "Not prey and not to be hunted. It cannot move; leave it be." },
+];

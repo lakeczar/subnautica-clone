@@ -148,7 +148,7 @@ export const REEF: AreaProposal = {
   lostSites: [
     { id: "reef.pumphouse_site", area: "refuge_reef", label: "Old intake pump house", at: p(-380, -23.5, -20), anchor: "floor",
       see: "A dead console behind a hanging door; a pressure log cabinet sealed with fan growth.",
-      decodes: [{ id: "reef_pumphouse_log", label: "Pump house log", size: "log", gates: ["reef_pumphouse_terminal"],
+      decodes: [{ id: "reef_pumphouse_log", label: "Pump house log", size: "log", gates: ["reef_pumphouse_terminal", "note_reef_season"],
         blueprints: ["bp_locker_extension"], story: false,
         reveals: [
           { id: "reef_hint_crown", label: "Spur crown bearing", category: "hint", target: prop("hub.crown"), radius: 90 },

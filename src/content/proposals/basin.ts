@@ -124,7 +124,7 @@ export const BASIN: AreaProposal = {
   lostSites: [
     { id: "basin.pump_heads_site", area: "silt_basin", label: "Pump-head field", at: p(240, -260.2, -760), anchor: "floor",
       see: "A sealed field cabinet on the central pump head.",
-      decodes: [{ id: "basin_pumphead_log", label: "Pump-head field log", size: "log", gates: ["basin_pumphead_cabinet"],
+      decodes: [{ id: "basin_pumphead_log", label: "Pump-head field log", size: "log", gates: ["basin_pumphead_cabinet", "note_fall_survey"],
         blueprints: ["bp_chart_fix"], story: false,
         reveals: [
           { id: "basin_site_rim_cut", label: "West rim cut", category: "site", target: prop("basin_west_rim_cut"), radius: 60 },
@@ -138,7 +138,7 @@ export const BASIN: AreaProposal = {
       near: [prop("basin.pump_heads")] },
     { id: "basin.instrument_vault", area: "silt_basin", label: "Sealed instrument vault", at: p(805, -300, -600), anchor: "reshape", inCave: "basin_ridge_vaults",
       see: "A sealed vault door in the ridge vaults with a tag light still blinking.",
-      decodes: [{ id: "basin_vault_archive", label: "Vault archive", size: "archive", gates: ["basin_vault_terminal", "basin_vault_profiles"],
+      decodes: [{ id: "basin_vault_archive", label: "Vault archive", size: "archive", gates: ["basin_vault_terminal", "basin_vault_profiles", "note_basin_tray"],
         blueprints: ["bp_outpost_advanced"], story: false,
         reveals: [
           { id: "basin_stop_cool_mooring", label: "Cool flank mooring", category: "stop", target: site("rift.cool_mooring"), radius: 60 },

@@ -144,7 +144,7 @@ export const ISLES: AreaProposal = {
   lostSites: [
     { id: "isles.strain_gauges", area: "island_chain", label: "Strain gauge line", at: p(345, -45.4, 70), anchor: "floor",
       see: "Six anchored gauges in a row across the scar's edge, the last two bent over, a logger housing clamped to the first.",
-      decodes: [{ id: "isles_strain_gauge_log", label: "Gauge logger", size: "log", gates: ["isles_gauge_logger"],
+      decodes: [{ id: "isles_strain_gauge_log", label: "Gauge logger", size: "log", gates: ["isles_gauge_logger", "note_tide_sheet"],
         blueprints: ["bp_ping_lens"], story: false,
         reveals: [
           { id: "isles_hint_storm_arch", label: "Storm arch", category: "site", target: prop("isles_storm_arch"), radius: 60 },
@@ -158,7 +158,7 @@ export const ISLES: AreaProposal = {
       near: [prop("isles.slump_scar")] },
     { id: "isles.tide_store", area: "island_chain", label: "Yard tide store", at: p(436, -24, 20), anchor: "reshape", inCave: "isles_undercroft",
       see: "A dry-lockered store room cut off the yard sump, manifests in a sealed sleeve.",
-      decodes: [{ id: "isles_tide_store_fragment", label: "Tide store manifests", size: "fragment", gates: ["isles_tide_store_sleeve"],
+      decodes: [{ id: "isles_tide_store_fragment", label: "Tide store manifests", size: "fragment", gates: ["isles_tide_store_sleeve", "note_trapper_tally"],
         blueprints: ["bp_air_line_reel"], story: false,
         reveals: [
           { id: "isles_site_gauges", label: "Gauge line on the west flank", category: "site", target: prop("isles.strain_gauges"), radius: 50 },
