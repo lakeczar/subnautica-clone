@@ -80,7 +80,7 @@ export const HUB: AreaProposal = {
   lostSites: [
     { id: "hub.beacon_house", area: "hub_spur", label: "Beacon house", at: p(335, -48, -565), anchor: "reshape",
       see: "A cylindrical beacon house on the crown summit, its lamp dead, a chart cabinet sealed.",
-      decodes: [{ id: "hub_beacon_archive", label: "Beacon chart archive", size: "archive", gates: ["hub_chart_cabinet"],
+      decodes: [{ id: "hub_beacon_archive", label: "Beacon chart archive", size: "archive", gates: ["hub_chart_cabinet", "note_beacon_keeper"],
         blueprints: ["bp_beacon_array"], story: false,
         reveals: [
           { id: "hub_mark_dishes", label: "Dish field", category: "landmark", target: site("basin.dish_field"), radius: 120 },
