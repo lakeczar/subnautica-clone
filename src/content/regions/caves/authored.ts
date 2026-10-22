@@ -1,5 +1,5 @@
 import type { MaterialId, RegionId } from "../../registry.js";
-import { assertDisjointFootprints, CAVE_SOURCES, EXTERIOR, type CarveSource, type CaveDef, type CavePortal, type CaveRoomSource,
+import { assertDisjointFootprints, AUTHORED_CAVE_SOURCES, EXTERIOR, type CarveSource, type CaveDef, type CavePortal, type CaveRoomSource,
   type CaveRoute, type CaveSource, type TerraceSource } from "../caves.js";
 import { buildCave } from "../caveGeometry.js";
 import type { CraftProfileId } from "../passages.js";
@@ -291,7 +291,7 @@ export function caveFloor(source: CaveSource, floor: FloorFunction): FloorFuncti
 
 const built = new WeakMap<FloorFunction, Map<string, CaveDef>>();
 /** A group's generated definition on its `caveFloor`, built once per
- * exterior floor function (the same memo `caveDef` keeps for `CAVE_SOURCES`). */
+ * exterior floor function (the same memo `caveDef` keeps for `AUTHORED_CAVE_SOURCES`). */
 export function groupDef(group: CaveGroup, floor: FloorFunction): CaveDef {
   let byId = built.get(floor);
   if (!byId) built.set(floor, byId = new Map());
@@ -300,9 +300,9 @@ export function groupDef(group: CaveGroup, floor: FloorFunction): CaveDef {
   return def;
 }
 
-/** Throws if any footprint overlaps another, the kit's caves included. */
+/** Throws if any footprint overlaps another, every authored kit cave (CA-1's included) too. */
 export function assertGroupsDisjoint(groups: readonly CaveGroup[]): void {
-  assertDisjointFootprints([...CAVE_SOURCES, ...groups.map(g => g.source)]);
+  assertDisjointFootprints([...AUTHORED_CAVE_SOURCES, ...groups.map(g => g.source)]);
 }
 
 /** A group moved rigidly by `by` (whole metres, so every lattice edge and

@@ -138,7 +138,7 @@ const BURIED_HUT: CaveGroup = {
       note: "The stillest water in the Basin: the wake lingers longest here." },
   ],
   finds: [
-    { id: `${HUT}.survey_lens`, kind: "part", cave: HUT, room: `${HUT}.room`, at: v3(556, -381.4, -771.2), label: "Survey lens spare",
+    { id: `${HUT}.survey_lens`, kind: "part", cave: HUT, room: `${HUT}.room`, at: v3(556.4, -381.4, -771.2), label: "Survey lens spare",
       note: "Bible: survey range +30% for one station (SYS-2 survey station part)." },
   ],
 };
@@ -174,7 +174,7 @@ const FRACTURE_POCKET: CaveGroup = {
   pockets: [],
   residents: [],
   finds: [
-    { id: `${FRACTURE}.fracture_faces`, kind: "scan", cave: FRACTURE, room: `${FRACTURE}.pocket`, at: v3(330, -212.5, -363), label: "Fresh fracture faces",
+    { id: `${FRACTURE}.fracture_faces`, kind: "scan", cave: FRACTURE, room: `${FRACTURE}.pocket`, at: v3(330, -212.5, -362.6), label: "Fresh fracture faces",
       note: "Bible: fresh fracture faces to scan." },
   ],
 };
@@ -276,7 +276,7 @@ const WEST_RIM: CaveGroup = {
       note: "In the pipes." },
   ],
   finds: [
-    { id: `${CUT}.worked_layers`, kind: "scan", cave: CUT, room: `${CUT}.west_cut`, at: v3(210.5, -284, -818), label: "Worked layers",
+    { id: `${CUT}.worked_layers`, kind: "scan", cave: CUT, room: `${CUT}.west_cut`, at: v3(210.5, -279, -818), label: "Worked layers",
       note: "Bible: cut walls showing the worked layers." },
   ],
 };

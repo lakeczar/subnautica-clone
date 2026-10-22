@@ -41,7 +41,7 @@ const KNOT_HOLLOW: CaveGroup = {
   links: [], handoffs: [],
   pockets: [
     { id: "canopy_knot_hollow_crust", status: "bible", item: "conductive_crust", cave: KNOT, room: `${KNOT}.hollow`,
-      at: v3(722, -123, -115.6), renewable: false, note: "Root fins grounded to the rib along the back wall, out of drifting silt." },
+      at: v3(722, -122.6, -115.6), renewable: false, note: "Root fins grounded to the rib along the back wall, out of drifting silt." },
   ],
   residents: [
     { id: `${KNOT}.weavers`, species: "resin_weaver", cave: KNOT, room: `${KNOT}.hollow`, at: v3(717, -118, -118.5), count: 3, radius: 2,
@@ -149,7 +149,7 @@ const LEE_HOLLOW: CaveGroup = {
   caves: [{ id: LEE, size: "small", rooms: [`${LEE}.passage`, `${LEE}.hollow`], exits: [{ exit: "lee mouth", portal: `${LEE}.mouth` }] }],
   links: [], handoffs: [],
   pockets: [
-    { id: "canopy_lee_hollow_resin", status: "proposed", item: "buoyant_resin", cave: LEE, room: `${LEE}.hollow`, at: v3(696.5, -195, -255),
+    { id: "canopy_lee_hollow_resin", status: "proposed", item: "buoyant_resin", cave: LEE, room: `${LEE}.hollow`, at: v3(696.5, -194.6, -255),
       stock: [8, 2, 0], renewable: false, note: "Resin piled at the hollow's back, beside the mooring's own lee patch (bible prose: extra resin)." },
   ],
   residents: [

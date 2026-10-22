@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-import { CAVE_SOURCES, type CaveSource } from "../src/content/regions/caves.js";
+import { AUTHORED_CAVE_SOURCES, CAVE_SOURCES, type CaveSource } from "../src/content/regions/caves.js";
 import { assertGroupsDisjoint, caveFloor, EDGE_SHELF, openProfile, BASIN_CAVES, CANOPY_CAVES, CANOPY_BASIN_GROUPS,
   type CaveGroup } from "../src/content/regions/caves/index.js";
 import { layWake, oldestVisible, swimWake, wakeGlow, wakeTrail, WAKE_FADE_SECONDS } from "../src/content/regions/caves/wakeglow.js";
@@ -130,16 +129,14 @@ test("footprints hold no existing datum: sites, structures, registry sources and
   }
 });
 
-test("no overlap with CA-1's Reef and Isles caves when their modules are present", async t => {
-  const found: CaveSource[] = [];
-  for (const [file, name] of [["reef", "REEF_CAVES"], ["isles", "ISLES_CAVES"]] as const) {
-    const url = new URL(`../src/content/regions/caves/${file}.js`, import.meta.url);
-    if (existsSync(url)) found.push(...((await import(url.href)) as Record<string, CaveSource[]>)[name] ?? []);
+test("no footprint or collar-band overlap with any authored cave, CA-1's Reef and Isles caves included", () => {
+  assert.ok(AUTHORED_CAVE_SOURCES.length > CAVE_SOURCES.length, "CA-1's authored caves are present");
+  for (const g of CANOPY_BASIN_GROUPS) for (const s of [...AUTHORED_CAVE_SOURCES, ...CANOPY_BASIN_GROUPS.map(x => x.source)]) {
+    if (s === g.source) continue;
+    const f = g.source.footprint, grown = { minX: f.minX - 2 * BAND, maxX: f.maxX + 2 * BAND, minZ: f.minZ - 2 * BAND, maxZ: f.maxZ + 2 * BAND };
+    assert.ok(!overlaps(f, s.footprint), `${g.source.id} overlaps ${s.id}`);
+    if (AUTHORED_CAVE_SOURCES.includes(s)) assert.ok(!overlaps(grown, s.footprint), `${g.source.id}'s collar band meets ${s.id}'s`);
   }
-  if (!found.length) { t.skip("CA-1's caves are not on this branch; checked at composition (docs/build/streams/CA-2.md)"); return; }
-  const all = [...CAVE_SOURCES, ...found, ...CANOPY_BASIN_GROUPS.map(g => g.source)];
-  for (const g of CANOPY_BASIN_GROUPS) for (const s of all) if (s !== g.source)
-    assert.ok(!overlaps(g.source.footprint, s.footprint), `${g.source.id} overlaps ${s.id}`);
 });
 
 test("links: every bible crawlway and back entrance has one rock owner and a swept rescue route, or is recorded as omitted", () => {

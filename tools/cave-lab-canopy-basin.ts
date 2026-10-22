@@ -20,7 +20,7 @@ import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js
 import type { LinesMesh } from "@babylonjs/core/Meshes/linesMesh.js";
 import { createAtmosphere } from "../src/render/atmosphere.js";
 import { createCaveCelMaterial, CaveLighting } from "../src/render/caves/caveMaterial.js";
-import { caveDaylight, sampleLightField } from "../src/render/caves/lightField.js";
+import { caveDaylight, caveLightField, sampleLightField } from "../src/render/caves/lightField.js";
 import { opticsAt } from "../src/render/biomes/optics.js";
 import { tessellate, FINE, BORDER_STEP } from "../src/render/biomes/tessellate.js";
 import { geologyColor } from "../src/render/biomes/geology.js";
@@ -29,7 +29,6 @@ import { caves, EXTERIOR } from "../src/content/regions/caves.js";
 import { caveVolume } from "../src/content/regions/caveGeometry.js";
 import { CANOPY_BASIN_GROUPS, groupDef } from "../src/content/regions/caves/index.js";
 import { styledShell } from "../src/content/regions/caves/style.js";
-import { caveLightFieldFixed } from "../src/content/regions/caves/lightFix.js";
 import { layWake, wakeGlow, wakeTrail, WAKE_STRENGTH } from "../src/content/regions/caves/wakeglow.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
@@ -55,7 +54,7 @@ camera.attachControl(canvas, true);
 const started = performance.now();
 const def = groupDef(group, worldFloor);
 const shells = { fine: styledShell(def, "fine", group.style), coarse: styledShell(def, "coarse", group.style) };
-const field = caveLightFieldFixed(def, worldFloor);
+const field = caveLightField(def, worldFloor);
 // The composed world, holding the kit's caves and this one (every Canopy and
 // Basin cave together costs ~40 s of collar building; one is enough here).
 const world = createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: [...caves(worldFloor), def].map(caveOwner) });

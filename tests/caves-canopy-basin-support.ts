@@ -11,8 +11,7 @@ import { caveOwner, createCaveWorldQueries, SOLIDS, surfaceHeight, type CaveOwne
 import type { Capsule, Vec3, WorldQueries } from "../src/sim/types.js";
 import { boxDistance } from "../src/world/frame.js";
 import type { MeshRecipe } from "../src/render/kit/types.js";
-import { caveDaylight, sampleLightField, type CaveLightField } from "../src/render/caves/lightField.js";
-import { caveLightFieldFixed } from "../src/content/regions/caves/lightFix.js";
+import { caveDaylight, caveLightField, sampleLightField, type CaveLightField } from "../src/render/caves/lightField.js";
 
 export const DIVER: Capsule = CRAFT_PROFILES.diver;
 export const groups = CANOPY_BASIN_GROUPS;
@@ -540,7 +539,7 @@ export const head = (p: Vec3): Vec3 => ({ ...p, y: p.y + 0.6 });
 const fields = new WeakMap<CaveDef, CaveLightField>();
 export const fieldOf = (def: CaveDef): CaveLightField => {
   let f = fields.get(def);
-  if (!f) fields.set(def, f = caveLightFieldFixed(def, worldFloor));
+  if (!f) fields.set(def, f = caveLightField(def, worldFloor));
   return f;
 };
 export const glow = (def: CaveDef, p: Vec3): number => { const c = sampleLightField(fieldOf(def), p); return caveDaylight(c.r, 0, c.a); };

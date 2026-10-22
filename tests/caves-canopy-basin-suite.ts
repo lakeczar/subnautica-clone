@@ -7,8 +7,12 @@ import { EXTERIOR } from "../src/content/regions/caves.js";
 import type { CaveGroup } from "../src/content/regions/caves/index.js";
 import { CRAFT_PROFILES } from "../src/content/regions/passages.js";
 import type { Vec3 } from "../src/sim/types.js";
+import { INTERACTION_HOSTS, SOURCES } from "../src/content/registry.js";
+import { createGame } from "../src/sim/state.js";
+import { completeOpening } from "../src/sim/progression.js";
+import { aimedInteraction, aimRay, INTERACTION_REACH, interactionHost } from "../src/sim/targeting.js";
 import { caveExtent, checkLod, checkMouths, checkPortals, checkRock, checkRoof, checkRoutes, checkShellAgrees, checkTopology, collarSteps,
-  deepestPose, defOf, dist, DIVER, frameOf, hasCycle, inRock, lightRetreat, plugs, retreatStarts, roomAt, roomGraph } from "./caves-canopy-basin-support.js";
+  deepestPose, defOf, dist, DIVER, frameOf, hasCycle, reaches, spots, inRock, lightRetreat, plugs, retreatStarts, roomAt, roomGraph } from "./caves-canopy-basin-support.js";
 
 /** Lamp-off retreats run sealed (every opening plugged) for these caves:
  * the control that the retreat can fail. */
@@ -115,6 +119,43 @@ export function registerCaveTests(groups: readonly CaveGroup[]): void {
         const around = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].map(([a, b, c]) => ({ x: r.at.x + a! * r.radius, y: r.at.y + b! * r.radius, z: r.at.z + c! * r.radius }));
         assert.ok(around.filter(p => roomAt(def, p) !== "").length >= 4, `${r.id}: its ${r.radius} m spread leaves the water`);
       }
+    });
+
+    test(`${id}: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight)`, () => {
+      const def = defOf(g), fr = frameOf(def);
+      // Reachable poses: every half metre along the diver routes (each segment
+      // sweeps), plus clear spots one swept hop from them.
+      const route = def.routes.filter(r => r.profile === "diver").flatMap(r => r.path.slice(1).flatMap((b, i) => {
+        const a = r.path[i]!, n = Math.max(1, Math.ceil(dist(a, b) / 0.5));
+        return Array.from({ length: n }, (_, k) => ({ x: a.x + (b.x - a.x) * k / n, y: a.y + (b.y - a.y) * k / n, z: a.z + (b.z - a.z) * k / n }));
+      })).filter(p => fr.world.clearance(p, DIVER));
+      const failures: string[] = [];
+      for (const item of [...g.pockets.map(p => ({ id: p.id, at: p.at, pocket: true })), ...g.finds.map(f => ({ id: f.id, at: f.at, pocket: false }))]) {
+        const sid = `test.ca2.${item.id}`;
+        // Pockets compose into SOURCES with the default source host (0.2 m
+        // below the datum); finds' adapters are C4's, so they use the datum itself.
+        (SOURCES as Record<string, unknown>)[sid] = { ...Object.values(SOURCES).find(x => x.item === "conductive_crust"), label: item.id, position: item.at };
+        if (!item.pocket) (INTERACTION_HOSTS as Record<string, unknown>)[sid] = { offset: { x: 0, y: 0, z: 0 } };
+        try {
+          const s = createGame(); completeOpening(s); s.player.mode = "swimming";
+          const host = interactionHost(s, { id: sid, kind: "source", position: item.at } as never).center;
+          const near = (p: Vec3): boolean => dist({ ...p, y: p.y + 0.65 }, host) < INTERACTION_REACH - 0.3;
+          const direct = route.filter(near);
+          const hopped = direct.length ? [] : spots(def).filter(near).filter(q => route.some(p => dist(p, q) <= 7 && reaches(fr, p, q)));
+          let ok = false;
+          for (const from of [...direct, ...hopped]) {
+            s.player.pose.position = { ...from };
+            const eye = aimRay(s)!.origin, dx = host.x - eye.x, dy = host.y - eye.y, dz = host.z - eye.z;
+            s.player.pose.yaw = Math.atan2(dx, -dz); s.player.pose.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+            if (aimedInteraction(s, fr.world)?.id === sid) { ok = true; break; }
+          }
+          if (!ok) failures.push(`${item.id}: not targetable from ${direct.length + hopped.length} reachable poses (host ${JSON.stringify(host)})`);
+        } finally {
+          delete (SOURCES as Record<string, unknown>)[sid];
+          delete (INTERACTION_HOSTS as Record<string, unknown>)[sid];
+        }
+      }
+      assert.deepEqual(failures, []);
     });
 
     for (const h of g.handoffs) test(`${h.id}: the back entrance stops sealed at its biome face, with room to turn`, () => {
