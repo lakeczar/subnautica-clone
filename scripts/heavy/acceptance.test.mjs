@@ -168,6 +168,31 @@ test("6: a grandchild over the reservation is OOM-killed and reported from memor
   assert.equal((await done(c, neighbour)).code, 0);
 });
 
+test("6b: the scope is delegated: a TT-1-style per-file cgroup OOMs inside the job and is not the reservation's OOM", async () => {
+  const c = context("delegated");
+  // What scripts/heavy-containment.mjs does: move the job into a leaf, enable the
+  // memory controller, give one "file" its own capped child cgroup.
+  const script = [
+    'base=/sys/fs/cgroup$(sed -n "s/^0:://p" /proc/self/cgroup)',
+    'mkdir "$base/leaf" && for p in $(cat "$base/cgroup.procs"); do echo $p > "$base/leaf/cgroup.procs" 2>/dev/null; done',
+    'echo +memory > "$base/cgroup.subtree_control"',
+    'mkdir "$base/file1" && echo 128M > "$base/file1/memory.max" && echo 0 > "$base/file1/memory.swap.max" && echo 1 > "$base/file1/memory.oom.group"',
+    `sh -c 'echo $$ > "$0/cgroup.procs" && exec node -e "const a=[];for(;;)a.push(Buffer.alloc(16<<20,1))"' "$base/file1"; echo file-rc=$?`,
+    'echo delegated=$SILTWAKE_HEAVY_CGROUP; exit 1',
+  ].join("\n");
+  const id = submit(c, c.wt("d"), "--class", "standard", "--mem", "1G", "--", "sh", "-c", script);
+  const r = await done(c, id);
+  const out = readFileSync(join(c.sched, "jobs", id, "output.log"), "utf8");
+  assert.match(out, /file-rc=137/, out);
+  assert.match(out, /delegated=delegated/);
+  assert.equal(r.code, 1, "the job's own code, not relabelled");
+  assert.equal(r.label, null);
+  assert.ok(r.oomKills >= 1);
+  assert.equal(r.reservationOom, false);
+  assert.match(out, /OOM-killed inside the job by a sub-limit/);
+  assert.equal(r.leftovers, false);
+});
+
 test("7: an exclusive job drains the lane and runs alone, express included", async () => {
   const c = context("exclusive");
   const r1 = submit(c, c.wt("r1"), "--class", "standard", "--", "sleep", "4");
