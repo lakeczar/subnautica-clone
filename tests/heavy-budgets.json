@@ -7,5 +7,12 @@
     "render-cache.heavy.test.ts": 1536,
     "renewal-render.heavy.test.ts": 1280,
     "world-stream.heavy.test.ts": 1536
-  }
+  },
+  "exclusive": [
+    "caves-canopy-basin.heavy.test.ts",
+    "caves-deep-perf.heavy.test.ts",
+    "caves-reef-isles-game.heavy.test.ts",
+    "large-cave-canopy.heavy.test.ts"
+  ],
+  "exclusiveComment": "These files assert elapsed time (build cost or per-step query cost), so the heavy runner starts them with no other heavy file running beside them."
 }

@@ -2,7 +2,7 @@
 // Runs one test tier from the compiled `.test-build/tests`.
 //
 //   node scripts/test-tier.mjs fast  [files...]   every *.test.js except *.heavy.test.js
-//   node scripts/test-tier.mjs heavy [files...]   every *.heavy.test.js, one at a time
+//   node scripts/test-tier.mjs heavy [files...]   every *.heavy.test.js, contained per file
 //
 // Classification rule: a test file that reaches `@babylonjs` through its imports
 // is heavy and must be named `*.heavy.test.ts`. The fast tier enforces it twice:
@@ -24,17 +24,21 @@
 // Both tiers preload scripts/test-build-cache.mjs, a disk cache of expensive
 // deterministic world data (see src/content/buildCache.ts).
 //
-// Heavy files run each in its own `node --test --test-isolation=none` process,
-// up to three at a time while their memory budgets fit a 4.5 GiB pool. A watchdog samples the process's peak RSS (VmHWM) and kills it at the
-// budget; the process also reports its exact `maxRSS` on exit. Budgets come from
-// tests/heavy-budgets.json (MiB per file, with a default). The heavy tier runs
-// only inside scripts/heavy-check.sh (which sets SILTWAKE_HEAVY_LOCK_HELD), so one
-// heavy job uses the VM at a time; `npm run test:heavy` does that.
+// Heavy files run each in its own `node --test --test-isolation=none` process.
+// Budgets in tests/heavy-budgets.json (MiB per file, with a default) cover the
+// file's whole process tree, children included, and are enforced per file by
+// scripts/heavy-containment.mjs: in a delegated scope, a child cgroup per file
+// (files share a pool of up to three, within three quarters of the job's
+// memory, at most 4.5 GiB); otherwise one file at a time with its process group
+// watched. Files listed under `exclusive` there assert elapsed time and run
+// alone. The heavy tier runs only inside scripts/heavy-check.sh (which sets
+// SILTWAKE_HEAVY_LOCK_HELD); `npm run test:heavy` does that.
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { grantedMemoryMiB, heavyContainment } from "./heavy-containment.mjs";
 import { pruneBuildCache } from "./test-build-cache.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -44,10 +48,6 @@ const testDir = join(build, "tests");
 // at a few hundred MiB (see the timing report), well inside FAST_HEAP_MIB each.
 const FAST_CONCURRENCY = Math.max(2, Math.min(5, availableParallelism() - 1));
 const FAST_HEAP_MIB = 1024;
-// Heavy files share heavy-check.sh's 6 GiB scope: up to three at once, while
-// their peak-RSS budgets add up to no more than 4.5 GiB.
-const HEAVY_CONCURRENCY = Number(process.env.SILTWAKE_HEAVY_CONCURRENCY ?? 3);
-const HEAVY_POOL_MIB = Number(process.env.SILTWAKE_HEAVY_POOL_MIB ?? 4608);
 const FAST_FILE_WARN_S = Number(process.env.SILTWAKE_FAST_FILE_WARN_S ?? 5);
 const FAST_FILE_BUDGET_S = Number(process.env.SILTWAKE_FAST_FILE_BUDGET_S ?? 10);
 const ESCAPE_RE = /\bworker_threads\b|\bnew\s+Worker\s*\(|\bchild_process\b|["'](?:node:)?vm["']|(?<![\w.])eval\s*\(|\bnew\s+Function\s*\(/g;
@@ -158,14 +158,14 @@ if (tier === "fast") {
     .filter((t) => files.includes(t.file)) : [];
   rmSync(scratch, { recursive: true, force: true });
   // The whole table, for finding what to make cheaper.
-  writeFileSync(join(build, "fast-timing.json"), JSON.stringify(timings.map((t) => ({ ...t, file: basename(t.file) })), null, 1));
-  const charged = (t) => Math.max(0, (t.threadMs ?? t.cpuMs) - t.missMs) / 1000;
+  writeFileSync(process.env.SILTWAKE_FAST_TIMING_JSON || join(build, "fast-timing.json"), JSON.stringify(timings.map((t) => ({ ...t, file: basename(t.file) })), null, 1));
+  const charged = (t) => Math.max(0, (t.threadMs ?? t.cpuMs) - t.fillMs) / 1000;
   timings.sort((a, b) => charged(b) - charged(a));
   console.log(`\ntest:fast slowest files (main-thread CPU s, less build-cache fills; warn ${FAST_FILE_WARN_S || "off"} s, ` +
     `fail ${FAST_FILE_BUDGET_S || "off"} s; every file in .test-build/fast-timing.json)`);
   for (const t of timings.slice(0, 8))
     console.log(`  ${basename(t.file).padEnd(44)} ${charged(t).toFixed(1).padStart(5)} s cpu ${(t.wallMs / 1000).toFixed(1).padStart(6)} s wall` +
-      `${t.missMs ? ` (+${(t.missMs / 1000).toFixed(1)} s cache fill)` : ""} ${String(t.maxRssMiB).padStart(5)} MiB`);
+      `${t.fillMs ? ` (+${(t.fillMs / 1000).toFixed(1)} s cache fill)` : ""} ${String(t.maxRssMiB).padStart(5)} MiB`);
   const over = FAST_FILE_BUDGET_S > 0 ? timings.filter((t) => charged(t) > FAST_FILE_BUDGET_S) : [];
   const near = FAST_FILE_WARN_S > 0 ? timings.filter((t) => charged(t) > FAST_FILE_WARN_S && !over.includes(t)) : [];
   for (const t of near)
@@ -185,64 +185,63 @@ if (!process.env.SILTWAKE_HEAVY_LOCK_HELD) {
   process.exit(2);
 }
 const budgets = JSON.parse(readFileSync(join(root, "tests", "heavy-budgets.json"), "utf8"));
-// SILTWAKE_HEAVY_BUDGET_MIB overrides every budget, e.g. to check that the watchdog fires.
+// SILTWAKE_HEAVY_BUDGET_MIB overrides every budget, e.g. to check that containment fires.
 const budgetMiB = (file) => Number(process.env.SILTWAKE_HEAVY_BUDGET_MIB) ||
   (budgets.files?.[basename(file).replace(/\.js$/, ".ts")] ?? budgets.defaultMiB);
-const vmHwmKiB = (pid) => {
-  try { return Number(/VmHWM:\s+(\d+)/.exec(readFileSync(`/proc/${pid}/status`, "utf8"))?.[1] ?? 0); } catch { return 0; }
-};
+// Files whose tests assert elapsed time run with no other heavy file beside them.
+const exclusive = new Set(budgets.exclusive ?? []);
+const isExclusive = (file) => exclusive.has(basename(file).replace(/\.js$/, ".ts"));
+const containment = heavyContainment();
+// The pool follows the job's grant: SCHED-1 exports SILTWAKE_JOB_CPUS, and the
+// scope's memory.max bounds the budgets reserved at once (three quarters of it,
+// at most 4.5 GiB). Without per-file cgroups files never share (see heavy-containment.mjs).
+const jobCpus = Number(process.env.SILTWAKE_JOB_CPUS) || 0;
+const concurrency = !containment.shares ? 1 : Number(process.env.SILTWAKE_HEAVY_CONCURRENCY) || (jobCpus ? Math.max(1, Math.min(3, jobCpus)) : 3);
+const poolMiB = Number(process.env.SILTWAKE_HEAVY_POOL_MIB) || Math.min(4608, Math.floor(grantedMemoryMiB() * 0.75));
 const scratch = mkdtempSync(join(tmpdir(), "siltwake-heavy-"));
-const peakModule = pathToFileURL(join(root, "scripts", "test-peak-rss.mjs")).href;
 const cacheModule = pathToFileURL(join(root, "scripts", "test-build-cache.mjs")).href;
 const rows = [];
 let failed = false;
-/** One heavy file in its own process, its output held until it ends, its peak RSS watched. */
+/** One heavy file and its whole process tree, contained at its budget; output held until it ends. */
 function runHeavy(file) {
-  const budget = budgetMiB(file), report = join(scratch, `${basename(file)}.peak`), started = Date.now();
-  let sampled = 0, killed = false;
-  const child = spawn(process.execPath,
-    ["--import", peakModule, "--import", cacheModule, "--test", "--test-isolation=none", "--test-reporter=spec", file],
-    { cwd: root, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, SILTWAKE_PEAK_RSS_FILE: report } });
+  const budget = budgetMiB(file), started = Date.now();
+  const run = containment.start(process.execPath,
+    ["--import", cacheModule, "--test", "--test-isolation=none", "--test-reporter=spec", file],
+    { cwd: root, stdio: ["ignore", "pipe", "pipe"], env: process.env }, budget);
   const output = [];
-  child.stdout.on("data", (d) => output.push(d));
-  child.stderr.on("data", (d) => output.push(d));
-  const timer = setInterval(() => {
-    sampled = Math.max(sampled, vmHwmKiB(child.pid));
-    if (sampled > budget * 1024 && !killed) { killed = true; child.kill("SIGKILL"); }
-  }, 100);
-  return new Promise((done) => child.on("close", (code, signal) => {
-    clearInterval(timer);
+  run.child.stdout.on("data", (d) => output.push(d));
+  run.child.stderr.on("data", (d) => output.push(d));
+  return new Promise((done) => run.child.on("close", (code, signal) => {
     process.stdout.write(`\n--- ${basename(file)}\n${Buffer.concat(output).toString()}`);
-    const exact = existsSync(report) ? Number(readFileSync(report, "utf8")) : 0;
-    const peakMiB = Math.round(Math.max(sampled, exact) / 1024), seconds = (Date.now() - started) / 1000;
-    const over = peakMiB > budget;
-    const status = killed ? "KILLED (over budget)" : over ? "FAIL (over budget)" : code === 0 ? "ok" : `FAIL (exit ${code ?? signal})`;
+    const { peakMiB, killed } = run.finish(), seconds = (Date.now() - started) / 1000;
+    const status = killed ? "KILLED (over budget)" : code === 0 ? "ok" : `FAIL (exit ${code ?? signal})`;
     if (status !== "ok") failed = true;
     rows.push({ file: basename(file), seconds, peakMiB, budget, status });
-    if (killed || over) console.error(`test-tier: ${basename(file)} peaked at ${peakMiB} MiB, over its ${budget} MiB budget.`);
+    if (killed) console.error(`test-tier: ${basename(file)} went over its ${budget} MiB budget (whole process tree).`);
     done();
   }));
 }
 // Files run side by side while their budgets together fit the pool (largest
-// first; a file larger than the pool runs alone), so the scope's memory cap
-// is never the watchdog.
-const started = Date.now(), queue = [...files].sort((a, b) => budgetMiB(b) - budgetMiB(a)), running = new Set();
+// first; a file larger than the pool, or an exclusive one, runs alone).
+const started = Date.now(), queue = [...files].sort((a, b) => budgetMiB(b) - budgetMiB(a)), running = new Map();
 let reserved = 0;
 while (queue.length || running.size) {
-  const next = queue.findIndex((f) => running.size === 0 || (running.size < HEAVY_CONCURRENCY && reserved + budgetMiB(f) <= HEAVY_POOL_MIB));
+  const alone = [...running.values()].some(isExclusive);
+  const next = alone ? -1 : queue.findIndex((f) => running.size === 0 ||
+    (!isExclusive(f) && running.size < concurrency && reserved + budgetMiB(f) <= poolMiB));
   if (next >= 0) {
     const [file] = queue.splice(next, 1), budget = budgetMiB(file);
     reserved += budget;
     const job = runHeavy(file).then(() => { running.delete(job); reserved -= budget; });
-    running.add(job);
+    running.set(job, file);
     continue;
   }
-  await Promise.race(running);
+  await Promise.race(running.keys());
 }
 rmSync(scratch, { recursive: true, force: true });
-console.log("\ntest:heavy summary");
+console.log(`\ntest:heavy summary (peak: the file's whole process tree, ${containment.kind} containment)`);
 for (const r of rows)
   console.log(`  ${r.file.padEnd(36)} ${r.seconds.toFixed(1).padStart(6)} s  peak ${String(r.peakMiB).padStart(5)} MiB / ${r.budget} MiB  ${r.status}`);
 console.log(`  total ${rows.reduce((t, r) => t + r.seconds, 0).toFixed(1)} s of file time in ${((Date.now() - started) / 1000).toFixed(1)} s ` +
-  `(up to ${HEAVY_CONCURRENCY} files within ${HEAVY_POOL_MIB} MiB of budgets at once)`);
+  `(up to ${concurrency} files within ${poolMiB} MiB of budgets at once)`);
 process.exit(failed ? 1 : 0);

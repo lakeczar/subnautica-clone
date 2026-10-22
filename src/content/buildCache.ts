@@ -13,7 +13,9 @@
 
 export interface BuildCacheStore {
   get(key: string, modules: readonly string[]): unknown;
-  set(key: string, modules: readonly string[], value: unknown, buildMs: number): void;
+  set(key: string, modules: readonly string[], value: unknown): void;
+  /** Runs a miss's build; a test store measures it here (optional). */
+  fill?<T>(build: () => T): T;
 }
 
 /** A build-cache key and the modules (URLs) whose code the cached data derives from. */
@@ -71,8 +73,8 @@ export function cachedBuild<T>(key: CacheKey | undefined, build: () => T): T {
   if (!store || key === undefined || bypass) return build();
   const hit = store.get(key.key, key.modules);
   if (hit !== undefined) return hit as T;
-  const started = performance.now(), value = build();
-  store.set(key.key, key.modules, value, performance.now() - started);
+  const value = store.fill ? store.fill(build) : build();
+  store.set(key.key, key.modules, value);
   return value;
 }
 

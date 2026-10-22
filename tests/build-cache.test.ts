@@ -13,7 +13,7 @@ import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { caveLightField } from "../src/render/caves/lightField.js";
 
 const root = resolve(".");
-type StoreModule = { closureHash(modules: readonly string[]): string; createStore(root: string): BuildCacheStore };
+type StoreModule = { closureHash(modules: readonly string[], runtime?: string): string; createStore(root: string): BuildCacheStore };
 const storeModule = await import(pathToFileURL(join(root, "scripts", "test-build-cache.mjs")).href) as StoreModule;
 const scratch = mkdtempSync(join(root, ".test-build", "build-cache-probe-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -66,9 +66,10 @@ test("the disk store round-trips typed arrays, refuses a mismatched key, and mis
   const modules = [pathToFileURL(a).href], hash = storeModule.closureHash(modules);
   writeFileSync(c, `export const c = 2;\n`);
   assert.equal(storeModule.closureHash(modules), hash, "a module outside the closure changes nothing");
+  assert.notEqual(storeModule.closureHash(modules, "another node/v8/platform"), hash, "another runtime is another namespace");
   const store = storeModule.createStore(join(scratch, "cache"));
   const value = { grid: { nx: 2 }, solid: new Uint8Array([1, 0, 1]), field: new Float32Array([0.5, -1]) };
-  store.set("cave:probe", modules, value, 0);
+  store.set("cave:probe", modules, value);
   assert.deepEqual(store.get("cave:probe", modules), value);
   assert.equal(store.get("cave:other", modules), undefined);
   writeFileSync(b, `export const b = 2;\n`);

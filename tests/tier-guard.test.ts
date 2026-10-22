@@ -2,7 +2,7 @@
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -84,14 +84,46 @@ test("fast files that spawn workers, processes or evaluated code are refused unl
   assert.equal(allowed.status, 0, allowed.stdout + allowed.stderr);
 });
 
+/** Probe source that burns `ms` of its own main-thread CPU (bounded at 30 s of wall time). */
+const BURN = `const cpu = () => { const u = process.threadCpuUsage?.() ?? process.cpuUsage(); return (u.user + u.system) / 1000; };
+const burn = (ms) => { const start = cpu(), until = Date.now() + 30000; while (cpu() - start < ms && Date.now() < until); };`;
+
 test("a fast file over its CPU budget fails the tier; over the target it only warns", () => {
-  const file = probe("slow", "const end = Date.now() + 400;\nwhile (Date.now() < end);");
+  // Measured CPU, not elapsed time: the probe uses 300 ms of CPU however little it gets (TT-1 R1-4).
+  const file = probe("slow", `${BURN}\nburn(300);`);
   const tier = (warn: string, budget: string) => spawnSync(process.execPath, ["scripts/test-tier.mjs", "fast", file],
-    { cwd: root, encoding: "utf8", env: { ...env, SILTWAKE_FAST_FILE_WARN_S: warn, SILTWAKE_FAST_FILE_BUDGET_S: budget } });
+    { cwd: root, encoding: "utf8", timeout: 120_000, env: { ...env, SILTWAKE_FAST_FILE_WARN_S: warn, SILTWAKE_FAST_FILE_BUDGET_S: budget,
+      SILTWAKE_FAST_TIMING_JSON: join(probes, "slow-timing.json") } });
   const failed = tier("0", "0.1");
   assert.equal(failed.status, 1, failed.stdout + failed.stderr);
   assert.match(failed.stderr, /slow\.test\.js used [\d.]+ s CPU, over the 0\.1 s fast-file budget/);
   const warned = tier("0.1", "0");
   assert.equal(warned.status, 0, warned.stdout + warned.stderr);
   assert.match(warned.stderr, /warning: slow\.test\.js used [\d.]+ s CPU, over the 0\.1 s fast-file target/);
+});
+
+test("cache fills are not charged, counted in main-thread CPU and once when nested; a slow fill hides no other CPU", () => {
+  // TT-1 R1-3: the fill waits 1 s without using CPU, burns 200 ms and nests a 100 ms fill; the file burns 300 ms outside it.
+  const file = probe("fill", `import { cachedBuild } from "../src/content/buildCache.js";
+${BURN}
+cachedBuild({ key: "tier-probe.outer", modules: [import.meta.url] }, () => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+  burn(200);
+  cachedBuild({ key: "tier-probe.inner", modules: [import.meta.url] }, () => { burn(100); return 2; });
+  return 1;
+});
+burn(300);`);
+  const cache = join(probes, "fill-cache"), timing = join(probes, "fill-timing.json");
+  const tier = () => {
+    const out = spawnSync(process.execPath, ["scripts/test-tier.mjs", "fast", file], { cwd: root, encoding: "utf8", timeout: 120_000,
+      env: { ...env, SILTWAKE_BUILD_CACHE_DIR: cache, SILTWAKE_FAST_TIMING_JSON: timing, SILTWAKE_FAST_FILE_WARN_S: "0", SILTWAKE_FAST_FILE_BUDGET_S: "0" } });
+    assert.equal(out.status, 0, out.stdout + out.stderr);
+    const [row] = JSON.parse(readFileSync(timing, "utf8")) as { threadMs: number; fillMs: number }[];
+    return { fill: row!.fillMs, charged: row!.threadMs - row!.fillMs };
+  };
+  const cold = tier(), warm = tier();
+  assert.ok(cold.fill >= 280 && cold.fill < 1000, `cold fill counted ${cold.fill} ms of CPU: its own 300 ms, not its 1.3 s elapsed nor twice`);
+  assert.equal(warm.fill, 0, "a warm run fills nothing");
+  for (const [run, r] of [["cold", cold], ["warm", warm]] as const)
+    assert.ok(r.charged >= 280, `${run}: ${r.charged} ms charged; the 300 ms outside the fill must count`);
 });

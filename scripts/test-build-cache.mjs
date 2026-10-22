@@ -9,9 +9,11 @@
 // floor), so editing that code or any content it imports misses, while edits
 // elsewhere keep the cache warm. Each entry stores its full key and is used only
 // when the key matches. Writes go through a temporary file and a rename, so
-// concurrent test processes never read a partial entry. Build time spent on
-// misses is reported to scripts/test-file-timing.mjs, so a cold cache does not
-// count against a fast file's budget. SILTWAKE_BUILD_CACHE=off disables the store.
+// concurrent test processes never read a partial entry. The CPU a fill spends
+// building is counted on the thread that runs it, the clock the fast-file budget
+// reads, once even when fills nest, and reported to scripts/test-file-timing.mjs
+// so a cold cache does not count against a fast file's budget.
+// SILTWAKE_BUILD_CACHE=off disables the store; SILTWAKE_BUILD_CACHE_DIR moves it.
 import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -19,11 +21,15 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { deserialize, serialize } from "node:v8";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-export const cacheRoot = join(root, ".test-build", "build-cache");
+export const cacheRoot = process.env.SILTWAKE_BUILD_CACHE_DIR || join(root, ".test-build", "build-cache");
 const IMPORT_RE = /(?:^|[\s;])(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|(?:^|[\s;])import\s*["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
 
-/** Hash of the compiled text of the relative-import closure of `modules` (file URLs). */
-export function closureHash(modules) {
+// Bump when the entry format changes. The runtime is part of every namespace:
+// entries are V8-serialized, and cached geometry uses engine math functions.
+const NAMESPACE = ["siltwake-build-cache/1", process.versions.node, process.versions.v8, process.platform, process.arch].join("\0");
+
+/** Hash of the runtime and of the compiled text of the relative-import closure of `modules` (file URLs). */
+export function closureHash(modules, runtime = NAMESPACE) {
   const seen = new Set(), queue = modules.map((m) => fileURLToPath(m));
   while (queue.length) {
     const file = queue.pop();
@@ -35,7 +41,7 @@ export function closureHash(modules) {
       if (specifier.startsWith(".")) queue.push(fileURLToPath(new URL(specifier, pathToFileURL(file))));
     }
   }
-  const hash = createHash("sha256");
+  const hash = createHash("sha256").update(runtime).update("\0");
   for (const file of [...seen].sort()) hash.update(file).update("\0").update(readFileSync(file)).update("\0");
   return hash.digest("hex").slice(0, 16);
 }
@@ -52,9 +58,13 @@ export function pruneBuildCache({ maxAgeHours = 24, keep = 24 } = {}) {
   });
 }
 
+/** Main-thread CPU ms (the process's where per-thread time is unavailable), as test-file-timing.mjs reads it. */
+const threadCpuMs = () => { const u = process.threadCpuUsage?.() ?? process.cpuUsage(); return (u.user + u.system) / 1000; };
+
 /** A store over `root`: entries filed under the closure hash of their modules. */
 export function createStore(root) {
   const dirs = new Map();
+  let depth = 0;
   const fileOf = (key, modules) => {
     const scope = [...modules].sort().join("\n");
     let dir = dirs.get(scope);
@@ -72,8 +82,15 @@ export function createStore(root) {
         return entry.key === key ? entry.value : undefined;
       } catch { return undefined; }
     },
-    set(key, modules, value, buildMs) {
-      globalThis.__siltwakeBuildCacheMissMs = (globalThis.__siltwakeBuildCacheMissMs ?? 0) + buildMs;
+    fill(build) {
+      if (depth++) try { return build(); } finally { depth--; }
+      const before = threadCpuMs();
+      try { return build(); } finally {
+        depth--;
+        globalThis.__siltwakeBuildCacheFillCpuMs = (globalThis.__siltwakeBuildCacheFillCpuMs ?? 0) + threadCpuMs() - before;
+      }
+    },
+    set(key, modules, value) {
       const file = fileOf(key, modules), temp = `${file}.${process.pid}.tmp`;
       try {
         mkdirSync(dirname(file), { recursive: true });

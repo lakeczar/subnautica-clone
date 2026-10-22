@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { AUTHORED_CAVE_SOURCES, caveDef } from "../src/content/regions/caves.js";
 import { CANOPY_BASIN_GROUPS, groupDef } from "../src/content/regions/caves/index.js";
 import { buildCave } from "../src/content/regions/caveGeometry.js";
+import { withoutBuildCache } from "../src/content/buildCache.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { DEEP_CAVES } from "../src/content/regions/caves/deep.js";
 import { CAVE_SUB_SWEEP, caveOwner, createCaveWorldQueries, SOLIDS, surfaceHeight } from "../src/sim/world.js";
@@ -40,7 +41,8 @@ test("cost: build, rock boxes, collar columns and per-step diver queries with ro
   let voxels = 0, rock = 0, collar = 0, ms = 0;
   const rows: string[] = [];
   for (const c of DEEP_CAVES) {
-    const started = performance.now(), def = buildCave(c.source, worldFloor), took = performance.now() - started;
+    // Generation itself, never the test build cache (TT-1 R1-2): a warm cache would time deserialization.
+    const started = performance.now(), def = withoutBuildCache(() => buildCave(c.source, worldFloor)), took = performance.now() - started;
     defOf(c); // the shared copy the world uses
     voxels += def.stats.voxels; rock += def.rock.length; collar += collarColumns(c.source.footprint); ms += took;
     rows.push(`${c.source.id}: ${def.rock.length} rock boxes, ${(def.stats.voxels / 1e6).toFixed(2)} M voxels, ${took.toFixed(0)} ms`);
