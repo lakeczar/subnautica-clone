@@ -27,6 +27,9 @@ export interface HubArt {
 /** The camera's far plane is 450 m; past this the flare is drawn on the
  * line of sight at this distance, at the same angular size. */
 const IMPOSTOR = 420;
+/** The beacon house's radius plus a margin, metres. */
+const LAMP_CLEAR = 4;
+const smoothstep = (a: number, b: number, v: number): number => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 /** Rays are culled past this (they are fogged out well before). */
 const RAY_CULL = 330;
 
@@ -87,14 +90,17 @@ export function createHubArt(scene: Scene, cel: Material): HubArt {
       const glow = beaconGlow(d, seconds);
       flare.setEnabled(glow > 0.004);
       if (glow > 0.004) {
-        const k = d > IMPOSTOR ? IMPOSTOR / d : 1;
+        // Drawn in front of the lamp room by more than the house's radius, so
+        // the house wall never hides the core; past the far plane, an impostor.
+        const along = Math.max(0.5, Math.min(d, IMPOSTOR) - LAMP_CLEAR), k = along / d;
         flare.position.set(camera.x + dx * k, camera.y + dy * k, camera.z + dz * k);
         const size = beaconSize(d) * k;
         flare.scaling.set(size, size, size);
         flareMaterial.setFloat("glow", glow);
       }
-      // The shaft only reads within the far plane; it fades out before it.
-      const shaftGlow = beaconGlow(d, seconds) * (1 - Math.min(1, Math.max(0, (d - 300) / 110)));
+      // The shaft is for distance: faint beside the house, full from about
+      // 90 m, and gone before the far plane (it has no impostor).
+      const shaftGlow = beaconGlow(d, seconds) * smoothstep(25, 90, d) * (1 - smoothstep(330, 420, d)) * 1.6;
       shaft.setEnabled(shaftGlow > 0.004);
       shaftMaterial.setFloat("glow", shaftGlow);
       shaftMaterial.setVector3("eye", eye.set(camera.x, camera.y, camera.z));

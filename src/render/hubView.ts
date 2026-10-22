@@ -20,13 +20,13 @@ export const BEACON_RANGE = 900;
 export const BEACON_PERIOD = 4;
 
 /** Glow strength of the beacon seen from `distance` metres at `seconds`
- * (0..~1.3). Near it is held down so it never blinds a diver beside it. */
+ * (0..~1.6). Near it is held down so it never blinds a diver beside it. */
 export function beaconGlow(distance: number, seconds: number): number {
   if (!(distance < BEACON_RANGE)) return 0;
   const phase = (seconds % BEACON_PERIOD) / BEACON_PERIOD;
   const pulse = 0.72 + 0.28 * Math.exp(-((phase - 0.5) ** 2) / 0.012);
   const near = Math.min(1, 0.35 + distance / 60);
-  return pulse * near * Math.exp(-distance / BEACON_REACH) * 1.3;
+  return pulse * near * Math.exp(-distance / BEACON_REACH) * 1.6;
 }
 /** Apparent flare size in metres: wider with distance (light scattered by
  * the water), so it keeps a few pixels at 600 m. */

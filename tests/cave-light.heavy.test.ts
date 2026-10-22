@@ -74,8 +74,11 @@ test("C4: the renderer's cave view activates the nearest cave, feeds the cel mat
     const cel = createCelMaterial(scene);
     for (const s of CAVE_SAMPLERS) assert.ok(cel.options.samplers.includes(s), s);
     const view = createCaveView(scene, [cel]);
-    assert.equal(view.prepare(), true, "idle time builds the Fanvault field");
-    assert.equal(view.prepare(), false, "and then has nothing left to do");
+    // Idle time builds one cave's field per call (W2 added the hub caves).
+    const { CAVE_SOURCES } = await import("../src/content/regions/caves.js");
+    let built = 0;
+    while (view.prepare()) assert.ok(++built <= CAVE_SOURCES.length, "prepare keeps finding work");
+    assert.equal(built, CAVE_SOURCES.length, "idle time builds every cave's field, then has nothing left to do");
     view.update(new Vector3(0, -2, 20), new Vector3(0, 0, -1), true);
     assert.equal(view.active, null, "the pod is far from every cave");
     assert.equal(scene.textures.filter(t => t.is3D).length, 2, "only the empty field and rock");

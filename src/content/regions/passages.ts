@@ -168,7 +168,8 @@ export const RAW_ROUTES: readonly RouteDef[] = [
     note: "Carrier anchorage up the crown's north cliff to the rim balcony, then the summit." },
   { id: "route.hub.canopy", from: "silt_basin", to: "suspended_garden", kind: "open", role: "shortcut",
     carrier: false, minHalfWidth: 8, profile: "medium", tier: "reinforced",
-    path: [v(336, -46, -546), v(370, -52, -500), v(430, -80, -420), v(500, -120, -330), v(560, -150, -255), v(620, -160, -200)],
+    // East of CA-2's Lantern Hall (486..554, -260..-204), whose footprint the old line grazed.
+    path: [v(336, -46, -546), v(370, -52, -500), v(430, -80, -420), v(520, -120, -330), v(590, -150, -262), v(620, -160, -200)],
     note: "The crown and its beacon at your back, the Lantern crowns ahead." },
 
   { id: "route.basin.legacy_anchorage", from: "silt_basin", to: "silt_basin", kind: "open", role: "primary",
