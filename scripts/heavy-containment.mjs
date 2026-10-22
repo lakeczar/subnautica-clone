@@ -70,13 +70,15 @@ function cgroupMode() {
         return {
           child,
           finish() {
-            const events = readFileSync(join(dir, "memory.events"), "utf8");
-            const oomKills = Number(/oom_kill (\d+)/.exec(events)?.[1] ?? 0);
+            // `.local`: OOMs this file's own budget caused, not ones inside a nested
+            // cgroup with its own limit (a nested runner's file).
+            const events = readFileSync(join(dir, "memory.events.local"), "utf8");
+            const ooms = Number(/^oom (\d+)/m.exec(events)?.[1] ?? 0);
             const peakMiB = Math.round(readNumber(join(dir, "memory.peak")) / 1048576);
             try { writeFileSync(join(dir, "cgroup.kill"), "1"); } catch { /* already empty */ }
             for (let i = 0; i < 50 && readFileSync(join(dir, "cgroup.procs"), "utf8").trim(); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
             removeTree(dir);
-            return { peakMiB, killed: oomKills > 0 };
+            return { peakMiB, killed: ooms > 0 };
           },
         };
       },
