@@ -268,3 +268,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
   - regression: keep the pressure and actually back out to exterior water, with a forward-into-uncovered control.
 
   **Queued** for the next free slot, after ENC-1.
+- **Usage-limit reset (2026-10-22):** C4, W2, CA-1, CA-2 and CA-3 had all hit the limit and were resumed; each was told to commit a WIP checkpoint first (C4 had about 87 uncommitted files). Builders 5 of 5. **Queued:** ENC-1 R1 fixes, then LC R2 fixes.
