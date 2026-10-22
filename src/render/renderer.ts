@@ -39,6 +39,7 @@ import { terrainStore } from "./biomes/terrain.js";
 import { CAVE_SOURCES } from "../content/regions/caves.js";
 import { createCurrentStreaks } from "./currentStreaks.js";
 import { createHubArt } from "./hub.js";
+import { createFarLayer } from "./farLayer.js";
 
 export type Quality = "rich" | "light";
 export interface GameRenderer {
@@ -276,6 +277,8 @@ export function createRenderer(
       cpu: caveWorld.kitCaves.stats.residentBoxes * 160 + (caves?.stats.lightBytes ?? 0),
       gpu: caveView.stats.textureBytes,
     }) });
+    // CW-1's far layer: the tallest landmarks and their lamps, always resident.
+    const far = createFarLayer(scene, cel, art.residency);
     for (const mesh of scene.meshes) mesh.renderingGroupId = 1;
     const { water, sky } = createAtmosphere(scene);
     // ATM-1: emissive art, Rift vents, cockpit instruments and parked-craft
@@ -434,6 +437,8 @@ export function createRenderer(
         canvas.dataset.currentStreaks = String(streaks.shown);
         placed.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         hub.update(time, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
+        far.update();
+        canvas.dataset.farLandmarks = String(far.shown);
         if (state) creatures.update(ecologyView(state.world.ecology, state.tick, presentationStimulus(state)), time,
           { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         cel.setFloat("time", time);
@@ -500,6 +505,7 @@ export function createRenderer(
         creatures.dispose();
         placed.dispose();
         hub.dispose();
+        far.dispose();
         caveView.dispose();
         streaks.dispose();
         lights.dispose();

@@ -281,14 +281,16 @@ export function caveVolume(def: CaveDef): CaveVolume {
   return v;
 }
 
-function sampleVolume(source: CaveSource, floor: FloorFunction, voxel: number, neighbours: readonly CaveSource[] = []): {
+/** Pad, in voxels, when edge rock may lean on the ground outside (`edgeRock`): 2 m, so a cube can stand three voxels out. */
+const EDGE_PAD = 4;
+function sampleVolume(source: CaveSource, floor: FloorFunction, voxel: number, neighbours: readonly CaveSource[] = [], edgeRock = false): {
   grid: CaveGrid; raw: Uint8Array; field: Float32Array; near: Uint8Array; under: Uint8Array; owned: Uint8Array; linked: Uint8Array;
   group: Uint8Array;
 } {
   const f = source.footprint;
   for (const v of [f.minX, f.maxX, f.minZ, f.maxZ, source.baseY, source.topY])
     if (!lattice(v, voxel)) throw new Error(`cave ${source.id}: ${v} is off the ${voxel} m lattice`);
-  const pad = neighbours.length ? LINKED_PAD : PAD;
+  const pad = neighbours.length ? LINKED_PAD : edgeRock ? EDGE_PAD : PAD;
   const origin = { x: f.minX - pad * voxel, y: source.baseY, z: f.minZ - pad * voxel };
   const nx = Math.round((f.maxX - f.minX) / voxel) + 2 * pad, nz = Math.round((f.maxZ - f.minZ) / voxel) + 2 * pad;
   const ny = Math.round((source.topY - source.baseY) / voxel);
@@ -384,10 +386,24 @@ function openRock(raw: Uint8Array, mask: Uint8Array, grid: CaveGrid): { rock: Ui
   return { rock, S, fits, opened, dropped };
 }
 
-/** Open owned rock by a 2 m cube, then cover the result with maximal boxes. */
-function thickRock(raw: Uint8Array, owned: Uint8Array, grid: CaveGrid): { opened: Uint8Array; boxes: VoxelBox[]; dropped: number } {
+/** Open owned rock by a 2 m cube, then cover the result with maximal boxes.
+ * With `ground` (edge rock, CW-1), a cube may lean on the exterior ground in
+ * the pad: owned rock at an uphill footprint edge, too thin to hold a cube
+ * on its own, stays rock where the ground outside continues it; only owned
+ * voxels are kept, and boxes are clipped back to the footprint. */
+function thickRock(raw: Uint8Array, owned: Uint8Array, grid: CaveGrid, ground?: Uint8Array): { opened: Uint8Array; boxes: VoxelBox[]; dropped: number } {
   const { nx, ny, nz } = grid, n = nx * ny * nz;
-  const { S, fits, opened, dropped } = openRock(raw, owned, grid);
+  let mask = owned;
+  if (ground) { mask = new Uint8Array(n); for (let at = 0; at < n; at++) mask[at] = owned[at]! | ground[at]!; }
+  const { S, fits, opened, dropped: all } = openRock(raw, mask, grid);
+  let dropped = all;
+  if (ground) {
+    dropped = 0;
+    for (let at = 0; at < n; at++) {
+      if (!owned[at]) { opened[at] = 0; continue; }
+      if (raw[at] && !opened[at]) dropped++;
+    }
+  }
   const inRock = (b: VoxelBox): boolean => b.i0 >= 0 && b.j0 >= 0 && b.k0 >= 0 && b.i1 <= nx && b.j1 <= ny && b.k1 <= nz &&
     boxSum(S, nx, ny, b.i0, b.i1, b.j0, b.j1, b.k0, b.k1) === (b.i1 - b.i0) * (b.j1 - b.j0) * (b.k1 - b.k0);
   const grow = (b: VoxelBox, faces: readonly (keyof VoxelBox)[]): void => {
@@ -437,18 +453,36 @@ function thickRock(raw: Uint8Array, owned: Uint8Array, grid: CaveGrid): { opened
       covered[bi + nx * (bj + ny * bk)] = covered[bi + nx * (bj + ny * bk)]! - 1;
   }
   kept.reverse();
-  return { opened, boxes: kept, dropped };
+  if (!ground) return { opened, boxes: kept, dropped };
+  // Clip to the owned columns (the footprint): leaning boxes end at its edge.
+  let i0 = nx, i1 = 0, k0 = nz, k1 = 0;
+  for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) if (owned[i + nx * ny * k]) {
+    i0 = Math.min(i0, i); i1 = Math.max(i1, i + 1); k0 = Math.min(k0, k); k1 = Math.max(k1, k + 1);
+  }
+  const clipped = kept.map(b => ({ ...b, i0: Math.max(b.i0, i0), i1: Math.min(b.i1, i1), k0: Math.max(b.k0, k0), k1: Math.min(b.k1, k1) }))
+    .filter(b => b.i0 < b.i1 && b.k0 < b.k1);
+  return { opened, boxes: clipped, dropped };
 }
 
 // --- Definition ---------------------------------------------------------------
 
 /** Generate a cave definition from its source. Pure and deterministic. */
-export function buildCave(source: CaveSource, floor: FloorFunction, neighbours: readonly CaveSource[] = []): CaveDef {
+/** `edgeRock` (CW-1): rock at uphill footprint edges leans on the exterior
+ * ground outside (see `thickRock`), so it no longer sinks under the shell's
+ * edge, which is snapped to the floor. Boxes stay inside the footprint; one
+ * clipped at an edge may be thinner than `MIN_ROCK` across it, with the
+ * exterior ground (the world's collar columns) continuing it. Not with
+ * edge neighbours (their seam is exact already). */
+export function buildCave(source: CaveSource, floor: FloorFunction, neighbours: readonly CaveSource[] = [],
+  options: { readonly edgeRock?: boolean } = {}): CaveDef {
   const started = Date.now();
   checkNeighbours(source, neighbours);
-  const s = sampleVolume(source, floor, 0.5, neighbours);
+  const edgeRock = !!options.edgeRock && !neighbours.length;
+  const s = sampleVolume(source, floor, 0.5, neighbours, edgeRock);
   const { grid } = s, { nx, ny, nz, origin, voxel } = grid;
-  const { opened, boxes, dropped } = thickRock(s.raw, s.owned, grid);
+  let ground: Uint8Array | undefined;
+  if (edgeRock) { ground = new Uint8Array(s.raw.length); for (let at = 0; at < ground.length; at++) ground[at] = s.owned[at] || s.group[at] ? 0 : 1; }
+  const { opened, boxes, dropped } = thickRock(s.raw, s.owned, grid, ground);
   const solid = new Uint8Array(s.raw.length);
   for (let at = 0; at < solid.length; at++) solid[at] = s.owned[at] ? opened[at]! : s.raw[at]!;
   // In a neighbour's pad, its rock as its own build keeps it: opened by

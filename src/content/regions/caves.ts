@@ -314,6 +314,7 @@ export { assertDisjointFootprints };
 /** CA-2's Canopy and Basin groups by source ID: they build on their
  * edge-shelf floor (`groupDef`) and draw in their region's style. */
 const GROUPS: ReadonlyMap<string, CaveGroup> = new Map(CANOPY_BASIN_GROUPS.map(g => [g.source.id, g]));
+const DEEP_IDS: ReadonlySet<string> = new Set(DEEP_CAVE_SOURCES.map(s => s.id));
 
 /** The caves in the game: `gameWorld()`, the terrain and cave bakes, pits,
  * shells, scatter, chunk bounds and the cave view all follow this list.
@@ -349,7 +350,12 @@ export function caveDef(id: string, floor: FloorFunction): CaveDef {
   if (!def) {
     const source = CAVE_SOURCES.find(s => s.id === id);
     if (!source) throw new Error(`Unknown cave: ${id}`);
-    def = buildCave(source, floor, CAVE_SOURCES.filter(s => s !== source && sharesEdge(s.footprint, source.footprint)));
+    // CA-3's caves stand against steep terrace and tube walls, where edge rock
+    // sank up to 17 m under the snapped shell: they lean on the ground outside
+    // (`edgeRock`). CA-2's groups build on their edge-shelf floor instead;
+    // CA-1's and the hub's edges sink at most 1.4 m and keep their accepted build.
+    def = buildCave(source, floor, CAVE_SOURCES.filter(s => s !== source && sharesEdge(s.footprint, source.footprint)),
+      { edgeRock: DEEP_IDS.has(id) });
     byId.set(id, def);
   }
   return def;
