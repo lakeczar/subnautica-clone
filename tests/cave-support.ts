@@ -1,6 +1,7 @@
 // Shared fixtures for the cave tests (not a test file itself).
 import { caveDef, withCaveFloors, type CaveDef, type CavePortal } from "../src/content/regions/caves.js";
 import { caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
+import { floorIdentity, nameFloor } from "../src/content/buildCache.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
 import { CRAFT_PROFILES } from "../src/content/regions/passages.js";
@@ -22,7 +23,9 @@ export const SHIFT = { x: 0, y: 0, z: 0 };
 export const shift = (p: Readonly<Vec3>): Vec3 => ({ x: p.x + SHIFT.x, y: p.y, z: p.z + SHIFT.z });
 export const shiftSolid = (s: Solid): Solid => ({ id: s.id, min: shift(s.min), max: shift(s.max) });
 export const shiftRect = (r: Rect): Rect => ({ minX: r.minX + SHIFT.x, maxX: r.maxX + SHIFT.x, minZ: r.minZ + SHIFT.z, maxZ: r.maxZ + SHIFT.z });
-export const shiftedFloor = (x: number, z: number): number => worldFloor(x - SHIFT.x, z - SHIFT.z);
+/** Named for the build cache (TT-1), so a shifted world's cave collars are built once. */
+export const shiftedFloor = nameFloor((x: number, z: number): number => worldFloor(x - SHIFT.x, z - SHIFT.z),
+  `worldFloor shifted ${SHIFT.x},${SHIFT.z}`, [import.meta.url, ...floorIdentity(worldFloor)!.modules]);
 /** The prototype ownership adapter over the shifted cave, plus `extra`
  * exterior solids (given in world coordinates). */
 export function worldWith(extra: readonly Solid[] = []) {

@@ -204,13 +204,13 @@ test("landmark lights hug what is already there: structure or vista collision, o
   for (const side of [-1, 1]) assert.ok(seamPoint(worldFloor, 200, side, 0.5), `the ${side < 0 ? "north-west" : "south-east"} wall has a cliff at 200 m`);
 });
 
-test("the dish bands wrap the drawn rim", async () => {
+test("smoke: the dish bands wrap the drawn rim (every 25th band vertex; every 5th in the heavy tier)", async () => {
   const { structureMesh } = await import("../src/render/biomes/structures.js");
   for (const d of STRUCTURES.filter(s => s.kind === "dish")) {
     const dish = structureMesh([d], d.id, true)!, band = points(drawPart(LANDMARK_LIGHTS.find(p => p.id === `landmark.basin.${d.id}`)!, true));
     assert.ok(band.length > 0, `${d.id} has a band`);
-    // Every fifth vertex of the band's tubes (0.5 m round the rim's centre line) is on the drawn rim tube.
-    for (let k = 0; k < band.length; k += 5) {
+    // Every 25th vertex of the band's tubes (0.5 m round the rim's centre line) is on the drawn rim tube.
+    for (let k = 0; k < band.length; k += 25) {
       const d0 = meshDistance(band[k]!, dish);
       assert.ok(d0 < 0.6, `${d.id} band at ${band[k]!.x.toFixed(1)}, ${band[k]!.y.toFixed(1)}, ${band[k]!.z.toFixed(1)} is ${d0.toFixed(2)} m off the drawn dish`);
     }

@@ -151,34 +151,50 @@ export function glow(p: Vec3): number {
 }
 export const head = (p: Vec3): Vec3 => ({ ...p, y: p.y + 0.6 });
 
-// Rock solids of every cave on a 2 m bucket grid.
-const BUCKET = 2, buckets = new Map<number, Solid[]>(), bucketed = new Set<string>();
+// Rock solids of every cave in 2 m cells: a solid strictly containing a point
+// overlaps that point's cell, and one within `reach` overlaps a cell within
+// `reach` (TT-1: cells, not X/Z columns, so a query skips the rock above and below).
+const BUCKET = 2, cells = new Map<number, Solid[]>(), bucketed = new Set<string>();
 const bucketKey = (i: number, k: number): number => (i + 10000) * 20000 + (k + 10000);
+const cellKey = (i: number, j: number, k: number): number => bucketKey(i, k) * 4000 + (j + 2000);
 function bucketRock(id: string): void {
   if (bucketed.has(id)) return;
   bucketed.add(id);
   for (const s of kit(id).def.rock)
     for (let i = Math.floor(s.min.x / BUCKET); i <= Math.floor(s.max.x / BUCKET); i++)
-      for (let k = Math.floor(s.min.z / BUCKET); k <= Math.floor(s.max.z / BUCKET); k++)
-        (buckets.get(bucketKey(i, k)) ?? buckets.set(bucketKey(i, k), []).get(bucketKey(i, k))!).push(s);
+      for (let k = Math.floor(s.min.z / BUCKET); k <= Math.floor(s.max.z / BUCKET); k++) {
+        for (let j = Math.floor(s.min.y / BUCKET); j <= Math.floor(s.max.y / BUCKET); j++)
+          (cells.get(cellKey(i, j, k)) ?? cells.set(cellKey(i, j, k), []).get(cellKey(i, j, k))!).push(s);
+      }
 }
 const visited = new WeakMap<Solid, number>();
 let visitStamp = 0;
-function nearRock(p: Vec3, reach: number, visit: (s: Solid) => boolean | void): void {
+function bucketNear(p: Vec3, reach: number): void {
   for (const s of AUTHORED_CAVE_SOURCES) {
     const f = s.footprint;
     if (p.x + reach >= f.minX && p.x - reach <= f.maxX && p.z + reach >= f.minZ && p.z - reach <= f.maxZ) bucketRock(s.id);
   }
+}
+const insideBox = (p: Vec3, s: Solid): boolean => p.x > s.min.x && p.x < s.max.x && p.y > s.min.y && p.y < s.max.y && p.z > s.min.z && p.z < s.max.z;
+export const inRock = (p: Vec3): boolean => {
+  bucketNear(p, 0);
+  return (cells.get(cellKey(Math.floor(p.x / BUCKET), Math.floor(p.y / BUCKET), Math.floor(p.z / BUCKET))) ?? []).some(s => insideBox(p, s));
+};
+/** Distance from `p` to the nearest cave rock: exact when that is within
+ * `reach`; otherwise some value above `reach` (Infinity if none is near). */
+export function rockDistance(p: Vec3, reach = 1): number {
+  bucketNear(p, reach);
+  let best = Infinity;
   const stamp = ++visitStamp;
   for (let i = Math.floor((p.x - reach) / BUCKET); i <= Math.floor((p.x + reach) / BUCKET); i++)
     for (let k = Math.floor((p.z - reach) / BUCKET); k <= Math.floor((p.z + reach) / BUCKET); k++)
-      for (const s of buckets.get(bucketKey(i, k)) ?? []) if (visited.get(s) !== stamp) { visited.set(s, stamp); if (visit(s)) return; }
-}
-const insideBox = (p: Vec3, s: Solid): boolean => p.x > s.min.x && p.x < s.max.x && p.y > s.min.y && p.y < s.max.y && p.z > s.min.z && p.z < s.max.z;
-export const inRock = (p: Vec3): boolean => { let hit = false; nearRock(p, 0, s => (hit = insideBox(p, s))); return hit; };
-export function rockDistance(p: Vec3, reach = 1): number {
-  let best = Infinity;
-  nearRock(p, reach, s => { best = Math.min(best, boxDistance(s, p)); return best === 0; });
+      for (let j = Math.floor((p.y - reach) / BUCKET); j <= Math.floor((p.y + reach) / BUCKET); j++)
+        for (const s of cells.get(cellKey(i, j, k)) ?? []) {
+          if (visited.get(s) === stamp) continue;
+          visited.set(s, stamp);
+          best = Math.min(best, boxDistance(s, p));
+          if (best === 0) return 0;
+        }
   return best;
 }
 
@@ -344,7 +360,11 @@ export function shellRockFailures(id: string, stride = 1): string[] {
   if (cells < 400) out.push(`${id}: only ${cells} room cells`);
   // Independently of the voxels: clearly carved source water is never rock,
   // clearly solid source rock (almost) always is.
-  const sampler = caveSampler(def.source, worldFloor, caveNeighbours(def)), f = def.replacementFootprints[0]!;
+  // The sweep runs y fastest, so remembering the last column's floor saves
+  // re-sampling the same (x, z) at every level (same values; TT-1).
+  let lastX = NaN, lastZ = NaN, lastFloor = 0;
+  const columnFloor = (x: number, z: number): number => x === lastX && z === lastZ ? lastFloor : (lastX = x, lastZ = z, lastFloor = worldFloor(x, z));
+  const sampler = caveSampler(def.source, columnFloor, caveNeighbours(def)), f = def.replacementFootprints[0]!;
   let water = 0, rock = 0, covered = 0;
   for (let x = f.minX + 0.3; x < f.maxX; x += 0.9) for (let z = f.minZ + 0.3; z < f.maxZ; z += 0.9)
     for (let y = def.source.baseY + 0.3; y < def.source.topY; y += 0.9) {

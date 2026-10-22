@@ -2,7 +2,6 @@ import { withComposedFields } from "./persistence-support.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { HULL_COLLIDERS } from "../src/content/registry.js";
 import { decodeSave, encodeSave } from "../src/save/codec.js";
 import { stepGame } from "../src/sim/step.js";
@@ -11,13 +10,7 @@ import { RIB_CONTACT_TOLERANCE } from "../src/sim/ribCollision.js";
 import { createWorldQueries, hullClearance, RIB_SEGMENTS, SOLIDS } from "../src/sim/world.js";
 import type { Capsule, GameCommand, GameState, Vec3 } from "../src/sim/types.js";
 import { directions, distance, gaps, input, noDeepening, pilot, swim, swimmer, world } from "./rib-support.js";
-
-// The real trapped export, converted once to the current schema. The original is
-// archived; save-bridge.test.ts checks the conversion kept its pose and ownership.
-function trappedExport() {
-  const text = readFileSync("tests/fixtures/reef-rib-trap.json", "utf8");
-  const decoded = decodeSave(text); assert.ok(decoded.ok); return { text, envelope: decoded.value };
-}
+import { hullTraps, trappedExport } from "./rib-surface-trap-support.js";
 
 test("actual trapped export loads without relocation, escapes, roundtrips and moves again without grants", () => {
   const { text, envelope } = trappedExport();
@@ -56,49 +49,6 @@ test("minimal clear swimmer surface approach remains clear for 60 complete steps
   assert.ok(distance(contact, s.player.pose.position) > 0.3);
   for (let i = 0; i < 30; i++) s = stepGame(s, [input()], world).state;
   assert.ok(world.clearance(s.player.pose.position, swimmer)); assert.ok(s.player.pose.position.y <= -0.5);
-});
-
-test("all 72 directional/look replays of the actual export preserve every rib gap after caller corrections", () => {
-  const { envelope } = trappedExport();
-  // Root's rejected-prototype counterexample is yaw=0/pitch=0/backward on tick one:
-  // segment12 -0.01311010134142121 -> -0.02646727175319885 after its unchecked clamp.
-  for (const yaw of [0, 1.57, 3.14, 4.71]) for (const pitch of [0, -1.2, 1.2]) for (const command of directions) {
-    let s = structuredClone(envelope.state); Object.assign(s.player.pose, { yaw, pitch });
-    for (let i = 0; i < 60; i++) {
-      const next = stepGame(s, [command], world).state;
-      noDeepening(s.player.pose.position, next.player.pose.position, swimmer); s = next;
-    }
-  }
-});
-
-// Frozen first-overlap poses and velocities produced by d9aaf63 from hullClearance-true
-// starts (full traces and input provenance retained in the author's evidence archive).
-const hullTraps = [
-  { p: { x: -4.179157081725582, y: -0.9, z: -10.032405071654868 },
-    velocity: { x: -4.1108372764481125, y: 7.829451676105529, z: -1.0182155487614462 } },
-  { p: { x: -4.821035219680587, y: -0.9, z: -11.733421160497922 },
-    velocity: { x: -0.9746026806911983, y: 7.856048095364841, z: 2.28126303541549 } },
-];
-test("baseline-generated shallow Dart traps escape and every final hull correction is non-deepening", () => {
-  for (const trap of hullTraps) {
-    assert.ok(Math.min(...gaps(trap.p, HULL_COLLIDERS.dart)) < -0.03);
-    const leaving = pilot("dart", trap.p, trap === hullTraps[0] ? 4.955192865804982 : 3.545342708416026, 0.8);
-    assert.equal(exitRefusal(leaving, world), null, "the pre-existing safe diver exit stays available");
-    assert.equal(exit(leaving, world), null); assert.equal(leaving.player.controlledVehicleId, null);
-    assert.ok(world.clearance(leaving.player.pose.position, swimmer));
-    let best = 0;
-    for (const yaw of [0, 1.57, 3.14, 4.71]) for (const pitch of [0, -1.2, 1.2]) for (const command of directions) {
-      let s = pilot("dart", trap.p, yaw, pitch);
-      s.fleet.vehicles[0]!.velocity = { ...trap.velocity }; s.player.velocity = { ...trap.velocity };
-      for (let i = 0; i < 60; i++) {
-        const next = stepGame(s, [command], world).state;
-        noDeepening(s.player.pose.position, next.player.pose.position, HULL_COLLIDERS.dart);
-        assert.ok(next.player.pose.position.y <= -0.9); s = next;
-      }
-      best = Math.max(best, distance(trap.p, s.player.pose.position));
-    }
-    assert.ok(best > 0.3);
-  }
 });
 
 test("clear Dart approaches cannot generate a trapped hull and contact remains escapable", () => {
@@ -243,4 +193,37 @@ test("a long inherited hull rise selects a safe capped retry under a shelf witho
   assert.ok(Math.abs(ascent.actualRise - 2.1) < 1e-12); assert.equal(ascent.solidLimitedRise, 0); assert.ok(ascent.surfaceLimitedRise > 0);
   const thrust = out.events.find(e => e.type === "thrust-sample"); assert.ok(thrust);
   assert.equal(thrust.supportLimited, 0); assert.equal(thrust.solidLimited, 0, "selected safe surface retry retains only its own measurements");
+});
+
+// --- Fast smokes (TT-1). Every yaw and pitch of both replays is in
+// tests/rib-surface-trap.heavy.test.ts.
+
+test("smoke: the actual export's level replays in all six directions (root's counterexample among them) preserve every rib gap", () => {
+  const { envelope } = trappedExport();
+  for (const command of directions) {
+    let s = structuredClone(envelope.state); Object.assign(s.player.pose, { yaw: 0, pitch: 0 });
+    for (let i = 0; i < 60; i++) {
+      const next = stepGame(s, [command], world).state;
+      noDeepening(s.player.pose.position, next.player.pose.position, swimmer); s = next;
+    }
+  }
+});
+
+test("smoke: both shallow Dart traps keep a safe diver exit, and level replays in all six directions never deepen", () => {
+  for (const trap of hullTraps) {
+    assert.ok(Math.min(...gaps(trap.p, HULL_COLLIDERS.dart)) < -0.03);
+    const leaving = pilot("dart", trap.p, trap === hullTraps[0] ? 4.955192865804982 : 3.545342708416026, 0.8);
+    assert.equal(exitRefusal(leaving, world), null, "the pre-existing safe diver exit stays available");
+    assert.equal(exit(leaving, world), null);
+    assert.ok(world.clearance(leaving.player.pose.position, swimmer));
+    for (const command of directions) {
+      let s = pilot("dart", trap.p, 0, 0);
+      s.fleet.vehicles[0]!.velocity = { ...trap.velocity }; s.player.velocity = { ...trap.velocity };
+      for (let i = 0; i < 60; i++) {
+        const next = stepGame(s, [command], world).state;
+        noDeepening(s.player.pose.position, next.player.pose.position, HULL_COLLIDERS.dart);
+        assert.ok(next.player.pose.position.y <= -0.9); s = next;
+      }
+    }
+  }
 });
