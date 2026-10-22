@@ -1045,6 +1045,14 @@ export function setKitCaveRecords(baked: ReadonlyMap<string, KitCaveCollision> |
   };
 }
 
+const gameCaves = (): KitCaveEntry[] => CAVE_SOURCES.map(s => ({ id: s.id, footprint: s.footprint, baseY: s.baseY, ceiling: s.topY }));
+const gameRecords: KitCaveRecords = { has: id => recordSource.has(id), record: id => recordSource.record(id) };
+/** The game's cave world over a different exterior roster (tests' extra
+ * solids, as negative controls): the same caves and the same records. */
+export function gameWorldWith(solids: readonly Solid[]): CaveWorld {
+  return kitCaveWorld({ solids, floor: surfaceHeight, caves: gameCaves(), records: gameRecords });
+}
+
 let composedWorld: CaveWorld | null = null;
 /** The game's exterior world: every solid on the shared floor, with the kit
  * caves owning their footprints. Creating it costs nothing: each cluster's
@@ -1052,11 +1060,7 @@ let composedWorld: CaveWorld | null = null;
  * (`world/caves/kitStream.ts`). The runtime, recovery, survival, the
  * validators and the playthrough harness all query this one world. */
 export function gameWorld(): CaveWorld {
-  return composedWorld ??= kitCaveWorld({
-    solids: SOLIDS, floor: surfaceHeight,
-    caves: CAVE_SOURCES.map(s => ({ id: s.id, footprint: s.footprint, baseY: s.baseY, ceiling: s.topY })),
-    records: { has: id => recordSource.has(id), record: id => recordSource.record(id) },
-  });
+  return composedWorld ??= gameWorldWith(SOLIDS);
 }
 
 /** Hull keel floor sampled across its conservative circular footprint. */
