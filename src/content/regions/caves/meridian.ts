@@ -372,7 +372,7 @@ const CULVERT_E_SOURCE: CaveSource = {
   id: "meridian_escarp_culvert",
   label: "Escarpment culvert",
   region: "deep_district",
-  footprint: { minX: 1320, maxX: 1352, minZ: -990, maxZ: -952 },
+  footprint: { minX: 1320, maxX: 1352, minZ: -990, maxZ: -946 },
   baseY: -555,
   topY: -506,
   terraces: [],
@@ -381,7 +381,7 @@ const CULVERT_E_SOURCE: CaveSource = {
     chamber("meridian_escarp.carve.upper", "meridian_escarp.upper_chamber", [1342, -528, -974], [8, 8, 8, 8], -536, 0.25),
     shaft("meridian_escarp.carve.ledge", "meridian_escarp.ledge_sump", [1342, -974], 7.4, 0, -524, -507.5, 0.15),
     tube("meridian_escarp.carve.overflow", "meridian_escarp.overflow", [
-      [1342, -965, -527, 3.2, 3], [1342, -958.5, -527.5, 3.2, 3], [1336, -958.5, -529.5, 3.2, 3], [1329, -958.5, -531.5, 3.2, 3], [1328, -965, -534.5, 3.2, 3], [1328, -969.5, -535.6, 3.2, 3],
+      [1342, -965, -527, 3.2, 3], [1342, -951.5, -527.5, 3.2, 3], [1336, -951.5, -529.5, 3.2, 3], [1329, -951.5, -531.5, 3.2, 3], [1328, -962, -534, 3.2, 3], [1328, -969.5, -535.6, 3.2, 3],
     ], 0.15),
   ],
   blend: 1.4,
@@ -401,8 +401,8 @@ const CULVERT_E_SOURCE: CaveSource = {
       [1342, -505.8, -974],
     ]),
     route("meridian_escarp.route.overflow", "diver", "loop", [
-      [1310, -537.98, -974], [1322.46, -535.4, -973.31], [1328, -533.9, -966.5], [1328, -532.9, -965], [1329, -530.4, -958.5], [1331.8, -529.4, -958.5],
-      [1340.5, -526.9, -958.5], [1342, -526.4, -961.1], [1342, -523.4, -972.5], [1342, -507.4, -974], [1342, -507.4, -974],
+      [1310, -537.98, -974], [1322.46, -535.4, -973.31], [1328, -533.9, -966.5], [1328.75, -530.88, -954.13], [1329, -530.4, -951.5], [1331.8, -529.4, -951.5],
+      [1340.5, -526.9, -951.5], [1342, -526.88, -956], [1342, -526.37, -957.5], [1342, -524.32, -971], [1342, -507.4, -974], [1342, -507.4, -974],
     ]),
   ],
   staging: [
@@ -425,11 +425,11 @@ const CULVERT_E: DeepCave = {
   ],
   cues: [
     { id: "meridian_escarp.cue.foot", kind: "colony", room: "meridian_escarp.lower_culvert", meaning: "exit", exit: "meridian_escarp.mouth.foot", color: TEAL,
-      points: [v(1332, -533, -968.5), v(1332, -533, -979.5)], read: "Teal colonies frame the foot mouth." },
+      points: [v(1331, -533.2, -969.6), v(1331, -533.2, -978.4)], read: "Teal colonies frame the foot mouth." },
     { id: "meridian_escarp.cue.sump", kind: "glimmer", room: "meridian_escarp.upper_chamber", meaning: "exit", exit: "meridian_escarp.mouth.ledge", color: AMBER,
       points: [v(1336, -530, -969), v(1338, -521, -969)], read: "Amber colonies climb the chamber wall to the ledge sump." },
     { id: "meridian_escarp.cue.overflow", species: "cable_tender", kind: "live_line", room: "meridian_escarp.overflow", meaning: "live_line", color: TENDER, feeds: "meridian.spire",
-      points: [v(1342.8, -526, -962), v(1336, -528, -957.2), v(1329, -530, -957.2)], read: "A live line runs the overflow's roof, tenders strung along it." },
+      points: [v(1342.8, -526, -958), v(1336, -528, -950.2), v(1329, -530, -950.2)], read: "A live line runs the overflow's roof, tenders strung along it." },
   ],
   hazards: [],
 };

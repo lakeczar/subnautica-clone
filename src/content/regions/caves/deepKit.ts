@@ -126,6 +126,9 @@ export interface DeepCave {
   readonly bible: readonly string[];
   readonly size: "small" | "medium";
   readonly style: CaveStyle;
+  /** A network realising several bible caves: each one's rooms (its water
+   * extents are held to the size class one by one). */
+  readonly parts?: Readonly<Record<string, readonly string[]>>;
   /** Bible exit names to the portals that realise them. */
   readonly exits: Readonly<Record<string, string>>;
   readonly hall?: CaveHall;

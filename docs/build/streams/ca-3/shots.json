@@ -1,0 +1,186 @@
+{
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+  "caves": [
+    {
+      "id": "rift_north_shoulder",
+      "shots": [
+        "docs/build/streams/ca-3/rift_north_shoulder-daylight.jpg",
+        "docs/build/streams/ca-3/rift_north_shoulder-lamp-off.jpg"
+      ],
+      "loadMs": 6031,
+      "frameMs": 0.29
+    },
+    {
+      "id": "rift_tube_mites",
+      "shots": [
+        "docs/build/streams/ca-3/rift_tube_mites-daylight.jpg",
+        "docs/build/streams/ca-3/rift_tube_mites-lamp-off.jpg"
+      ],
+      "loadMs": 6122,
+      "frameMs": 0.26
+    },
+    {
+      "id": "rift_stub_hollow",
+      "shots": [
+        "docs/build/streams/ca-3/rift_stub_hollow-daylight.jpg",
+        "docs/build/streams/ca-3/rift_stub_hollow-lamp-off.jpg"
+      ],
+      "loadMs": 4324,
+      "frameMs": 0.31
+    },
+    {
+      "id": "rift_west_blister",
+      "shots": [
+        "docs/build/streams/ca-3/rift_west_blister-daylight.jpg",
+        "docs/build/streams/ca-3/rift_west_blister-lamp-off.jpg"
+      ],
+      "loadMs": 3597,
+      "frameMs": 0.3
+    },
+    {
+      "id": "rift_west_tube",
+      "shots": [
+        "docs/build/streams/ca-3/rift_west_tube-daylight.jpg",
+        "docs/build/streams/ca-3/rift_west_tube-lamp-off.jpg"
+      ],
+      "loadMs": 4500,
+      "frameMs": 0.26
+    },
+    {
+      "id": "rift_kiln_tube",
+      "shots": [
+        "docs/build/streams/ca-3/rift_kiln_tube-daylight.jpg",
+        "docs/build/streams/ca-3/rift_kiln_tube-lamp-off.jpg"
+      ],
+      "loadMs": 6511,
+      "frameMs": 0.29
+    },
+    {
+      "id": "divide_mirror_pocket",
+      "shots": [
+        "docs/build/streams/ca-3/divide_mirror_pocket-daylight.jpg",
+        "docs/build/streams/ca-3/divide_mirror_pocket-lamp-off.jpg"
+      ],
+      "loadMs": 5975,
+      "frameMs": 0.23
+    },
+    {
+      "id": "divide_crest_hollow",
+      "shots": [
+        "docs/build/streams/ca-3/divide_crest_hollow-daylight.jpg",
+        "docs/build/streams/ca-3/divide_crest_hollow-lamp-off.jpg"
+      ],
+      "loadMs": 6530,
+      "frameMs": 0.23
+    },
+    {
+      "id": "divide_east_pocket",
+      "shots": [
+        "docs/build/streams/ca-3/divide_east_pocket-daylight.jpg",
+        "docs/build/streams/ca-3/divide_east_pocket-lamp-off.jpg"
+      ],
+      "loadMs": 6845,
+      "frameMs": 0.47
+    },
+    {
+      "id": "divide_lee_burrow",
+      "shots": [
+        "docs/build/streams/ca-3/divide_lee_burrow-daylight.jpg",
+        "docs/build/streams/ca-3/divide_lee_burrow-lamp-off.jpg"
+      ],
+      "loadMs": 8100,
+      "frameMs": 0.43
+    },
+    {
+      "id": "divide_fissure_window",
+      "shots": [
+        "docs/build/streams/ca-3/divide_fissure_window-daylight.jpg",
+        "docs/build/streams/ca-3/divide_fissure_window-lamp-off.jpg"
+      ],
+      "loadMs": 5062,
+      "frameMs": 0.5
+    },
+    {
+      "id": "divide_lintel_galleries",
+      "shots": [
+        "docs/build/streams/ca-3/divide_lintel_galleries-daylight.jpg",
+        "docs/build/streams/ca-3/divide_lintel_galleries-lamp-off.jpg"
+      ],
+      "loadMs": 6810,
+      "frameMs": 0.57
+    },
+    {
+      "id": "divide_brine_cistern",
+      "shots": [
+        "docs/build/streams/ca-3/divide_brine_cistern-daylight.jpg",
+        "docs/build/streams/ca-3/divide_brine_cistern-lamp-off.jpg"
+      ],
+      "loadMs": 7856,
+      "frameMs": 0.18
+    },
+    {
+      "id": "meridian_footing_void",
+      "shots": [
+        "docs/build/streams/ca-3/meridian_footing_void-daylight.jpg",
+        "docs/build/streams/ca-3/meridian_footing_void-lamp-off.jpg"
+      ],
+      "loadMs": 4648,
+      "frameMs": 0.48
+    },
+    {
+      "id": "meridian_culvert_north",
+      "shots": [
+        "docs/build/streams/ca-3/meridian_culvert_north-daylight.jpg",
+        "docs/build/streams/ca-3/meridian_culvert_north-lamp-off.jpg"
+      ],
+      "loadMs": 4553,
+      "frameMs": 0.51
+    },
+    {
+      "id": "meridian_spire_footing",
+      "shots": [
+        "docs/build/streams/ca-3/meridian_spire_footing-daylight.jpg",
+        "docs/build/streams/ca-3/meridian_spire_footing-lamp-off.jpg"
+      ],
+      "loadMs": 4149,
+      "frameMs": 0.22
+    },
+    {
+      "id": "meridian_escarp_pocket",
+      "shots": [
+        "docs/build/streams/ca-3/meridian_escarp_pocket-daylight.jpg",
+        "docs/build/streams/ca-3/meridian_escarp_pocket-lamp-off.jpg"
+      ],
+      "loadMs": 5812,
+      "frameMs": 0.4
+    },
+    {
+      "id": "meridian_terrace_crack",
+      "shots": [
+        "docs/build/streams/ca-3/meridian_terrace_crack-daylight.jpg",
+        "docs/build/streams/ca-3/meridian_terrace_crack-lamp-off.jpg"
+      ],
+      "loadMs": 3937,
+      "frameMs": 0.36
+    },
+    {
+      "id": "meridian_window_gallery",
+      "shots": [
+        "docs/build/streams/ca-3/meridian_window_gallery-daylight.jpg",
+        "docs/build/streams/ca-3/meridian_window_gallery-lamp-off.jpg"
+      ],
+      "loadMs": 5243,
+      "frameMs": 0.17
+    },
+    {
+      "id": "meridian_escarp_culvert",
+      "shots": [
+        "docs/build/streams/ca-3/meridian_escarp_culvert-daylight.jpg",
+        "docs/build/streams/ca-3/meridian_escarp_culvert-lamp-off.jpg"
+      ],
+      "loadMs": 8859,
+      "frameMs": 0.54
+    }
+  ],
+  "errors": []
+}
