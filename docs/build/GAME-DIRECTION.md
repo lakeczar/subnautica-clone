@@ -146,6 +146,17 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 - **The pod keeps its guaranteed role:** air, healing, storage and basic fabrication, and it's never stranded by crown power loss.
 - **The carrier anchorage** is about 130 m from the crown.
 
+## Streaming without pauses (owner, 2026-10-22)
+- **Rule:** ordinary play never shows a loading pause or hitch. The cave "loading" hold, and its rescue, is a **safety net only**. It should only ever appear in pathological cases, such as a save reloaded inside a cave on a starved budget, and then during the save's own load screen.
+- **How:**
+  - **Predictive prefetch by proximity and heading:** start a cave biome, region or large asset well before arrival, around 300–400 m from a mouth, which is 20–50 s ahead even at Dart speed.
+  - **Time-sliced or worker construction** within per-frame budgets.
+  - **Pre-built (baked) cave collision and light data,** not built at runtime.
+  - **Coarse versions always kept** as the floor.
+  - **Eviction behind you and far away first.**
+  - **Save loads finish admission during the existing load screen.**
+- **Acceptance:** a fast Dart traversal of every region and cave mouth shows no frame over about 33 ms caused by streaming, and no hold state is ever reached.
+
 ## Atmosphere
 All five matter, in this priority:
 1. **light and depth:** water colour, darkness, the lamp, god rays;
