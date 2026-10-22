@@ -40,6 +40,7 @@ import { mkdirSync, writeFileSync, readFileSync, readdirSync, statSync, existsSy
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { requireGpuLease } from "../../../scripts/heavy/gpu-lease.mjs";
 
 export const SCHEMA = "siltwake-gpu-probe/2";
 // Per-process switches for this probe's own browser only; the report records every result.
@@ -501,6 +502,7 @@ async function main() {
   if (opts.validate) return cmdValidate(opts);
   if (!opts.out || !opts.playwright) throw new Error("needs --out DIR and --playwright DIR (a playwright-core folder)");
   if (opts.dist && !opts.commit) throw new Error("--dist needs --commit (the source commit the build came from)");
+  requireGpuLease("webgl-probe.mjs");
   mkdirSync(opts.out, { recursive: true });
   const expect = new RegExp(opts.expect);
   const pw = createRequire(import.meta.url)(path.resolve(opts.playwright));

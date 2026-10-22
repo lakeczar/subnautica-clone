@@ -32,18 +32,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const say = (msg) => process.stderr.write(`heavy-check: ${msg}\n`);
 const fail = (msg, code = 2) => { say(msg); process.exit(code); };
 
-const argv = process.argv.slice(2);
-const sub = SUBCOMMANDS.has(argv[0]) ? argv.shift() : "run";
-switch (sub) {
-  case "run": process.exit(await runCmd(argv));
-  case "submit": process.exit(await submitCmd(argv));
-  case "wait": process.exit(await waitCmd(argv));
-  case "status": process.exit(statusCmd(argv));
-  case "log": process.exit(await logCmd(argv));
-  case "cancel": process.exit(await cancelCmd(argv));
-  default: process.stdout.write(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 18).map((l) => l.replace(/^\/\/ ?/, "")).join("\n") + "\n");
-}
-
 function parseJob(args) {
   const opts = {};
   let i = 0;
@@ -323,4 +311,18 @@ async function cancelCmd(args) {
   for (let i = 0; i < 300 && !existsSync(join(jobDir(cfg, id), "exit.json")); i++) await sleep(100);
   say(`${id} stopped`);
   return 0;
+}
+
+// Dispatch last: commands run during module evaluation, so every helper above
+// must already be initialised.
+const argv = process.argv.slice(2);
+const sub = SUBCOMMANDS.has(argv[0]) ? argv.shift() : "run";
+switch (sub) {
+  case "run": process.exit(await runCmd(argv));
+  case "submit": process.exit(await submitCmd(argv));
+  case "wait": process.exit(await waitCmd(argv));
+  case "status": process.exit(statusCmd(argv));
+  case "log": process.exit(await logCmd(argv));
+  case "cancel": process.exit(await cancelCmd(argv));
+  default: process.stdout.write(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 18).map((l) => l.replace(/^\/\/ ?/, "")).join("\n") + "\n");
 }

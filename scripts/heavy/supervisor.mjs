@@ -66,14 +66,17 @@ writeJsonAtomic(join(dir, "ack.json"), ack);
 if (ack.joined) process.exit(0);
 
 // 2. Wait for admission: re-plan when the state file changes, or every 15 s.
-let lastSeen = -1, lastTry = 0;
+// A v1 job releasing the old lock changes no state file, so while blocked by
+// it, re-check every 2 s.
+let lastSeen = -1, lastTry = 0, every = 15000;
 for (;;) {
   const m = mtime(cfg.paths.state);
-  if (m !== lastSeen || Date.now() - lastTry >= 15000) {
+  if (m !== lastSeen || Date.now() - lastTry >= every) {
     const out = tryAdmit();
     lastSeen = mtime(cfg.paths.state); lastTry = Date.now();
     if (out === "admitted") break;
     if (out === "gone") process.exit(0);
+    every = out === "legacy" ? 2000 : 15000;
   }
   await sleep(1000);
 }
@@ -140,7 +143,11 @@ const out = openSync(outPath, "a");
 const memBytes = req.memMiB * 1048576;
 const args = [
   "--user", "--scope", "--quiet", "--collect", `--unit=${unit}`, `--slice=${cfg.slice}`,
-  "-p", `MemoryMax=${req.memMiB}M`, "-p", `MemoryHigh=${Math.floor(req.memMiB * 0.9)}M`, "-p", "MemorySwapMax=0",
+  // No MemoryHigh: with no swap, a job past memory.high is throttled, not
+  // killed, and crawls to its deadline holding its reservation (measured in
+  // SCHED-1). At MemoryMax the kernel still reclaims page cache before it
+  // OOM-kills, so the job gets an explicit OOM instead.
+  "-p", `MemoryMax=${req.memMiB}M`, "-p", "MemoryHigh=infinity", "-p", "MemorySwapMax=0",
   "-p", `CPUWeight=${Math.min(10000, req.tokens * 100)}`, "-p", "TimeoutStopSec=10s",
   "sh", join(here, "scope-run.sh"), dir, String(req.deadline), String(memBytes), ...t.argv,
 ];
