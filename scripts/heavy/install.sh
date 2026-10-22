@@ -34,7 +34,7 @@ if [[ $uninstall == 1 ]]; then
   exit 0
 fi
 
-files=(policy.mjs state.mjs supervisor.mjs heavy-check.mjs scope-run.sh build-guard.mjs gpu-lease.mjs)
+files=(policy.mjs state.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh build-guard.mjs gpu-lease.mjs)
 version=$(cd "$src" && cat "${files[@]}" | sha256sum | cut -c1-12)
 if [[ ! -d "$home/$version" ]]; then
   [[ -d "$home/$version.tmp" ]] && chmod -R u+w "$home/$version.tmp" && rm -rf "$home/$version.tmp"

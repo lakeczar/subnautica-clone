@@ -2,7 +2,6 @@
 # Runs inside a heavy-check v2 job scope (started by supervisor.mjs).
 #
 #   scope-run.sh JOBDIR DEADLINE_S EXPECTED_MEMORY_MAX_BYTES COMMAND [ARGS...]
-#   (fd 3: the legacy bridge lock, fd 4: the ticket's alive lock)
 #
 # Records the scope's cgroup, refuses to run unless the scope's memory limits
 # took effect (WORKER_RESOURCE_LIMITS: verify before the heavy command), runs
@@ -32,8 +31,8 @@ fi
 : >"$jobdir/started"
 flock -u 5
 exec 5>&-
-# fds 3 (legacy bridge, shared) and 4 (the ticket's alive lock) stay open and
-# are inherited by the command, so both are held for its whole life.
+# The job's lifetime is this scope's cgroup: the ticket's holder (holder.mjs)
+# keeps the bridge and the reservation until the cgroup is empty.
 timeout --kill-after=10s "${deadline}s" "$@"
 rc=$?
 {

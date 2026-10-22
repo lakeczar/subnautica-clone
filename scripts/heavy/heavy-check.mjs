@@ -330,11 +330,12 @@ async function cancelCmd(args) {
   }
 }
 
-/** Finishes tickets whose supervisor died (state.mjs reconcile), so wait,
- * status and cancel reach a result even when nothing else is queued to run a
- * transaction. Takes no lock while every supervisor is alive. */
+/** Finishes tickets whose owner died (state.mjs reconcile), so wait, status
+ * and cancel reach a result even when nothing else is queued to run a
+ * transaction. Takes no lock while every owner process is alive. */
 function recover() {
-  if (Object.values(readState(cfg).tickets).every((t) => alive(t.supervisor))) return;
+  const owner = (t) => (t.state === "running" && t.holder ? t.holder : t.supervisor);
+  if (Object.values(readState(cfg).tickets).every((t) => alive(owner(t)))) return;
   transaction(cfg, (state) => ({ changed: reconcile(cfg, state) }));
 }
 

@@ -153,17 +153,6 @@ export function stopScope(unit, { block = true, waitS = 0 } = {}) {
   return false;
 }
 
-/** Whether any process of a ticket is alive: the supervisor takes
- * jobs/<ticket>/alive.lock and passes it to the scope launcher, the in-scope
- * wrapper and the payload, so the lock stays held until all of them are gone,
- * the startup window (launcher running, scope not yet registered) included. */
-export function ticketHeld(cfg, id) {
-  const fd = flockFd(join(jobDir(cfg, id), "alive.lock"));
-  if (fd == null) return true;
-  closeSync(fd);
-  return false;
-}
-
 /** Who holds or waits for the legacy (v1) lock file, from /proc/locks. Blocked
  * waiters show as "->" lines on the file's device:inode. A v1 caller always
  * takes it exclusively (WRITE); v2 jobs hold it shared (READ) and never block. */
@@ -226,31 +215,33 @@ export function readFileSafe(path) {
 }
 
 /**
- * Recovers tickets whose supervisor is gone. A queued ticket was never
- * launched, so it is dropped (exit 75, "lost"). A running ticket keeps its
- * reservation while any of its processes lives (ticketHeld) or its scope still
- * holds processes; the payload runs on to its own end and deadline, holding
- * the legacy bridge itself. Stragglers in a scope whose ticket processes are
- * all gone are stopped. Only when the scope is conclusively empty is the
- * ticket finished, with the payload's own exit code if the in-scope wrapper
- * recorded one. Runs on every transaction, and from wait, status and cancel,
- * so a lone `wait` also reaches a result. Returns true if state changed.
+ * Recovers tickets whose owner is gone, judging liveness by cgroups, never by
+ * which file descriptors a job's processes kept. A queued ticket whose
+ * supervisor died was never launched: it is dropped (exit 75, "lost"). An
+ * admitted ticket is alive while its holder's scope (holder.mjs) holds
+ * processes, or, before the holder has claimed it, while its supervisor or
+ * the holder's launcher does. Once the holder is gone, anything left in the
+ * job scope is stopped and the reservation kept until that cgroup is
+ * conclusively empty; then the ticket is finished, with the command's own exit
+ * code if the in-scope wrapper recorded one. A holder that starts after its
+ * ticket was finished here never launches (its claim fails). Runs on every
+ * transaction, and from wait, status and cancel, so a lone `wait` also reaches
+ * a result. Returns true if state changed.
  */
 export function reconcile(cfg, state) {
   let changed = false;
   for (const t of Object.values(state.tickets)) {
-    if (alive(t.supervisor)) continue;
-    const dir = jobDir(cfg, t.id);
+    if (t.state === "queued" && alive(t.supervisor)) continue;
     if (t.state === "running") {
-      if (ticketHeld(cfg, t.id)) {
+      const owner = t.holder ? [t.holderUnit] : [t.supervisorUnit, t.holderUnit];
+      if ((!t.holder && alive(t.supervisor)) || owner.some((u) => u && scopePopulated(u))) continue;
+      if (t.unit && scopePopulated(t.unit)) {
+        stopScope(t.unit, { block: false }); // keep the reservation until the cgroup is empty
         if (!t.orphaned) { t.orphaned = Date.now(); changed = true; ledger(cfg, { event: "orphaned", ticket: t.id, worktree: t.worktree }); }
         continue;
       }
-      if (t.unit && !stopScope(t.unit, { block: false })) {
-        if (!t.orphaned) { t.orphaned = Date.now(); changed = true; }
-        continue; // stopping: keep the reservation until the cgroup is empty
-      }
     }
+    const dir = jobDir(cfg, t.id);
     const result = t.state === "running" ? orphanResult(dir, t) : { code: 75, label: "lost: supervisor died before admission" };
     const marker = join(t.worktree, ".test-build", ".heavy-job");
     if (readJson(marker)?.ticket === t.id) rmSync(marker, { force: true });
@@ -268,11 +259,11 @@ function orphanResult(dir, t) {
   if (existsSync(join(dir, "not-started"))) return { code: 75, label: "cancelled before start; the command did not run" };
   if (existsSync(join(dir, "cancelled"))) return { code: 75, label: "cancelled" };
   const stats = Object.fromEntries((readFileSafe(join(dir, "stats")) ?? "").split("\n").filter(Boolean).map((l) => l.split("=")));
-  if (stats.rc == null) return { code: 137, label: "killed: supervisor died and the job did not finish" };
+  if (stats.rc == null) return { code: 137, label: t.holder ? "killed: its holder died and the job did not finish" : "not started: its supervisor died during the handoff" };
   const code = Number(stats.rc), oom = Number(stats.oom_local ?? 0) > 0 && code !== 0;
   return {
     code: oom ? 137 : code,
-    label: oom ? `oom: class ${t.req.class} reservation ${t.req.memMiB} MiB (supervisor died)` : "supervisor died; the job ran to its end",
+    label: oom ? `oom: class ${t.req.class} reservation ${t.req.memMiB} MiB (holder died)` : "its holder died; the command ran to its end",
     peakMiB: stats.peak ? Math.ceil(Number(stats.peak) / 1048576) : null,
   };
 }

@@ -74,6 +74,25 @@ const done = (c, id, ms = 60000) => until(`${id} done`, () => result(c, id), ms)
 const blockedBy = (c, id) => hc(c, ["status"]).out.split("\n").find((l) => l.startsWith(id))?.split(/\s{2,}/)[5];
 const scopeActive = (unit) => spawnSync("systemctl", ["--user", "is-active", "--quiet", `${unit}.scope`]).status === 0;
 const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+/** SIGKILLs a scheduler process only if it is still the same process (PID plus start time). */
+const killOwned = (p) => { assert.ok(alive(p), "the process to kill is still ours"); process.kill(p.pid, "SIGKILL"); };
+/** The running ticket once its holder has claimed it; the supervisor has exited by then. */
+const holderOf = async (c, id) => {
+  const t = await until(`${id} claimed`, () => state(c).tickets[id]?.holder && state(c).tickets[id]);
+  await until("supervisor exits after the handoff", () => !alive(t.supervisor));
+  return t;
+};
+/** The real v1 script from 1ccce66, pointed at the context's private lock and unit names. */
+function v1Script(c) {
+  const v1 = join(c.dir, "heavy-check-v1.sh");
+  const src = spawnSync("git", ["-C", here, "show", "1ccce66:scripts/heavy-check.sh"], { encoding: "utf8" }).stdout;
+  writeFileSync(v1, src.replace("/work/tmp/siltwake-heavy-check.lock", c.legacy).replace('unit="siltwake-heavy-', `unit="sched1test-v1-${c.n}-`), { mode: 0o755 });
+  return (cmd) => {
+    const p = spawn("bash", [v1, "--deadline", "60", "sh", "-c", cmd], { cwd: c.dir, env: c.env, stdio: "ignore" });
+    p.exited = new Promise((r) => p.on("exit", r));
+    return p;
+  };
+}
 
 test("1: two CPU jobs run at once", async () => {
   const c = context("two-cpu");
@@ -235,20 +254,22 @@ test("8: the job survives its caller; a fresh wait returns its code; resubmittin
   assert.match(w.err, new RegExp(`${id} exit 7`));
 });
 
-test("9: a killed supervisor's job runs on holding its reservation; a lone wait gets its real code; a reused PID is not alive", async () => {
+test("9: the supervisor exits after the handoff; if the holder is killed the job is stopped, kept reserved until empty, and a lone wait finishes it; a reused PID is not alive", async () => {
   const c = context("reconcile");
   const wt = c.wt("a");
-  const id = submit(c, wt, "--class", "standard", "--", "sh", "-c", "sleep 4; date +%s%3N > ended; exit 5");
-  await running(c, id);
-  const t = state(c).tickets[id];
-  process.kill(t.supervisor.pid, "SIGKILL");
-  // Nothing else is queued: a fresh wait alone must reach the job's own result.
+  const ok = submit(c, c.wt("ok"), "--class", "quick", "--", "sh", "-c", "sleep 2; exit 5");
+  await holderOf(c, ok); // the supervisor is gone; the holder runs the job
+  assert.equal(hc(c, ["wait", ok]).code, 5);
+  const id = submit(c, wt, "--class", "standard", "--", "sh", "-c", "sleep 30; date > ended");
+  const t = await holderOf(c, id);
+  killOwned(t.holder);
+  // Nothing else is queued: a fresh wait alone must reach a result.
   const w = hc(c, ["wait", id]);
-  assert.equal(w.code, 5, w.err);
-  assert.match(w.err, /supervisor died; the job ran to its end/);
+  assert.equal(w.code, 137, w.err);
+  assert.match(w.err, /killed: its holder died/);
   assert.equal(state(c).tickets[id], undefined, "reservation reclaimed");
-  assert.equal(scopePopulated(t.unit), false);
-  assert.ok(existsSync(join(wt, "ended")), "the payload was not killed");
+  assert.equal(scopePopulated(t.unit), false, "BindsTo stopped the job with its holder");
+  assert.equal(existsSync(join(wt, "ended")), false);
   const me = self();
   assert.equal(alive(me), true);
   assert.equal(alive({ pid: me.pid, start: me.start + 1 }), false, "same PID, different start time");
@@ -260,11 +281,11 @@ test("9b: a stopping (deactivating) scope keeps its reservation: an exclusive jo
   const id = submit(c, wt, "--class", "standard", "--mem", "256M", "--", "python3", "-c",
     "import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); open('payload.pid','w').write(str(os.getpid())); time.sleep(40)");
   await until("payload", () => existsSync(join(wt, "payload.pid")));
-  const t = state(c).tickets[id];
+  const t = await holderOf(c, id);
   const payload = Number(readFileSync(join(wt, "payload.pid"), "utf8"));
   spawn("systemctl", ["--user", "stop", `${t.unit}.scope`], { stdio: "ignore" }); // TERM ignored: stops after TimeoutStopSec=10s
   await until("deactivating", () => spawnSync("systemctl", ["--user", "is-active", `${t.unit}.scope`], { encoding: "utf8" }).stdout.trim() === "deactivating");
-  process.kill(t.supervisor.pid, "SIGKILL");
+  killOwned(t.holder);
   const X = submit(c, c.wt("x"), "--class", "exclusive", "--", "sh", "-c", `kill -0 ${payload} 2>/dev/null && echo OLD_PAYLOAD_ALIVE || echo OLD_PAYLOAD_GONE`);
   await sleep(1500);
   assert.ok(pidAlive(payload), "the old payload is still alive while stopping");
@@ -275,6 +296,55 @@ test("9b: a stopping (deactivating) scope keeps its reservation: an exclusive jo
   assert.equal(rx.code, 0);
   assert.match(readFileSync(join(c.sched, "jobs", X, "output.log"), "utf8"), /OLD_PAYLOAD_GONE/);
   assert.equal(result(c, id).code, 137);
+});
+
+test("9c (R2): background children outlive the foreground: v1 stays out until the job's cgroup is empty, inheriting or not", async () => {
+  // a: a shell background child that inherits every descriptor; b: a TERM-ignoring
+  // Python child started by Node spawn (stdio ignore, unref), which keeps none.
+  const cases = {
+    inherits: ["sh", "-c", "sleep 120 & echo $! > child.pid; : > ready; while [ ! -f release ]; do sleep 0.05; done; exit 0"],
+    closes: [process.execPath, "-e", "const {spawn}=require('node:child_process'),fs=require('node:fs');" +
+      "spawn('python3',['-c','import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); open(\"child.pid\",\"w\").write(str(os.getpid())); time.sleep(120)'],{stdio:'ignore',detached:true}).unref();" +
+      "fs.writeFileSync('ready','');const t=setInterval(()=>{if(fs.existsSync('release')){clearInterval(t);process.exit(0);}},50);"],
+  };
+  for (const [name, argv] of Object.entries(cases)) {
+    const c = context(`background-${name}`);
+    writeFileSync(c.legacy, "");
+    const id = submit(c, c.dir, "--class", "quick", "--mem", "256M", "--deadline", "60", "--", ...argv);
+    await until("child", () => existsSync(join(c.dir, "child.pid")) && existsSync(join(c.dir, "ready")));
+    const t = await holderOf(c, id);
+    const child = Number(readFileSync(join(c.dir, "child.pid"), "utf8"));
+    const fds = readdirSync(`/proc/${child}/fd`).map(Number).sort((a, b) => a - b);
+    const v1 = v1Script(c)(`if kill -0 $(cat child.pid) 2>/dev/null; then : > v1-overlap; fi; date +%s%3N > v1.enter`);
+    await sleep(500);
+    writeFileSync(join(c.dir, "release"), ""); // the foreground exits 0; the child stays
+    await until("foreground done", () => existsSync(join(c.sched, "jobs", id, "stats")));
+    await sleep(1000);
+    assert.equal(existsSync(join(c.dir, "v1.enter")), false, `${name}: v1 stays out while the child lives (fds ${fds})`);
+    await v1.exited;
+    assert.equal(existsSync(join(c.dir, "v1-overlap")), false, `${name}: v1 never saw the old child alive`);
+    assert.equal(pidAlive(child), false);
+    const w = hc(c, ["wait", id]);
+    assert.equal(w.code, 0, w.err);
+    assert.equal(result(c, id).leftovers, true);
+    assert.equal(scopePopulated(t.unit), false);
+    if (name === "closes") assert.ok(Number(readFileSync(join(c.dir, "v1.enter"), "utf8")) - result(c, id).admittedAt >= 10000, "v1 waited out the 10 s stop grace");
+  }
+});
+
+test("9d (R2): a job whose foreground cannot end is stopped at its whole-job deadline; a lone wait then completes", async () => {
+  const c = context("backstop");
+  // The payload stops its own `timeout` (SIGSTOP), so the in-scope deadline never fires.
+  const id = submit(c, c.wt("a"), "--class", "quick", "--deadline", "2", "--", "sh", "-c", "kill -STOP $PPID; sleep 120");
+  const t = await holderOf(c, id);
+  const started = Date.now();
+  const w = hc(c, ["wait", id]);
+  assert.equal(w.code, 124, w.err);
+  assert.match(w.err, /deadline 2s exceeded/);
+  const took = (Date.now() - started) / 1000;
+  assert.ok(took < 40, `stopped after ${took}s`);
+  assert.equal(scopePopulated(t.unit), false);
+  assert.equal(state(c).tickets[id], undefined);
 });
 
 test("10: cancel removes a queued ticket, stops only a running one's scope, and the queue limit exits 75", async () => {
@@ -390,26 +460,20 @@ test("12: legacy bridge: a v1 holder blocks v2; a v1 waiter pauses v2 until it r
   assert.match(events, /"event":"legacy-holder"/, "v1 acquisitions are recorded");
 });
 
-test("12b: a v1 waiter stays out while a v2 payload whose supervisor died is still running", async () => {
+test("12b: with the supervisor gone, the holder keeps v1 out until the payload has ended", async () => {
   const c = context("legacy-crash");
   writeFileSync(c.legacy, "");
-  const v1 = join(c.dir, "heavy-check-v1.sh");
-  const v1src = spawnSync("git", ["-C", here, "show", "1ccce66:scripts/heavy-check.sh"], { encoding: "utf8" }).stdout;
-  writeFileSync(v1, v1src.replace("/work/tmp/siltwake-heavy-check.lock", c.legacy).replace('unit="siltwake-heavy-', `unit="sched1test-v1-${c.n}-`), { mode: 0o755 });
   const wt = c.wt("a");
   const id = submit(c, wt, "--class", "quick", "--", "sh", "-c", "sleep 5; date +%s%3N > ended");
-  await running(c, id);
-  const v1run = spawn("bash", [v1, "--deadline", "60", "sh", "-c", `date +%s%3N > ${c.dir}/v1.start`], { cwd: c.dir, env: c.env, stdio: "ignore" });
-  const v1exited = new Promise((r) => v1run.on("exit", r));
-  await sleep(500);
-  process.kill(state(c).tickets[id].supervisor.pid, "SIGKILL");
-  await sleep(1000);
-  assert.equal(existsSync(join(c.dir, "v1.start")), false, "v1 did not enter when the supervisor died");
-  await v1exited;
+  await holderOf(c, id); // the supervisor has exited
+  const v1 = v1Script(c)(`date +%s%3N > ${c.dir}/v1.start`);
+  await sleep(1500);
+  assert.equal(existsSync(join(c.dir, "v1.start")), false, "v1 waits");
+  await v1.exited;
   const v1start = Number(readFileSync(join(c.dir, "v1.start"), "utf8"));
   const ended = Number(readFileSync(join(wt, "ended"), "utf8"));
   assert.ok(v1start >= ended, `v1 entered at ${v1start}, payload ended at ${ended}`);
-  assert.equal(hc(c, ["wait", id]).code, 0, "a lone wait finishes the orphaned ticket");
+  assert.equal(hc(c, ["wait", id]).code, 0);
 });
 
 test("13: nested calls run inline; a nested GPU call from a CPU job and a forged ticket are refused", async () => {
@@ -450,6 +514,26 @@ test("14: one running job per worktree, and the .test-build guard", async () => 
   assert.match(readFileSync(join(c.sched, "jobs", a, "output.log"), "utf8"), /inside=null/, "the job itself may rebuild");
   await done(c, b);
   assert.equal(heavyJobGuard(wt, {}), null, "marker removed after the job");
+});
+
+test("14b (R2): the build guard follows the job's cgroups: it refuses while the job lives without its supervisor or holder, until the job is empty", async () => {
+  const c = context("guard-life");
+  const wt = c.wt("repo");
+  writeFileSync(join(wt, "package.json"), "{}");
+  const id = submit(c, wt, "--class", "quick", "--", "python3", "-c",
+    "import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); open('ready','w').close(); time.sleep(60)");
+  await until("ready", () => existsSync(join(wt, "ready")));
+  const t = await holderOf(c, id);
+  assert.match(heavyJobGuard(wt, {}) ?? "", new RegExp(`ticket ${id} is running`), "supervisor gone: still refused");
+  killOwned(t.holder); // BindsTo stops the job; TERM is ignored, so it lingers for the 10 s stop grace
+  await sleep(1000);
+  assert.ok(scopePopulated(t.unit));
+  assert.match(heavyJobGuard(wt, {}) ?? "", /is running/, "holder gone, job still populated: still refused");
+  assert.equal(heavyJobGuard(wt, { SILTWAKE_JOB_TICKET: id }), null, "the job itself may rebuild");
+  await until("job empty", () => !scopePopulated(t.unit), 30000);
+  assert.equal(heavyJobGuard(wt, {}), null, "allowed once the job is empty");
+  assert.equal(hc(c, ["wait", id]).code, 137);
+  assert.equal(existsSync(join(wt, ".test-build", ".heavy-job")), false, "recovery removed the marker");
 });
 
 test("15: mode=serial makes every request exclusive (v1 behaviour) with no redeploy", async () => {
