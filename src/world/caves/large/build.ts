@@ -1,3 +1,4 @@
+import { cachedBuild, floorKey } from "../../../content/buildCache.js";
 import type { LargeCaveSource } from "../../../content/caves/largeCave.js";
 import type { LodLevel } from "../../types.js";
 import { buildCollider, chunkIndex, collisionComplete, createCollision, type CaveCollision } from "./collision.js";
@@ -40,6 +41,10 @@ export interface BakedLayout {
 }
 
 export function createLargeCave(source: LargeCaveSource, floor: FloorFunction, baked?: BakedLayout): LargeCave {
+  // The validated layout is pure in the source and the floor, so on a named
+  // floor it may come from the build cache: a bake by another name.
+  const key = baked ? undefined : floorKey("large-layout", floor, source, import.meta.url);
+  if (key) baked = cachedBuild(key, () => validatedLayout(source, floor));
   const field = compileField(source, floor, baked?.ownership);
   // A bake was validated when it was built, and its source hash matches.
   const problems = baked ? [] : validateOwnership(field);
@@ -64,6 +69,13 @@ export function createLargeCave(source: LargeCaveSource, floor: FloorFunction, b
     },
     dropMeshes() { cache.clear(); },
   };
+}
+
+/** The layout an unbaked cave computes: ownership validated, surface chunks listed. */
+function validatedLayout(source: LargeCaveSource, floor: FloorFunction): BakedLayout {
+  const field = compileField(source, floor), problems = validateOwnership(field);
+  if (problems.length) throw new Error(`cave ${source.id}: ownership problems:\n- ${problems.join("\n- ")}`);
+  return { ownership: field.ownership, chunks: surfaceChunks(field, caveLattice(field), COLLISION_BAND) };
 }
 
 /** Build colliders for `coords` (default: every surface chunk) from fine

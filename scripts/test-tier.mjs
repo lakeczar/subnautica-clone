@@ -11,6 +11,16 @@
 // process that resolves a Babylon module (computed or otherwise hidden imports).
 // Other expensive suites may opt into the heavy tier by name.
 //
+// Every fast file is held to a CPU budget (FAST_FILE_BUDGET_S, default 5 s of
+// user + system time, less time spent filling the build cache): a file over it
+// fails the tier, so the fast tier stays fast. Make the file cheaper (share
+// fixtures, shrink grids or durations the assertion does not need) or move the
+// expensive tests to a `*.heavy.test.ts` file and keep a fast smoke check.
+// SILTWAKE_FAST_FILE_BUDGET_S overrides the budget (0 turns the check off).
+//
+// Both tiers preload scripts/test-build-cache.mjs, a disk cache of expensive
+// deterministic world data (see src/content/buildCache.ts).
+//
 // Heavy files run sequentially, each in its own `node --test --test-isolation=none`
 // process. A watchdog samples the process's peak RSS (VmHWM) and kills it at the
 // budget; the process also reports its exact `maxRSS` on exit. Budgets come from
@@ -18,16 +28,20 @@
 // only inside scripts/heavy-check.sh (which sets SILTWAKE_HEAVY_LOCK_HELD), so one
 // heavy job uses the VM at a time; `npm run test:heavy` does that.
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { availableParallelism, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { pruneBuildCache } from "./test-build-cache.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const build = join(root, ".test-build");
 const testDir = join(build, "tests");
-const FAST_CONCURRENCY = 4;
+// One core is left for the runner and the rest of the shared VM. Fast files peak
+// at a few hundred MiB (see the timing report), well inside FAST_HEAP_MIB each.
+const FAST_CONCURRENCY = Math.max(2, Math.min(5, availableParallelism() - 1));
 const FAST_HEAP_MIB = 1024;
+const FAST_FILE_BUDGET_S = Number(process.env.SILTWAKE_FAST_FILE_BUDGET_S ?? 5);
 const ESCAPE_RE = /\bworker_threads\b|\bnew\s+Worker\s*\(|\bchild_process\b|["'](?:node:)?vm["']|(?<![\w.])eval\s*\(|\bnew\s+Function\s*\(/g;
 
 const [tier, ...requested] = process.argv.slice(2);
@@ -120,17 +134,37 @@ if (tier === "fast") {
     }
     process.exit(1);
   }
-  const started = Date.now();
+  pruneBuildCache();
+  const started = Date.now(), scratch = mkdtempSync(join(tmpdir(), "siltwake-fast-")), timingLog = join(scratch, "timing.jsonl");
   // Each fast test process gets a 1 GiB V8 heap: a runaway assertion diff fails
   // that file quickly instead of exhausting the shared VM. Fast tests hold no
   // Babylon buffers, so the heap is their memory.
-  // Every fast test process preloads the Babylon guard.
-  const guard = pathToFileURL(join(root, "scripts", "fast-guard.mjs")).href;
+  // Every fast test process preloads the Babylon guard, the build cache and the
+  // per-file timing report.
+  const imports = ["fast-guard.mjs", "test-build-cache.mjs", "test-file-timing.mjs"]
+    .map((m) => `--import=${pathToFileURL(join(root, "scripts", m)).href}`).join(" ");
   const { code } = await run(process.execPath, ["--test", `--test-concurrency=${FAST_CONCURRENCY}`, ...files],
-    { env: { ...process.env,
-      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${FAST_HEAP_MIB} --import=${guard}`.trim() } });
-  console.log(`test:fast ${files.length} files in ${((Date.now() - started) / 1000).toFixed(1)} s`);
-  process.exit(code ?? 1);
+    { env: { ...process.env, SILTWAKE_FILE_TIMING_LOG: timingLog,
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${FAST_HEAP_MIB} ${imports}`.trim() } });
+  const timings = existsSync(timingLog) ? readFileSync(timingLog, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l))
+    .filter((t) => files.includes(t.file)) : [];
+  rmSync(scratch, { recursive: true, force: true });
+  // The whole table, for finding what to make cheaper.
+  writeFileSync(join(build, "fast-timing.json"), JSON.stringify(timings.map((t) => ({ ...t, file: basename(t.file) })), null, 1));
+  const charged = (t) => Math.max(0, t.cpuMs - t.missMs) / 1000;
+  timings.sort((a, b) => charged(b) - charged(a));
+  console.log(`\ntest:fast slowest files (CPU s, less build-cache fills; budget ${FAST_FILE_BUDGET_S || "off"} s; ` +
+    "all files in .test-build/fast-timing.json)");
+  for (const t of timings.slice(0, 8))
+    console.log(`  ${basename(t.file).padEnd(44)} ${charged(t).toFixed(1).padStart(5)} s cpu ${(t.wallMs / 1000).toFixed(1).padStart(6)} s wall` +
+      `${t.missMs ? ` (+${(t.missMs / 1000).toFixed(1)} s cache fill)` : ""} ${String(t.maxRssMiB).padStart(5)} MiB`);
+  const over = FAST_FILE_BUDGET_S > 0 ? timings.filter((t) => charged(t) > FAST_FILE_BUDGET_S) : [];
+  for (const t of over)
+    console.error(`test-tier: ${basename(t.file)} used ${charged(t).toFixed(1)} s CPU, over the ${FAST_FILE_BUDGET_S} s fast-file budget. ` +
+      "Make it cheaper, or move its expensive tests to a *.heavy.test.ts file and keep a fast smoke check.");
+  const cpu = timings.reduce((s, t) => s + t.cpuMs, 0) / 1000;
+  console.log(`test:fast ${files.length} files in ${((Date.now() - started) / 1000).toFixed(1)} s (${cpu.toFixed(0)} s CPU, concurrency ${FAST_CONCURRENCY})`);
+  process.exit(code !== 0 ? code ?? 1 : over.length ? 1 : 0);
 }
 
 // Heavy tier.
@@ -147,13 +181,14 @@ const vmHwmKiB = (pid) => {
 };
 const scratch = mkdtempSync(join(tmpdir(), "siltwake-heavy-"));
 const peakModule = pathToFileURL(join(root, "scripts", "test-peak-rss.mjs")).href;
+const cacheModule = pathToFileURL(join(root, "scripts", "test-build-cache.mjs")).href;
 const rows = [];
 let failed = false;
 for (const file of files) {
   const budget = budgetMiB(file), report = join(scratch, `${basename(file)}.peak`), started = Date.now();
   let sampled = 0, killed = false, timer;
   const { code, signal } = await run(process.execPath,
-    ["--import", peakModule, "--test", "--test-isolation=none", "--test-reporter=spec", file],
+    ["--import", peakModule, "--import", cacheModule, "--test", "--test-isolation=none", "--test-reporter=spec", file],
     { env: { ...process.env, SILTWAKE_PEAK_RSS_FILE: report },
       onSpawn(child) {
         timer = setInterval(() => {

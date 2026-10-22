@@ -9,7 +9,7 @@ import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { CRAFT_PROFILES } from "../src/content/regions/passages.js";
 import { caveOwner, createCaveWorldQueries, gameWorld, SOLIDS, surfaceHeight, type Solid } from "../src/sim/world.js";
 import type { Vec3 } from "../src/sim/types.js";
-import { aperture, DIVER, fineShell, HUB_CAVES, openings, retreat, retreatStarts, rockIndex, roofHoles, roomAt, roomGraph, SMALL,
+import { aperture, DIVER, fineShell, HUB_CAVES, openings, retreat, retreatStarts, rockIndex, roomAt, roomGraph, SMALL,
   vertex } from "./hub-cave-support.js";
 
 // W2: the hub's three small spur caves and the crown shaft, held to the W1
@@ -20,15 +20,6 @@ import { aperture, DIVER, fineShell, HUB_CAVES, openings, retreat, retreatStarts
 const world = gameWorld();
 const crown = HUB_CAVES.find(d => d.id === "hub_crown_shaft")!;
 const sub = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
-/** Floor relief within one collar cell (0.75 m) of a point. */
-function localRelief(x: number, z: number): number {
-  let lo = Infinity, hi = -Infinity;
-  for (let i = -3; i <= 3; i++) for (let k = -3; k <= 3; k++) {
-    const h = worldFloor(x + i * 0.25, z + k * 0.25);
-    lo = Math.min(lo, h); hi = Math.max(hi, h);
-  }
-  return hi - lo;
-}
 
 test("hub caves: registered beside the Fanvault, disjoint, clear of the preserve's collar band, thick rock in their own footprints", () => {
   assert.deepEqual(HUB_CAVE_SOURCES.map(s => s.id), ["hub_apron_hollow", "hub_step_arch", "hub_glimmer_crack", "hub_crown_shaft"]);
@@ -54,33 +45,6 @@ test("hub caves: registered beside the Fanvault, disjoint, clear of the preserve
   }
 });
 
-test("hub caves: the shell never sits more than 0.35 m from its rock, and no cave water is inside rock", () => {
-  for (const def of HUB_CAVES) {
-    const rock = rockIndex(def), m = fineShell(def), f = def.replacementFootprints[0]!;
-    // Within half a metre of the footprint edge the shell is the collar, held
-    // to the heightfield itself by the collar test below.
-    const collar = (p: Vec3): boolean => Math.min(p.x - f.minX, f.maxX - p.x, p.z - f.minZ, f.maxZ - p.z) < 0.5;
-    let worst = 0, buried = 0;
-    // Every vertex of a small cave; every second of the crown's large shell.
-    const n = m.positions.length / 3, stride = n > 60000 ? 2 : 1;
-    for (let i = 0; i < n; i += stride) {
-      const p = vertex(m, i), nrm = { x: m.normals[i * 3]!, y: m.normals[i * 3 + 1]!, z: m.normals[i * 3 + 2]! };
-      if (!collar(p)) worst = Math.max(worst, rock.distance(p));
-      if (rock.inRock({ x: p.x + nrm.x * 0.36, y: p.y + nrm.y * 0.36, z: p.z + nrm.z * 0.36 })) buried++;
-    }
-    assert.ok(worst <= 0.35, `${def.id}: shell point ${worst.toFixed(3)} m outside its solids`);
-    assert.ok(buried <= n / stride * 0.001, `${def.id}: ${buried} of ${n} shell points face rock within 0.36 m`);
-    const v = caveVolume(def), g = v.grid;
-    let cells = 0;
-    for (let k = 0; k < g.nz; k++) for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) {
-      if (!v.room[i + g.nx * (j + g.ny * k)]) continue;
-      cells++;
-      const p = { x: g.origin.x + (i + 0.5) * g.voxel, y: g.origin.y + (j + 0.5) * g.voxel, z: g.origin.z + (k + 0.5) * g.voxel };
-      assert.ok(!rock.inRock(p), `${def.id}: room cell ${JSON.stringify(p)} is inside rock`);
-    }
-    assert.ok(cells > 1000, `${def.id}: ${cells} room cells`);
-  }
-});
 
 test("hub caves: every opening keeps its clear size; the spur caves are diver-only, the crown shaft takes a Dart", () => {
   for (const def of HUB_CAVES) {
@@ -122,33 +86,6 @@ test("hub caves: every route sweeps clear through the game world, and a blocked 
   assert.ok(loop.slice(1).some((b, i) => blocked.moveCapsule(loop[i]!, sub(b, loop[i]!), SMALL).hitSolid), "a blocked mouth must stop the loop");
 });
 
-test("hub caves: roofs are sound and the collar meets the heightfield at every footprint edge", () => {
-  for (const def of HUB_CAVES) {
-    const holes = roofHoles(def);
-    assert.equal(holes.length, 0, `${def.id}: roof holes, first ${JSON.stringify(holes[0])}`);
-    const f = def.replacementFootprints[0]!, edge: [number, number, number, number][] = [];
-    for (let u = f.minX + 0.5; u < f.maxX; u += 1) edge.push([u, f.minZ + 0.25, u, f.minZ - 0.25], [u, f.maxZ - 0.25, u, f.maxZ + 0.25]);
-    for (let u = f.minZ + 0.5; u < f.maxZ; u += 1) edge.push([f.minX + 0.25, u, f.minX - 0.25, u], [f.maxX - 0.25, u, f.maxX + 0.25, u]);
-    for (const [x, z, ox, oz] of edge) {
-      const outside = worldFloor(ox, oz);
-      assert.ok(outside >= def.source.baseY, `${def.id}: floor ${outside.toFixed(1)} below baseY at ${ox}, ${oz}`);
-      // The spur's flanks fall 3-5 m per metre, and the adapter's collar
-      // columns take the highest of nine floor samples per 0.5 m cell (a W1
-      // limit), so the step is bounded by the floor's own relief right there.
-      const top = world.supportHeight(x, z, 1000), relief = localRelief(x, z);
-      assert.ok(Math.abs(top - outside) <= 0.75 + relief, `${def.id}: collar step ${(top - outside).toFixed(2)} m at ${x}, ${z} (relief ${relief.toFixed(2)})`);
-    }
-    // The art seam: every shell vertex on the footprint edge lies on the floor.
-    for (const lod of ["fine", "coarse"] as const) {
-      const m = caveShell(def, lod);
-      for (let i = 0; i < m.positions.length / 3; i++) {
-        const p = vertex(m, i);
-        if (Math.abs(p.x - f.minX) > 1e-6 && Math.abs(p.x - f.maxX) > 1e-6 && Math.abs(p.z - f.minZ) > 1e-6 && Math.abs(p.z - f.maxZ) > 1e-6) continue;
-        assert.ok(Math.abs(p.y - worldFloor(p.x, p.z)) < 1e-4, `${def.id} ${lod}: collar vertex ${p.y.toFixed(2)} vs floor ${worldFloor(p.x, p.z).toFixed(2)}`);
-      }
-    }
-  }
-});
 
 test("the crown shaft is a real loop: two exits, a cycle of rooms, a Dart loop down the spiral and a diver loop up the chimney", () => {
   const graph = roomGraph(crown);
@@ -175,29 +112,7 @@ test("the crown shaft is a real loop: two exits, a cycle of rooms, a Dart loop d
     assert.deepEqual(p.admits, ["diver"], p.id);
 });
 
-test("ADVERSE: lamp off, a diver anywhere on a hub cave's routes swims the glow out through a mouth", () => {
-  for (const def of HUB_CAVES) {
-    const starts = retreatStarts(def, def.id === "hub_crown_shaft" ? 2 : 1);
-    assert.ok(starts.length >= 8, `${def.id}: ${starts.length} starts`);
-    const { failures, exits, hops } = retreat(def, world, starts);
-    assert.deepEqual(failures.slice(0, 5), [], `${def.id}: ${failures.length} of ${starts.length} starts lost`);
-    assert.ok(hops >= starts.length, `${def.id}: the retreat is a swim, not a jump`);
-    if (openings(def).length >= 2) assert.ok(Object.keys(exits).length >= 2, `${def.id}: exits used ${JSON.stringify(exits)}`);
-  }
-});
 
-test("negative control: with the crown shaft's mouths plugged the same retreat fails", () => {
-  const plugs: Solid[] = openings(crown).map((o, i) => {
-    const w = o.clear.width / 2 + 3, h = o.clear.height / 2 + 3, t = 1.5;
-    const half = o.normal.y !== 0 ? { x: w, y: t, z: h } : o.normal.z !== 0 ? { x: w, y: h, z: t } : { x: t, y: h, z: w };
-    return { id: `test.plug.${i}`, min: { x: o.center.x - half.x, y: o.center.y - half.y, z: o.center.z - half.z },
-      max: { x: o.center.x + half.x, y: o.center.y + half.y, z: o.center.z + half.z } };
-  });
-  const sealed = createCaveWorldQueries({ solids: [...SOLIDS, ...plugs], floor: surfaceHeight, caves: HUB_CAVES.map(caveOwner) });
-  const starts = retreatStarts(crown, 8);
-  const { failures } = retreat(crown, sealed, starts);
-  assert.ok(failures.length >= starts.length * 0.9, `${failures.length} of ${starts.length} still escaped a sealed cave`);
-});
 
 test("diver poses: a diver dropped in each hub cave's rooms lands on rock, never in it", () => {
   for (const def of HUB_CAVES) for (const r of def.rooms) {
@@ -209,4 +124,64 @@ test("diver poses: a diver dropped in each hub cave's rooms lands on rock, never
     assert.ok(drop.hitSolid && drop.position.y >= floor - 1e-6 && floor > def.source.baseY,
       `${r.id}: the drop from ${top} ends at ${JSON.stringify(drop.position)} over support ${floor}`);
   }
+});
+
+// --- Fast smokes (TT-1). The full checks, over every shell point, edge and
+// retreat start, are in tests/hub-caves.heavy.test.ts.
+
+test("smoke: every 64th shell point sits within 0.35 m of its rock; every 64th room cell is water", () => {
+  for (const def of HUB_CAVES) {
+    const rock = rockIndex(def), m = fineShell(def), f = def.replacementFootprints[0]!;
+    const collar = (p: Vec3): boolean => Math.min(p.x - f.minX, f.maxX - p.x, p.z - f.minZ, f.maxZ - p.z) < 0.5;
+    for (let i = 0; i < m.positions.length / 3; i += 64) {
+      const p = vertex(m, i);
+      if (!collar(p)) assert.ok(rock.distance(p) <= 0.35, `${def.id}: shell point ${JSON.stringify(p)} outside its solids`);
+    }
+    const v = caveVolume(def), g = v.grid;
+    for (let at = 0, n = 0; at < v.room.length; at++) {
+      if (!v.room[at] || n++ % 64) continue;
+      const i = at % g.nx, j = Math.floor(at / g.nx) % g.ny, k = Math.floor(at / (g.nx * g.ny));
+      const p = { x: g.origin.x + (i + 0.5) * g.voxel, y: g.origin.y + (j + 0.5) * g.voxel, z: g.origin.z + (k + 0.5) * g.voxel };
+      assert.ok(!rock.inRock(p), `${def.id}: room cell ${JSON.stringify(p)} is inside rock`);
+    }
+  }
+});
+
+test("smoke: the collar meets the heightfield every 8 m of footprint edge, and the coarse shell's edge lies on the floor", () => {
+  for (const def of HUB_CAVES) {
+    const f = def.replacementFootprints[0]!;
+    for (let u = f.minX + 0.5; u < f.maxX; u += 8) for (const [z, oz] of [[f.minZ + 0.25, f.minZ - 0.25], [f.maxZ - 0.25, f.maxZ + 0.25]] as const) {
+      const outside = worldFloor(u, oz);
+      assert.ok(outside >= def.source.baseY, `${def.id}: floor below baseY at ${u}, ${oz}`);
+      assert.ok(Number.isFinite(world.supportHeight(u, z, 1000)), `${def.id}: no collar support at ${u}, ${z}`);
+    }
+    const m = caveShell(def, "coarse");
+    for (let i = 0; i < m.positions.length / 3; i++) {
+      const p = vertex(m, i);
+      if (Math.abs(p.x - f.minX) > 1e-6 && Math.abs(p.x - f.maxX) > 1e-6 && Math.abs(p.z - f.minZ) > 1e-6 && Math.abs(p.z - f.maxZ) > 1e-6) continue;
+      assert.ok(Math.abs(p.y - worldFloor(p.x, p.z)) < 1e-4, `${def.id} coarse: collar vertex ${p.y.toFixed(2)} vs floor`);
+    }
+  }
+});
+
+test("smoke: lamp off, a diver from every 4th route start in each spur cave swims the glow out; with the step arch plugged, it does not", () => {
+  // The crown shaft's retreat (about 3 s of setup) runs in the heavy tier.
+  const spurs = HUB_CAVES.filter(d => d.id !== "hub_crown_shaft");
+  for (const def of spurs) {
+    const starts = retreatStarts(def).filter((_, i) => i % 4 === 0);
+    assert.ok(starts.length >= 3, `${def.id}: ${starts.length} starts`);
+    const { failures } = retreat(def, world, starts);
+    assert.deepEqual(failures.slice(0, 5), [], `${def.id}: ${failures.length} of ${starts.length} starts lost`);
+  }
+  const arch = HUB_CAVES.find(d => d.id === "hub_step_arch")!;
+  const plugs: Solid[] = openings(arch).map((o, i) => {
+    const w = o.clear.width / 2 + 3, h = o.clear.height / 2 + 3, t = 1.5;
+    const half = o.normal.y !== 0 ? { x: w, y: t, z: h } : o.normal.z !== 0 ? { x: w, y: h, z: t } : { x: t, y: h, z: w };
+    return { id: `test.plug.${i}`, min: { x: o.center.x - half.x, y: o.center.y - half.y, z: o.center.z - half.z },
+      max: { x: o.center.x + half.x, y: o.center.y + half.y, z: o.center.z + half.z } };
+  });
+  const sealed = createCaveWorldQueries({ solids: [...SOLIDS, ...plugs], floor: surfaceHeight, caves: HUB_CAVES.map(caveOwner) });
+  const starts = retreatStarts(arch).filter((_, i) => i % 4 === 0);
+  const { failures } = retreat(arch, sealed, starts);
+  assert.ok(failures.length >= starts.length * 0.9, `${failures.length} of ${starts.length} still escaped a sealed cave`);
 });
