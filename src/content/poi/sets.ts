@@ -179,7 +179,9 @@ export const ARCH_LINE: readonly Vec3[] = (() => {
   const top = Math.max(a.y, c.y) + 3 + ARCH.apex, pts: Vec3[] = [];
   for (let i = 0; i <= n; i++) {
     const u = i / n, b = lerp(a, c, u), lift = Math.pow(Math.sin(Math.PI * u), 0.6), edge = i === 0 || i === n ? 0 : 1;
-    pts.push(v(b.x + hash2(i, ARCH.seed, 1) * 0.7 * edge, b.y + (top - b.y) * lift + hash2(i, ARCH.seed, 2) * 0.5 * edge, b.z));
+    // Jitter only within the arch's plane: a sideways step between segments
+    // would leave a notch their collision slabs stand off.
+    pts.push(v(b.x, b.y + (top - b.y) * lift + hash2(i, ARCH.seed, 2) * 0.5 * edge, b.z));
   }
   return pts;
 })();
