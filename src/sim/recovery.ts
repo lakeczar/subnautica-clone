@@ -1,5 +1,5 @@
 import { gameWorld, moveHull, sweptHullClearance } from "./world.js";
-import { HULL_COLLIDERS, HULLS, ITEMS, PLACES, RECOVERY_STAGE } from "../content/registry.js";
+import { HULL_COLLIDERS, HULLS, ITEMS, RECOVERY_STAGE } from "../content/registry.js";
 import type { ItemKind } from "../content/registry.js";
 import { CREEL_CABIN, hullToWorld, mobileRefugeBlock } from "./fleet.js";
 import { cabinLockerId } from "./inventory.js";
@@ -17,6 +17,11 @@ import {
 } from "./inventory.js";
 import { safePersonalDepth } from "./capabilities.js";
 import { forgetEcologyHull } from "./ecologyLink.js";
+import { REST_BASES } from "../content/bases.js";
+import { moduleOfItem, tierOfKit } from "../content/systems/hosts.js";
+/** SYS-2's identity rule (systems/instances.ts `retainsIdentity`), inlined to keep imports one-way. */
+const retainsIdentity = (kind: string): boolean => moduleOfItem(kind) !== null || tierOfKit(kind) !== null;
+import { upgradeId } from "../content/upgrades/catalogue.js";
 const DT = 1 / 60;
 const OCCUPIED_RECOVERY = "the Dart is occupied. Tow and salvage require an empty hull. Exit only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.";
 const OCCUPIED_CREEL = "the Creel is occupied. Tow and salvage require an empty hull. Leave the helm or cabin only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.";
@@ -103,7 +108,10 @@ export function incapacitate(s: GameState, reason: string, world: WorldQueries =
       i.kind !== "salvage_buoy" &&
       i.kind !== "dart_acoustic_trim" &&
       i.kind !== "creel_cargo_rack" &&
-      i.kind !== "creel_cabin",
+      i.kind !== "creel_cabin" &&
+      // C4: identity items stay with the diver: SYS-2's socket modules and outpost
+      // kits (their work is keyed to the item) and SYS-1's upgrade modules.
+      !retainsIdentity(i.kind) && !upgradeId(i.kind),
   );
   let dropped = 0;
   const contents: { kind: (typeof cargo)[number]["kind"]; quantity: number }[] =
@@ -138,7 +146,8 @@ export function incapacitate(s: GameState, reason: string, world: WorldQueries =
   p.interiorPose = null;
   const mobile = p.mobileRefuge, refused = mobile ? mobileRefugeBlock(s, world) : null;
   const cabin = mobile && !refused ? s.fleet.vehicles.find((v) => v.id === mobile.vehicleId)! : null;
-  const workshop = !mobile && p.refugeId === "island_workshop" && facility(s, "island_workshop");
+  // Otherwise the last restored base rested at, while it still works; the pod always.
+  const restedAt = REST_BASES[p.refugeId], base = restedAt.facility === null || facility(s, restedAt.facility) ? p.refugeId : "home_pod";
   if (cabin) {
     const local = { x: 0.1, y: CREEL_CABIN.floorY, z: 1.6 };
     p.pose = { frame: "world", position: hullToWorld(local, cabin), yaw: cabin.pose.yaw, pitch: -0.05 };
@@ -146,16 +155,10 @@ export function incapacitate(s: GameState, reason: string, world: WorldQueries =
     p.interiorPose = { frame: "hull-local", position: local };
     p.mode = "interior";
   } else {
-    p.pose = {
-      frame: "world",
-      position: workshop
-        ? { x: 10, y: 1.2, z: -34 }
-        : { ...PLACES.home_pod.position },
-      yaw: 0,
-      pitch: -0.05,
-    };
-    p.mode = "walking";
-    p.refugeId = workshop ? "island_workshop" : "home_pod";
+    const wake = REST_BASES[base].wake;
+    p.pose = { frame: "world", position: { ...wake }, yaw: 0, pitch: -0.05 };
+    p.mode = wake.y >= 0 ? "walking" : "swimming";
+    p.refugeId = base;
   }
   p.velocity = { x: 0, y: 0, z: 0 };
   p.vitals = { health: 65, oxygen: 100, food: 60 };
@@ -165,7 +168,7 @@ export function incapacitate(s: GameState, reason: string, world: WorldQueries =
   s.world.threat.mode = "disengage";
   s.world.threat.interest = 0;
   s.metrics.failures++;
-  const where = cabin ? "your registered Creel cabin" : workshop ? "Splitspine workshop" : "the home pod";
+  const where = cabin ? "your registered Creel cabin" : base === "home_pod" ? "the home pod" : REST_BASES[base].label;
   s.feedback = `${reason} You recovered at ${where}.${refused ? ` Registered cabin unavailable: ${refused.message}.` : ""} Knowledge and essential equipment remain. Ordinary cargo has a visited-site marker; disabled craft retain their hold and modules.`;
 }
 export function rescueWaypoints(s: GameState, vehicleId: string, routeId: RecoveryRouteId = retainedRoute(s, vehicleId) ?? "canopy"): Vec3[] {

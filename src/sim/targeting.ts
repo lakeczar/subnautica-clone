@@ -68,8 +68,10 @@ function describe(s: GameState, t: Interaction, host: InteractionHost): AimedTar
       known = s.knowledge.scans.includes(id);
       const recoveryNeeded = d.region === "refuge_reef" &&
         (s.world.maintenance.alloy < 2 || s.world.maintenance.membrane < 1);
+      // C4 (CB): a never-stocked site is there to be inspected, not "empty".
       verb = node && node.stock > 0 ? d.item === "meal" ? "gather" : "collect"
-        : node && (d.item === "meal" || node.reserve > 0 || recoveryNeeded) ? "sort" : "empty";
+        : node && (d.item === "meal" || node.reserve > 0 || recoveryNeeded) ? "sort"
+        : d.stock === 0 && d.reserve === 0 ? "inspect" : "empty";
       break;
     }
     case "evidence":

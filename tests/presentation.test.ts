@@ -167,7 +167,7 @@ function viewFixture(t: test.TestContext, world = createWorldQueries()) {
   const noop = () => {};
   const actions: UiActions = {
     command: (c) => commands.push(c), audio: (a) => audio.push(a),
-    panel: noop, closePanel: noop, fixture: noop, newGame: noop,
+    panel: noop, closePanel: noop, fixture: noop, newGame: noop, exportTimeline: noop,
     continueGame: noop, resume: noop, pause: noop, save: noop,
     exportGame: noop, exportBackup: noop, exportRaw: noop,
     importFile: noop, confirm: noop, cancelConfirm: noop, lockMouse: noop, settings: noop,
@@ -299,6 +299,7 @@ test("minimal prompt follows actual aimed actions across all real hosts, and is 
       "scan promises require actual fitted tools and an unknown scannable host");
     const result = executeCommand(s, { type: "interact" }, world);
     if (v.id.startsWith("works:")) continue; // a refusal until plans and stock arrive (targeting.test)
+    if (v.id === "basin_pale_spores") continue; // only a Hush specimen bay samples them (targeting.test)
     assert.ok(!result.events.some(e => e.type === "notice" && e.error), v.id);
     const save = createEnvelope(result.state, { sessionId: "normal-prompt-hosts", createdAt: "2026-10-18T06:00:00.000Z", savedAt: "2026-10-18T06:00:00.000Z" });
     const encodedSave = encodeSave(save); assert.ok(encodedSave.ok, encodedSave.ok ? "" : encodedSave.error);

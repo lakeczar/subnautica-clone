@@ -1,3 +1,4 @@
+import { FIRST_WORKABLE } from "../src/content/c4Sources.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -48,20 +49,24 @@ test("each campaign plan is granted where the plan table says, and no plan depen
     assert.ok(CAMPAIGN_PLAN_SOURCES[RECIPES[id].bp as keyof typeof CAMPAIGN_PLAN_SOURCES].length >= 2, id);
 });
 
-test("late materials: two first-access deposits each, inside the preceding tier with margin, and no protection needed", () => {
+test("late materials (CB tier rule, C4): two first workable deposits each, at most at the preceding tier, unprotected; anything shallower is a taste", () => {
   const preceding = { pressure_ceramic: 350, thermal_core: 350, brine_lattice: 450 } as const;
-  for (const [kind, rating] of Object.entries(preceding)) {
-    const all = (Object.keys(CAMPAIGN_SOURCES) as (keyof typeof CAMPAIGN_SOURCES)[]).filter((id) => SOURCES[id].item === kind);
-    const first = all.filter((id) => CAMPAIGN_SOURCE_SITES[id].first);
-    assert.ok(first.length >= 2, kind);
+  for (const [kind, rating] of Object.entries(preceding) as [keyof typeof FIRST_WORKABLE, number][]) {
+    const first = FIRST_WORKABLE[kind] as readonly SourceId[];
+    assert.equal(first.length, 2, kind);
     for (const id of first) {
-      assert.equal(CAMPAIGN_SOURCE_SITES[id].protection, null, id);
-      assert.ok(depth(id) < rating * 0.9, `${id} at ${depth(id)} m under 90% of ${rating} m`);
+      assert.equal(SOURCES[id].item, kind, id);
+      assert.ok(!Object.hasOwn(CAMPAIGN_SOURCE_SITES, id) || CAMPAIGN_SOURCE_SITES[id as keyof typeof CAMPAIGN_SOURCE_SITES].protection === null, id);
+      assert.ok(depth(id) <= rating, `${id} at ${depth(id)} m within ${rating} m`);
       assert.ok(SOURCES[id].stock >= 8, id);
     }
-    // Richer stock is deeper or protected, never the only access.
-    for (const id of all.filter((id) => !CAMPAIGN_SOURCE_SITES[id].first))
-      assert.ok(depth(id) > Math.max(...first.map(depth)) || CAMPAIGN_SOURCE_SITES[id].protection, id);
+    // Shallower deposits are tastes (at most one unit); richer stock is deeper or protected.
+    const all = (Object.keys(SOURCES) as SourceId[]).filter((id) => SOURCES[id].item === kind && !first.includes(id));
+    for (const id of all) {
+      const protectedSite = Object.hasOwn(CAMPAIGN_SOURCE_SITES, id) && CAMPAIGN_SOURCE_SITES[id as keyof typeof CAMPAIGN_SOURCE_SITES].protection;
+      if (depth(id) < Math.min(...first.map(depth))) assert.ok(SOURCES[id].stock + SOURCES[id].reserve <= 1, `${id} is a taste`);
+      else assert.ok(depth(id) >= Math.max(...first.map(depth)) || protectedSite, id);
+    }
   }
   // The protection a deposit asks for is made from earlier stock: ceramic shroud, lattice seals.
   assert.ok(Object.keys(RECIPES.heat_shroud.cost).includes("pressure_ceramic"));

@@ -1,3 +1,4 @@
+import { C4_SOURCES } from "../src/content/c4Sources.js";
 import { BERTH_LOCAL, localToWorld } from "../src/sim/carrier.js";
 import { createEcology } from "../src/sim/ecology/ecology.js";
 import { WORLD_SOURCES } from "../src/content/worldSources.js";
@@ -74,13 +75,15 @@ const SOCKET_IDS = ["hl.socket.bridge.survey", "hl.socket.bridge.launch", "hl.so
  * earlier source in New Game order (docs/build/streams/S9.md). */
 export const S9_RESOURCES = [
   ["rift_ceramic_lip_north", 12, 8], ["rift_ceramic_lip_south", 12, 8], ["rift_ceramic_deep_seam", 16, 0],
-  ["rift_core_shoulder_north", 8, 6], ["rift_core_shoulder_west", 8, 6], ["rift_core_plume_seam", 16, 0],
-  ["divide_lattice_ledge_west", 12, 8], ["divide_lattice_ledge_east", 12, 8], ["divide_lattice_fissure", 20, 0],
+  // C4 (CB tier rule): the shoulders are scan-only and the flushed ledges one-crystal samples.
+  ["rift_core_shoulder_north", 0, 0], ["rift_core_shoulder_west", 0, 0], ["rift_core_plume_seam", 16, 0],
+  ["divide_lattice_ledge_west", 1, 0], ["divide_lattice_ledge_east", 1, 0], ["divide_lattice_fissure", 20, 0],
   ["meridian_cut_ceramic", 16, 0], ["meridian_service_cache", 12, 12],
 ].map(([id, stock, reserve]) => ({ id: id as string, stock: stock as number, reserve: reserve as number }));
 /** C3's additive content: S2's remaining sources, the two restorable stops and
  * the yard and stop lockers, each at New Game's first state and position. */
-export const C3_RESOURCES = Object.entries(WORLD_SOURCES).map(([id, d]) => ({ id, stock: d.stock as number, reserve: d.reserve as number }));
+export const C3_RESOURCES = [...Object.entries(WORLD_SOURCES), ...Object.entries(C4_SOURCES)]
+  .map(([id, d]) => ({ id, stock: d.stock as number, reserve: d.reserve as number }));
 export const C3_FACILITIES = [{ id: "rift_station", repaired: false }, { id: "divide_dock", repaired: false }];
 export const C3_LOCKERS = [
   { id: "stack_yard_locker", kind: "locker", capacity: 48, ownerId: "stack_yard" },

@@ -16,6 +16,12 @@ import type { GameRenderer, Quality } from "../render/renderer.js";
 import { PlayerInput, controlHasFocus, textEntryHasFocus, deliberateExit } from "./input.js";
 import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
+import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY } from "../sim/timeline/recorder.js";
+import type { TimelineRecorder } from "../sim/timeline/recorder.js";
+import { parseTimeline } from "../sim/timeline/report.js";
+import { controlsActive } from "../sim/timeline/activity.js";
+import { regionAtPoint } from "../content/regions/layout.js";
+import { CONTENT_VERSION } from "../content/registry.js";
 
 interface Settings {
   quality: Quality;
@@ -127,6 +133,9 @@ export class SiltwakeApp {
   private ascentActor: string | null = null;
   private lastBoundaryNotice = -Infinity;
   private settings = readSettings();
+  /** Local-only play timeline (SYS-2, C4): never in the save, never sent. */
+  private timeline: TimelineRecorder | null = null;
+  private timelineSaved = 0;
 
   constructor(root: HTMLElement) {
     this.session = new ExpeditionSession(this.repository, {
@@ -160,6 +169,7 @@ export class SiltwakeApp {
       pause: () => this.pause(),
       save: () => this.session.manualSave(),
       exportGame: () => this.exportGame(),
+      exportTimeline: () => this.exportTimeline(),
       exportBackup: () => this.exportBackup(),
       exportRaw: () => this.exportRaw(),
       importFile: (file) =>
@@ -258,7 +268,7 @@ export class SiltwakeApp {
       }
       if (event.repeat) return;
       const panels: Record<string, PanelKind> = {
-        Tab: "inventory", KeyI: "inventory", KeyK: "craft", KeyJ: "notebook", KeyV: "carrier",
+        Tab: "inventory", KeyI: "inventory", KeyK: "craft", KeyJ: "notebook", KeyV: "carrier", KeyO: "systems", KeyU: "fit",
       };
       const panel = panels[event.code];
       if (panel && !event.defaultPrevented && !event.shiftKey && (this.active || this.panelOpen) &&
@@ -291,8 +301,12 @@ export class SiltwakeApp {
         else this.command({ type: "exit" });
         return;
       }
+      if (event.code === "KeyN" && this.active) { event.preventDefault(); this.feedbackNote(); return; }
+      // C4: piloted upgrade actions on the number row, and the handheld ping.
+      const upgrade = ({ Digit1: "overdrive", Digit2: "flare", Digit3: "ballast", Digit4: "listen", Digit5: "sample", Digit6: "anchor" } as const)[event.code as "Digit1"];
+      if (upgrade && this.state?.player.controlledVehicleId) { event.preventDefault(); this.command({ type: "upgrade", action: upgrade }); return; }
       const commands: Record<string, GameCommand> = {
-        KeyE: { type: "interact" }, KeyQ: { type: "scan" },
+        KeyE: { type: "interact" }, KeyQ: { type: "scan" }, KeyP: { type: "ping" },
         KeyB: { type: "buoy" }, KeyF: { type: "eat" },
         KeyG: { type: "distraction" }, KeyH: { type: "hint" }, KeyX: { type: "exit" },
         // S4: the lamp switch and the two nonlethal kits.
@@ -345,6 +359,7 @@ export class SiltwakeApp {
       );
       this.session.state = result.state;
       this.events(result.events);
+      this.observeTimeline(result.state, [...controls, ...gesture], result.events);
       this.observeAscent(result.events);
       this.observeThrust(result.events);
       this.view.presentationStep(result.state);
@@ -428,9 +443,59 @@ export class SiltwakeApp {
     action();
   }
 
+  /** The play timeline: one observation per active step, kept in localStorage. */
+  private observeTimeline(s: GameState, controls: readonly GameCommand[], events: readonly GameEvent[]): void {
+    if (!this.timeline) return;
+    // A zero look or move is not input; a command or panel action since the last
+    // observation is (C4B-06).
+    const input = controlsActive(controls) || this.timelineActivity;
+    this.timelineActivity = false;
+    const waiting = [...(s.systems.decodes.length ? ["decode"] : []), ...(s.systems.planters.length ? ["growth"] : [])];
+    observe(this.timeline, s, { input, waiting });
+    const systems = events.flatMap((e) => e.type === "systems" ? [e.event] : []);
+    if (systems.length) recordSystemsEvents(this.timeline, s, systems);
+    if (s.tick - this.timelineSaved >= 600) this.saveTimeline();
+  }
+  private saveTimeline(): void {
+    if (!this.timeline || !this.state) return;
+    this.timelineSaved = this.state.tick;
+    try { localStorage.setItem(TIMELINE_STORAGE_KEY, exportTimelineText(this.timeline, this.state)); } catch {}
+  }
+  /** Start or resume the timeline for the session just entered (same save session resumes). */
+  private startTimeline(): void {
+    const meta = this.session.envelope()?.meta;
+    if (!meta || !this.state) { this.timeline = null; return; }
+    const options = { regionAt: (x: number, z: number) => regionAtPoint(x, z) };
+    let stored: string | null = null;
+    try { stored = localStorage.getItem(TIMELINE_STORAGE_KEY); } catch {}
+    const parsed = stored ? parseTimeline(stored) : null;
+    this.timeline = parsed?.ok && parsed.value.session.id === meta.sessionId ? resumeRecorder(parsed.value, options)
+      : createRecorder({ id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION }, options);
+    this.timelineSaved = this.state.tick;
+  }
+  /** N: a one-line feedback note stamped with play time and place. */
+  private feedbackNote(): void {
+    if (!this.timeline || !this.state) return;
+    this.pause("", true);
+    this.view.noteEntry((text) => {
+      if (text && this.timeline && this.state) {
+        const no = addNote(this.timeline, this.state, text, new Date().toISOString());
+        this.view.notify(no ?? "Note saved to the play timeline.", !!no, { channel: "system" });
+        this.saveTimeline();
+      }
+      this.resume(true);
+    });
+  }
+  private exportTimeline(): void {
+    if (!this.timeline || !this.state) { this.view.notify("No play timeline yet. Play a little first.", true, { channel: "system" }); return; }
+    this.download(exportTimelineText(this.timeline, this.state), `siltwake-timeline-${new Date().toISOString().slice(0, 10)}.json`);
+    this.view.notify("Play timeline exported. It stays on this computer unless you share the file.", false, { channel: "system" });
+  }
+
   private entered(): void {
     if (this.disposed) return;
     this.sessionGeneration++;
+    this.startTimeline();
     // A loaded save neither replays its history nor inherits old cooldowns.
     this.sound.reset();
     this.resolutionPhase = this.state?.story.resolution.phase ?? null;
@@ -498,7 +563,10 @@ export class SiltwakeApp {
         [event.origin.x, event.origin.y, event.origin.z].every(Number.isFinite))
         this.view.threatCall(event.origin, this.state);
       if (event.type === "impact" && event.hullLoss > 0) this.view.impact(event.hullLoss, this.state);
-      if (event.type === "interaction-panel") this.openPanel(event.panel, event.targetId);
+      if (event.type === "interaction-panel") {
+        if (event.panel === "journal") this.view.showJournalTab("decodes");
+        this.openPanel(event.panel === "journal" ? "notebook" : event.panel, event.targetId);
+      }
     }
     // One batch per step: the mapper reads impact and threat-damage itself and
     // keeps the hunter's bearing on the single injury hit.
@@ -566,7 +634,10 @@ export class SiltwakeApp {
     this.view.blockedThrust(this.thrustSeconds + 1e-9 >= 0.5, s);
   }
 
+  /** A command or panel action since the last timeline observation. */
+  private timelineActivity = false;
   private command(command: GameCommand): void {
+    this.timelineActivity = true;
     if (
       !this.state ||
       this.disposed ||
@@ -600,6 +671,7 @@ export class SiltwakeApp {
     )
       return;
     this.pause("", true);
+    this.timelineActivity = true;
     this.panelOpen = true;
     this.view.openPanel(kind, this.state, targetId);
     this.dirty = true;

@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { CONTENT_VERSION, MATERIALS, RECIPES, RENEWABLE_SOURCE_IDS, SOURCES } from "../.test-build/src/content/registry.js";
 import { CAMPAIGN_SOURCE_SITES } from "../.test-build/src/content/campaign/index.js";
+import { FIRST_WORKABLE } from "../.test-build/src/content/c4Sources.js";
 import { audit, planRegistryCampaign } from "../.test-build/src/sim/storyCampaign.js";
 import { finiteStock, runScenario, solvency } from "../.test-build/src/sim/campaignEconomy.js";
 import { createGame } from "../.test-build/src/sim/state.js";
@@ -80,7 +81,9 @@ for (const id of ["pod_repair", "essential_tools", "suit_150", "bobbin_kit", "sa
 const collected = {};
 /** Real collection of `need` units from first-access deposits within the current suit. */
 const gather = (kind, need) => {
-  const hosts = Object.keys(CAMPAIGN_SOURCE_SITES).filter((id) => SOURCES[id].item === kind && CAMPAIGN_SOURCE_SITES[id].first);
+  // C4: CB's frontier ledges are the first workable core and lattice (FIRST_WORKABLE).
+  const hosts = [...new Set([...(FIRST_WORKABLE[kind] ?? []),
+    ...Object.keys(CAMPAIGN_SOURCE_SITES).filter((id) => SOURCES[id].item === kind && CAMPAIGN_SOURCE_SITES[id].first)])];
   for (const id of hosts) while (need > 0 && s.world.resources.find((n) => n.id === id).stock > 0) {
     assert.ok(-SOURCES[id].position.y <= personalLimit(s), `${id} inside the suit`);
     at({ ...SOURCES[id].position, y: SOURCES[id].position.y + 0.5 });

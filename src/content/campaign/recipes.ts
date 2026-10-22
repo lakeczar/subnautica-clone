@@ -37,7 +37,8 @@ export const CAMPAIGN_RECIPES = {
   suit_450: {
     label: "Suit refit · 450 m",
     // Ceramic shell inserts carry the pressure; membrane reseals the joints; crust runs the new depth telemetry.
-    cost: { pressure_ceramic: 4, flex_membrane: 2, conductive_crust: 2 },
+    // CB tier rule (C4): one core from the 350 m lower ledges.
+    cost: { pressure_ceramic: 4, thermal_core: 1, flex_membrane: 2, conductive_crust: 2 },
     bp: "bp_rift_pressure", needs: ["suit_350"], site: "island_workshop",
     output: "suit_450", quantity: 1, once: true, maintenance: false,
   },
@@ -85,7 +86,9 @@ export const CAMPAIGN_RECIPES = {
     label: "Lay Hearthline keel",
     // Basin frame survey: two intact tagged frames set the keel spine, bulk wreck alloy the
     // twin pontoons; resin trims the empty hull for floating out.
-    cost: { tagged_frame: 2, structural_alloy: 16, buoyant_resin: 6 },
+    // CB tier rule (C4): two cores from the 350 m lower ledges set the keel's ballast heaters,
+    // so the carrier follows the first Rift trip.
+    cost: { tagged_frame: 2, structural_alloy: 16, buoyant_resin: 6, thermal_core: 2 },
     bp: "bp_carrier_basin", needs: ["restore_workshop", "creel_base", "suit_350"], site: "stack_yard",
     output: "hearthline_keel", quantity: 1, once: false, maintenance: false,
   },
@@ -123,14 +126,16 @@ export const CAMPAIGN_RECIPES = {
   hush_base: {
     label: "Hush survey glider",
     // Alloy spar, glass observation blister, membrane control skins, resin wing trim, crust hydrophones.
-    cost: { structural_alloy: 4, silica_glass: 3, flex_membrane: 3, buoyant_resin: 3, conductive_crust: 2 },
+    // CB tier rule (C4): one tagged frame from the 150 m rim stack replaces 4 alloy.
+    cost: { tagged_frame: 1, silica_glass: 3, flex_membrane: 3, buoyant_resin: 3, conductive_crust: 2 },
     bp: "bp_hush_survey", needs: ["restore_workshop", "suit_150"], site: "stack_yard",
     output: "hush", quantity: 1, once: false, maintenance: false,
   },
   spindle_base: {
     label: "Spindle island tender",
     // Alloy hull and ramp, resin outrigger floats, glass solar canopy, membrane fold seals, crust charge control.
-    cost: { structural_alloy: 6, buoyant_resin: 4, silica_glass: 2, flex_membrane: 2, conductive_crust: 2 },
+    // CB tier rule (C4): one tagged frame from the 150 m rim stack replaces 4 alloy.
+    cost: { tagged_frame: 1, structural_alloy: 2, buoyant_resin: 4, silica_glass: 2, flex_membrane: 2, conductive_crust: 2 },
     bp: "bp_spindle_tender", needs: ["restore_workshop", "suit_150"], site: "stack_yard",
     output: "spindle", quantity: 1, once: false, maintenance: false,
   },
@@ -146,7 +151,7 @@ export const CAMPAIGN_RECIPES = {
     label: "Hull heat lining",
     cost: { pressure_ceramic: 3, structural_alloy: 1 },
     bp: "bp_rift_pressure", needs: ["restore_workshop", "suit_350"], site: "island_workshop",
-    output: "hull_heat_lining", quantity: 1, once: true, maintenance: false,
+    output: "hull_heat_lining", quantity: 1, once: false, maintenance: false,
   },
   brine_seals: {
     label: "Lattice brine seals",
@@ -158,13 +163,13 @@ export const CAMPAIGN_RECIPES = {
     label: "Hull brine seals",
     cost: { brine_lattice: 3, flex_membrane: 1 },
     bp: "bp_deep_service", needs: ["restore_workshop", "suit_450"], site: "island_workshop",
-    output: "hull_brine_seals", quantity: 1, once: true, maintenance: false,
+    output: "hull_brine_seals", quantity: 1, once: false, maintenance: false,
   },
   trim_vanes: {
     label: "Resin trim vanes",
     cost: { buoyant_resin: 2, structural_alloy: 1 },
     bp: "bp_canopy_reinforcement", needs: ["restore_workshop"], site: "island_workshop",
-    output: "trim_vanes", quantity: 1, once: true, maintenance: false,
+    output: "trim_vanes", quantity: 1, once: false, maintenance: false,
   },
   glow_lures: {
     label: "Glow lures ×2",

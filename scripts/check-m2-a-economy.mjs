@@ -6,8 +6,8 @@ import { createHash } from "node:crypto";
 import { CONTENT_VERSION, DART_BUILD_POSE, HULLS, ITEMS, PLACES, RECIPES, SOURCES } from "../.test-build/src/content/registry.js";
 import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, RECOVERY_SURFACE_OPERATOR } from "../.test-build/src/content/routes.js";
 import { createGame } from "../.test-build/src/sim/state.js";
-import { collect, completeOpening, craft, discover, personalLimit } from "../.test-build/src/sim/progression.js";
-import { available, containerAccessible, fabricationContainers, transfer, usedCapacity } from "../.test-build/src/sim/inventory.js";
+import { collect, completeOpening, craft, discover, frameDestination, personalLimit } from "../.test-build/src/sim/progression.js";
+import { addItem, available, containerAccessible, fabricationContainers, transfer, usedCapacity } from "../.test-build/src/sim/inventory.js";
 import { installModule } from "../.test-build/src/sim/modules.js";
 import { disableVehicle, recoveryCommand, updateRecovery } from "../.test-build/src/sim/recovery.js";
 import { createWorldQueries } from "../.test-build/src/sim/world.js";
@@ -76,7 +76,12 @@ function run(initial, provenance) {
         assert.ok(candidates.length, `${id}: reachable exposed ${kind} remains in this actual state`);
         const [sourceId, source] = candidates[0]; visit(source.position);
         assert.ok(-source.position.y <= personalLimit(s), "before-upgrade source capability");
-        assert.equal(collect(s, sourceId), null, sourceId); gathered[sourceId] = (gathered[sourceId] ?? 0) + 1; check();
+        assert.equal(collect(s, sourceId), null, sourceId);
+        // C4 (CB): suit_350's tagged frame is a timed lift; staged here as its completion does.
+        if (s.world.action?.kind === "lift") {
+          addItem(s, "tagged_frame", 1, frameDestination(s)); s.world.resources.find(n => n.id === sourceId).stock--; s.world.action = null;
+        }
+        gathered[sourceId] = (gathered[sourceId] ?? 0) + 1; check();
         visit(PLACES[site].position); storeAtBench(locker);
       }
     }

@@ -105,7 +105,8 @@ test("batched exit metadata identifies the attempted craft and reason even when 
 
 test("successful underwater, surface and dry-refuge exits keep the same transaction and truthful receipt", () => {
   for (const [position, air] of [
-    [{ x: -55, y: -20, z: 30 }, "suit"],
+    // C4 (SYS-1): the parked, powered craft feeds the basic air line beside it.
+    [{ x: -55, y: -20, z: 30 }, "line"],
     [{ x: -55, y: -0.9, z: 30 }, "surface"],
     [{ x: -3.1, y: -0.02, z: 14 }, "refuge"],
   ] as const) {

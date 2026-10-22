@@ -15,6 +15,8 @@ export interface DecoderContext {
   power?: HostPower;
   /** SYS-1's decoder upgrade: work multiplier for one decoder module (default 1). */
   decoderSpeed?: (moduleId: string) => number;
+  /** A relay outside the host (C4: a surfaced Spindle's radio mast nearby). */
+  relayed?: (host: SocketHost) => boolean;
 }
 export const decodeSeconds = (id: DecodableId): number => DECODE_MINUTES[DECODABLES[id].size] * 60;
 
@@ -55,7 +57,7 @@ export function decodeStatus(s: GameState, sys: SystemsState, job: DecodeJob, ct
   if (!host) return { status: "not-installed", host: null };
   if (!host.available) return { status: "host-unavailable", host };
   if (!(ctx.power ?? locationPower)(host, s)) return { status: "unpowered", host };
-  if (!relayed(host) && !hostLocal(s, host) && distance(s.player.pose.position, host.position) > DECODER_LOCAL_RANGE)
+  if (!relayed(host) && !ctx.relayed?.(host) && !hostLocal(s, host) && distance(s.player.pose.position, host.position) > DECODER_LOCAL_RANGE)
     return { status: "out-of-range", host };
   return { status: "running", host };
 }

@@ -1,0 +1,46 @@
+{
+  "format": "siltwake.timeline",
+  "version": 1,
+  "session": {
+    "id": "c4b-r1-gpu-check",
+    "started": "2026-10-19T00:00:00.000Z",
+    "build": "expedition.7",
+    "end": {
+      "tick": 4800,
+      "play": 28.95,
+      "idle": 51.05
+    },
+    "pending": []
+  },
+  "dropped": 0,
+  "events": [
+    {
+      "kind": "region",
+      "id": "refuge_reef",
+      "tick": 1,
+      "play": 0.016666666666666666,
+      "at": [
+        -44,
+        -5.5,
+        8.5
+      ],
+      "region": "refuge_reef"
+    },
+    {
+      "kind": "idle",
+      "tick": 2,
+      "play": 0.016666666666666666,
+      "seconds": 21.666666666666668,
+      "waiting": [],
+      "region": "refuge_reef"
+    },
+    {
+      "kind": "idle",
+      "tick": 2226,
+      "play": 15.416666666666666,
+      "seconds": 29.383333333333333,
+      "waiting": [],
+      "region": "refuge_reef"
+    }
+  ]
+}

@@ -5,6 +5,9 @@ import type { Caption } from "../audio/captions.js";
 import type { SaveSlot } from "../save/repository.js";
 import type { Quality } from "../render/renderer.js";
 import { PanelView, type PanelKind } from "./panels.js";
+import { currentObjective } from "../sim/objective.js";
+const OBJECTIVE_KEY = "siltwake.hud.objective.v1";
+import type { JournalTabId } from "../sim/systems/journal.js";
 import { hazardBanners, HudView, type HudAim } from "./hud.js";
 import type { ThreatDamage } from "./notices.js";
 
@@ -22,6 +25,8 @@ export interface UiActions {
   pause(): void;
   save(): void;
   exportGame(): void;
+  /** The local play timeline, as a file (C4). */
+  exportTimeline(): void;
   exportBackup(): void;
   exportRaw(): void;
   importFile(file: File): void;
@@ -68,7 +73,7 @@ export class GameView {
       <div class="experience-layout">
       <main id="hud" hidden aria-label="Exploration display">
         <div id="threat-edge" class="threat-edge" aria-hidden="true" hidden></div>
-        <div class="hud-top"><div id="hud-region" class="region"><span class="eyebrow">SILTWAKE / FIRST EXPEDITION</span><strong id="region-name">Hearth Reef</strong></div>
+        <div class="hud-top"><div id="hud-region" class="region"><strong id="region-name">Hearth Reef</strong><p id="hud-objective" class="hud-objective" hidden></p></div>
         <div id="hud-heading" class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
         <div class="hud-actions"><div id="hud-tools"><button data-action="inventory">Cargo <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button></div><button id="hud-pause" data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
         <div id="call-cue" class="call-cue" hidden><span id="call-dial" class="call-dial" aria-hidden="true"></span><span id="call-elevation" aria-hidden="true"></span><span id="call-direction" role="status" aria-live="polite" aria-atomic="true"></span></div><div class="hud-instruments"><div id="vitals" class="vitals"></div><div id="pitch-cue" class="pitch-cue" aria-label="Pitch" hidden></div></div><span id="hazard-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><span id="damage-announce" class="hud-sr" role="alert" aria-live="assertive" aria-atomic="true"></span><span id="action-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><div class="motion-guidance"><span id="surface-cue" class="surface-cue" hidden>Surface</span><div id="impact-notice" class="impact-notice" role="status" aria-live="polite" hidden></div><span id="blocked-ascent" class="blocked-ascent" role="status" aria-live="polite" hidden>Blocked above</span><div id="pilot-guidance" class="pilot-guidance" aria-label="Pilot exit guidance" hidden></div></div>
@@ -85,7 +90,7 @@ export class GameView {
             <div class="menu-buttons"><button id="resume" class="primary" data-action="resume" hidden>Return to the water <span>↗</span></button>
             <button id="continue" class="primary" data-action="continue" disabled>Continue <span>↗</span></button>
             <button id="new-game" data-action="new">New expedition <span>+</span></button></div>
-            <div class="menu-tools"><button id="manual-save" data-action="save" hidden>Save locally</button><button id="export-game" data-action="export" hidden>Export save</button><button data-action="import">Import save</button><button id="open-settings" data-action="settings">Settings</button></div>
+            <div class="menu-tools"><button id="manual-save" data-action="save" hidden>Save locally</button><button id="export-game" data-action="export" hidden>Export save</button><button data-action="import">Import save</button><button data-action="timeline" title="Your local play timeline, for playtest feedback">Export play timeline</button><button id="open-settings" data-action="settings">Settings</button></div>
             <p id="save-status" class="save-status"></p>
             ${developer ? '<div class="menu-tools developer-tools"><button data-action="fixture">Dev · carrier fixture</button></div>' : ""}
           </section>
@@ -96,7 +101,7 @@ export class GameView {
               <div class="settings-fields">
                 <div class="settings"><label>Rendering <select id="quality"><option value="rich">Rich · full viewport</option><option value="light">Light · lower resolution</option></select></label>
                 <label>Sensitivity <output id="sensitivity-value">1.0</output><input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label>Mouse look<select id="mouse-mode"><option value="captured">Captured</option><option value="drag">Drag</option></select></label><label>Key turn speed <output id="key-turn-value">1.0</output><input id="key-turn" type="range" min="0.5" max="2" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
-                <div class="settings"><label>Volume <output id="volume-value">55%</output><input id="volume" type="range" min="0" max="1" step="0.05" value="0.55" /></label><label class="check"><input id="muted" type="checkbox" /> Mute</label><label class="check"><input id="subtitles" type="checkbox" checked /> Opening captions</label></div>
+                <div class="settings"><label>Volume <output id="volume-value">55%</output><input id="volume" type="range" min="0" max="1" step="0.05" value="0.55" /></label><label class="check"><input id="muted" type="checkbox" /> Mute</label><label class="check"><input id="subtitles" type="checkbox" checked /> Opening captions</label><label class="check"><input id="hud-objective-toggle" type="checkbox" checked /> Objective on the HUD</label></div>
                 <div class="settings save-safety"><span>Autosave every 30 s of play · previous valid save kept</span><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></div>
               </div>
             </div>
@@ -106,12 +111,13 @@ export class GameView {
         </div>
         <div class="scene-caption" aria-hidden="true" hidden><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
       </div>
-      <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-chrome"><div class="panel-header"><button id="panel-return" data-action="close-panel">Return <kbd>Esc</kbd></button><h2 id="panel-title"></h2><nav aria-label="Expedition panels"><button data-action="inventory-panel">Cargo</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Notebook</button><button id="carrier-nav" data-action="carrier-panel" hidden>Carrier fixture</button></nav><span class="panel-paused">Paused</span></div><p id="panel-feedback" role="status" aria-live="polite" hidden></p></div><div id="panel-content"></div></div></section>
+      <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-chrome"><div class="panel-header"><button id="panel-return" data-action="close-panel">Return <kbd>Esc</kbd></button><h2 id="panel-title"></h2><nav aria-label="Expedition panels"><button data-action="inventory-panel">Cargo</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Journal</button><button data-action="systems-panel">Base</button><button data-action="fit-panel">Fit</button><button id="carrier-nav" data-action="carrier-panel" hidden>Carrier fixture</button></nav><span class="panel-paused">Paused</span></div><p id="panel-feedback" role="status" aria-live="polite" hidden></p></div><div id="panel-content"></div></div></section>
       <div class="session-notices"><section id="graphics-error" class="graphics-error" role="alert" hidden><h2>The ocean could not open</h2><p id="graphics-error-text"></p><p>Your existing local save has not been changed. Save exports remain available in the menu.</p></section>
       <aside id="session-warning" class="session-warning" aria-label="Local saving disabled" hidden><span>Autosave off · export before closing</span><button data-action="export">Export save</button></aside>
       <div id="system-status" role="status" aria-live="polite" hidden></div><div id="notification" role="status" aria-live="polite" hidden></div></div>
       </div>
-      <input id="import-file" type="file" accept=".json,application/json" hidden />`;
+      <input id="import-file" type="file" accept=".json,application/json" hidden />
+      <form id="note-entry" class="note-entry" hidden><label for="note-text">Feedback note · saved to your play timeline with the time and place</label><input id="note-text" maxlength="500" autocomplete="off" /><small>Enter saves · Esc cancels</small></form>`;
     this.canvas = this.get<HTMLCanvasElement>("ocean");
     this.menu = this.get("menu");
     this.hud = this.get("hud");
@@ -127,7 +133,7 @@ export class GameView {
       fixture: actions.fixture,
       "close-panel": actions.closePanel,
       ...Object.fromEntries(
-        (["inventory", "craft", "notebook", "carrier"] as const).map((k) => [
+        (["inventory", "craft", "notebook", "carrier", "systems", "fit"] as const).map((k) => [
           `${k}-panel`,
           () => {
             if (this.latest) {
@@ -144,6 +150,7 @@ export class GameView {
       pause: actions.pause,
       save: actions.save,
       export: actions.exportGame,
+      timeline: actions.exportTimeline,
       backup: actions.exportBackup,
       raw: actions.exportRaw,
       confirm: actions.confirm,
@@ -166,6 +173,7 @@ export class GameView {
         if (target && !target.disabled) {
           const command = this.panels.command(target.dataset.action ?? "");
           if (command) actions.command(command);
+          else if (this.panels.selectJournalTab(target.dataset.action ?? "")) { if (this.latest) this.refreshPanel(this.latest); }
           else map[target.dataset.action ?? ""]?.();
         }
       },
@@ -181,7 +189,9 @@ export class GameView {
     this.get("import-file").addEventListener(
       "change",
       () => {
-        const file = this.get<HTMLInputElement>("import-file").files?.[0];
+        const input = this.get<HTMLInputElement>("import-file"), file = input.files?.[0];
+        // Reset at once, so choosing the same file again fires a change (M2 audit).
+        input.value = "";
         if (file) actions.importFile(file);
       },
       options,
@@ -210,6 +220,12 @@ export class GameView {
           }),
         options,
       );
+    const objectiveToggle = this.get<HTMLInputElement>("hud-objective-toggle");
+    objectiveToggle.checked = this.showObjective;
+    objectiveToggle.addEventListener("change", () => {
+      this.showObjective = objectiveToggle.checked;
+      try { localStorage.setItem(OBJECTIVE_KEY, this.showObjective ? "on" : "off"); } catch {}
+    }, options);
     this.get("opening-subtitles").addEventListener("change", () => actions.audio({
       volume: this.get<HTMLInputElement>("volume").valueAsNumber,
       muted: this.get<HTMLInputElement>("muted").checked,
@@ -307,6 +323,9 @@ export class GameView {
     this.canContinue = slot.save !== null;
     button.hidden = hasSession;
     button.disabled = !this.canContinue;
+    // Only a usable Continue leads; with no save, New expedition is the primary action (M2 audit #9).
+    button.classList.toggle("primary", this.canContinue);
+    this.get("new-game").classList.toggle("primary", !this.canContinue && !hasSession);
     button.textContent =
       slot.kind === "recovered" ? "Open previous valid save ↗" : "Continue ↗";
     this.get("save-status").textContent = slot.message;
@@ -410,6 +429,26 @@ export class GameView {
     this.latest = state;
     this.panels.observeStorageContext(state);
     this.hudPresentation.update(state, cruise, forward, aim);
+    // The current objective, one line under the region name (M2 audit #5).
+    const objective = this.get("hud-objective");
+    const line = state.opening.phase >= 4 && this.showObjective ? currentObjective(state).step : "";
+    if (objective.textContent !== line) objective.textContent = line;
+    objective.hidden = !line;
+  }
+  /** HUD objective line: on by default, a setting kept on this device; the journal always shows it. */
+  showObjective = (() => { try { return localStorage.getItem(OBJECTIVE_KEY) !== "off"; } catch { return true; } })();
+  showJournalTab(id: JournalTabId): void { this.panels.showJournalTab(id); }
+  /** A one-line feedback note: Enter saves, Esc or blur cancels. */
+  noteEntry(done: (text: string | null) => void): void {
+    const form = this.get<HTMLFormElement>("note-entry"), input = this.get<HTMLInputElement>("note-text");
+    form.hidden = false; input.value = ""; input.focus();
+    const finish = (text: string | null): void => {
+      form.hidden = true; form.onsubmit = null; input.onkeydown = null; input.onblur = null;
+      done(text?.trim() ? text.trim() : null);
+    };
+    form.onsubmit = (e) => { e.preventDefault(); finish(input.value); };
+    input.onkeydown = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(null); } };
+    input.onblur = () => { if (!form.hidden) finish(null); };
   }
 
   closePanel(): void {

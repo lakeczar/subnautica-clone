@@ -1,6 +1,6 @@
 /** Stable saved identifiers. Labels and render mesh names are never saved references.
  * Seeded from WORLD_PROGRESSION / EXPEDITION_INTEGRATION, not a recipe balance. */
-export const CONTENT_VERSION = "expedition.6" as const;
+export const CONTENT_VERSION = "expedition.7" as const;
 import { STORY_BLUEPRINT_LABELS, STORY_RECIPES } from "./story/evidence.js";
 import type { StoryBlueprintId } from "./story/evidence.js";
 // S9 campaign content: later tiers, carrier, specialists, stops and late sources.
@@ -9,6 +9,12 @@ import type { CampaignBlueprintId, CampaignOutput, CampaignSiteId } from "./camp
 // C3: S2's remaining sources, and S9 hull construction at the stack yard.
 import { WORLD_SOURCES } from "./worldSources.js";
 import { YARD_BUILD } from "./yard.js";
+import { C4_SOURCES } from "./c4Sources.js";
+// C4: SYS-1 upgrades and SYS-2 bases and knowledge, composed.
+import { HOST_KNOWLEDGE_RECIPES, UPGRADE_ITEMS, UPGRADE_RECIPES, UPGRADE_REFIT_RECIPES, UPGRADE_REFIT_TIERS } from "./upgrades/registry.js";
+import type { HostKnowledgeId, UpgradeRefitId } from "./upgrades/registry.js";
+import { SYS2_BLUEPRINTS, SYS2_ITEMS, SYS2_RECIPES, SYS2_TECH_RECORDS } from "./systems/items.js";
+import type { Sys2BlueprintId, Sys2ItemKind } from "./systems/items.js";
 
 export const REGIONS = {
   refuge_reef: { label: "Hearth Reef", depth: [0, 65] },
@@ -57,7 +63,8 @@ export const HULLS = {
     role: "scout",
     berth: "compact",
     initialDepth: 180,
-    maximumDepth: 350,
+    // C4 (M2 audit #3): the common depth line's 450 m refit reaches the Divide flank.
+    maximumDepth: 450,
   },
   creel: {
     label: "Creel",
@@ -241,6 +248,10 @@ export const ITEMS = {
   service_power_assembly: { label: "Portable service power assembly", cu: STORY_RECIPES.service_power_assembly.cu },
   service_air_assembly: { label: "Portable air staging assembly", cu: STORY_RECIPES.service_air_assembly.cu },
   ...CAMPAIGN_ITEMS,
+  // C4: every SYS-1 module and SYS-2 kit, module, seed and produce.
+  ...UPGRADE_ITEMS,
+  ...Object.fromEntries(Object.entries(SYS2_ITEMS).map(([k, v]) => [k, { label: v.label, cu: v.cu }])) as
+    { readonly [K in Sys2ItemKind]: { readonly label: string; readonly cu: number } },
 } as const;
 export type ItemKind = keyof typeof ITEMS;
 /** Alloy carried in one intact tagged frame. */
@@ -269,6 +280,8 @@ export const REFIT_TIERS = {
   dart_350: { hull: "dart", from: HULLS.dart.initialDepth, rating: 350 },
   creel_350: { hull: "creel", from: HULLS.creel.initialDepth, rating: 350 },
   ...CAMPAIGN_REFITS,
+  // C4: SYS-1's Hush refits and the Dart 450 m refit (M2 audit #3).
+  ...UPGRADE_REFIT_TIERS,
 } as const satisfies Record<string, { hull: HullId; from: number; rating: number }>;
 export type RefitRecipeId = keyof typeof REFIT_TIERS;
 /** Personal pressure suits by item, and the in-place refit that produces each. */
@@ -287,7 +300,8 @@ export type BlueprintId =
   | "bp_rift_pressure"
   | "bp_keel_survey"
   | StoryBlueprintId
-  | CampaignBlueprintId;
+  | CampaignBlueprintId
+  | Sys2BlueprintId;
 export type FacilityId =
   | "home_pod"
   | "pod_fabricator"
@@ -309,6 +323,7 @@ export const BLUEPRINTS: readonly BlueprintId[] = [
   "bp_keel_survey",
   ...(Object.keys(STORY_BLUEPRINT_LABELS) as StoryBlueprintId[]),
   ...(Object.keys(CAMPAIGN_BLUEPRINT_LABELS) as CampaignBlueprintId[]),
+  ...(Object.keys(SYS2_BLUEPRINTS) as Sys2BlueprintId[]),
 ];
 /** Retained research whose construction belongs to later tiers. Plans that are
  * partly executable list only the part that is still future knowledge. */
@@ -330,7 +345,7 @@ export interface Recipe {
   needs: readonly string[];
   site: FabricationSite;
   output: ItemKind | HullOutput | "pod_repair" | "restore_workshop" | "restore_canopy_stop" | "dart_350" | "creel_350" | "pod_buffer"
-    | CampaignOutput;
+    | CampaignOutput | UpgradeRefitId | HostKnowledgeId;
   quantity: number;
   once: boolean;
   maintenance: boolean;
@@ -438,7 +453,8 @@ export const RECIPES = {
   },
   suit_350: {
     label: "Suit refit · 350 m",
-    cost: { structural_alloy: 2, flex_membrane: 2, conductive_crust: 4, buoyant_resin: 4 },
+    // CB tier rule: one tagged frame from the 150 m rim stack replaces the alloy.
+    cost: { tagged_frame: 1, flex_membrane: 2, conductive_crust: 4, buoyant_resin: 4 },
     bp: "bp_canopy_reinforcement",
     needs: ["suit_150"],
     site: "island_workshop",
@@ -450,7 +466,8 @@ export const RECIPES = {
   // M2-B1. Creel-first is legal: no recipe here needs the Dart.
   creel_base: {
     label: "Creel workboat",
-    cost: { structural_alloy: 10, silica_glass: 4, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 },
+    // CB tier rule: one tagged frame (8 alloy's worth) from the 150 m rim stack.
+    cost: { tagged_frame: 1, structural_alloy: 2, silica_glass: 4, flex_membrane: 4, conductive_crust: 4, buoyant_resin: 2 },
     bp: "bp_creel_service",
     needs: ["restore_workshop", "suit_150"],
     site: "island_workshop",
@@ -562,6 +579,13 @@ export const RECIPES = {
     maintenance: false,
   },
   ...CAMPAIGN_RECIPES,
+  // C4: SYS-1 upgrades whose effects run, its new refits and host knowledge; SYS-2's kits and modules.
+  ...(UPGRADE_RECIPES as { readonly [K in keyof typeof UPGRADE_RECIPES]: Recipe }),
+  ...(UPGRADE_REFIT_RECIPES as { readonly [K in keyof typeof UPGRADE_REFIT_RECIPES]: Recipe }),
+  ...(HOST_KNOWLEDGE_RECIPES as { readonly [K in keyof typeof HOST_KNOWLEDGE_RECIPES]: Recipe }),
+  // Crust lies beyond the unsuited 60 m: SYS-2 recipes paying it wait for the 150 m suit.
+  ...(Object.fromEntries(Object.entries(SYS2_RECIPES).map(([k, r]) =>
+    [k, "conductive_crust" in r.cost ? { ...r, needs: [...r.needs, "suit_150"] } : r])) as { readonly [K in keyof typeof SYS2_RECIPES]: Recipe }),
 } as const satisfies Record<string, Recipe>;
 export type RecipeId = keyof typeof RECIPES;
 
@@ -569,7 +593,7 @@ export interface SourceDefinition {
   label: string;
   region: RegionId;
   position: { x: number; y: number; z: number };
-  item: MaterialId | "meal" | "tagged_frame";
+  item: MaterialId | "meal" | "tagged_frame" | Sys2ItemKind;
   stock: number;
   reserve: number;
   bundle: number;
@@ -938,6 +962,8 @@ export const SOURCES = {
   },
   ...CAMPAIGN_SOURCES,
   ...WORLD_SOURCES,
+  // C4: CB's frontier deposits and SYS-2's seed patches, last so older saves gain them in order.
+  ...C4_SOURCES,
 } as const satisfies Record<string, SourceDefinition>;
 export type SourceId = keyof typeof SOURCES;
 /** Siltwake design, not a claim about another game: only these living sheds regrow,
@@ -1054,6 +1080,11 @@ export const TECH_RECORDS = {
     blueprints: ["bp_keel_survey"],
   },
   ...CAMPAIGN_TECH_RECORDS,
+  // C4: SYS-2's main-path records carrying the outpost-kit, planter and decoder plans.
+  ...SYS2_TECH_RECORDS,
+  // The proposed rack datum (9, 2.2, -38.5) sits behind the workshop's back wall,
+  // out of every aim; composed on the bench wall beside the outpost sheet.
+  workshop_decoder_rack: { ...SYS2_TECH_RECORDS.workshop_decoder_rack, position: { x: 14, y: 2.2, z: -37 } },
 } as const satisfies Record<string, { label: string; region: RegionId; position: { x: number; y: number; z: number };
   text: string; blueprints: readonly BlueprintId[] }>;
 export type TechRecordId = keyof typeof TECH_RECORDS;

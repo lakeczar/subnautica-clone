@@ -13,6 +13,7 @@ import { board } from "../src/sim/vehicles.js";
 import { RECOVERY_NOTICES } from "../src/sim/recovery.js";
 import { createEnvelope, encodeSave, decodeSave } from "../src/save/codec.js";
 import type { GameEvent, GameState, Vec3 } from "../src/sim/types.js";
+import { DECODABLE_IDS, DECODABLES } from "../src/content/systems/decodes.js";
 import { faceTarget, NORMAL_VIEWS, protectedReadyState, readyState } from "./targeting-support.js";
 
 const world = createWorldQueries(), empty = createWorldQueries([], () => -200);
@@ -98,15 +99,28 @@ test("all sources, food, C01–C06, optional note and both rescue work faces ret
     const target = aimedInteraction(s, world); assert.equal(target?.id, v.id, v.id);
     assert.ok(world.lineOfSight(aimRay(s)!.origin, target!.host.center, target!.host.solidIds), v.id + " host LOS");
     const result = executeCommand(s, { type: "interact" }, world);
-    if (v.id.startsWith("works:")) {
+    if (v.id === "basin_pale_spores") {
+      // C4: the spores tear in a hand; only a Hush specimen bay samples them.
+      assert.ok(result.events.some(e => e.type === "notice" && e.error && /specimen bay/.test(e.message)), v.id);
+      assert.equal(result.state, s, v.id);
+    } else if (v.id.startsWith("works:")) {
       // The upper hall's faces need their plans and stock; the refusal says so and changes nothing.
       assert.ok(result.events.some(e => e.type === "notice" && e.error), v.id);
       assert.equal(result.state, s, v.id);
     } else assert.ok(!result.events.some(e => e.type === "notice" && e.error), v.id);
-    if (v.id.startsWith("works:")) { /* refusal checked above */ }
+    if (v.id.startsWith("works:") || v.id === "basin_pale_spores") { /* refusal checked above */ }
+    else if (v.id.startsWith("lost:")) {
+      // C4: reading a lost site finds its decodables for any powered decoder.
+      const site = v.id.slice(5);
+      for (const d of DECODABLE_IDS.filter(d => DECODABLES[d].site === site)) assert.ok(result.state.systems.found.includes(d), `${v.id} finds ${d}`);
+    }
     else if (v.id in SOURCES && SOURCES[v.id as SourceId].item === "tagged_frame") {
       // A frame is a timed, tool-cut lift; nothing is taken until it completes.
       assert.deepEqual(result.state.world.action, { sourceId: v.id, seconds: 10, kind: "lift" }, v.id);
+    } else if (v.id in SOURCES && SOURCES[v.id as SourceId].stock === 0) {
+      // C4: CB's scan-only shoulders read their scan; nothing is taken.
+      assert.equal(result.state.metrics.collections, 0, v.id);
+      assert.ok(result.events.some(e => e.type === "notice" && e.message.endsWith(SOURCES[v.id as SourceId].scan)), v.id);
     } else if (v.id in SOURCES) {
       assert.equal(result.state.metrics.collections, 1, v.id);
       const id = v.id as SourceId;

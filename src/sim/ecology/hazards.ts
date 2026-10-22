@@ -163,7 +163,8 @@ export function stepExposure(load: Exposure, sample: HazardSample, protection: P
     const warn = (level: number): void => {
       events.push({ type: "hazard-warning", hazard: kind, level, caption: c.caption(level, diver), protection: [diver ? c.suit : c.hull] });
     };
-    load[kind] = over > 0 ? Math.min(100, before + over * rate.rate * ECOLOGY_DT) : Math.max(0, before - rate.recovery * ECOLOGY_DT);
+    const factor = kind === "heat" ? protection.heatLoad ?? 1 : 1;
+    load[kind] = over > 0 ? Math.min(100, before + over * rate.rate * factor * ECOLOGY_DT) : Math.max(0, before - rate.recovery * ECOLOGY_DT);
     if (load[kind] < first) { load[warned] = 0; continue; }
     const level = Math.max(first, Math.floor(load[kind] / 10) * 10);
     // Rising across the threshold always opens a fresh episode, whatever age

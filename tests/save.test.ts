@@ -88,7 +88,7 @@ test("invalid JSON, unrecognized format, unsafe numeric ranges and nonempty futu
 });
 
 test("unsupported schema and different content are rejected without rewriting data", () => {
-  for (const version of [0, 6, 100, "1", null, ["1"], { toString: {} }]) {
+  for (const version of [0, 7, 100, "1", null, ["1"], { toString: {} }]) {
     const result = decodeSave(
       JSON.stringify({ ...sample(), schemaVersion: version }),
     );
@@ -149,7 +149,7 @@ test("invalid writes and rejected corrupt/future imports leave current AND backu
   // The runtime only offers import confirmation if decode succeeds.
   for (const text of [
     "{bad json}",
-    JSON.stringify({ ...sample(99), schemaVersion: 6 }),
+    JSON.stringify({ ...sample(99), schemaVersion: 7 }),
   ]) {
     const result = decodeSave(text);
     if (result.ok) await repo.commit(result.value);

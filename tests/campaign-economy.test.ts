@@ -1,3 +1,4 @@
+import { FIRST_WORKABLE } from "../src/content/c4Sources.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { MATERIALS, RECIPES, RENEWABLE_SOURCE_IDS, SOURCES, type SourceId } from "../src/content/registry.js";
@@ -36,7 +37,8 @@ for (const strategy of STRATEGIES) {
   test(`${strategy}: each purchase draws only on deposits its preceding equipment works`, () => {
     const r = runScenario(strategy);
     assert.equal(r.solvent, true);
-    const lips = ["rift_ceramic_lip_north", "rift_ceramic_lip_south"], ledges = ["divide_lattice_ledge_west", "divide_lattice_ledge_east"];
+    const lips: readonly string[] = FIRST_WORKABLE.pressure_ceramic;
+    const ledges: readonly string[] = [...FIRST_WORKABLE.brine_lattice, "divide_lattice_ledge_west", "divide_lattice_ledge_east"];
     assert.ok(r.drawn.suit_450!.every((id) => lips.includes(id) || SOURCES[id].item !== "pressure_ceramic"), "the first ceramic is lip stock");
     const firstLattice = strategy === "independent" ? "restore_divide_stop" : "hearthline_550";
     assert.ok(r.drawn[firstLattice]!.filter((id) => SOURCES[id].item === "brine_lattice").every((id) => ledges.includes(id)));
@@ -58,13 +60,15 @@ for (const strategy of STRATEGIES) {
   });
 
   test(`${strategy}: without both first deposits of a late material the chain stops at its first use (vacuity)`, () => {
-    const first = (kind: string) => (Object.keys(CAMPAIGN_SOURCE_SITES) as SourceId[])
-      .filter((id) => SOURCES[id].item === kind && CAMPAIGN_SOURCE_SITES[id as keyof typeof CAMPAIGN_SOURCE_SITES].first);
+    // CB tier rule (C4): the first workable deposits, plus the tastes that sit shallower.
+    const tastes: Record<string, SourceId[]> = { thermal_core: ["rift_core_shoulder_north", "rift_core_shoulder_west"],
+      brine_lattice: ["divide_lattice_ledge_west", "divide_lattice_ledge_east"] };
+    const first = (kind: keyof typeof FIRST_WORKABLE) => [...FIRST_WORKABLE[kind], ...(tastes[kind] ?? [])] as SourceId[];
     const expected = strategy === "independent"
-      ? { pressure_ceramic: "suit_450", thermal_core: "creel_450", brine_lattice: "restore_divide_stop" }
-      : { pressure_ceramic: "suit_450", thermal_core: "mantle_base", brine_lattice: "hearthline_550" };
+      ? { pressure_ceramic: "suit_450", thermal_core: "suit_450", brine_lattice: "restore_divide_stop" }
+      : { pressure_ceramic: "suit_450", thermal_core: "suit_450", brine_lattice: "hearthline_550" };
     for (const [kind, act] of Object.entries(expected)) {
-      const r = runScenario(strategy, { without: first(kind) });
+      const r = runScenario(strategy, { without: first(kind as keyof typeof FIRST_WORKABLE) });
       assert.equal(r.solvent, false, kind);
       assert.deepEqual([r.shortfalls[0]!.act, r.shortfalls[0]!.kind], [act, kind]);
     }
@@ -74,7 +78,8 @@ for (const strategy of STRATEGIES) {
 test("the strategies differ: no carrier on the Creel route, no deep Creel on the carrier route", () => {
   const independent = solvency("independent"), carrier = solvency("carrier");
   assert.deepEqual(independent.finalCaps.hulls, { dart: 350, creel: 800, hush: 220 });
-  assert.deepEqual(carrier.finalCaps.hulls, { dart: 350, creel: 350, spindle: 0, hearthline: 550, mantle: 800 });
+  // C4: the carrier route's scout refits to 450 m for the Divide's flank lattice.
+  assert.deepEqual(carrier.finalCaps.hulls, { dart: 450, creel: 350, spindle: 0, hearthline: 550, mantle: 800 });
   assert.ok(REQUIRED.independent.some((a) => a.kind === "craft" && a.recipe === "restore_divide_stop"));
   assert.ok(!REQUIRED.carrier.some((a) => a.kind === "craft" && a.recipe === "restore_divide_stop"));
   // Neither strategy requires a specialist: they appear only as optional spend.

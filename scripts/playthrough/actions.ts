@@ -55,6 +55,8 @@ export function workPoses(d: Driver, id: string): { body: Waypoint; land: boolea
     for (const dy of [1.2, 0.4, 2, -0.4]) {
       const body = { x, y: t.position.y + dy, z };
       if (body.y > -0.9 || d.world.groundHeight(x, z) > body.y - 0.1 || d.world.supportHeight(x, z, body.y) > body.y - 0.15) continue;
+      // C4: CB's frontier datums sit exactly at a suit's limit; work them from above it.
+      if (d.state.player.mode !== "piloting" && -body.y > personalLimit(d.state) - 0.3) continue;
       if (dist(body, t.position) < INTERACTION_REACH - 0.2 && d.world.clearance(body, SWIM) &&
           aimsFrom(d, id, body, "swimming", host.center))
         out.push({ body: { ...body, tolerance: 0.3 }, land: false, cost: dist(here, body) });
@@ -144,12 +146,19 @@ export function openPanel(d: Driver, id: string): void {
 
 /** Collect from one source until `want` units are taken, the stock ends or the
  * holds are full. Returns the quantity collected. */
-export function gather(d: Driver, id: SourceId, want = Infinity): number {
+export function gather(d: Driver, id: SourceId, want = Infinity, options: { sort?: boolean } = {}): number {
   const kind = SOURCES[id].item;
   let got = 0;
   reach(d, id);
   while (got < want) {
     const node = d.state.world.resources.find((n) => n.id === id)!;
+    // An emptied host with finite reserve: sort it (20 s) for two more, as a player would.
+    if (node.stock <= 0 && node.reserve > 0 && options.sort && SOURCES[id].item !== "meal") {
+      d.command({ type: "interact" });
+      d.waitFor(`sort at ${id}`, 22, (s) => !s.world.action);
+      if (d.state.world.resources.find((n) => n.id === id)!.stock <= 0) throw new Blocked(`Sorting ${id} added nothing: ${d.state.feedback}`, where(d.state));
+      continue;
+    }
     if (node.stock <= 0 || !roomFor(d, kind, Math.min(SOURCES[id].bundle, node.stock))) break;
     const before = node.stock;
     d.command({ type: "interact" });
@@ -232,7 +241,7 @@ export function procure(d: Driver, needs: Readonly<Partial<Record<ItemKind | "ta
       const choices = (Object.keys(SOURCES) as SourceId[])
         .filter((id) => open.some(([k]) => SOURCES[id].item === k) && regions.includes(SOURCES[id].region) &&
           !(options.skip ?? []).includes(id) &&
-          d.state.world.resources.find((n) => n.id === id)!.stock > 0 && -SOURCES[id].position.y - 0.4 <= limit - 2)
+          d.state.world.resources.find((n) => n.id === id)!.stock > 0 && -SOURCES[id].position.y <= limit)
         .sort((a, b) => dist(p, SOURCES[a].position) - dist(p, SOURCES[b].position));
       const id = choices.find((c) => roomFor(d, SOURCES[c].item, Math.min(SOURCES[c].bundle,
         d.state.world.resources.find((n) => n.id === c)!.stock)));
