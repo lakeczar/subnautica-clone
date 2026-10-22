@@ -343,3 +343,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - Root after the CA-3 and CB-2 merges: 1,256 tests pass, build OK.
 - **Owner grill on the opening and starting island** (in progress): `docs/build/OPENING-DESIGN.md`. Research: starting-island art and exploration (Sol high). Opening pass to build after CW-1 and HUB-2.
 - Island research switched from Sol to **Opus** at the owner's request (taste and art direction): `siltwake-research-start-island-art-opus`.
+- **Opening grill complete** (owner 2026-10-22): Lifted Reef island 205 m west-south-west of the pod, three threads with a two-of-three feed board, 33-item checklist, 150 m suit moved later, garden clarified. `OPENING-DESIGN.md`. The **OP-1 opening pass is queued** for the next free slot. HUB-2 asked for a surface beacon mast (sent).

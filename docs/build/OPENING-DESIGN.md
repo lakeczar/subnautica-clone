@@ -23,4 +23,19 @@
   - **Leaving:** you need the core thread plus **any one** of the other two. Each gives a different route to what the Dart needs.
   - **Unfinished threads** stay open leads, and later regions refer back to them, pulling the player home naturally.
 - **Garden (owner 2026-10-22):** **not** on the starting island. The abandoned overgrown plot is a **mid-game** discovery, farther out. You take cuttings and seeds there, find the planter recipe, build your first planter at a base, and from then on grow food at home, with upgrades later. The starting island feeds you through gathering, fishing and cooking.
-- **Art direction:** still open. The owner wants options and research.
+- **Art direction (owner 2026-10-22): A · Lifted Reef.** A raised coral-limestone (makatea) island: pale undercut domes over a black waterline notch, sinkholes, sea caves, a spring and a blue shaft. Plus saffron lichen on the windward crowns, terraces only inside the hidden garden, and one morning-mist moment. Full design, palette and blockout: `docs/research/STARTING-ISLAND-DESIGN.md` and `docs/research/starting-island/`.
+- **Placement:** the island centre is at about world (−205, 0, −5), 205 m west-south-west of the pod. About 200 × 180 m of land, summit 55 m. The blockout has places, loops, shortcuts and sightlines.
+- **The three threads (accepted):**
+  - **Lamp** (survival manual in the reef wreck): glow sacs and glass, then the lamp, then the dark sea cave's cell cache.
+  - **Scientist** (field station journal): spring, the air-pocket cave and the hidden garden, then repairing the station mast.
+  - **Tide** (workshop log): a cutter, then clearing the fouled tide wheel, then the net and the trap.
+- **The gate is visible, not a counter.** The workshop's feed board has two empty sockets and three labelled cables; any two powered threads let the workshop build the Dart. The third powers a charging cradle as a bonus.
+- **The detail checklist:** keep all 33 items for the blockout; the owner cuts from screenshots.
+- **The 150 m suit** moves later, after the Dart, from the Canopy expedition. That keeps the island's deep passage (the Under-Stair) a return reason.
+- **Garden clarification:** the island's sinkhole is a **hidden overgrown garden to explore** (a place and a view, with a few seeds). The **mid-game plot** is where you learn the planter and grow your own food.
+- **Routine places sit at the waterline.** The pod and the workshop cove (keyhole cove, workshop at +2 m on the slipway, craft dock and charging cradle) are reached by swimming or craft with no climbing. Up-hill places (station, lookout, garden) are discovery destinations, not daily stops.
+- **Dependencies:**
+  - HUB-2 adds a surface mast or buoy light above the crown, in the far layer.
+  - The Under-Stair (about 200 m, down to 140 m) uses the large-cave technology.
+  - The decoder is available before the hatch matters.
+  - The current workshop at (10, −36) and its ramp move to the cove.
