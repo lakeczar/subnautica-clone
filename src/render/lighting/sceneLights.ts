@@ -9,7 +9,7 @@ import { RIFT_AXIS } from "../../content/regions/terrain.js";
 import { worldFloor } from "../../content/regions/worldFloor.js";
 import type { GameState } from "../../sim/types.js";
 import { ArtBatch } from "../geometry.js";
-import { clusterEmissive, lightFromCluster, lightUniforms, selectLights, type LightCluster, type PointLight,
+import { emissiveScan, lightFromCluster, lightUniforms, selectLights, type LightCluster, type PointLight,
   type Vec3Like } from "./localLights.js";
 
 /** The renderer's local lights (ATM-1): every emissive cel mesh in the scene
@@ -61,6 +61,8 @@ const INSTRUMENT: Readonly<Record<string, { at: Vec3Like; radius: number }>> = {
 const MARKER_COLOR = { r: 1, g: 0.72, b: 0.32 };
 /** Seconds per blink, and the lit fraction. */
 const BLINK = 2.2, BLINK_ON = 0.22;
+/** Vertices read per check of the scan's time slice. */
+const SCAN_SLICE = 4096;
 /** Markers show below this depth (the surface has daylight). */
 const MARKER_DEPTH = 25;
 
@@ -104,18 +106,27 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     const e = entries.get(m.uniqueId);
     if (e) e.active = false;
   });
-  const scan = (mesh: AbstractMesh): void => {
-    if (mesh.isDisposed() || mesh.material !== cel || mesh.metadata?.atmLights === "skip") return;
+  /** The mesh being scanned a slice at a time (CW-1: streamed chunks are large). */
+  let scanning: { mesh: AbstractMesh; geometry: string; job: ReturnType<typeof emissiveScan> } | null = null;
+  /** Scan for up to `until`; true when the mesh is done (or needs no scan). */
+  const scan = (mesh: AbstractMesh, until: number): boolean => {
+    if (mesh.isDisposed() || mesh.material !== cel || mesh.metadata?.atmLights === "skip") return true;
     const m = mesh as Mesh, geometry = m.geometry;
-    const colors = geometry ? m.getVerticesData("color", false, false) : null;
-    const positions = geometry ? m.getVerticesData("position", false, false) : null;
-    if (!colors || !positions) return;
-    let clusters = byGeometry.get(geometry!.id);
-    if (!clusters) byGeometry.set(geometry!.id, clusters = clusterEmissive(positions, colors));
-    if (!clusters.length) return;
+    let clusters = geometry ? byGeometry.get(geometry.id) : undefined;
+    if (!clusters) {
+      const colors = geometry ? m.getVerticesData("color", false, false) : null;
+      const positions = geometry ? m.getVerticesData("position", false, false) : null;
+      if (!colors || !positions) return true;
+      if (scanning?.mesh !== mesh) scanning = { mesh, geometry: geometry!.id, job: emissiveScan(positions, colors) };
+      while (!scanning.job.step(SCAN_SLICE)) if (performance.now() > until) return false;
+      byGeometry.set(geometry!.id, clusters = scanning.job.clusters());
+      scanning = null;
+    }
+    if (!clusters.length) return true;
     const instances = m.thinInstanceCount > 0 ? m.thinInstanceGetWorldMatrices() : null;
     entries.set(mesh.uniqueId, { mesh, clusters, instances, world: null, active: true });
     mesh.onDisposeObservable.addOnce(() => entries.delete(mesh.uniqueId));
+    return true;
   };
   const toWorld = (e: Entry): PointLight[] => {
     const frozen = e.mesh.isWorldMatrixFrozen && !e.mesh.parent;
@@ -150,12 +161,12 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
   return {
     get stats() { return { sent, known: entries.size, pending: pending.size }; },
     update(state, eye, daylight, time) {
-      // Scan new meshes in a bounded slice per frame.
-      const start = performance.now();
+      // Scan new meshes in a bounded slice per frame, resuming a large one.
+      const until = performance.now() + 1.5;
       for (const mesh of pending) {
+        if (!scan(mesh, until)) break;
         pending.delete(mesh);
-        scan(mesh);
-        if (performance.now() - start > 1.5) break;
+        if (performance.now() > until) break;
       }
       // The piloted hull's own glows (gauges, ceiling strip) would glare inside
       // the compartment: its soft instrument light stands in for them.

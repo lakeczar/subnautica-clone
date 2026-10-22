@@ -27,10 +27,27 @@ export interface LightCluster {
 /** Group a mesh's emissive vertices into lights, in its local space.
  * `positions` xyz and `colors` rgba per vertex, as the cel meshes carry them. */
 export function clusterEmissive(positions: ArrayLike<number>, colors: ArrayLike<number>, cell = CLUSTER_CELL): LightCluster[] {
+  const job = emissiveScan(positions, colors, cell);
+  while (!job.step(Infinity)) { /* whole mesh at once */ }
+  return job.clusters();
+}
+
+/** `clusterEmissive` resumable (CW-1): a streamed chunk can carry hundreds of
+ * thousands of vertices, so the scene lights scan it a slice at a time;
+ * `step(vertices)` reads at most that many and reports whether it is done.
+ * The clusters are the same as in one pass. */
+export function emissiveScan(positions: ArrayLike<number>, colors: ArrayLike<number>, cell = CLUSTER_CELL) {
   const cells = new Map<string, { n: number; x: number; y: number; z: number; r: number; g: number; b: number;
     lo: [number, number, number]; hi: [number, number, number]; faint: boolean }>();
   const count = Math.min(positions.length / 3, colors.length / 4);
-  for (let i = 0; i < count; i++) {
+  let next = 0;
+  const clusters = (): LightCluster[] => [...cells.values()].map(c => ({
+    x: c.x / c.n, y: c.y / c.n, z: c.z / c.n, r: c.r / c.n, g: c.g / c.n, b: c.b / c.n,
+    extent: Math.max(c.hi[0] - c.lo[0], c.hi[1] - c.lo[1], c.hi[2] - c.lo[2]), faint: c.faint,
+  }));
+  const step = (vertices: number): boolean => {
+  const end = Math.min(count, next + vertices);
+  for (let i = next; i < end; i++) {
     const a = colors[i * 4 + 3]!;
     if (!(a <= FAINT_ALPHA)) continue;
     const faint = a > UNLIT_ALPHA;
@@ -43,10 +60,10 @@ export function clusterEmissive(positions: ArrayLike<number>, colors: ArrayLike<
     c.lo = [Math.min(c.lo[0], x), Math.min(c.lo[1], y), Math.min(c.lo[2], z)];
     c.hi = [Math.max(c.hi[0], x), Math.max(c.hi[1], y), Math.max(c.hi[2], z)];
   }
-  return [...cells.values()].map(c => ({
-    x: c.x / c.n, y: c.y / c.n, z: c.z / c.n, r: c.r / c.n, g: c.g / c.n, b: c.b / c.n,
-    extent: Math.max(c.hi[0] - c.lo[0], c.hi[1] - c.lo[1], c.hi[2] - c.lo[2]), faint: c.faint,
-  }));
+  next = end;
+  return next >= count;
+  };
+  return { step, clusters };
 }
 
 /** A light in world space as the shader takes it. */

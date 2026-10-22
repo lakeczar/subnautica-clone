@@ -139,12 +139,26 @@ try {
     const e = data.perf.find(x => x.at >= at - g - 1 && x.at <= at + 1) ?? null;
     result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
+  // Attribution: a long frame is streaming's when the streaming work in it
+  // (chunk residency, cave streaming, region activation, the lights' scan of
+  // new meshes) is at least half of the frame's own work and the work alone
+  // overran a vsync. Other long gaps are simulation, rendering, GC or the
+  // browser, reported but not streaming's.
+  const streamingOf = (f) => (f?.parts ? (f.parts.chunks ?? 0) + (f.parts.caves ?? 0) + (f.parts.regions ?? 0) + (f.parts.lights ?? 0) : 0);
+  for (const l of result.long) if (l.frame) l.streaming = l.frame.total > 16.7 && streamingOf(l.frame) >= 0.5 * l.frame.total;
+  result.longByCause = {
+    over34: result.long.filter(l => l.gap > 34).length,
+    streaming: result.long.filter(l => l.streaming).length,
+    streamingOver34: result.long.filter(l => l.streaming && l.gap > 34).length,
+    simulation: result.long.filter(l => l.frame && !l.streaming && l.frame.sim >= 0.5 * l.frame.total && l.frame.total > 16.7).length,
+    noWork: result.long.filter(l => !l.frame || l.frame.total <= 16.7).length,
+  };
   result.streamingMax = data.perf.reduce((m, e) => ({ chunks: Math.max(m.chunks, e.parts?.chunks ?? 0), caves: Math.max(m.caves, e.parts?.caves ?? 0) }), { chunks: 0, caves: 0 });
   result.holdFrames = data.perf.filter(e => e.hold && e.hold !== "clear").length;
   result.stream = data.stream;
   result.memory = { residentCpuMiB: +(data.cpu / 1048576).toFixed(1), residentGpuMiB: +(data.gpu / 1048576).toFixed(1), regionMiB: +(data.regionBytes / 1048576).toFixed(1),
     budgetMiB: 256, heapMiB: data.heap ? +(data.heap.used / 1048576).toFixed(1) : null };
-  note("result", JSON.stringify({ frames: result.frames, work: result.work, holds: result.holdFrames, memory: result.memory, stream: result.stream }));
+  note("result", JSON.stringify({ frames: result.frames, longByCause: result.longByCause, work: result.work, holds: result.holdFrames, memory: result.memory, stream: result.stream }));
 } catch (error) {
   result.errors.push(String(error?.stack ?? error)); note("error", String(error));
 } finally {
