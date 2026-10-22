@@ -1,6 +1,6 @@
 # TT-1: the fast tier is fast again
 
-Opus 5.5 high. Branch `feat/tt-1-test-speed` from `48612f5`, with root merged at `c649b11` (CA-3, CB-2) and at `1ccce66` (HUB-2). Scope: test files and tiering mechanics, plus pure caching hooks in production code (listed below). No assertion was deleted or weakened; every test that left the fast tier runs unchanged in the heavy tier.
+Opus 5.5 high. Branch `feat/tt-1-test-speed` from `48612f5`, with root merged at `c649b11` (CA-3, CB-2), `1ccce66` (HUB-2) and `86e2ff1` (DISH-1). R1 responses are at the end. Scope: test files and tiering mechanics, plus pure caching hooks in production code (listed below). No assertion was deleted or weakened; every test that left the fast tier runs unchanged in the heavy tier.
 
 ## Result
 
@@ -13,7 +13,7 @@ Times on the shared 6-vCPU VM; other agents were running, so each pair was measu
 | `npm run test:heavy` (through `heavy-check.sh`) | **955 s**: 33 files, 394 tests, one at a time | **293 s**: 57 files, 434 tests (850 s of file time, up to 3 at once) |
 | `npm test` after merging HUB-2 (load 14–18; HUB-2's source changes refill part of the cache) | | 220 s, 1,255 tests |
 
-41 tests moved to heavy; 33 smokes and 5 new tests (4 for the build cache, 1 budget probe) were added to the fast tier.
+Counts as of R1: 41 tests moved to heavy (40 byte-identical, 1 helper refactor); 34 smokes and the new cache and budget tests stay in the fast tier.
 
 `npm test` reaches about 60 s when the VM is not saturated. When six agents load it, the tier stays CPU-bound at roughly 250 s CPU over 5 workers.
 
@@ -32,7 +32,7 @@ Times on the shared 6-vCPU VM; other agents were running, so each pair was measu
    - **Output:** every run prints the 8 slowest files and writes them all to `.test-build/fast-timing.json`.
    - **Overrides:** `SILTWAKE_FAST_FILE_WARN_S` and `SILTWAKE_FAST_FILE_BUDGET_S` (0 turns a check off). `tests/tier-guard.test.ts` probes both the warning and the failure.
    - **Concurrency:** `min(5, cores − 1)`, so 5 on this VM (was 4). Fast files peak at 140–600 MiB inside their 1 GiB heaps.
-4. **Heavy pool.** Inside `heavy-check.sh`'s lock and 6 GiB scope, heavy files now run up to 3 at a time while their peak-RSS budgets total no more than 4.5 GiB, largest first. A file over the pool runs alone. Each file's output is printed whole when it ends, and the per-file RSS watchdog is unchanged. Overrides: `SILTWAKE_HEAVY_CONCURRENCY`, `SILTWAKE_HEAVY_POOL_MIB`. *DIRECTION's "Tests" line, which says heavy runs one file at a time, needs the coordinator's update.*
+4. **Heavy pool, with per-file containment** (since R1; see R1-1 below). Each heavy file's budget covers its whole process tree, enforced by its own child cgroup in the delegated `heavy-check.sh` scope. Files share a pool of up to 3, within three quarters of the job's memory (at most 4.5 GiB), largest first. Elapsed-time files run alone. Without delegation, files run one at a time. Each file's output is printed whole when it ends. Overrides: `SILTWAKE_JOB_CPUS`, `SILTWAKE_HEAVY_CONCURRENCY`, `SILTWAKE_HEAVY_POOL_MIB`. *DIRECTION's "Tests" line, which says heavy runs one file at a time, folds into SCHED-1's DIRECTION edit.*
 5. **Cheaper tests, same assertions:**
    - **CA-1 and Fanvault rock queries** (`caves-reef-isles-support.ts`, `cave-support.ts`): rock solids in cells rather than X/Z columns (2 × 8 × 2 m for CA-1, 2 m for the single Fanvault).
      - `inRock` returns the same boolean.
@@ -45,7 +45,7 @@ Times on the shared 6-vCPU VM; other agents were running, so each pair was measu
 
 ## Moved to the heavy tier (verbatim) and their fast smokes
 
-All 41 moved tests are byte-identical to root's; `/work/tmp/tt1/verbatim.py` checks every root test. Each fast file keeps a smoke: the same checks on a subset (fewer starts, points, cuts or poses, or a shorter run), or the cheap half of the test.
+Of the 41 moved tests, 40 are byte-identical to root's and one is the `regions-bake` refactor below. `/work/tmp/tt1/verbatim.py` checks every root test against `86e2ff1`. Each fast file keeps a smoke: the same checks on a subset (fewer starts, points, cuts or poses, or a shorter run), or the cheap half of the test.
 
 | Heavy file (new) | Moved from | Tests moved | Fast smoke left behind |
 | --- | --- | --- | --- |
@@ -72,12 +72,14 @@ All 41 moved tests are byte-identical to root's; `/work/tmp/tt1/verbatim.py` che
 | `m2-route-recovery.heavy` | `m2-route-recovery` | every loss endpoint towed home | the first and last endpoints |
 | `world-queries.heavy` | `world-queries` | 120 random queries per hotspot, indexed vs full scan | 20 per hotspot |
 | `poi.heavy` | `poi` | dish bands, every 5th vertex | every 25th vertex |
+| `dishes.heavy` (R1) | `dishes` | dish collision against every passage, rescue tether, first access and carrier lane | routes and carrier lanes only |
 
 The only heavy change that is not a verbatim move: `regions-bake`'s six-chunk decode check now lives in `regions-bake-support.ts` as `assertDecodedMatchesLive(c)` (the same statements), run over all six chunks in `regions-bake-decode.heavy.test.ts` and over two in the fast smoke.
 
 **Heavy budgets** (`tests/heavy-budgets.json`):
 - **New heavy files:** all peak at 107–492 MiB, under the 1,024 MiB default.
-- **Two raised:**
+- **Since R1, peaks are whole process trees** (cgroup `memory.peak`, which includes page cache the kernel can reclaim). `regions-bake` measured 1,469 MiB as a tree, so its budget is **1,920 MiB**.
+- **Two raised before R1:**
   - `world-stream` to **1,536 MiB** (from 1,280). It peaked at 1,286 MiB with two other files running beside it. Root runs it at 1,216 MiB alone, and the cache lowers it: 1,171 MiB on, 1,200 MiB off.
   - `caves-reef-isles-retreat` to **1,280 MiB** (from 1,024). Root runs it at 1,009 MiB, 98% of its budget.
 - **Still close:** `regions-stream` (933 of 1,024 MiB) and `caves-deep-perf` (875) are the nearest to their budgets.
@@ -117,29 +119,38 @@ The only heavy change that is not a verbatim move: `regions-bake`'s six-chunk de
 - **Tried and dropped:** Node's compile cache (no gain); `--single-threaded` V8 (17% less CPU, but no wall-time gain under load, and it charges GC to the main thread).
 
 ## Checks
-- `npm test`: 1,255 fast tests pass after merging HUB-2 (1,254 before it).
-- `npm run test:heavy` through `heavy-check.sh`: 57 files and 434 tests pass in 293 s, every peak within budget.
+- Before R1: `npm test` passed 1,255 fast tests after merging HUB-2 (1,254 before it); `npm run test:heavy` passed 56 files and 434 tests in 293 s. The R1 checks are at the end.
 - The fast tier also passes with `SILTWAKE_BUILD_CACHE=off`, cold.
 - Evidence and probe scripts are in `/work/tmp/tt1/` (timing runs, profiles, `verbatim.py`).
 
-## Paused for VM restart (2026-10-22, R1 fixes in progress)
+## R1 review (Sol xhigh, `3f2dc27`): responses
 
-**Done** (committed; fast tier 1,264/1,264 pass at `41e2aea` plus the dishes move):
-- R1-1: `scripts/heavy-containment.mjs`. Per-file child cgroups when `heavy-check.sh` delegates (`Delegate=yes`, `SILTWAKE_HEAVY_CGROUP=delegated`); otherwise process-group accounting, one file at a time. The pool follows the scope's `memory.max` and `SILTWAKE_JOB_CPUS`. `exclusive` timing files are listed in `tests/heavy-budgets.json`. The regression is `tests/heavy-tier.heavy.test.ts`.
-- R1-2: `caves-deep-perf` times generation through `withoutBuildCache`.
-- R1-3: fills measured in main-thread CPU, once when nested; tested in `tier-guard`.
-- R1-4: the budget probe burns measured CPU. It passes the reviewer's 10% CPU scope command.
-- R1-5: runtime and format namespace in `closureHash`.
-- DISH-1's new `dishes.test.ts` was 10.3 s alone (over the 10 s budget). Its whole-world access test moved to `dishes.heavy.test.ts`, leaving a routes smoke (now 3.2 s).
+Root merged at `86e2ff1` (DISH-1). All four P2s and the P3 are fixed.
 
-**In flight:** the containment regression ran once through `heavy-check.sh` before the pause.
-- **cgroup mode:** it reported the regression file itself KILLED. `memory.events` counts OOM kills in descendant cgroups too (the nested probe's intended kill), so `finish()` should read `memory.events.local`.
-- **Process-group mode:** it printed no summary row. Not yet debugged.
+- **R1-1 · P2 — heavy budgets now cover the whole process tree.**
+  - **Delegated scope:** `scripts/heavy-check.sh` starts its scope with `Delegate=yes` and exports `SILTWAKE_HEAVY_CGROUP=delegated`. The runner (`scripts/heavy-containment.mjs`) then moves the job's own processes into a leaf and gives each heavy file its own child cgroup: `memory.max` at the file's budget, swap off, and `memory.oom.group`.
+    - The kernel enforces the budget over the file's whole tree and kills only that tree.
+    - `memory.peak` is reported as the file's peak.
+    - `cgroup.kill` clears stragglers when the file ends.
+    - Only OOMs caused by the file's own limit count against it (`memory.events.local`), so a nested runner's file isn't charged to its parent.
+  - **Fallback:** without delegation, files run **one at a time** with their process group watched (resident memory summed every 100 ms, the group killed over budget). Sampling isn't sound containment, so files don't share.
+  - **Pool:** follows the job's grant. `SILTWAKE_JOB_CPUS` sets concurrency (1–3), and three quarters of the scope's `memory.max` caps the budgets reserved at once (at most 4.5 GiB). The explicit `SILTWAKE_HEAVY_CONCURRENCY` and `SILTWAKE_HEAVY_POOL_MIB` overrides still win.
+  - **Regression:** `tests/heavy-tier.heavy.test.ts` runs the real runner on two probe files whose child processes allocate memory. The one over budget fails alone; the one under budget passes, and its peak includes its child. It passes in both modes through `heavy-check.sh`.
+  - **Bake measured:** the terrain bake in `regions-bake.heavy` peaks at **1,469 MiB as a tree**; the old per-PID watchdog saw 54 MiB. Its budget is now 1,920 MiB.
+  - **For SCHED-1:** heavy-check v2 must keep `Delegate=yes` and `SILTWAKE_HEAVY_CGROUP=delegated`, or the runner falls back to one file at a time.
+- **R1-2 · P2 — the deep-cave cost test times generation.** `caves-deep-perf.heavy` wraps its measured `buildCave` in `withoutBuildCache`; its other fixtures stay cached.
+  - **Audit of every elapsed-time assertion:** this was the only measured operation that ran through the cache. The others time world queries (`moveCapsule`, `supportHeight`) or terrain decode steps, which the cache doesn't touch.
+  - **Contention policy:** files asserting elapsed time are listed under `exclusive` in `tests/heavy-budgets.json` (`caves-deep-perf`, `caves-canopy-basin`, `caves-reef-isles-game`, `large-cave-canopy`). The runner starts them with no other heavy file running.
+- **R1-3 · P2 — cache fills are charged on the same clock.** The browser-side hook no longer times anything. Instead, a store may wrap a miss's build (`fill`). The Node store measures fills with `process.threadCpuUsage()`, the clock the budget reads, and counts only the outermost of nested fills.
+  - **Test:** a `tier-guard` probe holds a fill that waits 1 s without CPU, burns 200 ms, and nests a 100 ms fill. The file then burns 300 ms outside the fill. Cold and warm runs both charge the outside 300 ms. The cold fill counts about 300 ms, not 1.3 s, and the nested fill counts once.
+- **R1-4 · P2 — the budget probe burns measured CPU.** It burns 300 ms of `threadCpuUsage()`, bounded at 30 s of wall time, against a 0.1 s budget. Under the reviewer's 10% CPU scope command it passes, and so does the new fill test (15 s with a 90 s limit).
+- **R1-5 · P3 — runtime in the namespace.** Every cache directory hash now includes a format salt (`siltwake-build-cache/1`), the Node and V8 versions, and the platform and architecture. `build-cache.test.ts` checks that another runtime gets another namespace.
+- **Counts corrected:**
+  - At R1, 40 tests had moved: 39 byte-identical and 1 helper refactor (`regions-bake`'s decode check). Since then DISH-1's whole-world access test also moved (below), so **41 moved: 40 byte-identical and 1 refactor**. The other fast-tier changes are 33 smokes and 5 new tests before DISH-1, plus the dishes smoke.
+  - The heavy tier has **59 files**: root's 34 (with DISH-1's `dishes-envelope`) and 25 new.
+  - Three root tests changed in place by design: the `c4-cave-bake` memo, the Fanvault determinism oracle, and the `caves-deep-perf` bypass above.
+- **DISH-1 merge:** its new `dishes.test.ts` used 10.3 s of CPU alone, over the new 10 s budget. Its whole-world access test ("dish collision leaves every passage, rescue tether, first access and carrier lane clear") moved verbatim to `dishes.heavy.test.ts`. A routes-only smoke stays, and the fast file now takes 3.2 s.
 
-**Next steps:**
-1. Fix both modes and rerun `heavy-tier.heavy.test.ts` through `heavy-check.sh`.
-2. Measure `regions-bake.heavy`'s whole-tree peak (bake process plus workers) and set its budget.
-3. Run the full `npm run test:heavy`.
-4. Update `verbatim.py` for the regions-bake refactor and the dishes move.
-5. Correct the handoff counts: 40 moved before dishes (39 verbatim plus 1 helper refactor), now 41 with dishes; 56 heavy files before, now 58.
-6. Write the R1 responses here, commit, push, and notify the coordinator.
+**Checks after the R1 fixes** (8-vCPU VM):
+- `npm test`: **57 s**, 1,264 of 1,264 pass (load 6–8, 284 s CPU); five files warned, none failed.
+- `npm run test:heavy` through `heavy-check.sh`: HEAVY_R1.
