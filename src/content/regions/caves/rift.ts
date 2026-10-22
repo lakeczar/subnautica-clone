@@ -1,5 +1,5 @@
-import { EXTERIOR, type CaveSource } from "../caves.js";
-import { chamber, heatBox, heatVent, portal, room, route, shaft, terrace, tube, v, type CaveHazard, type DeepCave } from "./deepKit.js";
+import type { CaveSource } from "../caves.js";
+import { chamber, EXTERIOR, heatBox, heatVent, portal, room, route, shaft, terrace, tube, v, type CaveHazard, type DeepCave } from "./deepKit.js";
 
 /** CA-3, Ember Rift: lava tubes that breathe heat.
  *
@@ -31,7 +31,7 @@ const NORTH_SOURCE: CaveSource = {
   topY: -279,
   terraces: [
     terrace("rift_north.terrace.mound", -281, [-109, -796.5], [9.5, 7], 2.4, 0.2, 0.4, 8),
-    terrace("rift_north.terrace.ridge", -306, [-87.5, -795], [9.5, 6.5], 3, 0.15, 0.5, 10),
+    terrace("rift_north.terrace.ridge", -306, [-88.5, -795], [8, 6.5], 3, 0.15, 0.5, 10),
   ],
   carves: [
     tube("rift_north.carve.crawl", "rift_north.crawl", [[-127, -795, -286.8, 3, 3], [-117, -795, -287.6, 3, 3], [-102, -795, -291.6, 3, 3]], 0.2),
@@ -50,18 +50,18 @@ const NORTH_SOURCE: CaveSource = {
   ],
   portals: [
     portal("rift_north.mouth.ledge", "mouth", "Ledge mouth (shoulder crawl)", "rift_north.crawl", EXTERIOR, v(-117.5, -285.9, -795), "-x", 1.8, 1.9),
-    portal("rift_north.mouth.shoulder", "mouth", "Shoulder mouth (north tube)", "rift_north.tube", EXTERIOR, v(-77.5, -312, -795), "+x", 3.4, 3),
+    portal("rift_north.mouth.shoulder", "mouth", "Shoulder mouth (north tube)", "rift_north.tube", EXTERIOR, v(-80, -312, -795), "+x", 3.4, 3),
     portal("rift_north.throat.drop", "throat", "Drop head", "rift_north.crawl", "rift_north.drop_upper", v(-102, -291.2, -795), "-y", 1.4, 1.4),
     portal("rift_north.throat.drop_foot", "throat", "Drop foot", "rift_north.drop_lower", "rift_north.tube", v(-99.5, -312.2, -795), "+x", 1.6, 2.2),
   ],
   routes: [
     route("rift_north.route.through", "diver", "loop", [
-      [-130, -286.3, -795], [-119.89, -286.37, -795], [-115.56, -286.9, -795], [-111.22, -287.87, -795], [-105.44, -289.36, -795], [-103, -290.4, -795],
-      [-102, -293.4, -795], [-102, -302.4, -795], [-100.67, -313.37, -795.08], [-87.33, -313.4, -795.5], [-74.88, -313.4, -795], [-68, -313.87, -795],
+      [-130, -286.3, -795], [-121, -286.38, -795], [-116, -286.9, -795], [-104, -289.86, -795], [-103, -290.4, -795], [-102, -293.4, -795],
+      [-102, -302.4, -795], [-101.14, -313.36, -795.07], [-88, -313.38, -795.5], [-78, -313.38, -795], [-70, -313.87, -795],
     ]),
     route("rift_north.route.turn_back", "diver", "exit", [
-      [-86, -313.4, -795.5], [-99.33, -313.37, -795.17], [-100.67, -313.37, -795.08], [-102, -302.4, -795], [-102, -293.4, -795], [-102, -290.9, -795],
-      [-103.5, -289.9, -795], [-111, -287.9, -795], [-115.5, -286.9, -795], [-119.89, -286.37, -795], [-130, -286.3, -795],
+      [-88, -313.4, -795.5], [-101.14, -313.36, -795.07], [-102, -302.4, -795], [-102, -293.4, -795], [-103, -290.37, -795], [-104, -289.9, -795],
+      [-116, -286.9, -795], [-121, -286.38, -795], [-130, -286.3, -795],
     ]),
   ],
   staging: [
@@ -84,7 +84,7 @@ const NORTH: DeepCave = {
   ],
   cues: [
     { id: "rift_north.cue.shoulder", kind: "colony", room: "rift_north.tube", meaning: "exit", exit: "rift_north.mouth.shoulder", color: TEAL,
-      points: [v(-80, -312, -792.6), v(-80, -312, -797.4)], read: "Teal colonies frame the bench mouth from inside." },
+      points: [v(-82.5, -312, -792.6), v(-82.5, -312, -797.4)], read: "Teal colonies frame the bench mouth from inside." },
     { id: "rift_north.cue.ledge", kind: "colony", room: "rift_north.crawl", meaning: "exit", exit: "rift_north.mouth.ledge", color: AMBER,
       points: [v(-113, -286.2, -793.8), v(-113, -286.2, -796.2)], read: "Amber colonies line the crawl just inside the ledge mouth." },
     { id: "rift_north.cue.shaft", kind: "glimmer", room: "rift_north.drop_upper", meaning: "exit", exit: "rift_north.mouth.ledge", color: AMBER,

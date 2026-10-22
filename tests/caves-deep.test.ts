@@ -6,7 +6,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { assertDisjointFootprints, CAVE_SOURCES, EXTERIOR } from "../src/content/regions/caves.js";
 import { DEEP_CAVES, DEEP_CAVE_HAZARDS, DEEP_CAVE_SOURCES, caveFieldLevel, sampleDeepHazards } from "../src/content/regions/caves/deep.js";
-import { KILN_BREATH, type DeepCave } from "../src/content/regions/caves/deepKit.js";
+import { EXTERIOR as DEEP_EXTERIOR, KILN_BREATH, type DeepCave } from "../src/content/regions/caves/deepKit.js";
+import { readFileSync } from "node:fs";
 import { AREAS, REQUIRED_SOURCES } from "../src/content/proposals/index.js";
 import type { CaveProposal } from "../src/content/proposals/index.js";
 import { SITES } from "../src/content/regions/sites.js";
@@ -31,6 +32,14 @@ const proposal = (id: string): CaveProposal => {
 const inRect = (r: Rect, x: number, z: number, pad = 0): boolean => x >= r.minX - pad && x <= r.maxX + pad && z >= r.minZ - pad && z <= r.maxZ + pad;
 const rectDistance = (r: Rect, x: number, z: number): number => Math.hypot(Math.max(r.minX - x, 0, x - r.maxX), Math.max(r.minZ - z, 0, z - r.maxZ));
 const portal = (c: DeepCave, id: string) => c.source.portals.find(p => p.id === id);
+
+test("the deep sources import nothing but types from caves.ts, so CAVE_SOURCES can include them without a cycle", () => {
+  assert.equal(DEEP_EXTERIOR, EXTERIOR);
+  for (const f of ["deepKit", "deep", "rift", "divide", "meridian"]) {
+    const text = readFileSync(new URL(`../../src/content/regions/caves/${f}.ts`, import.meta.url), "utf8");
+    for (const m of text.matchAll(/import ([^;]*) from "\.\.\/caves\.js";/g)) assert.ok(m[1]!.startsWith("type "), `${f}.ts imports values from caves.ts: ${m[0]}`);
+  }
+});
 
 test("every bible small and medium cave for the Rift, Divide and Meridian is realised exactly once", () => {
   const realised = DEEP_CAVES.flatMap(c => c.bible);

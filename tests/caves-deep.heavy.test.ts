@@ -35,6 +35,22 @@ for (const c of DEEP_CAVES) {
   });
 }
 
+test("every bible cave's carved water fits its size class (GAME-DIRECTION: small 10-25 m, medium 30-80 m)", () => {
+  for (const c of DEEP_CAVES) {
+    const def = defOf(c);
+    for (const id of c.bible) {
+      const rooms = new Set(c.parts?.[id] ?? def.rooms.map(r => r.id));
+      const min = { x: Infinity, y: Infinity, z: Infinity }, max = { x: -Infinity, y: -Infinity, z: -Infinity };
+      for (const r of def.rooms) if (rooms.has(r.id)) for (const a of ["x", "y", "z"] as const) {
+        min[a] = Math.min(min[a], r.bounds.min[a]); max[a] = Math.max(max[a], r.bounds.max[a]);
+      }
+      const extents = (["x", "y", "z"] as const).map(a => max[a] - min[a]), longest = Math.max(...extents);
+      const [lo, hi] = c.size === "small" ? [10, 25] : [30, 80];
+      assert.ok(longest >= lo && extents.every(e => e <= hi), `${id}: water ${extents.map(e => e.toFixed(1)).join(" x ")} m outside the ${c.size} class`);
+    }
+  }
+});
+
 test("negative control: a 2 m block in the kiln tube's plateau mouth stops its own craft loop", () => {
   const kiln = DEEP_CAVES.find(c => c.source.id === "rift_kiln_tube")!;
   const m = kiln.source.portals.find(p => p.id === "kiln.mouth.plateau")!;

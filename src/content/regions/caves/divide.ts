@@ -1,5 +1,5 @@
-import { EXTERIOR, type CaveSource } from "../caves.js";
-import { brinePool, chamber, portal, room, route, shaft, terrace, tube, v, type DeepCave } from "./deepKit.js";
+import type { CaveSource } from "../caves.js";
+import { brinePool, chamber, EXTERIOR, portal, room, route, shaft, terrace, tube, v, type DeepCave } from "./deepKit.js";
 
 /** CA-3, Mirror Divide: brine pockets with mirror floors.
  *

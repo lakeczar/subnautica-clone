@@ -19,6 +19,11 @@ import type {
  * Nothing here imports the bible (`content/proposals`); the tests hold every
  * ID to it. Metres, +Y up, water at Y = 0, +X east, +Z north. */
 
+/** The room name of open water outside a cave: `caves.ts`'s EXTERIOR, restated
+ * so `caves.ts` can import these sources without a module cycle (a test pins
+ * the two equal). */
+export const EXTERIOR = "exterior";
+
 // --- Constructors -------------------------------------------------------------
 
 export const v = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
