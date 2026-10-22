@@ -260,9 +260,11 @@ export function commandEffect(c: GameCommand, before: GameState, after: GameStat
       const cm = c as Extract<GameCommand, { type: "pack-outpost" }>;
       const kit = after.inventory.items.find((i) => i.id === cm.outpostId);
       if (after.systems.outposts.some((o) => o.id === cm.outpostId) || !kit) return [`outpost ${cm.outpostId} was not packed into its kit`];
-      // The kit returns with its identity; only the pack's anchor and seal material is spent.
-      const gains = [...changes(before, after)].filter(([k, d]) => d > 0 && k.split("|")[1] !== kit.kind);
-      return gains.map(([k, d]) => `packing added ${d} to ${k}`);
+      // The kit returns with its identity; the locker's contents move to the hold whole;
+      // only the pack's anchor and seal material is spent. No kind may grow overall.
+      const net = new Map<string, number>();
+      for (const [k, d] of changes(before, after)) if (k.split("|")[1] !== kit.kind) add(net, k.split("|")[1]!, d);
+      return [...net].filter(([, d]) => d > 0).map(([kind, d]) => `packing created ${d} ${kind}`);
     }
     case "start-decode": {
       const cm = c as Extract<GameCommand, { type: "start-decode" }>;

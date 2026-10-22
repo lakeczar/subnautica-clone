@@ -6,6 +6,7 @@ import type { SaveSlot } from "../save/repository.js";
 import type { Quality } from "../render/renderer.js";
 import { PanelView, type PanelKind } from "./panels.js";
 import { currentObjective } from "../sim/objective.js";
+const OBJECTIVE_KEY = "siltwake.hud.objective.v1";
 import type { JournalTabId } from "../sim/systems/journal.js";
 import { hazardBanners, HudView, type HudAim } from "./hud.js";
 import type { ThreatDamage } from "./notices.js";
@@ -99,7 +100,7 @@ export class GameView {
               <div class="settings-fields">
                 <div class="settings"><label>Rendering <select id="quality"><option value="rich">Rich · full viewport</option><option value="light">Light · lower resolution</option></select></label>
                 <label>Sensitivity <output id="sensitivity-value">1.0</output><input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label>Mouse look<select id="mouse-mode"><option value="captured">Captured</option><option value="drag">Drag</option></select></label><label>Key turn speed <output id="key-turn-value">1.0</output><input id="key-turn" type="range" min="0.5" max="2" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
-                <div class="settings"><label>Volume <output id="volume-value">55%</output><input id="volume" type="range" min="0" max="1" step="0.05" value="0.55" /></label><label class="check"><input id="muted" type="checkbox" /> Mute</label><label class="check"><input id="subtitles" type="checkbox" checked /> Opening captions</label></div>
+                <div class="settings"><label>Volume <output id="volume-value">55%</output><input id="volume" type="range" min="0" max="1" step="0.05" value="0.55" /></label><label class="check"><input id="muted" type="checkbox" /> Mute</label><label class="check"><input id="subtitles" type="checkbox" checked /> Opening captions</label><label class="check"><input id="hud-objective-toggle" type="checkbox" checked /> Objective on the HUD</label></div>
                 <div class="settings save-safety"><span>Autosave every 30 s of play · previous valid save kept</span><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></div>
               </div>
             </div>
@@ -218,6 +219,12 @@ export class GameView {
           }),
         options,
       );
+    const objectiveToggle = this.get<HTMLInputElement>("hud-objective-toggle");
+    objectiveToggle.checked = this.showObjective;
+    objectiveToggle.addEventListener("change", () => {
+      this.showObjective = objectiveToggle.checked;
+      try { localStorage.setItem(OBJECTIVE_KEY, this.showObjective ? "on" : "off"); } catch {}
+    }, options);
     this.get("opening-subtitles").addEventListener("change", () => actions.audio({
       volume: this.get<HTMLInputElement>("volume").valueAsNumber,
       muted: this.get<HTMLInputElement>("muted").checked,
@@ -427,8 +434,8 @@ export class GameView {
     if (objective.textContent !== line) objective.textContent = line;
     objective.hidden = !line;
   }
-  /** HUD objective line: on by default; the journal always shows it. */
-  showObjective = true;
+  /** HUD objective line: on by default, a setting kept on this device; the journal always shows it. */
+  showObjective = (() => { try { return localStorage.getItem(OBJECTIVE_KEY) !== "off"; } catch { return true; } })();
   showJournalTab(id: JournalTabId): void { this.panels.showJournalTab(id); }
   /** A one-line feedback note: Enter saves, Esc or blur cancels. */
   noteEntry(done: (text: string | null) => void): void {

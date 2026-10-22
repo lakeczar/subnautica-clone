@@ -189,7 +189,9 @@ function harvest(d: Driver, id: string, want: number, options: { sort?: boolean 
     const node = d.state.world.resources.find((n) => n.id === id)!;
     const hold = d.occupied()!.cargoId;
     if ((node.stock <= 0 && !(options.sort && node.reserve > 0)) || d.freeCu(hold) < ITEMS[def.item].cu * def.bundle) break;
-    sortie(d, def.position, id, () => { got += gather(d, id as SourceId, want - got, options); });
+    // Never more than the craft's hold takes when the diver ferries it back.
+    const room = Math.floor(d.freeCu(hold) / ITEMS[def.item].cu);
+    sortie(d, def.position, id, () => { got += gather(d, id as SourceId, Math.min(want - got, room), options); });
   }
 }
 /** Restore or fabricate at an S9 site: park, swim to S2's work pose, open the craft
@@ -250,6 +252,7 @@ function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
  * east-ledge route end and a hold over the 450 m north flank. */
 const RIFT_WEST_RETURN = { x: -97.6, y: -280, z: -747.7 } as const;
 const DIVIDE_EAST_LEDGE = { x: 749, y: -368, z: -1191 } as const;
+const DIVIDE_LEE = { x: 560, y: -390, z: -1120 } as const;
 const DIVIDE_FLANK_PARK = { x: 958, y: -438, z: -1128 } as const;
 
 /** Rift: restore the materials station, read its ledger, take ceramic and core;
@@ -265,8 +268,9 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
     ...(d.vehicle("creel") ? [] : [{ key: "owned:creel", text: "an owned Creel" }]),
   ],
   play(d, o) {
+    // The independent route stages the station's restoration in the Creel hold with the rest.
     if (strategy === "creel") stageForwardBase(d);
-    carryFromWorkshop(d, RECIPES[("restore_rift_station" as RecipeId)].cost as Record<string, number>);
+    else carryFromWorkshop(d, RECIPES[("restore_rift_station" as RecipeId)].cost as Record<string, number>);
     boardCraft(d, "creel");
     fly(d, "creel_out");
     fly(d, "basin_outbound");
@@ -289,9 +293,10 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
       // anchorage charges the Creel and holds the Divide stock: no trip home between.
       for (const recipe of ["suit_450", "creel_450"] as const) siteCraft(d, "rift_station", recipe);
       followS2(d, "route.basin.rift", true);
+      // The Creel holds 5 m above the ledge: the locker hands straight into its hold.
       atForwardBase(d, "take the Divide stock and charge", (id) => {
-        for (const i of [...d.state.inventory.items].filter((x) => x.containerId === `${id}_locker` && x.kind !== "reserve_cell"))
-          d.command({ type: "transfer", itemId: i.id, to: "diver", quantity: i.quantity });
+        const hold = d.vehicle("creel")!.cargoId;
+        for (const [kind, n] of Object.entries(DIVIDE_STOCK) as [ItemKind, number][]) move(d, kind, n, `${id}_locker`, hold);
       });
       return;
     }
@@ -309,16 +314,19 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
  * anchorage ledge where the Rift and Divide routes part. */
 const FORWARD_BASE = { x: 360, y: -245.4, z: -430 } as const;
 const DIVIDE_STOCK = { structural_alloy: 3, silica_glass: 3, conductive_crust: 3 } as const;
+/** Packing a basic outpost spends one alloy on its anchor seals; it waits in the locker. */
+const PACK_SEAL = { structural_alloy: 1 } as const;
 const forwardBase = (d: Driver): string | null => d.state.systems.outposts.find((o) => Math.hypot(o.position.x - FORWARD_BASE.x, o.position.z - FORWARD_BASE.z) < 6)?.id ?? null;
-/** At the workshop: the kit, two charged cells, the Divide dock's stock and the
- * 450 m refits' common materials go into the moored Creel's hold. */
+/** At the workshop: the kit, two charged cells, the Divide dock's stock, the Rift
+ * station's restoration and the 450 m refits' common materials go into the moored
+ * Creel's hold. */
 function stageForwardBase(d: Driver): void {
   const creel = d.vehicle("creel")!;
   if (d.count("reserve_cell", [creel.cargoId, "pod_locker", "diver"]) < 2) make(d, "reserve_cells", "pod", ISLES);
   enter(d, "pod");
   unload(d, "pod_locker", "diver", ["outpost_kit_basic", "reserve_cell"]);
-  const refits: Record<string, number> = { ...DIVIDE_STOCK };
-  for (const r of ["suit_450", "creel_450"] as const)
+  const refits: Record<string, number> = { ...DIVIDE_STOCK, structural_alloy: DIVIDE_STOCK.structural_alloy + PACK_SEAL.structural_alloy };
+  for (const r of ["restore_rift_station", "suit_450", "creel_450"] as const)
     for (const [k, n] of Object.entries(RECIPES[r].cost as Record<string, number>))
       if (k !== "pressure_ceramic" && k !== "thermal_core") refits[k] = (refits[k] ?? 0) + n;
   stockUp(d, refits);
@@ -343,12 +351,14 @@ function atForwardBase(d: Driver, label: string, work: (outpostId: string) => vo
 }
 function deployForwardBase(d: Driver): void {
   sortie(d, FORWARD_BASE, "deploy the forward outpost", () => {
-    loadDiver(d, { outpost_kit_basic: 1, reserve_cell: 2, ...DIVIDE_STOCK });
+    loadDiver(d, { outpost_kit_basic: 1 });
     travel(d, route("to the anchorage ledge", "diver", "local swim, played", [{ ...FORWARD_BASE, y: FORWARD_BASE.y + 1, tolerance: 1 }]));
     const kit = d.state.inventory.items.find((i) => i.kind === "outpost_kit_basic" && i.containerId === "diver")!;
     d.command({ type: "deploy-outpost", itemId: kit.id, name: "Anchorage" });
-    for (const i of [...d.state.inventory.items].filter((x) => x.containerId === "diver" && (x.kind === "reserve_cell" || x.kind in DIVIDE_STOCK)))
-      d.command({ type: "transfer", itemId: i.id, to: `${kit.id}_locker`, quantity: i.quantity });
+    // The Creel holds 5 m above: its hold hands the cells and the Divide stock to the locker.
+    const hold = d.vehicle("creel")!.cargoId;
+    for (const [kind, n] of [["reserve_cell", 2], ...Object.entries({ ...DIVIDE_STOCK, structural_alloy: DIVIDE_STOCK.structural_alloy + PACK_SEAL.structural_alloy })] as [ItemKind, number][])
+      if (move(d, kind, n, hold, `${kit.id}_locker`) < n) throw new Blocked(`The Creel hold lacks ${kind} for the forward outpost`, where(d.state));
   });
 }
 
@@ -381,15 +391,20 @@ const divide: Phase = {
     followS2(d, "route.divide.lattice_west", true);
     followS2(d, "route.divide.lattice_east");
     harvest(d, "divide_lattice_ledge_east", 8);
-    // C4 (CB): the ledges hold one rinsed crystal each; workable lattice lines the
-    // 450 m east flank, north of the brine field.
-    pilotTo(d, "over the north flank", DIVIDE_FLANK_PARK);
-    harvest(d, "divide_lattice_flank_north", 12);
-    pilotTo(d, "back to the east ledge", DIVIDE_EAST_LEDGE);
     followS2(d, "route.divide.lattice_east", true);
     story(d, "C07", o);
     story(d, "ren_access_log", o);
+    // The ledges' two crystals restore the dock first: its stock leaves the hold and
+    // the dock services the Creel before the flank.
     siteCraft(d, "divide_dock", "restore_divide_stop");
+    // C4 (CB): the ledges hold one rinsed crystal each; workable lattice lines the
+    // 450 m east flank, north of the brine field. From the dock, back to the lee first.
+    pilotTo(d, "back to the lee", DIVIDE_LEE);
+    followS2(d, "route.divide.lattice_east");
+    pilotTo(d, "over the north flank", DIVIDE_FLANK_PARK);
+    harvest(d, "divide_lattice_flank_north", 14, { sort: true });
+    pilotTo(d, "back to the east ledge", DIVIDE_EAST_LEDGE);
+    followS2(d, "route.divide.lattice_east", true);
     followS2(d, "route.basin.divide", true);
     // Packed on the way home: the kit keeps its identity for the next frontier.
     if (forwardBase(d)) atForwardBase(d, "pack it", (id) => { d.command({ type: "pack-outpost", outpostId: id, to: "diver" }); });

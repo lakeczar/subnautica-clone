@@ -19,7 +19,8 @@ test("placed hosts: build only near the camera, release far away, hide spent sto
     const layer = createPlacedHosts(scene, cel), s = createGame(), built = (): string[] => [...layer.built];
     completeOpening(s);
     layer.update(s, { x: 0, y: 0, z: 0 });
-    assert.deepEqual(built(), [], "nothing at the pod");
+    // C4: SYS-2's seed patches by the pod and the island are its only placed hosts.
+    assert.deepEqual(built().sort(), ["island_salve_fronds", "reef_ribbon_cuttings", "reef_staple_cuttings"], "only the seed patches at the pod");
     const lattice = SOURCES.divide_lattice_ledge_west.position;
     layer.update(s, { ...lattice, y: lattice.y + 5 });
     assert.ok(built().includes("divide_lattice_ledge_west"), "the ledge builds as the camera arrives");
