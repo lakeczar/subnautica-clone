@@ -1,5 +1,12 @@
 # CW-1: every authored cave in the game, streamed without pauses (handoff)
 
+## Paused for VM restart (2026-10-22 22:10 UTC)
+- **Done (committed):** all 55 caves registered (CA-1, CA-2, CA-3); per-cluster streamed collision with the vertical test and the exterior ground read; edge rock for CA-3; cave bake (collision pack + light fields) with `--verify`; predictive prefetch, sliced construction, behind-first eviction, far layer; admission (kit holds, LC biomes, LC-07 refuge) wired in `app.ts`; cave-current masking and CA-3 hazard sampling; three rescue tethers rerouted; lights scan/placement sliced; retention trims spread. Fast tier 1,266/1,266.
+- **Checks passed this round:** `bake-terrain --verify` (220 chunks + collision pack + 55 light fields); heavy `cw1-caves`, `cw1-bake` (every cave chunk: borders at all LOD pairs, shells, scatter, codec), `cave-light`, `large-cave`; CA-1 `game` and `shell`.
+- **Traversal (new plan, 27.2 km, 8 segments):** segment 0 done: 10 caves, 9 reached, 26,239 frames, p99 16.8 ms, 0 holds, 0 synchronous cave builds; 47 gaps over 34 ms, of which 1 attributed to streaming (a 15 ms chunk build step, `maxStepMs` 11.7). Segment 1 was stopped mid-run for the restart.
+- **In flight when stopped:** the traversal chain (`/work/tmp/cw1/run-all.sh`, segments 1–7) and the checks chain (`/work/tmp/cw1/checks.sh`: CA-1 retreat/adverse, CA-2, CA-3, the rest of the heavy tier, the playthrough). Both killed; no browser or server left.
+- **Next step on resume:** `npm ci` if needed, `npx tsc -p tsconfig.test.json && npx tsc -p scripts/playthrough/tsconfig.json`, `npm run build` (bake is cached), then run the two chains again, editing `run-all.sh` to start at segment 1 and `checks.sh` to start at `ca1b`. Saves and plan are in `/work/tmp/cw1/saves/` (regenerate with `docs/build/streams/cw1/derive.mjs` if lost). Then fill *Traversal*, *Checks* and *Known limits* below, look at chunk build steps over 8 ms (the one streaming long frame left), and commit.
+
 Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`, root merged at `c649b11` (CA-3, CB-2, POI-1). Code: **TBD**.
 
 ## Outcome
