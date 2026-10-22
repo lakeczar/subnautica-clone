@@ -362,3 +362,15 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
   - the rule becomes "admitted through the queue", with performance numbers from exclusive mode only;
   - VM: ask for 8 vCPU and keep 16 GiB.
 - **SCHED-1** (Opus, `t3/sched-1-heavy-queue`) is building it. Next after it: the `stepGame` state-copy speed-up.
+
+### 2026-10-22 ~22:10Z — paused for the VM CPU upgrade (6 → 8 vCPU)
+All builders are paused at a pushed checkpoint, with no jobs running and the lock free. Resume order after the restart:
+1. **Coordinator:** check `nproc` is 8, then run `task_status` on every task below.
+2. **SCHED-1** `t3/sched-1-heavy-queue` @ `12ff032`: resume, and check that tokens come out at 6. Then Sol review, then switch the fleet over.
+3. **CW-1** `t3/enable-authored-cave-streaming` @ `f55254f`: resume. The completion wake was disposed, so reconcile by hand.
+4. **CR-1** `t3/natural-threat-windows` @ `2ab8db7`: root merged, 1,287 fast tests pass. Resume to finish the economy scripts (the m1 roster pin may need the crown recipes) and the split playthrough, then Sol R1.
+5. **TT-1** `feat/tt-1-test-speed` @ `34c08a0`: resume the R1 fixes (four P2s plus one P3), then a fresh Sol R2.
+Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the four cave biomes, UX-1, lost sites, the atmosphere pass, then the owner's playtest.
+
+### 2026-10-22 22:20Z — VM back with 8 vCPU; builders resumed
+`nproc` is 8, about 15 GiB is visible, and the 3090 is OK. SCHED-1, CW-1, CR-1 and TT-1 are resumed through new tracked thread-send tasks, so their wakes work again. The fifth slot is held: OP-1 waits for CW-1 (shared island and cave streaming), and the `stepGame` speed-up waits for CR-1 and SCHED-1 (`step.ts` overlap).
