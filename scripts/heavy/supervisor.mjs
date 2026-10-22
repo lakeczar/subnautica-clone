@@ -215,8 +215,10 @@ const result = {
 };
 // The scope is empty: release the worktree's .test-build before anyone can see the result.
 if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: true });
-writeJsonAtomic(join(dir, "exit.json"), result);
+// Result, ledger and release in one transaction. If this process dies before
+// it, reconcile finishes the ticket from the wrapper's stats.
 transaction(cfg, (state) => {
+  writeJsonAtomic(join(dir, "exit.json"), result);
   delete state.tickets[id];
   ledger(cfg, { event: "job", ...result });
   return { changed: true };

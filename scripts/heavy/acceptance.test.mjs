@@ -11,7 +11,7 @@
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { heavyJobGuard } from "./build-guard.mjs";
@@ -425,7 +425,8 @@ test("13: nested calls run inline; a nested GPU call from a CPU job and a forged
   assert.match(out, /gpu-rc=2/);
   assert.match(out, /has no GPU lease/);
   assert.match(out, /excl-rc=2/);
-  assert.equal(Object.keys(state(c).tickets).length, 0, "the nested calls queued nothing");
+  await until("ticket released", () => Object.keys(state(c).tickets).length === 0); // the nested calls queued nothing
+  assert.equal(readdirSync(join(c.sched, "jobs")).length, 1, "the nested calls created no tickets");
   const forged = hc(c, ["--", "true"], { env: { SILTWAKE_JOB_TICKET: id } });
   assert.equal(forged.code, 2);
   assert.match(forged.err, /not inside that ticket's scope/);
