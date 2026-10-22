@@ -1,9 +1,10 @@
 import type { RegionId } from "../registry.js";
 import type { Aabb, Vec3 } from "../../world/types.js";
-import { sweepHull } from "./access.js";
+import { parkPose, sweepHull, workPose } from "./access.js";
 import { dishArt, dishScatterKeep, type DishArt } from "./dishGeometry.js";
+import { pieceSolids } from "../vistaKit.js";
 import { hash2 } from "./noise.js";
-import { ROUTES, type CraftProfileId } from "./passages.js";
+import { CRAFT_PROFILES, ROUTES, type CraftProfileId } from "./passages.js";
 import { RESCUE_PLANS } from "./rescue.js";
 import { SITES } from "./sites.js";
 import { MERIDIAN_CENTRE } from "./terrain.js";
@@ -57,8 +58,9 @@ const block = (kind: StructureKind): Make => (id, region, x, z, p, site, base) =
 
 /** A fallen survey dish: art and collision both from `dishGeometry.ts`
  * (rim, frame and hub within 0.35 m, the bowl's panels within 1 m, its
- * hollow open). Where a passage or rescue tether runs through it, that part
- * is missing (0.5 m clear of the craft's swept hull). Scatter keeps to the
+ * hollow open). Where a passage or rescue tether runs through it, or a
+ * site's work or park pose sits in it, that part is missing (0.5 m clear of
+ * the craft's swept hull, 0.3 m of the actor at a pose). Scatter keeps to the
  * rim footings it always kept to. */
 function dish(id: string, x: number, z: number, radius: number, tilt: number, facing: number, site: string): StructureDef {
   const base = footprintBase(x, z, radius * 0.7, radius * 0.7) - 0.6, p = { id, x, z, base, radius, tilt, facing };
@@ -73,9 +75,26 @@ function dish(id: string, x: number, z: number, radius: number, tilt: number, fa
   for (const r of ROUTES) if (r.role !== "walk") add(r.path, r.profile);
   for (const plan of RESCUE_PLANS) for (const branch of plan.tethers) add(branch, "medium");
   const pad = (k: Aabb): Aabb => ({ min: { x: k.min.x - 0.5, y: k.min.y - 0.5, z: k.min.z - 0.5 }, max: { x: k.max.x + 0.5, y: k.max.y + 0.5, z: k.max.z + 0.5 } });
-  const art = dishArt(p, k => lanes.some(l => sweepHull(l.a, l.b, l.profile, pad(k)) !== null));
+  // Sites' work poses (a diver) and park poses (a medium craft) in reach:
+  // the actor's own box there, and 0.3 m. Their poses sit in the bowls'
+  // hollows, just over the panels, so a wider margin would hole the bowls.
+  const poses: Aabb[] = SITES.filter(q => Math.hypot(q.at.x - x, q.at.z - z) < reach).flatMap(q => {
+    const w = workPose(q, worldFloor), k = parkPose(q, worldFloor), d = CRAFT_PROFILES.diver, m = CRAFT_PROFILES.medium, e = 0.3;
+    return [box(w.x - d.radius - e, w.y + d.bottom - e, w.z - d.radius - e, w.x + d.radius + e, w.y + d.height + e, w.z + d.radius + e),
+      // A craft parks by rising, crossing and coming straight down (as the
+      // playthrough's pilot does, up to 50 m): its column stays open too.
+      box(k.x - m.radius - e, k.y + m.bottom - e, k.z - m.radius - e, k.x + m.radius + e, k.y + m.height + 50, k.z + m.radius + e)];
+  });
+  const overlaps = (a: Aabb, b: Aabb): boolean => a.min.x < b.max.x && a.max.x > b.min.x && a.min.y < b.max.y && a.max.y > b.min.y && a.min.z < b.max.z && a.max.z > b.min.z;
+  const art = dishArt(p, k => poses.some(q => overlaps(k, q)) || lanes.some(l => sweepHull(l.a, l.b, l.profile, pad(k)) !== null));
   return { id, region: "silt_basin", kind: "dish", x, z, base, p: { radius, tilt, facing }, solids: [...art.solids.frame, ...art.solids.bowl], site,
-    dish: art, keep: dishScatterKeep(p, (cx, cz) => footprintBase(cx, cz, 1, 1)) };
+    dish: art, keep: [...dishScatterKeep(p, (cx, cz) => footprintBase(cx, cz, 1, 1)),
+      // The feed's pieces (fallen in the silt beside the dish), one box each.
+      ...art.pieces.slice(art.rimKept.filter(Boolean).length).map(piece => {
+        const b = pieceSolids(piece);
+        return box(Math.min(...b.map(k => k.min.x)), Math.min(...b.map(k => k.min.y)), Math.min(...b.map(k => k.min.z)),
+          Math.max(...b.map(k => k.max.x)), Math.max(...b.map(k => k.max.y)), Math.max(...b.map(k => k.max.z)));
+      })] };
 }
 
 /** A straight facade along `yaw` built from short axis-aligned pieces with a
