@@ -1,4 +1,5 @@
 import { HUNTER_GEOMETRY as H, HUNTER_PART_ENVELOPES } from "../content/encounterGeometry.js";
+import { HUNTER_ENCOUNTER as E } from "../content/ecology/encounter.js";
 import { THREAT_HOME } from "../content/registry.js";
 import type { HullId } from "../content/registry.js";
 import type { GameState, Vec3, WorldPose, WorldQueries } from "./types.js";
@@ -10,6 +11,7 @@ import { boundDistance, carrierShell, escapePlane, escapePlaneGap, meshOccludes,
 import type { Triangle, ContactMesh, OrientedPiece, Separation } from "./hunterQueries.js";
 import type { ContactBox } from "../content/encounterGeometry.js";
 import { localToWorld } from "./carrier.js";
+import { eyeHeight } from "./state.js";
 export { encounterRotation } from "./hunterQueries.js";
 
 interface ActorQuery {
@@ -57,6 +59,18 @@ function actorSurface(a: ActorQuery, position: Vec3): { point: Vec3; outward: Ve
   const world=add(a.pose.position,encounterRotation(closestOnMesh(local,a.mesh),a.pose.yaw,a.pitch));
   return {point:world,outward:outward(position,world)};
 }
+const PASS_LEAD=.6;
+/** ENC-1 silhouette pass: a point weaving across the actor's bow, ahead of its
+ * view heading, at `at` seconds into the investigation. Derived from saved
+ * state only (actor pose and the threat's mode timer). */
+export function hunterPassPoint(s: GameState, at: number = s.world.threat.modeSeconds): Vec3 {
+  const P=E.pass, p=s.player.pose.position, yaw=s.player.pose.yaw+Math.sin(at*2*Math.PI/P.period)*P.sweep;
+  // Along the view's pitch too: a diving craft sees the water below its bow.
+  // A moving actor sees the pass farther along its path, where it is heading.
+  const v=s.player.velocity, ahead=P.ahead+Math.min(P.lead*Math.hypot(v.x,v.y,v.z),P.ahead);
+  const pitch=Math.max(-1,Math.min(1,s.player.pose.pitch)), level=Math.cos(pitch)*ahead;
+  return {x:p.x+Math.sin(yaw)*level,y:p.y+eyeHeight(s)+Math.sin(pitch)*ahead+P.rise,z:p.z-Math.cos(yaw)*level};
+}
 export function hunterPhase(s: GameState): { seconds: number; withdrawing: boolean } {
   const seconds=((s.world.threat.modeSeconds%H.cycleSeconds)+H.cycleSeconds)%H.cycleSeconds;
   return {seconds,withdrawing:s.world.threat.mode==="pursue"&&seconds>=H.contactSeconds};
@@ -73,7 +87,10 @@ export function hunterPose(s: GameState, position: Vec3 = s.world.threat.positio
 }
 function poseAt(s: GameState, position: Vec3, surface: ReturnType<typeof actorSurface>): ReturnType<typeof hunterPose> {
   const t=s.world.threat, active=["warn","investigate","pursue"].includes(t.mode);
-  const target=t.distraction ?? (t.mode==="disengage"||t.mode==="idle"?THREAT_HOME:surface.point);
+  // ENC-1: the investigating animal swims its pass in profile, toward where the
+  // pass leads next, rather than strafing nose-on toward the actor.
+  const target=t.distraction ?? (t.mode==="disengage"||t.mode==="idle"?THREAT_HOME
+    :t.mode==="investigate"?hunterPassPoint(s,t.modeSeconds+PASS_LEAD):surface.point);
   const n=outward(position,target), roll=Math.sin(s.tick/60*1.5)*.045;
   const rolledMouth=encounterRotation(vec(H.mouth),0,0,roll);
   // Aim the rolled mouth, rather than its unrolled -Z axis. This avoids a
@@ -238,13 +255,23 @@ export function moveHunter(s: GameState, world: WorldQueries): {
   };
   const penetratesAt=(endpoint:typeof endpoints[number]):boolean=>endpoint.penetrating??=penetrates(a,endpoint.position,endpoint.pose);
   let target:Vec3=t.distraction??THREAT_HOME, speed=2;
-  if(!t.distraction&&(t.mode==="investigate"||t.mode==="pursue")) {
-    const gap=H.mouthGap+(t.mode==="investigate"?H.investigateGap:phase.withdrawing?H.withdrawalGap:0);
+  if(!t.distraction&&t.mode==="pursue") {
+    const gap=H.mouthGap+(phase.withdrawing?H.withdrawalGap:0);
     const offset=encounterRotation(vec(H.mouth),pose.yaw,0,pose.roll);
     target=sub(add(plan.point,scale(plan.outward,gap)),offset);
-    speed=t.mode==="pursue"?H.approachSpeed:H.investigateSpeed;
+    speed=H.approachSpeed;
+  } else if(!t.distraction&&t.mode==="investigate") {
+    // ENC-1 silhouette pass: close fast, then weave across the bow at a pace
+    // the eye can follow, keeping up with a moving actor.
+    target=hunterPassPoint(s);
+    const v=s.player.velocity;
+    speed=Math.min(E.pass.closeSpeed,E.pass.passSpeed+Math.hypot(v.x,v.y,v.z)+Math.max(0,length(sub(target,start))-6)*.5);
+  } else if(!t.distraction&&t.mode==="warn") {
+    // It comes to look: toward the noise, stopping short of the pass.
+    target=a.pose.position;
+    speed=length(sub(target,start))>E.warn.stopAt?E.warn.speed:0;
   }
-  if(t.mode==="idle"||t.mode==="warn")speed=0;
+  if(t.mode==="idle")speed=0;
   const sweep=(delta:Vec3):Vec3=>moveHull(world,start,delta,H.worldEnvelope,undefined,undefined,{separateBoxOverlaps:true}).position;
   let position={...start}, blocked=false;
   if(yielding||overlaps.length) {

@@ -12,6 +12,10 @@ export const LAMP_OUTPUT: Readonly<Record<HullId | "diver", number>> = {
 /** Sorting or harvesting disturbs a feeding structure; a scan pulse briefly more. */
 export const DISTURBANCE = { action: 0.7, scan: 0.9 } as const;
 
+/** Unit view direction in the sim's yaw convention: forward is (sin yaw, 0, -cos yaw). */
+export const viewFacing = (yaw: number, pitch: number): { x: number; y: number; z: number } =>
+  ({ x: Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch) });
+
 /** What the player emits this step, from the composed game state. `loudness`
  * is step.ts's value; `lamp` is the proposed persisted lamp switch. */
 export function stimulusFrom(s: GameState, loudness: number, options: { lamp: boolean; scanned?: boolean }): Stimulus {
@@ -27,5 +31,6 @@ export function stimulusFrom(s: GameState, loudness: number, options: { lamp: bo
     hull,
     radius: hull ? HULL_COLLIDERS[hull].radius : 0.4,
     inRefuge: exposure(s).refuge || s.player.mode === "interior",
+    facing: viewFacing(s.player.pose.yaw, s.player.pose.pitch),
   };
 }

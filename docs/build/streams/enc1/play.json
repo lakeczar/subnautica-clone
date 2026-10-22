@@ -1,0 +1,112 @@
+{
+  "commit": "5c76abb",
+  "save": "/work/tmp/enc1/saves/canopy-head.json",
+  "runs": {
+    "loud": {
+      "stages": [
+        {
+          "t": 48.3,
+          "stage": "warn",
+          "hull": 100,
+          "edge": "",
+          "call": "Call bearing · ahead, below"
+        },
+        {
+          "t": 51.3,
+          "stage": "investigate",
+          "hull": 100,
+          "edge": "warning",
+          "call": ""
+        },
+        {
+          "t": 55.4,
+          "stage": "pursue",
+          "hull": 100,
+          "edge": "",
+          "call": "Call bearing · below"
+        },
+        {
+          "t": 60.7,
+          "stage": "none",
+          "hull": 84,
+          "edge": "",
+          "call": ""
+        }
+      ],
+      "captions": [
+        " | | | ",
+        " | Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). Your reserve cells are in the pod locker; carry one in your hold or the craft's for the G decoy pulse. | | ",
+        " | | | ",
+        "SOUND HUNTER · paired calls · it hears your engine · Z quiet · L lamp off · back away | | | ",
+        "SOUND HUNTER · passing ahead · Z quiet · L lamp off · back away | | | ",
+        "SOUND HUNTER · pursuit · each bite harder while loud · Z quiet + L dark · rib cover / retreat | | | ",
+        "SOUND HUNTER · pursuit · each bite harder while loud · Z quiet + L dark · rib cover / retreat [Bite · taking damage] | A warning bump. The next bites come harder while it can hear you. Z quiet, lamp off (L), or back away. | | Bitten · hull −6.0%",
+        "SOUND HUNTER · pursuit · each bite harder while loud · Z quiet + L dark · rib cover / retreat [Bite · taking damage] | A warning bump. The next bites come harder while it can hear you. Z quiet, lamp off (L), or back away. | | Bitten · hull −16.0%",
+        "SOUND HUNTER · pursuit · each bite harder while loud · Z quiet + L dark · rib cover / retreat [Bite · taking damage] | A warning bump. The next bites come harder while it can hear you. Z quiet, lamp off (L), or back away. | Lamp off · running dark. Light hunters see you less; you see less. | Bitten · hull −16.0%",
+        "[Hunter calls fade] | Calls fading | Lamp off · running dark. Light hunters see you less; you see less. | Bitten · hull −16.0%"
+      ],
+      "maxStage": 3,
+      "bittenAt": {
+        "hull": 94,
+        "pos": {
+          "x": 122.524,
+          "y": -85.36999999999999,
+          "z": -107.647
+        },
+        "banner": "SOUND HUNTER · pursuit · each bite harder while loud · Z quiet + L dark · rib cover / retreat"
+      },
+      "afterRamp": 84,
+      "disengaged": {
+        "hull": 84,
+        "stage": "none",
+        "banner": ""
+      }
+    },
+    "quiet": {
+      "stages": [],
+      "captions": [
+        " | | | ",
+        " | Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). Your reserve cells are in the pod locker; carry one in your hold or the craft's for the G decoy pulse. | | ",
+        " | | | "
+      ],
+      "maxStage": 0,
+      "end": {
+        "hull": 100,
+        "pos": {
+          "x": 124.92,
+          "y": -115.256,
+          "z": -119.553
+        },
+        "banner": ""
+      }
+    }
+  },
+  "shots": [
+    "/work/tmp/enc1/final2/01-loud-route-head.png",
+    "/work/tmp/enc1/final2/02-loud-warn-paired-calls.png",
+    "/work/tmp/enc1/final2/03-loud-edge-cue-warning.png",
+    "/work/tmp/enc1/final2/04-loud-edge-cue-warning.png",
+    "/work/tmp/enc1/final2/05-loud-warn-paired-calls.png",
+    "/work/tmp/enc1/final2/06-loud-edge-cue-warning.png",
+    "/work/tmp/enc1/final2/07-loud-edge-cue-warning.png",
+    "/work/tmp/enc1/final2/08-loud-investigate-pass.png",
+    "/work/tmp/enc1/final2/09-loud-investigate-pass.png",
+    "/work/tmp/enc1/final2/10-loud-investigate-pass.png",
+    "/work/tmp/enc1/final2/11-loud-investigate-pass.png",
+    "/work/tmp/enc1/final2/12-loud-investigate-pass.png",
+    "/work/tmp/enc1/final2/13-loud-investigate-pass.png",
+    "/work/tmp/enc1/final2/14-loud-investigate-pass.png",
+    "/work/tmp/enc1/final2/15-loud-investigate-pass.png",
+    "/work/tmp/enc1/final2/16-loud-investigate-pass.png",
+    "/work/tmp/enc1/final2/17-loud-pursuit.png",
+    "/work/tmp/enc1/final2/18-loud-pursuit-edge-attack,attack.png",
+    "/work/tmp/enc1/final2/19-loud-pursuit-edge-attack.png",
+    "/work/tmp/enc1/final2/20-loud-pursuit-edge-attack.png",
+    "/work/tmp/enc1/final2/21-loud-pursuit-edge-attack.png",
+    "/work/tmp/enc1/final2/22-loud-pursuit-edge-attack,attack.png",
+    "/work/tmp/enc1/final2/23-loud-disengaged-quiet-dark.png",
+    "/work/tmp/enc1/final2/24-quiet-arrived-lab-parking.png"
+  ],
+  "errors": [],
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)"
+}

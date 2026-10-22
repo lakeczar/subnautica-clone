@@ -1,4 +1,5 @@
 import test from "node:test";
+import { HUNTER_GEOMETRY } from "../src/content/encounterGeometry.js";
 import assert from "node:assert/strict";
 import { createGame, makeVehicle } from "../src/sim/state.js";
 import { completeOpening } from "../src/sim/progression.js";
@@ -8,7 +9,7 @@ import { disableVehicle } from "../src/sim/recovery.js";
 import { stepGame } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameEvent, GameState } from "../src/sim/types.js";
-import { hunterStandOff } from "../src/sim/hunter.js";
+import { hunterPhase, hunterStandOff } from "../src/sim/hunter.js";
 const world = createWorldQueries();
 type Bite = Extract<GameEvent, { type: "threat-damage" }>;
 const bites = (events: GameEvent[]): Bite[] => events.filter((e): e is Bite => e.type === "threat-damage");
@@ -30,21 +31,34 @@ function fixture(pilot: boolean, health = 100): GameState {
 }
 const near = (a: number, b: number): void => assert.ok(Math.abs(a - b) < 1e-10, `${a} != ${b}`);
 
-test("a single non-sound-phase hull bite emits the frozen transient identity and actual raw health math", () => {
+test("a first hull bite is a warning bump: one transient event with its origin, a positional sound and knockback", () => {
   const s = fixture(true), before = structuredClone(s), result = stepGame(s, [], world);
   assert.equal(result.state.tick, 17);
   const hits = bites(result.events); assert.equal(hits.length, 1);
-  assert.deepEqual(hits[0], { type: "threat-damage", source: "hunter", target: { kind: "vehicle", vehicleId: "diagnostic_dart" },
-    loss: 100 - (100 - 12 / 60), healthAfter: 100 - 12 / 60 });
-  assert.equal(result.state.fleet.vehicles[0]!.health, 100 - 12 / 60);
-  assert.ok(!result.events.some(e => e.type === "sound" && e.cue === "damage"));
+  assert.deepEqual(hits[0], { type: "threat-damage", source: "hunter", origin: result.state.world.threat.position,
+    target: { kind: "vehicle", vehicleId: "diagnostic_dart" }, loss: 6, healthAfter: 94 });
+  assert.notEqual(hits[0]!.origin, result.state.world.threat.position, "a copied origin");
+  assert.equal(result.state.fleet.vehicles[0]!.health, 94);
+  const sounds = result.events.filter(e => e.type === "sound" && e.cue === "damage");
+  assert.deepEqual(sounds, [{ type: "sound", cue: "damage", origin: result.state.world.threat.position }]);
   assert.ok(!result.events.some(e => e.type === "impact")); assert.deepEqual(s, before);
-  assert.deepEqual(Object.keys(hits[0]!).sort(), ["healthAfter", "loss", "source", "target", "type"]);
+  assert.deepEqual(Object.keys(hits[0]!).sort(), ["healthAfter", "loss", "origin", "source", "target", "type"]);
   assert.doesNotMatch(JSON.stringify(result.state), /threat-damage|healthAfter|biteLoss|lastBite/);
+  // The bump pushes the craft away from the mouth (a swept displacement that
+  // leaves velocity alone, R1 ENC-1-01) and starts this cycle's withdrawal.
+  const v = result.state.fleet.vehicles[0]!, t = result.state.world.threat.position, was = s.fleet.vehicles[0]!;
+  assert.ok((v.pose.position.x - was.pose.position.x) * (was.pose.position.x - t.x) + (v.pose.position.z - was.pose.position.z) * (was.pose.position.z - t.z) > 0);
+  assert.ok(Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) < 1e-6, "the push is not propulsion");
+  assert.equal(hunterPhase(result.state).withdrawing, true);
+  assert.ok(result.events.some(e => e.type === "notice" && /warning bump/i.test(e.message)));
 });
 
-test("0.1 hull clamp emits only available health before disable; a disabled zero hull emits no loss", () => {
-  const result = stepGame(fixture(true, .1), [], world), hit = bites(result.events)[0]!;
+test("the warning bump never disables; a ramped bite emits only available health before disable; a zero hull emits no loss", () => {
+  const bump = stepGame(fixture(true, .1), [], world);
+  assert.equal(bites(bump.events).length, 0); assert.equal(bump.state.fleet.vehicles[0]!.health, .1);
+  assert.equal(bump.state.fleet.vehicles[0]!.disabled, false);
+  const ramped = fixture(true, .1); ramped.world.threat.modeSeconds = HUNTER_GEOMETRY.cycleSeconds;
+  const result = stepGame(ramped, [], world), hit = bites(result.events)[0]!;
   assert.equal(hit.loss, .1); assert.equal(hit.healthAfter, 0);
   assert.equal(result.state.fleet.vehicles[0]!.disabled, true);
   const damageIndex = result.events.findIndex(e => e.type === "threat-damage"),
@@ -54,18 +68,19 @@ test("0.1 hull clamp emits only available health before disable; a disabled zero
   const zero = stepGame(fixture(true, 0), [], world); assert.equal(bites(zero.events).length, 0);
 });
 
-test("diver raw mutation is unchanged; a lethal 0.1 bite precedes generic incapacity and keeps the bitten identity", () => {
+test("a diver's warning bump leaves health; a lethal ramped bite precedes generic incapacity and keeps the bitten identity", () => {
   const ordinary = stepGame(fixture(false), [], world), hit = bites(ordinary.events)[0]!;
-  near(hit.loss, 10 / 60); assert.equal(hit.healthAfter, 100 - 10 / 60);
-  assert.deepEqual(hit.target, { kind: "diver" }); assert.equal(ordinary.state.player.vitals.health, 100 - 10 / 60);
-  const lethal = stepGame(fixture(false, .1), [], world), last = bites(lethal.events)[0]!;
+  near(hit.loss, 6); assert.equal(hit.healthAfter, 94);
+  assert.deepEqual(hit.target, { kind: "diver" }); assert.equal(ordinary.state.player.vitals.health, 94);
+  const dying = fixture(false, .1); dying.world.threat.modeSeconds = HUNTER_GEOMETRY.cycleSeconds;
+  const lethal = stepGame(dying, [], world), last = bites(lethal.events)[0]!;
   assert.equal(last.loss, .1); assert.equal(last.healthAfter, 0); assert.deepEqual(last.target, { kind: "diver" });
   assert.equal(lethal.state.player.vitals.health, 65); assert.equal(lethal.state.player.mode, "walking");
   assert.equal(lethal.state.metrics.failures, 1);
   assert.ok(lethal.events.findIndex(e => e.type === "threat-damage") < lethal.events.findIndex(e => e.type === "sound" && e.cue === "recovery"));
   assert.ok(lethal.events.some(e => e.type === "notice" && /Exposure or injury/.test(e.message)));
   const zero = fixture(false, 0), events: GameEvent[] = []; updateThreat(zero, 0, events, world);
-  assert.equal(zero.player.vitals.health, -10 / 60, "preserve unclamped diver state mutation"); assert.equal(bites(events).length, 0);
+  assert.equal(zero.player.vitals.health, 0, "the warning bump takes nothing from an empty diver"); assert.equal(bites(events).length, 0);
 });
 
 test("cover, distance and the existing AI transitions suppress bites without changing pursuit rules", () => {
@@ -88,17 +103,16 @@ test("cover, distance and the existing AI transitions suppress bites without cha
   }
 });
 
-test("periodic spatial sound retains its tick cadence and bite totals remain raw over forty steps", () => {
+test("one bite per contact cycle: each has its own positional sound, and forty steps hold a single bump", () => {
   for (const tick of [59, 60, 61, 119, 120, 121]) {
     const s = fixture(true); s.tick = tick; const events: GameEvent[] = []; updateThreat(s, 0, events, world);
     assert.equal(bites(events).length, 1);
     const sounds = events.filter(e => e.type === "sound" && e.cue === "damage");
-    assert.equal(sounds.length, tick % 60 === 0 ? 1 : 0);
-    if (sounds.length) assert.deepEqual(sounds[0], { type: "sound", cue: "damage", origin: s.world.threat.position });
+    assert.deepEqual(sounds, [{ type: "sound", cue: "damage", origin: s.world.threat.position }]);
   }
-  let s = fixture(true), total = 0;
-  for (let i = 0; i < 40; i++) { const r = stepGame(s, [], world); s = r.state; total += bites(r.events).reduce((n, e) => n + e.loss, 0); }
-  near(total, 8); near(s.fleet.vehicles[0]!.health, 92);
+  let s = fixture(true), total = 0, count = 0;
+  for (let i = 0; i < 40; i++) { const r = stepGame(s, [], world); s = r.state; total += bites(r.events).reduce((n, e) => n + e.loss, 0); count += bites(r.events).length; }
+  assert.equal(count, 1); near(total, 6); near(s.fleet.vehicles[0]!.health, 94);
 });
 
 test("collision, personal/hull pressure, oxygen and starvation retain distinct damage with no bite event", () => {
@@ -129,7 +143,7 @@ test("a same-step collision and bite retain separate loss accounting and event o
   const r = stepGame(s, [{ type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], world);
   const collision = r.events.find(e => e.type === "impact"), hit = bites(r.events)[0]!;
   assert.ok(collision?.type === "impact" && collision.hullLoss > 0);
-  assert.equal(bites(r.events).length, 1); near(hit.loss, 12 / 60);
+  assert.equal(bites(r.events).length, 1); near(hit.loss, 6);
   assert.deepEqual(hit.target, { kind: "vehicle", vehicleId: v.id });
   near(hit.healthAfter, 100 - collision.hullLoss - hit.loss);
   near(r.state.fleet.vehicles[0]!.health, hit.healthAfter);

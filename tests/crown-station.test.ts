@@ -46,7 +46,8 @@ test("three stages, in order, each one diver load of mid-game materials, startin
     assert.equal(CROWN_RECIPES[stage.recipe]!.site, "crown_station");
   });
   // Stage one's bill is materials a Creel owner already gathers.
-  assert.deepEqual(Object.keys(CROWN_STAGES[0]!.cost).sort(), Object.keys(RECIPES.creel_base.cost).filter(k => k !== "buoyant_resin").sort());
+  // C4 (CB): the Creel's frame is its frontier material, not part of the crown's bill.
+  assert.deepEqual(Object.keys(CROWN_STAGES[0]!.cost).sort(), Object.keys(RECIPES.creel_base.cost).filter(k => k !== "buoyant_resin" && k !== "tagged_frame").sort());
 });
 
 test("better than the pod once restored: fast bunk, full bench, a dock, large lockers, six sockets, a survey array, the beacon", () => {

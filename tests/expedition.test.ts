@@ -1,5 +1,6 @@
 import { hunterStandOff } from "../src/sim/hunter.js";
 import test from "node:test";
+import { HUNTER_GEOMETRY } from "../src/content/encounterGeometry.js";
 import assert from "node:assert/strict";
 import { EVIDENCE, RECIPES, SOURCES } from "../src/content/registry.js";
 import type { RecipeId, SourceId } from "../src/content/registry.js";
@@ -446,6 +447,8 @@ test("continued hunter damage keeps the original disabled hull saveable without 
   s.world.threat.position = { ...v.pose.position, x: v.pose.position.x + 12 };
   s.world.threat.mode = "pursue";
   s.world.threat.interest = 12;
+  // ENC-1: past the warning bump (which never disables), into the ramp.
+  s.world.threat.modeSeconds = HUNTER_GEOMETRY.cycleSeconds;
   s.world.threat.position = hunterStandOff(s);
   addItem(s, "conductive_crust", 2, v.cargoId);
   const before = roundTrip(s);
@@ -457,7 +460,7 @@ test("continued hunter damage keeps the original disabled hull saveable without 
     s = result.state;
     const hull = s.fleet.vehicles[0]!;
     notices += result.events.filter((e) => e.type === "notice" && e.message.startsWith("Hull disabled.")).length;
-    if (i === 0) assert.ok(hull.health > 0 && hull.health < v.health);
+    if (i === 0) assert.ok(hull.health < v.health);
     if (hull.disabled && !disabledAt) {
       disabledAt = s.tick;
       loss = structuredClone(s.recovery.losses);
@@ -469,14 +472,14 @@ test("continued hunter damage keeps the original disabled hull saveable without 
     roundTrip(s);
   }
   const hull = s.fleet.vehicles[0]!;
-  assert.equal(disabledAt, before.tick + 3);
+  assert.equal(disabledAt, before.tick + 1, "one ramped bite takes the last half point");
   assert.equal(notices, 1);
   assert.equal(s.world.threat.mode, "pursue", "continued pursuit must still exercise hostile damage");
   assert.equal(s.fleet.vehicles.length, 1);
   assert.equal(loss.length, 1);
   assert.deepEqual(loss[0], { vehicleId: v.id, position: v.pose.position, visited: true });
-  assert.ok(Math.abs(hull.charge - (v.charge - 3 * 0.015 / 60)) < 1e-9);
-  assert.ok(Math.abs(hull.emergencyAir - (v.emergencyAir - 117 / 60)) < 1e-9);
+  assert.ok(Math.abs(hull.charge - (v.charge - 0.015 / 60)) < 1e-9);
+  assert.ok(Math.abs(hull.emergencyAir - (v.emergencyAir - 119 / 60)) < 1e-9);
   assert.deepEqual(hull, { ...v, health: 0, disabled: true, charge: hull.charge, emergencyAir: hull.emergencyAir });
   assert.deepEqual(s.inventory, before.inventory);
   assert.deepEqual(s.knowledge, before.knowledge);

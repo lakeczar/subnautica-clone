@@ -16,6 +16,7 @@ import type { GameState, NoticeContext, NoticeOptions, Vec3, WorldQueries } from
 import { FACILITY_SOLIDS } from "../sim/world.js";
 import { escapeHtml, recoveryDisplay } from "./format.js";
 import { EncounterPresentation, type ActionResult, type DamageTarget, type ThreatDamage } from "./notices.js";
+import { hunterBanner, ThreatEdgeView } from "./threatCue.js";
 
 export interface HudAim { target: AimedTarget | null; preview: ReachPreview | null }
 
@@ -36,6 +37,7 @@ export class HudView {
   private thrustBlocked = false;
   private disposed = false;
   private readonly presentation = new EncounterPresentation();
+  private readonly threatEdge: ThreatEdgeView;
   private impactTimer = 0;
   private impactLoss = 0;
   private impactAt = -Infinity;
@@ -60,6 +62,7 @@ export class HudView {
     this.hud = this.get("hud");
     this.canvas = this.get<HTMLCanvasElement>("ocean");
     this.toast = this.get("notification");
+    this.threatEdge = new ThreatEdgeView(this.get("threat-edge"));
   }
 
   private get<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -75,6 +78,7 @@ export class HudView {
     this.renderBlocked();
     this.renderNotices();
     this.renderCall(state);
+    this.threatEdge.update(state);
     const p = state.player.pose.position,
       mode = state.player.mode;
     const degrees = ((state.player.pose.yaw * 180) / Math.PI + 360) % 360;
@@ -278,6 +282,7 @@ export class HudView {
     if (this.disposed || this.hud.hidden || !this.presentation.damageTargetValid(event.target, state) ||
       !Number.isFinite(event.loss) || event.loss <= 0) return false;
     const onset = this.presentation.recordDamage(event.target, event.loss);
+    this.threatEdge.flash(event.origin, state);
     this.renderDamageChip();
     if (suppressAnnouncement) this.cancelDamageAnnouncement();
     if (onset && !suppressAnnouncement) {
@@ -365,6 +370,7 @@ export class HudView {
     this.announcedContexts.clear();
     this.get("hazard-announce").textContent = "";
     this.presentation.reset();
+    this.threatEdge.reset();
     this.renderNotices();
     this.get("call-cue").hidden = true;
   }
@@ -566,9 +572,8 @@ export function hazardBanners(state: GameState): HazardBanner[] {
     warnings.push({ context: "hull", text: `LOW HULL · ${v.health.toFixed(0)}% · retreat for repair` });
   if (state.player.vitals.health <= 25)
     warnings.push({ context: "health", text: "LOW HEALTH · retreat to refuge air and healing" });
-  const threat = state.world.threat.mode;
-  if (!e.refuge && threat !== "idle" && threat !== "disengage")
-    warnings.push({ context: "threat", text: `SOUND HUNTER · ${threat === "warn" ? "paired calls · slow down / cover" : threat === "investigate" ? "investigating · Z quiet / retreat" : "pursuit · break sight behind the tall rib / retreat"}` });
+  const threat = hunterBanner(state.world.threat.mode);
+  if (!e.refuge && threat) warnings.push({ context: "threat", text: threat });
   if (state.player.vitals.food < 20)
     warnings.push({ context: "food", text: state.player.vitals.food === 0
       ? state.player.starvationSeconds > 180 ? "STARVATION · health falling · F meal / refuge emergency portion" : "FOOD EMPTY · gather normally during grace · F meal / refuge portion"

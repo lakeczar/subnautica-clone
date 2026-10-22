@@ -54,6 +54,8 @@ test("warn/pursue transitions alone mark a copied emitted threat-call position, 
   for (const mode of ["idle", "investigate"] as const) {
     const s = swimmer({ x: 133, y: -112, z: -113 });
     Object.assign(s.world.threat, { mode, interest: mode === "idle" ? 0.7 : 4, modeSeconds: 5 });
+    // ENC-1: a pursuit begins with the investigating animal in view.
+    s.player.pose.yaw = 1.5 * Math.PI;
     const emitted = { ...s.world.threat.position }, events: GameEvent[] = [];
     updateThreat(s, 1, events, empty);
     assert.equal(s.world.threat.mode, mode === "idle" ? "warn" : "pursue");
