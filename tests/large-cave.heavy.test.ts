@@ -14,10 +14,10 @@ import { encodeCave, loadCaveBake, prepareCave } from "../src/render/caves/large
 import { createLargeCaveMaterial } from "../src/render/caves/large/caveMaterial.js";
 import { artBytes, createCaveLoader } from "../src/render/caves/large/loader.js";
 import { boxOverlapsTriangle, buildCollider, caveRockAt, chunkIndex, createCandidates, createCollision, gatherTriangles } from "../src/world/caves/large/collision.js";
-import { caveArtMinimum, caveWorldMap, CavePins } from "../src/world/caves/large/streaming.js";
+import { caveFineShare, caveSafetyBytes, caveWorldMap, CavePins } from "../src/world/caves/large/streaming.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
 import { WINDOW_BYTES } from "../src/world/caves/large/lampWindow.js";
-import { simulate } from "./large-cave-stream-support.js";
+import { outside, simulate } from "./large-cave-stream-support.js";
 import { chunkKey } from "../src/world/caves/large/mesh.js";
 import { createResidency } from "../src/world/residency.js";
 import { boxSamples, productionWorld, random, seek } from "./large-cave-support.js";
@@ -152,21 +152,22 @@ test("LC-03: every buffer a loaded cave keeps is in its accounted fixed bytes (i
   assert.ok(loaded.retained.some(r => r.name === "bake" && r.bytes >= 12e6), "the decompressed bake is counted");
 });
 
-test("LC-02 with the Canopy's real chunk costs and fixed bytes: the minimum share tours clean; a 16 MiB cut after entry holds, never moves uncovered", () => {
+test("LC-02 with the Canopy's real chunk costs and fixed bytes: under sustained pressure the craft goes in and backs out; below fixed + safety it waits outside", () => {
   const loaded = loadCaveBake(S, encodeCave(prepared)), runtime = createLargeCave(S, worldFloor, loaded.layout), cm = caveWorldMap(runtime);
   const cost = (id: string) => loaded.artCost[loaded.index.get(chunkKey(cm.byId(id)!.coord))!]!;
-  const fixedBytes = loaded.retainedBytes + 2 * WINDOW_BYTES, minimum = caveArtMinimum(cm, cost);
+  const fixedBytes = loaded.retainedBytes + 2 * WINDOW_BYTES, safety = caveSafetyBytes(cm, cost), fineShare = caveFineShare(cm, cost);
   const r = (id: string) => S.routes.find(x => x.id === id)!.path;
-  const tour = [...r("canopy_roots.route.craft_loop").slice(0, 9), ...r("canopy_roots.route.pool_spur"), ...[...r("canopy_roots.route.pool_spur")].reverse(),
-    ...r("canopy_roots.route.west_loop")];
-  const run = (o: Partial<Parameters<typeof simulate>[0]>) => simulate({ cm, cost, budgetBytes: fixedBytes + minimum, fixedBytes, path: tour, speed: 16,
+  const out = { x: 758, y: -56, z: -62 };
+  const path = [out, ...r("canopy_roots.route.craft_loop").slice(1, 10), ...r("canopy_roots.route.pool_spur"), ...[...r("canopy_roots.route.pool_spur")].reverse(),
+    ...r("canopy_roots.route.craft_loop").slice(1, 9).reverse(), out];
+  const run = (o: Partial<Parameters<typeof simulate>[0]>) => simulate({ cm, cost, budgetBytes: fixedBytes + safety + fineShare, fixedBytes, path, speed: 16,
     shape: CRAFT_PROFILES.small, gate: true, ...o });
   const clean = run({});
-  assert.ok(clean.finished && clean.unsafeMetres === 0 && clean.heldAfterEntry === 0 && clean.cutFramesAfterSettle === 0 && clean.settledFrame > 0 && clean.settledFrame < clean.frames / 4, JSON.stringify(clean));
-  const squeezed = run({ shareEvents: [{ frame: clean.readyFrame + 400, otherBytes: 16 * 1048576 }, { frame: clean.readyFrame + 900, otherBytes: 0 }] });
-  assert.equal(squeezed.unsafeMetres, 0, squeezed.firstUnsafe);
-  assert.ok(squeezed.finished && squeezed.heldAfterEntry > 0, JSON.stringify(squeezed));
-  const control = run({ shareEvents: [{ frame: clean.readyFrame + 400, otherBytes: 16 * 1048576 }, { frame: clean.readyFrame + 900, otherBytes: 0 }], gate: false });
-  assert.ok(control.unsafeMetres > 1, `control moved ${control.unsafeMetres.toFixed(1)} m uncovered`);
-  if (process.env.LC_VERBOSE) console.log(JSON.stringify({ fixedMiB: fixedBytes / 1048576, minimumMiB: minimum / 1048576, clean, squeezed, control: control.unsafeMetres }));
+  assert.ok(clean.finished && clean.unsafeMetres === 0 && clean.heldInside === 0, JSON.stringify(clean));
+  const pressed = run({ shareEvents: [{ frame: 200, otherBytes: 1e12 }] });
+  assert.ok(pressed.finished && outside(cm, pressed.final, CRAFT_PROFILES.small), `stranded: ${JSON.stringify(pressed)}`);
+  assert.ok(pressed.unsafeMetres === 0 && pressed.heldInside === 0 && pressed.coarseFrames > 100, JSON.stringify(pressed));
+  const below = run({ budgetBytes: fixedBytes + safety / 2, maxFrames: 2000 });
+  assert.ok(below.admittedFrame === -1 && below.insideUnadmitted === 0 && outside(cm, below.final, CRAFT_PROFILES.small), JSON.stringify(below));
+  if (process.env.LC_VERBOSE) console.log(JSON.stringify({ fixedMiB: fixedBytes / 1048576, safetyMiB: safety / 1048576, fineShareMiB: fineShare / 1048576, clean, pressed }));
 });

@@ -1,55 +1,60 @@
 import type { Capsule, Vec3 } from "../src/sim/types.js";
 import { actorBox } from "../src/sim/ribCollision.js";
-import { CaveGate, CavePins, COVERAGE_REACH, coverageProblems, shownLods, type CaveArtCost, type CaveMap } from "../src/world/caves/large/streaming.js";
+import { CaveArbiter, CaveGate, CavePins, CaveSafetySet, caveSafetyBytes, COVERAGE_REACH, coverageProblems, shownLods, type CaveArtCost, type CaveMap } from "../src/world/caves/large/streaming.js";
+import { boxTouchesOwned } from "../src/world/caves/large/ownership.js";
 import { createResidency, type ChunkLoader, type PreparedArt, type ResidentArt } from "../src/world/residency.js";
 
 /** LC streaming simulation (Babylon-free): an actor follows a path at a
- * fixed speed through S1 residency over a cave map, with chunk builds that
- * cost time in proportion to their bytes on a fake clock, fixed cave bytes
- * counted as external, and scheduled changes to other owners' share.
+ * fixed speed while a shared-budget arbiter, a cave's coarse safety set and
+ * its opportunistic fine residency run as the lab runs them. Chunk builds
+ * cost time in proportion to their bytes on a fake clock; other owners make
+ * scheduled requests of the arbiter.
  *
- * Each frame runs in the lab's order: pins and residency update first, then
- * the movement gate against what this frame will draw, then the move. A
- * metre moved while the drawn frame does not cover the actor is unsafe. */
+ * Each frame: admission (reserve the fixed bytes and the coarse safety set,
+ * all or nothing), safety-set building, fine pins and residency, then the
+ * gate against what this frame draws, then the move. A metre moved while
+ * the drawn frame leaves the actor uncovered is unsafe. */
 
-export interface ShareEvent { readonly frame: number; readonly otherBytes: number }
+export interface ShareEvent { readonly frame: number; readonly otherBytes: number; readonly owner?: string }
 export interface SimOptions {
   readonly cm: CaveMap;
   readonly cost: CaveArtCost;
-  /** The whole residency budget, CPU and GPU alike. */
+  /** The whole shared budget, CPU and GPU alike. */
   readonly budgetBytes: number;
-  /** Fixed cave bytes counted as external from the start. */
+  /** The cave's fixed bytes (colliders, bake, windows): reserved at load. */
   readonly fixedBytes: number;
   readonly path: readonly Vec3[];
   readonly speed: number;
   readonly shape: Capsule;
-  /** Enforce the gate after entry (cold entry is always gated). */
+  /** Enforce the gate (false: a control that moves regardless). */
   readonly gate: boolean;
+  /** Use the coarse safety set (false: a control with fine art only). */
+  readonly safety?: boolean;
   readonly shareEvents?: readonly ShareEvent[];
   readonly maxFrames?: number;
-  /** S1's per-LOD cost guess for units it has not built yet. */
-  readonly estimate?: { readonly fine: { cpu: number; gpu: number }; readonly coarse: { cpu: number; gpu: number } };
+  /** An arbiter shared with another simulation (two biomes). */
+  readonly arbiter?: CaveArbiter;
+  readonly id?: string;
 }
 export interface SimResult {
-  readonly readyFrame: number;
+  /** Frame the biome was admitted (fixed and safety reserved, set built), or -1. */
+  readonly admittedFrame: number;
   readonly frames: number;
   readonly finished: boolean;
-  /** Frames the gate held the actor after entry. */
-  readonly heldAfterEntry: number;
+  /** Frames the gate held the actor while it stood in or touching the cave. */
+  readonly heldInside: number;
+  /** Frames the gate held the actor outside (not admitted). */
+  readonly heldOutside: number;
   /** Metres moved while the drawn frame left the actor uncovered. */
   readonly unsafeMetres: number;
   readonly unsafeFrames: number;
-  /** Frames the actor stood still beside undrawn rock (share loss while held). */
-  readonly exposedStillFrames: number;
-  /** Frames after entry where residency cut or demoted a wanted chunk. */
-  readonly cutFrames: number;
-  /** The same, after residency first settled: cuts before that are S1
-   * probing units it has never built (cold start), not a shortage. */
-  readonly cutFramesAfterSettle: number;
-  /** Frame residency first settled, or -1. */
-  readonly settledFrame: number;
-  readonly maxAccountedBytes: number;
+  /** Frames the actor touched owned space while the biome was not admitted. */
+  readonly insideUnadmitted: number;
+  /** Frames moved with some touched chunk drawn only coarse (fine is opportunistic). */
+  readonly coarseFrames: number;
+  readonly final: Vec3;
   readonly firstUnsafe: string;
+  readonly reason: string;
 }
 
 /** Builds take 2.5 ms per 128 KiB step; the recipe costs `cost`. */
@@ -67,47 +72,72 @@ function costLoader(clock: { t: number }, cost: CaveArtCost): ChunkLoader {
   };
 }
 
+/** One simulated biome visit, stepped a frame at a time (so two can share an arbiter). */
+export function createSim(o: SimOptions) {
+  const clock = { t: 0 }, pins = new CavePins(o.cm), gate = new CaveGate(o.cm), id = o.id ?? o.cm.cave.id;
+  const arbiter = o.arbiter ?? new CaveArbiter({ cpu: o.budgetBytes, gpu: o.budgetBytes });
+  const loader = costLoader(clock, o.cost), safetyBytes = caveSafetyBytes(o.cm, o.cost), useSafety = o.safety ?? true;
+  const fine = createResidency({ map: pins.view, loader, now: () => clock.t,
+    budget: { cpuBytes: arbiter.total.cpu, gpuBytes: arbiter.total.gpu, buildMsPerFrame: 4, uploadMsPerFrame: 4 } });
+  const fixedHeld = arbiter.reserve(`${id}.fixed`, { cpu: o.fixedBytes, gpu: 0 });
+  let safety: CaveSafetySet | null = null;
+  let p = { ...o.path[0]! }, wp = 1, frame = 0, admittedFrame = -1, heldIn = 0, heldOut = 0, unsafeMetres = 0, unsafeFrames = 0, inside = 0, coarse = 0;
+  let firstUnsafe = "";
+  const own = o.cm.cave.field.ownership;
+  const result = (): SimResult => ({ admittedFrame, frames: frame, finished: wp >= o.path.length, heldInside: heldIn, heldOutside: heldOut,
+    unsafeMetres, unsafeFrames, insideUnadmitted: inside, coarseFrames: coarse, final: p, firstUnsafe, reason: gate.stats.reason });
+  return {
+    get done() { return wp >= o.path.length || frame >= (o.maxFrames ?? 30000); },
+    release() { safety?.dispose(); safety = null; arbiter.release(`${id}.safety`); arbiter.release(`${id}.fixed`); fine.dispose(); },
+    result,
+    step(): void {
+      frame++; clock.t += 16.7;
+      for (const e of o.shareEvents ?? []) if (e.frame === frame) arbiter.request(e.owner ?? "other", { cpu: e.otherBytes, gpu: e.otherBytes });
+      const g = o.path[wp]!, dx = g.x - p.x, dy = g.y - p.y, dz = g.z - p.z, l = Math.hypot(dx, dy, dz);
+      if (l < 0.5) { wp++; return; }
+      const s = Math.min(o.speed / 60, l), next = { x: p.x + dx / l * s, y: p.y + dy / l * s, z: p.z + dz / l * s };
+      // 1. Admission: the fixed bytes and the coarse safety set, all or nothing.
+      const eye = { x: p.x, y: p.y + 1.4, z: p.z };
+      if (useSafety && fixedHeld && !safety && arbiter.reserve(`${id}.safety`, { cpu: safetyBytes, gpu: safetyBytes }))
+        safety = new CaveSafetySet(o.cm, loader, eye);
+      safety?.step(4, () => clock.t);
+      const admitted = useSafety ? safety?.complete === true : fixedHeld;
+      if (admitted && admittedFrame < 0) admittedFrame = frame;
+      // 2. Opportunistic fine art in whatever no grant holds.
+      pins.update(eye, actorBox(p, o.shape), o.speed * 0.5);
+      const c = arbiter.committed();
+      fine.setExternalBytes({ cpu: c.cpu, gpu: c.gpu });
+      fine.update(eye);
+      const fineShown = shownLods(fine.units());
+      const drawn = safety ? safety.drawn(fineShown) : fineShown;
+      // 3. The gate against what this frame draws, then move or hold.
+      const allowed = !o.gate || gate.allows(drawn, actorBox(next, o.shape), admitted);
+      const touching = (q: Vec3): boolean => boxTouchesOwned(own, actorBox(q, o.shape));
+      const zone = (q: Vec3): number => { const z = o.cm.cave.field.zoneAt(q.x, q.y + 1.4, q.z); return z >= 0 ? z : pins.current.zone; };
+      if (allowed) {
+        p = next;
+        if (touching(p) && !admitted) inside++;
+        if (touching(p)) {
+          const box = actorBox(p, o.shape);
+          const problems = coverageProblems(o.cm, drawn, box, COVERAGE_REACH, zone(p), "any");
+          if (problems.length) { unsafeMetres += s; unsafeFrames++; firstUnsafe ||= `frame ${frame} at (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}): ${problems[0]}`; }
+          else if (coverageProblems(o.cm, drawn, box, COVERAGE_REACH, zone(p), "fine").length) coarse++;
+        }
+      } else if (admitted || touching(p)) heldIn++;
+      else heldOut++;
+    },
+  };
+}
+
 export function simulate(o: SimOptions): SimResult {
-  const clock = { t: 0 }, pins = new CavePins(o.cm), gate = new CaveGate(o.cm);
-  const residency = createResidency({ map: pins.view, loader: costLoader(clock, o.cost), now: () => clock.t,
-    budget: { cpuBytes: o.budgetBytes, gpuBytes: o.budgetBytes, buildMsPerFrame: 4, uploadMsPerFrame: 4 }, ...(o.estimate ? { estimate: o.estimate } : {}) });
-  let other = 0;
-  const external = (): void => residency.setExternalBytes({ cpu: o.fixedBytes + other, gpu: other });
-  external();
-  let p = { ...o.path[0]! }, wp = 1, frame = 0, readyFrame = -1, held = 0, unsafeMetres = 0, unsafeFrames = 0, still = 0, cuts = 0, maxBytes = 0;
-  let firstUnsafe = "", settledOnce = false, cutsSettled = 0, settledFrame = -1;
-  const step = o.speed / 60;
-  while (wp < o.path.length && frame < (o.maxFrames ?? 30000)) {
-    frame++; clock.t += 16.7;
-    for (const e of o.shareEvents ?? []) if (e.frame === frame) { other = e.otherBytes; external(); }
-    const g = o.path[wp]!, dx = g.x - p.x, dy = g.y - p.y, dz = g.z - p.z, l = Math.hypot(dx, dy, dz);
-    if (l < 0.5) { wp++; continue; }
-    const s = Math.min(step, l), next = { x: p.x + dx / l * s, y: p.y + dy / l * s, z: p.z + dz / l * s };
-    // 1. Pins and residency for this frame (look-ahead: half a second).
-    const eye = { x: p.x, y: p.y + 1.4, z: p.z };
-    pins.update(eye, actorBox(p, o.shape), o.speed * 0.5);
-    const stats = residency.update(eye);
-    maxBytes = Math.max(maxBytes, stats.cpuBytes);
-    const shown = shownLods(residency.units());
-    // 2. The gate against what this frame draws.
-    const entered = readyFrame >= 0;
-    const allowed = entered && !o.gate ? true : gate.allows(shown, actorBox(next, o.shape));
-    if (!entered) { if (allowed) readyFrame = frame; else continue; }
-    if (stats.settled && !settledOnce) { settledOnce = true; settledFrame = frame; }
-    if (entered && (stats.cut || stats.demoted)) { cuts++; if (settledOnce) cutsSettled++; }
-    // 3. Move or hold, then judge the drawn frame.
-    const zone = (q: Vec3): number => { const z = o.cm.cave.field.zoneAt(q.x, q.y + 1.4, q.z); return z >= 0 ? z : pins.current.zone; };
-    if (allowed) {
-      p = next;
-      const problems = coverageProblems(o.cm, shown, actorBox(p, o.shape), COVERAGE_REACH, zone(p));
-      if (problems.length) { unsafeMetres += s; unsafeFrames++; firstUnsafe ||= `frame ${frame} at (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}): ${problems[0]}`; }
-    } else {
-      held++;
-      if (coverageProblems(o.cm, shown, actorBox(p, o.shape), COVERAGE_REACH, zone(p)).length) still++;
-    }
-  }
-  return { readyFrame, frames: frame, finished: wp >= o.path.length, heldAfterEntry: held, unsafeMetres, unsafeFrames,
-    exposedStillFrames: still, cutFrames: cuts, cutFramesAfterSettle: cutsSettled, settledFrame, maxAccountedBytes: maxBytes, firstUnsafe };
+  const sim = createSim(o);
+  while (!sim.done) sim.step();
+  return sim.result();
+}
+
+/** True when the actor's box is clear of the cave's owned space (exterior water). */
+export function outside(cm: CaveMap, p: Vec3, shape: Capsule): boolean {
+  return !boxTouchesOwned(cm.cave.field.ownership, actorBox(p, shape));
 }
 
 /** Deterministic, uneven synthetic chunk costs: 60-900 KiB fine, a quarter coarse. */

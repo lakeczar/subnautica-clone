@@ -87,39 +87,57 @@ try {
     await page.close();
   }
   if (what === "stress" || what === "all") {
-    // LC-02/03 on the real loader and chunk costs. (1) The R1 budget of
-    // 32 MiB: with every retained byte counted the cave's art share is below
-    // its minimum, so the gate holds the Dart at the hollow and nothing moves
-    // uncovered. (2) A budget with the minimum share plus 4 MiB: after
-    // entry another owner reserves 16 MiB for 4 s mid-run, then releases it.
+    // LC-02 (R2) on the real loader and chunk costs:
+    // (1) budget 32 MiB, below fixed + coarse safety: the Dart waits OUTSIDE the mouth, never admitted;
+    // (2) budget 59 MiB: in for 4.5 s, stop, another owner takes 16 MiB and KEEPS it; the S key backs up,
+    //     then the craft retraces the route all the way out to exterior water;
+    // (3) budget 48 MiB (the R2 cold case): admitted, every free byte taken after entry and kept, the
+    //     craft loop still finishes, through coarse where fine was squeezed out.
     result.stress = [];
+    const snap = page => page.evaluate(() => ({ p: { ...window.lcLab.state.position }, held: window.lcLab.state.held, admitted: window.lcLab.admitted(),
+      outside: window.lcLab.outside(), reason: window.lcLab.holdReason(), gated: window.lcLab.gated, coverage: { ...window.lcLab.coverage },
+      shown: window.lcLab.residency.stats?.shown, cut: window.lcLab.residency.stats?.cut }));
     {
       const page = await open("hud=0&mode=dart&budget=32");
       await page.evaluate(() => window.lcLab.autopilot("canopy_roots.route.craft_loop", "dart", 16));
-      await page.waitForTimeout(12000);
-      result.stress.push({ case: "budget 32 MiB", ...(await page.evaluate(() => ({ shareOk: window.lcLab.shareOk(), fixed: window.lcLab.fixed,
-        artMinimum: window.lcLab.artMinimum, gated: window.lcLab.gated, coverage: { ...window.lcLab.coverage }, position: window.lcLab.state.position,
-        held: window.lcLab.state.held, residency: window.lcLab.residency.stats }))) });
+      await page.waitForTimeout(10000);
+      result.stress.push({ case: "budget 32 MiB: below fixed + coarse safety", ...(await snap(page)) });
       await page.screenshot({ path: join(out, "stress-budget32.png") });
       await page.close();
     }
     {
-      const probe = await open("hud=0&mode=free");
-      const need = await probe.evaluate(() => Math.ceil((Math.max(window.lcLab.fixed.cpu, window.lcLab.fixed.gpu) + window.lcLab.artMinimum) / 1048576) + 4);
-      await probe.close();
-      const page = await open(`hud=0&mode=dart&budget=${need}`);
-      await page.waitForFunction(() => window.lcLab.readyMs !== null, null, { timeout: 120000 });
+      const page = await open("hud=0&mode=dart&budget=59");
+      await page.evaluate(() => window.lcLab.autopilot("canopy_roots.route.craft_loop", "dart", 16));
+      await page.waitForTimeout(4500);
+      const reached = await page.evaluate(() => { const i = window.lcLab.state.autopilot?.index ?? 0; window.lcLab.stopAutopilot(); window.lcLab.reserveOther(16 * 1048576); return i; });
+      await page.waitForTimeout(1500);
+      const pressed = await snap(page);
+      // Ordinary keys under the kept pressure: hold S (reverse) for 0.6 s.
+      await page.locator("canvas").focus();
+      const k0 = await snap(page);
+      await page.keyboard.down("s"); await page.waitForTimeout(600); await page.keyboard.up("s");
+      const k1 = await snap(page);
+      const keyMoved = Math.hypot(k1.p.x - k0.p.x, k1.p.y - k0.p.y, k1.p.z - k0.p.z);
+      // Then retrace the route out to exterior water, pressure still kept.
+      const gatedBefore = (await snap(page)).gated;
+      await page.evaluate(n => { const path = window.lcLab.cave.source.routes.find(r => r.id === "canopy_roots.route.craft_loop").path;
+        window.lcLab.autopilotPath([...path.slice(0, Math.max(1, n)).reverse(), { x: 758, y: -56, z: -62 }], 11); }, reached);
+      await page.waitForFunction(() => window.lcLab.state.autopilot === null, null, { timeout: 60000 }).catch(() => {});
+      const end = await snap(page);
+      await page.screenshot({ path: join(out, "stress-retreat.png") });
+      result.stress.push({ case: "budget 59 MiB: 16 MiB taken after entry and kept; reverse key, then back out", reachedWaypoint: reached, pressed, keyMoved,
+        retreatGated: end.gated - gatedBefore, end });
+      await page.close();
+    }
+    {
+      const page = await open("hud=0&mode=dart&budget=48");
       const start = await page.evaluate(() => { window.lcLab.autopilot("canopy_roots.route.craft_loop", "dart", 16); return window.lcLab.frameCount(); });
-      await page.waitForTimeout(4000);
-      const before = await page.evaluate(() => ({ gated: window.lcLab.gated, p: { ...window.lcLab.state.position } }));
-      await page.evaluate(() => window.lcLab.reserveOther(16 * 1048576));
-      await page.waitForTimeout(4000);
-      const during = await page.evaluate(() => ({ gated: window.lcLab.gated, p: { ...window.lcLab.state.position }, held: window.lcLab.state.held }));
-      await page.screenshot({ path: join(out, "stress-share-reduced.png") });
-      await page.evaluate(() => window.lcLab.reserveOther(0));
+      await page.waitForFunction(() => window.lcLab.admitted(), null, { timeout: 60000 });
+      await page.evaluate(() => window.lcLab.reserveOther(1e12));
       await page.waitForFunction(() => window.lcLab.state.autopilot === null, null, { timeout: 120000 }).catch(() => {});
-      result.stress.push({ case: "share reduced by 16 MiB after entry", budgetMiB: need, before, during,
+      result.stress.push({ case: "budget 48 MiB: every free byte taken after entry and kept", end: await snap(page),
         finished: await page.evaluate(() => window.lcLab.state.autopilot === null), report: await page.evaluate(f => window.lcLab.report(f), start) });
+      await page.screenshot({ path: join(out, "stress-48-coarse.png") });
       await page.close();
     }
   }
@@ -158,7 +176,9 @@ try {
     await page.close();
   }
   failed = result.errors.length > 0 || (result.runs ?? []).some(r => r.coverage.failures > 0) || (result.drive?.report.coverage.failures ?? 0) > 0 ||
-    (result.stress ?? []).some(x => (x.coverage ?? x.report.coverage).failures > 0);
+    (result.stress ?? []).some(x => ((x.end ?? x).coverage).failures > 0) ||
+    (result.stress?.length && (result.stress[0].admitted || !result.stress[0].outside || !result.stress[1].end.outside || !(result.stress[1].keyMoved > 0.5) ||
+      result.stress[1].retreatGated > 0 || !result.stress[2].finished));
 } finally {
   await browser.close();
   await server.close();

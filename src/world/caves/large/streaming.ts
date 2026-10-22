@@ -1,10 +1,11 @@
 import type { ChunkDescriptor, ChunkId, LodBands, LodLevel, Vec3, WorldLayout, WorldMap } from "../../types.js";
 import { boxDistance, chunkId } from "../../frame.js";
 import { createWorldMap } from "../../map.js";
-import type { UnitView } from "../../residency.js";
+import type { ChunkLoader, PreparedArt, ResidentArt, UnitView } from "../../residency.js";
 import { EXTERIOR } from "../../../content/caves/largeCave.js";
 import type { LargeCave } from "./build.js";
 import { chunkBox, type ChunkCoord } from "./mesh.js";
+import { boxTouchesOwned } from "./ownership.js";
 
 /** Cave-biome streaming through S1's residency (Babylon-free).
  *
@@ -122,11 +123,12 @@ export const MAX_LOOKAHEAD = 8;
 export const LOCAL_CHUNKS = 8;
 export const COVERAGE_REACH = 2;
 
-/** Pins for a viewer, and a map view the residency reads them through.
+/** Pins for a viewer, and a map view the FINE residency reads them through.
  * While active, exactly the pinned chunks are wanted fine (the viewer's zone,
  * every zone one portal away, and the chunks round the actor's look-ahead
- * envelope) and every other cave chunk exactly coarse, so the art the cave
- * needs is bounded by `caveArtMinimum`. */
+ * envelope); nothing else is wanted. Fine art is opportunistic: other owners
+ * may squeeze it out. Coarse art is the `CaveSafetySet`'s, held for as long
+ * as the biome is admitted. */
 export class CavePins {
   private state: PinState = { zone: -1, fine: new Set(), active: false };
   readonly view: WorldMap;
@@ -140,9 +142,8 @@ export class CavePins {
         for (const chunk of inner.layout.chunks) {
           const b = lod(chunk);
           let distance = boxDistance(chunk.bounds, p);
-          if (this.state.fine.has(chunk.id)) distance = Math.min(distance, b.fine - 1);
-          // Unpinned: coarse, never fine (even close by, and past hysteresis).
-          else if (this.state.active) distance = Math.max(b.fine + b.hysteresis, Math.min(distance, b.coarse - 1));
+          if (!this.state.fine.has(chunk.id)) continue;
+          distance = Math.min(distance, b.fine - 1);
           if (distance <= radius) out.push({ chunk, distance });
         }
         return out.sort((a, b) => a.distance - b.distance || (a.chunk.id < b.chunk.id ? -1 : 1));
@@ -179,18 +180,20 @@ export function touchedChunks(cm: CaveMap, box: { min: Vec3; max: Vec3 }, reach:
 /** Art bytes of one chunk at each LOD (fine includes its life mesh). */
 export type CaveArtCost = (id: ChunkId) => { readonly fine: number; readonly coarse: number };
 
-/** The least art share (bytes, CPU and GPU alike: the loader keeps one copy
- * of each array on each side) under which the pins always fit: every chunk
- * coarse, plus the costliest pinned zone set fine, plus `LOCAL_CHUNKS` of the
- * costliest fine units for the look-ahead, plus S1's probe reservations. The
- * world must give the cave at least this beside its fixed bytes before the
- * player may enter; `CaveGate` enforces safety if it ever does not. */
-export function caveArtMinimum(cm: CaveMap, cost: CaveArtCost, residency: { inFlight?: number; estimate?: number } = {}): number {
-  let coarse = 0;
+/** The safety reservation's art bytes: every chunk of the biome at coarse
+ * (mouths and collars included: they are surface chunks). Exact, from the
+ * bake's per-chunk costs. */
+export function caveSafetyBytes(cm: CaveMap, cost: CaveArtCost): number {
+  return cm.refs.reduce((n, r) => n + cost(r.id).coarse, 0);
+}
+
+/** The fine share that keeps every pin fine (recommended, not required):
+ * the costliest pinned zone set, plus `LOCAL_CHUNKS` of the costliest units
+ * for the look-ahead, plus S1's probe reservations, capped at every chunk
+ * fine. Below it the player sees coarse rock somewhere, never undrawn rock. */
+export function caveFineShare(cm: CaveMap, cost: CaveArtCost, residency: { inFlight?: number; estimate?: number } = {}): number {
   const fine = new Map<ChunkId, number>();
-  for (const r of cm.refs) { const c = cost(r.id); coarse += c.coarse; fine.set(r.id, c.fine); }
-  // A pinned set's fine units in full: during a coarse-to-fine swap S1 keeps
-  // the outgoing coarse drawn, so the coarse copies stay counted beside them.
+  for (const r of cm.refs) fine.set(r.id, cost(r.id).fine);
   let zoneSet = 0;
   for (let z = 0; z < cm.cave.source.zones.length; z++) {
     const zones = new Set([z, ...cm.neighbours(z)]);
@@ -200,32 +203,121 @@ export function caveArtMinimum(cm: CaveMap, cost: CaveArtCost, residency: { inFl
   }
   const sorted = [...fine.values()].sort((a, b) => b - a);
   const local = sorted.slice(0, LOCAL_CHUNKS).reduce((n, v) => n + v, 0);
-  // Units S1 has not measured yet are probed at its per-LOD guess (1 MiB fine
-  // by default), up to `inFlight` at once.
   const probes = (residency.inFlight ?? 2) * Math.max(residency.estimate ?? 1048576, sorted[0] ?? 0);
-  // Never more than holding every chunk at both LODs at once.
-  const everything = coarse + sorted.reduce((n, v) => n + v, 0);
-  return Math.min(coarse + zoneSet + local, everything) + probes;
+  return Math.min(zoneSet + local, sorted.reduce((n, v) => n + v, 0)) + probes;
 }
 
-/** The movement gate: the safe response whenever coverage cannot be kept
- * (cold entry, a zone change before its chunks arrive, a turn into an
- * unloaded passage, or the art share shrinking after entry). A move is
- * allowed only when the actor's box at the destination, grown by
- * `COVERAGE_REACH`, touches no chunk that is not drawn fine and the
- * destination's zone has every chunk drawn. Otherwise the actor holds
- * (and may still retreat into covered space). */
+/** Shared-budget arbiter. Reservations (`reserve`) are all-or-nothing and
+ * NON-REVOCABLE until their owner releases them; requests (`request`) are
+ * granted only from what reservations and earlier grants leave. A cave's
+ * fixed bytes and its coarse safety set are reservations, so no other owner
+ * can take them; opportunistic art (a cave's fine residency) uses whatever
+ * no grant holds and shrinks when one arrives. */
+export class CaveArbiter {
+  private readonly held = new Map<string, { cpu: number; gpu: number; fixed: boolean }>();
+  constructor(readonly total: { readonly cpu: number; readonly gpu: number }) {}
+  private sum(except?: string): { cpu: number; gpu: number } {
+    let cpu = 0, gpu = 0;
+    for (const [k, v] of this.held) if (k !== except) { cpu += v.cpu; gpu += v.gpu; }
+    return { cpu, gpu };
+  }
+  /** Reserve exactly `bytes`, or nothing. True when held (already or now). */
+  reserve(owner: string, bytes: { cpu: number; gpu: number }): boolean {
+    const h = this.held.get(owner);
+    if (h?.fixed) return h.cpu >= bytes.cpu && h.gpu >= bytes.gpu;
+    const used = this.sum(owner);
+    if (used.cpu + bytes.cpu > this.total.cpu || used.gpu + bytes.gpu > this.total.gpu) return false;
+    this.held.set(owner, { ...bytes, fixed: true });
+    return true;
+  }
+  /** Ask for up to `bytes`; returns what is granted (replacing the last grant). */
+  request(owner: string, bytes: { cpu: number; gpu: number }): { cpu: number; gpu: number } {
+    if (this.held.get(owner)?.fixed) throw new Error(`arbiter: ${owner} holds a reservation`);
+    const used = this.sum(owner);
+    const g = { cpu: Math.max(0, Math.min(bytes.cpu, this.total.cpu - used.cpu)), gpu: Math.max(0, Math.min(bytes.gpu, this.total.gpu - used.gpu)) };
+    this.held.set(owner, { ...g, fixed: false });
+    return g;
+  }
+  release(owner: string): void { this.held.delete(owner); }
+  holds(owner: string): boolean { return this.held.get(owner)?.fixed === true; }
+  /** Everything held: the external bytes an opportunistic residency must leave. */
+  committed(): { cpu: number; gpu: number } { return this.sum(); }
+}
+
+/** The coarse safety set: every chunk of a biome built at coarse and kept
+ * resident, outside S1's residency, for as long as the biome is admitted.
+ * Nothing evicts it; `release` (the player has left) disposes it. A chunk's
+ * coarse is hidden while the fine residency shows that chunk fine. Built
+ * nearest-first from the admission point, in time slices. */
+export class CaveSafetySet {
+  private readonly arts = new Map<ChunkId, ResidentArt>();
+  private readonly pending: ChunkDescriptor[];
+  private building: { chunk: ChunkDescriptor; gen: Generator<void, PreparedArt> } | null = null;
+  bytes = { cpu: 0, gpu: 0 };
+  constructor(cm: CaveMap, private readonly loader: ChunkLoader, from: Vec3) {
+    this.pending = [...cm.map.layout.chunks].sort((a, b) => boxDistance(a.bounds, from) - boxDistance(b.bounds, from) || (a.id < b.id ? -1 : 1));
+  }
+  get complete(): boolean { return this.pending.length === 0 && this.building === null; }
+  /** Build and upload for up to `budgetMs`. */
+  step(budgetMs: number, now: () => number): void {
+    const start = now();
+    while (!this.complete && now() - start < budgetMs) {
+      if (!this.building) { const chunk = this.pending.shift()!; this.building = { chunk, gen: this.loader.build(chunk, "coarse") }; }
+      const r = this.building.gen.next();
+      if (!r.done) continue;
+      const prepared = r.value;
+      let art: ResidentArt;
+      if (prepared.beginUpload) { const job = prepared.beginUpload(); while (!job.done) job.step(Infinity, true); art = job.finish(); }
+      else art = prepared.upload();
+      art.setVisible(true);
+      this.arts.set(this.building.chunk.id, art);
+      this.bytes = { cpu: this.bytes.cpu + art.cpuBytes, gpu: this.bytes.gpu + art.gpuBytes };
+      this.building = null;
+    }
+  }
+  /** Hide coarse where the fine residency draws fine. */
+  present(fine: ReadonlyMap<ChunkId, LodLevel>): void {
+    for (const [id, a] of this.arts) a.setVisible(fine.get(id) !== "fine");
+  }
+  /** Drawn LOD per chunk: fine where the fine residency shows it, else this set's coarse. */
+  drawn(fine: ReadonlyMap<ChunkId, LodLevel>): Map<ChunkId, LodLevel> {
+    const out = new Map<ChunkId, LodLevel>();
+    for (const id of this.arts.keys()) out.set(id, "coarse");
+    for (const [id, l] of fine) if (l === "fine") out.set(id, "fine");
+    return out;
+  }
+  dispose(): void {
+    this.building?.gen.return(undefined as never);
+    for (const a of this.arts.values()) a.dispose();
+    this.arts.clear(); this.building = null; this.pending.length = 0;
+  }
+}
+
+/** The movement gate.
+ * - **Not admitted** (the biome's fixed bytes and coarse safety set are not
+ *   reserved and built): any destination whose box, grown by
+ *   `COVERAGE_REACH`, reaches the cave's owned space is refused, so the
+ *   player waits outside the mouth. (A player already inside, after a
+ *   reload, holds in place until admitted.)
+ * - **Admitted:** a destination is allowed when every chunk its box (grown
+ *   by `COVERAGE_REACH`) touches, and every chunk of its zone, is DRAWN at
+ *   some LOD. The safety set keeps every chunk drawn at least coarse and
+ *   nobody can revoke it, so an admitted player can always move, in any
+ *   direction, under any pressure; fine detail is opportunistic. */
 export class CaveGate {
   /** Frames refused, and why the latest refusal happened. */
   readonly stats = { refused: 0, reason: "" };
   constructor(private readonly cm: CaveMap) {}
-  allows(shown: ReadonlyMap<ChunkId, LodLevel>, destination: { min: Vec3; max: Vec3 }): boolean {
+  allows(drawn: ReadonlyMap<ChunkId, LodLevel>, destination: { min: Vec3; max: Vec3 }, admitted: boolean): boolean {
+    const r = COVERAGE_REACH, own = this.cm.cave.field.ownership;
+    const grown = { min: { x: destination.min.x - r, y: destination.min.y - r, z: destination.min.z - r },
+      max: { x: destination.max.x + r, y: destination.max.y + r, z: destination.max.z + r } };
+    if (!boxTouchesOwned(own, grown)) return true;
+    if (!admitted) { this.stats.refused++; this.stats.reason = "not admitted: waiting outside the cave"; return false; }
     const c = { x: (destination.min.x + destination.max.x) / 2, y: (destination.min.y + destination.max.y) / 2, z: (destination.min.z + destination.max.z) / 2 };
-    const near = boxDistance(this.cm.cave.source.domain, c) <= COVERAGE_REACH + 16;
-    if (!near) return true;
     let zone = this.cm.cave.field.zoneAt(c.x, c.y, c.z);
     if (zone < 0) zone = nearestMouthZone(this.cm, c);
-    const problems = coverageProblems(this.cm, shown, destination, COVERAGE_REACH, zone);
+    const problems = coverageProblems(this.cm, drawn, destination, r, zone, "any");
     if (!problems.length) return true;
     this.stats.refused++; this.stats.reason = problems[0]!;
     return false;
@@ -251,15 +343,17 @@ export function shownLods(units: readonly UnitView[]): Map<ChunkId, LodLevel> {
 }
 
 /** Problems with what is drawn round a moving box, as readable strings:
- * a touched chunk (box grown by `reach`) not drawn fine, or a chunk of the
- * box's zone not drawn at all. Empty when the adverse-case invariant holds. */
-export function coverageProblems(cm: CaveMap, shown: ReadonlyMap<ChunkId, LodLevel>, box: { min: Vec3; max: Vec3 }, reach: number, zone: number): string[] {
+ * a touched chunk (box grown by `reach`) not drawn (at `need`: fine, or any
+ * LOD), or a chunk of the box's zone not drawn at all. Empty when the
+ * invariant holds. The safety invariant is `need = "any"`. */
+export function coverageProblems(cm: CaveMap, shown: ReadonlyMap<ChunkId, LodLevel>, box: { min: Vec3; max: Vec3 }, reach: number, zone: number,
+  need: "fine" | "any" = "any"): string[] {
   const out: string[] = [];
   for (const r of cm.refs) {
     const b = cm.map.chunk(r.id)!.bounds;
     const touched = b.min.x <= box.max.x + reach && b.max.x >= box.min.x - reach && b.min.y <= box.max.y + reach &&
       b.max.y >= box.min.y - reach && b.min.z <= box.max.z + reach && b.max.z >= box.min.z - reach;
-    if (touched && shown.get(r.id) !== "fine") out.push(`${r.id} touched but ${shown.get(r.id) ?? "undrawn"}`);
+    if (touched && (need === "fine" ? shown.get(r.id) !== "fine" : !shown.has(r.id))) out.push(`${r.id} touched but ${shown.get(r.id) ?? "undrawn"}`);
     else if (zone >= 0 && r.zones.includes(zone) && !shown.has(r.id)) out.push(`${r.id} in the viewer's zone but undrawn`);
   }
   return out;

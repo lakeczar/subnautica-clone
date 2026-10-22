@@ -35,7 +35,9 @@ import { createCaveLoader } from "../src/render/caves/large/loader.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
 import { collisionBytes } from "../src/world/caves/large/collision.js";
 import { composeCaveWorld, hullFloorFromSupport, largeCaveCollider } from "../src/world/caves/large/compose.js";
-import { caveArtMinimum, caveWorldMap, CaveGate, CavePins, COVERAGE_REACH, coverageProblems, shownLods } from "../src/world/caves/large/streaming.js";
+import { CaveArbiter, caveFineShare, caveSafetyBytes, CaveSafetySet, caveWorldMap, CaveGate, CavePins, COVERAGE_REACH, coverageProblems, shownLods } from "../src/world/caves/large/streaming.js";
+import { boxTouchesOwned } from "../src/world/caves/large/ownership.js";
+import { boxDistance } from "../src/world/frame.js";
 import { WINDOW_BYTES } from "../src/world/caves/large/lampWindow.js";
 import { chunkKey } from "../src/world/caves/large/mesh.js";
 import { createResidency } from "../src/world/residency.js";
@@ -125,19 +127,37 @@ const loader = createCaveLoader({ scene, material: caveMaterial, source: {
     return { rock: baked[lod], life: lod === "fine" ? baked.life : null };
   },
 } });
+// Fine art is opportunistic: S1 residency over the fine pins, in whatever no
+// arbiter grant holds. Coarse is the safety set's, reserved at admission.
 const residency = createResidency({ map: pins.view, loader, budget: { cpuBytes: budgetMiB * 1048576, gpuBytes: budgetMiB * 1048576 } });
 const residentCollision = collisionBytes(loaded.collision);
 // Fixed bytes, counted before any art is admitted (LC-03): every buffer the
 // loaded cave keeps, plus the lamp window shown and staged (CPU) and bound (GPU).
 const fixed = { cpu: loaded.retainedBytes + 2 * WINDOW_BYTES, gpu: WINDOW_BYTES };
-// Other owners' share (a URL knob and `lcLab.reserveOther` for pressure tests).
-let other = Number(params.get("other") ?? 0) * 1048576;
-const external = (): void => residency.setExternalBytes({ cpu: fixed.cpu + other, gpu: fixed.gpu + other });
-external();
+// The shared budget (LC-02): the cave's fixed bytes are reserved at load and
+// its coarse safety set at admission; both are non-revocable. Other owners
+// (`?other=` and `lcLab.reserveOther`) get only what those leave.
+const arbiter = new CaveArbiter({ cpu: budgetMiB * 1048576, gpu: budgetMiB * 1048576 });
+const fixedHeld = arbiter.reserve("canopy.fixed", fixed);
 const artCost = (id: string): { fine: number; coarse: number } => loaded.artCost[loaded.index.get(chunkKey(cm.byId(id)!.coord))!]!;
-const artMinimum = caveArtMinimum(cm, artCost);
+const safetyBytes = caveSafetyBytes(cm, artCost), fineShare = caveFineShare(cm, artCost);
 const gate = new CaveGate(cm);
-const shareOk = (): boolean => budgetMiB * 1048576 - fixed.cpu - other >= artMinimum && budgetMiB * 1048576 - fixed.gpu - other >= artMinimum;
+let safety: CaveSafetySet | null = null;
+const reserveOther = (bytes: number): void => { arbiter.request("other", { cpu: bytes, gpu: bytes }); };
+reserveOther(Number(params.get("other") ?? 0) * 1048576);
+const admitted = (): boolean => safety?.complete === true;
+/** Admission and release, each frame: reserve the coarse safety set (all or
+ * nothing) within reach of the biome; release it once well away. */
+function admission(eye: Vec3): void {
+  const near = boxDistance(S.domain, eye) <= 160;
+  if (near && !safety && fixedHeld && arbiter.reserve("canopy.safety", { cpu: safetyBytes, gpu: safetyBytes })) safety = new CaveSafetySet(cm, loader, eye);
+  if (!near && safety && boxDistance(S.domain, eye) > 200) { safety.dispose(); safety = null; arbiter.release("canopy.safety"); }
+  safety?.step(3, () => performance.now());
+  const c = arbiter.committed();
+  residency.setExternalBytes({ cpu: c.cpu, gpu: c.gpu });
+}
+const holdReason = (): string => !fixedHeld || !safety ? "not admitted: the budget cannot reserve this cave's fixed bytes and coarse safety set"
+  : !safety.complete ? "admitting: coarse safety set loading" : gate.stats.reason;
 
 // --- Player -------------------------------------------------------------------
 type Mode = "diver" | "dart" | "creel" | "free";
@@ -148,7 +168,8 @@ const SPEED: Record<Exclude<Mode, "free">, [number, number]> = { diver: [3.4, 5.
 const EYE: Record<Mode, number> = { diver: 0.8, dart: 1.4, creel: 2.6, free: 0 };
 const state = {
   mode: (params.get("mode") ?? "diver") as Mode,
-  position: { x: 758, y: -72, z: -66 } as Vec3,
+  // Exterior water above the Crown hollow, clear of every owned column.
+  position: { x: 758, y: -56, z: -62 } as Vec3,
   velocity: { x: 0, y: 0, z: 0 } as Vec3,
   // Facing down into the Crown hollow from the shelf.
   yaw: -0.32, pitch: -0.9,
@@ -207,7 +228,7 @@ function step(): void {
   // The gate (LC-02), against what this frame will draw: a move whose
   // destination is not covered is refused and the craft stops. Cold entry,
   // zone changes, turns and a shrinking share all land here.
-  state.held = !gate.allows(shown, actorBox(state.position, SHAPES[state.mode]));
+  state.held = !gate.allows(drawn, actorBox(state.position, SHAPES[state.mode]), admitted());
   if (state.held) {
     state.position = before; state.velocity = { x: 0, y: 0, z: 0 }; void velocity;
     gated++;
@@ -299,9 +320,10 @@ function show(name: string, lamp?: boolean): void {
 // --- Per-frame ------------------------------------------------------------------
 const frames: { frame: number; dt: number; cpu: number; gpu: number; residencyMs: number; lampMs: number }[] = [];
 /** failures: frames that moved while the drawn frame left the actor uncovered. */
-const coverage = { frames: 0, failures: 0, unsafeMetres: 0, exposedStill: 0, first: "" };
+const coverage = { frames: 0, failures: 0, unsafeMetres: 0, exposedStill: 0, coarseFrames: 0, first: "" };
 let lastFrame = performance.now(), accumulator = 0, frame = 0, readyAt = 0, moved = 0, gated = 0;
-let shown: ReadonlyMap<string, LodLevel> = new Map();
+let drawn: ReadonlyMap<string, LodLevel> = new Map();
+function actorBoxTouches(p: Vec3, mode: Exclude<Mode, "free">): boolean { return boxTouchesOwned(cave.field.ownership, actorBox(p, SHAPES[mode])); }
 function zoneOf(p: Vec3): number { return cave.field.owned(p.x, p.y, p.z) && p.y < worldFloor(p.x, p.z) ? cave.field.zoneAt(p.x, p.y, p.z) : -1; }
 const hex = (h: string): [number, number, number] => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
 function frameUpdate(): void {
@@ -311,14 +333,17 @@ function frameUpdate(): void {
   const r0 = performance.now();
   if (state.mode !== "free") pins.update(eye0, actorBox(state.position, SHAPES[state.mode]), Math.hypot(state.velocity.x, state.velocity.y, state.velocity.z) * 0.5);
   else pins.update(eye0);
+  admission(eye0);
   const stats = residency.update(eye0);
-  shown = shownLods(residency.units());
+  const fineShown = shownLods(residency.units());
+  safety?.present(fineShown);
+  drawn = safety ? safety.drawn(fineShown) : fineShown;
   const r1 = performance.now();
   // 2. Gated steps against what this frame draws.
   accumulator = Math.min(accumulator + dt / 1000, 0.25);
   moved = 0;
   while (accumulator >= DT) { step(); accumulator -= DT; }
-  if (state.mode !== "free" && !state.held && !readyAt && frame > 2) readyAt = performance.now();
+  if (state.mode !== "free" && admitted() && !readyAt) readyAt = performance.now();
   const eye = { x: state.position.x, y: state.position.y + EYE[state.mode], z: state.position.z };
   camera.position.set(eye.x, eye.y, eye.z);
   const dir = new Vector3(Math.sin(state.yaw) * Math.cos(state.pitch), Math.sin(state.pitch), -Math.cos(state.yaw) * Math.cos(state.pitch));
@@ -328,10 +353,14 @@ function frameUpdate(): void {
   const r2 = performance.now();
   // 3. The invariant on the frame about to be drawn: no metre moved while uncovered.
   if (state.mode !== "free" && readyAt) {
-    const problems = coverageProblems(cm, shown, actorBox(state.position, SHAPES[state.mode]), COVERAGE_REACH, pins.current.zone);
-    coverage.frames++;
-    if (problems.length && moved > 0) { coverage.failures++; coverage.unsafeMetres += moved; coverage.first ||= `${frame}: ${problems[0]}`; }
-    else if (problems.length) coverage.exposedStill++;
+    const box = actorBox(state.position, SHAPES[state.mode]);
+    if (boxTouchesOwned(cave.field.ownership, box)) {
+      const problems = coverageProblems(cm, drawn, box, COVERAGE_REACH, pins.current.zone, "any");
+      coverage.frames++;
+      if (problems.length && moved > 0) { coverage.failures++; coverage.unsafeMetres += moved; coverage.first ||= `${frame}: ${problems[0]}`; }
+      else if (problems.length) coverage.exposedStill++;
+      else if (coverageProblems(cm, drawn, box, COVERAGE_REACH, pins.current.zone, "fine").length) coverage.coarseFrames++;
+    }
   }
   // Optics: exterior water from the shared optics; the cave tint from the zone.
   updateOpticalUniforms(optics, camera.position, null);
@@ -361,11 +390,11 @@ function hud(stats: ReturnType<typeof residency.update>, zone: number): void {
   const units = residency.units().filter(u => u.state === "shown"), fine = units.filter(u => u.lod === "fine").length;
   const recent = frames.slice(-120), p = (k: "dt" | "cpu", q: number) => [...recent.map(f => f[k])].sort((a, b) => a - b)[Math.floor(q * (recent.length - 1))] ?? 0;
   el.textContent = [
-    `${state.mode}${state.held ? ` (held: ${shareOk() ? "cave streaming in" : "cave art share below its minimum"})` : ""}  ${zone >= 0 ? S.zones[zone]!.label : "outside"}  depth ${(-state.position.y).toFixed(1)} m`,
+    `${state.mode}${state.held ? ` (held: ${holdReason()})` : ""}  ${zone >= 0 ? S.zones[zone]!.label : "outside"}  depth ${(-state.position.y).toFixed(1)} m`,
     `speed ${Math.hypot(state.velocity.x, state.velocity.y, state.velocity.z).toFixed(1)} m/s  lamp ${state.lamp ? "on" : "off"} (L)`,
     `frame p50 ${p("dt", 0.5).toFixed(1)} p95 ${p("dt", 0.95).toFixed(1)} ms  cpu ${p("cpu", 0.5).toFixed(1)} ms  draws ${instrumentation.drawCallsCounter.current}`,
     `chunks shown ${units.length} (fine ${fine})  pending ${stats.pending}  ${stats.settled ? "settled" : "streaming"}`,
-    `accounted cpu ${(stats.cpuBytes / 1048576).toFixed(1)} / gpu ${(stats.gpuBytes / 1048576).toFixed(1)} MiB of ${budgetMiB} (fixed ${(fixed.cpu / 1048576).toFixed(1)} cpu, art minimum ${(artMinimum / 1048576).toFixed(1)})`,
+    `accounted cpu ${(stats.cpuBytes / 1048576).toFixed(1)} / gpu ${(stats.gpuBytes / 1048576).toFixed(1)} MiB of ${budgetMiB} (fixed ${(fixed.cpu / 1048576).toFixed(1)}, coarse safety ${(safetyBytes / 1048576).toFixed(1)}${admitted() ? " held" : ""}, fine share ${(fineShare / 1048576).toFixed(1)})`,
     `collision ${(residentCollision / 1048576).toFixed(1)} MiB resident  step ${(stepCost.us / Math.max(1, stepCost.calls)).toFixed(0)} µs (max ${stepCost.maxUs.toFixed(0)})`,
     `lamp window builds ${lampWindow.stats.built}  gated ${gated}  unsafe moves ${coverage.failures}/${coverage.frames}`,
     `load: ${loadedBytes.source} ${(loadedBytes.packed / 1048576).toFixed(1)} MiB packed, collision ${(tCollision - tFetched).toFixed(0)} ms`,
@@ -392,20 +421,27 @@ addEventListener("resize", () => engine.resize());
 const percentile = (a: number[], q: number): number => { const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * s.length))] ?? 0; };
 (window as unknown as { lcLab: unknown }).lcLab = {
   scene, engine, state, residency, world, cave, loaded, pins, lampWindow, coverage, frames, stepCost, show, setMode, VIEWS, gate,
-  fixed, artMinimum, get gated() { return gated; }, shareOk,
-  /** Another owner reserves (or releases) bytes of the shared budget. */
-  reserveOther(bytes: number) { other = bytes; external(); },
+  fixed, safetyBytes, fineShare, arbiter, get gated() { return gated; }, admitted, holdReason,
+  /** Another owner asks for (or releases) bytes of the shared budget; it gets only what reservations leave. */
+  reserveOther,
   load: { source: loadedBytes.source, packedBytes: loadedBytes.packed, rawBytes: loadedBytes.bytes.byteLength, fetchMs: tFetched - t0,
-    collisionMs: tCollision - tFetched, mapMs: tMap - tCollision, collisionBytes: residentCollision, retained: loaded.retained, retainedBytes: loaded.retainedBytes, fixedCpu: fixed.cpu, artMinimum },
+    collisionMs: tCollision - tFetched, mapMs: tMap - tCollision, collisionBytes: residentCollision, retained: loaded.retained, retainedBytes: loaded.retainedBytes, fixedCpu: fixed.cpu, safetyBytes, fineShare },
   get readyMs() { return readyAt ? readyAt - t0 : null; },
   /** Drive a route through the same input path as the keys (boost on). */
   autopilot(routeId: string, mode: Exclude<Mode, "free">, speed: number | null = null) {
     const r = S.routes.find(x => x.id === routeId);
     if (!r) throw new Error(`no route ${routeId}`);
-    state.mode = mode; state.position = { ...r.path[0]! }; state.velocity = { x: 0, y: 0, z: 0 };
-    state.autopilot = { path: r.path.slice(1).map(p => ({ ...p })), index: 0, speed };
+    // A route opening at a mouth starts in the open water above it.
+    const p0 = r.path[0]!, start = actorBoxTouches(p0, mode) && cave.field.inCollar(p0.x, p0.z) ? { ...p0, y: Math.max(p0.y, S.domain.max.y + 4) } : { ...p0 };
+    state.mode = mode; state.position = start; state.velocity = { x: 0, y: 0, z: 0 };
+    state.autopilot = { path: (start.y !== p0.y ? r.path : r.path.slice(1)).map(p => ({ ...p })), index: 0, speed };
   },
-  settle: (n: number) => new Promise<void>(res => { const end = frame + n; const tick = () => frame >= end ? res() : requestAnimationFrame(tick); tick(); }),
+  /** Drive an explicit path from the current pose (no teleport). */
+  autopilotPath(path: Vec3[], speed: number | null = null) { state.velocity = { x: 0, y: 0, z: 0 }; state.autopilot = { path: path.map(p => ({ ...p })), index: 0, speed }; },
+  stopAutopilot() { state.autopilot = null; state.velocity = { x: 0, y: 0, z: 0 }; state.input.forward = 0; },
+  /** True when the current actor box is clear of the cave's owned space. */
+  outside: () => state.mode === "free" || !boxTouchesOwned(cave.field.ownership, actorBox(state.position, SHAPES[state.mode])),
+    settle: (n: number) => new Promise<void>(res => { const end = frame + n; const tick = () => frame >= end ? res() : requestAnimationFrame(tick); tick(); }),
   report(fromFrame = 0) {
     const f = frames.filter(x => x.frame >= fromFrame), dt = f.map(x => x.dt), cpu = f.map(x => x.cpu), gpu = f.map(x => x.gpu).filter(x => x > 0);
     return { frames: f.length, dt: { p50: percentile(dt, 0.5), p95: percentile(dt, 0.95), p99: percentile(dt, 0.99), max: Math.max(...dt) },
