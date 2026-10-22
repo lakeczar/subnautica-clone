@@ -12,7 +12,7 @@ type Floor = (x: number, z: number) => number;
 export const C = {
   petrol: hex(PALETTE.petrol), steel: hex(PALETTE.steelLight), rust: hex("#a8743f"), ochre: hex(PALETTE.ochre),
   glow: hex("#ffd27a"), warm: hex(PALETTE.warm), cyan: hex("#9fe6e0"), mint: hex("#8ff0c4"), lilac: hex("#cdb8ff"),
-  amber: hex("#ffb45a"), ember: hex("#ff8a3d"), bone: hex("#d9d2bf"), teal: hex("#2f8a85"),
+  amber: hex("#ffc070"), ember: hex("#ffa060"), bone: hex("#d9d2bf"), teal: hex("#2f8a85"),
 } as const;
 /** Draw `f` unlit (alpha -1), or faintly luminous (-0.3: ATM-1's crystal glow). */
 export const lit = (b: RecipeBuilder, f: () => void, faint = false): void => { const a = b.alpha; b.alpha = faint ? -0.3 : -1; f(); b.alpha = a; };
@@ -41,7 +41,7 @@ export const POI_DRESSING: readonly VistaPart[] = [
     const head = (q: typeof w, dy: number): P3 => [q.x, q.y + SPAN_POST_H - dy, q.z];
     const mid = catenary(head(w, 0.6), head(e, 0.6), 14, fine ? 24 : 12);
     for (const [dy, sag] of [[0.6, 14], [2.4, 16], [4.2, 17]] as const) b.tube(catenary(head(w, dy), head(e, dy), sag, fine ? 24 : 8), 0.12, 3, C.petrol);
-    lit(b, () => { for (let i = 2; i < mid.length - 1; i += fine ? 2 : 1) b.ellipsoid(mid[i]!, [0.45, 0.4, 0.45], i % 4 === 2 ? C.warm : C.glow, 2, fine ? 6 : 4); });
+    lit(b, () => { for (let i = 2; i < mid.length - 1; i += fine ? 2 : 1) b.ellipsoid(mid[i]!, [0.7, 0.6, 0.7], i % 4 === 2 ? C.warm : C.glow, 2, fine ? 6 : 4); });
     const low = catenary(head(w, 4.2), head(e, 4.2), 17, 24)[15]!;
     b.tube([low, [low[0] + 0.8, low[1] - 9, low[2] + 0.4], [low[0] + 1.6, low[1] - 17, low[2] - 0.6]], 0.11, 3, C.petrol);
   } },
@@ -72,6 +72,16 @@ export const POI_DRESSING: readonly VistaPart[] = [
         for (let k = i ? 1 : 0; k <= n; k++) { const x = a.x + (c.x - a.x) * k / n, z = a.z + (c.z - a.z) * k / n + o; pts.push([x, floor(x, z) + 0.2, z]); }
       }
       b.tube(pts, 0.13, 3, color);
+      // Lit couplings on the middle cable, every 8 m: the run reads as a
+      // dotted line down the slope.
+      if (o === 0) lit(b, () => {
+        let run = 0;
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1]!, c = pts[i]!;
+          run += Math.hypot(c[0] - a[0], c[1] - a[1], c[2] - a[2]);
+          if (run >= 8) { run = 0; b.ellipsoid([c[0], c[1] + 0.1, c[2]], [0.35, 0.3, 0.35], C.warm, 2, fine ? 5 : 4); }
+        }
+      });
     }
   } },
   // Lines trailing from the wreck's gunwales into the brine.

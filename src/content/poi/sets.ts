@@ -61,7 +61,7 @@ export const SPAN_POST_H = 8;
 const span: VistaBlock[] = SPAN_POSTS.flatMap(p => [
   stand(v(p.x, p.y - 1, p.z), 3.2, 2.4, 3.2, "concrete", "ochre"),
   stand(v(p.x, p.y + 1.4, p.z), 0.8, SPAN_POST_H - 1.4, 0.8, "petrol"),
-  lens(v(p.x, p.y + SPAN_POST_H, p.z), 0.7, "glow"),
+  lens(v(p.x, p.y + SPAN_POST_H, p.z), 1.2, "glow"),
 ]);
 
 // --- Basin ↔ Divide: a sounding line and a fall -----------------------------
@@ -76,7 +76,7 @@ const sounding: VistaBlock[] = [
   stand(ground(SOUNDING.x, SOUNDING.z, -0.8), 3.4, 1.7, 3.4, "concrete2", "rust"),
   ...Array.from({ length: SOUNDING.floats }, (_, k): VistaBlock[] => {
     const c = soundingFloat(k), top = k === SOUNDING.floats - 1, s = top ? 1.6 : 1.1;
-    return [stand(v(c.x, c.y - s * 0.6, c.z), s, s * 1.1, s, top ? "ochre" : "petrol"), lens(v(c.x, c.y - s * 0.6 + s * 1.1, c.z), s * 0.7, top ? "warm" : "glow")];
+    return [stand(v(c.x, c.y - s * 0.6, c.z), s, s * 1.1, s, top ? "ochre" : "petrol"), lens(v(c.x, c.y - s * 0.6 + s * 1.1, c.z), s * 1.05, top ? "warm" : "glow")];
   }).flat(),
 ];
 
@@ -120,19 +120,19 @@ export const FLOAT_LINE: readonly Vec3[] = Array.from({ length: 6 }, (_, k) => {
 export const floatAt = (k: number): Vec3 => { const a = FLOAT_LINE[k]!; return v(a.x, a.y + 10 + k * 1.2, a.z); };
 const floats: VistaBlock[] = FLOAT_LINE.flatMap((a, k) => {
   const f = floatAt(k);
-  return [stand(v(a.x, a.y - 0.6, a.z), 1.6, 1.4, 1.6, "concrete"), stand(v(f.x, f.y - 0.7, f.z), 1, 1.4, 1, "petrol"), lens(v(f.x, f.y + 0.7, f.z), 0.75, "cyan")];
+  return [stand(v(a.x, a.y - 0.6, a.z), 1.6, 1.4, 1.6, "concrete"), stand(v(f.x, f.y - 0.7, f.z), 1, 1.4, 1, "petrol"), lens(v(f.x, f.y + 0.7, f.z), 1.2, "cyan")];
 });
 
 /** A power run laid down the Divide's east slope to the staging shelf's
- * north pylon: junction boxes on the cable every 28 m, status lamps lit,
- * one box burst open. */
+ * north pylon: junction boxes on the cable every 26 m, status lamps lit,
+ * one box burst open; lit couplings bead the cable between them (render). */
 export const SUPPLY: readonly Vec3[] = Array.from({ length: 5 }, (_, k) => {
   const x = 960 + k * 26, z = -1093 - k * 2.5;
   return v(x, floor(x, z), z);
 });
 const supply: VistaBlock[] = SUPPLY.flatMap((p, k) => k === 2
   ? [stand(v(p.x - 0.5, p.y - 0.3, p.z), 0.8, 1.2, 1.1, "rust"), stand(v(p.x + 0.6, p.y - 0.3, p.z + 0.3), 0.7, 0.9, 1.1, "rustDark")]
-  : [stand(v(p.x, p.y - 0.3, p.z), 1.6, 1.4, 1.1, "concrete2", "petrol"), lens(v(p.x, p.y + 1.1, p.z), 0.45, "warm")]);
+  : [stand(v(p.x, p.y - 0.3, p.z), 1.6, 1.4, 1.1, "concrete2", "petrol"), lens(v(p.x, p.y + 1.1, p.z), 0.9, "warm")]);
 
 // --- Divide → service ledge: a wreck on the mirror and a crystal arch -------
 
@@ -199,7 +199,7 @@ export const POIS: readonly PoiDef[] = [
     beacon: v(FALL.x, floor(FALL.x, FALL.z) + 4, FALL.z) },
   { id: "poi.divide.float_line", region: "brine_divide", kind: "float_line", leg: "divide_meridian", label: "Float line", beacon: floatAt(5) },
   { id: "poi.meridian.supply_cable", region: "deep_district", kind: "cable_run", leg: "divide_meridian", label: "Supply cable",
-    beacon: v(SUPPLY[3]!.x, SUPPLY[3]!.y + 1.2, SUPPLY[3]!.z) },
+    beacon: v(SUPPLY[3]!.x, SUPPLY[3]!.y + 1.4, SUPPLY[3]!.z) },
   { id: "poi.divide.mirror_wreck", region: "brine_divide", kind: "wreck", leg: "service_ledge", label: "Wreck on the mirror", beacon: WRECK_MAST[1] },
   { id: "poi.divide.crystal_arch", region: "brine_divide", kind: "rock_arch", leg: "service_ledge", label: "Crystal arch", beacon: ARCH_LINE[6]! },
 ];

@@ -96,16 +96,17 @@ const poiArt = (id: string, fine: boolean): RecipeBuilder[] => [
 const lights = (b: RecipeBuilder): number => clusterEmissive(b.positions, b.colors).length;
 const inBox = (p: Vec3, k: Aabb, tol: number): boolean =>
   p.x >= k.min.x - tol && p.x <= k.max.x + tol && p.y >= k.min.y - tol && p.y <= k.max.y + tol && p.z >= k.min.z - tol && p.z <= k.max.z + tol;
-/** True where the terrain surface passes within 0.6 m (vertically) of `p`
- * somewhere within 1.2 m of it in plan: a lamp on a cliff face. The floor
- * is continuous, so it does if it spans the band [y - 0.6, y + 0.6] there. */
+/** True where the terrain surface passes within 0.8 m (vertically) of `p`
+ * somewhere within 1.2 m of it in plan: a lamp on a cliff face (the seams'
+ * ribbons stand 0.7 m either side of the rock's contour). The floor is
+ * continuous, so it does if it spans the band [y - 0.8, y + 0.8] there. */
 const onTerrain = (p: Vec3): boolean => {
   let lo = Infinity, hi = -Infinity;
   for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) {
     if (Math.hypot(i, j) > 3) continue;
     const f = worldFloor(p.x + i * 0.4, p.z + j * 0.4); lo = Math.min(lo, f); hi = Math.max(hi, f);
   }
-  return lo <= p.y + 0.6 && hi >= p.y - 0.6;
+  return lo <= p.y + 0.8 && hi >= p.y - 0.8;
 };
 /** Distance from `p` to a mesh's nearest triangle (closest point by sampling
  * each triangle on a 0.1 m lattice; triangles further than 3 m are skipped). */
@@ -116,7 +117,7 @@ function meshDistance(p: Vec3, m: Mesh & { indices: ArrayLike<number> }): number
     const a = at(m.indices[t]!), b = at(m.indices[t + 1]!), c = at(m.indices[t + 2]!);
     const span = Math.max(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z), Math.hypot(b.x - c.x, b.y - c.y, b.z - c.z), Math.hypot(a.x - c.x, a.y - c.y, a.z - c.z));
     if (Math.hypot(a.x - p.x, a.y - p.y, a.z - p.z) > span + 3) continue;
-    const n = Math.max(1, Math.ceil(span / 0.1));
+    const n = Math.max(1, Math.ceil(span / 0.15));
     for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) {
       const u = i / n, v = j / n, w = 1 - u - v;
       best = Math.min(best, Math.hypot(a.x * w + b.x * u + c.x * v - p.x, a.y * w + b.y * u + c.y * v - p.y, a.z * w + b.z * u + c.z * v - p.z));
@@ -187,15 +188,15 @@ test("landmark lights hug what is already there: structure or vista collision, o
   for (const side of [-1, 1]) assert.ok(seamPoint(worldFloor, 200, side, 0.5), `the ${side < 0 ? "north-west" : "south-east"} wall has a cliff at 200 m`);
 });
 
-test("dish rim lamps sit on the drawn rim", async () => {
+test("the dish bands wrap the drawn rim", async () => {
   const { structureMesh } = await import("../src/render/biomes/structures.js");
   for (const d of STRUCTURES.filter(s => s.kind === "dish")) {
-    const dish = structureMesh([d], d.id, true)!, lamp = drawPart(LANDMARK_LIGHTS.find(p => p.id === `landmark.basin.${d.id}`)!, true);
-    // Each lamp's centre (every 8 vertices of a box) is on the rim tube.
-    for (let k = 0; k < lamp.vertexCount; k += 24) {
-      const box = points(lamp).slice(k, k + 24), c = box.reduce((s, q) => ({ x: s.x + q.x / 24, y: s.y + q.y / 24, z: s.z + q.z / 24 }), { x: 0, y: 0, z: 0 });
-      const d0 = meshDistance(c, dish);
-      assert.ok(d0 < 0.5, `${d.id} lamp at ${c.x.toFixed(1)}, ${c.y.toFixed(1)}, ${c.z.toFixed(1)} is ${d0.toFixed(2)} m off the drawn dish`);
+    const dish = structureMesh([d], d.id, true)!, band = points(drawPart(LANDMARK_LIGHTS.find(p => p.id === `landmark.basin.${d.id}`)!, true));
+    assert.ok(band.length > 0, `${d.id} has a band`);
+    // Every fifth vertex of the band's tubes (0.5 m round the rim's centre line) is on the drawn rim tube.
+    for (let k = 0; k < band.length; k += 5) {
+      const d0 = meshDistance(band[k]!, dish);
+      assert.ok(d0 < 0.6, `${d.id} band at ${band[k]!.x.toFixed(1)}, ${band[k]!.y.toFixed(1)}, ${band[k]!.z.toFixed(1)} is ${d0.toFixed(2)} m off the drawn dish`);
     }
   }
 });
@@ -238,6 +239,10 @@ test("light and vertex budget: per chunk and in total", () => {
   }
   const added = [...POI_DRESSING, ...LANDMARK_LIGHTS].reduce((n, p) => n + lights(drawPart(p, true)), 0) + POI_SETS.reduce((n, s) => n + lights(drawSet(s.id, true)), 0);
   console.log(`vista lights (coarse) in the world: ${total}; POI-1 adds ${added} (fine); busiest chunk ${worst.id}: ${worst.lights} lights, ${worst.vertices} vertices`);
-  assert.ok(worst.lights <= 120, `chunk ${worst.id} carries ${worst.lights} emissive clusters`);
-  assert.ok(added <= 520, `POI-1 adds ${added} local lights`);
+  // ATM-1 sends the 12 best lights a frame, so clusters cost only the CPU
+  // selection (a score and a sort per resident light), not the GPU. Hold the
+  // count near today's so a careless lamp strip (one light per 4 m cell)
+  // shows up here.
+  assert.ok(worst.lights <= 180, `chunk ${worst.id} carries ${worst.lights} emissive clusters`);
+  assert.ok(added <= 760, `POI-1 adds ${added} local lights`);
 });
