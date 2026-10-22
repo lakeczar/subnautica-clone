@@ -11,6 +11,7 @@ import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { VISTA_SETS, VISTA_SOLIDS } from "../src/content/vistas.js";
 import type { Aabb, Vec3 } from "../src/world/types.js";
 import { RecipeBuilder } from "../src/render/biomes/recipe.js";
+import { blocked, prewarmScatter } from "../src/render/biomes/scatter.js";
 import { drawSolidSet, VISTA_DRESSING, vistaMesh, type VistaPart } from "../src/render/biomes/vistas.js";
 import { worldLayout } from "../src/content/regions/layout.js";
 import { clusterEmissive } from "../src/render/lighting/localLights.js";
@@ -56,6 +57,7 @@ const W2_PINNACLES: readonly [number, number, number][] = [[8, -392, 24], [40, -
 
 /** Every cave column a POI must keep off, padded by a margin for the kit's collar. */
 const CAVE_PAD = 8;
+prewarmScatter();
 const CAVE_RECTS = [
   ...CAVE_SOURCES.map(c => ({ id: `root.${c.id}`, ...c.footprint })),
   ...SIBLING_CAVES,
@@ -82,6 +84,20 @@ function crowds(p: Vec3): string | null {
   for (const [x, z, r] of W2_PINNACLES) if (Math.hypot(p.x - x, p.z - z) < r + 10) return `W2 pinnacle at ${x}, ${z}`;
   for (const c of CAVE_RECTS)
     if (p.x > c.minX - CAVE_PAD && p.x < c.maxX + CAVE_PAD && p.z > c.minZ - CAVE_PAD && p.z < c.maxZ + CAVE_PAD) return `cave ${c.id}`;
+  return null;
+}
+/** Seams lie on the rock like scatter: scatter's open-water keep-out (root's
+ * routes, tethers, moorings, structures), the same columns over W2's lanes
+ * (lane half-width plus a metre, from just under the keel to the hull's
+ * height plus 4 m), and the caves. */
+function seamCrowds(p: Vec3): string | null {
+  if (blocked(p.x, p.z, p.y, 0)) return "a root keep-out";
+  for (const [i, lane] of W2_LANES.entries()) for (let k = 1; k < lane.length; k++) {
+    const a = lane[k - 1]!, c = lane[k]!, dx = c.x - a.x, dz = c.z - a.z, l2 = dx * dx + dz * dz;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / l2)), y = a.y + (c.y - a.y) * t;
+    if (Math.hypot(p.x - a.x - dx * t, p.z - a.z - dz * t) < 31 && p.y > y - 0.5 && p.y < y + 13.2) return `w2.lane${i}`;
+  }
+  for (const c of CAVE_RECTS) if (p.x > c.minX - CAVE_PAD && p.x < c.maxX + CAVE_PAD && p.z > c.minZ - CAVE_PAD && p.z < c.maxZ + CAVE_PAD) return `cave ${c.id}`;
   return null;
 }
 type Mesh = { positions: readonly number[] | Float32Array; colors: readonly number[] | Float32Array };
@@ -175,7 +191,7 @@ test("landmark lights hug what is already there: structure or vista collision, o
       const where = `${part.id} at ${q.x.toFixed(2)}, ${q.y.toFixed(2)}, ${q.z.toFixed(2)}`;
       if (seam) {
         assert.ok(onTerrain(q), `${where} floats off the rock`);
-        assert.equal(crowds(q), null, `${where} crowds ${crowds(q)}`);
+        assert.equal(seamCrowds(q), null, `${where} crowds ${seamCrowds(q)}`);
       } else if (!dish) assert.ok(solids.some(k => inBox(q, k, 0.1)), `${where} stands off its landmark's collision`);
     }
     if (fine) counts[part.id] = lights(b);
@@ -244,5 +260,5 @@ test("light and vertex budget: per chunk and in total", () => {
   // count near today's so a careless lamp strip (one light per 4 m cell)
   // shows up here.
   assert.ok(worst.lights <= 180, `chunk ${worst.id} carries ${worst.lights} emissive clusters`);
-  assert.ok(added <= 760, `POI-1 adds ${added} local lights`);
+  assert.ok(added <= 850, `POI-1 adds ${added} local lights`);
 });

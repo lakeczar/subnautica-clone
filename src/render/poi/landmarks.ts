@@ -1,4 +1,3 @@
-import { ROUTES } from "../../content/regions/passages.js";
 import { STRUCTURES, type StructureDef } from "../../content/regions/structures.js";
 import { riftAxisAt } from "../../content/poi/sets.js";
 import { VISTA_SETS, type VistaPiece } from "../../content/vistas.js";
@@ -6,6 +5,9 @@ import type { Vec3 } from "../../world/types.js";
 import type { P3, RecipeBuilder, Rgb } from "../biomes/recipe.js";
 import type { VistaPart } from "../biomes/vistas.js";
 import { C, lit } from "./dressing.js";
+// Scatter imports the vista module, which imports this one: `blocked` is
+// only called while drawing, after every module has loaded.
+import { blocked } from "../biomes/scatter.js";
 
 /** Landmark lights (POI-1): in ATM-1's dark, big silhouettes vanish past
  * about 120 m, but lights survive the fog far longer (an unlit lamp keeps
@@ -17,7 +19,7 @@ import { C, lit } from "./dressing.js";
  *   a band along both faces of the lintel;
  * - the Rift head and cliff walls: ember seams along both walls;
  * - the Basin dishes: a dashed amber band round each rim;
- * - the wreck ridge's two ribbed hulls: work lamps on the keel and crowns.
+ * - the wreck ridge's two ribbed hulls: bands on the keel and rib crowns.
  *
  * Every lamp hugs what already exists: a structure's or vista's collision
  * (within 0.1 m), the terrain, or (the dishes, whose drawn rims stand above
@@ -80,22 +82,11 @@ function gateLamps(b: RecipeBuilder, floor: Floor): void {
 
 // --- Rift head and cliff walls ------------------------------------------------
 
-/** Carrier lanes keep 25 m clear of the swept hull (17 m), small-craft
- * routes 12 m of their centre line; seams near a route are left out. */
+/** Points of interest in open water keep carrier lanes 25 m clear of the
+ * swept hull (17 m) and small-craft routes 12 m clear of their centre line
+ * (tests/poi.test.ts). Seams lie on the rock like scatter, so they follow
+ * scatter's open-water keep-out instead (`blocked`). */
 export const CARRIER_CLEAR = 42, ROUTE_CLEAR = 12;
-const segDist = (p: Vec3, a: Vec3, c: Vec3): number => {
-  const d = { x: c.x - a.x, y: c.y - a.y, z: c.z - a.z }, l = d.x * d.x + d.y * d.y + d.z * d.z;
-  const t = l ? Math.max(0, Math.min(1, ((p.x - a.x) * d.x + (p.y - a.y) * d.y + (p.z - a.z) * d.z) / l)) : 0;
-  return Math.hypot(p.x - a.x - d.x * t, p.y - a.y - d.y * t, p.z - a.z - d.z * t);
-};
-export function nearRoute(p: Vec3, margin = 0): boolean {
-  for (const r of ROUTES) {
-    if (r.role === "walk") continue;
-    const clear = (r.carrier ? CARRIER_CLEAR : ROUTE_CLEAR) + margin;
-    for (let i = 1; i < r.path.length; i++) if (segDist(p, r.path[i - 1]!, r.path[i]!) < clear) return true;
-  }
-  return false;
-}
 /** Wall left dark round the kiln tube's mouth on the south-east wall (CA-3
  * `rift_kiln_tube` and the bible's footprint for it, with the kit's collar),
  * so no seam sits on a cave. */
@@ -108,7 +99,9 @@ export const SEAM_FROM = 24, SEAM_TO = 444, SEAM_PART = 60, SEAM_STEP = 8, SEAM_
  * wall is too low to be a cliff. */
 export function seamPoint(floor: Floor, s: number, side: number, frac: number): Vec3 | null {
   const a = riftAxisAt(s), at = (d: number): [number, number] => [a.x + a.nx * d * side, a.z + a.nz * d * side];
-  const bottom = Math.min(...[0, 8, 16].map(d => floor(...at(d)))), ledge = floor(...at(110));
+  // The cliff runs from the trench floor up to the lower ledge, 50-70 m out
+  // (the step to the upper ledge beyond it is not the cliff).
+  const bottom = Math.min(...[0, 8, 16].map(d => floor(...at(d)))), ledge = floor(...at(70));
   if (ledge - bottom < 25) return null;
   const y = bottom + (ledge - bottom) * frac;
   // The cliff itself stands within 80 m of the axis; a crossing further out
@@ -121,22 +114,24 @@ export function seamPoint(floor: Floor, s: number, side: number, frac: number): 
   return { x, y, z };
 }
 /** One stretch of ember seams on both walls: a rim seam just under the lip
- * (a dash every `SEAM_STEP` m), which outlines the trench from the Basin
- * side where the walls themselves are hidden, and a mid-wall seam (every
- * other step). Each dash is a ribbon between two points on the wall's
- * contour, set 0.4 m off the rock toward the trench. */
+ * (a dash every `SEAM_STEP` m), which outlines the trench from above and
+ * along its length, where the walls themselves are hidden. Each dash is a
+ * ribbon between two points on the wall's contour, set 0.4 m off the rock
+ * toward the trench. */
 function seams(b: RecipeBuilder, floor: Floor, from: number, to: number): void {
   lit(b, () => {
-    for (const side of [-1, 1]) for (let s = from; s < to; s += SEAM_STEP) for (const frac of Math.round(s / SEAM_STEP) % 2 ? [0.92] : [0.92, 0.5]) {
+    for (const side of [-1, 1]) for (let s = from; s < to; s += SEAM_STEP) {
+      const frac = 0.92;
       const p = seamPoint(floor, s, side, frac), q = seamPoint(floor, s + SEAM_DASH, side, frac);
-      if (!p || !q || Math.abs(p.y - q.y) > 3 || nearRoute(p, 1.5) || nearRoute(q, 1.5) || dark(p) || dark(q)) continue;
+      if (!p || !q || Math.abs(p.y - q.y) > 3 || dark(p) || dark(q)) continue;
+      if (blocked(p.x, p.z, p.y + 1, 1, p.y - 1) || blocked(q.x, q.z, q.y + 1, 1, q.y - 1)) continue;
       const a = riftAxisAt(s), ox = -a.nx * side * 0.4, oz = -a.nz * side * 0.4, h = 0.7;
       const P: P3 = [p.x + ox, p.y, p.z + oz], Q: P3 = [q.x + ox, q.y, q.z + oz];
       const quad = (lo: number, hi: number, c: Rgb): void => {
         b.face([[P[0], P[1] + lo, P[2]], [Q[0], Q[1] + lo, Q[2]], [Q[0], Q[1] + hi, Q[2]], [P[0], P[1] + hi, P[2]]], c);
         b.face([[P[0], P[1] + hi, P[2]], [Q[0], Q[1] + hi, Q[2]], [Q[0], Q[1] + lo, Q[2]], [P[0], P[1] + lo, P[2]]], c);
       };
-      quad(-h, h, frac > 0.7 ? C.ember : C.amber);
+      quad(-h, h, C.ember);
     }
   });
 }
@@ -175,35 +170,31 @@ function dishBand(b: RecipeBuilder, s: StructureDef): void {
 
 // --- Wreck ridge hulls -------------------------------------------------------------
 
-/** A prism's most upward face, shrunk about its centre and lifted off it:
- * a lamp plate on the beam's back. */
-function crownPlate(b: RecipeBuilder, piece: VistaPiece, shrink: number, color: Rgb): void {
-  let best: { pts: readonly Vec3[]; n: Vec3 } | null = null;
-  for (const f of piece.facets.slice(0, -2)) {
-    const [a, c, d] = f.pts as [Vec3, Vec3, Vec3];
-    const u = { x: c.x - a.x, y: c.y - a.y, z: c.z - a.z }, w = { x: d.x - a.x, y: d.y - a.y, z: d.z - a.z };
-    const n = { x: u.y * w.z - u.z * w.y, y: u.z * w.x - u.x * w.z, z: u.x * w.y - u.y * w.x }, l = Math.hypot(n.x, n.y, n.z) || 1;
-    const unit = { x: n.x / l, y: n.y / l, z: n.z / l };
-    if (!best || unit.y > best.n.y) best = { pts: f.pts, n: unit };
-  }
-  if (!best || best.n.y < 0.5) return;
-  const m = best.pts.reduce((s, q) => ({ x: s.x + q.x / best!.pts.length, y: s.y + q.y / best!.pts.length, z: s.z + q.z / best!.pts.length }), { x: 0, y: 0, z: 0 });
-  b.face(best.pts.map(q => [m.x + (q.x - m.x) * shrink + best!.n.x * 0.04, m.y + (q.y - m.y) * shrink + best!.n.y * 0.04, m.z + (q.z - m.z) * shrink + best!.n.z * 0.04] as P3), color);
+/** A glowing band wrapping a prism: a tube along its centre line (between
+ * its end caps' centres), `r` just over the prism's half-size and 80% of its
+ * length, so a hull's keel or rib reads as a line of light. */
+function band(b: RecipeBuilder, piece: VistaPiece, r: number, color: Rgb): void {
+  const centre = (f: { pts: readonly Vec3[] }): P3 => {
+    const n = f.pts.length;
+    return [f.pts.reduce((s, q) => s + q.x, 0) / n, f.pts.reduce((s, q) => s + q.y, 0) / n, f.pts.reduce((s, q) => s + q.z, 0) / n];
+  };
+  const [a, c] = piece.facets.slice(-2).map(centre) as [P3, P3], m = (t: number): P3 => [a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t, a[2] + (c[2] - a[2]) * t];
+  b.tube([m(0.1), m(0.9)], r, 6, color);
 }
 const HULL = VISTA_SETS.find(s => s.id === "wreck.hull")!, BOW = VISTA_SETS.find(s => s.id === "wreck.bow")!;
-/** Work lamps along the west hull's keel (petrol prisms) and the bow's rib
+/** Glowing bands on the west hull's keel (petrol prisms) and the bow's rib
  * crowns (the highest prism of each rib), so both hulls' backs read as lines
- * of light along the ridge. */
+ * of light along the ridge, even through the Basin's pale silt. */
 function hullLamps(b: RecipeBuilder): void {
   lit(b, () => {
-    HULL.pieces.filter(p => p.closed && p.facets.every(f => f.tone === "petrol")).forEach(p => crownPlate(b, p, 0.8, C.amber));
+    for (const p of HULL.pieces.filter(p => p.closed && p.facets.every(f => f.tone === "petrol"))) band(b, p, 0.6, C.amber);
     const ribs = new Map<number, VistaPiece>();
     for (const p of BOW.pieces.filter(p => p.closed && p.facets.every(f => f.tone === "rust" || f.tone === "rustDark"))) {
       const zs = p.facets.flatMap(f => f.pts.map(q => q.z)), key = Math.round((Math.min(...zs) + Math.max(...zs)) / 2);
       const top = (q: VistaPiece): number => Math.max(...q.facets.flatMap(f => f.pts.map(r => r.y)));
       if (!ribs.has(key) || top(p) > top(ribs.get(key)!)) ribs.set(key, p);
     }
-    for (const p of ribs.values()) crownPlate(b, p, 0.8, C.amber);
+    for (const p of ribs.values()) band(b, p, 0.42, C.amber);
   });
 }
 
