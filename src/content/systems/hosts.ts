@@ -3,6 +3,7 @@
  * Hearthline socket occupants to module kinds. Proposed balance, not final. */
 import { PLACES } from "../registry.js";
 import { WORKING_STOPS } from "../stops.js";
+import { CROWN_STATION } from "../hub/crownStation.js";
 import type { MaterialId } from "../registry.js";
 import type { Sys2ItemKind } from "./items.js";
 
@@ -96,9 +97,17 @@ export const FIXED_HOSTS = {
     kind: "stop", label: WORKING_STOPS.divide_dock.label, position: WORKING_STOPS.divide_dock.work, facility: "divide_dock", sockets: 3,
     unique: "800 m refits, mount changes and the forward air stop",
   },
+  // HUB-2: the crown station's sockets and its built-in survey array work with
+  // the third stage; the survey reaches 300 m without a mast.
+  crown_station: {
+    kind: "stop", label: WORKING_STOPS.crown_station.label, position: WORKING_STOPS.crown_station.work, facility: "crown_survey",
+    sockets: CROWN_STATION.sockets, unique: CROWN_STATION.unique, builtIn: ["survey"], surveyTier: CROWN_STATION.surveyTier,
+  },
 } as const satisfies Record<string, {
   kind: "pod" | "stop"; label: string; position: { x: number; y: number; z: number };
   facility: string | null; sockets: number; unique: string;
+  /** Services without a socket (a built-in survey array), and that array's tier. */
+  builtIn?: readonly ModuleKind[]; surveyTier?: number;
 }>;
 export type FixedHostId = keyof typeof FIXED_HOSTS;
 

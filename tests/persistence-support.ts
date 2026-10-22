@@ -84,11 +84,16 @@ export const S9_RESOURCES = [
  * the yard and stop lockers, each at New Game's first state and position. */
 export const C3_RESOURCES = [...Object.entries(WORLD_SOURCES), ...Object.entries(C4_SOURCES)]
   .map(([id, d]) => ({ id, stock: d.stock as number, reserve: d.reserve as number }));
-export const C3_FACILITIES = [{ id: "rift_station", repaired: false }, { id: "divide_dock", repaired: false }];
+export const C3_FACILITIES = [{ id: "rift_station", repaired: false }, { id: "divide_dock", repaired: false },
+  // HUB-2: the crown station's stages, additive since schema 5.
+  { id: "crown_power", repaired: false }, { id: "crown_dock", repaired: false }, { id: "crown_survey", repaired: false }];
 export const C3_LOCKERS = [
   { id: "stack_yard_locker", kind: "locker", capacity: 48, ownerId: "stack_yard" },
   { id: "rift_station_locker", kind: "locker", capacity: 48, ownerId: "rift_station" },
   { id: "divide_dock_locker", kind: "locker", capacity: 48, ownerId: "divide_dock" },
+  { id: "crown_station_locker", kind: "locker", capacity: 48, ownerId: "crown_station" },
+  { id: "crown_station_store_a", kind: "locker", capacity: 48, ownerId: "crown_station" },
+  { id: "crown_station_store_b", kind: "locker", capacity: 48, ownerId: "crown_station" },
 ];
 export function withComposedFields<T extends { state: unknown }>(old: T): T {
   const s = structuredClone(old.state) as Record<string, any>;

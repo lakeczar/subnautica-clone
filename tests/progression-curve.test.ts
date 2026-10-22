@@ -6,6 +6,7 @@ import {
   type EvidenceId, type MaterialId, type RecipeId, type SourceId,
 } from "../src/content/registry.js";
 import { personalDepth } from "../src/sim/capabilities.js";
+import { HUB_RECIPES } from "../src/content/hub/recipes.js";
 import { CAMPAIGN_RECIPES, CAMPAIGN_SOURCE_SITES } from "../src/content/campaign/index.js";
 import { SUIT_RATINGS } from "../src/content/registry.js";
 import { addItem, available, fabricationContainers, hasRoom, transfer } from "../src/sim/inventory.js";
@@ -32,8 +33,11 @@ const CAMPAIGN = Object.keys(CAMPAIGN_RECIPES) as RecipeId[];
 const C4 = Object.keys({ ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES, ...SYS2_RECIPES }) as RecipeId[];
 /** CR-1's hand net: an optional reef-plans tool; tests/cr-1-creatures.test.ts covers it. */
 const CR1 = Object.keys(FAUNA_RECIPES) as RecipeId[];
+/** HUB-2's crown station stages; tests/crown-station.test.ts proves them. */
+const HUB = Object.keys(HUB_RECIPES) as RecipeId[];
 const PRE_B1 = ids.filter((id) => !(B1 as readonly string[]).includes(id) && !(STORY as readonly string[]).includes(id) &&
-  !(CAMPAIGN as readonly string[]).includes(id) && !(C4 as readonly string[]).includes(id) && !(CR1 as readonly string[]).includes(id));
+  !(CAMPAIGN as readonly string[]).includes(id) && !(C4 as readonly string[]).includes(id) && !(CR1 as readonly string[]).includes(id) &&
+  !(HUB as readonly string[]).includes(id));
 const visible = (s: GameState) => ids.filter((id) => s.knowledge.blueprints.includes(RECIPES[id].bp));
 const POD = { x: 0, y: 0.18, z: 21.2 }, WORKSHOP = { x: 11, y: 1.2, z: -35 };
 function opened(): GameState { const s = createGame(); completeOpening(s); return s; }
@@ -54,6 +58,7 @@ test("New Game exposes only the pod checklist ladder; unknown or premature plans
     ...Object.fromEntries(B1.map((id) => [id, "blueprint"])),
     ...Object.fromEntries(STORY.map((id) => [id, "blueprint"])),
     ...Object.fromEntries(CAMPAIGN.map((id) => [id, "blueprint"])),
+    ...Object.fromEntries(HUB.map((id) => [id, "blueprint"])),
     ...Object.fromEntries(C4.map((id) => [id, "blueprint"])),
     ...Object.fromEntries(CR1.map((id) => [id, "blueprint"])),
   }, "nothing beyond the first repair is attemptable; it still needs materials");
@@ -80,10 +85,11 @@ test("each clue unlocks a bounded, exact plan set; every one of the 120 clue ord
     C01: [], C02: ["salvage_buoy", "bobbin_kit", "glow_lures", "startle_ink", "bobbin_deep_tether", "flare_launcher", "emergency_ballast", "hand_net"],
     C03: ["restore_workshop", "dart_base", "hearthline_base", "galley_planter", "plating_alloy", "cell_bank_1", "drive_tuning_1",
       "floodlights_1", "dart_overdrive", "hearthline_system_bay", "hearthline_mooring_anchor", "outpost_network_1"],
-    C04: ["dart_acoustic_trim", "suit_350", "restore_canopy_stop", "trim_vanes", "silent_running", "chart_live_position"],
-    C05: ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "hearthline_keel", "creel_service_head"],
+    // HUB-2: each crown stage unlocks with the plan it uses.
+    C04: ["dart_acoustic_trim", "suit_350", "restore_canopy_stop", "trim_vanes", "restore_crown_dock", "silent_running", "chart_live_position"],
+    C05: ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "hearthline_keel", "restore_crown_power", "creel_service_head"],
     C06: ["creel_350", "suit_450", "creel_450", "restore_rift_station", "hearthline_550", "heat_shroud", "hull_heat_lining",
-      "plating_ceramic", "cell_bank_2", "drive_tuning_2", "thermal_exchanger", "floodlights_2", "hush_450", "dart_450"],
+      "restore_crown_survey", "plating_ceramic", "cell_bank_2", "drive_tuning_2", "thermal_exchanger", "floodlights_2", "hush_450", "dart_450"],
   });
   // M2-B1: the Creel service plan is fully executable; carrier and deeper pressure
   // research stay listed as future knowledge even where part of a plan now executes.

@@ -112,6 +112,24 @@
           "kind": "locker",
           "capacity": 48,
           "ownerId": "divide_dock"
+        },
+        {
+          "id": "crown_station_locker",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "crown_station"
+        },
+        {
+          "id": "crown_station_store_a",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "crown_station"
+        },
+        {
+          "id": "crown_station_store_b",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "crown_station"
         }
       ],
       "buoy": {
@@ -669,6 +687,18 @@
         },
         {
           "id": "divide_dock",
+          "repaired": false
+        },
+        {
+          "id": "crown_power",
+          "repaired": false
+        },
+        {
+          "id": "crown_dock",
+          "repaired": false
+        },
+        {
+          "id": "crown_survey",
           "repaired": false
         }
       ],

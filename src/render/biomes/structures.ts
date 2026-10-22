@@ -4,6 +4,7 @@ import { MERIDIAN_CENTRE, MERIDIAN_TERRACES, MERIDIAN_WALL } from "../../content
 import { hash2 } from "../../content/regions/noise.js";
 import { PALETTE } from "../palette.js";
 import { hex, mix, RecipeBuilder, type P3 } from "./recipe.js";
+import { drawSolidSet } from "./vistas.js";
 
 /** `s2.structures`: cel art for authored structures, drawn inside the same
  * dimensions as their collision solids (content/regions/structures.ts), so
@@ -71,41 +72,11 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
     for (let y = 2; y < h - 1; y += 4) b.frustum([x, base + y, z], [x, base + y + 0.8, z], 0.9 - y * 0.03, 0.88 - y * 0.03, fine ? 6 : 4, C.ochre);
     glow(b, () => b.box([x, base + h + 0.2, z], [0.55, 0.4, 0.55], C.glow));
   },
-  dish(b, s, fine) {
-    const R = s.p.radius!, tilt = s.p.tilt!, face = s.p.facing!, seg = fine ? 18 : 10, rings = fine ? 6 : 3;
-    const c: P3 = [s.x, s.base + 2.2, s.z];
-    const ax: P3 = [Math.cos(face), 0, Math.sin(face)];
-    const rot = (p: P3): P3 => {
-      // Tilt about the horizontal axis perpendicular to `facing`.
-      const along = p[0] * ax[0] + p[2] * ax[2], perp: P3 = [p[0] - along * ax[0], 0, p[2] - along * ax[2]];
-      const ca = Math.cos(tilt), sa = Math.sin(tilt);
-      const a2 = along * ca - p[1] * sa, y2 = along * sa + p[1] * ca;
-      return [c[0] + perp[0] + a2 * ax[0], c[1] + y2 + Math.sin(tilt) * R * 0.5, c[2] + perp[2] + a2 * ax[2]];
-    };
-    const ring = (k: number): P3[] => Array.from({ length: seg }, (_, i) => {
-      const r = R * k / rings, t = i / seg * Math.PI * 2;
-      return rot([Math.cos(t) * r, (r * r) / R * 0.32, Math.sin(t) * r]);
-    });
-    let prev = Array.from({ length: seg }, () => rot([0, 0, 0]));
-    for (let k = 1; k <= rings; k++) {
-      const cur = ring(k);
-      for (let i = 0; i < seg; i++) {
-        const j = (i + 1) % seg;
-        const col = (k + (i >> 1)) % 3 === 0 ? C.shell : C.porcelain;
-        b.face([prev[j]!, cur[j]!, cur[i]!, prev[i]!], hash2(i, k, s.id.length) > 0.82 ? C.steel : col);
-      }
-      prev = cur;
-    }
-    b.tube([...prev, prev[0]!], 0.35, 4, C.petrol);
-    // Feed tripod and horn over the bowl; grounding fins under the rim.
-    const focus = rot([0, R * 0.62, 0]);
-    for (let i = 0; i < 3; i++) b.tube([prev[Math.floor(i * seg / 3)]!, focus], 0.18, 4, C.metal);
-    b.frustum(focus, rot([0, R * 0.55, 0]), 0.9, 0.5, 6, C.ochre);
-    b.aabb([s.x - R * 0.14, s.base, s.z - R * 0.14], [s.x + R * 0.14, s.base + 3.2, s.z + R * 0.14], C.petrol);
-    for (let i = 0; i < (fine ? 10 : 4); i++) {
-      const t = (i + 0.3) / (fine ? 10 : 4) * Math.PI * 2, p = prev[Math.floor(t / (Math.PI * 2) * seg) % seg]!;
-      b.box([p[0], p[1] - 1.2, p[2]], [0.18, 1.6, 1.4], C.metal, t);
-    }
+  dish(b, s) {
+    // Exactly the shapes it is collided by (content/regions/dishGeometry.ts),
+    // at every LOD.
+    const art = s.dish!;
+    drawSolidSet(b, { id: s.id, region: s.region, anchor: s, blocks: art.blocks, pieces: [...art.pieces, ...art.bowl.map(f => ({ facets: [f], closed: false, axis: "y" as const, step: 1 }))] }, true);
   },
   girder(b, s, fine) {
     const sol = s.solids[0]!, lx = sol.max.x - sol.min.x, lz = sol.max.z - sol.min.z;
@@ -210,6 +181,16 @@ const DRAW: Readonly<Record<StructureDef["kind"], Draw>> = {
       }
       b.box([(sol.min.x + sol.max.x) / 2, sol.min.y + h * 0.12, sol.max.z + 0.04], [1.6, 2.2, 0.06], C.glow);
     });
+  },
+  beacon_mast(b, s, fine) {
+    // HUB-2: a slim lattice tower from the summit to the surface, banded so it
+    // reads against open water, with its lamp cage at the top (the lamp's
+    // light itself is the hub art's flare).
+    const sol = s.solids[0]!, x = s.x, z = s.z, r = (sol.max.x - sol.min.x) / 2, top = sol.max.y;
+    b.frustum([x, sol.min.y, z], [x, top - 2, z], r, r * 0.6, fine ? 6 : 4, C.steel);
+    for (let y = sol.min.y + 6; y < top - 3; y += fine ? 6 : 12) b.frustum([x, y, z], [x, y + 0.8, z], r * 1.15, r * 1.1, fine ? 6 : 4, C.ochre);
+    glow(b, () => b.frustum([x, top - 2, z], [x, top - 0.6, z], r * 0.9, r * 0.9, fine ? 8 : 4, C.glow));
+    b.frustum([x, top - 0.6, z], [x, top, z], r, 0.15, fine ? 6 : 4, C.petrol);
   },
   beacon(b, s, fine) {
     // A round beacon house inside its square collider: tapering wall, a

@@ -3,7 +3,8 @@ import { regionAtPoint } from "../content/regions/layout.js";
 import { faunaVerb } from "./faunaPanels.js";
 import { LEGACY_PRESERVE } from "../content/regions/terrain.js";
 import { ROUTE_REGIONS } from "../content/routes.js";
-import { inCanopyAir, nearPod, nearWorkshop, equipped } from "../sim/inventory.js";
+import { atAirStop, inCanopyAir, nearPod, nearWorkshop, equipped } from "../sim/inventory.js";
+import { WORKING_STOPS } from "../content/stops.js";
 import { personalLimit } from "../sim/progression.js";
 import { deliberateExit } from "../runtime/input.js";
 import type { AimedTarget, ReachPreview } from "../sim/targeting.js";
@@ -542,7 +543,9 @@ function airSourceLabel(state: GameState): string {
   const air = airSupply(state);
   const v = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
   return air.kind === "craft" && v ? `${HULLS[v.hull].label} air`
-    : air.kind === "refuge" ? `${nearPod(state) ? PLACES.home_pod.label : nearWorkshop(state) ? PLACES.island_workshop.label : inCanopyAir(state) ? PLACES.canopy_lab.label : cabinHull(state) ? "Creel cabin" : "Hearthline"} air`
+    : air.kind === "refuge" ? `${nearPod(state) ? PLACES.home_pod.label : nearWorkshop(state) ? PLACES.island_workshop.label : inCanopyAir(state) ? PLACES.canopy_lab.label : cabinHull(state) ? "Creel cabin"
+      // HUB-2: a restored stop with air (the Rift station, the Divide dock, the crown station) names itself.
+      : atAirStop(state) ? WORKING_STOPS[atAirStop(state)!].label : "Hearthline"} air`
     : air.kind === "emergency" && cabinHull(state) ? `Cabin emergency air · ${Math.ceil(air.remainingSeconds!)} s`
     : air.kind === "surface" ? "Surface air"
     : `${air.kind === "emergency" ? "Emergency" : "Suit"} air · ${Math.ceil(air.remainingSeconds!)} s`;

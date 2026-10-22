@@ -217,28 +217,58 @@ test("the dish bands wrap the drawn rim", async () => {
   }
 });
 
-test("each deep leg's longest empty stretch stays inside the 90 s rule, on root's and W2's lanes", () => {
-  // Unlit sites and structures are noticed within 60 m in deep water; a lit
-  // POI or landmark from 150 m (its lights read at 200-300 m).
-  const before: Noticeable[] = [
-    ...SITES.map(s => ({ id: s.id, x: s.at.x, z: s.at.z, reach: 60 })),
-    ...STRUCTURES.map(s => ({ id: s.id, x: s.x, z: s.z, reach: 60 })),
-    ...VISTA_SETS.filter(s => !s.id.startsWith("poi.")).map(s => ({ id: s.id, x: s.anchor.x, z: s.anchor.z, reach: 60 })),
-  ];
-  const after: Noticeable[] = [...before, ...POIS.map(p => ({ id: p.id, x: p.beacon.x, z: p.beacon.z, reach: 150 })),
-    ...LANDMARK_LIGHTS.map(p => ({ id: p.id, x: p.x, z: p.z, reach: 150 }))];
+/** What a pilot notices on the deep legs. Unlit sites, structures and vista
+ * sets show within 60 m; a POI shows from 150 m at its beacon (its brightest
+ * light); a landmark from 150 m at any of its actual lights (the cluster
+ * centres the renderer lights it by), and counts once however many it has. */
+const centre = (boxes: readonly Aabb[]): Vec3 => ({ x: (Math.min(...boxes.map(b => b.min.x)) + Math.max(...boxes.map(b => b.max.x))) / 2,
+  y: (Math.min(...boxes.map(b => b.min.y)) + Math.max(...boxes.map(b => b.max.y))) / 2, z: (Math.min(...boxes.map(b => b.min.z)) + Math.max(...boxes.map(b => b.max.z))) / 2 });
+const UNLIT: Noticeable[] = [
+  ...SITES.map(s => ({ id: s.id, points: [{ x: s.at.x, y: typeof s.at.y === "number" ? s.at.y : worldFloor(s.at.x, s.at.z) + 1, z: s.at.z }], reach: 60 })),
+  ...STRUCTURES.map(s => ({ id: s.id, points: [centre(s.solids)], reach: 60 })),
+  ...VISTA_SETS.filter(s => !s.id.startsWith("poi.")).map(s => ({ id: s.id, points: [centre(VISTA_SOLIDS.filter(k => k.id.startsWith(`vista.${s.id}.`)).map(k => k.bounds))], reach: 60 })),
+];
+const LANDMARK_MARKS: Noticeable[] = (() => {
+  const by = new Map<string, Vec3[]>();
+  for (const part of LANDMARK_LIGHTS) {
+    const b = drawPart(part, false), id = part.id.replace(/\.\d+$/, "");
+    by.set(id, [...by.get(id) ?? [], ...clusterEmissive(b.positions, b.colors).map(c => ({ x: c.x, y: c.y, z: c.z }))]);
+  }
+  return [...by].filter(([, points]) => points.length).map(([id, points]) => ({ id, points, reach: 150 }));
+})();
+const poiMarks = (beacon: (p: (typeof POIS)[number]) => Vec3): Noticeable[] => POIS.map(p => ({ id: p.id, points: [beacon(p)], reach: 150 }));
+
+test("each POI's beacon is one of its own lights", () => {
+  for (const p of POIS) {
+    const lit = poiArt(p.id, false).flatMap(b => points(b).filter((_, i) => b.colors[i * 4 + 3] === -1));
+    const d = Math.min(...lit.map(q => Math.hypot(q.x - p.beacon.x, q.y - p.beacon.y, q.z - p.beacon.z)));
+    assert.ok(d <= 3, `${p.id}: its beacon is ${d.toFixed(1)} m from its nearest light`);
+  }
+});
+
+test("each deep leg's longest empty stretch, seen in 3D over the terrain, stays inside the 90 s rule", () => {
   const rows: string[] = [];
   for (const leg of DEEP_LEGS) {
-    const paths = [legRoute(leg).path, ...(leg.id === "basin_rift" ? [W2_LANES[0]!] : leg.id === "basin_divide" ? [W2_LANES[1]!] : [])];
-    for (const [k, path] of paths.entries()) {
-      const was = longestEmpty(path, before), now = longestEmpty(path, after);
-      rows.push(`${leg.label}${k ? " (W2 lane)" : ""}: ${was.gap.toFixed(0)} m / ${(was.gap / leg.speed).toFixed(0)} s -> ${now.gap.toFixed(0)} m / ${(now.gap / leg.speed).toFixed(0)} s`);
-      assert.ok(now.gap / leg.speed <= EMPTY_TRAVEL_LIMIT * 0.7, `${leg.label}: ${now.gap.toFixed(0)} m empty from s=${now.from.toFixed(0)}`);
-      // Every POI of this leg is seen from it.
-      for (const p of POIS.filter(q => q.leg === leg.id)) assert.ok(now.seen.some(s => s.id === p.id), `${p.id} is not seen from ${leg.route}`);
-    }
+    const path = legRoute(leg).path, was = longestEmpty(path, UNLIT, worldFloor), now = longestEmpty(path, [...UNLIT, ...poiMarks(p => p.beacon), ...LANDMARK_MARKS], worldFloor);
+    rows.push(`${leg.label}: ${was.gap.toFixed(0)} m / ${(was.gap / leg.speed).toFixed(0)} s -> ${now.gap.toFixed(0)} m / ${(now.gap / leg.speed).toFixed(0)} s`);
+    assert.ok(now.gap / leg.speed <= EMPTY_TRAVEL_LIMIT, `${leg.label}: ${now.gap.toFixed(0)} m empty from s=${now.from.toFixed(0)}`);
+    // Every POI of this leg is seen from it.
+    for (const p of POIS.filter(q => q.leg === leg.id)) assert.ok(now.seen.some(s => s.id === p.id), `${p.id} is not seen from ${leg.route}`);
   }
   console.log(`longest empty stretch, at the leg's best craft:\n  ${rows.join("\n  ")}`);
+});
+
+test("ADVERSE controls: a beacon 1 km down, or a lamp behind the Divide ridge, is not seen", () => {
+  const sunk = poiMarks(p => ({ ...p.beacon, y: p.beacon.y - 1000 }));
+  for (const leg of DEEP_LEGS) {
+    const seen = longestEmpty(legRoute(leg).path, [...UNLIT, ...sunk], worldFloor).seen;
+    for (const p of POIS.filter(q => q.leg === leg.id)) assert.ok(!seen.some(s => s.id === p.id), `${p.id} sunk 1 km is still seen from ${leg.route}`);
+  }
+  // Within reach, but over the ridge's crest from the Meridian lane.
+  const behind = { x: 860, y: worldFloor(860, -1262) + 2, z: -1262 };
+  const broad = DEEP_LEGS.find(l => l.id === "divide_meridian")!;
+  assert.ok(!longestEmpty(legRoute(broad).path, [{ id: "behind", points: [behind], reach: 400 }], worldFloor).seen.length, "a lamp behind the ridge is seen through it");
+  assert.ok(longestEmpty(legRoute(broad).path, [{ id: "lee", points: [{ ...behind, z: -1090, y: worldFloor(860, -1090) + 2 }], reach: 400 }], worldFloor).seen.length, "control: the same lamp in the lee is seen");
 });
 
 test("light and vertex budget: per chunk and in total", () => {

@@ -26,6 +26,7 @@ import { isSuitProtection } from "../sim/ecologyLink.js";
 import { CREEL_CABIN, fittedMount, holdCapacity, hullToWorld } from "../sim/fleet.js";
 import { CANISTER_CU, recoverableHull, recoveryRouteFor } from "../sim/recovery.js";
 import { renewalCap } from "../sim/renewal.js";
+import { CROWN_RESTORATIONS } from "../content/hub/crownStation.js";
 import { RECOVERY_ROUTES, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
 import { deepRoute, recoveryRouteIds } from "../content/recoveryRoutes.js";
 import type { GameState } from "../sim/types.js";
@@ -769,7 +770,10 @@ function semantic(s: GameState, fresh: GameState): boolean {
     s.world.facilities.find((f) => f.id === "rift_station")!.repaired !==
       k.crafted.includes("restore_rift_station") ||
     s.world.facilities.find((f) => f.id === "divide_dock")!.repaired !==
-      k.crafted.includes("restore_divide_stop")
+      k.crafted.includes("restore_divide_stop") ||
+    // HUB-2: each crown stage is repaired exactly when its restoration was paid.
+    (Object.entries(CROWN_RESTORATIONS) as [RecipeId, string][]).some(([recipe, id]) =>
+      s.world.facilities.find((f) => f.id === id)!.repaired !== k.crafted.includes(recipe))
   )
     return false;
   // Frame hosts have no reserve; timed lifts/arms work only their own host kinds.

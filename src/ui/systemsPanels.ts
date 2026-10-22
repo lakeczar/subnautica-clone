@@ -29,7 +29,8 @@ import {
 } from "../sim/systems/index.js";
 import type { JournalTabId } from "../sim/systems/journal.js";
 import type { CreatureEntry, CycleEntry } from "../sim/systems/index.js";
-import { berthChargePlan, chartOptions, deployPoint, hostPower, hostPowerReason, OUTPOST_SERVICE_RADIUS, outpostRules, siteQuery, systemsContext } from "../sim/systemsLink.js";
+import { berthChargePlan, chartOptions, deployPoint, hostPower, hostPowerReason, OUTPOST_SERVICE_RADIUS, outpostRules, siteQuery, surveyTierAt, systemsContext } from "../sim/systemsLink.js";
+import { surveyRange } from "../sim/systems/survey.js";
 import { serviceLabel, servicePreview } from "../sim/serviceLink.js";
 import { currentObjective } from "../sim/objective.js";
 import type { GameState, WorldQueries } from "../sim/types.js";
@@ -80,6 +81,9 @@ export function basePanel(s: GameState, world: WorldQueries, button: CommandButt
     }).join("");
     const outpost = sys.outposts.find((o) => o.id === host.id);
     let extra = "";
+    // HUB-2: a fixed host's built-in survey array (the crown station's).
+    if (host.kind !== "outpost" && host.builtIn.includes("survey"))
+      extra += `<p>${button("Survey", { type: "survey", hostId: host.id }, !powered, reason ?? undefined)} <small>Built-in array · scanned materials within ${surveyRange(surveyTierAt(s, host))} m.</small></p>`;
     if (outpost) {
       const pack = packPreview(s, sys, outpost.id), up = upgradePreview(s, sys, outpost.id);
       // The outpost's charger: each craft moored within its reach, through the same

@@ -1,7 +1,7 @@
 import { CREEL_BUILD_POSE, DART_BUILD_POSE, HULLS, ITEMS, MATERIALS } from "../content/registry.js";
 import type { FabricationSite, ItemKind, MaterialId } from "../content/registry.js";
 import { CANOPY_STOP } from "../content/routes.js";
-import { MOORING_SERVICE_RADIUS, SERVICE_MOORINGS, STOP_IDS, stopForSite, WORKING_STOPS, type WorkingStopId } from "../content/stops.js";
+import { MOORING_SERVICE_RADIUS, SERVICE_MOORINGS, STOP_IDS, stopForSite, WORKING_STOPS, type WorkingStop, type WorkingStopId } from "../content/stops.js";
 import { HEARTHLINE_CONTAINERS } from "../content/fleet/hearthlineInterior.js";
 import type { Fitting, GameState, ItemStack, Vec3, VehicleState } from "./types.js";
 import { FIXED_HOSTS, HOST_REACH, moduleOfItem } from "../content/systems/hosts.js";
@@ -145,6 +145,13 @@ export function stopWorks(s: GameState, id: WorkingStopId): boolean {
   const f = WORKING_STOPS[id].facility;
   return f === null || facility(s, f);
 }
+/** A working stop serves moored craft: it works and, for a staged stop, its
+ * dock stage is restored too (HUB-2, Sol W2-03: the crown's power-and-air
+ * stage must not open service, mounts, refits or moored holds). */
+export function stopServes(s: GameState, id: WorkingStopId): boolean {
+  const dock = (WORKING_STOPS[id] as WorkingStop).dock;
+  return stopWorks(s, id) && (dock === undefined || facility(s, dock));
+}
 /** The diver is at a working stop's work pose, on foot or swimming. */
 export function nearStop(s: GameState, id: WorkingStopId): boolean {
   const stop = WORKING_STOPS[id];
@@ -166,7 +173,7 @@ export function supportedServiceSite(s: GameState, v: VehicleState): ServiceSite
     return "home_pod";
   if (distance(v.pose.position, CANOPY_STOP.mooring) < CANOPY_STOP.serviceRadius && facility(s, "canopy_stop"))
     return "canopy_stop";
-  const stop = STOP_IDS.find((id) => stopWorks(s, id) && distance(v.pose.position, WORKING_STOPS[id].mooring) < WORKING_STOPS[id].serviceRadius);
+  const stop = STOP_IDS.find((id) => stopServes(s, id) && distance(v.pose.position, WORKING_STOPS[id].mooring) < WORKING_STOPS[id].serviceRadius);
   if (stop) return stop;
   const mooring = SERVICE_MOORINGS.find((m) => distance(v.pose.position, m.position) < MOORING_SERVICE_RADIUS);
   return mooring ? `mooring:${mooring.id}` : null;
@@ -190,6 +197,9 @@ export function containerAccessible(s: GameState, id: string): boolean {
     return localBenchSite(s) === "canopy_stop";
   const stopLocker = STOP_IDS.find((stop) => WORKING_STOPS[stop].locker === id);
   if (stopLocker) return localBenchSite(s) === stopLocker;
+  // A staged stop's extra stores open with its dock stage, at its door.
+  const storeOf = STOP_IDS.find((stop) => (WORKING_STOPS[stop] as WorkingStop).stores?.includes(id));
+  if (storeOf) return localBenchSite(s) === storeOf && stopServes(s, storeOf);
   const compartment = carrierCompartment(s, id);
   if (compartment) return s.player.interiorId === compartment.host.id && !compartment.host.disabled;
   // C4 (SYS-2): an outpost's locker at that outpost; a locker module's container
@@ -247,6 +257,8 @@ export function containerLabel(s: GameState, id: string): string {
   if (id === "canopy_stop_locker") return "mooring locker";
   const stopLocker = STOP_IDS.find((stop) => WORKING_STOPS[stop].locker === id);
   if (stopLocker) return stopLocker === "stack_yard" ? "yard store" : `${WORKING_STOPS[stopLocker].label} locker`;
+  const storeOf = STOP_IDS.find((stop) => (WORKING_STOPS[stop] as WorkingStop).stores?.includes(id));
+  if (storeOf) return `${WORKING_STOPS[storeOf].label} store ${((WORKING_STOPS[storeOf] as WorkingStop).stores!.indexOf(id) + 1)}`;
   if (s.inventory.items.some((i) => i.kind === "creel_cabin" && cabinLockerId(i.id) === id)) return "cabin locker";
   const outpost = s.systems.outposts.find((o) => `${o.id}_locker` === id);
   if (outpost) return `${outpost.name} locker`;
@@ -376,10 +388,11 @@ export function fabricationContainers(
   const stop = stopForSite(site);
   if (stop) {
     if (!nearStop(s, stop)) return [];
-    const locker = WORKING_STOPS[stop].locker;
+    const locker = WORKING_STOPS[stop].locker, stores = (WORKING_STOPS[stop] as WorkingStop).stores ?? [];
     return [
       "diver",
       ...(locker && containerAccessible(s, locker) ? [locker] : []),
+      ...stores.filter((c) => containerAccessible(s, c)),
       ...(containerAccessible(s, "buoy_hold") ? ["buoy_hold"] : []),
       ...s.fleet.vehicles.filter((v) => supportedServiceSite(s, v) === stop && containerAccessible(s, v.cargoId)).map((v) => v.cargoId),
     ];

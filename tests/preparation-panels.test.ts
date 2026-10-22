@@ -443,7 +443,8 @@ test("M2 preparation presents the paid in-place personal refit beside the unchan
   assert.match(recipe("suit_350"), /Tagged structural frame: 1 \/ 1/);
   assert.match(recipe("suit_350"), /Conductive crust: 4 \/ 4/);
   // C4 (M2 audit #3): the restored stop of the refit's tier also does it.
-  assert.match(recipe("suit_350"), /Splitspine workshop bench or the outer-crown mooring · restored/);
+  // HUB-2: the crown station's bench also runs the refit once its dock stage is restored.
+  assert.match(recipe("suit_350"), /Splitspine workshop bench or the outer-crown mooring, Crown station · restored/);
   assert.equal(refit().disabled, false); assert.equal(refit().label, "Refit");
   assert.match(refit().attrs, /aria-label="Suit refit · 350 m"/);
   assert.deepEqual(s, before);
@@ -572,7 +573,9 @@ test("the fabricator lists only known plans; Basin plans add exactly the earned 
   assert.deepEqual(c4.sort(), ["cell_bank_2", "creel_service_head", "dart_450", "drive_tuning_2", "floodlights_2", "hush_450",
     "plating_ceramic", "thermal_exchanger"]);
   assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells",
-    "creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "creel_350", ...campaign, ...c4]), "Basin clues add the earned workboat rows");
+    "creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "creel_350", ...campaign, ...c4,
+    // HUB-2: the crown station's stages ride on the Creel and Rift plans.
+    "restore_crown_power", "restore_crown_survey"]), "Basin clues add the earned workboat rows");
   panel.refresh("notebook", s);
   assert.match(html(), /Plans retained <small>2<\/small>/);
   assert.match(html(), /Research knowledge · construction not available yet\./);
