@@ -60,13 +60,9 @@ export function frameOf(def: CaveDef, extra: readonly Solid[] = []): Frame {
 }
 
 // --- Rock lookups --------------------------------------------------------------
-// X/Z columns for `nearRock`, and 2 m cells for point tests and distances: a
-// solid containing a point, or within `reach` of it, overlaps a cell within
-// `reach` (TT-1: a query skips the rock above and below).
 const BUCKET = 2;
-const rockGrids = new WeakMap<CaveDef, Map<number, Solid[]>>(), rockCells = new WeakMap<CaveDef, Map<number, Solid[]>>();
+const rockGrids = new WeakMap<CaveDef, Map<number, Solid[]>>();
 const key = (i: number, k: number): number => (i + 100000) * 200000 + (k + 100000);
-const cellKey = (i: number, j: number, k: number): number => key(i, k) * 4000 + (j + 2000);
 function rockGrid(def: CaveDef): Map<number, Solid[]> {
   let g = rockGrids.get(def);
   if (g) return g;
@@ -78,18 +74,6 @@ function rockGrid(def: CaveDef): Map<number, Solid[]> {
   rockGrids.set(def, g);
   return g;
 }
-function rockCellGrid(def: CaveDef): Map<number, Solid[]> {
-  let g = rockCells.get(def);
-  if (g) return g;
-  g = new Map();
-  for (const s of def.rock)
-    for (let i = Math.floor(s.min.x / BUCKET); i <= Math.floor(s.max.x / BUCKET); i++)
-      for (let k = Math.floor(s.min.z / BUCKET); k <= Math.floor(s.max.z / BUCKET); k++)
-        for (let j = Math.floor(s.min.y / BUCKET); j <= Math.floor(s.max.y / BUCKET); j++)
-          (g.get(cellKey(i, j, k)) ?? g.set(cellKey(i, j, k), []).get(cellKey(i, j, k))!).push(s);
-  rockCells.set(def, g);
-  return g;
-}
 export function nearRock(def: CaveDef, p: Readonly<Vec3>, reach: number, visit: (s: Solid) => boolean | void): void {
   const g = rockGrid(def), seen = new Set<Solid>();
   for (let i = Math.floor((p.x - reach) / BUCKET); i <= Math.floor((p.x + reach) / BUCKET); i++)
@@ -99,21 +83,10 @@ export function nearRock(def: CaveDef, p: Readonly<Vec3>, reach: number, visit: 
 export const insideBox = (p: Readonly<Vec3>, s: Solid, margin = 1e-9): boolean =>
   p.x > s.min.x + margin && p.x < s.max.x - margin && p.y > s.min.y + margin && p.y < s.max.y - margin &&
   p.z > s.min.z + margin && p.z < s.max.z - margin;
-export const inRock = (def: CaveDef, p: Readonly<Vec3>): boolean =>
-  (rockCellGrid(def).get(cellKey(Math.floor(p.x / BUCKET), Math.floor(p.y / BUCKET), Math.floor(p.z / BUCKET))) ?? []).some(s => insideBox(p, s));
-/** Distance to the nearest rock: exact within `reach`, otherwise some value above it (Infinity if none is near). */
+export const inRock = (def: CaveDef, p: Readonly<Vec3>): boolean => { let hit = false; nearRock(def, p, 0, s => (hit = insideBox(p, s))); return hit; };
 export const rockDistance = (def: CaveDef, p: Readonly<Vec3>, reach = 1): number => {
-  const g = rockCellGrid(def), seen = new Set<Solid>();
   let best = Infinity;
-  for (let i = Math.floor((p.x - reach) / BUCKET); i <= Math.floor((p.x + reach) / BUCKET); i++)
-    for (let k = Math.floor((p.z - reach) / BUCKET); k <= Math.floor((p.z + reach) / BUCKET); k++)
-      for (let j = Math.floor((p.y - reach) / BUCKET); j <= Math.floor((p.y + reach) / BUCKET); j++)
-        for (const s of g.get(cellKey(i, j, k)) ?? []) {
-          if (seen.has(s)) continue;
-          seen.add(s);
-          best = Math.min(best, boxDistance(s, p));
-          if (best === 0) return 0;
-        }
+  nearRock(def, p, reach, s => { best = Math.min(best, boxDistance(s, p)); return best === 0; });
   return best;
 };
 
@@ -305,11 +278,7 @@ export function checkShellAgrees(g: CaveGroup): string[] {
     if (inRock(def, p)) { out.push(`${def.id}: room cell ${JSON.stringify(p)} is inside rock`); break; }
   }
   if (cells < 500) out.push(`${def.id}: only ${cells} room cells`);
-  // The sweep runs y fastest: remember the last column's floor (same values; TT-1).
-  const floor = floorOf(g);
-  let lastX = NaN, lastZ = NaN, lastFloor = 0;
-  const columnFloor = (x: number, z: number): number => x === lastX && z === lastZ ? lastFloor : (lastX = x, lastZ = z, lastFloor = floor(x, z));
-  const sampler = caveSampler(g.source, columnFloor), f = def.replacementFootprints[0]!;
+  const sampler = caveSampler(g.source, floorOf(g)), f = def.replacementFootprints[0]!;
   // Rock deeper than one cube below the surface must all be collision; the
   // skin above it may be rounded off where the ground is convex (a crest
   // loses what no 2 m cube fits in, from art and collision together).

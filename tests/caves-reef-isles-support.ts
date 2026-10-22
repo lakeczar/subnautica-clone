@@ -151,10 +151,11 @@ export function glow(p: Vec3): number {
 }
 export const head = (p: Vec3): Vec3 => ({ ...p, y: p.y + 0.6 });
 
-// Rock solids of every cave in 2 m cells: a solid strictly containing a point
-// overlaps that point's cell, and one within `reach` overlaps a cell within
-// `reach` (TT-1: cells, not X/Z columns, so a query skips the rock above and below).
-const BUCKET = 2, cells = new Map<number, Solid[]>(), bucketed = new Set<string>();
+// Rock solids of every cave in 2 x 8 x 2 m cells (X, Y, Z): a solid strictly
+// containing a point overlaps that point's cell, and one within `reach`
+// overlaps a cell within `reach` (TT-1: cells, not X/Z columns, so a query
+// skips the rock above and below; 8 m tall to keep the index small).
+const BUCKET = 2, BUCKET_Y = 8, cells = new Map<number, Solid[]>(), bucketed = new Set<string>();
 const bucketKey = (i: number, k: number): number => (i + 10000) * 20000 + (k + 10000);
 const cellKey = (i: number, j: number, k: number): number => bucketKey(i, k) * 4000 + (j + 2000);
 function bucketRock(id: string): void {
@@ -163,7 +164,7 @@ function bucketRock(id: string): void {
   for (const s of kit(id).def.rock)
     for (let i = Math.floor(s.min.x / BUCKET); i <= Math.floor(s.max.x / BUCKET); i++)
       for (let k = Math.floor(s.min.z / BUCKET); k <= Math.floor(s.max.z / BUCKET); k++) {
-        for (let j = Math.floor(s.min.y / BUCKET); j <= Math.floor(s.max.y / BUCKET); j++)
+        for (let j = Math.floor(s.min.y / BUCKET_Y); j <= Math.floor(s.max.y / BUCKET_Y); j++)
           (cells.get(cellKey(i, j, k)) ?? cells.set(cellKey(i, j, k), []).get(cellKey(i, j, k))!).push(s);
       }
 }
@@ -178,7 +179,7 @@ function bucketNear(p: Vec3, reach: number): void {
 const insideBox = (p: Vec3, s: Solid): boolean => p.x > s.min.x && p.x < s.max.x && p.y > s.min.y && p.y < s.max.y && p.z > s.min.z && p.z < s.max.z;
 export const inRock = (p: Vec3): boolean => {
   bucketNear(p, 0);
-  return (cells.get(cellKey(Math.floor(p.x / BUCKET), Math.floor(p.y / BUCKET), Math.floor(p.z / BUCKET))) ?? []).some(s => insideBox(p, s));
+  return (cells.get(cellKey(Math.floor(p.x / BUCKET), Math.floor(p.y / BUCKET_Y), Math.floor(p.z / BUCKET))) ?? []).some(s => insideBox(p, s));
 };
 /** Distance from `p` to the nearest cave rock: exact when that is within
  * `reach`; otherwise some value above `reach` (Infinity if none is near). */
@@ -188,7 +189,7 @@ export function rockDistance(p: Vec3, reach = 1): number {
   const stamp = ++visitStamp;
   for (let i = Math.floor((p.x - reach) / BUCKET); i <= Math.floor((p.x + reach) / BUCKET); i++)
     for (let k = Math.floor((p.z - reach) / BUCKET); k <= Math.floor((p.z + reach) / BUCKET); k++)
-      for (let j = Math.floor((p.y - reach) / BUCKET); j <= Math.floor((p.y + reach) / BUCKET); j++)
+      for (let j = Math.floor((p.y - reach) / BUCKET_Y); j <= Math.floor((p.y + reach) / BUCKET_Y); j++)
         for (const s of cells.get(cellKey(i, j, k)) ?? []) {
           if (visited.get(s) === stamp) continue;
           visited.set(s, stamp);

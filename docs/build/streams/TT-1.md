@@ -31,7 +31,12 @@ Times on the shared 6-vCPU VM; other agents were running, so each pair was measu
    - **Concurrency:** `min(5, cores − 1)`, so 5 on this VM (was 4). Fast files peak at 140–600 MiB inside their 1 GiB heaps.
 4. **Heavy pool.** Inside `heavy-check.sh`'s lock and 6 GiB scope, heavy files now run up to 3 at a time while their peak-RSS budgets total no more than 4.5 GiB, largest first. A file over the pool runs alone. Each file's output is printed whole when it ends, and the per-file RSS watchdog is unchanged. Overrides: `SILTWAKE_HEAVY_CONCURRENCY`, `SILTWAKE_HEAVY_POOL_MIB`. *DIRECTION's "Tests" line, which says heavy runs one file at a time, needs the coordinator's update.*
 5. **Cheaper tests, same assertions:**
-   - **CA-1 and Fanvault rock queries** (`caves-reef-isles-support.ts`, `cave-support.ts`): rock solids in 2 m cells rather than X/Z columns. `inRock` returns the same boolean. `rockDistance` is exact within `reach`, and every caller compares against a threshold at or below `reach`. The source sweep remembers the last column's floor. The Reef shell check dropped from 13 s to 2 s, the Fanvault one from 4.4 s to 1.3 s, and the heavy full-stride versions speed up the same way.
+   - **CA-1 and Fanvault rock queries** (`caves-reef-isles-support.ts`, `cave-support.ts`): rock solids in cells rather than X/Z columns (2 × 8 × 2 m for CA-1, 2 m for the single Fanvault).
+     - `inRock` returns the same boolean.
+     - `rockDistance` is exact within `reach`, and every caller compares against a threshold at or below `reach`.
+     - The CA-1 source sweep remembers the last column's floor.
+     - Results: the Reef shell check dropped from 13 s to 1.7 s, the Fanvault one from 4.4 s to 1.3 s, and the heavy full-stride versions speed up the same way.
+     - The same change in `caves-canopy-basin-support.ts` was reverted. With 2 m cells its index held 56 million entries and pushed `caves-basin.heavy` over its memory budget, and that support only serves heavy files.
    - **`c4-cave-bake`:** the neighbour-edge test computes each chunk's live recipe once per LOD instead of once per pairing (5.2 → 1.4 s).
    - **Named test floors** for the cache: `cave-support.ts` (`shiftedFloor`) and `large-cave-support.ts` (`vaultFloor`).
 
