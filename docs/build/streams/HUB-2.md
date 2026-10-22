@@ -14,6 +14,21 @@ The pod stays the fallback: if the crown has no power, you wake at the pod. The 
 
 On the **carrier route**, the playthrough now restores the first two stages on its way to the Rift. It then makes the 450 m suit at the crown's bench and services the Creel at its dock, instead of the long way home to the island workshop.
 
+## The surface mast (owner, OPENING-DESIGN "Dependencies")
+The starting island's lookout will stand about 765 m from the crown at bearing 134° (+Z north), near (−217, −32). The crown's summit is 47 m deep, so a light down there can never reach it above water. The mast carries one to the surface.
+- **Mast:** `hub.crown_mast.mast` (`CROWN_MAST` in `content/hub/crownStation.ts`).
+  - **Shape:** a slim banded tower, 1.8 m square, from the summit's south lee at (326, −571) to +8 m. Its lamp cage sits at +7 m, just above the waterline.
+  - **Collision:** one structure record drives collision and art, like every S2 structure.
+  - **Clearance:** 13 m from the crown mouth, clear of the beacon house, the station and its mast. No route, rescue tether, rescue approach or carrier lane sweeps through it (`tests/hub.test.ts`).
+- **Lamp:** a slow lighthouse sweep (7 s period; dims to a quarter between passes) on the hub art's additive flare (`mastLampGlow` in `render/hubView.ts`).
+  - **Through air:** it fades over 900 m per e-fold, against about 555 m for the cel haze.
+  - **Underwater:** it fades like the summit beacon.
+  - **At the lookout:** glow 0.17–0.68 at 765 m.
+  - **Line of sight:** no land rises into it on today's terrain (the opening pass will rebuild the island; the test will catch a ridge in the way).
+- **Far layer:**
+  - **CW-1's layer** (`render/farLayer.ts` on `t3/enable-authored-cave-streaming`, not yet on root) registers every structure at least 20 m tall. The 55 m mast joins it automatically when CW-1 lands, as a silhouette plus lamp.
+  - **The lookout's range:** that layer still draws inside the camera's 450 m far plane. The lamp's flare is hub art, created once and never streamed, and past the far plane it becomes an impostor on the line of sight. That is what shows at 765 m.
+
 ## How it composes (C4's interfaces)
 - **Stop:** `content/stops.ts` gains a `crown_station` row with `facility: "crown_power"`. New optional `WorkingStop` fields support staged stops; stops without them work whole, as before.
   - `dock`: mooring service needs this facility as well.
@@ -42,7 +57,7 @@ On the **carrier route**, the playthrough now restores the first two stages on i
 - **UI:** the Fabricate status line names a working stop's bench, and the HUD's air source names an air stop. Both read "No bench here" and "Hearthline air" at every C3 stop before. The crown's stages fold into "Later" away from the crown, like S9's stops.
 
 ## Checks
-- `npm test`: **1,229/1,229**. `tests/crown-station.test.ts` (6), through `PanelProbe` and `executeCommand`:
+- `npm test`: **1,230/1,230** (with the mast's test). `tests/crown-station.test.ts` (6), through `PanelProbe` and `executeCommand`:
   - **Stages:** each stage paid at the door through Fabricate. Exactly the cost leaves, it pays once, a short payment and an unpaid press change nothing, the order holds, and each save round-trips.
   - **Dock:** Cargo's Service is disabled and refused at stage 1, and charges 12% → 100% and repairs 20 → 100 from stage 2. Out of reach, no service. The stores open with the dock.
   - **Bench:** the recipe split holds for every recipe. A paid `glow_lures` comes from a crown store; a paid `creel_450` comes from the moored Creel's hold. The bench is refused at stage 1 and for a hull away from the dock.
@@ -55,7 +70,7 @@ On the **carrier route**, the playthrough now restores the first two stages on i
   - the composed-field helpers (`persistence-support`);
   - the stop-pose exemption (the crown's door and dock are its own);
   - the M1 reason matrix, which now excludes hub recipes.
-- **Heavy** (`heavy-check.sh`): **29/29 files** (765 s).
+- **Heavy** (`heavy-check.sh`): **29/29 files**, rerun with the mast (860 s). Build OK; `bake-terrain --verify` gives 220/220.
 - `npm run build`: OK; the bake re-ran (220 chunks).
 - `npm run playthrough -- --jobs 2 --child-timeout 5400`: **exit 0, 5/5 complete, no blockers**, every milestone reload matched.
   - **Play times:** creel 199.3 min, carrier 360.6, creel-loss 208.9, reverse 204.4, no-optional 198.5.
@@ -65,6 +80,7 @@ On the **carrier route**, the playthrough now restores the first two stages on i
     - Rift +10.6: gathering the stages' 31 CU and the climb.
     - Hearthline +8.1, carrier-deep +12.3, works +7.4: later phases re-gather, because the stages draw on the same finite base stock.
     - The return through the crown's bench and dock replaces the workshop trip.
+  - **With the mast:** the carrier scenario reran unchanged, 360.6 min with all 16 reloads matched. The Creel routes never reach the summit.
   - **Coordinator note:** the bot uses only the crown's refit and dock, not its later benefits, so this is an upper bound on its cost. It's worth a look in the economy pass.
 - **3090, ordinary keys and keyboard focus** ([play](hub2/play.mjs), [derive](hub2/derive.mjs), [record](hub2/play.json)). It ran in a task-owned headless Chrome on ANGLE GL-EGL ("NVIDIA GeForce RTX 3090"), through `heavy-check.sh`, closed at the end, with 0 errors.
   - **Save:** derived headlessly. Stage 1 was restored by the harness's commands; the dock stage's materials in the diver hold and the Creel's 30% charge are **staged**.

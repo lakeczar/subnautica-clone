@@ -48,6 +48,23 @@ export const CROWN_STATION = {
   offers: "Air and a fast-heal bunk (power and air) · dock service, full fabricator with refit and upgrade bench and 144 CU of lockers (dock) · six sockets and the survey array (survey)",
 } as const;
 
+/** The crown's surface mast (owner, OPENING-DESIGN "Dependencies"): a slim
+ * tower from the summit's south lee to above the waterline, its slow lamp at
+ * the surface, so the starting island's lookout (about 765 m away, bearing
+ * 134°) sees the hub above water. Clear of the crown mouth, the beacon house,
+ * the station, the dock and every route end on the summit. */
+export const CROWN_MAST = {
+  x: 326, z: -571,
+  /** Half-width of its square collider, metres. */
+  half: 0.9,
+  /** Top of the mast above the waterline, and its lamp just below it. */
+  top: 8,
+  lamp: { x: 326, y: 7, z: -571 },
+} as const;
+/** Where the owner's starting island lookout will stand (OPENING-DESIGN):
+ * about 765 m from the mast at bearing 134° (+Z north). */
+export const ISLAND_LOOKOUT = { x: -217, z: -32 } as const;
+
 /** Recipes the crown's bench runs once the dock stage is restored, besides its
  * own restorations: every recipe of the pod fabricator, and the workshop's
  * except its own restoration, the hull builds and the frame strip (which fills
