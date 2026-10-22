@@ -14,7 +14,7 @@ import { worldFloor } from "./worldFloor.js";
 export type StructureKind =
   | "mast" | "pier" | "cradle" | "shelter" | "pylon" | "dish" | "girder" | "hut" | "post"
   | "split_chimney" | "chimney_stub" | "station" | "tower" | "lintel" | "dock" | "building"
-  | "spire" | "gallery" | "works" | "hall";
+  | "spire" | "gallery" | "works" | "hall" | "beacon";
 
 export interface StructureDef {
   readonly id: string;
@@ -175,7 +175,7 @@ const AUTHORED: readonly StructureDef[] = [
   ...pylons("canopy.east_mooring", "suspended_garden", 620, -200, 52, 18, [70, 180, 290]),
 
   // Pale Basin.
-  ...pylons("basin.anchorage", "silt_basin", 360, -430, 52, 16, [80, 180, 300]),
+  ...pylons("basin.anchorage", "silt_basin", 360, -430, 52, 16, [80, 165, 300]),
   dish("basin.dish_north.dish", 440, -526, 18, 0.42, 2.4, "basin.dish_north"),
   dish("basin.dish_centre.dish", 508, -572, 27, 0.36, -0.6, "basin.dish_centre"),
   dish("basin.dish_south.dish", 578, -612, 14, 0.5, 1.2, "basin.dish_south"),
@@ -187,6 +187,11 @@ const AUTHORED: readonly StructureDef[] = [
   block("girder")("basin.wreck.frame_4", "silt_basin", 770, -628, { w: 3, h: 4, d: 14 }, "basin.wreck_ridge"),
   block("post")("basin.wreck_tagboard.post", "silt_basin", 791, -501, { w: 3, h: 2.5, d: 0.5 }, "basin.wreck_tagboard"),
   block("post")("basin.deep_marker.post", "silt_basin", 610.8, -752, { w: 0.6, h: 6, d: 0.6 }, "basin.deep_marker"),
+
+  // Central hub spur (W2): the crown's summit, around the crown shaft's mouth.
+  block("beacon")("hub.beacon_house.house", "silt_basin", 341, -567, { w: 5, h: 14, d: 5 }, "hub.beacon_house"),
+  block("station")("hub.crown_station.hull", "silt_basin", 319, -547, { w: 9, h: 7, d: 6 }, "hub.crown_station"),
+  block("mast")("hub.crown_station.mast", "silt_basin", 316, -538, { w: 3, h: 22, d: 3 }, "hub.crown_station"),
 
   // Ember Rift.
   splitChimney(),

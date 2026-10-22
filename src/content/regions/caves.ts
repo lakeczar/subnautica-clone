@@ -6,6 +6,7 @@ import type { FloorFunction } from "./terrain.js";
 import { buildCave, sharesEdge } from "./caveGeometry.js";
 import { ISLES_CAVES } from "./caves/isles.js";
 import { REEF_CAVES } from "./caves/reef.js";
+import { HUB_CAVE_SOURCES } from "./hubCaves.js";
 
 /** W1 cave replacement volumes (Babylon-free).
  *
@@ -315,15 +316,16 @@ export function assertDisjointFootprints(sources: readonly CaveSource[]): void {
 }
 
 /** The caves in the game: `gameWorld()`, the terrain bake's pits and shells,
- * scatter, chunk bounds and the cave view all follow this list (C4's hook). */
-export const CAVE_SOURCES: readonly CaveSource[] = [FANVAULT_SOURCE];
+ * scatter, chunk bounds and the cave view all follow this list (C4's hook).
+ * W2's hub caves are in the world with the hub terrain. */
+export const CAVE_SOURCES: readonly CaveSource[] = [FANVAULT_SOURCE, ...HUB_CAVE_SOURCES];
 /** Every authored kit cave, in the game or not yet: what `caveDef` resolves
  * and what linked caves and the disjointness check see, so a cave builds the
  * same before and after it joins `CAVE_SOURCES`. CA-1's Reef and Isles caves
  * are authored and tested here; adding them to the game is C4's step
  * (docs/build/streams/CA-1.md). Add a linked network whole: a cave's shell
  * stops at a shared seam where its neighbour's begins. */
-export const AUTHORED_CAVE_SOURCES: readonly CaveSource[] = [FANVAULT_SOURCE, ...REEF_CAVES, ...ISLES_CAVES];
+export const AUTHORED_CAVE_SOURCES: readonly CaveSource[] = [...CAVE_SOURCES, ...REEF_CAVES, ...ISLES_CAVES];
 assertDisjointFootprints(AUTHORED_CAVE_SOURCES);
 
 const built = new WeakMap<FloorFunction, Map<string, CaveDef>>();

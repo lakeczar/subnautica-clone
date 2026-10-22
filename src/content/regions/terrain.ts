@@ -31,7 +31,10 @@ export function composeWorldFloor(legacy: FloorFunction): FloorFunction {
     const d = Math.hypot(dx, dz);
     if (d >= LEGACY_BLEND) return authoredFloor(x, z);
     const t = d / LEGACY_BLEND, w = t * t * (3 - 2 * t);
-    return legacy(x, z) * (1 - w) + authoredFloor(x, z) * w;
+    // The hub spur stands at full height inside the blend band: its reef
+    // heads and first step would otherwise be pulled down toward the legacy
+    // slope. It reaches nowhere near the preserve itself (tests hold that).
+    return Math.max(legacy(x, z) * (1 - w) + authoredFloor(x, z) * w, hubRelief(x, z, null));
   };
 }
 
@@ -43,10 +46,13 @@ export interface TerrainMasks {
   rift: number; trench: number; coolFlank: number; ledge: number;
   divide: number; brineSide: number; serviceLedge: number;
   meridian: number; terrace: number; escarpment: number;
+  /** W2 hub spur: the pinnacle rock, and the reef cap on its upper terraces. */
+  pinnacle: number; reefCap: number;
 }
 export function emptyMasks(): TerrainMasks {
   return { reef: 0, isle: 0, land: 0, canopy: 0, rib: 0, basin: 0, ridge: 0, sediment: 0, rift: 0, trench: 0,
-    coolFlank: 0, ledge: 0, divide: 0, brineSide: 0, serviceLedge: 0, meridian: 0, terrace: 0, escarpment: 0 };
+    coolFlank: 0, ledge: 0, divide: 0, brineSide: 0, serviceLedge: 0, meridian: 0, terrace: 0, escarpment: 0,
+    pinnacle: 0, reefCap: 0 };
 }
 
 const scratch = emptyMasks();
@@ -141,6 +147,84 @@ export function escarpmentLedgeDepth(z: number): number {
   return t.at(-1)![1];
 }
 export const escarpmentLedgeX = (z: number): number => 1350 + 22 * Math.sin(z / 95);
+
+// --- Central hub spur (W2, owner Option A) ----------------------------------
+/** A reef-capped pinnacle: a radial profile of `[radius, depth]` knots,
+ * eased with a smoothstep between knots so every knot reads as a terrace
+ * tread and every span between them as a riser. The radius is warped by
+ * `wobble` metres of noise, so the risers are irregular rock faces. */
+export interface HubPinnacle {
+  readonly id: string;
+  readonly x: number;
+  readonly z: number;
+  /** Radius ascending (metres), depth positive down. */
+  readonly profile: readonly (readonly [radius: number, depth: number])[];
+  readonly wobble: number;
+  /** Floor depth above which the rock reads as reef cap. */
+  readonly cap: number;
+}
+/** The spur, apron to crown: two reef heads on the apron's south lip, two
+ * stepping-stone pinnacles and the crown, which rises about 240 m from the
+ * Basin floor to a summit at 47 m. Carrier lanes pass between the second
+ * step and the crown at depth; the spur is never a wall across the lobe. */
+export const HUB_PINNACLES: readonly HubPinnacle[] = [
+  { id: "hub.head_west", x: 8, z: -392, wobble: 1.2, cap: 60,
+    profile: [[0, 29], [4, 30], [8, 35], [12, 48], [17, 72], [23, 110]] },
+  { id: "hub.head_apron", x: 40, z: -376, wobble: 1, cap: 60,
+    profile: [[0, 23], [6, 24], [11, 28], [16, 40], [22, 66], [28, 104], [34, 146]] },
+  { id: "hub.step_one", x: 80, z: -400, wobble: 2.2, cap: 75,
+    profile: [[0, 38.5], [6, 39.5], [11, 44], [16, 54], [21, 76], [27, 114], [33, 160], [40, 205], [48, 240]] },
+  { id: "hub.step_two", x: 186, z: -464, wobble: 2.4, cap: 80,
+    profile: [[0, 43.5], [6, 44.5], [11, 48.5], [16, 59], [21, 80], [26, 118], [31, 166], [35, 214], [39, 244], [46, 266]] },
+  { id: "hub.crown", x: 330, z: -560, wobble: 3,  cap: 128,
+    profile: [[0, 46.5], [12, 47.2], [18, 50], [23, 57], [28, 63], [33, 69], [37, 83], [41, 102], [45, 117], [48, 123],
+      [51, 170], [55, 225], [60, 262], [66, 283], [74, 300]] },
+];
+/** Flat shelves grafted onto a pinnacle flank. The rim balcony sits on the
+ * crown's north lip, looking down 120 m on the carrier anchorage. */
+export const HUB_LEDGES: readonly { readonly id: string; readonly x: number; readonly z: number; readonly radius: number; readonly depth: number }[] = [
+  { id: "hub.rim_balcony", x: 350, z: -522, radius: 17, depth: 121 },
+];
+const HUB_REACH = HUB_PINNACLES.map(p => p.profile.at(-1)![0] + p.wobble);
+/** Noise seed from the pinnacle's id, so authoring one never moves another. */
+const HUB_SEEDS = HUB_PINNACLES.map(p => {
+  let h = 701;
+  for (let i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) % 9973;
+  return h;
+});
+const hubSeed = (i: number): number => HUB_SEEDS[i]!;
+
+/** Height (+Y) of the hub spur at a point, or -Infinity beyond it. Applied
+ * as `max` over the floor, so the spur only ever adds rock. */
+export function hubRelief(x: number, z: number, m: TerrainMasks | null): number {
+  let h = -Infinity, cap = 0, rock = 0;
+  for (let i = 0; i < HUB_PINNACLES.length; i++) {
+    const p = HUB_PINNACLES[i]!, dx = x - p.x, dz = z - p.z;
+    if (Math.abs(dx) > HUB_REACH[i]! || Math.abs(dz) > HUB_REACH[i]!) continue;
+    const raw = Math.hypot(dx, dz);
+    if (raw > HUB_REACH[i]!) continue;
+    const r = Math.max(0, raw + p.wobble * fbm(x, z, 26, 3, hubSeed(i)));
+    const k = p.profile;
+    let depth = k.at(-1)![1];
+    for (let j = 1; j < k.length; j++) {
+      if (r > k[j]![0]) continue;
+      depth = lerp(k[j - 1]![1], k[j]![1], smooth(k[j - 1]![0], k[j]![0], r));
+      break;
+    }
+    // Reef relief on the treads, none on the summit datum the station uses.
+    depth += 0.7 * fbm(x, z, 7, 2, hubSeed(i) + 5) * smooth(10, 16, raw);
+    const y = -depth;
+    if (y > h) { h = y; cap = smooth(p.cap + 12, p.cap - 4, depth); rock = 1 - smooth(k.at(-2)![0], k.at(-1)![0], raw); }
+  }
+  for (const l of HUB_LEDGES) {
+    const r = Math.hypot(x - l.x, z - l.z);
+    if (r >= l.radius) continue;
+    const y = -l.depth - 0.4 * fbm(x, z, 6, 2, 761) - 180 * smooth(l.radius * 0.72, l.radius, r);
+    if (y > h) { h = y; cap = 1 - smooth(l.radius * 0.6, l.radius, r); rock = 1; }
+  }
+  if (m && h > -Infinity) { m.pinnacle = Math.max(m.pinnacle, rock); m.reefCap = Math.max(m.reefCap, cap); }
+  return h;
+}
 
 /** Height (+Y) of the sea stack and its shoal, or -Infinity outside it. */
 function seaStack(x: number, z: number, m: TerrainMasks): number {
@@ -330,6 +414,10 @@ function sampleAuthored(x: number, z: number, m: TerrainMasks): number {
   if (stack > h) h = lerp(h, stack, clamp01(m.isle * 1.6));
   const head = headland(x, z, m);
   if (head > h) h = lerp(h, head, clamp01(m.isle * 1.6));
+
+  // The hub spur only ever adds rock (see `hubRelief`).
+  const hub = hubRelief(x, z, m);
+  if (hub > h) h = hub;
 
   // Authored site pads: flat datums for moorings, deposits and structures.
   const pads = padsNear(x, z);

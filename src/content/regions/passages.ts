@@ -98,7 +98,8 @@ function escarpmentLedge(): Vec3[] {
   return out;
 }
 
-const RAW_ROUTES: readonly RouteDef[] = [
+/** Authored keel lines before `drape` (tests compare the two). */
+export const RAW_ROUTES: readonly RouteDef[] = [
   // Existing first loop, unchanged.
   { id: "route.legacy.reef_canopy", from: "refuge_reef", to: "suspended_garden", kind: "open", role: "first_loop",
     carrier: false, minHalfWidth: CANOPY_BASIN_ROUTE.minimumHalfWidth, profile: "small", tier: "early",
@@ -153,6 +154,24 @@ const RAW_ROUTES: readonly RouteDef[] = [
     carrier: false, minHalfWidth: 8, profile: "medium", tier: "reinforced",
     path: [v(780, -248, -444), v(786, -246, -530), v(783, -250, -612)] },
 
+  // Central hub spur (W2): apron to crown over the stepping stones, the
+  // anchorage up the crown's north cliff, and the crown's Canopy leg.
+  { id: "route.hub.spur", from: "silt_basin", to: "silt_basin", kind: "open", role: "primary",
+    carrier: false, minHalfWidth: 8, profile: "small", tier: "early",
+    path: [v(-14, -10, -318), v(18, -12, -342), v(40, -20, -366), v(80, -31, -400), v(133, -34, -432),
+      v(186, -36, -464), v(258, -38, -512), v(312, -40, -552)],
+    note: "Over the reef heads and both steps: a diver hops it, a Dart runs it at speed." },
+  { id: "route.hub.balcony", from: "silt_basin", to: "silt_basin", kind: "open", role: "primary",
+    carrier: false, minHalfWidth: 8, profile: "medium", tier: "reinforced",
+    path: [v(360, -240, -430), v(356, -200, -468), v(352, -126, -506), v(350, -116, -516), v(350, -100, -518),
+      v(346, -68, -532), v(336, -50, -546), v(318, -44, -548)],
+    note: "Carrier anchorage up the crown's north cliff to the rim balcony, then the summit." },
+  { id: "route.hub.canopy", from: "silt_basin", to: "suspended_garden", kind: "open", role: "shortcut",
+    carrier: false, minHalfWidth: 8, profile: "medium", tier: "reinforced",
+    // East of CA-2's Lantern Hall (486..554, -260..-204), whose footprint the old line grazed.
+    path: [v(336, -46, -546), v(370, -52, -500), v(430, -80, -420), v(520, -120, -330), v(590, -150, -262), v(620, -160, -200)],
+    note: "The crown and its beacon at your back, the Lantern crowns ahead." },
+
   { id: "route.basin.legacy_anchorage", from: "silt_basin", to: "silt_basin", kind: "open", role: "primary",
     carrier: false, minHalfWidth: 8, profile: "small", tier: "reinforced",
     path: [v(216, -166, -232), v(216, -150, -228), v(260, -175, -290), v(300, -212, -370), v(360, -240, -430)],
@@ -161,7 +180,8 @@ const RAW_ROUTES: readonly RouteDef[] = [
   // Basin -> Rift: carrier anchorage to cool-flank mooring, then deposits.
   { id: "route.basin.rift", from: "silt_basin", to: "thermal_rift", kind: "open", role: "carrier",
     carrier: true, minHalfWidth: 30, profile: "carrier", tier: "carrier",
-    path: [v(360, -240, -430), v(290, -246, -520), v(205, -252, -590), v(140, -262, -680),
+    // W2: west off the anchorage, then between the second step and the crown at depth.
+    path: [v(360, -240, -430), v(306, -244, -458), v(250, -249, -505), v(228, -252, -560), v(205, -254, -590), v(140, -262, -680),
       v(105, -282, -800), v(91.4, -300, -887.5)] },
   { id: "route.rift.ceramic", from: "thermal_rift", to: "thermal_rift", kind: "ledge", role: "primary",
     carrier: false, minHalfWidth: 8, profile: "medium", tier: "reinforced",
@@ -190,8 +210,9 @@ const RAW_ROUTES: readonly RouteDef[] = [
   // Basin -> Divide: carrier line to the lee mooring.
   { id: "route.basin.divide", from: "silt_basin", to: "brine_divide", kind: "open", role: "carrier",
     carrier: true, minHalfWidth: 30, profile: "carrier", tier: "carrier",
-    path: [v(360, -240, -430), v(300, -290, -600), v(330, -330, -760), v(430, -360, -900),
-      v(520, -378, -1020), v(560, -390, -1120)] },
+    // W2: shares the Rift lane through the step-two/crown gap, then south past the crown's west foot.
+    path: [v(360, -240, -430), v(306, -244, -458), v(250, -249, -505), v(228, -252, -560), v(242, -262, -620), v(262, -280, -690),
+      v(330, -330, -760), v(430, -360, -900), v(520, -378, -1020), v(560, -390, -1120)] },
   { id: "route.divide.lattice_east", from: "brine_divide", to: "brine_divide", kind: "open", role: "primary",
     carrier: false, minHalfWidth: 8, profile: "medium", tier: "service",
     path: [v(560, -390, -1120), v(660, -380, -1160), v(749, -370, -1191)] },

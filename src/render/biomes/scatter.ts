@@ -87,6 +87,14 @@ export const SCATTER_RULES: Readonly<Record<string, readonly Rule[]>> = {
     { template: "s2.flora.tube", variants: TUBES, spacing: 18, chance: 0.3, clump: { members: [3, 7], radius: 3 }, scale: [0.8, 1.5], cluster: { scale: 40, above: 0.15 }, height: 1.9 },
     { template: "s2.debris.panel", spacing: 12, chance: 0.08, scale: [0.8, 1.4], align: 1, height: 0.2 },
   ],
+  // W2 hub spur: Hearth Reef life on the pinnacle caps, bare limestone below.
+  hub_reef: [
+    { template: "s2.flora.cup", variants: CUPS, spacing: 8, chance: 0.5, clump: { members: [3, 8], radius: 2.4 }, scale: [0.8, 1.5], slope: [0, 0.5], weight: m => m.reefCap, height: 0.5, tints: WARM },
+    { template: "s2.flora.fan_coral", variants: fans("s2.flora.fan_coral"), spacing: 10, chance: 0.6, clump: { members: [3, 9], radius: 3.2 }, scale: [0.9, 1.8], weight: m => m.reefCap, cluster: { scale: 24, above: -0.2 }, coarse: 0.3, height: 1.5, tints: WARM },
+    { template: "s2.flora.ribbon", spacing: 5, chance: 0.3, scale: [0.8, 1.4], weight: m => m.reefCap, cluster: { scale: 18, above: 0.05 }, height: 2.6 },
+    { template: "s2.rock.column", variants: COLUMNS, spacing: 9, chance: 0.22, scale: [0.6, 1.4], slope: [0.6, 9], weight: m => 1 - m.reefCap, coarse: 0.4, height: 4 },
+    { template: "s2.rock.boulder", variants: BOULDERS, spacing: 10, chance: 0.2, scale: [0.6, 1.6], align: 0.5, height: 1.2 },
+  ],
   basin_wreck: [
     { template: "s2.debris.panel", spacing: 4, chance: 0.4, scale: [0.8, 1.8], align: 1, weight: m => m.ridge, cluster: { scale: 26, above: 0.25 }, height: 0.3 },
     { template: "s2.debris.pipe", spacing: 7, chance: 0.25, scale: [0.6, 1.4], align: 1, weight: m => m.ridge, cluster: { scale: 26, above: 0.15 }, coarse: 0.5, height: 0.6 },
@@ -336,7 +344,7 @@ function biomeOf(x: number, z: number, m: TerrainMasks): string {
   switch (region) {
     case "island_chain": return m.land > 0.5 ? "isle_land" : "isle_shoal";
     case "thermal_rift": return m.trench > 0.4 ? "rift_trench" : "rift_cool_flank";
-    case "silt_basin": return m.ridge > 0.35 ? "basin_wreck" : "basin_sediment";
+    case "silt_basin": return m.pinnacle > 0.5 ? "hub_reef" : m.ridge > 0.35 ? "basin_wreck" : "basin_sediment";
     case "suspended_garden": return "canopy_crowns";
     case "brine_divide": return m.brineSide > 0.5 ? "divide_brine" : "divide_ridge";
     case "deep_district": return m.escarpment > 0.5 ? "meridian_escarpment" : "meridian_terraces";
