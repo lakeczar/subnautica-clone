@@ -157,6 +157,22 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
   - **Save loads finish admission during the existing load screen.**
 - **Acceptance:** a fast Dart traversal of every region and cave mouth shows no frame over about 33 ms caused by streaming, and no hold state is ever reached.
 
+## Creatures (owner, 2026-10-22)
+- **No guide or helper animals.** There are no creatures that lead you to resources or guide you through passages.
+- **Every threat has a non-combat way through** that comes from its natural behaviour: feeding, patrol rhythm, resting, being distracted by other animals, territory edges. Timing and observation, not only avoiding the bite.
+- **Creatures as resources** (coordinator recommendation; the owner may adjust):
+  - **Shed and byproducts (core):** collect, without harm, what animals leave: shed shells and membranes, weaver resin, mite mineral grit, and casts that fertilise planters. Each resident's home is worth visiting.
+  - **Small common fish:** catch by hand or net and **cook** them. A **fish-trap outpost module** catches slowly in the background. **Threats, rare residents and story animals are never harvested.**
+  - **Bait and lures** made from small catches steer threats through their natural behaviour.
+  - **A few authored carcass falls:** static landmarks with scavengers and salvage, as environmental storytelling.
+  - **Later or optional:** a breeding tank; seasonal roe as regrowth, not a timed wait; glowing creatures in a jar as a light. Bio-cells already exist.
+- **Cooking stays one interaction with portions.** Food never decays, per FLEET_AND_SURVIVAL.
+
+## Cave and interior loading (owner, 2026-10-22)
+- **Natural caves:** loading is hidden by design. Mouths lead through a **twisting throat or bend** that blocks the view (an authored rule for cave biomes), plus prefetch on approach, darkness, fog and portal culling.
+- **Built interiors** (district halls, vault buildings, stations, the carrier): **two-door seals and airlocks** with a short animation are welcome. They double as atmosphere and as a load buffer.
+- **Seeing far stays intact:** an always-resident **far layer** of cheap landmark silhouettes plus their lights, so distant landmarks show while detail streams in.
+
 ## Atmosphere
 All five matter, in this priority:
 1. **light and depth:** water colour, darkness, the lamp, god rays;
