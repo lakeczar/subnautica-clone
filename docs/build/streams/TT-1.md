@@ -154,3 +154,17 @@ Root merged at `86e2ff1` (DISH-1). All four P2s and the P3 are fixed.
 **Checks after the R1 fixes** (8-vCPU VM):
 - `npm test`: **57 s**, 1,264 of 1,264 pass (load 6–8, 284 s CPU); five files warned, none failed.
 - `npm run test:heavy` through `heavy-check.sh`: **59 files, 437 tests pass in 347 s**, all with cgroup containment and every whole-tree peak within budget (940 s of file time). The four exclusive timing files ran alone at the end.
+
+## R2 review (Sol xhigh, `e539dd3`): response
+
+- **R2-1 · P2 — a straggler holding stdout or stderr blocked cleanup.** Fixed.
+  - **Teardown on exit:** `runHeavy` starts each file's teardown (`finish`) on the file process's `exit`, keeping its exit code and signal. Teardown is `cgroup.kill` and removal in the delegated adapter, and a group SIGKILL in the fallback. Killing the tree releases the inherited pipes, and output is still drained and printed on `close`.
+  - **Teardown runs once:** both adapters' `finish` is idempotent; the cgroup adapter memoises its accounting.
+  - **Accounting unchanged:** the memory peak and local OOM count are read before the kill.
+  - **Escaped descendant:** if a descendant outside the tree (one that left the fallback's process group) still holds a pipe 5 s after the exit, the runner destroys its ends of the streams, so the file still finishes and the queue continues.
+- **Regression** (`tests/heavy-tier.heavy.test.ts`), run under each adapter: cgroup when the job is delegated, and the process-group fallback always. The test asserts which containment the nested runner used.
+  - **Straggler:** a file exits leaving a 60 s child that inherited its stdout and stderr, beside a sibling file whose own 2 s child must exit 0. Both files must pass, the runner must finish in under 30 s, and the straggler must be gone.
+  - **Over-budget child:** the R1 test also runs under both adapters.
+- **Checks:**
+  - **`npm run test:heavy`** through `heavy-check.sh` (delegated): **59 files, 440 tests pass in 311 s**. All four regression cases pass; the straggler case finishes in 2.1 s instead of waiting out its child's 60 s.
+  - **`npm test`:** **54 s**, 1,264 of 1,264 pass, no budget failures.
