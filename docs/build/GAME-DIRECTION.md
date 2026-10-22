@@ -128,6 +128,24 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 - **Every region has its own cave style and at least one resident of its own:** Reef limestone arches, Isles tidal undercuts, Canopy root hollows, Basin silt-buried vaults, Rift lava tubes, Divide brine pockets, and a Meridian style from the lore owner.
 - **Technology:** small and medium caves use the W1 cave kit, which builds the rock and the visible shell from one source, plus the lighting. Cave biomes need a **scalable large-cave collision and rendering method, proved in a sandbox first.**
 
+## Central hub (owner, 2026-10-20)
+- **Option A, the central pinnacle:** a reef-capped spur of pinnacles from the shallow south apron to a **crown near the map centre**, at (330, -48, -560), rising about 240 m from the Basin floor. It needs new terrain and a re-bake, and is built after C4 stage A. The fallback shelf is not used.
+- **The crown station is deliberately better than the pod,** so players want to move there. It's restored in 2–3 stages with mid-game materials, starting around the Creel:
+  1. power and air;
+  2. the dock and the full fabricator;
+  3. full sockets and the survey station.
+- **What it has once restored:**
+  - a fast-heal bunk;
+  - a full fabricator plus a **refit and upgrade bench**;
+  - a **dock** that charges and repairs moored craft;
+  - large lockers;
+  - about **6 module sockets**;
+  - a built-in survey station covering the Basin, the Rift head and the Canopy edge;
+  - a far-visible beacon.
+- **Waking up:** after being incapacitated you **wake at the last restored base you rested at** (the pod or the crown).
+- **The pod keeps its guaranteed role:** air, healing, storage and basic fabrication, and it's never stranded by crown power loss.
+- **The carrier anchorage** is about 130 m from the crown.
+
 ## Atmosphere
 All five matter, in this priority:
 1. **light and depth:** water colour, darkness, the lamp, god rays;

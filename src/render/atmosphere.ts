@@ -2,10 +2,15 @@ import { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder.js";
 import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder.js";
 import type { Scene } from "@babylonjs/core";
-import { opticalShader, opticalUniforms } from "./materials.js";
+import { NOISE_SHADER, opticalShader, opticalUniforms } from "./materials.js";
+import { GOD_RAYS_SHADER } from "./lighting/depthLight.js";
+import { LOCAL_LIGHT_SHADER, LOCAL_LIGHT_UNIFORMS } from "./lighting/localLights.js";
 
 // The same directional light and optical path serve the sky and the underside
 // of the water. Deep rays reach the surface through water, even from a dry room.
+// Under water the open view is the water itself (ATM-1): its colour by ray
+// direction (the surface glow overhead), god rays in the shallows, and the
+// halos of local lights seen against open water.
 const skyColor = `
 vec3 skyRadiance(vec3 d){
   float altitude=smoothstep(-.08,.8,d.y);
@@ -25,17 +30,22 @@ export function createAtmosphere(scene: Scene): { water: ShaderMaterial; sky: Sh
   const skyMaterial = new ShaderMaterial("atmosphere.sky", scene, {
     vertexSource: `precision highp float; attribute vec3 position; uniform mat4 worldViewProjection; varying vec3 vDirection;
       void main(){vDirection=position;gl_Position=worldViewProjection*vec4(position,1.0);}`,
-    fragmentSource: `precision highp float; varying vec3 vDirection;
+    fragmentSource: `precision highp float; varying vec3 vDirection; uniform float time; uniform float godRays;
       ${opticalShader}
+      ${NOISE_SHADER}
+      ${LOCAL_LIGHT_SHADER}
+      ${GOD_RAYS_SHADER}
       ${skyColor}
       void main(){
         vec3 d=normalize(vDirection);
         float wet=waterPath(cameraPosition,cameraPosition+d*2000.0);
-        vec3 sky=mix(skyRadiance(d),waterFogColor,1.0-exp(-wet*fogDensity));
+        vec3 sky=mix(skyRadiance(d),waterMedium(d),1.0-exp(-wet*fogDensity));
+        if(cameraPosition.y<0.0)sky+=localHalo(cameraPosition+d*400.0)+godRayLight(cameraPosition+d*400.0);
         gl_FragColor=vec4(sky,1.0);
       }`,
-  }, { attributes: ["position"], uniforms: ["worldViewProjection", ...opticalUniforms] });
+  }, { attributes: ["position"], uniforms: ["worldViewProjection", "time", "godRays", ...opticalUniforms, ...LOCAL_LIGHT_UNIFORMS] });
   skyMaterial.backFaceCulling = false; skyMaterial.disableDepthWrite = true;
+  skyMaterial.setFloat("time", 0); skyMaterial.setFloat("godRays", 0); skyMaterial.setFloat("localLightCount", 0);
   sky.material = skyMaterial;
 
   // Beyond the camera's 450 m far plane in every horizontal direction. Follow

@@ -5,7 +5,6 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation.js";
 import type { GameState } from "../sim/types.js";
-import { eyeHeight } from "../sim/state.js";
 import type { InteractionHost } from "../sim/targeting.js";
 import { createTargetCue } from "./targetCue.js";
 import { inCanopyAir } from "../sim/inventory.js";
@@ -18,7 +17,9 @@ import { createPlacedHosts } from "./placedHosts.js";
 import { ecologyView } from "../sim/ecology/ecology.js";
 import { lampOn, presentationStimulus } from "../sim/ecologyLink.js";
 import { createExpeditionActors, createExpeditionRegion, DART_SEAT } from "./expedition.js";
-import { CREEL_SEAT } from "../sim/fleet.js";
+import { gameWorld } from "../sim/world.js";
+import { playerView } from "./camera.js";
+import { createSceneLights } from "./lighting/sceneLights.js";
 import { createAtmosphere } from "./atmosphere.js";
 import { createRegionResidency, REGION_OWNER_BYTES, RESIDENT_REGION_LIMIT, type RegionArt, type RenderRegion } from "./regions.js";
 import { composeWorldArt, type ComposedWorld } from "./worldArt.js";
@@ -234,6 +235,9 @@ export function createRenderer(
     const art = createRegionalArt(scene, cel, glass);
     for (const mesh of scene.meshes) mesh.renderingGroupId = 1;
     const { water, sky } = createAtmosphere(scene);
+    // ATM-1: emissive art, Rift vents, cockpit instruments and parked-craft
+    // markers as the cel pass's local lights (and their halos on open water).
+    const lights = createSceneLights(scene, cel, [cel, sky]);
     const cue = createTargetCue(scene);
     // S4's later-region species, cue animals, deterrents and field cues (C3).
     const creatures = createCreatureLayer(scene, cel);
@@ -299,8 +303,8 @@ export function createRenderer(
           canvas.dataset.activationMs = (performance.now() - activationStart).toFixed(3);
           canvas.dataset.retained = art.retained.join(",");
         }
+        let lamp: Vector3 | null = null;
         if (state) {
-          const pose = state.player.pose;
           if (state.opening.phase < 4) {
             const phase = state.opening.phase,
               t = state.opening.phaseTicks / 60;
@@ -314,25 +318,21 @@ export function createRenderer(
             );
             camera.rotation.z = Math.sin(t * 1.8) * 0.015 * (3 - phase);
           } else {
+            // Each hull's own view datum inside its real canopy or pilot
+            // compartment (the Creel's slides over the bow for arm work); the
+            // eye is kept out of solids and terrain (camera.ts).
             const seated = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId && (v.hull === "dart" || v.hull === "creel"));
             const hull = seated ? scene.getMeshByName(seated.id) : null;
-            if (seated && hull) {
-              // Each hull's own view datum inside its real canopy or pilot compartment.
-              const seat = seated.hull === "creel" ? CREEL_SEAT : DART_SEAT;
-              camera.position.copyFrom(Vector3.TransformCoordinates(
-                new Vector3(seat.x, seat.y, seat.z),
-                hull.computeWorldMatrix(true),
-              ));
-            } else {
-              camera.position.set(pose.position.x, pose.position.y + eyeHeight(state), pose.position.z);
-            }
-            const direction = new Vector3(
-              Math.sin(pose.yaw) * Math.cos(pose.pitch),
-              Math.sin(pose.pitch),
-              -Math.cos(pose.yaw) * Math.cos(pose.pitch),
-            );
-            camera.setTarget(camera.position.add(direction));
+            const matrix = hull?.computeWorldMatrix(true);
+            const view = playerView(state, matrix ? p => {
+              const w = Vector3.TransformCoordinates(new Vector3(p.x, p.y, p.z), matrix);
+              return { x: w.x, y: w.y, z: w.z };
+            } : null, gameWorld(), DART_SEAT);
+            camera.position.set(view.eye.x, view.eye.y, view.eye.z);
+            camera.setTarget(camera.position.add(new Vector3(view.forward.x, view.forward.y, view.forward.z)));
             camera.rotation.z = 0;
+            lamp = new Vector3(view.lamp.x, view.lamp.y, view.lamp.z);
+            canvas.dataset.workView = view.work.toFixed(2);
           }
         } else {
           camera.position.set(25, 13, 44);
@@ -351,10 +351,12 @@ export function createRenderer(
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
         const fog = Color3.FromHexString(interior ? "#486e76" : underwater ? "#226e7e" : "#96c5b9");
         scene.clearColor = new Color4(fog.r, fog.g, fog.b, 1);
-        updateOpticalUniforms([cel, glass, water, sky, cue.material], camera.position, state);
+        const optics = updateOpticalUniforms([cel, glass, water, sky, cue.material], camera.position, state);
+        lights.update(state, camera.position, optics.ambient, time);
+        canvas.dataset.localLights = `${lights.stats.sent}/${lights.stats.known}`;
         cel.setFloat("underwater", underwater);
         cel.setFloat("lampOn", state && state.opening.phase >= 4 && lampOn(state) ? 1 : 0);
-        caveView.update(camera.position, camera.getTarget().subtract(camera.position),
+        caveView.update(lamp ?? camera.position, camera.getTarget().subtract(camera.position),
           !!state && state.opening.phase >= 4 && lampOn(state) && underwater === 1);
         canvas.dataset.cave = caveView.active ?? "";
         streaks.update(camera.position, state?.tick ?? 0, !!state && state.opening.phase >= 4 && underwater === 1);
@@ -364,6 +366,7 @@ export function createRenderer(
           { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         cel.setFloat("time", time);
         water.setFloat("time", time);
+        sky.setFloat("time", time);
         canvas.dataset.water = underwater ? "underwater" : "above";
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
         scene.render();
@@ -420,6 +423,7 @@ export function createRenderer(
         placed.dispose();
         caveView.dispose();
         streaks.dispose();
+        lights.dispose();
         instrumentation.dispose();
         cue.dispose();
         scene.dispose();
