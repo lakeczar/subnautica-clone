@@ -5,18 +5,19 @@
 //
 // Started by `submit` in its own session (and its own systemd scope, so the
 // agent's tool call ending does not take it down). It enqueues the ticket,
-// admits it when the plan says so, holds the legacy lock in shared mode for
-// the run, runs the command in a capped scope
+// admits it when the plan says so, takes the legacy lock in shared mode and
+// passes it into the job's scope (so the payload itself holds it for its whole
+// life, even if this supervisor dies), runs the command in a capped scope
 // in the heavy slice, records the result and the ledger line, and frees the
 // reservation. If it dies, the next transaction stops its scope and frees it.
 import { spawn, spawnSync } from "node:child_process";
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { jobEnv, plan, resolveRequest, sliceLimits, tokensFor } from "./policy.mjs";
 import {
   cgroupRead, cpuContext, flockFd, gitTree, jobDir, ledger, legacyLockInfo, loadConfig, readFileSafe, readJson,
-  readMode, reconcile, sampleHost, scopeActive, self, systemctl, transaction, writeJsonAtomic,
+  readMode, reconcile, sampleHost, scopePopulated, self, stopScope, systemctl, transaction, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -26,6 +27,11 @@ const dir = jobDir(cfg, id);
 const request = readJson(join(dir, "request.json"));
 if (!request) { console.error(`supervisor: no request for ${id}`); process.exit(2); }
 const me = self();
+// Held for the ticket's whole life and inherited by the scope launcher, the
+// in-scope wrapper and the payload: while any of them lives, reconcile keeps
+// the reservation (state.mjs ticketHeld).
+const aliveFd = flockFd(join(dir, "alive.lock"));
+if (aliveFd == null) { console.error(`supervisor: ${id} already has a live owner`); process.exit(70); }
 const outPath = join(dir, "output.log");
 const note = (msg) => appendFileSync(outPath, `heavy-check: ${msg}\n`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -158,8 +164,16 @@ const context = req.exclusive ? { samples: 0, load1Max: 0, cpuSomeMax: 0, memFul
 const sampler = context && setInterval(() => sampleContext(context), 15000);
 if (context) sampleContext(context);
 const started = Date.now();
-const child = spawn("systemd-run", args, { cwd: t.cwd, env: { ...process.env, ...jobEnv(t, req, cfg) }, stdio: ["ignore", out, out] });
-const [rawCode, signal] = await new Promise((done) => {
+// fd 3: the legacy bridge (shared); fd 4: the ticket's alive lock. Both stay
+// open in the wrapper and the payload, so v1 stays out and the reservation
+// stays held for as long as the payload runs, whatever happens to this process.
+// A cancel that landed before launch is honoured here and, under the launch
+// gate, again inside the scope before the command starts (scope-run.sh).
+const cancelledEarly = existsSync(join(dir, "cancelled"));
+if (cancelledEarly) writeFileSync(join(dir, "not-started"), "");
+const child = cancelledEarly ? null
+  : spawn("systemd-run", args, { cwd: t.cwd, env: { ...process.env, ...jobEnv(t, req, cfg) }, stdio: ["ignore", out, out, bridgeFd, aliveFd] });
+const [rawCode, signal] = !child ? [75, null] : await new Promise((done) => {
   child.on("exit", (code, sig) => done([code, sig]));
   child.on("error", (err) => { appendFileSync(outPath, `heavy-check: could not start systemd-run: ${err.message}\n`); done([70, null]); });
 });
@@ -168,15 +182,19 @@ closeSync(out);
 
 // 4. Account, label, free.
 const stats = Object.fromEntries((readFileSafe(join(dir, "stats")) ?? "").split("\n").filter(Boolean).map((l) => l.split("=")));
-const leftovers = scopeActive(unit);
-if (leftovers) systemctl("stop", `${unit}.scope`); // descendants that outlived the command
+// Descendants that outlived the command: stop the scope and keep the
+// reservation until its cgroup is conclusively empty (a stopping scope is not).
+const leftovers = scopePopulated(unit);
+for (let tries = 0; !stopScope(unit, { waitS: 30 }); tries++)
+  if (tries === 0) note(`${unit} still has processes after stopping; keeping the reservation until it is empty`);
 const ranS = (Date.now() - started) / 1000;
 let code = rawCode ?? 128 + (signal === "SIGKILL" ? 9 : 15), label = null;
 // oom_kill counts kills anywhere in the scope, including a sub-limit such as a
 // heavy test file's own budget cgroup; only an OOM at the scope's own limit
 // (memory.events.local) means the job outgrew its reservation.
 const oomKills = Number(stats.oom_kill ?? 0), reservationOom = Number(stats.oom_local ?? 0) > 0;
-if (cancelRequested || existsSync(join(dir, "cancelled"))) { code = 75; label = "cancelled"; }
+if (existsSync(join(dir, "not-started"))) { code = 75; label = "cancelled before start; the command did not run"; }
+else if (cancelRequested || existsSync(join(dir, "cancelled"))) { code = 75; label = "cancelled"; }
 else if (existsSync(join(dir, "refused"))) label = "refused: scope limits not applied";
 else if (reservationOom && code !== 0) {
   code = 137;
@@ -203,6 +221,7 @@ transaction(cfg, (state) => {
 });
 if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: true });
 if (bridgeFd != null) closeSync(bridgeFd);
+closeSync(aliveFd);
 process.exit(0);
 
 function sampleContext(c) {

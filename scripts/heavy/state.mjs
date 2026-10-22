@@ -9,7 +9,7 @@
 // drops it if this process dies. The legacy bridge holds the v1 lock file the
 // same way, for the length of a job.
 import { spawnSync } from "node:child_process";
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
@@ -121,7 +121,48 @@ export const self = () => ({ pid: process.pid, start: procStart(process.pid) });
 export function systemctl(...args) {
   return spawnSync("systemctl", ["--user", ...args], { encoding: "utf8" });
 }
-export const scopeActive = (unit) => systemctl("is-active", "--quiet", `${unit}.scope`).status === 0;
+
+/**
+ * Whether a job scope still holds processes. "Empty" means conclusively empty:
+ * the unit is gone, or its cgroup reports `populated 0`. A stopping
+ * (deactivating) scope is not empty, and any query failure counts as
+ * populated, so a reservation is never freed on a guess.
+ */
+export function scopePopulated(unit) {
+  const r = systemctl("show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", `${unit}.scope`);
+  if (r.status !== 0) return true;
+  const p = Object.fromEntries(r.stdout.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+  if (p.LoadState === "not-found") return false;
+  if (p.ControlGroup) {
+    const events = cgroupRead(`/sys/fs/cgroup${p.ControlGroup}`, "cgroup.events");
+    if (events != null) return /^populated 1$/m.test(events);
+  }
+  return p.ActiveState !== "inactive" && p.ActiveState !== "failed";
+}
+
+/** Stops a job scope and waits until it is conclusively empty. Returns true
+ * when empty; false if it still is not after `waitS` (the caller keeps the
+ * reservation and tries again later). */
+export function stopScope(unit, { block = true, waitS = 0 } = {}) {
+  if (!scopePopulated(unit)) return true;
+  systemctl("stop", ...(block ? [] : ["--no-block"]), `${unit}.scope`);
+  for (let i = 0; i <= waitS * 10; i++) {
+    if (!scopePopulated(unit)) return true;
+    if (i < waitS * 10) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+  }
+  return false;
+}
+
+/** Whether any process of a ticket is alive: the supervisor takes
+ * jobs/<ticket>/alive.lock and passes it to the scope launcher, the in-scope
+ * wrapper and the payload, so the lock stays held until all of them are gone,
+ * the startup window (launcher running, scope not yet registered) included. */
+export function ticketHeld(cfg, id) {
+  const fd = flockFd(join(jobDir(cfg, id), "alive.lock"));
+  if (fd == null) return true;
+  closeSync(fd);
+  return false;
+}
 
 /** Who holds or waits for the legacy (v1) lock file, from /proc/locks. Blocked
  * waiters show as "->" lines on the file's device:inode. A v1 caller always
@@ -185,27 +226,55 @@ export function readFileSafe(path) {
 }
 
 /**
- * Frees what dead supervisors left behind. A queued ticket whose supervisor is
- * gone is dropped (exit 75, "lost"). A running ticket whose supervisor is gone
- * has its scope stopped, since nobody can account for it any more, and is
- * dropped (exit 137, "killed: supervisor died"). Returns true if state changed.
+ * Recovers tickets whose supervisor is gone. A queued ticket was never
+ * launched, so it is dropped (exit 75, "lost"). A running ticket keeps its
+ * reservation while any of its processes lives (ticketHeld) or its scope still
+ * holds processes; the payload runs on to its own end and deadline, holding
+ * the legacy bridge itself. Stragglers in a scope whose ticket processes are
+ * all gone are stopped. Only when the scope is conclusively empty is the
+ * ticket finished, with the payload's own exit code if the in-scope wrapper
+ * recorded one. Runs on every transaction, and from wait, status and cancel,
+ * so a lone `wait` also reaches a result. Returns true if state changed.
  */
 export function reconcile(cfg, state) {
   let changed = false;
   for (const t of Object.values(state.tickets)) {
     if (alive(t.supervisor)) continue;
     const dir = jobDir(cfg, t.id);
-    if (t.state === "running" && t.unit && scopeActive(t.unit)) systemctl("stop", `${t.unit}.scope`);
+    if (t.state === "running") {
+      if (ticketHeld(cfg, t.id)) {
+        if (!t.orphaned) { t.orphaned = Date.now(); changed = true; ledger(cfg, { event: "orphaned", ticket: t.id, worktree: t.worktree }); }
+        continue;
+      }
+      if (t.unit && !stopScope(t.unit, { block: false })) {
+        if (!t.orphaned) { t.orphaned = Date.now(); changed = true; }
+        continue; // stopping: keep the reservation until the cgroup is empty
+      }
+    }
+    const result = t.state === "running" ? orphanResult(dir, t) : { code: 75, label: "lost: supervisor died before admission" };
     const exitFile = join(dir, "exit.json");
-    const lost = t.state === "running"
-      ? { code: 137, label: "killed: supervisor died", endedAt: Date.now() }
-      : { code: 75, label: "lost: supervisor died before admission", endedAt: Date.now() };
-    if (!existsSync(exitFile)) writeJsonAtomic(exitFile, { ticket: t.id, ...lost });
-    ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, label: lost.label });
+    if (!existsSync(exitFile)) writeJsonAtomic(exitFile, { ticket: t.id, class: t.req.class, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), ...result });
+    ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, ...result });
+    const marker = join(t.worktree, ".test-build", ".heavy-job");
+    if (readJson(marker)?.ticket === t.id) rmSync(marker, { force: true });
     delete state.tickets[t.id];
     changed = true;
   }
   return changed;
+}
+
+/** The result of a job whose supervisor died, from what the in-scope wrapper left. */
+function orphanResult(dir, t) {
+  if (existsSync(join(dir, "not-started"))) return { code: 75, label: "cancelled before start; the command did not run" };
+  if (existsSync(join(dir, "cancelled"))) return { code: 75, label: "cancelled" };
+  const stats = Object.fromEntries((readFileSafe(join(dir, "stats")) ?? "").split("\n").filter(Boolean).map((l) => l.split("=")));
+  if (stats.rc == null) return { code: 137, label: "killed: supervisor died and the job did not finish" };
+  const code = Number(stats.rc), oom = Number(stats.oom_local ?? 0) > 0 && code !== 0;
+  return {
+    code: oom ? 137 : code,
+    label: oom ? `oom: class ${t.req.class} reservation ${t.req.memMiB} MiB (supervisor died)` : "supervisor died; the job ran to its end",
+    peakMiB: stats.peak ? Math.ceil(Number(stats.peak) / 1048576) : null,
+  };
 }
 
 /** The git worktree root containing cwd, or cwd itself outside git. */

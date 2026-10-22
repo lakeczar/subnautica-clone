@@ -21,8 +21,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLASS_NAMES, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveRequest, tokensFor } from "./policy.mjs";
 import {
-  alive, ensureDirs, gitTree, jobDir, ledger, legacyLockInfo, loadConfig, readJson, readMode, readState,
-  sampleHost, systemctl, transaction, worktreeOf, writeJsonAtomic,
+  alive, ensureDirs, flockFd, gitTree, jobDir, ledger, legacyLockInfo, loadConfig, readJson, readMode, readState,
+  reconcile, sampleHost, scopePopulated, systemctl, transaction, worktreeOf, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -190,8 +190,10 @@ async function follow(id, { stream, maxS = null }) {
     for (let n; (n = readSync(fd, buf, 0, buf.length, offset)) > 0; offset += n) process.stdout.write(buf.subarray(0, n));
     closeSync(fd);
   };
+  let lastRecover = 0;
   for (;;) {
     pump();
+    if (Date.now() - lastRecover > 5000) { recover(); lastRecover = Date.now(); }
     const exit = readJson(exitPath);
     if (exit) {
       pump();
@@ -235,7 +237,7 @@ function positionLine(id) {
 
 function finalLine(e) {
   const parts = [`${e.ticket} exit ${e.code}${e.label ? ` (${e.label})` : ""}`];
-  if (e.admittedAt) parts.push(`queued ${dur(e.admittedAt - e.submittedAt)}, ran ${dur(e.ranS * 1000)}`);
+  if (e.admittedAt) parts.push(`queued ${dur(e.admittedAt - e.submittedAt)}${e.ranS != null ? `, ran ${dur(e.ranS * 1000)}` : ""}`);
   if (e.peakMiB != null) parts.push(`peak ${e.peakMiB} of ${e.memMiB} MiB, ${e.cpuS} CPU-s`);
   if (e.head !== undefined) {
     const tr = (h, d) => (h ? `${h.slice(0, 10)}${d === "clean" ? "" : `+dirty:${d}`}` : "not git");
@@ -253,6 +255,7 @@ function dur(ms) {
 }
 
 function statusCmd(args) {
+  recover();
   const state = readState(cfg), host = hostNow(state), now = Date.now();
   if (args[0]) {
     const t = state.tickets[args[0]] ?? null, exit = readJson(join(jobDir(cfg, args[0]), "exit.json"));
@@ -307,10 +310,32 @@ async function cancelCmd(args) {
   if (r === "unknown") fail(`unknown ticket ${id}`);
   if (r === "finished") { say(`${id} already finished`); return 0; }
   if (r === "removed") { say(`${id} removed from the queue`); return 0; }
-  systemctl("stop", `${r.running}.scope`); // only this ticket's scope
-  for (let i = 0; i < 300 && !existsSync(join(jobDir(cfg, id), "exit.json")); i++) await sleep(100);
-  say(`${id} stopped`);
-  return 0;
+  // Running: under the launch gate (shared with scope-run.sh), either the
+  // command has not started and never will, or it has and its scope is stopped.
+  const dir = jobDir(cfg, id), unit = r.running;
+  const gate = flockFd(join(dir, "gate"), { wait: 30 });
+  if (gate == null) fail(`${id}: could not take the launch gate; try again`, 1);
+  writeFileSync(join(dir, "cancelled"), "");
+  const started = existsSync(join(dir, "started"));
+  closeSync(gate);
+  if (started) systemctl("stop", `${unit}.scope`); // only this ticket's scope
+  // Report only once the ticket has a result and its scope is conclusively empty.
+  for (let i = 0; ; i++) {
+    recover();
+    const exit = readJson(join(dir, "exit.json"));
+    if (exit && !scopePopulated(unit)) { say(finalLine(exit)); return 0; }
+    if (i === 600) fail(`${id}: still stopping after 2 minutes; see heavy-check status`, 1);
+    if (started && i % 50 === 49) systemctl("stop", `${unit}.scope`);
+    await sleep(200);
+  }
+}
+
+/** Finishes tickets whose supervisor died (state.mjs reconcile), so wait,
+ * status and cancel reach a result even when nothing else is queued to run a
+ * transaction. Takes no lock while every supervisor is alive. */
+function recover() {
+  if (Object.values(readState(cfg).tickets).every((t) => alive(t.supervisor))) return;
+  transaction(cfg, (state) => ({ changed: reconcile(cfg, state) }));
 }
 
 // Dispatch last: commands run during module evaluation, so every helper above
