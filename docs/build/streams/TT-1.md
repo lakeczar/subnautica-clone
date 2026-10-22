@@ -1,6 +1,6 @@
 # TT-1: the fast tier is fast again
 
-Opus 5.5 high. Branch `feat/tt-1-test-speed` from `48612f5`, with root merged at `c649b11` (CA-3, CB-2). Scope: test files and tiering mechanics, plus pure caching hooks in production code (listed below). No assertion was deleted or weakened; every test that left the fast tier runs unchanged in the heavy tier.
+Opus 5.5 high. Branch `feat/tt-1-test-speed` from `48612f5`, with root merged at `c649b11` (CA-3, CB-2) and at `1ccce66` (HUB-2). Scope: test files and tiering mechanics, plus pure caching hooks in production code (listed below). No assertion was deleted or weakened; every test that left the fast tier runs unchanged in the heavy tier.
 
 ## Result
 
@@ -9,8 +9,11 @@ Times on the shared 6-vCPU VM; other agents were running, so each pair was measu
 | | Before (root `c649b11`) | After |
 | --- | --- | --- |
 | `npm test` (load 11–15) | **512 s** (typecheck 17 s + clean compile 30 s + tier 480 s), 1,256 tests | **99 s** (typecheck and compile 12 s incremental + tier 92 s), 1,254 tests |
-| fast tier, quieter VM (load 4–9) | 352 s, 1,128 s CPU | **56–61 s**, 253–260 s CPU |
-| `npm run test:heavy` | HEAVY_BEFORE | HEAVY_AFTER |
+| fast tier alone, quieter VM | 352 s (load 12 falling to 6), 1,128 s CPU | **56–61 s** (load 4–9), 253–260 s CPU |
+| `npm run test:heavy` (through `heavy-check.sh`) | **955 s**: 33 files, 394 tests, one at a time | **293 s**: 57 files, 434 tests (850 s of file time, up to 3 at once) |
+| `npm test` after merging HUB-2 (load 14–18; HUB-2's source changes refill part of the cache) | | 220 s, 1,255 tests |
+
+41 tests moved to heavy; 33 smokes and 5 new tests (4 for the build cache, 1 budget probe) were added to the fast tier.
 
 `npm test` reaches about 60 s when the VM is not saturated. When six agents load it, the tier stays CPU-bound at roughly 250 s CPU over 5 workers.
 
@@ -72,7 +75,12 @@ All 41 moved tests are byte-identical to root's; `/work/tmp/tt1/verbatim.py` che
 
 The only heavy change that is not a verbatim move: `regions-bake`'s six-chunk decode check now lives in `regions-bake-support.ts` as `assertDecodedMatchesLive(c)` (the same statements), run over all six chunks in `regions-bake-decode.heavy.test.ts` and over two in the fast smoke.
 
-**Heavy budgets:** no change needed. Every new heavy file peaks under the 1,024 MiB default (HEAVY_PEAKS).
+**Heavy budgets** (`tests/heavy-budgets.json`):
+- **New heavy files:** all peak at 107–492 MiB, under the 1,024 MiB default.
+- **Two raised:**
+  - `world-stream` to **1,536 MiB** (from 1,280). It peaked at 1,286 MiB with two other files running beside it. Root runs it at 1,216 MiB alone, and the cache lowers it: 1,171 MiB on, 1,200 MiB off.
+  - `caves-reef-isles-retreat` to **1,280 MiB** (from 1,024). Root runs it at 1,009 MiB, 98% of its budget.
+- **Still close:** `regions-stream` (933 of 1,024 MiB) and `caves-deep-perf` (875) are the nearest to their budgets.
 
 ## Production code touched (pure caching only)
 - `src/content/buildCache.ts` (new): the cache hook.
@@ -109,7 +117,7 @@ The only heavy change that is not a verbatim move: `regions-bake`'s six-chunk de
 - **Tried and dropped:** Node's compile cache (no gain); `--single-threaded` V8 (17% less CPU, but no wall-time gain under load, and it charges GC to the main thread).
 
 ## Checks
-- `npm test`: 1,254 fast tests pass.
-- `npm run test:heavy` through `heavy-check.sh`: HEAVY_CHECK.
+- `npm test`: 1,255 fast tests pass after merging HUB-2 (1,254 before it).
+- `npm run test:heavy` through `heavy-check.sh`: 57 files and 434 tests pass in 293 s, every peak within budget.
 - The fast tier also passes with `SILTWAKE_BUILD_CACHE=off`, cold.
 - Evidence and probe scripts are in `/work/tmp/tt1/` (timing runs, profiles, `verbatim.py`).
