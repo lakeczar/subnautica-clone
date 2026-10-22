@@ -303,7 +303,7 @@ export function roofHoles(def: CaveDef): Vec3[] {
   const mouthZone = (p: Vec3): boolean => mouths.some(m => {
     if (m.normal.y !== 0) return Math.abs(p.x - m.center.x) < m.clear.width / 2 + 2.5 && Math.abs(p.z - m.center.z) < m.clear.height / 2 + 2.5;
     return Math.abs((p.z - m.center.z) * m.normal.z + (p.x - m.center.x) * m.normal.x) < 5 &&
-      Math.abs(m.normal.z !== 0 ? p.x - m.center.x : p.z - m.center.z) < m.clear.width / 2 + 2 && p.y < m.center.y + m.clear.height / 2 + 2.5;
+      Math.abs(m.normal.z !== 0 ? p.x - m.center.x : p.z - m.center.z) < m.clear.width / 2 + 3 && p.y < m.center.y + m.clear.height / 2 + 3.5;
   });
   for (let k = 0; k < g.nz; k++) for (let j = 0; j + 1 < g.ny; j++) for (let i = 0; i < g.nx; i++) {
     const at = i + g.nx * (j + g.ny * k), up = at + g.nx, r = v.room[at]!;
@@ -370,7 +370,8 @@ export function lodProblems(c: DeepCave): string[] {
       const a = r.path[i - 1]!, b = r.path[i]!, steps = Math.ceil(dist(a, b) / 0.25);
       for (let k = 0; k <= steps; k++) {
         const q = lerp3(a, b, k / steps), p = { ...q, y: q.y + lift };
-        if (!interior(q)) continue;
+        // Inside the cave's own water only: in front of a mouth the seabed shell is near by design.
+        if (!interior(q) || pr.roomAt(p) === "") continue;
         for (const lod of ["fine", "coarse"] as const) {
           if (r.profile === "diver") {
             const hit = pr.triangles(lod, p, 0.8).find(([u, w, x]) => pointTriangleDistance(p, u, w, x) < keep);

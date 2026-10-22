@@ -57,7 +57,9 @@ export type CaveStyle = "lava_tube" | "brine_pocket" | "cut_void";
 export type BibleRef =
   | { readonly kind: "resource"; readonly id: string }
   | { readonly kind: "reward"; readonly id: string }
-  | { readonly kind: "line"; readonly cave: string; readonly line: string };
+  | { readonly kind: "line"; readonly cave: string; readonly line: string }
+  /** One of a cave proposal's `links` (a crawlway or back entrance). */
+  | { readonly kind: "link"; readonly cave: string; readonly id: string };
 
 export type ContentKind = "resource" | "scan" | "cache" | "seed" | "service" | "view" | "shelter" | "shortcut";
 export interface CaveContent {
