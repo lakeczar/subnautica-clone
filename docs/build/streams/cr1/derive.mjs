@@ -4,7 +4,7 @@
 // the diver at the scene. Placement is a diagnostic shortcut (as C4's derive-c):
 // every other fact in the save was earned by the bot.
 // usage: node derive.mjs <repo> <outdir>
-import { writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 const [repo, out] = process.argv.slice(2), B = path.join(repo, ".test-build/");
 mkdirSync(out, { recursive: true });
@@ -24,14 +24,21 @@ const { NORMAL_VIEWS, faceTarget } = await import(B + "tests/targeting-support.j
 await (await import(B + "scripts/playthrough/content.js")).loadCampaign();
 
 const opts = { readOptional: true, reverse: false, verbose: false };
-const slot = new SaveSlot("cr1-play");
-const upTo = [...LIVE_PHASES, ...CREEL_LATER];
-const phases = upTo.slice(0, upTo.findIndex((p) => p.id === "meridian") + 1);
-const run = await runPhases(new Driver("creel", "creel"), phases, opts, slot);
-console.log(run.phases.map((p) => `${p.id}:${p.status}`).join(" "));
+// Milestone snapshots are cached beside the saves, so a rerun skips the replay.
+const cache = path.join(out, "milestones.json");
+const slot = { snapshots: new Map(existsSync(cache) ? Object.entries(JSON.parse(readFileSync(cache, "utf8"))) : []) };
+if (!slot.snapshots.size) {
+  const live = new SaveSlot("cr1-play");
+  const upTo = [...LIVE_PHASES, ...CREEL_LATER];
+  const phases = upTo.slice(0, upTo.findIndex((p) => p.id === "meridian") + 1);
+  const run = await runPhases(new Driver("creel", "creel"), phases, opts, live);
+  console.log(run.phases.map((p) => `${p.id}:${p.status}`).join(" "));
+  for (const [k, v] of live.snapshots) slot.snapshots.set(k, v);
+  writeFileSync(cache, JSON.stringify(Object.fromEntries(slot.snapshots)));
+}
 
 const save = (name, s) => {
-  const e = encodeSave(createEnvelope(s, { sessionId: `cr1-${name}`, createdAt: "2026-10-22T00:00:00.000Z",
+  const e = encodeSave(createEnvelope(s, { sessionId: `cr1-play-${name}`, createdAt: "2026-10-22T00:00:00.000Z",
     savedAt: new Date(Date.parse("2026-10-22T00:00:00.000Z") + s.tick * 1000 / 60).toISOString() }));
   if (!e.ok) throw new Error(`${name}: ${e.error}`);
   writeFileSync(path.join(out, `${name}.json`), e.value);

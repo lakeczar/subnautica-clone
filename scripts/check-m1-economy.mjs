@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { HOST_KNOWLEDGE_RECIPES, UPGRADE_RECIPES, UPGRADE_REFIT_RECIPES } from "../.test-build/src/content/upgrades/registry.js";
 import { SYS2_RECIPES } from "../.test-build/src/content/systems/items.js";
+import { FAUNA_RECIPES } from "../.test-build/src/content/fauna/items.js";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { CONTENT_VERSION, RECIPES, SOURCES, ITEMS, PLACES } from "../.test-build/src/content/registry.js";
@@ -30,7 +31,9 @@ const m2b1Ids = ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame",
 const storyIds = ["service_power_assembly", "service_air_assembly", "pod_buffer"];
 // C4's upgrade, refit, host-knowledge and SYS-2 recipes: scripts/upgrade-economy.mjs and tests/c4-systems.test.ts.
 const c4Ids = Object.keys({ ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES, ...SYS2_RECIPES });
-assert.deepEqual(Object.keys(RECIPES).sort(), [...m1Ids, "suit_350", ...m2b1Ids, ...storyIds, ...Object.keys(CAMPAIGN_RECIPES), ...c4Ids].sort(), "complete roster is M1 plus the separately checked M2 refits, M2-B1 fleet work, S5 works recipes, S9 campaign recipes (check-campaign-economy.mjs) and C4 systems");
+// CR-1's hand net: tests/cr-1-creatures.test.ts (loop-free, capped creature economy).
+const cr1Ids = Object.keys(FAUNA_RECIPES);
+assert.deepEqual(Object.keys(RECIPES).sort(), [...m1Ids, "suit_350", ...m2b1Ids, ...storyIds, ...Object.keys(CAMPAIGN_RECIPES), ...c4Ids, ...cr1Ids].sort(), "complete roster is M1 plus the separately checked M2 refits, M2-B1 fleet work, S5 works recipes, S9 campaign recipes (check-campaign-economy.mjs), C4 systems and CR-1's net");
 assert.equal(new Set(delta.preCanopy).size, delta.preCanopy.length);
 for (const id of m1Ids) {
   const r = RECIPES[id];
