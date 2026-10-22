@@ -317,3 +317,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
   - Builders 5 of 5: C4, POI-1, LC, CA-2, CA-3.
 - **LC R3 fixes done** at `61246f9`: the `CaveAdmission` state machine (away, waiting, loading with a paused clock, rescue to the nearest mouth exterior, admitted), priority preemption on reload, one shared fine remainder, and survival regressions over 180 s. Sol R4 running. Builders 4 of 5: C4, POI-1, CA-2, CA-3.
 - **W2 phase 1 integrated at `9d06df2`:** 1,149 tests pass, build OK, bake 220/220, heavy terrain-borders and cave-light pass. **The central pinnacle hub is in the main game.**
+- **ENC-1 R2 (Sol): accept** (`review/enc-1-r2` `b062535`). **Integrated:** 1,160 tests pass, build OK. C4 must keep `#threat-edge` in `ui/view.ts` when merging root.
