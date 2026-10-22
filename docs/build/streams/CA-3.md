@@ -1,6 +1,6 @@
 # CA-3: Rift, Divide and Meridian small and medium caves (handoff)
 
-Opus 5.5 high. Branch `t3/rift-divide-meridian-caves`, rebased onto `feat/siltwake-first-expedition` at `82a46ea` (CA-1, CA-2, W2's hub caves and C4 stage B integrated). R1 fixes below answer [Sol R1](../reviews/CA-3-SOL-XHIGH-R1.md) (on `review/ca-3-r1`). New files only, except one line in a kit file (see *Kit touch*). **Not registered** in `CAVE_SOURCES`; the step is below. Bible: [ember-rift](../../content/regions/ember-rift.md), [mirror-divide](../../content/regions/mirror-divide.md), [meridian](../../content/regions/meridian.md).
+Opus 5.5 high. Branch `t3/rift-divide-meridian-caves`, rebased onto `feat/siltwake-first-expedition` at `12b6a33` (CA-1, CA-2, W2's hub caves, C4 stage B and LC integrated). R1 fixes below answer [Sol R1](../reviews/CA-3-SOL-XHIGH-R1.md) (on `review/ca-3-r1`). New files only, except one line in a kit file (see *Kit touch*). **Not registered** in `CAVE_SOURCES`; the step is below. Bible: [ember-rift](../../content/regions/ember-rift.md), [mirror-divide](../../content/regions/mirror-divide.md), [meridian](../../content/regions/meridian.md).
 
 ## R1 fixes
 - **CA-3-01, content in rock.**
@@ -22,7 +22,7 @@ Opus 5.5 high. Branch `t3/rift-divide-meridian-caves`, rebased onto `feat/siltwa
     - each route's exit must load nothing at the peak.
 
     Zeroing every intensity fails it (negative control in the file).
-- **Rebase onto root at `82a46ea`.** `DEEP_CAVE_SOURCES` stays separate, unregistered.
+- **Rebase onto root at `12b6a33`.** `DEEP_CAVE_SOURCES` stays separate, unregistered.
   - The tests now compose root as it is: `AUTHORED_CAVE_SOURCES` through `caveDef` (the Fanvault, W2's hub caves, CA-1's Reef and Isles) and CA-2's `CANOPY_BASIN_GROUPS` through `groupDef`.
   - The fast disjointness check covers all 35 of those plus the 20 deep sources.
   - `deepWorld` composes those within 64 m of a deep footprint. Today that is only `basin_west_rim` (18 m from the kiln tube); the next nearest is 247 m away. World queries are local, so the rest only cost memory. With all 35, the dark file peaked at 996 of its 1,024 MiB.
@@ -90,18 +90,18 @@ Each has two or more exits. Craft legs run along the axes, because the clearance
   - **Running it:** `npx vite --port <port> --strictPort --host 127.0.0.1`, then `/tools/cave-lab-deep.html?cave=rift_kiln_tube`.
 - **GPU shots:** `tools/cave-deep-shots.mjs` (through `heavy-check.sh`).
 
-## Checks (R1, on `82a46ea`)
-- **`npm test`:** 1,201/1,201, including the 9 fast tests here.
-- **Heavy, through `heavy-check.sh`** (one 248 s job, load average about 17):
+## Checks (R1, on `12b6a33`)
+- **`npm test`:** 1,238/1,238, including the 9 fast tests here.
+- **Heavy, through `heavy-check.sh`** (one 243 s job, load average about 17):
 
   | File | Time | Peak RSS (MiB) | Tests |
   | --- | --- | --- | --- |
-  | `caves-deep.heavy` | 47.2 s | 640 | 111/111 |
-  | `caves-deep-dark.heavy` | 121.3 s | 934 | 31/31 |
-  | `caves-deep-hazard-step.heavy` | 23.1 s | 439 | 8/8 |
-  | `caves-deep-perf.heavy` | 56.6 s | 814 | 1/1 |
+  | `caves-deep.heavy` | 45.8 s | 680 | 111/111 |
+  | `caves-deep-dark.heavy` | 123.8 s | 688 | 31/31 |
+  | `caves-deep-hazard-step.heavy` | 19.1 s | 426 | 8/8 |
+  | `caves-deep-perf.heavy` | 54.4 s | 801 | 1/1 |
 
-  The dark file is the closest to the 1,024 MiB cap. Its world is 382 MiB, mostly these 20 caves; the rest is light fields and retreat searches.
+  The dark file's peak varies from run to run (688–934 MiB with the same code). Its world is 382 MiB, mostly these 20 caves; the rest is light fields and retreat searches.
   Phase 1 (code at `8a64355`): `npm run build` OK, with the bake unchanged while the caves are unregistered. Root's `cave-light.heavy` still passed after the kit touch (203 MiB).
 - **Per cave (heavy):**
   - shell and rock agree (solids are exactly the owned rock voxels, and the shell sits within 0.35 m of rock);
@@ -141,7 +141,7 @@ The other 31 shots are in [`ca-3/`](ca-3/).
 ## Numbers
 - **Build:** 20 caves, **9.4 M voxels, 19,628 rock boxes** plus about 133,760 collar columns, **2.5 s to build all 20** on the shared VM (largest: cistern 1.66 M voxels in 0.65 s, lintel 1.57 M, window gallery 1.25 M, kiln 1.05 M). Root's Fanvault alone: 1,504 boxes and about 9,920 collar columns.
 - **Query cost:** a diver step (1/60 s swim plus support) inside these caves, with root's caves loaded, costs **33.4 µs** (9,075 steps), against 21.8 µs inside the Fanvault in the root world (phase 1, quiet host).
-  - **R1, on `82a46ea`:** root now has 35 caves (56,281 rock boxes, about 268,960 collar columns). The step costs **58.2 µs** inside these caves against **82.2 µs** inside root's caves (28,600 steps). The host load average was about 17, so read the ratio, not the absolute numbers: the deep caves cost no more per step than root's own.
+  - **R1, on `12b6a33`:** root now has 35 caves (56,281 rock boxes, about 268,960 collar columns). The step costs **54.7 µs** inside these caves against **82.4 µs** inside root's caves (28,600 steps). The host load average was about 17, so read the ratio, not the absolute numbers: the deep caves cost no more per step than root's own.
 - **Load:** heavy, but within budget. The concern is **first-use build time**: `gameWorld()` builds every cave on first use, so with CA-1's 18 caves, CA-2 and W2 added, startup grows by seconds. I'd build caves per region lazily, or bake the rock, before all four streams land.
 
 ## Darkness and hazards
