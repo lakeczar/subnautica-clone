@@ -10,7 +10,9 @@
 // usage: node derive.mjs <repo> <outdir> [segments]
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-const [repo, out, segArg] = process.argv.slice(2), B = path.join(repo, ".test-build/");
+const [repo, out, segArg, onlyArg] = process.argv.slice(2), B = path.join(repo, ".test-build/");
+/** Optional: only these caves (a make-up tour for stops a pass missed). */
+const ONLY = onlyArg ? new Set(onlyArg.split(",")) : null;
 const SEGMENTS = Number(segArg ?? 8);
 mkdirSync(out, { recursive: true });
 const { CAVE_SOURCES } = await import(B + "src/content/regions/caves.js");
@@ -31,7 +33,7 @@ function clearNear(p, n) {
 }
 // One stop per cave: outside its first mouth (largest first), else above its footprint.
 const stops = [];
-for (const s of CAVE_SOURCES) {
+for (const s of CAVE_SOURCES.filter(c => !ONLY || ONLY.has(c.id))) {
   const mouths = s.portals.filter(p => p.kind === "mouth").sort((a, b) => b.clear.width * b.clear.height - a.clear.width * a.clear.height);
   let q = null, via = "", outer = null;
   for (const m of mouths) {
@@ -46,7 +48,7 @@ for (const s of CAVE_SOURCES) {
   stops.push({ cave: s.id, region: s.region, via, at: q, outer: outer ?? q, mouthY: mouths[0]?.center.y ?? null });
 }
 // Greedy tour from the Fanvault (beside the pod).
-const tour = [stops.find(s => s.cave === "fanvault")];
+const tour = [stops.find(s => s.cave === "fanvault") ?? stops[0]];
 const left = stops.filter(s => s !== tour[0]);
 while (left.length) {
   const last = tour.at(-1).at;
@@ -65,6 +67,10 @@ function ceilingAlong(a, b) {
   }
   return hi;
 }
+// Detours stay 40 m inside the world's edge (the Dart stops at the boundary).
+const EDGE = { minX: -536, maxX: 1432, minZ: -1592, maxZ: 120 };
+const inside = (p) => p.x >= EDGE.minX && p.x <= EDGE.maxX && p.z >= EDGE.minZ && p.z <= EDGE.maxZ;
+const clampIn = (p) => ({ x: Math.min(EDGE.maxX, Math.max(EDGE.minX, p.x)), z: Math.min(EDGE.maxZ, Math.max(EDGE.minZ, p.z)) });
 /** A leg's plan points: straight if it can cruise 14 m clear (and at least
  * 6 m under the surface), else bent round islands and shallows through a
  * detour beside its middle. */
@@ -74,9 +80,9 @@ function route(a, b, depth = 0) {
   const px = -(b.z - a.z) / len, pz = (b.x - a.x) / len;
   for (const off of [60, 120, 200, 300, 450]) for (const side of [1, -1]) {
     const m = { x: mx + px * off * side, z: mz + pz * off * side };
-    if (ceilingAlong(a, m) <= -20 && ceilingAlong(m, b) <= -20) return [m, b];
+    if (inside(m) && ceilingAlong(a, m) <= -20 && ceilingAlong(m, b) <= -20) return [m, b];
   }
-  const m = { x: mx + px * 200, z: mz + pz * 200 };
+  const m = clampIn({ x: mx + px * 200, z: mz + pz * 200 });
   return [...route(a, m, depth + 1), ...route(m, b, depth + 1)];
 }
 function leg(a, b) {
