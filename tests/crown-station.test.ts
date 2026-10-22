@@ -14,7 +14,9 @@ import type { GameState } from "../src/sim/types.js";
 import { gameWorld } from "../src/sim/world.js";
 import { creelFirst, parkCreel } from "./b1-support.js";
 
-// W2 phase 2: the crown station as data and pure rules against C4 stage B's
+// W2 phase 2, a deferred PROPOSAL (not imported by the game; see the source
+// headers and Sol R1's W2-02..04, fixed at composition). The crown station as
+// data and pure rules against C4 stage B's
 // interfaces. Composition (tables, survival, fabrication, service) is the
 // coordinator's, after C4 stage B; these pin the design it composes.
 

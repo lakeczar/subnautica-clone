@@ -1,3 +1,9 @@
+/** PROPOSAL, DEFERRED (coordinator, after Sol R1): not imported by the game.
+ * The crown station becomes its own composition task against C4 stage B's
+ * accepted interfaces, which fixes Sol R1's W2-02 (these rows cannot execute
+ * through C4's restoration path), W2-03 (stage 1 enables the generic stop
+ * service before the dock) and W2-04 (the bench predicate's site list). Do not
+ * wire these rows as they stand. */
 /** W2 phase 2: the crown station, as data in the shapes of C4 stage B's
  * interfaces (`content/bases.ts` REST_BASES, `content/systems/hosts.ts`
  * FIXED_HOSTS, `content/stops.ts` WORKING_STOPS and the campaign recipe rows).

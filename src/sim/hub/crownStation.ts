@@ -1,3 +1,9 @@
+/** PROPOSAL, DEFERRED (coordinator, after Sol R1): not imported by the game.
+ * The crown station becomes its own composition task against C4 stage B's
+ * accepted interfaces, which fixes Sol R1's W2-02 (these rows cannot execute
+ * through C4's restoration path), W2-03 (stage 1 enables the generic stop
+ * service before the dock) and W2-04 (the bench predicate's site list). Do not
+ * wire these rows as they stand. */
 /** W2 phase 2: the crown station's rules as pure functions over GameState.
  * The stages are ordinary facilities (`world.facilities`), so these read the
  * same `facility()` check every stop uses and need no saved field of their

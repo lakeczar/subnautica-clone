@@ -25,8 +25,11 @@ const SKIRT = 1.5;
 const MIRROR = hex("#a9b8dc"), MIRROR2 = hex("#c7d0ea");
 const NORMAL_STEP = 0.25;
 
+/** The chunk is cut by the legacy terrain's extent (its edges become lattice lines). */
+const cutByLegacy = (r: Rect): boolean => r.minX < LEGACY.maxX && r.maxX > LEGACY.minX && r.minZ < LEGACY.maxZ && r.maxZ > LEGACY.minZ;
+
 export function terrainOptions(rect: Rect, lod: LodLevel): TessellationOptions {
-  const cut = rect.minX < LEGACY.maxX && rect.maxX > LEGACY.minX && rect.minZ < LEGACY.maxZ && rect.maxZ > LEGACY.minZ;
+  const cut = cutByLegacy(rect);
   // W1 caves own their footprints: the floor there is the cave's shell. A
   // footprint touching the closed chunk rect is passed, so both neighbours of
   // a shared border agree on its cuts.
@@ -34,7 +37,19 @@ export function terrainOptions(rect: Rect, lod: LodLevel): TessellationOptions {
   const o = lod === "fine" ? FINE : COARSE;
   // Chunks cut by the legacy edge or a cave keep the border step as their base
   // so the extra lines never split a cell off the shared border lattice.
-  return { base: cut || pits.length ? BORDER_STEP : o.base, tolerance: o.tolerance, min: o.min,
+  // A border's cuts: every pit edge line meeting it from this chunk or the
+  // one across it (same size, so both sides compute the same union). The
+  // legacy extent's edges are lattice lines across a chunk it cuts, so the
+  // chunk across from one takes them too (W2-01: a hub chunk below the
+  // legacy chunk at Z -352 lacked its X 268.16 cut).
+  const w = rect.maxX - rect.minX, h = rect.maxZ - rect.minZ;
+  const borderPits = (axis: "x" | "z", at: number): Rect[] => {
+    const across = axis === "x"
+      ? { ...rect, minZ: at === rect.minZ ? at - h : at, maxZ: at === rect.minZ ? at : at + h }
+      : { ...rect, minX: at === rect.minX ? at - w : at, maxX: at === rect.minX ? at : at + w };
+    return [...pits, ...caveFootprintsTouching(across), ...(!cut && cutByLegacy(across) ? [LEGACY] : [])];
+  };
+  return { base: cut || pits.length ? BORDER_STEP : o.base, tolerance: o.tolerance, min: o.min, borderPits,
     ...(cut ? { hole: LEGACY } : {}), ...(pits.length ? { pits } : {}) };
 }
 /** Cave replacement footprints touching a closed rectangle. */
