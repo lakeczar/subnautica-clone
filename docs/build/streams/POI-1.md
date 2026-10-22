@@ -1,6 +1,6 @@
 # POI-1: the deep legs stop feeling empty, and the big landmarks read in the dark
 
-Opus 5.5 high. Branch `t3/deep-route-pois` from `e984a60`, with root merged at `4d3a7b9` (CA-1) and again with W2 phase 1 and ENC-1. Code `9a39ba5`; this page and [the evidence](poi1/) follow it. Answers the M2 audit's #3 (empty deep legs) and #10 (thin landmarks), and ATM-1's note that silhouettes vanish in the dark. Story-neutral: ambiguous wreckage and use, no plot, no resources or recipes.
+Opus 5.5 high. Branch `t3/deep-route-pois` from `e984a60`, with root merged up to `12b6a33` (CA-1, W2 phase 1, ENC-1, CA-2, C4 stage B). Code `9a39ba5`, merged at `a047c8f`; this page and [the evidence](poi1/) follow it. Answers the M2 audit's #3 (empty deep legs) and #10 (thin landmarks), and ATM-1's note that silhouettes vanish in the dark. Story-neutral: ambiguous wreckage and use, no plot, no resources or recipes.
 
 ## What a player sees
 **Seven points of interest**, about one per 300 m of each deep leg. Each is lit, so it's glimpsed from the route at 125–245 m, then drawn on approach:
@@ -58,7 +58,7 @@ Opus 5.5 high. Branch `t3/deep-route-pois` from `e984a60`, with root merged at `
   - **Seams:** they lie on the rock like scatter, so they follow scatter's keep-out and skip the kiln tube's mouth.
 
 ## Checks
-- **`npm run test:fast`:** 1,167/1,167 on the merged branch, including 7 new POI tests:
+- **`npm run test:fast`:** 1,199/1,199 on the final merge, including 7 new POI tests:
   - registration and lights at both LODs;
   - clearances;
   - adverse controls: a float 28 m from a carrier lane, art in CA-3's east pocket, W2's crown, a lamp 1 m off the spire, a seam 3 m off the rock;
