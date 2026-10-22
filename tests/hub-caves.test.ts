@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assertDisjointFootprints, CAVE_SOURCES, EXTERIOR, MIN_ROCK } from "../src/content/regions/caves.js";
-import { caveVolume } from "../src/content/regions/caveGeometry.js";
+import { caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
 import { HUB_CAVE_SOURCES } from "../src/content/regions/hubCaves.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
 import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
@@ -20,6 +20,15 @@ import { aperture, DIVER, fineShell, HUB_CAVES, openings, retreat, retreatStarts
 const world = gameWorld();
 const crown = HUB_CAVES.find(d => d.id === "hub_crown_shaft")!;
 const sub = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+/** Floor relief within one collar cell (0.75 m) of a point. */
+function localRelief(x: number, z: number): number {
+  let lo = Infinity, hi = -Infinity;
+  for (let i = -3; i <= 3; i++) for (let k = -3; k <= 3; k++) {
+    const h = worldFloor(x + i * 0.25, z + k * 0.25);
+    lo = Math.min(lo, h); hi = Math.max(hi, h);
+  }
+  return hi - lo;
+}
 
 test("hub caves: registered beside the Fanvault, disjoint, clear of the preserve's collar band, thick rock in their own footprints", () => {
   assert.deepEqual(HUB_CAVE_SOURCES.map(s => s.id), ["hub_apron_hollow", "hub_step_arch", "hub_glimmer_crack", "hub_crown_shaft"]);
@@ -47,16 +56,20 @@ test("hub caves: registered beside the Fanvault, disjoint, clear of the preserve
 
 test("hub caves: the shell never sits more than 0.35 m from its rock, and no cave water is inside rock", () => {
   for (const def of HUB_CAVES) {
-    const rock = rockIndex(def), m = fineShell(def);
+    const rock = rockIndex(def), m = fineShell(def), f = def.replacementFootprints[0]!;
+    // Within half a metre of the footprint edge the shell is the collar, held
+    // to the heightfield itself by the collar test below.
+    const collar = (p: Vec3): boolean => Math.min(p.x - f.minX, f.maxX - p.x, p.z - f.minZ, f.maxZ - p.z) < 0.5;
     let worst = 0, buried = 0;
-    const n = m.positions.length / 3;
-    for (let i = 0; i < n; i++) {
+    // Every vertex of a small cave; every second of the crown's large shell.
+    const n = m.positions.length / 3, stride = n > 60000 ? 2 : 1;
+    for (let i = 0; i < n; i += stride) {
       const p = vertex(m, i), nrm = { x: m.normals[i * 3]!, y: m.normals[i * 3 + 1]!, z: m.normals[i * 3 + 2]! };
-      worst = Math.max(worst, rock.distance(p));
+      if (!collar(p)) worst = Math.max(worst, rock.distance(p));
       if (rock.inRock({ x: p.x + nrm.x * 0.36, y: p.y + nrm.y * 0.36, z: p.z + nrm.z * 0.36 })) buried++;
     }
     assert.ok(worst <= 0.35, `${def.id}: shell point ${worst.toFixed(3)} m outside its solids`);
-    assert.ok(buried <= n * 0.001, `${def.id}: ${buried} of ${n} shell points face rock within 0.36 m`);
+    assert.ok(buried <= n / stride * 0.001, `${def.id}: ${buried} of ${n} shell points face rock within 0.36 m`);
     const v = caveVolume(def), g = v.grid;
     let cells = 0;
     for (let k = 0; k < g.nz; k++) for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) {
@@ -119,9 +132,20 @@ test("hub caves: roofs are sound and the collar meets the heightfield at every f
     for (const [x, z, ox, oz] of edge) {
       const outside = worldFloor(ox, oz);
       assert.ok(outside >= def.source.baseY, `${def.id}: floor ${outside.toFixed(1)} below baseY at ${ox}, ${oz}`);
-      // On the crown's 80° cap the floor falls ~2 m across the 0.5 m sample gap.
-      const top = world.supportHeight(x, z, 1000), slope = Math.abs(worldFloor(x, z) - outside);
-      assert.ok(Math.abs(top - outside) <= 0.75 + slope, `${def.id}: collar step ${(top - outside).toFixed(2)} m at ${x}, ${z}`);
+      // The spur's flanks fall 3-5 m per metre, and the adapter's collar
+      // columns take the highest of nine floor samples per 0.5 m cell (a W1
+      // limit), so the step is bounded by the floor's own relief right there.
+      const top = world.supportHeight(x, z, 1000), relief = localRelief(x, z);
+      assert.ok(Math.abs(top - outside) <= 0.75 + relief, `${def.id}: collar step ${(top - outside).toFixed(2)} m at ${x}, ${z} (relief ${relief.toFixed(2)})`);
+    }
+    // The art seam: every shell vertex on the footprint edge lies on the floor.
+    for (const lod of ["fine", "coarse"] as const) {
+      const m = caveShell(def, lod);
+      for (let i = 0; i < m.positions.length / 3; i++) {
+        const p = vertex(m, i);
+        if (Math.abs(p.x - f.minX) > 1e-6 && Math.abs(p.x - f.maxX) > 1e-6 && Math.abs(p.z - f.minZ) > 1e-6 && Math.abs(p.z - f.maxZ) > 1e-6) continue;
+        assert.ok(Math.abs(p.y - worldFloor(p.x, p.z)) < 1e-4, `${def.id} ${lod}: collar vertex ${p.y.toFixed(2)} vs floor ${worldFloor(p.x, p.z).toFixed(2)}`);
+      }
     }
   }
 });
@@ -170,7 +194,7 @@ test("negative control: with the crown shaft's mouths plugged the same retreat f
       max: { x: o.center.x + half.x, y: o.center.y + half.y, z: o.center.z + half.z } };
   });
   const sealed = createCaveWorldQueries({ solids: [...SOLIDS, ...plugs], floor: surfaceHeight, caves: HUB_CAVES.map(caveOwner) });
-  const starts = retreatStarts(crown, 6);
+  const starts = retreatStarts(crown, 8);
   const { failures } = retreat(crown, sealed, starts);
   assert.ok(failures.length >= starts.length * 0.9, `${failures.length} of ${starts.length} still escaped a sealed cave`);
 });

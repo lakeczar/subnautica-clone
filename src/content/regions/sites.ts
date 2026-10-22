@@ -299,13 +299,13 @@ export const SITES: readonly SiteDef[] = [
     at: { x: 330, y: -165, z: -560 }, half: { x: 74, y: 119, z: 74 },
     note: "Reef-capped pinnacle rising about 240 m from the Basin floor to a summit at 47 m; crown rays ring it, the beacon tops it." },
   { id: "hub.rim_balcony", region: "silt_basin", role: "landmark", label: "Crown balcony", vista: true,
-    at: { x: 350, y: "floor", z: -522 }, lift: 0.5, half: { x: 12, y: 6, z: 12 },
+    at: { x: 352, y: "floor", z: -511 }, lift: 0.5, half: { x: 12, y: 6, z: 10 },
     note: "Ledge on the crown's north lip, 120 m deep, over the carrier anchorage. The crown shaft's flank mouth opens onto it." },
   { id: "hub.beacon_house", region: "silt_basin", role: "story", label: "Beacon house",
-    at: { x: 343, y: "floor", z: -573 }, lift: 1, half: { x: 1.5, y: 1.5, z: 1 },
+    at: { x: 341, y: "floor", z: -571 }, lift: 1, half: { x: 1.5, y: 1.5, z: 1 },
     note: "Lost site: the door of the cylindrical beacon house on the summit. Its lamp is the hub's far-visible light; the chart cabinet stays sealed." },
   { id: "hub.crown_station", region: "silt_basin", role: "landmark", label: "Crown station",
-    at: { x: 312, y: "floor", z: -544 }, lift: 0.5, half: { x: 6, y: 4, z: 4 },
+    at: { x: 319, y: "floor", z: -547 }, lift: 0.5, half: { x: 5, y: 4, z: 3.5 },
     note: "Restorable stop in the crown's western lee (W2 phase 2), solar mast beside it." },
 
   // ---------------------------------------------------------------- Hearth Reef (route expansion only)

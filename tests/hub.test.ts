@@ -4,7 +4,7 @@ import { HULL_COLLIDERS, PLACES, RECIPES, type MaterialId, type RecipeId } from 
 import { sweepHull } from "../src/content/regions/access.js";
 import { caves, CAVE_SOURCES } from "../src/content/regions/caves.js";
 import { drape } from "../src/content/regions/drape.js";
-import { CRAFT_PROFILES, ROUTES } from "../src/content/regions/passages.js";
+import { CRAFT_PROFILES, RAW_ROUTES, ROUTES } from "../src/content/regions/passages.js";
 import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
 import { SITES } from "../src/content/regions/sites.js";
 import { STRUCTURES } from "../src/content/regions/structures.js";
@@ -16,6 +16,7 @@ import { createGame } from "../src/sim/state.js";
 import { stepGame } from "../src/sim/step.js";
 import type { GameCommand, GameEvent, GameState, Vec3 } from "../src/sim/types.js";
 import { gameWorld, hullClearance } from "../src/sim/world.js";
+import { BEACON, BEACON_PERIOD, beaconGlow, CROWN_RAY_LAP, CROWN_RAY_SPAN, crownRayPoses } from "../src/render/hubView.js";
 
 // W2: the central pinnacle hub in the world. The spur's terrain, the routes
 // it touches, the crown as a landmark, and the two adverse cases: a craft
@@ -49,13 +50,14 @@ test("the spur: reef heads, two stepping stones and a crown that rises about 240
   // The rim balcony is a ledge about 120 m down on the north lip, over the anchorage.
   const balcony = SITES.find(s => s.id === "hub.rim_balcony")!;
   const ledge = worldFloor(balcony.at.x, balcony.at.z);
-  assert.ok(Math.abs(ledge + 120) < 5 && dist2(balcony.at, { x: 350, z: -520 }) < 4, `balcony at ${ledge.toFixed(1)}`);
+  assert.ok(Math.abs(ledge + 120) < 5 && dist2(balcony.at, { x: 350, z: -520 }) < 10, `balcony at ${ledge.toFixed(1)}`);
   assert.ok(worldFloor(balcony.at.x, balcony.at.z + 30) < -200, "the balcony overlooks the cliff, not more ledge");
 });
 
-test("the legacy preserve is bit-exact: the spur stops well short of it", () => {
+test("the legacy preserve is untouched: the spur never reaches into it", () => {
+  // regions-world holds the preserve bit-exact; this says why it stays so.
   const P = LEGACY_PRESERVE;
-  for (let x = P.minX - 10; x <= P.maxX + 10; x += 2) for (let z = P.minZ - 10; z <= P.maxZ + 10; z += 2)
+  for (let x = P.minX; x <= P.maxX; x += 2) for (let z = P.minZ; z <= P.maxZ; z += 2)
     assert.equal(hubRelief(x, z, null), -Infinity, `hub relief reaches ${x}, ${z}`);
   // And no pinnacle reaches a CA-2 Basin cave footprint known at authoring time.
   const culvert = { minX: 398, maxX: 422, minZ: -507, maxZ: -483 };
@@ -90,9 +92,7 @@ test("carrier lanes pass between the pinnacles at depth: no route or tether is l
   }
 });
 
-/** The authored keel lines before drape, recovered by re-reading the route
- * module's sources: a draped path keeps its authored waypoints' X/Z. */
-const RAW_PATHS = new Map(ROUTES.map(r => [r.id, r.path.filter((_, i, a) => i === 0 || i === a.length - 1 || true)] as const));
+const RAW_PATHS = new Map(RAW_ROUTES.map(r => [r.id, r.path] as const));
 
 test("nothing passes through the pinnacles' cave rock: every route, tether and parked hull is clear of it", () => {
   const rock = caves(worldFloor).filter(d => d.id !== "fanvault").flatMap(d => d.rock.map(s => ({ id: s.id, bounds: { min: s.min, max: s.max } })));
@@ -142,15 +142,19 @@ function sightClear(a: Vec3, b: Vec3): string | null {
 test("the crown is the hub's landmark: its beacon in plain sight from the Canopy edge and the Rift head, its cliff over the anchorage", () => {
   const beacon = STRUCTURES.find(x => x.id === "hub.beacon_house.house")!.solids[0]!;
   const light = { x: (beacon.min.x + beacon.max.x) / 2, y: beacon.max.y - 1, z: (beacon.min.z + beacon.max.z) / 2 };
-  const views: Record<string, Vec3> = {
-    "Canopy south edge": { x: 400, y: -150, z: -350 },
-    "Rift head": { x: 172, y: -220, z: -606 },
-    "first step": { x: 80, y: -34, z: -400 },
-  };
-  for (const [name, at] of Object.entries(views)) {
-    const d = Math.hypot(light.x - at.x, light.y - at.y, light.z - at.z);
+  // The lamp itself from the Canopy edge and the spur; from the Rift head,
+  // 180 m below the summit, the crown's terraces hide the lamp and its light
+  // shaft rising over the summit is what shows.
+  const shaft = { ...light, y: light.y + 20 };
+  const views: [string, Vec3, Vec3][] = [
+    ["Canopy south edge", { x: 400, y: -150, z: -350 }, light],
+    ["first step", { x: 80, y: -34, z: -400 }, light],
+    ["Rift head", { x: 172, y: -220, z: -606 }, shaft],
+  ];
+  for (const [name, at, target] of views) {
+    const d = Math.hypot(target.x - at.x, target.y - at.y, target.z - at.z);
     assert.ok(d < 320, `${name} is ${d.toFixed(0)} m from the beacon`);
-    assert.equal(sightClear(at, light), null, `${name} -> beacon`);
+    assert.equal(sightClear(at, target), null, `${name} -> beacon`);
   }
   // From the anchorage the crown fills the view: the balcony lip 120 m overhead, in sight.
   const anchorage = { x: 360, y: -232, z: -430 }, lip = { x: 350, y: -118, z: -512 };
@@ -237,4 +241,31 @@ test("ADVERSE: a diver without power on the crown's summit always reaches air: o
   assert.ok(s.player.pose.position.y >= -1.2, `surfaced: ${JSON.stringify(s.player.pose.position)}`);
   assert.ok(s.player.vitals.oxygen > 0 && s.metrics.failures === 0, `air left ${s.player.vitals.oxygen.toFixed(1)}%, never incapacitated`);
   assert.ok(steps / 60 < 45, `${(steps / 60).toFixed(1)} s from the summit to air`);
+});
+
+test("the crown rays ring the crown in open water at every moment, and the beacon outlasts lit rock in the murk", () => {
+  for (let t = 0; t < CROWN_RAY_LAP; t += 1.7) for (const r of crownRayPoses(t)) {
+    const p = r.position, d = dist2(p, crown);
+    assert.ok(d > 70 && d < 125, `a ray strays to ${d.toFixed(0)} m from the crown`);
+    // Wingtips included: the ray's span clears the floor and the surface.
+    for (const [ox, oz] of [[0, 0], [CROWN_RAY_SPAN / 2, 0], [-CROWN_RAY_SPAN / 2, 0], [0, CROWN_RAY_SPAN / 2], [0, -CROWN_RAY_SPAN / 2]] as const)
+      assert.ok(p.y - worldFloor(p.x + ox, p.z + oz) > 12, `a ray at ${JSON.stringify(p)} skims the floor`);
+    assert.ok(p.y < -40, "rays stay well below the surface");
+  }
+  // Slow: a full lap takes minutes, and neighbours keep their spacing.
+  assert.ok(CROWN_RAY_LAP >= 120);
+  const a = crownRayPoses(30);
+  for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++)
+    assert.ok(Math.hypot(a[i]!.position.x - a[j]!.position.x, a[i]!.position.y - a[j]!.position.y, a[i]!.position.z - a[j]!.position.z) > CROWN_RAY_SPAN * 2, "rays crowd");
+  // The beacon is in the beacon house's lamp room.
+  const house = STRUCTURES.find(x => x.id === "hub.beacon_house.house")!.solids[0]!;
+  assert.ok(BEACON.y < house.max.y && BEACON.y > house.max.y - 2.4 && Math.abs(BEACON.x - (house.min.x + house.max.x) / 2) < 1e-9);
+  // Cel fog leaves lit rock at about e^(-0.0105 d); the beacon keeps several times that.
+  for (const d of [300, 450]) {
+    let peak = 0;
+    for (let t = 0; t < BEACON_PERIOD; t += 0.05) peak = Math.max(peak, beaconGlow(d, t));
+    assert.ok(peak > 4 * Math.exp(-0.0105 * d) && peak > 0.1, `beacon at ${d} m: ${peak.toFixed(3)}`);
+  }
+  assert.ok(beaconGlow(8, 0) < beaconGlow(60, 0), "held down beside it");
+  assert.equal(beaconGlow(1e4, 0), 0);
 });

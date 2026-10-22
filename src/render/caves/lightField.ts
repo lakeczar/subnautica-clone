@@ -170,7 +170,11 @@ export function caveLightField(def: CaveDef, floor: (x: number, z: number) => nu
   }
   // Daylight path length: shortest path through water from open water.
   const scale = def.rooms.map(r => REFERENCE_FALLOFF / r.falloff);
-  const distance = new Float32Array(n).fill(Infinity), heap = new Heap();
+  // Float64: a float32 store rounds a key, so a popped key can pass the
+  // stale check against its own rounding and relax again; in a long cave
+  // (W2's crown shaft) near-equal grid paths then grow the heap without end.
+  // Paths past DISTANCE_RANGE store the same clamped byte, so stop there.
+  const distance = new Float64Array(n).fill(Infinity), heap = new Heap();
   for (let t = 0; t < n; t++) if (rockCount[t]! < 8 && outside[t]! >= inside[t]!) { distance[t] = 0; heap.push(0, t); }
   while (heap.size) {
     const [d, t] = heap.pop();
@@ -182,7 +186,7 @@ export function caveLightField(def: CaveDef, floor: (x: number, z: number) => nu
       const u = a + nx * (b + ny * c);
       if (rockCount[u] === 8) continue;
       const r = room[u]!, next = d + len * texel * (r >= 0 ? scale[r]! : 1);
-      if (next < distance[u]!) { distance[u] = next; heap.push(next, u); }
+      if (next < distance[u]! && next <= DISTANCE_RANGE + texel * 2) { distance[u] = next; heap.push(next, u); }
     }
   }
   // Direct sun along the cel light direction, from each water voxel.

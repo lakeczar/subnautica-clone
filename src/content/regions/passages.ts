@@ -98,7 +98,8 @@ function escarpmentLedge(): Vec3[] {
   return out;
 }
 
-const RAW_ROUTES: readonly RouteDef[] = [
+/** Authored keel lines before `drape` (tests compare the two). */
+export const RAW_ROUTES: readonly RouteDef[] = [
   // Existing first loop, unchanged.
   { id: "route.legacy.reef_canopy", from: "refuge_reef", to: "suspended_garden", kind: "open", role: "first_loop",
     carrier: false, minHalfWidth: CANOPY_BASIN_ROUTE.minimumHalfWidth, profile: "small", tier: "early",

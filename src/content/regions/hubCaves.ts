@@ -28,7 +28,7 @@ const APRON_HOLLOW: CaveSource = {
   id: "hub_apron_hollow",
   label: "Apron hollow",
   region: "silt_basin",
-  footprint: { minX: 30, maxX: 50, minZ: -398, maxZ: -374 },
+  footprint: { minX: 30, maxX: 48, minZ: -394, maxZ: -374 },
   baseY: -100,
   topY: -18,
   terraces: [],

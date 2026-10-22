@@ -189,9 +189,9 @@ const AUTHORED: readonly StructureDef[] = [
   block("post")("basin.deep_marker.post", "silt_basin", 610.8, -752, { w: 0.6, h: 6, d: 0.6 }, "basin.deep_marker"),
 
   // Central hub spur (W2): the crown's summit, around the crown shaft's mouth.
-  block("beacon")("hub.beacon_house.house", "silt_basin", 343, -569, { w: 5, h: 9, d: 5 }, "hub.beacon_house"),
-  block("station")("hub.crown_station.hull", "silt_basin", 312, -544, { w: 12, h: 7, d: 8 }, "hub.crown_station"),
-  block("mast")("hub.crown_station.mast", "silt_basin", 321, -537, { w: 3, h: 22, d: 3 }, "hub.crown_station"),
+  block("beacon")("hub.beacon_house.house", "silt_basin", 341, -567, { w: 5, h: 14, d: 5 }, "hub.beacon_house"),
+  block("station")("hub.crown_station.hull", "silt_basin", 319, -547, { w: 9, h: 7, d: 6 }, "hub.crown_station"),
+  block("mast")("hub.crown_station.mast", "silt_basin", 316, -538, { w: 3, h: 22, d: 3 }, "hub.crown_station"),
 
   // Ember Rift.
   splitChimney(),

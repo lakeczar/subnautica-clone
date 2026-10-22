@@ -74,8 +74,14 @@ export const openings = (def: CaveDef): CavePortal[] => def.portals.filter(p => 
 /** Within an opening's zone: under an upward mouth's disc, or in a side
  * mouth's lintel band (2.5 m either side of its plane). Open by design. */
 function openingZone(def: CaveDef, p: Readonly<Vec3>): boolean {
+  // An upward mouth is its shaft's actual top aperture (radius, flare and
+  // wobble), as the Fanvault's skylight rule.
+  const aperture = (m: CavePortal): number => {
+    const shaft = def.source.carves.find(c => c.kind === "shaft" && Math.hypot(c.center[0] - m.center.x, c.center[1] - m.center.z) < 1);
+    return shaft?.kind === "shaft" ? shaft.radius + shaft.flare + shaft.wobble + 0.5 : m.clear.width / 2 + 2.5;
+  };
   return openings(def).some(m => m.normal.y !== 0
-    ? Math.hypot(p.x - m.center.x, p.z - m.center.z) < m.clear.width / 2 + 2.5
+    ? Math.hypot(p.x - m.center.x, p.z - m.center.z) < aperture(m)
     : Math.abs((p.z - m.center.z) * m.normal.z + (p.x - m.center.x) * m.normal.x) < 3 &&
       Math.abs(m.normal.z !== 0 ? p.x - m.center.x : p.z - m.center.z) < m.clear.width / 2 + 2.5 &&
       p.y < m.center.y + m.clear.height / 2 + 3);
@@ -127,11 +133,12 @@ export function retreat(def: CaveDef, q: WorldQueries, starts: readonly Vec3[]):
     return true;
   };
   // Candidate spots: water voxels (every other one) a diver fits in.
-  const spots: { p: Vec3; rank: number }[] = [];
+  const spots: { p: Vec3; rank: number }[] = [], near = def.rooms.map(r => r.bounds);
   for (let k = 0; k < g.nz; k += 2) for (let j = 0; j < g.ny; j += 2) for (let i = 0; i < g.nx; i += 2) {
     if (v.solid[i + g.nx * (j + g.ny * k)]) continue;
     const p = { x: g.origin.x + (i + 0.5) * g.voxel, y: g.origin.y + (j + 0.5) * g.voxel, z: g.origin.z + (k + 0.5) * g.voxel };
-    if (p.y > worldFloor(p.x, p.z) + 12 && !v.room[i + g.nx * (j + g.ny * k)]) continue; // open water well above the rock
+    // Only water near the cave's rooms matters: a few hops past a mouth is out.
+    if (!near.some(b => p.x > b.min.x - 6 && p.x < b.max.x + 6 && p.y > b.min.y - 6 && p.y < b.max.y + 6 && p.z > b.min.z - 6 && p.z < b.max.z + 6)) continue;
     if (q.clearance(p, DIVER)) spots.push({ p, rank: rank(p) });
   }
   const mouths = openings(def);

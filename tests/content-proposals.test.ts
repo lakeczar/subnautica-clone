@@ -70,9 +70,21 @@ test("proposal IDs are unique and never reuse an existing site, source or cave I
   for (const id of proposalIds) { assert.ok(!seen.has(id), `duplicate proposal ID ${id}`); seen.add(id); }
   for (const id of proposalIds) {
     assert.ok(/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/.test(id), `${id}: IDs are lower snake_case, dot-separated`);
-    assert.ok(!SITES.some(s => s.id === id) && !Object.hasOwn(SOURCES, id) && !CAVE_SOURCES.some(c => c.id === id), `${id} collides with existing content`);
+    assert.ok(!collides(id), `${id} collides with existing content`);
   }
 });
+/** An existing ID equal to a proposal's is that proposal built (W2's hub),
+ * allowed only where it stands near where the proposal put it: a site within
+ * 25 m, a cave whose footprint lies within 80 m of the proposed mouth. */
+function collides(id: string): boolean {
+  if (Object.hasOwn(SOURCES, id)) return true;
+  const site = SITES.find(s => s.id === id), cave = CAVE_SOURCES.find(c => c.id === id);
+  if (!site && !cave) return false;
+  const proposal = [...landmarks, ...lost].find(l => l.id === id), planned = caves.find(c => c.id === id);
+  if (site) return !proposal || Math.hypot(site.at.x - proposal.at.x, site.at.z - proposal.at.z) > 25;
+  const f = cave!.footprint;
+  return !planned || Math.hypot(Math.max(f.minX - planned.mouth.x, 0, planned.mouth.x - f.maxX), Math.max(f.minZ - planned.mouth.z, 0, planned.mouth.z - f.maxZ)) > 80;
+}
 
 test("every reference resolves against the registry, world sites, story sites, vistas, caves or proposals", () => {
   const refs: [string, Ref][] = [
@@ -189,7 +201,8 @@ test("each area meets the bible's density targets", () => {
   for (const a of AREAS) {
     const hub = a.area === "hub_spur";
     const anchors = a.landmarks.filter(l => l.role === "anchor").length, all = a.landmarks.length;
-    const existingSmall = a.area === "hub_spur" ? 0 : CAVE_SOURCES.filter(c => c.region === a.area).length;
+    // Built caves the bible already lists (W2's hub caves) count once, as proposals.
+    const existingSmall = a.area === "hub_spur" ? 0 : CAVE_SOURCES.filter(c => c.region === a.area && !caves.some(p => p.id === c.id)).length;
     const small = a.caves.filter(c => c.size === "small").length + existingSmall, medium = a.caves.filter(c => c.size === "medium").length;
     const roles = a.creatures.map(c => SPECIES.find(s => s.id === c.species)!.role);
     assert.ok(hub ? anchors >= 1 : anchors >= 2 && anchors <= 3, `${a.area}: ${anchors} anchors`);
