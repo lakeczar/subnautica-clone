@@ -165,7 +165,9 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
   - **Small common fish:** catch by hand or net and **cook** them. A **fish-trap outpost module** catches slowly in the background. **Threats, rare residents and story animals are never harvested.**
   - **Bait and lures** made from small catches steer threats through their natural behaviour.
   - **A few authored carcass falls:** static landmarks with scavengers and salvage, as environmental storytelling.
-  - **Later or optional:** a breeding tank; seasonal roe as regrowth, not a timed wait; glowing creatures in a jar as a light. Bio-cells already exist.
+  - **Seasonal roe and spawning grounds (in scope):** roe clusters regrow at authored grounds, as a rich capped food, never a timed wait. Protected species' eggs are never harvestable.
+  - **Later or optional:** a breeding tank; glowing creatures in a jar as a light. Bio-cells already exist.
+  - **Players learn all of this in-world:** a creature field guide (log entries per species: diet, sheds, spawning, natural behaviour, protection) and found notes (season logs, spawning records, a cook's notebook, a trapper's tally) that hint where roe, shed grounds, trap spots and carcass falls are, without map markers. Some notes are readable only after decoding.
 - **Cooking stays one interaction with portions.** Food never decays, per FLEET_AND_SURVIVAL.
 
 ## Cave and interior loading (owner, 2026-10-22)
