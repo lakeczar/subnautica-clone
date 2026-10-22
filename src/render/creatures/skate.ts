@@ -60,7 +60,7 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
       sweep = smooth(sweep, m === "commit" ? 1 : 0, 6, dt);
       dimpleScale = smooth(dimpleScale, m === "alert" ? 0.7 : m === "investigate" ? 1.2 : m === "commit" ? 1.6 : 0, 2.5, dt);
       bulge = smooth(bulge, m === "commit" ? 0.6 : 0, 5, dt);
-      const beat = m === "investigate" ? 2.6 : m === "commit" ? 3.4 : 0.9;
+      const beat = a.busy ? 0.5 : m === "investigate" ? 2.6 : m === "commit" ? 3.4 : 0.9;
       parts.root.position.set(a.position.x, a.position.y, a.position.z);
       // Body pitch rides with sweep: nose up for the surge toward the layer.
       body.rotation.set(-sweep * 0.5, 0, 0);
@@ -69,7 +69,7 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
         const flap = Math.sin(seconds * beat) * (m === "rest" ? 0.08 : 0.15);
         (w.inner.parent as TransformNode).rotation.set(-sweep * 0.5, 0, w.side * (curl + flap) - w.side * sweep * 0.2);
         (w.outer.parent as TransformNode).rotation.set(0, w.side * sweep * 0.6, w.side * (curl + Math.sin(seconds * beat - 0.8) * 0.18));
-        w.spots.set(m === "rest" ? 0.5 : m === "commit" ? 0.2 : 0.9 + 0.5 * Math.sin(seconds * 6 + w.side), m !== "commit");
+        w.spots.set(a.busy ? 0.25 : m === "rest" ? 0.5 : m === "commit" ? 0.2 : 0.9 + 0.5 * Math.sin(seconds * 6 + w.side), m !== "commit");
       }
       dimple.setEnabled(dimpleScale > 0.04);
       dimple.position.set(a.position.x, layerY + 0.05 + bulge, a.position.z);

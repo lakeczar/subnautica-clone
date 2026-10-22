@@ -265,6 +265,11 @@ export type GameCommand =
   | { type: "rest" }
   /** C4B-02: the carrier's charger module charges every berthed craft from the carrier. */
   | { type: "charge-berths"; carrierId: string }
+  // CR-1: creatures as resources (sim/fauna/link.ts).
+  | { type: "cook-catch"; portions: number }
+  | { type: "release-bait" }
+  | { type: "feed-planter"; hostId: string; socket: string }
+  | { type: "empty-trap"; hostId: string; socket: string; to?: string }
   | {
       type: "carrier";
       action:

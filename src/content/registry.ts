@@ -14,6 +14,9 @@ import { C4_SOURCES } from "./c4Sources.js";
 import { HOST_KNOWLEDGE_RECIPES, UPGRADE_ITEMS, UPGRADE_RECIPES, UPGRADE_REFIT_RECIPES, UPGRADE_REFIT_TIERS } from "./upgrades/registry.js";
 import type { HostKnowledgeId, UpgradeRefitId } from "./upgrades/registry.js";
 import { SYS2_BLUEPRINTS, SYS2_ITEMS, SYS2_RECIPES, SYS2_TECH_RECORDS } from "./systems/items.js";
+import { FAUNA_ITEMS, FAUNA_RECIPES } from "./fauna/items.js";
+import type { FaunaItemKind } from "./fauna/items.js";
+import { FAUNA_RENEWAL, FAUNA_SOURCES } from "./fauna/grounds.js";
 import type { Sys2BlueprintId, Sys2ItemKind } from "./systems/items.js";
 
 export const REGIONS = {
@@ -252,6 +255,8 @@ export const ITEMS = {
   ...UPGRADE_ITEMS,
   ...Object.fromEntries(Object.entries(SYS2_ITEMS).map(([k, v]) => [k, { label: v.label, cu: v.cu }])) as
     { readonly [K in Sys2ItemKind]: { readonly label: string; readonly cu: number } },
+  // CR-1: catches, roe, planter feed and the hand net.
+  ...FAUNA_ITEMS,
 } as const;
 export type ItemKind = keyof typeof ITEMS;
 /** Alloy carried in one intact tagged frame. */
@@ -586,6 +591,8 @@ export const RECIPES = {
   // Crust lies beyond the unsuited 60 m: SYS-2 recipes paying it wait for the 150 m suit.
   ...(Object.fromEntries(Object.entries(SYS2_RECIPES).map(([k, r]) =>
     [k, "conductive_crust" in r.cost ? { ...r, needs: [...r.needs, "suit_150"] } : r])) as { readonly [K in keyof typeof SYS2_RECIPES]: Recipe }),
+  // CR-1: the hand net.
+  ...FAUNA_RECIPES,
 } as const satisfies Record<string, Recipe>;
 export type RecipeId = keyof typeof RECIPES;
 
@@ -593,7 +600,7 @@ export interface SourceDefinition {
   label: string;
   region: RegionId;
   position: { x: number; y: number; z: number };
-  item: MaterialId | "meal" | "tagged_frame" | Sys2ItemKind;
+  item: MaterialId | "meal" | "tagged_frame" | Sys2ItemKind | FaunaItemKind;
   stock: number;
   reserve: number;
   bundle: number;
@@ -964,6 +971,9 @@ export const SOURCES = {
   ...WORLD_SOURCES,
   // C4: CB's frontier deposits and SYS-2's seed patches, last so older saves gain them in order.
   ...C4_SOURCES,
+  // CR-1: fish and spawning grounds, residents' shed, carcass-fall salvage and the
+  // protected egg cases, last so older saves gain them in order (additive content).
+  ...FAUNA_SOURCES,
 } as const satisfies Record<string, SourceDefinition>;
 export type SourceId = keyof typeof SOURCES;
 /** Siltwake design, not a claim about another game: only these living sheds regrow,
@@ -975,6 +985,8 @@ export const SOURCE_RENEWAL = {
   reef_ribbon_catch_south: { quantity: 2, intervalSteps: 21_600 },
   canopy_resin_lee_upper: { quantity: 2, intervalSteps: 36_000 },
   canopy_resin_lee_lower: { quantity: 2, intervalSteps: 36_000 },
+  // CR-1: fish regather, roe is laid again and residents keep shedding.
+  ...FAUNA_RENEWAL,
 } as const satisfies Partial<Record<SourceId, { quantity: number; intervalSteps: number }>>;
 export type RenewableSourceId = keyof typeof SOURCE_RENEWAL;
 export const RENEWABLE_SOURCE_IDS = Object.keys(SOURCE_RENEWAL) as RenewableSourceId[];

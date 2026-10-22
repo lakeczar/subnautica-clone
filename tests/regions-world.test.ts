@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { C4_SOURCES } from "../src/content/c4Sources.js";
+import { FAUNA_SOURCES } from "../src/content/fauna/grounds.js";
 import { REGIONS, SOURCES } from "../src/content/registry.js";
 import { SOLIDS, terrainHeight } from "../src/sim/world.js";
 import { CHUNK_SIZE, WORLD_ENVELOPE, chunkId, columnRect } from "../src/world/frame.js";
@@ -45,8 +46,8 @@ test("the preserve holds accepted B1's whole terrain, routes, sources and datums
   // Every registry source and B1 route/structure datum keeps its accepted floor.
   const datums: [string, number, number][] = [
     // B1's own sources; sources lifted from S2 sites and C4's frontier and seed
-    // patches are authored outside the preserve, on the composed floor.
-    ...Object.entries(SOURCES).filter(([id]) => !SITES.some(s => s.id === id) && !Object.hasOwn(C4_SOURCES, id))
+    // patches, and CR-1's creature grounds, are authored on the composed floor.
+    ...Object.entries(SOURCES).filter(([id]) => !SITES.some(s => s.id === id) && !Object.hasOwn(C4_SOURCES, id) && !Object.hasOwn(FAUNA_SOURCES, id))
       .map(([id, s]) => [id, s.position.x, s.position.z] as [string, number, number]),
     ...Object.values(CANOPY_BASIN_ROUTE).flatMap(v => Array.isArray(v) ? v.map((q, i) => [`route.${i}`, q.x, q.z] as [string, number, number]) :
       typeof v === "object" ? [["route.pose", (v as { x: number }).x, (v as { z: number }).z] as [string, number, number]] : []),

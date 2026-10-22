@@ -282,6 +282,24 @@ export function commandEffect(c: GameCommand, before: GameState, after: GameStat
     }
     case "rest": return [...(after.player.refugeId !== before.player.refugeId || after.player.refugeId ? [] : ["resting recorded no base"]),
       ...unchangedInventory("rest", before, after)];
+    // CR-1: cooking turns raw catch into meals at the COOKING ratios, nothing else;
+    // emptying a trap moves exactly the fish it held into one container.
+    case "cook-catch": {
+      const net = new Map<string, number>();
+      for (const [k, d] of changes(before, after)) add(net, k.split("|")[1]!, d);
+      const roe = -(net.get("roe_cluster") ?? 0), fish = -(net.get("small_fish") ?? 0), meals = net.get("meal") ?? 0;
+      const other = [...net].filter(([k, d]) => d !== 0 && !["roe_cluster", "small_fish", "meal"].includes(k));
+      return [...(roe >= 0 && fish >= 0 && fish % 2 === 0 && meals > 0 && meals === roe * 2 + fish / 2 ? [] : [`cooking used ${roe} roe and ${fish} fish for ${meals} meals`]),
+        ...other.map(([k, d]) => `cooking changed ${k} by ${d}`)];
+    }
+    case "empty-trap": {
+      const cm = c as Extract<GameCommand, { type: "empty-trap" }>;
+      const moduleId = before.systems.sockets.find((e) => e.hostId === cm.hostId && e.socket === cm.socket)?.itemId;
+      const held = before.systems.traps.find((t) => t.moduleId === moduleId)?.held ?? 0;
+      const gains = [...changes(before, after)];
+      return gains.length === 1 && gains[0]![0].split("|")[1] === "small_fish" && gains[0]![1] === held && held > 0 &&
+        after.systems.traps.find((t) => t.moduleId === moduleId)?.held === 0 ? [] : [`emptying the trap changed the inventory by ${JSON.stringify(gains)} (held ${held})`];
+    }
     default: return [`command kind "${kind}" has no effect rule; refusing to vouch for it`];
   }
 }

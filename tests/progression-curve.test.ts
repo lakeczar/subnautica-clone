@@ -1,3 +1,4 @@
+import { FAUNA_RECIPES } from "../src/content/fauna/items.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -29,8 +30,10 @@ const CAMPAIGN = Object.keys(CAMPAIGN_RECIPES) as RecipeId[];
 /** C4's SYS-1 upgrade, refit and host-knowledge recipes and SYS-2's kits and
  * modules; tests/c4-systems.test.ts and the upgrade economy check prove them. */
 const C4 = Object.keys({ ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES, ...SYS2_RECIPES }) as RecipeId[];
+/** CR-1's hand net: an optional reef-plans tool; tests/cr-1-creatures.test.ts covers it. */
+const CR1 = Object.keys(FAUNA_RECIPES) as RecipeId[];
 const PRE_B1 = ids.filter((id) => !(B1 as readonly string[]).includes(id) && !(STORY as readonly string[]).includes(id) &&
-  !(CAMPAIGN as readonly string[]).includes(id) && !(C4 as readonly string[]).includes(id));
+  !(CAMPAIGN as readonly string[]).includes(id) && !(C4 as readonly string[]).includes(id) && !(CR1 as readonly string[]).includes(id));
 const visible = (s: GameState) => ids.filter((id) => s.knowledge.blueprints.includes(RECIPES[id].bp));
 const POD = { x: 0, y: 0.18, z: 21.2 }, WORKSHOP = { x: 11, y: 1.2, z: -35 };
 function opened(): GameState { const s = createGame(); completeOpening(s); return s; }
@@ -52,6 +55,7 @@ test("New Game exposes only the pod checklist ladder; unknown or premature plans
     ...Object.fromEntries(STORY.map((id) => [id, "blueprint"])),
     ...Object.fromEntries(CAMPAIGN.map((id) => [id, "blueprint"])),
     ...Object.fromEntries(C4.map((id) => [id, "blueprint"])),
+    ...Object.fromEntries(CR1.map((id) => [id, "blueprint"])),
   }, "nothing beyond the first repair is attemptable; it still needs materials");
   // Even with every material at the right bench, unknown or later plans cannot be bypassed.
   for (const site of [POD, WORKSHOP]) {
@@ -73,7 +77,7 @@ test("each clue unlocks a bounded, exact plan set; every one of the 120 clue ord
   }
   assert.deepEqual(unlocks, {
     // C4: each clue's plans also carry the SYS-1 upgrades drawn on them.
-    C01: [], C02: ["salvage_buoy", "bobbin_kit", "glow_lures", "startle_ink", "bobbin_deep_tether", "flare_launcher", "emergency_ballast"],
+    C01: [], C02: ["salvage_buoy", "bobbin_kit", "glow_lures", "startle_ink", "bobbin_deep_tether", "flare_launcher", "emergency_ballast", "hand_net"],
     C03: ["restore_workshop", "dart_base", "hearthline_base", "galley_planter", "plating_alloy", "cell_bank_1", "drive_tuning_1",
       "floodlights_1", "dart_overdrive", "hearthline_system_bay", "hearthline_mooring_anchor", "outpost_network_1"],
     C04: ["dart_acoustic_trim", "suit_350", "restore_canopy_stop", "trim_vanes", "silent_running", "chart_live_position"],

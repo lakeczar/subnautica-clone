@@ -311,6 +311,8 @@ export class SiltwakeApp {
         KeyG: { type: "distraction" }, KeyH: { type: "hint" }, KeyX: { type: "exit" },
         // S4: the lamp switch and the two nonlethal kits.
         KeyL: { type: "lamp" }, KeyT: { type: "deploy-lure" }, KeyY: { type: "release-ink" },
+        // CR-1: release a caught small fish as bait.
+        KeyM: { type: "release-bait" },
       };
       const command = commands[event.code];
       if (command) { event.preventDefault(); this.command(command); }

@@ -14,14 +14,17 @@ import { createBrineSails, createDeterrents, createEmberMites } from "./cues.js"
 import { createHazardCues } from "./hazards.js";
 import { createLayerSkate } from "./skate.js";
 import { createGlareStalker } from "./stalker.js";
+import { createFauna } from "./fauna.js";
+import type { GameState } from "../../sim/types.js";
 import type { CreatureView } from "./types.js";
 
 export interface CreatureLayer {
   readonly root: TransformNode;
   /** Every mesh the layer owns, for budgets and tests. */
   readonly meshes: readonly Mesh[];
-  /** Pose all creatures and cues from the derived view. Never writes state. */
-  update(view: EcologyView, seconds: number, camera?: Vec3): void;
+  /** Pose all creatures and cues from the derived view. Never writes state.
+   * With `state`, CR-1's grounds, falls and laying skates are posed too. */
+  update(view: EcologyView, seconds: number, camera?: Vec3, state?: GameState): void;
   dispose(): void;
 }
 /** Beyond this distance from the camera a creature is disabled, not destroyed. */
@@ -43,13 +46,14 @@ export function createCreatureLayer(scene: Scene, cel: Material, parent?: Transf
   const sails = createBrineSails(scene, cel, "creature.brine_sails.divide_sails_lane", 3, root);
   const deterrents = createDeterrents(scene, cel, "creature.deterrents", MAX_DETERRENTS, root);
   const fields = createHazardCues(scene, cel, "creature.fields", root);
-  const meshes = [...[...threats.values()].flatMap(v => v.meshes), ...mites.meshes, ...sails.meshes, ...deterrents.meshes, ...fields.meshes];
+  const fauna = createFauna(scene, cel, root);
+  const meshes = [...[...threats.values()].flatMap(v => v.meshes), ...mites.meshes, ...sails.meshes, ...deterrents.meshes, ...fields.meshes, ...fauna.meshes];
   const near = (p: Vec3, camera: Vec3 | undefined): boolean =>
     !camera || Math.hypot(p.x - camera.x, p.y - camera.y, p.z - camera.z) <= CREATURE_CULL_DISTANCE;
   let disposed = false;
   return {
     root, meshes,
-    update(view, seconds, camera) {
+    update(view, seconds, camera, state) {
       if (disposed) return;
       for (const pose of view.threats) {
         const v = threats.get(pose.id);
@@ -64,12 +68,13 @@ export function createCreatureLayer(scene: Scene, cel: Material, parent?: Transf
       sails.update(view.sails.filter(p => near(p, camera)), seconds);
       deterrents.update(view.deterrents, seconds);
       fields.update(view.fields, seconds);
+      if (state) fauna.update(state, seconds, camera, near);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
       for (const v of threats.values()) v.dispose();
-      mites.dispose(); sails.dispose(); deterrents.dispose(); fields.dispose();
+      mites.dispose(); sails.dispose(); deterrents.dispose(); fields.dispose(); fauna.dispose();
       root.dispose(false, false);
     },
   };

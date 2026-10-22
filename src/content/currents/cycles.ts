@@ -76,13 +76,81 @@ export const WARDEN_ROUND: CycleDef = {
   ],
 };
 
+/** CR-1: each threat's natural window, a creature rhythm the player can watch
+ * and time (owner, 2026-10-22). The stalkers and skates keep the clocks of the
+ * fields they live by, with the same numbers, so their windows line up with the
+ * chimney and the crest exactly. The hunter's round is the warden candidate's
+ * shape given to a real animal. Every wait is about a minute at most, and quiet,
+ * dark, cover, retreat and the deterrents remain the alternatives. */
+export const HUNTER_FEEDING: CycleDef = {
+  id: "cycle.canopy.hunter_feeding", label: "Sound hunter's feeding round", offset: 0,
+  phases: [
+    { id: "resident", seconds: 45, level: 0, label: "at home" },
+    { id: "leaving", seconds: 8, label: "leaving to feed" },
+    { id: "away", seconds: 40, level: 1, label: "feeding on the east shoal" },
+    { id: "returning", seconds: 8, label: "returning" },
+  ],
+  warnings: [
+    { phase: "leaving", leadS: 6, cue: "The lantern shoal east of the lab bunches and flashes: the hunter is about to go and feed." },
+    { phase: "returning", leadS: 8, cue: "The east shoal scatters: the hunter has finished feeding and turns home." },
+  ],
+};
+/** The stalkers turn to the chimney as it builds (S4's 3 s rise), feed through
+ * the 18 s vent and linger 15 s on what settles: 36 s of every 75, aligned
+ * with the chimney pulse (S4 `start` 30, so the rise begins at 27). */
+export const STALKER_FEEDING: CycleDef = {
+  id: "cycle.rift.stalker_feeding", label: "Glare stalkers' vent feeding", offset: S4_SPLIT_PLUME.start - S4_SPLIT_PLUME.ramp,
+  phases: [
+    { id: "turning", seconds: S4_SPLIT_PLUME.ramp, label: "turning to the vent" },
+    { id: "feeding", seconds: S4_SPLIT_PLUME.duration, level: 1, label: "feeding in the plume" },
+    { id: "lingering", seconds: 15, level: 1, label: "feeding on what settles" },
+    { id: "hunting", seconds: S4_SPLIT_PLUME.period - S4_SPLIT_PLUME.ramp - S4_SPLIT_PLUME.duration - 15, level: 0, label: "hunting the passage" },
+  ],
+  warnings: [
+    { phase: "turning", leadS: 7, cue: "The mites leave the lip and the stalkers' lights swing toward the chimney: they are going to feed in the plume." },
+    { phase: "hunting", leadS: 6, cue: "The stalkers' lights turn back toward the passage: they are about to hunt again." },
+  ],
+};
+export const SKATE_REST: CycleDef = fromHazardCycle("cycle.divide.skate_rest", "Layer skates' slack-water rest", S4_CREST_SLACK,
+  { active: "patrolling the layer", quiet: "resting deep", rise: "rising to the layer", fall: "sinking to rest" },
+  [{ phase: "fall", leadS: 5, cue: "The crest ribbons start to stand upright; the skates' ripples slow as they sink to rest." },
+    { phase: "rise", leadS: 5, cue: "The crest ribbons lean again: the skates will rise to the layer." }]);
+/** CB-2 (owner-confirmed): skates leave the dense water only to lay, on the
+ * Divide's lee shelf. A rare, long visit; the mirror is unguarded meanwhile.
+ * The slack-water rest stays the frequent window. */
+export const SKATE_LAYING: CycleDef = {
+  id: "cycle.divide.skate_laying", label: "Layer skates' laying visit", offset: 0,
+  phases: [
+    { id: "patrolling", seconds: 270, level: 0, label: "in the dense water" },
+    { id: "leaving", seconds: 15, label: "leaving for the lee shelf" },
+    { id: "laying", seconds: 60, level: 1, label: "laying on the lee shelf" },
+    { id: "returning", seconds: 15, label: "returning to the brine" },
+  ],
+  warnings: [{ phase: "leaving", leadS: 6, cue: "Both skates turn north under the mirror, toward the lee shelf where they lay." }],
+};
+export const CHOIR_REST: CycleDef = {
+  id: "cycle.meridian.choir_rest", label: "Hollow choir's rest", offset: 0,
+  phases: [
+    { id: "open", seconds: 48, level: 0, label: "open and listening" },
+    { id: "closing", seconds: 4, label: "folding shut" },
+    { id: "closed", seconds: 22, level: 1, label: "closed, resting" },
+    { id: "opening", seconds: 4, label: "opening" },
+  ],
+  warnings: [
+    { phase: "closing", leadS: 5, cue: "The bells' rims dim one by one: the choir is about to close and rest." },
+    { phase: "opening", leadS: 5, cue: "The bells start to part: the choir will be listening again." },
+  ],
+};
+export const CREATURE_CYCLES: readonly CycleDef[] = [HUNTER_FEEDING, STALKER_FEEDING, SKATE_REST, CHOIR_REST, SKATE_LAYING];
+
 /** The cycles running in the game world. Owner keep-or-cut (CY, recorded
  * 2026-10-20): the vent pulse is kept; slackening currents at most one or two
  * per region (the Divide crest); the lantern bloom is dropped as a clock (its
  * reward is regrowth, SYS-2); the warden's round waits for a real creature;
- * the turbine is only a Hearthline mooring-anchor perk (SYS-1, stage B). */
-export const WORLD_CYCLES: readonly CycleDef[] = [CHIMNEY_PULSE, SEDIMENT_SURGE, CREST_SLACK];
+ * the turbine is only a Hearthline mooring-anchor perk (SYS-1, stage B).
+ * CR-1's creature windows follow; they are watched at the animal, not a field. */
+export const WORLD_CYCLES: readonly CycleDef[] = [CHIMNEY_PULSE, SEDIMENT_SURGE, CREST_SLACK, ...CREATURE_CYCLES];
 export const WORLD_CYCLE_BY_ID: ReadonlyMap<string, CycleDef> = new Map(WORLD_CYCLES.map(c => [c.id, c]));
 
-export const CYCLES: readonly CycleDef[] = [CHIMNEY_PULSE, SEDIMENT_SURGE, CREST_SLACK, SPILL_SLACK, LANTERN_BLOOM, WARDEN_ROUND];
+export const CYCLES: readonly CycleDef[] = [CHIMNEY_PULSE, SEDIMENT_SURGE, CREST_SLACK, SPILL_SLACK, LANTERN_BLOOM, WARDEN_ROUND, ...CREATURE_CYCLES];
 export const CYCLE_BY_ID: ReadonlyMap<string, CycleDef> = new Map(CYCLES.map(c => [c.id, c]));

@@ -6,6 +6,7 @@ import { HEARTHLINE_CONTAINERS } from "../content/fleet/hearthlineInterior.js";
 import type { Fitting, GameState, ItemStack, Vec3, VehicleState } from "./types.js";
 import { FIXED_HOSTS, HOST_REACH, moduleOfItem } from "../content/systems/hosts.js";
 import { isSys2Item, SYS2_ITEMS } from "../content/systems/items.js";
+import { FAUNA_STACKABLE } from "../content/fauna/items.js";
 /** A beached Spindle's ramp reaches this far up the shore (C4). */
 export const SHORE_RAMP_REACH = 10;
 export const distance = (a: Vec3, b: Vec3): number =>
@@ -69,7 +70,7 @@ export function addItem(
       "brine_lattice",
       "meal",
       "tagged_frame",
-    ].includes(kind) || (isSys2Item(kind) && SYS2_ITEMS[kind].stack))
+    ].includes(kind) || (isSys2Item(kind) && SYS2_ITEMS[kind].stack) || (FAUNA_STACKABLE as readonly string[]).includes(kind))
   ) {
     stack.quantity += quantity;
     return stack;

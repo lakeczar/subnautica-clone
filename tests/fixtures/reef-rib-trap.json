@@ -452,6 +452,116 @@
           "id": "basin_pale_spores",
           "stock": 2,
           "reserve": 0
+        },
+        {
+          "id": "reef_fish_ribs",
+          "stock": 4,
+          "reserve": 0
+        },
+        {
+          "id": "isles_fish_split",
+          "stock": 4,
+          "reserve": 0
+        },
+        {
+          "id": "basin_fish_ridge",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "hub_fish_crown",
+          "stock": 4,
+          "reserve": 0
+        },
+        {
+          "id": "reef_roe_nursery",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "isles_roe_cove",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "canopy_roe_crowns",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "reef_shed_moults",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "isles_shed_shells",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "canopy_weaver_resin",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "rift_mite_grit",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "basin_scavenger_casts",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "rift_crawler_moults",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "divide_picker_moults",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "meridian_scavenger_casts",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "divide_skate_eggcases",
+          "stock": 0,
+          "reserve": 0
+        },
+        {
+          "id": "hub_ray_eggcases",
+          "stock": 0,
+          "reserve": 0
+        },
+        {
+          "id": "fall_basin_west_hide",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "fall_basin_west_bone",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "fall_basin_east_hide",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "fall_divide_lee_crust",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "fall_divide_lee_bone",
+          "stock": 2,
+          "reserve": 0
         }
       ],
       "renewal": [
@@ -469,6 +579,66 @@
         },
         {
           "id": "canopy_resin_lee_lower",
+          "progress": 0
+        },
+        {
+          "id": "reef_fish_ribs",
+          "progress": 0
+        },
+        {
+          "id": "isles_fish_split",
+          "progress": 0
+        },
+        {
+          "id": "basin_fish_ridge",
+          "progress": 0
+        },
+        {
+          "id": "reef_roe_nursery",
+          "progress": 0
+        },
+        {
+          "id": "isles_roe_cove",
+          "progress": 0
+        },
+        {
+          "id": "canopy_roe_crowns",
+          "progress": 0
+        },
+        {
+          "id": "reef_shed_moults",
+          "progress": 0
+        },
+        {
+          "id": "isles_shed_shells",
+          "progress": 0
+        },
+        {
+          "id": "canopy_weaver_resin",
+          "progress": 0
+        },
+        {
+          "id": "rift_mite_grit",
+          "progress": 0
+        },
+        {
+          "id": "basin_scavenger_casts",
+          "progress": 0
+        },
+        {
+          "id": "hub_fish_crown",
+          "progress": 0
+        },
+        {
+          "id": "rift_crawler_moults",
+          "progress": 0
+        },
+        {
+          "id": "divide_picker_moults",
+          "progress": 0
+        },
+        {
+          "id": "meridian_scavenger_casts",
           "progress": 0
         }
       ],
@@ -643,6 +813,7 @@
       "decoded": [],
       "decodes": [],
       "planters": [],
+      "traps": [],
       "beacons": [],
       "beaconsOff": [],
       "categoriesOff": [],

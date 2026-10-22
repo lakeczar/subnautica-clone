@@ -12,6 +12,8 @@ import type { Triangle, ContactMesh, OrientedPiece, Separation } from "./hunterQ
 import type { ContactBox } from "../content/encounterGeometry.js";
 import { localToWorld } from "./carrier.js";
 import { eyeHeight } from "./state.js";
+import { HUNTER_ROUND_SPEED } from "../content/fauna/windows.js";
+import { hunterRoundPoint, windowSample } from "./fauna/windows.js";
 export { encounterRotation } from "./hunterQueries.js";
 
 interface ActorQuery {
@@ -89,7 +91,7 @@ function poseAt(s: GameState, position: Vec3, surface: ReturnType<typeof actorSu
   const t=s.world.threat, active=["warn","investigate","pursue"].includes(t.mode);
   // ENC-1: the investigating animal swims its pass in profile, toward where the
   // pass leads next, rather than strafing nose-on toward the actor.
-  const target=t.distraction ?? (t.mode==="disengage"||t.mode==="idle"?THREAT_HOME
+  const target=t.distraction ?? (t.mode==="disengage"||t.mode==="idle"?hunterRoundPoint(s.tick)
     :t.mode==="investigate"?hunterPassPoint(s,t.modeSeconds+PASS_LEAD):surface.point);
   const n=outward(position,target), roll=Math.sin(s.tick/60*1.5)*.045;
   const rolledMouth=encounterRotation(vec(H.mouth),0,0,roll);
@@ -254,7 +256,9 @@ export function moveHunter(s: GameState, world: WorldQueries): {
     const next={position,pose:poseAt(s,position,actorSurface(a,position))};endpoints.push(next);return next;
   };
   const penetratesAt=(endpoint:typeof endpoints[number]):boolean=>endpoint.penetrating??=penetrates(a,endpoint.position,endpoint.pose);
-  let target:Vec3=t.distraction??THREAT_HOME, speed=2;
+  // CR-1: idle and disengaging, it follows its feeding round (home while resident).
+  const round=hunterRoundPoint(s.tick),roundPhase=windowSample("canopy_sound_hunter",s.tick).phase;
+  let target:Vec3=t.distraction??round, speed=2;
   if(!t.distraction&&t.mode==="pursue") {
     const gap=H.mouthGap+(phase.withdrawing?H.withdrawalGap:0);
     const offset=encounterRotation(vec(H.mouth),pose.yaw,0,pose.roll);
@@ -271,7 +275,8 @@ export function moveHunter(s: GameState, world: WorldQueries): {
     target=a.pose.position;
     speed=length(sub(target,start))>E.warn.stopAt?E.warn.speed:0;
   }
-  if(t.mode==="idle")speed=0;
+  if(t.mode==="idle")speed=roundPhase==="resident"?0:length(sub(round,start))>6?HUNTER_ROUND_SPEED:roundPhase==="returning"?Math.min(2,length(sub(round,start))):2;
+  else if(t.mode==="disengage"&&!t.distraction&&roundPhase!=="resident"&&length(sub(round,start))>6)speed=HUNTER_ROUND_SPEED;
   const sweep=(delta:Vec3):Vec3=>moveHull(world,start,delta,H.worldEnvelope,undefined,undefined,{separateBoxOverlaps:true}).position;
   let position={...start}, blocked=false;
   if(yielding||overlaps.length) {

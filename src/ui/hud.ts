@@ -1,5 +1,6 @@
 import { HULLS, HULL_COLLIDERS, OPENING, PLACES, REGIONS, renewable, SOURCES } from "../content/registry.js";
 import { regionAtPoint } from "../content/regions/layout.js";
+import { faunaVerb } from "./faunaPanels.js";
 import { LEGACY_PRESERVE } from "../content/regions/terrain.js";
 import { ROUTE_REGIONS } from "../content/routes.js";
 import { inCanopyAir, nearPod, nearWorkshop, equipped } from "../sim/inventory.js";
@@ -607,6 +608,9 @@ function creelWork(state: GameState): string {
 /** Specific verbs for B1 hosts and cabin fixtures; null keeps the generic verb. */
 function fixtureVerb(t: AimedTarget, state: GameState | null): string | null {
   if (t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES]?.item === "tagged_frame" && t.verb === "collect") return "Lift · 10 s";
+  // CR-1: Catch / Net at a school, Take roe, and protected egg cases.
+  const fauna = faunaVerb(state, t.id, t.kind, t.verb);
+  if (fauna) return fauna;
   // Interior fixtures first: the cabin's own hatch leaves; an exterior hatch enters.
   if (!t.id.startsWith("cabin:")) return t.id.endsWith(":hatch") ? "Enter cabin" : null;
   const v = state ? cabinHull(state) : undefined;

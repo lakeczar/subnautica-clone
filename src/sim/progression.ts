@@ -60,6 +60,7 @@ import { makeVehicle } from "./state.js";
 import { personalLimit as personalPressureLimit, safePersonalDepth } from "./capabilities.js";
 import { RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
 import { recordStory, storyInteractions } from "./storyLink.js";
+import { catchBundle, emptyGround } from "./fauna/catch.js";
 export interface Interaction {
   id: string;
   label: string;
@@ -216,9 +217,10 @@ export function collectWithOutcome(s: GameState, id: SourceId): CollectionOutcom
       s.world.action = { sourceId: id, seconds: 20, kind: "food" };
       return { refusal: null, pickup: null };
     }
-    return refused("Exposed stock is exhausted. Survey the matching second patch, or sort this host’s finite reserve.");
+    return refused(emptyGround(id) ?? "Exposed stock is exhausted. Survey the matching second patch, or sort this host’s finite reserve.");
   }
-  const n = Math.min(def.bundle, node.stock);
+  // CR-1: a carried hand net takes one more fish from a school.
+  const n = Math.min(catchBundle(s, id), node.stock);
   const destination = hasRoom(s, "diver", ITEMS[def.item].cu * n)
     ? "diver"
     : containerAccessible(s, "buoy_hold") &&

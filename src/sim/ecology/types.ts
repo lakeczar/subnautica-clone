@@ -118,7 +118,8 @@ export interface EcologyInput {
   readonly commands?: readonly EcologyCommand[];
 }
 
-export type EcologyCue = "alert" | "investigate" | "commit" | "withdraw" | "calm" | "leash" | "lure" | "ink";
+/** `feed`: CR-1, an animal breaking off because its natural window began. */
+export type EcologyCue = "alert" | "investigate" | "commit" | "withdraw" | "calm" | "leash" | "lure" | "ink" | "feed";
 /** Presentation events. Transient, never saved. Captions are the text
  * equivalent of each visual and audio cue. */
 export type EcologyEvent =

@@ -367,7 +367,7 @@ export function createRenderer(
         placed.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         hub.update(time, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         if (state) creatures.update(ecologyView(state.world.ecology, state.tick, presentationStimulus(state)), time,
-          { x: camera.position.x, y: camera.position.y, z: camera.position.z });
+          { x: camera.position.x, y: camera.position.y, z: camera.position.z }, state);
         cel.setFloat("time", time);
         water.setFloat("time", time);
         sky.setFloat("time", time);

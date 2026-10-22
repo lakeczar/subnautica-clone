@@ -8,6 +8,7 @@
  * - Journal (J): the objective line, then SYS-2's six tabs, with the story
  *   notebook as one tab instead of one long scroll. */
 import { HULLS, ITEMS, REGIONS, SOURCES } from "../content/registry.js";
+import { faunaSocketActions } from "./faunaPanels.js";
 import type { RegionId } from "../content/registry.js";
 import { CUE_SPECIES, THREATS } from "../content/ecology/species.js";
 import { WORLD_CYCLES } from "../content/currents/cycles.js";
@@ -74,6 +75,7 @@ export function basePanel(s: GameState, world: WorldQueries, button: CommandButt
           actions.push(button(`Plant ${SEEDS[seed.kind as keyof typeof SEEDS].label}`, { type: "plant", hostId: host.id, socket: k.id, seed: seed.kind }));
       }
       if (occ.module === "survey") actions.push(button("Survey", { type: "survey", hostId: host.id }, !powered, reason ?? undefined));
+      actions.push(...faunaSocketActions(s, host.id, k.id, occ.module, button));
       return `<li><b>${esc(k.id)}</b> · ${esc(occ.label)} ${actions.join("")}</li>`;
     }).join("");
     const outpost = sys.outposts.find((o) => o.id === host.id);

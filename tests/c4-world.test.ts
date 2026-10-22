@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { HAZARD_FIELDS, type HazardFieldId } from "../src/content/ecology/hazards.js";
 import { sitePosition } from "../src/content/ecology/sites.js";
-import { CHIMNEY_PULSE, CREST_SLACK, SEDIMENT_SURGE, WORLD_CYCLES } from "../src/content/currents/cycles.js";
+import { CHIMNEY_PULSE, CREATURE_CYCLES, CREST_SLACK, SEDIMENT_SURGE, WORLD_CYCLES } from "../src/content/currents/cycles.js";
 import { REEF_SHELF_RACE, WORLD_CURRENTS } from "../src/content/currents/world.js";
 import { CAVE_SOURCES, caveDef } from "../src/content/regions/caves.js";
 import { ROUTES } from "../src/content/regions/passages.js";
@@ -195,7 +195,8 @@ test("the chimney pulse, the plume lane and the crest slack run on the cycle fra
     for (let tick = -60 * 7; tick < f.cycle.period * 60 * 2; tick++)
       assert.equal(frameworkLevel(cycle, secondsAt(tick)), s4(f.cycle, tick), `${field} tick ${tick}`);
   }
-  assert.deepEqual(WORLD_CYCLES.map(c => c.id), [CHIMNEY_PULSE.id, SEDIMENT_SURGE.id, CREST_SLACK.id]);
+  // CR-1's creature windows follow the three field cycles; they are watched at the animal.
+  assert.deepEqual(WORLD_CYCLES.map(c => c.id), [CHIMNEY_PULSE.id, SEDIMENT_SURGE.id, CREST_SLACK.id, ...CREATURE_CYCLES.map(c => c.id)]);
 });
 
 test("one movement owner: a resting diver in the plume lane drifts exactly once, by the CY response", () => {

@@ -482,7 +482,8 @@ test("continued hunter damage keeps the original disabled hull saveable without 
   assert.ok(Math.abs(hull.emergencyAir - (v.emergencyAir - 119 / 60)) < 1e-9);
   assert.deepEqual(hull, { ...v, health: 0, disabled: true, charge: hull.charge, emergencyAir: hull.emergencyAir });
   assert.deepEqual(s.inventory, before.inventory);
-  assert.deepEqual(s.knowledge, before.knowledge);
+  // CR-1: watching the hunter logs its feeding round in the journal; nothing else is learned.
+  assert.deepEqual({ ...s.knowledge, cycles: [] }, { ...before.knowledge, cycles: [] });
   assert.equal(s.metrics.failures, before.metrics.failures);
   assert.equal(s.metrics.rescues, before.metrics.rescues);
   const invalid = createEnvelope(s, { sessionId: "negative-disabled-health", createdAt: "2026-10-17T12:00:00.000Z", savedAt: "2026-10-17T12:00:00.000Z" });
