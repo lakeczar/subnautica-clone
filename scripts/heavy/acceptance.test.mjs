@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { heavyJobGuard } from "./build-guard.mjs";
+import { alive, scopePopulated, self } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, "heavy-check.mjs");
@@ -72,6 +73,7 @@ const running = (c, id) => until(`${id} running`, () => ticketState(c, id) === "
 const done = (c, id, ms = 60000) => until(`${id} done`, () => result(c, id), ms);
 const blockedBy = (c, id) => hc(c, ["status"]).out.split("\n").find((l) => l.startsWith(id))?.split(/\s{2,}/)[5];
 const scopeActive = (unit) => spawnSync("systemctl", ["--user", "is-active", "--quiet", `${unit}.scope`]).status === 0;
+const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
 test("1: two CPU jobs run at once", async () => {
   const c = context("two-cpu");
@@ -233,24 +235,46 @@ test("8: the job survives its caller; a fresh wait returns its code; resubmittin
   assert.match(w.err, new RegExp(`${id} exit 7`));
 });
 
-test("9: a killed supervisor's reservation is freed by the next transaction; a reused PID is not alive", async () => {
+test("9: a killed supervisor's job runs on holding its reservation; a lone wait gets its real code; a reused PID is not alive", async () => {
   const c = context("reconcile");
-  const id = submit(c, c.wt("a"), "--class", "standard", "--", "sleep", "60");
+  const wt = c.wt("a");
+  const id = submit(c, wt, "--class", "standard", "--", "sh", "-c", "sleep 4; date +%s%3N > ended; exit 5");
   await running(c, id);
   const t = state(c).tickets[id];
-  assert.ok(scopeActive(t.unit));
   process.kill(t.supervisor.pid, "SIGKILL");
-  const next = submit(c, c.wt("b"), "--class", "quick", "--", "true"); // its enqueue reconciles
-  await done(c, next);
-  assert.equal(state(c).tickets[id], undefined);
-  const r = result(c, id);
-  assert.equal(r.code, 137);
-  assert.match(r.label, /supervisor died/);
-  assert.equal(scopeActive(t.unit), false, "the orphaned scope was stopped");
-  const S = await import("./state.mjs");
-  const me = S.self();
-  assert.equal(S.alive(me), true);
-  assert.equal(S.alive({ pid: me.pid, start: me.start + 1 }), false, "same PID, different start time");
+  // Nothing else is queued: a fresh wait alone must reach the job's own result.
+  const w = hc(c, ["wait", id]);
+  assert.equal(w.code, 5, w.err);
+  assert.match(w.err, /supervisor died; the job ran to its end/);
+  assert.equal(state(c).tickets[id], undefined, "reservation reclaimed");
+  assert.equal(scopePopulated(t.unit), false);
+  assert.ok(existsSync(join(wt, "ended")), "the payload was not killed");
+  const me = self();
+  assert.equal(alive(me), true);
+  assert.equal(alive({ pid: me.pid, start: me.start + 1 }), false, "same PID, different start time");
+});
+
+test("9b: a stopping (deactivating) scope keeps its reservation: an exclusive job waits until its cgroup is empty", async () => {
+  const c = context("stopping");
+  const wt = c.wt("a");
+  const id = submit(c, wt, "--class", "standard", "--mem", "256M", "--", "python3", "-c",
+    "import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); open('payload.pid','w').write(str(os.getpid())); time.sleep(40)");
+  await until("payload", () => existsSync(join(wt, "payload.pid")));
+  const t = state(c).tickets[id];
+  const payload = Number(readFileSync(join(wt, "payload.pid"), "utf8"));
+  spawn("systemctl", ["--user", "stop", `${t.unit}.scope`], { stdio: "ignore" }); // TERM ignored: stops after TimeoutStopSec=10s
+  await until("deactivating", () => spawnSync("systemctl", ["--user", "is-active", `${t.unit}.scope`], { encoding: "utf8" }).stdout.trim() === "deactivating");
+  process.kill(t.supervisor.pid, "SIGKILL");
+  const X = submit(c, c.wt("x"), "--class", "exclusive", "--", "sh", "-c", `kill -0 ${payload} 2>/dev/null && echo OLD_PAYLOAD_ALIVE || echo OLD_PAYLOAD_GONE`);
+  await sleep(1500);
+  assert.ok(pidAlive(payload), "the old payload is still alive while stopping");
+  assert.equal(ticketState(c, X), "queued");
+  assert.equal(blockedBy(c, X), "lane");
+  assert.equal(ticketState(c, id), "running", "the stopping job keeps its reservation");
+  const rx = await done(c, X, 60000);
+  assert.equal(rx.code, 0);
+  assert.match(readFileSync(join(c.sched, "jobs", X, "output.log"), "utf8"), /OLD_PAYLOAD_GONE/);
+  assert.equal(result(c, id).code, 137);
 });
 
 test("10: cancel removes a queued ticket, stops only a running one's scope, and the queue limit exits 75", async () => {
@@ -267,11 +291,11 @@ test("10: cancel removes a queued ticket, stops only a running one's scope, and 
   assert.equal(result(c, queued).code, 75);
   const unit = state(c).tickets[first].unit;
   assert.equal(hc(c, ["cancel", first]).code, 0);
+  assert.equal(scopePopulated(unit), false, "cancel returned only once the scope was empty");
   const rf = await done(c, first);
   assert.equal(rf.code, 75);
   assert.equal(rf.label, "cancelled");
   assert.ok(rf.ranS < 20);
-  assert.equal(scopeActive(unit), false);
   assert.equal((await done(c, neighbour)).code, 0, "the neighbour ran to the end");
   // Queue limit.
   const blocker = submit(c, wt, "--class", "quick", "--", "sleep", "40");
@@ -281,6 +305,26 @@ test("10: cancel removes a queued ticket, stops only a running one's scope, and 
   assert.equal(w.code, 75);
   assert.match(result(c, exp).label, /expired/);
   hc(c, ["cancel", blocker]);
+  // Launch window: a cancel after admission but before the scope exists means
+  // the command never runs. A PATH wrapper holds the job's scope creation.
+  const bin = join(c.dir, "bin"), real = spawnSync("sh", ["-c", "command -v systemd-run"], { encoding: "utf8" }).stdout.trim();
+  mkdirSync(bin);
+  writeFileSync(join(bin, "systemd-run"), `#!/bin/sh\ncase " $* " in *--slice=*) : > "${c.dir}/held"; while [ ! -e "${c.dir}/release" ]; do sleep 0.05; done;; esac\nexec ${real} "$@"\n`, { mode: 0o755 });
+  const env = { PATH: `${bin}:${process.env.PATH}` };
+  const lw = c.wt("launch");
+  const r = hc(c, ["submit", "--class", "quick", "--", "sh", "-c", "echo ran > PAYLOAD_RAN"], { cwd: lw, env });
+  const held = r.out.trim();
+  await until("launch held", () => existsSync(join(c.dir, "held")));
+  const cancel = spawn(process.execPath, [CLI, "cancel", held], { cwd: lw, env: { ...c.env, ...env }, stdio: ["ignore", "ignore", "pipe"] });
+  let cancelErr = "";
+  cancel.stderr.on("data", (d) => { cancelErr += d; });
+  const cancelExit = new Promise((res) => cancel.on("exit", res));
+  await until("cancel recorded", () => existsSync(join(c.sched, "jobs", held, "cancelled")));
+  writeFileSync(join(c.dir, "release"), "");
+  assert.equal(await cancelExit, 0);
+  assert.match(cancelErr, /cancelled before start; the command did not run/);
+  assert.equal(existsSync(join(lw, "PAYLOAD_RAN")), false, "the command did not run");
+  assert.equal(result(c, held).code, 75);
 });
 
 test("11: wait --max exits 99 with a position line, then the job's code; 124 and 0 pass through", async () => {
@@ -344,6 +388,28 @@ test("12: legacy bridge: a v1 holder blocks v2; a v1 waiter pauses v2 until it r
   assert.equal(statSync(c.legacy).ino, inode);
   const events = readFileSync(join(c.sched, "ledger.jsonl"), "utf8");
   assert.match(events, /"event":"legacy-holder"/, "v1 acquisitions are recorded");
+});
+
+test("12b: a v1 waiter stays out while a v2 payload whose supervisor died is still running", async () => {
+  const c = context("legacy-crash");
+  writeFileSync(c.legacy, "");
+  const v1 = join(c.dir, "heavy-check-v1.sh");
+  const v1src = spawnSync("git", ["-C", here, "show", "1ccce66:scripts/heavy-check.sh"], { encoding: "utf8" }).stdout;
+  writeFileSync(v1, v1src.replace("/work/tmp/siltwake-heavy-check.lock", c.legacy).replace('unit="siltwake-heavy-', `unit="sched1test-v1-${c.n}-`), { mode: 0o755 });
+  const wt = c.wt("a");
+  const id = submit(c, wt, "--class", "quick", "--", "sh", "-c", "sleep 5; date +%s%3N > ended");
+  await running(c, id);
+  const v1run = spawn("bash", [v1, "--deadline", "60", "sh", "-c", `date +%s%3N > ${c.dir}/v1.start`], { cwd: c.dir, env: c.env, stdio: "ignore" });
+  const v1exited = new Promise((r) => v1run.on("exit", r));
+  await sleep(500);
+  process.kill(state(c).tickets[id].supervisor.pid, "SIGKILL");
+  await sleep(1000);
+  assert.equal(existsSync(join(c.dir, "v1.start")), false, "v1 did not enter when the supervisor died");
+  await v1exited;
+  const v1start = Number(readFileSync(join(c.dir, "v1.start"), "utf8"));
+  const ended = Number(readFileSync(join(wt, "ended"), "utf8"));
+  assert.ok(v1start >= ended, `v1 entered at ${v1start}, payload ended at ${ended}`);
+  assert.equal(hc(c, ["wait", id]).code, 0, "a lone wait finishes the orphaned ticket");
 });
 
 test("13: nested calls run inline; a nested GPU call from a CPU job and a forged ticket are refused", async () => {

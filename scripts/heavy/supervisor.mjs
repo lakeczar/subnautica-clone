@@ -213,13 +213,14 @@ const result = {
   oomKills, reservationOom, leftovers, head: tree.head, dirty: tree.dirty, headAtAdmit: treeAtAdmit.head, dirtyAtAdmit: treeAtAdmit.dirty,
   changedTree, context,
 };
+// The scope is empty: release the worktree's .test-build before anyone can see the result.
+if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: true });
 writeJsonAtomic(join(dir, "exit.json"), result);
 transaction(cfg, (state) => {
   delete state.tickets[id];
   ledger(cfg, { event: "job", ...result });
   return { changed: true };
 });
-if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: true });
 if (bridgeFd != null) closeSync(bridgeFd);
 closeSync(aliveFd);
 process.exit(0);

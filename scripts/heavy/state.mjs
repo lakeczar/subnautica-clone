@@ -252,11 +252,11 @@ export function reconcile(cfg, state) {
       }
     }
     const result = t.state === "running" ? orphanResult(dir, t) : { code: 75, label: "lost: supervisor died before admission" };
+    const marker = join(t.worktree, ".test-build", ".heavy-job");
+    if (readJson(marker)?.ticket === t.id) rmSync(marker, { force: true });
     const exitFile = join(dir, "exit.json");
     if (!existsSync(exitFile)) writeJsonAtomic(exitFile, { ticket: t.id, class: t.req.class, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), ...result });
     ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, ...result });
-    const marker = join(t.worktree, ".test-build", ".heavy-job");
-    if (readJson(marker)?.ticket === t.id) rmSync(marker, { force: true });
     delete state.tickets[t.id];
     changed = true;
   }
