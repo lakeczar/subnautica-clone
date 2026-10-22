@@ -211,15 +211,28 @@ function runHeavy(file) {
   const output = [];
   run.child.stdout.on("data", (d) => output.push(d));
   run.child.stderr.on("data", (d) => output.push(d));
-  return new Promise((done) => run.child.on("close", (code, signal) => {
-    process.stdout.write(`\n--- ${basename(file)}\n${Buffer.concat(output).toString()}`);
-    const { peakMiB, killed } = run.finish(), seconds = (Date.now() - started) / 1000;
-    const status = killed ? "KILLED (over budget)" : code === 0 ? "ok" : `FAIL (exit ${code ?? signal})`;
-    if (status !== "ok") failed = true;
-    rows.push({ file: basename(file), seconds, peakMiB, budget, status });
-    if (killed) console.error(`test-tier: ${basename(file)} went over its ${budget} MiB budget (whole process tree).`);
-    done();
-  }));
+  return new Promise((done) => {
+    let exited = null, result = null;
+    // Teardown starts when the file's process exits, not when its pipes close: a
+    // straggler that inherited stdout or stderr would hold them open, and only
+    // tearing down the file's tree (which kills it) lets them close.
+    run.child.once("exit", (code, signal) => {
+      exited = { code, signal, seconds: (Date.now() - started) / 1000 };
+      result = run.finish();
+      // A descendant outside the tree (one that left the fallback's process group)
+      // can still hold a pipe: stop waiting for it.
+      setTimeout(() => { run.child.stdout.destroy(); run.child.stderr.destroy(); }, 5000).unref();
+    });
+    run.child.once("close", () => {
+      process.stdout.write(`\n--- ${basename(file)}\n${Buffer.concat(output).toString()}`);
+      const { code, signal, seconds } = exited, { peakMiB, killed } = result;
+      const status = killed ? "KILLED (over budget)" : code === 0 ? "ok" : `FAIL (exit ${code ?? signal})`;
+      if (status !== "ok") failed = true;
+      rows.push({ file: basename(file), seconds, peakMiB, budget, status });
+      if (killed) console.error(`test-tier: ${basename(file)} went over its ${budget} MiB budget (whole process tree).`);
+      done();
+    });
+  });
 }
 // Files run side by side while their budgets together fit the pool (largest
 // first; a file larger than the pool, or an exclusive one, runs alone).

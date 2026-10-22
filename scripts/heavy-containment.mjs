@@ -12,6 +12,8 @@
 //   cgroup with `memory.max` at its budget, no swap and `memory.oom.group`, so
 //   the kernel enforces the budget over the whole tree and kills only that
 //   tree. `memory.peak` is the tree's peak; `cgroup.kill` clears stragglers.
+// Teardown (`finish`, once per file) runs when the file's process exits, so a
+// straggler holding the file's stdout or stderr cannot hold up its own removal.
 // - **process group** (fallback; one file at a time). Each file leads its own
 //   process group; a watcher sums the resident memory of every process in the
 //   group every 100 ms and kills the group over budget. Sampling can miss a
@@ -67,9 +69,11 @@ function cgroupMode() {
         writeFileSync(join(dir, "memory.oom.group"), "1");
         // The child joins its cgroup before it execs the test, so every descendant is inside.
         const child = spawn("/bin/sh", ["-c", 'echo $$ > "$0/cgroup.procs" && exec "$@"', dir, command, ...args], options);
+        let ended = null;
         return {
           child,
           finish() {
+            if (ended) return ended;
             // `.local`: OOMs this file's own budget caused, not ones inside a nested
             // cgroup with its own limit (a nested runner's file).
             const events = readFileSync(join(dir, "memory.events.local"), "utf8");
@@ -78,7 +82,7 @@ function cgroupMode() {
             try { writeFileSync(join(dir, "cgroup.kill"), "1"); } catch { /* already empty */ }
             for (let i = 0; i < 50 && readFileSync(join(dir, "cgroup.procs"), "utf8").trim(); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
             removeTree(dir);
-            return { peakMiB, killed: ooms > 0 };
+            return ended = { peakMiB, killed: ooms > 0 };
           },
         };
       },
@@ -113,7 +117,7 @@ function processGroupMode() {
       }, 100);
       return {
         child,
-        finish() { clearInterval(timer); kill(); return { peakMiB: Math.round(peakKiB / 1024), killed }; },
+        finish() { clearInterval(timer); kill(); return { peakMiB: Math.round(peakKiB / 1024), killed }; }, // idempotent
       };
     },
   };
