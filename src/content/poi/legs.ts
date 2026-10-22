@@ -27,31 +27,56 @@ export const legRoute = (leg: DeepLeg): RouteDef => {
   return r;
 };
 
-/** Distance along a polyline to the point nearest `p` in plan, and how far
- * off the line it lies (horizontal metres). */
-export function alongRoute(path: readonly Readonly<Vec3>[], p: { readonly x: number; readonly z: number }): { s: number; off: number; length: number } {
-  let s = 0, best = Infinity, at = 0;
-  for (let i = 1; i < path.length; i++) {
-    const a = path[i - 1]!, b = path[i]!, dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz;
-    const t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / l2)) : 0;
-    const d = Math.hypot(p.x - a.x - dx * t, p.z - a.z - dz * t), seg = Math.hypot(dx, b.y - a.y, dz);
-    if (d < best) { best = d; at = s + seg * t; }
-    s += seg;
+/** Something a pilot on the route notices: where it shows (its lights, or
+ * the thing itself when unlit) and from how far it can be seen in 3D (a lit
+ * point of interest further than an unlit site in deep water). One mark is
+ * one thing noticed, however many lights it has. */
+export interface Noticeable { readonly id: string; readonly points: readonly Readonly<Vec3>[]; readonly reach: number }
+type Floor = (x: number, z: number) => number;
+
+/** Clear water from `a` to `b` over the terrain (sampled every 2 m; the last
+ * 3 m before `b` are its own footing). */
+export function lineOfSight(a: Readonly<Vec3>, b: Readonly<Vec3>, floor: Floor): boolean {
+  const len = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z), n = Math.ceil(len / 2);
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    if (len * (1 - t) < 3) break;
+    const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t, z = a.z + (b.z - a.z) * t;
+    if (floor(x, z) > y + 0.5) return false;
   }
-  return { s: at, off: best, length: s };
+  return true;
+}
+/** The route sampled every `step` metres of 3D length. */
+export function routeSamples(path: readonly Readonly<Vec3>[], step = 5): { s: number; p: Vec3 }[] {
+  const out: { s: number; p: Vec3 }[] = [];
+  let acc = 0, next = 0;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1]!, b = path[i]!, l = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+    for (; next <= acc + l; next += step) { const t = l ? (next - acc) / l : 0; out.push({ s: next, p: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t } }); }
+    acc += l;
+  }
+  const end = path[path.length - 1]!;
+  if (!out.length || out[out.length - 1]!.s < acc) out.push({ s: acc, p: { ...end } });
+  return out;
 }
 
-/** Something a pilot on the route notices: where it stands, and from how far
- * off the line it can be seen (a lit point of interest further than an unlit
- * site in deep water). */
-export interface Noticeable { readonly id: string; readonly x: number; readonly z: number; readonly reach: number }
-
-/** The longest stretch of the route with nothing noticeable beside it, in
- * metres, and where it starts. The route's two ends are its stops. */
-export function longestEmpty(path: readonly Readonly<Vec3>[], marks: readonly Noticeable[]): { gap: number; from: number; seen: { id: string; s: number }[] } {
-  const seen = marks.map(m => ({ id: m.id, ...alongRoute(path, m), reach: m.reach })).filter(m => m.off <= m.reach)
-    .map(m => ({ id: m.id, s: m.s })).sort((a, b) => a.s - b.s);
-  const length = alongRoute(path, path[0]!).length, stops = [0, ...seen.map(m => m.s), length];
+/** The longest stretch of the route between two things noticed, in metres,
+ * and where it starts. A mark is noticed where the route passes nearest to
+ * it, among the route samples from which one of its points is within its
+ * reach (3D) and in line of sight over the terrain; a mark never in reach and
+ * sight is not noticed at all. The route's two ends are its stops. */
+export function longestEmpty(path: readonly Readonly<Vec3>[], marks: readonly Noticeable[], floor: Floor, step = 5): { gap: number; from: number; seen: { id: string; s: number }[] } {
+  const samples = routeSamples(path, step), seen: { id: string; s: number }[] = [];
+  for (const m of marks) {
+    let best = Infinity, at = -1;
+    for (const { s, p } of samples) for (const q of m.points) {
+      const d = Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z);
+      if (d <= m.reach && d < best && lineOfSight(p, q, floor)) { best = d; at = s; }
+    }
+    if (at >= 0) seen.push({ id: m.id, s: at });
+  }
+  seen.sort((a, b) => a.s - b.s);
+  const stops = [0, ...seen.map(m => m.s), samples[samples.length - 1]!.s];
   let gap = 0, from = 0;
   for (let i = 1; i < stops.length; i++) if (stops[i]! - stops[i - 1]! > gap) { gap = stops[i]! - stops[i - 1]!; from = stops[i - 1]!; }
   return { gap, from, seen };
