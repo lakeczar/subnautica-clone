@@ -10,7 +10,13 @@ import { gameWorld, SOLIDS, surfaceHeight, caveOwner, createCaveWorldQueries } f
 import {
   apertureProblems, collarProblems, deepWorld, defOf, envelopeProblems, hasCycle, lodProblems, roofProblems, roomGraph, routeProblems,
   shellProblems, stagingProblems, worldWith,
+  contentProblems,
 } from "./caves-deep-support.js";
+import { SOURCES, INTERACTION_HOSTS } from "../src/content/registry.js";
+import { createGame, eyeHeight } from "../src/sim/state.js";
+import { completeOpening } from "../src/sim/progression.js";
+import { aimedInteraction } from "../src/sim/targeting.js";
+import type { Vec3 } from "../src/sim/types.js";
 
 for (const c of DEEP_CAVES) {
   const id = c.source.id;
@@ -34,6 +40,34 @@ for (const c of DEEP_CAVES) {
     assert.deepEqual(c.source.rooms.map(r => r.id).filter(r => !seen.has(r)), []);
   });
 }
+
+/** Production aim: the item staged as a source at its host (as composition
+ * will register it), a swimming diver at `from` looking at the host centre,
+ * and `aimedInteraction` must pick exactly it. */
+function aimAt(center: Vec3, at: Vec3, from: Vec3): boolean {
+  const id = "ca3.probe", sources = SOURCES as Record<string, unknown>, hosts = INTERACTION_HOSTS as Record<string, unknown>;
+  sources[id] = { ...Object.values(SOURCES).find(s => s.item === "conductive_crust")!, label: id, position: at };
+  hosts[id] = { offset: { x: center.x - at.x, y: center.y - at.y, z: center.z - at.z } };
+  try {
+    const s = createGame();
+    completeOpening(s);
+    s.player.mode = "swimming"; s.player.pose.position = { ...from };
+    const eye = from.y + eyeHeight(s), dx = center.x - from.x, dy = center.y - eye, dz = center.z - from.z;
+    s.player.pose.yaw = Math.atan2(dx, -dz); s.player.pose.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+    return aimedInteraction(s, deepWorld())?.id === id;
+  } finally { delete sources[id]; delete hosts[id]; }
+}
+
+for (const c of DEEP_CAVES) test(`${c.source.id}: every content point is open water, and every targeted item is seen and aimed from reachable water`, () => {
+  assert.deepEqual(contentProblems(c, deepWorld(), aimAt).problems, []);
+});
+
+test("negative control: a resource datum pushed 2 m into the kiln gallery wall is caught", () => {
+  const kiln = DEEP_CAVES.find(c => c.source.id === "rift_kiln_tube")!;
+  const ceramic = kiln.contents.find(x => x.id === "rift_kiln_tube.ceramic_lining")!;
+  const buried = { ...kiln, contents: [{ ...ceramic, at: { ...ceramic.at, z: ceramic.at.z - 2 } }] };
+  assert.ok(contentProblems(buried, deepWorld(), aimAt).problems.length > 0, "a buried resource passed");
+});
 
 test("every bible cave's carved water fits its size class (GAME-DIRECTION: small 10-25 m, medium 30-80 m)", () => {
   for (const c of DEEP_CAVES) {

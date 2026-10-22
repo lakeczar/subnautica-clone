@@ -1,6 +1,28 @@
 # CA-3: Rift, Divide and Meridian small and medium caves (handoff)
 
-Opus 5.5 high. Branch `t3/rift-divide-meridian-caves` from `feat/siltwake-first-expedition` at `e8ad4bc`. New files only, except one line in a kit file (see *Kit touch*). **Not registered** in `CAVE_SOURCES`; the step is below. Bible: [ember-rift](../../content/regions/ember-rift.md), [mirror-divide](../../content/regions/mirror-divide.md), [meridian](../../content/regions/meridian.md).
+Opus 5.5 high. Branch `t3/rift-divide-meridian-caves`, rebased onto `feat/siltwake-first-expedition` at `4d3a7b9` (CA-1 integrated). R1 fixes below answer [Sol R1](../reviews/CA-3-SOL-XHIGH-R1.md) (on `review/ca-3-r1`). New files only, except one line in a kit file (see *Kit touch*). **Not registered** in `CAVE_SOURCES`; the step is below. Bible: [ember-rift](../../content/regions/ember-rift.md), [mirror-divide](../../content/regions/mirror-divide.md), [meridian](../../content/regions/meridian.md).
+
+## R1 fixes
+- **CA-3-01, content in rock.**
+  - `CaveContent` gains `hostOffset`, the interaction host relative to the datum, for `INTERACTION_HOSTS` at composition. Without it, each kind uses the production default: sources, seeds and resources −0.2 m in Y, caches +0.3 m, scans 0.
+  - Six points moved into water: the north-tube core scan (z −793 → −793.6), the stub lamina scan (y −261 → −261.6), the mirror-pocket cress (x −1 m), the window-gallery ceramic (y −554.5 → −554.1), and the west-tube shelter point. The **cistern lattice keeps its 450 m datum**, with host offset +0.15 m; the tier check still holds.
+  - **New heavy check, per cave:**
+    - every content point and host is open water against the whole rock roster;
+    - every targeted item (resource, seed, cache, scan) has a reachable diver pose within 4 m that sees its host with production `lineOfSight` (the swimming eye), from which production `aimedInteraction` picks it. The item is staged as a source with its real host offset.
+
+    "Reachable" means a lamp-off retreat start (each proven to swim out) or a diver route pose. Negative control: the kiln ceramic pushed 2 m into the wall is caught.
+- **CA-3-02, craft on the hull floor.**
+  - `routeProblems` now holds every craft route to production `sweptHullClearance`, and every parking pad to `hullClearance`, for every hull the hall lists or the pad admits, with the support floor under the whole footprint.
+  - The west-tube Dart start is now the reviewer's `(−318, −284, −940)` → `(−318, −284, −953)`, followed by the original waypoints. Its parking moved up to −284, and the east-pocket parking to −394.
+- **CA-3-03, positive danger controls.**
+  - **Fast:** every field is dangerous inside itself at its peak. That means heat above the suit's tolerance at the warm end and the end vent, dense water in every pool, and the blister floor warm but under tolerance. Every breath eases at slack, and the end vent stays hot.
+  - **Heavy, `caves-deep-hazard-step` (new):** the cave fields are registered in the canonical `HAZARD_FIELDS` before the simulation loads. An unprotected diver is then held at the reachable pose each field hits hardest, through `stepGame`:
+    - the real load must rise at least 15 in 3 s at the peak;
+    - a breath must load nothing at slack;
+    - each route's exit must load nothing at the peak.
+
+    Zeroing every intensity fails it (negative control in the file).
+- **Kiln niche, corrected:** the reviewer's real-step runs from inside the end-vent niche at load 90 and peak breath cost **11–14 health** (10.6–15.5 s). My earlier "about 5" came from the constant-speed model. At load 70 it costs nothing. This is an optional warned risk: the warnings come at 40 and 70, and the crawlers lead the breath by 5 s.
 
 ## Outcome
 All 21 bible small and medium caves for the three deep regions are built with the W1 kit, as **20 sources**. The north-shoulder crawl and tube are one network, in one footprint. Each source builds its rock and its shell from the same data, with rooms, portals, swept routes and staging. Each also has a typed layer: contents keyed to the bible's IDs, lamp-off cues, hazard fields in S4's own form, the hall and its craft, and the chamber graph.
@@ -128,7 +150,7 @@ The other 31 shots are in [`ca-3/`](ca-3/).
   | North shoulder | shoulder mouth | 2 | 3.0 s | 90 |
   | Mite tube | shoulder mouth | 2 | 2.5 s | 91.2 |
 
-  **Also measured:** starting *inside* the kiln's end-vent niche at load 90 during a breath peak costs about 5 health before the diver clears the warm end. That is the breath working as designed. The same start at load 70 passes. A diver gets the 40 and 70 warnings, and the crawlers' 5 s lead, before reaching 90.
+  **Also measured:** starting *inside* the kiln's end-vent niche at load 90 during a breath peak costs 11–14 health in Sol's real-step runs (see *R1 fixes*). The same start at load 70 passes.
 
 ## Bible changes (for CB and the coordinator)
 - **Moved, all clear of what the bible's footprint hit:**
@@ -169,6 +191,8 @@ The other 31 shots are in [`ca-3/`](ca-3/).
    - `content-proposals` (CB's): 3 fail, because the sources realise bible proposals under their own IDs: ID reuse, overlap with the bible footprints, and density counted twice. CA-1 hit the same. Patch: treat a proposal realised by a kit source as realised, using `DEEP_CAVES[].bible` (`rift_north_shoulder` realises two).
 2. **Bake:** registration changes `caves.ts`, so `npm run build` rebakes and adds `<chunk>.cave-<id>` shells. Run `bake-terrain --verify` after.
 3. **Hazards:** append `DEEP_CAVE_HAZARDS` to the fields the game samples. `sampleDeepHazards` shows the rule. The breath needs `KILN_BREATH` on the cycle framework, with the crawler cue's 5 s lead.
+   **Content hosts:** register each targeted content item's `hostOffset` (or its kind default) in `INTERACTION_HOSTS`; the heavy check stages exactly that.
+   **Current masking is required before composition:** with current unmasked, Sol found a diver resting in the crest hollow drifts into the brine film in 15 s (health 95.8), and the lintel crossing drifts 11 m.
 4. **Art and audio:** cues, contents and live lines are data. The kit paints every shell in the reef palette, and paints mouth glows amber or teal by `normal.z` only. CA-1's `STYLE_PALETTES`, plus a cue renderer, would give these caves their black glass, lavender and masonry. The `style` field is set on every cave.
 5. **Currents:** the crest downwelling's field doesn't know about rock, so it blows inside the crest hollow and lintel galleries. Mask current fields in carved cave water so the "sheltered" caves are sheltered.
 6. **10 m band:** three footprints sit inside C4's conservative 10 m route band:

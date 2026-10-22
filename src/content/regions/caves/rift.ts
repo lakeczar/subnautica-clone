@@ -78,7 +78,7 @@ const NORTH: DeepCave = {
     { id: "rift_north.ceramic", kind: "resource", bible: { kind: "resource", id: "rift_tube_north_ceramic" }, room: "rift_north.tube",
       at: v(-84, -313.5, -797.9), item: "pressure_ceramic", stock: 8, read: "Pale laminae in the south wall where the tube cooled slowly." },
     { id: "rift_north.core_nodes", kind: "scan", bible: { kind: "line", cave: "rift_tube_north", line: "Thin core nodes to scan" }, room: "rift_north.tube",
-      at: v(-92, -312.5, -793), read: "Dark nodes in the north wall, too thin to work: the workable seam is the 350 m ledge." },
+      at: v(-92, -312.5, -793.6), read: "Dark nodes in the north wall, too thin to work: the workable seam is the 350 m ledge." },
     { id: "rift_north.fin_crate", kind: "cache", bible: { kind: "reward", id: "rift.fin_crate" }, room: "rift_north.crawl",
       at: v(-114, -287.4, -796.1), read: "A crate wedged just inside the crawl, labelled for shipment south: two reserve cells and an exchanger fin." },
   ],
@@ -204,7 +204,7 @@ const STUB: DeepCave = {
   exits: { "stub mouth": "rift_stub.mouth.stub" },
   contents: [
     { id: "rift_stub.laminae", kind: "scan", bible: { kind: "line", cave: "rift_stub_hollow", line: "Ceramic laminae to scan (the pale-vs-dark rule)" },
-      room: "rift_stub.hollow", at: v(5, -261, -1136), read: "Pale laminae on the ceiling: ceramic is the pale layer, core the dark node." },
+      room: "rift_stub.hollow", at: v(5, -261.6, -1136), read: "Pale laminae on the ceiling: ceramic is the pale layer, core the dark node." },
   ],
   cues: [
     { id: "rift_stub.cue.mouth", kind: "colony", room: "rift_stub.mouth_passage", meaning: "exit", exit: "rift_stub.mouth.stub", color: TEAL,
@@ -324,7 +324,7 @@ const WEST_SOURCE: CaveSource = {
   ],
   routes: [
     route("rift_west.route.hall", "small", "loop", [
-      [-318, -286, -944], [-318, -286.02, -957.33], [-318, -286.27, -960], [-319, -287.27, -968], [-319.33, -287.78, -970.67], [-319.9, -290.27, -982.9],
+      [-318, -284, -940], [-318, -284, -953], [-318, -286.27, -960], [-319, -287.27, -968], [-319.33, -287.78, -970.67], [-319.9, -290.27, -982.9],
       [-319.34, -287.78, -995.34], [-319, -287.28, -998], [-318, -287.28, -1011.33], [-318, -287.4, -1022],
     ]),
     route("rift_west.route.bypass", "diver", "loop", [
@@ -333,7 +333,7 @@ const WEST_SOURCE: CaveSource = {
     ]),
   ],
   staging: [
-    { id: "rift_west.parking", role: "craft_parking", label: "Shoulder parking north of the west tube", position: v(-318, -285.2, -940), radius: 9, profiles: ["small", "medium"] },
+    { id: "rift_west.parking", role: "craft_parking", label: "Shoulder parking north of the west tube", position: v(-318, -284, -940), radius: 9, profiles: ["small", "medium"] },
   ],
   note: "CA-3 medium. Loop: north arm - fork - south arm - bypass. Hall: Dart (350) and Hush (450); the keel stays above 291 m.",
 };
@@ -348,7 +348,7 @@ const WEST: DeepCave = {
   },
   contents: [
     { id: "rift_west.shelter", kind: "shelter", bible: { kind: "line", cave: "rift_west_tube", line: "Sheltered approach to the west core patch" },
-      room: "rift_west.south_arm", at: v(-318, -287.6, -1004), read: "The south mouth looks down the shoulder toward the west lower ledge." },
+      room: "rift_west.south_arm", at: v(-318, -286.8, -1004), read: "The south mouth looks down the shoulder toward the west lower ledge." },
   ],
   cues: [
     { id: "rift_west.cue.north", kind: "colony", room: "rift_west.north_arm", meaning: "exit", exit: "rift_west.mouth.north", color: AMBER,

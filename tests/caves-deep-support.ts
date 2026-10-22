@@ -1,13 +1,14 @@
 // CA-3 deep-cave checks, generic over every cave (not a test file itself).
 // Each check returns a list of problems (empty = pass) so the tests assert
 // `[]` and print what broke, and the dev loop can call the same code.
-import { CAVE_SOURCES, EXTERIOR, MIN_ROCK, type CaveDef, type CavePortal } from "../src/content/regions/caves.js";
+import { AUTHORED_CAVE_SOURCES, caveDef, EXTERIOR, MIN_ROCK, type CaveDef, type CavePortal } from "../src/content/regions/caves.js";
 import { buildCave, caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { CRAFT_PROFILES, type CraftProfileId } from "../src/content/regions/passages.js";
 import { DEEP_CAVES, sampleDeepHazards } from "../src/content/regions/caves/deep.js";
-import type { DeepCave } from "../src/content/regions/caves/deepKit.js";
-import { caveOwner, createCaveWorldQueries, SOLIDS, surfaceHeight, type Solid } from "../src/sim/world.js";
+import { contentHost, type DeepCave } from "../src/content/regions/caves/deepKit.js";
+import { caveOwner, createCaveWorldQueries, hullClearance, hullFloor, SOLIDS, surfaceHeight, sweptHullClearance, type Solid } from "../src/sim/world.js";
+import { HULL_COLLIDERS, HULLS, type HullId } from "../src/content/registry.js";
 import type { Capsule, Vec3, WorldQueries } from "../src/sim/types.js";
 import { boxDistance } from "../src/world/frame.js";
 import type { MeshRecipe } from "../src/render/kit/types.js";
@@ -21,7 +22,7 @@ export const DIVER: Capsule = CRAFT_PROFILES.diver;
 export const profile = (p: CraftProfileId): Capsule => CRAFT_PROFILES[p];
 /** Ordinary (unsprinted) swim speed, step.ts. */
 export const SWIM_SPEED = 3.4;
-const ROOT_IDS = new Set(CAVE_SOURCES.map(s => s.id));
+const ROOT_IDS = new Set(AUTHORED_CAVE_SOURCES.map(s => s.id));
 
 // --- Built caves and the world with them -----------------------------------------
 
@@ -34,10 +35,12 @@ export function defOf(c: DeepCave): CaveDef {
 export const deepDefs = (): CaveDef[] => DEEP_CAVES.map(defOf);
 let deep: WorldQueries | null = null;
 /** The exterior world as it will be once registered: every solid, the shared
- * floor, root's caves and these caves owning their footprints. */
+ * floor, root's authored caves and these caves owning their footprints. */
 export function deepWorld(): WorldQueries {
   if (!deep) {
-    const root = CAVE_SOURCES.filter(s => !DEEP_CAVES.some(c => c.source.id === s.id)).map(s => buildCave(s, worldFloor));
+    // Root's authored caves (the Fanvault and CA-1's Reef and Isles), with
+    // their shared-edge neighbours, as root composes them.
+    const root = AUTHORED_CAVE_SOURCES.filter(s => !DEEP_CAVES.some(c => c.source.id === s.id)).map(s => caveDef(s.id, worldFloor));
     deep = createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: [...root, ...deepDefs()].map(caveOwner) });
   }
   return deep;
@@ -279,10 +282,23 @@ export function apertureProblems(c: DeepCave, world: WorldQueries = deepWorld())
   return out;
 }
 
+/** The hulls a profile admits (their collider fits it). */
+export const hullsFor = (p: CraftProfileId): HullId[] => (Object.keys(HULL_COLLIDERS) as HullId[])
+  .filter(h => h !== "hearthline" && HULLS[h].maximumDepth > 0 && HULL_COLLIDERS[h].radius <= CRAFT_PROFILES[p].radius && HULL_COLLIDERS[h].height <= CRAFT_PROFILES[p].height);
+
 /** Every route clears at each pose and sweeps segment by segment with its
- * own profile, arriving exactly. */
+ * own profile, arriving exactly. Craft routes and parking are held to the
+ * piloted rule as well: production `sweptHullClearance` / `hullClearance`
+ * (support floor under the whole footprint) for every hull the hall lists. */
 export function routeProblems(c: DeepCave, world: WorldQueries = deepWorld()): string[] {
   const out: string[] = [];
+  for (const r of c.source.routes.filter(r => r.profile !== "diver")) for (const h of c.hall?.craft ?? hullsFor(r.profile))
+    if (!sweptHullClearance(world, r.path, HULL_COLLIDERS[h])) {
+      const bad = r.path.findIndex(p => !hullClearance(world, p, HULL_COLLIDERS[h]));
+      out.push(`${r.id}: ${h} fails the piloted sweep${bad >= 0 ? ` (pose ${bad} ${fmt(r.path[bad]!)} below hull support ${hullFloor(world, r.path[bad]!, HULL_COLLIDERS[h]).toFixed(2)})` : ""}`);
+    }
+  for (const st of c.source.staging) for (const p of st.profiles) for (const h of hullsFor(p))
+    if (!hullClearance(world, st.position, HULL_COLLIDERS[h])) out.push(`${st.id}: no piloted room for ${h}`);
   for (const r of c.source.routes) {
     const s = profile(r.profile);
     for (const p of r.path) if (!world.clearance(p, s)) { out.push(`${r.id}: ${r.profile} blocked at ${fmt(p)}`); break; }
@@ -672,3 +688,29 @@ export function swim(path: readonly Vec3[], tick0: number, budget: Budget): Swim
 /** Simulation ticks per second (ECOLOGY_DT). */
 export const TICKS = Math.round(1 / ECOLOGY_DT);
 export { EXTERIOR };
+
+// --- Content placement (CA-3-01) --------------------------------------------------
+
+/** Every positioned content item: its point (the host centre for targeted
+ * kinds, the datum otherwise) must be open water, not rock, and a targeted
+ * item must be visible and aimable from a reachable diver pose. Reachable
+ * poses are the lamp-off retreat starts (each proven to swim out, so in the
+ * cave's connected water) plus the diver route poses. Production
+ * `lineOfSight` (eye at +0.65 m, the swimming eye) against the composed
+ * world's whole rock roster, and production `aimedInteraction` with the
+ * item staged as a source at its host (callers supply `aim`). */
+export interface ContentProbe { readonly id: string; readonly center: Vec3; readonly from: Vec3 | null; readonly poses: number }
+export function contentProblems(c: DeepCave, world: WorldQueries, aim: (center: Vec3, at: Vec3, from: Vec3) => boolean, starts?: readonly Vec3[]): { problems: string[]; probes: ContentProbe[] } {
+  const pr = probeOf(c), def = pr.def, problems: string[] = [], probes: ContentProbe[] = [];
+  const poses = [...(starts ?? retreatStarts(c, world)), ...def.routes.filter(r => r.profile === "diver").flatMap(r => r.path)];
+  for (const item of c.contents) {
+    const center = contentHost(item) ?? item.at;
+    if (voxelInRock(def, center) || pr.inRock(center)) { problems.push(`${item.id}: ${contentHost(item) ? "host" : "point"} ${fmt(center)} is inside rock`); continue; }
+    if (!contentHost(item)) continue;
+    const near = poses.filter(p => dist(p, item.at) < 3.9 && world.clearance(p, DIVER));
+    const from = near.find(p => world.lineOfSight({ ...p, y: p.y + 0.65 }, center) && aim(center, item.at, p)) ?? null;
+    probes.push({ id: item.id, center, from, poses: near.length });
+    if (!from) problems.push(`${item.id}: no reachable diver pose sees and aims at host ${fmt(center)} (${near.length} poses within reach)`);
+  }
+  return { problems, probes };
+}

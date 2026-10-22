@@ -73,7 +73,13 @@ export interface CaveContent {
   readonly bible: BibleRef;
   /** Room the content sits in (or `exterior` at a mouth). */
   readonly room: string;
+  /** The content's datum (the tier and bible depth use it). */
   readonly at: Vec3;
+  /** Interaction host centre relative to `at`, for `INTERACTION_HOSTS` at
+   * composition. Omitted: the production default for its kind (sources,
+   * seeds and resources -0.2 m in Y, caches +0.3 m, scans 0). Set where the
+   * datum must stay on rock, as the cistern lattice's 450 m rim does. */
+  readonly hostOffset?: Vec3;
   /** Gatherable item and stock for resources, caches and seeds. Scans hold none. */
   readonly item?: MaterialId | `seed_${string}`;
   readonly stock?: number;
@@ -143,6 +149,18 @@ export interface DeepCave {
   readonly hazards: readonly CaveHazard[];
   /** Water the hazard tests must find cool (heat) or clear (brine). */
   readonly safe?: string;
+}
+
+/** Kinds a diver aims at and interacts with, and their production host default. */
+export const TARGETED: Readonly<Partial<Record<ContentKind, Vec3>>> = {
+  resource: { x: 0, y: -0.2, z: 0 }, seed: { x: 0, y: -0.2, z: 0 }, cache: { x: 0, y: 0.3, z: 0 }, scan: { x: 0, y: 0, z: 0 },
+};
+/** The interaction host centre of a targeted content item. */
+export function contentHost(c: CaveContent): Vec3 | null {
+  const base = TARGETED[c.kind];
+  if (!base) return null;
+  const o = c.hostOffset ?? base;
+  return { x: c.at.x + o.x, y: c.at.y + o.y, z: c.at.z + o.z };
 }
 
 // --- Hazard fields ---------------------------------------------------------------

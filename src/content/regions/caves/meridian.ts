@@ -344,7 +344,7 @@ const WINDOW: DeepCave = {
   },
   contents: [
     { id: "meridian_window.ceramic", kind: "resource", bible: { kind: "resource", id: "meridian_window_ceramic" }, room: "meridian_window.sump_room",
-      at: v(1027, -554.5, -1298), item: "pressure_ceramic", stock: 10, read: "The builders cut through ceramic strata; it shows pale in the sump room's walls." },
+      at: v(1027, -554.1, -1298), item: "pressure_ceramic", stock: 10, read: "The builders cut through ceramic strata; it shows pale in the sump room's walls." },
     { id: "meridian_window.work_pocket", kind: "view", bible: { kind: "line", cave: "meridian_window_gallery", line: "A protected work pocket with a view" },
       room: "meridian_window.window_room", at: v(1025, -522, -1302), read: "From the window room: the clear lane and the terraces below, out of the choir's water." },
   ],

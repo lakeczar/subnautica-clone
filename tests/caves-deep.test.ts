@@ -4,7 +4,7 @@
 // rules, cheaply.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assertDisjointFootprints, CAVE_SOURCES, EXTERIOR } from "../src/content/regions/caves.js";
+import { assertDisjointFootprints, AUTHORED_CAVE_SOURCES, EXTERIOR } from "../src/content/regions/caves.js";
 import { DEEP_CAVES, DEEP_CAVE_HAZARDS, DEEP_CAVE_SOURCES, caveFieldLevel, sampleDeepHazards } from "../src/content/regions/caves/deep.js";
 import { EXTERIOR as DEEP_EXTERIOR, KILN_BREATH, type DeepCave } from "../src/content/regions/caves/deepKit.js";
 import { readFileSync } from "node:fs";
@@ -17,6 +17,7 @@ import { BRINE_Y, LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { STORY_PLACEMENTS } from "../src/content/story/placements.js";
+import { sitePosition } from "../src/content/ecology/sites.js";
 import { HULL_COLLIDERS, HULLS, SOURCES } from "../src/content/registry.js";
 import { UNPROTECTED } from "../src/content/ecology/hazards.js";
 import type { Rect } from "../src/world/types.js";
@@ -33,7 +34,7 @@ const inRect = (r: Rect, x: number, z: number, pad = 0): boolean => x >= r.minX 
 const rectDistance = (r: Rect, x: number, z: number): number => Math.hypot(Math.max(r.minX - x, 0, x - r.maxX), Math.max(r.minZ - z, 0, z - r.maxZ));
 const portal = (c: DeepCave, id: string) => c.source.portals.find(p => p.id === id);
 
-test("the deep sources import nothing but types from caves.ts, so CAVE_SOURCES can include them without a cycle", () => {
+test("the deep sources import nothing but types from caves.ts, so the cave lists can include them without a cycle", () => {
   assert.equal(DEEP_EXTERIOR, EXTERIOR);
   for (const f of ["deepKit", "deep", "rift", "divide", "meridian"]) {
     const text = readFileSync(new URL(`../../src/content/regions/caves/${f}.ts`, import.meta.url), "utf8");
@@ -71,7 +72,7 @@ test("every bible small and medium cave for the Rift, Divide and Meridian is rea
 });
 
 test("caves own disjoint footprints in their region, clear of the preserve, datums, structures, routes and story sites", () => {
-  assert.doesNotThrow(() => assertDisjointFootprints([...CAVE_SOURCES.filter(s => !DEEP_CAVE_SOURCES.includes(s)), ...DEEP_CAVE_SOURCES]));
+  assert.doesNotThrow(() => assertDisjointFootprints([...AUTHORED_CAVE_SOURCES.filter(s => !DEEP_CAVE_SOURCES.includes(s)), ...DEEP_CAVE_SOURCES]));
   const storySites = Object.values(STORY_PLACEMENTS).map(p => SITES.find(s => s.id === p.s2)).filter(s => !!s);
   for (const s of DEEP_CAVE_SOURCES) {
     const f = s.footprint;
@@ -246,4 +247,23 @@ test("hazards: heat breathes only in warm Rift tubes, never over a whole cave; b
     for (const r of c.source.routes) for (const p of r.path)
       if (p.z <= -1280) assert.ok(p.y >= BRINE_Y + 1, `${r.id}: pose ${JSON.stringify(p)} under the interface`);
   }
+});
+
+test("positive danger controls: every hazard field is dangerous inside itself at its peak, and every breath eases at slack", () => {
+  const peak = (KILN_BREATH.start + KILN_BREATH.ramp + 2) * 60, slack = (KILN_BREATH.start + KILN_BREATH.duration + 2 * KILN_BREATH.ramp + 8) * 60;
+  let warm = 0, pools = 0;
+  for (const h of DEEP_CAVE_HAZARDS) {
+    const o = sitePosition(h.shape.center), s = h.shape;
+    const inside = s.kind === "box" ? { x: o.x + (s.min.x + s.max.x) / 2, y: o.y + (s.min.y + s.max.y) / 2, z: o.z + (s.min.z + s.max.z) / 2 }
+      : s.kind === "cylinder" ? { x: o.x, y: o.y + (s.bottom + s.top) / 2, z: o.z }
+      : { x: o.x + (s.min.x + s.max.x) / 2, y: o.y + s.y - 0.4, z: o.z + (s.min.z + s.max.z) / 2 };
+    const at = (tick: number) => sampleDeepHazards(inside, tick);
+    if (h.kind === "brine") { pools++; assert.ok(at(peak).brine > 0.5, `${h.id}: no dense water inside its own pool`); continue; }
+    if (h.intensity <= UNPROTECTED.heat) { assert.ok(at(peak).heat > 0.15 && at(peak).heat <= UNPROTECTED.heat, `${h.id}: a warm floor must read warm and stay under tolerance`); continue; }
+    warm++;
+    assert.ok(at(peak).heat > UNPROTECTED.heat + 0.2, `${h.id}: ${at(peak).heat.toFixed(2)} heat at its own peak`);
+    if (h.cycle) assert.ok(caveFieldLevel(h, inside, slack) <= UNPROTECTED.heat, `${h.id}: still hot at slack`);
+    else assert.ok(caveFieldLevel(h, inside, slack) > UNPROTECTED.heat, `${h.id}: a constant vent must stay hot`);
+  }
+  assert.ok(warm >= 3 && pools >= 7, `${warm} warm fields, ${pools} pools`);
 });

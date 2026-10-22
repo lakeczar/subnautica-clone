@@ -69,7 +69,7 @@ const MIRROR: DeepCave = {
   exits: { "ledge mouth": "divide_mirror.mouth.ledge" },
   contents: [
     { id: "divide_mirror.cress", kind: "seed", bible: { kind: "resource", id: "divide_pocket_cress" }, room: "divide_mirror.pocket",
-      at: v(404.6, -360.2, -1240.4), item: "seed_mirror_cress", stock: 3, read: "Cress on the pool rim; it tears unless sampled gently." },
+      at: v(403.6, -360.2, -1240.4), item: "seed_mirror_cress", stock: 3, read: "Cress on the pool rim; it tears unless sampled gently." },
     { id: "divide_mirror.rim", kind: "scan", bible: { kind: "line", cave: "divide_mirror_pocket", line: "A pool rim to read" }, room: "divide_mirror.pool",
       at: v(402, -361.3, -1238.5), read: "Lavender crystal on the rim, black water below the sheen: dense water never mixes upward." },
     { id: "divide_mirror.seam_link", kind: "shortcut", bible: { kind: "link", cave: "divide_mirror_pocket", id: "rift_divide_seam.pocket_drop" }, room: "divide_mirror.crack",
@@ -192,7 +192,7 @@ const EAST_SOURCE: CaveSource = {
     ]),
   ],
   staging: [
-    { id: "divide_east.parking", role: "craft_parking", label: "Flank parking east of the pocket", position: v(828, -395.4, -1236), radius: 5, profiles: ["small"] },
+    { id: "divide_east.parking", role: "craft_parking", label: "Flank parking east of the pocket", position: v(828, -394, -1236), radius: 5, profiles: ["small"] },
   ],
   note: "CA-3 small. Two pools at two levels: the scan that explains layering.",
 };
@@ -491,7 +491,7 @@ const CISTERN: DeepCave = {
   },
   contents: [
     { id: "divide_cistern.lattice", kind: "resource", bible: { kind: "resource", id: "divide_cistern_lattice" }, room: "divide_cistern.west_landing",
-      at: v(892.5, -450, -1212), item: "brine_lattice", stock: 16, read: "Crystal fans round the lake's west rim at 450 m, a metre above the mirror." },
+      at: v(892.5, -450, -1212), hostOffset: v(0, 0.15, 0), item: "brine_lattice", stock: 16, read: "Crystal fans round the lake's west rim at 450 m, a metre above the mirror." },
     { id: "divide_cistern.lake_view", kind: "view", bible: { kind: "reward", id: "divide.cistern_lake" }, room: "divide_cistern.north_rim",
       at: v(903, -448, -1209), read: "A mirror lake inside the cave, skimmers fanning over it." },
   ],
