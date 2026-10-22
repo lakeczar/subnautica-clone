@@ -1,6 +1,6 @@
 # HUB-2: the crown station, composed (handoff)
 
-Opus 5.5 high. Branch `t3/hub-2-crown-station`, from root `e91a69b` (C4 stage B and LC integrated). Commit: `8ae961c`. It replaces W2 phase 2's proposal and fixes Sol R1's W2-02, W2-03 and W2-04 ([R1](reviews/W2-SOL-XHIGH-R1.md)).
+Opus 5.5 high. Branch `t3/hub-2-crown-station`, from root `e91a69b` (C4 stage B and LC integrated). Commits: `8ae961c` (the station), `0535c30` (the surface mast). It replaces W2 phase 2's proposal and fixes Sol R1's W2-02, W2-03 and W2-04 ([R1](reviews/W2-SOL-XHIGH-R1.md)).
 
 ## Outcome
 The crown station on W2's summit is a real restorable stop, built in three stages from a diver load each.
