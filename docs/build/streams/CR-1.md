@@ -2,6 +2,19 @@
 
 Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `c649b11` (C4, CA-3 and CB-2 integrated). Code `a4768e6` (evidence and this page after it). Story-neutral; `docs/spoilers/*` not read.
 
+## Paused for VM restart (2026-10-22)
+- **Done:**
+  - root `86e2ff1` (HUB-2, DISH-1) merged at `5e40404`;
+  - the one conflict (`tests/progression-curve.test.ts`) resolved, keeping both HUB-2's crown recipe group and CR-1's hand-net group;
+  - the crown stages appear in the C04, C05 and C06 plan pins, and `hand_net` in C02;
+  - `npm run test:fast` passes 1,287/1,287 after the merge;
+  - `npm run build` passes.
+- **In flight:** nothing. No job, browser or server is running.
+- **Next step:**
+  1. Run the six economy scripts (`node scripts/check-*-economy.mjs`, `check-progression-curve.mjs`, `upgrade-economy.mjs`). Watch whether `check-m1-economy`'s roster pin needs HUB-2's recipes.
+  2. Run the playthrough through `scripts/heavy-check.sh --deadline 1740`, in three jobs: `--scenario creel,carrier`, then `creel-loss`, then `reverse,no-optional --jobs 2`.
+  3. Commit and report the head, then send "CR-1 merged root at <sha>" to the coordinator.
+
 ## Outcome
 **A. A natural way past every threat.** Each threat has its own creature cycle. While a threat is busy it perceives nothing and never escalates; if it was engaged, it breaks off with a caption and is spent through S4's refractory. Afterwards ENC-1's full warning ladder applies.
 
