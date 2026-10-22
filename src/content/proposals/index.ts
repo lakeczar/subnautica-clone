@@ -38,3 +38,9 @@ export type { RequiredClue, RequiredSource, SourceChange, TierStep, Transition }
 export { SPECIES, SPECIES_IDS } from "./species.js";
 export { ELSEWHERE_PLANS, NEW_PLANS, PROPOSED_PLAN_IDS, REJECTED_MATERIALS, SEEDS } from "./blueprints.js";
 export type * from "./types.js";
+export { CR1_INTERFACE, FALL_NOTES, FAUNA_SITES } from "./fauna.js";
+export type { FaunaItem, FaunaSite, FaunaSiteKind } from "./fauna.js";
+export { FIELD_GUIDE } from "./fieldGuide.js";
+export type { FieldGuideEntry, Protection } from "./fieldGuide.js";
+export { FOUND_NOTES, HINT_RADIUS } from "./fieldNotes.js";
+export type { FoundNote, NoteHint, NoteKind } from "./fieldNotes.js";

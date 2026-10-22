@@ -103,6 +103,10 @@ export const SPECIES: readonly SpeciesProposal[] = [
     areas: ["hub_spur"], cost: ["art"],
     behaviour: "A small group of very large, slow rays circling the spur crown in a wide ring: a living landmark seen from the Basin and the Canopy edge.",
     noise: "Widen the ring around a loud craft.", light: "Undersides catch lamps from far off." },
+  { id: "pale_drifter", status: "new", label: "Pale drifters", role: "benign", caveDweller: false,
+    areas: ["silt_basin", "brine_divide"], cost: ["art"],
+    behaviour: "Huge, slow filter-feeders of the open water beyond the basin rim, never reachable alive: a far silhouette at most. When one dies it sinks, and its fall becomes a scavenger feast and a landmark for years (CB-2 carcass falls).",
+    noise: "None reachable.", light: "None reachable." },
 ];
 
 export const SPECIES_IDS: readonly SpeciesId[] = SPECIES.map(s => s.id);
