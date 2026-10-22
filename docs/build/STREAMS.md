@@ -341,3 +341,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **CA-3 R2 (Sol): accept** (`review/ca-3-r2` `2bd7105`) and **CB-2 R2 (Sol): accept** (`review/cb-2-r2` `ed0edcc`). Both merged into root (`4609901`, `c649b11`); tests running. **All ~58 small and medium caves are now authored and accepted;** switch-on is CW-1.
 - **Usage-limit reset:** CW-1, HUB-2, CR-1, the POI-1 dish fix and TT-1 had all hit the limit and were resumed (the platform had already armed auto-resume). CW-1 was told to include CA-3's deep caves with current masking; CR-1 to match CB-2's IDs and datums.
 - Root after the CA-3 and CB-2 merges: 1,256 tests pass, build OK.
+- **Owner grill on the opening and starting island** (in progress): `docs/build/OPENING-DESIGN.md`. Research: starting-island art and exploration (Sol high). Opening pass to build after CW-1 and HUB-2.
