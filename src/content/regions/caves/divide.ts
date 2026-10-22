@@ -343,7 +343,7 @@ const LINTEL_SOURCE: CaveSource = {
   label: "Lintel galleries",
   region: "brine_divide",
   footprint: { minX: 686, maxX: 754, minZ: -1300, maxZ: -1228 },
-  baseY: -375,
+  baseY: -377,
   topY: -339,
   terraces: [
     terrace("divide_lintel.terrace.mound", -345, [720, -1263], [28, 27.5], 5, 0.2, 0.5, 14),

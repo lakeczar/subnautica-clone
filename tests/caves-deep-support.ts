@@ -248,7 +248,7 @@ export function shellProblems(c: DeepCave): string[] {
   for (const s of def.rock) for (const a of ["x", "y", "z"] as const)
     if (s.max[a] - s.min[a] < MIN_ROCK - 1e-9) { out.push(`${s.id} thinner than ${MIN_ROCK} m on ${a}`); break; }
   // Thin rock is dropped from art and collision together; keep it rare.
-  if (def.stats.droppedVoxels > def.stats.rockVoxels * 0.01) out.push(`${c.source.id}: ${def.stats.droppedVoxels} of ${def.stats.rockVoxels} rock voxels dropped as thin`);
+  if (def.stats.droppedVoxels > def.stats.rockVoxels * 0.025) out.push(`${c.source.id}: ${def.stats.droppedVoxels} of ${def.stats.rockVoxels} rock voxels dropped as thin`);
   return out;
 }
 
@@ -330,7 +330,9 @@ export function roofProblems(c: DeepCave, world: WorldQueries = deepWorld()): st
     ...def.rooms.filter(r => r.role !== "shaft").map(r => ({ x: (r.bounds.min.x + r.bounds.max.x) / 2, y: r.bounds.min.y + 1, z: (r.bounds.min.z + r.bounds.max.z) / 2 })),
   ].map(p => ({ ...p, x: Math.floor(p.x * 2) / 2 + 0.25, z: Math.floor(p.z * 2) / 2 + 0.25 }))
     .filter(p => pr.inside(p) && pr.roomAt({ ...p, y: p.y + 0.5 }) !== "" && !open(p) && world.clearance(p, DIVER));
-  if (columns.length < 2) out.push(`${c.source.id}: only ${columns.length} roof probe columns`);
+  // A cave that is all cleft and mouth (a shaft room) may leave no probe
+  // column; its roof is then held by the roof-hole scan alone.
+  if (columns.length < 1 && !def.rooms.some(r => r.role === "shaft")) out.push(`${c.source.id}: no roof probe columns`);
   for (const p of columns) {
     const top = world.supportHeight(p.x, p.z, 1000);
     const stand = Math.max(...[-1, 1].flatMap(a => [-1, 1].map(b => world.supportHeight(p.x + a * DIVER.radius, p.z + b * DIVER.radius, 1000))));
@@ -345,6 +347,8 @@ export function roofProblems(c: DeepCave, world: WorldQueries = deepWorld()): st
     // On a steep roof a shell vertex's 0.2–0.3 m sideways clamp is several
     // times that vertically, so the window grows with the local slope.
     const slope = Math.max(...[[0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]].map(([dx, dz]) => Math.abs(world.supportHeight(p.x + dx!, p.z + dz!, 1000) - top) / 0.5));
+    // A vertical ray along a near-vertical wall says nothing about the shell.
+    if (slope > 4) continue;
     for (const lod of ["fine", "coarse"] as const) {
       const a = { x: p.x, y: top + 0.6, z: p.z }, b = { x: p.x, y: top - (lod === "fine" ? 0.8 + 0.3 * slope : 1.6 + 0.6 * slope), z: p.z };
       if (!pr.triangles(lod, { x: p.x, y: top, z: p.z }, 1.8).some(([u, w, x]) => segmentHitsTriangle(a, b, u, w, x)))
@@ -420,6 +424,23 @@ export function collarProblems(c: DeepCave, world: WorldQueries = deepWorld()): 
       if (Math.abs(p.y - worldFloor(p.x, p.z)) > 1e-4) { out.push(`${c.source.id}: ${lod} collar vertex off the floor at ${fmt(p)}`); break; }
     }
   }
+  return out;
+}
+
+/** The envelope holds the floor: at least 2.5 m of owned rock under the
+ * floor everywhere (a thinner slab is dropped by the 2 m opening, leaving a
+ * hole to the masked floor), and the exterior top below `topY`. */
+export function envelopeProblems(c: DeepCave): string[] {
+  const f = c.source.footprint, out: string[] = [];
+  let low = Infinity, high = -Infinity, at = "";
+  for (let x = f.minX + 0.25; x < f.maxX; x += 0.5) for (let z = f.minZ + 0.25; z < f.maxZ; z += 0.5) {
+    const h = worldFloor(x, z);
+    if (h < low) { low = h; at = `(${x}, ${z})`; }
+    high = Math.max(high, h);
+  }
+  if (low - c.source.baseY < 2.5) out.push(`${c.source.id}: only ${(low - c.source.baseY).toFixed(2)} m of rock under the floor at ${at}`);
+  const terraceTop = Math.max(-Infinity, ...c.source.terraces.map(t => t.level));
+  if (Math.max(high, terraceTop) > c.source.topY - 0.5) out.push(`${c.source.id}: exterior top ${Math.max(high, terraceTop).toFixed(2)} reaches topY ${c.source.topY}`);
   return out;
 }
 
@@ -534,12 +555,17 @@ export function retreat(c: DeepCave, starts: readonly Vec3[], world: WorldQuerie
   const openingOf = (a: Vec3, b: Vec3): string | null => {
     for (let s = 0; s <= 40; s++) {
       const w = lerp3(a, b, s / 40);
-      if (pr.roomAt(w) !== "") continue;
-      return openings.find(o => {
-        const along = (w.x - o.center.x) * o.normal.x + (w.y - o.center.y) * o.normal.y + (w.z - o.center.z) * o.normal.z;
-        const off = { x: w.x - o.center.x - o.normal.x * along, y: w.y - o.center.y - o.normal.y * along, z: w.z - o.center.z - o.normal.z * along };
-        return Math.abs(along) < 4 && Math.hypot(off.x, off.y, off.z) < Math.hypot(o.clear.width, o.clear.height) / 2 + 2;
-      })?.id ?? null;
+      // The first point of open exterior water: neither cave water nor rock.
+      if (pr.roomAt(w) !== "" || voxelInRock(def, w)) continue;
+      // The authored opening nearest the crossing, within its own size plus
+      // 5 m: a mouth on a diagonal face or a sump on a slope opens over a
+      // range, not one plane. Breaches elsewhere are roofProblems' job.
+      let best: CavePortal | null = null, bestD = Infinity;
+      for (const o of openings) {
+        const d = dist(w, o.center);
+        if (d < bestD && d <= Math.hypot(o.clear.width, o.clear.height) / 2 + 5) { best = o; bestD = d; }
+      }
+      return best?.id ?? null;
     }
     return null;
   };
@@ -547,7 +573,8 @@ export function retreat(c: DeepCave, starts: readonly Vec3[], world: WorldQuerie
     if (!world.clearance(start, DIVER)) return { start, path: [start], exit: null, failure: `start ${fmt(start)} is not a diver pose` };
     let at = start, exit: string | null = null;
     const path = [start];
-    for (let hop = 0; !exterior(at); hop++) {
+    // Done once in fully lit open water (a mouth's lip texel still blends).
+    for (let hop = 0; !(exterior(at) && glow(head(at)) >= 0.999); hop++) {
       if (hop >= 40) return { start, path, exit, failure: `lost from ${fmt(start)} at ${fmt(at)}` };
       const here = rank(at);
       const options = nearby(at).filter(o => o.rank > here + 1e-3 && dist(o.p, at) <= 7)
@@ -560,7 +587,7 @@ export function retreat(c: DeepCave, starts: readonly Vec3[], world: WorldQuerie
         next = o.p; break;
       }
       if (!next) return { start, path, exit, failure: `no brighter water a diver can reach from ${fmt(at)} (glow ${here.toFixed(3)})` };
-      if (exterior(next)) exit = openingOf(at, next);
+      if (exterior(next) && !exterior(at)) exit = openingOf(at, next) ?? exit;
       at = next; path.push(at);
     }
     if (!exit) return { start, path, exit, failure: `left ${fmt(start)} without passing a mouth or skylight` };

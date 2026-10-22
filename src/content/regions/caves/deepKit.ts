@@ -89,6 +89,10 @@ export interface CaveCue {
   readonly color: readonly [number, number, number];
   readonly meaning: "exit" | "heat_breath" | "dense_water" | "live_line" | "resident";
   readonly exit?: string;
+  /** Live lines only: the lit world site (regions/sites.ts) the line feeds.
+   * Tenders gather only on powered lines, so integration must keep that
+   * site lit while the cue shows (CB Meridian builder note). */
+  readonly feeds?: string;
   readonly read: string;
 }
 
