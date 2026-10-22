@@ -1,0 +1,858 @@
+{
+ "value": {
+  "which": "before",
+  "legs": [
+   {
+    "id": "basin_rift",
+    "route": "route.basin.rift",
+    "reverse": false,
+    "waypoints": [
+     {
+      "i": 1,
+      "draws": 108,
+      "lights": "12/119",
+      "vertices": 425580,
+      "meshes": 503,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 2,
+      "draws": 114,
+      "lights": "12/121",
+      "vertices": 442352,
+      "meshes": 553,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 3,
+      "draws": 120,
+      "lights": "12/124",
+      "vertices": 460917,
+      "meshes": 611,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 4,
+      "draws": 144,
+      "lights": "7/125",
+      "vertices": 472069,
+      "meshes": 651,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 5,
+      "draws": 141,
+      "lights": "7/126",
+      "vertices": 472613,
+      "meshes": 658,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 6,
+      "draws": 140,
+      "lights": "4/128",
+      "vertices": 476772,
+      "meshes": 691,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 7,
+      "draws": 157,
+      "lights": "5/129",
+      "vertices": 507877,
+      "meshes": 783,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 8,
+      "draws": 164,
+      "lights": "7/130",
+      "vertices": 520303,
+      "meshes": 819,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 9,
+      "draws": 144,
+      "lights": "10/130",
+      "vertices": 520303,
+      "meshes": 819,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 10,
+      "draws": 152,
+      "lights": "12/133",
+      "vertices": 530689,
+      "meshes": 866,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 11,
+      "draws": 162,
+      "lights": "12/134",
+      "vertices": 540753,
+      "meshes": 898,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 12,
+      "draws": 146,
+      "lights": "12/134",
+      "vertices": 538128,
+      "meshes": 900,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 13,
+      "draws": 150,
+      "lights": "12/135",
+      "vertices": 523389,
+      "meshes": 889,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 14,
+      "draws": 165,
+      "lights": "12/133",
+      "vertices": 531328,
+      "meshes": 910,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "shots": [
+     {
+      "name": "basin_rift-start",
+      "range": 44,
+      "file": "14-before-basin_rift-start.jpg",
+      "mean": 40.6,
+      "darkShare": 0.109,
+      "draws": 112,
+      "lights": "12/119",
+      "vertices": 424209,
+      "meshes": 494,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "stalls": [],
+    "seconds": 116.8,
+    "flyingSeconds": 116.7,
+    "frames": {
+     "frames": 6999,
+     "fps": 59.9,
+     "p50": 16.7,
+     "p95": 16.8,
+     "p99": 16.8,
+     "worst": 66.6
+    },
+    "drawsMax": 165,
+    "drawsMean": 143
+   },
+   {
+    "id": "basin_divide",
+    "route": "route.basin.divide",
+    "reverse": true,
+    "waypoints": [
+     {
+      "i": 1,
+      "draws": 112,
+      "lights": "12/152",
+      "vertices": 490302,
+      "meshes": 894,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 2,
+      "draws": 106,
+      "lights": "12/149",
+      "vertices": 494603,
+      "meshes": 890,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 3,
+      "draws": 96,
+      "lights": "12/147",
+      "vertices": 486864,
+      "meshes": 874,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 4,
+      "draws": 105,
+      "lights": "12/150",
+      "vertices": 479967,
+      "meshes": 860,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 5,
+      "draws": 106,
+      "lights": "12/150",
+      "vertices": 483714,
+      "meshes": 863,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 6,
+      "draws": 108,
+      "lights": "12/153",
+      "vertices": 485689,
+      "meshes": 877,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 7,
+      "draws": 109,
+      "lights": "12/153",
+      "vertices": 500597,
+      "meshes": 874,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 8,
+      "draws": 111,
+      "lights": "12/155",
+      "vertices": 503975,
+      "meshes": 888,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 9,
+      "draws": 113,
+      "lights": "1/155",
+      "vertices": 516023,
+      "meshes": 898,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 10,
+      "draws": 102,
+      "lights": "1/155",
+      "vertices": 516023,
+      "meshes": 898,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 11,
+      "draws": 105,
+      "lights": "2/155",
+      "vertices": 515420,
+      "meshes": 890,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 12,
+      "draws": 79,
+      "lights": "2/155",
+      "vertices": 515420,
+      "meshes": 890,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 13,
+      "draws": 105,
+      "lights": "3/159",
+      "vertices": 521976,
+      "meshes": 875,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 14,
+      "draws": 98,
+      "lights": "4/156",
+      "vertices": 519909,
+      "meshes": 865,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 15,
+      "draws": 106,
+      "lights": "6/157",
+      "vertices": 534456,
+      "meshes": 886,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 16,
+      "draws": 143,
+      "lights": "6/155",
+      "vertices": 526703,
+      "meshes": 874,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 17,
+      "draws": 113,
+      "lights": "12/152",
+      "vertices": 521143,
+      "meshes": 849,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 18,
+      "draws": 101,
+      "lights": "12/157",
+      "vertices": 523045,
+      "meshes": 856,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 19,
+      "draws": 106,
+      "lights": "12/156",
+      "vertices": 506564,
+      "meshes": 847,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 20,
+      "draws": 95,
+      "lights": "12/149",
+      "vertices": 498695,
+      "meshes": 817,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "shots": [
+     {
+      "name": "basin_divide-start",
+      "range": 40,
+      "file": "15-before-basin_divide-start.jpg",
+      "mean": 19.9,
+      "darkShare": 0.761,
+      "draws": 112,
+      "lights": "12/151",
+      "vertices": 446488,
+      "meshes": 900,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "stalls": [],
+    "seconds": 178.2,
+    "flyingSeconds": 178,
+    "frames": {
+     "frames": 10666,
+     "fps": 59.8,
+     "p50": 16.7,
+     "p95": 16.7,
+     "p99": 16.8,
+     "worst": 50
+    },
+    "drawsMax": 143,
+    "drawsMean": 106
+   },
+   {
+    "id": "divide_meridian",
+    "route": "route.divide.meridian_broad",
+    "reverse": false,
+    "waypoints": [
+     {
+      "i": 1,
+      "draws": 100,
+      "lights": "12/185",
+      "vertices": 463393,
+      "meshes": 782,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 2,
+      "draws": 101,
+      "lights": "12/184",
+      "vertices": 461856,
+      "meshes": 770,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 3,
+      "draws": 99,
+      "lights": "12/183",
+      "vertices": 458168,
+      "meshes": 770,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 4,
+      "draws": 82,
+      "lights": "12/188",
+      "vertices": 447680,
+      "meshes": 780,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 5,
+      "draws": 86,
+      "lights": "12/186",
+      "vertices": 441415,
+      "meshes": 776,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 6,
+      "draws": 89,
+      "lights": "12/185",
+      "vertices": 441179,
+      "meshes": 768,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 7,
+      "draws": 89,
+      "lights": "12/190",
+      "vertices": 449215,
+      "meshes": 784,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 8,
+      "draws": 77,
+      "lights": "12/186",
+      "vertices": 437487,
+      "meshes": 775,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 9,
+      "draws": 68,
+      "lights": "12/185",
+      "vertices": 441257,
+      "meshes": 779,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 10,
+      "draws": 69,
+      "lights": "12/186",
+      "vertices": 443521,
+      "meshes": 790,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 11,
+      "draws": 96,
+      "lights": "12/195",
+      "vertices": 452345,
+      "meshes": 810,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 12,
+      "draws": 100,
+      "lights": "12/191",
+      "vertices": 437914,
+      "meshes": 782,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 13,
+      "draws": 90,
+      "lights": "12/192",
+      "vertices": 439106,
+      "meshes": 785,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 14,
+      "draws": 89,
+      "lights": "12/194",
+      "vertices": 429190,
+      "meshes": 765,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "shots": [
+     {
+      "name": "divide_meridian-start",
+      "range": 40,
+      "file": "16-before-divide_meridian-start.jpg",
+      "mean": 18.9,
+      "darkShare": 0.807,
+      "draws": 115,
+      "lights": "12/181",
+      "vertices": 458208,
+      "meshes": 792,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "stalls": [],
+    "seconds": 124.7,
+    "flyingSeconds": 124.6,
+    "frames": {
+     "frames": 7436,
+     "fps": 59.6,
+     "p50": 16.7,
+     "p95": 16.8,
+     "p99": 16.8,
+     "worst": 66.7
+    },
+    "drawsMax": 101,
+    "drawsMean": 88
+   },
+   {
+    "id": "service_ledge",
+    "route": "route.divide.service_ledge",
+    "reverse": false,
+    "waypoints": [
+     {
+      "i": 1,
+      "draws": 116,
+      "lights": "12/206",
+      "vertices": 433893,
+      "meshes": 773,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 2,
+      "draws": 89,
+      "lights": "12/206",
+      "vertices": 433822,
+      "meshes": 774,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 3,
+      "draws": 73,
+      "lights": "12/205",
+      "vertices": 424802,
+      "meshes": 751,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 4,
+      "draws": 90,
+      "lights": "12/205",
+      "vertices": 429924,
+      "meshes": 755,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 5,
+      "draws": 89,
+      "lights": "12/205",
+      "vertices": 429191,
+      "meshes": 750,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 6,
+      "draws": 95,
+      "lights": "12/206",
+      "vertices": 429546,
+      "meshes": 747,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 7,
+      "draws": 91,
+      "lights": "12/205",
+      "vertices": 422100,
+      "meshes": 740,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 8,
+      "draws": 74,
+      "lights": "12/208",
+      "vertices": 427532,
+      "meshes": 754,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 9,
+      "draws": 82,
+      "lights": "12/206",
+      "vertices": 426422,
+      "meshes": 748,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 10,
+      "draws": 80,
+      "lights": "12/205",
+      "vertices": 425152,
+      "meshes": 744,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 11,
+      "draws": 70,
+      "lights": "12/205",
+      "vertices": 425152,
+      "meshes": 744,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 12,
+      "draws": 72,
+      "lights": "12/205",
+      "vertices": 424666,
+      "meshes": 742,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 13,
+      "draws": 62,
+      "lights": "12/207",
+      "vertices": 432404,
+      "meshes": 750,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 14,
+      "draws": 61,
+      "lights": "12/208",
+      "vertices": 433596,
+      "meshes": 753,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 15,
+      "draws": 62,
+      "lights": "12/210",
+      "vertices": 439264,
+      "meshes": 757,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 16,
+      "draws": 63,
+      "lights": "12/208",
+      "vertices": 431966,
+      "meshes": 738,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 17,
+      "draws": 64,
+      "lights": "12/211",
+      "vertices": 431063,
+      "meshes": 736,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 18,
+      "draws": 65,
+      "lights": "12/208",
+      "vertices": 422882,
+      "meshes": 723,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "shots": [
+     {
+      "name": "service_ledge-start",
+      "range": 64,
+      "file": "17-before-service_ledge-start.jpg",
+      "mean": 10.7,
+      "darkShare": 0.926,
+      "draws": 127,
+      "lights": "12/206",
+      "vertices": 434389,
+      "meshes": 774,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "stalls": [],
+    "seconds": 166.2,
+    "flyingSeconds": 165.8,
+    "frames": {
+     "frames": 9726,
+     "fps": 58.5,
+     "p50": 16.7,
+     "p95": 16.8,
+     "p99": 33.4,
+     "worst": 83.4
+    },
+    "drawsMax": 116,
+    "drawsMean": 78
+   }
+  ],
+  "views": [
+   {
+    "save": "view-spire",
+    "target": {
+     "x": 1215,
+     "y": -485,
+     "z": -1319
+    },
+    "on": {
+     "name": "view-spire-lamp-on",
+     "range": 247,
+     "file": "18-before-view-spire-lamp-on.jpg",
+     "mean": 16.8,
+     "darkShare": 0.766,
+     "draws": 89,
+     "lights": "12/213",
+     "vertices": 442756,
+     "meshes": 773,
+     "regions": "silt_basin,suspended_garden"
+    },
+    "off": {
+     "name": "view-spire-lamp-toggled",
+     "range": null,
+     "file": "19-before-view-spire-lamp-toggled.jpg",
+     "mean": 15.9,
+     "darkShare": 0.766,
+     "draws": 89,
+     "lights": "12/213",
+     "vertices": 442756,
+     "meshes": 773,
+     "regions": "silt_basin,suspended_garden"
+    }
+   },
+   {
+    "save": "view-gateworks",
+    "target": {
+     "x": 600,
+     "y": -345,
+     "z": -1262
+    },
+    "on": {
+     "name": "view-gateworks-lamp-on",
+     "range": 250,
+     "file": "20-before-view-gateworks-lamp-on.jpg",
+     "mean": 16.4,
+     "darkShare": 0.756,
+     "draws": 126,
+     "lights": "12/193",
+     "vertices": 492526,
+     "meshes": 779,
+     "regions": "silt_basin,suspended_garden"
+    },
+    "off": {
+     "name": "view-gateworks-lamp-toggled",
+     "range": null,
+     "file": "21-before-view-gateworks-lamp-toggled.jpg",
+     "mean": 14.5,
+     "darkShare": 0.757,
+     "draws": 126,
+     "lights": "12/193",
+     "vertices": 492526,
+     "meshes": 779,
+     "regions": "silt_basin,suspended_garden"
+    }
+   },
+   {
+    "save": "view-rift-head",
+    "target": {
+     "x": 90,
+     "y": -290,
+     "z": -720
+    },
+    "on": {
+     "name": "view-rift-head-lamp-on",
+     "range": 260,
+     "file": "22-before-view-rift-head-lamp-on.jpg",
+     "mean": 42.6,
+     "darkShare": 0.297,
+     "draws": 150,
+     "lights": "12/173",
+     "vertices": 583858,
+     "meshes": 839,
+     "regions": "silt_basin,suspended_garden"
+    },
+    "off": {
+     "name": "view-rift-head-lamp-toggled",
+     "range": null,
+     "file": "23-before-view-rift-head-lamp-toggled.jpg",
+     "mean": 42,
+     "darkShare": 0.297,
+     "draws": 150,
+     "lights": "12/173",
+     "vertices": 583858,
+     "meshes": 839,
+     "regions": "silt_basin,suspended_garden"
+    }
+   },
+   {
+    "save": "view-dishes",
+    "target": {
+     "x": 508,
+     "y": -255,
+     "z": -572
+    },
+    "on": {
+     "name": "view-dishes-lamp-on",
+     "range": 300,
+     "file": "24-before-view-dishes-lamp-on.jpg",
+     "mean": 47.2,
+     "darkShare": 0.128,
+     "draws": 116,
+     "lights": "12/168",
+     "vertices": 563931,
+     "meshes": 808,
+     "regions": "silt_basin,suspended_garden"
+    },
+    "off": {
+     "name": "view-dishes-lamp-toggled",
+     "range": null,
+     "file": "25-before-view-dishes-lamp-toggled.jpg",
+     "mean": 46.7,
+     "darkShare": 0.129,
+     "draws": 116,
+     "lights": "12/168",
+     "vertices": 563931,
+     "meshes": 808,
+     "regions": "silt_basin,suspended_garden"
+    }
+   },
+   {
+    "save": "view-wreck",
+    "target": {
+     "x": 780,
+     "y": -242,
+     "z": -605
+    },
+    "on": {
+     "name": "view-wreck-lamp-on",
+     "range": 274,
+     "file": "26-before-view-wreck-lamp-on.jpg",
+     "mean": 44.6,
+     "darkShare": 0.01,
+     "draws": 117,
+     "lights": "12/163",
+     "vertices": 636590,
+     "meshes": 847,
+     "regions": "silt_basin,suspended_garden"
+    },
+    "off": {
+     "name": "view-wreck-lamp-toggled",
+     "range": null,
+     "file": "27-before-view-wreck-lamp-toggled.jpg",
+     "mean": 43.5,
+     "darkShare": 0.01,
+     "draws": 117,
+     "lights": "12/163",
+     "vertices": 636590,
+     "meshes": 847,
+     "regions": "silt_basin,suspended_garden"
+    }
+   }
+  ],
+  "errors": [],
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)"
+ },
+ "state": {
+  "cam": [
+   560.812,
+   -233.136,
+   -440.912
+  ],
+  "bearing": 52,
+  "pitch": 0,
+  "depth": 235,
+  "region": "Pale Basin",
+  "movement": "Piloting",
+  "vitals": "O₂ 100% Creel air HEALTH 100 FOOD 49 F · eat meal CREEL 60% power Hull 100% · 235 / 450 m · hold 5/96 CU",
+  "prompt": "",
+  "menu": false,
+  "panel": "",
+  "graphics": "available",
+  "ready": "true",
+  "lights": "12/163",
+  "work": "0.00",
+  "cave": "",
+  "regions": "silt_basin,suspended_garden"
+ },
+ "errors": []
+}
