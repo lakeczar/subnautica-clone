@@ -269,3 +269,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 
   **Queued** for the next free slot, after ENC-1.
 - **Usage-limit reset (2026-10-22):** C4, W2, CA-1, CA-2 and CA-3 had all hit the limit and were resumed; each was told to commit a WIP checkpoint first (C4 had about 87 uncommitted files). Builders 5 of 5. **Queued:** ENC-1 R1 fixes, then LC R2 fixes.
+- **CA-1 done** at `cfe64a8`: 18 Reef and Isles caves in `AUTHORED_CAVE_SOURCES` (not yet switched on); 1,494/1,494 lamp-off starts escape; the adverse case surfaces with 7.7% air. Switch-on needs C4 to adopt `border-cuts.patch` (non-4 m footprint edges break chunk borders), the ground-read fix and the test patches. Cost: 6–9 s of builds plus 3–5 s of collision at first use, bake 15.4 → 22.3 MiB, so build lazily or bake. Sol R1 running. **ENC-1 fixes resumed** in the freed slot. Builders 5 of 5: C4, W2, CA-2, CA-3, ENC-1. Queued: LC R2 fixes.
