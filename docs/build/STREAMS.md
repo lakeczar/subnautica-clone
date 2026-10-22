@@ -306,3 +306,4 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
     - P2: idle time counts as play (confirmed on the 3090);
     - P2: cycle timings are revealed by scanning instead of observation.
   - **Queued first** (C4 author) for the next free slot, ahead of CA-2. This blocks the owner playtest.
+- **CA-1 R2 (Sol): accept** (`review/ca-1-r2` `4cafc37`); 42 unclamped routes pass, and forward surface swimming reaches the shelf. **Integrated** (caves not yet switched on; the kit Float64 light fix is now on root): 1,123 tests pass, build OK. P3: surface step-up, for C4.
