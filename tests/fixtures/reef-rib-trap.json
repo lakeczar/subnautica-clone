@@ -1,7 +1,7 @@
 {
   "format": "siltwake.save",
-  "schemaVersion": 5,
-  "contentVersion": "expedition.6",
+  "schemaVersion": 6,
+  "contentVersion": "expedition.7",
   "meta": {
     "sessionId": "5c1ce9fd-ce62-45ac-9d9e-e3794226e913",
     "createdAt": "2026-10-18T20:02:55.381Z",
@@ -39,7 +39,8 @@
       "starvationSeconds": 0,
       "graceSeconds": 0,
       "interiorPose": null,
-      "mobileRefuge": null
+      "mobileRefuge": null,
+      "lamp": true
     },
     "opening": {
       "phase": 4,
@@ -93,6 +94,24 @@
           "kind": "locker",
           "capacity": 48,
           "ownerId": "canopy_stop"
+        },
+        {
+          "id": "stack_yard_locker",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "stack_yard"
+        },
+        {
+          "id": "rift_station_locker",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "rift_station"
+        },
+        {
+          "id": "divide_dock_locker",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "divide_dock"
         }
       ],
       "buoy": {
@@ -272,6 +291,166 @@
           "id": "basin_frame_fracture",
           "stock": 4,
           "reserve": 0
+        },
+        {
+          "id": "rift_ceramic_lip_north",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "rift_ceramic_lip_south",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "rift_ceramic_deep_seam",
+          "stock": 16,
+          "reserve": 0
+        },
+        {
+          "id": "rift_core_shoulder_north",
+          "stock": 0,
+          "reserve": 0
+        },
+        {
+          "id": "rift_core_shoulder_west",
+          "stock": 0,
+          "reserve": 0
+        },
+        {
+          "id": "rift_core_plume_seam",
+          "stock": 16,
+          "reserve": 0
+        },
+        {
+          "id": "divide_lattice_ledge_west",
+          "stock": 1,
+          "reserve": 0
+        },
+        {
+          "id": "divide_lattice_ledge_east",
+          "stock": 1,
+          "reserve": 0
+        },
+        {
+          "id": "divide_lattice_fissure",
+          "stock": 20,
+          "reserve": 0
+        },
+        {
+          "id": "meridian_cut_ceramic",
+          "stock": 16,
+          "reserve": 0
+        },
+        {
+          "id": "meridian_service_cache",
+          "stock": 12,
+          "reserve": 12
+        },
+        {
+          "id": "isles_stack_glass_east",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "isles_stack_resin_cove",
+          "stock": 6,
+          "reserve": 4
+        },
+        {
+          "id": "isles_headland_crops",
+          "stock": 8,
+          "reserve": 0
+        },
+        {
+          "id": "isles_headland_resin_cove",
+          "stock": 6,
+          "reserve": 4
+        },
+        {
+          "id": "isles_headland_glass_ledge",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_east_resin_lee",
+          "stock": 8,
+          "reserve": 4
+        },
+        {
+          "id": "canopy_east_fins",
+          "stock": 8,
+          "reserve": 4
+        },
+        {
+          "id": "basin_dish_fins",
+          "stock": 10,
+          "reserve": 6
+        },
+        {
+          "id": "basin_wreck_frames_north",
+          "stock": 30,
+          "reserve": 12
+        },
+        {
+          "id": "basin_wreck_panels_south",
+          "stock": 20,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_rim_frames",
+          "stock": 4,
+          "reserve": 0
+        },
+        {
+          "id": "canopy_rim_frames_east",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "rift_core_lower_north",
+          "stock": 8,
+          "reserve": 6
+        },
+        {
+          "id": "rift_core_lower_west",
+          "stock": 8,
+          "reserve": 6
+        },
+        {
+          "id": "divide_lattice_flank_north",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "divide_lattice_flank_south",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "reef_staple_cuttings",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "reef_ribbon_cuttings",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "island_salve_fronds",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "canopy_lumen_bulbs",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "basin_pale_spores",
+          "stock": 2,
+          "reserve": 0
         }
       ],
       "renewal": [
@@ -312,12 +491,129 @@
         {
           "id": "canopy_stop",
           "repaired": false
+        },
+        {
+          "id": "rift_station",
+          "repaired": false
+        },
+        {
+          "id": "divide_dock",
+          "repaired": false
         }
       ],
       "maintenance": {
         "alloy": 16,
         "glass": 1,
         "membrane": 10
+      },
+      "ecology": {
+        "agents": [
+          {
+            "id": "rift_stalker_passage",
+            "mode": "rest",
+            "position": {
+              "x": -191,
+              "y": -294,
+              "z": -1065
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          },
+          {
+            "id": "rift_stalker_chimney",
+            "mode": "rest",
+            "position": {
+              "x": -179,
+              "y": -288,
+              "z": -1059
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          },
+          {
+            "id": "divide_skate_saddle",
+            "mode": "rest",
+            "position": {
+              "x": 565,
+              "y": -446,
+              "z": -1456
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          },
+          {
+            "id": "divide_skate_east",
+            "mode": "rest",
+            "position": {
+              "x": 625,
+              "y": -446,
+              "z": -1426
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          },
+          {
+            "id": "district_choir_gallery",
+            "mode": "rest",
+            "position": {
+              "x": 1298,
+              "y": -598.5,
+              "z": -1146
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          },
+          {
+            "id": "district_choir_terrace",
+            "mode": "rest",
+            "position": {
+              "x": 1328,
+              "y": -598.5,
+              "z": -1157
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          }
+        ],
+        "deterrents": [],
+        "diver": {
+          "heat": 0,
+          "brine": 0,
+          "heatWarned": 0,
+          "brineWarned": 0
+        },
+        "hulls": [],
+        "controlled": ""
       },
       "threat": {
         "mode": "idle",
@@ -331,11 +627,43 @@
         "distraction": null,
         "distractionSeconds": 0
       },
+      "flares": [],
       "action": null
     },
     "fleet": {
       "vehicles": [],
       "docking": null
+    },
+    "systems": {
+      "outposts": [],
+      "packed": [],
+      "sockets": [],
+      "found": [],
+      "decoded": [],
+      "decodes": [],
+      "planters": [],
+      "beacons": [],
+      "beaconsOff": [],
+      "categoriesOff": [],
+      "chart": []
+    },
+    "story": {
+      "discoveries": [],
+      "hints": {},
+      "works": {
+        "power": false,
+        "air": false,
+        "gate": "sealed",
+        "equalizeSteps": 0,
+        "hall": false,
+        "food": false,
+        "hallPower": false,
+        "repairs": []
+      },
+      "resolution": {
+        "phase": "none",
+        "first": null
+      }
     },
     "recovery": {
       "operation": null,

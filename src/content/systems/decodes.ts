@@ -4,6 +4,7 @@
  * recipes, terminals) stays unreadable until its decodable finishes. */
 import type { RegionId } from "../registry.js";
 import type { BeaconCategory } from "./navigation.js";
+import { CB_DECODABLES, CB_LOST_SITES } from "./lostSites.js";
 
 export type DecodeSize = "fragment" | "log" | "archive" | "core";
 /** Play minutes at base decoder speed: about 3–15 minutes by size. */
@@ -39,6 +40,8 @@ export const LOST_SITES = {
   demo_relay_hut: { label: "Collapsed relay hut", region: "refuge_reef", position: { x: -40, y: -20, z: -30 } },
   demo_survey_cairn: { label: "Survey cairn", region: "suspended_garden", position: { x: 180, y: -125, z: -110 } },
   demo_sealed_vault: { label: "Sealed instrument vault", region: "silt_basin", position: { x: 230, y: -185, z: -265 } },
+  // C4: the content bible's exterior lost sites, placed in the world.
+  ...CB_LOST_SITES,
 } as const satisfies Record<string, { label: string; region: RegionId; position: { x: number; y: number; z: number } }>;
 export type LostSiteId = keyof typeof LOST_SITES;
 
@@ -62,6 +65,7 @@ export const DECODABLES = {
     gates: ["demo_vault_terminal", "demo_vault_log"], blueprints: ["bp_outpost_advanced"], story: true,
     reveals: [],
   },
+  ...CB_DECODABLES,
 } as const satisfies Record<string, DecodableDefinition>;
 export type DecodableId = keyof typeof DECODABLES;
 export const DECODABLE_IDS = Object.keys(DECODABLES) as DecodableId[];
@@ -89,3 +93,10 @@ export const DEMO_MAIN_PATH: readonly MainPathStep[] = [
   { id: "basin_station_outpost_frame", grants: ["bp_outpost_advanced"], needsDecoded: [], record: "basin_station_outpost_frame" },
   { id: "basin_vault", grants: [], needsDecoded: ["demo_vault_archive"] },
 ];
+
+/** Lost sites standing in the game world (C4). The `demo_*` rows are SYS-2's test
+ * fixtures and are never placed. */
+export const WORLD_LOST_SITES = Object.keys(CB_LOST_SITES) as (keyof typeof CB_LOST_SITES)[];
+/** Decoded log lines, by decodable (display text, never saved). */
+export const DECODE_LOGS: Readonly<Record<string, readonly string[]>> =
+  Object.fromEntries(Object.entries(CB_DECODABLES).map(([id, d]) => [id, d.logs]));

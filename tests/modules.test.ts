@@ -269,8 +269,9 @@ test("installed identity survives valid berth/launch transactions and immediate 
   s.player.interiorPose = { frame: "carrier-local", position: { ...CARRIER_LAYOUT.helm } };
   s.player.pose.position = localToWorld(CARRIER_LAYOUT.helm, h);
   const item = structuredClone(trim(s)); roundTrip(s);
-  refused(s, { type: "remove-module", vehicleId: v.id, itemId: item.id }, /Leave the hull|unberthed/);
+  // C4 (SYS-1): a berthed hull is fitted from inside the carrier, but never mid-transaction.
   assert.equal(carrierCommand(s, "launch", v.id, world), null); roundTrip(s);
+  refused(s, { type: "remove-module", vehicleId: v.id, itemId: item.id }, /Leave the hull|unberthed/);
   for (let n = 0; n < 32; n++) updateBerth(s, world);
   assert.equal(v.berth, null); assert.deepEqual(trim(s), item); assert.deepEqual(v.modules, [item.id]); roundTrip(s);
 });

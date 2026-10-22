@@ -1,6 +1,7 @@
 import type { HullId } from "../../content/registry.js";
 import { HULL_COLLIDERS } from "../../content/registry.js";
 import { exposure } from "../survival.js";
+import { vehicleProfile } from "../fittings.js";
 import type { GameState } from "../types.js";
 import type { Stimulus } from "./types.js";
 
@@ -20,7 +21,8 @@ export function stimulusFrom(s: GameState, loudness: number, options: { lamp: bo
     position: { ...(v?.pose.position ?? s.player.pose.position) },
     velocity: { ...(v?.velocity ?? s.player.velocity) },
     noise: Math.max(0, Math.min(1, loudness)),
-    light: lit ? LAMP_OUTPUT[hull ?? "diver"] : 0,
+    // C4: a hull's lamp is its profile's (floodlights raise it).
+    light: lit ? (v ? vehicleProfile(s, v).lamp : LAMP_OUTPUT.diver) : 0,
     disturbance: options.scanned ? DISTURBANCE.scan : s.world.action ? DISTURBANCE.action : 0,
     hull,
     radius: hull ? HULL_COLLIDERS[hull].radius : 0.4,

@@ -2,6 +2,9 @@ import test from "node:test";
 import { CANOPY_STOP } from "../src/content/routes.js";
 import { CREEL_BUILD_POSE, DART_BUILD_POSE, ITEMS } from "../src/content/registry.js";
 import assert from "node:assert/strict";
+import { REFIT_STOP_SITES } from "../src/sim/progression.js";
+import { HOST_KNOWLEDGE_RECIPES, UPGRADE_RECIPES, UPGRADE_REFIT_RECIPES } from "../src/content/upgrades/registry.js";
+import { SYS2_RECIPES } from "../src/content/systems/items.js";
 import type { CraftingBlockCode } from "../src/sim/progression.js";
 import { EVIDENCE, HULLS, HULL_COLLIDERS, OPTIONAL_RECORD, RECIPES, SOURCES } from "../src/content/registry.js";
 import type { ItemKind, RecipeId, SourceId } from "../src/content/registry.js";
@@ -325,6 +328,8 @@ test("crafting reason codes preserve all recipe messages, precedence and pure ou
   // M2-B1 hull/site/package messages name their own hull, mooring or package.
   const message = (code: CraftingBlockCode, id: RecipeId): string =>
     code === "site" && RECIPES[id].site === "canopy_stop" ? "Work at the outer-crown mooring's service mast."
+    // C4 (M2 audit #3): refits also run at the restored stop of their own tier.
+    : code === "site" && REFIT_STOP_SITES[id]?.[0] === "canopy_stop" ? "Use the island workshop bench or the outer-crown mooring."
     : code === "duplicate-hull" && id === "creel_base" ? "A Creel already exists. Recover its frame or cargo instead of duplicating it."
     : code === "clearance" && id === "creel_base" ? "The medium slip is not clear. Move any craft out of it. Nothing consumed."
     : code === "space" && (id === "creel_cargo_rack" || id === "creel_cabin") ? `The ${ITEMS[id].cu} CU package needs room in the workshop locker or your hold. Nothing consumed.`
@@ -332,10 +337,12 @@ test("crafting reason codes preserve all recipe messages, precedence and pure ou
     : messages[code];
   const refitHull = (id: RecipeId) => id === "dart_350" ? "dart" : id === "creel_350" ? "creel" : null;
   // S9 campaign recipes have their own reason matrix in tests/campaign-content.test.ts.
-  for (const id of (Object.keys(RECIPES) as RecipeId[]).filter((id) => !Object.hasOwn(CAMPAIGN_RECIPES, id))) {
+  // C4's upgrade, refit, host-knowledge and SYS-2 recipes are covered in tests/c4-systems.test.ts.
+  const c4 = { ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES, ...SYS2_RECIPES };
+  for (const id of (Object.keys(RECIPES) as RecipeId[]).filter((id) => !Object.hasOwn(CAMPAIGN_RECIPES, id) && !Object.hasOwn(c4, id))) {
     const r = RECIPES[id], s = id === "suit_350" ? protectedReadyState(150) : readyState();
     s.knowledge.blueprints.push(r.bp);
-    s.knowledge.crafted = [...new Set<RecipeId>([...s.knowledge.crafted, ...r.needs])];
+    s.knowledge.crafted = [...new Set<RecipeId>([...s.knowledge.crafted, ...r.needs as RecipeId[]])];
     for (const f of s.world.facilities) f.repaired = true;
     if (r.site === "island_workshop") s.player.pose.position = { x: 10, y: 1.2, z: -34 };
     if (r.site === "canopy_stop") { s.player.pose.position = { ...CANOPY_STOP.work }; s.player.mode = "swimming"; }

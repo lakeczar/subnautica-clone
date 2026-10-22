@@ -2,6 +2,7 @@
  * and siting thresholds, the fixed hosts (pod and restored stops) and the map from
  * Hearthline socket occupants to module kinds. Proposed balance, not final. */
 import { PLACES } from "../registry.js";
+import { WORKING_STOPS } from "../stops.js";
 import type { MaterialId } from "../registry.js";
 import type { Sys2ItemKind } from "./items.js";
 
@@ -84,6 +85,15 @@ export const FIXED_HOSTS = {
     kind: "stop", label: PLACES.canopy_stop.label, position: PLACES.canopy_stop.position, facility: "canopy_stop", sockets: 3,
     unique: "Major-mount changes and hull service at depth",
   },
+  // C4: S9's restored service stops (content/stops.ts) host modules too.
+  rift_station: {
+    kind: "stop", label: WORKING_STOPS.rift_station.label, position: WORKING_STOPS.rift_station.work, facility: "rift_station", sockets: 3,
+    unique: "450 m refits, air and hull service on the Rift shoulder",
+  },
+  divide_dock: {
+    kind: "stop", label: WORKING_STOPS.divide_dock.label, position: WORKING_STOPS.divide_dock.work, facility: "divide_dock", sockets: 3,
+    unique: "800 m refits, mount changes and the forward air stop",
+  },
 } as const satisfies Record<string, {
   kind: "pod" | "stop"; label: string; position: { x: number; y: number; z: number };
   facility: string | null; sockets: number; unique: string;
@@ -91,8 +101,8 @@ export const FIXED_HOSTS = {
 export type FixedHostId = keyof typeof FIXED_HOSTS;
 
 /** Hearthline socket occupant names (HEARTHLINE_SOCKETS `accepts`) that are SYS-2
- * modules. Proposed: add `"decoder"` to a bridge socket; until then the fabrication
- * benches' `sample_analyser` slot takes the decoder. Other occupants are furniture. */
+ * modules. The bridge survey socket takes the decoder (C4), as do the fabrication
+ * benches' `sample_analyser` slots. Other occupants are furniture. */
 export const CARRIER_OCCUPANTS: Readonly<Record<string, ModuleKind>> = {
   galley_planter: "planter",
   directional_survey: "survey",

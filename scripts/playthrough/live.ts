@@ -201,6 +201,9 @@ function returnToCraft(d: Driver, v: VehicleState): void {
 
 // ------------------------------------------------------------------------- Canopy
 
+/** Where the Dart holds over the south-rim frames, 10 m above their datum. */
+const RIM_PARK = { x: 374, y: -140, z: -197 } as const;
+
 const canopy: Phase = {
   id: "canopy", title: "Dart to the Canopy laboratory: C04, crust and resin, 350 m suit",
   verify: all(crafted("suit_350"), suit(350), known("C04"), hull("dart")),
@@ -234,6 +237,18 @@ const canopy: Phase = {
       pilotTo(d, `park by ${id}`, park, { quiet: true });
       workFrom(d, d.vehicle("dart")!, [id], { [kind]: want[kind as keyof typeof want] - have });
     }
+    pilotTo(d, "back to the lab parking", CANOPY_BASIN_ROUTE.labParking, { quiet: true });
+    fly(d, "canopy_upper_back");
+    fly(d, "dart_home");
+    dockAndService(d, d.vehicle("dart")!);
+    stowHold(d, d.vehicle("dart")!);
+    // C4 (CB): the 350 m refit and the Creel each take a tagged frame, first found
+    // on the Canopy's south rim at exactly 150 m. A second sortie lifts two.
+    boardAt(d, d.vehicle("dart")!);
+    fly(d, "dart_out");
+    fly(d, "canopy_upper");
+    pilotTo(d, "over the south rim", RIM_PARK, { quiet: true });
+    workFrom(d, d.vehicle("dart")!, ["canopy_rim_frames", "canopy_rim_frames"], { tagged_frame: 2 });
     pilotTo(d, "back to the lab parking", CANOPY_BASIN_ROUTE.labParking, { quiet: true });
     fly(d, "canopy_upper_back");
     fly(d, "dart_home");

@@ -111,15 +111,34 @@ test("the swim cliff guard reads support: a diver on the north mouth's sill swim
   // groundHeight guard saw the exterior shelf as a cliff and zeroed travel.
   const mouth = fanvault.portals.find(p => p.id === "fanvault.mouth.north")!;
   const sill = world.supportHeight(mouth.center.x, mouth.center.z - 3, mouth.center.y);
+  // The premise, pinned (C4A-R1 P3): under the sill the heightfield is the masked
+  // floor 17 m down, and at the footprint edge the exterior shelf rises from it.
+  assert.ok(sill - world.groundHeight(mouth.center.x, mouth.center.z - 3) > 15, "the sill stands on support, not the raw floor");
+  const edge = footprint.maxZ + 0.5;
+  assert.ok(world.groundHeight(mouth.center.x, edge) - world.groundHeight(mouth.center.x, footprint.maxZ - 0.5) > 15,
+    "the raw heightfield steps up at the footprint edge");
   let s = diverAt({ x: mouth.center.x, y: sill + 0.4, z: mouth.center.z - 3 });
-  s.player.pose.yaw = 0; // facing -Z... turn to face +Z (north, out of the mouth)
-  s.player.pose.yaw = Math.PI;
+  s.player.pose.yaw = Math.PI; // facing +Z: north, out of the mouth
   const start = { ...s.player.pose.position };
-  for (let i = 0; i < 120; i++) s = stepGame(s, [{ type: "look", yawDelta: 0, pitchDelta: 0 },
+  for (let i = 0; i < 360; i++) s = stepGame(s, [{ type: "look", yawDelta: 0, pitchDelta: 0 },
     { type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], world).state;
   const p = s.player.pose.position;
-  assert.ok(p.z - start.z > 5, `the diver left the mouth: ${JSON.stringify(start)} → ${JSON.stringify(p)}`);
+  assert.ok(p.z > footprint.maxZ + 3, `the diver crossed the footprint edge onto the shelf: ${JSON.stringify(start)} → ${JSON.stringify(p)}`);
   assert.ok(world.clearance(p, DIVER));
+});
+
+test("the swim cliff guard consults support only: a heightfield that disagrees with support never stops a swimmer", () => {
+  // C4A-R1 P3: in today's Fanvault a raw-floor guard happens to agree with
+  // support, so pin the rule directly. This world's heightfield rises 14 m
+  // above the diver ahead (as a masked footprint's floor disagrees with its
+  // cave rock); its support, collision and water are the game world's.
+  const start = { x: 60, y: worldFloor(60, -60) + 12, z: -60 }, edge = start.z - 3;
+  const disagreeing = { ...world, groundHeight: (x: number, z: number) => z < edge ? start.y + 14 : world.groundHeight(x, z) };
+  let s = diverAt(start);
+  s.player.pose.yaw = 0; // facing -Z, toward the raised heightfield
+  for (let i = 0; i < 180; i++) s = stepGame(s, [{ type: "look", yawDelta: 0, pitchDelta: 0 },
+    { type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], disagreeing).state;
+  assert.ok(start.z - s.player.pose.position.z > 6, `swam past the heightfield step: ${JSON.stringify(s.player.pose.position)}`);
 });
 
 test("ADVERSE: a diver deep in the Fanvault, lamp off and low on air, escapes to the surface through the step", () => {
@@ -281,6 +300,37 @@ test("ADVERSE: a Creel driven along rock in the shelf race, the current pressing
   let hits = 0;
   for (let i = 0; i < 60 * 4; i++) { const out = stepGame(s, thrust(1, true), rocky); s = out.state; hits += out.events.filter(e => e.type === "impact").length; }
   assert.ok(hits >= 1 && s.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId)!.health < 100, "a drive into rock is still an impact");
+});
+
+test("held thrust into rock after contact: bounded damage, the slide along the face survives, closing speed is damped", () => {
+  // C4A-R1 P3: without dampIntoFace the closing drive re-hits every step and
+  // wrecks the hull. Still water (no current), a wall square to -Z.
+  const shape = HULL_COLLIDERS.creel, mid = { x: 60, z: -60 }, floor = worldFloor(mid.x, mid.z);
+  const wall: Solid = { id: "test.still.wall", min: { x: mid.x - 30, y: floor - 6, z: mid.z - 2 }, max: { x: mid.x + 30, y: floor + 30, z: mid.z } };
+  const rocky = createCaveWorldQueries({ solids: [...SOLIDS, wall], floor: surfaceHeight, caves: [caveOwner(fanvault)] });
+  const approach = { x: mid.x, y: 0, z: mid.z + 10 };
+  const run = (yaw: number) => {
+    let s = creelIn({ ...approach, y: Math.max(hullFloor(rocky, approach, shape) + 3, floor + 6) }, yaw);
+    let hits = 0, contact = -1, x0 = 0, closing = 0;
+    for (let i = 0; i < 60 * 8; i++) {
+      const out = stepGame(s, thrust(1, true), rocky); s = out.state;
+      const v = s.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId)!;
+      const n = out.events.filter(e => e.type === "impact").length; hits += n;
+      if (n && contact < 0) { contact = i; x0 = v.pose.position.x; }
+      if (contact >= 0 && i > contact + 30) closing = Math.max(closing, -v.velocity.z);
+      assert.ok(rocky.clearance(v.pose.position, shape), "never inside the wall");
+    }
+    const v = s.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId)!;
+    return { health: v.health, hits, contact, slide: v.pose.position.x - x0, closing };
+  };
+  for (const yaw of [0, 0.5]) {
+    const r = run(yaw);
+    assert.ok(r.contact >= 0 && r.health < 100, `yaw ${yaw}: the boost into rock is an impact`);
+    assert.ok(r.hits <= 3 && r.health > 99, `yaw ${yaw}: held thrust costs one bounded hit (${r.hits} hits, health ${r.health.toFixed(2)})`);
+    assert.ok(r.closing < 0.5, `yaw ${yaw}: closing speed damped to ${r.closing.toFixed(2)} m/s`);
+  }
+  // At an angle, the tangential part of the drive keeps sliding along the face.
+  assert.ok(run(0.5).slide > 12, "the slide along the face survives held thrust");
 });
 
 test("drain follows the drive: a stopped powered hull keeps station in the race and pays for it; a flat one drifts", () => {

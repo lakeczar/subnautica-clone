@@ -44,11 +44,11 @@ const refused = (raw: string, pattern: RegExp, message: string) => {
 test("saves written before a new source, place and item load with the source at its first stock, once", () => {
   const before = progressed(), raw = encoded(createEnvelope(before, meta));
   const earned = readFileSync("tests/fixtures/earned-c06.json", "utf8");
-  const bridged = readFileSync("tests/fixtures/diagnostic-depleted-expedition5.json", "utf8");
+  const bridged = readFileSync("tests/fixtures/diagnostic-depleted.json", "utf8");
   withNewContent(() => {
     const def = SOURCES[NEW.source as keyof typeof SOURCES];
     const first = { id: NEW.source, stock: def.stock, reserve: def.reserve };
-    for (const [name, text] of [["progressed", raw], ["earned C06", earned], ["schema 4 bridge", bridged]] as const) {
+    for (const [name, text] of [["progressed", raw], ["earned C06", earned], ["converted diagnostic", bridged]] as const) {
       const out = decodeSave(text); assert.ok(out.ok, `${name}: ${out.ok ? "" : out.error}`);
       const s = out.value.state;
       assert.deepEqual(s.world.resources.at(-1), first, `${name}: the new source starts at New Game's stock`);

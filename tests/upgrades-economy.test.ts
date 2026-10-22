@@ -14,19 +14,25 @@ test("every SYS-1 upgrade is payable at its tier, depth tiers reach the frontier
   assert.deepEqual(report.failures, []);
   assert.ok(report.ok);
   assert.equal(report.rows.length, UPGRADE_IDS.length + HOST_UPGRADE_IDS.length);
-  // The tier ladder this catalogue assumes: crust opens tier 1, frames/ceramic/core tier 2, lattice tier 3.
+  // The tier ladder (CB's tier rule, C4): crust opens tier 1, frames at 150 m and
+  // ceramic tier 2, core at the 350 m ledges tier 3; lattice at 450 m opens the
+  // deep refits beyond this ladder. Scan-only shoulders and one-unit tastes never count.
   const sources = registrySources();
   assert.deepEqual(frontierMaterials(sources, 1), ["conductive_crust"]);
-  assert.deepEqual(frontierMaterials(sources, 2).sort(), ["pressure_ceramic", "tagged_frame", "thermal_core"]);
-  assert.deepEqual(frontierMaterials(sources, 3), ["brine_lattice"]);
+  assert.deepEqual(frontierMaterials(sources, 2).sort(), ["pressure_ceramic", "tagged_frame"]);
+  assert.deepEqual(frontierMaterials(sources, 3), ["thermal_core"]);
+  assert.deepEqual([firstDepth(sources, "tagged_frame"), firstDepth(sources, "thermal_core"), firstDepth(sources, "brine_lattice")], [150, 350, 450]);
   assert.deepEqual(commonBase(sources).sort(), ["buoyant_resin", "conductive_crust", "flex_membrane", "silica_glass", "structural_alloy"]);
 });
 
 test("higher tiers need more common base plus a rare new material", () => {
   const report = checkUpgradeEconomy();
   const own = report.lines.filter((l) => l.owner === "SYS-1");
-  assert.ok(own.length >= 9);
-  for (const l of own) assert.ok(l.ok && l.commonAfter > l.commonBefore && l.newRare.length > 0, `${l.from} → ${l.to}`);
+  assert.ok(own.length >= 8);
+  // The depth refits the registry composes (C4) follow the rule too: Hush and Dart 350 → 450.
+  const refits = report.lines.filter((l) => /^(hush|dart)_/.test(l.from));
+  assert.deepEqual(refits.map((l) => `${l.from} → ${l.to}`).sort(), ["dart_350 → dart_450", "hush_350 → hush_450"]);
+  for (const l of [...own, ...refits]) assert.ok(l.ok && l.commonAfter > l.commonBefore && l.newRare.length > 0, `${l.from} → ${l.to}`);
   // R1 P3: an equal common cost is not "more" (hush_450 mutated to 7 → 7 common).
   const common = new Set(commonBase(registrySources()));
   const flat = tierStep(common, upgrade("hush_350").cost, { pressure_ceramic: 4, conductive_crust: 3, buoyant_resin: 3, silica_glass: 1 });

@@ -1,5 +1,7 @@
 import { HUSH_HANDLING } from "../content/campaign/fleet.js";
-import { HULL_COLLIDERS, HULL_HOLD_CU, HULLS, ITEMS, MODULES, SOURCES, isMountKind } from "../content/registry.js";
+import { upgradeId } from "../content/upgrades/catalogue.js";
+import { craftProfile } from "./upgrades/effects.js";
+import { HULL_COLLIDERS, HULL_HOLD_CU, HULLS, ITEMS, SOURCES, isMountKind } from "../content/registry.js";
 import type { MountKind, SourceId } from "../content/registry.js";
 import type { GameState, ItemStack, Vec3, VehicleState, WorldQueries } from "./types.js";
 import { cabinLockerId, distance, equipped, hasRoom, removeQuantity } from "./inventory.js";
@@ -19,9 +21,11 @@ export function fittedMount(s: Readonly<GameState>, v: Readonly<VehicleState>): 
   return null;
 }
 /** Hold size implied by hull and fitted mount; the saved container must equal it. */
+/** Hold size: the hull's base hold plus what its fitted upgrades add or take
+ * (C4: SYS-1's profile; the Creel rack +32 and cabin −24 as before). */
 export function holdCapacity(s: Readonly<GameState>, v: Readonly<VehicleState>): number {
-  const mount = v.hull === "creel" ? fittedMount(s, v) : null;
-  return mount ? MODULES[mount.kind].holdCu : HULL_HOLD_CU[v.hull];
+  const kinds = v.modules.flatMap((id) => { const k = s.inventory.items.find((i) => i.id === id)?.kind; return k && upgradeId(k) ? [k] : []; });
+  return HULL_HOLD_CU[v.hull] + craftProfile(v.hull, v.rating, kinds).holdDeltaCu;
 }
 export function fittedCabin(s: Readonly<GameState>, v: Readonly<VehicleState>): (ItemStack & { kind: "creel_cabin" }) | null {
   const mount = fittedMount(s, v);

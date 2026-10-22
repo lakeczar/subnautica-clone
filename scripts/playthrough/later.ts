@@ -182,14 +182,14 @@ function story(d: Driver, id: string, o: PlayOptions): void {
   if (!d.knows(id)) throw new Blocked(`Interacting with ${id} recorded nothing: ${d.state.feedback}`, where(d.state));
 }
 /** Gather a source from the craft into its hold, a diver load per sortie. */
-function harvest(d: Driver, id: string, want: number): void {
+function harvest(d: Driver, id: string, want: number, options: { sort?: boolean } = {}): void {
   const def = SOURCES[id as SourceId];
   let got = 0;
   for (let trip = 0; trip < 6 && got < want; trip++) {
-    const stock = d.state.world.resources.find((n) => n.id === id)!.stock;
+    const node = d.state.world.resources.find((n) => n.id === id)!;
     const hold = d.occupied()!.cargoId;
-    if (stock <= 0 || d.freeCu(hold) < ITEMS[def.item].cu * def.bundle) break;
-    sortie(d, def.position, id, () => { got += gather(d, id as SourceId, want - got); });
+    if ((node.stock <= 0 && !(options.sort && node.reserve > 0)) || d.freeCu(hold) < ITEMS[def.item].cu * def.bundle) break;
+    sortie(d, def.position, id, () => { got += gather(d, id as SourceId, want - got, options); });
   }
 }
 /** Restore or fabricate at an S9 site: park, swim to S2's work pose, open the craft
@@ -246,6 +246,12 @@ function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
 
 // --------------------------------------------------------------- Creel route (independent)
 
+/** C4: where S2's western return leaves the Rift shoulder, and the Divide's
+ * east-ledge route end and a hold over the 450 m north flank. */
+const RIFT_WEST_RETURN = { x: -97.6, y: -280, z: -747.7 } as const;
+const DIVIDE_EAST_LEDGE = { x: 749, y: -368, z: -1191 } as const;
+const DIVIDE_FLANK_PARK = { x: 958, y: -438, z: -1128 } as const;
+
 /** Rift: restore the materials station, read its ledger, take ceramic and core;
  * then the 450 m suit and Creel refits. */
 const rift = (strategy: "creel" | "carrier"): Phase => ({
@@ -253,7 +259,7 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
   verify: all(crafted("restore_rift_station", "suit_450"), facility("rift_station"), suit(450), strategy === "creel" ? hull("creel", 450) : hull("creel")),
   missing: (d) => [
     ...recipes("suit_450", "restore_rift_station", ...(strategy === "creel" ? ["creel_450"] : [])),
-    ...sources("rift_ceramic_lip_north", "rift_ceramic_lip_south", "rift_core_shoulder_north", "rift_core_shoulder_west"),
+    ...sources("rift_ceramic_lip_north", "rift_ceramic_lip_south", "rift_core_lower_north", "rift_core_lower_west"),
     ...routes("route.basin.legacy_anchorage", "route.basin.rift", "route.rift.ceramic", "route.rift.west_return", "route.basin.reef_west"),
     ...sites("rift.materials_station"),
     ...(d.vehicle("creel") ? [] : [{ key: "owned:creel", text: "an owned Creel" }]),
@@ -272,9 +278,11 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
     followS2(d, "route.rift.ceramic");
     harvest(d, "rift_ceramic_lip_south", 12);
     followS2(d, "route.rift.ceramic", true);
-    // Core: Creel 450 K2, Creel 800 K3, suit 800 K1, power assembly K2 (carrier: Mantle K4),
-    // on the shoulder where S2's western return leaves for the reef.
-    harvest(d, "rift_core_shoulder_north", 8);
+    // Core: suit 450 K1, Creel 450 K2, Creel 800 K3, suit 800 K1, power assembly K2
+    // (carrier: keel K2, Mantle K4). C4 (CB): the shoulder's inclusions are too thin;
+    // the first workable core is the 350 m lower ledge below it.
+    harvest(d, "rift_core_lower_north", 10, { sort: true });
+    pilotTo(d, "up to the western return", RIFT_WEST_RETURN);
     followS2(d, "route.rift.west_return");
     followS2(d, "route.basin.reef_west");
     fly(d, "reef_to_slip");
@@ -290,7 +298,7 @@ const divide: Phase = {
   verify: all(crafted("restore_divide_stop", "creel_800", "suit_800"), facility("divide_dock"), hull("creel", 800), suit(800)),
   missing: (d) => [
     ...recipes("restore_divide_stop", "creel_800", "suit_800"),
-    ...sources("divide_lattice_ledge_west", "divide_lattice_ledge_east"),
+    ...sources("divide_lattice_ledge_west", "divide_lattice_ledge_east", "divide_lattice_flank_north"),
     ...routes("route.basin.divide", "route.divide.lattice_west", "route.divide.lattice_east"),
     ...sites("divide.service_dock"),
     // The deep-service plans (the dock, Creel 800, suit 800) come only from these records.
@@ -309,6 +317,11 @@ const divide: Phase = {
     followS2(d, "route.divide.lattice_west", true);
     followS2(d, "route.divide.lattice_east");
     harvest(d, "divide_lattice_ledge_east", 8);
+    // C4 (CB): the ledges hold one rinsed crystal each; workable lattice lines the
+    // 450 m east flank, north of the brine field.
+    pilotTo(d, "over the north flank", DIVIDE_FLANK_PARK);
+    harvest(d, "divide_lattice_flank_north", 12);
+    pilotTo(d, "back to the east ledge", DIVIDE_EAST_LEDGE);
     followS2(d, "route.divide.lattice_east", true);
     story(d, "C07", o);
     story(d, "ren_access_log", o);
