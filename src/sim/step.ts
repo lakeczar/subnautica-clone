@@ -22,6 +22,7 @@ import {
   storeMaterials,
   transfer,
   usedCapacity,
+  facility as facilityRestored,
 } from "./inventory.js";
 import {
   collectWithOutcome,
@@ -1034,4 +1035,34 @@ export function stepGame(
       v && !v.disabled && v.charge > 0)
     events.push(thrust);
   return { state: s, events };
+}
+
+/** Cave admission's relocation (CW-1; LC's rescue and LC-07's refuge),
+ * applied before anything steps. A deterministic teleport, never travel:
+ * - **point:** the controlled craft (or the diver) is moved to the verified
+ *   exterior point, at rest;
+ * - **refuge:** the diver leaves any craft (it stays where it is, hold and
+ *   modules intact) and wakes at their refuge base: the last restored base
+ *   rested at while it still works, else the pod.
+ * Inventory, knowledge, vitals and vessel state are untouched. */
+export function relocateForCave(state: GameState, to: { kind: "point"; position: Vec3 } | { kind: "refuge" }): GameState {
+  const s = structuredClone(state), p = s.player;
+  if (to.kind === "point") {
+    const v = s.fleet.vehicles.find(x => x.id === p.controlledVehicleId);
+    if (v) { v.pose.position = { ...to.position }; v.velocity = { x: 0, y: 0, z: 0 }; }
+    p.pose = { ...p.pose, position: { ...to.position } };
+    p.velocity = { x: 0, y: 0, z: 0 };
+    if (!v && p.mode !== "interior") p.mode = to.position.y < -0.5 ? "swimming" : p.mode;
+    return s;
+  }
+  const rested = REST_BASES[p.refugeId], base = rested.facility === null || facilityRestored(s, rested.facility) ? p.refugeId : "home_pod";
+  const wake = REST_BASES[base].wake;
+  p.controlledVehicleId = null; p.interiorId = null; p.interiorPose = null;
+  p.pose = { frame: "world", position: { ...wake }, yaw: 0, pitch: -0.05 };
+  p.velocity = { x: 0, y: 0, z: 0 };
+  p.mode = wake.y >= 0 ? "walking" : "swimming";
+  p.refugeId = base;
+  s.world.action = null;
+  s.feedback = `This cave could not load. You were returned to ${base === "home_pod" ? "the home pod" : REST_BASES[base].label}; your craft waits where you left it.`;
+  return s;
 }
