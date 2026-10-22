@@ -295,3 +295,14 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
   - **Queue order:** LC R3 fix, W2 phase-1 fix, CA-2 fix.
 - **CA-1 R1 fixes done** at `de2c353`: the Blowhole gets a wading shelf plus a ledge one step up (keyboard test in and out), the chimney top is air and daylight only, there are no clamped targets anywhere, and a standable-waypoint check plus a light-field regression were added; 1,123 tests pass. Note for C4: allow the step-up at the surface. Sol R2 running. **LC R3 fix started** in the freed slot. Builders 5 of 5: C4, CA-3, ENC-1, POI-1, LC. Queue: W2 phase-1 fix, then CA-2 fix. Light-field consensus: the Float64 one-liner plus W2's cut-off; delete CA-2's `lightFix.ts` copy at composition.
 - **C4 stage B done** at `96c7560` (code `686079f`; range `b08747f..96c7560`, root merged with ATM-1): SYS-1, SYS-2, CB and the UI composed; the HUD objective, tabbed journal and fit/base screens; the timeline and feedback key; waking at the last rested base. 1,111 tests pass, heavy and build OK, 6 economy scripts pass. **Playthrough 5/5:** both routes use a kit plan, plating, a decode and a crop, and the independent route uses a forward outpost. 3090 keyboard check passed. Decisions under review: air line from any powered craft; Dart 450; the field fabricator plan from the first lost-site decode (main-path rule being checked); objective on by default. Sol R1 running. **W2 phase-1 fix started** in the freed slot (phase 2 deferred). Builders 5 of 5: CA-3, ENC-1, POI-1, LC, W2. Queue: CA-2 fix.
+- **C4B R1 (Sol):** changes-needed (`review/c4b-r1` `2ea00b5`).
+  - **Confirmed:** saves load (the schema-6 bump and bridge are warranted), conservation holds, and both routes are legitimate (Creel 197 min, carrier 319 min). The fabricator-plan decision is OK: it's optional convenience, and the required decoder and kit plans are on main-path records. The UI is readable on the 3090 and 5/5 mutations were caught.
+  - **Findings:**
+    - P1: outpost charging is not reachable through the UI (the playthrough bypassed it);
+    - P2: the carrier charger draws power without charging berths;
+    - P2: thermal exchanger heat tolerance is unwired;
+    - P2: reserve insertion ignores larger battery capacity;
+    - P2: berth warnings sample the wrong exterior;
+    - P2: idle time counts as play (confirmed on the 3090);
+    - P2: cycle timings are revealed by scanning instead of observation.
+  - **Queued first** (C4 author) for the next free slot, ahead of CA-2. This blocks the owner playtest.
