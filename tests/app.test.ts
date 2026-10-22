@@ -1,5 +1,6 @@
 import { hunterStandOff } from "../src/sim/hunter.js";
 import test from "node:test";
+import { HUNTER_GEOMETRY } from "../src/content/encounterGeometry.js";
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
@@ -755,6 +756,8 @@ for (const mode of ["idle", "investigate"] as const) {
     initial.state.world.threat.mode = mode;
     initial.state.world.threat.interest = mode === "idle" ? 0.7 : 4;
     initial.state.world.threat.modeSeconds = 5;
+    // ENC-1: a pursuit begins with the investigating animal in view.
+    initial.state.player.pose.yaw = 1.5 * Math.PI;
     const origin = structuredClone(initial.state.world.threat.position);
     const f = await fixture(t, initial);
     assert.equal(f.view.calls.length, 1);
@@ -959,15 +962,18 @@ function appInjury(f: Fixture) {
 test("app: several fixed steps in a frame deliver each actual bite once against its own installed state", async (t) => {
   const f = await fixture(t), { port, sounds } = appInjury(f);
   f.frames(2); sounds.length = 0;
-  const before = injuryDeliveries.get(f.view)!.length, health = port.session.state.fleet.vehicles[0]!.health;
+  // ENC-1: one bite per contact cycle. Re-arm the warning bump inside this frame.
+  const armed = port.session.state; armed.world.threat.modeSeconds = 0; armed.world.threat.position = hunterStandOff(armed);
+  const before = injuryDeliveries.get(f.view)!.length, health = armed.fleet.vehicles[0]!.health, tick = armed.tick;
   port.frame(10000);
   const delivered = injuryDeliveries.get(f.view)!.slice(before);
-  assert.equal(delivered.length, 8, "clock retains its existing eight-step frame cap");
+  assert.equal(port.session.state.tick, tick + 8, "clock retains its existing eight-step frame cap");
+  assert.equal(delivered.length, 1, "the frame's one real bite, delivered once");
   assert.ok(delivered.every(d => d.accepted && d.target.kind === "vehicle" && d.target.vehicleId === "app-bite"));
-  for (let i = 1; i < delivered.length; i++) assert.equal(delivered[i]!.tick, delivered[i - 1]!.tick + 1);
-  assert.ok(Math.abs(health - port.session.state.fleet.vehicles[0]!.health - 1.6) < 1e-10);
+  assert.equal(delivered[0]!.tick, tick + 1, "against the state installed by its own step");
+  assert.ok(Math.abs(health - port.session.state.fleet.vehicles[0]!.health - 6) < 1e-10);
   assert.equal(sounds.filter(e => e.type === "sound" && e.cue === "damage" && !e.origin).length, 0, "the app synthesizes no injury cue");
-  assert.equal(sounds.filter(e => e.type === "threat-damage").length, 8, "each step's real bite reaches audio once");
+  assert.equal(sounds.filter(e => e.type === "threat-damage").length, 1, "the step's real bite reaches audio once");
 });
 
 test("app: audio receives every batch's injury, collision and recovery events unchanged, with no synthetic cue", async (t) => {
@@ -1010,7 +1016,7 @@ test("app: same-step disable retains the target with speech suppressed, while in
 });
 
 test("app: a later real pressure-disable batch cancels the real HUD onset without a second bite", async (t) => {
-  const f = await fixture(t), { port, v, sounds } = appInjury(f);
+  const f = await fixture(t), { port, s, v, sounds } = appInjury(f);
   // Only DOM and timer ports are replaced here. Notification priority and
   // deferred cancellation execute in the production HudView, not the double.
   class HudElement {
@@ -1049,12 +1055,13 @@ test("app: a later real pressure-disable batch cancels the real HUD onset withou
     dispose() { hud.dispose(); dispose.call(f.view); },
   });
 
-  // Seeded diagnostic: one real bite leaves 0.04 hull. Stage the same actor in
-  // over-depth water outside pursuit before the next real fixed step.
-  v.health = 0.24;
+  // Seeded diagnostic: one real ramped bite (ENC-1: past the warning bump)
+  // leaves 0.04 hull. Stage the same actor in over-depth water outside pursuit
+  // before the next real fixed step.
+  v.health = 10.04; s.world.threat.modeSeconds = HUNTER_GEOMETRY.cycleSeconds;
   port.frame(0); port.frame(1000 / 60);
   assert.deepEqual(deliveries, [{ tick: 17, target: { kind: "vehicle", vehicleId: v.id } }]);
-  assert.equal(get("impact-notice").textContent, "Bitten · hull −0.2%");
+  assert.equal(get("impact-notice").textContent, "Bitten · hull −10.0%");
   assert.equal(get("damage-announce").textContent, "");
   const later = port.session.state, hull = later.fleet.vehicles.find(hull => hull.id === v.id)!;
   assert.ok(hull.health > 0 && hull.health < 0.05);
@@ -1068,7 +1075,7 @@ test("app: a later real pressure-disable batch cancels the real HUD onset withou
   assert.ok(f.view.noticeRecords.some(n => n.options.channel === "hazard" && n.options.context === "hull"));
   for (const [id, timer] of [...timers]) if (timer.delay === 0) { timers.delete(id); timer.callback(); }
   assert.equal(get("damage-announce").textContent, "", "the real outcome notification cancels the deferred onset");
-  assert.equal(get("impact-notice").textContent, "Bitten · hull −0.2%");
+  assert.equal(get("impact-notice").textContent, "Bitten · hull −10.0%");
   assert.match(get("hazard-announce").textContent, /HULL DISABLED/);
   assert.equal(sounds.filter(e => e.type === "threat-damage").length, 1,
     "the earlier valid bite reached audio once; the later disable batch adds no second bite");

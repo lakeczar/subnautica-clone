@@ -33,6 +33,7 @@ import type { Geometry } from "@babylonjs/core/Meshes/geometry.js";
 import { GeometryCache } from "./geometryCache.js";
 import { createCaveView } from "./caves/caveView.js";
 import { createCurrentStreaks } from "./currentStreaks.js";
+import { createHubArt } from "./hub.js";
 
 export type Quality = "rich" | "light";
 export interface GameRenderer {
@@ -242,6 +243,8 @@ export function createRenderer(
     // S4's later-region species, cue animals, deterrents and field cues (C3).
     const creatures = createCreatureLayer(scene, cel);
     const placed = createPlacedHosts(scene, cel);
+    // W2: the summit beacon over the hub and the crown rays' ring.
+    const hub = createHubArt(scene, cel);
     for (const mesh of creatures.meshes) mesh.renderingGroupId = 1;
     const instrumentation = new SceneInstrumentation(scene);
     let presented = 0;
@@ -362,6 +365,7 @@ export function createRenderer(
         streaks.update(camera.position, state?.tick ?? 0, !!state && state.opening.phase >= 4 && underwater === 1);
         canvas.dataset.currentStreaks = String(streaks.shown);
         placed.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
+        hub.update(time, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         if (state) creatures.update(ecologyView(state.world.ecology, state.tick, presentationStimulus(state)), time,
           { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         cel.setFloat("time", time);
@@ -421,6 +425,7 @@ export function createRenderer(
         art.dispose();
         creatures.dispose();
         placed.dispose();
+        hub.dispose();
         caveView.dispose();
         streaks.dispose();
         lights.dispose();

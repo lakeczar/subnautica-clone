@@ -29,6 +29,11 @@ export interface TessellationOptions {
   min: number;
   hole?: Rect;
   pits?: readonly Rect[];
+  /** Pits whose edge lines can meet a border line from either side: those
+   * touching this chunk or the one across the line. Their edges join that
+   * line's cuts, so both chunks emit the identical border (a pit's edge is a
+   * lattice line across its whole chunk, not just along the pit). */
+  borderPits?: (axis: "x" | "z", at: number) => readonly Rect[];
   /** Called between units of work; return true to yield. */
   due?: () => boolean;
 }
@@ -123,7 +128,8 @@ export function* tessellate(floor: (x: number, z: number) => number, rect: Rect,
   /** Border cuts on one line: the hole's, plus each pit reaching the line. */
   const lineCuts = (axis: "x" | "z", at: number): number[] => [...(axis === "x" ? cutsX : cutsZ),
     ...pits.filter(p => axis === "x" ? p.minZ <= at + EPS && p.maxZ >= at - EPS : p.minX <= at + EPS && p.maxX >= at - EPS)
-      .flatMap(p => axis === "x" ? [p.minX, p.maxX] : [p.minZ, p.maxZ])];
+      .flatMap(p => axis === "x" ? [p.minX, p.maxX] : [p.minZ, p.maxZ]),
+    ...(o.borderPits?.(axis, at) ?? []).flatMap(p => axis === "x" ? [p.minX, p.maxX] : [p.minZ, p.maxZ])];
   // Shared border sets, keyed by line.
   // Shared border sets, keyed by line; refinement yields as it goes.
   const border = new Map<string, number[]>();

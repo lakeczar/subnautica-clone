@@ -56,6 +56,13 @@ export function geologyColor(x: number, y: number, z: number, slope: number, reg
       c = mix(sed, rock, Math.max(steep, m.ridge * 0.55));
       ground = steep < 0.35 && m.ridge < 0.5;
       if (y > -150) c = mix(C.reefSand2, c, smooth(-60, -150, y));
+      if (m.pinnacle > 0) {
+        // W2 hub spur: limestone strata on the flanks, jade and shell reef caps.
+        const flank = stratum(x, y, z, 3.5, 35, C.reefRock, C.ridge2, C.wall);
+        const cap = mix(mix(patch > 0.1 ? C.reefSand : C.reefAlgae, C.reefSand2, smooth(-0.2, 0.5, fine) * 0.5), C.reefRock, steep * 0.6);
+        c = mix(c, mix(flank, cap, m.reefCap), m.pinnacle);
+        ground = m.reefCap > 0.5 && steep < 0.25;
+      }
       break;
     }
     case "thermal_rift": {

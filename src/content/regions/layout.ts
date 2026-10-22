@@ -21,6 +21,7 @@ export const BIOMES: readonly BiomeDescriptor[] = [
   { id: "canopy_crowns", label: "Lantern Canopy crowns and ribs" },
   { id: "basin_sediment", label: "Pale Basin rippled sediment" },
   { id: "basin_wreck", label: "Pale Basin wreck and dish ridges" },
+  { id: "hub_reef", label: "Hub spur reef-capped pinnacles" },
   { id: "rift_cool_flank", label: "Ember Rift cooled ledges" },
   { id: "rift_trench", label: "Ember Rift warm trench" },
   { id: "divide_ridge", label: "Mirror Divide fractured ridge" },
@@ -127,7 +128,7 @@ export function biomeAt(x: number, z: number, m: TerrainMasks = terrainMasks(x, 
   switch (region) {
     case "island_chain": return h > -1.5 ? "isle_land" : "isle_shoal";
     case "thermal_rift": return m.trench > 0.4 ? "rift_trench" : "rift_cool_flank";
-    case "silt_basin": return m.ridge > 0.35 ? "basin_wreck" : "basin_sediment";
+    case "silt_basin": return m.pinnacle > 0.5 ? "hub_reef" : m.ridge > 0.35 ? "basin_wreck" : "basin_sediment";
     case "suspended_garden": return "canopy_crowns";
     case "brine_divide": return m.brineSide > 0.5 && h < -440 ? "divide_brine" : "divide_ridge";
     case "deep_district": return m.escarpment > 0.5 ? "meridian_escarpment" : "meridian_terraces";

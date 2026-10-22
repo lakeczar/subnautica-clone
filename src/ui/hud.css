@@ -222,3 +222,11 @@
 
 /* S6 sound captions: one line under the hazard banners, in the same alert column. */
 .audio-caption { margin: 6px 0 0; padding: 4px 10px; max-width: 34em; border-left: 3px solid #e0ba7c; background: #071a24cc; color: #f3ead2; font-size: 14px; letter-spacing: .02em; }
+
+/* ENC-1 threat edge cue: a pulse on the screen edge toward an engaged animal.
+   Stage reads by size and pulse rate as well as colour; the banner names it. */
+.threat-edge { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.threat-mark { position: absolute; width: var(--size); height: var(--size); margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2); border-radius: 50%; background: radial-gradient(closest-side, #ffd08ae6, #ffb35a66 45%, transparent); }
+.threat-mark[data-stage="closing"] { background: radial-gradient(closest-side, #ffb070f0, #ff8a4a73 45%, transparent); }
+.threat-mark[data-stage="attack"] { background: radial-gradient(closest-side, #ff7a5af5, #ff4a3a80 45%, transparent); }
+@media (prefers-reduced-motion: reduce) { .threat-mark { opacity: .8 !important; } }
