@@ -2,15 +2,6 @@
   "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
   "caves": [
     {
-      "id": "rift_north_shoulder",
-      "shots": [
-        "docs/build/streams/ca-3/rift_north_shoulder-daylight.jpg",
-        "docs/build/streams/ca-3/rift_north_shoulder-lamp-off.jpg"
-      ],
-      "loadMs": 6031,
-      "frameMs": 0.29
-    },
-    {
       "id": "rift_tube_mites",
       "shots": [
         "docs/build/streams/ca-3/rift_tube_mites-daylight.jpg",
@@ -180,6 +171,15 @@
       ],
       "loadMs": 8859,
       "frameMs": 0.54
+    },
+    {
+      "id": "rift_north_shoulder",
+      "shots": [
+        "docs/build/streams/ca-3/rift_north_shoulder-daylight.jpg",
+        "docs/build/streams/ca-3/rift_north_shoulder-lamp-off.jpg"
+      ],
+      "loadMs": 6043,
+      "frameMs": 0.35
     }
   ],
   "errors": []
