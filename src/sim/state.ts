@@ -62,8 +62,8 @@ export function createGame(): GameState {
         },
         // C3: S9's yard store and restored-stop lockers at S2's sites.
         ...STOP_IDS.flatMap((id) => {
-          const locker = WORKING_STOPS[id].locker;
-          return locker ? [{ id: locker, kind: "locker" as const, capacity: STOP_LOCKER_CU, ownerId: id }] : [];
+          const { locker, stores = [] } = WORKING_STOPS[id];
+          return [...(locker ? [locker] : []), ...stores].map((c) => ({ id: c, kind: "locker" as const, capacity: STOP_LOCKER_CU, ownerId: id }));
         }),
       ],
       buoy: {
@@ -97,6 +97,10 @@ export function createGame(): GameState {
         { id: "canopy_stop", repaired: false },
         { id: "rift_station", repaired: false },
         { id: "divide_dock", repaired: false },
+        // HUB-2: the crown station's stages.
+        { id: "crown_power", repaired: false },
+        { id: "crown_dock", repaired: false },
+        { id: "crown_survey", repaired: false },
       ],
       maintenance: { alloy: 16, glass: 1, membrane: 10 },
       ecology: createEcology(),

@@ -15,6 +15,7 @@ import {
 import { atSite, craftingBlock, craftSite, hullOutput, personalLimit, recipeSites, refitHull, refitTier, suitRefit } from "../sim/progression.js";
 import { CAMPAIGN_RECIPES } from "../content/campaign/index.js";
 import { stopForSite, WORKING_STOPS } from "../content/stops.js";
+import { HUB_RECIPES } from "../content/hub/recipes.js";
 import { RECOVERY_NOTICES, recoverableHull, recoveryCommand, recoveryRouteFor } from "../sim/recovery.js";
 import { cellRechargePreview, distractionPreview, PULSE_CHARGE_COST, reserve, serviceState, serviceWouldRestore } from "../sim/vehicles.js";
 import { serviceLabel, servicePreview } from "../sim/serviceLink.js";
@@ -530,7 +531,7 @@ export class PanelView {
       // Ownership is live, independent of whichever validation check wins first.
       // In particular a seated owner still sees Current craft, with the site refusal.
       // S9's later campaign work folds away until it is ready or at hand (C3).
-      const later = Object.hasOwn(CAMPAIGN_RECIPES, id) && block !== null && block.code !== "materials" &&
+      const later = (Object.hasOwn(CAMPAIGN_RECIPES, id) || Object.hasOwn(HUB_RECIPES, id)) && block !== null && block.code !== "materials" &&
         !(stopForSite(r.site) && atSite(state, r.site));
       const group = dart ? "current" : done ? "completed" : block === null ? "ready"
         : later ? "later"
@@ -571,7 +572,9 @@ export class PanelView {
         : state.player.interiorId === dart.id ? "occupied"
         : dart.berth ? "berthed" : inCradle ? "in cradle" : heading(state.player.pose.position, dart.pose.position);
       // One actionable reason in the row; the exact refusal stays in the details.
-      const stop = stopForSite(r.site), place = stop ? { label: WORKING_STOPS[stop].label, position: WORKING_STOPS[stop].work } : PLACES[benchOf(r.site)];
+      // The site this recipe is worked at now (a shared bench in reach, e.g. the
+      // crown station's, else its own), so a stop's refusal reads as that stop's.
+      const stop = stopForSite(craftSite(state, id)), place = stop ? { label: WORKING_STOPS[stop].label, position: WORKING_STOPS[stop].work } : PLACES[benchOf(r.site)];
       const missingSteps = r.needs.filter((n) => !state.knowledge.crafted.includes(n as RecipeId));
       const reason = !block ? undefined
         : dart ? `${HULLS[dart.hull].label} owned — ${location}`

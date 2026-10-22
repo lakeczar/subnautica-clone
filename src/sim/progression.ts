@@ -22,7 +22,8 @@ import {
   TECH_RECORDS,
 } from "../content/registry.js";
 import { CAMPAIGN_PENDING, CAMPAIGN_SITES } from "../content/campaign/index.js";
-import { STOP_RESTORATIONS, stopForSite, WORKING_STOPS, type WorkingStopId } from "../content/stops.js";
+import { isStopRestoration, STOP_RESTORATIONS, stopForSite, WORKING_STOPS, type WorkingStop } from "../content/stops.js";
+import { CROWN_BENCH_EXCLUDES, CROWN_BENCH_FROM } from "../content/hub/crownStation.js";
 import { launchCarrier } from "./carrier.js";
 import { isSuitProtection } from "./ecologyLink.js";
 import type {
@@ -273,8 +274,6 @@ export function pendingCampaignWork(id: RecipeId): string | null {
 export function refitTarget(s: GameState, hull: HullOutput) {
   return s.fleet.vehicles.find((v) => v.hull === hull && !v.berth) ?? null;
 }
-const restorationOf = (stop: WorkingStopId): string | null =>
-  (Object.keys(STOP_RESTORATIONS) as (keyof typeof STOP_RESTORATIONS)[]).find((r) => STOP_RESTORATIONS[r] === stop) ?? null;
 /** C4 (M2 audit #3): restored stops do the refits for their own tier, so the
  * deep refits no longer send every player back to the island workshop. */
 export const REFIT_STOP_SITES: Readonly<Partial<Record<RecipeId, readonly FabricationSite[]>>> = {
@@ -282,8 +281,18 @@ export const REFIT_STOP_SITES: Readonly<Partial<Record<RecipeId, readonly Fabric
   suit_450: ["rift_station"], creel_450: ["rift_station"], dart_450: ["rift_station"], hush_450: ["rift_station"],
   suit_800: ["divide_dock"], creel_800: ["divide_dock"],
 };
+/** HUB-2 (Sol W2-04): the crown station's full fabricator and refit and
+ * upgrade bench run every pod-fabricator recipe and the workshop's, except the
+ * workshop's own restoration, the frame strip and hull construction. The
+ * yard's carrier work and hull builds stay at the yard. Payment, moored holds
+ * and refit targets then compose through the crown's own stop (its locker and
+ * stores, and craft moored at its dock), and the bench needs the dock stage. */
+export const crownBenchRecipe = (id: RecipeId): boolean =>
+  (CROWN_BENCH_FROM as readonly string[]).includes(RECIPES[id].site) &&
+  !(CROWN_BENCH_EXCLUDES as readonly string[]).includes(id) && !hullOutput(RECIPES[id]);
 /** Every site a recipe runs at: its bench, then the stops that share its work. */
-export const recipeSites = (id: RecipeId): readonly FabricationSite[] => [RECIPES[id].site, ...(REFIT_STOP_SITES[id] ?? [])];
+export const recipeSites = (id: RecipeId): readonly FabricationSite[] =>
+  [RECIPES[id].site, ...(REFIT_STOP_SITES[id] ?? []), ...(crownBenchRecipe(id) ? ["crown_station" as const] : [])];
 /** A field outpost with a powered small-fabricator module the diver is at (C4):
  * it runs the pod bench's recipes, paid from the diver hold and its lockers. */
 export function outpostBench(s: GameState): { id: string; lockers: string[] } | null {
@@ -342,9 +351,15 @@ export function craftingBlock(
       : stop ? `Work at the ${WORKING_STOPS[stop].label}.`
       : alt.length ? `Use the island workshop bench or ${alt.join(" or ")}.` : "Use this recipe’s bench.");
   }
-  // A restored stop's other work waits for its restoration.
-  if (stop && !stopWorks(s, stop) && r.output !== restorationOf(stop))
+  // A restored stop's other work waits for its restoration; a staged stop's
+  // bench also waits for its bench stage. Its own restorations are ordered by
+  // their `needs` (Sol W2-02: every stage restores through this one path).
+  const ownRestoration = stop !== null && isStopRestoration(r.output) && stopForSite(r.site) === stop;
+  if (stop && !stopWorks(s, stop) && !ownRestoration)
     return block("restore", `Restore the ${WORKING_STOPS[stop].label} first.`);
+  const benchStage = stop ? (WORKING_STOPS[stop] as WorkingStop).bench : undefined;
+  if (stop && benchStage && !facility(s, benchStage) && !ownRestoration)
+    return block("restore", `Restore the ${WORKING_STOPS[stop].label}'s dock and fabricator first.`);
   if (
     (site === "pod_fabricator" && !outpost && !facility(s, "pod_fabricator")) ||
     (site === "island_workshop" && id !== "restore_workshop" && !facility(s, "island_workshop")) ||
@@ -427,8 +442,8 @@ function outputFitting(output: string): "tools" | "suit" | "recovery" | "protect
  * ("none"), a fitting ("equipment"), a mount package, or the diver hold. */
 export function outputPlacement(id: RecipeId): "none" | "equipment" | "package" | "diver" {
   const r: Recipe = RECIPES[id];
-  if (["pod_repair", "restore_workshop", "restore_canopy_stop", "restore_rift_station", "restore_divide_stop",
-    "hearthline_keel", "pod_buffer"].includes(r.output) || hullOutput(r) || refitHull(id) || suitRefit(id) || id === "strip_frame")
+  if (["pod_repair", "restore_workshop", "restore_canopy_stop", "hearthline_keel", "pod_buffer"].includes(r.output) ||
+    isStopRestoration(r.output) || hullOutput(r) || refitHull(id) || suitRefit(id) || id === "strip_frame")
     return "none";
   if (Object.hasOwn(HOST_UPGRADES, r.output)) return "none";
   if (r.output === "creel_cargo_rack" || r.output === "creel_cabin") return "package";
@@ -464,7 +479,7 @@ export function craft(
     s.world.facilities.find((f) => f.id === "island_workshop")!.repaired = true;
   else if (r.output === "restore_canopy_stop")
     s.world.facilities.find((f) => f.id === "canopy_stop")!.repaired = true;
-  else if (r.output === "restore_rift_station" || r.output === "restore_divide_stop")
+  else if (isStopRestoration(r.output))
     s.world.facilities.find((f) => f.id === STOP_RESTORATIONS[r.output as keyof typeof STOP_RESTORATIONS])!.repaired = true;
   else if (r.output === "hearthline_keel") { /* The laid keel is a recorded stage; the fit-out launches the hull. */ }
   else if (r.output === "pod_buffer") {
@@ -534,8 +549,11 @@ export function craft(
     : id === "hearthline_keel" ? "Hearthline keel laid in the yard berth: frame spine and pontoons. Fit it out here to launch the carrier."
     : id === "hearthline_base" ? "Hearthline launched in the yard berth: dry rooms, two berths, galley and fabrication. Take the helm from the bridge."
     : hull && hull !== "dart" && hull !== "creel" ? `${HULLS[hull].label} built on the yard slip · board it from its access side.`
-    : id === "restore_rift_station" || id === "restore_divide_stop"
-      ? `${WORKING_STOPS[id === "restore_rift_station" ? "rift_station" : "divide_dock"].label} restored · ${WORKING_STOPS[id === "restore_rift_station" ? "rift_station" : "divide_dock"].offers}.`
+    : id === "restore_crown_power" ? "Crown station power and air restored · air, the fast-heal bunk and the 48 CU locker. You will wake here once you rest. The dock and fabricator are next."
+    : id === "restore_crown_dock" ? "Crown dock and fabricator restored · moored craft charge and are repaired, the full bench runs refits and upgrades, and two more stores open."
+    : id === "restore_crown_survey" ? "Crown sockets and survey array restored · six module sockets and a 300 m survey over the Basin, the Rift head and the Canopy edge."
+    : isStopRestoration(id)
+      ? `${WORKING_STOPS[stopForSite(r.site)!].label} restored · ${WORKING_STOPS[stopForSite(r.site)!].offers}.`
     : suit && id !== "suit_350" ? `Suit refitted · ${suit.rating} m personal limit. Hull ratings are separate.`
     : id === "strip_frame" ? "Frame stripped · 8 structural alloy in the workshop locker."
     : id === "pod_buffer" ? "Dispatch buffer fitted beside the regulator. Its log is readable now."
