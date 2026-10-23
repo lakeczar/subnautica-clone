@@ -35,12 +35,15 @@ if (!base.ok) throw new Error(`${SAVE}: ${base.error}`);
 const craft = base.value.state.fleet.vehicles.find(v => v.id === base.value.state.player.controlledVehicleId);
 if (!craft || craft.hull !== HULL || craft.rating < -DEEPEST + 10) throw new Error(`${SAVE}: not piloting a ${HULL} rated below ${-DEEPEST} m`);
 const START = { ...craft.pose.position };
-/** A clear Dart pose near `p`: step outward along `n`, then up, until it fits. */
+/** The keel's margin over the floor under the hull's footprint, metres. */
+const KEEL = 1;
+/** A clear pose near `p`: step outward along `n`, then up, until it fits. */
 function clearNear(p, n) {
   for (let out = 0; out <= 24; out += 2) for (const up of [0, 2, 4, 7, 10]) {
     const q = { x: p.x + n.x * out, z: p.z + n.z * out, y: 0 };
     q.y = clamp(p.y + up, q.x, q.z);
-    if (hullClearance(world, q, DART)) return q;
+    // Clear of solids, and the keel over the floor under the whole footprint.
+    if (hullClearance(world, q, DART) && q.y >= hullFloor(world, q, DART) + KEEL) return q;
   }
   return null;
 }
@@ -121,7 +124,6 @@ for (let i = 1; i < tour.length; i++) {
 // The game's movement keeps the hull's keel over the highest floor under its
 // whole footprint (hullFloor), which the swept solid test does not model: a
 // leg must also keep a metre over that floor every 2 m along it.
-const KEEL = 1;
 const keelClear = (a, b) => {
   const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 2));
   for (let i = 0; i <= n; i++) {
