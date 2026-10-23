@@ -120,7 +120,20 @@ Two survive:
   - **Root fix:** author footprints so a side meets the floor in rock, as R6 noted. **S** per cave.
 - **The reviewer's 51 colour floats** across six caves change by at most 0.000351, under the old rounded memo. Recorded as a qualification.
 
-**Checks for R7:** CHECKS.
+**Checks for R7:**
+- **Root merge gate** after merging root at `ea24b8a3` (docs only), run on the RTX 4070 while CW-1 held the 3090 (ticket `261023-224415-4e0a`):
+  - fast tier 1,474 / 1,474 (typecheck included);
+  - `npm run build` OK, with a fresh bake;
+  - all five economy scripts exit 0.
+- **Heavy, through the queue,** at `36944d8c` (ticket `261023-193805-3f69`):
+  - `col1-art.heavy` 4 / 5, with every kit cave, both LODs' seam, the audit and the wall controls passing. P3-C's art-seeded sample tripped on an existing box stop (see above); fixed in `546bde9c` and passing alone;
+  - `col1-oracle.heavy` 4 / 4;
+  - `col1-r6-floor.heavy` 1 / 1;
+  - terrain bake plus `--verify` 220/220;
+  - the nine-cave oracle, before and after.
+- **Art sweep,** all 55 caves, fine and coarse against pre-R6 and coarse against R6 (ticket `261023-193804-64d8`).
+- **Coarse strips:** `--class gpu`, ticket `261023-220421-43e2`.
+- **Every earlier control still passes** in the fast tier and these heavies: support, recovery, seam, mixed components, protected routes, the R6 column and the culvert edge columns.
 
 ## R6 response (Sol R6)
 **R6-1 is fixed at the root, in the floor snap.** The coordinator granted COL-1 the snap and seam step in `src/content/regions/caveGeometry.ts` for this fix, and later the one-line memo key in `caveFloor` (`src/content/regions/caves/authored.ts`, see below). Unchanged indices no longer stand in for orientation: the final mesh is checked.
