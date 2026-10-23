@@ -24,16 +24,17 @@ interface StationSpec {
   /** Carrier-local host centre and radius: the fixture the player looks at. */
   readonly center: Vec3;
   readonly radius: number;
-  /** Walking solid of the fixture, excluded from its own line of sight. */
-  readonly solid?: string;
+  /** Walking solids of the fixture, excluded from its own line of sight. */
+  readonly solids?: readonly string[];
 }
 const hatch = HEARTHLINE.access.find((a) => a.kind === "side_hatch")!;
 
 export const CARRIER_STATIONS: Readonly<Record<CarrierStationId, StationSpec>> = {
-  "carrier:helm": { label: "Helm", center: { x: 0, y: 4.95, z: -8.0 }, radius: 0.9, solid: "hl.bridge.helm" },
-  "carrier:lock": { label: "Lock console", center: { x: 4.9, y: 4.85, z: -10.6 }, radius: 0.85, solid: "hl.bridge.launch" },
-  "carrier:berths": { label: "Berth panel", center: { x: 5.35, y: 5.0, z: 6.1 }, radius: 0.6, solid: "hl.vestibule.launch" },
-  "carrier:stores": { label: "Stores lockers", center: { x: 5.6, y: 5.3, z: -5.2 }, radius: 0.85, solid: "hl.stores.lockers" },
+  // The helm is the console and its seat: one station, seen over the seat back.
+  "carrier:helm": { label: "Helm", center: { x: 0, y: 5.0, z: -8.0 }, radius: 0.9, solids: ["hl.bridge.helm", "hl.bridge.seat"] },
+  "carrier:lock": { label: "Lock console", center: { x: 4.9, y: 4.85, z: -10.6 }, radius: 0.85, solids: ["hl.bridge.launch", "hl.socket.bridge.launch"] },
+  "carrier:berths": { label: "Berth panel", center: { x: 5.35, y: 5.0, z: 6.1 }, radius: 0.6, solids: ["hl.vestibule.launch"] },
+  "carrier:stores": { label: "Stores lockers", center: { x: 5.6, y: 5.3, z: -5.2 }, radius: 0.85, solids: ["hl.stores.lockers"] },
   "carrier:hatch": { label: "Vestibule hatch", center: { x: LINING.x - 0.05, y: 5.2, z: hatch.at[2] }, radius: 0.85 },
   // Outside: the hatch on the hull side. Reach is measured to the swimmer's
   // approach point (the exterior vestibule), where boarding is accepted.
@@ -77,7 +78,7 @@ function station(id: CarrierStationId, h: VehicleState): Interaction {
 }
 export function carrierStationHost(s: GameState, id: CarrierStationId): InteractionHost {
   const h = carrierHull(s)!, spec = CARRIER_STATIONS[id];
-  return { center: localToWorld(spec.center, h), radius: spec.radius, solidIds: spec.solid ? [spec.solid] : [] };
+  return { center: localToWorld(spec.center, h), radius: spec.radius, solidIds: [...(spec.solids ?? [])] };
 }
 
 /** Line of sight aboard: the carrier's walls and fixtures, in its own frame.
