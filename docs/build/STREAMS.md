@@ -616,3 +616,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **P2:** orphans from interrupted saves can't be discovered after a restart and consume the quota;
   - **P2:** the REC-1 cursor must be initialised from `seq` at every entry.
   - **Decision:** the coordinator asked for the class to be removed rather than patched case by case: no trusted cross-save cache, read the head on each save, one owned key prefix, collection by enumeration. REC-1 was told to initialise its cursor from the head.
+- **STEW-1 done at `b7cb626`** (code `666fb71`):
+  - **Fixes:** F11 audio/HUD now use `regionAtPosition`, so the Rift, Divide and Meridian get their own ambience; `npm run gate` (`scripts/gate.mjs`); `scripts/guard-architecture.mjs` with planted-violation tests; `CORE-HELPERS.md` with 5 open forks; small fixes F14/F18–F20/F23–F25.
+  - **Evidence:** the gate passed 10/10 at 666fb71, npm test 1,402/1,402.
+  - **Review:** Sol R1 running (`siltwake-stew1-review-r1-sol-b7cb626`).
+  - **After merge:** update the root-merge-gate memory to `npm run gate`.
