@@ -205,7 +205,7 @@ export function parseReceipt(text, nonce) {
 export async function remoteRead(r, ticket, attempt, nonce) {
   const d = attemptDir(r, ticket, attempt), c = receiptDir(r, ticket, attempt);
   const res = await ssh(r, `d=${q(d)}; c=${q(c)}; echo "@@receipt"; cat "$c/receipt" 2>/dev/null; echo "@@end";` +
-    ` alive=0; if [ -f "$d/pid" ]; then set -- $(cat "$d/pid"); [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] && alive=1; fi; echo "alive $alive";` +
+    ` alive=0; if [ -f "$d/pid" ]; then set -- $(cat "$d/pid"); [ "$3" = "$(cat /proc/sys/kernel/random/boot_id)" ] && [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] && alive=1; fi; echo "alive $alive";` +
     ` cg=$(cat "$d/cgroup" 2>/dev/null); echo "high $(sed -n 's/^high //p' "$cg/memory.events" 2>/dev/null)"; echo "beat $(stat -c %Y "$d/heartbeat" 2>/dev/null)"`, { timeoutS: 20 });
   if (res.code !== 0) return null;
   const text = /@@receipt\n([\s\S]*?)@@end/.exec(res.out)?.[1] ?? "";
@@ -216,13 +216,17 @@ export async function remoteRead(r, ticket, attempt, nonce) {
 /**
  * Stops an attempt on the sandbox and says whether that is certain (R2-F3).
  * - Not yet admitted: the claim is taken as "abandon", so it can never start.
- * - Admitted: its wrapper is TERMed (checked by PID and start time); then, if
- *   anything is left in the job scope after graceS, the scope's cgroup
- *   (checked by its inode) is killed whole, detached and TERM-ignoring
- *   processes included.
+ * - Admitted: the scope identity the sandbox published before claiming
+ *   ("<boot> <cgroup> <inode>", R3-F1) is checked against this boot first
+ *   (R3-F2). One from another boot proves its processes are gone, and is never
+ *   signalled. In this boot, its wrapper is TERMed (checked by PID, start time
+ *   and boot); then, if anything is left in the job scope after graceS, the
+ *   scope's cgroup (checked by its inode) is killed whole, detached and
+ *   TERM-ignoring processes included.
+ * An unreadable boot ID or identity fails closed (not stopped).
  * `cancel: true` also marks the logical ticket cancelled. Returns
- * { reached, stopped, started }: stopped only when the attempt can't start or
- * its scope is empty or gone. Unreachable or still populated → stopped false.
+ * { reached, stopped, started, detail }: stopped only when the attempt can't
+ * start or its scope is provably empty or gone.
  */
 export async function remoteStop(cfg, ticket, { attempt = null, cancel = false, r = remoteConfig(cfg), graceS = 10 } = {}) {
   const t = ticketDir(r, ticket);
@@ -234,12 +238,16 @@ export async function remoteStop(cfg, ticket, { attempt = null, cancel = false, 
   const res = await ssh(r, `t=${q(t)} d=${q(d)} c=${q(c)}; mkdir -p "$t" "$d" "$c"; ${cancel ? `: > "$t/cancelled";` : `: > "$d/retired";`}
 ln -s abandon "$c/claim" 2>/dev/null
 [ "$(readlink "$c/claim")" = abandon ] && { echo "stopped 1 started 0"; exit 0; }
-set -- $(cat "$c/scope" 2>/dev/null); cg=$1 ino=$2
-[ -n "$cg" ] || { echo "stopped 0 started 1 (no scope recorded yet)"; exit 0; }
+boot=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+case "$boot" in ????????-????-????-????-????????????) ;; *) echo "stopped 0 started 1 (this boot's ID is unreadable)"; exit 0 ;; esac
+read -r rboot cg ino rest < "$c/scope" 2>/dev/null
+case "$rboot:$cg:$ino:$rest" in ????????-????-????-????-????????????:/sys/fs/cgroup/*:[0-9]*:) ;; *) echo "stopped 0 started 1 (no valid scope identity)"; exit 0 ;; esac
+case "$ino" in *[!0-9]*) echo "stopped 0 started 1 (no valid scope identity)"; exit 0 ;; esac
+[ "$rboot" = "$boot" ] || { echo "stopped 1 started 1 (recorded in another boot: its processes are gone)"; exit 0; }
 mine() { [ -d "$cg" ] && [ "$(stat -c %i "$cg" 2>/dev/null)" = "$ino" ]; }
 gone() { ! mine || grep -qx 'populated 0' "$cg/cgroup.events" 2>/dev/null; }
 gone && { echo "stopped 1 started 1"; exit 0; }
-if [ -f "$d/pid" ]; then set -- $(cat "$d/pid"); [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] && kill -TERM "$1"; fi
+if [ -f "$d/pid" ]; then set -- $(cat "$d/pid"); [ "$3" = "$boot" ] && [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] && kill -TERM "$1"; fi
 i=0; while [ $i -lt ${Number(graceS)} ]; do sleep 1; i=$((i+1)); gone && { echo "stopped 1 started 1"; exit 0; }; done
 mine && { echo 1 > "$cg/cgroup.kill" 2>/dev/null || find "$cg" -name cgroup.procs -exec cat {} + | xargs -r kill -KILL; }
 i=0; while [ $i -lt 10 ]; do sleep 1; i=$((i+1)); gone && { echo "stopped 1 started 1 (killed)"; exit 0; }; done

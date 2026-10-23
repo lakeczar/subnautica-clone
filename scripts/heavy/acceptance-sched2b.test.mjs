@@ -8,10 +8,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { alive, procStart, scopePopulated } from "./state.mjs";
-import { blockedBy, context, fakeSandbox, hc, here, holderOf, killOwned, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
+import { blockedBy, context, fakeSandbox, hc, here, holderOf, killOwned, result, running, scopeActive, sleep, submit, until } from "./acceptance-lib.mjs";
 
 const fast = { minStallS: 1, soakYieldS: 3 };
 const log = (c, id) => readFileSync(join(c.sched, "jobs", id, "output.log"), "utf8");
@@ -591,5 +591,135 @@ test("B24 (R2-F5): the transport's test seams work only in test mode with privat
     const x = spawnSync(transport, ["--sha", c.head, "--deadline", "20", "--memory", "1G", "--", "sh", "-c", `exit ${code}`], { cwd: c.repoDir, env: c.env, encoding: "utf8", timeout: 30000 });
     assert.equal(x.status, code, x.stderr);
     assert.match(x.stdout, new RegExp(`alickers-job: tested ${c.head} exit ${code}`));
+  }
+});
+
+// SCHED-2b R3 ---------------------------------------------------------------------
+
+const claimOf = (c, id, a = 1) => { try { return readlinkSync(join(c.fake.dir, "lane", "receipts", id, `a${a}`, "claim")); } catch { return null; } };
+const scopeOf = (c, id, a = 1) => { try { return readFileSync(join(c.fake.dir, "lane", "receipts", id, `a${a}`, "scope"), "utf8").trim().split(" "); } catch { return null; } };
+const BOOT = readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
+
+test("B25 (R3-F1): the sandbox's shell dies at the claim: before it, the holder abandons; after it, the published identity proves the end; a holder death or a cancel there resolves too", async () => {
+  const c = await lane("claim-crash");
+  // Before the claim: nothing claimed, so the holder takes it as abandon; the any job runs here.
+  c.fake.flag("crash-before-claim", true);
+  const a = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", 'case "$SILTWAKE_GPU_LEASE" in alickers-*) touch ran-a ;; esac; echo ran'); // a marker only on the sandbox: the worktree stays clean
+  assert.equal(waitFor(c, a).code, 0);
+  assert.deepEqual([result(c, a).remote, claimOf(c, a)], [undefined, "abandon"]);
+  assert.equal(existsSync(join(c.fake.repo, "ran-a")), false);
+  // After the claim: "run" with the identity published first (this boot, an empty or gone scope).
+  c.fake.flag("crash-after-claim", true);
+  await probeNow(c); // a fresh reading: an any job doesn't wait for a stale one
+  const b = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", 'case "$SILTWAKE_GPU_LEASE" in alickers-*) touch ran-b ;; esac; echo ran');
+  assert.equal(waitFor(c, b).code, 0);
+  assert.equal(result(c, b).remote, undefined, "settled, then run here");
+  assert.equal(claimOf(c, b), "run");
+  assert.equal(scopeOf(c, b)?.[0], BOOT);
+  assert.equal(existsSync(join(c.fake.repo, "ran-b")), false, "the payload never ran on the sandbox");
+  // A 4070 job crashed after its claim waits for alickers again and then runs there: the slot isn't stranded.
+  c.fake.flag("crash-after-claim", true);
+  const g = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c", "echo gpu-ran");
+  const wg = waitFor(c, g);
+  assert.equal(wg.code, 0, wg.err);
+  assert.deepEqual([result(c, g).remote, result(c, g).attempts >= 2, result(c, g).evidence.bound], [true, true, true]);
+  // Holder death in that state (the sandbox's cleanup is slow): recovery proves the end and frees the slot.
+  c.fake.flag("slow-cleanup", true);
+  c.fake.flag("crash-after-claim", true);
+  const h = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c", "echo never");
+  await until("claimed run", () => claimOf(c, h) === "run", 30000);
+  const tk = await holderOf(c, h);
+  killOwned(tk.holder);
+  const wh = waitFor(c, h);
+  assert.equal(wh.code, 137, wh.err);
+  assert.match(result(c, h).label, /its remote holder died; the job on alickers was stopped/);
+  // Cancel in that state.
+  c.fake.flag("crash-after-claim", true);
+  const k = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c", "echo never");
+  await until("claimed run", () => claimOf(c, k) === "run", 30000);
+  hc(c, ["cancel", k]);
+  assert.deepEqual([result(c, k).code, result(c, k).stopReason], [75, "cancelled"]);
+  c.fake.flag("slow-cleanup", false);
+  const after = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "true");
+  assert.equal(waitFor(c, after).code, 0, "the slot is free");
+  assert.equal(result(c, after).remote, true);
+});
+
+test("B26 (R3-F2): a scope identity from another boot never authorises a signal; an unreadable identity fails closed; this boot's own identity is stopped", async () => {
+  const c = await lane("boot-identity");
+  const { loadConfig } = await import("./state.mjs");
+  const { remoteStop } = await import("./remote.mjs");
+  const cfg = loadConfig(c.env);
+  // A replacement scope that now owns the old record's path and inode (as after a reboot).
+  const unit = `sched2bfake-${c.n}-replacement`;
+  const repl = spawn("systemd-run", ["--user", "--scope", "--quiet", "--collect", `--unit=${unit}`, "sleep", "120"], { stdio: "ignore" });
+  try {
+    await until("replacement running", () => scopeActive(unit) && procStart(repl.pid) != null, 10000);
+    const cg = `/sys/fs/cgroup${readFileSync(`/proc/${repl.pid}/cgroup`, "utf8").trim().replace(/^0::/, "")}`;
+    const ino = String(statSync(cg).ino), start = String(procStart(repl.pid));
+    const record = (id, scope, pidLine) => {
+      const rd = join(c.fake.dir, "lane", "receipts", id, "a1"), jd = join(c.fake.dir, "lane", "jobs", id, "a1");
+      mkdirSync(rd, { recursive: true }); mkdirSync(jd, { recursive: true });
+      symlinkSync("run", join(rd, "claim"));
+      if (scope != null) writeFileSync(join(rd, "scope"), scope);
+      writeFileSync(join(jd, "pid"), pidLine);
+    };
+    const other = "00000000-1111-2222-3333-444444444444";
+    record("T-oldboot", `${other} ${cg} ${ino}\n`, `${repl.pid} ${start} ${other}\n`);
+    const s1 = await remoteStop(cfg, "T-oldboot", { attempt: 1, graceS: 1 });
+    assert.deepEqual([s1.stopped, s1.started], [true, true]);
+    assert.match(s1.detail, /recorded in another boot: its processes are gone/);
+    assert.ok(scopeActive(unit) && procStart(repl.pid) != null, "the replacement scope was not signalled");
+    for (const [id, scope] of [["T-noboot", `${cg} ${ino}\n`], ["T-garbled", "garbled\n"], ["T-missing", null]]) {
+      record(id, scope, `${repl.pid} ${start} ${BOOT}\n`);
+      const s = await remoteStop(cfg, id, { attempt: 1, graceS: 1 });
+      assert.equal(s.stopped, false, `${id}: fails closed`);
+      assert.match(s.detail, /no valid scope identity/);
+    }
+    assert.ok(procStart(repl.pid) != null, "still not signalled");
+    record("T-otherino", `${BOOT} ${cg} ${Number(ino) + 1}\n`, `${repl.pid} ${start} ${BOOT}\n`);
+    assert.equal((await remoteStop(cfg, "T-otherino", { attempt: 1, graceS: 1 })).stopped, true, "another inode at the path: the old scope is gone");
+    assert.ok(procStart(repl.pid) != null, "and the new one untouched");
+    // Positive control: this boot's identity of a live scope is stopped, the whole scope.
+    record("T-mine", `${BOOT} ${cg} ${ino}\n`, `${repl.pid} ${start} ${BOOT}\n`);
+    const s2 = await remoteStop(cfg, "T-mine", { attempt: 1, graceS: 1 });
+    assert.equal(s2.stopped, true, s2.detail);
+    await until("stopped", () => procStart(repl.pid) == null, 10000);
+  } finally { spawnSync("systemctl", ["--user", "stop", `${unit}.scope`], { stdio: "ignore" }); }
+});
+
+test("B27 (R3): release-remote frees a ticket held by a sandbox that's gone: recorded, unbound, never retried here; refused without a reason or for local tickets", async () => {
+  const c = await lane("release");
+  const argv = resistantPayload(c);
+  c.fake.flag("drop-midrun", true);
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", ...argv);
+  try {
+    await until("running on the sandbox", () => existsSync(join(c.fake.repo, "midrun-started")), 30000);
+    c.fake.unreachable(true);
+    await until("held", () => log(c, id).includes("waiting until alickers confirms"), 30000);
+    const tk = JSON.parse(readFileSync(join(c.sched, "state.json"), "utf8")).tickets[id];
+    assert.equal(hc(c, ["release-remote", id]).code, 2, "a reason is required");
+    assert.equal(hc(c, ["release-remote", id, "--reason", " "]).code, 2);
+    const rel = hc(c, ["release-remote", id, "--reason", "owner confirmed the sandbox is gone"]);
+    assert.equal(rel.code, 0, rel.err);
+    assert.match(rel.err, /released: owner confirmed the sandbox is gone/);
+    const r = result(c, id);
+    assert.deepEqual([r.code, r.stopReason, r.evidence.bound, r.released.reason], [75, "released", false, "owner confirmed the sandbox is gone"]);
+    assert.equal(JSON.parse(readFileSync(join(c.sched, "state.json"), "utf8")).tickets[id], undefined, "the reservation is free");
+    assert.ok(readFileSync(join(c.sched, "ledger.jsonl"), "utf8").includes('"event":"remote-released"'));
+    await until("its holder ended", () => !alive(tk.holder), 10000);
+    await sleep(3000);
+    assert.doesNotMatch(log(c, id), /LOCAL-RAN/, "never retried here");
+    assert.equal(waitFor(c, id).code, 75);
+    // A local ticket is refused.
+    const l = submit(c, c.wt("local"), "--class", "quick", "--machine", "3090", "--", "sleep", "5");
+    await running(c, l);
+    assert.equal(hc(c, ["release-remote", l, "--reason", "x"]).code, 2);
+    hc(c, ["cancel", l]);
+  } finally {
+    c.fake.unreachable(false);
+    // The detached, TERM-ignoring payload on the fake sandbox: only this context's own scopes.
+    for (const u of spawnSync("systemctl", ["--user", "list-units", `sched2bfake-${c.n}-job-*`, "--plain", "--no-legend"], { encoding: "utf8" }).stdout.trim().split("\n").map((x) => x.trim().split(/\s+/)[0]).filter(Boolean))
+      spawnSync("systemctl", ["--user", "kill", "--signal=SIGKILL", u], { stdio: "ignore" });
   }
 });

@@ -106,6 +106,7 @@ const stopJob = (why) => {
   stopping = why;
   (async () => {
     for (let i = 0; !ended; i++) {
+      if (released()) process.exit(0);
       const s = handedOverAt == null ? { reached: true, stopped: true, started: false } : await remoteStop(cfg, id, { attempt, cancel: why === "cancelled", r });
       if (s.reached && s.stopped && !s.started) { endTransport(); }
       if (ended || (s.reached && s.stopped)) break;
@@ -311,6 +312,7 @@ async function finish(outcome, evidence, fetchedArtifacts = []) {
     evidence, artifacts: artifacts.length ? (fetchedArtifacts.length ? fetchedArtifacts : artifacts.map((p) => ({ remote: p, error: "the job did not run" }))) : undefined,
   };
   transaction(cfg, (state) => {
+    if (!state.tickets[id] || released()) return {}; // released by the coordinator meanwhile: its record stands
     writeFileSync(join(dir, "exit.json"), JSON.stringify(result, null, 1));
     delete state.tickets[id];
     ledger(cfg, { event: "job", ...result });
@@ -327,12 +329,17 @@ async function finish(outcome, evidence, fetchedArtifacts = []) {
  */
 async function settle(why) {
   for (let i = 0, noted = false; ; i++) {
+    if (released()) process.exit(0);
     const s = await remoteStop(cfg, id, { attempt, r });
     if (s.reached && s.stopped) return s;
     if (!noted) { noted = true; note(`${why}: waiting until alickers confirms this attempt has stopped (${s.reached ? s.detail : "unreachable"}); the ticket keeps its place there meanwhile`); }
     await sleep(Math.min(30000, 2000 * 2 ** i));
   }
 }
+
+/** The coordinator released this ticket (heavy-check release-remote): it has
+ * its terminal record already, and nothing here may touch the queue again. */
+function released() { return readJson(join(dir, "exit.json"))?.stopReason === "released"; }
 
 /** The transport's environment: test seams only under a private test state (R2-F5). */
 function transportEnv() {
@@ -397,6 +404,7 @@ async function recoverTicket() {
     // one after it would be our TERM's. Then the attempt is stopped, and the
     // ticket kept, until the sandbox confirms it (R2-F3).
     for (let i = 0; ; i++) {
+      if (released()) process.exit(0);
       const before = await remoteRead(lane, id, at.attempt, at.nonce);
       if (before && rc == null && before.receipt.valid && before.receipt.exit != null) rc = before.receipt;
       const s = before ? await remoteStop(cfg, id, { attempt: at.attempt, r: lane }) : { reached: false };

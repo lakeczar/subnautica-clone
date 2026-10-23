@@ -14,7 +14,7 @@
 #
 # - It refuses to start (receipt "lane refused …", exit 75) if the ticket was
 #   cancelled or this attempt retired or superseded.
-# - It records "PID START" and its scope's cgroup first, before those checks, so
+# - It records "PID START BOOT" and its scope's cgroup first, before those checks, so
 #   a stop that finds no PID knows the job has not started.
 # - After the command, still inside the lock, it stages each declared output
 #   (ARTIFACTS_BASE64: NUL-separated paths) into the attempt's stage/
@@ -28,7 +28,7 @@ IFS=' ' read -r n c || true
 exec </dev/null
 mkdir -p "$d"
 rec() { [ -n "$c" ] && printf '%s lane %s\n' "$n" "$*" >>"$c/receipt"; }
-echo "$$ $(cut -d' ' -f22 /proc/$$/stat)" >"$d/pid"
+echo "$$ $(cut -d' ' -f22 /proc/$$/stat) $(cat /proc/sys/kernel/random/boot_id)" >"$d/pid"
 cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
 echo "$cg" >"$d/cgroup"
 if [ -e "$t/cancelled" ]; then rec refused cancelled; echo "siltwake-lane: cancelled before start; the command did not run"; exit 75; fi

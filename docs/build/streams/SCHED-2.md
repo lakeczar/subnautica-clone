@@ -32,7 +32,7 @@ Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordin
 **Soaks there:** frames are recorded, never judged; a would-be failure gets a report **WARNING**. Memory, graphics, hold and save rules are judged. The browser is `siltwake-chrome`, which sets its own GPU flags, with the sandbox's playwright-core.
 
 **Checks:**
-- **Acceptance** `scripts/heavy/acceptance-sched2b.test.mjs` passes **24/24** (B1–B24; B18–B24 are R2's) against a fake sandbox run by the real transport (`siltwake-job`'s lock, pause flag, user scope, MemoryHigh and swap settings reproduced), with real systemd scopes:
+- **Acceptance** `scripts/heavy/acceptance-sched2b.test.mjs` passes **27/27** (B1–B27; B18–B24 are R2's, B25–B27 R3's) against a fake sandbox run by the real transport (`siltwake-job`'s lock, pause flag, user scope, MemoryHigh and swap settings reproduced), with real systemd scopes:
   - B1 any on alickers at its commit, worktree free, an evidence-pack directory and a file fetched whole, sandbox checkout left clean, ledger records;
   - B2 paused: 4070 waits and runs on resume, any runs here; B3 paused after dispatch: any falls back here keeping its place, 4070 waits again; B4 unreachable, dirty tree and local paths;
   - B5 stall after `testing`, heartbeats, waiting for the sandbox lock isn't silence; B6 memory.high throttling reported and stopped as `throttled`;
@@ -115,6 +115,30 @@ Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordin
   - killing only the transport's PID would orphan its ssh, now the whole process group is killed, and only once the attempt can't start;
   - test fixes: the fake's background jobs lost stdin, the lib's `until` didn't await async predicates, and `B5` and `B7` (waiting on the lock) now use `4070`, because `any` no longer waits.
 
+**R3 review responses** (review `2c78ac0` on `review/sched-2b-r3`, on `d51ee944`: two P2s, no P1). Both are fixed at the root, with regressions B25–B27 in `acceptance-sched2b.test.mjs`. The operator override is added as directed.
+- **F1, a crash between the claim and the scope stranded the slot: fixed.**
+  - **Order:** the transport now publishes the scope's complete identity, `<boot id> <cgroup> <inode>`, atomically (`scope.tmp`, then `mv`) **before** it takes the `run` claim. If the identity can't be read or written, nothing is claimed.
+  - **A crash before publishing or before the claim** leaves the claim free, so the holder takes it as `abandon` and the attempt can never start.
+  - **A crash after the claim** always leaves an identity whose cgroup, gone or empty, proves the end. There is no timeout and no fallback on ambiguity.
+  - **B25** uses a fixture `ln` that kills the sandbox's shell just before or just after creating the `run` claim:
+    - before: abandoned, then run here;
+    - after: settled from the identity, then run here, with the payload never run on the sandbox;
+    - a `4070` job after its claim: waits, then runs on alickers, bound;
+    - holder death in that state, with slow sandbox cleanup: recovery gives 137;
+    - cancel in that state: 75;
+    - then a job runs: the slot is free.
+  - **On `d51ee944`** the same fixture strands the attempt: `claim -> run`, no scope, the holder looping on "no scope recorded yet".
+- **F2, scope identity reused across a reboot: fixed.**
+  - **The identity** carries the sandbox's `/proc/sys/kernel/random/boot_id`, and so does lane-run's PID record (`PID START BOOT`).
+  - **Before any signal or cgroup stop,** `remoteStop` reads this boot's ID. A record from another boot proves its processes are gone, and is never signalled.
+  - **Fails closed:** an unreadable boot ID, or a missing, garbled or bootless identity, means "not stopped". Liveness reads check the boot too.
+  - **B26:** a live replacement scope owns the old record's path and inode. A record from another boot stops nothing and leaves the replacement alive. Missing, garbled and bootless identities fail closed. Another inode at the path counts as gone, with the new scope untouched. Positive control: this boot's identity of that scope stops it. On `d51ee944` the cross-boot case fails.
+- **Operator override:** `heavy-check release-remote <ticket> --reason "…"`, coordinator-only (usage text and WORKER_RESOURCE_LIMITS).
+  - **What it does:** for a running remote ticket, it writes a cancelled (75), unbound terminal record with the reason, the operator and the time, logs `remote-released` in the ledger, and frees the reservation. It ends the holder and any recovery, checked by PID and start time; their loops also stop by themselves on that record, and the holder never overwrites it.
+  - **What it doesn't do:** no local retry, never automatic. It refuses without a reason, and refuses local tickets.
+  - **B27:** a lost-then-unreachable ticket is held, then released. 75, `released`, unbound, ledger entry, slot free, holder gone, and never run here.
+- **Checks** at the commit below: SCHED-2b **27/27**, SCHED-2 **16/16**, SCHED-1 **23/23**, fast tier **1,377/1,377**. **Missing evidence:** the real 4070 canary, still. The sandbox was busy throughout the reviewer's window, and I haven't retried it.
+
 **Limits and compromises:**
 - **Peak memory and CPU time** of remote jobs are unavailable. Root fix: `siltwake-job` (fleet's) writes its scope's `memory.peak` and `cpu.stat` to a file the lane fetches.
 - **Undeclared files** a job writes inside the checkout stay there, as with direct `alickers-job.sh` calls today. Root fix: the transport cleans untracked files on commit change, as it now does for `.test-build*`. Fleet and the transport owner's call.
@@ -122,7 +146,10 @@ Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordin
 - **MemoryHigh at 85%** stays in `siltwake-job` until fleet changes it (the coordinator is asking). Meanwhile throttling is detected and labelled.
 - **Upload of the in-sandbox wrapper:** a file under `/work/tmp/siltwake-lane/bin/<hash>/`, like the transport's own bundle upload. It is not in the checkout.
 - **Deliberate receipt forgery is out of scope (R2-F1, the coordinator's ruling).** The transport, the wrapper and the job run as the same sandbox user, so a payload that deliberately reads its parent's memory (`/proc/<pid>/mem`) could learn the nonce and write a valid record. This is the same class as SCHED-1's accepted "a job deliberately kills its own anchor". Root fix: run the transport's receipt writer under a separate sandbox uid, with the receipt directory owned by it and unreadable to the job uid. Cost: a fleet change to the sandbox (a second account, sudo or a setuid helper for `siltwake-job`) and a review of the owner's PC setup, which we may not touch ourselves.
-- **An attempt on an alickers that never comes back holds its ticket (R2-F3).** By rule, no fallback while a stop can't be confirmed, and `cancel` waits too. Escape: the ticket ends once alickers is reachable again; killing its holder only moves the wait to recovery. Root fix: a sandbox-side lease that `siltwake-job` enforces (a job whose holder hasn't renewed within N minutes is killed by the sandbox itself), so a lapsed lease is itself proof. Cost: a fleet change to `siltwake-job`.
+- **An attempt on an alickers that never comes back holds its ticket (R2-F3).** By rule, there is no fallback while a stop can't be confirmed, and `cancel` waits too.
+  - **Escape:** the ticket ends once alickers is reachable again. If the owner confirms the sandbox is gone, the coordinator's `release-remote` (R3) frees it, recorded and unbound.
+  - **Root fix:** a sandbox-side lease that `siltwake-job` enforces: a job whose holder hasn't renewed within N minutes is killed by the sandbox itself, so a lapsed lease is itself proof.
+  - **Cost:** a fleet change to `siltwake-job`.
 - **The no-wait check is a check plus a claim, not a non-blocking lock (R2-F4),** because `siltwake-job` (fleet's) always waits up to 3,600 s. In the rare race, the abandoned attempt's `siltwake-job` keeps waiting on the sandbox until the lock frees, then exits without running anything. Root fix: a `--no-wait` option in `siltwake-job`. Cost: a one-line fleet change.
 
 **Cut-over** (coordinator, after review): merge, `scripts/heavy/install.sh` (the transport is copied into the version), then update briefs to `--machine`. Nothing is needed on the sandbox.

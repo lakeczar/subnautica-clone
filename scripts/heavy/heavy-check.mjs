@@ -9,6 +9,8 @@
 //   heavy-check status [TICKET]               the queue, or one ticket
 //   heavy-check log TICKET [-f]               the job's output
 //   heavy-check cancel TICKET                 remove a queued ticket or stop a running one
+//   heavy-check release-remote TICKET --reason "…"   coordinator only: free a remote
+//                                             ticket whose sandbox is confirmed gone
 //
 // OPTIONS: --class quick|standard|heavy-suite|gpu|playthrough|bake|soak|exclusive
 //          --review  --stall S  --deadline S  --cpus N  --mem 3G  --gpu (soak)
@@ -36,7 +38,7 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cfg = loadConfig();
-const SUBCOMMANDS = new Set(["run", "submit", "wait", "status", "log", "cancel", "help", "--help", "-h"]);
+const SUBCOMMANDS = new Set(["run", "submit", "wait", "status", "log", "cancel", "release-remote", "help", "--help", "-h"]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const say = (msg) => process.stderr.write(`heavy-check: ${msg}\n`);
 const fail = (msg, code = 2) => { say(msg); process.exit(code); };
@@ -393,6 +395,46 @@ async function cancelCmd(args) {
   }
 }
 
+/**
+ * The coordinator's override for a dead sandbox (SCHED-2b R3): a remote
+ * ticket waits, by rule, until alickers confirms its attempt stopped, so one
+ * whose sandbox never comes back holds its reservation for good. Only when
+ * the owner has confirmed the sandbox is gone, this writes a cancelled,
+ * unbound terminal record with the reason, frees the reservation and ends the
+ * ticket's holder and recovery (checked by PID and start time). The job is not
+ * retried here; nothing calls this automatically. Root fix: a sandbox-side
+ * lease (fleet's siltwake-job).
+ */
+function releaseRemoteCmd(args) {
+  const id = args[0], at = args.indexOf("--reason"), reason = at >= 0 ? String(args[at + 1] ?? "").trim() : "";
+  if (!id || id.startsWith("-") || !reason) fail('usage: heavy-check release-remote TICKET --reason "owner confirmed the sandbox is gone" (coordinator only)');
+  const by = `${process.env.USER ?? "?"} (pid ${process.pid})`;
+  const r = transaction(cfg, (state) => {
+    const t = state.tickets[id];
+    if (!t) return { result: existsSync(join(jobDir(cfg, id), "exit.json")) ? "finished" : "unknown" };
+    if (!t.remote || t.state !== "running") return { result: "not-remote" };
+    const request = readJson(join(jobDir(cfg, id), "request.json"));
+    const result = {
+      ticket: id, code: 75, stopReason: "released", class: t.req.class, remote: true, machine: MACHINE_LABELS.remote, machineTag: t.goal?.machine, attempts: t.attempts,
+      label: `released by the coordinator: ${reason}. The attempt on alickers was never confirmed stopped; the job was not run here`,
+      released: { reason, by, at: Date.now() }, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), head: request?.tree?.head ?? null,
+      evidence: { commit: request?.tree?.head ?? null, bound: false, why: `released by the coordinator: ${reason}`, snapshot: false },
+    };
+    writeJsonAtomic(join(jobDir(cfg, id), "exit.json"), result);
+    ledger(cfg, { event: "remote-released", ...result, holder: t.holder ?? null, recovering: t.recovering ?? null });
+    delete state.tickets[id];
+    return { changed: true, result: { holder: t.holder, holderUnit: t.holderUnit, recovering: t.recovering } };
+  });
+  if (r === "unknown") fail(`unknown ticket ${id}`);
+  if (r === "finished") { say(`${id} already finished`); return 0; }
+  if (r === "not-remote") fail(`${id} is not a running remote ticket; use heavy-check cancel`);
+  // Its holder and any recovery would wait for alickers for good: end them (they also stop by themselves on the record).
+  for (const p of [r.holder, r.recovering]) if (alive(p)) { try { process.kill(p.pid, "SIGKILL"); } catch { /* gone */ } }
+  if (r.holderUnit) systemctl("stop", "--no-block", `${r.holderUnit}.scope`);
+  say(`${id} released: ${reason}. Its reservation on alickers is free; the job was not run here. If alickers comes back, its attempt files stay in the lane directory there`);
+  return 0;
+}
+
 /** Finishes tickets whose owner died (state.mjs reconcile), so wait, status
  * and cancel reach a result even when nothing else is queued to run a
  * transaction. Takes no lock while every owner process is alive. */
@@ -413,5 +455,6 @@ switch (sub) {
   case "status": process.exit(statusCmd(argv));
   case "log": process.exit(await logCmd(argv));
   case "cancel": process.exit(await cancelCmd(argv));
+  case "release-remote": process.exit(releaseRemoteCmd(argv));
   default: process.stdout.write(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1).filter((l, i, all) => all.slice(0, i + 1).every((x) => x.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n") + "\n");
 }

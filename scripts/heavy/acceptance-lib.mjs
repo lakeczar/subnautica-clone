@@ -141,6 +141,14 @@ export function fakeSandbox(c, extra = {}) {
     "HOME=\"$FAKE/home\" PATH=\"$FAKE/bin:$PATH\" exec bash -c \"$cmd\"",
     "",
   ].join("\n"));
+  // The claim boundary (R3-F1): the sandbox's shell dies just before or just after claiming "run".
+  w("bin/ln", `#!/bin/bash
+if [ "$1" = -s ] && [ "$2" = run ]; then
+  if [ -e "$FAKE/crash-before-claim" ]; then rm -f "$FAKE/crash-before-claim"; kill -9 $PPID; exit 1; fi
+  if [ -e "$FAKE/crash-after-claim" ]; then rm -f "$FAKE/crash-after-claim"; /usr/bin/ln "$@"; s=$?; kill -9 $PPID; exit $s; fi
+fi
+exec /usr/bin/ln "$@"
+`);
   w("bin/siltwake-job", `#!/usr/bin/env bash
 # siltwake-job, as on the sandbox, with private paths and unit names
 set -euo pipefail
@@ -153,7 +161,7 @@ flock -w "\${FAKE_LOCK_WAIT:-3600}" 9 || exit 75
 if [[ -e "$FAKE/home/.local/state/siltwake/paused" ]]; then echo 'Sandbox paused by owner' >&2; exit 75; fi
 sleep "\${FAKE_START_DELAY:-0}"
 unit="sched2bfake-${c.n}-job-$$"
-cleanup() { systemctl --user stop "$unit.scope" >/dev/null 2>&1 || true; }
+cleanup() { [[ -e "$FAKE/slow-cleanup" ]] && sleep 4; systemctl --user stop "$unit.scope" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 trap 'exit 143' TERM HUP
 status=0

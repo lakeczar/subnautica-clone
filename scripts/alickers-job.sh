@@ -32,8 +32,10 @@
 # "lane" lines (heavy-check's lane-run.sh reads it and gives its job /dev/null).
 # DIR/claim is a symlink: the sandbox creates it as "run" when it admits the
 # attempt, and a caller that gives the attempt up first creates it as "abandon".
-# Whichever is first wins, so an abandoned attempt can never start. DIR/scope
-# records the job scope's cgroup and inode, so a stop can be confirmed.
+# Whichever is first wins, so an abandoned attempt can never start. Before
+# claiming, the sandbox publishes DIR/scope, "<boot id> <cgroup> <inode>" of the
+# job scope, atomically: a claimed attempt always has it, so a stop can prove
+# its end (the cgroup gone, empty, another inode, or another boot).
 # Output lines never carry control meaning. With fd 3 open, this script writes
 # "handover" there just before the job command goes to the sandbox: an earlier
 # failure means nothing reached it.
@@ -130,10 +132,16 @@ sha=$1 c=$2; shift 2
 n=""; [ -z "$c" ] || IFS= read -r n
 rec() { [ -z "$c" ] || printf '%s %s\n' "$n" "$*" >>"$c/receipt"; }
 if [ -n "$c" ]; then
+  # The scope's identity (this boot, its cgroup and inode) is published, complete
+  # and atomically, before the claim: once "run" is claimed, a stop can always
+  # prove this attempt's end from it. Without it, nothing is claimed.
+  boot=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null) cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
+  ino=$(stat -c %i "$cg" 2>/dev/null)
+  if ! [[ "$boot" =~ ^[0-9a-f-]{36}$ && "$ino" =~ ^[0-9]+$ ]] || ! { printf '%s %s %s\n' "$boot" "$cg" "$ino" >"$c/scope.tmp" && mv -f "$c/scope.tmp" "$c/scope"; }; then
+    echo "alickers-job: could not record the job scope's identity; the command did not run" >&2; exit 70
+  fi
   ln -s run "$c/claim" 2>/dev/null
   [ "$(readlink "$c/claim")" = run ] || { rec abandoned; echo "alickers-job: this attempt was given up before the sandbox admitted it; the command did not run" >&2; exit 75; }
-  cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
-  echo "$cg $(stat -c %i "$cg")" >"$c/scope.tmp" && mv "$c/scope.tmp" "$c/scope"
 fi
 rec admitted "$(date +%s)"
 old=$(git rev-parse HEAD 2>/dev/null || true)
