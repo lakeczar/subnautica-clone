@@ -112,6 +112,9 @@ export const DIVIDE_RIDGE: readonly (readonly [number, number])[] = [
 export const DIVIDE_GATE_X = 600;
 /** Dense brine interface (the "mirror"). Below this, south of the ridge, is brine. */
 export const BRINE_Y = -440;
+/** The drawn mirror sheet's height: BRINE_Y softly varied by ±0.25 m. Art laid
+ * on the mirror (CR-1's resting-skate outlines) samples this to sit on it. */
+export const brineSheetY = (x: number, z: number): number => BRINE_Y + 0.25 * fbm(x, z, 30, 2, 77);
 /** Narrow exterior service ledge depth on the Divide's south face. */
 export const SERVICE_LEDGE_Y = -412;
 export const MERIDIAN_CENTRE = { x: 1490, z: -1650 } as const;

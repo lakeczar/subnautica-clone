@@ -6,6 +6,10 @@ import type { Point } from "../geometry.js";
 import { PALETTE as P } from "../palette.js";
 import { creatureParts, Display, smooth } from "./kit.js";
 import type { CreatureView, ThreatPose } from "./types.js";
+import { brineSheetY } from "../../content/regions/terrain.js";
+
+/** Outline points (local x, z) where the mirror sheet is sampled: centre, wingtips, nose, tail. */
+const OUTLINE_SAMPLES: readonly (readonly [number, number])[] = [[0, 0], [3.3, 0.1], [-3.3, 0.1], [0, -2.4], [0, 1.9], [0.15, 4.5]];
 
 /** Layer skate: a broad ray living inside the dense brine. Its cue is at the
  * mirror surface above it, so the view owns a dimple ring at `layerY`: flat
@@ -91,7 +95,11 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
       // Settled under the mirror (busy and within a few metres of it): the outline shows.
       rest = smooth(rest, a.busy && Math.abs(a.position.y - layerY) < 3 ? 1 : 0, 1.5, dt);
       outline.setEnabled(rest > 0.05);
-      outline.position.set(a.position.x, layerY + 0.03, a.position.z);
+      // On the drawn sheet, which rolls ±0.25 m about layerY: just over its highest point under the outline.
+      let sheet = -Infinity;
+      for (const [dx, dz] of OUTLINE_SAMPLES)
+        sheet = Math.max(sheet, brineSheetY(a.position.x + dx * Math.cos(a.yaw) - dz * Math.sin(a.yaw), a.position.z + dx * Math.sin(a.yaw) + dz * Math.cos(a.yaw)));
+      outline.position.set(a.position.x, Math.max(layerY, sheet) + 0.06, a.position.z);
       outline.rotation.set(0, -a.yaw, 0);
       outline.scaling.setAll(0.6 + 0.4 * rest);
       dimple.setEnabled(dimpleScale > 0.04);
