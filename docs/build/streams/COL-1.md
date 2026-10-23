@@ -2,12 +2,56 @@
 
 Opus 5.5 high. Branch `t3/col-1-static-collider` from root `fe27757`; stage A head: see the commit that adds this page. The decision that created this stream is R1 of the [compromise verdict](../audits/COMPROMISE-VERDICT-OPUS.md) (on `research/compromise-audit`), on Sol's findings ART-01/02/03/07, CAV-02/03/20 and TST-05. **New modules only:** `src/world/collision/*` and `tests/col1-*`. No edit to `world.ts`, `app.ts`, `step.ts`, LC's files, or any cave or creature file.
 
+## R2 response (Sol R2 on `b94430c`: [report](../reviews/COL-1A-SOL-XHIGH-R2.md), on `review/col-1a-r2`)
+One root change fixes N1, N2 and most of N4: **recovery validates with oriented, one-sided contacts against closed solids.** A box can enter a closed solid through a face only while moving against that face's outward normal. So a contact with a face counts only then:
+- the box may leave whatever holds it, through any number of faces, with no exemptions;
+- it meets, as a contact, every face it would *enter*: another solid, or an arm of the same part it left;
+- skin and boxes keep their sweep semantics (a start contact may only separate).
+
+The heightfield applies the same rule to every contact, start or later. R1's two-phase exemption and `leaves` are gone. Every reproduction in the report is a test in `tests/col1-r2.test.ts`, and each fix's mutation fails its test:
+- the escape sweep made two-sided again;
+- R1's whole-way exemption;
+- later heightfield contacts not oriented;
+- no default bounds;
+- no lower bound.
+
+| Finding | Root fix | Tests |
+| --- | --- | --- |
+| **N1 (P1)** An exemption stayed active after a part was left: recovery crossed a re-entered arm (U and B). | The **oriented escape sweep** (`escapeSweep`), above: no exemption interval exists to outlive a part. | The report's U/B case, as separate members **and** as two labelled parts of one shape: never enters the east arm (checked by an independent sweep against the arm alone), and never returns R1's 1.444 m answer. Controls: without B, the gap at 0.944 m; nested boxes (0.844 m); touching boxes. |
+| **N2 (P2)** A buried diver rising met the underside of a heightfield edge and was pushed 1.17 m sideways. | `faceContact` judges **every** contact, not only start contacts, by the face's outward normal: an edge contact can no longer block motion that cannot enter through that face. Top and wall entry stay blocked; slides keep the kernel's normal along edges. | The report's Float32 cell: no contact, ends at (0.45, 3.2, 0.55). Its field: recovery straight up within 2.79 m (R1 returned null). **Monotonic property:** 2,000 rises from random poses, buried or not, on a wavy field with holes, with Float32 samples, all reach the requested end. Entry from clear starts (down and sideways) stays blocked, with no clear start ending inside. |
+| **N3 (P2)** R5's original reproduction (no bounds, or X/Z-only) still lost the exterior's Y policy. | `bounds` **defaults to `createWorldQueries`'s whole policy** (`EXTERIOR_BOUNDS`: the S1/S2 envelope and `WORLD_VERTICAL_BOUNDS`). `StaticBounds` needs all six limits, and construction validates them: finite and ordered. An incomplete or inverted policy throws. | R5's reproduction **as written** (no bounds), ordinary and `separateBoxOverlaps`, both through the static path, both equal to the exterior's answer. Rejection of X/Z-only (`WORLD_BOUNDS`), inverted and infinite policies. |
+| **N4 (P2)** Recovery on a dense curved solid ran thousands of rejected validations: 6.31 s at 39,600 triangles. | Three changes:<br>1. The oriented sweep accepts the outward face exits R1 rejected while the box still straddled the part.<br>2. **A configuration-space lower bound:** the centre must leave every part holding it, so no candidate nearer than the farthest of those parts' surfaces is tried. That distance comes from a branch-and-bound nearest-triangle search.<br>3. Candidates are ordered by a heap, built once, and only the first few are popped.<br>Tessellation is untouched, and there is no rescue fallback. | The report's 25,280-triangle sphere: a face exit (under the 2.561 m ring exit), in at most 3 sweeps and 50 tried candidates (R1: 11,982 sweeps). Any straddled pose on a sphere leaves freely along its normal, and inward stays blocked. Cost: *Checks*. |
+
+**Checks for R2:**
+- **Fast tier:** passes 1,335 / 1,335 at `72d90c8`; `col1-r2` adds 10 tests at 0.9 s CPU.
+- **Heavy oracle:** `col1-oracle.heavy.test.ts` passes **4 / 4** through the queue at `038f22b` (57 s, peak 248 MiB). The Canopy's 45 shared LC endpoints are unchanged.
+- **Typecheck:** clean.
+- **Recovery cost, `--class exclusive` at `038f22b`** (`tests/col1-recovery-cost.ts`, [`col1/recovery-cost-r2.jsonl`](col1/recovery-cost-r2.jsonl)). Headless Node, median of three calls, mesh construction excluded, host load at most 2.1.
+
+| Sphere triangles | From (0.1, 0.2, 0.3) | From the centre | Per call |
+| --- | --- | --- | --- |
+| 324 | 0.9 ms | 2.6 ms | 1 sweep, 27 tried |
+| 6,240 | 2.1 ms | 2.8 ms | 1 sweep, 27–40 tried |
+| 25,280 | 5.1 ms | 7.1 ms | 1 sweep, 27–40 tried |
+| 39,600 | **6.3 ms** (R1: 6.31 s) | 9.7 ms (R1: 6.31 s) | 1 sweep, 27–40 tried |
+
+Every call returns a clear face exit, 2.03–2.37 m away; the ring exit R1 fell back to is 2.561 m. What remains is linear: one pass over the containing part's faces to list their exits, and one branch-and-bound nearest search.
+
+**Also fixed:** a NaN corner empties its whole cell everywhere. `heightAt`, support and sight now read the cell's own ownership, as overlap and walls already did (the report's qualification, tested).
+
+**API changes:** the R1 additions `sweepExcept` and `leaves` are replaced by `escapeSweep` and `partDistance`; nothing outside COL-1 used them. `StaticBounds.minY`/`maxY` are now required, and `bounds` is optional with the exterior's default.
+
+**Dispositions kept from the review:**
+- **LC's endpoint debt is deferred to stage B, but not as a safety allowance.** I ask the coordinator to make the cap and collar walls (or a mesh-following cap) an **explicit stage-B acceptance prerequisite**, and to verify every affected end after that fix.
+- **The 1% bound is a regression alarm.** The classifier exempts a new illegal end whenever the old move also ends illegal; it does not prove the ends or the causes are the same.
+- **R4's best-effort search stays a named compromise.** The review's perpendicular-slabs case (null at 0.64 m, found at 0.8 m) is that compromise, unchanged.
+
 ## R1 response (Sol R1 on `245a006`: [report](../reviews/COL-1A-SOL-XHIGH-R1.md), on `review/col-1a-r1`)
 All five findings are fixed at the root, and stage B's API is unchanged: the same calls, with additions only. Every reproduction in the report is now a test in `tests/col1-r1.test.ts`. **Each fix was mutation-checked:** removing it fails its test, as do removing the lift and restoring the old jittered parity.
 
 | Finding | Root fix | Tests |
 | --- | --- | --- |
-| **R1 (P1)** Recovery from inside a solid skipped the escape sweep and crossed a separate wall. | Recovery validates the **whole** way out, in two phases:<br>1. While the centre is still inside the parts that held it, the box is swept against everything *except those parts*, so it can leave the rock it was caught in.<br>2. From where the centre leaves them, it is swept against everything.<br>A start contact may only separate. Exempting is per part (`PartRef`), never per shape or union. | The report's case through the collider **and the composed world** (wall B as an exterior solid): null within 1 m; with room, out through the far face and never through B; without B, the short way. Also a box caught across a wall it overlaps, which backs out the way it came. |
+| **R1 (P1)** Recovery from inside a solid skipped the escape sweep and crossed a separate wall. | Recovery validates the **whole** way out. *(R1 did this with a two-phase per-part exemption; R2 replaced that with the oriented escape sweep, see* R2 response*.)* | The report's case through the collider **and the composed world** (wall B as an exterior solid): null within 1 m; with room, out through the far face and never through B; without B, the short way. Also a box caught across a wall it overlaps, which backs out the way it came. |
 | **R2 (P1)** Jittered parity counted a shared diagonal twice: a whole box read as water. | `verticalCrossing`, a **watertight half-open rule**. Edge functions use a fixed vertex order (so neighbours see exactly opposite signs), and a point on an edge's line takes the sign at (x + ε, z + ε²). Each vertical line crosses each surface exactly once, through edges, vertices and either winding. It is used everywhere parity is: shapes, parts, split groups, and biome caps (`crossings`). No jitter remains. | Grid edges, vertices, diagonals and the report's point, on outward and reversed windings; every top-face vertex; overlapping parts; a split group's own vertices and seams; crossings exactly 2 under the box. |
 | **R3 (P1)** A sweep or sight line entered heightfield solid from a hole or the outside. | **The heightfield is a volume.**<br>- **Walls:** each solid cell edge that meets a hole or the lattice's edge is a vertical wall (two triangles down to the bounds' bottom).<br>- **One-sided:** sweeps meet the top and the walls only from above and from outside. A start contact is judged by the outward face normal, not the kernel's best axis, so a mostly buried box can't sink. Top slides are unchanged, and a buried actor may rise or leave through a wall.<br>- **Sight:** blocked under a solid cell's surface wherever the segment enters it. | The report's hole-to-solid and outside-to-solid cases, ending in and beyond the solid, and its composed case through LC's composer (it stops at X 2.656, as the columns did). Plus buried escape, refused sinking, a smooth glide over a hole's edge, and an independent brute force (every top and wall triangle) for sight. |
 | **R4 (P2)** Recovery took the face nearest the centre and gave up when it was over budget. | **The shortest validated candidate.** Candidates are:<br>- every face exit of the containing parts (plane distance plus the box's reach along the face normal, exact for leaving a convex part);<br>- push-outs from every overlapped surface, box and heightfield wall;<br>- the 26-direction ring.<br>All are tried shortest first, and each is validated as in R1 before it is accepted. | The report's two cases: 0.644 m (not null at 0.65) and 0.404 m (not 1.204 m). |
