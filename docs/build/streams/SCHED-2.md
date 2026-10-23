@@ -70,6 +70,7 @@ Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordin
   - **Fallback:** a fallen-back `any`/`soak` stops probing; a fallen-back `4070` keeps probing.
   - **Regression B16:** with a 4 s probe and alickers busy, `any` is admitted here within 2.5 s from an unknown, a stale `up` and a stale `unreachable` reading.
 - **F7, an unbounded artifact transfer: fixed.** `fetchStage` aborts on inactivity (`fetchInactivityS`, 60 s) or a ceiling (`fetchCeilingS`, 30 min), and on cancellation; it kills both ends. The watchdog, cancel check and backstop stay on through the fetch. A failed fetch is reported with the path of the staged copy kept on alickers. **Regression B17:** a stalled transfer ends in about 3 s with that report, and a cancel during it returns promptly.
+- **Checks** at `c67f5cb` (2b with root `a536775` merged, the stall fix included): SCHED-2b acceptance **17/17**, SCHED-2 **16/16**, SCHED-1 **23/23**, policy 32/32, soak 31/31, fast tier 1,367. No mutation run against `c88bab6`: the new fake runs the real transport, whose receipt and wrapper signature the old code lacks. The reviewer's reproductions, rebuilt as B8 and B12–B17, are the regression evidence.
 - **Found while fixing:**
   - the local copy of a fetched stage kept its read-only modes, now made writable;
   - a fallen-back 4070 ticket stopped refreshing health;
