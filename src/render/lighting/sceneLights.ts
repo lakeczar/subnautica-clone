@@ -22,7 +22,11 @@ export interface SceneLights {
   /** Lights sent last frame, emissive meshes known, meshes waiting for a scan. */
   readonly stats: { readonly sent: number; readonly known: number; readonly pending: number;
     /** Last update's time scanning new meshes, placing lights, and choosing them, ms. */
-    readonly scanMs: number; readonly placeMs: number; readonly selectMs: number; readonly placed: number };
+    readonly scanMs: number; readonly placeMs: number; readonly selectMs: number; readonly placed: number;
+    /** Lights the selection considered this frame, and the frame's slowest entry to place. */
+    readonly considered: number;
+    readonly slowest: { readonly name: string; readonly ms: number; readonly instances: number; readonly clusters: number; readonly frozen: boolean } | null;
+  };
   dispose(): void;
 }
 
@@ -77,7 +81,10 @@ interface Entry {
   world: PointLight[] | null;
   /** A frozen mesh's lights being placed over several frames: those so far,
    * and the next thin instance. */
-  placing: { readonly out: PointLight[]; next: number } | null;
+  placing: { readonly out: PointLight[]; next: number; cluster: number } | null;
+  /** Each cluster's reach, strength and colour (instance-independent), by
+   * whether the mesh is attached (moving) or frozen. */
+  params: { attached: boolean; list: readonly Omit<PointLight, "x" | "y" | "z">[] } | null;
   active: boolean;
 }
 
@@ -129,26 +136,34 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     }
     if (!clusters.length) return true;
     const instances = m.thinInstanceCount > 0 ? m.thinInstanceGetWorldMatrices() : null;
-    entries.set(mesh.uniqueId, { mesh, clusters, instances, world: null, placing: null, active: true });
+    entries.set(mesh.uniqueId, { mesh, clusters, instances, world: null, placing: null, params: null, active: true });
     mesh.onDisposeObservable.addOnce(() => entries.delete(mesh.uniqueId));
     return true;
   };
   const scratch = new Matrix(), p = new Vector3();
+  /** Lights placed between checks of the placement budget. */
+  const PLACE_CHECK = 256;
   /** The entry's world lights. A frozen mesh's are placed once and cached,
    * resuming across frames until `until` (CW-1: one streamed scatter mesh can
-   * hold thousands of thin instances); null while still being placed. */
+   * hold thousands of thin instances, each with many clusters); null while
+   * still being placed. The budget is checked by lights placed, not by
+   * instances, and each cluster's parameters are derived once per entry. */
   const toWorld = (e: Entry, until = Infinity): PointLight[] | null => {
     const frozen = e.mesh.isWorldMatrixFrozen && !e.mesh.parent;
     if (frozen && e.world) return e.world;
+    if (!e.params || e.params.attached === frozen) e.params = { attached: !frozen, list: e.clusters.map(c => lightFromCluster(c, !frozen)) };
+    const params = e.params.list, clusters = e.clusters;
     const world = e.mesh.computeWorldMatrix(!frozen), instances = e.instances ?? [null];
-    const job = frozen ? (e.placing ??= { out: [], next: 0 }) : { out: [] as PointLight[], next: 0 };
-    for (; job.next < instances.length; job.next++) {
-      if (frozen && (job.next & 63) === 0 && job.next > 0 && performance.now() > until) return null;
+    const job = frozen ? (e.placing ??= { out: [], next: 0, cluster: 0 }) : { out: [] as PointLight[], next: 0, cluster: 0 };
+    let sinceCheck = 0;
+    for (; job.next < instances.length; job.next++, job.cluster = 0) {
       const matrix = instances[job.next];
       const m = matrix ? matrix.multiplyToRef(world, scratch) : world;
-      for (const c of e.clusters) {
+      for (; job.cluster < clusters.length; job.cluster++) {
+        if (frozen && ++sinceCheck >= PLACE_CHECK) { sinceCheck = 0; if (performance.now() > until) return null; }
+        const c = clusters[job.cluster]!;
         Vector3.TransformCoordinatesFromFloatsToRef(c.x, c.y, c.z, m, p);
-        job.out.push({ x: p.x, y: p.y, z: p.z, ...lightFromCluster(c, !frozen) });
+        job.out.push({ x: p.x, y: p.y, z: p.z, ...params[job.cluster]! });
       }
     }
     if (frozen) { e.world = job.out; e.placing = null; }
@@ -160,7 +175,9 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     if (!h || h.isDisposed()) { h = (scene.getMeshByName(id) as Mesh | null) ?? undefined; if (h) hulls.set(id, h); }
     return h ?? null;
   };
-  let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0;
+  let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0, considered = 0;
+  /** The frame's slowest entry to place (measurement: which mesh a long placement was). */
+  let slowest: { name: string; ms: number; instances: number; clusters: number; frozen: boolean } | null = null;
   const send = (u: ReturnType<typeof lightUniforms>, halo: number): void => {
     for (const m of targets) {
       m.setArray4("localLightPos", u.position);
@@ -171,7 +188,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
   };
   send(lightUniforms([]), 0);
   return {
-    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed }; },
+    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed, considered, slowest }; },
     update(state, eye, daylight, time) {
       // Scan new meshes in a bounded slice per frame, resuming a large one.
       const until = performance.now() + 1.5;
@@ -191,11 +208,16 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       // for some scatter) are placed once and cached; place a bounded number
       // per frame (CW-1), so a new chunk's lights join over a few frames.
       const placeUntil = performance.now() + 2;
+      slowest = null;
       for (const e of entries.values())
         if (e.active && !e.mesh.isDisposed() && e.mesh.isEnabled() && !(hull && (e.mesh === hull || e.mesh.isDescendantOf(hull)))) {
           if (!e.world && e.mesh.isWorldMatrixFrozen && !e.mesh.parent && performance.now() > placeUntil) continue;
+          const t0 = performance.now();
           const placedLights = toWorld(e, placeUntil);
           if (placedLights) for (const l of placedLights) lights.push(l);
+          const ms = performance.now() - t0;
+          if (ms > (slowest?.ms ?? 0)) slowest = { name: e.mesh.name, ms, instances: e.instances?.length ?? 1, clusters: e.clusters.length,
+            frozen: e.mesh.isWorldMatrixFrozen && !e.mesh.parent };
         }
       placeMs = performance.now() - placeStart; placed = lights.length;
       for (const v of vents) lights.push(v);
@@ -223,6 +245,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
         lights.push({ x: at.x, y: at.y, z: at.z, radius: inst.radius, strength: 0.2, reserved: true, noHalo: true, r: 0.78, g: 0.92, b: 1 });
       }
       const selectStart = performance.now();
+      considered = lights.length;
       const chosen = selectLights(lights, eye);
       selectMs = performance.now() - selectStart;
       sent = chosen.length;

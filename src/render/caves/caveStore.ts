@@ -101,6 +101,8 @@ export function httpCaveStore(base: string, options: CaveStoreOptions): CaveStor
 }
 
 let store: CaveStore | null | undefined;
+/** Replace the game's cave store (tests: a pack that is pending, lands or fails). */
+export function setGameCaveStore(next: CaveStore | null | undefined): void { store = next; }
 /** The game's cave store: the baked `caves/` beside the page in a browser,
  * none elsewhere (Node tests and tools generate live). */
 export function gameCaveStore(): CaveStore | null {

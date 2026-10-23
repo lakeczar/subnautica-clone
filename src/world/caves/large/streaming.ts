@@ -378,6 +378,9 @@ export class CaveAdmission {
     this.fixedOwner = `${o.id}.fixed`; this.safetyOwner = `${o.id}.safety`;
   }
   get admitted(): boolean { return this.safety?.complete === true; }
+  /** A new expedition replaced the old one (CW-1 R2): its loading timer
+   * starts afresh. The safety set and reservations are world data, kept. */
+  reset(): void { this.loadingSince = -1; }
   /** True while the biome's fixed bytes are reserved: its bake, colliders and
    * lamp windows may be (and must only be) resident while this holds. */
   get loaded(): boolean { return this.arbiter.holds(this.fixedOwner); }

@@ -38,12 +38,14 @@ export class GameView {
     GameView.current = this;
   }
   slot(_slot: SaveSlot, _hasSession: boolean): void {}
+  /** The menu's busy presentation (a save operation, or CW-1's entry wait). */
+  busy = false;
   persistence(
     _message: string,
     _automatic: boolean,
     _hasSession: boolean,
-    _busy: boolean,
-  ): void {}
+    busy: boolean,
+  ): void { this.busy = busy; }
   settings(...settings: unknown[]): void { this.lastSettings = settings; }
   lookAction(visible: boolean, fallback = false): void { this.lookVisible = visible; this.fallback = fallback; }
   target(): void {}

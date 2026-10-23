@@ -188,7 +188,14 @@ try {
   await browser.startTracing(page, { categories: ["disabled-by-default-v8.gc", "v8", "blink.user_timing"], screenshots: false });
   // CW1_PROFILE=1 (diagnosis): a sampled CPU profile of the page over the travel.
   const cdp = process.env.CW1_PROFILE ? await page.context().newCDPSession(page) : null;
-  if (cdp) { await cdp.send("Profiler.enable"); await cdp.send("Profiler.setSamplingInterval", { interval: 500 }); await cdp.send("Profiler.start"); }
+  let profileStartPage = null;
+  if (cdp) {
+    await cdp.send("Profiler.enable"); await cdp.send("Profiler.setSamplingInterval", { interval: 500 });
+    // The profile's clock is aligned to the page's at its start (within a round trip).
+    const before = await page.evaluate(() => performance.now());
+    await cdp.send("Profiler.start");
+    profileStartPage = (before + await page.evaluate(() => performance.now())) / 2;
+  }
   sched.pid = findRenderer();
   note("renderer main thread", sched.pid ?? "not found");
   const sampler = setInterval(sampleSched, 5);
@@ -228,14 +235,14 @@ try {
     const trace = JSON.parse((await browser.stopTracing()).toString()), events = trace.traceEvents ?? trace;
     const mark = events.find(e => e.name === "cw1-align");
     // Profile samples on the page clock, each with its leaf and the nearest frames of our code.
-    if (profile && mark) {
+    if (profile) {
       const byId = new Map(profile.nodes.map(n => [n.id, n])), parentOf = new Map();
       for (const n of profile.nodes) for (const c of n.children ?? []) parentOf.set(c, n.id);
-      const label = (n) => { const f = n.callFrame; return `${f.functionName || "(anonymous)"}${f.url ? ` ${f.url.split("/").pop()}:${f.lineNumber + 1}` : ""}`; };
+      const label = (n) => { const f = n.callFrame; return `${f.functionName || "(anonymous)"}${f.url ? ` ${f.url.split("/").pop()}:${f.lineNumber + 1}:${f.columnNumber + 1}` : ""}${n.deoptReason ? ` [deopt: ${n.deoptReason}]` : ""}`; };
       const stackOf = new Map();
       const stack = (id) => { let s = stackOf.get(id); if (s) return s; const out = []; for (let n = id; n !== undefined && out.length < 6; n = parentOf.get(n)) out.push(label(byId.get(n))); s = out.join(" < "); stackOf.set(id, s); return s; };
       let t = profile.startTime; profileAt = [];
-      for (let i = 0; i < profile.samples.length; i++) { t += profile.timeDeltas[i]; profileAt.push([markAt + (t - mark.ts) / 1000, profile.samples[i]]); }
+      for (let i = 0; i < profile.samples.length; i++) { t += profile.timeDeltas[i]; profileAt.push([profileStartPage + (t - profile.startTime) / 1000, profile.samples[i]]); }
       profileAt.stack = stack;
     }
     // Top-level main-thread pauses: V8's MajorGC / MinorGC (and their finalizations).
@@ -268,7 +275,8 @@ try {
     if (profileAt) {
       const counts = new Map();
       for (const [ts, id] of profileAt) if (ts > at - g && ts <= at) { const k = profileAt.stack(id); counts.set(k, (counts.get(k) ?? 0) + 0.5); }
-      hot = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, ms]) => `${ms} ms: ${k}`);
+      const total = [...counts.values()].reduce((a, b) => a + b, 0);
+      hot = [`${total} ms sampled`, ...[...counts].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, ms]) => `${ms} ms: ${k}`)];
     }
     result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }

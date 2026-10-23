@@ -210,7 +210,11 @@ export function* tessellate(floor: (x: number, z: number) => number, rect: Rect,
     const m: [number, number] = [(c.x0 + c.x1) / 2, (c.z0 + c.z1) / 2];
     return poly.map((p, i) => [m, p, poly[(i + 1) % poly.length]!]);
   };
-  const error = (c: Cell, poly: [number, number][]): number => {
+  /** A cell's worst probe distance. It yields between triangles: a cell
+   * bordered by finely split neighbours fans into dozens of triangles, each
+   * probing the floor (CW-1 measured one cell's estimate at 37 ms on the
+   * legacy floor), so one cell is not one unit of work. */
+  function* error(c: Cell, poly: [number, number][]): Generator<void, number> {
     let worst = 0;
     for (const t of triangles(c, poly)) {
       const [a, b, d] = t as [[number, number], [number, number], [number, number]];
@@ -219,9 +223,10 @@ export function* tessellate(floor: (x: number, z: number) => number, rect: Rect,
         const x = a[0] * wa + b[0] * wb + d[0] * wd, z = a[1] * wa + b[1] * wb + d[1] * wd;
         worst = Math.max(worst, planeDistance(a[0], ya, a[1], b[0], yb, b[1], d[0], yd, d[1], x, H(x, z), z));
       }
+      if (due()) yield;
     }
     return worst;
-  };
+  }
   const onBorder = (c: Cell): string[] => {
     const out: string[] = [];
     if (Math.abs(c.z0 - rect.minZ) < EPS) out.push(`z:${key(rect.minZ)}`);
@@ -243,7 +248,7 @@ export function* tessellate(floor: (x: number, z: number) => number, rect: Rect,
       // Sides only ever gain points (cells split, never merge), so the
       // point count identifies the polygon.
       const poly = polygon(c), sig = String(poly.length);
-      if (c.sig !== sig) { c.sig = sig; c.err = error(c, poly); if (due()) yield; }
+      if (c.sig !== sig) { c.sig = sig; c.err = yield* error(c, poly); }
       if (c.err > o.tolerance && canSplit(c)) {
         const mx = (c.x0 + c.x1) / 2, mz = (c.z0 + c.z1) / 2;
         for (const q of [{ x0: c.x0, x1: mx, z0: c.z0, z1: mz }, { x0: mx, x1: c.x1, z0: c.z0, z1: mz },

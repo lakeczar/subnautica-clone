@@ -575,7 +575,8 @@ export function createRenderer(
           chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2), gpuTag: gpuTimer.tag, gpuDone: gpuTimer.done,
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
-          jump,
+          jump, stepUnit: world?.maxStepUnit ?? null, lightsIn: lights.stats.considered,
+          lightSlow: lights.stats.slowest && lights.stats.slowest.ms > 2 ? { ...lights.stats.slowest, ms: +lights.stats.slowest.ms.toFixed(1) } : null,
         };
         // Legacy per-frame counters for older drivers (REC-1's test hook computes
         // them only when asked); timed, so their cost is on every recording.
