@@ -65,6 +65,7 @@ Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `7070084` (C4, CA-3, 
   - `runtime/app.ts`: `KeyM` releases bait.
   - `render/renderer.ts` passes `state` to the creature layer and sets `canvas.dataset.tick` (the sim tick, read only by evidence drivers to time windows).
   - `render/{expedition,environment}.ts` skip creature grounds in the legacy source art.
+  - `content/regions/terrain.ts` exports `brineSheetY(x, z)`, the drawn mirror's height (`BRINE_Y` ± 0.25 m). `render/biomes/terrain.ts` now builds the mirror from it, with identical vertices, and the rest outline sits on it.
 - **Saves:** no schema bump. New sources and renewal rows load as New Game's (additive content); `systems.traps` is filled as `[]`. `earned-c06.json` and `reef-rib-trap.json` were re-canonicalised by decode → encode; only rows were added.
 - **Test pins updated for additive content.** Each comment says why:
   - roster and renewal pins: `resource-renewal`, `renewal-save`, `additive-content`, `campaign-economy`, `progression-curve`, `c4-world`, `persistence-support`;
@@ -79,10 +80,10 @@ Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `7070084` (C4, CA-3, 
 - **CB-2 lore edit:** `fieldGuide.ts`, `fieldNotes.ts` and `FIELD-GUIDE.md` now say the skates settle just under the mirror in slack water (was: sink into the brine), to match CRE-05. Flagged for CB.
 
 ## Compromise verdict (CRE-03/04/05/08)
-- **CRE-05 (done):** a resting skate rises to 0.9 m under the mirror and lies still. Its rest outline (body, both wingtips, tail) sits on the mirror with low humps for the back and wingtips, so it reads from the crest and at a grazing angle. The patrol ripple stops while it rests. Test: `CRE-05` (fast).
+- **CRE-05 (done):** a resting skate rises to 0.9 m under the mirror and lies still. Its rest outline (body, both wingtips, tail; wound both ways) sits on the drawn mirror sheet, just above its highest point under the outline, with low humps for the back and wingtips, so it reads from the crest and at a grazing angle. The patrol ripple stops while it rests. Test: `CRE-05` (fast).
 - **CRE-04 (interim, done):** the stand-in laying skates appear or leave only while their spot is out of the camera's view (a 1 rad cone, 140 m). One still in view after the visit keeps circling the egg cases until the camera turns away. Test: `CRE-04 (interim)` (fast).
 - **CRE-03 (fits, done):** see `hunter.ts` above. Test: `CRE-03` (fast) puts a 3 m crown trunk across the usual point.
-- **CRE-08:** one native continuous approach per window; results under 3090 play.
+- **CRE-08 (done):** one native continuous approach per window; see 3090 play.
 
 ## Compromises: root fix and cost
 | Compromise | Root fix | Cost until then |
@@ -126,7 +127,10 @@ Sim code final at `de3d4f6`; later commits touch only evidence drivers, render a
 - **Per-step cost** (CPU time, idle Canopy): 193 µs, against root's 156 µs, after the unswept round (it was 808 µs with the swept round).
 
 ## 3090 ordinary-key play
-Task-owned headless Chrome, ANGLE GL-EGL on "NVIDIA GeForce RTX 3090", through `heavy-check.sh` (three jobs, each under 5 min of play), closed at the end, 0 page errors. Driven by the game's keys and the panels' own buttons ([`cr1/play.mjs`](cr1/play.mjs), records `cr1/play-*.json`). Saves come from [`cr1/derive.mjs`](cr1/derive.mjs): P1's creel scenario played headless to Meridian (every phase passes, including the new `creatures` phase), branched from its milestones, then idled with real steps until the scene's window was due. In the window scenes the diver is placed at the scene (a diagnostic shortcut, as C4's `derive-c`).
+Task-owned headless Chrome, ANGLE GL-EGL on "NVIDIA GeForce RTX 3090", through `heavy-check.sh` (`--class gpu`), closed at the end, 0 page errors in every run.
+
+### Window scenes (first run, placed diver)
+These scenes were played with three jobs, each under 5 min of play. Driven by the game's keys and the panels' own buttons ([`cr1/play.mjs`](cr1/play.mjs), records `cr1/play-*.json`). Saves come from [`cr1/derive.mjs`](cr1/derive.mjs): P1's creel scenario played headless to Meridian (every phase passes, including the new `creatures` phase), branched from its milestones, then idled with real steps until the scene's window was due. In the window scenes the diver is placed at the scene (a diagnostic shortcut, as C4's `derive-c`).
 
 | | |
 |---|---|
@@ -142,7 +146,33 @@ Task-owned headless Chrome, ANGLE GL-EGL on "NVIDIA GeForce RTX 3090", through `
   - the mites' existing cue;
   - "… · one phase timed in the journal" for each window.
 - **No threat banner** in any scene.
-- **Not visible:** the skate's sinking can't be seen through the opaque mirror. A faint patrol ripple on the mirror (added after the first run, gone while resting) doesn't show from 30 m at a grazing angle. The rest reads by the crest ribbons, the caption and the absence of any warning.
+- **Then not visible, since fixed (CRE-05):** in this run the skates rested deep, unseen through the opaque mirror. They now rest just under it, with their outlines on the sheet (frames 19–20).
+
+### Native continuous approaches (CRE-08)
+One per window, with no placement and no teleport. [`cr1/approach.mjs`](cr1/approach.mjs) plays P1's creel scenario headless with the game's own step. The first time the bot's own play brings the player within range of a threat (Canopy 150 m in the Dart; the others 260 m), it saves that exact state. The GPU leg loads that save and continues with ordinary keys: it flies the craft along collision-checked legs in 15 m steps, gets out, waits for the window by watching, and crosses sprinting with the lamp on. Records: `cr1/play-approach-*.json`.
+
+| Window | Start | Result |
+| --- | --- | --- |
+| Canopy hunter | Dart, 150 m out, 7 m deep, on the bot's Reef → Canopy route | The Dart reached the upper crowns, 115 m deep, loud and lit. The hunter was already away feeding when it came within 100 m. Health and hull 100, no warning. |
+| Glare stalkers | Creel, 260 m out | The Creel flew to the park point and the diver got out. On the way down, lit, a stalker saw the lamp, followed, then stopped at the cool water: ENC-1's ordinary ladder, with no harm. The diver crossed the passage while both fed. Health 100. |
+| Layer skates (rest) | Creel, 260 m out | The diver waited 12 m over the mirror for 37 s until slack water. The skates settled with their outlines on the mirror. The diver went down to it and crossed. Health 100. |
+| Hollow choir | Creel, 260 m out, parked 45 m south of the gallery | The diver waited 47 m from both choirs and set off as the bells closed. The crossing was 101 m, sprinting, on the shortest clear line a capsule sweep found through both reaches. Health 100, no hum. |
+
+| | |
+|---|---|
+| ![](cr1/13-canopy-native-start-150m.webp) Canopy: the Dart as the bot left it, 150 m out | ![](cr1/14-canopy-lab-reached.webp) Upper crowns reached, 115 m, health and hull 100 |
+| ![](cr1/16-rift-stalker-stops-at-cool-water.webp) Rift: "The stalker stops at the edge of the cool water"; vent feeding timed | ![](cr1/17-rift-crossed.webp) Rift: crossed, health 100 |
+| ![](cr1/19-divide-skates-resting-outline.webp) Divide: a resting skate's outline on the mirror, a second farther off | ![](cr1/20-divide-outline-grazing-angle.webp) Down at the mirror: an outline at a grazing angle (right) |
+| ![](cr1/22-meridian-bells-closed.webp) Meridian: the gallery's bells closed, about to go | ![](cr1/23-meridian-crossed.webp) Meridian: out past both reaches, health 100 |
+
+**Missing evidence, not replaced:**
+- **Canopy and Rift, the wait itself:** the bot's own route arrived while those windows were already open, so the frames don't show the player watching a window open. The Divide and Meridian runs do.
+- **Hunter pass (CRE-03) in play:** no frame of a pass made visible by a variant. It is covered only by the fast test.
+- **Laying visit (CRE-04):** not played on the GPU. The out-of-view swap is covered only by the fast test.
+- **Earlier failures, kept in the record:**
+  - In the first approach run, the Rift Creel stalled on one long leg; that led to the 15 m steps.
+  - Meridian twice stalled at the gallery floor, and once the choir pulsed (−5.4 HP) after the window closed; that led to the swept line.
+  - In two Divide runs the outline hid under the drawn mirror sheet; that led to `brineSheetY`.
 
 ## Adverse case
 S4's real-world adverse case: a diver who lingers lit and loud in the stalkers' passage, then climbs out dark. When I first added windows, the busy branch reset the animal's strike count, so every feeding bout gave the stalkers a fresh engagement. The diver lost **229 HP** against S4's 60 HP bound. Fix: a window never refreshes an encounter, and an animal that breaks off to feed is spent through its refractory, as a lure spends the choir. The bound holds again (`ecology-world`, `ecology-adverse` and `ecology-agents` pass unchanged).
