@@ -1,3 +1,4 @@
+// test-tier: allow-escape the F22 test runs scripts/rec/views/accept.mjs, a file-copying CLI that never loads Babylon
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";

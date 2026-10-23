@@ -110,6 +110,8 @@ export interface FrameParts {
   gpuTimerMs: number;
   /** The legacy per-frame `#ocean` counters (two reduces over every mesh), ms. */
   dom?: number;
+  /** CW-1's further attribution (cave sub-parts and the like): diagnostics, read by its own tools. */
+  [diagnostic: string]: unknown;
   /** CW-1: the streaming unit behind the frame's longest build step, the lights the selection considered, and the slowest light placement over 2 ms. */
   stepUnit: string | null;
   lightsIn: number;
