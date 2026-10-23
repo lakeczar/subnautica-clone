@@ -12,13 +12,19 @@
 // no long frame attributed to streaming; the job exits 1 when it fails.
 // usage (frame times are performance evidence, so the exclusive class):
 //   $H --class exclusive -- node traverse.mjs <dist> <plan.json> <save.json> <segment> <outdir> <port>
+// Another GPU (the second worker's RTX 4070): CW1_CHROME (a browser wrapper
+// that sets its own GPU flags), CW1_PW (where playwright-core is installed),
+// CW1_GPU (the renderer it must report, a regex) and CW1_LABEL (how its
+// frame times are labelled).
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { requireGpuLease } from "../../../../scripts/heavy/gpu-lease.mjs";
 requireGpuLease("CW-1 traversal");
-const require = createRequire("/work/tmp/gpu-prep/pw/");
+const require = createRequire(process.env.CW1_PW ?? "/work/tmp/gpu-prep/pw/");
+const CHROME = process.env.CW1_CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`;
+const GPU = new RegExp(process.env.CW1_GPU ?? "RTX 3090");
 const { chromium } = require("playwright-core");
 const [dist, planFile, saveFile, segArg, out, port] = process.argv.slice(2);
 const segment = Number(segArg), plan = JSON.parse(readFileSync(planFile, "utf8")), points = plan.segments[segment];
@@ -35,11 +41,11 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(Number(port), "127.0.0.1", r));
 const log = [];
 const note = (...a) => { const line = `[${(performance.now() / 1000).toFixed(1)}s] ${a.join(" ")}`; log.push(line); console.log(line); };
-const result = { commit: readFileSync(path.join(dist, "COMMIT"), "utf8").trim(), segment, caves: points.filter(p => p.cave).map(p => p.cave),
+const result = { commit: readFileSync(path.join(dist, "COMMIT"), "utf8").trim(), label: process.env.CW1_LABEL ?? "RTX 3090 (factory-worker)", segment, caves: points.filter(p => p.cave).map(p => p.cave),
   reached: [], skipped: [], shots: [], views: [], errors: [], holds: [], long: [], unsliced: [], recoveries: 0 };
 let traveling = false;
-const browser = await chromium.launch({ executablePath: `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`,
-  headless: true, args: ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist", "--enable-precise-memory-info", "--cw1-traverse"], timeout: 30000 });
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, timeout: 30000,
+  args: [...(process.env.CW1_CHROME ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", "--cw1-traverse"] });
 let page;
 const held = new Set();
 const key = async (k, on) => { if (on && !held.has(k)) { held.add(k); await page.keyboard.down(k); } else if (!on && held.has(k)) { held.delete(k); await page.keyboard.up(k); } };
@@ -116,7 +122,7 @@ try {
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load", timeout: 60000 });
   result.renderer = await page.evaluate(() => { const g = document.createElement("canvas").getContext("webgl2"); const e = g.getExtension("WEBGL_debug_renderer_info"); return g.getParameter(e.UNMASKED_RENDERER_WEBGL); });
   note("renderer", result.renderer);
-  if (!/RTX 3090/.test(result.renderer)) throw new Error(`not the RTX 3090: ${result.renderer}`);
+  if (!GPU.test(result.renderer)) throw new Error(`not the expected GPU (${GPU.source}): ${result.renderer}`);
   await page.waitForFunction(() => document.querySelector("#ocean")?.dataset.graphics === "available", null, { timeout: 60000 });
   await page.locator("#new-game").waitFor({ state: "visible", timeout: 60000 });
   const title = Date.now() - t0;
