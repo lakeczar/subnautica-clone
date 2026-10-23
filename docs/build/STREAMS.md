@@ -706,3 +706,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Decision: split.**
     - **SIM-1a merges now:** the in-place step, StepGuard, SIM-02, the chunked recorder with note-keeping rotation, the cursor, the lock split, and root's own single-key atomic persistence. That's no regression vs root, and notes are now kept.
     - **SIM-1b follows:** the incremental journal (parked from f6fee338), with the R6 rulings: no cache and a fresh head parse per commit; a total reader; repair supersedes v1; a rejected lock or quota failure retries, while conflict and protection don't.
+- **TST-16 R8** (Sol on `1d1a1bfe`, report on `review/tst-16-r8` `39ac5fb6`): REQUEST CHANGES. R7 is fixed and all controls hold.
+  - **P2:** the unbounded `daemon-reload` inside the transaction holds the lock, so a failed submission runs later.
+  - **P2:** reload failure is swallowed, and the equality shortcut never retries.
+  - **P3:** prefix counter parsing.
+  - **P3:** an invalid throttle reading is still `measured:true`.
+  - **Fix:** one checked, timed systemctl helper for install and removal that restores the prior unit on failure and exits before any switch.
