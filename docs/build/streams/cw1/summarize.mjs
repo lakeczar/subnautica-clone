@@ -30,7 +30,7 @@ if (longs.length) {
   for (const l of longs) {
     const p = l.frame?.parts ?? {}, top = Object.entries(p).filter(([k, v]) => typeof v === "number" && !["lightCount", "evicted", "uploads", "buildMs", "maxStepMs", "caveBuildMs", "uploadMs"].includes(k))
       .sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k, v]) => `${k} ${v.toFixed(1)}`).join(", ");
-    console.log(`- ${l.run}${l.camera ? ` at ${l.camera.split(",").map(v => Math.round(+v)).join(", ")}` : ""}: ${l.gap} ms gap, ${l.frame?.total} ms of work (${top})${l.gc ? `, gc (${l.heapFreedMiB} MiB freed)` : l.heapFreedMiB != null ? ", no collection" : ""}` +
+    console.log(`- ${l.run}${l.camera ? ` at ${l.camera.split(",").map(v => Math.round(+v)).join(", ")}` : ""}: ${l.gap} ms gap, ${l.frame?.total} ms of work (${top})${l.gcs?.length ? `, GC in it: ${l.gcs.join(" + ")}` : l.gcs ? ", no GC traced" : l.gc ? `, gc (${l.heapFreedMiB} MiB freed)` : ""}` +
       (p.jump ? `, camera jumped ${p.jump.slice(0, 3).join(",")} → ${p.jump.slice(3).join(",")}` : ""));
   }
 }

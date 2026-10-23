@@ -110,6 +110,8 @@ export class TestRenderer {
   static current: TestRenderer;
   presents = 0;
   disposed = false;
+  /** The view settling after a jump (CW-1): the app keeps the clock paused. */
+  settling = false;
   constructor(
     private readonly canvas: TestCanvas,
     private readonly availability?: (available: boolean) => void,

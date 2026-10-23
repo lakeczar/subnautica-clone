@@ -45,6 +45,10 @@ const result = { commit: readFileSync(path.join(dist, "COMMIT"), "utf8").trim(),
   reached: [], skipped: [], shots: [], views: [], errors: [], holds: [], long: [], unsliced: [], recoveries: 0 };
 let traveling = false;
 // Playwright's default SwiftShader fallback flag is refused by a GPU wrapper (and must not apply on the GPU).
+// Collections on the main thread, from a Chrome trace of V8's GC events
+// (aligned to performance.now by a user-timing mark), so every long frame is
+// checked against the pauses that ran in it.
+let gcTrace = [];
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, timeout: 30000,
   ...(process.env.CW1_CHROME ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}),
   args: [...(process.env.CW1_CHROME ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", "--cw1-traverse"] });
@@ -153,7 +157,8 @@ try {
   let s = await read(); eye = s.cam[1] + s.depth;
   note("loaded", JSON.stringify({ cam: s.cam, depth: s.depth, vitals: s.vitals }));
   // Measured from here: the traversal itself.
-  await page.evaluate(() => { window.__siltwakePerf.length = 0; window.__gaps.length = 0; });
+  await browser.startTracing(page, { categories: ["disabled-by-default-v8.gc", "v8", "blink.user_timing"], screenshots: false });
+  const markAt = await page.evaluate(() => { window.__siltwakePerf.length = 0; window.__gaps.length = 0; performance.mark("cw1-align"); return performance.now(); });
   const started = performance.now(), syncAtStart = records.sync ?? 0;
   traveling = true;
   let caveIndex = 0;
@@ -182,7 +187,16 @@ try {
   }
   result.seconds = +((performance.now() - started) / 1000).toFixed(1);
   traveling = false;
-  const data = await page.evaluate(() => ({ gaps: window.__gaps, perf: window.__siltwakePerf, stream: JSON.parse(document.querySelector("#ocean").dataset.caveStream ?? "{}"),
+  {
+    const trace = JSON.parse((await browser.stopTracing()).toString()), events = trace.traceEvents ?? trace;
+    const mark = events.find(e => e.name === "cw1-align");
+    // Top-level main-thread pauses: V8's MajorGC / MinorGC (and their finalizations).
+    const top = events.filter(e => e.ph === "X" && /^(MajorGC|MinorGC|V8\.GCFinalizeMC|V8\.GCScavenger|V8\.GCCompactor|V8\.GCIncrementalMarkingFinalize|V8\.GC_MC_.*ATOMIC.*|V8\.GCMinorMS)$/.test(e.name) && e.dur > 0);
+    if (mark) gcTrace = top.map(e => ({ at: markAt + (e.ts - mark.ts) / 1000, kind: e.name, pauseMs: +(e.dur / 1000).toFixed(2), tid: e.tid }));
+    result.gcTraceAligned = !!mark;
+    result.gcTraceNames = [...new Set(events.filter(e => /GC/.test(e.name ?? "")).map(e => e.name))].slice(0, 40);
+  }
+  const data = await page.evaluate(() => ({ origin: performance.timeOrigin, gaps: window.__gaps, perf: window.__siltwakePerf, stream: JSON.parse(document.querySelector("#ocean").dataset.caveStream ?? "{}"),
     cpu: Number(document.querySelector("#ocean").dataset.residentCpu ?? 0), gpu: Number(document.querySelector("#ocean").dataset.residentGpu ?? 0),
     regionBytes: Number(document.querySelector("#ocean").dataset.regionBytes ?? 0),
     heap: performance.memory ? { used: performance.memory.usedJSHeapSize, total: performance.memory.totalJSHeapSize } : null }));
@@ -196,7 +210,9 @@ try {
   for (const [i, [at, g, heap, camera]] of data.gaps.entries()) if (g > 33.4) {
     const e = data.perf.find(x => x.at >= at - g - 1 && x.at <= at + 1) ?? null;
     const freed = i > 0 && heap && data.gaps[i - 1][2] ? data.gaps[i - 1][2] - heap : 0;
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+    // Collections whose trace line arrived during the gap (or within 30 ms after it).
+    const gcs = gcTrace.filter(x => x.at + x.pauseMs > at - g && x.at < at);
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of
@@ -212,12 +228,14 @@ try {
     simulation: result.long.filter(l => l.frame && !l.streaming && l.frame.sim >= 0.5 * l.frame.total && l.frame.total > 16.7).length,
     noWork: result.long.filter(l => !l.frame || l.frame.total <= 16.7).length,
     // Long gaps in which the heap shrank by over 2 MiB: a collection ran in them (whatever part it landed in).
-    gcShaped: result.long.filter(l => l.gc).length,
-    streamingGcShaped: result.long.filter(l => l.streaming && l.gc && l.gap > 34).length,
+    gcShaped: result.long.filter(l => l.gc || l.gcPauseMs >= 0.4 * l.gap).length,
+    streamingGcShaped: result.long.filter(l => l.streaming && (l.gc || l.gcPauseMs >= 0.4 * l.gap) && l.gap > 34).length,
   };
   result.streamingMax = data.perf.reduce((m, e) => ({ chunks: Math.max(m.chunks, e.parts?.chunks ?? 0), caves: Math.max(m.caves, e.parts?.caves ?? 0) }), { chunks: 0, caves: 0 });
   result.holdFrames = data.perf.filter(e => e.hold && e.hold !== "clear").length;
   result.stream = data.stream;
+  result.gc = { collections: gcTrace.length, byKind: gcTrace.reduce((m, x) => ({ ...m, [x.kind]: (m[x.kind] ?? 0) + 1 }), {}),
+    maxPauseMs: Math.max(0, ...gcTrace.map(x => x.pauseMs)), over16: gcTrace.filter(x => x.pauseMs > 16).map(x => `${x.kind} ${x.pauseMs} ms at ${x.at.toFixed(0)}`) };
   // The gate: the travel's own unsliced builds (the counter, and the logged
   // warnings that say where), holds and streaming-attributed long frames.
   const travelSync = (data.stream.sync ?? 0) - syncAtStart;

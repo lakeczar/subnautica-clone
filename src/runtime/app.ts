@@ -398,7 +398,8 @@ export class SiltwakeApp {
     // While a cave holds, the simulation clock is paused (no oxygen, exposure,
     // power or AI ticks); rendering carries on.
     const hold = this.active ? this.caveAdmission(now) : null;
-    this.clock.advance(now, this.active && !hold?.holding, () => {
+    // Likewise while the view settles after a jump (respawn, refuge, rescue).
+    this.clock.advance(now, this.active && !hold?.holding && !this.renderer?.settling, () => {
       if (!this.state || !this.active) return;
       const stepStart = perf ? performance.now() : 0;
       try { this.step(now); } finally { if (perf) { simMs += performance.now() - stepStart; steps++; saveMs += this.lastSaveMs; } }

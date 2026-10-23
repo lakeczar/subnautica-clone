@@ -104,29 +104,67 @@ for (let i = 1; i < tour.length; i++) {
   points.push({ ...a.outer }, ...leg(a.outer, b.outer), { ...b.outer }, { ...b.at, cave: b.cave });
 }
 // Every leg must sweep the Dart's hull clear of the game world's solids
-// (structures, docks, the pod), not just the heightfield: a blocked cruise
-// leg tries other depths, then a detour beside it; what stays blocked is
-// reported (the driver would stall there).
+// (structures, sea stacks, docks), not just the heightfield. A leg that does
+// not is replanned: A* over Dart-clear cells (8 m, at a ladder of depths),
+// every link swept, then string-pulled; a blocked cruise point may move to a
+// clear cell within 12 m. What still has no path is reported (the driver
+// would stall there).
 const sweeps = (a, b) => sweptHullClearance(world, [a, b], DART);
+const CELL = 8, LEVELS = [-4, -8, -14, -22, -34, -50, -70, -100, -140, -200, -260, -340, -420, -520, -640, -760].filter(y => y >= DEEPEST);
+function plan(a, b, movableGoal) {
+  const pad = 160, x0 = Math.max(EDGE.minX - 30, Math.min(a.x, b.x) - pad), x1 = Math.min(EDGE.maxX + 30, Math.max(a.x, b.x) + pad);
+  const z0 = Math.max(EDGE.minZ - 30, Math.min(a.z, b.z) - pad), z1 = Math.min(EDGE.maxZ + 30, Math.max(a.z, b.z) + pad);
+  const nx = Math.ceil((x1 - x0) / CELL), nz = Math.ceil((z1 - z0) / CELL), nl = LEVELS.length;
+  const id = (i, k, l) => (k * nx + i) * nl + l, pos = (n) => { const l = n % nl, c = (n - l) / nl, i = c % nx, k = (c - i) / nx;
+    const x = x0 + (i + 0.5) * CELL, z = z0 + (k + 0.5) * CELL; return { x, z, y: Math.max(worldFloor(x, z) + 3, LEVELS[l]) }; };
+  const clear = new Map(), isClear = (n) => { let c = clear.get(n); if (c === undefined) { const p = pos(n); c = p.y <= -2 && hullClearance(world, p, DART); clear.set(n, c); } return c; };
+  const cellOf = (p) => ({ i: Math.max(0, Math.min(nx - 1, Math.floor((p.x - x0) / CELL))), k: Math.max(0, Math.min(nz - 1, Math.floor((p.z - z0) / CELL))) });
+  const near = (p) => { const { i, k } = cellOf(p), out = [];
+    for (let di = -2; di <= 2; di++) for (let dk = -2; dk <= 2; dk++) for (let l = 0; l < nl; l++) {
+      const ii = i + di, kk = k + dk; if (ii < 0 || kk < 0 || ii >= nx || kk >= nz) continue;
+      const n = id(ii, kk, l), q = pos(n); if (Math.abs(q.y - p.y) < 30 && isClear(n)) out.push(n);
+    } return out; };
+  const d3 = (p, q) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+  const goals = new Set(near(b).filter(n => movableGoal ? d3(pos(n), b) <= 12 * 1.8 : sweeps(pos(n), b)));
+  const g = new Map(), from = new Map(), open = [];
+  for (const n of near(a)) if (sweeps(a, pos(n))) { g.set(n, d3(a, pos(n))); from.set(n, -1); open.push([g.get(n) + d3(pos(n), b), n]); }
+  let found = -1, expanded = 0;
+  while (open.length && expanded < 60000) {
+    let bi = 0; for (let j = 1; j < open.length; j++) if (open[j][0] < open[bi][0]) bi = j;
+    const [, n] = open[bi]; open[bi] = open[open.length - 1]; open.pop(); expanded++;
+    if (goals.has(n)) { found = n; break; }
+    const l = n % nl, c = (n - l) / nl, i = c % nx, k = (c - i) / nx, p = pos(n);
+    for (const [di, dk, dl] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[1,1,0],[1,-1,0],[-1,1,0],[-1,-1,0],[0,0,1],[0,0,-1]]) {
+      const ii = i + di, kk = k + dk, ll = l + dl;
+      if (ii < 0 || kk < 0 || ll < 0 || ii >= nx || kk >= nz || ll >= nl) continue;
+      const m = id(ii, kk, ll); if (!isClear(m)) continue;
+      const q = pos(m), cost = g.get(n) + d3(p, q);
+      if (cost >= (g.get(m) ?? Infinity)) continue;
+      if (!sweeps(p, q)) continue;
+      g.set(m, cost); from.set(m, n); open.push([cost + d3(q, b), m]);
+    }
+  }
+  if (found < 0) return null;
+  const path = []; for (let n = found; n >= 0; n = from.get(n)) path.unshift({ ...pos(n), cruise: true });
+  const goal = movableGoal ? null : b, full = [a, ...path, ...(goal ? [goal] : [])];
+  // String-pull: from each kept point, jump to the farthest that sweeps straight.
+  const out = [full[0]];
+  for (let i = 0; i < full.length - 1;) { let j = full.length - 1; while (j > i + 1 && !sweeps(full[i], full[j])) j--; out.push(full[j]); i = j; }
+  return out.slice(1, goal ? -1 : undefined);
+}
 const blocked = [];
+let replanned = 0;
 for (let i = 1; i < points.length; i++) {
   const a = points[i - 1], b = points[i];
-  if (sweeps(a, b)) continue;
-  let fixed = false;
-  if (b.cruise) for (const dy of [-4, -8, 4, 8, -14]) {
-    const q = { ...b, y: clamp(b.y + dy, b.x, b.z) };
-    if (hullClearance(world, q, DART) && sweeps(a, q) && (!points[i + 1] || sweeps(q, points[i + 1]))) { points[i] = q; fixed = true; break; }
-  }
-  const len = Math.hypot(b.x - a.x, b.z - a.z) || 1, px = -(b.z - a.z) / len, pz = (b.x - a.x) / len;
-  for (const off of [15, 30, 60]) for (const side of [1, -1]) for (const dy of [0, -6, 6]) {
-    if (fixed) break;
-    const m = { x: (a.x + b.x) / 2 + px * off * side, z: (a.z + b.z) / 2 + pz * off * side, cruise: true };
-    m.y = clamp(Math.min(a.y, b.y) + dy, m.x, m.z);
-    if (hullClearance(world, m, DART) && sweeps(a, m) && sweeps(m, b)) { points.splice(i, 0, m); fixed = true; }
-  }
-  if (!fixed) blocked.push(`${b.cave ?? "cruise"} at ${b.x.toFixed(0)},${b.y.toFixed(0)},${b.z.toFixed(0)}`);
+  if (hullClearance(world, b, DART) && sweeps(a, b)) continue;
+  const movable = !!b.cruise;
+  const via = plan(a, b, movable);
+  if (!via) { blocked.push(`${b.cave ?? "cruise"} at ${b.x.toFixed(0)},${b.y.toFixed(0)},${b.z.toFixed(0)}`); continue; }
+  replanned++;
+  if (movable) points.splice(i, 1, ...via); else points.splice(i, 0, ...via);
+  i += via.length - (movable ? 1 : 0);
 }
-console.log(`swept every leg: ${blocked.length} still blocked${blocked.length ? ": " + blocked.join("; ") : ""}`);
+console.log(`swept every leg: ${replanned} replanned, ${blocked.length} still blocked${blocked.length ? ": " + blocked.join("; ") : ""}`);
 let total = 0;
 for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
 // Exactly SEGMENTS segments of near-equal length, each cut at the cave stop

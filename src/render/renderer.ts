@@ -47,6 +47,11 @@ export interface GameRenderer {
   /** Idle-time construction of one nearby region into retention. Callers use
    * it only while play is not advancing; it never draws or changes state. */
   prepare(): boolean;
+  /** The view jumped during play (a respawn, a refuge, a rescue) and the
+   * world near it is still being built across frames: the screen is dark
+   * and the caller keeps the simulation clock paused. Never more than
+   * `SETTLE_MAX_MS`. */
+  readonly settling: boolean;
   setQuality(quality: Quality): void;
   resize(): void;
   dispose(): void;
@@ -65,6 +70,8 @@ const JUMP = 64;
  * nothing is interactive (title, load, the opening), and in play while the
  * visible range is still incomplete. */
 const CATCH_UP_MS = 2500, MENU_BUILD_MS = 12, PLAY_BUILD_MS = 4;
+/** Longest a jump during play may keep the screen dark while the near world builds. */
+const SETTLE_MAX_MS = 5000;
 /** Underwater fog hides chunks beyond about this distance. */
 const VISIBLE_WORLD = 200;
 
@@ -312,7 +319,7 @@ export function createRenderer(
     let disposed = false,
       available = true,
       generation = 0;
-    let lastViewer: Vector3 | null = null;
+    let lastViewer: Vector3 | null = null, settleSince = -1;
     let whenReady: (() => void) | null = null;
     const cancelReady = (): void => {
       if (whenReady) scene.onReadyObservable.removeCallback(whenReady);
@@ -343,6 +350,7 @@ export function createRenderer(
       scene.executeWhenReady(whenReady);
     });
     return {
+      get settling() { return settleSince >= 0; },
       present(state, overlay) {
         if (disposed || !available) return;
         const time = state ? state.tick / 60 : 0;
@@ -391,18 +399,23 @@ export function createRenderer(
           camera.position.set(25, 13, 44);
           camera.setTarget(new Vector3(-1, -0.8, -20));
         }
-        // Chunks stream around the camera. After a load or a jump the nearby
-        // ground is built before this frame draws; with no expedition running
-        // (title, loading) construction gets more of each frame.
+        // Chunks stream around the camera. On the first frame the nearby
+        // ground is built before it draws (behind the load screen); a jump
+        // during play instead settles: dark frames, the clock paused by the
+        // caller, the near world built in bounded slices across frames. With
+        // no expedition running (title, loading) or while settling,
+        // construction gets more of each frame.
         const timed = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
         const jumped = !lastViewer || Vector3.Distance(lastViewer, camera.position) > JUMP;
+        const cinematic = !state || state.opening.phase < 4;
+        if (jumped && lastViewer && !cinematic) settleSince = performance.now();
         // A jump during play builds the near world before the frame draws: say from where to where.
         const jump = jumped && lastViewer && timed ? [...lastViewer.asArray(), ...camera.position.asArray()].map(n => Math.round(n)) : null;
         lastViewer = camera.position.clone();
-        const cinematic = !state || state.opening.phase < 4;
-        const extraMs = cinematic ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
+        const extraMs = cinematic || settleSince >= 0 ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
         const tStream = timed ? performance.now() : 0;
-        const world = art.stream(camera.position, { ...(jumped ? { nearRadius: NEAR_WORLD } : {}), extraMs });
+        const world = art.stream(camera.position, { ...(jumped && settleSince < 0 ? { nearRadius: NEAR_WORLD } : {}), extraMs });
+        if (settleSince >= 0 && (art.residency.isReady(NEAR_WORLD) || performance.now() - settleSince > SETTLE_MAX_MS)) settleSince = -1;
         const chunkMs = timed ? performance.now() - tStream : 0;
         cue.update(state ? overlay?.target ?? overlay?.preview ?? null : null, camera.position, !!overlay?.target);
         const interior = !!state && (inCanopyAir(state) || state.player.mode === "interior");
@@ -458,7 +471,8 @@ export function createRenderer(
         canvas.dataset.water = underwater ? "underwater" : "above";
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
         const tRender = timed ? performance.now() : 0;
-        scene.render();
+        if (settleSince >= 0) { engine.clear(new Color4(0, 0, 0, 1), true, true); canvas.dataset.settling = "true"; }
+        else { scene.render(); canvas.dataset.settling = "false"; }
         if (timed) (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent = {
           regions: +regionsMs.toFixed(2), lights: +lightsMs.toFixed(2), actors: +actorsMs.toFixed(2),
           lightScan: +lights.stats.scanMs.toFixed(2), lightPlace: +lights.stats.placeMs.toFixed(2), lightSelect: +lights.stats.selectMs.toFixed(2),
