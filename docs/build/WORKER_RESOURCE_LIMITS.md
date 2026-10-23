@@ -120,7 +120,7 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
   ```
 
   While iterating, run only the affected scenarios (a branch alone with `--from-library`); run them all at handoff.
-- **The GPU guard is pending install** (coordinator, 2026-10-23): it's installed after the last pre-SCHED-2a tickets drain. Until then, enforcement is by the queue's `gpu`/`exclusive` classes only.
+- **The GPU guard is installed** (2026-10-23 10:12Z, guard `073e8b0da3da`). Rerun `scripts/heavy/install.sh --gpu-guard` after any `npx playwright install`.
 - **The GPU lease covers every GPU driver.** Every Playwright Chrome on this machine is wrapped (`install.sh --gpu-guard`; the guard has its own install, so rolling the scheduler back or uninstalling it leaves the guard enforcing, and a missing guard refuses GPU launches): a launch that asks for the GPU (`--use-angle=gl-egl`, `--use-gl=…`, `--enable-gpu`, `--ignore-gpu-blocklist`, Vulkan) refuses to start unless it runs inside a `gpu`, `exclusive` or `soak --gpu` job. Software (SwiftShader) launches pass. Drivers may also call `requireGpuLease()` from `scripts/heavy/gpu-lease.mjs` for an earlier, clearer error.
   - **Outside the queue:** any process holding the NVIDIA device without a lease is shown by `status`, recorded in the ledger (`unleased-gpu`) and on any GPU job that shared the GPU with it. An exclusive run that shared the GPU is marked `DISTURBED`.
 - **Machine-readable results:** `wait --json` ends with one JSON line: `{"pending":true,…}`, or the full result with `code`, `label`, `stopReason` (`stalled`, `deadline`, `ceiling`, `oom`, `killed`, `cancelled`, `preempted`, `rejected` or null) and `evidence`. Use it to tell a pending `99` from a job's own.
