@@ -32,7 +32,9 @@ const note = (...a) => { const line = `[${(performance.now() / 1000).toFixed(1)}
 const commitFile = path.join(dist, "COMMIT");
 const result = { commit: existsSync(commitFile) ? readFileSync(commitFile, "utf8").trim() : "unknown", save: saveFile, angle, segments: [], shots: [], errors: [], notices: [], steps: {} };
 const browser = await chromium.launch({ executablePath: chromePath, headless: true,
-  args: ["--use-gl=angle", `--use-angle=${angle}`, "--ignore-gpu-blocklist", "--ux1-drive"], timeout: 60000 });
+  args: ["--use-gl=angle", `--use-angle=${angle}`, "--ignore-gpu-blocklist", "--ux1-drive"], timeout: 60000,
+  // Playwright's SwiftShader fallback flag: the second worker's Chrome refuses it, and a GPU run must not use it.
+  ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] });
 let page;
 const held = new Set();
 const key = async (k, on) => { if (on && !held.has(k)) { held.add(k); await page.keyboard.down(k); } else if (!on && held.has(k)) { held.delete(k); await page.keyboard.up(k); } };
