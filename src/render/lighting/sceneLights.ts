@@ -75,6 +75,9 @@ interface Entry {
   readonly instances: readonly Matrix[] | null;
   /** World lights, cached for frozen meshes. */
   world: PointLight[] | null;
+  /** A frozen mesh's lights being placed over several frames: those so far,
+   * and the next thin instance. */
+  placing: { readonly out: PointLight[]; next: number } | null;
   active: boolean;
 }
 
@@ -126,23 +129,30 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     }
     if (!clusters.length) return true;
     const instances = m.thinInstanceCount > 0 ? m.thinInstanceGetWorldMatrices() : null;
-    entries.set(mesh.uniqueId, { mesh, clusters, instances, world: null, active: true });
+    entries.set(mesh.uniqueId, { mesh, clusters, instances, world: null, placing: null, active: true });
     mesh.onDisposeObservable.addOnce(() => entries.delete(mesh.uniqueId));
     return true;
   };
-  const toWorld = (e: Entry): PointLight[] => {
+  const scratch = new Matrix(), p = new Vector3();
+  /** The entry's world lights. A frozen mesh's are placed once and cached,
+   * resuming across frames until `until` (CW-1: one streamed scatter mesh can
+   * hold thousands of thin instances); null while still being placed. */
+  const toWorld = (e: Entry, until = Infinity): PointLight[] | null => {
     const frozen = e.mesh.isWorldMatrixFrozen && !e.mesh.parent;
     if (frozen && e.world) return e.world;
-    const world = e.mesh.computeWorldMatrix(!frozen), out: PointLight[] = [], p = new Vector3();
-    for (const matrix of e.instances ?? [null]) {
-      const m = matrix ? matrix.multiply(world) : world;
+    const world = e.mesh.computeWorldMatrix(!frozen), instances = e.instances ?? [null];
+    const job = frozen ? (e.placing ??= { out: [], next: 0 }) : { out: [] as PointLight[], next: 0 };
+    for (; job.next < instances.length; job.next++) {
+      if (frozen && (job.next & 63) === 0 && job.next > 0 && performance.now() > until) return null;
+      const matrix = instances[job.next];
+      const m = matrix ? matrix.multiplyToRef(world, scratch) : world;
       for (const c of e.clusters) {
         Vector3.TransformCoordinatesFromFloatsToRef(c.x, c.y, c.z, m, p);
-        out.push({ x: p.x, y: p.y, z: p.z, ...lightFromCluster(c, !frozen) });
+        job.out.push({ x: p.x, y: p.y, z: p.z, ...lightFromCluster(c, !frozen) });
       }
     }
-    if (frozen) e.world = out;
-    return out;
+    if (frozen) { e.world = job.out; e.placing = null; }
+    return job.out;
   };
   const hulls = new Map<string, Mesh>();
   const hullOf = (id: string): Mesh | null => {
@@ -184,7 +194,8 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       for (const e of entries.values())
         if (e.active && !e.mesh.isDisposed() && e.mesh.isEnabled() && !(hull && (e.mesh === hull || e.mesh.isDescendantOf(hull)))) {
           if (!e.world && e.mesh.isWorldMatrixFrozen && !e.mesh.parent && performance.now() > placeUntil) continue;
-          for (const l of toWorld(e)) lights.push(l);
+          const placedLights = toWorld(e, placeUntil);
+          if (placedLights) for (const l of placedLights) lights.push(l);
         }
       placeMs = performance.now() - placeStart; placed = lights.length;
       for (const v of vents) lights.push(v);

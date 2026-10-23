@@ -125,7 +125,8 @@ try {
   });
   await page.addInitScript(() => {
     window.__siltwakePerf = []; window.__gaps = [];
-    let last = 0; const loop = (now) => { if (last) window.__gaps.push([now, now - last]); last = now; requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+    // Each gap with the JS heap at its end: a heap that shrank across a long gap was collected in it (GC).
+    let last = 0; const loop = (now) => { if (last) window.__gaps.push([now, now - last, performance.memory?.usedJSHeapSize ?? 0]); last = now; requestAnimationFrame(loop); }; requestAnimationFrame(loop);
   });
   const t0 = Date.now();
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load", timeout: 60000 });
@@ -188,9 +189,10 @@ try {
   result.work = { p50: quant(work, 0.5), p95: quant(work, 0.95), p99: quant(work, 0.99), max: work.length ? +work.at(-1).toFixed(1) : null,
     over33: work.filter(w => w > 33.4).length };
   // Every long gap with the work of the frame that ran in it.
-  for (const [at, g] of data.gaps) if (g > 33.4) {
+  for (const [i, [at, g, heap]] of data.gaps.entries()) if (g > 33.4) {
     const e = data.perf.find(x => x.at >= at - g - 1 && x.at <= at + 1) ?? null;
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+    const freed = i > 0 && heap && data.gaps[i - 1][2] ? data.gaps[i - 1][2] - heap : 0;
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of
@@ -205,6 +207,9 @@ try {
     streamingOver34: result.long.filter(l => l.streaming && l.gap > 34).length,
     simulation: result.long.filter(l => l.frame && !l.streaming && l.frame.sim >= 0.5 * l.frame.total && l.frame.total > 16.7).length,
     noWork: result.long.filter(l => !l.frame || l.frame.total <= 16.7).length,
+    // Long gaps in which the heap shrank by over 2 MiB: a collection ran in them (whatever part it landed in).
+    gcShaped: result.long.filter(l => l.gc).length,
+    streamingGcShaped: result.long.filter(l => l.streaming && l.gc && l.gap > 34).length,
   };
   result.streamingMax = data.perf.reduce((m, e) => ({ chunks: Math.max(m.chunks, e.parts?.chunks ?? 0), caves: Math.max(m.caves, e.parts?.caves ?? 0) }), { chunks: 0, caves: 0 });
   result.holdFrames = data.perf.filter(e => e.hold && e.hold !== "clear").length;

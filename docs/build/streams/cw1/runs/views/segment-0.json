@@ -1,0 +1,189 @@
+{
+ "commit": "7967893",
+ "label": "RTX 3090 (factory-worker)",
+ "segment": 0,
+ "caves": [],
+ "reached": [],
+ "skipped": [],
+ "shots": [
+  "s0-01-mast-1km-surface.jpg",
+  "s0-02-mast-1km-submerged.jpg",
+  "s0-03-mast-lookout-765m-surface.jpg",
+  "s0-04-mast-lookout-765m-submerged.jpg",
+  "s0-05-mast-400m-surface.jpg",
+  "s0-06-mast-400m-submerged.jpg"
+ ],
+ "views": [
+  {
+   "aboveWater": true,
+   "view": "mast-1km-surface",
+   "shot": "s0-01-mast-1km-surface.jpg",
+   "reached": true,
+   "faced": true,
+   "camera": [
+    -384,
+    0.5,
+    133.9
+   ],
+   "bearing": 46,
+   "pitch": 1,
+   "metresToTarget": 1000,
+   "activeCaveLight": "reef_archlet",
+   "farLandmarksShown": 11
+  },
+  {
+   "aboveWater": false,
+   "view": "mast-1km-submerged",
+   "shot": "s0-02-mast-1km-submerged.jpg",
+   "reached": true,
+   "faced": true,
+   "camera": [
+    -383.9,
+    -8.3,
+    133.8
+   ],
+   "bearing": 46,
+   "pitch": -3,
+   "metresToTarget": 1000,
+   "activeCaveLight": "reef_archlet",
+   "farLandmarksShown": 11
+  },
+  {
+   "aboveWater": true,
+   "view": "mast-lookout-765m-surface",
+   "shot": "s0-03-mast-lookout-765m-surface.jpg",
+   "reached": true,
+   "faced": false,
+   "camera": [
+    -217,
+    0.5,
+    -31.8
+   ],
+   "bearing": 44,
+   "pitch": 0,
+   "metresToTarget": 765,
+   "activeCaveLight": "fanvault",
+   "farLandmarksShown": 11
+  },
+  {
+   "aboveWater": false,
+   "view": "mast-lookout-765m-submerged",
+   "shot": "s0-04-mast-lookout-765m-submerged.jpg",
+   "reached": true,
+   "faced": true,
+   "camera": [
+    -217,
+    -8.6,
+    -31.8
+   ],
+   "bearing": 47,
+   "pitch": 0,
+   "metresToTarget": 765,
+   "activeCaveLight": "fanvault",
+   "farLandmarksShown": 11
+  },
+  {
+   "aboveWater": true,
+   "view": "mast-400m-surface",
+   "shot": "s0-05-mast-400m-surface.jpg",
+   "reached": true,
+   "faced": true,
+   "camera": [
+    42.1,
+    0.5,
+    -289.1
+   ],
+   "bearing": 47,
+   "pitch": 0,
+   "metresToTarget": 400,
+   "activeCaveLight": null,
+   "farLandmarksShown": 8
+  },
+  {
+   "aboveWater": false,
+   "view": "mast-400m-submerged",
+   "shot": "s0-06-mast-400m-submerged.jpg",
+   "reached": true,
+   "faced": true,
+   "camera": [
+    42.2,
+    -8.5,
+    -289.1
+   ],
+   "bearing": 44,
+   "pitch": -2,
+   "metresToTarget": 400,
+   "activeCaveLight": null,
+   "farLandmarksShown": 8
+  }
+ ],
+ "errors": [],
+ "holds": [],
+ "long": [],
+ "unsliced": [],
+ "recoveries": 0,
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 5425,
+  "playableMs": 12918,
+  "collisionPackMs": 4350.60000000149,
+  "records": true
+ },
+ "seconds": 102.9,
+ "frames": {
+  "count": 6175,
+  "p50": 16.7,
+  "p95": 16.7,
+  "p99": 16.8,
+  "max": 33.2,
+  "over33": 0,
+  "over50": 0
+ },
+ "work": {
+  "p50": 3.6,
+  "p95": 8.1,
+  "p99": 9.1,
+  "max": 19.3,
+  "over33": 0
+ },
+ "longByCause": {
+  "over34": 0,
+  "streaming": 0,
+  "streamingOver34": 0,
+  "simulation": 0,
+  "noWork": 0
+ },
+ "streamingMax": {
+  "chunks": 10.6,
+  "caves": 6.6
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 0,
+  "built": 13,
+  "evicted": 2,
+  "boxes": 136244,
+  "stepMs": 5.9,
+  "buildMs": 6.5,
+  "pending": 0,
+  "missing": 7,
+  "uploads": 17,
+  "lightBytes": 3998496,
+  "textureBytes": 3998496,
+  "records": true,
+  "recordsMs": 4350.60000000149
+ },
+ "gate": {
+  "pass": true,
+  "failures": [],
+  "travelSync": 0,
+  "loadSync": 0
+ },
+ "memory": {
+  "residentCpuMiB": 65.1,
+  "residentGpuMiB": 45.8,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 447.9
+ }
+}

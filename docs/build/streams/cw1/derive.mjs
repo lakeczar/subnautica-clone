@@ -17,7 +17,7 @@ const SEGMENTS = segArg === "hops" ? 0 : Number(segArg ?? 8);
 mkdirSync(out, { recursive: true });
 const { CAVE_SOURCES } = await import(B + "src/content/regions/caves.js");
 const { worldFloor } = await import(B + "src/content/regions/worldFloor.js");
-const { gameWorld, hullClearance } = await import(B + "src/sim/world.js");
+const { gameWorld, hullClearance, sweptHullClearance } = await import(B + "src/sim/world.js");
 const { HULL_COLLIDERS } = await import(B + "src/content/registry.js");
 const { createEnvelope, encodeSave, decodeSave } = await import(B + "src/save/codec.js");
 const world = gameWorld(), DART = HULL_COLLIDERS.dart, DEEPEST = -340;
@@ -100,6 +100,30 @@ for (let i = 1; i < tour.length; i++) {
   const a = tour[i - 1], b = tour[i];
   points.push({ ...a.outer }, ...leg(a.outer, b.outer), { ...b.outer }, { ...b.at, cave: b.cave });
 }
+// Every leg must sweep the Dart's hull clear of the game world's solids
+// (structures, docks, the pod), not just the heightfield: a blocked cruise
+// leg tries other depths, then a detour beside it; what stays blocked is
+// reported (the driver would stall there).
+const sweeps = (a, b) => sweptHullClearance(world, [a, b], DART);
+const blocked = [];
+for (let i = 1; i < points.length; i++) {
+  const a = points[i - 1], b = points[i];
+  if (sweeps(a, b)) continue;
+  let fixed = false;
+  if (b.cruise) for (const dy of [-4, -8, 4, 8, -14]) {
+    const q = { ...b, y: clamp(b.y + dy, b.x, b.z) };
+    if (hullClearance(world, q, DART) && sweeps(a, q) && (!points[i + 1] || sweeps(q, points[i + 1]))) { points[i] = q; fixed = true; break; }
+  }
+  const len = Math.hypot(b.x - a.x, b.z - a.z) || 1, px = -(b.z - a.z) / len, pz = (b.x - a.x) / len;
+  for (const off of [15, 30, 60]) for (const side of [1, -1]) for (const dy of [0, -6, 6]) {
+    if (fixed) break;
+    const m = { x: (a.x + b.x) / 2 + px * off * side, z: (a.z + b.z) / 2 + pz * off * side, cruise: true };
+    m.y = clamp(Math.min(a.y, b.y) + dy, m.x, m.z);
+    if (hullClearance(world, m, DART) && sweeps(a, m) && sweeps(m, b)) { points.splice(i, 0, m); fixed = true; }
+  }
+  if (!fixed) blocked.push(`${b.cave ?? "cruise"} at ${b.x.toFixed(0)},${b.y.toFixed(0)},${b.z.toFixed(0)}`);
+}
+console.log(`swept every leg: ${blocked.length} still blocked${blocked.length ? ": " + blocked.join("; ") : ""}`);
 let total = 0;
 for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
 // Exactly SEGMENTS segments of near-equal length, each cut at the cave stop
