@@ -22,7 +22,7 @@ function fake(over: Partial<World> = {}, { failing = [] as string[], attributed 
   const w: World = { heap: 100, meshes: 900, cam: [0, 0, 0], calls: 0, gotos: [], leak: 0, leakMeshes: 0, ...over };
   const provider = (name: string, fn: () => Record<string, unknown>): Provider => ({ name, sample: async () => { if (failing.includes(name)) throw new Error(`${name} broke`); return fn(); } });
   const deps = {
-    Blocked, createProbe: P.createProbe,
+    Blocked, createProbe: P.createProbe, collectGarbage: async () => {},
     openGame: async () => ({ page: {}, cdp: {}, errors: [], crash: null, renderer: "fake", close: async () => {} }),
     goto: async (_g: unknown, p: { x: number; y: number; z: number }) => {
       w.gotos.push([p.x, p.y, p.z]); w.cam = [p.x, p.y, p.z];
@@ -50,8 +50,8 @@ const dir = mkdtempSync(join(tmpdir(), "soak-runner-"));
 test.after(() => rmSync(dir, { recursive: true, force: true }));
 let n = 0;
 const opts = (kind: string, extra: Record<string, unknown> = {}) => ({
-  kind, out: join(dir, `${n++}`), plan, sampleS: 0.04, tickMs: 10, settleMs: 0, judged: true, browser: {}, meta: {},
-  thresholds: { tour: { ...G.DEFAULTS.tour }, dwell: { ...G.DEFAULTS.dwell, autosaves: 4, warmupSamples: 1, leakMinWindowS: 0.4, autosaveMissingS: 30 } },
+  kind, out: join(dir, `${n++}`), plan, sampleS: 0.04, tickMs: 10, settleMs: 0, gcSettleMs: 0, gcEveryS: 0.05, judged: true, browser: {}, meta: {},
+  thresholds: { tour: { ...G.DEFAULTS.tour }, dwell: { ...G.DEFAULTS.dwell, autosaves: 4, warmupS: 0.05, windowS: 0.05, leakMinWindowS: 0.4, autosaveMissingS: 30 } },
   ...extra,
 });
 
@@ -116,10 +116,10 @@ test("dwell: the goal needs the leak window, so a slow leak is judged before any
   assert.equal(flat.verdict.status, "partial", JSON.stringify(flat.verdict.rules));
   assert.deepEqual(flat.verdict.unproven, ["day-night"]);
   assert.ok(flat.run.autosaves.length >= 4);
-  const span = flat.run.samples.at(-1).at - flat.run.samples[1].at;
+  const span = flat.run.samples.at(-1).at - flat.run.startedAt;
   assert.ok(span >= 0.4, `observed ${span} s of the 0.4 s leak window`);
   // Stopped short of the window: the leak rule is listed as unmeasured, not passed.
   const short = G.evaluateDwell({ samples: [{ at: 0, memory: { rendererRssMiB: 1 } }, { at: 1, memory: { rendererRssMiB: 1 } }, { at: 2, memory: { rendererRssMiB: 1 } }],
-    autosaves: [], frames: { judged: true }, now: 2 }, { ...G.DEFAULTS.dwell, warmupSamples: 0 });
+    autosaves: [], frames: { judged: true }, now: 2 }, { ...G.DEFAULTS.dwell, warmupS: 0 });
   assert.match(short.unavailable.join("\n"), /leak: observed 0 of the 10 min/);
 });

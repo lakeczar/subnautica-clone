@@ -26,7 +26,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadThresholds } from "./goals.mjs";
-import { cdpHeap, createProbe, frames, jobCgroup, oceanDataset, processRss, saveJournal } from "./probe.mjs";
+import { cdpHeap, collectGarbage, createProbe, frames, jobCgroup, oceanDataset, processRss, saveJournal } from "./probe.mjs";
 import { Blocked, goto, openGame, read, releaseAll, saveAndCheck } from "./browser.mjs";
 import { EXIT, readJsonFile, runSoak } from "./soak.mjs";
 
@@ -58,10 +58,8 @@ try {
     meta: { commit, machine: `${hostname()}${process.env.SILTWAKE_SOAK_MACHINE ? ` (${process.env.SILTWAKE_SOAK_MACHINE})` : ""}`, ticket: ticket ?? "none",
       class: grant?.class ?? "outside the queue", save: arg("save"), plan: arg("plan") ?? null },
   }, {
-    openGame, goto, read, releaseAll, saveAndCheck, Blocked, createProbe, log,
+    openGame, goto, read, releaseAll, saveAndCheck, Blocked, createProbe, collectGarbage, log,
     providers: (g) => ({
-      // RSS before any forced GC: a full GC transiently grows RSS, and every
-      // sample must be taken the same way to be comparable.
       full: [processRss(g.browserPid), jobCgroup(), oceanDataset(g.page), cdpHeap(g.cdp)],
       tick: [frames(g.page, { overMs: kind === "tour" ? t.tour.streamingFrameMs : t.dwell.autosaveHitchMs }), saveJournal(g.page), oceanDataset(g.page)],
     }),

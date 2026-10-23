@@ -36,7 +36,8 @@ export const DEFAULTS = Object.freeze({
   dwell: {
     autosaves: 20, // 30 s of play each
     dayNightCycles: 1,
-    warmupSamples: 3,
+    warmupS: 60, // load settling: samples before arrival + this are not compared
+    windowS: 60, // flatness and the leak trend use each window's minimum (the floor garbage sits above)
     memoryFlatPct: 5,
     leakMiBPerHour: 30,
     leakMinWindowS: 600,
@@ -112,18 +113,34 @@ export function evaluateTour(run, t = DEFAULTS.tour) {
  *   dayNight: { available, cycles }, frames: { judged, attributed }, saves, crash, now }
  */
 export function evaluateDwell(run, t = DEFAULTS.dwell) {
-  const rules = commonRules(run), samples = run.samples ?? [], warm = samples.slice(t.warmupSamples);
+  // Instantaneous memory swings with GC timing (measured on the 3090: renderer
+  // RSS ±5–8% around a GC while idle). What a leak raises is the floor, so each
+  // windowS window is reduced to its minimum, after a time-based warm-up from
+  // arrival, and flatness and the trend are judged on those floors.
+  const rules = commonRules(run), from = (run.startedAt ?? 0) + t.warmupS;
+  const warm = (run.samples ?? []).filter((s) => s.at >= from);
+  const floors = (m) => {
+    const w = new Map();
+    for (const s of warm) {
+      if (s.memory?.[m] == null) continue;
+      const k = Math.floor((s.at - from) / t.windowS), cur = w.get(k);
+      if (!cur || s.memory[m] < cur.v) w.set(k, { at: from + (k + 0.5) * t.windowS, v: s.memory[m] });
+    }
+    return [...w.values()].sort((a, b) => a.at - b.at);
+  };
   if (warm.length >= 2) {
     for (const m of t.memoryMetrics) {
-      const xs = warm.filter((s) => s.memory?.[m] != null);
-      if (xs.length < 2) { rules.push({ id: `memory-flat:${m}`, status: "unavailable", detail: `${m} not measured` }); continue; }
-      const base = xs[0].memory[m], worst = xs.reduce((w, s) => (Math.abs(pct(s.memory[m], base)) > Math.abs(w) ? pct(s.memory[m], base) : w), 0);
+      const xs = floors(m);
+      if (xs.length < 2) { rules.push({ id: `memory-flat:${m}`, status: "unavailable", detail: `${m}: fewer than two ${t.windowS} s windows measured after warm-up` }); continue; }
+      const base = xs[0].v, worst = xs.reduce((w, x) => (Math.abs(pct(x.v, base)) > Math.abs(w) ? pct(x.v, base) : w), 0);
       rules.push({ id: `memory-flat:${m}`, status: Math.abs(worst) > t.memoryFlatPct ? "fail" : "pass", value: round(worst), limit: t.memoryFlatPct,
-        detail: `after warm-up ${round(base)} MiB, furthest ${round(worst)}%` });
+        detail: `first window's floor ${round(base)} MiB, furthest ${round(worst)}% over ${xs.length} windows` });
       const spanS = xs.at(-1).at - xs[0].at;
-      if (spanS >= t.leakMinWindowS) {
-        const slope = slopePerHour(xs.map((s) => [s.at, s.memory[m]]));
+      if (spanS >= t.leakMinWindowS - t.windowS && xs.length >= 3) {
+        const slope = slopePerHour(xs.map((x) => [x.at, x.v]));
         rules.push({ id: `leak:${m}`, status: slope > t.leakMiBPerHour ? "fail" : "pass", value: round(slope), limit: t.leakMiBPerHour, detail: `trend ${round(slope)} MiB/h over ${Math.round(spanS / 60)} min` });
+      } else if (warm.at(-1).at - from >= t.leakMinWindowS) {
+        rules.push({ id: `leak:${m}`, status: "unavailable", detail: `${m}: the window was observed, but only ${xs.length} windows had a value` });
       }
     }
   }
@@ -134,7 +151,7 @@ export function evaluateDwell(run, t = DEFAULTS.dwell) {
   // The leak trend needs its observation window after warm-up (R1-F7): until
   // then the dwell has not met its goal, and if it stops short the rule is
   // listed as unmeasured.
-  const observedS = warm.length >= 2 ? warm.at(-1).at - warm[0].at : 0;
+  const observedS = warm.length >= 2 ? warm.at(-1).at - from : 0;
   if (observedS < t.leakMinWindowS) rules.push({ id: "leak", status: "unavailable", limit: t.leakMiBPerHour, detail: `observed ${Math.round(observedS / 60)} of the ${Math.round(t.leakMinWindowS / 60)} min after warm-up the leak trend needs` });
   const lastSave = saves.at(-1)?.at ?? run.startedAt ?? 0;
   if (run.now != null && run.now - lastSave > t.autosaveMissingS) rules.push({ id: "autosave", status: "fail", detail: `no autosave for ${Math.round(run.now - lastSave)} s` });

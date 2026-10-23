@@ -39,19 +39,21 @@ export function createProbe(providers) {
   };
 }
 
-/** JS heap from CDP Performance.getMetrics, and again after a forced GC
- * (ctx.gc, at lap ends) so lap-to-lap comparisons are not GC noise. */
+/** JS heap from CDP Performance.getMetrics. In a sample taken just after a
+ * forced, settled GC (ctx.afterGc; soak.mjs), the heap is the post-GC floor. */
 export function cdpHeap(cdp) {
   const heap = async () => (await cdp.send("Performance.getMetrics")).metrics.find((m) => m.name === "JSHeapUsedSize")?.value;
   return {
     name: "cdp-heap",
     async sample(ctx) {
-      const memory = { jsHeapMiB: (await heap()) / MiB };
-      if (ctx.gc) { await cdp.send("HeapProfiler.collectGarbage"); memory.jsHeapAfterGcMiB = (await heap()) / MiB; }
-      return { memory };
+      const v = (await heap()) / MiB;
+      return { memory: { jsHeapMiB: v, ...(ctx.afterGc ? { jsHeapAfterGcMiB: v } : {}) } };
     },
   };
 }
+
+/** Forces a full GC in the measured page (soak.mjs then settles before sampling). */
+export const collectGarbage = (g) => g.cdp.send("HeapProfiler.collectGarbage");
 
 /** Resident memory of the browser's processes: the largest renderer, the GPU
  * process and the whole tree, found from the browser's PID. */

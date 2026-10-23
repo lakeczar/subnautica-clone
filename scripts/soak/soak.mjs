@@ -76,6 +76,18 @@ export async function runSoak(opts, deps) {
     if (g.crash) run.crash = g.crash;
     if (env.SILTWAKE_JOB_YIELD && existsSync(env.SILTWAKE_JOB_YIELD)) run.yielded = true;
   }
+  /** Memory compared over time must be read the same way each time: a forced
+   * full GC, a settle (a GC transiently grows RSS, then returns pages), then
+   * the sample, so RSS and heap are the post-GC floor. Frames meanwhile are
+   * the GC's, not the game's, and are left out. */
+  async function gcSample(mark) {
+    checking = true;
+    try {
+      await deps.collectGarbage(g);
+      await new Promise((r) => setTimeout(r, opts.gcSettleMs ?? 2000));
+      return await fullSample({ afterGc: true, ...(mark ? { mark: { mark } } : {}) });
+    } finally { checking = false; }
+  }
   async function fullSample(extra = {}) {
     const s = await probe.sample({ at: now(), ...extra });
     noteErrors(s);
@@ -95,8 +107,7 @@ export async function runSoak(opts, deps) {
       if (++sinceFull >= ticksPerSample) {
         sinceFull = 0;
         const gc = kind === "dwell" && now() - lastGc >= (opts.gcEveryS ?? 60);
-        if (gc) lastGc = now();
-        await fullSample(gc ? { gc: true } : {});
+        if (gc) { lastGc = now(); await gcSample(); } else await fullSample();
       }
       evaluate();
       if (verdict.status === "fail" || run.yielded) { stopping = true; log(verdict.status === "fail" ? `rule broken: ${verdict.reason}` : "yield notice: stopping"); }
@@ -141,7 +152,7 @@ export async function runSoak(opts, deps) {
       }
       if (!(await deps.goto(g, points[0], { label: "lap start", stop: shouldStop }))) return;
       await new Promise((r) => setTimeout(r, opts.settleMs ?? 3000)); // the same place every lap, settled, before measuring
-      const s = await fullSample({ gc: true, mark: { mark: `lap ${lap}` } });
+      const s = await gcSample(`lap ${lap}`);
       run.laps.push({ lap, at: s.at, memory: s.memory, graphics: s.graphics });
       await checkSave(`lap ${lap}`);
       const sv = run.saves.at(-1);
@@ -167,7 +178,7 @@ export async function runSoak(opts, deps) {
       if (off > 6) await deps.goto(g, home, { label: "dwell place", stop: shouldStop }); // drifted in a current: hold station
       await new Promise((r) => setTimeout(r, opts.tickMs ?? 1000));
     }
-    if (!stopping) { await fullSample({ gc: true, mark: { mark: "dwell end" } }); await checkSave("dwell end"); }
+    if (!stopping) { await gcSample("dwell end"); await checkSave("dwell end"); }
   }
 }
 

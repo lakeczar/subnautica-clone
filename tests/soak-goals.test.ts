@@ -65,3 +65,16 @@ test("thresholds are config: a file overrides the defaults", () => {
   assert.deepEqual(t, { tour: G.DEFAULTS.tour, dwell: G.DEFAULTS.dwell });
   assert.equal(G.slopePerHour([[0, 0], [3600, 10]]), 10);
 });
+
+test("dwell: GC swings over a flat floor pass, a rising floor fails (the shape measured on the 3090)", () => {
+  // Every 10 s; RSS sits near 400 MiB and swings +8% between GCs (one a minute), as seen idle at the pod.
+  const swing = (i: number) => (i % 6 === 5 ? 0 : (i % 6) * 6.5);
+  const mk = (rise: number) => Array.from({ length: 70 }, (_, i) => ({ at: i * 10, memory: { rendererRssMiB: 400 + swing(i) + rise * i, gpuRssMiB: 230, jsHeapAfterGcMiB: 91 } }));
+  const saves = Array.from({ length: 22 }, (_, i) => ({ at: 30 + i * 30, frameMs: 17 }));
+  const dn = { available: true, cycles: 1 };
+  const flat = G.evaluateDwell({ samples: mk(0), autosaves: saves, frames: { judged: true }, dayNight: dn, now: 690 }, D);
+  assert.equal(flat.status, "pass", JSON.stringify(flat.rules));
+  const rising = G.evaluateDwell({ samples: mk(0.12), autosaves: saves, frames: { judged: true }, dayNight: dn, now: 690 }, D); // 43 MiB/h floor
+  assert.equal(rising.status, "fail");
+  assert.ok(rising.broken.includes("leak:rendererRssMiB"), JSON.stringify(rising.rules));
+});
