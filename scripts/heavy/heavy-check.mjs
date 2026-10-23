@@ -5,24 +5,31 @@
 //
 //   heavy-check [run] [OPTIONS] [--] CMD...   submit, then follow to the end (v1-compatible)
 //   heavy-check submit [OPTIONS] [--] CMD...  print a ticket at once; the job runs detached
-//   heavy-check wait TICKET [--max S]         block up to S s; the job's exit code, or 99 if pending
+//   heavy-check wait TICKET [--max S] [--json] block up to S s; the job's exit code, or 99 if pending
 //   heavy-check status [TICKET]               the queue, or one ticket
 //   heavy-check log TICKET [-f]               the job's output
 //   heavy-check cancel TICKET                 remove a queued ticket or stop a running one
 //
-// OPTIONS: --class quick|standard|heavy-suite|gpu|playthrough|bake|exclusive
-//          --review  --deadline S  --cpus N  --mem 3G  --queue-timeout S
-// Exit codes: the job's own; 124 deadline; 137 OOM or killed; 75 cancelled or
-// expired; 99 still pending (wait only); 2 usage or a request that can never fit.
+// OPTIONS: --class quick|standard|heavy-suite|gpu|playthrough|bake|soak|exclusive
+//          --review  --stall S  --deadline S  --cpus N  --mem 3G  --gpu (soak)
+//          --snapshot  --no-test-build  --queue-timeout S
+// A job runs until its command ends. It is stopped if it stalls (no output and
+// no touch of $SILTWAKE_JOB_HEARTBEAT for --stall S), at --deadline S if
+// given, or at its class's runaway ceiling (exclusive: a 30-minute cap).
+// Exit codes: the job's own; 123 stalled; 124 deadline or ceiling; 137 OOM or
+// killed; 75 cancelled, expired or a preempted soak; 3 rejected (the worktree
+// changed before admission); 99 still pending (wait only); 2 usage or a
+// request that can never fit.
 import { spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLASS_NAMES, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveRequest, tokensFor } from "./policy.mjs";
+import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
 import {
-  alive, ensureDirs, flockFd, gitTree, jobDir, ledger, legacyLockInfo, loadConfig, readJson, readMode, readState,
-  reconcile, sampleHost, scopePopulated, systemctl, transaction, worktreeOf, writeJsonAtomic,
+  alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState,
+  reconcile, scopePopulated, sliceCheck, systemctl, transaction, worktreeOf, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -43,6 +50,10 @@ function parseJob(args) {
     if (a === "--class") opts.class = value(a);
     else if (a === "--review") opts.review = true;
     else if (a === "--deadline") opts.deadline = Number(value(a));
+    else if (a === "--stall") opts.stallS = Number(value(a));
+    else if (a === "--snapshot") opts.snapshot = true;
+    else if (a === "--no-test-build") opts.noTestBuild = true;
+    else if (a === "--gpu") opts.gpu = true;
     else if (a === "--cpus") opts.cpus = Number(value(a));
     else if (a === "--mem") { const v = value(a); opts.memMiB = parseMiB(v); if (!Number.isFinite(opts.memMiB)) fail(`--mem ${v}: use 3G or 2048M`); }
     else if (a === "--queue-timeout") opts.queueTimeoutS = Number(value(a));
@@ -53,6 +64,8 @@ function parseJob(args) {
   // v1 environment, kept for old briefs.
   if (opts.memMiB == null && process.env.HEAVY_MEMORY_MAX) opts.memMiB = parseMiB(process.env.HEAVY_MEMORY_MAX);
   if (opts.queueTimeoutS == null && process.env.HEAVY_LOCK_WAIT) opts.queueTimeoutS = Number(process.env.HEAVY_LOCK_WAIT);
+  // For package scripts that call heavy-check themselves (test:heavy).
+  if (!opts.snapshot && process.env.HEAVY_SNAPSHOT === "1") opts.snapshot = true;
   if (opts.class && !CLASS_NAMES.includes(opts.class)) fail(`unknown class ${opts.class} (${CLASS_NAMES.join(", ")})`);
   return { opts, command };
 }
@@ -78,33 +91,46 @@ async function nested(opts, command) {
   } else if (!/\/siltwake-heavy-[^/]*\.scope$/m.test(cgroup) && !cgroup.includes(`/${cfg.unitPrefix}-`)) {
     fail("SILTWAKE_HEAVY_LOCK_HELD is set, but this process is not inside a heavy-check scope; refusing");
   }
-  const deadline = Math.min(opts.deadline ?? cls.maxRunS, cls.maxRunS);
+  // The outer job's own stall window and limit govern; this only bounds a runaway.
+  const deadline = Math.min(opts.deadline ?? cls.ceilingS, cls.ceilingS);
   const child = spawn("timeout", ["--kill-after=10s", `${deadline}s`, ...command], { stdio: "inherit" });
   return await new Promise((done) => child.on("exit", (code, sig) => done(code ?? (sig === "SIGKILL" ? 137 : 143))));
 }
 
-function hostNow(state = readState(cfg)) {
-  const host = sampleHost(cfg, state);
-  host.legacy = legacyLockInfo(cfg.legacyLock);
-  return host;
-}
+const hostNow = (state = readState(cfg)) => hostFor(cfg, state);
 
 async function submit(opts, command, { quiet = false } = {}) {
   ensureDirs(cfg);
   pruneOldJobs();
   const mode = readMode(cfg), T = tokensFor(hostNow().nproc);
   const cls = opts.class ?? classifyCommand(command);
-  const req = resolveRequest({ ...opts, class: cls }, { T, M: cfg.poolMiB, mode });
+  const req = resolveRequest({ ...opts, class: cls }, { T, M: cfg.poolMiB, mode, minStallS: cfg.minStallS, ceilings: cfg.ceilings, stalls: cfg.stalls });
   if (req.error) fail(`refused: ${req.error}`);
   for (const n of req.notes) say(n);
   if (!opts.class && cls !== "standard") say(`class ${cls} chosen from the command; pass --class to override`);
+  if (req.exclusive && !req.serial && /(^|[\s;&|(])(for|while|until)\s|;\s*do\b/.test(command.join(" ")))
+    say("exclusive is one measurement per ticket (30-minute cap). Submit each segment of a series as its own ticket; " +
+      "the queue then runs waiting work between them (exclusive turns)");
+  if (req.goal.soak && Object.values(readState(cfg).tickets).some((t) => t.state === "queued" && !t.goal))
+    fail("refused for now: SCHED-1 tickets are still queued, and their code would let a waiting soak hold the pools; retry when they have started", 75);
   const cwd = process.cwd(), worktree = worktreeOf(cwd), tree = gitTree(cwd);
+  if (opts.snapshot && !tree.head) fail("--snapshot needs a git worktree");
   const id = newTicket();
-  const key = coalesceKey({ worktree, cwd, argv: command, class: cls, cpus: opts.cpus, memMiB: opts.memMiB, review: opts.review, head: tree.head, dirty: tree.dirty });
+  const key = coalesceKey({ worktree, cwd, argv: command, class: cls, cpus: opts.cpus, memMiB: opts.memMiB, review: opts.review, head: tree.head, dirty: tree.dirty, snapshot: opts.snapshot, gpu: opts.gpu });
   const dir = jobDir(cfg, id);
   mkdirSync(dir, { recursive: true });
+  // --snapshot: the job runs on a copy of the tree as it is now (snapshot.mjs).
+  let snapshot;
+  if (opts.snapshot) {
+    const s = makeSnapshot(worktree, cwd, join(dir, "tree"), tree.head);
+    if (s.error) { rmSync(dir, { recursive: true, force: true }); fail(`--snapshot: ${s.error}`, 1); }
+    snapshot = { ...s, status: snapshotStatus(s.root) };
+  }
+  // The job inherits this environment, so its tests read this build directory (R1-F4).
+  const testBuild = process.env.SILTWAKE_TEST_BUILD || ".test-build";
+  if (!/^\.test-build(-[A-Za-z0-9_.]+)?$/.test(testBuild)) fail(`SILTWAKE_TEST_BUILD=${testBuild}: use .test-build-<name>`);
   writeJsonAtomic(join(dir, "request.json"), {
-    id, key, worktree, cwd, argv: command, opts: { ...opts, class: cls }, req, tree,
+    id, key, worktree, cwd, argv: command, opts: { ...opts, class: cls }, req, tree, snapshot, testBuild,
     submittedAt: Date.now(), queueTimeoutS: opts.queueTimeoutS ?? cfg.queueTimeoutS,
   });
   writeFileSync(join(dir, "output.log"), "");
@@ -117,7 +143,7 @@ async function submit(opts, command, { quiet = false } = {}) {
     if (!quiet) say(`same command and tree already queued or running: joined ticket ${ack.joined}`);
     return ack.joined;
   }
-  if (!quiet) say(`submitted ${id} (${req.class}${req.review ? ", review" : ""}: ${req.tokens} cpu, ${req.memMiB} MiB${req.gpu ? ", GPU" : ""}${req.serial ? ", serial mode" : ""})`);
+  if (!quiet) say(`submitted ${id} (${req.class}${req.review ? ", review" : ""}: ${req.tokens} cpu, ${req.memMiB} MiB${req.gpu ? ", GPU" : ""}${req.serial ? ", serial mode" : ""}${snapshot ? ", snapshot" : ""})`);
   return id;
 }
 
@@ -172,12 +198,12 @@ async function waitCmd(args) {
   const i = args.indexOf("--max");
   const max = i >= 0 ? Number(args[i + 1]) : null;
   if (i >= 0 && !(max >= 0)) fail("--max needs seconds");
-  return await follow(id, { stream: false, maxS: max });
+  return await follow(id, { stream: false, maxS: max, json: args.includes("--json") });
 }
 
 /** Follows a ticket until it ends (or maxS passes: 99). The run form streams
  * the job's output as it is written; wait prints the last lines at the end. */
-async function follow(id, { stream, maxS = null }) {
+async function follow(id, { stream, maxS = null, json = false }) {
   const dir = jobDir(cfg, id), exitPath = join(dir, "exit.json"), outPath = join(dir, "output.log");
   if (!existsSync(dir)) fail(`unknown ticket ${id}`);
   const started = Date.now();
@@ -199,6 +225,9 @@ async function follow(id, { stream, maxS = null }) {
       pump();
       if (!stream) printTail(outPath, 40);
       say(finalLine(exit));
+      // --json: the result record as the last stdout line, so a caller never
+      // has to tell a pending 99 from a job's own 99 by its code (TST-22).
+      if (json) process.stdout.write(`\n${JSON.stringify({ pending: false, ...exit })}\n`);
       return exit.code;
     }
     const line = positionLine(id);
@@ -209,6 +238,7 @@ async function follow(id, { stream, maxS = null }) {
     }
     if (maxS != null && Date.now() - started >= maxS * 1000) {
       say(`${id} still pending (${line ?? "unknown"}); call wait again`);
+      if (json) process.stdout.write(`${JSON.stringify({ pending: true, ticket: id, position: line ?? null })}\n`);
       return 99;
     }
     await sleep(500);
@@ -239,12 +269,17 @@ function finalLine(e) {
   const parts = [`${e.ticket} exit ${e.code}${e.label ? ` (${e.label})` : ""}`];
   if (e.admittedAt) parts.push(`queued ${dur(e.admittedAt - e.submittedAt)}${e.ranS != null ? `, ran ${dur(e.ranS * 1000)}` : ""}`);
   if (e.peakMiB != null) parts.push(`peak ${e.peakMiB} of ${e.memMiB} MiB, ${e.cpuS} CPU-s`);
-  if (e.head !== undefined) {
+  if (e.unavailable) parts.push(`unavailable: ${Object.keys(e.unavailable).join(", ")} (${Object.values(e.unavailable)[0]})`);
+  if (e.evidence) {
+    const tr = `${e.evidence.commit?.slice(0, 10) ?? "not git"}${e.dirtyAtAdmit && e.dirtyAtAdmit !== "clean" ? `+dirty:${e.dirtyAtAdmit}` : ""}`;
+    parts.push(e.evidence.bound ? `evidence for ${tr}${e.evidence.snapshot ? " (snapshot)" : ""}` : `tested ${tr}; NOT evidence for a commit: ${e.evidence.why}`);
+  } else if (e.head !== undefined && e.stopReason !== "rejected") {
     const tr = (h, d) => (h ? `${h.slice(0, 10)}${d === "clean" ? "" : `+dirty:${d}`}` : "not git");
     parts.push(e.changedTree
       ? `WARNING tree changed: submitted ${tr(e.head, e.dirty)}, tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`
       : `tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`);
   }
+  if (e.gpuShared) parts.push(`GPU shared outside the lease with pid ${e.gpuShared.map((u) => u.pid).join(", ")}`);
   if (e.context) parts.push(`exclusive context: load ≤${e.context.load1Max}, cpu PSI some ≤${e.context.cpuSomeMax}%${e.context.disturbed ? " — DISTURBED by work outside the lane" : ""}`);
   return parts.join("; ");
 }
@@ -270,6 +305,13 @@ function statusCmd(args) {
   process.stdout.write(`mode ${readMode(cfg)}; pool ${p.used.tokens}/${p.T} cpu, ${p.used.memMiB}/${M} MiB, GPU ${p.used.gpu ? "leased" : "free"}; ` +
     `express ${p.used.express ? "busy" : "free"}; MemAvailable ${host.memAvailableMiB} MiB, memory PSI full ${host.memFullAvg10}%` +
     `${host.legacy.holder ? `; v1 lock HELD (pid ${host.legacy.holders.join(",")})` : ""}${host.legacy.waiter ? "; v1 waiter present: v2 admissions paused" : ""}\n`);
+  if (cfg.manageSlice) {
+    const sc = sliceCheck(cfg, host.nproc);
+    process.stdout.write(`slice ${cfg.slice}: cpu.max ${sc.cpuMax ?? "?"}, memory.max ${sc.memMax ?? "?"}` +
+      (sc.ok ? " (as wanted)\n" : `; WANTED ${sc.want.cpuQuotaPct}% and ${sc.want.memoryMaxMiB} MiB (the next admission corrects it)\n`));
+  }
+  const unleased = gpuUsers(cfg, state).filter((u) => !u.leased);
+  if (unleased.length) process.stdout.write(`GPU in use outside the lease: ${unleased.map((u) => `pid ${u.pid} (${u.cmd.slice(0, 60)})`).join("; ")}\n`);
   const rows = [["TICKET", "WORKTREE", "CLASS", "STATE", "TIME", "BLOCKED-BY", "COMMAND"]];
   for (const t of running) rows.push([t.id, wt(t), cls(t), t.express ? "running*" : "running", dur(now - t.admittedAt), "", cmd(t)]);
   for (const id of p.order) {
@@ -350,5 +392,5 @@ switch (sub) {
   case "status": process.exit(statusCmd(argv));
   case "log": process.exit(await logCmd(argv));
   case "cancel": process.exit(await cancelCmd(argv));
-  default: process.stdout.write(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 18).map((l) => l.replace(/^\/\/ ?/, "")).join("\n") + "\n");
+  default: process.stdout.write(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1).filter((l, i, all) => all.slice(0, i + 1).every((x) => x.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n") + "\n");
 }

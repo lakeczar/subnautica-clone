@@ -429,3 +429,75 @@ Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the f
   - CW-1: 8 segments at 1080p, `Infinity`-finish counting, pack-hash rejection, mast and seam shots;
   - CR-1: visible skate rest, out-of-view laying swap, continuous approaches, the hunter sight line.
 - **Next:** MEM-1 (Sol), after CW-1 merges; it measures RAM and VRAM on the 3090 and the 4070.
+
+### 2026-10-23 ~03:30Z — REC-1 approved (owner)
+**REC-1, the flight recorder and evidence pack,** takes the **next free builder slot after CW-1 merges**, ahead of WK-1 and MEM-1. MEM-1, the soaks and PT-0 all consume it.
+
+**In-game recorder:**
+- **Per frame:** time split into sim, render, streaming build and GC, plus long tasks.
+- **Sampled a few times a second:** position, depth, region, cave admission, oxygen, speed and craft; draw calls, triangles, tab RAM and VRAM where the browser exposes them.
+- **Every event:** milestones, damage, threat warnings, holds, loads and saves, refusals, errors.
+- **Cost:** well under 1% of a frame.
+- **Owner playtests:** on by default (it can be turned off), carrying the feedback notes.
+
+**Visuals:**
+- **Event snapshots:** every event, every frame over 33 ms, every milestone.
+- **Video at 12 fps** (owner choice), 720p. It's on for functional runs, soaks and owner playtests, and **off in exclusive perf runs**, which keep only the snapshots. REC-1 measures the recording's own overhead.
+
+**Outputs, the same format on both machines:**
+- a story sheet for agents: a timeline with thumbnails, plus frames extracted around any event;
+- a timeline page for the owner: video, frame-time chart, memory curve and event markers, synchronised;
+- the evidence pack: header, contact sheet, charts and summary;
+- 3090 and 4070 packs side by side.
+
+SCHED-2b's remote lane carries the packs back from alickers.
+
+### 2026-10-23 ~05:00Z — UX-1 merged; COL-1 A and SCHED-2a in fixes
+- **UX-1 accepted:** Sol R1 requested changes (helm rudder during Hold; steering retained across a same-tick import); R2 accepted (`review/ux-1-r2` `5b88509`).
+  - **Merged:** 1,305 fast tests pass, build OK, all 5 economy scripts pass.
+  - **P3s carried:** stale sliced advice; the synchronous console search cost (worst case 36.6 ms).
+  - **Evidence:** 3090 exclusive and 4070 (indicative) bridge runs at 60 fps, max 16.8 ms.
+- **COL-1 A** (`245a006`): R1 requested changes, with five edge-case defects (escape through another wall, parity at shared edges, heightfield entry from holes, missed bounded recovery, lost vertical bounds). The builder is fixing them.
+- **SCHED-2a** (`8f702de`): R1 not accepted (5 P1, 3 P2). The builder is fixing them, and R2 is dispatched by the coordinator.
+- **Builders:** UX-1's slot is free and reserved for REC-1 once CW-1 merges.
+
+### 2026-10-23 ~08:00Z — reviews in flight; MEM-1 inputs
+- **COL-1 A:** the R1 fixes are done (`b94430c`), and Sol R2 is running. It also found LC's own endpoint debt: 45 of 8,000 Canopy probe moves end in poses LC rejects. It's bounded at 1% by the oracle; the root fix (walls on LC's cap and collar boundaries) goes to LC-2 or COL-1 B.
+- **CR-1:** ready at `494b7c3`, with root merged. Sol R1 is running.
+- **SCHED-2a:** the R1 fixes are done (`e85c8e3`), and Sol R2 is running. It isn't installed; the cut-over and `--gpu-guard` are the coordinator's.
+- **For MEM-1:**
+  - the GPU process's RSS grows about 35–40 MiB an hour idling at the pod (SCHED-2's 3090 dwell soak);
+  - every load requests terrain tiles `t_4/5_11/12`, which aren't in the bake, giving four 404s. That's for the bake owner (WK-1), unless CW-1's terrain manifest check already fixes it.
+- **alickers-job:** clears compiled test output when the sandbox changes commit (`fa35339`).
+
+### 2026-10-23 — coordinator decision: LC endpoint debt is a COL-1 stage-B prerequisite
+LC's cap and collar boundaries need walls, as the COL-1 heightfield now has, so that no clear-start move ends in a pose LC rejects. Today 45 of 8,000 Canopy probe moves do. **COL-1 stage B can't be accepted until that's fixed** in whichever stream lands first, COL-1 B or LC-2. The oracle's 1% bound is only a regression alarm, not proof that the failures match LC's. In flight now: COL-1 A R3 (`e8ce814`), SCHED-2a R3 (`014f37b`), and CR-1 (fixes at `4c4c7eb`, heavy tier running).
+
+### 2026-10-23 — CR-1 merged
+- **CR-1 accepted** by Sol R2 (`review/cr-1-r2` `5aa79da`) after R1 asked for changes (skate jump, hunter rejoin snap, dormant outlines by the pod).
+  - **Merged:** 1,321 fast tests pass, the build is OK, and all 5 economy scripts pass.
+  - **Adverse bound:** all 1,440 phased cases stay under 60 HP. A late departure can take one fully warned strike after a window closes, which is fair by ENC-1.
+  - **Compromises carried, with root fixes:** the laying stand-ins (NAV-1), the idle hunter's unswept round (broadphase), the CRE-03 fallback, the shelf-only laying caption, `dataset.tick` (REC-1's test API), and no trap model in the world.
+- **In flight:**
+  - CW-1's final 23-ticket exclusive series;
+  - COL-1 A R4 (`dfab435`);
+  - SCHED-2a R4 fixes (soak harness only), with the scheduler cut-over planned once CW-1's series ends;
+  - SCHED-2b R1 (`c88bab6`).
+- **Builders:** COL-1 and SCHED-2/SAVE-1 are active, CW-1 is finishing, and 2 slots are free for REC-1 and OP-1 once CW-1 merges.
+
+### 2026-10-23 ~09:15Z — owner priority: testing infrastructure first
+The owner prioritised the recorder, testing, scheduling and the save library.
+- **SIM-1 paused** (in-place stepping; resumes next).
+- **SAVE-1** split out to its own builder: `siltwake-save1-library-opus-f025bf6`, branch `t3/save-1-shared-library`.
+- **REC-1 started**, based on CW-1's head `7dc9cc9`: `siltwake-rec1-recorder-opus-7dc9cc9`, branch `t3/rec-1-flight-recorder`.
+- **The SCHED-2 builder** keeps the scheduler only: 2b R1 fixes (F1/F2 structural: staged artifacts under the sandbox lock, a receipt file instead of log markers), then any 2a R5 follow-ups.
+- **SCHED-2a R5 is reviewing `919a372`:** the soak fixes, plus a 7-line per-class stall default, to set `{"stalls":{"playthrough":2700}}` until active worktrees have the heartbeat.
+- **Builders:** CW-1 (final exclusive series), COL-1 (A R4 in review), SCHED-2 (2b fixes), SAVE-1, REC-1. SIM-1 is paused.
+
+### 2026-10-23 ~09:50Z — SCHED-2a cut over (scheduler); soak harness pending
+- **Merged** `t3/sched-2a-stall-floor` (`f91f0fc`). The gate passed: 1,359 tests, the build, and all 5 economy scripts.
+- **Installed v2 `e552265ea963`** in normal mode. The slice is as wanted (700%, 8 GiB) and the v1 lock inode is preserved. A smoke quick job runs to its goal, with its evidence bound to the commit.
+- **Bridge:** `/work/tmp/siltwake-sched/config.json` has `"stalls":{"playthrough":2700}` until active worktrees have the playthrough heartbeat. **Remove it after CW-1, COL-1, REC-1, SAVE-1 and SIM-1 merge root.**
+- **Soak verdicts are not evidence yet:** R6 asked for an append-only fact reducer. The note is in `WORKER_RESOURCE_LIMITS.md`.
+- **GPU guard (`install.sh --gpu-guard`) is deferred** until REC-1's queued pre-cutover tickets drain.
+- **CW-1's exclusive series finished;** the handoff is pending from the builder.

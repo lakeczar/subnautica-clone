@@ -34,9 +34,9 @@ test("carrier requires station keeping before walking/launch, and stationary int
   assert.equal(carrierCommand(s, "helm", undefined, w), null);
   assert.match(
     carrierCommand(s, "leave-helm", undefined, w)!,
-    /station keeping/,
+    /Hold station/,
   );
-  assert.match(carrierCommand(s, "launch", "fixture_dart", w)!, /Station/);
+  assert.match(carrierCommand(s, "launch", "fixture_dart", w)!, /Hold station/);
   assert.equal(carrierCommand(s, "station-keep", undefined, w), null);
   assert.equal(carrierCommand(s, "leave-helm", undefined, w), null);
   const before = { ...s.player.interiorPose!.position };
@@ -165,7 +165,7 @@ test("unsupported remote reconfiguration and a capture that drifts from the corr
   h.pose.position = { x: 100, y: -0.9, z: 12 };
   s.fleet.docking!.supportedDock = true;
   s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
-  assert.match(carrierCommand(s, "reconfigure", undefined, w)!, /supported/);
+  assert.match(carrierCommand(s, "reconfigure", undefined, w)!, /repair services/);
   const v = s.fleet.vehicles[1]!;
   v.pose.position = localToWorld(LAUNCH_LOCAL, h);
   assert.equal(carrierCommand(s, "capture", v.id, w), null);

@@ -48,11 +48,13 @@ export function createHollowChoir(scene: Scene, cel: Material, name: string, rea
   let open = 0, swell = 0, last = 0;
   return {
     root: parts.root,
+    setEnabled: parts.setEnabled,
     meshes: [base, ...bells.map(b => b.mesh), shell],
     update(a: ThreatPose, seconds: number) {
       const dt = Math.min(0.1, seconds - last); last = seconds;
       const m = a.mode;
-      open = smooth(open, m === "rest" ? 0.25 : m === "withdraw" ? 0.3 : 1, m === "withdraw" ? 0.6 : 2.2, dt);
+      // CR-1: resting (its natural window), the bells fold fully shut.
+      open = smooth(open, a.busy ? 0.02 : m === "rest" ? 0.25 : m === "withdraw" ? 0.3 : 1, m === "withdraw" || a.busy ? 0.6 : 2.2, dt);
       swell = smooth(swell, m === "investigate" ? 1 : m === "commit" ? 1.2 : 0, 2.5, dt);
       parts.root.position.set(a.position.x, a.position.y, a.position.z);
       for (const bell of bells) {
@@ -62,7 +64,7 @@ export function createHollowChoir(scene: Scene, cel: Material, name: string, rea
         bell.mesh.scaling.set((0.5 + open * 0.5) * s, 0.6 + open * 0.4, (0.5 + open * 0.5) * s);
         (bell.mesh.parent as TransformNode).rotation.set(own * 0.12 * open, 0, Math.cos(seconds * 1.7 + bell.phase) * 0.12 * open);
         const hum = m === "alert" ? 0.6 + 0.4 * own : m === "investigate" ? 0.9 + 0.6 * unison : m === "commit" ? 1.6 : 0.35;
-        bell.rim.set(hum, m !== "rest" && m !== "withdraw");
+        bell.rim.set(a.busy ? 0.12 : hum, !a.busy && m !== "rest" && m !== "withdraw");
       }
       // The shell expands over the commit window, matching the 2 s pulse timing.
       const pulsing = m === "commit";

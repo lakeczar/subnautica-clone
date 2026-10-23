@@ -15,7 +15,7 @@ import { caveLightField } from "../src/render/caves/lightField.js";
 const root = resolve(".");
 type StoreModule = { closureHash(modules: readonly string[], runtime?: string): string; createStore(root: string): BuildCacheStore };
 const storeModule = await import(pathToFileURL(join(root, "scripts", "test-build-cache.mjs")).href) as StoreModule;
-const scratch = mkdtempSync(join(root, ".test-build", "build-cache-probe-"));
+const scratch = mkdtempSync(join(root, process.env.SILTWAKE_TEST_BUILD || ".test-build", "build-cache-probe-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 /** Runs `fn` with `store` installed in place of the preloaded one. */

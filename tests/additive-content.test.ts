@@ -85,7 +85,8 @@ test("unknown, removed, missing-base, duplicate and malformed roster content is 
   refused(later, /content this build does not have.*test_vent_glass/, "removed source");
   for (const [name, mutate] of [
     ["schema 5 source missing", (s: GameState) => { s.world.resources.splice(3, 1); }],
-    ["schema 5 renewal missing", (s: GameState) => { s.world.renewal.pop(); }],
+    // (The last entries are now CR-1's additive grounds; drop a schema 5 one.)
+    ["schema 5 renewal missing", (s: GameState) => { s.world.renewal.splice(0, 1); }],
     ["schema 5 facility missing", (s: GameState) => { s.world.facilities.splice(s.world.facilities.findIndex((f) => f.id === "canopy_stop"), 1); }],
     ["schema 5 locker missing", (s: GameState) => { s.inventory.containers.splice(2, 1); }],
     ["duplicate source", (s: GameState) => { s.world.resources.push({ ...s.world.resources[0]! }); }],

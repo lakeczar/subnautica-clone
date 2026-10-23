@@ -265,6 +265,11 @@ export type GameCommand =
   | { type: "rest" }
   /** C4B-02: the carrier's charger module charges every berthed craft from the carrier. */
   | { type: "charge-berths"; carrierId: string }
+  // CR-1: creatures as resources (sim/fauna/link.ts).
+  | { type: "cook-catch"; portions: number }
+  | { type: "release-bait" }
+  | { type: "feed-planter"; hostId: string; socket: string }
+  | { type: "empty-trap"; hostId: string; socket: string; to?: string }
   | {
       type: "carrier";
       action:
@@ -311,7 +316,7 @@ export type GameEvent =
   | { type: "thrust-sample"; actorId: string; requested: number; actual: number; solidLimited: number; supportLimited: number }
   /** SYS-2 background work for the local play timeline (C4). Transient, never saved. */
   | { type: "systems"; event: SystemsEvent }
-  | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook" | "systems" | "journal"; targetId: string }
+  | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook" | "systems" | "journal" | "carrier"; targetId: string }
   | ({ type: "notice"; message: string; error?: boolean } & NoticeOptions)
   | {
       type: "sound";

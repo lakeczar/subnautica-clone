@@ -1,3 +1,4 @@
+import { FAUNA_IN_CAVE } from "../src/content/fauna/grounds.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -178,7 +179,9 @@ test("caves: size classes, footprints disjoint, outside the opening's preserve, 
     assert.ok(!overlaps(f, { minX: P.minX, maxX: P.maxX, minZ: P.minZ, maxZ: P.maxZ }), `${c.id}: inside the legacy preserve`);
     for (const [x, z] of [[f.minX, f.minZ], [f.maxX, f.minZ], [f.minX, f.maxZ], [f.maxX, f.maxZ]] as const)
       assert.ok(regionOk(c.area, x, z), `${c.id}: corner ${x},${z} is ${regionAtPoint(x, z)}`);
-    for (const dt of datums) assert.ok(!inRect(f, dt.x, dt.z), `${c.id}: footprint contains existing ${dt.id}`);
+    // CR-1: a creature ground declared inside this very cave belongs there.
+    for (const dt of datums) if ((FAUNA_IN_CAVE as Record<string, string | undefined>)[dt.id] !== c.id)
+      assert.ok(!inRect(f, dt.x, dt.z), `${c.id}: footprint contains existing ${dt.id}`);
   }
 });
 

@@ -18,6 +18,8 @@ import { ExpeditionSession } from "./session.js";
 import { createRenderer } from "../render/renderer.js";
 import type { GameRenderer, Quality } from "../render/renderer.js";
 import { PlayerInput, controlHasFocus, textEntryHasFocus, deliberateExit } from "./input.js";
+import { HelmControl } from "./helm.js";
+import { forgetCorridorView } from "../sim/carrierStations.js";
 import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
 import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY } from "../sim/timeline/recorder.js";
@@ -121,6 +123,8 @@ export class SiltwakeApp {
   private renderer: GameRenderer | null = null;
   private graphicsAvailable = true;
   private input: PlayerInput | null = null;
+  /** UX-1: head look and rudder at the Hearthline helm. */
+  private readonly helm = new HelmControl();
   private readonly session: ExpeditionSession;
   private get state(): GameState | null {
     return this.session.state;
@@ -331,6 +335,8 @@ export class SiltwakeApp {
         KeyG: { type: "distraction" }, KeyH: { type: "hint" }, KeyX: { type: "exit" },
         // S4: the lamp switch and the two nonlethal kits.
         KeyL: { type: "lamp" }, KeyT: { type: "deploy-lure" }, KeyY: { type: "release-ink" },
+        // CR-1: release a caught small fish as bait.
+        KeyM: { type: "release-bait" },
       };
       const command = commands[event.code];
       if (command) { event.preventDefault(); this.command(command); }
@@ -416,7 +422,7 @@ export class SiltwakeApp {
   private step(now: number): void {
     if (!this.state || !this.active) return;
     const gesture = this.sampleGesture();
-    const controls = this.input?.sample() ?? [];
+    const controls = this.helm.apply(this.state, this.input?.sample() ?? []);
     this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
     const result = stepGame(
       this.state,
@@ -468,7 +474,7 @@ export class SiltwakeApp {
       (this.active || this.dirty || this.view.canvas.dataset.ready !== "true")
     ) {
       try {
-        this.renderer.present(this.state, { target: target?.host ?? null, preview: preview?.host ?? null });
+        this.renderer.present(this.state, { target: target?.host ?? null, preview: preview?.host ?? null, look: this.helm.look });
         this.dirty = false;
       } catch (error) {
         this.pause();
@@ -576,6 +582,9 @@ export class SiltwakeApp {
     this.resolutionPhase = this.state?.story.resolution.phase ?? null;
     this.resetAscent();
     this.cancelGesture();
+    // UX-1: a replaced session inherits no head look or rudder, before its first frame.
+    this.helm.clear();
+    forgetCorridorView();
     this.view.resetPresentation();
     // A save loaded beside or inside a cave: admit it now, behind the load
     // screen, before the first tick (a hold carries on into play otherwise).

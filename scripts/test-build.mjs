@@ -5,6 +5,10 @@
 //   node scripts/test-build.mjs --typecheck  the same, plus `tsc --noEmit` on the
 //                                            whole project, in parallel
 //   node scripts/test-build.mjs --clean      delete .test-build first
+//   SILTWAKE_TEST_BUILD=.test-build-NAME     compile into that sibling directory
+//                                            instead (and `npm test` runs from it):
+//                                            for when a heavy job is running from
+//                                            this worktree's .test-build
 //
 // Both compilers keep their build info in .test-build, so an unchanged tree
 // rebuilds in seconds. Incremental output is never stale: after compiling, every
@@ -18,16 +22,20 @@ import { fileURLToPath } from "node:url";
 import { heavyJobGuard, keepHeavyJobMarker } from "./heavy/build-guard.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const build = join(root, ".test-build");
+// The build directory sits at the worktree root, like .test-build, so compiled
+// tests that find the root at ../../ still do.
+const buildName = process.env.SILTWAKE_TEST_BUILD || ".test-build";
+if (!/^\.test-build(-[A-Za-z0-9_.]+)?$/.test(buildName)) { console.error(`test-build: SILTWAKE_TEST_BUILD=${buildName}: use .test-build-<name> (a sibling of .test-build)`); process.exit(2); }
+const build = join(root, buildName);
 const tsc = join(root, "node_modules", "typescript", "bin", "tsc");
 const args = new Set(process.argv.slice(2));
 
 // A heavy-check job running in this worktree is testing these files; don't
 // rebuild them under it. The job itself (SILTWAKE_JOB_TICKET) may, and keeps
 // its marker across --clean.
-const busy = heavyJobGuard(root);
+const busy = heavyJobGuard(root, process.env, buildName);
 if (busy) { console.error(`test-build: ${busy}`); process.exit(1); }
-const restoreMarker = keepHeavyJobMarker(root);
+const restoreMarker = keepHeavyJobMarker(root, buildName);
 
 const run = (label, tscArgs) => new Promise((done) => {
   const started = Date.now();
@@ -37,7 +45,7 @@ const run = (label, tscArgs) => new Promise((done) => {
     done(code === 0);
   });
 });
-const compileTests = () => run("tests", ["-p", "tsconfig.test.json", "--incremental", "--tsBuildInfoFile", join(build, "tests.tsbuildinfo")]);
+const compileTests = () => run("tests", ["-p", "tsconfig.test.json", "--outDir", build, "--incremental", "--tsBuildInfoFile", join(build, "tests.tsbuildinfo")]);
 
 /** Deletes compiled files whose TypeScript (or JSON) source is gone. */
 function prune(dir = build) {

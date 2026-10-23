@@ -136,7 +136,8 @@ test("valid saved occupied approach, ready and tow snapshots cancel once before 
     assert.deepEqual(result.state.fleet.vehicles[0], { ...v, emergencyAir: v.emergencyAir - 1 / 60 });
     assert.deepEqual(result.state.player.pose, before.player.pose);
     assert.ok(result.state.player.vitals.food < before.player.vitals.food);
-    assert.deepEqual(result.events.filter((e) => e.type === "notice"), [{ ...event, channel: "hazard", context: "recovery" }]);
+    // CR-1: a first sight of the hunter's feeding round is the same in the control step.
+    assert.deepEqual(result.events.filter((e) => e.type === "notice" && e.context !== "ecology"), [{ ...event, channel: "hazard", context: "recovery" }]);
     s = roundTrip(result.state);
     for (let i = 0; i < 5; i++) {
       const next = stepGame(s, [], world);
@@ -205,7 +206,8 @@ test("safe exit permits a complete unoccupied local tow with every step codec-va
   assert.deepEqual(s.fleet.vehicles[0], { ...before.fleet.vehicles[0]!, pose: { ...before.fleet.vehicles[0]!.pose, position: { ...RECOVERY_MOORING } } });
   assert.deepEqual(s.inventory, before.inventory);
   assert.deepEqual(s.world.maintenance, before.world.maintenance);
-  assert.deepEqual(s.knowledge, before.knowledge);
+  // CR-1: watching the hunter's feeding round on the way is the only knowledge gained.
+  assert.deepEqual({ ...s.knowledge, cycles: [] }, { ...before.knowledge, cycles: [] });
   assert.deepEqual(s.recovery.losses, [{ vehicleId: v.id, visited: true, position: { ...RECOVERY_MOORING } }]);
   assert.equal(s.metrics.rescues, before.metrics.rescues + 1);
   assert.equal(notices.filter((e) => e.type === "notice" && /moored/.test(e.message)).length, 1);
@@ -238,7 +240,8 @@ test("unoccupied staged ready attachment remains available and salvage returns c
   for (const [kind, quantity] of Object.entries(v.investment))
     assert.equal(available(s, kind as MaterialId, ["buoy_hold"]), available(before, kind as MaterialId, ["buoy_hold"]) + quantity);
   assert.deepEqual(s.world.maintenance, { ...before.world.maintenance, alloy: before.world.maintenance.alloy + 4, membrane: before.world.maintenance.membrane + 2 });
-  assert.deepEqual(s.knowledge, before.knowledge);
+  // CR-1: watching the hunter's feeding round on the way is the only knowledge gained.
+  assert.deepEqual({ ...s.knowledge, cycles: [] }, { ...before.knowledge, cycles: [] });
   assert.equal(s.player.controlledVehicleId, null);
   assert.deepEqual(s.recovery.losses, []);
   const duplicate = executeCommand(s, { type: "recover", vehicleId: id, method: "salvage" }, world);

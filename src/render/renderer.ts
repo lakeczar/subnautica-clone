@@ -7,6 +7,7 @@ import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstr
 import type { GameState } from "../sim/types.js";
 import type { InteractionHost } from "../sim/targeting.js";
 import { createTargetCue } from "./targetCue.js";
+import { createLaunchCorridor } from "./fleet/corridor.js";
 import { inCanopyAir } from "../sim/inventory.js";
 import { createCelMaterial, createGlassMaterial, updateOpticalUniforms } from "./materials.js";
 import { createEnvironment } from "./environment.js";
@@ -18,7 +19,7 @@ import { ecologyView } from "../sim/ecology/ecology.js";
 import { lampOn, presentationStimulus } from "../sim/ecologyLink.js";
 import { createExpeditionActors, createExpeditionRegion, DART_SEAT } from "./expedition.js";
 import { gameWorld } from "../sim/world.js";
-import { playerView } from "./camera.js";
+import { playerView, type HeadLook } from "./camera.js";
 import { createSceneLights } from "./lighting/sceneLights.js";
 import { createAtmosphere } from "./atmosphere.js";
 import { createRegionResidency, REGION_OWNER_BYTES, RESIDENT_REGION_LIMIT, type RegionArt, type RenderRegion } from "./regions.js";
@@ -43,7 +44,7 @@ import { createFarLayer } from "./farLayer.js";
 
 export type Quality = "rich" | "light";
 export interface GameRenderer {
-  present(state: GameState | null, overlay?: { target: InteractionHost | null; preview?: InteractionHost | null }): void;
+  present(state: GameState | null, overlay?: { target: InteractionHost | null; preview?: InteractionHost | null; look?: HeadLook }): void;
   /** Idle-time construction of one nearby region into retention. Callers use
    * it only while play is not advancing; it never draws or changes state. */
   prepare(): boolean;
@@ -295,6 +296,8 @@ export function createRenderer(
     // markers as the cel pass's local lights (and their halos on open water).
     const lights = createSceneLights(scene, cel, [cel, sky]);
     const cue = createTargetCue(scene);
+    // UX-1: the Hearthline's lock corridor, drawn at the helm, the lock consoles and for recovery.
+    const corridor = createLaunchCorridor(scene);
     // S4's later-region species, cue animals, deterrents and field cues (C3).
     const creatures = createCreatureLayer(scene, cel);
     const placed = createPlacedHosts(scene, cel);
@@ -388,7 +391,7 @@ export function createRenderer(
             const view = playerView(state, matrix ? p => {
               const w = Vector3.TransformCoordinates(new Vector3(p.x, p.y, p.z), matrix);
               return { x: w.x, y: w.y, z: w.z };
-            } : null, gameWorld(), DART_SEAT);
+            } : null, gameWorld(), DART_SEAT, overlay?.look);
             camera.position.set(view.eye.x, view.eye.y, view.eye.z);
             camera.setTarget(camera.position.add(new Vector3(view.forward.x, view.forward.y, view.forward.z)));
             camera.rotation.z = 0;
@@ -418,6 +421,8 @@ export function createRenderer(
         if (settleSince >= 0 && (art.residency.isReady(NEAR_WORLD) || performance.now() - settleSince > SETTLE_MAX_MS)) settleSince = -1;
         const chunkMs = timed ? performance.now() - tStream : 0;
         cue.update(state ? overlay?.target ?? overlay?.preview ?? null : null, camera.position, !!overlay?.target);
+        corridor.update(state, gameWorld());
+        canvas.dataset.corridor = corridor.visible ? "shown" : "";
         const interior = !!state && (inCanopyAir(state) || state.player.mode === "interior");
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
         const fog = Color3.FromHexString(interior ? "#486e76" : underwater ? "#226e7e" : "#96c5b9");
@@ -463,13 +468,15 @@ export function createRenderer(
         far.update();
         canvas.dataset.farLandmarks = String(far.shown);
         if (state) creatures.update(ecologyView(state.world.ecology, state.tick, presentationStimulus(state)), time,
-          { x: camera.position.x, y: camera.position.y, z: camera.position.z });
+          { x: camera.position.x, y: camera.position.y, z: camera.position.z }, state);
         const actorsMs = timedParts ? performance.now() - tActors : 0;
         cel.setFloat("time", time);
         water.setFloat("time", time);
         sky.setFloat("time", time);
         canvas.dataset.water = underwater ? "underwater" : "above";
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
+        // CR-1: the sim tick, for evidence drivers timing creature rhythms (as cameraPosition is for steering).
+        canvas.dataset.tick = String(state?.tick ?? 0);
         const tRender = timed ? performance.now() : 0;
         if (settleSince >= 0) { engine.clear(new Color4(0, 0, 0, 1), true, true); canvas.dataset.settling = "true"; }
         else { scene.render(); canvas.dataset.settling = "false"; }
@@ -540,6 +547,7 @@ export function createRenderer(
         lights.dispose();
         instrumentation.dispose();
         cue.dispose();
+        corridor.dispose();
         scene.dispose();
         engine.dispose();
       },

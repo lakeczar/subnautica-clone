@@ -108,6 +108,9 @@ export function withComposedFields<T extends { state: unknown }>(old: T): T {
   if (!("lamp" in (out.player as any))) out.player = { ...(out.player as any), lamp: true };
   const composedWorld = out.world as any;
   for (const r of [...S9_RESOURCES, ...C3_RESOURCES]) if (!composedWorld.resources.some((n: any) => n.id === r.id)) composedWorld.resources.push({ ...r });
+  // Added content takes New Game's place in the roster (CR-1's grounds come after these).
+  const order = createGame().world.resources.map((r) => r.id);
+  composedWorld.resources.sort((a: any, b: any) => order.indexOf(a.id) - order.indexOf(b.id));
   for (const f of C3_FACILITIES) if (!composedWorld.facilities.some((n: any) => n.id === f.id)) composedWorld.facilities.push({ ...f });
   const containers = (out.inventory as any).containers;
   let at = containers.findIndex((c: any) => c.id === "canopy_stop_locker");

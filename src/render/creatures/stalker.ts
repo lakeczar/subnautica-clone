@@ -48,6 +48,7 @@ export function createGlareStalker(scene: Scene, cel: Material, name: string, pa
   let amp = 0.25, freq = 1.4, raise = 0, last = 0;
   return {
     root: parts.root,
+    setEnabled: parts.setEnabled,
     meshes: segments.map(s => s.mesh),
     update(a: ThreatPose, seconds: number) {
       const dt = Math.min(0.1, seconds - last); last = seconds;
@@ -73,6 +74,8 @@ export function createGlareStalker(scene: Scene, cel: Material, name: string, pa
         else if (mode === "investigate") { const ph = seconds % 1.6; gain = ph < 0.16 || (ph > 0.34 && ph < 0.5) ? 1.5 : 0.3; }
         else if (mode === "commit") { gain = 0.25; lit = false; }
         else if (mode === "withdraw") gain = 0.32 + 0.12 * Math.sin(seconds * 0.8 - i * 0.4);
+        // CR-1: feeding in the plume, its lights ripple fast and warm down the body.
+        if (a.busy) gain = 0.7 + 0.7 * Math.max(0, Math.sin(seconds * 7 - i * 1.3));
         s.lights.set(gain, lit);
       }
     },

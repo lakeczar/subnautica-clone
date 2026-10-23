@@ -5,6 +5,7 @@ import { eyeHeight } from "./state.js";
 import type { GameState, Vec3, WorldQueries } from "./types.js";
 import type { DiscoveryId } from "../content/story/evidence.js";
 import { storyHost, storyKnown } from "./storyLink.js";
+import { aboardCarrier, carrierAimWorld, carrierStationHost, isCarrierStation } from "./carrierStations.js";
 
 export interface AimRay { origin: Vec3; dir: Vec3 }
 export interface InteractionHost { center: Vec3; radius: number; solidIds: readonly string[] }
@@ -34,8 +35,8 @@ const CENTERED = 1e-6;
 
 export function aimRay(s: GameState): AimRay | null {
   const { pose, mode, controlledVehicleId, interiorId } = s.player;
-  // A Creel cabin is a fixed dry room with aimable fixtures; carrier interiors keep their panel controls.
-  const cabin = s.player.interiorPose?.frame === "hull-local";
+  // A Creel cabin and the Hearthline's rooms are dry rooms with aimable fixtures (UX-1).
+  const cabin = s.player.interiorPose?.frame === "hull-local" || !!aboardCarrier(s);
   if (s.opening.phase < 4 || controlledVehicleId || (interiorId && !cabin) ||
       mode === "piloting" || (mode === "interior" && !cabin) ||
       !finite(pose.position) || !Number.isFinite(pose.yaw) || !Number.isFinite(pose.pitch)) return null;
@@ -46,7 +47,8 @@ export function aimRay(s: GameState): AimRay | null {
   };
 }
 
-export function interactionHost(_s: GameState, t: Interaction): InteractionHost {
+export function interactionHost(s: GameState, t: Interaction): InteractionHost {
+  if (isCarrierStation(t.id)) return carrierStationHost(s, t.id);
   const m = INTERACTION_HOSTS[t.id];
   // Source clusters extend just below their terrain datum. A vehicle interaction
   // already includes its +0.6 m access datum; do not add that offset twice.
@@ -129,11 +131,13 @@ function pick(candidates: Candidate[]): AimedTarget | null {
  * always reaches the actual host center, even when the eye is inside its sphere. */
 export function aimedInteraction(s: GameState, world: WorldQueries): AimedTarget | null {
   const ray = aimRay(s);
+  world = carrierAimWorld(s, world) ?? world;
   return ray ? pick(aimCandidates(s, world, ray, INTERACTION_REACH)) : null;
 }
 /** Presentation only: never an executable Interaction, and never reveals unknown records. */
 export function reachPreview(s: GameState, world: WorldQueries): ReachPreview | null {
   const ray = aimRay(s);
+  world = carrierAimWorld(s, world) ?? world;
   if (!ray || pick(aimCandidates(s, world, ray, INTERACTION_REACH))) return null;
   const target = pick(aimCandidates(s, world, ray, PREVIEW_REACH)
     .filter(c => c.reach >= INTERACTION_REACH && c.target.verb !== "empty"));
