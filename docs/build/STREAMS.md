@@ -510,3 +510,19 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - a GPU launch inside a `gpu` ticket works (`261023-101223-f3f1`, evidence bound to `a536775`).
 - **Stall fix:** `a5724a7` merged and reinstalled as v2 `112892426b5d`. The full suites pass on it: SCHED-1 23/23, SCHED-2 16/16, policy 25/25. No job was mislabelled in the window.
 - **SCHED-2b:** R1 fixes are at `2e35921`, and Sol R2 is running. The SCHED-2 builder is now on the soak reducer.
+
+### 2026-10-23 — coordinator decisions: the remote-lane threat model; COL-1 stage-B conditions
+- **SCHED-2b R2** (`1d5b7ff`): 2 P1s and 3 P2s.
+  - **Threat model ruled:** the receipt protocol must be robust to **accidents** by our own job and setup code (marker output, stray writes, stale or partial records, dropped connections). It doesn't defend against a payload **deliberately** forging records through `/proc`. That's documented as a named limit, with its root fix (a separate transport uid), the same class as SCHED-1's accepted "job kills its own anchor".
+  - **Fixes:**
+    - a per-attempt nonce over ssh stdin;
+    - a strict phase grammar;
+    - an exit-status cross-check;
+    - checked out tree clean and verified under the lock;
+    - ownership kept until the old attempt is conclusively stopped;
+    - non-blocking admission for `any`;
+    - test seams only under an explicit test scope.
+- **COL-1 stage-B acceptance conditions:**
+  - LC cap and collar walls (no clear-start move ends in a pose LC rejects);
+  - **collars and other collision bakes happen offline** (WK-1's bake pipeline), never at runtime (stage A measured 9–14 s for 0.25 m collars);
+  - **collar corners stored per cell only where needed**, to recover memory.
