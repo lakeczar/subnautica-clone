@@ -540,3 +540,39 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **COL-1 A R6** (`89c3158`): one P2, the floor snap flips triangles (`meridian_culvert_north` support is 0.75 m off). **COL-1 now owns the snap/seam step** in `caveGeometry.ts` for this fix.
 - **Soak R7** (`7810194`): 2 P2s, plus 3 of 6 mutants survive the property tests. Queued after the SCHED-2b R2 fixes, then TST-16.
 - **SIM-1 resumed.** Builders: REC-1, SCHED-2, COL-1, SIM-1 active; CW-1 and SAVE-1 in review.
+
+### 2026-10-23 — soak harness accepted; SAVE-1 R2; SCHED-2b R3
+- **Soak reducer accepted** by Sol R8 (`review/sched-2a-soak-r8` `79c752c1`) after R1–R7. Merged into root as `fd2e5fe`; the gate passed (1,370 tests, build, economy). **Soak verdicts are evidence now.**
+  - **P3 follow-up:** five reviewer mutants survive the example suite (the reviewer's probes kill them). Add those probes as tests.
+  - **P3:** one conservative timestamp false failure.
+- **SAVE-1 R1 fixes** at `4690311`:
+  - the factory-fallback export now runs end to end (25 min, 73 saves, byte-identical with alickers);
+  - the library holds `0a464bc`, `1d4d2c3` and `dabaa79`;
+  - Sol R2 dispatched.
+- **SCHED-2b R3** (`2c78ac0`): 2 P2s (claim/scope crash boundary, cross-boot identity reuse), plus a request for a supported operator `release-remote`. Fixes are in progress.
+- **CW-1 R1** (`2bf88b4`): 2 P2s (admission escapes the load screen; recovery state leaks across saves), and **the 3090 spikes look like real main-thread work** (renderer on-CPU, PSI ≤ 1% in 22/24). CW-1 is profiling them.
+
+### 2026-10-23 ~14:25Z — SCHED-2b accepted and merged; switch-over pending drain
+- **SCHED-2b** was accepted by Sol R4 (`review/sched-2b-r4` `0aad7f2`) after R1–R3. The real `any` and `4070` canaries ran at `b1aa462a`, which is identical in `scripts/heavy` and `alickers-job.sh` to merged root `ca36d15`.
+  - **Merged:** fast 1,381, build OK, economy OK; full suites on merged root SCHED-1 23/23, SCHED-2 16/16, SCHED-2b 27/27, policy 32/32.
+  - **Switch-over (review checklist):** builders are holding new submissions; a watcher waits for the queue to drain with no 2a supervisors or holders. Then: record versions and inodes, install, verify the guard refresh, run a short local and a short remote canary, and announce.
+  - **Release precondition:** `release-remote` only after the owner confirms the sandbox's processes are dead. Losing SSH alone isn't enough.
+- **REC-1 done** at `b65dfbbc` (built on CW-1); Sol R1 dispatched.
+- **TST-16 done** at `312b1be`; Sol R1 running. It adds swap and major-fault signals.
+  - **Correction:** the 4 run-A "contention" frames include 24–50 ms GC pauses, which is game allocation pressure. That's passed to CW-1.
+- **Fleet:** pinning was already done. Option A recommended to the owner (move Kopia, the proxy and interrupts to CPUs 0–3); B (isolcpus, host reboot) not now. The 3090 inventory gets updated.
+
+### 2026-10-23 14:30Z — SAVE-1 merged; SCHED-2b live
+- **SAVE-1 accepted** by Sol R3 (`review/save-1-r3` `94fbcc3`). Merged as `91dc1ab`: 1,397 tests pass, build and economy OK. The library export at `91dc1ab` is running. **Merge gate addition:** `scripts/saves-export.sh` after game-code merges.
+- **The SCHED-2b switch-over** followed the review checklist:
+  - the queue drained, with no 2a processes left;
+  - pre-switch state recorded in `/work/tmp/cutover-2b/`;
+  - installed v2 `95f340380c25`; the transport is byte-identical, and the inodes were preserved;
+  - the guard refresh (`75ab0906bfb0`) still refuses outside a lease and allows inside one;
+  - a local `gpu` ticket was labelled RTX 3090;
+  - the `any` canary ran locally while health was unknown (correct);
+  - **the `4070` canary ran remotely** on the RTX 4070 D3D12 renderer, bound to `91dc1ab`, and the sandbox was left clean;
+  - alickers shows `up`.
+
+  Builders were told to merge root and use `--machine`.
+- **TST-16 R1 rejected** (`81d6d83`): stuck clamps, escaped memory limits, a sticky slice cap, false-clean sampling, a missed final GPU scan. It's being redesigned (CPU-only deprioritisation within the caller's containment, or labelling only).

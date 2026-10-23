@@ -1,4 +1,5 @@
-node_modules/
+# No trailing slash: the queue's --snapshot (and saves-build-at.sh) link node_modules, and a symlink is not a directory.
+node_modules
 dist/
 .test-build/
 .test-build-*/
