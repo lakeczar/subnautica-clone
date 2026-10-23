@@ -63,7 +63,7 @@ function followS2(d: Driver, id: string, reverse = false): void {
 }
 /** Long later phases (C3): eat at the workshop and carry three meals; eat()
  * reaches the diver hold anywhere, and followS2 eats between legs. */
-function provision(d: Driver): void {
+export function provision(d: Driver): void {
   ashoreFromCarrier(d);
   enter(d, "workshop");
   eatIfHungry(d, 70);
@@ -210,7 +210,7 @@ function siteCraft(d: Driver, site: string, recipe: string): void {
 }
 /** Put `needs` in the diver hold at the workshop, gathering any shortfall. */
 const carryFromWorkshop = (d: Driver, needs: Readonly<Record<string, number>>): void => carry(d, needs as Partial<Record<ItemKind, number>>);
-function boardCraft(d: Driver, hull: VehicleState["hull"]): void {
+export function boardCraft(d: Driver, hull: VehicleState["hull"]): void {
   const v = d.vehicle(hull);
   if (!v) throw new Blocked(`No ${hull} owned`, where(d.state));
   if (d.state.player.controlledVehicleId === v.id) return;
