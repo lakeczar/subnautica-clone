@@ -25,12 +25,18 @@ function retained<T>(build: () => T): { value: T; bytes: number } {
   return { value, bytes: after - before };
 }
 
-/** Median microseconds per call over five timed passes. */
-function micros(calls: number, run: () => void): number {
-  run();
-  const runs: number[] = [];
-  for (let i = 0; i < 5; i++) { const t = performance.now(); run(); runs.push((performance.now() - t) * 1000 / calls); }
-  return runs.sort((a, b) => a - b)[2]!;
+/** Median microseconds per call for two runs over the same inputs: seven
+ * timed passes each, interleaved (a, b, a, b, ...) after a warm-up of both,
+ * so neither pays the other's JIT or cache state. */
+function microsPair(calls: number, a: () => void, b: () => void): { old: number; neo: number } {
+  a(); b(); a(); b();
+  const ta: number[] = [], tb: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    let t = performance.now(); a(); ta.push((performance.now() - t) * 1000 / calls);
+    t = performance.now(); b(); tb.push((performance.now() - t) * 1000 / calls);
+  }
+  const med = (v: number[]): number => v.sort((x, y) => x - y)[3]!;
+  return { old: med(ta), neo: med(tb) };
 }
 
 interface Speed { readonly [query: string]: { readonly old: number; readonly neo: number } }
@@ -47,10 +53,9 @@ function speed(scene: OracleScene, shapes: readonly { id: string; shape: Capsule
     const frames = poses.map(() => { const u = rnd() * Math.PI * 2; return { x: Math.cos(u) * step, y: (rnd() - 0.5) * step * 0.4, z: Math.sin(u) * step }; });
     const long = poses.map((_, i) => ({ x: frames[i]!.x * 20, y: frames[i]!.y * 20, z: frames[i]!.z * 20 }));
     const time = (name: string, f: (w: WorldQueries, i: number) => unknown): void => {
-      result[`${id}.${name}`] = {
-        old: micros(poses.length, () => { for (let i = 0; i < poses.length; i++) f(scene.old, i); }),
-        neo: micros(poses.length, () => { for (let i = 0; i < poses.length; i++) f(scene.neo, i); }),
-      };
+      result[`${id}.${name}`] = microsPair(poses.length,
+        () => { for (let i = 0; i < poses.length; i++) f(scene.old, i); },
+        () => { for (let i = 0; i < poses.length; i++) f(scene.neo, i); });
     };
     time("clearance", (w, i) => w.clearance(poses[i]!, shape));
     time("move.frame", (w, i) => w.moveCapsule(poses[i]!, frames[i]!, shape));
