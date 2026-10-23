@@ -55,9 +55,12 @@ import {
   stopWorks,
   nearWorkshop,
   nextId,
-  spend,
+  applySpend,
+  hasRoomAfter,
+  planSpend,
   supportedServiceSite,
 } from "./inventory.js";
+import type { SpendPlan } from "./inventory.js";
 import { makeVehicle } from "./state.js";
 import { personalLimit as personalPressureLimit, safePersonalDepth } from "./capabilities.js";
 import { RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
@@ -419,20 +422,18 @@ export function craftingBlock(
     )
   )
     return block("materials", "Missing materials at this bench.");
-  if (id === "strip_frame") {
-    const after = structuredClone(s);
-    spend(after, r.cost, bins);
-    if (!hasRoom(after, "workshop_locker", ITEMS.structural_alloy.cu * FRAME_ALLOY))
-      return block("space", `Stripped alloy goes to the workshop locker; it needs ${ITEMS.structural_alloy.cu * FRAME_ALLOY} CU. Nothing consumed.`);
-  }
+  // Room checks read the spend plan itself (steward F05): what the ingredients
+  // free in a container counts, exactly as craft() will apply it.
+  const placement = outputPlacement(id);
+  if (id !== "strip_frame" && placement !== "package" && placement !== "diver") return null;
+  const plan: SpendPlan = r.maintenance ? { lines: [], missing: {} } : planSpend(s, r.cost, bins, "oldest");
+  if (id === "strip_frame" && !hasRoomAfter(s, plan, "workshop_locker", ITEMS.structural_alloy.cu * FRAME_ALLOY))
+    return block("space", `Stripped alloy goes to the workshop locker; it needs ${ITEMS.structural_alloy.cu * FRAME_ALLOY} CU. Nothing consumed.`);
   // Every carried output (C3-R1-1): after the ingredients are spent, the whole
   // output must fit where craft() puts it, or nothing is consumed.
-  const placement = outputPlacement(id);
   if (placement === "package" || placement === "diver") {
-    const after = structuredClone(s);
-    if (!r.maintenance) spend(after, r.cost, bins);
-    const to = placement === "package" ? packageDestination(after, site, ITEMS[r.output as ItemKind].cu) : "diver";
-    if (!to || !hasRoom(after, to, ITEMS[r.output as ItemKind].cu * r.quantity))
+    const to = placement === "package" ? packageDestination(s, site, ITEMS[r.output as ItemKind].cu, plan) : "diver";
+    if (!to || !hasRoomAfter(s, plan, to, ITEMS[r.output as ItemKind].cu * r.quantity))
       return block("space", placement === "package"
         ? `The ${ITEMS[r.output as ItemKind].cu} CU package needs room in ${site === "island_workshop" ? "the workshop" : "this site's"} locker or your hold. Nothing consumed.`
         : "Output would not fit your hold. Nothing consumed.");
@@ -457,9 +458,10 @@ export function outputPlacement(id: RecipeId): "none" | "equipment" | "package" 
   return outputFitting(r.output) ? "equipment" : "diver";
 }
 /** Mount packages are bulky: the workshop locker first, then the diver hold. */
-function packageDestination(s: GameState, site: FabricationSite = "island_workshop", cu: number = ITEMS.creel_cabin.cu): string | null {
+function packageDestination(s: GameState, site: FabricationSite = "island_workshop", cu: number = ITEMS.creel_cabin.cu,
+  plan: Pick<SpendPlan, "lines"> = { lines: [] }): string | null {
   const stop = stopForSite(site), locker = site === "island_workshop" ? "workshop_locker" : stop ? WORKING_STOPS[stop].locker : null;
-  return locker && hasRoom(s, locker, cu) ? locker : hasRoom(s, "diver", cu) ? "diver" : null;
+  return locker && hasRoomAfter(s, plan, locker, cu) ? locker : hasRoomAfter(s, plan, "diver", cu) ? "diver" : null;
 }
 export function craftingRefusal(s: GameState, id: RecipeId, world: WorldQueries): string | null {
   return craftingBlock(s, id, world)?.message ?? null;
@@ -477,7 +479,7 @@ export function craft(
     s.world.maintenance.alloy -= 2;
     s.world.maintenance.glass--;
     s.world.maintenance.membrane -= 3;
-  } else spend(s, r.cost, bins);
+  } else applySpend(s, planSpend(s, r.cost, bins, "oldest").lines);
   const hull = hullOutput(r), refit = refitHull(id), tier = refitTier(id), suit = suitRefit(id);
   if (r.output === "pod_repair")
     s.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired = true;

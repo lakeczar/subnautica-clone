@@ -5,9 +5,8 @@
 import { HEARTHLINE_SOCKETS } from "../../content/fleet/hearthlineInterior.js";
 import { CARRIER_OCCUPANTS, FIXED_HOSTS, HOST_REACH, MODULES, moduleOfItem, OUTPOST_TIERS } from "../../content/systems/hosts.js";
 import type { FixedHostId, ModuleKind } from "../../content/systems/hosts.js";
-import { containerAccessible, containerLabel, distance, facility, nearCanopyStop, nearPod, nearWorkshop } from "../inventory.js";
+import { containerAccepts, containerAccessible, containerLabel, cuOf, distance, facility, freeCapacity, labelOf, nearCanopyStop, nearPod, nearWorkshop, restoreInstance, usedCapacity } from "../inventory.js";
 import type { GameState, Vec3, VehicleState } from "../types.js";
-import { accepts, cuOf, freeCu, labelOf, restoreInstance, usedCu } from "./ledger.js";
 import type { OutpostState, PowerSource, SocketEntry, SystemsState } from "./state.js";
 
 export type HostKind = "pod" | "stop" | "outpost" | "carrier";
@@ -191,11 +190,11 @@ export function removeModule(s: GameState, sys: SystemsState, hostId: string, so
   if ("refusal" in at) return at.refusal;
   const entry = sys.sockets.find((e) => e.hostId === hostId && e.socket === socketId);
   if (!entry) return at.slot.occupant ? "That fitting belongs to the carrier fit-out." : "That socket is empty.";
-  if (moduleOfItem(entry.kind) === "locker" && usedCu(s, moduleLockerId(entry.itemId)) > 0)
-    return `Empty the locker module first (${usedCu(s, moduleLockerId(entry.itemId))} CU inside).`;
-  if (to === moduleLockerId(entry.itemId) || !accessible(s, sys, to) || !accepts(s, to, entry.kind))
+  if (moduleOfItem(entry.kind) === "locker" && usedCapacity(s, moduleLockerId(entry.itemId)) > 0)
+    return `Empty the locker module first (${usedCapacity(s, moduleLockerId(entry.itemId))} CU inside).`;
+  if (to === moduleLockerId(entry.itemId) || !accessible(s, sys, to) || !containerAccepts(s, to, entry.kind))
     return "Choose a reachable container for the module.";
-  if (freeCu(s, to) < cuOf(entry.kind)) return `${containerLabel(s, to)} needs ${cuOf(entry.kind)} CU free for the module. Nothing removed.`;
+  if (freeCapacity(s, to) < cuOf(entry.kind)) return `${containerLabel(s, to)} needs ${cuOf(entry.kind)} CU free for the module. Nothing removed.`;
   sys.sockets = sys.sockets.filter((e) => e !== entry);
   syncCarrierSocket(s, at.host, socketId, null);
   restoreInstance(s, entry.itemId, entry.kind, to);

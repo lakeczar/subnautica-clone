@@ -4,7 +4,7 @@ import { OUTPOST_TIERS } from "../src/content/systems/hosts.js";
 import { decodeViews, discoverSite, startDecode } from "../src/sim/systems/decoder.js";
 import { harvest, plant } from "../src/sim/systems/cultivation.js";
 import { hostById, installModule, moduleLockerId, outpostLockerId, removeModule } from "../src/sim/systems/hosts.js";
-import { usedCu } from "../src/sim/systems/ledger.js";
+import { usedCapacity } from "../src/sim/inventory.js";
 import { validSystems } from "../src/sim/systems/state.js";
 import { conservedTotals, deployOutpost, deployPreview, packOutpost, packPreview, sitePower, upgradeOutpost, upgradePreview } from "../src/sim/systems/outposts.js";
 import { advanceSystems } from "../src/sim/systems/step.js";
@@ -205,7 +205,7 @@ test("ADVERSE: packing mid-decode, mid-growth with a full locker loses and dupli
   give(s, "reserve_cell", 1, outpostLockerId(id));
   give(s, "structural_alloy", 3, outpostLockerId(id));
   give(s, "meal", 24, outpostLockerId(id));
-  assert.equal(usedCu(s, outpostLockerId(id)), OUTPOST_TIERS.standard.lockerCu, "the locker is genuinely full");
+  assert.equal(usedCapacity(s, outpostLockerId(id)), OUTPOST_TIERS.standard.lockerCu, "the locker is genuinely full");
   give(s, "seed_ribbon_fan", 1);
   assert.equal(plant(s, sys, id, "s1", "seed_ribbon_fan"), null);
   discoverSite(sys, "demo_relay_hut");

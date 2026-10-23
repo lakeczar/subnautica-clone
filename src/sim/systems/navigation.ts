@@ -8,9 +8,8 @@ import { FIXED_HOSTS } from "../../content/systems/hosts.js";
 import type { FixedHostId } from "../../content/systems/hosts.js";
 import { BEACON_CATEGORIES, BEACON_NAME_MAX, BEACON_REACH, CHART_CELL, CHART_VISIT_RADIUS, PLAYER_BEACON_LIMIT } from "../../content/systems/navigation.js";
 import type { BeaconCategory } from "../../content/systems/navigation.js";
-import { distance, facility, nextId } from "../inventory.js";
+import { addItem, applySpend, cuOf, distance, facility, freeCapacity, nextId, planSpend } from "../inventory.js";
 import type { GameState, Vec3 } from "../types.js";
-import { addStack, applySpend, cuOf, freeCu, planSpend } from "./ledger.js";
 import type { SystemsState } from "./state.js";
 import { hasMember } from "../rows.js";
 
@@ -46,10 +45,10 @@ export function collectBeacon(s: GameState, sys: SystemsState, id: string): stri
   const b = sys.beacons.find((b) => b.id === id);
   if (!b || b.source !== "player") return "Only your own placed beacons can be collected.";
   if (s.player.controlledVehicleId || distance(s.player.pose.position, b.position) > BEACON_REACH) return "Swim to the beacon to collect it.";
-  if (freeCu(s, "diver") < cuOf("nav_beacon")) return "Make 1 CU room to collect the beacon.";
+  if (freeCapacity(s, "diver") < cuOf("nav_beacon")) return "Make 1 CU room to collect the beacon.";
   sys.beacons = sys.beacons.filter((x) => x !== b);
   sys.beaconsOff = sys.beaconsOff.filter((x) => x !== id);
-  addStack(s, "nav_beacon", 1, "diver");
+  addItem(s, "nav_beacon", 1, "diver");
   return null;
 }
 export function setBeaconOn(sys: SystemsState, id: string, on: boolean): void {

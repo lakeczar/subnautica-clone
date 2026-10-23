@@ -6,11 +6,10 @@ import { DECODABLES, DECODE_MINUTES } from "../../content/systems/decodes.js";
 import { SEEDS } from "../../content/systems/cultivation.js";
 import { FIXED_HOSTS, moduleOfItem, OUTPOST_LIMIT, OUTPOST_SITING, OUTPOST_TIER_ORDER, OUTPOST_TIERS, tierOfKit } from "../../content/systems/hosts.js";
 import type { OutpostTier } from "../../content/systems/hosts.js";
-import { containerLabel, distance } from "../inventory.js";
+import { applySpend, containerAccepts, containerLabel, costText, cuOf, distance, freeCapacity, labelOf, planSpend, restoreInstance } from "../inventory.js";
 import type { GameState, Vec3 } from "../types.js";
 import { accessible, forgetRemembered, outpostHost, outpostLockerId, workContainers } from "./hosts.js";
-import { accepts, applySpend, costText, cuOf, freeCu, labelOf, planSpend, restoreInstance } from "./ledger.js";
-import type { SpendLine } from "./ledger.js";
+import type { SpendLine } from "../inventory.js";
 import { layoutProblem } from "./state.js";
 import type { OutpostState, PowerSource, SystemsState } from "./state.js";
 
@@ -176,11 +175,11 @@ export function packPreview(s: GameState, sys: SystemsState, outpostId: string, 
   base.work = workLines(sys, base.modules.map((m) => m.itemId));
   base.needCu = cuOf(tier.kit) + [...base.locker, ...base.modules].reduce((n, m) => n + m.cu, 0);
   const freedAtTo = loss.lines.filter((l) => l.from === to).reduce((n, l) => n + cuOf(l.kind) * l.quantity, 0);
-  base.freeCu = freeCu(s, to) + freedAtTo;
+  base.freeCu = freeCapacity(s, to) + freedAtTo;
   if (Object.keys(loss.missing).length)
     return { ...base, refusal: `Packing breaks the anchor seals: it spends ${costText(tier.packLoss)}. Bring ${costText(loss.missing)} in your hold or the outpost locker. Nothing packed.` };
-  const refused = [...base.locker, ...base.modules].find((m) => !accepts(s, to, m.kind));
-  if (refused || !accepts(s, to, tier.kit)) return { ...base, refusal: `${containerLabel(s, to)} can't take ${labelOf(refused?.kind ?? tier.kit).toLowerCase()}. Nothing packed.` };
+  const refused = [...base.locker, ...base.modules].find((m) => !containerAccepts(s, to, m.kind));
+  if (refused || !containerAccepts(s, to, tier.kit)) return { ...base, refusal: `${containerLabel(s, to)} can't take ${labelOf(refused?.kind ?? tier.kit).toLowerCase()}. Nothing packed.` };
   if (base.needCu > base.freeCu)
     return { ...base, refusal: `The kit, its ${base.modules.length} module${base.modules.length === 1 ? "" : "s"} and the locker contents need ${base.needCu} CU in ${containerLabel(s, to)}; it has ${base.freeCu} free. Empty the locker or pack into a craft hold. Nothing packed.` };
   return base;

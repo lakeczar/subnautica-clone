@@ -3,10 +3,10 @@
  * default replant it, so a crop keeps going between expeditions. */
 import { isSeed, SEEDS } from "../../content/systems/cultivation.js";
 import type { SeedKind } from "../../content/systems/cultivation.js";
-import { containerLabel } from "../inventory.js";
+import { addItem, applySpend, containerAccepts, containerLabel, cuOf, freeCapacity, labelOf, planSpend } from "../inventory.js";
+import type { ItemKind } from "../../content/registry.js";
 import type { GameState } from "../types.js";
 import { accessible, hostById, hostLocal, workContainers } from "./hosts.js";
-import { accepts, addStack, cuOf, freeCu, labelOf, planSpend, applySpend } from "./ledger.js";
 import type { PlanterState, SystemsState } from "./state.js";
 
 export const cropReady = (p: PlanterState): boolean => p.progress >= SEEDS[p.seed].growSeconds;
@@ -71,12 +71,12 @@ export function harvestPreview(s: GameState, sys: SystemsState, hostId: string, 
   const need = cuOf(seed.produce) * seed.quantity + (replant ? 0 : cuOf(crop.seed));
   // Both outputs land together, so the destination must take both: a pantry
   // takes meals but not the cutting that grew them.
-  const fits = (c: string): boolean => accessible(s, sys, c) && accepts(s, c, seed.produce) &&
-    (replant || accepts(s, c, crop.seed)) && freeCu(s, c) >= need;
+  const fits = (c: string): boolean => accessible(s, sys, c) && containerAccepts(s, c, seed.produce) &&
+    (replant || containerAccepts(s, c, crop.seed)) && freeCapacity(s, c) >= need;
   const to = options.to !== undefined ? (fits(options.to) ? options.to : null)
     : [...at.lockers, "diver"].find((c) => s.inventory.containers.some((k) => k.id === c) && fits(c)) ?? null;
   if (!to) {
-    const refused = options.to !== undefined && accessible(s, sys, options.to) && [seed.produce, ...(replant ? [] : [crop.seed])].find((k) => !accepts(s, options.to!, k));
+    const refused = options.to !== undefined && accessible(s, sys, options.to) && [seed.produce, ...(replant ? [] : [crop.seed])].find((k) => !containerAccepts(s, options.to!, k));
     return { ...empty(refused ? `${containerLabel(s, options.to!)} doesn't take ${labelOf(refused).toLowerCase()}. Harvest elsewhere, or replant the cutting. Nothing harvested.`
       : `The harvest needs ${need} CU free${options.to ? ` in ${containerLabel(s, options.to)}` : " in a locker here or your hold"}. Nothing harvested.`), produce: seed.produce, quantity: seed.quantity };
   }
@@ -88,11 +88,11 @@ export function harvest(s: GameState, sys: SystemsState, hostId: string, socketI
   if (p.refusal) return p.refusal;
   const at = planterAt(s, sys, hostId, socketId) as { moduleId: string };
   const crop = sys.planters.find((c) => c.moduleId === at.moduleId)!;
-  if (p.produce === "bio_cell") for (let n = 0; n < p.quantity; n++) addStack(s, p.produce, 1, p.to!);
-  else addStack(s, p.produce, p.quantity, p.to!);
+  if (p.produce === "bio_cell") for (let n = 0; n < p.quantity; n++) addItem(s, p.produce as ItemKind, 1, p.to!);
+  else addItem(s, p.produce as ItemKind, p.quantity, p.to!);
   if (p.cutting === "replanted") crop.progress = 0;
   else {
-    addStack(s, crop.seed, 1, p.to!);
+    addItem(s, crop.seed as ItemKind, 1, p.to!);
     sys.planters = sys.planters.filter((c) => c !== crop);
   }
   s.feedback = `Harvested ${p.quantity} × ${labelOf(p.produce)} → ${containerLabel(s, p.to!)}${p.cutting === "replanted" ? " · replanted" : ""}.`;

@@ -6,11 +6,10 @@
 import { TRAP } from "../../content/fauna/items.js";
 import { FAUNA_SOURCES, GROUNDS, TRAP_SPOTS } from "../../content/fauna/grounds.js";
 import type { Vec3 } from "../types.js";
-import { containerLabel } from "../inventory.js";
+import { addItem, containerAccepts, containerLabel, cuOf, freeCapacity } from "../inventory.js";
 import type { GameState } from "../types.js";
 import { accessible, hostById, hostLocal, listHosts } from "../systems/hosts.js";
 import type { SocketHost } from "../systems/hosts.js";
-import { accepts, addStack, cuOf, freeCu } from "../systems/ledger.js";
 import type { SystemsState, TrapState } from "../systems/state.js";
 
 export const TRAP_ITEM = "mod_fish_trap";
@@ -89,7 +88,7 @@ export function emptyTrapPreview(s: GameState, sys: SystemsState, hostId: string
   if (held <= 0) return none(wetHost(host) ? "The trap is empty. It catches a fish every few minutes." : `${host.label} is on dry land: the trap catches nothing here.`);
   const need = cuOf("small_fish") * held;
   const fits = (c: string): boolean => s.inventory.containers.some((k) => k.id === c) && accessible(s, sys, c) &&
-    accepts(s, c, "small_fish") && freeCu(s, c) >= need;
+    containerAccepts(s, c, "small_fish") && freeCapacity(s, c) >= need;
   const dest = to !== undefined ? (fits(to) ? to : null) : [...host.lockers, "diver"].find(fits) ?? null;
   if (!dest) return { refusal: `The catch needs ${need} CU free${to ? ` in ${containerLabel(s, to)}` : " in a locker here or your hold"}. Nothing moved.`, quantity: held, to: null };
   return { refusal: null, quantity: held, to: dest };
@@ -99,7 +98,7 @@ export function emptyTrap(s: GameState, sys: SystemsState, hostId: string, socke
   if (p.refusal) return p.refusal;
   const host = hostById(s, sys, hostId)!, moduleId = host.sockets.find((k) => k.id === socketId)!.occupant!.itemId!;
   const t = sys.traps.find((x) => x.moduleId === moduleId)!;
-  addStack(s, "small_fish", p.quantity, p.to!);
+  addItem(s, "small_fish", p.quantity, p.to!);
   t.held = 0;
   s.feedback = `Emptied the fish trap · ${p.quantity} × Small fish → ${containerLabel(s, p.to!)}.`;
   return null;

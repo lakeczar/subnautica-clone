@@ -10,12 +10,11 @@ import { SOURCES } from "../../content/registry.js";
 import type { SourceId } from "../../content/registry.js";
 import { placeDeterrent } from "../ecologyLink.js";
 import { cabinHull, cabinPowered, fittedCabin, nearFixture } from "../fleet.js";
-import { cabinLockerId, containerLabel, distance, facility, nearPod, nearWorkshop } from "../inventory.js";
+import { addItem, applySpend, cabinLockerId, containerAccepts, containerLabel, distance, facility, freeCapacity, nearPod, nearWorkshop, planSpend, removeQuantity } from "../inventory.js";
 import type { GameState, Vec3 } from "../types.js";
 import { WORLD_BOUNDS } from "../world.js";
 import { cropReady } from "../systems/cultivation.js";
 import { hostById, hostLocal, workContainers } from "../systems/hosts.js";
-import { accepts, addStack, applySpend, freeCu, planSpend } from "../systems/ledger.js";
 import type { SystemsState } from "../systems/state.js";
 import { windowBusy } from "./windows.js";
 
@@ -90,8 +89,8 @@ export function cookPlan(s: GameState, portions: number): CookPlan {
   const order = [where.to, ...where.raw.filter((c) => c !== where.to)];
   const pay = planSpend(s, use, order.filter((c) => s.inventory.containers.some((k) => k.id === c)));
   const freed = pay.lines.filter((l) => l.from === where.to).reduce((k, l) => k + l.quantity, 0);
-  const to = [where.to, "diver"].find((c) => s.inventory.containers.some((k) => k.id === c) && accepts(s, c, "meal") &&
-    freeCu(s, c) + (c === where.to ? freed : pay.lines.filter((l) => l.from === c).reduce((k, l) => k + l.quantity, 0)) >= meals) ?? null;
+  const to = [where.to, "diver"].find((c) => s.inventory.containers.some((k) => k.id === c) && containerAccepts(s, c, "meal") &&
+    freeCapacity(s, c) + (c === where.to ? freed : pay.lines.filter((l) => l.from === c).reduce((k, l) => k + l.quantity, 0)) >= meals) ?? null;
   if (!to) return { ...base, refusal: `${meals} meals need ${meals} CU free in ${containerLabel(s, where.to)} or your hold. Nothing cooked.`, use, meals, to: null };
   return { ...base, refusal: null, use, meals, to };
 }
@@ -100,7 +99,7 @@ export function cookCatch(s: GameState, portions: number): string | null {
   if (p.refusal) return p.refusal;
   const where = cookerHere(s) as Cooker, order = [where.to, ...where.raw.filter((c) => c !== where.to)];
   applySpend(s, planSpend(s, p.use, order.filter((c) => s.inventory.containers.some((k) => k.id === c))).lines);
-  addStack(s, "meal", p.meals, p.to!);
+  addItem(s, "meal", p.meals, p.to!);
   const raw = (COOKABLE).filter((k) => p.use[k] > 0).map((k) => `${p.use[k]} ${k === "small_fish" ? "fish" : "roe"}`).join(" and ");
   s.feedback = `Cooked ${raw} at the ${p.cooker} · ${p.meals} ${p.meals === 1 ? "meal" : "meals"} → ${containerLabel(s, p.to!)}. Meals keep; eat with F.`;
   return null;
@@ -127,8 +126,7 @@ export function releaseBait(s: GameState): string | null {
   const fish = s.inventory.items.find((i) => i.kind === "small_fish" && holds.includes(i.containerId));
   if (!fish) return "No small fish carried. Catch one at a school (E) to use as bait.";
   const at = baitPoint(s);
-  fish.quantity--;
-  if (fish.quantity === 0) s.inventory.items = s.inventory.items.filter((i) => i !== fish);
+  removeQuantity(s, fish, 1);
   placeDeterrent(s, "bait", at);
   // The sound hunter hears the struggling fish and goes to feed on it, unless
   // it is already away feeding or turned by another distraction.

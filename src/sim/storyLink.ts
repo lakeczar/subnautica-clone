@@ -16,7 +16,7 @@ import { placedSite, STORY_SITES } from "../content/story/sites.js";
 import { advanceWorks, beginResolution, completeResolution, found, gateOpen, gatePanel, mergeDiscoveries, notebook, openLeads, reachable,
   recordDiscovery, requestHint, worksAction } from "./story/index.js";
 import type { Capabilities, NotebookView, StoryState, WorksContext, WorksOutcome } from "./story/index.js";
-import { available, containerAccessible, facility, removeQuantity, spend } from "./inventory.js";
+import { applySpend, available, containerAccessible, facility, planSpend, removeQuantity } from "./inventory.js";
 import { PLACED_HOSTS, WORKS_FACES, type PlacedHostId, type WorksFaceId } from "../content/story/placements.js";
 import { STORY_RECIPES, type StorySiteId } from "../content/story/evidence.js";
 import { RESOLUTION_ROSTER, WORKS_TEXT, type RosterId, type WorksAction } from "../content/story/works.js";
@@ -190,7 +190,7 @@ function applyWorks(s: GameState, outcome: WorksOutcome, bins: string[]): string
   if (outcome.ok && outcome.consume) {
     if (outcome.consume === "service_power_assembly" || outcome.consume === "service_air_assembly")
       removeQuantity(s, s.inventory.items.find((i) => i.kind === outcome.consume && i.containerId === "diver")!, 1);
-    else spend(s, STORY_RECIPES[outcome.consume].cost, bins);
+    else applySpend(s, planSpend(s, STORY_RECIPES[outcome.consume].cost, bins, "oldest").lines);
   }
   return outcome.message;
 }
