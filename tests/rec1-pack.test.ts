@@ -215,3 +215,29 @@ test("R1-F2: running out of tries is unstable, with the last two pictures; a con
   const converging = await untilStable(async () => seq[Math.min(k++, 3)]!, async () => {}, 12);
   assert.deepEqual([converging.stable, converging.image, converging.tries], [true, "c", 2]);
 });
+
+test("audit F22: re-accepting a different picture for the same view and commit keeps the index and the stored bytes in step", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { createHash } = await import("node:crypto");
+  const { readFileSync } = await import("node:fs");
+  withDir((dir) => {
+    const store = join(dir, "store"), index = join(dir, "index.json");
+    const capture = (name: string, bytes: string) => {
+      const d = join(dir, name);
+      mkdirSync(join(d, "views"), { recursive: true });
+      writeFileSync(join(d, "views", "v.png"), bytes);
+      writeFileSync(join(d, "capture.json"), JSON.stringify({ class: "3090", commit: "c0ffee", viewsVersion: 1, gpu: "test",
+        views: [{ id: "place.home_pod", file: "views/v.png", settled: true, stable: true, sha256: createHash("sha256").update(bytes).digest("hex") }] }));
+      return d;
+    };
+    const accept = (d: string) => spawnSync(process.execPath, [resolve("scripts/rec/views/accept.mjs"), d, "--views", "place.home_pod", "--by", "test", "--why", "test", "--store", store, "--index", index], { encoding: "utf8" });
+    assert.equal(accept(capture("a", "first picture")).status, 0);
+    assert.equal(accept(capture("b", "second, different picture")).status, 0);
+    const entry = JSON.parse(readFileSync(index, "utf8")).classes["3090"]["place.home_pod"];
+    assert.equal(createHash("sha256").update(readFileSync(join(store, entry.file))).digest("hex"), entry.sha256, "the stored file holds the bytes the index names");
+    assert.equal(readFileSync(join(store, entry.file), "utf8"), "second, different picture");
+    // A capture whose file was altered after its hash was recorded is refused.
+    const c = capture("c", "third"); writeFileSync(join(c, "views", "v.png"), "tampered");
+    assert.equal(accept(c).status, 3);
+  });
+});

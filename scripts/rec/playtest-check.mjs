@@ -15,12 +15,12 @@
 //
 //   node scripts/rec/playtest-check.mjs --dist DIST --save SAVE --plan PLAN --segment N --seconds S --out DIR
 //     [--budget-mib M --segment-ms MS] [--gpu REGEX]
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { Blocked, goto, openGame, releaseAll } from "../soak/browser.mjs";
 import { unzip } from "./unzip.mjs";
 import { buildPack } from "./pack.mjs";
-import { videoSeconds } from "./imaging.mjs";
+import { remux, videoSeconds } from "./imaging.mjs";
 import { videoSegments } from "./analyse.mjs";
 
 const args = process.argv.slice(2), arg = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
@@ -71,7 +71,9 @@ function reconcile(zip, label, { noteText, until, after } = {}) {
   const declaredMissing = snaps.filter((s) => s.missing).map((s) => `${s.file}: ${s.missing}`);
   const note = noteText ? events.find((e) => e.kind === "note" && e.text.includes(noteText)) : null;
   const noteSnap = note?.snap ? snaps.find((s) => s.seq === note.snap) : null;
-  const segs = videoSegments(header).map((s) => ({ ...s, seconds: existsSync(path.join(dir, s.file)) ? videoSeconds(path.join(dir, s.file)) : null }));
+  // A MediaRecorder file has no duration until it is remuxed (as the pack does).
+  const duration = (file) => { if (!existsSync(file)) return null; if (remux(file, `${file}.tmp.webm`)) renameSync(`${file}.tmp.webm`, file); return videoSeconds(file); };
+  const segs = videoSegments(header).map((s) => ({ ...s, seconds: duration(path.join(dir, s.file)) }));
   const videoEnd = segs.reduce((m, s) => (s.seconds != null ? Math.max(m, s.start + s.seconds * 1000) : m), -Infinity);
   const lastFrameT = frames.length ? frames.at(-1)[0] : null;
   const facts = {

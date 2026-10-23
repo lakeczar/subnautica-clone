@@ -164,6 +164,16 @@ export class FlightCapture {
     r.charge(performance.now() - start, "spool");
   }
 
+  /** A frame with nothing drawn (paused, a menu, the note being typed): the video
+   * repeats its last picture at 12 fps, so its timeline keeps the page's clock and
+   * covers every moment up to an export (R1-F7). The spool still flushes. */
+  idle(now: number): void {
+    if (this.disposed || this.stopped) return;
+    const v = this.video;
+    if (v && !v.paused && v.frames > 0 && now >= v.next) { v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS); v.track.requestFrame(); }
+    if (this.spool && now - this.spool.last >= SPOOL_EVERY_MS) this.flush(now);
+  }
+
   private videoFrame(v: Video, bitmap: ImageBitmap, captured: number): void {
     v.pending--;
     if (this.disposed || this.video !== v || v.paused) { bitmap.close(); return; }

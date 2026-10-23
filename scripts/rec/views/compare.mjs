@@ -14,6 +14,9 @@ import path from "node:path";
 import { loadViewSet } from "./stable.mjs";
 import { fileURLToPath } from "node:url";
 import { composer, composeStrip, dataUrl } from "../imaging.mjs";
+import { createHash } from "node:crypto";
+
+const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const STORE = process.env.REC_VIEW_STORE ?? `${process.env.HOME}/.local/share/siltwake-views`;
@@ -76,9 +79,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       if (quarantine) { rows.push({ id: v.id, status: "quarantined", reason: quarantine, flags }); continue; }
       if (flags.length) { rows.push({ id: v.id, status: "not judged", reason: flags.join(", "), flags }); continue; }
       if (!b) { rows.push({ id: v.id, status: "no baseline", flags }); continue; }
-      if (b.sha256 === v.sha256) { rows.push({ id: v.id, status: "identical", ssim: 1, flags }); continue; }
+      // Hashes from the bytes on disk on both sides (audit F22): the stored baseline must
+      // still be what its index entry names, and the capture's picture is hashed afresh.
       const bf = path.join(store, b.file);
       if (!existsSync(bf)) { rows.push({ id: v.id, status: "baseline missing from the store", flags, baseline: b.file }); attention.push({ id: v.id, reason: `baseline ${b.file} is not in the store ${store}` }); continue; }
+      const storedSha = sha256(readFileSync(bf)), newSha = sha256(readFileSync(file));
+      if (storedSha !== b.sha256) { rows.push({ id: v.id, status: "baseline corrupt", flags, baseline: b.file }); attention.push({ id: v.id, reason: `the stored baseline ${b.file} no longer holds the bytes its index entry names` }); continue; }
+      if (storedSha === newSha) { rows.push({ id: v.id, status: "identical", ssim: 1, flags }); continue; }
       const s = await ssim(c.page, dataUrl(bf), dataUrl(file));
       const changed = s.ssim < threshold;
       rows.push({ id: v.id, status: changed ? "changed" : "unchanged", ssim: +s.ssim.toFixed(4), changedPct: +s.changedPct.toFixed(2), threshold, flags, baseline: b.commit });

@@ -7,10 +7,13 @@
 //   node scripts/rec/views/accept.mjs CAPTURE_DIR --by WHO --why "REASON" (--views id,id | --all | --new)
 //     [--store DIR] [--index FILE]
 //   --new: only views with no baseline yet (the first baseline of a view set).
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { INDEX, readIndex, STORE } from "./compare.mjs";
 import { loadViewSet } from "./stable.mjs";
+
+const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 
 const args = process.argv.slice(2), arg = (n) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : undefined; };
 const dir = args[0], by = arg("by"), why = arg("why");
@@ -33,11 +36,18 @@ const held = chosen.filter((v) => quarantined.has(v.id));
 if (held.length && !args.includes("--allow-quarantined")) { console.error(`refusing quarantined views as baselines: ${held.map((v) => `${v.id} (${quarantined.get(v.id)})`).join(", ")} (--allow-quarantined to override, with the reason in --why)`); process.exit(2); }
 const at = new Date().toISOString();
 for (const v of chosen) {
-  const rel = `${cap.class}/${v.id}/${cap.commit}.png`, dest = path.join(store, rel);
+  // Content-addressed (audit F22): the stored file is named by the hash of the bytes
+  // accepted, read from disk, never taken from the capture's metadata; the copy is
+  // verified before the index names it. A second, different picture for the same
+  // view and commit is a second file, so the index and the bytes cannot disagree.
+  const bytes = readFileSync(path.join(dir, v.file)), sha = sha256(bytes);
+  if (v.sha256 && v.sha256 !== sha) { console.error(`${v.id}: the capture's file does not match its recorded hash; not accepted`); process.exit(3); }
+  const rel = `${cap.class}/${v.id}/${sha}.png`, dest = path.join(store, rel);
   mkdirSync(path.dirname(dest), { recursive: true });
-  if (!existsSync(dest)) copyFileSync(path.join(dir, v.file), dest);
+  if (!existsSync(dest)) { copyFileSync(path.join(dir, v.file), `${dest}.tmp`); renameSync(`${dest}.tmp`, dest); }
+  if (sha256(readFileSync(dest)) !== sha) { console.error(`${v.id}: the stored baseline ${rel} does not hold the accepted bytes; not accepted`); process.exit(3); }
   const prior = cls[v.id];
-  cls[v.id] = { commit: cap.commit, sha256: v.sha256, file: rel, acceptedBy: by, why, at, viewsVersion: cap.viewsVersion, gpu: cap.gpu,
+  cls[v.id] = { commit: cap.commit, sha256: sha, file: rel, acceptedBy: by, why, at, viewsVersion: cap.viewsVersion, gpu: cap.gpu,
     history: [...(prior?.history ?? []), ...(prior ? [{ commit: prior.commit, acceptedBy: prior.acceptedBy, why: prior.why, at: prior.at }] : [])].slice(-10) };
 }
 writeFileSync(indexFile, JSON.stringify(index, null, 1) + "\n");

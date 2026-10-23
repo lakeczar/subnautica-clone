@@ -534,6 +534,7 @@ export class SiltwakeApp {
     charge("frame");
     // Pictures only from a frame that drew: otherwise the canvas holds nothing current.
     if (this.drewFrame) fl.afterRender(now);
+    else fl.idle(now);
     this.drewFrame = false;
   }
   private drewFrame = false;
