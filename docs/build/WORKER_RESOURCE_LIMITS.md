@@ -61,8 +61,6 @@ H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 
 **Exclusive is one measurement per ticket.** Submit each segment of a series (traversal segments, A/B variants) as its own ticket, all at once if you like; don't loop over them inside one job. After each exclusive run, the jobs that waited through it start before the next exclusive drains the lane (blocked reason `turn`), so a series never locks everyone else out.
 
-> **Soak verdicts are not evidence yet (coordinator, 2026-10-23).** The scheduler parts of SCHED-2a are accepted and installed. The soak *harness* (`scripts/soak/`) is still in review (R6, `bf7bcb1`: a verdict reducer is being rebuilt). Run soaks to explore, but don't cite a soak `pass` or `partial` as evidence until this note is removed.
-
 **Soaks take only leftover capacity:**
 - A soak starts only when nothing else is waiting. It never ages, and it never takes the express slot or the 10-minute reservation.
 - Its CPU runs at idle weight, so it never slows other jobs.
