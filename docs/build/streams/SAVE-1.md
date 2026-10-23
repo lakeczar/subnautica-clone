@@ -80,6 +80,36 @@ Measured headless in the `tour` scenario (`manifest.measurements.tour`, at `0a46
 - **Oxygen:** a powered Dart supplies air, so oxygen stays at 100% throughout.
 - **How the tour uses it:** CW-1's tour can start from `tour-ready` at the cradle and insert a cell (the `reserve` command) when the charge runs low. The stock Dart (7.2 km per charge, 2.5 km per cell) could not do a lap without a service stop.
 
+## R1 fixes (Sol 6.1 xhigh R1, `7d3c51f`: one P1, four P2s)
+- **R1 (P1), an export labelled with a SHA its code didn't come from.**
+  - `scripts/saves-build-at.sh SHA DIR` compiles one commit from `git archive` in a directory of its own, and writes `.siltwake-source-commit` last.
+  - `run.js --export --commit SHA` refuses code without the marker, or marked with another commit, before it plays anything. `exportCommit()` and `--allow-dirty` are gone.
+  - `saves-export.sh` captures HEAD once, builds it, and runs both paths from that build: the second worker builds the same SHA there, and the factory fallback runs as `--class playthrough --snapshot`. Its own `verify` and `import` use that build's CLI.
+  - So a HEAD that moves, or a stale `.test-build`, can't change what is exported or how it is labelled.
+- **R2 (P2), an import public before it was decoded.**
+  - `importCommitDir` copies the incoming directory into hidden staging in the root, then decodes every save there with a build of that commit. That is this code when its marker names the commit, else a fresh `saves-build-at.sh` build run as a child (`verify-dir`).
+  - Only then does it publish. A failure leaves no commit directory, no index entry and no staging.
+  - An existing directory must itself verify before an identical import or export is accepted, and `saves-export.sh` re-verifies an existing export instead of trusting its manifest.
+- **R3 (P2), damaged recorded hashes accepted as migrations.**
+  - `pickSave` and `verifyCommitDir` check the recorded hash against the raw saved state before decoding.
+  - `migrated` now means the decoder changed that state. The test covers a pre-CR-1 save without fish traps, which this build fills in.
+  - An export whose own build would change a save is refused.
+- **R4 (P2), concurrent publication.**
+  - Publication and index rebuilds take the root's `.lock` directory. It names its holder, and a dead holder on this host is broken.
+  - The existence check, rename and index rebuild happen under it. A create race lost to a writer outside the lock is judged by identity, and staging is removed in every case.
+  - Tested with 7 processes racing on 3 commits: 3 published, 4 identical, all 3 in the index, nothing left behind.
+- **R5 (P2), read failures outside the refusal contract.**
+  - A missing, unreadable, non-JSON, damaged or undecodable nearest save is a `LibraryRefusal` (exit 3).
+  - It lists the selected commit's reason, every older compatible candidate as "compatible but not tried", and the other candidates' reasons.
+  - The real CLI is tested for its exit code, `REFUSED:` diagnostics and the absence of a stack trace.
+- **R1 evidence:**
+  - **Fast:** `npm test` passes 1,372 of 1,372 at `9af74c7`. `save-library` and `save-library-cli` pass 13 of 13: the R2, R3 and R5 cases in-process; the real CLI's exit 0 and 3 with diagnostics; `--export` from worktree code refused; the 7-process race.
+  - **Heavy** (`tests/save-library-build.heavy.test.ts`, queue ticket `261023-123418-2aae`, evidence for `248bf49`): 5 of 5. An archive build holds exactly the commit's sources and refuses another `--commit`. An import from a worktree build compiles the commit's decoder, refuses a checksum-valid but invalid save with nothing public, then publishes a good one, which verifies.
+  - **Factory fallback, end to end** (`scripts/saves-export.sh --here`, ticket `261023-122825-304a`, `--class playthrough --snapshot`, evidence for `dabaa79`): exit 0 after 25 min, 8 of 8 complete, 73 saves, `verify` clean with the `dabaa79` build.
+  - **Second-worker path** (`SILTWAKE_SAVES=/work/tmp/save1/lib-remote scripts/saves-export.sh`, tested `e432c63`): published after decoding in staging.
+  - **Deterministic across machines and commits:** the factory `dabaa79`, alickers `e432c63` and alickers `1d4d2c3` exports are byte-identical, 73 of 73.
+- **Found on the way (not SAVE-1's code):** every `heavy-check --snapshot` job from a worktree with `node_modules` was rejected (exit 3). The snapshot links `node_modules`, but `.gitignore`'s `node_modules/` only matches a directory, so the copy looked dirty. Fixed at the root by `node_modules` (no slash), `dabaa79`.
+
 ## Checks
 - **Fast:** `npm test` passes 1,328 of 1,328 at `0a464bc`. After the root merge, `save-library`, `playthrough` and `playthrough-parallel` pass 22 of 22 at the head. `tests/save-library.test.ts` takes 0.9 s CPU and covers:
   - picking the nearest ancestor, with provenance;
@@ -123,7 +153,6 @@ The library's own refusals are covered in the fast tests: a damaged nearest save
 
 ## Missing evidence
 - **The ENC-1 3090 play from the library save** was not rerun. It needs the GPU lease, and the queue was in CW-1's exclusive series; the derive was run headless only.
-- **No factory-worker fallback export was run end to end.** The queue was busy all session; the `--here` path is the same command `heavy-check` already classes as a playthrough.
 - **No browser import of a library save in this stream.** Loading uses the game's own `decodeSave` and repository, exactly as Import and Continue do.
 
 ## Known limits
