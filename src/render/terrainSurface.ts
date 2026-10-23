@@ -9,11 +9,9 @@ export const RESOURCE_TERRAIN_BOUNDS = { minX: -24, maxX: 40, minZ: -46, maxZ: -
 export const WORKSHOP_DECK = { minX: 3, maxX: 16, minZ: -40, maxZ: -31, top: 1.2 } as const;
 /** Keep the original coordinates above: extending a grid must not move its
  * already inspected island, reef or Canopy samples. Remote extension cells
- * are coarse; only work faces need sub-metre samples. */
-export const TERRAIN_EXTENT = {
-  minX: -95, maxX: 205 + 40 * 300 / 190,
-  minZ: -202 - 80 * 290 / 178, maxZ: 88,
-} as const;
+ * are coarse; only work faces need sub-metre samples. The extent itself is
+ * content (content/regions/terrain.ts, STEW-1 F14), so content never imports render. */
+export { TERRAIN_EXTENT } from "../content/regions/terrain.js";
 /** M2-B1 fracture rows, appended south of the M2-A extension rows. */
 const FRACTURE_ROWS = [60, 70, 80] as const;
 

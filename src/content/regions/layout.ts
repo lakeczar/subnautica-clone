@@ -5,8 +5,7 @@ import type { AccessKind, AccessPoint, Aabb, BiomeDescriptor, ChunkArtRef, Chunk
 import { ROUTES } from "./passages.js";
 import { SITES } from "./sites.js";
 import { STRUCTURES } from "./structures.js";
-import { TERRAIN_EXTENT } from "../../render/terrainSurface.js";
-import { MERIDIAN_CENTRE, MERIDIAN_TERRACES, terrainMasks, type TerrainMasks } from "./terrain.js";
+import { MERIDIAN_CENTRE, MERIDIAN_TERRACES, TERRAIN_EXTENT, terrainMasks, type TerrainMasks } from "./terrain.js";
 import { worldFloor } from "./worldFloor.js";
 import { CAVE_SOURCES } from "./caves.js";
 

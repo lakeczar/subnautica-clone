@@ -11,7 +11,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "test:build": "node scripts/test-build.mjs",
-    "test:fast": "node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast",
+    "test:fast": "node scripts/guard-architecture.mjs --quiet && node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast",
     "test:heavy": "scripts/heavy-check.sh --class heavy-suite -- sh -c 'node scripts/test-build.mjs && node scripts/test-tier.mjs heavy'",
     "test": "npm run test:fast",
     "check": "npm run test:fast && npm run test:heavy && node scripts/bake-terrain.mjs && vite build",
