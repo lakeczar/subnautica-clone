@@ -112,7 +112,9 @@ export function resumeRecorder(t: TimelineExport, options: RecorderOptions = {})
   // The export carries the live recovery ledger: every open death, its losses
   // still out and the cargo it left, so a reload resumes it exactly.
   rec.pending = clonePending(t.session.pending ?? []);
-  rec.regions = [...new Set([...(t.rotated ?? []).flatMap((r) => r.regions),
+  // Known regions from the one restored partition: every summary (the export's, and any
+  // chunk re-chunking just rotated) and every event kept whole.
+  rec.regions = [...new Set([...rec.rotated.flatMap((r) => r.regions),
     ...kept.filter((e) => (e.kind === "new" && e.what === "region") || e.kind === "region").map((e) => e.id ?? "")])];
   return rec;
 }

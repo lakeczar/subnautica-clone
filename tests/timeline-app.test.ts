@@ -110,3 +110,33 @@ test("SIM-1a: on a full quota the stored copy folds its oldest chunks and fits; 
     } finally { app.dispose(); f.restore(); }
   }
 });
+
+test("SIM-1a F2: every browser's quota error folds and retries; any other refusal stops after one write; neither says saved", async () => {
+  const quota = (make: () => Error) => make;
+  const kinds: [string, () => Error, boolean][] = [
+    ["QuotaExceededError", quota(() => Object.assign(new Error("full"), { name: "QuotaExceededError" })), true],
+    ["NS_ERROR_DOM_QUOTA_REACHED", quota(() => Object.assign(new Error("full"), { name: "NS_ERROR_DOM_QUOTA_REACHED" })), true],
+    ["code 22", quota(() => Object.assign(new Error("full"), { code: 22 })), true],
+    ["code 1014", quota(() => Object.assign(new Error("full"), { code: 1014 })), true],
+    ["SecurityError", () => Object.assign(new Error("denied"), { name: "SecurityError" }), false],
+  ];
+  for (const [label, error, isQuota] of kinds) {
+    const f = browserFixture(), app = await newGame(f);
+    try {
+      for (let i = 0; i < TIMELINE_CHUNK_EVENTS * 4; i++) recordEvent(app.timeline, app.state, { kind: "gather", what: "silica_glass", id: "src", quantity: 1 });
+      let attempts = 0;
+      const write = f.storage.setItem.bind(f.storage);
+      f.storage.setItem = (key: string, value: string) => {
+        if (key === TIMELINE_STORAGE_KEY) { attempts++; throw error(); }
+        write(key, value);
+      };
+      const before = GameView.current.notices.length;
+      writeNote(app, label);
+      const said = GameView.current.notices.slice(before);
+      assert.ok(said.some((n) => /^Note kept in memory only/.test(n)), `${label}: memory only`);
+      assert.ok(!said.includes("Note saved to the play timeline."), `${label}: never saved`);
+      if (isQuota) assert.ok(attempts > 1, `${label}: folded and retried (${attempts} writes)`);
+      else assert.equal(attempts, 1, `${label}: one write only`);
+    } finally { app.dispose(); f.restore(); }
+  }
+});

@@ -47,9 +47,10 @@ const ASCENT_EPSILON = 1e-5;
 const IDLE_PREPARE_MS = 250;
 /** Vite's development build (false in production and in Node tests). */
 const DEV = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV === true;
-/** A browser's full-storage error (Chrome, Safari and Firefox name it differently). */
+/** A browser's full-storage error: the standard name and code 22, and Firefox's legacy name and code 1014. */
 const quotaExceeded = (error: unknown): boolean => error instanceof Error &&
-  (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED" || (error as { code?: number }).code === 22);
+  (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+    (error as { code?: number }).code === 22 || (error as { code?: number }).code === 1014);
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : "An unknown error occurred.";
 

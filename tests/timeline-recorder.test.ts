@@ -483,3 +483,30 @@ test("an export for a full quota folds its oldest chunks: every note kept, the a
     assert.deepEqual([a.travel.count, a.travel.minutes, a.idle.count], [whole.travel.count, whole.travel.minutes, whole.idle.count], `${k} whole`);
   }
 });
+
+test("SIM-1a F1: a region held only in the chunk resume's re-chunking rotates is still known: revisiting it is not new", () => {
+  const s = createGame(); completeOpening(s);
+  const rec = createRecorder(SESSION, { regionAt });
+  observe(rec, s, { input: true });
+  s.tick = 30; s.player.pose.position.x = 200; observe(rec, s, { input: true });   // the Garden, first and only time
+  s.tick = 60; s.player.pose.position.x = 0; observe(rec, s, { input: true });
+  addNote(rec, s, "old note");
+  while (rec.seq < TIMELINE_CHUNK_EVENTS * TIMELINE_RETAINED_CHUNKS + TIMELINE_CHUNK_EVENTS - 2) { s.tick++; rec.playTicks++; recordEvent(rec, s, { kind: "gather", what: "silica_glass", quantity: 1 }); }
+  addNote(rec, s, "recent note");
+  s.tick += 1000; observe(rec, s, { input: false });   // an open idle span: closing it at export seals one more chunk on resume
+  assert.deepEqual([rec.sealed.length, rec.events.length], [TIMELINE_RETAINED_CHUNKS, TIMELINE_CHUNK_EVENTS - 1]);
+  const before = analyseTimeline(exportTimeline(rec, s));
+  const parsed = parseTimeline(exportTimelineText(rec, s));
+  assert.ok(parsed.ok);
+  if (!parsed.ok) return;
+  const back = resumeRecorder(parsed.value, { regionAt });
+  assert.ok(back.rotated.length > (parsed.value.rotated?.length ?? 0), "resume rotated a chunk");
+  assert.ok(back.regions.includes("suspended_garden"), "the Garden is still known");
+  assert.deepEqual(analyseTimeline(exportTimeline(back, s)).notes, before.notes);
+  // Keep observing after the resume, and revisit the Garden.
+  s.tick++; observe(back, s, { input: true });
+  s.tick = Math.ceil((s.tick + 1) / 30) * 30; s.player.pose.position.x = 200; observe(back, s, { input: true });
+  const after = analyseTimeline(exportTimeline(back, s));
+  assert.equal(before.newByKind.region, 1);
+  assert.equal(after.newByKind.region, 1, "no second discovery of the Garden");
+});
