@@ -424,6 +424,7 @@ test("routing: the remote lane ignores local legacy, exclusive and memory states
   assert.equal(y.blocked.g, "remote");
   assert.deepEqual(y.preempt, ["s"]);
   assert.deepEqual(P.plan(stateOf(soak, rt("a", "playthrough", "any", { at: 1 })), 3, remote("up"), cfg).preempt, [], "an any job just runs here");
+});
 
 test("config stalls: a class's default stall window, below its limit; an explicit --stall still wins", () => {
   const r = (o: object, stalls: object) => P.resolveRequest({ class: "playthrough", ...o }, { T: 4, M: 6144, stalls }).goal.stallS;
