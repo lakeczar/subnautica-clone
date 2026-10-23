@@ -168,6 +168,11 @@ Opus 5.5 high. Branch `t3/stew-1-guard-rails`, on root `f0dc680` (SAVE-1 merged)
     - Sol's four probes: a Babylon barrel in `tools/`; a side-effect import of a `.js` module using `document`; a computed load in a reachable `src/world` helper, plus two hops up through a relay; `vite/dist/client/client.mjs`.
     - Also `node:fs` and a missing module, all failing as expected.
     - JSON data and a TypeScript helper in `tools/` reached through `src/world` pass.
+- **R3 evidence:**
+  - **`npm run gate -- --machine 4070` at `762cf55`: exit 0, all 10 steps.** Both queued receipts are "evidence for `762cf558c1`" on the RTX 4070 (alickers), with `--review` and a clean waiter:
+    - bake `261023-224747-c7b7` (30 s, warm);
+    - playthrough `261023-224858-9590` (25 min, 8 of 8 complete, no blockers).
+  - `npm test`: 1,417 of 1,417. Guard about 0.9 s.
 - **Gate:** `--machine M` sends every queued step to one machine, replacing its own tag (used for this round's gate while CW-1 holds the 3090). Tested.
   - **What fails today:** nothing. Root and the merge trees of CW-1, REC-1, COL-1, SIM-1 and TST-16 with this branch pass, with no allowlist entry added.
 
