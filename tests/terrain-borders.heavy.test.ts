@@ -7,6 +7,7 @@ import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { liveTerrain } from "../src/render/biomes/terrain.js";
 import type { MeshRecipe } from "../src/render/kit/types.js";
 import type { ChunkDescriptor, LodLevel } from "../src/world/types.js";
+import { drain, rectOf } from "./shared-support.js";
 
 // W2-01 (Sol R1, after CA-1's border-cuts patch): a cave footprint's edges and
 // the legacy terrain extent's edges are lattice lines across the chunk that
@@ -16,8 +17,6 @@ import type { ChunkDescriptor, LodLevel } from "../src/world/types.js";
 // bake verify cannot see this: it reproduces both sides' recipes faithfully.
 
 const layout = worldLayout();
-const drain = <T>(g: Generator<void, T>): T => { let r = g.next(); while (!r.done) r = g.next(); return r.value; };
-const rectOf = (c: ChunkDescriptor) => ({ minX: c.bounds.min.x, maxX: c.bounds.max.x, minZ: c.bounds.min.z, maxZ: c.bounds.max.z });
 const ctx = { floor: worldFloor, random: seededStream, due: () => false };
 const touches = (f: { minX: number; maxX: number; minZ: number; maxZ: number }, r: ReturnType<typeof rectOf>): boolean =>
   f.minX <= r.maxX && f.maxX >= r.minX && f.minZ <= r.maxZ && f.maxZ >= r.minZ;

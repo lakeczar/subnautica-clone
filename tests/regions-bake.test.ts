@@ -10,6 +10,7 @@ import { decodeTerrain } from "../src/render/biomes/terrainCodec.js";
 import type { ChunkRecipe, MeshRecipe } from "../src/render/kit/types.js";
 import type { ChunkDescriptor, LodLevel } from "../src/world/types.js";
 import { assertDecodedMatchesLive, drain, layout, live, pick, rectOf, SAMPLE } from "./regions-bake-support.js";
+import { waitUntil } from "./shared-support.js";
 
 /** Baked terrain against the live recipe (the oracle). Fast tier; the full
  * every-chunk byte comparison is `regions-bake.heavy.test.ts`. */
@@ -65,12 +66,32 @@ test("s2.terrain decodes from the store in small steps and falls back to live wi
   } finally { setTerrainStore(null); }
 });
 
-test("the decompressed-file cache stays within its byte bound", async () => {
-  const ids = bakeTargets().slice(0, 12).map(c => c.id), size = 300_000;
-  const store = createTerrainStore({ cacheBytes: size * 4, fetchFile: async () => deflateSync(new Uint8Array(size)) });
-  for (const id of ids) { store.request(id); await new Promise(r => setTimeout(r, 5)); }
-  await new Promise(r => setTimeout(r, 50));
-  assert.ok(store.stats.cachedBytes <= size * 4 && store.stats.files <= 4, `${store.stats.cachedBytes} bytes in ${store.stats.files} files`);
+test("the decompressed-file cache admits files, evicts least recently used past its byte bound, and serves what it keeps without a fetch", async () => {
+  // Twelve chunks no two of which neighbour each other, so a request's neighbour
+  // prefetch never touches another of the twelve. Only their files ever arrive; the
+  // neighbour fetches stay pending, so they neither admit nor fail.
+  const size = 300_000, ids: string[] = [];
+  const near = (a: string, b: string): boolean => {
+    const [, ax, az] = a.split(":").map(Number), [, bx, bz] = b.split(":").map(Number);
+    return Math.abs(ax! - bx!) <= 1 && Math.abs(az! - bz!) <= 1;
+  };
+  for (const c of bakeTargets()) if (ids.length < 12 && !ids.some(id => near(id, c.id))) ids.push(c.id);
+  assert.equal(ids.length, 12);
+  const names = new Set(ids.map(terrainFileName)), file = deflateSync(new Uint8Array(size));
+  const store = createTerrainStore({ cacheBytes: size * 4, fetchFile: name => names.has(name) ? Promise.resolve(file) : new Promise<null>(() => {}) });
+  const jobs = ids.map(id => store.request(id));
+  await waitUntil(() => jobs.every(j => j.settled), "every requested file to settle");
+  // Every file arrived and decompressed: twelve admissions, no failures.
+  assert.ok(jobs.every(j => j.bytes?.byteLength === size), "each file decompressed in full");
+  assert.equal(store.stats.failures, 0);
+  // Twelve admissions into four files' worth: eight were evicted, and the bound holds.
+  assert.equal(store.stats.files, 4, `${store.stats.files} files kept`);
+  assert.equal(store.stats.cachedBytes, size * 4);
+  // The four kept are served at once, with no fetch; the eight evicted are fetched again.
+  const fetches = store.stats.fetches;
+  const served = ids.filter(id => store.request(id).settled);
+  assert.equal(served.length, 4, `kept: ${served.join(", ")}`);
+  assert.equal(store.stats.fetches, fetches + 8, "only the evicted eight are fetched again");
 });
 
 test("a chunk without a baked file is fetched once, then remembered as absent", async () => {
@@ -78,9 +99,10 @@ test("a chunk without a baked file is fetched once, then remembered as absent", 
   const store = createTerrainStore({ fetchFile: async () => { fetches++; return null; } });
   const p = { x: -64, y: 0, z: -96 };
   store.prefetch(p, 200);
-  await new Promise(r => setTimeout(r, 20));
+  await waitUntil(() => fetches > 0 && store.stats.failures === fetches, "every prefetched chunk to come back absent");
   const first = fetches;
-  for (let i = 0; i < 5; i++) { store.prefetch(p, 200); await new Promise(r => setTimeout(r, 5)); }
+  for (let i = 0; i < 5; i++) store.prefetch(p, 200);
+  await new Promise(r => setImmediate(r));
   assert.ok(first > 0 && fetches === first, `refetched missing files: ${first} then ${fetches}`);
   assert.equal(store.request("chunk:4:11:0").settled, true);
 });
