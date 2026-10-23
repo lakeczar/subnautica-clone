@@ -18,7 +18,7 @@
 // frame times are labelled).
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
-import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { requireGpuLease } from "../../../../scripts/heavy/gpu-lease.mjs";
 requireGpuLease("CW-1 traversal");
@@ -117,6 +117,31 @@ async function shot(name) {
   const file = path.join(out, `s${segment}-${String(result.shots.length + 1).padStart(2, "0")}-${name}.jpg`);
   await page.screenshot({ path: file, type: "jpeg", quality: 82 }); result.shots.push(path.basename(file)); note("screenshot", file);
 }
+/** The renderer's main thread, from the kernel (Linux): every 5 ms its time
+ * on a CPU, time runnable but waiting for one, and page faults, so a long
+ * frame can be told apart: our own work (on CPU), preemption (waiting), or a
+ * blocked thread (neither: IPC, a lock, I/O). */
+const sched = { pid: null, samples: [] };
+function findRenderer() {
+  const procs = readdirSync("/proc").filter(d => /^\d+$/.test(d)).map(pid => {
+    try { return { pid, cmd: readFileSync(`/proc/${pid}/cmdline`, "utf8"), stat: readFileSync(`/proc/${pid}/stat`, "utf8") }; } catch { return null; }
+  }).filter(Boolean);
+  const root = procs.find(p => p.cmd.includes("--cw1-traverse") && !p.cmd.includes("--type="));
+  if (!root) return null;
+  const parent = (p) => p.stat.slice(p.stat.lastIndexOf(")") + 2).split(" ")[1];
+  const ours = new Set([root.pid]);
+  for (let grew = true; grew;) { grew = false; for (const p of procs) if (!ours.has(p.pid) && ours.has(parent(p))) { ours.add(p.pid); grew = true; } }
+  const cpu = (p) => { const f = p.stat.slice(p.stat.lastIndexOf(")") + 2).split(" "); return +f[11] + +f[12]; };
+  return procs.filter(p => ours.has(p.pid) && p.cmd.includes("--type=renderer") && !p.cmd.includes("extension")).sort((a, b) => cpu(b) - cpu(a))[0]?.pid ?? null;
+}
+function sampleSched() {
+  if (!sched.pid) return;
+  try {
+    const [run, wait] = readFileSync(`/proc/${sched.pid}/task/${sched.pid}/schedstat`, "utf8").split(" ").map(Number);
+    const f = readFileSync(`/proc/${sched.pid}/task/${sched.pid}/stat`, "utf8"), rest = f.slice(f.lastIndexOf(")") + 2).split(" ");
+    sched.samples.push([performance.timeOrigin + performance.now(), run / 1e6, wait / 1e6, +rest[7], +rest[9], rest[0]]);
+  } catch { sched.pid = null; }
+}
 const quant = (s, f) => s.length ? +s[Math.min(s.length - 1, Math.floor(s.length * f))].toFixed(1) : null;
 try {
   const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
@@ -158,6 +183,9 @@ try {
   note("loaded", JSON.stringify({ cam: s.cam, depth: s.depth, vitals: s.vitals }));
   // Measured from here: the traversal itself.
   await browser.startTracing(page, { categories: ["disabled-by-default-v8.gc", "v8", "blink.user_timing"], screenshots: false });
+  sched.pid = findRenderer();
+  note("renderer main thread", sched.pid ?? "not found");
+  const sampler = setInterval(sampleSched, 5);
   const markAt = await page.evaluate(() => { window.__siltwakePerf.length = 0; window.__gaps.length = 0; performance.mark("cw1-align"); return performance.now(); });
   const started = performance.now(), syncAtStart = records.sync ?? 0;
   traveling = true;
@@ -185,6 +213,7 @@ try {
       if (caveIndex++ % 4 === 0) await shot(p.cave);
     }
   }
+  clearInterval(sampler);
   result.seconds = +((performance.now() - started) / 1000).toFixed(1);
   traveling = false;
   {
@@ -212,7 +241,11 @@ try {
     const freed = i > 0 && heap && data.gaps[i - 1][2] ? data.gaps[i - 1][2] - heap : 0;
     // Collections whose trace line arrived during the gap (or within 30 ms after it).
     const gcs = gcTrace.filter(x => x.at + x.pauseMs > at - g && x.at < at);
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+    // The main thread over the gap (epoch ms): on CPU, waiting to run, faults.
+    const t1 = data.origin + at, t0 = t1 - g, first = sched.samples.findLast?.(x => x[0] <= t0) ?? null, last = sched.samples.find(x => x[0] >= t1) ?? null;
+    const thread = first && last ? { spanMs: +(last[0] - first[0]).toFixed(1), onCpuMs: +(last[1] - first[1]).toFixed(1), waitingMs: +(last[2] - first[2]).toFixed(1),
+      minorFaults: last[3] - first[3], majorFaults: last[4] - first[4] } : null;
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of
@@ -234,6 +267,7 @@ try {
   result.streamingMax = data.perf.reduce((m, e) => ({ chunks: Math.max(m.chunks, e.parts?.chunks ?? 0), caves: Math.max(m.caves, e.parts?.caves ?? 0) }), { chunks: 0, caves: 0 });
   result.holdFrames = data.perf.filter(e => e.hold && e.hold !== "clear").length;
   result.stream = data.stream;
+  result.thread = { pid: sched.pid, samples: sched.samples.length };
   result.gc = { collections: gcTrace.length, byKind: gcTrace.reduce((m, x) => ({ ...m, [x.kind]: (m[x.kind] ?? 0) + 1 }), {}),
     maxPauseMs: Math.max(0, ...gcTrace.map(x => x.pauseMs)), over16: gcTrace.filter(x => x.pauseMs > 16).map(x => `${x.kind} ${x.pauseMs} ms at ${x.at.toFixed(0)}`) };
   // The gate: the travel's own unsliced builds (the counter, and the logged

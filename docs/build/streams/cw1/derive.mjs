@@ -110,14 +110,15 @@ for (let i = 1; i < tour.length; i++) {
 // clear cell within 12 m. What still has no path is reported (the driver
 // would stall there).
 const sweeps = (a, b) => sweptHullClearance(world, [a, b], DART);
-const CELL = 8, LEVELS = [-4, -8, -14, -22, -34, -50, -70, -100, -140, -200, -260, -340, -420, -520, -640, -760].filter(y => y >= DEEPEST);
+// -1.5: awash, as the Dart runs on the surface (its cap is -0.9 m) over the Isles' shallows.
+const CELL = 8, LEVELS = [-1.5, -4, -8, -14, -22, -34, -50, -70, -100, -140, -200, -260, -340, -420, -520, -640, -760].filter(y => y >= DEEPEST);
 function plan(a, b, movableGoal) {
   const pad = 160, x0 = Math.max(EDGE.minX - 30, Math.min(a.x, b.x) - pad), x1 = Math.min(EDGE.maxX + 30, Math.max(a.x, b.x) + pad);
   const z0 = Math.max(EDGE.minZ - 30, Math.min(a.z, b.z) - pad), z1 = Math.min(EDGE.maxZ + 30, Math.max(a.z, b.z) + pad);
   const nx = Math.ceil((x1 - x0) / CELL), nz = Math.ceil((z1 - z0) / CELL), nl = LEVELS.length;
   const id = (i, k, l) => (k * nx + i) * nl + l, pos = (n) => { const l = n % nl, c = (n - l) / nl, i = c % nx, k = (c - i) / nx;
     const x = x0 + (i + 0.5) * CELL, z = z0 + (k + 0.5) * CELL; return { x, z, y: Math.max(worldFloor(x, z) + 3, LEVELS[l]) }; };
-  const clear = new Map(), isClear = (n) => { let c = clear.get(n); if (c === undefined) { const p = pos(n); c = p.y <= -2 && hullClearance(world, p, DART); clear.set(n, c); } return c; };
+  const clear = new Map(), isClear = (n) => { let c = clear.get(n); if (c === undefined) { const p = pos(n); c = p.y <= -1.4 && hullClearance(world, p, DART); clear.set(n, c); } return c; };
   const cellOf = (p) => ({ i: Math.max(0, Math.min(nx - 1, Math.floor((p.x - x0) / CELL))), k: Math.max(0, Math.min(nz - 1, Math.floor((p.z - z0) / CELL))) });
   const near = (p) => { const { i, k } = cellOf(p), out = [];
     for (let di = -2; di <= 2; di++) for (let dk = -2; dk <= 2; dk++) for (let l = 0; l < nl; l++) {
@@ -127,7 +128,9 @@ function plan(a, b, movableGoal) {
   const d3 = (p, q) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
   const goals = new Set(near(b).filter(n => movableGoal ? d3(pos(n), b) <= 12 * 1.8 : sweeps(pos(n), b)));
   const g = new Map(), from = new Map(), open = [];
-  for (const n of near(a)) if (sweeps(a, pos(n))) { g.set(n, d3(a, pos(n))); from.set(n, -1); open.push([g.get(n) + d3(pos(n), b), n]); }
+  // A start that is itself not clear (an earlier point no plan could move) starts from the clear cells round it.
+  const startClear = hullClearance(world, a, DART);
+  for (const n of near(a)) if (startClear ? sweeps(a, pos(n)) : d3(a, pos(n)) <= 12 * 1.8) { g.set(n, d3(a, pos(n))); from.set(n, -1); open.push([g.get(n) + d3(pos(n), b), n]); }
   let found = -1, expanded = 0;
   while (open.length && expanded < 60000) {
     let bi = 0; for (let j = 1; j < open.length; j++) if (open[j][0] < open[bi][0]) bi = j;
@@ -146,25 +149,27 @@ function plan(a, b, movableGoal) {
   }
   if (found < 0) return null;
   const path = []; for (let n = found; n >= 0; n = from.get(n)) path.unshift({ ...pos(n), cruise: true });
-  const goal = movableGoal ? null : b, full = [a, ...path, ...(goal ? [goal] : [])];
+  const goal = movableGoal ? null : b, full = [...(startClear ? [a] : []), ...path, ...(goal ? [goal] : [])];
   // String-pull: from each kept point, jump to the farthest that sweeps straight.
   const out = [full[0]];
   for (let i = 0; i < full.length - 1;) { let j = full.length - 1; while (j > i + 1 && !sweeps(full[i], full[j])) j--; out.push(full[j]); i = j; }
-  return out.slice(1, goal ? -1 : undefined);
+  return (startClear ? out.slice(1) : out).slice(0, goal ? -1 : undefined);
 }
 const blocked = [];
-let replanned = 0;
+let replanned = 0, dropped = 0;
 for (let i = 1; i < points.length; i++) {
   const a = points[i - 1], b = points[i];
   if (hullClearance(world, b, DART) && sweeps(a, b)) continue;
   const movable = !!b.cruise;
   const via = plan(a, b, movable);
+  // A cruise corner no path reaches (on land) is only a waypoint: drop it and plan to the next point.
+  if (!via && movable && i + 1 < points.length) { points.splice(i, 1); i--; dropped++; continue; }
   if (!via) { blocked.push(`${b.cave ?? "cruise"} at ${b.x.toFixed(0)},${b.y.toFixed(0)},${b.z.toFixed(0)}`); continue; }
   replanned++;
   if (movable) points.splice(i, 1, ...via); else points.splice(i, 0, ...via);
   i += via.length - (movable ? 1 : 0);
 }
-console.log(`swept every leg: ${replanned} replanned, ${blocked.length} still blocked${blocked.length ? ": " + blocked.join("; ") : ""}`);
+console.log(`swept every leg: ${replanned} replanned, ${dropped} unreachable corners dropped, ${blocked.length} still blocked${blocked.length ? ": " + blocked.join("; ") : ""}`);
 let total = 0;
 for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
 // Exactly SEGMENTS segments of near-equal length, each cut at the cave stop
