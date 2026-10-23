@@ -21,6 +21,21 @@ if [ "$max" != "$expect_max" ] || [ "$swap" != 0 ]; then
   : >"$jobdir/refused"
   exit 70
 fi
+# One OOM group for everything this scope runs: this wrapper, the anchor and
+# the command move into the child cgroup "job" with memory.oom.group=1. An OOM
+# at the scope's reservation then kills all of them at once, the anchor
+# included, so no workload can outlive the anchor's hold on the v1 bridge. A
+# delegated child with its own memory.max (TT-1's per-file budgets, created
+# under "job") is its own OOM domain, so a per-file OOM stays inside it. The
+# scope keeps OOMPolicy=continue: systemd's own OOM reaction would stop the
+# whole scope on any OOM in its subtree, per-file ones included.
+if ! { mkdir "$cg/job" && echo $$ >"$cg/job/cgroup.procs" &&
+       for c in $(cat "$cg/cgroup.controllers"); do echo "+$c"; done >"$cg/cgroup.subtree_control" &&
+       echo 1 >"$cg/job/memory.oom.group"; }; then
+  echo "heavy-check: could not set up the job's OOM group in $cg; not running" >&2
+  : >"$jobdir/refused"
+  exit 70
+fi
 # The anchor takes over the bridge inside this scope before anything else runs
 # here, so v1 stays out until the scope's last process is gone (anchor.sh). The
 # command never holds the bridge: fd 3 is closed for it.

@@ -140,6 +140,18 @@ export function scopePopulated(unit) {
   return p.ActiveState !== "inactive" && p.ActiveState !== "failed";
 }
 
+/** What systemd recorded for a finished job scope (Result, MemoryPeak,
+ * CPUUsageNSec), then clears a failed unit. Job scopes are not collected on
+ * failure, so an OOM group kill (OOMPolicy=kill) stays visible here after the
+ * in-scope wrapper itself was killed. */
+export function unitFacts(unit) {
+  const r = systemctl("show", "-p", "LoadState", "-p", "ActiveState", "-p", "Result", "-p", "MemoryPeak", "-p", "CPUUsageNSec", `${unit}.scope`);
+  const f = r.status === 0 ? Object.fromEntries(r.stdout.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)])) : {};
+  if (f.ActiveState === "failed") systemctl("reset-failed", `${unit}.scope`);
+  const num = (v) => (/^\d+$/.test(v ?? "") ? Number(v) : null);
+  return { result: f.LoadState === "loaded" ? f.Result : null, memoryPeak: num(f.MemoryPeak), cpuNs: num(f.CPUUsageNSec) };
+}
+
 /** Stops a job scope and waits until it is conclusively empty. Returns true
  * when empty; false if it still is not after `waitS` (the caller keeps the
  * reservation and tries again later). */
@@ -291,6 +303,11 @@ function orphanResult(dir, t) {
   if (existsSync(join(dir, "not-started"))) return { code: 75, label: "cancelled before start; the command did not run" };
   if (existsSync(join(dir, "cancelled"))) return { code: 75, label: "cancelled" };
   const stats = Object.fromEntries((readFileSafe(join(dir, "stats")) ?? "").split("\n").filter(Boolean).map((l) => l.split("=")));
+  const facts = t.unit ? unitFacts(t.unit) : {};
+  const oomLocal = readFileSafe(join(dir, "oom-local")); // what the holder saw before it died
+  if (stats.rc == null && oomLocal) // the whole job was OOM group-killed
+    return { code: 137, label: `oom: class ${t.req.class} reservation ${t.req.memMiB} MiB (holder died)`, reservationOom: true,
+      peakMiB: facts.memoryPeak != null ? Math.ceil(facts.memoryPeak / 1048576) : null };
   if (stats.rc == null) return { code: 137, label: t.holder ? "killed: its holder died and the job did not finish" : "not started: its supervisor died during the handoff" };
   const code = Number(stats.rc), oom = Number(stats.oom_local ?? 0) > 0 && code !== 0;
   return {

@@ -26,13 +26,13 @@
 // Liveness for recovery is cgroup-based: while this scope or the job scope
 // holds processes, the ticket is alive (state.mjs reconcile).
 import { spawn, spawnSync } from "node:child_process";
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { jobEnv, sliceLimits, tokensFor } from "./policy.mjs";
 import {
   cgroupRead, cpuContext, gitTree, jobDir, ledger, loadConfig, readFileSafe, readJson, releaseAnchorIfAlone, scopePopulated,
-  self, systemctl, transaction, writeJsonAtomic,
+  self, systemctl, transaction, unitFacts, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -105,13 +105,18 @@ const out = openSync(outPath, "a");
 const memBytes = req.memMiB * 1048576;
 const inOwnScope = readFileSync("/proc/self/cgroup", "utf8").includes(`/${holderUnit}.scope`);
 const args = [
-  "--user", "--scope", "--quiet", "--collect", `--unit=${unit}`, `--slice=${cfg.slice}`,
+  // Not --collect: a failed scope stays loaded until unitFacts() has read its
+  // accounting and cleared it.
+  "--user", "--scope", "--quiet", `--unit=${unit}`, `--slice=${cfg.slice}`,
   // No MemoryHigh: with no swap, a job past memory.high is throttled, not
   // killed, and crawls to its deadline holding its reservation (measured in
   // SCHED-1). At MemoryMax the kernel still reclaims page cache before it
   // OOM-kills, so the job gets an explicit OOM instead.
   "-p", `MemoryMax=${req.memMiB}M`, "-p", "MemoryHigh=infinity", "-p", "MemorySwapMax=0",
   "-p", `CPUWeight=${Math.min(10000, req.tokens * 100)}`, "-p", "TimeoutStopSec=10s", "-p", "Delegate=yes",
+  // The OOM group is scope-run.sh's "job" child cgroup, not OOMPolicy=kill:
+  // systemd would stop the whole scope on a per-file OOM in a delegated child.
+  "-p", "OOMPolicy=continue",
   ...(inOwnScope ? ["-p", `BindsTo=${holderUnit}.scope`, "-p", `After=${holderUnit}.scope`] : []),
   "sh", join(here, "scope-run.sh"), dir, String(req.deadline), String(memBytes), ...t.argv,
 ];
@@ -131,11 +136,31 @@ if (cancelledEarly) writeFileSync(join(dir, "not-started"), "");
 child = cancelledEarly ? null
   : spawn("systemd-run", args, { cwd: t.cwd, env: { ...process.env, ...jobEnv(t, req, cfg) }, stdio: ["ignore", out, out, 3] });
 launched = Boolean(child);
+// Reservation OOMs, seen from outside the job's memory domain. The OOM group
+// kill also takes the in-scope wrapper, which then records nothing, so the
+// scope's memory.events.local is watched here and what it shows is kept in the
+// job directory (recovery reads it too).
+const oomSeen = { local: 0, peak: null };
+const watchOom = async () => {
+  let cg = null;
+  for (let i = 0; i < 100 && launched && !foregroundDone && !(cg = readFileSafe(join(dir, "cgroup"))); i++) await sleep(50);
+  if (!cg) return;
+  const look = () => {
+    const local = Number(/^oom (\d+)/m.exec(cgroupRead(cg, "memory.events.local") ?? "")?.[1] ?? 0);
+    const peak = Number(cgroupRead(cg, "memory.peak"));
+    if (Number.isFinite(peak) && peak > 0) oomSeen.peak = peak;
+    if (local > oomSeen.local) { oomSeen.local = local; writeFileSync(join(dir, "oom-local"), `${local} ${oomSeen.peak ?? ""}\n`); }
+  };
+  look();
+  try { watch(join(cg, "memory.events.local"), look).on("error", () => {}); } catch { /* no inotify: the exit-time inference below */ }
+};
+if (child) watchOom();
 const [rawCode, signal] = !child ? [75, null] : await new Promise((done) => {
   child.on("exit", (code, sig) => done([code, sig]));
   child.on("error", (err) => { appendFileSync(outPath, `heavy-check: could not start systemd-run: ${err.message}\n`); done([70, null]); });
 });
 foregroundDone = true;
+const stoppingAtExit = stopping; // a stop of ours that preceded the foreground's end
 closeSync(out);
 
 // 3. The foreground has ended: anything left in the scope is stopped, and the
@@ -154,12 +179,19 @@ if (sampler) { clearInterval(sampler); sampleContext(context); }
 
 // 4. Account, label, free.
 const stats = Object.fromEntries((readFileSafe(join(dir, "stats")) ?? "").split("\n").filter(Boolean).map((l) => l.split("=")));
+const facts = launched ? unitFacts(unit) : {};
 const ranS = (Date.now() - started) / 1000;
 let code = rawCode ?? 128 + (signal === "SIGKILL" ? 9 : 15), label = null;
 // oom_kill counts kills anywhere in the scope, including a sub-limit such as a
 // heavy test file's own budget cgroup; only an OOM at the scope's own limit
-// (memory.events.local) means the job outgrew its reservation.
-const oomKills = Number(stats.oom_kill ?? 0), reservationOom = Number(stats.oom_local ?? 0) > 0;
+// means the job outgrew its reservation. The wrapper records that
+// (memory.events.local) unless the OOM group kill took the wrapper too; then
+// the holder's watch saw it, or, failing that, the wrapper was SIGKILLed with
+// no stop of ours, which nothing but the OOM group kill does.
+const groupOom = stats.rc == null && signal === "SIGKILL" && !stoppingAtExit;
+const oomKills = Number(stats.oom_kill ?? 0), reservationOom = Number(stats.oom_local ?? 0) > 0 || groupOom;
+const oomEvidence = Number(stats.oom_local ?? 0) > 0 ? "memory.events.local (wrapper)"
+  : !groupOom ? null : oomSeen.local > 0 ? "memory.events.local (holder watch); OOM group kill" : "inferred: the whole job was SIGKILLed at once, not by a stop";
 if (existsSync(join(dir, "not-started"))) { code = 75; label = "cancelled before start; the command did not run"; }
 else if (existsSync(join(dir, "cancelled"))) { code = 75; label = "cancelled"; }
 else if (existsSync(join(dir, "refused"))) label = "refused: scope limits not applied";
@@ -177,9 +209,10 @@ const result = {
   ticket: id, code, label, class: req.class, review: req.review, tokens: req.tokens, memMiB: req.memMiB, gpu: req.gpu,
   express: t.express, exclusive: req.exclusive, mode: t.mode, worktree: t.worktree, cwd: t.cwd, argv: t.argv,
   submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), ranS: Math.round(ranS * 10) / 10,
-  peakMiB: stats.peak ? Math.ceil(Number(stats.peak) / 1048576) : null,
-  cpuS: stats.usage_usec ? Math.round(Number(stats.usage_usec) / 1e5) / 10 : null,
-  oomKills, reservationOom, leftovers, head: tree.head, dirty: tree.dirty, headAtAdmit: treeAtAdmit.head, dirtyAtAdmit: treeAtAdmit.dirty,
+  peakMiB: stats.peak ? Math.ceil(Number(stats.peak) / 1048576) : oomSeen.peak ? Math.ceil(oomSeen.peak / 1048576)
+    : facts.memoryPeak != null ? Math.ceil(facts.memoryPeak / 1048576) : null,
+  cpuS: stats.usage_usec ? Math.round(Number(stats.usage_usec) / 1e5) / 10 : facts.cpuNs != null ? Math.round(facts.cpuNs / 1e8) / 10 : null,
+  oomKills, reservationOom, oomGroupKill: groupOom, oomEvidence, leftovers, head: tree.head, dirty: tree.dirty, headAtAdmit: treeAtAdmit.head, dirtyAtAdmit: treeAtAdmit.dirty,
   changedTree, context,
 };
 // The scope is empty: release the worktree's .test-build before anyone can see the result.

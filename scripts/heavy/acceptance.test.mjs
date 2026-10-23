@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { heavyJobGuard } from "./build-guard.mjs";
-import { alive, legacyLockInfo, scopePopulated, self } from "./state.mjs";
+import { alive, legacyLockInfo, procStart, scopePopulated, self } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, "heavy-check.mjs");
@@ -175,15 +175,18 @@ test("5: memory refuses overcommit; impossible requests exit 2; the host brake h
   await done(c, low, 30000); // re-planned within the 15 s host re-check
 });
 
-test("6: a grandchild over the reservation is OOM-killed and reported from memory.events; its neighbour is unaffected", async () => {
+test("6: a grandchild over the reservation OOM-kills the whole job (memory.oom.group) and is reported as oom; its neighbour is unaffected", async () => {
   const c = context("oom");
   const neighbour = submit(c, c.wt("n"), "--class", "quick", "--", "sleep", "6");
   const hog = submit(c, c.wt("h"), "--class", "standard", "--mem", "512M", "--", "sh", "-c",
-    `node -e 'const a=[];for(;;)a.push(Buffer.alloc(32<<20,1))'; echo grandchild-exit=$?; exit 1`);
+    `cat /sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)/memory.oom.group > oom-group; node -e 'const a=[];for(;;)a.push(Buffer.alloc(32<<20,1))'; echo grandchild-exit=$?; exit 1`);
   const r = await done(c, hog, 60000);
   assert.equal(r.code, 137);
   assert.match(r.label, /^oom: class standard reservation 512 MiB; rerun with --class exclusive or --mem/);
-  assert.ok(r.oomKills >= 1);
+  assert.equal(r.reservationOom, true);
+  assert.match(r.oomEvidence, /memory\.events\.local|inferred/);
+  assert.equal(readFileSync(join(c.wt("h"), "oom-group"), "utf8").trim(), "1");
+  assert.doesNotMatch(readFileSync(join(c.sched, "jobs", hog, "output.log"), "utf8"), /grandchild-exit/, "the whole scope was killed");
   assert.ok(r.peakMiB >= 400 && r.peakMiB <= 513, `peak ${r.peakMiB}`);
   assert.equal(state(c).tickets[hog], undefined, "reservation released");
   assert.equal((await done(c, neighbour)).code, 0);
@@ -212,6 +215,69 @@ test("6b: the scope is delegated: a TT-1-style per-file cgroup OOMs inside the j
   assert.equal(r.reservationOom, false);
   assert.match(out, /OOM-killed inside the job by a sub-limit/);
   assert.equal(r.leftovers, false);
+});
+
+test("6c (R4): a reservation OOM cannot leave a workload alive without the anchor: memfd pressure, holder SIGKILL, real v1 waiter", async (t) => {
+  const c = context("anchor-oom");
+  // The reviewer's allocator: charges memfd pages to the job while keeping a
+  // tiny RSS, so the kernel would rather pick the anchor than the allocator.
+  const src = join(c.dir, "memfd-pressure.c"), bin = join(c.dir, "memfd-pressure");
+  writeFileSync(src, `#define _GNU_SOURCE
+#include <sys/mman.h>
+#include <signal.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <string.h>
+static char block[4096];
+int main(int argc, char **argv) {
+  signal(SIGTERM, SIG_IGN);
+  FILE *p = fopen("child.pid", "w"); fprintf(p, "%d", getpid()); fclose(p);
+  close(open("ready", O_WRONLY | O_CREAT, 0600));
+  while (access("allocate", F_OK)) usleep(20000);
+  FILE *a = fopen(argv[1], "r"); int anchor; if (!a || fscanf(a, "%d", &anchor) != 1) return 71; fclose(a);
+  int fd = memfd_create("sched1-r4-pressure", 0);
+  if (fd < 0) return 70;
+  for (int i = 0; i < 70000; i++) {
+    char path[80], st[512];
+    snprintf(path, sizeof(path), "/proc/%d/stat", anchor);
+    int statfd = open(path, O_RDONLY);
+    if (statfd < 0) break;
+    int n = read(statfd, st, sizeof(st) - 1); close(statfd);
+    if (n <= 0) break;
+    st[n] = 0; char *tail = strrchr(st, ')');
+    if (!tail || tail[2] == 'Z' || tail[2] == 'X') break;
+    if (write(fd, block, sizeof(block)) != sizeof(block)) break;
+    if (i % 128 == 0) usleep(1000);
+  }
+  close(open("alloc-done", O_WRONLY | O_CREAT, 0600));
+  for (;;) pause();
+}
+`);
+  if (spawnSync("cc", ["-O2", "-o", bin, src]).status !== 0) { t.skip("no C compiler"); return; }
+  writeFileSync(c.legacy, "");
+  const id = submit(c, c.dir, "--class", "quick", "--mem", "256M", "--deadline", "60", "--", "sh", "-c",
+    `exec ${bin} "$SILTWAKE_SCHED_DIR/jobs/$SILTWAKE_JOB_TICKET/anchor.pid"`);
+  await until("ready", () => existsSync(join(c.dir, "ready")));
+  const tk = await holderOf(c, id);
+  const child = Number(readFileSync(join(c.dir, "child.pid"), "utf8"));
+  const childId = { pid: child, start: procStart(child) };
+  const anchor = Number(readFileSync(join(c.sched, "jobs", id, "anchor.pid"), "utf8"));
+  const anchorId = { pid: anchor, start: procStart(anchor) };
+  const v1 = v1Script(c)(`if [ -r /proc/$(cat child.pid)/stat ] && ! grep -q ') [ZX] ' /proc/$(cat child.pid)/stat; then : > v1-overlap; fi; date +%s%3N > v1.enter`);
+  await until("v1 waiting", () => legacyLockInfo(c.legacy).waiter);
+  writeFileSync(join(c.dir, "allocate"), "");
+  await until("OOM", () => !alive(anchorId) || !alive(childId), 30000);
+  await sleep(300);
+  assert.equal(alive(anchorId) || alive(childId), false, "the OOM killed the whole scope, not the anchor alone");
+  if (alive(tk.holder)) killOwned(tk.holder);
+  await v1.exited;
+  assert.equal(existsSync(join(c.dir, "v1-overlap")), false, "v1 entered while the allocator lived");
+  const w = hc(c, ["wait", id]);
+  assert.equal(w.code, 137, w.err);
+  assert.match(w.err, /oom: class quick reservation 256 MiB/);
+  assert.equal(scopePopulated(tk.unit), false);
+  assert.equal(state(c).tickets[id], undefined);
 });
 
 test("7: an exclusive job drains the lane and runs alone, express included", async () => {
