@@ -627,3 +627,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **F2, P2:** a surviving reset child zeroes a later live job's boost while the result claims clean.
   - **F3, P3:** an abandoned freeze is invisible in status.
   - **Decision:** four rounds of lifetime races in runtime CPUWeight mutation. The builder is to first evaluate a static design: a dedicated slice with a fixed weight and limits that exclusive payloads are placed into, deleting the freeze/handover machinery. Only if R1's containment constraints forbid that is it to fix F1–F3 in place.
+- **STEW-1 R1** (Sol on `b7cb626`, report on `review/stew-1-r1` `1805c3dd`): REQUEST CHANGES. F11 is verified headless and the small fixes are bit-identical.
+  - **P2s:** the gate trusts exit codes, not bound or undisturbed receipts; the guard misses dynamic imports and `.mts`; cycle allowances don't ratchet down; DOM detection isn't scope-aware. The fix for the last is to adopt the headless sim/content tsconfig now.
+  - **P3s:** add `--review` to the gate's queued steps; add the missing `FORK(stream-drivers)` marker.
+  - The HUD region naming is accepted. Sent back.
