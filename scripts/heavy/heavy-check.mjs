@@ -108,7 +108,7 @@ async function submit(opts, command, { quiet = false } = {}) {
   pruneOldJobs();
   const mode = readMode(cfg), T = tokensFor(hostNow().nproc);
   const cls = opts.class ?? classifyCommand(command);
-  const req = resolveRequest({ ...opts, class: cls }, { T, M: cfg.poolMiB, mode, minStallS: cfg.minStallS, ceilings: cfg.ceilings });
+  const req = resolveRequest({ ...opts, class: cls }, { T, M: cfg.poolMiB, mode, minStallS: cfg.minStallS, ceilings: cfg.ceilings, stalls: cfg.stalls });
   if (req.error) fail(`refused: ${req.error}`);
   for (const n of req.notes) say(n);
   if (!opts.class && cls !== "standard") say(`class ${cls} chosen from the command; pass --class to override`);

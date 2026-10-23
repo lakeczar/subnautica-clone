@@ -381,3 +381,56 @@ test("R4-F3: the real recorder tags gaps by interval: a GC pause before, during 
     assert.match(paused.verdict.reason ?? "", /autosave-hitch|over 100 ms/);
   } finally { live++; gw.window = saved.window; }
 });
+
+// SCHED-2a R5 -----------------------------------------------------------------
+
+test("R5-F1: the closing interval is drained before the verdict: a tail hold or streaming frame fails, an unknown tail hold is unproven, a clear tail passes", async () => {
+  const cw1 = (over: Record<string, unknown>) => ({ at: 1, total: 16, sim: 2, steps: 1, save: 0, present: 10, hud: 1, parts: { chunks: 0, caves: 0, regions: 0, lights: 0, render: 9 }, hold: "clear", ...over });
+  const run = async (tail: Record<string, unknown>) => {
+    gw.window = { __soakGaps: [], __siltwakePerf: [] };
+    const f = fake();
+    const check0 = f.deps.saveAndCheck;
+    let checks = 0;
+    // Just before the last save check returns, the page records one more frame.
+    f.deps.saveAndCheck = async (...a: Parameters<typeof check0>) => {
+      const res = await check0(...a);
+      if (++checks === 3) { (gw.window.__soakGaps as unknown[]).push({ ms: Number(tail.total ?? 16), excluded: true }); (gw.window.__siltwakePerf as unknown[]).push(cw1(tail)); }
+      return res;
+    };
+    const base = f.deps.providers;
+    f.deps.providers = () => { const ps = base(); return { ...ps, tick: [P.frames(nodePage() as never), ps.tick[1]!, ps.tick[2]!] }; };
+    // No periodic tick runs: only the closing drain can see the tail.
+    return S.runSoak({ ...opts("tour"), tickMs: 1e7, sampleS: 1e5 }, f.deps);
+  };
+  const hold = await run({ hold: "loading" });
+  assert.equal(hold.verdict.status, "fail", JSON.stringify(hold.verdict.rules));
+  assert.match(hold.verdict.reason, /loading-hold/);
+  const streaming = await run({ total: 70, parts: { chunks: 0, caves: 70, regions: 0, lights: 0, render: 0 } });
+  assert.equal(streaming.verdict.status, "fail", JSON.stringify(streaming.verdict.rules));
+  assert.match(streaming.verdict.reason, /streaming-frame/);
+  const unknown = await run({ hold: null });
+  assert.notEqual(unknown.verdict.status, "pass", JSON.stringify(unknown.verdict.rules));
+  assert.equal(unknown.verdict.rules.find((x: { id: string }) => x.id === "loading-hold").status, "unavailable");
+  const clear = await run({});
+  assert.equal(clear.verdict.rules.find((x: { id: string }) => x.id === "loading-hold").status, "pass", "the closing interval itself is covered");
+});
+
+test("R5-F2: a hold seen only by the full probe's dataset read, in a GC sample, fails and stops at once", async () => {
+  const f = fake({}, { attributed: false });
+  let inGc = false;
+  const gc0 = f.deps.collectGarbage;
+  f.deps.collectGarbage = async () => { inGc = true; await gc0(); };
+  const page = { evaluate: async () => ({ caveHold: inGc ? "loading" : "clear" }) };
+  const base = f.deps.providers;
+  f.deps.providers = () => {
+    const ps = base();
+    // The full probe reads #ocean too (as run.mjs wires it); the tick poll always sees clear.
+    return { full: [...ps.full, { ...P.oceanDataset(page as never), sample: async () => { const s = await P.oceanDataset(page as never).sample(); inGc = false; return s; } }],
+      tick: [ps.tick[0]!, ps.tick[2]!, P.oceanDataset({ evaluate: async () => ({ caveHold: "clear" }) } as never)] };
+  };
+  const r = await S.runSoak(opts("tour"), f.deps);
+  assert.equal(r.verdict.status, "fail", JSON.stringify(r.verdict.rules));
+  assert.match(r.verdict.reason, /loading-hold/);
+  assert.equal(r.run.laps.length, 1, "stopped in lap 1's GC sample");
+  assert.equal(r.run.saves.length, 0, "before that lap's save check");
+});

@@ -45,7 +45,7 @@ process.on("SIGINT", () => {}); process.on("SIGHUP", () => {});
 function refreshRequests(state, T, mode) {
   for (const t of Object.values(state.tickets)) {
     if (t.state !== "queued" || t.goal?.v !== 2) continue;
-    const { goal, ...r } = resolveRequest(t.opts, { T, M: cfg.poolMiB, mode, minStallS: cfg.minStallS, ceilings: cfg.ceilings });
+    const { goal, ...r } = resolveRequest(t.opts, { T, M: cfg.poolMiB, mode, minStallS: cfg.minStallS, ceilings: cfg.ceilings, stalls: cfg.stalls });
     if (!r.error) t.req = r;
   }
 }

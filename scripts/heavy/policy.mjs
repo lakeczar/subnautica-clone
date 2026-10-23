@@ -84,7 +84,7 @@ export function parseMiB(value) {
  * Turns options into a reservation, or { error } for a request that can never
  * fit (exit 2 at submit). `mode` "serial" makes every request exclusive (v1).
  */
-export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60, ceilings = {} }) {
+export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60, ceilings = {}, stalls = {} }) {
   const name = opts.class ?? "standard";
   const c = CLASSES[name];
   if (!c) return { error: `unknown class ${name} (${CLASS_NAMES.join(", ")})` };
@@ -116,7 +116,10 @@ export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60, ce
     if (opts.deadline > ceilingS) notes.push(`deadline ${opts.deadline}s clamped to ${name}'s ${c.exclusive ? "cap" : "runaway ceiling"} ${ceilingS}s`);
     deadline = Math.min(opts.deadline, ceilingS);
   }
-  let stallS = c.stallS;
+  // config.json `stalls` ({ class: seconds }) sets a class's default stall
+  // window: a migration bridge for jobs whose code predates their heartbeat
+  // (an unmerged worktree's playthrough is silent for its whole run). --stall wins.
+  let stallS = Math.min(stalls[name] ?? c.stallS, deadline);
   if (opts.stallS != null) {
     if (!(Number.isInteger(opts.stallS) && opts.stallS >= minStallS)) return { error: `--stall must be whole seconds ≥ ${minStallS}` };
     stallS = Math.min(opts.stallS, deadline);
