@@ -1,6 +1,6 @@
 # REC-1: the flight recorder and evidence pack (handoff)
 
-Opus 5.5 high. Branch `t3/rec-1-flight-recorder`, from CW-1's head `7dc9cc9`; root merged at `f2fd628` (CR-1, UX-1, TT-1, SCHED-1), `51a6b27` (SCHED-2a live) and `1bdcc39`; CW-1's final head `d62586c` merged (CW-1 is not in root yet). Story-neutral; `docs/spoilers/*` not read.
+Opus 5.5 high. Branch `t3/rec-1-flight-recorder`, from CW-1's head `7dc9cc9`; root merged at `f2fd628` (CR-1, UX-1, TT-1, SCHED-1), `51a6b27` (SCHED-2a live), `1bdcc39` and `990e5c1` (the soak's fact reducer, `--snapshot` with a linked `node_modules`); CW-1 merged up to its R1 fixes `14c7a02` (CW-1 is not in root yet). The evidence below ran at `2bf9b14e`, `67e8394d` and `3a07c189`, before the last two merges; a recorded run at the handoff head confirms the recorder against them (below). Story-neutral; `docs/spoilers/*` not read.
 
 ## Outcome
 **Every run of the game can show what happened, frame by frame, to an agent who reads text first and to the owner who watches.**
@@ -70,8 +70,8 @@ Side by side: `final/compare-seg0/` (driver marks line the runs up by place: bot
 **Soak integration (`2bf9b14e`):** a two-lap tour soak on a CW-1 hop with the recorder wired in: providers `flight-frames`, `flight-recorder`, `flight-recording` with no provider errors, 4,109 frames attributed from the recorder, its own video and pack written. The soak ended "incomplete" on travel (its own driver stalled 17 m short of `canopy_fin_cleft`); hold coverage stays unproven because 47 records carry `hold: null` (admission not evaluated while not playing), which SCHED-2's contract counts as unknown.
 
 ## Checks
-- `npm test` (fast tier): **1,388 pass, 0 fail** at the handoff head; new `tests/rec1-flight.test.ts` (recorder rings and cursors, long frames and causes, recorder-caused frames, holds, snapshots, self-time, GPU time on its own row, event mapping, modes, ZIP, view staging) and `tests/rec1-pack.test.ts` (verdict, attention, pacing, shared runs, the soak provider through `measure.mjs normalize`).
-- `npm run build` OK; the five economy scripts pass (root merge gate) after merging root `1bdcc39` and CW-1 `d62586c`.
+- `npm test` (fast tier): **1,405 pass, 0 fail** at the handoff head; new `tests/rec1-flight.test.ts` (recorder rings and cursors, long frames and causes, recorder-caused frames, holds, snapshots, self-time, GPU time on its own row, event mapping, modes, ZIP, view staging) and `tests/rec1-pack.test.ts` (verdict, attention, pacing, shared runs, the soak provider through `measure.mjs normalize`).
+- `npm run build` OK; the five economy scripts pass (root merge gate) after every root merge, the last at `990e5c1` with CW-1 `14c7a02`.
 - No `test:heavy` change: REC-1 adds no NullEngine or render tests; the browser paths are covered by the queued GPU runs above.
 
 ## Compromises (each with its root fix and cost)
