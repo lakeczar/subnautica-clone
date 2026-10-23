@@ -80,10 +80,12 @@ export interface PointLight {
   readonly noHalo?: boolean;
 }
 
+/** The furthest any scene light reaches, metres. */
+export const MAX_LIGHT_RADIUS = 18;
 /** Reach and strength from a cluster's size: a creature's eye is a faint
  * spark, a lantern lights a few metres, a lit window wall lights a street. */
 export function lightFromCluster(c: LightCluster, attached = false): Omit<PointLight, "x" | "y" | "z"> {
-  const radius = Math.min(18, Math.max(2, 2 + c.extent * 7)) * (c.faint ? 0.45 : 1);
+  const radius = Math.min(MAX_LIGHT_RADIUS, Math.max(2, 2 + c.extent * 7)) * (c.faint ? 0.45 : 1);
   const strength = Math.min(1, 0.22 + c.extent * 0.7) * (c.faint ? 0.35 : 1) * (attached ? 0.45 : 1);
   // Glow colours are pale; lights carry their hue a little more strongly.
   const peak = Math.max(c.r, c.g, c.b, 1e-3), k = 0.35;

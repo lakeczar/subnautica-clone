@@ -9,7 +9,7 @@ import { RIFT_AXIS } from "../../content/regions/terrain.js";
 import { worldFloor } from "../../content/regions/worldFloor.js";
 import type { GameState } from "../../sim/types.js";
 import { ArtBatch } from "../geometry.js";
-import { emissiveScan, lightFromCluster, lightUniforms, selectLights, type LightCluster, type PointLight,
+import { emissiveScan, LIGHT_RANGE, lightFromCluster, lightUniforms, MAX_LIGHT_RADIUS, selectLights, type LightCluster, type PointLight,
   type Vec3Like } from "./localLights.js";
 
 /** The renderer's local lights (ATM-1): every emissive cel mesh in the scene
@@ -176,6 +176,12 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     return h ?? null;
   };
   const frameLights: PointLight[] = [];
+  const outOfRange = (mesh: AbstractMesh, eye: Vector3): boolean => {
+    const box = mesh.getBoundingInfo().boundingBox, lo = box.minimumWorld, hi = box.maximumWorld;
+    const dx = Math.max(lo.x - eye.x, 0, eye.x - hi.x), dy = Math.max(lo.y - eye.y, 0, eye.y - hi.y), dz = Math.max(lo.z - eye.z, 0, eye.z - hi.z);
+    // Slack for a moving mesh's bounds, refreshed at render (a frame behind here).
+    return Math.sqrt(dx * dx + dy * dy + dz * dz) > LIGHT_RANGE + MAX_LIGHT_RADIUS + 8;
+  };
   let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0, considered = 0;
   /** The frame's slowest entry to place (measurement: which mesh a long placement was). */
   let slowest: { name: string; ms: number; instances: number; clusters: number; frozen: boolean } | null = null;
@@ -215,6 +221,12 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       for (const e of entries.values())
         if (e.active && !e.mesh.isDisposed() && e.mesh.isEnabled() && !(hull && (e.mesh === hull || e.mesh.isDescendantOf(hull)))) {
           if (!e.world && e.mesh.isWorldMatrixFrozen && !e.mesh.parent && performance.now() > placeUntil) continue;
+          // A non-instanced mesh's lights all lie in its world bounds, each
+          // reaching at most MAX_LIGHT_RADIUS: a mesh whose bounds are beyond
+          // LIGHT_RANGE of that can give selection nothing, so its lights are
+          // not placed this frame (CW-1: a far creature field re-placed 1,201
+          // moving lights a frame for nothing).
+          if (!e.instances && outOfRange(e.mesh, eye)) continue;
           const t0 = performance.now();
           const placedLights = toWorld(e, placeUntil);
           if (placedLights) for (const l of placedLights) lights.push(l);
