@@ -67,6 +67,7 @@ sh -c 'cg=$1 d=$2; shift 2; echo $$ >"$cg/cgroup.procs" && exec timeout --kill-a
 rc=$?
 {
   echo "rc=$rc"
+  echo "stopped=${stopped:-0}"
   echo "peak=$(cat "$cg/memory.peak" 2>/dev/null)"
   sed -n 's/^oom_kill /oom_kill=/p; s/^oom_group_kill /oom_group_kill=/p' "$cg/memory.events"
   sed -n 's/^oom /oom_local=/p' "$cg/memory.events.local"

@@ -29,7 +29,7 @@ import { CLASS_NAMES, classInfo, classifyCommand, coalesceKey, parseMiB, plan, r
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
 import {
   alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState,
-  reconcile, scopePopulated, systemctl, transaction, worktreeOf, writeJsonAtomic,
+  reconcile, scopePopulated, sliceCheck, systemctl, transaction, worktreeOf, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -103,7 +103,7 @@ async function submit(opts, command, { quiet = false } = {}) {
   pruneOldJobs();
   const mode = readMode(cfg), T = tokensFor(hostNow().nproc);
   const cls = opts.class ?? classifyCommand(command);
-  const req = resolveRequest({ ...opts, class: cls }, { T, M: cfg.poolMiB, mode, minStallS: cfg.minStallS });
+  const req = resolveRequest({ ...opts, class: cls }, { T, M: cfg.poolMiB, mode, minStallS: cfg.minStallS, ceilings: cfg.ceilings });
   if (req.error) fail(`refused: ${req.error}`);
   for (const n of req.notes) say(n);
   if (!opts.class && cls !== "standard") say(`class ${cls} chosen from the command; pass --class to override`);
@@ -301,6 +301,11 @@ function statusCmd(args) {
   process.stdout.write(`mode ${readMode(cfg)}; pool ${p.used.tokens}/${p.T} cpu, ${p.used.memMiB}/${M} MiB, GPU ${p.used.gpu ? "leased" : "free"}; ` +
     `express ${p.used.express ? "busy" : "free"}; MemAvailable ${host.memAvailableMiB} MiB, memory PSI full ${host.memFullAvg10}%` +
     `${host.legacy.holder ? `; v1 lock HELD (pid ${host.legacy.holders.join(",")})` : ""}${host.legacy.waiter ? "; v1 waiter present: v2 admissions paused" : ""}\n`);
+  if (cfg.manageSlice) {
+    const sc = sliceCheck(cfg, host.nproc);
+    process.stdout.write(`slice ${cfg.slice}: cpu.max ${sc.cpuMax ?? "?"}, memory.max ${sc.memMax ?? "?"}` +
+      (sc.ok ? " (as wanted)\n" : `; WANTED ${sc.want.cpuQuotaPct}% and ${sc.want.memoryMaxMiB} MiB (the next admission corrects it)\n`));
+  }
   const unleased = gpuUsers(cfg, state).filter((u) => !u.leased);
   if (unleased.length) process.stdout.write(`GPU in use outside the lease: ${unleased.map((u) => `pid ${u.pid} (${u.cmd.slice(0, 60)})`).join("; ")}\n`);
   const rows = [["TICKET", "WORKTREE", "CLASS", "STATE", "TIME", "BLOCKED-BY", "COMMAND"]];

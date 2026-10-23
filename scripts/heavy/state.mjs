@@ -13,7 +13,7 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync
 import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
-import { DEFAULTS, PROTOCOL } from "./policy.mjs";
+import { DEFAULTS, PROTOCOL, sliceLimits } from "./policy.mjs";
 
 export const PRODUCTION_DIR = "/work/tmp/siltwake-sched";
 export const PRODUCTION_LEGACY_LOCK = "/work/tmp/siltwake-heavy-check.lock";
@@ -251,6 +251,28 @@ export function sampleHost(cfg, state) {
   if (!cfg.production) Object.assign(host, readJson(cfg.paths.hostOverride) ?? {});
   return host;
 }
+/** The slice's cgroup directory: systemd's ControlGroup when the unit is
+ * loaded, else derived ("a-b.slice" nests under "a.slice", so
+ * siltwake-heavy.slice lives at siltwake.slice/siltwake-heavy.slice, under the
+ * user manager this process runs beneath). Null if neither is known. */
+export function sliceCgroup(slice) {
+  const shown = systemctl("show", "-p", "ControlGroup", "--value", slice).stdout?.trim();
+  if (shown) return `/sys/fs/cgroup${shown}`;
+  const own = readFileSafe("/proc/self/cgroup")?.replace(/^0::/, "") ?? "";
+  const root = /^(.*\/user@\d+\.service)/.exec(own)?.[1];
+  if (!root) return null;
+  const parts = slice.replace(/\.slice$/, "").split("-");
+  return `/sys/fs/cgroup${root}/${parts.map((_, i) => `${parts.slice(0, i + 1).join("-")}.slice`).join("/")}`;
+}
+
+/** The slice's live cpu.max and memory.max against what this machine wants
+ * (policy sliceLimits): { cpuMax, memMax, want, ok }. */
+export function sliceCheck(cfg, nproc) {
+  const want = sliceLimits(nproc, cfg), cg = sliceCgroup(cfg.slice);
+  const cpuMax = cg && cgroupRead(cg, "cpu.max"), memMax = cg && cgroupRead(cg, "memory.max");
+  return { cg, cpuMax, memMax, want, ok: cpuMax === `${want.cpuQuotaPct * 1000} 100000` && memMax === String(want.memoryMaxMiB * 1048576) };
+}
+
 /** sampleHost plus the legacy lock's holders and waiters: what plan() needs. */
 export function hostFor(cfg, state) {
   const host = sampleHost(cfg, state);
@@ -326,10 +348,13 @@ function orphanResult(dir, t) {
       stopReason: "killed", reservationOom: null, oomKills: null, peakMiB, unavailable };
   }
   const code = Number(stats.rc), oom = Number(stats.oom_local ?? 0) > 0 && code !== 0;
+  // The wrapper records whether the scope was stopped around it (BindsTo= after
+  // the holder died, or a manual stop): then the command did not end by itself.
+  const stopped = stats.stopped === "1" && !oom;
   return {
-    code: oom ? 137 : code,
-    label: oom ? oomLabel : "its holder died; the command ran to its end",
-    stopReason: oom ? "oom" : null, reservationOom: oom, oomEvidence: oom ? "memory.events.local (wrapper)" : null,
+    code: oom || stopped ? 137 : code,
+    label: oom ? oomLabel : stopped ? `killed: its holder died and the job was stopped (the command exited ${code})` : "its holder died; the command ran to its end",
+    stopReason: oom ? "oom" : stopped ? "killed" : null, reservationOom: oom, oomEvidence: oom ? "memory.events.local (wrapper)" : null,
     oomKills: stats.oom_kill != null ? Number(stats.oom_kill) : null, peakMiB,
   };
 }
@@ -358,7 +383,7 @@ export function gpuUsers(cfg, state) {
     const cgroup = readFileSafe(`/proc/${pid}/cgroup`) ?? "";
     const owner = scopes.find(([s]) => cgroup.includes(s))?.[1];
     const v1 = !owner && /\/siltwake-heavy-[^/]*\.scope/.test(cgroup) && !scopes.some(([s]) => cgroup.includes(s));
-    users.push({ pid: Number(pid), cmd: (readFileSafe(`/proc/${pid}/cmdline`) ?? "").replace(/\0/g, " ").slice(0, 160),
+    users.push({ pid: Number(pid), cmd: (readFileSafe(`/proc/${pid}/cmdline`) ?? "").replace(/\0/g, " ").trim().slice(0, 160),
       ticket: owner?.id ?? null, leased: Boolean(owner?.req.gpu) || v1 });
   }
   return users;

@@ -33,11 +33,11 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { jobEnv, plan, sliceLimits } from "./policy.mjs";
+import { jobEnv, plan } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 import {
   cgroupRead, cpuContext, gitTree, gpuUsers, hostFor, jobDir, jobProcs, ledger, loadConfig, readFileSafe, readJson, readState, readStats,
-  releaseAnchorIfAlone, scopePopulated, self, systemctl, transaction, unitFacts, writeJsonAtomic,
+  releaseAnchorIfAlone, scopePopulated, self, sliceCheck, systemctl, transaction, unitFacts, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -361,21 +361,10 @@ function mtimeMs(p) { try { return statSync(p).mtimeMs; } catch { return 0; } }
  * vCPU change needs no redeploy. Runtime properties only; the unit file
  * (install.sh --slice) makes the slice persistent. */
 function ensureSlice(nproc) {
-  const want = sliceLimits(nproc, cfg);
-  const cg = readFileSync("/proc/self/cgroup", "utf8").trim().replace(/^0::/, "");
-  const root = /^(.*\/user@\d+\.service)/.exec(cg)?.[1];
-  if (!root) return;
-  // systemd nests "a-b.slice" under "a.slice": siltwake-heavy.slice lives at
-  // siltwake.slice/siltwake-heavy.slice. systemd's own ControlGroup is used
-  // when it reports one; the derived path otherwise.
-  const parts = cfg.slice.replace(/\.slice$/, "").split("-");
-  const nested = parts.map((_, i) => `${parts.slice(0, i + 1).join("-")}.slice`).join("/");
-  const shown = systemctl("show", "-p", "ControlGroup", "--value", cfg.slice).stdout?.trim();
-  const sliceCg = `/sys/fs/cgroup${shown || `${root}/${nested}`}`;
-  const cpuMax = cgroupRead(sliceCg, "cpu.max"), memMax = cgroupRead(sliceCg, "memory.max");
-  if (cpuMax === `${want.cpuQuotaPct * 1000} 100000` && memMax === String(want.memoryMaxMiB * 1048576)) return;
+  const check = sliceCheck(cfg, nproc);
+  if (check.ok || !check.cg) return;
   spawnSync("systemctl", ["--user", "set-property", "--runtime", cfg.slice,
-    `CPUQuota=${want.cpuQuotaPct}%`, `MemoryMax=${want.memoryMaxMiB}M`, "MemorySwapMax=0"], { stdio: "ignore" });
+    `CPUQuota=${check.want.cpuQuotaPct}%`, `MemoryMax=${check.want.memoryMaxMiB}M`, "MemorySwapMax=0"], { stdio: "ignore" });
 }
 
 function fmt(ms) {

@@ -13,11 +13,12 @@ const MIN = 60000;
 const cfg = P.DEFAULTS;
 const idle = (over: object = {}) => ({ nproc: 6, memAvailableMiB: 12000, memFullAvg10: 0, charges: {}, legacy: { holder: false, waiter: false }, ...over });
 let seq = 0;
-type Ticket = { id: string; seq: number; worktree: string; state: string; submittedAt: number; express?: boolean | undefined; req: { class: string; tokens: number; memMiB: number; gpu: boolean; exclusive: boolean; basePriority: number } };
-function ticket(id: string, cls: string, opts: { at?: number; state?: string; review?: boolean; worktree?: string; express?: boolean; mode?: string; cpus?: number; memMiB?: number } = {}): Ticket {
-  const req = P.resolveRequest({ class: cls, review: opts.review, cpus: opts.cpus, memMiB: opts.memMiB }, { T: 4, M: cfg.poolMiB, mode: opts.mode ?? "normal" });
+type Ticket = { id: string; seq: number; worktree: string; state: string; submittedAt: number; express?: boolean | undefined; req: { class: string; tokens: number; memMiB: number; gpu: boolean; exclusive: boolean; basePriority: number }; goal: { soak: boolean } };
+function ticket(id: string, cls: string, opts: { at?: number; state?: string; review?: boolean; worktree?: string; express?: boolean; mode?: string; cpus?: number; memMiB?: number; gpu?: boolean } = {}): Ticket {
+  const { goal, ...req } = P.resolveRequest({ class: cls, review: opts.review, cpus: opts.cpus, memMiB: opts.memMiB, gpu: opts.gpu }, { T: 4, M: cfg.poolMiB, mode: opts.mode ?? "normal" });
   assert.equal(req.error, undefined, req.error);
-  return { id, seq: ++seq, worktree: opts.worktree ?? `wt-${id}`, state: opts.state ?? "queued", submittedAt: opts.at ?? 0, express: opts.express, req };
+  // As the supervisor stores it: the goal beside req, not in it.
+  return { id, seq: ++seq, worktree: opts.worktree ?? `wt-${id}`, state: opts.state ?? "queued", submittedAt: opts.at ?? 0, express: opts.express, req, goal };
 }
 const stateOf = (...ts: Ticket[]) => ({ tickets: Object.fromEntries(ts.map((t) => [t.id, t])) });
 const admitted = (p: { admit: { id: string; express: boolean }[] }) => p.admit.map((a) => a.id + (a.express ? "*" : ""));
@@ -33,15 +34,20 @@ test("tokens follow nproc − 2, so 6 vCPU gives 4 and 8 vCPU gives 6 with no re
   assert.deepEqual(P.sliceLimits(6), { cpuQuotaPct: 500, memoryMaxMiB: 8192 });
 });
 
-test("class reservations match the decision's table", () => {
-  const r = (c: string) => { const x = P.resolveRequest({ class: c }, { T: 4, M: 6144 }); return [x.tokens, x.memMiB, x.gpu, x.deadline, x.basePriority]; };
-  assert.deepEqual(r("quick"), [1, 2048, false, 600, 1]);
-  assert.deepEqual(r("standard"), [2, 3072, false, 1200, 2]);
-  assert.deepEqual(r("heavy-suite"), [2, 3072, false, 1500, 2]);
-  assert.deepEqual(r("gpu"), [2, 3072, true, 1500, 2]);
-  assert.deepEqual(r("playthrough"), [2, 2048, false, 1800, 3]);
-  assert.deepEqual(r("bake"), [2, 3072, false, 900, 2]);
-  assert.deepEqual(r("exclusive"), [4, 6144, true, 1800, 3]);
+test("class reservations, runaway ceilings and stall windows match the SCHED-2 table", () => {
+  const r = (c: string) => { const x = P.resolveRequest({ class: c }, { T: 4, M: 6144 }); return [x.tokens, x.memMiB, x.gpu, x.goal.limitS, x.goal.stallS, x.basePriority]; };
+  const H = 3600;
+  assert.deepEqual(r("quick"), [1, 2048, false, 2 * H, 600, 1]);
+  assert.deepEqual(r("standard"), [2, 3072, false, 4 * H, 900, 2]);
+  assert.deepEqual(r("heavy-suite"), [2, 3072, false, 4 * H, 900, 2]);
+  assert.deepEqual(r("gpu"), [2, 3072, true, 4 * H, 900, 2]);
+  assert.deepEqual(r("playthrough"), [2, 2048, false, 6 * H, 900, 3]);
+  assert.deepEqual(r("bake"), [2, 3072, false, 2 * H, 900, 2]);
+  assert.deepEqual(r("soak"), [1, 3072, false, 6 * H, 900, 9]);
+  assert.deepEqual(r("exclusive"), [4, 6144, true, 1800, 300, 3]); // the one real cap: it blocks everything
+  const g = P.resolveRequest({ class: "standard" }, { T: 4, M: 6144 }).goal;
+  assert.equal(g.explicitDeadline, false);
+  assert.equal(P.resolveRequest({ class: "soak", gpu: true }, { T: 4, M: 6144 }).gpu, true);
   assert.equal(P.resolveRequest({ class: "quick", review: true }, { T: 4, M: 6144 }).basePriority, 0);
 });
 
@@ -70,9 +76,16 @@ test("requests that can never fit are refused at once, not queued forever", () =
   assert.match(P.resolveRequest({ class: "quick", cpus: 2 }, { T, M }).error, /maximum of 1/);
   assert.match(P.resolveRequest({ class: "standard", cpus: 5 }, { T, M }).error, /maximum of 4/);
   assert.match(P.resolveRequest({ class: "nope" }, { T, M }).error, /unknown class/);
-  const clamped = P.resolveRequest({ class: "standard", deadline: 1740 }, { T, M });
-  assert.equal(clamped.deadline, 1200);
-  assert.match(clamped.notes[0], /clamped/);
+  const chosen = P.resolveRequest({ class: "standard", deadline: 1740 }, { T, M });
+  assert.deepEqual([chosen.goal.limitS, chosen.goal.explicitDeadline, chosen.notes.length], [1740, true, 0]); // the caller's own limit
+  const clamped = P.resolveRequest({ class: "standard", deadline: 20000 }, { T, M });
+  assert.equal(clamped.goal.limitS, 14400);
+  assert.match(clamped.notes[0], /clamped to standard's runaway ceiling/);
+  assert.match(P.resolveRequest({ class: "exclusive", deadline: 3600 }, { T, M }).notes[0], /cap 1800s/);
+  assert.match(P.resolveRequest({ class: "standard", stallS: 30 }, { T, M }).error, /--stall/);
+  assert.equal(P.resolveRequest({ class: "standard", stallS: 30 }, { T, M, minStallS: 5 }).goal.stallS, 30);
+  assert.equal(P.resolveRequest({ class: "standard", stallS: 900, deadline: 600 }, { T, M }).goal.stallS, 600);
+  assert.match(P.resolveRequest({ class: "standard", gpu: true }, { T, M }).error, /--gpu is for --class soak/);
 });
 
 test("known commands get their class; anything else is standard", () => {
@@ -135,7 +148,7 @@ test("4: no starvation: a playthrough under a steady stream of review quicks sta
     }
   }
   assert.ok(started != null, "the playthrough never started");
-  assert.ok(started <= 10 + 10, `started at minute ${started}`); // quick's 10-minute maximum run
+  assert.ok(started <= 10 + 3, `started at minute ${started}`); // the reservation, then the longest running job's remaining time
   assert.ok(started >= 10, `started at minute ${started}: before the reservation, the reviews should win`);
 });
 
@@ -237,4 +250,82 @@ test("coalescing key: same command, worktree, tree and request; a changed tree i
   assert.equal(P.coalesceKey(base), P.coalesceKey({ ...base }));
   assert.notEqual(P.coalesceKey(base), P.coalesceKey({ ...base, dirty: "123" }));
   assert.notEqual(P.coalesceKey(base), P.coalesceKey({ ...base, review: true }));
+});
+
+// SCHED-2 -------------------------------------------------------------------
+
+test("soak: admitted only when nothing else waits; never ages; its CPU takes no pool token", () => {
+  const soak = ticket("S", "soak", { at: 0 });
+  assert.deepEqual(admitted(P.plan(stateOf(soak), 0, idle(), cfg)), ["S"]);
+  // Something waiting for CPU (it can't fit): the soak waits too, even though memory is free.
+  const full = [ticket("x", "standard", { state: "running" }), ticket("y", "standard", { state: "running", memMiB: 1024 })];
+  const waiting = ticket("w", "standard", { at: 1, memMiB: 1024 });
+  const p = P.plan(stateOf(...full, waiting, soak), 2 * 3600 * 1000, idle(), cfg);
+  assert.deepEqual(admitted(p), []);
+  assert.equal(p.blocked.S, "leftover");
+  assert.deepEqual(p.order, ["w", "S"]); // two hours waited, still last
+  assert.equal(P.effectivePriority(soak, 10 * 3600 * 1000, cfg), 9);
+  // A ticket waiting only for its own worktree does not hold the soak back.
+  const same = ticket("z", "quick", { at: 1, worktree: "wt-x" });
+  assert.deepEqual(admitted(P.plan(stateOf(ticket("x", "standard", { state: "running" }), same, soak), 2, idle(), cfg)), ["S"]);
+  // A running soak takes no token: four tokens stay for the pool.
+  const running = ticket("S", "soak", { state: "running" });
+  const p2 = P.plan(stateOf(running, ticket("a", "standard", { at: 1 }), ticket("b", "standard", { at: 2, memMiB: 1024 })), 3, idle(), cfg);
+  assert.deepEqual(admitted(p2), ["a"]);
+  assert.equal(p2.blocked.b, "memory"); // 3 + 3 GiB booked: the soak's memory does count
+  assert.deepEqual(p2.preempt, ["S"]); // and b would start without it
+  assert.equal(p2.used.tokens, 2);
+  // An old soak never takes the 10-minute reservation: the newer quick is not
+  // held back by it (and the soak then fits beside it).
+  const old = ticket("S2", "soak", { at: 0 });
+  const p3 = P.plan(stateOf(old, ticket("q", "quick", { at: 11 * MIN })), 12 * MIN, idle(), cfg);
+  assert.deepEqual(admitted(p3), ["q", "S2"]);
+  // Pool full and only the express slot free: a soak never takes it.
+  const p4 = P.plan(stateOf(ticket("x", "standard", { state: "running" }), ticket("y", "standard", { state: "running" }), old), 12 * MIN, idle(), cfg);
+  assert.equal(p4.blocked.S2, "memory");
+});
+
+test("soak yield: preempt only when the soak's memory or GPU is what blocks a waiting job", () => {
+  const S = ticket("S", "soak", { state: "running", gpu: true });
+  // CPU shortage is not the soak's doing: no preemption.
+  const busy = [ticket("x", "standard", { state: "running", memMiB: 1024 }), ticket("y", "standard", { state: "running", memMiB: 1024 })];
+  const cpuWait = P.plan(stateOf(S, ...busy, ticket("c", "standard", { at: 1, memMiB: 1024 })), 2, idle(), cfg);
+  assert.equal(cpuWait.blocked.c, "cpu");
+  assert.deepEqual(cpuWait.preempt, []);
+  // The soak holds the GPU a gpu job needs.
+  const gpuWait = P.plan(stateOf(S, ticket("g", "gpu", { at: 1 })), 2, idle(), cfg);
+  assert.equal(gpuWait.blocked.g, "gpu");
+  assert.deepEqual(gpuWait.preempt, ["S"]);
+  // An exclusive drain with only a soak left in the lane.
+  const drain = P.plan(stateOf(S, ticket("X", "exclusive", { at: 1 })), 2, idle(), cfg);
+  assert.equal(drain.blocked.X, "lane");
+  assert.deepEqual(drain.preempt, ["S"]);
+  // Nobody waiting: the soak keeps running.
+  assert.deepEqual(P.plan(stateOf(S), 2, idle(), cfg).preempt, []);
+});
+
+test("exclusive turns: a series of exclusive tickets interleaves with the work that waited through each", () => {
+  const X1 = ticket("X1", "exclusive", { at: 0 }), X2 = ticket("X2", "exclusive", { at: 1 });
+  const a = ticket("a", "standard", { at: 5 * MIN }); // arrived while X1 ran
+  const p = P.plan({ ...stateOf(X2, a), lastExclusiveEnd: 20 * MIN }, 20 * MIN, idle(), cfg);
+  assert.deepEqual(admitted(p), ["a"]); // X2 is older and aged further, but a waited through X1
+  assert.equal(p.blocked.X2, "turn");
+  a.state = "running";
+  const next = P.plan({ ...stateOf(X2, a, ticket("late", "quick", { at: 21 * MIN })), lastExclusiveEnd: 20 * MIN }, 21 * MIN, idle(), cfg);
+  assert.equal(next.blocked.X2, "lane"); // a's turn taken: X2 drains now, later arrivals wait
+  assert.equal(next.blocked.late, "exclusive");
+  void X1;
+});
+
+test("serial mode turns a soak into an ordinary exclusive job", () => {
+  const s = ticket("S", "soak", { mode: "serial" });
+  assert.equal(s.req.exclusive, true);
+  assert.deepEqual(admitted(P.plan(stateOf(s), 0, idle(), cfg)), ["S"]);
+});
+
+test("coalescing: a snapshot or GPU soak is different work from the plain request", () => {
+  const base = { worktree: "/w", cwd: "/w", argv: ["x"], class: "soak", head: "abc", dirty: "clean" };
+  assert.notEqual(P.coalesceKey(base), P.coalesceKey({ ...base, snapshot: true }));
+  assert.notEqual(P.coalesceKey(base), P.coalesceKey({ ...base, gpu: true }));
+  assert.equal(P.coalesceKey(base), JSON.stringify(["/w", "/w", ["x"], "soak", null, null, false, "abc", "clean"])); // SCHED-1 keys unchanged
 });

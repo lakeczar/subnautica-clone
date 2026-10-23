@@ -72,7 +72,7 @@ export function parseMiB(value) {
  * Turns options into a reservation, or { error } for a request that can never
  * fit (exit 2 at submit). `mode` "serial" makes every request exclusive (v1).
  */
-export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60 }) {
+export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60, ceilings = {} }) {
   const name = opts.class ?? "standard";
   const c = CLASSES[name];
   if (!c) return { error: `unknown class ${name} (${CLASS_NAMES.join(", ")})` };
@@ -93,11 +93,13 @@ export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60 }) 
   if (opts.gpu && !c.optionalGpu && !c.gpu) return { error: `--gpu is for --class soak; use --class gpu` };
   // --deadline is a hard limit the caller chooses; without it the job runs to
   // its goal, bounded only by the stall window and the class ceiling.
-  let deadline = c.ceilingS;
+  // config.json `ceilings` ({ class: seconds }) can retune a class's ceiling.
+  const ceilingS = ceilings[name] ?? c.ceilingS;
+  let deadline = ceilingS;
   if (opts.deadline != null) {
     if (!(opts.deadline > 0)) return { error: `--deadline must be positive seconds` };
-    if (opts.deadline > c.ceilingS) notes.push(`deadline ${opts.deadline}s clamped to ${name}'s ${c.exclusive ? "cap" : "runaway ceiling"} ${c.ceilingS}s`);
-    deadline = Math.min(opts.deadline, c.ceilingS);
+    if (opts.deadline > ceilingS) notes.push(`deadline ${opts.deadline}s clamped to ${name}'s ${c.exclusive ? "cap" : "runaway ceiling"} ${ceilingS}s`);
+    deadline = Math.min(opts.deadline, ceilingS);
   }
   let stallS = c.stallS;
   if (opts.stallS != null) {
@@ -121,7 +123,7 @@ export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60 }) 
     // SCHED-2. Kept out of `req` in the ticket (see goalOf): SCHED-1 supervisors
     // still queued during a migration re-resolve every queued `req` with their
     // own code, which would clamp it to their 10–30 minute maxima.
-    goal: { v: 2, limitS: deadline, explicitDeadline: opts.deadline != null, ceilingS: c.ceilingS, stallS, soak, snapshot: Boolean(opts.snapshot) },
+    goal: { v: 2, limitS: deadline, explicitDeadline: opts.deadline != null, ceilingS, stallS, soak, snapshot: Boolean(opts.snapshot) },
   };
 }
 
