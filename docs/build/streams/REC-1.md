@@ -33,7 +33,17 @@ TBD
 TBD
 
 ## Compromises (each with its root fix and cost)
-TBD
+1. **The old DOM attributes still update every frame** (`#ocean` `data-*`: two reduces over every mesh, a `JSON.stringify` of the cave counters). The soak's `oceanDataset` provider, CW-1's traversal and older evidence drivers read them. *Root fix:* move those readers to `__siltwake.scene()` (computed only when asked), then delete the per-frame writes. *Cost:* edits to SCHED-2's provider and frozen evidence drivers; their per-frame cost is unmeasured (Missing).
+2. **Tab memory in an owner playtest is the JS heap only.** `measureUserAgentSpecificMemory` needs cross-origin isolation, which a static host cannot grant without headers. Driver runs do have it (COOP/COEP served; renderer RSS from /proc). *Root fix:* serve COOP/COEP (a host that sets headers, or a service-worker shim) and sample it every 10 s. *Cost:* a hosting decision; a shim's side effects untested.
+3. **Collections are inferred, not traced:** a frame's JS heap drop (precise in drivers, which pass `--enable-precise-memory-info`; coarse in a player's Chrome). *Root fix:* in driver runs, trace V8's GC events over CDP aligned to the page clock (CW-1's traversal does) and merge them into the recording. *Cost:* a trace buffer and some browser-side CPU; not built.
+4. **GPU time lags 1–3 frames** (timer queries resolve late; the column holds the latest resolved value) and is -1 where the browser hides `EXT_disjoint_timer_query_webgl2`. *Root fix:* key each query to its frame row and write the value back to that row. *Cost:* small.
+5. **VRAM:** this browser's own on the 3090 (nvidia-smi's process table); the whole GPU, Windows desktop included, on the 4070 (WSL lists no processes); only the game's streamed-byte estimate in a player's browser. *Root fix:* none available in a browser; MEM-1 reads the GPU process externally.
+6. **Fixed views stage the diver alone** (no cockpit views), all at the base save's time of day; the pod and the island workshop are framed from the waterline without a sight-line check (`sightUnchecked`); the island lookout (OP-1) and the carrier bridge (needs a crewed-Hearthline save) are pending slots. *Root fix:* SAVE-1 library saves per view group, the lookout after OP-1. *Cost:* regenerate `views.json` (version 2) and re-accept affected baselines.
+7. **Pacing is classified from motion and actions** (doing: an action within 3 s; waiting: still or held), so waiting out a threat window is "waiting", not named. *Root fix:* the simulation emits a window-watched event (CR-1's first-sight captions are close) and the pacing sheet reads it.
+8. **The timeline page inlines the video only up to 32 MiB;** longer runs play `recording/video.webm` beside it (the pack is one directory, so they travel together).
+9. **A playtest's current session spools without a cap** (video about 400 MB an hour); older sessions are pruned to 6 GiB and the newest four. *Root fix:* rotate video segments in very long sessions.
+10. **Evidence saves are CW-1's derived traversal saves** (`/work/tmp/cw1/saves-8x`), until SAVE-1's library lands.
 
 ## Missing
-TBD
+- The per-frame cost of the old DOM attribute writes (compromise 1): not measured.
+- The in-game video and export in a headed, owner-style Chrome: checked headless only (`playtest-check.mjs`).
