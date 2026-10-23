@@ -5,6 +5,8 @@
 // is exclusive. The variable alone is not proof: a lease is valid only for a
 // process inside that ticket's job scope, whose grant includes the GPU.
 //
+// On the second worker the sandbox's own job lock (siltwake-job) is the lease.
+//
 // Two ways in, so no GPU driver can skip it:
 // - drivers call requireGpuLease() before launching Chrome;
 // - every Playwright Chrome binary on this machine is wrapped by
@@ -20,6 +22,9 @@ const HOW = "Run it through scripts/heavy-check.sh --class gpu -- … (functiona
 
 /** Why this process holds no valid GPU lease, or null if it does. */
 export function leaseProblem(env = process.env, cgroup = ownCgroup()) {
+  // The second worker (siltwake-alickers) runs one `siltwake-job` at a time, each
+  // in its own siltwake-job-* scope: inside one, the sandbox's GPU is this job's.
+  if (/\/siltwake-job-[^/]*\.scope/.test(cgroup)) return null;
   const lease = env.SILTWAKE_GPU_LEASE;
   if (!lease) return "no GPU lease (SILTWAKE_GPU_LEASE is not set)";
   if (lease.startsWith("v1-")) return /\/siltwake-heavy-[^/]*\.scope/.test(cgroup) ? null : `SILTWAKE_GPU_LEASE=${lease}, but this process is not inside a heavy-check scope`;

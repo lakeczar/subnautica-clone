@@ -329,3 +329,15 @@ test("coalescing: a snapshot or GPU soak is different work from the plain reques
   assert.notEqual(P.coalesceKey(base), P.coalesceKey({ ...base, gpu: true }));
   assert.equal(P.coalesceKey(base), JSON.stringify(["/w", "/w", ["x"], "soak", null, null, false, "abc", "clean"])); // SCHED-1 keys unchanged
 });
+
+test("GPU lease: the environment alone is no proof; the second worker's siltwake-job scope is its lease", async () => {
+  const L = await import(pathToFileURL(resolve("scripts/heavy/gpu-lease.mjs")).href);
+  const env = { SILTWAKE_SCHED_DIR: "/nonexistent-sched" };
+  assert.match(L.leaseProblem(env, "0::/user.slice/x.scope"), /not set/);
+  assert.match(L.leaseProblem({ ...env, SILTWAKE_GPU_LEASE: "261023-000000-abcd" }, "0::/user.slice/x.scope"), /names no admitted ticket/);
+  assert.match(L.leaseProblem({ ...env, SILTWAKE_GPU_LEASE: "v1-123" }, "0::/user.slice/other.scope"), /not inside a heavy-check scope/);
+  assert.equal(L.leaseProblem({ ...env, SILTWAKE_GPU_LEASE: "v1-123" }, "0::/user.slice/user@1000.service/app.slice/siltwake-heavy-wt-123.scope"), null);
+  // CW-1's run-4070.sh sets SILTWAKE_GPU_LEASE=alickers-job inside the sandbox's job scope.
+  assert.equal(L.leaseProblem({ ...env, SILTWAKE_GPU_LEASE: "alickers-job" }, "0::/system.slice/siltwake-job-42.scope"), null);
+  assert.equal(L.leaseProblem(env, "0::/system.slice/siltwake-job-42.scope/sub"), null);
+});
