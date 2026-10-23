@@ -30,7 +30,9 @@ const fault = args.includes("--child") ? process.env.SILTWAKE_PLAYTHROUGH_FAULT 
 await loadCampaign();
 // --jobs N: independent New Game groups (a root and the scenarios branching from it)
 // run in separate processes. Light work: no Babylon, a few hundred MiB each.
-const jobs = Math.max(1, Number(value("--jobs") ?? 1));
+// Without --jobs, a run admitted by heavy-check uses its reservation's CPU
+// tokens (SILTWAKE_JOB_CPUS); a --child never fans out again.
+const jobs = Math.max(1, Number(value("--jobs") ?? (args.includes("--child") ? 1 : process.env.SILTWAKE_JOB_CPUS ?? 1)));
 const runs = fault.startsWith("stub")
   ? ids.map((id) => ({ ...emptyRun(id, SCENARIOS.find((s) => s.id === id)!.strategy), outcome: "pending-c3" as const }))
   : jobs > 1 ? await parallel(ids, jobs) : await playScenarios(ids, !quiet);
