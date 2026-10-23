@@ -63,7 +63,7 @@ test("import from a worktree build decodes with a fresh build of the commit befo
   const refused = spawnSync(process.execPath, [cli, "import", badDir, "--root", root], { encoding: "utf8", cwd: repo });
   assert.equal(refused.status, 1, refused.stdout + refused.stderr);
   assert.match(refused.stderr, /REFUSED: .*does not decode/);
-  assert.match(refused.stderr, new RegExp(`the ${head.slice(0, 12)} build refused`));
+  assert.match(refused.stderr, new RegExp(`the ${head.slice(0, 12)} build: creel@opening.json does not load`));
   assert.equal(fs.existsSync(path.join(root, head)), false);
   assert.deepEqual(fs.readdirSync(root).filter((f) => !f.startsWith(".")).filter((f) => f !== "index.json"), []);
   assert.equal(readLibrary(root).manifests.length, 0);
