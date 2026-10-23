@@ -1,6 +1,6 @@
 # SCHED-2b design: the remote lane (draft, before building)
 
-Status: design only, written while SCHED-2a is in review. Nothing here is built, and no file under review is changed. Owner rules: [DIRECTION](../../DIRECTION.md), "Two test machines". Transport: `scripts/alickers-job.sh`. The sandbox: `/work/tmp/siltwake-alickers-handoff/SANDBOX-HANDOFF.md` and its `/usr/local/bin/siltwake-job` (read 2026-10-23).
+Status: **built** on `t3/sched-2b-remote-lane`; see SCHED-2.md, "SCHED-2b". This was the design before building. Owner rules: [DIRECTION](../../DIRECTION.md), "Two test machines". Transport: `scripts/alickers-job.sh`. The sandbox: `/work/tmp/siltwake-alickers-handoff/SANDBOX-HANDOFF.md` and its `/usr/local/bin/siltwake-job` (read 2026-10-23).
 
 ## What the sandbox gives us (facts)
 

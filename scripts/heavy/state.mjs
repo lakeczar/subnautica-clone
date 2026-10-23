@@ -8,11 +8,12 @@
 // file description, stays with this process after flock(1) exits, and the kernel
 // drops it if this process dies. The legacy bridge holds the v1 lock file the
 // same way, for the length of a job.
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DEFAULTS, PROTOCOL, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 
@@ -278,7 +279,22 @@ export function sliceCheck(cfg, nproc) {
 export function hostFor(cfg, state) {
   const host = sampleHost(cfg, state);
   host.legacy = legacyLockInfo(cfg.legacyLock);
+  host.remote = remoteHealth(cfg);
   return host;
+}
+/** The second worker's cached health for plan() (remote.mjs keeps it fresh). */
+function remoteHealth(cfg) {
+  // Off when disabled, and for a private state directory (tests) without a remote.
+  if (cfg.remote?.enabled === false || (!cfg.production && cfg.remote === undefined)) return { state: "off" };
+  const h = readJson(join(cfg.dir, "remote.json"));
+  if (!h) return { state: "unknown" };
+  // Routing trusts a fresh reading only (R1-F6): a stale one is unknown, so an
+  // any job runs here at once and a 4070 job waits for the refresh. The same
+  // freshness as remote.mjs healthTtlMs, plus the slack of one probe.
+  const s = { up: 30, paused: 60, unreachable: 60, unreachableMax: 300, ...(cfg.remote?.recheckS ?? {}) };
+  const ttlS = h.state === "up" || h.state === "busy" ? s.up : h.state === "paused" ? s.paused
+    : h.state === "unreachable" ? Math.min(s.unreachableMax, s.unreachable * 2 ** Math.max(0, (h.failures ?? 1) - 1)) : 0;
+  return Date.now() - (h.at ?? 0) <= (ttlS + 30) * 1000 ? h : { ...h, state: "unknown", stale: h.state };
 }
 export function cpuContext() {
   const load1 = Number(readFileSync("/proc/loadavg", "utf8").split(" ")[0]);
@@ -306,6 +322,23 @@ export function reconcile(cfg, state) {
   let changed = false;
   for (const t of Object.values(state.tickets)) {
     if (t.state === "queued" && alive(t.supervisor)) continue;
+    if (t.state === "running" && t.remote) {
+      // A remote ticket is supervised by its remote holder's process, not by
+      // whatever its scope still holds (R1-F3): a surviving transport is no
+      // observer. Before the claim its supervisor owns it.
+      if (!t.holder ? alive(t.supervisor) || [t.supervisorUnit, t.holderUnit].some((u) => u && scopePopulated(u)) : alive(t.holder)) continue;
+      // Holder gone: one recovery process (remote-holder.mjs --recover) stops the
+      // job on the sandbox and finishes the ticket; the reservation is kept until then.
+      if (alive(t.recovering)) continue;
+      const rec = spawn("systemd-run", ["--user", "--scope", "--quiet", "--collect", `--unit=${cfg.supervisorPrefix}-recover-${t.id}-${Date.now() % 100000}`,
+        process.execPath, join(dirname(fileURLToPath(import.meta.url)), "remote-holder.mjs"), "--recover", t.id], { detached: true, stdio: "ignore", env: process.env });
+      rec.unref();
+      // systemd-run execs into the scope: its PID is the recovery process's.
+      t.recovering = { pid: rec.pid, start: procStart(rec.pid) };
+      if (!t.orphaned) { t.orphaned = Date.now(); ledger(cfg, { event: "orphaned", ticket: t.id, worktree: t.worktree, remote: true }); }
+      changed = true;
+      continue;
+    }
     if (t.state === "running") {
       const owner = t.holder ? [t.holderUnit] : [t.supervisorUnit, t.holderUnit];
       if ((!t.holder && alive(t.supervisor)) || owner.some((u) => u && scopePopulated(u))) continue;

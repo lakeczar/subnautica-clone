@@ -381,7 +381,7 @@ test("S14: the .test-build guard: a queued ticket never blocks; a running one na
   await running(c, blocker);
   const queued = submit(c, B, "--class", "gpu", "--", "sleep", "3");
   await sleep(800);
-  assert.equal(hc(c, ["status"]).out.split("\n").find((l) => l.startsWith(queued))?.split(/\s{2,}/)[3], "queued");
+  assert.equal(hc(c, ["status"]).out.split("\n").find((l) => l.startsWith(queued))?.split(/\s{2,}/)[4], "queued");
   assert.equal(heavyJobGuard(B, env), null, "a queued ticket does not block");
   await until("A's marker", () => existsSync(join(A, ".test-build", ".heavy-job")));
   const msg = heavyJobGuard(A, env);
