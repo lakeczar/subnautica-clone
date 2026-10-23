@@ -36,7 +36,7 @@ export interface Phase {
   play(d: Driver, o: PlayOptions): void;
 }
 
-const REEF = ["refuge_reef"], ISLES = ["island_chain", "refuge_reef"];
+export const REEF = ["refuge_reef"], ISLES = ["island_chain", "refuge_reef"];
 
 /** Containers a bench can draw on that the harness tracks for shortfalls. */
 function benchStock(d: Driver, refuge: Refuge, kind: ItemKind | "tagged_frame"): number {
@@ -192,7 +192,7 @@ function workFrom(d: Driver, v: VehicleState, sources: readonly SourceId[], want
   returnToCraft(d, v);
 }
 /** Swim back beside the craft, move the diver hold into its cargo and board. */
-function returnToCraft(d: Driver, v: VehicleState): void {
+export function returnToCraft(d: Driver, v: VehicleState): void {
   const craft = d.state.fleet.vehicles.find((x) => x.id === v.id)!;
   reach(d, craft.id);
   unload(d, "diver", craft.cargoId);
@@ -282,7 +282,7 @@ const creel: Phase = {
 // ------------------------------------------------------------------------- systems (C4)
 
 /** The Dart's run west to the old intake pump house, a lost site 380 m off the pod. */
-const PUMPHOUSE_RUN = [{ x: 20, y: -1.6, z: -12 }, { x: 20, y: -3, z: 2 }, { x: -200, y: -4, z: -8 }, { x: -377, y: -18, z: -20 }] as const;
+export const PUMPHOUSE_RUN = [{ x: 20, y: -1.6, z: -12 }, { x: 20, y: -3, z: 2 }, { x: -200, y: -4, z: -8 }, { x: -377, y: -18, z: -20 }] as const;
 const recordRead = (d: Driver, id: string): void => {
   if (d.state.knowledge.scans.includes(id)) return;
   d.legOf(`read ${id}`, "work", () => { interact(d, id); });

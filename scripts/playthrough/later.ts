@@ -55,7 +55,7 @@ const sites = (...ids: string[]): Missing[] => ids.flatMap(need.site);
 
 /** Fly an S2 route (validated by S2's swept corridor tests, and again here by the
  * game's own hull sweep). Reversed for return journeys. */
-function followS2(d: Driver, id: string, reverse = false): void {
+export function followS2(d: Driver, id: string, reverse = false): void {
   eatIfHungry(d);
   const r = s2Route(id);
   const path = reverse ? [...r.path].reverse() : [...r.path];
@@ -183,7 +183,7 @@ function story(d: Driver, id: string, o: PlayOptions): void {
   if (!d.knows(id)) throw new Blocked(`Interacting with ${id} recorded nothing: ${d.state.feedback}`, where(d.state));
 }
 /** Gather a source from the craft into its hold, a diver load per sortie. */
-function harvest(d: Driver, id: string, want: number, options: { sort?: boolean } = {}): void {
+export function harvest(d: Driver, id: string, want: number, options: { sort?: boolean } = {}): void {
   const def = SOURCES[id as SourceId];
   let got = 0;
   for (let trip = 0; trip < 6 && got < want; trip++) {
@@ -210,7 +210,7 @@ function siteCraft(d: Driver, site: string, recipe: string): void {
 }
 /** Put `needs` in the diver hold at the workshop, gathering any shortfall. */
 const carryFromWorkshop = (d: Driver, needs: Readonly<Record<string, number>>): void => carry(d, needs as Partial<Record<ItemKind, number>>);
-function boardCraft(d: Driver, hull: VehicleState["hull"]): void {
+export function boardCraft(d: Driver, hull: VehicleState["hull"]): void {
   const v = d.vehicle(hull);
   if (!v) throw new Blocked(`No ${hull} owned`, where(d.state));
   if (d.state.player.controlledVehicleId === v.id) return;
@@ -239,7 +239,7 @@ function boardHearthline(d: Driver): void {
   }
   carrierIn(d);
 }
-function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
+export function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
   for (const [id, reverse] of legs) followS2(d, id, reverse);
   fly(d, "basin_return");
   fly(d, "creel_home");

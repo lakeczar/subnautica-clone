@@ -35,12 +35,20 @@ export interface LegRecord {
 
 export interface SaveRecord {
   phase: string;
+  /** The phase ID for a milestone; the capture's name for a mid-phase capture. */
   label: string;
   tick: number;
+  /** UTF-8 bytes of the save file, as the codec's import limit counts them. */
   bytes: number;
   hash: string;
   /** Reloaded through a fresh repository and matched the live state exactly. */
   equal: boolean;
+  /** Accepted commands since New Game (a branch counts its parent's). */
+  commands: number;
+  /** UTF-8 bytes of the whole local journal record after this commit. */
+  journalBytes: number;
+  /** A mid-phase capture (SAVE-1): saved and reloaded, but play went on from the live state. */
+  capture?: boolean;
 }
 
 export interface DiscoveryRecord {
@@ -88,6 +96,8 @@ export interface RunRecord {
   /** Hazard notices the game raised, by context (threat, oxygen, food, hull, recovery). */
   hazards: Record<string, number>;
   hazardLog: { tick: number; phase: string; leg: string; message: string }[];
+  /** Numbers a phase measured on the way (SAVE-1's tour range, for one). */
+  measurements: Record<string, number>;
 }
 
 export const freshMinima = (): Minima => ({ oxygen: 100, food: 100, health: 100, power: null, hull: null });
@@ -107,4 +117,5 @@ export function addCounts(into: Record<string, number>, from: Readonly<Record<st
 export const emptyRun = (scenario: string, strategy: string): RunRecord => ({
   scenario, strategy, outcome: "complete", ticks: 0, minutes: 0, wallMs: 0, phases: [], legs: [], saves: [],
   discoveries: [], gathered: {}, spent: {}, refusals: [], failures: 0, checks: [], notes: [], hazards: {}, hazardLog: [],
+  measurements: {},
 });
