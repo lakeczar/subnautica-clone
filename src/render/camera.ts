@@ -2,6 +2,8 @@ import type { GameState, Vec3, WorldQueries } from "../sim/types.js";
 import { eyeHeight } from "../sim/state.js";
 import { CREEL_SEAT } from "../sim/fleet.js";
 import { inCanopyAir } from "../sim/inventory.js";
+import { localToWorld } from "../sim/carrier.js";
+import { atCarrierHelm } from "../sim/carrierStations.js";
 
 /** The player view (ATM-1, Babylon-free): where the eye is, where it looks,
  * and where the lamp sits. Render-only; the simulation's pose, targeting and
@@ -12,6 +14,8 @@ import { inCanopyAir } from "../sim/inventory.js";
  *   pilot's eye forward over the bow, through the forward window's opening,
  *   so the claws and the work below are in view instead of the cockpit
  *   floor (M2 audit #1).
+ * - **Hearthline helm** (UX-1). The pilot stands at the bridge console and
+ *   looks out of the bow and side windows; a head look turns the view only.
  * - **Eye collision.** The eye never rests inside a solid or under terrain
  *   (audit #6: a diver eye inside the Dart cradle's rail). */
 
@@ -19,6 +23,14 @@ import { inCanopyAir } from "../sim/inventory.js";
 export const CREEL_WORK_EYE = { x: 0, y: 2.0, z: -3.3 } as const;
 /** Pitch (radians) where the work view starts and where it is complete. */
 export const WORK_VIEW_PITCH = { start: -0.4, full: -0.72 } as const;
+/** Hearthline helm eye, carrier-local: standing behind the bridge console,
+ * high enough to see over it through the bow window band (y 5.0-7.1). */
+export const HELM_EYE = { x: 0, y: 5.72, z: -6.95 } as const;
+/** Lamp origin ahead of the helm eye, clear of the bow glazing (z -12.45). */
+const HELM_LAMP_NEAR = 6.2;
+/** Head look relative to the view's own heading and pitch, radians. */
+export interface HeadLook { readonly yaw: number; readonly pitch: number }
+
 /** Radius of the eye probe kept clear of solids and terrain, metres. */
 export const EYE_RADIUS = 0.14;
 
@@ -84,8 +96,15 @@ export interface PlayerView {
  * `world` is the exterior world for eye collision; local rooms (cabins, the
  * carrier, the canopy lab) skip it. */
 export function playerView(state: GameState, toWorld: ((local: Vec3) => Vec3) | null, world: WorldQueries | null,
-  dartSeat: Vec3): PlayerView {
+  dartSeat: Vec3, look?: HeadLook): PlayerView {
   const { pose } = state.player;
+  const helm = atCarrierHelm(state);
+  if (helm) {
+    const yaw = pose.yaw + (look?.yaw ?? 0), pitch = Math.max(-1.35, Math.min(1.35, pose.pitch + (look?.pitch ?? 0)));
+    const forward = { x: Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch) };
+    const eye = localToWorld(HELM_EYE, helm);
+    return { eye, forward, work: 0, lamp: { x: eye.x + forward.x * HELM_LAMP_NEAR, y: eye.y + forward.y * HELM_LAMP_NEAR, z: eye.z + forward.z * HELM_LAMP_NEAR } };
+  }
   const forward = { x: Math.sin(pose.yaw) * Math.cos(pose.pitch), y: Math.sin(pose.pitch), z: -Math.cos(pose.yaw) * Math.cos(pose.pitch) };
   const seated = toWorld ? state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId) : undefined;
   let eye: Vec3, work = 0, near: number;

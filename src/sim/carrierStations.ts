@@ -155,3 +155,21 @@ export function launchCorridor(s: GameState, world: WorldQueries): CorridorStatu
   return { vehicleId: v.id, label: craft, path: [localToWorld(CARRIER_LAYOUT.railTurn, h), launchPoint(h, v)],
     halfWidth: shape.halfWidth, height: shape.height, clear: !surfaceOnly && !block, advice };
 }
+
+/** launchCorridor for presentation (HUD, console, the drawn corridor), which
+ * ask every frame. A change of berths, configuration or other craft recomputes
+ * at once; carrier motion at most four times a second (draw the corridor from
+ * the carrier's current pose, not from `path`). Commands always check exactly. */
+export function launchCorridorView(s: GameState, world: WorldQueries): CorridorStatus | null {
+  const h = carrierHull(s), dock = s.fleet.docking;
+  if (!h || !dock) return null;
+  const r = (n: number, q: number): number => Math.round(n / q);
+  const structure = [h.id, dock.configuration, dock.launchBlocked, ...s.fleet.vehicles.filter((v) => v.id !== h.id).map((v) => v.berth
+    ? `${v.id}@${v.berth.carrierId}:${v.berth.slot}` : `${v.id}:${r(v.pose.position.x, 0.5)},${r(v.pose.position.y, 0.5)},${r(v.pose.position.z, 0.5)}`)].join("|");
+  const pose = [r(h.pose.position.x, 0.05), r(h.pose.position.y, 0.05), r(h.pose.position.z, 0.05), r(h.pose.yaw, 0.005)].join(",");
+  const stale = !memo || memo.world !== world || memo.structure !== structure ||
+    (memo.pose !== pose && (s.tick - memo.tick >= 15 || s.tick < memo.tick));
+  if (stale) memo = { structure, pose, tick: s.tick, world, status: launchCorridor(s, world) };
+  return memo!.status;
+}
+let memo: { structure: string; pose: string; tick: number; world: WorldQueries; status: CorridorStatus | null } | null = null;

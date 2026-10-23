@@ -423,6 +423,13 @@ export function fixtureGame(): GameState {
   s.player.pose.position = localToWorld(s.player.interiorPose.position, h);
   return s;
 }
+/** The interface is the hull or its exterior vestibule (13.8 m aft of the keel,
+ * entered within 5 m): measuring only from the keel refused 39% of that zone. */
+export function carrierInReach(s: GameState, h: VehicleState): boolean {
+  return s.player.interiorId === h.id || s.player.controlledVehicleId === h.id ||
+    distance(s.player.pose.position, h.pose.position) <= 15 ||
+    distance(s.player.pose.position, localToWorld(CARRIER_LAYOUT.exteriorVestibule, h)) <= 5;
+}
 export function carrierCommand(
   s: GameState,
   action: string,
@@ -432,14 +439,7 @@ export function carrierCommand(
   const dock = s.fleet.docking,
     h = carrierHull(s);
   if (!dock || !h) return "No carrier interface is present in this expedition.";
-  // The interface is the hull or its exterior vestibule (13.8 m aft of the keel,
-  // entered within 5 m): measuring only from the keel refused 39% of that zone.
-  if (
-    s.player.interiorId !== h.id &&
-    s.player.controlledVehicleId !== h.id &&
-    distance(s.player.pose.position, h.pose.position) > 15 &&
-    distance(s.player.pose.position, localToWorld(CARRIER_LAYOUT.exteriorVestibule, h)) > 5
-  )
+  if (!carrierInReach(s, h))
     return "Board the Hearthline or come within reach of its vestibule to use its controls.";
   if (action === "leave-interior") {
     if (!dock.stationKeeping || !s.player.interiorPose)
@@ -489,6 +489,16 @@ export function carrierCommand(
   if (action === "helm") {
     if (dock.transaction)
       return "The lock is cycling. Wait for it to close before taking the helm.";
+    if (s.player.controlledVehicleId === h.id) {
+      // Already at the helm: throttle or rudder releases station keeping.
+      dock.stationKeeping = false;
+      s.feedback = "Station keeping released. The Hearthline answers the helm.";
+      return null;
+    }
+    // UX-1: the helm takes the carrier's own heading, level. The view no longer
+    // swings the hull to wherever the player happened to be facing.
+    s.player.pose.yaw = h.pose.yaw;
+    s.player.pose.pitch = 0;
     s.player.mode = "piloting";
     s.player.controlledVehicleId = h.id;
     s.player.pose.position = { ...h.pose.position };

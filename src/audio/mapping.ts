@@ -46,6 +46,9 @@ interface Snapshot {
   disabled: ReadonlySet<string>;
   transaction: { id: string; phase: "prepared" | "lock"; type: "capture" | "launch" } | null;
   completed: number;
+  /** At the Hearthline's helm; the carrier holding station (UX-1). */
+  helm: boolean;
+  holding: boolean;
 }
 
 export class CueMapper {
@@ -151,6 +154,8 @@ export class CueMapper {
       disabled: new Set(s.fleet.vehicles.filter(v => v.disabled).map(v => v.id)),
       transaction: dock?.transaction ? { id: dock.transaction.id, phase: dock.transaction.phase, type: dock.transaction.type } : null,
       completed: dock?.completed.length ?? 0,
+      helm: !!dock && s.player.controlledVehicleId === dock.vehicleId,
+      holding: !!dock?.stationKeeping,
     };
     const prev = this.last;
     this.last = next;
@@ -168,6 +173,9 @@ export class CueMapper {
     for (const id of next.disabled) if (!prev.disabled.has(id)) { out.push(centred("hull.failure")); break; }
     if (next.transaction?.phase === "lock" && prev.transaction?.phase !== "lock") out.push(centred("carrier.lock"));
     if (next.completed > prev.completed && prev.transaction?.type === "capture") out.push(centred("carrier.clamp"));
+    if (next.helm && !prev.helm) out.push(centred("carrier.helm"));
+    // Only aboard (helm or rooms) does the hold carry; outside it is the vestibule's business.
+    if (next.holding && !prev.holding && (next.helm || prev.helm || next.mode === "interior")) out.push(centred("carrier.hold"));
     if (next.threat === "disengage" && (prev.threat === "investigate" || prev.threat === "pursue")) out.push(centred("threat.disengage"));
     // Crossing the waterline outside a hull or shelter.
     if (next.mode === "swimming" || next.mode === "walking") {

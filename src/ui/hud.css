@@ -230,3 +230,10 @@
 .threat-mark[data-stage="closing"] { background: radial-gradient(closest-side, #ffb070f0, #ff8a4a73 45%, transparent); }
 .threat-mark[data-stage="attack"] { background: radial-gradient(closest-side, #ff7a5af5, #ff4a3a80 45%, transparent); }
 @media (prefers-reduced-motion: reduce) { .threat-mark { opacity: .8 !important; } }
+/* UX-1: the Hearthline helm's instruments, beside the helm guidance. */
+.helm-readout { display: flex; flex-direction: column; gap: 4px; padding: 9px 10px; border-left: 2px solid #8af5d099; border-radius: 3px; font-size: 12px; line-height: 1.45; background: #0b2733f0; }
+.helm-readout .helm-title { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #a9cfc3; }
+.helm-readout .helm-figures { display: flex; flex-wrap: wrap; gap: 4px 12px; color: #e8f1e4; }
+.helm-readout .helm-figures b { font: 400 15px Georgia, serif; color: #fff4d8; }
+.helm-readout .helm-corridor { color: #b8f6dc; }
+.helm-readout .helm-corridor.blocked { color: #ffd59a; }
