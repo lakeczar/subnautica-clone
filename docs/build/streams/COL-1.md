@@ -2,17 +2,50 @@
 
 Opus 5.5 high. Branch `t3/col-1-static-collider` from root `fe27757`; stage A head: see the commit that adds this page. The decision that created this stream is R1 of the [compromise verdict](../audits/COMPROMISE-VERDICT-OPUS.md) (on `research/compromise-audit`), on Sol's findings ART-01/02/03/07, CAV-02/03/20 and TST-05. **New modules only:** `src/world/collision/*` and `tests/col1-*`. No edit to `world.ts`, `app.ts`, `step.ts`, LC's files, or any cave or creature file.
 
+## R1 response (Sol R1 on `245a006`: [report](../reviews/COL-1A-SOL-XHIGH-R1.md), on `review/col-1a-r1`)
+All five findings are fixed at the root, and stage B's API is unchanged: the same calls, with additions only. Every reproduction in the report is now a test in `tests/col1-r1.test.ts`. **Each fix was mutation-checked:** removing it fails its test, as do removing the lift and restoring the old jittered parity.
+
+| Finding | Root fix | Tests |
+| --- | --- | --- |
+| **R1 (P1)** Recovery from inside a solid skipped the escape sweep and crossed a separate wall. | Recovery validates the **whole** way out, in two phases:<br>1. While the centre is still inside the parts that held it, the box is swept against everything *except those parts*, so it can leave the rock it was caught in.<br>2. From where the centre leaves them, it is swept against everything.<br>A start contact may only separate. Exempting is per part (`PartRef`), never per shape or union. | The report's case through the collider **and the composed world** (wall B as an exterior solid): null within 1 m; with room, out through the far face and never through B; without B, the short way. Also a box caught across a wall it overlaps, which backs out the way it came. |
+| **R2 (P1)** Jittered parity counted a shared diagonal twice: a whole box read as water. | `verticalCrossing`, a **watertight half-open rule**. Edge functions use a fixed vertex order (so neighbours see exactly opposite signs), and a point on an edge's line takes the sign at (x + ε, z + ε²). Each vertical line crosses each surface exactly once, through edges, vertices and either winding. It is used everywhere parity is: shapes, parts, split groups, and biome caps (`crossings`). No jitter remains. | Grid edges, vertices, diagonals and the report's point, on outward and reversed windings; every top-face vertex; overlapping parts; a split group's own vertices and seams; crossings exactly 2 under the box. |
+| **R3 (P1)** A sweep or sight line entered heightfield solid from a hole or the outside. | **The heightfield is a volume.**<br>- **Walls:** each solid cell edge that meets a hole or the lattice's edge is a vertical wall (two triangles down to the bounds' bottom).<br>- **One-sided:** sweeps meet the top and the walls only from above and from outside. A start contact is judged by the outward face normal, not the kernel's best axis, so a mostly buried box can't sink. Top slides are unchanged, and a buried actor may rise or leave through a wall.<br>- **Sight:** blocked under a solid cell's surface wherever the segment enters it. | The report's hole-to-solid and outside-to-solid cases, ending in and beyond the solid, and its composed case through LC's composer (it stops at X 2.656, as the columns did). Plus buried escape, refused sinking, a smooth glide over a hole's edge, and an independent brute force (every top and wall triangle) for sight. |
+| **R4 (P2)** Recovery took the face nearest the centre and gave up when it was over budget. | **The shortest validated candidate.** Candidates are:<br>- every face exit of the containing parts (plane distance plus the box's reach along the face normal, exact for leaving a convex part);<br>- push-outs from every overlapped surface, box and heightfield wall;<br>- the 26-direction ring.<br>All are tried shortest first, and each is validated as in R1 before it is accepted. | The report's two cases: 0.644 m (not null at 0.65) and 0.404 m (not 1.204 m). |
+| **R5 (P2)** The static move path dropped the vertical bounds. | A static move keeps the exterior's policy:<br>- ordinary moves clamp X/Z and the datum's Y and report `hitBoundary`;<br>- `separateBoxOverlaps` clips requested travel first and never clamps an end;<br>- invalid input gets the exterior's own answer.<br>`bounds` gains optional `minY`/`maxY`. | The report's case (−800, `hitBoundary`), its `separateBoxOverlaps` form, and up and across X, each equal to the exterior's answer. |
+
+**The lift mutation, now killed.** Omitting the lift fails `col1-r1`'s lift test in two ways:
+- **Property:** the collar must be on or above the floor at every cell's nine points.
+- **Behaviour:** on a floor whose 0.5 m chords sag 3 cm, drops onto a collar beside the footprint must rest on poses that LC's composer, testing the floor itself, accepts.
+
+**Precision the review asked for:**
+- **The collar is not "never below the floor".** It is on or above it at the nine points per cell. Elsewhere the sag is measured at 16 interior points per cell: at most **0.333 mm** on the colonnade collars, matching the review's 0.3331 mm scan.
+- **A floor with bumps narrower than a cell is refused, not hidden.** `collarHeightfield` throws above 10 mm. The adverse test is the review's sin² floor, measured at 50 mm.
+- **The residual is sampling, not a bound.** Features narrower than an eighth of a cell can still escape it.
+
+**The oracle now asserts what it used to log:**
+- the shell's moves have no stop without art on the path;
+- the shell blocks no protected route or pose;
+- in every scene, no move from a clear start ends illegal in the space the new collider answers for.
+
+The oracle's art reference is the new collider's own geometry for structures, and the same kernels for the shell and biome. It judges geometry fidelity; it is not independent query validation. The review's independent SAT check of all 114 shell poses is the independent part.
+
+**For stage B (from the review):**
+- **Composer control:** the four "spurious" moves are real skin contacts with retained box-cover corners. Contact starts at a skin of 0.04–3.7 mm, and final positions differ by 2–25 cm. The shell removes them.
+- **Endpoint debt:** the review found clear starts whose full moves end in rejected poses in today's composed world (production does the same). That is existing composed-world debt for stage B's composed check; this oracle doesn't approve every differing slide.
+- **Register every collision owner with one composer.** `composeStaticWorld` sweeps only its own collider and `solids`. Nesting it under LC's composer, or wrapping a cave-bearing exterior, doesn't bring the other's triangles into the near sweep.
+- **Shared bytes are a sum of views,** not a deduplicated allocation. Small per-shape arrays and JS owners aren't in the format count.
+
 ## What stage A gives stage B and every builder
 One collider for any baked shape, each surface in the primitive that fits it:
 
 | Module | What it is |
 | --- | --- |
 | `boxTriangle.ts` | LC's 13-axis swept box against a triangle, reading vertices in place, bit-equal to LC's (tested on 20,000 random cases). Adds signed separation (the push-out axis) and **order-independent tie-breaking** (see *Findings*). |
-| `shape.ts` | **The compact format.** `Uint16` indices; positions are the art's own Float32 buffer where it can be (`shared`, not counted as owned); BVH nodes of 16 bytes (bounds quantised to `Uint16`, rounded outwards, plus one `Uint32` link). Closed shapes answer interior by ray parity, per part. |
-| `heightfield.ts` | **Seabed as collision** for collars and seams: one Float32 per lattice point, a hole bit per cell, 8 × 8-cell tiles with min/max for culling, solid all the way down. Sampling can be **conservative**: each vertex is lifted by the largest chord sag its cells show at the old columns' nine points, so the lattice never sits below the floor the exterior world tests against. |
+| `shape.ts` | **The compact format.** `Uint16` indices; positions are the art's own Float32 buffer where it can be (`shared`, not counted as owned); BVH nodes of 16 bytes (bounds quantised to `Uint16`, rounded outwards, plus one `Uint32` link). Closed shapes answer interior by vertical-ray parity, per part, with a **watertight half-open crossing rule** (a point on a shared edge or vertex belongs to exactly one triangle; no jitter). |
+| `heightfield.ts` | **Seabed as collision** for collars and seams: one Float32 per lattice point, a hole bit per cell, 8 × 8-cell tiles with min/max for culling. **A volume:** solid below every solid cell's surface, with vertical walls where a solid cell meets a hole or the lattice's edge, met one-sided (from above, from outside) by sweeps and sight. **Conservative sampling** lifts each vertex by the largest chord sag its cells show at the old columns' nine points, so the lattice is on or above the floor there; the sag left between them is **measured** (`residual`), and `collarHeightfield` refuses a floor whose residual passes 10 mm. |
 | `collider.ts` | `createStaticCollider(id, members)`: shapes, heightfields and true boxes behind a top-level BVH. Queries: `sweep`, `overlaps` (surfaces, interiors, buried), `support`, `segmentClear`, `move` (slides), **`depenetrate`** (ART-07), `contact`, `solidAt`, `crossings`. **No uniform grid anywhere**: cost and size follow primitive counts, never extent (TST-05). |
 | `bake.ts` | **Baked from the art's own source:** `artMembers(id, blocks, pieces, skin)` takes a set piece's `VistaBlock`s and `VistaPiece`s (blocks stay boxes, closed prisms become solid parts wound outwards, open pieces become skin); `meshShapes` takes a mesh (over 65,536 vertices it splits in X/Z columns, viewing the art's buffer where it can, with group parity); `collarHeightfield`; `meshFacing`. |
-| `world.ts` | The seams for stage B: `staticCaveCollider` (a W1 kit cave as LC's `CaveCollider`, for `composeCaveWorld`) and `composeStaticWorld` (structures over the exterior world; every answer away from the collider is the exterior's, bit for bit). Both answer `depenetrate`. |
+| `world.ts` | The seams for stage B: `staticCaveCollider` (a W1 kit cave as LC's `CaveCollider`, for `composeCaveWorld`) and `composeStaticWorld` (structures over the exterior world; every answer away from the collider is the exterior's, bit for bit, and a static move keeps the exterior's bounds policy). **Only `composeStaticWorld` answers `depenetrate`.** The cave adapters don't: stage B must recover against the fully composed cave world. |
 | `biome.ts` | A cave biome in the compact format with LC's exact semantics (`compactBiomeCollider`): for LC-2. |
 | `cover.ts` | `coverReport(art, boxes, points)`: how far a box cover stands off its art, and where art pokes out (the interim rule's debt entry). |
 
@@ -106,7 +139,7 @@ The heightfield variant's p95 comes from its rock boxes, not the collar: on the 
   - **Stage B should run cave slides through `slideMove`.**
 - **Composer control (identical boxes): today's W1 composite vs LC's composer.** These aren't collider effects:
   - Clearance agrees on 16,000 of 16,000 poses.
-  - 4 of 8,000 moves differ: half-millimetre near-misses at rock-box corners, which LC's 4 mm skin counts as contacts (one traced to `reef_bellhole.rock.0740`).
+  - 4 of 8,000 moves differ. These are real skin contacts with retained box-cover corners: contact starts at a skin of 0.04–3.7 mm, so they miss with no skin and hit at 4 mm. Final positions differ by 2–25 cm (Sol traced all four). The shell variant removes them.
   - Support outside a footprint reads up to 0.28 m lower in LC's composer, which doesn't read collar tops there.
 
   Stage B picks one composer.
@@ -137,7 +170,9 @@ The heightfield variant's p95 comes from its rock boxes, not the collar: on the 
 
 ## Adverse cases
 - **No escape through a wall.** A diver overlaps a wall in a room 3 cm narrower than itself, and the far side of the wall is open water (the nearest clear pose). `depenetrate` returns null, because the escape sweep would close on the wall. With the room's other wall removed, it backs out by its overlap (`tests/col1-queries.test.ts`).
-- **A collar that sags.** On a curved floor, a plain lattice lies under the floor between samples. A box resting on it was called buried by the composer's floor check (found by the composer test). The conservative lift fixes it; on the colonnade collars the largest lift is 10.7 mm.
+- **A collar that sags.** On a curved floor, a plain lattice lies under the floor between samples. A box resting on it was called buried by the composer's floor check (found by the composer test). The conservative lift fixes it: the largest lift on the colonnade collars is 10.7 mm, with a measured residual of at most 0.333 mm. The mutation is now killed (see *R1 response*).
+- **Inside rock, beside a wall** (R1). Recovery returns null when every way out within the limit crosses another wall, through the collider and the composed world alike.
+- **Into the collar from a hole** (R3). A diver in a cave's footprint stops at the collar's rim, through LC's composer.
 
 ## Compromises (each with its root fix)
 - **Long single-call moves of a large hull among dense triangle art are slower than boxes:** A1, medium hull, 4 m in one call, 73.7 → 117.9 µs; dishes about even. Per-frame moves (what the game makes) are as fast or faster in every scene.
@@ -146,13 +181,18 @@ The heightfield variant's p95 comes from its rock boxes, not the collar: on the 
   - **Root fix in LC-2:** fold each chunk's band into a heightfield (one shape per chunk, fewer triangles). **S**.
 - **Vista and dish positions aren't shared with the render's buffers.** The collider bakes its own Float32 from the same facets, so the numbers are identical, but the bytes are owned.
   - **Root fix in stage B:** the renderer draws from the collider's merged positions. **S**.
-- **The collar lattice samples the physical floor function at 0.5 m.** The seabed art is an adaptive triangulation of that function, and their visual seam is not measured here (see *Missing*).
+- **The collar lattice samples the physical floor function at 0.5 m**, while the seabed art is an adaptive triangulation of the same function. Collision follows the physical floor (on or above it at nine points per cell, with a measured residual); the drawn seam between the art and the collar isn't measured (see *Missing*).
+  - **Root fix in stage B:** sample the collar from the terrain bake's own triangulation in the band, so art and collision are the same triangles, as the shell already is inside the footprint. **S–M**.
+- **Recovery is bounded best-effort, not a proof of the nearest pose.** It returns the shortest *validated* candidate among face exits, push-outs and the 26-direction ring. A shorter legal escape off every candidate (a box leaving a non-convex part between faces, or escaping diagonally from a convex corner faster than through either face) isn't found.
+  - **Rescue consequence:** within the distance limit, recovery may take a longer legal way out, or return null where an unlisted way exists. The caller then rescues (LC's verified rescue path). It never returns an illegal or wall-crossing pose.
+  - **Root fix:** an exact configuration-space search, the Minkowski sum of the parts and the box, which is convex per convex part. **M**.
 
 ## Missing evidence
 - No browser or GPU run: stage A changes nothing drawn or wired. Stage B's integration carries the ordinary-control run.
 - Performance is headless Node query cost (`--class exclusive`, factory-worker), not in-game frame cost.
 - Memory is Node heap (old) and exact format bytes (new), not a browser heap. The new collider's heap delta was below measurement noise.
 - The Canopy oracle covers 47 of 90 chunks, the two routes' columns.
+- **The art/collar visual seam** (see *Compromises*) and save-load integration are stage B's composed check. So are endpoint safety across the composed world (see *R1 response*) and all 90 Canopy chunks.
 
 ## Stage B, when CW-1 merges
 1. Compose structures through `composeStaticWorld` (vistas, dishes, the sites), with `guards: [LEGACY_PRESERVE]`, and drop `VISTA_SOLIDS` and the dish boxes from `SOLIDS`.
