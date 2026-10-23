@@ -14,14 +14,15 @@ export function timelineHtml(r, a) {
   // Frame times: the worst gap per 100 ms (every long frame survives the reduction).
   const fr = [];
   for (const f of r.frames) {
-    if (!(f.gap > 0)) continue;
+    if (!(f.gap > 0) || f.t < t0) continue;
     const x = Math.round(s(f.t) * 10) / 10;
     if (fr.length && fr.at(-1)[0] === x) fr.at(-1)[1] = Math.max(fr.at(-1)[1], f.gap); else fr.push([x, +f.gap.toFixed(1)]);
   }
   const mem = [["tab (renderer RSS)", a.series.tab], ["JS heap", a.series.heap], ["GPU in use", a.series.gpuUsed], ["streamed world, GPU estimate", a.series.resident]]
     .filter(([, xs]) => xs.length).map(([label, xs]) => ({ label, pts: xs.map((p) => [s(p.t), p.v]) }));
   const attention = new Map(a.attention.map((e) => [e.t, e]));
-  const events = r.events.filter((e) => !["action", "long-task", "session"].includes(e.kind) && !(e.kind === "save" && e.detail?.ok && !e.detail?.manual))
+  // The measured window only (the load before it is one line in story.md).
+  const events = r.events.filter((e) => e.t >= t0 && !["action", "long-task", "session"].includes(e.kind) && !(e.kind === "save" && e.detail?.ok && !e.detail?.manual))
     .map((e) => ({ s: s(e.t), k: e.kind, x: e.text.slice(0, 160), tick: e.tick ?? null, a: attention.get(e.t)?.id ?? null, strip: attention.get(e.t)?.strip ?? null }));
   const spans = a.pacing.spans.map((p) => [s(p.from), s(p.to), p.cls]);
   const v = h.video, file = path.join(r.rec, "video.webm");
@@ -76,10 +77,12 @@ for(const id of ["cf","cm","cp"]){const c=document.getElementById(id);
  c.addEventListener("mousemove",e=>{const r=c.getBoundingClientRect(),s=(e.clientX-r.left-L)/(r.width-L-R)*D.end;const f=D.fr.reduce((b,p)=>Math.abs(p[0]-s)<Math.abs(b[0]-s)?p:b,D.fr[0]||[0,0]);
   const near=D.events.filter(ev=>Math.abs(ev.s-s)<D.end/200).slice(0,3).map(ev=>ev.k+": "+ev.x).join("<br>");tip.style.display="block";tip.style.left=e.clientX+12+"px";tip.style.top=e.clientY+12+"px";tip.innerHTML=fmt(s)+" · frame "+f[1]+" ms"+(near?"<br>"+near:"")});
  c.addEventListener("mouseleave",()=>tip.style.display="none")}
-const kinds=[...new Set(D.events.map(e=>e.k))],shown=new Set(kinds.filter(k=>k!=="notice"));
+const kinds=[...new Set(D.events.map(e=>e.k))],shown=new Set(kinds.filter(k=>k!=="notice"&&k!=="long-frame"));
+// Long frames: only those that head an attention entry (the rest of a burst is in the chart).
+const listed=e=>shown.has(e.k)||(e.k==="long-frame"&&e.a);
 document.getElementById("filters").innerHTML=kinds.map(k=>'<label><input type=checkbox data-k="'+k+'" '+(shown.has(k)?"checked":"")+"> "+k+"</label>").join("");
 document.getElementById("filters").addEventListener("change",e=>{const k=e.target.dataset.k;e.target.checked?shown.add(k):shown.delete(k);list()});
-function list(){document.getElementById("ev").innerHTML=D.events.filter(e=>shown.has(e.k)).map((e,i)=>'<div data-s="'+e.s+'"><i>'+fmt(e.s)+(e.tick!=null?" t"+e.tick:"")+"</i><b>"+(e.a?e.a+" ":"")+e.k+"</b>"+e.x.replace(/</g,"&lt;")+"</div>").join("")}
+function list(){document.getElementById("ev").innerHTML=D.events.filter(listed).map((e,i)=>'<div data-s="'+e.s+'"><i>'+fmt(e.s)+(e.tick!=null?" t"+e.tick:"")+"</i><b>"+(e.a?e.a+" ":"")+e.k+"</b>"+e.x.replace(/</g,"&lt;")+"</div>").join("")}
 document.getElementById("ev").addEventListener("click",e=>{const d=e.target.closest("div[data-s]");if(d)seek(+d.dataset.s)});
 function highlight(){let best=null;for(const d of document.querySelectorAll("#ev div")){d.classList.remove("on");if(+d.dataset.s<=cursor)best=d}if(best){best.classList.add("on")}}
 if(V)V.addEventListener("timeupdate",()=>{cursor=V.currentTime+D.offset;draw();highlight()});
