@@ -70,13 +70,13 @@ All runs are on factory-worker unless marked otherwise. `src` is unchanged since
 
 | Check | Result |
 | --- | --- |
-| `npm test` (fast) | **Pass:** 128 files in 64 s, 294 s CPU (at `635239d`). `ux1-carrier-stations` has 14 tests and takes about 1.2 s. |
+| `npm test` (fast) | **Pass:** 128 files in 65 s, 295 s CPU (at `7443ce0`). `ux1-carrier-stations` has 14 tests and takes about 1.2 s. |
 | `npm run build` | OK. The bundle-size warning is root's. |
 | Heavy: `ux1-carrier-corridor.heavy` (v2 `quick`) | **Pass.** 1,920 poses: 10 per mooring (as moored, low, and on a 25 m ring) × 24 headings. 713 are obstructed, every one with advice identical to the launch command's refusal. All 425 turn hints actually clear the corridor; 288 obstructed poses get a "rise" hint. |
 | Economy scripts | `check-campaign`, `m2-a`, `m2-b1`, `progression-curve` and `upgrade-economy` pass. `check-m1-economy` fails on root's `restore_crown_*` roster pin (HUB-2's recipes; CR-1 flagged it too). UX-1 touches no content. |
 | Playthrough `creel,carrier --jobs 2` (v1 lock) | **Both complete** (at `727e511`, `src` identical to `deda216`): no blockers, 16 saves matched, 0 incapacities. The carrier route passed rift, hearthline, carrier-deep (Mantle captured), deep-records, meridian, works and the ending. |
 | Playthrough `creel-loss,reverse,no-optional --jobs 3` (v2 `playthrough`) | **All complete** (at `deda216`): no blockers, every reload matched. |
-| Playthrough, all five, on the second worker (`alickers-job`) | ALICKERS_PLACEHOLDER |
+| Playthrough, all five, on the second worker (`alickers-job`) | **All five complete** (tested `b6093f7`, which includes the lock-outcome notice): creel 199 min of play, carrier 361, creel-loss 209, reverse 204, no-optional 199. No blockers. |
 | `src` after the playthroughs | `a76a708` adds one sim change, the lock-outcome notice (covered by a fast test). Then `635239d`/`61a430a` change presentation only (render, the runtime helm and the console); the playthrough loads none of those. |
 
 ## 3090 evidence (ordinary keys and the game's own panel clicks)
