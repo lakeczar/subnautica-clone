@@ -22,7 +22,11 @@ export interface SceneLights {
   /** Lights sent last frame, emissive meshes known, meshes waiting for a scan. */
   readonly stats: { readonly sent: number; readonly known: number; readonly pending: number;
     /** Last update's time scanning new meshes, placing lights, and choosing them, ms. */
-    readonly scanMs: number; readonly placeMs: number; readonly selectMs: number; readonly placed: number };
+    readonly scanMs: number; readonly placeMs: number; readonly selectMs: number; readonly placed: number;
+    /** Lights the selection considered this frame, and the frame's slowest entry to place. */
+    readonly considered: number;
+    readonly slowest: { readonly name: string; readonly ms: number; readonly instances: number; readonly clusters: number; readonly frozen: boolean } | null;
+  };
   dispose(): void;
 }
 
@@ -160,7 +164,9 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     if (!h || h.isDisposed()) { h = (scene.getMeshByName(id) as Mesh | null) ?? undefined; if (h) hulls.set(id, h); }
     return h ?? null;
   };
-  let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0;
+  let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0, considered = 0;
+  /** The frame's slowest entry to place (measurement: which mesh a long placement was). */
+  let slowest: { name: string; ms: number; instances: number; clusters: number; frozen: boolean } | null = null;
   const send = (u: ReturnType<typeof lightUniforms>, halo: number): void => {
     for (const m of targets) {
       m.setArray4("localLightPos", u.position);
@@ -171,7 +177,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
   };
   send(lightUniforms([]), 0);
   return {
-    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed }; },
+    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed, considered, slowest }; },
     update(state, eye, daylight, time) {
       // Scan new meshes in a bounded slice per frame, resuming a large one.
       const until = performance.now() + 1.5;
@@ -191,11 +197,16 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       // for some scatter) are placed once and cached; place a bounded number
       // per frame (CW-1), so a new chunk's lights join over a few frames.
       const placeUntil = performance.now() + 2;
+      slowest = null;
       for (const e of entries.values())
         if (e.active && !e.mesh.isDisposed() && e.mesh.isEnabled() && !(hull && (e.mesh === hull || e.mesh.isDescendantOf(hull)))) {
           if (!e.world && e.mesh.isWorldMatrixFrozen && !e.mesh.parent && performance.now() > placeUntil) continue;
+          const t0 = performance.now();
           const placedLights = toWorld(e, placeUntil);
           if (placedLights) for (const l of placedLights) lights.push(l);
+          const ms = performance.now() - t0;
+          if (ms > (slowest?.ms ?? 0)) slowest = { name: e.mesh.name, ms, instances: e.instances?.length ?? 1, clusters: e.clusters.length,
+            frozen: e.mesh.isWorldMatrixFrozen && !e.mesh.parent };
         }
       placeMs = performance.now() - placeStart; placed = lights.length;
       for (const v of vents) lights.push(v);
@@ -223,6 +234,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
         lights.push({ x: at.x, y: at.y, z: at.z, radius: inst.radius, strength: 0.2, reserved: true, noHalo: true, r: 0.78, g: 0.92, b: 1 });
       }
       const selectStart = performance.now();
+      considered = lights.length;
       const chosen = selectLights(lights, eye);
       selectMs = performance.now() - selectStart;
       sent = chosen.length;

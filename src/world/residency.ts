@@ -134,6 +134,8 @@ export interface ResidencyStats {
   /** Longest single build step this frame: a factory that overruns its
    * slice shows up here, not as a mystery hitch. */
   readonly maxStepMs: number;
+  /** The unit (chunk and LOD) whose build step was `maxStepMs`. */
+  readonly maxStepUnit: string | null;
   readonly uploadMs: number;
   readonly uploads: number;
   readonly uploadedBytes: number;
@@ -415,7 +417,7 @@ export function createResidency(options: {
       // 3. Builds, nearest first, within the time slice. A new build starts
       //    only when its reservation fits; a finished one is re-checked.
       const start = now();
-      let steps = 0, maxStepMs = 0, deferred = 0;
+      let steps = 0, maxStepMs = 0, deferred = 0, maxStepUnit: string | null = null;
       const queue = [...desired.values()].filter(w => {
         const u = units.get(key(w.chunk.id, w.lod));
         return !u || u.state === "building";
@@ -437,7 +439,8 @@ export function createResidency(options: {
         while (u.build) {
           const before = now();
           const r = u.build.next();
-          maxStepMs = Math.max(maxStepMs, now() - before);
+          const stepMs = now() - before;
+          if (stepMs > maxStepMs) { maxStepMs = stepMs; maxStepUnit = u.key; }
           steps++;
           if (r.done) {
             u.build = null; u.prepared = r.value; u.state = "prepared"; totals.built++;
@@ -552,7 +555,7 @@ export function createResidency(options: {
         // completed may still reveal room for chunks cut this frame.
         settled: fits(bytes) && building + prepared + uploading === 0 && pending === 0 && steps === 0 && uploads === 0 &&
           totals.overBudgetDiscards === discardsBefore && evictable <= budget.retainedUnits,
-        buildMs, buildSteps: steps, maxStepMs, uploadMs, uploads, uploadedBytes, uploadOverrunBytes, pending,
+        buildMs, buildSteps: steps, maxStepMs, maxStepUnit, uploadMs, uploads, uploadedBytes, uploadOverrunBytes, pending,
         totals: { ...totals },
       };
       return last;
