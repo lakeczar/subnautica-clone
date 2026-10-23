@@ -148,3 +148,22 @@ test("the ZIP is a valid store-only archive with correct CRCs", async () => {
   }
   assert.deepEqual(names, ["header.json", "snapshots/00001.jpg"]);
 });
+
+test("a staged fixed view puts the diver alone at the pose, still, with the craft left where it was", async () => {
+  const { stageView } = await import("../src/runtime/flight/game.js");
+  const { makeVehicle } = await import("../src/sim/state.js");
+  const s = createGame();
+  const dart = makeVehicle("dart-1", "dart", { x: 5, y: -10, z: 5 }, "cargo-dart-1");
+  s.fleet.vehicles.push(dart);
+  s.player.controlledVehicleId = "dart-1";
+  s.player.mode = "piloting";
+  const out = stageView(s, { position: { x: 100, y: -40, z: -200 }, yaw: 90, pitch: -10, lamp: false, tick: 777 });
+  assert.equal(out.player.controlledVehicleId, null);
+  assert.equal(out.player.mode, "swimming");
+  assert.deepEqual(out.player.pose.position, { x: 100, y: -40, z: -200 });
+  assert.ok(Math.abs(out.player.pose.yaw - Math.PI / 2) < 1e-9 && Math.abs(out.player.pose.pitch + Math.PI / 18) < 1e-9);
+  assert.equal(out.player.lamp, false);
+  assert.equal(out.tick, 777);
+  assert.deepEqual(out.fleet.vehicles.find((v) => v.id === "dart-1")!.pose.position, { x: 5, y: -10, z: 5 });
+  assert.equal(s.player.controlledVehicleId, "dart-1", "the original state is untouched");
+});
