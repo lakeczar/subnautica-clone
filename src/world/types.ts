@@ -155,6 +155,11 @@ export interface SpatialQuery<T = unknown> {
   get(id: string): SpatialEntry<T> | undefined;
   /** Entries whose bounds intersect `box` (touching counts). */
   inBox(box: Aabb, kinds?: readonly SpatialKind[]): SpatialEntry<T>[];
+  /** The data of `kind` entries whose bounds intersect `box`, in `inBox`'s
+   * order, written into `out[0 .. count)`; returns the count (entries past it
+   * are stale). Allocation-free once `out` has grown, for the simulation's
+   * per-tick queries; `out` belongs to the caller. */
+  dataInBox(box: Aabb, kind: SpatialKind, out: T[]): number;
   /** Entries whose bounds lie within `radius` of `point`. */
   near(point: Readonly<Vec3>, radius: number, kinds?: readonly SpatialKind[]): SpatialEntry<T>[];
   /** Entries whose bounds, inflated by `pad`, the segment a→b touches. */

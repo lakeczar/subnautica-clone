@@ -93,9 +93,10 @@ export function lightFromCluster(c: LightCluster, attached = false): Omit<PointL
 
 /** How much a light can matter to the view from `eye`: big and close first. */
 export function lightScore(l: PointLight, eye: Vec3Like): number {
-  const d = Math.hypot(l.x - eye.x, l.y - eye.y, l.z - eye.z);
-  return (l.strength * l.radius) / Math.max(1, d - l.radius * 0.5);
+  const dx = l.x - eye.x, dy = l.y - eye.y, dz = l.z - eye.z;
+  return scoreAt(l, Math.sqrt(dx * dx + dy * dy + dz * dz));
 }
+const scoreAt = (l: PointLight, d: number): number => (l.strength * l.radius) / Math.max(1, d - l.radius * 0.5);
 
 /** Lights further than this from the eye are never sent. */
 export const LIGHT_RANGE = 200;
@@ -105,24 +106,38 @@ export const MAX_LIGHTS = 12;
 /** The lights to send this frame: every reserved light (up to the slot
  * count), then the best-scoring others within `LIGHT_RANGE`. Lights near the
  * range edge fade out, so leaving range never pops. */
-export function selectLights(lights: Iterable<PointLight>, eye: Vec3Like, slots = MAX_LIGHTS): PointLight[] {
-  const reserved: PointLight[] = [], scored: { l: PointLight; s: number }[] = [];
-  for (const l of lights) {
+export function selectLights(lights: readonly PointLight[], eye: Vec3Like, slots = MAX_LIGHTS): PointLight[] {
+  // Allocation-free over the candidates (CW-1: thousands of lights a frame
+  // made a megabyte of score objects per frame): the best `slots` scores are
+  // kept in place, best first, equal scores in input order, exactly as a
+  // stable sort of every candidate would rank them.
+  if (bestScore.length < slots) { bestScore = new Float64Array(slots); bestLight = new Array<PointLight | null>(slots).fill(null); }
+  const reserved: PointLight[] = [];
+  let kept = 0;
+  for (let n = 0; n < lights.length; n++) {
+    const l = lights[n]!;
     if (l.reserved) { if (reserved.length < slots) reserved.push(l); continue; }
-    const d = Math.hypot(l.x - eye.x, l.y - eye.y, l.z - eye.z);
+    const dx = l.x - eye.x, dy = l.y - eye.y, dz = l.z - eye.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (d - l.radius > LIGHT_RANGE) continue;
-    scored.push({ l, s: lightScore(l, eye) });
+    const s = scoreAt(l, d);
+    if (kept === slots && !(s > bestScore[slots - 1]!)) continue;
+    let i = kept < slots ? kept++ : slots - 1;
+    for (; i > 0 && bestScore[i - 1]! < s; i--) { bestScore[i] = bestScore[i - 1]!; bestLight[i] = bestLight[i - 1]!; }
+    bestScore[i] = s; bestLight[i] = l;
   }
-  scored.sort((a, b) => b.s - a.s);
   const out = [...reserved];
-  for (const { l } of scored) {
-    if (out.length >= slots) break;
-    const d = Math.hypot(l.x - eye.x, l.y - eye.y, l.z - eye.z);
+  for (let k = 0; k < kept; k++) {
+    const l = bestLight[k]!;
+    bestLight[k] = null;
+    if (out.length >= slots) continue;
+    const dx = l.x - eye.x, dy = l.y - eye.y, dz = l.z - eye.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const fade = 1 - Math.max(0, Math.min(1, (d - l.radius - LIGHT_RANGE * 0.75) / (LIGHT_RANGE * 0.25)));
     out.push(fade < 1 ? { ...l, strength: l.strength * fade } : l);
   }
   return out;
 }
+/** Selection's reusable best-so-far buffers (never retained past a call). */
+let bestScore = new Float64Array(MAX_LIGHTS), bestLight = new Array<PointLight | null>(MAX_LIGHTS).fill(null);
 
 /** Shader uniform data for `selectLights`' result: pos+radius and
  * colour+strength, `MAX_LIGHTS` vec4 each. */

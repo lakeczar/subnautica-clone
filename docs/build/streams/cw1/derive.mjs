@@ -1,16 +1,17 @@
 // CW-1 traversal plan and saves (headless, the game's own rules and world).
-// A Dart tour that passes every kit cave's mouths (55 caves, all seven regions):
-// at each cave it drops to a point a few metres outside a mouth (at most
-// 340 m deep: the playthrough's Dart has its 350 m refit), between caves it
-// cruises at least 14 m over the highest floor on the leg. The tour is cut
-// into segments, each started from its own save: the creel route's state
-// after its refits phase (the real Dart and suits), the Dart moved to the
-// segment's first stop at full charge, the diver aboard. So every browser
-// job stays under 30 minutes.
+// A tour that passes every kit cave's mouths: at each cave it drops to a point
+// a few metres outside a mouth (no deeper than the craft's rating allows),
+// between caves it cruises at least 14 m over the highest floor on the leg,
+// and every leg is swept against the game world's solids (A* where blocked).
+// Saves are earned, not edited (SAVE-1): every segment starts from the same
+// library save (by default `tour-ready`: the 350 m Dart at its cradle, full,
+// two reserve cells aboard) and first flies from there to its first stop, so
+// each segment opens with a cold approach at travel speed.
 // usage: node derive.mjs <repo> <outdir> [segments | hops] [cave,...]
-// Deep caves (mouths below the Dart's 350 m): CW1_HULL=creel CW1_SNAPSHOT=divide
-// CW1_DEEPEST=-790 tours them in the 800 m Creel of the divide phase's state.
-import { mkdirSync, writeFileSync } from "node:fs";
+// Deep caves (mouths below the Dart's 350 m): CW1_SAVE=canopy-over-geared
+// CW1_HULL=creel CW1_DEEPEST=-790 tours them in the 800 m Creel.
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 const [repo, out, segArg, onlyArg] = process.argv.slice(2), B = path.join(repo, ".test-build/");
 /** Optional: only these caves (a make-up tour for stops a pass missed). */
@@ -21,10 +22,19 @@ const { CAVE_SOURCES } = await import(B + "src/content/regions/caves.js");
 const { worldFloor } = await import(B + "src/content/regions/worldFloor.js");
 const { gameWorld, hullClearance, sweptHullClearance } = await import(B + "src/sim/world.js");
 const { HULL_COLLIDERS } = await import(B + "src/content/registry.js");
-const { createEnvelope, encodeSave, decodeSave } = await import(B + "src/save/codec.js");
-const HULL = process.env.CW1_HULL ?? "dart", SNAPSHOT = process.env.CW1_SNAPSHOT ?? "refits";
+const { decodeSave } = await import(B + "src/save/codec.js");
+const HULL = process.env.CW1_HULL ?? "dart", SAVE = process.env.CW1_SAVE ?? "tour-ready";
 const world = gameWorld(), DART = HULL_COLLIDERS[HULL], DEEPEST = Number(process.env.CW1_DEEPEST ?? -340);
 const clamp = (y, x, z) => Math.min(-2, Math.max(DEEPEST, worldFloor(x, z) + 3, y));
+// The library save every segment starts from, and its craft.
+const picked = execFileSync(process.execPath, [path.join(B, "scripts/playthrough/saves.js"), "pick", SAVE], { cwd: repo, encoding: "utf8" }).trim().split("\n");
+const saveFile = picked.at(-1);
+console.log(picked.join(" | "));
+const base = decodeSave(readFileSync(saveFile, "utf8"));
+if (!base.ok) throw new Error(`${SAVE}: ${base.error}`);
+const craft = base.value.state.fleet.vehicles.find(v => v.id === base.value.state.player.controlledVehicleId);
+if (!craft || craft.hull !== HULL || craft.rating < -DEEPEST + 10) throw new Error(`${SAVE}: not piloting a ${HULL} rated below ${-DEEPEST} m`);
+const START = { ...craft.pose.position };
 /** A clear Dart pose near `p`: step outward along `n`, then up, until it fits. */
 function clearNear(p, n) {
   for (let out = 0; out <= 24; out += 2) for (const up of [0, 2, 4, 7, 10]) {
@@ -50,11 +60,10 @@ for (const s of CAVE_SOURCES.filter(c => !ONLY || ONLY.has(c.id))) {
   if (!q) throw new Error(`no clear stop for ${s.id}`);
   stops.push({ cave: s.id, region: s.region, via, at: q, outer: outer ?? q, mouthY: mouths[0]?.center.y ?? null });
 }
-// Greedy tour from the Fanvault (beside the pod).
-const tour = [stops.find(s => s.cave === "fanvault") ?? stops[0]];
-const left = stops.filter(s => s !== tour[0]);
+// Greedy tour from the stop nearest the save's craft.
+const tour = [], left = [...stops];
 while (left.length) {
-  const last = tour.at(-1).at;
+  const last = tour.at(-1)?.at ?? START;
   left.sort((a, b) => Math.hypot(a.at.x - last.x, a.at.z - last.z) - Math.hypot(b.at.x - last.x, b.at.z - last.z));
   tour.push(left.shift());
 }
@@ -98,7 +107,7 @@ function leg(a, b) {
   }
   return out;
 }
-const points = [{ ...tour[0].at, cave: tour[0].cave }];
+const points = [{ ...START, start: true }, ...leg(START, tour[0].outer), { ...tour[0].outer }, { ...tour[0].at, cave: tour[0].cave }];
 for (let i = 1; i < tour.length; i++) {
   const a = tour[i - 1], b = tour[i];
   points.push({ ...a.outer }, ...leg(a.outer, b.outer), { ...b.outer }, { ...b.at, cave: b.cave });
@@ -157,6 +166,8 @@ function plan(a, b, movableGoal) {
 }
 const blocked = [];
 let replanned = 0, dropped = 0;
+/** Replan, in place, every leg of `points` that does not sweep clear. */
+function repair(points) {
 for (let i = 1; i < points.length; i++) {
   const a = points[i - 1], b = points[i];
   if (hullClearance(world, b, DART) && sweeps(a, b)) continue;
@@ -169,6 +180,9 @@ for (let i = 1; i < points.length; i++) {
   if (movable) points.splice(i, 1, ...via); else points.splice(i, 0, ...via);
   i += via.length - (movable ? 1 : 0);
 }
+return points;
+}
+repair(points);
 console.log(`swept every leg: ${replanned} replanned, ${dropped} unreachable corners dropped, ${blocked.length} still blocked${blocked.length ? ": " + blocked.join("; ") : ""}`);
 let total = 0;
 for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
@@ -176,7 +190,9 @@ for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points
 // nearest its share of the tour; or, with "hops", one short run per cave:
 // its approach point, the mouth, and back.
 const segments = [];
-if (segArg === "hops") for (const t of tour) segments.push([{ ...t.outer }, { ...t.at, cave: t.cave }, { ...t.outer }]);
+// A segment after the first starts at the save's craft too: a cold transit to its first stop.
+const fromStart = (seg) => repair([{ ...START, start: true }, ...leg(START, seg[0]), ...seg]);
+if (segArg === "hops") for (const t of tour) segments.push(fromStart([{ ...t.outer }, { ...t.at, cave: t.cave }, { ...t.outer }]));
 else {
   const along = [0];
   for (let i = 1; i < points.length; i++) along.push(along[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z));
@@ -189,38 +205,11 @@ else {
     cuts.push(options.reduce((b, i) => Math.abs(along[i] - total * k / SEGMENTS) < Math.abs(along[b] - total * k / SEGMENTS) ? i : b));
   }
   cuts.push(points.length - 1);
-  for (let k = 0; k < SEGMENTS; k++) segments.push(points.slice(cuts[k], cuts[k + 1] + 1));
+  for (let k = 0; k < SEGMENTS; k++) segments.push(k === 0 ? points.slice(0, cuts[1] + 1) : fromStart(points.slice(cuts[k], cuts[k + 1] + 1)));
 }
-// The real late state: the creel route through its refits phase.
-const { Driver } = await import(B + "scripts/playthrough/driver.js");
-const { LIVE_PHASES } = await import(B + "scripts/playthrough/live.js");
-const { SaveSlot, loadSnapshot } = await import(B + "scripts/playthrough/persistence.js");
-const { runPhases } = await import(B + "scripts/playthrough/runner.js");
-await (await import(B + "scripts/playthrough/content.js")).loadCampaign();
-const slot = new SaveSlot("cw1-traversal");
-// The live phases reach the refits state; later states (the divide phase's 800 m Creel) need the creel route's later phases.
-const later = LIVE_PHASES.some(p => p.id === SNAPSHOT) ? [] : (await import(B + "scripts/playthrough/later.js")).CREEL_LATER;
-const run = await runPhases(new Driver("creel", "creel"), [...LIVE_PHASES, ...later], { readOptional: true, reverse: false, verbose: false }, slot);
-console.log(run.phases.map((p) => `${p.id}:${p.status}`).join(" "));
-const base = loadSnapshot(slot.snapshots.get(SNAPSHOT));
-segments.forEach((seg, k) => {
-  const s = structuredClone(base), dart = s.fleet.vehicles.find(v => v.hull === HULL);
-  if (!dart || dart.rating < -DEEPEST + 10) throw new Error(`no ${HULL} rated below ${-DEEPEST} m in the ${SNAPSHOT} state (${dart?.rating})`);
-  const p0 = seg[0];
-  dart.pose = { ...dart.pose, frame: "world", position: { x: p0.x, y: p0.y, z: p0.z }, yaw: 0, pitch: 0 };
-  dart.velocity = { x: 0, y: 0, z: 0 }; dart.charge = 100; dart.health = 100; dart.disabled = false;
-  s.player.controlledVehicleId = dart.id; s.player.mode = "piloting"; s.player.interiorId = null; s.player.interiorPose = null;
-  s.player.pose = { frame: "world", position: { ...dart.pose.position }, yaw: 0, pitch: 0 };
-  s.player.vitals = { health: 100, oxygen: 100, food: 100 };
-  const meta = { sessionId: "cw1-traversal", createdAt: "2026-10-22T00:00:00.000Z",
-    savedAt: new Date(Date.parse("2026-10-22T00:00:00.000Z") + s.tick * 1000 / 60).toISOString() };
-  const e = encodeSave(createEnvelope(s, meta));
-  if (!e.ok) throw new Error(`segment ${k}: ${e.error}`);
-  const back = decodeSave(e.value);
-  if (!back.ok) throw new Error(`segment ${k}: ${back.error}`);
-  writeFileSync(path.join(out, `seg${k}.json`), e.value);
-});
-writeFileSync(path.join(out, "plan.json"), JSON.stringify({ totalMetres: Math.round(total), stops: tour, segments }, null, 1));
+// Every segment's save is the library save itself, unedited.
+segments.forEach((_, k) => copyFileSync(saveFile, path.join(out, `seg${k}.json`)));
+writeFileSync(path.join(out, "plan.json"), JSON.stringify({ save: { kind: SAVE, file: saveFile, start: START }, totalMetres: Math.round(total), stops: tour, segments }, null, 1));
 console.log(`${tour.length} caves, ${Math.round(total)} m, ${segments.length} segments:`,
   segments.map(s => `${s.filter(p => p.cave).length} caves`).join(", "));
 console.log("regions", [...new Set(tour.map(s => s.region))].join(", "));

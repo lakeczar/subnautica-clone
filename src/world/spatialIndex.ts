@@ -82,7 +82,44 @@ export function* buildSpatialIndex<T = unknown>(
       e => ok(e) && boxDistance(e.bounds, p) <= radius);
   };
 
+  // dataInBox's query and hit buffer (indices), reused; they never outlive a call.
+  let hits = new Int32Array(64), hitCount = 0;
+  let qKind: SpatialKind = "solid", qMinX = 0, qMaxX = 0, qMinY = 0, qMaxY = 0, qMinZ = 0, qMaxZ = 0;
+  const test = (i: number): void => {
+    if (seen[i] === stamp) return;
+    seen[i] = stamp;
+    const e = list[i]!, b = e.bounds;
+    if (e.kind === qKind && b.min.x <= qMaxX && b.max.x >= qMinX && b.min.y <= qMaxY && b.max.y >= qMinY && b.min.z <= qMaxZ && b.max.z >= qMinZ) {
+      if (hitCount === hits.length) { const grown = new Int32Array(hits.length * 2); grown.set(hits); hits = grown; }
+      hits[hitCount++] = i;
+    }
+  };
   return {
+    dataInBox(box, kind, out) {
+      if (++stamp === 0xffffffff) { seen.fill(0); stamp = 1; }
+      hitCount = 0;
+      qKind = kind; qMinX = box.min.x; qMaxX = box.max.x; qMinY = box.min.y; qMaxY = box.max.y; qMinZ = box.min.z; qMaxZ = box.max.z;
+      const minX = qMinX, maxX = qMaxX, minZ = qMinZ, maxZ = qMaxZ;
+      for (let k = 0; k < oversize.length; k++) test(oversize[k]!);
+      const x0 = cell(minX), x1 = cell(maxX), z0 = cell(minZ), z1 = cell(maxZ);
+      if ((x1 - x0 + 1) * (z1 - z0 + 1) > cells.size) {
+        for (const bucket of cells.values()) for (let k = 0; k < bucket.length; k++) test(bucket[k]!);
+      } else {
+        for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+          const bucket = cells.get(key(ix, iz));
+          if (bucket) for (let k = 0; k < bucket.length; k++) test(bucket[k]!);
+        }
+      }
+      // Ascending index order, as inBox: insertion sort (hits are few, and arrive nearly sorted).
+      for (let k = 1; k < hitCount; k++) {
+        const v = hits[k]!;
+        let j = k - 1;
+        for (; j >= 0 && hits[j]! > v; j--) hits[j + 1] = hits[j]!;
+        hits[j + 1] = v;
+      }
+      for (let k = 0; k < hitCount; k++) out[k] = list[hits[k]!]!.data as T;
+      return hitCount;
+    },
     get size() { return list.length; },
     get(id) { return byId.get(id); },
     inBox(box: Aabb, kinds) {
