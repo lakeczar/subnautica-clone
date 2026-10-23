@@ -19,8 +19,8 @@
 // derives from the valid ones only: the worst gap (a maximum over valid gaps),
 // the gaps over the limit, attribution (true only when every per-frame record
 // has a valid total and a valid split for every part the streaming rule
-// needs), streaming frames, hold frames, and whether the interval's evidence
-// is complete. A known violation is kept even when other observations in the
+// needs), streaming frames (proven field by field: valid parts alone may
+// prove one), hold frames, and whether the interval's evidence is complete. A known violation is kept even when other observations in the
 // same interval are invalid; an invalid one only makes the interval incomplete.
 
 export const DOMAINS = Object.freeze({
@@ -123,8 +123,13 @@ function frames(name, raw, bad) {
     const recs = raw.records;
     const usable = (r) => r && valid("frameMs", r.total) && r.parts && STREAMING_PARTS.every((p) => valid("splitMs", r.parts[p]));
     const ok = recs.filter(usable), broken = recs.length - ok.length;
-    // Streaming violations from valid records only; a broken record never counts as no streaming work.
-    f.streaming = ok.filter((r) => r.total > overMs && STREAMING_PARTS.reduce((a, p) => a + r.parts[p], 0) >= r.total / 2).map((r) => r.total);
+    // Streaming violations, judged field by field (R6-F2): with a valid total
+    // over the limit, the valid streaming parts alone proving at least half of
+    // the frame make it streaming's, whatever the other parts say (parts are
+    // nonnegative, so a missing one can only add). A missing or invalid part
+    // only makes the rest of the record unattributed; it never counts as zero.
+    const knownStreaming = (r) => STREAMING_PARTS.reduce((a, p) => a + (valid("splitMs", r.parts?.[p]) ? r.parts[p] : 0), 0);
+    f.streaming = recs.filter((r) => r && valid("frameMs", r.total) && r.total > overMs && knownStreaming(r) >= r.total / 2).map((r) => r.total);
     if (broken) {
       const r = recs.find((x) => !usable(x));
       bad("frames.records", r?.total, `frameMs with a splitMs for each of ${STREAMING_PARTS.join(", ")} (${broken} of ${recs.length} records)`);

@@ -526,3 +526,28 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - LC cap and collar walls (no clear-start move ends in a pose LC rejects);
   - **collars and other collision bakes happen offline** (WK-1's bake pipeline), never at runtime (stage A measured 9–14 s for 0.25 m collars);
   - **collar corners stored per cell only where needed**, to recover memory.
+
+### 2026-10-23 ~12:15Z — CW-1 and SAVE-1 done; reviews out; SIM-1 resumed
+- **Usage limit:** about 11:00–12:00Z. Builders auto-resumed at 12:00.
+- **CW-1 done** at `d62586c` (code `e935e4f`); Sol R1 `siltwake-cw1-review-r1-sol-d62586c`.
+  - The 3090 1080p traversal had 0 holds and 0 unsliced builds in travel, but the 34 ms gate fails on 24 frames, mostly in runs marked `DISTURBED`.
+  - Clean 3090 frame evidence is missing; the root fix is TST-16 (light-work slice), assigned to the SCHED-2 builder after 2b.
+  - The 4070 control passes.
+- **SAVE-1 done** at `f86dd48` (unpushed; a docs conflict with root); Sol R1 `siltwake-save1-review-r1-sol-f86dd48`.
+  - **Store:** 73 bot-earned saves per export at `/work/tmp/siltwake-saves/<sha>/`, 16 named kinds, with tour-ready fitting a 27.2 km lap at cruise.
+  - **Merge gate addition, after SAVE-1 merges:** run `scripts/saves-export.sh` after each root merge.
+  - **UI finding:** a dying battery gets only a sound cue, no notice (for SIG-1 or a UX pass).
+- **COL-1 A R6** (`89c3158`): one P2, the floor snap flips triangles (`meridian_culvert_north` support is 0.75 m off). **COL-1 now owns the snap/seam step** in `caveGeometry.ts` for this fix.
+- **Soak R7** (`7810194`): 2 P2s, plus 3 of 6 mutants survive the property tests. Queued after the SCHED-2b R2 fixes, then TST-16.
+- **SIM-1 resumed.** Builders: REC-1, SCHED-2, COL-1, SIM-1 active; CW-1 and SAVE-1 in review.
+
+### 2026-10-23 — soak harness accepted; SAVE-1 R2; SCHED-2b R3
+- **Soak reducer accepted** by Sol R8 (`review/sched-2a-soak-r8` `79c752c1`) after R1–R7. Merged into root as `fd2e5fe`; the gate passed (1,370 tests, build, economy). **Soak verdicts are evidence now.**
+  - **P3 follow-up:** five reviewer mutants survive the example suite (the reviewer's probes kill them). Add those probes as tests.
+  - **P3:** one conservative timestamp false failure.
+- **SAVE-1 R1 fixes** at `4690311`:
+  - the factory-fallback export now runs end to end (25 min, 73 saves, byte-identical with alickers);
+  - the library holds `0a464bc`, `1d4d2c3` and `dabaa79`;
+  - Sol R2 dispatched.
+- **SCHED-2b R3** (`2c78ac0`): 2 P2s (claim/scope crash boundary, cross-boot identity reuse), plus a request for a supported operator `release-remote`. Fixes are in progress.
+- **CW-1 R1** (`2bf88b4`): 2 P2s (admission escapes the load screen; recovery state leaks across saves), and **the 3090 spikes look like real main-thread work** (renderer on-CPU, PSI ≤ 1% in 22/24). CW-1 is profiling them.
