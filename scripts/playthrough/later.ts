@@ -55,7 +55,7 @@ const sites = (...ids: string[]): Missing[] => ids.flatMap(need.site);
 
 /** Fly an S2 route (validated by S2's swept corridor tests, and again here by the
  * game's own hull sweep). Reversed for return journeys. */
-export function followS2(d: Driver, id: string, reverse = false): void {
+function followS2(d: Driver, id: string, reverse = false): void {
   eatIfHungry(d);
   const r = s2Route(id);
   const path = reverse ? [...r.path].reverse() : [...r.path];
@@ -183,7 +183,7 @@ function story(d: Driver, id: string, o: PlayOptions): void {
   if (!d.knows(id)) throw new Blocked(`Interacting with ${id} recorded nothing: ${d.state.feedback}`, where(d.state));
 }
 /** Gather a source from the craft into its hold, a diver load per sortie. */
-export function harvest(d: Driver, id: string, want: number, options: { sort?: boolean } = {}): void {
+function harvest(d: Driver, id: string, want: number, options: { sort?: boolean } = {}): void {
   const def = SOURCES[id as SourceId];
   let got = 0;
   for (let trip = 0; trip < 6 && got < want; trip++) {
@@ -239,7 +239,7 @@ function boardHearthline(d: Driver): void {
   }
   carrierIn(d);
 }
-export function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
+function homeAndUnload(d: Driver, legs: readonly [string, boolean][]): void {
   for (const [id, reverse] of legs) followS2(d, id, reverse);
   fly(d, "basin_return");
   fly(d, "creel_home");

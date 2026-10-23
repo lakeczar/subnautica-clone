@@ -3,7 +3,8 @@
  * phase: a diver who overstays on suit air, a Dart flown until its battery is
  * empty and brought home on its reserve cells, and late gear taken back to an
  * early region. Nothing writes the state. */
-import { HULL_COLLIDERS, SOURCES } from "../../src/content/registry.js";
+import { HULL_COLLIDERS, RECIPES, SOURCES } from "../../src/content/registry.js";
+import { CANOPY_BASIN_ROUTE } from "../../src/content/routes.js";
 import type { ItemKind } from "../../src/content/registry.js";
 import { HULL_SLOTS } from "../../src/content/upgrades/catalogue.js";
 import { slotOf } from "../../src/sim/upgrades/fitting.js";
@@ -14,13 +15,13 @@ import { board, move, reach } from "./actions.js";
 import { Blocked, where } from "./driver.js";
 import type { Driver } from "./driver.js";
 import { KINDS, LOW_AIR_PERCENT } from "./kinds.js";
-import { boardCraft, followS2, harvest, homeAndUnload } from "./later.js";
-import { dockAndService, ISLES, make, PUMPHOUSE_RUN } from "./live.js";
+import { boardCraft } from "./later.js";
+import { dockAndService, ISLES, make, PUMPHOUSE_RUN, stowHold, workFrom } from "./live.js";
 import type { Phase } from "./live.js";
 import { breathe, enter, surface, surfaceTo } from "./nav.js";
 import { all, custom } from "./outcomes.js";
 import type { Outcome } from "./outcomes.js";
-import { fly } from "./routes.js";
+import { fly, pilotTo } from "./routes.js";
 import { route, travel } from "./travel.js";
 
 /** A kind's own facts as a phase outcome, so the phase cannot pass without them. */
@@ -71,18 +72,24 @@ export const TOUR_LAP_METRES = 27_215;
 const LAP_OUT = [...PUMPHOUSE_RUN.slice(1)].map((p) => ({ ...p }));
 const LAP_BACK = [...PUMPHOUSE_RUN].reverse().slice(1).map((p) => ({ ...p }));
 
-/** Thermal cores the two upgrades need, from the Rift's lower ledge by Creel if home has too few. */
-function coresForUpgrades(d: Driver): void {
-  const need = 3, have = d.count("thermal_core", ["diver", "workshop_locker", "pod_locker"]);
+/** The upgrades' conductive crust, by Dart from the Canopy's upper grounding fins
+ * as the canopy phase gathers it, when home holds too little. */
+function crustByDart(d: Driver): void {
+  const need = TOUR_UPGRADES.reduce((n, k) => n + (RECIPES[k].cost.conductive_crust ?? 0), 0);
+  const have = d.count("conductive_crust", ["diver", "workshop_locker"]);
   if (have >= need) return;
-  boardCraft(d, "creel");
-  fly(d, "creel_out");
-  fly(d, "basin_outbound");
-  followS2(d, "route.basin.legacy_anchorage");
-  followS2(d, "route.basin.rift");
-  harvest(d, "rift_core_lower_north", need - have, { sort: true });
-  followS2(d, "route.basin.rift", true);
-  homeAndUnload(d, [["route.basin.legacy_anchorage", true]]);
+  const dart = d.vehicle("dart")!;
+  reach(d, dart.id);
+  board(d, dart.id);
+  fly(d, "dart_out");
+  fly(d, "canopy_upper");
+  pilotTo(d, "park by canopy_grounding_fins_upper", { x: 98, y: -84, z: -92 }, { quiet: true });
+  workFrom(d, d.vehicle("dart")!, ["canopy_grounding_fins_upper"], { conductive_crust: need - have });
+  pilotTo(d, "back to the lab parking", CANOPY_BASIN_ROUTE.labParking, { quiet: true });
+  fly(d, "canopy_upper_back");
+  fly(d, "dart_home");
+  dockAndService(d, d.vehicle("dart")!);
+  stowHold(d, d.vehicle("dart")!);
 }
 
 export const tourFit: Phase = {
@@ -90,7 +97,10 @@ export const tourFit: Phase = {
   verify: kindFacts("tour-ready"),
   missing: () => [],
   play(d) {
-    coresForUpgrades(d);
+    const cores = TOUR_UPGRADES.reduce((n, k) => n + (RECIPES[k].cost.thermal_core ?? 0), 0);
+    if (d.count("thermal_core", ["diver", "workshop_locker"]) < cores)
+      throw new Blocked(`The tour upgrades need ${cores} thermal cores; home holds ${d.count("thermal_core", ["diver", "workshop_locker"])}`, where(d.state));
+    crustByDart(d);
     const dart = d.vehicle("dart")!;
     // Free both sockets: whatever is socketed goes back to the workshop locker.
     enter(d, "workshop");

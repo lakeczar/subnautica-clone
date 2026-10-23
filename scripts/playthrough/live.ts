@@ -178,7 +178,7 @@ export function dockAndService(d: Driver, v: VehicleState): void {
 
 /** From the helm: exit, collect from each source while air allows, ferry the diver
  * hold into the craft hold, re-board. The craft stays parked within reach. */
-function workFrom(d: Driver, v: VehicleState, sources: readonly SourceId[], want: Partial<Record<string, number>>): void {
+export function workFrom(d: Driver, v: VehicleState, sources: readonly SourceId[], want: Partial<Record<string, number>>): void {
   exitHere(d);
   const left: Record<string, number> = { ...want } as Record<string, number>;
   for (const id of sources) {
