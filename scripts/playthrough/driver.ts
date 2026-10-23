@@ -1,11 +1,13 @@
 /** The playthrough driver: it plays the real simulation through the same two
- * entry points the app uses. Held controls (move, look) go through `stepGame`,
- * one fixed step at a time; key presses and panel buttons go through
- * `executeCommand`. Nothing here writes game state directly. */
+ * entry points the app uses, through the same `StepGuard`. Held controls (move,
+ * look) step the live state in place, one fixed step at a time; key presses
+ * and panel buttons go through `executeCommand`. Nothing here writes game state
+ * directly. */
 import fs from "node:fs";
 import { ITEMS, RECIPES, SOURCES, techRecord } from "../../src/content/registry.js";
 import type { ItemKind, RecipeId } from "../../src/content/registry.js";
-import { executeCommand, stepGame } from "../../src/sim/step.js";
+import { executeCommand } from "../../src/sim/step.js";
+import { StepGuard } from "../../src/sim/stepGuard.js";
 import { createGame } from "../../src/sim/state.js";
 import { gameWorld } from "../../src/sim/world.js";
 import { cabinHull } from "../../src/sim/fleet.js";
@@ -54,6 +56,14 @@ function heartbeat(): void {
   try { fs.writeFileSync(HEARTBEAT, ""); } catch { /* the queue's concern, never the run's */ }
 }
 
+/** Sees every step and command a driver applies (the SIM-1 differential). */
+export interface DriverObserver {
+  tick(d: Driver, controls: readonly GameCommand[], events: readonly GameEvent[]): void;
+  command(d: Driver, command: GameCommand, result: { state: GameState; events: GameEvent[] }): void;
+}
+/** Set before scenarios run to observe every driver they create. */
+export const driverHooks: { attach: ((d: Driver) => DriverObserver | null) | null } = { attach: null };
+
 export class Driver {
   state: GameState;
   readonly world: WorldQueries = gameWorld();
@@ -69,7 +79,12 @@ export class Driver {
     this.state = state;
     this.run = emptyRun(scenario, strategy);
     for (const id of knownRecords(state)) this.known.add(id);
+    this.observer = driverHooks.attach?.(this) ?? null;
   }
+  private readonly guard = new StepGuard();
+  private readonly observer: DriverObserver | null;
+  /** Exposed stock before the step in flight, by resource index (reused). */
+  private readonly stocks: number[] = [];
 
   get player(): GameState["player"] { return this.state.player; }
   /** The craft whose air, power and hull the player depends on now. */
@@ -82,14 +97,20 @@ export class Driver {
 
   /** One fixed step with the given held controls, exactly as the app's frame loop. */
   tick(controls: readonly GameCommand[] = [IDLE]): GameEvent[] {
-    const before = this.state;
-    const failures = before.metrics.failures;
-    const result = stepGame(before, controls, this.world);
-    this.accept(before, result.state, result.events);
-    if ((result.state.tick & 1023) === 0) heartbeat();
-    if (result.state.metrics.failures > failures && !this.expectFailure)
-      throw new Blocked(`Incapacitated: ${result.state.feedback}`, where(before));
-    return result.events;
+    const s = this.state, failures = s.metrics.failures;
+    this.recordStocks(s);
+    const events = this.guard.step(s, controls, this.world);
+    this.accept(s, events);
+    this.observer?.tick(this, controls, events);
+    if ((s.tick & 1023) === 0) heartbeat();
+    if (s.metrics.failures > failures && !this.expectFailure)
+      throw new Blocked(`Incapacitated: ${s.feedback}`, where(s));
+    return events;
+  }
+  private recordStocks(s: GameState): void {
+    const r = s.world.resources;
+    this.stocks.length = r.length;
+    for (let i = 0; i < r.length; i++) this.stocks[i] = r[i]!.stock;
   }
   /** Set while an adverse scenario deliberately loses a craft or the diver. */
   expectFailure = false;
@@ -107,7 +128,7 @@ export class Driver {
 
   /** The command entry point: the game's executeCommand. Tests may substitute a
    * faulty one to prove that a success response without its effect blocks. */
-  exec: typeof executeCommand = executeCommand;
+  exec: typeof executeCommand = (s, c, w) => this.guard.command(s, c, w);
   /** A key press or panel button. Throws Blocked on a refusal unless `refusal` is
    * allowed, and on an accepted command whose effect is missing from the state. */
   command(command: GameCommand, options: { allowRefusal?: boolean } = {}): { ok: boolean; message: string; events: GameEvent[] } {
@@ -120,7 +141,9 @@ export class Driver {
       if (!options.allowRefusal) throw new Blocked(`${JSON.stringify(command)} refused: ${error.message}`, where(before));
       return { ok: false, message: error.message, events: result.events };
     }
-    this.accept(before, result.state, result.events);
+    this.recordStocks(before);
+    this.accept(result.state, result.events);
+    this.observer?.command(this, command, result);
     const problems = commandEffect(command, before, result.state, this.world, result.events);
     if (problems.length) throw new Blocked(`${JSON.stringify(command)} was accepted but ${problems.join("; ")}`, where(result.state));
     if (command.type === "craft") this.paid(command.recipeId);
@@ -139,7 +162,8 @@ export class Driver {
 
   private bump(into: Record<string, number>, kind: string, n: number): void { into[kind] = (into[kind] ?? 0) + n; }
 
-  private accept(before: GameState, after: GameState, events: GameEvent[]): void {
+  /** Bookkeeping for the step or command just applied; `this.stocks` holds the stock before it. */
+  private accept(after: GameState, events: GameEvent[]): void {
     this.state = after;
     this.lastEvents = events;
     for (const e of events) if (e.type === "notice" && e.channel === "hazard") {
@@ -148,11 +172,11 @@ export class Driver {
     }
     // Gathered: exposed stock leaves a source only by collection, tool arms or a frame lift.
     for (let i = 0; i < after.world.resources.length; i++) {
-      const a = before.world.resources[i]!, b = after.world.resources[i]!;
-      if (b.stock < a.stock) {
+      const was = this.stocks[i]!, b = after.world.resources[i]!;
+      if (b.stock < was) {
         const kind = SOURCES[b.id].item;
-        this.bump(this.run.gathered, kind, a.stock - b.stock);
-        this.onGather?.(kind, a.stock - b.stock);
+        this.bump(this.run.gathered, kind, was - b.stock);
+        this.onGather?.(kind, was - b.stock);
       }
     }
     for (const id of knownRecords(after)) if (!this.known.has(id)) {

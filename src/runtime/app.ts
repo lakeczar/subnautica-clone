@@ -1,7 +1,7 @@
 import { armTarget, fittedCabin } from "../sim/fleet.js";
 import { SiltwakeAudio } from "../audio/director.js";
 import { worldRegionAt } from "../render/regions.js";
-import { executeCommand, stepGame } from "../sim/step.js";
+import { StepFault, StepGuard } from "../sim/stepGuard.js";
 import { gameWorld } from "../sim/world.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
@@ -44,6 +44,8 @@ const BLOCKED_ASCENT_SECONDS = 0.45;
 const ASCENT_EPSILON = 1e-5;
 /** Lets a pause or menu draw before idle region preparation may block a frame. */
 const IDLE_PREPARE_MS = 250;
+/** Vite's development build (false in production and in Node tests). */
+const DEV = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV === true;
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : "An unknown error occurred.";
 
@@ -137,6 +139,9 @@ export class SiltwakeApp {
   private ascentActor: string | null = null;
   private lastBoundaryNotice = -Infinity;
   private settings = readSettings();
+  /** SIM-1: the live state steps in place; a throw restores it (development
+   * builds also check every 10th checkpoint's replay against the live state). */
+  private readonly guard = new StepGuard({ verifyEvery: DEV ? 10 : 0 });
   /** Local-only play timeline (SYS-2, C4): never in the save, never sent. */
   private timeline: TimelineRecorder | null = null;
   private timelineSaved = 0;
@@ -358,12 +363,14 @@ export class SiltwakeApp {
       const gesture = this.sampleGesture();
       const controls = this.helm.apply(this.state, this.input?.sample() ?? []);
       this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
-      const result = stepGame(
-        this.state,
-        [...controls, ...gesture],
-        this.world,
-      );
-      this.session.state = result.state;
+      // SIM-1: the live state steps in place; the guard keeps a throw atomic.
+      let result: { state: GameState; events: GameEvent[] };
+      try {
+        result = { state: this.state, events: this.guard.step(this.state, [...controls, ...gesture], this.world) };
+      } catch (error) {
+        this.simulationFault(error);
+        return;
+      }
       this.events(result.events);
       this.observeTimeline(result.state, [...controls, ...gesture], result.events);
       this.observeAscent(result.events);
@@ -565,6 +572,18 @@ export class SiltwakeApp {
     this.dirty = true;
   }
 
+  /** SIM-1: a simulation exception. The guard has already restored the live
+   * state, so saving and export stay safe: pause and say so. Development
+   * builds also rethrow, so the fault is loud there. */
+  private simulationFault(error: unknown): void {
+    console.error(error);
+    const restored = !(error instanceof StepFault) ? "is unchanged"
+      : error.restored === "exact" ? "was restored to the moment before the fault"
+      : "was restored to its last checkpoint, up to a second earlier";
+    this.pause(`Simulation fault · the expedition ${restored}; saving and export are safe. ${errorText(error)}`);
+    if (DEV) queueMicrotask(() => { throw error; });
+  }
+
   private events(events: readonly GameEvent[]): void {
     for (const event of events) {
       if (event.type === "notice") this.view.notify(event.message, event.error, event, this.state);
@@ -659,7 +678,9 @@ export class SiltwakeApp {
       return;
     this.sound.activate();
     const actor = `${this.state.player.mode}/${this.state.player.controlledVehicleId ?? "diver"}`;
-    const result = executeCommand(this.state, command, this.world);
+    let result: { state: GameState; events: GameEvent[] };
+    // A throw inside a command never touches the live state (executeCommand's draft).
+    try { result = this.guard.command(this.state, command, this.world); } catch (error) { this.simulationFault(error); return; }
     this.session.state = result.state;
     if (actor !== `${result.state.player.mode}/${result.state.player.controlledVehicleId ?? "diver"}`) this.resetAscent();
     this.validateGesture();
