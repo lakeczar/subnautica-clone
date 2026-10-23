@@ -20,6 +20,7 @@ test("oracle smoke: the dishes and A1's set pieces as art agree with their box c
     assert.equal(r.clearance.spurious, 0, `${scene.id}: ${JSON.stringify(r.examples.slice(0, 3))}`);
     assert.equal(r.sight.newOnlyBlockedOutsideArt, 0, scene.id);
     assert.equal(r.moves.spurious, 0, `${scene.id}: ${JSON.stringify(r.examples.slice(0, 3))}`);
+    assert.equal(r.moves.endIllegal, 0, `${scene.id}: ${JSON.stringify(r.examples.slice(0, 3))}`);
     assert.deepEqual(r.protected.newlyBlocked, [], scene.id);
     assert.ok(r.clearance.agree > r.clearance.tried * 0.8, `${scene.id}: ${JSON.stringify(r.clearance)}`);
   }

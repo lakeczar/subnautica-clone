@@ -20,6 +20,7 @@ for (const make of [dishScene, vistaScene]) {
     assert.equal(r.sight.newOnlyBlockedOutsideArt, 0, `${scene.id}: sight blocked without art`);
     // A move stopped where the old one went free stops at art on its path.
     assert.equal(r.moves.spurious, 0, `${scene.id}: ${JSON.stringify(r.examples.filter(e => e.kind.startsWith("new stops")).slice(0, 4))}`);
+    assert.equal(r.moves.endIllegal, 0, `${scene.id}: ${JSON.stringify(r.examples.filter(e => e.kind.startsWith("new move ends")).slice(0, 4))}`);
     assert.ok(r.clearance.newClearOldBlocked > 0, `${scene.id}: the art frees nothing the boxes held: no stand-off measured`);
   });
 }
@@ -35,7 +36,11 @@ test("caves (CA-1 colonnade): the heightfield collar never blocks what the colum
   // The heightfield is never above the columns where it replaces them: it frees, never blocks.
   assert.ok(heightfield.clearance.oldClearNewBlocked <= columns.clearance.oldClearNewBlocked,
     `heightfield ${heightfield.clearance.oldClearNewBlocked} vs columns ${columns.clearance.oldClearNewBlocked} newly blocked poses`);
-  console.log(JSON.stringify({ shellNewlyBlocked: shell.protected.newlyBlocked, columnsNewlyBlocked: columns.protected.newlyBlocked }));
+  // The shell, judged on its own: no stop without art on the path, no protected
+  // route or pose blocked, and no variant's move ends illegal in its caves.
+  assert.equal(shell.moves.spurious, 0, JSON.stringify(shell.examples.slice(0, 3)));
+  assert.deepEqual(shell.protected.newlyBlocked, [], "the shell blocks a protected route or pose");
+  for (const r of [columns, heightfield, shell]) assert.equal(r.moves.endIllegal, 0, `${r.scene}: ${JSON.stringify(r.examples.filter(e => e.kind.startsWith("new move ends")).slice(0, 3))}`);
 });
 
 test("cave biome (LC Canopy): the compact format answers as LC's chunk colliders; first contacts are LC's exactly", () => {
@@ -46,6 +51,7 @@ test("cave biome (LC Canopy): the compact format answers as LC's chunk colliders
   assert.equal(r.sight.agree, r.sight.tried);
   assert.deepEqual([r.protected.newlyBlocked, r.protected.newlyCleared], [[], []]);
   assert.ok(scene.after.bytes < scene.lcBytes * 0.5, `compact ${scene.after.bytes} B vs LC ${scene.lcBytes} B`);
+  assert.equal(r.moves.endIllegal, 0, JSON.stringify(r.examples.slice(0, 3)));
   // Moves may differ only by a slide after a tie: LC keeps whichever tied
   // contact its storage order meets first; the compact collider breaks ties
   // by geometry. Every first contact (hit, time) is LC's, bit for bit.

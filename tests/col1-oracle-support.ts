@@ -54,6 +54,9 @@ export interface OracleScene {
   readonly after: StaticCollider;
   /** Old-world solids replaced (for memory measurement). */
   readonly oldSolids: readonly Solid[];
+  /** Whether a pose is illegal by the new collider, in the space it answers
+   * for (a structure collider everywhere, a cave inside what it owns). */
+  readonly illegalEnd: (p: Vec3, shape: Capsule) => boolean;
 }
 
 const grow = (b: Aabb, r: number): Aabb => ({ min: { x: b.min.x - r, y: b.min.y - r, z: b.min.z - r }, max: { x: b.max.x + r, y: b.max.y + r, z: b.max.z + r } });
@@ -112,6 +115,7 @@ function structureScene(id: string, label: string, replaced: (s: Solid) => boole
     id, label, regions, old: productionWorld(), neo, art: collider, seeds: seedsOf(members),
     shapes: [{ id: "diver", shape: DIVER }, { id: "small", shape: SMALL }, { id: "medium", shape: MEDIUM }],
     paths, poses, before: { boxes: oldSolids.length, note }, after: collider, oldSolids,
+    illegalEnd: (p, shape) => { const { c, e } = boxOf(p, shape); return collider.overlaps(c, e); },
   };
 }
 
@@ -218,6 +222,7 @@ export function caveScenes(ids: readonly string[] = ["reef_archlet", "reef_bellh
       shapes: [{ id: "diver", shape: DIVER }, { id: "small", shape: SMALL }], paths: prot.paths, poses: prot.poses,
       before: { boxes: oldBoxes, note: "rock boxes plus 0.5 m collar columns" }, after: createStaticCollider(`colonnade.${v}`, members),
       oldSolids: defs.flatMap(d => [...d.rock, ...collarColumns(d, surfaceHeight, CAVE_BAND, defs)]),
+      illegalEnd: (p, shape) => ownedIllegal(caves, p, shape),
     };
   };
   return { production, variants: { columns: variant("columns"), heightfield: variant("heightfield"), shell: variant("shell") } };
@@ -263,7 +268,14 @@ export function biomeScene(): OracleScene & { readonly lcBytes: number; readonly
     paths: routes.map(r => ({ id: r.id, shape: shapeOf(r.profile as CraftProfileId), path: r.path.map(p => ({ ...p })) })), poses: [],
     before: { boxes: 0, note: "LC chunk colliders (triangles, Uint32 indices, 32-byte nodes, copied positions)" },
     after: biome.collider, oldSolids: [], lcBytes, chunks: built.length, lc, compact,
+    illegalEnd: (p, shape) => ownedIllegal([compact], p, shape),
   };
+}
+
+/** Blocked by a cave whose owned space the pose's box reaches. */
+function ownedIllegal(caves: readonly CaveCollider[], p: Vec3, shape: Capsule): boolean {
+  const { c, e } = boxOf(p, shape), box = { min: { x: c.x - e.x, y: c.y - e.y, z: c.z - e.z }, max: { x: c.x + e.x, y: c.y + e.y, z: c.z + e.z } };
+  return caves.some(cv => cv.touches(box) && cv.blocked(c, e));
 }
 
 // --- Probes ------------------------------------------------------------------------
@@ -276,7 +288,7 @@ export interface ProbeResult {
   /** freed: the new move went free where the old hit; oldThroughArt: the old
    * went free through the art and the new stops at it; spurious: the new
    * stops with no art on the old straight path; both hit: slides differ. */
-  moves: { tried: number; agree: number; freed: number; freedMax: number; oldThroughArt: number; spurious: number; bothHitSlideDiffers: number; slideDiffMax: number };
+  moves: { tried: number; agree: number; freed: number; freedMax: number; oldThroughArt: number; spurious: number; bothHitSlideDiffers: number; slideDiffMax: number; endIllegal: number };
   support: { tried: number; agree: number; oldHigher: number; newHigher: number; floatMax: number; floatMean: number; newHigherMax: number };
   sight: { tried: number; agree: number; oldOnlyBlocked: number; newOnlyBlocked: number; newOnlyBlockedOutsideArt: number };
   protected: { paths: number; poses: number; newlyBlocked: string[]; newlyCleared: string[] };
@@ -308,7 +320,7 @@ export function probe(scene: OracleScene, o: ProbeOptions): ProbeResult {
   const r: ProbeResult = {
     scene: scene.id,
     clearance: { tried: 0, agree: 0, oldClearNewBlocked: 0, artInsideOldCover: 0, newClearOldBlocked: 0, standOffMax: 0, standOffMean: 0, spurious: 0 },
-    moves: { tried: 0, agree: 0, freed: 0, freedMax: 0, oldThroughArt: 0, spurious: 0, bothHitSlideDiffers: 0, slideDiffMax: 0 },
+    moves: { tried: 0, agree: 0, freed: 0, freedMax: 0, oldThroughArt: 0, spurious: 0, bothHitSlideDiffers: 0, slideDiffMax: 0, endIllegal: 0 },
     support: { tried: 0, agree: 0, oldHigher: 0, newHigher: 0, floatMax: 0, floatMean: 0, newHigherMax: 0 },
     sight: { tried: 0, agree: 0, oldOnlyBlocked: 0, newOnlyBlocked: 0, newOnlyBlockedOutsideArt: 0 },
     protected: { paths: 0, poses: 0, newlyBlocked: [], newlyCleared: [] },
@@ -336,6 +348,8 @@ export function probe(scene: OracleScene, o: ProbeOptions): ProbeResult {
       const d = { x: len * Math.sin(w) * Math.cos(u), y: len * Math.cos(w) * 0.6, z: len * Math.sin(w) * Math.sin(u) };
       const ma = scene.old.moveCapsule(p, d, shape), mb = scene.neo.moveCapsule(p, d, shape), a = ma.position, b = mb.position;
       r.moves.tried++;
+      // Every move from a clear start ends legal by the new collider.
+      if (scene.illegalEnd(b, shape)) { r.moves.endIllegal++; note({ kind: "new move ends illegal", shape: id, at: p, detail: `d ${JSON.stringify(d)} end ${JSON.stringify(b)}` }); }
       const gap = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
       if (gap < 0.02) { r.moves.agree++; continue; }
       if (!mb.hitSolid) { r.moves.freed++; r.moves.freedMax = Math.max(r.moves.freedMax, gap); continue; }
