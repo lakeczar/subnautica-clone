@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { CANOPY_ROOT_CAVES } from "../src/content/caves/canopyRootCaves.js";
 import { AUTHORED_CAVE_SOURCES, caveDef, type CaveDef } from "../src/content/regions/caves.js";
-import { buildCave, caveNeighbours, caveShell, caveVolume, sharedSpans } from "../src/content/regions/caveGeometry.js";
+import { buildCave, caveNeighbours, caveShell, caveVolume, sharedSpans, shellSeamProblems } from "../src/content/regions/caveGeometry.js";
 import { CANOPY_BASIN_GROUPS, groupDef } from "../src/content/regions/caves/index.js";
 import { DEEP_CAVES } from "../src/content/regions/caves/deep.js";
 import { STRUCTURES } from "../src/content/regions/structures.js";
@@ -43,7 +43,7 @@ const voxelInside = (def: CaveDef) => {
   };
 };
 
-test("every kit cave's fine shell, in all three registries, bakes by provenance, has no fold or flip, meets the floor; the cross-check agrees per component", () => {
+test("every kit cave's fine shell, in all three registries, bakes by provenance, has no fold or flip, meets the floor (and so does its coarse shell); the cross-check agrees per component", () => {
   const list = kitDefs(), failures: string[] = [], notes: string[] = [];
   assert.equal(new Set(list.map(k => k.id)).size, 55, "55 distinct kit sources");
   let components = 0, contrary = 0, sampled = 0;
@@ -59,6 +59,11 @@ test("every kit cave's fine shell, in all three registries, bakes by provenance,
       const shared = (x: number, z: number): boolean => spans.some(s => s.axis === "x" ? x === s.at && z >= s.lo && z <= s.hi : z === s.at && x >= s.lo && x <= s.hi);
       const gaps = seamGaps(mesh, f, shared, worldFloor);
       if (gaps.length) failures.push(`${k.id}: ${gaps.length} seam vertices off the floor, e.g. ${JSON.stringify(gaps[0])}`);
+      // The coarse shell's seam and the band lifted onto the floor (art only; no collision).
+      const co = caveShell(def, "coarse"), band = def.surfaces.find(s => s.lod === "coarse")!.voxel * 1.5;
+      const coarseGaps = seamGaps({ positions: co.positions, indices: Uint32Array.from(co.indices) }, f, shared, worldFloor, band);
+      if (coarseGaps.length) failures.push(`${k.id} coarse: ${coarseGaps.length} seam vertices off or below the floor, e.g. ${JSON.stringify(coarseGaps[0])}`);
+      for (const lod of ["fine", "coarse"] as const) failures.push(...shellSeamProblems(def, lod, worldFloor).slice(0, 1));
       const { of, count } = meshComponents(mesh);
       components += count;
       for (const row of probeComponents(mesh, of, new Int8Array(count).fill(1), voxelInside(def))) {

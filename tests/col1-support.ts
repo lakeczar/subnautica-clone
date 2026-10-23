@@ -158,23 +158,27 @@ export function parityContradictions(mesh: TriangleMesh, columns = 3000, limit =
 }
 
 /** Boundary vertices on an unshared footprint side that don't sit on the
- * floor: gaps in the shell's seam with the terrain. */
+ * floor, or (within `band` of one, measured to its nearest side) sit below
+ * it: gaps in the shell's seam with the terrain. */
 export function seamGaps(mesh: TriangleMesh, foot: { minX: number; maxX: number; minZ: number; maxZ: number },
-  shared: (x: number, z: number) => boolean, floor: (x: number, z: number) => number): Vec3[] {
+  shared: (x: number, z: number) => boolean, floor: (x: number, z: number) => number, band = 0): Vec3[] {
   const P = mesh.positions, I = mesh.indices, uses = new Map<number, number>(), nv = P.length / 3, out: Vec3[] = [];
   for (let t = 0; t < I.length / 3; t++) for (let k = 0; k < 3; k++) {
     const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!, e = Math.min(a, b) * nv + Math.max(a, b);
     uses.set(e, (uses.get(e) ?? 0) + 1);
   }
-  const side = (x: number, z: number): boolean => x === foot.minX || x === foot.maxX || z === foot.minZ || z === foot.maxZ;
   const seen = new Set<number>();
   for (const [e, n] of uses) {
     if (n !== 1) continue;
     for (const v of [Math.floor(e / nv), e % nv]) {
       if (seen.has(v)) continue;
       seen.add(v);
-      const x = P[v * 3]!, y = P[v * 3 + 1]!, z = P[v * 3 + 2]!;
-      if (side(x, z) && !shared(x, z) && Math.abs(y - Math.fround(floor(x, z))) > 1e-4) out.push({ x, y, z });
+      const x = P[v * 3]!, y = P[v * 3 + 1]!, z = P[v * 3 + 2]!, off = y - Math.fround(floor(x, z));
+      // The nearest side, and the point on it straight across.
+      const sides: [number, number, number][] = [[x - foot.minX, foot.minX, z], [foot.maxX - x, foot.maxX, z], [z - foot.minZ, x, foot.minZ], [foot.maxZ - z, x, foot.maxZ]];
+      const [d, sx, sz] = sides.reduce((m, s) => s[0] < m[0] ? s : m);
+      if (shared(sx, sz)) continue;
+      if (d === 0 ? Math.abs(off) > 1e-4 : d < band && off < -1e-4) out.push({ x, y, z });
     }
   }
   return out;

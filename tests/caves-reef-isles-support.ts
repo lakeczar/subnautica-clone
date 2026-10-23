@@ -2,7 +2,7 @@
 // Every check takes cave ids and returns its failures, so the region tests
 // assert an empty list and print what broke, by name.
 import { AUTHORED_CAVE_SOURCES, caveDef, MIN_ROCK, type CaveDef, type CavePortal, type CaveSource } from "../src/content/regions/caves.js";
-import { caveNeighbours, caveSampler, caveShell, caveVolume, sharedSpans, type CaveVolume } from "../src/content/regions/caveGeometry.js";
+import { caveNeighbours, caveSampler, caveShell, caveVolume, sharedSpans, shellSeamProblems, type CaveVolume } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
@@ -610,14 +610,8 @@ export function collarFailures(id: string): string[] {
     if (Math.abs(top - floor) > COLLAR_STEP) { out.push(`${id}: collar step ${(top - floor).toFixed(2)} m at ${x}, ${z}`); break; }
   }
   collarSteps.set(id, worstStep);
-  for (const m of [shells.fine, shells.coarse]) for (let v = 0; v < m.positions.length / 3; v++) {
-    const p = vertex(m, v);
-    const sides: ["x" | "z", number, number][] = [["x", f.minX, p.z], ["x", f.maxX, p.z], ["z", f.minZ, p.x], ["z", f.maxZ, p.x]];
-    if (!sides.some(([axis, at, along]) => Math.abs((axis === "x" ? p.x : p.z) - at) < 1e-6 && !shared(axis, at, along))) continue;
-    if (spans.some(s => (s.axis === "x" ? Math.abs(p.x - s.at) : Math.abs(p.z - s.at)) < 1e-6 &&
-      (s.axis === "x" ? p.z : p.x) >= s.lo - 1e-6 && (s.axis === "x" ? p.z : p.x) <= s.hi + 1e-6)) continue; // a seam vertex
-    if (Math.abs(p.y - worldFloor(p.x, p.z)) >= 1e-4) { out.push(`${id}: collar vertex ${p.y.toFixed(2)} vs floor ${worldFloor(p.x, p.z).toFixed(2)}`); break; }
-  }
+  // The seam meets the floor at both LODs: on it, or through a skirt (COL-1 R6).
+  for (const lod of ["fine", "coarse"] as const) out.push(...shellSeamProblems(def, lod, worldFloor, shells[lod]).slice(0, 1));
   return out;
 }
 

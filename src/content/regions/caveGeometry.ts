@@ -928,25 +928,32 @@ function generateShell(def: CaveDef, lod: LodLevel): MeshRecipe {
   // collar; lift that band back onto it (coarse makes no rock-bound promise).
   // An edge shared with a neighbour cave is not collar: both shells already
   // meet there exactly, so it is neither snapped nor lifted.
-  const P = clipped.positions as Float32Array, edge = 1e-6, band = lod === "coarse" ? surface.voxel * 1.5 : 0;
-  const sides = [["x", f.minX, 1], ["x", f.maxX, -1], ["z", f.minZ, 1], ["z", f.maxZ, -1]] as const;
-  const collarDistance = (x: number, z: number): number => {
-    let d = Infinity;
-    if (spans.some(s => spanDistance(s, x, z) < edge)) return d; // on the seam itself
-    for (const [axis, at, sign] of sides) {
-      const along = axis === "x" ? z : x;
-      if (spans.some(s => s.axis === axis && s.at === at && along >= s.lo && along <= s.hi)) continue;
-      d = Math.min(d, ((axis === "x" ? x : z) - at) * sign);
-    }
-    return d;
-  };
-  const target = new Float64Array(P.length / 3).fill(NaN), onEdge = new Uint8Array(P.length / 3);
+  const P = clipped.positions as Float32Array, band = collarBand(def, lod);
+  const target = new Float64Array(P.length / 3).fill(NaN);
   for (let v = 0; v < P.length / 3; v++) {
-    const x = P[v * 3]!, z = P[v * 3 + 2]!, d = collarDistance(x, z);
-    if (d < edge) { target[v] = floor(x, z); onEdge[v] = 1; }
+    const x = P[v * 3]!, z = P[v * 3 + 2]!, d = collarDistance(f, spans, x, z);
+    if (d < COLLAR_EDGE) target[v] = floor(x, z);
     else if (d < band) target[v] = Math.max(P[v * 3 + 1]!, floor(x, z));
   }
-  return snapToFloor(clipped, target, onEdge, f, def.id);
+  return snapToFloor(clipped, target, def.id);
+}
+
+const COLLAR_EDGE = 1e-6;
+/** How far inside the footprint the shell is lifted onto the floor at one LOD. */
+function collarBand(def: CaveDef, lod: LodLevel): number {
+  return lod === "coarse" ? def.surfaces.find(s => s.lod === lod)!.voxel * 1.5 : 0;
+}
+/** Distance inside the footprint from its nearest collar side (one not
+ * shared with a neighbour); Infinity on a shared seam. */
+function collarDistance(f: Rect, spans: readonly SharedSpan[], x: number, z: number): number {
+  let d = Infinity;
+  if (spans.some(s => spanDistance(s, x, z) < COLLAR_EDGE)) return d; // on the seam itself
+  for (const [axis, at, sign] of [["x", f.minX, 1], ["x", f.maxX, -1], ["z", f.minZ, 1], ["z", f.maxZ, -1]] as const) {
+    const along = axis === "x" ? z : x;
+    if (spans.some(s => s.axis === axis && s.at === at && along >= s.lo && along <= s.hi)) continue;
+    d = Math.min(d, ((axis === "x" ? x : z) - at) * sign);
+  }
+  return d;
 }
 
 /** Smallest triangle normal (unnormalised, m^2) whose direction counts. */
@@ -984,15 +991,17 @@ function segmentThrough(P: ArrayLike<number>, p: number, q: number, a: number, b
  * flip) and none then passes through another triangle of the shell (a fold).
  * Moves are vertical, so one X/Z bucket grid serves every check; passes
  * repeat while vertices that moved free others. Nearly everywhere every
- * vertex moves, so the shell is as before. A footprint-edge vertex
- * (`onEdge`) that must stay gets a vertical skirt in the footprint's edge
- * plane from it to its floor point, wound coherently with the triangle
- * beside it, so the seam still meets the terrain exactly. Afterwards no
+ * vertex moves, so the shell is as before. Where a vertex must stay, each
+ * open edge at it (the clipped seam, on a footprint side or, in a coarse
+ * shell, cutting just inside one) gets a vertical skirt from it to the
+ * target heights, wound coherently with the triangle beside it: the open
+ * edge lies where the snap would have put it, so the seam still meets the
+ * terrain exactly. Afterwards no
  * triangle faces against its pre-snap normal and no moved triangle crosses
  * another: the mesher's outward winding (`surfaceNets`) holds for the
  * final mesh, which COL-1's collision takes as its orientation. Throws
  * otherwise. */
-function snapToFloor(mesh: MeshRecipe, target: Float64Array, onEdge: Uint8Array, foot: Rect, id: string): MeshRecipe {
+function snapToFloor(mesh: MeshRecipe, target: Float64Array, id: string): MeshRecipe {
   const P = mesh.positions as Float32Array, I = mesh.indices, n = I.length / 3, nv = P.length / 3;
   const pre = Array.from({ length: n }, (_, t) => triangleNormal(P, I, t));
   const incident: number[][] = Array.from({ length: nv }, () => []);
@@ -1046,8 +1055,8 @@ function snapToFloor(mesh: MeshRecipe, target: Float64Array, onEdge: Uint8Array,
     }
     if (!any) break;
   }
-  // Skirts along footprint-edge boundary edges with an end that stayed.
-  const stayed = (v: number): boolean => onEdge[v] === 1 && !moved[v];
+  // Skirts below or above open edges with an end that stayed.
+  const stayed = (v: number): boolean => !Number.isNaN(target[v]!) && !moved[v];
   const uses = new Map<string, number>();
   for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) {
     const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!, e = a < b ? `${a},${b}` : `${b},${a}`;
@@ -1069,12 +1078,9 @@ function snapToFloor(mesh: MeshRecipe, target: Float64Array, onEdge: Uint8Array,
     const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!;
     if (!stayed(a) && !stayed(b)) continue;
     if (uses.get(a < b ? `${a},${b}` : `${b},${a}`) !== 1) continue;
-    // A boundary edge along a footprint side (its other end may be a corner
-    // shared with a neighbour, which never snaps: the skirt still closes it).
-    const ax = P[a * 3]!, az = P[a * 3 + 2]!, bx = P[b * 3]!, bz = P[b * 3 + 2]!;
-    const along = (ax === bx && (ax === foot.minX || ax === foot.maxX)) || (az === bz && (az === foot.minZ || az === foot.maxZ));
-    if (!along) continue;
-    // The triangle runs a -> b; the skirt runs b -> a, so the two agree.
+    // The triangle runs a -> b; the skirt runs b -> a, so the two agree. An
+    // end that moved (or a corner shared with a neighbour, which never
+    // snaps) is already where it belongs: the quad closes to it.
     const a2 = stayed(a) ? below(a) : a, b2 = stayed(b) ? below(b) : b;
     if (a2 !== a) indices.push(b, a, a2);
     if (b2 !== b) indices.push(b, a2, b2);
@@ -1087,6 +1093,33 @@ function snapToFloor(mesh: MeshRecipe, target: Float64Array, onEdge: Uint8Array,
   for (let v = 0; v < nv; v++) if (moved[v] && P[v * 3 + 1] !== Math.fround(target[v]!)) throw new Error(`cave ${id}: vertex ${v} moved partway`);
   return { ...mesh, positions: final, normals: new Float32Array(normals), colors: new Float32Array(colors),
     indices: final.length / 3 > 65535 ? new Uint32Array(indices) : new Uint16Array(indices) };
+}
+
+/** Problems with a shell's seam with the terrain (COL-1 R6): no open edge
+ * of the shell may end off the floor on a collar side, nor (coarse) below
+ * it within the band lifted onto it. The snapped band ends there, and where
+ * a vertex stays (snapping would flip or fold its triangles), a skirt to its
+ * target height closes the mesh. Vertices no open edge reaches (rock a side
+ * cuts, deep below the floor) are sealed. */
+export function shellSeamProblems(def: CaveDef, lod: LodLevel, floor: FloorFunction, mesh: MeshRecipe = caveShell(def, lod)): string[] {
+  const P = mesh.positions, I = mesh.indices, nv = P.length / 3, f = def.replacementFootprints[0]!, out: string[] = [];
+  const spans = sharedSpans(f, caveNeighbours(def)), band = collarBand(def, lod), uses = new Map<number, number>();
+  for (let t = 0; t < I.length / 3; t++) for (let k = 0; k < 3; k++) {
+    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!, e = Math.min(a, b) * nv + Math.max(a, b);
+    uses.set(e, (uses.get(e) ?? 0) + 1);
+  }
+  const seen = new Uint8Array(nv);
+  for (const [e, n] of uses) {
+    if (n !== 1) continue;
+    for (const v of [Math.floor(e / nv), e % nv]) {
+      if (seen[v] || out.length >= 8) continue;
+      seen[v] = 1;
+      const x = P[v * 3]!, y = P[v * 3 + 1]!, z = P[v * 3 + 2]!, d = collarDistance(f, spans, x, z), off = y - Math.fround(floor(x, z));
+      if (d < COLLAR_EDGE ? Math.abs(off) > 1e-4 : d < band && off < -1e-4)
+        out.push(`${def.id} ${lod}: seam gap at ${x}, ${z}, ${d.toFixed(3)} m inside: the shell's open edge ends at ${y.toFixed(2)}, ${off.toFixed(2)} m off the floor`);
+    }
+  }
+  return out;
 }
 
 /** Bake form: the shell split per 128 m column (layer-0 recipe parts). */

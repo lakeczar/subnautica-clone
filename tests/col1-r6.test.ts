@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCave, caveNeighbours, caveShell, sharedSpans } from "../src/content/regions/caveGeometry.js";
+import { buildCave, caveNeighbours, caveShell, sharedSpans, shellSeamProblems } from "../src/content/regions/caveGeometry.js";
 import { DEEP_CAVES } from "../src/content/regions/caves/deep.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { createHit } from "../src/world/collision/boxTriangle.js";
@@ -52,8 +52,19 @@ test("R6-1: along the snapped edge, every column's crossings agree with the volu
   assert.deepEqual(bad.slice(0, 5), []);
 });
 
+const spans = sharedSpans(f, caveNeighbours(def));
+const shared = (x: number, z: number): boolean => spans.some(s => s.axis === "x" ? x === s.at && z >= s.lo && z <= s.hi : z === s.at && x >= s.lo && x <= s.hi);
+
 test("R6-1: the seam still meets the floor: every boundary vertex on an unshared side is on it", () => {
-  const spans = sharedSpans(f, caveNeighbours(def));
-  const shared = (x: number, z: number): boolean => spans.some(s => s.axis === "x" ? x === s.at && z >= s.lo && z <= s.hi : z === s.at && x >= s.lo && x <= s.hi);
   assert.deepEqual(seamGaps(mesh, f, shared, worldFloor).slice(0, 5), []);
+  assert.deepEqual(shellSeamProblems(def, "fine", worldFloor), []);
+});
+
+test("R6-1: the coarse shell's seam band: where a lift onto the floor is refused, a skirt closes it, so no open edge ends below the floor", () => {
+  // The coarse clip leaves open edges just inside the side; the band (1.5
+  // coarse voxels) lifts them onto the floor. Culvert refuses the most.
+  const coarse = caveShell(def, "coarse"), voxel = def.surfaces.find(s => s.lod === "coarse")!.voxel;
+  const m = { positions: coarse.positions, indices: Uint32Array.from(coarse.indices) };
+  assert.deepEqual(seamGaps(m, f, shared, worldFloor, voxel * 1.5).slice(0, 5), []);
+  assert.deepEqual(shellSeamProblems(def, "coarse", worldFloor), []);
 });
