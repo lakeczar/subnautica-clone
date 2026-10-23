@@ -12,6 +12,12 @@
   "cave.divide_mirror_pocket.mouth": "history-dependent: differs between two captures of the same build",
   "cave.divide_lee_burrow.mouth": "history-dependent: differs between two captures of the same build",
   "cave.divide_fissure_window.interior": "history-dependent: differs between two captures of the same build",
-  "cave.meridian_footing_void.mouth": "history-dependent: differs between two captures of the same build"
+  "cave.meridian_footing_void.mouth": "history-dependent: differs between two captures of the same build",
+  "cave.divide_brine_cistern.interior": "history-dependent: one capture of the same build drew no cave around the camera while every streaming counter was still and the hold clear (R1 repeatability, af6d85de)",
+  "cave.basin_west_rim.interior": "history-dependent: one capture of the same build drew no cave around the camera at first while the hold was clear, then the cave appeared (R1 repeatability, af6d85de)",
+  "cave.canopy_root_arch.interior": "history-dependent: the light selection differs between two captures of the same build (88% of pixels; R1 repeatability, af6d85de)",
+  "cave.hub_glimmer_crack.interior": "history-dependent: differs between two captures of the same build (48% of pixels; R1 repeatability, af6d85de)",
+  "cave.isles_headland_west.interior": "history-dependent: differs between two captures of the same build (68% of pixels, SSIM 0.968; R1 repeatability, af6d85de)",
+  "place.home_pod": "history-dependent: creatures and the structure's lights differ between two captures of the same build (3% of pixels; R1 repeatability, af6d85de)"
  }
 }
