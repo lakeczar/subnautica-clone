@@ -235,7 +235,9 @@ const SCENES = {
   },
   async "approach-meridian"() {
     const h = homeOf("district_choir_gallery");
-    await approach("meridian", [{ x: h.x + 26, y: h.y + 1.5, z: h.z }, { x: h.x + 44, y: h.y + 1.5, z: h.z }], { ...h, y: h.y + 2 }, "hollow_choir");
+    // From the parking point 45 m south: down outside the reach, then straight through the bells and out the north side.
+    await approach("meridian", [{ x: h.x, y: h.y + 1.5, z: h.z - 26 }, { x: h.x, y: h.y + 1.5, z: h.z + 26 }, { x: h.x, y: h.y + 1.5, z: h.z + 44 }], { ...h, y: h.y + 2 }, "hollow_choir",
+      [{ x: h.x, y: h.y + 4, z: h.z - 45 }]);
   },
   async "approach-canopy"() {
     // The Dart as the bot left it on the Reef → Canopy route; on to the approach ring, watch, then on to the lab.

@@ -30,7 +30,8 @@ const TARGETS = {
   canopy: { at: THREAT_HOME, park: null, range: 150, hull: "dart" },
   rift: { at: chimney, park: { x: chimney.x - 64, y: chimney.y + 10, z: chimney.z } },
   divide: { at: homeOf("divide_skate_saddle"), park: { x: homeOf("divide_skate_saddle").x - 44, y: layerY("divide_dense_layer") + 14, z: homeOf("divide_skate_saddle").z } },
-  meridian: { at: homeOf("district_choir_gallery"), park: { x: homeOf("district_choir_gallery").x - 48, y: homeOf("district_choir_gallery").y + 6, z: homeOf("district_choir_gallery").z } },
+  // South of the gallery, 15 m up: the terrace buildings block every route to its west side.
+  meridian: { at: homeOf("district_choir_gallery"), park: { x: homeOf("district_choir_gallery").x, y: homeOf("district_choir_gallery").y + 15, z: homeOf("district_choir_gallery").z - 45 } },
 };
 const captured = new Map();
 const actor = (s) => s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId) ?? null;
