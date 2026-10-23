@@ -171,11 +171,14 @@ export function meshFacing(id: string, mesh: TriangleMesh, isSolid: (p: Vec3) =>
 }
 
 /** The exterior seabed round a cave footprint as a heightfield (the collar),
- * sampled from the same floor the seabed art is drawn from. Cells whose
- * centre any owned footprint holds are holes, as the old collar columns
- * skipped them. */
+ * sampled from the same floor the seabed art is drawn from and the exterior
+ * world tests clearance against, lifted where the floor curves so it never
+ * sags below it (`conservative`). Cells whose centre any owned footprint
+ * holds are holes, as the old collar columns skipped them. */
 export function collarHeightfield(id: string, footprint: Rect, band: number, floor: (x: number, z: number) => number,
   owned: readonly Rect[], cell = 0.5): StaticHeightfield {
   const rect = { minX: footprint.minX - band, maxX: footprint.maxX + band, minZ: footprint.minZ - band, maxZ: footprint.maxZ + band };
-  return sampleHeightfield(id, rect, cell, floor, (x, z) => owned.some(r => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ));
+  return sampleHeightfield(id, rect, cell, floor, {
+    conservative: true, hole: (x, z) => owned.some(r => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ),
+  });
 }

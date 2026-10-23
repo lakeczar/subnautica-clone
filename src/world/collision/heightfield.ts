@@ -43,18 +43,51 @@ export interface StaticHeightfield {
   readonly tileMax: Float32Array;
   readonly bounds: Aabb;
   readonly bytes: number;
+  /** Largest conservative lift of any sample, metres (0 when not lifted). */
+  readonly lift: number;
 }
 
 export const TILE = 8;
+/** Below the surface is solid all the way down: bounds reach this far under
+ * the lowest sample, so a broad phase never skips a buried query. */
+export const SOLID_DEPTH = 10000;
 
-/** Sample `floor` on a lattice over `rect` (snapped outwards to `cell`).
- * `hole(cx, cz)`, given a cell's centre, marks it a hole. */
+export interface SampleOptions {
+  /** Given a cell's centre, true makes the cell a hole. */
+  readonly hole?: (cx: number, cz: number) => boolean;
+  /** Lift each sample so the surface is never below `floor` at any cell's
+   * nine half-cell points (corners, edge midpoints, centre: the points the
+   * old collar columns took their maximum of). A curved floor sags under
+   * its chords; this keeps the lattice on or above the floor the exterior
+   * world tests clearance against, within millimetres. */
+  readonly conservative?: boolean;
+}
+
+/** Sample `floor` on a lattice over `rect` (snapped outwards to `cell`). */
 export function sampleHeightfield(id: string, rect: Rect, cell: number, floor: (x: number, z: number) => number,
-  hole?: (cx: number, cz: number) => boolean): StaticHeightfield {
+  options: SampleOptions = {}): StaticHeightfield {
   const x0 = Math.floor(rect.minX / cell) * cell, z0 = Math.floor(rect.minZ / cell) * cell;
   const nx = Math.max(1, Math.ceil((rect.maxX - x0) / cell - 1e-9)), nz = Math.max(1, Math.ceil((rect.maxZ - z0) / cell - 1e-9));
-  const heights = new Float32Array((nx + 1) * (nz + 1));
-  for (let k = 0; k <= nz; k++) for (let i = 0; i <= nx; i++) heights[i + (nx + 1) * k] = floor(x0 + i * cell, z0 + k * cell);
+  const r = nx + 1, raw = new Float64Array(r * (nz + 1)), hole = options.hole;
+  for (let k = 0; k <= nz; k++) for (let i = 0; i <= nx; i++) raw[i + r * k] = floor(x0 + i * cell, z0 + k * cell);
+  const lift = new Float64Array(raw.length);
+  if (options.conservative) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
+    if (hole?.(x0 + (i + 0.5) * cell, z0 + (k + 0.5) * cell)) continue;
+    const a = raw[i + r * k]!, b = raw[i + 1 + r * k]!, c = raw[i + r * (k + 1)]!, d = raw[i + 1 + r * (k + 1)]!;
+    let deficit = 0;
+    for (const [u, w] of [[0.5, 0], [0, 0.5], [0.5, 0.5], [1, 0.5], [0.5, 1]] as const) {
+      const lattice = u >= w ? a + (b - a) * u + (d - b) * w : a + (d - c) * u + (c - a) * w;
+      deficit = Math.max(deficit, floor(x0 + (i + u) * cell, z0 + (k + w) * cell) - lattice);
+    }
+    // Raising all four corners by the deficit raises the whole cell by it.
+    for (const v of [i + r * k, i + 1 + r * k, i + r * (k + 1), i + 1 + r * (k + 1)]) lift[v] = Math.max(lift[v]!, deficit);
+  }
+  const heights = new Float32Array(raw.length);
+  // Round up to Float32, so storage never lowers a sample.
+  for (let v = 0; v < raw.length; v++) {
+    const want = raw[v]! + lift[v]!, f = Math.fround(want);
+    heights[v] = f >= want ? f : f + Math.max(Math.abs(f) * 2 ** -23, 1e-30);
+  }
   let holes: Uint8Array | null = null;
   if (hole) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
     if (!hole(x0 + (i + 0.5) * cell, z0 + (k + 0.5) * cell)) continue;
@@ -62,7 +95,10 @@ export function sampleHeightfield(id: string, rect: Rect, cell: number, floor: (
     const b = i + nx * k;
     holes[b >> 3] = holes[b >> 3]! | (1 << (b & 7));
   }
-  return createHeightfield(id, x0, z0, cell, nx, nz, heights, holes);
+  const field = createHeightfield(id, x0, z0, cell, nx, nz, heights, holes);
+  let most = 0;
+  for (const l of lift) most = Math.max(most, l);
+  return { ...field, lift: most };
 }
 
 export function createHeightfield(id: string, x0: number, z0: number, cell: number, nx: number, nz: number, heights: Float32Array,
@@ -88,8 +124,8 @@ export function createHeightfield(id: string, x0: number, z0: number, cell: numb
   if (lo === Infinity) lo = hi = 0;
   return {
     kind: "heightfield", id, x0, z0, cell, nx, nz, heights, holes, tx, tz, tileMin, tileMax,
-    bounds: { min: { x: x0, y: lo, z: z0 }, max: { x: x0 + nx * cell, y: hi, z: z0 + nz * cell } },
-    bytes: heights.byteLength + (holes?.byteLength ?? 0) + tileMin.byteLength + tileMax.byteLength,
+    bounds: { min: { x: x0, y: lo - SOLID_DEPTH, z: z0 }, max: { x: x0 + nx * cell, y: hi, z: z0 + nz * cell } },
+    bytes: heights.byteLength + (holes?.byteLength ?? 0) + tileMin.byteLength + tileMax.byteLength, lift: 0,
   };
 }
 
