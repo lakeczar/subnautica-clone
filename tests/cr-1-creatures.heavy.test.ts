@@ -3,6 +3,9 @@
  * inside it; afterwards ENC-1's full ladder applies; crossings timed to a window
  * are never struck; the hunter's round, bait, first sight and the laying visit. */
 import test from "node:test";
+import { HUNTER_GEOMETRY } from "../src/content/encounterGeometry.js";
+import { hunterRoundPath } from "../src/sim/fauna/windows.js";
+import { hullClearance } from "../src/sim/world.js";
 import assert from "node:assert/strict";
 import { FIRST_STRIKE_SHARE } from "../src/content/ecology/encounter.js";
 import { sitePosition } from "../src/content/ecology/sites.js";
@@ -259,3 +262,16 @@ test("grounds sit on the composed floor outside every cave; carcass falls stand 
   }
 });
 
+
+test("the idle hunter's unswept round is open water the whole way: home, the east leg and the feeding circle", () => {
+  const world = gameWorld();
+  for (let tick = 0; tick < 101 * 60; tick += 15) {
+    const p = hunterRoundPath(tick);
+    assert.ok(hullClearance(world, p, HUNTER_GEOMETRY.worldEnvelope), `blocked at tick ${tick}: ${JSON.stringify(p)}`);
+  }
+  // Consecutive path points never jump: the round reads as swimming, not teleporting.
+  for (let tick = 1; tick < 101 * 60; tick++) {
+    const a = hunterRoundPath(tick - 1), b = hunterRoundPath(tick);
+    assert.ok(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 12 / 60, `jump at tick ${tick}`);
+  }
+});

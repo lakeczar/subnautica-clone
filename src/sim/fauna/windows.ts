@@ -58,3 +58,23 @@ export function hunterRoundPoint(tick: number): Vec3 {
   const a = (secondsAt(tick) / HUNTER_FEEDING_CIRCLE.period) * Math.PI * 2, r = HUNTER_FEEDING_CIRCLE.radius;
   return { x: HUNTER_FEEDING_SPOT.x + Math.cos(a) * r, y: HUNTER_FEEDING_SPOT.y + Math.sin(a * 2) * 0.8, z: HUNTER_FEEDING_SPOT.z + Math.sin(a) * r };
 }
+
+/** With no diver or craft within this many metres of it, the idle hunter's
+ * round follows the authored path below without a swept move. */
+export const HUNTER_ROUND_UNSWEPT = 30;
+/** The round's authored path as a pure function of the tick: home while
+ * resident, the straight east leg out and back, and the feeding circle. The
+ * leg and circle are open water (tests/cr-1-creatures.heavy.test.ts sweeps them). */
+export function hunterRoundPath(tick: number): Vec3 {
+  const s = windowSample("canopy_sound_hunter", tick), span = s.elapsed + s.remaining;
+  if (s.phase === "resident") return { ...THREAT_HOME };
+  if (s.phase === "away") return hunterRoundPoint(tick);
+  // Out to (or back from) where the circle will be (or was) at the phase edge.
+  const edge = s.phase === "leaving" ? tick + Math.round(s.remaining * 60) : tick - Math.round(s.elapsed * 60);
+  const circle = s.phase === "leaving" ? hunterRoundPoint(edge) : (() => {
+    const a = (secondsAt(edge) / HUNTER_FEEDING_CIRCLE.period) * Math.PI * 2, r = HUNTER_FEEDING_CIRCLE.radius;
+    return { x: HUNTER_FEEDING_SPOT.x + Math.cos(a) * r, y: HUNTER_FEEDING_SPOT.y + Math.sin(a * 2) * 0.8, z: HUNTER_FEEDING_SPOT.z + Math.sin(a) * r };
+  })();
+  const f = s.phase === "leaving" ? s.elapsed / span : s.remaining / span;
+  return { x: THREAT_HOME.x + (circle.x - THREAT_HOME.x) * f, y: THREAT_HOME.y + (circle.y - THREAT_HOME.y) * f, z: THREAT_HOME.z + (circle.z - THREAT_HOME.z) * f };
+}
