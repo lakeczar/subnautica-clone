@@ -233,7 +233,7 @@ test("7: an exclusive job drains the lane and runs alone, express included", asy
   for (const r of [r1, r2]) assert.ok(rx.admittedAt >= result(c, r).endedAt - 50, "X started once the lane was empty");
   for (const r of [rs, rq]) assert.ok(r.admittedAt >= rx.endedAt - 50, "nothing ran beside X");
   assert.equal(rx.tokens, 4); assert.equal(rx.memMiB, 6144); assert.equal(rx.gpu, true);
-  assert.ok(rx.context && rx.context.samples >= 1, "load and PSI recorded for the measurement");
+  assert.ok(rx.context?.v === 2 && rx.context.job && rx.context.measuredS >= 1, `the job's own contention measured (TST-16): ${JSON.stringify(rx.context)}`);
   assert.match(readFileSync(join(c.sched, "jobs", X, "output.log"), "utf8"), /cpus=4 lease=yes/);
   assert.doesNotMatch(readFileSync(join(c.sched, "ledger.jsonl"), "utf8"), /legacy-holder/, "a v2 exclusive job is not mistaken for a v1 holder");
 });

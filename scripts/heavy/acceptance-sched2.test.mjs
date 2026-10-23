@@ -395,3 +395,49 @@ test("S14: the .test-build guard: a queued ticket never blocks; a running one na
   for (const id of [blocker, queued, free]) assert.equal(waitFor(c, id).code, 0);
   assert.equal(heavyJobGuard(A, env), null);
 });
+
+// TST-16: light work clamped during an exclusive job; contention judged on the job's own cgroup.
+const lightProps = (c) => {
+  const out = spawnSync("systemctl", ["--user", "show", "-p", "CPUQuotaPerSecUSec,CPUWeight", c.env.SILTWAKE_SCHED_LIGHT_SLICE], { encoding: "utf8" }).stdout;
+  return Object.fromEntries(out.trim().split("\n").map((l) => l.split("=")));
+};
+
+test("S17 (TST-16): an exclusive job clamps the light slice while it runs and releases it at its result; its context is its own cgroup's", async () => {
+  const c = context("light-clamp", { config: fast });
+  const x = submit(c, c.wt("x"), "--class", "exclusive", "--", "sh", "-c", "sleep 12");
+  await running(c, x);
+  await until("clamped", () => read(join(c.sched, "state.json"))?.lightClamp?.ticket === x, 15000);
+  assert.deepEqual(lightProps(c), { CPUQuotaPerSecUSec: "1s", CPUWeight: "idle" });
+  // Light work started meanwhile lands in the clamped slice (scripts/light-run.sh).
+  const lw = spawnSync(join(here, "..", "light-run.sh"), ["sh", "-c", "cat /proc/self/cgroup"], { env: { ...c.env, SILTWAKE_LIGHT_SLICE: c.env.SILTWAKE_SCHED_LIGHT_SLICE }, encoding: "utf8" });
+  assert.match(lw.stdout, new RegExp(c.env.SILTWAKE_SCHED_LIGHT_SLICE.replace(/\./g, "\\.")));
+  assert.equal(waitFor(c, x).code, 0);
+  const ctx = result(c, x).context;
+  assert.equal(ctx.v, 2);
+  assert.ok(ctx.samples >= 2 && ctx.measuredS >= 5, JSON.stringify(ctx));
+  assert.equal(typeof ctx.job.cpuSomeWorstPct, "number");
+  assert.equal(typeof ctx.host.stealPct, "number");
+  assert.deepEqual([ctx.light.slice, ctx.light.clamped, ctx.light.ok], [c.env.SILTWAKE_SCHED_LIGHT_SLICE, true, true]);
+  assert.equal(ctx.disturbed, ctx.reasons.length > 0);
+  assert.deepEqual(lightProps(c), { CPUQuotaPerSecUSec: "infinity", CPUWeight: "[not set]" });
+  assert.equal(read(join(c.sched, "state.json"))?.lightClamp, undefined);
+  // Its holder dies (the job is bound to it and stops too): reconcile releases the clamp.
+  const y = submit(c, c.wt("y"), "--class", "exclusive", "--", "sh", "-c", "sleep 60");
+  await running(c, y);
+  const tk = await holderOf(c, y);
+  await until("clamped", () => read(join(c.sched, "state.json"))?.lightClamp?.ticket === y, 15000);
+  killOwned(tk.holder);
+  await until("reconciled", () => { hc(c, ["status"]); return result(c, y); }, 30000);
+  assert.deepEqual(lightProps(c), { CPUQuotaPerSecUSec: "infinity", CPUWeight: "[not set]" });
+  assert.match(readFileSync(join(c.sched, "ledger.jsonl"), "utf8"), /"event":"light-unclamped","ticket":"[^"]*"/);
+  spawnSync("systemctl", ["--user", "revert", c.env.SILTWAKE_SCHED_LIGHT_SLICE], { stdio: "ignore" });
+});
+
+test("S18 (TST-16): private state without a named light slice never clamps one", async () => {
+  const c = context("no-light", { config: fast });
+  delete c.env.SILTWAKE_SCHED_LIGHT_SLICE;
+  const x = submit(c, c.wt("x"), "--class", "exclusive", "--", "true");
+  assert.equal(waitFor(c, x).code, 0);
+  assert.equal(result(c, x).context.light, null);
+  assert.equal(spawnSync("systemctl", ["--user", "show", "-p", "CPUWeight", "siltwake-light.slice"], { encoding: "utf8" }).stdout.trim() === "CPUWeight=idle", false, "the real light slice is untouched");
+});

@@ -13,6 +13,7 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync
 import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
+import { lightClamp } from "./contention.mjs";
 import { DEFAULTS, PROTOCOL, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 
@@ -36,6 +37,10 @@ export function loadConfig(env = process.env) {
   if (env.SILTWAKE_SCHED_UNIT_PREFIX) cfg.unitPrefix = env.SILTWAKE_SCHED_UNIT_PREFIX;
   if (env.SILTWAKE_SCHED_SUPERVISOR_PREFIX) cfg.supervisorPrefix = env.SILTWAKE_SCHED_SUPERVISOR_PREFIX;
   cfg.production = dir === PRODUCTION_DIR;
+  // The light-work slice an exclusive job clamps (TST-16, contention.mjs). A
+  // private state directory (tests) never touches the real one: it clamps
+  // only a slice its environment or config.json names.
+  cfg.lightSlice = env.SILTWAKE_SCHED_LIGHT_SLICE || fileCfg.lightSlice || (cfg.production ? "siltwake-light.slice" : null);
   cfg.paths = {
     state: join(dir, "state.json"),
     lock: join(dir, "state.lock"),
@@ -280,10 +285,6 @@ export function hostFor(cfg, state) {
   host.legacy = legacyLockInfo(cfg.legacyLock);
   return host;
 }
-export function cpuContext() {
-  const load1 = Number(readFileSync("/proc/loadavg", "utf8").split(" ")[0]);
-  return { load1, cpuSomeAvg10: psi("cpu", "some"), memFullAvg10: psi("memory", "full") };
-}
 export function readFileSafe(path) {
   try { return readFileSync(path, "utf8").trim(); } catch { return null; }
 }
@@ -334,6 +335,13 @@ export function reconcile(cfg, state) {
     ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, ...result });
     if (t.state === "running" && t.req.exclusive) state.lastExclusiveEnd = Date.now();
     delete state.tickets[t.id];
+    changed = true;
+  }
+  // A light-work clamp outlives only its exclusive job (its holder died before releasing it).
+  if (state.lightClamp && state.tickets[state.lightClamp.ticket]?.state !== "running") {
+    const r = lightClamp({ ...cfg, lightSlice: state.lightClamp.slice }, false);
+    ledger(cfg, { event: "light-unclamped", ticket: state.lightClamp.ticket, slice: state.lightClamp.slice, ok: r.ok, error: r.error });
+    delete state.lightClamp;
     changed = true;
   }
   return changed;

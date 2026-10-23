@@ -51,13 +51,13 @@ if [[ $uninstall == 1 ]]; then
   exit 0
 fi
 
-files=(policy.mjs state.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh)
+files=(policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh)
 # The GPU lease checker has its own immutable install ($home/guard/<version>,
 # `guard/current`): the Chrome wrappers point there, never at the scheduler's
 # `current`, so installing an older scheduler (a rollback) or uninstalling it
 # leaves the guard enforcing (R1-F5). A lease names a ticket's grant, which
 # SCHED-1 and SCHED-2 write alike.
-guard_files=(gpu-lease.mjs state.mjs policy.mjs snapshot.mjs)
+guard_files=(gpu-lease.mjs state.mjs contention.mjs policy.mjs snapshot.mjs)
 install_guard() {
   local gv
   gv=$(cd "$src" && cat "${guard_files[@]}" | sha256sum | cut -c1-12)

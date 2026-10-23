@@ -36,7 +36,8 @@ export function context(name, { mode = "normal", host = {}, config = null, slice
   writeFileSync(join(sched, "host-override.json"), JSON.stringify({ nproc: 6, memAvailableMiB: 12000, memFullAvg10: 0, ...host }));
   if (config) writeFileSync(join(sched, "config.json"), JSON.stringify(config));
   const env = { ...process.env, SILTWAKE_SCHED_DIR: sched, SILTWAKE_SCHED_LEGACY_LOCK: join(dir, "legacy.lock"),
-    SILTWAKE_SCHED_SLICE: slice, SILTWAKE_SCHED_UNIT_PREFIX: `sched1test-heavy-${n}`, SILTWAKE_SCHED_SUPERVISOR_PREFIX: `sched1test-sched-${n}` };
+    SILTWAKE_SCHED_SLICE: slice, SILTWAKE_SCHED_UNIT_PREFIX: `sched1test-heavy-${n}`, SILTWAKE_SCHED_SUPERVISOR_PREFIX: `sched1test-sched-${n}`,
+    SILTWAKE_SCHED_LIGHT_SLICE: `sched1test-light${process.pid}x${n}.slice` };
   for (const k of ["SILTWAKE_JOB_TICKET", "SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_GPU_LEASE", "HEAVY_MEMORY_MAX", "HEAVY_LOCK_WAIT"]) delete env[k];
   const c = { dir, sched, env, legacy: join(dir, "legacy.lock"), n };
   c.wt = (w) => { const p = join(dir, `wt-${w}`); mkdirSync(p, { recursive: true }); return p; };

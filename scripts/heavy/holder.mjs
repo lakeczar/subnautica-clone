@@ -33,11 +33,12 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { contentionSampler, lightClamp } from "./contention.mjs";
 import { jobEnv, plan } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 import {
-  cgroupRead, cpuContext, gitTree, gpuUsers, hostFor, jobDir, jobProcs, ledger, loadConfig, readFileSafe, readJson, readState, readStats,
-  releaseAnchorIfAlone, scopePopulated, self, sliceCheck, systemctl, transaction, unitFacts, writeJsonAtomic,
+  cgroupRead, gitTree, gpuUsers, hostFor, jobDir, jobProcs, ledger, loadConfig, readFileSafe, readJson, readState, readStats,
+  releaseAnchorIfAlone, scopePopulated, self, sliceCgroup, sliceCheck, systemctl, transaction, unitFacts, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -147,12 +148,23 @@ const args = [
   ...(inOwnScope ? ["-p", `BindsTo=${holderUnit}.scope`, "-p", `After=${holderUnit}.scope`] : []),
   "sh", join(here, "scope-run.sh"), dir, String(goal.limitS), String(memBytes), ...t.argv,
 ];
-const context = req.exclusive ? { samples: 0, load1Max: 0, cpuSomeMax: 0, memFullMax: 0 } : null;
+// An exclusive job's contention, judged on its own cgroup (contention.mjs,
+// TST-16); and outside light work clamped while it runs (released at the
+// result, or by reconcile if this holder dies).
+const context = req.exclusive ? contentionSampler({ jobCgroup: () => readFileSafe(join(dir, "cgroup")), lightCgroup: cfg.lightSlice ? sliceCgroup(cfg.lightSlice) : null,
+  nproc: t.hostAtAdmit.nproc, thresholds: cfg.disturbed }) : null;
+let light = null;
+if (req.exclusive && !rejected && cfg.lightSlice) {
+  light = lightClamp(cfg, true);
+  transaction(cfg, (state) => { state.lightClamp = { ticket: id, at: Date.now(), slice: cfg.lightSlice }; return { changed: true }; });
+  if (!light.ok) note(`could not clamp light work (${cfg.lightSlice}): ${light.error}`);
+}
 // GPU jobs record any GPU client outside the lease that shared the GPU with
 // them (a driver run outside the queue): their screenshots stay functional,
 // but an exclusive measurement is then disturbed.
 const gpuShared = new Map();
-const sampler = (context || req.gpu) && setInterval(() => sample(), 15000);
+let gpuTicks = 0;
+const sampler = (context || req.gpu) && setInterval(() => sample(), context ? 1000 : 15000);
 sample();
 const started = Date.now();
 // Hard limit: the in-scope `timeout` ends the foreground at the deadline or
@@ -293,7 +305,8 @@ else if (code === 137 || signal) { stopReason = "killed"; label = "killed"; }
 if (oomKills > 0 && !reservationOom) note(`${oomKills} process(es) were OOM-killed inside the job by a sub-limit (for example a heavy test file's budget), not by its ${req.memMiB} MiB reservation`);
 if (leftovers) note("processes left behind by the command were stopped");
 if (gpuShared.size) note(`the GPU was also used outside the lease by: ${[...gpuShared.values()].map((u) => `pid ${u.pid} (${u.cmd.slice(0, 60)})`).join("; ")}`);
-if (context && (context.cpuSomeMax >= 10 || context.memFullMax >= 1 || gpuShared.size)) context.disturbed = true;
+const contextResult = context ? context.finish({ gpuShared: [...gpuShared.values()], light }) : null;
+if (contextResult?.disturbed) note(`DISTURBED: ${contextResult.reasons.join("; ")}`);
 
 // Evidence binding: a result is evidence for a commit only if the tree was
 // that clean commit when admitted and stayed so to the end. A snapshot is
@@ -320,7 +333,7 @@ const result = {
   oomKills, reservationOom, oomGroupKill: groupOom, oomEvidence, unavailable, leftovers, stopReason, goal,
   head: tree.head, dirty: tree.dirty, headAtAdmit: treeAtAdmit.head, dirtyAtAdmit: treeAtAdmit.dirty,
   changedTree, changedDuringRun, evidence, snapshot: snap ? { root: snap.root, kept: Boolean(keptSnapshot) } : null,
-  gpuShared: gpuShared.size ? [...gpuShared.values()] : undefined, context,
+  gpuShared: gpuShared.size ? [...gpuShared.values()] : undefined, context: contextResult,
 };
 // The scope is empty: release the worktree's .test-build before anyone can see the result.
 if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: true });
@@ -329,6 +342,7 @@ if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: tru
 transaction(cfg, (state) => {
   writeJsonAtomic(join(dir, "exit.json"), result);
   delete state.tickets[id];
+  if (state.lightClamp?.ticket === id) { lightClamp(cfg, false); delete state.lightClamp; } // light work runs freely again
   if (req.exclusive && launched) state.lastExclusiveEnd = Date.now(); // exclusive turns (policy.mjs)
   ledger(cfg, { event: "job", ...result });
   return { changed: true };
@@ -336,14 +350,8 @@ transaction(cfg, (state) => {
 process.exit(0); // releases the bridge (fd 3)
 
 function sample() {
-  if (context) {
-    const s = cpuContext();
-    context.samples++;
-    context.load1Max = Math.max(context.load1Max, s.load1);
-    context.cpuSomeMax = Math.max(context.cpuSomeMax, s.cpuSomeAvg10);
-    context.memFullMax = Math.max(context.memFullMax, s.memFullAvg10);
-  }
-  if (!req.gpu) return;
+  if (context) context.sample();
+  if (!req.gpu || (context && ++gpuTicks % 15 !== 1)) return; // GPU scans stay at 15 s
   for (const u of gpuUsers(cfg, readState(cfg))) {
     if (u.leased || gpuShared.has(u.pid)) continue;
     gpuShared.set(u.pid, { pid: u.pid, cmd: u.cmd });
