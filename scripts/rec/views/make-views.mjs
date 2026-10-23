@@ -41,21 +41,24 @@ const sees = (e, t) => {
 };
 
 /** A clear, seeing eye near `t`: around the preferred direction, nearer or further, higher or lower. */
-function standoff(t, dir, dist, rise, { surface = false } = {}) {
+function standoff(t, dir, dist, rise, { surface = false, unseen = false } = {}) {
   const base = Math.atan2(dir.x, dir.z);
   for (const turn of [0, 0.5, -0.5, 1, -1, 1.6, -1.6, 2.4, -2.4, Math.PI])
     for (const d of [dist, dist * 0.7, dist * 1.4, dist * 0.45])
       for (const h of [rise, rise + 4, rise - 3, rise + 10]) {
         const a = base + turn, p = { x: t.x + Math.sin(a) * d, z: t.z + Math.cos(a) * d, y: surface ? -0.7 : t.y + h };
         if (!surface) p.y = Math.min(-1, Math.max(p.y, worldFloor(p.x, p.z) + 1.5));
-        if (fits(p) && sees(p, t)) return p;
+        if (fits(p) && (unseen || sees(p, t))) return unseen ? { ...p, sightUnchecked: true } : p;
       }
-  return null;
+  // Surface places (the pod, the island workshop): the sight test from the waterline is
+  // blocked at the surface itself; a clear pose facing it is taken, flagged.
+  return surface && !unseen ? standoff(t, dir, dist, rise, { surface, unseen: true }) : null;
 }
 const views = [], pending = [];
 function add(id, group, label, eye, target, extra = {}) {
   if (!eye) { pending.push({ id, group, label, reason: "no clear pose that sees it (derivation found none)" }); return; }
   const e = { x: r1(eye.x), y: r1(eye.y), z: r1(eye.z) };
+  if (eye.sightUnchecked) extra = { ...extra, sightUnchecked: true };
   views.push({ id, group, label, region: regionAtPoint(e.x, e.z), pos: e, ...aim({ ...e, y: e.y + EYE }, target), target: { x: r1(target.x), y: r1(target.y), z: r1(target.z) }, lamp: e.y < -60, ...extra });
 }
 
