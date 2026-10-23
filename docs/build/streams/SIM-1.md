@@ -142,7 +142,7 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
 
 **Checks:**
 - **Fast tier:** passed at `950d8796`, 140 files (`npm test`, exit 0).
-- **Heavy tier:** passed on alickers at `bebc19a4` (fail 0 in every file; 894 s of file time in 329 s). It was not rerun after the merge: root brought no `src` changes, and its test changes are in SAVE-1's files.
+- **Heavy tier:** passed at `b509b949` (sources as at `950d8796`) on factory-worker: exit 0, 1,193 s of file time in 664 s. It also passed earlier on alickers at `bebc19a4`.
 - **Build:** `npm run build` passed at `950d8796`.
 - **Economy scripts:** all five passed at `950d8796` (`check-campaign-economy`, `check-m1-economy`, `check-m2-a-economy`, `check-m2-b1-economy`, `upgrade-economy`).
 
