@@ -62,6 +62,8 @@ const LONG_TRAVEL_SECONDS = 90, LONG_IDLE_SECONDS = 60;
 /** One rotated-out chunk of the timeline (SIM-05): its kept events in full and
  * everything else as totals, so a long session's report still counts it all. */
 export interface ChunkSummary {
+  /** The chunk's number in its session, when the recorder sealed it. */
+  n?: number;
   from: { tick: number; play: number };
   to: { tick: number; play: number };
   /** Every event the chunk held, by kind. */
@@ -80,6 +82,8 @@ export interface ChunkSummary {
 /** `rotated` (version 2) summarises the oldest chunks, oldest first; `events`
  * holds the rest in full. `dropped` counts events a version 1 recorder discarded at its cap. */
 export interface TimelineExport { format: typeof TIMELINE_FORMAT; version: number; session: TimelineSession; dropped: number;
+  /** Events ever recorded, rotated ones included (version 2; a resumed recorder carries on from it). */
+  seq?: number;
   rotated?: ChunkSummary[]; events: TimelineEvent[] }
 
 const bump = (into: Record<string, number>, key: string, n = 1): void => { into[key] = (into[key] ?? 0) + n; };
@@ -150,14 +154,14 @@ export function parseTimeline(text: string): { ok: true; value: TimelineExport }
     p.cargo.every((c) => obj(c) && typeof c.cache === "string" && typeof c.item === "string" && typeof c.kind === "string" &&
       num(c.quantity) && c.quantity > 0 && num(c.last) && c.last >= 0))))
     return { ok: false, error: "Malformed pending recoveries." };
-  if (!Array.isArray(v.events) || !num(v.dropped)) return { ok: false, error: "Malformed events." };
+  if (!Array.isArray(v.events) || !num(v.dropped) || (v.seq !== undefined && !num(v.seq))) return { ok: false, error: "Malformed events." };
   const event = (e: unknown): boolean => obj(e) && typeof e.kind === "string" && KINDS.includes(e.kind) && num(e.tick) && num(e.play) &&
       (e.seconds === undefined || num(e.seconds)) && (e.of === undefined || num(e.of)) &&
       (e.keys === undefined || (Array.isArray(e.keys) && e.keys.every((k) => typeof k === "string"))) && (e.stationary === undefined || num(e.stationary)) && (e.at === undefined || (Array.isArray(e.at) && e.at.length === 3 && e.at.every(num)));
   for (const [n, e] of v.events.entries()) if (!event(e)) return { ok: false, error: `Malformed event ${n}.` };
   const counts = (r: unknown): boolean => obj(r) && Object.values(r).every(num);
   if (v.rotated !== undefined && !(Array.isArray(v.rotated) && v.rotated.every((r) => obj(r) && obj(r.from) && obj(r.to) &&
-    num(r.from.tick) && num(r.from.play) && num(r.to.tick) && num(r.to.play) && counts(r.kinds) && Array.isArray(r.kept) && r.kept.every(event) &&
+    (r.n === undefined || num(r.n)) && num(r.from.tick) && num(r.from.play) && num(r.to.tick) && num(r.to.play) && counts(r.kinds) && Array.isArray(r.kept) && r.kept.every(event) &&
     obj(r.gathering) && num(r.gathering.count) && counts(r.gathering.byItem) &&
     obj(r.travel) && num(r.travel.count) && num(r.travel.seconds) && num(r.travel.stationary) && counts(r.travel.byHull) && Array.isArray(r.travel.long) &&
     obj(r.idle) && num(r.idle.count) && num(r.idle.seconds) && num(r.idle.waitingSeconds) && Array.isArray(r.idle.long) &&

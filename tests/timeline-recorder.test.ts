@@ -7,7 +7,7 @@ import { addItem, transfer } from "../src/sim/inventory.js";
 import { incapacitate } from "../src/sim/recovery.js";
 import type { GameState } from "../src/sim/types.js";
 import { addNote, createRecorder, exportTimeline, exportTimelineText, NOTE_MAX, observe, recordEvent, recordSystemsEvents, resumeRecorder,
-  TIMELINE_CHUNK_EVENTS, TIMELINE_RETAINED_CHUNKS } from "../src/sim/timeline/recorder.js";
+  TIMELINE_CHUNK_EVENTS, TIMELINE_RETAINED_CHUNKS, timelineSince } from "../src/sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../src/sim/timeline/recorder.js";
 import { analyseTimeline, parseTimeline } from "../src/sim/timeline/report.js";
 import type { TimelineEvent, TimelineExport } from "../src/sim/timeline/report.js";
@@ -368,4 +368,50 @@ test("a partly emptied cache keeps its death open; a death that left nothing clo
   assert.deepEqual(nothing.map((e) => [e.what, e.seconds]), [["nothing-lost", 0]]);
   const deaths = analyseTimeline(exportTimeline(rec, s)).deaths;
   assert.deepEqual(deaths, { count: 2, recoverySeconds: [], nothingLost: 1, unrecovered: 1 });
+});
+
+test("R1-C1: the event cursor never resets, so a reader sees every event once across seals, rotation and a reload", () => {
+  const { s, rec } = setup();
+  let cursor = timelineSince(rec, 0).cursor;
+  const read: string[] = [];
+  const take = (r: TimelineRecorder): void => {
+    const next = timelineSince(r, cursor);
+    assert.equal(next.missed, 0);
+    read.push(...next.events.map((e) => e.text ?? e.kind));
+    cursor = next.cursor;
+  };
+  const written: string[] = [];
+  // Read after every note (the REC-1 pattern), across the first seal.
+  for (let i = 0; i < 1001; i++) { addNote(rec, s, `n${i}`); written.push(`n${i}`); take(rec); }
+  // Bursts that each cross a seal between two reads.
+  for (let b = 0; b < 3; b++) {
+    for (let i = 0; i < 700; i++) { addNote(rec, s, `b${b}.${i}`); written.push(`b${b}.${i}`); }
+    take(rec);
+  }
+  assert.deepEqual(read, written);
+  // A reload carries the sequence on: the cursor still fits.
+  // An open idle span closes into the export, and is a recorded event after the reload.
+  rec.idle = { tick: s.tick - 600, play: 0, waiting: new Set() };
+  const parsedIdle = parseTimeline(exportTimelineText(rec, s));
+  assert.ok(parsedIdle.ok);
+  if (!parsedIdle.ok) return;
+  const resumed = resumeRecorder(parsedIdle.value, { regionAt });
+  assert.equal(resumed.seq, rec.seq + 1);
+  written.push("idle");
+  addNote(resumed, s, "after reload"); written.push("after reload");
+  take(resumed);
+  assert.deepEqual(read, written);
+  // A reader that lags past the retained window is told how many it missed.
+  const lagging = timelineSince(rec, 0);
+  assert.equal(lagging.missed + lagging.events.length, rec.seq);
+});
+
+test("R1-C1: an export or a save never seals or rotates the live recorder", () => {
+  const { s, rec } = setup();
+  for (let i = 0; i < TIMELINE_CHUNK_EVENTS - 1; i++) addNote(rec, s, `n${i}`);
+  rec.idle = { tick: s.tick - 600, play: 0, waiting: new Set() };
+  const [sealed, open, seq] = [rec.sealed.length, rec.events.length, rec.seq];
+  const x = exportTimeline(rec, s);
+  assert.deepEqual([rec.sealed.length, rec.events.length, rec.seq], [sealed, open, seq]);
+  assert.equal(x.events.at(-1)!.kind, "idle", "the open span closes into the export only");
 });

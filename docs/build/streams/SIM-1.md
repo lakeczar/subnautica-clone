@@ -55,12 +55,16 @@ Every other identity-keyed cache is keyed by content.
 - **Chunks:** 1,000 events each. The newest 20 sealed chunks plus the open chunk stay whole, the same 20k window as before.
 - **Rotation:** an older chunk rotates into a `ChunkSummary` that keeps **notes, new things, deaths and recoveries verbatim**. Everything else becomes totals, and empty-travel and idle stretches are listed at the report's default thresholds.
 - **Analysis:** the analysis merges the summaries. The test shows a 26-chunk session analyses the same as its unrotated event list.
-- **`TimelineStore`** (`src/sim/timeline/store.ts`):
-  - It writes each sealed chunk to localStorage once.
-  - Each 10-second save rewrites only a small head; before, it re-serialised the whole history, up to about 2.4 MB.
-  - On a full quota it rotates more and retries.
-  - If even the head can't be written, the app says so once and the notes stay in memory until exported.
-- **Bridge:** the v1 single-key timeline migrates at the first save, and v1 export files still parse.
+- **`TimelineStore`** (`src/sim/timeline/store.ts`, redesigned in R1):
+  - **Keys:** each chunk has its own key, scoped by session, written once when sealed. When the chunk rotates, the same key is overwritten with its summary.
+  - **The head:** each 10-second save rewrites only the head (the session, the open chunk with open spans closed as of the save, and the chunk keys in order). Before, the whole history was re-serialised, up to about 2.4 MB. Summaries live in their chunk keys, so the head stays small however many notes accumulate.
+  - **Every failure leaves a readable, complete committed timeline:**
+    - the head is the commit point, written after the chunks it names;
+    - a chunk key is only ever replaced by its own summary, one atomic write that shrinks it, so a committed head naming it reads the same history;
+    - anything a new head no longer names (another session's timeline, the v1 record, the chunks of a commit that never landed) is removed only after that head is stored.
+  - **On a full quota,** the recorder rotates its oldest chunk, the store folds that key in place (freeing space) and the save retries. If nothing fits, the save fails, the app says so once, and every note stays in memory for export.
+- **Bridge:** the v1 single-key timeline migrates at the first save, and the v1 key stays until a v2 head is stored. v1 export files still parse.
+- **Spans:** exports and saves close the open travel and idle spans with `closingEvents`, the same pure helper the recorder uses to close them. They never seal or rotate the live history. That was the cause of R1 F1.
 
 ## Contracts for other streams
 
@@ -69,6 +73,17 @@ Every other identity-keyed cache is keyed by content.
 - **`DriverObserver`/`driverHooks`** in the playthrough driver is the differential's seam.
 - **CW-1 merge:** CW-1 changes `flowAt(old, state.tick)` to `flowHere(…)` on the line SIM-1 changed to `pre.tick`. Whichever merges second writes `flowHere(world, old, pre.tick)`. `relocateForCave` keeps its clone, and the guard treats its result as a new state.
 - **SIG-1:** add per-step work inside `stepGameInPlace` and read the pre-step values from `pre`, never from a reference taken before mutation.
+- **Timeline consumers (changed contract, R1 C1):** `rec.events` is now only the open chunk, and it is replaced at every 1,000-event seal, so an array offset into it loses events at the boundary.
+  - Read new events with `timelineSince(rec, cursor)` → `{ events, cursor, missed }`. The cursor is `rec.seq`, which never resets across seals, rotation or a reload. A read costs only the new events; `missed` counts events that rotated away unread.
+  - **REC-1:** its app call `recordTimeline(recorder, timeline.events, offset)` becomes:
+
+    ```ts
+    const next = timelineSince(timeline, cursor);
+    recordTimeline(recorder, next.events, 0);
+    cursor = next.cursor;
+    ```
+
+    Whichever of SIM-1 and REC-1 merges second wires it.
 
 ## Evidence
 
@@ -147,6 +162,28 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
 - **Economy scripts:** all five passed at `950d8796` (`check-campaign-economy`, `check-m1-economy`, `check-m2-a-economy`, `check-m2-b1-economy`, `upgrade-economy`).
 
 **Where test time went** (attribution only, from the fast tier under its 5-way concurrency): 60,481 `stepGame` calls spent 18.5 s cloning and 33.3 s stepping, so cloning was about 6% of the tier's CPU. The converted loops remove most of it. The larger win is the playthrough and bots, above.
+
+## Review responses
+
+**R1 (Sol 6.1 xhigh, `docs/build/reviews/SIM-1-SOL-XHIGH-R1.md` on `review/sim-1-r1`):**
+- **F1 (P1), fixed at the root:** the export closed spans on a copy, which could seal and rotate, and the store then sliced that copy by the live partition. Exports and the store now take the live partition as it stands, plus `closingEvents`, the one shared helper. No copy remains and nothing seals behind the writer's back. The regression covers 998 and 999 open events at the full 20-chunk window, closing idle, travel and both. Every note comes back exactly once, the analysis totals match, and the live partition is unchanged.
+- **F2 (P1), fixed at the root:** the store was redesigned as a commit protocol (above). Nothing a committed head names is ever deleted before a replacement head is stored. A rotated chunk is folded in place, which shrinks it, so compaction needs no free space. Regressions:
+  - exhaustive fault injection at every write of a save that seals chunks: one failing write and all later writes failing, with both a quota error and a non-quota error;
+  - the review's quota-plus-100 case;
+  - a failed v1 migration.
+
+  A fresh reader always recovers every committed note exactly once. After a successful or recovered save, it recovers every note.
+- **Checked against the reviewed code:** all four regressions fail on `2b0b7d88`'s timeline modules and pass now.
+- **C1:** `timelineSince` plus `rec.seq` (contracts, above). Regressions cover:
+  - reading after every note across the first seal;
+  - bursts of 700 crossing seals;
+  - a reload, including an idle span that closes into the stored timeline;
+  - a lagging reader's `missed` count.
+
+**Performance conventions** (`t3/stew-1-guard-rails` DIRECTION):
+- **#1:** the recorder's per-step stock copy uses a reused buffer, and `timelineSince` copies only the new events.
+- **#7 and #8:** `rowById` and `hasMember` are keyed by roster identity, but nothing is trusted on identity. Every `rowById` hit is checked against the row itself, and `hasMember` validates length and tail. Each index is bounded by its roster's size and is collected with the roster array, which is state-owned rather than a long-lived root. If the steward wants them under a ledger, that is a small follow-up.
+- **#9:** the per-tick numbers are `--class exclusive` on the 3090. No separate 4070 µs check was run. The 4070 evidence is the alickers playthrough wall times, which are indicative.
 
 ## Compromises and follow-ups
 
