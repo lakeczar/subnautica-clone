@@ -2,6 +2,73 @@
 
 Opus 5.5 high. Branch `t3/col-1-static-collider` from root `fe27757`; stage A head: see the commit that adds this page. The decision that created this stream is R1 of the [compromise verdict](../audits/COMPROMISE-VERDICT-OPUS.md) (on `research/compromise-audit`), on Sol's findings ART-01/02/03/07, CAV-02/03/20 and TST-05. **New modules only:** `src/world/collision/*` and `tests/col1-*`. No edit to `world.ts`, `app.ts`, `step.ts`, LC's files, or any cave or creature file.
 
+## R5 response (Sol R5 on `09e8586`: [report](../reviews/COL-1A-SOL-XHIGH-R5.md), on `review/col-1a-r5`)
+**Orientation is now by construction, never by probing** (R5-1, P3-A, P3-B). The probe vote is gone from `src` entirely.
+- **Producers declare orientation** (`Orientation { facing, source }` on an `OrientedMesh`):
+  - **Kit shells:** `KIT_SHELL_ORIENTATION`, in `caveShapes.ts`. `surfaceNets` winds each triangle so its normal's crossing-axis component points from the solid voxel to the water voxel, which is outward. `relax`, the floor snap and `clipMeshToRect` move positions or keep polygon order, and never reorder indices. COL-1 states this beside the code it cites, because it may not edit `caveGeometry.ts`.
+  - **LC chunks:** `LC_ORIENTATION` ("rock at v0 means the surface faces +axis").
+  - **Closed prisms:** wound away from their convex centroid by `facetMesh`.
+- **Certification per connected component** (`certifyOrientation`, `orientedShapes`):
+  - coherence within each component (`orientationProblems`) is the hard check;
+  - every triangle must carry a provenance facing;
+  - provenance that differs inside one coherent component is refused;
+  - differently oriented components bake as separate shapes.
+
+  No majority, count or vote rule exists.
+- **Probing is a test-only cross-check:** `probeComponents` in `tests/col1-support.ts`, per component, at 5, 10, 20 and 40 cm. A wrongly wound component is contrary at every scale; a single tilted triangle can be contrary close in and agree further out.
+- **`kitShellShapes(def)` is fine-only** (P3-B). The coarse shell makes no rock-bound promise and isn't a collision LOD.
+
+**P3-C turned up a real defect, now fixed at the root.** The collar lattice shared its vertices, so lifting one cell's corners raised its neighbours too. On the hub collars, whose floors have cliffs and steps, the heightfield stood **0.1–2.5 m above the old column tops in thousands of columns**: 2,244 of 4,640 at Apron hollow. The colonnade and every earlier fixture were smooth, so nothing caught it.
+
+**The heightfield is now per cell.** Each cell owns its four corners:
+- **A smooth cell** is lifted by its own sag at most (at most `CREASE`, 2 cm, measured on a 5 × 5 quarter-cell grid that contains the old columns' nine points), so it never stands above its old column top.
+- **A cell that creases more** (a cliff, a step, a ridge) is baked **flat at its column top** (25-point maximum plus 2 cm).
+- **Steps between cells are walls,** in the same oriented volume as the hole and edge walls.
+- **The residual is measured independently,** on an 8 × 8 grid that shares no point with the construction grid.
+- **`collarHeightfield` chooses a validated resolution:** the first of 0.5 m and 0.25 m whose residual is at most 10 mm. If none passes, it throws, naming every residual.
+
+On the real collars:
+
+| Collar | Cell | Flat cells | Heightfield above an old column top |
+| --- | --- | --- | --- |
+| Colonnade (three caves) | 0.5 m | 0 | never |
+| Fanvault | 0.5 m | 12 | never |
+| Apron hollow | 0.5 m | 1,846 | 25 columns, at most 3.2 mm |
+| Step arch | 0.5 m | 3,380 | 41 columns, at most 13.7 mm |
+| Glimmer crack | 0.25 m | 12,058 | 38 columns, at most 13.1 mm |
+| Crown shaft | 0.25 m | 11,699 | 125 columns, at most 21.9 mm |
+
+**Every exceedance is the old column's own shortfall.** In each of those columns the floor itself rises above the column's nine sample points (the old column stood below the floor) by the same amount, to within one Float32 ulp of round-up. Shared vertices gave up to 2.5 m.
+
+**Art sweep** (`tests/col1-art.heavy.test.ts`): every kit cave in all three registries, each with its own builder:
+- `caveDef` for the 23 in `AUTHORED_CAVE_SOURCES`;
+- `groupDef` for the 12 Canopy and Basin groups;
+- `buildCave` for the 20 deep caves.
+
+That's 55 fine shells in 56 components. The cross-check finds 9 isolated contrary probes in 22,150, none more than 3 per component. The three shells the vote refused (`basin_dish_lee_vault`, `divide_lintel_galleries`, `meridian_terrace_crack`) and both hub controls bake. Also in the sweep: all 30 vista, POI and dish sets; all 90 Canopy chunks (55 art meshes in 74 components); and **the Apron hollow's whole oracle scene**. Through LC's composer, its heightfield and shell variants have no spurious block or stop, no newly illegal end and no newly blocked protected pose; the heightfield variant blocks nothing the columns allow.
+
+**Tests:** `tests/col1-r5.test.ts`, with each mutation failing its test:
+- **P3-A:** two disjoint boxes, one reversed, and a 2 cm reversed cube beside a box. Per-component provenance certifies both; support and recovery come out right (0.154 m); conflicting or missing provenance is refused; the cross-check flags a wrong claim.
+- **P3-C:** validated cell choice. A ridge 0.5 m can't bound bakes at 0.25 m; a sliver neither can bound is refused with both residuals; a cliff bakes flat.
+- **Per-cell heightfield:** never above a column top; on the floor at the nine points; step walls stop sweeps below a cliff top and pass above it; sight agrees with an **independent** dense walk under each cell's own plane.
+- **The cliff collar** never blocks a pose the old 0.5 m columns allow.
+- **Mutations:** creases lifted instead of flattened; walls only at holes; conflicting provenance accepted; the first cell taken unvalidated.
+
+**API changes:**
+- `meshFacing`, `insideOf` and `FACING_PROBES` are removed.
+- Added: `Orientation`, `OrientedMesh`, `meshComponents`, `certifyOrientation`, `orientedShapes` (bake), and `KIT_SHELL_ORIENTATION` with `kitShellShapes(def)` (fine only, no floor argument).
+- `StaticHeightfield.corners` (four per cell) replaces `heights`; `createHeightfield` still takes shared samples, `createCellHeightfield` takes corners, and `flatCells` is added.
+- `collarHeightfield`'s last argument is now a list of cell sizes.
+- `StaticCollider.samples` now counts heightfield cells.
+
+**Compromises:**
+- **Collar bake cost.** Collars that need 0.25 m cells take 9–14 s to bake (Glimmer crack and Crown shaft, measured locally, not exclusive). That's bake-time work; **root fix:** bake collars offline in WK-1's bake pipeline and load them. **S**.
+- **Per-cell storage** is four Float32 per cell, against the shared lattice's one.
+  - **Measured on the colonnade:** the heightfield variant is now **832 KiB** (356 KiB with shared vertices), about half the column boxes' 1.53 MiB. The shell variant is 1.86 MiB. The memory figures in the pre-R1 tables below are older than this change.
+  - **Root fix:** keep the shared lattice and store per-cell corners only for flat cells, since almost every cell agrees with its neighbours. **S**.
+
+CHECKS_R5
+
 ## R4 response (Sol R4 on `dfab435`: [report](../reviews/COL-1A-SOL-XHIGH-R4.md), on `review/col-1a-r4`)
 **R4-1 is fixed at the root.** Coherence (`orientationProblems`) stays the hard winding guarantee. The vote only decides which way a coherent mesh faces, and now uses the **shape's own authoritative occupancy**:
 - **The predicate** returns true, false, or `null` (unknown, outside its domain).
