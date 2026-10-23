@@ -70,6 +70,14 @@ Every other identity-keyed cache is keyed by content.
   - **Reloading:** v1 and v2 exports both parse.
   - **Retention and tabs:** as root. A new expedition replaces the stored timeline, and multiple tabs are last-writer-wins.
   - **What SIM-05 needed:** rotation now bounds the export and keeps every note verbatim. The old 20,000-event cap dropped later events, notes included.
+  - **Under quota pressure,** the stored copy folds before it fails.
+    - **The folding:** on `QuotaExceededError` the one `setItem` is retried with fewer whole sealed chunks: all of them (up to 20), then 10, 5 and 2, plus the open chunk each time. The older ones are folded into summaries in the export only, the same `summarizeChunk` rotation uses. The timeline in memory keeps its full window.
+    - **What the stored copy keeps:**
+      - in full, at every step: every **note, new thing, death, recovery and system event**, plus the newest 2–20 chunks' events;
+      - as exact totals: gathering by item, travel count, minutes, stationary time and time by hull, and idle count and minutes;
+      - listed at the default thresholds: empty travel over 90 s and idle stretches of 60 s or more.
+    - **What the analysis gives:** new things, gaps, gathering, deaths and notes analyse exactly as the unfolded timeline (tested).
+    - **Below the floor** (the open chunk plus 2 sealed) the save says the note or timeline is in memory only, with export.
   - **Known cost, a compromise:** each save still re-serialises the whole export (see "Compromises"; the root fix is SIM-1b).
 - **Spans:** an export closes the open travel and idle spans with `closingEvents`, the same pure helper the recorder uses to close them, so it never seals or rotates the live history (R1 F1's cause).
 
@@ -267,6 +275,12 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
   - "an export never seals".
 - **New app tests:** "Note saved" only after the write returns (a refused write says memory only), and Continue resumes a rotated timeline whole.
 - **No longer applicable:** R3's two app flows (returning to a previous expedition's timeline), since root's model keeps one timeline.
+- **Quota fold** (coordinator's addition after the split), at `54bbae19`. Tests:
+  - folded exports at 6, 3 and 2 whole chunks keep every note, analyse the same as the unfolded export, are smaller, and leave the live recorder's window untouched;
+  - an app quota double set between the half-window and quarter-window export sizes forces two folds: "Note saved" appears, and Continue reloads every note with matching new-thing, gathering and death totals;
+  - a limit below the floor says memory only.
+
+  Fast tier on `--machine 4070` (the 3090 is in CW-1's exclusive window): 140 files including the typecheck, exit 0.
 - **Checks at `68a2c5bd`:**
   - fast tier, 140 files;
   - focused suites, 281/281 (timeline, app, save, session, presentation, step guard, rows);
@@ -279,7 +293,7 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
 
 ## Compromises and follow-ups
 
-- **SIM-1a writes the whole timeline export on every save** (every 600 active ticks, and on each note), as root does today. This is no regression, but it is the cost SIM-05 named.
+- **SIM-1a writes the whole timeline export on every save** (every 600 active ticks, and on each note), as root does today. This is no regression, but it is the cost SIM-05 named. A full quota now folds the stored copy rather than failing (above), so a long session's notes stay stored until even the folded floor doesn't fit.
   - **Size, measured (deterministic, not a timing):** a full rotation window (20 sealed chunks of 1,000 events: gathers, points of interest and a note every 50) exports to **2,854,214 UTF-16 code units**, about 5.4 MiB in localStorage terms. That is a large share of a ~5 M-character origin quota, which the save journal shares.
   - **Not measured:** the per-save stringify cost is not measured on the 3090 or the 4070; the earlier estimate was about 2.4 MB per save.
   - **Tabs:** multi-tab writes are last-writer-wins, as root.
