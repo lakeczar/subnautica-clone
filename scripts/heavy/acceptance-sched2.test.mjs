@@ -11,7 +11,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { heavyJobGuard } from "./build-guard.mjs";
 import { sliceLimits } from "./policy.mjs";
@@ -401,7 +401,8 @@ test("S14: the .test-build guard: a queued ticket never blocks; a running one na
 const weight = (c) => spawnSync("systemctl", ["--user", "show", "-p", "CPUWeight", "--value", c.env.SILTWAKE_SCHED_BOOST_SLICE], { encoding: "utf8" }).stdout.trim();
 const stateOf = (c) => read(join(c.sched, "state.json")) ?? {};
 /** A fault-injecting systemctl in the scheduler's PATH (the real one otherwise): `mode` is
- * crash-before-apply, crash-after-apply (the boost's caller is killed there) or fail-resets:N. */
+ * crash-before-apply, crash-after-apply (the boost's caller is killed there), hold-apply (the apply
+ * waits for <shim>/release) or fail-resets:N. */
 function shim(c) {
   const d = join(c.dir, "shim");
   mkdirSync(d, { recursive: true });
@@ -412,6 +413,7 @@ if [[ "$*" == *"set-property"*"${c.env.SILTWAKE_SCHED_BOOST_SLICE}"* ]]; then
     case "$m" in
       crash-before-apply) : > "${d}/mode"; kill -9 $PPID; exit 1 ;;
       crash-after-apply) : > "${d}/mode"; /usr/bin/systemctl "$@"; kill -9 $PPID; exit 0 ;;
+      hold-apply) : > "${d}/mode"; : > "${d}/held"; while [ ! -e "${d}/release" ]; do sleep 0.1; done; exec /usr/bin/systemctl "$@" ;;
     esac
   elif [[ " $* " == *" CPUWeight= "* && "$m" == fail-resets:* ]]; then
     n=\${m#fail-resets:}; if [ "$n" -gt 0 ]; then echo "fail-resets:$((n-1))" > "${d}/mode"; echo "injected failure" >&2; exit 1; fi
@@ -420,7 +422,9 @@ fi
 exec /usr/bin/systemctl "$@"
 `, { mode: 0o755 });
   c.env.PATH = `${d}:${process.env.PATH}`;
-  return (mode) => writeFileSync(join(d, "mode"), mode);
+  const set = (mode) => writeFileSync(join(d, "mode"), mode);
+  set.dir = d;
+  return set;
 }
 
 test("S17 (TST-16): an exclusive job raises its slice's CPU weight while it runs and resets it at its result; its contention is measured from before its payload to after it", async () => {
@@ -499,4 +503,70 @@ test("S20 (TST-16 R1-F5): a GPU client that starts after admission and outlives 
     assert.ok(r.gpuShared?.some((u) => u.pid === client.pid), JSON.stringify(r.gpuShared));
     assert.match(r.context.reasons.join(), new RegExp(`GPU was shared outside the lease \\(pid [^)]*${client.pid}`));
   } finally { client.kill(); }
+});
+
+test("S21 (TST-16 R2-F1): a boost apply still in flight when its holder dies is never reset early: the record stays until the holder's scope is empty, then the late apply is undone", async () => {
+  const c = context("boost-inflight", { config: fast });
+  const mode = shim(c);
+  mode("hold-apply");
+  const x = submit(c, c.wt("x"), "--class", "exclusive", "--", "sleep", "30");
+  await until("the apply is held", () => existsSync(join(mode.dir, "held")), 30000);
+  const tk = await holderOf(c, x);
+  assert.equal(stateOf(c).boost?.state, "applying");
+  killOwned(tk.holder);
+  for (let i = 0; i < 6; i++) { hc(c, ["status"]); await sleep(300); }
+  assert.equal(stateOf(c).boost?.ticket, x, "kept while the holder's scope still holds the setter");
+  writeFileSync(join(mode.dir, "release"), "");
+  await until("the late apply landed", () => weight(c) === "10000" || stateOf(c).boost === undefined, 15000);
+  await until("reset once the scope is empty", () => { hc(c, ["status"]); return stateOf(c).boost === undefined && result(c, x); }, 60000);
+  assert.equal(weight(c), "[not set]");
+  for (let i = 0; i < 2; i++) { hc(c, ["status"]); assert.equal(weight(c), "[not set]"); }
+});
+
+test("S22 (TST-16 R2-F2): rollback and uninstall hand the boost over first: they refuse while a reset is pending (no tickets) or an exclusive job runs, and succeed once a verified reset is done; the backstop resets a stray weight", async () => {
+  const c = context("boost-rollback", { config: fast });
+  const mode = shim(c);
+  const home = join(c.dir, "home"), env = { ...c.env, SILTWAKE_SCHED_HOME: home };
+  const install = (...args) => spawnSync("bash", [join(here, "install.sh"), ...args], { env, encoding: "utf8" });
+  const installed = (...args) => spawnSync("bash", [join(home, "current", "install.sh"), ...args], { env, encoding: "utf8" });
+  assert.equal(install().status, 0);
+  const current = () => readlinkSync(join(home, "current"));
+  const v = current();
+  mkdirSync(join(home, "old000000000"), { recursive: true }); // an older installed version (it never cleans the boost up)
+  // A reset pending with no tickets: rollback refuses and changes nothing; then succeeds with a verified reset.
+  mode("fail-resets:9");
+  const x = submit(c, c.wt("x"), "--class", "exclusive", "--", "sleep", "1");
+  assert.equal(waitFor(c, x).code, 0);
+  assert.equal(stateOf(c).boost?.state, "releasing");
+  assert.equal(Object.keys(stateOf(c).tickets).length, 0);
+  let r = installed("--rollback", "old000000000");
+  assert.equal(r.status, 3, r.stderr);
+  assert.match(r.stderr, /CPU boost on .* is still pending \(releasing\): its reset has not been verified yet/);
+  assert.equal(current(), v, "nothing changed");
+  assert.equal(installed("--uninstall").status, 3);
+  assert.ok(existsSync(join(home, "current")));
+  mode("");
+  r = installed("--rollback", "old000000000");
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual([current(), stateOf(c).boost, weight(c)], ["old000000000", undefined, "[not set]"]);
+  // Holder death during a transition: refused while the exclusive job runs, done once it's recovered.
+  spawnSync("ln", ["-sfn", v, join(home, "current")]);
+  const y = submit(c, c.wt("y"), "--class", "exclusive", "--", "sleep", "30");
+  await until("boosted", () => stateOf(c).boost?.state === "applied", 30000);
+  r = installed("--rollback", "old000000000");
+  assert.equal(r.status, 3);
+  assert.match(r.stderr, new RegExp(`exclusive job ${y} is running`));
+  killOwned((await holderOf(c, y)).holder);
+  await until("recovered", () => { hc(c, ["status"]); return result(c, y) && stateOf(c).boost === undefined; }, 60000);
+  r = installed("--uninstall");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(existsSync(join(home, "current")), false);
+  // The backstop: a raised weight with no record and nothing exclusive running is reset by any queue command.
+  spawnSync("systemctl", ["--user", "set-property", "--runtime", c.env.SILTWAKE_SCHED_BOOST_SLICE, "CPUWeight=10000"]);
+  const q = submit(c, c.wt("q"), "--class", "quick", "--", "sleep", "3"); // keeps the slice's cgroup present
+  await running(c, q);
+  hc(c, ["status"]);
+  assert.equal(weight(c), "[not set]");
+  assert.match(readFileSync(join(c.sched, "ledger.jsonl"), "utf8"), /"event":"boost-reset".*"by":"backstop"/);
+  waitFor(c, q);
 });

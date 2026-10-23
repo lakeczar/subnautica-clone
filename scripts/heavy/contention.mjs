@@ -186,12 +186,33 @@ export function unmeasuredContext(why) {
 
 /**
  * The exclusive priority boost on `slice` (state.boost holds its ownership).
- * on: CPUWeight=weight; off: CPUWeight reset. Verified by reading the
- * property back. Returns { ok, verified, error }.
+ * on: CPUWeight=weight; off: CPUWeight reset. Verified only by a successful
+ * read-back of the property (R2 P3). Returns { ok, verified, error }.
  */
 export function setBoost(slice, on, weight = 10000) {
   const r = spawnSync("systemctl", ["--user", "set-property", "--runtime", slice, `CPUWeight=${on ? weight : ""}`], { encoding: "utf8", timeout: 15000 });
-  const shown = spawnSync("systemctl", ["--user", "show", "-p", "CPUWeight", "--value", slice], { encoding: "utf8", timeout: 15000 }).stdout?.trim();
-  const verified = r.status === 0 && (on ? shown === String(weight) : shown === "[not set]" || shown === "");
-  return { ok: r.status === 0, verified, error: verified ? null : (r.stderr || r.error?.message || `CPUWeight shows ${shown}`).trim().slice(0, 200) };
+  const w = boostWeight(slice, { force: true });
+  const verified = r.status === 0 && w.known && (on ? w.value === weight : w.value === null);
+  return { ok: r.status === 0, verified, error: verified ? null : (r.status !== 0 ? (r.stderr || r.error?.message || `exit ${r.status}`) : w.known ? `CPUWeight reads ${w.value ?? "unset"}` : "the property could not be read back").trim().slice(0, 200) };
+}
+
+/** A top-level user slice's cgroup, derived from this process's (no systemctl call). */
+function userSliceCgroup(slice) {
+  const root = /^0::(.*\/user@\d+\.service)/m.exec(read("/proc/self/cgroup") ?? "")?.[1];
+  return root ? `/sys/fs/cgroup${root}/${slice}` : null;
+}
+/**
+ * The slice's CPU weight setting: { known, value } (value null: not set, the
+ * default). Read from its cgroup when it exists (cheap; 100 is the default),
+ * else, or with `force`, from systemd: an idle slice has no cgroup but still
+ * carries a runtime drop-in that applies when it becomes active.
+ */
+export function boostWeight(slice, { force = false, cheapOnly = false } = {}) {
+  const cg = userSliceCgroup(slice), file = !force && cg ? read(`${cg}/cpu.weight`) : null;
+  if (file != null) { const v = Number(file.trim()); return { known: true, value: v === 100 ? null : v, via: "cgroup" }; }
+  if (cheapOnly) return { known: false, value: null, via: "none" };
+  const r = spawnSync("systemctl", ["--user", "show", "-p", "CPUWeight", "--value", slice], { encoding: "utf8", timeout: 15000 });
+  const out = r.stdout?.trim();
+  if (r.status !== 0 || !out) return { known: false, value: null, via: "systemd" };
+  return { known: true, value: out === "[not set]" ? null : Number(out), via: "systemd" };
 }

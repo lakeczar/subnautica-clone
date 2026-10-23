@@ -30,6 +30,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveRequest, tokensFor } from "./policy.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
+import { boostWeight } from "./contention.mjs";
 import { builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
   alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState,
@@ -448,7 +449,9 @@ function recover() {
   const owner = (t) => (t.state === "running" && t.holder ? t.holder : t.supervisor);
   const s = readState(cfg);
   // An exclusive boost record (TST-16) is reconciled too, with no tickets left: a reset may be pending.
-  if (!s.boost && Object.values(s.tickets).every((t) => alive(owner(t)))) return;
+  // So is a raised weight with no record (the backstop; a cheap cgroup read).
+  const raised = cfg.boostSlice && !s.boost && boostWeight(cfg.boostSlice, { cheapOnly: true }).value != null;
+  if (!s.boost && !raised && Object.values(s.tickets).every((t) => alive(owner(t)))) return;
   transaction(cfg, (state) => ({ changed: reconcile(cfg, state) }));
 }
 

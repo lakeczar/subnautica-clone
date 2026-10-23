@@ -156,7 +156,8 @@ const args = [
 const exclusive = req.exclusive ? { points: [], observed: { load1Max: 0, cpuSomeAvg10Max: 0, memFullAvg10Max: 0 }, raw: join(dir, "contention.jsonl") } : null;
 let boost = null;
 if (req.exclusive && !rejected && cfg.boostSlice) {
-  transaction(cfg, (state) => { state.boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, ticket: id, owner: me, state: "applying", at: Date.now() }; return { changed: true }; });
+  // The owner is this holder and its scope: the setter is a child here, so recovery waits until the scope is empty (R2-F1).
+  transaction(cfg, (state) => { state.boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, ticket: id, owner: me, ownerUnit: inOwnScope ? holderUnit : null, state: "applying", at: Date.now() }; return { changed: true }; });
   const r = setBoost(cfg.boostSlice, true, cfg.exclusiveCpuWeight);
   transaction(cfg, (state) => { if (state.boost?.ticket === id && r.verified) state.boost.state = "applied"; return { changed: true }; });
   boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, applied: r.verified, ...(r.verified ? {} : { error: r.error }) };

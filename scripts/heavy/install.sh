@@ -9,7 +9,13 @@
 #   scripts/heavy/install.sh --mode normal   switch mode (serial = v1 behaviour)
 #   scripts/heavy/install.sh --slice         also install the user slice unit
 #                                            (per-user config: coordinator approval)
+#   scripts/heavy/install.sh --rollback VER  point `current` at an installed older version
 #   scripts/heavy/install.sh --uninstall     remove `current`: every shim falls back to v1
+#     Both first hand the state over (handover.mjs): they refuse while an
+#     exclusive job runs or its CPU boost can't be reset and verified, because
+#     older code never cleans that up (TST-16). Run them from the installed
+#     copy: ~/.local/share/siltwake-sched/current/install.sh --rollback VER.
+#     Never roll back by running an older tree's install.sh.
 #   scripts/heavy/install.sh --gpu-guard     wrap every Playwright Chrome binary so a GPU
 #                                            launch needs the GPU lease (chrome-guard.sh);
 #                                            per-user change: coordinator approval
@@ -23,15 +29,16 @@ home="${SILTWAKE_SCHED_HOME:-$HOME/.local/share/siltwake-sched}"
 dir="${SILTWAKE_SCHED_DIR:-/work/tmp/siltwake-sched}"
 slice_name="${SILTWAKE_SCHED_SLICE:-siltwake-heavy.slice}"
 pw="${SILTWAKE_PLAYWRIGHT_DIR:-$HOME/.cache/ms-playwright}"
-mode="" slice=0 uninstall=0 guard=""
+mode="" slice=0 uninstall=0 guard="" rollback=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode) mode="$2"; shift 2 ;;
     --slice) slice=1; shift ;;
     --uninstall) uninstall=1; shift ;;
+    --rollback) rollback="$2"; shift 2 ;;
     --gpu-guard) guard=on; shift ;;
     --gpu-guard-remove) guard=off; shift ;;
-    *) echo "usage: $0 [--mode serial|normal] [--slice] [--gpu-guard|--gpu-guard-remove] [--uninstall]" >&2; exit 2 ;;
+    *) echo "usage: $0 [--mode serial|normal] [--slice] [--gpu-guard|--gpu-guard-remove] [--rollback VERSION] [--uninstall]" >&2; exit 2 ;;
   esac
 done
 
@@ -45,13 +52,20 @@ if [[ $guard == off ]]; then
   exit 0
 fi
 
-if [[ $uninstall == 1 ]]; then
-  rm -f "$home/current"
-  echo "heavy-check v2 uninstalled: shims fall back to v1. State in $dir is kept."
+if [[ $uninstall == 1 || -n $rollback ]]; then
+  [[ -z $rollback || -d "$home/$rollback" ]] || { echo "no installed version $rollback in $home" >&2; exit 2; }
+  SILTWAKE_SCHED_DIR="$dir" node "$src/handover.mjs" || { echo "not handed over: the older code would not clean that up; nothing was changed" >&2; exit 3; }
+  if [[ $uninstall == 1 ]]; then
+    rm -f "$home/current"
+    echo "heavy-check v2 uninstalled: shims fall back to v1. State in $dir is kept."
+  else
+    ln -sfn "$rollback" "$home/current.tmp" && mv -T "$home/current.tmp" "$home/current"
+    echo "heavy-check rolled back to $rollback."
+  fi
   exit 0
 fi
 
-files=(policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
+files=(install.sh handover.mjs policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
   remote.mjs remote-holder.mjs lane-run.sh)
 # The remote lane's transport (SCHED-2b) is scripts/alickers-job.sh; each
 # version carries its own copy, so a running remote ticket keeps its transport.

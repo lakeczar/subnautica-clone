@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { setBoost, unmeasuredContext } from "./contention.mjs";
+import { boostWeight, setBoost, unmeasuredContext } from "./contention.mjs";
 import { DEFAULTS, PROTOCOL, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 
@@ -374,15 +374,28 @@ export function reconcile(cfg, state) {
     delete state.tickets[t.id];
     changed = true;
   }
-  // The exclusive priority boost (TST-16 R1-F1) lasts only while its job runs
-  // under its live holder. Otherwise it is reset; the record stays until the
-  // reset is verified, so a failed one is retried by the next reconcile.
+  // The exclusive priority boost (TST-16) lasts only while its job runs under
+  // its live holder. Its record keeps ownership until a verified reset. It is
+  // reset only once the owner can't act any more: the holder dead *and* its
+  // scope empty (R2-F1: the same boundary as the ticket's lifetime), so an
+  // apply still in flight can never land after the reset.
   if (state.boost) {
-    const b = state.boost, tk = state.tickets[b.ticket];
-    if (b.state === "releasing" || tk?.state !== "running" || !alive(b.owner)) {
+    const b = state.boost;
+    if (!alive(b.owner) && !(b.ownerUnit && scopePopulated(b.ownerUnit))) {
       const r = setBoost(b.slice, false);
       ledger(cfg, { event: "boost-reset", ticket: b.ticket, slice: b.slice, verified: r.verified, error: r.error, by: "reconcile" });
       if (r.verified) delete state.boost; else Object.assign(b, { state: "releasing", failures: (b.failures ?? 0) + 1 });
+      changed = true;
+    }
+  } else if (cfg.boostSlice && !Object.values(state.tickets).some((t) => t.state === "running" && t.req?.exclusive)) {
+    // Backstop (R2): with no record and no exclusive job, our own slice's weight is
+    // reset whatever happened (a bypassed rollback, a lost record). An idle slice
+    // is checked through systemd at most once a minute.
+    let w = boostWeight(cfg.boostSlice, { cheapOnly: true });
+    if (!w.known && Date.now() - (state.boostCheckedAt ?? 0) > 60000) { w = boostWeight(cfg.boostSlice, { force: true }); state.boostCheckedAt = Date.now(); changed = true; }
+    if (w.known && w.value !== null) {
+      const r = setBoost(cfg.boostSlice, false);
+      ledger(cfg, { event: "boost-reset", slice: cfg.boostSlice, was: w.value, verified: r.verified, error: r.error, by: "backstop" });
       changed = true;
     }
   }

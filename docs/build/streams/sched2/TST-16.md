@@ -59,6 +59,23 @@ Review `81d6d83` on `review/tst-16-r1`, on `312b1bed`: two P1s, three P2s.
 - **F5 (P2): the GPU scan** is forced on the first and final observation. **S20**: a client opened after admission and outlasting the job is in `gpuShared` and the reasons.
 - **Composition with SCHED-2b:** merged root `91dc1ab`. The holder keeps 2b's machine and artifact fields and the v2 context together. `cpuContext` is gone. Reconcile keeps 2b's remote-recovery branch separate from the local boost, which is keyed to its own exclusive ticket, so a remote ticket's death can't release it. `install.sh` carries `contention.mjs` and 2b's modules and transport. The acceptance lib keeps 2b's sandbox seams.
 
+## R2 review responses
+
+Review `b3ecb670` on `review/tst-16-r2`, on `ddd814da`: two P2s, plus one P3. The redesign held.
+- **F1, a surviving apply could re-boost after recovery deleted the record.**
+  - **The fix:** the boost record names its owner's holder scope. Reconcile resets and forgets a dead owner's boost only once that scope is empty, which is the same boundary as the ticket's lifetime. An apply still in flight therefore lands before the reset, never after it.
+  - **S21** (the reviewer's reproduction): the apply is held, the holder killed, and the record kept while the setter lives. Once released, the late apply lands, the scope empties, and the weight is reset. On `ddd814da` it fails at "kept while the holder's scope still holds the setter".
+- **F2, rollback abandoned pending cleanup.**
+  - **Guarded commands:** `install.sh --rollback <version>` (new) and `--uninstall` first run `handover.mjs`. It refuses, changing nothing, while an exclusive job runs or while a boost record remains or the weight doesn't read back as the default after reconcile.
+  - **Always available:** `install.sh` and `handover.mjs` are now in every installed version, so the guarded path runs from `current/install.sh`.
+  - **Documented:** WORKER_RESOURCE_LIMITS "Operating it" and SCHED-2's rollback step say: never roll back by running an older tree's `install.sh`.
+  - **S22:** a pending reset with no tickets makes rollback and uninstall refuse with the reason, leaving `current` unchanged; once the fault clears, rollback succeeds with a verified reset. An exclusive job running makes rollback refuse; after its holder dies and it's recovered, uninstall succeeds.
+- **Backstop (the coordinator's suggestion, adopted):** with no boost record and no exclusive job running, reconcile resets our slice's weight whenever it reads non-default.
+  - **Cost:** a cheap `cpu.weight` read when the slice's cgroup exists; an idle slice is checked through systemd at most once a minute.
+  - **Coverage:** `recover()` runs on that check too, so any queue command repairs a stray boost, for example after a bypassed rollback once this version is reinstalled.
+  - **Safe** because the weight is ours alone. **S22** sets a stray weight and a queue command resets it (`boost-reset`, `by: backstop`).
+- **P3, a failed read-back counted as verified:** fixed. A reset or apply is verified only when systemd's read-back succeeds and shows the expected value.
+
 ## Checks
 
 - **Unit tests** (`tests/heavy-contention.test.ts`, 6):
@@ -72,8 +89,10 @@ Review `81d6d83` on `review/tst-16-r1`, on `312b1bed`: two P1s, three P2s.
   - **S18:** crash boundaries, reset failures, takeover.
   - **S19:** private state without a named slice boosts nothing.
   - **S20:** the late GPU client.
+  - **S21:** an in-flight apply at holder death (R2-F1).
+  - **S22:** guarded rollback and uninstall, and the backstop (R2-F2).
   - **SCHED-1 test 7** checks the job's own measurement.
-- **Full suites** on the merged branch (root `91dc1ab` with this work): SCHED-1 **23/23**, SCHED-2 **20/20**, SCHED-2b **27/27**, fast tier **1,403/1,403**. No units or slices left behind.
+- **Full suites** on the merged branch (root `91dc1ab` with this work): SCHED-1 **23/23**, SCHED-2 **22/22**, SCHED-2b **27/27**, fast tier **1,403/1,403**. No units, slices or drop-ins left behind.
 
 ## Validation (CW-1 segment 7, run A)
 
