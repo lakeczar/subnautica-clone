@@ -600,3 +600,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - WK-1: one mesh builder, cache ledger and verify path;
   - SIG-1 stage 0: one inventory authority.
 - **Per-wave architecture review:** Sol makes one read-only pass against 8 checks (at most 2 pages), then an Opus steward rules (at most 1 page). At most one cleanup stream per wave.
+- **COL-1 A R7** (Sol on `38e50afb`, report on `review/col-1a-r7` `c863a203`): REQUEST CHANGES, one P2 (R7-1). The appended seam skirts are never validated. Where an open-edge chain doubles back, the curtains overlap with opposite normals in nine fine shells. That makes `escapeSweep` block exits at Step arch and at the Glimmer crack. R6-1 is fixed, 78/78 pass, and the art, memo and memory checks are confirmed. The coordinator agrees and sent it back to the builder for a constructed seam boundary validated on the final faces (no probes, flips, two-sided fallback or reopened seam).
