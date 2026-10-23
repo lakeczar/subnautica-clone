@@ -2,10 +2,13 @@
 // The architecture guard (STEW-1; the steward verdict's "What the guard rails are").
 // Runs in `npm run test:fast`, in about a second, with the TypeScript compiler API
 // already in devDependencies. It FAILS on:
-//   1. layering: a value import from src/sim/** or src/content/** into src/render/**,
-//      src/ui/**, src/audio/** or Babylon, or a DOM global used as a value there;
-//   2. a value-import cycle that isn't one of today's allowlisted groups, or a new
-//      member joining one (a ratchet: groups may shrink, never grow);
+//   1. layering: a value import (static, `export … from`, `import x = require`, a literal
+//      `import()` or `require()`) from src/sim/** or src/content/** into src/render/**,
+//      src/ui/**, src/audio/** or Babylon; a computed `import()`/`require()` there is
+//      refused outright. (DOM globals there fail tsconfig.headless.json's typecheck.)
+//   2. a value-import cycle (static edges) that isn't exactly an allowlisted group: a
+//      new cycle, a new member, or a group that shrank or vanished while its allowance
+//      didn't (the ratchet: shrink the allowance in the change that shrinks the cycle);
 //   3. browser, server or GPU-prep plumbing (`chromium.launch(`, `createServer(`,
 //      `gpu-prep`) outside scripts/rec, scripts/heavy and scripts/soak, except the
 //      allowlisted archive (REC-2 retires it);
@@ -13,6 +16,7 @@
 //   5. a region lookup (a function or method named like `regionAt`, `regionOf`,
 //      `regionFor`) declared outside src/content/regions/layout.ts, except the
 //      allowlisted legacy art lookup and the WorldMap interface.
+// Sources are every .ts, .mts, .cts and .tsx under src (not .d.ts).
 // It PRINTS, without failing: the FORK markers, the shared roots' line counts and
 // exported names nothing else references, for the per-wave architecture review.
 //
@@ -34,6 +38,7 @@ export const ALLOW = {
       "src/sim/recovery.ts", "src/sim/survival.ts", "src/sim/vehicles.ts"],
   ],
   /** Archived per-stream evidence drivers (and two in flight on CW-1 and COL-1). REC-2 moves them onto scripts/rec. */
+  // FORK(stream-drivers): per-stream browser drivers, servers and save-derive scripts, each a copy of the last; retire in REC-2.
   drivers: [
     "docs/build/gpu-enablement/webgl-probe.mjs",
     "docs/build/streams/atm1/server.mjs", "docs/build/streams/c3/play.mjs", "docs/build/streams/c4/play-a.mjs",
@@ -58,8 +63,10 @@ const DRIVER_PATTERNS = [
   ["gpu-prep", /gpu-prep/],
 ];
 const LOWER = /^src\/(sim|content)\//, UPPER = /^src\/(render|ui|audio)\//;
-const DOM_GLOBALS = new Set(["document", "window", "navigator", "localStorage", "sessionStorage", "location", "HTMLElement",
-  "HTMLCanvasElement", "requestAnimationFrame", "cancelAnimationFrame", "AudioContext", "getComputedStyle"]);
+/** Source files the guard analyses. */
+export const SOURCE = /^src\/.+(?<!\.d)\.(ts|mts|cts|tsx)$/;
+/** The owner's lookups: a function whose whole body is one call to these delegates, it is no second lookup. */
+const REGION_DELEGATES = new Set(["regionAtPoint", "regionAtPosition"]);
 const REGION_LOOKUP = /^\w*region(At|Of|For)(Point|Position)?$/i;
 const REGION_OWNER = "src/content/regions/layout.ts";
 const SELF = ["scripts/guard-architecture.mjs", "tests/guard-architecture.test.ts"];
@@ -68,14 +75,18 @@ export const SHARED_ROOTS = ["src/runtime/app.ts", "src/sim/step.ts", "src/sim/w
 
 // ----------------------------------------------------------------------------- source analysis
 
-/** Value imports of one TS source, resolved to repository paths (bare specifiers kept). Type-only imports are skipped. */
+/** One source's value imports (resolved to repository paths, bare specifiers kept), split into
+ * static edges (which can form initialization cycles) and lazy ones (`import()`, `require()`);
+ * type-only imports are skipped. Plus its region lookups, RecipeBuilder classes and value exports. */
 function analyseSource(file, text, exists) {
-  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
-  const imports = [], declared = new Set(), dom = new Set(), lookups = [], builders = [], exports = [];
+  const kind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true, kind);
+  const imports = [], lazy = [], computed = [], lookups = [], builders = [], exports = [];
   const resolve = (spec) => {
     if (!spec.startsWith(".")) return spec;
     const base = path.posix.normalize(path.posix.join(path.posix.dirname(file), spec));
-    for (const c of [base.replace(/\.js$/, ".ts"), base.replace(/\.mjs$/, ".mts"), `${base}.ts`, `${base}/index.ts`, base]) if (exists(c)) return c;
+    const swap = [[/\.js$/, [".ts", ".tsx"]], [/\.mjs$/, [".mts"]], [/\.cjs$/, [".cts"]]].flatMap(([re, exts]) => re.test(base) ? exts.map((e) => base.replace(re, e)) : []);
+    for (const c of [...swap, `${base}.ts`, `${base}.mts`, `${base}.tsx`, `${base}/index.ts`, base]) if (exists(c)) return c;
     return base;
   };
   const exported = (n) => (ts.getCombinedModifierFlags(n) & ts.ModifierFlags.Export) !== 0;
@@ -89,6 +100,9 @@ function analyseSource(file, text, exists) {
       const typeOnly = st.isTypeOnly || (st.exportClause && ts.isNamedExports(st.exportClause) &&
         st.exportClause.elements.length > 0 && st.exportClause.elements.every((e) => e.isTypeOnly));
       if (!typeOnly) imports.push(resolve(st.moduleSpecifier.text));
+    } else if (ts.isImportEqualsDeclaration(st) && !st.isTypeOnly && ts.isExternalModuleReference(st.moduleReference)) {
+      const e = st.moduleReference.expression;
+      if (ts.isStringLiteral(e)) imports.push(resolve(e.text)); else computed.push(e.getText(sf));
     } else if (exported(st)) {
       // Value exports only (functions, constants, classes, enums): what a dead-code pass can delete.
       if (ts.isVariableStatement(st)) for (const d of st.declarationList.declarations) { if (ts.isIdentifier(d.name)) exports.push(d.name.text); }
@@ -96,7 +110,20 @@ function analyseSource(file, text, exists) {
     }
   }
   const nameOf = (n) => n.name && (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name)) ? n.name.text : null;
+  /** The function's whole body is one call to the owner's lookup (with any arguments). */
+  const delegates = (fn) => {
+    let body = fn.body;
+    if (body && ts.isBlock(body)) body = body.statements.length === 1 && ts.isReturnStatement(body.statements[0]) ? body.statements[0].expression : undefined;
+    while (body && ts.isParenthesizedExpression(body)) body = body.expression;
+    return !!body && ts.isCallExpression(body) && ts.isIdentifier(body.expression) && REGION_DELEGATES.has(body.expression.text);
+  };
   const visit = (n) => {
+    // Lazy loads: import("…") and require("…") (a type position's import("…") is a type, skipped below).
+    if (ts.isCallExpression(n) && (n.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(n.expression) && n.expression.text === "require"))) {
+      const arg = n.arguments[0];
+      if (arg && (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg))) lazy.push(resolve(arg.text));
+      else computed.push(n.getText(sf).slice(0, 80));
+    }
     if (ts.isTypeNode(n) && !ts.isExpressionWithTypeArguments(n)) return;
     if (ts.isInterfaceDeclaration(n) || ts.isTypeAliasDeclaration(n)) {
       for (const m of ts.isInterfaceDeclaration(n) ? n.members : []) {
@@ -107,24 +134,15 @@ function analyseSource(file, text, exists) {
       return;
     }
     const name = nameOf(n);
-    if (name && (ts.isVariableDeclaration(n) || ts.isParameter(n) || ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n) || ts.isBindingElement(n))) declared.add(name);
-    // A lookup implementation; one that only delegates to the owner's regionAtPoint/regionAtPosition is wiring, not a second lookup.
+    // A lookup implementation; one whose whole body calls the owner's regionAtPoint/regionAtPosition is wiring.
     const fn = ts.isFunctionDeclaration(n) || ts.isMethodDeclaration(n) ? n
       : (ts.isVariableDeclaration(n) || ts.isPropertyAssignment(n)) && n.initializer && (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer)) ? n.initializer : null;
-    if (name && fn && REGION_LOOKUP.test(name) && !/\bregionAtPo(int|sition)\b/.test(fn.getText(sf))) lookups.push(name);
+    if (name && fn && REGION_LOOKUP.test(name) && !delegates(fn)) lookups.push(name);
     if (ts.isClassDeclaration(n) && name === "RecipeBuilder" && exported(n)) builders.push(name);
-    if (ts.isIdentifier(n) && DOM_GLOBALS.has(n.text)) {
-      const p = n.parent;
-      const isName = (ts.isPropertyAccessExpression(p) && p.name === n) || (ts.isPropertyAssignment(p) && p.name === n) ||
-        (ts.isPropertyDeclaration(p) && p.name === n) || (ts.isMethodDeclaration(p) && p.name === n) || ts.isImportSpecifier(p) ||
-        (ts.isShorthandPropertyAssignment(p) && false);
-      if (!isName) dom.add(n.text);
-    }
     ts.forEachChild(n, visit);
   };
   visit(sf);
-  for (const d of declared) dom.delete(d);
-  return { imports, dom: [...dom], lookups, builders, exports };
+  return { imports, lazy, computed, lookups, builders, exports };
 }
 
 /** Strongly connected groups (size > 1, or a self-import) of a directed graph (Tarjan). */
@@ -152,18 +170,19 @@ function cycles(graph) {
 export function analyse(files, allow = ALLOW) {
   const failures = [], notes = [];
   const exists = (p) => files.has(p);
-  const sources = [...files.keys()].filter((f) => f.startsWith("src/") && f.endsWith(".ts") && !f.endsWith(".d.ts")).sort();
+  const sources = [...files.keys()].filter((f) => SOURCE.test(f)).sort();
   const info = new Map(sources.map((f) => [f, analyseSource(f, files.get(f), exists)]));
   // 1. Layering.
   for (const [f, i] of info) {
     if (!LOWER.test(f)) continue;
-    for (const target of i.imports)
-      if (UPPER.test(target) || target.startsWith("@babylonjs/")) failures.push(`layering: ${f} imports ${target} (sim and content stay below render, UI, audio and Babylon)`);
-    for (const g of i.dom) failures.push(`layering: ${f} uses the DOM global ${g} (sim and content run headless)`);
+    for (const [target, how] of [...i.imports.map((t) => [t, "imports"]), ...i.lazy.map((t) => [t, "lazily imports"])])
+      if (UPPER.test(target) || target.startsWith("@babylonjs/")) failures.push(`layering: ${f} ${how} ${target} (sim and content stay below render, UI, audio and Babylon)`);
+    for (const c of i.computed) failures.push(`layering: ${f} loads a computed module (${c}); sim and content import by literal path only, so the rule can see it`);
   }
   // 2. Cycles, ratcheted by membership.
   const graph = new Map([...info].map(([f, i]) => [f, i.imports.filter((t) => info.has(t))]));
   const groups = cycles(graph);
+  // Every cycle must be exactly an allowance, and every allowance exactly a cycle.
   for (const g of groups) {
     const home = allow.cycles.find((a) => g.every((m) => a.includes(m)));
     if (!home) {
@@ -171,9 +190,14 @@ export function analyse(files, allow = ALLOW) {
       failures.push(known
         ? `cycle: new members join an allowlisted import cycle: ${g.filter((m) => !known.includes(m)).join(", ")} (group: ${g.join(" → ")})`
         : `cycle: a new value-import cycle: ${g.join(" → ")}`);
-    } else if (g.length < home.length) notes.push(`cycle shrank to ${g.length} of ${home.length} (${home.filter((m) => !g.includes(m)).join(", ")} left it): ratchet ALLOW.cycles down`);
+    }
   }
-  for (const a of allow.cycles) if (!groups.some((g) => g.some((m) => a.includes(m)))) notes.push(`an allowlisted cycle is gone (${a[0]} …): remove it from ALLOW.cycles`);
+  for (const a of allow.cycles) {
+    const now = groups.filter((g) => g.some((m) => a.includes(m)));
+    const left = a.filter((m) => !now.some((g) => g.includes(m)));
+    if (!now.length) failures.push(`cycle: the allowlisted cycle ${a.join(" → ")} is gone: remove it from ALLOW.cycles in this change, so it can't regrow`);
+    else if (left.length || now.length > 1) failures.push(`cycle: an allowlisted cycle shrank or split (${left.join(", ") || "split"} left it): set ALLOW.cycles to ${now.map((g) => `[${g.join(", ")}]`).join(" and ")} in this change, so it can't regrow`);
+  }
   // 3. Driver plumbing.
   for (const [f, text] of files) {
     if (!/\.(mjs|js|cjs|ts|mts|sh)$/.test(f) || SELF.includes(f) || DRIVER_HOMES.some((d) => f.startsWith(d))) continue;
@@ -181,7 +205,10 @@ export function analyse(files, allow = ALLOW) {
     if (found.length && !allow.drivers.includes(f))
       failures.push(`driver: ${f} has ${found.join(", ")}; browser, server and GPU plumbing lives in scripts/rec (write a scenario), scripts/heavy or scripts/soak`);
   }
-  for (const f of allow.drivers) if (files.has(f) && !DRIVER_PATTERNS.some(([, re]) => re.test(files.get(f)))) notes.push(`${f} no longer has driver plumbing: remove it from ALLOW.drivers`);
+  // The same ratchet: an allowlisted file that lost its plumbing leaves the list in that change. (Files not on
+  // this branch, such as another stream's in-flight driver, are skipped.)
+  for (const f of allow.drivers) if (files.has(f) && !DRIVER_PATTERNS.some(([, re]) => re.test(files.get(f))))
+    failures.push(`driver: ${f} no longer has driver plumbing: remove it from ALLOW.drivers in this change, so it can't regrow`);
   // 4. RecipeBuilder.
   for (const [f, i] of info) if (i.builders.length && !allow.recipeBuilders.includes(f))
     failures.push(`builder: ${f} exports another class RecipeBuilder; use the kit RecipeBuilder (src/render/kit/recipe.ts)`);
@@ -192,8 +219,9 @@ export function analyse(files, allow = ALLOW) {
       failures.push(`region: ${f} declares a region lookup ${name}; the semantic region is regionAtPoint/regionAtPosition in ${REGION_OWNER}`);
   }
   // Printed only.
+  // The guard's own drivers marker counts; its test's planted text doesn't.
   const forks = [];
-  for (const [f, text] of files) for (const m of text.matchAll(/\/\/\s*FORK\(([^)]+)\)/g)) if (!SELF.includes(f)) forks.push(`${m[1]} (${f})`);
+  for (const [f, text] of files) for (const m of text.matchAll(/^\s*\/\/\s*FORK\(([^)]+)\)/gm)) if (f !== SELF[1]) forks.push({ id: m[1], file: f });
   const roots = SHARED_ROOTS.filter((f) => files.has(f)).map((f) => [f, files.get(f).split("\n").length]);
   const words = new Map();
   for (const [f, text] of files) if (!SELF.includes(f)) words.set(f, new Set(text.match(/[A-Za-z_$][\w$]*/g) ?? []));
@@ -204,7 +232,7 @@ export function analyse(files, allow = ALLOW) {
     const own = files.get(f).match(new RegExp(`(?<![\\w$])${name.replace(/\$/g, "\\$")}(?![\\w$])`, "g"))?.length ?? 0;
     if (own <= 1) unused.push(`${f}: ${name}`);
   }
-  return { failures, notes, report: { forks, roots, unused, groups, sources: sources.length } };
+  return { failures, notes, report: { forks, forkIds: [...new Set(forks.map((k) => k.id))].sort(), roots, unused, groups, sources: sources.length } };
 }
 
 // ----------------------------------------------------------------------------- the repository
@@ -231,10 +259,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const { failures, notes, report } = analyse(repositoryFiles());
   const ms = Math.round(performance.now() - t0);
   if (quiet && !failures.length)
-    console.log(`guard-architecture: ok in ${ms} ms (${report.sources} sources; ${report.forks.length} FORK markers, ${report.unused.length} unreferenced exports: node scripts/guard-architecture.mjs for the report)`);
+    console.log(`guard-architecture: ok in ${ms} ms (${report.sources} sources; ${report.forkIds.length} forks in ${report.forks.length} FORK markers, ${report.unused.length} unreferenced exports: node scripts/guard-architecture.mjs for the report)`);
   if (!quiet) {
-    console.log(`guard-architecture: ${report.sources} sources, ${report.groups.length} allowlisted import cycles, ${ms} ms`);
-    console.log(`  FORK markers: ${report.forks.length}${report.forks.length ? `: ${report.forks.join("; ")}` : ""}`);
+    console.log(`guard-architecture: ${report.sources} sources, ${report.groups.length} import cycles (each exactly an allowance), ${ms} ms`);
+    console.log(`  forks: ${report.forkIds.length} distinct IDs in ${report.forks.length} FORK markers: ${report.forks.map((k) => `${k.id} (${k.file})`).join("; ")}`);
     console.log(`  shared roots: ${report.roots.map(([f, n]) => `${path.basename(f)} ${n}`).join(", ")} lines`);
     console.log(`  exports nothing else references: ${report.unused.length}${report.unused.length ? "" : ""}`);
     for (const u of report.unused.slice(0, 40)) console.log(`    ${u}`);

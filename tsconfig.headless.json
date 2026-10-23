@@ -1,0 +1,6 @@
+{
+  "//": "STEW-1 (R4): sim and content, and everything they import, typecheck without the DOM, so no browser global can creep into the simulation. scripts/headless-platform.d.ts declares the three non-DOM platform APIs the headless runtime (Node and workers) provides.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "lib": ["ES2022"], "types": [], "noEmit": true },
+  "include": ["scripts/headless-platform.d.ts", "src/sim/**/*.ts", "src/content/**/*.ts"]
+}

@@ -6,10 +6,10 @@
   "engines": { "node": ">=22.18.0" },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc --noEmit && node scripts/bake-terrain.mjs && vite build",
+    "build": "tsc --noEmit && tsc -p tsconfig.headless.json && node scripts/bake-terrain.mjs && vite build",
     "bake:terrain": "node scripts/bake-terrain.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.headless.json",
     "test:build": "node scripts/test-build.mjs",
     "test:fast": "node scripts/guard-architecture.mjs --quiet && node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast",
     "test:heavy": "scripts/heavy-check.sh --class heavy-suite -- sh -c 'node scripts/test-build.mjs && node scripts/test-tier.mjs heavy'",
