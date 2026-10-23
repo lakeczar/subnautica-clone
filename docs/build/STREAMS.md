@@ -583,3 +583,20 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **REC-1 R1** (`32d6ef3`): 4 P1s and 8 P2s, among them **no storage budget for the default playtest recording**, an incomplete export, and false streaming and stable passes. Fixes are in progress; also told to fix the audit's baseline hash/PNG defect and merge CW-1's latest.
 - **TST-16 R2** (`b3ecb67`): 2 P2s (a surviving apply re-boosts after recovery; rollback strands boost cleanup). Fixes are in progress, with a suggested backstop: reset the slice weight whenever no exclusive job is running.
 - **Memory corrected:** the 3090 frame-stall note now says the causes are mixed, game work included.
+
+### 2026-10-23 — codebase steward verdict adopted (Opus `cc718962`)
+- **Root causes of drift:**
+  - interim copies never retired → the FORK register;
+  - per-stream evidence drivers → one driver library, `scripts/rec`;
+  - no hot-path rules → ten performance conventions;
+  - contracts kept in memory → one `npm run gate`.
+- **A live bug, F11:** audio uses the old four-region map, so the Rift, the Divide and the Deep District play the wrong ambience. It's fixed in STEW-1.
+- **New streams:**
+  - **STEW-1:** guard rails and small fixes. It started on the SAVE-1 builder's slot.
+  - **REC-2:** one evidence driver. The REC-1 builder does it after REC-1 merges, before BIO-1.
+- **Folded into existing streams:**
+  - REC-1: the two recorder defects, plus CW-1's top-k merge;
+  - COL-1 B: retire the box collision copies;
+  - WK-1: one mesh builder, cache ledger and verify path;
+  - SIG-1 stage 0: one inventory authority.
+- **Per-wave architecture review:** Sol makes one read-only pass against 8 checks (at most 2 pages), then an Opus steward rules (at most 1 page). At most one cleanup stream per wave.
