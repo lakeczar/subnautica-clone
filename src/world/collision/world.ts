@@ -107,9 +107,9 @@ export function composeStaticWorld(options: StaticWorldOptions): StaticWorld {
       max: { x: Math.max(b.max.x, b.max.x + d.x) + r, y: Math.max(b.max.y, b.max.y + d.y) + r, z: Math.max(b.max.z, b.max.z + d.z) + r } };
   };
   /** Earliest contact against the collider and the solids in `local`. */
-  const sweepBoth = (local: readonly Solid[], e: Vec3) => (c: Vec3, d: Vec3, out: SweepHit): boolean => {
-    let found = collider.sweep(c, e, d, SKIN, out);
-    for (const s of local) if (sweepBoxBox(c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, s.min.x, s.min.y, s.min.z, s.max.x, s.max.y, s.max.z, SKIN, hit))
+  const sweepBoth = (local: readonly Solid[], e: Vec3, skin = SKIN) => (c: Vec3, d: Vec3, out: SweepHit): boolean => {
+    let found = collider.sweep(c, e, d, skin, out);
+    for (const s of local) if (sweepBoxBox(c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, s.min.x, s.min.y, s.min.z, s.max.x, s.max.y, s.max.z, skin, hit))
       found = mergeHit(hit, out, found, d.x, d.y, d.z);
     return found;
   };
@@ -162,15 +162,7 @@ export function composeStaticWorld(options: StaticWorldOptions): StaticWorld {
       const { c, e } = boxOf(origin, shape);
       const sep = createSeparation();
       const r: Depenetration | null = depenetrate({
-        sweep: (cc, ee, dd, skin, out) => {
-          const b = { min: { x: cc.x - ee.x - 0.1, y: cc.y - ee.y - 0.1, z: cc.z - ee.z - 0.1 }, max: { x: cc.x + ee.x + 0.1, y: cc.y + ee.y + 0.1, z: cc.z + ee.z + 0.1 } };
-          const reach = Math.hypot(dd.x, dd.y, dd.z);
-          const local = nearSolids({ min: { x: b.min.x - reach, y: b.min.y - reach, z: b.min.z - reach }, max: { x: b.max.x + reach, y: b.max.y + reach, z: b.max.z + reach } });
-          let found = collider.sweep(cc, ee, dd, skin, out);
-          for (const s of local) if (sweepBoxBox(cc.x, cc.y, cc.z, ee.x, ee.y, ee.z, dd.x, dd.y, dd.z, s.min.x, s.min.y, s.min.z, s.max.x, s.max.y, s.max.z, skin, hit))
-            found = mergeHit(hit, out, found, dd.x, dd.y, dd.z);
-          return found;
-        },
+        sweep: (cc, ee, dd, skin, out) => sweepBoth(nearSolids(envelope(poseOf(cc, shape), dd, shape)), ee, skin)(cc, dd, out),
         blocked: cc => !world.clearance(poseOf(cc, shape), shape),
         deepest(cc, ee, tolerance) {
           let best: Separation | null = collider.contact(cc, ee, tolerance);
