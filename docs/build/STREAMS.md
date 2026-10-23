@@ -683,3 +683,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - report victims only after commit;
     - add a timeline-scoped export-and-repair action in this stream;
     - fold in the STEW-1 headless writer-lock split now.
+- **TST-16 done at `2ada5062`** (R6): fail-closed `unitPopulated` for removal and install refusal; `cpu.stat` throttle deltas, where any throttling means DISTURBED; endpoint limits documented. Suites pass 23/23, 24/24 and 27/27, and the fast tier 1405/1405. Short Sol R7 running (`siltwake-tst16-review-r7-sol-2ada506`).
