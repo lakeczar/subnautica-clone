@@ -31,7 +31,10 @@ const ECONOMY = [
 
 export const GATE = [
   { id: "fast", what: "fast tier: unit, simulation and save tests, with the architecture guard", run: ["npm", "run", "test:fast"] },
-  { id: "build", what: "typecheck, terrain bake and production build", run: ["npm", "run", "build"] },
+  // A cold terrain bake is heavy work, so it goes through the queue (it restores from the
+  // shared store when nothing changed); the build's own bake then finds it current.
+  { id: "bake", what: "terrain bake, queued (restored from the shared store when its sources are unchanged)", run: [H, "--class", "bake", "--", "node", "scripts/bake-terrain.mjs"] },
+  { id: "build", what: "typecheck and production build", run: ["npm", "run", "build"] },
   // The fast tier compiles .test-build, which these read.
   ...ECONOMY.map(([id, file, why]) => ({ id: `economy:${id}`, what: why, run: ["node", `scripts/${file}`] })),
   { id: "playthrough", what: "every playthrough scenario, both fleet routes included (queued, any machine)",
