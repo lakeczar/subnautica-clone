@@ -67,7 +67,13 @@ That's 55 fine shells in 56 components. The cross-check finds 9 isolated contrar
   - **Measured on the colonnade:** the heightfield variant is now **832 KiB** (356 KiB with shared vertices), about half the column boxes' 1.53 MiB. The shell variant is 1.86 MiB. The memory figures in the pre-R1 tables below are older than this change.
   - **Root fix:** keep the shared lattice and store per-cell corners only for flat cells, since almost every cell agrees with its neighbours. **S**.
 
-CHECKS_R5
+**Checks for R5**, at `3df972e` (root `55f05e7` merged in, SCHED-2a):
+- **Root merge gate:** fast tier 1,421 / 1,421; typecheck clean; `npm run build` OK; all five economy scripts exit 0 (campaign, M1, M2-A, M2-B1, progression curve).
+- **Heavy, through the queue** (`evidence for 3df972e3d2`):
+  - `col1-oracle.heavy.test.ts`: 4 / 4 (89 s, peak 243 MiB). The Canopy's 45 shared LC endpoints are unchanged.
+  - `col1-art.heavy.test.ts`: 5 / 5 (93 s, peak **831 of 1,024 MiB**). It builds 55 caves. If more registries join it, split it by registry rather than raise the budget.
+- **Mutations:** four, each failing its test (see the tests above).
+- **No new timing claims:** the collar bake times above are local and indicative.
 
 ## R4 response (Sol R4 on `dfab435`: [report](../reviews/COL-1A-SOL-XHIGH-R4.md), on `review/col-1a-r4`)
 **R4-1 is fixed at the root.** Coherence (`orientationProblems`) stays the hard winding guarantee. The vote only decides which way a coherent mesh faces, and now uses the **shape's own authoritative occupancy**:
