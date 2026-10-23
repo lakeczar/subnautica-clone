@@ -289,3 +289,12 @@ test("a lock cycle says how it ended: launched, then recovered", () => {
   }
   assert.deepEqual(said, ["Dart recovered. Clamps locked; the berth is dry."]);
 });
+
+test("loading a save starts the helm view level, not where the last session's head look was", () => {
+  const s = atHelm(), helm = new HelmControl();
+  helm.apply(s, [{ type: "look", yawDelta: 0.7, pitchDelta: 0.3 }]);
+  assert.deepEqual(helm.look, { yaw: 0.7, pitch: 0.3 });
+  const loaded = structuredClone(s); loaded.tick += 5000;
+  helm.apply(loaded, [{ type: "look", yawDelta: 0, pitchDelta: 0 }]);
+  assert.deepEqual(helm.look, { yaw: 0, pitch: 0 });
+});

@@ -5,7 +5,7 @@
  * existing carrier command; a refused action shows why, with the exact text the
  * command would give. Developer tools appear only with `?dev`. */
 import { HULLS } from "../content/registry.js";
-import { carrierCommand, carrierHull, carrierInReach, launchPoint, localToWorld, CARRIER_LAYOUT } from "../sim/carrier.js";
+import { captureApproach, carrierCommand, carrierHull, carrierInReach, launchPoint, localToWorld, CARRIER_LAYOUT } from "../sim/carrier.js";
 import { aboardCarrier, atCarrierHelm, carrierSpeed, HOLD_SPEED, launchCorridorView } from "../sim/carrierStations.js";
 import { distance, usedCapacity } from "../sim/inventory.js";
 import type { GameCommand, GameState, VehicleState, WorldQueries } from "../sim/types.js";
@@ -93,7 +93,11 @@ export function carrierPanel(state: GameState, world: WorldQueries, button: Comm
     html += '<h3 class="carrier-heading">Near the lock mouth</h3>';
     for (const v of nearby) {
       const gap = distance(v.pose.position, launchPoint(h, v));
-      html += `<article class="carrier-berth"><div class="vessel-line"><h4>${HULLS[v.hull].label} · ${gap.toFixed(0)} m from the lock mouth</h4><div class="service-actions">${act(`Recover ${HULLS[v.hull].label}`, "capture", v.id)}</div></div><p>${craftLine(state, v)}</p></article>`;
+      // As with launch: a craft that is too far away needs bringing in before station keeping matters.
+      const no = dryRun(state, world, "capture", v.id), far = gap > 13 || v.disabled;
+      const recover = button(`Recover ${HULLS[v.hull].label}`, { type: "carrier", action: "capture", vehicleId: v.id }, no !== null,
+        (no && far && !d.stationKeeping ? captureApproach(h, v) : no) ?? undefined);
+      html += `<article class="carrier-berth"><div class="vessel-line"><h4>${HULLS[v.hull].label} · ${gap.toFixed(0)} m from the lock mouth</h4><div class="service-actions">${recover}</div></div><p>${craftLine(state, v)}</p></article>`;
     }
   } else html += '<p class="carrier-hint">To recover a craft, leave it settled within 13 m of the lock mouth under the bow, then use this console from aboard.</p>';
   // Refitting the berths: only where a repair dock makes it possible.

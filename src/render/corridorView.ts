@@ -70,3 +70,14 @@ export function corridorLines(d: CorridorDrawing): Vec3[][] {
   }
   return lines;
 }
+
+/** Carrier-local quads of the swept envelope (floor, roof and both sides),
+ * for the translucent ghost under the lines. */
+export function corridorFaces(d: CorridorDrawing): Vec3[][] {
+  const w = d.halfWidth, hgt = d.height;
+  const at = (t: number, x: number, y: number): Vec3 => ({
+    x: d.from.x + (d.to.x - d.from.x) * t + x, y: d.from.y + (d.to.y - d.from.y) * t + y, z: d.from.z + (d.to.z - d.from.z) * t,
+  });
+  return ([[-w, 0, w, 0], [-w, hgt, w, hgt], [-w, 0, -w, hgt], [w, 0, w, hgt]] as const)
+    .map(([x0, y0, x1, y1]) => [at(0, x0, y0), at(0, x1, y1), at(1, x1, y1), at(1, x0, y0)]);
+}

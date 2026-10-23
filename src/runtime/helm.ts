@@ -26,9 +26,13 @@ export class HelmControl {
   private helmId: string | null = null;
   private resumed = false;
   private handover: { yaw: number; pitch: number } | null = null;
+  private tick: number | null = null;
 
   /** Rewrites one fixed step's controls. Off the helm they pass through. */
   apply(state: GameState, controls: readonly GameCommand[]): GameCommand[] {
+    // One call per fixed step: a jump in time is a load or a new expedition, so start level.
+    if (this.tick !== null && Math.abs(state.tick - this.tick) > 1) this.clear();
+    this.tick = state.tick;
     const h = atCarrierHelm(state);
     if (!h) {
       if (this.helmId !== null && state.player.mode === "interior") this.handover = { ...this.look };
