@@ -621,3 +621,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Evidence:** the gate passed 10/10 at 666fb71, npm test 1,402/1,402.
   - **Review:** Sol R1 running (`siltwake-stew1-review-r1-sol-b7cb626`).
   - **After merge:** update the root-merge-gate memory to `npm run gate`.
+- **SIM-1 done at `8eb5e374`** (R2 fixes): a stateless store that reads the durable head on every save; one owned key prefix with per-session heads and provisional heads; collection by prefix enumeration, plus a 10-minute stale rule for other sessions; collision-free resume numbering; the cursor rule stated. Timeline tests 42/42, fast tier 140/140. Focused Sol R3 running (`siltwake-sim1-review-r3-sol-8eb5e37`); it is told to check whether collecting another session's committed timeline matches the game's session model.
