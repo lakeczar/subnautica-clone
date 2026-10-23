@@ -79,6 +79,7 @@ Two survive:
     - [isles_blowhole](col1/r7-coarse-isles_blowhole.jpg): the V-shaped gap along both edges at the corner is filled;
     - [basin_dish_lee_vault](col1/r7-coarse-basin_dish_lee_vault.jpg): the rock's side face to open water is closed (pre-R6 left a sliver, R6 a partial skirt).
   - 3–5% of pixels change at those views.
+  - **The driver:** made with [`col1/r6-shots.mjs`](col1/r6-shots.mjs), COL-1's one browser driver. R7's tree and LOD parameters were folded into it rather than added as a second driver, so STEW-1's guard allowlist entry for it, `FORK(stream-drivers)` (retired in REC-2), covers both rounds.
 - **Coarse against pre-R6** includes R6's coarse change, which R6 only reported as vertex displacement. R7 adds up to 7.87 m, 2,446 m² bordering water, the largest at Glimmer crack's corner beside its neighbour's shaft. The rest of what R7 removes is R6's removal of buried sheets.
 
 **Oracle,** on the nine shells the reviewer found overlaps in, pre-R6 and R7 alike (24 protected paths, 15 poses):
