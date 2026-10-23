@@ -653,3 +653,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - an unreadable journal means protected;
     - no lock API means read and export only;
     - honest page-lifecycle bounds.
+- **TST-16 done at `b10aa825`** (R5): uninstall keeps the inert unit, and `--remove-exclusive-slice` is a separate step that refuses while tickets run. Kernel cgroup properties are read before and after each payload, and a mismatch means unavailable plus DISTURBED. New S23. Suites pass 23/23, 23/23 and 27/27, and the fast tier 1405/1405. Focused Sol R6 running (`siltwake-tst16-review-r6-sol-b10aa82`).
