@@ -7,7 +7,8 @@
 # The commit (default: this worktree's HEAD) must be committed. A commit already
 # on origin is fetched by the sandbox; otherwise it is sent as a git bundle.
 # Inside the sandbox's own job lock (`siltwake-job`), the shared checkout is
-# moved to that commit, `npm ci` runs if package-lock.json changed, and then
+# moved to that commit, `npm ci` runs if package-lock.json changed, compiled
+# test output from a different commit is removed, and then
 # COMMAND runs. The first and last lines name the tested SHA.
 #
 # Exit 75 or 255 means the worker is paused, stopped or unreachable: rerun the
@@ -57,6 +58,9 @@ ssh_ -n "cd $repo && siltwake-job --deadline $deadline --memory $memory bash -c 
   old=\$(git rev-parse HEAD 2>/dev/null || true)
   git checkout -q --detach $sha
   if [ -n \"\$old\" ] && ! git diff --quiet \"\$old\" $sha -- package-lock.json; then npm ci --no-audit --no-fund >/dev/null; fi
+  # The checkout is shared between commits: drop compiled output from another commit, so an
+  # incremental build can never run stale files (COL-1 saw a stale caves.js).
+  if [ \"\$old\" != $sha ]; then rm -rf .test-build .test-build-*; fi
   echo \"alickers-job: testing $sha on \$(hostname)\"
   set +e; $quoted; rc=\$?
   echo \"alickers-job: tested $sha exit \$rc\"; exit \$rc
