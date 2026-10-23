@@ -472,3 +472,15 @@ SCHED-2b's remote lane carries the packs back from alickers.
 
 ### 2026-10-23 — coordinator decision: LC endpoint debt is a COL-1 stage-B prerequisite
 LC's cap and collar boundaries need walls, as the COL-1 heightfield now has, so that no clear-start move ends in a pose LC rejects. Today 45 of 8,000 Canopy probe moves do. **COL-1 stage B can't be accepted until that's fixed** in whichever stream lands first, COL-1 B or LC-2. The oracle's 1% bound is only a regression alarm, not proof that the failures match LC's. In flight now: COL-1 A R3 (`e8ce814`), SCHED-2a R3 (`014f37b`), and CR-1 (fixes at `4c4c7eb`, heavy tier running).
+
+### 2026-10-23 — CR-1 merged
+- **CR-1 accepted** by Sol R2 (`review/cr-1-r2` `5aa79da`) after R1 asked for changes (skate jump, hunter rejoin snap, dormant outlines by the pod).
+  - **Merged:** 1,321 fast tests pass, the build is OK, and all 5 economy scripts pass.
+  - **Adverse bound:** all 1,440 phased cases stay under 60 HP. A late departure can take one fully warned strike after a window closes, which is fair by ENC-1.
+  - **Compromises carried, with root fixes:** the laying stand-ins (NAV-1), the idle hunter's unswept round (broadphase), the CRE-03 fallback, the shelf-only laying caption, `dataset.tick` (REC-1's test API), and no trap model in the world.
+- **In flight:**
+  - CW-1's final 23-ticket exclusive series;
+  - COL-1 A R4 (`dfab435`);
+  - SCHED-2a R4 fixes (soak harness only), with the scheduler cut-over planned once CW-1's series ends;
+  - SCHED-2b R1 (`c88bab6`).
+- **Builders:** COL-1 and SCHED-2/SAVE-1 are active, CW-1 is finishing, and 2 slots are free for REC-1 and OP-1 once CW-1 merges.
