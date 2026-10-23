@@ -1,0 +1,34 @@
+diff --git a/scripts/test-build.mjs b/scripts/test-build.mjs
+index f26fccd..4716487 100644
+--- a/scripts/test-build.mjs
++++ b/scripts/test-build.mjs
+@@ -15,12 +15,20 @@ import { spawn } from "node:child_process";
+ import { existsSync, readdirSync, rmSync } from "node:fs";
+ import { dirname, join, relative, resolve } from "node:path";
+ import { fileURLToPath } from "node:url";
++import { heavyJobGuard, keepHeavyJobMarker } from "./heavy/build-guard.mjs";
+ 
+ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+ const build = join(root, ".test-build");
+ const tsc = join(root, "node_modules", "typescript", "bin", "tsc");
+ const args = new Set(process.argv.slice(2));
+ 
++// A heavy-check job running in this worktree is testing these files; don't
++// rebuild them under it. The job itself (SILTWAKE_JOB_TICKET) may, and keeps
++// its marker across --clean.
++const busy = heavyJobGuard(root);
++if (busy) { console.error(`test-build: ${busy}`); process.exit(1); }
++const restoreMarker = keepHeavyJobMarker(root);
++
+ const run = (label, tscArgs) => new Promise((done) => {
+   const started = Date.now();
+   const child = spawn(process.execPath, [tsc, ...tscArgs], { cwd: root, stdio: "inherit" });
+@@ -47,7 +55,7 @@ function prune(dir = build) {
+ const missingTests = () => readdirSync(join(root, "tests")).filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"))
+   .filter((f) => !existsSync(join(build, "tests", f.replace(/\.ts$/, ".js"))));
+ 
+-if (args.has("--clean")) rmSync(build, { recursive: true, force: true });
++if (args.has("--clean")) { rmSync(build, { recursive: true, force: true }); restoreMarker(); }
+ const jobs = [compileTests()];
+ if (args.has("--typecheck"))
+   jobs.push(run("typecheck", ["--noEmit", "--incremental", "--tsBuildInfoFile", join(build, "typecheck.tsbuildinfo")]));

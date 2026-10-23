@@ -1,0 +1,287 @@
+{
+ "commit": "b866d9b",
+ "segment": 3,
+ "caves": [
+  "divide_fissure_window",
+  "divide_mirror_pocket",
+  "divide_lee_burrow",
+  "basin_west_rim",
+  "rift_kiln_tube",
+  "rift_north_shoulder",
+  "rift_west_tube",
+  "rift_west_blister",
+  "rift_tube_mites",
+  "rift_stub_hollow",
+  "meridian_terrace_crack"
+ ],
+ "reached": [
+  "divide_mirror_pocket",
+  "divide_lee_burrow",
+  "basin_west_rim",
+  "rift_kiln_tube",
+  "rift_north_shoulder",
+  "rift_west_tube",
+  "rift_west_blister",
+  "rift_tube_mites",
+  "rift_stub_hollow",
+  "meridian_terrace_crack"
+ ],
+ "skipped": [],
+ "shots": [
+  "s3-01-divide_mirror_pocket.jpg",
+  "s3-02-rift_north_shoulder.jpg",
+  "s3-03-rift_stub_hollow.jpg"
+ ],
+ "errors": [
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_4_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_5_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_4_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_5_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)"
+ ],
+ "holds": [],
+ "long": [
+  {
+   "at": 149347,
+   "gap": 50,
+   "frame": {
+    "total": 4.7,
+    "sim": 0.7,
+    "steps": 1,
+    "present": 3.9,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.3,
+     "actors": 0.2,
+     "lightScan": 0,
+     "lightPlace": 0.2,
+     "lightSelect": 0,
+     "lightCount": 2195,
+     "evicted": 16,
+     "chunks": 0.1,
+     "caves": 0,
+     "render": 1.7,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 154180,
+   "gap": 100,
+   "frame": {
+    "total": 4.7,
+    "sim": 0.7,
+    "steps": 1,
+    "present": 4,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.4,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.2,
+     "lightSelect": 0.1,
+     "lightCount": 2053,
+     "evicted": 19,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 1.6,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 156447,
+   "gap": 116.7,
+   "frame": {
+    "total": 85.9,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 85,
+    "parts": {
+     "regions": 0.1,
+     "lights": 81.6,
+     "actors": 0.2,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 81.3,
+     "lightCount": 1840,
+     "evicted": 22,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 1.4,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": true
+  },
+  {
+   "at": 158480,
+   "gap": 66.7,
+   "frame": {
+    "total": 6.4,
+    "sim": 1.6,
+    "steps": 2,
+    "present": 4.8,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.5,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.1,
+     "lightCount": 1828,
+     "evicted": 26,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 2.1,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 160430,
+   "gap": 100,
+   "frame": {
+    "total": 75.3,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 74.5,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.5,
+     "actors": 0.2,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.2,
+     "lightCount": 1828,
+     "evicted": 26,
+     "chunks": 0.3,
+     "caves": 0.1,
+     "render": 2,
+     "buildMs": 0.1,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 165746,
+   "gap": 66.8,
+   "frame": {
+    "total": 6.4,
+    "sim": 0.7,
+    "steps": 1,
+    "present": 5.7,
+    "parts": {
+     "regions": 0.1,
+     "lights": 2.4,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.2,
+     "lightSelect": 2.1,
+     "lightCount": 1711,
+     "evicted": 28,
+     "chunks": 0.3,
+     "caves": 0,
+     "render": 1.2,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  }
+ ],
+ "recoveries": 0,
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 5061,
+  "playableMs": 9542,
+  "collisionPackMs": 4095.10000000149,
+  "records": true
+ },
+ "seconds": 422.7,
+ "frames": {
+  "count": 25338,
+  "p50": 16.7,
+  "p95": 16.7,
+  "p99": 16.8,
+  "max": 116.7,
+  "over33": 6,
+  "over50": 5
+ },
+ "work": {
+  "p50": 3.8,
+  "p95": 6,
+  "p99": 8,
+  "max": 85.9,
+  "over33": 2
+ },
+ "longByCause": {
+  "over34": 6,
+  "streaming": 1,
+  "streamingOver34": 1,
+  "simulation": 0,
+  "noWork": 4
+ },
+ "streamingMax": {
+  "chunks": 8.6,
+  "caves": 5.6
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 0,
+  "built": 34,
+  "evicted": 26,
+  "boxes": 70031,
+  "stepMs": 3.7,
+  "buildMs": 5.6,
+  "pending": 0,
+  "missing": 7,
+  "uploads": 19,
+  "lightBytes": 2859792,
+  "textureBytes": 5223312,
+  "records": true,
+  "recordsMs": 4095.10000000149
+ },
+ "memory": {
+  "residentCpuMiB": 42.2,
+  "residentGpuMiB": 34.6,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 250
+ }
+}

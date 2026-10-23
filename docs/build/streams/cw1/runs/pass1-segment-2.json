@@ -1,0 +1,741 @@
+{
+ "commit": "f55254f",
+ "segment": 2,
+ "caves": [
+  "canopy_lee_hollow",
+  "canopy_knot_hollow",
+  "canopy_fin_cleft",
+  "canopy_lantern_hall",
+  "canopy_eastcrown",
+  "isles_headland_west",
+  "isles_cove_undercut"
+ ],
+ "reached": [
+  "canopy_knot_hollow",
+  "canopy_lantern_hall"
+ ],
+ "skipped": [
+  {
+   "cave": "canopy_fin_cleft",
+   "metres": 16.2
+  },
+  {
+   "cave": "canopy_eastcrown",
+   "metres": 16.2
+  },
+  {
+   "cave": "isles_headland_west",
+   "metres": 145.5
+  },
+  {
+   "cave": "isles_cove_undercut",
+   "metres": 221.9
+  }
+ ],
+ "shots": [
+  "s2-01-canopy_knot_hollow.jpg",
+  "s2-02-isles_headland_west.jpg"
+ ],
+ "errors": [
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_4_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_5_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_4_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_5_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)"
+ ],
+ "holds": [],
+ "long": [
+  {
+   "at": 127661,
+   "gap": 33.4,
+   "frame": {
+    "total": 4.1,
+    "sim": 0.6,
+    "steps": 1,
+    "present": 3.5,
+    "parts": {
+     "regions": 0.2,
+     "lights": 1,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.1,
+     "lightSelect": 0.8,
+     "lightCount": 6769,
+     "evicted": 0,
+     "chunks": 0.2,
+     "caves": 0.1,
+     "render": 1.2,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 317286,
+   "gap": 49.9,
+   "frame": {
+    "total": 34.5,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 33.7,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.6,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.2,
+     "lightCount": 3610,
+     "evicted": 11,
+     "chunks": 0.2,
+     "caves": 0.1,
+     "render": 0.8,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 335336,
+   "gap": 99.9,
+   "frame": {
+    "total": 6.3,
+    "sim": 1.5,
+    "steps": 2,
+    "present": 4.8,
+    "parts": {
+     "regions": 0.2,
+     "lights": 0.7,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.3,
+     "lightCount": 3610,
+     "evicted": 11,
+     "chunks": 0.9,
+     "caves": 0.1,
+     "render": 1,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 342752,
+   "gap": 33.4,
+   "frame": {
+    "total": 4.1,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 3.3,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.7,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.2,
+     "lightCount": 3610,
+     "evicted": 11,
+     "chunks": 0.1,
+     "caves": 0,
+     "render": 0.8,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 343735,
+   "gap": 116.6,
+   "frame": {
+    "total": 5.4,
+    "sim": 1,
+    "steps": 1,
+    "present": 4.4,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.6,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.2,
+     "lightSelect": 0.3,
+     "lightCount": 3610,
+     "evicted": 11,
+     "chunks": 0.1,
+     "caves": 0.1,
+     "render": 1.6,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 348052,
+   "gap": 66.7,
+   "frame": {
+    "total": 6.2,
+    "sim": 1.4,
+    "steps": 2,
+    "present": 4.7,
+    "parts": {
+     "regions": 0.2,
+     "lights": 0.6,
+     "actors": 0.2,
+     "lightScan": 0,
+     "lightPlace": 0.2,
+     "lightSelect": 0.3,
+     "lightCount": 3610,
+     "evicted": 12,
+     "chunks": 0.1,
+     "caves": 0.1,
+     "render": 1.2,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 349652,
+   "gap": 100,
+   "frame": {
+    "total": 101.9,
+    "sim": 96.5,
+    "steps": 1,
+    "present": 5.4,
+    "parts": {
+     "regions": 0.2,
+     "lights": 1.1,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.5,
+     "lightCount": 3610,
+     "evicted": 12,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 1.4,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 350285,
+   "gap": 33.4,
+   "frame": {
+    "total": 18.6,
+    "sim": 1.3,
+    "steps": 1,
+    "present": 17.3,
+    "parts": {
+     "regions": 0.1,
+     "lights": 13.5,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 13.2,
+     "lightSelect": 0.3,
+     "lightCount": 3782,
+     "evicted": 12,
+     "chunks": 0.2,
+     "caves": 0.1,
+     "render": 1.3,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": true
+  },
+  {
+   "at": 354985,
+   "gap": 33.4,
+   "frame": {
+    "total": 4.9,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 4.1,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.6,
+     "actors": 0.1,
+     "lightScan": 0.1,
+     "lightPlace": 0.3,
+     "lightSelect": 0.2,
+     "lightCount": 3855,
+     "evicted": 13,
+     "chunks": 0.1,
+     "caves": 0,
+     "render": 1.2,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 355052,
+   "gap": 66.6,
+   "frame": {
+    "total": 58.1,
+    "sim": 1.6,
+    "steps": 2,
+    "present": 56.4,
+    "parts": {
+     "regions": 52.1,
+     "lights": 0.5,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.2,
+     "lightCount": 3855,
+     "evicted": 13,
+     "chunks": 0.2,
+     "caves": 0.1,
+     "render": 1.3,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": true
+  },
+  {
+   "at": 375484,
+   "gap": 50,
+   "frame": {
+    "total": 5.1,
+    "sim": 0.7,
+    "steps": 1,
+    "present": 4.3,
+    "parts": {
+     "regions": 0.2,
+     "lights": 0.7,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.3,
+     "lightCount": 3996,
+     "evicted": 13,
+     "chunks": 0.1,
+     "caves": 0.1,
+     "render": 1.3,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 439365,
+   "gap": 33.4,
+   "frame": {
+    "total": 3.5,
+    "sim": 0.7,
+    "steps": 1,
+    "present": 2.8,
+    "parts": {
+     "regions": 0,
+     "lights": 0.4,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.1,
+     "lightSelect": 0.2,
+     "lightCount": 3996,
+     "evicted": 13,
+     "chunks": 0.1,
+     "caves": 0,
+     "render": 1,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 466364,
+   "gap": 33.4,
+   "frame": {
+    "total": 9.4,
+    "sim": 0.9,
+    "steps": 1,
+    "present": 8.5,
+    "parts": {
+     "regions": 0.2,
+     "lights": 1,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.7,
+     "lightSelect": 0.2,
+     "lightCount": 3996,
+     "evicted": 13,
+     "chunks": 0.1,
+     "caves": 4.2,
+     "render": 1.5,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 631474,
+   "gap": 50,
+   "frame": {
+    "total": 2.9,
+    "sim": 0.5,
+    "steps": 1,
+    "present": 2.4,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.5,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.2,
+     "lightSelect": 0.3,
+     "lightCount": 4040,
+     "evicted": 15,
+     "chunks": 0.1,
+     "caves": 0.1,
+     "render": 0.6,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 636607,
+   "gap": 50,
+   "frame": {
+    "total": 4.2,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 3.4,
+    "parts": {
+     "regions": 0,
+     "lights": 0.9,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.5,
+     "lightCount": 4040,
+     "evicted": 15,
+     "chunks": 0.1,
+     "caves": 0.1,
+     "render": 1,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 636657,
+   "gap": 33.4,
+   "frame": {
+    "total": 3.3,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 2.5,
+    "parts": {
+     "regions": 0,
+     "lights": 0.5,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.2,
+     "lightSelect": 0.3,
+     "lightCount": 4040,
+     "evicted": 15,
+     "chunks": 0.1,
+     "caves": 0,
+     "render": 0.8,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 640607,
+   "gap": 100.1,
+   "frame": {
+    "total": 4.6,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 3.8,
+    "parts": {
+     "regions": 0.2,
+     "lights": 0.8,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.5,
+     "lightCount": 4040,
+     "evicted": 15,
+     "chunks": 0.1,
+     "caves": 0.1,
+     "render": 0.9,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 642907,
+   "gap": 83.4,
+   "frame": {
+    "total": 4.8,
+    "sim": 0.9,
+    "steps": 2,
+    "present": 3.9,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.8,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.2,
+     "lightSelect": 0.5,
+     "lightCount": 4040,
+     "evicted": 15,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 0.9,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 644340,
+   "gap": 33.4,
+   "frame": {
+    "total": 4.2,
+    "sim": 0.7,
+    "steps": 1,
+    "present": 3.4,
+    "parts": {
+     "regions": 0,
+     "lights": 0.7,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.1,
+     "lightSelect": 0.5,
+     "lightCount": 4040,
+     "evicted": 15,
+     "chunks": 0.1,
+     "caves": 0.1,
+     "render": 1,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 644390,
+   "gap": 49.9,
+   "frame": {
+    "total": 5.9,
+    "sim": 1.3,
+    "steps": 2,
+    "present": 4.6,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.9,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.4,
+     "lightSelect": 0.5,
+     "lightCount": 4040,
+     "evicted": 15,
+     "chunks": 0.3,
+     "caves": 0.2,
+     "render": 1.1,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 649440,
+   "gap": 66.6,
+   "frame": {
+    "total": 16,
+    "sim": 0.6,
+    "steps": 1,
+    "present": 15.3,
+    "parts": {
+     "regions": 0,
+     "lights": 0.6,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.1,
+     "lightSelect": 0.4,
+     "lightCount": 4040,
+     "evicted": 15,
+     "chunks": 0.1,
+     "caves": 0,
+     "render": 13.1,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  }
+ ],
+ "recoveries": 60,
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 4571,
+  "playableMs": 14022,
+  "collisionPackMs": 3891.2999999998137,
+  "records": true
+ },
+ "seconds": 878.9,
+ "frames": {
+  "count": 52673,
+  "p50": 16.7,
+  "p95": 16.7,
+  "p99": 16.8,
+  "max": 116.6,
+  "over33": 21,
+  "over50": 8
+ },
+ "work": {
+  "p50": 3.5,
+  "p95": 6.1,
+  "p99": 8.1,
+  "max": 101.9,
+  "over33": 5
+ },
+ "longByCause": {
+  "over34": 13,
+  "streaming": 2,
+  "streamingOver34": 1,
+  "simulation": 1,
+  "noWork": 17
+ },
+ "streamingMax": {
+  "chunks": 29.9,
+  "caves": 4.2
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 0,
+  "built": 21,
+  "evicted": 13,
+  "boxes": 82992,
+  "stepMs": 2.1,
+  "buildMs": 3.2,
+  "pending": 0,
+  "missing": 7,
+  "uploads": 31,
+  "lightBytes": 4695636,
+  "textureBytes": 3337524,
+  "records": true,
+  "recordsMs": 3891.2999999998137
+ },
+ "memory": {
+  "residentCpuMiB": 53.1,
+  "residentGpuMiB": 40.8,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 245.5
+ }
+}

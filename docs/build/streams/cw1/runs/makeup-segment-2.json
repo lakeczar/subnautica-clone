@@ -1,0 +1,74 @@
+{
+ "commit": "b866d9b",
+ "segment": 2,
+ "caves": [
+  "isles_blowhole",
+  "canopy_root_arch",
+  "meridian_escarp_pocket",
+  "meridian_escarp_culvert",
+  "meridian_culvert_north",
+  "meridian_footing_void",
+  "meridian_window_gallery",
+  "divide_brine_cistern",
+  "divide_east_pocket",
+  "divide_lintel_galleries",
+  "divide_crest_hollow",
+  "divide_fissure_window"
+ ],
+ "reached": [],
+ "skipped": [
+  {
+   "cave": "canopy_root_arch",
+   "metres": 518.6
+  },
+  {
+   "cave": "meridian_escarp_pocket",
+   "metres": 1158.4
+  },
+  {
+   "cave": "meridian_escarp_culvert",
+   "metres": 1185.7
+  },
+  {
+   "cave": "meridian_culvert_north",
+   "metres": 1352.1
+  },
+  {
+   "cave": "meridian_footing_void",
+   "metres": 1408.7
+  },
+  {
+   "cave": "meridian_window_gallery",
+   "metres": 1122.3
+  },
+  {
+   "cave": "divide_brine_cistern",
+   "metres": 1405.7
+  }
+ ],
+ "shots": [
+  "s2-01-canopy_root_arch.jpg",
+  "s2-02-meridian_footing_void.jpg"
+ ],
+ "errors": [
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_4_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_5_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_4_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_5_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "page.waitForTimeout: Target page, context or browser has been closed\n    at goto (/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05/docs/build/streams/cw1/traverse.mjs:74:16)\n    at async file:///home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05/docs/build/streams/cw1/traverse.mjs:118:16"
+ ],
+ "holds": [],
+ "long": [],
+ "recoveries": 89,
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 4957,
+  "playableMs": 9220,
+  "collisionPackMs": 4131.699999999255,
+  "records": true
+ }
+}

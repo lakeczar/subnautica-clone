@@ -1,0 +1,67 @@
+#!/bin/sh
+# Runs inside a heavy-check v2 job scope (started by holder.mjs).
+#
+#   scope-run.sh JOBDIR DEADLINE_S EXPECTED_MEMORY_MAX_BYTES COMMAND [ARGS...]
+#   fd 3: the legacy bridge lock (shared), from the ticket's holder
+#
+# Records the scope's cgroup, refuses to run unless the scope's memory limits
+# took effect (WORKER_RESOURCE_LIMITS: verify before the heavy command), runs
+# the command under its deadline, then saves the scope's own accounting
+# (memory.peak, OOM kills, CPU time) before the scope empties and disappears.
+# The scope is delegated: the heavy test runner may move these processes into a
+# leaf and give each test file a child cgroup (scripts/heavy-containment.mjs);
+# the paths below stay the scope's own.
+jobdir=$1 deadline=$2 expect_max=$3
+shift 3
+cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
+echo "$cg" >"$jobdir/cgroup"
+max=$(cat "$cg/memory.max") swap=$(cat "$cg/memory.swap.max")
+if [ "$max" != "$expect_max" ] || [ "$swap" != 0 ]; then
+  echo "heavy-check: scope limits not applied (memory.max=$max, expected $expect_max; memory.swap.max=$swap); not running" >&2
+  : >"$jobdir/refused"
+  exit 70
+fi
+# One OOM group for everything this scope runs: this wrapper, the anchor and
+# the command move into the child cgroup "job" with memory.oom.group=1. An OOM
+# at the scope's reservation then kills all of them at once, the anchor
+# included, so no workload can outlive the anchor's hold on the v1 bridge. A
+# delegated child with its own memory.max (TT-1's per-file budgets, created
+# under "job") is its own OOM domain, so a per-file OOM stays inside it. The
+# scope keeps OOMPolicy=continue: systemd's own OOM reaction would stop the
+# whole scope on any OOM in its subtree, per-file ones included.
+if ! { mkdir "$cg/job" && echo $$ >"$cg/job/cgroup.procs" &&
+       for c in $(cat "$cg/cgroup.controllers"); do echo "+$c"; done >"$cg/cgroup.subtree_control" &&
+       echo 1 >"$cg/job/memory.oom.group"; }; then
+  echo "heavy-check: could not set up the job's OOM group in $cg; not running" >&2
+  : >"$jobdir/refused"
+  exit 70
+fi
+# The anchor takes over the bridge inside this scope before anything else runs
+# here, so v1 stays out until the scope's last process is gone (anchor.sh). The
+# command never holds the bridge: fd 3 is closed for it.
+sh "$(dirname "$0")/anchor.sh" 9<&3 &
+echo $! >"$jobdir/anchor.pid"
+exec 3<&-
+# Launch gate, shared with `heavy-check cancel`: a cancel recorded before this
+# point means the command never starts; after it, cancel stops the scope.
+exec 5>>"$jobdir/gate"
+flock 5
+if [ -e "$jobdir/cancelled" ]; then
+  : >"$jobdir/not-started"
+  exit 75
+fi
+: >"$jobdir/started"
+flock -u 5
+exec 5>&-
+# The job's lifetime is this scope's cgroup: the anchor keeps the bridge, and
+# the ticket's holder (holder.mjs) the reservation, until the cgroup is empty.
+timeout --kill-after=10s "${deadline}s" "$@"
+rc=$?
+{
+  echo "rc=$rc"
+  echo "peak=$(cat "$cg/memory.peak" 2>/dev/null)"
+  sed -n 's/^oom_kill /oom_kill=/p' "$cg/memory.events"
+  sed -n 's/^oom /oom_local=/p' "$cg/memory.events.local"
+  sed -n 's/^usage_usec /usage_usec=/p' "$cg/cpu.stat"
+} >"$jobdir/stats"
+exit "$rc"
