@@ -23,7 +23,9 @@ Owned by the coordinator; each per-wave architecture review updates it (STEW-1, 
 | Heavy and GPU work | `scripts/heavy-check.sh` | With a machine tag (`--machine any` for headless jobs). |
 | The merge gate | `npm run gate` (`scripts/gate.mjs`) | Its manifest is the gate. |
 
-**Layering** (*guarded*): `src/sim/**` and `src/content/**` never value-import `src/render/**`, `src/ui/**`, `src/audio/**` or Babylon, and use no DOM globals. Value-import cycles are frozen at today's two groups: the 3-module render group (`biomes/scatter`, `biomes/vistas`, `poi/landmarks`) and the 13-module sim group around `carrier` and `progression`. A group may shrink, but it never gains a member, and no new cycle may form.
+**Layering** (*guarded*): `src/sim/**` and `src/content/**` never value-import `src/render/**`, `src/ui/**`, `src/audio/**` or Babylon, lazily (`import()`, `require()`) or not. They load modules by literal path only. They use no DOM: `tsconfig.headless.json` typechecks them, and everything they reach, with no DOM library; `scripts/headless-platform.d.ts` declares the few platform APIs every headless runtime has.
+
+Value-import cycles are frozen at today's two groups: the 3-module render group (`biomes/scatter`, `biomes/vistas`, `poi/landmarks`) and the 13-module sim group around `carrier` and `progression`. **Each cycle must match its allowance exactly.** A change that shrinks or retires a cycle lowers its allowance in the same commit (the guard fails until it does), so it can never regrow. No new cycle may form.
 
 ## Open forks
 

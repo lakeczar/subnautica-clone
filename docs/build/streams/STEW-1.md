@@ -99,13 +99,40 @@ Opus 5.5 high. Branch `t3/stew-1-guard-rails`, on root `f0dc680` (SAVE-1 merged)
 - **One adverse case:** a point exactly on the Reef–Canopy edge (x 64) resolves to the Canopy by footprint order, in the map and in the audio scene alike. Outside every footprint (5000, 5000) the scene keeps its previous region.
 
 
+## R1 fixes (Sol 6.1 xhigh R1, `1805c3dd`: four P2s and two P3s)
+- **R1, the gate trusted exit codes.**
+  - A queued step is now `heavy-check submit … --review -- <command>`, then `wait --json`. It counts only when its receipt has exit 0, no stop reason, no DISTURBED context, and evidence bound to the commit the gate pinned at its start (`receiptProblems`).
+  - Every step also fails if HEAD or the tracked tree changed while it ran.
+  - A dirty start is refused (exit 2); with `--allow-dirty` the gate runs, but its verdict is always FAILED.
+  - The partial-gate label stays.
+  - **Tests** (`tests/gate.test.ts`):
+    - success, nonzero, cancelled, stopped-with-0, DISTURBED, unbound, wrong commit, pending and no receipt;
+    - the real gate against a stand-in queue for five of those receipts;
+    - a throwaway repository where the queued job edits a tracked file, and a dirty start.
+- **R2, lazy imports and other extensions bypassed layering.**
+  - Literal `import()`, `require()` and `import x = require()` are now layering edges.
+  - A computed load in sim or content is refused outright.
+  - `.mts`, `.cts` and `.tsx` sources are analysed, with `.mjs` and `.cjs` specifiers resolved to them.
+  - Static edges alone form the cycle graph, since lazy ones can't make an initialization cycle.
+  - Type positions (`typeof import(…)`, `import type`) stay exempt. Each form has a case.
+- **R3, the cycle allowances didn't ratchet.**
+  - Every cycle must now be exactly an allowance, and every allowance exactly a cycle. A shrink, a split or a retirement fails, naming the allowance to set, until the same change lowers it; after that a regrowth is a new member or a new cycle.
+  - Stale driver allowances fail the same way.
+  - The repository test checks that contract (cycles equal allowances), not a count. Shrink, retire and regrow have their own cases.
+- **R4, the DOM check got bindings wrong.** I took the root fix.
+  - `tsconfig.headless.json` (`lib: ["ES2022"]`, `types: []`, and `scripts/headless-platform.d.ts` declaring `ImportMeta.url`, `performance.now` and `structuredClone`) typechecks sim, content and everything they reach. It runs in `test:fast` (beside the normal typecheck, incrementally), in `npm run typecheck` and in the build. It passes today, with no SIM-1 changes.
+  - The guard's DOM name list is deleted.
+  - **Test:** `window` and `localStorage` fail under those options, while a parameter named `window`, an import aliased `window` and the three declared APIs pass.
+- **R5:** both queued gate steps carry `--review`.
+- **R6:** `// FORK(stream-drivers)` marks the driver allowlist. The guard reports distinct fork IDs separately from markers: 5 forks in 6 markers, because `legacy-terrain` heads both legacy modules. A test ties the marker IDs to the register's rows.
+- **Optional, done:** the region-lookup exemption needs a real delegation shape: the whole body one call to `regionAtPoint` or `regionAtPosition`. A comment mentioning it, or a call plus a fallback, is a lookup again.
+- **Docs:** WORKER_RESOURCE_LIMITS states that `--class exclusive` is refused off the 3090 (use `--class gpu --machine 4070`), and that commands reading `.test-build*` or `dist` can't go to alickers (compile inside the job).
+
 ## Compromises (each with its root fix and cost)
-1. **The guard's region-lookup and driver rules are name and text patterns,** not semantics. A lookup named otherwise (`whereIs`), or a driver hidden behind a helper, passes.
+1. **The guard's region-lookup and driver rules are name and text patterns,** not semantics. A lookup named otherwise (`whereIs`), or a driver hidden behind a helper, passes; a delegating adapter must have the exact delegation shape.
    - **Root fix:** the per-wave review, and REC-2 moving every driver onto `scripts/rec`, which leaves nothing to hide.
    - **Cost:** none now. A semantic check (data flow into `FOOTPRINTS`) would cost M and still guess.
-2. **The DOM check is a name list** (`document`, `window`, `navigator`, `localStorage` …). A DOM global outside it would pass.
-   - **Root fix:** compile sim and content with `lib` lacking `"dom"` (a separate tsconfig), so any DOM use fails typechecking.
-   - **Cost:** S, but every shared type file would need checking against it. Worth doing once SIM-1 lands.
+2. **Fixed in R1 (R4):** the DOM name list is replaced by the headless typecheck.
 3. **The recorder's `STEPS = 60` is left** (F19). `sim/timeline/recorder.ts` is being rewritten on SIM-1's branch.
    - **Root fix:** SIM-1 imports `FIXED_SECONDS` there. **Cost:** S, in SIM-1.
 4. **CW-1's `tests/cw1-bake.heavy.test.ts` keeps its own `drain`/`rectOf`** until it merges, since it isn't on root.
