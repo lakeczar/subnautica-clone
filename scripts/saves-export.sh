@@ -43,6 +43,20 @@ fetch() {
   /usr/bin/ssh -F "$HOME/.ssh/siltwake.conf" siltwake-alickers -n "tar -C $remote -cf - $sha" | tar -C "$tmp" -xf -
   saves import "$tmp/$sha" --root "$root"
   chmod -R u+w "$tmp"; rm -rf "$tmp"
+  [[ "$(git rev-parse HEAD)" == "$sha" ]] || verify_at_sha
+}
+# This worktree moved on while the export ran: decode every save with a build of
+# the exported commit itself, compiled from `git archive` in a scratch directory.
+verify_at_sha() {
+  local d rc=0; d="$(mktemp -d /work/tmp/siltwake-saves-verify-XXXXXX)"
+  git archive "$sha" | tar -x -C "$d"
+  ln -s "$PWD/node_modules" "$d/node_modules"
+  (cd "$d" && npx tsc -p scripts/playthrough/tsconfig.json &&
+    node --input-type=module -e "const L = await import('$d/.test-build/scripts/playthrough/library.js');
+      const p = L.verifyCommitDir('$root/$sha', true);
+      console.log(p.length ? p.join('\n') : 'saves-export: every save decoded by the $sha build');
+      process.exit(p.length ? 1 : 0);") || rc=$?
+  rm -rf "$d"; return $rc
 }
 
 if [[ $here == 0 ]]; then
