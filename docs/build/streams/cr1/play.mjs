@@ -168,7 +168,7 @@ async function approach(name, crossing, look, windowId, before = []) {
   const waited = await waitFor((t) => windowOpen(windowId, t) && windowSample(windowId, t).elapsed > 0.3, look);
   result.scenes[scene].notes.waited = waited; await shot("window-open");
   await key("ShiftLeft", true);
-  for (const [i, q] of crossing.entries()) { await goto(q, { tol: 2, label: `cross ${i}`, keep: ["ShiftLeft"], timeout: 60 }); if (q.dwell) { await releaseAll(); await watch(q.dwell, look); await key("ShiftLeft", true); } }
+  for (const [i, q] of crossing.entries()) { await goto(q, { tol: 2, label: `cross ${i}`, keep: ["ShiftLeft"], timeout: 60 }); if (q.dwell) { await releaseAll(); await watch(q.dwell, look); await shot(q.shot ?? `dwell-${i}`); await key("ShiftLeft", true); } }
   await releaseAll(); await shot("crossed");
 }
 
@@ -243,8 +243,9 @@ const SCENES = {
   },
   async "approach-divide"() {
     const h = homeOf("divide_skate_saddle"), y = layerY("divide_dense_layer");
-    // Wait above the skates' reach; go down to the mirror only once they rest.
-    await approach("divide", [{ x: h.x - 44, y: y + 1.5, z: h.z }, { x: h.x + 30, y: y + 1.5, z: h.z }, { x: h.x + 30, y: y + 12, z: h.z }], { x: h.x, y, z: h.z }, "layer_skate",
+    // Wait above the skates' reach; watch them settle (CRE-05: their outlines lie still on the mirror), go down to the
+    // mirror and look across it at a grazing angle, then cross.
+    await approach("divide", [{ x: h.x - 44, y: y + 12, z: h.z, dwell: 8, shot: "resting-seen-from-above" }, { x: h.x - 44, y: y + 1.5, z: h.z, dwell: 2, shot: "resting-seen-across-the-mirror" }, { x: h.x + 30, y: y + 1.5, z: h.z }, { x: h.x + 30, y: y + 12, z: h.z }], { x: h.x, y, z: h.z }, "layer_skate",
       [{ x: h.x - 44, y: y + 12, z: h.z }]);
   },
   async "approach-meridian"() {
