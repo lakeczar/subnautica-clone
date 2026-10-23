@@ -32,6 +32,23 @@ const saveTick = (() => { try { return JSON.parse(readFileSync(save, "utf8")).st
 mkdirSync(path.join(out, "views"), { recursive: true });
 const started = Date.now(), log = (...a) => console.log(`[${((Date.now() - started) / 1000).toFixed(0)}s] ${a.join(" ")}`);
 const SETTLE_MS = set.defaults?.settleMs ?? 1500, TIMEOUT_MS = 25000, STABLE_MS = 500, STABLE_TRIES = 12;
+/** Two pictures are the same view when under JITTER_PCT of pixels changed noticeably (a summed RGB step over 24):
+ * CW-1's time-sliced light selection makes a few distant lights differ frame to frame with the clock frozen. */
+const JITTER_PCT = 0.5;
+let page = null;
+async function samePicture(a, c) {
+  if (a === c) return { same: true, jitter: 0 };
+  const pct = await page.evaluate(async ([x, y]) => {
+    const load = async (b64) => createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob());
+    const [ia, ib] = await Promise.all([load(x), load(y)]), W = ia.width, H = ia.height;
+    const px = (bm) => { const cv = new OffscreenCanvas(W, H), cx = cv.getContext("2d"); cx.drawImage(bm, 0, 0); return cx.getImageData(0, 0, W, H).data; };
+    const pa = px(ia), pb = px(ib);
+    let n = 0;
+    for (let i = 0; i < pa.length; i += 4) if (Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2]) > 24) n++;
+    return (100 * n) / (W * H);
+  }, [a, c]);
+  return { same: pct < JITTER_PCT, jitter: Math.round(pct * 1000) / 1000 };
+}
 
 const result = { format: "siltwake.views-capture", viewsVersion: set.version, commit: (() => { try { return readFileSync(path.join(dist, "COMMIT"), "utf8").trim(); } catch { return null; } })(),
   machine: arg("machine", hostname()), views: [], pending: set.pending ?? [], errors: [] };
@@ -40,6 +57,7 @@ try {
   // The soak's own browser session (scripts/soak/browser.mjs), the recorder in driver mode (stage and capture need it).
   b = await openGame({ dist, save, port: Number(arg("port", 0)), gpu: arg("gpu"), chrome: arg("chrome"), pw: arg("pw"), label: "rec1-views", query: "?rec=driver", isolate: true, log });
   result.chrome = b.chrome;
+  page = b.page;
   result.renderer = b.renderer;
   result.class = arg("class", /3090/.test(b.renderer) ? "3090" : /4070/.test(b.renderer) ? "4070" : "other");
   const g = gpuInfo(); result.gpu = g ? `${g.name} ${g.driver}` : b.renderer;
@@ -72,7 +90,7 @@ try {
     const settled = since !== null && Date.now() - since >= SETTLE_MS && moved < 1;
     // Settled for the picture itself: two captures STABLE_MS apart are the same pixels
     // (content still activating or fading in shows here even when no counter moves).
-    const shot = await untilStable(() => b.page.evaluate(() => window.__siltwake.capture()), () => b.page.waitForTimeout(STABLE_MS), STABLE_TRIES);
+    const shot = await untilStable(() => b.page.evaluate(() => window.__siltwake.capture()), () => b.page.waitForTimeout(STABLE_MS), STABLE_TRIES, samePicture);
     const file = `views/${v.id}.png`, png = Buffer.from(shot.image, "base64");
     writeFileSync(path.join(out, file), png);
     // An unstable view keeps its last two different pictures (R1-F2).
@@ -80,7 +98,7 @@ try {
     const sha = createHash("sha256").update(png).digest("hex");
     result.views.push({ id: v.id, group: v.group, label: v.label, file, sha256: sha, tick, settled, settleMs: Date.now() - t0, hold: last?.hold ?? null,
       // A frozen view draws the same pixels twice; anything else animates outside the sim clock.
-      stable: shot.stable, stableAfterMs: shot.tries * STABLE_MS, ...(shot.stable ? {} : { previous: `views/${v.id}.previous.png` }),
+      stable: shot.stable, stableAfterMs: shot.tries * STABLE_MS, ...(shot.jitter != null ? { jitterPct: shot.jitter } : {}), ...(shot.stable ? {} : { previous: `views/${v.id}.previous.png` }),
       ...(v.quarantine ? { quarantine: v.quarantine } : {}),
       ...(moved >= 1 ? { relocatedM: Math.round(moved * 10) / 10 } : {}), ...(settled ? {} : { unsettled: last }) });
     log(v.id, settled ? "settled" : `UNSETTLED ${JSON.stringify({ ...last, scene: undefined })}${moved >= 1 ? ` moved ${moved.toFixed(1)} m` : ""}`, `${Date.now() - t0} ms`,

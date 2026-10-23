@@ -169,7 +169,6 @@ export class FlightRecorder {
   snapshotsOn: boolean;
   /** Recorder self-time summed over every frame, and the worst frame's. */
   readonly self = { totalMs: 0, worstMs: 0, frames: 0 };
-  private readonly row = new Float32Array(COLS);
   private eventSeq = 0;
   private snapSeq = 0;
   private pending: SnapshotRequest | null = null;
@@ -195,61 +194,71 @@ export class FlightRecorder {
   /** Adds recorder self-time spent outside `frame()` (sampling, capture) to the current frame. */
   charge(ms: number, part = "other"): void { this.accrued += ms; this.selfParts[part] = (this.selfParts[part] ?? 0) + ms; }
 
-  private readonly waiting: { input: FrameInput; selfMs: number }[] = [];
+  /** Rows waiting for their GPU time: a small pool reused every frame (no allocation per frame, R1-S1). */
+  private readonly slots = Array.from({ length: GPU_WAIT_FRAMES + 2 }, () => ({ row: new Float32Array(COLS), t: 0, tag: -1, hold: null as string | null, rec: 0 }));
+  private head = 0;
+  private count = 0;
   private readonly gpuTimes = new Map<number, number>();
   /** A frame's GPU timer query resolved (renderer.ts createGpuTimer). A result
    * for a row no longer waiting (it timed out, or was settled) is dropped. */
   gpuResolved(tag: number, ms: number): void {
-    if (this.waiting.some((w) => w.input.gpuTag === tag)) this.gpuTimes.set(tag, ms);
+    for (let k = 0; k < this.count; k++) if (this.slots[(this.head + k) % this.slots.length]!.tag === tag) { this.gpuTimes.set(tag, ms); return; }
   }
 
   /** One frame. A frame with a GPU query waits until its time resolves (at most
    * GPU_WAIT_FRAMES), so the GPU time lands on the frame it measured; rows are
-   * written in order. `selfMs` is the caller's own recording time in this frame. */
+   * written in order. The input is copied at once: callers may reuse it.
+   * `selfMs` is the caller's own recording time in this frame. */
   frame(input: FrameInput, selfMs = 0): void {
     this.selfParts.frame = (this.selfParts.frame ?? 0) + selfMs;
-    this.waiting.push({ input, selfMs: selfMs + this.accrued });
+    if (this.count === this.slots.length) this.commitHead();
+    const slot = this.slots[(this.head + this.count) % this.slots.length]!, r = slot.row, values = input as unknown as Record<string, unknown>;
+    this.count++;
+    for (let k = 0; k < COLS; k++) { const v = values[FRAME_COLUMNS[k]!]; r[k] = typeof v === "number" ? v : 0; }
+    if (input.heapDrop === undefined) r[COL.heapDrop] = -1;
+    if (input.gpu === undefined) r[COL.gpu] = -1;
+    slot.t = input.t; slot.tag = input.gpuTag ?? -1; slot.hold = input.hold ?? null; slot.rec = selfMs + this.accrued;
     this.accrued = 0;
-    while (this.waiting.length) {
-      const head = this.waiting[0]!, tag = head.input.gpuTag;
-      const known = tag === undefined || tag < 0 || this.gpuTimes.has(tag);
-      if (!known && this.waiting.length <= GPU_WAIT_FRAMES) break;
-      this.waiting.shift();
-      const gpu = tag !== undefined && tag >= 0 ? this.gpuTimes.get(tag) : undefined;
-      if (tag !== undefined) this.gpuTimes.delete(tag);
-      const { gpuTag: _, ...rest } = head.input;
-      this.commit(gpu !== undefined && gpu >= 0 ? { ...rest, gpu } : rest, head.selfMs);
+    while (this.count) {
+      const head = this.slots[this.head]!;
+      if (head.tag >= 0 && !this.gpuTimes.has(head.tag) && this.count <= GPU_WAIT_FRAMES) break;
+      this.commitHead();
     }
+  }
+  private commitHead(): void {
+    const s = this.slots[this.head]!;
+    if (s.tag >= 0) {
+      const g = this.gpuTimes.get(s.tag);
+      if (g !== undefined && g >= 0) s.row[COL.gpu] = g;
+      this.gpuTimes.delete(s.tag);
+    }
+    this.head = (this.head + 1) % this.slots.length;
+    this.count--;
+    this.commit(s.row, s.t, s.hold, s.rec);
   }
   /** Writes every waiting row now (an export, the end of a recording). */
   settle(): void {
-    while (this.waiting.length) { const h = this.waiting.shift()!; const { gpuTag: _, ...rest } = h.input; this.commit(rest, h.selfMs); }
+    while (this.count) this.commitHead();
     this.gpuTimes.clear();
   }
   /** Results waiting for their rows (bounded by GPU_WAIT_FRAMES). */
   get gpuPending(): number { return this.gpuTimes.size; }
 
-  private commit(input: FrameInput, rec: number): void {
-    const r = this.row;
-    r.fill(0);
-    for (const [k, v] of Object.entries(input)) if (k !== "hold" && typeof v === "number") r[COL[k as FrameColumn]] = v;
-    if (input.heapDrop === undefined) r[COL.heapDrop] = -1;
-    if (input.gpu === undefined) r[COL.gpu] = -1;
-    const hold = input.hold ?? null;
+  private commit(r: Float32Array, t: number, hold: string | null, rec: number): void {
     r[COL.hold] = holdCode(hold);
     r[COL.rec] = rec;
     this.self.totalMs += rec; this.self.frames++;
     if (rec > this.self.worstMs) this.self.worstMs = rec;
-    this.frames.push(r, input.t);
+    this.frames.push(r, t);
     // Hold transitions (only frames where admission was evaluated).
     if (hold !== null && !NOT_APPLICABLE.has(hold)) {
       const was = this.hold, holding = HOLDING.has(hold), wasHolding = was !== null && HOLDING.has(was);
       if (holding && hold !== was) {
-        if (!wasHolding) this.holdSince = input.t;
-        this.event("hold", `cave hold: ${hold}`, { t: input.t, detail: { state: hold } });
+        if (!wasHolding) this.holdSince = t;
+        this.event("hold", `cave hold: ${hold}`, { t: t, detail: { state: hold } });
       } else if (!holding && wasHolding)
-        this.event("hold", `cave hold ended after ${((input.t - this.holdSince) / 1000).toFixed(1)} s (${hold})`,
-          { t: input.t, detail: { state: hold, ms: Math.round(input.t - this.holdSince) } });
+        this.event("hold", `cave hold ended after ${((t - this.holdSince) / 1000).toFixed(1)} s (${hold})`,
+          { t: t, detail: { state: hold, ms: Math.round(t - this.holdSince) } });
       this.hold = hold;
     }
     // Two observations, never merged (R1-F1). A callback's own work over budget is
@@ -257,10 +266,10 @@ export class FlightRecorder {
     // time from the previous frame's start to this one's) belongs to the callback
     // that ran in it, the previous row, and to whatever ran outside it.
     const work = r[COL.work]!, prev = this.prevT === null ? null : this.prevRow;
-    if (work > this.longFrameMs) this.longFrame("callback", input.t, work, r, r, rec, input.t);
-    if (input.gap > this.longFrameMs && prev) this.longFrame("interval", input.t, input.gap, prev, r, rec, this.prevT!);
+    if (work > this.longFrameMs) this.longFrame("callback", t, work, r, r, rec, t);
+    if (r[COL.gap]! > this.longFrameMs && prev) this.longFrame("interval", t, r[COL.gap]!, prev, r, rec, this.prevT!);
     this.prevRow.set(r);
-    this.prevT = input.t;
+    this.prevT = t;
   }
   private readonly prevRow = new Float32Array(COLS);
   private prevT: number | null = null;

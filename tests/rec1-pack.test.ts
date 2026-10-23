@@ -242,3 +242,13 @@ test("audit F22: re-accepting a different picture for the same view and commit k
     assert.equal(accept(c).status, 3);
   });
 });
+
+test("R1-F2: a tolerant comparison settles a view whose distant lights jitter, and records how much; real change stays unstable", async () => {
+  const { untilStable } = await import(pathToFileURL(resolve("scripts/rec/views/stable.mjs")).href);
+  let n = 0;
+  const jitter = await untilStable(async () => `p${n++}`, async () => {}, 12, async () => ({ same: true, jitter: 0.17 }));
+  assert.deepEqual([jitter.stable, jitter.tries, jitter.jitter], [true, 0, 0.17]);
+  let m = 0;
+  const moving = await untilStable(async () => `q${m++}`, async () => {}, 4, async () => ({ same: false, jitter: 6.2 }));
+  assert.deepEqual([moving.stable, moving.jitter, moving.previous], [false, 6.2, "q3"]);
+});

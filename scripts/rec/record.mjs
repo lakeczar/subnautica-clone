@@ -40,8 +40,8 @@ export function gpuInfo() {
   return null;
 }
 
-/** VRAM held by the browser's children (its GPU process): nvidia-smi's
- * per-process table, matched by parent PID. Linux drivers list graphics
+/** VRAM held by the browser's descendants (its GPU process): nvidia-smi's
+ * per-process table, matched by ancestry. Linux drivers list graphics
  * processes; WSL's lists none (null there). */
 export function processVram(browserPid) {
   const parent = (pid) => { try { const st = readFileSync(`/proc/${pid}/stat`, "utf8"); return Number(st.slice(st.lastIndexOf(")") + 2).split(" ")[1]); } catch { return null; } };
@@ -50,7 +50,9 @@ export function processVram(browserPid) {
     try { xml = execFileSync(bin, ["-q", "-x"], { encoding: "utf8", timeout: 5000, maxBuffer: 16 << 20 }); } catch { continue; }
     const procs = [...xml.matchAll(/<process_info>[\s\S]*?<pid>(\d+)<\/pid>[\s\S]*?<used_memory>(\d+) MiB<\/used_memory>/g)].map((m) => ({ pid: Number(m[1]), mib: Number(m[2]) }));
     if (!procs.length) return null;
-    const ours = procs.filter((p) => p.pid === browserPid || parent(p.pid) === browserPid);
+    // Ours: the browser itself or any descendant (the GPU process may sit under a zygote or helper).
+    const descends = (pid) => { for (let p = pid, n = 0; p && p > 1 && n < 16; p = parent(p), n++) if (p === browserPid) return true; return false; };
+    const ours = procs.filter((p) => descends(p.pid));
     return ours.length ? ours.reduce((a, p) => a + p.mib, 0) : null;
   }
   return null;

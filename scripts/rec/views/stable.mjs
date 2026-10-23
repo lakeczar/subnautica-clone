@@ -8,19 +8,23 @@ import { fileURLToPath } from "node:url";
 /**
  * @param capture () => Promise<string>  one picture (base64)
  * @param wait () => Promise<void>        the pause between pictures
- * @returns { image, stable, tries, previous } — `previous` is the last different picture when unstable
+ * @param same (a, b) => Promise<boolean | { same: boolean, jitter?: number }>  the comparison
+ *   (default: identical bytes; capture.mjs counts pixels that changed noticeably)
+ * @returns { image, stable, tries, previous, jitter } — `previous` is the last different picture when unstable
  */
-export async function untilStable(capture, wait, tries) {
-  let image = await capture();
+export async function untilStable(capture, wait, tries, same = async (a, b) => a === b) {
+  let image = await capture(), jitter = null;
   for (let n = 0; n < tries; n++) {
     await wait();
     const next = await capture();
-    if (next === image) return { image, stable: true, tries: n, previous: null };
+    const verdict = await same(image, next), ok = typeof verdict === "boolean" ? verdict : verdict.same;
+    if (typeof verdict === "object") jitter = verdict.jitter ?? null;
+    if (ok) return { image: next, stable: true, tries: n, previous: null, jitter };
     const previous = image;
     image = next;
-    if (n === tries - 1) return { image, stable: false, tries: tries, previous };
+    if (n === tries - 1) return { image, stable: false, tries: tries, previous, jitter };
   }
-  return { image, stable: false, tries, previous: null };
+  return { image, stable: false, tries, previous: null, jitter };
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url));

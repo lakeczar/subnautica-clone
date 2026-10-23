@@ -522,15 +522,20 @@ export class SiltwakeApp {
       gap = 0;
     }
     this.flightLast = now;
+    charge("frame");
     const heap = fl.heapNow();
-    const heapDrop = heap !== null && this.flightHeap !== null ? Math.max(0, this.flightHeap - heap) : undefined;
+    const heapDrop = heap !== null && this.flightHeap !== null ? Math.max(0, this.flightHeap - heap) : -1;
     this.flightHeap = heap;
+    charge("heap");
     const p = this.renderer?.parts;
     if (p?.gpuTimerMs) fl.recorder.charge(p.gpuTimerMs, "gpu-timer");
     for (const g of p?.gpuDone ?? []) fl.recorder.gpuResolved(g.tag, g.ms);
-    fl.recorder.frame({ t: now, gap, work, sim, steps, save, hud: this.lastHudMs, hold,
-      ...(p ? { chunks: p.chunks, caves: p.caves, regions: p.regions, lights: p.lights, actors: p.actors, render: p.render, dom: p.dom ?? 0, gpuTag: p.gpuTag } : {}),
-      ...(heapDrop !== undefined ? { heapDrop } : {}) });
+    // One input object, reused every frame (the recorder copies it at once): nothing allocated per frame.
+    const f = this.flightInput;
+    f.t = now; f.gap = gap; f.work = work; f.sim = sim; f.steps = steps; f.save = save; f.hud = this.lastHudMs; f.hold = hold; f.heapDrop = heapDrop;
+    f.chunks = p?.chunks ?? 0; f.caves = p?.caves ?? 0; f.regions = p?.regions ?? 0; f.lights = p?.lights ?? 0; f.actors = p?.actors ?? 0;
+    f.render = p?.render ?? 0; f.dom = p?.dom ?? 0; f.gpuTag = p?.gpuTag ?? -1;
+    fl.recorder.frame(f);
     charge("frame");
     // Pictures only from a frame that drew: otherwise the canvas holds nothing current.
     if (this.drewFrame) fl.afterRender(now);
@@ -538,6 +543,8 @@ export class SiltwakeApp {
     this.drewFrame = false;
   }
   private drewFrame = false;
+  private readonly flightInput = { t: 0, gap: 0, work: 0, sim: 0, steps: 0, save: 0, hud: 0, hold: null as string | null, heapDrop: -1,
+    chunks: 0, caves: 0, regions: 0, lights: 0, actors: 0, render: 0, dom: 0, gpuTag: -1 };
   private flightSurvival = new SurvivalWatch();
 
   /** The test hook's reading of the game (hooks.ts HookRead). */
