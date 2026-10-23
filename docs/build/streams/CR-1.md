@@ -82,6 +82,7 @@ Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `fa35339` (C4, CA-3, 
 - **CB-2 lore edit:** `fieldGuide.ts`, `fieldNotes.ts` and `FIELD-GUIDE.md` now say the skates settle just under the mirror in slack water (was: sink into the brine), to match CRE-05. Flagged for CB.
 
 ## Sol R1 (request changes, three P2): fixed at the root
+Fixes at `4c4c7eb` (root `9bab678` merged). Checks at `4c4c7eb`: `test:fast` 1,321/1,321; build OK; all six economy scripts exit 0; on the second worker, `test:heavy` 461/461 (61 files) and all five playthroughs complete with every milestone reload matched (play times unchanged).
 - **R1-1, laying skates jumped 45 m in view at the end of a visit.** `layingPose` is now one continuous function of the tick. Between visits each stand-in holds at the far end of its departure path, circling. The visit's path starts and ends there, so neither boundary moves it, and the view gate only switches visibility.
 - **R1-2, the hunter jumped up to 11 m rejoining its round.** The unswept path is taken only by a hunter already on it. Off it, the idle hunter's swept move targets the path's point at round speed, which outpaces the path (at most 7.2 m/s, against 8). Resident, it drifts home at 2 m/s.
 - **R1-3, dormant skate outlines were enabled beside the pod.** One visibility operation now covers each creature's root and its world-space cues, which start hidden.
