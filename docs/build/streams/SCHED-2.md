@@ -36,6 +36,14 @@ Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 
 - **Unavailable counters:** a counter no observer read is `null`, with the reason under `unavailable`, never 0.
 - **Recovery:** a stopped scope whose holder died is labelled `killed: its holder died…` (137), not "ran to its end".
 
+**The `.test-build` guard** (UX-1's report, checked):
+- **Only running tickets block.** Only an admitted, running ticket writes the marker, so a queued one never blocks; that holds on the installed SCHED-1 code too. Acceptance S14 shows a queued `gpu` ticket leaves the guard open, and SCHED-1's own tests 14 and 14b still pass. UX-1's worktree had a running playthrough beside its queued tickets.
+- **What changed:**
+  - the refusal names the ticket, its class and its command, and gives the ways around it;
+  - `SILTWAKE_TEST_BUILD=.test-build-<name>` compiles and runs the fast tier from a sibling directory: `test-build.mjs`, `test-tier.mjs`, the build cache and two tests that wrote into `.test-build`. It sits at the same depth because compiled tests find the root at `../../`. The fast tier passes 1,296 from `.test-build-2`, and the name is git-ignored;
+  - `--no-test-build` declares a job that never reads `.test-build`; `--snapshot` already didn't take it.
+- **Default:** I kept the guard for every running job rather than guessing from the command which jobs read `.test-build`. Drivers import compiled modules in ways a command line doesn't show.
+
 **Smaller items:**
 - `anchor.pid` records `PID START`, and USR1 is sent only to the same process (R4 P3 4).
 - `wait --json` ends with a JSON record, pending or final, so a pending 99 can't be mistaken for a job's own (TST-22).

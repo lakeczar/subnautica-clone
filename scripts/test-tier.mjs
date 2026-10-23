@@ -42,7 +42,7 @@ import { grantedMemoryMiB, heavyContainment } from "./heavy-containment.mjs";
 import { pruneBuildCache } from "./test-build-cache.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const build = join(root, ".test-build");
+const build = join(root, process.env.SILTWAKE_TEST_BUILD || ".test-build"); // test-build.mjs checks the name
 const testDir = join(build, "tests");
 // One core is left for the runner and the rest of the shared VM. Fast files peak
 // at a few hundred MiB (see the timing report), well inside FAST_HEAP_MIB each.
@@ -58,7 +58,7 @@ if (tier !== "fast" && tier !== "heavy") {
   process.exit(2);
 }
 if (!existsSync(testDir)) {
-  console.error("test-tier: .test-build/tests is missing; run `tsc -p tsconfig.test.json` first");
+  console.error(`test-tier: ${relative(root, testDir)} is missing; run \`node scripts/test-build.mjs\` first`);
   process.exit(2);
 }
 const isHeavy = (file) => file.endsWith(".heavy.test.js");

@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { heavyJobGuard } from "./build-guard.mjs";
 import { sliceLimits } from "./policy.mjs";
 import { alive, scopePopulated } from "./state.mjs";
 import { context, hc, here, holderOf, killOwned, read, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
@@ -286,4 +287,28 @@ test("S13 (migration): SCHED-1 code and this code share one queue; neither rewri
   const refused = hc(c, ["submit", "--class", "soak", "--", "true"], { cwd: c.wt("s") });
   assert.equal(refused.code, 75);
   assert.match(refused.err, /SCHED-1 tickets are still queued/);
+});
+
+test("S14: the .test-build guard: a queued ticket never blocks; a running one names itself and the ways around it; --no-test-build writes no marker", async () => {
+  const c = context("guard", { config: fast });
+  const wt = (n) => { const p = c.wt(n); writeFileSync(join(p, "package.json"), "{}"); return p; };
+  const A = wt("a"), B = wt("b"), N = wt("n");
+  const env = { ...c.env };
+  const blocker = submit(c, A, "--class", "gpu", "--", "sleep", "5");
+  await running(c, blocker);
+  const queued = submit(c, B, "--class", "gpu", "--", "sleep", "3");
+  await sleep(800);
+  assert.equal(hc(c, ["status"]).out.split("\n").find((l) => l.startsWith(queued))?.split(/\s{2,}/)[3], "queued");
+  assert.equal(heavyJobGuard(B, env), null, "a queued ticket does not block");
+  await until("A's marker", () => existsSync(join(A, ".test-build", ".heavy-job")));
+  const msg = heavyJobGuard(A, env);
+  assert.match(msg, new RegExp(`ticket ${blocker} \\(gpu, running: sleep 5\\) is running from this worktree's \\.test-build`));
+  assert.match(msg, /SILTWAKE_TEST_BUILD=\.test-build-2 npm test/);
+  assert.match(msg, /--no-test-build, or --snapshot/);
+  assert.equal(heavyJobGuard(A, env, ".test-build-2"), null, "a sibling build directory is free meanwhile");
+  const free = submit(c, N, "--class", "quick", "--no-test-build", "--", "sleep", "2");
+  await until("started", () => existsSync(join(c.sched, "jobs", free, "started")));
+  assert.equal(existsSync(join(N, ".test-build", ".heavy-job")), false);
+  for (const id of [blocker, queued, free]) assert.equal(waitFor(c, id).code, 0);
+  assert.equal(heavyJobGuard(A, env), null);
 });

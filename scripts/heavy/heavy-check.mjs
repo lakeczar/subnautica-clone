@@ -12,7 +12,7 @@
 //
 // OPTIONS: --class quick|standard|heavy-suite|gpu|playthrough|bake|soak|exclusive
 //          --review  --stall S  --deadline S  --cpus N  --mem 3G  --gpu (soak)
-//          --snapshot  --queue-timeout S
+//          --snapshot  --no-test-build  --queue-timeout S
 // A job runs until its command ends. It is stopped if it stalls (no output and
 // no touch of $SILTWAKE_JOB_HEARTBEAT for --stall S), at --deadline S if
 // given, or at its class's runaway ceiling (exclusive: a 30-minute cap).
@@ -52,6 +52,7 @@ function parseJob(args) {
     else if (a === "--deadline") opts.deadline = Number(value(a));
     else if (a === "--stall") opts.stallS = Number(value(a));
     else if (a === "--snapshot") opts.snapshot = true;
+    else if (a === "--no-test-build") opts.noTestBuild = true;
     else if (a === "--gpu") opts.gpu = true;
     else if (a === "--cpus") opts.cpus = Number(value(a));
     else if (a === "--mem") { const v = value(a); opts.memMiB = parseMiB(v); if (!Number.isFinite(opts.memMiB)) fail(`--mem ${v}: use 3G or 2048M`); }

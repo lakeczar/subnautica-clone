@@ -74,6 +74,7 @@ Options:
 - `--mem 4G` and `--cpus N`: up to the class maximum.
 - `--snapshot`: run on a private copy of the tree as submitted, so you can keep editing while the ticket waits and runs (below). In package scripts that queue themselves (`test:heavy`), set `HEAVY_SNAPSHOT=1`.
 - `--gpu`: for `soak` only.
+- `--no-test-build`: this job never reads the worktree's `.test-build` (GPU play from `dist`), so `npm test` there stays allowed while it runs.
 
 Commands that `heavy-check` recognises (a playthrough, the heavy tier, the terrain bake, the large-cave lab bake) get their class without `--class`.
 
@@ -103,7 +104,11 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
 - **A changed worktree is rejected, not silently tested** (exit **3**). If the tree (HEAD, tracked changes or untracked files) changed between submit and admission, the command does not run. Either don't edit that worktree while your ticket waits, or submit with `--snapshot`: the job then runs on a copy of the tree as submitted (about 0.3 s to make; `node_modules` is linked).
   - A snapshot has no ignored build outputs, so the job compiles inside it. Package scripts like `npm run playthrough` and `test:heavy` already do; the terrain bake restores from the shared store.
   - Write artifacts to absolute paths (`/work/tmp/...`). A snapshot the job wrote into is kept beside the job's log for 7 days.
-- **`.test-build` is in use while your job runs.** While a heavy job runs in your worktree, `npm test` and `npm run test:build` there refuse to rebuild `.test-build`, because the job is running those files. Wait, or edit in another worktree. The job itself may rebuild.
+- **`.test-build` is in use while your job runs.** While a heavy job is *running* (admitted) in your worktree, `npm test` and `npm run test:build` there refuse to rebuild `.test-build`, because the job may be running those files; a *queued* ticket never blocks. The refusal names the ticket. Meanwhile:
+  - compile and test in a sibling directory: `SILTWAKE_TEST_BUILD=.test-build-2 npm test` (any `.test-build-<name>`; the first build is cold, then incremental; git ignores it);
+  - submit jobs that never read `.test-build`, such as GPU play from `dist`, with `--no-test-build`, or use `--snapshot`: neither takes the worktree's `.test-build`.
+
+  The job itself may rebuild.
 - **Playthroughs:** compile first, then queue only the run:
 
   ```sh

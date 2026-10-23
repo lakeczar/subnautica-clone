@@ -115,7 +115,8 @@ if (rejected) note(rejected);
 // (build-guard.mjs), not a process ID. A snapshot job uses its own copy's
 // .test-build, so the worktree's stays free.
 const marker = join(t.worktree, ".test-build", ".heavy-job");
-const writesMarker = !snap && !rejected && existsSync(join(t.worktree, "package.json"));
+// --no-test-build: the caller declares the job never reads it (GPU play from dist).
+const writesMarker = !snap && !rejected && !t.opts?.noTestBuild && existsSync(join(t.worktree, "package.json"));
 if (writesMarker) {
   mkdirSync(dirname(marker), { recursive: true });
   writeJsonAtomic(marker, { ticket: id, units: [holderUnit, unit] });
