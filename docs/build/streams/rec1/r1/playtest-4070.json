@@ -1,0 +1,153 @@
+{
+ "query": "?rec=playtest",
+ "errors": [],
+ "exports": [
+  {
+   "label": "export-1",
+   "bytes": 3951235,
+   "entries": 24,
+   "pictures": 18,
+   "absent": [],
+   "declaredMissing": [],
+   "note": {
+    "found": true,
+    "t": 97721.79999999702,
+    "picture": {
+     "file": "snapshots/00018.jpg",
+     "present": true
+    }
+   },
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 9034,
+      "seconds": 88.78
+     }
+    ],
+    "endsAt": 97814,
+    "coversUntil": 97724
+   },
+   "retention": {
+    "budgetBytes": 2147483648,
+    "lost": []
+   },
+   "lastFrameT": 97877.4,
+   "offAfter": null,
+   "ok": true
+  },
+  {
+   "label": "export-2",
+   "bytes": 4976605,
+   "entries": 28,
+   "pictures": 22,
+   "absent": [],
+   "declaredMissing": [],
+   "note": {
+    "found": true,
+    "t": 97721.79999999702,
+    "picture": {
+     "file": "snapshots/00018.jpg",
+     "present": true
+    }
+   },
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 9034,
+      "seconds": 109.16
+     }
+    ],
+    "endsAt": 118194,
+    "coversUntil": 116717.89999999851
+   },
+   "retention": {
+    "budgetBytes": 2147483648,
+    "lost": []
+   },
+   "lastFrameT": 118259.9,
+   "offAfter": null,
+   "ok": true
+  },
+  {
+   "label": "export-3",
+   "bytes": 4981222,
+   "entries": 28,
+   "pictures": 22,
+   "absent": [],
+   "declaredMissing": [],
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 9034,
+      "seconds": 109.41
+     }
+    ],
+    "endsAt": 118444,
+    "coversUntil": null
+   },
+   "retention": {
+    "budgetBytes": 2147483648,
+    "lost": []
+   },
+   "lastFrameT": 118493.2,
+   "offAfter": 118501.89999999851,
+   "ok": true
+  }
+ ],
+ "renderer": "ANGLE (Microsoft Corporation, D3D12 (NVIDIA GeForce RTX 4070 Laptop GPU), OpenGL 4.6)",
+ "mode": "playtest",
+ "offMode": "off",
+ "pack": {
+  "verdict": "partial",
+  "failed": [],
+  "unproven": [
+   "no streaming frame over 33 ms",
+   "frame times judged",
+   "memory flat",
+   "tab memory (RSS)",
+   "VRAM"
+  ],
+  "frame": {
+   "p50": 16.7,
+   "p99": 16.8,
+   "max": 6183,
+   "over33": 44,
+   "frames": 4513
+  },
+  "work": {
+   "p50": 2.7,
+   "p99": 8.2
+  },
+  "rec": {
+   "mean": 0.077,
+   "p99": 0.4
+  },
+  "holds": 0,
+  "memory": {
+   "tab": null,
+   "heap": [
+    255.3,
+    377
+   ],
+   "vram": null,
+   "trend": 40.9
+  },
+  "errors": 0,
+  "warnings": 0,
+  "draws": {
+   "p50": 68,
+   "max": 161
+  },
+  "attention": 17,
+  "minutes": 1.3,
+  "machine": null,
+  "gpu": "ANGLE (Microsoft Corporation, D3D12 (NVIDIA GeForce RTX 4070 Laptop GPU), OpenGL",
+  "browser": "Chrome/156.0.0.0",
+  "commit": "48b0f2512f79",
+  "build": "index-Bou1gtsV.js"
+ },
+ "ok": true
+}
