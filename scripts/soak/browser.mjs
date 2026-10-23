@@ -96,19 +96,19 @@ export async function releaseAll(g) { for (const k of [...g.held]) await key(g, 
  * lift, as a player would, up to three times; no progress for 20 s: Blocked.
  * `stop()` true ends it early (a broken rule or a yield). */
 export async function goto(g, t, { tol = 3, label = "", timeoutS = 300, boost = false, stop = () => false } = {}) {
-  const start = Date.now();
+  const start = performance.now();
   let best = Infinity, bestAt = start, recoveries = 0;
   for (;;) {
     if (stop()) { await releaseAll(g); return false; }
     const s = await read(g), p = pos(g, s), dx = t.x - p.x, dy = t.y - p.y, dz = t.z - p.z, h = Math.hypot(dx, dz), d3 = Math.hypot(h, dy);
     if (d3 <= tol) break;
-    if (d3 < best - 0.3) { best = d3; bestAt = Date.now(); }
-    if (Date.now() - bestAt > 6000 && recoveries < 3) {
+    if (d3 < best - 0.3) { best = d3; bestAt = performance.now(); }
+    if (performance.now() - bestAt > 6000 && recoveries < 3) {
       recoveries++;
       await releaseAll(g); await key(g, "KeyS", true); await key(g, "Space", true); await g.page.waitForTimeout(1500); await releaseAll(g);
-      bestAt = Date.now(); best = Infinity; continue;
+      bestAt = performance.now(); best = Infinity; continue;
     }
-    if (Date.now() - bestAt > 20000 || Date.now() - start > timeoutS * 1000) {
+    if (performance.now() - bestAt > 20000 || performance.now() - start > timeoutS * 1000) {
       await releaseAll(g);
       throw new Blocked(`stalled ${d3.toFixed(1)} m short of ${label} (${t.x},${t.y},${t.z}) at ${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}`);
     }

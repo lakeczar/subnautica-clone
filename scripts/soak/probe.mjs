@@ -4,9 +4,11 @@
 // changing it.
 //
 //   provider: { name, async sample(ctx) → partial sample }
-//   sample:   { at, memory: { MiB… }, graphics: { counts… }, frames: { count,
-//               worstMs, over: [{ ms, where }], attributed, streamingOver: […] },
-//               holds: { available, list }, saves: [{ at, savedAt }], unavailable: [] }
+//   sample:   { at, memory: { MiB… }, graphics: { counts… }, frames: { …raw
+//               observations; measure.mjs derives the facts }, holds, lastSave,
+//               unavailable: [] }
+// Every provider's output passes through the measurement contract
+// (measure.mjs normalize) before the soak logic sees it.
 //
 // Providers available now: CDP heap (before and after a GC), /proc RSS of the
 // browser's renderer and GPU processes, the job scope's memory.current and
@@ -14,6 +16,7 @@
 // CW-1's per-frame split (window.__siltwakePerf) and cave-hold state where
 // the build has them.
 import { readdirSync, readFileSync } from "node:fs";
+import { normalize } from "./measure.mjs";
 import { dirname } from "node:path";
 
 const MiB = 1048576;
@@ -26,27 +29,15 @@ const merge = (a, b) => {
   return a;
 };
 
-/** A provider's memory and graphics values must be finite numbers: anything
- * else (a missing metric divided into NaN, an absent counter) is dropped and
- * reported as unavailable, never passed on as a measurement (R2-F1). */
-function finite(name, part) {
-  for (const group of ["memory", "graphics"]) {
-    for (const [k, v] of Object.entries(part?.[group] ?? {})) {
-      if (typeof v === "number" && Number.isFinite(v)) continue;
-      delete part[group][k];
-      if (v !== null) (part.unavailable ??= []).push(`${name}: ${k} not measured (got ${String(v)})`);
-    }
-  }
-  return part;
-}
-
 export function createProbe(providers) {
   return {
     providers: providers.map((p) => p.name),
     async sample(ctx = {}) {
-      const s = { at: ctx.at ?? null, memory: {}, graphics: {}, frames: {}, holds: {}, saves: [], unavailable: [] };
+      const s = { at: ctx.at ?? null, memory: {}, graphics: {}, frames: null, holds: {}, saves: [], unavailable: [] }; // frames: none until a provider reports them
       for (const p of providers) {
-        try { merge(s, finite(p.name, await p.sample(ctx))); } catch (e) { s.unavailable.push(`${p.name}: ${e.message.split("\n")[0]}`); }
+        // The measurement contract (measure.mjs): nothing reaches the soak
+        // logic until it has passed its domain check.
+        try { merge(s, normalize(p.name, await p.sample(ctx))); } catch (e) { s.unavailable.push(`${p.name}: ${e.message.split("\n")[0]}`); }
       }
       return s;
     },
@@ -139,17 +130,15 @@ export function oceanDataset(page) {
 export function frames(page, { overMs = 33 } = {}) {
   return {
     name: "frames",
+    // Raw observations only; measure.mjs decides what they establish.
     async sample() {
-      const f = await page.evaluate((overMs) => {
+      const raw = await page.evaluate(() => {
         const gaps = (window.__soakGaps ?? []).splice(0);
         const perf = Array.isArray(window.__siltwakePerf) ? window.__siltwakePerf.splice(0) : null;
-        const streaming = perf ? perf.filter((e) => { const p = e.parts ?? {}; const s = (p.chunks ?? 0) + (p.caves ?? 0) + (p.regions ?? 0) + (p.lights ?? 0); return e.total > overMs && s >= e.total / 2; }).map((e) => e.total) : null;
-        // Attributed only if the build actually records its frames (CW-1 and later):
-        // an opted-in but empty array while frames ran means it does not.
-        const attributed = perf != null && (perf.length > 0 || gaps.length === 0);
-        return { count: gaps.length, worstMs: gaps.length ? Math.max(...gaps) : null, over: gaps.filter((g) => g > overMs), attributed, streaming: attributed ? streaming : null, holdFrames: perf ? perf.filter((e) => e.hold).length : null };
-      }, overMs);
-      return { frames: f };
+        const records = perf && perf.map((e) => ({ total: e?.total, hold: e?.hold, parts: e?.parts && { chunks: e.parts.chunks, caves: e.parts.caves, regions: e.parts.regions, lights: e.parts.lights } }));
+        return { gaps, records };
+      });
+      return { frames: { overMs, ...raw } };
     },
   };
 }

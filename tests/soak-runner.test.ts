@@ -15,6 +15,8 @@ const G = await import(pathToFileURL(resolve("scripts/soak/goals.mjs")).href);
 const P = await import(pathToFileURL(resolve("scripts/soak/probe.mjs")).href);
 
 type World = { heap: number; meshes: number; cam: number[]; calls: number; gotos: number[][]; leak: number; leakMeshes: number; holdOnce: number; heapMetric: boolean };
+/** One valid per-frame record, as CW-1's __siltwakePerf keeps it. */
+const rec = (total: number, over: Record<string, unknown> = {}) => ({ total, parts: { chunks: 0, caves: 0, regions: 0, lights: 0 }, hold: false, ...over });
 type Provider = { name: string; sample: () => Promise<Record<string, unknown>> };
 class Blocked extends Error {}
 
@@ -36,7 +38,8 @@ function fake(over: Partial<World> = {}, { failing = [] as string[], attributed 
     providers: () => ({
       full: [provider("memory", () => ({ memory: { rendererRssMiB: w.heap, gpuRssMiB: 400, jsHeapAfterGcMiB: w.heap }, graphics: { meshes: w.meshes, materials: 80, textures: 60, geometries: 700 } }))],
       tick: [
-        provider("frames", () => ({ frames: { count: 10, worstMs: 16, over: [], attributed, streaming: attributed ? [] : null, holdFrames: attributed ? (w.holdOnce-- > 0 ? 1 : 0) : null } })),
+        // Raw observations, as the real provider reports them (measure.mjs derives the rest).
+        provider("frames", () => ({ frames: { overMs: 33, gaps: Array(10).fill(16), records: attributed ? Array.from({ length: 10 }, (_, i) => rec(16, { hold: i === 0 && w.holdOnce-- > 0 })) : null } })),
         provider("ocean-dataset", () => ({ holds: { available: true, held: false } })),
         provider("save-journal", () => { w.calls++; return { lastSave: { savedAt: String(Math.floor(w.calls / 3)), tick: w.calls } }; }),
       ],
@@ -80,7 +83,7 @@ test("tour: flat memory, fully measured on an isolated run, passes; on a shared 
 
 test("tour: failed frame and hold providers are unavailable and reported, never passes (R1-F3)", async () => {
   const r = await S.runSoak(opts("tour"), fake({}, { failing: ["frames", "ocean-dataset"] }).deps);
-  assert.equal(r.verdict.status, "partial");
+  assert.equal(r.verdict.status, "partial", JSON.stringify(r.verdict.rules));
   const rule = (id: string) => r.verdict.rules.find((x: { id: string }) => x.id === id);
   assert.equal(rule("streaming-frame").status, "unavailable");
   assert.match(rule("streaming-frame").detail, /no frames were measured/);
@@ -88,7 +91,7 @@ test("tour: failed frame and hold providers are unavailable and reported, never 
   assert.match(rule("providers").detail, /frames failed \d+× \(frames broke\).*ocean-dataset failed/);
   // A build without per-frame attribution: unavailable too, with the reason.
   const u = await S.runSoak(opts("tour"), fake({}, { attributed: false }).deps);
-  assert.match(u.verdict.rules.find((x: { id: string }) => x.id === "streaming-frame").detail, /no streaming attribution yet/);
+  assert.match(u.verdict.rules.find((x: { id: string }) => x.id === "streaming-frame").detail, /no streaming attribution \(this build keeps no per-frame record\)/);
 });
 
 test("dwell: named places, coordinates and the unplaced large cave reach their outcomes (R1-F6)", async () => {
@@ -174,7 +177,7 @@ test("R2-F3: an autosave with no frame time, then a measured 70 ms autosave hitc
   deps.providers = () => {
     const ps = base();
     return { ...ps, tick: [
-      { name: "frames", sample: async () => { k++; return { frames: k < 6 ? { count: 0, worstMs: null, over: [], attributed: true, streaming: [], holdFrames: 0 } : { count: 10, worstMs: 70, over: [70], attributed: true, streaming: [], holdFrames: 0 } }; } },
+      { name: "frames", sample: async () => { k++; return { frames: k < 6 ? { overMs: 33, gaps: [], records: [] } : { overMs: 33, gaps: [16, 70], records: [rec(16), rec(70)] } }; } },
       { name: "save-journal", sample: async () => ({ lastSave: { savedAt: String(Math.floor(k / 3)), tick: k } }) },
       ps.tick[1]!,
     ] };
@@ -186,4 +189,100 @@ test("R2-F3: an autosave with no frame time, then a measured 70 ms autosave hitc
   // The same on a streaming rule: a measured violation stands after attribution is lost.
   const v = G.evaluateTour({ laps: [], frames: { judged: true, attributed: false, observed: 0, streamingOver: [{ ms: 48, where: "seam" }] }, holds: { covered: true, list: [] } }, G.DEFAULTS.tour);
   assert.equal(v.status, "fail");
+});
+
+// SCHED-2a R3: the reviewer's reproductions, through the real loop and contract -------
+
+/** The fake game with its memory and graphics read through a function of the lap. */
+function lapped(at: (lap: number) => { rss?: unknown; meshes?: unknown }) {
+  const f = fake();
+  let lap = 1;
+  const goto0 = f.deps.goto;
+  f.deps.goto = async (g: unknown, p: { x: number; y: number; z: number }, o?: { label?: string }) => { if (o?.label === "lap start") lap++; return goto0(g, p); };
+  const base = f.deps.providers;
+  f.deps.providers = () => {
+    const ps = base();
+    return { ...ps, full: [{ name: "memory", sample: async () => {
+      const v = at(lap - 1);
+      return { memory: { rendererRssMiB: v.rss ?? 400, gpuRssMiB: 230, jsHeapAfterGcMiB: 90 }, graphics: { meshes: v.meshes ?? 900, materials: 80, textures: 60, geometries: 700 } };
+    } }] };
+  };
+  return f;
+}
+const ruleOf = (v: { rules: { id: string; status: string; detail?: string }[] }, id: string) => v.rules.find((x) => x.id === id)!;
+
+test("R3-F1: a final RSS of 0 or −1, or a −1 mesh count, is no measurement: the tour is partial, never a pass", async () => {
+  for (const [what, at] of [["rss 0", (l: number) => (l >= 3 ? { rss: 0 } : {})], ["rss −1", (l: number) => (l >= 3 ? { rss: -1 } : {})], ["meshes −1", (l: number) => (l >= 3 ? { meshes: -1 } : {})]] as const) {
+    const r = await S.runSoak(opts("tour"), lapped(at).deps);
+    assert.equal(r.verdict.status, "partial", `${what}: ${JSON.stringify(r.verdict.rules)}`);
+    assert.match(JSON.stringify(r.run.providerErrors), /(memory\.rendererRssMiB|graphics\.meshes) \S+ is outside (memoryMiB|count)/, what);
+  }
+  // A valid zero count growing is still growth, and fails.
+  const grow = await S.runSoak(opts("tour"), lapped((l) => ({ meshes: l >= 2 ? 5 : 0 })).deps);
+  assert.equal(grow.verdict.status, "fail");
+  assert.equal(grow.verdict.broken[0], "graphics-growth:meshes");
+});
+
+test("R3-F1: garbled per-frame records (total NaN, ±Infinity, −1, 0, absent) and a missing split make the tour partial (the real frames provider)", async () => {
+  const g = globalThis as unknown as { window: Record<string, unknown> };
+  const run = async (record: Record<string, unknown>, gaps = [16, 16]) => {
+    const f = fake();
+    const page = { evaluate: async (fn: () => unknown) => { g.window = { __soakGaps: [...gaps], __siltwakePerf: [{ ...record }] }; return fn(); } };
+    const base = f.deps.providers;
+    f.deps.providers = () => { const ps = base(); return { ...ps, tick: [P.frames(page), ...ps.tick.slice(1)] }; };
+    return S.runSoak(opts("tour"), f.deps);
+  };
+  for (const total of [NaN, Infinity, -Infinity, -1, 0, undefined]) {
+    const r = await run({ total, parts: { chunks: NaN, caves: NaN, regions: 0, lights: 0 }, hold: false });
+    assert.equal(r.verdict.status, "partial", `total ${total}: ${JSON.stringify(r.verdict.rules)}`);
+    assert.equal(ruleOf(r.verdict, "streaming-frame").status, "unavailable");
+  }
+  const missing = await run({ total: 70, hold: false }, [70]);
+  assert.equal(missing.verdict.status, "partial", JSON.stringify(missing.verdict.rules));
+  assert.match(ruleOf(missing.verdict, "streaming-frame").detail ?? "", /lack a valid total or split/);
+});
+
+test("R3-F2: gaps [70, NaN] around each autosave with a valid 70 ms record: the judged dwell fails and stops on the known hitch", async () => {
+  const g = globalThis as unknown as { window: Record<string, unknown> };
+  const f = fake();
+  const page = { evaluate: async (fn: () => unknown) => { g.window = { __soakGaps: [70, NaN], __siltwakePerf: [rec(70)] }; return fn(); } };
+  const base = f.deps.providers;
+  f.deps.providers = () => { const ps = base(); return { ...ps, tick: [P.frames(page), ...ps.tick.slice(1)] }; };
+  const r = await S.runSoak(opts("dwell"), f.deps);
+  assert.equal(r.verdict.status, "fail", JSON.stringify(r.verdict.rules));
+  assert.match(r.verdict.reason, /autosave-hitch: 1 autosave frames over 33 ms, worst 70 ms/);
+  assert.equal(r.run.autosaves.length, 1, "it stopped at the first hitch");
+  assert.equal(r.run.autosaves[0].complete, false, "and knew that interval was incomplete");
+});
+
+test("R3-F3: elapsed time is monotonic: a 300 s wall-clock step changes neither the leak window nor the verdict", async () => {
+  // Simulated seconds 200× faster than real time, from the injected monotonic clock.
+  const run = async (stepWallClock: boolean) => {
+    const f = fake();
+    const t0 = performance.now(), sim = () => ((performance.now() - t0) / 1000) * 200;
+    const base = f.deps.providers;
+    f.deps.providers = () => {
+      const ps = base();
+      return { ...ps, full: [{ name: "memory", sample: async () => ({ memory: { rendererRssMiB: 400 + (40 / 3600) * sim(), gpuRssMiB: 230, jsHeapAfterGcMiB: 90 }, graphics: { meshes: 900, materials: 80, textures: 60, geometries: 700 } }) }] };
+    };
+    (f.deps as Record<string, unknown>).clock = sim;
+    const realNow = Date.now;
+    if (stepWallClock) Date.now = () => realNow() + (sim() > 300 ? 300000 : 0);
+    try {
+      return await S.runSoak({ ...opts("dwell"), sampleS: 0.04, tickMs: 10, gcEveryS: 60, thresholds: { tour: G.DEFAULTS.tour, dwell: { ...G.DEFAULTS.dwell, autosaveMissingS: 1e9 } } }, f.deps);
+    } finally { Date.now = realNow; }
+  };
+  for (const step of [false, true]) {
+    const r = await run(step);
+    assert.equal(r.verdict.status, "fail", `${step ? "stepped" : "steady"}: ${JSON.stringify(r.verdict.rules)}`);
+    const leak = ruleOf(r.verdict, "leak:rendererRssMiB") as unknown as { value: number };
+    assert.ok(leak.value > 35 && leak.value < 45, `${step ? "stepped" : "steady"} trend ${leak.value} MiB/h`);
+  }
+  // And the evaluator refuses time evidence that is not monotonic seconds.
+  const xs = (ts: number[]) => ts.map((at, i) => ({ at, afterGc: true, memory: { rendererRssMiB: 400 + i, gpuRssMiB: 230, jsHeapAfterGcMiB: 90 } }));
+  for (const ts of [[60, 3960, 3900, 4260], [60, Infinity, 700]]) {
+    const v = G.evaluateDwell({ samples: xs(ts), autosaves: [], frames: { judged: true }, dayNight: { available: true, cycles: 1 }, now: 5000 }, { ...G.DEFAULTS.dwell, autosaves: 0, autosaveMissingS: 1e9 });
+    assert.notEqual(v.status, "pass", JSON.stringify(ts));
+    assert.equal(ruleOf(v, "memory-flat:rendererRssMiB").status, "unavailable");
+  }
 });

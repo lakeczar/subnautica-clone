@@ -2,6 +2,40 @@
 
 Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 rule ("a job has a goal, not a time limit") and the 2a list in [DIRECTION](../DIRECTION.md), "Two test machines". SCHED-2b (the remote lane) and SAVE-1 follow after review. **Not installed:** the live queue still runs SCHED-1 `6824478b070f`; cut-over is below and waits for the coordinator.
 
+## R3 review responses
+
+Review: `d2a429c` on `review/sched-2a-r3`, on `014f37b`, not accepted: three P2s, again only in the soak evidence path. As the coordinator directed, these got **one structural fix, not more rule-by-rule patches**. Still no change under `scripts/heavy`.
+
+- **One measurement contract** (`scripts/soak/measure.mjs`). Every provider's output passes through `normalize()` in `createProbe` before anything else sees it. Each type declares its domain:
+  - `memoryMiB`: finite, > 0;
+  - `sizeMiB` (residency): finite, ≥ 0;
+  - `count` (graphics): a nonnegative integer, 0 valid;
+  - `frameMs` (a frame total): finite, > 0;
+  - `splitMs` (a split part): finite, ≥ 0;
+  - `gapMs` (rAF and autosave gaps): finite, ≥ 0;
+  - `seconds`: finite, ≥ 0.
+
+  An out-of-domain value is dropped with a diagnostic, never a number. An absent one is simply not measured.
+- **Frames are raw observations.** The frame provider now returns the rAF gaps and the per-frame records unchanged. The contract derives the facts from valid observations only:
+  - the worst gap, a maximum over valid gaps only;
+  - gaps over the limit;
+  - attribution, `true` only when every record has a valid total and a valid split for each of chunks, caves, regions and lights; a missing split is unavailable, never "zero streaming";
+  - streaming frames from valid records;
+  - hold frames, booleans only, with coverage;
+  - whether the interval was complete.
+- **Known violations are kept independently of completeness (R3-F2).** An invalid observation makes its interval incomplete, which prevents a pass and gives `partial`. A valid violation in the same interval fails a judged run and stops it. Autosaves record the worst valid gap and whether their interval was complete.
+- **The evaluator re-checks the same contract** (`goals.mjs` uses `valid()`): both tour endpoints, counts, frame milliseconds, monotonic and ordered sample times, and a finite trend.
+- **A monotonic clock (R3-F3):** the loop's elapsed time comes from `performance.now()`, or an injected `deps.clock`; it covers sample times, warm-up, GC cadence, leak windows and autosave silence. Travel timeouts are monotonic too. Wall time is used only for labels.
+- **Found while fixing:** a tick that landed during a GC or a save check was dropped whole, hold records included. Holds and attributed streaming frames are now always kept; only plain gaps from that window are left out.
+- **Tests:**
+  - `tests/soak-measure.test.ts`, table-driven: every type × {valid, fraction, 0, negative, NaN, ±Infinity, absent, null, wrong types}; the same through `normalize()`; frame totals and every split part × every bad value; holds; times.
+  - The reviewer's reproductions as runner-level regressions in `tests/soak-runner.test.ts`, all failing on `014f37b`:
+    - a final RSS of 0 or −1, or a −1 mesh count, gives partial (and a zero-to-positive count still fails as growth);
+    - a garbled record total (NaN, ±Infinity, −1, 0, absent), or a missing split with a 70 ms gap, gives partial;
+    - gaps `[70, NaN]` with a valid 70 ms record fail and stop at the first autosave;
+    - a 300 s wall-clock step changes neither the leak window nor the 40 MiB/h failure, and non-monotonic or infinite times are unavailable.
+  - Soak tests: **24/24**, three runs in a row.
+
 ## R2 review responses
 
 Review: `e43761e` on `review/sched-2a-r2`, on `e85c8e3`, not accepted, with three P2s, all in the soak harness. The scheduler side passed. Each fix has a runner-level regression in `tests/soak-runner.test.ts`, using the real loop and the real providers; all three fail on `e85c8e3`'s soak code (checked by export).

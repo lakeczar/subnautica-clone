@@ -31,10 +31,12 @@ export const PLACES = Object.freeze({
 export async function runSoak(opts, deps) {
   const { kind, out, thresholds: t } = opts, env = deps.env ?? process.env, log = deps.log ?? (() => {});
   mkdirSync(join(out, "saves"), { recursive: true });
-  const started = Date.now(), now = () => (Date.now() - started) / 1000;
+  // Elapsed time is monotonic (R3-F3): a wall-clock step never lengthens a
+  // leak window or a warm-up. deps.clock (seconds) is injectable for tests.
+  const clock = deps.clock ?? (() => performance.now() / 1000), t0 = clock(), now = () => clock() - t0;
   const run = {
     startedAt: 0, laps: [], samples: [], autosaves: [], saves: [], crash: null, travel: {}, yielded: false, providerErrors: {},
-    frames: { judged: Boolean(opts.judged), attributed: null, observed: 0, streamingOver: [], longOver: [] },
+    frames: { judged: Boolean(opts.judged), attributed: null, attributionIssue: null, observed: 0, invalid: 0, streamingOver: [], longOver: [] },
     holds: { available: null, covered: null, list: [] },
   };
   let verdict = null, stopping = false, checking = false, where = "start", lastSave = null;
@@ -54,21 +56,28 @@ export async function runSoak(opts, deps) {
   async function heartbeatTick() {
     const s = await tick.sample({ at: now() });
     noteErrors(s);
-    if (checking) return; // frames while a save is being checked are not travel frames
     where = s.where?.cave || s.where?.region || where;
-    const f = s.frames ?? {};
-    if (f.count != null) {
-      run.frames.observed += f.count;
-      if (f.attributed === false) run.frames.attributed = false;
-      else if (f.attributed === true && f.count > 0 && run.frames.attributed !== false) run.frames.attributed = true;
-      for (const ms of f.streaming ?? []) run.frames.streamingOver.push({ ms, where });
-      if (!f.attributed) for (const ms of f.over ?? []) run.frames.longOver.push({ ms, where });
-      // Holds the per-frame record saw since the last tick, however short (R2-F2);
-      // coverage holds only while every tick with frames had the record.
-      if (f.count > 0) {
-        if (Number.isFinite(f.holdFrames)) { if (run.holds.covered !== false) run.holds.covered = true; } else run.holds.covered = false;
-      }
+    // Facts the measurement contract derived (measure.mjs): valid observations
+    // only, with completeness kept apart from known violations.
+    const f = s.frames;
+    // Holds and attributed streaming frames are the game's, whenever they
+    // happened: never dropped. Plain frame gaps while a GC or a save check
+    // runs are that work's, not the game's, and are left out.
+    if (f) {
+      for (const ms of f.streaming) run.frames.streamingOver.push({ ms, where });
       if (f.holdFrames > 0) run.holds.list.push({ where, state: "recorded", frames: f.holdFrames, at: now() });
+    }
+    if (checking) return;
+    if (f) {
+      run.frames.observed += f.count;
+      run.frames.invalid += f.invalidGaps;
+      if (f.count > 0 || f.invalidGaps > 0) {
+        if (f.attributed === false) { run.frames.attributed = false; run.frames.attributionIssue = f.attributionIssue; }
+        else if (f.attributed === true && run.frames.attributed === null) run.frames.attributed = true;
+        // "No hold" needs every interval with frames covered by the record (R2-F2).
+        if (f.holdsCovered) { if (run.holds.covered !== false) run.holds.covered = true; } else run.holds.covered = false;
+      }
+      if (f.attributed !== true) for (const ms of f.over) run.frames.longOver.push({ ms, where });
     }
     if (s.holds?.available === false) run.holds.available = false;
     else if (s.holds?.available === true) {
@@ -76,7 +85,9 @@ export async function runSoak(opts, deps) {
       if (s.holds.held) run.holds.list.push({ where, state: s.holds.state, at: now() });
     }
     if (s.lastSave?.savedAt && s.lastSave.savedAt !== lastSave?.savedAt) {
-      if (lastSave) run.autosaves.push({ at: now(), tick: s.lastSave.tick, frameMs: f.count > 0 ? f.worstMs : null }); // the frame around the save
+      // The worst valid gap around the save; an invalid one in the same
+      // interval leaves the save incomplete, but never hides a known hitch (R3-F2).
+      if (lastSave) run.autosaves.push({ at: now(), tick: s.lastSave.tick, frameMs: f?.worstMs ?? null, complete: Boolean(f && f.count > 0 && f.invalidGaps === 0) });
       lastSave = s.lastSave;
     }
     if (g.crash) run.crash = g.crash;
