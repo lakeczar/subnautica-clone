@@ -100,6 +100,13 @@ async function face(t) {
     await page.waitForTimeout(30);
   }
 }
+/** Rise to the surface cap (craft -0.9 m, swimmer -0.5 m) and hold it, so the eye is above water. */
+async function rise() {
+  const start = performance.now();
+  await key("Space", true);
+  for (let s = await read(); s.cam[1] < 0.02 && performance.now() - start < 6000; s = await read()) await page.waitForTimeout(50);
+  await page.waitForTimeout(600);
+}
 async function shot(name) {
   const file = path.join(out, `s${segment}-${String(result.shots.length + 1).padStart(2, "0")}-${name}.jpg`);
   await page.screenshot({ path: file, type: "jpeg", quality: 82 }); result.shots.push(path.basename(file)); note("screenshot", file);
@@ -147,10 +154,14 @@ try {
     if (i === 0) continue;
     const ok = await goto(p, { tol: p.tol ?? (p.cave ? 4 : 7), label: p.cave ?? p.view ?? `cruise#${i}`, boost: !(p.view || p.tol) });
     if (p.view) {
-      const faced = await face(p.look), s1 = await read(), far = await page.evaluate(() => Number(document.querySelector("#ocean").dataset.farLandmarks ?? -1));
+      if (p.surface) await rise();
+      const faced = await face(p.look);
+      if (p.surface) await rise();
+      const s1 = await read(), far = await page.evaluate(() => Number(document.querySelector("#ocean").dataset.farLandmarks ?? -1));
       const c = { x: s1.cam[0], y: s1.cam[1], z: s1.cam[2] };
       await shot(p.view);
-      result.views.push({ view: p.view, shot: result.shots.at(-1), reached: ok, faced, camera: s1.cam.map(v => +v.toFixed(1)), bearing: s1.bearing, pitch: s1.pitch,
+      await releaseAll();
+      result.views.push({ aboveWater: s1.cam[1] >= 0, view: p.view, shot: result.shots.at(-1), reached: ok, faced, camera: s1.cam.map(v => +v.toFixed(1)), bearing: s1.bearing, pitch: s1.pitch,
         metresToTarget: +Math.hypot(p.look.x - c.x, p.look.y - c.y, p.look.z - c.z).toFixed(0), activeCaveLight: s1.cave || null, farLandmarksShown: far });
       note("view", JSON.stringify(result.views.at(-1)));
     }

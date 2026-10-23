@@ -1,4 +1,5 @@
 import { decodeKitCavePack, StaleKitCavePack, type KitCaveCollision } from "../../world/caves/kitCollision.js";
+import { BAKE_SOURCE } from "../bakeSource.js";
 import { inflate } from "../biomes/terrainAssets.js";
 import { decodeLightField, type CaveLightField } from "./lightField.js";
 
@@ -99,8 +100,6 @@ export function httpCaveStore(base: string, options: CaveStoreOptions): CaveStor
   };
 }
 
-/** Set by the vite build (vite.config.ts); absent under Node. */
-declare const __BAKE_SOURCE_HASH__: string | undefined;
 let store: CaveStore | null | undefined;
 /** The game's cave store: the baked `caves/` beside the page in a browser,
  * none elsewhere (Node tests and tools generate live). */
@@ -109,7 +108,7 @@ export function gameCaveStore(): CaveStore | null {
     let base: string | null = null;
     // Only a real page with a usable base URL (not Node's test doubles).
     try { base = typeof document !== "undefined" && typeof fetch === "function" ? new URL("caves/", document.baseURI).href : null; } catch { base = null; }
-    store = base ? httpCaveStore(base, { expectedSource: typeof __BAKE_SOURCE_HASH__ === "string" ? __BAKE_SOURCE_HASH__ : null }) : null;
+    store = base ? httpCaveStore(base, { expectedSource: BAKE_SOURCE }) : null;
   }
   return store;
 }

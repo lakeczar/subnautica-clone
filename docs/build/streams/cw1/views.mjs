@@ -21,20 +21,20 @@ const { createEnvelope, encodeSave, decodeSave } = await import(B + "src/save/co
 // The mast line.
 const m = CROWN_MAST, L = ISLAND_LOOKOUT, d = Math.hypot(L.x - m.x, L.z - m.z), u = { x: (L.x - m.x) / d, z: (L.z - m.z) / d };
 const at = (r) => ({ x: +(m.x + u.x * r).toFixed(1), z: +(m.z + u.z * r).toFixed(1) });
-const SURFACE = -1.5, UNDER = -10, CRUISE = -3;
+const SURFACE = -0.9, UNDER = -10, CRUISE = -3;
 const lamp = { x: m.lamp.x, y: m.lamp.y, z: m.lamp.z }, body = { x: m.x, y: -20, z: m.z };
 const clampY = (y, p) => Math.min(-2, Math.max(worldFloor(p.x, p.z) + 3, y));
 const mast = [];
 const stop = (r, name) => {
   const p = at(r);
-  mast.push({ ...p, y: SURFACE, view: `mast-${name}-surface`, look: lamp, tol: 3 });
+  mast.push({ ...p, y: SURFACE, view: `mast-${name}-surface`, look: lamp, tol: 3, surface: true });
   mast.push({ ...p, y: clampY(UNDER, p), view: `mast-${name}-submerged`, look: body, tol: 3 });
 };
 const cruise = (r0, r1) => { for (let r = r0 - 50; r > r1 + 25; r -= 50) { const p = at(r); mast.push({ ...p, y: clampY(CRUISE, p) }); } };
 mast.push({ ...at(1000), y: SURFACE });
 stop(1000, "1km");
 cruise(1000, d);
-mast.push({ ...L, y: SURFACE, view: "mast-lookout-765m-surface", look: lamp, tol: 3 },
+mast.push({ ...L, y: SURFACE, view: "mast-lookout-765m-surface", look: lamp, tol: 3, surface: true },
   { ...L, y: clampY(UNDER, L), view: "mast-lookout-765m-submerged", look: body, tol: 3 });
 cruise(d, 400);
 stop(400, "400m");

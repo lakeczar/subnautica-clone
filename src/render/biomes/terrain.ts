@@ -1,6 +1,7 @@
 import type { ChunkArtFactory, ChunkBuildContext, ChunkRecipe, MeshRecipe } from "../kit/types.js";
 import type { ChunkDescriptor } from "../../world/types.js";
 import { decodeTerrain } from "./terrainCodec.js";
+import { BAKE_SOURCE } from "../bakeSource.js";
 import { httpTerrainStore, type TerrainStore } from "./terrainAssets.js";
 import type { LodLevel, Rect } from "../../world/types.js";
 import { BORDER_STEP, COARSE, FINE, tessellate, type TessellationOptions } from "./tessellate.js";
@@ -65,7 +66,7 @@ let store: TerrainStore | null | undefined;
 export function setTerrainStore(next: TerrainStore | null): void { store = next; }
 export function terrainStore(): TerrainStore | null {
   if (store === undefined)
-    store = typeof document !== "undefined" && typeof fetch === "function" ? httpTerrainStore(new URL("terrain/", document.baseURI).href) : null;
+    store = typeof document !== "undefined" && typeof fetch === "function" ? httpTerrainStore(new URL("terrain/", document.baseURI).href, { expectedSource: BAKE_SOURCE }) : null;
   return store;
 }
 

@@ -16,6 +16,7 @@ import type { Vec3 } from "../src/sim/types.js";
 import { createCaveRuntime } from "../src/world/caves/admission.js";
 import { decodeKitCave, decodeKitCavePack, encodeKitCave, encodeKitCavePack, insideKitCave, liveKitCave, StaleKitCavePack } from "../src/world/caves/kitCollision.js";
 import { httpCaveStore } from "../src/render/caves/caveStore.js";
+import { httpTerrainStore } from "../src/render/biomes/terrainAssets.js";
 import { deflateSync } from "node:zlib";
 import { createKitStreamer } from "../src/world/caves/kitStream.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
@@ -244,4 +245,35 @@ test("STR-13 provenance: a collision pack or manifest baked from other sources i
   // A stale manifest, and a build without a hash, refuse the bake too.
   assert.equal((await load(SOURCE_A, SOURCE_A, SOURCE_B)).store.collision, null);
   assert.match((await load(SOURCE_A, SOURCE_A, null)).store.refused ?? "", /no bake source hash/);
+});
+
+test("STR-13 for terrain: only files the manifest lists are fetched, and a manifest from other sources tessellates live", async () => {
+  const chunkFile = deflateSync(new Uint8Array([1, 2, 3]));
+  const run = async (manifestSource: string, expected: string | null, id: string) => {
+    const asked: string[] = [], saved = globalThis.fetch, warn = console.warn;
+    globalThis.fetch = (async (url: URL | string) => {
+      const name = new URL(String(url)).pathname.split("/terrain/")[1]!;
+      asked.push(name);
+      const body = name === "manifest.json" ? new TextEncoder().encode(JSON.stringify({ sourceHash: manifestSource, chunks: { "chunk:1:1:0": { file: "t_1_1.bin" } } }))
+        : name === "t_1_1.bin" ? chunkFile : null;
+      return new Response(body ? body.slice() : null, { status: body ? 200 : 404 });
+    }) as typeof fetch;
+    console.warn = () => {};
+    try {
+      const store = httpTerrainStore("http://bake.test/terrain/", { expectedSource: expected });
+      const file = store.request(id);
+      for (let i = 0; i < 200 && !file.settled; i++) await new Promise(r => setTimeout(r, 1));
+      return { bytes: file.bytes, asked };
+    } finally { globalThis.fetch = saved; console.warn = warn; }
+  };
+  // Neighbour prefetch asks for the eight around too; only the listed file is ever fetched.
+  const fresh = await run(SOURCE_A, SOURCE_A, "chunk:1:1:0");
+  assert.deepEqual([...fresh.bytes ?? []], [1, 2, 3]);
+  assert.deepEqual(fresh.asked.sort(), ["manifest.json", "t_1_1.bin"]);
+  const unlisted = await run(SOURCE_A, SOURCE_A, "chunk:4:12:0");
+  assert.equal(unlisted.bytes, null);
+  assert.ok(!unlisted.asked.includes("t_4_12.bin"), "an unlisted column is never requested");
+  const stale = await run(SOURCE_A, SOURCE_B, "chunk:1:1:0");
+  assert.equal(stale.bytes, null);
+  assert.deepEqual(stale.asked, ["manifest.json"]);
 });

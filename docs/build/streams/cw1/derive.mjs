@@ -102,16 +102,24 @@ for (let i = 1; i < tour.length; i++) {
 }
 let total = 0;
 for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
-// Segments of equal length, each starting at a cave stop; or, with
-// "hops", one short run per cave: its approach point, the mouth, and back.
-const per = total / (SEGMENTS || 1), segments = [];
+// Exactly SEGMENTS segments of near-equal length, each cut at the cave stop
+// nearest its share of the tour; or, with "hops", one short run per cave:
+// its approach point, the mouth, and back.
+const segments = [];
 if (segArg === "hops") for (const t of tour) segments.push([{ ...t.outer }, { ...t.at, cave: t.cave }, { ...t.outer }]);
-let acc = 0, start = 0;
-for (let i = 1; segArg !== "hops" && i < points.length; i++) {
-  acc += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
-  if ((acc >= per && points[i].cave && segments.length < SEGMENTS - 1) || i === points.length - 1) {
-    segments.push(points.slice(start, i + 1)); start = i; acc = 0;
+else {
+  const along = [0];
+  for (let i = 1; i < points.length; i++) along.push(along[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z));
+  const stopsAt = points.map((p, i) => p.cave ? i : -1).filter(i => i > 0 && i < points.length - 1);
+  if (stopsAt.length < SEGMENTS - 1) throw new Error(`${stopsAt.length} inner cave stops cannot cut ${SEGMENTS} segments`);
+  const cuts = [0];
+  for (let k = 1; k < SEGMENTS; k++) {
+    // The nearest stop to k/SEGMENTS of the way, after the last cut, leaving one stop per cut still to come.
+    const options = stopsAt.filter(i => i > cuts.at(-1)).slice(0, stopsAt.filter(i => i > cuts.at(-1)).length - (SEGMENTS - 1 - k));
+    cuts.push(options.reduce((b, i) => Math.abs(along[i] - total * k / SEGMENTS) < Math.abs(along[b] - total * k / SEGMENTS) ? i : b));
   }
+  cuts.push(points.length - 1);
+  for (let k = 0; k < SEGMENTS; k++) segments.push(points.slice(cuts[k], cuts[k + 1] + 1));
 }
 // The real late state: the creel route through its refits phase.
 const { Driver } = await import(B + "scripts/playthrough/driver.js");

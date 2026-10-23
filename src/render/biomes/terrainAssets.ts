@@ -97,15 +97,34 @@ export function createTerrainStore(options: {
   };
 }
 
-/** Store over HTTP: `base` is the URL of the baked `terrain/` directory. */
-export function httpTerrainStore(base: string, cacheBytes?: number): TerrainStore {
+/** Store over HTTP: `base` is the URL of the baked `terrain/` directory. Its
+ * `manifest.json` is read once: only the files it lists are fetched (columns
+ * the bake leaves to the legacy terrain are never asked for), and a manifest
+ * baked from other sources than `expectedSource` refuses every file, so the
+ * chunks tessellate live (STR-13; logged). No manifest: files are tried by
+ * name, as before. */
+export function httpTerrainStore(base: string, options: { readonly expectedSource: string | null; readonly cacheBytes?: number }): TerrainStore {
+  const root = new URL(base, globalThis.location?.href ?? "http://localhost/");
+  const get = async (name: string): Promise<Uint8Array | null> => {
+    const r = await fetch(new URL(name, root));
+    // A dev server answers a missing file with its HTML fallback page.
+    if (!r.ok || (r.headers.get("content-type") ?? "").includes("text/html")) return null;
+    return new Uint8Array(await r.arrayBuffer());
+  };
+  const listed = get("manifest.json").then(bytes => {
+    if (!bytes) return null;
+    const m = JSON.parse(new TextDecoder().decode(bytes)) as { sourceHash?: string; chunks?: Record<string, { file: string }> };
+    if (!options.expectedSource || m.sourceHash !== options.expectedSource) {
+      console.warn(`terrain bake refused, live tessellation: baked from ${m.sourceHash?.slice(0, 12) ?? "?"}…, this build is ${options.expectedSource?.slice(0, 12) ?? "unknown"}…`);
+      return new Set<string>();
+    }
+    return new Set(Object.values(m.chunks ?? {}).map(c => c.file));
+  }, () => null);
   return createTerrainStore({
-    ...(cacheBytes ? { cacheBytes } : {}),
+    ...(options.cacheBytes ? { cacheBytes: options.cacheBytes } : {}),
     async fetchFile(name) {
-      const r = await fetch(new URL(name, new URL(base, globalThis.location?.href ?? "http://localhost/")));
-      // A dev server answers a missing file with its HTML fallback page.
-      if (!r.ok || (r.headers.get("content-type") ?? "").includes("text/html")) return null;
-      return new Uint8Array(await r.arrayBuffer());
+      const files = await listed;
+      return files && !files.has(name) ? null : get(name);
     },
   });
 }
