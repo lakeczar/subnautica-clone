@@ -4,6 +4,7 @@ import type { Aabb, LodLevel, Rect, Vec3 } from "../../world/types.js";
 import type { CaveDef, CaveRoom, CaveSource, CaveSurface, CarveSource, TerraceSource } from "./caves.js";
 import { cachedBuild, type CacheKey, floorKey } from "../buildCache.js";
 import { fbm, smooth } from "./noise.js";
+import { capOverlap, capTriangles, type PlanePoint } from "./seamCap.js";
 import type { FloorFunction } from "./terrain.js";
 
 /** One-source cave geometry (Babylon-free, deterministic).
@@ -561,22 +562,37 @@ interface Lattice {
   readonly field: Float32Array;
   readonly room: Uint8Array;
 }
-/** 1 m lattice: rock only where all eight fine voxels are rock. */
+/** 1 m lattice: rock only where all eight fine voxels are rock, plus one
+ * more cell beyond the fine grid on every face, sampled from the source.
+ * A shell vertex sits within its clamp of the corner a cell shares with the
+ * next, so without that shell of cells the coarse surface's own edge (the
+ * last cell's corner, on the footprint side itself) could end up to a clamp
+ * inside the footprint, and water-dominant bottom cells (or a neighbour's
+ * deeper water) left it open through the lattice floor: open edges the clip never made, which the seam can't
+ * close in a side plane (COL-1 R7). With it the surface closes inside the
+ * lattice, and the clip alone makes its open edges, all in the side planes,
+ * as at fine. */
 function coarsen(v: CaveVolume, sampler: CaveSampler): Lattice {
-  const g = v.grid, nx = g.nx / 2, ny = g.ny / 2, nz = g.nz / 2, voxel = g.voxel * 2;
-  if (![nx, ny, nz].every(Number.isInteger)) throw new Error("cave shell: fine grid must have even dimensions");
+  const g = v.grid, fx = g.nx / 2, fy = g.ny / 2, fz = g.nz / 2, voxel = g.voxel * 2;
+  if (![fx, fy, fz].every(Number.isInteger)) throw new Error("cave shell: fine grid must have even dimensions");
+  const nx = fx + 2, ny = fy + 2, nz = fz + 2, origin = { x: g.origin.x - voxel, y: g.origin.y - voxel, z: g.origin.z - voxel };
   const solid = new Uint8Array(nx * ny * nz), field = new Float32Array(nx * ny * nz), room = new Uint8Array(nx * ny * nz);
   for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const at = i + nx * (j + ny * k), fi = i - 1, fj = j - 1, fk = k - 1;
+    const rock = sampler.rock(origin.x + (i + 0.5) * voxel, origin.y + (j + 0.5) * voxel, origin.z + (k + 0.5) * voxel);
+    field[at] = rock;
+    // Below the lattice is the cave's own rock (under its base); a neighbour's
+    // water continuing deeper is that neighbour's, outside this footprint.
+    if (fj < 0) { solid[at] = 1; continue; }
+    if (fi < 0 || fk < 0 || fi >= fx || fj >= fy || fk >= fz) { solid[at] = rock < 0 ? 1 : 0; continue; }
     let all = 1, r = 0;
     for (let c = 0; c < 8; c++) {
-      const at = (2 * i + (c & 1)) + g.nx * ((2 * j + ((c >> 1) & 1)) + g.ny * (2 * k + (c >> 2)));
-      all &= v.solid[at]!; if (!r) r = v.room[at]!;
+      const f = (2 * fi + (c & 1)) + g.nx * ((2 * fj + ((c >> 1) & 1)) + g.ny * (2 * fk + (c >> 2)));
+      all &= v.solid[f]!; if (!r) r = v.room[f]!;
     }
-    const at = i + nx * (j + ny * k);
     solid[at] = all; room[at] = r;
-    field[at] = sampler.rock(g.origin.x + (i + 0.5) * voxel, g.origin.y + (j + 0.5) * voxel, g.origin.z + (k + 0.5) * voxel);
   }
-  return { grid: { origin: g.origin, voxel, nx, ny, nz }, solid, field, room };
+  return { grid: { origin, voxel, nx, ny, nz }, solid, field, room };
 }
 
 /** Raw surface: positions, per-vertex room (0 exterior) and triangles. */
@@ -877,7 +893,10 @@ export function clipMeshToRect(mesh: MeshRecipe, rect: Rect, name = mesh.name): 
         const a = poly[e]!, b = poly[(e + 1) % poly.length]!;
         const da = (a.p[axis]! - value) * sign, db = (b.p[axis]! - value) * sign;
         if (da >= 0) next.push(a);
-        if ((da >= 0) !== (db >= 0)) {
+        // Only an edge with its ends strictly either side makes a point: an
+        // end exactly on the plane is kept as itself (a cut point at s = 0
+        // or 1 would duplicate it, pinching the mesh with a null triangle).
+        if ((da > 0 && db < 0) || (da < 0 && db > 0)) {
           const s = da / (da - db), lerp = (u: number[], w: number[]): number[] => u.map((x, i) => x + (w[i]! - x) * s);
           const [lo, hi] = a.key < b.key ? [a.key, b.key] : [b.key, a.key];
           const c = lerp(a.c, b.c); c[3] = s < 0.5 ? a.c[3]! : b.c[3]!;
@@ -935,7 +954,7 @@ function generateShell(def: CaveDef, lod: LodLevel): MeshRecipe {
     if (d < COLLAR_EDGE) target[v] = floor(x, z);
     else if (d < band) target[v] = Math.max(P[v * 3 + 1]!, floor(x, z));
   }
-  return snapToFloor(clipped, target, def.id);
+  return snapToFloor(clipped, target, f, spans, floor, def.id);
 }
 
 const COLLAR_EDGE = 1e-6;
@@ -985,24 +1004,63 @@ function segmentThrough(P: ArrayLike<number>, p: number, q: number, a: number, b
   return t > 1e-7 && t < 1 - 1e-7;
 }
 
-/** Join the clipped shell to the floor without folding it (COL-1 R6).
- * Each vertex with a `target` height moves there **only if** that keeps the
- * surface honest: no incident triangle turns against the way it faced (a
+/** Whether segments a-b and c-d, lying in one side plane, cross or touch
+ * other than at a shared end, or overlap collinearly (measured in that
+ * plane's horizontal axis `h` and y). */
+function segmentsTangle(P: ArrayLike<number>, h: number, a: number, b: number, c: number, d: number): boolean {
+  const pu = (v: number): number => P[v * 3 + h]!, py = (v: number): number => P[v * 3 + 1]!;
+  const cr = (o: number, p: number, q: number): number => (pu(p) - pu(o)) * (py(q) - py(o)) - (py(p) - py(o)) * (pu(q) - pu(o));
+  const within = (o: number, p: number, q: number): boolean => pu(q) >= Math.min(pu(o), pu(p)) && pu(q) <= Math.max(pu(o), pu(p)) &&
+    py(q) >= Math.min(py(o), py(p)) && py(q) <= Math.max(py(o), py(p));
+  if (Math.max(pu(a), pu(b)) < Math.min(pu(c), pu(d)) || Math.max(pu(c), pu(d)) < Math.min(pu(a), pu(b))) return false;
+  const shared = a === c || a === d || b === c || b === d;
+  if (shared) {
+    // Sharing an end: only folding back along the other edge tangles.
+    const o = a === c || a === d ? a : b, p = o === a ? b : a, q = c === o ? d : c;
+    return cr(o, p, q) === 0 && (pu(p) - pu(o)) * (pu(q) - pu(o)) + (py(p) - py(o)) * (py(q) - py(o)) > 0;
+  }
+  const d1 = cr(a, b, c), d2 = cr(a, b, d), d3 = cr(c, d, a), d4 = cr(c, d, b);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+  return (d1 === 0 && within(a, b, c)) || (d2 === 0 && within(a, b, d)) || (d3 === 0 && within(c, d, a)) || (d4 === 0 && within(c, d, b));
+}
+
+/** Join the clipped shell to the floor without folding it (COL-1 R6), and
+ * close the seam with faces built from its boundary (R7).
+ *
+ * **Snap.** Each vertex with a `target` height moves there only if that keeps
+ * the surface honest: no incident triangle turns against the way it faced (a
  * flip) and none then passes through another triangle of the shell (a fold).
- * Moves are vertical, so one X/Z bucket grid serves every check; passes
- * repeat while vertices that moved free others. Nearly everywhere every
- * vertex moves, so the shell is as before. Where a vertex must stay, each
- * open edge at it (the clipped seam, on a footprint side or, in a coarse
- * shell, cutting just inside one) gets a vertical skirt from it to the
- * target heights, wound coherently with the triangle beside it: the open
- * edge lies where the snap would have put it, so the seam still meets the
- * terrain exactly. Afterwards no
- * triangle faces against its pre-snap normal and no moved triangle crosses
- * another: the mesher's outward winding (`surfaceNets`) holds for the
- * final mesh, which COL-1's collision takes as its orientation. Throws
- * otherwise. */
-function snapToFloor(mesh: MeshRecipe, target: Float64Array, id: string): MeshRecipe {
-  const P = mesh.positions as Float32Array, I = mesh.indices, n = I.length / 3, nv = P.length / 3;
+ * Moves are vertical, so one X/Z bucket grid serves every check; passes repeat
+ * while vertices that moved free others. Nearly everywhere every vertex moves,
+ * so the shell is as before.
+ *
+ * **Seam.** Where vertices stay, the cut in a collar side plane no longer
+ * lies on the floor. The plane then gets the faces `capTriangles` builds:
+ * exactly the signed region between the cut and the floor, triangulated once
+ * from its boundary, so the shell's solid against terrain water faces out,
+ * terrain solid against the shell's water faces in, and nothing is covered
+ * twice. Triangles the mesher left lying in a collar plane join that sum
+ * (their edges become the cut), so they can't overlap the new faces either.
+ * Every open edge left in a collar plane lies on the floor.
+ *
+ * **Checks.** No original triangle faces against its pre-snap normal; no
+ * moved vertex stops partway; the seam faces tile their region exactly
+ * (`capProblems`); no seam face crosses or overlaps (coplanar included) any
+ * triangle of the shell; every edge a seam face uses is shared coherently.
+ * The mesher's outward winding (`surfaceNets`) holds for the final mesh,
+ * which COL-1's collision takes as its orientation. Throws otherwise. */
+function snapToFloor(mesh: MeshRecipe, target: Float64Array, f: Rect, spans: readonly SharedSpan[], floor: FloorFunction, id: string): MeshRecipe {
+  const P = mesh.positions as Float32Array, nv = P.length / 3;
+  const onSpan = (v: number): boolean => spans.some(s => spanDistance(s, P[v * 3]!, P[v * 3 + 2]!) < COLLAR_EDGE);
+  // The collar sides: axis, coordinate, outward normal along the axis. In
+  // plane coordinates u = p . (n.z, 0, -n.x), so (u, y) counter-clockwise
+  // is the outward normal.
+  const sides = ([[0, f.minX, -1], [0, f.maxX, 1], [2, f.minZ, -1], [2, f.maxZ, 1]] as const).map(([axis, at, out]) => ({ axis, at, out }));
+  const inPlane = (t: number, I: ArrayLike<number>): boolean => sides.some(sd => [0, 1, 2].every(k => P[I[t * 3 + k]! * 3 + sd.axis] === sd.at)) &&
+    ![0, 1, 2].some(k => onSpan(I[t * 3 + k]!));
+  const kept: number[] = [];
+  for (let t = 0; t < mesh.indices.length / 3; t++) if (!inPlane(t, mesh.indices)) kept.push(mesh.indices[t * 3]!, mesh.indices[t * 3 + 1]!, mesh.indices[t * 3 + 2]!);
+  const I = Uint32Array.from(kept), n = I.length / 3;
   const pre = Array.from({ length: n }, (_, t) => triangleNormal(P, I, t));
   const incident: number[][] = Array.from({ length: nv }, () => []);
   for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) incident[I[t * 3 + k]!]!.push(t);
@@ -1041,7 +1099,38 @@ function snapToFloor(mesh: MeshRecipe, target: Float64Array, id: string): MeshRe
       }
     return false;
   };
-  const honest = (v: number): boolean => incident[v]!.every(t => keepsFacing(pre[t]!, triangleNormal(P, I, t)) && !crosses(t));
+  // The cut in each collar plane: open edges with both ends in it, as each
+  // runs in its triangle, minus a stretch shared with a neighbour.
+  const uses = new Map<number, number>();
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) {
+    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!, e = Math.min(a, b) * nv + Math.max(a, b);
+    uses.set(e, (uses.get(e) ?? 0) + 1);
+  }
+  const cuts = sides.map(sd => {
+    const out: [number, number][] = [];
+    for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) {
+      const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!;
+      if (P[a * 3 + sd.axis] === sd.at && P[b * 3 + sd.axis] === sd.at && !(onSpan(a) && onSpan(b)) && uses.get(Math.min(a, b) * nv + Math.max(a, b)) === 1) out.push([a, b]);
+    }
+    return out;
+  });
+  const cutEdges = (sd: (typeof sides)[number]): [number, number][] => cuts[sides.indexOf(sd)]!;
+  const cutAt: [number, number][][] = Array.from({ length: nv }, () => []);
+  for (const cut of cuts) for (const e of cut) { cutAt[e[0]]!.push(e); cutAt[e[1]]!.push(e); }
+  /** Whether v's cut edges cross or touch another edge of the cut in their
+   * plane: the cut must stay a simple curve for its seam to be built. */
+  const tangles = (v: number): boolean => {
+    for (let s = 0; s < sides.length; s++) {
+      const sd = sides[s]!, h = sd.axis === 0 ? 2 : 0;
+      if (P[v * 3 + sd.axis] !== sd.at) continue;
+      for (const [a, b] of cutAt[v]!) for (const [c, d] of cuts[s]!) {
+        if (c === a && d === b) continue;
+        if (segmentsTangle(P, h, a, b, c, d)) return true;
+      }
+    }
+    return false;
+  };
+  const honest = (v: number): boolean => incident[v]!.every(t => keepsFacing(pre[t]!, triangleNormal(P, I, t)) && !crosses(t)) && !tangles(v);
   const moved = new Uint8Array(nv);
   for (let pass = 0; pass < 4; pass++) {
     let any = false;
@@ -1055,44 +1144,212 @@ function snapToFloor(mesh: MeshRecipe, target: Float64Array, id: string): MeshRe
     }
     if (!any) break;
   }
-  // Skirts below or above open edges with an end that stayed.
-  const stayed = (v: number): boolean => !Number.isNaN(target[v]!) && !moved[v];
-  const uses = new Map<string, number>();
-  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) {
-    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!, e = a < b ? `${a},${b}` : `${b},${a}`;
-    uses.set(e, (uses.get(e) ?? 0) + 1);
-  }
+  for (let v = 0; v < nv; v++) if (moved[v] && P[v * 3 + 1] !== Math.fround(target[v]!)) throw new Error(`cave ${id}: vertex ${v} moved partway`);
+  const stayed = (v: number): boolean => v < nv && !Number.isNaN(target[v]!) && !moved[v];
+
+  // The seam: per collar plane, the cut's strips to the floor summed as
+  // boundaries, and the region they bound capped once.
   const positions = Array.from(P), normals = Array.from(mesh.normals), colors = Array.from(mesh.colors), indices = Array.from(I);
-  const floorVertex = new Map<number, number>();
-  const below = (v: number): number => {
-    let w = floorVertex.get(v);
+  // Every cut vertex already on the floor is the floor there: a stayed
+  // vertex above or below it at the same point of the plane reuses it.
+  const floorAt = new Map<string, number>();
+  for (const cut of cuts) for (const e of cut) for (const v of e) if (!stayed(v)) floorAt.set(`${P[v * 3]},${P[v * 3 + 1]},${P[v * 3 + 2]}`, v);
+  /** The vertex where the floor is under (or over) v: v itself when it lies
+   * there (snapped, or has no target: a corner a neighbour shares). */
+  const floorPoint = (v: number): number => {
+    if (v >= nv || Number.isNaN(target[v]!) || moved[v]) return v;
+    const x = P[v * 3]!, y = Math.fround(target[v]!), z = P[v * 3 + 2]!, k = `${x},${y},${z}`;
+    let w = floorAt.get(k);
     if (w === undefined) {
-      w = positions.length / 3; floorVertex.set(v, w);
-      positions.push(P[v * 3]!, Math.fround(target[v]!), P[v * 3 + 2]!);
+      w = positions.length / 3; floorAt.set(k, w);
+      positions.push(x, y, z);
       normals.push(mesh.normals[v * 3]!, mesh.normals[v * 3 + 1]!, mesh.normals[v * 3 + 2]!);
       for (let c = 0; c < 4; c++) colors.push(mesh.colors[v * 4 + c]!);
     }
     return w;
   };
-  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) {
-    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!;
-    if (!stayed(a) && !stayed(b)) continue;
-    if (uses.get(a < b ? `${a},${b}` : `${b},${a}`) !== 1) continue;
-    // The triangle runs a -> b; the skirt runs b -> a, so the two agree. An
-    // end that moved (or a corner shared with a neighbour, which never
-    // snaps) is already where it belongs: the quad closes to it.
-    const a2 = stayed(a) ? below(a) : a, b2 = stayed(b) ? below(b) : b;
-    if (a2 !== a) indices.push(b, a, a2);
-    if (b2 !== b) indices.push(b, a2, b2);
+  // Directed edge -> triangle, for splitting a cut edge where it meets the floor.
+  const owner = new Map<string, number>();
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) owner.set(`${I[t * 3 + k]},${I[t * 3 + (k + 1) % 3]}`, t);
+  const caps: number[] = [];
+  for (const sd of sides) {
+    const nx = sd.axis === 0 ? sd.out : 0, nz = sd.axis === 2 ? sd.out : 0;
+    const at = (v: number): PlanePoint => ({ u: positions[v * 3 + 2]! * nx - positions[v * 3]! * nz, y: positions[v * 3 + 1]! });
+    /** Split cut edge a -> b where it meets the floor, at plane point q or
+     * at an existing floor vertex there: its triangle (a, b, c) becomes
+     * (a, x, c) and (x, b, c), same plane and winding. */
+    const split = (a: number, b: number, q: PlanePoint | number): number => {
+      const t = owner.get(`${a},${b}`)!, k = [0, 1, 2].find(k => indices[t * 3 + k] === a && indices[t * 3 + (k + 1) % 3] === b)!;
+      const c = indices[t * 3 + (k + 2) % 3]!;
+      let x: number;
+      if (typeof q === "number") x = q;
+      else {
+        const A = at(a), B = at(b), w = Math.hypot(q.u - A.u, q.y - A.y) / Math.hypot(B.u - A.u, B.y - A.y);
+        x = positions.length / 3;
+        positions.push(Math.fround(sd.axis === 0 ? sd.at : -q.u / nz), Math.fround(q.y), Math.fround(sd.axis === 2 ? sd.at : q.u / nx));
+        const nrm = [0, 1, 2].map(c3 => normals[a * 3 + c3]! + (normals[b * 3 + c3]! - normals[a * 3 + c3]!) * w), l = Math.hypot(...nrm) || 1;
+        normals.push(...nrm.map(c3 => c3 / l));
+        for (let c4 = 0; c4 < 4; c4++) colors.push(colors[a * 4 + c4]! + (colors[b * 4 + c4]! - colors[a * 4 + c4]!) * w);
+      }
+      indices[t * 3 + (k + 1) % 3] = x;
+      const u = indices.length / 3;
+      indices.push(x, b, c);
+      pre.push(pre[t]!);
+      owner.set(`${a},${x}`, t); owner.set(`${x},${c}`, t); owner.set(`${x},${b}`, u); owner.set(`${b},${c}`, u); owner.set(`${c},${x}`, u);
+      floorAt.set(`${positions[x * 3]},${positions[x * 3 + 1]},${positions[x * 3 + 2]}`, x);
+      return x;
+    };
+    // The cut, as each edge runs in its triangle, where an end stayed off the
+    // floor (an edge with both ends on it is the seam already); a stretch
+    // shared with a neighbour stays open. Each edge's strip is a closed
+    // boundary by itself, so the sum is exact over any subset. (A vertical
+    // edge's strip has no area, but its sides cancel its neighbours'.)
+    const cut = cutEdges(sd).filter(([a, b]) => stayed(a) || stayed(b));
+    if (!cut.length) continue;
+    // The floor along the plane, one vertex per cut vertex's u, in order; a
+    // cut edge that crosses it is split there, so every strip lies on one
+    // side of the floor (a crossing strip is a bow-tie, two regions of
+    // opposite sign meeting at a point the triangulation needs as a vertex).
+    let floorOf = new Map<number, number>(), us: number[] = [];
+    const floorLine = (): void => {
+      floorOf = new Map();
+      for (const [a, b] of cut) for (const v of [a, b]) {
+        const u = at(v).u, w = floorPoint(v), had = floorOf.get(u);
+        if (had === undefined) floorOf.set(u, w);
+        else if (had !== w && positions[had * 3 + 1] !== positions[w * 3 + 1])
+          throw new Error(`cave ${id}: two floor heights at one point of the seam (${positions[had * 3 + 1]}, ${positions[w * 3 + 1]})`);
+      }
+      us = [...floorOf.keys()].sort((p, q) => p - q);
+    };
+    floorLine();
+    for (let e = 0; e < cut.length; e++) {
+      const [a, b] = cut[e]!, A = at(a), B = at(b), lo = Math.min(A.u, B.u), hi = Math.max(A.u, B.u);
+      if (A.u === B.u) {
+        // A vertical edge through the floor: split it at the floor vertex there,
+        // a seam vertex of its own (an original one would join far triangles).
+        const f = floorOf.get(A.u)!, y = at(f).y;
+        if (!(y > Math.min(A.y, B.y) && y < Math.max(A.y, B.y))) continue;
+        if (f < nv) throw new Error(`cave ${id}: the seam's cut passes through a shell vertex on the floor at u = ${A.u}`);
+        cut.splice(e, 1, [a, split(a, b, f)], [f, b]);
+        floorLine();
+        e--;
+        continue;
+      }
+      // Height of the chord above the floor line at each floor vertex in its span.
+      const ks = us.filter(u => u >= lo && u <= hi);
+      const gap = (u: number): number => A.y + (B.y - A.y) * (u - A.u) / (B.u - A.u) - at(floorOf.get(u)!).y;
+      for (let k = 0; k + 1 < ks.length; k++) {
+        const g0 = gap(ks[k]!), g1 = gap(ks[k + 1]!);
+        if (g0 === 0 && k > 0) throw new Error(`cave ${id}: the seam's cut touches the floor exactly at u = ${ks[k]}`);
+        if (!((g0 > 0 && g1 < 0) || (g0 < 0 && g1 > 0))) continue;
+        // The floor line's vertices sample the floor, so the edge crosses the
+        // floor itself between these two: find it there, so the new vertex
+        // is on the edge and exactly on the floor (where the seam must meet it).
+        const xz = (u: number): [number, number] => sd.axis === 0 ? [sd.at, Math.fround(u / nx)] : [Math.fround(-u / nz), sd.at];
+        const ground = (u: number): number => { const [x, z] = xz(u); return Math.fround(floor(x, z)); };
+        const chord = (u: number): number => A.y + (B.y - A.y) * (u - A.u) / (B.u - A.u);
+        let u0 = ks[k]!, u1 = ks[k + 1]!;
+        const s0 = Math.sign(chord(u0) - ground(u0));
+        if (s0 === 0 || s0 === Math.sign(chord(u1) - ground(u1))) throw new Error(`cave ${id}: the seam's cut meets the floor between samples it doesn't straddle, at u = ${u0}`);
+        for (let it = 0; it < 64 && u1 - u0 > 1e-9; it++) { const m = (u0 + u1) / 2; if (Math.sign(chord(m) - ground(m)) === s0) u0 = m; else u1 = m; }
+        const u = (u0 + u1) / 2;
+        const x = split(a, b, { u, y: ground(u) });
+        cut.splice(e, 1, [a, x], [x, b]);
+        floorLine();
+        e--;
+        break;
+      }
+    }
+    const index = new Map(us.map((u, i) => [u, i]));
+    const edges: number[] = [];
+    for (const [a, b] of cut) {
+      const fa = floorOf.get(at(a).u)!, fb = floorOf.get(at(b).u)!, ia = index.get(at(a).u)!, ib = index.get(at(b).u)!;
+      edges.push(b, a);
+      if (fa !== a) edges.push(a, fa);
+      for (let i = ia; i !== ib; i += ib > ia ? 1 : -1) edges.push(floorOf.get(us[i]!)!, floorOf.get(us[i + (ib > ia ? 1 : -1)]!)!);
+      if (fb !== b) edges.push(fb, b);
+    }
+    caps.push(...capTriangles(edges, at, `cave ${id} seam at ${sd.axis === 0 ? "x" : "z"} = ${sd.at}`));
   }
+  const originals = indices.length / 3;
+  indices.push(...caps);
   const final = new Float32Array(positions);
-  for (let t = 0; t < n; t++) {
+  for (let t = 0; t < originals; t++) {
     if (!keepsFacing(pre[t]!, triangleNormal(final, indices, t)))
       throw new Error(`cave ${id}: shell triangle ${t} turned against its mesher normal when snapped to the floor`);
   }
-  for (let v = 0; v < nv; v++) if (moved[v] && P[v * 3 + 1] !== Math.fround(target[v]!)) throw new Error(`cave ${id}: vertex ${v} moved partway`);
+  const problems = seamFaceProblems(final, indices, originals, sides);
+  if (problems.length) throw new Error(`cave ${id}: the seam faces aren't embedded in the shell:\n- ${problems.slice(0, 5).join("\n- ")}`);
   return { ...mesh, positions: final, normals: new Float32Array(normals), colors: new Float32Array(colors),
     indices: final.length / 3 > 65535 ? new Uint32Array(indices) : new Uint16Array(indices) };
+}
+
+/** How the seam faces (triangles from `first` on) fail to be embedded in the
+ * shell: an edge one uses shared incoherently or by more than two triangles,
+ * or a seam face passing through, or overlapping with positive area in its
+ * plane, any other triangle (sharing a vertex doesn't excuse a coplanar
+ * overlap). Empty when they're embedded. */
+function seamFaceProblems(P: Float32Array, I: readonly number[], first: number,
+  sides: readonly { readonly axis: 0 | 2; readonly at: number }[]): string[] {
+  const out: string[] = [], n = I.length / 3, nv = P.length / 3;
+  const directed = new Map<number, number>(), undirected = new Map<number, number>();
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) {
+    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!;
+    directed.set(a * nv + b, (directed.get(a * nv + b) ?? 0) + 1);
+    undirected.set(Math.min(a, b) * nv + Math.max(a, b), (undirected.get(Math.min(a, b) * nv + Math.max(a, b)) ?? 0) + 1);
+  }
+  for (let t = first; t < n && out.length < 8; t++) for (let k = 0; k < 3; k++) {
+    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!;
+    if ((directed.get(a * nv + b) ?? 0) > 1) out.push(`seam face ${t}: edge ${a}-${b} runs the same way in two triangles`);
+    if ((undirected.get(Math.min(a, b) * nv + Math.max(a, b)) ?? 0) > 2) out.push(`seam face ${t}: edge ${a}-${b} is shared by more than two triangles`);
+  }
+  // Seam faces against every triangle near them: 1 m cells over the faces' boxes.
+  const CELL = 1, cells = new Map<string, number[]>(), box = (t: number): number[] => {
+    const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    for (let k = 0; k < 3; k++) for (let c = 0; c < 3; c++) { const x = P[I[t * 3 + k]! * 3 + c]!; b[c] = Math.min(b[c]!, x); b[c + 3] = Math.max(b[c + 3]!, x); }
+    return b.map(x => Math.floor(x / CELL));
+  };
+  const each = (t: number, fn: (k: string) => void): void => {
+    const b = box(t);
+    for (let i = b[0]!; i <= b[3]!; i++) for (let j = b[1]!; j <= b[4]!; j++) for (let k = b[2]!; k <= b[5]!; k++) fn(`${i},${j},${k}`);
+  };
+  for (let t = first; t < n; t++) each(t, k => (cells.get(k) ?? cells.set(k, []).get(k)!).push(t));
+  const near = new Set<string>(cells.keys());
+  const checked = new Set<number>();
+  for (let t = 0; t < n && out.length < 8; t++) {
+    let touches = false;
+    each(t, k => { if (near.has(k)) touches = true; });
+    if (!touches) continue;
+    const candidates = new Set<number>();
+    each(t, k => { for (const s of cells.get(k) ?? []) if (s !== t) candidates.add(s); });
+    for (const s of candidates) {
+      const pair = Math.min(s, t) * n + Math.max(s, t);
+      if (checked.has(pair)) continue;
+      checked.add(pair);
+      const plane = sides.find(sd => [0, 1, 2].every(k => P[I[s * 3 + k]! * 3 + sd.axis] === sd.at && P[I[t * 3 + k]! * 3 + sd.axis] === sd.at));
+      if (plane) {
+        const area = coplanarOverlap(P, I, s, t, plane.axis === 0 ? 2 : 0);
+        if (area > 1e-9) out.push(`seam face ${s} overlaps triangle ${t} by ${area.toExponential(2)} m² in its plane`);
+        continue;
+      }
+      const A = [I[s * 3]! * 3, I[s * 3 + 1]! * 3, I[s * 3 + 2]! * 3], B = [I[t * 3]! * 3, I[t * 3 + 1]! * 3, I[t * 3 + 2]! * 3];
+      for (let e = 0; e < 3; e++) {
+        if (segmentThrough(P, A[e]!, A[(e + 1) % 3]!, B[0]!, B[1]!, B[2]!) || segmentThrough(P, B[e]!, B[(e + 1) % 3]!, A[0]!, A[1]!, A[2]!)) {
+          out.push(`seam face ${s} passes through triangle ${t}`);
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** Area of overlap of two triangles lying in one side plane, measured in
+ * (the plane's horizontal axis `h`, y). */
+function coplanarOverlap(P: Float32Array, I: readonly number[], s: number, t: number, h: 0 | 2): number {
+  const pt = (v: number): PlanePoint => ({ u: P[v * 3 + h]!, y: P[v * 3 + 1]! });
+  const tris = [I[s * 3]!, I[s * 3 + 1]!, I[s * 3 + 2]!, I[t * 3]!, I[t * 3 + 1]!, I[t * 3 + 2]!];
+  return capOverlap(tris, 0, 3, i => pt(i));
 }
 
 /** Problems with a shell's seam with the terrain (COL-1 R6): no open edge
