@@ -75,3 +75,40 @@ export function sphereMesh(r: number, bands: number, segments: number): Triangle
   }
   return { positions: new Float32Array(pos), indices: new Uint32Array(idx) };
 }
+
+/** Test diagnostic, never a decider: probe votes on a provenance-oriented
+ * mesh, per connected component. Every `step`-th triangle is probed either
+ * side at 5, 10, 20 and 40 cm with `inside` (true, false, or null for
+ * unknown). A triangle **agrees** if any offset's classified, differing pair
+ * agrees with its component's provenance facing, is **contrary** if every
+ * decisive offset disagrees, else **undecided**. A wrongly wound component
+ * is contrary at every scale; a single triangle tilted by relaxing can be
+ * contrary close in and agree further out. */
+export interface ComponentVotes { component: number; triangles: number; agree: number; contrary: number; undecided: number; examples: number[] }
+export function probeComponents(mesh: TriangleMesh, component: Int32Array, facing: Int8Array, inside: (p: Vec3) => boolean | null, samples = 400): ComponentVotes[] {
+  const P = mesh.positions, I = mesh.indices, n = I.length / 3, step = Math.max(1, Math.floor(n / samples));
+  const rows = new Map<number, ComponentVotes>();
+  for (let t = 0; t < n; t++) {
+    const c = component[t]!;
+    if (!rows.has(c)) rows.set(c, { component: c, triangles: 0, agree: 0, contrary: 0, undecided: 0, examples: [] });
+    rows.get(c)!.triangles++;
+  }
+  for (let t = 0; t < n; t += step) {
+    const a = I[t * 3]! * 3, b = I[t * 3 + 1]! * 3, c = I[t * 3 + 2]! * 3;
+    const ux = P[b]! - P[a]!, uy = P[b + 1]! - P[a + 1]!, uz = P[b + 2]! - P[a + 2]!, vx = P[c]! - P[a]!, vy = P[c + 1]! - P[a + 1]!, vz = P[c + 2]! - P[a + 2]!;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz);
+    if (l < 1e-9) continue;
+    const m = { x: (P[a]! + P[b]! + P[c]!) / 3, y: (P[a + 1]! + P[b + 1]! + P[c + 1]!) / 3, z: (P[a + 2]! + P[b + 2]! + P[c + 2]!) / 3 };
+    const row = rows.get(component[t]!)!, want = facing[component[t]!]!;
+    let agree = false, contrary = false;
+    for (const off of [0.05, 0.1, 0.2, 0.4]) {
+      const h = off / l, plus = inside({ x: m.x + nx * h, y: m.y + ny * h, z: m.z + nz * h }), minus = inside({ x: m.x - nx * h, y: m.y - ny * h, z: m.z - nz * h });
+      if (plus === null || minus === null || plus === minus) continue;
+      if ((minus ? 1 : -1) === want) agree = true; else contrary = true;
+    }
+    if (agree) row.agree++;
+    else if (contrary) { row.contrary++; if (row.examples.length < 3) row.examples.push(t); }
+    else row.undecided++;
+  }
+  return [...rows.values()];
+}

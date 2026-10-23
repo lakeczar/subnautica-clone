@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { prism, v } from "../src/content/vistaKit.js";
 import type { Vec3 } from "../src/sim/types.js";
-import { meshFacing, orientationProblems, solidPiecesShape } from "../src/world/collision/bake.js";
+import { certifyOrientation, orientationProblems, solidPiecesShape } from "../src/world/collision/bake.js";
 import { createHit } from "../src/world/collision/boxTriangle.js";
 import { buildBoxes, createStaticCollider, depenetrate, type StaticMember } from "../src/world/collision/collider.js";
 import { buildShape, TRAVERSAL } from "../src/world/collision/shape.js";
@@ -82,7 +82,7 @@ test("R3-2: recovery from 1,000 nested parts of one shape walks each triangle a 
 
 // --- P3: coherent winding, finite budget ------------------------------------------------
 
-test("P3: a mesh with flipped triangles is refused by meshFacing and the solid-piece baker, naming it", () => {
+test("P3: a mesh with flipped triangles is refused by orientation certification and the solid-piece baker, naming it", () => {
   // A closed box with shared corners: 8 vertices, 12 outward triangles (the west face, X = -0.2, is triangles 0 and 1).
   const positions = new Float32Array([-0.2, -3, -3, -0.1, -3, -3, -0.1, 3, -3, -0.2, 3, -3, -0.2, -3, 3, -0.1, -3, 3, -0.1, 3, 3, -0.2, 3, 3]);
   const m = { positions, indices: new Uint32Array([0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5, 0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2, 0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7]) };
@@ -92,9 +92,9 @@ test("P3: a mesh with flipped triangles is refused by meshFacing and the solid-p
   for (const t of [0, 1]) { const q = bad[t * 3 + 1]!; bad[t * 3 + 1] = bad[t * 3 + 2]!; bad[t * 3 + 2] = q; }
   const flipped = { positions: m.positions, indices: bad };
   assert.ok(orientationProblems("wall", flipped, true).some(p => /flipped/.test(p)));
-  const isSolid = (p: Vec3): boolean => p.x > -0.2 && p.x < -0.1 && Math.abs(p.y) < 3 && Math.abs(p.z) < 3;
-  assert.throws(() => meshFacing("wall", flipped, isSolid), /wall: winding is not coherent/);
-  assert.equal(meshFacing("wall", m, isSolid), 1);
+  const orientation = { facing: 1, source: "test: wound outward" } as const;
+  assert.throws(() => certifyOrientation("wall", { ...flipped, orientation }, true), /wall: winding is not coherent/);
+  assert.deepEqual(Array.from(certifyOrientation("wall", { ...m, orientation }, true)), [1]);
   // A closed prism bakes; one with a facet removed (open) is refused.
   const p = prism(v(0, 0, 0), v(4, 0, 0), 0.4, 0.4, 0.1, () => "rust");
   assert.ok(solidPiecesShape("bar", [p]));

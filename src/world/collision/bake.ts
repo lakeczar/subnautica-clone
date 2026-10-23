@@ -108,6 +108,11 @@ export interface MeshShapeOptions {
  * its vertices fall in one 65,536 window, else copies just its vertices.
  * Parts of a closed mesh share a group, so interior parity spans them. */
 export function meshShapes(id: string, mesh: TriangleMesh, options: MeshShapeOptions): StaticShape[] {
+  // A facing claims a winding; it must at least be coherent (its provenance is the caller's: `orientedShapes`).
+  if (options.facing !== 0) {
+    const problems = orientationProblems(id, mesh, false);
+    if (problems.length) throw new Error(`${id}: winding is not coherent:\n- ${problems.join("\n- ")}`);
+  }
   const nv = mesh.positions.length / 3;
   if (nv <= MAX_SHAPE_VERTICES) return [buildShape(id, mesh.positions, mesh.indices, { ...options, group: null })];
   const P = mesh.positions, I = mesh.indices, out: StaticShape[] = [];
@@ -187,75 +192,99 @@ export function orientationProblems(id: string, mesh: TriangleMesh, closed: bool
   return out;
 }
 
-/** Probe offsets, metres, tried in turn until a vote is decisive. */
-export const FACING_PROBES = [0.05, 0.1, 0.2] as const;
-/** Which way a coherently wound mesh faces: 1 when (b - a) x (c - a) points
- * out of the solid, -1 when in.
- * - **Coherence is the guarantee:** the mesh must have no orientation
- *   problems (`orientationProblems`), so every face agrees with its
- *   neighbours and one decision orients them all.
- * - **The vote decides which way, with the shape's own authoritative
- *   occupancy:** `inside(p)` is true in the solid, false outside, and `null`
- *   where it doesn't know (outside its domain). Pass the source field the
- *   mesh was built from, not a proxy such as a box cover, which disagrees
- *   with the surface near its own edges.
- * - **A vote is decisive** only when both probes either side of a sampled
- *   triangle are classified and differ. Otherwise it retries at the next
- *   offset (`FACING_PROBES`), and abstains if none decides (a thin feature,
- *   an ownership cutoff).
- * - **Every decisive vote must agree,** and at least one must exist; else it
- *   throws, naming the mesh. */
-export function meshFacing(id: string, mesh: TriangleMesh, inside: (p: Vec3) => boolean | null, samples = 96): 1 | -1 {
-  const problems = orientationProblems(id, mesh, false);
-  if (problems.length) throw new Error(`${id}: winding is not coherent:\n- ${problems.join("\n- ")}`);
-  const P = mesh.positions, I = mesh.indices, n = I.length / 3, step = Math.max(1, Math.floor(n / samples));
-  let out = 0, inward = 0, abstained = 0;
-  for (let t = 0; t < n; t += step) {
-    const a = I[t * 3]! * 3, b = I[t * 3 + 1]! * 3, c = I[t * 3 + 2]! * 3;
-    const ux = P[b]! - P[a]!, uy = P[b + 1]! - P[a + 1]!, uz = P[b + 2]! - P[a + 2]!, vx = P[c]! - P[a]!, vy = P[c + 1]! - P[a + 1]!, vz = P[c + 2]! - P[a + 2]!;
-    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz);
-    if (l < 1e-9) continue;
-    const mx = (P[a]! + P[b]! + P[c]!) / 3, my = (P[a + 1]! + P[b + 1]! + P[c + 1]!) / 3, mz = (P[a + 2]! + P[b + 2]! + P[c + 2]!) / 3;
-    let vote = 0;
-    for (const off of FACING_PROBES) {
-      const h = off / l;
-      const plus = inside({ x: mx + nx * h, y: my + ny * h, z: mz + nz * h }), minus = inside({ x: mx - nx * h, y: my - ny * h, z: mz - nz * h });
-      if (plus === null || minus === null || plus === minus) continue;
-      vote = minus ? 1 : -1;
-      break;
-    }
-    if (vote > 0) out++; else if (vote < 0) inward++; else abstained++;
+/** Where a mesh's orientation comes from: **its producer, by construction**,
+ * never inferred from probes. `facing` is 1 when (b - a) x (c - a) points
+ * out of the solid, -1 when in; one value for the whole mesh, or one per
+ * triangle (a mesh assembled from differently wound producers). `source`
+ * names the guarantee, for the reader and for errors. */
+export interface Orientation { readonly facing: 1 | -1 | Int8Array; readonly source: string }
+export interface OrientedMesh extends TriangleMesh { readonly orientation: Orientation }
+
+/** Connected components by shared edges (vertex indices): a component id per
+ * triangle, and the count. Null triangles join no edge and stand alone. */
+export function meshComponents(mesh: TriangleMesh): { readonly of: Int32Array; readonly count: number } {
+  const I = mesh.indices, n = I.length / 3, parent = new Int32Array(n);
+  for (let t = 0; t < n; t++) parent[t] = t;
+  const find = (t: number): number => { while (parent[t] !== t) { parent[t] = parent[parent[t]!]!; t = parent[t]!; } return t; };
+  const nv = mesh.positions.length / 3, firstUse = new Map<number, number>();
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) {
+    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!;
+    if (a === b) continue;
+    const e = Math.min(a, b) * nv + Math.max(a, b), u = firstUse.get(e);
+    if (u === undefined) firstUse.set(e, t);
+    else { const x = find(u), y = find(t); if (x !== y) parent[x] = y; }
   }
-  if (out > 0 && inward === 0) return 1;
-  if (inward > 0 && out === 0) return -1;
-  throw new Error(`${id}: winding votes disagree or are absent (${out} out, ${inward} in, ${abstained} undecided)`);
+  const of = new Int32Array(n), label = new Map<number, number>();
+  for (let t = 0; t < n; t++) { const r = find(t); let c = label.get(r); if (c === undefined) { c = label.size; label.set(r, c); } of[t] = c; }
+  return { of, count: label.size };
 }
 
-/** The inside predicate of a signed distance (negative inside), for `meshFacing`. */
-export const insideOf = (distance: (x: number, y: number, z: number) => number) => (p: Vec3): boolean | null => {
-  const d = distance(p.x, p.y, p.z);
-  return Number.isFinite(d) ? d < 0 : null;
-};
+/** Certify a mesh's orientation, **per connected component**:
+ * - **coherent** within each (`orientationProblems`: no flipped triangle;
+ *   with `closed`, no hole);
+ * - **covered**: every triangle has a provenance facing (1 or -1);
+ * - **uniform**: one facing per component. A coherent component's faces all
+ *   wind the same way, so provenance that differs inside one is a conflict.
+ * Throws, naming the mesh and its source, otherwise. Returns each
+ * component's facing. Probing never decides; tests may cross-check. */
+export function certifyOrientation(id: string, mesh: OrientedMesh, closed: boolean, parts?: ArrayLike<number> | null): Int8Array {
+  const problems = orientationProblems(id, mesh, closed, parts);
+  if (problems.length) throw new Error(`${id}: winding is not coherent (${mesh.orientation.source}):\n- ${problems.join("\n- ")}`);
+  const { of, count } = meshComponents(mesh), f = mesh.orientation.facing, n = mesh.indices.length / 3;
+  if (typeof f !== "number" && f.length !== n) throw new Error(`${id}: ${f.length} provenance facings for ${n} triangles`);
+  const facing = new Int8Array(count);
+  for (let t = 0; t < n; t++) {
+    const v = typeof f === "number" ? f : f[t]!;
+    if (v !== 1 && v !== -1) throw new Error(`${id}: triangle ${t} has no provenance orientation (${mesh.orientation.source})`);
+    const c = of[t]!;
+    if (facing[c] === 0) facing[c] = v;
+    else if (facing[c] !== v) throw new Error(`${id}: component ${c} has conflicting provenance orientations (${mesh.orientation.source})`);
+  }
+  return facing;
+}
+
+/** Shapes for an oriented mesh: certified per component, then one set of
+ * shapes per facing (differently wound producers bake as separate shapes). */
+export function orientedShapes(id: string, mesh: OrientedMesh, options: { readonly interior: Interior; readonly shared: boolean; readonly closed?: boolean }): StaticShape[] {
+  const byComponent = certifyOrientation(id, mesh, options.closed ?? false), { of } = meshComponents(mesh);
+  const f = mesh.orientation.facing;
+  if (typeof f === "number") return meshShapes(id, mesh, { interior: options.interior, facing: f, shared: options.shared });
+  const out: StaticShape[] = [];
+  for (const facing of [1, -1] as const) {
+    const idx: number[] = [];
+    for (let t = 0; t < mesh.indices.length / 3; t++) if (byComponent[of[t]!] === facing) idx.push(mesh.indices[t * 3]!, mesh.indices[t * 3 + 1]!, mesh.indices[t * 3 + 2]!);
+    if (idx.length) out.push(...meshShapes(`${id}.${facing > 0 ? "out" : "in"}`, { positions: mesh.positions, indices: new Uint32Array(idx) },
+      { interior: options.interior, facing, shared: options.shared }));
+  }
+  return out;
+}
 
 /** Most a collar's floor may stand above its lattice between the
  * conservative points, metres: half the exterior world's 2 cm floor
  * tolerance, so a box resting on the collar is never called buried. */
 export const COLLAR_RESIDUAL = 0.01;
+/** Collar cell sizes tried in turn, metres: the first whose measured residual passes is used. */
+export const COLLAR_CELLS = [0.5, 0.25] as const;
 /** The exterior seabed round a cave footprint as a heightfield (the collar),
  * sampled from the same floor the seabed art is drawn from and the exterior
  * world tests clearance against. It is lifted where the floor curves
  * (`conservative`), so it is on or above the floor at each cell's nine
- * half-cell points, and the sag left between them is measured: a floor that
- * curves more than `COLLAR_RESIDUAL` inside a 0.5 m cell throws, naming the
- * collar, rather than leave a hidden float or sink. Cells whose centre any
- * owned footprint holds are holes, as the old collar columns skipped them. */
+ * half-cell points, and the sag left between them is measured. The bake
+ * **chooses a validated resolution**: the first of `cells` whose residual is
+ * at most `COLLAR_RESIDUAL`; a floor no listed cell bounds (a step, a crease
+ * finer than every cell) throws, naming the collar and every residual,
+ * rather than leave a hidden float or sink. Cells whose centre any owned
+ * footprint holds are holes, as the old collar columns skipped them. */
 export function collarHeightfield(id: string, footprint: Rect, band: number, floor: (x: number, z: number) => number,
-  owned: readonly Rect[], cell = 0.5): StaticHeightfield {
+  owned: readonly Rect[], cells: readonly number[] = COLLAR_CELLS): StaticHeightfield {
   const rect = { minX: footprint.minX - band, maxX: footprint.maxX + band, minZ: footprint.minZ - band, maxZ: footprint.maxZ + band };
-  const h = sampleHeightfield(id, rect, cell, floor, {
-    conservative: true, measure: true, hole: (x, z) => owned.some(r => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ),
-  });
-  if (h.residual > COLLAR_RESIDUAL)
-    throw new Error(`collar ${id}: the floor stands ${(h.residual * 1000).toFixed(1)} mm above the ${cell} m lattice between samples; use a finer cell`);
-  return h;
+  const tried: string[] = [];
+  for (const cell of cells) {
+    const h = sampleHeightfield(id, rect, cell, floor, {
+      conservative: true, measure: true, hole: (x, z) => owned.some(r => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ),
+    });
+    if (h.residual <= COLLAR_RESIDUAL) return h;
+    tried.push(`${cell} m: ${(h.residual * 1000).toFixed(1)} mm`);
+  }
+  throw new Error(`collar ${id}: the floor stands above the lattice between samples beyond ${COLLAR_RESIDUAL * 1000} mm at every cell tried (${tried.join(", ")})`);
 }

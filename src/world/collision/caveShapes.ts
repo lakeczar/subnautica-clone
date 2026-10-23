@@ -1,26 +1,29 @@
 import type { CaveDef } from "../../content/regions/caves.js";
-import { caveShell, caveVolume } from "../../content/regions/caveGeometry.js";
-import type { FloorFunction } from "../../content/regions/terrain.js";
-import type { LodLevel } from "../types.js";
-import { meshFacing, meshShapes, type TriangleMesh } from "./bake.js";
+import { caveShell } from "../../content/regions/caveGeometry.js";
+import { orientedShapes, type Orientation } from "./bake.js";
 import type { StaticShape } from "./shape.js";
 
-/** A W1 kit cave's shell as static collision (COL-1): the drawn mesh itself,
- * viewing its positions. Its winding is certified by coherence and oriented
- * by the occupancy the shell was meshed from: the cave's opened voxel volume
- * (`caveVolume(def).solid`, "rock as collided and drawn"), unknown outside
- * its grid. Neither the raw source field (the opening removed thin rock it
- * still has) nor the rock box cover (it ends at the footprint) is that
- * occupancy, and each disagrees with the shell at the footprint's edges.
- * `floor` is kept for callers that bake from a definition built on it. */
-export function kitShellShapes(def: CaveDef, _floor: FloorFunction, lod: LodLevel = "fine"): StaticShape[] {
-  const sh = caveShell(def, lod), mesh: TriangleMesh = { positions: sh.positions, indices: Uint32Array.from(sh.indices) };
-  const vol = caveVolume(def), g = vol.grid;
-  const inside = (p: { x: number; y: number; z: number }): boolean | null => {
-    const i = Math.floor((p.x - g.origin.x) / g.voxel), j = Math.floor((p.y - g.origin.y) / g.voxel), k = Math.floor((p.z - g.origin.z) / g.voxel);
-    if (i < 0 || j < 0 || k < 0 || i >= g.nx || j >= g.ny || k >= g.nz) return null;
-    return vol.solid[i + g.nx * (j + g.ny * k)] === 1;
-  };
-  const facing = meshFacing(`${def.id}.shell.${lod}`, mesh, inside);
-  return meshShapes(`${def.id}.shell`, mesh, { interior: "solid", facing, shared: true });
+/** Orientation of every W1 kit-cave shell, by construction. `surfaceNets`
+ * (`content/regions/caveGeometry.ts`) emits one quad per solid/water voxel
+ * pair along an axis, and winds each of its triangles so that the normal's
+ * component along that axis points from the solid voxel to the water one:
+ * outward from the opened rock. Later steps never reorder indices: `relax`
+ * and the collar's floor snap move positions only, and `clipMeshToRect`
+ * keeps each polygon's vertex order and fans it in order. So every
+ * component of a shell is wound outward. (Where relaxing or snapping tilts
+ * a triangle, occupancy probes near it can disagree with its normal; the
+ * winding does not.) Owned by caveGeometry; COL-1 states it here because it
+ * may not edit that module, and `tests/col1-art.heavy.test.ts` cross-checks
+ * it on every kit shell. */
+export const KIT_SHELL_ORIENTATION: Orientation = { facing: 1, source: "caveGeometry surfaceNets: solid voxel to water, outward" };
+
+/** A W1 kit cave's fine shell as static collision (COL-1): the drawn mesh
+ * itself, viewing its positions, oriented by its provenance and certified
+ * per component (`orientedShapes`). Fine only: the fine shell keeps the
+ * rock bound (within `clamp` of the opened rock); the coarse one makes no
+ * rock-bound promise and is not a collision LOD. */
+export function kitShellShapes(def: CaveDef): StaticShape[] {
+  const sh = caveShell(def, "fine");
+  return orientedShapes(`${def.id}.shell`, { positions: sh.positions, indices: Uint32Array.from(sh.indices), orientation: KIT_SHELL_ORIENTATION },
+    { interior: "solid", shared: true });
 }

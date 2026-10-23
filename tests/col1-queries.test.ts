@@ -7,7 +7,7 @@ import { composeCaveWorld } from "../src/world/caves/large/compose.js";
 import { collarHeightfield } from "../src/world/collision/bake.js";
 import { createHit, segmentTriangle } from "../src/world/collision/boxTriangle.js";
 import { buildBoxes, createStaticCollider } from "../src/world/collision/collider.js";
-import { heightAt, sampleHeightfield, type StaticHeightfield } from "../src/world/collision/heightfield.js";
+import { cellCorners, heightAt, sampleHeightfield, type StaticHeightfield } from "../src/world/collision/heightfield.js";
 import { buildShape } from "../src/world/collision/shape.js";
 import { composeStaticWorld, staticCaveCollider } from "../src/world/collision/world.js";
 import { boxMesh, random } from "./col1-support.js";
@@ -21,11 +21,11 @@ const hilly = (x: number, z: number): number => -20 + 1.6 * Math.sin(x * 0.37) *
 
 /** The heightfield's own triangles as a skin shape: the same surface, by the shape path. */
 function asShape(h: StaticHeightfield) {
-  const pos: number[] = [], idx: number[] = [], r = h.nx + 1;
-  for (let k = 0; k <= h.nz; k++) for (let i = 0; i <= h.nx; i++) pos.push(h.x0 + i * h.cell, h.heights[i + r * k]!, h.z0 + k * h.cell);
+  const pos: number[] = [], idx: number[] = [];
   for (let k = 0; k < h.nz; k++) for (let i = 0; i < h.nx; i++) {
-    const a = i + r * k, b = a + 1, c = a + r, d = c + 1;
-    idx.push(a, d, b, a, c, d);
+    const [a, b, c, d] = cellCorners(h, i, k), x = h.x0 + i * h.cell, z = h.z0 + k * h.cell, base = pos.length / 3;
+    pos.push(x, a, z, x + h.cell, b, z, x, c, z + h.cell, x + h.cell, d, z + h.cell);
+    idx.push(base, base + 3, base + 1, base, base + 2, base + 3);
   }
   return buildShape(`${h.id}.tri`, new Float32Array(pos), idx, { facing: 1 });
 }
@@ -76,7 +76,7 @@ test("heightfield: buried boxes are blocked, may rise, may not sink; holes answe
 
 test("heightfield: sight lines by DDA equal a brute-force test against the solid's every top and wall triangle", () => {
   const h = sampleHeightfield("s", { minX: 0, maxX: 30, minZ: 0, maxZ: 30 }, 0.5, hilly, { hole: (x, z) => (x - 15) ** 2 + (z - 15) ** 2 < 9 });
-  const col = createStaticCollider("s", [h]), rnd = random(4), r = h.nx + 1;
+  const col = createStaticCollider("s", [h]), rnd = random(4);
   const T = new Float64Array(9);
   // Independent: the solid's boundary as plain triangles (every solid cell's
   // top, and a wall on every edge it shares with a hole or the outside, down
@@ -84,11 +84,11 @@ test("heightfield: sight lines by DDA equal a brute-force test against the solid
   // solid and crosses none of them.
   const solid = (i: number, k: number): boolean => i >= 0 && k >= 0 && i < h.nx && k < h.nz &&
     !Number.isNaN(heightAt(h, h.x0 + (i + 0.5) * h.cell, h.z0 + (k + 0.5) * h.cell));
-  const tris: number[][] = [], H = h.heights, bottom = h.bounds.min.y;
+  const tris: number[][] = [], bottom = h.bounds.min.y;
   for (let k = 0; k < h.nz; k++) for (let i = 0; i < h.nx; i++) {
     if (!solid(i, k)) continue;
-    const x = h.x0 + i * h.cell, z = h.z0 + k * h.cell, X = x + h.cell, Z = z + h.cell;
-    const p00 = [x, H[i + r * k]!, z], p10 = [X, H[i + 1 + r * k]!, z], p01 = [x, H[i + r * (k + 1)]!, Z], p11 = [X, H[i + 1 + r * (k + 1)]!, Z];
+    const x = h.x0 + i * h.cell, z = h.z0 + k * h.cell, X = x + h.cell, Z = z + h.cell, [ha, hb, hc, hd] = cellCorners(h, i, k);
+    const p00 = [x, ha, z], p10 = [X, hb, z], p01 = [x, hc, Z], p11 = [X, hd, Z];
     tris.push([...p00, ...p11, ...p10], [...p00, ...p01, ...p11]);
     for (const [di, dk, q0, q1] of [[-1, 0, p00, p01], [1, 0, p10, p11], [0, -1, p00, p10], [0, 1, p01, p11]] as const) {
       if (solid(i + di, k + dk)) continue;

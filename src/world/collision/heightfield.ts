@@ -5,28 +5,33 @@ import {
 
 /** A baked heightfield: exterior seabed as collision, for cave collars and
  * terrain seams (COL-1). It replaces collar column boxes (CA-1: 125,852 of
- * its 152,548 boxes) with one Float32 sample per lattice point.
+ * its 152,548 boxes) with four Float32 corner heights per cell.
  *
- * - **Surface.** Samples at `x0 + i * cell`, `z0 + k * cell` (X fastest).
- *   Each cell is two triangles split along its (i, k)-(i+1, k+1) diagonal, so
- *   collision is the lattice's piecewise-linear surface and the box sweep
- *   is the same 13-axis test as every triangle. Below the surface is solid.
+ * - **Surface.** Cell (i, k) spans `x0 + i * cell` to `x0 + (i + 1) * cell`
+ *   (and the same in Z) and owns its four corners, a (i, k), b (i + 1, k),
+ *   c (i, k + 1), d (i + 1, k + 1), split along a-d into two triangles, so
+ *   collision is piecewise linear and the box sweep is the same 13-axis test
+ *   as every triangle. Below the surface is solid. Neighbouring cells
+ *   usually agree along their shared edge; where they don't (a crease or
+ *   cliff baked as a flat column top, see `sampleHeightfield`), the step
+ *   between them is a wall.
  * - **Holes.** A cell is a hole when its bit is set in `holes` (a cave's
  *   own footprint, where the cave answers: the old collar rule, by cell
- *   centre) or a corner sample is NaN. Outside the lattice, and in holes,
- *   the heightfield answers nothing; ownership is the composer's job.
+ *   centre) or a corner is NaN. Outside the lattice, and in holes, the
+ *   heightfield answers nothing; ownership is the composer's job.
  * - **Culling.** Tiles of `TILE` x `TILE` cells keep their lowest and
- *   highest sample, so a box above a tile skips all of its cells. Storage
+ *   highest corner, so a box above a tile skips all of its cells. Storage
  *   and cost follow the lattice size: no 3D grid, no per-cell objects.
  *
  * **A volume, not a sheet.** Below the surface of every solid cell is solid,
- * so a solid cell's edge that borders a hole or the lattice's edge is a
- * vertical **wall**, from the surface down to the bounds' bottom. Sweeps
- * meet the top triangles and the walls **oriented**: a contact with a face
- * counts only while the box moves against that face's outward normal (the
- * only way into the solid through it). So a buried actor may rise or leave
- * through a wall, monotonically, but never sinks deeper or enters. Sight is blocked wherever a segment is under
- * a solid cell's surface, entered from above or through a wall.
+ * so where a solid cell's edge stands above what lies across it (a hole or
+ * the lattice's edge: the bounds' bottom; a lower neighbour: its edge), that
+ * part is a vertical **wall**. Sweeps meet the tops and the walls
+ * **oriented**: a contact with a face counts only while the box moves
+ * against that face's outward normal (the only way into the solid through
+ * it). So a buried actor may rise or leave through a wall, monotonically,
+ * but never sinks deeper or enters. Sight is blocked wherever a segment is
+ * under a solid cell's surface, entered from above or through a wall.
  *
  * A box with no crossing triangle lies wholly above or wholly below the
  * surface in each cell under it, so a buried box is found by its bottom
@@ -38,21 +43,24 @@ export interface StaticHeightfield {
   readonly x0: number;
   readonly z0: number;
   readonly cell: number;
-  /** Cells along X and Z (samples are one more). */
+  /** Cells along X and Z. */
   readonly nx: number;
   readonly nz: number;
-  readonly heights: Float32Array;
+  /** Four corner heights per cell (i + nx * k): a, b, c, d (see above). */
+  readonly corners: Float32Array;
   /** One bit per cell (i + nx * k), set for a hole; null when there are none. */
   readonly holes: Uint8Array | null;
   readonly tx: number;
   readonly tz: number;
-  /** Lowest and highest finite sample per tile (+/-Infinity when all holes). */
+  /** Lowest and highest finite corner per tile (+/-Infinity when all holes). */
   readonly tileMin: Float32Array;
   readonly tileMax: Float32Array;
   readonly bounds: Aabb;
   readonly bytes: number;
-  /** Largest conservative lift of any sample, metres (0 when not lifted). */
+  /** Largest conservative lift of a sloped cell, metres (at most `CREASE`; 0 when not lifted). */
   readonly lift: number;
+  /** Cells baked as a flat column top because their floor creases (`sampleHeightfield`). */
+  readonly flatCells: number;
   /** Most the sampled floor stands above the surface between the
    * conservative points (`SampleOptions.measure`; 0 when not measured). */
   readonly residual: number;
@@ -63,46 +71,65 @@ export const TILE = 8;
  * the lowest sample, so a broad phase never skips a buried query. */
 export const SOLID_DEPTH = 10000;
 
+/** The most a sloped cell is lifted, metres: the old collar columns' pad. A
+ * cell whose floor creases more under its chords is baked as a flat column
+ * top instead (`sampleHeightfield`). */
+export const CREASE = 0.02;
+
 export interface SampleOptions {
   /** Given a cell's centre, true makes the cell a hole. */
   readonly hole?: (cx: number, cz: number) => boolean;
-  /** Lift each sample so the surface is never below `floor` at any cell's
-   * nine half-cell points (corners, edge midpoints, centre: the points the
-   * old collar columns took their maximum of). A curved floor sags under
-   * its chords; this keeps the lattice on or above the floor the exterior
-   * world tests clearance against at those points. Between them a floor
-   * that curves within a cell can still stand above the lattice: `residual`
-   * measures that. */
+  /** Keep each cell on or above `floor` at a 5 x 5 grid of quarter-cell
+   * points (which contains the nine half-cell points the old collar columns
+   * took their maximum of), **cell by cell**:
+   * - a cell whose floor sags under its chords by at most `CREASE` there is
+   *   lifted by its own sag only (its corners are its own, so a neighbour's
+   *   crease never raises it), so it never stands above its old column top
+   *   (the nine-point maximum plus `CREASE`);
+   * - a cell that creases more (a cliff, a step, a ridge) is baked flat at
+   *   its 25-point maximum plus `CREASE`: the old column, raised only where
+   *   the floor stood above that column between its own nine points.
+   * Between the construction points a floor that curves within a cell can
+   * still stand above the surface: `residual` measures that, elsewhere. */
   readonly conservative?: boolean;
   /** Measure `residual`: the most the floor stands above the stored surface
-   * at a 4 x 4 grid of interior points per cell (offsets 1/8 .. 7/8). */
+   * at an 8 x 8 grid of interior points per cell (offsets 1/16 .. 15/16),
+   * none of them a construction point. */
   readonly measure?: boolean;
 }
 
-/** Sample `floor` on a lattice over `rect` (snapped outwards to `cell`). */
+/** Float32 at or above `want`: storage never lowers a conservative height. */
+const roundUp = (want: number): number => {
+  const f = Math.fround(want);
+  return f >= want ? f : f + Math.max(Math.abs(f) * 2 ** -23, 1e-30);
+};
+/** Construction points per cell: a 5 x 5 grid at quarter cells, containing the old columns' nine half-cell points. */
+const GRID: readonly (readonly [number, number])[] = Array.from({ length: 25 }, (_, n) => [(n % 5) / 4, Math.floor(n / 5) / 4] as const);
+
+/** Sample `floor` over `rect` (snapped outwards to `cell`). */
 export function sampleHeightfield(id: string, rect: Rect, cell: number, floor: (x: number, z: number) => number,
   options: SampleOptions = {}): StaticHeightfield {
   const x0 = Math.floor(rect.minX / cell) * cell, z0 = Math.floor(rect.minZ / cell) * cell;
   const nx = Math.max(1, Math.ceil((rect.maxX - x0) / cell - 1e-9)), nz = Math.max(1, Math.ceil((rect.maxZ - z0) / cell - 1e-9));
   const r = nx + 1, raw = new Float64Array(r * (nz + 1)), hole = options.hole;
   for (let k = 0; k <= nz; k++) for (let i = 0; i <= nx; i++) raw[i + r * k] = floor(x0 + i * cell, z0 + k * cell);
-  const lift = new Float64Array(raw.length);
-  if (options.conservative) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
-    if (hole?.(x0 + (i + 0.5) * cell, z0 + (k + 0.5) * cell)) continue;
-    const a = raw[i + r * k]!, b = raw[i + 1 + r * k]!, c = raw[i + r * (k + 1)]!, d = raw[i + 1 + r * (k + 1)]!;
-    let deficit = 0;
-    for (const [u, w] of [[0.5, 0], [0, 0.5], [0.5, 0.5], [1, 0.5], [0.5, 1]] as const) {
-      const lattice = u >= w ? a + (b - a) * u + (d - b) * w : a + (d - c) * u + (c - a) * w;
-      deficit = Math.max(deficit, floor(x0 + (i + u) * cell, z0 + (k + w) * cell) - lattice);
+  const corners = new Float32Array(nx * nz * 4);
+  let lift = 0, flatCells = 0;
+  for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
+    const a = raw[i + r * k]!, b = raw[i + 1 + r * k]!, c = raw[i + r * (k + 1)]!, d = raw[i + 1 + r * (k + 1)]!, o = (i + nx * k) * 4;
+    let q = [a, b, c, d];
+    if (options.conservative && !hole?.(x0 + (i + 0.5) * cell, z0 + (k + 0.5) * cell)) {
+      let deficit = 0, top = -Infinity;
+      for (const [u, w] of GRID) {
+        const f = floor(x0 + (i + u) * cell, z0 + (k + w) * cell), lattice = u >= w ? a + (b - a) * u + (d - b) * w : a + (d - c) * u + (c - a) * w;
+        deficit = Math.max(deficit, f - lattice); top = Math.max(top, f);
+      }
+      // Raising all four corners by the deficit raises the whole cell by it.
+      if (deficit <= CREASE) { q = q.map(v => v + deficit); lift = Math.max(lift, deficit); }
+      else { q = [top + CREASE, top + CREASE, top + CREASE, top + CREASE]; flatCells++; }
+      q = q.map(roundUp);
     }
-    // Raising all four corners by the deficit raises the whole cell by it.
-    for (const v of [i + r * k, i + 1 + r * k, i + r * (k + 1), i + 1 + r * (k + 1)]) lift[v] = Math.max(lift[v]!, deficit);
-  }
-  const heights = new Float32Array(raw.length);
-  // Round up to Float32, so storage never lowers a sample.
-  for (let v = 0; v < raw.length; v++) {
-    const want = raw[v]! + lift[v]!, f = Math.fround(want);
-    heights[v] = f >= want ? f : f + Math.max(Math.abs(f) * 2 ** -23, 1e-30);
+    corners.set(q, o);
   }
   let holes: Uint8Array | null = null;
   if (hole) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
@@ -111,46 +138,58 @@ export function sampleHeightfield(id: string, rect: Rect, cell: number, floor: (
     const b = i + nx * k;
     holes[b >> 3] = holes[b >> 3]! | (1 << (b & 7));
   }
-  const field = createHeightfield(id, x0, z0, cell, nx, nz, heights, holes);
-  let most = 0;
-  for (const l of lift) most = Math.max(most, l);
+  const field = createCellHeightfield(id, x0, z0, cell, nx, nz, corners, holes);
   let residual = 0;
   if (options.measure) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
     if (!solidCell(field, i, k)) continue;
-    for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) {
-      const x = x0 + (i + (2 * a + 1) / 8) * cell, z = z0 + (k + (2 * b + 1) / 8) * cell;
+    for (let a = 0; a < 8; a++) for (let b = 0; b < 8; b++) {
+      const x = x0 + (i + (2 * a + 1) / 16) * cell, z = z0 + (k + (2 * b + 1) / 16) * cell;
       residual = Math.max(residual, floor(x, z) - cellHeightAt(field, i, k, x, z));
     }
   }
-  return { ...field, lift: most, residual };
+  return { ...field, lift, flatCells, residual };
 }
 
+/** A heightfield from shared lattice samples ((nx + 1) x (nz + 1), X fastest):
+ * every cell takes its corners from them, so neighbours agree everywhere. */
 export function createHeightfield(id: string, x0: number, z0: number, cell: number, nx: number, nz: number, heights: Float32Array,
   holes: Uint8Array | null = null): StaticHeightfield {
-  if (holes && holes.length !== Math.ceil(nx * nz / 8)) throw new Error(`heightfield ${id}: hole mask of ${holes.length} bytes for ${nx} x ${nz} cells`);
   if (heights.length !== (nx + 1) * (nz + 1)) throw new Error(`heightfield ${id}: ${heights.length} samples for ${nx} x ${nz} cells`);
+  const r = nx + 1, corners = new Float32Array(nx * nz * 4);
+  for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++)
+    corners.set([heights[i + r * k]!, heights[i + 1 + r * k]!, heights[i + r * (k + 1)]!, heights[i + 1 + r * (k + 1)]!], (i + nx * k) * 4);
+  return createCellHeightfield(id, x0, z0, cell, nx, nz, corners, holes);
+}
+
+/** A heightfield from per-cell corners (four per cell, a, b, c, d). */
+export function createCellHeightfield(id: string, x0: number, z0: number, cell: number, nx: number, nz: number, corners: Float32Array,
+  holes: Uint8Array | null = null): StaticHeightfield {
+  if (holes && holes.length !== Math.ceil(nx * nz / 8)) throw new Error(`heightfield ${id}: hole mask of ${holes.length} bytes for ${nx} x ${nz} cells`);
+  if (corners.length !== nx * nz * 4) throw new Error(`heightfield ${id}: ${corners.length} corners for ${nx} x ${nz} cells`);
   if (!(cell > 0)) throw new Error(`heightfield ${id}: cell must be positive`);
   const tx = Math.ceil(nx / TILE), tz = Math.ceil(nz / TILE);
   const tileMin = new Float32Array(tx * tz).fill(Infinity), tileMax = new Float32Array(tx * tz).fill(-Infinity);
   let lo = Infinity, hi = -Infinity;
-  for (let k = 0; k <= nz; k++) for (let i = 0; i <= nx; i++) {
-    const h = heights[i + (nx + 1) * k]!;
+  for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) for (let q = 0; q < 4; q++) {
+    const h = corners[(i + nx * k) * 4 + q]!;
     if (Number.isNaN(h)) continue;
-    if (!Number.isFinite(h)) throw new Error(`heightfield ${id}: infinite sample at ${i}, ${k}`);
+    if (!Number.isFinite(h)) throw new Error(`heightfield ${id}: infinite corner at ${i}, ${k}`);
     lo = Math.min(lo, h); hi = Math.max(hi, h);
-    // A sample borders up to four cells, so up to four tiles.
-    for (const ti of [Math.floor((i - 1) / TILE), Math.floor(i / TILE)]) for (const tk of [Math.floor((k - 1) / TILE), Math.floor(k / TILE)]) {
-      if (ti < 0 || tk < 0 || ti >= tx || tk >= tz) continue;
-      const t = ti + tx * tk;
-      tileMin[t] = Math.min(tileMin[t]!, h); tileMax[t] = Math.max(tileMax[t]!, h);
-    }
+    const t = Math.floor(i / TILE) + tx * Math.floor(k / TILE);
+    tileMin[t] = Math.min(tileMin[t]!, h); tileMax[t] = Math.max(tileMax[t]!, h);
   }
   if (lo === Infinity) lo = hi = 0;
   return {
-    kind: "heightfield", id, x0, z0, cell, nx, nz, heights, holes, tx, tz, tileMin, tileMax,
+    kind: "heightfield", id, x0, z0, cell, nx, nz, corners, holes, tx, tz, tileMin, tileMax,
     bounds: { min: { x: x0, y: lo - SOLID_DEPTH, z: z0 }, max: { x: x0 + nx * cell, y: hi, z: z0 + nz * cell } },
-    bytes: heights.byteLength + (holes?.byteLength ?? 0) + tileMin.byteLength + tileMax.byteLength, lift: 0, residual: 0,
+    bytes: corners.byteLength + (holes?.byteLength ?? 0) + tileMin.byteLength + tileMax.byteLength, lift: 0, flatCells: 0, residual: 0,
   };
+}
+
+/** Cell (i, k)'s corners a, b, c, d. */
+export function cellCorners(h: StaticHeightfield, i: number, k: number): [number, number, number, number] {
+  const o = (i + h.nx * k) * 4, C = h.corners;
+  return [C[o]!, C[o + 1]!, C[o + 2]!, C[o + 3]!];
 }
 
 /** The surface height at (x, z), or NaN outside the lattice or in a hole. */
@@ -161,7 +200,7 @@ export function heightAt(h: StaticHeightfield, x: number, z: number): number {
   // The whole cell's ownership, as overlap and walls read it (a NaN corner
   // empties the cell, even on its triangle that doesn't use that corner).
   if (!solidCell(h, i, k)) return NaN;
-  const H = h.heights, r = h.nx + 1, a = H[i + r * k]!, b = H[i + 1 + r * k]!, c = H[i + r * (k + 1)]!, d = H[i + 1 + r * (k + 1)]!;
+  const o = (i + h.nx * k) * 4, C = h.corners, a = C[o]!, b = C[o + 1]!, c = C[o + 2]!, d = C[o + 3]!;
   // Lower triangle (i,k) (i+1,k) (i+1,k+1) where u >= w; upper (i,k) (i+1,k+1) (i,k+1).
   return u >= w ? a + (b - a) * u + (d - b) * w : a + (d - c) * u + (c - a) * w;
 }
@@ -176,8 +215,7 @@ const T = new Float64Array(18);
 /** Writes cell (i, k)'s two triangles into T; false for a hole. */
 function cellTriangles(h: StaticHeightfield, i: number, k: number): boolean {
   if (isHole(h, i, k)) return false;
-  const H = h.heights, r = h.nx + 1;
-  const a = H[i + r * k]!, b = H[i + 1 + r * k]!, c = H[i + r * (k + 1)]!, d = H[i + 1 + r * (k + 1)]!;
+  const o = (i + h.nx * k) * 4, C = h.corners, a = C[o]!, b = C[o + 1]!, c = C[o + 2]!, d = C[o + 3]!;
   if (Number.isNaN(a) || Number.isNaN(b) || Number.isNaN(c) || Number.isNaN(d)) return false;
   const x = h.x0 + i * h.cell, z = h.z0 + k * h.cell, X = x + h.cell, Z = z + h.cell;
   // Wound so (b - a) x (c - a) faces up (+Y).
@@ -186,38 +224,59 @@ function cellTriangles(h: StaticHeightfield, i: number, k: number): boolean {
   return true;
 }
 const cellMin = (h: StaticHeightfield, i: number, k: number): number => {
-  const H = h.heights, r = h.nx + 1;
-  return Math.min(H[i + r * k]!, H[i + 1 + r * k]!, H[i + r * (k + 1)]!, H[i + 1 + r * (k + 1)]!);
+  const o = (i + h.nx * k) * 4, C = h.corners;
+  return Math.min(C[o]!, C[o + 1]!, C[o + 2]!, C[o + 3]!);
+};
+const cellMax = (h: StaticHeightfield, i: number, k: number): number => {
+  const o = (i + h.nx * k) * 4, C = h.corners;
+  return Math.max(C[o]!, C[o + 1]!, C[o + 2]!, C[o + 3]!);
 };
 
 /** Whether cell (i, k) is solid below its surface: in the lattice, not a hole, every corner sampled. */
 export function solidCell(h: StaticHeightfield, i: number, k: number): boolean {
   if (i < 0 || k < 0 || i >= h.nx || k >= h.nz || isHole(h, i, k)) return false;
-  const H = h.heights, r = h.nx + 1;
-  return !(Number.isNaN(H[i + r * k]!) || Number.isNaN(H[i + 1 + r * k]!) || Number.isNaN(H[i + r * (k + 1)]!) || Number.isNaN(H[i + 1 + r * (k + 1)]!));
+  const o = (i + h.nx * k) * 4, C = h.corners;
+  return !(Number.isNaN(C[o]!) || Number.isNaN(C[o + 1]!) || Number.isNaN(C[o + 2]!) || Number.isNaN(C[o + 3]!));
 }
 /** Edges of a cell: west, east, south, north, as neighbour offset and outward normal. */
 const EDGES = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
 // Scratch wall triangles (0..8, 9..17).
 const W = new Float64Array(18);
-/** Writes the wall on edge `side` of solid cell (i, k) into W (two
- * triangles, from the surface edge down to the bounds' bottom); false when
- * the neighbour across it is solid too (no wall). */
-function cellWall(h: StaticHeightfield, i: number, k: number, side: number): boolean {
-  const [di, dk] = EDGES[side]!;
-  if (solidCell(h, i + di, k + dk)) return false;
-  const H = h.heights, r = h.nx + 1, c = h.cell, bottom = h.bounds.min.y;
-  // The edge's two corners (lattice indices), in a fixed order.
-  const [i0, k0, i1, k1] = side === 0 ? [i, k, i, k + 1] : side === 1 ? [i + 1, k, i + 1, k + 1] : side === 2 ? [i, k, i + 1, k] : [i, k + 1, i + 1, k + 1];
-  const x0 = h.x0 + i0 * c, z0 = h.z0 + k0 * c, x1 = h.x0 + i1 * c, z1 = h.z0 + k1 * c, y0 = H[i0 + r * k0]!, y1 = H[i1 + r * k1]!;
-  W[0] = x0; W[1] = bottom; W[2] = z0; W[3] = x1; W[4] = bottom; W[5] = z1; W[6] = x1; W[7] = y1; W[8] = z1;
-  W[9] = x0; W[10] = bottom; W[11] = z0; W[12] = x1; W[13] = y1; W[14] = z1; W[15] = x0; W[16] = y0; W[17] = z0;
-  return true;
+/** Corner slots of each edge's two ends (first, second), and the neighbour's matching slots. */
+const EDGE_SLOTS = [[0, 2, 1, 3], [1, 3, 0, 2], [0, 1, 2, 3], [2, 3, 0, 1]] as const;
+/** Writes the wall on edge `side` of solid cell (i, k) into W: the part of
+ * the cell's edge that stands above what lies across it (the bounds' bottom
+ * past a hole or the lattice's edge, else the neighbour's own edge), down to
+ * it. Returns the number of triangles written (0, 1 where the edges cross,
+ * or 2). */
+function cellWall(h: StaticHeightfield, i: number, k: number, side: number): number {
+  const [di, dk] = EDGES[side]!, [s0, s1, n0, n1] = EDGE_SLOTS[side]!, C = h.corners, c = h.cell, o = (i + h.nx * k) * 4;
+  const top0 = C[o + s0]!, top1 = C[o + s1]!;
+  let low0 = h.bounds.min.y, low1 = h.bounds.min.y;
+  if (solidCell(h, i + di, k + dk)) { const p = (i + di + h.nx * (k + dk)) * 4; low0 = C[p + n0]!; low1 = C[p + n1]!; }
+  const g0 = top0 - low0, g1 = top1 - low1;
+  if (g0 <= 0 && g1 <= 0) return 0;
+  // The edge's two ends in X/Z.
+  const xa = h.x0 + (side === 1 ? i + 1 : i) * c, za = h.z0 + (side === 3 ? k + 1 : k) * c;
+  const xb = xa + (side >= 2 ? c : 0), zb = za + (side < 2 ? c : 0);
+  const put = (n: number, ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number): void => {
+    W[n] = ax; W[n + 1] = ay; W[n + 2] = az; W[n + 3] = bx; W[n + 4] = by; W[n + 5] = bz; W[n + 6] = cx; W[n + 7] = cy; W[n + 8] = cz;
+  };
+  if (g0 > 0 && g1 > 0) {
+    put(0, xa, low0, za, xb, low1, zb, xb, top1, zb);
+    put(9, xa, low0, za, xb, top1, zb, xa, top0, za);
+    return 2;
+  }
+  // The edges cross at s along it: the wall is the triangle on the side where the cell stands higher.
+  const t = g0 / (g0 - g1), xm = xa + (xb - xa) * t, zm = za + (zb - za) * t, ym = low0 + (low1 - low0) * t;
+  if (g0 > 0) put(0, xa, low0, za, xm, ym, zm, xa, top0, za);
+  else put(0, xm, ym, zm, xb, low1, zb, xb, top1, zb);
+  return 1;
 }
 /** Surface height of cell (i, k)'s own triangles at (x, z), clamped into the cell. */
 function cellHeightAt(h: StaticHeightfield, i: number, k: number, x: number, z: number): number {
   const u = Math.max(0, Math.min(1, (x - h.x0) / h.cell - i)), w = Math.max(0, Math.min(1, (z - h.z0) / h.cell - k));
-  const H = h.heights, r = h.nx + 1, a = H[i + r * k]!, b = H[i + 1 + r * k]!, c = H[i + r * (k + 1)]!, d = H[i + 1 + r * (k + 1)]!;
+  const o = (i + h.nx * k) * 4, C = h.corners, a = C[o]!, b = C[o + 1]!, c = C[o + 2]!, d = C[o + 3]!;
   return u >= w ? a + (b - a) * u + (d - b) * w : a + (d - c) * u + (c - a) * w;
 }
 
@@ -276,11 +335,10 @@ export function sweepHeightfield(h: StaticHeightfield, cx: number, cy: number, c
       const ux = T[o + 3]! - T[o]!, uy = T[o + 4]! - T[o + 1]!, uz = T[o + 5]! - T[o + 2]!, vx = T[o + 6]! - T[o]!, vy = T[o + 7]! - T[o + 1]!, vz = T[o + 8]! - T[o + 2]!;
       found = faceContact(T, o, uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx, cx, cy, cz, ex, ey, ez, dx, dy, dz, skin, out, found);
     }
-    // Walls where this solid cell meets a hole or the lattice's edge.
+    // Walls where this solid cell stands above what lies across an edge.
     for (let side = 0; side < 4; side++) {
-      if (!cellWall(h, i, k, side)) continue;
-      const [ox, oz] = EDGES[side]!;
-      for (const o of [0, 9]) found = faceContact(W, o, ox, 0, oz, cx, cy, cz, ex, ey, ez, dx, dy, dz, skin, out, found);
+      const n = cellWall(h, i, k, side), [ox, oz] = EDGES[side]!;
+      for (let w = 0; w < n; w++) found = faceContact(W, w * 9, ox, 0, oz, cx, cy, cz, ex, ey, ez, dx, dy, dz, skin, out, found);
     }
     return false;
   });
@@ -295,8 +353,7 @@ export function heightfieldPushes(h: StaticHeightfield, cx: number, cy: number, 
   let top = -Infinity;
   forCells(h, cx - ex, cz - ez, cx + ex, cz + ez, cy - ey, (i, k) => {
     if (!solidCell(h, i, k)) return false;
-    const H = h.heights, r = h.nx + 1;
-    top = Math.max(top, H[i + r * k]!, H[i + 1 + r * k]!, H[i + r * (k + 1)]!, H[i + 1 + r * (k + 1)]!);
+    top = Math.max(top, cellMax(h, i, k));
     for (let side = 0; side < 4; side++) {
       const [di, dk] = EDGES[side]!;
       if (solidCell(h, i + di, k + dk)) continue;
@@ -340,7 +397,7 @@ export function deepestHeightfieldContact(h: StaticHeightfield, cx: number, cy: 
     }
     if (!crossed) {
       // Buried under this cell: push straight up past its highest corner.
-      const H = h.heights, r = h.nx + 1, top = Math.max(H[i + r * k]!, H[i + 1 + r * k]!, H[i + r * (k + 1)]!, H[i + 1 + r * (k + 1)]!);
+      const top = cellMax(h, i, k);
       const x = Math.max(cx - ex, Math.min(cx + ex, h.x0 + (i + 0.5) * h.cell)), z = Math.max(cz - ez, Math.min(cz + ez, h.z0 + (k + 0.5) * h.cell));
       if (heightAt(h, x, z) > bottom + tolerance && bottom - top < best) { best = bottom - top; nx = 0; ny = 1; nz = 0; found = true; }
     }
@@ -382,9 +439,7 @@ export function segmentClearHeightfield(h: StaticHeightfield, a: Vec3, b: Vec3):
     const tEnd = Math.min(t1, tx, tz);
     // Lowest point of the segment over this cell against the cell's top.
     const yLow = Math.min(a.y + dy * t, a.y + dy * tEnd);
-    const H = h.heights, r = h.nx + 1;
-    const cellTop = Math.max(H[i + r * k]!, H[i + 1 + r * k]!, H[i + r * (k + 1)]!, H[i + 1 + r * (k + 1)]!);
-    if (!(yLow > cellTop) && cellTriangles(h, i, k)) {
+    if (!(yLow > cellMax(h, i, k)) && cellTriangles(h, i, k)) {
       // Under the surface where the segment enters this cell (from a hole,
       // the lattice's edge or its start), or crossing its top: in the solid.
       const px = a.x + dx * t, py = a.y + dy * t, pz = a.z + dz * t;

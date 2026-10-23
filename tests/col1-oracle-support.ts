@@ -184,7 +184,7 @@ export function caveScenes(ids: readonly string[] = ["reef_archlet", "reef_bellh
   const production = createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: defs.map(caveOwner) });
   const exterior = productionWorld(), feet = defs.map(d => d.replacementFootprints[0]!);
   const shellMembers = (d: CaveDef): StaticMember[] => {
-    return kitShellShapes(d, worldFloor);
+    return kitShellShapes(d);
   };
   const collarOf = (d: CaveDef) => collarHeightfield(`${d.id}.collar`, d.replacementFootprints[0]!, CAVE_BAND, surfaceHeight, feet);
   const membersFor: Record<CaveVariant, (d: CaveDef) => StaticMember[]> = {

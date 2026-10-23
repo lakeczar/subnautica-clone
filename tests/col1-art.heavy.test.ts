@@ -1,28 +1,80 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CANOPY_ROOT_CAVES } from "../src/content/caves/canopyRootCaves.js";
-import { AUTHORED_CAVE_SOURCES, caveDef } from "../src/content/regions/caves.js";
+import { AUTHORED_CAVE_SOURCES, caveDef, type CaveDef } from "../src/content/regions/caves.js";
+import { buildCave, caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
+import { CANOPY_BASIN_GROUPS, groupDef } from "../src/content/regions/caves/index.js";
+import { DEEP_CAVES } from "../src/content/regions/caves/deep.js";
 import { STRUCTURES } from "../src/content/regions/structures.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { VISTA_SETS } from "../src/content/vistas.js";
+import type { Vec3 } from "../src/sim/types.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
-import { artMembers, insideOf, meshFacing, orientationProblems } from "../src/world/collision/bake.js";
-import { kitShellShapes } from "../src/world/collision/caveShapes.js";
+import { compactBiome, LC_ORIENTATION } from "../src/world/collision/biome.js";
+import { artMembers, certifyOrientation, meshComponents } from "../src/world/collision/bake.js";
+import { KIT_SHELL_ORIENTATION, kitShellShapes } from "../src/world/collision/caveShapes.js";
+import { caveScenes, probe } from "./col1-oracle-support.js";
+import { probeComponents } from "./col1-support.js";
 
-/** COL-1 R4: every shipped shape bakes, with its own occupancy deciding
- * winding: every authored kit cave's fine shell, every vista, POI and dish
- * set, and every Canopy chunk. Heavy only for its size (no Babylon). */
+/** COL-1 R4/R5: every shipped and authored shape bakes, oriented by its
+ * producer's provenance and certified per connected component:
+ * - every kit cave in all three registries, each with its own builder
+ *   (`caveDef` for `AUTHORED_CAVE_SOURCES`, `groupDef` for the Canopy and
+ *   Basin groups, `buildCave` for the deep caves): 55 fine shells;
+ * - every vista, POI and dish set;
+ * - every Canopy chunk.
+ * Probing is a cross-check here only: the occupancy the shell was meshed
+ * from, per component, flags a component whose provenance is wrong at every
+ * scale. Heavy only for its size (no Babylon). */
 
-test("every authored kit cave's fine shell is coherent and oriented outward by the voxel occupancy it was meshed from", () => {
-  const failures: string[] = [];
-  for (const s of AUTHORED_CAVE_SOURCES) {
+/** Every kit cave definition, by registry and builder. */
+function kitDefs(): { id: string; registry: string; def: () => CaveDef }[] {
+  return [
+    ...AUTHORED_CAVE_SOURCES.map(s => ({ id: s.id, registry: "authored", def: () => caveDef(s.id, worldFloor) })),
+    ...CANOPY_BASIN_GROUPS.map(g => ({ id: g.source.id, registry: "canopy-basin", def: () => groupDef(g, worldFloor) })),
+    ...DEEP_CAVES.map(c => ({ id: c.source.id, registry: "deep", def: () => buildCave(c.source, worldFloor) })),
+  ];
+}
+const voxelInside = (def: CaveDef) => {
+  const vol = caveVolume(def), g = vol.grid;
+  return (p: Vec3): boolean | null => {
+    const i = Math.floor((p.x - g.origin.x) / g.voxel), j = Math.floor((p.y - g.origin.y) / g.voxel), k = Math.floor((p.z - g.origin.z) / g.voxel);
+    return i < 0 || j < 0 || k < 0 || i >= g.nx || j >= g.ny || k >= g.nz ? null : vol.solid[i + g.nx * (j + g.ny * k)] === 1;
+  };
+};
+
+test("every kit cave's fine shell, in all three registries, bakes by provenance; the cross-check agrees per component", () => {
+  const list = kitDefs(), failures: string[] = [], notes: string[] = [];
+  assert.equal(new Set(list.map(k => k.id)).size, 55, "55 distinct kit sources");
+  let components = 0, contrary = 0, sampled = 0;
+  for (const k of list) {
     try {
-      const shapes = kitShellShapes(caveDef(s.id, worldFloor), worldFloor);
-      if (!shapes.every(x => x.facing === 1)) failures.push(`${s.id}: facing ${shapes.map(x => x.facing)}`);
-    } catch (e) { failures.push(`${s.id}: ${(e as Error).message.split("\n")[0]}`); }
+      const def = k.def(), shapes = kitShellShapes(def);
+      if (!shapes.every(s => s.facing === KIT_SHELL_ORIENTATION.facing)) failures.push(`${k.id}: facing ${shapes.map(s => s.facing)}`);
+      const sh = caveShell(def, "fine"), mesh = { positions: sh.positions, indices: Uint32Array.from(sh.indices) };
+      const { of, count } = meshComponents(mesh);
+      components += count;
+      for (const row of probeComponents(mesh, of, new Int8Array(count).fill(1), voxelInside(def))) {
+        sampled += row.agree + row.contrary; contrary += row.contrary;
+        // A wrongly wound component is contrary at every scale on most of its probes.
+        if (row.contrary > Math.max(1, (row.agree + row.contrary) * 0.05))
+          failures.push(`${k.id} component ${row.component}: ${row.contrary} contrary of ${row.agree + row.contrary} (triangles ${row.examples.join(", ")})`);
+        else if (row.contrary) notes.push(`${k.id} c${row.component}: ${row.contrary} of ${row.agree + row.contrary}`);
+      }
+    } catch (e) { failures.push(`${k.registry} ${k.id}: ${(e as Error).message.split("\n")[0]}`); }
   }
-  console.log(JSON.stringify({ kitShells: AUTHORED_CAVE_SOURCES.length, failures }));
+  console.log(JSON.stringify({ kitShells: list.length, components, sampled, contrary, isolatedContrary: notes, failures }));
   assert.deepEqual(failures, []);
+});
+
+test("R5-1: the three shells the probe vote refused bake, with the hub controls", () => {
+  const ids = ["basin_dish_lee_vault", "divide_lintel_galleries", "meridian_terrace_crack", "hub_apron_hollow", "hub_crown_shaft"];
+  for (const id of ids) {
+    const k = kitDefs().find(x => x.id === id)!, def = k.def(), shapes = kitShellShapes(def);
+    const sh = caveShell(def, "fine"), n = sh.indices.length / 3;
+    assert.equal(shapes.reduce((t, s) => t + s.triangles, 0), n, id);
+    assert.deepEqual(Array.from(new Set(certifyOrientation(id, { positions: sh.positions, indices: Uint32Array.from(sh.indices), orientation: KIT_SHELL_ORIENTATION }, false))), [1], id);
+  }
 });
 
 test("every vista, POI and dish set bakes: closed pieces closed and coherent", () => {
@@ -35,20 +87,36 @@ test("every vista, POI and dish set bakes: closed pieces closed and coherent", (
   assert.deepEqual(failures, []);
 });
 
-test("every Canopy chunk: art and band coherent; art oriented out of rock by the biome's field", () => {
+test("every Canopy chunk bakes by LC's provenance; the field cross-checks each art component", () => {
   const cave = createLargeCave(CANOPY_ROOT_CAVES, worldFloor), failures: string[] = [];
-  let art = 0, band = 0;
-  for (const c of cave.chunks) {
-    const m = cave.mesh(c, "fine");
-    if (m.indices.length) {
-      art++;
-      const mesh = { positions: m.positions, indices: m.indices };
-      try { if (meshFacing(m.key, mesh, insideOf((x, y, z) => cave.field.rock(x, y, z))) !== 1) failures.push(`${m.key}: faces into rock`); }
-      catch (e) { failures.push((e as Error).message.split("\n")[0]!); }
-    }
-    if (m.band?.indices.length) { band++; failures.push(...orientationProblems(`${m.key}.band`, m.band, false)); }
+  const chunks = cave.chunks.map(c => { const m = cave.mesh(c, "fine"); return { key: m.key, art: { positions: m.positions, indices: m.indices }, band: m.band }; });
+  assert.equal(chunks.length, 90);
+  // Certifies every chunk's art and band coherent with LC's provenance (throws, naming it).
+  compactBiome(cave.id, cave.collision.ownership, chunks);
+  const inside = (p: Vec3): boolean | null => { const d = cave.field.rock(p.x, p.y, p.z); return Number.isFinite(d) ? d < 0 : null; };
+  let art = 0, components = 0;
+  for (const c of chunks) {
+    if (!c.art.indices.length) continue;
+    art++;
+    const { of, count } = meshComponents(c.art);
+    components += count;
+    for (const row of probeComponents(c.art, of, new Int8Array(count).fill(LC_ORIENTATION.facing), inside, 200))
+      if (row.contrary > Math.max(1, (row.agree + row.contrary) * 0.05)) failures.push(`${c.key} component ${row.component}: ${row.contrary} contrary of ${row.agree + row.contrary}`);
   }
-  console.log(JSON.stringify({ chunks: cave.chunks.length, art, band, failures }));
-  assert.equal(cave.chunks.length, 90);
+  console.log(JSON.stringify({ chunks: chunks.length, art, components, failures }));
   assert.deepEqual(failures, []);
+});
+
+test("P3-C: the Apron hollow's whole oracle scene builds (shell, validated collar) and, through LC's composer, blocks nothing the columns allow", () => {
+  const { variants } = caveScenes(["hub_apron_hollow"]);
+  const columns = probe(variants.columns, { poses: 3000, moves: 1000, columns: 600, sights: 400, seed: 3 });
+  for (const v of ["heightfield", "shell"] as const) {
+    const r = probe(variants[v], { poses: 3000, moves: 1000, columns: 600, sights: 400, seed: 3 });
+    console.log(v, JSON.stringify({ clearance: r.clearance, moves: r.moves, protected: r.protected }));
+    assert.equal(r.clearance.spurious, 0, `${v}: blocked without art`);
+    assert.equal(r.moves.spurious, 0, `${v}: stops without art`);
+    assert.equal(r.moves.endIllegal, 0, `${v}: ${JSON.stringify(r.examples.filter(e => e.kind.startsWith("new move ends")).slice(0, 3))}`);
+    assert.deepEqual(r.protected.newlyBlocked.filter(id => !columns.protected.newlyBlocked.includes(id)), [], `${v}: newly blocked protected`);
+    if (v === "heightfield") assert.ok(r.clearance.oldClearNewBlocked <= columns.clearance.oldClearNewBlocked, `${r.clearance.oldClearNewBlocked} vs ${columns.clearance.oldClearNewBlocked}`);
+  }
 });

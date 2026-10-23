@@ -270,7 +270,7 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
     },
     triangles: members.reduce((n, m) => n + (m.kind === "shape" ? m.triangles : 0), 0),
     boxCount: members.reduce((n, m) => n + (m.kind === "boxes" ? m.ids.length : 0), 0),
-    samples: members.reduce((n, m) => n + (m.kind === "heightfield" ? m.heights.length : 0), 0),
+    samples: members.reduce((n, m) => n + (m.kind === "heightfield" ? m.nx * m.nz : 0), 0),
     bytes: members.reduce((n, m) => n + m.bytes, 0) + raw.byteLength + N.byteLength + L.byteLength,
     sharedBytes: members.reduce((n, m) => n + (m.kind === "shape" ? m.sharedBytes : 0), 0),
   };

@@ -214,7 +214,8 @@ const curved = (x: number, z: number): number => -20 + 0.6 * Math.sin(1.3 * x) +
 test("lift: the collar is on or above the floor at every cell's nine points, and a diver resting on it is never called buried", () => {
   const footprint = { minX: 10, maxX: 20, minZ: 10, maxZ: 20 }, band = 6;
   const h = collarHeightfield("curved", footprint, band, curved, [footprint]);
-  assert.ok(h.lift > 0.02 && h.residual < 0.005, `lift ${h.lift}, residual ${h.residual}`);
+  // Its 3 cm sags exceed the 2 cm crease, so those cells bake flat (R5); the rest are lifted by their own sag.
+  assert.ok(h.flatCells > 0 && h.lift > 0 && h.lift <= 0.02 + 1e-6 && h.residual < 0.005, `lift ${h.lift}, flat ${h.flatCells}, residual ${h.residual}`);
   for (let k = 0; k < h.nz; k++) for (let i = 0; i < h.nx; i++) for (const [u, w] of [[0, 0], [0.5, 0], [1, 0], [0, 0.5], [0.5, 0.5], [1, 0.5], [0, 1], [0.5, 1], [1, 1]]) {
     const x = h.x0 + (i + u!) * h.cell, z = h.z0 + (k + w!) * h.cell, y = heightAt(h, x, z);
     if (Number.isNaN(y)) continue;
@@ -239,11 +240,11 @@ test("lift: the collar is on or above the floor at every cell's nine points, and
   assert.ok(rested > 100, `only ${rested} drops rested`);
 });
 
-test("ADVERSE lift: a floor that curves within a cell is measured and refused, not hidden", () => {
-  // 10 cm bumps a quarter of a 0.5 m cell wide: the nine points all sit in the troughs.
-  const bumpy = (x: number): number => 0.1 * Math.sin(4 * Math.PI * x) ** 2;
-  const h = sampleHeightfield("bumps", { minX: 0, maxX: 2, minZ: 0, maxZ: 2 }, 0.5, bumpy, { conservative: true, measure: true });
-  assert.equal(h.lift, 0);
-  assert.ok(h.residual > 0.04, `residual ${h.residual}`);
-  assert.throws(() => collarHeightfield("bumps", { minX: 1, maxX: 2, minZ: 1, maxZ: 2 }, 1, bumpy, []), /stands \d+\.\d mm above/);
+test("ADVERSE lift: a floor that rises between the construction points is measured and refused, not hidden", () => {
+  // A ridge between the quarter-cell construction points of a 0.5 m cell (none of 1.125, 1.25), caught by the 1/32 m measurement.
+  const ridge = (x: number): number => (x > 1.135 && x < 1.18 ? 0.1 : 0);
+  const h = sampleHeightfield("ridge", { minX: 0, maxX: 2, minZ: 0, maxZ: 2 }, 0.5, ridge, { conservative: true, measure: true });
+  assert.equal(h.flatCells, 0);
+  assert.ok(h.residual > 0.09, `residual ${h.residual}`);
+  assert.throws(() => collarHeightfield("ridge", { minX: 1, maxX: 2, minZ: 1, maxZ: 2 }, 1, ridge, [], [0.5]), /every cell tried \(0\.5 m: \d+\.\d mm\)/);
 });

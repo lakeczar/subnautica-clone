@@ -1,7 +1,7 @@
 import type { Vec3 } from "../types.js";
 import type { CaveCollider } from "../caves/large/compose.js";
 import { boxTouchesOwned, capAt, collarAt, owns, type CaveOwnership } from "../caves/large/ownership.js";
-import type { TriangleMesh } from "./bake.js";
+import { orientationProblems, type TriangleMesh } from "./bake.js";
 import { createStaticCollider, OVERLAP_TOLERANCE, type StaticCollider } from "./collider.js";
 import { buildShape, type StaticShape } from "./shape.js";
 
@@ -29,12 +29,22 @@ export interface CompactBiome {
   readonly collider: StaticCollider;
 }
 
-/** LC winds its surfaces so (b - a) x (c - a) faces into water: out of rock. */
-const LC_FACING = 1;
+/** Orientation of LC chunk meshes, by construction: LC's `surfaceNets`
+ * (`caves/large/mesh.ts`) winds each crossing in a fixed order about its axis
+ * and flips it when the far node is the rock, so (b - a) x (c - a) faces
+ * into water: out of rock. The seabed band is wound the same way (up, out of
+ * the ground). */
+export const LC_ORIENTATION = { facing: 1, source: "LC surfaceNets: rock to water, outward" } as const;
+const LC_FACING = LC_ORIENTATION.facing;
 
 export function compactBiome(id: string, ownership: CaveOwnership, chunks: readonly BiomeChunk[]): CompactBiome {
   const shapes: StaticShape[] = [];
   for (const c of chunks) {
+    // The provenance claims a winding; each chunk's art and band must be coherent with it.
+    for (const [name, m] of [[c.key, c.art], [`${c.key}.band`, c.band]] as const) {
+      const problems = m?.indices.length ? orientationProblems(`${id}.${name}`, m, false) : [];
+      if (problems.length) throw new Error(`${id}.${name}: winding is not coherent (${LC_ORIENTATION.source}):\n- ${problems.join("\n- ")}`);
+    }
     if (c.art.indices.length) shapes.push(buildShape(`${id}.${c.key}`, c.art.positions, c.art.indices, { facing: LC_FACING, shared: true }));
     if (c.band?.indices.length) shapes.push(buildShape(`${id}.${c.key}.band`, c.band.positions, c.band.indices, { facing: LC_FACING }));
   }
