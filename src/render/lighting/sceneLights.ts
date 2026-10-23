@@ -175,6 +175,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     if (!h || h.isDisposed()) { h = (scene.getMeshByName(id) as Mesh | null) ?? undefined; if (h) hulls.set(id, h); }
     return h ?? null;
   };
+  const frameLights: PointLight[] = [];
   let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0, considered = 0;
   /** The frame's slowest entry to place (measurement: which mesh a long placement was). */
   let slowest: { name: string; ms: number; instances: number; clusters: number; frozen: boolean } | null = null;
@@ -203,7 +204,9 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       const hull = seated ? hullOf(seated.id) : null;
       scanMs = performance.now() - (until - 1.5);
       const placeStart = performance.now();
-      const lights: PointLight[] = [];
+      // The frame's candidates, in one array reused frame to frame (never retained by selection).
+      const lights = frameLights;
+      lights.length = 0;
       // A newly streamed frozen mesh's lights (thousands of thin instances
       // for some scatter) are placed once and cached; place a bounded number
       // per frame (CW-1), so a new chunk's lights join over a few frames.

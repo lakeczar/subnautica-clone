@@ -469,10 +469,13 @@ function broadPhase(solids: readonly Solid[], cellSize = 32): SpatialQuery<Solid
   }
   return index;
 }
-const grown = (box: { min: Vec3; max: Vec3 }, by: number): { min: Vec3; max: Vec3 } => ({
-  min: { x: box.min.x - by, y: box.min.y - by, z: box.min.z - by },
-  max: { x: box.max.x + by, y: box.max.y + by, z: box.max.z + by },
-});
+const ZERO_DELTA: Readonly<Vec3> = { x: 0, y: 0, z: 0 };
+/** A reusable box for a hot query's bounds (never retained past the query). */
+const scratchBox = (): { min: Vec3; max: Vec3 } => ({ min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } });
+const setBox = (out: { min: Vec3; max: Vec3 }, minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number): { min: Vec3; max: Vec3 } => {
+  out.min.x = minX; out.min.y = minY; out.min.z = minZ; out.max.x = maxX; out.max.y = maxY; out.max.z = maxZ;
+  return out;
+};
 
 /** World queries over a solid roster. Rosters of `BROAD_PHASE_MIN` or more
  * solids narrow each call to the solids near it through a spatial index
@@ -492,8 +495,15 @@ export function createWorldQueries(
 ): WorldQueries {
   const worldTerrain = floorHeight === surfaceHeight || floorHeight === terrainHeight;
   const index = options.broadPhase === false ? null : options.index ?? broadPhase(solids, options.cellSize);
-  const near = (box: { min: Vec3; max: Vec3 }): readonly Solid[] =>
-    index ? index.inBox(box, ["solid"]).map(e => e.data!) : solids;
+  // The simulation queries these many times a tick (CW-1 measured 119 KiB of
+  // garbage a tick from support alone): each query site gathers into its own
+  // reusable array and bounds box. None calls another site while iterating.
+  /** How many of `out`'s first solids are near `box` (all `solids` without an index). */
+  const nearInto = (box: { min: Vec3; max: Vec3 }, out: Solid[]): number =>
+    index ? index.dataInBox(box, "solid", out) : solids.length;
+  const listOf = (out: Solid[]): readonly Solid[] => index ? out : solids;
+  const clearHits: Solid[] = [], supportHits: Solid[] = [], moveHits: Solid[] = [];
+  const clearBox = scratchBox(), supportBox = scratchBox(), moveBox = scratchBox();
   return {
     lineOfSight(a, b, ignore = []) {
       if (!finitePoint(a) || !finitePoint(b)) return false;
@@ -529,27 +539,34 @@ export function createWorldQueries(
       )
         return false;
       const box = actorBox(origin, capsule);
-      return !near(grown(box, BROAD_PHASE_MARGIN)).some((s) => {
-        if (!sweptBoxIntersects(box, { x: 0, y: 0, z: 0 }, s)) return false;
+      const m = BROAD_PHASE_MARGIN;
+      const count = nearInto(setBox(clearBox, box.min.x - m, box.min.y - m, box.min.z - m, box.max.x + m, box.max.y + m, box.max.z + m), clearHits);
+      const near = listOf(clearHits);
+      for (let k = 0; k < count; k++) {
+        const s = near[k]!;
+        if (!sweptBoxIntersects(box, ZERO_DELTA, s)) continue;
         const rib = canonicalRib(s);
-        if (rib) return segmentBoxClosest(rib.a, rib.b, box).distance < rib.radius - RIB_CONTACT_TOLERANCE;
-        return (
+        if (rib) { if (segmentBoxClosest(rib.a, rib.b, box).distance < rib.radius - RIB_CONTACT_TOLERANCE) return false; continue; }
+        if (
           origin.x + rx > s.min.x + 0.001 &&
           origin.x - rx < s.max.x - 0.001 &&
           origin.z + rz > s.min.z + 0.001 &&
           origin.z - rz < s.max.z - 0.001 &&
           origin.y + capsule.height > s.min.y + 0.001 &&
           origin.y + (capsule.bottom ?? 0) < s.max.y - 0.001
-        );
-      });
+        ) return false;
+      }
+      return true;
     },
     waterHeight: WATER_Y,
     groundHeight: floorHeight,
     supportHeight(x, z, fromY) {
       let height = floorHeight(x, z);
-      const column = { min: { x: x - BROAD_PHASE_MARGIN, y: -TALL, z: z - BROAD_PHASE_MARGIN },
-        max: { x: x + BROAD_PHASE_MARGIN, y: TALL, z: z + BROAD_PHASE_MARGIN } };
-      for (const solid of index && Number.isFinite(x) && Number.isFinite(z) ? near(column) : solids) {
+      const finite = !!index && Number.isFinite(x) && Number.isFinite(z);
+      const count = finite ? nearInto(setBox(supportBox, x - BROAD_PHASE_MARGIN, -TALL, z - BROAD_PHASE_MARGIN, x + BROAD_PHASE_MARGIN, TALL, z + BROAD_PHASE_MARGIN), supportHits) : solids.length;
+      const column = finite ? listOf(supportHits) : solids;
+      for (let k = 0; k < count; k++) {
+        const solid = column[k]!;
         const rib = canonicalRib(solid);
         if (rib) {
           if (x >= solid.min.x && x <= solid.max.x && z >= solid.min.z && z <= solid.max.z) {
@@ -580,8 +597,12 @@ export function createWorldQueries(
       // Slides never travel further than |delta| in total, so the actor box
       // grown by that length bounds every swept contact.
       const reach = Math.hypot(delta.x, delta.y, delta.z);
-      const candidates = index && Number.isFinite(reach)
-        ? near(grown(actorBox(origin, capsule), reach + BROAD_PHASE_MARGIN)) : solids;
+      let candidates: readonly Solid[] = solids;
+      if (index && Number.isFinite(reach)) {
+        const a = actorBox(origin, capsule), r = reach + BROAD_PHASE_MARGIN;
+        // A move iterates its candidates many times: a right-sized copy of this one gather.
+        candidates = moveHits.slice(0, nearInto(setBox(moveBox, a.min.x - r, a.min.y - r, a.min.z - r, a.max.x + r, a.max.y + r, a.max.z + r), moveHits));
+      }
       let position = { ...origin },
         remaining = { ...delta },
         hitSolid = false, clippedBoundary = false;
