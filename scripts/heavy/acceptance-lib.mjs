@@ -7,6 +7,7 @@ import { after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { alive } from "./state.mjs";
@@ -201,9 +202,12 @@ exit "$status"
  * would (TST-16): a fixed CPUWeight, no swap, a memory cap. Test setup only;
  * the scheduler itself never sets a property on it.
  */
-export function exclusiveSlice(c, { weight = 10000 } = {}) {
+export async function exclusiveSlice(c, { weight = 10000, memoryMiB = null } = {}) {
   const name = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE;
-  const r = spawnSync("systemctl", ["--user", "set-property", "--runtime", name, `CPUWeight=${weight}`, "MemorySwapMax=0", "MemoryMax=8G"], { encoding: "utf8" });
+  const { sliceLimits } = await import("./policy.mjs");
+  const { loadConfig } = await import("./state.mjs");
+  const w = sliceLimits(availableParallelism(), loadConfig(c.env)); // as install.sh writes the unit
+  const r = spawnSync("systemctl", ["--user", "set-property", "--runtime", name, `CPUWeight=${weight}`, `CPUQuota=${w.cpuQuotaPct}%`, `MemoryMax=${memoryMiB ?? w.memoryMaxMiB}M`, "MemorySwapMax=0"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   return name;
 }

@@ -91,6 +91,7 @@ export function snapshotNow(cgroup, { host = { cpu: hostCpu, vm: hostVm }, now =
 export function parseCounters(text) {
   if (!text) return null;
   const v = (k) => num(text, new RegExp(`^${k} ([\\d.]+)`, "m"));
+  const line = (k) => new RegExp(`^${k} (.*)$`, "m").exec(text)?.[1]?.trim() ?? null;
   const uptime = v("uptime"), stat = /^host_stat (.*)$/m.exec(text)?.[1];
   if (uptime == null) return null;
   return {
@@ -100,7 +101,23 @@ export function parseCounters(text) {
     jobMajflt: v("job_majflt"), jobSwapIns: v("job_swapins"), jobUsec: v("job_usec"),
     h: stat ? statLine(stat.trim().split(/\s+/).map(Number)) : null,
     vm: { pswpin: v("pswpin"), pswpout: v("pswpout"), pgmajfault: v("pgmajfault") },
+    slice: { path: line("slice_path"), weight: line("slice_weight"), cpuMax: line("slice_cpu_max"), memoryMax: line("slice_memory_max"), swapMax: line("slice_swap_max") },
   };
+}
+
+/**
+ * Whether a snapshot's live slice (scope-run.sh read it from the kernel) is
+ * the exclusive slice as configured: `want` { path, weight, cpuMax, memoryMax,
+ * swapMax } as cgroup file contents. Returns the mismatches, [] when it is.
+ */
+export function sliceMismatch(snapshot, want) {
+  const got = snapshot?.slice;
+  if (!got?.path) return ["no reading of the job's slice"];
+  const out = [];
+  if (!got.path.endsWith(`/${want.slice}`)) out.push(`ran in ${got.path.split("/").pop()}`);
+  for (const [k, file] of [["weight", "cpu.weight"], ["cpuMax", "cpu.max"], ["memoryMax", "memory.max"], ["swapMax", "memory.swap.max"]])
+    if (got[k] !== want[k]) out.push(`${file} ${got[k] || "unreadable"} (wants ${want[k]})`);
+  return out;
 }
 
 const round2 = (x) => Math.round(x * 100) / 100;

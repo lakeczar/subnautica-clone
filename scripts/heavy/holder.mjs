@@ -31,10 +31,11 @@
 // holds processes, the ticket is alive (state.mjs reconcile).
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { exclusiveSliceReady, hostObserved, judge, parseCounters, snapshotNow } from "./contention.mjs";
-import { MACHINE_LABELS, jobEnv, plan } from "./policy.mjs";
+import { exclusiveSliceReady, hostObserved, judge, parseCounters, sliceMismatch, snapshotNow } from "./contention.mjs";
+import { MACHINE_LABELS, jobEnv, plan, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 import {
   cgroupRead, gitTree, gpuUsers, hostFor, jobDir, jobProcs, ledger, loadConfig, readFileSafe, readJson, readState, readStats,
@@ -304,13 +305,21 @@ else if (code === 137 || signal) { stopReason = "killed"; label = "killed"; }
 if (oomKills > 0 && !reservationOom) note(`${oomKills} process(es) were OOM-killed inside the job by a sub-limit (for example a heavy test file's budget), not by its ${req.memMiB} MiB reservation`);
 if (leftovers) note("processes left behind by the command were stopped");
 if (gpuShared.size) note(`the GPU was also used outside the lease by: ${[...gpuShared.values()].map((u) => `pid ${u.pid} (${u.cmd.slice(0, 60)})`).join("; ")}`);
-// The priority it had: verified from where its scope actually ran.
-const ranIn = readFileSafe(join(dir, "cgroup")) ?? "";
-const boost = !placement ? null : placement.ready && ranIn.includes(`/${cfg.exclusiveSlice}/`)
-  ? { slice: cfg.exclusiveSlice, weight: cfg.exclusiveCpuWeight, status: "applied" }
-  : { slice: cfg.exclusiveSlice, status: "unavailable", why: placement.why ?? `the job's scope ran in ${ranIn || "an unknown cgroup"}` };
+// The priority it had, from the kernel's own reading of the slice its scope ran
+// in, before the payload started and after it ended (scope-run.sh): the unit's
+// properties, never a path name. A slice created without its unit (weight 100,
+// no caps) or configured differently is no CPU priority (R5-F1).
+const counters = { start: parseCounters(readFileSafe(join(dir, "counters-start"))), end: parseCounters(readFileSafe(join(dir, "counters-end"))) };
+let boost = null;
+if (placement) {
+  const w = sliceLimits(availableParallelism(), cfg); // as install.sh wrote the unit
+  const want = { slice: cfg.exclusiveSlice, weight: String(cfg.exclusiveCpuWeight), cpuMax: `${w.cpuQuotaPct * 1000} 100000`, memoryMax: String(w.memoryMaxMiB * 1048576), swapMax: "0" };
+  const wrong = !placement.ready ? [placement.why] : [...new Set([...sliceMismatch(counters.start, want).map((m) => `at the start: ${m}`), ...sliceMismatch(counters.end, want).map((m) => `at the end: ${m}`)])];
+  boost = wrong.length ? { slice: cfg.exclusiveSlice, status: "unavailable", why: wrong.join("; ") } : { slice: cfg.exclusiveSlice, weight: cfg.exclusiveCpuWeight, status: "applied" };
+  if (wrong.length) note(`no CPU priority for this exclusive run: ${boost.why}`);
+}
 const contextResult = !exclusive || rejected ? null : judge({
-  start: parseCounters(readFileSafe(join(dir, "counters-start"))), end: parseCounters(readFileSafe(join(dir, "counters-end"))),
+  start: counters.start, end: counters.end,
   points: exclusive.points, nproc: t.hostAtAdmit.nproc, thresholds: cfg.disturbed, gpuShared: [...gpuShared.values()], observed: exclusive.observed, boost,
 });
 if (contextResult?.disturbed) note(`DISTURBED: ${contextResult.reasons.join("; ")}`);

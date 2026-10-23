@@ -69,6 +69,11 @@ counters() {
     sed -n 's/^usage_usec /job_usec /p' "$cg/cpu.stat"
     sed -n '1s/^cpu  */host_stat /p' /proc/stat
     sed -n 's/^pswpin /pswpin /p; s/^pswpout /pswpout /p; s/^pgmajfault /pgmajfault /p' /proc/vmstat
+    # The slice this scope actually runs in, as the kernel has it (an exclusive
+    # job's CPU priority is judged on these, never on a path name).
+    p=$(dirname "$cg")
+    echo "slice_path $p"; echo "slice_weight $(cat "$p/cpu.weight" 2>/dev/null)"; echo "slice_cpu_max $(cat "$p/cpu.max" 2>/dev/null)"
+    echo "slice_memory_max $(cat "$p/memory.max" 2>/dev/null)"; echo "slice_swap_max $(cat "$p/memory.swap.max" 2>/dev/null)"
   } >"$jobdir/$1.tmp" 2>/dev/null && mv "$jobdir/$1.tmp" "$jobdir/$1"
 }
 counters counters-start

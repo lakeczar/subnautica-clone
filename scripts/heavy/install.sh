@@ -10,14 +10,18 @@
 #   scripts/heavy/install.sh --slice         also install the user slice unit
 #                                            (per-user config: coordinator approval)
 #   scripts/heavy/install.sh --uninstall     remove `current`: every shim falls back to v1
-#                                            (and the exclusive slice's unit, once empty)
+#                                            (the exclusive slice's unit stays: inert without jobs)
+#   scripts/heavy/install.sh --remove-exclusive-slice   remove that unit too; refuses
+#                                            unless no ticket is running and the slice is empty
 #
 # Every install also writes the exclusive slice's unit file once (TST-16):
 # siltwake_exclusive.slice, a top-level user slice with a fixed CPUWeight and
 # the heavy slice's memory, swap and CPU caps. Exclusive jobs run there, so
 # their CPU priority lasts exactly as long as their processes; nothing is set
 # at runtime. Older versions never place jobs there, so rolling back needs no
-# cleanup.
+# cleanup. Uninstall leaves the unit (it does nothing without jobs); removing it
+# is a separate step that checks and removes under the queue's state lock, so
+# no job can be admitted between the check and the removal.
 #   scripts/heavy/install.sh --gpu-guard     wrap every Playwright Chrome binary so a GPU
 #                                            launch needs the GPU lease (chrome-guard.sh);
 #                                            per-user change: coordinator approval
@@ -37,15 +41,16 @@ if [[ -n "${SILTWAKE_SCHED_EXCLUSIVE_SLICE:-}" ]]; then excl="$SILTWAKE_SCHED_EX
 elif [[ "$dir" == /work/tmp/siltwake-sched ]]; then excl=siltwake_exclusive.slice excl_dir="$HOME/.config/systemd/user"
 else excl="" excl_dir=""; fi
 pw="${SILTWAKE_PLAYWRIGHT_DIR:-$HOME/.cache/ms-playwright}"
-mode="" slice=0 uninstall=0 guard=""
+mode="" slice=0 uninstall=0 guard="" remove_excl=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode) mode="$2"; shift 2 ;;
     --slice) slice=1; shift ;;
     --uninstall) uninstall=1; shift ;;
+    --remove-exclusive-slice) remove_excl=1; shift ;;
     --gpu-guard) guard=on; shift ;;
     --gpu-guard-remove) guard=off; shift ;;
-    *) echo "usage: $0 [--mode serial|normal] [--slice] [--gpu-guard|--gpu-guard-remove] [--uninstall]" >&2; exit 2 ;;
+    *) echo "usage: $0 [--mode serial|normal] [--slice] [--gpu-guard|--gpu-guard-remove] [--uninstall] [--remove-exclusive-slice]" >&2; exit 2 ;;
   esac
 done
 
@@ -62,15 +67,31 @@ fi
 if [[ $uninstall == 1 ]]; then
   rm -f "$home/current"
   echo "heavy-check v2 uninstalled: shims fall back to v1. State in $dir is kept."
-  if [[ -n $excl && -f "$excl_dir/$excl" ]]; then
-    cg=$(systemctl --user show -p ControlGroup --value "$excl" 2>/dev/null)
-    if [[ -n $cg ]] && grep -qx 'populated 1' "/sys/fs/cgroup$cg/cgroup.events" 2>/dev/null; then
-      echo "kept $excl: an exclusive job still runs in it; run --uninstall again when it ends"
-    else
-      rm -f "$excl_dir/$excl" && systemctl --user daemon-reload && echo "removed $excl"
-    fi
-  fi
+  [[ -n $excl && -f "$excl_dir/$excl" ]] && echo "$excl stays (inert without jobs); remove it with --remove-exclusive-slice"
   exit 0
+fi
+
+if [[ $remove_excl == 1 ]]; then
+  [[ -n $excl && -f "$excl_dir/$excl" ]] || { echo "no exclusive slice unit to remove"; exit 0; }
+  # Checked and removed inside one state transaction: admission takes the same lock.
+  (cd "$src" && SILTWAKE_SCHED_DIR="$dir" node --input-type=module -e '
+    const { spawnSync } = await import("node:child_process");
+    const { existsSync, readFileSync, rmSync } = await import("node:fs");
+    const { loadConfig, transaction } = await import("./state.mjs");
+    const [slice, file] = process.argv.slice(1);
+    const why = transaction(loadConfig(), (state) => {
+      const running = Object.entries(state.tickets ?? {}).filter(([, t]) => t.state === "running").map(([id]) => id);
+      if (running.length) return { result: `tickets ${running.join(", ")} are running` };
+      const cg = spawnSync("systemctl", ["--user", "show", "-p", "ControlGroup", "--value", slice], { encoding: "utf8" }).stdout.trim();
+      if (cg && existsSync(`/sys/fs/cgroup${cg}/cgroup.events`) && /^populated 1$/m.test(readFileSync(`/sys/fs/cgroup${cg}/cgroup.events`, "utf8"))) return { result: `${slice} still holds processes` };
+      rmSync(file, { force: true });
+      spawnSync("systemctl", ["--user", "daemon-reload"]);
+      return { result: null };
+    });
+    if (why) { console.error(`not removed: ${why}; try again when it is idle`); process.exit(3); }
+    console.log(`removed ${slice}`);
+  ' "$excl" "$excl_dir/$excl")
+  exit $?
 fi
 
 files=(policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh

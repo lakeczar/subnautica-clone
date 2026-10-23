@@ -8,15 +8,25 @@ Four review rounds each found another lifetime race in one mechanism: changing a
 - **The design:** exclusive jobs run in their own top-level user slice, `siltwake_exclusive.slice`. Its `CPUWeight=10000` is fixed in its unit file, which `install.sh` writes once with the heavy slice's caps (`CPUQuota`, `MemoryMax`, `MemorySwapMax=0`, from `sliceLimits` for this machine).
   - **When the priority exists:** only while an exclusive job's processes are in that slice. There is nothing to apply, reset, journal, freeze, certify or hand over.
   - **Older versions** never place jobs there, so a rollback needs no cleanup. A job already running there keeps its priority until it ends.
-  - **Uninstall** removes the unit once the slice is empty.
+  - **Uninstall** leaves the inert unit; `--remove-exclusive-slice` removes it only when no ticket runs and the slice is empty (R5).
 - **The name has no dash.** A dash would nest the slice under `siltwake.slice`, where its weight would compete only with its siblings. Top-level, it competes with `app.slice` (T3, weight 100). This is the comparison measured in R1 (a pinned probe waited 14–21% at weight 100, 0% at 10000).
 - **Against R1's constraints:**
   - **R1-F2 and F3 were about moving builders' processes** out of their T3 tree and copying their limits: callers' containment. Queue payloads have never lived in the caller's tree. Since SCHED-1 they run in our own `siltwake-heavy.slice`, with per-scope hard limits that `scope-run.sh` verifies before the command runs (MemoryMax at the reservation, no swap). An exclusive scope in another of our own slices keeps exactly those per-scope limits.
   - **The aggregate caps carry over:** the slice has the heavy slice's memory, swap and CPU caps, and an exclusive job runs alone in the lane anyway. So nothing escapes, no caller is moved or re-limited, and T3's slices are never touched.
   - Leaving the caller's tree was never the objection, because queue jobs already leave it by design.
-- **If the slice isn't ready** (missing, or not configured as expected; checked read-only before launch), the job runs in the lane's slice. It is recorded as `boost.status: unavailable` with the reason, and is `DISTURBED`: not boosted evidence. Placement is verified afterwards from the job's own cgroup path.
+- **If the slice isn't ready** (missing, or not configured as expected; checked read-only before launch), the job runs in the lane's slice. It is recorded as `boost.status: unavailable` with the reason, and is `DISTURBED`: not boosted evidence. Since R5, the priority is judged on the kernel's own reading of the slice the job ran in, before and after the payload, not on its path.
 - **Deleted:** `handover.mjs`, the boost journal (`state.boost`), the freeze (`state.frozen`), the backstop, the runtime setter and read-back, `install.sh --rollback` and the thaw. Rollback is back to its pre-TST-16 form.
 - **R4's findings** (F1 freeze ownership across installer operations, F2 a reset outliving a killed handover, F3 freeze visibility) concern only that machinery, so they are removed with it. The diff is much smaller.
+
+## R5 review responses
+
+Review `430a2ec0` on `review/tst-16-r5`, on `40fdc202`: one P2. The static design was confirmed.
+- **F1, uninstall could remove the unit after a holder's readiness check and before its launch.** `systemd-run --slice` then created a default slice (weight 100, no caps), and the result still claimed `applied`, because only the path name was checked. Two fixes, no new protocol:
+  - **The unit's lifetime:** `--uninstall` now leaves the inert unit file; it does nothing without jobs. A separate `--remove-exclusive-slice` removes it, and refuses unless no ticket is running and the slice is empty. It checks and removes inside one state transaction, so no admission can come between them.
+  - **The live slice, not the path:** `scope-run.sh` reads the slice its scope actually runs in from `/sys/fs/cgroup` (`cpu.weight`, `cpu.max`, `memory.max`, `memory.swap.max`) just before the payload starts and again after it ends, into the counter snapshots. The holder compares both readings with the unit's properties (the same `sliceLimits` computation `install.sh` uses). Any mismatch means `unavailable` and `DISTURBED`, with the reason. So whole-run evidence rests on the kernel's real properties.
+- **S23:** the reviewer's interleaving. A `systemctl` shim lets the readiness check pass, then removes the unit and stops the slice before the launch. The job's path still names the slice, but it ran at weight 100 with no caps and no swap limit, so it's `unavailable` and `DISTURBED`, and the final line says so. A slice with the right weight but a 4 GiB memory cap is a mismatch too. On `40fdc202`, S23 fails with `applied`.
+- **S22:** uninstall leaves the unit. `--remove-exclusive-slice` refuses while a ticket runs, and removes the unit once it's done.
+- **Unit test:** `sliceMismatch` covers the default slice, wrong caps, the wrong slice and a missing reading.
 
 ## Why a quiet run was labelled DISTURBED
 
@@ -107,7 +117,7 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
 
 ## Checks
 
-- **Unit tests** (`tests/heavy-contention.test.ts`, 7, including a run without the slice's priority):
+- **Unit tests** (`tests/heavy-contention.test.ts`, 8, including a run without the slice's priority and the live-slice mismatch):
   - the CW-1 case (host memory "full" 32% with the job unstalled is clean, and recorded);
   - every reason with its value, and host swap and other CPU recorded but not judged;
   - the tail merge;
@@ -124,9 +134,10 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
     - an exclusive job runs in it while the **real live version `95f340380c25`** is reinstalled from root `91dc1ab`'s own tree (a plain rollback);
     - the job keeps its priority to its end;
     - the old version then runs its own exclusive job in the lane's slice, with nothing left over;
-    - uninstall keeps the unit while an exclusive job runs in the slice, and removes it once empty.
+    - uninstall leaves the inert unit; `--remove-exclusive-slice` refuses while a ticket runs, and removes it once done (R5).
+  - **S23 (R5-F1):** a unit removed between readiness and launch (a default slice under the right name), and a wrong memory cap: `unavailable`, `DISTURBED`, judged on the live slice reading.
   - **SCHED-1 test 7** checks the job's own measurement.
-- **Full suites** on the merged branch (root `91dc1ab` with this work), after the R4 redesign: SCHED-1 **23/23**, SCHED-2 **22/22**, SCHED-2b **27/27**, fast tier **1,404/1,404**. No units, slices, unit files or drop-ins left behind.
+- **Full suites** on the merged branch (root `91dc1ab` with this work), after R5: SCHED-1 **23/23**, SCHED-2 **23/23** (S23 new), SCHED-2b **27/27**, fast tier **1,405/1,405**. No units, slices, unit files or drop-ins left behind.
 
 ## Validation (CW-1 segment 7, run A)
 

@@ -77,6 +77,17 @@ test("a run that didn't get the exclusive slice's CPU priority is not boosted ev
   assert.equal(judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied" } }).disturbed, false);
 });
 
+test("R5-F1: the live slice reading decides the priority, never the path: a default slice with the right name, or a wrong cap, is a mismatch", () => {
+  const want = { slice: "x.slice", weight: "10000", cpuMax: "700000 100000", memoryMax: "8589934592", swapMax: "0" };
+  const snap = (w: string, cpu: string, mem: string, swap: string, path = "/user.slice/u/x.slice") =>
+    C.parseCounters(`uptime 1.0\nslice_path ${path}\nslice_weight ${w}\nslice_cpu_max ${cpu}\nslice_memory_max ${mem}\nslice_swap_max ${swap}\n`);
+  assert.deepEqual(C.sliceMismatch(snap("10000", "700000 100000", "8589934592", "0"), want), []);
+  assert.deepEqual(C.sliceMismatch(snap("100", "max 100000", "max", "max"), want),
+    ["cpu.weight 100 (wants 10000)", "cpu.max max 100000 (wants 700000 100000)", "memory.max max (wants 8589934592)", "memory.swap.max max (wants 0)"]);
+  assert.deepEqual(C.sliceMismatch(snap("10000", "700000 100000", "8589934592", "0", "/user.slice/u/siltwake.slice/siltwake-heavy.slice"), want), ["ran in siltwake-heavy.slice"]);
+  assert.deepEqual(C.sliceMismatch(null, want), ["no reading of the job's slice"]);
+});
+
 test("unavailable counters stay null, never zero", () => {
   const s = series(quiet(5));
   for (const p of s) p.jobUsec = null;

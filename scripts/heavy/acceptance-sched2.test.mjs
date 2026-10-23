@@ -407,7 +407,7 @@ const noRuntimeState = (c) => { const st = stateOf(c); assert.deepEqual([st.boos
 
 test("S17 (TST-16): an exclusive job runs in the exclusive slice, whose fixed weight is its CPU priority; its contention is measured from before its payload to after it", async () => {
   const c = context("excl", { config: fast });
-  const slice = exclusiveSlice(c);
+  const slice = await exclusiveSlice(c);
   const x = submit(c, c.wt("x"), "--class", "exclusive", "--", "sh", "-c", "cut -d' ' -f1 /proc/uptime > payload-start; sleep 6");
   await running(c, x);
   await until("started", () => existsSync(join(c.sched, "jobs", x, "cgroup")), 15000);
@@ -443,7 +443,7 @@ test("S18 (TST-16): an exclusive slice that is missing or not as configured give
   assert.equal(ctx.disturbed, true);
   assert.match(ctx.reasons.join(), /the job didn't run in the boosted slice .* \(.*(is not installed|has CPUWeight \[not set\]).*\): not boosted evidence/);
   assert.match(w.err, /no CPU priority \(unavailable\).*DISTURBED/);
-  exclusiveSlice(c, { weight: 100 });
+  await exclusiveSlice(c, { weight: 100 });
   const y = submit(c, c.wt("y"), "--class", "exclusive", "--", "true");
   assert.equal(waitFor(c, y).code, 0);
   assert.match(result(c, y).context.boost.why, /has CPUWeight 100, not 10000/);
@@ -461,7 +461,7 @@ test("S19 (TST-16): private state without a named exclusive slice uses none", as
 
 test("S20 (TST-16 R1-F5): a GPU client that starts after admission and outlives the job is caught by the final scan", async () => {
   const c = context("gpu-late", { config: { ...fast, disturbed: { jobCpuSomePct: 100, jobMemSomePct: 100, jobMajorFaults: 1e9, jobSwapIns: 1e9, stealPct: 100 } } });
-  exclusiveSlice(c);
+  await exclusiveSlice(c);
   const x = submit(c, c.wt("x"), "--class", "exclusive", "--", "sleep", "5");
   await running(c, x);
   await sleep(1500); // after the first scan
@@ -476,7 +476,7 @@ test("S20 (TST-16 R1-F5): a GPU client that starts after admission and outlives 
 
 test("S21 (TST-16): a holder killed while its exclusive job runs leaves nothing to clean: the job stops with it, the slice empties, the result is unmeasured", async () => {
   const c = context("excl-crash", { config: fast });
-  const slice = exclusiveSlice(c);
+  const slice = await exclusiveSlice(c);
   const x = submit(c, c.wt("x"), "--class", "exclusive", "--", "sleep", "60");
   await until("started in the slice", () => existsSync(join(c.sched, "jobs", x, "cgroup")) && ranIn(c, x).includes(`/${slice}/`), 30000);
   killOwned((await holderOf(c, x)).holder);
@@ -524,16 +524,61 @@ test("S22 (TST-16): install writes the exclusive slice's unit once; a rollback t
   assert.equal(ranIn(c, o).includes(`/${slice}/`), false);
   assert.equal(oldHc(["status"]).code, 0);
   noRuntimeState(c);
-  // Uninstall keeps the unit while an exclusive job runs in the slice, and removes it once empty.
+  // Uninstall leaves the inert unit; removing it is a separate step that refuses while a ticket runs.
   assert.equal(bash(join(here, "install.sh")).status, 0);
   const y = submit(c, c.wt("y"), "--class", "exclusive", "--", "sleep", "6");
   await until("started in the slice", () => existsSync(join(c.sched, "jobs", y, "cgroup")) && ranIn(c, y).includes(`/${slice}/`), 30000);
   r = bash(join(here, "install.sh"), ["--uninstall"]);
-  assert.match(r.stdout, /kept .*an exclusive job still runs in it/);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /stays \(inert without jobs\)/);
+  assert.ok(existsSync(unitFile));
+  r = bash(join(here, "install.sh"), ["--remove-exclusive-slice"]);
+  assert.equal(r.status, 3);
+  assert.match(r.stderr, new RegExp(`not removed: tickets ${y} are running`));
   assert.ok(existsSync(unitFile));
   assert.equal(waitFor(c, y).code, 0);
-  await until("the slice is empty", () => sliceEmpty(slice), 15000);
-  r = bash(join(here, "install.sh"), ["--uninstall"]);
+  assert.equal(result(c, y).context.boost.status, "applied");
+  r = bash(join(here, "install.sh"), ["--remove-exclusive-slice"]);
+  assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, new RegExp(`removed ${slice.replace(/\./g, "\\.")}`));
   assert.equal(existsSync(unitFile), false);
 });
+
+test("S23 (TST-16 R5-F1): priority is judged on the slice the kernel ran the job in: a unit removed between the readiness check and the launch (a default slice) and a slice with the wrong memory cap are no priority, DISTURBED", async () => {
+  const c = context("excl-live", { config: fast });
+  const home = join(c.dir, "home"), slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE;
+  const unitFile = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, "systemd", "user", slice);
+  assert.equal(spawnSync("bash", [join(here, "install.sh")], { env: { ...c.env, SILTWAKE_SCHED_HOME: home }, encoding: "utf8" }).status, 0);
+  assert.ok(existsSync(unitFile));
+  // The reviewer's interleaving: readiness passes, then the unit goes before the scope launches.
+  const d = join(c.dir, "shim");
+  mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, "systemctl"), `#!/bin/bash
+out=$(/usr/bin/systemctl "$@"); rc=$?; printf '%s\n' "$out"
+if [[ "$*" == *"-p LoadState -p CPUWeight"*"${slice}"* && -e "${d}/arm" ]]; then
+  rm -f "${d}/arm" "${unitFile}"; /usr/bin/systemctl --user stop "${slice}"; /usr/bin/systemctl --user daemon-reload
+fi
+exit $rc
+`, { mode: 0o755 });
+  writeFileSync(join(d, "arm"), "");
+  c.env.PATH = `${d}:${process.env.PATH}`;
+  const x = submit(c, c.wt("x"), "--class", "exclusive", "--", "sleep", "2");
+  const wx = waitFor(c, x);
+  assert.equal(wx.code, 0);
+  assert.equal(existsSync(join(d, "arm")), false, "the interleaving happened");
+  assert.ok(ranIn(c, x).includes(`/${slice}/`), "the path still names the slice");
+  const bx = result(c, x).context.boost;
+  assert.equal(bx.status, "unavailable");
+  assert.match(bx.why, /at the start: cpu\.weight 100 \(wants 10000\)/);
+  assert.match(bx.why, /memory\.swap\.max max \(wants 0\)/);
+  assert.equal(result(c, x).context.disturbed, true);
+  assert.match(wx.err, /no CPU priority \(unavailable\).*DISTURBED: .*didn't run in the boosted slice/);
+  // A slice with every readiness property right but the wrong memory cap.
+  await sleep(500);
+  await exclusiveSlice(c, { memoryMiB: 4096 });
+  const y = submit(c, c.wt("y"), "--class", "exclusive", "--", "true");
+  assert.equal(waitFor(c, y).code, 0);
+  assert.match(result(c, y).context.boost.why, /memory\.max 4294967296 \(wants \d+\)/);
+  assert.equal(result(c, y).context.disturbed, true);
+});
+
