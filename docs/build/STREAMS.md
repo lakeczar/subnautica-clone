@@ -697,3 +697,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **CW-1 R1:** R1 and R2 are fixed (`477b2b4`); the frame work continues. Its last series lost 6 of 10 exclusives to the 7,200 s admission timeout.
   - **3090 window:** granted for about 23:00–01:30 UTC, for 10 segments at `fd457d3` with `--queue-timeout 21600`.
   - **Others:** REC-1 and COL-1 hold further exclusives, and builders route fast tiers to the 4070 meanwhile.
+- **STEW-1 done at `1c17c4a`** (R2 fixes, code `0c9b2ff`):
+  - **Fixes:** one `TS_EXTENSIONS` set and recursive headless roots; value-edge traversal through modules outside sim/content; a failing waiter fails its step; headless TextEncoder/TextDecoder/AbortSignal declarations.
+  - **Evidence:** the gate passed 10/10 at 0c9b2ff, npm test 1,415/1,415.
+  - **Review:** short Sol R3 running (`siltwake-stew1-review-r3-sol-1c17c4a`).
