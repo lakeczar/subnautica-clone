@@ -713,3 +713,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **P3:** an invalid throttle reading is still `measured:true`.
   - **Fix:** one checked, timed systemctl helper for install and removal that restores the prior unit on failure and exits before any switch.
 - **STEW-1 R3** (Sol on `1c17c4a`, report on `review/stew-1-r3` `763cbcc5`): REQUEST CHANGES. **P2:** inline `{ type X }` imports still emit a runtime edge. **P2:** the traversal fails open outside the TS-under-src graph (tools/ barrels, .js files, computed loads in helpers, unlisted packages). Decision: fail closed on any unanalysable reachable edge, with an explicit portable-package allowlist. After this the guard is complete enough to accept.
+- **SIM-1a at `cc3b7de0`** (code `68a2c5bd`):
+  - **Contents:** root's single-key atomic persistence restored over the chunked recorder; SIM-1b parked on `t3/sim-1b-timeline-journal` (f6fee338). Diff vs f6fee338: +117/−1,300. Fast tier 140/140, focused 281/281, 4070 Creel 17/17.
+  - **Before review:** a full window exports 2.85M code units, close to the shared localStorage quota. Asked for a quota-pressure fold of the exported copy (halve the whole-event window, notes kept) and a retry before falling back to memory-only.
