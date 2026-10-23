@@ -501,3 +501,12 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **Soak verdicts are not evidence yet:** R6 asked for an append-only fact reducer. The note is in `WORKER_RESOURCE_LIMITS.md`.
 - **GPU guard (`install.sh --gpu-guard`) is deferred** until REC-1's queued pre-cutover tickets drain.
 - **CW-1's exclusive series finished;** the handoff is pending from the builder.
+
+### 2026-10-23 10:12Z — GPU guard installed; SCHED-2a fully live
+- **Installed:** `install.sh --gpu-guard` wrapped all three Playwright Chrome binaries; the guard's own version is `073e8b0da3da`.
+- **Verified:**
+  - a GPU-flagged launch outside a job is refused with the lease message;
+  - a plain launch works;
+  - a GPU launch inside a `gpu` ticket works (`261023-101223-f3f1`, evidence bound to `a536775`).
+- **Stall fix:** `a5724a7` merged and reinstalled as v2 `112892426b5d`. The full suites pass on it: SCHED-1 23/23, SCHED-2 16/16, policy 25/25. No job was mislabelled in the window.
+- **SCHED-2b:** R1 fixes are at `2e35921`, and Sol R2 is running. The SCHED-2 builder is now on the soak reducer.
