@@ -178,7 +178,7 @@ Fixes are at `bbe125b`, `95077ca` and `e48fb40` (pushed); root `7070084` is merg
 
 **Fresh runs at `e48fb40`** (same sequence, ordinary keys plus console clicks):
 
-| Segment | RTX 3090, exclusive (`ux1/gpu-final`) | RTX 4070 Laptop (alickers, shared desktop host; indicative) |
+| Segment | RTX 3090, exclusive (`ux1/gpu-final.json`) | RTX 4070 Laptop (alickers, shared desktop host; indicative) |
 | --- | --- | --- |
 | At the helm, holding (5 s) | 60 fps · p95 16.8 · max 16.8 | 60 fps · p95 16.8 · max 16.8 |
 | Under way, turning (10 s) | 60 fps · p95 16.7 · max 16.8 | 60 fps · p95 16.8 · max 16.8 |
