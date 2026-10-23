@@ -13,6 +13,7 @@
 // OPTIONS: --class quick|standard|heavy-suite|gpu|playthrough|bake|soak|exclusive
 //          --review  --stall S  --deadline S  --cpus N  --mem 3G  --gpu (soak)
 //          --snapshot  --no-test-build  --queue-timeout S
+//          --machine any|3090|4070|soak  --artifact PATH (repeatable)
 // A job runs until its command ends. It is stopped if it stalls (no output and
 // no touch of $SILTWAKE_JOB_HEARTBEAT for --stall S), at --deadline S if
 // given, or at its class's runaway ceiling (exclusive: a 30-minute cap).
@@ -25,8 +26,9 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, 
 import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CLASS_NAMES, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveRequest, tokensFor } from "./policy.mjs";
+import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveRequest, tokensFor } from "./policy.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
+import { externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
   alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState,
   reconcile, scopePopulated, sliceCheck, systemctl, transaction, worktreeOf, writeJsonAtomic,
@@ -54,6 +56,8 @@ function parseJob(args) {
     else if (a === "--snapshot") opts.snapshot = true;
     else if (a === "--no-test-build") opts.noTestBuild = true;
     else if (a === "--gpu") opts.gpu = true;
+    else if (a === "--machine") opts.machine = value(a);
+    else if (a === "--artifact") (opts.artifacts ??= []).push(value(a));
     else if (a === "--cpus") opts.cpus = Number(value(a));
     else if (a === "--mem") { const v = value(a); opts.memMiB = parseMiB(v); if (!Number.isFinite(opts.memMiB)) fail(`--mem ${v}: use 3G or 2048M`); }
     else if (a === "--queue-timeout") opts.queueTimeoutS = Number(value(a));
@@ -115,8 +119,19 @@ async function submit(opts, command, { quiet = false } = {}) {
     fail("refused for now: SCHED-1 tickets are still queued, and their code would let a waiting soak hold the pools; retry when they have started", 75);
   const cwd = process.cwd(), worktree = worktreeOf(cwd), tree = gitTree(cwd);
   if (opts.snapshot && !tree.head) fail("--snapshot needs a git worktree");
+  // The second worker runs a commit (SCHED-2b): only a clean tree can go, and
+  // only a command that names nothing outside it but its declared --artifact
+  // outputs. An `any` or `soak` job that can't go runs here; a `4070` job is refused.
+  const machine = req.goal.machine, lane = remoteConfig(cfg);
+  const external = externalPaths(command, worktree, opts.artifacts ?? []);
+  const why = !lane.enabled ? `the remote lane is off (${readHealth(cfg).detail})` : !tree.head ? "not a git tree"
+    : tree.dirty !== "clean" ? "uncommitted changes (alickers runs a commit)" : external.length ? `it names local paths alickers lacks: ${external.slice(0, 3).join(", ")} (declare outputs with --artifact)` : null;
+  req.goal.remoteOk = machine !== "3090" && !why;
+  if (machine === "4070" && why) fail(`refused: --machine 4070 runs on alickers, but ${why}`);
+  if (why && machine !== "3090" && !(machine === "any" && !opts.machine)) say(`runs here (factory-worker), not on alickers: ${why}`);
+  for (const a of opts.artifacts ?? []) if (machine === "3090" || !req.goal.remoteOk) { if (!a.startsWith("/")) fail(`--artifact ${a}: a job running here needs an absolute path`); }
   const id = newTicket();
-  const key = coalesceKey({ worktree, cwd, argv: command, class: cls, cpus: opts.cpus, memMiB: opts.memMiB, review: opts.review, head: tree.head, dirty: tree.dirty, snapshot: opts.snapshot, gpu: opts.gpu });
+  const key = coalesceKey({ worktree, cwd, argv: command, class: cls, cpus: opts.cpus, memMiB: opts.memMiB, review: opts.review, head: tree.head, dirty: tree.dirty, snapshot: opts.snapshot, gpu: opts.gpu, machine: opts.machine, artifacts: opts.artifacts });
   const dir = jobDir(cfg, id);
   mkdirSync(dir, { recursive: true });
   // --snapshot: the job runs on a copy of the tree as it is now (snapshot.mjs).
@@ -279,6 +294,8 @@ function finalLine(e) {
       ? `WARNING tree changed: submitted ${tr(e.head, e.dirty)}, tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`
       : `tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`);
   }
+  parts.push(`on ${e.machine ?? MACHINE_LABELS.local}`);
+  if (e.artifacts?.length) parts.push(`artifacts: ${e.artifacts.map((a) => a.local ?? `${a.remote ?? a.path} (${a.error ?? "here"})`).join(", ")}`);
   if (e.gpuShared) parts.push(`GPU shared outside the lease with pid ${e.gpuShared.map((u) => u.pid).join(", ")}`);
   if (e.context) parts.push(`exclusive context: load ≤${e.context.load1Max}, cpu PSI some ≤${e.context.cpuSomeMax}%${e.context.disturbed ? " — DISTURBED by work outside the lane" : ""}`);
   return parts.join("; ");
@@ -310,13 +327,16 @@ function statusCmd(args) {
     process.stdout.write(`slice ${cfg.slice}: cpu.max ${sc.cpuMax ?? "?"}, memory.max ${sc.memMax ?? "?"}` +
       (sc.ok ? " (as wanted)\n" : `; WANTED ${sc.want.cpuQuotaPct}% and ${sc.want.memoryMaxMiB} MiB (the next admission corrects it)\n`));
   }
+  const rh = readHealth(cfg);
+  process.stdout.write(`alickers (second worker): ${rh.state}${rh.at ? `, checked ${dur(now - rh.at)} ago` : ""}${rh.detail ? ` (${rh.detail})` : ""}\n`);
   const unleased = gpuUsers(cfg, state).filter((u) => !u.leased);
   if (unleased.length) process.stdout.write(`GPU in use outside the lease: ${unleased.map((u) => `pid ${u.pid} (${u.cmd.slice(0, 60)})`).join("; ")}\n`);
-  const rows = [["TICKET", "WORKTREE", "CLASS", "STATE", "TIME", "BLOCKED-BY", "COMMAND"]];
-  for (const t of running) rows.push([t.id, wt(t), cls(t), t.express ? "running*" : "running", dur(now - t.admittedAt), "", cmd(t)]);
+  const rows = [["TICKET", "WORKTREE", "CLASS", "MACHINE", "STATE", "TIME", "BLOCKED-BY", "COMMAND"]];
+  const mach = (t) => (t.state === "running" ? (t.remote ? "alickers" : "here") : t.goal?.machine ?? "3090") + (t.fellBack ? "*" : "");
+  for (const t of running) rows.push([t.id, wt(t), cls(t), mach(t), t.express ? "running*" : "running", dur(now - t.admittedAt), "", cmd(t)]);
   for (const id of p.order) {
     const t = state.tickets[id];
-    rows.push([id, wt(t), cls(t), "queued", dur(now - t.submittedAt), p.admit.some((a) => a.id === id) ? "(starting)" : p.blocked[id] ?? "", cmd(t)]);
+    rows.push([id, wt(t), cls(t), mach(t), "queued", dur(now - t.submittedAt), p.admit.some((a) => a.id === id) ? "(starting)" : p.blocked[id] ?? "", cmd(t)]);
   }
   const widths = rows[0].map((_, c) => Math.max(...rows.map((r) => r[c].length)));
   for (const r of rows) process.stdout.write(`${r.map((v, c) => (c === r.length - 1 ? v : v.padEnd(widths[c]))).join("  ")}\n`);

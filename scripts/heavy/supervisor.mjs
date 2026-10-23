@@ -14,13 +14,18 @@ import { openSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { plan, resolveRequest, tokensFor } from "./policy.mjs";
+import { refreshHealth } from "./remote.mjs";
 import {
   flockFd, gpuUsers, hostFor, jobDir, ledger, loadConfig, readFileSafe, readJson,
   readMode, reconcile, self, transaction, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const id = process.argv[2];
+// --resume TICKET: a remote ticket sent back to the queue by its remote
+// holder (remote-holder.mjs requeue) gets a new supervisor, which takes the
+// ticket over instead of enqueueing it.
+const resume = process.argv[2] === "--resume";
+const id = process.argv[resume ? 3 : 2];
 const cfg = loadConfig();
 const dir = jobDir(cfg, id);
 const request = readJson(join(dir, "request.json"));
@@ -29,7 +34,7 @@ const me = self();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const mtime = (p) => { try { return statSync(p).mtimeMs; } catch { return 0; } };
 
-let bridgeFd = null, holderUnit = null;
+let bridgeFd = null, holderUnit = null, remote = false;
 process.on("SIGTERM", () => process.exit(0)); // cancelled while queued; `cancel` already cleaned up
 process.on("SIGINT", () => {}); process.on("SIGHUP", () => {});
 
@@ -46,7 +51,12 @@ function refreshRequests(state, T, mode) {
 }
 
 // 1. Enqueue, or join a matching ticket that is already queued or running.
-const ack = transaction(cfg, (state) => {
+const ack = resume ? transaction(cfg, (state) => {
+  const t = state.tickets[id];
+  if (!t || t.state !== "queued") return { result: { gone: true } };
+  t.supervisor = me;
+  return { changed: true, result: { ticket: id, resumed: true } };
+}) : transaction(cfg, (state) => {
   const changed = reconcile(cfg, state);
   const match = Object.values(state.tickets).find((t) => t.key === request.key);
   if (match) return { changed, result: { joined: match.id } };
@@ -61,18 +71,23 @@ const ack = transaction(cfg, (state) => {
   };
   return { changed: true, result: { ticket: id } };
 });
-writeJsonAtomic(join(dir, "ack.json"), ack);
-if (ack.joined) process.exit(0);
+if (!resume) writeJsonAtomic(join(dir, "ack.json"), ack);
+if (ack.joined || ack.gone) process.exit(0);
+// Whether this ticket may go to the second worker: then its health is kept
+// fresh (remote.mjs, outside the state lock) while it waits.
+const remoteBound = Boolean(request.req.goal?.remoteOk) && ["any", "4070", "soak"].includes(request.req.goal?.machine);
 
 // 2. Wait for admission: re-plan when the state file changes, or every 15 s.
 // A v1 job releasing the old lock changes no state file, so while blocked by
 // it, re-check every 2 s.
 let lastSeen = -1, lastTry = 0, every = 15000;
+const healthFile = join(cfg.dir, "remote.json");
 for (;;) {
-  const m = mtime(cfg.paths.state);
+  if (remoteBound) await refreshHealth(cfg);
+  const m = mtime(cfg.paths.state) + mtime(healthFile);
   if (m !== lastSeen || Date.now() - lastTry >= every) {
     const out = tryAdmit();
-    lastSeen = mtime(cfg.paths.state); lastTry = Date.now();
+    lastSeen = mtime(cfg.paths.state) + mtime(healthFile); lastTry = Date.now();
     if (out === "admitted") break;
     if (out === "gone") process.exit(0);
     every = out === "legacy" ? 2000 : 15000;
@@ -108,6 +123,15 @@ function tryAdmit() {
     const p = plan(state, now, host, cfg);
     const mine = p.admit.find((a) => a.id === id);
     if (!mine) return { changed, result: p.blocked[id] ?? "queued" };
+    if (mine.remote) {
+      // The second worker: no local reservation, no bridge (nothing runs here
+      // but the transport); its remote holder owns it (remote-holder.mjs).
+      holderUnit = `${cfg.supervisorPrefix}-rhold-${id}`;
+      remote = true;
+      Object.assign(t, { state: "running", admittedAt: now, express: false, remote: true, holderUnit, supervisorUnit: `${cfg.supervisorPrefix}-${id}`, mode });
+      writeJsonAtomic(join(dir, "grant.json"), { ticket: id, class: t.req.class, remote: true, machine: t.goal.machine, gpu: false, exclusive: false });
+      return { changed: true, result: "admitted" };
+    }
     // Always shared, exclusive jobs included: shared already shuts v1 out, the
     // plan keeps an exclusive job alone, and an exclusive (WRITE) holder of the
     // old lock then always means a v1 caller, which the ledger records.
@@ -140,6 +164,11 @@ function scanGpu(state, now) {
 // lock inherited as fd 3 so it is held without a gap; the holder claims the
 // ticket and owns the job's lifetime from here (holder.mjs).
 const log = openSync(join(dir, "holder.log"), "a");
+if (remote) {
+  spawn("systemd-run", ["--user", "--scope", "--quiet", "--collect", `--unit=${holderUnit}`, "-p", "TimeoutStopSec=90s",
+    process.execPath, join(here, "remote-holder.mjs"), id], { detached: true, stdio: ["ignore", log, log], env: process.env }).unref();
+  process.exit(0);
+}
 spawn("systemd-run", ["--user", "--scope", "--quiet", "--collect", `--unit=${holderUnit}`, "-p", "TimeoutStopSec=60s",
   process.execPath, join(here, "holder.mjs"), id], { detached: true, stdio: ["ignore", log, log, bridgeFd], env: process.env }).unref();
 process.exit(0);

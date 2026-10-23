@@ -47,6 +47,18 @@ const CLASSES = {
   exclusive:     { cpus: (T) => T, gpu: true, exclusive: true, mem: "M", maxCpus: (T) => T, maxMiB: "M", ceilingS: 1800, stallS: 600, base: 3 },
 };
 export const CLASS_NAMES = Object.keys(CLASSES);
+
+// Machine tags (SCHED-2b; DIRECTION, "Two test machines"). `any`: the second
+// worker (siltwake-alickers, RTX 4070 Laptop) when its slot is free, else here;
+// `3090`: here only; `4070`: alickers only, waiting for it through pauses and
+// outages, never faked here; `soak`: alickers first, here only while alickers
+// is paused or unreachable.
+export const MACHINES = ["any", "3090", "4070", "soak"];
+export const defaultMachine = (cls) => (cls === "playthrough" || cls === "heavy-suite" ? "any" : cls === "soak" ? "soak" : "3090");
+export const MACHINE_LABELS = Object.freeze({
+  local: "RTX 3090 (factory-worker)",
+  remote: "RTX 4070 Laptop (alickers, shared desktop host)",
+});
 export const classInfo = (name) => CLASSES[name];
 
 /** Known commands get their class without --class, so v1-style calls of the
@@ -91,6 +103,9 @@ export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60, ce
   }
   if (!c.exclusive && memMiB > M) return { error: `${memMiB} MiB is over the ${M} MiB pool; use --class exclusive` };
   if (opts.gpu && !c.optionalGpu && !c.gpu) return { error: `--gpu is for --class soak; use --class gpu` };
+  const machine = opts.machine ?? defaultMachine(name);
+  if (!MACHINES.includes(machine)) return { error: `unknown machine ${machine} (${MACHINES.join(", ")})` };
+  if (c.exclusive && machine !== "3090") return { error: `--class exclusive measures the RTX 3090; for the 4070 use --class gpu --machine 4070 (its frame times are recorded, not judged)` };
   // --deadline is a hard limit the caller chooses; without it the job runs to
   // its goal, bounded only by the stall window and the class ceiling.
   // config.json `ceilings` ({ class: seconds }) can retune a class's ceiling.
@@ -123,7 +138,7 @@ export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60, ce
     // SCHED-2. Kept out of `req` in the ticket (see goalOf): SCHED-1 supervisors
     // still queued during a migration re-resolve every queued `req` with their
     // own code, which would clamp it to their 10–30 minute maxima.
-    goal: { v: 2, limitS: deadline, explicitDeadline: opts.deadline != null, ceilingS, stallS, soak, snapshot: Boolean(opts.snapshot) },
+    goal: { v: 2, limitS: deadline, explicitDeadline: opts.deadline != null, ceilingS, stallS, soak, snapshot: Boolean(opts.snapshot), machine },
   };
 }
 
@@ -164,22 +179,52 @@ const byOrder = (now, cfg) => (a, b) =>
  *   submittedAt, req, goal? } }; state.lastExclusiveEnd: when the last
  *   exclusive job ended (ms).
  * host: { nproc, memAvailableMiB, memFullAvg10, charges: { id: MiB },
- *   legacy: { holder, waiter } }
- * Returns { admit: [{ id, express }], blocked: { id: reason }, order: [id], T,
+ *   legacy: { holder, waiter }, remote: { state: up|busy|paused|unreachable|unknown|off } }
+ * Returns { admit: [{ id, express, remote? }], blocked: { id: reason }, order: [id], T,
  *   used, preempt: [soak ids whose resources would let a waiting job start] }.
+ *
+ * Remote tickets (t.remote, SCHED-2b) run on the second worker: they take its
+ * one slot and nothing here (no tokens, memory, GPU or worktree), and local
+ * legacy, exclusive and memory states don't hold them back.
  * Reasons: legacy, exclusive (draining for one), lane (exclusive waiting for
  * the lane to empty), turn (exclusive waiting while the jobs that waited
  * through the last exclusive start), worktree, head (pools reserved for an old
  * ticket), cpu, memory, gpu, host-memory, leftover (a soak waiting for idle
- * capacity).
+ * capacity), remote (alickers' slot is busy: a lane job, or another agent's
+ * direct alickers-job.sh call), remote-paused, remote-down, remote-unknown.
  */
 export function plan(state, now, host, cfg = DEFAULTS, { counterfactual = false } = {}) {
   const T = tokensFor(host.nproc), M = cfg.poolMiB;
   const tickets = Object.values(state.tickets ?? {});
-  const running = tickets.filter((t) => t.state === "running");
+  const remoteRunning = tickets.filter((t) => t.state === "running" && t.remote);
+  const running = tickets.filter((t) => t.state === "running" && !t.remote); // local
   const all = tickets.filter((t) => t.state === "queued").sort(byOrder(now, cfg));
-  const queue = all.filter((t) => !isSoak(t)), soaks = all.filter(isSoak);
-  const used = { tokens: 0, memMiB: 0, gpu: 0, express: false, exclusive: false, soaks: 0 };
+  const used = { tokens: 0, memMiB: 0, gpu: 0, express: false, exclusive: false, soaks: 0, remote: remoteRunning.length };
+  const result = { admit: [], blocked: {}, order: all.map((t) => t.id), T, used, preempt: [] };
+
+  // The remote lane first: its slot is independent of everything local.
+  const rstate = host.remote?.state ?? "off";
+  let slotFree = rstate === "up" && remoteRunning.length < (cfg.remoteSlots ?? 1);
+  const remoteHandled = new Set();
+  for (const t of all) {
+    const m = t.goal?.machine;
+    if (!m || m === "3090") continue;
+    // A commit only (the transport sends commits); an any or soak ticket that fell back runs here.
+    if (!t.goal.remoteOk || (t.fellBack && m !== "4070")) continue;
+    if (slotFree) { result.admit.push({ id: t.id, express: false, remote: true }); slotFree = false; remoteHandled.add(t.id); continue; }
+    if (m === "any") continue; // prefers alickers, never waits for it
+    if (m === "soak" && ["paused", "unreachable", "off"].includes(rstate)) continue; // here while alickers is away
+    result.blocked[t.id] = { busy: "remote", up: "remote", paused: "remote-paused", unreachable: "remote-down", unknown: "remote-unknown", off: "remote-down" }[rstate];
+    remoteHandled.add(t.id);
+  }
+  // A soak on alickers yields its slot to a 4070 job waiting for it.
+  if (!counterfactual) {
+    const remoteSoaks = remoteRunning.filter(isSoak).map((t) => t.id);
+    if (remoteSoaks.length && all.some((t) => result.blocked[t.id] === "remote" && t.goal?.machine === "4070")) result.preempt.push(...remoteSoaks);
+  }
+
+  const local = all.filter((t) => !remoteHandled.has(t.id));
+  const queue = local.filter((t) => !isSoak(t)), soaks = local.filter(isSoak);
   const busy = new Set();
   let unreserved = 0;
   for (const t of running) {
@@ -190,8 +235,7 @@ export function plan(state, now, host, cfg = DEFAULTS, { counterfactual = false 
     else { used.tokens += t.req.tokens; used.memMiB += t.req.memMiB; used.gpu += t.req.gpu ? 1 : 0; }
     unreserved += Math.max(0, t.req.memMiB - (host.charges?.[t.id] ?? 0));
   }
-  const result = { admit: [], blocked: {}, order: all.map((t) => t.id), T, used, preempt: [] };
-  const blockAll = (reason, except) => { for (const t of all) if (t !== except && !result.blocked[t.id]) result.blocked[t.id] = reason; };
+  const blockAll = (reason, except) => { for (const t of local) if (t !== except && !result.blocked[t.id]) result.blocked[t.id] = reason; };
   const runningSoaks = running.filter(isSoak).map((t) => t.id);
 
   if (host.legacy?.holder || host.legacy?.waiter) { blockAll("legacy"); return result; }
@@ -202,7 +246,7 @@ export function plan(state, now, host, cfg = DEFAULTS, { counterfactual = false 
   const hostOk = (mem) => !psiBlocked && hostFree - mem >= 0;
 
   const eligible = queue.filter((t) => !busy.has(t.worktree));
-  for (const t of all) if (busy.has(t.worktree)) result.blocked[t.id] = "worktree";
+  for (const t of local) if (busy.has(t.worktree)) result.blocked[t.id] = "worktree";
   // Exclusive turns: the jobs that waited through the last exclusive run start
   // before the next exclusive may drain, so a series of exclusive tickets
   // (one measurement each) interleaves with everyone else.
@@ -220,7 +264,7 @@ export function plan(state, now, host, cfg = DEFAULTS, { counterfactual = false 
   if (drain) {
     if (running.length === 0 && hostOk(drain.req.memMiB)) result.admit.push({ id: drain.id, express: false });
     else result.blocked[drain.id] = running.length ? "lane" : "host-memory";
-    if (running.length && running.every(isSoak)) result.preempt = runningSoaks;
+    if (running.length && running.every(isSoak)) result.preempt.push(...runningSoaks);
     blockAll("exclusive", drain);
     return result;
   }
@@ -270,7 +314,7 @@ export function plan(state, now, host, cfg = DEFAULTS, { counterfactual = false 
     const without = { ...state, tickets: Object.fromEntries(tickets.filter((t) => !isSoak(t) || t.state !== "running").map((t) => [t.id, t])) };
     const freed = runningSoaks.reduce((n, id) => n + (host.charges?.[id] ?? 0), 0);
     const cf = plan(without, now, { ...host, memAvailableMiB: host.memAvailableMiB + freed }, cfg, { counterfactual: true });
-    if (cf.admit.some((a) => !isSoak(state.tickets[a.id]) && !result.admit.some((b) => b.id === a.id))) result.preempt = runningSoaks;
+    if (cf.admit.some((a) => !a.remote && !isSoak(state.tickets[a.id]) && !result.admit.some((b) => b.id === a.id))) result.preempt.push(...runningSoaks);
   }
   return result;
 }
@@ -278,7 +322,8 @@ export function plan(state, now, host, cfg = DEFAULTS, { counterfactual = false 
 /** Same command, same worktree, same tree, same request: the same work. */
 export function coalesceKey(r) {
   return JSON.stringify([r.worktree, r.cwd, r.argv, r.class, r.cpus ?? null, r.memMiB ?? null, Boolean(r.review), r.head ?? null, r.dirty ?? null,
-    ...(r.snapshot || r.gpu ? [Boolean(r.snapshot), Boolean(r.gpu)] : [])]);
+    ...(r.snapshot || r.gpu || r.machine || r.artifacts?.length ? [Boolean(r.snapshot), Boolean(r.gpu)] : []),
+    ...(r.machine || r.artifacts?.length ? [r.machine ?? null, r.artifacts ?? []] : [])]);
 }
 
 /** Slice limits for the current machine: tokens + express, pool + express. */

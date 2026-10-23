@@ -34,7 +34,7 @@ export async function runSoak(opts, deps) {
   const started = Date.now(), now = () => (Date.now() - started) / 1000;
   const run = {
     startedAt: 0, laps: [], samples: [], autosaves: [], saves: [], crash: null, travel: {}, yielded: false, providerErrors: {},
-    frames: { judged: Boolean(opts.judged), attributed: null, observed: 0, streamingOver: [], longOver: [] },
+    frames: { judged: Boolean(opts.judged), machine: opts.machine ?? null, attributed: null, observed: 0, streamingOver: [], longOver: [] },
     holds: { available: null, list: [] },
   };
   let verdict = null, stopping = false, checking = false, where = "start", lastSave = null;
@@ -127,7 +127,7 @@ export async function runSoak(opts, deps) {
     await deps.releaseAll(g).catch(() => {});
   }
   evaluate();
-  const meta = { ...opts.meta, renderer: g.renderer, frames: opts.judged ? "judged (isolated run)" : "recorded only (shared run: not frame-time evidence)",
+  const meta = { ...opts.meta, renderer: g.renderer, frames: opts.judged ? "judged (isolated run)" : opts.machine ? `recorded only (${opts.machine}: possibly disturbed, not frame-time evidence)` : "recorded only (shared run: not frame-time evidence)",
     ranS: Math.round(now()), providers: [...new Set([...ps.full, ...ps.tick].map((p) => p.name))].join(", "), pageErrors: g.errors.length };
   writeFileSync(join(out, "report.json"), JSON.stringify({ kind, meta, thresholds: t[kind], verdict, laps: run.laps, autosaves: run.autosaves, saves: run.saves,
     providerErrors: run.providerErrors, longFrames: run.frames.longOver.slice(0, 200), streamingFrames: run.frames.streamingOver.slice(0, 200),

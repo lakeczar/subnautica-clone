@@ -68,11 +68,14 @@ function commonRules(run) {
 
 /** Frame-time rule: judged only when frames are evidence (an isolated run).
  * Measured only if frames were actually observed and attributed. */
-function frameRule(id, over, limitMs, { judged, attributed, observed }, what) {
+function frameRule(id, over, limitMs, { judged, attributed, observed, machine }, what) {
   if (attributed === false) return { id, status: "unavailable", limit: limitMs, detail: `no ${what} attribution yet (REC-1 or CW-1's per-frame split); long frames are recorded unattributed` };
   if (attributed !== true || !(observed > 0)) return { id, status: "unavailable", limit: limitMs, detail: `no frames were measured (the frame provider failed or saw none)` };
   const worst = over.reduce((m, f) => Math.max(m, f.ms), 0);
-  if (!judged) return { id, status: "recorded", value: round(worst), limit: limitMs, detail: `${over.length} over ${limitMs} ms; frame times from a shared run are not evidence` };
+  // Not judged (a shared run, or the 4070 on the owner's desktop): recorded,
+  // and flagged when it would have failed, so a bad result stays visible.
+  if (!judged) return { id, status: "recorded", value: round(worst), limit: limitMs, warning: over.length > 0,
+    detail: `${over.length} over ${limitMs} ms${over.length ? `, worst ${round(worst)} ms at ${over[0].where ?? "?"}` : ""}; ${machine ?? "a shared run"}: recorded, not frame-time evidence` };
   return { id, status: over.length ? "fail" : "pass", value: round(worst), limit: limitMs, detail: over.length ? `${over.length} ${what} frames over ${limitMs} ms, worst ${round(worst)} ms at ${over[0].where ?? "?"}` : null };
 }
 
@@ -137,7 +140,7 @@ export function evaluateDwell(run, t = DEFAULTS.dwell) {
   const saves = run.autosaves ?? [], timed = saves.filter((s) => s.frameMs != null);
   const over = timed.filter((s) => s.frameMs > t.autosaveHitchMs).map((s) => ({ ms: s.frameMs, where: `autosave at ${Math.round(s.at)} s` }));
   if (saves.length && timed.length < saves.length) rules.push({ id: "autosave-hitch", status: "unavailable", limit: t.autosaveHitchMs, detail: `no frame time for ${saves.length - timed.length} of ${saves.length} autosaves` });
-  else rules.push(frameRule("autosave-hitch", over, t.autosaveHitchMs, { judged: run.frames?.judged, attributed: true, observed: timed.length }, "autosave"));
+  else rules.push(frameRule("autosave-hitch", over, t.autosaveHitchMs, { judged: run.frames?.judged, machine: run.frames?.machine, attributed: true, observed: timed.length }, "autosave"));
   // The leak trend needs its observation window after warm-up (R1-F7): until
   // then the dwell has not met its goal, and if it stops short the rule is
   // listed as unmeasured.
@@ -165,6 +168,7 @@ function finish(rules, progress, goalMet, run) {
     broken: failed.map((r) => r.id),
     unproven: unproven.map((r) => r.id),
     unavailable: rules.filter((r) => r.status === "unavailable").map((r) => `${r.id}: ${r.detail}`),
+    warnings: rules.filter((r) => r.warning).map((r) => `${r.id}: would have failed (${r.detail})`),
     reason: failed.length ? `${failed[0].id}: ${failed[0].detail}` : run.yielded ? "yielded to waiting work" : run.travel?.blocked ? `travel blocked: ${run.travel.blocked}` : null,
   };
 }
@@ -182,6 +186,7 @@ export function reportMarkdown(kind, verdict, meta = {}) {
   for (const [k, v] of Object.entries(meta)) lines.push(`- **${k}:** ${v}`);
   lines.push(`- **Progress:** ${JSON.stringify(verdict.progress)}`);
   if (verdict.reason) lines.push(`- **Stopped because:** ${verdict.reason}`);
+  if (verdict.warnings?.length) lines.push("", "**WARNING: recorded frame rules that would have failed:**", ...verdict.warnings.map((w) => `- ${w}`));
   lines.push("", "| Rule | Result | Value | Limit | Detail |", "| --- | --- | --- | --- | --- |");
   for (const r of verdict.rules) lines.push(`| ${r.id} | ${r.status} | ${r.value ?? ""} | ${r.limit ?? ""} | ${r.detail ?? ""} |`);
   if (verdict.unavailable.length) lines.push("", "**Missing evidence (not measured, not replaced by a proxy):**", ...verdict.unavailable.map((u) => `- ${u}`));

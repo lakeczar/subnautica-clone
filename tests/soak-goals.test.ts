@@ -80,3 +80,15 @@ test("dwell: GC swings over a flat floor pass, a rising floor fails (the shape m
   assert.equal(rising.status, "fail");
   assert.ok(rising.broken.includes("leak:rendererRssMiB"), JSON.stringify(rising.rules));
 });
+
+test("4070 frames are recorded, not judged, and a would-be failure is flagged in the report", () => {
+  const frames = { judged: false, machine: "RTX 4070 Laptop (alickers, shared desktop host)", attributed: true, observed: 900, streamingOver: [{ ms: 61, where: "fanvault" }] };
+  const v = G.evaluateTour({ laps: [lap(1, 1000), lap(2, 1000), lap(3, 1000)], frames, holds: { available: true, list: [] }, saves: [{ ok: true }] }, T);
+  const r = v.rules.find((x: { id: string }) => x.id === "streaming-frame");
+  assert.deepEqual([r.status, r.warning], ["recorded", true]);
+  assert.match(r.detail, /worst 61 ms at fanvault; RTX 4070 Laptop \(alickers, shared desktop host\): recorded, not frame-time evidence/);
+  assert.equal(v.status, "partial"); // memory, graphics and saves judged and passed; frames unproven
+  assert.match(G.reportMarkdown("tour", v, {}), /\*\*WARNING: recorded frame rules that would have failed:\*\*\n- streaming-frame: would have failed/);
+  const clean = G.evaluateTour({ laps: [lap(1, 1000)], frames: { ...frames, streamingOver: [] }, holds: { available: true, list: [] } }, T);
+  assert.deepEqual(clean.warnings, []);
+});

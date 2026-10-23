@@ -76,7 +76,7 @@ export async function until(what, fn, ms = 30000) {
 }
 export const running = (c, id) => until(`${id} running`, () => ticketState(c, id) === "running", 30000);
 export const done = (c, id, ms = 60000) => until(`${id} done`, () => result(c, id), ms);
-export const blockedBy = (c, id) => hc(c, ["status"]).out.split("\n").find((l) => l.startsWith(id))?.split(/\s{2,}/)[5];
+export const blockedBy = (c, id) => hc(c, ["status"]).out.split("\n").find((l) => l.startsWith(id))?.split(/\s{2,}/)[6];
 export const scopeActive = (unit) => spawnSync("systemctl", ["--user", "is-active", "--quiet", `${unit}.scope`]).status === 0;
 export const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 /** SIGKILLs a scheduler process only if it is still the same process (PID plus start time). */
