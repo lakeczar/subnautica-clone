@@ -145,6 +145,11 @@ Opus 5.5 high. Branch `t3/stew-1-guard-rails`, on root `f0dc680` (SAVE-1 merged)
   - **Tests:** a render barrel, a Babylon barrel, an `export *` two-hop chain, a loop of barrels where only one member touches render, and a type-only barrel that stays exempt.
   - **No false positives:** root and the merge trees of CW-1, REC-1, COL-1, SIM-1 and TST-16 with this branch all pass.
 - **R2-3, the waiter's own status was ignored.** A queued step also fails when its waiter exits nonzero, is killed or fails to start, even after printing a good receipt. Tested with exit 7 and SIGTERM.
+- **R2 evidence:**
+  - **`npm run gate` at `0c9b2ff`: exit 0, all 10 steps.** Both queued receipts were "evidence for `0c9b2ffde3`", with `--review` and a clean waiter:
+    - bake `261023-220139-8523` (3090, warm);
+    - playthrough `261023-220215-732b` (`any` ran here on the 3090 this time; 21 min, 8 of 8 complete, no blockers).
+  - `npm test`: 1,415 of 1,415. Guard about 0.9 s.
 - **Composition (coordinator's decision):**
   - `scripts/headless-platform.d.ts` now declares `TextEncoder`, `TextDecoder` and `AbortSignal`: real in Node ≥ 22 and workers, with only the members code uses. `LockManager` is deliberately not declared.
   - **Codec check:** CW-1's kit-codec pattern and SIM-1's cancellation pattern typecheck under the real headless config, and a UTF-8 round trip, `AbortSignal.abort`, `reason` and `throwIfAborted` behave so at runtime.
