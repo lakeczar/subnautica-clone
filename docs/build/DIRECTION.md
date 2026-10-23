@@ -102,3 +102,8 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   1. **2a:** goals and stall detection, the soak class, the GPU lease for every driver, rejecting a changed worktree, and keeping the OOM label.
   2. **2b:** the remote lane with machine tags.
   3. **SAVE-1:** the save library, exporting on alickers.
+
+## Evidence reading and quality review (owner, 2026-10-23)
+- **Tiered evidence:** agents read `summary.json`, then `story.md` (with its attention list), then only the frame strips for flagged items. The budget is about 6–10 strips per review. Builders and reviewers look at frames themselves and report conclusions in text; the coordinator reads conclusions.
+- **Fixed-view visual regression** (REC-1): every run, or a short `gpu` job, captures a fixed set of camera views and compares them with the last accepted baseline per machine class. Changed views go on the attention list. Accepting a new baseline is a deliberate, recorded act.
+- **Taste review once per wave:** an Opus agent reviews the fixed-view contact sheet against GAME-DIRECTION after each wave of work, and the coordinator dispatches it. The owner's playtests remain the judge of feel.

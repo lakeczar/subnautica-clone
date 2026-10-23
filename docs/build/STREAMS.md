@@ -493,3 +493,11 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **The SCHED-2 builder** keeps the scheduler only: 2b R1 fixes (F1/F2 structural: staged artifacts under the sandbox lock, a receipt file instead of log markers), then any 2a R5 follow-ups.
 - **SCHED-2a R5 is reviewing `919a372`:** the soak fixes, plus a 7-line per-class stall default, to set `{"stalls":{"playthrough":2700}}` until active worktrees have the heartbeat.
 - **Builders:** CW-1 (final exclusive series), COL-1 (A R4 in review), SCHED-2 (2b fixes), SAVE-1, REC-1. SIM-1 is paused.
+
+### 2026-10-23 ~09:50Z — SCHED-2a cut over (scheduler); soak harness pending
+- **Merged** `t3/sched-2a-stall-floor` (`f91f0fc`). The gate passed: 1,359 tests, the build, and all 5 economy scripts.
+- **Installed v2 `e552265ea963`** in normal mode. The slice is as wanted (700%, 8 GiB) and the v1 lock inode is preserved. A smoke quick job runs to its goal, with its evidence bound to the commit.
+- **Bridge:** `/work/tmp/siltwake-sched/config.json` has `"stalls":{"playthrough":2700}` until active worktrees have the playthrough heartbeat. **Remove it after CW-1, COL-1, REC-1, SAVE-1 and SIM-1 merge root.**
+- **Soak verdicts are not evidence yet:** R6 asked for an append-only fact reducer. The note is in `WORKER_RESOURCE_LIMITS.md`.
+- **GPU guard (`install.sh --gpu-guard`) is deferred** until REC-1's queued pre-cutover tickets drain.
+- **CW-1's exclusive series finished;** the handoff is pending from the builder.

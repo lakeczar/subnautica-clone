@@ -2,6 +2,7 @@
  * entry points the app uses. Held controls (move, look) go through `stepGame`,
  * one fixed step at a time; key presses and panel buttons go through
  * `executeCommand`. Nothing here writes game state directly. */
+import fs from "node:fs";
 import { ITEMS, RECIPES, SOURCES, techRecord } from "../../src/content/registry.js";
 import type { ItemKind, RecipeId } from "../../src/content/registry.js";
 import { executeCommand, stepGame } from "../../src/sim/step.js";
@@ -38,6 +39,19 @@ export function knownRecords(s: GameState): string[] {
     ...s.story.discoveries.map((d) => d.id),
     ...s.knowledge.scans.filter((id) => techRecord(id)),
   ];
+}
+
+/** Inside a heavy-check job, simulated progress is the job's heartbeat
+ * (SCHED-2): a parallel run's children print nothing until they finish, so
+ * the queue would otherwise see a healthy run as stalled. Touched as the
+ * simulation advances (every 1,024 steps, at most every 5 s), so a child that
+ * hangs stops beating and the queue's stall detection still catches it. */
+const HEARTBEAT = process.env.SILTWAKE_JOB_HEARTBEAT;
+let lastBeat = 0;
+function heartbeat(): void {
+  if (!HEARTBEAT || Date.now() - lastBeat < 5000) return;
+  lastBeat = Date.now();
+  try { fs.writeFileSync(HEARTBEAT, ""); } catch { /* the queue's concern, never the run's */ }
 }
 
 export class Driver {
@@ -78,6 +92,7 @@ export class Driver {
     const failures = before.metrics.failures;
     const result = stepGame(before, controls, this.world);
     this.accept(before, result.state, result.events);
+    if ((result.state.tick & 1023) === 0) heartbeat();
     if (result.state.metrics.failures > failures && !this.expectFailure)
       throw new Blocked(`Incapacitated: ${result.state.feedback}`, where(before));
     return result.events;
