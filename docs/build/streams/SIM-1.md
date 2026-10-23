@@ -286,6 +286,11 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
   - focused suites, 281/281 (timeline, app, save, session, presentation, step guard, rows);
   - the queued `creel` playthrough on `--machine 4070` (RTX 4070 Laptop, alickers): complete, no blockers, all 17 milestone reloads matched (`/work/tmp/261023-224012-ea90/pt-sim1a-creel.json`).
 
+**SIM-1a review (Sol 6.1 xhigh, `docs/build/reviews/SIM-1A-SOL-XHIGH.md` on `review/sim-1a`).** Fixed at `ff623989`.
+- **F1 (P2):** `resumeRecorder` rebuilds known regions from the one restored partition: every restored summary, including a chunk the re-chunking just rotated, plus the retained events. Regression (Sol's boundary case): a region held only in the chunk resume rotates stays known, and revisiting it after the resume is not a new region.
+- **F2 (P3):** the quota predicate also accepts Firefox's legacy code 1014. Regression: both names and both codes fold and retry; a non-quota refusal stops after one write; neither says "Note saved".
+- **Checks:** fast tier via the queue on `--machine 4070`, 140 files including the typecheck, exit 0; both regressions ran and passed.
+
 **Performance conventions** (`t3/stew-1-guard-rails` DIRECTION):
 - **#1:** the recorder's per-step stock copy uses a reused buffer, and `timelineSince` copies only the new events.
 - **#7 and #8: core helpers** (a note for the steward to fold into `CORE-HELPERS.md`): `rowById` and `hasMember` (`src/sim/rows.ts`) are identity-keyed, hit-validated, roster-bounded caches. Each is a `WeakMap` keyed by a state roster array. Every hit is checked against the row (or the length and tail for append-only rosters), so they never trust identity. Each is bounded by its roster's size and goes when the roster goes.
