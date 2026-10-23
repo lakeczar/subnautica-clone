@@ -226,8 +226,8 @@ test("S11: a GPU client outside the lease is reported by status and recorded on 
   // Opening the device node is what a GPU client does; this one does nothing with it.
   const probe = spawn("sh", ["-c", "exec 7</dev/nvidia0; exec sleep 20", "sched2-acceptance-unleased-gpu-probe"], { stdio: "ignore" });
   try {
-    await sleep(300);
-    assert.match(hc(c, ["status"]).out, new RegExp(`GPU in use outside the lease: pid ${probe.pid} \\(sleep 20\\)`));
+    const line = new RegExp(`GPU in use outside the lease: pid ${probe.pid} \\(sleep 20\\)`);
+    await until("status reports the probe", () => line.test(hc(c, ["status"]).out), 10000);
     const g = submit(c, c.wt("g"), "--class", "gpu", "--", "sh", "-c", "exec 7</dev/nvidia0; sleep 1");
     const w = waitFor(c, g);
     assert.equal(w.code, 0, w.err);
