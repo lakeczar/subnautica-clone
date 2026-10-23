@@ -29,7 +29,7 @@ export const liveCaveFields: CaveFieldSource = {
  * footprint holds the camera, else the nearest within `CAVE_ACTIVE_RANGE`,
  * so in a linked network the light switches at the seam. Fields and their
  * textures arrive ahead of use: the streamer names the caves to fetch and
- * to upload (`stream`), one texture set per frame. A field still in flight
+ * to upload (`stream`), filled a slab budget per frame. A field still in flight
  * when its cave becomes active draws as open water until it lands; with
  * the bake that never happens in ordinary play (fetch from 300 m). Without a
  * store, `prepare` builds nearby fields in idle time. The lamp is the camera's. */
@@ -75,11 +75,12 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
       near = light;
       if (live) return;
       for (const id of light) source.field(id);
-      // One new texture set per frame, nearest first, and never more caves
-      // than the texture cache keeps (more would evict and re-upload forever).
+      // One texture set filling at a time, nearest first, a slab budget per
+      // frame (CaveLighting.prepare), and never more caves than the texture
+      // cache keeps (more would evict and re-upload forever).
       for (const id of upload.slice(0, UPLOAD_AHEAD)) {
         const f = source.field(id);
-        if (f && !lighting.has(f)) { lighting.upload(f); break; }
+        if (f && !lighting.has(f)) { lighting.prepare(f); break; }
       }
     },
     update(camera, forward, lamp) {

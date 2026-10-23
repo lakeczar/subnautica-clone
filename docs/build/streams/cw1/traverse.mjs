@@ -68,7 +68,11 @@ async function read() {
 }
 const pos = (s) => ({ x: s.cam[0], y: s.cam[1] - eye, z: s.cam[2] });
 /** Closed-loop piloting to a point with the ordinary keys; false when it gives up (logged, the tour goes on). */
-async function goto(t, { tol = 4, label = "", boost = true, timeout = 100 } = {}) {
+/** Closed-loop piloting to `t`. Depth follows the planned leg from `from`:
+ * the depth the line has reached at the craft's horizontal progress (the
+ * line the planner checked for keel clearance), not the endpoint's depth,
+ * so a descending leg over a rising floor never dives into it. */
+async function goto(t, { tol = 4, label = "", boost = true, timeout = 100, from = null } = {}) {
   const start = performance.now(); let best = Infinity, bestAt = start, recoveries = 0;
   for (;;) {
     const s = await read();
@@ -89,7 +93,13 @@ async function goto(t, { tol = 4, label = "", boost = true, timeout = 100 } = {}
     await key("ArrowUp", s.pitch < -2); await key("ArrowDown", s.pitch > 2);
     await key("KeyW", Math.abs(err) < (h > 12 ? 0.5 : 0.3) && h > tol * 0.5);
     await key("ShiftLeft", boost && h > 25 && Math.abs(err) < 0.3);
-    await key("Space", dy > 1); await key("KeyC", dy < -1);
+    let wantY = t.y;
+    if (from) {
+      const total = Math.hypot(t.x - from.x, t.z - from.z), left = Math.min(total, h);
+      wantY = total > 1 ? t.y + (from.y - t.y) * (left / total) : t.y;
+    }
+    const dyLine = wantY - p.y;
+    await key("Space", dyLine > 1); await key("KeyC", dyLine < -1);
     await page.waitForTimeout(40);
   }
 }
@@ -205,7 +215,7 @@ try {
   let caveIndex = 0;
   for (const [i, p] of points.entries()) {
     if (i === 0) continue;
-    const ok = await goto(p, { tol: p.tol ?? (p.cave ? 4 : 7), label: p.cave ?? p.view ?? `cruise#${i}`, boost: !(p.view || p.tol) });
+    const ok = await goto(p, { tol: p.tol ?? (p.cave ? 4 : 7), label: p.cave ?? p.view ?? `cruise#${i}`, boost: !(p.view || p.tol), from: points[i - 1] });
     if (p.view) {
       if (p.surface) await rise();
       const faced = await face(p.look);

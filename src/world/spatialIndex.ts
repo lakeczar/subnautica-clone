@@ -110,8 +110,11 @@ export function* buildSpatialIndex<T = unknown>(
           if (bucket) for (let k = 0; k < bucket.length; k++) test(bucket[k]!);
         }
       }
-      // Ascending index order, as inBox: insertion sort (hits are few, and arrive nearly sorted).
-      for (let k = 1; k < hitCount; k++) {
+      // Ascending index order, as inBox: insertion sort for a few hits (no
+      // allocation), the native numeric sort beyond (hits gathered from many
+      // cells arrive out of order, and insertion sort is quadratic).
+      if (hitCount > 24) hits.subarray(0, hitCount).sort();
+      else for (let k = 1; k < hitCount; k++) {
         const v = hits[k]!;
         let j = k - 1;
         for (; j >= 0 && hits[j]! > v; j--) hits[j + 1] = hits[j]!;
