@@ -732,3 +732,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Guard:** inline `{ type X }` imports count as runtime edges; layering fails closed over the reachable closure in any directory, with an empty PORTABLE_PACKAGES allowlist. Root and all five merge trees pass.
   - **Gate:** a new `--machine M` override. The gate passed 10/10 on the 4070, npm test 1,417/1,417.
   - **Review:** short Sol R4 running (`siltwake-stew1-review-r4-sol-c5ab187`).
+- **SIM-1a done at `a6010a80`** (fixes `ff623989`): regions rebuilt from one restored partition; quota code 1014. Fast tier on the 4070. Short Sol re-check running (`siltwake-sim1a-review-r2-sol-a6010a8`); it is also asked to look for any other recorder index built from a mixed partition.
