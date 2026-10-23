@@ -63,14 +63,22 @@ Every other identity-keyed cache is keyed by content.
     - **Conflict detection:** if the journal changed since this tab observed it and its current head isn't this tab's last commit, the result is `conflict`, and the tab becomes memory-only with a notice and export. A stale base is never written over a newer journal.
     - **Abort:** each commit takes the expedition generation's `AbortSignal`, checked inside the lock before any mutation. Replacing the expedition or disposing the app aborts it.
     - **No lock API** means read and export only. A lock that rejects is reported; a lock that stays pending is reported once saves queue behind it.
-  - **Reads are tri-state.** An unreadable or malformed journal, chunk or v1 record is `protected`: no writes, memory and export only, and a notice. (There is no "replace the protected timeline" action; see limits.)
+  - **Reads are tri-state, through one validator (R5).** Both retained heads, of whatever expedition, are read whole, with their chunk references, through the same parser at load and before any commit that could replace or drop them. Verification is cached per head commit ID, an explicit revision, so a steady session doesn't re-parse history every 10 s. A head about to be dropped (displaced or for room) is read whole again just before. An unreadable or malformed journal, head, chunk or v1 record vetoes the commit and makes the store `protected`: no writes, memory and export only, a notice, and the menu's **Repair play timeline**.
+  - **Repair play timeline** (save menu, shown only while the store is protected), mirroring "Repair & save":
+    - it exports the raw records (journal and v1 text) as `siltwake-timeline-record.json` first;
+    - it explains what will be replaced and asks for confirmation;
+    - it then replaces the journal with this expedition's timeline, inside the same writer lock: a conflict if the records changed since the export. Garbage and the exported v1 record go. It never requires clearing site data.
   - **v1** migrates into current or previous by its session ID, and is deleted only once a committed journal names its replacement. Under quota, a v1 record that can't migrate stays where it is.
-  - **Notes outlive a close.** Each note is also written at once, without the lock, to this tab's outbox (`siltwake.timeline.v2.notes|<session>|<tab>`). Loading an expedition merges outbox notes it doesn't hold, from any tab, including a conflicting or memory-only one. A commit that holds them removes those outboxes. This is what makes "notes aren't lost" true under an asynchronous lock.
 - **`LiveTimeline`** (`src/runtime/liveTimeline.ts`): one per expedition entry. It owns the recorder, its journal, its save queue (one in flight, one queued) and its generation's `AbortController`, and it says what happens.
   - **Replacement:** a new expedition, or the same one imported, ends the old generation before the replacement loads.
   - **Pagehide** asks for a final commit without depending on it: a successor's newer commit makes it a conflict.
-  - **The honest bound:** on close, at most the last ~10 s of non-note events can be lost (since the last periodic commit). Notes aren't lost: they're in the outbox. The stored timeline never goes backwards, because the old journal stays valid.
-- **Size:** `store.ts` is 285 lines and `liveTimeline.ts` 97. This isn't the shrink below 275 the contract expected. Everything R3 added is deleted: per-session heads, provisional heads, eviction, reference queries, reclaim, leases and the lock port. Removing it saved less than the outbox (about 30 lines, needed for notes under an asynchronous lock), v1 migration into previous (about 10) and the journal swap added.
+  - **Notes commit like game saves (R5; the outbox is gone).** A note commits at once. The player sees "Saving note…" immediately, then "Note saved to the play timeline." only when a commit holding it succeeds; a commit's result carries the sequence it made durable. A commit pending about 2 s says "Waiting to save the play timeline…". On conflict, protection, a rejected lock or a full quota, the player is told the note is in memory only, with export.
+  - **The honest bound:** a note is durable once its commit returns, normally within milliseconds of entry. Closing the page while that commit is pending can lose it, and the notices show that state (no "Note saved"). Other events: at most the last ~10 s since the last periodic commit. The stored timeline never goes backwards, because the old journal stays valid.
+- **Size, honestly:** `store.ts` is 318 lines (285 at R4) and `liveTimeline.ts` 138 (97). R5 asked for a shrink and this grew. Removing the outbox (about 40 lines across both) is outweighed by four things R5 asked for:
+  - the shared head validator, with a re-read before any drop (about 35);
+  - the repair (about 30);
+  - the note notice states and the pending notice (about 40);
+  - drop reporting after commit.
 - **Bridge:** the v1 single-key timeline migrates as above. v1 export files still parse.
 - **Spans:** exports and saves close the open travel and idle spans with `closingEvents`, the same pure helper the recorder uses to close them. They never seal or rotate the live history. That was the cause of R1 F1.
 
@@ -81,6 +89,7 @@ Every other identity-keyed cache is keyed by content.
 - **`DriverObserver`/`driverHooks`** in the playthrough driver is the differential's seam.
 - **CW-1 merge:** CW-1 changes `flowAt(old, state.tick)` to `flowHere(…)` on the line SIM-1 changed to `pre.tick`. Whichever merges second writes `flowHere(world, old, pre.tick)`. `relocateForCave` keeps its clone, and the guard treats its result as a new state.
 - **SIG-1:** add per-step work inside `stepGameInPlace` and read the pre-step values from `pre`, never from a reference taken before mutation.
+- **Writer lock (STEW-1 headless split, folded in at R5):** `src/save/writer-lock.ts` is portable: the `WriterLockPort` interface and `SAVE_WRITER_LOCK`, with no browser types. The `browserWriterLock` adapter (`LockManager`) is in `src/runtime/browserLock.ts`. sim imports only the port. `AbortSignal` comes from STEW-1's `scripts/headless-platform.d.ts`, and nothing declares `LockManager` globally.
 - **Timeline consumers (changed contract, R1 C1):** `rec.events` is now only the open chunk, and it is replaced at every 1,000-event seal, so an array offset into it loses events at the boundary.
   - Read new events with `timelineSince(rec, cursor)` → `{ events, cursor, missed }`. The cursor is `rec.seq`, which never resets across seals, rotation or a reload. A read costs only the new events; `missed` counts events that rotated away unread.
   - **REC-1:** its app call `recordTimeline(recorder, timeline.events, offset)` becomes:
@@ -231,7 +240,7 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
 
 **R4 (Sol 6.1 xhigh, `docs/build/reviews/SIM-1-SOL-XHIGH-R4.md` on `review/sim-1-r4`).** The coordinator replaced R3's multi-session contract with contract v2. The store was rebuilt to it (above), and everything R3 added was deleted.
 - **F1** (a waiting tab overwrote newer history): observed-record conflict detection. Regression: a tab that loaded before another tab's newer commit gets `conflict`, and the newer history stands.
-- **F2** (a released lease didn't stop a save; notes lost on pagehide): the generation `AbortSignal` is checked inside the lock, plus the outbox. Regressions:
+- **F2** (a released lease didn't stop a save; notes lost on pagehide): the generation `AbortSignal` is checked inside the lock, plus the outbox (removed in R5; see below). Regressions:
   - a commit aborted while waiting for the lock never mutates (journal and app level);
   - a same-session replacement mid-save: the old generation never writes, and its note comes back from the outbox exactly once (journal and app level);
   - a page closed while the lock never comes: Continue has the note.
@@ -243,6 +252,22 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
 - **Kept regressions:** the 998/999 boundary matrix, write faults at every write and read faults at every read (with crash images), the 23,000-note export round trip, and quota folding. Plus Sol's two R3 app flows, now via previous: A, then B, then import A; and session-only B, then Continue A.
 - **Test harness:** the R3 `navigator.locks` double is reverted to the original minimal one, since the app no longer takes Web Locks directly.
 
+**R5 (Sol 6.1 xhigh, `docs/build/reviews/SIM-1-SOL-XHIGH-R5.md` on `review/sim-1-r5`).** Fixed under the coordinator's R5 decisions.
+- **F1, F2, F3, F7, F8 and F9 (the note outbox):** the outbox is removed entirely, and notes commit like game saves (above). Its tests are dropped, and the "close while the lock is pending" test is adapted to the honest bound: the notices showed "Saving note…" and never "Note saved", the committed note survives, and the pending one is gone.
+- **F4:** the one shared validator (above). Regressions:
+  - B and then C, a third expedition, load protected and write nothing over A, for each of a malformed head event, a malformed chunk list, malformed chunk JSON and a missing chunk;
+  - a thrown chunk read protects, and nothing is deleted;
+  - A's chunk damaged *after* B and C verified it: displacement by C, and a quota drop by B, both refuse as protected and write nothing.
+- **F5:** notice correctness, with "Waiting to save the play timeline" and "the local play-timeline store" wording. Regressions: "Saving note…" then "Note saved" only after the commit; a pending commit is said within 2 s (mock timers) with no "Note saved" until it lands; a conflict says the note is in memory only, with export.
+- **F6:** victims are reported only once a committed journal stops naming them. Regressions: C's failing first write reports nothing and changes nothing; under a quota where A and B must both go and C still doesn't fit, both drops are reported, though C fails.
+- **Repair:** regressions at the journal level (repair, then normal commits; a conflict when the records change after export) and the app level (the menu shows it, the export downloads first, confirm, then replace; a change before confirming is a conflict and nothing is replaced).
+- **Cleanups:** `TimelineJournal.canWrite` is removed. Notes are counted without allocating the history.
+- **STEW-1 split** folded in (contracts, above).
+- **Checks at `85266cd7`:**
+  - fast tier, 141 files;
+  - focused timeline, app, save, session and presentation suites, 295/295;
+  - the `creel` playthrough on the queue (`--machine any`, run on alickers): complete, no blockers, all 17 milestone reloads matched (`/work/tmp/261023-220917-5751/pt-sim1-r5-creel.json`).
+
 **Performance conventions** (`t3/stew-1-guard-rails` DIRECTION):
 - **#1:** the recorder's per-step stock copy uses a reused buffer, and `timelineSince` copies only the new events.
 - **#7 and #8: core helpers** (a note for the steward to fold into `CORE-HELPERS.md`): `rowById` and `hasMember` (`src/sim/rows.ts`) are identity-keyed, hit-validated, roster-bounded caches. Each is a `WeakMap` keyed by a state roster array. Every hit is checked against the row (or the length and tail for append-only rosters), so they never trust identity. Each is bounded by its roster's size and goes when the roster goes.
@@ -250,7 +275,6 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
 
 ## Compromises and follow-ups
 
-- **No "replace the protected timeline" action.** A protected (unreadable or malformed) timeline journal or v1 record stays protected. The game keeps the session's timeline in memory with export, says so, and never overwrites the record. Recovering it needs the browser's site data cleared. The root fix is a menu action like the save slot's "Repair & save", with confirmation, S. Owner: whoever next touches the menu.
 
 - **World terrain sampling is now the largest per-step cost:** about 25% of the in-place step in the attribution profile (`nearestOnPolyline`, `sampleAuthored`, noise inside `groundHeight`/`supportHeight`). It's out of this stream's scope. The root fix is a baked or cached height lookup for the sim's world queries, M. Owner: the world stream.
 - **Systems host views are rebuilt every step** (`listHosts` → `plainSockets`), about 6% in the attribution profile. The cost is bounded by the number of hosts, so it doesn't grow with play. The root fix is to cache host views between changes to systems state, S/M.
