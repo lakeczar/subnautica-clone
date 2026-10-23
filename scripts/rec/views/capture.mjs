@@ -49,7 +49,7 @@ try {
     // Settled: drawn, not settling, the hold clear, nothing pending, for SETTLE_MS on end.
     let since = null, last = null;
     for (;;) {
-      const s = await b.page.evaluate(() => { const r = window.__siltwake.read(), sc = window.__siltwake.scene(); return { ready: r?.ready, settling: r?.settling, hold: r?.hold, pending: sc?.caveStream.pending, missing: sc?.caveStream.missing }; });
+      const s = await b.page.evaluate(() => { const r = window.__siltwake.read(), sc = window.__siltwake.scene(); return { ready: r?.ready, settling: r?.settling, hold: r?.hold, pending: sc?.caveStream.pending, missing: sc?.caveStream.missing, feet: r?.feet }; });
       last = s;
       const calm = s.ready && !s.settling && (s.hold == null || ["clear", "admitted", "away"].includes(s.hold)) && (s.pending ?? 0) <= 0 && (s.missing ?? 0) === 0;
       since = calm ? since ?? Date.now() : null;
@@ -57,7 +57,9 @@ try {
       if (Date.now() - t0 > TIMEOUT_MS) break;
       await b.page.waitForTimeout(100);
     }
-    const settled = since !== null && Date.now() - since >= SETTLE_MS;
+    // A hold that outlasted LC-07's 12 s moves the diver to safety: then this is not the view.
+    const moved = last?.feet ? Math.hypot(last.feet[0] - v.pos.x, last.feet[1] - v.pos.y, last.feet[2] - v.pos.z) : 0;
+    const settled = since !== null && Date.now() - since >= SETTLE_MS && moved < 1;
     const a = await b.page.evaluate(() => window.__siltwake.capture());
     await b.page.waitForTimeout(400);
     const c = await b.page.evaluate(() => window.__siltwake.capture());
@@ -66,7 +68,7 @@ try {
     const sha = createHash("sha256").update(png).digest("hex");
     result.views.push({ id: v.id, group: v.group, label: v.label, file, sha256: sha, settled, settleMs: Date.now() - t0, hold: last?.hold ?? null,
       // A frozen view draws the same pixels twice; anything else animates outside the sim clock.
-      stable: a === c, ...(settled ? {} : { unsettled: last }) });
+      stable: a === c, ...(moved >= 1 ? { relocatedM: Math.round(moved * 10) / 10 } : {}), ...(settled ? {} : { unsettled: last }) });
     log(v.id, settled ? "settled" : "UNSETTLED", `${Date.now() - t0} ms`, a === c ? "stable" : "ANIMATES");
   }
 } catch (e) {
