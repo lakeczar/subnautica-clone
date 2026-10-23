@@ -185,7 +185,14 @@ export function transferBlock(s: GameState, v: VehicleState, slot: 0 | 1, type: 
 /** The smallest change of the carrier's pose that clears a launch corridor
  * blocked by terrain here: a turn (radians; positive is to starboard, 5° steps
  * up to 180°), else a rise (metres, 2 m steps toward the surface), else null. */
-export function corridorRemedy(s: GameState, v: VehicleState, world: WorldQueries): { turn: number } | { rise: number } | null {
+export type CorridorRemedy = { turn: number } | { rise: number };
+export function corridorRemedy(s: GameState, v: VehicleState, world: WorldQueries): CorridorRemedy | null {
+  const search = corridorRemedySearch(s, v, world);
+  for (;;) { const step = search.next(); if (step.done) return step.value; }
+}
+/** corridorRemedy one candidate sweep at a time (it yields after each), so a
+ * presentation can spread a long search over frames. Same order, same answer. */
+export function* corridorRemedySearch(s: GameState, v: VehicleState, world: WorldQueries): Generator<void, CorridorRemedy | null> {
   const h = carrierHull(s), slot = v.berth?.slot;
   if (!h || slot === undefined) return null;
   // Only the world leg depends on the pose: the carrier's own structure and
@@ -196,10 +203,14 @@ export function corridorRemedy(s: GameState, v: VehicleState, world: WorldQuerie
   };
   const step = Math.PI / 36;
   for (let n = 1; n <= 36; n++)
-    for (const sign of [1, -1])
+    for (const sign of [1, -1]) {
       if (at(h.pose.yaw + sign * n * step, h.pose.position.y)) return { turn: sign * n * step };
-  for (let rise = 2; h.pose.position.y + rise <= -0.9; rise += 2)
+      yield;
+    }
+  for (let rise = 2; h.pose.position.y + rise <= -0.9; rise += 2) {
     if (at(h.pose.yaw, h.pose.position.y + rise)) return { rise };
+    yield;
+  }
   return null;
 }
 const TAU = Math.PI * 2;
@@ -213,7 +224,11 @@ export function transferAdvice(s: GameState, v: VehicleState, block: TransferBlo
     ? "Another craft obstructs the lock corridor under the bow. Move it clear, then launch."
     : `Another craft obstructs the lock mouth under the bow. Move it clear, then recover the ${craft}.`;
   if (type === "capture") return `The lock corridor under the bow is obstructed. Move the Hearthline to open water, then recover the ${craft}.`;
-  const remedy = corridorRemedy(s, v, world);
+  return launchTerrainAdvice(v, corridorRemedy(s, v, world));
+}
+/** The advice for a launch the terrain obstructs, given the remedy search's answer. */
+export function launchTerrainAdvice(v: VehicleState, remedy: CorridorRemedy | null): string {
+  const craft = HULLS[v.hull].label;
   if (!remedy) return `The lock corridor under the bow is obstructed and no nearby heading clears it. Take the Hearthline into open water, then launch the ${craft}.`;
   if ("rise" in remedy) return `The seabed obstructs the lock corridor under the bow. Rise about ${remedy.rise} m, then launch the ${craft}.`;
   const degrees = Math.round(Math.abs(remedy.turn) * 180 / Math.PI);

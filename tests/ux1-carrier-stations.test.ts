@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import {
   BERTH_LOCAL, CARRIER_LAYOUT, carrierCommand, carrierHull, corridorRemedy, fixtureGame, launchPoint, localToWorld, updateBerth,
 } from "../src/sim/carrier.js";
-import { aboardCarrier, atCarrierHelm, CARRIER_STATIONS, carrierInteractions, launchCorridor, launchCorridorNow, launchCorridorView } from "../src/sim/carrierStations.js";
+import { aboardCarrier, atCarrierHelm, CARRIER_STATIONS, carrierInteractions, forgetCorridorView, launchCorridor, launchCorridorNow, launchCorridorView } from "../src/sim/carrierStations.js";
 import { interactions } from "../src/sim/progression.js";
 import { aimedInteraction } from "../src/sim/targeting.js";
 import { executeCommand, stepGame } from "../src/sim/step.js";
@@ -217,7 +217,8 @@ test("the helm readout shows heading, way and the corridor; the corridor is draw
   assert.equal(d.mode, "launch");
   assert.deepEqual(d.from, CARRIER_LAYOUT.railTurn);
   assert.ok(corridorLines(d).length > 6);
-  const blocked = corridorDrawing(s, rockWorld(s));
+  const rock = rockWorld(s); launchCorridorNow(s, rock); // the exact status, shared with the drawing
+  const blocked = corridorDrawing(s, rock);
   assert.equal(blocked?.clear, false);
   // Walking the passage, away from the lock stations, nothing is drawn.
   const passage = aboard({ x: 0.05, y: 4, z: 1 }, { x: 0, y: 5, z: -5 });
@@ -351,12 +352,23 @@ test("the cached corridor refreshes within a second under way; the console's exa
   const remedy = corridorRemedy(s, dart, world) as { turn: number };
   h.pose.yaw = remedy.turn; updateBerth(s, world);
   s.tick += 30;
-  assert.equal(launchCorridorView(s, world)!.clear, false, "half a second on, the cache still holds");
+  assert.equal(launchCorridorView(s, world, Infinity)!.clear, false, "half a second on, the cache still holds");
   s.tick += 31;
-  assert.equal(launchCorridorView(s, world)!.clear, true, "past a second, it refreshes");
+  assert.equal(launchCorridorView(s, world, Infinity)!.clear, true, "past a second, it refreshes");
   // Back to blocked, and a paused console (no ticks) asks exactly.
   h.pose.yaw = 0; updateBerth(s, world);
-  assert.equal(launchCorridorView(s, world)!.clear, true, "the cache is stale");
+  assert.equal(launchCorridorView(s, world, Infinity)!.clear, true, "the cache is stale");
   assert.equal(launchCorridorNow(s, world)!.clear, false, "the console's exact query is not");
-  assert.equal(launchCorridorView(s, world)!.clear, false, "and the HUD shares it");
+  assert.equal(launchCorridorView(s, world, Infinity)!.clear, false, "and the HUD shares it");
+});
+
+test("the presentation corridor search is spread over frames and reaches the exact answer", () => {
+  const s = atHelm(), world = rockWorld(s);
+  forgetCorridorView();
+  const exact = launchCorridor(s, world)!;
+  assert.equal(exact.clear, false);
+  const seen: (string | null)[] = [];
+  for (let i = 0; i < 200 && seen.at(-1) !== exact.advice; i++) seen.push(launchCorridorView(s, world, 0)?.advice ?? null);
+  assert.equal(seen.at(-1), exact.advice, "one step per call still finishes");
+  assert.ok(seen.length > 2 && seen[0] === null, `it took ${seen.length} calls, showing nothing until the first complete status`);
 });

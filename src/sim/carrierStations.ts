@@ -12,8 +12,8 @@ import type { Interaction } from "./progression.js";
 import type { InteractionHost } from "./targeting.js";
 import type { GameEvent, GameState, Vec3, VehicleState, WorldQueries } from "./types.js";
 import {
-  CARRIER_LAYOUT, carrierCommand, carrierHull, carrierInteriorSolids, launchPoint, localToWorld, transferAdvice,
-  transferBlock, worldToLocal,
+  CARRIER_LAYOUT, carrierCommand, carrierHull, carrierInteriorSolids, corridorRemedySearch, launchPoint, launchTerrainAdvice,
+  localToWorld, transferAdvice, transferBlock, worldToLocal,
 } from "./carrier.js";
 import { createWorldQueries } from "./world.js";
 
@@ -142,6 +142,13 @@ const BERTH_ORDER = { medium: 0, compact: 1 } as const;
 /** Is the lock corridor under the bow clear for the largest berthed craft,
  * and if not, what would clear it. Read-only. */
 export function launchCorridor(s: GameState, world: WorldQueries): CorridorStatus | null {
+  const search = launchCorridorSearch(s, world);
+  for (;;) { const step = search.next(); if (step.done) return step.value; }
+}
+/** launchCorridor in steps: it yields after the transfer check and after each
+ * candidate of the turn-or-rise search, so a presentation can spread it over
+ * frames. The state it was given is the state it describes. */
+export function* launchCorridorSearch(s: GameState, world: WorldQueries): Generator<void, CorridorStatus | null> {
   const h = carrierHull(s), dock = s.fleet.docking;
   if (!h || !dock) return null;
   const berthed = s.fleet.vehicles.filter((v) => v.berth?.carrierId === h.id)
@@ -151,35 +158,61 @@ export function launchCorridor(s: GameState, world: WorldQueries): CorridorStatu
   const surfaceOnly = v.hull === "spindle" && h.pose.position.y < -1;
   const block = surfaceOnly ? null : transferBlock(s, v, v.berth.slot, "launch", world);
   const craft = HULLS[v.hull].label, shape = BERTH_ENVELOPES[v.hull];
-  const advice = surfaceOnly ? "The Spindle is a surface craft. Surface the Hearthline to launch it."
-    : block ? transferAdvice(s, v, block, "launch", world) : `Lock corridor clear under the bow for the ${craft}.`;
+  let advice: string;
+  if (surfaceOnly) advice = "The Spindle is a surface craft. Surface the Hearthline to launch it.";
+  else if (!block) advice = `Lock corridor clear under the bow for the ${craft}.`;
+  else if (block !== "terrain") advice = transferAdvice(s, v, block, "launch", world);
+  else {
+    yield;
+    advice = launchTerrainAdvice(v, yield* corridorRemedySearch(s, v, world));
+  }
   return { vehicleId: v.id, label: craft, path: [localToWorld(CARRIER_LAYOUT.railTurn, h), launchPoint(h, v)],
     halfWidth: shape.halfWidth, height: shape.height, clear: !surfaceOnly && !block, advice };
 }
 
-/** launchCorridor for presentation (HUD, console, the drawn corridor), which
- * ask every frame. A change of berths, configuration or other craft recomputes
- * at once; carrier motion at most once a second, as the world sweep costs a few
- * milliseconds (draw the corridor from the carrier's current pose, not from
- * `path`). Commands always check exactly. */
-export function launchCorridorView(s: GameState, world: WorldQueries): CorridorStatus | null {
+/** Milliseconds of corridor search a presentation call may spend (one step at least). */
+export const CORRIDOR_FRAME_BUDGET_MS = 3;
+
+/** launchCorridor for presentation (the HUD and the drawn corridor), which ask
+ * every frame. A change of berths, configuration or other craft starts a new
+ * search at once; carrier motion at most once a second. Each call advances the
+ * search by about CORRIDOR_FRAME_BUDGET_MS (the turn-or-rise search can take
+ * tens of milliseconds low over blocked ground) and returns the last complete
+ * status, tagged with the tick of the state it describes. Draw the corridor from
+ * the carrier's current pose, not from `path`. Commands and the console check
+ * exactly (launchCorridorNow). */
+export function launchCorridorView(s: GameState, world: WorldQueries, budgetMs = CORRIDOR_FRAME_BUDGET_MS): CorridorStatus | null {
   const h = carrierHull(s), dock = s.fleet.docking;
   if (!h || !dock) return null;
   const r = (n: number, q: number): number => Math.round(n / q);
   const structure = [h.id, dock.configuration, dock.launchBlocked, ...s.fleet.vehicles.filter((v) => v.id !== h.id).map((v) => v.berth
     ? `${v.id}@${v.berth.carrierId}:${v.berth.slot}` : `${v.id}:${r(v.pose.position.x, 0.5)},${r(v.pose.position.y, 0.5)},${r(v.pose.position.z, 0.5)}`)].join("|");
   const pose = [r(h.pose.position.x, 0.05), r(h.pose.position.y, 0.05), r(h.pose.position.z, 0.05), r(h.pose.yaw, 0.005)].join(",");
-  const stale = !memo || memo.world !== world || memo.structure !== structure ||
-    (memo.pose !== pose && (s.tick - memo.tick >= 60 || s.tick < memo.tick));
-  if (stale) memo = { structure, pose, tick: s.tick, world, status: launchCorridor(s, world) };
-  return memo!.status;
+  const latest = job ?? done;
+  const restart = !latest || latest.world !== world || latest.structure !== structure ||
+    (latest.pose !== pose && (s.tick - latest.tick >= 60 || s.tick < latest.tick));
+  if (restart) {
+    job = { structure, pose, tick: s.tick, world, search: launchCorridorSearch(s, world) };
+    // A different craft or berth set: the old status describes something else.
+    if (done && (done.structure !== structure || done.world !== world)) done = null;
+  }
+  if (job) {
+    const start = performance.now();
+    do {
+      const step = job.search.next();
+      if (step.done) { done = { ...job, status: step.value }; job = null; break; }
+    } while (performance.now() - start < budgetMs);
+  }
+  return done?.status ?? null;
 }
-let memo: { structure: string; pose: string; tick: number; world: WorldQueries; status: CorridorStatus | null } | null = null;
+interface CorridorKey { structure: string; pose: string; tick: number; world: WorldQueries }
+let job: (CorridorKey & { search: Generator<void, CorridorStatus | null> }) | null = null;
+let done: (CorridorKey & { status: CorridorStatus | null }) | null = null;
 /** A paused decision (the console) or a new session needs the exact status: recompute
  * now and share it with the HUD and the drawn corridor. */
 export function launchCorridorNow(s: GameState, world: WorldQueries): CorridorStatus | null {
-  memo = null;
-  return launchCorridorView(s, world);
+  forgetCorridorView();
+  return launchCorridorView(s, world, Infinity);
 }
-/** Drop the cached status (a new or replaced expedition). */
-export function forgetCorridorView(): void { memo = null; }
+/** Drop the cached status and any search in progress (a new or replaced expedition). */
+export function forgetCorridorView(): void { job = null; done = null; }
