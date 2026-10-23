@@ -1018,7 +1018,11 @@ export function stepGame(
   observeWorldCycles(s, world, events);
   advanceRenewal(s);
   advanceStory(s);
+  // UX-1: a lock cycle's outcome (launched, recovered, stopped) is said, not only stored.
+  const lock = s.fleet.docking?.transaction ?? null, before = s.feedback;
   updateBerth(s, world);
+  if (lock && !s.fleet.docking?.transaction && s.feedback !== before)
+    events.push({ type: "notice", channel: "action", message: s.feedback, error: !s.fleet.docking?.completed.includes(lock.id) });
   const recoveryEvent = updateRecovery(s, world);
   if (recoveryEvent) events.push(recoveryEvent.type === "notice"
     ? { ...recoveryEvent, channel: recoveryEvent.error ? "hazard" : "action", context: "recovery" }

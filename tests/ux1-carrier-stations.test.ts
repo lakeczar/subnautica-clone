@@ -269,3 +269,23 @@ test("BERTH_LOCAL and the stations stay inside the walkable interior", () => {
   }
   assert.equal(BERTH_LOCAL.length, 2);
 });
+
+test("a lock cycle says how it ended: launched, then recovered", () => {
+  let s = atHelm();
+  assert.equal(carrierCommand(s, "station-keep", undefined, open), null);
+  const dart = s.fleet.vehicles.find((v) => v.hull === "dart")!;
+  assert.equal(carrierCommand(s, "launch", dart.id, open), null);
+  const said: string[] = [];
+  for (let i = 0; i < 35; i++) {
+    const out = stepGame(s, [{ type: "move", forward: 0, right: 0, vertical: 0, sprint: false }], open);
+    s = out.state; said.push(...notices(out.events).map((n) => n.message));
+  }
+  assert.deepEqual(said, ["Dart launched under the bow. Board it from the water."]);
+  assert.equal(carrierCommand(s, "capture", dart.id, open), null);
+  said.length = 0;
+  for (let i = 0; i < 35; i++) {
+    const out = stepGame(s, [{ type: "move", forward: 0, right: 0, vertical: 0, sprint: false }], open);
+    s = out.state; said.push(...notices(out.events).map((n) => n.message));
+  }
+  assert.deepEqual(said, ["Dart recovered. Clamps locked; the berth is dry."]);
+});
