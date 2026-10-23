@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { biomeScene, caveScenes, dishScene, probe, vistaScene, type ProbeResult } from "./col1-oracle-support.js";
+import { biomeScene, caveScenes, dishScene, probe, random, vistaScene, type ProbeResult } from "./col1-oracle-support.js";
 
 /** COL-1 oracle, exhaustive: today's box queries against the static
  * collider on the dishes, A1's set pieces, CA-1's colonnade caves and LC's
@@ -38,13 +38,31 @@ test("caves (CA-1 colonnade): the heightfield collar never blocks what the colum
   console.log(JSON.stringify({ shellNewlyBlocked: shell.protected.newlyBlocked, columnsNewlyBlocked: columns.protected.newlyBlocked }));
 });
 
-test("cave biome (LC Canopy): the compact format answers exactly as LC's chunk colliders", () => {
+test("cave biome (LC Canopy): the compact format answers as LC's chunk colliders; first contacts are LC's exactly", () => {
   const scene = biomeScene(), r = probe(scene, { ...FULL, poses: 8000, moves: 4000 });
   console.log(summary(r), JSON.stringify({ lcBytes: scene.lcBytes, compactBytes: scene.after.bytes, shared: scene.after.sharedBytes, chunks: scene.chunks }));
   assert.equal(r.clearance.agree, r.clearance.tried, JSON.stringify(r.examples.slice(0, 3)));
-  assert.equal(r.moves.agree, r.moves.tried, JSON.stringify(r.examples.slice(0, 3)));
   assert.equal(r.support.agree, r.support.tried);
   assert.equal(r.sight.agree, r.sight.tried);
   assert.deepEqual([r.protected.newlyBlocked, r.protected.newlyCleared], [[], []]);
   assert.ok(scene.after.bytes < scene.lcBytes * 0.5, `compact ${scene.after.bytes} B vs LC ${scene.lcBytes} B`);
+  // Moves may differ only by a slide after a tie: LC keeps whichever tied
+  // contact its storage order meets first; the compact collider breaks ties
+  // by geometry. Every first contact (hit, time) is LC's, bit for bit.
+  const rnd = random(9), e = { x: 0.34, y: 0.475, z: 0.34 }, a = { t: 0, nx: 0, ny: 0, nz: 0, start: false }, b = { ...a };
+  let sweeps = 0, hits = 0, ties = 0;
+  for (let i = 0; sweeps < 20000 && i < 200000; i++) {
+    const s = scene.seeds[Math.floor(rnd() * scene.seeds.length)]!, c = { x: s.x + (rnd() - 0.5) * 3, y: s.y + (rnd() - 0.5) * 3, z: s.z + (rnd() - 0.5) * 3 };
+    if (scene.lc.blocked(c, e)) continue;
+    const d = { x: (rnd() - 0.5) * 4, y: (rnd() - 0.5) * 3, z: (rnd() - 0.5) * 4 };
+    const ha = scene.lc.sweep(c, e, d, 0.004, a), hb = scene.compact.sweep(c, e, d, 0.004, b);
+    sweeps++;
+    assert.equal(ha, hb, `sweep ${i} at ${JSON.stringify(c)}`);
+    if (!ha) continue;
+    hits++;
+    assert.equal(b.t, a.t, `sweep ${i}: time`);
+    if (a.nx !== b.nx || a.ny !== b.ny || a.nz !== b.nz) ties++;
+  }
+  console.log(JSON.stringify({ sweeps, hits, ties, movesDiffering: r.moves.tried - r.moves.agree }));
+  assert.ok(hits > 3000 && ties < hits * 0.01, `${hits} hits, ${ties} ties`);
 });

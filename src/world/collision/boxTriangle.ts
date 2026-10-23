@@ -17,10 +17,34 @@
  * keep their state in module scope: they are hot and never re-entered. */
 
 /** The earliest contact of a sweep: `t` in [0, 1] of the delta, the unit
- * contact normal (from the obstacle towards the box), and whether it was a
- * closing contact that started within the skin (`t` = 0). */
-export interface SweepHit { t: number; nx: number; ny: number; nz: number; start: boolean }
-export const createHit = (): SweepHit => ({ t: 0, nx: 0, ny: 0, nz: 0, start: false });
+ * contact normal (from the obstacle towards the box), whether it was a
+ * closing contact that started within the skin (`t` = 0), and whether the
+ * normal is the obstacle's own face (a triangle's plane, a box's side)
+ * rather than an edge or the box's own axis. LC's hits carry no `face`. */
+export interface SweepHit { t: number; nx: number; ny: number; nz: number; start: boolean; face?: boolean }
+export const createHit = (): SweepHit => ({ t: 0, nx: 0, ny: 0, nz: 0, start: false, face: false });
+
+/** Contacts within this of the same time are a tie. */
+export const TIE = 1e-12;
+/** Whether contact `h` should replace `best` for a sweep by d: the earlier
+ * wins. At a tie (a box meeting a mesh along shared edges) a face wins over
+ * an edge or box axis (the edge of a coplanar neighbour is no wall), then
+ * the more head-on normal (most opposed to d), then the smaller normal in
+ * x, y, z order. The answer never depends on the order contacts were found
+ * in, so re-chunking, a new hierarchy or a rebake cannot change a slide. */
+export function earlier(h: SweepHit, best: SweepHit, dx: number, dy: number, dz: number): boolean {
+  if (h.t < best.t - TIE) return true;
+  if (h.t > best.t + TIE) return false;
+  if ((h.face ?? false) !== (best.face ?? false)) return h.face === true;
+  const a = h.nx * dx + h.ny * dy + h.nz * dz, b = best.nx * dx + best.ny * dy + best.nz * dz;
+  if (a !== b) return a < b;
+  return h.nx !== best.nx ? h.nx < best.nx : h.ny !== best.ny ? h.ny < best.ny : h.nz < best.nz;
+}
+/** Copy `h` into `out`, keeping the earlier time of a tie. */
+export function takeHit(h: SweepHit, out: SweepHit, found: boolean): void {
+  const t = found ? Math.min(out.t, h.t) : h.t;
+  out.t = t; out.nx = h.nx; out.ny = h.ny; out.nz = h.nz; out.start = h.start; out.face = h.face ?? false;
+}
 
 /** Signed separation of a box from an obstacle along its best separating
  * axis (negative when they overlap), and that axis as a unit normal from the
@@ -33,6 +57,9 @@ type Positions = Float32Array | Float64Array;
 
 let tEnter = 0, tExit = 0, eNx = 0, eNy = 0, eNz = 0;
 let sBest = 0, sDer = 0, sNx = 0, sNy = 0, sNz = 0;
+// Which axis call this is (0: the triangle's own normal), and whether the
+// entering and best-separating axes were that face.
+let axisNo = 0, eFace = false, sFace = false;
 let hx = 0, hy = 0, hz = 0, mdx = 0, mdy = 0, mdz = 0, skinR = 0;
 let p0x = 0, p0y = 0, p0z = 0, p1x = 0, p1y = 0, p1z = 0, p2x = 0, p2y = 0, p2z = 0;
 
@@ -46,12 +73,13 @@ function axis(lx: number, ly: number, lz: number): boolean {
   const lo = Math.min(a, b, c) - r, hi = Math.max(a, b, c) + r, v = mdx * lx + mdy * ly + mdz * lz;
   // Separation at t = 0 along the unit axis, and its rate.
   const loSide = lo >= -hi, s = (loSide ? lo : -hi) / len, der = (loSide ? -v : v) / len;
-  if (s > sBest + 1e-9) { sBest = s; sDer = der; const k = (loSide ? -1 : 1) / len; sNx = lx * k; sNy = ly * k; sNz = lz * k; }
+  const face = axisNo++ === 0;
+  if (s > sBest + 1e-9) { sBest = s; sDer = der; const k = (loSide ? -1 : 1) / len; sNx = lx * k; sNy = ly * k; sNz = lz * k; sFace = face; }
   else if (s >= sBest - 1e-9 && der > sDer) sDer = der;
   if (Math.abs(v) < 1e-14) return lo < 0 && hi > 0;
   let t0 = lo / v, t1 = hi / v;
   if (t0 > t1) { const q = t0; t0 = t1; t1 = q; }
-  if (t0 > tEnter) { tEnter = t0; const k = (v > 0 ? -1 : 1) / len; eNx = lx * k; eNy = ly * k; eNz = lz * k; }
+  if (t0 > tEnter) { tEnter = t0; const k = (v > 0 ? -1 : 1) / len; eNx = lx * k; eNy = ly * k; eNz = lz * k; eFace = face; }
   if (t1 < tExit) tExit = t1;
   return tEnter <= tExit;
 }
@@ -61,6 +89,7 @@ function load(cx: number, cy: number, cz: number, P: Positions, a: number, b: nu
   p1x = P[b]! - cx; p1y = P[b + 1]! - cy; p1z = P[b + 2]! - cz;
   p2x = P[c]! - cx; p2y = P[c + 1]! - cy; p2z = P[c + 2]! - cz;
   tEnter = -Infinity; tExit = Infinity; sBest = -Infinity; sDer = -Infinity; eNx = eNy = eNz = 0; sNx = sNy = sNz = 0;
+  axisNo = 0; eFace = sFace = false;
 }
 
 /** All 13 axes, in LC's order; false as soon as one separates. */
@@ -76,11 +105,11 @@ function allAxes(): boolean {
 
 function finish(dx: number, dy: number, dz: number, out: SweepHit): boolean {
   if (tExit < 0 || tEnter > 1) return false;
-  if (tEnter >= 0) { out.t = tEnter; out.nx = eNx; out.ny = eNy; out.nz = eNz; out.start = false; return true; }
+  if (tEnter >= 0) { out.t = tEnter; out.nx = eNx; out.ny = eNy; out.nz = eNz; out.start = false; out.face = eFace; return true; }
   // Starting inside the skin: blocked only while the best separation closes.
   const tau = 1e-9 * Math.hypot(dx, dy, dz) + 1e-15;
   if (sDer >= -tau) return false;
-  out.t = 0; out.nx = sNx; out.ny = sNy; out.nz = sNz; out.start = true;
+  out.t = 0; out.nx = sNx; out.ny = sNy; out.nz = sNz; out.start = true; out.face = sFace;
   return true;
 }
 
@@ -125,7 +154,7 @@ export function boxTriangleSeparation(cx: number, cy: number, cz: number, ex: nu
 export function sweepBoxBox(cx: number, cy: number, cz: number, ex: number, ey: number, ez: number,
   dx: number, dy: number, dz: number, minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number,
   skin: number, out: SweepHit): boolean {
-  tEnter = -Infinity; tExit = Infinity; sBest = -Infinity; sDer = -Infinity;
+  tEnter = -Infinity; tExit = Infinity; sBest = -Infinity; sDer = -Infinity; eFace = sFace = true;
   if (!boxAxis(minX - cx - ex - skin, maxX - cx + ex + skin, dx, 0)) return false;
   if (!boxAxis(minY - cy - ey - skin, maxY - cy + ey + skin, dy, 1)) return false;
   if (!boxAxis(minZ - cz - ez - skin, maxZ - cz + ez + skin, dz, 2)) return false;

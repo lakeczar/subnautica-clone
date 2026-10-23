@@ -4,7 +4,7 @@ import type { CaveCollider } from "../caves/large/compose.js";
 import type { Aabb, Rect } from "../types.js";
 import { createSpatialIndex } from "../spatialIndex.js";
 import { solidEntries } from "../queries.js";
-import { boxBoxSeparation, createHit, createSeparation, sweepBoxBox, type Separation, type SweepHit } from "./boxTriangle.js";
+import { boxBoxSeparation, createHit, createSeparation, earlier, sweepBoxBox, takeHit, type Separation, type SweepHit } from "./boxTriangle.js";
 import { depenetrate, OVERLAP_TOLERANCE, SKIN, slideMove, type Depenetration, type StaticCollider } from "./collider.js";
 
 /** Static colliders in the world's query interface (COL-1 stage A; the
@@ -96,7 +96,7 @@ export function composeStaticWorld(options: StaticWorldOptions): StaticWorld {
   const sweepBoth = (local: readonly Solid[], e: Vec3) => (c: Vec3, d: Vec3, out: SweepHit): boolean => {
     let found = collider.sweep(c, e, d, SKIN, out);
     for (const s of local) if (sweepBoxBox(c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, s.min.x, s.min.y, s.min.z, s.max.x, s.max.y, s.max.z, SKIN, hit) &&
-      (!found || hit.t < out.t)) { Object.assign(out, hit); found = true; }
+      (!found || earlier(hit, out, d.x, d.y, d.z))) { takeHit(hit, out, found); found = true; }
     return found;
   };
   const clamp = (p: Vec3): { p: Vec3; clipped: boolean } => {
@@ -156,7 +156,7 @@ export function composeStaticWorld(options: StaticWorldOptions): StaticWorld {
           const local = nearSolids({ min: { x: b.min.x - reach, y: b.min.y - reach, z: b.min.z - reach }, max: { x: b.max.x + reach, y: b.max.y + reach, z: b.max.z + reach } });
           let found = collider.sweep(cc, ee, dd, skin, out);
           for (const s of local) if (sweepBoxBox(cc.x, cc.y, cc.z, ee.x, ee.y, ee.z, dd.x, dd.y, dd.z, s.min.x, s.min.y, s.min.z, s.max.x, s.max.y, s.max.z, skin, hit) &&
-            (!found || hit.t < out.t)) { Object.assign(out, hit); found = true; }
+            (!found || earlier(hit, out, dd.x, dd.y, dd.z))) { takeHit(hit, out, found); found = true; }
           return found;
         },
         blocked: cc => !world.clearance(poseOf(cc, shape), shape),

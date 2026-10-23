@@ -1,6 +1,6 @@
 import type { Aabb, Vec3 } from "../types.js";
 import {
-  boxOverlapsTriangle, boxTriangleSeparation, segmentTriangle, sweepBoxTriangle, triangleHeightAt, UP,
+  boxOverlapsTriangle, boxTriangleSeparation, earlier, segmentTriangle, sweepBoxTriangle, takeHit, triangleHeightAt, UP,
   type Separation, type SweepHit,
 } from "./boxTriangle.js";
 import { buildBvh, bvhDepth, isLeaf, leafCount, leafFirst, STACK_DEPTH } from "./bvh.js";
@@ -174,7 +174,7 @@ export function sweepShape(s: StaticShape, cx: number, cy: number, cz: number, e
   for (let i = 0; i < n; i++) {
     const t = CAND[i]!;
     if (!sweepBoxTriangle(cx, cy, cz, ex, ey, ez, dx, dy, dz, P, vA(s, t), vB(s, t), vC(s, t), skin, HIT)) continue;
-    if (!found || HIT.t < out.t) { out.t = HIT.t; out.nx = HIT.nx; out.ny = HIT.ny; out.nz = HIT.nz; out.start = HIT.start; found = true; }
+    if (!found || earlier(HIT, out, dx, dy, dz)) { takeHit(HIT, out, found); found = true; }
   }
   return found;
 }

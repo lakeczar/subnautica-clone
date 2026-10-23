@@ -1,6 +1,6 @@
 import type { Aabb, Vec3 } from "../types.js";
 import {
-  boxBoxSeparation, createHit, createSeparation, segmentBox, sweepBoxBox, type Separation, type SweepHit,
+  boxBoxSeparation, createHit, createSeparation, earlier, segmentBox, sweepBoxBox, takeHit, type Separation, type SweepHit,
 } from "./boxTriangle.js";
 import { buildBvh, isLeaf, leafCount, leafFirst } from "./bvh.js";
 import {
@@ -159,7 +159,7 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
     const ms = gather(c.x - e.x + Math.min(0, d.x) - r, c.y - e.y + Math.min(0, d.y) - r, c.z - e.z + Math.min(0, d.z) - r,
       c.x + e.x + Math.max(0, d.x) + r, c.y + e.y + Math.max(0, d.y) + r, c.z + e.z + Math.max(0, d.z) + r);
     let found = false;
-    const take = (): void => { if (!found || hit.t < out.t) { out.t = hit.t; out.nx = hit.nx; out.ny = hit.ny; out.nz = hit.nz; out.start = hit.start; found = true; } };
+    const take = (): void => { if (!found || earlier(hit, out, d.x, d.y, d.z)) { takeHit(hit, out, found); found = true; } };
     for (const m of ms) {
       if (m.kind === "shape") { if (sweepShape(m, c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, skin, hit)) take(); }
       else if (m.kind === "heightfield") { if (sweepHeightfield(m, c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, skin, hit)) take(); }
@@ -285,6 +285,8 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
 // --- Slides --------------------------------------------------------------------------
 
 export const SLIDES = 6;
+/** How far past the skin a slide leaves each contact, metres. */
+export const CLEAR = 1e-5;
 /** One swept move with slides (LC's composer semantics): advance to the
  * earliest contact, clip the remaining travel against every contact plane
  * met so far (keeping the first clip that respects all of them), else run
@@ -299,7 +301,10 @@ export function slideMove(sweep: (c: Vec3, d: Vec3, out: SweepHit) => boolean, c
   for (let i = 0; i < SLIDES; i++) {
     if (!sweep({ x: px, y: py, z: pz }, { x: rx, y: ry, z: rz }, best)) { px += rx; py += ry; pz += rz; break; }
     any = true;
-    px += rx * best.t; py += ry * best.t; pz += rz * best.t;
+    // To the contact, then a hair past the skin along its normal: resting
+    // at exactly the skin, a slide along a flat mesh would meet the edges of
+    // the coplanar triangles beside it as walls (ghost contacts).
+    px += rx * best.t + best.nx * CLEAR; py += ry * best.t + best.ny * CLEAR; pz += rz * best.t + best.nz * CLEAR;
     const left = { x: rx * (1 - best.t), y: ry * (1 - best.t), z: rz * (1 - best.t) };
     planes.push({ x: best.nx, y: best.ny, z: best.nz });
     // Clip against each plane; keep the first that respects all of them.

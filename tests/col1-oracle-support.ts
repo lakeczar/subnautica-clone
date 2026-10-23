@@ -241,16 +241,16 @@ export function canopyCave(): LargeCave {
   return canopy;
 }
 /** LC's chunk colliders against the same triangles in the compact format. */
-export function biomeScene(): OracleScene & { readonly lcBytes: number; readonly chunks: number } {
+export function biomeScene(): OracleScene & { readonly lcBytes: number; readonly chunks: number; readonly lc: CaveCollider; readonly compact: CaveCollider } {
   const cave = canopyCave(), col = cave.collision;
   const built = cave.chunks.filter(c => col.colliders[c.cx + col.nx * (c.cy + col.ny * c.cz)] !== undefined);
   const biome = compactBiome(cave.id, col.ownership, built.map(c => {
     const m = cave.mesh(c, "fine");
     return { key: m.key, art: { positions: m.positions, indices: m.indices }, band: m.band };
   }));
-  const exterior = productionWorld();
-  const old = composeCaveWorld({ exterior, solids: SOLIDS, floor: surfaceHeight, caves: [largeCaveCollider(col)] });
-  const neo = composeCaveWorld({ exterior, solids: SOLIDS, floor: surfaceHeight, caves: [compactBiomeCollider(biome)] });
+  const exterior = productionWorld(), lc = largeCaveCollider(col), compact = compactBiomeCollider(biome);
+  const old = composeCaveWorld({ exterior, solids: SOLIDS, floor: surfaceHeight, caves: [lc] });
+  const neo = composeCaveWorld({ exterior, solids: SOLIDS, floor: surfaceHeight, caves: [compact] });
   const o = col.origin, C = col.chunk;
   const regions = built.map(c => ({ min: { x: o.x + c.cx * C, y: o.y + c.cy * C, z: o.z + c.cz * C }, max: { x: o.x + (c.cx + 1) * C, y: o.y + (c.cy + 1) * C, z: o.z + (c.cz + 1) * C } }));
   const routes = CANOPY_ROOT_CAVES.routes.filter(r => r.id === "canopy_roots.route.squeeze" || r.id === "canopy_roots.route.craft_loop");
@@ -261,7 +261,7 @@ export function biomeScene(): OracleScene & { readonly lcBytes: number; readonly
     seeds: seedsOf(biome.collider.members), shapes: [{ id: "diver", shape: DIVER }, { id: "medium", shape: MEDIUM }],
     paths: routes.map(r => ({ id: r.id, shape: shapeOf(r.profile as CraftProfileId), path: r.path.map(p => ({ ...p })) })), poses: [],
     before: { boxes: 0, note: "LC chunk colliders (triangles, Uint32 indices, 32-byte nodes, copied positions)" },
-    after: biome.collider, oldSolids: [], lcBytes, chunks: built.length,
+    after: biome.collider, oldSolids: [], lcBytes, chunks: built.length, lc, compact,
   };
 }
 

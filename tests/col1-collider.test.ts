@@ -87,7 +87,7 @@ test("kernels: the sweep and overlap tests are LC's, bit for bit", () => {
     const mine = sweepBoxTriangle(c[0]!, c[1]!, c[2]!, e[0]!, e[1]!, e[2]!, d[0]!, d[1]!, d[2]!, tri, 0, 3, 6, skin, a);
     const theirs = lcSweep(c[0]!, c[1]!, c[2]!, e[0]!, e[1]!, e[2]!, d[0]!, d[1]!, d[2]!, tri, 0, skin, b);
     assert.equal(mine, theirs, `case ${i}`);
-    if (mine) { assert.deepEqual(a, b, `case ${i}`); hits++; if (a.start) starts++; }
+    if (mine) { assert.deepEqual({ ...a, face: undefined }, { ...b, face: undefined }, `case ${i}`); hits++; if (a.start) starts++; }
     assert.equal(boxOverlapsTriangle(c[0]!, c[1]!, c[2]!, e[0]!, e[1]!, e[2]!, tri, 0, 3, 6, 0.001), lcOverlaps(c[0]!, c[1]!, c[2]!, e[0]!, e[1]!, e[2]!, tri, 0, 0.001), `overlap ${i}`);
   }
   assert.ok(hits > 2000 && starts > 100, `coverage: ${hits} hits, ${starts} start contacts`);
@@ -174,5 +174,33 @@ test("boxes: real boxes stay boxes, with box semantics", () => {
   assert.equal(col.segmentClear({ x: -1, y: 0.5, z: 4 }, { x: 6, y: 0.5, z: 4 }), false);
   assert.equal(col.segmentClear({ x: -1, y: 0.5, z: 4 }, { x: 6, y: 0.5, z: 4 }, ["beam.0", "beam.1"]), true);
   const m = col.move({ x: 2.5, y: 0.5, z: 4 }, DIVER, { x: 3, y: 0, z: 0 });
-  assert.ok(Math.abs(m.x - (4 - DIVER.x - 0.004)) < 1e-6, JSON.stringify(m));
+  // At the skin, plus the hair a slide leaves past it.
+  assert.ok(Math.abs(m.x - (4 - DIVER.x - 0.004)) < 2e-5, JSON.stringify(m));
+});
+
+test("layout independence: the same triangles in any order, leaf size or split give the same moves", () => {
+  const m = gridBoxMesh({ x: 0, y: 0, z: 0 }, { x: 6, y: 3, z: 6 }, 9), n = m.indices.length / 3;
+  // Reversed triangle order, and the mesh cut into three shapes.
+  const reversed = new Uint32Array(m.indices.length);
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) reversed[t * 3 + k] = m.indices[(n - 1 - t) * 3 + k]!;
+  const cut = [0, Math.floor(n / 3), Math.floor(2 * n / 3), n];
+  const layouts = [
+    createStaticCollider("a", [buildShape("a", m.positions, m.indices)]),
+    createStaticCollider("b", [buildShape("b", m.positions, reversed, { leafSize: 1 })]),
+    createStaticCollider("c", cut.slice(1).map((end, i) => buildShape(`c${i}`, m.positions, m.indices.slice(cut[i]! * 3, end * 3), { leafSize: 7 }))),
+  ];
+  const rnd = random(17);
+  let ties = 0;
+  for (let i = 0; i < 600; i++) {
+    // Starts on the lattice's own planes and edges, so contacts tie often.
+    const c = { x: -1 + Math.round(16 * rnd()) / 2, y: -1 + Math.round(10 * rnd()) / 2, z: -1 + Math.round(16 * rnd()) / 2 };
+    const d = { x: -3 + Math.round(12 * rnd()) / 2, y: -3 + Math.round(12 * rnd()) / 2, z: -3 + Math.round(12 * rnd()) / 2 };
+    const results = layouts.map(l => l.move(c, DIVER, d));
+    for (const r of results.slice(1)) {
+      const q = results[0]!, off = Math.hypot(r.x - q.x, r.y - q.y, r.z - q.z);
+      assert.ok(r.hit === q.hit && off < 1e-9, `move ${i} from ${JSON.stringify(c)} by ${JSON.stringify(d)}: ${JSON.stringify(r)} vs ${JSON.stringify(q)}`);
+    }
+    if (results[0]!.hit) ties++;
+  }
+  assert.ok(ties > 100, `only ${ties} moves met the mesh`);
 });
