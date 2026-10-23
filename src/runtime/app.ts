@@ -18,7 +18,8 @@ import { HelmControl } from "./helm.js";
 import { forgetCorridorView } from "../sim/carrierStations.js";
 import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
-import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY } from "../sim/timeline/recorder.js";
+import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY,
+  TIMELINE_WHOLE_FLOOR } from "../sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../sim/timeline/recorder.js";
 import { parseTimeline } from "../sim/timeline/report.js";
 import { controlsActive } from "../sim/timeline/activity.js";
@@ -46,6 +47,9 @@ const ASCENT_EPSILON = 1e-5;
 const IDLE_PREPARE_MS = 250;
 /** Vite's development build (false in production and in Node tests). */
 const DEV = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV === true;
+/** A browser's full-storage error (Chrome, Safari and Firefox name it differently). */
+const quotaExceeded = (error: unknown): boolean => error instanceof Error &&
+  (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED" || (error as { code?: number }).code === 22);
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : "An unknown error occurred.";
 
@@ -470,11 +474,17 @@ export class SiltwakeApp {
     if (s.tick - this.timelineSaved >= 600) this.saveTimeline();
   }
   /** The whole timeline under its one key, in one atomic write (SIM-1a; incremental storage is
-   * SIM-1b). Rotation bounds the export and keeps every note. False when storage refused it. */
+   * SIM-1b). Rotation bounds the export and keeps every note. On a full quota the stored copy
+   * keeps fewer whole chunks, halving each try down to the open chunk plus two, the older ones
+   * folded into summaries (notes, new things, deaths and recoveries verbatim); the timeline in
+   * memory keeps its window. False when even that doesn't fit, or storage refused it. */
   private saveTimeline(): boolean {
     if (!this.timeline || !this.state) return false;
     this.timelineSaved = this.state.tick;
-    try { localStorage.setItem(TIMELINE_STORAGE_KEY, exportTimelineText(this.timeline, this.state)); return true; } catch { return false; }
+    for (let whole = this.timeline.sealed.length; ; whole = Math.max(TIMELINE_WHOLE_FLOOR, Math.floor(whole / 2))) {
+      try { localStorage.setItem(TIMELINE_STORAGE_KEY, exportTimelineText(this.timeline, this.state, whole)); return true; }
+      catch (error) { if (!quotaExceeded(error) || whole <= TIMELINE_WHOLE_FLOOR) return false; }
+    }
   }
   /** Start or resume the timeline for the session just entered (same save session resumes). */
   private startTimeline(): void {

@@ -458,3 +458,28 @@ test("R2-F2: a rotated export round-trips with one numbering, then keeps recordi
   assert.equal(allNotes(again, s).length, 24_500);
   assert.equal(new Set(allNotes(again, s)).size, 24_500, "every note once");
 });
+
+test("an export for a full quota folds its oldest chunks: every note kept, the analysis unchanged, the live recorder untouched", () => {
+  const s = createGame(); completeOpening(s);
+  const rec = createRecorder(SESSION), items = ["silica_glass", "structural_alloy", "meal"];
+  for (let i = 0; i < TIMELINE_CHUNK_EVENTS * 12 + 300; i++) {
+    s.tick += 30; rec.playTicks += 30;
+    if (i % 41 === 0) addNote(rec, s, `note ${i}`);
+    else if (i % 97 === 0) recordEvent(rec, s, { kind: "new", what: "blueprint", id: `bp${i}` });
+    else if (i % 13 === 0) recordEvent(rec, s, { kind: "travel", seconds: 100 + (i % 7), stationary: 1, metres: 50, hull: "dart", id: "v" });
+    else recordEvent(rec, s, { kind: "gather", what: items[i % 3]!, id: "src", quantity: 1 });
+  }
+  const sealed = rec.sealed.length, full = exportTimelineText(rec, s), whole = analyseTimeline(exportTimeline(rec, s));
+  for (const k of [6, 3, 2]) {
+    const text = exportTimelineText(rec, s, k), parsed = parseTimeline(text);
+    assert.ok(parsed.ok);
+    if (!parsed.ok) return;
+    assert.ok(text.length < full.length, `${k} whole: smaller (${text.length} < ${full.length})`);
+    assert.equal(rec.sealed.length, sealed, "the live recorder keeps its window");
+    const back = resumeRecorder(parsed.value, { regionAt });
+    assert.deepEqual(allNotes(back, s), allNotes(rec, s), `${k} whole: every note`);
+    const a = analyseTimeline(parsed.value);
+    for (const key of ["newCount", "gaps", "gathering", "notes", "deaths"] as const) assert.deepEqual(a[key], whole[key], `${k} whole: ${key}`);
+    assert.deepEqual([a.travel.count, a.travel.minutes, a.idle.count], [whole.travel.count, whole.travel.minutes, whole.idle.count], `${k} whole`);
+  }
+});

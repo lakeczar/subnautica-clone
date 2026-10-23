@@ -371,9 +371,15 @@ export function recordSystemsEvents(rec: TimelineRecorder, s: GameState, events:
 }
 
 /** A detached export with any open travel or idle span closed as of now. */
-export function exportTimeline(rec: TimelineRecorder, s: GameState): TimelineExport {
-  const closing = closingEvents(rec, s);
-  return { ...exportHead(rec, s.tick, closing.length), events: [...retainedEvents(rec), ...closing] };
+/** `whole`: how many of the newest sealed chunks the export keeps whole; older ones are
+ * folded into summaries in the export only (as rotation does), so a timeline can fit
+ * a full storage quota. The live recorder keeps its own window. */
+export function exportTimeline(rec: TimelineRecorder, s: GameState, whole = Infinity): TimelineExport {
+  const closing = closingEvents(rec, s), cut = Math.max(0, rec.sealed.length - whole), head = exportHead(rec, s.tick, closing.length);
+  if (!cut) return { ...head, events: [...retainedEvents(rec), ...closing] };
+  const folded = rec.sealed.slice(0, cut).map((c) => ({ n: c.n, ...summarizeChunk(c.events) }));
+  return { ...head, rotated: [...rec.rotated, ...folded],
+    events: [...rec.sealed.slice(cut).flatMap((c) => c.events), ...rec.events, ...closing] };
 }
 /** An export's head, ending at `tick`: everything but `events`. `closing` events
  * end the export's events; its `seq` counts them, since a resumed recorder holds
@@ -385,4 +391,6 @@ function exportHead(rec: TimelineRecorder, tick: number, closing: number): Omit<
     dropped: rec.dropped, seq: rec.seq + closing, ...(rec.rotated.length ? { rotated: [...rec.rotated] } : {}),
   };
 }
-export const exportTimelineText = (rec: TimelineRecorder, s: GameState): string => serializeTimeline(exportTimeline(rec, s));
+export const exportTimelineText = (rec: TimelineRecorder, s: GameState, whole = Infinity): string => serializeTimeline(exportTimeline(rec, s, whole));
+/** The fewest sealed chunks an export folded for storage keeps whole (with the open chunk). */
+export const TIMELINE_WHOLE_FLOOR = 2;
