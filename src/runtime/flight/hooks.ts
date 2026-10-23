@@ -1,11 +1,14 @@
 /** REC-1 test hook: one typed, versioned surface for test drivers, soaks and
  * evidence runs, in place of ad hoc DOM attributes (`dataset.tick` and the
- * rest). Read-only for the game, apart from `freeze` (fixed-view captures)
- * and `recorder.mark` (a driver's own event on the recording).
+ * rest). Read-only for the game, apart from `freeze` and `stage` (fixed-view
+ * captures; `stage` only in driver mode) and `recorder.mark` (a driver's own
+ * event on the recording).
  *
  *   window.__siltwake.read()                → HookRead | null (no expedition)
  *   window.__siltwake.scene()               → RendererStats | null
  *   window.__siltwake.freeze(true|false)    → holds the simulation clock; rendering carries on
+ *   window.__siltwake.stage(view)           → driver mode only: the diver alone at a fixed view (game.ts StagedView)
+ *   window.__siltwake.capture()             → driver mode only: the next drawn frame's canvas as base64 PNG (no HUD)
  *   window.__siltwake.recorder?.frames(cursor, max) → { next, lost, columns, rows }
  *   …samples / events / snapshots(cursor, max) → { next, lost, items }
  *   …snapshot(seq) → base64 JPEG | null;  release(seq) frees snapshots up to seq
@@ -14,6 +17,7 @@
  * from one another. `lost` counts entries overwritten before they were read. */
 import type { RendererStats } from "../../render/renderer.js";
 import type { FlightCapture } from "./capture.js";
+import type { StagedView } from "./game.js";
 import { FRAME_COLUMNS } from "./recorder.js";
 
 export const TEST_HOOK_VERSION = 1;
@@ -54,6 +58,8 @@ export interface HookSource {
   stats(): RendererStats | null;
   freeze(on: boolean): void;
   capture(): FlightCapture | null;
+  /** Driver mode only; false when refused. */
+  stage(view: StagedView): boolean;
 }
 
 export interface SiltwakeTestHook {
@@ -61,6 +67,8 @@ export interface SiltwakeTestHook {
   read(): HookRead | null;
   scene(): RendererStats | null;
   freeze(on: boolean): boolean;
+  stage(view: StagedView): boolean;
+  capture(): Promise<string | null>;
   readonly recorder: ReturnType<typeof recorderHook> | null;
 }
 
@@ -86,6 +94,12 @@ export function installTestHook(src: HookSource): () => void {
     read: () => src.read(),
     scene: () => src.stats(),
     freeze: (on) => { src.freeze(Boolean(on)); return Boolean(on); },
+    stage: (view) => src.stage(view),
+    capture: async () => {
+      const c = src.capture();
+      if (!c || c.mode !== "driver") return null;
+      return c.frameData();
+    },
     get recorder() { const c = src.capture(); return c ? recorderHook(c) : null; },
   };
   (globalThis as { __siltwake?: SiltwakeTestHook }).__siltwake = hook;

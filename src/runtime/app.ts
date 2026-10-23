@@ -29,7 +29,7 @@ import { controlsActive } from "../sim/timeline/activity.js";
 import { regionAtPoint } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
 import { DEFAULT_FLIGHT_SETTINGS, FlightCapture, flightMode, type FlightSettings } from "./flight/capture.js";
-import { gameSample, recordCommand, recordGameEvents, recordTimeline } from "./flight/game.js";
+import { gameSample, recordCommand, recordGameEvents, recordTimeline, stageView } from "./flight/game.js";
 import { installTestHook, type HookRead } from "./flight/hooks.js";
 import { exposure } from "../sim/survival.js";
 import { BAKE_SOURCE } from "../render/bakeSource.js";
@@ -294,6 +294,15 @@ export class SiltwakeApp {
       stats: () => this.renderer?.stats() ?? null,
       freeze: (on) => { this.frozen = on; this.clock.reset(); this.dirty = true; },
       capture: () => this.flight,
+      stage: (v) => {
+        if (this.flight?.mode !== "driver" || !this.state) return false;
+        this.session.state = stageView(this.state, v);
+        this.helm.clear();
+        this.resetAscent();
+        this.flight.recorder.event("mark", `staged view at ${[v.position.x, v.position.y, v.position.z].map(n => n.toFixed(1)).join(",")}`, { snapshot: false, detail: { ...v } });
+        this.dirty = true;
+        return true;
+      },
     });
     const options = { signal: this.abort.signal };
     window.addEventListener(

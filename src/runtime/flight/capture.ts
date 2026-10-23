@@ -79,6 +79,16 @@ export class FlightCapture {
   afterRender(now: number): number {
     if (this.disposed) return 0;
     const start = performance.now();
+    const frame = this.frameWaiters.splice(0);
+    if (frame.length) {
+      // The whole canvas, full size, lossless (fixed-view captures).
+      const job = createImageBitmap(this.canvas).then((bitmap) => {
+        const out = new OffscreenCanvas(bitmap.width, bitmap.height);
+        out.getContext("bitmaprenderer")!.transferFromImageBitmap(bitmap);
+        return out.convertToBlob({ type: "image/png" });
+      });
+      for (const w of frame) job.then(w.resolve, w.reject);
+    }
     const want = this.recorder.wantSnapshot(now);
     if (want) this.snapshot(want, now);
     const v = this.video;
@@ -122,6 +132,13 @@ export class FlightCapture {
       this.blobs.set(snap.seq, blob);
       for (const old of this.blobs.keys()) { if (this.blobs.size <= SNAPSHOT_MEMORY) break; this.blobs.delete(old); }
     }, () => {});
+  }
+
+  private readonly frameWaiters: { resolve: (b: Blob) => void; reject: (e: unknown) => void }[] = [];
+  /** The next drawn frame's canvas as base64 PNG (no DOM, no HUD). */
+  async frameData(): Promise<string> {
+    const blob = await new Promise<Blob>((resolve, reject) => this.frameWaiters.push({ resolve, reject }));
+    return base64(new Uint8Array(await blob.arrayBuffer()));
   }
 
   /** A snapshot's JPEG, while it is still held in memory. */
@@ -288,10 +305,7 @@ export class FlightCapture {
   async snapshotData(seq: number): Promise<string | null> {
     const blob = this.blobs.get(seq);
     if (!blob) return null;
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    let s = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    return btoa(s);
+    return base64(new Uint8Array(await blob.arrayBuffer()));
   }
   /** Releases snapshots a driver has written (it never needs them again). */
   release(upTo: number): void { for (const k of [...this.blobs.keys()]) if (k <= upTo) this.blobs.delete(k); }
@@ -309,6 +323,11 @@ export class FlightCapture {
 }
 
 const round = (v: number): number => Math.round(v * 10) / 10;
+function base64(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
 function safeJson(v: unknown): string { try { return JSON.stringify(v)?.slice(0, 200) ?? String(v); } catch { return String(v); } }
 
 async function gather(dir: FileSystemDirectoryHandle, prefix: string, out: ZipEntry[]): Promise<void> {

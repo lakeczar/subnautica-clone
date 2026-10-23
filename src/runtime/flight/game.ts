@@ -1,6 +1,6 @@
 /** REC-1: what the flight recorder records from the game, kept out of app.ts.
  * Simulation events, timeline milestones and the periodic sample. DOM-free. */
-import type { GameCommand, GameEvent, GameState } from "../../sim/types.js";
+import type { GameCommand, GameEvent, GameState, Vec3 } from "../../sim/types.js";
 import type { TimelineEvent } from "../../sim/timeline/report.js";
 import { exposure } from "../../sim/survival.js";
 import { regionAtPoint } from "../../content/regions/layout.js";
@@ -87,4 +87,20 @@ export function gameSample(t: number, s: GameState | null, stats: RendererStats 
     unsliced: stats.caveStream.sync,
   });
   return out;
+}
+
+/** A fixed view (REC-1's visual regression): the diver alone at a pose, out of
+ * any craft (which waits where it was), still. Degrees, as the HUD shows them.
+ * Drivers only (`?rec=driver`); the clock is frozen around it. */
+export interface StagedView { position: Vec3; yaw: number; pitch: number; tick?: number; lamp?: boolean }
+export function stageView(state: GameState, v: StagedView): GameState {
+  const s = structuredClone(state), p = s.player;
+  p.controlledVehicleId = null; p.interiorId = null; p.interiorPose = null;
+  p.pose = { frame: "world", position: { ...v.position }, yaw: (v.yaw * Math.PI) / 180, pitch: (v.pitch * Math.PI) / 180 };
+  p.velocity = { x: 0, y: 0, z: 0 };
+  p.mode = v.position.y < -0.5 ? "swimming" : "walking";
+  if (v.lamp !== undefined) p.lamp = v.lamp;
+  if (v.tick !== undefined) s.tick = v.tick;
+  s.world.action = null;
+  return s;
 }
