@@ -1,3 +1,6 @@
+// FORK(lc-box-collider): the large-cave box-set collider, beside COL-1's
+// StaticCollider and the kit object solids composed in sim/world.ts; retire both
+// in COL-1 stage B (CORE-HELPERS).
 import type { Solid } from "../../../sim/world.js";
 import type { Aabb, Rect, Vec3 } from "../../types.js";
 import { sweepBoxBox, type SweepHit } from "./collision.js";

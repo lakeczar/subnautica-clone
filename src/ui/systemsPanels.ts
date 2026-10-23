@@ -34,14 +34,13 @@ import { surveyRange } from "../sim/systems/survey.js";
 import { serviceLabel, servicePreview } from "../sim/serviceLink.js";
 import { currentObjective } from "../sim/objective.js";
 import type { GameState, WorldQueries } from "../sim/types.js";
-import { bearing, escapeHtml } from "./format.js";
+import { bearing, duration as mins, escapeHtml } from "./format.js";
 import type { CommandButton } from "./panels.js";
 
 type Group = (id: string, label: string, body: string, open?: boolean) => string;
 const esc = escapeHtml;
 const label = (kind: string): string => Object.hasOwn(ITEMS, kind) ? ITEMS[kind as keyof typeof ITEMS].label : kind.replaceAll("_", " ");
 const pct = (n: number): string => `${Math.round(n * 100)}%`;
-const mins = (s: number): string => s < 90 ? `${Math.round(s)} s` : `${Math.round(s / 60)} min`;
 
 // ---------------------------------------------------------------- Base
 export function basePanel(s: GameState, world: WorldQueries, button: CommandButton, group: Group): string {

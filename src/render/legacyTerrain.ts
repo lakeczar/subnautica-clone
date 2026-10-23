@@ -1,3 +1,6 @@
+// FORK(legacy-terrain): B1's accepted opening terrain (island, reef, Canopy and
+// Basin benchmark), live and owned: it is not dead code. Kept until the
+// bigger-map re-evaluation (TER-09) migrates it into the authored terrain (CORE-HELPERS).
 import { fractureDepth, legacyWorldHeight as terrainHeight } from "../sim/terrain.js";
 import { PALETTE as P } from "./palette.js";
 import type { ChunkArtFactory, MeshRecipe } from "./kit/types.js";

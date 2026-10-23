@@ -131,7 +131,7 @@ The switch itself is one line in `caves.ts`, plus three fixes and some test upda
    - the pending joins `isles_undercroft.scar_mouth` and `canopy_rootways.back_stair` wait for those caves.
 
 ### Border fix evidence
-Three runs on scratch copies, each through `heavy-check.sh`. The probe test is [`ca-1/ca1-bake-probe.heavy.test.ts`](ca-1/ca1-bake-probe.heavy.test.ts); C4 can adopt it when the caves are registered.
+Three runs on scratch copies, each through `heavy-check.sh`. The probe test was `ca-1/ca1-bake-probe.heavy.test.ts`; CW-1's `tests/cw1-bake.heavy.test.ts` adopted it, and STEW-1 deleted the dormant copy (git history has it).
 - **Today's game with the fix** (Fanvault only): `bake-terrain --verify` gives **220/220**. The fix is byte-neutral.
 - **All caves with the fix:**
   - **Chunks:** in every chunk touching a CA-1 footprint (17 chunks), no heightfield remains inside a footprint, each shell stays inside its footprint and column, chunk Y bounds cover the cave, and the codec round-trips.

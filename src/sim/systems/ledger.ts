@@ -1,6 +1,9 @@
-/** Inventory arithmetic that knows SYS-2 item sizes. inventory.ts reads ITEMS only,
- * so until the coordinator composes SYS2_ITEMS into the registry, systems code
- * uses these helpers. Once composed they reduce to inventory.ts calls. */
+// FORK(ledger): a second inventory arithmetic beside sim/inventory.ts (used
+// capacity, stack merging, and container-order spending where inventory.ts spends
+// in inventory order); retire in SIG-1 stage 0 (docs/build/CORE-HELPERS.md).
+/** Inventory arithmetic that knows SYS-2 item sizes, written when inventory.ts read
+ * ITEMS only. SYS2_ITEMS are composed into the registry now; SIG-1 stage 0 makes
+ * inventory.ts the one authority, with planSpend/applySpend as the single spend path. */
 import { ITEMS, MATERIALS } from "../../content/registry.js";
 import type { ItemKind } from "../../content/registry.js";
 import { isSys2Item, stackable, SYS2_ITEMS } from "../../content/systems/items.js";
