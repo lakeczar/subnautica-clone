@@ -2,6 +2,17 @@
 
 Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 rule ("a job has a goal, not a time limit") and the 2a list in [DIRECTION](../DIRECTION.md), "Two test machines". SCHED-2b (the remote lane) and SAVE-1 follow after review. **Not installed:** the live queue still runs SCHED-1 `6824478b070f`; cut-over is below and waits for the coordinator.
 
+## R5 review responses
+
+Review: `eaef069` on `review/sched-2a-r5`, on `919a372`. The scheduler, including the `stalls` default, passed; two soak P2s remained. Soak files only. No change under `scripts/heavy` from `919a372`, which the coordinator is cutting over.
+
+- **R5-F1, the last interval was never drained: fixed.** Before any verdict, the run closes its observation interval: one more drain, serialized after the sampling chain. Holds, coverage and attributed streaming from it are kept whatever the timing exclusion. If the closing interval can't be observed, hold coverage is unavailable.
+- **R5-F2, full-probe holds were logged but not judged: fixed.** Every probe result goes through one observation path, `observe()`: tick, full and GC samples alike. A positive polled hold anywhere is a violation, and a broken rule stops the run at once (a tour stops before that lap's save check). Polls never establish a hold-free run; only the per-frame record's coverage does.
+- **Regressions** (`tests/soak-runner.test.ts`, both failing on `919a372`):
+  - with no periodic tick, a frame recorded just before the last save check returns: `loading` fails, a 70 ms caves-attributed frame fails, `null` is unproven, clear is covered;
+  - a `loading` hold seen only by the full probe's dataset read in lap 1's GC sample fails and stops there, before the save check.
+- Soak tests: 31/31, three runs in a row.
+
 ## R4 review responses
 
 Review: `7080616` on `review/sched-2a-r4`, on `4f572b5`, not accepted: three P2s on holds and timing windows. The contract itself stood. Still no change under `scripts/heavy`.

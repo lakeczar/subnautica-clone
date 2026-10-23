@@ -53,16 +53,18 @@ export async function runSoak(opts, deps) {
   const ps = deps.providers(g);
   const probe = deps.createProbe(ps.full), tick = deps.createProbe(ps.tick);
 
-  async function heartbeatTick() {
-    const s = await tick.sample({ at: now() });
+  /**
+   * The one observation path every probe result goes through (R5-F2): tick,
+   * full and GC samples alike. Holds and attributed streaming frames are the
+   * game's whenever they happened, inside a GC or save-check window too: never
+   * dropped, and hold coverage is kept apart from timing (R4-F2). A polled
+   * hold proves a violation; polls never prove a hold-free run (only the
+   * per-frame record's coverage does). A broken rule stops the run at once.
+   */
+  function observe(s) {
     noteErrors(s);
     where = s.where?.cave || s.where?.region || where;
-    // Facts the measurement contract derived (measure.mjs): valid observations
-    // only, with completeness kept apart from known violations.
     const f = s.frames;
-    // Holds and attributed streaming frames are the game's whenever they
-    // happened, inside a GC or save-check window too: never dropped, and hold
-    // coverage is kept apart from timing (R4-F2). Polled holds count as well.
     if (f) {
       for (const ms of f.streaming) run.frames.streamingOver.push({ ms, where });
       if (f.holdFrames > 0) run.holds.list.push({ where, state: "recorded", frames: f.holdFrames, at: now() });
@@ -72,11 +74,22 @@ export async function runSoak(opts, deps) {
         else { run.holds.covered = false; run.holds.issue ??= f.holdIssue ?? f.attributionIssue; }
       }
     }
-    if (s.holds?.available === false) run.holds.available = false;
+    if (s.holds?.available === false) run.holds.available ??= false;
     else if (s.holds?.available === true) {
-      if (run.holds.available === null) run.holds.available = true;
+      if (!run.holds.available) run.holds.available = true;
       if (s.holds.held) run.holds.list.push({ where, state: s.holds.state, at: now() });
     }
+    if (g.crash) run.crash = g.crash;
+    if (!stopping && evaluate().status === "fail") { stopping = true; log(`rule broken: ${verdict.reason}`); }
+  }
+
+  async function heartbeatTick({ closing = false } = {}) {
+    const s = await tick.sample({ at: now() });
+    // The run's last interval (R5-F1): if it can't be observed, the run's hold
+    // record has a gap, so "no hold" is not established.
+    if (closing && !s.frames) { run.holds.covered = false; run.holds.issue ??= "the closing interval could not be observed"; }
+    observe(s);
+    const f = s.frames;
     // Timing: gaps that overlapped an excluded window were tagged in the page
     // and are already out of f.count (measure.mjs). Without page tagging, the
     // whole interval since the last tick is excluded when a window touched it.
@@ -99,7 +112,6 @@ export async function runSoak(opts, deps) {
         complete: Boolean(f && !untagged && f.count > 0 && f.invalidGaps === 0 && f.excluded === 0) });
       lastSave = s.lastSave;
     }
-    if (g.crash) run.crash = g.crash;
     if (env.SILTWAKE_JOB_YIELD && existsSync(env.SILTWAKE_JOB_YIELD)) run.yielded = true;
   }
   /** Excluded windows (R4-F3): the page tags the gaps that overlap them
@@ -129,7 +141,7 @@ export async function runSoak(opts, deps) {
   }
   async function fullSample(extra = {}) {
     const s = await probe.sample({ at: now(), ...extra });
-    noteErrors(s);
+    observe(s);
     run.samples.push({ at: s.at, memory: s.memory, graphics: s.graphics, afterGc: Boolean(extra.afterGc) });
     appendFileSync(join(out, "samples.jsonl"), `${JSON.stringify({ ...s, afterGc: Boolean(extra.afterGc), ...extra.mark })}\n`);
     if (env.SILTWAKE_JOB_HEARTBEAT) { try { writeFileSync(env.SILTWAKE_JOB_HEARTBEAT, ""); } catch { /* best effort */ } }
@@ -163,6 +175,10 @@ export async function runSoak(opts, deps) {
   } finally {
     clearInterval(timer);
     await ticking.catch(() => {});
+    // Close the observation interval through the run's end before any
+    // verdict (R5-F1): one more drain, serialized after the sampling chain,
+    // so nothing the page recorded since the last tick goes unjudged.
+    await heartbeatTick({ closing: true }).catch((e) => { run.holds.covered = false; run.holds.issue ??= `the closing interval could not be observed: ${e.message.split("\n")[0]}`; });
     await deps.releaseAll(g).catch(() => {});
   }
   evaluate();
@@ -193,6 +209,7 @@ export async function runSoak(opts, deps) {
       await new Promise((r) => setTimeout(r, opts.settleMs ?? 3000)); // the same place every lap, settled, before measuring
       const s = await gcSample(`lap ${lap}`);
       run.laps.push({ lap, at: s.at, memory: s.memory, graphics: s.graphics });
+      if (stopping) return; // a rule broke in that sample: stop now
       await checkSave(`lap ${lap}`);
       const sv = run.saves.at(-1);
       log(`lap ${lap}: renderer ${s.memory.rendererRssMiB?.toFixed?.(0)} MiB, heap ${s.memory.jsHeapAfterGcMiB?.toFixed?.(0)} MiB after GC, ${s.graphics.meshes} meshes; save ${sv.ok ? "loads" : `FAILED: ${sv.error}`}`);
