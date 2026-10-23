@@ -10,9 +10,9 @@
     "bake:terrain": "node scripts/bake-terrain.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test:build": "node -e \"require('fs').rmSync('.test-build',{recursive:true,force:true})\" && tsc -p tsconfig.test.json",
-    "test:fast": "npm run typecheck && npm run test:build && node scripts/test-tier.mjs fast",
-    "test:heavy": "scripts/heavy-check.sh --class heavy-suite --deadline 1500 -- sh -c 'npm run -s test:build && node scripts/test-tier.mjs heavy'",
+    "test:build": "node scripts/test-build.mjs",
+    "test:fast": "node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast",
+    "test:heavy": "scripts/heavy-check.sh --class heavy-suite --deadline 1500 -- sh -c 'node scripts/test-build.mjs && node scripts/test-tier.mjs heavy'",
     "test": "npm run test:fast",
     "check": "npm run test:fast && npm run test:heavy && node scripts/bake-terrain.mjs && vite build",
     "playthrough": "tsc -p scripts/playthrough/tsconfig.json && node .test-build/scripts/playthrough/run.js"

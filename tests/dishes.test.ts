@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { firstAccessProblems, parkPose, rescueProblems, routeProblems, workPose, type CheckContext } from "../src/content/regions/access.js";
+import { parkPose, routeProblems, workPose, type CheckContext } from "../src/content/regions/access.js";
 import { BOWL_STANDOFF, DISH_RINGS, DISH_SEGMENTS, rimLine } from "../src/content/regions/dishGeometry.js";
 import { HAZARDS } from "../src/content/regions/hazards.js";
 import { CRAFT_PROFILES, ROUTES } from "../src/content/regions/passages.js";
@@ -95,12 +95,6 @@ test("the bowls' hollows stay open: dish sites' work and park poses, and the way
   }
 });
 
-test("dish collision leaves every passage, rescue tether, first access and carrier lane clear", () => {
-  const ctx: CheckContext = { floor: worldFloor, hazards: HAZARDS, solids: DISHES.flatMap(d => d.solids.map((bounds, i) => ({ id: `${d.id}.${i}`, bounds }))) };
-  const problems = [...ROUTES.filter(r => r.role !== "walk").flatMap(r => routeProblems(r, ctx)), ...rescueProblems(ctx), ...firstAccessProblems(ctx)];
-  assert.deepEqual(problems.filter(p => /dish/.test(p)), []);
-});
-
 test("the dishes are drawn at one resolution, with the bowl's collision held to its stand-off", () => {
   for (const d of DISHES) {
     const art = d.dish!;
@@ -111,4 +105,10 @@ test("the dishes are drawn at one resolution, with the bowl's collision held to 
     assert.equal(d.solids.length, art.solids.frame.length + art.solids.bowl.length);
   }
   assert.equal(BOWL_STANDOFF, 1, "the owner's bowl stand-off (2026-10-22)");
+});
+
+test("smoke: dish collision leaves every passage and carrier lane clear", () => {
+  // With every rescue tether and first access re-checked: tests/dishes.heavy.test.ts (TT-1).
+  const ctx: CheckContext = { floor: worldFloor, hazards: HAZARDS, solids: DISHES.flatMap(d => d.solids.map((bounds, i) => ({ id: `${d.id}.${i}`, bounds }))) };
+  assert.deepEqual(ROUTES.filter(r => r.role !== "walk").flatMap(r => routeProblems(r, ctx)).filter(p => /dish/.test(p)), []);
 });

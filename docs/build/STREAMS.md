@@ -374,3 +374,20 @@ Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the f
 
 ### 2026-10-22 22:20Z — VM back with 8 vCPU; builders resumed
 `nproc` is 8, about 15 GiB is visible, and the 3090 is OK. SCHED-1, CW-1, CR-1 and TT-1 are resumed through new tracked thread-send tasks, so their wakes work again. The fifth slot is held: OP-1 waits for CW-1 (shared island and cave streaming), and the `stepGame` speed-up waits for CR-1 and SCHED-1 (`step.ts` overlap).
+
+### 2026-10-23 — TT-1 merged
+- **Review:** TT-1 was accepted by Sol R3 (`review/tt-1-r3` `267bd0b`) after R1 Fix and R2 Fix.
+- **Merged into root:** fast tests pass 1,264/1,264 in 79 s from a cold cache; the build is OK.
+- **Effect:** `npm test` takes about 1 minute; the heavy tier runs 59 files, 440 tests, in about 5 minutes, with per-file cgroups.
+- **Follow-up:** apply `docs/build/streams/sched1/tt1-test-build-guard.patch` when SCHED-1 merges.
+- **CW-1 and CR-1** must merge root before handoff: TT-1 moved tests out of their files into `*.heavy.test.ts` and `*-support.ts`.
+- **SCHED-1:** in Sol R4 at `8759122`.
+
+### 2026-10-23 ~00:25Z — owner decisions on job limits and saves
+- **Jobs have goals, not time limits** (owner). The 20–30 min cap was a fairness rule for the single v1 lock. After the SCHED-1 cut-over:
+  - jobs run until their goal is done;
+  - the queue kills only on a **stall** (no output or heartbeat for about 15 min) or a generous runaway ceiling;
+  - exclusive performance drains keep a cap.
+  - Planned as the SCHED-1 follow-up (SCHED-2) once R4 accepts. Soak runs for long-session problems come with it.
+- **Save library approved:** after each root merge, the playthrough exports standard milestone, adverse and gear-variant saves to a shared store tagged by commit, for tests, reviews and 3090 sessions. **SAVE-1** starts after SCHED-1 merges.
+- **Second machine:** switch the queue on first, measure for a day, then decide.

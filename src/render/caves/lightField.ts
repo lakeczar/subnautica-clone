@@ -1,5 +1,6 @@
 import type { CaveDef } from "../../content/regions/caves.js";
-import { caveVolume } from "../../content/regions/caveGeometry.js";
+import { cachedBuild, floorIdentity } from "../../content/buildCache.js";
+import { caveVolume, derivedCacheKey } from "../../content/regions/caveGeometry.js";
 import type { Vec3 } from "../../world/types.js";
 
 /** Cave daylight as data (Babylon-free).
@@ -153,6 +154,14 @@ const fields = new WeakMap<CaveDef, CaveLightField>();
 export function caveLightField(def: CaveDef, floor: (x: number, z: number) => number): CaveLightField {
   const cached = fields.get(def);
   if (cached) return cached;
+  // Pure in the cave and the floor, so a cacheable cave on a named floor may come from the build cache.
+  const id = floorIdentity(floor);
+  const field = cachedBuild(id && derivedCacheKey(def, `light:${id.name}`, import.meta.url, id.modules), () => buildLightField(def, floor));
+  fields.set(def, field);
+  return field;
+}
+
+function buildLightField(def: CaveDef, floor: (x: number, z: number) => number): CaveLightField {
   const volume = caveVolume(def), g = volume.grid, f = 2, texel = g.voxel * f;
   const nx = g.nx / f, ny = g.ny / f, nz = g.nz / f, n = nx * ny * nz;
   const fine = (i: number, j: number, k: number): number => i + g.nx * (j + g.ny * k);
@@ -249,7 +258,6 @@ export function caveLightField(def: CaveDef, floor: (x: number, z: number) => nu
     caveId: def.id, min: { ...g.origin }, size: { x: nx * texel, y: ny * texel, z: nz * texel }, texel, nx, ny, nz, data,
     rock: { min: { ...g.origin }, voxel: g.voxel, nx: g.nx, ny: g.ny, nz: g.nz, data: volume.solid.map(v => v ? 255 : 0) },
   };
-  fields.set(def, field);
   return field;
 }
 

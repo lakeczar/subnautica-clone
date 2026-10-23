@@ -1,5 +1,6 @@
 import type { Vec3 } from "../../world/types.js";
 import type { FloorFunction } from "./terrain.js";
+import { cachedBuild, floorKey } from "../buildCache.js";
 import { worldFloor } from "./worldFloor.js";
 
 /** Highest floor under a circular footprint: centre, rim and an inner ring
@@ -23,6 +24,12 @@ export function footprintFloor(floor: FloorFunction, x: number, z: number, radiu
  * and parking pockets stay exact. Deterministic: same floor, same line. */
 export function drape(path: readonly Readonly<Vec3>[], radius: number, clearance: number,
   floor: FloorFunction = worldFloor, step = 6): Vec3[] {
+  return cachedBuild(floorKey("drape", floor, [path, radius, clearance, step], import.meta.url),
+    () => drapeOver(path, radius, clearance, floor, step));
+}
+
+function drapeOver(path: readonly Readonly<Vec3>[], radius: number, clearance: number,
+  floor: FloorFunction, step: number): Vec3[] {
   const dense: Vec3[] = [];
   for (let i = 0; i < path.length - 1; i++) {
     const a = path[i]!, b = path[i + 1]!;

@@ -1,40 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HAZARD_FIELDS } from "../src/content/ecology/hazards.js";
-import { sitePosition } from "../src/content/ecology/sites.js";
 import { RECIPES, type ItemKind } from "../src/content/registry.js";
 import { CueMapper } from "../src/audio/mapping.js";
 import { sceneFromState } from "../src/audio/scene.js";
 import { worldRegionAt } from "../src/render/regions.js";
-import { homeOf } from "../src/sim/ecology/agents.js";
 import { createEcology, resumeEcology } from "../src/sim/ecology/ecology.js";
 import { addItem } from "../src/sim/inventory.js";
 import { craft } from "../src/sim/progression.js";
 import { executeCommand, stepGame } from "../src/sim/step.js";
-import { recordStory } from "../src/sim/storyLink.js";
-import type { GameEvent, GameState, Vec3 } from "../src/sim/types.js";
+import type { GameEvent, GameState } from "../src/sim/types.js";
 import { addNewContent } from "../src/save/content.js";
-import { at, creelFirst, fund, saveable, world, WORKSHOP_BENCH } from "./b1-support.js";
-
-/** Rule-staged diver with an 800 m suit (real recipes), placed at a real Rift pose. */
-function riftDiver(p: Vec3): GameState {
-  const s = creelFirst(["creel_350"]);
-  recordStory(s, "C07");
-  for (const id of ["suit_450", "suit_800"] as const) fund(s, id);
-  at(s, p);
-  s.player.vitals.health = 100;
-  return s;
-}
-const hold = (s: GameState, n: number, still = true): { state: GameState; events: GameEvent[] } => {
-  const events: GameEvent[] = [];
-  for (let i = 0; i < n; i++) {
-    const r = stepGame(s, still ? [{ type: "move", forward: 0, right: 0, vertical: 0, sprint: false }] : [], world);
-    s = r.state; events.push(...r.events);
-  }
-  return { state: s, events };
-};
-const near = homeOf("rift_stalker_passage");
-const start = { x: near.x + 8, y: near.y, z: near.z };
+import { at, creelFirst, saveable, world, WORKSHOP_BENCH } from "./b1-support.js";
+import { hold, riftDiver, start } from "./ecology-composed-support.js";
 
 test("COMPOSED: in the real warm passage the glare stalker warns in hazard notices before it strikes a lit diver", () => {
   let s = riftDiver(start);
@@ -108,29 +85,15 @@ test("COMPOSED: glow lures and startle ink are fabricated in pairs, carried, and
   assert.match(executeCommand(none, { type: "release-ink" }, world).events.map((e) => e.type === "notice" ? e.message : "").join(), /No startle ink/);
 });
 
-test("COMPOSED: the split-chimney vent warns before harm; the fitted heat shroud holds; the mapper sounds it", () => {
-  const plume = sitePosition(HAZARD_FIELDS.rift_split_plume.shape.center), inside = { ...plume, y: plume.y + 20 };
-  const vent = HAZARD_FIELDS.rift_split_plume.cycle!;
-  const bare = riftDiver(inside);
-  bare.tick = vent.start * 60 - 60;
-  const r = hold(bare, 60 * 20, false);
-  const warnAt = r.events.findIndex((e) => e.type === "notice" && e.context === "ecology" && /Heat load/.test(e.message));
-  assert.ok(warnAt >= 0, "a heat warning names the protection");
-  assert.ok(r.state.player.vitals.health < 100, "unprotected harm after the warning");
-  // Fit the shroud at the workshop (worn in equipment), then stand in the same vent.
+test("smoke: the heat shroud is fabricated at the workshop and fitted as protection; the mapper turns an ecology warning into a positional call", () => {
+  // The vent held bare and shrouded for 20 s each: tests/ecology-composed.heavy.test.ts (TT-1).
   const fitted = riftDiver(WORKSHOP_BENCH);
   for (const [k, q] of Object.entries(RECIPES.heat_shroud.cost)) addItem(fitted, k as ItemKind, q, "workshop_locker");
   assert.equal(craft(fitted, "heat_shroud", world), null);
   assert.equal(fitted.inventory.items.find((i) => i.kind === "heat_shroud")?.fitted, "protection");
   saveable(fitted);
-  at(fitted, inside); fitted.tick = vent.start * 60 - 60; fitted.player.vitals.health = 100;
-  const shielded = hold(fitted, 60 * 20, false);
-  const heatHarm = (shielded.events.filter((e) => e.type === "notice" && /Heat load critical/.test(e.message))).length;
-  assert.equal(heatHarm, 0, "the shroud keeps the load below harm");
-  // S6's mapper: an ecology warning becomes the positional warning call.
   const s = riftDiver(start), mapper = new CueMapper();
   const step = hold(s, 60 * 8);
-  const scene = sceneFromState(step.state, true, worldRegionAt);
-  const cues = mapper.events(step.events, step.state, scene);
+  const cues = mapper.events(step.events, step.state, sceneFromState(step.state, true, worldRegionAt));
   assert.ok(cues.some((c) => c.cue === "alert.threat-call" && c.distance > 0), "a positional warning call at the animal");
 });
