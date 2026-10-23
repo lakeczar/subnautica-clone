@@ -2,6 +2,42 @@
 
 Opus 5.5 high. Branch `t3/col-1-static-collider` from root `fe27757`; stage A head: see the commit that adds this page. The decision that created this stream is R1 of the [compromise verdict](../audits/COMPROMISE-VERDICT-OPUS.md) (on `research/compromise-audit`), on Sol's findings ART-01/02/03/07, CAV-02/03/20 and TST-05. **New modules only:** `src/world/collision/*` and `tests/col1-*`. No edit to `world.ts`, `app.ts`, `step.ts`, LC's files, or any cave or creature file.
 
+## R4 response (Sol R4 on `dfab435`: [report](../reviews/COL-1A-SOL-XHIGH-R4.md), on `review/col-1a-r4`)
+**R4-1 is fixed at the root.** Coherence (`orientationProblems`) stays the hard winding guarantee. The vote only decides which way a coherent mesh faces, and now uses the **shape's own authoritative occupancy**:
+- **The predicate** returns true, false, or `null` (unknown, outside its domain).
+- **A vote is decisive** only when both probes are classified and differ. It retries at 10 and 20 cm, and otherwise abstains.
+- **Unanimity is over decisive votes only,** and a mesh with no decisive vote fails, naming it.
+
+**Which occupancy is authoritative**, found by sweeping all the shipped art:
+- **Kit-cave shells** vote with the **opened voxel volume** they were meshed from (`caveVolume(def).solid`), in the new `kitShellShapes(def, floor)` (`src/world/collision/caveShapes.ts`), which the oracle now uses.
+- **The raw source field is not it.** The review suggested `caveSampler(...).rock`, and with it `hub_apron_hollow` passes. But the sweep then refused `hub_crown_shaft` (96 out, 1 in) at a footprint edge (z = −516). There the field says rock outward at every scale, because the morphological opening removed rock the field still has, while the voxel volume agrees with the outward winding from 10 cm.
+- **The rock box cover** is wrong for the same reason: it ends at the footprint.
+- **LC chunks** vote with their biome's field (`field.rock`), which LC meshes directly.
+
+| Test | Result |
+| --- | --- |
+| `hub_apron_hollow`, from `CAVE_SOURCES` (10,728 triangles) | Coherent. It bakes through `kitShellShapes` with facing 1; the box cover (unknown beyond the footprint) also returns 1, because its out-of-domain probes now abstain. |
+| **Art sweep,** `tests/col1-art.heavy.test.ts` | All **23** authored kit shells, **30** vista, POI and dish sets (the closed pieces closed and coherent), and all **90** Canopy chunks (55 art meshes oriented out of rock by the field, 41 bands coherent). |
+| Voting rules (`tests/col1-r4.test.ts`) | A partly unknown predicate still decides. An all-unknown one fails loudly ("0 out, 0 in, 4 undecided"). A predicate wrong for one face is refused as a disagreement, not outvoted. The flipped-wall fixtures from R3 are still refused. |
+
+**Mutations,** each failing its test: unknown probes counted as outside; a majority vote; kit shells voting with the raw field; null triangles not skipped. The larger-offset retries aren't load-bearing in the shipped art (without them, some votes abstain and every mesh still orients); they only reduce abstentions.
+
+**P3, indexed topology.** Null triangles (a repeated index) have no orientation and are skipped; a closed tetrahedron with one stays closed. The intake precondition is now documented on `orientationProblems`: **conforming indexed topology**, meaning equal positions merged and no edge split on one side only. A T-junction reads as a hole. Edge balance certifies coherent winding of such a mesh; it is not a geometric closedness proof for arbitrary input. Welding and normalising arbitrary meshes is for whichever stream first brings non-conforming art in. No shipped art needs it.
+
+**Stage B (from the review), unchanged and restated:**
+- **Stage B owns bounded-rock recovery** for cave biomes. That means an oriented rock-volume guarantee with the cap, collar and domain boundaries, composed endpoint validation, and verified rescue when local recovery fails.
+- **Don't mark open chunks `interior: "solid"`,** and don't take the bare skin collider's zero-distance answer as rock recovery.
+- **The LC cap and collar walls stay a stage-B acceptance prerequisite.**
+
+**Checks for R4:**
+- **Fast tier:** passes 1,344 / 1,344 on factory-worker at `ae09272`; `col1-r4` adds 3 tests at 0.2 s CPU. Typecheck clean.
+- **Second worker** (`alickers-job: tested ae09272…`, clean test build), all COL-1 tests, **65 / 65**:
+  - the 58 fast tests;
+  - `col1-oracle.heavy.test.ts` 4 / 4 (57.5 s, peak 425 MiB);
+  - `col1-art.heavy.test.ts` 3 / 3 (11.4 s, peak 512 MiB).
+
+  The factory queue was booked by CW-1's exclusive series. These are functional results; no timing claim changed.
+
 ## R3 response (Sol R3 on `e8ce814`: [report](../reviews/COL-1A-SOL-XHIGH-R3.md), on `review/col-1a-r3`)
 Both P2s and both P3s are fixed. Every reproduction is a test in `tests/col1-r3.test.ts`, and each fix's mutation fails its test:
 - facing alone made one-sided;
