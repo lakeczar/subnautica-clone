@@ -1,8 +1,8 @@
 # SIM-1: the simulation steps in place
 
-Branch `t3/sim-1-inplace-step`, from root `feat/siltwake-first-expedition`. It was resumed on 2026-10-23 and merged with root at `887df90c` (SCHED-2a). It covers SIM-01, SIM-02 and SIM-05 from the compromise audit.
+Branch `t3/sim-1-inplace-step`, from root `feat/siltwake-first-expedition`. It was resumed on 2026-10-23, merged with root at `887df90c` (SCHED-2a), then at `91dc1ab` (SCHED-2b, SAVE-1). It covers SIM-01, SIM-02 and SIM-05 from the compromise audit.
 
-**Source SHA:** `bebc19a4` (evidence below). **No save schema change.** The timeline storage format changed from v1 to v2 and includes a bridge (below).
+**Source SHA:** `950d8796`, the merge with root `91dc1ab`. Root changed nothing under `src` since `887df90c`, so the sim sources are those tested at `bebc19a4`. **No save schema change.** The timeline storage format changed from v1 to v2 and includes a bridge (below).
 
 ## What changed
 
@@ -72,9 +72,9 @@ Every other identity-keyed cache is keyed by content.
 
 ## Evidence
 
-Unless noted otherwise, everything below was tested at `bebc19a4`. The base is root `887df90c`.
+Each result names the SHA it was tested at. The base is root `887df90c`, whose `src` is identical to root `91dc1ab`'s.
 
-**Determinism.** The differential is `scripts/sim-differential.sh 887df90c` on alickers at `bebc19a4`; the job exited 0 after 1,813 s, with results in `/work/results/sim1-diff-bebc19a4.json`.
+**Determinism.** The differential is `scripts/sim-differential.sh 887df90c`, run at `950d8796` over all 8 scenarios on factory-worker (the queue's `--machine any` route). It exited 0 after 2,530 s, with results in `/work/tmp/sim1-diff-950d8796.json`. An earlier run of the first 5 scenarios at `bebc19a4` on alickers was also identical.
 - **What it does:** each scenario's real command stream is fed to two sims side by side, the new in-place sim and the base commit's own compiled cloning sim (separate module instances and world).
 - **Coverage:**
 
@@ -85,12 +85,15 @@ Unless noted otherwise, everything below was tested at `bebc19a4`. The base is r
   | creel-loss | 628,280 | 311 | 10,788 | 181 | identical |
   | reverse | 744,078 | 522 | 12,938 | 222 | identical |
   | no-optional | 723,107 | 509 | 12,575 | 216 | identical |
+  | low-air | 9,678 | 0 | 162 | 5 | identical |
+  | tour | 183,602 | 37 | 3,098 | 53 | identical |
+  | over-geared | 18,046 | 3 | 304 | 6 | identical |
 
-  The branch scenarios count only their own ticks.
+  The branch scenarios count only their own ticks. In total: 4.19 M ticks and 2,518 commands.
 - **What was compared:**
-  - **State:** compared structurally every 60 ticks, after every command and on the first step after every save reload. All 68,856 checks were equal.
+  - **State:** compared structurally every 60 ticks, after every command and on the first step after every save reload. All 72,420 checks were equal.
   - **Events:** every tick's events were equal.
-  - **Timeline:** the base and new timeline recorders were observed as the app does, and their timelines (events and death and recovery ledgers) matched at all 1,161 checks.
+  - **Timeline:** the base and new timeline recorders were observed as the app does, and their timelines (events and death and recovery ledgers) matched at all 1,225 checks.
 - **Cross-commit milestones:** the plain playthroughs before (`887df90c`) and after (`bebc19a4`) were run on alickers, both with `--jobs 3`.
   - In all 5 scenarios, every milestone's label, tick and state hash is identical (82 saves), and every reload matched.
   - The whole run records (phases, legs, gathered and spent counts, hazards, discoveries) are identical apart from wall time, so the bots made the same decisions.
@@ -102,24 +105,25 @@ Unless noted otherwise, everything below was tested at `bebc19a4`. The base is r
 | Before (`887df90c`) | **13 min 04 s** (user 21 min 05 s) | 226 s | 378 s | 172 s | 232 s | 225 s |
 | After (`bebc19a4`) | **6 min 04 s** | 101 s | 181 s | 74 s | 103 s | 101 s |
 
-That is about 2.2× faster.
+That is about 2.2× faster. After the merge, all **8 scenarios** play in **7 min 19 s** on alickers at `950d8796`, with no blockers and every reload matched (`/work/tmp/261023-143349-ad64/pt-sim1-after-950d8796.json`). Root's README quotes about 14 min for the same eight at `0a464bc`; that is its figure, not a before-run of mine.
 
 **Per-tick cost.** These numbers come from `scripts/sim-bench.mjs` with the base and new trees interleaved in one job:
 - **Workload:** 600 ticks of held swim or pilot controls from each of the 16 creel milestone saves, 7 rounds, taking the median.
-- **The run:** `--class exclusive` at `c77979ab` (sources as at `bebc19a4`), results in `/work/tmp/sim1-bench-exclusive-c77979ab.json`.
-- **Missing: the exclusive evidence.** The queue flagged this run as "DISTURBED by work outside the lane" (CPU pressure some ≤ 19%), so these numbers are indicative only. A clean `--class exclusive` rerun is pending after SCHED-2b's queue switch-over.
+- **The run:** `--class exclusive` on the RTX 3090 at `950d8796`, results in `/work/tmp/sim1-bench-exclusive-950d8796.json`. It was **not disturbed** (CPU pressure some ≤ 0.56%).
+- **An earlier run** at `c77979ab` was flagged DISTURBED; it agrees in shape (254 → 39 µs).
 
 | µs per tick (mean of 16 states; range across states) | Base (`887df90c`) | New |
 | --- | --- | --- |
-| `stepGame` (pure: clone + step) | **254** (175–373) | 274 (172–476) |
-| `stepGameInPlace` | n/a | **39** (25–91) |
-| `StepGuard.step` (the app's and driver's path) | n/a | **40** (24–88) |
-| Clone alone | 149 (85–252) | n/a |
-| The app's timeline observation | 6.1 (4.5–8.8) | **2.0** (0.7–4.3) |
+| `stepGame` (pure: clone + step) | **209** (153–279) | 222 (152–301) |
+| `stepGameInPlace` | n/a | **31** (22–65) |
+| `StepGuard.step` (the app's and driver's path) | n/a | **33** (25–59) |
+| Clone alone | 125 (85–149) | n/a |
+| The app's timeline observation | 5.1 (3.9–5.9) | **1.7** (0.4–2.5) |
 
 **Reading the table:**
-- **The clone costs more than its own time.** The base step costs about 103 µs more than the clone alone, while the in-place step costs 39 µs. Stepping a freshly allocated graph every tick is itself slower (cold shapes and GC), so removing the clone saves more than the clone's own time.
-- **The pure `stepGame`** stays at its old cost, as intended: it is for forks only.
+- **The app's path is about 6.3× cheaper per tick** (209 → 33 µs). The guard's checkpoint and journal add about 2 µs.
+- **The clone costs more than its own time.** The base step costs about 84 µs more than the clone alone, while the in-place step costs 31 µs. Stepping a freshly allocated graph every tick is itself slower (cold shapes and GC), so removing the clone saves more than the clone's own time.
+- **The pure `stepGame`** is for forks only. It measures about 6% over the base; the likely cause is `preStep`'s small copy, which is not measured separately.
 
 **Atomicity.** `tests/step-guard.test.ts` (fast tier) injects a throw at each of the faulting step's world queries, and at 8 fields only later parts of the step touch:
 - renewal progress;
@@ -137,10 +141,10 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
 - drift detection when something writes outside the guard.
 
 **Checks:**
-- **Fast tier:** passed, 136 files (`npm test`, exit 0).
-- **Heavy tier:** passed on alickers at `bebc19a4` (fail 0 in every file; 894 s of file time in 329 s).
-- **Build:** `npm run build` passed.
-- **Economy scripts:** all five passed (`check-campaign-economy`, `check-m1-economy`, `check-m2-a-economy`, `check-m2-b1-economy`, `upgrade-economy`).
+- **Fast tier:** passed at `950d8796`, 140 files (`npm test`, exit 0).
+- **Heavy tier:** passed on alickers at `bebc19a4` (fail 0 in every file; 894 s of file time in 329 s). It was not rerun after the merge: root brought no `src` changes, and its test changes are in SAVE-1's files.
+- **Build:** `npm run build` passed at `950d8796`.
+- **Economy scripts:** all five passed at `950d8796` (`check-campaign-economy`, `check-m1-economy`, `check-m2-a-economy`, `check-m2-b1-economy`, `upgrade-economy`).
 
 **Where test time went** (attribution only, from the fast tier under its 5-way concurrency): 60,481 `stepGame` calls spent 18.5 s cloning and 33.3 s stepping, so cloning was about 6% of the tier's CPU. The converted loops remove most of it. The larger win is the playthrough and bots, above.
 
