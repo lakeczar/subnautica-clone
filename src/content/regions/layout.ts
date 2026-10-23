@@ -61,11 +61,14 @@ const DEPTH_RATING: Readonly<Record<RegionId, number>> = {
   thermal_rift: 350, brine_divide: 450, deep_district: 800,
 };
 
-/** Fine region lookup from footprints (exact rectangles, not chunk owners). */
+/** Fine region lookup from footprints (exact rectangles, not chunk owners): the
+ * one semantic answer to "which region is this?" (audio, optics, timeline, HUD). */
 export function regionAtPoint(x: number, z: number): RegionId | null {
   for (const [id, rects] of FOOTPRINTS) if (rects.some(r => rectContains(r, x, z))) return id;
   return null;
 }
+/** `regionAtPoint` for a world position (audio's `RegionResolver` shape). */
+export const regionAtPosition = (p: Readonly<{ x: number; z: number }>): RegionId | null => regionAtPoint(p.x, p.z);
 
 const box = (min: Vec3, max: Vec3): Aabb => ({ min, max });
 

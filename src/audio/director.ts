@@ -1,7 +1,8 @@
 /** SiltwakeAudio: the S6 replacement for `Soundscape`, with the same lifecycle
  * surface so app.ts swaps one import. Owns the live AudioContext; everything
  * it plays goes through the pure mapper and the engine. */
-import { worldRegionAt } from "../render/regions.js";
+import { regionAtPosition } from "../content/regions/layout.js";
+import type { RegionId } from "../content/registry.js";
 import type { GameEvent, GameState } from "../sim/types.js";
 import { CaptionGate, type Caption } from "./captions.js";
 import { AudioEngine, type EngineStats } from "./engine.js";
@@ -14,8 +15,8 @@ export interface AudioSettings {
   subtitles: boolean;
 }
 export interface AudioOptions {
-  /** Region at a world position. Defaults to today's render-region bounds; S1's
-   * spatial query replaces it once the full world is composed. */
+  /** Region at a world position. Defaults to the semantic region map
+   * (`regionAtPoint`), the same answer optics, the timeline and the HUD use. */
   regionAt?: RegionResolver;
   /** Visual equivalent of each captioned cue, emitted even when muted. */
   onCaption?: (caption: Caption) => void;
@@ -40,7 +41,7 @@ export class SiltwakeAudio {
   private scene: AudioScene;
 
   constructor(private readonly options: AudioOptions = {}) {
-    this.regionAt = options.regionAt ?? worldRegionAt;
+    this.regionAt = options.regionAt ?? regionAtPosition;
     this.clock = options.clock ?? (() => performance.now() / 1000);
     this.scene = sceneFromState(null, false, this.regionAt);
   }
@@ -104,6 +105,8 @@ export class SiltwakeAudio {
   }
 
   stats(): EngineStats | null { return this.engine?.stats() ?? null; }
+  /** The region the ambience follows now (diagnostics and tests). */
+  get region(): RegionId { return this.scene.region; }
 
   private gain(): number {
     const v = this.settings.volume;

@@ -1,4 +1,5 @@
 import { HULLS, HULL_COLLIDERS, OPENING, PLACES, REGIONS, renewable, SOURCES } from "../content/registry.js";
+import type { RegionId } from "../content/registry.js";
 import { regionAtPoint } from "../content/regions/layout.js";
 import { faunaVerb } from "./faunaPanels.js";
 import { LEGACY_PRESERVE } from "../content/regions/terrain.js";
@@ -31,6 +32,8 @@ export class HudView {
   private readonly canvas: HTMLCanvasElement;
   private readonly toast: HTMLElement;
   private noticeTimer = 0;
+  /** The region named last: outside every footprint the HUD keeps it, as audio does. */
+  private lastRegion: RegionId = "refuge_reef";
   private announcementTimer = 0;
   private announcementVersion = 0;
   private pendingExitAnnouncements: string[] = [];
@@ -104,20 +107,13 @@ export class HudView {
     const home = PLACES.home_pod.position;
     this.get("refuge-distance").textContent =
       `Home pod · ${Math.round(Math.hypot(p.x - home.x, p.z - home.z))} m`;
+    // B1's area keeps its own context hints below; the region name is the region map's
+    // everywhere (STEW-1, F11: the same answer audio, optics and the timeline use).
     const preserve = LEGACY_PRESERVE, legacy = p.x >= preserve.minX && p.x <= preserve.maxX && p.z >= preserve.minZ && p.z <= preserve.maxZ;
-    const composed = legacy ? null : regionAtPoint(p.x, p.z);
+    const region = regionAtPoint(p.x, p.z);
+    if (region) this.lastRegion = region;
     this.get("region-name").textContent =
-      state.scenario === "carrier-fixture"
-        ? "Carrier test fixture"
-        // C3: beyond B1's area, S2's region footprints name the place.
-        : composed ? REGIONS[composed].label
-        : p.x >= ROUTE_REGIONS.silt_basin.bounds.minX && p.z < ROUTE_REGIONS.silt_basin.bounds.maxZ
-          ? "Pale Basin"
-        : p.x > 62
-          ? "Upper Lantern Canopy"
-          : p.z < -28
-            ? "Splitspine shore"
-            : "Hearth Reef";
+      state.scenario === "carrier-fixture" ? "Carrier test fixture" : REGIONS[region ?? this.lastRegion].label;
     this.get("cruise").hidden = !cruise;
     // The occupied hull: the pilot seat, or the Creel cabin the player stands in.
     const e = exposure(state),
