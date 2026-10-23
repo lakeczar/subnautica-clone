@@ -13,6 +13,11 @@ Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 
 - `config.json` `ceilings` retunes a class without a release.
 - `test:heavy` drops its 25-minute `--deadline`.
 
+**Quiet jobs that are working** (found while checking the defaults):
+- **Playthrough:** a parallel playthrough's children print nothing until they finish, about 22 min, so the run would look stalled. The driver now touches the heartbeat as the simulation advances: every 1,024 steps, at most every 5 s (`scripts/playthrough/driver.ts`). A hung child stops stepping and is still caught. Inside the queue, children have no 1,800 s wall-clock limit any more (`run.ts`; `--child-timeout` still sets one).
+- **Heavy tier:** it holds each file's output until the file ends, so its test output beats the heartbeat as it arrives (`scripts/test-tier.mjs`).
+- These are small edits to playthrough and TT-1 files, flagged for composition.
+
 **Exclusive turns** (`policy.mjs`): `state.lastExclusiveEnd` is recorded. Until the queued tickets that waited through the last exclusive have started, no exclusive may drain (blocked reason `turn`). A series of exclusive tickets, one measurement each, therefore interleaves with everyone else. The usage text states the rule, and a loop inside one exclusive command gets a warning. Live example: at 03:02Z, CW-1 queued its traversal as one exclusive ticket per segment. Under SCHED-1 those tickets drain the lane back to back; under this policy, waiting work runs between them.
 
 **`soak` class:**
@@ -29,6 +34,7 @@ Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 
 **The GPU lease for every driver:**
 - **`gpu-lease.mjs`:** a lease is valid only for a process inside the granting ticket's scope whose grant has the GPU. The environment variable alone isn't proof.
 - **`chrome-guard.sh` + `install.sh --gpu-guard`:** every Playwright Chrome binary (full and headless shell, under `~/.cache/ms-playwright`) is replaced by a 6-line wrapper, using a hard link and then a rename, so no launch ever finds the binary missing. A GPU-flagged launch (`--use-angle=`, except SwiftShader; `--use-gl=`; `--enable-gpu`; `--ignore-gpu-blocklist`; Vulkan) then needs a valid lease. The check fails closed: it needs an explicit `gpu-lease: ok`. Per-stream play scripts are covered without edits. `--gpu-guard-remove` restores the originals.
+- **The second worker:** a process inside the sandbox's `siltwake-job-*` scope holds the lease, because the sandbox runs one job at a time. CW-1's `run-4070.sh` sets `SILTWAKE_GPU_LEASE=alickers-job` and keeps working.
 - **Detection:** `gpuUsers()` lists processes with `/dev/nvidia*` open (one scan takes about 7–10 ms). Checked on the 3090: a GPU-flagged Chrome's `gpu-process` opens `/dev/nvidia0`, and SwiftShader opens nothing. Unleased users appear in `status` and in the ledger (`unleased-gpu`, at most once a minute). They are also recorded on any GPU job that shared the GPU with them (`gpuShared`); an exclusive job that did is marked `DISTURBED`.
 
 **OOM classification across observer loss (R5 P3)** (`scope-run.sh`):
@@ -81,10 +87,10 @@ Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 
 
 ## Checks
 
-- **Unit:** `tests/heavy-sched-policy.test.ts`, 23/23, with SCHED-2 policy cases for soak leftover, no aging, no token, preemption only for memory or GPU, exclusive turns, serial soak and coalescing. `tests/soak-goals.test.ts`, 5/5.
+- **Unit:** `tests/heavy-sched-policy.test.ts`, 24/24 (including the lease rules), with SCHED-2 policy cases for soak leftover, no aging, no token, preemption only for memory or GPU, exclusive turns, serial soak and coalescing. `tests/soak-goals.test.ts`, 5/5.
 - **Acceptance** (real systemd, private state, units and slices):
   - SCHED-1's `acceptance.test.mjs` on the new code passes **23/23**, including 6c and 9e. Two expectations changed with the code, both shown above: 6c's anchor PID format, and 9e's label after the wrapper's TERM trap.
-  - New `acceptance-sched2.test.mjs` passes **13/13**:
+  - New `acceptance-sched2.test.mjs` passes **14/14**:
     - S1 stall (123, process dump); S2 heartbeat and output keep a job alive; S3 deadline against ceiling;
     - S4 soak (`cpu.idle=1`, yield notice, preempted 75, the waiting job starts after);
     - S5 rejection (3, the command never ran); S6 snapshot (tests v1 while the worktree says v2, evidence bound; a dirty snapshot is unbound; a written snapshot is kept); S7 drift during a run;
@@ -93,12 +99,17 @@ Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 
     - S10 GPU lease and Chrome guard (granted, missing, forged in another ticket's name; software passes; the guard removes cleanly);
     - S11 an unleased `/dev/nvidia0` holder shown by `status` and recorded on a GPU job;
     - S12 `wait --json`;
-    - S13 mixed-version queue with the real SCHED-1 code (`1f31c87`).
+    - S13 mixed-version queue with the real SCHED-1 code (`1f31c87`);
+    - S14 the `.test-build` guard (queued doesn't block, running names itself, the sibling directory is free, `--no-test-build`).
+  - Full runs of both suites at `fcc5811`: 23/23 and 13/13. S14 and SCHED-1's 14 and 14b ran again after the guard change.
+- **Fast tier:** `npm test` passes 1,296, and passes from `.test-build-2` too.
 
   S11 flaked once in a full run (a fixed 300 ms wait), was fixed to wait on the condition, and then passed 3/3.
 - **Soak runner, functional on the 3090:** see "Functional soak check" below.
 
 ## Compromises, limits and missing evidence
+
+- **Unverified on the sandbox:** the exact cgroup path of a `siltwake-job` scope. The rule follows the sandbox handoff's `siltwake-job-*` scope names. My check job couldn't run: the sandbox had a backlog of other agents' jobs.
 
 - **Starvation bound grows with ceilings.** The 10-minute head reservation now bounds a wait at 10 min plus the longest running job's remaining time, which can be hours. Only soaks are preemptible. Root fix if it bites: checkpointed or resumable jobs (TST-14's "resumable scenario runs"), or preemption by stopping and requeueing with a progress marker. Neither is cheap to do safely; I'd measure the ledger first.
 - **The GPU guard covers Playwright's Chrome binaries,** the only browsers here. Another GPU client (a system Chrome, a CUDA tool) is detected and recorded, not prevented. Device-level enforcement (cgroup device BPF) needs privileges we don't have.
