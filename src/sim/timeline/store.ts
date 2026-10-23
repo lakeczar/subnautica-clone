@@ -1,38 +1,34 @@
-/** The play timeline in local storage, append-only (SIM-05).
- *
- * Every key lives under one owned prefix, `siltwake.timeline.v2|<session>|…`:
- * a session's head (`|head`) and its chunk keys (`|<n>`). A chunk is written
+/** The play timeline in local storage (SIM-05), kept like the save slot
+ * (`src/save/repository.ts`): one journal record is the commit point, holding
+ * the current expedition's head and one previous expedition's. Each head names
+ * its chunk keys (`siltwake.timeline.v2|<session>|<n>`): a chunk is written
  * once when sealed; when it rotates, the same key is overwritten with its
- * summary (its notes, new things, deaths and recoveries kept verbatim). A save
- * rewrites only the small head: the session, the open chunk and the chunk keys.
+ * summary (notes, new things, deaths, recoveries and system events kept
+ * verbatim). A commit rewrites the journal, never the whole history.
  *
- * Retention (SIM-1 R3, the coordinator's contract):
- * - a committed timeline belongs to its session and is never collected for age;
- * - only when a save can't fit, unreferenced committed timelines are evicted,
- *   least recently written first: never the save repository's Continue or
- *   backup session, never a session live in another tab; each eviction is
- *   named in the save result and recorded in the saving timeline;
- * - the version 1 record goes once a complete version 2 head for that same
- *   session is stored.
- *
- * Commits: each save reads the session's durable head first and trusts only
- * what it names. A session with no head first gets a provisional head, so its
- * keys are discoverable; readers ignore it. The head is the commit point,
- * written after the chunks it names; then the session's keys that head doesn't
- * name are removed. Reads are tri-state: an unreadable value never authorises a
- * delete, a reclaim or a provisional overwrite.
- *
- * Coordination: the caller holds its session's lock (`timelineLock`) while the
- * session is live. Another session's uncommitted keys are reclaimed, or its
- * timeline evicted, only while holding that session's lock, taken only if
- * free. Without a lock API, only this session's own work is reclaimed. */
-import { closingEvents, exportHead, recordEvent, resumeRecorder, rotateOldest, TIMELINE_STORAGE_KEY } from "./recorder.js";
+ * - Every commit runs inside one exclusive writer lock: chunk writes, the
+ *   journal write, then removal of the chunk keys no head names. A journal
+ *   changed since this tab observed it, whose current head isn't this tab's
+ *   last commit, is a conflict: a stale base is never written over it.
+ * - Entering a different expedition moves current to previous; the older
+ *   previous goes (said when it held notes). On a full quota this
+ *   expedition's oldest chunks fold first, then previous is dropped (said, by
+ *   start date and play time), then the commit fails.
+ * - Reads are tri-state: an unreadable journal, head, chunk or version 1
+ *   record makes the timeline protected (no writes; memory and export only).
+ * - The version 1 record migrates into current or previous by its session and
+ *   goes only once a committed journal names its replacement.
+ * - Each note is also written at once, without the lock, to this tab's outbox
+ *   (`siltwake.timeline.v2.notes|<session>|<tab>`); a load merges outbox notes
+ *   not yet committed, so a note outlives a close before its commit. */
+import { closingEvents, exportHead, restoreEvent, resumeRecorder, retainedEvents, rotateOldest, TIMELINE_STORAGE_KEY, timelineSince } from "./recorder.js";
 import type { RecorderOptions, TimelineRecorder } from "./recorder.js";
 import { parseTimeline } from "./report.js";
 import type { ChunkSummary, TimelineEvent, TimelineExport } from "./report.js";
+import type { WriterLockPort } from "../../save/writer-lock.js";
 import type { GameState } from "../types.js";
 
-/** The parts of `Storage` (localStorage) the store uses, enumeration included. */
+/** The parts of `Storage` (localStorage) the timeline uses, enumeration included. */
 export interface TimelineStoragePort {
   readonly length: number;
   key(index: number): string | null;
@@ -40,235 +36,249 @@ export interface TimelineStoragePort {
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
 }
-/** Cross-tab locks (the Web Locks API). */
-export interface TimelineLockPort {
-  /** Holds `name` until the returned release is called; resolves once granted. */
-  hold(name: string): Promise<() => void>;
-  /** Runs `work` holding `name`, only if no one holds it now; undefined otherwise. */
-  ifFree<T>(name: string, work: () => T): Promise<T | undefined>;
-}
-/** `navigator.locks` as a lock port, or null without it. */
-export function webLocks(): TimelineLockPort | null {
-  const locks = (globalThis as { navigator?: { locks?: LockManagerLike } }).navigator?.locks;
-  if (!locks) return null;
-  return {
-    hold: (name) => new Promise((granted) => { void locks.request(name, () => new Promise<void>((release) => granted(release))); }),
-    ifFree: async (name, work) => { let out: ReturnType<typeof work> | undefined; await locks.request(name, { ifAvailable: true }, (lock) => { if (lock) out = work(); }); return out; },
-  };
-}
-interface LockManagerLike {
-  request(name: string, callback: (lock: unknown) => unknown): Promise<unknown>;
-  request(name: string, options: { ifAvailable: boolean }, callback: (lock: unknown) => unknown): Promise<unknown>;
-}
-export const TIMELINE_PREFIX = "siltwake.timeline.v2|";
-export const timelineLock = (session: string): string => `siltwake.timeline|${session}`;
-const sessionPrefix = (session: string): string => `${TIMELINE_PREFIX}${encodeURIComponent(session)}|`;
-export const headKey = (session: string): string => `${sessionPrefix(session)}head`;
-const chunkKey = (session: string, n: number): string => `${sessionPrefix(session)}${n}`;
-/** An export without its summaries, whose `events` are the open chunk (open
- * spans closed as of the save); `chunks` names every chunk key in order, oldest
- * first, and `folded` those holding summaries. */
-type Head = Omit<TimelineExport, "rotated"> & { chunks: number[]; folded: number[]; nextChunk: number; writtenAt: number };
-type Provisional = { provisional: true };
+export const TIMELINE_JOURNAL_KEY = "siltwake.timeline.v2.journal";
+/** All timeline writers on an origin use this lock name. */
+export const TIMELINE_WRITER_LOCK = "siltwake.timeline.v2.writer";
+const CHUNKS = "siltwake.timeline.v2|", NOTES = "siltwake.timeline.v2.notes|";
+const chunkKey = (session: string, n: number): string => `${CHUNKS}${encodeURIComponent(session)}|${n}`;
+const notesPrefix = (session: string): string => `${NOTES}${encodeURIComponent(session)}|`;
+/** An export without summaries, whose `events` are the open chunk (open spans
+ * closed as of the commit); `chunks` names its chunk keys oldest first and
+ * `folded` those holding summaries. */
+export type TimelineHead = Omit<TimelineExport, "rotated"> & { chunks: number[]; folded: number[]; nextChunk: number; commit: string; notes: number };
+interface Journal { format: "siltwake.timeline.journal"; version: 1; current: TimelineHead | null; previous: TimelineHead | null }
 type Read<T> = { kind: "absent" } | { kind: "present"; value: T } | { kind: "unreadable"; error: string };
+/** A previous expedition's timeline a commit removed. */
+export interface DroppedTimeline { label: string; notes: number; reason: "replaced" | "room" }
 
-export type TimelineLoad = { kind: "absent" } | { kind: "loaded"; recorder: TimelineRecorder } | { kind: "unreadable"; error: string };
-/** `rotated`: saved after folding own old chunks into summaries to fit the quota.
- * `failed`: nothing new committed (the last committed timeline is intact, and
- * everything lives on in memory). `evicted`: other sessions' timelines removed
- * to make room. */
-export interface TimelineSave { outcome: "saved" | "rotated" | "failed"; evicted: string[]; error?: string }
-export interface TimelineStoreOptions {
-  locks?: TimelineLockPort | null;
-  /** Sessions the save repository still holds (Continue, backup): never evicted. */
-  referenced?: () => Iterable<string>;
-  now?: () => number;
-}
+export type TimelineLoad =
+  | { kind: "empty" }
+  | { kind: "loaded"; recorder: TimelineRecorder; from: "current" | "previous" | "v1" }
+  | { kind: "protected"; error: string };
+export type TimelineCommitFailure = "conflict" | "protected" | "cancelled" | "lock-unavailable" | "lock-failed" | "storage-unavailable" | "write-refused" | "invalid";
+/** `dropped`: previous expeditions' timelines this commit removed (said to the player). */
+export type TimelineCommit =
+  | { ok: true; rotated: boolean; dropped: DroppedTimeline[] }
+  | { ok: false; code: TimelineCommitFailure; error: string; dropped: DroppedTimeline[] };
 
-export class TimelineStore {
-  private readonly locks: TimelineLockPort | null;
-  private readonly referenced: () => Iterable<string>;
-  private readonly now: () => number;
-  constructor(private readonly storage: TimelineStoragePort, options: TimelineStoreOptions = {}) {
-    this.locks = options.locks ?? null;
-    this.referenced = options.referenced ?? (() => []);
-    this.now = options.now ?? Date.now;
-  }
+/** One expedition's timeline in storage, for one tab's session generation. */
+export class TimelineJournal {
+  /** The journal text as this tab last saw it. */
+  private observed: string | null = null;
+  /** This tab's last commit, and the sequence it made durable. */
+  private lastCommit: string | null = null;
+  private committedSeq = 0;
+  private protectedReason: string | null = null;
+  /** Outbox keys merged at load: removed once a commit holds their notes. */
+  private merged: string[] = [];
+  private readonly tab = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
-  /** The stored timeline for `sessionId`. `unreadable`: it may exist but can't be
-   * read now; the caller must not save a replacement over it. */
-  load(sessionId: string, options: RecorderOptions = {}): TimelineLoad {
-    const head = this.head(sessionId);
-    if (head.kind === "unreadable") return head;
-    if (head.kind === "present" && !("provisional" in head.value)) {
-      const h = head.value, rotated: ChunkSummary[] = [], sealed: { n: number; events: TimelineEvent[] }[] = [];
-      for (const n of h.chunks) {
-        const c = this.read<TimelineEvent[] | ChunkSummary>(chunkKey(sessionId, n));
-        if (c.kind !== "present") return { kind: "unreadable", error: `chunk ${n} is ${c.kind === "absent" ? "missing" : "unreadable"}` };
-        if (isSummary(c.value)) rotated.push({ ...c.value, n });
-        else if (Array.isArray(c.value) && c.value.length) sealed.push({ n, events: c.value });
-        else return { kind: "unreadable", error: `chunk ${n} is malformed` };
-      }
-      // Validate the whole stored timeline as one export before trusting it.
-      const parsed = parseTimeline(JSON.stringify({ ...h, rotated, events: [...sealed.flatMap((c) => c.events), ...h.events] }));
-      if (!parsed.ok) return { kind: "unreadable", error: parsed.error };
-      return { kind: "loaded", recorder: resumeRecorder({ ...parsed.value, events: h.events }, options, { sealed, nextChunk: h.nextChunk }) };
+  constructor(private readonly storage: TimelineStoragePort | null, private readonly lock: WriterLockPort | null, readonly session: string) {}
+  get canWrite(): boolean { return this.storage !== null && this.lock !== null && this.protectedReason === null; }
+
+  /** This expedition's stored timeline, with any outbox notes not yet committed. */
+  load(options: RecorderOptions = {}): TimelineLoad {
+    if (!this.storage) return { kind: "empty" };
+    const raw = this.read<string>(TIMELINE_JOURNAL_KEY, false);
+    if (raw.kind === "unreadable") return this.protect(`the timeline journal can't be read (${raw.error})`);
+    this.observed = raw.kind === "present" ? raw.value : null;
+    const j = this.observed === null ? empty() : journal(this.observed);
+    if (!j) return this.protect("the timeline journal is unreadable");
+    const v1 = this.legacy();
+    if (v1.kind === "unreadable") return this.protect(`the version 1 timeline is unreadable (${v1.error})`);
+    const head = [j.current, j.previous].find((h) => h?.session.id === this.session) ?? null;
+    let out: TimelineLoad = { kind: "empty" };
+    if (head) {
+      const recorder = this.resume(head, options);
+      if (typeof recorder === "string") return this.protect(recorder);
+      out = { kind: "loaded", recorder, from: head === j.current ? "current" : "previous" };
+    } else if (v1.kind === "present" && v1.value.session.id === this.session) out = { kind: "loaded", recorder: resumeRecorder(v1.value, options), from: "v1" };
+    if (out.kind === "loaded") {
+      // What loaded is durable; outbox notes merged now are not, until the next commit.
+      this.committedSeq = out.recorder.seq;
+      this.mergeOutbox(out.recorder);
     }
-    // The single-key version 1 timeline, until this session's version 2 head replaces it.
-    const legacy = this.read<string>(TIMELINE_STORAGE_KEY, false);
-    if (legacy.kind === "unreadable") return legacy;
-    if (legacy.kind === "absent") return { kind: "absent" };
-    const parsed = parseTimeline(legacy.value);
-    return parsed.ok && parsed.value.session.id === sessionId ? { kind: "loaded", recorder: resumeRecorder(parsed.value, options) } : { kind: "absent" };
+    return out;
+  }
+  /** Outbox notes for a new recorder of this expedition (when `load` was empty). */
+  adopt(rec: TimelineRecorder): void { this.mergeOutbox(rec); }
+
+  /** Writes this recorder's uncommitted notes to this tab's outbox, at once and without the lock. */
+  stash(rec: TimelineRecorder): void {
+    if (!this.storage) return;
+    const notes = timelineSince(rec, this.committedSeq).events.filter((e) => e.kind === "note"), key = notesPrefix(this.session) + this.tab;
+    try { if (notes.length) this.storage.setItem(key, JSON.stringify(notes)); else this.storage.removeItem(key); }
+    catch { /* best effort: the next commit carries every note */ }
   }
 
-  /** Commits the recorder's timeline. The caller holds `timelineLock(rec.session.id)`.
-   * On a full quota: this session's leftovers go, then its oldest chunks fold,
-   * then unreferenced timelines are evicted, oldest written first. */
-  async save(rec: TimelineRecorder, s: GameState): Promise<TimelineSave> {
-    const evicted: string[] = [];
-    // A free lock means the caller doesn't hold it: another tab could reclaim this save's work mid-write.
-    if (this.locks && await this.locks.ifFree(timelineLock(rec.session.id), () => true))
-      return { outcome: "failed", evicted, error: "this session's timeline lock isn't held" };
-    await this.reclaimAbandoned(rec.session.id);
-    let rotated = false;
-    for (;;) {
-      const r = this.attempt(rec, s);
-      if (r === "saved") return { outcome: rotated ? "rotated" : "saved", evicted };
-      if (r !== "quota") return { outcome: "failed", evicted, error: r.error };
-      if (rotateOldest(rec)) { rotated = true; continue; }
-      const gone = await this.evictOne(rec.session.id);
-      if (!gone) return { outcome: "failed", evicted, error: "the timeline doesn't fit the browser's storage" };
-      evicted.push(gone);
-      recordEvent(rec, s, { kind: "system", what: "timeline-evicted", id: gone });
-    }
-  }
-
-  /** One synchronous commit attempt. */
-  private attempt(rec: TimelineRecorder, s: GameState): "saved" | "quota" | { error: string } {
-    const id = rec.session.id, numbers = [...rec.rotated.map((r) => r.n), ...rec.sealed.map((c) => c.n)];
-    if (numbers.some((n) => n === undefined) || new Set(numbers).size !== numbers.length)
-      return { error: `timeline chunk numbers collide or are missing: ${numbers.join(",")}` };
-    const durable = this.head(id);
-    if (durable.kind === "unreadable") return { error: `the stored timeline head can't be read: ${durable.error}` };
-    const committed = durable.kind === "present" && !("provisional" in durable.value) ? durable.value : null;
-    const named = new Set(committed?.chunks ?? []), folded = new Set(committed?.folded ?? []);
-    let head: Head;
+  /** Commits the recorder's timeline, like `SaveRepository.commit`. */
+  async commit(rec: TimelineRecorder, s: GameState, signal: AbortSignal): Promise<TimelineCommit> {
+    if (rec.session.id !== this.session) return failed("invalid", "this recorder belongs to another expedition");
+    if (signal.aborted) return failed("cancelled", "the expedition was replaced");
+    if (this.protectedReason) return failed("protected", this.protectedReason);
+    if (!this.storage) return failed("storage-unavailable", "local storage is unavailable");
+    if (!this.lock) return failed("lock-unavailable", "this browser can't coordinate timeline saves between tabs");
     try {
-      if (durable.kind === "absent") this.storage.setItem(headKey(id), JSON.stringify({ provisional: true } satisfies Provisional));
-      for (const r of rec.rotated) if (!folded.has(r.n!)) this.storage.setItem(chunkKey(id, r.n!), JSON.stringify(r));
-      for (const c of rec.sealed) if (!named.has(c.n) || folded.has(c.n)) this.storage.setItem(chunkKey(id, c.n), JSON.stringify(c.events));
-      const closing = closingEvents(rec, s);
-      // Summaries live in their chunk keys, so the head stays small however many notes accumulate.
-      const { rotated: _summaries, ...rest } = exportHead(rec, s, closing.length);
-      head = { ...rest, events: [...rec.events, ...closing], chunks: numbers as number[],
-        folded: rec.rotated.map((r) => r.n!), nextChunk: rec.nextChunk, writtenAt: this.now() };
-      this.storage.setItem(headKey(id), JSON.stringify(head));
-    } catch (error) {
-      if (!quota(error)) return { error: error instanceof Error ? error.message : String(error) };
-      // This attempt's keys (and older leftovers) that the committed head doesn't name: free their space.
-      this.collect(id, committed?.chunks ?? []);
-      return "quota";
-    }
-    // Against the manifest just written: never re-read, never an empty keep-set from a failed read.
-    this.collect(id, head.chunks);
-    const legacy = this.read<string>(TIMELINE_STORAGE_KEY, false);
-    if (legacy.kind === "present" && legacySession(legacy.value) === id) this.remove(TIMELINE_STORAGE_KEY);
-    return "saved";
-  }
-
-  /** Removes this session's chunk keys outside `keep`. A failure defers the rest to the next commit. */
-  private collect(id: string, keep: readonly number[]): void {
-    const names = new Set(keep.map(String)), prefix = sessionPrefix(id);
-    for (const key of this.keys(prefix) ?? [])
-      if (key !== headKey(id) && !names.has(key.slice(prefix.length)) && !this.remove(key)) return;
-  }
-
-  /** Other sessions' uncommitted keys (a provisional head, or none), under their lock if it is free. */
-  private async reclaimAbandoned(id: string): Promise<void> {
-    if (!this.locks) return;
-    for (const other of this.sessions()) {
-      if (other === id || !this.uncommitted(other)) continue;
-      await this.locks.ifFree(timelineLock(other), () => { if (this.uncommitted(other)) this.drop(other); });
+      return await this.lock.runExclusive(TIMELINE_WRITER_LOCK, signal, () =>
+        signal.aborted ? failed("cancelled", "the expedition was replaced") : this.write(rec, s));
+    } catch {
+      return signal.aborted ? failed("cancelled", "the expedition was replaced") : failed("lock-failed", "timeline-save coordination failed; nothing was written");
     }
   }
-  /** Evicts the least recently written committed timeline that no one references or holds. */
-  private async evictOne(id: string): Promise<string | null> {
-    if (!this.locks) return null;
-    const keep = new Set(this.referenced());
-    const candidates = this.sessions().flatMap((other) => {
-      if (other === id || keep.has(other)) return [];
-      const h = this.head(other);
-      return h.kind === "present" && !("provisional" in h.value) ? [{ other, at: h.value.writtenAt }] : [];
-    }).sort((a, b) => a.at - b.at);
-    // A version 1 record of an unreferenced session is the oldest history of all.
-    const legacy = this.read<string>(TIMELINE_STORAGE_KEY, false), legacyId = legacy.kind === "present" ? legacySession(legacy.value) : null;
-    if (legacyId !== null && legacyId !== id && !keep.has(legacyId)) candidates.unshift({ other: legacyId, at: -Infinity });
-    for (const { other, at } of candidates) {
-      const done = await this.locks.ifFree(timelineLock(other), () => {
-        if (new Set(this.referenced()).has(other)) return false;
-        if (at === -Infinity) return this.remove(TIMELINE_STORAGE_KEY);
-        const h = this.head(other);
-        if (h.kind !== "present" || "provisional" in h.value) return false;
-        return this.drop(other);
-      });
-      if (done) return other;
+
+  /** Inside the writer lock: synchronous, so no other writer interleaves. */
+  private write(rec: TimelineRecorder, s: GameState): TimelineCommit {
+    const storage = this.storage!;
+    const now = this.read<string>(TIMELINE_JOURNAL_KEY, false);
+    if (now.kind === "unreadable") return failed("storage-unavailable", `the timeline journal can't be read (${now.error}); nothing was written`);
+    const raw = now.kind === "present" ? now.value : null;
+    let j = raw === null ? empty() : journal(raw);
+    if (!j) return failed("protected", "the timeline journal is unreadable");
+    if (raw !== this.observed && (this.lastCommit === null || j.current?.commit !== this.lastCommit))
+      return failed("conflict", "the play timeline changed in another tab");
+    this.observed = raw;
+    const numbers = [...rec.rotated.map((r) => r.n), ...rec.sealed.map((c) => c.n)];
+    if (numbers.some((n) => n === undefined) || new Set(numbers).size !== numbers.length) return failed("invalid", "timeline chunk numbers collide");
+    const v1 = this.legacy();
+    if (v1.kind === "unreadable") return failed("protected", `the version 1 timeline is unreadable (${v1.error})`);
+    const own = [j.current, j.previous].find((h) => h?.session.id === this.session) ?? null;
+    const others = [j.current, j.previous].filter((h): h is TimelineHead => !!h && h.session.id !== this.session);
+    let previous: TimelineHead | null = others[0] ?? null;
+    const displaced = others[1] ?? null;
+    const dropped: DroppedTimeline[] = displaced?.notes ? [label(displaced, "replaced")] : [];
+    let rotated = false;
+    // Another expedition's version 1 timeline, before any journal: it migrates into previous.
+    let migrate = v1.kind === "present" && !j.current && !j.previous && v1.value.session.id !== this.session ? resumeRecorder(v1.value) : null;
+    for (;;) {
+      try {
+        this.writeChunks(rec, own);
+        if (migrate) { this.writeChunks(migrate, null); previous = headOf(migrate, migrate.events.at(-1)?.tick ?? 0, [], this.newCommit()); }
+        const closing = closingEvents(rec, s), commit = this.newCommit();
+        const next: Journal = { format: "siltwake.timeline.journal", version: 1, current: headOf(rec, s.tick, closing, commit), previous };
+        const text = JSON.stringify(next);
+        storage.setItem(TIMELINE_JOURNAL_KEY, text);
+        this.observed = text;
+        this.lastCommit = commit;
+        this.committedSeq = rec.seq;
+        this.collect(next);
+        // Every note is now in a committed head: this tab's outbox, and the outboxes merged at load, go.
+        for (const key of [...this.merged.splice(0), notesPrefix(this.session) + this.tab]) this.remove(key);
+        return { ok: true, rotated, dropped };
+      } catch (error) {
+        if (!quota(error)) return failed("write-refused", `browser storage refused the timeline (${error instanceof Error ? error.message : String(error)}); the stored timeline is unchanged`, dropped);
+      }
+      this.collect(j);   // this attempt's keys that the stored journal doesn't name
+      if (migrate) { migrate = null; previous = null; continue; }   // the version 1 record then stays as it is
+      if (rotateOldest(rec)) { rotated = true; continue; }
+      if (!previous) return failed("write-refused", "the play timeline doesn't fit the browser's storage", dropped);
+      // Drop previous: a smaller journal first (the commit point), then its keys.
+      const smaller: Journal = { ...j, current: own === j.current ? j.current : null, previous: own === j.previous ? j.previous : null };
+      const text = JSON.stringify(smaller);
+      try { storage.setItem(TIMELINE_JOURNAL_KEY, text); } catch { return failed("write-refused", "the play timeline doesn't fit the browser's storage", dropped); }
+      this.observed = text;
+      dropped.push(label(previous, "room"));
+      previous = null;
+      j = smaller;
+      this.collect(j);
     }
-    return null;
-  }
-  /** Whether a session has keys but no committed head (a readable provisional head, or none). */
-  private uncommitted(session: string): boolean {
-    const h = this.head(session);
-    return h.kind === "absent" || (h.kind === "present" && "provisional" in h.value);
-  }
-  /** Removes a session's keys: chunks first, the head last. False if storage refused (left for later). */
-  private drop(session: string): boolean {
-    const keys = this.keys(sessionPrefix(session));
-    if (!keys) return false;
-    for (const key of keys) if (key !== headKey(session) && !this.remove(key)) return false;
-    return this.remove(headKey(session));
   }
 
-  /** Sessions with keys under the prefix. */
-  private sessions(): string[] {
-    const out = new Set<string>();
-    for (const k of this.keys(TIMELINE_PREFIX) ?? []) try { out.add(decodeURIComponent(k.slice(TIMELINE_PREFIX.length).split("|")[0]!)); } catch { /* not ours */ }
-    return [...out];
+  /** New chunks and folds for `rec`, given its stored head `own` (null: none). */
+  private writeChunks(rec: TimelineRecorder, own: TimelineHead | null): void {
+    const id = rec.session.id, named = new Set(own?.chunks ?? []), folded = new Set(own?.folded ?? []);
+    for (const r of rec.rotated) if (!folded.has(r.n!)) this.storage!.setItem(chunkKey(id, r.n!), JSON.stringify(r));
+    for (const c of rec.sealed) if (!named.has(c.n) || folded.has(c.n)) this.storage!.setItem(chunkKey(id, c.n), JSON.stringify(c.events));
   }
-  /** Keys under `prefix`, listed before any is removed; null if storage can't be enumerated now. */
-  private keys(prefix: string): string[] | null {
+
+  /** Removes chunk keys no head of the stored journal `j` names, and the version 1 record once `j` replaces it. */
+  private collect(j: Journal): void {
+    const live = new Set([j.current, j.previous].flatMap((h) => h ? h.chunks.map((n) => chunkKey(h.session.id, n)) : []));
+    for (const key of this.keys(CHUNKS)) if (!live.has(key) && !this.remove(key)) return;
+    const v1 = this.legacy();
+    if (v1.kind === "present" && [j.current, j.previous].some((h) => h?.session.id === v1.value.session.id)) this.remove(TIMELINE_STORAGE_KEY);
+  }
+
+  private resume(head: TimelineHead, options: RecorderOptions): TimelineRecorder | string {
+    const rotated: ChunkSummary[] = [], sealed: { n: number; events: TimelineEvent[] }[] = [];
+    for (const n of head.chunks) {
+      const c = this.read<TimelineEvent[] | ChunkSummary>(chunkKey(head.session.id, n));
+      if (c.kind !== "present") return `chunk ${n} of the stored timeline is ${c.kind === "absent" ? "missing" : "unreadable"}`;
+      if (isSummary(c.value)) rotated.push({ ...c.value, n });
+      else if (Array.isArray(c.value) && c.value.length) sealed.push({ n, events: c.value });
+      else return `chunk ${n} of the stored timeline is malformed`;
+    }
+    const parsed = parseTimeline(JSON.stringify({ ...head, rotated, events: [...sealed.flatMap((c) => c.events), ...head.events] }));
+    if (!parsed.ok) return `the stored timeline is malformed (${parsed.error})`;
+    return resumeRecorder({ ...parsed.value, events: head.events }, options, { sealed, nextChunk: head.nextChunk });
+  }
+
+  /** Adds outbox notes (from any tab) that the recorder doesn't hold yet. */
+  private mergeOutbox(rec: TimelineRecorder): void {
+    const seen = new Set(noteKeys(rec)), found: TimelineEvent[] = [];
+    for (const key of this.keys(notesPrefix(this.session))) {
+      const r = this.read<TimelineEvent[]>(key);
+      if (r.kind !== "present" || !Array.isArray(r.value)) continue;
+      for (const e of r.value) if (e?.kind === "note" && !seen.has(noteKey(e))) { seen.add(noteKey(e)); found.push(e); }
+      this.merged.push(key);
+    }
+    for (const e of found.sort((a, b) => a.tick - b.tick)) restoreEvent(rec, e);
+  }
+
+  private newCommit(): string { return `${this.tab}.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`; }
+  private protect(reason: string): TimelineLoad { this.protectedReason = reason; return { kind: "protected", error: reason }; }
+  /** The version 1 record: absent, present (parsed) or unreadable (a malformed record included). */
+  private legacy(): Read<TimelineExport> {
+    const r = this.read<string>(TIMELINE_STORAGE_KEY, false);
+    if (r.kind !== "present") return r;
+    const p = parseTimeline(r.value);
+    return p.ok ? { kind: "present", value: p.value } : { kind: "unreadable", error: p.error };
+  }
+  private keys(prefix: string): string[] {
     try {
       const out: string[] = [];
-      for (let i = 0; i < this.storage.length; i++) { const k = this.storage.key(i); if (k?.startsWith(prefix)) out.push(k); }
+      for (let i = 0; i < this.storage!.length; i++) { const k = this.storage!.key(i); if (k?.startsWith(prefix)) out.push(k); }
       return out;
-    } catch { return null; }
+    } catch { return []; }
   }
   private remove(key: string): boolean {
-    try { this.storage.removeItem(key); return true; } catch { return false; }
-  }
-  private head(session: string): Read<Head | Provisional> {
-    const h = this.read<Head | Provisional>(headKey(session));
-    if (h.kind !== "present") return h;
-    const v = h.value as Partial<Head> & Partial<Provisional>;
-    if (typeof v !== "object" || v === null) return { kind: "unreadable", error: "the head is not an object" };
-    if (v.provisional === true) return h;
-    return Array.isArray(v.chunks) && Array.isArray(v.folded) && v.session?.id === session && typeof v.writtenAt === "number"
-      ? h : { kind: "unreadable", error: "the head is malformed" };
+    try { this.storage!.removeItem(key); return true; } catch { return false; }
   }
   /** Absent, present, or unreadable (storage threw, or the value doesn't parse). */
   private read<T>(key: string, json = true): Read<T> {
     let text: string | null;
-    try { text = this.storage.getItem(key); } catch (e) { return { kind: "unreadable", error: e instanceof Error ? e.message : String(e) }; }
+    try { text = this.storage!.getItem(key); } catch (e) { return { kind: "unreadable", error: e instanceof Error ? e.message : String(e) }; }
     if (text === null) return { kind: "absent" };
     if (!json) return { kind: "present", value: text as T };
     try { return { kind: "present", value: JSON.parse(text) as T }; } catch { return { kind: "unreadable", error: `${key} does not parse` }; }
   }
 }
-/** The session of a version 1 timeline, from its first line (`serializeTimeline` writes the head
- * first), without parsing the whole record; null when it can't be read (the record is then kept). */
-function legacySession(text: string): string | null {
-  const m = /"session":\{"id":("(?:[^"\\]|\\.)*")/.exec(text.slice(0, 4096));
-  try { return m ? JSON.parse(m[1]!) as string : null; } catch { return null; }
+
+const failed = (code: TimelineCommitFailure, error: string, dropped: DroppedTimeline[] = []): TimelineCommit => ({ ok: false, code, error, dropped });
+const empty = (): Journal => ({ format: "siltwake.timeline.journal", version: 1, current: null, previous: null });
+function journal(raw: string): Journal | null {
+  try {
+    const v = JSON.parse(raw) as Partial<Journal>;
+    const head = (h: unknown): boolean => h === null || (typeof h === "object" && h !== null && Array.isArray((h as TimelineHead).chunks) &&
+      Array.isArray((h as TimelineHead).folded) && typeof (h as TimelineHead).session?.id === "string" && typeof (h as TimelineHead).commit === "string");
+    return v?.format === "siltwake.timeline.journal" && v.version === 1 && head(v.current ?? null) && head(v.previous ?? null)
+      ? { format: v.format, version: 1, current: v.current ?? null, previous: v.previous ?? null } : null;
+  } catch { return null; }
+}
+/** The recorder's head, ending at `tick`, its open spans closed by `closing`. */
+function headOf(rec: TimelineRecorder, tick: number, closing: readonly TimelineEvent[], commit: string): TimelineHead {
+  const { rotated: _summaries, ...rest } = exportHead(rec, tick, closing.length);
+  return { ...rest, events: [...rec.events, ...closing], chunks: [...rec.rotated.map((r) => r.n!), ...rec.sealed.map((c) => c.n)],
+    folded: rec.rotated.map((r) => r.n!), nextChunk: rec.nextChunk, commit, notes: noteKeys(rec).length };
+}
+const noteKey = (e: TimelineEvent): string => `${e.tick}|${e.wall ?? ""}|${e.text ?? ""}`;
+/** Every note the recorder holds, rotated summaries' kept notes included. */
+const noteKeys = (rec: TimelineRecorder): string[] =>
+  [...rec.rotated.flatMap((r) => r.kept), ...retainedEvents(rec)].filter((e) => e.kind === "note").map(noteKey);
+/** "the expedition started 23 Oct 2026 (2 h 14 min of play)". */
+function label(h: TimelineHead, reason: DroppedTimeline["reason"]): DroppedTimeline {
+  const started = new Date(h.session.started), play = Math.round(h.session.end.play / 60);
+  const date = Number.isNaN(started.getTime()) ? "an earlier expedition" : `the expedition started ${started.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
+  return { label: `${date} (${play >= 60 ? `${Math.floor(play / 60)} h ${play % 60} min` : `${play} min`} of play)`, notes: h.notes, reason };
 }
 const isSummary = (v: unknown): v is ChunkSummary => typeof v === "object" && v !== null && !Array.isArray(v) && Array.isArray((v as ChunkSummary).kept);
 const quota = (error: unknown): boolean => error instanceof Error &&

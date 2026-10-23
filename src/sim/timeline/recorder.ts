@@ -141,6 +141,9 @@ function push(rec: TimelineRecorder, e: TimelineEvent): void {
   rec.events = [];
   while (rec.sealed.length > TIMELINE_RETAINED_CHUNKS) rotateOldest(rec);
 }
+/** Records an event that already carries its stamp (a note from the outbox of a
+ * commit that never landed). */
+export function restoreEvent(rec: TimelineRecorder, e: TimelineEvent): void { push(rec, e); }
 /** Folds the oldest sealed chunk into a summary (its kept events stay whole).
  * Also the storage's answer to a full quota. Returns false with nothing to rotate. */
 export function rotateOldest(rec: TimelineRecorder): boolean {
@@ -382,15 +385,15 @@ export function recordSystemsEvents(rec: TimelineRecorder, s: GameState, events:
 /** A detached export with any open travel or idle span closed as of now. */
 export function exportTimeline(rec: TimelineRecorder, s: GameState): TimelineExport {
   const closing = closingEvents(rec, s);
-  return { ...exportHead(rec, s, closing.length), events: [...retainedEvents(rec), ...closing] };
+  return { ...exportHead(rec, s.tick, closing.length), events: [...retainedEvents(rec), ...closing] };
 }
-/** An export's head: everything but `events` (the store adds its own partition).
- * `closing` events end the export's events; its `seq` counts them, since a
- * resumed recorder holds them as recorded events. */
-export function exportHead(rec: TimelineRecorder, s: GameState, closing: number): Omit<TimelineExport, "events"> {
+/** An export's head, ending at `tick`: everything but `events` (the store adds
+ * its own partition). `closing` events end the export's events; its `seq`
+ * counts them, since a resumed recorder holds them as recorded events. */
+export function exportHead(rec: TimelineRecorder, tick: number, closing: number): Omit<TimelineExport, "events"> {
   return {
     format: TIMELINE_FORMAT, version: TIMELINE_VERSION,
-    session: { ...rec.session, end: { tick: s.tick, play: rec.playTicks / STEPS, idle: rec.idleTicks / STEPS }, pending: clonePending(rec.pending) },
+    session: { ...rec.session, end: { tick, play: rec.playTicks / STEPS, idle: rec.idleTicks / STEPS }, pending: clonePending(rec.pending) },
     dropped: rec.dropped, seq: rec.seq + closing, ...(rec.rotated.length ? { rotated: [...rec.rotated] } : {}),
   };
 }
