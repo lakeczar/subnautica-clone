@@ -67,7 +67,12 @@ export async function openGame(opts) {
 }
 
 async function waitPlayable(page) {
-  await page.waitForFunction(() => !document.querySelector("#hud")?.hidden && document.querySelector("#ocean").dataset.ready === "true", null, { timeout: 120000 });
+  await page.waitForFunction(() => !document.querySelector("#hud")?.hidden, null, { timeout: 120000 });
+  const ready = () => page.waitForFunction(() => document.querySelector("#ocean").dataset.ready === "true", null, { timeout: 5000 }).then(() => true, () => false);
+  // A save at the very start plays the pod opening; a player skips it by holding Space (as C4's driver does).
+  if (!(await ready())) { await page.keyboard.down("Space"); await page.waitForTimeout(1300); await page.keyboard.up("Space"); }
+  await page.waitForFunction(() => document.querySelector("#ocean").dataset.ready === "true", null, { timeout: 120000 });
+  await page.waitForTimeout(1000);
   await page.locator("#ocean").click();
 }
 
