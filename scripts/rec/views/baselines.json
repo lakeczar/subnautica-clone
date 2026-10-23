@@ -21,24 +21,6 @@
      }
     ]
    },
-   "place.basin_boundary_station": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "9197e52e10bd46ecc99729b1ac012d62b9c914f51c1d967507f35b982601cda9",
-    "file": "3090/place.basin_boundary_station/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
    "place.basin_dormitory": {
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "cf37133b5de37cb876c97122528665994490692c3080ae47bcfde14c053b3740",
@@ -75,46 +57,10 @@
      }
     ]
    },
-   "place.canopy_stop": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "b6269a62389fb50841d4638c1fcbdf8e4701b7feed3f74265192e847bb1e8eca",
-    "file": "3090/place.canopy_stop/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
    "place.island_workshop": {
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "866866204854732d49c0d68fa766714cc6ba10fd85b867126096787196613389",
     "file": "3090/place.island_workshop/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
-   "place.reef_ribs": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "782a4621f8cd26385872a980040e7f31dd99f21392efcc81dfc93a37b1a68207",
-    "file": "3090/place.reef_ribs/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
     "at": "2026-10-23T13:32:12.331Z",
@@ -151,24 +97,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "f51ab8d7e3191446eec3ffb400af49ce207836d5d39a3d317c8fd6fbb0f9c835",
     "file": "3090/hub.crown_station.outside/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
-   "hub.crown_station.work": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "72a98c0c0162647d2af1bedbd3b7c3890ebb2c31e3120efcf2c42a8336059d45",
-    "file": "3090/hub.crown_station.work/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
     "at": "2026-10-23T13:32:12.331Z",
@@ -223,24 +151,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "1eec18782c8f67595e35899c53f0b3020fc75a91248606293ead09b0ff758dc3",
     "file": "3090/threat.basin_wreck_ridge/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
-   "threat.rift_cool_flank": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "b667053acd483a673f3f3c99484479b1d75fa976281c68f976ed4ee943d457ee",
-    "file": "3090/threat.rift_cool_flank/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
     "at": "2026-10-23T13:32:12.331Z",
@@ -344,17 +254,6 @@
       "at": "2026-10-23T12:34:03.458Z"
      }
     ]
-   },
-   "region.refuge_reef.1": {
-    "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-    "sha256": "cdc05474ca1e3b2376f3ddeee8fcfa4a45bdfcd241250000eeb86bef1ecfdf8c",
-    "file": "3090/region.refuge_reef.1/2bf9b14eee972ea659585abe0c4b885b8cb09e74.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-    "at": "2026-10-23T12:34:03.458Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": []
    },
    "region.refuge_reef.2": {
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
@@ -522,24 +421,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "da216f6d2e6c1766f59d903da685e238856f3610ec71774d73859384a1c4794c",
     "file": "3090/region.brine_divide.1/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
-   "region.brine_divide.2": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "b073185bfd1f72fcb8a5a4fabcf2b2b9f54fa9b63a94d73a512e08204972a658",
-    "file": "3090/region.brine_divide.2/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
     "at": "2026-10-23T13:32:12.331Z",
@@ -846,24 +727,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "e642a108b1187e5176cfcfbeb5dfcf745454ffc26ff87fb3119d1d40c4ee584c",
     "file": "3090/cave.reef_wrackhollow.mouth/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
-   "cave.reef_wrackhollow.interior": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "ac105c2557a2086ea1da4f7ece40753c9670f285a3eeec1a01b604903d3f0961",
-    "file": "3090/cave.reef_wrackhollow.interior/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
     "at": "2026-10-23T13:32:12.331Z",
@@ -2066,24 +1929,6 @@
      }
     ]
    },
-   "cave.divide_mirror_pocket.mouth": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "b1e2b5eb2b88377e06a2e34b26cb643f8f8776eb2752c7acb2b274401bce55ea",
-    "file": "3090/cave.divide_mirror_pocket.mouth/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
    "cave.divide_mirror_pocket.interior": {
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "012de47360f6b7a7612b6a03d98b41ee5c99d9ff856f1bf698b05f87e93c44cd",
@@ -2174,24 +2019,6 @@
      }
     ]
    },
-   "cave.divide_lee_burrow.mouth": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "9bda6e8ef2ff25e404676791279486fff08d76f0af73f8c9f9c56ee0c79ac73a",
-    "file": "3090/cave.divide_lee_burrow.mouth/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
    "cave.divide_lee_burrow.interior": {
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "596cfa451c74fb4a767ffc72edcb7b1e700d880129c52e80705b99a94a087261",
@@ -2214,24 +2041,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "bc77fed546ec140b90e9bbb24950d93c291ab2cea32107519b014d8699626189",
     "file": "3090/cave.divide_fissure_window.mouth/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
-   "cave.divide_fissure_window.interior": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "60839779740abaef5565bd8d0d8d72416670d4a1c9ae583cb01a8035e4096e16",
-    "file": "3090/cave.divide_fissure_window.interior/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
     "at": "2026-10-23T13:32:12.331Z",
@@ -2304,24 +2113,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "15fa0e526f773cf24b32b26433aabbed078192f0aaee53018365a910ea512986",
     "file": "3090/cave.divide_brine_cistern.interior/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
-    "at": "2026-10-23T13:32:12.331Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 3090 550.163.01",
-    "history": [
-     {
-      "commit": "2bf9b14eee972ea659585abe0c4b885b8cb09e74",
-      "acceptedBy": "REC-1 builder (Opus 5.5)",
-      "why": "first baseline of view set v1 (REC-1): no earlier baseline; taste review pending",
-      "at": "2026-10-23T12:34:03.458Z"
-     }
-    ]
-   },
-   "cave.meridian_footing_void.mouth": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "cd8574a73457f53dc239fb2ab488159e7f53cf53f2f6a6cb55e889fdf48cfe3b",
-    "file": "3090/cave.meridian_footing_void.mouth/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "view set v1 re-baselined at a fixed tick (the save's, 145422): the first baseline froze whatever tick loading reached, and the water's waves moved between runs",
     "at": "2026-10-23T13:32:12.331Z",
@@ -2583,17 +2374,6 @@
     "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
     "history": []
    },
-   "place.basin_boundary_station": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "c8bc1ff3d7012d50767f4b6f721e5d869fd6d0d83a6ef56bc49ce62262a4111f",
-    "file": "4070/place.basin_boundary_station/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
    "place.basin_dormitory": {
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "1f03f2c84096038136453b8819bda36eee0b497232f77e746484b44c87531858",
@@ -2616,32 +2396,10 @@
     "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
     "history": []
    },
-   "place.canopy_stop": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "2b41a45c358fed1ecc21d7cb3e155713c8fb622bee85acc7042f8a470f3d06ba",
-    "file": "4070/place.canopy_stop/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
    "place.island_workshop": {
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "3b77703f0e82b8dd66ff11f1fb3cb09cba96da438ee7b6e07779d0e5a16f6942",
     "file": "4070/place.island_workshop/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
-   "place.reef_ribs": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "d9ef8b7b89cf8bf4123b34beee1468095757f284f91ffb587ec48761adb4afbd",
-    "file": "4070/place.reef_ribs/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
     "at": "2026-10-23T14:05:02.900Z",
@@ -2664,17 +2422,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "7891a473f60ec450b441b9c933b4871de23e738427f44cc9e42797b7c85f4df0",
     "file": "4070/hub.crown_station.outside/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
-   "hub.crown_station.work": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "f45d84ad9105acd6da6714566cc3b5fd7f9050f292c5736140c5e15bc7ff7646",
-    "file": "4070/hub.crown_station.work/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
     "at": "2026-10-23T14:05:02.900Z",
@@ -2708,17 +2455,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "2c94c775fe74b53b198a27798f7056abc768abc477ff656655f33d8896207532",
     "file": "4070/threat.basin_wreck_ridge/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
-   "threat.rift_cool_flank": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "1474fc87aca06bea0017674cf91224f9774378bcacac8330de457ab16f2c2c81",
-    "file": "4070/threat.rift_cool_flank/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
     "at": "2026-10-23T14:05:02.900Z",
@@ -2884,17 +2620,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "2853b40d16767890a54037fa2da00ace05d26cbf0cd9a72abeba9f4ec77162ee",
     "file": "4070/region.brine_divide.1/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
-   "region.brine_divide.2": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "2acb0e2b07bf9755819c1a6a84f2034825a663ccb5899e2c6fd9ab22f636512c",
-    "file": "4070/region.brine_divide.2/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
     "at": "2026-10-23T14:05:02.900Z",
@@ -3082,17 +2807,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "6f4bde5a3c7c0f56f7821d83dc28e23eeb3002bde10e8c0380fb10123441456d",
     "file": "4070/cave.reef_wrackhollow.mouth/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
-   "cave.reef_wrackhollow.interior": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "2dda8764ab52014703844edf9660a98f461eb8e43699d6a8c88b4a764e719f28",
-    "file": "4070/cave.reef_wrackhollow.interior/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
     "at": "2026-10-23T14:05:02.900Z",
@@ -3826,17 +3540,6 @@
     "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
     "history": []
    },
-   "cave.divide_mirror_pocket.mouth": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "86a579e4d12865d54038caaf59b2aa6da02bec8af425b57c6a62450321197f5f",
-    "file": "4070/cave.divide_mirror_pocket.mouth/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
    "cave.divide_mirror_pocket.interior": {
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "49ec62feccf4a1e020e3e6a767360675c7c1b379b628af76e8daaea947692a4f",
@@ -3892,17 +3595,6 @@
     "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
     "history": []
    },
-   "cave.divide_lee_burrow.mouth": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "2b00e8a53e925339bce2aaa815963e71b68ae2b448c5f4edae6e56883df2efa5",
-    "file": "4070/cave.divide_lee_burrow.mouth/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
    "cave.divide_lee_burrow.interior": {
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "12d1a9034421818c6c4b6798b053591458f65a86464c0b729f212218e5109e9a",
@@ -3918,17 +3610,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "a9e846aa396960758aee6d5f0c4f5b69cb41154bdcdc5a66abedc552864b9c1e",
     "file": "4070/cave.divide_fissure_window.mouth/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
-   "cave.divide_fissure_window.interior": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "f07ef0c7a24be83cbb43160caa4b031679f75b8665ee03535cf30bf12362488a",
-    "file": "4070/cave.divide_fissure_window.interior/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
     "at": "2026-10-23T14:05:02.900Z",
@@ -3973,17 +3654,6 @@
     "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
     "sha256": "48af7d906a3d9c3e8a1d4db08b271c3b7dbb836cc0e63a80fe4edc27b176b7f9",
     "file": "4070/cave.divide_brine_cistern.interior/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
-    "acceptedBy": "REC-1 builder (Opus 5.5)",
-    "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
-    "at": "2026-10-23T14:05:02.900Z",
-    "viewsVersion": 1,
-    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU 595.97",
-    "history": []
-   },
-   "cave.meridian_footing_void.mouth": {
-    "commit": "67e8394d62bbc5322a2902e5ecb61f81ec409b88",
-    "sha256": "63f96e758e081233aeeb2f114c0d8ea8bdde05dc659077dbe88fbbc70c24138f",
-    "file": "4070/cave.meridian_footing_void.mouth/67e8394d62bbc5322a2902e5ecb61f81ec409b88.png",
     "acceptedBy": "REC-1 builder (Opus 5.5)",
     "why": "first RTX 4070 baseline of view set v1 at a fixed tick (indicative machine; taste review pending)",
     "at": "2026-10-23T14:05:02.900Z",
@@ -4135,5 +3805,22 @@
     "history": []
    }
   }
+ },
+ "withdrawn": {
+  "note": "Baselines withdrawn when their views were quarantined (REC-1 R1-F2): a history-dependent capture is not an accepted visual state.",
+  "views": [
+   "cave.divide_fissure_window.interior",
+   "cave.divide_lee_burrow.mouth",
+   "cave.divide_mirror_pocket.mouth",
+   "cave.meridian_footing_void.mouth",
+   "cave.reef_wrackhollow.interior",
+   "hub.crown_station.work",
+   "place.basin_boundary_station",
+   "place.canopy_stop",
+   "place.reef_ribs",
+   "region.brine_divide.2",
+   "region.refuge_reef.1",
+   "threat.rift_cool_flank"
+  ]
  }
 }

@@ -32,9 +32,13 @@ const COL = Object.fromEntries(FRAME_COLUMNS.map((c, i) => [c, i])) as Record<Fr
 export const STREAMING_PARTS = ["chunks", "caves", "regions", "lights"] as const;
 
 /** Cave admission states (world/caves/admission.ts CaveHold.state, LC's biome
- * states). Index 0: admission was not evaluated this frame. */
-export const HOLD_CODES = [null, "clear", "loading", "rescue", "refuge", "waiting", "away", "admitted"] as const;
+ * states), then the runtime's reasons admission is deliberately not evaluated
+ * (R1-F4): not playing (paused, a menu or panel, graphics away), the opening,
+ * inside an interior. Index 0, null: not known (never "nothing held"). */
+export const HOLD_CODES = [null, "clear", "loading", "rescue", "refuge", "waiting", "away", "admitted", "inactive", "opening", "interior"] as const;
 export const HOLDING = new Set(["loading", "rescue", "refuge", "waiting"]);
+/** Admission deliberately not evaluated: no play to hold. */
+export const NOT_APPLICABLE = new Set(["inactive", "opening", "interior"]);
 export const holdCode = (state: string | null | undefined): number => {
   const i = HOLD_CODES.indexOf((state ?? null) as (typeof HOLD_CODES)[number]);
   return i < 0 ? 0 : i;
@@ -193,8 +197,11 @@ export class FlightRecorder {
 
   private readonly waiting: { input: FrameInput; selfMs: number }[] = [];
   private readonly gpuTimes = new Map<number, number>();
-  /** A frame's GPU timer query resolved (renderer.ts createGpuTimer). */
-  gpuResolved(tag: number, ms: number): void { this.gpuTimes.set(tag, ms); }
+  /** A frame's GPU timer query resolved (renderer.ts createGpuTimer). A result
+   * for a row no longer waiting (it timed out, or was settled) is dropped. */
+  gpuResolved(tag: number, ms: number): void {
+    if (this.waiting.some((w) => w.input.gpuTag === tag)) this.gpuTimes.set(tag, ms);
+  }
 
   /** One frame. A frame with a GPU query waits until its time resolves (at most
    * GPU_WAIT_FRAMES), so the GPU time lands on the frame it measured; rows are
@@ -215,7 +222,12 @@ export class FlightRecorder {
     }
   }
   /** Writes every waiting row now (an export, the end of a recording). */
-  settle(): void { while (this.waiting.length) { const h = this.waiting.shift()!; const { gpuTag: _, ...rest } = h.input; this.commit(rest, h.selfMs); } }
+  settle(): void {
+    while (this.waiting.length) { const h = this.waiting.shift()!; const { gpuTag: _, ...rest } = h.input; this.commit(rest, h.selfMs); }
+    this.gpuTimes.clear();
+  }
+  /** Results waiting for their rows (bounded by GPU_WAIT_FRAMES). */
+  get gpuPending(): number { return this.gpuTimes.size; }
 
   private commit(input: FrameInput, rec: number): void {
     const r = this.row;
@@ -230,7 +242,7 @@ export class FlightRecorder {
     if (rec > this.self.worstMs) this.self.worstMs = rec;
     this.frames.push(r, input.t);
     // Hold transitions (only frames where admission was evaluated).
-    if (hold !== null) {
+    if (hold !== null && !NOT_APPLICABLE.has(hold)) {
       const was = this.hold, holding = HOLDING.has(hold), wasHolding = was !== null && HOLDING.has(was);
       if (holding && hold !== was) {
         if (!wasHolding) this.holdSince = input.t;
@@ -240,24 +252,45 @@ export class FlightRecorder {
           { t: input.t, detail: { state: hold, ms: Math.round(input.t - this.holdSince) } });
       this.hold = hold;
     }
-    const work = input.work ?? 0;
-    if (input.gap > this.longFrameMs || work > this.longFrameMs) {
-      const split: Record<string, number> = {};
-      for (const c of ["work", "sim", "chunks", "caves", "regions", "lights", "actors", "render", "hud", "save"] as const) {
-        const v = r[COL[c]]!;
-        if (v >= 0.05) split[c] = Math.round(v * 100) / 100;
-      }
-      const streaming = STREAMING_PARTS.reduce((a, p) => a + r[COL[p]]!, 0);
-      const cause = longFrameCause(input.gap, work, r[COL.sim]!, streaming, r[COL.render]!, r[COL.heapDrop]!, rec, r[COL.gpu]!);
-      // A picture of a long frame at most every LONG_FRAME_SNAPSHOT_MS, and never
-      // of the recorder's own (a snapshot must not cause the next one).
-      const snapshot = cause !== "recorder" && input.t - this.lastLongSnapshot >= LONG_FRAME_SNAPSHOT_MS;
-      if (snapshot) this.lastLongSnapshot = input.t;
-      this.event("long-frame", `${input.gap.toFixed(1)} ms frame (${cause})`, {
-        t: input.t, snapshot, detail: { gap: Math.round(input.gap * 10) / 10, ...split, ...(rec >= 0.05 ? { rec: Math.round(rec * 100) / 100 } : {}),
-          outside: Math.round(Math.max(0, input.gap - work - rec) * 10) / 10, ...(r[COL.gpu]! >= 0 ? { gpu: Math.round(r[COL.gpu]! * 100) / 100 } : {}), cause, ...(r[COL.heapDrop]! > 0 ? { heapDrop: Math.round(r[COL.heapDrop]! * 10) / 10 } : {}) },
-      });
+    // Two observations, never merged (R1-F1). A callback's own work over budget is
+    // its own fault whatever the interval around it; an interval over budget (the
+    // time from the previous frame's start to this one's) belongs to the callback
+    // that ran in it, the previous row, and to whatever ran outside it.
+    const work = r[COL.work]!, prev = this.prevT === null ? null : this.prevRow;
+    if (work > this.longFrameMs) this.longFrame("callback", input.t, work, r, r, rec, input.t);
+    if (input.gap > this.longFrameMs && prev) this.longFrame("interval", input.t, input.gap, prev, r, rec, this.prevT!);
+    this.prevRow.set(r);
+    this.prevT = input.t;
+  }
+  private readonly prevRow = new Float32Array(COLS);
+  private prevT: number | null = null;
+
+  /** A long-frame event. `own` is the callback the time belongs to; `at` is the
+   * row whose interval ended it (collections between the two show on it). */
+  private longFrame(observation: "callback" | "interval", t: number, ms: number, own: Float32Array, at: Float32Array, rec: number, callbackT: number): void {
+    const split: Record<string, number> = {};
+    for (const c of ["work", "sim", "chunks", "caves", "regions", "lights", "actors", "render", "hud", "save"] as const) {
+      const v = own[COL[c]]!;
+      if (v >= 0.05) split[c] = Math.round(v * 100) / 100;
     }
+    const work = own[COL.work]!, gpu = own[COL.gpu]!, heapDrop = at[COL.heapDrop]!;
+    const streaming = STREAMING_PARTS.reduce((a, p) => a + own[COL[p]]!, 0);
+    const cause = observation === "callback"
+      ? longFrameCause(work, work, own[COL.sim]!, streaming, own[COL.render]!, -1, 0, gpu)
+      : longFrameCause(ms, work, own[COL.sim]!, streaming, own[COL.render]!, heapDrop, rec, gpu);
+    // A picture of a long frame at most every LONG_FRAME_SNAPSHOT_MS, and never
+    // of the recorder's own (a snapshot must not cause the next one).
+    const snapshot = cause !== "recorder" && t - this.lastLongSnapshot >= LONG_FRAME_SNAPSHOT_MS;
+    if (snapshot) this.lastLongSnapshot = t;
+    const r1 = (v: number) => Math.round(v * 10) / 10;
+    this.event("long-frame", `${ms.toFixed(1)} ms ${observation} (${cause})`, {
+      t, snapshot, detail: {
+        observation, ms: r1(ms), ...(observation === "interval" ? { gap: r1(ms), callbackAt: Math.round(callbackT * 100) / 100 } : {}), ...split,
+        ...(observation === "interval" && rec >= 0.05 ? { rec: Math.round(rec * 100) / 100 } : {}),
+        ...(observation === "interval" ? { outside: r1(Math.max(0, ms - work - rec)) } : {}),
+        ...(gpu >= 0 ? { gpu: Math.round(gpu * 100) / 100 } : {}), cause, ...(observation === "interval" && heapDrop > 0 ? { heapDrop: r1(heapDrop) } : {}),
+      },
+    });
   }
 
   sample(s: FlightSample): void { this.samples.push(s); }

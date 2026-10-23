@@ -44,7 +44,7 @@ export function flightFrames(page, { overMs = 33 } = {}) {
       }, cursor);
       if (!got) return legacy();
       const { f, gaps } = got, col = Object.fromEntries(f.columns.map((c, i) => [c, i]));
-      const HOLD = [null, "clear", "loading", "rescue", "refuge", "waiting", "away", "admitted"];
+      const HOLD = f.holdCodes ?? [null, "clear", "loading", "rescue", "refuge", "waiting", "away", "admitted"];
       cursor = f.next;
       const records = f.rows.map((row) => ({ total: row[col.work], hold: HOLD[row[col.hold]] ?? null,
         parts: { chunks: row[col.chunks], caves: row[col.caves], regions: row[col.regions], lights: row[col.lights] } }));

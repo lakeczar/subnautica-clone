@@ -77,7 +77,8 @@ test("pacing splits the time into travelling, doing and waiting, and finds the l
     assert.ok(p.share.travelling.pct >= 55, JSON.stringify(p.share));
     assert.ok(p.share.doing.s >= 5 && p.share.waiting.s >= 5, JSON.stringify(p.share));
     assert.equal(p.milestones.length, 1);
-    assert.ok(p.regions.refuge_reef.s >= 29 && p.regions.island_chain.s >= 29, JSON.stringify(p.regions));
+    // On the play clock: the island stretch excludes its 8 s of waiting.
+    assert.ok(p.regions.refuge_reef.s >= 29 && p.regions.island_chain.s >= 20 && p.regions.island_chain.s <= 24, JSON.stringify(p.regions));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -108,4 +109,109 @@ test("a shared run records a streaming hitch for attention but neither passes no
     assert.ok(a.attention.some((e: { kind: string }) => e.kind === "long-frame"));
     assert.equal(a.verdict.status, "partial");
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+/** A recording written directly: rows (by column name), samples, events, system readings, snapshots and files. */
+function recording(dir: string, o: { rows?: Record<string, number | string | null>[]; samples?: object[]; events?: object[]; system?: object[]; snapshots?: object[]; files?: string[]; header?: object }): void {
+  const rec = join(dir, "recording");
+  mkdirSync(join(rec, "snapshots"), { recursive: true });
+  const codes = [null, "clear", "loading", "rescue", "refuge", "waiting", "away", "admitted", "inactive", "opening", "interior"];
+  const row = (r: Record<string, number | string | null>) => FRAME_COLUMNS.map((c) => (c === "hold" ? codes.indexOf((r.hold ?? null) as string | null) : c === "gpu" || c === "heapDrop" ? (r[c] ?? -1) : (r[c] ?? 0)));
+  const lines = (xs: unknown[] = []) => xs.map((x) => JSON.stringify(x)).join("\n") + (xs.length ? "\n" : "");
+  writeFileSync(join(rec, "header.json"), JSON.stringify({ frameColumns: FRAME_COLUMNS, holdCodes: codes, run: { pageStart: 0, judged: true }, video: null, drained: { lost: {} }, ...o.header }));
+  writeFileSync(join(rec, "frames.ndjson"), lines((o.rows ?? []).map(row)));
+  writeFileSync(join(rec, "samples.ndjson"), lines(o.samples));
+  writeFileSync(join(rec, "events.ndjson"), lines(o.events));
+  writeFileSync(join(rec, "system.ndjson"), lines(o.system));
+  writeFileSync(join(rec, "snapshots.ndjson"), lines(o.snapshots));
+  for (const f of o.files ?? []) writeFileSync(join(rec, f), "x");
+}
+const withDir = (fn: (dir: string) => void) => { const dir = mkdtempSync(join(tmpdir(), "rec1-")); try { fn(dir); } finally { rmSync(dir, { recursive: true, force: true }); } };
+
+test("R1-F1: the review's two rows fail the streaming check, through the recorder's own events", () => {
+  withDir((dir) => {
+    const r = new FlightRecorder({ snapshots: false });
+    r.frame({ t: 950, gap: 16.7, work: 4 });
+    r.frame({ t: 1000, gap: 16.7, work: 44, chunks: 36, caves: 0.2 });
+    r.frame({ t: 1050, gap: 50, work: 4, chunks: 0.2 });
+    const cols = FRAME_COLUMNS as readonly string[];
+    const rows = r.frames.since(0).rows.map((x) => Object.fromEntries(cols.map((c, i) => [c, x[i]!])) as Record<string, number>);
+    recording(dir, { rows: rows.map((x) => ({ ...x, hold: "clear" })), events: r.events.since(0).items });
+    const a = A.analyse(A.loadRecording(dir));
+    const c = a.checks.find((x: { name: string }) => x.name === "no streaming frame over 33 ms");
+    assert.equal(c.status, "fail", c.note);
+    assert.match(c.note, /2 of 2/);
+  });
+});
+
+test("R1-F4: hold coverage comes from the rows: a known hold fails amid unknowns; unknowns never pass; not-applicable frames do not count against it", () => {
+  withDir((dir) => {
+    recording(dir, { rows: [{ t: 0, gap: 16, work: 3, hold: "clear" }, { t: 16, gap: 16, work: 3, hold: null }, { t: 32, gap: 16, work: 3, hold: null }] });
+    assert.equal(A.analyse(A.loadRecording(dir)).checks.find((x: { name: string }) => x.name === "no cave hold").status, "missing");
+  });
+  withDir((dir) => {
+    recording(dir, { rows: [{ t: 0, gap: 16, work: 3, hold: "loading" }, { t: 16, gap: 16, work: 3, hold: null }] });
+    assert.equal(A.analyse(A.loadRecording(dir)).checks.find((x: { name: string }) => x.name === "no cave hold").status, "fail");
+  });
+  withDir((dir) => {
+    recording(dir, { rows: [{ t: 0, gap: 16, work: 3, hold: "clear" }, { t: 16, gap: 16, work: 3, hold: "inactive" }, { t: 32, gap: 16, work: 3, hold: "opening" }] });
+    const c = A.analyse(A.loadRecording(dir)).checks.find((x: { name: string }) => x.name === "no cave hold");
+    assert.equal(c.status, "pass");
+    assert.match(c.note, /2 not applicable/);
+  });
+});
+
+test("R1-F4: completeness is checked against the files: a picture the index names but the recording lacks, and a driver-only page error", () => {
+  withDir((dir) => {
+    recording(dir, { rows: [{ t: 0, gap: 16, work: 3, hold: "clear" }], snapshots: [{ seq: 1, t: 0, reasons: [1], file: "snapshots/00001.jpg" }, { seq: 2, t: 5, reasons: [2], file: "snapshots/00002.jpg" }],
+      files: ["snapshots/00001.jpg"], header: { run: { pageStart: 0, judged: true, pageErrors: 2 } } });
+    const a = A.analyse(A.loadRecording(dir));
+    const complete = a.checks.find((x: { name: string }) => x.name === "recording complete");
+    assert.equal(complete.status, "partial");
+    assert.match(complete.note, /00002\.jpg/);
+    assert.equal(a.checks.find((x: { name: string }) => x.name === "no errors").status, "fail", "errors the driver saw are errors");
+  });
+});
+
+test("R1-F4: a named video passes only on its real duration over the window", () => {
+  const segs = [{ file: "video/000.webm", start: 0 }];
+  assert.equal(A.videoCoverage(segs, null, 0, 60000).status, "unproven");
+  assert.equal(A.videoCoverage(segs, { "video/000.webm": null }, 0, 60000).status, "missing");
+  assert.equal(A.videoCoverage(segs, { "video/000.webm": 30 }, 0, 60000).status, "partial");
+  assert.equal(A.videoCoverage(segs, { "video/000.webm": 59 }, 0, 60000).status, "pass");
+});
+
+test("R1-F5: memory flatness needs enough readings across the window", () => {
+  const rows = Array.from({ length: 700 }, (_, i) => ({ t: i * 1000, gap: 16, work: 3, hold: "clear" }));
+  const reading = (n: number, slope: number) => Array.from({ length: n }, (_, i) => ({ t: (i * 699000) / Math.max(1, n - 1), rendererRssMiB: 500 + (slope * i * 699) / Math.max(1, n - 1) / 60 }));
+  for (const [n, slope, status] of [[0, 0, "unproven"], [1, 0, "unproven"], [60, 0, "pass"], [60, 30, "fail"]] as const) withDir((dir) => {
+    recording(dir, { rows, system: reading(n, slope) });
+    assert.equal(A.analyse(A.loadRecording(dir)).checks.find((x: { name: string }) => x.name === "memory flat").status, status, `${n} readings, ${slope} MiB/min`);
+  });
+});
+
+test("R1-F6: pacing is causal and on a play clock: one action is three seconds of doing; a long menu adds nothing to progression", () => {
+  const samples = (from: number, to: number, o: object) => Array.from({ length: (to - from) / 250 }, (_, i) => ({ t: from + i * 250, tick: 0, active: true, speed: 0, region: "refuge_reef", hold: "clear", ...o }));
+  const p = A.pacing({
+    samples: [...samples(0, 20000, { speed: 6 }), ...samples(20000, 620000, { active: false }), ...samples(620000, 640000, { speed: 6 })],
+    events: [{ kind: "action", t: 10000, text: "scan" }, { kind: "milestone", t: 5000, text: "new blueprint a" }, { kind: "milestone", t: 630000, text: "new blueprint b" }],
+  }, (t: number) => t / 1000);
+  assert.ok(p.share.doing.s >= 8 && p.share.doing.s <= 10, `three causal 3 s windows (milestones at 5 s and 630 s, an action at 10 s), not twice that: ${p.share.doing.s}`);
+  assert.equal(p.share.menus.s, 600);
+  assert.equal(p.between[0].wall, 625);
+  assert.ok(p.between[0].s <= 30, `play seconds between the milestones, the menu excluded: ${p.between[0].s}`);
+  assert.ok(p.regions.refuge_reef.s <= 30, `nothing-new stretch on play time: ${p.regions.refuge_reef.s}`);
+});
+
+test("R1-F2: running out of tries is unstable, with the last two pictures; a converging view is stable", async () => {
+  const { untilStable } = await import(pathToFileURL(resolve("scripts/rec/views/stable.mjs")).href);
+  let n = 0;
+  const changing = await untilStable(async () => `p${n++}`, async () => {}, 12);
+  assert.equal(changing.stable, false);
+  assert.equal(changing.image, "p12");
+  assert.equal(changing.previous, "p11");
+  const seq = ["a", "b", "c", "c"];
+  let k = 0;
+  const converging = await untilStable(async () => seq[Math.min(k++, 3)]!, async () => {}, 12);
+  assert.deepEqual([converging.stable, converging.image, converging.tries], [true, "c", 2]);
 });

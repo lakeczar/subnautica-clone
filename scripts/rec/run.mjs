@@ -6,7 +6,6 @@
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
 //     [--rec on|off|game-video] [--video on|off] [--seconds S] [--machine LABEL]
 //     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack]
-//     [--size 1280x720]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
 //   is the CDP screencast (--video on, default) or none (--video off: an
@@ -20,13 +19,13 @@
 // gap and the game's frame-callback time, so the modes compare like for like.
 //
 // GPU: run inside `scripts/heavy-check.sh --class gpu` (functional) or
-// `--class exclusive` (frame-time numbers). On alickers: --chrome
-// /usr/local/bin/siltwake-chrome --pw /work/tmp/pw/ --gpu "RTX 4070".
+// `--class exclusive` (frame-time numbers). The browser session is the soak's
+// (scripts/soak/browser.mjs), which finds alickers' own Chrome wrapper itself.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { launch, openGame, pilot, read, serve } from "./browser.mjs";
+import { Blocked, goto, openGame, releaseAll } from "../soak/browser.mjs";
 import { gpuInfo, startRecording } from "./record.mjs";
 
 const args = process.argv.slice(2);
@@ -39,7 +38,6 @@ if (process.env.SILTWAKE_GPU_LEASE === undefined && !flag("software")) {
   requireGpuLease("REC-1's recorded run");
 }
 const mode = arg("rec", "on"), videoOn = mode === "on" && arg("video", "on") === "on", seconds = Number(arg("seconds", 0)) || Infinity;
-const [width, height] = arg("size", "1280x720").split("x").map(Number);
 const plan = arg("plan") ? JSON.parse(readFileSync(arg("plan"), "utf8")) : null;
 const segment = Number(arg("segment", 0)), points = plan ? plan.segments?.[segment] ?? plan.points : [];
 mkdirSync(out, { recursive: true });
@@ -67,55 +65,59 @@ function probeScript() {
 }
 
 const gpu0 = gpuInfo();
-const server = await serve(dist, Number(arg("port", 0)), { isolate: !flag("no-isolate") });
-const b = await launch({ chrome: arg("chrome"), pw: arg("pw"), label: "rec1", width, height, software: flag("software") });
-const result = { mode, video: videoOn, machine, commit, chrome: b.version, segment, errors: [], reached: [], skipped: [] };
-let exit = 0;
+const query = mode === "off" ? "?rec=off" : mode === "game-video" ? "?rec=driver&recvideo=1" : mode === "playtest" ? "?rec=playtest" : "?rec=driver";
+const result = { mode, video: videoOn, machine, commit, segment, errors: [], reached: [], skipped: [] };
+let exit = 0, g = null;
 try {
-  b.page.on("pageerror", (e) => result.errors.push(e.message.slice(0, 300)));
-  b.page.on("response", (r) => { if (r.status() >= 400) result.errors.push(`HTTP ${r.status()} ${r.url().slice(0, 200)}`); });
-  await b.page.addInitScript(probeScript);
-  const query = mode === "off" ? "?rec=off" : mode === "game-video" ? "?rec=driver&recvideo=1" : mode === "playtest" ? "?rec=playtest" : "?rec=driver";
-  const open = await openGame(b.page, `http://127.0.0.1:${server.port}/${query}`, save, { gpu: arg("gpu") });
-  Object.assign(result, open);
-  log("renderer", open.renderer, "playable in", open.playableMs, "ms");
-  await b.cdp.send("Performance.enable");
-  // Measured from here: the travel itself.
-  await b.page.evaluate(() => { window.__recProbe.gaps.length = 0; window.__recProbe.work.length = 0; });
+  // The soak's own browser session (scripts/soak/browser.mjs): one driver for both.
+  g = await openGame({ dist, save, port: Number(arg("port", 0)), software: flag("software"), gpu: arg("gpu"), chrome: arg("chrome"), pw: arg("pw"),
+    label: "rec1", query, isolate: !flag("no-isolate"), initScripts: [probeScript], log });
+  result.renderer = g.renderer; result.chrome = g.chrome;
+  log("renderer", g.renderer);
+  // Measured from here: the travel itself. Main-thread task time over the window
+  // (CDP: every task, GC and the recorder's later tasks included) is the inclusive cost (R1-S1).
+  await g.page.evaluate(() => { window.__recProbe.gaps.length = 0; window.__recProbe.work.length = 0; });
+  const metrics = async () => Object.fromEntries((await g.cdp.send("Performance.getMetrics")).metrics.map((m) => [m.name, m.value]));
+  const m0 = await metrics();
   // Off, and an owner's playtest (it records itself, unread by any driver): nothing drains it.
-  const rec = mode === "off" || mode === "playtest" ? null : await startRecording({ page: b.page, cdp: b.cdp, pid: b.pid, out, video: videoOn, gpuBaseline: gpu0,
-    meta: { machine, commit, chrome: b.version, mode, segment, judged, ticket: process.env.SILTWAKE_JOB_TICKET ?? null, save: path.basename(save), plan: arg("plan") ? path.basename(arg("plan")) : null, isolated: !flag("no-isolate") } });
+  const rec = mode === "off" || mode === "playtest" ? null : await startRecording({ page: g.page, cdp: g.cdp, pid: g.browserPid, out, video: videoOn, gpuBaseline: gpu0,
+    meta: { machine, commit, chrome: g.chrome, mode, segment, judged, ticket: process.env.SILTWAKE_JOB_TICKET ?? null, save: path.basename(save), plan: arg("plan") ? path.basename(arg("plan")) : null, isolated: !flag("no-isolate") } });
   await rec?.mark(`travel starts (segment ${segment}, ${points.length} points)`);
-  const p = pilot(b.page), deadline = Date.now() + seconds * 1000;
+  const deadline = Date.now() + seconds * 1000;
   for (const [i, pt] of points.entries()) {
     if (i === 0) continue;
     if (Date.now() > deadline) break;
     const label = pt.cave ?? pt.view ?? `point ${i}`;
-    const ok = await p.goto(pt, { tol: pt.tol ?? (pt.cave ? 4 : 7), label, boost: !(pt.view || pt.tol), stop: () => Date.now() > deadline });
+    let ok = false;
+    try { ok = await goto(g, pt, { tol: pt.tol ?? (pt.cave ? 4 : 7), label, boost: !(pt.view || pt.tol), timeoutS: 100, stop: () => Date.now() > deadline }); }
+    catch (e) { if (!(e instanceof Blocked)) throw e; log("skipped", e.message); }
     if (Date.now() > deadline && !ok) break;
     if (pt.cave) { (ok ? result.reached : result.skipped).push(pt.cave); await rec?.mark(`${ok ? "at" : "short of"} ${pt.cave}`, { cave: pt.cave }); }
-    if (!ok) log("skipped", label);
   }
-  await p.releaseAll();
+  await releaseAll(g);
+  const m1 = await metrics();
   result.travelS = Math.round((Date.now() - started) / 1000);
-  const probe = await b.page.evaluate(() => window.__recProbe);
+  const probe = await g.page.evaluate(() => window.__recProbe);
   const q = (xs, f) => { const s = [...xs].sort((a, b) => a - b); return s.length ? +s[Math.min(s.length - 1, Math.floor(s.length * f))].toFixed(2) : null; };
+  const per = (k) => (probe.gaps.length ? +(((m1[k] ?? 0) - (m0[k] ?? 0)) * 1000 / probe.gaps.length).toFixed(3) : null);
   result.probe = { frames: probe.gaps.length, gap: { p50: q(probe.gaps, 0.5), p99: q(probe.gaps, 0.99), max: q(probe.gaps, 1) },
     work: { p50: q(probe.work, 0.5), p99: q(probe.work, 0.99), mean: +(probe.work.reduce((a, b) => a + b, 0) / Math.max(1, probe.work.length)).toFixed(3) },
-    over33: probe.gaps.filter((g) => g > 33.4).length };
-  writeFileSync(path.join(out, "probe.json"), JSON.stringify({ gaps: probe.gaps.map((g) => +g.toFixed(2)), work: probe.work.map((w) => +w.toFixed(3)) }));
-  if (rec) result.header = await rec.stop({ reached: result.reached, skipped: result.skipped, probe: result.probe, pageErrors: result.errors.length });
-  else if (mode === "playtest") result.recorderOverhead = await b.page.evaluate(() => window.__siltwake.recorder?.overhead() ?? null);
-  const last = await read(b.page);
+    over33: probe.gaps.filter((x) => x > 33.4).length,
+    // Inclusive main-thread time per frame: all tasks, and the script share of them.
+    mainThread: { taskMsPerFrame: per("TaskDuration"), scriptMsPerFrame: per("ScriptDuration"), heapMiBEnd: m1.JSHeapUsedSize ? +(m1.JSHeapUsedSize / 1048576).toFixed(1) : null } };
+  writeFileSync(path.join(out, "probe.json"), JSON.stringify({ gaps: probe.gaps.map((x) => +x.toFixed(2)), work: probe.work.map((w) => +w.toFixed(3)), metrics: { start: m0, end: m1 } }));
+  if (rec) result.header = await rec.stop({ reached: result.reached, skipped: result.skipped, probe: result.probe, pageErrors: g.errors.length });
+  else if (mode === "playtest") result.recorderOverhead = await g.page.evaluate(() => window.__siltwake.recorder?.overhead() ?? null);
+  const last = await g.page.evaluate(() => window.__siltwake.read());
   result.end = { tick: last?.tick, feet: last?.feet, region: last?.region };
+  result.errors.push(...g.errors);
   log("probe", JSON.stringify(result.probe));
 } catch (e) {
   result.errors.push(String(e?.stack ?? e).slice(0, 1000));
   log("error", String(e));
   exit = 1;
 } finally {
-  await b.close();
-  await server.close();
+  await g?.close();
 }
 writeFileSync(path.join(out, "run.json"), JSON.stringify(result, null, 1));
 if (!["off", "playtest"].includes(mode) && !flag("no-pack") && !exit) {

@@ -1,7 +1,7 @@
 /** REC-1 test hook: one typed, versioned surface for test drivers, soaks and
  * evidence runs, in place of ad hoc DOM attributes (`dataset.tick` and the
  * rest). Read-only for the game, apart from `freeze` and `stage` (fixed-view
- * captures; `stage` only in driver mode) and `recorder.mark` (a driver's own
+ * captures; both only in driver mode) and `recorder.mark` (a driver's own
  * event on the recording).
  *
  *   window.__siltwake.read()                → HookRead | null (no expedition)
@@ -11,14 +11,14 @@
  *   window.__siltwake.capture()             → driver mode only: the next drawn frame's canvas as base64 PNG (no HUD)
  *   window.__siltwake.recorder?.frames(cursor, max) → { next, lost, columns, rows }
  *   …samples / events / snapshots(cursor, max) → { next, lost, items }
- *   …snapshot(seq) → base64 JPEG | null;  release(seq) frees snapshots up to seq
+ *   …snapshot(seq) → base64 JPEG | null;  snapshotState(seq);  release(seq) frees snapshots up to seq
  *   …mark(text, detail?) → event seq;  header(); overhead()
  * Cursors start at 0; each consumer keeps its own, so readers never take data
  * from one another. `lost` counts entries overwritten before they were read. */
 import type { RendererStats } from "../../render/renderer.js";
 import type { FlightCapture } from "./capture.js";
 import type { StagedView } from "./game.js";
-import { FRAME_COLUMNS } from "./recorder.js";
+import { FRAME_COLUMNS, HOLD_CODES } from "./recorder.js";
 
 export const TEST_HOOK_VERSION = 1;
 
@@ -77,11 +77,13 @@ function recorderHook(c: FlightCapture) {
   return {
     mode: c.mode,
     header: () => c.header,
-    frames: (cursor = 0, max = 20000) => ({ columns: FRAME_COLUMNS, ...r.frames.since(cursor, max) }),
+    frames: (cursor = 0, max = 20000) => ({ columns: FRAME_COLUMNS, holdCodes: HOLD_CODES, ...r.frames.since(cursor, max) }),
     samples: (cursor = 0, max = 5000) => r.samples.since(cursor, max),
     events: (cursor = 0, max = 5000) => r.events.since(cursor, max),
     snapshots: (cursor = 0, max = 500) => r.snapshots.since(cursor, max),
     snapshot: (seq: number) => c.snapshotData(seq),
+    /** pending (still encoding), ok, failed (never will be), released. */
+    snapshotState: (seq: number) => c.snapshotState(seq),
     release: (upTo: number) => c.release(upTo),
     mark: (text: string, detail?: Record<string, unknown>) => r.event("mark", String(text), detail ? { detail } : {}),
     overhead: () => r.overhead(),

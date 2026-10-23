@@ -25,19 +25,46 @@ test("each consumer reads every frame row through its own cursor; overwritten ro
   assert.deepEqual(r.frames.since(20), { next: 20, lost: 0, rows: [] });
 });
 
-test("a long frame is an event with its split and cause, and asks for one snapshot", () => {
+test("R1-F1: an interval and the callback that ran in it are separate observations; a streaming overrun cannot pass", () => {
   const r = new FlightRecorder({ snapshotSpacingMs: 250 });
-  r.frame(frame(0));
-  r.frame(frame(16.7, { gap: 48, work: 44, chunks: 30, caves: 6, render: 5, sim: 2 }));
-  const e = r.events.since(0).items.find((x) => x.kind === "long-frame")!;
-  assert.match(e.text, /48\.0 ms frame \(streaming\)/);
-  assert.equal(e.detail!.chunks, 30);
-  assert.equal(e.detail!.outside, 4);
-  const want = r.wantSnapshot(20)!;
-  assert.deepEqual(want.reasons, [e.seq]);
-  const snap = r.snapshotTaken(want, 20);
-  assert.equal(r.events.since(0).items.find((x) => x.seq === e.seq)!.snap, snap.seq, "the event names its picture");
-  assert.equal(snap.file, "snapshots/00001.jpg");
+  r.frame(frame(950));
+  // The review's two rows: a 44 ms streaming callback, then the 50 ms interval it caused.
+  r.frame(frame(1000, { gap: 16.7, work: 44, chunks: 36, caves: 0.2, sim: 2, render: 4 }));
+  r.frame(frame(1050, { gap: 50, work: 4, chunks: 0.2 }));
+  const long = r.events.since(0).items.filter((x) => x.kind === "long-frame");
+  assert.deepEqual(long.map((x) => [x.t, x.detail!.observation, x.detail!.cause]), [[1000, "callback", "streaming"], [1050, "interval", "streaming"]]);
+  assert.equal(long[1]!.detail!.callbackAt, 1000, "the interval names the callback that owns it");
+  assert.equal(long[1]!.detail!.chunks, 36, "with that callback's split, not the next one's");
+  assert.equal(long[0]!.detail!.ms, 44);
+  const want = r.wantSnapshot(1060)!;
+  assert.deepEqual(want.reasons, [long[0]!.seq], "one picture per long-frame burst");
+  const snap = r.snapshotTaken(want, 1060);
+  assert.equal(r.events.since(0).items.find((x) => x.seq === long[0]!.seq)!.snap, snap.seq, "the event names its picture");
+});
+
+test("R1-F1: a GPU-only delay and an outside-task delay are named as such, never as the game's work", () => {
+  const gpu = new FlightRecorder();
+  gpu.frame(frame(0, { gpu: 30 }));
+  gpu.frame(frame(16.7, { gap: 16.7, work: 4, gpu: 32 }));
+  gpu.frame(frame(66.7, { gap: 50, work: 4 }));
+  assert.deepEqual(gpu.events.since(0).items.filter((x) => x.kind === "long-frame").map((x) => [x.detail!.observation, x.detail!.cause]), [["interval", "GPU"]]);
+  const outside = new FlightRecorder();
+  outside.frame(frame(0));
+  outside.frame(frame(16.7, { gap: 16.7, work: 4, gpu: 4 }));
+  outside.frame(frame(66.7, { gap: 50, work: 4, gpu: 4 }));
+  const e = outside.events.since(0).items.filter((x) => x.kind === "long-frame");
+  assert.deepEqual(e.map((x) => [x.detail!.observation, x.detail!.cause]), [["interval", "outside the game's frame"]]);
+  assert.equal(e[0]!.detail!.outside, 46);
+});
+
+test("R1-S3: a GPU result for a row that is no longer waiting is discarded", () => {
+  const r = new FlightRecorder();
+  for (let i = 0; i < 40; i++) r.frame(frame(i * 16, { gpuTag: i + 1 }));
+  for (let i = 0; i < 40; i++) r.gpuResolved(i + 1, 3);
+  assert.ok(r.gpuPending <= 7, `bounded by the waiting rows: ${r.gpuPending}`);
+  r.settle();
+  r.gpuResolved(5, 3);
+  assert.equal(r.gpuPending, 0, "nothing waits after a settle, so nothing is kept");
 });
 
 test("long-frame causes follow CW-1's rule: a part that is half the frame's own work owns it", () => {
@@ -97,6 +124,8 @@ test("game events map to damage, threat, refusal and notice; commands to actions
     { type: "notice", message: "Cannot exit here", error: true, channel: "action", refusal: { kind: "exit", vehicleId: "dart-1", code: "depth" } },
     { type: "notice", message: "Saved locally", channel: "persistence" },
     { type: "sound", cue: "warning", source: "threat-call", origin: { x: 1, y: 2, z: 3 } },
+    // R1-F9: an oxygen hazard notice is a warning, never a refusal.
+    { type: "notice", message: "Oxygen low", error: true, channel: "hazard", context: "oxygen" },
   ]);
   recordCommand(r, s, { type: "scan" });
   const next = recordTimeline(r, [
@@ -107,7 +136,7 @@ test("game events map to damage, threat, refusal and notice; commands to actions
   assert.equal(next, 3);
   const kinds = r.events.since(0).items.map((x) => `${x.kind}:${x.text}`);
   assert.deepEqual(kinds, [
-    "damage:hunter strike on the diver: -12.3, health 70", "refusal:refused: Cannot exit here", "notice:Saved locally", "threat:threat call",
+    "damage:hunter strike on the diver: -12.3, health 70", "refusal:refused: Cannot exit here", "notice:Saved locally", "threat:threat call", "threat:warning: Oxygen low",
     "action:scan", "milestone:new blueprint dart", "action:gather x", "note:note: too dark here",
   ]);
 });
@@ -186,4 +215,34 @@ test("a frame's GPU time lands on that frame's own row, rows stay in order, and 
   assert.equal(frameObject(r.frames.since(4).rows[0]!).gpu, -1, "a query that never resolves: written without a GPU time after the wait");
   r.settle();
   assert.equal(r.frames.written, 4 + GPU_WAIT_FRAMES + 1);
+});
+
+test("R1-F4: why admission was not evaluated is recorded, and never breaks a hold's transitions", async () => {
+  const { HOLD_CODES } = await import("../src/runtime/flight/recorder.js");
+  const r = new FlightRecorder();
+  r.frame(frame(0, { hold: "loading" }));
+  r.frame(frame(16, { hold: "inactive" }));
+  r.frame(frame(32, { hold: "loading" }));
+  r.frame(frame(48, { hold: "clear" }));
+  assert.deepEqual(r.frames.since(0).rows.map((x) => HOLD_CODES[frameObject(x).hold]), ["loading", "inactive", "loading", "clear"]);
+  assert.deepEqual(r.events.since(0).items.filter((x) => x.kind === "hold").map((x) => x.text), ["cave hold: loading", "cave hold ended after 0.0 s (clear)"]);
+});
+
+test("R1-F9: survival injury becomes a damage episode: onset with a picture, an end with its total; strikes are not counted twice", async () => {
+  const { SurvivalWatch } = await import("../src/runtime/flight/game.js");
+  const r = new FlightRecorder(), w = new SurvivalWatch();
+  let s = createGame();
+  s.opening.phase = 4;
+  const step = (fn: (x: typeof s) => void, events: Parameters<typeof w.observe>[3] = []) => {
+    const next = structuredClone(s); next.tick++; fn(next); w.observe(r, s, next, events, next.tick * 16.7); s = next;
+  };
+  for (let i = 0; i < 30; i++) step((x) => { x.player.vitals.oxygen = 0; x.player.vitals.health -= 0.2; });
+  // A strike in the same step is the strike's, not survival's.
+  step((x) => { x.player.vitals.health -= 10; }, [{ type: "threat-damage", source: "hunter", target: { kind: "diver" }, loss: 10, healthAfter: 0 }]);
+  for (let i = 0; i < 130; i++) step((x) => { x.player.vitals.oxygen = 50; });
+  const damage = r.events.since(0).items.filter((x) => x.kind === "damage");
+  assert.equal(damage.length, 2);
+  assert.equal(damage[0]!.text, "oxygen damage to the diver");
+  assert.match(damage[1]!.text, /oxygen damage to the diver ended: -6 over 0\.5 s/);
+  assert.equal(r.wantSnapshot(1e9)!.reasons[0], damage[0]!.seq, "the onset asks for a picture");
 });

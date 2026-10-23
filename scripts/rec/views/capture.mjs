@@ -13,36 +13,36 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { hostname } from "node:os";
 import path from "node:path";
+import { loadViewSet } from "./stable.mjs";
 import { fileURLToPath } from "node:url";
-import { launch, openGame, serve } from "../browser.mjs";
+import { openGame } from "../../soak/browser.mjs";
 import { gpuInfo } from "../record.mjs";
+import { untilStable } from "./stable.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2), arg = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
 const dist = arg("dist"), save = arg("save"), out = arg("out");
 if (!dist || !save || !out) { console.error("usage: capture.mjs --dist DIST --save SAVE --out DIR [--views FILE] [--only ids] [--class 3090|4070]"); process.exit(2); }
-if (process.env.SILTWAKE_GPU_LEASE === undefined) { const { requireGpuLease } = await import("../../heavy/gpu-lease.mjs"); requireGpuLease("REC-1's fixed-view capture"); }
-const set = JSON.parse(readFileSync(arg("views", path.join(here, "views.json")), "utf8"));
+const set = loadViewSet(arg("views", path.join(here, "views.json")));
 const only = arg("only") ? new Set(arg("only").split(",")) : null;
 const views = set.views.filter((v) => !only || only.has(v.id));
 // Every view at a fixed sim tick (its own, else the save's): water, sky, creatures and
 // particles all run on it, so the clock reached after loading never shows in a view.
 const saveTick = (() => { try { return JSON.parse(readFileSync(save, "utf8")).state.tick; } catch { return null; } })();
-const [width, height] = (set.defaults?.size ?? "1280x720").split("x").map(Number);
 mkdirSync(path.join(out, "views"), { recursive: true });
 const started = Date.now(), log = (...a) => console.log(`[${((Date.now() - started) / 1000).toFixed(0)}s] ${a.join(" ")}`);
 const SETTLE_MS = set.defaults?.settleMs ?? 1500, TIMEOUT_MS = 25000, STABLE_MS = 500, STABLE_TRIES = 12;
 
-const server = await serve(dist, Number(arg("port", 0)));
-const b = await launch({ chrome: arg("chrome"), pw: arg("pw"), label: "rec1-views", width, height });
 const result = { format: "siltwake.views-capture", viewsVersion: set.version, commit: (() => { try { return readFileSync(path.join(dist, "COMMIT"), "utf8").trim(); } catch { return null; } })(),
-  machine: arg("machine", hostname()), chrome: b.version, views: [], pending: set.pending ?? [], errors: [] };
+  machine: arg("machine", hostname()), views: [], pending: set.pending ?? [], errors: [] };
+let b = null;
 try {
-  b.page.on("pageerror", (e) => result.errors.push(e.message.slice(0, 300)));
-  const open = await openGame(b.page, `http://127.0.0.1:${server.port}/?rec=driver`, save, { gpu: arg("gpu") });
-  result.renderer = open.renderer;
-  result.class = arg("class", /3090/.test(open.renderer) ? "3090" : /4070/.test(open.renderer) ? "4070" : "other");
-  const g = gpuInfo(); result.gpu = g ? `${g.name} ${g.driver}` : open.renderer;
+  // The soak's own browser session (scripts/soak/browser.mjs), the recorder in driver mode (stage and capture need it).
+  b = await openGame({ dist, save, port: Number(arg("port", 0)), gpu: arg("gpu"), chrome: arg("chrome"), pw: arg("pw"), label: "rec1-views", query: "?rec=driver", isolate: true, log });
+  result.chrome = b.chrome;
+  result.renderer = b.renderer;
+  result.class = arg("class", /3090/.test(b.renderer) ? "3090" : /4070/.test(b.renderer) ? "4070" : "other");
+  const g = gpuInfo(); result.gpu = g ? `${g.name} ${g.driver}` : b.renderer;
   result.build = await b.page.evaluate(() => window.__siltwake.recorder?.header().build ?? null);
   await b.page.evaluate(() => window.__siltwake.freeze(true));
   for (const v of views) {
@@ -72,30 +72,25 @@ try {
     const settled = since !== null && Date.now() - since >= SETTLE_MS && moved < 1;
     // Settled for the picture itself: two captures STABLE_MS apart are the same pixels
     // (content still activating or fading in shows here even when no counter moves).
-    let a = await b.page.evaluate(() => window.__siltwake.capture()), c = null, tries = 0;
-    for (; tries < STABLE_TRIES; tries++) {
-      await b.page.waitForTimeout(STABLE_MS);
-      c = await b.page.evaluate(() => window.__siltwake.capture());
-      if (c === a) break;
-      a = c;
-    }
-    const file = `views/${v.id}.png`, png = Buffer.from(a, "base64");
+    const shot = await untilStable(() => b.page.evaluate(() => window.__siltwake.capture()), () => b.page.waitForTimeout(STABLE_MS), STABLE_TRIES);
+    const file = `views/${v.id}.png`, png = Buffer.from(shot.image, "base64");
     writeFileSync(path.join(out, file), png);
-    // Diagnosis (--keep-pair): the second capture beside the first when they differ.
-    if (args.includes("--keep-pair") && a !== c) writeFileSync(path.join(out, `views/${v.id}.b.png`), Buffer.from(c, "base64"));
+    // An unstable view keeps its last two different pictures (R1-F2).
+    if (!shot.stable && shot.previous) writeFileSync(path.join(out, `views/${v.id}.previous.png`), Buffer.from(shot.previous, "base64"));
     const sha = createHash("sha256").update(png).digest("hex");
     result.views.push({ id: v.id, group: v.group, label: v.label, file, sha256: sha, tick, settled, settleMs: Date.now() - t0, hold: last?.hold ?? null,
       // A frozen view draws the same pixels twice; anything else animates outside the sim clock.
-      stable: a === c, stableAfterMs: tries * STABLE_MS, ...(moved >= 1 ? { relocatedM: Math.round(moved * 10) / 10 } : {}), ...(settled ? {} : { unsettled: last }) });
+      stable: shot.stable, stableAfterMs: shot.tries * STABLE_MS, ...(shot.stable ? {} : { previous: `views/${v.id}.previous.png` }),
+      ...(v.quarantine ? { quarantine: v.quarantine } : {}),
+      ...(moved >= 1 ? { relocatedM: Math.round(moved * 10) / 10 } : {}), ...(settled ? {} : { unsettled: last }) });
     log(v.id, settled ? "settled" : `UNSETTLED ${JSON.stringify({ ...last, scene: undefined })}${moved >= 1 ? ` moved ${moved.toFixed(1)} m` : ""}`, `${Date.now() - t0} ms`,
-      a === c ? `stable after ${tries * STABLE_MS} ms` : `ANIMATES (${a.length} vs ${c.length} base64 chars)`);
+      shot.stable ? `stable after ${shot.tries * STABLE_MS} ms` : "UNSTABLE (never the same picture twice)", v.quarantine ? "(quarantined)" : "");
   }
 } catch (e) {
   result.errors.push(String(e?.stack ?? e).slice(0, 1000));
   log("error", String(e));
 } finally {
-  await b.close();
-  await server.close();
+  if (b) { result.errors.push(...b.errors); await b.close(); }
 }
 result.seconds = Math.round((Date.now() - started) / 1000);
 writeFileSync(path.join(out, "capture.json"), JSON.stringify(result, null, 1));

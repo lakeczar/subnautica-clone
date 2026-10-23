@@ -3,6 +3,9 @@
 import type { GameCommand, GameEvent, GameState, Vec3 } from "../../sim/types.js";
 import type { TimelineEvent } from "../../sim/timeline/report.js";
 import { exposure } from "../../sim/survival.js";
+import { personalLimit } from "../../sim/capabilities.js";
+import { hullDepth } from "../../sim/vehicles.js";
+import { effectiveRating } from "../../sim/fittings.js";
 import { regionAtPoint } from "../../content/regions/layout.js";
 import type { FlightRecorder, FlightSample } from "./recorder.js";
 import type { RendererStats } from "../../render/renderer.js";
@@ -36,9 +39,15 @@ export function recordGameEvents(rec: FlightRecorder, s: GameState | null, event
         if (e.source === "threat-call") rec.event("threat", "threat call", stamp({ cue: e.cue }));
         break;
       case "notice":
-        if (e.refusal || (e.error && e.channel !== "persistence"))
+        // A refusal is a command the game turned down (R1-F9): an exit refusal, or an
+        // action-channel error. Hazard warnings are threats; persistence problems
+        // are the save events' (the session reports them).
+        if (e.refusal || (e.error && (e.channel === "action" || e.channel === undefined)))
           rec.event("refusal", `refused: ${e.message}`, stamp({ ...(e.refusal ? { code: e.refusal.code } : {}), ...(e.channel ? { channel: e.channel } : {}) }));
-        else rec.event("notice", e.message, { ...stamp({ ...(e.channel ? { channel: e.channel } : {}), ...(e.context ? { context: e.context } : {}) }), snapshot: false });
+        else if (e.channel === "hazard")
+          rec.event("threat", `warning: ${e.message}`, stamp({ channel: "hazard", ...(e.context ? { context: e.context } : {}) }));
+        else if (e.channel !== "persistence" || !e.error)
+          rec.event("notice", e.message, { ...stamp({ ...(e.channel ? { channel: e.channel } : {}), ...(e.context ? { context: e.context } : {}) }), snapshot: false });
         break;
       case "foundation-boundary":
         break;
@@ -103,4 +112,53 @@ export function stageView(state: GameState, v: StagedView): GameState {
   if (v.tick !== undefined) s.tick = v.tick;
   s.world.action = null;
   return s;
+}
+
+/** Survival injury (R1-F9): oxygen, pressure, starvation and hull-depth damage
+ * change health directly, with no event of their own. Each step's loss not
+ * explained by an impact or a strike is put to its cause from the state, and
+ * gathered into episodes: one event (with a picture) when it starts, one when
+ * it has stopped for EPISODE_GAP_TICKS, with the total and the time. */
+const EPISODE_GAP_TICKS = 120;
+export class SurvivalWatch {
+  private readonly open = new Map<string, { tick: number; last: number; loss: number; t: number }>();
+  observe(rec: FlightRecorder, before: GameState, after: GameState, events: readonly GameEvent[], t: number): void {
+    const explained = { diver: 0, vehicle: 0 };
+    for (const e of events) {
+      if (e.type === "threat-damage") explained[e.target.kind === "diver" ? "diver" : "vehicle"] += e.loss;
+      if (e.type === "impact") explained.vehicle += e.hullLoss;
+    }
+    const causes: { key: string; target: string; loss: number }[] = [];
+    const diverLoss = before.player.vitals.health - after.player.vitals.health - explained.diver;
+    if (diverLoss > 1e-6) {
+      const p = after.player, v = after.fleet.vehicles.find((x) => x.id === p.controlledVehicleId);
+      const why = [
+        ...(p.vitals.oxygen === 0 ? ["oxygen"] : []),
+        ...(!v && after.opening.phase >= 4 && !exposure(after).refuge && exposure(after).pressureDepth > personalLimit(after) ? ["pressure"] : []),
+        ...(p.starvationSeconds > 180 ? ["starvation"] : []),
+      ];
+      causes.push({ key: `diver:${why.join("+") || "other"}`, target: "diver", loss: diverLoss });
+    }
+    const id = after.player.controlledVehicleId, vb = before.fleet.vehicles.find((x) => x.id === id), va = after.fleet.vehicles.find((x) => x.id === id);
+    if (vb && va) {
+      const hullLoss = vb.health - va.health - explained.vehicle;
+      if (hullLoss > 1e-6) {
+        const crushed = va.hull === "spindle" ? hullDepth(va) > 1 : hullDepth(va) > effectiveRating(after, va);
+        causes.push({ key: `${va.hull}:${crushed ? "hull-depth" : "other"}`, target: va.hull, loss: hullLoss });
+      }
+    }
+    for (const c of causes) {
+      const ep = this.open.get(c.key);
+      if (ep) { ep.last = after.tick; ep.loss += c.loss; continue; }
+      this.open.set(c.key, { tick: after.tick, last: after.tick, loss: c.loss, t });
+      const [target, cause] = c.key.split(":");
+      rec.event("damage", `${cause} damage to the ${target}`, { t, tick: after.tick, detail: { source: "survival", cause, target, at: where(after) } });
+    }
+    for (const [key, ep] of this.open) if (after.tick - ep.last > EPISODE_GAP_TICKS) {
+      this.open.delete(key);
+      const [target, cause] = key.split(":");
+      rec.event("damage", `${cause} damage to the ${target} ended: -${r1(ep.loss)} over ${r1((ep.last - ep.tick) / 60)} s`,
+        { t, tick: after.tick, snapshot: false, detail: { source: "survival", cause, target, loss: r1(ep.loss), seconds: r1((ep.last - ep.tick) / 60), ended: true } });
+    }
+  }
 }

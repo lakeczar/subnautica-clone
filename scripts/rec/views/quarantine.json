@@ -1,0 +1,17 @@
+{
+ "note": "Fixed views excluded from automatic regression judgments and normal baseline acceptance (REC-1 R1-F2). Their pictures are still captured for the taste review. Each leaves when the renderer's capture mode (build everything wanted at the pose before drawing) makes it repeatable, or a fresh load per view group does.",
+ "views": {
+  "region.refuge_reef.1": "never settles: its streaming counters keep moving with the camera frozen (both GPUs)",
+  "place.basin_boundary_station": "history-dependent: differs between two captures of the same build",
+  "place.canopy_stop": "history-dependent: differs between two captures of the same build",
+  "place.reef_ribs": "history-dependent: a capture can come before the ribs' art is drawn",
+  "hub.crown_station.work": "history-dependent: differs between two captures of the same build",
+  "threat.rift_cool_flank": "history-dependent: differs between two captures of the same build",
+  "region.brine_divide.2": "history-dependent: differs between two captures of the same build",
+  "cave.reef_wrackhollow.interior": "history-dependent: differs between two captures of the same build",
+  "cave.divide_mirror_pocket.mouth": "history-dependent: differs between two captures of the same build",
+  "cave.divide_lee_burrow.mouth": "history-dependent: differs between two captures of the same build",
+  "cave.divide_fissure_window.interior": "history-dependent: differs between two captures of the same build",
+  "cave.meridian_footing_void.mouth": "history-dependent: differs between two captures of the same build"
+ }
+}

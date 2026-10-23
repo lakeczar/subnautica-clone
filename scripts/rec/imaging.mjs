@@ -5,16 +5,24 @@
 // machines, so a pack looks the same from either. No GPU is needed: the page
 // only draws images and text.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { findFfmpeg } from "./record.mjs";
-import { launch } from "./browser.mjs";
+import { createRequire } from "node:module";
 
-/** One Chrome page for composing; close() when done. */
+/** One Chrome page for composing (no game, no GPU: software rendering, or the
+ * sandbox's own wrapper on alickers, as the soak's browser finds it); close() when done. */
 export async function composer(opts = {}) {
-  const b = await launch({ ...opts, label: "rec1-pack", software: !opts.chrome || opts.chrome.includes("ms-playwright"), width: 1280, height: 800 });
-  return { page: b.page, close: b.close };
+  const sandbox = "/usr/local/bin/siltwake-chrome", playwright = `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`;
+  const chrome = opts.chrome ?? (existsSync(playwright) ? playwright : existsSync(sandbox) ? sandbox : playwright);
+  const wrapper = chrome === sandbox;
+  const pw = opts.pw ?? process.env.REC_PW ?? ["/work/tmp/gpu-prep/pw/", "/work/tmp/pw/"].find((d) => existsSync(path.join(d, "node_modules", "playwright-core"))) ?? "/work/tmp/gpu-prep/pw/";
+  const { chromium } = createRequire(pw)("playwright-core");
+  const browser = await chromium.launch({ executablePath: chrome, headless: true, timeout: 30000,
+    ...(wrapper ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}), args: wrapper ? [] : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 })).newPage();
+  return { page, close: () => browser.close().catch(() => {}) };
 }
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);

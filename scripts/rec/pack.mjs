@@ -14,8 +14,8 @@
 //         recording/          the raw recording, video.webm included
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, renameSync } from "node:fs";
 import path from "node:path";
-import { analyse, loadRecording, summaryJson, THRESHOLDS, HOLDING } from "./analyse.mjs";
-import { composeStrip, composer, extractFrames, remux, renderHtml, dataUrl, esc, ensureDir } from "./imaging.mjs";
+import { analyse, loadRecording, summaryJson, THRESHOLDS, HOLDING, videoSegments } from "./analyse.mjs";
+import { composeStrip, composer, extractFrames, remux, renderHtml, ensureDir, videoSeconds as videoSeconds_ } from "./imaging.mjs";
 import { frameTimeSvg, memorySvg, pacingSvg, fmtTime } from "./charts.mjs";
 import { unzip } from "./unzip.mjs";
 import { timelineHtml } from "./timeline.mjs";
@@ -31,14 +31,18 @@ export function grid(n, width = STRIP.width) {
 
 /** Builds one strip around page time `center` (or across [from, to] at `fps`). */
 export async function strip(r, a, page, { title, out, center = null, from, to, fps = STRIP.fps }) {
-  const v = r.header.video, video = path.join(r.rec, "video.webm");
+  const segs = videoSegments(r.header).filter((x) => existsSync(path.join(r.rec, x.file)));
   const label = (pt) => {
     const s = a.sampleAt(pt), f = nearestFrame(r.frames, pt);
     return [`${((pt - a.t0) / 1000).toFixed(2)}s t${s?.tick ?? "?"}${f && f.gap > THRESHOLDS.longFrameMs ? ` ${f.gap.toFixed(0)}ms` : ""}`,
       `${s ? `${s.depth}m ${s.speed}m/s` : ""} ${s?.hold && s.hold !== "clear" ? s.hold : ""}`.trim()];
   };
-  if (v?.file && v.start != null && existsSync(video)) {
-    const t0 = from ?? center - STRIP.before * 1000, t1 = to ?? center + STRIP.after * 1000;
+  const t0v = from ?? center - STRIP.before * 1000;
+  // The segment whose span holds the window's start (segments are independently decodable files).
+  const seg = segs.filter((x) => x.start <= Math.max(t0v, x.start) && (x.end == null || x.end > t0v)).sort((a2, b2) => b2.start - a2.start).find((x) => x.start <= (center ?? t0v)) ?? null;
+  if (seg) {
+    const v = seg, video = path.join(r.rec, seg.file);
+    const t0 = t0v, t1 = to ?? center + STRIP.after * 1000;
     const n = Math.round(((t1 - t0) / 1000) * fps), g = grid(n);
     const x = extractFrames(video, (t0 - v.start) / 1000, (t1 - t0) / 1000, fps, g.tileW * 2, g.tileH * 2);
     try {
@@ -56,7 +60,7 @@ export async function strip(r, a, page, { title, out, center = null, from, to, f
   if (!near.length) return null;
   const g = grid(Math.max(4, near.length));
   const best = near.reduce((bi, s, i) => (Math.abs(s.t - c) < Math.abs(near[bi].t - c) ? i : bi), 0);
-  await composeStrip(page, { title: `${title} (snapshots: ${v?.file && !v.error ? "the video has no frames here" : "no video in this run"})`, cols: g.cols, tileW: g.tileW, tileH: g.tileH, out,
+  await composeStrip(page, { title: `${title} (snapshots: ${segs.length ? "the video has no frames here" : "no video in this run"})`, cols: g.cols, tileW: g.tileW, tileH: g.tileH, out,
     tiles: near.map((s, i) => ({ file: path.join(r.rec, s.file), lines: label(s.t), mark: center != null && i === best })) });
   return { source: "snapshots", frames: near.length };
 }
@@ -82,11 +86,18 @@ function randomMoments(n, a, seed) {
 }
 
 export async function buildPack(dir, opts = {}) {
-  const r = loadRecording(dir), a = analyse(r), h = r.header;
+  const r = loadRecording(dir), h = r.header;
+  // Tier 3 video: seekable copies (MediaRecorder and piped ffmpeg leave no index),
+  // and each file's real duration, which the coverage check reads (R1-F4).
+  const videoSeconds = {};
+  for (const s of videoSegments(h)) {
+    const file = path.join(r.rec, s.file);
+    if (!existsSync(file)) { videoSeconds[s.file] = null; continue; }
+    if (remux(file, `${file}.tmp.webm`)) renameSync(`${file}.tmp.webm`, file);
+    videoSeconds[s.file] = videoSeconds_(file);
+  }
+  const a = analyse(r, THRESHOLDS, { videoSeconds });
   const S = ensureDir(path.join(dir, "strips")), C = ensureDir(path.join(dir, "charts"));
-  // Tier 3 video: a seekable copy (MediaRecorder and piped ffmpeg leave no index).
-  const video = path.join(r.rec, "video.webm");
-  if (existsSync(video) && remux(video, `${video}.tmp.webm`)) renameSync(`${video}.tmp.webm`, video);
   const c = await composer(opts);
   try {
     // Tier 2: strips for the attention list (up to the cap), then a few random moments.
@@ -127,7 +138,7 @@ function holdSpans(r, a) {
   const out = [];
   let open = null;
   for (const f of r.frames) {
-    const held = HOLDING.has([null, "clear", "loading", "rescue", "refuge", "waiting", "away", "admitted"][f.hold]);
+    const held = HOLDING.has(f.holdState);
     if (held && open === null) open = f.t;
     if (!held && open !== null) { out.push([(open - a.t0) / 1000, (f.t - a.t0) / 1000]); open = null; }
   }
@@ -165,8 +176,9 @@ function storyMd(r, a, s) {
   const p = a.pacing;
   L.push("## Pacing", "", "| Activity | Time | Share |", "| --- | --- | --- |", ...Object.entries(p.share).map(([k, v]) => `| ${k} | ${fmtTime(v.s)} | ${v.pct}% |`), "");
   L.push("Travelling: moving ≥ 0.5 m/s with no action within 3 s. Doing: a command, gather, craft or milestone within 3 s. Waiting: still, or held by a cave. Menus: paused or in a panel.", "");
-  if (p.between.length) L.push("| From | To | Seconds |", "| --- | --- | --- |", ...p.between.slice(0, 40).map((b) => `| ${b.from} | ${b.to} | ${b.s} |`), "");
-  L.push("Longest stretch with nothing new, by region:", "", "| Region | Longest (s) | Ends at |", "| --- | --- | --- |",
+  L.push(`Play clock: ${fmtTime(p.playSeconds)} of travelling and doing. Progression below is measured on it (menus and waiting add nothing); wall seconds alongside.`, "");
+  if (p.between.length) L.push("| From | To | Play seconds | Wall seconds |", "| --- | --- | --- | --- |", ...p.between.slice(0, 40).map((b) => `| ${b.from} | ${b.to} | ${b.s} | ${b.wall} |`), "");
+  L.push("Longest stretch of play with nothing new, by region:", "", "| Region | Longest (play s) | Ends at |", "| --- | --- | --- |",
     ...Object.entries(p.regions).sort((x, y) => y[1].s - x[1].s).map(([k, v]) => `| ${k} | ${v.s} | ${fmtTime(v.endsAt)} |`), "", "Chart: [charts/pacing.png](charts/pacing.png)", "");
   L.push("## Timeline", "");
   const SKIP = new Set(["action", "long-task", "long-frame"]);

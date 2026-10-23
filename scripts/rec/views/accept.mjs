@@ -10,6 +10,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { INDEX, readIndex, STORE } from "./compare.mjs";
+import { loadViewSet } from "./stable.mjs";
 
 const args = process.argv.slice(2), arg = (n) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : undefined; };
 const dir = args[0], by = arg("by"), why = arg("why");
@@ -23,8 +24,13 @@ const cls = (index.classes[cap.class] ??= {});
 const wanted = arg("views") ? new Set(arg("views").split(",")) : null;
 const chosen = cap.views.filter((v) => v.file && (args.includes("--all") || (wanted?.has(v.id)) || (args.includes("--new") && !cls[v.id])));
 if (wanted) for (const id of wanted) if (!cap.views.some((v) => v.id === id && v.file)) { console.error(`${id} is not in this capture`); process.exit(2); }
-const unsettled = chosen.filter((v) => !v.settled || v.stable === false);
-if (unsettled.length && !args.includes("--allow-unsettled")) { console.error(`refusing unsettled or animating views as baselines: ${unsettled.map((v) => v.id).join(", ")} (--allow-unsettled to override)`); process.exit(2); }
+// A baseline is a settled, stable, unquarantined picture (R1-F2); `stable` must be true, not merely absent.
+const set = loadViewSet();
+const quarantined = new Map(set.views.filter((v) => v.quarantine).map((v) => [v.id, v.quarantine]));
+const unsettled = chosen.filter((v) => !v.settled || v.stable !== true);
+if (unsettled.length && !args.includes("--allow-unsettled")) { console.error(`refusing unsettled or unstable views as baselines: ${unsettled.map((v) => v.id).join(", ")} (--allow-unsettled to override)`); process.exit(2); }
+const held = chosen.filter((v) => quarantined.has(v.id));
+if (held.length && !args.includes("--allow-quarantined")) { console.error(`refusing quarantined views as baselines: ${held.map((v) => `${v.id} (${quarantined.get(v.id)})`).join(", ")} (--allow-quarantined to override, with the reason in --why)`); process.exit(2); }
 const at = new Date().toISOString();
 for (const v of chosen) {
   const rel = `${cap.class}/${v.id}/${cap.commit}.png`, dest = path.join(store, rel);

@@ -20,7 +20,10 @@ export class Blocked extends Error {}
 /**
  * opts: { dist, save, port, software (SwiftShader, functional only, no lease),
  *   chrome (binary), pw (where playwright-core is installed), gpu (regex the
- *   renderer must match), label, log }
+ *   renderer must match), label, log,
+ *   query (the URL's search, e.g. "?rec=driver"), isolate (serve COOP/COEP:
+ *   5 µs timers and the memory API; REC-1's drivers), initScripts (run before
+ *   the game loads, after the soak's own frame recorder) }
  */
 export async function openGame(opts) {
   const { dist, save, port, software = false, log = () => {} } = opts;
@@ -37,16 +40,18 @@ export async function openGame(opts) {
     const rel = decodeURIComponent((req.url ?? "/").split("?")[0]);
     const file = path.resolve(root, "." + (rel.endsWith("/") ? rel + "index.html" : rel));
     if (!file.startsWith(root + path.sep) || !existsSync(file) || statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream", "cache-control": "no-store" });
+    res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream", "cache-control": "no-store",
+      ...(opts.isolate ? { "cross-origin-opener-policy": "same-origin", "cross-origin-embedder-policy": "require-corp" } : {}) });
     res.end(readFileSync(file));
   });
   await new Promise((r) => server.listen(Number(port), "127.0.0.1", r));
+  const bound = server.address().port; // port 0: any free port
   const label = `${opts.label ?? "soak"}-${process.pid}`;
   const browser = await chromium.launch({
     executablePath: opts.chrome ?? (onSandbox ? sandboxChrome : `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`), headless: true, timeout: 30000,
     args: [...(software ? ["--use-angle=swiftshader"] : onSandbox ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", `--siltwake-soak=${label}`],
   });
-  const g = { browser, server, errors: [], crash: null, label, held: new Set(), eye: 0 };
+  const g = { browser, server, errors: [], crash: null, label, held: new Set(), eye: 0, port: bound, chrome: browser.version() };
   g.browserPid = readdirSync("/proc").filter((d) => /^\d+$/.test(d)).map(Number).find((p) => {
     try { const c = readFileSync(`/proc/${p}/cmdline`, "utf8"); return c.includes(`--siltwake-soak=${label}`) && !c.includes("--type="); } catch { return false; }
   });
@@ -59,7 +64,8 @@ export async function openGame(opts) {
   page.on("console", (m) => { if (m.type() === "error" && !m.text().startsWith("Failed to load resource")) g.errors.push(m.text().slice(0, 300)); });
   page.on("response", (r) => { if (r.status() >= 400) g.errors.push(`HTTP ${r.status()} ${r.url().slice(0, 200)}`); }); // which resource, not just that one failed
   await page.addInitScript(frameRecorderScript);
-  await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load", timeout: 60000 });
+  for (const script of opts.initScripts ?? []) await page.addInitScript(script);
+  await page.goto(`http://127.0.0.1:${bound}/${opts.query ?? ""}`, { waitUntil: "load", timeout: 60000 });
   g.renderer = await page.evaluate(() => { const c = document.createElement("canvas").getContext("webgl2"); const e = c.getExtension("WEBGL_debug_renderer_info"); return c.getParameter(e.UNMASKED_RENDERER_WEBGL); });
   log("renderer", g.renderer);
   if (opts.gpu && !new RegExp(opts.gpu).test(g.renderer)) throw new Error(`renderer ${g.renderer} is not ${opts.gpu}`);

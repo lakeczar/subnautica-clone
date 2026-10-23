@@ -93,6 +93,8 @@ test("R4-F1: the canonical hold observation over CW-1's real states, booleans, a
     [true, "holding"], [false, "clear"], ["clear", "clear"], ["admitted", "clear"], ["away", "clear"],
     ["loading", "holding"], ["rescue", "holding"], ["refuge", "holding"], ["waiting", "holding"],
     [null, "unknown"], [undefined, "unknown"], ["bogus", "unknown"], [1, "unknown"], [{}, "unknown"], [NaN, "unknown"],
+    // REC-1 R1-F4: the runtime's reasons admission was not evaluated.
+    ["inactive", "n/a"], ["opening", "n/a"], ["interior", "n/a"],
   ];
   for (const [v, obs] of cases) assert.equal(M.holdObservation(v).obs, obs, String(v));
   // CW-1's per-frame record as app.ts pushes it.
@@ -118,4 +120,17 @@ test("R4-F3: gaps are excluded by interval: tagged gaps never count as timing, u
   const n = M.normalize("frames", { frames: { overMs: 33, gaps: [{ ms: 16, excluded: false }, { ms: 90, excluded: true }, { ms: 16, excluded: true }, 70], records: null } }).frames;
   assert.deepEqual([n.count, n.excluded, n.worstMs, n.over], [2, 2, 70, [70]]);
   assert.equal(M.normalize("frames", { frames: { overMs: 33, gaps: [{ ms: 16, excluded: "yes" }], records: null } }).frames.invalidGaps, 1);
+});
+
+test("REC-1 R1-F4: not-applicable frames keep hold coverage; a bare null among them still does not", () => {
+  const rec = (hold: unknown) => ({ total: 16, parts: { chunks: 0, caves: 0, regions: 0, lights: 0 }, hold });
+  const f = (holds: unknown[]) => M.normalize("flight-frames", { frames: { overMs: 33, gaps: holds.map(() => ({ ms: 16, excluded: false })), records: holds.map(rec) } }).frames;
+  const covered = f(["clear", "inactive", "inactive", "opening", "loading", "interior"]);
+  assert.equal(covered.holdsCovered, true);
+  assert.equal(covered.holdFrames, 1, "n/a is never a hold");
+  const mixed = f(["clear", "inactive", null]);
+  assert.equal(mixed.holdsCovered, false);
+  assert.match(mixed.holdIssue, /1 of 3/);
+  const polled = M.normalize("p", { holds: { state: "inactive" } }).holds;
+  assert.deepEqual(polled, { available: true, held: false, notApplicable: true, state: "inactive" });
 });

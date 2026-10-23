@@ -11,6 +11,7 @@ cd "$(dirname "$0")/../.."
 tool="$1"; shift
 [ -d /work/tmp/pw/node_modules/playwright-core ] || npm i --prefix /work/tmp/pw --no-save --no-audit --no-fund playwright-core@1.64.1 >/dev/null
 ls -d "$HOME"/.cache/ms-playwright/ffmpeg-* >/dev/null 2>&1 || node /work/tmp/pw/node_modules/playwright-core/cli.js install ffmpeg >/dev/null
-# The sandbox's job lock is its one-GPU lease.
-SILTWAKE_GPU_LEASE=alickers-job exec node "scripts/rec/$tool" --chrome /usr/local/bin/siltwake-chrome --pw /work/tmp/pw/ --gpu "RTX 4070" \
+# The sandbox's job lock is its one-GPU lease. The soak's browser session finds
+# the sandbox's Chrome wrapper and /work/tmp/pw itself.
+SILTWAKE_GPU_LEASE=alickers-job exec node "scripts/rec/$tool" --gpu "RTX 4070" \
   --machine "RTX 4070 Laptop (alickers, shared desktop host; indicative)" "$@"

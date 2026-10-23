@@ -1,11 +1,13 @@
 // REC-1 owner timeline page: one self-contained HTML with the video, the
 // frame-time chart, the memory curve and the event markers, synchronised:
 // playing moves the cursor, clicking a chart or an event seeks the video.
-// The data is inlined; the video is inlined too when it is small (≤ 32 MiB),
-// otherwise the page plays recording/video.webm beside it.
+// The data is inlined; the video (one or more independently decodable segment
+// files, played in turn) is inlined too when it is small (≤ 32 MiB in all),
+// otherwise the page plays the files in recording/ beside it.
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { SERIES, INK, PACE } from "./charts.mjs";
+import { videoSegments } from "./analyse.mjs";
 
 const INLINE_VIDEO = 32 * 1024 * 1024;
 
@@ -25,10 +27,13 @@ export function timelineHtml(r, a) {
   const events = r.events.filter((e) => e.t >= t0 && !["action", "long-task", "session"].includes(e.kind) && !(e.kind === "save" && e.detail?.ok && !e.detail?.manual))
     .map((e) => ({ s: s(e.t), k: e.kind, x: e.text.slice(0, 160), tick: e.tick ?? null, a: attention.get(e.t)?.id ?? null, strip: attention.get(e.t)?.strip ?? null }));
   const spans = a.pacing.spans.map((p) => [s(p.from), s(p.to), p.cls]);
-  const v = h.video, file = path.join(r.rec, "video.webm");
-  const hasVideo = v?.file && v.start != null && existsSync(file);
-  const src = !hasVideo ? null : statSync(file).size <= INLINE_VIDEO ? `data:video/webm;base64,${readFileSync(file).toString("base64")}` : "recording/video.webm";
-  const data = { fr, mem, events, spans, offset: hasVideo ? (v.start - t0) / 1000 : 0, end: +a.durationS.toFixed(1), colors: SERIES, pace: PACE, ink: INK };
+  const segs = videoSegments(h).filter((x) => existsSync(path.join(r.rec, x.file)));
+  const bytes = segs.reduce((n, x) => n + statSync(path.join(r.rec, x.file)).size, 0);
+  const inline = bytes <= INLINE_VIDEO;
+  const videos = segs.map((x) => ({ src: inline ? `data:video/webm;base64,${readFileSync(path.join(r.rec, x.file)).toString("base64")}` : `recording/${x.file}`,
+    start: (x.start - t0) / 1000, end: x.end != null ? (x.end - t0) / 1000 : null }));
+  const hasVideo = videos.length > 0;
+  const data = { fr, mem, events, spans, videos, end: +a.durationS.toFixed(1), colors: SERIES, pace: PACE, ink: INK };
   const title = `${h.machine?.label ?? ""} · ${h.gpuDevice?.name ?? h.gpu?.renderer ?? ""} · ${(h.commit ?? h.build?.commit ?? "").slice(0, 10)} · ${a.verdict.status}`;
   return `<!doctype html><html lang=en><meta charset=utf-8><title>Siltwake run timeline · ${esc(title)}</title>
 <style>
@@ -45,17 +50,18 @@ canvas{width:100%;display:block;cursor:crosshair;border:1px solid var(--grid);ma
 </style>
 <header><b>Run timeline</b> · ${esc(title)} · ${esc(h.run?.startedAt ?? h.startedAt ?? "")}</header>
 <main><section>
-${src ? `<video id=v controls preload=metadata src="${src}"></video>` : `<div class=novideo>No video in this run (an exclusive performance run keeps snapshots only)</div>`}
-<div class=legend id=lf></div><canvas id=cf height=180></canvas>
-<div class=legend id=lm></div><canvas id=cm height=150></canvas>
-<div class=legend id=lp></div><canvas id=cp height=40></canvas>
+${hasVideo ? `<video id=v controls preload=metadata></video>` : `<div class=novideo>No video in this run (an exclusive performance run keeps snapshots only)</div>`}
+<div class=legend id=lf></div><canvas id=cf data-h=180></canvas>
+<div class=legend id=lm></div><canvas id=cm data-h=150></canvas>
+<div class=legend id=lp></div><canvas id=cp data-h=40></canvas>
 </section><aside><div class=f id=filters></div><div id=ev></div></aside></main><div id=tip></div>
 <script>
 const D=${JSON.stringify(data)};
 const V=document.getElementById("v"), tip=document.getElementById("tip");
 let cursor=0;
 const fmt=s=>s>=60?Math.floor(s/60)+":"+String(Math.floor(s%60)).padStart(2,"0"):s.toFixed(1)+"s";
-function setup(c){const r=c.getBoundingClientRect(),dpr=devicePixelRatio||1;c.width=r.width*dpr;c.height=c.getAttribute("height")*dpr;c.style.height=c.getAttribute("height")+"px";const x=c.getContext("2d");x.scale(dpr,dpr);return{x,w:r.width,h:+c.getAttribute("height")}}
+// Fixed logical sizes (R1-F3): the backing store follows CSS size × DPR and is never read back as a size.
+function setup(c){const h=+c.dataset.h,w=c.clientWidth||c.getBoundingClientRect().width,dpr=devicePixelRatio||1;c.style.height=h+"px";const bw=Math.round(w*dpr),bh=Math.round(h*dpr);if(c.width!==bw)c.width=bw;if(c.height!==bh)c.height=bh;const x=c.getContext("2d");x.setTransform(dpr,0,0,dpr,0,0);return{x,w,h}}
 const L=44,R=10;
 function axes(g,top,unit){const{x,w,h}=g;x.fillStyle=D.ink.surface;x.fillRect(0,0,w,h);x.strokeStyle=D.ink.grid;x.fillStyle=D.ink.muted;x.font="11px system-ui";for(let i=0;i<=4;i++){const v=top*i/4,y=h-14-(h-24)*v/top;x.beginPath();x.moveTo(L,y);x.lineTo(w-R,y);x.stroke();x.fillText(Math.round(v)+unit,2,y+4)}}
 const X=(g,s)=>L+(g.w-L-R)*s/Math.max(1,D.end), Y=(g,top,v)=>g.h-14-(g.h-24)*Math.min(v,top)/top;
@@ -71,7 +77,11 @@ function drawPace(){const g=setup(document.getElementById("cp")),x=g.x;x.fillSty
  cursorLine(g);document.getElementById("lp").innerHTML="Activity: "+Object.entries(D.pace).map(([k,c])=>'<span><i style="background:'+c+'"></i>'+k+"</span>").join("")}
 function cursorLine(g){g.x.strokeStyle=D.ink.primary;g.x.lineWidth=1;g.x.beginPath();g.x.moveTo(X(g,cursor),0);g.x.lineTo(X(g,cursor),g.h);g.x.stroke()}
 function draw(){drawFrames();drawMem();drawPace()}
-function seek(s){cursor=Math.max(0,s);if(V)V.currentTime=Math.max(0,s-D.offset);draw();highlight()}
+// Segments play in turn; a seek loads the one that holds the moment.
+let segI=-1;
+function segFor(s){let i=-1;D.videos.forEach((v,k)=>{if(v.start<=s)i=k});return Math.max(0,i)}
+function load(i,at){if(!V||!D.videos[i])return;if(segI!==i){segI=i;V.src=D.videos[i].src}const go=()=>{V.currentTime=Math.max(0,at)};V.readyState>=1?go():V.addEventListener("loadedmetadata",go,{once:true})}
+function seek(s){cursor=Math.max(0,s);if(V&&D.videos.length){const i=segFor(s);load(i,s-D.videos[i].start)}draw();highlight()}
 for(const id of ["cf","cm","cp"]){const c=document.getElementById(id);
  c.addEventListener("click",e=>{const r=c.getBoundingClientRect();seek((e.clientX-r.left-L)/(r.width-L-R)*D.end)});
  c.addEventListener("mousemove",e=>{const r=c.getBoundingClientRect(),s=(e.clientX-r.left-L)/(r.width-L-R)*D.end;const f=D.fr.reduce((b,p)=>Math.abs(p[0]-s)<Math.abs(b[0]-s)?p:b,D.fr[0]||[0,0]);
@@ -85,7 +95,8 @@ document.getElementById("filters").addEventListener("change",e=>{const k=e.targe
 function list(){document.getElementById("ev").innerHTML=D.events.filter(listed).map((e,i)=>'<div data-s="'+e.s+'"><i>'+fmt(e.s)+(e.tick!=null?" t"+e.tick:"")+"</i><b>"+(e.a?e.a+" ":"")+e.k+"</b>"+e.x.replace(/</g,"&lt;")+"</div>").join("")}
 document.getElementById("ev").addEventListener("click",e=>{const d=e.target.closest("div[data-s]");if(d)seek(+d.dataset.s)});
 function highlight(){let best=null;for(const d of document.querySelectorAll("#ev div")){d.classList.remove("on");if(+d.dataset.s<=cursor)best=d}if(best){best.classList.add("on")}}
-if(V)V.addEventListener("timeupdate",()=>{cursor=V.currentTime+D.offset;draw();highlight()});
+if(V){V.addEventListener("timeupdate",()=>{if(segI>=0){cursor=V.currentTime+D.videos[segI].start;draw();highlight()}});
+ V.addEventListener("ended",()=>{if(segI+1<D.videos.length){load(segI+1,0);V.play()}});load(0,0)}
 addEventListener("resize",draw);list();draw();
 </script></html>`;
 }

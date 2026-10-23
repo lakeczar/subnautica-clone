@@ -29,7 +29,7 @@ import { controlsActive } from "../sim/timeline/activity.js";
 import { regionAtPoint } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
 import { DEFAULT_FLIGHT_SETTINGS, FlightCapture, flightMode, type FlightSettings } from "./flight/capture.js";
-import { gameSample, recordCommand, recordGameEvents, recordTimeline, stageView } from "./flight/game.js";
+import { gameSample, recordCommand, recordGameEvents, recordTimeline, stageView, SurvivalWatch } from "./flight/game.js";
 import { installTestHook, type HookRead } from "./flight/hooks.js";
 import { exposure } from "../sim/survival.js";
 import { BAKE_SOURCE } from "../render/bakeSource.js";
@@ -234,9 +234,11 @@ export class SiltwakeApp {
       exportBackup: () => this.exportBackup(),
       exportRaw: () => this.exportRaw(),
       flight: (settings) => {
+        const was = this.flightSettings;
         this.flightSettings = settings;
         this.view.flightSettings(settings);
         try { localStorage.setItem(FLIGHT_KEY, JSON.stringify(settings)); } catch {}
+        this.applyFlightSettings(was, settings);
       },
       exportFlight: () => void this.exportFlight(),
       importFile: (file) =>
@@ -306,7 +308,8 @@ export class SiltwakeApp {
     this.uninstallHook = installTestHook({
       read: () => this.hookRead(),
       stats: () => this.renderer?.stats() ?? null,
-      freeze: (on) => { this.frozen = on; this.clock.reset(); this.dirty = true; },
+      // Fixed-view captures only (driver mode): a player's build cannot be frozen through the hook.
+      freeze: (on) => { if (this.flight?.mode !== "driver") return; this.frozen = on; this.clock.reset(); this.dirty = true; },
       capture: () => this.flight,
       stage: (v) => {
         if (this.flight?.mode !== "driver" || !this.state) return false;
@@ -480,26 +483,36 @@ export class SiltwakeApp {
     const presentStart = timed ? performance.now() : 0;
     this.present(now);
     const presentEnd = timed ? performance.now() : 0;
-    if (this.flight) this.recordFrame(now, presentEnd - started, simMs, steps, saveMs, hold?.state ?? null);
+    if (this.flight) this.recordFrame(now, presentEnd - started, simMs, steps, saveMs, hold?.state ?? this.holdNotEvaluated());
     if (perf) perf.push({ at: now, total: presentEnd - started, sim: simMs, steps, save: saveMs, present: presentEnd - presentStart,
       hud: this.lastHudMs, parts: this.renderer?.parts ?? null, hold: hold?.state ?? null });
     this.frameId = requestAnimationFrame((time) => this.frame(time));
+  }
+
+  /** Why cave admission was not evaluated this frame (REC-1's provenance, R1-F4):
+   * no play to hold, the opening, or an interior; null when it should have been. */
+  private holdNotEvaluated(): string | null {
+    if (!this.active) return "inactive";
+    if (this.state && this.state.opening.phase < 4) return "opening";
+    if (this.state?.player.mode === "interior") return "interior";
+    return null;
   }
 
   /** REC-1: this frame's row, the periodic sample, then the snapshot and video
    * frame (after the render, while the drawing buffer is this frame's). */
   private recordFrame(now: number, work: number, sim: number, steps: number, save: number, hold: string | null): void {
     const fl = this.flight!;
-    let recStart = performance.now();
+    // Inclusive self-time (R1-S1): every recording step here is timed and charged
+    // by part, the row's own processing in frame() included (it lands on the next row).
+    let mark = performance.now();
+    const charge = (part: string) => { const t = performance.now(); fl.recorder.charge(t - mark, part); mark = t; };
     this.flightFrames++;
     if (now >= this.flightSampleAt) {
       this.flightSampleAt = now + FLIGHT_SAMPLE_MS;
       const r = this.hookRead();
       fl.sample(gameSample(now, this.state, this.renderer?.stats() ?? null, r?.camera ?? null, hold, this.active, this.flightFrames));
       this.flightFrames = 0;
-      const sampled = performance.now();
-      fl.recorder.charge(sampled - recStart, "sample");
-      recStart = sampled;
+      charge("sample");
     }
     let gap = this.flightLast ? now - this.flightLast : 0;
     if (this.flightHidden) {
@@ -513,15 +526,18 @@ export class SiltwakeApp {
     const heapDrop = heap !== null && this.flightHeap !== null ? Math.max(0, this.flightHeap - heap) : undefined;
     this.flightHeap = heap;
     const p = this.renderer?.parts;
+    if (p?.gpuTimerMs) fl.recorder.charge(p.gpuTimerMs, "gpu-timer");
     for (const g of p?.gpuDone ?? []) fl.recorder.gpuResolved(g.tag, g.ms);
     fl.recorder.frame({ t: now, gap, work, sim, steps, save, hud: this.lastHudMs, hold,
       ...(p ? { chunks: p.chunks, caves: p.caves, regions: p.regions, lights: p.lights, actors: p.actors, render: p.render, dom: p.dom ?? 0, gpuTag: p.gpuTag } : {}),
-      ...(heapDrop !== undefined ? { heapDrop } : {}) }, performance.now() - recStart);
+      ...(heapDrop !== undefined ? { heapDrop } : {}) });
+    charge("frame");
     // Pictures only from a frame that drew: otherwise the canvas holds nothing current.
     if (this.drewFrame) fl.afterRender(now);
     this.drewFrame = false;
   }
   private drewFrame = false;
+  private flightSurvival = new SurvivalWatch();
 
   /** The test hook's reading of the game (hooks.ts HookRead). */
   private hookRead(): HookRead | null {
@@ -563,11 +579,34 @@ export class SiltwakeApp {
     }
   }
 
+  /** Settings apply to the running recording (R1-F8): off stops it now (it stays
+   * exportable), on starts a new one, and the video toggle starts or ends a segment. */
+  private applyFlightSettings(was: FlightSettings, now: FlightSettings): void {
+    const { mode } = flightMode(now);
+    if (this.flight && !now.enabled && this.flight.mode === "playtest") {
+      this.flight.stop();
+      this.flightDone = this.flight;
+      this.flight = null;
+      if (this.renderer) this.renderer.timing = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
+      this.view.notify("Flight recorder off. What it recorded can still be exported.", false, { channel: "system" });
+      return;
+    }
+    if (!this.flight && now.enabled && mode === "playtest") {
+      this.startFlight();
+      if (this.flight) this.view.notify("Flight recorder on: a new recording has started.", false, { channel: "system" });
+      return;
+    }
+    if (this.flight && this.flight.mode === "playtest" && was.video !== now.video) this.flight.setVideo(now.video);
+  }
+  /** The last recording turned off, kept for export. */
+  private flightDone: FlightCapture | null = null;
+
   private async exportFlight(): Promise<void> {
-    if (!this.flight) { this.view.notify("The flight recorder is off. Turn it on in Settings; it starts with the next load.", true, { channel: "system" }); return; }
+    const capture = this.flight ?? this.flightDone;
+    if (!capture) { this.view.notify("The flight recorder is off. Turn it on in Settings to start a recording.", true, { channel: "system" }); return; }
     this.view.notify("Preparing the flight recording…", false, { channel: "system" });
     try {
-      const { blob, name } = await this.flight.exportZip();
+      const { blob, name } = await capture.exportZip();
       const url = URL.createObjectURL(blob), a = document.createElement("a");
       a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -580,6 +619,7 @@ export class SiltwakeApp {
   /** One fixed simulation step with this frame's input. */
   private step(now: number): void {
     if (!this.state || !this.active) return;
+    const before = this.state;
     const gesture = this.sampleGesture();
     const controls = this.helm.apply(this.state, this.input?.sample() ?? []);
     this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
@@ -592,9 +632,12 @@ export class SiltwakeApp {
     this.events(result.events);
     this.observeTimeline(result.state, [...controls, ...gesture], result.events);
     if (this.flight) {
+      const t0 = performance.now();
       recordGameEvents(this.flight.recorder, result.state, result.events);
       for (const c of gesture) recordCommand(this.flight.recorder, result.state, c);
       if (this.timeline) this.flightTimeline = recordTimeline(this.flight.recorder, this.timeline.events, this.flightTimeline);
+      this.flightSurvival.observe(this.flight.recorder, before, result.state, result.events, now);
+      this.flight.recorder.charge(performance.now() - t0, "events");
     }
     this.observeAscent(result.events);
     this.observeThrust(result.events);
@@ -961,8 +1004,10 @@ export class SiltwakeApp {
     const result = executeCommand(this.state, command, this.world);
     this.session.state = result.state;
     if (this.flight) {
+      const t0 = performance.now();
       recordCommand(this.flight.recorder, result.state, command);
       recordGameEvents(this.flight.recorder, result.state, result.events);
+      this.flight.recorder.charge(performance.now() - t0, "events");
     }
     if (actor !== `${result.state.player.mode}/${result.state.player.controlledVehicleId ?? "diver"}`) this.resetAscent();
     this.validateGesture();
@@ -1173,6 +1218,7 @@ export class SiltwakeApp {
     if (document.pointerLockElement === this.view.canvas)
       document.exitPointerLock();
     this.flight?.dispose();
+    this.flightDone?.dispose();
     this.uninstallHook();
     this.renderer?.dispose();
     this.sound.dispose();

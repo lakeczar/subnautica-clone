@@ -12,6 +12,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import path from "node:path";
+import { cdpHeap, processRss } from "../soak/probe.mjs";
 
 export const VIDEO_FPS = 12;
 export const VIDEO_SIZE = { width: 1280, height: 720 };
@@ -39,36 +40,20 @@ export function gpuInfo() {
   return null;
 }
 
-/** VRAM held by these processes (nvidia-smi's per-process table; Linux drivers list
- * graphics processes, WSL's lists none: null there). */
-export function processVram(pids) {
+/** VRAM held by the browser's children (its GPU process): nvidia-smi's
+ * per-process table, matched by parent PID. Linux drivers list graphics
+ * processes; WSL's lists none (null there). */
+export function processVram(browserPid) {
+  const parent = (pid) => { try { const st = readFileSync(`/proc/${pid}/stat`, "utf8"); return Number(st.slice(st.lastIndexOf(")") + 2).split(" ")[1]); } catch { return null; } };
   for (const bin of ["nvidia-smi", "/usr/lib/wsl/lib/nvidia-smi"]) {
     let xml;
     try { xml = execFileSync(bin, ["-q", "-x"], { encoding: "utf8", timeout: 5000, maxBuffer: 16 << 20 }); } catch { continue; }
     const procs = [...xml.matchAll(/<process_info>[\s\S]*?<pid>(\d+)<\/pid>[\s\S]*?<used_memory>(\d+) MiB<\/used_memory>/g)].map((m) => ({ pid: Number(m[1]), mib: Number(m[2]) }));
     if (!procs.length) return null;
-    const ours = procs.filter((p) => pids.has(p.pid));
+    const ours = procs.filter((p) => p.pid === browserPid || parent(p.pid) === browserPid);
     return ours.length ? ours.reduce((a, p) => a + p.mib, 0) : null;
   }
   return null;
-}
-
-/** Resident memory of the browser's renderer (the tab), GPU process and whole tree, MiB. */
-export function processMemory(browserPid) {
-  if (!browserPid) return null;
-  const kib = (pid) => { try { return Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${pid}/status`, "utf8"))[1]); } catch { return null; } };
-  const cmd = (pid) => { try { return readFileSync(`/proc/${pid}/cmdline`, "utf8"); } catch { return ""; } };
-  const parent = (pid) => { try { const st = readFileSync(`/proc/${pid}/stat`, "utf8"); return Number(st.slice(st.lastIndexOf(")") + 2).split(" ")[1]); } catch { return null; } };
-  const all = readdirSync("/proc").filter((p) => /^\d+$/.test(p)).map(Number), tree = new Set([browserPid]);
-  for (let grew = true; grew;) { grew = false; for (const p of all) if (!tree.has(p) && tree.has(parent(p))) { tree.add(p); grew = true; } }
-  const procs = [...tree].map((p) => ({ c: cmd(p), r: kib(p) })).filter((x) => x.r != null);
-  const max = (xs) => (xs.length ? Math.round(Math.max(...xs) / 102.4) / 10 : null);
-  return {
-    pids: tree,
-    tabMiB: max(procs.filter((x) => x.c.includes("--type=renderer") && !x.c.includes("extension")).map((x) => x.r)),
-    gpuProcessMiB: max(procs.filter((x) => x.c.includes("--type=gpu-process")).map((x) => x.r)),
-    browserTreeMiB: Math.round(procs.reduce((a, x) => a + x.r, 0) / 102.4) / 10,
-  };
 }
 
 /**
@@ -97,30 +82,32 @@ export async function startRecording(opts) {
     append("events.ndjson", got.events.items);
     // A snapshot still being encoded is read on a later drain; one still absent after SNAPSHOT_WAIT_MS is missing.
     let done = got.snapshots.next - got.snapshots.items.length, last = null;
+    // A failed picture is recorded as missing at once (R1-S4); a pending one waits for a later drain.
     for (const s of got.snapshots.items) {
-      const data = await page.evaluate((seq) => window.__siltwake.recorder.snapshot(seq), s.seq);
-      if (!data && final !== true && pageNow() - s.t < SNAPSHOT_WAIT_MS) break;
+      const { data, state } = await page.evaluate(async (seq) => ({ data: await window.__siltwake.recorder.snapshot(seq), state: window.__siltwake.recorder.snapshotState?.(seq) }), s.seq);
+      if (!data && state === "pending" && final !== true && pageNow() - s.t < SNAPSHOT_WAIT_MS) break;
       if (data) { writeFileSync(path.join(dir, s.file), Buffer.from(data, "base64")); snapshotsWritten++; } else snapshotsMissing++;
-      append("snapshots.ndjson", [{ ...s, ...(data ? {} : { missing: "not encoded within the wait, or released before the driver read it" }) }]);
+      append("snapshots.ndjson", [{ ...s, ...(data ? {} : { missing: state === "failed" ? "encoding failed" : state === "pending" ? "not encoded within the wait" : "released before the driver read it" }) }]);
       done++; last = s.seq;
     }
     cursors.snapshots = done;
     if (last !== null) await page.evaluate((seq) => window.__siltwake.recorder.release(seq), last);
   }
 
-  // System: the tab's and the GPU's memory, on the page clock.
+  // System: the tab's and the GPU's memory, on the page clock, through the
+  // soak's own providers (scripts/soak/probe.mjs), not a second copy of them.
   const gpu0 = opts.gpuBaseline ?? null;
+  const rss = processRss(opts.pid), heapProvider = cdpHeap(cdp);
   let lastGpu = 0;
   async function system() {
-    const { pids, ...m } = processMemory(opts.pid) ?? {};
-    let heap = null;
-    try { heap = (await cdp.send("Performance.getMetrics")).metrics.find((x) => x.name === "JSHeapUsedSize")?.value ?? null; } catch { /* closed */ }
-    const row = { t: Math.round(pageNow()), ...m, ...(heap ? { jsHeapMiB: Math.round(heap / 104857.6) / 10 } : {}) };
+    const row = { t: Math.round(pageNow()) };
+    if (opts.pid) Object.assign(row, (await rss.sample()).memory);
+    try { Object.assign(row, (await heapProvider.sample({})).memory ?? {}); } catch { /* closed */ }
     if (Date.now() - lastGpu >= GPU_MS) {
       lastGpu = Date.now();
       const g = gpuInfo(); if (g) row.gpuUsedMiB = g.usedMiB;
       // This browser's own VRAM, where the driver lists processes (not under WSL).
-      const v = pids ? processVram(pids) : null; if (v != null) row.browserVramMiB = v;
+      const v = opts.pid ? processVram(opts.pid) : null; if (v != null) row.browserVramMiB = v;
     }
     append("system.ndjson", [row]);
   }

@@ -43,19 +43,23 @@ class Bytes {
 }
 
 export interface ZipEntry { name: string; data: Blob }
+/** An entry whose CRC and size are already known (the worker's streaming export). */
+export interface ZipLayoutEntry { name: string; size: number; crc: number }
 
-export async function zipBlob(entries: readonly ZipEntry[], when = new Date()): Promise<Blob> {
-  const parts: BlobPart[] = [], central: Uint8Array[] = [];
+/** The bytes around each entry's data, and the closing records: shared by the
+ * Blob export and the worker's streaming export. */
+export function zipLayout(entries: readonly ZipLayoutEntry[], when = new Date()): { locals: Uint8Array[]; tail: Uint8Array[] } {
   const { time, date } = dosTime(when);
+  const locals: Uint8Array[] = [], central: Uint8Array[] = [];
   let offset = 0;
   for (const e of entries) {
-    const name = utf8.encode(e.name), size = e.data.size, crc = await blobCrc(e.data);
+    const name = utf8.encode(e.name), size = e.size, crc = e.crc;
     const big = size >= MAX32 || offset >= MAX32;
     const local = new Bytes(30 + name.length + (big ? 20 : 0))
       .u32(0x04034b50).u16(big ? 45 : 20).u16(0x0800).u16(0).u16(time).u16(date).u32(crc)
       .u32(big ? MAX32 : size).u32(big ? MAX32 : size).u16(name.length).u16(big ? 20 : 0).raw(name);
     if (big) local.u16(1).u16(16).u64(size).u64(size);
-    parts.push(local.buf as Uint8Array<ArrayBuffer>, e.data);
+    locals.push(local.buf);
     const extra = big ? 28 : 0;
     const c = new Bytes(46 + name.length + extra)
       .u32(0x02014b50).u16(45).u16(big ? 45 : 20).u16(0x0800).u16(0).u16(time).u16(date).u32(crc)
@@ -67,7 +71,7 @@ export async function zipBlob(entries: readonly ZipEntry[], when = new Date()): 
   }
   const cdSize = central.reduce((a, b) => a + b.length, 0), cdOffset = offset;
   const zip64 = entries.length >= 0xffff || cdOffset >= MAX32 || cdSize >= MAX32;
-  const tail: Uint8Array[] = [];
+  const tail: Uint8Array[] = [...central];
   if (zip64) {
     tail.push(new Bytes(56).u32(0x06064b50).u64(44).u16(45).u16(45).u32(0).u32(0)
       .u64(entries.length).u64(entries.length).u64(cdSize).u64(cdOffset).buf);
@@ -76,5 +80,14 @@ export async function zipBlob(entries: readonly ZipEntry[], when = new Date()): 
   tail.push(new Bytes(22).u32(0x06054b50).u16(0).u16(0)
     .u16(zip64 ? 0xffff : entries.length).u16(zip64 ? 0xffff : entries.length)
     .u32(zip64 ? MAX32 : cdSize).u32(zip64 ? MAX32 : cdOffset).u16(0).buf);
-  return new Blob([...parts, ...central as Uint8Array<ArrayBuffer>[], ...tail as Uint8Array<ArrayBuffer>[]], { type: "application/zip" });
+  return { locals, tail };
+}
+
+export async function zipBlob(entries: readonly ZipEntry[], when = new Date()): Promise<Blob> {
+  const layout: ZipLayoutEntry[] = [];
+  for (const e of entries) layout.push({ name: e.name, size: e.data.size, crc: await blobCrc(e.data) });
+  const { locals, tail } = zipLayout(layout, when);
+  const parts: BlobPart[] = [];
+  entries.forEach((e, i) => parts.push(locals[i] as Uint8Array<ArrayBuffer>, e.data));
+  return new Blob([...parts, ...tail as Uint8Array<ArrayBuffer>[]], { type: "application/zip" });
 }

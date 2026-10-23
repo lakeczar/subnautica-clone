@@ -35,16 +35,21 @@ export const DOMAINS = Object.freeze({
 export const valid = (type, v) => DOMAINS[type](v);
 
 /**
- * The canonical hold observation (R4-F1): "holding", "clear" or "unknown".
+ * The canonical hold observation (R4-F1): "holding", "clear", "n/a" or "unknown".
  * Producers: CW-1's per-frame record and #ocean dataset carry the cave
  * admission's state (src/world/caves/admission.ts CaveHold.state: clear,
  * loading, rescue, refuge); a frame where admission was not evaluated records
  * null. Other providers may report a boolean. Absent, null, an unknown state or
  * a wrong type is "unknown": never evidence that nothing held.
+ * "n/a" (REC-1 R1-F4): the runtime says why admission was deliberately not
+ * evaluated: no play to hold (inactive: paused, a menu or panel), the opening,
+ * an interior. It is neither a hold nor a clear frame; it only keeps those
+ * frames from counting as unknown.
  */
 export const HOLD_STATES = Object.freeze({
   clear: "clear", admitted: "clear", away: "clear", // admitted or no cave in reach: nothing holds
   loading: "holding", waiting: "holding", rescue: "holding", refuge: "holding",
+  inactive: "n/a", opening: "n/a", interior: "n/a",
 });
 export function holdObservation(v) {
   if (v === true) return { obs: "holding" };
@@ -88,7 +93,7 @@ export function normalize(name, part) {
   if (part.holds && "state" in part.holds) {
     const h = holdObservation(part.holds.state);
     if (h.invalid) out.unavailable.push(`${name}: hold state ${h.why}`);
-    out.holds = h.obs === "unknown" ? { available: false } : { available: true, held: h.obs === "holding", state: h.state ?? String(part.holds.state) };
+    out.holds = h.obs === "unknown" ? { available: false } : { available: true, held: h.obs === "holding", ...(h.obs === "n/a" ? { notApplicable: true } : {}), state: h.state ?? String(part.holds.state) };
   }
   return out;
 }
@@ -138,14 +143,14 @@ function frames(name, raw, bad) {
     else if (broken) { f.attributed = false; f.attributionIssue = `${broken} of ${recs.length} per-frame records lack a valid total or split`; }
     else f.attributed = recs.length > 0 ? true : null;
     // Holds: the canonical observation per record (R4-F1). Holding frames are
-    // violations; covered only when every record says clear or holding.
+    // violations; covered only when every record says clear, holding or n/a.
     const holds = recs.map((r) => holdObservation(r?.hold));
     f.holdFrames = holds.filter((h) => h.obs === "holding").length;
     const unknown = holds.filter((h) => h.obs === "unknown");
     f.holdsCovered = recs.length > 0 && unknown.length === 0;
     if (unknown.length) {
       f.holdIssue = `${unknown.length} of ${recs.length} per-frame records have no known hold state (${unknown[0].why})`;
-      if (unknown.some((h) => h.invalid)) bad("frames.records[].hold", recs[holds.findIndex((h) => h.invalid)]?.hold, "a hold state (clear, loading, rescue, refuge) or a boolean");
+      if (unknown.some((h) => h.invalid)) bad("frames.records[].hold", recs[holds.findIndex((h) => h.invalid)]?.hold, "a hold state (clear, loading, rescue, refuge; inactive, opening, interior) or a boolean");
     }
   }
   f.complete = invalidGaps === 0 && f.attributed !== false;

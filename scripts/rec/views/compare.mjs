@@ -11,6 +11,7 @@
 //   node scripts/rec/views/compare.mjs CAPTURE_DIR [--store DIR] [--index FILE] [--pw DIR] [--chrome BIN]
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { loadViewSet } from "./stable.mjs";
 import { fileURLToPath } from "node:url";
 import { composer, composeStrip, dataUrl } from "../imaging.mjs";
 
@@ -60,7 +61,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const dir = args[0];
   if (!dir || dir.startsWith("--")) { console.error("usage: compare.mjs CAPTURE_DIR [--store DIR] [--index FILE]"); process.exit(2); }
   const cap = JSON.parse(readFileSync(path.join(dir, "capture.json"), "utf8"));
-  const set = JSON.parse(readFileSync(arg("views", path.join(here, "views.json")), "utf8"));
+  const set = loadViewSet(arg("views", path.join(here, "views.json")));
   const store = arg("store", STORE), index = readIndex(arg("index", INDEX)), base = index.classes[cap.class] ?? {};
   const byId = new Map(set.views.map((v) => [v.id, v]));
   mkdirSync(path.join(dir, "strips"), { recursive: true });
@@ -69,7 +70,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     for (const v of cap.views.filter((x) => x.file)) {
       const b = base[v.id], file = path.join(dir, v.file), threshold = byId.get(v.id)?.ssim ?? set.defaults?.ssim ?? 0.97;
-      const flags = [...(v.settled ? [] : ["unsettled"]), ...(v.stable === false ? ["animates"] : [])];
+      const flags = [...(v.settled ? [] : ["unsettled"]), ...(v.stable === false ? ["unstable"] : [])];
+      // Quarantined, unsettled or unstable views are reported apart and never judged (R1-F2).
+      const quarantine = byId.get(v.id)?.quarantine ?? v.quarantine;
+      if (quarantine) { rows.push({ id: v.id, status: "quarantined", reason: quarantine, flags }); continue; }
+      if (flags.length) { rows.push({ id: v.id, status: "not judged", reason: flags.join(", "), flags }); continue; }
       if (!b) { rows.push({ id: v.id, status: "no baseline", flags }); continue; }
       if (b.sha256 === v.sha256) { rows.push({ id: v.id, status: "identical", ssim: 1, flags }); continue; }
       const bf = path.join(store, b.file);
@@ -98,8 +103,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const md = [
     `# Fixed views: ${attention.length ? `${attention.length} need attention` : "nothing changed"}`, "",
     `${cap.class} · ${cap.gpu} · ${cap.chrome} · commit \`${cap.commit?.slice(0, 12)}\` · views v${cap.viewsVersion} · ${cap.seconds} s`, "",
-    `${rows.length} captured: ${count("unchanged") + count("identical")} unchanged, ${count("changed")} changed, ${count("no baseline")} without a baseline. Unsettled: ${rows.filter((r) => r.flags.includes("unsettled")).length}; animating while frozen: ${rows.filter((r) => r.flags.includes("animates")).length}.`, "",
+    `${rows.length} captured: ${count("unchanged") + count("identical")} unchanged (${count("identical")} pixel-identical), ${count("changed")} changed, ${count("no baseline")} without a baseline; ${count("quarantined")} quarantined and ${count("not judged")} not judged (unsettled or unstable), none of them part of the verdict.`, "",
     "## Attention", "", ...(attention.length ? attention.map((a) => `- **${a.id}** · ${a.reason}${a.strip ? ` → [${a.strip}](${a.strip})` : ""}`) : ["Nothing changed beyond its threshold."]), "",
+    "## Not judged (pictures kept for the taste review)", "", ...rows.filter((r) => r.status === "quarantined" || r.status === "not judged").map((r) => `- ${r.id}: ${r.status}: ${r.reason}`), "",
     "## Pending views (missing, with why)", "", ...cap.pending.map((p) => `- ${p.id}: ${p.reason}`), "",
     "## Every view", "", "| View | Status | SSIM | Flags |", "| --- | --- | --- | --- |", ...rows.map((r) => `| ${r.id} | ${r.status} | ${r.ssim ?? ""} | ${r.flags.join(", ")} |`), "",
     "One image of all views: `contact-sheet.jpg`. Accept a change deliberately: `node scripts/rec/views/accept.mjs <dir> --views <id,…> --by <who> --why <reason>`.",

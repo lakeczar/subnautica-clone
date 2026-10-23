@@ -106,6 +106,8 @@ export interface FrameParts {
   /** This frame's GPU timer query (-1: none), and the queries that resolved now: the frame each measured and its GPU ms. */
   gpuTag: number;
   gpuDone: readonly { tag: number; ms: number }[];
+  /** The timer queries' own cost this frame, ms (the recorder's, charged to it). */
+  gpuTimerMs: number;
   /** The legacy per-frame `#ocean` counters (two reduces over every mesh), ms. */
   dom?: number;
   /** CW-1: the streaming unit behind the frame's longest build step, the lights the selection considered, and the slowest light placement over 2 ms. */
@@ -568,15 +570,19 @@ export function createRenderer(
         canvas.dataset.water = underwater ? "underwater" : "above";
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
         const tRender = timed ? performance.now() : 0;
+        const tGpu0 = timed ? performance.now() : 0;
         if (timed) gpuTimer.begin();
+        const gpuBegin = timed ? performance.now() - tGpu0 : 0;
         if (settleSince >= 0) { engine.clear(new Color4(0, 0, 0, 1), true, true); canvas.dataset.settling = "true"; }
         else { scene.render(); canvas.dataset.settling = "false"; }
+        const tGpu1 = timed ? performance.now() : 0;
         if (timed) gpuTimer.end();
+        const gpuTimerMs = timed ? gpuBegin + performance.now() - tGpu1 : 0;
         parts = !timed ? null : {
           regions: +regionsMs.toFixed(2), lights: +lightsMs.toFixed(2), actors: +actorsMs.toFixed(2),
           lightScan: +lights.stats.scanMs.toFixed(2), lightPlace: +lights.stats.placeMs.toFixed(2), lightSelect: +lights.stats.selectMs.toFixed(2),
           lightCount: lights.stats.placed, evicted: world?.totals.evicted ?? 0,
-          chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2), gpuTag: gpuTimer.tag, gpuDone: gpuTimer.done,
+          chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender - gpuTimerMs).toFixed(2), gpuTag: gpuTimer.tag, gpuDone: gpuTimer.done, gpuTimerMs,
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
           jump, stepUnit: world?.maxStepUnit ?? null, lightsIn: lights.stats.considered,
