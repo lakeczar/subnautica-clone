@@ -110,6 +110,8 @@ export interface RendererStats {
   regions: string[]; cave: string | null; settling: boolean; ready: boolean;
   /** CW-1's cave streaming counters; `sync` counts unsliced builds. */
   caveStream: { sync: number; built: number; evicted: number; boxes: number; pending: number; missing: number; uploads: number };
+  /** Scene lights: known, sent to the cel pass, still to scan/place (time-sliced, so a still view keeps changing until `pending` is 0). */
+  lights: { known: number; sent: number; pending: number; placed: number };
 }
 
 /** Byte budget of all world art: chunk residency plus the legacy region
@@ -425,6 +427,7 @@ export function createRenderer(
           regions: [...art.active], cave: caveView.active ?? null, settling: settleSince >= 0, ready: canvas.dataset.ready === "true",
           caveStream: { sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes, pending: streamFrame?.pending ?? -1,
             missing: caveView.stats.missing, uploads: caveView.stats.uploads },
+          lights: { known: lights.stats.known, sent: lights.stats.sent, pending: lights.stats.pending, placed: lights.stats.placed },
         };
       },
       present(state, overlay) {

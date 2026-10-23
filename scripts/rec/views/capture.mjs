@@ -49,9 +49,15 @@ try {
     // Settled: drawn, not settling, the hold clear, nothing pending, for SETTLE_MS on end.
     let since = null, last = null;
     for (;;) {
-      const s = await b.page.evaluate(() => { const r = window.__siltwake.read(), sc = window.__siltwake.scene(); return { ready: r?.ready, settling: r?.settling, hold: r?.hold, pending: sc?.caveStream.pending, missing: sc?.caveStream.missing, feet: r?.feet }; });
+      const s = await b.page.evaluate(() => {
+        const r = window.__siltwake.read(), sc = window.__siltwake.scene();
+        return { ready: r?.ready, settling: r?.settling, hold: r?.hold, feet: r?.feet, pending: sc?.caveStream.pending, lightsPending: sc?.lights?.pending,
+          // Everything streaming or time-sliced work changes; settled when none of it moves.
+          scene: sc && JSON.stringify([sc.meshes, sc.triangles, sc.geometries, sc.textures, sc.regions, sc.cave, sc.caveStream, sc.lights, sc.residentGpu]) };
+      });
+      const calm = s.ready && !s.settling && (s.hold == null || ["clear", "admitted", "away"].includes(s.hold)) && (s.pending ?? 0) <= 0 && (s.lightsPending ?? 0) === 0
+        && s.scene === last?.scene;
       last = s;
-      const calm = s.ready && !s.settling && (s.hold == null || ["clear", "admitted", "away"].includes(s.hold)) && (s.pending ?? 0) <= 0 && (s.missing ?? 0) === 0;
       since = calm ? since ?? Date.now() : null;
       if (since && Date.now() - since >= SETTLE_MS) break;
       if (Date.now() - t0 > TIMEOUT_MS) break;
@@ -69,7 +75,7 @@ try {
     result.views.push({ id: v.id, group: v.group, label: v.label, file, sha256: sha, settled, settleMs: Date.now() - t0, hold: last?.hold ?? null,
       // A frozen view draws the same pixels twice; anything else animates outside the sim clock.
       stable: a === c, ...(moved >= 1 ? { relocatedM: Math.round(moved * 10) / 10 } : {}), ...(settled ? {} : { unsettled: last }) });
-    log(v.id, settled ? "settled" : `UNSETTLED ${JSON.stringify(last)}${moved >= 1 ? ` moved ${moved.toFixed(1)} m` : ""}`, `${Date.now() - t0} ms`,
+    log(v.id, settled ? "settled" : `UNSETTLED ${JSON.stringify({ ...last, scene: undefined })}${moved >= 1 ? ` moved ${moved.toFixed(1)} m` : ""}`, `${Date.now() - t0} ms`,
       a === c ? "stable" : `ANIMATES (${a.length} vs ${c.length} base64 chars)`);
   }
 } catch (e) {
