@@ -5,13 +5,16 @@ import { sitePosition } from "../../content/ecology/sites.js";
 import type { ThreatAgentId } from "../../content/ecology/species.js";
 import { THREAT_HOME } from "../../content/registry.js";
 import {
-  HUNTER_FEEDING_CIRCLE, HUNTER_FEEDING_SPOT, SKATE_LAYING_AWAY, SKATE_LAYING_RADIUS, SKATE_LAYING_SITE, SKATE_REST_DEPTH,
+  HUNTER_FEEDING_CIRCLE, HUNTER_FEEDING_SPOT, SKATE_LAYING_AWAY, SKATE_LAYING_RADIUS, SKATE_LAYING_SITE, SKATE_REST_UNDER_MIRROR,
   THREAT_WINDOWS, WINDOW_IDS, WINDOW_SPOTS,
 } from "../../content/fauna/windows.js";
 import type { ThreatWindow, WindowId, WindowSpecies } from "../../content/fauna/windows.js";
 import { sampleCycleAt, secondsAt } from "../cycles/cycle.js";
 import type { CycleSample } from "../cycles/cycle.js";
 import type { Vec3 } from "../types.js";
+import { HAZARD_FIELDS } from "../../content/ecology/hazards.js";
+/** The dense layer's mirror height (as ecology/agents.ts `layerY`, without importing it). */
+const MIRROR_Y = sitePosition(HAZARD_FIELDS.divide_dense_layer.shape.center).y + HAZARD_FIELDS.divide_dense_layer.shape.y;
 
 export const windowSample = (id: WindowId, tick: number): CycleSample => sampleCycleAt(THREAT_WINDOWS[id].cycle, tick);
 /** That window keeps its animal busy now. */
@@ -24,15 +27,15 @@ export function busyWindow(species: WindowSpecies, tick: number): (ThreatWindow 
 /** The animal is away, feeding or resting: it perceives nothing and never escalates. */
 export const windowBusy = (species: WindowSpecies, tick: number): boolean => busyWindow(species, tick) !== null;
 
-/** Where an ecology threat goes while busy: its feeding spot, below its home
- * for a resting skate, north and down toward the lee shelf for a laying one,
+/** Where an ecology threat goes while busy: its feeding spot, just under the
+ * mirror above its home for a resting skate, north and down toward the lee shelf for a laying one,
  * or nowhere for the sessile choir. */
 export function windowSpot(id: ThreatAgentId, home: Vec3, tick: number): Vec3 | null {
   const spot = WINDOW_SPOTS[id];
-  if (spot === "deep" && windowOpen("layer_skate_laying", tick))
+  if (spot === "under" && windowOpen("layer_skate_laying", tick))
     return { x: home.x + SKATE_LAYING_AWAY.x, y: home.y + SKATE_LAYING_AWAY.y, z: home.z + SKATE_LAYING_AWAY.z };
   if (spot === "stay") return null;
-  if (spot === "deep") return { x: home.x, y: home.y - SKATE_REST_DEPTH, z: home.z };
+  if (spot === "under") return { x: home.x, y: MIRROR_Y - SKATE_REST_UNDER_MIRROR, z: home.z };
   return sitePosition(spot);
 }
 /** The laying skates at the lee shelf (presentation and watching): arriving
@@ -77,4 +80,26 @@ export function hunterRoundPath(tick: number): Vec3 {
   })();
   const f = s.phase === "leaving" ? s.elapsed / span : s.remaining / span;
   return { x: THREAT_HOME.x + (circle.x - THREAT_HOME.x) * f, y: THREAT_HOME.y + (circle.y - THREAT_HOME.y) * f, z: THREAT_HOME.z + (circle.z - THREAT_HOME.z) * f };
+}
+
+/** CRE-04 (interim, until NAV-1's migration lanes): the stand-in laying skates
+ * only appear or leave while the player cannot see where they are, so no one
+ * watches one pop in or out. Shown when wanted, but never switched in view. */
+export const swapWhileUnseen = (present: boolean, wanted: boolean, inView: boolean): boolean => inView ? present : wanted;
+/** A laying skate's pose: on its visit path, or (kept after the visit while
+ * still in view) circling the egg cases until it can leave unseen. */
+export function layingPose(tick: number, i: number): { position: Vec3; yaw: number } {
+  const k = layingSkates(tick)[i];
+  if (k) return k;
+  const a = secondsAt(tick) * 0.35 + (i ? Math.PI : 0);
+  return { position: { x: SKATE_LAYING_SITE.x + Math.cos(a) * SKATE_LAYING_RADIUS, y: SKATE_LAYING_SITE.y + 1, z: SKATE_LAYING_SITE.z + Math.sin(a) * SKATE_LAYING_RADIUS },
+    yaw: Math.atan2(-Math.sin(a), -Math.cos(a)) };
+}
+/** Whether a point is in the view: inside a cone around the camera's forward
+ * (wider than the screen) and nearer than the water lets anyone see. */
+export function inCameraView(camera: Vec3, forward: Vec3, p: Vec3, halfAngle = 1.0, range = 140): boolean {
+  const d = { x: p.x - camera.x, y: p.y - camera.y, z: p.z - camera.z }, n = Math.hypot(d.x, d.y, d.z);
+  if (n > range) return false;
+  if (n < 1e-6) return true;
+  return (d.x * forward.x + d.y * forward.y + d.z * forward.z) / n >= Math.cos(halfAngle);
 }

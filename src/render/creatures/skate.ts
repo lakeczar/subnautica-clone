@@ -49,10 +49,18 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
     b.glow(b.ellipsoid([0, 0, 0], [0.3, 0.02, 0.3], P.mint, 6));
   }, parts.world, 0);
   const dimpleDisplay = new Display(dimple, () => true);
+  // CRE-05: a resting skate lies still just under the mirror; its dark outline
+  // (body, wings, tail) shows on the surface, from the crest and to a diver crossing.
+  const outline = parts.part("rest-outline", b => {
+    b.face([[0, 0, -2.4], [3.3, 0, 0.1], [0, 0, 1.9], [-3.3, 0, 0.1]], "#13242b");
+    b.face([[0, 0.002, -1.9], [2.6, 0.002, 0.1], [0, 0.002, 1.5], [-2.6, 0.002, 0.1]], "#0d1a20");
+    b.tube([[0, 0.01, 1.9], [0, 0.01, 3.4], [0.15, 0.01, 4.5]], 0.08, "#13242b", 4);
+  }, parts.world, 0);
+  let rest = 0;
   let curl = 0, sweep = 0, dimpleScale = 0, bulge = 0, last = 0;
   return {
     root: parts.root,
-    meshes: [body, ...wings.flatMap(w => [w.inner, w.outer]), dimple],
+    meshes: [body, ...wings.flatMap(w => [w.inner, w.outer]), dimple, outline],
     update(a: ThreatPose, seconds: number) {
       const dt = Math.min(0.1, seconds - last); last = seconds;
       const m = a.mode;
@@ -73,6 +81,12 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
         (w.outer.parent as TransformNode).rotation.set(0, w.side * sweep * 0.6, w.side * (curl + Math.sin(seconds * beat - 0.8) * 0.18));
         w.spots.set(a.busy ? 0.25 : m === "rest" ? 0.5 : m === "commit" ? 0.2 : 0.9 + 0.5 * Math.sin(seconds * 6 + w.side), m !== "commit");
       }
+      // Settled under the mirror (busy and within a few metres of it): the outline shows.
+      rest = smooth(rest, a.busy && Math.abs(a.position.y - layerY) < 3 ? 1 : 0, 1.5, dt);
+      outline.setEnabled(rest > 0.05);
+      outline.position.set(a.position.x, layerY + 0.03, a.position.z);
+      outline.rotation.set(0, -a.yaw, 0);
+      outline.scaling.setAll(0.6 + 0.4 * rest);
       dimple.setEnabled(dimpleScale > 0.04);
       dimple.position.set(a.position.x, layerY + 0.05 + bulge, a.position.z);
       dimple.scaling.set(dimpleScale * (1 + 0.08 * Math.sin(seconds * 5)), 1, dimpleScale * (1 + 0.08 * Math.cos(seconds * 5)));

@@ -76,7 +76,7 @@ export const FOUND_NOTES: readonly FoundNote[] = [
     ] },
   { id: "note_dock_board", label: "Chalk on the dock board", kind: "board", area: "brine_divide", host: site("divide.service_dock"), readable: always,
     author: "Upper dock", dated: "D−30",
-    text: "Slack on the crest means skates on the floor. Cross slow, in the slack. "
+    text: "Slack on the crest means skates lying still under the mirror. Cross slow, in the slack. "
       + "Egg cases on the lee shelf by the west ledge: DO NOT TOUCH. Incident sheet pinned below.",
     hints: [
       { target: "cycle.divide.skate_rest", via: site("divide.gateworks"), words: "Slack on the crest" },

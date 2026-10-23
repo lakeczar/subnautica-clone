@@ -47,9 +47,9 @@ export const THREAT_WINDOWS: Readonly<Record<WindowId, ThreatWindow>> = {
   },
   layer_skate: {
     species: "layer_skate", cycle: SKATE_REST, busy: ["fall", "quiet"], sight: 70,
-    seenBusy: "In slack water the skates sink deep into the brine and rest. The layer's surface is still: cross while the crest ribbons stand upright.",
-    seenIdle: "Layer skates patrol the mirror while the crest current runs. When it slackens and the ribbons stand upright, they sink to rest.",
-    breakOff: "The current eases; the skate sinks away from the layer to rest.",
+    seenBusy: "In slack water the skates settle just under the mirror and lie still: their dark shapes show through it. Cross while they rest.",
+    seenIdle: "Layer skates patrol under the mirror while the crest current runs. When it slackens, they settle just under the surface and lie still.",
+    breakOff: "The current eases; the skate settles under the mirror and lies still.",
   },
   hollow_choir: {
     species: "hollow_choir", cycle: CHOIR_REST, busy: ["closing", "closed"], sight: 55,
@@ -67,18 +67,19 @@ export const THREAT_WINDOWS: Readonly<Record<WindowId, ThreatWindow>> = {
 export const WINDOW_IDS = Object.keys(THREAT_WINDOWS) as WindowId[];
 
 /** Where each animal goes while busy: a feeding spot (site-relative), or
- * `deep` (sink below its home into the dense water) or `stay` (sessile). */
-export const WINDOW_SPOTS: Readonly<Record<ThreatAgentId, SiteOffset | "deep" | "stay">> = {
+ * `under` (a skate settles just under the mirror above its home) or `stay` (sessile). */
+export const WINDOW_SPOTS: Readonly<Record<ThreatAgentId, SiteOffset | "under" | "stay">> = {
   // In the plume's rising wash above the chimney's west lip, over the passage roof.
   rift_stalker_passage: at("rift_split_chimney", -10, 26, 4),
   rift_stalker_chimney: at("rift_split_chimney", -4, 34, -8),
-  divide_skate_saddle: "deep",
-  divide_skate_east: "deep",
+  divide_skate_saddle: "under",
+  divide_skate_east: "under",
   district_choir_gallery: "stay",
   district_choir_terrace: "stay",
 };
-/** How far below its home a resting skate sinks. */
-export const SKATE_REST_DEPTH = 14;
+/** CRE-05: a resting skate lies this far under the mirror, still, so its dark
+ * outline shows on the surface from the crest and to anyone crossing. */
+export const SKATE_REST_UNDER_MIRROR = 0.9;
 /** Where the skates lay: their egg cases on the lee shelf, above the brine
  * (`divide_skate_eggcases`). While laying they circle it this close. */
 export const SKATE_LAYING_SITE = { x: 424, y: -380.56, z: -1146 } as const;

@@ -11,7 +11,7 @@ import { CARCASS_FALLS, FAUNA_SOURCES, GROUNDS } from "../../content/fauna/groun
 import type { FaunaSourceId } from "../../content/fauna/grounds.js";
 import { HUNTER_FEEDING_SPOT } from "../../content/fauna/windows.js";
 import { layerY } from "../../sim/ecology/agents.js";
-import { layingSkates, windowSample } from "../../sim/fauna/windows.js";
+import { inCameraView, layingPose, layingSkates, swapWhileUnseen, windowSample } from "../../sim/fauna/windows.js";
 import type { GameState, Vec3 } from "../../sim/types.js";
 import type { ArtBatch } from "../geometry.js";
 import { seeded } from "../geometry.js";
@@ -143,6 +143,7 @@ export function createFauna(scene: Scene, cel: Material, parent?: TransformNode)
   // Laying skates on the lee shelf, only during their visit.
   const laying = [0, 1].map((i) => createLayerSkate(scene, cel, `fauna.laying_skate.${i}`, layerY("divide_dense_layer"), parts.root));
   for (const v of laying) meshes.push(...v.meshes);
+  const present = [false, false];
   return {
     root: parts.root, meshes,
     update(s: GameState, seconds: number, camera: Vec3 | undefined, near: (p: Vec3, c: Vec3 | undefined) => boolean): void {
@@ -151,11 +152,20 @@ export function createFauna(scene: Scene, cel: Material, parent?: TransformNode)
         g.node.setEnabled(shown);
         if (shown) g.pose(s, seconds);
       }
-      const skates = layingSkates(s.tick);
+      // CRE-04 (interim): a stand-in laying skate comes or goes only while its spot is out of view.
+      const skates = layingSkates(s.tick), cam = scene.activeCamera;
+      // The game camera is a target camera (renderer.ts reads its target too).
+      const target = (cam as unknown as { getTarget?: () => { x: number; y: number; z: number } } | null)?.getTarget?.();
+      const forward = cam && target && camera ? (() => {
+        const d = { x: target.x - camera.x, y: target.y - camera.y, z: target.z - camera.z }, n = Math.hypot(d.x, d.y, d.z) || 1;
+        return { x: d.x / n, y: d.y / n, z: d.z / n };
+      })() : null;
       laying.forEach((v, i) => {
-        const k = skates[i], shown = !!k && near(k.position, camera);
+        const pose = layingPose(s.tick, i), seen = !!camera && !!forward && inCameraView(camera, forward, pose.position);
+        present[i] = swapWhileUnseen(present[i]!, !!skates[i], seen);
+        const shown = present[i]! && near(pose.position, camera);
         v.root.setEnabled(shown);
-        if (shown) v.update({ id: "divide_skate_saddle", species: "layer_skate", mode: "rest", position: k.position, yaw: k.yaw,
+        if (shown) v.update({ id: "divide_skate_saddle", species: "layer_skate", mode: "rest", position: pose.position, yaw: pose.yaw,
           warning: 0, cue: null, modeSeconds: 0, busy: true }, seconds);
       });
     },

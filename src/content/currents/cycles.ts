@@ -112,8 +112,8 @@ export const STALKER_FEEDING: CycleDef = {
   ],
 };
 export const SKATE_REST: CycleDef = fromHazardCycle("cycle.divide.skate_rest", "Layer skates' slack-water rest", S4_CREST_SLACK,
-  { active: "patrolling the layer", quiet: "resting deep", rise: "rising to the layer", fall: "sinking to rest" },
-  [{ phase: "fall", leadS: 5, cue: "The crest ribbons start to stand upright; the skates' ripples slow as they sink to rest." },
+  { active: "patrolling the layer", quiet: "lying still under the mirror", rise: "patrolling again", fall: "settling to rest" },
+  [{ phase: "fall", leadS: 5, cue: "The crest ribbons start to stand upright; the skates' ripples slow as they settle under the mirror." },
     { phase: "rise", leadS: 5, cue: "The crest ribbons lean again: the skates will rise to the layer." }]);
 /** CB-2 (owner-confirmed): skates leave the dense water only to lay, on the
  * Divide's lee shelf. A rare, long visit; the mirror is unguarded meanwhile.

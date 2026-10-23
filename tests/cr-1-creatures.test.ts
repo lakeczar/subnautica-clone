@@ -6,6 +6,9 @@
  *    items, stay capped and loop-free, never touch protected animals, and load
  *    into older saves as additive content. */
 import test from "node:test";
+import { layerY } from "../src/sim/ecology/agents.js";
+import { inCameraView, layingPose, swapWhileUnseen, windowOpen, windowSpot } from "../src/sim/fauna/windows.js";
+import { SKATE_LAYING_SITE } from "../src/content/fauna/windows.js";
 import type { Vec3 } from "../src/sim/types.js";
 import { hunterPassPoint } from "../src/sim/hunter.js";
 import { eyeHeight } from "../src/sim/state.js";
@@ -211,4 +214,30 @@ test("CRE-03: the hunter's silhouette pass always takes a point the player can s
   assert.ok(Math.hypot(seen.x - eye.x, seen.z - eye.z) >= 4, "still in front, never on top of the diver");
   const open = createWorldQueries([], () => -200);
   assert.deepEqual(hunterPassPoint(s, s.world.threat.modeSeconds, open), usual, "open water keeps the usual pass");
+});
+
+test("CRE-05: a resting skate lies still just under the mirror, where its outline shows; a patrolling one stays deeper", () => {
+  const mirror = layerY("divide_dense_layer");
+  for (const id of ["divide_skate_saddle", "divide_skate_east"] as const) {
+    let tick = 60; while (!(windowOpen("layer_skate", tick) && !windowOpen("layer_skate_laying", tick))) tick++;
+    const rest = windowSpot(id, homeOf(id), tick)!;
+    assert.ok(rest.y < mirror && mirror - rest.y <= 1, `${id} rests ${(mirror - rest.y).toFixed(2)} m under the mirror`);
+    assert.ok(mirror - homeOf(id).y >= 5, `${id} patrols deeper than it rests`);
+  }
+});
+
+test("CRE-04 (interim): stand-in laying skates come and go only while unseen", () => {
+  // Never switched while in view; switched freely out of view.
+  for (const present of [false, true]) for (const wanted of [false, true]) {
+    assert.equal(swapWhileUnseen(present, wanted, true), present);
+    assert.equal(swapWhileUnseen(present, wanted, false), wanted);
+  }
+  const cam = { x: 0, y: 0, z: 0 }, ahead = { x: 0, y: 0, z: -1 };
+  assert.equal(inCameraView(cam, ahead, { x: 0, y: 0, z: -30 }), true, "ahead and near");
+  assert.equal(inCameraView(cam, ahead, { x: 0, y: 0, z: 30 }), false, "behind");
+  assert.equal(inCameraView(cam, ahead, { x: 0, y: 0, z: -300 }), false, "beyond the water's range");
+  // After the visit a kept skate goes on circling the egg cases rather than freezing.
+  let after = 60; while (!(windowOpen("layer_skate_laying", after - 1) && !windowOpen("layer_skate_laying", after))) after++;
+  const a = layingPose(after, 0).position, b = layingPose(after + 60, 0).position;
+  assert.ok(Math.hypot(a.x - SKATE_LAYING_SITE.x, a.z - SKATE_LAYING_SITE.z) < 6 && Math.hypot(a.x - b.x, a.z - b.z) > 0.5);
 });
