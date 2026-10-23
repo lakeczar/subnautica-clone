@@ -444,16 +444,27 @@ export function createRenderer(
         // Records must have landed before the streamer builds from them;
         // without a store (or a bake) clusters generate live.
         const tCaves = timed ? performance.now() : 0;
+        // Sub-parts of the cave work, for measurement: the streamer's step, the
+        // light texture upload, field retention, and the view's activation.
+        let caveStepMs = 0, caveUploadMs = 0, caveRetainMs = 0;
+        const uploadsBefore = caveView.stats.uploads, bytesBefore = caveView.stats.textureBytes;
         if (!caves || caves.settled) {
+          const t0 = timed ? performance.now() : 0;
           streamFrame = streamer.update(camera.position, velocity);
           worstCaveBuildMs = Math.max(worstCaveBuildMs, streamFrame.buildMs);
+          const t1 = timed ? performance.now() : 0;
           caveView.stream(streamFrame.light, streamFrame.upload);
+          const t2 = timed ? performance.now() : 0;
           caves?.retainLight(streamFrame.light);
+          if (timed) { caveStepMs = t1 - t0; caveUploadMs = t2 - t1; caveRetainMs = performance.now() - t2; }
         }
         if (++streamFrames % 30 === 0) terrainStore()?.prefetch(camera.position.add(velocity.scale(streamer.options.lookAhead)), 520);
+        const tView = timed ? performance.now() : 0;
         caveView.update(lamp ?? camera.position, camera.getTarget().subtract(camera.position),
           !!state && state.opening.phase >= 4 && lampOn(state) && underwater === 1);
+        const caveViewMs = timed ? performance.now() - tView : 0;
         const caveMs = timed ? performance.now() - tCaves : 0;
+        const caveUpload = caveView.stats.uploads > uploadsBefore ? { ms: +caveUploadMs.toFixed(1), bytes: caveView.stats.textureBytes - bytesBefore } : null;
         canvas.dataset.cave = caveView.active ?? "";
         const ks = caveWorld.kitCaves.stats;
         canvas.dataset.caveStream = JSON.stringify({ sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes,
@@ -487,7 +498,8 @@ export function createRenderer(
           chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2),
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
-          jump, stepUnit: world?.maxStepUnit ?? null, lightsIn: lights.stats.considered,
+          jump, stepUnit: world?.maxStepUnit ?? null,
+          caveStep: +caveStepMs.toFixed(2), caveUploadMs: +caveUploadMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered,
           lightSlow: lights.stats.slowest && lights.stats.slowest.ms > 2 ? { ...lights.stats.slowest, ms: +lights.stats.slowest.ms.toFixed(1) } : null,
         };
         canvas.dataset.meshes = String(scene.meshes.length);
