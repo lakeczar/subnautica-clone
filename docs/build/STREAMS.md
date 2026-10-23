@@ -725,3 +725,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **TST-16 R9** (Sol on `b8e9b103`, report on `review/tst-16-r9` `fddd7ae8`): REQUEST CHANGES, 3 P2s.
   - **Findings:** combined systemd delays exceed client deadlines; a failed restore is forgotten, so a retry certifies stale settings; a previous-file read error deletes the unit.
   - **Decision:** a maintenance mode, set and cleared in short transactions (admission paused, submissions queue). The unit update runs outside the lock and succeeds only when systemd's own properties match. On failure, maintenance stays set and the recovery is to rerun install. No rollback, no equality shortcut.
+- **REC-1 R2** (Sol on `f9c04948`, report on `review/rec-1-r2` `370f2dea`): REQUEST CHANGES, 7 P2s.
+  - **Findings:** a telemetry budget exception; loss accounting says "nothing lost" when data is lost; Off discards an in-flight picture; a campaign-length timeline.html throws; Off/on leaks spool workers; the overhead probe divides by callbacks, so the queued A/B 261023-224654-17c1 is to be cancelled or discounted; the segment clock after a restart or long task.
+  - **Status:** the ordinary path works. Sent back.
