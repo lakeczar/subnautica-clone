@@ -6,6 +6,10 @@
  *    items, stay capped and loop-free, never touch protected animals, and load
  *    into older saves as additive content. */
 import test from "node:test";
+import type { Vec3 } from "../src/sim/types.js";
+import { hunterPassPoint } from "../src/sim/hunter.js";
+import { eyeHeight } from "../src/sim/state.js";
+import { createWorldQueries } from "../src/sim/world.js";
 import assert from "node:assert/strict";
 import { CHIMNEY_PULSE, CREST_SLACK, CREATURE_CYCLES, WORLD_CYCLES } from "../src/content/currents/cycles.js";
 import { THREATS } from "../src/content/ecology/species.js";
@@ -189,4 +193,22 @@ test("additive content: a save from before CR-1 loads with New Game's grounds an
   assert.ok(out.ok, out.ok ? "" : out.error);
   for (const id of fauna) assert.equal(out.value.state.world.resources.find((r) => r.id === id)!.stock, SOURCES[id as SourceId].stock);
   assert.deepEqual(out.value.state.systems.traps, []);
+});
+
+test("CRE-03: the hunter's silhouette pass always takes a point the player can see", () => {
+  const s = opened(); s.player.mode = "swimming";
+  s.player.pose = { frame: "world", position: { x: 132, y: -110, z: -90 }, yaw: 0, pitch: 0 };
+  s.world.threat = { ...s.world.threat, mode: "investigate", modeSeconds: 1.5 };
+  const eye = { ...s.player.pose.position, y: s.player.pose.position.y + eyeHeight(s) };
+  const usual = hunterPassPoint(s);
+  // A crown trunk standing across the usual point: 3 m wide, from the floor to well above the eye.
+  const at = (p: Vec3, d: number): Vec3 => ({ x: eye.x + (p.x - eye.x) * d, y: 0, z: eye.z + (p.z - eye.z) * d });
+  const c = at(usual, 0.85);
+  const walled = createWorldQueries([{ id: "crown.trunk", min: { x: c.x - 1.5, y: -200, z: c.z - 1.5 }, max: { x: c.x + 1.5, y: eye.y + 2, z: c.z + 1.5 } }], () => -200);
+  assert.equal(walled.lineOfSight(eye, usual), false, "premise: the usual pass point is hidden");
+  const seen = hunterPassPoint(s, s.world.threat.modeSeconds, walled);
+  assert.ok(walled.lineOfSight(eye, seen), "the pass moves to a visible point");
+  assert.ok(Math.hypot(seen.x - eye.x, seen.z - eye.z) >= 4, "still in front, never on top of the diver");
+  const open = createWorldQueries([], () => -200);
+  assert.deepEqual(hunterPassPoint(s, s.world.threat.modeSeconds, open), usual, "open water keeps the usual pass");
 });
