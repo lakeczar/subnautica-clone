@@ -1,6 +1,6 @@
 # CR-1: natural threat windows and creatures as resources
 
-Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `7070084` (C4, CA-3, CB-2, HUB-2, DISH-1, TT-1 and SCHED-1 integrated). Head: see the report; the checks below name the commit they ran on. Story-neutral; `docs/spoilers/*` not read.
+Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `fa35339` (C4, CA-3, CB-2, HUB-2, DISH-1, TT-1, SCHED-1 and UX-1 integrated). Head: see the report; the checks below name the commit they ran on. Story-neutral; `docs/spoilers/*` not read.
 
 ## Outcome
 **A. A natural way past every threat.** Each threat has its own creature cycle. While a threat is busy it perceives nothing and never escalates; if it was engaged, it breaks off with a caption and is spent through S4's refractory. Afterwards ENC-1's full warning ladder applies.
@@ -96,8 +96,8 @@ Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `7070084` (C4, CA-3, 
 | **Not built:** a trap model in the world, breeding tanks, light jars. | A later stream. | The trap shows only in the Base panel. |
 
 ## Checks
-Sim code final at `de3d4f6`; later commits touch only evidence drivers, render art and this page.
-- **`npm run test:fast`:** FASTLINE That includes `cr-1-creatures` (12 tests) and CB-2's `creature-lore` comparing my composed rows. The covered behaviour:
+The gate ran at `7515e1d` (root `fa35339` merged, UX-1 included; one `hud.ts` conflict, with both the fauna verbs and the carrier station verbs kept). The heavy tier and playthrough ran at `de3d4f6`. Since then, CR-1 changed only render art (the CRE-05 outline, `brineSheetY`), evidence drivers and this page. Root brought UX-1.
+- **`npm run test:fast`:** 1,317/1,317 pass at `7515e1d`. `enc-1-readable-threats` is over TT-1's 5 s target (6.1 s, warning; it fails at 10 s). It costs the same on a clean root export, so CR-1 didn't cause it. That includes `cr-1-creatures` (12 tests) and CB-2's `creature-lore` comparing my composed rows. The covered behaviour:
   - **Windows:** each one exists, the worst wait is about a minute or less, and each opens long enough to cross. The CRE-03, CRE-04 and CRE-05 tests are above.
   - **Conservation:** catching by hand and by net, regrowth to the cap, cooking ratios, trap catch, cap and emptying (through a save), feed once per crop.
   - **Protection:** protected species are never harvested; nothing loops; no source feeds more than 8 meals an hour.
@@ -111,8 +111,8 @@ Sim code final at `de3d4f6`; later commits touch only evidence drivers, render a
   - the laying visit; first sight; bait (on the stalker and the resident hunter, not the feeding one);
   - grounds on the floor outside caves, and falls at least 30 m off routes;
   - the unswept round path is open water the whole way.
-- **`npm run build`:** BUILDLINE
-- **Economy scripts:** ECONLINE
+- **`npm run build`:** OK at `7515e1d`.
+- **Economy scripts:** `check-campaign-economy`, `check-m1-economy`, `check-m2-a-economy`, `check-m2-b1-economy`, `check-progression-curve` and `upgrade-economy` all exit 0 at `7515e1d`.
 - **`npm run playthrough`** on the second worker at `de3d4f6`, run whole (`--jobs 3`): all five scenarios complete with no blockers, and every milestone reload matched:
 
   | Scenario | Play time | Saves |
