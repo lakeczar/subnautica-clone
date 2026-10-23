@@ -29,6 +29,16 @@ All five findings are fixed at the root, and stage B's API is unchanged: the sam
 
 The oracle's art reference is the new collider's own geometry for structures, and the same kernels for the shell and biome. It judges geometry fidelity; it is not independent query validation. The review's independent SAT check of all 114 shell poses is the independent part.
 
+**Found by the new endpoint invariant: LC's own endpoint debt.** With every Canopy chunk built, 45 of 8,000 probe moves end in a pose LC's own collider rejects. The compact biome ends there too (identically, or 0.2 m apart after a tie), as designed: LC's semantics, exactly.
+- **Cause, in two of three sampled ends:** the box rises within a metre under LC's cap, where no mesh surface lies above it. LC's rule ("the cap is rock") then calls it rock with no boundary to stop it.
+- **The third sampled end:** under the band in a collar column.
+
+This is the same class as R3 (an ownership step with no wall), in LC's own ownership, which is outside COL-1's files.
+- **For LC-2:** the oracle bounds it (at most 1% of moves; 45 now), lists examples with poses, and fails if it grows.
+- **Root fix (LC-2 or stage B, M):** give LC's cap and collar boundaries walls (as `heightfield.ts` now does), or make the cap follow the mesh's roof.
+- **The colonnade:** one move in the heightfield variant ends rejected where production also ends rejected (Sol's composed-world debt); the shell variant has none.
+- **Also fixed:** the Canopy oracle had built only the 47 chunks on two routes, so probes reaching an unbuilt neighbour read missing surfaces. It now builds all 90.
+
 **For stage B (from the review):**
 - **Composer control:** the four "spurious" moves are real skin contacts with retained box-cover corners. Contact starts at a skin of 0.04–3.7 mm, and final positions differ by 2–25 cm. The shell removes them.
 - **Endpoint debt:** the review found clear starts whose full moves end in rejected poses in today's composed world (production does the same). That is existing composed-world debt for stage B's composed check; this oracle doesn't approve every differing slide.
@@ -66,9 +76,12 @@ For a mesh, use `meshShapes(id, { positions, indices }, { interior: "solid", fac
   - `columns`: the same rock boxes and collar columns (the composer control);
   - `heightfield`: the same rock boxes, the collar as a heightfield;
   - `shell`: the fine shell (the art) as rock, plus the heightfield;
-- **canopy:** LC's Canopy chunks on the squeeze and craft loop (47 of 90), LC's chunk colliders against the compact format.
+- **canopy:** LC's Canopy root caves, LC's chunk colliders against the compact format. Probes go round the squeeze and the craft loop; the tables below are from before R1, when only those 47 of 90 chunks were built (R1 builds all 90).
 
-**Every probe below**, from one `--class exclusive` run at `91b01cb` (`col1/oracle.json`; `tests/col1-oracle-report.ts`). The heavy test asserts on the same probes. Speed is the median of seven interleaved passes over the same inputs, headless Node on factory-worker. The scheduler logged host load up to 7.7 from work outside the queue, so treat differences under about 20% as noise. Old memory is the measured heap of the box sets and their index. New memory is the collider's exact typed-array bytes: its heap delta is below measurement noise at these sizes (A1's came out negative), so it isn't quoted.
+**Every probe below** is from one `--class exclusive` run at `91b01cb`, before R1 (`col1/oracle.json`; `tests/col1-oracle-report.ts`). R1 changed recovery, parity, heightfield walls and the Canopy fixture; it changed no answer in these tables except the Canopy endpoint counts above. **Speed was not re-measured after R1:** the exclusive lane was booked by CW-1's traversals, and the review ruled performance non-blocking. The cost R1 adds:
+- heightfield walls are tested only at solid cells that border a hole or the lattice's edge;
+- parity is one more sign test per edge;
+- recovery runs only on load. The heavy test asserts on the same probes. Speed is the median of seven interleaved passes over the same inputs, headless Node on factory-worker. The scheduler logged host load up to 7.7 from work outside the queue, so treat differences under about 20% as noise. Old memory is the measured heap of the box sets and their index. New memory is the collider's exact typed-array bytes: its heap delta is below measurement noise at these sizes (A1's came out negative), so it isn't quoted.
 
 | Scene | Before | After | Memory: old (measured heap) → new (format bytes) |
 | --- | --- | --- | --- |
@@ -149,6 +162,14 @@ The heightfield variant's p95 comes from its rock boxes, not the collar: on the 
 - **Where the speed comes from in caves.** The composer control, with identical boxes, is already 3–5× faster than today's W1 composite: a box hierarchy against an 8 m grid. The heightfield adds the memory (1.53 MiB of boxes become 356 KiB). The shell adds faithfulness and keeps the speed, except on long moves.
 
 ## Checks
+**After R1, at `1baeda9`:**
+- **Fast tier:** passes 1,325 / 1,325 on factory-worker; `col1-r1` adds 11 tests at 1.2 s CPU.
+- **Mutations:** each R1 fix's removal, the lift's removal and the old jittered parity all fail `col1-r1` (generated JS, in a scratch export).
+- **Heavy oracle:** `col1-oracle.heavy.test.ts` passes **4 / 4** on the second worker (`alickers-job: tested 1baeda9…`, clean test build, 58 s, peak 420 MiB). The five COL-1 fast files pass there too.
+- **Build:** `npm run build` OK; typecheck clean.
+- **An earlier second-worker attempt is not counted.** Its shared checkout's incremental test build kept a stale `caves.js` from another commit after the switch. Only orphaned files were removed, so the heavy file failed to load. The rerun used `--clean`. Worth a fix in `test-build.mjs` for shared checkouts.
+
+**Before R1, at `91b01cb`:**
 - **Fast tier:** `node scripts/test-tier.mjs fast` passes **1,314 / 1,314** at `91b01cb`. The COL-1 fast files are under the 5 s warning: `col1-collider` 3.5 s, `col1-oracle` 2.5 s, `col1-queries` 1.2 s and `col1-cover` 0.4 s of main-thread CPU.
   - **Format:** `Uint16` indices, 16-byte nodes, shared positions; over 65,536 vertices a shape refuses, and a split mesh views the art's buffer.
   - **Hierarchy:** quantised nodes hold every triangle under them; candidates never miss one; swept slab culling equals a sweep over every triangle.
@@ -191,8 +212,9 @@ The heightfield variant's p95 comes from its rock boxes, not the collar: on the 
 - No browser or GPU run: stage A changes nothing drawn or wired. Stage B's integration carries the ordinary-control run.
 - Performance is headless Node query cost (`--class exclusive`, factory-worker), not in-game frame cost.
 - Memory is Node heap (old) and exact format bytes (new), not a browser heap. The new collider's heap delta was below measurement noise.
-- The Canopy oracle covers 47 of 90 chunks, the two routes' columns.
-- **The art/collar visual seam** (see *Compromises*) and save-load integration are stage B's composed check. So are endpoint safety across the composed world (see *R1 response*) and all 90 Canopy chunks.
+- The Canopy oracle now builds all 90 chunks; probes still go round the two routes' chunks.
+- Speed after R1 (see the tables' note).
+- **The art/collar visual seam** (see *Compromises*) and save-load integration are stage B's composed check. So are endpoint safety across the composed world (see *R1 response*) and LC's endpoint debt above.
 
 ## Stage B, when CW-1 merges
 1. Compose structures through `composeStaticWorld` (vistas, dishes, the sites), with `guards: [LEGACY_PRESERVE]`, and drop `VISTA_SOLIDS` and the dish boxes from `SOLIDS`.
