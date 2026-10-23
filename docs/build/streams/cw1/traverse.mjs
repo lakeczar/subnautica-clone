@@ -7,11 +7,14 @@
 // Measured: cold start (navigation to playable), every rAF gap, every frame's
 // own work (`__siltwakePerf`: simulation, chunk streaming, cave streaming,
 // render), cave holds, streaming counters, resident bytes and JS heap.
-// usage: node traverse.mjs <dist> <plan.json> <save.json> <segment> <outdir> <port>
+// usage (frame times are performance evidence, so the exclusive class):
+//   $H --class exclusive -- node traverse.mjs <dist> <plan.json> <save.json> <segment> <outdir> <port>
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { requireGpuLease } from "../../../../scripts/heavy/gpu-lease.mjs";
+requireGpuLease("CW-1 traversal");
 const require = createRequire("/work/tmp/gpu-prep/pw/");
 const { chromium } = require("playwright-core");
 const [dist, planFile, saveFile, segArg, out, port] = process.argv.slice(2);
