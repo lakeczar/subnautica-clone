@@ -158,12 +158,20 @@ export function meshShapes(id: string, mesh: TriangleMesh, options: MeshShapeOpt
  * each way), except, on an open mesh, once at its boundary. So a flipped
  * triangle shows as an edge used two more times one way than the other, and
  * with `closed`, any imbalance is a hole or seam. Empty when coherent.
- * Vertices are compared by index, so merge equal positions first (`facetMesh` does). */
+ *
+ * **Intake precondition: conforming indexed topology.** Vertices are
+ * compared by index, so equal positions must be merged first (`facetMesh`
+ * does), and an edge must not be split on one side only (a T-junction reads
+ * as a hole). Null triangles (a repeated index) have no orientation and are
+ * skipped. Edge balance certifies coherent winding of such a mesh; it is not
+ * a geometric closedness proof for arbitrary input. */
 export function orientationProblems(id: string, mesh: TriangleMesh, closed: boolean, parts?: ArrayLike<number> | null): string[] {
   const I = mesh.indices, n = I.length / 3, nv = mesh.positions.length / 3, out: string[] = [];
   // Net uses of each undirected edge, per part: + for low -> high, - for high -> low.
   const net = new Map<number, number>();
   for (let t = 0; t < n; t++) {
+    const a0 = I[t * 3]!, b0 = I[t * 3 + 1]!, c0 = I[t * 3 + 2]!;
+    if (a0 === b0 || b0 === c0 || a0 === c0) continue;
     const p = parts ? parts[t]! : 0;
     for (let k = 0; k < 3; k++) {
       const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!, lo = Math.min(a, b), hi = Math.max(a, b), e = (p * nv + lo) * nv + hi;
@@ -179,30 +187,55 @@ export function orientationProblems(id: string, mesh: TriangleMesh, closed: bool
   return out;
 }
 
+/** Probe offsets, metres, tried in turn until a vote is decisive. */
+export const FACING_PROBES = [0.05, 0.1, 0.2] as const;
 /** Which way a coherently wound mesh faces: 1 when (b - a) x (c - a) points
- * out of the solid, -1 when in. The mesh must be coherently oriented
- * (`orientationProblems`, so every face agrees with its neighbours); then up
- * to `samples` triangles vote with `isSolid` a hair either side, and every
- * decisive vote must agree. Throws, naming the mesh, otherwise. */
-export function meshFacing(id: string, mesh: TriangleMesh, isSolid: (p: Vec3) => boolean, samples = 96): 1 | -1 {
+ * out of the solid, -1 when in.
+ * - **Coherence is the guarantee:** the mesh must have no orientation
+ *   problems (`orientationProblems`), so every face agrees with its
+ *   neighbours and one decision orients them all.
+ * - **The vote decides which way, with the shape's own authoritative
+ *   occupancy:** `inside(p)` is true in the solid, false outside, and `null`
+ *   where it doesn't know (outside its domain). Pass the source field the
+ *   mesh was built from, not a proxy such as a box cover, which disagrees
+ *   with the surface near its own edges.
+ * - **A vote is decisive** only when both probes either side of a sampled
+ *   triangle are classified and differ. Otherwise it retries at the next
+ *   offset (`FACING_PROBES`), and abstains if none decides (a thin feature,
+ *   an ownership cutoff).
+ * - **Every decisive vote must agree,** and at least one must exist; else it
+ *   throws, naming the mesh. */
+export function meshFacing(id: string, mesh: TriangleMesh, inside: (p: Vec3) => boolean | null, samples = 96): 1 | -1 {
   const problems = orientationProblems(id, mesh, false);
   if (problems.length) throw new Error(`${id}: winding is not coherent:\n- ${problems.join("\n- ")}`);
   const P = mesh.positions, I = mesh.indices, n = I.length / 3, step = Math.max(1, Math.floor(n / samples));
-  let out = 0, inward = 0;
+  let out = 0, inward = 0, abstained = 0;
   for (let t = 0; t < n; t += step) {
     const a = I[t * 3]! * 3, b = I[t * 3 + 1]! * 3, c = I[t * 3 + 2]! * 3;
     const ux = P[b]! - P[a]!, uy = P[b + 1]! - P[a + 1]!, uz = P[b + 2]! - P[a + 2]!, vx = P[c]! - P[a]!, vy = P[c + 1]! - P[a + 1]!, vz = P[c + 2]! - P[a + 2]!;
     const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz);
     if (l < 1e-9) continue;
-    const m = { x: (P[a]! + P[b]! + P[c]!) / 3, y: (P[a + 1]! + P[b + 1]! + P[c + 1]!) / 3, z: (P[a + 2]! + P[b + 2]! + P[c + 2]!) / 3 }, h = 0.05 / l;
-    const plus = isSolid({ x: m.x + nx * h, y: m.y + ny * h, z: m.z + nz * h }), minus = isSolid({ x: m.x - nx * h, y: m.y - ny * h, z: m.z - nz * h });
-    if (minus && !plus) out++;
-    else if (plus && !minus) inward++;
+    const mx = (P[a]! + P[b]! + P[c]!) / 3, my = (P[a + 1]! + P[b + 1]! + P[c + 1]!) / 3, mz = (P[a + 2]! + P[b + 2]! + P[c + 2]!) / 3;
+    let vote = 0;
+    for (const off of FACING_PROBES) {
+      const h = off / l;
+      const plus = inside({ x: mx + nx * h, y: my + ny * h, z: mz + nz * h }), minus = inside({ x: mx - nx * h, y: my - ny * h, z: mz - nz * h });
+      if (plus === null || minus === null || plus === minus) continue;
+      vote = minus ? 1 : -1;
+      break;
+    }
+    if (vote > 0) out++; else if (vote < 0) inward++; else abstained++;
   }
   if (out > 0 && inward === 0) return 1;
   if (inward > 0 && out === 0) return -1;
-  throw new Error(`${id}: winding votes disagree or are absent (${out} out, ${inward} in)`);
+  throw new Error(`${id}: winding votes disagree or are absent (${out} out, ${inward} in, ${abstained} undecided)`);
 }
+
+/** The inside predicate of a signed distance (negative inside), for `meshFacing`. */
+export const insideOf = (distance: (x: number, y: number, z: number) => number) => (p: Vec3): boolean | null => {
+  const d = distance(p.x, p.y, p.z);
+  return Number.isFinite(d) ? d < 0 : null;
+};
 
 /** Most a collar's floor may stand above its lattice between the
  * conservative points, metres: half the exterior world's 2 cm floor

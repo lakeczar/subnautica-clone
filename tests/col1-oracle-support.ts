@@ -3,7 +3,6 @@
 // `col1-oracle-report.ts` measures speed and memory with it.
 import { CANOPY_ROOT_CAVES } from "../src/content/caves/canopyRootCaves.js";
 import { caveDef, type CaveDef } from "../src/content/regions/caves.js";
-import { caveShell } from "../src/content/regions/caveGeometry.js";
 import { parkPose, workPose } from "../src/content/regions/access.js";
 import { CRAFT_PROFILES, ROUTES, type CraftProfileId } from "../src/content/regions/passages.js";
 import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
@@ -17,7 +16,8 @@ import type { Capsule, Vec3, WorldQueries } from "../src/sim/types.js";
 import { caveOwner, createCaveWorldQueries, createWorldQueries, SOLIDS, surfaceHeight, type Solid } from "../src/sim/world.js";
 import { buildCollision, chunksNear, createLargeCave, type LargeCave } from "../src/world/caves/large/build.js";
 import { composeCaveWorld, largeCaveCollider, type CaveCollider } from "../src/world/caves/large/compose.js";
-import { artMembers, collarHeightfield, meshFacing, meshShapes } from "../src/world/collision/bake.js";
+import { artMembers, collarHeightfield } from "../src/world/collision/bake.js";
+import { kitShellShapes } from "../src/world/collision/caveShapes.js";
 import { compactBiome, compactBiomeCollider } from "../src/world/collision/biome.js";
 import { buildBoxes, createStaticCollider, type StaticCollider, type StaticMember } from "../src/world/collision/collider.js";
 import { composeStaticWorld, staticCaveCollider } from "../src/world/collision/world.js";
@@ -184,8 +184,7 @@ export function caveScenes(ids: readonly string[] = ["reef_archlet", "reef_bellh
   const production = createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: defs.map(caveOwner) });
   const exterior = productionWorld(), feet = defs.map(d => d.replacementFootprints[0]!);
   const shellMembers = (d: CaveDef): StaticMember[] => {
-    const sh = caveShell(d, "fine"), mesh = { positions: sh.positions, indices: Uint32Array.from(sh.indices) };
-    return meshShapes(`${d.id}.shell`, mesh, { interior: "solid", facing: shellFacing(d, mesh), shared: true });
+    return kitShellShapes(d, worldFloor);
   };
   const collarOf = (d: CaveDef) => collarHeightfield(`${d.id}.collar`, d.replacementFootprints[0]!, CAVE_BAND, surfaceHeight, feet);
   const membersFor: Record<CaveVariant, (d: CaveDef) => StaticMember[]> = {
@@ -227,14 +226,6 @@ export function caveScenes(ids: readonly string[] = ["reef_archlet", "reef_bellh
   };
   return { production, variants: { columns: variant("columns"), heightfield: variant("heightfield"), shell: variant("shell") } };
 }
-/** Which way the shell winds, read against the cave's own rock occupancy. */
-function shellFacing(d: CaveDef, mesh: { positions: Float32Array; indices: Uint32Array }): 1 | -1 {
-  // The opened rock of the definition's own boxes is the occupancy that
-  // built the shell: rock is inside some box (they cover it exactly).
-  const rockAt = (p: Vec3): boolean => d.rock.some(b => p.x > b.min.x && p.x < b.max.x && p.y > b.min.y && p.y < b.max.y && p.z > b.min.z && p.z < b.max.z);
-  return meshFacing(d.id, mesh, rockAt);
-}
-
 // --- Cave biome (LC) ----------------------------------------------------------------
 
 let canopy: LargeCave | null = null;
