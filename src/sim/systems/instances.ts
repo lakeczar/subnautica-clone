@@ -75,5 +75,9 @@ export function instanceProblems(s: GameState, sys: SystemsState): string[] {
     const kind = where(p.moduleId);
     if (!kind || moduleOfItem(kind) !== "planter") problems.push(`crop ${p.seed} references missing planter ${p.moduleId}`);
   }
+  for (const t of sys.traps) {
+    const kind = where(t.moduleId);
+    if (!kind || moduleOfItem(kind) !== "trap") problems.push(`trap catch references missing fish trap ${t.moduleId}`);
+  }
   return problems;
 }

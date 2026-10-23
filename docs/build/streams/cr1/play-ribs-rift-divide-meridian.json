@@ -1,0 +1,76 @@
+{
+  "scenes": {
+    "ribs": {
+      "captions": [
+        " | | | ",
+        " | | +2 Small fish · diver hold 5/16 CU | ",
+        " | | +2 Small fish · diver hold 7/16 CU | "
+      ],
+      "banners": [],
+      "minHealth": null,
+      "notes": {
+        "prompt": "E Rib school Net",
+        "catch0": " | | +2 Small fish · diver hold 5/16 CU | ",
+        "catch1": " | | +2 Small fish · diver hold 7/16 CU | "
+      }
+    },
+    "rift": {
+      "captions": [
+        " | Glare stalkers hunt this warm passage, but every vent they rise into the plume to feed. Watch the mites: when they leave the lip, the stalkers go too. | | ",
+        " | | | ",
+        " | Ember mites are leaving the chimney lip. The plume vents within seconds; stay clear of the column. | | ",
+        " | | | ",
+        " | | Glare stalkers' vent feeding · one phase timed in the journal. | ",
+        " | | | ",
+        " | | Split chimney pulse · watch it to learn its timing. | ",
+        " | | | ",
+        " | | Glare stalkers' vent feeding · one phase timed in the journal. | ",
+        " | | | ",
+        " | | Split chimney pulse · one phase timed in the journal. | "
+      ],
+      "banners": [],
+      "minHealth": null,
+      "notes": {}
+    },
+    "divide": {
+      "captions": [
+        " | Layer skates leave the dense water only to lay, here on the lee shelf. Their egg cases are protected. | | ",
+        " | | | ",
+        " | | Layer skates' slack-water rest · one phase timed in the journal. | ",
+        " | | | "
+      ],
+      "banners": [],
+      "minHealth": null,
+      "notes": {}
+    },
+    "meridian": {
+      "captions": [
+        " | The hollow choir rests at regular times: its rims dim and the bells fold shut. Closed bells barely hear. | | ",
+        " | | | ",
+        " | | Hollow choir's rest · one phase timed in the journal. | ",
+        " | | | "
+      ],
+      "banners": [],
+      "minHealth": null,
+      "notes": {}
+    }
+  },
+  "shots": [
+    "/work/tmp/cr1/shots/ribs-01-school-catch-prompt.png",
+    "/work/tmp/cr1/shots/ribs-02-caught-with-net.png",
+    "/work/tmp/cr1/shots/ribs-03-cargo-catch-section.png",
+    "/work/tmp/cr1/shots/rift-01-stalkers-hunting-passage.png",
+    "/work/tmp/cr1/shots/rift-02-stalkers-feeding-in-plume.png",
+    "/work/tmp/cr1/shots/rift-03-in-the-passage-lit-loud.png",
+    "/work/tmp/cr1/shots/rift-04-out-of-the-passage.png",
+    "/work/tmp/cr1/shots/divide-01-skate-patrolling-under-mirror.png",
+    "/work/tmp/cr1/shots/divide-02-skate-sinking-to-rest.png",
+    "/work/tmp/cr1/shots/divide-03-across-the-mirror.png",
+    "/work/tmp/cr1/shots/divide-04-above-the-layer.png",
+    "/work/tmp/cr1/shots/meridian-01-bells-open-listening.png",
+    "/work/tmp/cr1/shots/meridian-02-bells-closed-resting.png",
+    "/work/tmp/cr1/shots/meridian-03-through-the-gallery.png"
+  ],
+  "errors": [],
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)"
+}

@@ -119,7 +119,9 @@ export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60, ce
   // config.json `stalls` ({ class: seconds }) sets a class's default stall
   // window: a migration bridge for jobs whose code predates their heartbeat
   // (an unmerged worktree's playthrough is silent for its whole run). --stall wins.
-  let stallS = Math.min(stalls[name] ?? c.stallS, deadline);
+  // A default window is not clamped to the deadline (as before this setting):
+  // a silent job with a short --deadline still ends as "deadline", not "stalled".
+  let stallS = stalls[name] ?? c.stallS;
   if (opts.stallS != null) {
     if (!(Number.isInteger(opts.stallS) && opts.stallS >= minStallS)) return { error: `--stall must be whole seconds ≥ ${minStallS}` };
     stallS = Math.min(opts.stallS, deadline);

@@ -1,4 +1,5 @@
 import { PLACED_SOURCE_IDS } from "../content/worldSources.js";
+import { isFaunaSource } from "../content/fauna/grounds.js";
 import type { GeometryCache } from "./geometryCache.js";
 import type { Scene, ShaderMaterial, Mesh } from "@babylonjs/core";
 import {
@@ -298,7 +299,8 @@ export function createExpeditionRegion(
   const initial = new Set(scene.meshes);
   const sourceMeshes = new Map<string, Mesh>(), unitMeshes = new Map<string, Mesh[]>();
   for (const [id, s] of Object.entries(SOURCES)) {
-    if (PLACED_SOURCE_IDS.has(id)) continue;
+    // CR-1's creature grounds are drawn by the creature layer (render/creatures/fauna.ts).
+    if (PLACED_SOURCE_IDS.has(id) || isFaunaSource(id)) continue;
     if (region && s.region !== region) continue;
     if (b1Source(id)) {
       const [first, ...units] = b1SourceArt(scene, cel, id, cache);

@@ -61,6 +61,8 @@ H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 
 **Exclusive is one measurement per ticket.** Submit each segment of a series (traversal segments, A/B variants) as its own ticket, all at once if you like; don't loop over them inside one job. After each exclusive run, the jobs that waited through it start before the next exclusive drains the lane (blocked reason `turn`), so a series never locks everyone else out.
 
+> **Soak verdicts are not evidence yet (coordinator, 2026-10-23).** The scheduler parts of SCHED-2a are accepted and installed. The soak *harness* (`scripts/soak/`) is still in review (R6, `bf7bcb1`: a verdict reducer is being rebuilt). Run soaks to explore, but don't cite a soak `pass` or `partial` as evidence until this note is removed.
+
 **Soaks take only leftover capacity:**
 - A soak starts only when nothing else is waiting. It never ages, and it never takes the express slot or the 10-minute reservation.
 - Its CPU runs at idle weight, so it never slows other jobs.
@@ -145,6 +147,7 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
   ```
 
   While iterating, run only the affected scenarios; run all five at handoff.
+- **The GPU guard is pending install** (coordinator, 2026-10-23): it's installed after the last pre-SCHED-2a tickets drain. Until then, enforcement is by the queue's `gpu`/`exclusive` classes only.
 - **The GPU lease covers every GPU driver.** Every Playwright Chrome on this machine is wrapped (`install.sh --gpu-guard`; the guard has its own install, so rolling the scheduler back or uninstalling it leaves the guard enforcing, and a missing guard refuses GPU launches): a launch that asks for the GPU (`--use-angle=gl-egl`, `--use-gl=…`, `--enable-gpu`, `--ignore-gpu-blocklist`, Vulkan) refuses to start unless it runs inside a `gpu`, `exclusive` or `soak --gpu` job. Software (SwiftShader) launches pass. Drivers may also call `requireGpuLease()` from `scripts/heavy/gpu-lease.mjs` for an earlier, clearer error.
   - **Outside the queue:** any process holding the NVIDIA device without a lease is shown by `status`, recorded in the ledger (`unleased-gpu`) and on any GPU job that shared the GPU with it. An exclusive run that shared the GPU is marked `DISTURBED`.
 - **Machine-readable results:** `wait --json` ends with one JSON line: `{"pending":true,…}`, or the full result with `code`, `label`, `stopReason` (`stalled`, `deadline`, `ceiling`, `oom`, `killed`, `cancelled`, `preempted`, `rejected` or null) and `evidence`. Use it to tell a pending `99` from a job's own.

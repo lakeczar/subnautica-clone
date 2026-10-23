@@ -81,7 +81,7 @@ export function createEmberMites(scene: Scene, cel: Material, name: string, lip:
  * per kind; unused slots are hidden, never rebuilt per deploy. */
 export function createDeterrents(scene: Scene, cel: Material, name: string, slots: number, parent?: TransformNode) {
   const parts = creatureParts(scene, cel, name, parent), random = seeded(77);
-  const lures: { mesh: Mesh; glow: Display }[] = [], inks: Mesh[] = [];
+  const lures: { mesh: Mesh; glow: Display }[] = [], inks: Mesh[] = [], baits: Mesh[] = [];
   for (let i = 0; i < slots; i++) {
     const mesh = parts.part(`lure.${i}`, b => {
       b.glow(b.ellipsoid([0, 0, 0], [0.22, 0.26, 0.22], P.lime, 8));
@@ -91,17 +91,27 @@ export function createDeterrents(scene: Scene, cel: Material, name: string, slot
     inks.push(parts.part(`ink.${i}`, b => {
       for (let k = 0; k < 9; k++) b.ellipsoid([(random() - 0.5) * 6, (random() - 0.5) * 4, (random() - 0.5) * 6], [1.6 + random(), 1.2 + random(), 1.6 + random()], k % 2 ? P.ink : "#22283a", 7);
     }, undefined, 0));
+    // CR-1: a released small fish, struggling as it sinks.
+    baits.push(parts.part(`bait.${i}`, b => {
+      b.ellipsoid([0, 0, 0], [0.08, 0.1, 0.28], P.reflection, 6);
+      b.face([[0, 0, 0.24], [0, 0.13, 0.42], [0, -0.13, 0.42]], P.steelLight);
+    }));
   }
   return {
-    root: parts.root, meshes: [...lures.map(l => l.mesh), ...inks],
+    root: parts.root, meshes: [...lures.map(l => l.mesh), ...inks, ...baits],
     update(deployed: readonly { kind: string; position: Vec3; seconds: number }[], seconds: number) {
-      let l = 0, k = 0;
+      let l = 0, k = 0, f = 0;
       for (const d of deployed) {
         if (d.kind === "lure" && l < lures.length) {
           const lure = lures[l++]!;
           lure.mesh.setEnabled(true);
           lure.mesh.position.set(d.position.x, d.position.y, d.position.z);
           lure.glow.set(1.1 + 0.4 * Math.sin(seconds * 5), true);
+        } else if (d.kind === "bait" && f < baits.length) {
+          const bait = baits[f++]!;
+          bait.setEnabled(true);
+          bait.position.set(d.position.x, d.position.y, d.position.z);
+          bait.rotation.set(Math.sin(seconds * 9) * 0.5, seconds * 1.7, Math.cos(seconds * 7) * 0.3);
         } else if (d.kind === "ink" && k < inks.length) {
           const ink = inks[k++]!, fade = Math.min(1, d.seconds / 3);
           ink.setEnabled(true);
@@ -112,6 +122,7 @@ export function createDeterrents(scene: Scene, cel: Material, name: string, slot
       }
       for (; l < lures.length; l++) lures[l]!.mesh.setEnabled(false);
       for (; k < inks.length; k++) inks[k]!.setEnabled(false);
+      for (; f < baits.length; f++) baits[f]!.setEnabled(false);
     },
     dispose: () => parts.dispose(),
   };

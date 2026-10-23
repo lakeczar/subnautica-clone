@@ -32,7 +32,8 @@ test("malformed current renewal state refuses atomically on decode and encode, w
   const interval = SOURCE_RENEWAL.reef_ribbon_catch_north.intervalSteps;
   const mutations: ((s: GameState) => void)[] = [
     (s) => { Reflect.deleteProperty(s.world, "renewal"); },
-    (s) => { s.world.renewal.pop(); },
+    // A schema 5 entry; the last ones are CR-1's additive grounds, which load as New Game's.
+    (s) => { s.world.renewal.splice(0, 1); },
     (s) => { s.world.renewal.push({ id: "reef_ribbon_catch_north", progress: 0 }); },
     (s) => { s.world.renewal.reverse(); },
     (s) => { Reflect.set(s.world.renewal[0]!, "id", "island_resin_cove_east"); },

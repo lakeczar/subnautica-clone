@@ -124,7 +124,10 @@ test("placements agree with CR-1's published IDs, and with its composed rows whe
   for (const f of FAUNA_SITES) if (f.owner === "CR-1")
     assert.ok(Object.hasOwn(cr1Grounds, f.id) || Object.hasOwn(cr1Falls, f.id) || Object.hasOwn(CR1_INTERFACE.protectedGrounds, f.id), `${f.id}: owner CR-1 but not in its interface`);
   for (const f of FAUNA_SITES) if (f.owner === "CB-2")
-    assert.ok(!Object.hasOwn(SOURCES, f.id) || (SOURCES as Record<string, { item: string }>)[f.id]!.item === f.item, `${f.id}: collides with a different registry source`);
+    assert.ok(!Object.hasOwn(SOURCES, f.id) || (SOURCES as Record<string, { item: string }>)[f.id]!.item === f.item ||
+      // CR-1 composes protected egg sites as scan-only sources: they name an item but hold none.
+      (f.kind === "protected_spawn" && (SOURCES as Record<string, { stock: number; reserve: number }>)[f.id]!.stock +
+        (SOURCES as Record<string, { stock: number; reserve: number }>)[f.id]!.reserve === 0), `${f.id}: collides with a different registry source`);
   // Once CR-1 composes, its rows must carry these IDs and items.
   const composed = Object.keys(cr1Grounds).filter(id => Object.hasOwn(SOURCES, id));
   for (const id of composed) assert.equal((SOURCES as Record<string, { item: string }>)[id]!.item, cr1Grounds[id]!.item, `${id}: composed item differs`);

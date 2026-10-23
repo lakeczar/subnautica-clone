@@ -5,7 +5,7 @@ import type { Deterrent } from "./species.js";
  * choosing the right one is part of reading the animal. Quantities are
  * untested tuning; every material is reachable from the reef, isles or upper
  * Canopy, long before any animal it counters. */
-export const DETERRENT_KITS: Readonly<Record<Exclude<Deterrent, "acoustic">, {
+export const DETERRENT_KITS: Readonly<Record<Exclude<Deterrent, "acoustic" | "bait">, {
   label: string; cost: Partial<Record<MaterialId, number>>; quantity: number; site: "pod_fabricator" | "island_workshop"; works: string;
 }>> = {
   lure: {
@@ -17,6 +17,7 @@ export const DETERRENT_KITS: Readonly<Record<Exclude<Deterrent, "acoustic">, {
     works: "A dark bitter cloud around you. Any animal in or looking through it breaks off.",
   },
 };
+/** CR-1: bait is no kit; it is a caught small fish, released (sim/fauna/catch.ts). */
 /** The existing service-tool acoustic pulse (`distraction` command) is the
  * sound deterrent; it already costs reserve-cell charge in vehicles.ts. */
 export const ACOUSTIC_DETERRENT = "distraction" as const;

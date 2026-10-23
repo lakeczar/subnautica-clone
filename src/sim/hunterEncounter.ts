@@ -15,6 +15,8 @@ import { behindCover, exposure } from "./survival.js";
 import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
 import { PULSE_CHARGE_COST } from "./vehicles.js";
 import { gameWorld, moveHull } from "./world.js";
+import { THREAT_WINDOWS } from "../content/fauna/windows.js";
+import { HUNTER_ROUND_JOIN, HUNTER_ROUND_UNSWEPT, hunterRoundPath, windowBusy } from "./fauna/windows.js";
 
 const DT = 1 / 60;
 /** Latest pursuit time before the warning bump: just inside cycle 0's contact phase. */
@@ -95,7 +97,10 @@ export function updateThreat(
   // The cap holds on every step, not only while loud: a save from before
   // ENC-1 can carry up to 12, which would outlast the quiet, dark escape.
   t.interest = Math.min(E.interest.max, t.interest);
-  if (territory && !cover && loudness > 0.35)
+  // CR-1: on its feeding round (leaving, feeding, returning) it hears almost
+  // nothing; it breaks off any encounter and starts from idle when it is back.
+  const feeding = windowBusy("canopy_sound_hunter", s.tick);
+  if (territory && !cover && loudness > 0.35 && !feeding)
     t.interest = Math.min(E.interest.max, t.interest + loudness * DT * 2);
   else t.interest = Math.max(0, t.interest - DT * (cover ? E.interest.cover : lampOn(s) ? E.interest.lit : E.interest.dark));
   const change = (mode: HunterMode): void => {
@@ -110,7 +115,12 @@ export function updateThreat(
     else if (mode === "investigate")
       events.push({ type: "notice", channel: "hazard", context: "threat", message: HUNTER_CAPTIONS.investigate, error: true });
   };
-  if (!territory || (cover && t.modeSeconds > 1) || t.distraction) {
+  if (feeding) {
+    if (t.mode === "warn" || t.mode === "investigate" || t.mode === "pursue") {
+      change("disengage");
+      events.push({ type: "notice", channel: "hazard", context: "threat", message: THREAT_WINDOWS.canopy_sound_hunter.breakOff });
+    } else if (t.mode === "disengage" && t.modeSeconds > 5) change("idle");
+  } else if (!territory || (cover && t.modeSeconds > 1) || t.distraction) {
     if (t.mode !== "idle") change("disengage");
   } else if (t.mode === "idle" && t.interest > 0.65) change("warn");
   else if (t.mode === "warn" && t.modeSeconds > 3)
@@ -129,6 +139,13 @@ export function updateThreat(
     distance(t.position, THREAT_HOME) < 4
   )
     change("idle");
+  // CR-1: with nothing near it, an idle hunter already on its round follows
+  // the authored, open path, so no swept move runs every step (each costs more
+  // than the rest of the step). Off the path, the swept move brings it there.
+  if (t.mode === "idle" && !t.distraction) {
+    const next = hunterRoundPath(s.tick), clear = (q: Vec3): boolean => distance(q, t.position) > HUNTER_ROUND_UNSWEPT && distance(q, next) > HUNTER_ROUND_UNSWEPT;
+    if (distance(t.position, next) <= HUNTER_ROUND_JOIN && clear(p) && s.fleet.vehicles.every((v) => clear(v.pose.position))) { t.position = next; return; }
+  }
   const motion = moveHunter(s, world);
   t.position = motion.position;
   if (motion.contact.biting && !behindCover(p, t.position) && !exposure(s).refuge && !t.distraction) bite(s, events, world);
