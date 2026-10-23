@@ -129,6 +129,21 @@ Review: `2d461de` on `review/sched-2a-r1` (`docs/build/reviews/SCHED-2A-SOL-XHIG
   S11 flaked once in a full run (a fixed 300 ms wait), was fixed to wait on the condition, and then passed 3/3.
 - **Soak runner, functional on the 3090:** see "Functional soak check" below.
 
+## Functional soak check (3090, `--class gpu`, a shared run)
+
+This is not the real tour. It's a 4-point surface swim loop by the start pod (`/work/tmp/sched2/soak/pod-loop.json`, earned travel with ordinary keys from `c2-evidence/saves/pod.json`), there to show the runner works end to end on the GPU. Results are in `/work/tmp/sched2/soak/run*/`.
+
+- **Tour, 3 laps** (run4, at `bdc7985`): one game lifetime, each lap's save loaded in a separate browser. The verdict is **partial** (exit 5):
+  - every memory and graphics rule passes: renderer RSS lap 1 376.8 → lap 3 374.2 MiB, GPU process 230.2 → 231.3, heap after GC 93.4 → 93.0, 425 meshes flat;
+  - all 3 saves load;
+  - `streaming-frame` and `loading-hold` are **unavailable**: this root build records no per-frame split or cave-hold state (CW-1 and REC-1 add them).
+- **Dwell:** these runs found two measurement flaws, both fixed:
+  - **First run (10-min window):** it "failed" on an artifact. The renderer RSS idling at the pod swings ±5–11% with GC timing (478–490 MiB, then 532 just after a forced GC), and a single post-GC sample was compared with samples taken without a GC.
+  - **Fix:** memory compared over time is now read one way only: a forced GC, a 2 s settle, then RSS and heap. Tour laps already worked like that. Dwell flatness and leak are judged only on these settled samples, one a minute after a 60 s warm-up, and the goal requires them to span the leak window.
+  - Regression: `tests/soak-goals.test.ts`, GC swings over a flat floor pass, a rising floor fails.
+  - **Rerun on the fixed code:** see the next point.
+- **Observed for its owners:** every load requests terrain tiles `t_4_11`, `t_4_12`, `t_5_11` and `t_5_12`, which are not in the bake or its manifest, so each load logs four HTTP 404s. The soak's page-error list now names the resource.
+
 ## Compromises, limits and missing evidence
 
 - **Unverified on the sandbox:** the exact cgroup path of a `siltwake-job` scope. The rule follows the sandbox handoff's `siltwake-job-*` scope names. My check job couldn't run: the sandbox had a backlog of other agents' jobs.
