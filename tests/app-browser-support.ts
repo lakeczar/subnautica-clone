@@ -156,6 +156,31 @@ export function createRenderer(
   return new TestRenderer(canvas, availability);
 }
 
+/** `navigator.locks` for one page: the save writer lock's requests (they carry a
+ * signal) go to the test's gate-able writer lock; any other request follows Web
+ * Locks: exclusive per name, FIFO, and `ifAvailable` gets null when it is held. */
+export function webLocksDouble(writer: TestWriterLock) {
+  const held = new Set<string>(), waiting = new Map<string, (() => void)[]>();
+  const release = (name: string): void => {
+    held.delete(name);
+    const next = waiting.get(name)?.shift();
+    if (next) next();
+  };
+  const grant = async (name: string, callback: (lock: { name: string } | null) => unknown): Promise<unknown> => {
+    held.add(name);
+    try { return await callback({ name }); } finally { release(name); }
+  };
+  return {
+    request(name: string, a: LockOptions | ((lock: { name: string } | null) => unknown), b?: (lock: { name: string } | null) => unknown): Promise<unknown> {
+      const options = typeof a === "function" ? {} : a, callback = (typeof a === "function" ? a : b)!;
+      if (options.signal) return writer.runExclusive(name, options.signal, callback as () => unknown);
+      if (!held.has(name)) return grant(name, callback);
+      if (options.ifAvailable) return Promise.resolve(callback(null));
+      return new Promise((done) => { (waiting.get(name) ?? waiting.set(name, []).get(name)!).push(() => { done(grant(name, callback)); }); });
+    },
+  };
+}
+
 /** Task-owned DOM/event and RAF scheduler; no wall-clock sleeps or state setters. */
 export function browserFixture() {
   const storage = new MemoryStorage(),
@@ -178,13 +203,7 @@ export function browserFixture() {
     localStorage: storage,
     navigator: {
       userActivation: { isActive: false },
-      locks: {
-        request: (
-          name: string,
-          options: LockOptions,
-          callback: () => unknown,
-        ) => lock.runExclusive(name, options.signal!, callback),
-      },
+      locks: webLocksDouble(lock),
     },
     requestAnimationFrame: (callback: FrameRequestCallback) => {
       frames.set(++nextId, callback);

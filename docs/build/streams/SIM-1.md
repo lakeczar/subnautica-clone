@@ -55,22 +55,35 @@ Every other identity-keyed cache is keyed by content.
 - **Chunks:** 1,000 events each. The newest 20 sealed chunks plus the open chunk stay whole, the same 20k window as before.
 - **Rotation:** an older chunk rotates into a `ChunkSummary` that keeps **notes, new things, deaths and recoveries verbatim**. Everything else becomes totals, and empty-travel and idle stretches are listed at the report's default thresholds.
 - **Analysis:** the analysis merges the summaries. The test shows a 26-chunk session analyses the same as its unrotated event list.
-- **`TimelineStore`** (`src/sim/timeline/store.ts`; redesigned in R1, made stateless in R2):
+- **`TimelineStore`** (`src/sim/timeline/store.ts`; redesigned in R1, made stateless in R2, given a retention contract in R3):
   - **Keys:** everything lives under one owned prefix, `siltwake.timeline.v2|<session>|…`. Each session has a head (`|head`) and chunk keys (`|<n>`). A chunk is written once when it seals; when it rotates, the same key is overwritten with its summary.
   - **The head:** each 10-second save rewrites only the head (the session, the open chunk with open spans closed as of the save, and the chunk keys in order, with which ones are folded). Before, the whole history was re-serialised, up to about 2.4 MB. Summaries live in their chunk keys, so the head stays small however many notes accumulate.
-  - **No remembered state.** The store keeps nothing between saves except the storage port and a clock. Each save reads the session's durable head first and treats only what that head names as committed.
+  - **No remembered state.** The store keeps nothing between saves except the storage port, the lock port and the repository's reference list. Each save reads the session's durable head first and treats only what that head names as committed.
+  - **Retention (the coordinator's R3 contract):**
+    - **a committed timeline belongs to its session and is never collected for age;**
+    - **eviction happens only under quota pressure**, after this session's own leftovers are collected and its own oldest chunks are folded (notes kept). Unreferenced committed timelines are then evicted, least recently written first. A session is never evicted if the save repository's Continue slot or backup holds it (the app asks `repository.status`), or if it is live in another tab (its lock is held). Without a lock API, other sessions are never evicted;
+    - **each eviction is named** in the save result (`evicted`), recorded as a `system` event (`timeline-evicted`) in the saving timeline, which is how the export names it, and told to the player in a notice. `system` events are now kept verbatim through rotation, like notes;
+    - **`siltwake.timeline.v1`** is removed only after a complete v2 head for the same session is stored. Under quota pressure, an unreferenced session's v1 record counts as the oldest evictable history.
+  - **Reads are tri-state:** absent, present or unreadable (storage threw, or the value doesn't parse). An unreadable value never authorises a delete, a reclaim, an eviction or a provisional overwrite:
+    - a save whose head read fails stores nothing;
+    - collection after a commit uses the manifest just written, never a re-read;
+    - `load` returns `unreadable` rather than `absent`, and the app then keeps that expedition's timeline in memory only and says so, so a fresh timeline is never saved over an unreadable one.
+  - **Coordination (Web Locks, behind `TimelineLockPort`):**
+    - the app holds `timelineLock(session)` while an expedition is live in the tab. The browser releases it if the tab dies, which is how "abandoned" is detected without timestamps;
+    - `save` refuses if its own session's lock is free, because then the caller isn't holding it;
+    - another session's uncommitted work (a provisional head, or keys with no head) is reclaimed, and its committed timeline evicted, only inside `ifAvailable` of that session's lock, re-checked inside the lock;
+    - without a lock API, only this session's own leftovers are reclaimed;
+    - one tab records an expedition at a time: a second tab on the same expedition waits for the lock and doesn't save its timeline.
   - **Every failure or restart leaves a readable, complete committed timeline:**
     - the head is the commit point, written after the chunks it names;
-    - a session with no head first gets a *provisional* head, so its keys can always be discovered and aged after a crash; readers ignore provisional heads, so a pending v1 migration still loads from v1;
+    - a session with no head first gets a *provisional* head, so its keys can always be discovered; readers ignore provisional heads, so a pending v1 migration still loads from v1;
     - a chunk key is only ever replaced by its own summary, in one atomic write, so a head naming it reads the same history. A fold usually shrinks the key, which is how compaction frees space. A summary of a chunk made only of notes can be slightly larger than the chunk; then that fold can fail on a full quota, and the committed notes survive (tested);
-    - after a head is stored, the session's own prefix is enumerated, and every key the head doesn't name is removed: leftovers of an interrupted transaction or cleanup, found after any restart;
-    - another session's keys are removed only once its head is older than `STALE_MS` (10 min) or it has no head, chunks first and head last. A live game saves its timeline every 10 s of play; a paused game whose keys were collected rewrites them whole from memory at its next save;
-    - the v1 record is removed once any v2 head is stored.
-  - **One writer per session is assumed** (one tab per expedition), as for saves.
-  - **On a full quota,** the store first collects this session's unnamed keys. Then the recorder rotates its oldest chunk, the store folds that key in place, and the save retries. If nothing fits, the save fails, the app says so once, and every note stays in memory for export.
+    - after a head is stored, the session's own prefix is enumerated, and every key the head doesn't name is removed: leftovers of an interrupted transaction or cleanup, found after any restart.
+  - **Saves are asynchronous** (they wait on locks). The app runs one at a time and queues a save asked for meanwhile, such as a note.
   - **Restore numbering:** `resumeRecorder` from an export numbers summaries first, then the re-chunked events, with `nextChunk` beyond all of them. A commit refuses colliding or missing chunk numbers, loudly, instead of writing them.
+  - **Size:** `store.ts` is 275 lines, up from 157 at R2. The age machinery is gone, but tri-state reads, the lock port, the referenced-session eviction policy and the v1 same-session rule outweigh it.
   - **Unreleased formats:** the R1-era keys (`siltwake.timeline.v2`, `siltwake.timeline.v2.<session>.<n>`) only ever existed in branch builds. They are not migrated or collected.
-- **Bridge:** the v1 single-key timeline migrates at the first save, and the v1 key stays until a v2 head is stored. v1 export files still parse.
+- **Bridge:** the v1 single-key timeline migrates at that session's first v2 save, and the v1 key stays until then. v1 export files still parse.
 - **Spans:** exports and saves close the open travel and idle spans with `closingEvents`, the same pure helper the recorder uses to close them. They never seal or rotate the live history. That was the cause of R1 F1.
 
 ## Contracts for other streams
@@ -207,6 +220,26 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
 - **C1 (P2):** the initialisation rule, above.
 - **The "every fold shrinks" claim** is corrected in the store design above.
 - **Every successful save in these tests** is checked by a fresh store that reloads every note exactly once, with matching analysis totals (new things, gathering, notes, deaths, travel, idle), unique chunk numbers and no orphaned keys.
+
+**R3 (Sol 6.1 xhigh, `docs/build/reviews/SIM-1-SOL-XHIGH-R3.md` on `review/sim-1-r3`).** Fixed under the coordinator's retention contract (store design, above).
+- **F1 (P1):** committed timelines are no longer collected for age; there is no age rule at all. Regressions:
+  - Sol's two real-app flows (`tests/timeline-app.test.ts`), through the real app, session and repository, with the other expedition's saves an hour later:
+    - New A, then New B, then B saves, then import A;
+    - A, then a session-only B, then B saves, then dispose and Continue.
+
+    Every A note comes back exactly once, and the stored A analyses exactly as A did at its last save. Both fail on `8eb5e374`.
+  - Store-level checks:
+    - three old committed sessions survive five saves "years" later;
+    - a v1 record survives other sessions' saves, and an interrupted migration of its own session, until that session stores a complete v2 head.
+- **F2 (P1):** tri-state reads (above). Regressions:
+  - a read failing at every read index of a save, once and persistently: the committed history and the other session's timeline always survive, as does every crash image taken during those saves;
+  - an unreadable head loads as `unreadable`, and a save never writes over it.
+- **F3 (P2):** Web Locks coordination (above), and `save` refuses without its own lock. Regressions:
+  - another tab's collector runs at every storage step (provisional, chunk, head) of a live session's retry, and the retry commits and reloads whole;
+  - a writer without its lock is refused before writing, and its abandoned work is reclaimed;
+  - abandoned uncommitted sessions are reclaimed only under free locks, never without locks, and never the live one.
+- **Eviction order:** under repeated tight-quota saves, exactly the unreferenced, not-live timelines go, oldest written first (`oldest`, `middle`, `newest`). Continue, backup and a live tab remain, and the save fails rather than take them. Each eviction is in the result and in the timeline, even after its chunks fold.
+- **The test harness's `navigator.locks` double** (`tests/app-browser-support.ts`) now models Web Locks: both call forms, `ifAvailable` and FIFO waiting. Save writer-lock requests still go to the gate-able writer lock.
 
 **Performance conventions** (`t3/stew-1-guard-rails` DIRECTION):
 - **#1:** the recorder's per-step stock copy uses a reused buffer, and `timelineSince` copies only the new events.

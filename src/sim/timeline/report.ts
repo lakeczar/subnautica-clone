@@ -54,9 +54,10 @@ export interface PendingRecovery {
 }
 /** `pending` is the live recovery ledger at export, so a reload resumes it exactly. */
 export interface TimelineSession { id: string; started: string; build?: string; end: { tick: number; play: number; idle: number }; pending?: PendingRecovery[] }
-/** Event kinds a rotated chunk keeps in full: feedback notes are never dropped,
- * and new things, deaths and recoveries carry the pacing and recovery story. */
-export const KEPT_KINDS: readonly TimelineKind[] = ["note", "new", "death", "recovery"];
+/** Event kinds a rotated chunk keeps in full: feedback notes are never dropped;
+ * new things, deaths and recoveries carry the pacing and recovery story; system
+ * events (decodes, crops, timelines evicted for room) are rare and say what happened. */
+export const KEPT_KINDS: readonly TimelineKind[] = ["note", "new", "death", "recovery", "system"];
 /** The listing floors a summary keeps stretches at (the report's defaults). */
 const LONG_TRAVEL_SECONDS = 90, LONG_IDLE_SECONDS = 60;
 /** One rotated-out chunk of the timeline (SIM-05): its kept events in full and

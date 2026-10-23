@@ -20,7 +20,7 @@ import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
 import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents } from "../sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../sim/timeline/recorder.js";
-import { TimelineStore } from "../sim/timeline/store.js";
+import { timelineLock, TimelineStore, webLocks } from "../sim/timeline/store.js";
 import { controlsActive } from "../sim/timeline/activity.js";
 import { regionAtPoint } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
@@ -146,9 +146,24 @@ export class SiltwakeApp {
   private timeline: TimelineRecorder | null = null;
   private timelineSaved = 0;
   /** Append-only local storage for the timeline (SIM-05); null without localStorage. */
-  private readonly timelineStore = (() => { try { return new TimelineStore(window.localStorage); } catch { return null; } })();
-  /** A failed timeline save has been reported this session. */
+  private readonly timelineLocks = webLocks();
+  private readonly timelineStore = (() => {
+    try {
+      return new TimelineStore(window.localStorage, { locks: this.timelineLocks,
+        // The save repository's Continue and backup expeditions keep their timelines.
+        referenced: () => [this.repository.status.save?.meta.sessionId, this.repository.status.backup?.meta.sessionId]
+          .filter((id): id is string => !!id) });
+    } catch { return null; }
+  })();
+  /** A failed timeline save has been reported for this expedition. */
   private timelineWarned = false;
+  /** This expedition's timeline is saved (false: memory only, said once). */
+  private timelineWritable = false;
+  /** Releases this expedition's timeline lock; null while it isn't held. */
+  private timelineRelease: (() => void) | null = null;
+  /** A timeline save in flight (saves never overlap), and one asked for meanwhile. */
+  private timelineSaving = false;
+  private timelineAgain = false;
 
   constructor(root: HTMLElement) {
     this.session = new ExpeditionSession(this.repository, {
@@ -476,9 +491,28 @@ export class SiltwakeApp {
   private saveTimeline(): void {
     if (!this.timeline || !this.state) return;
     this.timelineSaved = this.state.tick;
-    // A full quota rotates old chunks into summaries (notes kept); only an
-    // unusable store fails, and then the notes live on until exported.
-    if ((this.timelineStore?.save(this.timeline, this.state) ?? "failed") !== "failed" || this.timelineWarned) return;
+    // Only while this tab holds the expedition's timeline lock (or there are no locks).
+    if (this.timelineSaving) { this.timelineAgain = true; return; }
+    if (!this.timelineStore || !this.timelineWritable || (this.timelineLocks && !this.timelineRelease)) {
+      if (!this.timelineStore) this.timelineFailed();
+      return;
+    }
+    const timeline = this.timeline;
+    this.timelineSaving = true;
+    void this.timelineStore.save(timeline, this.state).then((r) => {
+      if (this.timeline !== timeline) return;
+      // A full quota first folds old chunks into summaries (notes kept), then
+      // evicts other expeditions' timelines that no save still refers to.
+      if (r.evicted.length) this.view.notify(`To make room, the play timeline${r.evicted.length > 1 ? "s" : ""} of ${r.evicted.length} older expedition${r.evicted.length > 1 ? "s were" : " was"} removed. This expedition's timeline records it.`,
+        false, { channel: "system" });
+      if (r.outcome === "failed") this.timelineFailed();
+    }).finally(() => {
+      this.timelineSaving = false;
+      if (this.timelineAgain && !this.disposed) { this.timelineAgain = false; this.saveTimeline(); }
+    });
+  }
+  private timelineFailed(): void {
+    if (this.timelineWarned) return;
     this.timelineWarned = true;
     this.view.notify("The play timeline can't be saved on this computer. Your notes are kept until you close the page: export the timeline from the menu to keep them.",
       true, { channel: "system" });
@@ -488,9 +522,26 @@ export class SiltwakeApp {
     const meta = this.session.envelope()?.meta;
     if (!meta || !this.state) { this.timeline = null; return; }
     const options = { regionAt: (x: number, z: number) => regionAtPoint(x, z) };
-    this.timeline = this.timelineStore?.load(meta.sessionId, options)
-      ?? createRecorder({ id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION }, options);
+    const stored = this.timelineStore?.load(meta.sessionId, options) ?? { kind: "absent" as const };
+    this.timeline = stored.kind === "loaded" ? stored.recorder
+      : createRecorder({ id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION }, options);
     this.timelineSaved = this.state.tick;
+    this.timelineWarned = false;
+    // A stored timeline that can't be read now is never saved over: this one stays in memory.
+    this.timelineWritable = stored.kind !== "unreadable";
+    if (stored.kind === "unreadable") this.view.notify(`This expedition's stored play timeline can't be read (${stored.error}). It is left as it is; this session's timeline is kept in memory only, so export it from the menu to keep it.`,
+      true, { channel: "system" });
+    // One tab records an expedition's timeline: hold its lock while it is live here.
+    this.releaseTimelineLock();
+    const timeline = this.timeline;
+    void this.timelineLocks?.hold(timelineLock(meta.sessionId)).then((release) => {
+      if (this.timeline === timeline && !this.disposed) this.timelineRelease = release;
+      else release();
+    });
+  }
+  private releaseTimelineLock(): void {
+    this.timelineRelease?.();
+    this.timelineRelease = null;
   }
   /** N: a one-line feedback note stamped with play time and place. */
   private feedbackNote(): void {
@@ -890,6 +941,7 @@ export class SiltwakeApp {
     this.view.cancelFeedback();
     this.disposed = true;
     this.paused = true;
+    this.releaseTimelineLock();
     cancelAnimationFrame(this.frameId);
     this.abort.abort();
     this.session.dispose();
