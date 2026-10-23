@@ -63,3 +63,42 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   2. LC-2, then cave biomes 2–4;
   3. SIG-1, then the owner's playtest;
   4. an early opening-hours playtest right after OP-1.
+
+## Two test machines: how work is planned (owner grill, 2026-10-23)
+
+- **factory-worker (RTX 3090):** builds, fast tests, focused heavy tests, reviewers' quick checks, every 3090 session and every **exclusive** performance measurement (the 60 fps target).
+- **siltwake-alickers (RTX 4070 Laptop, best-effort):**
+  - whole playthroughs, the full heavy tier and soaks;
+  - 4070 "player-class" sessions.
+
+  When it's paused or offline, its work falls back to factory-worker, except 4070 jobs, which wait for it. The owner uses the PC freely and pauses the sandbox when needed. 4070 frame-rate numbers are flagged as possibly disturbed.
+- **Routing:** SCHED-2b's remote lane routes each job by a machine tag:
+  - `any`: prefers alickers;
+  - `3090`;
+  - `4070`: waits for alickers, never faked on the 3090;
+  - `soak`: alickers first.
+
+  Until the lane exists, builders may call `scripts/alickers-job.sh` directly.
+- **Evidence:**
+  - Functional results count from either machine, bound to the exact SHA tested.
+  - 3090 exclusive numbers are the target.
+  - 4070 numbers are the player-floor check:
+    - one 4070 check at handoff for streams touching rendering, streaming, caves or UI;
+    - full 4070 runs in MEM-1 and PT-0;
+    - a 4070 check before every playtest.
+- **Soaks have goals.**
+  - **Tour soak:** 3 laps of every region and cave by ordinary travel. It passes if memory after lap 3 is within about 5% of lap 1, no streaming frame is over 33 ms, there's no loading hold, there's no growth in graphics objects, and every save reloads.
+  - **Dwell soak:** in the heaviest places, for set autosave and day–night cycles. It passes if memory stays flat, with no autosave hitch over budget and no leak.
+  - **Stopping:** both stop early, with a report, on a broken rule. Stall detection applies; the numbers get tuned from MEM-1.
+  - **When:** after each root merge that touches streaming, memory or saves, and a full soak before each playtest.
+- **Planning:**
+  - **Builders:** at most 5 Opus builders until the owner upgrades the subscription.
+  - **Slots:** filled from the compromise verdict's priority list by dependencies.
+  - **Owner updates:** at decisions, finished streams, problems, and with a roadmap update when each wave of work completes.
+- **Usage limits:**
+  - When usage runs low, pause lower-priority builders so the critical path keeps going.
+  - After any reset, Stop or compaction, the coordinator checks every outstanding task directly (`task_status`), because a finished agent's report can be delivered and never acted on.
+- **SCHED-2 order,** each step with its own Sol review:
+  1. **2a:** goals and stall detection, the soak class, the GPU lease for every driver, rejecting a changed worktree, and keeping the OOM label.
+  2. **2b:** the remote lane with machine tags.
+  3. **SAVE-1:** the save library, exporting on alickers.
