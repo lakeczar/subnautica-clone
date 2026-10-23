@@ -1,6 +1,6 @@
 import type { Aabb, Rect, Vec3 } from "../types.js";
 import {
-  boxOverlapsTriangle, boxTriangleSeparation, earlier, segmentTriangle, sweepBoxTriangle, takeHit, type Separation, type SweepHit,
+  boxOverlapsTriangle, boxTriangleSeparation, mergeHit, segmentTriangle, sweepBoxTriangle, type Separation, type SweepHit,
 } from "./boxTriangle.js";
 
 /** A baked heightfield: exterior seabed as collision, for cave collars and
@@ -192,12 +192,12 @@ export function sweepHeightfield(h: StaticHeightfield, cx: number, cy: number, c
     const x = h.x0 + i * h.cell, z = h.z0 + k * h.cell;
     if (cellMin(h, i, k) > top + skin && x < cx + ex && x + h.cell > cx - ex && z < cz + ez && z + h.cell > cz - ez) {
       const buried: SweepHit = { t: 0, nx: 0, ny: 1, nz: 0, start: true, face: true };
-      if (dy < -1e-12 && (!found || earlier(buried, out, dx, dy, dz))) { takeHit(buried, out, found); found = true; }
+      if (dy < -1e-12) found = mergeHit(buried, out, found, dx, dy, dz);
       return false;
     }
     for (const o of [0, 9]) {
       if (!sweepBoxTriangle(cx, cy, cz, ex, ey, ez, dx, dy, dz, T, o, o + 3, o + 6, skin, HIT)) continue;
-      if (!found || earlier(HIT, out, dx, dy, dz)) { takeHit(HIT, out, found); found = true; }
+      found = mergeHit(HIT, out, found, dx, dy, dz);
     }
     return false;
   });

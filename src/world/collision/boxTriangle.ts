@@ -40,10 +40,15 @@ export function earlier(h: SweepHit, best: SweepHit, dx: number, dy: number, dz:
   if (a !== b) return a < b;
   return h.nx !== best.nx ? h.nx < best.nx : h.ny !== best.ny ? h.ny < best.ny : h.nz < best.nz;
 }
-/** Copy `h` into `out`, keeping the earlier time of a tie. */
-export function takeHit(h: SweepHit, out: SweepHit, found: boolean): void {
-  const t = found ? Math.min(out.t, h.t) : h.t;
-  out.t = t; out.nx = h.nx; out.ny = h.ny; out.nz = h.nz; out.start = h.start; out.face = h.face ?? false;
+/** Merge contact `h` into the best so far (`out`, valid when `found`):
+ * the winner by `earlier` supplies the normal, and the time is always the
+ * earliest of the two, so a tie never moves a contact later. Returns true. */
+export function mergeHit(h: SweepHit, out: SweepHit, found: boolean, dx: number, dy: number, dz: number): true {
+  if (!found) { out.t = h.t; out.nx = h.nx; out.ny = h.ny; out.nz = h.nz; out.start = h.start; out.face = h.face ?? false; return true; }
+  const t = Math.min(out.t, h.t);
+  if (earlier(h, out, dx, dy, dz)) { out.nx = h.nx; out.ny = h.ny; out.nz = h.nz; out.start = h.start; out.face = h.face ?? false; }
+  out.t = t;
+  return true;
 }
 
 /** Signed separation of a box from an obstacle along its best separating

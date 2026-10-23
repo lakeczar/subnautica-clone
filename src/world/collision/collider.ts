@@ -1,6 +1,6 @@
 import type { Aabb, Vec3 } from "../types.js";
 import {
-  boxBoxSeparation, createHit, createSeparation, earlier, segmentBox, sweepBoxBox, takeHit, type Separation, type SweepHit,
+  boxBoxSeparation, createHit, createSeparation, mergeHit, segmentBox, sweepBoxBox, type Separation, type SweepHit,
 } from "./boxTriangle.js";
 import { buildBvh, isLeaf, leafCount, leafFirst } from "./bvh.js";
 import {
@@ -159,7 +159,7 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
     const ms = gather(c.x - e.x + Math.min(0, d.x) - r, c.y - e.y + Math.min(0, d.y) - r, c.z - e.z + Math.min(0, d.z) - r,
       c.x + e.x + Math.max(0, d.x) + r, c.y + e.y + Math.max(0, d.y) + r, c.z + e.z + Math.max(0, d.z) + r);
     let found = false;
-    const take = (): void => { if (!found || earlier(hit, out, d.x, d.y, d.z)) { takeHit(hit, out, found); found = true; } };
+    const take = (): void => { found = mergeHit(hit, out, found, d.x, d.y, d.z); };
     for (const m of ms) {
       if (m.kind === "shape") { if (sweepShape(m, c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, skin, hit)) take(); }
       else if (m.kind === "heightfield") { if (sweepHeightfield(m, c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, skin, hit)) take(); }
