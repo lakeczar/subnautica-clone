@@ -170,7 +170,7 @@ function viewFixture(t: test.TestContext, world = createWorldQueries()) {
     panel: noop, closePanel: noop, fixture: noop, newGame: noop, exportTimeline: noop,
     continueGame: noop, resume: noop, pause: noop, save: noop,
     exportGame: noop, exportBackup: noop, exportRaw: noop,
-    importFile: noop, confirm: noop, cancelConfirm: noop, lockMouse: noop, settings: noop,
+    importFile: noop, confirm: noop, cancelConfirm: noop, lockMouse: noop, settings: noop, flight: noop, exportFlight: noop,
   };
   const view = new GameView(root as unknown as HTMLElement, actions, world);
   root.querySelector("#opening").children = ["opening-act", "opening-skip", "opening-subtitles"].map((id) => root.querySelector(`#${id}`));
