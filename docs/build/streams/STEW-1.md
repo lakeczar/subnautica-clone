@@ -155,6 +155,22 @@ Opus 5.5 high. Branch `t3/stew-1-guard-rails`, on root `f0dc680` (SAVE-1 merged)
   - **Codec check:** CW-1's kit-codec pattern and SIM-1's cancellation pattern typecheck under the real headless config, and a UTF-8 round trip, `AbortSignal.abort`, `reason` and `throwIfAborted` behave so at runtime.
   - With this branch, CW-1's merge tree passes the headless typecheck. SIM-1's fails only on `LockManager` in `src/save/writer-lock.ts`, which SIM-1 splits into a portable port and a browser adapter.
 
+## R3 fixes (Sol 6.1 xhigh R3, `763cbcc5`: two P2s)
+- **R3-1, inline type specifiers.**
+  - Under `verbatimModuleSyntax`, `import { type X } from` and `export { type X } from` still emit `import {}`/`export {}` and run their target. They are now runtime edges, for layering and cycles; only statement-level `import type`/`export type` are erased.
+  - Root's cycles are unchanged by this (still exactly the two allowances).
+  - **Tests:** a direct import, a direct re-export and a barrel case fail; statement-level types pass. Under the project's own compiler options, `transpileModule` shows the empty import and re-export emitted, and the statement-level forms erased.
+- **R3-2, the closure failed open at unanalysed edges** (the coordinator's fail-closed design).
+  - The layering rule follows sim and content's runtime closure through reachable modules in **any directory**, parsing reachable TypeScript lazily.
+  - Every path must end in JSON data, a package on `PORTABLE_PACKAGES`, or TypeScript the guard analyses. Each `PORTABLE_PACKAGES` entry needs a one-line reason; the list is empty, because sim and content reach no package today.
+  - Anything else fails, naming the chain: render, UI, audio or Babylon; any other package or Node builtin; JavaScript (which the headless typecheck doesn't check); a module the guard can't find; a computed `import()`/`require()` in any reachable module.
+  - **Tests** (disk-backed scratch repositories):
+    - Sol's four probes: a Babylon barrel in `tools/`; a side-effect import of a `.js` module using `document`; a computed load in a reachable `src/world` helper, plus two hops up through a relay; `vite/dist/client/client.mjs`.
+    - Also `node:fs` and a missing module, all failing as expected.
+    - JSON data and a TypeScript helper in `tools/` reached through `src/world` pass.
+- **Gate:** `--machine M` sends every queued step to one machine, replacing its own tag (used for this round's gate while CW-1 holds the 3090). Tested.
+  - **What fails today:** nothing. Root and the merge trees of CW-1, REC-1, COL-1, SIM-1 and TST-16 with this branch pass, with no allowlist entry added.
+
 ## Compromises (each with its root fix and cost)
 1. **The guard's region-lookup and driver rules are name and text patterns,** not semantics. A lookup named otherwise (`whereIs`), or a driver hidden behind a helper, passes; a delegating adapter must have the exact delegation shape.
    - **Root fix:** the per-wave review, and REC-2 moving every driver onto `scripts/rec`, which leaves nothing to hide.

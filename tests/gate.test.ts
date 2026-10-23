@@ -111,3 +111,13 @@ else process.exit(7);
   }
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("--machine sends every queued step to one machine, replacing its own tag", () => {
+  const list = spawnSync(process.execPath, ["scripts/gate.mjs", "--machine", "4070", "--list"], { encoding: "utf8" }).stdout;
+  for (const id of ["bake", "playthrough"]) {
+    const line = list.split("\n").find((_line, i, all) => all[i - 1]?.startsWith(id))!;
+    assert.match(line, /submit .*--machine 4070 --review --/, id);
+    assert.equal(line.match(/--machine/g)?.length, 1, `${id}: one machine tag`);
+  }
+  assert.equal(spawnSync(process.execPath, ["scripts/gate.mjs", "--machine", "moon", "--list"], { encoding: "utf8" }).status, 2);
+});

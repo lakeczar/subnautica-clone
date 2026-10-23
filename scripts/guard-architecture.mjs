@@ -2,10 +2,13 @@
 // The architecture guard (STEW-1; the steward verdict's "What the guard rails are").
 // Runs in `npm run test:fast`, in about a second, with the TypeScript compiler API
 // already in devDependencies. It FAILS on:
-//   1. layering: a value import (static, `export … from`, `import x = require`, a literal
-//      `import()` or `require()`) from src/sim/** or src/content/** into src/render/**,
-//      src/ui/**, src/audio/** or Babylon; a computed `import()`/`require()` there is
-//      refused outright. (DOM globals there fail tsconfig.headless.json's typecheck.)
+//   1. layering, failing closed: sim and content's runtime closure (value edges, static and
+//      lazy, followed through modules in any directory) may end only in JSON data, a package on
+//      PORTABLE_PACKAGES, or TypeScript the guard analyses. It fails at render, UI, audio or
+//      Babylon, any other package or builtin, JavaScript (which the headless typecheck doesn't
+//      check), a module it can't find, and a computed import()/require() anywhere on the path.
+//      Only statement-level `import type`/`export type` are erased (verbatimModuleSyntax:
+//      `import { type X }` still runs its target). DOM globals fail tsconfig.headless.json.
 //   2. a value-import cycle (static edges) that isn't exactly an allowlisted group: a
 //      new cycle, a new member, or a group that shrank or vanished while its allowance
 //      didn't (the ratchet: shrink the allowance in the change that shrinks the cycle);
@@ -74,6 +77,11 @@ const hasExt = (f, exts) => exts.some((e) => f.endsWith(e)) && !DECLARATION.some
 export const isSource = (f) => f.startsWith("src/") && hasExt(f, TS_EXTENSIONS);
 /** The owner's lookups: a function whose whole body is one call to these delegates, it is no second lookup. */
 const REGION_DELEGATES = new Set(["regionAtPoint", "regionAtPosition"]);
+/** A bare specifier (a package, a Node builtin, an absolute path) as a graph target. */
+const PACKAGE = "package:";
+/** Packages sim and content may reach at runtime, each with why it is portable (Node, workers and
+ * the browser alike). Today they reach none; add one only with its reason. */
+export const PORTABLE_PACKAGES = new Map([]);
 const REGION_LOOKUP = /^\w*region(At|Of|For)(Point|Position)?$/i;
 const REGION_OWNER = "src/content/regions/layout.ts";
 const SELF = ["scripts/guard-architecture.mjs", "tests/guard-architecture.test.ts"];
@@ -86,11 +94,11 @@ export const SHARED_ROOTS = ["src/runtime/app.ts", "src/sim/step.ts", "src/sim/w
  * static edges (which can form initialization cycles) and lazy ones (`import()`, `require()`);
  * type-only imports are skipped. Plus its region lookups, RecipeBuilder classes and value exports. */
 function analyseSource(file, text, exists) {
-  const kind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const kind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : /\.[mc]?js$/.test(file) ? ts.ScriptKind.JS : ts.ScriptKind.TS;
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true, kind);
   const imports = [], lazy = [], computed = [], lookups = [], builders = [], exports = [];
   const resolve = (spec) => {
-    if (!spec.startsWith(".")) return spec;
+    if (!spec.startsWith(".")) return `${PACKAGE}${spec}`;
     const base = path.posix.normalize(path.posix.join(path.posix.dirname(file), spec));
     const swap = [[/\.js$/, [".ts", ".tsx"]], [/\.mjs$/, [".mts"]], [/\.cjs$/, [".cts"]]].flatMap(([re, exts]) => re.test(base) ? exts.map((e) => base.replace(re, e)) : []);
     for (const c of [...swap, `${base}.ts`, `${base}.mts`, `${base}.tsx`, `${base}/index.ts`, base]) if (exists(c)) return c;
@@ -99,14 +107,12 @@ function analyseSource(file, text, exists) {
   const exported = (n) => (ts.getCombinedModifierFlags(n) & ts.ModifierFlags.Export) !== 0;
   for (const st of sf.statements) {
     if (ts.isImportDeclaration(st) && ts.isStringLiteral(st.moduleSpecifier)) {
-      const c = st.importClause;
-      const typeOnly = c && (c.isTypeOnly || (!c.name && c.namedBindings && ts.isNamedImports(c.namedBindings) &&
-        c.namedBindings.elements.length > 0 && c.namedBindings.elements.every((e) => e.isTypeOnly)));
-      if (!typeOnly) imports.push(resolve(st.moduleSpecifier.text));
+      // Under verbatimModuleSyntax only a statement-level `import type` is erased: `import { type X }`
+      // still emits `import {} from …` and runs its target.
+      if (!st.importClause?.isTypeOnly) imports.push(resolve(st.moduleSpecifier.text));
     } else if (ts.isExportDeclaration(st) && st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier)) {
-      const typeOnly = st.isTypeOnly || (st.exportClause && ts.isNamedExports(st.exportClause) &&
-        st.exportClause.elements.length > 0 && st.exportClause.elements.every((e) => e.isTypeOnly));
-      if (!typeOnly) imports.push(resolve(st.moduleSpecifier.text));
+      // Likewise only `export type { … } from` is erased; `export { type X } from` emits `export {} from …`.
+      if (!st.isTypeOnly) imports.push(resolve(st.moduleSpecifier.text));
     } else if (ts.isImportEqualsDeclaration(st) && !st.isTypeOnly && ts.isExternalModuleReference(st.moduleReference)) {
       const e = st.moduleReference.expression;
       if (ts.isStringLiteral(e)) imports.push(resolve(e.text)); else computed.push(e.getText(sf));
@@ -179,32 +185,57 @@ export function analyse(files, allow = ALLOW) {
   const exists = (p) => files.has(p);
   const sources = [...files.keys()].filter(isSource).sort();
   const info = new Map(sources.map((f) => [f, analyseSource(f, files.get(f), exists)]));
-  // 1. Layering.
-  // A barrel or helper outside sim and content can't launder a forbidden value: the
-  // check follows value edges (static and lazy, never type-only) through other layers.
-  const forbidden = (t) => UPPER.test(t) || t.startsWith("@babylonjs/");
+  // 1. Layering, failing closed. Sim and content's runtime closure is every module they reach
+  // by value edges (static and lazy: not statement-level `import type`/`export type`, which are
+  // erased), in any directory. Each path must end in something the guard can vouch for: JSON
+  // data, a portable package, or TypeScript it analyses. Anything else fails, naming the chain.
+  const forbidden = (t) => UPPER.test(t) || t.startsWith(`${PACKAGE}@babylonjs/`);
+  const shown = (t) => t.startsWith(PACKAGE) ? t.slice(PACKAGE.length) : t;
   const edges = (i) => [...i.imports.map((t) => [t, "imports"]), ...i.lazy.map((t) => [t, "lazily imports"])];
-  // Every module outside sim and content that reaches a forbidden target, with its next hop
-  // toward it: grown to a fixed point over the whole graph (cycles included), so each lookup
-  // is a walk along next hops.
-  const hop = new Map();
-  const between = [...info].filter(([m]) => !LOWER.test(m) && !forbidden(m));
-  for (const [m, i] of between) { const t = edges(i).find(([next]) => forbidden(next)); if (t) hop.set(m, t[0]); }
+  const parsed = new Map(info);
+  const nodeOf = (t) => { if (!parsed.has(t)) parsed.set(t, analyseSource(t, files.get(t), exists)); return parsed.get(t); };
+  /** "ok" for a leaf the guard vouches for, a reason for one it can't, or null for TypeScript it follows. */
+  const verdict = (t) => {
+    if (forbidden(t)) return "render, UI, audio or Babylon";
+    if (t.startsWith(PACKAGE)) {
+      const spec = shown(t), name = spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0];
+      return PORTABLE_PACKAGES.has(name) ? "ok" : `the package or builtin ${spec}, not on the guard's PORTABLE_PACKAGES list`;
+    }
+    if (t.endsWith(".json")) return "ok"; // data, not code
+    if (!files.has(t)) return "a module the guard can't find or read";
+    if (hasExt(t, [".js", ".mjs", ".cjs"])) return "JavaScript, which the headless typecheck doesn't check";
+    if (!hasExt(t, TS_EXTENSIONS)) return "a file type the guard can't analyse";
+    const c = nodeOf(t).computed;
+    return c.length ? `a computed load (${c[0]}), which no rule can see through` : null;
+  };
+  // The followed modules: TypeScript outside sim and content reachable from them.
+  const followed = new Set(), queue = [];
+  const enqueue = (t) => { if (!LOWER.test(t) && !followed.has(t) && verdict(t) === null) { followed.add(t); queue.push(t); } };
+  for (const [f, i] of info) if (LOWER.test(f)) for (const [t] of edges(i)) enqueue(t);
+  for (let k = 0; k < queue.length; k++) for (const [t] of edges(nodeOf(queue[k]))) enqueue(t);
+  // Each followed module that reaches a leaf the guard can't vouch for, with its next hop toward
+  // it, grown to a fixed point (cycles included).
+  const hop = new Map(), bad = (t) => { const v = verdict(t); return v !== null && v !== "ok"; };
+  for (const m of followed) { const e = edges(nodeOf(m)).find(([t]) => bad(t)); if (e) hop.set(m, e[0]); }
   for (let grew = true; grew;) {
     grew = false;
-    for (const [m, i] of between) {
+    for (const m of followed) {
       if (hop.has(m)) continue;
-      const t = edges(i).find(([next]) => hop.has(next));
-      if (t) { hop.set(m, t[0]); grew = true; }
+      const e = edges(nodeOf(m)).find(([t]) => hop.has(t));
+      if (e) { hop.set(m, e[0]); grew = true; }
     }
   }
-  const chainFrom = (m) => { const out = [m]; while (!forbidden(out.at(-1))) out.push(hop.get(out.at(-1))); return out; };
+  const chainFrom = (m) => { const out = [m]; while (hop.has(out.at(-1))) out.push(hop.get(out.at(-1))); return out; };
   for (const [f, i] of info) {
     if (!LOWER.test(f)) continue;
-    for (const [target, how] of edges(i)) if (forbidden(target)) failures.push(`layering: ${f} ${how} ${target} (sim and content stay below render, UI, audio and Babylon)`);
-    for (const [target] of edges(i)) if (!forbidden(target) && hop.has(target)) {
-      const chain = chainFrom(target);
-      failures.push(`layering: ${f} reaches ${chain.at(-1)} through ${chain.slice(0, -1).join(" → ")} (a value path from sim or content to render, UI, audio or Babylon)`);
+    for (const [target, how] of edges(i)) {
+      if (LOWER.test(target)) continue; // checked as its own entry
+      const v = verdict(target);
+      if (v !== null && v !== "ok") failures.push(`layering: ${f} ${how} ${shown(target)} (${v}; sim and content stay below render, UI, audio and Babylon, on code the guard can check)`);
+      else if (v === null && hop.has(target)) {
+        const chain = chainFrom(target), end = chain.at(-1);
+        failures.push(`layering: ${f} reaches ${shown(end)} through ${chain.slice(0, -1).map(shown).join(" → ")} (${verdict(end)})`);
+      }
     }
     for (const c of i.computed) failures.push(`layering: ${f} loads a computed module (${c}); sim and content import by literal path only, so the rule can see it`);
   }

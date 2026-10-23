@@ -250,3 +250,66 @@ test("the declared platform APIs (TextEncoder, TextDecoder, AbortSignal) typeche
   assert.throws(() => signal.throwIfAborted());
   assert.equal(typeof AbortSignal.timeout, "function");
 });
+
+test("R3-1: an inline type specifier still runs its target (verbatimModuleSyntax), so it is a runtime edge; statement-level types are erased", () => {
+  const dir = scratchRepo({
+    "src/render/art.ts": "export const art = 1;\nexport interface Art { id: string }\n",
+    "src/sim/inlineImport.ts": `import { type Art } ${from("../render/art.js")};\nexport type A = Art;\n`,
+    "src/sim/inlineExport.ts": `export { type Art } ${from("../render/art.js")};\n`,
+    "src/world/typeBarrel.ts": `export { type Art } ${from("../render/art.js")};\n`,
+    "src/sim/viaTypeBarrel.ts": `import { type Art } ${from("../world/typeBarrel.js")};\nexport type B = Art;\n`,
+    "src/content/erased.ts": `import type { Art } ${from("../render/art.js")};\nexport type { Art as Model } ${from("../render/art.js")};\nexport type C = Art;\n`,
+  });
+  try {
+    const { failures } = G.analyse(G.repositoryFiles(dir), none);
+    for (const re of [/layering: src\/sim\/inlineImport\.ts imports src\/render\/art\.ts/, /layering: src\/sim\/inlineExport\.ts imports src\/render\/art\.ts/,
+      /layering: src\/sim\/viaTypeBarrel\.ts reaches src\/render\/art\.ts through src\/world\/typeBarrel\.ts/])
+      assert.ok(failures.some((f) => re.test(f)), `${re}:\n${failures.join("\n")}`);
+    assert.ok(!failures.some((f) => /erased/.test(f)), failures.join("\n"));
+    assert.equal(failures.length, 3, failures.join("\n"));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  // The emission the rule follows, under this project's own compiler options.
+  const options = ts.convertCompilerOptionsFromJson((ts.readConfigFile("tsconfig.json", ts.sys.readFile).config as { compilerOptions: object }).compilerOptions, ".").options;
+  const emit = (code: string): string => ts.transpileModule(code, { compilerOptions: { ...options, noEmit: false } }).outputText;
+  assert.match(emit(`import { type Art } ${from("../render/art.js")};\nexport type A = Art;\n`), /import \{\} from "\.\.\/render\/art\.js"/);
+  assert.match(emit(`export { type Art } ${from("../render/art.js")};\n`), /export \{\} from "\.\.\/render\/art\.js"/);
+  assert.doesNotMatch(emit(`import type { Art } ${from("../render/art.js")};\nexport type { Art as M } ${from("../render/art.js")};\nexport type A = Art;\n`), /render\/art/);
+});
+
+test("R3-2: sim and content's runtime closure fails closed at anything the guard can't vouch for, in any directory", () => {
+  const dir = scratchRepo({
+    // Sol's four probes.
+    "tools/bridge.ts": `export { Color3 } ${from("@babylonjs/core/Maths/math.color.js")};\n`,
+    "src/sim/viaTools.ts": `export { Color3 } ${from("../../tools/bridge.js")};\n`,
+    "src/world/browser.js": `document.querySelector("canvas");\n`,
+    "src/sim/viaJs.ts": `import ${JSON.stringify("../world/browser.js")};\nexport const plain = 1;\n`,
+    "src/world/helper.ts": `export const later = () => ${"imp" + "ort"}("@babylonjs/" + "core/Maths/math.color.js");\n`,
+    "src/sim/viaHelper.ts": `export { later } ${from("../world/helper.js")};\n`,
+    "src/world/relay.ts": `export { later } ${from("./helper.js")};\n`,
+    "src/content/viaRelay.ts": `export { later } ${from("../world/relay.js")};\n`,
+    "src/sim/viaVite.ts": `import ${JSON.stringify("vite/dist/client/client.mjs")};\nexport const v = 1;\n`,
+    // And a builtin, a missing module, and what stays allowed: JSON data and checked TypeScript anywhere.
+    "src/content/viaNode.ts": `import fs ${from("node:fs")};\nexport const read = fs.readFileSync;\n`,
+    "src/sim/viaMissing.ts": `export { gone } ${from("../world/gone.js")};\n`,
+    "src/content/table.json": "{ \"rows\": [] }\n",
+    "src/content/viaJson.ts": `import table ${from("./table.json")} with { type: "json" };\nexport const rows = table;\n`,
+    "tools/portable.ts": "export const fine = 2;\n",
+    "src/world/ok.ts": `export { fine } ${from("../../tools/portable.js")};\nexport const also = 1;\n`,
+    "src/sim/viaOk.ts": `import { fine, also } ${from("../world/ok.js")};\nexport const sum = fine + also;\n`,
+  });
+  try {
+    const { failures } = G.analyse(G.repositoryFiles(dir), none);
+    const expect: [RegExp, string][] = [
+      [/layering: src\/sim\/viaTools\.ts reaches @babylonjs\/core\/Maths\/math\.color\.js through tools\/bridge\.ts \(render, UI, audio or Babylon\)/, "a barrel outside src"],
+      [/layering: src\/sim\/viaJs\.ts imports src\/world\/browser\.js \(JavaScript, which the headless typecheck doesn't check/, "reachable JavaScript"],
+      [/layering: src\/sim\/viaHelper\.ts imports src\/world\/helper\.ts \(a computed load \(import\("@babylonjs\/" \+/, "a computed load in a reachable helper"],
+      [/layering: src\/content\/viaRelay\.ts reaches src\/world\/helper\.ts through src\/world\/relay\.ts \(a computed load/, "a computed load two hops up"],
+      [/layering: src\/sim\/viaVite\.ts imports vite\/dist\/client\/client\.mjs \(the package or builtin .* not on the guard's PORTABLE_PACKAGES list/, "an unvetted package"],
+      [/layering: src\/content\/viaNode\.ts imports node:fs \(the package or builtin/, "a Node builtin"],
+      [/layering: src\/sim\/viaMissing\.ts imports src\/world\/gone\.js \(a module the guard can't find or read/, "a missing module"],
+    ];
+    for (const [re, what] of expect) assert.ok(failures.some((f) => re.test(f)), `${what}:\n${failures.join("\n")}`);
+    assert.ok(!failures.some((f) => /viaJson|viaOk/.test(f)), failures.join("\n"));
+    assert.equal(failures.length, expect.length, failures.join("\n"));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

@@ -8,6 +8,8 @@
 //   npm run gate -- --only ID,…  just these steps (a partial gate, labelled so)
 //   npm run gate -- --no-playthrough   everything but the queued playthrough
 //   npm run gate -- --allow-dirty      run on uncommitted changes (never a pass)
+//   npm run gate -- --machine 4070     send every queued step to that machine (for example
+//                                      while the 3090 is booked; receipts must still bind)
 //
 // The gate pins the commit it starts on. Steps run one after another and the gate
 // reports every one, so a failure early doesn't hide the rest. A queued step (heavy
@@ -49,7 +51,15 @@ export const GATE = [
 export const POST_MERGE = [
   { id: "saves-export", what: "export the shared save library at the merged commit (SAVE-1)", run: ["scripts/saves-export.sh"] },
 ];
-const command = (s) => s.queue ? [H, "submit", ...s.queue, "--review", "--", ...s.run] : s.run;
+/** `--machine` replaces each queued step's own machine tag. */
+let machineOverride = null;
+const queueOptions = (s) => {
+  if (!machineOverride) return s.queue;
+  const out = [];
+  for (let i = 0; i < s.queue.length; i++) { if (s.queue[i] === "--machine") { i++; continue; } out.push(s.queue[i]); }
+  return [...out, "--machine", machineOverride];
+};
+const command = (s) => s.queue ? [H, "submit", ...queueOptions(s), "--review", "--", ...s.run] : s.run;
 
 /** Why a queued step's terminal receipt can't count for the gate at `commit` (empty: it counts). */
 export function receiptProblems(receipt, commit) {
@@ -89,6 +99,8 @@ function queued(step, head) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const value = (flag) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : undefined; };
+  machineOverride = value("--machine") ?? null;
+  if (machineOverride && !["any", "3090", "4070", "soak"].includes(machineOverride)) { console.error(`gate: --machine ${machineOverride}: one of any, 3090, 4070`); process.exit(2); }
   if (args.includes("--list")) {
     for (const s of GATE) console.log(`${s.id.padEnd(20)} ${s.what}\n${"".padEnd(20)} $ ${command(s).join(" ")}`);
     console.log("\nafter the merge is pushed:");
