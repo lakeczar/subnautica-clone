@@ -49,6 +49,7 @@ import {
   localToWorld,
   updateBerth,
 } from "./carrier.js";
+import { atCarrierHelm, isCarrierStation, leaveCarrierHelm, useCarrierStation } from "./carrierStations.js";
 
 /** A caller correction is another continuous move, including from a legacy rib
  * overlap. Require the straight vertical path, its intended endpoint and floor;
@@ -127,6 +128,14 @@ function actionResult(s: GameState, events: GameEvent[], summary: string, cue: "
   events.push({ type: "notice", channel: "action", message: s.feedback, summary }, { type: "sound", cue });
 }
 function exitAction(s: GameState, w: WorldQueries, events: GameEvent[]): string | null {
+  // UX-1: at the Hearthline's helm, X holds station and leaves into the bridge.
+  const helm = atCarrierHelm(s);
+  if (helm && s.fleet.docking) {
+    const no = leaveCarrierHelm(s, w);
+    if (no) events.push({ type: "notice", channel: "action", message: no, error: true, refusal: { kind: "exit", vehicleId: helm.id, code: "carrier" } });
+    else actionResult(s, events, "Left the helm");
+    return no;
+  }
   if (cabinHull(s)) {
     const no = leaveByHatch(s, w);
     if (!no) actionResult(s, events, "Left the cabin");
@@ -411,6 +420,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         s.feedback = readTechRecord(s, target.id);
         return null;
       }
+      if (isCarrierStation(target.id)) return useCarrierStation(s, target.id, w, events);
       if (target.id.startsWith("cabin:")) {
         const fixture = target.id.slice(6);
         if (fixture === "locker") {

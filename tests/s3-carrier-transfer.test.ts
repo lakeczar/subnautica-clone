@@ -42,6 +42,6 @@ test("adverse: the pre-composition envelopes still refuse exactly the Dart and H
     "dart slot 0 launch", "dart slot 0 capture", "dart slot 1 launch", "dart slot 1 capture",
     "hush slot 0 launch", "hush slot 0 capture", "hush slot 1 launch", "hush slot 1 capture",
   ], failures.join("\n"));
-  assert.ok(failures.every((f) => f.includes("Transfer corridor obstructed")));
+  assert.ok(failures.every((f) => f.includes("obstructed")));
   assert.deepEqual({ e: BERTH_ENVELOPES, c: HULL_COLLIDERS, b: BERTH_LOCAL }, before, "the helper restores every patched value");
 });

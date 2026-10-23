@@ -25,6 +25,7 @@ import { CAMPAIGN_PENDING, CAMPAIGN_SITES } from "../content/campaign/index.js";
 import { isStopRestoration, STOP_RESTORATIONS, stopForSite, WORKING_STOPS, type WorkingStop } from "../content/stops.js";
 import { CROWN_BENCH_EXCLUDES, CROWN_BENCH_FROM } from "../content/hub/crownStation.js";
 import { launchCarrier } from "./carrier.js";
+import { aboardCarrier, carrierExteriorInteractions, carrierInteractions } from "./carrierStations.js";
 import { isSuitProtection } from "./ecologyLink.js";
 import type {
   EvidenceId,
@@ -76,6 +77,8 @@ function cabinInteractions(s: GameState): Interaction[] {
 }
 export function interactions(s: GameState): Interaction[] {
   if (cabinHull(s)) return cabinInteractions(s);
+  // UX-1: aboard the Hearthline only its own stations are in reach.
+  if (aboardCarrier(s)) return carrierInteractions(s);
   const targets: Interaction[] = [
     ...Object.entries(SOURCES).map(([id, a]) => ({
       id,
@@ -99,6 +102,7 @@ export function interactions(s: GameState): Interaction[] {
       id, label: r.label, position: r.position, kind: "record" as const,
     })),
     ...storyInteractions(s),
+    ...carrierExteriorInteractions(s),
   ];
   targets.push(
     {
