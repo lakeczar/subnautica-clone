@@ -348,3 +348,12 @@ test("GPU lease: the environment alone is no proof; the second worker's siltwake
   assert.equal(L.leaseProblem({ ...env, SILTWAKE_GPU_LEASE: "alickers-job" }, "0::/system.slice/siltwake-job-42.scope"), null);
   assert.equal(L.leaseProblem(env, "0::/system.slice/siltwake-job-42.scope/sub"), null);
 });
+
+test("config stalls: a class's default stall window, below its limit; an explicit --stall still wins", () => {
+  const r = (o: object, stalls: object) => P.resolveRequest({ class: "playthrough", ...o }, { T: 4, M: 6144, stalls }).goal.stallS;
+  assert.equal(r({}, {}), 900);
+  assert.equal(r({}, { playthrough: 2700 }), 2700);
+  assert.equal(r({ deadline: 1200 }, { playthrough: 2700 }), 1200, "never past the job's own limit");
+  assert.equal(r({ stallS: 600 }, { playthrough: 2700 }), 600);
+  assert.equal(P.resolveRequest({ class: "quick" }, { T: 4, M: 6144, stalls: { playthrough: 2700 } }).goal.stallS, 600, "other classes unchanged");
+});
