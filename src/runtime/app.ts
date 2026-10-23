@@ -29,7 +29,7 @@ import { controlsActive } from "../sim/timeline/activity.js";
 import { regionAtPoint } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
 import { DEFAULT_FLIGHT_SETTINGS, FlightCapture, flightMode, type FlightSettings } from "./flight/capture.js";
-import { gameSample, recordCommand, recordGameEvents, recordTimeline, stageView, timelineHead, SurvivalWatch } from "./flight/game.js";
+import { gameSample, recordCommand, recordGameEvents, stageView, SurvivalWatch, TimelineReader } from "./flight/game.js";
 import { installTestHook, type HookRead } from "./flight/hooks.js";
 import { exposure } from "../sim/survival.js";
 import { BAKE_SOURCE } from "../render/bakeSource.js";
@@ -186,7 +186,7 @@ export class SiltwakeApp {
   /** REC-1 flight recorder (null when off) and its per-frame bookkeeping. */
   private flight: FlightCapture | null = null;
   private flightSettings = readFlightSettings();
-  private flightTimeline = 0;
+  private readonly flightTimeline = new TimelineReader();
   private flightLast = 0;
   private flightHeap: number | null = null;
   private flightHeapTurn = 0;
@@ -588,7 +588,7 @@ export class SiltwakeApp {
         commit: typeof __BUILD_COMMIT__ === "string" ? __BUILD_COMMIT__ : "",
       });
       // A recording turned on mid-session reads the timeline from now, not what passed while it was off.
-      this.flightTimeline = this.timeline ? timelineHead(this.timeline) : 0;
+      this.flightTimeline.start(this.timeline);
       this.renderer.timing = true;
     } catch (error) {
       console.warn(`flight recorder unavailable: ${errorText(error)}`);
@@ -652,7 +652,7 @@ export class SiltwakeApp {
       const t0 = performance.now();
       recordGameEvents(this.flight.recorder, result.state, result.events);
       for (const c of gesture) recordCommand(this.flight.recorder, result.state, c);
-      if (this.timeline) this.flightTimeline = recordTimeline(this.flight.recorder, this.timeline, this.flightTimeline);
+      if (this.timeline) this.flightTimeline.read(this.flight.recorder, this.timeline);
       this.flightSurvival.observe(this.flight.recorder, before, result.state, result.events, now);
       this.flight.recorder.charge(performance.now() - t0, "events");
     }
@@ -770,7 +770,7 @@ export class SiltwakeApp {
   /** Start or resume the timeline for the session just entered (same save session resumes). */
   private startTimeline(): void {
     const meta = this.session.envelope()?.meta;
-    if (!meta || !this.state) { this.timeline = null; return; }
+    if (!meta || !this.state) { this.timeline = null; this.flightTimeline.start(null); return; }
     const options = { regionAt: (x: number, z: number) => regionAtPoint(x, z) };
     let stored: string | null = null;
     try { stored = localStorage.getItem(TIMELINE_STORAGE_KEY); } catch {}
@@ -778,6 +778,8 @@ export class SiltwakeApp {
     this.timeline = parsed?.ok && parsed.value.session.id === meta.sessionId ? resumeRecorder(parsed.value, options)
       : createRecorder({ id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION }, options);
     this.timelineSaved = this.state.tick;
+    // Every timeline arrives here (a reload, a new expedition): the recorder reads it from its head.
+    this.flightTimeline.start(this.timeline);
   }
   /** N: a one-line feedback note stamped with play time and place. */
   private feedbackNote(): void {
@@ -786,7 +788,7 @@ export class SiltwakeApp {
     this.view.noteEntry((text) => {
       if (text && this.timeline && this.state) {
         const no = addNote(this.timeline, this.state, text, new Date().toISOString());
-        if (this.flight) this.flightTimeline = recordTimeline(this.flight.recorder, this.timeline, this.flightTimeline);
+        if (this.flight) this.flightTimeline.read(this.flight.recorder, this.timeline);
         this.view.notify(no ?? "Note saved to the play timeline.", !!no, { channel: "system" });
         this.saveTimeline();
       }
@@ -813,7 +815,6 @@ export class SiltwakeApp {
     this.caves.reset();
     this.caveHolding = false;
     this.startTimeline();
-    this.flightTimeline = this.timeline ? timelineHead(this.timeline) : 0;
     if (this.flight && this.state) {
       const meta = this.session.envelope()?.meta;
       this.flight.recorder.event("load", `expedition entered at tick ${this.state.tick}`, { tick: this.state.tick,

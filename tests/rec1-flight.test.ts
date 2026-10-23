@@ -4,8 +4,8 @@ import { crc32 as nodeCrc32 } from "node:zlib";
 import { FlightRecorder, FRAME_COLUMNS, frameObject, HOLD_CODES, longFrameCause } from "../src/runtime/flight/recorder.js";
 import { crc32, zipBlob } from "../src/runtime/flight/zip.js";
 import { flightMode } from "../src/runtime/flight/capture.js";
-import { recordCommand, recordGameEvents, recordTimeline, timelineHead, timelineSince } from "../src/runtime/flight/game.js";
-import { addNote, createRecorder, recordEvent } from "../src/sim/timeline/recorder.js";
+import { recordCommand, recordGameEvents, recordTimeline, timelineHead, timelineSince, TimelineReader } from "../src/runtime/flight/game.js";
+import { addNote, createRecorder, exportTimeline, recordEvent, resumeRecorder } from "../src/sim/timeline/recorder.js";
 import { createGame } from "../src/sim/state.js";
 
 const frame = (t: number, extra: Record<string, number | string | null> = {}) => ({ t, gap: 16.7, work: 4, sim: 1, steps: 1, chunks: 0.5, caves: 0.2, render: 2, ...extra });
@@ -266,4 +266,47 @@ test("the timeline cursor: a burst of notes is read once and whole; a new record
   assert.ok(!notes.includes("note: before the recording"), "entries before the head are not replayed");
   assert.equal(recordTimeline(r, timeline, cursor), cursor);
   assert.equal(r.events.since(0).items.filter((e) => e.kind === "note").length, 1001, "read once");
+});
+
+// SIM-1 R2-C1: a cursor belongs to one timeline. App entry and replacement go
+// through TimelineReader.start, which takes the head of the timeline it is given.
+const notesIn = (r: FlightRecorder) => r.events.since(0).items.filter((e) => e.kind === "note").map((e) => e.text);
+
+test("re-entering a reloaded timeline past 1,000 entries replays none of them; the next note is read once", () => {
+  const s = createGame(), a = createRecorder({ id: "a", started: "" });
+  for (let i = 0; i < 2500; i++) addNote(a, s, `old ${i}`);
+  const reloaded = resumeRecorder(exportTimeline(a, s));
+  const r = new FlightRecorder(), reader = new TimelineReader();
+  reader.start(reloaded);
+  reader.read(r, reloaded);
+  assert.equal(notesIn(r).length, 0, "the reloaded history is not replayed");
+  addNote(reloaded, s, "after the reload");
+  reader.read(r, reloaded);
+  assert.deepEqual(notesIn(r), ["note: after the reload"]);
+});
+
+test("a timeline replaced by a shorter session: the new one's notes are all read, none hidden by the old count", () => {
+  const s = createGame(), a = createRecorder({ id: "a", started: "" }), r = new FlightRecorder(), reader = new TimelineReader();
+  reader.start(a);
+  for (let i = 0; i < 2500; i++) addNote(a, s, `a ${i}`);
+  reader.read(r, a);
+  assert.equal(notesIn(r).length, 2500);
+  const b = createRecorder({ id: "b", started: "" });
+  reader.start(b);
+  for (let i = 0; i < 3; i++) addNote(b, s, `b ${i}`);
+  reader.read(r, b);
+  assert.deepEqual(notesIn(r).slice(2500), ["note: b 0", "note: b 1", "note: b 2"]);
+});
+
+test("a timeline nobody started is read from its present, never with another timeline's cursor", () => {
+  const s = createGame(), a = createRecorder({ id: "a", started: "" }), r = new FlightRecorder(), reader = new TimelineReader();
+  reader.start(a);
+  for (let i = 0; i < 2500; i++) addNote(a, s, `a ${i}`);
+  reader.read(r, a);
+  const b = createRecorder({ id: "b", started: "" });
+  addNote(b, s, "before anyone read b");
+  reader.read(r, b);
+  addNote(b, s, "b after");
+  reader.read(r, b);
+  assert.deepEqual(notesIn(r).slice(2500), ["note: b after"]);
 });

@@ -76,6 +76,22 @@ export function timelineSince(t: TimelineRecorder, cursor: number): { events: re
   return { events: t.events.slice(cursor), cursor: t.events.length, missed: 0 };
 }
 
+/** The flight recorder's place in the play timeline. A cursor belongs to one
+ * timeline: `start` takes the head of each timeline as it arrives (a new
+ * recording, a reload, a new expedition), so a reloaded history is not replayed
+ * and a stale count from another session never hides the new one's entries. */
+export class TimelineReader {
+  private of: TimelineRecorder | null = null;
+  private at = 0;
+  /** Reads `t` from now on. */
+  start(t: TimelineRecorder | null): void { this.of = t; this.at = t ? timelineHead(t) : 0; }
+  /** Records what `t` gained since the last read. A timeline nobody started is read from its present, never from another's count. */
+  read(rec: FlightRecorder, t: TimelineRecorder): void {
+    if (t !== this.of) this.start(t);
+    this.at = recordTimeline(rec, t, this.at);
+  }
+}
+
 const MILESTONE_KINDS = new Set(["new", "death", "recovery", "system"]);
 /** New play-timeline entries since `cursor`: milestones (with a snapshot), the rest for pacing. Returns the new cursor. */
 export function recordTimeline(rec: FlightRecorder, t: TimelineRecorder, cursor: number): number {
