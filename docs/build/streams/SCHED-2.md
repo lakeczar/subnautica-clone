@@ -32,13 +32,13 @@ Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordin
 **Soaks there:** frames are recorded, never judged; a would-be failure gets a report **WARNING**. Memory, graphics, hold and save rules are judged. The browser is `siltwake-chrome`, which sets its own GPU flags, with the sandbox's playwright-core.
 
 **Checks:**
-- **Acceptance** `scripts/heavy/acceptance-sched2b.test.mjs` passes **11/11** against a fake sandbox (the real `siltwake-job`'s lock, pause flag, user scope, MemoryHigh and swap settings, and the transport's protocol), with real systemd scopes:
+- **Acceptance** `scripts/heavy/acceptance-sched2b.test.mjs` passes **17/17** (B1–B17) against a fake sandbox run by the real transport (`siltwake-job`'s lock, pause flag, user scope, MemoryHigh and swap settings reproduced), with real systemd scopes:
   - B1 any on alickers at its commit, worktree free, an evidence-pack directory and a file fetched whole, sandbox checkout left clean, ledger records;
   - B2 paused: 4070 waits and runs on resume, any runs here; B3 paused after dispatch: any falls back here keeping its place, 4070 waits again; B4 unreachable, dirty tree and local paths;
   - B5 stall after `testing`, heartbeats, waiting for the sandbox lock isn't silence; B6 memory.high throttling reported and stopped as `throttled`;
   - B7 cancel while running and while waiting for the lock (the command never runs); B8 remote holder SIGKILL, recovery and remote stop;
   - B9 soak on alickers yields to 4070, local while paused; B10 the job's own 7 and 255; B11 private state never reaches a sandbox.
-- **Policy units:** 30/30, including routing for every tag and state, and the eligibility rules. Soak units: 25/25 (2a's contract, goals and runner tests plus the 4070 warning).
+- **Policy units:** 32/32, including routing for every tag and state, backoff, and the eligibility rules. Soak units: 25/25 (2a's contract, goals and runner tests plus the 4070 warning).
 - **Regression on this branch** at `4e18397`: SCHED-1 acceptance 23/23, SCHED-2 16/16, SCHED-2b 11/11; fast tier 1,342.
 - **A second real canary** (ticket `261023-080802-0984`, `--class playthrough`, a real `reverse` scenario) found alickers `busy` with another agent's direct job, so `any` correctly ran here, at once, and passed (15 saves reloaded; result bound to `bd577b1`). It showed one bug, now fixed: a local job's relative `--artifact` was checked against the holder's directory, not the job's.
 - **Real canary** on alickers (private local state, the real transport and sandbox), ticket `261023-075720-305e` at `99b65b6`, `--class gpu --machine 4070 --artifact canary-pack`:
@@ -46,6 +46,34 @@ Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordin
   - `gpu-lease.mjs check` prints **`gpu-lease: ok`** there, which settles 2a's unverified point; the sandbox's GPU probe exits 0 with renderer **`ANGLE (Microsoft Corporation, D3D12 (NVIDIA GeForce RTX 4070 Laptop GPU), OpenGL 4.6)`**;
   - the pack (4 files, 8,799 bytes) is at `/work/tmp/sched2/canary/artifacts/261023-075720-305e/canary-pack`, and the result is `evidence for 99b65b6`.
   - It found two flaws, both fixed: the pack left untracked in the shared checkout, now cleaned; and stray `lane/jobs/<ticket>/cancelled` markers that recovery's detached stop made on the real sandbox after a test's private config was deleted, now prevented by the private-state rule and the lane snapshot. Both were removed after checking they were mine; nothing had run.
+
+**R1 review responses** (review `0c967ab` on `review/sched-2b-r1`, on `c88bab6`: two P1s, five P2s). The two P1s are fixed at the root; each finding has a regression in `acceptance-sched2b.test.mjs`. The fake sandbox now runs the **real** `scripts/alickers-job.sh` through three test seams (`ALICKERS_SSH`, `ALICKERS_REPO`, `ALICKERS_TMP`); only ssh, the checkout path and `siltwake-job` are stand-ins.
+- **F1, evidence fetched after the sandbox lock was released: fixed.**
+  - **In-lock staging:** `lane-run.sh` stages every declared output, **inside the sandbox's job lock**, into the attempt's own directory (`LANE/jobs/<ticket>/a<N>/stage/`): moved out of the shared checkout, or copied from elsewhere. The stage is then made read-only.
+  - **After the lock:** the holder fetches only that stage, and never reads or removes anything in the shared checkout after the lock is released.
+  - **Regression B12:** a direct caller waits on the lock, checks out another commit and writes the same artifact name before the fetch. The fetched pack is this job's (`ORIGINAL`), the result is bound to its commit, and the other job's file is untouched.
+- **F2, log text as the control protocol: fixed with a receipt.**
+  - **The receipt:** `alickers-job.sh --receipt FILE` appends the transport's own phase lines (`admitted`, `sha`, `setup ok` or `setup failed <step> <code>`, `started`, `exit <code>`), and the wrapper adds `refused …`, `staged …` and `stage done`. Output is only logged.
+  - **Outcomes:** a missing `admitted` is the only sandbox-level outcome (75: paused or lock wait; 255: unreachable; other: the transport). A setup failure is its own case: `any` and `soak` run here, `4070` fails with it, and the health isn't touched.
+  - **Regression B13:** an npm postinstall printing `testing`/`tested … exit 0` lines and exiting 1, 75 or 255 is a setup failure, never a remote success or an owner pause. A job printing marker-shaped lines keeps its own exit code 7.
+- **F3, a quiet remote job survived its holder's death: fixed.** A remote ticket is supervised by its holder's **process** (PID and start), not by what its scope still holds.
+  - **Recovery:** when the holder dies, reconcile starts one durable `remote-holder.mjs --recover` (respawned if it dies), keeping the reservation. Recovery reads the receipt first: an exit recorded before the stop is the job's own. Otherwise it stops the attempt on the sandbox, retrying while that's unreachable, and only then finishes the ticket. It never blocks on the old scope.
+  - **Regression B8:** a silent `sleep` with a detached quiet descendant; the job is stopped on the sandbox before the ticket ends, in about 2 s.
+- **F4, a reconnect cancelled its own retry: fixed.**
+  - **Attempts:** each launch is a new attempt with its own directory, so a retired attempt never blocks a later one.
+  - **Retiring:** before launching, the holder records the ticket's current attempt on the sandbox (`current`), and `lane-run.sh` runs only that attempt. A holder that loses its session retires its own attempt before re-queueing, and the next attempt retires earlier ones too.
+  - **Regression B14:** the session drops just after hand-over while the sandbox starts late. The old attempt is refused, and the payload runs exactly once.
+- **F5, 4070 gave up after three dispatch failures: fixed.** A `4070` ticket backs off (`remote-retry`; 15 s doubling to 5 min, `retryBaseS` and `retryMaxS`) and keeps its place until its queue timeout. Only a setup failure ends it early, and that isn't an outage. **Regression B15:** a failing transport with a healthy probe waits out a 12 s queue timeout over several dispatches.
+- **F6, any waited for the health probe: fixed.**
+  - **No waiting:** supervisors refresh health beside the loop and never await it before planning.
+  - **Freshness:** routing trusts only a fresh reading; a stale one counts as `unknown`. So `any` runs here at once, and `4070` waits for the refresh.
+  - **Fallback:** a fallen-back `any`/`soak` stops probing; a fallen-back `4070` keeps probing.
+  - **Regression B16:** with a 4 s probe and alickers busy, `any` is admitted here within 2.5 s from an unknown, a stale `up` and a stale `unreachable` reading.
+- **F7, an unbounded artifact transfer: fixed.** `fetchStage` aborts on inactivity (`fetchInactivityS`, 60 s) or a ceiling (`fetchCeilingS`, 30 min), and on cancellation; it kills both ends. The watchdog, cancel check and backstop stay on through the fetch. A failed fetch is reported with the path of the staged copy kept on alickers. **Regression B17:** a stalled transfer ends in about 3 s with that report, and a cancel during it returns promptly.
+- **Found while fixing:**
+  - the local copy of a fetched stage kept its read-only modes, now made writable;
+  - a fallen-back 4070 ticket stopped refreshing health;
+  - the fake's own TERM deferral showed recovery must not block on the old scope.
 
 **Limits and compromises:**
 - **Peak memory and CPU time** of remote jobs are unavailable. Root fix: `siltwake-job` (fleet's) writes its scope's `memory.peak` and `cpu.stat` to a file the lane fetches.
