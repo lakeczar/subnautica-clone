@@ -26,13 +26,27 @@ const merge = (a, b) => {
   return a;
 };
 
+/** A provider's memory and graphics values must be finite numbers: anything
+ * else (a missing metric divided into NaN, an absent counter) is dropped and
+ * reported as unavailable, never passed on as a measurement (R2-F1). */
+function finite(name, part) {
+  for (const group of ["memory", "graphics"]) {
+    for (const [k, v] of Object.entries(part?.[group] ?? {})) {
+      if (typeof v === "number" && Number.isFinite(v)) continue;
+      delete part[group][k];
+      if (v !== null) (part.unavailable ??= []).push(`${name}: ${k} not measured (got ${String(v)})`);
+    }
+  }
+  return part;
+}
+
 export function createProbe(providers) {
   return {
     providers: providers.map((p) => p.name),
     async sample(ctx = {}) {
       const s = { at: ctx.at ?? null, memory: {}, graphics: {}, frames: {}, holds: {}, saves: [], unavailable: [] };
       for (const p of providers) {
-        try { merge(s, await p.sample(ctx)); } catch (e) { s.unavailable.push(`${p.name}: ${e.message.split("\n")[0]}`); }
+        try { merge(s, finite(p.name, await p.sample(ctx))); } catch (e) { s.unavailable.push(`${p.name}: ${e.message.split("\n")[0]}`); }
       }
       return s;
     },
@@ -46,7 +60,9 @@ export function cdpHeap(cdp) {
   return {
     name: "cdp-heap",
     async sample(ctx) {
-      const v = (await heap()) / MiB;
+      const bytes = await heap();
+      if (!(typeof bytes === "number" && Number.isFinite(bytes) && bytes > 0)) return { unavailable: ["cdp-heap: Performance.getMetrics reported no JSHeapUsedSize"] };
+      const v = bytes / MiB;
       return { memory: { jsHeapMiB: v, ...(ctx.afterGc ? { jsHeapAfterGcMiB: v } : {}) } };
     },
   };

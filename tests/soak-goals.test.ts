@@ -12,7 +12,7 @@ const status = (v: { rules: { id: string; status: string }[] }, id: string) => v
 
 test("tour: three laps with flat memory and graphics pass; the goal is laps, not time", () => {
   const frames = { judged: true, attributed: true, observed: 500, streamingOver: [] };
-  const holds = { available: true, list: [] };
+  const holds = { available: true, covered: true, list: [] };
   assert.equal(G.evaluateTour({ laps: [lap(1, 1000), lap(2, 1020)], frames, holds, saves: [{ ok: true }] }, T).status, "running");
   const v = G.evaluateTour({ laps: [lap(1, 1000), lap(2, 1020), lap(3, 1040)], frames, holds, saves: [{ ok: true }, { ok: true }] }, T);
   assert.equal(v.status, "pass", JSON.stringify(v.rules));
@@ -21,7 +21,7 @@ test("tour: three laps with flat memory and graphics pass; the goal is laps, not
 });
 
 test("tour: each rule breaks the soak early, with a reason", () => {
-  const ok = { frames: { judged: true, attributed: true, observed: 500, streamingOver: [] }, holds: { available: true, list: [] }, saves: [] };
+  const ok = { frames: { judged: true, attributed: true, observed: 500, streamingOver: [] }, holds: { available: true, covered: true, list: [] }, saves: [] };
   const grown = G.evaluateTour({ ...ok, laps: [lap(1, 1000), lap(2, 1060)] }, T);
   assert.equal(grown.status, "fail"); // already over 5% at lap 2: stop now
   assert.match(grown.reason, /memory-growth:rendererRssMiB: lap 1 1000 MiB → lap 2 1060 MiB \(6%\)/);

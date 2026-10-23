@@ -14,12 +14,12 @@ const S = await import(pathToFileURL(resolve("scripts/soak/soak.mjs")).href);
 const G = await import(pathToFileURL(resolve("scripts/soak/goals.mjs")).href);
 const P = await import(pathToFileURL(resolve("scripts/soak/probe.mjs")).href);
 
-type World = { heap: number; meshes: number; cam: number[]; calls: number; gotos: number[][]; leak: number; leakMeshes: number };
+type World = { heap: number; meshes: number; cam: number[]; calls: number; gotos: number[][]; leak: number; leakMeshes: number; holdOnce: number; heapMetric: boolean };
 type Provider = { name: string; sample: () => Promise<Record<string, unknown>> };
 class Blocked extends Error {}
 
 function fake(over: Partial<World> = {}, { failing = [] as string[], attributed = true } = {}) {
-  const w: World = { heap: 100, meshes: 900, cam: [0, 0, 0], calls: 0, gotos: [], leak: 0, leakMeshes: 0, ...over };
+  const w: World = { heap: 100, meshes: 900, cam: [0, 0, 0], calls: 0, gotos: [], leak: 0, leakMeshes: 0, holdOnce: 0, heapMetric: true, ...over };
   const provider = (name: string, fn: () => Record<string, unknown>): Provider => ({ name, sample: async () => { if (failing.includes(name)) throw new Error(`${name} broke`); return fn(); } });
   const deps = {
     Blocked, createProbe: P.createProbe, collectGarbage: async () => {},
@@ -36,7 +36,7 @@ function fake(over: Partial<World> = {}, { failing = [] as string[], attributed 
     providers: () => ({
       full: [provider("memory", () => ({ memory: { rendererRssMiB: w.heap, gpuRssMiB: 400, jsHeapAfterGcMiB: w.heap }, graphics: { meshes: w.meshes, materials: 80, textures: 60, geometries: 700 } }))],
       tick: [
-        provider("frames", () => ({ frames: { count: 10, worstMs: 16, over: [], attributed, streaming: attributed ? [] : null } })),
+        provider("frames", () => ({ frames: { count: 10, worstMs: 16, over: [], attributed, streaming: attributed ? [] : null, holdFrames: attributed ? (w.holdOnce-- > 0 ? 1 : 0) : null } })),
         provider("ocean-dataset", () => ({ holds: { available: true, held: false } })),
         provider("save-journal", () => { w.calls++; return { lastSave: { savedAt: String(Math.floor(w.calls / 3)), tick: w.calls } }; }),
       ],
@@ -122,4 +122,68 @@ test("dwell: the goal needs the leak window, so a slow leak is judged before any
   const short = G.evaluateDwell({ samples: [{ at: 0, memory: { rendererRssMiB: 1 } }, { at: 1, memory: { rendererRssMiB: 1 } }, { at: 2, memory: { rendererRssMiB: 1 } }],
     autosaves: [], frames: { judged: true }, now: 2 }, { ...G.DEFAULTS.dwell, warmupS: 0 });
   assert.match(short.unavailable.join("\n"), /leak: settled samples span 0 of the 10 min/);
+});
+
+// SCHED-2a R2 ---------------------------------------------------------------
+
+test("R2-F1: a CDP heap metric that is missing is unavailable through the real provider, so the tour is partial, never pass", async () => {
+  const { deps } = fake();
+  const base = deps.providers;
+  const cdp = { send: async (m: string) => (m === "Performance.getMetrics" ? { metrics: [] } : {}) };
+  deps.providers = () => {
+    const ps = base();
+    const mem = ps.full[0]!;
+    return { ...ps, full: [{ name: "memory", sample: async () => { const s = await mem.sample() as { memory: Record<string, number> }; delete s.memory.jsHeapAfterGcMiB; return s; } }, P.cdpHeap(cdp)] };
+  };
+  const r = await S.runSoak(opts("tour"), deps);
+  assert.equal(r.verdict.status, "partial", JSON.stringify(r.verdict.rules));
+  const heap = r.verdict.rules.find((x: { id: string }) => x.id === "memory-growth:jsHeapAfterGcMiB");
+  assert.equal(heap.status, "unavailable");
+  assert.match(JSON.stringify(r.run.providerErrors), /cdp-heap/);
+  // And defensively in the goals: a NaN that got through is no measurement.
+  const lapN = (n: number, heap: number) => ({ lap: n, memory: { rendererRssMiB: 100, gpuRssMiB: 100, jsHeapAfterGcMiB: heap }, graphics: { meshes: 1, materials: 1, textures: 1, geometries: 1 } });
+  const v = G.evaluateTour({ laps: [lapN(1, NaN), lapN(2, NaN)], frames: { judged: true, attributed: true, observed: 9, streamingOver: [] }, holds: { covered: true, list: [] } }, G.DEFAULTS.tour);
+  assert.equal(v.rules.find((x: { id: string }) => x.id === "memory-growth:jsHeapAfterGcMiB").status, "unavailable");
+});
+
+test("R2-F2: a hold the per-frame record saw between two state polls fails the tour (the real frames provider)", async () => {
+  const { w, deps } = fake();
+  const base = deps.providers;
+  const g = globalThis as unknown as { window: Record<string, unknown> };
+  const page = { evaluate: async (fn: (a: unknown) => unknown, arg: unknown) => {
+    // One recorded hold frame, entirely between polls: the current state is clear.
+    g.window = { __soakGaps: [16, 16, 16], __siltwakePerf: [{ total: 16, parts: {}, hold: w.holdOnce-- > 0 }, { total: 16, parts: {} }] };
+    return fn(arg);
+  } };
+  w.holdOnce = 1;
+  deps.providers = () => { const ps = base(); return { ...ps, tick: [P.frames(page), ...ps.tick.slice(1)] }; };
+  const r = await S.runSoak(opts("tour"), deps);
+  assert.equal(r.verdict.status, "fail", JSON.stringify(r.verdict.rules));
+  assert.match(r.verdict.reason, /loading-hold: hold at .* \(1 frames recorded\)/);
+  // No hold recorded: pass; without a per-frame record, the rule is unproven.
+  const clear = await S.runSoak(opts("tour"), fake().deps);
+  assert.equal(clear.verdict.rules.find((x: { id: string }) => x.id === "loading-hold").status, "pass");
+  const polled = await S.runSoak(opts("tour"), fake({}, { attributed: false }).deps);
+  assert.equal(polled.verdict.rules.find((x: { id: string }) => x.id === "loading-hold").status, "unavailable");
+});
+
+test("R2-F3: an autosave with no frame time, then a measured 70 ms autosave hitch: the dwell fails and stops", async () => {
+  const { deps } = fake();
+  const base = deps.providers;
+  let k = 0;
+  deps.providers = () => {
+    const ps = base();
+    return { ...ps, tick: [
+      { name: "frames", sample: async () => { k++; return { frames: k < 6 ? { count: 0, worstMs: null, over: [], attributed: true, streaming: [], holdFrames: 0 } : { count: 10, worstMs: 70, over: [70], attributed: true, streaming: [], holdFrames: 0 } }; } },
+      { name: "save-journal", sample: async () => ({ lastSave: { savedAt: String(Math.floor(k / 3)), tick: k } }) },
+      ps.tick[1]!,
+    ] };
+  };
+  const r = await S.runSoak(opts("dwell"), deps);
+  assert.equal(r.verdict.status, "fail", JSON.stringify(r.verdict.rules));
+  assert.match(r.verdict.reason, /autosave-hitch: 1 autosave frames over 33 ms, worst 70 ms/);
+  assert.equal(r.run.autosaves[0].frameMs, null, "the first autosave had no frame time");
+  // The same on a streaming rule: a measured violation stands after attribution is lost.
+  const v = G.evaluateTour({ laps: [], frames: { judged: true, attributed: false, observed: 0, streamingOver: [{ ms: 48, where: "seam" }] }, holds: { covered: true, list: [] } }, G.DEFAULTS.tour);
+  assert.equal(v.status, "fail");
 });
