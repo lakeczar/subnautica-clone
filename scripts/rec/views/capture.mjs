@@ -69,7 +69,8 @@ try {
     result.views.push({ id: v.id, group: v.group, label: v.label, file, sha256: sha, settled, settleMs: Date.now() - t0, hold: last?.hold ?? null,
       // A frozen view draws the same pixels twice; anything else animates outside the sim clock.
       stable: a === c, ...(moved >= 1 ? { relocatedM: Math.round(moved * 10) / 10 } : {}), ...(settled ? {} : { unsettled: last }) });
-    log(v.id, settled ? "settled" : "UNSETTLED", `${Date.now() - t0} ms`, a === c ? "stable" : "ANIMATES");
+    log(v.id, settled ? "settled" : `UNSETTLED ${JSON.stringify(last)}${moved >= 1 ? ` moved ${moved.toFixed(1)} m` : ""}`, `${Date.now() - t0} ms`,
+      a === c ? "stable" : `ANIMATES (${a.length} vs ${c.length} base64 chars)`);
   }
 } catch (e) {
   result.errors.push(String(e?.stack ?? e).slice(0, 1000));
