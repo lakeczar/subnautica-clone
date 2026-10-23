@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { heavyJobGuard } from "./build-guard.mjs";
 import { sliceLimits } from "./policy.mjs";
 import { alive, scopePopulated } from "./state.mjs";
-import { context, hc, here, holderOf, killOwned, read, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
+import { blockedBy, context, hc, here, holderOf, killOwned, read, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
 
 const fast = { minStallS: 1, soakYieldS: 3 };
 const log = (c, id) => readFileSync(join(c.sched, "jobs", id, "output.log"), "utf8");
@@ -87,6 +87,48 @@ test("S4: a soak runs at idle CPU on leftover capacity, gets a yield notice when
   assert.equal(waitFor(c, quiet).code, 0);
 });
 
+test("S4b (R1-F8): a soak yields to a job queued in its own worktree; the job starts once the soak's cgroup is empty", async () => {
+  const c = context("soak-same-tree", { config: fast });
+  const w = c.wt("s");
+  const soak = submit(c, w, "--class", "soak", "--", "sh", "-c", "while :; do echo tick; sleep 0.5; done");
+  await running(c, soak);
+  const review = submit(c, w, "--class", "quick", "--review", "--", "sh", "-c", "echo reviewed");
+  assert.equal(blockedBy(c, review), "worktree");
+  const ws = waitFor(c, soak);
+  assert.equal(ws.code, 75, ws.err);
+  assert.match(ws.err, /preempted: the soak yielded to .* after a 3s notice/);
+  const wr = waitFor(c, review);
+  assert.equal(wr.code, 0, wr.err);
+  assert.ok(result(c, review).admittedAt >= result(c, soak).endedAt - 50, "one job per worktree still holds");
+});
+
+test("S15 (R1-F4): a job built into a sibling directory protects that directory, also after its holder dies", async () => {
+  const c = context("sibling-build", { config: fast });
+  const w = c.wt("r");
+  writeFileSync(join(w, "package.json"), "{}");
+  const env = { SILTWAKE_TEST_BUILD: ".test-build-review" };
+  const bad = hc(c, ["submit", "--class", "quick", "--", "true"], { cwd: w, env: { SILTWAKE_TEST_BUILD: "../elsewhere" } });
+  assert.equal(bad.code, 2);
+  const r = hc(c, ["submit", "--class", "quick", "--", "python3", "-c", "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); open('ready','w').close(); time.sleep(60)"], { cwd: w, env });
+  assert.equal(r.code, 0, r.err);
+  const id = r.out.trim();
+  await until("ready", () => existsSync(join(w, "ready")));
+  const tk = await holderOf(c, id);
+  assert.equal(existsSync(join(w, ".test-build-review", ".heavy-job")), true);
+  assert.equal(existsSync(join(w, ".test-build", ".heavy-job")), false);
+  assert.match(heavyJobGuard(w, c.env, ".test-build-review") ?? "", new RegExp(`ticket ${id}`));
+  assert.equal(heavyJobGuard(w, c.env, ".test-build"), null, "the default directory is free");
+  assert.equal(heavyJobGuard(w, c.env, ".test-build-other"), null, "so is any other sibling");
+  killOwned(tk.holder); // BindsTo stops the job; it ignores TERM, so it lingers for the stop grace
+  await sleep(500);
+  assert.equal(scopePopulated(tk.unit), true);
+  assert.match(heavyJobGuard(w, c.env, ".test-build-review") ?? "", /is running/, "holder gone, job alive: still protected");
+  const wr = waitFor(c, id);
+  assert.equal(wr.code, 137, wr.err);
+  assert.equal(heavyJobGuard(w, c.env, ".test-build-review"), null);
+  assert.equal(existsSync(join(w, ".test-build-review", ".heavy-job")), false, "recovery removed the sibling's marker");
+});
+
 test("S5: a worktree that changed between submit and admission is rejected (3); the command never runs", async () => {
   const c = context("reject", { config: fast });
   const repo = c.repo("r"), out = join(c.dir, "ran");
@@ -129,6 +171,18 @@ test("S6: --snapshot tests the tree as submitted while the worktree keeps changi
   assert.equal(rd.evidence.why, "uncommitted changes");
   assert.match(wd.err, /NOT evidence for a commit: uncommitted changes/);
   assert.equal(existsSync(join(rd.snapshot.root, "new-output.txt")), true);
+  // R1-F1: a snapshot is writable. A job that edits a tracked file, or moves
+  // HEAD, in its snapshot no longer tests the submitted commit.
+  gitIn(repo, "checkout", "-q", "--", "file.txt"); // the worktree is clean again: bound case below
+  const edits = submit(c, repo, "--class", "quick", "--snapshot", "--", "sh", "-c", `echo different-source > file.txt; cat file.txt > ${out}`);
+  const we = waitFor(c, edits);
+  assert.equal(readFileSync(out, "utf8"), "different-source\n");
+  const re = result(c, edits);
+  assert.deepEqual([re.evidence.bound, re.changedDuringRun, re.snapshot.kept], [false, true, true]);
+  assert.match(we.err, /NOT evidence for a commit: the job changed its snapshot's tracked files or HEAD/);
+  const moves = submit(c, repo, "--class", "quick", "--snapshot", "--", "sh", "-c", "git -c user.name=t -c user.email=t@t commit -q --allow-empty -m moved");
+  waitFor(c, moves);
+  assert.equal(result(c, moves).evidence.bound, false, "a moved HEAD unbinds it too");
 });
 
 test("S7: a tree that changes while the job runs makes the result unbound, with a warning", async () => {
@@ -178,6 +232,9 @@ test("S8 (R5 P3): a reservation OOM stays classified when the holder was frozen 
   assert.equal(r.reservationOom, true);
   assert.equal(r.oomEvidence, "memory.events.local (wrapper)");
   assert.ok(r.oomKills >= 1, `oomKills ${r.oomKills}`);
+  // R1 P3: recovery keeps what was submitted, and never binds evidence it did not check.
+  assert.equal(r.head, null, "submitted outside git: no commit to keep");
+  assert.deepEqual(r.evidence, { commit: null, bound: false, why: "recovered: no observer checked the tree at the end", snapshot: false });
 });
 
 test("S9: after an admission the live slice has the machine's cpu.max and memory.max (nested slice name)", async () => {
@@ -218,6 +275,32 @@ test("S10: the GPU lease holds only inside a GPU ticket's scope; the Chrome guar
   // Removing the guard restores the real binary.
   spawnSync("bash", [join(here, "install.sh"), "--gpu-guard-remove"], { env: { ...c.env, SILTWAKE_SCHED_HOME: home, SILTWAKE_PLAYWRIGHT_DIR: pw } });
   assert.equal(readFileSync(bin).subarray(1, 4).toString(), "ELF");
+  // R1-F5: the guard does not depend on the scheduler's install. Re-wrap,
+  // then roll the scheduler back to SCHED-1 (its real installer), uninstall it,
+  // and finally lose the checker: a GPU launch without a lease is refused every
+  // time, a leased one still works after the rollback, software always passes.
+  const envH = { ...c.env, SILTWAKE_SCHED_HOME: home, SILTWAKE_PLAYWRIGHT_DIR: pw };
+  assert.equal(spawnSync("bash", [join(here, "install.sh"), "--gpu-guard"], { env: envH }).status, 0);
+  const old = join(c.dir, "sched1");
+  mkdirSync(old);
+  assert.equal(spawnSync("sh", ["-c", `git -C ${here} archive 1f31c87 -- :/scripts/heavy | tar -x -C ${old}`]).status, 0);
+  const launch = (args) => spawnSync(bin, args, { env: c.env, encoding: "utf8" });
+  assert.equal(spawnSync("bash", [join(old, "install.sh")], { env: envH, encoding: "utf8" }).status, 0);
+  assert.match(readFileSync(join(home, "current", "heavy-check.mjs"), "utf8"), /heavy-check v2/);
+  assert.equal(existsSync(join(home, "current", "chrome-guard.sh")), false, "the rolled-back scheduler has no guard of its own");
+  assert.equal(launch(["--use-angle=gl-egl", "x"]).status, 2, "rolled back: still refused");
+  assert.equal(launch(["--headless=new", "sw"]).status, 0);
+  const leased = submit(c, c.wt("g2"), "--class", "gpu", "--", bin, "--use-angle=gl-egl", "leased-after-rollback");
+  assert.equal(waitFor(c, leased).code, 0);
+  assert.match(log(c, leased), /leased-after-rollback/);
+  spawnSync("rm", ["-f", join(home, "current")]);
+  assert.equal(launch(["--use-angle=gl-egl", "x"]).status, 2, "scheduler uninstalled: still refused");
+  spawnSync("rm", ["-f", join(home, "guard", "current")]);
+  const lost = launch(["--use-angle=gl-egl", "x"]);
+  assert.equal(lost.status, 2);
+  assert.match(lost.stderr, /GPU lease enforcement is unavailable/);
+  assert.equal(launch(["--headless=new", "sw"]).status, 0);
+  spawnSync("bash", [join(here, "install.sh"), "--gpu-guard-remove"], { env: envH });
   spawnSync("chmod", ["-R", "u+w", home]);
 });
 

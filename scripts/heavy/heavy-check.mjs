@@ -126,8 +126,11 @@ async function submit(opts, command, { quiet = false } = {}) {
     if (s.error) { rmSync(dir, { recursive: true, force: true }); fail(`--snapshot: ${s.error}`, 1); }
     snapshot = { ...s, status: snapshotStatus(s.root) };
   }
+  // The job inherits this environment, so its tests read this build directory (R1-F4).
+  const testBuild = process.env.SILTWAKE_TEST_BUILD || ".test-build";
+  if (!/^\.test-build(-[A-Za-z0-9_.]+)?$/.test(testBuild)) fail(`SILTWAKE_TEST_BUILD=${testBuild}: use .test-build-<name>`);
   writeJsonAtomic(join(dir, "request.json"), {
-    id, key, worktree, cwd, argv: command, opts: { ...opts, class: cls }, req, tree, snapshot,
+    id, key, worktree, cwd, argv: command, opts: { ...opts, class: cls }, req, tree, snapshot, testBuild,
     submittedAt: Date.now(), queueTimeoutS: opts.queueTimeoutS ?? cfg.queueTimeoutS,
   });
   writeFileSync(join(dir, "output.log"), "");

@@ -114,7 +114,9 @@ if (rejected) note(rejected);
 // The marker names the units whose cgroups decide whether the job is alive
 // (build-guard.mjs), not a process ID. A snapshot job uses its own copy's
 // .test-build, so the worktree's stays free.
-const marker = join(t.worktree, ".test-build", ".heavy-job");
+// The build directory the job was submitted with (SILTWAKE_TEST_BUILD, R1-F4):
+// that is the one its tests read, so that is the one protected.
+const marker = join(t.worktree, t.testBuild ?? ".test-build", ".heavy-job");
 // --no-test-build: the caller declares the job never reads it (GPU play from dist).
 const writesMarker = !snap && !rejected && !t.opts?.noTestBuild && existsSync(join(t.worktree, "package.json"));
 if (writesMarker) {
@@ -294,14 +296,15 @@ if (gpuShared.size) note(`the GPU was also used outside the lease by: ${[...gpuS
 if (context && (context.cpuSomeMax >= 10 || context.memFullMax >= 1 || gpuShared.size)) context.disturbed = true;
 
 // Evidence binding: a result is evidence for a commit only if the tree was
-// that clean commit when admitted and stayed so (a snapshot always does).
-const treeAtEnd = snap || rejected ? null : gitTree(t.cwd);
+// that clean commit when admitted and stayed so to the end. A snapshot is
+// writable too, so it is checked the same way (R1-F1).
+const treeAtEnd = rejected || !launched ? null : gitTree(runCwd);
 const changedDuringRun = Boolean(treeAtEnd) && (treeAtEnd.head !== treeAtAdmit.head || treeAtEnd.tracked !== treeAtAdmit.tracked);
-if (changedDuringRun) note(`warning: the worktree changed while the job ran (${short(treeAtAdmit)} → ${short(treeAtEnd)}); this result is not evidence for ${treeAtAdmit.head?.slice(0, 10)}`);
+if (changedDuringRun) note(`warning: ${snap ? "the job changed its snapshot" : "the worktree changed while the job ran"} (${short(treeAtAdmit)} → ${short(treeAtEnd)}); this result is not evidence for ${treeAtAdmit.head?.slice(0, 10)}`);
 const evidence = rejected ? null : {
   commit: treeAtAdmit.head,
   bound: Boolean(treeAtAdmit.head) && treeAtAdmit.dirty === "clean" && !changedDuringRun,
-  why: !treeAtAdmit.head ? "not a git tree" : treeAtAdmit.dirty !== "clean" ? "uncommitted changes" : changedDuringRun ? "the worktree changed while it ran" : null,
+  why: !treeAtAdmit.head ? "not a git tree" : treeAtAdmit.dirty !== "clean" ? "uncommitted changes" : changedDuringRun ? (snap ? "the job changed its snapshot's tracked files or HEAD" : "the worktree changed while it ran") : null,
   snapshot: Boolean(snap),
 };
 const keptSnapshot = snap ? dropSnapshot(snap.root, snap.status) : null;

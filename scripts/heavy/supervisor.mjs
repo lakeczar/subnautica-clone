@@ -56,7 +56,7 @@ const ack = transaction(cfg, (state) => {
   const { goal, ...req } = request.req;
   state.tickets[id] = {
     id, seq: state.seq, key: request.key, worktree: request.worktree, cwd: request.cwd, argv: request.argv,
-    opts: request.opts, req, goal, state: "queued", submittedAt: request.submittedAt,
+    opts: request.opts, req, goal, testBuild: request.testBuild ?? ".test-build", state: "queued", submittedAt: request.submittedAt,
     queueTimeoutS: request.queueTimeoutS, supervisor: me,
   };
   return { changed: true, result: { ticket: id } };

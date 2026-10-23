@@ -11,7 +11,7 @@ const lap = (n: number, rss: number, meshes = 900) => ({ lap: n, memory: { rende
 const status = (v: { rules: { id: string; status: string }[] }, id: string) => v.rules.find((r) => r.id === id)?.status;
 
 test("tour: three laps with flat memory and graphics pass; the goal is laps, not time", () => {
-  const frames = { judged: true, attributed: true, streamingOver: [] };
+  const frames = { judged: true, attributed: true, observed: 500, streamingOver: [] };
   const holds = { available: true, list: [] };
   assert.equal(G.evaluateTour({ laps: [lap(1, 1000), lap(2, 1020)], frames, holds, saves: [{ ok: true }] }, T).status, "running");
   const v = G.evaluateTour({ laps: [lap(1, 1000), lap(2, 1020), lap(3, 1040)], frames, holds, saves: [{ ok: true }, { ok: true }] }, T);
@@ -21,12 +21,12 @@ test("tour: three laps with flat memory and graphics pass; the goal is laps, not
 });
 
 test("tour: each rule breaks the soak early, with a reason", () => {
-  const ok = { frames: { judged: true, attributed: true, streamingOver: [] }, holds: { available: true, list: [] }, saves: [] };
+  const ok = { frames: { judged: true, attributed: true, observed: 500, streamingOver: [] }, holds: { available: true, list: [] }, saves: [] };
   const grown = G.evaluateTour({ ...ok, laps: [lap(1, 1000), lap(2, 1060)] }, T);
   assert.equal(grown.status, "fail"); // already over 5% at lap 2: stop now
   assert.match(grown.reason, /memory-growth:rendererRssMiB: lap 1 1000 MiB → lap 2 1060 MiB \(6%\)/);
   assert.equal(G.evaluateTour({ ...ok, laps: [lap(1, 1000), lap(2, 1000, 950)] }, T).broken[0], "graphics-growth:meshes");
-  const hitch = G.evaluateTour({ ...ok, frames: { judged: true, attributed: true, streamingOver: [{ ms: 48, where: "basin seam" }] } }, T);
+  const hitch = G.evaluateTour({ ...ok, frames: { judged: true, attributed: true, observed: 500, streamingOver: [{ ms: 48, where: "basin seam" }] } }, T);
   assert.match(hitch.reason, /streaming-frame: 1 streaming frames over 33 ms, worst 48 ms at basin seam/);
   assert.equal(G.evaluateTour({ ...ok, holds: { available: true, list: [{ where: "fanvault", state: "waiting" }] } }, T).broken[0], "loading-hold");
   assert.match(G.evaluateTour({ ...ok, saves: [{ ok: false, label: "lap 1", error: "tick went back" }] }, T).reason, /save-reload: save at lap 1 did not reload: tick went back/);
@@ -35,7 +35,7 @@ test("tour: each rule breaks the soak early, with a reason", () => {
 });
 
 test("tour: shared-run frame times are recorded, not judged; missing measurements are listed, not proxied", () => {
-  const v = G.evaluateTour({ laps: [lap(1, 1000)], frames: { judged: false, attributed: true, streamingOver: [{ ms: 90 }] }, holds: { available: false } }, T);
+  const v = G.evaluateTour({ laps: [lap(1, 1000)], frames: { judged: false, attributed: true, observed: 500, streamingOver: [{ ms: 90 }] }, holds: { available: false } }, T);
   assert.equal(status(v, "streaming-frame"), "recorded");
   assert.notEqual(v.status, "fail");
   const u = G.evaluateTour({ laps: [lap(1, 1000)], frames: { judged: true, attributed: false, streamingOver: [] }, holds: { available: false } }, T);
@@ -44,12 +44,13 @@ test("tour: shared-run frame times are recorded, not judged; missing measurement
   assert.equal(u.unavailable.length, 2);
 });
 
-test("dwell: flat memory over the autosave goal passes; a slow leak or a jump fails; day–night is missing", () => {
+test("dwell: flat memory over the goal passes (partial while day–night is missing); a slow leak or a jump fails; day–night is missing", () => {
   const flat = Array.from({ length: 40 }, (_, i) => ({ at: i * 30, memory: { rendererRssMiB: 1000 + (i % 3), gpuRssMiB: 400, jsHeapAfterGcMiB: 120 } }));
   const saves = Array.from({ length: 20 }, (_, i) => ({ at: 30 + i * 30, frameMs: 18 }));
   const v = G.evaluateDwell({ samples: flat, autosaves: saves, frames: { judged: true }, now: 620 }, D);
-  assert.equal(v.status, "pass", JSON.stringify(v.rules));
+  assert.equal(v.status, "partial", JSON.stringify(v.rules)); // goal met, nothing broke, day–night unproven
   assert.equal(status(v, "day-night"), "unavailable");
+  assert.equal(G.evaluateDwell({ samples: flat, autosaves: saves, frames: { judged: true }, dayNight: { available: true, cycles: 1 }, now: 620 }, D).status, "pass");
   assert.equal(status(v, "leak:rendererRssMiB"), "pass");
   const leaking = flat.map((s, i) => ({ ...s, memory: { ...s.memory, jsHeapAfterGcMiB: 120 + i * 0.4 } })); // 48 MiB/h, inside 5% for a while
   const lv = G.evaluateDwell({ samples: leaking.slice(0, 25), autosaves: saves.slice(0, 10), frames: { judged: true }, now: 750 }, D);

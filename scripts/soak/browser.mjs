@@ -7,7 +7,7 @@
 // Follows docs/BROWSER_RULES.md: own profile, own port, closes what it opens.
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { requireGpuLease } from "../heavy/gpu-lease.mjs";
 import { frameRecorderScript } from "./probe.mjs";
@@ -123,26 +123,35 @@ export async function goto(g, t, { tol = 3, label = "", timeoutS = 300, boost = 
   return true;
 }
 
-/** "Every save reloads": a manual save (F5), the page reloaded, Continue, and
- * the game must come back where it was, no earlier than the saved tick. */
-export async function saveAndReload(g, label) {
-  const before = await read(g);
-  const journal = () => g.page.evaluate(() => { try { return JSON.parse(JSON.parse(localStorage.getItem("siltwake.save.journal.v1")).current).meta.savedAt; } catch { return null; } });
+/**
+ * "Every save reloads", without disturbing the game being measured (R1-F2):
+ * a manual save (F5) in the measured page, the committed save exported from
+ * its journal to `file`, then loaded in a separate browser (its processes are
+ * not the probe's), which must come back where the save was made, no earlier
+ * than its tick. The measured page keeps its one lifetime across all laps.
+ */
+export async function saveAndCheck(g, opts, file, label) {
+  const journal = () => g.page.evaluate(() => { try { return JSON.parse(localStorage.getItem("siltwake.save.journal.v1")).current; } catch { return null; } });
   const prior = await journal();
+  const at = await read(g);
   await g.page.keyboard.press("F5");
   try {
-    await g.page.waitForFunction((p) => { try { return JSON.parse(JSON.parse(localStorage.getItem("siltwake.save.journal.v1")).current).meta.savedAt !== p; } catch { return false; } }, prior, { timeout: 15000 });
+    await g.page.waitForFunction((p) => { try { return JSON.parse(localStorage.getItem("siltwake.save.journal.v1")).current !== p; } catch { return false; } }, prior, { timeout: 15000 });
   } catch { return { ok: false, label, error: "the manual save never reached the journal" }; }
-  const saved = await g.page.evaluate(() => JSON.parse(JSON.parse(localStorage.getItem("siltwake.save.journal.v1")).current).state.tick);
-  await g.page.reload({ waitUntil: "load", timeout: 60000 });
+  const text = await journal();
+  writeFileSync(file, text);
+  const saved = JSON.parse(text);
+  let check;
   try {
-    await g.page.waitForFunction(() => document.querySelector("#continue") && !document.querySelector("#continue").disabled, null, { timeout: 60000 });
-    await g.page.locator("#continue").click();
-    await waitPlayable(g.page);
-  } catch (e) { return { ok: false, label, error: `did not come back: ${e.message.split("\n")[0]}` }; }
-  const after = await read(g);
-  const moved = Math.hypot(after.cam[0] - before.cam[0], after.cam[1] - before.cam[1], after.cam[2] - before.cam[2]);
-  if (!(after.tick >= saved)) return { ok: false, label, error: `tick ${after.tick} is before the saved ${saved}` };
-  if (moved > 5) return { ok: false, label, error: `came back ${moved.toFixed(1)} m from where it was saved` };
-  return { ok: true, label, tick: saved, movedM: Math.round(moved * 10) / 10 };
+    check = await openGame({ ...opts, save: file, port: Number(opts.port) + 1, label: "save-check" });
+    const back = await read(check);
+    const moved = Math.hypot(back.cam[0] - at.cam[0], back.cam[1] - at.cam[1], back.cam[2] - at.cam[2]);
+    if (!(back.tick >= saved.state.tick)) return { ok: false, label, file, error: `loaded at tick ${back.tick}, before the saved ${saved.state.tick}` };
+    if (moved > 5) return { ok: false, label, file, error: `loaded ${moved.toFixed(1)} m from where it was saved` };
+    return { ok: true, label, file, tick: saved.state.tick, movedM: Math.round(moved * 10) / 10, pageErrors: check.errors.length };
+  } catch (e) {
+    return { ok: false, label, file, error: `did not load: ${e.message.split("\n")[0]}` };
+  } finally {
+    await check?.close();
+  }
 }

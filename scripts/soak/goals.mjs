@@ -13,8 +13,14 @@
 //   hitch is over autosaveHitchMs.
 //
 // Rule results: pass, fail, recorded (measured, but frame times from a shared
-// run are not evidence, so not judged) or unavailable (nothing measures it
-// yet; it is listed as missing, never replaced by a proxy).
+// run are not evidence, so not judged) or unavailable (nothing measured it:
+// no provider, a provider that failed, or no observations; it is listed as
+// missing, never replaced by a proxy or counted as zero violations).
+//
+// Verdicts: pass (the goal is met and every rule was measured and passed),
+// partial (the goal is met and nothing broke, but some rules are unproven:
+// recorded or unavailable), fail (a rule broke; the soak stops), incomplete
+// (travel blocked), yielded, or running.
 import { readFileSync } from "node:fs";
 
 export const DEFAULTS = Object.freeze({
@@ -60,9 +66,11 @@ function commonRules(run) {
   return rules;
 }
 
-/** Frame-time rule: judged only when frames are evidence (an isolated run). */
-function frameRule(id, over, limitMs, { judged, attributed }, what) {
+/** Frame-time rule: judged only when frames are evidence (an isolated run).
+ * Measured only if frames were actually observed and attributed. */
+function frameRule(id, over, limitMs, { judged, attributed, observed }, what) {
   if (attributed === false) return { id, status: "unavailable", limit: limitMs, detail: `no ${what} attribution yet (REC-1 or CW-1's per-frame split); long frames are recorded unattributed` };
+  if (attributed !== true || !(observed > 0)) return { id, status: "unavailable", limit: limitMs, detail: `no frames were measured (the frame provider failed or saw none)` };
   const worst = over.reduce((m, f) => Math.max(m, f.ms), 0);
   if (!judged) return { id, status: "recorded", value: round(worst), limit: limitMs, detail: `${over.length} over ${limitMs} ms; frame times from a shared run are not evidence` };
   return { id, status: over.length ? "fail" : "pass", value: round(worst), limit: limitMs, detail: over.length ? `${over.length} ${what} frames over ${limitMs} ms, worst ${round(worst)} ms at ${over[0].where ?? "?"}` : null };
@@ -93,6 +101,7 @@ export function evaluateTour(run, t = DEFAULTS.tour) {
   }
   rules.push(frameRule("streaming-frame", run.frames?.streamingOver ?? [], t.streamingFrameMs, run.frames ?? {}, "streaming"));
   if (run.holds?.available === false) rules.push({ id: "loading-hold", status: "unavailable", detail: "the build exposes no cave-hold state" });
+  else if (run.holds?.available !== true) rules.push({ id: "loading-hold", status: "unavailable", detail: "the hold state was never read (the provider failed)" });
   else { const n = run.holds?.list?.length ?? 0; rules.push({ id: "loading-hold", status: n > t.holds ? "fail" : "pass", value: n, limit: t.holds, detail: n ? `hold at ${run.holds.list[0].where}` : null }); }
   const progress = { laps: laps.length, goal: t.laps };
   return finish(rules, progress, laps.length >= t.laps, run);
@@ -118,24 +127,34 @@ export function evaluateDwell(run, t = DEFAULTS.dwell) {
       }
     }
   }
-  const saves = run.autosaves ?? [];
-  const over = saves.filter((s) => s.frameMs != null && s.frameMs > t.autosaveHitchMs).map((s) => ({ ms: s.frameMs, where: `autosave at ${Math.round(s.at)} s` }));
-  rules.push(frameRule("autosave-hitch", over, t.autosaveHitchMs, { ...run.frames, attributed: true }, "autosave"));
+  const saves = run.autosaves ?? [], timed = saves.filter((s) => s.frameMs != null);
+  const over = timed.filter((s) => s.frameMs > t.autosaveHitchMs).map((s) => ({ ms: s.frameMs, where: `autosave at ${Math.round(s.at)} s` }));
+  if (saves.length && timed.length < saves.length) rules.push({ id: "autosave-hitch", status: "unavailable", limit: t.autosaveHitchMs, detail: `no frame time for ${saves.length - timed.length} of ${saves.length} autosaves` });
+  else rules.push(frameRule("autosave-hitch", over, t.autosaveHitchMs, { judged: run.frames?.judged, attributed: true, observed: timed.length }, "autosave"));
+  // The leak trend needs its observation window after warm-up (R1-F7): until
+  // then the dwell has not met its goal, and if it stops short the rule is
+  // listed as unmeasured.
+  const observedS = warm.length >= 2 ? warm.at(-1).at - warm[0].at : 0;
+  if (observedS < t.leakMinWindowS) rules.push({ id: "leak", status: "unavailable", limit: t.leakMiBPerHour, detail: `observed ${Math.round(observedS / 60)} of the ${Math.round(t.leakMinWindowS / 60)} min after warm-up the leak trend needs` });
   const lastSave = saves.at(-1)?.at ?? run.startedAt ?? 0;
   if (run.now != null && run.now - lastSave > t.autosaveMissingS) rules.push({ id: "autosave", status: "fail", detail: `no autosave for ${Math.round(run.now - lastSave)} s` });
   const dayNight = run.dayNight ?? { available: false };
   if (!dayNight.available) rules.push({ id: "day-night", status: "unavailable", detail: "the game has no day–night cycle yet; the dwell goal counts autosaves only" });
   const progress = { autosaves: saves.length, goal: t.autosaves, dayNightCycles: dayNight.available ? dayNight.cycles : null, dayNightGoal: dayNight.available ? t.dayNightCycles : null };
-  const met = saves.length >= t.autosaves && (!dayNight.available || dayNight.cycles >= t.dayNightCycles);
+  const met = saves.length >= t.autosaves && observedS >= t.leakMinWindowS && (!dayNight.available || dayNight.cycles >= t.dayNightCycles);
   return finish(rules, progress, met, run);
 }
 
 function finish(rules, progress, goalMet, run) {
   const failed = rules.filter((r) => r.status === "fail");
-  const status = failed.length ? "fail" : run.yielded ? "yielded" : run.travel?.blocked ? "incomplete" : goalMet ? "pass" : "running";
+  const unproven = rules.filter((r) => r.status === "unavailable" || r.status === "recorded");
+  // A measured soak needs measurements: completing the travel is not a pass.
+  if (run.providerErrors && Object.keys(run.providerErrors).length) rules.push({ id: "providers", status: "unavailable", detail: Object.entries(run.providerErrors).map(([k, v]) => `${k} failed ${v.count}× (${v.last})`).join("; ") });
+  const status = failed.length ? "fail" : run.yielded ? "yielded" : run.travel?.blocked ? "incomplete" : !goalMet ? "running" : unproven.length || rules.some((r) => r.id === "providers") ? "partial" : "pass";
   return {
     status, progress, rules,
     broken: failed.map((r) => r.id),
+    unproven: unproven.map((r) => r.id),
     unavailable: rules.filter((r) => r.status === "unavailable").map((r) => `${r.id}: ${r.detail}`),
     reason: failed.length ? `${failed[0].id}: ${failed[0].detail}` : run.yielded ? "yielded to waiting work" : run.travel?.blocked ? `travel blocked: ${run.travel.blocked}` : null,
   };

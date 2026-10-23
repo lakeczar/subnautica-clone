@@ -52,6 +52,25 @@ if [[ $uninstall == 1 ]]; then
 fi
 
 files=(policy.mjs state.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh)
+# The GPU lease checker has its own immutable install ($home/guard/<version>,
+# `guard/current`): the Chrome wrappers point there, never at the scheduler's
+# `current`, so installing an older scheduler (a rollback) or uninstalling it
+# leaves the guard enforcing (R1-F5). A lease names a ticket's grant, which
+# SCHED-1 and SCHED-2 write alike.
+guard_files=(gpu-lease.mjs state.mjs policy.mjs snapshot.mjs)
+install_guard() {
+  local gv
+  gv=$(cd "$src" && cat "${guard_files[@]}" | sha256sum | cut -c1-12)
+  if [[ ! -d "$home/guard/$gv" ]]; then
+    [[ -d "$home/guard/$gv.tmp" ]] && chmod -R u+w "$home/guard/$gv.tmp" && rm -rf "$home/guard/$gv.tmp"
+    mkdir -p "$home/guard/$gv.tmp"
+    (cd "$src" && cp "${guard_files[@]}" "$home/guard/$gv.tmp/")
+    chmod -R a-w "$home/guard/$gv.tmp"
+    mv -T "$home/guard/$gv.tmp" "$home/guard/$gv"
+  fi
+  ln -sfn "$gv" "$home/guard/current.tmp"
+  mv -T "$home/guard/current.tmp" "$home/guard/current"
+}
 version=$(cd "$src" && cat "${files[@]}" | sha256sum | cut -c1-12)
 if [[ ! -d "$home/$version" ]]; then
   [[ -d "$home/$version.tmp" ]] && chmod -R u+w "$home/$version.tmp" && rm -rf "$home/$version.tmp"
@@ -97,7 +116,13 @@ EOF
   ' "$dir/config.json"
 fi
 
+# A guard already in place follows this scheduler's lease checker.
+[[ $guard != on && -e "$home/guard/current" ]] && install_guard
+
 if [[ $guard == on ]]; then
+  install_guard
+  # Each wrapper carries the guard itself (chrome-guard.sh), so nothing at
+  # launch depends on the scheduler's install; a missing checker fails closed.
   # The wrapper takes the binary's place atomically: the real file gets a
   # second name (a hard link, same inode), then the wrapper is renamed over the
   # original name, so a concurrent launch always finds one or the other.
@@ -111,9 +136,9 @@ if [[ $guard == on ]]; then
       echo '#!/bin/sh'
       echo '# Siltwake GPU lease guard (scripts/heavy/install.sh --gpu-guard). The real'
       echo '# binary is $0.siltwake-real; install.sh --gpu-guard-remove puts it back.'
-      echo "g=$home/current/chrome-guard.sh"
-      echo '[ -f "$g" ] && exec sh "$g" "$0.siltwake-real" "$@"'
-      echo 'exec "$0.siltwake-real" "$@"'
+      echo 'real="$0.siltwake-real"'
+      echo "check='$home/guard/current/gpu-lease.mjs'"
+      cat "$src/chrome-guard.sh"
     } >"$b.siltwake-tmp"
     chmod 755 "$b.siltwake-tmp" && mv -f "$b.siltwake-tmp" "$b"
     echo "wrapped $b"

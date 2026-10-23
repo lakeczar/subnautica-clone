@@ -260,9 +260,13 @@ export function plan(state, now, host, cfg = DEFAULTS, { counterfactual = false 
     busy.add(t.worktree);
   }
 
-  // A running soak yields when its memory or GPU is what keeps a waiting job
-  // out: the same plan without the soaks would admit someone it does not.
-  if (runningSoaks.length && !counterfactual && queue.some((t) => ["memory", "gpu", "host-memory"].includes(result.blocked[t.id]))) {
+  // A running soak yields when its memory, its GPU or its worktree is what
+  // keeps a waiting job out: the same plan without the soaks would admit
+  // someone it does not. (The job then waits for the soak's cgroup to empty,
+  // as for any worktree.)
+  const soakTrees = new Set(running.filter(isSoak).map((t) => t.worktree));
+  const soakBlocks = (t) => ["memory", "gpu", "host-memory"].includes(result.blocked[t.id]) || (result.blocked[t.id] === "worktree" && soakTrees.has(t.worktree));
+  if (runningSoaks.length && !counterfactual && queue.some(soakBlocks)) {
     const without = { ...state, tickets: Object.fromEntries(tickets.filter((t) => !isSoak(t) || t.state !== "running").map((t) => [t.id, t])) };
     const freed = runningSoaks.reduce((n, id) => n + (host.charges?.[id] ?? 0), 0);
     const cf = plan(without, now, { ...host, memAvailableMiB: host.memAvailableMiB + freed }, cfg, { counterfactual: true });

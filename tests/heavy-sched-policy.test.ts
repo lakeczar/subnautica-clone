@@ -300,6 +300,13 @@ test("soak yield: preempt only when the soak's memory or GPU is what blocks a wa
   const drain = P.plan(stateOf(S, ticket("X", "exclusive", { at: 1 })), 2, idle(), cfg);
   assert.equal(drain.blocked.X, "lane");
   assert.deepEqual(drain.preempt, ["S"]);
+  // R1-F8: a job queued in the soak's own worktree is blocked by `worktree`; the soak yields to it too.
+  const same = P.plan(stateOf(S, ticket("rev", "quick", { at: 1, review: true, worktree: "wt-S" })), 2, idle(), cfg);
+  assert.equal(same.blocked.rev, "worktree");
+  assert.deepEqual(same.preempt, ["S"]);
+  // ... but not to a job waiting on another busy worktree.
+  const other = P.plan(stateOf(S, ticket("x", "standard", { state: "running", worktree: "wt-o" }), ticket("o", "quick", { at: 1, worktree: "wt-o" })), 2, idle(), cfg);
+  assert.deepEqual(other.preempt, []);
   // Nobody waiting: the soak keeps running.
   assert.deepEqual(P.plan(stateOf(S), 2, idle(), cfg).preempt, []);
 });
