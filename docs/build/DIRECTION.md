@@ -112,3 +112,30 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
 - **Every review brief checks reuse and simplicity:** no new parallel implementation of something that already exists; shared helpers over copies; dead or legacy code removed when it's replaced; hot-path allocation justified; obvious names and one way to do each thing.
 - **An architecture review once per wave,** alongside the taste review: Sol gathers evidence, and an Opus steward rules.
 - **A one-off codebase health audit** (2026-10-23): Sol evidence at `research/codebase-health:docs/build/audits/CODEBASE-HEALTH-SOL.md`, then an Opus verdict and refactor plan, slotted into the waves.
+- **The merge gate is `npm run gate`** (STEW-1). Its manifest (`scripts/gate.mjs`, `GATE`) *is* the gate: the fast tier with the architecture guard, the build, the six current economy checks and every playthrough scenario as a queued `--machine any` job. After the merge is pushed, `scripts/saves-export.sh` exports the save library. No brief, handoff or memory keeps its own list.
+- **One way to do each thing:** [CORE-HELPERS](CORE-HELPERS.md) maps each job to its owner module and holds the *Open forks* register. An interim parallel implementation carries `// FORK(<id>): <what it duplicates>; retire in <stream>` and a row in that register. A stream that composes or replaces it deletes the fork in the same merge, or names the stream that will. A "temporary" comment without a FORK marker is not allowed.
+- **The architecture guard** (`scripts/guard-architecture.mjs`, in `test:fast`) fails on a layering break (sim or content importing render, UI, audio, Babylon or the DOM), a new import cycle or cycle member, new browser, server or `gpu-prep` plumbing outside `scripts/rec`, `scripts/heavy` and `scripts/soak`, a second `RecipeBuilder`, or a region lookup outside `content/regions/layout.ts`. It prints the FORK count, the shared roots' sizes and exports nobody uses, for the per-wave review.
+
+### Performance conventions (quote in every builder brief)
+From the [steward verdict](https://github.com/lakeczar/subnautica-clone/blob/research/codebase-health/docs/build/audits/CODEBASE-STEWARD-VERDICT-OPUS.md) (`research/codebase-health`, `cc718962`).
+1. **Loops that run every frame, every stream tick or every fixed step** (the render frame, `kitStream` and the residency arbiter, `stepGame`, collision sweeps) **don't allocate in proportion to world content.**
+   - Reuse caller-owned scratch: module-level `Vector3` and `Matrix` for Babylon, typed arrays, output arrays cleared with `out.length = 0`.
+   - A small constant allocation needs a reason in the handoff.
+   - Allocation that grows with a roster is a defect.
+2. **Pick the top k with a bounded selection, never a full sort.** CW-1's light selection (`localLights.ts`, `51ad6c9`) is the reference. Keep tie-breaks stable and deterministic.
+3. **Spatial work goes through the index:** `WorldQueries`, with `dataInBox(box, out)` on hot paths. Never scan a world roster linearly per frame, and never index large shapes in a uniform fine grid (TST-05's 56M-entry cliff). New static shapes use COL-1's BVH or heightfield once stage B lands; no new box-set adapters.
+4. **Main-thread work that can exceed about 2 ms is sliced:**
+   - a generator under the stream budget, with deterministic `workClock` in tests;
+   - every synchronous `Infinity` finish is counted and logged (CW-1's rule).
+5. **The WK-1 worker boundary:**
+   - only transferable typed arrays cross it (positions, normals, colours, indices, collider buffers), never Babylon objects, closures or `GameState`;
+   - builders stay Babylon-free so they run in a worker;
+   - the main thread only uploads, in bounded slices;
+   - packs are content-addressed and bound to the build.
+6. **Diagnostics are pulled, not pushed:** no per-frame DOM or `dataset` writes. Expose an on-demand snapshot (`__siltwake.scene()`) and REC events.
+7. **Live state is mutated in place (after SIM-1):**
+   - never keep a `GameState` or hull reference across frames or yields; snapshot explicitly, as the corridor search does;
+   - memoize derived data only for a measured hot consumer, and only under an explicit revision, never under object identity.
+8. **Every cache has an owner, a byte bound, an eviction rule and a ledger registration.** `geometryCache.ts` is the model. A `WeakMap` hung off a long-lived root is not a budget.
+9. **Perf claims come from `--class exclusive` on the 3090, plus a 4070 check.** A hot-path change reports µs per call and allocations per call on a SAVE-1 save, bound to its SHA. Shared-host numbers are labelled indicative.
+10. **A preview reuses the authority, it doesn't copy the rule.** A UI answer either calls a pure plan shared with execution (`planSpend`/`applySpend`, `servicePreview`) or dry-runs the real command on a clone. It never re-derives the rule in UI code. A dry run on a clone is fine on a click, but not every frame.
