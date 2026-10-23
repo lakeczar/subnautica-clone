@@ -2,6 +2,37 @@
 
 Opus 5.5 high. Branch `t3/col-1-static-collider` from root `fe27757`; stage A head: see the commit that adds this page. The decision that created this stream is R1 of the [compromise verdict](../audits/COMPROMISE-VERDICT-OPUS.md) (on `research/compromise-audit`), on Sol's findings ART-01/02/03/07, CAV-02/03/20 and TST-05. **New modules only:** `src/world/collision/*` and `tests/col1-*`. No edit to `world.ts`, `app.ts`, `step.ts`, LC's files, or any cave or creature file.
 
+## R3 response (Sol R3 on `e8ce814`: [report](../reviews/COL-1A-SOL-XHIGH-R3.md), on `review/col-1a-r3`)
+Both P2s and both P3s are fixed. Every reproduction is a test in `tests/col1-r3.test.ts`, and each fix's mutation fails its test:
+- facing alone made one-sided;
+- a branch-and-bound search per part;
+- candidates enumerated per part;
+- no coherence precondition.
+
+| Finding | Root fix | Tests |
+| --- | --- | --- |
+| **R3-1 (P2)** Recovery treated facing open skin as a closed solid; the diver crossed a plate 6 cm away. | The one-sided rule needs a **closed-solid guarantee**: `interior === "solid"` (plus facing). Open skin (`interior: "none"`) stays two-sided in recovery whatever its facing, so it's a barrier as in ordinary sweeps. **Consequence:** the compact biome's chunks are open skin bounded by LC's cap rule, so recovery treats them two-sided. An explicit "externally bounded rock" guarantee, if cave recovery needs it, belongs with stage B's composed cave recovery, not with `facing`. | The report's plate through the public constructor, in both windings and with facing 1, −1 and 0: the escape sweep meets it, and recovery returns null within 1 m. Control: the rock alone still leaves through its own face (0.944 m). |
+| **R3-2 (P2)** Recovery rescanned the whole shape once per containing part: 2.4 s for 2,000 nested parts in one shape. | **One traversal per shape**, triangles routed to the set of containing parts:<br>- face-exit candidates come from one enumeration per shape;<br>- the lower bound (`exitBound`, replacing `partDistance`) uses one pass per shape: branch and bound for a single part, else one accumulating walk keeping every part's own minimum.<br>The bound stays admissible and no-re-entry stays checked; parts, tessellation and the rescue path are untouched. | **Work-count regression,** with a traversal counter. At 1,000 parts in one shape, recovery visits fewer than 40 triangles per triangle; R3's candidate visited about 1,000. It scales linearly: half the parts, about half the work. It gives the same escape and the same 226 tried candidates as separate members. Exclusive remeasurement: *Checks* below. |
+| **P3** `meshFacing` accepted mixed winding by majority. | `orientationProblems`: a coherently wound surface uses every undirected edge equally often each way, so a flipped triangle shows as an imbalance of two (surface nets' non-manifold edges, used twice each way, pass). `meshFacing` requires that, plus **unanimous** votes, and names the mesh. `solidPiecesShape` requires each closed piece to be closed and coherent. | The report's flipped wall is refused; the coherent one gives 1. An open prism is refused. All 517 closed vista and dish pieces, and the CA-1 shells, pass. |
+| **P3** Recovery with an infinite budget never finished building the ring. | `depenetrate` throws on a non-finite or negative budget, or a non-finite centre. | Infinity, −1 and NaN are refused; a finite budget works. |
+
+**Remaining work in the many-part case:** candidates and the bound are one pass each. The rest is each tried candidate's blocked check, whose parity ray crosses two faces of every stacked part. It is linear in the stacked surfaces, about 23 visits per triangle, and inherent to 2,000 surfaces stacked over one point.
+
+**Checks for R3:**
+- **Fast tier:** passes 1,341 / 1,341 at `7b8ad69`; `col1-r3` adds 6 tests at 0.3 s CPU.
+- **Heavy oracle:** `col1-oracle.heavy.test.ts` passes **4 / 4** through the queue at `c73f922` (50 s, peak 228 MiB).
+- **Typecheck:** clean.
+- **Recovery cost, `--class exclusive` at `c73f922`** (`tests/col1-recovery-cost.ts`, [`col1/recovery-cost-r3.jsonl`](col1/recovery-cost-r3.jsonl)). Headless Node, median of three calls, construction excluded, host load at most 3.2. R3's fixture: n nested closed boxes, centre (0.1, 0.2, 0.3), diver, budget 3 m.
+
+| Containing parts (triangles) | One shape (R3) | One shape now | As members now | Per call |
+| --- | --- | --- | --- | --- |
+| 100 (1,200) | 9.9 ms | 1.7 ms | 2.2 ms | 1 sweep, 207 tried |
+| 500 (6,000) | 165.1 ms | 4.7 ms | 7.1 ms | 1 sweep, 226 tried |
+| 1,000 (12,000) | 577.2 ms | 11.0 ms | 20.6 ms | 1 sweep, 226 tried |
+| 2,000 (24,000) | **2,434.8 ms** | **14.2 ms** | 27.9 ms | 1 sweep, 226 tried |
+
+Every result is the same clear escape (2.034–2.049 m) for both layouts. The sphere cases are unchanged from R2 (6.3 ms at 39,600 triangles).
+
 ## R2 response (Sol R2 on `b94430c`: [report](../reviews/COL-1A-SOL-XHIGH-R2.md), on `review/col-1a-r2`)
 One root change fixes N1, N2 and most of N4: **recovery validates with oriented, one-sided contacts against closed solids.** A box can enter a closed solid through a face only while moving against that face's outward normal. So a contact with a face counts only then:
 - the box may leave whatever holds it, through any number of faces, with no exemptions;
