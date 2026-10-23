@@ -673,3 +673,13 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **P3:** the gate ignores the waiter's exit status and signal.
   - **What holds:** all in-flight merge trees pass the guard with no allowance changes.
   - **Composition:** STEW-1 declares TextEncoder/TextDecoder/AbortSignal headless now. SIM-1 splits `writer-lock.ts` into a portable port and a browser adapter when it merges after STEW-1.
+- **SIM-1 R5** (Sol on `3731a553`, report on `review/sim-1-r5` `6b74707f`): REQUEST CHANGES, 4 P1s, 4 P2s and 1 P3.
+  - **What holds:** the v2 journal core (stale-writer protection, v1 migration, zero old-generation mutation); Creel playthrough 17/17 reloads.
+  - **Findings:** 6 of the 9 are in the note outbox. Others: other-session heads protected inconsistently; swallowed and late notices; a premature victim report.
+  - **Decisions:**
+    - remove the outbox and mirror game saves ("Note saved" only after commit, honest pending and memory-only states);
+    - validate both retained heads via the shared validator before any mutation;
+    - fix the notice wording;
+    - report victims only after commit;
+    - add a timeline-scoped export-and-repair action in this stream;
+    - fold in the STEW-1 headless writer-lock split now.
