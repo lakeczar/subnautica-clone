@@ -37,7 +37,6 @@ export const DEFAULTS = Object.freeze({
     autosaves: 20, // 30 s of play each
     dayNightCycles: 1,
     warmupS: 60, // load settling: samples before arrival + this are not compared
-    windowS: 60, // flatness and the leak trend use each window's minimum (the floor garbage sits above)
     memoryFlatPct: 5,
     leakMiBPerHour: 30,
     leakMinWindowS: 600,
@@ -113,35 +112,26 @@ export function evaluateTour(run, t = DEFAULTS.tour) {
  *   dayNight: { available, cycles }, frames: { judged, attributed }, saves, crash, now }
  */
 export function evaluateDwell(run, t = DEFAULTS.dwell) {
-  // Instantaneous memory swings with GC timing (measured on the 3090: renderer
-  // RSS ±5–8% around a GC while idle). What a leak raises is the floor, so each
-  // windowS window is reduced to its minimum, after a time-based warm-up from
-  // arrival, and flatness and the trend are judged on those floors.
+  // Instantaneous memory swings with GC timing (measured on the 3090 idle at
+  // the pod: renderer RSS ±5–11% between GCs). Memory compared over time is
+  // therefore read the same way each time: only settled post-GC samples
+  // (`afterGc`, one every gcEveryS, soak.mjs), after a time-based warm-up from
+  // arrival. Flatness is each against the first; the leak is their trend.
   const rules = commonRules(run), from = (run.startedAt ?? 0) + t.warmupS;
   const warm = (run.samples ?? []).filter((s) => s.at >= from);
-  const floors = (m) => {
-    const w = new Map();
-    for (const s of warm) {
-      if (s.memory?.[m] == null) continue;
-      const k = Math.floor((s.at - from) / t.windowS), cur = w.get(k);
-      if (!cur || s.memory[m] < cur.v) w.set(k, { at: from + (k + 0.5) * t.windowS, v: s.memory[m] });
-    }
-    return [...w.values()].sort((a, b) => a.at - b.at);
-  };
-  if (warm.length >= 2) {
-    for (const m of t.memoryMetrics) {
-      const xs = floors(m);
-      if (xs.length < 2) { rules.push({ id: `memory-flat:${m}`, status: "unavailable", detail: `${m}: fewer than two ${t.windowS} s windows measured after warm-up` }); continue; }
-      const base = xs[0].v, worst = xs.reduce((w, x) => (Math.abs(pct(x.v, base)) > Math.abs(w) ? pct(x.v, base) : w), 0);
-      rules.push({ id: `memory-flat:${m}`, status: Math.abs(worst) > t.memoryFlatPct ? "fail" : "pass", value: round(worst), limit: t.memoryFlatPct,
-        detail: `first window's floor ${round(base)} MiB, furthest ${round(worst)}% over ${xs.length} windows` });
-      const spanS = xs.at(-1).at - xs[0].at;
-      if (spanS >= t.leakMinWindowS - t.windowS && xs.length >= 3) {
-        const slope = slopePerHour(xs.map((x) => [x.at, x.v]));
-        rules.push({ id: `leak:${m}`, status: slope > t.leakMiBPerHour ? "fail" : "pass", value: round(slope), limit: t.leakMiBPerHour, detail: `trend ${round(slope)} MiB/h over ${Math.round(spanS / 60)} min` });
-      } else if (warm.at(-1).at - from >= t.leakMinWindowS) {
-        rules.push({ id: `leak:${m}`, status: "unavailable", detail: `${m}: the window was observed, but only ${xs.length} windows had a value` });
-      }
+  const settled = warm.filter((s) => s.afterGc);
+  for (const m of t.memoryMetrics) {
+    const xs = settled.filter((s) => s.memory?.[m] != null).map((s) => ({ at: s.at, v: s.memory[m] }));
+    if (xs.length < 2) { if (warm.length) rules.push({ id: `memory-flat:${m}`, status: "unavailable", detail: `${m}: ${xs.length} settled post-GC sample(s) after warm-up; two are needed` }); continue; }
+    const base = xs[0].v, worst = xs.reduce((w, x) => (Math.abs(pct(x.v, base)) > Math.abs(w) ? pct(x.v, base) : w), 0);
+    rules.push({ id: `memory-flat:${m}`, status: Math.abs(worst) > t.memoryFlatPct ? "fail" : "pass", value: round(worst), limit: t.memoryFlatPct,
+      detail: `first settled sample ${round(base)} MiB, furthest ${round(worst)}% over ${xs.length} samples` });
+    const spanS = xs.at(-1).at - xs[0].at;
+    if (spanS >= t.leakMinWindowS && xs.length >= 3) {
+      const slope = slopePerHour(xs.map((x) => [x.at, x.v]));
+      rules.push({ id: `leak:${m}`, status: slope > t.leakMiBPerHour ? "fail" : "pass", value: round(slope), limit: t.leakMiBPerHour, detail: `trend ${round(slope)} MiB/h over ${Math.round(spanS / 60)} min, ${xs.length} settled samples` });
+    } else if (warm.length && warm.at(-1).at - from >= t.leakMinWindowS) {
+      rules.push({ id: `leak:${m}`, status: "unavailable", detail: `${m}: the window was observed, but settled samples span only ${Math.round(spanS)} s (${xs.length})` });
     }
   }
   const saves = run.autosaves ?? [], timed = saves.filter((s) => s.frameMs != null);
@@ -151,8 +141,10 @@ export function evaluateDwell(run, t = DEFAULTS.dwell) {
   // The leak trend needs its observation window after warm-up (R1-F7): until
   // then the dwell has not met its goal, and if it stops short the rule is
   // listed as unmeasured.
-  const observedS = warm.length >= 2 ? warm.at(-1).at - from : 0;
-  if (observedS < t.leakMinWindowS) rules.push({ id: "leak", status: "unavailable", limit: t.leakMiBPerHour, detail: `observed ${Math.round(observedS / 60)} of the ${Math.round(t.leakMinWindowS / 60)} min after warm-up the leak trend needs` });
+  // The goal includes the leak window, spanned by settled samples, so a dwell
+  // cannot finish before its leak rule can be judged.
+  const observedS = settled.length >= 2 ? settled.at(-1).at - settled[0].at : 0;
+  if (observedS < t.leakMinWindowS) rules.push({ id: "leak", status: "unavailable", limit: t.leakMiBPerHour, detail: `settled samples span ${Math.round(observedS / 60)} of the ${Math.round(t.leakMinWindowS / 60)} min the leak trend needs` });
   const lastSave = saves.at(-1)?.at ?? run.startedAt ?? 0;
   if (run.now != null && run.now - lastSave > t.autosaveMissingS) rules.push({ id: "autosave", status: "fail", detail: `no autosave for ${Math.round(run.now - lastSave)} s` });
   const dayNight = run.dayNight ?? { available: false };

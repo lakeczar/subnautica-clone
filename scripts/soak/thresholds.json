@@ -22,7 +22,6 @@
     "autosaves": 20,
     "dayNightCycles": 1,
     "warmupS": 60,
-    "windowS": 60,
     "memoryFlatPct": 5,
     "leakMiBPerHour": 30,
     "leakMinWindowS": 600,

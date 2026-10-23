@@ -51,7 +51,7 @@ test.after(() => rmSync(dir, { recursive: true, force: true }));
 let n = 0;
 const opts = (kind: string, extra: Record<string, unknown> = {}) => ({
   kind, out: join(dir, `${n++}`), plan, sampleS: 0.04, tickMs: 10, settleMs: 0, gcSettleMs: 0, gcEveryS: 0.05, judged: true, browser: {}, meta: {},
-  thresholds: { tour: { ...G.DEFAULTS.tour }, dwell: { ...G.DEFAULTS.dwell, autosaves: 4, warmupS: 0.05, windowS: 0.05, leakMinWindowS: 0.4, autosaveMissingS: 30 } },
+  thresholds: { tour: { ...G.DEFAULTS.tour }, dwell: { ...G.DEFAULTS.dwell, autosaves: 4, warmupS: 0.05, leakMinWindowS: 0.4, autosaveMissingS: 30 } },
   ...extra,
 });
 
@@ -121,5 +121,5 @@ test("dwell: the goal needs the leak window, so a slow leak is judged before any
   // Stopped short of the window: the leak rule is listed as unmeasured, not passed.
   const short = G.evaluateDwell({ samples: [{ at: 0, memory: { rendererRssMiB: 1 } }, { at: 1, memory: { rendererRssMiB: 1 } }, { at: 2, memory: { rendererRssMiB: 1 } }],
     autosaves: [], frames: { judged: true }, now: 2 }, { ...G.DEFAULTS.dwell, warmupS: 0 });
-  assert.match(short.unavailable.join("\n"), /leak: observed 0 of the 10 min/);
+  assert.match(short.unavailable.join("\n"), /leak: settled samples span 0 of the 10 min/);
 });

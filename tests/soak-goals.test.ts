@@ -45,7 +45,8 @@ test("tour: shared-run frame times are recorded, not judged; missing measurement
 });
 
 test("dwell: flat memory over the goal passes (partial while day–night is missing); a slow leak or a jump fails; day–night is missing", () => {
-  const flat = Array.from({ length: 40 }, (_, i) => ({ at: i * 30, memory: { rendererRssMiB: 1000 + (i % 3), gpuRssMiB: 400, jsHeapAfterGcMiB: 120 } }));
+  // Every 30 s, a settled post-GC sample every minute (soak.mjs).
+  const flat = Array.from({ length: 40 }, (_, i) => ({ at: i * 30, afterGc: i % 2 === 0, memory: { rendererRssMiB: 1000 + (i % 3), gpuRssMiB: 400, jsHeapAfterGcMiB: 120 } }));
   const saves = Array.from({ length: 20 }, (_, i) => ({ at: 30 + i * 30, frameMs: 18 }));
   const v = G.evaluateDwell({ samples: flat, autosaves: saves, frames: { judged: true }, now: 620 }, D);
   assert.equal(v.status, "partial", JSON.stringify(v.rules)); // goal met, nothing broke, day–night unproven
@@ -69,12 +70,13 @@ test("thresholds are config: a file overrides the defaults", () => {
 test("dwell: GC swings over a flat floor pass, a rising floor fails (the shape measured on the 3090)", () => {
   // Every 10 s; RSS sits near 400 MiB and swings +8% between GCs (one a minute), as seen idle at the pod.
   const swing = (i: number) => (i % 6 === 5 ? 0 : (i % 6) * 6.5);
-  const mk = (rise: number) => Array.from({ length: 70 }, (_, i) => ({ at: i * 10, memory: { rendererRssMiB: 400 + swing(i) + rise * i, gpuRssMiB: 230, jsHeapAfterGcMiB: 91 } }));
-  const saves = Array.from({ length: 22 }, (_, i) => ({ at: 30 + i * 30, frameMs: 17 }));
+  // Settled samples are the post-GC ones (i % 6 === 5); the rest swing above them and must not count.
+  const mk = (rise: number) => Array.from({ length: 80 }, (_, i) => ({ at: i * 10, afterGc: i % 6 === 5, memory: { rendererRssMiB: 400 + swing(i) + rise * i, gpuRssMiB: 230, jsHeapAfterGcMiB: 91 } }));
+  const saves = Array.from({ length: 25 }, (_, i) => ({ at: 30 + i * 30, frameMs: 17 }));
   const dn = { available: true, cycles: 1 };
-  const flat = G.evaluateDwell({ samples: mk(0), autosaves: saves, frames: { judged: true }, dayNight: dn, now: 690 }, D);
+  const flat = G.evaluateDwell({ samples: mk(0), autosaves: saves, frames: { judged: true }, dayNight: dn, now: 790 }, D);
   assert.equal(flat.status, "pass", JSON.stringify(flat.rules));
-  const rising = G.evaluateDwell({ samples: mk(0.12), autosaves: saves, frames: { judged: true }, dayNight: dn, now: 690 }, D); // 43 MiB/h floor
+  const rising = G.evaluateDwell({ samples: mk(0.12), autosaves: saves, frames: { judged: true }, dayNight: dn, now: 790 }, D); // 43 MiB/h floor
   assert.equal(rising.status, "fail");
   assert.ok(rising.broken.includes("leak:rendererRssMiB"), JSON.stringify(rising.rules));
 });

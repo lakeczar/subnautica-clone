@@ -91,7 +91,7 @@ export async function runSoak(opts, deps) {
   async function fullSample(extra = {}) {
     const s = await probe.sample({ at: now(), ...extra });
     noteErrors(s);
-    run.samples.push({ at: s.at, memory: s.memory, graphics: s.graphics });
+    run.samples.push({ at: s.at, memory: s.memory, graphics: s.graphics, afterGc: Boolean(extra.afterGc) });
     appendFileSync(join(out, "samples.jsonl"), `${JSON.stringify({ ...s, ...extra.mark })}\n`);
     if (env.SILTWAKE_JOB_HEARTBEAT) { try { writeFileSync(env.SILTWAKE_JOB_HEARTBEAT, ""); } catch { /* best effort */ } }
     return s;
@@ -171,6 +171,7 @@ export async function runSoak(opts, deps) {
     if (anchor && !(await deps.goto(g, anchor, { label: `dwell place ${name}`, stop: shouldStop }))) return;
     const s0 = await deps.read(g), home = anchor ?? { x: s0.cam[0], y: s0.cam[1], z: s0.cam[2] };
     run.startedAt = now(); // "autosaves keep happening" counts from arrival, not from the trip there
+    lastGc = -Infinity; // the first settled sample comes right after warm-up
     log(`dwelling at ${home.x.toFixed(0)},${home.y.toFixed(0)},${home.z.toFixed(0)} until the goal: ${t.dwell.autosaves} autosaves and ${Math.round(t.dwell.leakMinWindowS / 60)} min after warm-up`);
     for (;;) {
       if (stopping || ["pass", "partial", "fail"].includes(evaluate().status)) break;
