@@ -321,6 +321,18 @@ export function closestOnTriangle(p: Vec3, P: Float32Array | Float64Array, ia: n
   const ax = P[ia]!, ay = P[ia + 1]!, az = P[ia + 2]!;
   const abx = P[ib]! - ax, aby = P[ib + 1]! - ay, abz = P[ib + 2]! - az, acx = P[ic]! - ax, acy = P[ic + 1]! - ay, acz = P[ic + 2]! - az;
   const at = (u: number, v: number): Vec3 => ({ x: ax + abx * u + acx * v, y: ay + aby * u + acy * v, z: az + abz * u + acz * v });
+  const nx = aby * acz - abz * acy, ny = abz * acx - abx * acz, nz = abx * acy - aby * acx;
+  if (nx * nx + ny * ny + nz * nz < 1e-24) {
+    // Degenerate (a sliver from clipping or a repeated vertex): its edges.
+    let best = at(0, 0), bd = Infinity;
+    for (const [u0, v0, u1, v1] of [[0, 0, 1, 0], [0, 0, 0, 1], [1, 0, 0, 1]] as const) {
+      const q0 = at(u0, v0), q1 = at(u1, v1), dx = q1.x - q0.x, dy = q1.y - q0.y, dz = q1.z - q0.z, l2 = dx * dx + dy * dy + dz * dz;
+      const t = l2 > 0 ? Math.max(0, Math.min(1, ((p.x - q0.x) * dx + (p.y - q0.y) * dy + (p.z - q0.z) * dz) / l2)) : 0;
+      const q = { x: q0.x + dx * t, y: q0.y + dy * t, z: q0.z + dz * t }, d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2 + (q.z - p.z) ** 2;
+      if (d < bd) { bd = d; best = q; }
+    }
+    return best;
+  }
   const apx = p.x - ax, apy = p.y - ay, apz = p.z - az;
   const d1 = abx * apx + aby * apy + abz * apz, d2 = acx * apx + acy * apy + acz * apz;
   if (d1 <= 0 && d2 <= 0) return at(0, 0);

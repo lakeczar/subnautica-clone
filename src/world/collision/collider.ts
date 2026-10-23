@@ -108,6 +108,9 @@ export interface StaticCollider {
   solidAt(p: Vec3): StaticShape | null;
   /** Nearest surface point of a solid (its whole group) to p within `reach`. */
   surfaceNear(solid: StaticShape, p: Vec3, reach: number): { point: Vec3; distance: number } | null;
+  /** Triangle surfaces the vertical segment from (x, y, z) up to `top` crosses,
+   * over every shape (for owners with their own interior rule: a biome's cap). */
+  crossings(x: number, y: number, z: number, top: number): number;
   readonly triangles: number;
   readonly boxCount: number;
   readonly samples: number;
@@ -240,6 +243,11 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
     contact: (c, e, tolerance) => deepest(c, e, tolerance),
     solidAt: p => solidAt(p),
     surfaceNear: (solid, p, reach) => surfaceNear(solid, p, reach),
+    crossings(x, y, z, top) {
+      let n = 0;
+      for (const m of gather(x, y, z, x, top, z)) if (m.kind === "shape") n += crossingsAbove(m, x, y, z, top);
+      return n;
+    },
     triangles: members.reduce((n, m) => n + (m.kind === "shape" ? m.triangles : 0), 0),
     boxCount: members.reduce((n, m) => n + (m.kind === "boxes" ? m.ids.length : 0), 0),
     samples: members.reduce((n, m) => n + (m.kind === "heightfield" ? m.heights.length : 0), 0),
