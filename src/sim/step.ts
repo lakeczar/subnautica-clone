@@ -49,6 +49,7 @@ import {
   localToWorld,
   updateBerth,
 } from "./carrier.js";
+import { atCarrierHelm, isCarrierStation, leaveCarrierHelm, useCarrierStation } from "./carrierStations.js";
 
 /** A caller correction is another continuous move, including from a legacy rib
  * overlap. Require the straight vertical path, its intended endpoint and floor;
@@ -127,6 +128,14 @@ function actionResult(s: GameState, events: GameEvent[], summary: string, cue: "
   events.push({ type: "notice", channel: "action", message: s.feedback, summary }, { type: "sound", cue });
 }
 function exitAction(s: GameState, w: WorldQueries, events: GameEvent[]): string | null {
+  // UX-1: at the Hearthline's helm, X holds station and leaves into the bridge.
+  const helm = atCarrierHelm(s);
+  if (helm && s.fleet.docking) {
+    const no = leaveCarrierHelm(s, w);
+    if (no) events.push({ type: "notice", channel: "action", message: no, error: true, refusal: { kind: "exit", vehicleId: helm.id, code: "carrier" } });
+    else actionResult(s, events, "Left the helm");
+    return no;
+  }
   if (cabinHull(s)) {
     const no = leaveByHatch(s, w);
     if (!no) actionResult(s, events, "Left the cabin");
@@ -411,6 +420,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         s.feedback = readTechRecord(s, target.id);
         return null;
       }
+      if (isCarrierStation(target.id)) return useCarrierStation(s, target.id, w, events);
       if (target.id.startsWith("cabin:")) {
         const fixture = target.id.slice(6);
         if (fixture === "locker") {
@@ -1008,7 +1018,11 @@ export function stepGame(
   observeWorldCycles(s, world, events);
   advanceRenewal(s);
   advanceStory(s);
+  // UX-1: a lock cycle's outcome (launched, recovered, stopped) is said, not only stored.
+  const lock = s.fleet.docking?.transaction ?? null, before = s.feedback;
   updateBerth(s, world);
+  if (lock && !s.fleet.docking?.transaction && s.feedback !== before)
+    events.push({ type: "notice", channel: "action", message: s.feedback, error: !s.fleet.docking?.completed.includes(lock.id) });
   const recoveryEvent = updateRecovery(s, world);
   if (recoveryEvent) events.push(recoveryEvent.type === "notice"
     ? { ...recoveryEvent, channel: recoveryEvent.error ? "hazard" : "action", context: "recovery" }

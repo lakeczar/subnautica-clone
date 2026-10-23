@@ -56,7 +56,7 @@ export type CueId =
   | "hit.impact" | "hit.damage" | "hull.failure"
   | "transition.submerge" | "transition.surface" | "transition.board"
   | "transition.disembark" | "transition.interior"
-  | "carrier.clamp" | "carrier.lock" | "threat.disengage"
+  | "carrier.clamp" | "carrier.lock" | "carrier.helm" | "carrier.hold" | "threat.disengage"
   | "music.discovery" | "music.blueprint" | "music.arrival" | "music.homecoming" | "music.ending";
 
 export interface CueSpec {
@@ -311,6 +311,25 @@ export const CUES: Readonly<Record<CueId, CueSpec>> = {
       t({ wave: "sine", freq: 180, at: 0, dur: 0.7, attack: 0.002, gain: 0.6, fm: { ratio: 2.76, index: 1.6, indexTo: 0.1 } }),
       t({ wave: "sine", freq: 240, at: 0.09, dur: 0.6, attack: 0.002, gain: 0.45, fm: { ratio: 3.41, index: 1.2, indexTo: 0.1 } }),
       n({ color: "brown", filter: "lowpass", freq: 500, q: 0.8, at: 0, dur: 0.15, attack: 0.002, gain: 0.5 }),
+    ],
+  },
+  // UX-1: the bridge console wakes as the helm is taken (two soft rising notes)...
+  "carrier.helm": {
+    bus: "sfx", priority: 2, level: -18, cooldown: 1, maxInstances: 1, spatial: false,
+    caption: "[Helm console wakes]", essential: false, wet: 0.25,
+    sound: [
+      t({ wave: "sine", freq: 523, at: 0, dur: 0.35, attack: 0.01, gain: 0.45 }),
+      t({ wave: "sine", freq: 784, at: 0.12, dur: 0.5, attack: 0.01, gain: 0.35 }),
+      n({ color: "pink", filter: "bandpass", freq: 2400, q: 3, at: 0, dur: 0.08, attack: 0.002, gain: 0.15 }),
+    ],
+  },
+  // ...and the station-keeping thrusters spool down to a hold (a falling hum).
+  "carrier.hold": {
+    bus: "sfx", priority: 2, level: -17, cooldown: 1.5, maxInstances: 1, spatial: false,
+    caption: "[Thrusters settle to a hold]", essential: false, wet: 0.35,
+    sound: [
+      n({ color: "brown", filter: "lowpass", freq: 380, to: 140, q: 0.9, at: 0, dur: 1.6, attack: 0.08, gain: 0.7 }),
+      t({ wave: "sine", freq: 98, to: 73, glide: 1.2, at: 0, dur: 1.4, attack: 0.05, gain: 0.4 }),
     ],
   },
   "carrier.lock": {

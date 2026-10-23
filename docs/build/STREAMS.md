@@ -451,3 +451,21 @@ Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the f
 - 3090 and 4070 packs side by side.
 
 SCHED-2b's remote lane carries the packs back from alickers.
+
+### 2026-10-23 ~05:00Z — UX-1 merged; COL-1 A and SCHED-2a in fixes
+- **UX-1 accepted:** Sol R1 requested changes (helm rudder during Hold; steering retained across a same-tick import); R2 accepted (`review/ux-1-r2` `5b88509`).
+  - **Merged:** 1,305 fast tests pass, build OK, all 5 economy scripts pass.
+  - **P3s carried:** stale sliced advice; the synchronous console search cost (worst case 36.6 ms).
+  - **Evidence:** 3090 exclusive and 4070 (indicative) bridge runs at 60 fps, max 16.8 ms.
+- **COL-1 A** (`245a006`): R1 requested changes, with five edge-case defects (escape through another wall, parity at shared edges, heightfield entry from holes, missed bounded recovery, lost vertical bounds). The builder is fixing them.
+- **SCHED-2a** (`8f702de`): R1 not accepted (5 P1, 3 P2). The builder is fixing them, and R2 is dispatched by the coordinator.
+- **Builders:** UX-1's slot is free and reserved for REC-1 once CW-1 merges.
+
+### 2026-10-23 ~08:00Z — reviews in flight; MEM-1 inputs
+- **COL-1 A:** the R1 fixes are done (`b94430c`), and Sol R2 is running. It also found LC's own endpoint debt: 45 of 8,000 Canopy probe moves end in poses LC rejects. It's bounded at 1% by the oracle; the root fix (walls on LC's cap and collar boundaries) goes to LC-2 or COL-1 B.
+- **CR-1:** ready at `494b7c3`, with root merged. Sol R1 is running.
+- **SCHED-2a:** the R1 fixes are done (`e85c8e3`), and Sol R2 is running. It isn't installed; the cut-over and `--gpu-guard` are the coordinator's.
+- **For MEM-1:**
+  - the GPU process's RSS grows about 35–40 MiB an hour idling at the pod (SCHED-2's 3090 dwell soak);
+  - every load requests terrain tiles `t_4/5_11/12`, which aren't in the bake, giving four 404s. That's for the bake owner (WK-1), unless CW-1's terrain manifest check already fixes it.
+- **alickers-job:** clears compiled test output when the sandbox changes commit (`fa35339`).

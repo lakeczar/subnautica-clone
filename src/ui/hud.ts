@@ -18,6 +18,8 @@ import { FACILITY_SOLIDS } from "../sim/world.js";
 import { escapeHtml, recoveryDisplay } from "./format.js";
 import { EncounterPresentation, type ActionResult, type DamageTarget, type ThreatDamage } from "./notices.js";
 import { hunterBanner, ThreatEdgeView } from "./threatCue.js";
+import { isCarrierStation } from "../sim/carrierStations.js";
+import { CARRIER_STATION_VERBS, HELM_CONTROLS, helmGuidance } from "./helmHud.js";
 
 export interface HudAim { target: AimedTarget | null; preview: ReachPreview | null }
 
@@ -92,7 +94,7 @@ export class HudView {
     this.get("depth").textContent = exposure(state).pressureDepth.toFixed(1);
     this.get("movement").textContent =
       mode === "piloting"
-        ? "Piloting"
+        ? state.fleet.vehicles.find((v) => v.id === state.player.controlledVehicleId)?.hull === "hearthline" ? "At the helm" : "Piloting"
         : mode === "interior"
           ? "Dry interior"
           : mode === "swimming"
@@ -150,7 +152,8 @@ export class HudView {
       : pulse.refusal === null ? `G · ${pulse.cost} cell points · ${(pulse.remainingCharge + pulse.cost).toFixed(0)} → ${pulse.remainingCharge.toFixed(0)}%`
       : `G · ${pulse.block === "facing" ? "face the survey area" : "no cell with 25 charge"} · Z quiet / cover / retreat`;
     this.get("control-hint").textContent = threatened || aftermath || this.get("context-hint").textContent ? "" : v
-      ? state.tick - this.pilotSince < 720 ? "Look steers · W/S thrust · A/D slide · Space/C rise/dive · Z quiet · Shift boost" : ""
+      ? v.hull === "hearthline" ? HELM_CONTROLS
+      : state.tick - this.pilotSince < 720 ? "Look steers · W/S thrust · A/D slide · Space/C rise/dive · Z quiet · Shift boost" : ""
       : state.tick - this.startTick < 3600 ? "WASD move · mouse / arrows look · Space rise · C dive" : "";
     const pitch = state.player.pose.pitch;
     this.get("pitch-cue").hidden = !(mode === "swimming" || v) || Math.abs(pitch) <= 0.14;
@@ -218,7 +221,7 @@ export class HudView {
       // The Creel's E is its work key: tool arms on a host ahead, else its cabin.
       const work = v.hull === "creel" ? creelWork(state) : "";
       const exitKey = v.hull === "creel" ? "X" : this.exitKey;
-      const html = `${work}<kbd>${exitKey}</kbd> ${block ? "Exit blocked" : `${deliberateExit(state) ? "Hold to exit" : "Exit"}`}${this.exitProgress !== null ? ` <progress aria-label="Exit hold" max="1" value="${this.exitProgress}"></progress>` : ""}${block || stopped ? `<small>${escapeHtml(block?.message ?? `Suit ${personalLimit(state)} m · hull ${v.rating} m`)}</small>` : ""}`;
+      const html = helmGuidance(state) ?? `${work}<kbd>${exitKey}</kbd> ${block ? "Exit blocked" : `${deliberateExit(state) ? "Hold to exit" : "Exit"}`}${this.exitProgress !== null ? ` <progress aria-label="Exit hold" max="1" value="${this.exitProgress}"></progress>` : ""}${block || stopped ? `<small>${escapeHtml(block?.message ?? `Suit ${personalLimit(state)} m · hull ${v.rating} m`)}</small>` : ""}`;
       if (guidance.innerHTML !== html) guidance.innerHTML = html;
       guidance.classList.toggle("urgent", block !== null);
     }
@@ -610,6 +613,7 @@ function creelWork(state: GameState): string {
 /** Specific verbs for B1 hosts and cabin fixtures; null keeps the generic verb. */
 function fixtureVerb(t: AimedTarget, state: GameState | null): string | null {
   if (t.kind === "source" && SOURCES[t.id as keyof typeof SOURCES]?.item === "tagged_frame" && t.verb === "collect") return "Lift · 10 s";
+  if (isCarrierStation(t.id)) return CARRIER_STATION_VERBS[t.id];
   // Interior fixtures first: the cabin's own hatch leaves; an exterior hatch enters.
   if (!t.id.startsWith("cabin:")) return t.id.endsWith(":hatch") ? "Enter cabin" : null;
   const v = state ? cabinHull(state) : undefined;
