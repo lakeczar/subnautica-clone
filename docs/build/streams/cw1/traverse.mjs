@@ -126,7 +126,11 @@ try {
   await page.addInitScript(() => {
     window.__siltwakePerf = []; window.__gaps = [];
     // Each gap with the JS heap at its end: a heap that shrank across a long gap was collected in it (GC).
-    let last = 0; const loop = (now) => { if (last) window.__gaps.push([now, now - last, performance.memory?.usedJSHeapSize ?? 0]); last = now; requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+    // Long gaps also keep where the camera was.
+    let last = 0; const loop = (now) => {
+      if (last) window.__gaps.push([now, now - last, performance.memory?.usedJSHeapSize ?? 0, now - last > 33.4 ? document.querySelector("#ocean")?.dataset.cameraPosition ?? null : null]);
+      last = now; requestAnimationFrame(loop);
+    }; requestAnimationFrame(loop);
   });
   const t0 = Date.now();
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load", timeout: 60000 });
@@ -189,10 +193,10 @@ try {
   result.work = { p50: quant(work, 0.5), p95: quant(work, 0.95), p99: quant(work, 0.99), max: work.length ? +work.at(-1).toFixed(1) : null,
     over33: work.filter(w => w > 33.4).length };
   // Every long gap with the work of the frame that ran in it.
-  for (const [i, [at, g, heap]] of data.gaps.entries()) if (g > 33.4) {
+  for (const [i, [at, g, heap, camera]] of data.gaps.entries()) if (g > 33.4) {
     const e = data.perf.find(x => x.at >= at - g - 1 && x.at <= at + 1) ?? null;
     const freed = i > 0 && heap && data.gaps[i - 1][2] ? data.gaps[i - 1][2] - heap : 0;
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of

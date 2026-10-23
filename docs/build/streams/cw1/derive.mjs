@@ -155,7 +155,9 @@ const { SaveSlot, loadSnapshot } = await import(B + "scripts/playthrough/persist
 const { runPhases } = await import(B + "scripts/playthrough/runner.js");
 await (await import(B + "scripts/playthrough/content.js")).loadCampaign();
 const slot = new SaveSlot("cw1-traversal");
-const run = await runPhases(new Driver("creel", "creel"), LIVE_PHASES, { readOptional: true, reverse: false, verbose: false }, slot);
+// The live phases reach the refits state; later states (the divide phase's 800 m Creel) need the creel route's later phases.
+const later = LIVE_PHASES.some(p => p.id === SNAPSHOT) ? [] : (await import(B + "scripts/playthrough/later.js")).CREEL_LATER;
+const run = await runPhases(new Driver("creel", "creel"), [...LIVE_PHASES, ...later], { readOptional: true, reverse: false, verbose: false }, slot);
 console.log(run.phases.map((p) => `${p.id}:${p.status}`).join(" "));
 const base = loadSnapshot(slot.snapshots.get(SNAPSHOT));
 segments.forEach((seg, k) => {

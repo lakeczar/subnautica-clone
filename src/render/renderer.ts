@@ -394,11 +394,13 @@ export function createRenderer(
         // Chunks stream around the camera. After a load or a jump the nearby
         // ground is built before this frame draws; with no expedition running
         // (title, loading) construction gets more of each frame.
+        const timed = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
         const jumped = !lastViewer || Vector3.Distance(lastViewer, camera.position) > JUMP;
+        // A jump during play builds the near world before the frame draws: say from where to where.
+        const jump = jumped && lastViewer && timed ? [...lastViewer.asArray(), ...camera.position.asArray()].map(n => Math.round(n)) : null;
         lastViewer = camera.position.clone();
         const cinematic = !state || state.opening.phase < 4;
         const extraMs = cinematic ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
-        const timed = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
         const tStream = timed ? performance.now() : 0;
         const world = art.stream(camera.position, { ...(jumped ? { nearRadius: NEAR_WORLD } : {}), extraMs });
         const chunkMs = timed ? performance.now() - tStream : 0;
@@ -464,6 +466,7 @@ export function createRenderer(
           chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2),
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
+          jump,
         };
         canvas.dataset.meshes = String(scene.meshes.length);
         canvas.dataset.vertices = String(scene.meshes.reduce((n, m) => n + m.getTotalVertices(), 0));
