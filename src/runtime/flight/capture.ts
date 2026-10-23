@@ -150,11 +150,10 @@ export class FlightCapture {
       v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS);
       const size = this.scaled(VIDEO_SIZE.width);
       v.pending++;
-      const captured = now;
       void createImageBitmap(this.canvas, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: "low" }).then((bitmap) => {
         // A later task: its time is the recorder's too.
         const t0 = performance.now();
-        try { this.videoFrame(v, bitmap, captured); } finally { r.charge(performance.now() - t0, "video"); }
+        try { this.videoFrame(v, bitmap); } finally { r.charge(performance.now() - t0, "video"); }
       }, () => { v.pending--; });
     }
     at = performance.now();
@@ -177,14 +176,13 @@ export class FlightCapture {
       void createImageBitmap(v.last).then((copy) => {
         v.pending--;
         if (this.disposed || this.video !== v || v.paused) { copy.close(); return; }
-        v.context.transferFromImageBitmap(copy);
-        v.track.requestFrame();
+        this.handOver(v, copy);
       }, () => { v.pending--; });
     }
     if (this.spool && now - this.spool.last >= SPOOL_EVERY_MS) this.flush(now);
   }
 
-  private videoFrame(v: Video, bitmap: ImageBitmap, captured: number): void {
+  private videoFrame(v: Video, bitmap: ImageBitmap): void {
     v.pending--;
     if (this.disposed || this.video !== v || v.paused) { bitmap.close(); return; }
     if (v.canvas.width !== bitmap.width || v.canvas.height !== bitmap.height) { v.canvas.width = bitmap.width; v.canvas.height = bitmap.height; }
@@ -196,15 +194,19 @@ export class FlightCapture {
     void createImageBitmap(bitmap).then((copy) => {
       v.pending--;
       if (this.disposed || this.video !== v || v.paused) { copy.close(); return; }
-      v.context.transferFromImageBitmap(copy);
-      v.track.requestFrame();
+      this.handOver(v, copy);
     }, () => { v.pending--; });
     v.frames++;
-    if (v.segment.start === null) {
-      // This segment's time 0 on the page clock: the pack lines video and frames up by it.
-      v.segment.start = Math.round(captured);
-      this.videoHeader();
-    }
+  }
+  /** Hands the video a picture. The segment's time 0 on the page clock (the pack
+   * lines video and frames up by it) is when its first picture is handed over,
+   * since that is where MediaRecorder starts its clock; not when the picture was
+   * taken: one taken just before a long task (the load) arrives seconds later,
+   * and dating the file from it put the whole segment that much early. */
+  private handOver(v: Video, copy: ImageBitmap): void {
+    v.context.transferFromImageBitmap(copy);
+    v.track.requestFrame();
+    if (v.segment.start === null) { v.segment.start = Math.round(performance.now()); this.videoHeader(); }
   }
 
   /** The game canvas scaled to `width`, keeping its aspect. */
