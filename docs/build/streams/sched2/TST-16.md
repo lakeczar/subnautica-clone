@@ -18,6 +18,16 @@ Four review rounds each found another lifetime race in one mechanism: changing a
 - **Deleted:** `handover.mjs`, the boost journal (`state.boost`), the freeze (`state.frozen`), the backstop, the runtime setter and read-back, `install.sh --rollback` and the thaw. Rollback is back to its pre-TST-16 form.
 - **R4's findings** (F1 freeze ownership across installer operations, F2 a reset outliving a killed handover, F3 freeze visibility) concern only that machinery, so they are removed with it. The diff is much smaller.
 
+## R7 review responses
+
+Review `4aa06738` on `review/tst-16-r7`, on `2ada5062`: two P2s and one P3, all mechanical. No design change.
+- **F1 (P2): the install refusal wasn't atomic with admission, and skipped slices with no unit file.**
+  - **One transaction:** the check, the write and the reload now happen inside one queue transaction, the lock admission takes. It refuses while any ticket runs (exactly as removal does), and while the slice holds processes or that can't be established, also when there is no unit file.
+  - **Still first:** it stays before every other switch, so a refusal changes nothing.
+  - **S24:** a populated slice with no unit file, and a running ticket with the slice empty, both refuse. On `2ada5062` the fileless case was installed.
+- **F2 (P2): missing throttle counters certified clean.** `sliceThrottle(start, end)` in `contention.mjs` requires both counters at both readings to be nonnegative integers that didn't go backwards. Anything missing, invalid or reset is `unmeasured` and `DISTURBED`, and either positive delta counts as throttling. **Unit tests:** absent fields at either end, a time-only delta, a reset, and no snapshot.
+- **F3 (P3): any events text without "populated 1" counted as empty.** `populatedFromEvents()` in `state.mjs` is true or false only for an explicit `populated 1` or `populated 0`; anything else is unknown, so `unitPopulated` counts it as in use. **Unit test:** covers all three.
+
 ## R6 review responses
 
 Review `867fd6e9` on `review/tst-16-r6`, on `b10aa825`: one P2, one P3.
@@ -128,7 +138,7 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
 
 ## Checks
 
-- **Unit tests** (`tests/heavy-contention.test.ts`, 8, including a run without the slice's priority, throttling and the live-slice mismatch):
+- **Unit tests** (`tests/heavy-contention.test.ts`, 9, including a run without the slice's priority, throttling with strict counters, explicit population and the live-slice mismatch):
   - the CW-1 case (host memory "full" 32% with the job unstalled is clean, and recorded);
   - every reason with its value, and host swap and other CPU recorded but not judged;
   - the tail merge;
@@ -147,9 +157,9 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
     - the old version then runs its own exclusive job in the lane's slice, with nothing left over;
     - uninstall leaves the inert unit; `--remove-exclusive-slice` refuses while a ticket runs, and removes it once done (R5).
   - **S23 (R5-F1):** a unit removed between readiness and launch (a default slice under the right name), and a wrong memory cap: `unavailable`, `DISTURBED`, judged on the live slice reading.
-  - **S24 (R6):** neither removal nor a changing reinstall happens while the slice holds processes, also when systemd can't be asked.
+  - **S24 (R6, R7):** neither removal nor a changing reinstall happens while the slice holds processes, also when systemd can't be asked or there's no unit file, nor while a ticket runs.
   - **SCHED-1 test 7** checks the job's own measurement.
-- **Full suites** on the merged branch (root `91dc1ab` with this work), after R6: SCHED-1 **23/23**, SCHED-2 **24/24** (S24 new), SCHED-2b **27/27**, fast tier **1,405/1,405**. No units, slices, unit files or drop-ins left behind.
+- **Full suites** on the merged branch (root `91dc1ab` with this work), after R7: SCHED-1 **23/23**, SCHED-2 **24/24**, SCHED-2b **27/27**, fast tier **1,406/1,406**. No units, slices, unit files or drop-ins left behind.
 
 ## Validation (CW-1 segment 7, run A)
 

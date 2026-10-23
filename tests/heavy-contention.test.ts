@@ -75,9 +75,24 @@ test("a run that didn't get the exclusive slice's CPU priority is not boosted ev
   assert.equal(off.disturbed, true);
   assert.match(off.reasons.join(), /the job didn't run in the boosted slice x\.slice \(x\.slice is not installed \(not-found\)\): not boosted evidence/);
   assert.equal(judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied", throttled: { periods: 0, ms: 0 } } }).disturbed, false);
-  const throttled = judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied", throttled: { periods: 3, ms: 41 } } });
+  const throttled = judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied", throttled: { periods: 3, usec: 41000 } } });
   assert.equal(throttled.disturbed, true);
   assert.match(throttled.reasons.join(), /the exclusive slice was CPU-throttled 3 time\(s\), 41 ms in all/);
+  const timeOnly = judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied", throttled: { periods: 0, usec: 5000 } } });
+  assert.equal(timeOnly.disturbed, true, "either positive delta is throttling");
+  const invalid = judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied", throttled: { invalid: "were missing or invalid (throttled_usec at the end)" } } });
+  assert.match(invalid.reasons.join(), /unmeasured: the exclusive slice's throttle counters were missing/);
+});
+
+test("R7-F2: throttle counters must be nonnegative integers at both readings, never coerced; R7-F3: only an explicit populated 0 is empty", () => {
+  const snap = (n?: number, u?: number) => C.parseCounters(`uptime 1.0\nslice_path /a/x.slice${n == null ? "" : `\nslice_nr_throttled ${n}`}${u == null ? "" : `\nslice_throttled_usec ${u}`}\n`);
+  assert.deepEqual(C.sliceThrottle(snap(2, 100), snap(2, 100)), { periods: 0, usec: 0 });
+  assert.deepEqual(C.sliceThrottle(snap(2, 100), snap(2, 900)), { periods: 0, usec: 800 });
+  assert.match(C.sliceThrottle(snap(2, 100), snap(2)).invalid, /missing or invalid \(throttled_usec at the end\)/);
+  assert.match(C.sliceThrottle(snap(undefined, 100), snap(2, 100)).invalid, /nr_throttled at the start/);
+  assert.match(C.sliceThrottle(snap(5, 100), snap(2, 100)).invalid, /went backwards \(nr_throttled\)/);
+  assert.match(C.sliceThrottle(null, snap(2, 100)).invalid, /missing/);
+  assert.deepEqual([S.populatedFromEvents("populated 1\nfrozen 0\n"), S.populatedFromEvents("populated 0\nfrozen 0\n"), S.populatedFromEvents("frozen 0\n"), S.populatedFromEvents(null)], [true, false, null, null]);
 });
 
 test("R5-F1: the live slice reading decides the priority, never the path: a default slice with the right name, or a wrong cap, is a mismatch", () => {

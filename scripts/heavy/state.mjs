@@ -146,10 +146,18 @@ export function unitPopulated(name) {
   const p = Object.fromEntries(r.stdout.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
   if (p.LoadState === "not-found") return false;
   if (p.ControlGroup) {
-    const events = cgroupRead(`/sys/fs/cgroup${p.ControlGroup}`, "cgroup.events");
-    if (events != null) return /^populated 1$/m.test(events);
+    const known = populatedFromEvents(cgroupRead(`/sys/fs/cgroup${p.ControlGroup}`, "cgroup.events"));
+    if (known != null) return known;
   }
   return p.ActiveState !== "inactive" && p.ActiveState !== "failed";
+}
+
+/** A cgroup.events text's population: true or false only when it says so
+ * ("populated 1" / "populated 0"); null when absent or unrecognised (R7-F3). */
+export function populatedFromEvents(text) {
+  if (/^populated 1$/m.test(text ?? "")) return true;
+  if (/^populated 0$/m.test(text ?? "")) return false;
+  return null;
 }
 
 /** What systemd recorded for a finished job scope (Result, MemoryPeak,

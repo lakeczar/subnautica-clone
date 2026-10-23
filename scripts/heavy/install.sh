@@ -120,29 +120,37 @@ install_guard() {
 }
 # The exclusive slice's unit (TST-16), written once: a fixed CPUWeight, and the
 # heavy slice's caps for this machine (policy sliceLimits), so moving an
-# exclusive job here escapes no aggregate limit. Rewritten only if it differs.
+# exclusive job here escapes no aggregate limit. Rewritten only if it differs,
+# and never under a measurement: the check (no ticket running, the slice
+# provably empty, also with no unit file), the write and the reload happen in
+# one queue transaction, the lock admission takes, so no job is admitted in
+# between (R7-F1). Before anything else is switched: a refusal changes nothing.
 if [[ -n $excl ]]; then
-  unit=$(cd "$src" && SILTWAKE_SCHED_DIR="$dir" node --input-type=module -e '
-    const { sliceLimits } = await import("./policy.mjs");
-    const { loadConfig } = await import("./state.mjs");
+  (cd "$src" && SILTWAKE_SCHED_DIR="$dir" node --input-type=module -e '
+    const { spawnSync } = await import("node:child_process");
+    const { mkdirSync, readFileSync, renameSync, writeFileSync } = await import("node:fs");
     const { availableParallelism } = await import("node:os");
-    const w = sliceLimits(availableParallelism(), loadConfig());
-    console.log(["[Unit]", "Description=Siltwake heavy-check exclusive jobs (TST-16): CPU priority while one runs", "",
-      "[Slice]", "CPUAccounting=yes", "CPUWeight=10000", `CPUQuota=${w.cpuQuotaPct}%`, "MemoryAccounting=yes", `MemoryMax=${w.memoryMaxMiB}M`, "MemorySwapMax=0"].join("\n"));')
-  if [[ "$(cat "$excl_dir/$excl" 2>/dev/null)" != "$unit" ]]; then
-    # Never under a running measurement: a changed unit would change its slice
-    # mid-run. Checked fail-closed (state.mjs unitPopulated), before anything
-    # else is switched, so a refusal changes nothing.
-    if [[ -f "$excl_dir/$excl" ]] && ! (cd "$src" && node --input-type=module -e '
-        const { unitPopulated } = await import("./state.mjs");
-        process.exit(unitPopulated(process.argv[1]) ? 1 : 0);' "$excl"); then
-      echo "not installed: $excl would change while it holds processes (or that could not be established); rerun when no exclusive job runs" >&2
-      exit 3
-    fi
-    mkdir -p "$excl_dir" && printf '%s\n' "$unit" >"$excl_dir/$excl.tmp" && mv "$excl_dir/$excl.tmp" "$excl_dir/$excl"
-    systemctl --user daemon-reload
-    echo "installed $excl ($excl_dir)"
-  fi
+    const { sliceLimits } = await import("./policy.mjs");
+    const { loadConfig, transaction, unitPopulated } = await import("./state.mjs");
+    const [slice, dir] = process.argv.slice(1), file = `${dir}/${slice}`, cfg = loadConfig();
+    const w = sliceLimits(availableParallelism(), cfg);
+    const unit = ["[Unit]", "Description=Siltwake heavy-check exclusive jobs (TST-16): CPU priority while one runs", "",
+      "[Slice]", "CPUAccounting=yes", "CPUWeight=10000", `CPUQuota=${w.cpuQuotaPct}%`, "MemoryAccounting=yes", `MemoryMax=${w.memoryMaxMiB}M`, "MemorySwapMax=0", ""].join("\n");
+    let now = null; try { now = readFileSync(file, "utf8"); } catch { /* none yet */ }
+    if (now === unit) process.exit(0);
+    const why = transaction(cfg, (state) => {
+      const running = Object.entries(state.tickets ?? {}).filter(([, t]) => t.state === "running").map(([id]) => id);
+      if (running.length) return { result: `tickets ${running.join(", ")} are running` };
+      if (unitPopulated(slice)) return { result: `${slice} holds processes, or that could not be established` };
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(`${file}.tmp`, unit);
+      renameSync(`${file}.tmp`, file);
+      spawnSync("systemctl", ["--user", "daemon-reload"]);
+      return { result: null };
+    });
+    if (why) { console.error(`not installed: ${slice} would change while ${why}; rerun when the queue is idle`); process.exit(3); }
+    console.log(`installed ${slice} (${dir})`);
+  ' "$excl" "$excl_dir") || exit $?
 fi
 
 version=$(cd "$src" && cat "${files[@]}" "$transport" | sha256sum | cut -c1-12)

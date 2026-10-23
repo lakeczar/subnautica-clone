@@ -11,7 +11,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { heavyJobGuard } from "./build-guard.mjs";
 import { sliceLimits } from "./policy.mjs";
@@ -416,7 +416,7 @@ test("S17 (TST-16): an exclusive job runs in the exclusive slice, whose fixed we
   const w = waitFor(c, x);
   assert.equal(w.code, 0);
   const ctx = result(c, x).context, dir = join(c.sched, "jobs", x);
-  assert.deepEqual(ctx.boost, { slice, weight: 10000, status: "applied", throttled: { periods: 0, ms: 0 } });
+  assert.deepEqual(ctx.boost, { slice, weight: 10000, status: "applied", throttled: { periods: 0, usec: 0 } });
   assert.equal(ctx.reasons.some((r) => /boosted slice/.test(r)), false);
   assert.match(w.err, new RegExp(`CPU priority in ${slice.replace(/\./g, "\\.")} \\(weight 10000\\)`));
   assert.deepEqual([ctx.v, ctx.measured, ctx.missing], [2, true, []], JSON.stringify(ctx));
@@ -516,7 +516,7 @@ test("S22 (TST-16): install writes the exclusive slice's unit once; a rollback t
   assert.equal(bash(join(oldTree, "scripts", "heavy", "install.sh")).status, 0);
   assert.equal(current(), old);
   assert.equal(waitFor(c, x).code, 0);
-  assert.deepEqual(result(c, x).context.boost, { slice, weight: 10000, status: "applied", throttled: { periods: 0, ms: 0 } }, "it kept its priority to its end");
+  assert.deepEqual(result(c, x).context.boost, { slice, weight: 10000, status: "applied", throttled: { periods: 0, usec: 0 } }, "it kept its priority to its end");
   await until("the slice is empty", () => sliceEmpty(slice), 15000);
   // The old version then runs its own exclusive job, in the lane's slice as before; nothing is left over.
   const o = oldHc(["submit", "--class", "exclusive", "--", "true"]).out.trim();
@@ -609,13 +609,26 @@ test("S24 (TST-16 R6): the exclusive slice's unit is never removed or rewritten 
     writeFileSync(join(c.sched, "config.json"), JSON.stringify({ ...fast, poolMiB: 4096 }));
     r = install();
     assert.equal(r.status, 3);
-    assert.match(r.stderr, new RegExp(`not installed: ${slice.replace(/\./g, "\\.")} would change while it holds processes`));
+    assert.match(r.stderr, new RegExp(`not installed: ${slice.replace(/\./g, "\\.")} would change while ${slice.replace(/\./g, "\\.")} holds processes`));
     assert.equal(readFileSync(unitFile, "utf8"), before);
     r = install([], { PATH: `${d}:${process.env.PATH}` });
     assert.equal(r.status, 3, "nor when that can't be established");
+    // With no unit file at all (the slice made implicitly), the population check still applies (R7-F1).
+    rmSync(unitFile); spawnSync("systemctl", ["--user", "daemon-reload"]);
+    r = install();
+    assert.equal(r.status, 3, r.stdout);
+    assert.equal(existsSync(unitFile), false);
   } finally { spawnSync("systemctl", ["--user", "stop", `${unit}.scope`], { stdio: "ignore" }); p.kill(); }
   await until("empty", () => sliceEmpty(slice), 10000);
+  // A running ticket refuses it too: the check, write and reload are one queue transaction (R7-F1).
+  const q = submit(c, c.wt("q"), "--class", "quick", "--", "sleep", "5");
+  await running(c, q);
   let r = install();
+  assert.equal(r.status, 3);
+  assert.match(r.stderr, new RegExp(`would change while tickets ${q} are running`));
+  assert.equal(existsSync(unitFile), false);
+  assert.equal(waitFor(c, q).code, 0);
+  r = install();
   assert.equal(r.status, 0, r.stderr);
   assert.notEqual(readFileSync(unitFile, "utf8"), before, "rewritten once idle");
   r = install(["--remove-exclusive-slice"]);

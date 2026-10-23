@@ -108,6 +108,21 @@ export function parseCounters(text) {
 }
 
 /**
+ * The exclusive slice's CPU throttling between two snapshots (its cpu.stat
+ * nr_throttled and throttled_usec): { periods, usec }, or { invalid: why }
+ * unless both counters are nonnegative integers at both readings and neither
+ * went backwards (R7-F2). A missing counter is never zero.
+ */
+export function sliceThrottle(start, end) {
+  const a = start?.slice, b = end?.slice, ok = (x) => Number.isInteger(x) && x >= 0;
+  for (const [k, file] of [["nrThrottled", "nr_throttled"], ["throttledUsec", "throttled_usec"]]) {
+    if (!ok(a?.[k]) || !ok(b?.[k])) return { invalid: `were missing or invalid (${file} at the ${!ok(a?.[k]) ? "start" : "end"})` };
+    if (b[k] < a[k]) return { invalid: `went backwards (${file})` };
+  }
+  return { periods: b.nrThrottled - a.nrThrottled, usec: b.throttledUsec - a.throttledUsec };
+}
+
+/**
  * Whether a snapshot's live slice (scope-run.sh read it from the kernel) is
  * the exclusive slice as configured: `want` { path, weight, cpuMax, memoryMax,
  * swapMax } as cgroup file contents. Returns the mismatches, [] when it is.
@@ -184,7 +199,10 @@ export function judge({ start, end, points = [], nproc, thresholds = {}, windowS
   if (gpuShared.length) reasons.push(`the GPU was shared outside the lease (pid ${gpuShared.map((u) => u.pid).join(", ")})`);
   // A run that should have had the exclusive CPU priority and didn't is not boosted evidence.
   if (boost && boost.status !== "applied") reasons.push(`the job didn't run in the boosted slice ${boost.slice} (${boost.why ?? boost.status}): not boosted evidence`);
-  if (boost?.throttled?.periods > 0) reasons.push(`the exclusive slice was CPU-throttled ${boost.throttled.periods} time(s), ${boost.throttled.ms} ms in all, during the run`);
+  if (boost?.status === "applied" && boost.throttled) {
+    if (boost.throttled.invalid) reasons.push(`unmeasured: the exclusive slice's throttle counters ${boost.throttled.invalid}`);
+    else if (boost.throttled.periods > 0 || boost.throttled.usec > 0) reasons.push(`the exclusive slice was CPU-throttled ${boost.throttled.periods} time(s), ${Math.round(boost.throttled.usec / 1000)} ms in all, during the run`);
+  }
   if (missing.length) reasons.push(`unmeasured: ${missing.join("; ")}`);
   return {
     v: 2, measured: missing.length === 0, missing, windowS, points: good.length, measuredS: whole ? round2((whole.to - whole.from) / 1000) : 0,
