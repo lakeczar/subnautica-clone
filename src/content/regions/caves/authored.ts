@@ -233,7 +233,13 @@ export function openProfile(p: readonly number[], step: number, width: number): 
  * (and its shells) would depend on build order (COL-1 R6). Open addressing
  * over Float64 triples keeps every point's own value at about the memory a
  * numeric-keyed Map took. Queries are never NaN (they are inside the
- * footprint), so NaN marks an empty slot. */
+ * footprint), so NaN marks an empty slot.
+ *
+ * Owned by its `caveFloor`; at most `POINT_MEMO_ENTRIES` points (a table of
+ * 6 MiB at most: the largest cave build asks about 64 thousand); past that
+ * it starts empty again, which changes no answer, since every entry is the
+ * exact height of its point. (Ledger registration waits on STEW-1's.) */
+const POINT_MEMO_ENTRIES = 1 << 17;
 function pointMemo(): { get(x: number, z: number): number | undefined; set(x: number, z: number, h: number): void } {
   let cap = 1 << 12, size = 0, table = new Float64Array(cap * 3).fill(NaN);
   const find = (t: Float64Array, n: number, x: number, z: number): number => {
@@ -247,6 +253,7 @@ function pointMemo(): { get(x: number, z: number): number | undefined; set(x: nu
       return Number.isNaN(table[i * 3]!) ? undefined : table[i * 3 + 2]!;
     },
     set(x, z, h) {
+      if (size >= POINT_MEMO_ENTRIES) { cap = 1 << 12; size = 0; table = new Float64Array(cap * 3).fill(NaN); }
       if ((size + 1) * 2 > cap) {
         const old = table, n = cap;
         cap *= 2; table = new Float64Array(cap * 3).fill(NaN);

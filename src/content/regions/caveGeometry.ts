@@ -600,7 +600,12 @@ interface RawShell { positions: number[]; rooms: number[]; triangles: number[] }
 
 /** `freeze` marks voxel corners (X/Z) whose vertices must not relax: near a
  * shared edge, so both neighbours compute the same seam. */
-function surfaceNets(l: Lattice, clamp: number, freeze?: (x: number, z: number) => boolean): RawShell {
+/** `ringed`: the lattice's outermost cells are the shell of cells `coarsen`
+ * adds beyond the source grid. Their vertices are frozen, and every other
+ * vertex relaxes over triangles of its own cells only, so the surface inside
+ * is exactly what the unringed lattice gives; the ring only carries it on
+ * past the footprint's sides (and closes it underneath). */
+function surfaceNets(l: Lattice, clamp: number, freeze?: (x: number, z: number) => boolean, ringed = false): RawShell {
   const { grid, solid, field, room } = l, { nx, ny, nz, origin, voxel } = grid;
   const dx = nx - 1, dy = ny - 1, dz = nz - 1;
   const vertexOf = new Int32Array(dx * dy * dz).fill(-1);
@@ -654,32 +659,43 @@ function surfaceNets(l: Lattice, clamp: number, freeze?: (x: number, z: number) 
     if (j + 1 < ny && s !== solid[at(i, j + 1, k)]) quad(cell(i - 1, j, k - 1), cell(i, j, k - 1), cell(i, j, k), cell(i - 1, j, k), 1, s ? 1 : -1);
     if (k + 1 < nz && s !== solid[at(i, j, k + 1)]) quad(cell(i - 1, j - 1, k), cell(i, j - 1, k), cell(i, j, k), cell(i - 1, j, k), 2, s ? 1 : -1);
   }
-  let frozen: Uint8Array | undefined;
+  let frozen: Uint8Array | undefined, ring: Uint8Array | undefined;
   if (freeze) {
     frozen = new Uint8Array(corners.length / 3);
     for (let v = 0; v < frozen.length; v++) frozen[v] = freeze(corners[v * 3]!, corners[v * 3 + 2]!) ? 1 : 0;
   }
-  relax(positions, corners, triangles, clamp, frozen);
+  if (ringed) {
+    ring = new Uint8Array(corners.length / 3);
+    for (let k = 0; k < dz; k++) for (let j = 0; j < dy; j++) for (let i = 0; i < dx; i++) {
+      const v = vertexOf[i + dx * (j + dy * k)]!;
+      if (v >= 0 && (i === 0 || j === 0 || k === 0 || i === dx - 1 || j === dy - 1 || k === dz - 1)) ring[v] = 1;
+    }
+  }
+  relax(positions, corners, triangles, clamp, frozen, ring);
   return { positions, rooms, triangles };
 }
 
 /** Two damped Laplacian passes over the shell, each vertex held within
  * `clamp` of its voxel corner per axis, so the rock bound still holds while
  * the voxel staircase relaxes into slopes the cel bands draw cleanly.
- * `frozen` vertices keep their raw position. */
-function relax(positions: number[], corners: readonly number[], triangles: readonly number[], clamp: number, frozen?: Uint8Array): void {
+ * `frozen` vertices keep their raw position, and so do `ring` vertices,
+ * which no other vertex's average counts either. */
+function relax(positions: number[], corners: readonly number[], triangles: readonly number[], clamp: number, frozen?: Uint8Array, ring?: Uint8Array): void {
   const n = positions.length / 3, sum = new Float64Array(n * 3), count = new Uint16Array(n);
   for (let pass = 0; pass < 2; pass++) {
     sum.fill(0); count.fill(0);
-    for (let t = 0; t < triangles.length; t += 3) for (let e = 0; e < 3; e++) {
+    for (let t = 0; t < triangles.length; t += 3) {
+      if (ring && (ring[triangles[t]!] || ring[triangles[t + 1]!] || ring[triangles[t + 2]!])) continue;
+      for (let e = 0; e < 3; e++) {
       const a = triangles[t + e]!, b = triangles[t + (e + 1) % 3]!;
       for (const [u, v] of [[a, b], [b, a]] as const) {
         sum[u * 3] = sum[u * 3]! + positions[v * 3]!; sum[u * 3 + 1] = sum[u * 3 + 1]! + positions[v * 3 + 1]!;
         sum[u * 3 + 2] = sum[u * 3 + 2]! + positions[v * 3 + 2]!; count[u] = count[u]! + 1;
       }
+      }
     }
     for (let v = 0; v < n; v++) {
-      if (!count[v] || frozen?.[v]) continue;
+      if (!count[v] || frozen?.[v] || ring?.[v]) continue;
       for (let a = 0; a < 3; a++) {
         const target = positions[v * 3 + a]! * 0.5 + sum[v * 3 + a]! / count[v]! * 0.5, c = corners[v * 3 + a]!;
         positions[v * 3 + a] = Math.max(c - clamp, Math.min(c + clamp, target));
@@ -933,7 +949,7 @@ function generateShell(def: CaveDef, lod: LodLevel): MeshRecipe {
   const lattice: Lattice = lod === "fine" ? volume : coarsen(volume, caveSampler(def.source, floor, neighbours));
   const f = def.replacementFootprints[0]!, spans = sharedSpans(f, neighbours);
   const raw = surfaceNets(lattice, surface.clamp,
-    spans.length ? (x, z) => spans.some(s => spanDistance(s, x, z) <= SEAM_FREEZE) : undefined);
+    spans.length ? (x, z) => spans.some(s => spanDistance(s, x, z) <= SEAM_FREEZE) : undefined, lod === "coarse");
   const positions = new Float32Array(raw.positions), normals = vertexNormals(raw.positions, raw.triangles);
   const colors = new Float32Array(positions.length / 3 * 4);
   shellColors(def.source, floor, positions, normals, new Uint8Array(raw.rooms), colors);
@@ -1117,10 +1133,10 @@ function snapToFloor(mesh: MeshRecipe, target: Float64Array, f: Rect, spans: rea
   const cutEdges = (sd: (typeof sides)[number]): [number, number][] => cuts[sides.indexOf(sd)]!;
   const cutAt: [number, number][][] = Array.from({ length: nv }, () => []);
   for (const cut of cuts) for (const e of cut) { cutAt[e[0]]!.push(e); cutAt[e[1]]!.push(e); }
-  /** Whether moving v would leave one of its cut edges that still needs a
-   * seam face (its other end off the floor) crossing or touching another
-   * such edge in their plane: those edges bound the seam, so they must stay
-   * a simple curve. (Edges with both ends on the floor are the seam already;
+  /** Whether moving v would collapse one of its cut edges to a point, or
+   * leave one that still needs a seam face (its other end off the floor)
+   * crossing or touching another such edge in their plane: those edges
+   * bound the seam, so they must stay a simple curve. (Edges with both ends on the floor are the seam already;
    * a contributing edge crossing one crosses the floor, which the seam
    * splits exactly.) */
   const settled = (v: number): boolean => moved[v] === 1;
@@ -1129,6 +1145,8 @@ function snapToFloor(mesh: MeshRecipe, target: Float64Array, f: Rect, spans: rea
       const sd = sides[s]!, h = sd.axis === 0 ? 2 : 0;
       if (P[v * 3 + sd.axis] !== sd.at) continue;
       for (const [a, b] of cutAt[v]!) {
+        // Never onto the other end: a cut edge of no length pinches the cut.
+        if (P[a * 3] === P[b * 3] && P[a * 3 + 1] === P[b * 3 + 1] && P[a * 3 + 2] === P[b * 3 + 2]) return true;
         if (settled(a === v ? b : a)) continue;
         for (const [c, d] of cuts[s]!) {
           if ((c === a && d === b) || (settled(c) && settled(d))) continue;

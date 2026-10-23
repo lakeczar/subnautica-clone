@@ -36,3 +36,14 @@ test("R6: caveFloor gives every point its own height whatever was asked before (
 test("R6: Knot Hollow's shells are the same in every build order: fine then coarse, coarse then fine, coarse alone", () => {
   assert.deepEqual(shellOrders(knot), []);
 });
+
+test("R7: caveFloor's memo is bounded; starting over past its bound changes no answer", () => {
+  const f = knot.footprint, floor = caveFloor(knot, worldFloor), fresh = caveFloor(knot, worldFloor), rnd = random(17);
+  const pts: [number, number][] = [];
+  // More distinct points than the memo keeps (2^17), all inside the footprint.
+  for (let i = 0; i < (1 << 17) + 5000; i++) pts.push([f.minX + 1e-3 + (f.maxX - f.minX - 2e-3) * rnd(), f.minZ + 1e-3 + (f.maxZ - f.minZ - 2e-3) * rnd()]);
+  const first = pts.slice(0, 500).map(([x, z]) => floor(x, z));
+  for (const [x, z] of pts) floor(x, z);
+  assert.deepEqual(pts.slice(0, 500).map(([x, z]) => floor(x, z)), first);
+  assert.deepEqual(pts.slice(0, 500).map(([x, z]) => fresh(x, z)), first);
+});
