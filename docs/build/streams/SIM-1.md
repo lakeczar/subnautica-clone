@@ -135,6 +135,14 @@ That is about 2.2× faster. After the merge, all **8 scenarios** play in **7 min
 | Clone alone | 125 (85–149) | n/a |
 | The app's timeline observation | 5.1 (3.9–5.9) | **1.7** (0.4–2.5) |
 
+**RTX 4070 Laptop (alickers, shared desktop host; indicative):** the same bench at `3b797af3` via `--class gpu --machine 4070`. It exited 0 after 5 min 19 s, with results in `/work/tmp/261023-175203-8975/sim1-bench-4070.json`.
+- **Inputs:** the job compiled both trees in its own checkout and regenerated the 16 milestone saves with the base tree. They match the 3090 run's inputs by size and tick, 16 of 16.
+- **Results** (mean µs per tick):
+  - base `stepGame` **197** (144–328) → `stepGameInPlace` **32** (20–66) and `StepGuard.step` **32** (20–61), about 6.1× cheaper;
+  - the new pure `stepGame` 214;
+  - clone alone 117;
+  - timeline observation 5.0 → **1.6**.
+
 **Reading the table:**
 - **The app's path is about 6.3× cheaper per tick** (209 → 33 µs). The guard's checkpoint and journal add about 2 µs.
 - **The clone costs more than its own time.** The base step costs about 84 µs more than the clone alone, while the in-place step costs 31 µs. Stepping a freshly allocated graph every tick is itself slower (cold shapes and GC), so removing the clone saves more than the clone's own time.
@@ -182,8 +190,8 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
 
 **Performance conventions** (`t3/stew-1-guard-rails` DIRECTION):
 - **#1:** the recorder's per-step stock copy uses a reused buffer, and `timelineSince` copies only the new events.
-- **#7 and #8:** `rowById` and `hasMember` are keyed by roster identity, but nothing is trusted on identity. Every `rowById` hit is checked against the row itself, and `hasMember` validates length and tail. Each index is bounded by its roster's size and is collected with the roster array, which is state-owned rather than a long-lived root. If the steward wants them under a ledger, that is a small follow-up.
-- **#9:** the per-tick numbers are `--class exclusive` on the 3090. No separate 4070 µs check was run. The 4070 evidence is the alickers playthrough wall times, which are indicative.
+- **#7 and #8: core helpers** (a note for the steward to fold into `CORE-HELPERS.md`): `rowById` and `hasMember` (`src/sim/rows.ts`) are identity-keyed, hit-validated, roster-bounded caches. Each is a `WeakMap` keyed by a state roster array. Every hit is checked against the row (or the length and tail for append-only rosters), so they never trust identity. Each is bounded by its roster's size and goes when the roster goes.
+- **#9:** the target numbers are `--class exclusive` on the 3090; the 4070 check is the indicative bench above.
 
 ## Compromises and follow-ups
 
