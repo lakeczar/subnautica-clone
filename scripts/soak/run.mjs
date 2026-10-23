@@ -60,7 +60,9 @@ try {
   }, {
     openGame, goto, read, releaseAll, saveAndCheck, Blocked, createProbe, log,
     providers: (g) => ({
-      full: [cdpHeap(g.cdp), processRss(g.browserPid), jobCgroup(), oceanDataset(g.page)],
+      // RSS before any forced GC: a full GC transiently grows RSS, and every
+      // sample must be taken the same way to be comparable.
+      full: [processRss(g.browserPid), jobCgroup(), oceanDataset(g.page), cdpHeap(g.cdp)],
       tick: [frames(g.page, { overMs: kind === "tour" ? t.tour.streamingFrameMs : t.dwell.autosaveHitchMs }), saveJournal(g.page), oceanDataset(g.page)],
     }),
   });

@@ -84,13 +84,20 @@ export async function runSoak(opts, deps) {
     if (env.SILTWAKE_JOB_HEARTBEAT) { try { writeFileSync(env.SILTWAKE_JOB_HEARTBEAT, ""); } catch { /* best effort */ } }
     return s;
   }
-  let ticking = Promise.resolve(), sinceFull = 0;
+  let ticking = Promise.resolve(), sinceFull = 0, lastGc = -Infinity;
   const ticksPerSample = Math.max(1, Math.round((opts.sampleS ?? 10) * 1000 / (opts.tickMs ?? 1000)));
   const timer = setInterval(() => {
     ticking = ticking.then(async () => {
       if (stopping) return;
       await heartbeatTick();
-      if (++sinceFull >= ticksPerSample) { sinceFull = 0; await fullSample(); }
+      // Dwell: a GC'd heap sample on a fixed cadence, so the heap rules have a
+      // series of like-for-like values (a heap without GC is a sawtooth).
+      if (++sinceFull >= ticksPerSample) {
+        sinceFull = 0;
+        const gc = kind === "dwell" && now() - lastGc >= (opts.gcEveryS ?? 60);
+        if (gc) lastGc = now();
+        await fullSample(gc ? { gc: true } : {});
+      }
       evaluate();
       if (verdict.status === "fail" || run.yielded) { stopping = true; log(verdict.status === "fail" ? `rule broken: ${verdict.reason}` : "yield notice: stopping"); }
     }).catch((e) => { run.crash ??= `measurement loop failed: ${e.message.split("\n")[0]}`; stopping = true; });
