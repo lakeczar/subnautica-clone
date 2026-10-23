@@ -12,10 +12,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { heavyJobGuard } from "./build-guard.mjs";
 import { sliceLimits } from "./policy.mjs";
-import { alive, scopePopulated } from "./state.mjs";
+import { alive, loadConfig, scopePopulated } from "./state.mjs";
 import { V1_REPO, blockedBy, context, exclusiveSlice, hc, here, holderOf, killOwned, read, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
 
 const fast = { minStallS: 1, soakYieldS: 3 };
@@ -534,7 +535,7 @@ test("S22 (TST-16): install writes the exclusive slice's unit once; a rollback t
   assert.ok(existsSync(unitFile));
   r = bash(join(here, "install.sh"), ["--remove-exclusive-slice"]);
   assert.equal(r.status, 3);
-  assert.match(r.stderr, new RegExp(`not removed: .* while tickets ${y} are running`));
+  assert.match(r.stderr, new RegExp(`not removed: .* while (tickets ${y} are running|.* holds processes)`));
   assert.ok(existsSync(unitFile));
   assert.equal(waitFor(c, y).code, 0);
   assert.equal(result(c, y).context.boost.status, "applied");
@@ -636,18 +637,18 @@ test("S24 (TST-16 R6): the exclusive slice's unit is never removed or rewritten 
   assert.equal(existsSync(unitFile), false);
 });
 
-test("S25 (TST-16 R8): the exclusive unit changes all-or-nothing: a held reload is bounded (the queue keeps working), a failed one restores the old file and changes nothing else, and a retry starts clean; removal too", async () => {
-  const c = context("excl-reload", { config: fast });
+test("S25 (TST-16 R8, R9): the exclusive unit changes under maintenance: admission pauses (queued work waits, none fails), systemd's own view is verified, a failure leaves maintenance and a rerun recovers; an equal file with a stale manager, an unreadable file, and removal", async () => {
+  const c = context("excl-maint", { config: fast });
   const home = join(c.dir, "home"), slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE;
   const unitFile = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, "systemd", "user", slice);
   const d = join(c.dir, "shim");
   mkdirSync(d, { recursive: true });
-  // daemon-reload held past the bound once, or failing until the mode is cleared; everything else is the real systemctl.
+  // daemon-reload held well past the 30 s lock wait once, or failing until the mode is cleared; everything else is the real systemctl.
   writeFileSync(join(d, "systemctl"), `#!/bin/bash
 m=$(cat "${d}/mode" 2>/dev/null)
 if [[ " $* " == *" daemon-reload "* ]]; then
   case "$m" in
-    hold-once) : > "${d}/mode"; sleep 30; exit 0 ;;
+    hold-once) : > "${d}/mode"; sleep 40; exec /usr/bin/systemctl "$@" ;;
     fail) echo "Failed to reload daemon: injected" >&2; exit 1 ;;
   esac
 fi
@@ -655,42 +656,75 @@ exec /usr/bin/systemctl "$@"
 `, { mode: 0o755 });
   const shimmed = { PATH: `${d}:${process.env.PATH}` };
   const env = (extra = {}) => ({ ...c.env, SILTWAKE_SCHED_HOME: home, ...extra });
-  assert.equal(spawnSync("bash", [join(here, "install.sh")], { env: env(), encoding: "utf8" }).status, 0);
-  const before = readFileSync(unitFile, "utf8"), mode = () => readFileSync(join(c.sched, "mode"), "utf8").trim();
-  assert.equal(mode(), "normal");
-  writeFileSync(join(c.sched, "config.json"), JSON.stringify({ ...fast, poolMiB: 4096 })); // the unit must change
-  // A held reload: bounded inside the lock; the queue keeps admitting meanwhile.
+  const install = (args = [], extra = {}) => spawnSync("bash", [join(here, "install.sh"), ...args], { env: env(extra), encoding: "utf8", timeout: 120000 });
+  const mode = () => readFileSync(join(c.sched, "mode"), "utf8").trim();
+  const memMax = () => sliceProp(slice, "MemoryMax"), fileMem = () => String(Number(readFileSync(unitFile, "utf8").match(/MemoryMax=(\d+)M/)[1]) * 1048576);
+  assert.equal(install().status, 0);
+  assert.equal(memMax(), fileMem());
+  const pool = (mib) => writeFileSync(join(c.sched, "config.json"), JSON.stringify({ ...fast, poolMiB: mib }));
+
+  // 1. A reload held 40 s: admission pauses; a submission meanwhile queues (no failure) and runs once the update is verified.
+  pool(4096);
   writeFileSync(join(d, "mode"), "hold-once");
-  const t0 = Date.now();
   const inst = spawn("bash", [join(here, "install.sh"), "--mode", "serial"], { env: env(shimmed), stdio: ["ignore", "pipe", "pipe"] });
-  let err = ""; inst.stderr.on("data", (x) => { err += x; });
+  let out = ""; inst.stdout.on("data", (x) => { out += x; });
   const instDone = new Promise((res) => inst.on("exit", res));
-  await sleep(1500);
+  await until("maintenance", () => stateOf(c).maintenance, 15000);
   const q = submit(c, c.wt("q"), "--class", "quick", "--", "true");
-  assert.equal(waitFor(c, q).code, 0, "a submission during the held reload is admitted and runs");
-  assert.equal(await instDone, 4, err);
-  assert.ok(Date.now() - t0 < 25000, `bounded: ${Date.now() - t0} ms`);
-  assert.match(err, /systemd's reload failed \(timed out after 10 s\); the previous unit file was restored and reloaded/);
-  assert.deepEqual([readFileSync(unitFile, "utf8"), mode()], [before, "normal"], "nothing else changed");
-  // A failed reload: the same; then a retry, with systemd answering, starts clean.
+  await sleep(3000);
+  assert.equal(stateOf(c).tickets[q]?.state, "queued", "nothing is admitted during maintenance");
+  const st = hc(c, ["status"]).out;
+  assert.match(st, /MAINTENANCE for \d+s: exclusive unit update \(write\).*Recover: rerun scripts\/heavy\/install\.sh/);
+  assert.match(st, new RegExp(`${q}.*maintenance`));
+  assert.equal(await instDone, 0, out);
+  assert.equal(stateOf(c).maintenance, undefined);
+  assert.deepEqual([memMax(), mode()], [fileMem(), "serial"], "systemd has the new unit, then the mode switched");
+  assert.equal(waitFor(c, q).code, 0, "the queued job ran after maintenance");
+  install(["--mode", "normal"]);
+
+  // 2. A failed reload: maintenance stays with the reason, nothing else switches, queued work waits; a rerun recovers.
+  pool(2048);
   writeFileSync(join(d, "mode"), "fail");
-  let r = spawnSync("bash", [join(here, "install.sh"), "--mode", "serial"], { env: env(shimmed), encoding: "utf8" });
+  let r = install(["--mode", "serial"], shimmed);
   assert.equal(r.status, 4, r.stderr);
-  assert.match(r.stderr, /reload failed .*injected.*restored, but reloading it failed too/);
-  assert.deepEqual([readFileSync(unitFile, "utf8"), mode()], [before, "normal"]);
-  r = spawnSync("bash", [join(here, "install.sh"), "--mode", "serial"], { env: env(), encoding: "utf8" });
+  assert.match(r.stderr, /not installed: systemd's reload failed \(.*injected.*\)\. The queue admits nothing until this is done/);
+  assert.match(stateOf(c).maintenance.reason, /^unit update incomplete: systemd's reload failed/);
+  assert.equal(mode(), "normal");
+  const q2 = submit(c, c.wt("q2"), "--class", "quick", "--", "true");
+  await sleep(2000);
+  assert.equal(stateOf(c).tickets[q2]?.state, "queued");
+  r = install(["--mode", "serial"]);
   assert.equal(r.status, 0, r.stderr);
-  assert.notEqual(readFileSync(unitFile, "utf8"), before);
-  assert.match(readFileSync(unitFile, "utf8"), /MemoryMax=\d+M/);
-  assert.equal(sliceProp(slice, "MemoryMax"), String(Number(readFileSync(unitFile, "utf8").match(/MemoryMax=(\d+)M/)[1]) * 1048576), "systemd has the new unit");
-  assert.equal(mode(), "serial");
-  spawnSync("bash", [join(here, "install.sh"), "--mode", "normal"], { env: env(), encoding: "utf8" });
-  // Removal: a failed reload keeps the file; a retry removes it.
+  assert.deepEqual([stateOf(c).maintenance, memMax(), mode()], [undefined, fileMem(), "serial"]);
+  assert.equal(waitFor(c, q2).code, 0);
+  install(["--mode", "normal"]);
+
+  // 3. An equal file with a stale manager (the file written, never reloaded): the rerun verifies systemd, not the file.
+  pool(3072);
+  const stale = memMax();
+  const wantMiB = sliceLimits(availableParallelism(), loadConfig(c.env)).memoryMaxMiB;
+  writeFileSync(unitFile, readFileSync(unitFile, "utf8").replace(/MemoryMax=\d+M/, `MemoryMax=${wantMiB}M`));
+  assert.equal(memMax(), stale, "systemd hasn't seen it");
+  r = install();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(memMax(), String(wantMiB * 1048576));
+
+  // 4. The previous file unreadable: nothing is changed; maintenance records why; a rerun once readable recovers.
+  spawnSync("chmod", ["000", unitFile]);
+  r = install();
+  assert.equal(r.status, 4);
+  assert.match(r.stderr, /could not read .* \(EACCES\)/);
+  assert.match(stateOf(c).maintenance.reason, /could not read/);
+  spawnSync("chmod", ["644", unitFile]);
+  assert.equal(install().status, 0);
+  assert.equal(stateOf(c).maintenance, undefined);
+
+  // 5. Removal: the same shape.
   writeFileSync(join(d, "mode"), "fail");
-  r = spawnSync("bash", [join(here, "install.sh"), "--remove-exclusive-slice"], { env: env(shimmed), encoding: "utf8" });
+  r = install(["--remove-exclusive-slice"], shimmed);
   assert.equal(r.status, 4, r.stderr);
-  assert.ok(existsSync(unitFile));
-  r = spawnSync("bash", [join(here, "install.sh"), "--remove-exclusive-slice"], { env: env(), encoding: "utf8" });
+  assert.ok(stateOf(c).maintenance);
+  r = install(["--remove-exclusive-slice"]);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(existsSync(unitFile), false);
+  assert.deepEqual([existsSync(unitFile), stateOf(c).maintenance, sliceProp(slice, "CPUWeight")], [false, undefined, "[not set]"]);
 });

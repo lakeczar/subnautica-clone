@@ -18,7 +18,29 @@ Four review rounds each found another lifetime race in one mechanism: changing a
 - **Deleted:** `handover.mjs`, the boost journal (`state.boost`), the freeze (`state.frozen`), the backstop, the runtime setter and read-back, `install.sh --rollback` and the thaw. Rollback is back to its pre-TST-16 form.
 - **R4's findings** (F1 freeze ownership across installer operations, F2 a reset outliving a killed handover, F3 freeze visibility) concern only that machinery, so they are removed with it. The diff is much smaller.
 
-## R8 review responses
+## R9 review responses
+
+Review `fddd7ae8` on `review/tst-16-r9`, on `b8e9b103`: three P2s, all from external systemd work done while holding the admission lock (F1: per-call bounds didn't bound the whole critical section; F2: a failed restore was forgotten; F3: a read error counted as absent, and rollback deleted the unit). Coordinator's decision: stop doing that, rather than add deadlines.
+- **Maintenance, set and cleared in short transactions.** `exclusive-unit.mjs`:
+  - **First, a short transaction:** refuse while a ticket runs, else set `state.maintenance` (`since`, `by`, `reason`, `recover`), then release the lock.
+  - **While it's set,** `plan()` admits nothing and queued tickets are blocked as `maintenance`. Submissions queue normally, with no failure and no 70. `status` shows the mark, reason, age, owner and the recovery command.
+- **The update happens outside the lock:** refuse if the slice holds processes (rechecked once admission is paused), write or remove the file, `daemon-reload`, and verify systemd's own properties (`CPUWeight`, `CPUQuotaPerSecUSec`, `MemoryMax`, `MemorySwapMax`).
+  - **Bounds:** every call is bounded and checked, queries at 10 s and the reload at 120 s. Outside the lock, a slow manager costs only waiting time.
+  - **Success means systemd matches,** not the file. The equality shortcut is gone: the fast path also requires systemd's properties to match.
+  - **On success:** maintenance clears.
+  - **On failure:** maintenance stays with "unit update incomplete: …; rerun install.sh", install exits 4, and nothing else switches. There is no rollback, so the delete path of F3 is gone; rerunning install is the recovery.
+- **Reading the old file:** only `ENOENT` is absent; any other error stops before a change, with maintenance set and the reason.
+- **Removal** uses the same shape.
+- **S25, rewritten:**
+  - a reload held 40 s, past the 30 s lock wait: a submission queues and waits while `status` shows it, then runs after the verified update, and the mode switches only then;
+  - a failed reload: maintenance stays, nothing else switches, queued work waits; a rerun recovers and the work runs;
+  - an equal file with a stale manager: the rerun verifies systemd and reloads;
+  - an unreadable previous file: exit 4, maintenance with the reason; recovered once readable;
+  - removal: the same failure and retry.
+
+  The R8 rollback tests are dropped. A policy unit test covers `plan()` under maintenance.
+
+## R8 review responses (history; R9 replaces the rollback design)
 
 Review `39ac5fb6` on `review/tst-16-r8`, on `1d1a1bfe`: two P2s and two P3s, all in the installer's systemd calls and in counter parsing.
 - **F1 and F2 (P2): unbounded and unchecked systemd calls under the lock.** One checked helper, `scripts/heavy/exclusive-unit.mjs`, now does both install's write and the removal.
@@ -174,7 +196,7 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
     - uninstall leaves the inert unit; `--remove-exclusive-slice` refuses while a ticket runs, and removes it once done (R5).
   - **S23 (R5-F1):** a unit removed between readiness and launch (a default slice under the right name), and a wrong memory cap: `unavailable`, `DISTURBED`, judged on the live slice reading.
   - **S24 (R6, R7):** neither removal nor a changing reinstall happens while the slice holds processes, also when systemd can't be asked or there's no unit file, nor while a ticket runs.
-  - **S25 (R8):** the unit changes all-or-nothing under bounded systemd calls: held and failed reloads, retry, removal.
+  - **S25 (R8, R9):** unit changes under maintenance: a held reload (queued work waits, none fails), a failed one (maintenance kept, rerun recovers), a stale manager with an equal file, an unreadable file, removal.
   - **SCHED-1 test 7** checks the job's own measurement.
 - **Full suites** after R8 at `2fe7aef1`: SCHED-1 **23/23**, SCHED-2 **25/25** (S25 new), SCHED-2b **27/27**, all local and sequential.
   - **Fast tier:** passed through the queue on alickers (`--machine 4070`, ticket `261023-224619-c8b8`, exit 0, 138 files, evidence for `2fe7aef1`), not locally, during CW-1's 3090 exclusive window.

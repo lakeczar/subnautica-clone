@@ -331,6 +331,11 @@ function statusCmd(args) {
   process.stdout.write(`mode ${readMode(cfg)}; pool ${p.used.tokens}/${p.T} cpu, ${p.used.memMiB}/${M} MiB, GPU ${p.used.gpu ? "leased" : "free"}; ` +
     `express ${p.used.express ? "busy" : "free"}; MemAvailable ${host.memAvailableMiB} MiB, memory PSI full ${host.memFullAvg10}%` +
     `${host.legacy.holder ? `; v1 lock HELD (pid ${host.legacy.holders.join(",")})` : ""}${host.legacy.waiter ? "; v1 waiter present: v2 admissions paused" : ""}\n`);
+  if (state.maintenance) {
+    const m = state.maintenance, age = dur(now - (m.since ?? now));
+    process.stdout.write(`MAINTENANCE for ${age}: ${m.reason}${m.by ? ` (pid ${m.by.pid}${alive(m.by) ? ", still running" : ", ended"})` : ""}; nothing is admitted, queued tickets wait. ` +
+      `${m.recover ?? "Recover: rerun scripts/heavy/install.sh"}\n`);
+  }
   if (cfg.manageSlice) {
     const sc = sliceCheck(cfg, host.nproc);
     process.stdout.write(`slice ${cfg.slice}: cpu.max ${sc.cpuMax ?? "?"}, memory.max ${sc.memMax ?? "?"}` +

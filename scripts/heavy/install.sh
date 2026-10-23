@@ -72,8 +72,8 @@ if [[ $uninstall == 1 ]]; then
 fi
 
 if [[ $remove_excl == 1 ]]; then
-  [[ -n $excl && -f "$excl_dir/$excl" ]] || { echo "no exclusive slice unit to remove"; exit 0; }
-  # Checked and removed inside one state transaction, all-or-nothing (exclusive-unit.mjs).
+  [[ -n $excl ]] || { echo "no exclusive slice for this state"; exit 0; }
+  # Admission paused (maintenance) while systemd changes; verified (exclusive-unit.mjs).
   SILTWAKE_SCHED_DIR="$dir" node "$src/exclusive-unit.mjs" remove "$excl" "$excl_dir"
   exit $?
 fi
@@ -104,11 +104,11 @@ install_guard() {
 }
 # The exclusive slice's unit (TST-16), written once: a fixed CPUWeight, and the
 # heavy slice's caps for this machine (policy sliceLimits), so moving an
-# exclusive job here escapes no aggregate limit. Rewritten only if it differs,
-# never under a measurement, and all-or-nothing (exclusive-unit.mjs: one queue
-# transaction, bounded and checked systemd calls, the old file restored if the
-# reload fails). Before anything else is switched: a refusal or failure changes
-# nothing else.
+# exclusive job here escapes no aggregate limit. Changed only when systemd's
+# view differs, never under a measurement: admission is paused (maintenance)
+# while systemd reloads, and resumes only once its properties are verified
+# (exclusive-unit.mjs). Before anything else is switched: a refusal or an
+# incomplete update changes nothing else.
 if [[ -n $excl ]]; then
   SILTWAKE_SCHED_DIR="$dir" node "$src/exclusive-unit.mjs" write "$excl" "$excl_dir" || exit $?
 fi
