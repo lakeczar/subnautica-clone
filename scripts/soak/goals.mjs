@@ -118,7 +118,7 @@ export function evaluateTour(run, t = DEFAULTS.tour) {
   if (n > t.holds) rules.push({ id: "loading-hold", status: "fail", value: n, limit: t.holds, detail: `hold at ${holds.list[0].where}${holds.list[0].frames ? ` (${holds.list[0].frames} frames recorded)` : ""}` });
   else if (holds.covered === true) rules.push({ id: "loading-hold", status: "pass", value: n, limit: t.holds, detail: "per-frame hold record over the whole run" });
   else rules.push({ id: "loading-hold", status: "unavailable", detail: holds.available === false && holds.covered == null ? "the build exposes no cave-hold state"
-    : holds.covered === false ? "the per-frame hold record did not cover the whole run; polls alone can miss a short hold" : "no per-frame hold record (the provider failed, or the build has none)" });
+    : holds.covered === false ? `the per-frame hold record did not cover the whole run (${holds.issue ?? "some intervals had none"}); polls alone can miss a short hold` : "no per-frame hold record (the provider failed, or the build has none)" });
   const progress = { laps: laps.length, goal: t.laps };
   return finish(rules, progress, laps.length >= t.laps, run);
 }

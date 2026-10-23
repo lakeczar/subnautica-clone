@@ -25,6 +25,8 @@ function fake(over: Partial<World> = {}, { failing = [] as string[], attributed 
   const provider = (name: string, fn: () => Record<string, unknown>): Provider => ({ name, sample: async () => { if (failing.includes(name)) throw new Error(`${name} broke`); return fn(); } });
   const deps = {
     Blocked, createProbe: P.createProbe, collectGarbage: async () => {},
+    // The fake page has no excluded windows to tag (its gaps are the game's).
+    exclude: async (_g: unknown, _on: boolean): Promise<boolean> => true,
     openGame: async () => ({ page: {}, cdp: {}, errors: [], crash: null, renderer: "fake", close: async () => {} }),
     goto: async (_g: unknown, p: { x: number; y: number; z: number }) => {
       w.gotos.push([p.x, p.y, p.z]); w.cam = [p.x, p.y, p.z];
@@ -285,4 +287,97 @@ test("R3-F3: elapsed time is monotonic: a 300 s wall-clock step changes neither 
     assert.notEqual(v.status, "pass", JSON.stringify(ts));
     assert.equal(ruleOf(v, "memory-flat:rendererRssMiB").status, "unavailable");
   }
+});
+
+// SCHED-2a R4 -----------------------------------------------------------------
+
+/** A page whose evaluate() runs the callback here, against `g.window`. */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const gw = globalThis as unknown as { window: Record<string, unknown>; requestAnimationFrame?: (cb: (t: number) => void) => unknown };
+const nodePage = () => ({ evaluate: async (fn: (a?: unknown) => unknown, arg?: unknown) => fn(arg) });
+
+test("R4-F1: CW-1's real per-frame hold states through the real frames provider: clear passes, a loading frame fails, a missing or null field is unproven", async () => {
+  const run = async (hold: (i: number) => unknown, pollState = "clear") => {
+    const f = fake();
+    let i = 0;
+    const page = { evaluate: async (fn: () => unknown) => {
+      gw.window = { __soakGaps: [16, 16], __siltwakePerf: [0, 1].map(() => ({ at: i, total: 16, sim: 2, steps: 1, save: 0, present: 10, hud: 1, parts: { chunks: 0, caves: 0, regions: 0, lights: 0, render: 9 }, ...(hold(i) === "OMIT" ? {} : { hold: hold(i) }) })) };
+      i++;
+      return fn();
+    } };
+    const base = f.deps.providers;
+    f.deps.providers = () => {
+      const ps = base();
+      // ps.tick: [frames, ocean-dataset, save-journal]; the frames and the poll are replaced.
+      return { ...ps, tick: [P.frames(page), ps.tick[2]!, { name: "ocean-dataset", sample: async () => ({ holds: { state: pollState } }) }] };
+    };
+    return S.runSoak(opts("tour"), f.deps);
+  };
+  const clear = await run(() => "clear");
+  assert.equal(clear.verdict.status, "pass", JSON.stringify(clear.verdict.rules));
+  const loading = await run((i) => (i === 1 ? "loading" : "clear"));
+  assert.equal(loading.verdict.status, "fail");
+  assert.match(loading.verdict.reason, /loading-hold/);
+  for (const absent of ["OMIT", null]) {
+    const r = await run(() => absent);
+    assert.equal(r.verdict.status, "partial", `${absent}: ${JSON.stringify(r.verdict.rules)}`);
+    assert.equal(r.verdict.rules.find((x: { id: string }) => x.id === "loading-hold").status, "unavailable");
+  }
+});
+
+test("R4-F2: a hold the #ocean poll sees only inside a save check fails and stops, with no per-frame record at all", async () => {
+  const f = fake({}, { attributed: false });
+  let inCheck = false;
+  const check0 = f.deps.saveAndCheck;
+  f.deps.saveAndCheck = async (...a: Parameters<typeof check0>) => { inCheck = true; await sleep(60); try { return await check0(...a); } finally { inCheck = false; } };
+  const base = f.deps.providers;
+  const page = { evaluate: async () => ({ caveHold: inCheck ? "loading" : "clear" }) };
+  f.deps.providers = () => { const ps = base(); return { ...ps, tick: [ps.tick[0]!, ps.tick[2]!, P.oceanDataset(page)] }; };
+  const r = await S.runSoak(opts("tour"), f.deps);
+  assert.equal(r.verdict.status, "fail", JSON.stringify(r.verdict.rules));
+  assert.match(r.verdict.reason, /loading-hold: hold at/);
+  assert.equal(r.run.laps.length, 1, "it stopped at the first lap's save check");
+});
+
+test("R4-F3: the real recorder tags gaps by interval: a GC pause before, during and after a save tick is never an autosave hitch; a real game pause is", async () => {
+  const busy = (ms: number) => { const t = performance.now(); while (performance.now() - t < ms) { /* a real stall of the event loop */ } };
+  const saved = { window: gw.window };
+  // An rAF shim for the real recorder; `live` ends a run's frame loop, and the
+  // shim stays installed so a frame already scheduled ends quietly.
+  let live = 0;
+  const run = async (gamePauseAt: number | null) => {
+    gw.window = {};
+    const mine = ++live;
+    gw.requestAnimationFrame = (cb) => setTimeout(() => { if (live === mine) cb(performance.now()); }, 8);
+    P.frameRecorderScript.call(null);
+    const f = fake();
+    let saves = 0, gcRan = false, ticks = 0;
+    f.deps.collectGarbage = async () => { busy(120); gcRan = true; };
+    f.deps.exclude = async (_g: unknown, on: boolean): Promise<boolean> => P.excludeTiming({ page: nodePage() } as never, on);
+    const base = f.deps.providers;
+    f.deps.providers = () => {
+      const ps = base();
+      return { ...ps, tick: [
+        // The game pauses right after this tick's drain, so its long gap lands in the next interval.
+        { name: "frames", sample: async () => { ticks++; const r = await P.frames(nodePage() as never).sample(); if (ticks === gamePauseAt) busy(150); return r; } },
+        // A save is seen on the first poll after each GC (the reviewer's ordering), and in the paused run on the tick after the pause.
+        { name: "save-journal", sample: async () => { if (gcRan || (gamePauseAt != null && ticks === gamePauseAt + 1)) { gcRan = false; saves++; } return { lastSave: { savedAt: String(saves), tick: saves } }; } },
+        ps.tick[1]!, // ocean-dataset
+      ] };
+    };
+    try {
+      return await S.runSoak({ ...opts("dwell"), gcEveryS: 0.15, thresholds: { tour: G.DEFAULTS.tour, dwell: { ...G.DEFAULTS.dwell, autosaves: 6, warmupS: 0.05, leakMinWindowS: 0.4, autosaveMissingS: 30, autosaveHitchMs: 100 } } }, f.deps);
+    } finally { live++; }
+  };
+  try {
+    const healthy = await run(null);
+    const hitch = healthy.verdict.rules.find((x: { id: string }) => x.id === "autosave-hitch");
+    assert.notEqual(hitch.status, "fail", `the harness's GC was blamed on autosaving: ${JSON.stringify(healthy.run.autosaves)}`);
+    assert.ok(healthy.run.autosaves.length >= 4);
+    assert.ok(healthy.run.autosaves.every((a: { frameMs: number | null }) => a.frameMs == null || a.frameMs < 100), JSON.stringify(healthy.run.autosaves));
+    // A real game pause outside any window, in the interval of a save: it fails and stops.
+    const paused = await run(6);
+    assert.equal(paused.verdict.status, "fail", JSON.stringify(paused.run.autosaves));
+    assert.match(paused.verdict.reason ?? "", /autosave-hitch|over 100 ms/);
+  } finally { live++; gw.window = saved.window; }
 });

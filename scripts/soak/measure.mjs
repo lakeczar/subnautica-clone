@@ -34,6 +34,26 @@ export const DOMAINS = Object.freeze({
 });
 export const valid = (type, v) => DOMAINS[type](v);
 
+/**
+ * The canonical hold observation (R4-F1): "holding", "clear" or "unknown".
+ * Producers: CW-1's per-frame record and #ocean dataset carry the cave
+ * admission's state (src/world/caves/admission.ts CaveHold.state: clear,
+ * loading, rescue, refuge); a frame where admission was not evaluated records
+ * null. Other providers may report a boolean. Absent, null, an unknown state or
+ * a wrong type is "unknown": never evidence that nothing held.
+ */
+export const HOLD_STATES = Object.freeze({
+  clear: "clear", admitted: "clear", away: "clear", // admitted or no cave in reach: nothing holds
+  loading: "holding", waiting: "holding", rescue: "holding", refuge: "holding",
+});
+export function holdObservation(v) {
+  if (v === true) return { obs: "holding" };
+  if (v === false) return { obs: "clear" };
+  if (v == null) return { obs: "unknown", why: v === null ? "null (admission not evaluated)" : "absent" };
+  if (typeof v === "string" && HOLD_STATES[v]) return { obs: HOLD_STATES[v], state: v };
+  return { obs: "unknown", why: `${typeof v === "string" ? "an unknown state" : "a wrong type"} ${JSON.stringify(v)?.slice(0, 30)}`, invalid: true };
+}
+
 /** Memory keys that may legitimately be empty; every other memory key is memoryMiB. */
 const SIZE_KEYS = new Set(["residentCpuMiB", "residentGpuMiB"]);
 const memoryType = (k) => (SIZE_KEYS.has(k) ? "sizeMiB" : "memoryMiB");
@@ -64,27 +84,35 @@ export function normalize(name, part) {
     out.lastSave = typeof savedAt === "string" && savedAt && valid("count", tick) ? { savedAt, tick } : null;
     if (!out.lastSave) out.unavailable.push(`${name}: the newest save has no valid savedAt and tick`);
   }
-  if (part.holds) {
-    const h = part.holds;
-    if (h.available === true && typeof h.held !== "boolean") { out.holds = {}; out.unavailable.push(`${name}: hold state without a boolean "held"`); }
+  // A polled hold state (R4-F1): canonical observation; "unknown" is no state at all.
+  if (part.holds && "state" in part.holds) {
+    const h = holdObservation(part.holds.state);
+    if (h.invalid) out.unavailable.push(`${name}: hold state ${h.why}`);
+    out.holds = h.obs === "unknown" ? { available: false } : { available: true, held: h.obs === "holding", state: h.state ?? String(part.holds.state) };
   }
   return out;
 }
 
 /**
  * Raw frame observations → validated facts.
- * raw: { overMs, gaps: [ms…] (rAF gaps), records: [{ total, parts: {…}, hold }…] | null
- *   (null: this build keeps no per-frame record) }
- * → { overMs, count, invalidGaps, worstMs, over: [ms], attributed: true|false|null,
- *     attributionIssue, streaming: [ms], holdFrames: n|null, holdsCovered, complete }
+ * raw: { overMs, gaps: [ms | { ms, excluded }…] (rAF gaps; `excluded` when the gap
+ *   overlapped a GC or save-check window, tagged in the page), records: [{ total,
+ *   parts: {…}, hold }…] | null (null: this build keeps no per-frame record) }
+ * → { overMs, count, excluded, invalidGaps, worstMs, over: [ms], attributed,
+ *     attributionIssue, streaming: [ms], holdFrames, holdsCovered, complete }
  */
 function frames(name, raw, bad) {
   const overMs = valid("frameMs", raw.overMs) ? raw.overMs : 33;
-  const gaps = Array.isArray(raw.gaps) ? raw.gaps : [];
-  const good = gaps.filter((g) => valid("gapMs", g)), invalidGaps = gaps.length - good.length;
-  if (invalidGaps) bad("frames.gaps", gaps.find((g) => !valid("gapMs", g)), `gapMs (${invalidGaps} of ${gaps.length})`);
+  // Gaps that overlapped an excluded window (GC, save check) are that work's,
+  // not the game's: kept out of timing, by interval (R4-F3).
+  const all = (Array.isArray(raw.gaps) ? raw.gaps : []).map((g) => (g && typeof g === "object" ? g : { ms: g, excluded: false }));
+  const wellTagged = (g) => typeof g.excluded === "boolean";
+  const usableGap = (g) => valid("gapMs", g.ms) && wellTagged(g);
+  const invalidGaps = all.filter((g) => !usableGap(g)).length;
+  if (invalidGaps) bad("frames.gaps", all.find((g) => !usableGap(g))?.ms, `gapMs with a boolean excluded tag (${invalidGaps} of ${all.length})`);
+  const good = all.filter((g) => usableGap(g) && !g.excluded).map((g) => g.ms);
   const f = {
-    overMs, count: good.length, invalidGaps,
+    overMs, count: good.length, excluded: all.filter((g) => usableGap(g) && g.excluded).length, invalidGaps,
     worstMs: good.length ? Math.max(...good) : null, // over valid gaps only
     over: good.filter((g) => g > overMs),
     attributed: null, attributionIssue: null, streaming: [], holdFrames: null, holdsCovered: false,
@@ -104,11 +132,16 @@ function frames(name, raw, bad) {
     if (good.length && !recs.length) { f.attributed = false; f.attributionIssue = "frames ran, but the per-frame record stayed empty"; }
     else if (broken) { f.attributed = false; f.attributionIssue = `${broken} of ${recs.length} per-frame records lack a valid total or split`; }
     else f.attributed = recs.length > 0 ? true : null;
-    // Holds: a boolean per record; anything else leaves the interval uncovered.
-    const holdKnown = recs.every((r) => typeof r?.hold === "boolean" || r?.hold === undefined);
-    f.holdFrames = recs.filter((r) => r?.hold === true).length;
-    f.holdsCovered = holdKnown && recs.length > 0 && !(good.length && !recs.length);
-    if (!holdKnown) bad("frames.records[].hold", recs.find((r) => r?.hold !== undefined && typeof r?.hold !== "boolean")?.hold, "a boolean");
+    // Holds: the canonical observation per record (R4-F1). Holding frames are
+    // violations; covered only when every record says clear or holding.
+    const holds = recs.map((r) => holdObservation(r?.hold));
+    f.holdFrames = holds.filter((h) => h.obs === "holding").length;
+    const unknown = holds.filter((h) => h.obs === "unknown");
+    f.holdsCovered = recs.length > 0 && unknown.length === 0;
+    if (unknown.length) {
+      f.holdIssue = `${unknown.length} of ${recs.length} per-frame records have no known hold state (${unknown[0].why})`;
+      if (unknown.some((h) => h.invalid)) bad("frames.records[].hold", recs[holds.findIndex((h) => h.invalid)]?.hold, "a hold state (clear, loading, rescue, refuge) or a boolean");
+    }
   }
   f.complete = invalidGaps === 0 && f.attributed !== false;
   return f;
