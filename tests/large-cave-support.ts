@@ -1,4 +1,5 @@
 import type { LargeCaveSource } from "../src/content/caves/largeCave.js";
+import { nameFloor } from "../src/content/buildCache.js";
 import { EXTERIOR } from "../src/content/caves/largeCave.js";
 import type { Capsule, Vec3 } from "../src/sim/types.js";
 import { createWorldQueries, SOLIDS, surfaceHeight } from "../src/sim/world.js";
@@ -10,7 +11,8 @@ import { composeCaveWorld, largeCaveCollider, translatedWorld, type CaveWorld } 
  * checks use a few chunks of the real biome. */
 
 /** The exterior seabed: a gentle slope at about 44 m. */
-export const vaultFloor = (x: number, z: number): number => -44 + 0.05 * x - 0.02 * z;
+/** Named for the build cache (TT-1), so the vault's layout and meshes are built once. */
+export const vaultFloor = nameFloor((x: number, z: number): number => -44 + 0.05 * x - 0.02 * z, "vaultFloor", [import.meta.url]);
 
 export const VAULT: LargeCaveSource = {
   id: "test_vault", label: "Test vault", region: "suspended_garden",

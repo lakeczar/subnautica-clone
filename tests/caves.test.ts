@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { assertDisjointFootprints, CAVE_SOURCES, EXTERIOR, MIN_ROCK, type CaveSource } from "../src/content/regions/caves.js";
 import { buildCave, caveSampler, caveShellByColumn, caveVolume, clipMeshToRect } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
+import { withoutBuildCache } from "../src/content/buildCache.js";
 import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
 import { ROUTES, CRAFT_PROFILES } from "../src/content/regions/passages.js";
@@ -51,7 +52,8 @@ test("overlapping cave footprints are rejected until a union policy exists", () 
 });
 
 test("Fanvault: generation is deterministic", () => {
-  const again = buildCave(source, worldFloor);
+  // A fresh build, never the test build cache: `def` may come from the cache, so this also checks the cached data.
+  const again = withoutBuildCache(() => buildCave(source, worldFloor));
   assert.deepEqual(again.rock, def.rock);
   assert.deepEqual(again.rooms, def.rooms);
 });

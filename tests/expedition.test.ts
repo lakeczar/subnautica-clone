@@ -673,7 +673,8 @@ test("automatic Bobbin ready and blocked transitions publish one notice through 
   assert.deepEqual(result.events.filter((e) => e.type === "notice"), [{ type: "notice", channel: "hazard", context: "recovery", message: result.state.feedback, error: true }]);
   assert.equal(stepGame(result.state, [], blocked).events.filter((e) => e.type === "notice").length, 0);
 });
-test("saved operation phase cuts and attachment offsets resume a fully swept tow with immediately valid saves", () => {
+test("smoke: a tow resumed from the ready cut and the last tow cut is fully swept, with immediately valid saves", () => {
+  // All thirteen cuts: tests/expedition.heavy.test.ts (TT-1).
   const deep = { x: 95.29085223262864, y: -91.62861156955663, z: -98.03837674249381 };
   const keel = [RECOVERY_MOORING, { x: 57, y: -10, z: -65 }, { x: 80, y: -48, z: -89 }, deep];
   const cuts: { phase: "approach" | "ready" | "tow"; waypoint: number; offset: number }[] = [
@@ -681,7 +682,7 @@ test("saved operation phase cuts and attachment offsets resume a fully swept tow
     { phase: "ready", waypoint: 3, offset: 1 },
     ...[0, 1, 2, 3].flatMap((waypoint) => [0, 1].map((offset) => ({ phase: "tow" as const, waypoint, offset }))),
   ];
-  for (const cut of cuts) {
+  for (const cut of cuts.filter((c) => c.phase === "ready" || (c.waypoint === 3 && c.offset === 1))) {
     let s = dartGame();
     const v = s.fleet.vehicles[0]!;
     v.pose.position = { ...(cut.phase === "tow" ? keel[Math.min(3, cut.waypoint + 1)]! : deep) };

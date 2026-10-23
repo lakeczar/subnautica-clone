@@ -59,9 +59,15 @@ test("the Fanvault chunk still shares identical edges with all four neighbours",
     { n: layout.chunks.find(c => c.bounds.max.z === b.min.z && c.bounds.min.x === b.min.x), axis: 2 as const, at: b.min.z },
     { n: layout.chunks.find(c => c.bounds.min.z === b.max.z && c.bounds.min.x === b.min.x), axis: 2 as const, at: b.max.z },
   ];
+  // Each chunk's live recipe once per LOD (deterministic), not once per pairing (TT-1).
+  const recipes = new Map<string, MeshRecipe[]>();
+  const once = (c: ChunkDescriptor, lod: LodLevel): MeshRecipe[] => {
+    const key = `${c.id}@${lod}`;
+    return recipes.get(key) ?? recipes.set(key, live(c, lod)).get(key)!;
+  };
   for (const la of ["fine", "coarse"] as const) for (const lb of ["fine", "coarse"] as const) for (const { n, axis, at } of sides) {
     assert.ok(n, "neighbour exists");
-    const a = edges(live(home, la), axis, at), e = edges(live(n, lb), axis, at);
+    const a = edges(once(home, la), axis, at), e = edges(once(n, lb), axis, at);
     assert.ok(a.length > 10);
     assert.deepEqual(a, e, `${home.id} ${la} / ${n.id} ${lb}`);
   }

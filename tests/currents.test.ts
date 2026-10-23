@@ -283,42 +283,6 @@ test("adverse: a powerless diver pinned on rock at a strong current's edge escap
   assert.equal(mid.health, 100);
 });
 
-test("adverse: from anywhere inside every lab current a powerless diver reaches still water within 25 s", () => {
-  const field = lab.field, diver = ACTORS.diver;
-  const tries: { label: string; input: (s: SandboxState) => SandboxInput }[] = [
-    { label: "rest", input: () => ({}) },
-    { label: "up", input: () => ({ vertical: 1 }) },
-    { label: "north", input: () => ({ forward: 1, yaw: Math.PI }) },
-    { label: "south", input: () => ({ forward: 1, yaw: 0 }) },
-    { label: "east", input: () => ({ forward: 1, yaw: Math.PI / 2 }) },
-    { label: "west", input: () => ({ forward: 1, yaw: -Math.PI / 2 }) },
-  ];
-  let worst = 0, checked = 0;
-  for (const vol of LAB_VOLUMES) {
-    const b = vol.shape.kind === "box"
-      ? { min: v(vol.shape.center.x - vol.shape.half.x, vol.shape.center.y - vol.shape.half.y, vol.shape.center.z - vol.shape.half.z),
-        max: v(vol.shape.center.x + vol.shape.half.x, vol.shape.center.y + vol.shape.half.y, vol.shape.center.z + vol.shape.half.z) }
-      : { min: v(Math.min(vol.shape.a.x, vol.shape.b.x), vol.shape.a.y - 5, Math.min(vol.shape.a.z, vol.shape.b.z)),
-        max: v(Math.max(vol.shape.a.x, vol.shape.b.x), vol.shape.a.y + 5, Math.max(vol.shape.a.z, vol.shape.b.z)) };
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (const fy of [0.15, 0.8]) {
-      const p = v(b.min.x + (b.max.x - b.min.x) * (i + 0.5) / 4, Math.min(-1, b.min.y + (b.max.y - b.min.y) * fy), b.min.z + (b.max.z - b.min.z) * (j + 0.5) / 4);
-      if (field.peak(p).speed < 0.5 || !lab.world.clearance(p, diver.shape) || p.y < -39) continue;
-      checked++;
-      let best = Infinity;
-      for (const t of tries) {
-        const s = initialSandbox("diver", p); // tick 0: the spill is surging
-        const { stoppedAt } = run(s, lab, 25, t.input, st => field.sample(st.position, st.tick).speed < 0.5);
-        assert.equal(s.health, 100);
-        if (stoppedAt !== null) best = Math.min(best, stoppedAt);
-      }
-      assert.ok(best <= 25, `${vol.id}: no escape from ${JSON.stringify(p)}`);
-      worst = Math.max(worst, best);
-    }
-  }
-  assert.ok(checked >= 40, `${checked} start points`);
-  assert.ok(worst <= 25, `worst escape ${worst} s`);
-});
-
 // ------------------------------------------------------------------ gates and alternatives
 
 test("gates: every gated passage has an always-open alternative a diver can swim", () => {
@@ -436,4 +400,31 @@ test("lab content stays inside today's world bounds and clear of its own rock", 
   for (const solid of LAB_SOLIDS) assert.ok(solid.min.x >= -76 && solid.max.x <= 248 && solid.min.z >= -320 && solid.max.z <= 66, solid.id);
   for (const c of CANDIDATES) for (const p of [...c.direct, ...c.alternative, c.site])
     assert.ok(lab.world.clearance(p, ACTORS.diver.shape), `${c.id} point ${JSON.stringify(p)} is in rock`);
+});
+
+test("smoke: from one grid start in every lab current a powerless diver reaches still water within 25 s", () => {
+  // The whole 4 x 4 x 2 grid of starts in every volume: tests/currents.heavy.test.ts (TT-1).
+  const field = lab.field, diver = ACTORS.diver;
+  const tries: ((s: SandboxState) => SandboxInput)[] = [() => ({}), () => ({ vertical: 1 }), () => ({ forward: 1, yaw: Math.PI }),
+    () => ({ forward: 1, yaw: 0 }), () => ({ forward: 1, yaw: Math.PI / 2 }), () => ({ forward: 1, yaw: -Math.PI / 2 })];
+  let checked = 0;
+  for (const vol of LAB_VOLUMES) {
+    const b = vol.shape.kind === "box"
+      ? { min: v(vol.shape.center.x - vol.shape.half.x, vol.shape.center.y - vol.shape.half.y, vol.shape.center.z - vol.shape.half.z),
+        max: v(vol.shape.center.x + vol.shape.half.x, vol.shape.center.y + vol.shape.half.y, vol.shape.center.z + vol.shape.half.z) }
+      : { min: v(Math.min(vol.shape.a.x, vol.shape.b.x), vol.shape.a.y - 5, Math.min(vol.shape.a.z, vol.shape.b.z)),
+        max: v(Math.max(vol.shape.a.x, vol.shape.b.x), vol.shape.a.y + 5, Math.max(vol.shape.a.z, vol.shape.b.z)) };
+    const p = v(b.min.x + (b.max.x - b.min.x) * 1.5 / 4, Math.min(-1, b.min.y + (b.max.y - b.min.y) * 0.8), b.min.z + (b.max.z - b.min.z) * 1.5 / 4);
+    if (field.peak(p).speed < 0.5 || !lab.world.clearance(p, diver.shape) || p.y < -39) continue;
+    checked++;
+    let best = Infinity;
+    for (const input of tries) {
+      const s = initialSandbox("diver", p);
+      const { stoppedAt } = run(s, lab, 25, input, st => field.sample(st.position, st.tick).speed < 0.5);
+      assert.equal(s.health, 100);
+      if (stoppedAt !== null) best = Math.min(best, stoppedAt);
+    }
+    assert.ok(best <= 25, `${vol.id}: no escape from ${JSON.stringify(p)}`);
+  }
+  assert.ok(checked >= 2, `${checked} start points`);
 });

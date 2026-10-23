@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { corridorProblems, firstAccessProblems, parkPose, rescueProblems, routeProblems, workPose, type CheckContext } from "../src/content/regions/access.js";
+import { corridorProblems, parkPose, routeProblems, workPose } from "../src/content/regions/access.js";
 import { STRUCTURE_SOLIDS } from "../src/content/regions/structures.js";
-import { HAZARDS } from "../src/content/regions/hazards.js";
 import { CRAFT_PROFILES, ROUTES } from "../src/content/regions/passages.js";
 import { SITES } from "../src/content/regions/sites.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
@@ -15,42 +14,19 @@ import { blocked, blockedBox, prewarmScatter } from "../src/render/biomes/scatte
 import { RecipeBuilder } from "../src/render/biomes/recipe.js";
 import { drawSolidSet, VISTA_DRESSING, vistaMesh } from "../src/render/biomes/vistas.js";
 import { LANDMARK_LIGHTS } from "../src/render/poi/landmarks.js";
+import { ctx, none } from "./vistas-support.js";
 
 /** Composed vistas (A1). Solid-looking pieces are drawn only from the shapes
  * that are also their collision (`VISTA_SOLIDS`); everything else is thin,
  * visual-only dressing. Neither may cost a passage, tether, mooring, park or
  * work pose. */
 prewarmScatter();
-const ctx: CheckContext = { floor: worldFloor, hazards: HAZARDS, solids: VISTA_SOLIDS };
-const none = (problems: readonly string[], what: string): void =>
-  assert.equal(problems.length, 0, `${what}:\n- ${problems.slice(0, 12).join("\n- ")}`);
 
 test("REGRESSION (A1-R2-01): no false diver contact beside the arch and the ring", () => {
   // The reviewer's stationary diver poses, beside but clear of the drawn rock.
   const all = { floor: worldFloor, solids: [...STRUCTURE_SOLIDS, ...VISTA_SOLIDS] };
   for (const pose of [{ x: -211.9245, y: -25.3824, z: -118.7396 }, { x: 1355.3629, y: -454.3530, z: -691.4400 }])
     none(corridorProblems("diver", [pose, pose], all, { profile: "diver" }), `diver at ${JSON.stringify(pose)}`);
-});
-
-test("vista solids stay out of the keep-outs and pass the authoritative access checks", () => {
-  for (const s of VISTA_SOLIDS) {
-    assert.ok(s.bounds.max.x - s.bounds.min.x > 0 && s.bounds.max.y - s.bounds.min.y > 0 && s.bounds.max.z - s.bounds.min.z > 0, `${s.id} is degenerate`);
-    assert.ok(!blockedBox(s.bounds.min, s.bounds.max), `${s.id} enters a passage, tether, mooring or structure keep-out`);
-  }
-  // Only the vista solids: the regions suite already proves floor and
-  // structures clear, so any problem here is one the vistas add.
-  for (const r of ROUTES) if (!r.legacy) none(routeProblems(r, ctx), r.id);
-  none(firstAccessProblems(ctx), "first access");
-  none(rescueProblems(ctx), "rescue");
-  const dist = (p: Vec3, k: { min: Vec3; max: Vec3 }): number => Math.hypot(Math.max(k.min.x - p.x, 0, p.x - k.max.x),
-    Math.max(k.min.y - p.y, 0, p.y - k.max.y), Math.max(k.min.z - p.z, 0, p.z - k.max.z));
-  for (const site of SITES) {
-    const work = workPose(site, worldFloor), park = parkPose(site, worldFloor);
-    for (const s of VISTA_SOLIDS) {
-      assert.ok(dist(work, s.bounds) > 2, `${s.id} crowds ${site.id}'s work pose`);
-      assert.ok(dist(park, s.bounds) > CRAFT_PROFILES.medium.radius + 1, `${s.id} crowds ${site.id}'s park pose`);
-    }
-  }
 });
 
 test("ADVERSE controls: a solid on a passage and a vertical tether's midpoint are both caught", () => {
@@ -144,5 +120,22 @@ test("INVARIANT (A1-R3-01): every vista set is drawn exactly once by a real chun
       emitted += r.value ? r.value.positions.length / 3 : 0;
     }
     assert.equal(emitted, own(lod), `${lod}: chunks emit every vista set's art exactly once`);
+  }
+});
+
+test("smoke: vista solids stay out of the keep-outs and crowd no work or park pose", () => {
+  // With every route, first access and rescue re-checked: tests/vistas.heavy.test.ts (TT-1).
+  for (const s of VISTA_SOLIDS) {
+    assert.ok(s.bounds.max.x - s.bounds.min.x > 0 && s.bounds.max.y - s.bounds.min.y > 0 && s.bounds.max.z - s.bounds.min.z > 0, `${s.id} is degenerate`);
+    assert.ok(!blockedBox(s.bounds.min, s.bounds.max), `${s.id} enters a passage, tether, mooring or structure keep-out`);
+  }
+  const dist = (p: Vec3, k: { min: Vec3; max: Vec3 }): number => Math.hypot(Math.max(k.min.x - p.x, 0, p.x - k.max.x),
+    Math.max(k.min.y - p.y, 0, p.y - k.max.y), Math.max(k.min.z - p.z, 0, p.z - k.max.z));
+  for (const site of SITES) {
+    const work = workPose(site, worldFloor), park = parkPose(site, worldFloor);
+    for (const s of VISTA_SOLIDS) {
+      assert.ok(dist(work, s.bounds) > 2, `${s.id} crowds ${site.id}'s work pose`);
+      assert.ok(dist(park, s.bounds) > CRAFT_PROFILES.medium.radius + 1, `${s.id} crowds ${site.id}'s park pose`);
+    }
   }
 });

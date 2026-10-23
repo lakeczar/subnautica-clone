@@ -134,49 +134,6 @@ test("ember mites leave the lip, and scavengers retreat, at least five seconds b
   assert.equal(scavengerRetreat(surge - 60 * 30, loudCreel).retreat, 1, "loud machinery sends them in too");
 });
 
-test("hazard harm always follows an observable warning by at least five seconds: every field, phase, protection and resumed load", () => {
-  type Case = { field: "rift_split_plume" | "rift_warm_passage" | "divide_dense_layer"; at: { x: number; y: number; z: number } };
-  const saddle = sitePosition(HAZARD_FIELDS.divide_dense_layer.shape.center);
-  const cases: Case[] = [
-    { field: "rift_split_plume", at: { ...chimney, y: chimney.y + 20 } },
-    { field: "rift_warm_passage", at: offset(chimney, -26, 6, 0) },
-    { field: "divide_dense_layer", at: { ...saddle, x: saddle.x - 70, y: layerY("divide_dense_layer") - 4 } },
-  ];
-  const actors: [HullId | null, ProtectionId[]][] = [[null, []], [null, ["heat_shroud"]], [null, ["brine_seals"]],
-    ...(Object.keys(HULLS) as HullId[]).map((h): [HullId, ProtectionId[]] => [h, []]), ["dart", ["hull_heat_lining"]]];
-  let checked = 0;
-  // Resumed loads use a pending (never delivered, age 0) warning: that is the
-  // only post-load case entitled to grace. A delivered episode is checked below.
-  for (const c of cases) for (const [hull, fitted] of actors) for (let phase = 0; phase < 4; phase++) for (const resumed of [0, 39, 45, 85, 99.9, 100]) {
-    const state = createEcology(), vehicleId = hull ? "Fleet_Hull-1" : null;
-    if (resumed > 0) {
-      const load = { heat: resumed, brine: resumed, heatWarned: 0, brineWarned: 0 };
-      if (vehicleId) state.hulls.push({ id: vehicleId, ...load }); else state.diver = load;
-      resumeEcology(state);
-    }
-    const start = Math.round(phase / 4 * plume.cycle.period * 60);
-    let firstWarning: number | null = null, firstHarm: number | null = null;
-    for (let i = 0; i < 60 * 25 && firstHarm === null; i++) {
-      const r = stepEcology(state, { tick: start + i, stimulus: stimulus(c.at, { hull, radius: hull ? 3.6 : 0.4, light: 0, noise: 0 }),
-        protection: protectionFor(hull, fitted), vehicleId }, openWater());
-      if (firstWarning === null && r.events.some(e => e.type === "hazard-warning" && e.level >= 40)) firstWarning = i;
-      if (r.effects.diverHealth + r.effects.vehicleHealth > 0) firstHarm = i;
-    }
-    if (firstHarm !== null) {
-      checked++;
-      assert.ok(firstWarning !== null && (firstHarm - firstWarning) / 60 >= WARNING_LEAD - 1e-9,
-        `${c.field} ${hull ?? "diver"} ${fitted.join("+")} phase ${phase} resumed ${resumed}: warning ${firstWarning}, harm ${firstHarm}`);
-    }
-  }
-  assert.ok(checked > 20, `harmful cases exercised: ${checked}`);
-  // A delivered episode resumed from a save gets a reminder, not fresh grace.
-  const plumeAt = { ...chimney, y: chimney.y + 20 }, state = createEcology();
-  state.diver = { heat: 100, brine: 0, heatWarned: 30, brineWarned: 0 };
-  resumeEcology(state);
-  const r = stepEcology(state, { tick: ventTick(1), stimulus: stimulus(plumeAt, { light: 0, noise: 0 }), protection: protectionFor(null, []), vehicleId: null }, openWater());
-  assert.ok(r.events.some(e => e.type === "hazard-warning" && e.hazard === "heat"), "the load re-shows the current caption");
-  assert.ok(r.effects.diverHealth > 0, "harm continues: the saved episode's grace was already spent");
-});
 test("brine sails mark a calm lane well above the layer", () => {
   const top = layerY("divide_dense_layer");
   for (let t = 0; t < 60 * 600; t += 120)
@@ -228,4 +185,49 @@ test("stepEcology reports field exposure, harm, drift and visibility for the con
   assert.ok(surging.effects.visibility < 0.5 && surging.effects.drift.z > 0);
   const fieldIds = Object.keys(HAZARD_FIELDS) as HazardFieldId[];
   assert.ok(fieldIds.every(id => HAZARD_FIELDS[id].cue.length > 40), "every field has an observable cue");
+});
+
+test("smoke: hazard harm always follows an observable warning by at least five seconds (every field and protection at phase 0, fresh and resumed at 99.9)", () => {
+  // Every phase and resumed load: tests/ecology-hazards.heavy.test.ts (TT-1).
+  type Case = { field: "rift_split_plume" | "rift_warm_passage" | "divide_dense_layer"; at: { x: number; y: number; z: number } };
+  const saddle = sitePosition(HAZARD_FIELDS.divide_dense_layer.shape.center);
+  const cases: Case[] = [
+    { field: "rift_split_plume", at: { ...chimney, y: chimney.y + 20 } },
+    { field: "rift_warm_passage", at: offset(chimney, -26, 6, 0) },
+    { field: "divide_dense_layer", at: { ...saddle, x: saddle.x - 70, y: layerY("divide_dense_layer") - 4 } },
+  ];
+  const actors: [HullId | null, ProtectionId[]][] = [[null, []], [null, ["heat_shroud"]], [null, ["brine_seals"]],
+    ...(Object.keys(HULLS) as HullId[]).map((h): [HullId, ProtectionId[]] => [h, []]), ["dart", ["hull_heat_lining"]]];
+  let checked = 0;
+  // Resumed loads use a pending (never delivered, age 0) warning: that is the
+  // only post-load case entitled to grace. A delivered episode is checked below.
+  for (const c of cases) for (const [hull, fitted] of actors) for (let phase = 0; phase < 1; phase++) for (const resumed of [0, 99.9]) {
+    const state = createEcology(), vehicleId = hull ? "Fleet_Hull-1" : null;
+    if (resumed > 0) {
+      const load = { heat: resumed, brine: resumed, heatWarned: 0, brineWarned: 0 };
+      if (vehicleId) state.hulls.push({ id: vehicleId, ...load }); else state.diver = load;
+      resumeEcology(state);
+    }
+    const start = Math.round(phase / 4 * plume.cycle.period * 60);
+    let firstWarning: number | null = null, firstHarm: number | null = null;
+    for (let i = 0; i < 60 * 25 && firstHarm === null; i++) {
+      const r = stepEcology(state, { tick: start + i, stimulus: stimulus(c.at, { hull, radius: hull ? 3.6 : 0.4, light: 0, noise: 0 }),
+        protection: protectionFor(hull, fitted), vehicleId }, openWater());
+      if (firstWarning === null && r.events.some(e => e.type === "hazard-warning" && e.level >= 40)) firstWarning = i;
+      if (r.effects.diverHealth + r.effects.vehicleHealth > 0) firstHarm = i;
+    }
+    if (firstHarm !== null) {
+      checked++;
+      assert.ok(firstWarning !== null && (firstHarm - firstWarning) / 60 >= WARNING_LEAD - 1e-9,
+        `${c.field} ${hull ?? "diver"} ${fitted.join("+")} phase ${phase} resumed ${resumed}: warning ${firstWarning}, harm ${firstHarm}`);
+    }
+  }
+  assert.ok(checked > 3, `harmful cases exercised: ${checked}`);
+  // A delivered episode resumed from a save gets a reminder, not fresh grace.
+  const plumeAt = { ...chimney, y: chimney.y + 20 }, state = createEcology();
+  state.diver = { heat: 100, brine: 0, heatWarned: 30, brineWarned: 0 };
+  resumeEcology(state);
+  const r = stepEcology(state, { tick: ventTick(1), stimulus: stimulus(plumeAt, { light: 0, noise: 0 }), protection: protectionFor(null, []), vehicleId: null }, openWater());
+  assert.ok(r.events.some(e => e.type === "hazard-warning" && e.hazard === "heat"), "the load re-shows the current caption");
+  assert.ok(r.effects.diverHealth > 0, "harm continues: the saved episode's grace was already spent");
 });
