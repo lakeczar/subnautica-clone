@@ -1,0 +1,53 @@
+{
+  "scenes": {
+    "ribs": {
+      "captions": [
+        " | | Nothing within reach. | "
+      ],
+      "banners": [],
+      "minHealth": null,
+      "notes": {
+        "prompt": "",
+        "catch0": " | | Nothing within reach. | ",
+        "catch1": " | | Nothing within reach. | "
+      }
+    },
+    "pod": {
+      "captions": [],
+      "banners": [],
+      "minHealth": null,
+      "notes": {
+        "cooked": " | | | ",
+        "base": "",
+        "emptied": " | | | "
+      }
+    },
+    "canopy": {
+      "captions": [
+        " | | | ",
+        " | Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). Your reserve cells are in the pod locker; carry one in your hold or the craft's for the G decoy pulse. | | ",
+        " | | | ",
+        " | The sound hunter has left its crowns to feed on the lantern shoal to the east. While it feeds it hears almost nothing: this is the time to cross. | | ",
+        " | | | "
+      ],
+      "banners": [],
+      "minHealth": 100,
+      "notes": {}
+    }
+  },
+  "shots": [
+    "/work/tmp/cr1/shots/ribs-01-school-catch-prompt.png",
+    "/work/tmp/cr1/shots/ribs-02-caught-with-net.png",
+    "/work/tmp/cr1/shots/ribs-03-cargo-catch-section.png",
+    "/work/tmp/cr1/shots/pod-01-cargo-catch-before-cooking.png",
+    "/work/tmp/cr1/shots/pod-02-cooked-one-portion.png",
+    "/work/tmp/cr1/shots/pod-03-base-trap-holding-fish.png",
+    "/work/tmp/cr1/shots/pod-04-trap-emptied.png",
+    "/work/tmp/cr1/shots/canopy-01-route-head-loud-lit.png",
+    "/work/tmp/cr1/shots/canopy-02-hunter-feeding-on-east-shoal.png",
+    "/work/tmp/cr1/shots/canopy-03-lab-reached-unbothered.png",
+    "/work/tmp/cr1/shots/canopy-04-looking-east-from-lab.png"
+  ],
+  "errors": [],
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)"
+}

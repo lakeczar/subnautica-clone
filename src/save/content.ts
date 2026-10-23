@@ -88,6 +88,9 @@ function addNewFields(state: GameState, template: GameState): { ok: true; value:
   // deterrent or exposure, so their absence is exactly New Game's state.
   if (record(out.world) && !Object.hasOwn(out.world, "ecology"))
     out.world = newGameOrder({ ...out.world, ecology: createEcology() }, template.world);
+  // CR-1: fish traps. No earlier build could hold one, so none is New Game's state.
+  if (record(out.systems) && !Object.hasOwn(out.systems, "traps"))
+    out.systems = newGameOrder({ ...out.systems, traps: [] }, template.systems) as GameState["systems"];
   if (record(out.player) && !Object.hasOwn(out.player, "lamp"))
     out.player = newGameOrder({ ...out.player, lamp: true }, template.player);
   const fleet = out.fleet as unknown;

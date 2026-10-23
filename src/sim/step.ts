@@ -102,6 +102,7 @@ import { stepUpgrades, upgradeAction } from "./fittings.js";
 import { stepSystems, systemsCommand } from "./systemsLink.js";
 import { serviceCommand, servicePreview } from "./serviceLink.js";
 import { observeWorldCycles } from "./cyclesLink.js";
+import { faunaCommand, stepFauna } from "./fauna/link.js";
 import { REST_BASES } from "../content/bases.js";
 import { currentObjective } from "./objective.js";
 import { DECODABLES } from "../content/systems/decodes.js";
@@ -168,6 +169,12 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       }
     }
     return null;
+  }
+  // CR-1: cooking a catch, bait, planter feed and the fish trap.
+  const fauna = faunaCommand(s, c);
+  if (fauna !== undefined) {
+    if (fauna === null && s.feedback) actionResult(s, events, s.feedback);
+    return fauna;
   }
   const systems = systemsCommand(s, c, w);
   if (systems !== undefined) {
@@ -1015,6 +1022,7 @@ export function stepGame(
   stepUpgrades(s, new Set(s.fleet.vehicles.filter((a) => distance(a.pose.position,
     state.fleet.vehicles.find((b) => b.id === a.id)?.pose.position ?? a.pose.position) > 0.003).map((a) => a.id)));
   stepSystems(s, events);
+  stepFauna(s, world, events);
   observeWorldCycles(s, world, events);
   advanceRenewal(s);
   advanceStory(s);

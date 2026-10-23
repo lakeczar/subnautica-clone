@@ -6,7 +6,7 @@ import type { LodLevel, Rect } from "../../world/types.js";
 import { BORDER_STEP, COARSE, FINE, tessellate, type TessellationOptions } from "./tessellate.js";
 import { regionAtPoint } from "../../content/regions/layout.js";
 import { fbm } from "../../content/regions/noise.js";
-import { BRINE_Y, emptyMasks, terrainMasks } from "../../content/regions/terrain.js";
+import { BRINE_Y, brineSheetY, emptyMasks, terrainMasks } from "../../content/regions/terrain.js";
 import { TERRAIN_EXTENT } from "../terrainSurface.js";
 import { geologyColor } from "./geology.js";
 import { hex } from "./recipe.js";
@@ -153,8 +153,8 @@ function brineMirror(floor: (x: number, z: number) => number, x0: number, z0: nu
     if (Math.min(floor(x, z), floor(x + step, z), floor(x, z + step), floor(x + step, z + step)) > BRINE_Y + 0.5) continue;
     const base = positions.length / 3;
     for (const [px, pz] of [[x, z], [x + step, z], [x + step, z + step], [x, z + step]] as const) {
-      const w = fbm(px, pz, 30, 2, 77), streak = fbm(px * 0.35, pz * 1.6, 18, 2, 78);
-      positions.push(px, BRINE_Y + 0.25 * w, pz);
+      const w = fbm(px, pz, 30, 2, 77), y = brineSheetY(px, pz), streak = fbm(px * 0.35, pz * 1.6, 18, 2, 78);
+      positions.push(px, y, pz);
       const c = streak > 0.2 ? MIRROR2 : MIRROR, k = 0.68 + 0.12 * Math.max(0, w);
       colors.push(c[0] * k, c[1] * k, c[2] * k, -1);
     }

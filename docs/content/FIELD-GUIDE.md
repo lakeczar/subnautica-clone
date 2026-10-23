@@ -446,7 +446,7 @@ Natural window (`cycle.rift.stalker_feeding`): While the split chimney vents, bo
 
 *Mirror Divide · unlocks when seen · existing*
 
-> **When the crest goes slack, nothing drifts down for them and the skates settle on the floor: cross then, slowly. Their egg cases are tethered on the clear lee shelf by the west ledge; never touch them.**
+> **When the crest goes slack, nothing drifts down for them and the skates settle just under the mirror and lie still: cross then, slowly. Their egg cases are tethered on the clear lee shelf by the west ledge; never touch them.**
 >
 > *Eats:* What the downwelling drops onto the mirror.
 >
@@ -458,7 +458,7 @@ Natural window (`cycle.rift.stalker_feeding`): While the split chimney vents, bo
 >
 > *Not prey and not to be hunted. Its egg cases stay where they lie.*
 
-Natural window (`cycle.divide.skate_rest`): In crest slack water, when nothing drifts down onto the mirror, the skates settle to the floor and rest.
+Natural window (`cycle.divide.skate_rest`): In crest slack water, when nothing drifts down onto the mirror, the skates settle just under it and lie still, dark shapes on the mirror.
 
 #### Hollow choir (`hollow_choir`)
 
@@ -512,7 +512,7 @@ Natural window (`cycle.meridian.choir_rest`): The bells close to rest and barely
 
 **Chalk on the dock board** (`note_dock_board`) — *Upper dock, D−30*
 
-> Slack on the crest means skates on the floor. Cross slow, in the slack. Egg cases on the lee shelf by the west ledge: DO NOT TOUCH. Incident sheet pinned below.
+> Slack on the crest means skates lying still under the mirror. Cross slow, in the slack. Egg cases on the lee shelf by the west ledge: DO NOT TOUCH. Incident sheet pinned below.
 
 **Staging office shift notes** (`note_office_board`) — *Staging office, D−12*
 

@@ -29,6 +29,7 @@ import { registerEcologyNotes } from "./ecologyNotes.js";
 import { registerStoryNotebook } from "./storyNotebook.js";
 import { DISCOVERY_IDS, type DiscoveryId } from "../content/story/evidence.js";
 import { basePanel, fitPanel, journalPanel, JOURNAL_TABS } from "./systemsPanels.js";
+import { registerFaunaPanels } from "./faunaPanels.js";
 import { currentObjective } from "../sim/objective.js";
 import type { JournalTabId } from "../sim/systems/journal.js";
 import { carrierPanel } from "./carrierPanel.js";
@@ -93,6 +94,8 @@ export class PanelView {
     registerStoryNotebook(this);
     // S4's wildlife and hazard notes, the same way (C3).
     registerEcologyNotes(this);
+    // CR-1: cooking a catch and bait in Cargo.
+    registerFaunaPanels(this);
   }
 
   private get<T extends HTMLElement = HTMLElement>(id: string): T {

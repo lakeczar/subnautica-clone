@@ -334,10 +334,37 @@ const systems: Phase = {
   },
 };
 
+/** CR-1: creatures as resources at home. Two small fish caught by hand at the rib
+ * school, cooked into a meal at the pod's galley ring; a fish trap made and
+ * socketed at the pod, emptied when the refits bring the bot home. */
+const creatures: Phase = {
+  id: "creatures", title: "Rib school: fish caught and cooked; a fish trap socketed at the pod",
+  verify: all(crafted("mod_fish_trap"), custom("no fish trap at the pod", (d) => d.state.systems.sockets.some((e) => e.hostId === "home_pod" && e.kind === "mod_fish_trap"))),
+  missing: () => [],
+  play(d) {
+    gather(d, "reef_fish_ribs", 2);
+    enter(d, "pod");
+    const meals = d.count("meal", ["diver", "pod_locker"]);
+    d.command({ type: "cook-catch", portions: 1 });
+    d.run.checks.push({ name: "fish cooked at the pod", ok: d.count("meal", ["diver", "pod_locker"]) === meals + 1, detail: d.state.feedback });
+    make(d, "mod_fish_trap", "pod", ISLES);
+    enter(d, "pod");
+    d.command({ type: "install-host-module", hostId: "home_pod", socket: "s1", itemId: firstItem(d, "mod_fish_trap") });
+  },
+};
+
 /** End of the refits: the staple cups harvested at the pod and the pump-house log
  * decoded at the workshop (waiting at the bench for whatever is left). */
 function systemsPayoff(d: Driver): void {
   enter(d, "pod");
+  // CR-1: the pod's fish trap has been catching in the background all along.
+  const trap = d.state.systems.sockets.find((e) => e.hostId === "home_pod" && e.kind === "mod_fish_trap");
+  const held = trap ? d.state.systems.traps.find((t) => t.moduleId === trap.itemId)?.held ?? 0 : 0;
+  if (trap && held > 0) {
+    const fish = d.count("small_fish", ["diver", "pod_locker"]);
+    d.command({ type: "empty-trap", hostId: "home_pod", socket: trap.socket });
+    d.run.checks.push({ name: "fish trap emptied at the pod", ok: d.count("small_fish", ["diver", "pod_locker"]) === fish + held, detail: d.state.feedback });
+  }
   const crop = d.state.systems.planters[0];
   if (crop) {
     d.waitFor("the staple cups to ripen", 400, (s) => (s.systems.planters[0]?.progress ?? 0) >= 360);
@@ -487,5 +514,5 @@ const refits: Phase = {
   },
 };
 
-export const LIVE_PHASES: readonly Phase[] = [opening, reef, isles, canopy, survey, creel, systems, frames, refits];
+export const LIVE_PHASES: readonly Phase[] = [opening, reef, isles, canopy, survey, creel, systems, creatures, frames, refits];
 export const REFITS_PHASE = refits;

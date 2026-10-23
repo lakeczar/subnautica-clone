@@ -88,7 +88,11 @@ export async function playScenarios(ids: readonly string[], verbose: boolean): P
       }
       if (!text) { d.run.outcome = "blocked"; runs.set(scenario.id, { run: d.run, slot }); out.push(d.run); continue; }
     } else d = new Driver(scenario.id, scenario.strategy);
-    const run = await runPhases(d, scenario.phases, { ...scenario.options, verbose }, slot);
+    // A parent played only for its branches stops at the last milestone they need,
+    // so a branch can run on its own inside one short job. Requested scenarios play in full.
+    const until = ids.includes(scenario.id) ? -1 : Math.max(...wanted.filter((w) => w.from?.scenario === scenario.id)
+      .map((w) => scenario.phases.findIndex((p) => p.id === w.from!.milestone)));
+    const run = await runPhases(d, until >= 0 ? scenario.phases.slice(0, until + 1) : scenario.phases, { ...scenario.options, verbose }, slot);
     for (const c of scenario.check?.(run) ?? []) run.checks.push(c);
     run.checks.push({ name: "every milestone reload matched", ok: run.saves.every((s) => s.equal), detail: `${run.saves.length} saves` });
     runs.set(scenario.id, { run, slot });

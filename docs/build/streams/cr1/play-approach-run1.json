@@ -1,0 +1,238 @@
+{
+  "scenes": {
+    "approach-canopy": {
+      "captions": [
+        " | | | ",
+        " | Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). Your reserve cells are in the pod locker; carry one in your hold or the craft's for the G decoy pulse. | | ",
+        " | | | ",
+        " | The sound hunter has left its crowns to feed on the lantern shoal to the east. While it feeds it hears almost nothing: this is the time to cross. | | ",
+        " | | | "
+      ],
+      "banners": [],
+      "minHealth": 100,
+      "notes": {
+        "start": {
+          "distance": 149.94306082964277,
+          "mode": "piloting",
+          "hull": "dart"
+        },
+        "waited": 0.004934484999997948
+      }
+    },
+    "approach-rift": {
+      "captions": [
+        " | | | ",
+        " | Glare stalkers hunt this warm passage, but every vent they rise into the plume to feed. Watch the mites: when they leave the lip, the stalkers go too. | | ",
+        " | Glare stalkers hunt this warm passage, but every vent they rise into the plume to feed. Watch the mites: when they leave the lip, the stalkers go too. | Split chimney pulse · watch it to learn its timing. | ",
+        " | Glare stalkers hunt this warm passage, but every vent they rise into the plume to feed. Watch the mites: when they leave the lip, the stalkers go too. | | ",
+        " | | | ",
+        "[Paired hunter calls, right] | Rippling lights run along a long shape in the warm passage. It has seen your lamp. Dim it, or climb to the pale cool ledges. | | ",
+        "[Paired hunter calls, right] | Ember mites are leaving the chimney lip. The plume vents within seconds; stay clear of the column. | | ",
+        "[Paired hunter calls, behind] | The glare stalker drifts closer, its lights pulsing in pairs. Dark and still, or out of the warm water, it loses you. | | ",
+        " | The glare stalker drifts closer, its lights pulsing in pairs. Dark and still, or out of the warm water, it loses you. | | ",
+        "[Hunter calls fade] | The stalker stops at the edge of the cool water and will not follow. | | ",
+        " | The stalker stops at the edge of the cool water and will not follow. | Glare stalkers' vent feeding · one phase timed in the journal. | ",
+        " | | Glare stalkers' vent feeding · one phase timed in the journal. | ",
+        " | | | ",
+        " | | Glare stalkers' vent feeding · one phase timed in the journal. | ",
+        " | | | "
+      ],
+      "banners": [],
+      "minHealth": 100,
+      "notes": {
+        "start": {
+          "distance": 259.99430729033446,
+          "mode": "piloting",
+          "hull": "creel"
+        },
+        "exited": {
+          "at": {
+            "x": -224.77,
+            "y": -289.2,
+            "z": -1067.447
+          },
+          "vitals": "O₂ 100% Suit air · 0 s HEALTH 100 FOOD 65 F · eat meal"
+        },
+        "waited": 0.0043345660000049975
+      }
+    },
+    "approach-divide": {
+      "captions": [
+        " | | | ",
+        "HULL DEPTH · 383 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 384 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 385 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 386 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 387 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 388 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 389 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 390 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 391 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 392 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 393 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 394 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 395 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 396 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 397 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 398 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 399 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 400 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 401 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 402 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 403 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 404 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 405 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 406 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 407 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 408 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 409 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 410 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 411 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 411 / 450 m · ascend before hull damage | Layer skates patrol under the mirror while the crest current runs. When it slackens, they settle just under the surface and lie still. | | ",
+        "HULL DEPTH · 412 / 450 m · ascend before hull damage | Layer skates patrol under the mirror while the crest current runs. When it slackens, they settle just under the surface and lie still. | | ",
+        "HULL DEPTH · 413 / 450 m · ascend before hull damage | Layer skates patrol under the mirror while the crest current runs. When it slackens, they settle just under the surface and lie still. | | ",
+        "HULL DEPTH · 414 / 450 m · ascend before hull damage | Layer skates patrol under the mirror while the crest current runs. When it slackens, they settle just under the surface and lie still. | | ",
+        "HULL DEPTH · 415 / 450 m · ascend before hull damage | Layer skates patrol under the mirror while the crest current runs. When it slackens, they settle just under the surface and lie still. | | ",
+        "HULL DEPTH · 416 / 450 m · ascend before hull damage | Layer skates patrol under the mirror while the crest current runs. When it slackens, they settle just under the surface and lie still. | | ",
+        "HULL DEPTH · 417 / 450 m · ascend before hull damage | Layer skates patrol under the mirror while the crest current runs. When it slackens, they settle just under the surface and lie still. | | ",
+        "HULL DEPTH · 418 / 450 m · ascend before hull damage | Layer skates patrol under the mirror while the crest current runs. When it slackens, they settle just under the surface and lie still. | | ",
+        "HULL DEPTH · 418 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 419 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 420 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 421 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 422 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 423 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 424 / 450 m · ascend before hull damage | | | ",
+        "HULL DEPTH · 425 / 450 m · ascend before hull damage | | | ",
+        " | | Left the craft | ",
+        " | | | ",
+        " | | Layer skates' slack-water rest · one phase timed in the journal. | ",
+        " | | | ",
+        " | | Layer skates' slack-water rest · one phase timed in the journal. | ",
+        " | | | "
+      ],
+      "banners": [
+        "HULL DEPTH · 383 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 384 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 385 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 386 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 387 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 388 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 389 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 390 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 391 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 392 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 393 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 394 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 395 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 396 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 397 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 398 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 399 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 400 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 401 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 402 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 403 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 404 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 405 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 406 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 407 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 408 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 409 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 410 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 411 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 412 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 413 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 414 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 415 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 416 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 417 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 418 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 419 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 420 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 421 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 422 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 423 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 424 / 450 m · ascend before hull damage",
+        "HULL DEPTH · 425 / 450 m · ascend before hull damage",
+        ""
+      ],
+      "minHealth": 100,
+      "notes": {
+        "start": {
+          "distance": 259.97846271234204,
+          "mode": "piloting",
+          "hull": "creel"
+        },
+        "exited": {
+          "at": {
+            "x": 525.481,
+            "y": -424.9,
+            "z": -1454.542
+          },
+          "vitals": "O₂ 100% Suit air · 0 s HEALTH 100 FOOD 94 F · eat meal"
+        },
+        "waited": 35.90483082600002
+      }
+    },
+    "approach-meridian": {
+      "captions": [
+        " | | | ",
+        " | The hollow choir rests at regular times: its rims dim and the bells fold shut. Closed bells barely hear. | | ",
+        " | The hollow choir rests at regular times: its rims dim and the bells fold shut. Closed bells barely hear. | Left the craft | ",
+        " | The hollow choir rests at regular times: its rims dim and the bells fold shut. Closed bells barely hear. | | ",
+        " | | | ",
+        " | | Hollow choir's rest · one phase timed in the journal. | ",
+        " | | | ",
+        " | | Hollow choir's rest · one phase timed in the journal. | ",
+        " | | | ",
+        "[Paired hunter calls, behind] | The pale bells along the gallery start to hum with your noise. Quiet your movement or leave the bells' reach. | | ",
+        "[Paired hunter calls, behind] | The pale bells along the gallery start to hum with your noise. Quiet your movement or leave the bells' reach. | Hollow choir's rest · one phase timed in the journal. | ",
+        " | The pale bells along the gallery start to hum with your noise. Quiet your movement or leave the bells' reach. | Hollow choir's rest · one phase timed in the journal. | ",
+        " | The pale bells along the gallery start to hum with your noise. Quiet your movement or leave the bells' reach. | | ",
+        "[Paired hunter calls, behind] | The choir's hum rises and its bells swell together. A pressure pulse is coming; go quiet or leave the reach. | | ",
+        " | The choir's hum rises and its bells swell together. A pressure pulse is coming; go quiet or leave the reach. | | ",
+        "[Paired hunter calls, behind] | The choir releases a pressure pulse. | | ",
+        "[Hunter calls fade] | The bells fall silent and slowly close. | | Bitten · health −5.4"
+      ],
+      "banners": [],
+      "minHealth": 95,
+      "notes": {
+        "start": {
+          "distance": 259.9742185264904,
+          "mode": "piloting",
+          "hull": "creel"
+        },
+        "exited": {
+          "at": {
+            "x": 1293.699,
+            "y": -583.4,
+            "z": -1193.086
+          },
+          "vitals": "O₂ 100% Suit air · 0 s HEALTH 100 FOOD 61 F · eat meal"
+        },
+        "waited": 9.870724423000008
+      }
+    }
+  },
+  "shots": [
+    "/work/tmp/cr1/shots4/approach-canopy-01-native-start.png",
+    "/work/tmp/cr1/shots4/approach-canopy-02-at-the-approach-ring.png",
+    "/work/tmp/cr1/shots4/approach-canopy-03-hunter-gone-to-feed.png",
+    "/work/tmp/cr1/shots4/approach-canopy-04-lab-reached-loud-and-lit.png",
+    "/work/tmp/cr1/shots4/approach-rift-01-native-start.png",
+    "/work/tmp/cr1/shots4/approach-rift-02-arrived-watching.png",
+    "/work/tmp/cr1/shots4/approach-rift-03-window-open.png",
+    "/work/tmp/cr1/shots4/approach-rift-04-crossed.png",
+    "/work/tmp/cr1/shots4/approach-divide-01-native-start.png",
+    "/work/tmp/cr1/shots4/approach-divide-02-arrived-watching.png",
+    "/work/tmp/cr1/shots4/approach-divide-03-window-open.png",
+    "/work/tmp/cr1/shots4/approach-divide-04-crossed.png",
+    "/work/tmp/cr1/shots4/approach-meridian-01-native-start.png",
+    "/work/tmp/cr1/shots4/approach-meridian-02-arrived-watching.png",
+    "/work/tmp/cr1/shots4/approach-meridian-03-window-open.png",
+    "/work/tmp/cr1/shots4/approach-meridian-04-crossed.png"
+  ],
+  "errors": [],
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)"
+}
