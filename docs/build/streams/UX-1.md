@@ -1,6 +1,6 @@
 # UX-1: the Hearthline is a ship you command
 
-Opus 5.5 high. Branch `t3/ux-1-carrier-stations`, from root `fb51c50`, with root merged up to `5806f78`: SCHED-1, TT-1, the second worker and docs, none of it in `src`. Spoiler-free. Answers M2 audit finding #2 ([audit](../reviews/M2-OPUS-EXPERIENCE-AUDIT.md)).
+Opus 5.5 high. Branch `t3/ux-1-carrier-stations`, from root `fb51c50`, with root merged up to `7070084`: SCHED-1, TT-1, the second worker and docs, none of it in `src`. Spoiler-free. Answers M2 audit finding #2 ([audit](../reviews/M2-OPUS-EXPERIENCE-AUDIT.md)).
 
 ## What changed for the player
 - **Stations, not a panel.** Aboard, you aim at a fixture and press E, as in the Creel cabin:
