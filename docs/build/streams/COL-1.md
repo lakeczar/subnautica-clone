@@ -125,7 +125,7 @@ Vertex-index displacement overstates the change: up to 28.5 m fine and 30.9 m co
 - **Heavy, through the queue:**
   - at `9fb9538b` (ticket `261023-131556-3839`): `col1-r6-floor.heavy` 1 / 1, `col1-art.heavy` 5 / 5 (55 kit shells, both LODs' seam, no failures), `col1-oracle.heavy` 4 / 4;
   - the five-cave oracle, before and after, at `d8a06e12` (ticket `261023-140117-33f6`);
-  - at the head: HEAVY-HEAD.
+  - at `a065036a` (ticket `261023-144700-a735`): `col1-art.heavy` 5 / 5, `col1-r6-floor.heavy` 1 / 1, `col1-oracle.heavy` 4 / 4 (peak 1,044 MiB).
 - **Mutations,** each failing its test:
   - the naive snap;
   - side-only skirts;
