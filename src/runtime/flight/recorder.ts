@@ -22,7 +22,7 @@ export const FRAME_COLUMNS = [
   "rec", // the recorder's own time in this frame
   "heapDrop", // MiB the JS heap shrank since the previous frame (a collection), when the browser exposes it; -1 unknown
   "hold", // cave admission state, HOLD_CODES index
-  "gpu", // GPU time of a recent scene.render (timer queries resolve 1–3 frames late); -1 unknown
+  "gpu", // GPU time of this frame's scene.render (its timer query, resolved a few frames later); -1 unknown
   "dom", // the legacy per-frame #ocean counters (REC-1 compromise 1: their cost, measured)
 ] as const;
 export type FrameColumn = (typeof FRAME_COLUMNS)[number];
@@ -42,7 +42,11 @@ export const holdCode = (state: string | null | undefined): number => {
 
 export type FrameInput = Partial<Record<Exclude<FrameColumn, "t" | "gap" | "hold">, number>> & {
   t: number; gap: number; hold?: string | null;
+  /** The frame's GPU timer query: the row waits (up to GPU_WAIT_FRAMES) for `gpuResolved(tag)`. */
+  gpuTag?: number;
 };
+/** Frames a row waits for its GPU time before it is written without one. */
+export const GPU_WAIT_FRAMES = 6;
 
 /** A few-times-a-second reading of the player and the renderer. */
 export interface FlightSample {
@@ -185,9 +189,32 @@ export class FlightRecorder {
   /** Adds recorder self-time spent outside `frame()` (sampling, capture) to the current frame. */
   charge(ms: number): void { this.accrued += ms; }
 
-  /** One frame's row. Detects long frames and hold transitions. `selfMs` is the
-   * caller's own recording time in this frame (timing reads, stats). */
+  private readonly waiting: { input: FrameInput; selfMs: number }[] = [];
+  private readonly gpuTimes = new Map<number, number>();
+  /** A frame's GPU timer query resolved (renderer.ts createGpuTimer). */
+  gpuResolved(tag: number, ms: number): void { this.gpuTimes.set(tag, ms); }
+
+  /** One frame. A frame with a GPU query waits until its time resolves (at most
+   * GPU_WAIT_FRAMES), so the GPU time lands on the frame it measured; rows are
+   * written in order. `selfMs` is the caller's own recording time in this frame. */
   frame(input: FrameInput, selfMs = 0): void {
+    this.waiting.push({ input, selfMs: selfMs + this.accrued });
+    this.accrued = 0;
+    while (this.waiting.length) {
+      const head = this.waiting[0]!, tag = head.input.gpuTag;
+      const known = tag === undefined || tag < 0 || this.gpuTimes.has(tag);
+      if (!known && this.waiting.length <= GPU_WAIT_FRAMES) break;
+      this.waiting.shift();
+      const gpu = tag !== undefined && tag >= 0 ? this.gpuTimes.get(tag) : undefined;
+      if (tag !== undefined) this.gpuTimes.delete(tag);
+      const { gpuTag: _, ...rest } = head.input;
+      this.commit(gpu !== undefined && gpu >= 0 ? { ...rest, gpu } : rest, head.selfMs);
+    }
+  }
+  /** Writes every waiting row now (an export, the end of a recording). */
+  settle(): void { while (this.waiting.length) { const h = this.waiting.shift()!; const { gpuTag: _, ...rest } = h.input; this.commit(rest, h.selfMs); } }
+
+  private commit(input: FrameInput, rec: number): void {
     const r = this.row;
     r.fill(0);
     for (const [k, v] of Object.entries(input)) if (k !== "hold" && typeof v === "number") r[COL[k as FrameColumn]] = v;
@@ -195,9 +222,7 @@ export class FlightRecorder {
     if (input.gpu === undefined) r[COL.gpu] = -1;
     const hold = input.hold ?? null;
     r[COL.hold] = holdCode(hold);
-    const rec = selfMs + this.accrued;
     r[COL.rec] = rec;
-    this.accrued = 0;
     this.self.totalMs += rec; this.self.frames++;
     if (rec > this.self.worstMs) this.self.worstMs = rec;
     this.frames.push(r, input.t);

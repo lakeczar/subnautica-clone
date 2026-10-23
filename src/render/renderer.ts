@@ -65,27 +65,34 @@ export interface GameRenderer {
 }
 
 /** REC-1: the GPU's time for each scene.render, from WebGL2 timer queries
- * (EXT_disjoint_timer_query_webgl2), read when they resolve a few frames
- * later. `latest` is -1 where the browser does not expose the timer, or
- * after a disjoint event (the GPU was interrupted: no valid times). */
+ * (EXT_disjoint_timer_query_webgl2). A query resolves a few frames later; each
+ * carries the tag of the frame it measured, so the recorder can put the time
+ * on that frame's own row. `tag` is -1 for a frame with no query (the browser
+ * hides the timer, or too many are still in flight); a disjoint event (the
+ * GPU was interrupted) resolves as -1 ms. */
 function createGpuTimer(gl: WebGL2RenderingContext | undefined) {
   const ext = gl?.getExtension("EXT_disjoint_timer_query_webgl2") as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null | undefined;
-  const pending: WebGLQuery[] = [], free: WebGLQuery[] = [];
-  let open: WebGLQuery | null = null;
+  const pending: { q: WebGLQuery; tag: number }[] = [], free: WebGLQuery[] = [];
+  let open: WebGLQuery | null = null, frames = 0;
   const timer = {
-    latest: -1,
+    /** This frame's query tag, or -1. */
+    tag: -1,
+    /** Queries resolved at the last end(): the frame each measured and its GPU ms. */
+    done: [] as { tag: number; ms: number }[],
     begin(): void {
+      timer.tag = -1;
       if (!gl || !ext || open || pending.length > 6) return;
       open = free.pop() ?? gl.createQuery();
-      if (open) gl.beginQuery(ext.TIME_ELAPSED_EXT, open);
+      if (open) { gl.beginQuery(ext.TIME_ELAPSED_EXT, open); timer.tag = ++frames; }
     },
     end(): void {
+      timer.done = [];
       if (!gl || !ext) return;
-      if (open) { gl.endQuery(ext.TIME_ELAPSED_EXT); pending.push(open); open = null; }
-      while (pending.length && gl.getQueryParameter(pending[0]!, gl.QUERY_RESULT_AVAILABLE)) {
-        const q = pending.shift()!;
+      if (open) { gl.endQuery(ext.TIME_ELAPSED_EXT); pending.push({ q: open, tag: timer.tag }); open = null; }
+      while (pending.length && gl.getQueryParameter(pending[0]!.q, gl.QUERY_RESULT_AVAILABLE)) {
+        const { q, tag } = pending.shift()!;
         const ns = gl.getQueryParameter(q, gl.QUERY_RESULT) as number;
-        timer.latest = gl.getParameter(ext.GPU_DISJOINT_EXT) ? -1 : Math.round(ns / 1e4) / 100;
+        timer.done.push({ tag, ms: gl.getParameter(ext.GPU_DISJOINT_EXT) ? -1 : Math.round(ns / 1e4) / 100 });
         free.push(q);
       }
     },
@@ -96,8 +103,9 @@ function createGpuTimer(gl: WebGL2RenderingContext | undefined) {
 /** One present's time by part, ms (REC-1; CW-1's attribution). */
 export interface FrameParts {
   regions: number; lights: number; actors: number; chunks: number; caves: number; render: number;
-  /** GPU time of a recent scene.render (timer queries resolve 1–3 frames late), ms; -1 when the browser exposes no GPU timer. */
-  gpu: number;
+  /** This frame's GPU timer query (-1: none), and the queries that resolved now: the frame each measured and its GPU ms. */
+  gpuTag: number;
+  gpuDone: readonly { tag: number; ms: number }[];
   /** The legacy per-frame `#ocean` counters (two reduces over every mesh), ms. */
   dom?: number;
   lightScan: number; lightPlace: number; lightSelect: number; lightCount: number; evicted: number;
@@ -564,7 +572,7 @@ export function createRenderer(
           regions: +regionsMs.toFixed(2), lights: +lightsMs.toFixed(2), actors: +actorsMs.toFixed(2),
           lightScan: +lights.stats.scanMs.toFixed(2), lightPlace: +lights.stats.placeMs.toFixed(2), lightSelect: +lights.stats.selectMs.toFixed(2),
           lightCount: lights.stats.placed, evicted: world?.totals.evicted ?? 0,
-          chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2), gpu: gpuTimer.latest,
+          chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2), gpuTag: gpuTimer.tag, gpuDone: gpuTimer.done,
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
           jump,

@@ -258,9 +258,10 @@ export class FlightCapture {
   /** The header as it stands (it learns the video's start once the first frame is taken). */
   private putHeader(): void { this.post("header.json", JSON.stringify(this.header, null, 1), "put"); }
   /** Appends everything recorded since the last flush. */
-  flush(now = performance.now()): void {
+  flush(now = performance.now(), final = false): void {
     const s = this.spool;
     if (!s) return;
+    if (final) this.recorder.settle();
     s.last = now;
     const r = this.recorder, c = s.cursors;
     const frames = r.frames.since(c.frames), samples = r.samples.since(c.samples), events = r.events.since(c.events), snaps = r.snapshots.since(c.snapshots);
@@ -289,6 +290,7 @@ export class FlightCapture {
   async exportZip(): Promise<{ blob: Blob; name: string }> {
     const end = { seq: 0, t: performance.now(), kind: "session", text: "recording exported", detail: { overhead: this.recorder.overhead(), videoFrames: this.video?.frames ?? 0 } };
     const name = `siltwake-flight-${this.session}.zip`;
+    this.recorder.settle();
     if (!this.spool) {
       const r = this.recorder, lines = <T>(xs: T[]) => new Blob([xs.map((x) => JSON.stringify(x)).join("\n") + "\n"]);
       const snaps = r.snapshots.since(0).items.filter((x) => this.blobs.has(x.seq));
@@ -331,7 +333,7 @@ export class FlightCapture {
     this.abort.abort();
     this.restoreConsole?.();
     try { this.video?.recorder.stop(); } catch { /* already stopped */ }
-    this.flush();
+    this.flush(performance.now(), true);
     const s = this.spool;
     if (s) setTimeout(() => s.worker.terminate(), 2000);
   }

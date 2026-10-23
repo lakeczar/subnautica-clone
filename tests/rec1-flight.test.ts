@@ -167,3 +167,23 @@ test("a staged fixed view puts the diver alone at the pose, still, with the craf
   assert.deepEqual(out.fleet.vehicles.find((v) => v.id === "dart-1")!.pose.position, { x: 5, y: -10, z: 5 });
   assert.equal(s.player.controlledVehicleId, "dart-1", "the original state is untouched");
 });
+
+test("a frame's GPU time lands on that frame's own row, rows stay in order, and an unresolved query is written without one", async () => {
+  const { GPU_WAIT_FRAMES } = await import("../src/runtime/flight/recorder.js");
+  const r = new FlightRecorder();
+  r.frame(frame(0, { gpuTag: 1 }));
+  r.frame(frame(16, { gpuTag: 2 }));
+  assert.equal(r.frames.written, 0, "rows wait for their GPU time");
+  r.gpuResolved(2, 5.5);
+  r.frame(frame(33, { gpuTag: 3 }));
+  assert.equal(r.frames.written, 0, "row 2 is known, but row 1 is still waiting: order is kept");
+  r.gpuResolved(1, 4.25);
+  r.gpuResolved(3, 6);
+  r.frame(frame(50, { gpuTag: -1 }));
+  const rows = r.frames.since(0).rows.map((x) => frameObject(x));
+  assert.deepEqual(rows.map((x) => [x.t, x.gpu]), [[0, 4.25], [16, 5.5], [33, 6], [50, -1]]);
+  for (let i = 0; i <= GPU_WAIT_FRAMES; i++) r.frame(frame(66 + i * 16, { gpuTag: 100 + i }));
+  assert.equal(frameObject(r.frames.since(4).rows[0]!).gpu, -1, "a query that never resolves: written without a GPU time after the wait");
+  r.settle();
+  assert.equal(r.frames.written, 4 + GPU_WAIT_FRAMES + 1);
+});

@@ -497,8 +497,9 @@ export class SiltwakeApp {
     const heapDrop = heap !== null && this.flightHeap !== null ? Math.max(0, this.flightHeap - heap) : undefined;
     this.flightHeap = heap;
     const p = this.renderer?.parts;
+    for (const g of p?.gpuDone ?? []) fl.recorder.gpuResolved(g.tag, g.ms);
     fl.recorder.frame({ t: now, gap, work, sim, steps, save, hud: this.lastHudMs, hold,
-      ...(p ? { chunks: p.chunks, caves: p.caves, regions: p.regions, lights: p.lights, actors: p.actors, render: p.render, dom: p.dom ?? 0, ...(p.gpu >= 0 ? { gpu: p.gpu } : {}) } : {}),
+      ...(p ? { chunks: p.chunks, caves: p.caves, regions: p.regions, lights: p.lights, actors: p.actors, render: p.render, dom: p.dom ?? 0, gpuTag: p.gpuTag } : {}),
       ...(heapDrop !== undefined ? { heapDrop } : {}) }, performance.now() - recStart);
     // Pictures only from a frame that drew: otherwise the canvas holds nothing current.
     if (this.drewFrame) fl.recorder.charge(fl.afterRender(now));
