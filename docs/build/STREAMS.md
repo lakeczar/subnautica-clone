@@ -666,3 +666,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Size:** store.ts 285 lines plus liveTimeline.ts 97.
   - **Open gap:** no "replace protected timeline" action.
   - **Review:** Sol R5 running (`siltwake-sim1-review-r5-sol-3731a55`), focused on the outbox and on contract conformance.
+- **TST-16 R6** (Sol on `b10aa825`, report on `review/tst-16-r6` `867fd6e9`): REQUEST CHANGES. **P2:** `--remove-exclusive-slice` treats a failed population query as empty. **P3:** the endpoint readings can't see a mid-run change that is later restored, which is reachable via reinstall. Fixes: fail-closed population (reusing state.mjs); install refuses to rewrite the unit while the slice is populated; `cpu.stat` throttling deltas, where any throttling means DISTURBED; documented limits. A short R7 follows.
