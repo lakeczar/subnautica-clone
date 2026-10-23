@@ -197,6 +197,14 @@ export async function fetchArtifacts(cfg, ticket, paths, cwdRel) {
   return out;
 }
 
+/** Build outputs a command reads that a commit doesn't carry: `.test-build*`
+ * (the transport clears it when the commit changes) and `dist`. Such a
+ * command must compile inside the job to run on alickers (npm run playthrough,
+ * npm run build && …). */
+export function builtOutputs(argv) {
+  return [...new Set(argv.flatMap((t) => [...String(t).matchAll(/(?:^|[\s=:'"(/])(\.test-build[^\s/'";)]*|dist)(?=\/|$|[\s'";)])/g)].map((m) => m[1])))];
+}
+
 /**
  * Absolute paths a command names outside its worktree (/work, /home, /tmp,
  * /mnt). The sandbox has only the commit, so such a command can't run there:

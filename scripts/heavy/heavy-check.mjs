@@ -28,7 +28,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveRequest, tokensFor } from "./policy.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
-import { externalPaths, readHealth, remoteConfig } from "./remote.mjs";
+import { builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
   alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState,
   reconcile, scopePopulated, sliceCheck, systemctl, transaction, worktreeOf, writeJsonAtomic,
@@ -123,9 +123,10 @@ async function submit(opts, command, { quiet = false } = {}) {
   // only a command that names nothing outside it but its declared --artifact
   // outputs. An `any` or `soak` job that can't go runs here; a `4070` job is refused.
   const machine = req.goal.machine, lane = remoteConfig(cfg);
-  const external = externalPaths(command, worktree, opts.artifacts ?? []);
+  const external = externalPaths(command, worktree, opts.artifacts ?? []), built = builtOutputs(command);
   const why = !lane.enabled ? `the remote lane is off (${readHealth(cfg).detail})` : !tree.head ? "not a git tree"
-    : tree.dirty !== "clean" ? "uncommitted changes (alickers runs a commit)" : external.length ? `it names local paths alickers lacks: ${external.slice(0, 3).join(", ")} (declare outputs with --artifact)` : null;
+    : tree.dirty !== "clean" ? "uncommitted changes (alickers runs a commit)" : external.length ? `it names local paths alickers lacks: ${external.slice(0, 3).join(", ")} (declare outputs with --artifact)`
+    : built.length ? `it reads build output a commit lacks (${built.join(", ")}); compile inside the job, e.g. npm run playthrough, or npm run build && …` : null;
   req.goal.remoteOk = machine !== "3090" && !why;
   if (machine === "4070" && why) fail(`refused: --machine 4070 runs on alickers, but ${why}`);
   if (why && machine !== "3090" && !(machine === "any" && !opts.machine)) say(`runs here (factory-worker), not on alickers: ${why}`);

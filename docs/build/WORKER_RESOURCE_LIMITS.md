@@ -75,6 +75,33 @@ Options:
 - `--snapshot`: run on a private copy of the tree as submitted, so you can keep editing while the ticket waits and runs (below). In package scripts that queue themselves (`test:heavy`), set `HEAVY_SNAPSHOT=1`.
 - `--gpu`: for `soak` only.
 - `--no-test-build`: this job never reads the worktree's `.test-build` (GPU play from `dist`), so `npm test` there stays allowed while it runs.
+- `--machine any|3090|4070|soak`: where it runs (below, "Two machines").
+- `--artifact PATH` (repeatable): an output file or directory to bring back from alickers (below).
+
+**Two machines** (SCHED-2b; DIRECTION, "Two test machines"). The queue routes each job by its machine tag to factory-worker (RTX 3090) or the best-effort second worker `siltwake-alickers` (RTX 4070 Laptop):
+
+| Tag | Default for | Where it runs |
+| --- | --- | --- |
+| `any` | `playthrough`, `heavy-suite` | alickers when its one slot is free; otherwise here at once (never waits for it) |
+| `3090` | every other class | here only. `exclusive` is always 3090 |
+| `4070` | (ask for it) | alickers only. It waits through pauses and outages until its queue timeout, and is never faked here |
+| `soak` | `soak` | alickers first. It runs here only while alickers is paused or unreachable |
+
+- **Only a commit goes to alickers.** A dirty tree, or a command that names a local path outside the worktree (`/work/...`, `/tmp/...`; inputs would be missing, outputs left behind), runs here, and `--machine 4070` is refused with the reason. Put inputs in the commit. Declare outputs with `--artifact`:
+  - a relative path is in the job's directory in the sandbox checkout; an absolute path is on the sandbox;
+  - each one comes back **whole**, an evidence pack directory included, into `/work/tmp/<ticket>/<name>`, also when the job failed;
+  - the result, the ledger and the final line list them with the machine and the tested commit. A fetch that failed is listed as such.
+- **Sandbox outages:** a paused or unreachable alickers, detected before the job started, sends an `any` or `soak` job back to run here, keeping its place (`status` marks it `here*`, the result has `fellBack`). A `4070` job waits again. A job's own exit codes, 75 and 255 included, pass through once it has started (`alickers-job: testing <sha>`).
+- **Goals there:** the stall clock starts at the `testing` line, so waiting for the sandbox's lock, `npm ci` and the transport don't count; the first compile (cold, because the transport clears `.test-build*` when the commit changes) does. The sandbox's `siltwake-job` sets MemoryHigh at 85% of its memory with no swap, so a job past it is **throttled**, not killed. The queue reports continuous throttling after 2 minutes and stops the job at its stall window (exit **123**, `throttled`); rerun with more `--mem` (up to 12 GiB).
+- **4070 frame times** are recorded, labelled "RTX 4070 Laptop (alickers, shared desktop host)", and flagged with a **WARNING** in a soak report when a frame rule would have failed. They are never judged. Memory, graphics, hold and save rules are judged there. Frame judgement stays with 3090 `exclusive` runs.
+- **`status`** shows alickers' state (`up`, `busy`, `paused`, `unreachable`) and a MACHINE column. Blocked reasons are `remote` (its slot is busy: a lane job, or someone's direct `alickers-job.sh` call), `remote-paused` and `remote-down`.
+
+```sh
+$H --class gpu --machine 4070 --artifact evidence-pack -- node my-4070-session.mjs   # writes evidence-pack/ in the checkout
+$H --class playthrough -- npm run playthrough -- --jobs 3 --quiet                     # any: alickers if free, else here
+```
+
+A command that reads build output a commit lacks (`node .test-build/…`, `--dist dist`) runs here: on alickers it must compile inside the job (`npm run playthrough` compiles first; `npm run test:heavy` already does). Compiling outside the queue and queueing only `node .test-build/…`, as below, stays the fastest form for a run here.
 
 Commands that `heavy-check` recognises (a playthrough, the heavy tier, the terrain bake, the large-cave lab bake) get their class without `--class`.
 
@@ -149,7 +176,7 @@ A WSL2 Ubuntu sandbox on the owner's PC (`alickers`): **8 CPUs, 16 GB, no swap, 
 
 Keep factory-worker for evidence that must be on the 3090, and for anything needing the coordinator or provider logins.
 
-**Run a job** from any worktree on factory-worker:
+**Run a job through the queue** with `--machine` (above). `scripts/alickers-job.sh` is the queue's transport, and the documented fallback if the queue's lane is unavailable. Called directly, it runs from any worktree on factory-worker:
 
 ```sh
 scripts/alickers-job.sh [--sha SHA] [--deadline S] [--memory NG] -- COMMAND ...

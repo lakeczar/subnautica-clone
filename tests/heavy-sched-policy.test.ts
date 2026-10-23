@@ -351,6 +351,18 @@ test("GPU lease: the environment alone is no proof; the second worker's siltwake
 
 // SCHED-2b: machine tags and the remote lane -----------------------------------
 
+test("lane eligibility: local paths outside the tree and uncommitted build outputs keep a job here", async () => {
+  const R = await import(pathToFileURL(resolve("scripts/heavy/remote.mjs")).href);
+  const wt = "/home/worker/wt";
+  assert.deepEqual(R.externalPaths(["node", "/work/tmp/x/derive.mjs", "--json=/work/results/pt.json"], wt), ["/work/tmp/x/derive.mjs", "/work/results/pt.json"]);
+  assert.deepEqual(R.externalPaths(["node", "/home/worker/wt/scripts/a.mjs", "sh", "-c", "cat /tmp/in > out"], wt), ["/tmp/in"]);
+  assert.deepEqual(R.externalPaths(["sh", "-c", "echo > /work/results/pack/a"], wt, ["/work/results/pack"]), [], "a declared --artifact is an output");
+  assert.deepEqual(R.builtOutputs(["node", ".test-build/scripts/playthrough/run.js"]), [".test-build"]);
+  assert.deepEqual(R.builtOutputs(["node", "scripts/soak/run.mjs", "tour", "--dist", "dist"]), ["dist"]);
+  assert.deepEqual(R.builtOutputs(["sh", "-c", "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy"]), [], "compiling inside the job is fine");
+  assert.deepEqual(R.builtOutputs(["npm", "run", "playthrough", "--", "--jobs", "3"]), []);
+});
+
 test("machine tags: defaults by class; exclusive is the 3090's; unknown tags refused", () => {
   const m = (cls: string, extra = {}) => P.resolveRequest({ class: cls, ...extra }, { T: 4, M: 6144 }).goal?.machine;
   assert.deepEqual([m("playthrough"), m("heavy-suite"), m("soak"), m("gpu"), m("quick"), m("exclusive")], ["any", "any", "soak", "3090", "3090", "3090"]);

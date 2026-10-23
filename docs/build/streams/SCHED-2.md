@@ -2,6 +2,58 @@
 
 Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 rule ("a job has a goal, not a time limit") and the 2a list in [DIRECTION](../DIRECTION.md), "Two test machines". SCHED-2b (the remote lane) and SAVE-1 follow after review. **Not installed:** the live queue still runs SCHED-1 `6824478b070f`; cut-over is below and waits for the coordinator.
 
+## SCHED-2b: the remote lane (built on 2a; for review)
+
+Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordinator's calls on its four open points (2026-10-23). Branch `t3/sched-2b-remote-lane`, on 2a at `014f37b`.
+
+**Routing** (`policy.mjs`):
+- Machine tags `any|3090|4070|soak` sit in the ticket's goal. Defaults: playthrough and heavy-suite → `any`, soak → `soak`, the rest → `3090`. `exclusive` with a non-3090 tag is refused.
+- The plan routes the remote slot first, in priority order. A remote ticket takes no local tokens, memory, GPU or worktree, and local legacy, exclusive and memory states don't hold it back. `any` takes alickers only when it's free; `4070` waits (`remote`, `remote-paused`, `remote-down`); `soak` waits unless alickers is paused or unreachable. A fallen-back `any` or `soak` stays here.
+- A remote soak yields its slot to a waiting `4070` job.
+
+**Eligibility** (`heavy-check.mjs` submit, `remote.mjs`):
+- Only a clean tree goes, and only a command that names no local path outside the worktree (`/work`, `/home`, `/tmp`, `/mnt`) except its declared `--artifact` outputs, and reads no uncommitted build output (`.test-build*`, `dist`).
+- Otherwise `any` and `soak` run here, with the reason, and `4070` is refused.
+- Private state (tests) never reaches a real sandbox unless its `config.json` names a remote.
+
+**Health** (`remote.mjs`): one ssh probe reads the owner's pause flag and a non-blocking check of `siltwake-job`'s lock, giving `up`, `busy` (a lane job or someone's direct call), `paused` or `unreachable`. It's cached in `remote.json` and rechecked after 30 s (up or busy), 60 s (paused), or 1, 2, then 5 min (unreachable). Waiting remote-bound supervisors refresh it outside the state lock, one prober at a time.
+
+**The remote holder** (`remote-holder.mjs`, its own scope; the supervisor starts it instead of `holder.mjs`):
+- **Transport:** it runs `alickers-job.sh --sha <submitted commit> --deadline <limit> --memory <≥8G>` on `lane-run.sh` (uploaded once per version), with the argv base64-encoded so no quoting survives the shell layers. Each installed version carries its own transport copy.
+- **Stall and throttle:** the stall clock starts at `alickers-job: testing <sha>`. Heartbeat and `memory.high` are read **out of band**, by ssh every `tickS` (10 s), because a monitor inside the job's cgroup is throttled with it (found in B6). Continuous throttling is reported after 2 min and stopped at the stall window (`throttled`, 123); a throttled job that has gone silent is labelled `throttled`, not `stalled`.
+- **Ceiling, cancel, yield:** the ceiling is applied by the sandbox's own `timeout` plus a backstop. Cancel and stop TERM the wrapper (PID and start time) and mark the ticket cancelled, so a job still waiting for the sandbox's lock never starts. Soak yield works through `$SILTWAKE_JOB_YIELD` on the sandbox.
+- **Exit codes:** a 75 or 255 *before* `testing` is the sandbox's: `any` and `soak` are re-queued here, keeping their place (a resumed supervisor takes the ticket over; the holder owns it until then); `4070` waits again; the health is updated. A connection lost mid-run stops the job remotely, then re-queues it. Transport errors give up after `maxAttempts` (3) for 4070 and run here for `any`. After `testing`, the code is the job's own, 75 and 255 included.
+- **After the job:** artifacts are fetched whole (`ssh tar | tar`) into `/work/tmp/<ticket>/`, recorded with bytes, machine and the tested commit. Then the sandbox is cleaned: the lane directory is removed, and so are artifacts inside the shared checkout; one that failed to fetch is moved to `/work/results/lane-<ticket>/` there instead. Health is probed again so the slot frees promptly.
+- **Recovery:** if the holder dies, reconcile finishes the ticket (137, unbound) and starts a detached `--stop` with the lane the job was sent to (`remote-config.json` in the job directory).
+- **Results:** `machine` ("RTX 4070 Laptop (alickers, shared desktop host)" or "RTX 3090 (factory-worker)"), `machineTag`, `evidence` bound to the tested SHA, `artifacts`, `fellBack`, `attempts`. Peak memory and CPU time are `unavailable`: the sandbox's `siltwake-job` measures them, and they aren't reported over the lane.
+
+**Inside the sandbox** (`lane-run.sh`): it records PID and start, refuses to start if cancelled, and records its scope's cgroup. It sets `SILTWAKE_JOB_HEARTBEAT`, `SILTWAKE_GPU_LEASE` (older commits read the variable; current ones accept the `siltwake-job-*` scope) and `SILTWAKE_SOAK_MACHINE`, plus worker counts for the sandbox's grant and nested heavy-check calls inline.
+
+**Soaks there:** frames are recorded, never judged; a would-be failure gets a report **WARNING**. Memory, graphics, hold and save rules are judged. The browser is `siltwake-chrome`, which sets its own GPU flags, with the sandbox's playwright-core.
+
+**Checks:**
+- **Acceptance** `scripts/heavy/acceptance-sched2b.test.mjs` passes **11/11** against a fake sandbox (the real `siltwake-job`'s lock, pause flag, user scope, MemoryHigh and swap settings, and the transport's protocol), with real systemd scopes:
+  - B1 any on alickers at its commit, worktree free, an evidence-pack directory and a file fetched whole, sandbox checkout left clean, ledger records;
+  - B2 paused: 4070 waits and runs on resume, any runs here; B3 paused after dispatch: any falls back here keeping its place, 4070 waits again; B4 unreachable, dirty tree and local paths;
+  - B5 stall after `testing`, heartbeats, waiting for the sandbox lock isn't silence; B6 memory.high throttling reported and stopped as `throttled`;
+  - B7 cancel while running and while waiting for the lock (the command never runs); B8 remote holder SIGKILL, recovery and remote stop;
+  - B9 soak on alickers yields to 4070, local while paused; B10 the job's own 7 and 255; B11 private state never reaches a sandbox.
+- **Policy units:** 30/30, including routing for every tag and state, and the eligibility rules. Soak units: 15/15, including the 4070 warning.
+- **Real canary** on alickers (private local state, the real transport and sandbox), ticket `261023-075720-305e` at `99b65b6`, `--class gpu --machine 4070 --artifact canary-pack`:
+  - `alickers-job: testing 99b65b6… on siltwake-alickers`; the job's scope is `/user.slice/…/app.slice/siltwake-job-33075.scope`;
+  - `gpu-lease.mjs check` prints **`gpu-lease: ok`** there, which settles 2a's unverified point; the sandbox's GPU probe exits 0 with renderer **`ANGLE (Microsoft Corporation, D3D12 (NVIDIA GeForce RTX 4070 Laptop GPU), OpenGL 4.6)`**;
+  - the pack (4 files, 8,799 bytes) is at `/work/tmp/sched2/canary/artifacts/261023-075720-305e/canary-pack`, and the result is `evidence for 99b65b6`.
+  - It found two flaws, both fixed: the pack left untracked in the shared checkout, now cleaned; and stray `lane/jobs/<ticket>/cancelled` markers that recovery's detached stop made on the real sandbox after a test's private config was deleted, now prevented by the private-state rule and the lane snapshot. Both were removed after checking they were mine; nothing had run.
+
+**Limits and compromises:**
+- **Peak memory and CPU time** of remote jobs are unavailable. Root fix: `siltwake-job` (fleet's) writes its scope's `memory.peak` and `cpu.stat` to a file the lane fetches.
+- **Undeclared files** a job writes inside the checkout stay there, as with direct `alickers-job.sh` calls today. Root fix: the transport cleans untracked files on commit change, as it now does for `.test-build*`. Fleet and the transport owner's call.
+- **Direct `alickers-job.sh` callers** are seen only as `busy`, and their waits are invisible until briefs move to `--machine` (the coordinator's cut-over step).
+- **MemoryHigh at 85%** stays in `siltwake-job` until fleet changes it (the coordinator is asking). Meanwhile throttling is detected and labelled.
+- **Upload of the in-sandbox wrapper:** a file under `/work/tmp/siltwake-lane/bin/<hash>/`, like the transport's own bundle upload. It is not in the checkout.
+
+**Cut-over** (coordinator, after review): merge, `scripts/heavy/install.sh` (the transport is copied into the version), then update briefs to `--machine`. Nothing is needed on the sandbox.
+
 ## R2 review responses
 
 Review: `e43761e` on `review/sched-2a-r2`, on `e85c8e3`, not accepted, with three P2s, all in the soak harness. The scheduler side passed. Each fix has a runner-level regression in `tests/soak-runner.test.ts`, using the real loop and the real providers; all three fail on `e85c8e3`'s soak code (checked by export).
