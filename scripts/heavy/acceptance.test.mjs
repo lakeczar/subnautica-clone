@@ -19,6 +19,9 @@ import { alive, legacyLockInfo, procStart, scopePopulated, self } from "./state.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, "heavy-check.mjs");
+// The real v1 script comes from this repository's history (1ccce66); point
+// SCHED1_V1_REPO at a checkout when running a copy of this file elsewhere.
+const V1_REPO = process.env.SCHED1_V1_REPO ?? here;
 const ROOT = join(process.env.SCHED1_TEST_ROOT ?? "/work/tmp/sched1-test", `acceptance-${process.pid}`);
 const SLICE = "sched1test.slice";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -85,7 +88,8 @@ const holderOf = async (c, id) => {
 /** The real v1 script from 1ccce66, pointed at the context's private lock and unit names. */
 function v1Script(c) {
   const v1 = join(c.dir, "heavy-check-v1.sh");
-  const src = spawnSync("git", ["-C", here, "show", "1ccce66:scripts/heavy-check.sh"], { encoding: "utf8" }).stdout;
+  const src = spawnSync("git", ["-C", V1_REPO, "show", "1ccce66:scripts/heavy-check.sh"], { encoding: "utf8" }).stdout;
+  assert.match(src, /flock/, "the v1 script source is available (set SCHED1_V1_REPO)");
   writeFileSync(v1, src.replace("/work/tmp/siltwake-heavy-check.lock", c.legacy).replace('unit="siltwake-heavy-', `unit="sched1test-v1-${c.n}-`), { mode: 0o755 });
   return (cmd) => {
     const p = spawn("bash", [v1, "--deadline", "60", "sh", "-c", cmd], { cwd: c.dir, env: c.env, stdio: "ignore" });
@@ -264,6 +268,11 @@ int main(int argc, char **argv) {
   const childId = { pid: child, start: procStart(child) };
   const anchor = Number(readFileSync(join(c.sched, "jobs", id, "anchor.pid"), "utf8"));
   const anchorId = { pid: anchor, start: procStart(anchor) };
+  // Make the anchor the kernel's first OOM victim (unprivileged code may raise
+  // a score), so the dangerous order, anchor killed while the allocator lives,
+  // happens every time rather than only when victim selection happens to pick
+  // it. With the job's OOM group, any victim takes the whole job.
+  writeFileSync(`/proc/${anchor}/oom_score_adj`, "1000");
   const v1 = v1Script(c)(`if [ -r /proc/$(cat child.pid)/stat ] && ! grep -q ') [ZX] ' /proc/$(cat child.pid)/stat; then : > v1-overlap; fi; date +%s%3N > v1.enter`);
   await until("v1 waiting", () => legacyLockInfo(c.legacy).waiter);
   writeFileSync(join(c.dir, "allocate"), "");
@@ -548,7 +557,8 @@ test("12: legacy bridge: a v1 holder blocks v2; a v1 waiter pauses v2 until it r
   const inode = statSync(c.legacy).ino;
   // The real v1 script, pointed at the private lock and unit names.
   const v1 = join(c.dir, "heavy-check-v1.sh");
-  const v1src = spawnSync("git", ["-C", here, "show", "1ccce66:scripts/heavy-check.sh"], { encoding: "utf8" }).stdout;
+  const v1src = spawnSync("git", ["-C", V1_REPO, "show", "1ccce66:scripts/heavy-check.sh"], { encoding: "utf8" }).stdout;
+  assert.match(v1src, /flock/, "the v1 script source is available (set SCHED1_V1_REPO)");
   writeFileSync(v1, v1src.replace("/work/tmp/siltwake-heavy-check.lock", c.legacy).replace('unit="siltwake-heavy-', `unit="sched1test-v1-${c.n}-`), { mode: 0o755 });
   const v1run = (cmd) => {
     const child = spawn("bash", [v1, "--deadline", "60", "sh", "-c", cmd], { cwd: c.dir, env: c.env, stdio: "ignore" });
