@@ -2,6 +2,37 @@
 
 Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 rule ("a job has a goal, not a time limit") and the 2a list in [DIRECTION](../DIRECTION.md), "Two test machines". SCHED-2b (the remote lane) and SAVE-1 follow after review. **Not installed:** the live queue still runs SCHED-1 `6824478b070f`; cut-over is below and waits for the coordinator.
 
+## R6 review responses: one verdict over append-only facts
+
+Review: `bf7bcb1` on `review/sched-2a-r6`, on `f91f0fc`: two P2s, both a later step overwriting or masking a measured failure. As the coordinator directed, the fix changes the harness's shape, not the two instances. Soak files only; `scripts/heavy` untouched.
+
+- **Append-only facts** (`scripts/soak/facts.mjs`). Every observation is a frozen fact in a log, and nothing removes or rewrites one:
+  - violations, `covered` intervals and `unavailable` intervals with their reason;
+  - frame times recorded on runs whose frames aren't judged;
+  - settled and plain samples, laps, autosaves and checked saves;
+  - start, blocked, yielded, day–night, and the run's `end`.
+
+  The loop (`soak.mjs`) only appends; its `run` object is a report view the verdict never reads. The log is written to `facts.jsonl` beside the report.
+- **One pure reducer**, `verdict(facts, kind, config)`. It is called at every early-stop check and once at the end. No other code decides a verdict; `evaluateTour`/`evaluateDwell` are adapters that turn a summary into facts and call it. The order:
+  - **fail:** any violation, explicit or derived, in any prefix of the log. Growth and flatness are checked against lap 1 or the first sample, and the leak over every prefix that spans the window, so a failure once proven stays.
+  - **running:** before `end`.
+  - **incomplete or yielded:** the run ended before its goal.
+  - **partial:** a rule lacks full coverage up to `end` (any gap for any rule, listed or not, a recorded frame time, or no coverage at all).
+  - **pass:** otherwise.
+
+  Coverage and the goal count only facts up to `end`; facts after it can add a failure and nothing else.
+- **R6-F1:** the terminal sample and the closing drain now run on the one sampling chain, each only if nothing broke meanwhile, so no two samples interleave. A leak proven by any prefix stays failed in any case.
+- **R6-F2, judged field by field:** with a valid total over the limit, valid streaming parts alone proving half the frame make it streaming's. A missing or invalid other part only makes the rest of the record unattributed, never zero.
+- **Found by the property test:** the reducer ignored gaps for rules whose coverage it derives itself (`autosave`, `save-reload`, `renderer`), and dropped violations of rules a kind doesn't list. Both are now generic.
+- **Tests:**
+  - `tests/soak-facts.test.ts`, property-based, seeded, over random fact sequences (valid, invalid and missing values; violations anywhere, at and after the end; laps; settled windows; backward and infinite times; blocked and yielded): 1,500 sequences per kind, every prefix checked.
+    - **Monotonicity:** fail never becomes partial or pass, partial never becomes pass, and before `end` the only outcomes are fail or running.
+    - **Soundness:** every pass is checked by an independent oracle (no violation, no gap before the end, every rule covered, goal reached, no derived growth, flatness or leak breach).
+    - Clean-biased generators reach pass for tour and dwell, and a one-off 20,000-seed sweep per kind held.
+  - The reviewer's reproductions: the exact R6-F1 series at the reducer (still fail at 43.2 MiB/h after a flat terminal sample), and R6-F1 at the runner. In the latter, a periodic GC sample due during the terminal one is held off; on `f91f0fc` it overlaps and its leak is erased, passing at 20.9 MiB/h.
+  - R6-F2 at the runner through the real frames provider: `chunks` absent or NaN with 70 ms in caves fails and stops; 10 ms known in caves with a part missing stays unproven; all-valid parts with a non-streaming frame pass. The runner regressions fail on `f91f0fc`.
+  - All earlier soak tests run on the reducer: 38/38, three runs in a row.
+
 ## R5 review responses
 
 Review: `eaef069` on `review/sched-2a-r5`, on `919a372`. The scheduler, including the `stalls` default, passed; two soak P2s remained. Soak files only. No change under `scripts/heavy` from `919a372`, which the coordinator is cutting over.

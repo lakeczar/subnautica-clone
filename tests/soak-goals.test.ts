@@ -41,7 +41,8 @@ test("tour: shared-run frame times are recorded, not judged; missing measurement
   const u = G.evaluateTour({ laps: [lap(1, 1000)], frames: { judged: true, attributed: false, streamingOver: [] }, holds: { available: false } }, T);
   assert.equal(status(u, "streaming-frame"), "unavailable");
   assert.equal(status(u, "loading-hold"), "unavailable");
-  assert.equal(u.unavailable.length, 2);
+  // Every unmeasured rule is listed (one lap: no growth either), streaming and holds among them.
+  for (const id of ["streaming-frame", "loading-hold"]) assert.ok(u.unavailable.some((x: string) => x.startsWith(id)), id);
 });
 
 test("dwell: flat memory over the goal passes (partial while day–night is missing); a slow leak or a jump fails; day–night is missing", () => {
@@ -51,7 +52,7 @@ test("dwell: flat memory over the goal passes (partial while day–night is miss
   const v = G.evaluateDwell({ samples: flat, autosaves: saves, frames: { judged: true }, now: 620 }, D);
   assert.equal(v.status, "partial", JSON.stringify(v.rules)); // goal met, nothing broke, day–night unproven
   assert.equal(status(v, "day-night"), "unavailable");
-  assert.equal(G.evaluateDwell({ samples: flat, autosaves: saves, frames: { judged: true }, dayNight: { available: true, cycles: 1 }, now: 620 }, D).status, "pass");
+  assert.equal(G.evaluateDwell({ samples: flat, autosaves: saves, saves: [{ ok: true }], frames: { judged: true }, dayNight: { available: true, cycles: 1 }, now: 620 }, D).status, "pass");
   assert.equal(status(v, "leak:rendererRssMiB"), "pass");
   const leaking = flat.map((s, i) => ({ ...s, memory: { ...s.memory, jsHeapAfterGcMiB: 120 + i * 0.4 } })); // 48 MiB/h, inside 5% for a while
   const lv = G.evaluateDwell({ samples: leaking.slice(0, 25), autosaves: saves.slice(0, 10), frames: { judged: true }, now: 750 }, D);
@@ -74,7 +75,7 @@ test("dwell: GC swings over a flat floor pass, a rising floor fails (the shape m
   const mk = (rise: number) => Array.from({ length: 80 }, (_, i) => ({ at: i * 10, afterGc: i % 6 === 5, memory: { rendererRssMiB: 400 + swing(i) + rise * i, gpuRssMiB: 230, jsHeapAfterGcMiB: 91 } }));
   const saves = Array.from({ length: 25 }, (_, i) => ({ at: 30 + i * 30, frameMs: 17 }));
   const dn = { available: true, cycles: 1 };
-  const flat = G.evaluateDwell({ samples: mk(0), autosaves: saves, frames: { judged: true }, dayNight: dn, now: 790 }, D);
+  const flat = G.evaluateDwell({ samples: mk(0), autosaves: saves, saves: [{ ok: true }], frames: { judged: true }, dayNight: dn, now: 790 }, D);
   assert.equal(flat.status, "pass", JSON.stringify(flat.rules));
   const rising = G.evaluateDwell({ samples: mk(0.12), autosaves: saves, frames: { judged: true }, dayNight: dn, now: 790 }, D); // 43 MiB/h floor
   assert.equal(rising.status, "fail");
