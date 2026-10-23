@@ -25,7 +25,7 @@ const contexts = [];
 after(() => {
   for (const c of contexts) for (const id of Object.keys(state(c).tickets ?? {})) hc(c, ["cancel", id]);
   spawnSync("systemctl", ["--user", "stop", SLICE], { stdio: "ignore" });
-  rmSync(ROOT, { recursive: true, force: true });
+  if (!process.env.SCHED_KEEP) rmSync(ROOT, { recursive: true, force: true }); // SCHED_KEEP=1 keeps the evidence
 });
 
 export function context(name, { mode = "normal", host = {}, config = null, slice = SLICE } = {}) {
@@ -100,3 +100,63 @@ export function v1Script(c) {
   };
 }
 
+
+/**
+ * A fake second worker for the remote lane's tests (SCHED-2b), entirely in the
+ * context's directory: an ssh stand-in (runs the command here, or exits 255
+ * while FAKE/unreachable exists), a transport with alickers-job.sh's protocol
+ * (pins the commit in FAKE/repo, prints "testing" and "tested" lines) and a
+ * siltwake-job copy (its one-job lock, the owner's pause flag giving 75, its
+ * own user scope with MemoryHigh at 85% of MemoryMax, or FAKE_MEMORY_HIGH, and
+ * no swap). Returns the remote config and env for context().
+ */
+export function fakeSandbox(c, extra = {}) {
+  const f = join(c.dir, "fake-alickers");
+  mkdirSync(join(f, "home", ".local", "state", "siltwake"), { recursive: true });
+  const w = (name, body) => { writeFileSync(join(f, name), body, { mode: 0o755 }); return join(f, name); };
+  const ssh = w("ssh", `#!/bin/bash
+# fake ssh: the last argument is the remote command
+[ -e "$FAKE/unreachable" ] && { echo "ssh: connect to host siltwake-alickers: Connection refused" >&2; exit 255; }
+cmd="\${@: -1}"
+HOME="$FAKE/home" exec bash -c "$cmd"
+`);
+  const job = w("siltwake-job", `#!/usr/bin/env bash
+# siltwake-job, as on the sandbox, with private paths and unit names
+set -euo pipefail
+memory=8G deadline=1800
+while [[ $# -gt 0 ]]; do case "$1" in --memory) memory="$2"; shift 2;; --deadline) deadline="$2"; shift 2;; --) shift; break;; *) break;; esac; done
+exec 9>"$FAKE/lock"
+flock -w "\${FAKE_LOCK_WAIT:-3600}" 9 || exit 75
+if [[ -e "$FAKE/home/.local/state/siltwake/paused" ]]; then echo 'Sandbox paused by owner' >&2; exit 75; fi
+unit="sched2bfake-${c.n}-job-$$"
+cleanup() { systemctl --user stop "$unit.scope" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+trap 'exit 143' TERM HUP
+status=0
+systemd-run --user --scope --quiet --unit="$unit" -p MemoryHigh="\${FAKE_MEMORY_HIGH:-$(( \${memory%G} * 850 ))M}" -p MemoryMax="$memory" \\
+  -p MemorySwapMax=0 -p CPUQuota=600% -p Delegate=yes timeout --kill-after=10s "\${deadline}s" "$@" || status=$?
+exit "$status"
+`);
+  const transport = w("alickers-job.sh", `#!/usr/bin/env bash
+# alickers-job.sh's protocol against the fake sandbox
+set -euo pipefail
+sha="" deadline=1800 memory=8G
+while [[ $# -gt 0 ]]; do case "$1" in --sha) sha="$2"; shift 2;; --deadline) deadline="$2"; shift 2;; --memory) memory="$2"; shift 2;; --) shift; break;; *) break;; esac; done
+[ -e "$FAKE/unreachable" ] && { echo "alickers-job: worker unreachable (ssh 255); rerun on factory-worker" >&2; exit 255; }
+sha="$(git rev-parse --verify "\${sha:-HEAD}^{commit}")"
+[ -d "$FAKE/repo/.git" ] || git clone -q --no-checkout "$PWD" "$FAKE/repo"
+git -C "$FAKE/repo" fetch -q "$PWD" "$sha" 2>/dev/null || git -C "$FAKE/repo" fetch -q "$PWD"
+cd "$FAKE/repo"
+exec "$FAKE/siltwake-job" --deadline "$deadline" --memory "$memory" bash -c '
+  git checkout -q --detach "$0"
+  echo "alickers-job: testing $0 on fake-alickers"
+  "$@"; rc=$?
+  echo "alickers-job: tested $0 exit $rc"; exit $rc' "$sha" "$@"
+`);
+  const remote = { transport, ssh: [ssh], repo: join(f, "repo"), laneDir: join(f, "lane"), lock: join(f, "lock"), artifactsDir: join(c.dir, "artifacts"),
+    tickS: 1, throttleNoticeS: 3, recheckS: { up: 2, paused: 2, unreachable: 2, unreachableMax: 4 }, ...extra };
+  c.env.FAKE = f;
+  c.fake = { dir: f, job, pause: (on) => (on ? writeFileSync(join(f, "home", ".local", "state", "siltwake", "paused"), "") : rmSync(join(f, "home", ".local", "state", "siltwake", "paused"), { force: true })),
+    unreachable: (on) => (on ? writeFileSync(join(f, "unreachable"), "") : rmSync(join(f, "unreachable"), { force: true })) };
+  return remote;
+}

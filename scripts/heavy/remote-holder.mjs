@@ -27,7 +27,7 @@ import { createInterface } from "node:readline";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MACHINE_LABELS, plan } from "./policy.mjs";
-import { fetchArtifacts, refreshHealth, remoteConfig, remoteStop, remoteYield, uploadWrapper, writeHealth } from "./remote.mjs";
+import { fetchArtifacts, refreshHealth, remoteConfig, remoteStop, remoteWatch, remoteYield, uploadWrapper, writeHealth } from "./remote.mjs";
 import { hostFor, jobDir, ledger, loadConfig, readJson, readState, self, transaction, alive } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -43,6 +43,8 @@ const outPath = join(dir, "output.log");
 const note = (msg) => { appendFileSync(outPath, `heavy-check: ${msg}\n`); };
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 const fmt = (ms) => { const s = Math.round(ms / 1000); return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s` : `${Math.floor(s / 3600)}h${String(Math.floor(s / 60) % 60).padStart(2, "0")}m`; };
+// The heartbeat's mtime has a one-second resolution on the sandbox: a touch is
+// seen at the next look, so the stall window needs a tick of slack (watchdog).
 
 // 1. Claim, as holder.mjs does.
 const me = self();
@@ -83,10 +85,22 @@ const stopJob = (why) => {
 process.on("SIGTERM", () => stopJob("holder stopped"));
 process.on("SIGINT", () => {}); process.on("SIGHUP", () => {});
 
+let lastBeat = null, lastWatch = 0;
 async function watchdogAsync() {
   if (stopping) return;
   if (existsSync(join(dir, "cancelled"))) { stopJob("cancelled"); return; }
   if (!testing) return; // waiting for the sandbox's lock or installing: not the job's silence
+  // Heartbeat and memory.high, read from outside the job's cgroup every tickS.
+  if (Date.now() - lastWatch >= r.tickS * 1000) {
+    lastWatch = Date.now();
+    const w = await remoteWatch(cfg, id);
+    if (w?.beat != null && w.beat !== lastBeat) { if (lastBeat != null) lastActivity = Date.now(); lastBeat = w.beat; }
+    if (w?.high != null) {
+      if (lastHigh != null && w.high > lastHigh) { lastHighAt = Date.now(); throttleSince ??= Date.now(); }
+      lastHigh = w.high;
+    }
+  }
+  if (stopping) return;
   const now = Date.now();
   if (throttleSince && now - lastHighAt > r.tickS * 2500) throttleSince = null; // the count stopped rising
   if (throttleSince && !throttleNoticed && now - throttleSince >= r.throttleNoticeS * 1000) {
@@ -97,6 +111,8 @@ async function watchdogAsync() {
   if (throttleSince && now - throttleSince >= goal.stallS * 1000) { stalledS = Math.round((now - throttleSince) / 1000); stopJob("throttled"); return; }
   if (now - lastActivity >= goal.stallS * 1000) {
     stalledS = Math.round((now - lastActivity) / 1000);
+    // Silent because it is held at MemoryHigh: that is the throttle, not a hang.
+    if (throttleSince) { note(`throttled and silent for ${fmt(stalledS * 1000)}`); stopJob("throttled"); return; }
     note(`stalled: no output and no heartbeat from the sandbox for ${fmt(stalledS * 1000)} (window ${fmt(goal.stallS * 1000)})`);
     stopJob("stalled");
     return;
@@ -125,18 +141,10 @@ else {
   const argvB64 = Buffer.from(t.argv.map((a) => `${a}\0`).join("")).toString("base64");
   const memoryG = Math.min(12, Math.max(r.memoryG, Math.ceil(req.memMiB / 1024)));
   const args = ["--sha", sha, "--deadline", String(goal.limitS), "--memory", `${memoryG}G`, "--",
-    "bash", wrapper, r.laneDir, id, cwdRel, argvB64, goal.soak ? "1" : "0", String(r.tickS)];
+    "bash", wrapper, r.laneDir, id, cwdRel, argvB64, goal.soak ? "1" : "0"];
   child = spawn(r.transport, args, { cwd: t.worktree, stdio: ["ignore", "pipe", "pipe"], env: process.env });
   const out = openSync(outPath, "a");
   const onLine = (line) => {
-    if (/^siltwake-lane: heartbeat$/.test(line)) { lastActivity = Date.now(); return; } // progress, not log
-    const high = /^siltwake-lane: memory\.high (\d+)$/.exec(line);
-    if (high) {
-      const n = Number(high[1]);
-      if (lastHigh != null && n > lastHigh) { lastHighAt = Date.now(); throttleSince ??= Date.now(); }
-      lastHigh = n;
-      return; // being throttled is not progress
-    }
     appendFileSync(out, `${line}\n`);
     if (!testing && /^alickers-job: testing [0-9a-f]{40}/.test(line)) { testing = true; writeHealth(cfg, "busy", `running ${id}`); }
     const tested = /^alickers-job: tested ([0-9a-f]{40}) exit (\d+)/.exec(line);

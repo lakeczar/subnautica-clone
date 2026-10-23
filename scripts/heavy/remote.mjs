@@ -37,6 +37,7 @@ export function remoteConfig(cfg) {
     tickS: 10, // how often the wrapper reports heartbeats and memory.high
     throttleNoticeS: 120, // continuous memory.high throttling reported after this
     maxAttempts: 3, // transport or connection failures before a 4070 ticket gives up
+    recheckS: { up: 30, paused: 60, unreachable: 60, unreachableMax: 300 }, // how long a health reading stays good
     ...(cfg.remote ?? {}),
   };
   if (!r.transport) r.enabled = false;
@@ -53,7 +54,9 @@ export function ssh(r, command, { input, timeoutS = 60 } = {}) {
     const timer = setTimeout(() => p.kill("SIGKILL"), timeoutS * 1000);
     p.on("error", (e) => { clearTimeout(timer); done({ code: 255, out, err: e.message }); });
     p.on("close", (code) => { clearTimeout(timer); done({ code: code ?? 255, out, err }); });
-    if (input != null) p.stdin.end(input);
+    // The remote side may not read its input (a wrapper already uploaded):
+    // an EPIPE here is not an error.
+    if (input != null) { p.stdin.on("error", () => {}); p.stdin.end(input); }
   });
 }
 const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
@@ -76,10 +79,10 @@ export function writeHealth(cfg, state, detail = null) {
 }
 /** How long a health reading stays good: up and busy 30 s; paused 60 s;
  * unreachable 1, 2, then 5 minutes. */
-export function healthTtlMs(h) {
-  if (h.state === "up" || h.state === "busy") return 30000;
-  if (h.state === "paused") return 60000;
-  if (h.state === "unreachable") return Math.min(300000, 60000 * 2 ** Math.max(0, (h.failures ?? 1) - 1));
+export function healthTtlMs(h, s = { up: 30, paused: 60, unreachable: 60, unreachableMax: 300 }) {
+  if (h.state === "up" || h.state === "busy") return s.up * 1000;
+  if (h.state === "paused") return s.paused * 1000;
+  if (h.state === "unreachable") return Math.min(s.unreachableMax, s.unreachable * 2 ** Math.max(0, (h.failures ?? 1) - 1)) * 1000;
   return 0;
 }
 
@@ -99,7 +102,7 @@ export async function probe(cfg) {
 /** Probes if the cached reading is stale (or `force`), one prober at a time. */
 export async function refreshHealth(cfg, { force = false } = {}) {
   const h = readHealth(cfg);
-  if (h.state === "off" || (!force && Date.now() - (h.at ?? 0) < healthTtlMs(h))) return h;
+  if (h.state === "off" || (!force && Date.now() - (h.at ?? 0) < healthTtlMs(h, remoteConfig(cfg).recheckS))) return h;
   const fd = flockFd(join(cfg.dir, "remote.probe.lock"));
   if (fd == null) return h; // someone else is probing
   try { return await probe(cfg); } finally { closeSync(fd); }
@@ -111,7 +114,7 @@ export async function refreshHealth(cfg, { force = false } = {}) {
 export async function uploadWrapper(cfg) {
   const r = remoteConfig(cfg), body = readFileSync(join(here, "lane-run.sh"));
   const path = `${r.laneDir}/bin/${createHash("sha256").update(body).digest("hex").slice(0, 12)}/lane-run.sh`;
-  const res = await ssh(r, `f=${q(path)}; [ -f "$f" ] && exit 0; mkdir -p "$(dirname "$f")" && cat > "$f.tmp" && mv "$f.tmp" "$f"`, { input: body });
+  const res = await ssh(r, `f=${q(path)}; [ -f "$f" ] && { cat >/dev/null; exit 0; }; mkdir -p "$(dirname "$f")" && cat > "$f.tmp" && mv "$f.tmp" "$f"`, { input: body });
   return res.code === 0 ? path : null;
 }
 
@@ -123,6 +126,17 @@ export async function remoteStop(cfg, ticket) {
   const res = await ssh(r, `d=${q(d)}; mkdir -p "$d" && : > "$d/cancelled"; if [ -f "$d/pid" ]; then set -- $(cat "$d/pid"); ` +
     `[ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] && kill -TERM "$1" && echo stopped; fi; true`, { timeoutS: 30 });
   return { reached: res.code === 0, stopped: /stopped/.test(res.out) };
+}
+
+/** One out-of-band look at a running job on the sandbox, from outside its
+ * cgroup: its scope's memory.high count and its heartbeat file's mtime.
+ * { high, beat } (null where unreadable), or null if unreachable. */
+export async function remoteWatch(cfg, ticket) {
+  const r = remoteConfig(cfg), d = `${r.laneDir}/jobs/${ticket}`;
+  const res = await ssh(r, `d=${q(d)}; cg=$(cat "$d/cgroup" 2>/dev/null); echo "high $(sed -n 's/^high //p' "$cg/memory.events" 2>/dev/null)"; echo "beat $(stat -c %Y "$d/heartbeat" 2>/dev/null)"`, { timeoutS: 20 });
+  if (res.code !== 0) return null;
+  const num = (k) => { const v = new RegExp(`^${k} (\\d+)$`, "m").exec(res.out)?.[1]; return v == null ? null : Number(v); };
+  return { high: num("high"), beat: num("beat") };
 }
 
 /** Asks a running soak to yield ($SILTWAKE_JOB_YIELD appears on the sandbox). */
