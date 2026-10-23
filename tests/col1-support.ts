@@ -112,3 +112,70 @@ export function probeComponents(mesh: TriangleMesh, component: Int32Array, facin
   }
   return [...rows.values()];
 }
+
+/** Every crossing of the vertical line at (x, z) with the mesh's triangles,
+ * top to bottom: height, triangle, and the Y component of (b - a) x (c - a).
+ * Brute force over the triangles (independent of the collider). */
+export function columnCrossings(mesh: TriangleMesh, x: number, z: number): { y: number; t: number; ny: number }[] {
+  const P = mesh.positions, I = mesh.indices, out: { y: number; t: number; ny: number }[] = [];
+  for (let t = 0; t < I.length / 3; t++) {
+    const a = I[t * 3]! * 3, b = I[t * 3 + 1]! * 3, c = I[t * 3 + 2]! * 3;
+    const ax = P[a]!, az = P[a + 2]!, bx = P[b]!, bz = P[b + 2]!, cx = P[c]!, cz = P[c + 2]!;
+    const det = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+    if (Math.abs(det) < 1e-12) continue;
+    const l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / det, l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / det, l3 = 1 - l1 - l2;
+    if (l1 < 0 || l2 < 0 || l3 < 0) continue;
+    out.push({ y: l1 * P[a + 1]! + l2 * P[b + 1]! + l3 * P[c + 1]!, t, ny: (bz - az) * (cx - ax) - (bx - ax) * (cz - az) });
+  }
+  return out.sort((p, q) => q.y - p.y);
+}
+
+/** Columns (at triangle centroids, nudged off the lattice) where an outward
+ * wound closed volume's crossings contradict its own parity: counted from
+ * the top, an odd crossing has solid below it, so its outward normal must
+ * point up; an even one, down. A fold or a flip shows here; nothing is
+ * probed. Returns the contradicting columns (at most `limit`). */
+export function parityContradictions(mesh: TriangleMesh, columns = 3000, limit = 10): { x: number; z: number; j: number; t: number }[] {
+  const P = mesh.positions, I = mesh.indices, n = I.length / 3, step = Math.max(1, Math.floor(n / columns)), out: { x: number; z: number; j: number; t: number }[] = [];
+  // X/Z buckets, so each column reads only nearby triangles.
+  const C = 1, buckets = new Map<number, number[]>(), key = (i: number, k: number): number => i * 1000003 + k;
+  for (let t = 0; t < n; t++) {
+    const xs = [0, 1, 2].map(k => P[I[t * 3 + k]! * 3]!), zs = [0, 1, 2].map(k => P[I[t * 3 + k]! * 3 + 2]!);
+    for (let i = Math.floor(Math.min(...xs) / C); i <= Math.floor(Math.max(...xs) / C); i++) for (let k = Math.floor(Math.min(...zs) / C); k <= Math.floor(Math.max(...zs) / C); k++)
+      (buckets.get(key(i, k)) ?? buckets.set(key(i, k), []).get(key(i, k))!).push(t);
+  }
+  for (let t0 = 0; t0 < n && out.length < limit; t0 += step) {
+    const x = (P[I[t0 * 3]! * 3]! + P[I[t0 * 3 + 1]! * 3]! + P[I[t0 * 3 + 2]! * 3]!) / 3 + 1.37e-6, z = (P[I[t0 * 3]! * 3 + 2]! + P[I[t0 * 3 + 1]! * 3 + 2]! + P[I[t0 * 3 + 2]! * 3 + 2]!) / 3 + 2.91e-6;
+    const near = buckets.get(key(Math.floor(x / C), Math.floor(z / C))) ?? [];
+    const sub = { positions: P, indices: Uint32Array.from(near.flatMap(t => [I[t * 3]!, I[t * 3 + 1]!, I[t * 3 + 2]!])) };
+    const hits = columnCrossings(sub, x, z);
+    for (let j = 0; j < hits.length; j++) {
+      const want = j % 2 === 0 ? 1 : -1;
+      if (Math.abs(hits[j]!.ny) > 1e-9 && Math.sign(hits[j]!.ny) !== want) { out.push({ x, z, j, t: near[hits[j]!.t]! }); break; }
+    }
+  }
+  return out;
+}
+
+/** Boundary vertices on an unshared footprint side that don't sit on the
+ * floor: gaps in the shell's seam with the terrain. */
+export function seamGaps(mesh: TriangleMesh, foot: { minX: number; maxX: number; minZ: number; maxZ: number },
+  shared: (x: number, z: number) => boolean, floor: (x: number, z: number) => number): Vec3[] {
+  const P = mesh.positions, I = mesh.indices, uses = new Map<number, number>(), nv = P.length / 3, out: Vec3[] = [];
+  for (let t = 0; t < I.length / 3; t++) for (let k = 0; k < 3; k++) {
+    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!, e = Math.min(a, b) * nv + Math.max(a, b);
+    uses.set(e, (uses.get(e) ?? 0) + 1);
+  }
+  const side = (x: number, z: number): boolean => x === foot.minX || x === foot.maxX || z === foot.minZ || z === foot.maxZ;
+  const seen = new Set<number>();
+  for (const [e, n] of uses) {
+    if (n !== 1) continue;
+    for (const v of [Math.floor(e / nv), e % nv]) {
+      if (seen.has(v)) continue;
+      seen.add(v);
+      const x = P[v * 3]!, y = P[v * 3 + 1]!, z = P[v * 3 + 2]!;
+      if (side(x, z) && !shared(x, z) && Math.abs(y - Math.fround(floor(x, z))) > 1e-4) out.push({ x, y, z });
+    }
+  }
+  return out;
+}

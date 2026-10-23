@@ -940,12 +940,153 @@ function generateShell(def: CaveDef, lod: LodLevel): MeshRecipe {
     }
     return d;
   };
-  for (let v = 0; v < P.length; v += 3) {
-    const x = P[v]!, z = P[v + 2]!, d = collarDistance(x, z);
-    if (d < edge) P[v + 1] = floor(x, z);
-    else if (d < band) P[v + 1] = Math.max(P[v + 1]!, floor(x, z));
+  const target = new Float64Array(P.length / 3).fill(NaN), onEdge = new Uint8Array(P.length / 3);
+  for (let v = 0; v < P.length / 3; v++) {
+    const x = P[v * 3]!, z = P[v * 3 + 2]!, d = collarDistance(x, z);
+    if (d < edge) { target[v] = floor(x, z); onEdge[v] = 1; }
+    else if (d < band) target[v] = Math.max(P[v * 3 + 1]!, floor(x, z));
   }
-  return clipped;
+  return snapToFloor(clipped, target, onEdge, f, def.id);
+}
+
+/** Smallest triangle normal (unnormalised, m^2) whose direction counts. */
+const DEGENERATE = 1e-9;
+const triangleNormal = (P: ArrayLike<number>, I: ArrayLike<number>, t: number): [number, number, number] => {
+  const a = I[t * 3]! * 3, b = I[t * 3 + 1]! * 3, c = I[t * 3 + 2]! * 3;
+  const ux = P[b]! - P[a]!, uy = P[b + 1]! - P[a + 1]!, uz = P[b + 2]! - P[a + 2]!, vx = P[c]! - P[a]!, vy = P[c + 1]! - P[a + 1]!, vz = P[c + 2]! - P[a + 2]!;
+  return [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+};
+/** Whether moving positions kept triangle t facing the way it did (`pre`):
+ * a degenerate triangle before or after has no direction to keep. */
+const keepsFacing = (pre: readonly number[], post: readonly number[]): boolean => {
+  const lp = Math.hypot(pre[0]!, pre[1]!, pre[2]!), lq = Math.hypot(post[0]!, post[1]!, post[2]!);
+  return lp < DEGENERATE || lq < DEGENERATE || pre[0]! * post[0]! + pre[1]! * post[1]! + pre[2]! * post[2]! > 0;
+};
+
+/** Whether segment p -> q passes through the interior of triangle (a, b, c)
+ * (Moller-Trumbore, strict: touching an edge or an end does not count). */
+function segmentThrough(P: ArrayLike<number>, p: number, q: number, a: number, b: number, c: number): boolean {
+  const ox = P[p]!, oy = P[p + 1]!, oz = P[p + 2]!, dx = P[q]! - ox, dy = P[q + 1]! - oy, dz = P[q + 2]! - oz;
+  const e1x = P[b]! - P[a]!, e1y = P[b + 1]! - P[a + 1]!, e1z = P[b + 2]! - P[a + 2]!, e2x = P[c]! - P[a]!, e2y = P[c + 1]! - P[a + 1]!, e2z = P[c + 2]! - P[a + 2]!;
+  const hx = dy * e2z - dz * e2y, hy = dz * e2x - dx * e2z, hz = dx * e2y - dy * e2x, det = e1x * hx + e1y * hy + e1z * hz;
+  if (Math.abs(det) < 1e-12) return false;
+  const sx = ox - P[a]!, sy = oy - P[a + 1]!, sz = oz - P[a + 2]!, u = (sx * hx + sy * hy + sz * hz) / det;
+  if (u <= 1e-7 || u >= 1 - 1e-7) return false;
+  const qx = sy * e1z - sz * e1y, qy = sz * e1x - sx * e1z, qz = sx * e1y - sy * e1x, v = (dx * qx + dy * qy + dz * qz) / det;
+  if (v <= 1e-7 || u + v >= 1 - 1e-7) return false;
+  const t = (e2x * qx + e2y * qy + e2z * qz) / det;
+  return t > 1e-7 && t < 1 - 1e-7;
+}
+
+/** Join the clipped shell to the floor without folding it (COL-1 R6).
+ * Each vertex with a `target` height moves there **only if** that keeps the
+ * surface honest: no incident triangle turns against the way it faced (a
+ * flip) and none then passes through another triangle of the shell (a fold).
+ * Moves are vertical, so one X/Z bucket grid serves every check; passes
+ * repeat while vertices that moved free others. Nearly everywhere every
+ * vertex moves, so the shell is as before. A footprint-edge vertex
+ * (`onEdge`) that must stay gets a vertical skirt in the footprint's edge
+ * plane from it to its floor point, wound coherently with the triangle
+ * beside it, so the seam still meets the terrain exactly. Afterwards no
+ * triangle faces against its pre-snap normal and no moved triangle crosses
+ * another: the mesher's outward winding (`surfaceNets`) holds for the
+ * final mesh, which COL-1's collision takes as its orientation. Throws
+ * otherwise. */
+function snapToFloor(mesh: MeshRecipe, target: Float64Array, onEdge: Uint8Array, foot: Rect, id: string): MeshRecipe {
+  const P = mesh.positions as Float32Array, I = mesh.indices, n = I.length / 3, nv = P.length / 3;
+  const pre = Array.from({ length: n }, (_, t) => triangleNormal(P, I, t));
+  const incident: number[][] = Array.from({ length: nv }, () => []);
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) incident[I[t * 3 + k]!]!.push(t);
+  // X/Z buckets over every triangle (moves are vertical, so they stay valid).
+  const CELL = 1, buckets = new Map<number, number[]>(), key = (i: number, k: number): number => i * 1000003 + k;
+  const xzBox = (t: number): [number, number, number, number] => {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (let k = 0; k < 3; k++) { const v = I[t * 3 + k]! * 3; x0 = Math.min(x0, P[v]!); x1 = Math.max(x1, P[v]!); z0 = Math.min(z0, P[v + 2]!); z1 = Math.max(z1, P[v + 2]!); }
+    return [x0, x1, z0, z1];
+  };
+  for (let t = 0; t < n; t++) {
+    const [x0, x1, z0, z1] = xzBox(t);
+    for (let i = Math.floor(x0 / CELL); i <= Math.floor(x1 / CELL); i++) for (let k = Math.floor(z0 / CELL); k <= Math.floor(z1 / CELL); k++)
+      (buckets.get(key(i, k)) ?? buckets.set(key(i, k), []).get(key(i, k))!).push(t);
+  }
+  const shares = (s: number, t: number): boolean => {
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) if (I[s * 3 + a] === I[t * 3 + b]) return true;
+    return false;
+  };
+  const intersects = (s: number, t: number): boolean => {
+    const A = [I[s * 3]! * 3, I[s * 3 + 1]! * 3, I[s * 3 + 2]! * 3], B = [I[t * 3]! * 3, I[t * 3 + 1]! * 3, I[t * 3 + 2]! * 3];
+    for (let e = 0; e < 3; e++) {
+      if (segmentThrough(P, A[e]!, A[(e + 1) % 3]!, B[0]!, B[1]!, B[2]!)) return true;
+      if (segmentThrough(P, B[e]!, B[(e + 1) % 3]!, A[0]!, A[1]!, A[2]!)) return true;
+    }
+    return false;
+  };
+  /** Whether triangle s passes through any triangle it shares no vertex with. */
+  const crosses = (s: number): boolean => {
+    const [x0, x1, z0, z1] = xzBox(s), seen = new Set<number>();
+    for (let i = Math.floor(x0 / CELL); i <= Math.floor(x1 / CELL); i++) for (let k = Math.floor(z0 / CELL); k <= Math.floor(z1 / CELL); k++)
+      for (const t of buckets.get(key(i, k)) ?? []) {
+        if (t === s || seen.has(t)) continue;
+        seen.add(t);
+        if (!shares(s, t) && intersects(s, t)) return true;
+      }
+    return false;
+  };
+  const honest = (v: number): boolean => incident[v]!.every(t => keepsFacing(pre[t]!, triangleNormal(P, I, t)) && !crosses(t));
+  const moved = new Uint8Array(nv);
+  for (let pass = 0; pass < 4; pass++) {
+    let any = false;
+    for (let v = 0; v < nv; v++) {
+      const goal = Math.fround(target[v]!);
+      if (moved[v] || Number.isNaN(goal)) continue;
+      if (P[v * 3 + 1] === goal) { moved[v] = 1; continue; }
+      const from = P[v * 3 + 1]!;
+      P[v * 3 + 1] = goal;
+      if (honest(v)) { moved[v] = 1; any = true; } else P[v * 3 + 1] = from;
+    }
+    if (!any) break;
+  }
+  // Skirts along footprint-edge boundary edges with an end that stayed.
+  const stayed = (v: number): boolean => onEdge[v] === 1 && !moved[v];
+  const uses = new Map<string, number>();
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) {
+    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!, e = a < b ? `${a},${b}` : `${b},${a}`;
+    uses.set(e, (uses.get(e) ?? 0) + 1);
+  }
+  const positions = Array.from(P), normals = Array.from(mesh.normals), colors = Array.from(mesh.colors), indices = Array.from(I);
+  const floorVertex = new Map<number, number>();
+  const below = (v: number): number => {
+    let w = floorVertex.get(v);
+    if (w === undefined) {
+      w = positions.length / 3; floorVertex.set(v, w);
+      positions.push(P[v * 3]!, Math.fround(target[v]!), P[v * 3 + 2]!);
+      normals.push(mesh.normals[v * 3]!, mesh.normals[v * 3 + 1]!, mesh.normals[v * 3 + 2]!);
+      for (let c = 0; c < 4; c++) colors.push(mesh.colors[v * 4 + c]!);
+    }
+    return w;
+  };
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) {
+    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!;
+    if (!stayed(a) && !stayed(b)) continue;
+    if (uses.get(a < b ? `${a},${b}` : `${b},${a}`) !== 1) continue;
+    // A boundary edge along a footprint side (its other end may be a corner
+    // shared with a neighbour, which never snaps: the skirt still closes it).
+    const ax = P[a * 3]!, az = P[a * 3 + 2]!, bx = P[b * 3]!, bz = P[b * 3 + 2]!;
+    const along = (ax === bx && (ax === foot.minX || ax === foot.maxX)) || (az === bz && (az === foot.minZ || az === foot.maxZ));
+    if (!along) continue;
+    // The triangle runs a -> b; the skirt runs b -> a, so the two agree.
+    const a2 = stayed(a) ? below(a) : a, b2 = stayed(b) ? below(b) : b;
+    if (a2 !== a) indices.push(b, a, a2);
+    if (b2 !== b) indices.push(b, a2, b2);
+  }
+  const final = new Float32Array(positions);
+  for (let t = 0; t < n; t++) {
+    if (!keepsFacing(pre[t]!, triangleNormal(final, indices, t)))
+      throw new Error(`cave ${id}: shell triangle ${t} turned against its mesher normal when snapped to the floor`);
+  }
+  for (let v = 0; v < nv; v++) if (moved[v] && P[v * 3 + 1] !== Math.fround(target[v]!)) throw new Error(`cave ${id}: vertex ${v} moved partway`);
+  return { ...mesh, positions: final, normals: new Float32Array(normals), colors: new Float32Array(colors),
+    indices: final.length / 3 > 65535 ? new Uint32Array(indices) : new Uint16Array(indices) };
 }
 
 /** Bake form: the shell split per 128 m column (layer-0 recipe parts). */
