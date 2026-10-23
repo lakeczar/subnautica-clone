@@ -27,13 +27,46 @@ Also `charts/` (frame time, memory, pacing), `contact-sheet.jpg`, `README.md` (r
 **Soaks** (`scripts/soak/run.mjs`) read frames, holds and scene counts from the recorder through the provider interface (`flightFrames`, `flightRecorder`; validated by `measure.mjs normalize` in `tests/rec1-pack.test.ts`) and record their own video and pack in `OUT/pack` (`--no-record` to skip).
 
 ## Evidence
-TBD
+All on factory-worker's RTX 3090 (ANGLE GL-EGL, Chrome 156 headless) through the queue, and the RTX 4070 Laptop on alickers (ANGLE → D3D12 under WSL, Chrome 156; **indicative**: a shared desktop host). Packs, captures and logs: `/work/tmp/rec1/final/` on factory-worker.
+
+**Recorder overhead (exclusive, RTX 3090, `67e8394d`),** the same 120 s of CW-1's segment 0 from the same save, modes interleaved over two rounds, each with the same rAF probe:
+
+OVERHEAD_TABLE
+
+**Real traversal packs (`2bf9b14e`):** CW-1's segment 0 (55 points, the reef's caves), its save, ordinary keys, recorded with the screencast video.
+
+| | RTX 3090 (`gpu` ticket `261023-120623-5311`) | RTX 4070 Laptop (indicative) |
+| --- | --- | --- |
+| verdict | partial (frame times unjudged in a shared run; under 10 min for memory) | partial (same) |
+| frames · minutes | 18,924 · 5.3 | 17,254 · 5.4 |
+| gap p50 / p99 / max (ms) | 16.7 / 16.7 / 133.3 | 16.7 / 50 / 133.3 |
+| streaming frames over 33 ms · holds · unsliced · errors | 0 · 0 · 0 · 0 | 0 · 0 · 0 · 0 |
+| game work p50 / p99 (ms) | 4.5 / 11.2 | 2.8 / 7.4 |
+| GPU per scene p50 / p99 (ms) | 4.0 / 10.3 | 2.1 / 18.6 |
+| recorder self-time mean / p99 (ms) | 0.106 / 1.55 | 0.044 / 0.16 |
+| legacy `#ocean` counters (compromise 1) | 0.133 ms mean, 0.3 ms p99 a frame | 0.062 / 0.12 |
+| tab · VRAM (MiB) | 688 → 777 · this browser 170 → 1,474 | 535 → 598 · whole GPU 4,048 (desktop included) |
+| lost data | none | none |
+
+Side by side: `final/compare-seg0/` (driver marks line the runs up by place: both reached the first cave at 94 s; the 3090 run then lost 23 s to impacts its strips show, the Dart running into the isle's shore at the surface).
+
+**The 4070 sandbox drops to 30 fps in stretches with recording off too** (A/B at `6892640d`: off 2.2% of frames over 33.4 ms, in-game video 4.4%, a full playtest 6.5%; the game's own work about 3 ms throughout, long frames carry about 8 ms of GPU against 4 ms). CW-1's shorter 4070 runs did not show it. It is the sandbox's present path, made worse by in-game video; whether a player's Windows Chrome sees it is **missing** (an owner-PC check).
+
+**The owner's playtest path, end to end (`2bf9b14e`):** the default playtest mode (spooled to private storage, in-game 12 fps VP9), 90 s of play, a feedback note (N), Settings → Export flight recording → one ZIP (3090: 6.7 MB, 38 entries; 4070: 6.0 MB, 59 entries), unpacked and packed like any run. Both packs: no errors, nothing lost, the note on the timeline, the video synchronised. Found and fixed on the way: an export is judged from the first moment of play (CW-1's entry admission builds nearby caves at once behind the load screen, by design, and had failed the 4070 export as an unsliced build).
+
+**Fixed views:** 143 views (2 pending slots) captured on the 3090 in 13 min (median settle 3.3 s) and on the 4070 in 10 min; one view, `region.refuge_reef.1`, never settles on either (its streaming counters keep moving with the camera frozen; on the 4070 the world is not even ready): a lead for CW-1/MEM-1. First baselines (RTX 3090) accepted with who and why in `scripts/rec/views/baselines.json`.
+- **Adverse case:** one view turned 15°, one cave interior's lamp off, five untouched → both changes on the attention list with baseline | new | difference strips (SSIM 0.744 and 0.948), the untouched views unchanged.
+- **Found and fixed by it:** a third view flagged with nothing changed: the water's waves had moved, because each run froze the clock wherever loading left it. Views are now staged at a fixed tick (the save's) and re-baselined.
+
+**Soak integration (`2bf9b14e`):** a two-lap tour soak on a CW-1 hop with the recorder wired in: providers `flight-frames`, `flight-recorder`, `flight-recording` with no provider errors, 4,109 frames attributed from the recorder, its own video and pack written. The soak ended "incomplete" on travel (its own driver stalled 17 m short of `canopy_fin_cleft`); hold coverage stays unproven because 47 records carry `hold: null` (admission not evaluated while not playing), which SCHED-2's contract counts as unknown.
 
 ## Checks
-TBD
+- `npm test` (fast tier): CHECK_TESTS; new `tests/rec1-flight.test.ts` (recorder rings and cursors, long frames and causes, recorder-caused frames, holds, snapshots, self-time, GPU time on its own row, event mapping, modes, ZIP, view staging) and `tests/rec1-pack.test.ts` (verdict, attention, pacing, shared runs, the soak provider through `measure.mjs normalize`).
+- `npm run build` OK; the five economy scripts pass (root merge gate) after merging root `1bdcc39` and CW-1 `d62586c`.
+- No `test:heavy` change: REC-1 adds no NullEngine or render tests; the browser paths are covered by the queued GPU runs above.
 
 ## Compromises (each with its root fix and cost)
-1. **The old DOM attributes still update every frame** (`#ocean` `data-*`: two reduces over every mesh, a `JSON.stringify` of the cave counters). The soak's `oceanDataset` provider, CW-1's traversal and older evidence drivers read them. *Root fix:* move those readers to `__siltwake.scene()` (computed only when asked), then delete the per-frame writes. *Cost:* edits to SCHED-2's provider and frozen evidence drivers; their per-frame cost is unmeasured (Missing).
+1. **The old DOM attributes still update every frame** (`#ocean` `data-*`: two reduces over every mesh, a `JSON.stringify` of the cave counters). The soak's `oceanDataset` provider, CW-1's traversal and older evidence drivers read them. *Root fix:* move those readers to `__siltwake.scene()` (computed only when asked), then delete the per-frame writes. *Cost now measured:* 0.133 ms a frame on the 3090 (0.3 ms p99), 0.062 ms on the 4070: more than the recorder itself. *Fix cost:* edits to SCHED-2's `oceanDataset` provider and older evidence drivers.
 2. **Tab memory in an owner playtest is the JS heap only.** `measureUserAgentSpecificMemory` needs cross-origin isolation, which a static host cannot grant without headers. Driver runs do have it (COOP/COEP served; renderer RSS from /proc). *Root fix:* serve COOP/COEP (a host that sets headers, or a service-worker shim) and sample it every 10 s. *Cost:* a hosting decision; a shim's side effects untested.
 3. **Collections are inferred, not traced:** a frame's JS heap drop (precise in drivers, which pass `--enable-precise-memory-info`; coarse in a player's Chrome). *Root fix:* in driver runs, trace V8's GC events over CDP aligned to the page clock (CW-1's traversal does) and merge them into the recording. *Cost:* a trace buffer and some browser-side CPU; not built.
 4. **A long frame's event and picture come up to 6 frames after it** (rows wait for their GPU time, then the long-frame rule runs; the event keeps the frame's own time). Fixed on the way: GPU time used to land 1–3 frames late on the wrong row; each query now carries its frame's tag.
@@ -45,5 +78,7 @@ TBD
 10. **Evidence saves are CW-1's derived traversal saves** (`/work/tmp/cw1/saves-8x`), until SAVE-1's library lands.
 
 ## Missing
-- The per-frame cost of the old DOM attribute writes (compromise 1): not measured.
-- The in-game video and export in a headed, owner-style Chrome: checked headless only (`playtest-check.mjs`).
+- **The owner's own browser:** the in-game video, the spool and the export in a headed Chrome on the owner's Windows PC (and whether it shows the 4070 sandbox's 30 fps stretches): checked headless only (`playtest-check.mjs`), on both machines.
+- **A completed soak with the recorder:** the two-lap tour proved the wiring and the pack, but its own driver stalled before the first cave; a full three-lap tour and a dwell soak are MEM-1's and PT-0's.
+- **Memory flatness** is judged only from 10 minutes up; every run here was shorter.
+- **The fixed-view set's taste:** some framings are weak (the crown station's work pose faces a wall, the dish field shows open water, a few interiors face sand or are near black). The once-per-wave Opus taste review decides version 2; `make-views.mjs` regenerates it.
