@@ -41,6 +41,8 @@ All on factory-worker's RTX 3090 (ANGLE GL-EGL, Chrome 156 headless) through the
 
 Isolated modes: ticket `261023-123448-7658`; the owner path: `261023-123455-1459` (off against playtest, 2 × 2 runs). The game's own work moved by −0.13 to +0.70 ms between modes, inside its own round-to-round spread (off alone: 3.3 to 4.2 ms mean), so the self-timed figure is the cost: **well under 1% of a frame in every mode (0.3–0.7%).** Both tickets ran with the scheduler's warning "DISTURBED by work outside the lane" (CPU pressure up to 50% from other work on the host; some of it, in the first, mine), so these are the numbers with that caveat. The full playtest check (load and export included) self-timed 0.18 ms mean, 8.4 ms at its worst frame.
 
+**At the handoff head (`75fd4b10`, `gpu` ticket `261023-140959-38b6`),** after the last merges: 2 minutes of segment 0 recorded on the 3090; recorder 0.088 ms mean, 0.72 ms p99 a frame; 0 of 5 long frames streaming's; no holds, unsliced builds or errors; nothing lost; video encoded (`final/head-3090/`).
+
 **Real traversal packs (`2bf9b14e`):** CW-1's segment 0 (55 points, the reef's caves), its save, ordinary keys, recorded with the screencast video.
 
 | | RTX 3090 (`gpu` ticket `261023-120623-5311`) | RTX 4070 Laptop (indicative) |
