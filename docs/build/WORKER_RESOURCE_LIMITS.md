@@ -184,6 +184,6 @@ node .test-build/scripts/playthrough/saves.js pick creel-350  # prints the save'
 npm run playthrough -- --scenario carrier --from-library      # a branch without its parent's replay
 ```
 
-- **Light:** `pick`, `list` and `verify` are light work; run them directly. Exporting is a playthrough: only through `scripts/saves-export.sh`, the second worker or the queue.
+- **Light:** `pick`, `list` and `verify` are light work; run them directly. `verify` and `import` compile a build of the commit when needed, which takes about 5 s. Exporting is a playthrough: only through `scripts/saves-export.sh`, which runs it from an archive build of the pinned SHA, on the second worker or through the queue.
 - **Compatibility:** the newest export at your commit or one of its ancestors, with this build's schema and content versions (or the schema 5 bridge), that this build decodes. Anything else is refused with the reason (exit 3), never swapped for another save. Record the save's commit (stderr, or `--json`) with your evidence.
 - **On the second worker:** exports run there keep their copy in the same place, `/work/tmp/siltwake-saves`, so a job there finds every commit exported there. A commit exported on factory-worker isn't there; `pick` then refuses, and you copy the save you need in with the job.

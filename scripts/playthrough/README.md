@@ -32,7 +32,11 @@ At every phase end the harness saves through the real `SaveRepository`, reloads 
 - **SAVE-1 added three short library scenarios** (below): `low-air`, `tour` and `over-geared`, so a plain `npm run playthrough` now plays eight. On siltwake-alickers at `0a464bc`, `--jobs 3` takes about 14 min: the New Game Creel group (`creel` and its five branches) runs in one child and is the critical path. A branch alone with `--from-library` takes seconds to a minute.
 
 ## Save library (SAVE-1)
-After each root merge, the coordinator runs `scripts/saves-export.sh` on root. It plays every scenario and publishes **every save the bot made** (each milestone, plus the mid-phase captures) to an immutable directory per commit, `/work/tmp/siltwake-saves/<sha>/` (or `$SILTWAKE_SAVES`), with a `manifest.json` and an `index.json` beside it. Everything is earned through real commands; the export refuses a dirty tree and publishes nothing unless every scenario completes, every save reloads to its hash and every kind holds its facts.
+After each root merge, the coordinator runs `scripts/saves-export.sh` on root. It plays every scenario and publishes **every save the bot made** (each milestone, plus the mid-phase captures) to an immutable directory per commit, `/work/tmp/siltwake-saves/<sha>/` (or `$SILTWAKE_SAVES`), with a `manifest.json` and an `index.json` beside it. Everything is earned through real commands. The export publishes nothing unless every scenario completes, every save reloads to its hash and every kind holds its facts.
+
+**Pinned to one SHA.** The wrapper captures HEAD once. It refuses a dirty tree, then builds that commit with `scripts/saves-build-at.sh SHA DIR`: a `git archive` compiled in a directory of its own and marked with `.siltwake-source-commit`. Both the second worker and the factory fallback run the export from such a build. `run.js --export --commit SHA` refuses code without the marker, or marked with another commit, so a worktree's `.test-build` can never export under a SHA. A partial export (some scenarios) may only go to a private `--library-root`.
+
+**Publication** takes the root's lock (a `.lock` directory naming its holder; a dead holder on this host is broken). It renames the verified staging directory into place read-only and rebuilds the index under the same lock. A repeated or concurrent identical export reports `identical`, after checking that the existing directory itself verifies. A different one is an error.
 
 **Kinds** (`saves.js kinds` prints them; `kinds.ts` defines them). Every save is also its own kind, `scenario@label`, for example `creel@refits`.
 
@@ -50,9 +54,18 @@ After each root merge, the coordinator runs `scripts/saves-export.sh` on root. I
 - **Code** (tests, GPU drivers): `const { librarySave } = await import(B + "scripts/playthrough/library.js")`; `librarySave("dart")` returns `{ path, text, state, entry, manifest, compatibility, distance, migrated, describe }`. Import `path` through the menu (`#import-file`) as the drivers do, or seed localStorage with `journalRecord(text)`. A worked consumer: [`enc1/derive.mjs`](../../docs/build/streams/enc1/derive.mjs) starts from `dart` instead of replaying three phases.
 - **Branch scenarios** (TST-21): `npm run playthrough -- --scenario carrier --from-library` starts `carrier` from the library's `creel@refits` instead of replaying the Creel run; every branch whose parent is not requested does the same, and each becomes its own `--jobs` group.
 
-**Compatibility.** A save suits a commit when its library commit is that commit or an ancestor, its schema and content versions are this build's (or schema 5 / expedition.6, which `bridge5.ts` converts), and this build's own `decodeSave` accepts it. The nearest such commit wins (`same-commit`, else `same-version` or `bridged`); `migrated` says additive content was filled in on load. Anything else is **refused** (exit 3) with every candidate's reason: another branch's commit, another schema, a damaged file, a kind no export has. If the nearest compatible save fails to load, that is refused too; an older one is never tried in its place.
+**Compatibility.** A save suits a commit when its library commit is that commit or an ancestor, its schema and content versions are this build's (or schema 5 / expedition.6, which `bridge5.ts` converts), and this build's own `decodeSave` accepts it. The nearest such commit wins (`same-commit`, else `same-version` or `bridged`). The recorded hash must match the saved state before any migration; `migrated` means this build's decoder actually changed it (the schema 5 bridge, additive content).
 
-**The second worker.** `scripts/saves-export.sh` runs the export on siltwake-alickers (`alickers-job.sh`, into its own `/work/tmp/siltwake-saves/<sha>`, so jobs there find it too), copies the directory back over ssh, checks every file against the manifest, decodes every save on factory-worker and publishes it. Exit 75 or 255 falls back to factory-worker's queue (`--class playthrough`); `--here` goes straight there. When SCHED-2b's remote lane lands, its `remote_export` becomes `heavy-check --machine any --artifact <dir>`.
+Anything else is **refused** (exit 3) with every candidate's reason:
+- another branch's commit;
+- another schema;
+- a missing or damaged file;
+- a recorded hash that doesn't match;
+- a kind no export has.
+
+If the nearest compatible save fails to load, that is refused too, and the refusal names the older compatible candidates as not tried. An older one is never used in its place.
+
+**The second worker.** `scripts/saves-export.sh` runs the export on siltwake-alickers (`alickers-job.sh`, into its own `/work/tmp/siltwake-saves/<sha>`, so jobs there find it too), copies the directory back over ssh and imports it. The import checks every file against the manifest, copies it into hidden staging in the root and decodes every save there with a build of that commit (this code if it was built from it, else a fresh `saves-build-at.sh` build). Only then does it publish; a failure leaves no directory and no index entry. `saves.js verify REF` decodes with a build of REF in the same way. Exit 75 or 255 falls back to factory-worker's queue (`--class playthrough --snapshot`); `--here` goes straight there. When SCHED-2b's remote lane lands, its `remote_export` becomes `heavy-check --machine any --artifact <dir>`.
 
 ## Scenarios and status
 | Scenario | Root `a09968b` | C3 in progress `3c9a181` (export in `/work/tmp`) |

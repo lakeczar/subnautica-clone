@@ -1,5 +1,5 @@
 /** SAVE-1: the shared save library. After each root merge the playthrough exports
- * its bot-earned saves (`npm run playthrough -- --export`) into an immutable
+ * its bot-earned saves (`scripts/saves-export.sh`: `run.js --export` from an archive build of the commit) into an immutable
  * directory per commit:
  *
  *   <root>/<commit>/manifest.json   provenance, sizes, measurements
@@ -206,7 +206,7 @@ export function pickSave(kind: string, o: PickOptions = {}): Picked {
   }
   ok.sort((a, b) => a.distance - b.distance);
   const best = ok[0];
-  if (!best) throw new LibraryRefusal(`No library save of kind "${kind}" is compatible with ${target.slice(0, 12)}. Export the library at this commit (npm run playthrough -- --export).`, rejected);
+  if (!best) throw new LibraryRefusal(`No library save of kind "${kind}" is compatible with ${target.slice(0, 12)}. Export the library at this commit (scripts/saves-export.sh).`, rejected);
   const entry = best.m.saves.find((e) => e.kinds.includes(kind))!;
   const file = path.join(root, best.m.commit, entry.file);
   // The nearest compatible save must load. A failure here is loud: an older one is never tried instead.
