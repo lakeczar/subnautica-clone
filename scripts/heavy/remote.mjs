@@ -121,59 +121,142 @@ export async function uploadWrapper(cfg) {
   return res.code === 0 ? path : null;
 }
 
-/** A ticket's and an attempt's directories on the sandbox. */
+/** A ticket's and an attempt's directories on the sandbox (the job's files),
+ * and the attempt's receipt directory (the transport's --receipt DIR: receipt,
+ * claim and scope), which the job is never told about. */
 export const ticketDir = (r, ticket) => `${r.laneDir}/jobs/${ticket}`;
 export const attemptDir = (r, ticket, attempt) => `${r.laneDir}/jobs/${ticket}/a${attempt}`;
+export const receiptDir = (r, ticket, attempt) => `${r.laneDir}/receipts/${ticket}/a${attempt}`;
 
-/** Parses a receipt (alickers-job.sh --receipt, plus lane-run.sh's lines). */
-export function parseReceipt(text) {
-  const rc = { admitted: false, sha: null, setup: null, setupFailed: null, started: false, exit: null, refused: null, staged: [], stageMissing: [], stageFailed: [], stageDone: false };
-  for (const line of String(text ?? "").split("\n")) {
-    const [k, ...v] = line.trim().split(/\s+/);
-    if (k === "admitted") rc.admitted = true;
-    else if (k === "sha" && /^[0-9a-f]{40}$/.test(v[0] ?? "")) rc.sha = v[0];
-    else if (k === "setup" && v[0] === "ok") rc.setup = "ok";
-    else if (k === "setup" && v[0] === "failed") { rc.setup = "failed"; rc.setupFailed = { step: v[1] ?? "?", code: Number(v[2]) }; }
-    else if (k === "started") rc.started = true;
-    else if (k === "exit" && /^\d+$/.test(v[0] ?? "")) rc.exit = Number(v[0]);
-    else if (k === "refused") rc.refused = v.join(" ");
-    else if (k === "staged") rc.staged.push(v.join(" "));
-    else if (k === "stage-missing") rc.stageMissing.push(v.join(" "));
-    else if (k === "stage-failed") rc.stageFailed.push(v.join(" "));
-    else if (k === "stage" && v[0] === "done") rc.stageDone = true;
+// The receipt's grammar (alickers-job.sh --receipt): every line is
+// "<nonce> <phase> ...". `next` lists the phases allowed after each one.
+const PHASES = {
+  start: ["admitted", "busy", "abandoned"],
+  admitted: ["sha", "setup-failed"],
+  sha: ["setup-ok", "setup-failed"],
+  "setup-ok": ["started"],
+  started: ["lane", "after"],
+  lane: ["lane", "after"],
+  after: ["exit"],
+  busy: [], abandoned: [], "setup-failed": [], exit: [],
+};
+const SHA = /^[0-9a-f]{40}$/;
+
+/**
+ * Parses an attempt's receipt against its nonce, strictly: a line with another
+ * nonce or none, a phase out of order or repeated, a malformed phase or an
+ * unterminated last line makes it invalid (`problem`), and an invalid receipt
+ * establishes nothing. A valid one may still be incomplete (the job runs, or
+ * the record stops): `complete` means it reached a last phase.
+ */
+export function parseReceipt(text, nonce) {
+  const rc = { valid: true, problem: null, complete: false, admitted: false, busy: false, abandoned: false, sha: null, setup: null, setupFailed: null,
+    dirtyAtAdmit: null, started: false, after: null, exit: null, refused: null, staged: [], stageMissing: [], stageFailed: [], stageDone: false };
+  const bad = (why) => { rc.valid = false; rc.problem ??= why; return rc; };
+  const body = String(text ?? "");
+  if (!body) return rc;
+  if (!body.endsWith("\n")) return bad("the receipt's last line is unterminated");
+  if (!/^[0-9a-f]{32}$/.test(nonce ?? "")) return bad("no nonce for this attempt");
+  let at = "start";
+  for (const [i, line] of body.slice(0, -1).split("\n").entries()) {
+    const [n, k, ...v] = line.split(" ");
+    if (n !== nonce) return bad(`line ${i + 1} does not carry this attempt's nonce`);
+    let phase = k, ok = true;
+    if (k === "admitted") ok = v.length === 1 && /^\d+$/.test(v[0]);
+    else if (k === "busy" || k === "abandoned" || k === "started") ok = v.length === 0;
+    else if (k === "sha") ok = v.length === 1 && SHA.test(v[0]);
+    else if (k === "setup" && v[0] === "ok") { phase = "setup-ok"; ok = v.length === 2 && /^(clean|restored:\d+)$/.test(v[1]); }
+    else if (k === "setup" && v[0] === "failed") { phase = "setup-failed"; ok = v.length === 3 && /^[a-z-]+$/.test(v[1]) && /^\d+$/.test(v[2]); }
+    else if (k === "lane") ok = v.length >= 1;
+    else if (k === "after") ok = v.length === 2 && (SHA.test(v[0]) || v[0] === "none") && /^(clean|changed:\d+)$/.test(v[1]);
+    else if (k === "exit") ok = v.length === 1 && /^\d+$/.test(v[0]);
+    else ok = false;
+    if (!ok) return bad(`line ${i + 1} is not a receipt phase: ${line.slice(33, 120)}`);
+    if (!PHASES[at].includes(phase)) return bad(`"${phase}" after "${at}"`);
+    at = phase;
+    if (phase === "admitted") rc.admitted = true;
+    else if (phase === "busy") rc.busy = true;
+    else if (phase === "abandoned") rc.abandoned = true;
+    else if (phase === "sha") rc.sha = v[0];
+    else if (phase === "setup-ok") { rc.setup = "ok"; rc.dirtyAtAdmit = v[1]; }
+    else if (phase === "setup-failed") { rc.setup = "failed"; rc.setupFailed = { step: v[1], code: Number(v[2]) }; }
+    else if (phase === "started") rc.started = true;
+    else if (phase === "after") rc.after = { head: v[0], clean: v[1] === "clean", changed: v[1] === "clean" ? 0 : Number(v[1].split(":")[1]) };
+    else if (phase === "exit") rc.exit = Number(v[0]);
+    else if (phase === "lane") {
+      const [w, ...x] = v;
+      if (w === "refused") rc.refused = x.join(" ");
+      else if (w === "staged") rc.staged.push(x.join(" "));
+      else if (w === "stage-missing") rc.stageMissing.push(x.join(" "));
+      else if (w === "stage-failed") rc.stageFailed.push(x.join(" "));
+      else if (w === "stage" && x[0] === "done") rc.stageDone = true;
+    }
   }
+  rc.complete = PHASES[at].length === 0;
   return rc;
 }
 
 /**
  * One out-of-band look at an attempt on the sandbox, from outside its cgroup:
- * its receipt, its wrapper's liveness (PID and start time), its scope's
- * memory.high count and its heartbeat file's mtime. Null if unreachable.
+ * its receipt (parsed against `nonce`), its wrapper's liveness (PID and start
+ * time), its scope's memory.high count and its heartbeat file's mtime. Null if
+ * unreachable. `text` is the raw receipt.
  */
-export async function remoteRead(r, ticket, attempt) {
-  const d = attemptDir(r, ticket, attempt);
-  const res = await ssh(r, `d=${q(d)}; echo "@@receipt"; cat "$d/receipt" 2>/dev/null; echo "@@end";` +
+export async function remoteRead(r, ticket, attempt, nonce) {
+  const d = attemptDir(r, ticket, attempt), c = receiptDir(r, ticket, attempt);
+  const res = await ssh(r, `d=${q(d)}; c=${q(c)}; echo "@@receipt"; cat "$c/receipt" 2>/dev/null; echo "@@end";` +
     ` alive=0; if [ -f "$d/pid" ]; then set -- $(cat "$d/pid"); [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] && alive=1; fi; echo "alive $alive";` +
     ` cg=$(cat "$d/cgroup" 2>/dev/null); echo "high $(sed -n 's/^high //p' "$cg/memory.events" 2>/dev/null)"; echo "beat $(stat -c %Y "$d/heartbeat" 2>/dev/null)"`, { timeoutS: 20 });
   if (res.code !== 0) return null;
-  const receipt = parseReceipt(/@@receipt\n([\s\S]*?)@@end/.exec(res.out)?.[1] ?? "");
+  const text = /@@receipt\n([\s\S]*?)@@end/.exec(res.out)?.[1] ?? "";
   const num = (k) => { const v = new RegExp(`^${k} (\\d+)$`, "m").exec(res.out)?.[1]; return v == null ? null : Number(v); };
-  return { receipt, alive: num("alive") === 1, high: num("high"), beat: num("beat") };
+  return { receipt: parseReceipt(text, nonce), text, alive: num("alive") === 1, high: num("high"), beat: num("beat") };
 }
 
 /**
- * Stops work on the sandbox, checked by PID and start time.
- * - `cancel: true`: the logical ticket is cancelled (a not-yet-started attempt never starts).
- * - otherwise only `attempt` is retired: a later attempt is unaffected (R1-F4).
- * Returns { reached, alive } (alive: the attempt's wrapper still runs after the TERM).
+ * Stops an attempt on the sandbox and says whether that is certain (R2-F3).
+ * - Not yet admitted: the claim is taken as "abandon", so it can never start.
+ * - Admitted: its wrapper is TERMed (checked by PID and start time); then, if
+ *   anything is left in the job scope after graceS, the scope's cgroup
+ *   (checked by its inode) is killed whole, detached and TERM-ignoring
+ *   processes included.
+ * `cancel: true` also marks the logical ticket cancelled. Returns
+ * { reached, stopped, started }: stopped only when the attempt can't start or
+ * its scope is empty or gone. Unreachable or still populated → stopped false.
  */
-export async function remoteStop(cfg, ticket, { attempt = null, cancel = false, r = remoteConfig(cfg) } = {}) {
-  const t = ticketDir(r, ticket), d = attempt == null ? null : attemptDir(r, ticket, attempt);
-  const res = await ssh(r, `t=${q(t)}; mkdir -p "$t"; ${cancel ? `: > "$t/cancelled";` : ""}` +
-    (d ? ` d=${q(d)}; mkdir -p "$d"; ${cancel ? "" : `: > "$d/retired";`} if [ -f "$d/pid" ]; then set -- $(cat "$d/pid");` +
-      ` if [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ]; then kill -TERM "$1"; for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1;` +
-      ` [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] || { echo "alive 0"; exit 0; }; done; echo "alive 1"; exit 0; fi; fi; echo "alive 0"` : ` echo "alive 0"`), { timeoutS: 40 });
-  return { reached: res.code === 0, alive: /alive 1/.test(res.out) };
+export async function remoteStop(cfg, ticket, { attempt = null, cancel = false, r = remoteConfig(cfg), graceS = 10 } = {}) {
+  const t = ticketDir(r, ticket);
+  if (attempt == null) {
+    const res = await ssh(r, `t=${q(t)}; mkdir -p "$t"; ${cancel ? `: > "$t/cancelled";` : ""} echo ok`, { timeoutS: 30 });
+    return { reached: res.code === 0, stopped: res.code === 0, started: false };
+  }
+  const d = attemptDir(r, ticket, attempt), c = receiptDir(r, ticket, attempt);
+  const res = await ssh(r, `t=${q(t)} d=${q(d)} c=${q(c)}; mkdir -p "$t" "$d" "$c"; ${cancel ? `: > "$t/cancelled";` : `: > "$d/retired";`}
+ln -s abandon "$c/claim" 2>/dev/null
+[ "$(readlink "$c/claim")" = abandon ] && { echo "stopped 1 started 0"; exit 0; }
+set -- $(cat "$c/scope" 2>/dev/null); cg=$1 ino=$2
+[ -n "$cg" ] || { echo "stopped 0 started 1 (no scope recorded yet)"; exit 0; }
+mine() { [ -d "$cg" ] && [ "$(stat -c %i "$cg" 2>/dev/null)" = "$ino" ]; }
+gone() { ! mine || grep -qx 'populated 0' "$cg/cgroup.events" 2>/dev/null; }
+gone && { echo "stopped 1 started 1"; exit 0; }
+if [ -f "$d/pid" ]; then set -- $(cat "$d/pid"); [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] && kill -TERM "$1"; fi
+i=0; while [ $i -lt ${Number(graceS)} ]; do sleep 1; i=$((i+1)); gone && { echo "stopped 1 started 1"; exit 0; }; done
+mine && { echo 1 > "$cg/cgroup.kill" 2>/dev/null || find "$cg" -name cgroup.procs -exec cat {} + | xargs -r kill -KILL; }
+i=0; while [ $i -lt 10 ]; do sleep 1; i=$((i+1)); gone && { echo "stopped 1 started 1 (killed)"; exit 0; }; done
+echo "stopped 0 started 1 (its scope is still populated)"`, { timeoutS: Number(graceS) + 40 });
+  return { reached: res.code === 0, stopped: res.code === 0 && /^stopped 1/m.test(res.out), started: !/started 0/.test(res.out), detail: /^stopped .*$/m.exec(res.out)?.[0] ?? null };
+}
+
+/**
+ * Gives up an attempt the sandbox has not admitted yet (an any or soak job
+ * whose admission is late, R2-F4), without touching one it has: the claim is
+ * taken as "abandon" only if the sandbox hasn't taken it as "run". Returns
+ * { reached, abandoned }: abandoned means it can never start.
+ */
+export async function remoteAbandon(r, ticket, attempt) {
+  const c = receiptDir(r, ticket, attempt);
+  const res = await ssh(r, `c=${q(c)}; mkdir -p "$c"; ln -s abandon "$c/claim" 2>/dev/null; echo "claim $(readlink "$c/claim")"`, { timeoutS: 30 });
+  return { reached: res.code === 0, abandoned: res.code === 0 && /^claim abandon$/m.test(res.out) };
 }
 
 /** Makes `attempt` the ticket's current one on the sandbox (lane-run.sh runs only that one). */
@@ -182,10 +265,11 @@ export async function setCurrent(r, ticket, attempt) {
   return (await ssh(r, `t=${q(t)}; mkdir -p "$t" && echo ${Number(attempt)} > "$t/current.tmp" && mv "$t/current.tmp" "$t/current"`, { timeoutS: 30 })).code === 0;
 }
 
-/** Removes an attempt's directory on the sandbox (its staged outputs included). */
+/** Removes an attempt's directories on the sandbox (its staged outputs and receipt included). */
 export async function removeAttempt(r, ticket, attempt) {
-  const d = attemptDir(r, ticket, attempt);
-  return (await ssh(r, `d=${q(d)}; [ -d "$d" ] && chmod -R u+w "$d"; rm -rf "$d"; t=${q(ticketDir(r, ticket))}; [ -z "$(ls -A "$t" | grep -v '^current$')" ] && rm -rf "$t"; true`, { timeoutS: 60 })).code === 0;
+  const d = attemptDir(r, ticket, attempt), c = receiptDir(r, ticket, attempt);
+  return (await ssh(r, `d=${q(d)}; [ -d "$d" ] && chmod -R u+w "$d"; rm -rf "$d" ${q(c)}; for t in ${q(ticketDir(r, ticket))} ${q(`${r.laneDir}/receipts/${ticket}`)}; do` +
+    ` [ -d "$t" ] && [ -z "$(ls -A "$t" | grep -v '^current$')" ] && rm -rf "$t"; done; true`, { timeoutS: 60 })).code === 0;
 }
 
 /** Asks a running soak attempt to yield ($SILTWAKE_JOB_YIELD appears on the sandbox). */

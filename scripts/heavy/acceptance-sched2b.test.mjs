@@ -8,10 +8,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { alive, procStart, scopePopulated } from "./state.mjs";
-import { blockedBy, context, fakeSandbox, hc, holderOf, killOwned, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
+import { blockedBy, context, fakeSandbox, hc, here, holderOf, killOwned, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
 
 const fast = { minStallS: 1, soakYieldS: 3 };
 const log = (c, id) => readFileSync(join(c.sched, "jobs", id, "output.log"), "utf8");
@@ -147,13 +147,14 @@ test("B5: stall detection on alickers: silence stops it (123) once it has starte
   const wb = waitFor(c, beat);
   assert.equal(wb.code, 0, wb.err);
   assert.doesNotMatch(log(c, beat), /stalled/);
-  // Waiting for the sandbox's lock (another agent's direct call) is not silence.
+  // Waiting for the sandbox's lock (another agent's direct call) is not silence (a 4070 job waits for it).
   const holder = spawn("flock", [join(c.fake.dir, "lock"), "sleep", "8"], { stdio: "ignore" });
   try {
     await sleep(300);
-    const waiting = submit(c, c.repoDir, "--class", "playthrough", "--stall", "4", "--", "sh", "-c", "echo after-the-lock");
+    const waiting = submit(c, c.repoDir, "--class", "playthrough", "--machine", "4070", "--stall", "4", "--", "sh", "-c", "echo after-the-lock");
     const ww = waitFor(c, waiting);
     assert.equal(ww.code, 0, ww.err);
+    assert.equal(result(c, waiting).remote, true);
     assert.match(log(c, waiting), /after-the-lock/);
   } finally { holder.kill(); }
 });
@@ -187,7 +188,7 @@ test("B7: cancel stops a running remote job on the sandbox; a cancel while it wa
   try {
     await sleep(300);
     const marker = join(c.fake.dir, "repo", "must-not-exist"); // where the job would write it, on the sandbox
-    const q = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "touch must-not-exist");
+    const q = submit(c, c.repoDir, "--class", "playthrough", "--machine", "4070", "--", "sh", "-c", "touch must-not-exist"); // 4070 waits for the lock
     await running(c, q);
     await sleep(1500);
     hc(c, ["cancel", q]);
@@ -239,6 +240,11 @@ test("B10: a remote job's own exit codes pass through after 'testing'; units and
   const wb = waitFor(c, b);
   assert.equal(wb.code, 255, `a 255 after testing with the tested line is the job's: ${JSON.stringify(result(c, b))} ${log(c, b)}`);
   assert.equal(result(c, b).fellBack, undefined);
+  // The sandbox's own timeout at an explicit deadline: 124 there, a deadline result, never a rerun.
+  const d = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--deadline", "3", "--", "sh", "-c", "echo started; sleep 30");
+  const wd = waitFor(c, d);
+  assert.equal(wd.code, 124, wd.err);
+  assert.deepEqual([result(c, d).stopReason, result(c, d).attempts, result(c, d).remote], ["deadline", 1, true]);
   const left = spawnSync("systemctl", ["--user", "list-units", `sched2bfake-${c.n}-job-*`, "--no-legend"], { encoding: "utf8" }).stdout.trim();
   assert.equal(left, "");
   assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(c.sched, "state.json"), "utf8")).tickets), []);
@@ -325,7 +331,8 @@ test("B14 (R1-F4): a session lost just after hand-over: the old attempt is retir
   assert.ok(r.attempts >= 2, `attempts ${r.attempts}`);
   await sleep(4000); // the first attempt's delayed start has come and gone
   assert.equal(readFileSync(join(c.fake.repo, "runs.log"), "utf8"), "ran\n", "once");
-  assert.match(readFileSync(join(c.fake.dir, "lane", "jobs", g, "a1", "receipt"), "utf8"), /refused retired/);
+  // The first attempt's late start lost its claim to the holder: it wrote only "abandoned".
+  assert.match(readFileSync(join(c.fake.dir, "lane", "receipts", g, "a1", "receipt"), "utf8"), /^[0-9a-f]{32} abandoned\n$/);
 });
 
 test("B15 (R1-F5): with alickers' transport failing before admission, a 4070 job keeps waiting until its queue timeout", async () => {
@@ -380,4 +387,209 @@ test("B17 (R1-F7): a stalled artifact transfer is bounded and cancellable; the s
   assert.ok(Date.now() - t1 < 10000, "cancel returned promptly");
   assert.match(result(c, id2).artifacts[0].error, /transfer aborted: (cancelled|no data)/);
   c.fake.flag("stall-fetch", false);
+});
+
+// SCHED-2b R2 ---------------------------------------------------------------------
+
+const receiptOf = (c, id, a = 1) => readFileSync(join(c.fake.dir, "lane", "receipts", id, `a${a}`, "receipt"), "utf8");
+
+test("B18 (R2-F1): setup that rewrites the receipt is not bound; a job writing beside its heartbeat can't reach it", async () => {
+  const c = await lane("receipt-forge");
+  // The reviewer's setup fixture: npm finds the receipt from its parent's command line,
+  // overwrites it with a successful record and fails. Those lines lack the attempt's nonce.
+  const forge = (code) => c.fake.npm(`r=$(tr '\\0' '\\n' < /proc/$PPID/cmdline | grep '/receipts/' | head -1)/receipt
+[ -f "$r" ] || exit 9
+s=$(git rev-parse HEAD)
+printf 'admitted 1\\nsha %s\\nsetup ok clean\\nstarted\\nafter %s clean\\nexit 0\\n' "$s" "$s" > "$r"
+exit ${code}`);
+  commit(c.repoDir, "package-lock.json", '{"v":1}\n'); forge(1);
+  const g = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c", "touch payload-ran");
+  const wg = waitFor(c, g);
+  const rg = result(c, g);
+  assert.equal(wg.code, 70, wg.err);
+  assert.equal(rg.evidence.bound, false);
+  assert.match(rg.label, /receipt from alickers is not valid \(line 1 does not carry this attempt's nonce\)/);
+  assert.equal(existsSync(join(c.fake.repo, "payload-ran")), false, "the payload never ran");
+  // An any job reruns here instead.
+  commit(c.repoDir, "package-lock.json", '{"v":2}\n'); forge(1);
+  const a = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "echo ran-here");
+  assert.equal(waitFor(c, a).code, 0);
+  assert.equal(result(c, a).remote, undefined);
+  assert.match(result(c, a).fellBack.reason, /not valid/);
+  assert.equal(result(c, a).fellBack.outage, false);
+  c.fake.npm(null);
+  // A job writing a forged receipt where the old layout kept it (beside its heartbeat): its own code, bound.
+  const j = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c",
+    'printf "admitted 1\\nsha 0000000000000000000000000000000000000000\\nsetup ok clean\\nstarted\\nexit 0\\n" > "${SILTWAKE_JOB_HEARTBEAT%/*}/receipt"; exit 7');
+  assert.equal(waitFor(c, j).code, 7);
+  assert.equal(result(c, j).evidence.bound, true);
+});
+
+test("B19 (R2-F1): a truncated receipt, or one whose exit the transport contradicts, binds nothing", async () => {
+  const c = await lane("receipt-strict");
+  const g = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c", "sleep 3; exit 7");
+  await until("started", () => { try { return /started\n/.test(receiptOf(c, g)); } catch { return false; } }, 30000);
+  const f = join(c.fake.dir, "lane", "receipts", g, "a1", "receipt");
+  writeFileSync(f, readFileSync(f, "utf8").replace(/ setup ok clean\n[0-9a-f]{32} started\n$/, " setup o"));
+  const wg = waitFor(c, g);
+  assert.equal(wg.code, 70, wg.err);
+  assert.equal(result(c, g).evidence.bound, false);
+  assert.match(result(c, g).label, /not valid/);
+  // The transport's ssh says 0 while the receipt says 7.
+  c.fake.flag("exit-zero", true);
+  const x = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c", "exit 7");
+  const wx = waitFor(c, x);
+  const rx = result(c, x);
+  assert.equal(wx.code, 70, wx.err);
+  assert.deepEqual([rx.evidence.bound, rx.evidence.transportExit, rx.evidence.receiptExit], [false, 0, 7]);
+  assert.match(rx.label, /the receipt says exit 7, the transport exited 0/);
+  const a = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "exit 7");
+  assert.equal(waitFor(c, a).code, 7);
+  assert.equal(result(c, a).remote, undefined, "an any job reruns here");
+  c.fake.flag("exit-zero", false);
+});
+
+test("B20 (R2-F2): tracked changes on the sandbox never pass as the commit: the modifying job and the next read-only job, a direct caller's leftovers, a moved HEAD", async () => {
+  const c = await lane("tree");
+  commit(c.repoDir, "second.txt", "2\n");
+  const m = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c", "echo CHANGED > file.txt; cat file.txt");
+  assert.equal(waitFor(c, m).code, 0);
+  const rm = result(c, m);
+  assert.deepEqual([rm.evidence.bound, rm.changedDuringRun, rm.dirtyAtAdmit], [false, true, "clean"]);
+  assert.match(rm.evidence.why, /the job changed the checkout \(HEAD \w+, 1 tracked files; restored afterwards\)/);
+  assert.equal(readFileSync(join(c.fake.repo, "file.txt"), "utf8"), "v1\n", "restored before the lock was released");
+  const n = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "cat", "file.txt");
+  assert.equal(waitFor(c, n).code, 0);
+  assert.match(log(c, n), /^v1$/m);
+  assert.doesNotMatch(log(c, n), /CHANGED/);
+  assert.deepEqual([result(c, n).evidence.bound, result(c, n).changedDuringRun, result(c, n).dirtyAtAdmit], [true, false, "clean"]);
+  // Another agent's direct call (no lane, an older transport) leaves an edit behind.
+  const d = c.fake.direct("echo LEFT > file.txt");
+  await new Promise((r) => d.on("exit", r));
+  assert.equal(readFileSync(join(c.fake.repo, "file.txt"), "utf8"), "LEFT\n");
+  const o = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "cat", "file.txt");
+  assert.equal(waitFor(c, o).code, 0);
+  assert.match(log(c, o), /^v1$/m);
+  assert.match(log(c, o), /1 tracked files in the sandbox checkout were changed; restored/);
+  assert.deepEqual([result(c, o).evidence.bound, result(c, o).dirtyAtAdmit], [true, "restored:1"]);
+  // The job moves HEAD.
+  const h = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "git", "checkout", "-q", "--detach", "HEAD~1");
+  assert.equal(waitFor(c, h).code, 0);
+  assert.equal(result(c, h).evidence.bound, false);
+  assert.equal(result(c, h).changedDuringRun, true);
+  assert.equal(git(c.fake.repo, "status", "--porcelain", "--untracked-files=no").stdout, "");
+});
+
+/** A payload that, on the sandbox, leaves a TERM-ignoring foreground process and a detached one; here it says LOCAL-RAN. */
+function resistantPayload(c) {
+  commit(c.repoDir, "resist.py", [
+    "import os, signal, sys, time",
+    "signal.signal(signal.SIGTERM, signal.SIG_IGN)",
+    "name = sys.argv[1]",
+    "open('pid-' + name, 'w').write('%d %s' % (os.getpid(), open('/proc/self/stat').read().split()[21]))",
+    "if name == 'fg':",
+    "    while not os.path.exists('pid-detached'): time.sleep(0.05)",
+    "    open('midrun-started', 'w').write('1')",
+    "time.sleep(120)",
+    "",
+  ].join("\n"));
+  return ["sh", "-c", 'case "$SILTWAKE_GPU_LEASE" in alickers-*) setsid python3 resist.py detached & python3 resist.py fg ;; *) echo LOCAL-RAN ;; esac'];
+}
+const remoteAlive = (c) => ["fg", "detached"].filter((n) => {
+  try { const [pid, start] = readFileSync(join(c.fake.repo, `pid-${n}`), "utf8").split(" ").map(Number); return procStart(pid) === start; } catch { return false; }
+});
+
+test("B21 (R2-F3): the session lost mid-run: nothing runs here until the sandbox confirms the attempt stopped, TERM-ignoring and detached processes included", async () => {
+  const c = await lane("midrun-drop");
+  const argv = resistantPayload(c);
+  c.fake.flag("drop-midrun", true);
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", ...argv);
+  await until("running on the sandbox", () => remoteAlive(c).length === 2, 30000);
+  let overlap = null;
+  while (!result(c, id)) {
+    if (log(c, id).includes("LOCAL-RAN") && remoteAlive(c).length) overlap = remoteAlive(c);
+    await sleep(100);
+  }
+  assert.equal(overlap, null, `ran here while ${overlap} still ran on the sandbox`);
+  const r = result(c, id);
+  assert.equal(r.code, 0);
+  assert.match(log(c, id), /LOCAL-RAN/);
+  assert.match(r.fellBack.reason, /connection to alickers was lost (while|as) the job/);
+  assert.deepEqual(remoteAlive(c), []);
+  await until("no fake sandbox scope left", () => spawnSync("systemctl", ["--user", "list-units", `sched2bfake-${c.n}-job-*`, "--no-legend"], { encoding: "utf8" }).stdout.trim() === "", 30000);
+});
+
+test("B22 (R2-F3): lost mid-run and then unreachable: the ticket keeps its place on alickers; it runs here only once a stop is confirmed", async () => {
+  const c = await lane("midrun-unreachable");
+  const argv = resistantPayload(c);
+  c.fake.flag("drop-midrun", true);
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", ...argv);
+  await until("running on the sandbox", () => existsSync(join(c.fake.repo, "midrun-started")), 30000);
+  c.fake.unreachable(true);
+  await sleep(6000);
+  const tk = JSON.parse(readFileSync(join(c.sched, "state.json"), "utf8")).tickets[id];
+  assert.deepEqual([tk?.state, tk?.remote], ["running", true], "still held on alickers");
+  assert.doesNotMatch(log(c, id), /LOCAL-RAN/);
+  assert.match(log(c, id), /waiting until alickers confirms this attempt has stopped \(unreachable\)/);
+  assert.equal(remoteAlive(c).length, 2, "the sandbox side ran on meanwhile");
+  c.fake.unreachable(false);
+  const w = waitFor(c, id);
+  assert.equal(w.code, 0, w.err);
+  assert.match(log(c, id), /LOCAL-RAN/);
+  assert.deepEqual(remoteAlive(c), []);
+});
+
+test("B23 (R2-F4): an any job never waits for alickers: a direct caller's lock after a fresh probe, or one taken just before siltwake-job's own flock", async () => {
+  // A long-lived "up" reading: the dispatch races the direct caller, as after a fresh probe.
+  const c = await lane("busy", { recheckS: { up: 120, paused: 2, unreachable: 2, unreachableMax: 4 } });
+  await probeNow(c);
+  const holder = spawn("flock", ["--no-fork", join(c.fake.dir, "lock"), "sleep", "8"], { stdio: "ignore" });
+  try {
+    await sleep(250);
+    const a = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "echo ran-here");
+    assert.equal(waitFor(c, a).code, 0);
+    const r = result(c, a);
+    assert.equal(r.remote, undefined);
+    assert.match(r.fellBack.reason, /alickers was busy/);
+    assert.equal(r.fellBack.outage, false);
+    assert.ok(r.admittedAt - r.submittedAt < 3000, `admitted here after ${r.admittedAt - r.submittedAt} ms`);
+    assert.match(receiptOf(c, a), /^[0-9a-f]{32} busy\n$/);
+  } finally { holder.kill(); }
+  // The race: the no-wait check passes, then the lock is taken before siltwake-job's flock.
+  await until("alickers free again", async () => (await probeNow(c)).state === "up", 15000);
+  c.fake.flag("detach-job", true); c.fake.flag("race-lock", true);
+  const q = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "touch raced-ran");
+  assert.equal(waitFor(c, q).code, 0);
+  const rq = result(c, q);
+  assert.equal(rq.remote, undefined);
+  assert.match(rq.fellBack.reason, /did not admit the job within 3s/);
+  assert.ok(rq.admittedAt - rq.submittedAt < 7000, `admitted here after ${rq.admittedAt - rq.submittedAt} ms`);
+  await until("the late start on the sandbox gave up", () => { try { return /abandoned\n$/.test(receiptOf(c, q)); } catch { return false; } }, 20000);
+  assert.equal(existsSync(join(c.fake.repo, "raced-ran")), false, "it never ran on the sandbox");
+  c.fake.flag("detach-job", false);
+});
+
+test("B24 (R2-F5): the transport's test seams work only in test mode with private state; direct callers keep their exit codes", async () => {
+  const c = await lane("seams");
+  const transport = join(here, "..", "alickers-job.sh");
+  const seamLog = join(c.dir, "seam.log"), stub = join(c.dir, "leaked-ssh"), home = join(c.dir, "empty-home");
+  writeFileSync(stub, `#!/bin/sh\necho "$*" >> ${seamLog}\nexit 255\n`, { mode: 0o755 });
+  mkdirSync(home, { recursive: true }); // no ~/.ssh/siltwake.conf: the real ssh fails at once, reaching nothing
+  const leaked = { ALICKERS_SSH: stub, ALICKERS_REPO: "/some/leaked/repo", ALICKERS_TMP: "/some/leaked/tmp", ALICKERS_LOCK: "/some/leaked/lock" };
+  const run = (env) => spawnSync(transport, ["--sha", c.head, "--", "true"], { cwd: c.repoDir, env: { PATH: process.env.PATH, HOME: home, ...env }, encoding: "utf8", timeout: 30000 });
+  for (const env of [leaked, { ...leaked, ALICKERS_TEST_MODE: "1" }, { ...leaked, SILTWAKE_SCHED_DIR: c.sched },
+    { ...leaked, ALICKERS_TEST_MODE: "1", SILTWAKE_SCHED_DIR: "/work/tmp/siltwake-sched" }]) {
+    const x = run(env);
+    assert.equal(x.status, 255, x.stderr);
+    assert.match(x.stderr, /ignoring ALICKERS_\* test overrides/);
+    assert.equal(existsSync(seamLog), false, `${JSON.stringify(Object.keys(env))}: the leaked ssh was not used`);
+  }
+  run({ ...leaked, ALICKERS_TEST_MODE: "1", SILTWAKE_SCHED_DIR: c.sched });
+  assert.match(readFileSync(seamLog, "utf8"), /\/some\/leaked\/repo/, "a private test scope uses them");
+  // Direct callers (no --receipt) keep their payload's exit codes.
+  for (const code of [0, 7, 75, 255]) {
+    const x = spawnSync(transport, ["--sha", c.head, "--deadline", "20", "--memory", "1G", "--", "sh", "-c", `exit ${code}`], { cwd: c.repoDir, env: c.env, encoding: "utf8", timeout: 30000 });
+    assert.equal(x.status, code, x.stderr);
+    assert.match(x.stdout, new RegExp(`alickers-job: tested ${c.head} exit ${code}`));
+  }
 });

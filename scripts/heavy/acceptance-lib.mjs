@@ -68,7 +68,7 @@ export const ticketState = (c, id) => state(c).tickets[id]?.state ?? (result(c, 
 export async function until(what, fn, ms = 30000) {
   const end = Date.now() + ms;
   for (;;) {
-    const v = fn();
+    const v = await fn();
     if (v) return v;
     if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
     await sleep(100);
@@ -108,7 +108,8 @@ export function v1Script(c) {
  * here, with the sandbox's PATH and HOME, or exits 255 while FAKE/unreachable
  * exists), ALICKERS_REPO the sandbox checkout (a clone of the test worktree,
  * so the transport's own `git fetch origin` finds the commit) and ALICKERS_TMP
- * its scratch directory. `siltwake-job` is a copy of the sandbox's (its one-job
+ * its scratch directory, ALICKERS_LOCK its job lock (all with ALICKERS_TEST_MODE=1
+ * and this private state, R2-F5). `siltwake-job` is a copy of the sandbox's (its one-job
  * lock, the owner's pause flag giving 75, its own user scope with MemoryHigh
  * at 85% of MemoryMax, or FAKE_MEMORY_HIGH, and no swap). FAKE/npm, if written,
  * replaces npm on the sandbox. Returns the remote config for config.json.
@@ -124,13 +125,19 @@ export function fakeSandbox(c, extra = {}) {
     "# fake ssh: the last argument is the remote command",
     "cmd=\"${@: -1}\"",
     "[ -e \"$FAKE/unreachable\" ] && { echo \"ssh: connect to host siltwake-alickers: Connection refused\" >&2; exit 255; }",
-    "if [ -e \"$FAKE/slow-probe\" ] && [[ \"$cmd\" == *\"flock -n\"* ]]; then sleep \"${FAKE_SSH_DELAY:-4}\"; fi",
+    "if [ -e \"$FAKE/slow-probe\" ] && [[ \"$cmd\" == *\"then echo paused\"* ]]; then sleep \"${FAKE_SSH_DELAY:-4}\"; fi",
     "if [ -e \"$FAKE/stall-fetch\" ] && [[ \"$cmd\" == *\"tar -cf\"* ]]; then sleep 3600; fi",
     "if [ -e \"$FAKE/slow-fetch\" ] && [[ \"$cmd\" == *\"tar -cf\"* ]]; then sleep 1.5; fi",
     "# The transport's connection fails before admission (the probe still works).",
     "if [ -e \"$FAKE/transport-down\" ] && [[ \"$cmd\" == *\"git fetch\"* ]]; then echo \"ssh: connection reset\" >&2; exit 255; fi",
     "# The session drops once, just after the job is handed to the sandbox, which carries on.",
-    "if [ -e \"$FAKE/drop-once\" ] && [[ \"$cmd\" == *\"siltwake-job\"* ]]; then rm -f \"$FAKE/drop-once\"; HOME=\"$FAKE/home\" PATH=\"$FAKE/bin:$PATH\" FAKE_START_DELAY=3 setsid bash -c \"$cmd\" >/dev/null 2>&1 < /dev/null & sleep 1; echo \"ssh: connection lost\" >&2; exit 255; fi",
+    "if [ -e \"$FAKE/drop-once\" ] && [[ \"$cmd\" == *\"siltwake-job\"* ]]; then rm -f \"$FAKE/drop-once\"; cat > \"$FAKE/drop-stdin\"; HOME=\"$FAKE/home\" PATH=\"$FAKE/bin:$PATH\" FAKE_START_DELAY=3 setsid bash -c \"$cmd\" >/dev/null 2>&1 < \"$FAKE/drop-stdin\" & sleep 1; echo \"ssh: connection lost\" >&2; exit 255; fi",
+    "# The session drops once the job has started on the sandbox (which carries on, its scope included).",
+    "if [ -e \"$FAKE/drop-midrun\" ] && [[ \"$cmd\" == *\"siltwake-job\"* ]]; then rm -f \"$FAKE/drop-midrun\"; cat > \"$FAKE/drop-stdin\"; HOME=\"$FAKE/home\" PATH=\"$FAKE/bin:$PATH\" setsid bash -c \"$cmd\" >/dev/null 2>&1 < \"$FAKE/drop-stdin\" & for i in $(seq 1 200); do [ -e \"$FAKE/repo/midrun-started\" ] && break; sleep 0.05; done; sleep 0.5; echo \"ssh: connection lost\" >&2; exit 255; fi",
+    "# The transport's ssh exits 0 whatever the job command did (a transport that can't be trusted).",
+    "if [ -e \"$FAKE/exit-zero\" ] && [[ \"$cmd\" == *\"siltwake-job\"* ]]; then HOME=\"$FAKE/home\" PATH=\"$FAKE/bin:$PATH\" bash -c \"$cmd\"; exit 0; fi",
+    "# The sandbox side outlives this ssh process, as a real sandbox's command outlives a lost session.",
+    "if [ -e \"$FAKE/detach-job\" ] && [[ \"$cmd\" == *\"siltwake-job\"* ]]; then HOME=\"$FAKE/home\" PATH=\"$FAKE/bin:$PATH\" setsid bash -c \"$cmd\" 0<&0 >>\"$FAKE/detached.log\" 2>&1 & wait $!; exit $?; fi",
     "HOME=\"$FAKE/home\" PATH=\"$FAKE/bin:$PATH\" exec bash -c \"$cmd\"",
     "",
   ].join("\n"));
@@ -139,6 +146,8 @@ export function fakeSandbox(c, extra = {}) {
 set -euo pipefail
 memory=8G deadline=1800
 while [[ $# -gt 0 ]]; do case "$1" in --memory) memory="$2"; shift 2;; --deadline) deadline="$2"; shift 2;; --) shift; break;; *) break;; esac; done
+# race-lock: another agent's direct call takes the lock between the transport's no-wait check and this flock.
+if [[ -e "$FAKE/race-lock" ]]; then rm -f "$FAKE/race-lock"; setsid flock "$FAKE/lock" sleep "\${FAKE_RACE_HOLD:-8}" </dev/null >/dev/null 2>&1 & sleep 0.5; fi
 exec 9>"$FAKE/lock"
 flock -w "\${FAKE_LOCK_WAIT:-3600}" 9 || exit 75
 if [[ -e "$FAKE/home/.local/state/siltwake/paused" ]]; then echo 'Sandbox paused by owner' >&2; exit 75; fi
@@ -154,8 +163,9 @@ exit "$status"
 `);
   const repo = join(f, "repo");
   const remote = { ssh: [ssh], repo, laneDir: join(f, "lane"), lock: join(f, "lock"), artifactsDir: join(c.dir, "artifacts"),
-    tickS: 1, throttleNoticeS: 3, fetchInactivityS: 3, retryBaseS: 1, retryMaxS: 2, recheckS: { up: 2, paused: 2, unreachable: 2, unreachableMax: 4 }, ...extra };
-  Object.assign(c.env, { FAKE: f, ALICKERS_SSH: ssh, ALICKERS_REPO: repo, ALICKERS_TMP: join(f, "tmp") });
+    tickS: 1, throttleNoticeS: 3, fetchInactivityS: 3, admitGraceS: 3, retryBaseS: 1, retryMaxS: 2, recheckS: { up: 2, paused: 2, unreachable: 2, unreachableMax: 4 }, ...extra };
+  // The transport's test seams, honoured only in test mode with this private state (R2-F5).
+  Object.assign(c.env, { FAKE: f, ALICKERS_TEST_MODE: "1", ALICKERS_SSH: ssh, ALICKERS_REPO: repo, ALICKERS_TMP: join(f, "tmp"), ALICKERS_LOCK: join(f, "lock") });
   c.fake = { dir: f, repo,
     /** The sandbox's checkout, cloned from a worktree (its origin), as the real sandbox's is from GitHub. */
     clone: (from) => { if (!existsSync(join(repo, ".git"))) spawnSync("git", ["clone", "-q", from, repo]); },

@@ -32,7 +32,7 @@ Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordin
 **Soaks there:** frames are recorded, never judged; a would-be failure gets a report **WARNING**. Memory, graphics, hold and save rules are judged. The browser is `siltwake-chrome`, which sets its own GPU flags, with the sandbox's playwright-core.
 
 **Checks:**
-- **Acceptance** `scripts/heavy/acceptance-sched2b.test.mjs` passes **17/17** (B1–B17) against a fake sandbox run by the real transport (`siltwake-job`'s lock, pause flag, user scope, MemoryHigh and swap settings reproduced), with real systemd scopes:
+- **Acceptance** `scripts/heavy/acceptance-sched2b.test.mjs` passes **24/24** (B1–B24; B18–B24 are R2's) against a fake sandbox run by the real transport (`siltwake-job`'s lock, pause flag, user scope, MemoryHigh and swap settings reproduced), with real systemd scopes:
   - B1 any on alickers at its commit, worktree free, an evidence-pack directory and a file fetched whole, sandbox checkout left clean, ledger records;
   - B2 paused: 4070 waits and runs on resume, any runs here; B3 paused after dispatch: any falls back here keeping its place, 4070 waits again; B4 unreachable, dirty tree and local paths;
   - B5 stall after `testing`, heartbeats, waiting for the sandbox lock isn't silence; B6 memory.high throttling reported and stopped as `throttled`;
@@ -76,12 +76,54 @@ Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordin
   - a fallen-back 4070 ticket stopped refreshing health;
   - the fake's own TERM deferral showed recovery must not block on the old scope.
 
+**R2 review responses** (review `1d5b7ff` on `review/sched-2b-r2`, on `2e35921`: two P1s, three P2s). Each finding is fixed at its root and has a regression in `acceptance-sched2b.test.mjs` (B18–B24), run through the real transport; the receipt grammar also has units (`tests/heavy-remote-receipt.test.ts`). Fleet's `siltwake-job` is unchanged: it was read on the sandbox (`exec 9>LOCK; flock -w 3600 9`), and everything below works with it as installed.
+- **F1, a writable receipt could forge bound success: fixed, within the coordinator's threat model** (accidents in scope, deliberate forgery out of scope).
+  - **Nonce:** the holder makes a random 128-bit nonce per attempt and gives it to the transport on stdin. It reaches the sandbox over ssh stdin, so it is never in argv, the environment or any path the job is told, and is kept in shell variables only. Every receipt line carries it; the wrapper gets it on stdin and gives its job `/dev/null`.
+  - **Not exposed to the job:** the receipt is in `LANE/receipts/<ticket>/a<N>/`, not beside the heartbeat (`LANE/jobs/…`). The job is never told that directory.
+  - **Strict grammar** (`remote.mjs` `parseReceipt`): `admitted → sha → setup ok|failed → started → lane… → after → exit`, each once and in order, or a single `busy` or `abandoned`. A line with another nonce or none, a phase out of order or repeated, a malformed value or an unterminated last line makes the receipt invalid, and an invalid one binds nothing. An `any` or `soak` job then reruns here; a `4070` job fails with 70 (never a success code), with both exits recorded.
+  - **Cross-check:** the receipt's exit must equal the transport's own exit status. A mismatch is a contradiction. A 255 transport with a recorded exit is a lost connection, so the job reruns after the stop is confirmed.
+  - **Regressions:**
+    - **B18:** the reviewer's setup fixture (it finds the receipt from its parent's command line, writes a success record, exits 1) gives 70, unbound, payload never run; for `any`, a rerun here. A job writing a forged receipt beside its heartbeat keeps its own 7, bound.
+    - **B19:** the receipt truncated mid-run, and a transport whose ssh says 0 while the receipt says 7: both unbound.
+    - **Units:** "started" then "setup failed", repeated phases, stale and foreign nonces, truncation: all invalid.
+- **F2, a dirty shared checkout certified as the SHA: fixed.**
+  - **Before the job,** inside the sandbox lock: `git checkout -f --detach <sha>` restores tracked files, then HEAD must equal the SHA and the tracked tree must be clean, else `setup failed verify`.
+  - **Clean policy:** tracked files are restored to the commit. Untracked files are left alone, except `.test-build*`, which is now also removed when files were restored, so no stale compiled edit survives.
+  - **After the job,** still inside the lock: HEAD and tracked files are checked again (`after <head> clean|changed:<n>`), then restored for the next job.
+  - **Recorded:** `dirtyAtAdmit` (`clean` or `restored:<n>`) and `changedDuringRun` are real now. Any drift unbinds the result.
+  - **B20:** the modifying job is unbound (`changedDuringRun: true`) and the checkout is restored. The next read-only job sees `v1` and is bound and clean. A direct caller's leftover edit is restored (`restored:1`) and that job is bound. A job that moves HEAD is unbound.
+- **F3, a fallback while the remote payload still ran: fixed.**
+  - **Hold until confirmed:** once the job command was handed over (the transport says so on fd 3, never in output), nothing runs elsewhere until the sandbox confirms the attempt is stopped. The ticket keeps its reservation; an unreachable sandbox keeps it waiting.
+  - **Proof it can't start:** each attempt has a claim symlink, created atomically as `run` by the sandbox at admission or as `abandon` by the holder. An abandoned attempt can never start.
+  - **Proof it stopped:** the scope's cgroup and inode are recorded at admission. The stop TERMs the wrapper, waits for `cgroup.events` `populated 0`, and after 10 s kills the whole scope with `cgroup.kill`, checked by inode. That covers TERM-ignoring and detached processes.
+  - **Every path uses it:** recovery, requeue and every result.
+  - **B21:** session lost mid-run, with a TERM-ignoring foreground and a detached process: the local run never overlaps them (polled every 100 ms), both are dead, and no scope is left.
+  - **B22:** the same, then unreachable. The ticket stays running on alickers for 6 s with no local run; once reachable, the stop is confirmed and only then does it run here.
+- **F4, any waited on a direct caller's lock: fixed** without changing `siltwake-job`:
+  - **No-wait:** the transport's `--no-wait` checks the lock with `flock -n` on the sandbox and writes `busy` at once.
+  - **The race window** between that check and `siltwake-job`'s own flock is closed by the claim. If the sandbox hasn't admitted the attempt within `admitGraceS` (20 s) of hand-over, the holder takes the claim as `abandon` and runs the job here. A late start then writes `abandoned` and doesn't run.
+  - **Blocking stays** for `4070` and direct callers. `soak` follows `any`, since it also falls back.
+  - **B23:** a direct caller's lock after a fresh `up` reading gives a run here within 3 s (`busy`). The lock taken between the check and `siltwake-job`'s flock gives a run here after the 3 s grace, and the late start on the sandbox writes `abandoned` and never runs.
+- **F5, test seams in production: fixed.**
+  - **The transport** honours `ALICKERS_SSH|REPO|TMP|LOCK` only with `ALICKERS_TEST_MODE=1` **and** a private `SILTWAKE_SCHED_DIR`. Otherwise it ignores them with a warning.
+  - **The holder** strips them from the transport's environment in production state or without test mode.
+  - **B24:** four leaked combinations never use the stub. The real ssh, with no config in an empty `HOME`, fails at once and reaches nothing. A private test scope does use the stub. Direct callers still get their payload's 0/7/75/255.
+- **Checks** at the commit below (2b plus the soak reducer `008ca104`): SCHED-2b acceptance **24/24** (B10 adds a remote deadline), SCHED-2 **16/16**, SCHED-1 **23/23**, fast tier **1,377/1,377** (receipt units and soak included). No mutation run against `2e35921`: the regressions drive the new protocol (nonce on stdin, the receipt directory), which the old transport lacks. The reviewer's reproductions, rebuilt as B18–B24, are the regression evidence; on `2e35921` they reproduced as the review describes.
+- **Found while fixing:**
+  - a remote deadline (`timeout`'s 124 with no exit line) was taken for a lost connection, now a deadline result;
+  - a requeue logged "the resumed supervisor did not start" when the new supervisor had already admitted and exited;
+  - killing only the transport's PID would orphan its ssh, now the whole process group is killed, and only once the attempt can't start;
+  - test fixes: the fake's background jobs lost stdin, the lib's `until` didn't await async predicates, and `B5` and `B7` (waiting on the lock) now use `4070`, because `any` no longer waits.
+
 **Limits and compromises:**
 - **Peak memory and CPU time** of remote jobs are unavailable. Root fix: `siltwake-job` (fleet's) writes its scope's `memory.peak` and `cpu.stat` to a file the lane fetches.
 - **Undeclared files** a job writes inside the checkout stay there, as with direct `alickers-job.sh` calls today. Root fix: the transport cleans untracked files on commit change, as it now does for `.test-build*`. Fleet and the transport owner's call.
 - **Direct `alickers-job.sh` callers** are seen only as `busy`, and their waits are invisible until briefs move to `--machine` (the coordinator's cut-over step).
 - **MemoryHigh at 85%** stays in `siltwake-job` until fleet changes it (the coordinator is asking). Meanwhile throttling is detected and labelled.
 - **Upload of the in-sandbox wrapper:** a file under `/work/tmp/siltwake-lane/bin/<hash>/`, like the transport's own bundle upload. It is not in the checkout.
+- **Deliberate receipt forgery is out of scope (R2-F1, the coordinator's ruling).** The transport, the wrapper and the job run as the same sandbox user, so a payload that deliberately reads its parent's memory (`/proc/<pid>/mem`) could learn the nonce and write a valid record. This is the same class as SCHED-1's accepted "a job deliberately kills its own anchor". Root fix: run the transport's receipt writer under a separate sandbox uid, with the receipt directory owned by it and unreadable to the job uid. Cost: a fleet change to the sandbox (a second account, sudo or a setuid helper for `siltwake-job`) and a review of the owner's PC setup, which we may not touch ourselves.
+- **An attempt on an alickers that never comes back holds its ticket (R2-F3).** By rule, no fallback while a stop can't be confirmed, and `cancel` waits too. Escape: the ticket ends once alickers is reachable again; killing its holder only moves the wait to recovery. Root fix: a sandbox-side lease that `siltwake-job` enforces (a job whose holder hasn't renewed within N minutes is killed by the sandbox itself), so a lapsed lease is itself proof. Cost: a fleet change to `siltwake-job`.
+- **The no-wait check is a check plus a claim, not a non-blocking lock (R2-F4),** because `siltwake-job` (fleet's) always waits up to 3,600 s. In the rare race, the abandoned attempt's `siltwake-job` keeps waiting on the sandbox until the lock frees, then exits without running anything. Root fix: a `--no-wait` option in `siltwake-job`. Cost: a one-line fleet change.
 
 **Cut-over** (coordinator, after review): merge, `scripts/heavy/install.sh` (the transport is copied into the version), then update briefs to `--machine`. Nothing is needed on the sandbox.
 

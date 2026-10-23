@@ -5,15 +5,17 @@
 #
 #   lane-run.sh LANE_DIR TICKET ATTEMPT CWD_REL ARGV_BASE64 SOAK ARTIFACTS_BASE64
 #
-# Every attempt has its own directory, LANE_DIR/jobs/TICKET/aATTEMPT: its
-# receipt (the transport's and this wrapper's control lines), PID, cgroup,
-# heartbeat, yield file and staged outputs. A retry never sees an older
-# attempt's markers.
+# Every attempt has its own directory, LANE_DIR/jobs/TICKET/aATTEMPT: its PID,
+# cgroup, heartbeat, yield file and staged outputs. A retry never sees an older
+# attempt's markers. The receipt is elsewhere (the transport's --receipt DIR,
+# LANE_DIR/receipts/TICKET/aATTEMPT), never named to the job: stdin's first
+# line is "<nonce> DIR", and this wrapper's lines go there as "<nonce> lane ...".
+# The job itself gets /dev/null as stdin, and neither the nonce nor DIR.
 #
-# - It refuses to start (receipt "refused …", exit 75) if the ticket was
-#   cancelled or this attempt retired while it waited for the sandbox's lock.
-# - It records "PID START" and its scope's cgroup, for stops and for the
-#   remote holder's out-of-band watch (heartbeat, memory.high).
+# - It refuses to start (receipt "lane refused …", exit 75) if the ticket was
+#   cancelled or this attempt retired or superseded.
+# - It records "PID START" and its scope's cgroup first, before those checks, so
+#   a stop that finds no PID knows the job has not started.
 # - After the command, still inside the lock, it stages each declared output
 #   (ARTIFACTS_BASE64: NUL-separated paths) into the attempt's stage/
 #   directory: a path inside the checkout is moved there (so it never leaks into
@@ -22,18 +24,19 @@
 #   the shared checkout is read or removed once another job may own it.
 lane=$1 ticket=$2 attempt=$3 rel=$4 b64=$5 soak=$6 arts=$7
 t="$lane/jobs/$ticket" d="$lane/jobs/$ticket/a$attempt"
+IFS=' ' read -r n c || true
+exec </dev/null
 mkdir -p "$d"
-r="$d/receipt"
-rec() { printf '%s\n' "$*" >>"$r"; }
+rec() { [ -n "$c" ] && printf '%s lane %s\n' "$n" "$*" >>"$c/receipt"; }
 echo "$$ $(cut -d' ' -f22 /proc/$$/stat)" >"$d/pid"
+cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
+echo "$cg" >"$d/cgroup"
 if [ -e "$t/cancelled" ]; then rec refused cancelled; echo "siltwake-lane: cancelled before start; the command did not run"; exit 75; fi
 if [ -e "$d/retired" ]; then rec refused retired; echo "siltwake-lane: this attempt was retired; the command did not run"; exit 75; fi
 # Only the ticket's current attempt may run: a delayed start of an older one never does.
 if [ "$(cat "$t/current" 2>/dev/null)" != "$attempt" ]; then rec refused superseded; echo "siltwake-lane: a later attempt superseded this one; the command did not run"; exit 75; fi
 top=$(pwd)
 cd "$rel" || { rec refused "no directory $rel"; exit 70; }
-cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
-echo "$cg" >"$d/cgroup"
 mem_max=$(cat "$cg/memory.max" 2>/dev/null)
 export SILTWAKE_LANE_TICKET="$ticket" SILTWAKE_JOB_HEARTBEAT="$d/heartbeat"
 # The sandbox runs one job at a time, so this job has its GPU (gpu-lease.mjs
@@ -47,7 +50,7 @@ case "$mem_max" in ''|max) ;; *) export SILTWAKE_HEAVY_POOL_MIB=$(( mem_max / 10
 [ "$soak" = 1 ] && export SILTWAKE_JOB_YIELD="$d/yield"
 mapfile -d '' -t argv < <(printf %s "$b64" | base64 -d)
 mapfile -d '' -t outputs < <(printf %s "$arts" | base64 -d)
-"${argv[@]}" &
+"${argv[@]}" </dev/null &
 child=$!
 trap 'kill -TERM "$child" 2>/dev/null' TERM INT HUP
 rc=0
