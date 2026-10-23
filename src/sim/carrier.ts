@@ -124,19 +124,34 @@ export function launchPoint(h: VehicleState, v: VehicleState): Vec3 {
   if (v.hull === "spindle") p.y = -0.4;
   return p;
 }
-/** Full world-space keel route, including the independent capture approach. */
-export function carrierTransferPath(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture"): Vec3[] {
-  const h = carrierHull(s)!, berth = BERTH_LOCAL[slot]!;
+/** Full world-space keel route, including the independent capture approach.
+ * `h` defaults to the carrier as it is; a copy at another pose asks "what if". */
+export function carrierTransferPath(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture",
+  h: VehicleState = carrierHull(s)!): Vec3[] {
+  const berth = BERTH_LOCAL[slot]!;
   const path = [berth, { ...berth, y: CARRIER_LAYOUT.lockKeelY },
     { x: 0, y: CARRIER_LAYOUT.lockKeelY, z: berth.z }, CARRIER_LAYOUT.railTurn].map((p) => localToWorld(p, h));
   path.push(launchPoint(h, v));
   return type === "capture" ? [{ ...v.pose.position }, ...path.reverse()] : path;
 }
 
-function transferRefusal(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture", world: WorldQueries): string | null {
-  const dock = s.fleet.docking!, h = carrierHull(s)!, shape = transferEnvelope(v);
-  if (dock.launchBlocked) return "Transfer corridor obstructed. Vehicle identity, cargo, charge and damage are unchanged.";
-  const path = carrierTransferPath(s, v, slot, type);
+/** What blocks a transfer: the developer test obstruction, the carrier's own
+ * structure or berthed craft, the seabed and rock, or another craft in the water. */
+export type TransferBlock = "test" | "structure" | "terrain" | "craft";
+
+/** The craft's rail-aligned envelope as a world-axis box at the carrier's yaw. */
+function worldEnvelope(shape: Capsule, yaw: number): Capsule {
+  const cos = Math.abs(Math.cos(yaw)), sin = Math.abs(Math.sin(yaw));
+  const rx = shape.halfWidth ?? shape.radius, rz = shape.halfLength ?? shape.radius;
+  return { ...shape, halfWidth: rx * cos + rz * sin, halfLength: rx * sin + rz * cos };
+}
+/** The lock corridor runs forward and down out of the gate under the bow, to the
+ * launch point 17 m ahead of the keel datum and 3 m below it. */
+export function transferBlock(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture", world: WorldQueries,
+  h: VehicleState = carrierHull(s)!): TransferBlock | null {
+  const dock = s.fleet.docking!, shape = transferEnvelope(v);
+  if (dock.launchBlocked) return "test";
+  const path = carrierTransferPath(s, v, slot, type, h);
   // The in-carrier keel route stays exactly carrier-local: at an oblique heading a
   // world round trip lands the lock leg an ulp below the lock floor's top and grazes it.
   const berth = BERTH_LOCAL[slot]!, lockY = CARRIER_LAYOUT.lockKeelY;
@@ -150,22 +165,89 @@ function transferRefusal(s: GameState, v: VehicleState, slot: 0 | 1, type: "laun
     if (a.id !== v.id && a.berth?.carrierId === h.id)
       structure.push(envelopeSolid(`berth.${a.id}`, a.berth.pose.position, transferEnvelope(a)));
   const localWorld = createWorldQueries(structure, () => -200);
-  const cos = Math.abs(Math.cos(h.pose.yaw)), sin = Math.abs(Math.sin(h.pose.yaw));
-  const rx = shape.halfWidth ?? shape.radius, rz = shape.halfLength ?? shape.radius;
-  const worldShape = { ...shape, halfWidth: rx * cos + rz * sin, halfLength: rx * sin + rz * cos };
+  const worldShape = worldEnvelope(shape, h.pose.yaw);
   const obstacles = s.fleet.vehicles.filter((a) => a.id !== v.id && a.id !== h.id && !a.berth)
     .map((a) => envelopeSolid(`craft.${a.id}`, a.pose.position, HULL_COLLIDERS[a.hull]));
   // Other craft only, in world coordinates: no floor of its own (the composed world
   // is checked separately), so a transfer below 200 m is not refused by a stand-in.
   const otherWorld = createWorldQueries(obstacles, () => -1e4);
-  if (!sweptHullClearance(localWorld, local, shape) ||
-    !sweptHullClearance(world, path, worldShape) ||
-    !sweptHullClearance(otherWorld, path, worldShape) ||
-    (type === "capture" && (!sweptHullClearance(world, path.slice(0, 2), HULL_COLLIDERS[v.hull]) ||
-      !sweptHullClearance(localWorld, local.slice(0, 2), HULL_COLLIDERS[v.hull]) ||
-      !sweptHullClearance(otherWorld, path.slice(0, 2), HULL_COLLIDERS[v.hull]))))
-    return "Transfer corridor obstructed. Vehicle identity, cargo, charge and damage are unchanged.";
+  if (!sweptHullClearance(localWorld, local, shape)) return "structure";
+  if (!sweptHullClearance(world, path, worldShape)) return "terrain";
+  if (!sweptHullClearance(otherWorld, path, worldShape)) return "craft";
+  if (type === "capture") {
+    if (!sweptHullClearance(world, path.slice(0, 2), HULL_COLLIDERS[v.hull])) return "terrain";
+    if (!sweptHullClearance(localWorld, local.slice(0, 2), HULL_COLLIDERS[v.hull])) return "structure";
+    if (!sweptHullClearance(otherWorld, path.slice(0, 2), HULL_COLLIDERS[v.hull])) return "craft";
+  }
   return null;
+}
+
+/** The smallest change of the carrier's pose that clears a launch corridor
+ * blocked by terrain here: a turn (radians; positive is to starboard, 5° steps
+ * up to 180°), else a rise (metres, 2 m steps toward the surface), else null. */
+export type CorridorRemedy = { turn: number } | { rise: number };
+export function corridorRemedy(s: GameState, v: VehicleState, world: WorldQueries): CorridorRemedy | null {
+  const search = corridorRemedySearch(s, v, world);
+  for (;;) { const step = search.next(); if (step.done) return step.value; }
+}
+/** corridorRemedy one candidate sweep at a time (it yields after each), so a
+ * presentation can spread a long search over frames. Same order, same answer. */
+export function* corridorRemedySearch(s: GameState, v: VehicleState, world: WorldQueries): Generator<void, CorridorRemedy | null> {
+  const h = carrierHull(s), slot = v.berth?.slot;
+  if (!h || slot === undefined) return null;
+  // Only the world leg depends on the pose: the carrier's own structure and
+  // other craft are separate refusals with their own advice.
+  const at = (yaw: number, y: number): boolean => {
+    const copy = { ...h, pose: { ...h.pose, yaw: ((yaw % TAU) + TAU) % TAU, position: { ...h.pose.position, y } } };
+    return sweptHullClearance(world, carrierTransferPath(s, v, slot, "launch", copy), worldEnvelope(transferEnvelope(v), copy.pose.yaw));
+  };
+  const step = Math.PI / 36;
+  for (let n = 1; n <= 36; n++)
+    for (const sign of [1, -1]) {
+      if (at(h.pose.yaw + sign * n * step, h.pose.position.y)) return { turn: sign * n * step };
+      yield;
+    }
+  for (let rise = 2; h.pose.position.y + rise <= -0.9; rise += 2) {
+    if (at(h.pose.yaw, h.pose.position.y + rise)) return { rise };
+    yield;
+  }
+  return null;
+}
+const TAU = Math.PI * 2;
+
+/** Player-facing copy for a blocked transfer, with what to do about it. */
+export function transferAdvice(s: GameState, v: VehicleState, block: TransferBlock, type: "launch" | "capture", world: WorldQueries): string {
+  const craft = HULLS[v.hull].label;
+  if (block === "test") return "The lock corridor is obstructed (developer test). Nothing changed.";
+  if (block === "structure") return `The ${craft}'s route out of its berth is obstructed. Nothing changed.`;
+  if (block === "craft") return type === "launch"
+    ? "Another craft obstructs the lock corridor under the bow. Move it clear, then launch."
+    : `Another craft obstructs the lock mouth under the bow. Move it clear, then recover the ${craft}.`;
+  if (type === "capture") return `The lock corridor under the bow is obstructed. Move the Hearthline to open water, then recover the ${craft}.`;
+  return launchTerrainAdvice(v, corridorRemedy(s, v, world));
+}
+/** The advice for a launch the terrain obstructs, given the remedy search's answer. */
+export function launchTerrainAdvice(v: VehicleState, remedy: CorridorRemedy | null): string {
+  const craft = HULLS[v.hull].label;
+  if (!remedy) return `The lock corridor under the bow is obstructed and no nearby heading clears it. Take the Hearthline into open water, then launch the ${craft}.`;
+  if ("rise" in remedy) return `The seabed obstructs the lock corridor under the bow. Rise about ${remedy.rise} m, then launch the ${craft}.`;
+  const degrees = Math.round(Math.abs(remedy.turn) * 180 / Math.PI);
+  return `The lock corridor under the bow is obstructed. Turn about ${degrees}° to ${remedy.turn > 0 ? "starboard" : "port"} for clear water, then launch the ${craft}.`;
+}
+
+/** Why a free craft cannot be drawn in yet, and how to bring it. */
+export function captureApproach(h: VehicleState, v: VehicleState): string {
+  const craft = HULLS[v.hull].label;
+  if (v.berth) return `The ${craft} is already in a berth.`;
+  if (v.disabled) return `The ${craft} is disabled. Restore it before the lock can draw it in.`;
+  const gap = distance(v.pose.position, launchPoint(h, v)), speed = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z);
+  if (gap > 13) return `The ${craft} is ${Math.round(gap)} m from the lock mouth under the Hearthline's bow. Bring it within 13 m.`;
+  return `The ${craft} is still moving at ${speed.toFixed(1)} m/s. Let it settle at the lock mouth.`;
+}
+
+function transferRefusal(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture", world: WorldQueries): string | null {
+  const block = transferBlock(s, v, slot, type, world);
+  return block ? transferAdvice(s, v, block, type, world) : null;
 }
 export function localToWorld(local: Vec3, carrier: VehicleState): Vec3 {
   const { position: p, yaw } = carrier.pose;
@@ -362,6 +444,13 @@ export function fixtureGame(): GameState {
   s.player.pose.position = localToWorld(s.player.interiorPose.position, h);
   return s;
 }
+/** The interface is the hull or its exterior vestibule (13.8 m aft of the keel,
+ * entered within 5 m): measuring only from the keel refused 39% of that zone. */
+export function carrierInReach(s: GameState, h: VehicleState): boolean {
+  return s.player.interiorId === h.id || s.player.controlledVehicleId === h.id ||
+    distance(s.player.pose.position, h.pose.position) <= 15 ||
+    distance(s.player.pose.position, localToWorld(CARRIER_LAYOUT.exteriorVestibule, h)) <= 5;
+}
 export function carrierCommand(
   s: GameState,
   action: string,
@@ -371,27 +460,21 @@ export function carrierCommand(
   const dock = s.fleet.docking,
     h = carrierHull(s);
   if (!dock || !h) return "No carrier interface is present in this expedition.";
-  // The interface is the hull or its exterior vestibule (13.8 m aft of the keel,
-  // entered within 5 m): measuring only from the keel refused 39% of that zone.
-  if (
-    s.player.interiorId !== h.id &&
-    s.player.controlledVehicleId !== h.id &&
-    distance(s.player.pose.position, h.pose.position) > 15 &&
-    distance(s.player.pose.position, localToWorld(CARRIER_LAYOUT.exteriorVestibule, h)) > 5
-  )
-    return "Approach the carrier interface locally.";
+  if (!carrierInReach(s, h))
+    return "Board the Hearthline or come within reach of its vestibule to use its controls.";
   if (action === "leave-interior") {
     if (!dock.stationKeeping || !s.player.interiorPose)
-      return "Station keeping is required before using the vestibule.";
+      return "Hold station before leaving through the vestibule.";
     if (s.player.interiorPose.position.z < 7)
-      return "Walk aft to the yellow launch vestibule before leaving the dry interior.";
+      return "Walk aft to the yellow vestibule to leave the Hearthline.";
     const exit = localToWorld(CARRIER_LAYOUT.exteriorVestibule, h);
     if (!world.clearance(exit, { radius: 0.34, height: 0.95 }))
-      return "Exterior vestibule exit is blocked.";
+      return "The vestibule hatch is blocked outside. Move the Hearthline clear first.";
     s.player.interiorId = null;
     s.player.interiorPose = null;
     s.player.pose.position = exit;
     s.player.mode = "swimming";
+    s.feedback = "Out through the vestibule. The Hearthline holds station behind you.";
     return null;
   }
   if (action === "enter-interior") {
@@ -400,7 +483,8 @@ export function carrierCommand(
       distance(s.player.pose.position, localToWorld(CARRIER_LAYOUT.exteriorVestibule, h)) >
         5
     )
-      return "Approach the exterior vestibule while station keeping is engaged.";
+      return dock.stationKeeping ? "Swim to the yellow vestibule hatch on the starboard side to board."
+        : "The Hearthline is under way. Board it once it holds station.";
     const entry = carrierInteriorEntry(s, world, CARRIER_LAYOUT.vestibule);
     if (!entry) return "World edge or an obstruction blocks the dry interior. Turn or move inward before boarding.";
     s.player.controlledVehicleId = null;
@@ -411,6 +495,7 @@ export function carrierCommand(
     };
     s.player.pose.position = localToWorld(s.player.interiorPose.position, h);
     s.player.mode = "interior";
+    s.feedback = "Aboard the Hearthline. The bridge and helm are forward.";
     if (distance(entry, CARRIER_LAYOUT.vestibule) > 0.001)
       s.feedback = "World edge blocks the vestibule landing. Entered a clear dry passage; carrier position is unchanged.";
     return null;
@@ -419,13 +504,22 @@ export function carrierCommand(
     h.velocity = { x: 0, y: 0, z: 0 };
     dock.stationKeeping = true;
     dock.supportedDock = atCarrierSupport(h);
-    s.feedback =
-      "Station keeping engaged. Interior and launch controls available.";
+    s.feedback = "Holding station. Berths, lock and the vestibule are ready.";
     return null;
   }
   if (action === "helm") {
     if (dock.transaction)
-      return "Close the launch lock before taking the helm.";
+      return "The lock is cycling. Wait for it to close before taking the helm.";
+    if (s.player.controlledVehicleId === h.id) {
+      // Already at the helm: throttle or rudder releases station keeping.
+      dock.stationKeeping = false;
+      s.feedback = "Station keeping released. The Hearthline answers the helm.";
+      return null;
+    }
+    // UX-1: the helm takes the carrier's own heading, level. The view no longer
+    // swings the hull to wherever the player happened to be facing.
+    s.player.pose.yaw = h.pose.yaw;
+    s.player.pose.pitch = 0;
     s.player.mode = "piloting";
     s.player.controlledVehicleId = h.id;
     s.player.pose.position = { ...h.pose.position };
@@ -433,8 +527,7 @@ export function carrierCommand(
     s.player.interiorId = null;
     s.player.interiorPose = null;
     dock.stationKeeping = false;
-    s.feedback =
-      "Carrier helm. Station keeping is required before walking or launching.";
+    s.feedback = "At the Hearthline's helm. A/D turn, W/S ahead and astern; X holds station and leaves the helm.";
     return null;
   }
   if (action === "leave-helm") {
@@ -442,7 +535,7 @@ export function carrierCommand(
       !dock.stationKeeping ||
       Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) > 0.05
     )
-      return "Stop and engage station keeping before leaving the helm.";
+      return "Hold station before leaving the helm.";
     const entry = carrierInteriorEntry(s, world, CARRIER_LAYOUT.helm);
     if (!entry) return "World edge or an obstruction blocks the dry interior. Turn or move inward before leaving the helm.";
     s.player.controlledVehicleId = null;
@@ -454,6 +547,7 @@ export function carrierCommand(
     s.player.pose.position = localToWorld(s.player.interiorPose.position, h);
     s.player.mode = "interior";
     s.player.velocity = { x: 0, y: 0, z: 0 };
+    s.feedback = "You leave the helm. The Hearthline holds station.";
     if (distance(entry, CARRIER_LAYOUT.helm) > 0.001)
       s.feedback = "World edge blocks the bridge landing. Entered a clear dry passage; carrier position is unchanged.";
     return null;
@@ -462,42 +556,41 @@ export function carrierCommand(
     !dock.stationKeeping ||
     Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) > 0.05
   )
-    return "Station keeping is required. No vehicle state changed.";
+    return "Hold station first. Nothing changed.";
   if (action === "interrupt") {
     dock.transaction = null;
-    s.feedback =
-      "Launch/capture interrupted before detachment. Original vehicle and cargo retained.";
+    s.feedback = "Lock cycle stopped. The craft and its cargo stay where they were.";
     return null;
   }
   if (action === "block-exit" && s.scenario === "carrier-fixture") {
     dock.launchBlocked = !dock.launchBlocked;
     s.feedback = dock.launchBlocked
-      ? "Fixture obstruction in the launch volume."
-      : "Fixture launch volume cleared.";
+      ? "Test obstruction placed in the lock corridor (developer)."
+      : "Test obstruction cleared (developer).";
     return null;
   }
-  if (dock.transaction) return "A berth transaction is already in progress.";
+  if (dock.transaction) return "The lock is already cycling.";
   if (action === "reconfigure") {
     if (
       !dock.supportedDock || !atCarrierSupport(h) ||
       s.fleet.vehicles.some((v) => v.berth?.carrierId === h.id)
     )
-      return "Reconfiguration requires an empty carrier at a supported dock.";
+      return "Refit the berths only with both empty, moored and holding station at a dock with repair services.";
     const configuration = dock.configuration === "compact" ? "medium" : "compact";
     if (s.player.interiorPose && !createWorldQueries([
       ...carrierStructure(configuration), ...carrierRooms(configuration),
     ], () => -200).clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 }))
-      return "Move to the clear bridge passage before reconfiguring the sealed compartments. Nothing changed.";
+      return "Step into the passage clear of the berth rooms before refitting them. Nothing changed.";
     dock.configuration = configuration;
-    s.feedback = `Empty supported berth reconfigured to ${dock.configuration}.`;
+    s.feedback = dock.configuration === "medium" ? "Berths refitted: one service berth for a medium craft." : "Berths refitted: two compact berths.";
     return null;
   }
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId);
-  if (!v || v.id === h.id) return "Select a craft at this berth.";
+  if (!v || v.id === h.id) return "Choose a craft for the lock.";
   if (action === "launch") {
-    if (v.berth?.carrierId !== h.id) return "This craft is already detached.";
+    if (v.berth?.carrierId !== h.id) return `The ${HULLS[v.hull].label} is already out of its berth.`;
     if (v.hull === "spindle" && h.pose.position.y < -1)
-      return "Spindle is dry and isolated. Launch it only at the surface.";
+      return "The Spindle is a surface craft. Surface the Hearthline to launch it.";
     const no = launchRefusal(s, v, world);
     if (no) return no;
     dock.transaction = {
@@ -510,16 +603,16 @@ export function carrierCommand(
     };
   } else if (action === "capture") {
     if (s.player.controlledVehicleId === v.id)
-      return "Exit the craft and use the stationary carrier interface before capture.";
+      return "Leave the craft by the lock mouth, then recover it from aboard the Hearthline.";
     if (
       v.berth ||
       v.disabled ||
       distance(v.pose.position, launchPoint(h, v)) > 13 ||
       Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) > 1
     )
-      return "Approach the launch corridor slowly with an independent craft.";
+      return captureApproach(h, v);
     if (v.hull === "spindle" && h.pose.position.y < -1)
-      return "Spindle capture is surface-only.";
+      return "The Spindle is a surface craft. Surface the Hearthline to recover it.";
     const slot = ([0, 1] as const).find(
       (n) =>
         !s.fleet.vehicles.some(
@@ -531,7 +624,9 @@ export function carrierCommand(
       (dock.configuration === "medium" && slot !== 0) ||
       HULLS[v.hull].berth !== dock.configuration
     )
-      return "Craft size does not fit an empty berth in this configuration.";
+      return HULLS[v.hull].berth !== dock.configuration
+        ? `The ${HULLS[v.hull].label} needs ${HULLS[v.hull].berth === "medium" ? "the service berth; refit the berths at a repair dock" : "a compact berth; refit the berths at a repair dock"}.`
+        : `No free berth for the ${HULLS[v.hull].label}.`;
     const no = transferRefusal(s, v, slot, "capture", world);
     if (no) return no;
     dock.transaction = {
@@ -543,8 +638,8 @@ export function carrierCommand(
       ticks: 0,
     };
   } else return "Unknown berth action.";
-  s.feedback =
-    "Lock transaction prepared. Saving or interruption preserves one craft identity.";
+  s.feedback = action === "launch" ? `Lock cycling: the ${HULLS[v.hull].label} moves down to the gate.`
+    : `Lock cycling: drawing the ${HULLS[v.hull].label} in under the bow.`;
   return null;
 }
 export function launchRefusal(
@@ -552,8 +647,8 @@ export function launchRefusal(
   v: VehicleState,
   world: WorldQueries,
 ): string | null {
-  if (!v.berth || v.berth.carrierId !== carrierHull(s)?.id) return "This craft is already detached.";
-  if (v.hull === "spindle" && carrierHull(s)!.pose.position.y < -1) return "Spindle is dry and isolated. Launch it only at the surface.";
+  if (!v.berth || v.berth.carrierId !== carrierHull(s)?.id) return `The ${HULLS[v.hull].label} is already out of its berth.`;
+  if (v.hull === "spindle" && carrierHull(s)!.pose.position.y < -1) return "The Spindle is a surface craft. Surface the Hearthline to launch it.";
   return transferRefusal(s, v, v.berth.slot, "launch", world);
 }
 export function updateBerth(s: GameState, world: WorldQueries): void {
@@ -573,7 +668,7 @@ export function updateBerth(s: GameState, world: WorldQueries): void {
   if (!t) return;
   if (!dock.stationKeeping || Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) > 0.05) {
     dock.transaction = null;
-    s.feedback = "Transaction rolled back: station keeping interrupted.";
+    s.feedback = "Lock cycle stopped: the Hearthline stopped holding station. Nothing moved.";
     return;
   }
   t.ticks++;
@@ -610,7 +705,7 @@ export function updateBerth(s: GameState, world: WorldQueries): void {
       s.fleet.vehicles.some((a) => a.berth?.carrierId === h.id && a.berth.slot === t.slot) ||
       HULLS[v.hull].berth !== dock.configuration) {
       dock.transaction = null;
-      s.feedback = "Capture clearance changed before lock closure. World craft and cargo retained.";
+      s.feedback = "The craft drifted out of the lock mouth before the clamps closed. Recover it again.";
       return;
     }
     const no = transferRefusal(s, v, t.slot, "capture", world);
@@ -636,5 +731,6 @@ export function updateBerth(s: GameState, world: WorldQueries): void {
   dock.completed.push(t.id);
   if (dock.completed.length > 64) dock.completed.shift();
   dock.transaction = null;
-  s.feedback = `${v.hull} ${t.type === "launch" ? "detached exactly once" : "captured in an isolated dry berth"}. Other berths remain sealed.`;
+  s.feedback = t.type === "launch" ? `${HULLS[v.hull].label} launched under the bow. Board it from the water.`
+    : `${HULLS[v.hull].label} recovered. Clamps locked; the berth is dry.`;
 }

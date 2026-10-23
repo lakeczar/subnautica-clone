@@ -56,7 +56,7 @@ test("paused carrier helm, station keeping and leave-helm commands each save imm
   s = snapshot(command(s, { type: "carrier", action: "helm" }));
   assert.deepEqual(s.player.pose.position, s.fleet.vehicles[0]!.pose.position);
   const refused = executeCommand(s, { type: "carrier", action: "leave-helm" }, world);
-  assert.ok(refused.events.some((e) => e.type === "notice" && e.error && /station keeping/.test(e.message)));
+  assert.ok(refused.events.some((e) => e.type === "notice" && e.error && /Hold station/.test(e.message)));
   snapshot(refused.state);
   s = snapshot(command(s, { type: "carrier", action: "station-keep" }));
   s = snapshot(command(s, { type: "carrier", action: "leave-helm" }));

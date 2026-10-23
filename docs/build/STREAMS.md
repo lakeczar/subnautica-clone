@@ -451,3 +451,12 @@ Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the f
 - 3090 and 4070 packs side by side.
 
 SCHED-2b's remote lane carries the packs back from alickers.
+
+### 2026-10-23 ~05:00Z — UX-1 merged; COL-1 A and SCHED-2a in fixes
+- **UX-1 accepted:** Sol R1 requested changes (helm rudder during Hold; steering retained across a same-tick import); R2 accepted (`review/ux-1-r2` `5b88509`).
+  - **Merged:** 1,305 fast tests pass, build OK, all 5 economy scripts pass.
+  - **P3s carried:** stale sliced advice; the synchronous console search cost (worst case 36.6 ms).
+  - **Evidence:** 3090 exclusive and 4070 (indicative) bridge runs at 60 fps, max 16.8 ms.
+- **COL-1 A** (`245a006`): R1 requested changes, with five edge-case defects (escape through another wall, parity at shared edges, heightfield entry from holes, missed bounded recovery, lost vertical bounds). The builder is fixing them.
+- **SCHED-2a** (`8f702de`): R1 not accepted (5 P1, 3 P2). The builder is fixing them, and R2 is dispatched by the coordinator.
+- **Builders:** UX-1's slot is free and reserved for REC-1 once CW-1 merges.
