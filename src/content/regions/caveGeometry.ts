@@ -1117,15 +1117,23 @@ function snapToFloor(mesh: MeshRecipe, target: Float64Array, f: Rect, spans: rea
   const cutEdges = (sd: (typeof sides)[number]): [number, number][] => cuts[sides.indexOf(sd)]!;
   const cutAt: [number, number][][] = Array.from({ length: nv }, () => []);
   for (const cut of cuts) for (const e of cut) { cutAt[e[0]]!.push(e); cutAt[e[1]]!.push(e); }
-  /** Whether v's cut edges cross or touch another edge of the cut in their
-   * plane: the cut must stay a simple curve for its seam to be built. */
+  /** Whether moving v would leave one of its cut edges that still needs a
+   * seam face (its other end off the floor) crossing or touching another
+   * such edge in their plane: those edges bound the seam, so they must stay
+   * a simple curve. (Edges with both ends on the floor are the seam already;
+   * a contributing edge crossing one crosses the floor, which the seam
+   * splits exactly.) */
+  const settled = (v: number): boolean => moved[v] === 1;
   const tangles = (v: number): boolean => {
     for (let s = 0; s < sides.length; s++) {
       const sd = sides[s]!, h = sd.axis === 0 ? 2 : 0;
       if (P[v * 3 + sd.axis] !== sd.at) continue;
-      for (const [a, b] of cutAt[v]!) for (const [c, d] of cuts[s]!) {
-        if (c === a && d === b) continue;
-        if (segmentsTangle(P, h, a, b, c, d)) return true;
+      for (const [a, b] of cutAt[v]!) {
+        if (settled(a === v ? b : a)) continue;
+        for (const [c, d] of cuts[s]!) {
+          if ((c === a && d === b) || (settled(c) && settled(d))) continue;
+          if (segmentsTangle(P, h, a, b, c, d)) return true;
+        }
       }
     }
     return false;
