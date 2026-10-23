@@ -313,3 +313,41 @@ test("R3-2: sim and content's runtime closure fails closed at anything the guard
     assert.equal(failures.length, expect.length, failures.join("\n"));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("R4-1: inside sim and content only analysed TypeScript is skipped; JavaScript, missing and unsupported targets there fail too", () => {
+  const dir = scratchRepo({
+    "src/sim/plain.js": `document.title;\n`,
+    "src/sim/lazy.mjs": `export const w = () => window.innerWidth;\n`,
+    "src/content/common.cjs": `module.exports = { d: () => document };\n`,
+    "src/content/notes.txt": "not code\n",
+    "src/sim/staticJs.ts": `import ${JSON.stringify("./plain.js")};\nexport const a = 1;\n`,
+    "src/sim/lazyMjs.ts": `export const later = () => ${lazy("./lazy.mjs")};\n`,
+    "src/content/requireCjs.ts": `export const later = () => require("./common.cjs");\n`,
+    "src/content/staticMjs.ts": `export { w } ${from("../sim/lazy.mjs")};\n`,
+    "src/sim/missing.ts": `export { gone } ${from("./gone.js")};\n`,
+    "src/content/missingLazy.ts": `export const later = () => ${lazy("./absent.mjs")};\n`,
+    "src/content/unsupported.ts": `import ${JSON.stringify("./notes.txt")};\nexport const b = 1;\n`,
+    // Through another layer: the chain is named.
+    "src/world/relay.ts": `export { w } ${from("../sim/lazy.mjs")};\n`,
+    "src/sim/viaRelay.ts": `export { w } ${from("../world/relay.js")};\n`,
+    // Still fine: analysed TypeScript in sim and content, and JSON data there.
+    "src/content/table.json": "[]\n",
+    "src/sim/okTs.ts": `import { a } ${from("./staticJs.js")};\nimport t ${from("../content/table.json")} with { type: "json" };\nexport const c = a + t.length;\n`,
+  });
+  try {
+    const { failures } = G.analyse(G.repositoryFiles(dir), none);
+    const expect: [RegExp, string][] = [
+      [/layering: src\/sim\/staticJs\.ts imports src\/sim\/plain\.js \(JavaScript/, "a static .js in sim"],
+      [/layering: src\/sim\/lazyMjs\.ts lazily imports src\/sim\/lazy\.mjs \(JavaScript/, "a lazy .mjs in sim"],
+      [/layering: src\/content\/requireCjs\.ts lazily imports src\/content\/common\.cjs \(JavaScript/, "a required .cjs in content"],
+      [/layering: src\/content\/staticMjs\.ts imports src\/sim\/lazy\.mjs \(JavaScript/, "a static .mjs across sim and content"],
+      [/layering: src\/sim\/missing\.ts imports src\/sim\/gone\.js \(a module the guard can't find or read/, "a missing static target in sim"],
+      [/layering: src\/content\/missingLazy\.ts lazily imports src\/content\/absent\.mjs \(a module the guard can't find or read/, "a missing lazy target in content"],
+      [/layering: src\/content\/unsupported\.ts imports src\/content\/notes\.txt \(a module the guard can't find or read/, "an unsupported file in content"],
+      [/layering: src\/sim\/viaRelay\.ts reaches src\/sim\/lazy\.mjs through src\/world\/relay\.ts \(JavaScript/, "a lower .mjs reached through another layer"],
+    ];
+    for (const [re, what] of expect) assert.ok(failures.some((f) => re.test(f)), `${what}:\n${failures.join("\n")}`);
+    assert.ok(!failures.some((f) => /okTs/.test(f)), failures.join("\n"));
+    assert.equal(failures.length, expect.length, failures.join("\n"));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

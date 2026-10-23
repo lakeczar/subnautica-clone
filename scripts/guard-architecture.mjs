@@ -210,7 +210,7 @@ export function analyse(files, allow = ALLOW) {
   };
   // The followed modules: TypeScript outside sim and content reachable from them.
   const followed = new Set(), queue = [];
-  const enqueue = (t) => { if (!LOWER.test(t) && !followed.has(t) && verdict(t) === null) { followed.add(t); queue.push(t); } };
+  const enqueue = (t) => { if (!(LOWER.test(t) && info.has(t)) && !followed.has(t) && verdict(t) === null) { followed.add(t); queue.push(t); } };
   for (const [f, i] of info) if (LOWER.test(f)) for (const [t] of edges(i)) enqueue(t);
   for (let k = 0; k < queue.length; k++) for (const [t] of edges(nodeOf(queue[k]))) enqueue(t);
   // Each followed module that reaches a leaf the guard can't vouch for, with its next hop toward
@@ -229,7 +229,9 @@ export function analyse(files, allow = ALLOW) {
   for (const [f, i] of info) {
     if (!LOWER.test(f)) continue;
     for (const [target, how] of edges(i)) {
-      if (LOWER.test(target)) continue; // checked as its own entry
+      // An analysed TypeScript source in sim or content is checked as its own entry; anything else
+      // there (JavaScript, a missing or unsupported file) gets the same fail-closed verdict as elsewhere.
+      if (LOWER.test(target) && info.has(target)) continue;
       const v = verdict(target);
       if (v !== null && v !== "ok") failures.push(`layering: ${f} ${how} ${shown(target)} (${v}; sim and content stay below render, UI, audio and Babylon, on code the guard can check)`);
       else if (v === null && hop.has(target)) {
