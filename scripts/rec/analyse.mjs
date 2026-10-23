@@ -43,7 +43,8 @@ export function analyse(r, t = THRESHOLDS) {
   const { header } = r;
   // A driver run is judged from the moment travel starts (run.pageStart); the
   // load before it is summarised apart. An owner export is judged whole.
-  const t0 = header.run?.pageStart ?? r.frames[0]?.t ?? r.samples[0]?.t ?? 0;
+  // An owner export has no driver mark: it is judged from entering the expedition (the load screen before it is not play).
+  const t0 = header.run?.pageStart ?? r.events.find((e) => e.kind === "load")?.t ?? r.frames[0]?.t ?? r.samples[0]?.t ?? 0;
   const inWindow = (x) => x.t >= t0;
   const frames = r.frames.filter(inWindow), samples = r.samples.filter(inWindow), events = r.events.filter(inWindow), system = r.system.filter(inWindow);
   const early = r.frames.filter((f) => f.t < t0 && f.gap > 0);
@@ -128,6 +129,8 @@ export function analyse(r, t = THRESHOLDS) {
   const streamingLong = longFrames.filter((e) => e.detail?.cause === "streaming" && e.detail.gap > t.longFrameMs);
   const judged = header.run?.judged === true;
   if (!played.length) check("frames recorded", "missing", "no frame rows");
+  // Frame times are evidence only from an isolated run; elsewhere they are recorded and flagged, never passed or failed.
+  else if (!judged) check("no streaming frame over 33 ms", "unproven", `${streamingLong.length} of ${longFrames.length} long frames were streaming's (recorded; a shared run does not judge frame times)`);
   else check("no streaming frame over 33 ms", streamingLong.length ? "fail" : "pass", `${streamingLong.length} of ${longFrames.length} long frames were streaming's`);
   check("no cave hold", holdFrames ? "fail" : frames.some((f) => f.hold > 0) ? "pass" : "missing", holdFrames ? `${holdFrames} hold frames` : frames.some((f) => f.hold > 0) ? "admission evaluated every play frame" : "admission never evaluated (no play?)");
   const unslicedN = attention.filter((a) => a.kind === "unsliced").length;

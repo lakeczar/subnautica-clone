@@ -477,13 +477,17 @@ export class SiltwakeApp {
   /** REC-1: this frame's row, the periodic sample, then the snapshot and video
    * frame (after the render, while the drawing buffer is this frame's). */
   private recordFrame(now: number, work: number, sim: number, steps: number, save: number, hold: string | null): void {
-    const fl = this.flight!, recStart = performance.now();
+    const fl = this.flight!;
+    let recStart = performance.now();
     this.flightFrames++;
     if (now >= this.flightSampleAt) {
       this.flightSampleAt = now + FLIGHT_SAMPLE_MS;
       const r = this.hookRead();
       fl.sample(gameSample(now, this.state, this.renderer?.stats() ?? null, r?.camera ?? null, hold, this.active, this.flightFrames));
       this.flightFrames = 0;
+      const sampled = performance.now();
+      fl.recorder.charge(sampled - recStart, "sample");
+      recStart = sampled;
     }
     let gap = this.flightLast ? now - this.flightLast : 0;
     if (this.flightHidden) {
@@ -502,7 +506,7 @@ export class SiltwakeApp {
       ...(p ? { chunks: p.chunks, caves: p.caves, regions: p.regions, lights: p.lights, actors: p.actors, render: p.render, dom: p.dom ?? 0, gpuTag: p.gpuTag } : {}),
       ...(heapDrop !== undefined ? { heapDrop } : {}) }, performance.now() - recStart);
     // Pictures only from a frame that drew: otherwise the canvas holds nothing current.
-    if (this.drewFrame) fl.recorder.charge(fl.afterRender(now));
+    if (this.drewFrame) fl.afterRender(now);
     this.drewFrame = false;
   }
   private drewFrame = false;

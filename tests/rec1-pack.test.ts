@@ -12,7 +12,7 @@ const A = await import(pathToFileURL(resolve("scripts/rec/analyse.mjs")).href);
 const P = await import(pathToFileURL(resolve("scripts/soak/measure.mjs")).href);
 
 /** A 60 s run: travel, a hold, a streaming hitch, an error, a milestone, gathering. */
-function synthetic(dir: string, opts: { hold?: boolean; error?: boolean } = {}): void {
+function synthetic(dir: string, opts: { hold?: boolean; error?: boolean; judged?: boolean } = {}): void {
   const r = new FlightRecorder({ snapshots: false });
   const start = 10_000;
   r.event("load", "expedition entered", { t: start - 5000 });
@@ -29,7 +29,7 @@ function synthetic(dir: string, opts: { hold?: boolean; error?: boolean } = {}):
   const rec = join(dir, "recording");
   mkdirSync(rec, { recursive: true });
   const lines = (xs: unknown[]) => xs.map((x) => JSON.stringify(x)).join("\n") + "\n";
-  writeFileSync(join(rec, "header.json"), JSON.stringify({ frameColumns: FRAME_COLUMNS, run: { pageStart: start }, machine: { label: "test" }, video: null, drained: { lost: { frames: 0 } } }));
+  writeFileSync(join(rec, "header.json"), JSON.stringify({ frameColumns: FRAME_COLUMNS, run: { pageStart: start, judged: opts.judged ?? true }, machine: { label: "test" }, video: null, drained: { lost: { frames: 0 } } }));
   writeFileSync(join(rec, "frames.ndjson"), lines(r.frames.since(0).rows));
   writeFileSync(join(rec, "samples.ndjson"), lines(r.samples.since(0).items));
   writeFileSync(join(rec, "events.ndjson"), lines(r.events.since(0).items));
@@ -45,7 +45,7 @@ test("a clean run passes what it can measure and names what it cannot", () => {
     assert.equal(a.numbers.over33, 1);
     assert.equal(a.verdict.status, "fail");
     assert.deepEqual(a.verdict.failed, ["no streaming frame over 33 ms"]);
-    assert.ok(a.verdict.unproven.includes("frame times judged"), "a shared run never judges frame times");
+    assert.ok(!a.verdict.unproven.includes("frame times judged"), "an exclusive run judges frame times");
     assert.equal(a.checks.find((c: { name: string }) => c.name === "video").status, "absent", "no video (an exclusive run) is named, never passed");
     const s = A.summaryJson(a, A.loadRecording(dir).header);
     assert.ok(JSON.stringify(s).length < 1024, "Tier 0 stays under 1 KB");
@@ -97,4 +97,15 @@ test("the soak provider's records pass the soak's measurement contract", async (
   assert.deepEqual(out.frames.streaming, [36]);
   assert.equal(out.frames.holdFrames, 1);
   assert.equal(out.frames.holdsCovered, true);
+});
+
+test("a shared run records a streaming hitch for attention but neither passes nor fails frame times", () => {
+  const dir = mkdtempSync(join(tmpdir(), "rec1-"));
+  try {
+    synthetic(dir, { judged: false });
+    const a = A.analyse(A.loadRecording(dir));
+    assert.equal(a.checks.find((c: { name: string }) => c.name === "no streaming frame over 33 ms").status, "unproven");
+    assert.ok(a.attention.some((e: { kind: string }) => e.kind === "long-frame"));
+    assert.equal(a.verdict.status, "partial");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

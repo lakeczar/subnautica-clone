@@ -13,8 +13,9 @@
 //   exclusive performance run keeps snapshots only).
 // --rec off: the recorder is off (?rec=off) and nothing is captured, the
 //   baseline for the recorder's overhead.
-// --rec game-video: driver mode plus the in-game MediaRecorder video, which
-//   is what an owner playtest runs (its overhead, measured the same way).
+// --rec game-video: driver mode plus the in-game MediaRecorder video.
+// --rec playtest: exactly an owner's playtest (?rec=playtest: in-game video,
+//   spooled to private storage); nothing is drained, its overhead is read at the end.
 // Every mode installs the same small probe before the game loads: each rAF
 // gap and the game's frame-callback time, so the modes compare like for like.
 //
@@ -74,14 +75,15 @@ try {
   b.page.on("pageerror", (e) => result.errors.push(e.message.slice(0, 300)));
   b.page.on("response", (r) => { if (r.status() >= 400) result.errors.push(`HTTP ${r.status()} ${r.url().slice(0, 200)}`); });
   await b.page.addInitScript(probeScript);
-  const query = mode === "off" ? "?rec=off" : mode === "game-video" ? "?rec=driver&recvideo=1" : "?rec=driver";
+  const query = mode === "off" ? "?rec=off" : mode === "game-video" ? "?rec=driver&recvideo=1" : mode === "playtest" ? "?rec=playtest" : "?rec=driver";
   const open = await openGame(b.page, `http://127.0.0.1:${server.port}/${query}`, save, { gpu: arg("gpu") });
   Object.assign(result, open);
   log("renderer", open.renderer, "playable in", open.playableMs, "ms");
   await b.cdp.send("Performance.enable");
   // Measured from here: the travel itself.
   await b.page.evaluate(() => { window.__recProbe.gaps.length = 0; window.__recProbe.work.length = 0; });
-  const rec = mode === "off" ? null : await startRecording({ page: b.page, cdp: b.cdp, pid: b.pid, out, video: videoOn, gpuBaseline: gpu0,
+  // Off, and an owner's playtest (it records itself, unread by any driver): nothing drains it.
+  const rec = mode === "off" || mode === "playtest" ? null : await startRecording({ page: b.page, cdp: b.cdp, pid: b.pid, out, video: videoOn, gpuBaseline: gpu0,
     meta: { machine, commit, chrome: b.version, mode, segment, judged, ticket: process.env.SILTWAKE_JOB_TICKET ?? null, save: path.basename(save), plan: arg("plan") ? path.basename(arg("plan")) : null, isolated: !flag("no-isolate") } });
   await rec?.mark(`travel starts (segment ${segment}, ${points.length} points)`);
   const p = pilot(b.page), deadline = Date.now() + seconds * 1000;
@@ -103,6 +105,7 @@ try {
     over33: probe.gaps.filter((g) => g > 33.4).length };
   writeFileSync(path.join(out, "probe.json"), JSON.stringify({ gaps: probe.gaps.map((g) => +g.toFixed(2)), work: probe.work.map((w) => +w.toFixed(3)) }));
   if (rec) result.header = await rec.stop({ reached: result.reached, skipped: result.skipped, probe: result.probe, pageErrors: result.errors.length });
+  else if (mode === "playtest") result.recorderOverhead = await b.page.evaluate(() => window.__siltwake.recorder?.overhead() ?? null);
   const last = await read(b.page);
   result.end = { tick: last?.tick, feet: last?.feet, region: last?.region };
   log("probe", JSON.stringify(result.probe));
@@ -115,7 +118,7 @@ try {
   await server.close();
 }
 writeFileSync(path.join(out, "run.json"), JSON.stringify(result, null, 1));
-if (mode !== "off" && !flag("no-pack") && !exit) {
+if (!["off", "playtest"].includes(mode) && !flag("no-pack") && !exit) {
   const { buildPack } = await import("./pack.mjs");
   try { const s = await buildPack(out, { pw: arg("pw"), chrome: arg("chrome") }); log("pack", s.verdict.status, path.join(out, "README.md")); }
   catch (e) { log("pack failed", e.message); exit = 1; }

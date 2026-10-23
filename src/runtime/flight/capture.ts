@@ -81,10 +81,11 @@ export class FlightCapture {
 
   /** After the frame's render, in the same task (the drawing buffer is still
    * the frame's): the snapshot the recorder asked for, the video frame if due,
-   * and the spool. Returns the ms spent, which the caller charges to the recorder. */
-  afterRender(now: number): number {
-    if (this.disposed) return 0;
-    const start = performance.now();
+   * and the spool. Each part's time is charged to the recorder by name. */
+  afterRender(now: number): void {
+    if (this.disposed) return;
+    const r = this.recorder;
+    let start = performance.now();
     const frame = this.frameWaiters.splice(0);
     if (frame.length) {
       // The whole canvas, full size, lossless (fixed-view captures).
@@ -97,6 +98,9 @@ export class FlightCapture {
     }
     const want = this.recorder.wantSnapshot(now);
     if (want) this.snapshot(want, now);
+    let at = performance.now();
+    r.charge(at - start, "snapshot");
+    start = at;
     const v = this.video;
     // A frame still being copied is not overtaken: under load the video drops frames, never the game.
     if (v && now >= v.next && v.pending < 2) {
@@ -105,20 +109,29 @@ export class FlightCapture {
       v.pending++;
       const captured = now;
       void createImageBitmap(this.canvas, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: "low" }).then((bitmap) => {
-        v.pending--;
-        if (this.disposed) { bitmap.close(); return; }
-        if (v.canvas.width !== bitmap.width || v.canvas.height !== bitmap.height) { v.canvas.width = bitmap.width; v.canvas.height = bitmap.height; }
-        v.context.transferFromImageBitmap(bitmap);
-        v.track.requestFrame();
-        if (v.frames++ === 0) {
-          // The video's time 0 on the page clock: the pack lines video and frames up by it.
-          this.header.video = { ...(this.header.video as object), start: Math.round(captured) };
-          this.putHeader();
-        }
+        // A later task: its time is the recorder's too.
+        const t0 = performance.now();
+        try { this.videoFrame(v, bitmap, captured); } finally { r.charge(performance.now() - t0, "video"); }
       }, () => { v.pending--; });
     }
+    at = performance.now();
+    r.charge(at - start, "video");
+    start = at;
     if (this.spool && now - this.spool.last >= SPOOL_EVERY_MS) this.flush(now);
-    return performance.now() - start;
+    r.charge(performance.now() - start, "spool");
+  }
+
+  private videoFrame(v: NonNullable<FlightCapture["video"]>, bitmap: ImageBitmap, captured: number): void {
+    v.pending--;
+    if (this.disposed) { bitmap.close(); return; }
+    if (v.canvas.width !== bitmap.width || v.canvas.height !== bitmap.height) { v.canvas.width = bitmap.width; v.canvas.height = bitmap.height; }
+    v.context.transferFromImageBitmap(bitmap);
+    v.track.requestFrame();
+    if (v.frames++ === 0) {
+      // The video's time 0 on the page clock: the pack lines video and frames up by it.
+      this.header.video = { ...(this.header.video as object), start: Math.round(captured) };
+      this.putHeader();
+    }
   }
 
   /** The game canvas scaled to `width`, keeping its aspect. */

@@ -20,10 +20,12 @@ const args = process.argv.slice(2), arg = (n, d) => { const i = args.indexOf(`--
 const out = arg("out"), rounds = Number(arg("rounds", 2));
 if (!out || !arg("dist") || !arg("save")) { console.error("usage: overhead.mjs --dist DIST --save SAVE --plan PLAN --segment N --seconds S --rounds R --out DIR"); process.exit(2); }
 mkdirSync(out, { recursive: true });
-const MODES = { off: ["--rec", "off"], perf: ["--rec", "on", "--video", "off"], screencast: ["--rec", "on", "--video", "on"], "game-video": ["--rec", "game-video"] };
-const order = Object.keys(MODES);
+const MODES = { off: ["--rec", "off"], perf: ["--rec", "on", "--video", "off"], screencast: ["--rec", "on", "--video", "on"], "game-video": ["--rec", "game-video"], playtest: ["--rec", "playtest"] };
+// --modes off,playtest: a subset; --no-isolate: serve as a static host does (an owner's playtest page is not cross-origin isolated).
+const order = arg("modes") ? arg("modes").split(",") : ["off", "perf", "screencast", "game-video"];
 const pass = [];
 for (const name of ["plan", "segment", "seconds", "chrome", "pw", "gpu", "machine", "size"]) if (arg(name) !== undefined) pass.push(`--${name}`, arg(name));
+if (args.includes("--no-isolate")) pass.push("--no-isolate");
 const runner = path.join(path.dirname(fileURLToPath(import.meta.url)), "run.mjs");
 const runs = [];
 for (let r = 0; r < rounds; r++) {
@@ -32,7 +34,7 @@ for (let r = 0; r < rounds; r++) {
     const t = Date.now();
     const p = spawnSync(process.execPath, [runner, "--dist", arg("dist"), "--save", arg("save"), "--out", dir, ...MODES[mode], ...pass, "--no-pack"], { stdio: "inherit" });
     const run = JSON.parse(readFileSync(path.join(dir, "run.json"), "utf8"));
-    runs.push({ round: r + 1, mode, dir, exit: p.status, seconds: Math.round((Date.now() - t) / 1000), probe: run.probe, recorder: run.header?.recorderOverhead ?? null, video: run.header?.video ?? null, errors: run.errors.length });
+    runs.push({ round: r + 1, mode, dir, exit: p.status, seconds: Math.round((Date.now() - t) / 1000), probe: run.probe, recorder: run.header?.recorderOverhead ?? run.recorderOverhead ?? null, video: run.header?.video ?? null, errors: run.errors.length });
     console.log(`[overhead] round ${r + 1} ${mode}: ${JSON.stringify(run.probe)}`);
   }
 }
@@ -42,13 +44,14 @@ for (const x of runs) {
   const p = JSON.parse(readFileSync(path.join(x.dir, "probe.json"), "utf8"));
   const m = (pooled[x.mode] ??= { gaps: [], work: [], recMean: [] });
   m.gaps.push(...p.gaps); m.work.push(...p.work);
-  if (x.recorder) m.recMean.push(x.recorder.meanMs);
+  if (x.recorder) { m.recMean.push(x.recorder.meanMs); for (const [k, v] of Object.entries(x.recorder.parts ?? {})) (m.parts ??= {})[k] = [...(m.parts?.[k] ?? []), v]; }
 }
 const q = (xs, f) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.floor(s.length * f))] : null; };
 const stats = Object.fromEntries(Object.entries(pooled).map(([k, m]) => [k, {
   frames: m.gaps.length, gapP50: +q(m.gaps, 0.5).toFixed(2), gapP99: +q(m.gaps, 0.99).toFixed(2), over33: m.gaps.filter((g) => g > 33.4).length,
   workP50: +q(m.work, 0.5).toFixed(3), workP99: +q(m.work, 0.99).toFixed(3), workMean: +(m.work.reduce((a, b) => a + b, 0) / m.work.length).toFixed(3),
   recorderSelfMs: m.recMean.length ? +(m.recMean.reduce((a, b) => a + b, 0) / m.recMean.length).toFixed(4) : null,
+  recorderParts: m.parts ? Object.fromEntries(Object.entries(m.parts).map(([p, xs]) => [p, +(xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(4)])) : null,
 }]));
 const base = stats.off, d = (a, b) => (a == null || b == null ? null : +(a - b).toFixed(3));
 const deltas = Object.fromEntries(Object.entries(stats).filter(([k]) => k !== "off").map(([k, s]) => [k, {
@@ -63,6 +66,7 @@ const md = [
   ...Object.entries(stats).map(([k, s]) => `| ${k} | ${s.frames} | ${s.gapP50} | ${s.gapP99} | ${s.over33} | ${s.workP50} | ${s.workP99} | ${s.workMean} | ${s.recorderSelfMs ?? "—"} |`), "",
   "Deltas against off (ms; % of a 16.67 ms frame from the mean work):", "", "| Mode | Gap p50 | Gap p99 | Work p50 | Work p99 | Work mean | % of frame |", "| --- | --- | --- | --- | --- | --- | --- |",
   ...Object.entries(deltas).map(([k, x]) => `| ${k} | ${x.gapP50} | ${x.gapP99} | ${x.workP50} | ${x.workP99} | ${x.workMean} | ${x.pctOfFrame} |`), "",
+  "Recorder self-time by part (mean ms per frame): " + Object.entries(stats).filter(([, s]) => s.recorderParts).map(([k, s]) => `${k}: ${Object.entries(s.recorderParts).map(([p, v]) => `${p} ${v}`).join(", ")}`).join(" · "), "",
   "Work: the game's frame callback (simulation, streaming, render, HUD, and the recorder when on), timed by the same wrapper in every mode. Gap: the rAF interval a player sees.",
 ];
 writeFileSync(path.join(out, "overhead.md"), md.join("\n") + "\n");

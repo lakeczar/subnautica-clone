@@ -186,8 +186,10 @@ export class FlightRecorder {
     this.snapshotsOn = opts.snapshots ?? true;
   }
 
+  /** Self-time by part, summed over the recording: frame (rows, events), sample, snapshot, video, spool. */
+  readonly selfParts: Record<string, number> = {};
   /** Adds recorder self-time spent outside `frame()` (sampling, capture) to the current frame. */
-  charge(ms: number): void { this.accrued += ms; }
+  charge(ms: number, part = "other"): void { this.accrued += ms; this.selfParts[part] = (this.selfParts[part] ?? 0) + ms; }
 
   private readonly waiting: { input: FrameInput; selfMs: number }[] = [];
   private readonly gpuTimes = new Map<number, number>();
@@ -198,6 +200,7 @@ export class FlightRecorder {
    * GPU_WAIT_FRAMES), so the GPU time lands on the frame it measured; rows are
    * written in order. `selfMs` is the caller's own recording time in this frame. */
   frame(input: FrameInput, selfMs = 0): void {
+    this.selfParts.frame = (this.selfParts.frame ?? 0) + selfMs;
     this.waiting.push({ input, selfMs: selfMs + this.accrued });
     this.accrued = 0;
     while (this.waiting.length) {
@@ -291,9 +294,11 @@ export class FlightRecorder {
     return snap;
   }
 
-  /** Mean and worst self-time per frame (ms). */
-  overhead(): { meanMs: number; worstMs: number; frames: number } {
-    return { meanMs: this.self.frames ? this.self.totalMs / this.self.frames : 0, worstMs: this.self.worstMs, frames: this.self.frames };
+  /** Mean and worst self-time per frame (ms), and the mean per frame of each part. */
+  overhead(): { meanMs: number; worstMs: number; frames: number; parts: Record<string, number> } {
+    const n = Math.max(1, this.self.frames);
+    return { meanMs: this.self.frames ? this.self.totalMs / this.self.frames : 0, worstMs: this.self.worstMs, frames: this.self.frames,
+      parts: Object.fromEntries(Object.entries(this.selfParts).map(([k, v]) => [k, Math.round((v / n) * 10000) / 10000])) };
   }
 }
 
