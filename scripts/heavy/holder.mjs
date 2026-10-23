@@ -31,7 +31,7 @@
 // holds processes, the ticket is alive (state.mjs reconcile).
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MACHINE_LABELS, jobEnv, plan } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
@@ -323,7 +323,7 @@ const result = {
   gpuShared: gpuShared.size ? [...gpuShared.values()] : undefined, context,
   machine: MACHINE_LABELS.local, machineTag: goal.machine ?? null, fellBack: t.fellBack ?? undefined,
   // --artifact paths of a job that ran here are where it wrote them.
-  artifacts: request.opts?.artifacts?.map((p) => ({ path: p, ...(existsSync(p) ? { local: p } : { error: "not written" }) })),
+  artifacts: request.opts?.artifacts?.map((p) => { const at = resolve(runCwd, p); return { path: p, ...(existsSync(at) ? { local: at } : { error: "not written" }) }; }),
 };
 // The scope is empty: release the worktree's .test-build before anyone can see the result.
 if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: true });

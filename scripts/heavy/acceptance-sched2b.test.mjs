@@ -68,6 +68,10 @@ test("B2: paused alickers: a 4070 job waits (remote-paused) and runs when it res
   assert.equal(waitFor(c, a).code, 0);
   assert.equal(result(c, a).remote, undefined);
   assert.equal(result(c, a).machine, "RTX 3090 (factory-worker)");
+  // An --artifact of a job that ran here is where it wrote it, relative to its own directory.
+  const here = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--artifact", "out.txt", "--", "sh", "-c", "echo x > out.txt");
+  assert.equal(waitFor(c, here).code, 0);
+  assert.deepEqual(result(c, here).artifacts, [{ path: "out.txt", local: join(c.repoDir, "out.txt") }]);
   assert.match(hc(c, ["status"]).out, /alickers \(second worker\): paused/);
   c.fake.pause(false);
   const w = waitFor(c, g);
