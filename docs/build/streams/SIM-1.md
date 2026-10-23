@@ -104,6 +104,23 @@ Unless noted otherwise, everything below was tested at `bebc19a4`. The base is r
 
 That is about 2.2× faster.
 
+**Per-tick cost.** These numbers come from `scripts/sim-bench.mjs` with the base and new trees interleaved in one job:
+- **Workload:** 600 ticks of held swim or pilot controls from each of the 16 creel milestone saves, 7 rounds, taking the median.
+- **The run:** `--class exclusive` at `c77979ab` (sources as at `bebc19a4`), results in `/work/tmp/sim1-bench-exclusive-c77979ab.json`.
+- **Missing: the exclusive evidence.** The queue flagged this run as "DISTURBED by work outside the lane" (CPU pressure some ≤ 19%), so these numbers are indicative only. A clean `--class exclusive` rerun is pending after SCHED-2b's queue switch-over.
+
+| µs per tick (mean of 16 states; range across states) | Base (`887df90c`) | New |
+| --- | --- | --- |
+| `stepGame` (pure: clone + step) | **254** (175–373) | 274 (172–476) |
+| `stepGameInPlace` | n/a | **39** (25–91) |
+| `StepGuard.step` (the app's and driver's path) | n/a | **40** (24–88) |
+| Clone alone | 149 (85–252) | n/a |
+| The app's timeline observation | 6.1 (4.5–8.8) | **2.0** (0.7–4.3) |
+
+**Reading the table:**
+- **The clone costs more than its own time.** The base step costs about 103 µs more than the clone alone, while the in-place step costs 39 µs. Stepping a freshly allocated graph every tick is itself slower (cold shapes and GC), so removing the clone saves more than the clone's own time.
+- **The pure `stepGame`** stays at its old cost, as intended: it is for forks only.
+
 **Atomicity.** `tests/step-guard.test.ts` (fast tier) injects a throw at each of the faulting step's world queries, and at 8 fields only later parts of the step touch:
 - renewal progress;
 - the works gate;
