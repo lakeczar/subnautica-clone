@@ -484,3 +484,45 @@ LC's cap and collar boundaries need walls, as the COL-1 heightfield now has, so 
   - SCHED-2a R4 fixes (soak harness only), with the scheduler cut-over planned once CW-1's series ends;
   - SCHED-2b R1 (`c88bab6`).
 - **Builders:** COL-1 and SCHED-2/SAVE-1 are active, CW-1 is finishing, and 2 slots are free for REC-1 and OP-1 once CW-1 merges.
+
+### 2026-10-23 ~09:15Z — owner priority: testing infrastructure first
+The owner prioritised the recorder, testing, scheduling and the save library.
+- **SIM-1 paused** (in-place stepping; resumes next).
+- **SAVE-1** split out to its own builder: `siltwake-save1-library-opus-f025bf6`, branch `t3/save-1-shared-library`.
+- **REC-1 started**, based on CW-1's head `7dc9cc9`: `siltwake-rec1-recorder-opus-7dc9cc9`, branch `t3/rec-1-flight-recorder`.
+- **The SCHED-2 builder** keeps the scheduler only: 2b R1 fixes (F1/F2 structural: staged artifacts under the sandbox lock, a receipt file instead of log markers), then any 2a R5 follow-ups.
+- **SCHED-2a R5 is reviewing `919a372`:** the soak fixes, plus a 7-line per-class stall default, to set `{"stalls":{"playthrough":2700}}` until active worktrees have the heartbeat.
+- **Builders:** CW-1 (final exclusive series), COL-1 (A R4 in review), SCHED-2 (2b fixes), SAVE-1, REC-1. SIM-1 is paused.
+
+### 2026-10-23 ~09:50Z — SCHED-2a cut over (scheduler); soak harness pending
+- **Merged** `t3/sched-2a-stall-floor` (`f91f0fc`). The gate passed: 1,359 tests, the build, and all 5 economy scripts.
+- **Installed v2 `e552265ea963`** in normal mode. The slice is as wanted (700%, 8 GiB) and the v1 lock inode is preserved. A smoke quick job runs to its goal, with its evidence bound to the commit.
+- **Bridge:** `/work/tmp/siltwake-sched/config.json` has `"stalls":{"playthrough":2700}` until active worktrees have the playthrough heartbeat. **Remove it after CW-1, COL-1, REC-1, SAVE-1 and SIM-1 merge root.**
+- **Soak verdicts are not evidence yet:** R6 asked for an append-only fact reducer. The note is in `WORKER_RESOURCE_LIMITS.md`.
+- **GPU guard (`install.sh --gpu-guard`) is deferred** until REC-1's queued pre-cutover tickets drain.
+- **CW-1's exclusive series finished;** the handoff is pending from the builder.
+
+### 2026-10-23 10:12Z — GPU guard installed; SCHED-2a fully live
+- **Installed:** `install.sh --gpu-guard` wrapped all three Playwright Chrome binaries; the guard's own version is `073e8b0da3da`.
+- **Verified:**
+  - a GPU-flagged launch outside a job is refused with the lease message;
+  - a plain launch works;
+  - a GPU launch inside a `gpu` ticket works (`261023-101223-f3f1`, evidence bound to `a536775`).
+- **Stall fix:** `a5724a7` merged and reinstalled as v2 `112892426b5d`. The full suites pass on it: SCHED-1 23/23, SCHED-2 16/16, policy 25/25. No job was mislabelled in the window.
+- **SCHED-2b:** R1 fixes are at `2e35921`, and Sol R2 is running. The SCHED-2 builder is now on the soak reducer.
+
+### 2026-10-23 — coordinator decisions: the remote-lane threat model; COL-1 stage-B conditions
+- **SCHED-2b R2** (`1d5b7ff`): 2 P1s and 3 P2s.
+  - **Threat model ruled:** the receipt protocol must be robust to **accidents** by our own job and setup code (marker output, stray writes, stale or partial records, dropped connections). It doesn't defend against a payload **deliberately** forging records through `/proc`. That's documented as a named limit, with its root fix (a separate transport uid), the same class as SCHED-1's accepted "job kills its own anchor".
+  - **Fixes:**
+    - a per-attempt nonce over ssh stdin;
+    - a strict phase grammar;
+    - an exit-status cross-check;
+    - checked out tree clean and verified under the lock;
+    - ownership kept until the old attempt is conclusively stopped;
+    - non-blocking admission for `any`;
+    - test seams only under an explicit test scope.
+- **COL-1 stage-B acceptance conditions:**
+  - LC cap and collar walls (no clear-start move ends in a pose LC rejects);
+  - **collars and other collision bakes happen offline** (WK-1's bake pipeline), never at runtime (stage A measured 9–14 s for 0.25 m collars);
+  - **collar corners stored per cell only where needed**, to recover memory.

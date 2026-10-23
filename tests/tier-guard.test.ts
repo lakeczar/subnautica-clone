@@ -10,7 +10,7 @@ import { pathToFileURL } from "node:url";
 // the compiled sources, run through the real tier runner. A probe that slips past
 // a guard would load Babylon in a fast process, so failures here matter.
 const root = resolve(".");
-const probes = mkdtempSync(join(root, ".test-build", "tier-probes-"));
+const probes = mkdtempSync(join(root, process.env.SILTWAKE_TEST_BUILD || ".test-build", "tier-probes-"));
 after(() => rmSync(probes, { recursive: true, force: true }));
 const probe = (name: string, body: string): string => {
   const file = join(probes, `${name}.test.js`);
@@ -60,7 +60,7 @@ test("app module loads with the mocked renderer", () => { assert.equal(typeof Si
 });
 
 test("heavy files are refused by the fast tier, and the heavy tier refuses to run outside the lock", () => {
-  const heavy = join(root, ".test-build", "tests", "render-lifecycle.heavy.test.js");
+  const heavy = join(root, process.env.SILTWAKE_TEST_BUILD || ".test-build", "tests", "render-lifecycle.heavy.test.js");
   const out = fast(heavy);
   assert.equal(out.status, 2); assert.match(out.stderr, /heavy files run only in the heavy tier/);
   const unlockedEnv = { ...env }; delete unlockedEnv.SILTWAKE_HEAVY_LOCK_HELD;

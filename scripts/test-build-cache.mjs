@@ -21,7 +21,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { deserialize, serialize } from "node:v8";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-export const cacheRoot = process.env.SILTWAKE_BUILD_CACHE_DIR || join(root, ".test-build", "build-cache");
+export const cacheRoot = process.env.SILTWAKE_BUILD_CACHE_DIR || join(root, process.env.SILTWAKE_TEST_BUILD || ".test-build", "build-cache");
 const IMPORT_RE = /(?:^|[\s;])(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|(?:^|[\s;])import\s*["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
 
 // Bump when the entry format changes. The runtime is part of every namespace:

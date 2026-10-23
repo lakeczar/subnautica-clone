@@ -57,7 +57,8 @@ function spawnGroup(dir: string, deadlineMs: number): Launch {
     const out = path.join(dir, `${n++}.json`);
     const child = spawn(process.execPath, [self, "--child", "--scenario", group.join(","), "--json", out, "--quiet"], { stdio: ["ignore", "ignore", "inherit"] });
     let error: string | null = null;
-    const timer = setTimeout(() => { error = `timed out after ${deadlineMs / 1000} s`; child.kill("SIGKILL"); }, deadlineMs);
+    // Node fires an over-large (or infinite) delay at once: no timer then.
+    const timer = Number.isFinite(deadlineMs) ? setTimeout(() => { error = `timed out after ${deadlineMs / 1000} s`; child.kill("SIGKILL"); }, deadlineMs) : undefined;
     child.on("error", (e) => { error = `spawn failed: ${e.message}`; });
     child.on("close", (code, signal) => {
       clearTimeout(timer);
@@ -68,7 +69,12 @@ function spawnGroup(dir: string, deadlineMs: number): Launch {
 async function parallel(selected: readonly string[], limit: number): Promise<RunRecord[]> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "siltwake-playthrough-"));
   try {
-    const deadline = Number(value("--child-timeout") ?? 1800) * 1000;
+    // A child's wall-clock limit. Inside a heavy-check job the run has a goal,
+    // not a time limit (SCHED-2): children beat the job's heartbeat as they
+    // simulate, so a hang is caught by the queue's stall detection and the
+    // only bound left is the class's runaway ceiling.
+    const fallback = process.env.SILTWAKE_JOB_HEARTBEAT ? Infinity : 1800;
+    const deadline = Number(value("--child-timeout") ?? fallback) * 1000;
     return await runGroups(selected, limit, spawnGroup(dir, deadline),
       (id) => SCENARIOS.find((s) => s.id === id)?.from?.scenario, (id) => SCENARIOS.find((s) => s.id === id)?.strategy ?? "?");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
