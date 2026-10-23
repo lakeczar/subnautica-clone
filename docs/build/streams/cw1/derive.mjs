@@ -198,15 +198,34 @@ for (let i = 1; i < points.length; i++) {
 return points;
 }
 repair(points);
-console.log(`swept every leg: ${replanned} replanned, ${dropped} unreachable corners dropped, ${blocked.length} still blocked${blocked.length ? ": " + blocked.join("; ") : ""}`);
+const reportBlocked = () => console.log(`swept every leg: ${replanned} replanned, ${dropped} unreachable corners dropped, ${blocked.length} still blocked${blocked.length ? ": " + blocked.join("; ") : ""}`);
+reportBlocked();
 let total = 0;
 for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
 // Exactly SEGMENTS segments of near-equal length, each cut at the cave stop
 // nearest its share of the tour; or, with "hops", one short run per cave:
 // its approach point, the mouth, and back.
 const segments = [];
-// A segment after the first starts at the save's craft too: a cold transit to its first stop.
-const fromStart = (seg) => repair([{ ...START, start: true }, ...leg(START, seg[0]), ...seg]);
+// A segment after the first starts at the save's craft too: a cold transit
+// to its first stop. It leaves the berth the way the tour does (the tour's
+// own repaired opening waypoints, down to open water), then cruises to the
+// stop through corners at most 150 m apart, so a blocked piece is short
+// enough to replan.
+const firstOpen = points.findIndex((q, i) => i > 0 && q.y < -20 && hullFloor(world, q, DART) < q.y - 10);
+const berthExit = points.slice(0, Math.max(1, firstOpen) + 1).map(q => ({ ...q, cave: undefined }));
+const densify = (path) => {
+  const out = [path[0]];
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i], n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 150);
+    for (let k = 1; k < n; k++) { const x = a.x + (b.x - a.x) * k / n, z = a.z + (b.z - a.z) * k / n; out.push({ x, z, y: clamp(a.y + (b.y - a.y) * k / n, x, z), cruise: true }); }
+    out.push(b);
+  }
+  return out;
+};
+const fromStart = (seg) => {
+  const from = berthExit.at(-1);
+  return repair([...berthExit, ...densify([from, ...leg(from, seg[0]), seg[0]]).slice(1, -1), ...seg]);
+};
 if (segArg === "hops") for (const t of tour) segments.push(fromStart([{ ...t.outer }, { ...t.at, cave: t.cave }, { ...t.outer }]));
 else {
   const along = [0];
@@ -224,6 +243,7 @@ else {
 }
 // Every segment's save is the library save itself, unedited.
 segments.forEach((_, k) => copyFileSync(saveFile, path.join(out, `seg${k}.json`)));
+reportBlocked();
 writeFileSync(path.join(out, "plan.json"), JSON.stringify({ save: { kind: SAVE, file: saveFile, start: START }, totalMetres: Math.round(total), stops: tour, segments }, null, 1));
 console.log(`${tour.length} caves, ${Math.round(total)} m, ${segments.length} segments:`,
   segments.map(s => `${s.filter(p => p.cave).length} caves`).join(", "));

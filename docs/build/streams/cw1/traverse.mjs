@@ -288,7 +288,7 @@ try {
       const total = [...counts.values()].reduce((a, b) => a + b, 0);
       hot = [`${total} ms sampled`, ...[...counts].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, ms]) => `${ms} ms: ${k}`)];
     }
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of
