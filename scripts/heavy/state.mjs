@@ -387,19 +387,31 @@ export function reconcile(cfg, state) {
       if (r.verified) delete state.boost; else Object.assign(b, { state: "releasing", failures: (b.failures ?? 0) + 1 });
       changed = true;
     }
-  } else if (cfg.boostSlice && !Object.values(state.tickets).some((t) => t.state === "running" && t.req?.exclusive)) {
-    // Backstop (R2): with no record and no exclusive job, our own slice's weight is
-    // reset whatever happened (a bypassed rollback, a lost record). An idle slice
-    // is checked through systemd at most once a minute.
-    let w = boostWeight(cfg.boostSlice, { cheapOnly: true });
-    if (!w.known && Date.now() - (state.boostCheckedAt ?? 0) > 60000) { w = boostWeight(cfg.boostSlice, { force: true }); state.boostCheckedAt = Date.now(); changed = true; }
-    if (w.known && w.value !== null) {
-      const r = setBoost(cfg.boostSlice, false);
-      ledger(cfg, { event: "boost-reset", slice: cfg.boostSlice, was: w.value, verified: r.verified, error: r.error, by: "backstop" });
-      changed = true;
-    }
-  }
+  } else changed = boostBackstop(cfg, state).changed || changed;
   return changed;
+}
+
+/**
+ * The backstop for our slice's CPU weight (TST-16 R2): with no boost record
+ * and no exclusive job that could hold one, the weight is reset whatever
+ * happened (a bypassed rollback, a lost record). During a handover
+ * (state.frozen) no job may hold a boost, so a running exclusive doesn't
+ * protect it. Runs only inside transaction(), so it is serialised with
+ * ownership and admission. An idle slice (no cgroup) is checked through
+ * systemd at most once a minute, or always with `force` (the handover's
+ * certification). Returns { changed, clean }: clean when the weight is
+ * verified at its default.
+ */
+export function boostBackstop(cfg, state, { force = false } = {}) {
+  if (!cfg.boostSlice) return { changed: false, clean: true };
+  if (state.boost || (!state.frozen && Object.values(state.tickets).some((t) => t.state === "running" && t.req?.exclusive))) return { changed: false, clean: false };
+  let changed = false, w = boostWeight(cfg.boostSlice, force ? { force: true } : { cheapOnly: true });
+  if (!w.known && !force && Date.now() - (state.boostCheckedAt ?? 0) > 60000) { w = boostWeight(cfg.boostSlice, { force: true }); state.boostCheckedAt = Date.now(); changed = true; }
+  if (!w.known) return { changed, clean: false };
+  if (w.value === null) return { changed, clean: true };
+  const r = setBoost(cfg.boostSlice, false);
+  ledger(cfg, { event: "boost-reset", slice: cfg.boostSlice, was: w.value, verified: r.verified, error: r.error, by: "backstop" });
+  return { changed: true, clean: r.verified };
 }
 
 /** The result of a job whose supervisor died, from what the in-scope wrapper

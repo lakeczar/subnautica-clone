@@ -11,10 +11,14 @@
 #                                            (per-user config: coordinator approval)
 #   scripts/heavy/install.sh --rollback VER  point `current` at an installed older version
 #   scripts/heavy/install.sh --uninstall     remove `current`: every shim falls back to v1
-#     Both first hand the state over (handover.mjs): they refuse while an
-#     exclusive job runs or its CPU boost can't be reset and verified, because
-#     older code never cleans that up (TST-16). Run them from the installed
-#     copy: ~/.local/share/siltwake-sched/current/install.sh --rollback VER.
+#     Both first hand the state over (handover.mjs): they freeze boosting, wait
+#     until no exclusive job holds the CPU boost and certify the weight reset,
+#     because older code never cleans that up (TST-16); they refuse, lifting
+#     the freeze, if that doesn't happen within SILTWAKE_HANDOVER_WAIT (1800 s).
+#     The freeze stays after the switch, so this version's supervisors still
+#     running admit their jobs unboosted; installing an aware version lifts it.
+#     Run them from the installed copy:
+#     ~/.local/share/siltwake-sched/current/install.sh --rollback VER.
 #     Never roll back by running an older tree's install.sh.
 #   scripts/heavy/install.sh --gpu-guard     wrap every Playwright Chrome binary so a GPU
 #                                            launch needs the GPU lease (chrome-guard.sh);
@@ -54,7 +58,8 @@ fi
 
 if [[ $uninstall == 1 || -n $rollback ]]; then
   [[ -z $rollback || -d "$home/$rollback" ]] || { echo "no installed version $rollback in $home" >&2; exit 2; }
-  SILTWAKE_SCHED_DIR="$dir" node "$src/handover.mjs" || { echo "not handed over: the older code would not clean that up; nothing was changed" >&2; exit 3; }
+  what="rollback to $rollback"; [[ $uninstall == 1 ]] && what="uninstall"
+  SILTWAKE_SCHED_DIR="$dir" node "$src/handover.mjs" --for "$what" || { echo "not handed over: the older code would not clean that up; \`current\` was not changed" >&2; exit 3; }
   if [[ $uninstall == 1 ]]; then
     rm -f "$home/current"
     echo "heavy-check v2 uninstalled: shims fall back to v1. State in $dir is kept."
@@ -103,6 +108,8 @@ mv -T "$home/current.tmp" "$home/current"
 
 mkdir -p "$dir/jobs"
 [[ -f "$dir/protocol" ]] || echo 1 >"$dir/protocol"
+# This version boosts exclusive jobs again: lift a handover's freeze (TST-16).
+SILTWAKE_SCHED_DIR="$dir" node "$src/handover.mjs" --thaw
 [[ -f "$dir/mode" ]] || echo serial >"$dir/mode"
 if [[ -n "$mode" ]]; then
   [[ "$mode" == serial || "$mode" == normal ]] || { echo "mode must be serial or normal" >&2; exit 2; }

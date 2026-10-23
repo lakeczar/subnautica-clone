@@ -70,6 +70,15 @@ test("R1-F4: missing coverage is never clean: unreadable counters for a stretch,
   assert.deepEqual([rec.disturbed, rec.measured], [true, false]);
 });
 
+test("a run whose exclusive CPU boost was withheld by a handover, or failed, is not boosted evidence: DISTURBED with that reason", () => {
+  const withheld = judge(series(quiet(10)), { boost: { slice: "s", status: "withheld-frozen", applied: false, skipped: "a rollback to v is in progress: no boost" } });
+  assert.equal(withheld.disturbed, true);
+  assert.match(withheld.reasons.join(), /the exclusive CPU boost was withheld \(a rollback to v is in progress: no boost\): not boosted evidence/);
+  const failed = judge(series(quiet(10)), { boost: { slice: "s", status: "failed", applied: false, error: "denied" } });
+  assert.match(failed.reasons.join(), /could not be applied \(denied\)/);
+  assert.equal(judge(series(quiet(10)), { boost: { slice: "s", status: "applied", applied: true } }).disturbed, false);
+});
+
 test("unavailable counters stay null, never zero", () => {
   const s = series(quiet(5));
   for (const p of s) p.jobUsec = null;

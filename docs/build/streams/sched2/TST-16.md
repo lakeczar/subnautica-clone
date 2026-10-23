@@ -76,23 +76,48 @@ Review `b3ecb670` on `review/tst-16-r2`, on `ddd814da`: two P2s, plus one P3. Th
   - **Safe** because the weight is ours alone. **S22** sets a stray weight and a queue command resets it (`boost-reset`, `by: backstop`).
 - **P3, a failed read-back counted as verified:** fixed. A reset or apply is verified only when systemd's read-back succeeds and shows the expected value.
 
+## R3 review responses
+
+Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
+- **F1, handover was not atomic with admission.** Its checks, weight read/reset and final check were separate unlocked steps, so a refusing handover could reset a live boost, and work submitted or queued across the handover could be boosted on an old install and stranded.
+- **Fix: one protocol through the switch.**
+  - **Freeze:** `handover.mjs` sets `state.frozen` in `transaction()`. A holder decides whether to boost in the same transaction as its journal, so no boost starts once the freeze is set.
+  - **Admission continues, unboosted.** Supervisors keep admitting, including this version's already-running and queued ones, pinned to their install, after a rollback. Refusing admission instead would strand those queued tickets forever, because the old version never lifts the mark.
+  - **Wait:** the handover waits (`SILTWAKE_HANDOVER_WAIT`, 1,800 s) until no boost is owned. A running exclusive releases its own; a dead owner's is reset by reconcile once its scope is empty.
+  - **Certify:** inside one transaction, reconcile, no boost record, and the weight verified at its default through the shared backstop. That backstop is now `boostBackstop()`, used by reconcile and handover alike. Under the freeze, an unboosted exclusive doesn't stop it resetting a stray weight.
+  - **No own setter:** the handover has no setter or read/check/reset sequence of its own (the duplication the reviewer flagged). Every reset happens in reconcile, with its ownership checks, under `state.lock`. A holder that never applied a boost never resets one.
+  - **The switch:** `install.sh` switches or removes `current` with the freeze still in place; installing an aware version lifts it (`--thaw`). On refusal the handover lifts the freeze, and `current` is unchanged.
+- **S22, rewritten:** the old version is the exact live `95f340380c25`, installed from root `91dc1ab`'s own tree, and its later operation is verified (a quick job, `status`, an exclusive job of its own, the weight untouched). It covers:
+  - a reset pending with no tickets: refused, then handed over;
+  - a refusal beside a live boost: the weight, record and ticket are untouched;
+  - admission between certification and the switch: the job runs unboosted, and the weight never reaches 10,000 while it runs;
+  - an exclusive queued behind a quick job, then a guarded rollback: its pinned supervisor admits it on the old install, unboosted;
+  - holder death mid-handover: the handover waits, then uninstalls after recovery;
+  - the backstop.
+- **Unboosted runs are never clean evidence** (coordinator's condition for admitting unboosted).
+  - **Recorded:** the result's `context.boost.status` is `withheld-frozen` (or `failed`, if the apply failed), and the final line shows `CPU boost withheld-frozen`.
+  - **Labelled:** the run is `DISTURBED` with the reason "the exclusive CPU boost was withheld (…): not boosted evidence", so its timings don't count.
+  - **Tested:** S22's admitted-during-handover and queued-exclusive cases assert the status, `DISTURBED` and the reason (the final line too), and a unit test covers withheld, failed and applied.
+- **Negative control:** S22's queued-exclusive part, run on `ef037871`, fails at "was boosted during a handover".
+
 ## Checks
 
-- **Unit tests** (`tests/heavy-contention.test.ts`, 6):
+- **Unit tests** (`tests/heavy-contention.test.ts`, 7, including withheld and failed boosts):
   - the CW-1 case (host memory "full" 32% with the job unstalled is clean, and recorded);
   - every reason with its value, and host swap and other CPU recorded but not judged;
   - the tail merge;
   - missing coverage of every kind, recovery, and nulls;
   - snapshot parsing and the boost-slice selection.
 - **Acceptance (SCHED-2 suite):**
-  - **S17:** boost applied and reset, measured from before the payload to after it, raw points kept.
+  - **S17:** boost applied (`status: applied`) and reset, measured from before the payload to after it, raw points kept.
   - **S18:** crash boundaries, reset failures, takeover.
   - **S19:** private state without a named slice boosts nothing.
   - **S20:** the late GPU client.
   - **S21:** an in-flight apply at holder death (R2-F1).
-  - **S22:** guarded rollback and uninstall, and the backstop (R2-F2).
+  - **S22:** the handover protocol against the real live version, with the races (R2-F2, R3-F1).
   - **SCHED-1 test 7** checks the job's own measurement.
-- **Full suites** on the merged branch (root `91dc1ab` with this work): SCHED-1 **23/23**, SCHED-2 **22/22**, SCHED-2b **27/27**, fast tier **1,403/1,403**. No units, slices or drop-ins left behind.
+- **Full suites** on the merged branch (root `91dc1ab` with this work), after R3: SCHED-1 **23/23**, SCHED-2 **22/22**, SCHED-2b **27/27**, fast tier **1,404/1,404**. No units, slices or drop-ins left behind.
+  - **One flake:** the first fast-tier run had one failure, in `soak-runner` R4-F3 (a timing-sensitive real-recorder test, in code this work doesn't touch), while host CPU pressure averaged 22%. It passed 5 of 5 alone, and the whole fast tier passed on its rerun.
 
 ## Validation (CW-1 segment 7, run A)
 

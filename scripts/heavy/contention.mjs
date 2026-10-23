@@ -31,6 +31,8 @@
 //   steal          the hypervisor took ≥ stealPct of the machine's CPU in a window
 //   GPU            a GPU client outside the lease shared the GPU (holder.mjs)
 //   unmeasured     coverage was missing (above), or the job was recovered
+//   boost          the exclusive CPU boost (below) was withheld by a handover
+//                  ("withheld-frozen") or could not be applied
 // Thresholds: config.json `disturbed` over DISTURBED_DEFAULTS.
 //
 // Priority (R1-F2, F3): while an exclusive job runs, our own top-level slice
@@ -160,6 +162,8 @@ export function judge({ start, end, points = [], nproc, thresholds = {}, windowS
     reasons.push(`the job took ${W.jobMajflt} major faults and ${W.jobSwapIns} swap-ins in its worst window (≥ ${t.jobMajorFaults} or ≥ ${t.jobSwapIns}): its memory or cache was read back from disk`);
   if (W.steal != null && W.steal >= t.stealPct) reasons.push(`the hypervisor took ${W.steal}% of the machine's CPU in the worst window (≥ ${t.stealPct}%)`);
   if (gpuShared.length) reasons.push(`the GPU was shared outside the lease (pid ${gpuShared.map((u) => u.pid).join(", ")})`);
+  // A run that should have had the exclusive CPU priority and didn't is not boosted evidence.
+  if (boost && boost.status !== "applied") reasons.push(boost.status === "withheld-frozen" ? `the exclusive CPU boost was withheld (${boost.skipped}): not boosted evidence` : `the exclusive CPU boost could not be applied (${boost.error ?? "unknown"}): not boosted evidence`);
   if (missing.length) reasons.push(`unmeasured: ${missing.join("; ")}`);
   return {
     v: 2, measured: missing.length === 0, missing, windowS, points: good.length, measuredS: whole ? round2((whole.to - whole.from) / 1000) : 0,

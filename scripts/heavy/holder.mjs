@@ -155,12 +155,22 @@ const args = [
 // is applied and kept until a verified reset (R1-F1; reconcile recovers it).
 const exclusive = req.exclusive ? { points: [], observed: { load1Max: 0, cpuSomeAvg10Max: 0, memFullAvg10Max: 0 }, raw: join(dir, "contention.jsonl") } : null;
 let boost = null;
-if (req.exclusive && !rejected && cfg.boostSlice) {
+// A handover (a rollback or uninstall in progress, handover.mjs) freezes boosting:
+// decided in the same transaction as the journal, so no boost starts after the
+// handover has certified cleanup (R3-F1). The job still runs, unboosted.
+const frozen = req.exclusive && !rejected && cfg.boostSlice ? transaction(cfg, (state) => {
+  if (state.frozen) return { result: state.frozen };
+  state.boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, ticket: id, owner: me, ownerUnit: inOwnScope ? holderUnit : null, state: "applying", at: Date.now() };
+  return { changed: true, result: null };
+}) : undefined;
+if (frozen) {
+  boost = { slice: cfg.boostSlice, status: "withheld-frozen", applied: false, skipped: `a ${frozen.for ?? "handover"} is in progress: no boost` };
+  note(`not raising ${cfg.boostSlice}'s CPU weight: ${boost.skipped}`);
+} else if (frozen === null) {
   // The owner is this holder and its scope: the setter is a child here, so recovery waits until the scope is empty (R2-F1).
-  transaction(cfg, (state) => { state.boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, ticket: id, owner: me, ownerUnit: inOwnScope ? holderUnit : null, state: "applying", at: Date.now() }; return { changed: true }; });
   const r = setBoost(cfg.boostSlice, true, cfg.exclusiveCpuWeight);
   transaction(cfg, (state) => { if (state.boost?.ticket === id && r.verified) state.boost.state = "applied"; return { changed: true }; });
-  boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, applied: r.verified, ...(r.verified ? {} : { error: r.error }) };
+  boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, status: r.verified ? "applied" : "failed", applied: r.verified, ...(r.verified ? {} : { error: r.error }) };
   if (!r.verified) note(`could not raise ${cfg.boostSlice}'s CPU weight for this exclusive job: ${r.error}`);
 }
 // GPU jobs record any GPU client outside the lease that shared the GPU with
@@ -276,7 +286,7 @@ if (sampler) clearInterval(sampler);
 sample({ gpu: true }); // the final GPU observation always runs (R1-F5)
 // The boost ends with the job: marked releasing, reset and verified before the
 // result; a failed reset leaves the record for reconcile to retry (R1-F1).
-if (boost) {
+if (boost && !boost.skipped) { // a boost it never applied is not its to reset
   transaction(cfg, (state) => { if (state.boost?.ticket === id) state.boost.state = "releasing"; return { changed: true }; });
   const r = setBoost(cfg.boostSlice, false);
   boost.released = r.verified;

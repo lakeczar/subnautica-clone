@@ -305,7 +305,7 @@ function finalLine(e) {
     const c = e.context, j = c.job;
     parts.push(`exclusive context: ${j ? `job CPU wait ${j.cpuSomePct}% (worst ${j.cpuSomeWorstPct}%), memory stall ${j.memSomePct}% (worst ${j.memSomeWorstPct}%), ${j.majorFaults} major faults, ${j.swapIns} swap-ins` : "job contention unmeasured"}` +
       (c.host ? `, steal ${c.host.stealWorstPct ?? "?"}% worst, other CPU ${c.host.otherCpuPct ?? "?"}%, host swap-in ${c.host.swapInPages ?? "?"} pages` : "") +
-      (c.boost ? `, ${c.boost.slice} CPU weight ${c.boost.applied ? c.boost.weight : "not raised"}` : "") +
+      (c.boost ? `, ${c.boost.slice} CPU boost ${c.boost.status === "applied" ? c.boost.weight : c.boost.status}` : "") +
       (c.disturbed ? ` — DISTURBED: ${c.reasons.join("; ")}` : ""));
   } else if (e.context) parts.push(`exclusive context: load ≤${e.context.load1Max}, cpu PSI some ≤${e.context.cpuSomeMax}%${e.context.disturbed ? " — DISTURBED by work outside the lane" : ""}`);
   return parts.join("; ");
