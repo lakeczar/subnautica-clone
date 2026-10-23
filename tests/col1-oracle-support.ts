@@ -14,7 +14,7 @@ import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { POI_SETS } from "../src/content/poi/sets.js";
 import { VISTA_SETS } from "../src/content/vistas.js";
 import type { Capsule, Vec3, WorldQueries } from "../src/sim/types.js";
-import { caveOwner, createCaveWorldQueries, createWorldQueries, SOLIDS, surfaceHeight, WORLD_BOUNDS, type Solid } from "../src/sim/world.js";
+import { caveOwner, createCaveWorldQueries, createWorldQueries, SOLIDS, surfaceHeight, type Solid } from "../src/sim/world.js";
 import { buildCollision, chunksNear, createLargeCave, type LargeCave } from "../src/world/caves/large/build.js";
 import { composeCaveWorld, largeCaveCollider, type CaveCollider } from "../src/world/caves/large/compose.js";
 import { artMembers, collarHeightfield, meshFacing, meshShapes } from "../src/world/collision/bake.js";
@@ -109,7 +109,7 @@ export const productionWorld = (): WorldQueries => production ??= createWorldQue
 function structureScene(id: string, label: string, replaced: (s: Solid) => boolean, members: StaticMember[], regions: Aabb[], note: string): OracleScene {
   const rest = SOLIDS.filter(s => !replaced(s)), oldSolids = SOLIDS.filter(replaced);
   const collider = createStaticCollider(id, members);
-  const neo = composeStaticWorld({ exterior: createWorldQueries(rest, surfaceHeight), solids: rest, collider, bounds: WORLD_BOUNDS, guards: [LEGACY_PRESERVE] });
+  const neo = composeStaticWorld({ exterior: createWorldQueries(rest, surfaceHeight), solids: rest, collider, guards: [LEGACY_PRESERVE] });
   const { paths, poses } = protectedNear(regions, 12);
   return {
     id, label, regions, old: productionWorld(), neo, art: collider, seeds: seedsOf(members),

@@ -214,17 +214,21 @@ const vB = (s: StaticShape, t: number): number => s.indices[t * 3 + 1]! * 3;
 const vC = (s: StaticShape, t: number): number => s.indices[t * 3 + 2]! * 3;
 const HIT: SweepHit = { t: 0, nx: 0, ny: 0, nz: 0, start: false };
 
-/** Earliest contact of a box (centre c, half extents e) moving by d. */
+const ON = { x: 0, y: 0, z: 0 };
+/** Earliest contact of a box (centre c, half extents e) moving by d.
+ * `oriented`: for a facing shape, only contacts that enter it (see below). */
 export function sweepShape(s: StaticShape, cx: number, cy: number, cz: number, ex: number, ey: number, ez: number,
-  dx: number, dy: number, dz: number, skin: number, out: SweepHit, skip?: (t: number) => boolean): boolean {
+  dx: number, dy: number, dz: number, skin: number, out: SweepHit, oriented = false): boolean {
   // The skin sphere fits in a cube of its radius; a centimetre more for rounding.
   const r = skin + 0.01;
   const n = sweptCandidates(s, cx, cy, cz, ex + r, ey + r, ez + r, dx, dy, dz);
   let found = false;
-  const P = s.positions;
+  const P = s.positions, orient = oriented && s.facing !== 0, tau = 1e-9 * Math.hypot(dx, dy, dz) + 1e-15;
   for (let i = 0; i < n; i++) {
     const t = CAND[i]!;
-    if (skip?.(t)) continue;
+    // Oriented (a facing shape, for recovery): a face counts only while the
+    // box moves against its outward normal, the only way in through it.
+    if (orient && triangleNormal(s, t, ON) && dx * ON.x + dy * ON.y + dz * ON.z >= -tau) continue;
     if (!sweepBoxTriangle(cx, cy, cz, ex, ey, ez, dx, dy, dz, P, vA(s, t), vB(s, t), vC(s, t), skin, HIT)) continue;
     found = mergeHit(HIT, out, found, dx, dy, dz);
   }
@@ -371,16 +375,55 @@ export function segmentClearShape(s: StaticShape, a: Vec3, b: Vec3): boolean {
   return true;
 }
 
-/** Nearest point of the shape's surface to p, by brute force over the
- * triangles within `reach` (for depenetration out of a solid's interior). */
-export function nearestSurface(s: StaticShape, p: Vec3, reach: number): { point: Vec3; distance: number } | null {
+/** Nearest point of the shape's surface (of one part, or all) to p, over
+ * the triangles within `reach` (recovery's lower bound out of a solid). */
+export function nearestSurface(s: StaticShape, p: Vec3, reach: number, part: number | null = null): { point: Vec3; distance: number } | null {
   const n = candidates(s, p.x - reach, p.y - reach, p.z - reach, p.x + reach, p.y + reach, p.z + reach);
-  const P = s.positions;
+  const P = s.positions, parts = s.parts;
   let best: { point: Vec3; distance: number } | null = null;
   for (let i = 0; i < n; i++) {
-    const t = CAND[i]!, q = closestOnTriangle(p, P, vA(s, t), vB(s, t), vC(s, t));
+    const t = CAND[i]!;
+    if (part !== null && parts && parts[t] !== part) continue;
+    const q = closestOnTriangle(p, P, vA(s, t), vB(s, t), vC(s, t));
     const d = Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z);
     if (!best || d < best.distance) best = { point: q, distance: d };
+  }
+  return best;
+}
+
+/** Distance from p to the nearest triangle of the shape (of one part, or
+ * all), or `reach` when none is nearer: branch and bound over the
+ * hierarchy, nearest node first, pruning every node farther than the best. */
+export function nearestDistance(s: StaticShape, p: Vec3, reach: number, part: number | null = null): number {
+  if (!s.triangles) return reach;
+  const o = s.origin, k = s.scale, N = s.nodes, L = s.links, P = s.positions, parts = s.parts;
+  const boxDistance = (id: number): number => {
+    const n = id * 6;
+    let d2 = 0;
+    for (let q = 0; q < 3; q++) {
+      const lo = o[q]! + N[n + q]! * k[q]!, hi = o[q]! + N[n + 3 + q]! * k[q]!, v = q === 0 ? p.x : q === 1 ? p.y : p.z;
+      const g = v < lo ? lo - v : v > hi ? v - hi : 0;
+      d2 += g * g;
+    }
+    return Math.sqrt(d2);
+  };
+  let best = reach, sp = 0;
+  STACK[sp++] = 0;
+  while (sp) {
+    const id = STACK[--sp]!;
+    if (boxDistance(id) >= best) continue;
+    const l = L[id]!;
+    if (isLeaf(l)) {
+      for (let t = leafFirst(l), e = t + leafCount(l); t < e; t++) {
+        if (part !== null && parts && parts[t] !== part) continue;
+        const q = closestOnTriangle(p, P, vA(s, t), vB(s, t), vC(s, t)), d = Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z);
+        if (d < best) best = d;
+      }
+      continue;
+    }
+    // Nearer child last, so it is popped first.
+    const a = id + 1, b = l, da = boxDistance(a), db = boxDistance(b);
+    if (da <= db) { STACK[sp++] = b; STACK[sp++] = a; } else { STACK[sp++] = a; STACK[sp++] = b; }
   }
   return best;
 }

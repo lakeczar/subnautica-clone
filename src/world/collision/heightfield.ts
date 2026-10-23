@@ -22,10 +22,10 @@ import {
  * **A volume, not a sheet.** Below the surface of every solid cell is solid,
  * so a solid cell's edge that borders a hole or the lattice's edge is a
  * vertical **wall**, from the surface down to the bounds' bottom. Sweeps
- * meet the top triangles and the walls one-sided, by the solid's outward
- * face: from above and from outside. A contact the box starts within blocks
- * only motion into the solid, so a buried actor may rise or leave through a
- * wall but never sink deeper. Sight is blocked wherever a segment is under
+ * meet the top triangles and the walls **oriented**: a contact with a face
+ * counts only while the box moves against that face's outward normal (the
+ * only way into the solid through it). So a buried actor may rise or leave
+ * through a wall, monotonically, but never sinks deeper or enters. Sight is blocked wherever a segment is under
  * a solid cell's surface, entered from above or through a wall.
  *
  * A box with no crossing triangle lies wholly above or wholly below the
@@ -158,7 +158,9 @@ export function heightAt(h: StaticHeightfield, x: number, z: number): number {
   const fx = (x - h.x0) / h.cell, fz = (z - h.z0) / h.cell;
   if (!(fx >= 0 && fz >= 0 && fx <= h.nx && fz <= h.nz)) return NaN;
   const i = Math.min(h.nx - 1, Math.floor(fx)), k = Math.min(h.nz - 1, Math.floor(fz)), u = fx - i, w = fz - k;
-  if (isHole(h, i, k)) return NaN;
+  // The whole cell's ownership, as overlap and walls read it (a NaN corner
+  // empties the cell, even on its triangle that doesn't use that corner).
+  if (!solidCell(h, i, k)) return NaN;
   const H = h.heights, r = h.nx + 1, a = H[i + r * k]!, b = H[i + 1 + r * k]!, c = H[i + r * (k + 1)]!, d = H[i + 1 + r * (k + 1)]!;
   // Lower triangle (i,k) (i+1,k) (i+1,k+1) where u >= w; upper (i,k) (i+1,k+1) (i,k+1).
   return u >= w ? a + (b - a) * u + (d - b) * w : a + (d - c) * u + (c - a) * w;
@@ -236,24 +238,23 @@ function forCells(h: StaticHeightfield, minX: number, minZ: number, maxX: number
 
 const HIT: SweepHit = { t: 0, nx: 0, ny: 0, nz: 0, start: false };
 /** One face of the solid (triangle `o` of `tri`, outward normal (ox, oy, oz),
- * unnormalised) against the swept box, one-sided. A box that starts within
- * the skin of the face is blocked only while moving into the solid along
- * the face's outward normal (judged here, not by the kernel's best axis, so
- * a mostly buried box cannot sink); otherwise a contact met from inside the
- * solid is none. */
+ * unnormalised) against the swept box, **oriented**: the box can enter the
+ * solid through this face only while moving against its outward normal, so
+ * a contact with it counts only then, whether the box starts within its
+ * skin or meets it later at an edge or vertex (where the kernel's contact
+ * normal may be an edge axis that says nothing about entry). A start contact
+ * reports the face normal; a later one the kernel's, so slides follow edges. */
 function faceContact(tri: Float64Array, o: number, ox: number, oy: number, oz: number, cx: number, cy: number, cz: number,
   ex: number, ey: number, ez: number, dx: number, dy: number, dz: number, skin: number, out: SweepHit, found: boolean): boolean {
   const l = Math.hypot(ox, oy, oz);
   if (l < 1e-18) return found;
-  const nx = ox / l, ny = oy / l, nz = oz / l;
+  const nx = ox / l, ny = oy / l, nz = oz / l, tau = 1e-9 * Math.hypot(dx, dy, dz) + 1e-15;
+  if (dx * nx + dy * ny + dz * nz >= -tau) return found;
   if (boxOverlapsTriangle(cx, cy, cz, ex, ey, ez, tri, o, o + 3, o + 6, -skin)) {
-    const tau = 1e-9 * Math.hypot(dx, dy, dz) + 1e-15;
-    if (dx * nx + dy * ny + dz * nz >= -tau) return found;
     HIT.t = 0; HIT.nx = nx; HIT.ny = ny; HIT.nz = nz; HIT.start = true; HIT.face = true;
     return mergeHit(HIT, out, found, dx, dy, dz);
   }
   if (!sweepBoxTriangle(cx, cy, cz, ex, ey, ez, dx, dy, dz, tri, o, o + 3, o + 6, skin, HIT)) return found;
-  if (HIT.nx * nx + HIT.ny * ny + HIT.nz * nz <= 1e-9) return found;
   return mergeHit(HIT, out, found, dx, dy, dz);
 }
 
