@@ -4,7 +4,8 @@ import type { SiteOffset } from "./sites.js";
 
 /** Senses are separate on purpose: every predator need not share one hearing rule. */
 export type Sense = "noise" | "light" | "disturbance" | "layer";
-export type Deterrent = "acoustic" | "lure" | "ink";
+/** CR-1 adds `bait`: a released small fish the threats feed on. */
+export type Deterrent = "acoustic" | "lure" | "ink" | "bait";
 export interface SenseDefinition {
   /** Metres at which the cue falls to zero. */
   readonly range: number;
@@ -36,7 +37,7 @@ export interface ThreatDefinition {
   readonly attractedBy: readonly Deterrent[];
   readonly repelledBy: readonly Deterrent[];
   /** Captions that name the cue and the way out. Never color alone. */
-  readonly captions: { readonly alert: Readonly<Partial<Record<Sense, string>>>; readonly investigate: string; readonly commit: string; readonly withdraw: string; readonly leash: string; readonly lure: string; readonly ink: string };
+  readonly captions: { readonly alert: Readonly<Partial<Record<Sense, string>>>; readonly investigate: string; readonly commit: string; readonly withdraw: string; readonly leash: string; readonly lure: string; readonly ink: string; readonly bait: string };
   readonly scan: string;
 }
 
@@ -53,7 +54,7 @@ export const THREATS = {
     territory: 40, standOff: 9, reach: 2.2,
     strike: { kind: "contact", diver: 14, hull: 9 },
     habitat: { kind: "warm", minHeat: 0.2 },
-    attractedBy: ["lure"], repelledBy: ["ink"],
+    attractedBy: ["lure", "bait"], repelledBy: ["ink"],
     captions: {
       alert: {
         light: "Rippling lights run along a long shape in the warm passage. It has seen your lamp. Dim it, or climb to the pale cool ledges.",
@@ -65,6 +66,7 @@ export const THREATS = {
       leash: "The stalker stops at the edge of the cool water and will not follow.",
       lure: "The stalker turns to follow the drifting lure.",
       ink: "The ink cloud blinds the stalker; it breaks off.",
+      bait: "The stalker turns to the sinking fish and feeds on it.",
     },
     scan: "Hunts light inside warm, dark passages and will not enter cool water. Paired pulses mean it is closing; dark lights mean a lunge. A drifting lure draws it; ink blinds it.",
   },
@@ -80,7 +82,7 @@ export const THREATS = {
     territory: 48, standOff: 7, reach: 3.2,
     strike: { kind: "contact", diver: 18, hull: 12 },
     habitat: { kind: "below-layer", field: "divide_dense_layer", above: 0.3 },
-    attractedBy: [], repelledBy: ["ink"],
+    attractedBy: ["bait"], repelledBy: ["ink"],
     captions: {
       alert: {
         layer: "The mirror layer dimples below you: something wide is rising under it. Move slowly away from the surface of the layer, or climb.",
@@ -92,6 +94,7 @@ export const THREATS = {
       leash: "You are above the layer's reach. The skate's ripple fades.",
       lure: "The skate ignores the lure.",
       ink: "Ink spreads across the layer; the skate drops away.",
+      bait: "The fish sinks through the mirror and the skate turns down after it, away from you.",
     },
     scan: "Lives inside the dense brine and feels vibration at the layer's surface. It surges no more than about three metres above the layer. Cross slowly where sails drift, or keep above it.",
   },
@@ -107,7 +110,7 @@ export const THREATS = {
     territory: 30, standOff: 0, reach: 16,
     strike: { kind: "pulse", diver: 9, hull: 7 },
     habitat: { kind: "territory" },
-    attractedBy: ["acoustic"], repelledBy: ["ink"],
+    attractedBy: ["acoustic", "bait"], repelledBy: ["ink"],
     captions: {
       alert: {
         noise: "The pale bells along the gallery start to hum with your noise. Quiet your movement or leave the bells' reach.",
@@ -119,6 +122,7 @@ export const THREATS = {
       leash: "Outside the bells' reach the hum fades.",
       lure: "The choir answers the acoustic pulse instead and spends its chorus there.",
       ink: "The ink muffles the nearest bells.",
+      bait: "The fish drifts into the bells; they close around it to feed and fall quiet.",
     },
     scan: "A sessile colony that answers sustained noise with a pressure pulse after a rising hum. It cannot move. Quiet coasting, leaving its reach or an acoustic pulse elsewhere all spend or calm it.",
   },

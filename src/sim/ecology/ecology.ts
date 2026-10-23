@@ -9,8 +9,10 @@ import { driftFrom, emptyExposure, fieldLevel, recoverExposure, sampleHazards, s
 import { DIVER_ACTOR, ECOLOGY_DT, NO_ACTOR } from "./types.js";
 import type { AgentMode, EcologyEvent, EcologyInput, EcologyState, EcologyStepResult, EcologyWorld, Exposure, Sense } from "./types.js";
 import { finite } from "./vector.js";
+import { BAIT } from "../../content/fauna/items.js";
+import { windowBusy } from "../fauna/windows.js";
 
-export const DETERRENT_SECONDS: Readonly<Record<Deterrent, number>> = { acoustic: 12, lure: 20, ink: 10 };
+export const DETERRENT_SECONDS: Readonly<Record<Deterrent, number>> = { acoustic: 12, lure: 20, ink: 10, bait: BAIT.seconds };
 export const MAX_DETERRENTS = 6;
 /** A drifting glow lure rises slowly, so it leads an animal up and away. */
 export const LURE_RISE = 0.15;
@@ -53,6 +55,8 @@ export function stepEcology(state: EcologyState, input: EcologyInput, world: Eco
   for (const d of state.deterrents) {
     d.seconds = Math.max(0, d.seconds - ECOLOGY_DT);
     if (d.kind === "lure" && d.position.y < world.waterY - 1) d.position.y += LURE_RISE * ECOLOGY_DT;
+    // CR-1: bait sinks to just above the floor, where bottom feeders and the skate find it.
+    if (d.kind === "bait") d.position.y = Math.max(world.floor(d.position.x, d.position.z) + 0.5, d.position.y - BAIT.sink * ECOLOGY_DT);
   }
   state.deterrents = state.deterrents.filter(d => d.seconds > 0);
 
@@ -95,7 +99,8 @@ export function stepEcology(state: EcologyState, input: EcologyInput, world: Eco
 /** Everything a renderer, audio mixer or HUD may read. Derived, never saved. */
 export interface EcologyView {
   threats: { id: ThreatAgentId; species: ThreatSpeciesId; mode: AgentMode; position: Vec3; yaw: number;
-    /** 0..1 strength of the visible warning display. */ warning: number; cue: Sense | null; modeSeconds: number }[];
+    /** 0..1 strength of the visible warning display. */ warning: number; cue: Sense | null; modeSeconds: number;
+    /** CR-1: in its natural window (feeding, resting). */ busy: boolean }[];
   mites: { id: CueAgentId; scatter: number; secondsToVent: number };
   scavengers: { id: CueAgentId; retreat: number };
   sails: Vec3[];
@@ -107,7 +112,7 @@ const WARNING: Readonly<Record<AgentMode, number>> = { rest: 0, alert: 0.55, inv
 export function ecologyView(state: EcologyState, tick: number, s: EcologyInput["stimulus"] | null): EcologyView {
   return {
     threats: state.agents.map(a => ({ id: a.id, species: speciesOf(a.id), mode: a.mode, position: { ...a.position }, yaw: a.yaw,
-      warning: WARNING[a.mode], cue: a.cue, modeSeconds: a.modeSeconds })),
+      warning: WARNING[a.mode], cue: a.cue, modeSeconds: a.modeSeconds, busy: windowBusy(speciesOf(a.id), tick) })),
     mites: { id: "rift_mites_lip", ...miteScatter(tick) },
     scavengers: { id: "basin_scavengers_ridge", retreat: scavengerRetreat(tick, s).retreat },
     sails: sailPositions(tick),

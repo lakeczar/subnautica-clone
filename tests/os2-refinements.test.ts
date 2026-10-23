@@ -97,6 +97,8 @@ test("batched exit metadata identifies the attempted craft and reason even when 
   const carrier = fixture.fleet.vehicles.find(v => v.hull === "hearthline")!;
   fixture.player.controlledVehicleId = carrier.id; fixture.player.mode = "piloting";
   fixture.player.pose = structuredClone(carrier.pose);
+  // UX-1: X at the helm holds station and leaves; under way it is refused.
+  fixture.fleet.docking!.stationKeeping = false; carrier.velocity = { x: 0, y: 0, z: -2 };
   const changed = stepGame(fixture, [{ type: "exit" }, { type: "carrier", action: "failure-drill" }], water);
   assert.equal(notices(changed.events)[0]?.refusal?.vehicleId, carrier.id);
   assert.equal(notices(changed.events)[0]?.refusal?.code, "carrier");

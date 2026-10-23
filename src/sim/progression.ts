@@ -25,6 +25,7 @@ import { CAMPAIGN_PENDING, CAMPAIGN_SITES } from "../content/campaign/index.js";
 import { isStopRestoration, STOP_RESTORATIONS, stopForSite, WORKING_STOPS, type WorkingStop } from "../content/stops.js";
 import { CROWN_BENCH_EXCLUDES, CROWN_BENCH_FROM } from "../content/hub/crownStation.js";
 import { launchCarrier } from "./carrier.js";
+import { aboardCarrier, carrierExteriorInteractions, carrierInteractions } from "./carrierStations.js";
 import { isSuitProtection } from "./ecologyLink.js";
 import type {
   EvidenceId,
@@ -61,6 +62,7 @@ import { makeVehicle } from "./state.js";
 import { personalLimit as personalPressureLimit, safePersonalDepth } from "./capabilities.js";
 import { RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
 import { recordStory, storyInteractions } from "./storyLink.js";
+import { catchBundle, emptyGround } from "./fauna/catch.js";
 export interface Interaction {
   id: string;
   label: string;
@@ -76,6 +78,8 @@ function cabinInteractions(s: GameState): Interaction[] {
 }
 export function interactions(s: GameState): Interaction[] {
   if (cabinHull(s)) return cabinInteractions(s);
+  // UX-1: aboard the Hearthline only its own stations are in reach.
+  if (aboardCarrier(s)) return carrierInteractions(s);
   const targets: Interaction[] = [
     ...Object.entries(SOURCES).map(([id, a]) => ({
       id,
@@ -99,6 +103,7 @@ export function interactions(s: GameState): Interaction[] {
       id, label: r.label, position: r.position, kind: "record" as const,
     })),
     ...storyInteractions(s),
+    ...carrierExteriorInteractions(s),
   ];
   targets.push(
     {
@@ -217,9 +222,10 @@ export function collectWithOutcome(s: GameState, id: SourceId): CollectionOutcom
       s.world.action = { sourceId: id, seconds: 20, kind: "food" };
       return { refusal: null, pickup: null };
     }
-    return refused("Exposed stock is exhausted. Survey the matching second patch, or sort this host’s finite reserve.");
+    return refused(emptyGround(id) ?? "Exposed stock is exhausted. Survey the matching second patch, or sort this host’s finite reserve.");
   }
-  const n = Math.min(def.bundle, node.stock);
+  // CR-1: a carried hand net takes one more fish from a school.
+  const n = Math.min(catchBundle(s, id), node.stock);
   const destination = hasRoom(s, "diver", ITEMS[def.item].cu * n)
     ? "diver"
     : containerAccessible(s, "buoy_hold") &&

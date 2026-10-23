@@ -1,0 +1,23 @@
+{
+  "scenes": {
+    "divide": {
+      "captions": [
+        " | Layer skates patrol the mirror while the crest current runs. When it slackens and the ribbons stand upright, they sink to rest. | | ",
+        " | | | ",
+        " | | Layer skates' slack-water rest · one phase timed in the journal. | ",
+        " | | | "
+      ],
+      "banners": [],
+      "minHealth": 100,
+      "notes": {}
+    }
+  },
+  "shots": [
+    "/work/tmp/cr1/shots2/divide-01-skate-patrolling-under-mirror.png",
+    "/work/tmp/cr1/shots2/divide-02-skate-sinking-to-rest.png",
+    "/work/tmp/cr1/shots2/divide-03-across-the-mirror.png",
+    "/work/tmp/cr1/shots2/divide-04-above-the-layer.png"
+  ],
+  "errors": [],
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)"
+}

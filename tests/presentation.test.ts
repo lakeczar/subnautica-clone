@@ -12,7 +12,7 @@ import { cellRechargePreview, distractionPreview, exitBlock } from "../src/sim/v
 import { dartPerformance } from "../src/sim/modules.js";
 import { executeCommand, stepGame } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
-import { aimRay, aimedInteraction } from "../src/sim/targeting.js";
+import { aimRay, aimedInteraction, reachPreview } from "../src/sim/targeting.js";
 import { faceTarget, NORMAL_VIEWS, protectedReadyState, readyState } from "./targeting-support.js";
 import type { GameCommand, WorldQueries } from "../src/sim/types.js";
 import { ExpeditionSession } from "../src/runtime/session.js";
@@ -307,7 +307,8 @@ test("minimal prompt follows actual aimed actions across all real hosts, and is 
     assert.deepEqual(s, before, "presentation and target queries are pure");
     s.player.pose.yaw += Math.PI; view.update(s, false);
     const away = aimedInteraction(s, world);
-    if (!away) assert.equal(get("interact-prompt").innerHTML, "", v.id + " looking away");
+    // (Another host now ahead may show its own "Move closer"; nothing of the old one stays.)
+    if (!away && !reachPreview(s, world)) assert.equal(get("interact-prompt").innerHTML, "", v.id + " looking away");
   }
 });
 

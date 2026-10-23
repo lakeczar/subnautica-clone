@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DIVER_ESCAPE_SPEED } from "../src/content/ecology/species.js";
 import type { ThreatAgentId } from "../src/content/ecology/species.js";
-import { canReach, definitionOf, homeOf, layerY } from "../src/sim/ecology/agents.js";
+import { canReach, definitionOf, homeOf, layerY, speciesOf } from "../src/sim/ecology/agents.js";
+import { windowBusy } from "../src/sim/fauna/windows.js";
 import { openWater } from "../src/sim/ecology/adapter.js";
 import { createEcology, stepEcology } from "../src/sim/ecology/ecology.js";
 import { emptyExposure, protectionFor, sampleHazards, stepExposure } from "../src/sim/ecology/hazards.js";
@@ -64,16 +65,24 @@ const CLOSED: readonly Vec3[] = [{ x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, { x
 function assertClosed(body: EcologyWorld, at: Vec3, label: string): void {
   for (const d of CLOSED) assert.equal(body.clearLine(at, offset(at, d.x * 2, d.y * 2, d.z * 2)), false, `${label}: the face toward ${JSON.stringify(d)} blocks the diver`);
 }
-function cornered(f: Fixture): Outcome {
+/** When the cornered diver sets off. `legacy`: once every engaged animal rests
+ * in its refractory (S4's policy, from tick 0). `windows` (CR-1): also while
+ * the fixture's animal is plainly busy in its natural window, feeding or
+ * resting, as a player watching it would see, engaged before or not. */
+type Escape = "legacy" | "windows";
+function cornered(f: Fixture, start = 0, escape: Escape = "legacy"): Outcome {
   const solids = crevice(f.at), world = openWater({ solids }), body = openWater({ solids: solids.map(b => inflate(b, DIVER_RADIUS)) });
   assertClosed(body, f.at, "before the encounter");
   assert.equal(world.clearLine(f.at, offset(f.at, 3, 0, 0)), false, "the back wall also blocks sight and contact");
   const state: EcologyState = createEcology();
   let pos = { ...f.at }, drift: Vec3 = { x: 0, y: 0, z: 0 }, loss = 0, minHealth = 100, clear = -1, safeAt = -1, leg = 0;
   const engaged = new Set<string>(), strikes: Outcome["strikes"] = [], events: Outcome["events"] = [], path: Outcome["path"] = [];
-  for (let tick = 0; tick < 60 * 180 && safeAt < 0; tick++) {
+  const settled = (a: EcologyState["agents"][number], tick: number): boolean =>
+    (a.mode === "rest" && a.refractory > 0) || (escape === "windows" && windowBusy(speciesOf(a.id), tick));
+  for (let tick = start; tick < start + 60 * 180 && safeAt < 0; tick++) {
     for (const a of state.agents) if (a.mode !== "rest") engaged.add(a.id);
-    if (clear < 0 && engaged.size && state.agents.every(a => !engaged.has(a.id) || (a.mode === "rest" && a.refractory > 0))) clear = tick;
+    const open = escape === "windows" && windowBusy(speciesOf(f.id), tick);
+    if (clear < 0 && (engaged.size || open) && state.agents.every(a => !engaged.has(a.id) || settled(a, tick))) clear = tick;
     let velocity: Vec3 = { x: 0, y: 0, z: 0 };
     if (clear >= 0) {
       // Escape: quiet swim at the slowest unaided speed, lamp still on, with drift.
@@ -110,27 +119,40 @@ function cornered(f: Fixture): Outcome {
 /** Documented bound for one cornered engagement plus escape, all ecology causes. */
 export const CORNERED_LOSS_BOUND = 60;
 
+/** Every assertion of the adverse case, for one cornered run. */
+function assertAdverse(id: ThreatAgentId, variant: string, f: Fixture, o: Outcome, start: number, escape: Escape): void {
+  const report = { clearSeconds: +(o.clear / 60).toFixed(2), safeSeconds: +(o.safeAt / 60).toFixed(2), loss: +o.loss.toFixed(2),
+    strikeLoss: o.strikes.reduce((a, s) => a + s.loss, 0) };
+  console.log(`cornered ${id}${variant ? `/${variant}` : ""}${start ? ` from ${start / 60} s (${escape})` : ""}: ${JSON.stringify(report)}`);
+  // From tick 0 the fixture always produces contact; at other phases the window may come first.
+  if (start === 0) assert.ok(o.strikes.length >= 1, "the fixture does produce contact");
+  assert.ok(o.clear > 0, "every engaged animal disengages while the diver stays cornered");
+  assert.ok(o.safeAt > o.clear, "the diver reaches safety along the route");
+  assert.ok(o.strikes.every(s => s.tick < o.clear), "nothing strikes during the escape");
+  assert.ok(o.loss <= CORNERED_LOSS_BOUND, `total ecology loss ${o.loss.toFixed(2)} within ${CORNERED_LOSS_BOUND}`);
+  assert.ok(o.minHealth > 0, "alive throughout");
+  // The rock is still there after the encounter and the escape never crossed it.
+  assertClosed(o.body, f.at, "after the encounter");
+  for (let i = 1; i < o.path.length; i++) assert.ok(o.body.clearLine(o.path[i - 1]!.pos, o.path[i]!.pos), `step ${i} stays out of rock`);
+  // Independent accounting: replay the recorded path through a fresh exposure
+  // load. Total effects loss must equal strike loss plus that hazard harm.
+  const exposure = emptyExposure();
+  let hazard = 0;
+  for (const { tick, pos } of o.path) hazard += stepExposure(exposure, sampleHazards(pos, tick), protectionFor(null, []), true, false).harm;
+  assert.ok(Math.abs(o.loss - (report.strikeLoss + hazard)) < 1e-6, `effects loss ${o.loss} = strikes ${report.strikeLoss} + hazard ${hazard}`);
+  if (id === "divide_skate_saddle" && start === 0) assert.ok(hazard > 10, `the skate case includes real brine harm (${hazard.toFixed(2)})`);
+}
+
 for (const [id, variant] of [["rift_stalker_passage", ""], ["rift_stalker_passage", "passage"], ["divide_skate_saddle", ""], ["district_choir_gallery", ""]] as const) {
   test(`adverse (${id}${variant ? `, ${variant} route` : ""}): cornered with no tool, lamp on and loud, the diver survives contact and hazard, then escapes through the open side`, () => {
-    const f = fixture(id, variant), o = cornered(f);
-    const report = { clearSeconds: +(o.clear / 60).toFixed(2), safeSeconds: +(o.safeAt / 60).toFixed(2), loss: +o.loss.toFixed(2),
-      strikeLoss: o.strikes.reduce((a, s) => a + s.loss, 0) };
-    console.log(`cornered ${id}${variant ? `/${variant}` : ""}: ${JSON.stringify(report)}`);
-    assert.ok(o.strikes.length >= 1, "the fixture does produce contact");
-    assert.ok(o.clear > 0, "every engaged animal disengages while the diver stays cornered");
-    assert.ok(o.safeAt > o.clear, "the diver reaches safety along the route");
-    assert.ok(o.strikes.every(s => s.tick < o.clear), "nothing strikes during the escape");
-    assert.ok(o.loss <= CORNERED_LOSS_BOUND, `total ecology loss ${o.loss.toFixed(2)} within ${CORNERED_LOSS_BOUND}`);
-    assert.ok(o.minHealth > 0, "alive throughout");
-    // The rock is still there after the encounter and the escape never crossed it.
-    assertClosed(o.body, f.at, "after the encounter");
-    for (let i = 1; i < o.path.length; i++) assert.ok(o.body.clearLine(o.path[i - 1]!.pos, o.path[i]!.pos), `step ${i} stays out of rock`);
-    // Independent accounting: replay the recorded path through a fresh exposure
-    // load. Total effects loss must equal strike loss plus that hazard harm.
-    const exposure = emptyExposure();
-    let hazard = 0;
-    for (const { tick, pos } of o.path) hazard += stepExposure(exposure, sampleHazards(pos, tick), protectionFor(null, []), true, false).harm;
-    assert.ok(Math.abs(o.loss - (report.strikeLoss + hazard)) < 1e-6, `effects loss ${o.loss} = strikes ${report.strikeLoss} + hazard ${hazard}`);
-    if (id === "divide_skate_saddle") assert.ok(hazard > 10, `the skate case includes real brine harm (${hazard.toFixed(2)})`);
+    const f = fixture(id, variant);
+    assertAdverse(id, variant, f, cornered(f), 0, "legacy");
+  });
+  // CR-1: the same case arriving at other points of the animals' cycles. A
+  // diver who waits for the refractory alone may sit through a whole feeding
+  // or rest, so these leave when the animal is plainly busy in its window too.
+  test(`adverse (${id}${variant ? `, ${variant} route` : ""}) at other cycle phases, leaving when the animal is busy in its natural window`, () => {
+    const f = fixture(id, variant);
+    for (const start of [17 * 60, 37 * 60, 67 * 60]) assertAdverse(id, variant, f, cornered(f, start, "windows"), start, "windows");
   });
 }

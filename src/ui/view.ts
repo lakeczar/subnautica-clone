@@ -9,6 +9,8 @@ import { currentObjective } from "../sim/objective.js";
 const OBJECTIVE_KEY = "siltwake.hud.objective.v1";
 import type { JournalTabId } from "../sim/systems/journal.js";
 import { hazardBanners, HudView, type HudAim } from "./hud.js";
+import { developerMode } from "./developer.js";
+import { HelmReadout } from "./helmHud.js";
 import type { ThreatDamage } from "./notices.js";
 
 export type { PanelKind } from "./panels.js";
@@ -55,6 +57,7 @@ export class GameView {
   private readonly hud: HTMLElement;
   private readonly panels: PanelView;
   private readonly hudPresentation: HudView;
+  private readonly helmReadout: HelmReadout;
   private wasPlaying = false;
   private canContinue = false;
   private graphicsFailed = false;
@@ -66,7 +69,7 @@ export class GameView {
     world: WorldQueries,
   ) {
     // Diagnostic scenarios stay out of the player's front door unless ?dev is set.
-    const developer = new URLSearchParams(globalThis.location?.search ?? "").has("dev");
+    const developer = developerMode();
     root.innerHTML = `
       <canvas id="ocean" tabindex="0" aria-label="Siltwake 3D reef. WASD to move, mouse or arrow keys to look. Escape opens the menu."></canvas>
       <div class="vignette" aria-hidden="true"></div>
@@ -76,7 +79,7 @@ export class GameView {
         <div class="hud-top"><div id="hud-region" class="region"><strong id="region-name">Hearth Reef</strong><p id="hud-objective" class="hud-objective" hidden></p></div>
         <div id="hud-heading" class="heading"><span id="compass">N</span><small id="bearing">000°</small></div>
         <div class="hud-actions"><div id="hud-tools"><button data-action="inventory">Cargo <kbd>Tab</kbd></button><button data-action="notebook">Notebook <kbd>J</kbd></button><button data-action="craft">Fabricate <kbd>K</kbd></button><button data-action="save" title="Save locally (F5)">Save <kbd>F5</kbd></button></div><button id="hud-pause" data-action="pause">Menu <kbd>Esc</kbd></button></div></div>
-        <div id="call-cue" class="call-cue" hidden><span id="call-dial" class="call-dial" aria-hidden="true"></span><span id="call-elevation" aria-hidden="true"></span><span id="call-direction" role="status" aria-live="polite" aria-atomic="true"></span></div><div class="hud-instruments"><div id="vitals" class="vitals"></div><div id="pitch-cue" class="pitch-cue" aria-label="Pitch" hidden></div></div><span id="hazard-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><span id="damage-announce" class="hud-sr" role="alert" aria-live="assertive" aria-atomic="true"></span><span id="action-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><div class="motion-guidance"><span id="surface-cue" class="surface-cue" hidden>Surface</span><div id="impact-notice" class="impact-notice" role="status" aria-live="polite" hidden></div><span id="blocked-ascent" class="blocked-ascent" role="status" aria-live="polite" hidden>Blocked above</span><div id="pilot-guidance" class="pilot-guidance" aria-label="Pilot exit guidance" hidden></div></div>
+        <div id="call-cue" class="call-cue" hidden><span id="call-dial" class="call-dial" aria-hidden="true"></span><span id="call-elevation" aria-hidden="true"></span><span id="call-direction" role="status" aria-live="polite" aria-atomic="true"></span></div><div class="hud-instruments"><div id="vitals" class="vitals"></div><div id="pitch-cue" class="pitch-cue" aria-label="Pitch" hidden></div></div><span id="hazard-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><span id="damage-announce" class="hud-sr" role="alert" aria-live="assertive" aria-atomic="true"></span><span id="action-announce" class="hud-sr" role="status" aria-live="polite" aria-atomic="true"></span><div class="motion-guidance"><span id="surface-cue" class="surface-cue" hidden>Surface</span><div id="impact-notice" class="impact-notice" role="status" aria-live="polite" hidden></div><span id="blocked-ascent" class="blocked-ascent" role="status" aria-live="polite" hidden>Blocked above</span><div id="pilot-guidance" class="pilot-guidance" aria-label="Pilot exit guidance" hidden></div><div id="helm-readout" class="helm-readout" role="status" aria-label="Hearthline helm" hidden></div></div>
         <section id="opening" class="opening" aria-label="Damaged pod opening" hidden><div aria-live="polite" aria-atomic="true"><span id="opening-progress" class="eyebrow">POD CHECK 1 / 4</span><h2 id="opening-title"></h2><p id="opening-caption"></p></div><div class="opening-actions"><button id="opening-act" data-action="opening">Act <kbd>E</kbd></button><button id="opening-skip" data-action="skip">Skip · hold <kbd>Space</kbd></button><label class="check"><input id="opening-subtitles" type="checkbox" checked /> Captions</label></div><small id="opening-detail"></small></section><div id="crosshair" class="crosshair" aria-hidden="true"></div><div class="encounter-stack"><div id="alert-stack" class="alert-stack"><div id="hazard" class="hazard" aria-live="off"></div><p id="audio-caption" class="audio-caption" role="status" aria-live="polite" hidden></p></div><div id="interaction-stack" class="interaction-stack"><div id="interact-prompt" class="interact-prompt"></div><div id="action-result" class="action-result" hidden></div><button id="look-action" class="look-action" data-action="lock" hidden>Click to look</button></div></div>
         <div id="hud-bottom" class="hud-bottom"><div class="telemetry"><span class="depth"><b id="depth">0.0</b><small>m / DEPTH</small></span><span class="mode"><strong id="movement">On foot</strong><small id="refuge-distance">Home pod · 0 m</small></span></div>
         <div class="explore-note"><span id="cruise" hidden>FORWARD CRUISE · R TO STOP</span><p id="context-hint">Walk down the amber-edged ramp to the water.</p><small id="pulse-summary"></small><small id="control-hint"></small></div></div>
@@ -97,7 +100,7 @@ export class GameView {
           <section id="settings-menu" class="settings-menu" aria-labelledby="settings-title" hidden>
             <div class="settings-head"><h2 id="settings-title">Settings</h2><button id="settings-back" data-action="settings-back">Back <kbd>Esc</kbd></button></div>
             <div class="settings-columns">
-              <dl class="controls" aria-label="Controls"><div><dt>W A S D</dt><dd>Move / swim</dd></div><div><dt>Mouse / ↑ ↓ ← →</dt><dd>Look</dd></div><div><dt>Space / C</dt><dd>Rise or jump / dive</dd></div><div><dt>Shift</dt><dd>Faster</dd></div><div><dt>R</dt><dd>Forward cruise</dd></div><div><dt>E / Q</dt><dd>Interact / scan</dd></div><div><dt>B / F / G</dt><dd>Buoy / meal / pulse</dd></div><div><dt>L / T / Y</dt><dd>Lamp / glow lure / startle ink</dd></div><div><dt>Tab or I / K / J / H</dt><dd>Cargo / fabricate / notebook / hint</dd></div><div><dt>W / S · A / D</dt><dd>Pilot thrust · slide</dd></div><div><dt>X</dt><dd>Exit craft (hold while moving)</dd></div><div><dt>Z</dt><dd>Quiet movement</dd></div>${developer ? "<div><dt>V</dt><dd>Carrier fixture panel</dd></div>" : ""}<div><dt>Esc / F5</dt><dd>Pause / save</dd></div></dl>
+              <dl class="controls" aria-label="Controls"><div><dt>W A S D</dt><dd>Move / swim</dd></div><div><dt>Mouse / ↑ ↓ ← →</dt><dd>Look</dd></div><div><dt>Space / C</dt><dd>Rise or jump / dive</dd></div><div><dt>Shift</dt><dd>Faster</dd></div><div><dt>R</dt><dd>Forward cruise</dd></div><div><dt>E / Q</dt><dd>Interact / scan</dd></div><div><dt>B / F / G</dt><dd>Buoy / meal / pulse</dd></div><div><dt>L / T / Y</dt><dd>Lamp / glow lure / startle ink</dd></div><div><dt>Tab or I / K / J / H</dt><dd>Cargo / fabricate / notebook / hint</dd></div><div><dt>W / S · A / D</dt><dd>Pilot thrust · slide</dd></div><div><dt>X</dt><dd>Exit craft (hold while moving)</dd></div><div><dt>Z</dt><dd>Quiet movement</dd></div><div><dt>Hearthline helm</dt><dd>A / D turn · W / S ahead or astern · mouse looks around · X hold station and leave</dd></div><div><dt>V</dt><dd>Hearthline berths and lock (aboard or at its hatch)</dd></div><div><dt>Esc / F5</dt><dd>Pause / save</dd></div></dl>
               <div class="settings-fields">
                 <div class="settings"><label>Rendering <select id="quality"><option value="rich">Rich · full viewport</option><option value="light">Light · lower resolution</option></select></label>
                 <label>Sensitivity <output id="sensitivity-value">1.0</output><input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label>Mouse look<select id="mouse-mode"><option value="captured">Captured</option><option value="drag">Drag</option></select></label><label>Key turn speed <output id="key-turn-value">1.0</output><input id="key-turn" type="range" min="0.5" max="2" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
@@ -111,7 +114,7 @@ export class GameView {
         </div>
         <div class="scene-caption" aria-hidden="true" hidden><span>01 / HEARTH REEF</span><p>Follow the light.<br/>Learn the shore.</p><i></i><small>A QUIET PLACE TO BEGIN</small></div>
       </div>
-      <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-chrome"><div class="panel-header"><button id="panel-return" data-action="close-panel">Return <kbd>Esc</kbd></button><h2 id="panel-title"></h2><nav aria-label="Expedition panels"><button data-action="inventory-panel">Cargo</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Journal</button><button data-action="systems-panel">Base</button><button data-action="fit-panel">Fit</button><button id="carrier-nav" data-action="carrier-panel" hidden>Carrier fixture</button></nav><span class="panel-paused">Paused</span></div><p id="panel-feedback" role="status" aria-live="polite" hidden></p></div><div id="panel-content"></div></div></section>
+      <section id="game-panel" class="game-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" hidden><div class="panel-frame"><div class="panel-chrome"><div class="panel-header"><button id="panel-return" data-action="close-panel">Return <kbd>Esc</kbd></button><h2 id="panel-title"></h2><nav aria-label="Expedition panels"><button data-action="inventory-panel">Cargo</button><button data-action="craft-panel">Fabricate</button><button data-action="notebook-panel">Journal</button><button data-action="systems-panel">Base</button><button data-action="fit-panel">Fit</button><button id="carrier-nav" data-action="carrier-panel" hidden>Hearthline</button></nav><span class="panel-paused">Paused</span></div><p id="panel-feedback" role="status" aria-live="polite" hidden></p></div><div id="panel-content"></div></div></section>
       <div class="session-notices"><section id="graphics-error" class="graphics-error" role="alert" hidden><h2>The ocean could not open</h2><p id="graphics-error-text"></p><p>Your existing local save has not been changed. Save exports remain available in the menu.</p></section>
       <aside id="session-warning" class="session-warning" aria-label="Local saving disabled" hidden><span>Autosave off · export before closing</span><button data-action="export">Export save</button></aside>
       <div id="system-status" role="status" aria-live="polite" hidden></div><div id="notification" role="status" aria-live="polite" hidden></div></div>
@@ -123,6 +126,7 @@ export class GameView {
     this.hud = this.get("hud");
     this.panels = new PanelView(root, world);
     this.hudPresentation = new HudView(root, world);
+    this.helmReadout = new HelmReadout(this.get("helm-readout"), world);
     const options = { signal: this.abort.signal };
     const map: Record<string, () => void> = {
       opening: () => actions.command({ type: "interact" }),
@@ -429,6 +433,7 @@ export class GameView {
     this.latest = state;
     this.panels.observeStorageContext(state);
     this.hudPresentation.update(state, cruise, forward, aim);
+    this.helmReadout.update(state);
     // The current objective, one line under the region name (M2 audit #5).
     const objective = this.get("hud-objective");
     const line = state.opening.phase >= 4 && this.showObjective ? currentObjective(state).step : "";

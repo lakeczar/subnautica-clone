@@ -1,4 +1,5 @@
 import { PLACED_SOURCE_IDS } from "../content/worldSources.js";
+import { isFaunaSource } from "../content/fauna/grounds.js";
 import type { GeometryCache } from "./geometryCache.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Scene } from "@babylonjs/core";
@@ -124,7 +125,8 @@ export function createEnvironment(scene: Scene, cel: ShaderMaterial, region?: Re
   // and tagged alloy sits on a fallen service frame. Hosts persist after harvest.
   // These skins sample the authoritative height field; they add no art-only shelf.
   for (const [id, source] of Object.entries(SOURCES)) {
-    if (PLACED_SOURCE_IDS.has(id)) continue;
+    // CR-1's creature grounds are drawn by the creature layer (render/creatures/fauna.ts).
+    if (PLACED_SOURCE_IDS.has(id) || isFaunaSource(id)) continue;
     if (region && source.region !== region) continue;
     const { x, z } = source.position;
     if (BASIN_SOURCE_IDS.some(s => s === id)) {

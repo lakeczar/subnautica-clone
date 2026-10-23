@@ -29,8 +29,11 @@ import { registerEcologyNotes } from "./ecologyNotes.js";
 import { registerStoryNotebook } from "./storyNotebook.js";
 import { DISCOVERY_IDS, type DiscoveryId } from "../content/story/evidence.js";
 import { basePanel, fitPanel, journalPanel, JOURNAL_TABS } from "./systemsPanels.js";
+import { registerFaunaPanels } from "./faunaPanels.js";
 import { currentObjective } from "../sim/objective.js";
 import type { JournalTabId } from "../sim/systems/journal.js";
+import { carrierPanel } from "./carrierPanel.js";
+import { developerMode } from "./developer.js";
 
 const isDiscovery = (id: string): id is DiscoveryId => (DISCOVERY_IDS as readonly string[]).includes(id);
 
@@ -91,6 +94,8 @@ export class PanelView {
     registerStoryNotebook(this);
     // S4's wildlife and hazard notes, the same way (C3).
     registerEcologyNotes(this);
+    // CR-1: cooking a catch and bait in Cargo.
+    registerFaunaPanels(this);
   }
 
   private get<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -178,7 +183,8 @@ export class PanelView {
     const scrollTop = this.renderedKind === kind ? this.get("game-panel").scrollTop : 0;
     this.renderedKind = kind;
     this.commands.clear();
-    this.get("carrier-nav").hidden = state.scenario !== "carrier-fixture";
+    // UX-1: the Hearthline console is in the nav once the fleet has a carrier.
+    this.get("carrier-nav").hidden = !state.fleet.docking;
     const button: CommandButton = (label, command, disabled = false, reason, name) => {
       const id = `command-${this.commands.size}`;
       this.commands.set(id, command);
@@ -196,7 +202,7 @@ export class PanelView {
       inventory: "Cargo",
       craft: "Fabricate",
       notebook: "Journal",
-      carrier: "Developer test · carrier fixture",
+      carrier: "Hearthline",
       systems: "Base",
       fit: "Fit",
     }[kind];
@@ -217,31 +223,7 @@ export class PanelView {
     } else if (kind === "fit") {
       html = fitPanel(state, button, (id, label, body, open) => this.group(`fit:${id}`, label, body, open));
     } else {
-      const d = state.fleet.docking;
-      html =
-        '<p class="fixture-label">SEEDED FEASIBILITY · no earned campaign progression · station keeping only, no underway walking</p>';
-      if (!d)
-        html += "<p>Open the separate carrier fixture from the main menu.</p>";
-      else {
-        html += `<p>${d.stationKeeping ? "Station keeping" : "Under helm control"} · ${d.configuration} configuration · ${d.transaction ? `${d.transaction.type} / ${d.transaction.phase}` : "lock closed"} · completed transactions ${d.completed.length}</p><div class="service-actions">`;
-        for (const [label, a] of [
-          ["Engage station keeping", "station-keep"],
-          ["Take helm", "helm"],
-          ["Leave helm", "leave-helm"],
-          ["Leave aft vestibule", "leave-interior"],
-          ["Enter exterior vestibule", "enter-interior"],
-          ["Reconfigure empty supported berth", "reconfigure"],
-          ["Toggle fixture obstruction", "block-exit"],
-          ["Interrupt lock transaction", "interrupt"],
-          ["Fixture incapacity / refuge fallback", "failure-drill"],
-        ] as const)
-          html += button(label, { type: "carrier", action: a });
-        html += "</div>";
-        for (const v of state.fleet.vehicles.filter(
-          (v) => v.id !== d.vehicleId,
-        ))
-          html += `<article><h3>${HULLS[v.hull].label} · ${v.berth ? "dry isolated berth " + v.berth.slot : "world craft"}</h3><p>Identity ${v.id} · power ${v.charge.toFixed(1)} · damage ${(100 - v.health).toFixed(1)} · cargo ${usedCapacity(state, v.cargoId)} CU</p>${button(v.berth ? "Launch through lock" : "Capture from corridor", { type: "carrier", action: v.berth ? "launch" : "capture", vehicleId: v.id })}</article>`;
-      }
+      html = carrierPanel(state, this.world, button, developerMode());
     }
     this.get("panel-content").innerHTML = html;
     if (restoreFocus) {

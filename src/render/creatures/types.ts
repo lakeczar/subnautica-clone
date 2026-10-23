@@ -10,5 +10,8 @@ export interface CreatureView {
   /** Meshes whose color buffers this view animates (for tests and culling). */
   readonly meshes: readonly Mesh[];
   update(pose: ThreatPose, seconds: number): void;
+  /** Shows or hides the whole creature, world-space cues included. Culling uses
+   * this, never `root` alone: a cue in world space is not under the root. */
+  setEnabled(enabled: boolean): void;
   dispose(): void;
 }
