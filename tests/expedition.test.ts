@@ -33,6 +33,7 @@ import {
   updateRecovery,
 } from "../src/sim/recovery.js";
 import type { GameEvent, GameState } from "../src/sim/types.js";
+import { play } from "./step-support.js";
 const world = createWorldQueries();
 const ready = (): GameState => {
   const s = createGame();
@@ -300,7 +301,7 @@ test("food-empty restart preserves movement, has warned grace and grants accessi
   s.player.vitals.food = 0;
   s.player.graceSeconds = 0;
   const health = s.player.vitals.health;
-  for (let i = 0; i < 60; i++) s = stepGame(s, [], world).state;
+  s = play(s, 60, [], world);
   assert.equal(s.player.vitals.health, health);
   assert.equal(s.player.starvationSeconds, 1.0000000000000013);
   s = executeCommand(s, { type: "emergency-meal" }, world).state;
@@ -398,10 +399,10 @@ test("distraction preserves the interior projection and expiry and refuses an ou
   });
   roundTrip(result.state);
   let active = result.state;
-  for (let i = 0; i < 719; i++) active = stepGame(active, [], world).state;
+  active = play(active, 719, [], world);
   assert.ok(active.world.threat.distraction);
   assert.ok(active.world.threat.distractionSeconds > 0);
-  for (let i = 0; i < 2; i++) active = stepGame(active, [], world).state;
+  active = play(active, 2, [], world);
   assert.equal(active.world.threat.distraction, null);
   assert.equal(active.world.threat.distractionSeconds, 0);
   roundTrip(active);
@@ -575,7 +576,7 @@ test("pursuing hunter uses the same solid sweep instead of crossing a wall", () 
   s.world.threat.position = { x: 124, y: -110, z: -110 };
   s.world.threat.mode = "pursue";
   s.world.threat.interest = 12;
-  for (let i = 0; i < 90; i++) s = stepGame(s, [], barrier).state;
+  s = play(s, 90, [], barrier);
   assert.ok(s.world.threat.position.x <= 126.801, JSON.stringify(s.world.threat.position));
 });
 test("actual oxygen exhaustion causes refuge return, retained knowledge/tools and capped identified cargo without vessel duplication", () => {
@@ -587,7 +588,7 @@ test("actual oxygen exhaustion causes refuge return, retained knowledge/tools an
   s.player.vitals.oxygen = 0.01;
   s.player.vitals.health = 0.1;
   addItem(s, "silica_glass", 10, "diver");
-  for (let i = 0; i < 120; i++) s = stepGame(s, [], world).state;
+  s = play(s, 120, [], world);
   assert.equal(s.metrics.failures, 1);
   assert.equal(s.player.refugeId, "island_workshop");
   assert.ok(s.player.vitals.food >= 59);

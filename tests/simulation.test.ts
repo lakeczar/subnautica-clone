@@ -16,6 +16,7 @@ import {
   WORLD_BOUNDS,
 } from "../src/sim/world.js";
 import type { GameCommand, GameState, WorldQueries } from "../src/sim/types.js";
+import { play } from "./step-support.js";
 
 const createGame = (): GameState => {
   const s = openingGame();
@@ -37,9 +38,7 @@ function run(
   seconds: number,
   query = world,
 ): GameState {
-  for (let i = 0; i < Math.round(seconds / FIXED_SECONDS); i++)
-    state = stepGame(state, commands, query).state;
-  return state;
+  return play(state, Math.round(seconds / FIXED_SECONDS), commands, query);
 }
 
 test("fixed updates are deterministic across normal display frame schedules", () => {

@@ -4,11 +4,12 @@ import type { RecipeId } from "../src/content/registry.js";
 import { decodeSave, encodeSave, createEnvelope } from "../src/save/codec.js";
 import { validState } from "../src/save/validation.js";
 import { addItem } from "../src/sim/inventory.js";
-import { executeCommand, stepGame } from "../src/sim/step.js";
+import { executeCommand } from "../src/sim/step.js";
 import type { GameCommand, GameEvent, GameState } from "../src/sim/types.js";
 import { gameWorld } from "../src/sim/world.js";
 import { at, creelFirst, fund, meta } from "./b1-support.js";
 import { faceTarget, NORMAL_VIEWS } from "./targeting-support.js";
+import { play } from "./step-support.js";
 
 export const world = gameWorld();
 
@@ -38,7 +39,7 @@ export function roundTrip(s: GameState): GameState {
 }
 
 export const idle = (seconds: number, s: GameState): GameState => {
-  for (let i = 0; i < seconds * 60; i++) s = stepGame(s, [], world).state;
+  s = play(s, seconds * 60, [], world);
   return s;
 };
 
