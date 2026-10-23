@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { boostWeight, setBoost, unmeasuredContext } from "./contention.mjs";
+import { unmeasuredContext } from "./contention.mjs";
 import { DEFAULTS, PROTOCOL, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 
@@ -38,11 +38,10 @@ export function loadConfig(env = process.env) {
   if (env.SILTWAKE_SCHED_UNIT_PREFIX) cfg.unitPrefix = env.SILTWAKE_SCHED_UNIT_PREFIX;
   if (env.SILTWAKE_SCHED_SUPERVISOR_PREFIX) cfg.supervisorPrefix = env.SILTWAKE_SCHED_SUPERVISOR_PREFIX;
   cfg.production = dir === PRODUCTION_DIR;
-  // The slice whose CPU weight an exclusive job raises while it runs (TST-16,
-  // contention.mjs): the heavy slice's top-level parent (siltwake.slice). A
-  // private state directory (tests) never touches the real one: it boosts only
-  // a slice its environment or config.json names.
-  cfg.boostSlice = env.SILTWAKE_SCHED_BOOST_SLICE || fileCfg.boostSlice || (cfg.production ? `${cfg.slice.split("-")[0].replace(/\.slice$/, "")}.slice` : null);
+  // The top-level slice exclusive jobs run in, whose CPU weight is fixed in its
+  // unit file (TST-16, contention.mjs). A private state directory (tests) uses
+  // only a slice its environment or config.json names.
+  cfg.exclusiveSlice = env.SILTWAKE_SCHED_EXCLUSIVE_SLICE || fileCfg.exclusiveSlice || (cfg.production ? "siltwake_exclusive.slice" : null);
   cfg.exclusiveCpuWeight = fileCfg.exclusiveCpuWeight ?? 10000;
   cfg.paths = {
     state: join(dir, "state.json"),
@@ -374,44 +373,7 @@ export function reconcile(cfg, state) {
     delete state.tickets[t.id];
     changed = true;
   }
-  // The exclusive priority boost (TST-16) lasts only while its job runs under
-  // its live holder. Its record keeps ownership until a verified reset. It is
-  // reset only once the owner can't act any more: the holder dead *and* its
-  // scope empty (R2-F1: the same boundary as the ticket's lifetime), so an
-  // apply still in flight can never land after the reset.
-  if (state.boost) {
-    const b = state.boost;
-    if (!alive(b.owner) && !(b.ownerUnit && scopePopulated(b.ownerUnit))) {
-      const r = setBoost(b.slice, false);
-      ledger(cfg, { event: "boost-reset", ticket: b.ticket, slice: b.slice, verified: r.verified, error: r.error, by: "reconcile" });
-      if (r.verified) delete state.boost; else Object.assign(b, { state: "releasing", failures: (b.failures ?? 0) + 1 });
-      changed = true;
-    }
-  } else changed = boostBackstop(cfg, state).changed || changed;
   return changed;
-}
-
-/**
- * The backstop for our slice's CPU weight (TST-16 R2): with no boost record
- * and no exclusive job that could hold one, the weight is reset whatever
- * happened (a bypassed rollback, a lost record). During a handover
- * (state.frozen) no job may hold a boost, so a running exclusive doesn't
- * protect it. Runs only inside transaction(), so it is serialised with
- * ownership and admission. An idle slice (no cgroup) is checked through
- * systemd at most once a minute, or always with `force` (the handover's
- * certification). Returns { changed, clean }: clean when the weight is
- * verified at its default.
- */
-export function boostBackstop(cfg, state, { force = false } = {}) {
-  if (!cfg.boostSlice) return { changed: false, clean: true };
-  if (state.boost || (!state.frozen && Object.values(state.tickets).some((t) => t.state === "running" && t.req?.exclusive))) return { changed: false, clean: false };
-  let changed = false, w = boostWeight(cfg.boostSlice, force ? { force: true } : { cheapOnly: true });
-  if (!w.known && !force && Date.now() - (state.boostCheckedAt ?? 0) > 60000) { w = boostWeight(cfg.boostSlice, { force: true }); state.boostCheckedAt = Date.now(); changed = true; }
-  if (!w.known) return { changed, clean: false };
-  if (w.value === null) return { changed, clean: true };
-  const r = setBoost(cfg.boostSlice, false);
-  ledger(cfg, { event: "boost-reset", slice: cfg.boostSlice, was: w.value, verified: r.verified, error: r.error, by: "backstop" });
-  return { changed: true, clean: r.verified };
 }
 
 /** The result of a job whose supervisor died, from what the in-scope wrapper

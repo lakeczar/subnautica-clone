@@ -31,20 +31,21 @@
 //   steal          the hypervisor took ≥ stealPct of the machine's CPU in a window
 //   GPU            a GPU client outside the lease shared the GPU (holder.mjs)
 //   unmeasured     coverage was missing (above), or the job was recovered
-//   boost          the exclusive CPU boost (below) was withheld by a handover
-//                  ("withheld-frozen") or could not be applied
+//   boost          the job didn't run in the boosted exclusive slice (below)
 // Thresholds: config.json `disturbed` over DISTURBED_DEFAULTS.
 //
-// Priority (R1-F2, F3): while an exclusive job runs, our own top-level slice
-// (siltwake.slice, the heavy slice's parent) gets CPUWeight exclusiveCpuWeight.
-// CPU is shared between top-level groups by weight (app.slice, where T3 runs
-// every agent and its tools, has 100), and T3's slices below enable no CPU
-// controller, so no lever inside them exists without changing them. Measured
-// (TST-16.md): a probe pinned to one CPU against four app.slice threads waited
-// 14–21% at weight 100, 0% at 10000. Nothing else changes: no process moves,
-// no caller's memory, swap or pids containment changes, and T3's slices are
-// never touched. Ownership is journalled in state.boost before the weight is
-// set, kept until a verified reset, and recovered by reconcile (R1-F1).
+// Priority (R4 redesign; nothing is set at runtime). Exclusive jobs run in
+// their own top-level slice, siltwake_exclusive.slice, whose CPUWeight is
+// fixed in its unit file (install.sh writes it once, with the heavy slice's
+// memory, swap and CPU caps). CPU is shared between top-level user groups by
+// weight; app.slice, where T3 runs every agent and its tools, has 100.
+// Measured (TST-16.md): a probe pinned to one CPU against four app.slice
+// threads waited 14–21% at weight 100, 0% at 10000. The priority exists only
+// while an exclusive job's processes are in that slice: nothing to apply,
+// reset, journal or hand over, and older versions simply never use it. The
+// name has no dash, because a dash would nest it under siltwake.slice, where
+// its weight would compete only with its siblings. A job that didn't run there
+// (the slice missing or not as configured) is DISTURBED: not boosted evidence.
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
@@ -163,7 +164,7 @@ export function judge({ start, end, points = [], nproc, thresholds = {}, windowS
   if (W.steal != null && W.steal >= t.stealPct) reasons.push(`the hypervisor took ${W.steal}% of the machine's CPU in the worst window (≥ ${t.stealPct}%)`);
   if (gpuShared.length) reasons.push(`the GPU was shared outside the lease (pid ${gpuShared.map((u) => u.pid).join(", ")})`);
   // A run that should have had the exclusive CPU priority and didn't is not boosted evidence.
-  if (boost && boost.status !== "applied") reasons.push(boost.status === "withheld-frozen" ? `the exclusive CPU boost was withheld (${boost.skipped}): not boosted evidence` : `the exclusive CPU boost could not be applied (${boost.error ?? "unknown"}): not boosted evidence`);
+  if (boost && boost.status !== "applied") reasons.push(`the job didn't run in the boosted slice ${boost.slice} (${boost.why ?? boost.status}): not boosted evidence`);
   if (missing.length) reasons.push(`unmeasured: ${missing.join("; ")}`);
   return {
     v: 2, measured: missing.length === 0, missing, windowS, points: good.length, measuredS: whole ? round2((whole.to - whole.from) / 1000) : 0,
@@ -189,34 +190,17 @@ export function unmeasuredContext(why) {
 }
 
 /**
- * The exclusive priority boost on `slice` (state.boost holds its ownership).
- * on: CPUWeight=weight; off: CPUWeight reset. Verified only by a successful
- * read-back of the property (R2 P3). Returns { ok, verified, error }.
+ * Whether the exclusive slice is ready to give a job its CPU priority: loaded,
+ * with the expected CPUWeight, no swap and a finite memory cap (its unit file,
+ * install.sh). Read only; nothing here changes it. Returns { ready, why }.
  */
-export function setBoost(slice, on, weight = 10000) {
-  const r = spawnSync("systemctl", ["--user", "set-property", "--runtime", slice, `CPUWeight=${on ? weight : ""}`], { encoding: "utf8", timeout: 15000 });
-  const w = boostWeight(slice, { force: true });
-  const verified = r.status === 0 && w.known && (on ? w.value === weight : w.value === null);
-  return { ok: r.status === 0, verified, error: verified ? null : (r.status !== 0 ? (r.stderr || r.error?.message || `exit ${r.status}`) : w.known ? `CPUWeight reads ${w.value ?? "unset"}` : "the property could not be read back").trim().slice(0, 200) };
-}
-
-/** A top-level user slice's cgroup, derived from this process's (no systemctl call). */
-function userSliceCgroup(slice) {
-  const root = /^0::(.*\/user@\d+\.service)/m.exec(read("/proc/self/cgroup") ?? "")?.[1];
-  return root ? `/sys/fs/cgroup${root}/${slice}` : null;
-}
-/**
- * The slice's CPU weight setting: { known, value } (value null: not set, the
- * default). Read from its cgroup when it exists (cheap; 100 is the default),
- * else, or with `force`, from systemd: an idle slice has no cgroup but still
- * carries a runtime drop-in that applies when it becomes active.
- */
-export function boostWeight(slice, { force = false, cheapOnly = false } = {}) {
-  const cg = userSliceCgroup(slice), file = !force && cg ? read(`${cg}/cpu.weight`) : null;
-  if (file != null) { const v = Number(file.trim()); return { known: true, value: v === 100 ? null : v, via: "cgroup" }; }
-  if (cheapOnly) return { known: false, value: null, via: "none" };
-  const r = spawnSync("systemctl", ["--user", "show", "-p", "CPUWeight", "--value", slice], { encoding: "utf8", timeout: 15000 });
-  const out = r.stdout?.trim();
-  if (r.status !== 0 || !out) return { known: false, value: null, via: "systemd" };
-  return { known: true, value: out === "[not set]" ? null : Number(out), via: "systemd" };
+export function exclusiveSliceReady(slice, weight = 10000) {
+  const r = spawnSync("systemctl", ["--user", "show", "-p", "LoadState", "-p", "CPUWeight", "-p", "MemorySwapMax", "-p", "MemoryMax", slice], { encoding: "utf8", timeout: 15000 });
+  if (r.status !== 0) return { ready: false, why: `systemd could not be asked about ${slice}` };
+  const p = Object.fromEntries(r.stdout.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+  if (p.LoadState !== "loaded") return { ready: false, why: `${slice} is not installed (${p.LoadState || "unknown"})` };
+  if (p.CPUWeight !== String(weight)) return { ready: false, why: `${slice} has CPUWeight ${p.CPUWeight}, not ${weight}` };
+  if (p.MemorySwapMax !== "0") return { ready: false, why: `${slice} allows swap (${p.MemorySwapMax})` };
+  if (!/^\d+$/.test(p.MemoryMax ?? "")) return { ready: false, why: `${slice} has no memory cap (${p.MemoryMax})` };
+  return { ready: true, why: null };
 }

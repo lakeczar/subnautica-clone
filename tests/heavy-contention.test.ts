@@ -70,13 +70,11 @@ test("R1-F4: missing coverage is never clean: unreadable counters for a stretch,
   assert.deepEqual([rec.disturbed, rec.measured], [true, false]);
 });
 
-test("a run whose exclusive CPU boost was withheld by a handover, or failed, is not boosted evidence: DISTURBED with that reason", () => {
-  const withheld = judge(series(quiet(10)), { boost: { slice: "s", status: "withheld-frozen", applied: false, skipped: "a rollback to v is in progress: no boost" } });
-  assert.equal(withheld.disturbed, true);
-  assert.match(withheld.reasons.join(), /the exclusive CPU boost was withheld \(a rollback to v is in progress: no boost\): not boosted evidence/);
-  const failed = judge(series(quiet(10)), { boost: { slice: "s", status: "failed", applied: false, error: "denied" } });
-  assert.match(failed.reasons.join(), /could not be applied \(denied\)/);
-  assert.equal(judge(series(quiet(10)), { boost: { slice: "s", status: "applied", applied: true } }).disturbed, false);
+test("a run that didn't get the exclusive slice's CPU priority is not boosted evidence: DISTURBED with that reason", () => {
+  const off = judge(series(quiet(10)), { boost: { slice: "x.slice", status: "unavailable", why: "x.slice is not installed (not-found)" } });
+  assert.equal(off.disturbed, true);
+  assert.match(off.reasons.join(), /the job didn't run in the boosted slice x\.slice \(x\.slice is not installed \(not-found\)\): not boosted evidence/);
+  assert.equal(judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied" } }).disturbed, false);
 });
 
 test("unavailable counters stay null, never zero", () => {
@@ -87,11 +85,11 @@ test("unavailable counters stay null, never zero", () => {
   assert.equal(r.disturbed, false);
 });
 
-test("scope-run.sh's snapshot format parses; the boost slice: production raises siltwake.slice, private state only one it names", () => {
+test("scope-run.sh's snapshot format parses; the exclusive slice: production uses siltwake_exclusive.slice, private state only one it names", () => {
   const p = C.parseCounters("uptime 58550.80\ncpu_some 507557988\ncpu_full 223264398\nmem_some 1552\nmem_full 1466\njob_swapins 0\njob_majflt 1350\njob_usec 43540094850\nhost_stat 11321318 4 1539240 33672701 11869 0 678844 128739 0 0\npswpin 123056\npswpout 236994\npgmajfault 102077\n");
   assert.deepEqual([p.t, p.cpu.some, p.mem.full, p.jobMajflt, p.jobSwapIns, p.h.steal, p.vm.pswpin], [58550800, 507557988, 1466, 1350, 0, 128739, 123056]);
   assert.equal(C.parseCounters("garbage"), null);
-  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: "/work/tmp/siltwake-sched" }).boostSlice, "siltwake.slice");
-  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: join(tmpdir(), "private-x") }).boostSlice, null);
-  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: join(tmpdir(), "private-x"), SILTWAKE_SCHED_BOOST_SLICE: "x.slice" }).boostSlice, "x.slice");
+  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: "/work/tmp/siltwake-sched" }).exclusiveSlice, "siltwake_exclusive.slice");
+  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: join(tmpdir(), "private-x") }).exclusiveSlice, null);
+  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: join(tmpdir(), "private-x"), SILTWAKE_SCHED_EXCLUSIVE_SLICE: "x.slice" }).exclusiveSlice, "x.slice");
 });

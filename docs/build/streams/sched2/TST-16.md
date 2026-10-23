@@ -2,6 +2,22 @@
 
 Builder: Opus 5.5, branch `t3/tst-16-light-slice`, from root `9ac573ec`, with root `91dc1ab` (SCHED-2b and SAVE-1) merged in. It touches `scripts/heavy`, so it's checked with the full SCHED-1, SCHED-2 and SCHED-2b suites. Asked for by the coordinator after CW-1's 3090 frame gate. That gate failed on 24 frames, mostly in runs labelled `DISTURBED`, and one quiet run was labelled `DISTURBED` too.
 
+## Decision (R4): static priority by placement, no runtime mutation
+
+Four review rounds each found another lifetime race in one mechanism: changing a shared CPUWeight at runtime, owned across processes and across installed versions. Per "Root fixes over workarounds", R4 removes that mutation instead of adding a fifth ownership layer.
+- **The design:** exclusive jobs run in their own top-level user slice, `siltwake_exclusive.slice`. Its `CPUWeight=10000` is fixed in its unit file, which `install.sh` writes once with the heavy slice's caps (`CPUQuota`, `MemoryMax`, `MemorySwapMax=0`, from `sliceLimits` for this machine).
+  - **When the priority exists:** only while an exclusive job's processes are in that slice. There is nothing to apply, reset, journal, freeze, certify or hand over.
+  - **Older versions** never place jobs there, so a rollback needs no cleanup. A job already running there keeps its priority until it ends.
+  - **Uninstall** removes the unit once the slice is empty.
+- **The name has no dash.** A dash would nest the slice under `siltwake.slice`, where its weight would compete only with its siblings. Top-level, it competes with `app.slice` (T3, weight 100). This is the comparison measured in R1 (a pinned probe waited 14–21% at weight 100, 0% at 10000).
+- **Against R1's constraints:**
+  - **R1-F2 and F3 were about moving builders' processes** out of their T3 tree and copying their limits: callers' containment. Queue payloads have never lived in the caller's tree. Since SCHED-1 they run in our own `siltwake-heavy.slice`, with per-scope hard limits that `scope-run.sh` verifies before the command runs (MemoryMax at the reservation, no swap). An exclusive scope in another of our own slices keeps exactly those per-scope limits.
+  - **The aggregate caps carry over:** the slice has the heavy slice's memory, swap and CPU caps, and an exclusive job runs alone in the lane anyway. So nothing escapes, no caller is moved or re-limited, and T3's slices are never touched.
+  - Leaving the caller's tree was never the objection, because queue jobs already leave it by design.
+- **If the slice isn't ready** (missing, or not configured as expected; checked read-only before launch), the job runs in the lane's slice. It is recorded as `boost.status: unavailable` with the reason, and is `DISTURBED`: not boosted evidence. Placement is verified afterwards from the job's own cgroup path.
+- **Deleted:** `handover.mjs`, the boost journal (`state.boost`), the freeze (`state.frozen`), the backstop, the runtime setter and read-back, `install.sh --rollback` and the thaw. Rollback is back to its pre-TST-16 form.
+- **R4's findings** (F1 freeze ownership across installer operations, F2 a reset outliving a killed handover, F3 freeze visibility) concern only that machinery, so they are removed with it. The diff is much smaller.
+
 ## Why a quiet run was labelled DISTURBED
 
 - **The old rule** (SCHED-1, `holder.mjs`): `DISTURBED` if host-wide `/proc/pressure/cpu` "some" ≥ 10%, or `/proc/pressure/memory` "full" ≥ 1%, taking the maximum of the avg10 values sampled every 15 s, or if the GPU was shared.
@@ -32,22 +48,11 @@ Builder: Opus 5.5, branch `t3/tst-16-light-slice`, from root `9ac573ec`, with ro
 
   Host load and PSI, host swap and CPU used outside the job are recorded, never judged. Thresholds: config.json `disturbed`.
 - **Swap (fleet's host audit, 2026-10-23):** the vCPUs are pinned to dedicated host cores, so steal comes from Unraid's own work on those cores. The guest swaps (about 700 MB out), and a swap-in can stall a thread 50–100 ms without showing as steal. A live 14-minute playthrough scope had 0 major faults and 0 refaults, so any major fault in a job is a sign its memory or cache was evicted.
-- **CPU priority (R1 redesign; replaces the light-work slice):** while an exclusive job runs, our own top-level slice `siltwake.slice` (the heavy slice's parent) gets `CPUWeight=10000`; config `exclusiveCpuWeight`.
-  - **Why this lever:**
-    - **Weight is shared at the top level:** CPU is divided by weight between the top-level user groups. `app.slice`, where T3 runs every agent and its tools, has 100.
-    - **T3's slices can't be used:** they enable no CPU controller (`subtree_control` is `memory pids`), and T3's agent scope has its own `pids.max`. A CPU quota on any light unit inside them would make systemd enable the controller on T3's slices, and a sibling scope would escape the caller's `pids.max`.
-    - **Process priority doesn't work here:** lowering nice or `SCHED_IDLE` can't be undone without privileges (`RLIMIT_NICE` is 0). It also doesn't act across cgroup groups: a group's share is its weight, whatever its tasks' policies.
-  - **Measured** (`/work/tmp/tst16/weight-exp.sh`): a busy probe pinned to one CPU, in a private top-level slice, against four busy `app.slice` threads on that CPU. In three paired runs it waited **14–21%** of the time at weight 100 and **0%** at 10000, running 99–100%.
-  - **What changes:** one property of our own slice, for the job's duration. No process moves. No caller's memory, swap or pids containment changes, and T3's slices are never touched. Other work only yields the CPU the exclusive job actually wants; run A's job used about 1.1–1.6 of the 8 CPUs.
-  - **Crash-safe ownership (R1-F1):**
-    - **Journalled first:** `state.boost` records the slice, ticket and owner before the weight is set. The holder marks it `releasing`, resets the weight and reads it back; the record goes only after a **verified** reset.
-    - **Reconcile** resets a record whose owner is dead, whose job isn't running, or that is `releasing`, and keeps it until the reset is verified. `recover()` also reconciles with no tickets left.
-    - **Takeover:** the next exclusive job takes ownership of a pending record under the state lock, so nothing resets the boost under it.
-    - **Private state** boosts only a slice its environment names.
+- **CPU priority (R4 design, above):** exclusive jobs run in `siltwake_exclusive.slice`, which has a fixed `CPUWeight=10000` (config `exclusiveSlice`, `exclusiveCpuWeight`). R1–R3 raised `siltwake.slice`'s weight at runtime instead; that design and its lifetime machinery are superseded (their review responses below are history).
 - **Removed:** `scripts/light-run.sh`, the shared `siltwake-light.slice` and the package.json changes, which caused R1-F2 and F3. The npm scripts are back to root's.
 - **Install:** `contention.mjs` is in both the version and the GPU guard manifests, alongside SCHED-2b's remote modules.
 
-## R1 review responses
+## R1 review responses (history; R4 supersedes the boost parts)
 
 Review `81d6d83` on `review/tst-16-r1`, on `312b1bed`: two P1s, three P2s.
 - **F1 (P1): crash-safe ownership.** Journal before applying; keep the record until a verified reset; recover with no tickets; serialise against the next exclusive job. **S18** proves both crash boundaries (a fault-injecting `systemctl` kills the holder just before and just after applying), a reset failing in the holder and then in reconcile, and the next exclusive job taking over a pending record without being reset under it.
@@ -59,7 +64,7 @@ Review `81d6d83` on `review/tst-16-r1`, on `312b1bed`: two P1s, three P2s.
 - **F5 (P2): the GPU scan** is forced on the first and final observation. **S20**: a client opened after admission and outlasting the job is in `gpuShared` and the reasons.
 - **Composition with SCHED-2b:** merged root `91dc1ab`. The holder keeps 2b's machine and artifact fields and the v2 context together. `cpuContext` is gone. Reconcile keeps 2b's remote-recovery branch separate from the local boost, which is keyed to its own exclusive ticket, so a remote ticket's death can't release it. `install.sh` carries `contention.mjs` and 2b's modules and transport. The acceptance lib keeps 2b's sandbox seams.
 
-## R2 review responses
+## R2 review responses (history; superseded by R4: the runtime boost is gone)
 
 Review `b3ecb670` on `review/tst-16-r2`, on `ddd814da`: two P2s, plus one P3. The redesign held.
 - **F1, a surviving apply could re-boost after recovery deleted the record.**
@@ -76,7 +81,7 @@ Review `b3ecb670` on `review/tst-16-r2`, on `ddd814da`: two P2s, plus one P3. Th
   - **Safe** because the weight is ours alone. **S22** sets a stray weight and a queue command resets it (`boost-reset`, `by: backstop`).
 - **P3, a failed read-back counted as verified:** fixed. A reset or apply is verified only when systemd's read-back succeeds and shows the expected value.
 
-## R3 review responses
+## R3 review responses (history; superseded by R4: the handover is gone)
 
 Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
 - **F1, handover was not atomic with admission.** Its checks, weight read/reset and final check were separate unlocked steps, so a refusing handover could reset a live boost, and work submitted or queued across the handover could be boosted on an old install and stranded.
@@ -102,22 +107,26 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
 
 ## Checks
 
-- **Unit tests** (`tests/heavy-contention.test.ts`, 7, including withheld and failed boosts):
+- **Unit tests** (`tests/heavy-contention.test.ts`, 7, including a run without the slice's priority):
   - the CW-1 case (host memory "full" 32% with the job unstalled is clean, and recorded);
   - every reason with its value, and host swap and other CPU recorded but not judged;
   - the tail merge;
   - missing coverage of every kind, recovery, and nulls;
-  - snapshot parsing and the boost-slice selection.
-- **Acceptance (SCHED-2 suite):**
-  - **S17:** boost applied (`status: applied`) and reset, measured from before the payload to after it, raw points kept.
-  - **S18:** crash boundaries, reset failures, takeover.
-  - **S19:** private state without a named slice boosts nothing.
+  - snapshot parsing and the exclusive-slice selection.
+- **Acceptance (SCHED-2 suite), re-derived for R4:**
+  - **S17:** an exclusive job runs in the exclusive slice: its cgroup path, the static weight, `boost.status: applied`, the final line. It is measured from before its payload to after it, with raw points kept. The slice's weight is unchanged afterwards and it holds nothing; no runtime boost state exists.
+  - **S18:** a missing slice, or one with CPUWeight 100, means the job runs in the lane's slice, `unavailable`, `DISTURBED` with the reason.
+  - **S19:** no slice named, none used.
   - **S20:** the late GPU client.
-  - **S21:** an in-flight apply at holder death (R2-F1).
-  - **S22:** the handover protocol against the real live version, with the races (R2-F2, R3-F1).
+  - **S21:** a holder killed while its exclusive job runs. The job stops with it, the slice empties, the result is unmeasured, and there's nothing to clean.
+  - **S22:** install, rollback and uninstall:
+    - install writes the slice's unit once, with the heavy slice's caps (a runtime unit for private state);
+    - an exclusive job runs in it while the **real live version `95f340380c25`** is reinstalled from root `91dc1ab`'s own tree (a plain rollback);
+    - the job keeps its priority to its end;
+    - the old version then runs its own exclusive job in the lane's slice, with nothing left over;
+    - uninstall keeps the unit while an exclusive job runs in the slice, and removes it once empty.
   - **SCHED-1 test 7** checks the job's own measurement.
-- **Full suites** on the merged branch (root `91dc1ab` with this work), after R3: SCHED-1 **23/23**, SCHED-2 **22/22**, SCHED-2b **27/27**, fast tier **1,404/1,404**. No units, slices or drop-ins left behind.
-  - **One flake:** the first fast-tier run had one failure, in `soak-runner` R4-F3 (a timing-sensitive real-recorder test, in code this work doesn't touch), while host CPU pressure averaged 22%. It passed 5 of 5 alone, and the whole fast tier passed on its rerun.
+- **Full suites** on the merged branch (root `91dc1ab` with this work), after the R4 redesign: SCHED-1 **23/23**, SCHED-2 **22/22**, SCHED-2b **27/27**, fast tier **1,404/1,404**. No units, slices, unit files or drop-ins left behind.
 
 ## Validation (CW-1 segment 7, run A)
 
@@ -168,10 +177,11 @@ Run A (no priority boost; it ran before R1, on the live holder with the old rule
 
 ## Compromises, limits and missing evidence
 
-- **A boosted CW-1 run is missing until this is installed.** The live holder doesn't boost. Then rerun CW-1's segment, with exact clock alignment.
-- **The boost favours the exclusive job over all other user work,** not only light work.
+- **A boosted CW-1 run is missing until this is installed.** Then rerun CW-1's segment, with exact clock alignment.
+- **The priority favours exclusive jobs over all other user work,** not only light work.
   - **When it matters:** only when they contend, and only for what the job uses.
-  - **What T3's agents feel:** their tools may run a little slower during an exclusive run. A boost that targets only light work would need a CPU controller inside T3's slices, which is T3's call.
+  - **What T3's agents feel:** their tools may run a little slower during an exclusive run. A priority aimed only at light work would need a CPU controller inside T3's slices, which is T3's call.
+- **The exclusive slice's caps are fixed at install,** from this machine's CPUs and the pool config. The heavy slice is corrected at runtime when they change; the exclusive slice is corrected when `install.sh` next runs.
 - **The thresholds (5%, 1%, 1 fault, 1 swap-in, 5%) are first values,** and they are config.
   - **Major faults include cold file reads:** a run after page-cache eviction is marked `DISTURBED` for them, deliberately, because its timings include disk reads.
 - **Steal is machine-wide.** Fleet's audit found the vCPUs pinned, so steal is host work (Kopia, ZFS writes, the proxy, interrupts) waking on those cores. The root fix is fleet's: keep host work off them.

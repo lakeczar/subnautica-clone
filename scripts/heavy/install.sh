@@ -9,17 +9,15 @@
 #   scripts/heavy/install.sh --mode normal   switch mode (serial = v1 behaviour)
 #   scripts/heavy/install.sh --slice         also install the user slice unit
 #                                            (per-user config: coordinator approval)
-#   scripts/heavy/install.sh --rollback VER  point `current` at an installed older version
 #   scripts/heavy/install.sh --uninstall     remove `current`: every shim falls back to v1
-#     Both first hand the state over (handover.mjs): they freeze boosting, wait
-#     until no exclusive job holds the CPU boost and certify the weight reset,
-#     because older code never cleans that up (TST-16); they refuse, lifting
-#     the freeze, if that doesn't happen within SILTWAKE_HANDOVER_WAIT (1800 s).
-#     The freeze stays after the switch, so this version's supervisors still
-#     running admit their jobs unboosted; installing an aware version lifts it.
-#     Run them from the installed copy:
-#     ~/.local/share/siltwake-sched/current/install.sh --rollback VER.
-#     Never roll back by running an older tree's install.sh.
+#                                            (and the exclusive slice's unit, once empty)
+#
+# Every install also writes the exclusive slice's unit file once (TST-16):
+# siltwake_exclusive.slice, a top-level user slice with a fixed CPUWeight and
+# the heavy slice's memory, swap and CPU caps. Exclusive jobs run there, so
+# their CPU priority lasts exactly as long as their processes; nothing is set
+# at runtime. Older versions never place jobs there, so rolling back needs no
+# cleanup.
 #   scripts/heavy/install.sh --gpu-guard     wrap every Playwright Chrome binary so a GPU
 #                                            launch needs the GPU lease (chrome-guard.sh);
 #                                            per-user change: coordinator approval
@@ -32,17 +30,22 @@ src=$(cd "$(dirname "$0")" && pwd)
 home="${SILTWAKE_SCHED_HOME:-$HOME/.local/share/siltwake-sched}"
 dir="${SILTWAKE_SCHED_DIR:-/work/tmp/siltwake-sched}"
 slice_name="${SILTWAKE_SCHED_SLICE:-siltwake-heavy.slice}"
+# The exclusive slice: production writes the real unit to the user's unit
+# directory; a private state directory (tests) only one its environment names,
+# as a runtime unit (gone at reboot).
+if [[ -n "${SILTWAKE_SCHED_EXCLUSIVE_SLICE:-}" ]]; then excl="$SILTWAKE_SCHED_EXCLUSIVE_SLICE" excl_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/systemd/user"
+elif [[ "$dir" == /work/tmp/siltwake-sched ]]; then excl=siltwake_exclusive.slice excl_dir="$HOME/.config/systemd/user"
+else excl="" excl_dir=""; fi
 pw="${SILTWAKE_PLAYWRIGHT_DIR:-$HOME/.cache/ms-playwright}"
-mode="" slice=0 uninstall=0 guard="" rollback=""
+mode="" slice=0 uninstall=0 guard=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode) mode="$2"; shift 2 ;;
     --slice) slice=1; shift ;;
     --uninstall) uninstall=1; shift ;;
-    --rollback) rollback="$2"; shift 2 ;;
     --gpu-guard) guard=on; shift ;;
     --gpu-guard-remove) guard=off; shift ;;
-    *) echo "usage: $0 [--mode serial|normal] [--slice] [--gpu-guard|--gpu-guard-remove] [--rollback VERSION] [--uninstall]" >&2; exit 2 ;;
+    *) echo "usage: $0 [--mode serial|normal] [--slice] [--gpu-guard|--gpu-guard-remove] [--uninstall]" >&2; exit 2 ;;
   esac
 done
 
@@ -56,21 +59,21 @@ if [[ $guard == off ]]; then
   exit 0
 fi
 
-if [[ $uninstall == 1 || -n $rollback ]]; then
-  [[ -z $rollback || -d "$home/$rollback" ]] || { echo "no installed version $rollback in $home" >&2; exit 2; }
-  what="rollback to $rollback"; [[ $uninstall == 1 ]] && what="uninstall"
-  SILTWAKE_SCHED_DIR="$dir" node "$src/handover.mjs" --for "$what" || { echo "not handed over: the older code would not clean that up; \`current\` was not changed" >&2; exit 3; }
-  if [[ $uninstall == 1 ]]; then
-    rm -f "$home/current"
-    echo "heavy-check v2 uninstalled: shims fall back to v1. State in $dir is kept."
-  else
-    ln -sfn "$rollback" "$home/current.tmp" && mv -T "$home/current.tmp" "$home/current"
-    echo "heavy-check rolled back to $rollback."
+if [[ $uninstall == 1 ]]; then
+  rm -f "$home/current"
+  echo "heavy-check v2 uninstalled: shims fall back to v1. State in $dir is kept."
+  if [[ -n $excl && -f "$excl_dir/$excl" ]]; then
+    cg=$(systemctl --user show -p ControlGroup --value "$excl" 2>/dev/null)
+    if [[ -n $cg ]] && grep -qx 'populated 1' "/sys/fs/cgroup$cg/cgroup.events" 2>/dev/null; then
+      echo "kept $excl: an exclusive job still runs in it; run --uninstall again when it ends"
+    else
+      rm -f "$excl_dir/$excl" && systemctl --user daemon-reload && echo "removed $excl"
+    fi
   fi
   exit 0
 fi
 
-files=(install.sh handover.mjs policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
+files=(policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
   remote.mjs remote-holder.mjs lane-run.sh)
 # The remote lane's transport (SCHED-2b) is scripts/alickers-job.sh; each
 # version carries its own copy, so a running remote ticket keeps its transport.
@@ -108,8 +111,24 @@ mv -T "$home/current.tmp" "$home/current"
 
 mkdir -p "$dir/jobs"
 [[ -f "$dir/protocol" ]] || echo 1 >"$dir/protocol"
-# This version boosts exclusive jobs again: lift a handover's freeze (TST-16).
-SILTWAKE_SCHED_DIR="$dir" node "$src/handover.mjs" --thaw
+
+# The exclusive slice's unit (TST-16), written once: a fixed CPUWeight, and the
+# heavy slice's caps for this machine (policy sliceLimits), so moving an
+# exclusive job here escapes no aggregate limit. Rewritten only if it differs.
+if [[ -n $excl ]]; then
+  unit=$(cd "$src" && SILTWAKE_SCHED_DIR="$dir" node --input-type=module -e '
+    const { sliceLimits } = await import("./policy.mjs");
+    const { loadConfig } = await import("./state.mjs");
+    const { availableParallelism } = await import("node:os");
+    const w = sliceLimits(availableParallelism(), loadConfig());
+    console.log(["[Unit]", "Description=Siltwake heavy-check exclusive jobs (TST-16): CPU priority while one runs", "",
+      "[Slice]", "CPUAccounting=yes", "CPUWeight=10000", `CPUQuota=${w.cpuQuotaPct}%`, "MemoryAccounting=yes", `MemoryMax=${w.memoryMaxMiB}M`, "MemorySwapMax=0"].join("\n"));')
+  if [[ "$(cat "$excl_dir/$excl" 2>/dev/null)" != "$unit" ]]; then
+    mkdir -p "$excl_dir" && printf '%s\n' "$unit" >"$excl_dir/$excl.tmp" && mv "$excl_dir/$excl.tmp" "$excl_dir/$excl"
+    systemctl --user daemon-reload
+    echo "installed $excl ($excl_dir)"
+  fi
+fi
 [[ -f "$dir/mode" ]] || echo serial >"$dir/mode"
 if [[ -n "$mode" ]]; then
   [[ "$mode" == serial || "$mode" == normal ]] || { echo "mode must be serial or normal" >&2; exit 2; }

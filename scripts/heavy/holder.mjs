@@ -33,7 +33,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { hostObserved, judge, parseCounters, setBoost, snapshotNow } from "./contention.mjs";
+import { exclusiveSliceReady, hostObserved, judge, parseCounters, snapshotNow } from "./contention.mjs";
 import { MACHINE_LABELS, jobEnv, plan } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 import {
@@ -131,10 +131,16 @@ if (cfg.manageSlice) ensureSlice(t.hostAtAdmit.nproc);
 const out = openSync(outPath, "a");
 const memBytes = req.memMiB * 1048576;
 const inOwnScope = readFileSync("/proc/self/cgroup", "utf8").includes(`/${holderUnit}.scope`);
+// An exclusive job runs in the exclusive slice, whose CPU weight is fixed in its
+// unit file (contention.mjs, TST-16): its priority lasts exactly as long as its
+// processes. If that slice isn't ready, it runs in the lane's slice, labelled.
+const placement = req.exclusive && cfg.exclusiveSlice ? exclusiveSliceReady(cfg.exclusiveSlice, cfg.exclusiveCpuWeight) : null;
+const jobSlice = placement?.ready ? cfg.exclusiveSlice : cfg.slice;
+if (placement && !placement.ready) note(`not in the exclusive slice: ${placement.why}; this run has no CPU priority`);
 const args = [
   // Not --collect: a failed scope stays loaded until unitFacts() has read its
   // accounting and cleared it.
-  "--user", "--scope", "--quiet", `--unit=${unit}`, `--slice=${cfg.slice}`,
+  "--user", "--scope", "--quiet", `--unit=${unit}`, `--slice=${jobSlice}`,
   // No MemoryHigh: with no swap, a job past memory.high is throttled, not
   // killed, and crawls to its deadline holding its reservation (measured in
   // SCHED-1). At MemoryMax the kernel still reclaims page cache before it
@@ -150,29 +156,8 @@ const args = [
 ];
 // An exclusive job's contention, judged on its own cgroup (contention.mjs,
 // TST-16): scope-run.sh's snapshots before and after the payload, and a live
-// point every second between (raw in contention.jsonl). While it runs, our own
-// top-level slice gets a higher CPU weight; the boost is journalled before it
-// is applied and kept until a verified reset (R1-F1; reconcile recovers it).
+// point every second between (raw in contention.jsonl).
 const exclusive = req.exclusive ? { points: [], observed: { load1Max: 0, cpuSomeAvg10Max: 0, memFullAvg10Max: 0 }, raw: join(dir, "contention.jsonl") } : null;
-let boost = null;
-// A handover (a rollback or uninstall in progress, handover.mjs) freezes boosting:
-// decided in the same transaction as the journal, so no boost starts after the
-// handover has certified cleanup (R3-F1). The job still runs, unboosted.
-const frozen = req.exclusive && !rejected && cfg.boostSlice ? transaction(cfg, (state) => {
-  if (state.frozen) return { result: state.frozen };
-  state.boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, ticket: id, owner: me, ownerUnit: inOwnScope ? holderUnit : null, state: "applying", at: Date.now() };
-  return { changed: true, result: null };
-}) : undefined;
-if (frozen) {
-  boost = { slice: cfg.boostSlice, status: "withheld-frozen", applied: false, skipped: `a ${frozen.for ?? "handover"} is in progress: no boost` };
-  note(`not raising ${cfg.boostSlice}'s CPU weight: ${boost.skipped}`);
-} else if (frozen === null) {
-  // The owner is this holder and its scope: the setter is a child here, so recovery waits until the scope is empty (R2-F1).
-  const r = setBoost(cfg.boostSlice, true, cfg.exclusiveCpuWeight);
-  transaction(cfg, (state) => { if (state.boost?.ticket === id && r.verified) state.boost.state = "applied"; return { changed: true }; });
-  boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, status: r.verified ? "applied" : "failed", applied: r.verified, ...(r.verified ? {} : { error: r.error }) };
-  if (!r.verified) note(`could not raise ${cfg.boostSlice}'s CPU weight for this exclusive job: ${r.error}`);
-}
 // GPU jobs record any GPU client outside the lease that shared the GPU with
 // them (a driver run outside the queue): their screenshots stay functional,
 // but an exclusive measurement is then disturbed.
@@ -284,14 +269,6 @@ clearTimeout(backstop);
 for (const timer of [stallWatch, soakWatch]) if (timer) clearInterval(timer);
 if (sampler) clearInterval(sampler);
 sample({ gpu: true }); // the final GPU observation always runs (R1-F5)
-// The boost ends with the job: marked releasing, reset and verified before the
-// result; a failed reset leaves the record for reconcile to retry (R1-F1).
-if (boost && !boost.skipped) { // a boost it never applied is not its to reset
-  transaction(cfg, (state) => { if (state.boost?.ticket === id) state.boost.state = "releasing"; return { changed: true }; });
-  const r = setBoost(cfg.boostSlice, false);
-  boost.released = r.verified;
-  if (!r.verified) { boost.releaseError = r.error; note(`could not reset ${cfg.boostSlice}'s CPU weight (${r.error}); it is retried until it succeeds`); }
-}
 
 // 4. Account, label, free.
 const stats = readStats(dir);
@@ -327,6 +304,11 @@ else if (code === 137 || signal) { stopReason = "killed"; label = "killed"; }
 if (oomKills > 0 && !reservationOom) note(`${oomKills} process(es) were OOM-killed inside the job by a sub-limit (for example a heavy test file's budget), not by its ${req.memMiB} MiB reservation`);
 if (leftovers) note("processes left behind by the command were stopped");
 if (gpuShared.size) note(`the GPU was also used outside the lease by: ${[...gpuShared.values()].map((u) => `pid ${u.pid} (${u.cmd.slice(0, 60)})`).join("; ")}`);
+// The priority it had: verified from where its scope actually ran.
+const ranIn = readFileSafe(join(dir, "cgroup")) ?? "";
+const boost = !placement ? null : placement.ready && ranIn.includes(`/${cfg.exclusiveSlice}/`)
+  ? { slice: cfg.exclusiveSlice, weight: cfg.exclusiveCpuWeight, status: "applied" }
+  : { slice: cfg.exclusiveSlice, status: "unavailable", why: placement.why ?? `the job's scope ran in ${ranIn || "an unknown cgroup"}` };
 const contextResult = !exclusive || rejected ? null : judge({
   start: parseCounters(readFileSafe(join(dir, "counters-start"))), end: parseCounters(readFileSafe(join(dir, "counters-end"))),
   points: exclusive.points, nproc: t.hostAtAdmit.nproc, thresholds: cfg.disturbed, gpuShared: [...gpuShared.values()], observed: exclusive.observed, boost,
@@ -370,7 +352,6 @@ if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: tru
 transaction(cfg, (state) => {
   writeJsonAtomic(join(dir, "exit.json"), result);
   delete state.tickets[id];
-  if (state.boost?.ticket === id && boost?.released) delete state.boost; // otherwise reconcile retries the reset
   if (req.exclusive && launched) state.lastExclusiveEnd = Date.now(); // exclusive turns (policy.mjs)
   ledger(cfg, { event: "job", ...result });
   return { changed: true };

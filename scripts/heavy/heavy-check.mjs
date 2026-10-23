@@ -30,7 +30,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveRequest, tokensFor } from "./policy.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
-import { boostWeight } from "./contention.mjs";
 import { builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
   alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState,
@@ -305,7 +304,7 @@ function finalLine(e) {
     const c = e.context, j = c.job;
     parts.push(`exclusive context: ${j ? `job CPU wait ${j.cpuSomePct}% (worst ${j.cpuSomeWorstPct}%), memory stall ${j.memSomePct}% (worst ${j.memSomeWorstPct}%), ${j.majorFaults} major faults, ${j.swapIns} swap-ins` : "job contention unmeasured"}` +
       (c.host ? `, steal ${c.host.stealWorstPct ?? "?"}% worst, other CPU ${c.host.otherCpuPct ?? "?"}%, host swap-in ${c.host.swapInPages ?? "?"} pages` : "") +
-      (c.boost ? `, ${c.boost.slice} CPU boost ${c.boost.status === "applied" ? c.boost.weight : c.boost.status}` : "") +
+      (c.boost ? `, ${c.boost.status === "applied" ? `CPU priority in ${c.boost.slice} (weight ${c.boost.weight})` : `no CPU priority (${c.boost.status})`}` : "") +
       (c.disturbed ? ` — DISTURBED: ${c.reasons.join("; ")}` : ""));
   } else if (e.context) parts.push(`exclusive context: load ≤${e.context.load1Max}, cpu PSI some ≤${e.context.cpuSomeMax}%${e.context.disturbed ? " — DISTURBED by work outside the lane" : ""}`);
   return parts.join("; ");
@@ -447,11 +446,7 @@ function releaseRemoteCmd(args) {
  * transaction. Takes no lock while every owner process is alive. */
 function recover() {
   const owner = (t) => (t.state === "running" && t.holder ? t.holder : t.supervisor);
-  const s = readState(cfg);
-  // An exclusive boost record (TST-16) is reconciled too, with no tickets left: a reset may be pending.
-  // So is a raised weight with no record (the backstop; a cheap cgroup read).
-  const raised = cfg.boostSlice && !s.boost && boostWeight(cfg.boostSlice, { cheapOnly: true }).value != null;
-  if (!s.boost && !raised && Object.values(s.tickets).every((t) => alive(owner(t)))) return;
+  if (Object.values(readState(cfg).tickets).every((t) => alive(owner(t)))) return;
   transaction(cfg, (state) => ({ changed: reconcile(cfg, state) }));
 }
 
