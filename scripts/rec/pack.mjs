@@ -87,7 +87,7 @@ function randomMoments(n, a, seed) {
 
 export async function buildPack(dir, opts = {}) {
   const r = loadRecording(dir), h = r.header;
-  // Tier 3 video: seekable copies (MediaRecorder and piped ffmpeg leave no index),
+  // Tier 3 video: seekable copies (the in-game live WebM and piped ffmpeg leave no index),
   // and each file's real duration, which the coverage check reads (R1-F4).
   const videoSeconds = {};
   for (const s of videoSegments(h)) {

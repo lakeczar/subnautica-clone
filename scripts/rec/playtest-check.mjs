@@ -71,7 +71,7 @@ function reconcile(zip, label, { noteText, until, after } = {}) {
   const declaredMissing = snaps.filter((s) => s.missing).map((s) => `${s.file}: ${s.missing}`);
   const note = noteText ? events.find((e) => e.kind === "note" && e.text.includes(noteText)) : null;
   const noteSnap = note?.snap ? snaps.find((s) => s.seq === note.snap) : null;
-  // A MediaRecorder file has no duration until it is remuxed (as the pack does).
+  // A live WebM (the in-game writer's) has no duration until it is remuxed (as the pack does).
   const duration = (file) => { if (!existsSync(file)) return null; if (remux(file, `${file}.tmp.webm`)) renameSync(`${file}.tmp.webm`, file); return videoSeconds(file); };
   const segs = videoSegments(header).map((s) => ({ ...s, seconds: duration(path.join(dir, s.file)) }));
   const videoEnd = segs.reduce((m, s) => (s.seconds != null ? Math.max(m, s.start + s.seconds * 1000) : m), -Infinity);

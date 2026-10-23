@@ -28,7 +28,7 @@ export async function composer(opts = {}) {
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const dataUrl = (file) => `data:image/${file.endsWith(".png") ? "png" : "jpeg"};base64,${readFileSync(file).toString("base64")}`;
 
-/** Re-muxes a MediaRecorder/ffmpeg WebM so it has a duration and seeks (a stream copy). */
+/** Re-muxes a live WebM (the in-game writer's, piped ffmpeg's) so it has a duration and seeks (a stream copy). */
 export function remux(file, out) {
   const ff = findFfmpeg();
   if (!ff) return false;

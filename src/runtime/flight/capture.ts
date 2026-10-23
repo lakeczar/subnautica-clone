@@ -616,7 +616,7 @@ export class FlightCapture {
 
   /**
    * The whole recording as one ZIP (R1-F7, R2-2): an export cutoff; the video
-   * given a picture at the cutoff and drained into its file; every picture
+   * drained into its file; every picture
    * taken before the cutoff encoded and written; the worker's barrier (every
    * write before it acknowledged or refused, so the ledger is final); then the
    * header, and the worker writes the ZIP into its own file as everything
@@ -632,8 +632,10 @@ export class FlightCapture {
     this.recorder.event("session", "export: recording up to here", { t: cutoff, snapshot: false });
     const name = `siltwake-flight-${this.session}.zip`;
     await this.finished;
-    const v = this.video;
-    if (v && !v.paused && this.spool) { this.sendFrame(v, cutoff); await this.request({ op: "video-flush" }); }
+    // Everything encoded so far into its file: the video runs to the last picture
+    // before the cutoff (within one capture interval). A picture is never
+    // re-sent with the cutoff's time: the screen may have moved on since.
+    if (this.video && this.spool) await this.request({ op: "video-flush" });
     await this.settleInflight(SNAPSHOT_TIMEOUT_MS);
     this.recorder.settle();
     if (!this.spool) return { blob: await this.memoryZip(cutoff), name };

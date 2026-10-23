@@ -6,13 +6,18 @@
 //
 // - R2-7, the video clock: an ordinary segment; a stall before a segment's
 //   first picture; a stall right after its first hand-over; a video restart;
-//   rotations (2 s segments); a CPU-throttled stretch; a hidden tab (its
-//   window minimized; whether the page really reported "hidden" is recorded,
-//   not assumed). Every encoded frame is decoded (ffmpeg: its time
-//   and the barcode it shows): a frame showing picture k at page time T must
-//   satisfy draw(k) − 2 ms ≤ T ≤ draw(k+1) + 2 ms, where T is the segment's
-//   recorded origin plus the frame's time in the file. Any compressed,
-//   shifted or misdated interval breaks that.
+//   rotations (2 s segments); a CPU-throttled stretch; a pause (nothing drawn:
+//   the recorder repeats its last picture); no frames at all for 2.5 s, as a
+//   hidden tab gives the page (headless Chrome never reports a page hidden, so
+//   this is the recorder's view of one, not a real hidden tab). The page is
+//   "drawn" every frame like the game (afterRender), with a new barcode every
+//   83 ms. Every encoded frame is decoded (ffmpeg: its time and the barcode it
+//   shows): a frame showing picture k at page time T, the segment's recorded
+//   origin plus the frame's time in the file, must satisfy
+//   draw(k) − 2 ms ≤ T ≤ draw(k+1) + 2 ms. In a pause, the picture repeated
+//   may be the one before the last drawn (a frame drawn after the last capture
+//   cannot be captured later): at most one capture interval stale. Any
+//   compressed, shifted or misdated interval breaks that.
 // - R2-5: spool workers alive after four stop-and-replace cycles that retire
 //   the superseded recording (CDP targets, after a forced collection).
 // - R2-4: a ten-hour timeline page (360,000 frame points, two 4 Hz memory
@@ -51,7 +56,9 @@ function decode(ff, file) {
 }
 /** R2-7's verdict from a run's raw facts and recording: every frame dated within its picture's lifetime. */
 function judgeClock(raw, rec, failed) {
-  const ff = decoder(), draws = raw.draws, cutoff = raw.header.exported.cutoff;
+  const ff = decoder(), draws = raw.draws, cutoff = raw.header.exported.cutoff, pauses = raw.pauses ?? [];
+  const inPause = (T) => pauses.some((p) => T >= p.from && T <= p.to);
+  const lastDrawBefore = (T) => { let k = null; for (const d of draws) if (d.t <= T) k = d; return k; };
   if (!ff) { failed.push("clock: no ffmpeg here decodes VP9 with showinfo; judge this run with --decode where one does"); return { undecoded: true }; }
   const byId = new Map(draws.map((d, i) => [d.id, { t: d.t, next: draws[i + 1]?.t ?? Infinity }]));
   const segments = [];
@@ -61,7 +68,9 @@ function judgeClock(raw, rec, failed) {
     const { times, ids } = decode(ff, fixed);
     const frames = times.map((pt, i) => {
       const d = byId.get(ids[i]), T = seg.start + pt * 1000;
-      return { pt, id: ids[i], T: +T.toFixed(1), drawn: d?.t ?? null, ok: !!d && T >= d.t - 2 && T <= d.next + 2 };
+      // In a pause: the last picture drawn, or the one before it if that last one came after the last capture (≤ one interval).
+      const last = lastDrawBefore(T), staleOk = inPause(T) && last && last.id === ids[i] + 1 && last.t - d?.t <= 1000 / 12 + 2;
+      return { pt, id: ids[i], T: +T.toFixed(1), drawn: d?.t ?? null, ok: !!d && T >= d.t - 2 && (T <= d.next + 2 || !!staleOk) };
     });
     const bad = frames.filter((f) => !f.ok);
     segments.push({ file: seg.file, start: seg.start, end: seg.end, frames: frames.length, barcodes: ids.length, misdated: bad.length, firstBad: bad.slice(0, 3),
@@ -70,8 +79,8 @@ function judgeClock(raw, rec, failed) {
   const lastT = Math.max(...segments.map((s) => s.lastT ?? -Infinity));
   if (!segments.length) failed.push("clock: no video segments");
   for (const s of segments) if (s.error || s.misdated || !s.frames || s.frames !== s.barcodes) failed.push(`clock: ${s.file} ${s.error ?? `${s.misdated} of ${s.frames} frames misdated (${s.barcodes} barcodes)`}`);
-  if (!(lastT >= cutoff - 2)) failed.push(`clock: the video ends at ${lastT}, before the export cutoff ${cutoff}`);
-  return { decoder: ff, segments, cutoff, lastT, reachesCutoff: lastT >= cutoff - 2 };
+  if (!(lastT >= cutoff - 1000 / 12 - 2)) failed.push(`clock: the video ends at ${lastT}, before the export cutoff ${cutoff}`);
+  return { decoder: ff, segments, cutoff, lastT, reachesCutoff: lastT >= cutoff - 1000 / 12 - 2 };
 }
 
 if (arg("decode")) {
@@ -111,7 +120,7 @@ try {
   await c.page.evaluate(async () => {
     const { FlightCapture } = await import("/modules/capture.js");
     const canvas = document.getElementById("c"), x = canvas.getContext("2d");
-    Object.assign(window, { draws: [], marks: [], vis: [], stallNext: false, run: true, id: 0 });
+    Object.assign(window, { draws: [], marks: [], vis: [], pauses: [], stallNext: false, run: true, paused: false, hidden: false, id: 0 });
     document.addEventListener("visibilitychange", () => window.vis.push({ t: performance.now(), state: document.visibilityState }));
     // A stall right after a segment's first hand-over to the encoder.
     const send = FlightCapture.prototype.sendFrame;
@@ -121,8 +130,11 @@ try {
     };
     window.cap = new FlightCapture(canvas, "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
     let last = -1;
+    // Like the game: a frame that draws calls afterRender, one that draws nothing (a pause) idle; a hidden page gets no frames.
     const frame = (now) => {
       if (!window.run) return;
+      if (window.hidden) { requestAnimationFrame(frame); return; }
+      if (window.paused) { window.cap.idle(now); requestAnimationFrame(frame); return; }
       if (now - last > 83) {
         last = now;
         const id = ++window.id;
@@ -130,8 +142,8 @@ try {
         x.fillStyle = "#246578"; x.fillRect(0, 0, 640, 360);
         for (let bit = 0; bit < 16; bit++) { x.fillStyle = id & (1 << bit) ? "#fff" : "#000"; x.fillRect(bit * 40, 0, 40, 80); }
         x.fillStyle = "#fff"; x.font = "30px sans-serif"; x.fillText(`${id} ${Math.round(now)}`, 40, 180);
-        window.cap.afterRender(now);
-      } else window.cap.idle(now);
+      }
+      window.cap.afterRender(now);
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
@@ -152,25 +164,30 @@ try {
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   await mark("CPU throttle off");
   await sleep(1500);
-  // A hidden tab: its window minimized (headless Chrome keeps a page in front visible).
+  // A pause: nothing drawn, the recorder repeats its last picture.
+  await c.page.evaluate(() => { window.paused = true; window.pauses.push({ from: performance.now(), to: Infinity }); });
+  await sleep(2000);
+  await c.page.evaluate(() => { window.paused = false; window.pauses.at(-1).to = performance.now(); });
+  await sleep(1500);
+  // No frames at all, as a hidden tab gets (headless Chrome never reports a page hidden: the window is minimized too, and whether that hid it is recorded).
   const { windowId } = await cdp.send("Browser.getWindowForTarget");
-  await mark("window minimized");
+  await c.page.evaluate(() => { window.hidden = true; window.marks.push({ t: performance.now(), what: "no frames (hidden-tab equivalent)" }); });
   await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "minimized" } });
   await sleep(2500);
   const hiddenSeen = await c.page.evaluate(() => document.visibilityState);
   await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
-  await mark("window restored");
+  await c.page.evaluate(() => { window.hidden = false; window.marks.push({ t: performance.now(), what: "frames again" }); });
   await sleep(2000);
   const data = await c.page.evaluate(async () => {
     const exp = await window.cap.exportZip(), bytes = new Uint8Array(await exp.blob.arrayBuffer());
     window.run = false;
     let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    return { zip: btoa(s), draws: window.draws, marks: window.marks, vis: window.vis, header: window.cap.header };
+    return { zip: btoa(s), draws: window.draws, marks: window.marks, vis: window.vis, pauses: window.pauses, header: window.cap.header };
   });
   const rec = path.join(out, "recording");
   writeFileSync(path.join(out, "recording.zip"), Buffer.from(data.zip, "base64"));
   unzip(path.join(out, "recording.zip"), rec);
-  writeFileSync(path.join(out, "raw.json"), JSON.stringify({ draws: data.draws, marks: data.marks, vis: data.vis, header: data.header }));
+  writeFileSync(path.join(out, "raw.json"), JSON.stringify({ draws: data.draws, marks: data.marks, vis: data.vis, pauses: data.pauses, header: data.header }));
   result.clock = { marks: data.marks, visibility: data.vis, hiddenSeen, codec: data.header.video?.codec ?? null, ...judgeClock(data, rec, result.failed) };
 
   // --- R2-5: superseded recordings retire their workers ----------------------
