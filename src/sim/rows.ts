@@ -18,3 +18,19 @@ export function rowById<T extends { id: string }>(rows: readonly T[], id: string
   const j = index.get(id);
   return j === undefined ? undefined : rows[j];
 }
+
+const members = new WeakMap<readonly string[], { set: Set<string>; length: number; last: string | undefined }>();
+/** `rows.includes(value)` for an append-only roster of unique strings (chart
+ * cells): appended rows extend the index; a shorter roster, or a changed last
+ * row, rebuilds it. */
+export function hasMember(rows: readonly string[], value: string): boolean {
+  let m = members.get(rows);
+  if (!m || rows.length < m.length || (m.length > 0 && rows[m.length - 1] !== m.last)) {
+    m = { set: new Set(), length: 0, last: undefined };
+    members.set(rows, m);
+  }
+  for (let i = m.length; i < rows.length; i++) m.set.add(rows[i]!);
+  m.length = rows.length;
+  m.last = rows[rows.length - 1];
+  return m.set.has(value);
+}

@@ -12,6 +12,7 @@ import { distance, facility, nextId } from "../inventory.js";
 import type { GameState, Vec3 } from "../types.js";
 import { addStack, applySpend, cuOf, freeCu, planSpend } from "./ledger.js";
 import type { SystemsState } from "./state.js";
+import { hasMember } from "../rows.js";
 
 export interface BeaconView { id: string; name: string; category: BeaconCategory; position: Vec3; on: boolean; removable: boolean }
 
@@ -90,7 +91,7 @@ function cellsAround(p: { x: number; z: number }, radius: number): string[] {
 /** Marks the cells near `position` explored. Cheap enough per step: at most nine
  * candidates, and nothing changes while the player stays in explored water. */
 export function visitChart(sys: SystemsState, position: Vec3): string[] {
-  const fresh = cellsAround(position, CHART_VISIT_RADIUS).filter((c) => !sys.chart.includes(c));
+  const fresh = cellsAround(position, CHART_VISIT_RADIUS).filter((c) => !hasMember(sys.chart, c));
   sys.chart.push(...fresh);
   return fresh;
 }
