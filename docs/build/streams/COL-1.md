@@ -133,7 +133,10 @@ Two survive:
   - the nine-cave oracle, before and after.
 - **Art sweep,** all 55 caves, fine and coarse against pre-R6 and coarse against R6 (ticket `261023-193804-64d8`).
 - **Coarse strips:** `--class gpu`, ticket `261023-220421-43e2`.
-- **Every earlier control still passes** in the fast tier and these heavies: support, recovery, seam, mixed components, protected routes, the R6 column and the culvert edge columns.
+- **The whole heavy tier** passes at `8485294e` on the RTX 4070 (ticket `261023-225958-eca6`, compiled inside the job).
+  - Its first run at `84395b6e` found that the deep, Canopy/Basin and hub heavy cave tests still asserted the pre-R6 rule (every footprint-edge vertex on the floor). R6 moved the fast cave tests to the seam contract but never ran these heavy ones, which I missed.
+  - They now hold `shellSeamProblems` too (`8485294e`).
+- **Every earlier control still passes:** support, recovery, seam, mixed components, protected routes, the R6 column and the culvert edge columns.
 
 ## R6 response (Sol R6)
 **R6-1 is fixed at the root, in the floor snap.** The coordinator granted COL-1 the snap and seam step in `src/content/regions/caveGeometry.ts` for this fix, and later the one-line memo key in `caveFloor` (`src/content/regions/caves/authored.ts`, see below). Unchanged indices no longer stand in for orientation: the final mesh is checked.
