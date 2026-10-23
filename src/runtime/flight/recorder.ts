@@ -22,6 +22,7 @@ export const FRAME_COLUMNS = [
   "rec", // the recorder's own time in this frame
   "heapDrop", // MiB the JS heap shrank since the previous frame (a collection), when the browser exposes it; -1 unknown
   "hold", // cave admission state, HOLD_CODES index
+  "gpu", // GPU time of a recent scene.render (timer queries resolve 1–3 frames late); -1 unknown
 ] as const;
 export type FrameColumn = (typeof FRAME_COLUMNS)[number];
 const COLS = FRAME_COLUMNS.length;
@@ -190,6 +191,7 @@ export class FlightRecorder {
     r.fill(0);
     for (const [k, v] of Object.entries(input)) if (k !== "hold" && typeof v === "number") r[COL[k as FrameColumn]] = v;
     if (input.heapDrop === undefined) r[COL.heapDrop] = -1;
+    if (input.gpu === undefined) r[COL.gpu] = -1;
     const hold = input.hold ?? null;
     r[COL.hold] = holdCode(hold);
     const rec = selfMs + this.accrued;
@@ -217,14 +219,14 @@ export class FlightRecorder {
         if (v >= 0.05) split[c] = Math.round(v * 100) / 100;
       }
       const streaming = STREAMING_PARTS.reduce((a, p) => a + r[COL[p]]!, 0);
-      const cause = longFrameCause(input.gap, work, r[COL.sim]!, streaming, r[COL.render]!, r[COL.heapDrop]!, rec);
+      const cause = longFrameCause(input.gap, work, r[COL.sim]!, streaming, r[COL.render]!, r[COL.heapDrop]!, rec, r[COL.gpu]!);
       // A picture of a long frame at most every LONG_FRAME_SNAPSHOT_MS, and never
       // of the recorder's own (a snapshot must not cause the next one).
       const snapshot = cause !== "recorder" && input.t - this.lastLongSnapshot >= LONG_FRAME_SNAPSHOT_MS;
       if (snapshot) this.lastLongSnapshot = input.t;
       this.event("long-frame", `${input.gap.toFixed(1)} ms frame (${cause})`, {
         t: input.t, snapshot, detail: { gap: Math.round(input.gap * 10) / 10, ...split, ...(rec >= 0.05 ? { rec: Math.round(rec * 100) / 100 } : {}),
-          outside: Math.round(Math.max(0, input.gap - work - rec) * 10) / 10, cause, ...(r[COL.heapDrop]! > 0 ? { heapDrop: r[COL.heapDrop] } : {}) },
+          outside: Math.round(Math.max(0, input.gap - work - rec) * 10) / 10, ...(r[COL.gpu]! >= 0 ? { gpu: Math.round(r[COL.gpu]! * 100) / 100 } : {}), cause, ...(r[COL.heapDrop]! > 0 ? { heapDrop: Math.round(r[COL.heapDrop]! * 10) / 10 } : {}) },
       });
     }
   }
@@ -271,10 +273,15 @@ export class FlightRecorder {
 
 /** Why a long frame was long, from its split (the same rule as CW-1 and the soak:
  * a part that is at least half of the frame's own work owns it). */
-export function longFrameCause(gap: number, work: number, sim: number, streaming: number, render: number, heapDrop: number, rec = 0): string {
+export function longFrameCause(gap: number, work: number, sim: number, streaming: number, render: number, heapDrop: number, rec = 0, gpu = -1): string {
   // The recorder's own time (this frame's, and capture charged from the frame before) explains most of the overrun.
   if (rec >= 0.5 * Math.max(0, gap - 16.7) && rec > work) return "recorder";
-  if (work < 0.5 * gap) return heapDrop > 2 ? "outside the game's frame: a collection" : "outside the game's frame";
+  if (work < 0.5 * gap) {
+    if (heapDrop > 2) return "outside the game's frame: a collection";
+    // The GPU's own time for the scene (when the browser exposes it) is the overrun.
+    if (gpu >= 0 && gpu >= 0.5 * gap) return "GPU";
+    return "outside the game's frame";
+  }
   if (streaming >= 0.5 * work) return "streaming";
   if (sim >= 0.5 * work) return "simulation";
   if (render >= 0.5 * work) return "render";

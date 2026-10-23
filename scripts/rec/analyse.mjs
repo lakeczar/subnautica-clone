@@ -105,6 +105,18 @@ export function analyse(r, t = THRESHOLDS) {
     if (ua != null && ub != null && ub > ua) add({ kind: "unsliced", t: samples[i].t, tick: samples[i].tick, reason: `CW-1 unsliced cave build counter ${ua} → ${ub}` });
   }
   attention.sort((a, b) => a.t - b.t);
+  // A burst is one entry: memory jumps within 30 s (a region streaming in), damage within 1 s (a hit and its rebound).
+  for (const [kind, ms] of [["memory", 30000], ["damage", 1000]]) {
+    for (let i = attention.length - 1; i > 0; i--) {
+      const a = attention[i], prev = attention.slice(0, i).reverse().find((x) => x.kind === kind);
+      if (a.kind !== kind || !prev || a.t - (prev.lastT ?? prev.t) > ms) continue;
+      prev.count = (prev.count ?? 1) + (a.count ?? 1);
+      prev.lastT = Math.max(a.lastT ?? a.t, prev.lastT ?? prev.t);
+      prev.more = [...(prev.more ?? []), a.reason, ...(a.more ?? [])];
+      attention.splice(i, 1);
+    }
+  }
+  for (const a of attention) if (a.count > 1) { a.reason = `${a.count} in ${((a.lastT - a.t) / 1000).toFixed(0)} s, first: ${a.reason}; then ${a.more.slice(0, 3).join("; ")}${a.more.length > 3 ? "; …" : ""}`; delete a.more; }
   attention.forEach((a, i) => { a.id = `A${String(i + 1).padStart(2, "0")}`; });
 
   // --- checks: what was checked, what was missing, what looked wrong --------

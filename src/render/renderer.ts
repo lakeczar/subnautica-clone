@@ -64,9 +64,40 @@ export interface GameRenderer {
   dispose(): void;
 }
 
+/** REC-1: the GPU's time for each scene.render, from WebGL2 timer queries
+ * (EXT_disjoint_timer_query_webgl2), read when they resolve a few frames
+ * later. `latest` is -1 where the browser does not expose the timer, or
+ * after a disjoint event (the GPU was interrupted: no valid times). */
+function createGpuTimer(gl: WebGL2RenderingContext | undefined) {
+  const ext = gl?.getExtension("EXT_disjoint_timer_query_webgl2") as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null | undefined;
+  const pending: WebGLQuery[] = [], free: WebGLQuery[] = [];
+  let open: WebGLQuery | null = null;
+  const timer = {
+    latest: -1,
+    begin(): void {
+      if (!gl || !ext || open || pending.length > 6) return;
+      open = free.pop() ?? gl.createQuery();
+      if (open) gl.beginQuery(ext.TIME_ELAPSED_EXT, open);
+    },
+    end(): void {
+      if (!gl || !ext) return;
+      if (open) { gl.endQuery(ext.TIME_ELAPSED_EXT); pending.push(open); open = null; }
+      while (pending.length && gl.getQueryParameter(pending[0]!, gl.QUERY_RESULT_AVAILABLE)) {
+        const q = pending.shift()!;
+        const ns = gl.getQueryParameter(q, gl.QUERY_RESULT) as number;
+        timer.latest = gl.getParameter(ext.GPU_DISJOINT_EXT) ? -1 : Math.round(ns / 1e4) / 100;
+        free.push(q);
+      }
+    },
+  };
+  return timer;
+}
+
 /** One present's time by part, ms (REC-1; CW-1's attribution). */
 export interface FrameParts {
   regions: number; lights: number; actors: number; chunks: number; caves: number; render: number;
+  /** GPU time of a recent scene.render (timer queries resolve 1–3 frames late), ms; -1 when the browser exposes no GPU timer. */
+  gpu: number;
   lightScan: number; lightPlace: number; lightSelect: number; lightCount: number; evicted: number;
   buildMs: number; maxStepMs: number; uploadMs: number; uploads: number; caveBuildMs: number;
   /** A jump during play: from and to, metres. */
@@ -346,6 +377,7 @@ export function createRenderer(
       available = true,
       generation = 0;
     let lastViewer: Vector3 | null = null, settleSince = -1;
+    const gpuTimer = createGpuTimer((engine as unknown as { _gl: WebGL2RenderingContext })._gl);
     let timing = false, parts: FrameParts | null = null, lastWorld: ReturnType<typeof art.stream> | null = null;
     let whenReady: (() => void) | null = null;
     const cancelReady = (): void => {
@@ -517,13 +549,15 @@ export function createRenderer(
         canvas.dataset.water = underwater ? "underwater" : "above";
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
         const tRender = timed ? performance.now() : 0;
+        if (timed) gpuTimer.begin();
         if (settleSince >= 0) { engine.clear(new Color4(0, 0, 0, 1), true, true); canvas.dataset.settling = "true"; }
         else { scene.render(); canvas.dataset.settling = "false"; }
+        if (timed) gpuTimer.end();
         parts = !timed ? null : {
           regions: +regionsMs.toFixed(2), lights: +lightsMs.toFixed(2), actors: +actorsMs.toFixed(2),
           lightScan: +lights.stats.scanMs.toFixed(2), lightPlace: +lights.stats.placeMs.toFixed(2), lightSelect: +lights.stats.selectMs.toFixed(2),
           lightCount: lights.stats.placed, evicted: world?.totals.evicted ?? 0,
-          chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2),
+          chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2), gpu: gpuTimer.latest,
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
           jump,
