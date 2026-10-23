@@ -50,7 +50,8 @@ export async function openGame(opts) {
   await g.cdp.send("Performance.enable");
   page.on("pageerror", (e) => g.errors.push(e.message.slice(0, 300)));
   page.on("crash", () => { g.crash = "the renderer crashed"; });
-  page.on("console", (m) => { if (m.type() === "error") g.errors.push(m.text().slice(0, 300)); });
+  page.on("console", (m) => { if (m.type() === "error" && !m.text().startsWith("Failed to load resource")) g.errors.push(m.text().slice(0, 300)); });
+  page.on("response", (r) => { if (r.status() >= 400) g.errors.push(`HTTP ${r.status()} ${r.url().slice(0, 200)}`); }); // which resource, not just that one failed
   await page.addInitScript(frameRecorderScript);
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load", timeout: 60000 });
   g.renderer = await page.evaluate(() => { const c = document.createElement("canvas").getContext("webgl2"); const e = c.getExtension("WEBGL_debug_renderer_info"); return c.getParameter(e.UNMASKED_RENDERER_WEBGL); });
