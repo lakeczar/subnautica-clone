@@ -88,7 +88,9 @@ for (;;) {
   // plan uses the cached reading, so an any ticket with room here is admitted
   // here at once, whatever the network does (R1-F6). A fresh reading changes
   // remote.json, which wakes the loop.
-  if (remoteBound && !refreshing && !readState(cfg).tickets[id]?.fellBack) {
+  // (A fallen-back any or soak ticket runs here; a 4070 ticket keeps waiting for alickers.)
+  const mine = readState(cfg).tickets[id];
+  if (remoteBound && !refreshing && !(mine?.fellBack && mine.goal?.machine !== "4070")) {
     refreshing = true;
     refreshHealth(cfg).catch(() => {}).finally(() => { refreshing = false; });
   }

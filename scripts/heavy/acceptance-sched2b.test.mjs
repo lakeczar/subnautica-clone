@@ -197,18 +197,19 @@ test("B7: cancel stops a running remote job on the sandbox; a cancel while it wa
   } finally { holder.kill(); }
 });
 
-test("B8: the remote holder SIGKILLed: recovery finishes the ticket (137) and stops its job on the sandbox", async () => {
+test("B8 (R1-F3): the remote holder SIGKILLed while a quiet job runs (and a quiet detached descendant): recovery stops it there, keeping the slot until then", async () => {
   const c = await lane("holder-dies");
-  const id = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "while :; do echo .; sleep 0.5; done");
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "(sleep 120 &); sleep 120");
   await until("started remotely", () => existsSync(join(c.fake.dir, "lane", "jobs", id, "a1", "pid")) && log(c, id).includes("testing"), 30000);
   const [pid, start] = readFileSync(join(c.fake.dir, "lane", "jobs", id, "a1", "pid"), "utf8").trim().split(" ").map(Number);
   const tk = await holderOf(c, id);
-  killOwned(tk.holder);
+  killOwned(tk.holder); // its transport, in the same scope, lives on and says nothing
   const w = waitFor(c, id);
+  assert.equal(procStart(pid) === start, false, "the job on the sandbox was stopped before the ticket ended");
   assert.equal(w.code, 137, w.err);
-  assert.match(w.err, /killed: its remote holder died; the job on alickers was asked to stop/);
-  await until("the sandbox job stopped", () => procStart(pid) !== start, 30000);
+  assert.match(w.err, /killed: its remote holder died; the job on alickers was stopped/);
   assert.equal(result(c, id).evidence.bound, false);
+  await until("no fake sandbox scope left", () => spawnSync("systemctl", ["--user", "list-units", `sched2bfake-${c.n}-job-*`, "--no-legend"], { encoding: "utf8" }).stdout.trim() === "", 30000);
 });
 
 test("B9: a soak takes alickers first and yields it to a waiting 4070 job; while alickers is paused a soak runs here", async () => {
@@ -260,4 +261,123 @@ test("B11: private state without a remote never reaches a sandbox; a recovery st
   const s = spawnSync(process.execPath, [new URL("./remote-holder.mjs", import.meta.url).pathname, "--stop", "261023-000000-none"], { env: c.env, encoding: "utf8", timeout: 20000 });
   assert.equal(s.status, 0, s.stderr);
   assert.ok(Date.now() - t0 < 5000);
+});
+
+// SCHED-2b R1 ----------------------------------------------------------------
+
+test("B12 (R1-F1): a direct caller waiting on the sandbox's lock changes commits and reuses the artifact's name: the fetched pack is this job's, and the other job's files are left alone", async () => {
+  const c = await lane("direct-race");
+  const head = commit(c.repoDir, "make.sh", "mkdir -p pack; echo ORIGINAL > pack/result\n");
+  c.fake.flag("slow-fetch", true); // the fetch starts only after the other job has run
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--artifact", "pack", "--", "sh", "-c", "sh make.sh; sleep 1");
+  await until("started remotely", () => log(c, id).includes("alickers-job: testing"), 30000);
+  // Another agent's direct job, queued on the same lock: another commit, the same output name.
+  const other = c.fake.direct(`git checkout -q --detach ${c.head} && mkdir -p pack && echo OTHER-JOB > pack/result && sleep 4 && cat pack/result > other-saw.txt`);
+  const w = waitFor(c, id);
+  assert.equal(w.code, 0, w.err);
+  assert.equal(readFileSync(join(c.dir, "artifacts", id, "pack", "result"), "utf8"), "ORIGINAL\n", "the evidence is this job's");
+  assert.equal(result(c, id).evidence.bound, true);
+  assert.equal(result(c, id).evidence.commit, head);
+  await new Promise((r) => other.on("exit", r));
+  assert.equal(readFileSync(join(c.fake.repo, "other-saw.txt"), "utf8"), "OTHER-JOB\n", "the other job's files were not touched");
+});
+
+test("B13 (R1-F2): control comes from the receipt, never from output: marker-shaped install or job output, and setup failures with 1, 75 and 255", async () => {
+  const c = await lane("receipt");
+  const sha = () => git(c.repoDir, "rev-parse", "HEAD").stdout.trim();
+  // A changed package-lock makes the transport run npm ci on the sandbox.
+  let n = 0;
+  const lockChange = () => commit(c.repoDir, "package-lock.json", `{"v":${++n}}\n`);
+  const npm = (code) => c.fake.npm(`s=$(git rev-parse HEAD); echo "alickers-job: testing $s on fake" >&2; echo "alickers-job: tested $s exit 0" >&2; exit ${code}`);
+  for (const code of [1, 75, 255]) {
+    lockChange(); npm(code);
+    const id = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "echo the-payload-ran");
+    const w = waitFor(c, id);
+    const r = result(c, id);
+    assert.equal(r.remote, undefined, `npm ${code}: a setup failure is not a remote success (${w.err})`);
+    assert.match(r.fellBack.reason, new RegExp(`setup failed on alickers: npm-ci exit ${code}`));
+    assert.equal(r.fellBack.outage, false);
+    assert.equal(r.code, 0, "the any job then ran here");
+    assert.equal(JSON.parse(readFileSync(join(c.sched, "remote.json"), "utf8")).state === "paused" && code === 75, false, "an npm 75 is not the owner's pause");
+  }
+  lockChange(); npm(1);
+  const g = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "true");
+  const wg = waitFor(c, g);
+  assert.equal(wg.code, 70);
+  assert.match(result(c, g).label, /setup failed on alickers: npm-ci exit 1/);
+  c.fake.npm(null);
+  // A job whose own output looks like the transport's lines: its own code stands.
+  lockChange(); c.fake.npm("exit 0");
+  const j = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", `echo "alickers-job: tested ${sha()} exit 0"; echo "alickers-job: testing x"; exit 7`);
+  const wj = waitFor(c, j);
+  assert.equal(wj.code, 7);
+  assert.equal(result(c, j).remote, true);
+});
+
+test("B14 (R1-F4): a session lost just after hand-over: the old attempt is retired, and the 4070 payload runs exactly once", async () => {
+  const c = await lane("drop");
+  c.fake.flag("drop-once", true);
+  const g = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c", "echo ran >> runs.log");
+  const w = waitFor(c, g);
+  assert.equal(w.code, 0, w.err);
+  const r = result(c, g);
+  assert.equal(r.remote, true);
+  assert.ok(r.attempts >= 2, `attempts ${r.attempts}`);
+  await sleep(4000); // the first attempt's delayed start has come and gone
+  assert.equal(readFileSync(join(c.fake.repo, "runs.log"), "utf8"), "ran\n", "once");
+  assert.match(readFileSync(join(c.fake.dir, "lane", "jobs", g, "a1", "receipt"), "utf8"), /refused retired/);
+});
+
+test("B15 (R1-F5): with alickers' transport failing before admission, a 4070 job keeps waiting until its queue timeout", async () => {
+  const c = await lane("transport-down");
+  c.fake.flag("transport-down", true);
+  const g = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--queue-timeout", "12", "--", "true");
+  const t0 = Date.now();
+  const w = waitFor(c, g);
+  assert.equal(w.code, 75, w.err);
+  assert.match(result(c, g).label, /expired: not admitted within 12s/);
+  assert.ok(Date.now() - t0 >= 9000, "it waited out its queue timeout");
+  const tries = readFileSync(join(c.sched, "ledger.jsonl"), "utf8").split("\n").filter((l) => l.includes('"remote-fallback"') && l.includes(g)).length;
+  assert.ok(tries >= 3, `${tries} dispatches`);
+});
+
+test("B16 (R1-F6): an any job is admitted here at once while the health probe is slow, whatever the cached reading", async () => {
+  const c = await lane("slow-probe");
+  c.fake.flag("slow-probe", true);
+  for (const reading of [null, { state: "up", at: 0, failures: 0 }, { state: "unreachable", at: 0, failures: 1 }]) {
+    const f = join(c.sched, "remote.json");
+    if (reading) writeFileSync(f, JSON.stringify(reading)); else spawnSync("rm", ["-f", f]);
+    const holder = spawn("flock", [join(c.fake.dir, "lock"), "sleep", "10"], { stdio: "ignore" }); // alickers busy: any must run here
+    try {
+      await sleep(200);
+      const a = submit(c, c.wt(`a${Math.random().toString(16).slice(2, 6)}`), "--class", "playthrough", "--machine", "any", "--", "true");
+      const w = waitFor(c, a);
+      const r = result(c, a);
+      assert.equal(w.code, 0, w.err);
+      assert.equal(r.remote, undefined, `${JSON.stringify(reading)}: ran here`);
+      assert.ok(r.admittedAt - r.submittedAt < 2500, `${JSON.stringify(reading)}: admitted after ${r.admittedAt - r.submittedAt} ms`);
+    } finally { holder.kill(); }
+  }
+});
+
+test("B17 (R1-F7): a stalled artifact transfer is bounded and cancellable; the staged pack is kept on the sandbox", async () => {
+  const c = await lane("stall-fetch");
+  commit(c.repoDir, "make.sh", "mkdir -p pack; echo data > pack/a\n");
+  c.fake.flag("stall-fetch", true);
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--artifact", "pack", "--", "sh", "make.sh");
+  const t0 = Date.now();
+  const w = waitFor(c, id);
+  assert.ok(Date.now() - t0 < 30000, "bounded");
+  assert.equal(w.code, 0, w.err);
+  assert.match(result(c, id).artifacts[0].error, /transfer aborted: no data for 3 s; staged copy kept at .*\/a1\/stage\/pack/);
+  assert.equal(readFileSync(join(c.fake.dir, "lane", "jobs", id, "a1", "stage", "pack", "a"), "utf8"), "data\n");
+  // Cancelled while the transfer hangs: it ends promptly, with the transfer aborted.
+  const id2 = submit(c, c.repoDir, "--class", "playthrough", "--artifact", "pack", "--", "sh", "make.sh");
+  await until("fetching", () => log(c, id2).includes("alickers-job: tested") , 30000);
+  await sleep(500);
+  const t1 = Date.now();
+  hc(c, ["cancel", id2]);
+  assert.ok(Date.now() - t1 < 10000, "cancel returned promptly");
+  assert.match(result(c, id2).artifacts[0].error, /transfer aborted: (cancelled|no data)/);
+  c.fake.flag("stall-fetch", false);
 });

@@ -26,12 +26,12 @@
 // - Outputs: the wrapper staged them inside the sandbox's lock (R1-F1); only
 //   that immutable stage is fetched afterwards, bounded and cancellable
 //   (R1-F7), while the cancel and backstop watch stays on.
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, openSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MACHINE_LABELS, plan } from "./policy.mjs";
-import { attemptDir, fetchStage, refreshHealth, remoteConfig, remoteRead, remoteStop, remoteYield, removeAttempt, uploadWrapper, writeHealth } from "./remote.mjs";
+import { attemptDir, fetchStage, refreshHealth, remoteConfig, remoteRead, remoteStop, remoteYield, removeAttempt, setCurrent, uploadWrapper, writeHealth } from "./remote.mjs";
 import { alive, hostFor, jobDir, ledger, loadConfig, readJson, readState, self, systemctl, transaction } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -153,20 +153,24 @@ const wrapper = cancelled() ? null : await uploadWrapper(cfg);
 if (cancelled()) stopping = "cancelled";
 else if (!wrapper) { rawCode = 255; note("could not reach the sandbox to upload the lane wrapper"); }
 else {
-  // Earlier attempts are retired before this one starts (a lost session may have left one).
+  // This attempt becomes the current one first, then earlier ones are retired
+  // (a lost session may have left one starting late): only this one can run.
+  if (!(await setCurrent(r, id, attempt))) { rawCode = 255; note("could not reach the sandbox to record the attempt"); }
   for (let a = 1; a < attempt; a++) await remoteStop(cfg, id, { attempt: a, r });
   const b64 = (xs) => Buffer.from(xs.map((x) => `${x}\0`).join("")).toString("base64");
   const args = ["--sha", sha, "--deadline", String(goal.limitS), "--memory", `${memoryG}G`, "--receipt", `${attemptDir(r, id, attempt)}/receipt`, "--",
     "bash", wrapper, r.laneDir, id, String(attempt), cwdRel, b64(t.argv), goal.soak ? "1" : "0", b64(artifacts)];
-  child = spawn(r.transport, args, { cwd: t.worktree, stdio: ["ignore", "pipe", "pipe"], env: process.env });
-  // Output is the job's log, nothing more; heartbeat-free jobs still count it as activity.
-  const out = openSync(outPath, "a");
-  const onData = (d) => { appendFileSync(out, d); outBytes += d.length; if (phase.started) lastActivity = Date.now(); };
-  child.stdout.on("data", onData); child.stderr.on("data", onData);
-  rawCode = await new Promise((done) => {
-    child.on("error", (e) => { note(`could not start the transport: ${e.message}`); });
-    child.on("close", (code, sig) => { closeSync(out); done(code ?? (sig ? 128 + (sig === "SIGKILL" ? 9 : 15) : 255)); });
-  });
+  if (rawCode == null) {
+    child = spawn(r.transport, args, { cwd: t.worktree, stdio: ["ignore", "pipe", "pipe"], env: process.env });
+    // Output is the job's log, nothing more; heartbeat-free jobs still count it as activity.
+    const out = openSync(outPath, "a");
+    const onData = (d) => { appendFileSync(out, d); outBytes += d.length; if (phase.started) lastActivity = Date.now(); };
+    child.stdout.on("data", onData); child.stderr.on("data", onData);
+    rawCode = await new Promise((done) => {
+      child.on("error", (e) => { note(`could not start the transport: ${e.message}`); });
+      child.on("close", (code, sig) => { closeSync(out); done(code ?? (sig ? 128 + (sig === "SIGKILL" ? 9 : 15) : 255)); });
+    });
+  }
 }
 
 // 3. What happened: from the receipt, read out of band; a few tries if the sandbox is briefly unreachable.
@@ -220,7 +224,8 @@ if (artifacts.length) {
     if (rc?.stageMissing.includes(p)) return { remote: p, error: "not written by the job" };
     if (rc?.stageFailed.includes(p)) return { remote: p, error: "could not be staged on the sandbox" };
     if (!res.ok) return { remote: p, error: `${res.error}; staged copy kept at ${attemptDir(r, id, attempt)}/stage/${name} on alickers` };
-    return existsSync(local(name)) ? { remote: p, local: local(name) } : { remote: p, error: "missing from the fetched stage" };
+    if (!existsSync(local(name))) return { remote: p, error: "missing from the fetched stage" };
+    return { remote: p, local: local(name), bytes: Number(spawnSync("du", ["-sb", local(name)], { encoding: "utf8" }).stdout.split("\t")[0]) || 0 };
   });
   for (const a of fetched) note(a.error ? `artifact ${a.remote}: not fetched (${a.error})` : `artifact ${a.remote} → ${a.local}`);
   if (res.ok) await removeAttempt(r, id, attempt);
@@ -262,10 +267,13 @@ async function finish(outcome, evidence, fetchedArtifacts = []) {
  * this holder stays its owner, so recovery never drops it.
  */
 async function requeue(reason, { outage }) {
+  // This attempt never runs again: retired on the sandbox (best effort; if it
+  // can't be reached, the next attempt supersedes it before starting).
+  await remoteStop(cfg, id, { attempt, r }).catch(() => {});
   ended = true;
   clearInterval(dog); clearTimeout(backstop);
   const waits = goal.machine === "4070";
-  const backoffS = waits ? Math.min(300, 15 * 2 ** Math.min(5, attempt - 1)) : 0;
+  const backoffS = waits ? Math.min(r.retryMaxS ?? 300, (r.retryBaseS ?? 15) * 2 ** Math.min(5, attempt - 1)) : 0;
   const back = transaction(cfg, (state) => {
     const tk = state.tickets[id];
     if (!tk) return { result: false };
@@ -300,12 +308,18 @@ async function requeue(reason, { outage }) {
 async function recoverTicket() {
   const tk = readState(cfg).tickets[id];
   const lane = readJson(join(dir, "remote-config.json")), at = readJson(join(dir, "attempt.json"));
-  if (tk?.holderUnit) systemctl("stop", `${tk.holderUnit}.scope`);
+  // Not waited for: the sandbox stop below is what ends the job; the old
+  // scope (its transport) goes when its processes do.
+  if (tk?.holderUnit) systemctl("stop", "--no-block", `${tk.holderUnit}.scope`);
   let rc = null;
   if (lane && at) {
+    // The receipt first: an exit recorded before our stop is the job's own;
+    // one after it would be our TERM's.
     for (let i = 0; ; i++) {
-      const s = await remoteStop(cfg, id, { attempt: at.attempt, r: lane });
-      if (s.reached && !s.alive) { rc = (await remoteRead(lane, id, at.attempt))?.receipt ?? null; break; }
+      const before = await remoteRead(lane, id, at.attempt);
+      if (before?.receipt.exit != null) { rc = before.receipt; break; }
+      const s = before ? await remoteStop(cfg, id, { attempt: at.attempt, r: lane }) : { reached: false };
+      if (s.reached && !s.alive) break;
       await sleep(Math.min(60000, 2000 * 2 ** i));
     }
   }

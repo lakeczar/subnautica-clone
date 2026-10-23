@@ -25,7 +25,7 @@ const contexts = [];
 after(() => {
   for (const c of contexts) for (const id of Object.keys(state(c).tickets ?? {})) hc(c, ["cancel", id]);
   spawnSync("systemctl", ["--user", "stop", SLICE], { stdio: "ignore" });
-  if (!process.env.SCHED_KEEP) rmSync(ROOT, { recursive: true, force: true }); // SCHED_KEEP=1 keeps the evidence
+  if (!process.env.SCHED_KEEP) { spawnSync("chmod", ["-R", "u+w", ROOT]); rmSync(ROOT, { recursive: true, force: true }); } // staged outputs are read-only // SCHED_KEEP=1 keeps the evidence
 });
 
 export function context(name, { mode = "normal", host = {}, config = null, slice = SLICE } = {}) {
@@ -119,14 +119,21 @@ export function fakeSandbox(c, extra = {}) {
   mkdirSync(join(f, "bin"), { recursive: true });
   mkdirSync(join(f, "tmp"), { recursive: true });
   const w = (name, body) => { writeFileSync(join(f, name), body, { mode: 0o755 }); return join(f, name); };
-  const ssh = w("ssh", `#!/bin/bash
-# fake ssh: the last argument is the remote command
-[ -e "$FAKE/unreachable" ] && { echo "ssh: connect to host siltwake-alickers: Connection refused" >&2; exit 255; }
-[ -n "$FAKE_SSH_DELAY" ] && [ -e "$FAKE/slow-probe" ] && case "\${@: -1}" in *flock\ -n*) sleep "$FAKE_SSH_DELAY" ;; esac
-[ -e "$FAKE/stall-fetch" ] && case "\${@: -1}" in *"tar -cf"*) sleep 3600 ;; esac
-cmd="\${@: -1}"
-HOME="$FAKE/home" PATH="$FAKE/bin:$PATH" exec bash -c "$cmd"
-`);
+  const ssh = w("ssh", [
+    "#!/bin/bash",
+    "# fake ssh: the last argument is the remote command",
+    "cmd=\"${@: -1}\"",
+    "[ -e \"$FAKE/unreachable\" ] && { echo \"ssh: connect to host siltwake-alickers: Connection refused\" >&2; exit 255; }",
+    "if [ -e \"$FAKE/slow-probe\" ] && [[ \"$cmd\" == *\"flock -n\"* ]]; then sleep \"${FAKE_SSH_DELAY:-4}\"; fi",
+    "if [ -e \"$FAKE/stall-fetch\" ] && [[ \"$cmd\" == *\"tar -cf\"* ]]; then sleep 3600; fi",
+    "if [ -e \"$FAKE/slow-fetch\" ] && [[ \"$cmd\" == *\"tar -cf\"* ]]; then sleep 1.5; fi",
+    "# The transport's connection fails before admission (the probe still works).",
+    "if [ -e \"$FAKE/transport-down\" ] && [[ \"$cmd\" == *\"git fetch\"* ]]; then echo \"ssh: connection reset\" >&2; exit 255; fi",
+    "# The session drops once, just after the job is handed to the sandbox, which carries on.",
+    "if [ -e \"$FAKE/drop-once\" ] && [[ \"$cmd\" == *\"siltwake-job\"* ]]; then rm -f \"$FAKE/drop-once\"; HOME=\"$FAKE/home\" PATH=\"$FAKE/bin:$PATH\" FAKE_START_DELAY=3 setsid bash -c \"$cmd\" >/dev/null 2>&1 < /dev/null & sleep 1; echo \"ssh: connection lost\" >&2; exit 255; fi",
+    "HOME=\"$FAKE/home\" PATH=\"$FAKE/bin:$PATH\" exec bash -c \"$cmd\"",
+    "",
+  ].join("\n"));
   w("bin/siltwake-job", `#!/usr/bin/env bash
 # siltwake-job, as on the sandbox, with private paths and unit names
 set -euo pipefail
@@ -135,6 +142,7 @@ while [[ $# -gt 0 ]]; do case "$1" in --memory) memory="$2"; shift 2;; --deadlin
 exec 9>"$FAKE/lock"
 flock -w "\${FAKE_LOCK_WAIT:-3600}" 9 || exit 75
 if [[ -e "$FAKE/home/.local/state/siltwake/paused" ]]; then echo 'Sandbox paused by owner' >&2; exit 75; fi
+sleep "\${FAKE_START_DELAY:-0}"
 unit="sched2bfake-${c.n}-job-$$"
 cleanup() { systemctl --user stop "$unit.scope" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -146,7 +154,7 @@ exit "$status"
 `);
   const repo = join(f, "repo");
   const remote = { ssh: [ssh], repo, laneDir: join(f, "lane"), lock: join(f, "lock"), artifactsDir: join(c.dir, "artifacts"),
-    tickS: 1, throttleNoticeS: 3, fetchInactivityS: 3, recheckS: { up: 2, paused: 2, unreachable: 2, unreachableMax: 4 }, ...extra };
+    tickS: 1, throttleNoticeS: 3, fetchInactivityS: 3, retryBaseS: 1, retryMaxS: 2, recheckS: { up: 2, paused: 2, unreachable: 2, unreachableMax: 4 }, ...extra };
   Object.assign(c.env, { FAKE: f, ALICKERS_SSH: ssh, ALICKERS_REPO: repo, ALICKERS_TMP: join(f, "tmp") });
   c.fake = { dir: f, repo,
     /** The sandbox's checkout, cloned from a worktree (its origin), as the real sandbox's is from GitHub. */

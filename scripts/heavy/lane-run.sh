@@ -28,6 +28,8 @@ rec() { printf '%s\n' "$*" >>"$r"; }
 echo "$$ $(cut -d' ' -f22 /proc/$$/stat)" >"$d/pid"
 if [ -e "$t/cancelled" ]; then rec refused cancelled; echo "siltwake-lane: cancelled before start; the command did not run"; exit 75; fi
 if [ -e "$d/retired" ]; then rec refused retired; echo "siltwake-lane: this attempt was retired; the command did not run"; exit 75; fi
+# Only the ticket's current attempt may run: a delayed start of an older one never does.
+if [ "$(cat "$t/current" 2>/dev/null)" != "$attempt" ]; then rec refused superseded; echo "siltwake-lane: a later attempt superseded this one; the command did not run"; exit 75; fi
 top=$(pwd)
 cd "$rel" || { rec refused "no directory $rel"; exit 70; }
 cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)

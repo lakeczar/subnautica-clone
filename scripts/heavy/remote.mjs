@@ -36,7 +36,7 @@ export function remoteConfig(cfg) {
     cpus: 6, // siltwake-job's CPU quota
     tickS: 10, // how often the wrapper reports heartbeats and memory.high
     throttleNoticeS: 120, // continuous memory.high throttling reported after this
-    maxAttempts: 3, // transport or connection failures before a 4070 ticket gives up
+    retryBaseS: 15, retryMaxS: 300, // a 4070 ticket's backoff after a failed dispatch: 15 s, doubling, at most 5 min; it waits until its queue timeout
     recheckS: { up: 30, paused: 60, unreachable: 60, unreachableMax: 300 }, // how long a health reading stays good
     ...(cfg.remote ?? {}),
   };
@@ -176,10 +176,16 @@ export async function remoteStop(cfg, ticket, { attempt = null, cancel = false, 
   return { reached: res.code === 0, alive: /alive 1/.test(res.out) };
 }
 
+/** Makes `attempt` the ticket's current one on the sandbox (lane-run.sh runs only that one). */
+export async function setCurrent(r, ticket, attempt) {
+  const t = ticketDir(r, ticket);
+  return (await ssh(r, `t=${q(t)}; mkdir -p "$t" && echo ${Number(attempt)} > "$t/current.tmp" && mv "$t/current.tmp" "$t/current"`, { timeoutS: 30 })).code === 0;
+}
+
 /** Removes an attempt's directory on the sandbox (its staged outputs included). */
 export async function removeAttempt(r, ticket, attempt) {
   const d = attemptDir(r, ticket, attempt);
-  return (await ssh(r, `d=${q(d)}; [ -d "$d" ] && chmod -R u+w "$d"; rm -rf "$d"; rmdir ${q(ticketDir(r, ticket))} 2>/dev/null; true`, { timeoutS: 60 })).code === 0;
+  return (await ssh(r, `d=${q(d)}; [ -d "$d" ] && chmod -R u+w "$d"; rm -rf "$d"; t=${q(ticketDir(r, ticket))}; [ -z "$(ls -A "$t" | grep -v '^current$')" ] && rm -rf "$t"; true`, { timeoutS: 60 })).code === 0;
 }
 
 /** Asks a running soak attempt to yield ($SILTWAKE_JOB_YIELD appears on the sandbox). */
@@ -218,6 +224,8 @@ export function fetchStage(r, ticket, attempt, dest, { inactivityS = 60, ceiling
       if (sc == null || tc == null) return;
       clearInterval(watch);
       const ok = !aborted && sc === 0 && tc === 0;
+      // The stage is read-only on the sandbox; the copy here is the caller's to use.
+      if (ok) spawnSync("chmod", ["-R", "u+w", dest]);
       done({ ok, bytes, error: ok ? null : aborted ? `transfer aborted: ${aborted}` : (err.trim() || `exit ${sc || tc}`).slice(0, 200) });
     };
     s.on("close", (c) => { sc = c ?? 255; end(); });

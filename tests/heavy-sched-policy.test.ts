@@ -434,3 +434,11 @@ test("config stalls: a class's default stall window, below its limit; an explici
   assert.equal(r({ stallS: 600 }, { playthrough: 2700 }), 600);
   assert.equal(P.resolveRequest({ class: "quick" }, { T: 4, M: 6144, stalls: { playthrough: 2700 } }).goal.stallS, 600, "other classes unchanged");
 });
+
+test("routing (R1-F5): a 4070 ticket backing off waits (remote-retry) and is never dropped or run here", () => {
+  const g = rt("g", "gpu", "4070", { fellBack: true }) as ReturnType<typeof rt> & { notBefore?: number };
+  g.notBefore = 10_000;
+  const p = P.plan(stateOf(g), 5_000, remote("up"), cfg);
+  assert.deepEqual([p.admit, p.blocked.g], [[], "remote-retry"]);
+  assert.deepEqual(routed(P.plan(stateOf(g), 10_001, remote("up"), cfg)), ["g@4070"]);
+});

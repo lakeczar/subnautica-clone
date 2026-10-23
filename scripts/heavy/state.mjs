@@ -286,7 +286,15 @@ export function hostFor(cfg, state) {
 function remoteHealth(cfg) {
   // Off when disabled, and for a private state directory (tests) without a remote.
   if (cfg.remote?.enabled === false || (!cfg.production && cfg.remote === undefined)) return { state: "off" };
-  return readJson(join(cfg.dir, "remote.json")) ?? { state: "unknown" };
+  const h = readJson(join(cfg.dir, "remote.json"));
+  if (!h) return { state: "unknown" };
+  // Routing trusts a fresh reading only (R1-F6): a stale one is unknown, so an
+  // any job runs here at once and a 4070 job waits for the refresh. The same
+  // freshness as remote.mjs healthTtlMs, plus the slack of one probe.
+  const s = { up: 30, paused: 60, unreachable: 60, unreachableMax: 300, ...(cfg.remote?.recheckS ?? {}) };
+  const ttlS = h.state === "up" || h.state === "busy" ? s.up : h.state === "paused" ? s.paused
+    : h.state === "unreachable" ? Math.min(s.unreachableMax, s.unreachable * 2 ** Math.max(0, (h.failures ?? 1) - 1)) : 0;
+  return Date.now() - (h.at ?? 0) <= (ttlS + 30) * 1000 ? h : { ...h, state: "unknown", stale: h.state };
 }
 export function cpuContext() {
   const load1 = Number(readFileSync("/proc/loadavg", "utf8").split(" ")[0]);
