@@ -32,6 +32,8 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(Number(port), "127.0.0.1", r));
 const note = (...a) => console.log(`[${(performance.now() / 1000).toFixed(1)}s] ${a.join(" ")}`);
 const result = { scenes: {}, shots: [], errors: [] };
+const { requireGpuLease } = await import(path.resolve(build, "..", "scripts/heavy/gpu-lease.mjs"));
+requireGpuLease("cr1/play.mjs");
 const browser = await chromium.launch({ executablePath: `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`,
   headless: true, args: ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist", "--cr1-play"], timeout: 30000 });
 let page, eye = 0, scene = "";
