@@ -25,6 +25,9 @@ if (process.env.SILTWAKE_GPU_LEASE === undefined) { const { requireGpuLease } = 
 const set = JSON.parse(readFileSync(arg("views", path.join(here, "views.json")), "utf8"));
 const only = arg("only") ? new Set(arg("only").split(",")) : null;
 const views = set.views.filter((v) => !only || only.has(v.id));
+// Every view at a fixed sim tick (its own, else the save's): water, sky, creatures and
+// particles all run on it, so the clock reached after loading never shows in a view.
+const saveTick = (() => { try { return JSON.parse(readFileSync(save, "utf8")).state.tick; } catch { return null; } })();
 const [width, height] = (set.defaults?.size ?? "1280x720").split("x").map(Number);
 mkdirSync(path.join(out, "views"), { recursive: true });
 const started = Date.now(), log = (...a) => console.log(`[${((Date.now() - started) / 1000).toFixed(0)}s] ${a.join(" ")}`);
@@ -44,7 +47,8 @@ try {
   await b.page.evaluate(() => window.__siltwake.freeze(true));
   for (const v of views) {
     const t0 = Date.now();
-    const ok = await b.page.evaluate((x) => window.__siltwake.stage({ position: x.pos, yaw: x.yaw, pitch: x.pitch, lamp: x.lamp, ...(x.tick != null ? { tick: x.tick } : {}) }), v);
+    const tick = v.tick ?? saveTick;
+    const ok = await b.page.evaluate((x) => window.__siltwake.stage({ position: x.pos, yaw: x.yaw, pitch: x.pitch, lamp: x.lamp, ...(x.tick != null ? { tick: x.tick } : {}) }), { ...v, tick });
     if (!ok) { result.views.push({ id: v.id, error: "stage refused (is the recorder in driver mode?)" }); continue; }
     // Settled: drawn, not settling, the hold clear, nothing pending, for SETTLE_MS on end.
     let since = null, last = null;
@@ -80,7 +84,7 @@ try {
     // Diagnosis (--keep-pair): the second capture beside the first when they differ.
     if (args.includes("--keep-pair") && a !== c) writeFileSync(path.join(out, `views/${v.id}.b.png`), Buffer.from(c, "base64"));
     const sha = createHash("sha256").update(png).digest("hex");
-    result.views.push({ id: v.id, group: v.group, label: v.label, file, sha256: sha, settled, settleMs: Date.now() - t0, hold: last?.hold ?? null,
+    result.views.push({ id: v.id, group: v.group, label: v.label, file, sha256: sha, tick, settled, settleMs: Date.now() - t0, hold: last?.hold ?? null,
       // A frozen view draws the same pixels twice; anything else animates outside the sim clock.
       stable: a === c, stableAfterMs: tries * STABLE_MS, ...(moved >= 1 ? { relocatedM: Math.round(moved * 10) / 10 } : {}), ...(settled ? {} : { unsettled: last }) });
     log(v.id, settled ? "settled" : `UNSETTLED ${JSON.stringify({ ...last, scene: undefined })}${moved >= 1 ? ` moved ${moved.toFixed(1)} m` : ""}`, `${Date.now() - t0} ms`,
