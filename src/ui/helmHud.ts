@@ -28,6 +28,7 @@ export function helmGuidance(state: GameState): string | null {
   const h = atCarrierHelm(state), d = state.fleet.docking;
   if (!h || !d) return null;
   const speed = carrierSpeed(h);
+  if (d.transaction) return "<kbd>X</kbd> Leave the helm<small>Lock cycling · the helm answers when it closes</small>";
   if (d.stationKeeping) return "<kbd>X</kbd> Leave the helm<small>Holding station · W/S or A/D takes her back</small>";
   if (speed > HOLD_SPEED) return `<kbd>X</kbd> Ease off to leave the helm<small>${speed.toFixed(1)} m/s · release W, or S astern</small>`;
   return "<kbd>X</kbd> Hold station and leave the helm";
