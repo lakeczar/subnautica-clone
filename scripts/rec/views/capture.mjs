@@ -71,6 +71,8 @@ try {
     const c = await b.page.evaluate(() => window.__siltwake.capture());
     const file = `views/${v.id}.png`, png = Buffer.from(a, "base64");
     writeFileSync(path.join(out, file), png);
+    // Diagnosis (--keep-pair): the second capture beside the first when they differ.
+    if (args.includes("--keep-pair") && a !== c) writeFileSync(path.join(out, `views/${v.id}.b.png`), Buffer.from(c, "base64"));
     const sha = createHash("sha256").update(png).digest("hex");
     result.views.push({ id: v.id, group: v.group, label: v.label, file, sha256: sha, settled, settleMs: Date.now() - t0, hold: last?.hold ?? null,
       // A frozen view draws the same pixels twice; anything else animates outside the sim clock.
