@@ -1,0 +1,36 @@
+{
+  "_comment": "Soak pass rules (scripts/soak/goals.mjs). MEM-1 tunes these; a run takes --thresholds FILE to try others.",
+  "tour": {
+    "laps": 3,
+    "memoryGrowthPct": 5,
+    "memoryMetrics": [
+      "rendererRssMiB",
+      "gpuRssMiB",
+      "jsHeapAfterGcMiB"
+    ],
+    "graphicsMetrics": [
+      "meshes",
+      "materials",
+      "textures",
+      "geometries"
+    ],
+    "graphicsGrowthPct": 2,
+    "streamingFrameMs": 33,
+    "holds": 0
+  },
+  "dwell": {
+    "autosaves": 20,
+    "dayNightCycles": 1,
+    "warmupSamples": 3,
+    "memoryFlatPct": 5,
+    "leakMiBPerHour": 30,
+    "leakMinWindowS": 600,
+    "memoryMetrics": [
+      "rendererRssMiB",
+      "gpuRssMiB",
+      "jsHeapAfterGcMiB"
+    ],
+    "autosaveHitchMs": 33,
+    "autosaveMissingS": 120
+  }
+}
