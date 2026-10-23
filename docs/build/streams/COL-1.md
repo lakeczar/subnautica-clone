@@ -2,6 +2,126 @@
 
 Opus 5.5 high. Branch `t3/col-1-static-collider` from root `fe27757`; stage A head: see the commit that adds this page. The decision that created this stream is R1 of the [compromise verdict](../audits/COMPROMISE-VERDICT-OPUS.md) (on `research/compromise-audit`), on Sol's findings ART-01/02/03/07, CAV-02/03/20 and TST-05. **New modules only:** `src/world/collision/*` and `tests/col1-*`. No edit to `world.ts`, `app.ts`, `step.ts`, LC's files, or any cave or creature file, with two grants from the coordinator for R6: the floor snap and seam step in `caveGeometry.ts` (and the cave tests that encode the seam), and the memo key in `caveFloor` (`caves/authored.ts`).
 
+## R7 response (Sol R7 on `38e50afb`: [report](../reviews/COL-1A-SOL-XHIGH-R7.md), on `review/col-1a-r7`)
+**R7-1 is fixed at the root.** The seam is now built from its boundary in each side plane, instead of extruding each open edge to the floor on its own. The result is checked against that boundary inside the build. The reviewer's cases now pass at half-extents 1e-7, 1e-5 and 1e-4 m:
+- **Step exit:** `hub_step_arch`, a box leaving solid across x = 100, is no longer stopped.
+- **Glimmer wall:** there's water on both sides of z = −486, so there's no face there, and a box crosses it both ways.
+
+**Why per-edge skirts failed.** R6 gave each open edge its own vertical curtain down to the floor. Where the cut doubles back in its plane, those curtains overlap with opposite normals. Index coherence can't see that; it's an embedding failure.
+
+**The construction** (`src/content/regions/seamCap.ts`, called from the seam step in `caveGeometry.ts`):
+- **The region.** In a collar side plane, the face needed is the signed region where the shell's cross-section and the terrain's differ. Shell solid against terrain water faces out; terrain solid against shell water faces in. That region is the sum, over cut edges, of each edge's strip to the floor.
+- **Boundaries, not faces.** The strips are summed as boundaries. Each strip is a closed cycle on its own: the edge reversed, its sides, and the floor between. Their floor pieces run over one floor polyline per plane, with a vertex at every cut vertex's u, so coincident pieces cancel exactly. What's left bounds the signed region.
+- **Triangulation.** That boundary is cut into simple loops. A walk that comes back through a vertex is a pinched region, and it's cut there. The loops are nested by containment, each region gets its winding, and only regions with winding ±1 are triangulated, once, from their own boundary. The triangulator is a compact port of earcut (ISC), as nothing in the repo triangulated polygons. A boundary that crosses itself or covers anywhere twice is refused.
+- **Splitting at the floor.** A cut edge that crosses the floor gets a vertex there, so every strip lies on one side of the floor. The point is found by bisection on the floor function between two floor-polyline samples, so it sits on the edge and exactly on the floor. A vertical cut edge through the floor is split at the floor vertex. The edge's triangle becomes two, with the same plane and winding.
+- **In-plane triangles.** Triangles the mesher left lying exactly in a collar plane join the sum: they're dropped, and their edges become cut. They can't overlap the new faces.
+- **Snap guard.** The snap refuses a move that would collapse a cut edge to a point, or tangle edges that still bound the seam. Those edges must stay a simple curve.
+
+**Two root fixes underneath:**
+- **The clip duplicated endpoints.** Sutherland–Hodgman made a "cut point" at s = 0 or 1 for an edge with an end exactly on the plane. That pinched the mesh with null triangles. Only an edge whose ends are strictly on either side makes a point now. Geometry doesn't change.
+- **The coarse lattice stopped short.** Its outermost corner lay on the footprint side, so the coarse surface could end up to a clamp (0.3 m) inside it, and water-dominant bottom cells left it open through the lattice floor. `coarsen` now adds one sampled cell beyond every face, and the cells below are always rock. Ring vertices keep their raw position. Every original vertex relaxes over triangles of its own cells only, so the surface inside is exactly the unringed one.
+  - **Result:** every coarse open edge now lies in a side plane, as at fine: none is left off them in all 110 shells. One planar construction serves both LODs, and the coarse band's inset edges no longer exist.
+
+**Checks inside the build** (`generateShell` throws on any failure):
+- every seam face tiles its region exactly (`capProblems`: each face's sign equals the region's winding at its centroid, no two overlap, and signed area matches Green's theorem on the boundary);
+- no seam face crosses, or overlaps in its plane, any triangle of the shell (`seamFaceProblems`; sharing vertices doesn't excuse a coplanar overlap);
+- every edge a seam face uses is shared coherently, by at most two triangles;
+- no original triangle faces against its pre-snap normal, and no moved vertex stops partway.
+
+How often each path fires on current art, over all 110 shells:
+- snap refusals: 317, in 23 shells;
+- in-plane triangles dropped: 85, in 11 shells;
+- pinch cuts: 8 shells;
+- floor-crossing splits: 3 shells.
+
+The vertical-edge split never fires on current art. It's kept because the general path can't take that case.
+
+**Tests** (`tests/col1-r7.test.ts`, fast, about 3.4 s cached):
+- the reviewer's Step exit and Glimmer wall;
+- an independent seam audit (`seamAudit`, its own 2-D clipping and segment test) on the reviewer's three caves at both LODs;
+- **horizontal wall-normal and occupancy controls** (`wallContradictions`) along X and Z: lines through every seam face's centroid plus random ones. Every face crossed must agree with the collider's own `solidAt`, which comes from vertical parity, on its footprint side. Two opposite faces meeting a line at one place in one side plane are reported outright. The vertical-column test can't see vertical faces at all;
+- every coarse open edge lies in a side plane;
+- the clip keeps an endpoint on the plane as itself;
+- the construction's own cases: a strip, the hairpin (R7-1's doubled cut), a closed passage loop, a pinch, and refusal of a crossing or double cover. The validator catches an overlap and a wrongly signed face.
+
+On R6's shells, the audit flags all three caves, including the reviewer's faces 42117/42119 and 69956/69957, and so do the wall controls. On R7's shells, both are clean. The art sweep (`col1-art.heavy`) adds the audit at both LODs and the wall controls on every fine shell, for all 55 caves.
+
+**Mutations,** at `5b14979d`:
+
+| Mutation | Shells refused (of 110) | R7 tests failing |
+| --- | --- | --- |
+| Per-edge strip faces (R6's construction) | 29 | 4 |
+| No pinch cut | 3 | 2 |
+| No floor-crossing split | 3 | 3 |
+| The old clip | 1 | 2 |
+| The original `coarsen` (no ring) | 23 | 2 |
+| In-plane triangles kept | 1 | 0 |
+| Per-edge strips with the in-build embedding check off | 0 | 3 (the independent controls) |
+
+Two survive:
+- **The snap guard off:** current art still builds; the guard keeps any art buildable.
+- **The tiling validator off:** a correct construction never trips it; its unit test proves it catches an overlap and a wrong sign.
+
+**Linked caves' shared seam** (`caves-reef-isles-support.ts`). The test compared the sets of vertices lying on the shared plane. It passed only because the old clip padded one shell with null triangles. Both shells' real cuts are identical. It now checks watertightness: every open edge either shell has strictly inside the span must be an edge of the other. One edge at a span end, where both caves' collars meet it, has never matched, pre-R6 included.
+
+**P3-C** (`col1-art.heavy`). The art's triangle list changed, so the oracle's art-seeded sample drew one move the `heightfield` variant stops without art on its path. The `columns` control stops at the very same move, and so did R6's art (checked), since these are today's rock boxes, which both variants keep. The test now holds the heightfield variant to the columns' own box stops, and the shell to none.
+
+**Art** (surface-to-surface, against pre-R6 `a1a45bb0`, correspondence-free: a triangle is unchanged when the other mesh has one at the same three positions; null triangles are no surface; [`col1/r7-surface.mjs`](col1/r7-surface.mjs), results in [`col1/r7-surface.json`](col1/r7-surface.json)):
+- **Fine: the R6 constraint holds.**
+  - R7 adds no surface more than **0.306 m** from pre-R6.
+  - Changed surface that borders water totals **2.27 m²**, at most **0.251 m**.
+  - The two metre-scale differences are the buried sheets R6 removed: rift_kiln_tube 12.51 m and meridian_escarp_pocket 6.92 m, 133 m² in all.
+  - 49 of 55 shells change. R6 changed 42; the rest are null triangles the clip no longer makes.
+- **Coarse: R7 against R6 changes in every cave, only at the footprint sides.**
+  - R7 adds up to 1.44 m of surface, 781 m² bordering water (of 217,709 m²), at a p95 of at most 0.65 m within changed area.
+  - Every change closes something that was open. Three strips from the same camera, at the largest water-bordering coarse changes, rendered at the coarse LOD from 6 m (far closer than it's ever drawn; `--class gpu`, RTX 3090, functional only), each pre-R6 | R6 | R7 | R6→R7 difference ×8:
+    - [canopy_root_arch](col1/r7-coarse-canopy_root_arch.jpg): the see-through crack along the corner, in pre-R6 and R6, is filled;
+    - [isles_blowhole](col1/r7-coarse-isles_blowhole.jpg): the V-shaped gap along both edges at the corner is filled;
+    - [basin_dish_lee_vault](col1/r7-coarse-basin_dish_lee_vault.jpg): the rock's side face to open water is closed (pre-R6 left a sliver, R6 a partial skirt).
+  - 3–5% of pixels change at those views.
+- **Coarse against pre-R6** includes R6's coarse change, which R6 only reported as vertex displacement. R7 adds up to 7.87 m, 2,446 m² bordering water, the largest at Glimmer crack's corner beside its neighbour's shaft. The rest of what R7 removes is R6's removal of buried sheets.
+
+**Oracle,** on the nine shells the reviewer found overlaps in, pre-R6 and R7 alike (24 protected paths, 15 poses):
+- no spurious block or stop;
+- no newly blocked path or pose;
+- no new illegal end. meridian_window_gallery's one new illegal end before R6 is now 0;
+- ends that are illegal as today's world is are existing debt.
+
+**Baked artifacts:**
+- **Terrain:** rebaked, and `bake --verify` gives 220/220 at `36944d8c`. The same 7 chunks change as with R6: 2:12, 4:9, 5:8, 5:9, 6:8, 6:9, 7:8.
+- **Correction to R6's handoff:** CW-1's `collision.bin` doesn't use shells. Its records come from the cave's volume and rock (`world/caves/kitCollision.ts` imports only `caveDef` and `caveVolume`). So shell changes can't change it until stage B makes shells a collision input. Whichever of CW-1 and COL-1 merges second still rebakes and verifies it.
+
+**Where the shell build runs** (on root plus CW-1):
+- **Collision and light don't use shells.** CW-1's collision pack and light fields are built from the volume (above).
+- **Shells reach the game only inside terrain chunks.** `npm run build` runs `bake-terrain.mjs` (terrain, cave collision, light) before `vite build`. The browser's `s2.terrain` decodes the baked chunk, fetch and decode sliced by `due()`.
+- **The store refuses a bake from any other source.** It's provenance-bound (STR-13), so a shipped build always draws shells baked from its own code. **In play, no shell is built.**
+- **The live path** (`liveTerrain`, which calls `caveShellOf` for each cave a chunk touches) runs only when there's no bake or a stale one: the dev fallback. There it is unsliced on the main thread. Each shell is one synchronous build between `due()` yields.
+- **The cost:** uncached shell build, local and indicative, R6 → R7:
+  - crown shaft fine 1.23 → 1.80 s;
+  - Glimmer fine 0.71 → 0.91 s;
+  - culvert fine 0.27 → 0.36 s;
+  - escarp pocket fine 0.11 → 0.17 s.
+
+  That's about 1.2–1.6× in all, coarse alike. It falls on bake time (`npm run build`, tests through the build cache) and on that dev fallback only.
+- **Root fix:** WK-1's offline pack pipeline, with shells baked and loaded as packs, and the live builder sliced or in a worker for the dev fallback (conventions 4 and 5). **S–M.**
+- **Measured confirmation: TRAVERSE.**
+
+**Performance conventions:** this is build-time work: no per-frame allocation, no hot path, Babylon-free (convention 5). `caveFloor`'s memo now has an owner, a 6 MiB bound and an eviction rule: it starts over past 2¹⁷ points, which changes no answer since it's exact (convention 8). It has a fast test. Registering it in a cache ledger waits for STEW-1's ledger.
+
+**Reuse:**
+- **`capOverlap`** (product) and the test's `convexOverlap` are deliberately independent.
+- **The earcut port** is the only polygon triangulator. Babylon's `PolygonMeshBuilder` needs earcut injected, and the builder must stay Babylon-free.
+- **`segmentsTangle`** (2-D, in-plane) is separate from the 3-D `segmentThrough` and COL-1's edge-inclusive `segmentTriangle`, because each tests something different.
+
+**Compromises:**
+- **Coarse art changes at every footprint side.** It's the closure of cracks and openings, up to 1.44 m against R6 (see the strips).
+  - **Root fix:** none needed. These are the seam closing.
+- **The snap guard keeps some vertices off the floor** (317 refusals), and seam faces close them instead.
+  - **Root fix:** author footprints so a side meets the floor in rock, as R6 noted. **S** per cave.
+- **The reviewer's 51 colour floats** across six caves change by at most 0.000351, under the old rounded memo. Recorded as a qualification.
+
+**Checks for R7:** CHECKS.
+
 ## R6 response (Sol R6)
 **R6-1 is fixed at the root, in the floor snap.** The coordinator granted COL-1 the snap and seam step in `src/content/regions/caveGeometry.ts` for this fix, and later the one-line memo key in `caveFloor` (`src/content/regions/caves/authored.ts`, see below). Unchanged indices no longer stand in for orientation: the final mesh is checked.
 
