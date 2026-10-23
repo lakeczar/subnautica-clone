@@ -8,7 +8,9 @@ import type { Aabb, Vec3 } from "../world/types.js";
 export type VistaTone = "rust" | "rustDark" | "metal" | "steel" | "petrol" | "ochre" | "stone" | "stoneDark" | "coral"
   | "amber" | "concrete" | "concrete2" | "glow" | "warm" | "cyan"
   // POI-1: pale bone, and lit ember, mint and lilac lamps.
-  | "bone" | "ember" | "mint" | "lilac";
+  | "bone" | "ember" | "mint" | "lilac"
+  // The Basin dishes' panels (`regions/dishGeometry.ts`).
+  | "porcelain" | "shell";
 export interface VistaBlock { readonly min: Vec3; readonly max: Vec3; readonly tone: VistaTone; readonly top?: VistaTone }
 /** A flat convex polygon of the art, drawn exactly as given (outward
  * winding for closed pieces). */

@@ -57,14 +57,14 @@ const lockerModules = (sys: SystemsState, hostId: string): string[] =>
 /** Each fixed host's own locker (C4: the restored S9 stops use their stop lockers). */
 const FIXED_LOCKERS: Readonly<Record<FixedHostId, string>> = {
   home_pod: "pod_locker", island_workshop: "workshop_locker", canopy_stop: "canopy_stop_locker",
-  rift_station: "rift_station_locker", divide_dock: "divide_dock_locker",
+  rift_station: "rift_station_locker", divide_dock: "divide_dock_locker", crown_station: "crown_station_locker",
 };
 function fixedHost(s: GameState, sys: SystemsState, id: FixedHostId): SocketHost {
   const d = FIXED_HOSTS[id];
   return {
     id, kind: d.kind, label: d.label, position: { ...d.position },
     available: d.facility === null || facility(s, d.facility), power: "plant",
-    sockets: plainSockets(sys, id, d.sockets), builtIn: [], unique: d.unique,
+    sockets: plainSockets(sys, id, d.sockets), builtIn: "builtIn" in d ? d.builtIn : [], unique: d.unique,
     lockers: [FIXED_LOCKERS[id], ...lockerModules(sys, id)],
   };
 }

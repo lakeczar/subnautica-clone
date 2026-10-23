@@ -16,9 +16,10 @@ import { parkPose, workPose } from "./regions/access.js";
 import { SITES } from "./regions/sites.js";
 import { worldFloor } from "./regions/worldFloor.js";
 import type { RegionId } from "./registry.js";
+import { CROWN_RESTORATIONS, CROWN_STATION } from "./hub/crownStation.js";
 
 interface Point { readonly x: number; readonly y: number; readonly z: number }
-export type StopFacilityId = "rift_station" | "divide_dock";
+export type StopFacilityId = "rift_station" | "divide_dock" | "crown_power" | "crown_dock";
 export interface WorkingStop {
   readonly label: string;
   readonly s2: string;
@@ -35,6 +36,14 @@ export interface WorkingStop {
   readonly fabrication: CampaignSiteId | null;
   /** Shown when a diver asks what the stop offers. */
   readonly offers: string;
+  /** HUB-2: a staged stop. Mooring service (charge, repair, mount and refit
+   * support, moored holds at the bench) needs `dock` restored as well as
+   * `facility`; work at the bench other than the stop's own restorations
+   * needs `bench`; `stores` are extra lockers that open with `dock`. A stop
+   * without them works whole once `facility` is restored. */
+  readonly dock?: StopFacilityId;
+  readonly bench?: StopFacilityId;
+  readonly stores?: readonly string[];
 }
 const site = (id: string) => {
   const s = SITES.find((x) => x.id === id);
@@ -69,6 +78,14 @@ export const WORKING_STOPS = {
     locker: "divide_dock_locker", fabrication: "divide_dock",
     offers: "Air and rest · hull service, cell charging and mount changes · 48 CU locker",
   }),
+  /** HUB-2: the crown station on W2's summit, restored in three stages. The
+   * door and dock poses are its own (the S2 datum is the hull's centre). */
+  crown_station: {
+    label: CROWN_STATION.label, s2: CROWN_STATION.s2, region: "silt_basin", facility: "crown_power",
+    work: CROWN_STATION.work, workRadius: CROWN_STATION.workRadius, mooring: CROWN_STATION.dock,
+    serviceRadius: CROWN_STATION.dockRadius, air: true, locker: CROWN_STATION.locker, fabrication: "crown_station",
+    offers: CROWN_STATION.offers, dock: "crown_dock", bench: "crown_dock", stores: CROWN_STATION.stores,
+  },
   /** S2's working exterior stop on the district shelf: no restoration needed. */
   meridian_office: stop("meridian.staging_office", {
     label: "District staging office", facility: null, workRadius: 4, serviceRadius: 14, air: true,
@@ -83,7 +100,9 @@ export { STOP_LOCKER_CU };
 export const stopForSite = (siteId: string): WorkingStopId | null =>
   STOP_IDS.find((id) => id === siteId || WORKING_STOPS[id].fabrication === siteId) ?? null;
 /** Restoration recipe output → facility. */
-export const STOP_RESTORATIONS = { restore_rift_station: "rift_station", restore_divide_stop: "divide_dock" } as const;
+export const STOP_RESTORATIONS = { restore_rift_station: "rift_station", restore_divide_stop: "divide_dock", ...CROWN_RESTORATIONS } as const;
+export type StopRestorationId = keyof typeof STOP_RESTORATIONS;
+export const isStopRestoration = (output: string): output is StopRestorationId => Object.hasOwn(STOP_RESTORATIONS, output);
 
 export { YARD_BUILD } from "./yard.js";
 

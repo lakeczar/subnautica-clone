@@ -1,4 +1,5 @@
 import { STRUCTURES } from "../content/regions/structures.js";
+import { CROWN_MAST } from "../content/hub/crownStation.js";
 import { HUB_PINNACLES } from "../content/regions/terrain.js";
 import type { Vec3 } from "../sim/types.js";
 
@@ -32,6 +33,29 @@ export function beaconGlow(distance: number, seconds: number): number {
  * the water), so it keeps a few pixels at 600 m. */
 export function beaconSize(distance: number): number {
   return 3 + distance * 0.035;
+}
+
+// --- The crown's surface lamp (HUB-2) ------------------------------------------
+
+/** The mast's lamp, just above the waterline over the crown. */
+export const MAST_LAMP: Vec3 = { ...CROWN_MAST.lamp };
+/** Seconds per sweep: slower than the summit beacon, so the two read apart. */
+export const MAST_LAMP_PERIOD = 7;
+/** Glow e-fold through air and through water, metres. The cel haze in air
+ * clears over about 555 m per e-fold; a lamp carries further. */
+export const MAST_LAMP_AIR_REACH = 900;
+/** Past this the lamp is culled (the whole basin is about 2 km). */
+export const MAST_LAMP_RANGE = 2200;
+/** Glow of the surface lamp seen from `distance` metres at `seconds`, by an
+ * eye above or below the waterline (0..~1.5). Underwater it fades as the
+ * summit beacon does; above, it carries across the basin to the island. */
+export function mastLampGlow(distance: number, seconds: number, underwater: boolean): number {
+  if (!(distance < MAST_LAMP_RANGE)) return 0;
+  const phase = (seconds % MAST_LAMP_PERIOD) / MAST_LAMP_PERIOD;
+  // A slow lighthouse sweep: a dim glow between bright passes.
+  const pulse = 0.25 + 0.75 * Math.exp(-((phase - 0.5) ** 2) / 0.02);
+  const near = Math.min(1, 0.35 + distance / 60);
+  return pulse * near * Math.exp(-distance / (underwater ? BEACON_REACH : MAST_LAMP_AIR_REACH)) * 1.6;
 }
 
 // --- Crown rays ---------------------------------------------------------------

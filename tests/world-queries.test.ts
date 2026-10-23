@@ -17,10 +17,10 @@ const hotspots: Vec3[] = [
   { x: 116, y: -117, z: -126 }, { x: 178, y: -164, z: -218 }, { x: 216, y: -170, z: -240 }, { x: 197, y: -165, z: -219 },
 ];
 
-test("indexed movement, clearance, support and sight equal the full roster scan", () => {
+test("smoke: indexed movement, clearance, support and sight equal the full roster scan (20 per hotspot; 120 in the heavy tier)", () => {
   const next = random(23);
   let checks = 0;
-  for (const spot of hotspots) for (let i = 0; i < 120; i++) {
+  for (const spot of hotspots) for (let i = 0; i < 20; i++) {
     const p = { x: spot.x + (next() - 0.5) * 16, y: spot.y + (next() - 0.5) * 8, z: spot.z + (next() - 0.5) * 16 };
     const d = { x: (next() - 0.5) * 6, y: (next() - 0.5) * 4, z: (next() - 0.5) * 6 };
     const shape = shapes[Math.floor(next() * shapes.length)]!;
@@ -33,7 +33,7 @@ test("indexed movement, clearance, support and sight equal the full roster scan"
     assert.equal(indexed.lineOfSight(p, q, ["pod.back"]), full.lineOfSight(p, q, ["pod.back"]));
     checks++;
   }
-  assert.equal(checks, hotspots.length * 120);
+  assert.equal(checks, hotspots.length * 20);
 });
 
 test("long and degenerate requests keep the full scan's answers", () => {

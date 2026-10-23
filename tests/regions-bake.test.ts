@@ -1,49 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { deflateSync } from "node:zlib";
-import { worldLayout } from "../src/content/regions/layout.js";
 import { seededStream } from "../src/content/regions/noise.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { bakeChunkBytes, bakeTargets } from "../src/render/biomes/bake.js";
-import { liveTerrain, setTerrainStore, terrainFactory } from "../src/render/biomes/terrain.js";
+import { setTerrainStore, terrainFactory } from "../src/render/biomes/terrain.js";
 import { createTerrainStore, terrainFileName } from "../src/render/biomes/terrainAssets.js";
 import { decodeTerrain } from "../src/render/biomes/terrainCodec.js";
 import type { ChunkRecipe, MeshRecipe } from "../src/render/kit/types.js";
 import type { ChunkDescriptor, LodLevel } from "../src/world/types.js";
+import { assertDecodedMatchesLive, drain, layout, live, pick, rectOf, SAMPLE } from "./regions-bake-support.js";
 
 /** Baked terrain against the live recipe (the oracle). Fast tier; the full
  * every-chunk byte comparison is `regions-bake.heavy.test.ts`. */
-const layout = worldLayout();
-const pick = (x: number, z: number): ChunkDescriptor =>
-  layout.chunks.find(c => x >= c.bounds.min.x && x < c.bounds.max.x && z >= c.bounds.min.z && z < c.bounds.max.z)!;
-const rectOf = (c: ChunkDescriptor) => ({ minX: c.bounds.min.x, maxX: c.bounds.max.x, minZ: c.bounds.min.z, maxZ: c.bounds.max.z });
-const drain = <T>(g: Generator<void, T>): T => { let r = g.next(); while (!r.done) r = g.next(); return r.value; };
-const live = (c: ChunkDescriptor, lod: LodLevel): MeshRecipe[] =>
-  drain(liveTerrain({ floor: worldFloor, random: seededStream, due: () => false }, c, lod)).meshes as MeshRecipe[];
-// Stack ramp, Meridian pair, Divide brine (mirror mesh), legacy seam (skirt), Rift.
-const SAMPLE = [pick(470, 95), pick(1000, -1400), pick(1000, -1360), pick(560, -1450), pick(300, -120), pick(-165, -1065)];
-
-test("decoded baked recipes equal the live recipe within the codec's quantization", () => {
-  for (const c of SAMPLE) {
-    const bytes = bakeChunkBytes(c);
-    assert.deepEqual(bakeChunkBytes(c), bytes, `${c.id}: bake is deterministic`);
-    for (const lod of ["fine", "coarse"] as const) {
-      const a = live(c, lod), b = drain(decodeTerrain(bytes, rectOf(c), c.id, lod));
-      assert.deepEqual(b.map(m => m.name), a.map(m => m.name), `${c.id} ${lod}: meshes`);
-      a.forEach((m, k) => {
-        const d = b[k]!;
-        assert.deepEqual([...d.indices], [...m.indices], `${m.name}: indices identical`);
-        for (let i = 0; i < m.positions.length; i += 3) {
-          assert.ok(Math.abs(d.positions[i]! - m.positions[i]!) <= 0.0011 && Math.abs(d.positions[i + 2]! - m.positions[i + 2]!) <= 0.0011 &&
-            Math.abs(d.positions[i + 1]! - m.positions[i + 1]!) <= 0.0081, `${m.name}: vertex ${i / 3} moved`);
-          const dot = d.normals[i]! * m.normals[i]! + d.normals[i + 1]! * m.normals[i + 1]! + d.normals[i + 2]! * m.normals[i + 2]!;
-          assert.ok(dot > 0.998, `${m.name}: normal ${i / 3} (${dot})`);
-        }
-        for (let i = 0; i < m.colors.length; i++)
-          assert.ok(i % 4 === 3 ? d.colors[i] === m.colors[i] : Math.abs(d.colors[i]! - m.colors[i]!) <= 0.0026, `${m.name}: colour ${i}`);
-      });
-    }
-  }
+test("smoke: decoded baked recipes equal the live recipe at the legacy seam's skirt and the Divide brine's mirror mesh", () => {
+  // All six sample chunks: tests/regions-bake-decode.heavy.test.ts (TT-1).
+  for (const c of [SAMPLE[4]!, SAMPLE[3]!]) assertDecodedMatchesLive(c);
 });
 
 test("decoded neighbours still share identical edges at every LOD pairing", () => {

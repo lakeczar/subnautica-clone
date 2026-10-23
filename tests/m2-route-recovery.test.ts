@@ -72,11 +72,12 @@ test("starter equipment reaches the local surface operator and complete submerge
     "the original submerged work face is retained");
 });
 
-test("all new patch/site loss endpoints tow through every guide and turn with save/reload and exact cargo/module/frame retention", () => {
+test("smoke: the first and last loss endpoints tow through every guide and turn with save/reload and exact cargo/module/frame retention", () => {
+  // Every endpoint: tests/m2-route-recovery.heavy.test.ts (TT-1).
   const sites: Vec3[] = [...BASIN_SOURCE_IDS.map(id => ({ ...SOURCES[id].position, y: SOURCES[id].position.y + 2 })),
     { x: 178, y: -163.5, z: -219 }, { x: 216, y: -169, z: -241 },
     { x: 240, y: -189, z: -252 }, { x: 40, y: -4, z: -250 }];
-  for (const site of sites) {
+  for (const site of [sites[0]!, sites.at(-1)!]) {
     let s = prepared(), v = s.fleet.vehicles[0]!; v.pose.position = { ...site }; v.charge = 0; disableVehicle(s, v.id);
     assert.ok(sweptHullClearance(world, rescueWaypoints(s, v.id, "basin"), BOBBIN_COLLIDER), JSON.stringify(site));
     assert.ok(sweptHullClearance(world, recoveryTowPath(s, v.id, "basin"), HULL_COLLIDERS.dart));

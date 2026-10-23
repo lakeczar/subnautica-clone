@@ -7,7 +7,9 @@ import { createGame } from "../src/sim/state.js";
 import { completeOpening } from "../src/sim/progression.js";
 import { flowHere, stepGame } from "../src/sim/step.js";
 import { flowAt } from "../src/sim/currents/world.js";
-import { gameWorld } from "../src/sim/world.js";
+import { createWorldQueries, gameWorld, sweptHullClearance } from "../src/sim/world.js";
+import { CRAFT_PROFILES, ROUTES } from "../src/content/regions/passages.js";
+import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
 import type { GameState, Vec3, WorldQueries } from "../src/sim/types.js";
 
 const world = gameWorld();
@@ -60,4 +62,28 @@ test("every kit cave cluster of the game builds from its records; their size is 
     `built in ${(ms / 1000).toFixed(1)} s from live records, heap +${((process.memoryUsage().heapUsed - before) / 1048576).toFixed(0)} MiB`);
   for (const c of k.clusters) k.evict(c.index);
   assert.equal(k.stats.residentBoxes, 0);
+});
+
+test("every route and rescue tether that sweeps clear over the plain world still sweeps clear with every cave in", () => {
+  // CW-1 found three tethers diving through CA-2's and CA-3's rock (Basin #4,
+  // Divide #5, Meridian #4); they were bent clear. A lane near a cave must
+  // sweep the same in the game world as over the plain heightfield.
+  const raw = createWorldQueries(), near = (path: readonly Vec3[]): boolean => CAVE_SOURCES.some(({ footprint: f }) => path.some((p, i) => {
+    const q = path[i + 1] ?? p;
+    return Math.max(p.x, q.x) > f.minX - 12 && Math.min(p.x, q.x) < f.maxX + 12 && Math.max(p.z, q.z) > f.minZ - 12 && Math.min(p.z, q.z) < f.maxZ + 12;
+  }));
+  const lanes: [string, readonly Vec3[], keyof typeof CRAFT_PROFILES][] = [
+    ...ROUTES.filter(r => r.role !== "walk").map(r => [r.id, r.path, r.profile] as [string, readonly Vec3[], keyof typeof CRAFT_PROFILES]),
+    ...RESCUE_PLANS.flatMap(p => p.tethers.map((t, i) => [`${p.id}#${i}`, t, "medium"] as [string, readonly Vec3[], keyof typeof CRAFT_PROFILES])),
+  ];
+  const problems: string[] = [];
+  let checked = 0;
+  for (const [id, path, profile] of lanes) {
+    if (!near(path)) continue;
+    checked++;
+    const shape = CRAFT_PROFILES[profile];
+    if (sweptHullClearance(raw, path, shape) && !sweptHullClearance(world, path, shape)) problems.push(`${id} (${profile})`);
+  }
+  assert.ok(checked > 10, `${checked} lanes near caves`);
+  assert.deepEqual(problems, []);
 });

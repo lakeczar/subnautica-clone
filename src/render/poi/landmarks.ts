@@ -1,5 +1,6 @@
 import { STRUCTURES, type StructureDef } from "../../content/regions/structures.js";
 import { riftAxisAt } from "../../content/poi/sets.js";
+import { rimLine } from "../../content/regions/dishGeometry.js";
 import { VISTA_SETS, type VistaPiece } from "../../content/vistas.js";
 import type { Vec3 } from "../../world/types.js";
 import type { P3, RecipeBuilder, Rgb } from "../biomes/recipe.js";
@@ -140,22 +141,16 @@ function seams(b: RecipeBuilder, floor: Floor, from: number, to: number): void {
 
 // --- Basin dishes ---------------------------------------------------------------
 
-/** Points on a dish's drawn rim (the same tilt as `structures.ts` draws). */
-export function dishRim(s: StructureDef, t: number): P3 {
-  const R = s.p.radius!, tilt = s.p.tilt!, face = s.p.facing!, c: P3 = [s.x, s.base + 2.2, s.z], ax: P3 = [Math.cos(face), 0, Math.sin(face)];
-  const p: P3 = [Math.cos(t) * R, R * 0.32, Math.sin(t) * R];
-  const along = p[0] * ax[0] + p[2] * ax[2], perp: P3 = [p[0] - along * ax[0], 0, p[2] - along * ax[2]];
-  const ca = Math.cos(tilt), sa = Math.sin(tilt), a2 = along * ca - p[1] * sa, y2 = along * sa + p[1] * ca;
-  return [c[0] + perp[0] + a2 * ax[0], c[1] + y2 + Math.sin(tilt) * R * 0.5, c[2] + perp[2] + a2 * ax[2]];
-}
 const DISHES = STRUCTURES.filter(s => s.kind === "dish");
-/** The fine LOD draws the rim as this many straight segments. */
-const DISH_SEGMENTS = 18;
 export const DISH_DASH = 3.4, DISH_GAP = 1.8;
-/** A dashed glowing band wrapping the drawn (fine) rim tube: from 300 m in
+/** A dashed glowing band wrapping the drawn rim (`dishGeometry.ts`): from 300 m in
  * the Basin's pale silt the dish outline reads as a ring of light. */
 function dishBand(b: RecipeBuilder, s: StructureDef): void {
-  const ring = Array.from({ length: DISH_SEGMENTS + 1 }, (_, i) => dishRim(s, i / DISH_SEGMENTS * Math.PI * 2));
+  const ring: P3[] = rimLine({ id: s.id, x: s.x, z: s.z, base: s.base, radius: s.p.radius!, tilt: s.p.tilt!, facing: s.p.facing! }).map(q => [q.x, q.y, q.z]);
+  const kept = s.dish?.rimKept, segmentAt = (d: number): number => {
+    for (let i = 1; i < ring.length; i++) { const l = Math.hypot(ring[i]![0] - ring[i - 1]![0], ring[i]![1] - ring[i - 1]![1], ring[i]![2] - ring[i - 1]![2]); if (d <= l) return i - 1; d -= l; }
+    return ring.length - 2;
+  };
   const at = (d: number): P3 => {
     for (let i = 1; i < ring.length; i++) {
       const a = ring[i - 1]!, c = ring[i]!, l = Math.hypot(c[0] - a[0], c[1] - a[1], c[2] - a[2]);
@@ -167,7 +162,12 @@ function dishBand(b: RecipeBuilder, s: StructureDef): void {
   let length = 0;
   for (let i = 1; i < ring.length; i++) length += Math.hypot(ring[i]![0] - ring[i - 1]![0], ring[i]![1] - ring[i - 1]![1], ring[i]![2] - ring[i - 1]![2]);
   const n = Math.floor(length / (DISH_DASH + DISH_GAP)), step = length / n;
-  lit(b, () => { for (let k = 0; k < n; k++) b.tube([0, 0.5, 1].map(t => at(k * step + t * DISH_DASH)), 0.5, 4, C.amber); });
+  // No band where the rim is broken away.
+  lit(b, () => { for (let k = 0; k < n; k++) {
+    const ds = [0, 0.5, 1].map(t => k * step + t * DISH_DASH);
+    if (kept && ds.some(d => !kept[segmentAt(d)])) continue;
+    b.tube(ds.map(at), 0.5, 4, C.amber);
+  } });
 }
 
 // --- Wreck ridge hulls -------------------------------------------------------------

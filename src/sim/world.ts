@@ -4,6 +4,7 @@ import { BASIN_GEOMETRY, CANOPY_MARGIN_RIBS, CANOPY_STOP, CREEL_SLIP_SOLIDS, LEG
 import { STRUCTURE_SOLIDS } from "../content/regions/structures.js";
 import { VISTA_SOLIDS } from "../content/vistas.js";
 import { worldFloor } from "../content/regions/worldFloor.js";
+import { nameFloor } from "../content/buildCache.js";
 import { CAVE_SOURCES, type CaveDef } from "../content/regions/caves.js";
 import { LEGACY_PRESERVE } from "../content/regions/terrain.js";
 import { WORLD_ENVELOPE } from "../world/frame.js";
@@ -87,6 +88,7 @@ export const POD_RAMP = {
   lowY: -1.2,
   highY: 0.18,
 } as const;
+nameFloor(surfaceHeight, "surfaceHeight", [import.meta.url]);
 export function surfaceHeight(x: number, z: number): number {
   const terrain = terrainHeight(x, z);
   if (

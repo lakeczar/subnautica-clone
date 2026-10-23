@@ -9,7 +9,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import type { Vec3 } from "../sim/types.js";
 import { creatureParts } from "./creatures/kit.js";
-import { BEACON, beaconGlow, beaconSize, CROWN_RAY_COUNT, CROWN_RAY_SPAN, crownRayPoses } from "./hubView.js";
+import { BEACON, beaconGlow, beaconSize, CROWN_RAY_COUNT, CROWN_RAY_SPAN, crownRayPoses, MAST_LAMP, mastLampGlow } from "./hubView.js";
 import { PALETTE as P } from "./palette.js";
 
 /** The hub's landmark presentation (W2): the summit beacon and the crown
@@ -76,9 +76,17 @@ export function createHubArt(scene: Scene, cel: Material): HubArt {
   shaft.scaling.set(1, shaftHeight, 1);
   shaft.position.set(BEACON.x, BEACON.y + shaftHeight / 2, BEACON.z);
   shaft.material = shaftMaterial; shaft.isPickable = false; shaft.parent = root;
+  // --- The surface mast's lamp (HUB-2): the hub seen above water from the
+  // starting island. Hub art is created once and never streamed, and past the
+  // far plane the flare is an impostor on the line of sight, so it shows at
+  // the island lookout's 765 m.
+  const lampMaterial = additive(scene, "hub.mast.flare", FLARE_VERTEX, FLARE_FRAGMENT, ["position", "uv"], ["worldViewProjection", "glow"]);
+  const lamp = CreatePlane("hub.mast.flare", { size: 1 }, scene);
+  lamp.billboardMode = Mesh.BILLBOARDMODE_ALL;
+  lamp.material = lampMaterial; lamp.isPickable = false; lamp.parent = root;
   // --- Crown rays ------------------------------------------------------------------
   const rays = Array.from({ length: CROWN_RAY_COUNT }, (_, i) => createCrownRay(scene, cel, `creature.crown_rays.${i}`, root));
-  const meshes = [flare, shaft, ...rays.flatMap(r => r.meshes)];
+  const meshes = [flare, shaft, lamp, ...rays.flatMap(r => r.meshes)];
   for (const m of meshes) m.renderingGroupId = 1;
   const eye = new Vector3();
   let disposed = false;
@@ -98,6 +106,18 @@ export function createHubArt(scene: Scene, cel: Material): HubArt {
         flare.scaling.set(size, size, size);
         flareMaterial.setFloat("glow", glow);
       }
+      {
+        const lx = MAST_LAMP.x - camera.x, ly = MAST_LAMP.y - camera.y, lz = MAST_LAMP.z - camera.z, ld = Math.hypot(lx, ly, lz);
+        const g = mastLampGlow(ld, seconds, camera.y < 0);
+        lamp.setEnabled(g > 0.004);
+        if (g > 0.004) {
+          const along = Math.max(0.5, Math.min(ld, IMPOSTOR) - 1.5), k = along / ld;
+          lamp.position.set(camera.x + lx * k, camera.y + ly * k, camera.z + lz * k);
+          const size = beaconSize(ld) * 0.8 * k;
+          lamp.scaling.set(size, size, size);
+          lampMaterial.setFloat("glow", g);
+        }
+      }
       // The shaft is for distance: faint beside the house, full from about
       // 90 m, and gone before the far plane (it has no impostor).
       const shaftGlow = beaconGlow(d, seconds) * smoothstep(25, 90, d) * (1 - smoothstep(330, 420, d)) * 1.6;
@@ -115,7 +135,7 @@ export function createHubArt(scene: Scene, cel: Material): HubArt {
       if (disposed) return;
       disposed = true;
       for (const r of rays) r.dispose();
-      flareMaterial.dispose(); shaftMaterial.dispose();
+      flareMaterial.dispose(); shaftMaterial.dispose(); lampMaterial.dispose();
       root.dispose(false, false);
     },
   };

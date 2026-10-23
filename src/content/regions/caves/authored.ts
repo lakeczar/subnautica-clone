@@ -1,5 +1,6 @@
 import type { MaterialId, RegionId } from "../../registry.js";
 import type { CarveSource, CaveDef, CavePortal, CaveRoomSource, CaveRoute, CaveSource, TerraceSource } from "../caves.js";
+import { floorIdentity, nameFloor } from "../../buildCache.js";
 import { assertDisjointFootprints, buildCave } from "../caveGeometry.js";
 import type { CraftProfileId } from "../passages.js";
 import type { FloorFunction } from "../terrain.js";
@@ -299,7 +300,12 @@ export function groupDef(group: CaveGroup, floor: FloorFunction): CaveDef {
   let byId = built.get(floor);
   if (!byId) built.set(floor, byId = new Map());
   let def = byId.get(group.source.id);
-  if (!def) { def = buildCave(group.source, caveFloor(group.source, floor)); byId.set(group.source.id, def); }
+  if (!def) {
+    // `caveFloor` depends only on the source and the exterior floor, and the source is in the cave's cache key.
+    const id = floorIdentity(floor), groupFloor = caveFloor(group.source, floor);
+    def = buildCave(group.source, id ? nameFloor(groupFloor, `caveFloor(${id.name})`, [import.meta.url, ...id.modules]) : groupFloor);
+    byId.set(group.source.id, def);
+  }
   return def;
 }
 

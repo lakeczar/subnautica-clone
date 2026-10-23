@@ -38,7 +38,9 @@ test("every stop stands on S2's own work and park poses, clear for a diver and a
     const stop = WORKING_STOPS[id], site = SITES.find((x) => x.id === stop.s2)!;
     assert.ok(site, id);
     // The yard is worked from S2's pier, with its mooring moved clear of every build slip (P1).
-    if (id !== "stack_yard") {
+    // HUB-2: S2's crown-station datum is its hull's centre; the door is on its north
+    // face and the dock in the summit's west lee (tests/crown-station.test.ts).
+    if (id !== "stack_yard" && id !== "crown_station") {
       assert.deepEqual(stop.mooring, parkPose(site, worldFloor), id);
       assert.deepEqual(stop.work, workPose(site, worldFloor), id);
     }

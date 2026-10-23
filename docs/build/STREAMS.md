@@ -338,3 +338,47 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
 - **CA-3 R1 fixes done** at `82222fd` (rebased onto `12b6a33`): items in water with production targeting checks, hull-clearance craft routes, positive hazard controls through real survival; 1,238 fast and 151 heavy tests pass. Sol R2 running. **CB-2 R1 fix resumed** in the freed slot (CB-2-01 withdrawn per the owner's helper-creature correction). Builders 5 of 5: CR-1, CW-1, HUB-2, POI-1 (dish), CB-2.
 - **CB-2 R1 fixes done** at `2c7669b`: egg cases grounded, a stricter datum visibility test (9 more datums raised, 3 of them CR-1 falls, synced with CR-1), window-prose safety checks; 1,247 tests pass. Sol R2 running. Builders 4 of 5: CR-1, CW-1, HUB-2, POI-1 (dish).
 - **TT-1 started:** bring the fast tier back to about 60 s or less (it's 337 s now) without losing coverage: profile, cheapen, move inherently heavy tests to the heavy tier, add a per-file budget guard. Builders 5 of 5: CR-1, CW-1, HUB-2, POI-1 (dish), TT-1.
+- **CA-3 R2 (Sol): accept** (`review/ca-3-r2` `2bd7105`) and **CB-2 R2 (Sol): accept** (`review/cb-2-r2` `ed0edcc`). Both merged into root (`4609901`, `c649b11`); tests running. **All ~58 small and medium caves are now authored and accepted;** switch-on is CW-1.
+- **Usage-limit reset:** CW-1, HUB-2, CR-1, the POI-1 dish fix and TT-1 had all hit the limit and were resumed (the platform had already armed auto-resume). CW-1 was told to include CA-3's deep caves with current masking; CR-1 to match CB-2's IDs and datums.
+- Root after the CA-3 and CB-2 merges: 1,256 tests pass, build OK.
+- **Owner grill on the opening and starting island** (in progress): `docs/build/OPENING-DESIGN.md`. Research: starting-island art and exploration (Sol high). Opening pass to build after CW-1 and HUB-2.
+- Island research switched from Sol to **Opus** at the owner's request (taste and art direction): `siltwake-research-start-island-art-opus`.
+- **Opening grill complete** (owner 2026-10-22): Lifted Reef island 205 m west-south-west of the pod, three threads with a two-of-three feed board, 33-item checklist, 150 m suit moved later, garden clarified. `OPENING-DESIGN.md`. The **OP-1 opening pass is queued** for the next free slot. HUB-2 asked for a surface beacon mast (sent).
+- **Perf diagnosis (owner request, 2026-10-22):** three Sol xhigh analyses: A (lock and job scheduling), B (test and playthrough cost, caching), C (machine capacity, parallel workers, fleet asks). Snapshot: one global heavy lock serialises playthroughs (up to about 29 min), GPU sessions (up to about 25 min) and heavy files across about 6 agents; queued holders seen: CR-1 playthrough, CW-1 GPU traversal, a carrier playthrough.
+- **HUB-2 done** at `ed0be89` (`t3/hub-2-crown-station`): the crown station in 3 staged restorations composed into C4 stops, hosts, rest bases and recipes; a dock gated on stage 2; the bench predicate; the surface mast with a sweep lamp (far layer joins with CW-1); the carrier playthrough uses the crown. 1,230 tests pass. Sol R1 running. Perf A (lock) and C (capacity) reports are in; B pending, then the Opus debate.
+
+### 2026-10-22 21:20Z — perf decision started
+- Perf B landed at `0d9b9f3` (19:53Z). The coordinator missed the completion wake; a Sol stall investigation is running (report outside the repo, `/work/tmp/coordinator-stall-2026-10-22/REPORT.md`).
+- An Opus decision agent (`siltwake-perf-decision-opus-34a961f`) is arguing out A, B and C toward a heavy-check v2 design, written to `research/perf-decision:docs/build/perf/DECISION-OPUS.md`. Nothing is implemented until the owner picks.
+
+### 2026-10-22 ~21:45Z — stall found, HUB-2 merged, perf decided, SCHED-1 started
+- **Stall cause:** a coordinator Stop (19:45) disposed the completion wakes of all running children. "Continue" doesn't re-arm them (report: `/work/tmp/coordinator-stall-2026-10-22/REPORT.md`). Disposed and still running: CW-1, CR-1, TT-1. Reconcile them with `task_status` on every wake.
+- **HUB-2:** Sol R1 accepts (`review/hub-2-r1` `afea2b5`); merged `--no-ff`.
+  - Follow-up P3 **HUB-2-01**: the stage-order test passes with the prerequisite removed.
+  - The mast GPU spot-check didn't run (lock timeouts); it moves to the CW-1 integration check.
+- **DISH-1** (POI-1 follow-ups) is done at `b3ea752` on `t3/dish-rim-collision`; Sol R1 is running. For the owner to look at: the feed tripods now lie fallen, and some rim segments are broken away.
+- **Perf decision:** Opus `fd4cdcd` (`research/perf-decision`). Owner choices:
+  - build the queue now;
+  - the rule becomes "admitted through the queue", with performance numbers from exclusive mode only;
+  - VM: ask for 8 vCPU and keep 16 GiB.
+- **SCHED-1** (Opus, `t3/sched-1-heavy-queue`) is building it. Next after it: the `stepGame` state-copy speed-up.
+
+### 2026-10-22 ~22:10Z — paused for the VM CPU upgrade (6 → 8 vCPU)
+All builders are paused at a pushed checkpoint, with no jobs running and the lock free. Resume order after the restart:
+1. **Coordinator:** check `nproc` is 8, then run `task_status` on every task below.
+2. **SCHED-1** `t3/sched-1-heavy-queue` @ `12ff032`: resume, and check that tokens come out at 6. Then Sol review, then switch the fleet over.
+3. **CW-1** `t3/enable-authored-cave-streaming` @ `f55254f`: resume. The completion wake was disposed, so reconcile by hand.
+4. **CR-1** `t3/natural-threat-windows` @ `2ab8db7`: root merged, 1,287 fast tests pass. Resume to finish the economy scripts (the m1 roster pin may need the crown recipes) and the split playthrough, then Sol R1.
+5. **TT-1** `feat/tt-1-test-speed` @ `34c08a0`: resume the R1 fixes (four P2s plus one P3), then a fresh Sol R2.
+Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the four cave biomes, UX-1, lost sites, the atmosphere pass, then the owner's playtest.
+
+### 2026-10-22 22:20Z — VM back with 8 vCPU; builders resumed
+`nproc` is 8, about 15 GiB is visible, and the 3090 is OK. SCHED-1, CW-1, CR-1 and TT-1 are resumed through new tracked thread-send tasks, so their wakes work again. The fifth slot is held: OP-1 waits for CW-1 (shared island and cave streaming), and the `stepGame` speed-up waits for CR-1 and SCHED-1 (`step.ts` overlap).
+
+### 2026-10-23 — TT-1 merged
+- **Review:** TT-1 was accepted by Sol R3 (`review/tt-1-r3` `267bd0b`) after R1 Fix and R2 Fix.
+- **Merged into root:** fast tests pass 1,264/1,264 in 79 s from a cold cache; the build is OK.
+- **Effect:** `npm test` takes about 1 minute; the heavy tier runs 59 files, 440 tests, in about 5 minutes, with per-file cgroups.
+- **Follow-up:** apply `docs/build/streams/sched1/tt1-test-build-guard.patch` when SCHED-1 merges.
+- **CW-1 and CR-1** must merge root before handoff: TT-1 moved tests out of their files into `*.heavy.test.ts` and `*-support.ts`.
+- **SCHED-1:** in Sol R4 at `8759122`.

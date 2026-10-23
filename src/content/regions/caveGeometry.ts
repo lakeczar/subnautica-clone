@@ -2,6 +2,7 @@ import type { Solid } from "../../sim/world.js";
 import type { MeshRecipe } from "../../render/kit/types.js";
 import type { Aabb, LodLevel, Rect, Vec3 } from "../../world/types.js";
 import type { CaveDef, CaveRoom, CaveSource, CaveStyle, CaveSurface, CarveSource, TerraceSource } from "./caves.js";
+import { cachedBuild, type CacheKey, floorKey } from "../buildCache.js";
 import { fbm, smooth } from "./noise.js";
 import type { FloorFunction } from "./terrain.js";
 
@@ -466,8 +467,11 @@ function thickRock(raw: Uint8Array, owned: Uint8Array, grid: CaveGrid, ground?: 
 
 // --- Definition ---------------------------------------------------------------
 
-/** Generate a cave definition from its source. Pure and deterministic. */
-/** `edgeRock` (CW-1): rock at uphill footprint edges leans on the exterior
+/** Generate a cave definition from its source. Pure and deterministic, so on
+ * a named floor the generated data may come from the build cache
+ * (`content/buildCache.ts`); the definition still refers to `source` itself.
+ *
+ * `edgeRock` (CW-1): rock at uphill footprint edges leans on the exterior
  * ground outside (see `thickRock`), so it no longer sinks under the shell's
  * edge, which is snapped to the floor. Boxes stay inside the footprint; one
  * clipped at an edge may be thinner than `MIN_ROCK` across it, with the
@@ -475,9 +479,34 @@ function thickRock(raw: Uint8Array, owned: Uint8Array, grid: CaveGrid, ground?: 
  * edge neighbours (their seam is exact already). */
 export function buildCave(source: CaveSource, floor: FloorFunction, neighbours: readonly CaveSource[] = [],
   options: { readonly edgeRock?: boolean } = {}): CaveDef {
+  const edgeRock = !!options.edgeRock && !neighbours.length;
+  const key = floorKey("cave", floor, [source, neighbours, edgeRock], import.meta.url);
+  const built = cachedBuild(key, () => {
+    const def = generateCave(source, floor, neighbours, edgeRock);
+    return { def: { ...def, source: null }, volume: caveVolume(def) };
+  });
+  const def: CaveDef = {
+    ...built.def, replacementFootprints: [source.footprint],
+    portals: source.portals, routes: source.routes, staging: source.staging, source,
+  };
+  volumes.set(def, built.volume);
+  floors.set(def, floor);
+  if (neighbours.length) linkedTo.set(def, neighbours);
+  if (key) cacheKeys.set(def, key);
+  return def;
+}
+
+const cacheKeys = new WeakMap<CaveDef, CacheKey>();
+/** The build-cache key of data derived from `def` by the code of `module`,
+ * or undefined when `def` itself was not cacheable (an unnamed floor). */
+export function derivedCacheKey(def: CaveDef, kind: string, module: string, extra: readonly string[] = []): CacheKey | undefined {
+  const base = cacheKeys.get(def);
+  return base && { key: `${kind}:${base.key}`, modules: [module, ...base.modules, ...extra] };
+}
+
+function generateCave(source: CaveSource, floor: FloorFunction, neighbours: readonly CaveSource[], edgeRock: boolean): CaveDef {
   const started = Date.now();
   checkNeighbours(source, neighbours);
-  const edgeRock = !!options.edgeRock && !neighbours.length;
   const s = sampleVolume(source, floor, 0.5, neighbours, edgeRock);
   const { grid } = s, { nx, ny, nz, origin, voxel } = grid;
   let ground: Uint8Array | undefined;
@@ -949,6 +978,12 @@ const shells = new WeakMap<CaveDef, Partial<Record<LodLevel, MeshRecipe>>>();
 export function caveShell(def: CaveDef, lod: LodLevel): MeshRecipe {
   const cached = shells.get(def)?.[lod];
   if (cached) return cached;
+  const shell = cachedBuild(derivedCacheKey(def, `shell.${lod}`, import.meta.url), () => generateShell(def, lod));
+  shells.set(def, { ...shells.get(def), [lod]: shell });
+  return shell;
+}
+
+function generateShell(def: CaveDef, lod: LodLevel): MeshRecipe {
   const volume = caveVolume(def), floor = floors.get(def)!, neighbours = caveNeighbours(def);
   const surface = def.surfaces.find(s => s.lod === lod)!;
   const lattice: Lattice = lod === "fine" ? volume : coarsen(volume, caveSampler(def.source, floor, neighbours));
@@ -985,7 +1020,6 @@ export function caveShell(def: CaveDef, lod: LodLevel): MeshRecipe {
     if (d < edge) P[v + 1] = floor(x, z);
     else if (d < band) P[v + 1] = Math.max(P[v + 1]!, floor(x, z));
   }
-  shells.set(def, { ...shells.get(def), [lod]: clipped });
   return clipped;
 }
 

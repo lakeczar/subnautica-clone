@@ -1,130 +1,233 @@
+/** HUB-2: the crown station composed into C4's stops, hosts, rest bases and
+ * recipes, pinned through the paths a player uses (Fabricate, Cargo and Base
+ * through `PanelProbe`, commands through `executeCommand`), and Sol R1's
+ * W2-02, W2-03 and W2-04 as regressions. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CROWN_BENCH_SITES, CROWN_FIXED_HOST, CROWN_RECIPES, CROWN_REST_BASE, CROWN_RESTORATIONS, CROWN_STAGES, CROWN_STATION,
-  CROWN_WORKING_STOP } from "../src/content/hub/crownStation.js";
-import { ITEMS, RECIPES, type FacilityId, type MaterialId } from "../src/content/registry.js";
-import { CRAFT_PROFILES, ROUTES } from "../src/content/regions/passages.js";
-import { SITES } from "../src/content/regions/sites.js";
-import { STRUCTURES } from "../src/content/regions/structures.js";
-import { atCrownStation, bunkHealRate, crownBeaconLit, crownBenchServes, crownDockServes, crownLockerCu, crownRefuge, crownServices,
-  crownSockets, crownStage, crownSurveyReaches, wakeBase } from "../src/sim/hub/crownStation.js";
-import { completeOpening } from "../src/sim/progression.js";
-import { createGame } from "../src/sim/state.js";
-import type { GameState } from "../src/sim/types.js";
+import { CROWN_FACILITIES, CROWN_RESTORATIONS, CROWN_STATION } from "../src/content/hub/crownStation.js";
+import { RECIPES, type ItemKind, type RecipeId } from "../src/content/registry.js";
+import { REST_BASES } from "../src/content/bases.js";
+import { WORKING_STOPS } from "../src/content/stops.js";
+import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
+import { validState } from "../src/save/validation.js";
+import { bunkHealRate, crownStage } from "../src/sim/hub/crownStation.js";
+import { addItem, containerAccessible, facility, supportedServiceSite } from "../src/sim/inventory.js";
+import { crownBenchRecipe, recipeSites } from "../src/sim/progression.js";
+import { incapacitate } from "../src/sim/recovery.js";
+import { executeCommand, stepGame } from "../src/sim/step.js";
+import type { GameCommand, GameState } from "../src/sim/types.js";
 import { gameWorld } from "../src/sim/world.js";
-import { creelFirst, parkCreel } from "./b1-support.js";
+import { PanelProbe, type PanelButton } from "../src/ui/panelProbe.js";
+import { at, creelFirst, creelOf, meta, parkCreel, pilotCreel } from "./b1-support.js";
 
-// W2 phase 2, a deferred PROPOSAL (not imported by the game; see the source
-// headers and Sol R1's W2-02..04, fixed at composition). The crown station as
-// data and pure rules against C4 stage B's
-// interfaces. Composition (tables, survival, fabrication, service) is the
-// coordinator's, after C4 stage B; these pin the design it composes.
+const world = gameWorld(), probe = new PanelProbe(world);
+const STAGES = Object.keys(CROWN_RESTORATIONS) as (keyof typeof CROWN_RESTORATIONS)[];
 
-const world = gameWorld();
-const restore = (s: GameState, n: number): GameState => {
-  for (const stage of CROWN_STAGES.slice(0, n)) s.world.facilities.push({ id: stage.id as FacilityId, repaired: true });
-  return s;
+function roundTrip(s: GameState): GameState {
+  assert.ok(validState(s), "valid before saving");
+  const e = encodeSave(createEnvelope(s, meta)); assert.ok(e.ok, e.ok ? "" : e.error);
+  const d = decodeSave(e.value); assert.ok(d.ok, d.ok ? "" : d.error);
+  assert.deepEqual(d.value.state, JSON.parse(JSON.stringify(s)));
+  return d.value.state;
+}
+const run = (s: GameState, c: GameCommand): GameState => {
+  const out = executeCommand(s, c, world), no = out.events.find((e) => e.type === "notice" && e.error);
+  assert.equal(no && "message" in no ? no.message : null, null, `${c.type} refused`);
+  return out.state;
 };
-const diverAtDoor = (n: number): GameState => {
-  const s = restore(createGame(), n); completeOpening(s);
-  s.player.pose.position = { ...CROWN_STATION.work }; s.player.mode = "swimming";
-  s.player.controlledVehicleId = null; s.player.interiorId = null;
-  return s;
+const refused = (s: GameState, c: GameCommand): string => {
+  const out = executeCommand(s, c, world), no = out.events.find((e) => e.type === "notice" && e.error);
+  assert.ok(no && "message" in no, `${c.type} was accepted`);
+  assert.equal(out.state, s, "a refusal leaves the state untouched");
+  return (no as { message: string }).message;
 };
+/** Creel-first fixture (B1's paid rule staging), the diver at the crown's door
+ * with an empty hold, plans for every stage known. */
+function atCrown(): GameState {
+  const s = creelFirst();
+  for (const i of s.inventory.items.filter((i) => i.containerId === "diver")) i.containerId = "pod_locker";
+  for (const bp of ["bp_canopy_reinforcement", "bp_rift_pressure"] as const) if (!s.knowledge.blueprints.includes(bp)) s.knowledge.blueprints.push(bp);
+  at(s, { ...CROWN_STATION.work }, "swimming");
+  return s;
+}
+/** The 450 m suit refit as paid (rule staging): the fitted suit and the record agree. */
+function suit450(s: GameState): void {
+  s.inventory.items.find((i) => i.fitted === "suit")!.kind = "suit_450";
+  s.knowledge.crafted.push("suit_450");
+}
+const fundDiver = (s: GameState, id: RecipeId): void => {
+  for (const [k, q] of Object.entries(RECIPES[id].cost)) addItem(s, k as ItemKind, q!, "diver");
+};
+const totals = (s: GameState): Record<string, number> => {
+  const t: Record<string, number> = {};
+  for (const i of s.inventory.items) t[i.kind] = (t[i.kind] ?? 0) + i.quantity;
+  return t;
+};
+/** The Fabricate panel's button for one recipe (buttons read as their verb). */
+const craftButton = (s: GameState, id: RecipeId): PanelButton | undefined =>
+  probe.buttons("craft", s).find((b) => b.command.type === "craft" && b.command.recipeId === id);
+const press = (s: GameState, id: RecipeId): GameCommand => {
+  const b = craftButton(s, id);
+  if (!b) throw new Error(`No ${id} button on Fabricate`);
+  if (b.disabled) throw new Error(`${id} is disabled: ${b.reason ?? "no reason shown"}`);
+  return b.command;
+};
+/** Restore stages 1..n through the Fabricate panel. */
+function restored(n: number): GameState {
+  let s = atCrown();
+  if (n >= 3) suit450(s);
+  for (const id of STAGES.slice(0, n)) { fundDiver(s, id); s = run(s, press(s, id)); }
+  return s;
+}
 
-test("three stages, in order, each one diver load of mid-game materials, starting with the Creel's", () => {
-  assert.deepEqual(CROWN_STAGES.map(s => s.id), ["crown_power", "crown_dock", "crown_survey"]);
-  const late: MaterialId[] = ["brine_lattice", "thermal_core"];
-  CROWN_STAGES.forEach((stage, i) => {
-    const cu = Object.entries(stage.cost).reduce((n, [k, q]) => n + ITEMS[k as MaterialId].cu * q!, 0);
-    assert.ok(cu >= 12 && cu <= 16, `${stage.id}: ${cu} CU`);
-    for (const m of late) assert.ok(!(m in stage.cost), `${stage.id} needs late ${m}`);
-    // Each stage needs the one before; the first needs the Creel.
-    assert.ok(stage.needs.includes(i === 0 ? "creel_base" : CROWN_STAGES[i - 1]!.recipe), `${stage.id}: needs ${stage.needs}`);
-    for (const need of stage.needs) assert.ok(need in RECIPES || need in CROWN_RECIPES, `${stage.id}: unknown need ${need}`);
-    assert.equal(CROWN_RESTORATIONS[stage.recipe], stage.id);
-    assert.equal(CROWN_RECIPES[stage.recipe]!.site, "crown_station");
-  });
-  // Stage one's bill is materials a Creel owner already gathers.
-  // C4 (CB): the Creel's frame is its frontier material, not part of the crown's bill.
-  assert.deepEqual(Object.keys(CROWN_STAGES[0]!.cost).sort(), Object.keys(RECIPES.creel_base.cost).filter(k => k !== "buoyant_resin" && k !== "tagged_frame").sort());
+test("W2-02: each stage restores at the door through Fabricate, paid exactly once, atomically, and saves", () => {
+  let s = atCrown();
+  suit450(s);
+  assert.ok(validState(s), "fixture");
+  assert.equal(crownStage(s), 0);
+  for (const [n, id] of STAGES.entries()) {
+    // Unpaid: the button shows why, and pressing it anyway changes nothing.
+    const unpaid = craftButton(s, id);
+    assert.ok(unpaid?.disabled, `${id}: shown and disabled before payment`);
+    refused(s, unpaid!.command);
+    // A later stage waits for this one.
+    if (n < 2) {
+      const later = craftButton(s, STAGES[n + 1]!);
+      assert.ok(!later || later.disabled, `${STAGES[n + 1]} before ${id}`);
+    }
+    // One unit short: still refused, nothing moves.
+    fundDiver(s, id);
+    const short = Object.keys(RECIPES[id].cost)[0] as ItemKind;
+    const spare = s.inventory.items.find((i) => i.kind === short && i.containerId === "diver")!;
+    spare.quantity -= 1;
+    if (!spare.quantity) s.inventory.items.splice(s.inventory.items.indexOf(spare), 1);
+    assert.match(refused(s, unpaid!.command), /Missing materials/);
+    addItem(s, short, 1, "diver");
+    // Paid: exactly the cost leaves, the stage's facility is restored, once.
+    const before = totals(s);
+    s = run(s, press(s, id));
+    const after = totals(s);
+    for (const k of new Set([...Object.keys(before), ...Object.keys(after)]))
+      assert.equal((before[k] ?? 0) - (after[k] ?? 0), (RECIPES[id].cost as Record<string, number>)[k] ?? 0, `${id}: ${k} conserved`);
+    assert.ok(facility(s, CROWN_RESTORATIONS[id]) && s.knowledge.crafted.includes(id));
+    assert.equal(crownStage(s), n + 1);
+    fundDiver(s, id);
+    const again = craftButton(s, id);
+    assert.ok(!again || again.disabled, `${id}: a paid stage cannot be paid again`);
+    if (again) refused(s, again.command);
+    for (const i of s.inventory.items.filter((i) => i.containerId === "diver")) i.containerId = "pod_locker";
+    s = roundTrip(s);
+  }
 });
 
-test("better than the pod once restored: fast bunk, full bench, a dock, large lockers, six sockets, a survey array, the beacon", () => {
-  const none = diverAtDoor(0), all = diverAtDoor(3);
-  assert.equal(crownStage(none), 0); assert.equal(crownServices(none).size, 0);
-  assert.ok(!crownRefuge(none) && bunkHealRate(none) === CROWN_STATION.refugeHealRate);
-  assert.equal(crownStage(all), 3);
-  assert.deepEqual([...crownServices(all)].sort(), ["air", "beacon", "dock", "fabricator", "fast_heal", "large_lockers", "locker", "refit_bench",
-    "rest", "sockets", "survey"]);
-  assert.ok(crownRefuge(all) && atCrownStation(all));
-  assert.equal(bunkHealRate(all), CROWN_STATION.refugeHealRate * 3, "three times any other refuge, the pod included");
-  assert.ok(crownLockerCu(all) > 48 * 2 && crownSockets(all) === 6 && crownBeaconLit(all));
-  // Stage by stage, every service only ever adds.
-  let before = new Set<string>();
-  for (let n = 1; n <= 3; n++) {
-    const now = crownServices(diverAtDoor(n));
-    for (const x of before) assert.ok(now.has(x as never), `stage ${n} drops ${x}`);
-    assert.ok(now.size > before.size); before = new Set(now);
+test("W2-03: the dock serves through Cargo's Service only from the dock stage; stage 1 gives air, bunk and locker, not service", () => {
+  for (const n of [1, 2]) {
+    const s = restored(n), v = creelOf(s);
+    parkCreel(s, { ...CROWN_STATION.dock }, Math.PI / 2);
+    v.charge = 12; v.health = 20;
+    pilotCreel(s);
+    const service = probe.buttons("inventory", s).find((b) => b.command.type === "service" && (b.command as { vehicleId?: string }).vehicleId === v.id);
+    assert.ok(service, "Cargo shows the craft's service button");
+    if (n === 1) {
+      assert.ok(service.disabled, "stage 1: no dock service");
+      assert.equal(supportedServiceSite(s, v), null);
+      refused(s, service.command);
+    } else {
+      assert.ok(!service.disabled, `stage 2: ${service.reason}`);
+      assert.equal(supportedServiceSite(s, v), "crown_station");
+      const after = run(s, service.command), w = after.fleet.vehicles.find((x) => x.id === v.id)!;
+      assert.equal(w.charge, 100); assert.equal(w.health, 100);
+    }
   }
-  // A later stage without the earlier one counts for nothing.
-  const skipped = diverAtDoor(0); skipped.world.facilities.push({ id: "crown_survey" as FacilityId, repaired: true });
-  assert.equal(crownStage(skipped), 0);
+  // Out of the dock's reach, never.
+  const s = restored(2), v = creelOf(s);
+  parkCreel(s, { ...CROWN_STATION.dock, x: CROWN_STATION.dock.x - CROWN_STATION.dockRadius - 1 });
+  assert.equal(supportedServiceSite(s, v), null);
+  // Stage 1 opens the locker and the refuge; the stores wait for the dock.
+  const one = restored(1);
+  assert.match(probe.text("craft", one), /Crown station bench · restored/, "Fabricate names the crown's bench");
+  assert.ok(containerAccessible(one, CROWN_STATION.locker));
+  for (const c of CROWN_STATION.stores) assert.ok(!containerAccessible(one, c) && containerAccessible(restored(2), c), c);
+  const cu = [CROWN_STATION.locker, ...CROWN_STATION.stores].reduce((n, id) => n + one.inventory.containers.find((c) => c.id === id)!.capacity, 0);
+  assert.equal(cu, 144, "large lockers once the dock is restored");
 });
 
-test("the bench: its own restorations always; the workshop's refits and the pod's fabrication from the dock stage; never the yard", () => {
-  for (const [n, workshop] of [[1, false], [2, true], [3, true]] as const) {
-    const s = diverAtDoor(n);
-    assert.ok(crownBenchServes(s, "crown_station"));
-    for (const site of CROWN_BENCH_SITES) assert.equal(crownBenchServes(s, site), workshop, `stage ${n}: ${site}`);
-    assert.equal(crownBenchServes(s, "stack_yard"), false);
+test("W2-04: the full bench runs the pod's fabrication and the workshop's refits and upgrades, never hull builds or yard work", () => {
+  for (const id of Object.keys(RECIPES) as RecipeId[]) {
+    const r = RECIPES[id], crown = recipeSites(id).includes("crown_station") && r.site !== "crown_station";
+    if (r.site === "pod_fabricator") assert.ok(crown, `${id}: basic fabrication at the crown`);
+    if (r.site === "stack_yard" || r.site === "home_pod") assert.ok(!crown, `${id}: stays at its own site`);
+    if (["creel_base", "dart_base", "restore_workshop", "strip_frame"].includes(id)) assert.ok(!crown, `${id}: stays at the workshop`);
+    assert.equal(crown, crownBenchRecipe(id));
   }
-  // Only at the door: a diver 10 m away crafts nothing here.
-  const away = diverAtDoor(3); away.player.pose.position = { ...CROWN_STATION.work, x: CROWN_STATION.work.x + 10 };
-  assert.ok(!crownBenchServes(away, "island_workshop") && !crownRefuge(away));
+  for (const id of ["suit_450", "creel_450", "creel_800", "dart_350", "plating_alloy", "mod_survey", "creel_cargo_rack"] as RecipeId[])
+    assert.ok(recipeSites(id).includes("crown_station"), id);
+  // A paid basic recipe from the crown's store: not before the dock stage.
+  const early = restored(1);
+  fundDiver(early, "glow_lures");
+  const blocked = craftButton(early, "glow_lures");
+  assert.ok(blocked?.disabled && /dock and fabricator/.test(blocked.reason ?? ""), `stage 1: ${blocked?.reason}`);
+  let s = restored(2);
+  for (const [k, q] of Object.entries(RECIPES.glow_lures.cost)) addItem(s, k as ItemKind, q!, CROWN_STATION.stores[0]);
+  const before = totals(s);
+  s = run(s, press(s, "glow_lures"));
+  for (const [k, q] of Object.entries(RECIPES.glow_lures.cost)) assert.equal(before[k]! - (totals(s)[k] ?? 0), q, `glow_lures: ${k} from the store`);
+  assert.ok((totals(s).glow_lure ?? 0) > (before.glow_lure ?? 0), "the lures are made");
+  // A hull refit: the Creel moored at the dock, paid from its own hold.
+  const refit = (): GameState => {
+    const t = restored(2), v = creelOf(t);
+    v.rating = 350; if (!t.knowledge.crafted.includes("creel_350")) t.knowledge.crafted.push("creel_350");
+    parkCreel(t, { ...CROWN_STATION.dock }, Math.PI / 2);
+    for (const [k, q] of Object.entries(RECIPES.creel_450.cost)) addItem(t, k as ItemKind, q!, v.cargoId);
+    return t;
+  };
+  const moored = refit(), done = run(moored, press(moored, "creel_450"));
+  assert.equal(creelOf(done).rating, 450);
+  for (const [k, q] of Object.entries(RECIPES.creel_450.cost)) assert.equal(totals(moored)[k]! - (totals(done)[k] ?? 0), q, `creel_450: ${k}`);
+  // Away from the dock: refused, with the reason.
+  const away = refit();
+  parkCreel(away, { ...CROWN_STATION.dock, x: CROWN_STATION.dock.x - 40 }, Math.PI / 2);
+  const b = craftButton(away, "creel_450");
+  assert.ok(!b || b.disabled, "a remote hull is not refitted");
 });
 
-test("the dock charges and repairs a craft moored within its radius once restored; the survey reaches the Basin, the Rift head and the Canopy edge", () => {
-  // B1's paid Creel fixture (rule staging, not an earned chain).
-  for (const n of [1, 2, 3]) {
-    const s = restore(creelFirst(), n), creel = parkCreel(s, { ...CROWN_STATION.dock });
-    assert.equal(crownDockServes(s, creel.id), n >= 2, `stage ${n}`);
-    parkCreel(s, { ...CROWN_STATION.dock, x: CROWN_STATION.dock.x + CROWN_STATION.dockRadius + 1 });
-    assert.equal(crownDockServes(s, creel.id), false, "beyond the dock's radius");
-  }
-  const s = diverAtDoor(3);
-  for (const [name, at] of Object.entries(CROWN_STATION.surveyCovers)) {
-    assert.ok(crownSurveyReaches(s, at), `survey misses ${name}`);
-    assert.ok(!crownSurveyReaches(diverAtDoor(2), at), `${name}: no survey before stage 3`);
-  }
-  assert.ok(!crownSurveyReaches(s, { x: 600, z: -1120 }), "the Divide is beyond it");
+test("sockets and the survey array work from the third stage, through Base", () => {
+  assert.ok(!probe.text("systems", restored(2)).includes(CROWN_STATION.label), "no crown host before the survey stage");
+  const s = restored(3), text = probe.text("systems", s);
+  assert.ok(text.includes(CROWN_STATION.label), text.slice(0, 200));
+  assert.equal((text.match(/\bs\d · empty/g) ?? []).length, CROWN_STATION.sockets, "six sockets");
+  const after = run(s, probe.press("systems", s, /^Survey$/));
+  assert.match(after.feedback, /Survey \(300 m\)/);
 });
 
-test("waking: at the crown once rested there while it works; the pod whenever the crown has no power", () => {
-  assert.equal(wakeBase(diverAtDoor(1), "crown_station"), "crown_station");
-  assert.equal(wakeBase(diverAtDoor(0), "crown_station"), "home_pod");
-  assert.equal(wakeBase(diverAtDoor(3), "home_pod"), "home_pod");
-  assert.deepEqual(Object.keys(CROWN_REST_BASE), ["crown_station"]);
-  assert.equal(CROWN_REST_BASE.crown_station.facility, "crown_power");
-  assert.equal(CROWN_FIXED_HOST.crown_station.sockets, 6);
-  assert.equal(CROWN_FIXED_HOST.crown_station.facility, "crown_survey");
-  assert.equal(CROWN_WORKING_STOP.crown_station.facility, "crown_power");
+test("the bunk heals three times as fast; you wake at the crown once rested there while it works, else the pod", () => {
+  let s = restored(1);
+  s.player.vitals.health = 30; s.player.vitals.food = 80;
+  assert.equal(bunkHealRate(s), 3 * 1.8);
+  for (let i = 0; i < 60; i++) s = stepGame(s, [{ type: "move", forward: 0, right: 0, vertical: 0, sprint: false }], world).state;
+  assert.ok(s.player.vitals.health > 30 + 4.5, `healed ${(s.player.vitals.health - 30).toFixed(1)} in 1 s`);
+  assert.equal(s.player.refugeId, "crown_station", "resting here registers the bunk");
+  incapacitate(s, "Test.", world);
+  assert.deepEqual(s.player.pose.position, REST_BASES.crown_station.wake);
+  // Without power the crown is no base: the pod.
+  const cold = atCrown();
+  cold.player.refugeId = "crown_station";
+  incapacitate(cold, "Test.", world);
+  assert.equal(cold.player.refugeId, "home_pod");
 });
 
-test("the station's poses stand in the real world: a diver fits at the door, a medium hull at the dock, both on W2's summit", () => {
-  const door = CROWN_STATION.work, dock = CROWN_STATION.dock;
-  assert.ok(world.clearance(door, CRAFT_PROFILES.diver), "the diver fits at the door");
-  const floor = world.supportHeight(door.x, door.z, door.y + 0.5);
-  assert.ok(door.y - floor >= 0 && door.y - floor < 0.6, `door ${(door.y - floor).toFixed(2)} m above its floor`);
-  const hull = STRUCTURES.find(x => x.id === "hub.crown_station.hull")!.solids[0]!;
-  assert.ok(door.z > hull.max.z && door.x > hull.min.x && door.x < hull.max.x, "the door faces the hull's north side");
-  assert.ok(Math.hypot(door.x - (hull.min.x + hull.max.x) / 2, door.z - hull.max.z) < CROWN_STATION.workRadius);
-  assert.ok(world.clearance(dock, CRAFT_PROFILES.medium), "a medium hull fits at the dock");
-  const site = SITES.find(x => x.id === CROWN_STATION.s2)!;
-  assert.ok(Math.hypot(site.at.x - door.x, site.at.z - door.z) < 8);
-  // The spur's end and the balcony route's summit end both reach the dock.
-  for (const id of ["route.hub.spur", "route.hub.balcony"]) {
-    const end = ROUTES.find(r => r.id === id)!.path.at(-1)!;
-    assert.ok(Math.hypot(end.x - dock.x, end.y - dock.y, end.z - dock.z) <= CROWN_STATION.dockRadius + 2, `${id} ends ${Math.hypot(end.x - dock.x, end.z - dock.z).toFixed(1)} m from the dock`);
-  }
+test("saves: crown facilities and stores are additive content; an older save loads with them unrestored", () => {
+  const s = atCrown();
+  const e = encodeSave(createEnvelope(s, meta)); assert.ok(e.ok);
+  const raw = JSON.parse(e.value);
+  raw.state.world.facilities = raw.state.world.facilities.filter((f: { id: string }) => !(CROWN_FACILITIES as readonly string[]).includes(f.id));
+  raw.state.inventory.containers = raw.state.inventory.containers.filter((c: { id: string }) => !c.id.startsWith("crown_station_"));
+  const d = decodeSave(JSON.stringify(raw)); assert.ok(d.ok, d.ok ? "" : d.error);
+  for (const id of CROWN_FACILITIES) assert.equal(d.value.state.world.facilities.find((f) => f.id === id)?.repaired, false, id);
+  for (const id of [CROWN_STATION.locker, ...CROWN_STATION.stores]) assert.ok(d.value.state.inventory.containers.some((c) => c.id === id), id);
+  // A restored stage without its paid recipe is refused as corrupt.
+  const forged = structuredClone(s);
+  forged.world.facilities.find((f) => f.id === "crown_dock")!.repaired = true;
+  assert.equal(validState(forged), false);
+  assert.equal(WORKING_STOPS.crown_station.facility, "crown_power");
 });

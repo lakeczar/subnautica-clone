@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { HULL_COLLIDERS, PLACES, RECIPES, type MaterialId, type RecipeId } from "../src/content/registry.js";
 import { sweepHull } from "../src/content/regions/access.js";
-import { caves, CAVE_SOURCES } from "../src/content/regions/caves.js";
+import { caveDef, CAVE_SOURCES } from "../src/content/regions/caves.js";
+import { HUB_CAVE_SOURCES } from "../src/content/regions/hubCaves.js";
 import { drape } from "../src/content/regions/drape.js";
 import { CRAFT_PROFILES, RAW_ROUTES, ROUTES } from "../src/content/regions/passages.js";
 import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
@@ -16,7 +17,8 @@ import { createGame } from "../src/sim/state.js";
 import { stepGame } from "../src/sim/step.js";
 import type { GameCommand, GameEvent, GameState, Vec3 } from "../src/sim/types.js";
 import { gameWorld, hullClearance } from "../src/sim/world.js";
-import { BEACON, BEACON_PERIOD, beaconGlow, CROWN_RAY_LAP, CROWN_RAY_SPAN, crownRayPoses } from "../src/render/hubView.js";
+import { BEACON, BEACON_PERIOD, beaconGlow, CROWN_RAY_LAP, CROWN_RAY_SPAN, crownRayPoses, MAST_LAMP, MAST_LAMP_PERIOD, mastLampGlow } from "../src/render/hubView.js";
+import { ISLAND_LOOKOUT } from "../src/content/hub/crownStation.js";
 
 // W2: the central pinnacle hub in the world. The spur's terrain, the routes
 // it touches, the crown as a landmark, and the two adverse cases: a craft
@@ -95,7 +97,8 @@ test("carrier lanes pass between the pinnacles at depth: no route or tether is l
 const RAW_PATHS = new Map(RAW_ROUTES.map(r => [r.id, r.path] as const));
 
 test("nothing passes through the pinnacles' cave rock: every route, tether and parked hull is clear of it", () => {
-  const rock = caves(worldFloor).filter(d => d.id !== "fanvault").flatMap(d => d.rock.map(s => ({ id: s.id, bounds: { min: s.min, max: s.max } })));
+  // The hub's own caves; every cave against every lane is cw1-caves.heavy (CW-1).
+  const rock = HUB_CAVE_SOURCES.map(s => caveDef(s.id, worldFloor)).flatMap(d => d.rock.map(s => ({ id: s.id, bounds: { min: s.min, max: s.max } })));
   const lines: [string, readonly Vec3[], keyof typeof CRAFT_PROFILES][] = [
     ...ROUTES.filter(r => r.role !== "walk").map(r => [r.id, r.path, r.profile] as [string, readonly Vec3[], keyof typeof CRAFT_PROFILES]),
     ...RESCUE_PLANS.flatMap(p => p.tethers.map((t, i) => [`${p.id}#${i}`, t, "medium"] as [string, readonly Vec3[], keyof typeof CRAFT_PROFILES])),
@@ -268,4 +271,42 @@ test("the crown rays ring the crown in open water at every moment, and the beaco
   }
   assert.ok(beaconGlow(8, 0) < beaconGlow(60, 0), "held down beside it");
   assert.equal(beaconGlow(1e4, 0), 0);
+});
+
+test("HUB-2: the crown's surface mast stands from the summit to above the water, clear of every line, its slow lamp seen from the island lookout", () => {
+  const mast = STRUCTURES.find(x => x.id === "hub.crown_mast.mast")!;
+  assert.ok(mast, "the mast is a structure (collision and art from one record)");
+  const box = mast.solids[0]!;
+  assert.ok(box.min.y <= worldFloor(mast.x, mast.z) + 0.01, "it stands on the summit");
+  assert.ok(box.max.y >= 5, `its top stands ${box.max.y.toFixed(1)} m above the waterline`);
+  // CW-1's far layer registers every structure at least 20 m tall (FAR_LANDMARK_HEIGHT).
+  assert.ok(box.max.y - box.min.y >= 20, "tall enough for the always-resident far layer");
+  // Clear of the crown mouth, the beacon house, the station and the summit's route ends.
+  for (const id of ["hub.beacon_house.house", "hub.crown_station.hull", "hub.crown_station.mast"]) {
+    const o = STRUCTURES.find(x => x.id === id)!.solids[0]!;
+    assert.ok(o.max.x < box.min.x - 4 || o.min.x > box.max.x + 4 || o.max.z < box.min.z - 4 || o.min.z > box.max.z + 4, `clear of ${id}`);
+  }
+  assert.ok(Math.hypot(mast.x - 331, mast.z + 559) > 7 + 1.5 + 2, "clear of the crown mouth");
+  // No route, rescue tether or surface approach sweeps through it (carrier lanes included).
+  const lines: [string, readonly Vec3[], keyof typeof CRAFT_PROFILES][] = [
+    ...ROUTES.filter(r => r.role !== "walk").map(r => [r.id, r.path, r.profile] as [string, readonly Vec3[], keyof typeof CRAFT_PROFILES]),
+    ...RESCUE_PLANS.flatMap(p => [...p.tethers.map((t, i) => [`${p.id}#${i}`, t, "medium"] as [string, readonly Vec3[], keyof typeof CRAFT_PROFILES]),
+      [`${p.id} approach`, p.approach, "diver"] as [string, readonly Vec3[], keyof typeof CRAFT_PROFILES]]),
+  ];
+  for (const [id, path, profile] of lines) for (let i = 1; i < path.length; i++)
+    assert.equal(sweepHull(path[i - 1]!, path[i]!, profile, box), null, `${id} crosses the mast`);
+  // The lamp above water: from the lookout (765 m, bearing 134°) it stays bright,
+  // and no land rises into the sight line today.
+  const d = Math.hypot(MAST_LAMP.x - ISLAND_LOOKOUT.x, MAST_LAMP.z - ISLAND_LOOKOUT.z);
+  assert.ok(d > 700 && d < 820, `${d.toFixed(0)} m`);
+  assert.ok(Math.abs(((Math.atan2(MAST_LAMP.x - ISLAND_LOOKOUT.x, MAST_LAMP.z - ISLAND_LOOKOUT.z) * 180 / Math.PI + 360) % 360) - 134) < 3);
+  let peak = 0, low = Infinity;
+  for (let t = 0; t < MAST_LAMP_PERIOD; t += 0.05) { const g = mastLampGlow(d, t, false); peak = Math.max(peak, g); low = Math.min(low, g); }
+  assert.ok(peak > 0.5 && low > 0.12, `lamp at the lookout: ${low.toFixed(2)}..${peak.toFixed(2)}`);
+  assert.ok(peak > 2.5 * low, "a slow pulse, not a steady light");
+  assert.ok(mastLampGlow(d, 0, true) < mastLampGlow(d, 0, false) / 10, "it carries through air, not water");
+  for (let t = 0.03; t < 0.97; t += 0.002) {
+    const x = ISLAND_LOOKOUT.x + (MAST_LAMP.x - ISLAND_LOOKOUT.x) * t, z = ISLAND_LOOKOUT.z + (MAST_LAMP.z - ISLAND_LOOKOUT.z) * t;
+    assert.ok(worldFloor(x, z) < MAST_LAMP.y * t, `land in the sight line at ${x.toFixed(0)}, ${z.toFixed(0)}`);
+  }
 });
