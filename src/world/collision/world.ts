@@ -15,9 +15,10 @@ import { depenetrate, OVERLAP_TOLERANCE, SKIN, slideMove, type Depenetration, ty
  *   itself, and the collar as a heightfield instead of column boxes.
  * - `composeStaticWorld`: authored structures (vistas, dishes, lost sites)
  *   over the exterior world. Away from the collider every query is the
- *   exterior's, unchanged; near it, moves advance in sub-sweeps with slides
- *   against the collider and every exterior solid near it, and clearance,
- *   support and sight add the collider to the exterior's answer.
+ *   exterior's, unchanged; a move whose envelope reaches it is one
+ *   continuous sweep with slides against the collider and every exterior
+ *   solid near it, and clearance, support and sight add the collider to the
+ *   exterior's answer. Colliders keep out of the exterior's guarded regions.
  * Both add `depenetrate` for save loads (ART-07). */
 
 const boxOf = (p: Vec3, s: Capsule): { c: Vec3; e: Vec3; box: Aabb } => {
@@ -67,6 +68,10 @@ export interface StaticWorldOptions {
   readonly collider: StaticCollider;
   /** Horizontal bounds static moves clamp to (the exterior's own clamp). */
   readonly bounds?: { readonly minX: number; readonly maxX: number; readonly minZ: number; readonly maxZ: number };
+  /** Regions the collider must keep clear of: where the exterior world's
+   * own guards live (the legacy preserve's terrain columns, bench walls and
+   * capsule ribs), which a static move sweeps as plain boxes. Throws. */
+  readonly guards?: readonly Rect[];
 }
 export interface StaticWorld extends WorldQueries {
   /** The nearest clear pose reachable by continuous escape within
@@ -76,12 +81,21 @@ export interface StaticWorld extends WorldQueries {
   readonly counters: { staticSweeps: number; exteriorSweeps: number };
 }
 
-export const STATIC_SUB_SWEEP = 0.5;
+/** Longest piece a move is cut to near a guarded region, metres. */
+export const GUARD_PIECE = 4;
 /** Support reads tops up to this far above `fromY`, as `createWorldQueries` does. */
 export const SUPPORT_REACH = 0.25;
 
 export function composeStaticWorld(options: StaticWorldOptions): StaticWorld {
-  const { exterior, solids, collider } = options;
+  const { exterior, solids, collider } = options, guards = options.guards ?? [];
+  // A move's envelope reaches its length past the hull; members keep the
+  // widest admitted hull's span plus one guard piece clear of every guard.
+  const reach = 2 * 4.5 + GUARD_PIECE;
+  for (const g of guards) for (const m of collider.members) {
+    const b = m.bounds;
+    if (b.min.x - reach < g.maxX && b.max.x + reach > g.minX && b.min.z - reach < g.maxZ && b.max.z + reach > g.minZ)
+      throw new Error(`static collider ${collider.id}: ${m.id} reaches a guarded region; its moves would sweep the exterior's guards as plain boxes`);
+  }
   const counters = { staticSweeps: 0, exteriorSweeps: 0 };
   const index = createSpatialIndex(solidEntries(solids));
   const nearSolids = (b: Aabb): Solid[] => index.inBox(b, ["solid"]).map(e => e.data!);
@@ -122,29 +136,27 @@ export function composeStaticWorld(options: StaticWorldOptions): StaticWorld {
       return exterior.lineOfSight(a, b, ignore) && (!finite(a) || !finite(b) || collider.segmentClear(a, b, ignore));
     },
     moveCapsule(origin: Vec3, delta: Vec3, shape: Capsule, opts?: MovementOptions): MoveResult {
-      if (!finite(origin) || !finite(delta) || !touches(envelope(origin, delta, shape))) {
+      const env = finite(origin) && finite(delta) ? envelope(origin, delta, shape) : null;
+      if (!env || !touches(env)) {
         counters.exteriorSweeps++;
         return exterior.moveCapsule(origin, delta, shape, opts);
       }
-      const n = Math.max(1, Math.ceil(Math.hypot(delta.x, delta.y, delta.z) / STATIC_SUB_SWEEP));
-      if (n > 100000) return { position: { ...origin }, hitSolid: true, hitBoundary: false };
-      const d = { x: delta.x / n, y: delta.y / n, z: delta.z / n }, len = Math.hypot(d.x, d.y, d.z);
-      let position = { ...origin }, hitSolid = false, hitBoundary = false;
-      for (let i = 0; i < n; i++) {
-        if (!touches(envelope(position, d, shape))) {
-          counters.exteriorSweeps++;
-          const r = exterior.moveCapsule(position, d, shape, opts);
-          position = r.position; hitSolid ||= r.hitSolid; hitBoundary ||= r.hitBoundary;
-          continue;
-        }
-        counters.staticSweeps++;
-        const { c, e, box } = boxOf(position, shape);
-        const local = nearSolids({ min: { x: box.min.x - len - 0.1, y: box.min.y - len - 0.1, z: box.min.z - len - 0.1 },
-          max: { x: box.max.x + len + 0.1, y: box.max.y + len + 0.1, z: box.max.z + len + 0.1 } });
-        const r = slideMove(sweepBoth(local, e), c, d), next = clamp(poseOf(r, shape));
-        position = next.p; hitSolid ||= r.hit; hitBoundary ||= next.clipped;
+      // A long move reaching both a member and a guarded region goes in
+      // halves: a piece of at most GUARD_PIECE whose envelope meets a member
+      // cannot meet a guard (checked at construction).
+      const len = Math.hypot(delta.x, delta.y, delta.z);
+      if (len > GUARD_PIECE && guards.some(g => env.min.x < g.maxX && env.max.x > g.minX && env.min.z < g.maxZ && env.max.z > g.minZ)) {
+        const half = { x: delta.x / 2, y: delta.y / 2, z: delta.z / 2 };
+        const a = world.moveCapsule(origin, half, shape, opts), b = world.moveCapsule(a.position, half, shape, opts);
+        return { position: b.position, hitSolid: a.hitSolid || b.hitSolid, hitBoundary: a.hitBoundary || b.hitBoundary };
       }
-      return { position, hitSolid, hitBoundary };
+      // One continuous swept move with slides against the collider and every
+      // exterior solid the move's envelope reaches (slides never travel
+      // further than |delta|, so the envelope bounds them).
+      counters.staticSweeps++;
+      const { c, e } = boxOf(origin, shape);
+      const r = slideMove(sweepBoth(nearSolids(env), e), c, delta), next = clamp(poseOf(r, shape));
+      return { position: next.p, hitSolid: r.hit, hitBoundary: next.clipped };
     },
     depenetrate(origin, shape, maxDistance) {
       const { c, e } = boxOf(origin, shape);

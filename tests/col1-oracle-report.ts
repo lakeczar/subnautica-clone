@@ -40,7 +40,7 @@ function speed(scene: OracleScene, shapes: readonly { id: string; shape: Capsule
   for (const { id, shape, step } of shapes) {
     const poses: Vec3[] = [];
     for (let guard = 0; poses.length < 400 && guard < 40000; guard++) {
-      const s = scene.seeds[Math.floor(rnd() * scene.seeds.length)]!, r = 0.5 + 3 * rnd(), u = rnd() * Math.PI * 2;
+      const s = scene.seeds[Math.floor(rnd() * scene.seeds.length)]!, r = shape.radius + 0.2 + 3.5 * rnd(), u = rnd() * Math.PI * 2;
       const p = { x: s.x + r * Math.cos(u), y: s.y - shape.height / 2 + (rnd() - 0.5) * 2, z: s.z + r * Math.sin(u) };
       if (scene.old.clearance(p, shape) && scene.neo.clearance(p, shape)) poses.push(p);
     }
@@ -62,9 +62,21 @@ function speed(scene: OracleScene, shapes: readonly { id: string; shape: Capsule
   return result;
 }
 
+/** Highest of `surface` at the box's footprint corners, edge midpoints and centre. */
+const under = (p: Vec3, s: Capsule, surface: (x: number, z: number) => number): number => {
+  let top = -Infinity;
+  for (const i of [-1, 0, 1]) for (const k of [-1, 0, 1]) top = Math.max(top, surface(p.x + i * s.radius, p.z + k * s.radius));
+  return top;
+};
+const stat = (v: number[]) => {
+  const s = [...v].sort((a, b) => a - b), at = (q: number): number => s[Math.min(s.length - 1, Math.floor(q * s.length))] ?? NaN;
+  return { samples: s.length, mean: s.reduce((a, x) => a + x, 0) / Math.max(1, s.length), p50: at(0.5), p95: at(0.95), max: at(1) };
+};
+
 /** A diver dropped onto each bowl panel from 3 m above it: how far its feet
- * rest above the porcelain (ART-03's float), old and new. */
-function bowlFloat(scene: OracleScene): { dish: string; panels: number; old: { mean: number; max: number }; neo: { mean: number; max: number } }[] {
+ * rest above the highest porcelain under its footprint (ART-03's float),
+ * old and new. A drop that slides off the bowl's slope still counts where it rests. */
+function bowlFloat(scene: OracleScene) {
   const rows = [];
   for (const d of STRUCTURES.filter(s => s.kind === "dish")) {
     const o: number[] = [], n: number[] = [];
@@ -72,32 +84,47 @@ function bowlFloat(scene: OracleScene): { dish: string; panels: number; old: { m
       const [a, b, c] = f.pts as [Vec3, Vec3, Vec3], m = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3, z: (a.z + b.z + c.z) / 3 };
       const start = { x: m.x, y: m.y + 3, z: m.z };
       if (!scene.old.clearance(start, DIVER) || !scene.neo.clearance(start, DIVER)) continue;
-      const porcelain = scene.art.support(m.x, m.z, m.y + 0.01);
-      if (Math.abs(porcelain - m.y) > 0.05) continue;
-      o.push(scene.old.moveCapsule(start, { x: 0, y: -4, z: 0 }, DIVER).position.y - m.y);
-      n.push(scene.neo.moveCapsule(start, { x: 0, y: -4, z: 0 }, DIVER).position.y - m.y);
+      // Where each world's drop comes to rest on something; drops that fall
+      // through a gap (no contact) are not resting on the bowl.
+      const rest = (w: WorldQueries): number | null => {
+        const m2 = w.moveCapsule(start, { x: 0, y: -4, z: 0 }, DIVER), e = m2.position;
+        if (!m2.hitSolid) return null;
+        const art = under(e, DIVER, (x, z) => scene.art.support(x, z, e.y + 0.05));
+        return Number.isFinite(art) ? e.y - art : null;
+      };
+      const ra = rest(scene.old), rb = rest(scene.neo);
+      if (ra !== null && rb !== null) { o.push(ra); n.push(rb); }
     }
-    const stat = (v: number[]) => ({ mean: v.reduce((s, x) => s + x, 0) / Math.max(1, v.length), max: Math.max(...v) });
-    rows.push({ dish: d.id, panels: o.length, old: stat(o), neo: stat(n) });
+    rows.push({ dish: d.id, old: stat(o), neo: stat(n) });
   }
   return rows;
 }
 
-/** A diver dropped onto the collar band from 2 m: feet above the floor
- * function (CAV-20's float), old columns and new heightfield. */
-function collarFloat(old: WorldQueries, neo: WorldQueries, regions: OracleScene["regions"]): { old: { mean: number; max: number }; neo: { mean: number; max: number }; samples: number } {
+/** A diver straddling a cave footprint's edge, dropped 3 m onto the seam
+ * from 2 m above it: how far its feet rest above the highest real surface
+ * under it (the floor outside the footprint, the shell inside; CAV-20's
+ * float), old columns against the new collar. */
+function collarFloat(old: WorldQueries, neo: WorldQueries, scene: OracleScene) {
   const rnd = random(5), o: number[] = [], n: number[] = [];
-  for (let i = 0; o.length < 600 && i < 20000; i++) {
-    const b = regions[Math.floor(rnd() * regions.length)]!, x = b.min.x + (b.max.x - b.min.x) * rnd(), z = b.min.z + (b.max.z - b.min.z) * rnd();
-    // Only the band outside every footprint (the regions pad the footprints by 4 m).
-    if (regions.some(r => x > r.min.x + 4 && x < r.max.x - 4 && z > r.min.z + 4 && z < r.max.z - 4)) continue;
-    const f = surfaceHeight(x, z), start = { x, y: f + 2, z };
+  const feet = scene.regions.map(r => ({ minX: r.min.x + 4, maxX: r.max.x - 4, minZ: r.min.z + 4, maxZ: r.max.z - 4 }));
+  const insideAny = (x: number, z: number): boolean => feet.some(f => x >= f.minX && x < f.maxX && z >= f.minZ && z < f.maxZ);
+  for (let i = 0; o.length < 600 && i < 40000; i++) {
+    const f = feet[Math.floor(rnd() * feet.length)]!, side = Math.floor(rnd() * 4), t = rnd(), out = 0.3 * rnd();
+    const x = side === 0 ? f.minX - out : side === 1 ? f.maxX + out : f.minX + (f.maxX - f.minX) * t;
+    const z = side === 2 ? f.minZ - out : side === 3 ? f.maxZ + out : f.minZ + (f.maxZ - f.minZ) * t;
+    const surface = (px: number, pz: number, top: number): number => insideAny(px, pz) ? scene.art.support(px, pz, top) : surfaceHeight(px, pz);
+    const start = { x, y: under({ x, y: 0, z }, DIVER, (px, pz) => surface(px, pz, 1e3)) + 2, z };
     if (!old.clearance(start, DIVER) || !neo.clearance(start, DIVER)) continue;
-    o.push(old.moveCapsule(start, { x: 0, y: -3, z: 0 }, DIVER).position.y - f);
-    n.push(neo.moveCapsule(start, { x: 0, y: -3, z: 0 }, DIVER).position.y - f);
+    const rest = (w: WorldQueries): number | null => {
+      const m2 = w.moveCapsule(start, { x: 0, y: -3, z: 0 }, DIVER), e = m2.position;
+      if (!m2.hitSolid) return null;
+      const top = under(e, DIVER, (px, pz) => surface(px, pz, e.y + 0.05));
+      return Number.isFinite(top) ? e.y - top : null;
+    };
+    const a = rest(old), b = rest(neo);
+    if (a !== null && b !== null) { o.push(a); n.push(b); }
   }
-  const stat = (v: number[]) => ({ mean: v.reduce((s, x) => s + x, 0) / Math.max(1, v.length), max: Math.max(...v) });
-  return { old: stat(o), neo: stat(n), samples: o.length };
+  return { old: stat(o), neo: stat(n) };
 }
 
 const FULL = { poses: 12000, moves: 6000, columns: 8000, sights: 4000, seed: 1 };
@@ -131,7 +158,7 @@ for (const make of [dishScene, vistaScene]) {
       memory: { oldMeasured: oldMemory(scene.oldSolids, 8), neoFormat: scene.after.bytes, neoShared: scene.after.sharedBytes },
       speed: speed(scene, [{ id: "diver", shape: DIVER, step: 0.09 }]),
     };
-    if (k !== "columns") extra.collarFloat = collarFloat(scenes.variants.columns.neo, scene.neo, scene.regions);
+    if (k !== "columns") extra.collarFloat = collarFloat(scenes.variants.columns.neo, scene.neo, scene);
     record(scene, probe(scene, { ...FULL, poses: 8000, moves: 4000 }), extra);
   }
 }

@@ -129,6 +129,7 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
   const top = buildBvh(raw, 2), order = Array.from(top.order, i => members[i]!);
   const N = top.bounds, L = top.links, stack = new Int32Array(64);
   const hit = createHit(), sep = createSeparation();
+  const hasSolids = members.some(m => m.kind === "shape" && m.interior === "solid");
   /** Members (in top-level leaf order) whose bounds meet the box. */
   const near: StaticMember[] = [];
   const gather = (minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number): StaticMember[] => {
@@ -185,7 +186,7 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
       })) return true;
     }
     // No surface crosses the box: inside a closed solid wholly or not at all.
-    return solidAt(c) !== null;
+    return hasSolids && solidAt(c) !== null;
   }
 
   function support(x: number, z: number, fromY: number): number {
@@ -211,7 +212,7 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
       })) return false;
     }
     // A segment crossing no surface is wholly inside a solid or outside it.
-    const solid = solidAt(a);
+    const solid = hasSolids ? solidAt(a) : null;
     return solid === null || ignore.includes(solid.id);
   }
 
@@ -241,7 +242,7 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
     move: (c, e, d, skin = SKIN) => slideMove((cc, rem, out) => sweep(cc, e, rem, skin, out), c, d),
     depenetrate: (c, e, maxDistance) => depenetrate({ sweep, blocked: (p, x) => overlaps(p, x), deepest, inside: p => solidAt(p), surfaceNear }, c, e, maxDistance),
     contact: (c, e, tolerance) => deepest(c, e, tolerance),
-    solidAt: p => solidAt(p),
+    solidAt: p => hasSolids ? solidAt(p) : null,
     surfaceNear: (solid, p, reach) => surfaceNear(solid, p, reach),
     crossings(x, y, z, top) {
       let n = 0;

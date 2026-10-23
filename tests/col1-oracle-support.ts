@@ -9,6 +9,7 @@ import { CRAFT_PROFILES, ROUTES, type CraftProfileId } from "../src/content/regi
 import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
 import { SITES } from "../src/content/regions/sites.js";
 import { STRUCTURES } from "../src/content/regions/structures.js";
+import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { POI_SETS } from "../src/content/poi/sets.js";
 import { VISTA_SETS } from "../src/content/vistas.js";
@@ -105,7 +106,7 @@ export const productionWorld = (): WorldQueries => production ??= createWorldQue
 function structureScene(id: string, label: string, replaced: (s: Solid) => boolean, members: StaticMember[], regions: Aabb[], note: string): OracleScene {
   const rest = SOLIDS.filter(s => !replaced(s)), oldSolids = SOLIDS.filter(replaced);
   const collider = createStaticCollider(id, members);
-  const neo = composeStaticWorld({ exterior: createWorldQueries(rest, surfaceHeight), solids: rest, collider, bounds: WORLD_BOUNDS });
+  const neo = composeStaticWorld({ exterior: createWorldQueries(rest, surfaceHeight), solids: rest, collider, bounds: WORLD_BOUNDS, guards: [LEGACY_PRESERVE] });
   const { paths, poses } = protectedNear(regions, 12);
   return {
     id, label, regions, old: productionWorld(), neo, art: collider, seeds: seedsOf(members),

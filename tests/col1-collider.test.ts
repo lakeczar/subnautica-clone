@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { boxOverlapsTriangle as lcOverlaps, buildCollider, sweepBoxTriangle as lcSweep } from "../src/world/caves/large/collision.js";
 import {
-  boxOverlapsTriangle, createHit, sweepBoxBox, sweepBoxTriangle,
+  boxOverlapsTriangle, createHit, mergeHit, sweepBoxBox, sweepBoxTriangle,
 } from "../src/world/collision/boxTriangle.js";
 import { isLeaf, leafCount, leafFirst } from "../src/world/collision/bvh.js";
 import { buildBoxes, createStaticCollider } from "../src/world/collision/collider.js";
 import { meshShapes } from "../src/world/collision/bake.js";
-import { buildShape, candidate, candidates, MAX_SHAPE_VERTICES } from "../src/world/collision/shape.js";
+import { buildShape, candidate, candidates, MAX_SHAPE_VERTICES, sweepShape } from "../src/world/collision/shape.js";
 import { boxMesh, gridBoxMesh, random } from "./col1-support.js";
 
 /** COL-1 stage A: the compact static collider's format and kernels. The
@@ -203,4 +203,23 @@ test("layout independence: the same triangles in any order, leaf size or split g
     if (results[0]!.hit) ties++;
   }
   assert.ok(ties > 100, `only ${ties} moves met the mesh`);
+});
+
+test("swept culling: a sweep through the slab-culled hierarchy equals one over every triangle", () => {
+  const m = gridBoxMesh({ x: -6, y: -2, z: -5 }, { x: 6, y: 3, z: 5 }, 12), s = buildShape("s", m.positions, m.indices);
+  const rnd = random(23), full = createHit(), culled = createHit(), one = createHit();
+  let hits = 0;
+  for (let i = 0; i < 1500; i++) {
+    const c = { x: -12 + 24 * rnd(), y: -8 + 16 * rnd(), z: -12 + 24 * rnd() }, e = { x: 0.2 + 4 * rnd(), y: 0.2 + 2 * rnd(), z: 0.2 + 4 * rnd() };
+    const d = { x: -14 + 28 * rnd(), y: -8 + 16 * rnd(), z: -14 + 28 * rnd() };
+    let found = false;
+    for (let t = 0; t < s.triangles; t++) {
+      if (!sweepBoxTriangle(c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, s.positions, s.indices[t * 3]! * 3, s.indices[t * 3 + 1]! * 3, s.indices[t * 3 + 2]! * 3, 0.004, one)) continue;
+      found = mergeHit(one, full, found, d.x, d.y, d.z);
+    }
+    const got = sweepShape(s, c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, 0.004, culled);
+    assert.equal(got, found, `sweep ${i}`);
+    if (found) { hits++; assert.deepEqual(culled, full, `sweep ${i}`); }
+  }
+  assert.ok(hits > 300, `${hits} hits`);
 });

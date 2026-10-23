@@ -158,6 +158,57 @@ export function candidates(s: StaticShape, minX: number, minY: number, minZ: num
 }
 export const candidate = (i: number): number => CAND[i]!;
 
+/** Whether segment c + t d, t in [0, 1], meets the box [lo, hi] grown by g. */
+function slabHit(cx: number, cy: number, cz: number, dx: number, dy: number, dz: number, gx: number, gy: number, gz: number,
+  x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): boolean {
+  let t0 = 0, t1 = 1;
+  for (let q = 0; q < 3; q++) {
+    const c = q === 0 ? cx : q === 1 ? cy : cz, d = q === 0 ? dx : q === 1 ? dy : dz, g = q === 0 ? gx : q === 1 ? gy : gz;
+    const lo = (q === 0 ? x0 : q === 1 ? y0 : z0) - g, hi = (q === 0 ? x1 : q === 1 ? y1 : z1) + g;
+    if (Math.abs(d) < 1e-15) { if (c < lo || c > hi) return false; continue; }
+    let u = (lo - c) / d, w = (hi - c) / d;
+    if (u > w) { const x = u; u = w; w = x; }
+    if (u > t0) t0 = u;
+    if (w < t1) t1 = w;
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
+/** Triangles whose nodes and own bounds the swept box (centre c, half
+ * extents g, moving by d) can meet: a slab test of the motion against each
+ * node grown by the box, which hugs a long diagonal sweep far tighter than
+ * the sweep's bounding box. */
+export function sweptCandidates(s: StaticShape, cx: number, cy: number, cz: number, gx: number, gy: number, gz: number,
+  dx: number, dy: number, dz: number): number {
+  const b = s.bounds;
+  if (!s.triangles || !slabHit(cx, cy, cz, dx, dy, dz, gx, gy, gz, b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z)) return 0;
+  const o = s.origin, k = s.scale, N = s.nodes, L = s.links, P = s.positions, I = s.indices;
+  const ox = o[0]!, oy = o[1]!, oz = o[2]!, kx = k[0]!, ky = k[1]!, kz = k[2]!;
+  let sp = 0, count = 0;
+  STACK[sp++] = 0;
+  while (sp) {
+    const id = STACK[--sp]!, n = id * 6;
+    if (!slabHit(cx, cy, cz, dx, dy, dz, gx, gy, gz, ox + N[n]! * kx, oy + N[n + 1]! * ky, oz + N[n + 2]! * kz,
+      ox + N[n + 3]! * kx, oy + N[n + 4]! * ky, oz + N[n + 5]! * kz)) continue;
+    const l = L[id]!;
+    if (isLeaf(l)) {
+      const first = leafFirst(l), end = first + leafCount(l);
+      if (count + 128 > CAND.length) { const g = new Int32Array(CAND.length * 2); g.set(CAND); CAND = g; }
+      for (let t = first; t < end; t++) {
+        const a = I[t * 3]! * 3, c = I[t * 3 + 1]! * 3, e = I[t * 3 + 2]! * 3;
+        if (!slabHit(cx, cy, cz, dx, dy, dz, gx, gy, gz,
+          Math.min(P[a]!, P[c]!, P[e]!), Math.min(P[a + 1]!, P[c + 1]!, P[e + 1]!), Math.min(P[a + 2]!, P[c + 2]!, P[e + 2]!),
+          Math.max(P[a]!, P[c]!, P[e]!), Math.max(P[a + 1]!, P[c + 1]!, P[e + 1]!), Math.max(P[a + 2]!, P[c + 2]!, P[e + 2]!))) continue;
+        CAND[count++] = t;
+      }
+      continue;
+    }
+    STACK[sp++] = l; STACK[sp++] = id + 1;
+  }
+  return count;
+}
+
 const vA = (s: StaticShape, t: number): number => s.indices[t * 3]! * 3;
 const vB = (s: StaticShape, t: number): number => s.indices[t * 3 + 1]! * 3;
 const vC = (s: StaticShape, t: number): number => s.indices[t * 3 + 2]! * 3;
@@ -166,9 +217,9 @@ const HIT: SweepHit = { t: 0, nx: 0, ny: 0, nz: 0, start: false };
 /** Earliest contact of a box (centre c, half extents e) moving by d. */
 export function sweepShape(s: StaticShape, cx: number, cy: number, cz: number, ex: number, ey: number, ez: number,
   dx: number, dy: number, dz: number, skin: number, out: SweepHit): boolean {
+  // The skin sphere fits in a cube of its radius; a centimetre more for rounding.
   const r = skin + 0.01;
-  const n = candidates(s, cx - ex + Math.min(0, dx) - r, cy - ey + Math.min(0, dy) - r, cz - ez + Math.min(0, dz) - r,
-    cx + ex + Math.max(0, dx) + r, cy + ey + Math.max(0, dy) + r, cz + ez + Math.max(0, dz) + r);
+  const n = sweptCandidates(s, cx, cy, cz, ex + r, ey + r, ez + r, dx, dy, dz);
   let found = false;
   const P = s.positions;
   for (let i = 0; i < n; i++) {

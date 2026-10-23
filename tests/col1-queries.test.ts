@@ -226,3 +226,14 @@ test("composeStaticWorld: away from the collider every answer is the exterior's;
   const loaded = world.depenetrate({ x: 15, y: -20.3, z: 0 }, DIVER_SHAPE, 2);
   assert.ok(loaded && loaded.y >= -20 && loaded.y < -19.98 && world.clearance(loaded, DIVER_SHAPE), JSON.stringify(loaded));
 });
+
+test("composeStaticWorld guards: a member near a guarded region is refused; a long move into one goes there in pieces", () => {
+  const exterior = createWorldQueries([], (x: number, _z: number): number => -40 + 0.001 * x);
+  const near = createStaticCollider("near", [solidBox("hull", { x: 0, y: -30, z: 0 }, { x: 4, y: -26, z: 4 })]);
+  assert.throws(() => composeStaticWorld({ exterior, solids: [], collider: near, guards: [{ minX: 10, maxX: 50, minZ: -10, maxZ: 10 }] }), /guarded region/);
+  const world = composeStaticWorld({ exterior, solids: [], collider: near, guards: [{ minX: 40, maxX: 80, minZ: -10, maxZ: 10 }] });
+  // From beside the hull, 60 m east into the guard: the hull is not in the way, so the move ends where asked.
+  const end = world.moveCapsule({ x: 5, y: -28, z: 2 }, { x: 60, y: 0, z: 0 }, DIVER_SHAPE);
+  assert.ok(!end.hitSolid && Math.abs(end.position.x - 65) < 1e-9, JSON.stringify(end));
+  assert.ok(world.counters.exteriorSweeps > 0 && world.counters.staticSweeps > 0, JSON.stringify(world.counters));
+});
