@@ -1,11 +1,11 @@
 # COL-1: one collision model (stage A: the static collider)
 
-Opus 5.5 high. Branch `t3/col-1-static-collider` from root `fe27757`; stage A head: see the commit that adds this page. The decision that created this stream is R1 of the [compromise verdict](../audits/COMPROMISE-VERDICT-OPUS.md) (on `research/compromise-audit`), on Sol's findings ART-01/02/03/07, CAV-02/03/20 and TST-05. **New modules only:** `src/world/collision/*` and `tests/col1-*`. No edit to `world.ts`, `app.ts`, `step.ts`, LC's files, or any cave or creature file.
+Opus 5.5 high. Branch `t3/col-1-static-collider` from root `fe27757`; stage A head: see the commit that adds this page. The decision that created this stream is R1 of the [compromise verdict](../audits/COMPROMISE-VERDICT-OPUS.md) (on `research/compromise-audit`), on Sol's findings ART-01/02/03/07, CAV-02/03/20 and TST-05. **New modules only:** `src/world/collision/*` and `tests/col1-*`. No edit to `world.ts`, `app.ts`, `step.ts`, LC's files, or any cave or creature file, with two grants from the coordinator for R6: the floor snap and seam step in `caveGeometry.ts` (and the cave tests that encode the seam), and the memo key in `caveFloor` (`caves/authored.ts`).
 
 ## R5 response (Sol R5 on `09e8586`: [report](../reviews/COL-1A-SOL-XHIGH-R5.md), on `review/col-1a-r5`)
 **Orientation is now by construction, never by probing** (R5-1, P3-A, P3-B). The probe vote is gone from `src` entirely.
 - **Producers declare orientation** (`Orientation { facing, source }` on an `OrientedMesh`):
-  - **Kit shells:** `KIT_SHELL_ORIENTATION`, in `caveShapes.ts`. `surfaceNets` winds each triangle so its normal's crossing-axis component points from the solid voxel to the water voxel, which is outward. `relax`, the floor snap and `clipMeshToRect` move positions or keep polygon order, and never reorder indices. COL-1 states this beside the code it cites, because it may not edit `caveGeometry.ts`.
+  - **Kit shells:** `KIT_SHELL_ORIENTATION`, in `caveShapes.ts`. `surfaceNets` winds each triangle so its normal's crossing-axis component points from the solid voxel to the water voxel, which is outward. `relax`, the floor snap and `clipMeshToRect` move positions or keep polygon order, and never reorder indices. COL-1 states this beside the code it cites. R6 showed that unchanged indices weren't enough: the snap could still turn triangles inside out by moving them. It now refuses such moves and asserts every triangle's facing on the final mesh (see *R6 response*).
   - **LC chunks:** `LC_ORIENTATION` ("rock at v0 means the surface faces +axis").
   - **Closed prisms:** wound away from their convex centroid by `facetMesh`.
 - **Certification per connected component** (`certifyOrientation`, `orientedShapes`):
