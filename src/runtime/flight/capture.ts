@@ -52,7 +52,7 @@ export interface FlightBuild { content: string; bake: string; commit: string }
 type Video = {
   canvas: HTMLCanvasElement; context: ImageBitmapRenderingContext; track: CanvasCaptureMediaStreamTrack; stream: MediaStream; mimeType: string;
   recorder: MediaRecorder; segment: { file: string; index: number; start: number | null; began: number }; next: number; frames: number; pending: number;
-  paused: boolean; onData: (() => void)[];
+  paused: boolean; onData: (() => void)[]; last: ImageBitmap | null;
 };
 
 export class FlightCapture {
@@ -170,7 +170,17 @@ export class FlightCapture {
   idle(now: number): void {
     if (this.disposed || this.stopped) return;
     const v = this.video;
-    if (v && !v.paused && v.frames > 0 && now >= v.next) { v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS); v.track.requestFrame(); }
+    // A canvas whose picture did not change sends no frame, so a copy of the last picture is handed over each time.
+    if (v && !v.paused && v.last && now >= v.next && v.pending < 2) {
+      v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS);
+      v.pending++;
+      void createImageBitmap(v.last).then((copy) => {
+        v.pending--;
+        if (this.disposed || this.video !== v || v.paused) { copy.close(); return; }
+        v.context.transferFromImageBitmap(copy);
+        v.track.requestFrame();
+      }, () => { v.pending--; });
+    }
     if (this.spool && now - this.spool.last >= SPOOL_EVERY_MS) this.flush(now);
   }
 
@@ -178,6 +188,8 @@ export class FlightCapture {
     v.pending--;
     if (this.disposed || this.video !== v || v.paused) { bitmap.close(); return; }
     if (v.canvas.width !== bitmap.width || v.canvas.height !== bitmap.height) { v.canvas.width = bitmap.width; v.canvas.height = bitmap.height; }
+    // Kept for frames with nothing drawn (idle): the video's clock keeps the page's.
+    void createImageBitmap(bitmap).then((copy) => { v.last?.close(); v.last = copy; }, () => {});
     v.context.transferFromImageBitmap(bitmap);
     v.track.requestFrame();
     v.frames++;
@@ -298,7 +310,7 @@ export class FlightCapture {
    * finishes the current segment; on starts a new one. */
   setVideo(on: boolean): void {
     if (this.stopped && on) return;
-    if (!on) { if (this.video) { this.finishSegment(this.video, "video turned off"); this.video = null; } return; }
+    if (!on) { if (this.video) { this.finishSegment(this.video, "video turned off"); this.video.last?.close(); this.video = null; } return; }
     if (this.video) return;
     const allowed = videoAllowed(this.mode, this.spool !== null, this.budget, this.minVideo);
     if (!allowed.ok) { this.recorder.event("warning", `warning: recording without video: ${allowed.why}`, { snapshot: false }); return; }
@@ -312,7 +324,7 @@ export class FlightCapture {
     if (!context || !track || !mimeType) return;
     const index = this.segmentIndex++;
     const v: Video = { canvas, context, track, stream, mimeType, recorder: null as unknown as MediaRecorder,
-      segment: { file: `video/${String(index).padStart(3, "0")}.webm`, index, start: null, began: performance.now() }, next: 0, frames: 0, pending: 0, paused: false, onData: [] };
+      segment: { file: `video/${String(index).padStart(3, "0")}.webm`, index, start: null, began: performance.now() }, next: 0, frames: 0, pending: 0, paused: false, onData: [], last: null };
     v.recorder = this.segmentRecorder(v);
     this.video = v;
     this.recorder.event("session", `video started (${mimeType}, ${VIDEO_FPS} fps, ${VIDEO_SIZE.width}x${VIDEO_SIZE.height}, ${v.segment.file})`, { snapshot: false });
