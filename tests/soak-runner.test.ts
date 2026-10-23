@@ -67,7 +67,7 @@ test("tour: all laps run in one game lifetime, so a per-visit leak shows at lap 
   assert.match(r.verdict.reason, /memory-growth:rendererRssMiB: lap 1 140 MiB → lap 2 180 MiB/);
   assert.equal(r.run.laps.length, 2, "stopped at the lap that broke the rule");
   assert.equal(w.heap, 180, "nothing reset the measured page");
-  assert.equal(r.run.saves.length, 2, "each lap's save was checked separately");
+  assert.equal(r.run.saves.length, 1, "lap 1's save was checked separately; lap 2 stopped at its own sample, before its save");
 });
 
 test("tour: flat memory, fully measured on an isolated run, passes; on a shared run it is only partial", async () => {
@@ -90,7 +90,7 @@ test("tour: failed frame and hold providers are unavailable and reported, never 
   assert.equal(rule("streaming-frame").status, "unavailable");
   assert.match(rule("streaming-frame").detail, /no frames were measured/);
   assert.equal(rule("loading-hold").status, "unavailable");
-  assert.match(rule("providers").detail, /frames failed \d+× \(frames broke\).*ocean-dataset failed/);
+  assert.match(rule("providers").detail, /frames: frames broke.*ocean-dataset: ocean-dataset broke/);
   // A build without per-frame attribution: unavailable too, with the reason.
   const u = await S.runSoak(opts("tour"), fake({}, { attributed: false }).deps);
   assert.match(u.verdict.rules.find((x: { id: string }) => x.id === "streaming-frame").detail, /no streaming attribution \(this build keeps no per-frame record\)/);
@@ -121,12 +121,12 @@ test("dwell: the goal needs the leak window, so a slow leak is judged before any
   assert.equal(flat.verdict.status, "partial", JSON.stringify(flat.verdict.rules));
   assert.deepEqual(flat.verdict.unproven, ["day-night"]);
   assert.ok(flat.run.autosaves.length >= 4);
-  const span = flat.run.samples.at(-1).at - flat.run.startedAt;
+  const span = flat.run.samples.at(-1).at - flat.facts.find((f: { t: string }) => f.t === "start").at;
   assert.ok(span >= 0.4, `observed ${span} s of the 0.4 s leak window`);
   // Stopped short of the window: the leak rule is listed as unmeasured, not passed.
   const short = G.evaluateDwell({ samples: [{ at: 0, memory: { rendererRssMiB: 1 } }, { at: 1, memory: { rendererRssMiB: 1 } }, { at: 2, memory: { rendererRssMiB: 1 } }],
     autosaves: [], frames: { judged: true }, now: 2 }, { ...G.DEFAULTS.dwell, warmupS: 0 });
-  assert.match(short.unavailable.join("\n"), /leak: settled samples span 0 of the 10 min/);
+  assert.match(short.unavailable.join("\n"), /leak:rendererRssMiB: settled samples of rendererRssMiB span 0 s of the 600 s the trend needs/);
 });
 
 // SCHED-2a R2 ---------------------------------------------------------------
@@ -433,4 +433,94 @@ test("R5-F2: a hold seen only by the full probe's dataset read, in a GC sample, 
   assert.match(r.verdict.reason, /loading-hold/);
   assert.equal(r.run.laps.length, 1, "stopped in lap 1's GC sample");
   assert.equal(r.run.saves.length, 0, "before that lap's save check");
+});
+
+// SCHED-2a R6: one verdict over append-only facts ----------------------------------
+
+test("R6-F1 (runner): a periodic sample can't overlap the terminal one; a leak it proved would stay failed", async () => {
+  const f = fake();
+  const t0 = performance.now(), sim = () => ((performance.now() - t0) / 1000) * 200;
+  // The reviewer's window: the dwell's goal is met at its 4th settled sample
+  // (900 s), so the 5th collection is the terminal one. It is held open for
+  // 2.5 s (500 simulated s), during which a periodic GC sample (due at 1200 s)
+  // would read 1018 MiB: a leak, which the flat terminal sample must not erase.
+  let gcs = 0, inTerminal = false, periodicDuringTerminal = false;
+  f.deps.collectGarbage = async () => { if (++gcs === 5) { inTerminal = true; await sleep(2500); inTerminal = false; } };
+  const base = f.deps.providers;
+  f.deps.providers = () => {
+    const ps = base();
+    return { ...ps, full: [{ name: "memory", sample: async (ctx?: { afterGc?: boolean }) => {
+      const leakyRead = Boolean(ctx?.afterGc) && inTerminal;
+      if (leakyRead) periodicDuringTerminal = true;
+      return { memory: { rendererRssMiB: leakyRead ? 1018 : 1000, gpuRssMiB: 230, jsHeapAfterGcMiB: 90 }, graphics: { meshes: 900, materials: 80, textures: 60, geometries: 700 } };
+    } }] };
+  };
+  (f.deps as Record<string, unknown>).clock = sim;
+  const r = await S.runSoak({ ...opts("dwell"), gcEveryS: 300, thresholds: { tour: G.DEFAULTS.tour, dwell: { ...G.DEFAULTS.dwell, warmupS: 0, autosaves: 2, autosaveMissingS: 1e9, leakMinWindowS: 900 } } }, f.deps);
+  assert.ok(gcs >= 5, `${gcs} collections`);
+  // Either no sample ran inside the terminal one (serialized), or the leak it proved stands.
+  assert.ok(!periodicDuringTerminal || (r.verdict.status === "fail" && r.verdict.broken.includes("leak:rendererRssMiB")),
+    `a periodic sample overlapped the terminal one and its leak was erased: ${JSON.stringify(r.verdict.rules)}`);
+  assert.equal(periodicDuringTerminal, false, "the samples are serialized");
+});
+
+test("R6-F2: a 70 ms frame with 70 ms in caves is streaming's whatever an unrelated part says; an insufficient known part stays unproven", async () => {
+  const g = globalThis as unknown as { window: Record<string, unknown> };
+  const run = async (parts: Record<string, unknown>) => {
+    const f = fake();
+    const page = { evaluate: async (fn: () => unknown) => { g.window = { __soakGaps: [{ ms: 70, excluded: false }], __siltwakePerf: [{ total: 70, parts, hold: "clear" }] }; return fn(); } };
+    const base = f.deps.providers;
+    f.deps.providers = () => { const ps = base(); return { ...ps, tick: [P.frames(page as never), ps.tick[1]!, ps.tick[2]!] }; };
+    return S.runSoak(opts("tour"), f.deps);
+  };
+  for (const chunks of [undefined, NaN]) {
+    const r = await run({ chunks, caves: 70, regions: 0, lights: 0 });
+    assert.equal(r.verdict.status, "fail", `chunks ${chunks}: ${JSON.stringify(r.verdict.rules)}`);
+    assert.equal(r.verdict.broken[0], "streaming-frame");
+    assert.ok(r.run.laps.length < 3, `it stopped early (${r.run.laps.length} laps)`);
+  }
+  const control = await run({ chunks: undefined, caves: 10, regions: 0, lights: 0 });
+  assert.equal(control.verdict.status, "partial", JSON.stringify(control.verdict.rules));
+  assert.equal(control.verdict.rules.find((x: { id: string }) => x.id === "streaming-frame").status, "unavailable");
+  const valid = await run({ chunks: 0, caves: 10, regions: 0, lights: 0 });
+  assert.equal(valid.verdict.rules.find((x: { id: string }) => x.id === "streaming-frame").status, "pass", "all valid zero-ish parts and a non-streaming 70 ms frame: no violation");
+});
+
+// SCHED-2a R7 -------------------------------------------------------------------
+
+test("R7-F1 (runner): a dwell's measured hold fails and stops it, though a companion record in the same interval is unknown", async () => {
+  const f = fake();
+  const base = f.deps.providers;
+  f.deps.providers = () => {
+    const ps = base();
+    // CW-1's records: one frame held ("loading"), one where admission wasn't evaluated (null).
+    return { ...ps, tick: [{ name: "frames", sample: async () => ({ frames: { overMs: 33, gaps: [16, 16], records: [rec(16, { hold: "loading" }), rec(16, { hold: null })] } }) }, ps.tick[2]!] };
+  };
+  const r = await S.runSoak(opts("dwell"), f.deps);
+  assert.equal(r.verdict.status, "fail", JSON.stringify(r.verdict.rules));
+  assert.ok(r.verdict.broken.includes("loading-hold"), JSON.stringify(r.verdict.broken));
+  assert.equal(r.run.saves.length, 0, "stopped at the hold, before the terminal save check");
+});
+
+test("R7-F2 (runner): after a backward sample time, a later valid 10% rise fails flatness and stops the dwell", async () => {
+  let clock = 0, settled = 0;
+  const memory = (v: number) => ({ rendererRssMiB: v, gpuRssMiB: 400, jsHeapAfterGcMiB: 120 });
+  const full = { name: "recorder-like-memory", sample: async (ctx: { afterGc?: boolean; at: number }) => {
+    clock += 300;
+    if (!ctx.afterGc) return { memory: memory(1000) };
+    settled++;
+    return { at: settled === 3 ? ctx.at - 450 : ctx.at, memory: memory(settled >= 4 ? 1100 : 1000) };
+  } };
+  let ticks = 0;
+  const tick = { name: "frames-and-save", sample: async () => ({ frames: { gaps: [16], records: [rec(16, { hold: "clear" })] }, lastSave: { savedAt: String(++ticks), tick: ticks } }) };
+  const deps = { env: {}, clock: () => clock, createProbe: P.createProbe, Blocked, openGame: async () => ({ renderer: "simulated", errors: [], close: async () => {} }),
+    // Bounded: a reducer that misses the rise must fail this test, not hang it (travel ends after two more readings).
+    read: async () => { if (settled >= 6) throw new Blocked("the test stops here"); return { cam: [0, 0, 0] }; }, goto: async () => true, releaseAll: async () => {}, exclude: async () => true, collectGarbage: async () => {},
+    saveAndCheck: async () => ({ ok: true }), providers: () => ({ full: [full], tick: [tick] }) };
+  const r = await S.runSoak({ ...opts("dwell"), tickMs: 5, sampleS: 0.005, gcEveryS: 0,
+    thresholds: { tour: G.DEFAULTS.tour, dwell: { ...G.DEFAULTS.dwell, autosaves: 100, warmupS: 0, autosaveMissingS: 1e9 } } }, deps);
+  assert.ok(r.facts.some((x: { t: string; settled?: boolean; memory?: { rendererRssMiB?: number } }) => x.t === "sample" && x.settled && x.memory?.rendererRssMiB === 1100));
+  assert.equal(r.verdict.status, "fail", JSON.stringify(r.verdict.rules));
+  assert.ok(r.verdict.broken.includes("memory-flat:rendererRssMiB"));
+  assert.equal(settled, 4, "stopped at the reading that proved it");
 });

@@ -53,7 +53,10 @@ let result;
 try {
   result = await runSoak({
     kind, out: arg("out"), thresholds: t, plan: readJsonFile(arg("plan")), at: arg("at"), sampleS: Number(arg("sample-s", 10)),
-    judged: Boolean(grant?.exclusive) || process.env.SILTWAKE_SOAK_DEDICATED === "1",
+    // On the second worker (SILTWAKE_SOAK_MACHINE, from the remote lane) frames
+    // are recorded and flagged, never judged: it is the owner's desktop.
+    judged: !process.env.SILTWAKE_SOAK_MACHINE && (Boolean(grant?.exclusive) || process.env.SILTWAKE_SOAK_DEDICATED === "1"),
+    machine: process.env.SILTWAKE_SOAK_MACHINE || null,
     browser: { dist: arg("dist"), save: arg("save"), port: Number(arg("port", 4100 + (process.pid % 800) * 2)), software: flag("software"), gpu: arg("gpu"), log },
     meta: { commit, machine: `${hostname()}${process.env.SILTWAKE_SOAK_MACHINE ? ` (${process.env.SILTWAKE_SOAK_MACHINE})` : ""}`, ticket: ticket ?? "none",
       class: grant?.class ?? "outside the queue", save: arg("save"), plan: arg("plan") ?? null },

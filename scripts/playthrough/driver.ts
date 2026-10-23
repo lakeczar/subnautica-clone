@@ -75,9 +75,15 @@ export class Driver {
   lastEvents: GameEvent[] = [];
   private known = new Set<string>();
 
-  constructor(scenario: string, strategy: string, state: GameState = createGame()) {
+  /** Accepted commands since New Game, including a parent run's before a branch. */
+  commands = 0;
+  /** Called after every accepted tick or command (SAVE-1's mid-phase captures). */
+  readonly watchers: ((d: Driver) => void)[] = [];
+
+  constructor(scenario: string, strategy: string, state: GameState = createGame(), commands = 0) {
     this.state = state;
     this.run = emptyRun(scenario, strategy);
+    this.commands = commands;
     for (const id of knownRecords(state)) this.known.add(id);
     this.observer = driverHooks.attach?.(this) ?? null;
   }
@@ -141,6 +147,7 @@ export class Driver {
       if (!options.allowRefusal) throw new Blocked(`${JSON.stringify(command)} refused: ${error.message}`, where(before));
       return { ok: false, message: error.message, events: result.events };
     }
+    this.commands++;
     this.recordStocks(before);
     this.accept(result.state, result.events);
     this.observer?.command(this, command, result);
@@ -189,6 +196,7 @@ export class Driver {
     const m = this.sample();
     lowerMinima(this.phaseMinima, m);
     if (this.leg) lowerMinima(this.leg.minima, m);
+    for (const watch of this.watchers) watch(this);
   }
 
   sample(): Minima {

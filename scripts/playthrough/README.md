@@ -29,6 +29,46 @@ At every phase end the harness saves through the real `SaveRepository`, reloads 
 - `npm run playthrough` runs all five scenarios, in about 3.3 min. Add `-- --jobs 3` to run the three New Game groups in parallel (about 1.7–2 min here). Other flags: `--scenario creel,carrier,creel-loss,reverse,no-optional` and `--json out.json` for the full timeline. No Babylon is loaded.
 - **Exit codes:** 0 means nothing is blocked, every check holds and the expected-pending list is current; pending is expected today. 1 means a blocker, a failed check, a stale or malformed list, or any `--jobs` child that exited nonzero (even after writing a complete result), was killed, timed out (`--child-timeout`, default 1800 s) or did not return every requested scenario exactly once.
 - **Fast tier:** `tests/playthrough.test.ts` plays New Game through the reef with exact reloads. It also covers the refusal contract, keyed content checks, abnormal child outcomes, a removed recipe blocking, the list being current, S5's works sites and hull ratings.
+- **SAVE-1 added three short library scenarios** (below): `low-air`, `tour` and `over-geared`, so a plain `npm run playthrough` now plays eight. On siltwake-alickers at `0a464bc`, `--jobs 3` takes about 14 min: the New Game Creel group (`creel` and its five branches) runs in one child and is the critical path. A branch alone with `--from-library` takes seconds to a minute.
+
+## Save library (SAVE-1)
+After each root merge, the coordinator runs `scripts/saves-export.sh` on root. It plays every scenario and publishes **every save the bot made** (each milestone, plus the mid-phase captures) to an immutable directory per commit, `/work/tmp/siltwake-saves/<sha>/` (or `$SILTWAKE_SAVES`), with a `manifest.json` and an `index.json` beside it. Everything is earned through real commands. The export publishes nothing unless every scenario completes, every save reloads to its hash and every kind holds its facts.
+
+**Pinned to one SHA.** The wrapper captures HEAD once. It refuses a dirty tree, then builds that commit with `scripts/saves-build-at.sh SHA DIR`: a `git archive` compiled in a directory of its own and marked with `.siltwake-source-commit`. Both the second worker and the factory fallback run the export from such a build. `run.js --export --commit SHA` refuses code without the marker, or marked with another commit, so a worktree's `.test-build` can never export under a SHA. A partial export (some scenarios) may only go to a private `--library-root`.
+
+**Publication** takes the root's lock: a kernel `flock(1)` on `.publish.lock`, a file that is never removed. The lock is held by a child process and dropped by the kernel when its owner dies, so no writer ever deletes another's lock. `.publish.lock.owner` names the last holder, for messages only. Under the lock, publication collects orphaned staging, renames the verified staging directory into place read-only and rebuilds the index. A repeated or concurrent identical export reports `identical`, after checking that the existing directory itself verifies. A different one is an error.
+
+**Staging** is `<root>/.staging-<sha12>-XXXXXX/<sha>`: hidden, and named by its commit so any build's verifier accepts it. Its owner holds a `flock` lease on `.lease` beside it for its whole life. An orphan, whose lease is free, is collected by the next publish or `saves.js index`. A live exporter's staging is never collected, however old.
+
+**Kinds** (`saves.js kinds` prints them; `kinds.ts` defines them). Every save is also its own kind, `scenario@label`, for example `creel@refits`.
+
+| Group | Kinds | Where from |
+| --- | --- | --- |
+| Milestones | `pod-start`, `dart`, `creel-basin-frames`, `creel-350`, `rift-450`, `creel-800`, `carrier-fitout`, `pre-ending`, `pre-ending-carrier` | Phase ends of `creel` and `carrier` |
+| Adverse | `low-air` (oxygen ≤ 20%, on suit air), `hull-damaged` (running, hull ≤ 50%), `craft-lost` (disabled at depth, the diver surfaced), `battery-depleted` (charge 0, helm dead, emergency air) | `low-air`, `creel-loss` captures, `tour` |
+| Gear | `canopy-min-gear` (180 m Dart, 150 m suit), `canopy-over-geared` (800 m Creel and suit) | First entry into the Canopy in `creel` and `over-geared` |
+| Tour | `tour-ready`: the 350 m Dart with the core cell bank and drive controller, full, two charged reserve cells aboard | `tour` |
+
+**Provenance**, per save in the manifest: scenario, label, phase, branch point (`from`), tick and minutes of play, accepted commands since New Game (a branch counts its parent's), bytes, journal bytes, state hash, the file's SHA-256 and a few readable facts (region, vitals, craft). The manifest also records the commit, schema and content versions, the machine, each scenario's outcome, the size summary (SAV-03) and measurements (the tour range).
+
+**Using it.** Build first (`npx tsc -p scripts/playthrough/tsconfig.json`), from a checkout at the commit you are testing:
+- **CLI:** `node .test-build/scripts/playthrough/saves.js pick tour-ready` prints the path of the newest compatible save; what it chose goes to stderr. `--commit REF`, `--exact` (that commit only), `--json`. Also `list`, `kinds`, `verify [REF]`, `import DIR`, `index`, and `--root DIR` everywhere.
+- **Code** (tests, GPU drivers): `const { librarySave } = await import(B + "scripts/playthrough/library.js")`; `librarySave("dart")` returns `{ path, text, state, entry, manifest, compatibility, distance, migrated, describe }`. Import `path` through the menu (`#import-file`) as the drivers do, or seed localStorage with `journalRecord(text)`. A worked consumer: [`enc1/derive.mjs`](../../docs/build/streams/enc1/derive.mjs) starts from `dart` instead of replaying three phases.
+- **Branch scenarios** (TST-21): `npm run playthrough -- --scenario carrier --from-library` starts `carrier` from the library's `creel@refits` instead of replaying the Creel run; every branch whose parent is not requested does the same, and each becomes its own `--jobs` group.
+
+**Compatibility.** A save suits a commit when its library commit is that commit or an ancestor, its schema and content versions are this build's (or schema 5 / expedition.6, which `bridge5.ts` converts), and this build's own `decodeSave` accepts it. The nearest such commit wins (`same-commit`, else `same-version` or `bridged`). The recorded hash must match the saved state before any migration; `migrated` means this build's decoder actually changed it (the schema 5 bridge, additive content).
+
+Anything else is **refused** (exit 3) with every candidate's reason:
+- another branch's commit;
+- another schema;
+- a missing or damaged file;
+- a recorded hash that doesn't match;
+- an envelope without a state;
+- a kind no export has.
+
+If the nearest compatible save fails to load, that is refused too, and the refusal names the older compatible candidates as not tried. An older one is never used in its place. An export whose manifest can't be read stays a candidate: if it's at least as near as the best readable one, it could hide a nearer save, so the pick is refused. A farther one is named under "passed over".
+
+**The second worker.** `scripts/saves-export.sh` runs the export on siltwake-alickers (`alickers-job.sh`, into its own `/work/tmp/siltwake-saves/<sha>`, so jobs there find it too), copies the directory back over ssh and imports it. The import checks every file against the manifest, copies it into hidden staging in the root and decodes every save there with a build of that commit. That is this code if it was built from it, else a fresh `saves-build-at.sh` build called through its own exported `verifyCommitDir(dir, true)`, which every export since the first has had, so older exports verify with their own decoder and kind facts. Only then does it publish; a failure leaves no directory and no index entry. `saves.js verify REF` decodes with a build of REF in the same way. Exit 75 or 255 falls back to factory-worker's queue (`--class playthrough --snapshot`); `--here` goes straight there. When SCHED-2b's remote lane lands, its `remote_export` becomes `heavy-check --machine any --artifact <dir>`.
 
 ## Scenarios and status
 | Scenario | Root `a09968b` | C3 in progress `3c9a181` (export in `/work/tmp`) |
