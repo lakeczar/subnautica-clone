@@ -501,3 +501,63 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **Soak verdicts are not evidence yet:** R6 asked for an append-only fact reducer. The note is in `WORKER_RESOURCE_LIMITS.md`.
 - **GPU guard (`install.sh --gpu-guard`) is deferred** until REC-1's queued pre-cutover tickets drain.
 - **CW-1's exclusive series finished;** the handoff is pending from the builder.
+
+### 2026-10-23 10:12Z — GPU guard installed; SCHED-2a fully live
+- **Installed:** `install.sh --gpu-guard` wrapped all three Playwright Chrome binaries; the guard's own version is `073e8b0da3da`.
+- **Verified:**
+  - a GPU-flagged launch outside a job is refused with the lease message;
+  - a plain launch works;
+  - a GPU launch inside a `gpu` ticket works (`261023-101223-f3f1`, evidence bound to `a536775`).
+- **Stall fix:** `a5724a7` merged and reinstalled as v2 `112892426b5d`. The full suites pass on it: SCHED-1 23/23, SCHED-2 16/16, policy 25/25. No job was mislabelled in the window.
+- **SCHED-2b:** R1 fixes are at `2e35921`, and Sol R2 is running. The SCHED-2 builder is now on the soak reducer.
+
+### 2026-10-23 — coordinator decisions: the remote-lane threat model; COL-1 stage-B conditions
+- **SCHED-2b R2** (`1d5b7ff`): 2 P1s and 3 P2s.
+  - **Threat model ruled:** the receipt protocol must be robust to **accidents** by our own job and setup code (marker output, stray writes, stale or partial records, dropped connections). It doesn't defend against a payload **deliberately** forging records through `/proc`. That's documented as a named limit, with its root fix (a separate transport uid), the same class as SCHED-1's accepted "job kills its own anchor".
+  - **Fixes:**
+    - a per-attempt nonce over ssh stdin;
+    - a strict phase grammar;
+    - an exit-status cross-check;
+    - checked out tree clean and verified under the lock;
+    - ownership kept until the old attempt is conclusively stopped;
+    - non-blocking admission for `any`;
+    - test seams only under an explicit test scope.
+- **COL-1 stage-B acceptance conditions:**
+  - LC cap and collar walls (no clear-start move ends in a pose LC rejects);
+  - **collars and other collision bakes happen offline** (WK-1's bake pipeline), never at runtime (stage A measured 9–14 s for 0.25 m collars);
+  - **collar corners stored per cell only where needed**, to recover memory.
+
+### 2026-10-23 ~12:15Z — CW-1 and SAVE-1 done; reviews out; SIM-1 resumed
+- **Usage limit:** about 11:00–12:00Z. Builders auto-resumed at 12:00.
+- **CW-1 done** at `d62586c` (code `e935e4f`); Sol R1 `siltwake-cw1-review-r1-sol-d62586c`.
+  - The 3090 1080p traversal had 0 holds and 0 unsliced builds in travel, but the 34 ms gate fails on 24 frames, mostly in runs marked `DISTURBED`.
+  - Clean 3090 frame evidence is missing; the root fix is TST-16 (light-work slice), assigned to the SCHED-2 builder after 2b.
+  - The 4070 control passes.
+- **SAVE-1 done** at `f86dd48` (unpushed; a docs conflict with root); Sol R1 `siltwake-save1-review-r1-sol-f86dd48`.
+  - **Store:** 73 bot-earned saves per export at `/work/tmp/siltwake-saves/<sha>/`, 16 named kinds, with tour-ready fitting a 27.2 km lap at cruise.
+  - **Merge gate addition, after SAVE-1 merges:** run `scripts/saves-export.sh` after each root merge.
+  - **UI finding:** a dying battery gets only a sound cue, no notice (for SIG-1 or a UX pass).
+- **COL-1 A R6** (`89c3158`): one P2, the floor snap flips triangles (`meridian_culvert_north` support is 0.75 m off). **COL-1 now owns the snap/seam step** in `caveGeometry.ts` for this fix.
+- **Soak R7** (`7810194`): 2 P2s, plus 3 of 6 mutants survive the property tests. Queued after the SCHED-2b R2 fixes, then TST-16.
+- **SIM-1 resumed.** Builders: REC-1, SCHED-2, COL-1, SIM-1 active; CW-1 and SAVE-1 in review.
+
+### 2026-10-23 — soak harness accepted; SAVE-1 R2; SCHED-2b R3
+- **Soak reducer accepted** by Sol R8 (`review/sched-2a-soak-r8` `79c752c1`) after R1–R7. Merged into root as `fd2e5fe`; the gate passed (1,370 tests, build, economy). **Soak verdicts are evidence now.**
+  - **P3 follow-up:** five reviewer mutants survive the example suite (the reviewer's probes kill them). Add those probes as tests.
+  - **P3:** one conservative timestamp false failure.
+- **SAVE-1 R1 fixes** at `4690311`:
+  - the factory-fallback export now runs end to end (25 min, 73 saves, byte-identical with alickers);
+  - the library holds `0a464bc`, `1d4d2c3` and `dabaa79`;
+  - Sol R2 dispatched.
+- **SCHED-2b R3** (`2c78ac0`): 2 P2s (claim/scope crash boundary, cross-boot identity reuse), plus a request for a supported operator `release-remote`. Fixes are in progress.
+- **CW-1 R1** (`2bf88b4`): 2 P2s (admission escapes the load screen; recovery state leaks across saves), and **the 3090 spikes look like real main-thread work** (renderer on-CPU, PSI ≤ 1% in 22/24). CW-1 is profiling them.
+
+### 2026-10-23 ~14:25Z — SCHED-2b accepted and merged; switch-over pending drain
+- **SCHED-2b** was accepted by Sol R4 (`review/sched-2b-r4` `0aad7f2`) after R1–R3. The real `any` and `4070` canaries ran at `b1aa462a`, which is identical in `scripts/heavy` and `alickers-job.sh` to merged root `ca36d15`.
+  - **Merged:** fast 1,381, build OK, economy OK; full suites on merged root SCHED-1 23/23, SCHED-2 16/16, SCHED-2b 27/27, policy 32/32.
+  - **Switch-over (review checklist):** builders are holding new submissions; a watcher waits for the queue to drain with no 2a supervisors or holders. Then: record versions and inodes, install, verify the guard refresh, run a short local and a short remote canary, and announce.
+  - **Release precondition:** `release-remote` only after the owner confirms the sandbox's processes are dead. Losing SSH alone isn't enough.
+- **REC-1 done** at `b65dfbbc` (built on CW-1); Sol R1 dispatched.
+- **TST-16 done** at `312b1be`; Sol R1 running. It adds swap and major-fault signals.
+  - **Correction:** the 4 run-A "contention" frames include 24–50 ms GC pauses, which is game allocation pressure. That's passed to CW-1.
+- **Fleet:** pinning was already done. Option A recommended to the owner (move Kopia, the proxy and interrupts to CPUs 0–3); B (isolcpus, host reboot) not now. The 3090 inventory gets updated.

@@ -349,6 +349,83 @@ test("GPU lease: the environment alone is no proof; the second worker's siltwake
   assert.equal(L.leaseProblem(env, "0::/system.slice/siltwake-job-42.scope/sub"), null);
 });
 
+// SCHED-2b: machine tags and the remote lane -----------------------------------
+
+test("lane eligibility: local paths outside the tree and uncommitted build outputs keep a job here", async () => {
+  const R = await import(pathToFileURL(resolve("scripts/heavy/remote.mjs")).href);
+  const wt = "/home/worker/wt";
+  assert.deepEqual(R.externalPaths(["node", "/work/tmp/x/derive.mjs", "--json=/work/results/pt.json"], wt), ["/work/tmp/x/derive.mjs", "/work/results/pt.json"]);
+  assert.deepEqual(R.externalPaths(["node", "/home/worker/wt/scripts/a.mjs", "sh", "-c", "cat /tmp/in > out"], wt), ["/tmp/in"]);
+  assert.deepEqual(R.externalPaths(["sh", "-c", "echo > /work/results/pack/a"], wt, ["/work/results/pack"]), [], "a declared --artifact is an output");
+  assert.deepEqual(R.builtOutputs(["node", ".test-build/scripts/playthrough/run.js"]), [".test-build"]);
+  assert.deepEqual(R.builtOutputs(["node", "scripts/soak/run.mjs", "tour", "--dist", "dist"]), ["dist"]);
+  assert.deepEqual(R.builtOutputs(["sh", "-c", "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy"]), [], "compiling inside the job is fine");
+  assert.deepEqual(R.builtOutputs(["npm", "run", "playthrough", "--", "--jobs", "3"]), []);
+});
+
+test("machine tags: defaults by class; exclusive is the 3090's; unknown tags refused", () => {
+  const m = (cls: string, extra = {}) => P.resolveRequest({ class: cls, ...extra }, { T: 4, M: 6144 }).goal?.machine;
+  assert.deepEqual([m("playthrough"), m("heavy-suite"), m("soak"), m("gpu"), m("quick"), m("exclusive")], ["any", "any", "soak", "3090", "3090", "3090"]);
+  assert.equal(m("gpu", { machine: "4070" }), "4070");
+  assert.match(P.resolveRequest({ class: "exclusive", machine: "4070" }, { T: 4, M: 6144 }).error, /exclusive measures the RTX 3090/);
+  assert.match(P.resolveRequest({ class: "quick", machine: "mars" }, { T: 4, M: 6144 }).error, /unknown machine/);
+});
+
+const remote = (state: string) => idle({ remote: { state } });
+function rt(id: string, cls: string, machine: string, opts: { at?: number; state?: string; remote?: boolean; ok?: boolean; fellBack?: boolean; worktree?: string } = {}) {
+  const t = ticket(id, cls, { ...(opts.at != null ? { at: opts.at } : {}), ...(opts.state ? { state: opts.state } : {}), ...(opts.worktree ? { worktree: opts.worktree } : {}) }) as Ticket & { remote?: boolean; fellBack?: object; goal: { machine: string; remoteOk: boolean; soak: boolean } };
+  t.goal = { ...t.goal, machine, remoteOk: opts.ok ?? true };
+  if (opts.remote) t.remote = true;
+  if (opts.fellBack) t.fellBack = { reason: "paused" };
+  return t;
+}
+const routed = (p: { admit: { id: string; remote?: boolean }[] }) => p.admit.map((a) => a.id + (a.remote ? "@4070" : ""));
+
+test("routing: any prefers alickers when its slot is free and runs here otherwise; 3090 never leaves", () => {
+  const s = stateOf(rt("a", "playthrough", "any"), rt("b", "playthrough", "any", { at: 1 }), rt("c", "gpu", "3090", { at: 2 }));
+  const sorted = (p: { admit: { id: string; remote?: boolean }[] }) => routed(p).sort();
+  assert.deepEqual(sorted(P.plan(s, 3, remote("up"), cfg)), ["a@4070", "b", "c"]); // one remote slot; b and c fit the 4 tokens here
+  const busy = P.plan(s, 3, remote("busy"), cfg); // another agent's direct call holds it
+  assert.deepEqual(sorted(busy), ["a", "c"]);
+  assert.equal(busy.blocked.b, "cpu", "b waits here like any local job");
+  assert.deepEqual(sorted(P.plan(s, 3, remote("unreachable"), cfg)), ["a", "c"]);
+  // A dirty tree can't be sent: any runs here.
+  assert.deepEqual(routed(P.plan(stateOf(rt("d", "playthrough", "any", { ok: false })), 3, remote("up"), cfg)), ["d"]);
+});
+
+test("routing: 4070 waits for alickers through busy, pause and outage, and is never run here", () => {
+  for (const [st, why] of [["busy", "remote"], ["paused", "remote-paused"], ["unreachable", "remote-down"], ["unknown", "remote-unknown"]]) {
+    const p = P.plan(stateOf(rt("g", "gpu", "4070")), 3, remote(st!), cfg);
+    assert.deepEqual(p.admit, [], st);
+    assert.equal(p.blocked.g, why);
+  }
+  const running = rt("r", "playthrough", "any", { state: "running", remote: true });
+  const p = P.plan(stateOf(running, rt("g", "gpu", "4070", { at: 1 })), 3, remote("up"), cfg);
+  assert.equal(p.blocked.g, "remote"); // our own job holds the slot
+  assert.equal(p.used.remote, 1);
+  assert.equal(p.used.tokens, 0, "a remote job takes nothing here");
+  assert.deepEqual(routed(P.plan(stateOf(rt("g", "gpu", "4070", { fellBack: true })), 3, remote("up"), cfg)), ["g@4070"], "a 4070 job goes back to alickers");
+});
+
+test("routing: soak goes to alickers first, here only while it is paused or unreachable; a fallen-back soak stays here", () => {
+  assert.deepEqual(routed(P.plan(stateOf(rt("s", "soak", "soak")), 3, remote("up"), cfg)), ["s@4070"]);
+  assert.equal(P.plan(stateOf(rt("s", "soak", "soak")), 3, remote("busy"), cfg).blocked.s, "remote");
+  assert.deepEqual(routed(P.plan(stateOf(rt("s", "soak", "soak")), 3, remote("paused"), cfg)), ["s"]);
+  assert.deepEqual(routed(P.plan(stateOf(rt("s", "soak", "soak", { fellBack: true })), 3, remote("up"), cfg)), ["s"]);
+});
+
+test("routing: the remote lane ignores local legacy, exclusive and memory states; a remote soak yields to a waiting 4070 job", () => {
+  const ex = ticket("x", "exclusive", { state: "running" });
+  const p = P.plan(stateOf(ex, rt("a", "playthrough", "any", { at: 1 }), ticket("q", "quick", { at: 2 })), 3, idle({ remote: { state: "up" }, legacy: { holder: true, waiter: false } }), cfg);
+  assert.deepEqual(routed(p), ["a@4070"]);
+  assert.equal(p.blocked.q, "legacy");
+  const soak = rt("s", "soak", "soak", { state: "running", remote: true });
+  const y = P.plan(stateOf(soak, rt("g", "gpu", "4070", { at: 1 })), 3, remote("up"), cfg);
+  assert.equal(y.blocked.g, "remote");
+  assert.deepEqual(y.preempt, ["s"]);
+  assert.deepEqual(P.plan(stateOf(soak, rt("a", "playthrough", "any", { at: 1 })), 3, remote("up"), cfg).preempt, [], "an any job just runs here");
+});
+
 test("config stalls: a class's default stall window, below its limit; an explicit --stall still wins", () => {
   const r = (o: object, stalls: object) => P.resolveRequest({ class: "playthrough", ...o }, { T: 4, M: 6144, stalls }).goal.stallS;
   assert.equal(r({}, {}), 900);
@@ -356,4 +433,12 @@ test("config stalls: a class's default stall window, below its limit; an explici
   assert.equal(r({ deadline: 1200 }, { playthrough: 2700 }), 2700, "a default is not clamped: the deadline still ends a silent job first, as 'deadline'");
   assert.equal(r({ stallS: 600 }, { playthrough: 2700 }), 600);
   assert.equal(P.resolveRequest({ class: "quick" }, { T: 4, M: 6144, stalls: { playthrough: 2700 } }).goal.stallS, 600, "other classes unchanged");
+});
+
+test("routing (R1-F5): a 4070 ticket backing off waits (remote-retry) and is never dropped or run here", () => {
+  const g = rt("g", "gpu", "4070", { fellBack: true }) as ReturnType<typeof rt> & { notBefore?: number };
+  g.notBefore = 10_000;
+  const p = P.plan(stateOf(g), 5_000, remote("up"), cfg);
+  assert.deepEqual([p.admit, p.blocked.g], [[], "remote-retry"]);
+  assert.deepEqual(routed(P.plan(stateOf(g), 10_001, remote("up"), cfg)), ["g@4070"]);
 });

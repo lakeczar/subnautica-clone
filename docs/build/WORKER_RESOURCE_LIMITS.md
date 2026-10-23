@@ -61,8 +61,6 @@ H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 
 **Exclusive is one measurement per ticket.** Submit each segment of a series (traversal segments, A/B variants) as its own ticket, all at once if you like; don't loop over them inside one job. After each exclusive run, the jobs that waited through it start before the next exclusive drains the lane (blocked reason `turn`), so a series never locks everyone else out.
 
-> **Soak verdicts are not evidence yet (coordinator, 2026-10-23).** The scheduler parts of SCHED-2a are accepted and installed. The soak *harness* (`scripts/soak/`) is still in review (R6, `bf7bcb1`: a verdict reducer is being rebuilt). Run soaks to explore, but don't cite a soak `pass` or `partial` as evidence until this note is removed.
-
 **Soaks take only leftover capacity:**
 - A soak starts only when nothing else is waiting. It never ages, and it never takes the express slot or the 10-minute reservation.
 - Its CPU runs at idle weight, so it never slows other jobs.
@@ -77,6 +75,37 @@ Options:
 - `--snapshot`: run on a private copy of the tree as submitted, so you can keep editing while the ticket waits and runs (below). In package scripts that queue themselves (`test:heavy`), set `HEAVY_SNAPSHOT=1`.
 - `--gpu`: for `soak` only.
 - `--no-test-build`: this job never reads the worktree's `.test-build` (GPU play from `dist`), so `npm test` there stays allowed while it runs.
+- `--machine any|3090|4070|soak`: where it runs (below, "Two machines").
+- `--artifact PATH` (repeatable): an output file or directory to bring back from alickers (below).
+
+**Two machines** (SCHED-2b; DIRECTION, "Two test machines"). The queue routes each job by its machine tag to factory-worker (RTX 3090) or the best-effort second worker `siltwake-alickers` (RTX 4070 Laptop):
+
+| Tag | Default for | Where it runs |
+| --- | --- | --- |
+| `any` | `playthrough`, `heavy-suite` | alickers when its one slot is free; otherwise here at once (never waits for it) |
+| `3090` | every other class | here only. `exclusive` is always 3090 |
+| `4070` | (ask for it) | alickers only. It waits through pauses and outages until its queue timeout, and is never faked here |
+| `soak` | `soak` | alickers first. It runs here only while alickers is paused or unreachable |
+
+- **Only a commit goes to alickers.** A dirty tree, or a command that names a local path outside the worktree (`/work/...`, `/tmp/...`; inputs would be missing, outputs left behind), runs here, and `--machine 4070` is refused with the reason. Put inputs in the commit. Declare outputs with `--artifact`:
+  - a relative path is in the job's directory in the sandbox checkout; an absolute path is on the sandbox;
+  - each one comes back **whole**, an evidence pack directory included, into `/work/tmp/<ticket>/<name>`, also when the job failed. Outputs are staged inside the sandbox's job lock, so another job can never replace them. The transfer is bounded and cancellable; a failed one is reported with where the staged copy waits on alickers;
+  - the result, the ledger and the final line list them with the machine and the tested commit. A fetch that failed is listed as such.
+- **`any` and `soak` never wait for alickers.** If its job lock is held (someone's direct `alickers-job.sh` call), or the sandbox hasn't admitted the job within 20 s of hand-over, the attempt is given up there (it can then never start) and the job runs here at once. `4070` jobs wait for the lock.
+- **Sandbox outages:** if alickers never admitted the job (busy, paused, its lock wait expired, unreachable, or the transport failed first), an `any` or `soak` job runs here instead, keeping its place (`status` marks it `here*`, the result has `fellBack`). A `4070` job waits again, backing off (`remote-retry`), until its queue timeout. A setup failure there (checkout, `npm ci`, an unclean tree) isn't an outage: `any` and `soak` run here, and a `4070` job fails with it. Once the job has started, its own exit codes pass through, 75 and 255 included. The queue learns these phases from the transport's receipt, never from output.
+- **Nothing runs twice.** Once a job has reached the sandbox, it runs anywhere else only after alickers confirms that attempt can't start or has stopped, its whole scope included (detached and TERM-ignoring processes are killed with the scope's cgroup). While alickers is unreachable the ticket keeps its place there; it doesn't run here meanwhile, and `cancel` waits too.
+- **A sandbox that is gone for good (coordinator only):** once the owner confirms it, `heavy-check release-remote <ticket> --reason "owner confirmed the sandbox is gone"` frees that ticket's reservation. It writes a cancelled (75), unbound result with the reason (`released`), records `remote-released` in the ledger, and ends the ticket's holder. The job isn't run here; resubmit it if needed. Nothing calls this automatically. Builders: ask the coordinator instead.
+- **Evidence from alickers is bound to the commit** only if the transport's receipt is valid and complete, its exit agrees with the transport's own, and the shared checkout's tracked files were exactly the commit before and after the job. The result records `dirtyAtAdmit` (`clean`, or `restored:<n>` tracked files left changed by an earlier job) and `changedDuringRun`. A job that changes tracked files isn't bound; the checkout is restored for the next one. A receipt that isn't valid binds nothing: an `any` or `soak` job reruns here, a `4070` job fails with 70.
+- **Goals there:** the stall clock starts at the `testing` line, so waiting for the sandbox's lock, `npm ci` and the transport don't count; the first compile (cold, because the transport clears `.test-build*` when the commit changes) does. The sandbox's `siltwake-job` sets MemoryHigh at 85% of its memory with no swap, so a job past it is **throttled**, not killed. The queue reports continuous throttling after 2 minutes and stops the job at its stall window (exit **123**, `throttled`); rerun with more `--mem` (up to 12 GiB).
+- **4070 frame times** are recorded, labelled "RTX 4070 Laptop (alickers, shared desktop host)", and flagged with a **WARNING** in a soak report when a frame rule would have failed. They are never judged. Memory, graphics, hold and save rules are judged there. Frame judgement stays with 3090 `exclusive` runs.
+- **`status`** shows alickers' state (`up`, `busy`, `paused`, `unreachable`) and a MACHINE column. Blocked reasons are `remote` (its slot is busy: a lane job, or someone's direct `alickers-job.sh` call), `remote-paused` and `remote-down`.
+
+```sh
+$H --class gpu --machine 4070 --artifact evidence-pack -- node my-4070-session.mjs   # writes evidence-pack/ in the checkout
+$H --class playthrough -- npm run playthrough -- --jobs 3 --quiet                     # any: alickers if free, else here
+```
+
+A command that reads build output a commit lacks (`node .test-build/…`, `--dist dist`) runs here: on alickers it must compile inside the job (`npm run playthrough` compiles first; `npm run test:heavy` already does). Compiling outside the queue and queueing only `node .test-build/…`, as below, stays the fastest form for a run here.
 
 Commands that `heavy-check` recognises (a playthrough, the heavy tier, the terrain bake, the large-cave lab bake) get their class without `--class`.
 
@@ -119,8 +148,8 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
   $H --class playthrough -- node .test-build/scripts/playthrough/run.js --scenario …
   ```
 
-  While iterating, run only the affected scenarios; run all five at handoff.
-- **The GPU guard is pending install** (coordinator, 2026-10-23): it's installed after the last pre-SCHED-2a tickets drain. Until then, enforcement is by the queue's `gpu`/`exclusive` classes only.
+  While iterating, run only the affected scenarios (a branch alone with `--from-library`); run them all at handoff.
+- **The GPU guard is installed** (2026-10-23 10:12Z, guard `073e8b0da3da`). Rerun `scripts/heavy/install.sh --gpu-guard` after any `npx playwright install`.
 - **The GPU lease covers every GPU driver.** Every Playwright Chrome on this machine is wrapped (`install.sh --gpu-guard`; the guard has its own install, so rolling the scheduler back or uninstalling it leaves the guard enforcing, and a missing guard refuses GPU launches): a launch that asks for the GPU (`--use-angle=gl-egl`, `--use-gl=…`, `--enable-gpu`, `--ignore-gpu-blocklist`, Vulkan) refuses to start unless it runs inside a `gpu`, `exclusive` or `soak --gpu` job. Software (SwiftShader) launches pass. Drivers may also call `requireGpuLease()` from `scripts/heavy/gpu-lease.mjs` for an earlier, clearer error.
   - **Outside the queue:** any process holding the NVIDIA device without a lease is shown by `status`, recorded in the ledger (`unleased-gpu`) and on any GPU job that shared the GPU with it. An exclusive run that shared the GPU is marked `DISTURBED`.
 - **Machine-readable results:** `wait --json` ends with one JSON line: `{"pending":true,…}`, or the full result with `code`, `label`, `stopReason` (`stalled`, `deadline`, `ceiling`, `oom`, `killed`, `cancelled`, `preempted`, `rejected` or null) and `evidence`. Use it to tell a pending `99` from a job's own.
@@ -152,7 +181,7 @@ A WSL2 Ubuntu sandbox on the owner's PC (`alickers`): **8 CPUs, 16 GB, no swap, 
 
 Keep factory-worker for evidence that must be on the 3090, and for anything needing the coordinator or provider logins.
 
-**Run a job** from any worktree on factory-worker:
+**Run a job through the queue** with `--machine` (above). `scripts/alickers-job.sh` is the queue's transport, and the documented fallback if the queue's lane is unavailable. Called directly, it runs from any worktree on factory-worker:
 
 ```sh
 scripts/alickers-job.sh [--sha SHA] [--deadline S] [--memory NG] -- COMMAND ...
@@ -165,11 +194,28 @@ scripts/alickers-job.sh --deadline 1800 -- npm run test:heavy
 - It tests a **commit**, by default this worktree's HEAD; uncommitted edits are not sent. A commit already on origin is fetched by the sandbox; a local-only commit is sent as a git bundle.
 - Inside the sandbox's job lock, it moves the shared checkout `/work/repos/subnautica-clone` to that commit and runs `npm ci` if the lockfile changed.
 - It prints `alickers-job: testing <sha>` first and `tested <sha> exit N` last. **Record that SHA with any result.**
+- Tracked files in the shared checkout are put back to the commit (`git checkout -f`) before the job, and after it if the job changed them. Untracked files stay, except compiled test output (`.test-build*`), which is removed when the commit changes or files were restored.
+- With `--receipt DIR` (the queue's lane uses it, with a nonce on stdin), the transport also writes its phases to `DIR/receipt` on the sandbox, each stamped with the nonce, in one order: admitted, the checked-out SHA, setup ok (and whether the tree was restored) or failed, started, the tree after the job, exit. Those lines, not its output, are what the queue trusts. `--no-wait` exits 75 at once if the sandbox's lock is held. The script's header describes both.
+- Its test overrides (`ALICKERS_SSH`, `ALICKERS_REPO`, `ALICKERS_TMP`, `ALICKERS_LOCK`) work only with `ALICKERS_TEST_MODE=1` and a private `SILTWAKE_SCHED_DIR`; otherwise they are ignored with a warning.
 
 **Rules:**
-- **Best-effort.** Exit **75** (paused by the owner, or the queue wait expired) or **255** (unreachable) means **rerun the job on factory-worker** through `scripts/heavy-check.sh`. Never restart Windows, change host settings, run `wsl --shutdown`, or try to bring the sandbox up yourself.
+- **Best-effort.** Exit **75** (paused by the owner, the queue wait expired, or busy with `--no-wait`) or **255** (unreachable) means **rerun the job on factory-worker** through `scripts/heavy-check.sh`. Never restart Windows, change host settings, run `wsl --shutdown`, or try to bring the sandbox up yourself.
 - **Browsers** use `executablePath: "/usr/local/bin/siltwake-chrome"`. It runs Chrome Stable headless under a private Xvfb, on the 4070. Read and follow `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md`. **Everything stays inside Linux:** never use the Windows desktop, cursor, focus, a Windows browser or a Windows-rendered preview. Use a separate profile per job, and close what you open.
 - **Artifacts** go in `/work/results/<name>` or `/work/tmp`. Fetch them with `ssh -F ~/.ssh/siltwake.conf siltwake-alickers cat /work/results/<file> > /work/tmp/<file>`.
 - **Performance numbers** from the sandbox are labelled **"RTX 4070 Laptop (alickers, shared desktop host)"**. The Windows host can be in use, so treat them as indicative, never as the 3090's exclusive-mode evidence. Functional evidence (play, screenshots, passes) counts like any other run at the recorded SHA.
 - **One job at a time** on the sandbox, and the checkout is shared. Don't leave long interactive sessions holding it, and don't edit files there; everything comes from commits.
 - **Coordination, provider logins and GitHub pushes stay on factory-worker.** The sandbox has no logins.
+
+## Shared save library (SAVE-1, 2026-10-23)
+
+Don't derive late saves in your own job. After each root merge the coordinator runs `scripts/saves-export.sh` on root: the whole playthrough runs on siltwake-alickers (factory-worker's queue if it is paused), and every bot-earned save lands, read-only, in **`/work/tmp/siltwake-saves/<sha>/`** on factory-worker, shared by every worktree. Kinds include pod start, the Dart, the Creel at 350 m, the Rift at 450 m, the 800 m Creel, the carrier fit-out, the pre-ending of both routes, low air, a damaged hull, a lost craft, a depleted battery, minimum gear and over-geared in the Canopy, and the tour-ready Dart. The details are in [the playthrough README](../../scripts/playthrough/README.md#save-library-save-1).
+
+```sh
+npx tsc -p scripts/playthrough/tsconfig.json                 # light; from your checkout
+node .test-build/scripts/playthrough/saves.js pick creel-350  # prints the save's path
+npm run playthrough -- --scenario carrier --from-library      # a branch without its parent's replay
+```
+
+- **Light:** `pick`, `list` and `verify` are light work; run them directly. `verify` and `import` compile a build of the commit when needed, which takes about 5 s. Exporting is a playthrough: only through `scripts/saves-export.sh`, which runs it from an archive build of the pinned SHA, on the second worker or through the queue.
+- **Compatibility:** the newest export at your commit or one of its ancestors, with this build's schema and content versions (or the schema 5 bridge), that this build decodes. Anything else is refused with the reason (exit 3), never swapped for another save. Record the save's commit (stderr, or `--json`) with your evidence.
+- **On the second worker:** exports run there keep their copy in the same place, `/work/tmp/siltwake-saves`, so a job there finds every commit exported there. A commit exported on factory-worker isn't there; `pick` then refuses, and you copy the save you need in with the job.
