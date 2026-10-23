@@ -133,7 +133,13 @@ test("P3-C: the Apron hollow's whole oracle scene builds (shell, validated colla
     const r = probe(variants[v], { poses: 3000, moves: 1000, columns: 600, sights: 400, seed: 3 });
     console.log(v, JSON.stringify({ clearance: r.clearance, moves: r.moves, protected: r.protected }));
     assert.equal(r.clearance.spurious, 0, `${v}: blocked without art`);
-    assert.equal(r.moves.spurious, 0, `${v}: stops without art`);
+    // The heightfield variant keeps today's rock boxes, which stop a move
+    // here and there with no art on its path (so does the columns control,
+    // the same boxes): it may stop nowhere the columns don't. The shell
+    // stops only on art.
+    const stops = (x: typeof r): string[] => x.examples.filter(e => /no art on the path/.test(e.kind)).map(e => JSON.stringify(e.at));
+    if (v === "shell") assert.equal(r.moves.spurious, 0, `${v}: stops without art`);
+    else assert.deepEqual(stops(r).filter(k => !stops(columns).includes(k)), [], `${v}: stops without art where the columns don't`);
     assert.equal(r.moves.endIllegal, 0, `${v}: ${JSON.stringify(r.examples.filter(e => e.kind.startsWith("new move ends")).slice(0, 3))}`);
     assert.deepEqual(r.protected.newlyBlocked.filter(id => !columns.protected.newlyBlocked.includes(id)), [], `${v}: newly blocked protected`);
     if (v === "heightfield") assert.ok(r.clearance.oldClearNewBlocked <= columns.clearance.oldClearNewBlocked, `${r.clearance.oldClearNewBlocked} vs ${columns.clearance.oldClearNewBlocked}`);
