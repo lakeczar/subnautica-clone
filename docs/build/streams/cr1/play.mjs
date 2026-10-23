@@ -140,7 +140,19 @@ async function waitFor(ready, look, limit = 120) {
 /** Fly the planned legs, park, and step out (hold X). */
 async function flyAndExit(plan) {
   if (plan.mode === "piloting") {
-    for (const [i, q] of (plan.route ?? []).entries()) await goto(q, { tol: 3, label: `leg ${i}`, timeout: 180 });
+    // Steer the cleared legs in short steps, so the hull keeps to the swept line; on a stall, lift 5 m and go on.
+    let from = pos(await read());
+    for (const [i, q] of (plan.route ?? []).entries()) {
+      const n = Math.max(1, Math.ceil(Math.hypot(q.x - from.x, q.y - from.y, q.z - from.z) / 15));
+      for (let k = 1; k <= n; k++) {
+        const step = { x: from.x + (q.x - from.x) * k / n, y: from.y + (q.y - from.y) * k / n, z: from.z + (q.z - from.z) * k / n };
+        if (await goto(step, { tol: 3, label: `leg ${i}.${k}`, timeout: 60 }) === "stalled") {
+          const p = pos(await read()); await goto({ ...p, y: p.y + 5 }, { tol: 1.5, label: "lift", timeout: 15 });
+          await goto(step, { tol: 3, label: `leg ${i}.${k} again`, timeout: 60 });
+        }
+      }
+      from = q;
+    }
     await page.keyboard.down("KeyX"); await page.waitForTimeout(700); await page.keyboard.up("KeyX"); await page.waitForTimeout(1200);
     const s = await read(); eye = s.cam[1] + s.depth; result.scenes[scene].notes.exited = { at: pos(s), vitals: s.vitals };
   }
@@ -153,7 +165,7 @@ async function approach(name, crossing, look, windowId, before = []) {
   await flyAndExit(plan);
   for (const [i, q] of before.entries()) await goto(q, { tol: 2, label: `before ${i}`, timeout: 40 });
   await shot("arrived-watching");
-  const waited = await waitFor((t) => windowOpen(windowId, t) && windowSample(windowId, t).elapsed > 2, look);
+  const waited = await waitFor((t) => windowOpen(windowId, t) && windowSample(windowId, t).elapsed > 0.3, look);
   result.scenes[scene].notes.waited = waited; await shot("window-open");
   await key("ShiftLeft", true);
   for (const [i, q] of crossing.entries()) { await goto(q, { tol: 2, label: `cross ${i}`, keep: ["ShiftLeft"], timeout: 60 }); if (q.dwell) { await releaseAll(); await watch(q.dwell, look); await key("ShiftLeft", true); } }
@@ -238,8 +250,9 @@ const SCENES = {
   async "approach-meridian"() {
     const h = homeOf("district_choir_gallery");
     // From the parking point 45 m south: down outside the reach, then straight through the bells and out the north side.
-    await approach("meridian", [{ x: h.x, y: h.y + 1.5, z: h.z - 26 }, { x: h.x, y: h.y + 1.5, z: h.z + 26 }, { x: h.x, y: h.y + 1.5, z: h.z + 44 }], { ...h, y: h.y + 2 }, "hollow_choir",
-      [{ x: h.x, y: h.y + 4, z: h.z - 45 }]);
+    // Wait outside the bells' reach (46 m); go the moment they close, 4 m over the gallery floor.
+    await approach("meridian", [{ x: h.x, y: h.y + 4, z: h.z + 30 }, { x: h.x, y: h.y + 4, z: h.z + 48 }], { ...h, y: h.y + 2 }, "hollow_choir",
+      [{ x: h.x, y: h.y + 4, z: h.z - 48 }]);
   },
   async "approach-canopy"() {
     // The Dart as the bot left it on the Reef → Canopy route; on to the approach ring, watch, then on to the lab.
@@ -248,7 +261,7 @@ const SCENES = {
     await load("approach-canopy"); await shot("native-start");
     const route = CANOPY_BASIN_ROUTE.upper.map((p) => ({ ...p })), here = pos(await read());
     let i = route.reduce((b, q, k) => Math.hypot(q.x - here.x, q.z - here.z) < Math.hypot(route[b].x - here.x, route[b].z - here.z) ? k : b, 0);
-    for (; i < route.length && Math.hypot(route[i].x - THREAT_HOME.x, route[i].z - THREAT_HOME.z) > 110; i++) await goto(route[i], { tol: 3, label: `upper#${i}` });
+    for (; i < route.length && Math.hypot(route[i].x - THREAT_HOME.x, route[i].y - THREAT_HOME.y, route[i].z - THREAT_HOME.z) > 100; i++) await goto(route[i], { tol: 3, label: `upper#${i}` });
     await shot("at-the-approach-ring");
     result.scenes[scene].notes.waited = await waitFor((t) => windowSample("canopy_sound_hunter", t).phase === "away", { ...THREAT_HOME });
     await shot("hunter-gone-to-feed");

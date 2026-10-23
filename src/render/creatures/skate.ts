@@ -55,6 +55,9 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
     b.face([[0, 0, -2.4], [3.3, 0, 0.1], [0, 0, 1.9], [-3.3, 0, 0.1]], "#13242b");
     b.face([[0, 0.002, -1.9], [2.6, 0.002, 0.1], [0, 0.002, 1.5], [-2.6, 0.002, 0.1]], "#0d1a20");
     b.tube([[0, 0.01, 1.9], [0, 0.01, 3.4], [0.15, 0.01, 4.5]], 0.08, "#13242b", 4);
+    // The back and both wingtips just break the surface: low humps that read at a grazing angle.
+    b.ellipsoid([0, 0, -0.2], [0.9, 0.22, 1.6], "#1b3038", 8);
+    for (const side of [-1, 1]) b.ellipsoid([side * 2.9, 0, 0.15], [0.35, 0.12, 0.5], "#1b3038", 6);
   }, parts.world, 0);
   let rest = 0;
   let curl = 0, sweep = 0, dimpleScale = 0, bulge = 0, last = 0;
