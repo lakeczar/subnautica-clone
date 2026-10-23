@@ -31,7 +31,15 @@ All on factory-worker's RTX 3090 (ANGLE GL-EGL, Chrome 156 headless) through the
 
 **Recorder overhead (exclusive, RTX 3090, `67e8394d`),** the same 120 s of CW-1's segment 0 from the same save, modes interleaved over two rounds, each with the same rAF probe:
 
-OVERHEAD_TABLE
+| Mode | What runs it | Gap p50 / p99 Δ | Frames over 33 ms | Recorder self-time, mean a frame (by part) |
+| --- | --- | --- | --- | --- |
+| off | – | – | 0 | – |
+| perf: recorder, snapshots, no video | exclusive performance runs | 0 / 0 | 9 | **0.070 ms** (rows 0.057, sampling 0.010, snapshots 0.001) |
+| screencast video | functional runs, soaks | 0 / 0 | 2 | **0.048 ms** (the video is the browser's, outside the page) |
+| in-game video | – | 0 / 0 | 10 | **0.110 ms** (video 0.031) |
+| owner playtest, as a static host serves it (not isolated; video and spool) | owner playtests | 0 / 0 (vs 9 off) | 5 | **0.078 ms** (rows 0.041, video 0.025, sampling 0.009, spool 0.003) |
+
+Isolated modes: ticket `261023-123448-7658`; the owner path: `261023-123455-1459` (off against playtest, 2 × 2 runs). The game's own work moved by −0.13 to +0.70 ms between modes, inside its own round-to-round spread (off alone: 3.3 to 4.2 ms mean), so the self-timed figure is the cost: **well under 1% of a frame in every mode (0.3–0.7%).** Both tickets ran with the scheduler's warning "DISTURBED by work outside the lane" (CPU pressure up to 50% from other work on the host; some of it, in the first, mine), so these are the numbers with that caveat. The full playtest check (load and export included) self-timed 0.18 ms mean, 8.4 ms at its worst frame.
 
 **Real traversal packs (`2bf9b14e`):** CW-1's segment 0 (55 points, the reef's caves), its save, ordinary keys, recorded with the screencast video.
 
