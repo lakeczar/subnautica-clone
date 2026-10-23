@@ -31,7 +31,8 @@
 //   steal          the hypervisor took ≥ stealPct of the machine's CPU in a window
 //   GPU            a GPU client outside the lease shared the GPU (holder.mjs)
 //   unmeasured     coverage was missing (above), or the job was recovered
-//   boost          the job didn't run in the boosted exclusive slice (below)
+//   boost          the job didn't run in the boosted exclusive slice (below), or
+//                  that slice was CPU-throttled (its cpu.stat, start to end)
 // Thresholds: config.json `disturbed` over DISTURBED_DEFAULTS.
 //
 // Priority (R4 redesign; nothing is set at runtime). Exclusive jobs run in
@@ -101,7 +102,8 @@ export function parseCounters(text) {
     jobMajflt: v("job_majflt"), jobSwapIns: v("job_swapins"), jobUsec: v("job_usec"),
     h: stat ? statLine(stat.trim().split(/\s+/).map(Number)) : null,
     vm: { pswpin: v("pswpin"), pswpout: v("pswpout"), pgmajfault: v("pgmajfault") },
-    slice: { path: line("slice_path"), weight: line("slice_weight"), cpuMax: line("slice_cpu_max"), memoryMax: line("slice_memory_max"), swapMax: line("slice_swap_max") },
+    slice: { path: line("slice_path"), weight: line("slice_weight"), cpuMax: line("slice_cpu_max"), memoryMax: line("slice_memory_max"), swapMax: line("slice_swap_max"),
+      nrThrottled: v("slice_nr_throttled"), throttledUsec: v("slice_throttled_usec") },
   };
 }
 
@@ -182,6 +184,7 @@ export function judge({ start, end, points = [], nproc, thresholds = {}, windowS
   if (gpuShared.length) reasons.push(`the GPU was shared outside the lease (pid ${gpuShared.map((u) => u.pid).join(", ")})`);
   // A run that should have had the exclusive CPU priority and didn't is not boosted evidence.
   if (boost && boost.status !== "applied") reasons.push(`the job didn't run in the boosted slice ${boost.slice} (${boost.why ?? boost.status}): not boosted evidence`);
+  if (boost?.throttled?.periods > 0) reasons.push(`the exclusive slice was CPU-throttled ${boost.throttled.periods} time(s), ${boost.throttled.ms} ms in all, during the run`);
   if (missing.length) reasons.push(`unmeasured: ${missing.join("; ")}`);
   return {
     v: 2, measured: missing.length === 0, missing, windowS, points: good.length, measuredS: whole ? round2((whole.to - whole.from) / 1000) : 0,

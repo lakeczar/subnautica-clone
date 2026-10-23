@@ -316,6 +316,9 @@ if (placement) {
   const want = { slice: cfg.exclusiveSlice, weight: String(cfg.exclusiveCpuWeight), cpuMax: `${w.cpuQuotaPct * 1000} 100000`, memoryMax: String(w.memoryMaxMiB * 1048576), swapMax: "0" };
   const wrong = !placement.ready ? [placement.why] : [...new Set([...sliceMismatch(counters.start, want).map((m) => `at the start: ${m}`), ...sliceMismatch(counters.end, want).map((m) => `at the end: ${m}`)])];
   boost = wrong.length ? { slice: cfg.exclusiveSlice, status: "unavailable", why: wrong.join("; ") } : { slice: cfg.exclusiveSlice, weight: cfg.exclusiveCpuWeight, status: "applied" };
+  // Throttling of that slice between the two readings (its quota bit): corroborates the endpoint readings (R6).
+  const a = counters.start?.slice, b = counters.end?.slice;
+  if (a?.nrThrottled != null && b?.nrThrottled != null) boost.throttled = { periods: b.nrThrottled - a.nrThrottled, ms: Math.round((b.throttledUsec - a.throttledUsec) / 1000) };
   if (wrong.length) note(`no CPU priority for this exclusive run: ${boost.why}`);
 }
 const contextResult = !exclusive || rejected ? null : judge({

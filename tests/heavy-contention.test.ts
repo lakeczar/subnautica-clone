@@ -74,7 +74,10 @@ test("a run that didn't get the exclusive slice's CPU priority is not boosted ev
   const off = judge(series(quiet(10)), { boost: { slice: "x.slice", status: "unavailable", why: "x.slice is not installed (not-found)" } });
   assert.equal(off.disturbed, true);
   assert.match(off.reasons.join(), /the job didn't run in the boosted slice x\.slice \(x\.slice is not installed \(not-found\)\): not boosted evidence/);
-  assert.equal(judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied" } }).disturbed, false);
+  assert.equal(judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied", throttled: { periods: 0, ms: 0 } } }).disturbed, false);
+  const throttled = judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied", throttled: { periods: 3, ms: 41 } } });
+  assert.equal(throttled.disturbed, true);
+  assert.match(throttled.reasons.join(), /the exclusive slice was CPU-throttled 3 time\(s\), 41 ms in all/);
 });
 
 test("R5-F1: the live slice reading decides the priority, never the path: a default slice with the right name, or a wrong cap, is a mismatch", () => {

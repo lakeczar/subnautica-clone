@@ -416,7 +416,7 @@ test("S17 (TST-16): an exclusive job runs in the exclusive slice, whose fixed we
   const w = waitFor(c, x);
   assert.equal(w.code, 0);
   const ctx = result(c, x).context, dir = join(c.sched, "jobs", x);
-  assert.deepEqual(ctx.boost, { slice, weight: 10000, status: "applied" });
+  assert.deepEqual(ctx.boost, { slice, weight: 10000, status: "applied", throttled: { periods: 0, ms: 0 } });
   assert.equal(ctx.reasons.some((r) => /boosted slice/.test(r)), false);
   assert.match(w.err, new RegExp(`CPU priority in ${slice.replace(/\./g, "\\.")} \\(weight 10000\\)`));
   assert.deepEqual([ctx.v, ctx.measured, ctx.missing], [2, true, []], JSON.stringify(ctx));
@@ -516,7 +516,7 @@ test("S22 (TST-16): install writes the exclusive slice's unit once; a rollback t
   assert.equal(bash(join(oldTree, "scripts", "heavy", "install.sh")).status, 0);
   assert.equal(current(), old);
   assert.equal(waitFor(c, x).code, 0);
-  assert.deepEqual(result(c, x).context.boost, { slice, weight: 10000, status: "applied" }, "it kept its priority to its end");
+  assert.deepEqual(result(c, x).context.boost, { slice, weight: 10000, status: "applied", throttled: { periods: 0, ms: 0 } }, "it kept its priority to its end");
   await until("the slice is empty", () => sliceEmpty(slice), 15000);
   // The old version then runs its own exclusive job, in the lane's slice as before; nothing is left over.
   const o = oldHc(["submit", "--class", "exclusive", "--", "true"]).out.trim();
@@ -582,3 +582,43 @@ exit $rc
   assert.equal(result(c, y).context.disturbed, true);
 });
 
+
+test("S24 (TST-16 R6): the exclusive slice's unit is never removed or rewritten while the slice holds processes, also when systemd can't be asked", async () => {
+  const c = context("excl-inuse", { config: fast });
+  const home = join(c.dir, "home"), slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE;
+  const unitFile = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, "systemd", "user", slice);
+  const install = (args = [], extra = {}) => spawnSync("bash", [join(here, "install.sh"), ...args], { env: { ...c.env, SILTWAKE_SCHED_HOME: home, ...extra }, encoding: "utf8" });
+  assert.equal(install().status, 0);
+  const before = readFileSync(unitFile, "utf8");
+  // A process in the slice (as an exclusive job's would be), with no ticket running.
+  const unit = `sched1test-inuse-${c.n}`;
+  const p = spawn("systemd-run", ["--user", "--scope", "--quiet", "--collect", `--slice=${slice}`, `--unit=${unit}`, "sleep", "60"], { stdio: "ignore" });
+  try {
+    await until("in the slice", () => !sliceEmpty(slice), 10000);
+    // Removal: refused by the normal query, and by a failing one (fail closed).
+    let r = install(["--remove-exclusive-slice"]);
+    assert.equal(r.status, 3);
+    assert.match(r.stderr, /holds processes, or that could not be established/);
+    const d = join(c.dir, "shim");
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, "systemctl"), `#!/bin/bash\nif [[ "$*" == *" show "*"${slice}"* ]]; then echo "Failed to connect to bus" >&2; exit 1; fi\nexec /usr/bin/systemctl "$@"\n`, { mode: 0o755 });
+    r = install(["--remove-exclusive-slice"], { PATH: `${d}:${process.env.PATH}` });
+    assert.equal(r.status, 3, "a failed query is not an empty slice");
+    assert.ok(existsSync(unitFile));
+    // A reinstall that would change the unit (another pool size) is refused while it's in use; nothing changes.
+    writeFileSync(join(c.sched, "config.json"), JSON.stringify({ ...fast, poolMiB: 4096 }));
+    r = install();
+    assert.equal(r.status, 3);
+    assert.match(r.stderr, new RegExp(`not installed: ${slice.replace(/\./g, "\\.")} would change while it holds processes`));
+    assert.equal(readFileSync(unitFile, "utf8"), before);
+    r = install([], { PATH: `${d}:${process.env.PATH}` });
+    assert.equal(r.status, 3, "nor when that can't be established");
+  } finally { spawnSync("systemctl", ["--user", "stop", `${unit}.scope`], { stdio: "ignore" }); p.kill(); }
+  await until("empty", () => sliceEmpty(slice), 10000);
+  let r = install();
+  assert.equal(r.status, 0, r.stderr);
+  assert.notEqual(readFileSync(unitFile, "utf8"), before, "rewritten once idle");
+  r = install(["--remove-exclusive-slice"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(existsSync(unitFile), false);
+});

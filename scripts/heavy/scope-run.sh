@@ -74,6 +74,7 @@ counters() {
     p=$(dirname "$cg")
     echo "slice_path $p"; echo "slice_weight $(cat "$p/cpu.weight" 2>/dev/null)"; echo "slice_cpu_max $(cat "$p/cpu.max" 2>/dev/null)"
     echo "slice_memory_max $(cat "$p/memory.max" 2>/dev/null)"; echo "slice_swap_max $(cat "$p/memory.swap.max" 2>/dev/null)"
+    sed -n 's/^nr_throttled /slice_nr_throttled /p; s/^throttled_usec /slice_throttled_usec /p' "$p/cpu.stat" 2>/dev/null
   } >"$jobdir/$1.tmp" 2>/dev/null && mv "$jobdir/$1.tmp" "$jobdir/$1"
 }
 counters counters-start

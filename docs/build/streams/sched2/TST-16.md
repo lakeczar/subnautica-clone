@@ -18,12 +18,23 @@ Four review rounds each found another lifetime race in one mechanism: changing a
 - **Deleted:** `handover.mjs`, the boost journal (`state.boost`), the freeze (`state.frozen`), the backstop, the runtime setter and read-back, `install.sh --rollback` and the thaw. Rollback is back to its pre-TST-16 form.
 - **R4's findings** (F1 freeze ownership across installer operations, F2 a reset outliving a killed handover, F3 freeze visibility) concern only that machinery, so they are removed with it. The diff is much smaller.
 
+## R6 review responses
+
+Review `867fd6e9` on `review/tst-16-r6`, on `b10aa825`: one P2, one P3.
+- **F1 (P2): removal took a failed query for an empty slice.** `install.sh` discarded the status of `systemctl show -p ControlGroup`.
+  - **One check, reused:** `state.mjs`'s fail-closed population logic, generalised as `unitPopulated(name)` (`scopePopulated` now calls it). A failed query, or an active unit whose cgroup can't be read, counts as in use; only a conclusive not-found or an empty cgroup counts as empty. `--remove-exclusive-slice` uses it, and refuses with "holds processes, or that could not be established".
+  - **S24:** with a process in the slice and no ticket running, the normal query refuses, and so does a query a `systemctl` shim makes fail. On `b10aa825` the failing query removed the unit.
+- **F2 (P3): two endpoint readings can't see a property changed and restored mid-run.**
+  - **Docs scoped:** properties are verified at the payload's start and end. A change restored in between can be missed, so no config change or reinstall during a measurement.
+  - **The supported path is closed** (coordinator's addition 1): `install.sh` refuses to rewrite the exclusive unit while that slice is populated, using the same fail-closed check, before anything else is switched, so a refusal changes nothing. **S24:** a reinstall with another pool size is refused while the slice is in use, leaving the unit unchanged, and also when the query fails; once idle, the reinstall rewrites it.
+  - **Corroboration** (coordinator's addition 2): `scope-run.sh` records the slice's `cpu.stat` `nr_throttled` and `throttled_usec` at both readings. The result carries the deltas (`boost.throttled`), and any throttling of the exclusive slice is `DISTURBED`, with the reason. A unit test covers the reason; S17 and S22 record zero throttling on ordinary runs.
+
 ## R5 review responses
 
 Review `430a2ec0` on `review/tst-16-r5`, on `40fdc202`: one P2. The static design was confirmed.
 - **F1, uninstall could remove the unit after a holder's readiness check and before its launch.** `systemd-run --slice` then created a default slice (weight 100, no caps), and the result still claimed `applied`, because only the path name was checked. Two fixes, no new protocol:
   - **The unit's lifetime:** `--uninstall` now leaves the inert unit file; it does nothing without jobs. A separate `--remove-exclusive-slice` removes it, and refuses unless no ticket is running and the slice is empty. It checks and removes inside one state transaction, so no admission can come between them.
-  - **The live slice, not the path:** `scope-run.sh` reads the slice its scope actually runs in from `/sys/fs/cgroup` (`cpu.weight`, `cpu.max`, `memory.max`, `memory.swap.max`) just before the payload starts and again after it ends, into the counter snapshots. The holder compares both readings with the unit's properties (the same `sliceLimits` computation `install.sh` uses). Any mismatch means `unavailable` and `DISTURBED`, with the reason. So whole-run evidence rests on the kernel's real properties.
+  - **The live slice, not the path:** `scope-run.sh` reads the slice its scope actually runs in from `/sys/fs/cgroup` (`cpu.weight`, `cpu.max`, `memory.max`, `memory.swap.max`) just before the payload starts and again after it ends, into the counter snapshots. The holder compares both readings with the unit's properties (the same `sliceLimits` computation `install.sh` uses). Any mismatch means `unavailable` and `DISTURBED`, with the reason. So the evidence rests on the kernel's real properties at the payload's start and end, corroborated by the slice's throttle counters between them (R6).
 - **S23:** the reviewer's interleaving. A `systemctl` shim lets the readiness check pass, then removes the unit and stops the slice before the launch. The job's path still names the slice, but it ran at weight 100 with no caps and no swap limit, so it's `unavailable` and `DISTURBED`, and the final line says so. A slice with the right weight but a 4 GiB memory cap is a mismatch too. On `40fdc202`, S23 fails with `applied`.
 - **S22:** uninstall leaves the unit. `--remove-exclusive-slice` refuses while a ticket runs, and removes the unit once it's done.
 - **Unit test:** `sliceMismatch` covers the default slice, wrong caps, the wrong slice and a missing reading.
@@ -117,7 +128,7 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
 
 ## Checks
 
-- **Unit tests** (`tests/heavy-contention.test.ts`, 8, including a run without the slice's priority and the live-slice mismatch):
+- **Unit tests** (`tests/heavy-contention.test.ts`, 8, including a run without the slice's priority, throttling and the live-slice mismatch):
   - the CW-1 case (host memory "full" 32% with the job unstalled is clean, and recorded);
   - every reason with its value, and host swap and other CPU recorded but not judged;
   - the tail merge;
@@ -136,8 +147,9 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
     - the old version then runs its own exclusive job in the lane's slice, with nothing left over;
     - uninstall leaves the inert unit; `--remove-exclusive-slice` refuses while a ticket runs, and removes it once done (R5).
   - **S23 (R5-F1):** a unit removed between readiness and launch (a default slice under the right name), and a wrong memory cap: `unavailable`, `DISTURBED`, judged on the live slice reading.
+  - **S24 (R6):** neither removal nor a changing reinstall happens while the slice holds processes, also when systemd can't be asked.
   - **SCHED-1 test 7** checks the job's own measurement.
-- **Full suites** on the merged branch (root `91dc1ab` with this work), after R5: SCHED-1 **23/23**, SCHED-2 **23/23** (S23 new), SCHED-2b **27/27**, fast tier **1,405/1,405**. No units, slices, unit files or drop-ins left behind.
+- **Full suites** on the merged branch (root `91dc1ab` with this work), after R6: SCHED-1 **23/23**, SCHED-2 **24/24** (S24 new), SCHED-2b **27/27**, fast tier **1,405/1,405**. No units, slices, unit files or drop-ins left behind.
 
 ## Validation (CW-1 segment 7, run A)
 

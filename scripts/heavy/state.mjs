@@ -136,8 +136,12 @@ export function systemctl(...args) {
  * (deactivating) scope is not empty, and any query failure counts as
  * populated, so a reservation is never freed on a guess.
  */
-export function scopePopulated(unit) {
-  const r = systemctl("show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", `${unit}.scope`);
+export function scopePopulated(unit) { return unitPopulated(`${unit}.scope`); }
+/** Whether a unit (a scope, a slice) holds processes, failing closed: a failed
+ * query, or an active unit whose cgroup can't be read, counts as populated;
+ * only a conclusive not-found or an empty cgroup counts as empty. */
+export function unitPopulated(name) {
+  const r = systemctl("show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", name);
   if (r.status !== 0) return true;
   const p = Object.fromEntries(r.stdout.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
   if (p.LoadState === "not-found") return false;
