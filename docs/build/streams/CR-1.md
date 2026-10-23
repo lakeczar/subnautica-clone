@@ -96,13 +96,13 @@ Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `fa35339` (C4, CA-3, 
 | **Not built:** a trap model in the world, breeding tanks, light jars. | A later stream. | The trap shows only in the Base panel. |
 
 ## Checks
-The gate ran at `7515e1d` (root `fa35339` merged, UX-1 included; one `hud.ts` conflict, with both the fauna verbs and the carrier station verbs kept). The heavy tier and playthrough ran at `de3d4f6`. Since then, CR-1 changed only render art (the CRE-05 outline, `brineSheetY`), evidence drivers and this page. Root brought UX-1.
+The gate ran at `7515e1d` (root `fa35339` merged, UX-1 included; one `hud.ts` conflict, with both the fauna verbs and the carrier station verbs kept). The heavy tier and playthrough ran on the second worker at `de3d4f6`, then again at `40c18d6` after the UX-1 merge, with identical results.
 - **`npm run test:fast`:** 1,317/1,317 pass at `7515e1d`. `enc-1-readable-threats` is over TT-1's 5 s target (6.1 s, warning; it fails at 10 s). It costs the same on a clean root export, so CR-1 didn't cause it. That includes `cr-1-creatures` (12 tests) and CB-2's `creature-lore` comparing my composed rows. The covered behaviour:
   - **Windows:** each one exists, the worst wait is about a minute or less, and each opens long enough to cross. The CRE-03, CRE-04 and CRE-05 tests are above.
   - **Conservation:** catching by hand and by net, regrowth to the cap, cooking ratios, trap catch, cap and emptying (through a save), feed once per crop.
   - **Protection:** protected species are never harvested; nothing loops; no source feeds more than 8 meals an hour.
   - **Saves:** a pre-CR-1 save loads with New Game's grounds and empty traps.
-- **`npm run test:heavy`** on the second worker at `de3d4f6`: 60 files, 455/455 pass. `cr-1-creatures.heavy` (6.2 s) covers:
+- **`npm run test:heavy`** on the second worker: 61 files, 456/456 pass at `40c18d6` (60 files, 455/455 at `de3d4f6`). `cr-1-creatures.heavy` (6.2 s) covers:
   - an animal engaged when its window opens breaks off, and nothing strikes inside the window;
   - afterwards the first harm comes at least `WARNING_LEAD` after a fresh alert;
   - a loud, lit diver crossing inside each window at 2 m/s is never struck;
@@ -113,7 +113,7 @@ The gate ran at `7515e1d` (root `fa35339` merged, UX-1 included; one `hud.ts` co
   - the unswept round path is open water the whole way.
 - **`npm run build`:** OK at `7515e1d`.
 - **Economy scripts:** `check-campaign-economy`, `check-m1-economy`, `check-m2-a-economy`, `check-m2-b1-economy`, `check-progression-curve` and `upgrade-economy` all exit 0 at `7515e1d`.
-- **`npm run playthrough`** on the second worker at `de3d4f6`, run whole (`--jobs 3`): all five scenarios complete with no blockers, and every milestone reload matched:
+- **`npm run playthrough`** on the second worker at `de3d4f6` and again at `40c18d6`, run whole (`--jobs 3`): all five scenarios complete with no blockers, and every milestone reload matched:
 
   | Scenario | Play time | Saves |
   | --- | --- | --- |
