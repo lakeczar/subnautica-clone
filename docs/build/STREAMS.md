@@ -429,3 +429,25 @@ Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the f
   - CW-1: 8 segments at 1080p, `Infinity`-finish counting, pack-hash rejection, mast and seam shots;
   - CR-1: visible skate rest, out-of-view laying swap, continuous approaches, the hunter sight line.
 - **Next:** MEM-1 (Sol), after CW-1 merges; it measures RAM and VRAM on the 3090 and the 4070.
+
+### 2026-10-23 ~03:30Z — REC-1 approved (owner)
+**REC-1, the flight recorder and evidence pack,** takes the **next free builder slot after CW-1 merges**, ahead of WK-1 and MEM-1. MEM-1, the soaks and PT-0 all consume it.
+
+**In-game recorder:**
+- **Per frame:** time split into sim, render, streaming build and GC, plus long tasks.
+- **Sampled a few times a second:** position, depth, region, cave admission, oxygen, speed and craft; draw calls, triangles, tab RAM and VRAM where the browser exposes them.
+- **Every event:** milestones, damage, threat warnings, holds, loads and saves, refusals, errors.
+- **Cost:** well under 1% of a frame.
+- **Owner playtests:** on by default (it can be turned off), carrying the feedback notes.
+
+**Visuals:**
+- **Event snapshots:** every event, every frame over 33 ms, every milestone.
+- **Video at 12 fps** (owner choice), 720p. It's on for functional runs, soaks and owner playtests, and **off in exclusive perf runs**, which keep only the snapshots. REC-1 measures the recording's own overhead.
+
+**Outputs, the same format on both machines:**
+- a story sheet for agents: a timeline with thumbnails, plus frames extracted around any event;
+- a timeline page for the owner: video, frame-time chart, memory curve and event markers, synchronised;
+- the evidence pack: header, contact sheet, charts and summary;
+- 3090 and 4070 packs side by side.
+
+SCHED-2b's remote lane carries the packs back from alickers.
