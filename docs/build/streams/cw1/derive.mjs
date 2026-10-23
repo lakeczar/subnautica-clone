@@ -13,7 +13,7 @@ import path from "node:path";
 const [repo, out, segArg, onlyArg] = process.argv.slice(2), B = path.join(repo, ".test-build/");
 /** Optional: only these caves (a make-up tour for stops a pass missed). */
 const ONLY = onlyArg ? new Set(onlyArg.split(",")) : null;
-const SEGMENTS = Number(segArg ?? 8);
+const SEGMENTS = segArg === "hops" ? 0 : Number(segArg ?? 8);
 mkdirSync(out, { recursive: true });
 const { CAVE_SOURCES } = await import(B + "src/content/regions/caves.js");
 const { worldFloor } = await import(B + "src/content/regions/worldFloor.js");
@@ -102,10 +102,12 @@ for (let i = 1; i < tour.length; i++) {
 }
 let total = 0;
 for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
-// Segments of equal length, each starting at a cave stop.
-const per = total / SEGMENTS, segments = [];
+// Segments of equal length, each starting at a cave stop; or, with
+// "hops", one short run per cave: its approach point, the mouth, and back.
+const per = total / (SEGMENTS || 1), segments = [];
+if (segArg === "hops") for (const t of tour) segments.push([{ ...t.outer }, { ...t.at, cave: t.cave }, { ...t.outer }]);
 let acc = 0, start = 0;
-for (let i = 1; i < points.length; i++) {
+for (let i = 1; segArg !== "hops" && i < points.length; i++) {
   acc += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
   if ((acc >= per && points[i].cave && segments.length < SEGMENTS - 1) || i === points.length - 1) {
     segments.push(points.slice(start, i + 1)); start = i; acc = 0;
