@@ -43,9 +43,7 @@ export class FlightCapture {
   readonly session: string;
   private readonly blobs = new Map<number, Blob>();
   private readonly abort = new AbortController();
-  private readonly snapCanvas: OffscreenCanvas | null;
-  private readonly snapContext: OffscreenCanvasRenderingContext2D | null;
-  private video: { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D; track: CanvasCaptureMediaStreamTrack; recorder: MediaRecorder; next: number; frames: number } | null = null;
+  private video: { canvas: HTMLCanvasElement; context: ImageBitmapRenderingContext; track: CanvasCaptureMediaStreamTrack; recorder: MediaRecorder; next: number; frames: number; pending: number } | null = null;
   private spool: { worker: Worker; cursors: { frames: number; samples: number; events: number; snapshots: number }; last: number; closing: Map<number, () => void>; seq: number } | null = null;
   private readonly restoreConsole: (() => void) | null = null;
   private disposed = false;
@@ -68,10 +66,6 @@ export class FlightCapture {
       video: videoOn ? { source: "game", fps: VIDEO_FPS, size: VIDEO_SIZE, file: "video.webm" } : null,
       snapshots: { size: SNAPSHOT_SIZE, format: "jpeg" },
     };
-    if (typeof OffscreenCanvas !== "undefined") {
-      this.snapCanvas = new OffscreenCanvas(SNAPSHOT_SIZE.width, SNAPSHOT_SIZE.height);
-      this.snapContext = this.snapCanvas.getContext("2d", { alpha: false });
-    } else { this.snapCanvas = null; this.snapContext = null; }
     this.restoreConsole = this.observeErrors();
     this.observeLongFrames();
     if (mode === "playtest") this.startSpool();
@@ -88,29 +82,43 @@ export class FlightCapture {
     const want = this.recorder.wantSnapshot(now);
     if (want) this.snapshot(want, now);
     const v = this.video;
-    if (v && now >= v.next) {
+    // A frame still being copied is not overtaken: under load the video drops frames, never the game.
+    if (v && now >= v.next && v.pending < 2) {
       v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS);
-      this.fit(v.context, VIDEO_SIZE.width, VIDEO_SIZE.height);
-      v.track.requestFrame();
-      v.frames++;
+      const size = this.scaled(VIDEO_SIZE.width);
+      v.pending++;
+      void createImageBitmap(this.canvas, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: "low" }).then((bitmap) => {
+        v.pending--;
+        if (this.disposed) { bitmap.close(); return; }
+        if (v.canvas.width !== bitmap.width || v.canvas.height !== bitmap.height) { v.canvas.width = bitmap.width; v.canvas.height = bitmap.height; }
+        v.context.transferFromImageBitmap(bitmap);
+        v.track.requestFrame();
+        v.frames++;
+      }, () => { v.pending--; });
     }
     if (this.spool && now - this.spool.last >= SPOOL_EVERY_MS) this.flush(now);
     return performance.now() - start;
   }
 
-  /** Draws the game canvas into a 16:9 target, letterboxed. */
-  private fit(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, w: number, h: number): void {
-    const s = Math.min(w / this.canvas.width, h / this.canvas.height), dw = this.canvas.width * s, dh = this.canvas.height * s;
-    if (dw < w || dh < h) { context.fillStyle = "#000"; context.fillRect(0, 0, w, h); }
-    context.drawImage(this.canvas, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  /** The game canvas scaled to `width`, keeping its aspect. */
+  private scaled(width: number): { width: number; height: number } {
+    const w = Math.max(1, this.canvas.width), h = Math.max(1, this.canvas.height);
+    return { width, height: Math.max(2, Math.round((width * h) / w / 2) * 2) };
   }
 
+  /** The picture is copied and scaled on the GPU (createImageBitmap snapshots
+   * the drawing buffer now, in this frame's task), then encoded off the main
+   * thread. Never a 2D drawImage of the WebGL canvas: that reads the frame
+   * back synchronously (40–75 ms per picture on ANGLE/D3D12, REC-1's first run). */
   private snapshot(req: SnapshotRequest, now: number): void {
-    if (!this.snapCanvas || !this.snapContext || !this.canvas.width) return;
-    this.fit(this.snapContext, SNAPSHOT_SIZE.width, SNAPSHOT_SIZE.height);
+    if (!this.canvas.width || typeof createImageBitmap === "undefined" || typeof OffscreenCanvas === "undefined") return;
+    const size = this.scaled(SNAPSHOT_SIZE.width);
     const snap = this.recorder.snapshotTaken(req, now);
-    // Encoding is asynchronous, off this frame.
-    void this.snapCanvas.convertToBlob({ type: "image/jpeg", quality: 0.72 }).then((blob) => {
+    void createImageBitmap(this.canvas, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: "low" }).then((bitmap) => {
+      const out = new OffscreenCanvas(bitmap.width, bitmap.height);
+      out.getContext("bitmaprenderer")!.transferFromImageBitmap(bitmap);
+      return out.convertToBlob({ type: "image/jpeg", quality: 0.72 });
+    }).then((blob) => {
       this.blobs.set(snap.seq, blob);
       for (const old of this.blobs.keys()) { if (this.blobs.size <= SNAPSHOT_MEMORY) break; this.blobs.delete(old); }
     }, () => {});
@@ -134,8 +142,9 @@ export class FlightCapture {
 
   private observeErrors(): (() => void) | null {
     const opts = { signal: this.abort.signal };
-    addEventListener("error", (e) => this.recorder.event("error", `error: ${e.message}`, { detail: { source: `${e.filename}:${e.lineno}` } }), opts);
-    addEventListener("unhandledrejection", (e) => this.recorder.event("error", `unhandled rejection: ${String((e.reason as Error)?.message ?? e.reason)}`), opts);
+    const stack = (x: unknown) => (x instanceof Error && x.stack ? { stack: x.stack.split("\n").slice(0, 6).join("\n") } : {});
+    addEventListener("error", (e) => this.recorder.event("error", `error: ${e.message}`, { detail: { source: `${e.filename}:${e.lineno}:${e.colno}`, ...stack(e.error) } }), opts);
+    addEventListener("unhandledrejection", (e) => this.recorder.event("error", `unhandled rejection: ${String((e.reason as Error)?.message ?? e.reason)}`, { detail: stack(e.reason) }), opts);
     const original = { error: console.error, warn: console.warn };
     let inside = false;
     const wrap = (kind: "error" | "warning", fn: (...a: unknown[]) => void) => (...args: unknown[]) => {
@@ -162,7 +171,8 @@ export class FlightCapture {
     const observer = new PerformanceObserver((list) => {
       for (const e of list.getEntries()) {
         const loaf = e as PerformanceEntry & { blockingDuration?: number; scripts?: { sourceURL?: string; sourceFunctionName?: string; invoker?: string; duration: number }[] };
-        const scripts = (loaf.scripts ?? []).sort((a, b) => b.duration - a.duration).slice(0, 3)
+        // `scripts` is a frozen array: sort a copy.
+        const scripts = [...(loaf.scripts ?? [])].sort((a, b) => b.duration - a.duration).slice(0, 3)
           .map((s) => `${Math.round(s.duration)} ms ${s.invoker ?? ""} ${s.sourceFunctionName ?? ""} ${(s.sourceURL ?? "").split("/").pop()}`.trim());
         this.recorder.event("long-task", `${type} ${Math.round(e.duration)} ms`, { t: e.startTime, snapshot: false,
           detail: { type, duration: Math.round(e.duration), ...(loaf.blockingDuration !== undefined ? { blocking: Math.round(loaf.blockingDuration) } : {}), ...(scripts.length ? { scripts } : {}) } });
@@ -176,7 +186,7 @@ export class FlightCapture {
     if (typeof MediaRecorder === "undefined") { this.recorder.event("warning", "warning: no MediaRecorder in this browser; recording without video", { snapshot: false }); return; }
     const canvas = document.createElement("canvas");
     canvas.width = VIDEO_SIZE.width; canvas.height = VIDEO_SIZE.height;
-    const context = canvas.getContext("2d", { alpha: false });
+    const context = canvas.getContext("bitmaprenderer");
     const stream = canvas.captureStream(0);
     const track = stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack | undefined;
     const mimeType = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m));
@@ -188,7 +198,7 @@ export class FlightCapture {
       else this.videoChunks.push(e.data);
     };
     recorder.start(SPOOL_EVERY_MS);
-    this.video = { canvas, context, track, recorder, next: 0, frames: 0 };
+    this.video = { canvas, context, track, recorder, next: 0, frames: 0, pending: 0 };
     this.header.video = { ...(this.header.video as object), mimeType, startedAt: performance.now(), bitsPerSecond: VIDEO_BITS };
     this.recorder.event("session", `video started (${mimeType}, ${VIDEO_FPS} fps, ${VIDEO_SIZE.width}x${VIDEO_SIZE.height})`, { snapshot: false });
   }

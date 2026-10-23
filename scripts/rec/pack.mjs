@@ -56,7 +56,7 @@ export async function strip(r, a, page, { title, out, center = null, from, to, f
   if (!near.length) return null;
   const g = grid(Math.max(4, near.length));
   const best = near.reduce((bi, s, i) => (Math.abs(s.t - c) < Math.abs(near[bi].t - c) ? i : bi), 0);
-  await composeStrip(page, { title: `${title} (snapshots: no video in this run)`, cols: g.cols, tileW: g.tileW, tileH: g.tileH, out,
+  await composeStrip(page, { title: `${title} (snapshots: ${v?.file && !v.error ? "the video has no frames here" : "no video in this run"})`, cols: g.cols, tileW: g.tileW, tileH: g.tileH, out,
     tiles: near.map((s, i) => ({ file: path.join(r.rec, s.file), lines: label(s.t), mark: center != null && i === best })) });
   return { source: "snapshots", frames: near.length };
 }
@@ -155,6 +155,7 @@ function storyMd(r, a, s) {
   L.push(`# Run story: ${s.verdict.toUpperCase()}`, "");
   L.push(`${h.machine?.label ?? "?"} · ${s.gpu ?? "?"} · ${s.browser ?? "?"} · commit \`${s.commit ?? "?"}\` · build \`${s.build ?? "?"}\` · ${s.minutes} min · ${h.mode ?? ""}${h.run?.segment != null ? ` · segment ${h.run.segment}` : ""}${h.crossOriginIsolated ? " · isolated (5 µs timers)" : ""}`, "");
   L.push(`Frames ${n.frames}: gap p50 ${n.gap.p50} / p99 ${n.gap.p99} / max ${n.gap.max} ms, ${n.over33} over 33 ms. Game's own work p50 ${n.work.p50} / p99 ${n.work.p99} ms. Recorder ${n.rec.mean} ms mean, ${n.rec.p99} ms p99 per frame (self-timed).`);
+  if (a.before) L.push(`Before the measured window (load and entry, not judged): ${a.before.frames} frames over ${a.before.seconds} s, ${a.before.over33} over 33 ms, ${a.before.errors} errors.`);
   L.push(`Memory: tab ${fmtPair(n.memory.tabMiB)} MiB, heap ${fmtPair(n.memory.heapMiB)} MiB, GPU ${fmtPair(n.memory.gpuUsedMiB)} MiB, trend ${n.memory.trendMiBPerMin ?? "n/a"} MiB/min. Draw calls p50 ${n.draws.p50 ?? "?"}, max ${n.draws.max ?? "?"}. Holds ${n.holds.frames} frames. Errors ${n.errors}, warnings ${n.warnings}.`, "");
   L.push("## Checks", "", "| Check | Result | Note |", "| --- | --- | --- |", ...a.checks.map((c) => `| ${c.name} | ${c.status} | ${c.note.replace(/\|/g, "/")} |`), "");
   L.push(`## Attention (${a.attention.length}${a.attention.length > THRESHOLDS.maxStrips ? `; strips for the first ${THRESHOLDS.maxStrips}` : ""})`, "");

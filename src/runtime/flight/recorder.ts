@@ -90,6 +90,8 @@ export interface SnapshotRequest { reasons: number[]; frameT: number }
 export interface FlightSnapshot { seq: number; t: number; reasons: number[]; /** File name in the recording. */ file: string }
 
 /** Which kinds take a snapshot by default: every event except the very frequent or the invisible. */
+/** Long frames come in bursts: one picture per burst is enough. */
+const LONG_FRAME_SNAPSHOT_MS = 2000;
 const NO_SNAPSHOT: ReadonlySet<FlightEventKind> = new Set(["action", "long-task", "session", "notice", "save"]);
 
 export interface RecorderOptions {
@@ -164,6 +166,7 @@ export class FlightRecorder {
   private lastSnapshotT = -Infinity;
   private hold: string | null = null;
   private holdSince = 0;
+  private lastLongSnapshot = -Infinity;
   /** Self-time accrued in the current frame before its row is written (samples, snapshots). */
   private accrued = 0;
 
@@ -214,9 +217,14 @@ export class FlightRecorder {
         if (v >= 0.05) split[c] = Math.round(v * 100) / 100;
       }
       const streaming = STREAMING_PARTS.reduce((a, p) => a + r[COL[p]]!, 0);
-      const cause = longFrameCause(input.gap, work, r[COL.sim]!, streaming, r[COL.render]!, r[COL.heapDrop]!);
+      const cause = longFrameCause(input.gap, work, r[COL.sim]!, streaming, r[COL.render]!, r[COL.heapDrop]!, rec);
+      // A picture of a long frame at most every LONG_FRAME_SNAPSHOT_MS, and never
+      // of the recorder's own (a snapshot must not cause the next one).
+      const snapshot = cause !== "recorder" && input.t - this.lastLongSnapshot >= LONG_FRAME_SNAPSHOT_MS;
+      if (snapshot) this.lastLongSnapshot = input.t;
       this.event("long-frame", `${input.gap.toFixed(1)} ms frame (${cause})`, {
-        t: input.t, detail: { gap: Math.round(input.gap * 10) / 10, ...split, outside: Math.round(Math.max(0, input.gap - work) * 10) / 10, cause, ...(r[COL.heapDrop]! > 0 ? { heapDrop: r[COL.heapDrop] } : {}) },
+        t: input.t, snapshot, detail: { gap: Math.round(input.gap * 10) / 10, ...split, ...(rec >= 0.05 ? { rec: Math.round(rec * 100) / 100 } : {}),
+          outside: Math.round(Math.max(0, input.gap - work - rec) * 10) / 10, cause, ...(r[COL.heapDrop]! > 0 ? { heapDrop: r[COL.heapDrop] } : {}) },
       });
     }
   }
@@ -263,7 +271,9 @@ export class FlightRecorder {
 
 /** Why a long frame was long, from its split (the same rule as CW-1 and the soak:
  * a part that is at least half of the frame's own work owns it). */
-export function longFrameCause(gap: number, work: number, sim: number, streaming: number, render: number, heapDrop: number): string {
+export function longFrameCause(gap: number, work: number, sim: number, streaming: number, render: number, heapDrop: number, rec = 0): string {
+  // The recorder's own time (this frame's, and capture charged from the frame before) explains most of the overrun.
+  if (rec >= 0.5 * Math.max(0, gap - 16.7) && rec > work) return "recorder";
   if (work < 0.5 * gap) return heapDrop > 2 ? "outside the game's frame: a collection" : "outside the game's frame";
   if (streaming >= 0.5 * work) return "streaming";
   if (sim >= 0.5 * work) return "simulation";

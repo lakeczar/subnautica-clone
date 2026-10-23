@@ -15,7 +15,7 @@ import path from "node:path";
 
 export const VIDEO_FPS = 12;
 export const VIDEO_SIZE = { width: 1280, height: 720 };
-const DRAIN_MS = 1000, SYSTEM_MS = 1000, GPU_MS = 5000;
+const DRAIN_MS = 1000, SYSTEM_MS = 1000, GPU_MS = 5000, SNAPSHOT_WAIT_MS = 5000;
 
 /** An ffmpeg that encodes MJPEG → VP9 WebM and decodes it back to PNG: the
  * system's, else Playwright's own build (the same binary on both machines). */
@@ -70,21 +70,27 @@ export async function startRecording(opts) {
   const append = (file, items) => { if (items.length) appendFileSync(path.join(dir, file), items.map((x) => JSON.stringify(x)).join("\n") + "\n"); };
   let draining = Promise.resolve(), stopped = false, snapshotsWritten = 0, snapshotsMissing = 0;
 
-  async function drain() {
+  async function drain(final = false) {
     const got = await page.evaluate((c) => {
       const r = window.__siltwake.recorder;
       return { frames: r.frames(c.frames), samples: r.samples(c.samples), events: r.events(c.events), snapshots: r.snapshots(c.snapshots) };
     }, cursors);
-    for (const k of Object.keys(cursors)) { cursors[k] = got[k].next; lost[k] += got[k].lost; }
+    for (const k of ["frames", "samples", "events"]) { cursors[k] = got[k].next; lost[k] += got[k].lost; }
+    lost.snapshots += got.snapshots.lost;
     append("frames.ndjson", got.frames.rows);
     append("samples.ndjson", got.samples.items);
     append("events.ndjson", got.events.items);
+    // A snapshot still being encoded is read on a later drain; one still absent after SNAPSHOT_WAIT_MS is missing.
+    let done = got.snapshots.next - got.snapshots.items.length, last = null;
     for (const s of got.snapshots.items) {
       const data = await page.evaluate((seq) => window.__siltwake.recorder.snapshot(seq), s.seq);
+      if (!data && final !== true && pageNow() - s.t < SNAPSHOT_WAIT_MS) break;
       if (data) { writeFileSync(path.join(dir, s.file), Buffer.from(data, "base64")); snapshotsWritten++; } else snapshotsMissing++;
-      append("snapshots.ndjson", [{ ...s, ...(data ? {} : { missing: "not encoded or released before the driver read it" }) }]);
+      append("snapshots.ndjson", [{ ...s, ...(data ? {} : { missing: "not encoded within the wait, or released before the driver read it" }) }]);
+      done++; last = s.seq;
     }
-    if (got.snapshots.items.length) await page.evaluate((seq) => window.__siltwake.recorder.release(seq), got.snapshots.items.at(-1).seq);
+    cursors.snapshots = done;
+    if (last !== null) await page.evaluate((seq) => window.__siltwake.recorder.release(seq), last);
   }
 
   // System: the tab's and the GPU's memory, on the page clock.
@@ -106,7 +112,7 @@ export async function startRecording(opts) {
     const ffmpeg = findFfmpeg();
     if (!ffmpeg) video = { missing: "no ffmpeg (system or Playwright's: `npx playwright-core install ffmpeg`)" };
     else {
-      const proc = spawn(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "image2pipe", "-c:v", "mjpeg", "-framerate", String(VIDEO_FPS), "-i", "-",
+      const proc = spawn(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "image2pipe", "-c:v", "mjpeg", "-framerate", String(VIDEO_FPS), "-i", "pipe:0",
         "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-row-mt", "1", "-b:v", "900k", "-pix_fmt", "yuv420p", "-y", path.join(dir, "video.webm")],
       { stdio: ["pipe", "ignore", "pipe"] });
       let err = "";
@@ -145,7 +151,7 @@ export async function startRecording(opts) {
         if (video.last) { video.proc.stdin.write(video.last); video.written++; }
         video.proc.stdin.end();
       }
-      try { await drain(); await system(); } catch { /* the page may be gone */ }
+      try { await new Promise((r) => setTimeout(r, 1500)); await drain(true); await system(); } catch { /* the page may be gone */ }
       const code = video?.proc ? await video.done : null;
       const overhead = await page.evaluate(() => window.__siltwake.recorder.overhead()).catch(() => null);
       const g = gpuInfo();

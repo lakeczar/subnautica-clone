@@ -40,8 +40,15 @@ function slope(xs, ys) {
 
 /** Every number and judgement the pack shows. */
 export function analyse(r, t = THRESHOLDS) {
-  const { header, frames, samples, events, system } = r;
-  const t0 = header.run?.pageStart ?? frames[0]?.t ?? samples[0]?.t ?? 0;
+  const { header } = r;
+  // A driver run is judged from the moment travel starts (run.pageStart); the
+  // load before it is summarised apart. An owner export is judged whole.
+  const t0 = header.run?.pageStart ?? r.frames[0]?.t ?? r.samples[0]?.t ?? 0;
+  const inWindow = (x) => x.t >= t0;
+  const frames = r.frames.filter(inWindow), samples = r.samples.filter(inWindow), events = r.events.filter(inWindow), system = r.system.filter(inWindow);
+  const early = r.frames.filter((f) => f.t < t0 && f.gap > 0);
+  const before = early.length ? { frames: early.length, seconds: Math.round((t0 - early[0].t) / 100) / 10, over33: early.filter((f) => f.gap > t.longFrameMs).length,
+    errors: r.events.filter((e) => e.t < t0 && e.kind === "error").length } : null;
   const rel = (pt) => Math.round((pt - t0) / 100) / 10; // seconds from the start
   const played = frames.filter((f) => f.gap > 0);
   const gaps = played.map((f) => f.gap).sort((a, b) => a - b), work = played.map((f) => f.work).sort((a, b) => a - b);
@@ -102,7 +109,7 @@ export function analyse(r, t = THRESHOLDS) {
 
   // --- checks: what was checked, what was missing, what looked wrong --------
   const checks = [];
-  const check = (name, status, note) => checks.push({ name, status, note });
+  const check = (name, status, note) => checks.push({ name, status, note: String(note).replace(/\s*\n\s*/g, " ").slice(0, 240) });
   const streamingLong = longFrames.filter((e) => e.detail?.cause === "streaming" && e.detail.gap > t.longFrameMs);
   const judged = header.run?.judged === true;
   if (!played.length) check("frames recorded", "missing", "no frame rows");
@@ -124,8 +131,14 @@ export function analyse(r, t = THRESHOLDS) {
   const fails = checks.filter((c) => c.status === "fail"), unproven = checks.filter((c) => ["missing", "unproven", "partial"].includes(c.status));
   const verdict = { status: fails.length ? "fail" : unproven.length ? "partial" : "pass", failed: fails.map((c) => c.name), unproven: unproven.map((c) => c.name) };
 
+  // Errors before the window still fail the run (they are the game's, whenever they happen).
+  if (before?.errors) {
+    const c = checks.find((x) => x.name === "no errors");
+    c.status = "fail"; c.note = `${before.errors} during load; ${c.note}`;
+    if (!verdict.failed.includes("no errors")) { verdict.failed.push("no errors"); verdict.status = "fail"; verdict.unproven = verdict.unproven.filter((x) => x !== "no errors"); }
+  }
   return {
-    t0, rel, sampleAt, tickAt, durationS, attention, checks, verdict,
+    t0, rel, sampleAt, tickAt, durationS, attention, checks, verdict, before,
     numbers: {
       frames: played.length, gap: { p50: r1(q(gaps, 0.5)), p99: r1(q(gaps, 0.99)), max: r1(gaps.at(-1) ?? null) }, over33: gaps.filter((g) => g > t.longFrameMs).length,
       work: { p50: r1(q(work, 0.5)), p99: r1(q(work, 0.99)) }, rec: { mean: recMs.length ? +(recMs.reduce((a, b) => a + b, 0) / recMs.length).toFixed(3) : null, p99: recMs.length ? +q(recMs, 0.99).toFixed(3) : null },
@@ -134,7 +147,7 @@ export function analyse(r, t = THRESHOLDS) {
       errors: errs.length, warnings: events.filter((e) => e.kind === "warning").length, draws: { p50: q(draws, 0.5), max: draws.at(-1) ?? null },
     },
     series: { tab, heap, gpuUsed, resident },
-    pacing: pacing(r, rel),
+    pacing: pacing({ samples, events }, rel),
   };
 }
 
