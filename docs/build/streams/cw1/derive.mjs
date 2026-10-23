@@ -7,7 +7,9 @@
 // after its refits phase (the real Dart and suits), the Dart moved to the
 // segment's first stop at full charge, the diver aboard. So every browser
 // job stays under 30 minutes.
-// usage: node derive.mjs <repo> <outdir> [segments]
+// usage: node derive.mjs <repo> <outdir> [segments | hops] [cave,...]
+// Deep caves (mouths below the Dart's 350 m): CW1_HULL=creel CW1_SNAPSHOT=divide
+// CW1_DEEPEST=-790 tours them in the 800 m Creel of the divide phase's state.
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 const [repo, out, segArg, onlyArg] = process.argv.slice(2), B = path.join(repo, ".test-build/");
@@ -20,7 +22,8 @@ const { worldFloor } = await import(B + "src/content/regions/worldFloor.js");
 const { gameWorld, hullClearance, sweptHullClearance } = await import(B + "src/sim/world.js");
 const { HULL_COLLIDERS } = await import(B + "src/content/registry.js");
 const { createEnvelope, encodeSave, decodeSave } = await import(B + "src/save/codec.js");
-const world = gameWorld(), DART = HULL_COLLIDERS.dart, DEEPEST = -340;
+const HULL = process.env.CW1_HULL ?? "dart", SNAPSHOT = process.env.CW1_SNAPSHOT ?? "refits";
+const world = gameWorld(), DART = HULL_COLLIDERS[HULL], DEEPEST = Number(process.env.CW1_DEEPEST ?? -340);
 const clamp = (y, x, z) => Math.min(-2, Math.max(DEEPEST, worldFloor(x, z) + 3, y));
 /** A clear Dart pose near `p`: step outward along `n`, then up, until it fits. */
 function clearNear(p, n) {
@@ -154,10 +157,10 @@ await (await import(B + "scripts/playthrough/content.js")).loadCampaign();
 const slot = new SaveSlot("cw1-traversal");
 const run = await runPhases(new Driver("creel", "creel"), LIVE_PHASES, { readOptional: true, reverse: false, verbose: false }, slot);
 console.log(run.phases.map((p) => `${p.id}:${p.status}`).join(" "));
-const base = loadSnapshot(slot.snapshots.get("refits"));
+const base = loadSnapshot(slot.snapshots.get(SNAPSHOT));
 segments.forEach((seg, k) => {
-  const s = structuredClone(base), dart = s.fleet.vehicles.find(v => v.hull === "dart");
-  if (!dart || dart.rating < 350) throw new Error("no 350 m Dart in the refits state");
+  const s = structuredClone(base), dart = s.fleet.vehicles.find(v => v.hull === HULL);
+  if (!dart || dart.rating < -DEEPEST + 10) throw new Error(`no ${HULL} rated below ${-DEEPEST} m in the ${SNAPSHOT} state (${dart?.rating})`);
   const p0 = seg[0];
   dart.pose = { ...dart.pose, frame: "world", position: { x: p0.x, y: p0.y, z: p0.z }, yaw: 0, pitch: 0 };
   dart.velocity = { x: 0, y: 0, z: 0 }; dart.charge = 100; dart.health = 100; dart.disabled = false;
@@ -176,4 +179,4 @@ writeFileSync(path.join(out, "plan.json"), JSON.stringify({ totalMetres: Math.ro
 console.log(`${tour.length} caves, ${Math.round(total)} m, ${segments.length} segments:`,
   segments.map(s => `${s.filter(p => p.cave).length} caves`).join(", "));
 console.log("regions", [...new Set(tour.map(s => s.region))].join(", "));
-console.log("stops above the mouth (deeper than 340 m or no clear mouth):", stops.filter(s => s.via === "above" || (s.mouthY ?? 0) < DEEPEST).map(s => s.cave).join(", "));
+console.log(`stops above the mouth (deeper than ${-DEEPEST} m or no clear mouth):`, stops.filter(s => s.via === "above" || (s.mouthY ?? 0) < DEEPEST).map(s => s.cave).join(", "));
