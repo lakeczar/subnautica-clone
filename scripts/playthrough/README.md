@@ -36,7 +36,9 @@ After each root merge, the coordinator runs `scripts/saves-export.sh` on root. I
 
 **Pinned to one SHA.** The wrapper captures HEAD once. It refuses a dirty tree, then builds that commit with `scripts/saves-build-at.sh SHA DIR`: a `git archive` compiled in a directory of its own and marked with `.siltwake-source-commit`. Both the second worker and the factory fallback run the export from such a build. `run.js --export --commit SHA` refuses code without the marker, or marked with another commit, so a worktree's `.test-build` can never export under a SHA. A partial export (some scenarios) may only go to a private `--library-root`.
 
-**Publication** takes the root's lock (a `.lock` directory naming its holder; a dead holder on this host is broken). It renames the verified staging directory into place read-only and rebuilds the index under the same lock. A repeated or concurrent identical export reports `identical`, after checking that the existing directory itself verifies. A different one is an error.
+**Publication** takes the root's lock: a kernel `flock(1)` on `.publish.lock`, a file that is never removed. The lock is held by a child process and dropped by the kernel when its owner dies, so no writer ever deletes another's lock. `.publish.lock.owner` names the last holder, for messages only. Under the lock, publication collects orphaned staging, renames the verified staging directory into place read-only and rebuilds the index. A repeated or concurrent identical export reports `identical`, after checking that the existing directory itself verifies. A different one is an error.
+
+**Staging** is `<root>/.staging-<sha12>-XXXXXX/<sha>`: hidden, and named by its commit so any build's verifier accepts it. Its owner holds a `flock` lease on `.lease` beside it for its whole life. An orphan, whose lease is free, is collected by the next publish or `saves.js index`. A live exporter's staging is never collected, however old.
 
 **Kinds** (`saves.js kinds` prints them; `kinds.ts` defines them). Every save is also its own kind, `scenario@label`, for example `creel@refits`.
 
@@ -61,11 +63,12 @@ Anything else is **refused** (exit 3) with every candidate's reason:
 - another schema;
 - a missing or damaged file;
 - a recorded hash that doesn't match;
+- an envelope without a state;
 - a kind no export has.
 
-If the nearest compatible save fails to load, that is refused too, and the refusal names the older compatible candidates as not tried. An older one is never used in its place.
+If the nearest compatible save fails to load, that is refused too, and the refusal names the older compatible candidates as not tried. An older one is never used in its place. An export whose manifest can't be read stays a candidate: if it's at least as near as the best readable one, it could hide a nearer save, so the pick is refused. A farther one is named under "passed over".
 
-**The second worker.** `scripts/saves-export.sh` runs the export on siltwake-alickers (`alickers-job.sh`, into its own `/work/tmp/siltwake-saves/<sha>`, so jobs there find it too), copies the directory back over ssh and imports it. The import checks every file against the manifest, copies it into hidden staging in the root and decodes every save there with a build of that commit (this code if it was built from it, else a fresh `saves-build-at.sh` build). Only then does it publish; a failure leaves no directory and no index entry. `saves.js verify REF` decodes with a build of REF in the same way. Exit 75 or 255 falls back to factory-worker's queue (`--class playthrough --snapshot`); `--here` goes straight there. When SCHED-2b's remote lane lands, its `remote_export` becomes `heavy-check --machine any --artifact <dir>`.
+**The second worker.** `scripts/saves-export.sh` runs the export on siltwake-alickers (`alickers-job.sh`, into its own `/work/tmp/siltwake-saves/<sha>`, so jobs there find it too), copies the directory back over ssh and imports it. The import checks every file against the manifest, copies it into hidden staging in the root and decodes every save there with a build of that commit. That is this code if it was built from it, else a fresh `saves-build-at.sh` build called through its own exported `verifyCommitDir(dir, true)`, which every export since the first has had, so older exports verify with their own decoder and kind facts. Only then does it publish; a failure leaves no directory and no index entry. `saves.js verify REF` decodes with a build of REF in the same way. Exit 75 or 255 falls back to factory-worker's queue (`--class playthrough --snapshot`); `--here` goes straight there. When SCHED-2b's remote lane lands, its `remote_export` becomes `heavy-check --machine any --artifact <dir>`.
 
 ## Scenarios and status
 | Scenario | Root `a09968b` | C3 in progress `3c9a181` (export in `/work/tmp`) |

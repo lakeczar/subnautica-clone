@@ -73,3 +73,40 @@ test("import from a worktree build decodes with a fresh build of the commit befo
   const verify = spawnSync(process.execPath, [cli, "verify", head, "--root", root], { encoding: "utf8", cwd: repo });
   assert.equal(verify.status, 0, verify.stdout + verify.stderr);
 });
+
+test("an export from before the R1 fixes imports and verifies through that commit's own verifyCommitDir", () => {
+  // 1d4d2c3: the R1 review's head, whose CLI had no verify-dir and whose readManifest
+  // insists a directory is named by its commit.
+  const old = "1d4d2c328ba3ad00d5a3be6ceca10bcdddf93b09";
+  assert.ok(git("merge-base", "--is-ancestor", old, head) === "" , "in this history");
+  const build = path.join(scratch("siltwake-old-build-"), "b");
+  execFileSync("bash", [path.join(repo, "scripts/saves-build-at.sh"), old, build], { stdio: "ignore" });
+  const src = scratch("siltwake-old-incoming-");
+  try {
+    // The save and manifest exactly as that commit's own code makes them.
+    const made = spawnSync(process.execPath, ["--input-type=module", "-e", `
+      import fs from "node:fs"; import path from "node:path";
+      const B = ${JSON.stringify(path.join(build, ".test-build") + "/")};
+      const { createEnvelope, encodeSave } = await import(B + "src/save/codec.js");
+      const { createGame } = await import(B + "src/sim/state.js");
+      const L = await import(B + "scripts/playthrough/library.js");
+      const { stateHash } = await import(B + "scripts/playthrough/persistence.js");
+      const { emptyRun } = await import(B + "scripts/playthrough/timeline.js");
+      const e = encodeSave(createEnvelope(createGame(), { sessionId: "old-export-test", createdAt: "2026-10-23T00:00:00.000Z", savedAt: "2026-10-23T00:00:00.000Z" }));
+      const run = emptyRun("creel", "creel");
+      run.saves.push({ phase: "opening", label: "opening", tick: 0, bytes: 0, hash: stateHash(JSON.parse(e.value).state), equal: true, commands: 4, journalBytes: 0 });
+      const { manifest } = L.buildManifest(${JSON.stringify(old)}, [run], [{ scenario: "creel", label: "opening", text: e.value }], () => null);
+      const dir = path.join(${JSON.stringify(src)}, ${JSON.stringify(old)});
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, "creel@opening.json"), e.value);
+      fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest));`], { encoding: "utf8" });
+    assert.equal(made.status, 0, made.stderr);
+    const root = scratch("siltwake-lib-"), cli = path.join(repo, ".test-build/scripts/playthrough/saves.js");
+    const imported = spawnSync(process.execPath, [cli, "import", path.join(src, old), "--root", root], { encoding: "utf8", cwd: repo });
+    assert.equal(imported.status, 0, imported.stdout + imported.stderr);
+    assert.match(imported.stdout, new RegExp(`${old.slice(0, 12)}: published .* decoded by a build of ${old.slice(0, 12)}`));
+    const verified = spawnSync(process.execPath, [cli, "verify", old, "--root", root], { encoding: "utf8", cwd: repo });
+    assert.equal(verified.status, 0, verified.stdout + verified.stderr);
+    assert.match(verified.stdout, /decoded by a build of 1d4d2c328ba3, loads unchanged/);
+  } finally { fs.rmSync(path.dirname(build), { recursive: true, force: true }); }
+});

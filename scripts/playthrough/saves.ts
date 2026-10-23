@@ -16,6 +16,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { KINDS } from "./kinds.js";
 import { codeCommit, describePick, gitPort, importCommitDir, LibraryRefusal, libraryRoot, pickSave, readLibrary, verifyCommitDir, writeIndex } from "./library.js";
 
@@ -26,7 +27,10 @@ const root = libraryRoot(value("--root"));
 const git = gitPort();
 
 /** A verifier that decodes with a build of `commit`: this code if it was built from
- * it, else a scratch build (scripts/saves-build-at.sh) run as a child. */
+ * it, else a scratch build (scripts/saves-build-at.sh) of that commit. The scratch
+ * build is called through `verifyCommitDir(dir, true)` from its own library.js, the
+ * interface every export since the first has had, so its own decoder and kind facts
+ * judge it, whatever CLI commands that commit lacks. */
 function decoderFor(commit: string): { verify: (dir: string) => string[]; done: () => void } {
   if (codeCommit() === commit) return { verify: (dir) => verifyCommitDir(dir, true), done: () => {} };
   const scratch = fs.existsSync("/work/tmp") ? "/work/tmp" : os.tmpdir();
@@ -35,8 +39,14 @@ function decoderFor(commit: string): { verify: (dir: string) => string[]; done: 
   execFileSync("bash", [path.join(repo, "scripts/saves-build-at.sh"), commit, build], { stdio: ["ignore", process.stderr, "inherit"] });
   return {
     verify: (dir) => {
-      const r = spawnSync(process.execPath, [path.join(build, ".test-build/scripts/playthrough/saves.js"), "verify-dir", dir], { encoding: "utf8" });
-      return r.status === 0 ? [] : [`the ${commit.slice(0, 12)} build refused ${dir} (exit ${r.status}): ${(r.stdout + r.stderr).trim()}`];
+      const lib = pathToFileURL(path.join(build, ".test-build/scripts/playthrough/library.js")).href;
+      const r = spawnSync(process.execPath, ["--input-type=module", "-e",
+        `const L = await import(${JSON.stringify(lib)}); process.stdout.write(JSON.stringify(L.verifyCommitDir(${JSON.stringify(dir)}, true)));`],
+        { encoding: "utf8", cwd: build });
+      let problems: unknown = null;
+      try { problems = JSON.parse(r.stdout); } catch { /* reported below */ }
+      if (r.status === 0 && Array.isArray(problems)) return problems.map((p) => `the ${commit.slice(0, 12)} build: ${String(p)}`);
+      return [`the ${commit.slice(0, 12)} build's verifyCommitDir failed (exit ${r.status}): ${(r.stderr || r.stdout).trim().slice(0, 2000)}`];
     },
     done: () => fs.rmSync(build, { recursive: true, force: true }),
   };
@@ -85,15 +95,6 @@ switch (command) {
     process.exit(problems.length ? 1 : 0);
     break;
   }
-  case "verify-dir": {
-    // Internal: a decoder build checking a directory, for verify and import.
-    const dir = positional[0]!, m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")) as { commit: string };
-    if (codeCommit() !== m.commit) { console.error(`this code was built from ${codeCommit() ?? "a worktree"}, not ${m.commit}`); process.exit(2); }
-    const problems = verifyCommitDir(dir, true);
-    if (problems.length) console.error(problems.join("\n"));
-    process.exit(problems.length ? 1 : 0);
-    break;
-  }
   case "import": {
     const dir = positional[0];
     if (!dir || !fs.existsSync(path.join(dir, "manifest.json"))) { console.error("usage: saves.js import DIR (a commit directory with manifest.json)"); process.exit(2); }
@@ -101,7 +102,7 @@ switch (command) {
     try { git.resolve(commit); } catch { console.error(`${commit} is not a commit in this repository`); process.exit(2); }
     const decoder = decoderFor(commit);
     try {
-      const r = importCommitDir(dir, root, decoder.verify);
+      const r = await importCommitDir(dir, root, decoder.verify);
       console.log(`${r.commit.slice(0, 12)}: ${r.status} at ${path.join(root, r.commit)}, decoded by a build of ${r.commit.slice(0, 12)} before publishing`);
     } catch (e) {
       console.error(`REFUSED: ${(e as Error).message}`);
@@ -109,10 +110,12 @@ switch (command) {
     } finally { decoder.done(); }
     break;
   }
-  case "index":
-    writeIndex(root);
+  case "index": {
+    const removed = await writeIndex(root);
+    if (removed.length) console.log(`collected ${removed.length} orphaned staging directories: ${removed.join(", ")}`);
     console.log(`${path.join(root, "index.json")} rewritten`);
     break;
+  }
   default:
     console.error("usage: saves.js pick|list|kinds|verify|import|index [--root DIR] ...");
     process.exit(2);

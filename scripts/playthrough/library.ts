@@ -14,7 +14,7 @@
  * which this build bridges), and this build's own decoder accepts the file. The
  * nearest such commit wins. Anything else is refused with every candidate's
  * reason; nothing falls back silently. */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -127,9 +127,8 @@ const SHA = /^[0-9a-f]{40}$/;
 function readManifest(dir: string): Manifest {
   const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")) as Manifest;
   if (m.format !== LIBRARY_FORMAT || m.version !== 1) throw new Error(`not a ${LIBRARY_FORMAT} v1 manifest`);
-  // A commit directory is named by its commit; a staging directory is checked before it gets that name.
-  if (m.commit !== path.basename(dir) && !(path.basename(dir).startsWith(".staging-") && SHA.test(m.commit)))
-    throw new Error(`manifest names commit ${m.commit}`);
+  // A commit directory is named by its commit, in staging too (`.staging-…/<sha>`).
+  if (m.commit !== path.basename(dir)) throw new Error(`manifest names commit ${m.commit}`);
   if (!Array.isArray(m.saves) || !m.saves.every((e) => typeof e.file === "string" && Array.isArray(e.kinds) && typeof e.sha256 === "string"))
     throw new Error("malformed save entries");
   return m;
@@ -206,6 +205,16 @@ export function pickSave(kind: string, o: PickOptions = {}): Picked {
   }
   ok.sort((a, b) => a.distance - b.distance);
   const best = ok[0];
+  // An export whose manifest can't be read may hold a nearer save of this kind: it is a
+  // candidate too, and one at least as near as the best readable save refuses the pick.
+  const hidden = unreadable.filter((u) => !o.exact || u.commit === target).flatMap((u) =>
+    git.isAncestor(u.commit, target) ? [{ ...u, distance: git.distance(u.commit, target) }] : []);
+  const blocking = hidden.filter((u) => !best || u.distance <= best.distance).sort((a, b) => a.distance - b.distance);
+  if (blocking.length) {
+    const older = ok.map((c) => ({ commit: c.m.commit, reason: `compatible (${c.compatibility}, ${c.distance} commits back) but not tried: a nearer export is unreadable` }));
+    throw new LibraryRefusal(`The export at ${blocking[0]!.commit.slice(0, 12)} (${blocking[0]!.distance} commits back) is unreadable and could hold a nearer save of kind "${kind}"; repair or remove it by hand.`,
+      [...blocking.map((u) => ({ commit: u.commit, reason: u.reason })), ...older, ...rejected.filter((r) => !unreadable.includes(r))]);
+  }
   if (!best) throw new LibraryRefusal(`No library save of kind "${kind}" is compatible with ${target.slice(0, 12)}. Export the library at this commit (scripts/saves-export.sh).`, rejected);
   const entry = best.m.saves.find((e) => e.kinds.includes(kind))!;
   const file = path.join(root, best.m.commit, entry.file);
@@ -220,16 +229,26 @@ export function pickSave(kind: string, o: PickOptions = {}): Picked {
   try { text = fs.readFileSync(file, "utf8"); } catch (e) { return refuse(`cannot be read: ${(e as Error).message}`); }
   if (sha256(text) !== entry.sha256) refuse("does not match its manifest (SHA-256 differs): the library copy is damaged");
   // The recorded hash is of the state as saved: check it before any migration.
-  let raw: unknown;
-  try { raw = (JSON.parse(text) as { state?: unknown }).state; } catch { return refuse("is not JSON"); }
-  if (stateHash(raw as GameState) !== entry.hash) refuse(`holds a state hashing to ${stateHash(raw as GameState)}, not its recorded ${entry.hash}: the manifest or file is damaged`);
-  const decoded = decodeSave(text);
+  const raw = rawStateHash(text);
+  if (!raw.ok) return refuse(raw.error);
+  if (raw.hash !== entry.hash) refuse(`holds a state hashing to ${raw.hash}, not its recorded ${entry.hash}: the manifest or file is damaged`);
+  let decoded: ReturnType<typeof decodeSave>;
+  try { decoded = decodeSave(text); } catch (e) { return refuse(`breaks this build's decoder: ${(e as Error).message}`); }
   if (!decoded.ok) return refuse(`does not load in this build: ${decoded.error}`);
   // Migrated only when this build's decoder actually changed the state (the schema 5 bridge, additive content).
   const migrated = stateHash(decoded.value.state) !== entry.hash;
   if (o.exact && migrated) refuse("loads to a different hash than it was saved with (it needs migration in this build)");
   return { kind, path: file, text, state: decoded.value.state, manifest: best.m, entry, compatibility: best.compatibility, distance: best.distance, migrated,
-    passed: rejected.filter((r) => holding.some((m) => m.commit === r.commit)) };
+    passed: [...rejected.filter((r) => holding.some((m) => m.commit === r.commit)),
+      ...hidden.map((u) => ({ commit: u.commit, reason: `${u.reason} (${u.distance} commits back, farther than the save used)` }))] };
+}
+/** The stateHash of a save file's raw `state`, before any decoding, or why there is none. */
+function rawStateHash(text: string): { ok: true; hash: string } | { ok: false; error: string } {
+  let envelope: unknown;
+  try { envelope = JSON.parse(text); } catch { return { ok: false, error: "is not JSON" }; }
+  const state = typeof envelope === "object" && envelope !== null ? (envelope as { state?: unknown }).state : undefined;
+  if (typeof state !== "object" || state === null || Array.isArray(state)) return { ok: false, error: "has no state object in its envelope" };
+  try { return { ok: true, hash: stateHash(state as GameState) }; } catch (e) { return { ok: false, error: `holds a state that cannot be hashed: ${(e as Error).message}` }; }
 }
 /** For tests and GPU drivers: `pickSave`, plus one line saying what was loaded. */
 export function librarySave(kind: string, o: PickOptions = {}): Picked & { describe: string } {
@@ -299,24 +318,136 @@ export function buildManifest(commit: string, runs: readonly RunRecord[], produc
 
 export type PublishStatus = "published" | "identical";
 const files = (m: Manifest): string => m.saves.map((e) => `${e.file} ${e.sha256}`).sort().join("\n");
+
+// ----------------------------------------------------------------------------- locks and staging
+
+/** An exclusive kernel lock (flock(1)) on `file`, held by a child process for as long
+ * as this process wants it. The lock file is never unlinked, so the lock always lives
+ * on one inode; if this process dies, the child's stdin closes and the kernel drops
+ * the lock. Nothing ever removes another owner's lock. */
+export interface HeldLock { release(): Promise<void> }
+export function holdLock(file: string, timeoutS = 120): Promise<HeldLock> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("flock", ["-x", "-w", String(timeoutS), file, "-c", "echo held; exec cat >/dev/null"], { stdio: ["pipe", "pipe", "inherit"] });
+    let held = false;
+    const exited = new Promise<void>((done) => child.once("exit", () => done()));
+    child.once("error", (e) => reject(new Error(`flock(1) is needed for the save library's locks: ${e.message}`)));
+    child.stdout.once("data", () => {
+      held = true;
+      resolve({ release: () => { child.stdin.end(); return exited; } });
+    });
+    child.once("exit", (code) => { if (!held) reject(new Error(`Could not lock ${file} within ${timeoutS} s (flock exit ${code})${holderOf(file)}`)); });
+  });
+}
+const holderOf = (file: string): string => { try { return `; last holder: ${fs.readFileSync(`${file}.owner`, "utf8").trim()}`; } catch { return ""; } };
+/** Is anyone holding `file`'s lock? (A free lock is taken and released at once.) */
+const lockFree = (file: string): boolean => spawnSync("flock", ["-n", file, "true"]).status === 0;
+
+/** Publication and index rebuilds run one at a time per root, under `<root>/.publish.lock`. */
+export async function withLibraryLock<T>(root: string, fn: () => T | Promise<T>): Promise<T> {
+  fs.mkdirSync(root, { recursive: true });
+  const file = path.join(root, ".publish.lock"), lock = await holdLock(file);
+  try {
+    fs.writeFileSync(`${file}.owner`, `${os.hostname()} pid ${process.pid} since ${new Date().toISOString()}\n`);
+    return await fn();
+  } finally { await lock.release(); }
+}
+/** Fault injection for the lock regression test only: with SILTWAKE_LIBRARY_PAUSE set,
+ * an index rebuild that has read the manifests writes `<file>.in` and waits for `<file>`.
+ * Never set in normal use. */
+function testPause(): void {
+  const file = process.env.SILTWAKE_LIBRARY_PAUSE;
+  if (!file) return;
+  fs.writeFileSync(`${file}.in`, String(process.pid));
+  while (!fs.existsSync(file)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+}
+/** Under the lock: rewrite index.json (atomically) from the manifests, and collect
+ * orphaned staging. Returns the staging directories removed. */
+export async function writeIndex(root: string): Promise<string[]> {
+  return withLibraryLock(root, () => { writeIndexLocked(root); return collectStaging(root); });
+}
+function writeIndexLocked(root: string): void {
+  const { manifests } = readLibrary(root);
+  testPause();
+  const index = {
+    format: `${LIBRARY_FORMAT}-index`, generatedAt: new Date().toISOString(),
+    commits: manifests.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)).map((m) => ({
+      commit: m.commit, schemaVersion: m.schemaVersion, contentVersion: m.contentVersion, machine: m.machine, generatedAt: m.generatedAt,
+      kinds: [...new Set(m.saves.flatMap((e) => e.kinds.filter((k) => !k.includes("@"))))], saves: m.saves.length,
+    })),
+  };
+  const tmp = path.join(root, `.index-${process.pid}.json`);
+  fs.writeFileSync(tmp, JSON.stringify(index, null, 1) + "\n");
+  fs.renameSync(tmp, path.join(root, "index.json"));
+}
+
+/** A staging directory: `<root>/.staging-<sha12>-XXXXXX/<sha>`, named by its commit so
+ * any build's verifier accepts it, and leased: its owner holds the kernel lock on
+ * `.lease` beside it for its whole life, so an orphan (owner gone) is told from a live
+ * export by the lock alone, never by age. */
+export interface Staging { dir: string; discard(): Promise<void> }
+export async function stagingDir(root: string, commit: string): Promise<Staging> {
+  fs.mkdirSync(root, { recursive: true });
+  // Created under a name collection ignores until the lease is held, then renamed.
+  const fresh = fs.mkdtempSync(path.join(root, `.new-staging-${commit.slice(0, 12)}-`));
+  const lease = await holdLock(path.join(fresh, ".lease"), 10);
+  const outer = path.join(root, `.${path.basename(fresh).slice(".new-".length)}`);
+  fs.renameSync(fresh, outer);
+  const dir = path.join(outer, commit);
+  fs.mkdirSync(dir);
+  let gone = false;
+  return { dir, discard: async () => {
+    if (gone) return;
+    gone = true;
+    removeTree(outer);
+    await lease.release();
+  } };
+}
+const removeTree = (dir: string): void => {
+  if (!fs.existsSync(dir)) return;
+  spawnSync("chmod", ["-R", "u+w", dir]);
+  fs.rmSync(dir, { recursive: true, force: true });
+};
+/** Remove staging directories whose owner is gone: its lease is free. One without a
+ * lease (an older build's, or a crash before the lease) is left alone unless it is a
+ * `.new-staging-` more than ten minutes old. Returns what it removed. */
+export function collectStaging(root: string): string[] {
+  if (!fs.existsSync(root)) return [];
+  const removed: string[] = [];
+  for (const name of fs.readdirSync(root)) {
+    const dir = path.join(root, name), lease = path.join(dir, ".lease");
+    const leased = name.startsWith(".staging-"), creating = name.startsWith(".new-staging-");
+    if (!leased && !creating) continue;
+    let age = 0;
+    try { age = Date.now() - fs.statSync(dir).mtimeMs; } catch { continue; }
+    if (leased ? (fs.existsSync(lease) && lockFree(lease)) : (age > 600_000 && (!fs.existsSync(lease) || lockFree(lease)))) {
+      removeTree(dir);
+      removed.push(name);
+    }
+  }
+  return removed;
+}
+
 /** Move a finished, verified staging directory into place as `<root>/<commit>`,
- * read-only, under the library lock (one publisher and one index rebuild at a
- * time). An existing directory is never replaced: it must itself verify
- * (`verifyExisting`) and hold the same files, which makes a repeated or concurrent
- * identical export "identical"; a different one is an error (the bot is meant to
- * be deterministic). The staging directory is gone afterwards in every case. */
-export function publish(root: string, staging: string, manifest: Manifest, verifyExisting: (dir: string) => string[]): PublishStatus {
+ * read-only, under the library lock (one publisher and one index rebuild at a time).
+ * An existing directory is never replaced: it must itself verify (`verifyExisting`)
+ * and hold the same files, which makes a repeated or concurrent identical export
+ * "identical"; a different one is an error (the bot is meant to be deterministic).
+ * Orphaned staging is collected under the same lock. The staging is gone afterwards. */
+export async function publish(root: string, staging: Staging, manifest: Manifest, verifyExisting: (dir: string) => string[]): Promise<PublishStatus> {
   const dir = path.join(root, manifest.commit);
   try {
-    fs.writeFileSync(path.join(staging, "manifest.json"), JSON.stringify(manifest, null, 1) + "\n");
-    return withLibraryLock(root, () => {
+    if (path.basename(staging.dir) !== manifest.commit) throw new Error(`staging ${staging.dir} is not named by commit ${manifest.commit}`);
+    fs.writeFileSync(path.join(staging.dir, "manifest.json"), JSON.stringify(manifest, null, 1) + "\n");
+    return await withLibraryLock(root, () => {
+      collectStaging(root);
       if (!fs.existsSync(dir)) {
-        for (const f of fs.readdirSync(staging)) fs.chmodSync(path.join(staging, f), 0o444);
+        for (const f of fs.readdirSync(staging.dir)) fs.chmodSync(path.join(staging.dir, f), 0o444);
         try {
-          fs.renameSync(staging, dir);
+          fs.renameSync(staging.dir, dir);
           fs.chmodSync(dir, 0o555);
           writeIndexLocked(root);
-          return "published";
+          return "published" as const;
         } catch (e) {
           // A writer outside the lock (an older build) created it first: judge the winner below.
           if (!["EEXIST", "ENOTEMPTY"].includes((e as NodeJS.ErrnoException).code ?? "")) throw e;
@@ -329,52 +460,9 @@ export function publish(root: string, staging: string, manifest: Manifest, verif
         const diff = manifest.saves.filter((e) => !old.saves.some((x) => x.file === e.file && x.sha256 === e.sha256)).map((e) => e.file);
         throw new Error(`${dir} already holds a different export (${diff.join(", ") || "different file set"}). A library directory is immutable; investigate the nondeterminism.`);
       }
-      return "identical";
+      return "identical" as const;
     });
-  } finally { fs.rmSync(staging, { recursive: true, force: true }); }
-}
-
-const sleep = (ms: number): void => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
-const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; } };
-/** The library root's lock: a `.lock` directory (mkdir is atomic) naming its holder.
- * A holder on this host that is no longer running is broken; any other wait gives
- * up after `timeoutMs`. */
-export function withLibraryLock<T>(root: string, fn: () => T, timeoutMs = 120_000): T {
-  fs.mkdirSync(root, { recursive: true });
-  const lock = path.join(root, ".lock"), owner = path.join(lock, "owner"), me = `${os.hostname()} ${process.pid}`;
-  for (const t0 = Date.now(); ;) {
-    try { fs.mkdirSync(lock); fs.writeFileSync(owner, me); break; } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-    }
-    let holder = "", age = 0;
-    try { holder = fs.readFileSync(owner, "utf8"); } catch { /* being created or removed */ }
-    try { age = Date.now() - fs.statSync(lock).mtimeMs; } catch { continue; }
-    const [host, pid] = holder.split(" ");
-    if ((holder && host === os.hostname() && !alive(Number(pid))) || (!holder && age > 10_000)) { fs.rmSync(lock, { recursive: true, force: true }); continue; }
-    if (Date.now() - t0 > timeoutMs) throw new Error(`The save library lock ${lock} has been held by ${holder || "an unknown writer"} for over ${timeoutMs / 1000} s`);
-    sleep(50);
-  }
-  try { return fn(); } finally { fs.rmSync(lock, { recursive: true, force: true }); }
-}
-/** Rewrite index.json (atomically, under the lock) from the manifests. */
-export function writeIndex(root: string): void { withLibraryLock(root, () => writeIndexLocked(root)); }
-function writeIndexLocked(root: string): void {
-  const { manifests } = readLibrary(root);
-  const index = {
-    format: `${LIBRARY_FORMAT}-index`, generatedAt: new Date().toISOString(),
-    commits: manifests.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)).map((m) => ({
-      commit: m.commit, schemaVersion: m.schemaVersion, contentVersion: m.contentVersion, machine: m.machine, generatedAt: m.generatedAt,
-      kinds: [...new Set(m.saves.flatMap((e) => e.kinds.filter((k) => !k.includes("@"))))], saves: m.saves.length,
-    })),
-  };
-  const tmp = path.join(root, `.index-${process.pid}.json`);
-  fs.writeFileSync(tmp, JSON.stringify(index, null, 1) + "\n");
-  fs.renameSync(tmp, path.join(root, "index.json"));
-}
-/** A fresh staging directory inside the root, so publishing is one rename. */
-export function stagingDir(root: string, commit: string): string {
-  fs.mkdirSync(root, { recursive: true });
-  return fs.mkdtempSync(path.join(root, `.staging-${commit.slice(0, 12)}-`));
+  } finally { await staging.discard(); }
 }
 
 /** Check a commit directory against its manifest: every file's SHA-256 and recorded
@@ -389,9 +477,9 @@ export function verifyCommitDir(dir: string, decode: boolean): string[] {
     if (!fs.existsSync(file)) { problems.push(`${e.file} is missing`); continue; }
     const text = fs.readFileSync(file, "utf8");
     if (sha256(text) !== e.sha256) { problems.push(`${e.file}: SHA-256 differs from the manifest`); continue; }
-    let raw: GameState;
-    try { raw = (JSON.parse(text) as { state: GameState }).state; } catch { problems.push(`${e.file} is not JSON`); continue; }
-    if (stateHash(raw) !== e.hash) { problems.push(`${e.file} holds a state hashing to ${stateHash(raw)}, not its recorded ${e.hash}`); continue; }
+    const raw = rawStateHash(text);
+    if (!raw.ok) { problems.push(`${e.file} ${raw.error}`); continue; }
+    if (raw.hash !== e.hash) { problems.push(`${e.file} holds a state hashing to ${raw.hash}, not its recorded ${e.hash}`); continue; }
     if (!decode) continue;
     const decoded = decodeSave(text);
     if (!decoded.ok) { problems.push(`${e.file} does not load: ${decoded.error}`); continue; }
@@ -404,15 +492,15 @@ export function verifyCommitDir(dir: string, decode: boolean): string[] {
 /** Bring a commit directory exported elsewhere (the second worker) into the root:
  * copied into a hidden staging directory, decoded there by `verify` (a build of
  * that commit), and only then published. A failure publishes nothing. */
-export function importCommitDir(source: string, root: string, verify: (dir: string) => string[]): { status: PublishStatus; commit: string } {
+export async function importCommitDir(source: string, root: string, verify: (dir: string) => string[]): Promise<{ status: PublishStatus; commit: string }> {
   const m = readManifest(source), files = verifyCommitDir(source, false);
   if (files.length) throw new Error(`${source} does not verify:\n  ${files.join("\n  ")}`);
-  const staging = stagingDir(root, m.commit);
+  const staging = await stagingDir(root, m.commit);
   try {
-    for (const e of m.saves) fs.copyFileSync(path.join(source, e.file), path.join(staging, e.file));
-    fs.writeFileSync(path.join(staging, "manifest.json"), fs.readFileSync(path.join(source, "manifest.json")));
-    const problems = verify(staging);
+    for (const e of m.saves) fs.copyFileSync(path.join(source, e.file), path.join(staging.dir, e.file));
+    fs.writeFileSync(path.join(staging.dir, "manifest.json"), fs.readFileSync(path.join(source, "manifest.json")));
+    const problems = verify(staging.dir);
     if (problems.length) throw new Error(`${source} does not decode:\n  ${problems.join("\n  ")}`);
-  } catch (e) { fs.rmSync(staging, { recursive: true, force: true }); throw e; }
-  return { status: publish(root, staging, m, verify), commit: m.commit };
+  } catch (e) { await staging.discard(); throw e; }
+  return { status: await publish(root, staging, m, verify), commit: m.commit };
 }

@@ -87,7 +87,7 @@ Measured headless in the `tour` scenario (`manifest.measurements.tour`, at `0a46
   - `saves-export.sh` captures HEAD once, builds it, and runs both paths from that build: the second worker builds the same SHA there, and the factory fallback runs as `--class playthrough --snapshot`. Its own `verify` and `import` use that build's CLI.
   - So a HEAD that moves, or a stale `.test-build`, can't change what is exported or how it is labelled.
 - **R2 (P2), an import public before it was decoded.**
-  - `importCommitDir` copies the incoming directory into hidden staging in the root, then decodes every save there with a build of that commit. That is this code when its marker names the commit, else a fresh `saves-build-at.sh` build run as a child (`verify-dir`).
+  - `importCommitDir` copies the incoming directory into hidden staging in the root, then decodes every save there with a build of that commit. That is this code when its marker names the commit, else a fresh `saves-build-at.sh` build, called through its own exported `verifyCommitDir` (R2 round, below).
   - Only then does it publish. A failure leaves no commit directory, no index entry and no staging.
   - An existing directory must itself verify before an identical import or export is accepted, and `saves-export.sh` re-verifies an existing export instead of trusting its manifest.
 - **R3 (P2), damaged recorded hashes accepted as migrations.**
@@ -95,7 +95,7 @@ Measured headless in the `tour` scenario (`manifest.measurements.tour`, at `0a46
   - `migrated` now means the decoder changed that state. The test covers a pre-CR-1 save without fish traps, which this build fills in.
   - An export whose own build would change a save is refused.
 - **R4 (P2), concurrent publication.**
-  - Publication and index rebuilds take the root's `.lock` directory. It names its holder, and a dead holder on this host is broken.
+  - Publication and index rebuilds take a root lock. Replaced in the R2 round by a kernel `flock` (below).
   - The existence check, rename and index rebuild happen under it. A create race lost to a writer outside the lock is judged by identity, and staging is removed in every case.
   - Tested with 7 processes racing on 3 commits: 3 published, 4 identical, all 3 in the index, nothing left behind.
 - **R5 (P2), read failures outside the refusal contract.**
@@ -109,6 +109,25 @@ Measured headless in the `tour` scenario (`manifest.measurements.tour`, at `0a46
   - **Second-worker path** (`SILTWAKE_SAVES=/work/tmp/save1/lib-remote scripts/saves-export.sh`, tested `e432c63`): published after decoding in staging.
   - **Deterministic across machines and commits:** the factory `dabaa79`, alickers `e432c63` and alickers `1d4d2c3` exports are byte-identical, 73 of 73.
 - **Found on the way (not SAVE-1's code):** every `heavy-check --snapshot` job from a worktree with `node_modules` was rejected (exit 3). The snapshot links `node_modules`, but `.gitignore`'s `node_modules/` only matches a directory, so the copy looked dirty. Fixed at the root by `node_modules` (no slash), `dabaa79`.
+
+## R2 fixes (Sol 6.1 xhigh R2, `9e1e499`: three P2s, plus staging collection)
+- **R4, recovering a dead holder could delete a live lock.**
+  - The `.lock` directory and its owner reads, dead-holder checks and removals are gone.
+  - `holdLock(file)` runs `flock -x` on `<root>/.publish.lock`, a file that is never unlinked, in a child process that holds the lock until this process releases it. When the owner dies, the child's stdin closes and the kernel drops the lock. There is no recovery step left to race, and only the owner's own child ever releases it.
+  - `.publish.lock.owner` names the last holder, for messages only.
+  - **Regression test** (`save-library-cli.test.ts`): a holder takes the lock and is SIGKILLed while two publishers wait. Exactly one enters and pauses inside its index rebuild after reading the manifests (`SILTWAKE_LIBRARY_PAUSE`, test-only fault injection). The other stays out for a second, then enters after the release. Both publish, and the index keeps both commits.
+- **R2 follow-up, older exports couldn't be verified.**
+  - The cross-commit verifier now imports the archived build's own `library.js` and calls `verifyCommitDir(dir, true)`, exported since the first export. That build's decoder, hash check and kind facts judge the save, and nothing is bypassed. `verify-dir` is removed.
+  - Staging is now `<root>/.staging-…/<sha>`, named by its commit, because older `readManifest`s require that name. Publication renames that inner directory into place.
+  - **Heavy test:** a save and manifest made by `1d4d2c3`'s own code import and verify through the current CLI, decoded by a fresh `1d4d2c3` build.
+- **R5, a damaged manifest could make the pick fall back silently, and a stateless envelope crashed it.**
+  - An export with an unreadable manifest stays a candidate in the ancestry and distance selection. If it is at least as near as the best readable save, the pick is refused: it names the unreadable export and lists every older compatible one as "not tried: a nearer export is unreadable". A farther one is listed under "passed over".
+  - The raw envelope is parsed and hashed inside the refusal boundary (`rawStateHash`): a missing or non-object `state` and any hashing error are refusals. The decoder call is guarded too.
+  - **Real CLI tests:** a `{` manifest at HEAD exits 3, while the same store at the parent commit still picks; an unreadable older export is reported; a checksum-valid `{}` save exits 3 with no stack trace.
+- **Staging collection (non-blocking, done):** each staging directory is leased with `flock` by its owner, from before it gets its `.staging-` name until it is published or discarded. `collectStaging` removes only those whose lease is free, under the publication lock, on every publish and `saves.js index`.
+  - A lease-less `.new-staging-` older than ten minutes (a crash mid-creation) is also collected.
+  - A lease-less `.staging-` from an older build is never collected automatically; delete it by hand.
+  - Age alone never deletes anything. Tested: a live owner's staging backdated to 2000 survives `index`, and is collected once its owner is SIGKILLed.
 
 ## Checks
 - **Fast:** `npm test` passes 1,328 of 1,328 at `0a464bc`. After the root merge, `save-library`, `playthrough` and `playthrough-parallel` pass 22 of 22 at the head. `tests/save-library.test.ts` takes 0.9 s CPU and covers:

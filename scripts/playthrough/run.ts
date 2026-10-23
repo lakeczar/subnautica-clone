@@ -26,7 +26,7 @@ import { EXPECTED_PENDING_BASE, malformedExpected, staleExpected } from "./pendi
 import { playScenarios, SCENARIOS } from "./scenarios.js";
 import type { PlayHooks } from "./scenarios.js";
 import { buildManifest, codeCommit, CODE_ROOT, libraryRoot, librarySave, publish, SOURCE_MARKER, stagingDir, verifyCommitDir } from "./library.js";
-import type { Produced } from "./library.js";
+import type { Produced, Staging } from "./library.js";
 
 const args = process.argv.slice(2);
 const value = (flag: string): string | undefined => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : undefined; };
@@ -45,15 +45,15 @@ if (exporting && !privateRoot && ids.length !== SCENARIOS.length) {
 }
 const fromOf = (id: string): string | null => { const f = SCENARIOS.find((s) => s.id === id)?.from; return f ? `${f.scenario}@${f.milestone}` : null; };
 const libraryParent = (id: string): boolean => { const f = SCENARIOS.find((s) => s.id === id)?.from; return fromLibrary && !!f && !ids.includes(f.scenario); };
-let commit = "", staging = "";
+let commit = "", staging: Staging | null = null;
 if (exporting) {
   const built = codeCommit(), asked = value("--commit");
   if (!built) { console.error(`--export runs only from code built by scripts/saves-build-at.sh (no ${SOURCE_MARKER} in ${CODE_ROOT}); use scripts/saves-export.sh`); process.exit(2); }
   if (asked !== built) { console.error(`--export --commit ${asked ?? "(missing)"}: this code was built from ${built}`); process.exit(2); }
   commit = built;
-  staging = stagingDir(libraryRoot(privateRoot), commit);
+  staging = await stagingDir(libraryRoot(privateRoot), commit);
 }
-const savesDir = value("--saves-dir") ?? (staging || undefined);
+const savesDir = value("--saves-dir") ?? staging?.dir;
 const hooks: PlayHooks = {
   sink: savesDir ? (scenario, label, text) => fs.writeFileSync(path.join(savesDir, `${scenario}@${label}.json`), text) : undefined,
   fromLibrary: fromLibrary ? (scenario, milestone) => {
@@ -82,22 +82,22 @@ const bad = runs.filter((r) => r.outcome === "blocked" || r.checks.some((c) => !
 if (runs.length !== ids.length) { console.log(`Expected ${ids.length} results, got ${runs.length}.`); process.exit(1); }
 console.log(bad.length ? `BLOCKED or failed: ${bad.map((r) => r.scenario).join(", ")}` : stale.length ? "Expected-pending list stale." :
   `No blockers. ${runs.filter((r) => r.outcome === "pending-c3").length} of ${runs.length} scenarios wait on C3 content.`);
-const exported = exporting ? exportLibrary() : 0;
+const exported = exporting ? await exportLibrary(staging!) : 0;
 process.exit(bad.length || stale.length || exported ? 1 : 0);
 
 /** Publish the staged saves as the library at this commit, or nothing at all. */
-function exportLibrary(): number {
-  const produced: Produced[] = fs.readdirSync(staging).filter((f) => f.endsWith(".json")).map((f) => {
+async function exportLibrary(staging: Staging): Promise<number> {
+  const produced: Produced[] = fs.readdirSync(staging.dir).filter((f) => f.endsWith(".json")).map((f) => {
     const [scenario, label] = f.slice(0, -5).split("@") as [string, string];
-    return { scenario, label, text: fs.readFileSync(path.join(staging, f), "utf8") };
+    return { scenario, label, text: fs.readFileSync(path.join(staging.dir, f), "utf8") };
   });
   const { manifest, problems } = buildManifest(commit, runs, produced, fromOf);
   if (problems.length) {
     console.log(`\nSave library NOT exported for ${commit.slice(0, 12)}:\n  ${problems.join("\n  ")}`);
-    fs.rmSync(staging, { recursive: true, force: true });
+    await staging.discard();
     return 1;
   }
-  const status = publish(libraryRoot(privateRoot), staging, manifest, (dir) => verifyCommitDir(dir, true)), z = manifest.sizes, k = (n: number): string => `${(n / 1024).toFixed(0)} KiB`;
+  const status = await publish(libraryRoot(privateRoot), staging, manifest, (dir) => verifyCommitDir(dir, true)), z = manifest.sizes, k = (n: number): string => `${(n / 1024).toFixed(0)} KiB`;
   console.log(`\nSave library ${status} at ${libraryRoot(privateRoot)}/${commit} (${manifest.saves.length} saves):`);
   for (const e of manifest.saves.filter((e) => e.kinds.length > 1))
     console.log(`  ${e.kinds.slice(0, -1).join(", ").padEnd(22)} ${e.file.padEnd(30)} ${k(e.bytes).padStart(8)}  ${e.minutes} min, ${e.commands} commands`);
