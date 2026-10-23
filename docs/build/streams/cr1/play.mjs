@@ -249,10 +249,12 @@ const SCENES = {
   },
   async "approach-meridian"() {
     const h = homeOf("district_choir_gallery");
-    // From the parking point 45 m south: down outside the reach, then straight through the bells and out the north side.
-    // Wait outside the bells' reach (46 m); go the moment they close, 4 m over the gallery floor.
-    await approach("meridian", [{ x: h.x, y: h.y + 4, z: h.z + 30 }, { x: h.x, y: h.y + 4, z: h.z + 48 }], { ...h, y: h.y + 2 }, "hollow_choir",
-      [{ x: h.x, y: h.y + 4, z: h.z - 48 }]);
+    // Wait 47 m from both choirs (the gallery's and the terrace's; their reach is 46 m); go the moment they close,
+    // sprinting 4 m over the floor straight through the gallery's bells and out past the terrace's: 101 m in about
+    // 19 s of a 26 s rest. A diver-capsule sweep of the world found this the shortest clear line through both reaches
+    // (straight north, a 10 m structure blocks the floor 12 m past the bells).
+    await approach("meridian", [{ x: h.x + 41.37, y: h.y + 4, z: h.z + 34.71 }], { ...h, y: h.y + 2 }, "hollow_choir",
+      [{ x: h.x - 36.0, y: h.y + 4, z: h.z - 30.21 }]);
   },
   async "approach-canopy"() {
     // The Dart as the bot left it on the Reef → Canopy route; on to the approach ring, watch, then on to the lab.
