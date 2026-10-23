@@ -22,6 +22,7 @@
 // recorded or unavailable), fail (a rule broke; the soak stops), incomplete
 // (travel blocked), yielded, or running.
 import { readFileSync } from "node:fs";
+import { valid, validTimes } from "./measure.mjs";
 
 export const DEFAULTS = Object.freeze({
   tour: {
@@ -52,7 +53,8 @@ export function loadThresholds(file) {
   return { tour: { ...DEFAULTS.tour, ...over.tour }, dwell: { ...DEFAULTS.dwell, ...over.dwell } };
 }
 
-/** A usable measurement: a finite number (defensive; probe.mjs drops the rest). */
+// Defence in depth: the evaluator re-checks the measurement contract
+// (measure.mjs) for every value it judges.
 const measured = (v) => typeof v === "number" && Number.isFinite(v);
 /** Growth in %: from a zero count, any rise is unbounded growth. */
 const pct = (a, b) => (b > 0 ? ((a - b) / b) * 100 : a > b ? Infinity : 0);
@@ -71,19 +73,21 @@ function commonRules(run) {
 
 /** Frame-time rule: judged only when frames are evidence (an isolated run).
  * Measured only if frames were actually observed and attributed. */
-function frameRule(id, over, limitMs, { judged, attributed, observed, machine }, what) {
+function frameRule(id, over, limitMs, { judged, attributed, observed, invalid = 0, attributionIssue = null, machine }, what) {
   // A measured violation is judged first: missing coverage elsewhere in the
-  // run never hides one (R2-F3).
-  over = over.filter((f) => measured(f.ms));
+  // run never hides one (R2-F3, R3-F2).
+  over = over.filter((f) => valid("frameMs", f.ms));
   const worstOver = over.reduce((m, f) => Math.max(m, f.ms), 0);
   if (judged && over.length) return { id, status: "fail", value: round(worstOver), limit: limitMs, detail: `${over.length} ${what} frames over ${limitMs} ms, worst ${round(worstOver)} ms at ${over[0].where ?? "?"}` };
-  if (attributed === false) return { id, status: "unavailable", limit: limitMs, detail: `no ${what} attribution yet (REC-1 or CW-1's per-frame split); long frames are recorded unattributed` };
+  // Not judged (a shared run, or the 4070 on the owner's desktop): a known
+  // violation is recorded and flagged however complete the rest is.
+  if (!judged && over.length) return { id, status: "recorded", value: round(worstOver), limit: limitMs, warning: true,
+    detail: `${over.length} over ${limitMs} ms, worst ${round(worstOver)} ms at ${over[0].where ?? "?"}; ${machine ?? "a shared run"}: recorded, not frame-time evidence` };
+  if (attributed === false) return { id, status: "unavailable", limit: limitMs, detail: `no ${what} attribution (${attributionIssue ?? "REC-1 or CW-1's per-frame split is missing"}); long frames are recorded unattributed` };
   if (attributed !== true || !(observed > 0)) return { id, status: "unavailable", limit: limitMs, detail: `no frames were measured (the frame provider failed or saw none)` };
+  if (invalid > 0) return { id, status: "unavailable", limit: limitMs, detail: `${invalid} frame gaps were invalid; the rest are within ${limitMs} ms, but the record is incomplete` };
   const worst = over.reduce((m, f) => Math.max(m, f.ms), 0);
-  // Not judged (a shared run, or the 4070 on the owner's desktop): recorded,
-  // and flagged when it would have failed, so a bad result stays visible.
-  if (!judged) return { id, status: "recorded", value: round(worst), limit: limitMs, warning: over.length > 0,
-    detail: `${over.length} over ${limitMs} ms${over.length ? `, worst ${round(worst)} ms at ${over[0].where ?? "?"}` : ""}; ${machine ?? "a shared run"}: recorded, not frame-time evidence` };
+  if (!judged) return { id, status: "recorded", value: round(worst), limit: limitMs, warning: false, detail: `0 over ${limitMs} ms; ${machine ?? "a shared run"}: recorded, not frame-time evidence` };
   return { id, status: over.length ? "fail" : "pass", value: round(worst), limit: limitMs, detail: over.length ? `${over.length} ${what} frames over ${limitMs} ms, worst ${round(worst)} ms at ${over[0].where ?? "?"}` : null };
 }
 
@@ -98,13 +102,13 @@ export function evaluateTour(run, t = DEFAULTS.tour) {
   const rules = commonRules(run), laps = run.laps ?? [], first = laps[0], last = laps.at(-1);
   if (first && last && last !== first) {
     for (const m of t.memoryMetrics) {
-      if (!measured(first.memory?.[m]) || !measured(last.memory?.[m]) || !(first.memory[m] > 0)) { rules.push({ id: `memory-growth:${m}`, status: "unavailable", detail: `${m} not measured at lap 1 and lap ${last.lap}` }); continue; }
+      if (!valid("memoryMiB", first.memory?.[m]) || !valid("memoryMiB", last.memory?.[m])) { rules.push({ id: `memory-growth:${m}`, status: "unavailable", detail: `${m} not validly measured at lap 1 and lap ${last.lap}` }); continue; }
       const g = pct(last.memory[m], first.memory[m]);
       rules.push({ id: `memory-growth:${m}`, status: g > t.memoryGrowthPct ? "fail" : "pass", value: round(g), limit: t.memoryGrowthPct,
         detail: `lap 1 ${round(first.memory[m])} MiB → lap ${last.lap} ${round(last.memory[m])} MiB (${round(g)}%)` });
     }
     for (const m of t.graphicsMetrics) {
-      if (!measured(first.graphics?.[m]) || !measured(last.graphics?.[m])) { rules.push({ id: `graphics-growth:${m}`, status: "unavailable", detail: `${m} not measured at lap 1 and lap ${last.lap}` }); continue; }
+      if (!valid("count", first.graphics?.[m]) || !valid("count", last.graphics?.[m])) { rules.push({ id: `graphics-growth:${m}`, status: "unavailable", detail: `${m} not validly counted at lap 1 and lap ${last.lap}` }); continue; }
       const g = pct(last.graphics[m], first.graphics[m]);
       rules.push({ id: `graphics-growth:${m}`, status: g > t.graphicsGrowthPct ? "fail" : "pass", value: round(g), limit: t.graphicsGrowthPct,
         detail: `lap 1 ${first.graphics[m]} → lap ${last.lap} ${last.graphics[m]}` });
@@ -137,7 +141,9 @@ export function evaluateDwell(run, t = DEFAULTS.dwell) {
   const warm = (run.samples ?? []).filter((s) => s.at >= from);
   const settled = warm.filter((s) => s.afterGc);
   for (const m of t.memoryMetrics) {
-    const xs = settled.filter((s) => measured(s.memory?.[m]) && s.memory[m] > 0).map((s) => ({ at: s.at, v: s.memory[m] }));
+    const xs = settled.filter((s) => valid("memoryMiB", s.memory?.[m])).map((s) => ({ at: s.at, v: s.memory[m] }));
+    // Monotonic seconds, nondecreasing (R3-F3): otherwise no window or trend is established.
+    if (!validTimes(xs)) { rules.push({ id: `memory-flat:${m}`, status: "unavailable", detail: `${m}: sample times are not monotonic seconds` }); continue; }
     if (xs.length < 2) { if (warm.length) rules.push({ id: `memory-flat:${m}`, status: "unavailable", detail: `${m}: ${xs.length} settled post-GC sample(s) after warm-up; two are needed` }); continue; }
     const base = xs[0].v, worst = xs.reduce((w, x) => (Math.abs(pct(x.v, base)) > Math.abs(w) ? pct(x.v, base) : w), 0);
     rules.push({ id: `memory-flat:${m}`, status: Math.abs(worst) > t.memoryFlatPct ? "fail" : "pass", value: round(worst), limit: t.memoryFlatPct,
@@ -145,24 +151,28 @@ export function evaluateDwell(run, t = DEFAULTS.dwell) {
     const spanS = xs.at(-1).at - xs[0].at;
     if (spanS >= t.leakMinWindowS && xs.length >= 3) {
       const slope = slopePerHour(xs.map((x) => [x.at, x.v]));
+      if (!measured(slope)) { rules.push({ id: `leak:${m}`, status: "unavailable", detail: `${m}: the trend could not be computed` }); continue; }
       rules.push({ id: `leak:${m}`, status: slope > t.leakMiBPerHour ? "fail" : "pass", value: round(slope), limit: t.leakMiBPerHour, detail: `trend ${round(slope)} MiB/h over ${Math.round(spanS / 60)} min, ${xs.length} settled samples` });
     } else if (warm.length && warm.at(-1).at - from >= t.leakMinWindowS) {
       rules.push({ id: `leak:${m}`, status: "unavailable", detail: `${m}: the window was observed, but settled samples span only ${Math.round(spanS)} s (${xs.length})` });
     }
   }
-  const saves = run.autosaves ?? [], timed = saves.filter((s) => measured(s.frameMs));
+  const saves = run.autosaves ?? [], timed = saves.filter((s) => valid("gapMs", s.frameMs) && valid("seconds", s.at));
+  const complete = saves.filter((s) => s.complete !== false && valid("gapMs", s.frameMs)).length;
   const over = timed.filter((s) => s.frameMs > t.autosaveHitchMs).map((s) => ({ ms: s.frameMs, where: `autosave at ${Math.round(s.at)} s` }));
   // A measured hitch fails even when other autosaves lack a frame time (R2-F3).
   const hitch = frameRule("autosave-hitch", over, t.autosaveHitchMs, { judged: run.frames?.judged, machine: run.frames?.machine, attributed: true, observed: timed.length }, "autosave");
-  if (hitch.status === "fail" || !saves.length || timed.length === saves.length) rules.push(hitch);
+  if (hitch.status === "fail" || !saves.length || complete === saves.length) rules.push(hitch);
   else rules.push({ id: "autosave-hitch", status: "unavailable", limit: t.autosaveHitchMs, warning: Boolean(hitch.warning),
-    detail: `no frame time for ${saves.length - timed.length} of ${saves.length} autosaves${over.length ? `; ${over.length} recorded over budget` : ""}` });
+    detail: `no complete frame time for ${saves.length - complete} of ${saves.length} autosaves${over.length ? `; ${over.length} recorded over budget` : ""}` });
   // The leak trend needs its observation window after warm-up (R1-F7): until
   // then the dwell has not met its goal, and if it stops short the rule is
   // listed as unmeasured.
   // The goal includes the leak window, spanned by settled samples, so a dwell
   // cannot finish before its leak rule can be judged.
-  const observedS = settled.length >= 2 ? settled.at(-1).at - settled[0].at : 0;
+  const timesOk = validTimes(settled);
+  const observedS = timesOk && settled.length >= 2 ? settled.at(-1).at - settled[0].at : 0;
+  if (!timesOk) rules.push({ id: "clock", status: "unavailable", detail: "settled sample times are not monotonic seconds; no observation window is established" });
   if (observedS < t.leakMinWindowS) rules.push({ id: "leak", status: "unavailable", limit: t.leakMiBPerHour, detail: `settled samples span ${Math.round(observedS / 60)} of the ${Math.round(t.leakMinWindowS / 60)} min the leak trend needs` });
   const lastSave = saves.at(-1)?.at ?? run.startedAt ?? 0;
   if (run.now != null && run.now - lastSave > t.autosaveMissingS) rules.push({ id: "autosave", status: "fail", detail: `no autosave for ${Math.round(run.now - lastSave)} s` });
