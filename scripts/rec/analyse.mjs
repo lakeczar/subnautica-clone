@@ -62,6 +62,7 @@ export function analyse(r, t = THRESHOLDS) {
   const tab = system.filter((s) => s.tabMiB != null).map((s) => ({ t: s.t, v: s.tabMiB }));
   const heap = (system.some((s) => s.jsHeapMiB != null) ? system.filter((s) => s.jsHeapMiB != null).map((s) => ({ t: s.t, v: s.jsHeapMiB })) : samples.filter((s) => s.heapMiB != null).map((s) => ({ t: s.t, v: s.heapMiB })));
   const gpuUsed = system.filter((s) => s.gpuUsedMiB != null).map((s) => ({ t: s.t, v: s.gpuUsedMiB }));
+  const vram = system.filter((s) => s.browserVramMiB != null).map((s) => ({ t: s.t, v: s.browserVramMiB }));
   const resident = samples.filter((s) => s.residentGpuMiB != null).map((s) => ({ t: s.t, v: s.residentGpuMiB }));
   const trend = (xs) => { const m = slope(xs.map((x) => x.t / 60000), xs.map((x) => x.v)); return m == null ? null : r1(m); };
   const ends = (xs) => (xs.length ? [r1(xs[0].v), r1(xs.at(-1).v)] : null);
@@ -97,7 +98,7 @@ export function analyse(r, t = THRESHOLDS) {
       if (xs[i].v - lo.v > t.memoryJumpMiB) { add({ kind: "memory", t: xs[i].t, reason: `${what} rose ${Math.round(xs[i].v - lo.v)} MiB in ${((xs[i].t - lo.t) / 1000).toFixed(0)} s (${Math.round(lo.v)} → ${Math.round(xs[i].v)} MiB)` }); k = i; }
     }
   };
-  jumps(tab, "tab memory"); jumps(heap, "JS heap"); jumps(gpuUsed, "GPU memory");
+  jumps(tab, "tab memory"); jumps(heap, "JS heap"); jumps(vram.length ? vram : gpuUsed, vram.length ? "this browser's VRAM" : "GPU memory");
   for (let i = 1; i < samples.length; i++) {
     const a = samples[i - 1].draws, b = samples[i].draws;
     if (a != null && b != null && b - a > t.drawJumpMin && b > a * (1 + t.drawJumpRatio)) add({ kind: "draws", t: samples[i].t, tick: samples[i].tick, reason: `draw calls ${a} → ${b}` });
@@ -139,7 +140,8 @@ export function analyse(r, t = THRESHOLDS) {
   check("frame times judged", judged ? "pass" : "unproven", judged ? "exclusive run" : "shared run: frame times are recorded, not performance evidence");
   check("memory flat", durationS < 600 ? "unproven" : (trend(tab.length ? tab : heap) ?? 0) > 5 ? "fail" : "pass", `trend ${trend(tab.length ? tab : heap) ?? "n/a"} MiB/min over ${Math.round(durationS / 60)} min${durationS < 600 ? " (under 10 min: not judged)" : ""}`);
   check("tab memory (RSS)", tab.length ? "pass" : "missing", tab.length ? "renderer process RSS" : "the driver read no process memory (in-game export: the browser exposes only the JS heap)");
-  check("VRAM", gpuUsed.length ? "pass" : "missing", gpuUsed.length ? `whole-GPU memory in use (nvidia-smi${header.gpuDevice?.baselineUsedMiB != null ? `, ${header.gpuDevice.baselineUsedMiB} MiB before launch` : ""}); the game's own estimate of streamed bytes alongside` : "no GPU memory figure: browsers expose none; only the game's own estimate of streamed bytes");
+  check("VRAM", vram.length || gpuUsed.length ? "pass" : "missing", vram.length ? "this browser's own VRAM (nvidia-smi per process); whole-GPU use and the game's estimate of streamed bytes alongside"
+    : gpuUsed.length ? `whole-GPU memory in use only (nvidia-smi lists no processes here${header.gpuDevice?.baselineUsedMiB != null ? `; ${header.gpuDevice.baselineUsedMiB} MiB before launch, desktop included` : ""}); the game's own estimate of streamed bytes alongside` : "no GPU memory figure: browsers expose none; only the game's own estimate of streamed bytes");
   const fails = checks.filter((c) => c.status === "fail"), unproven = checks.filter((c) => ["missing", "unproven", "partial"].includes(c.status));
   const verdict = { status: fails.length ? "fail" : unproven.length ? "partial" : "pass", failed: fails.map((c) => c.name), unproven: unproven.map((c) => c.name) };
 
@@ -155,10 +157,10 @@ export function analyse(r, t = THRESHOLDS) {
       frames: played.length, gap: { p50: r1(q(gaps, 0.5)), p99: r1(q(gaps, 0.99)), max: r1(gaps.at(-1) ?? null) }, over33: gaps.filter((g) => g > t.longFrameMs).length,
       work: { p50: r1(q(work, 0.5)), p99: r1(q(work, 0.99)) }, rec: { mean: recMs.length ? +(recMs.reduce((a, b) => a + b, 0) / recMs.length).toFixed(3) : null, p99: recMs.length ? +q(recMs, 0.99).toFixed(3) : null },
       holds: { frames: holdFrames, events: attention.filter((a) => a.kind === "hold").length },
-      memory: { tabMiB: ends(tab), heapMiB: ends(heap), gpuUsedMiB: ends(gpuUsed), residentGpuMiB: ends(resident), trendMiBPerMin: trend(tab.length ? tab : heap) },
+      memory: { tabMiB: ends(tab), heapMiB: ends(heap), vramMiB: ends(vram), gpuUsedMiB: ends(gpuUsed), residentGpuMiB: ends(resident), trendMiBPerMin: trend(tab.length ? tab : heap) },
       errors: errs.length, warnings: events.filter((e) => e.kind === "warning").length, draws: { p50: q(draws, 0.5), max: draws.at(-1) ?? null },
     },
-    series: { tab, heap, gpuUsed, resident },
+    series: { tab, heap, vram, gpuUsed, resident },
     pacing: pacing({ samples, events }, rel),
   };
 }
@@ -206,7 +208,7 @@ export function summaryJson(a, header) {
   const s = {
     verdict: a.verdict.status, failed: a.verdict.failed, unproven: a.verdict.unproven,
     frame: { ...n.gap, over33: n.over33, frames: n.frames }, work: n.work, rec: n.rec, holds: n.holds.frames,
-    memory: { tab: n.memory.tabMiB, heap: n.memory.heapMiB, gpu: n.memory.gpuUsedMiB, trend: n.memory.trendMiBPerMin },
+    memory: { tab: n.memory.tabMiB, heap: n.memory.heapMiB, vram: n.memory.vramMiB ?? n.memory.gpuUsedMiB, trend: n.memory.trendMiBPerMin },
     errors: n.errors, warnings: n.warnings, draws: n.draws, attention: a.attention.length, minutes: r1(a.durationS / 60),
     machine: header.machine?.label ?? null, gpu: g.name ? `${g.name} ${g.driver}` : header.gpu?.renderer?.slice(0, 80) ?? null,
     browser: header.chrome ?? /Chrome\/[\d.]+/.exec(header.browser ?? "")?.[0] ?? null,

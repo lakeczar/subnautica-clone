@@ -173,3 +173,24 @@ scripts/alickers-job.sh --deadline 1800 -- npm run test:heavy
 - **Performance numbers** from the sandbox are labelled **"RTX 4070 Laptop (alickers, shared desktop host)"**. The Windows host can be in use, so treat them as indicative, never as the 3090's exclusive-mode evidence. Functional evidence (play, screenshots, passes) counts like any other run at the recorded SHA.
 - **One job at a time** on the sandbox, and the checkout is shared. Don't leave long interactive sessions holding it, and don't edit files there; everything comes from commits.
 - **Coordination, provider logins and GitHub pushes stay on factory-worker.** The sandbox has no logins.
+
+## Recorded runs and evidence packs (REC-1)
+
+Every build records itself: the flight recorder costs about 0.1 ms a frame. An automated browser (`navigator.webdriver`) gets **driver mode** unless the URL names another (`?rec=off|driver|playtest`): bounded memory, no in-game video, read through the test hook `window.__siltwake`. Use the hook, not DOM attributes, for new drivers: `read()` (tick, camera, feet, yaw, pitch, depth, region, cave, hold, vitals, craft), `scene()` (counts, streamed bytes, CW-1's cave counters) and `recorder.*` (cursor reads).
+
+**A recorded run** writes one directory (the remote lane fetches it whole):
+
+```sh
+$H --class gpu -- node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out /work/tmp/<ticket>/pack [--seconds S]
+#   --video off in --class exclusive runs (snapshots only); 4070: scripts/rec/alickers-run.sh run.mjs …
+node scripts/rec/compare.mjs PACK_3090 PACK_4070 OUT    # side by side (light)
+node scripts/rec/strip.mjs PACK --event A07              # more frames: --at S, --from S --to S --fps 1 (light)
+```
+
+Soaks record their own pack in `OUT/pack` (`scripts/soak/run.mjs`, `--no-record` to skip). Recorder overhead: `scripts/rec/overhead.mjs` in `--class exclusive`. Fixed views: `scripts/rec/views/capture.mjs` (`--class gpu`), then `compare.mjs` and, deliberately, `accept.mjs`.
+
+**Reading a pack (agents):** text first, images only where flagged.
+1. `summary.json` (under 1 KB): verdict, unproven list, key numbers, machine.
+2. `story.md`: checks, the **attention list** (each entry names its strip), pacing, timeline.
+3. Only the strips you need from `strips/`: **a budget of about 6–10 strips per review.** Failures, holds, errors and streaming long frames first; `R*` strips are random unflagged moments.
+4. Charts and `contact-sheet.jpg` only if the question needs them. `timeline.html` and the video are for people.

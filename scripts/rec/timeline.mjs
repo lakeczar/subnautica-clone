@@ -18,7 +18,7 @@ export function timelineHtml(r, a) {
     const x = Math.round(s(f.t) * 10) / 10;
     if (fr.length && fr.at(-1)[0] === x) fr.at(-1)[1] = Math.max(fr.at(-1)[1], f.gap); else fr.push([x, +f.gap.toFixed(1)]);
   }
-  const mem = [["tab (renderer RSS)", a.series.tab], ["JS heap", a.series.heap], ["GPU in use", a.series.gpuUsed], ["streamed world, GPU estimate", a.series.resident]]
+  const mem = [["tab (renderer RSS)", a.series.tab], ["JS heap", a.series.heap], [a.series.vram.length ? "VRAM (this browser)" : "GPU in use (whole GPU)", a.series.vram.length ? a.series.vram : a.series.gpuUsed], ["streamed world, GPU estimate", a.series.resident]]
     .filter(([, xs]) => xs.length).map(([label, xs]) => ({ label, pts: xs.map((p) => [s(p.t), p.v]) }));
   const attention = new Map(a.attention.map((e) => [e.t, e]));
   // The measured window only (the load before it is one line in story.md).

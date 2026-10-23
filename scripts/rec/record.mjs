@@ -39,6 +39,20 @@ export function gpuInfo() {
   return null;
 }
 
+/** VRAM held by these processes (nvidia-smi's per-process table; Linux drivers list
+ * graphics processes, WSL's lists none: null there). */
+export function processVram(pids) {
+  for (const bin of ["nvidia-smi", "/usr/lib/wsl/lib/nvidia-smi"]) {
+    let xml;
+    try { xml = execFileSync(bin, ["-q", "-x"], { encoding: "utf8", timeout: 5000, maxBuffer: 16 << 20 }); } catch { continue; }
+    const procs = [...xml.matchAll(/<process_info>[\s\S]*?<pid>(\d+)<\/pid>[\s\S]*?<used_memory>(\d+) MiB<\/used_memory>/g)].map((m) => ({ pid: Number(m[1]), mib: Number(m[2]) }));
+    if (!procs.length) return null;
+    const ours = procs.filter((p) => pids.has(p.pid));
+    return ours.length ? ours.reduce((a, p) => a + p.mib, 0) : null;
+  }
+  return null;
+}
+
 /** Resident memory of the browser's renderer (the tab), GPU process and whole tree, MiB. */
 export function processMemory(browserPid) {
   if (!browserPid) return null;
@@ -50,6 +64,7 @@ export function processMemory(browserPid) {
   const procs = [...tree].map((p) => ({ c: cmd(p), r: kib(p) })).filter((x) => x.r != null);
   const max = (xs) => (xs.length ? Math.round(Math.max(...xs) / 102.4) / 10 : null);
   return {
+    pids: tree,
     tabMiB: max(procs.filter((x) => x.c.includes("--type=renderer") && !x.c.includes("extension")).map((x) => x.r)),
     gpuProcessMiB: max(procs.filter((x) => x.c.includes("--type=gpu-process")).map((x) => x.r)),
     browserTreeMiB: Math.round(procs.reduce((a, x) => a + x.r, 0) / 102.4) / 10,
@@ -97,11 +112,16 @@ export async function startRecording(opts) {
   const gpu0 = opts.gpuBaseline ?? null;
   let lastGpu = 0;
   async function system() {
-    const m = processMemory(opts.pid);
+    const { pids, ...m } = processMemory(opts.pid) ?? {};
     let heap = null;
     try { heap = (await cdp.send("Performance.getMetrics")).metrics.find((x) => x.name === "JSHeapUsedSize")?.value ?? null; } catch { /* closed */ }
     const row = { t: Math.round(pageNow()), ...m, ...(heap ? { jsHeapMiB: Math.round(heap / 104857.6) / 10 } : {}) };
-    if (Date.now() - lastGpu >= GPU_MS) { lastGpu = Date.now(); const g = gpuInfo(); if (g) row.gpuUsedMiB = g.usedMiB; }
+    if (Date.now() - lastGpu >= GPU_MS) {
+      lastGpu = Date.now();
+      const g = gpuInfo(); if (g) row.gpuUsedMiB = g.usedMiB;
+      // This browser's own VRAM, where the driver lists processes (not under WSL).
+      const v = pids ? processVram(pids) : null; if (v != null) row.browserVramMiB = v;
+    }
     append("system.ndjson", [row]);
   }
 

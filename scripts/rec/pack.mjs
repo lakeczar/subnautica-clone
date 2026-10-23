@@ -106,7 +106,7 @@ export async function buildPack(dir, opts = {}) {
     // Charts.
     const end = a.durationS, holds = holdSpans(r, a);
     await renderHtml(c.page, frameTimeSvg({ frames: r.frames, t0: a.t0, holds, attention: a.attention }), path.join(C, "frame-time.png"));
-    const mem = [["tab (renderer RSS)", a.series.tab], ["JS heap", a.series.heap], ["GPU in use (whole GPU)", a.series.gpuUsed], ["streamed world, GPU estimate", a.series.resident]]
+    const mem = [["tab (renderer RSS)", a.series.tab], ["JS heap", a.series.heap], [a.series.vram.length ? "VRAM (this browser)" : "GPU in use (whole GPU)", a.series.vram.length ? a.series.vram : a.series.gpuUsed], ["streamed world, GPU estimate", a.series.resident]]
       .filter(([, xs]) => xs.length).map(([label, xs]) => ({ label, points: xs.map((p) => ({ s: (p.t - a.t0) / 1000, v: p.v })) }));
     await renderHtml(c.page, memorySvg({ series: mem, end }), path.join(C, "memory.png"));
     await renderHtml(c.page, pacingSvg({ pacing: a.pacing, t0: a.t0, end }), path.join(C, "pacing.png"));
@@ -156,7 +156,7 @@ function storyMd(r, a, s) {
   L.push(`${h.machine?.label ?? "?"} · ${s.gpu ?? "?"} · ${s.browser ?? "?"} · commit \`${s.commit ?? "?"}\` · build \`${s.build ?? "?"}\` · ${s.minutes} min · ${h.mode ?? ""}${h.run?.segment != null ? ` · segment ${h.run.segment}` : ""}${h.crossOriginIsolated ? " · isolated (5 µs timers)" : ""}`, "");
   L.push(`Frames ${n.frames}: gap p50 ${n.gap.p50} / p99 ${n.gap.p99} / max ${n.gap.max} ms, ${n.over33} over 33 ms. Game's own work p50 ${n.work.p50} / p99 ${n.work.p99} ms. Recorder ${n.rec.mean} ms mean, ${n.rec.p99} ms p99 per frame (self-timed).`);
   if (a.before) L.push(`Before the measured window (load and entry, not judged): ${a.before.frames} frames over ${a.before.seconds} s, ${a.before.over33} over 33 ms, ${a.before.errors} errors.`);
-  L.push(`Memory: tab ${fmtPair(n.memory.tabMiB)} MiB, heap ${fmtPair(n.memory.heapMiB)} MiB, GPU ${fmtPair(n.memory.gpuUsedMiB)} MiB, trend ${n.memory.trendMiBPerMin ?? "n/a"} MiB/min. Draw calls p50 ${n.draws.p50 ?? "?"}, max ${n.draws.max ?? "?"}. Holds ${n.holds.frames} frames. Errors ${n.errors}, warnings ${n.warnings}.`, "");
+  L.push(`Memory: tab ${fmtPair(n.memory.tabMiB)} MiB, heap ${fmtPair(n.memory.heapMiB)} MiB, ${n.memory.vramMiB ? `VRAM (this browser) ${fmtPair(n.memory.vramMiB)}` : `GPU (whole) ${fmtPair(n.memory.gpuUsedMiB)}`} MiB, trend ${n.memory.trendMiBPerMin ?? "n/a"} MiB/min. Draw calls p50 ${n.draws.p50 ?? "?"}, max ${n.draws.max ?? "?"}. Holds ${n.holds.frames} frames. Errors ${n.errors}, warnings ${n.warnings}.`, "");
   L.push("## Checks", "", "| Check | Result | Note |", "| --- | --- | --- |", ...a.checks.map((c) => `| ${c.name} | ${c.status} | ${c.note.replace(/\|/g, "/")} |`), "");
   L.push(`## Attention (${a.attention.length}${a.attention.length > THRESHOLDS.maxStrips ? `; strips for the first ${THRESHOLDS.maxStrips}` : ""})`, "");
   if (!a.attention.length) L.push("Nothing flagged.");

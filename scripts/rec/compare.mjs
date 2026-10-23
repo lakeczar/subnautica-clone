@@ -36,7 +36,7 @@ const md = [
   row("game work p50 / p99 (ms)", (x) => `${x.s.work.p50} / ${x.s.work.p99}`),
   row("recorder mean / p99 (ms)", (x) => `${x.s.rec.mean} / ${x.s.rec.p99}`),
   row("hold frames", (x) => x.s.holds),
-  row("tab MiB", (x) => pair(x.s.memory.tab)), row("heap MiB", (x) => pair(x.s.memory.heap)), row("GPU MiB (whole GPU)", (x) => pair(x.s.memory.gpu)),
+  row("tab MiB", (x) => pair(x.s.memory.tab)), row("heap MiB", (x) => pair(x.s.memory.heap)), row("VRAM MiB (this browser where listed, else whole GPU)", (x) => pair(x.s.memory.vram)),
   row("draw calls p50 / max", (x) => `${x.s.draws.p50} / ${x.s.draws.max}`),
   row("errors · warnings", (x) => `${x.s.errors} · ${x.s.warnings}`),
   row("attention", (x) => byKind(x)), "",
@@ -52,7 +52,7 @@ writeFileSync(path.join(out, "compare.json"), JSON.stringify({ a: { dir: A, ...p
 const c = await composer({ pw: arg("pw"), chrome: arg("chrome") });
 try {
   const end = Math.max(p.a.durationS, q.a.durationS);
-  const mem = (x) => [["tab", x.a.series.tab], ["heap", x.a.series.heap], ["GPU in use", x.a.series.gpuUsed]].filter(([, xs]) => xs.length)
+  const mem = (x) => [["tab", x.a.series.tab], ["heap", x.a.series.heap], [x.a.series.vram.length ? "VRAM (browser)" : "GPU (whole)", x.a.series.vram.length ? x.a.series.vram : x.a.series.gpuUsed]].filter(([, xs]) => xs.length)
     .map(([label, xs]) => ({ label, points: xs.map((v) => ({ s: (v.t - x.a.t0) / 1000, v: v.v })) }));
   const block = (x) => `<div style="font:600 14px system-ui;margin:8px 4px">${x.label}</div>${frameTimeSvg({ frames: x.r.frames, t0: x.a.t0, attention: x.a.attention, w: 1200, h: 240 })}${memorySvg({ series: mem(x), end, w: 1200, h: 200 })}`;
   await renderHtml(c.page, block(p) + block(q), path.join(out, "compare.png"));
