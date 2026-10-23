@@ -2,6 +2,137 @@
 
 Opus 5.5 high. Branch `t3/col-1-static-collider` from root `fe27757`; stage A head: see the commit that adds this page. The decision that created this stream is R1 of the [compromise verdict](../audits/COMPROMISE-VERDICT-OPUS.md) (on `research/compromise-audit`), on Sol's findings ART-01/02/03/07, CAV-02/03/20 and TST-05. **New modules only:** `src/world/collision/*` and `tests/col1-*`. No edit to `world.ts`, `app.ts`, `step.ts`, LC's files, or any cave or creature file, with two grants from the coordinator for R6: the floor snap and seam step in `caveGeometry.ts` (and the cave tests that encode the seam), and the memo key in `caveFloor` (`caves/authored.ts`).
 
+## R6 response (Sol R6)
+**R6-1 is fixed at the root, in the floor snap.** The coordinator granted COL-1 the snap and seam step in `src/content/regions/caveGeometry.ts` for this fix, and later the one-line memo key in `caveFloor` (`src/content/regions/caves/authored.ts`, see below). Unchanged indices no longer stand in for orientation: the final mesh is checked.
+
+**What was wrong.** The snap pulled every footprint-edge vertex onto the floor (and, coarse, lifted a 1.5-voxel band onto it) regardless of what that did to its triangles. Where the shell met the side well below or above the floor, triangles turned inside out or passed through other rock. Indices were untouched, so provenance still claimed outward faces. At the reviewer's column in `meridian_culvert_north`, support missed the real top by 0.753 m. Before the fix, 100 columns in 5 fine shells contradicted the volume's own parity.
+
+**The snap now never flips or folds** (`snapToFloor`):
+- **All or nothing per vertex.** A vertex moves to its target height only if every incident triangle keeps facing the way the mesher wound it (dot product with its pre-snap normal > 0, unless degenerate) and none then passes through a triangle it shares no vertex with (strict Möller–Trumbore over an X/Z bucket grid). Passes repeat while vertices that moved free others (at most four). Partial moves were tried first and left zigzag folds (19 contradicting columns in culvert), so they're gone.
+- **Skirts close the seam where a vertex stays.** Every open edge with a stayed end gets a vertical quad from it to the target heights, wound against the edge, so it's coherent with the triangle beside it. Each open edge then lies where the snap would have put it. On a side, that means on the floor, as before. In a coarse shell, where the clip leaves open edges a few centimetres inside the side, it means at the floor in the band.
+- **Asserted on the final mesh.** After snap and skirts, no original triangle faces against its pre-snap normal, and no moved vertex stopped partway. Otherwise `generateShell` throws.
+- **Not done, as asked:** no probing, no whole-component flips, no two-sided fallback.
+
+**The seam contract is one function, `shellSeamProblems(def, lod, floor)`.** No open edge may end off the floor on a collar side, nor below it within the coarse band. Vertices on a side that no open edge reaches (rock a side cuts, deep below the floor) are sealed and pass. Four existing cave tests asserted that every footprint-edge vertex is on the floor. That's no longer true where a vertex has to stay, so they now call this contract:
+- `caves.test.ts` (Fanvault);
+- `hub-caves.test.ts` (smoke, coarse);
+- the Isles and Reef shell agreement (`caves-reef-isles-support.ts`, both LODs).
+
+The 1e-4 tolerance is unchanged.
+
+**Results:**
+- **Column parity:** 0 contradicting columns on all 55 fine shells (1,500 random columns each in the art sweep, 4,000 on culvert), against 100 in 5 shells before.
+- **Seam:** 0 gaps on all 110 shells (55 caves × 2 LODs), by both `shellSeamProblems` and the test-side oracle `seamGaps`.
+- **Coarse topology is exactly pre-R6:** 16,306 open edges, 2,188 of them away from both side and floor (the coarse clip's own, unchanged). Every coarse open edge inside the band sits at its pre-R6 height, on all 55.
+- **Coarse parity** is not exact (the coarse shell has those open edges), and it's diagnostic only. Contradictions dropped from 11 shells to 6, none new.
+- **The reviewer's column:** support agrees with the final top boundary, and the escape sweep rejects entry from water. So do 300 columns within a metre of culvert's west edge.
+
+**Art: what changes.** Measured as surface-to-surface distance between the pre-R6 (`a1a45bb0`) and R6 fine shells, in all 55 caves ([`col1/r6-surface.mjs`](col1/r6-surface.mjs); per-cave results in [`col1/r6-surface.json`](col1/r6-surface.json)):
+- **Method.** R6 never re-indexes: the snap moves vertices and skirts are appended. So every triangle with no moved vertex is identical in both meshes. Only changed triangles are sampled (area-weighted, 10 cm spacing), and each sample's distance is taken to the whole other mesh. A control (one vertex moved 1 m along its normal) reads 0.92–1.00 m. The scripts in `col1/` read a pre-R6 tree at `/work/tmp/col1-pre` (`git archive a1a45bb0`, then `node scripts/test-build.mjs` there).
+- **Classes.** A changed spot is **broken** when one of its moved vertices lay on a pre-R6 triangle that faced against the mesher's winding (flipped) or passed through other rock (folded). Otherwise it's **was fine**.
+- **Visibility,** by the cave's own rock field: **buried** means 25 cm or more inside solid rock; anything else borders water.
+
+Results:
+- **13 caves don't change.** In the 42 that do, **R6 adds no surface more than 0.31 m from the old one** (largest R6-to-pre distance: meridian_terrace_crack 0.31 m).
+- **Places that weren't broken** change by at most **0.257 m** (divide_brine_cistern), over 31.1 m² in total.
+- **Two caves move metres, both entirely at broken spots and only one way.** In each, a pre-R6 sheet that R6 removes:
+  - rift_kiln_tube: 12.51 m, 75.8 m² buried;
+  - meridian_escarp_pocket: 6.92 m, 39.0 m² buried.
+
+  These are sealed vertices on a footprint side, deep in solid rock, that pre-R6 dragged up to the floor as sheets through the rock. They were never visible from water.
+- **Changed surface that borders water** totals **2.3 m²**, out of 187,179 m² of shell in the changed caves, at most **0.25 m** (basin_dish_lee_vault, 0.35 m²).
+
+The five most changed caves:
+
+| Cave | Hausdorff | pre→R6 / R6→pre | p95, broken area | Broken area | Was-fine area, max | Buried | Borders water, max |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| rift_kiln_tube | 12.51 m | 12.51 / 0.15 m | 11.79 m | 78.2 m² | 0.01 m², 0.09 m | 75.8 m² | 0.67 m², 0.20 m |
+| meridian_escarp_pocket | 6.92 m | 6.92 / 0.10 m | 5.86 m | 61.3 m² | 2.6 m², 0.10 m | 39.0 m² | 0.01 m², 0.06 m |
+| meridian_terrace_crack | 0.31 m | 0.23 / 0.31 m | 0.20 m | 4.2 m² | 1.0 m², 0.15 m | 3.0 m² | 0.04 m², 0.15 m |
+| divide_brine_cistern | 0.26 m | 0.14 / 0.26 m | 0.04 m | 0.8 m² | 5.6 m², 0.26 m | 2.0 m² | 0.07 m², 0.14 m |
+| basin_dish_lee_vault | 0.25 m | 0.17 / 0.25 m | 0.05 m | 0.8 m² | 0.3 m², 0.25 m | 0 | 0.35 m², 0.25 m |
+
+Every other changed cave stays within 0.24 m. Over the whole surface, the 95th percentile is 0 in every cave except escarp_pocket (6 mm).
+
+Vertex-index displacement overstates the change: up to 28.5 m fine and 30.9 m coarse (`disp2.json`). On a footprint side, R6's skirt and pre-R6's stretched triangles lie in the same side plane, so a vertex can move 11.6 m while the surface moves 3.5 cm (culvert's largest).
+
+**Screenshots** (`--class gpu` on the RTX 3090, ticket `261023-144359-c4e6`; functional evidence, not timing). Each cave's lab is served by its own tree, pre-R6 and R6, from the same camera:
+- **The spot** is each cave's largest change that borders water, since the buried changes can't be seen from water.
+- **The camera** is 6 m off, in open water by the cave's rock field, with a clear line of sight, and at least 30° off the footprint side's plane. A first run looked along two side planes, edge-on, which shows nothing; it's discarded.
+- **Each strip** shows before, after and the difference ×8.
+
+| Cave | Strip | Pixels differing by more than 8/255 | Largest difference |
+| --- | --- | --- | --- |
+| rift_kiln_tube | [strip](col1/r6-rift_kiln_tube.jpg) | 0 | 13 |
+| meridian_escarp_pocket | [strip](col1/r6-meridian_escarp_pocket.jpg) | 0 | 6 |
+| meridian_terrace_crack | [strip](col1/r6-meridian_terrace_crack.jpg) | 0.004% (two specks) | 73 |
+| divide_brine_cistern | [strip](col1/r6-divide_brine_cistern.jpg) | 0.039% (a sliver along the side seam) | 122 |
+| basin_dish_lee_vault | [strip](col1/r6-basin_dish_lee_vault.jpg) | 0 | 4 |
+
+**Oracle on these five caves,** per cave, on the pre-R6 and R6 trees alike (`caveScenes` now takes a def resolver): 0 spurious blocks or stops, 0 new illegal ends, and no route, tether or protected pose newly blocked against today's box queries. That's 15 protected paths and 6 poses. meridian_terrace_crack's ends that are illegal as today's world is fall from 3 to 1; those are existing debt.
+
+**The caveFloor memo** (granted separately). Extending the seam check to coarse found that `caveFloor` memoized by 1/64 m cell: a query got the height of whichever nearby point was asked first. So a group cave's floor and shells depended on build order, and so did what the build cache stored.
+- **The fix** is an exact (x, z) open-addressing memo over `Float64` triples (`pointMemo`).
+- **Effect:**
+  - fine geometry is unchanged in all 12 group caves;
+  - **the coarse render shells of five caves change by up to 0.37 m** (canopy_root_arch 0.375, canopy_eastcrown 0.371, basin_west_rim 0.314, canopy_knot_hollow 0.270, canopy_lantern_hall 0.202), back to their correct, build-alone shape;
+  - basin_burrow_warren and basin_dish_lee_vault gain or lose a coarse vertex;
+  - others move by at most 5 cm.
+- **Memory and time** (the real query stream of a full build, replayed into a fresh memo): canopy_root_arch 3.75 MB → **3.09 MB** (a string key would be 9.32 MB); lantern_hall 3.89 → 3.08 MB. Whole-build CPU time is within run-to-run spread (root_arch 4.99–5.16 s before, 4.99–5.09 s after; local, indicative). No bound is needed.
+
+**Baked artifacts:**
+- **Terrain:** rebaked and `bake --verify` at `9fb9538b`: 220/220 chunk files equal the live recipe (ticket `261023-131556-3839`). **7 of 220 chunks change against pre-R6,** all through the R6 snap's shells:
+  - `chunk:2:12:0` (Fanvault, reef_fan_crawl);
+  - `chunk:4:9:0` (Apron hollow);
+  - `chunk:5:8:0`, `5:9:0`, `6:8:0`, `6:9:0` (Glimmer crack, with Step arch and Crown shaft);
+  - `chunk:7:8:0` (Crown shaft, Basin culvert).
+
+  None of the five caves the memo fix corrects is in the terrain bake on this branch. Basin culvert's coarse shell moves at most 1.2 mm under the memo fix, and shares chunk 7:8 with Crown shaft.
+- **Collision packs:** `collision.bin` doesn't exist on this branch yet (CW-1 is unmerged). **Whoever merges second must rebake it and run `bake --verify`.** The R6 snap changes the fine shells of 42 caves (R6 adds no surface more than 0.31 m from the old), so the packs holding those caves change. The memo fix can't change any pack: packs bake fine shells only, and the memo fix leaves fine geometry identical.
+- **Merging CW-1:** a preview of the merge with `origin/t3/enable-authored-cave-streaming` (`477b2b45`) is clean.
+- **Coarse shells** are baked by the terrain bake (`render/biomes/terrain.ts`, `caveShellByColumn` at both LODs) and by nothing else.
+
+**Snap cost** (uncached, local, indicative): crown shaft fine shell 1,053 → 1,484 ms; culvert 224 → 578 ms. These are build-time costs, served by the build cache in tests.
+
+**Tests:**
+- `tests/col1-r6.test.ts`:
+  - the reviewer's column;
+  - 300 edge columns plus 4,000-column parity on culvert;
+  - the fine seam;
+  - the coarse band seam on culvert.
+- `tests/col1-r6-floor.test.ts`:
+  - `caveFloor` gives every point its own height in any query order, including points sharing a cell, with a fresh floor per point as the reference;
+  - Knot Hollow's whole shells are identical fine-then-coarse, coarse-then-fine and coarse alone.
+- `tests/col1-r6-floor.heavy.test.ts`: all 12 group caves, both LODs, three orders.
+- The art sweep (`col1-art.heavy.test.ts`) adds, for all 55: parity on the fine shell, and the seam at both LODs through both checkers.
+
+**Cross-check note:** the art sweep's isolated contrary probes rose 9 → 17, all within 6 of about 400 per component. The skirts are new vertical faces right next to the probes' voxel cells. This is diagnostic only: orientation is by provenance, and the final-mesh check above is exact.
+
+**Compromises:**
+- **Art changes at the broken spots, and slightly beside them.** R6 adds no surface more than 0.31 m from pre-R6. It removes pre-R6 sheets of up to 12.5 m that were dragged through solid rock (rift_kiln_tube, meridian_escarp_pocket). Those were buried and can't be seen from water. Changed surface that borders water totals 2.3 m², at most 0.25 m. 276 fine vertices next to broken ones stay that would have been harmless alone; the places that weren't broken change by at most 0.257 m over 31.1 m².
+  - **Root fix:** author those footprints so the side meets the floor in rock: move the side, or give the carve a floor there. **S** per cave, caves owner.
+- **The skirt is a vertical wall** at the footprint side where the shell stood off the floor. It's drawn in the vertex's own colour and normal.
+  - **Root fix:** the same authoring.
+
+**Checks for R6:**
+- **Root merge gate,** after merging root `91dc1ab` (SAVE-1, SCHED-2b) at `031462ee`:
+  - typecheck clean;
+  - fast tier 1,465 / 1,465;
+  - `npm run build` OK;
+  - all five economy scripts exit 0 (campaign, M1, M2-A, M2-B1, progression curve).
+
+  A first fast-tier run read a test build compiled before the merged sources. It showed 6 soak-goal failures, which pass 7 / 7 after a rebuild and pass on root by itself.
+- **Heavy, through the queue:**
+  - at `9fb9538b` (ticket `261023-131556-3839`): `col1-r6-floor.heavy` 1 / 1, `col1-art.heavy` 5 / 5 (55 kit shells, both LODs' seam, no failures), `col1-oracle.heavy` 4 / 4;
+  - the five-cave oracle, before and after, at `d8a06e12` (ticket `261023-140117-33f6`);
+  - at the head: HEAVY-HEAD.
+- **Mutations,** each failing its test:
+  - the naive snap;
+  - side-only skirts;
+  - no skirts;
+  - a memo match by rounded cell.
+- **Local runs.** During R6 the art sweep also ran locally a few times (about 90 s each). That bypassed the queue rule. Every result cited above comes from the queue.
+
 ## R5 response (Sol R5 on `09e8586`: [report](../reviews/COL-1A-SOL-XHIGH-R5.md), on `review/col-1a-r5`)
 **Orientation is now by construction, never by probing** (R5-1, P3-A, P3-B). The probe vote is gone from `src` entirely.
 - **Producers declare orientation** (`Orientation { facing, source }` on an `OrientedMesh`):
