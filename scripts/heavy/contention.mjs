@@ -91,16 +91,21 @@ export function snapshotNow(cgroup, { host = { cpu: hostCpu, vm: hostVm }, now =
 /** A snapshot file written by scope-run.sh (`key value` lines), or null. */
 export function parseCounters(text) {
   if (!text) return null;
-  const v = (k) => num(text, new RegExp(`^${k} ([\\d.]+)`, "m"));
   const line = (k) => new RegExp(`^${k} (.*)$`, "m").exec(text)?.[1]?.trim() ?? null;
-  const uptime = v("uptime"), stat = /^host_stat (.*)$/m.exec(text)?.[1];
+  // A counter is its whole raw value as a nonnegative safe integer, or null:
+  // never a prefix of something else ("0garbage", "0e3", "0 23"; R8-F3).
+  const int = (raw) => (raw != null && /^\d+$/.test(raw) && Number.isSafeInteger(Number(raw)) ? Number(raw) : null);
+  const v = (k) => int(line(k));
+  const up = line("uptime"), uptime = up != null && /^\d+(\.\d+)?$/.test(up) ? Number(up) : null;
+  const statRaw = line("host_stat")?.split(/\s+/) ?? null, statNums = statRaw?.map(int);
+  const stat = statNums && statNums.length >= 8 && statNums.every((x) => x != null) ? statNums : null;
   if (uptime == null) return null;
   return {
     t: Math.round(uptime * 1000),
     cpu: v("cpu_some") == null ? null : { some: v("cpu_some"), full: v("cpu_full") },
     mem: v("mem_some") == null ? null : { some: v("mem_some"), full: v("mem_full") },
     jobMajflt: v("job_majflt"), jobSwapIns: v("job_swapins"), jobUsec: v("job_usec"),
-    h: stat ? statLine(stat.trim().split(/\s+/).map(Number)) : null,
+    h: stat ? statLine(stat) : null,
     vm: { pswpin: v("pswpin"), pswpout: v("pswpout"), pgmajfault: v("pgmajfault") },
     slice: { path: line("slice_path"), weight: line("slice_weight"), cpuMax: line("slice_cpu_max"), memoryMax: line("slice_memory_max"), swapMax: line("slice_swap_max"),
       nrThrottled: v("slice_nr_throttled"), throttledUsec: v("slice_throttled_usec") },
@@ -199,10 +204,10 @@ export function judge({ start, end, points = [], nproc, thresholds = {}, windowS
   if (gpuShared.length) reasons.push(`the GPU was shared outside the lease (pid ${gpuShared.map((u) => u.pid).join(", ")})`);
   // A run that should have had the exclusive CPU priority and didn't is not boosted evidence.
   if (boost && boost.status !== "applied") reasons.push(`the job didn't run in the boosted slice ${boost.slice} (${boost.why ?? boost.status}): not boosted evidence`);
-  if (boost?.status === "applied" && boost.throttled) {
-    if (boost.throttled.invalid) reasons.push(`unmeasured: the exclusive slice's throttle counters ${boost.throttled.invalid}`);
-    else if (boost.throttled.periods > 0 || boost.throttled.usec > 0) reasons.push(`the exclusive slice was CPU-throttled ${boost.throttled.periods} time(s), ${Math.round(boost.throttled.usec / 1000)} ms in all, during the run`);
-  }
+  if (boost?.status === "applied" && boost.throttled && !boost.throttled.invalid && (boost.throttled.periods > 0 || boost.throttled.usec > 0))
+    reasons.push(`the exclusive slice was CPU-throttled ${boost.throttled.periods} time(s), ${Math.round(boost.throttled.usec / 1000)} ms in all, during the run`);
+  // Throttle counters that couldn't be read leave the measurement incomplete (R8-F4).
+  if (boost?.status === "applied" && boost.throttled?.invalid) missing.push(`the exclusive slice's throttle counters ${boost.throttled.invalid}`);
   if (missing.length) reasons.push(`unmeasured: ${missing.join("; ")}`);
   return {
     v: 2, measured: missing.length === 0, missing, windowS, points: good.length, measuredS: whole ? round2((whole.to - whole.from) / 1000) : 0,

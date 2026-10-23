@@ -73,24 +73,8 @@ fi
 
 if [[ $remove_excl == 1 ]]; then
   [[ -n $excl && -f "$excl_dir/$excl" ]] || { echo "no exclusive slice unit to remove"; exit 0; }
-  # Checked and removed inside one state transaction: admission takes the same lock.
-  (cd "$src" && SILTWAKE_SCHED_DIR="$dir" node --input-type=module -e '
-    const { spawnSync } = await import("node:child_process");
-    const { rmSync } = await import("node:fs");
-    const { loadConfig, transaction, unitPopulated } = await import("./state.mjs");
-    const [slice, file] = process.argv.slice(1);
-    const why = transaction(loadConfig(), (state) => {
-      const running = Object.entries(state.tickets ?? {}).filter(([, t]) => t.state === "running").map(([id]) => id);
-      if (running.length) return { result: `tickets ${running.join(", ")} are running` };
-      // Fail closed: a failed query or an unreadable cgroup counts as in use (state.mjs unitPopulated).
-      if (unitPopulated(slice)) return { result: `${slice} holds processes, or that could not be established` };
-      rmSync(file, { force: true });
-      spawnSync("systemctl", ["--user", "daemon-reload"]);
-      return { result: null };
-    });
-    if (why) { console.error(`not removed: ${why}; try again when it is idle`); process.exit(3); }
-    console.log(`removed ${slice}`);
-  ' "$excl" "$excl_dir/$excl")
+  # Checked and removed inside one state transaction, all-or-nothing (exclusive-unit.mjs).
+  SILTWAKE_SCHED_DIR="$dir" node "$src/exclusive-unit.mjs" remove "$excl" "$excl_dir"
   exit $?
 fi
 
@@ -121,36 +105,12 @@ install_guard() {
 # The exclusive slice's unit (TST-16), written once: a fixed CPUWeight, and the
 # heavy slice's caps for this machine (policy sliceLimits), so moving an
 # exclusive job here escapes no aggregate limit. Rewritten only if it differs,
-# and never under a measurement: the check (no ticket running, the slice
-# provably empty, also with no unit file), the write and the reload happen in
-# one queue transaction, the lock admission takes, so no job is admitted in
-# between (R7-F1). Before anything else is switched: a refusal changes nothing.
+# never under a measurement, and all-or-nothing (exclusive-unit.mjs: one queue
+# transaction, bounded and checked systemd calls, the old file restored if the
+# reload fails). Before anything else is switched: a refusal or failure changes
+# nothing else.
 if [[ -n $excl ]]; then
-  (cd "$src" && SILTWAKE_SCHED_DIR="$dir" node --input-type=module -e '
-    const { spawnSync } = await import("node:child_process");
-    const { mkdirSync, readFileSync, renameSync, writeFileSync } = await import("node:fs");
-    const { availableParallelism } = await import("node:os");
-    const { sliceLimits } = await import("./policy.mjs");
-    const { loadConfig, transaction, unitPopulated } = await import("./state.mjs");
-    const [slice, dir] = process.argv.slice(1), file = `${dir}/${slice}`, cfg = loadConfig();
-    const w = sliceLimits(availableParallelism(), cfg);
-    const unit = ["[Unit]", "Description=Siltwake heavy-check exclusive jobs (TST-16): CPU priority while one runs", "",
-      "[Slice]", "CPUAccounting=yes", "CPUWeight=10000", `CPUQuota=${w.cpuQuotaPct}%`, "MemoryAccounting=yes", `MemoryMax=${w.memoryMaxMiB}M`, "MemorySwapMax=0", ""].join("\n");
-    let now = null; try { now = readFileSync(file, "utf8"); } catch { /* none yet */ }
-    if (now === unit) process.exit(0);
-    const why = transaction(cfg, (state) => {
-      const running = Object.entries(state.tickets ?? {}).filter(([, t]) => t.state === "running").map(([id]) => id);
-      if (running.length) return { result: `tickets ${running.join(", ")} are running` };
-      if (unitPopulated(slice)) return { result: `${slice} holds processes, or that could not be established` };
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(`${file}.tmp`, unit);
-      renameSync(`${file}.tmp`, file);
-      spawnSync("systemctl", ["--user", "daemon-reload"]);
-      return { result: null };
-    });
-    if (why) { console.error(`not installed: ${slice} would change while ${why}; rerun when the queue is idle`); process.exit(3); }
-    console.log(`installed ${slice} (${dir})`);
-  ' "$excl" "$excl_dir") || exit $?
+  SILTWAKE_SCHED_DIR="$dir" node "$src/exclusive-unit.mjs" write "$excl" "$excl_dir" || exit $?
 fi
 
 version=$(cd "$src" && cat "${files[@]}" "$transport" | sha256sum | cut -c1-12)

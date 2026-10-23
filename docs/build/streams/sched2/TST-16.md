@@ -18,6 +18,22 @@ Four review rounds each found another lifetime race in one mechanism: changing a
 - **Deleted:** `handover.mjs`, the boost journal (`state.boost`), the freeze (`state.frozen`), the backstop, the runtime setter and read-back, `install.sh --rollback` and the thaw. Rollback is back to its pre-TST-16 form.
 - **R4's findings** (F1 freeze ownership across installer operations, F2 a reset outliving a killed handover, F3 freeze visibility) concern only that machinery, so they are removed with it. The diff is much smaller.
 
+## R8 review responses
+
+Review `39ac5fb6` on `review/tst-16-r8`, on `1d1a1bfe`: two P2s and two P3s, all in the installer's systemd calls and in counter parsing.
+- **F1 and F2 (P2): unbounded and unchecked systemd calls under the lock.** One checked helper, `scripts/heavy/exclusive-unit.mjs`, now does both install's write and the removal.
+  - **In one queue transaction:** refuse while busy, save the previous file, change it, reload.
+  - **Bounded and checked:** every `systemctl` call there (`state.mjs` `systemctlBounded`, and `unitPopulated`'s query) has a 10 s bound, well under the 30 s queue clients wait for the lock, with exit status, spawn error, timeout and signal all checked.
+  - **All-or-nothing:** if the reload fails or times out, the previous file is restored (a new one removed) and reloaded before the lock is released. It exits 4 before any other switch (version, mode, guard), so a retry starts clean, and an unchanged file can never stand for an unfinished reload.
+  - **S25:**
+    - a reload held past the bound: a queue submission during it is admitted and runs; install exits 4 within the bound with the file and mode unchanged;
+    - a failed reload: the same;
+    - a retry with systemd answering installs the unit (systemd has it) and applies the mode;
+    - removal: the same failure and retry pair.
+  - **On `1d1a1bfe`,** S25's submission during the held reload fails with 70, as the reviewer found.
+- **F3 (P3): prefixes parsed as counters.** `parseCounters` takes a counter only as its whole raw value, a nonnegative safe integer (`0garbage`, `0e3`, `0 23`, `-1`, `1.5` and overflow are null). Uptime keeps its decimal form, and `host_stat` must be eight or more such integers. **Unit tests:** cover each.
+- **F4 (P3): an invalid throttle measurement still said `measured: true`.** It now joins `missing`, so `measured` is false and the fields agree. **Unit test:** covers it.
+
 ## R7 review responses
 
 Review `4aa06738` on `review/tst-16-r7`, on `2ada5062`: two P2s and one P3, all mechanical. No design change.
@@ -158,6 +174,7 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
     - uninstall leaves the inert unit; `--remove-exclusive-slice` refuses while a ticket runs, and removes it once done (R5).
   - **S23 (R5-F1):** a unit removed between readiness and launch (a default slice under the right name), and a wrong memory cap: `unavailable`, `DISTURBED`, judged on the live slice reading.
   - **S24 (R6, R7):** neither removal nor a changing reinstall happens while the slice holds processes, also when systemd can't be asked or there's no unit file, nor while a ticket runs.
+  - **S25 (R8):** the unit changes all-or-nothing under bounded systemd calls: held and failed reloads, retry, removal.
   - **SCHED-1 test 7** checks the job's own measurement.
 - **Full suites** on the merged branch (root `91dc1ab` with this work), after R7: SCHED-1 **23/23**, SCHED-2 **24/24**, SCHED-2b **27/27**, fast tier **1,406/1,406**. No units, slices, unit files or drop-ins left behind.
 

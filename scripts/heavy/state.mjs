@@ -129,6 +129,14 @@ export const self = () => ({ pid: process.pid, start: procStart(process.pid) });
 export function systemctl(...args) {
   return spawnSync("systemctl", ["--user", ...args], { encoding: "utf8" });
 }
+/** systemctl with a bound (ms): { ok, out, error }. ok only on exit 0, with no
+ * spawn error, timeout or signal. For calls made while holding the state lock,
+ * which queue clients wait 30 s for (R8-F1, F2). */
+export function systemctlBounded(timeoutMs, ...args) {
+  const r = spawnSync("systemctl", ["--user", ...args], { encoding: "utf8", timeout: timeoutMs });
+  const ok = r.status === 0 && !r.error && !r.signal;
+  return { ok, out: r.stdout ?? "", error: ok ? null : (r.error?.code === "ETIMEDOUT" ? `timed out after ${timeoutMs / 1000} s` : r.error?.message ?? (r.signal ? `killed by ${r.signal}` : (r.stderr || `exit ${r.status}`).trim())) };
+}
 
 /**
  * Whether a job scope still holds processes. "Empty" means conclusively empty:
@@ -140,9 +148,10 @@ export function scopePopulated(unit) { return unitPopulated(`${unit}.scope`); }
 /** Whether a unit (a scope, a slice) holds processes, failing closed: a failed
  * query, or an active unit whose cgroup can't be read, counts as populated;
  * only a conclusive not-found or an empty cgroup counts as empty. */
-export function unitPopulated(name) {
-  const r = systemctl("show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", name);
-  if (r.status !== 0) return true;
+export function unitPopulated(name, { timeoutMs = 0 } = {}) {
+  const r = timeoutMs ? systemctlBounded(timeoutMs, "show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", name) : systemctl("show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", name);
+  if (timeoutMs ? !r.ok : r.status !== 0) return true;
+  if (timeoutMs) r.stdout = r.out;
   const p = Object.fromEntries(r.stdout.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
   if (p.LoadState === "not-found") return false;
   if (p.ControlGroup) {

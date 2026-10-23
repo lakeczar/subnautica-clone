@@ -81,7 +81,8 @@ test("a run that didn't get the exclusive slice's CPU priority is not boosted ev
   const timeOnly = judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied", throttled: { periods: 0, usec: 5000 } } });
   assert.equal(timeOnly.disturbed, true, "either positive delta is throttling");
   const invalid = judge(series(quiet(10)), { boost: { slice: "x.slice", weight: 10000, status: "applied", throttled: { invalid: "were missing or invalid (throttled_usec at the end)" } } });
-  assert.match(invalid.reasons.join(), /unmeasured: the exclusive slice's throttle counters were missing/);
+  assert.match(invalid.reasons.join(), /unmeasured: .*the exclusive slice's throttle counters were missing/);
+  assert.deepEqual([invalid.measured, invalid.missing.some((m: string) => /throttle counters/.test(m))], [false, true], "the fields agree (R8-F4)");
 });
 
 test("R7-F2: throttle counters must be nonnegative integers at both readings, never coerced; R7-F3: only an explicit populated 0 is empty", () => {
@@ -118,6 +119,13 @@ test("scope-run.sh's snapshot format parses; the exclusive slice: production use
   const p = C.parseCounters("uptime 58550.80\ncpu_some 507557988\ncpu_full 223264398\nmem_some 1552\nmem_full 1466\njob_swapins 0\njob_majflt 1350\njob_usec 43540094850\nhost_stat 11321318 4 1539240 33672701 11869 0 678844 128739 0 0\npswpin 123056\npswpout 236994\npgmajfault 102077\n");
   assert.deepEqual([p.t, p.cpu.some, p.mem.full, p.jobMajflt, p.jobSwapIns, p.h.steal, p.vm.pswpin], [58550800, 507557988, 1466, 1350, 0, 128739, 123056]);
   assert.equal(C.parseCounters("garbage"), null);
+  // R8-F3: a counter is its whole raw value as a nonnegative safe integer; uptime keeps its decimals.
+  for (const bad of ["0garbage", "0e3", "0 23", "-1", "1.5", "", "99999999999999999999"]) {
+    const q = C.parseCounters(`uptime 12.34\ncpu_some ${bad}\nmem_some 5\njob_majflt ${bad}\nslice_nr_throttled ${bad}\nhost_stat 1 2 3 ${bad} 5 6 7 8\n`);
+    assert.deepEqual([q.t, q.cpu, q.jobMajflt, q.slice.nrThrottled], [12340, null, null, null], `"${bad}"`);
+    if (!/\s/.test(bad)) assert.equal(q.h, null, `host_stat with "${bad}"`); // host_stat is a list: "0 23" there is two fields
+  }
+  assert.equal(C.parseCounters("uptime 1e3\n"), null, "uptime is decimal, not exponent");
   assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: "/work/tmp/siltwake-sched" }).exclusiveSlice, "siltwake_exclusive.slice");
   assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: join(tmpdir(), "private-x") }).exclusiveSlice, null);
   assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: join(tmpdir(), "private-x"), SILTWAKE_SCHED_EXCLUSIVE_SLICE: "x.slice" }).exclusiveSlice, "x.slice");
