@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { CANOPY_ROOT_CAVES } from "../src/content/caves/canopyRootCaves.js";
 import { AUTHORED_CAVE_SOURCES, caveDef, type CaveDef } from "../src/content/regions/caves.js";
-import { buildCave, caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
+import { buildCave, caveNeighbours, caveShell, caveVolume, sharedSpans } from "../src/content/regions/caveGeometry.js";
 import { CANOPY_BASIN_GROUPS, groupDef } from "../src/content/regions/caves/index.js";
 import { DEEP_CAVES } from "../src/content/regions/caves/deep.js";
 import { STRUCTURES } from "../src/content/regions/structures.js";
@@ -14,7 +14,7 @@ import { compactBiome, LC_ORIENTATION } from "../src/world/collision/biome.js";
 import { artMembers, certifyOrientation, meshComponents } from "../src/world/collision/bake.js";
 import { KIT_SHELL_ORIENTATION, kitShellShapes } from "../src/world/collision/caveShapes.js";
 import { caveScenes, probe } from "./col1-oracle-support.js";
-import { probeComponents } from "./col1-support.js";
+import { parityContradictions, probeComponents, seamGaps } from "./col1-support.js";
 
 /** COL-1 R4/R5: every shipped and authored shape bakes, oriented by its
  * producer's provenance and certified per connected component:
@@ -43,7 +43,7 @@ const voxelInside = (def: CaveDef) => {
   };
 };
 
-test("every kit cave's fine shell, in all three registries, bakes by provenance; the cross-check agrees per component", () => {
+test("every kit cave's fine shell, in all three registries, bakes by provenance, has no fold or flip, meets the floor; the cross-check agrees per component", () => {
   const list = kitDefs(), failures: string[] = [], notes: string[] = [];
   assert.equal(new Set(list.map(k => k.id)).size, 55, "55 distinct kit sources");
   let components = 0, contrary = 0, sampled = 0;
@@ -52,6 +52,13 @@ test("every kit cave's fine shell, in all three registries, bakes by provenance;
       const def = k.def(), shapes = kitShellShapes(def);
       if (!shapes.every(s => s.facing === KIT_SHELL_ORIENTATION.facing)) failures.push(`${k.id}: facing ${shapes.map(s => s.facing)}`);
       const sh = caveShell(def, "fine"), mesh = { positions: sh.positions, indices: Uint32Array.from(sh.indices) };
+      // R6: the final mesh's own parity (no folds or flips, exact) and its seam with the floor.
+      const folds = parityContradictions(mesh, 1500, 3);
+      if (folds.length) failures.push(`${k.id}: ${folds.length} columns contradict the volume's parity, e.g. ${JSON.stringify(folds[0])}`);
+      const f = def.replacementFootprints[0]!, spans = sharedSpans(f, caveNeighbours(def));
+      const shared = (x: number, z: number): boolean => spans.some(s => s.axis === "x" ? x === s.at && z >= s.lo && z <= s.hi : z === s.at && x >= s.lo && x <= s.hi);
+      const gaps = seamGaps(mesh, f, shared, worldFloor);
+      if (gaps.length) failures.push(`${k.id}: ${gaps.length} seam vertices off the floor, e.g. ${JSON.stringify(gaps[0])}`);
       const { of, count } = meshComponents(mesh);
       components += count;
       for (const row of probeComponents(mesh, of, new Int8Array(count).fill(1), voxelInside(def))) {
