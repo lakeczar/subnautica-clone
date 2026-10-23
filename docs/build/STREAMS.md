@@ -561,3 +561,42 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **TST-16 done** at `312b1be`; Sol R1 running. It adds swap and major-fault signals.
   - **Correction:** the 4 run-A "contention" frames include 24–50 ms GC pauses, which is game allocation pressure. That's passed to CW-1.
 - **Fleet:** pinning was already done. Option A recommended to the owner (move Kopia, the proxy and interrupts to CPUs 0–3); B (isolcpus, host reboot) not now. The 3090 inventory gets updated.
+
+### 2026-10-23 14:30Z — SAVE-1 merged; SCHED-2b live
+- **SAVE-1 accepted** by Sol R3 (`review/save-1-r3` `94fbcc3`). Merged as `91dc1ab`: 1,397 tests pass, build and economy OK. The library export at `91dc1ab` is running. **Merge gate addition:** `scripts/saves-export.sh` after game-code merges.
+- **The SCHED-2b switch-over** followed the review checklist:
+  - the queue drained, with no 2a processes left;
+  - pre-switch state recorded in `/work/tmp/cutover-2b/`;
+  - installed v2 `95f340380c25`; the transport is byte-identical, and the inodes were preserved;
+  - the guard refresh (`75ab0906bfb0`) still refuses outside a lease and allows inside one;
+  - a local `gpu` ticket was labelled RTX 3090;
+  - the `any` canary ran locally while health was unknown (correct);
+  - **the `4070` canary ran remotely** on the RTX 4070 D3D12 renderer, bound to `91dc1ab`, and the sandbox was left clean;
+  - alickers shows `up`.
+
+  Builders were told to merge root and use `--machine`.
+- **TST-16 R1 rejected** (`81d6d83`): stuck clamps, escaped memory limits, a sticky slice cap, false-clean sampling, a missed final GPU scan. It's being redesigned (CPU-only deprioritisation within the caller's containment, or labelling only).
+
+### 2026-10-23 ~17:00Z — usage limit again; codebase audit in; steward verdict started
+- **Usage limit:** about 16:00–17:00Z. SIM-1, REC-1 and CW-1 failed with the rate limit and auto-resume at reset.
+- **Codebase health audit:** Sol `c912151` on `research/codebase-health` (28 findings, top 15). The Opus steward verdict (`siltwake-codebase-steward-opus-c912151`) is running.
+- **REC-1 R1** (`32d6ef3`): 4 P1s and 8 P2s, among them **no storage budget for the default playtest recording**, an incomplete export, and false streaming and stable passes. Fixes are in progress; also told to fix the audit's baseline hash/PNG defect and merge CW-1's latest.
+- **TST-16 R2** (`b3ecb67`): 2 P2s (a surviving apply re-boosts after recovery; rollback strands boost cleanup). Fixes are in progress, with a suggested backstop: reset the slice weight whenever no exclusive job is running.
+- **Memory corrected:** the 3090 frame-stall note now says the causes are mixed, game work included.
+
+### 2026-10-23 — codebase steward verdict adopted (Opus `cc718962`)
+- **Root causes of drift:**
+  - interim copies never retired → the FORK register;
+  - per-stream evidence drivers → one driver library, `scripts/rec`;
+  - no hot-path rules → ten performance conventions;
+  - contracts kept in memory → one `npm run gate`.
+- **A live bug, F11:** audio uses the old four-region map, so the Rift, the Divide and the Deep District play the wrong ambience. It's fixed in STEW-1.
+- **New streams:**
+  - **STEW-1:** guard rails and small fixes. It started on the SAVE-1 builder's slot.
+  - **REC-2:** one evidence driver. The REC-1 builder does it after REC-1 merges, before BIO-1.
+- **Folded into existing streams:**
+  - REC-1: the two recorder defects, plus CW-1's top-k merge;
+  - COL-1 B: retire the box collision copies;
+  - WK-1: one mesh builder, cache ledger and verify path;
+  - SIG-1 stage 0: one inventory authority.
+- **Per-wave architecture review:** Sol makes one read-only pass against 8 checks (at most 2 pages), then an Opus steward rules (at most 1 page). At most one cleanup stream per wave.
