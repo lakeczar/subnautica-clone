@@ -168,10 +168,11 @@ const env = { ...process.env, ...jobEnv(t, req, cfg), SILTWAKE_JOB_HEARTBEAT: he
 child = cancelledEarly || rejected ? null
   : spawn("systemd-run", args, { cwd: runCwd, env, stdio: ["ignore", out, out, 3] });
 launched = Boolean(child);
-// Reservation OOMs, seen from outside the job's memory domain. The OOM group
-// kill also takes the in-scope wrapper, which then records nothing, so the
-// scope's memory.events.local is watched here and what it shows is kept in the
-// job directory (recovery reads it too).
+// Reservation OOMs, seen from outside the job's memory domain: the backup
+// observer. The in-scope wrapper sits outside the job's OOM group and normally
+// records them itself (scope-run.sh); should it die too, the scope's
+// memory.events.local seen here is kept in the job directory (recovery reads
+// it too).
 const oomSeen = { local: 0, peak: null };
 const watchOom = async () => {
   let cg = null;
