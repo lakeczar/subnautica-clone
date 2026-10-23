@@ -149,7 +149,8 @@ test("the recorder's mode: on by default for play, off or driver by URL, video b
   assert.deepEqual(flightMode({ enabled: false, video: true }, "", false), { mode: "off", video: false });
   assert.deepEqual(flightMode({ enabled: true, video: true }, "?rec=off"), { mode: "off", video: false });
   assert.deepEqual(flightMode({ enabled: false, video: true }, "?rec=driver"), { mode: "driver", video: false });
-  assert.deepEqual(flightMode({ enabled: true, video: true }, "?rec=driver&recvideo=1"), { mode: "driver", video: true });
+  // The in-game video is encoded in the playtest spool: a driver records its own (R2-7).
+  assert.deepEqual(flightMode({ enabled: true, video: true }, "?rec=driver&recvideo=1"), { mode: "driver", video: false });
   assert.deepEqual(flightMode({ enabled: true, video: true }, "", true), { mode: "driver", video: false }, "an automated browser records cheaply unless told otherwise");
   assert.deepEqual(flightMode({ enabled: true, video: true }, "?rec=playtest", true), { mode: "playtest", video: true });
 });

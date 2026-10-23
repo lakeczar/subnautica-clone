@@ -1,15 +1,26 @@
 /** REC-1 playtest spool: writes the recording to the Origin Private File
  * System from a worker, with synchronous access handles, so every flush is
  * durable (a crashed tab keeps what was written) and the main thread never
- * waits on disk. Messages are handled strictly in order, so a message is a
- * barrier for everything posted before it. Local only: nothing leaves the computer.
+ * waits on disk. It also encodes the in-game video (R2-7). Messages are
+ * handled strictly in order, so a message is a barrier for everything posted
+ * before it. Local only: nothing leaves the computer.
  *
- *   { op: "append" | "put" (replace), dir, file, data }  → { ack: bytes } or { failed: file, bytes, quota, error }
+ *   { op: "append" | "put" (replace), dir, file, data: ArrayBuffer }  → { ack: bytes } or { failed: file, bytes, quota, error }
  *   { op: "remove", dir, file | null (the whole directory), id } → { removed: id }
  *   { op: "export", dir, out, id } → { exported: id, bytes } : `out` is a ZIP of every
  *     file in `dir` as it stands at this point in the queue (nothing appended later
- *     is in it, and nothing modifies `out` afterwards). */
+ *     is in it, and nothing modifies `out` afterwards).
+ *   { op: "barrier", id } → { barrier: id } once everything before it has been acknowledged or refused.
+ *
+ * Video (WebCodecs, one segment file at a time, see webm.ts):
+ *   { op: "video-open", dir, file, width, height, fps, bitrate } → { videoOpened: file, codec } or { videoError }
+ *   { op: "video-frame", t, bitmap? } → { videoFrame: 1, kept }: the picture (or, without one,
+ *     the last picture again) encoded with page time `t` (ms); kept false when the encoder is behind
+ *   { op: "video-flush", id } → { videoFlushed: id }: everything encoded so far is in the file
+ *   { op: "video-close", id, final } → { videoClosed: id, file, frames, firstMs, lastMs }
+ *   unprompted: { wrote: file, bytes } after each cluster; { failed: file, ... } as above. */
 import { crc32, zipLayout, type ZipLayoutEntry } from "./zip.js";
+import { WebmClusters, webmHead, type WebmCodec } from "./webm.js";
 
 interface SyncHandle {
   getSize(): number;
@@ -21,13 +32,17 @@ interface SyncHandle {
 }
 interface SyncFileHandle extends FileSystemFileHandle { createSyncAccessHandle(): Promise<SyncHandle> }
 type Message =
-  | { op: "append"; dir: string; file: string; data: ArrayBuffer | string }
-  | { op: "put"; dir: string; file: string; data: ArrayBuffer | string }
+  | { op: "append"; dir: string; file: string; data: ArrayBuffer }
+  | { op: "put"; dir: string; file: string; data: ArrayBuffer }
   | { op: "remove"; dir: string; file: string | null; id: number }
-  | { op: "export"; dir: string; out: string; id: number };
+  | { op: "export"; dir: string; out: string; id: number }
+  | { op: "barrier"; id: number }
+  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number }
+  | { op: "video-frame"; t: number; bitmap?: ImageBitmap }
+  | { op: "video-flush"; id: number }
+  | { op: "video-close"; id: number; final: boolean };
 
 const handles = new Map<string, SyncHandle>();
-const encoder = new TextEncoder();
 let queue: Promise<void> = Promise.resolve();
 const scope = globalThis as unknown as { onmessage: ((e: MessageEvent<Message>) => void) | null; postMessage(m: unknown): void };
 
@@ -90,11 +105,107 @@ async function exportZip(dir: string, out: string): Promise<number> {
   } finally { target.close(); }
 }
 
+// --- video ----------------------------------------------------------------
+
+/** Encoder input waiting beyond this is dropped at the source: under load the video loses frames, never its clock. */
+const ENCODE_QUEUE_MAX = 2;
+/** A key frame this often (frames), and at every segment's start: seeking stays cheap. */
+const KEY_EVERY = 24;
+type Segment = { dir: string; file: string; h: SyncHandle; clusters: WebmClusters; origin: number | null; frames: number; broken: boolean };
+let encoder: VideoEncoder | null = null, encoderSize = "", codec: WebmCodec = "V_VP9", lastPicture: ImageBitmap | null = null, lastT = -Infinity;
+/** The one segment being written. A close drains the encoder first, so every chunk belongs to it. */
+let segment: Segment | null = null;
+
+function writeVideo(seg: Segment, bytes: Uint8Array): void {
+  if (seg.broken) return;
+  try {
+    seg.h.write(bytes, { at: seg.h.getSize() });
+    seg.h.flush();
+    scope.postMessage({ wrote: seg.file, bytes: bytes.length });
+  } catch (error) {
+    // A refused video write ends this segment's file here; the main thread decides what follows.
+    seg.broken = true;
+    const name = error instanceof DOMException ? error.name : "";
+    scope.postMessage({ failed: seg.file, bytes: bytes.length, quota: name === "QuotaExceededError", error: error instanceof Error ? error.message : String(error), video: true });
+  }
+}
+async function openEncoder(width: number, height: number, fps: number, bitrate: number): Promise<void> {
+  const size = `${width}x${height}`;
+  if (encoder && encoder.state === "configured" && encoderSize === size) return;
+  try { encoder?.close(); } catch { /* closed */ }
+  encoder = null;
+  if (typeof VideoEncoder === "undefined") throw new Error("this browser has no WebCodecs video encoder");
+  for (const [c, id] of [["vp09.00.10.08", "V_VP9"], ["vp8", "V_VP8"]] as const) {
+    const config: VideoEncoderConfig = { codec: c, width, height, bitrate, framerate: fps, latencyMode: "realtime" };
+    if (!(await VideoEncoder.isConfigSupported(config)).supported) continue;
+    codec = id;
+    encoderSize = size;
+    encoder = new VideoEncoder({
+      output: (chunk) => {
+        const seg = segment;
+        if (!seg || seg.origin === null) return;
+        const bytes = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(bytes);
+        seg.clusters.add(bytes, chunk.timestamp / 1000 - seg.origin, chunk.type === "key");
+      },
+      error: (error) => { scope.postMessage({ videoError: error.message }); },
+    });
+    encoder.configure(config);
+    return;
+  }
+  throw new Error(`no VP9 or VP8 encoder for ${size}`);
+}
+async function videoOpen(m: Extract<Message, { op: "video-open" }>): Promise<void> {
+  try {
+    await openEncoder(m.width, m.height, m.fps, m.bitrate);
+    const h = await handle(m.dir, m.file);
+    h.truncate(0);
+    const seg: Segment = { dir: m.dir, file: m.file, h, clusters: null as unknown as WebmClusters, origin: null, frames: 0, broken: false };
+    seg.clusters = new WebmClusters((b) => writeVideo(seg, b));
+    writeVideo(seg, webmHead(codec, m.width, m.height));
+    segment = seg;
+    scope.postMessage({ videoOpened: m.file, codec });
+  } catch (error) { scope.postMessage({ videoError: error instanceof Error ? error.message : String(error) }); }
+}
+function videoFrame(m: Extract<Message, { op: "video-frame" }>): void {
+  const seg = segment;
+  if (m.bitmap) { lastPicture?.close(); lastPicture = m.bitmap; }
+  const picture = lastPicture;
+  // Times only go forward; a segment's first picture is always kept (its key frame and its origin).
+  const behind = encoder !== null && encoder.encodeQueueSize > ENCODE_QUEUE_MAX && seg !== null && seg.frames > 0;
+  if (!encoder || encoder.state !== "configured" || !seg || seg.broken || !picture || m.t <= lastT || behind) { scope.postMessage({ videoFrame: 1, kept: false }); return; }
+  lastT = m.t;
+  // The segment's origin is its first encoded picture's page time: the main thread dates the file by it.
+  if (seg.origin === null) { seg.origin = m.t; scope.postMessage({ videoOrigin: seg.file, t: m.t }); }
+  const frame = new VideoFrame(picture, { timestamp: Math.round(m.t * 1000) });
+  try { encoder.encode(frame, { keyFrame: seg.frames % KEY_EVERY === 0 }); } finally { frame.close(); }
+  seg.frames++;
+  scope.postMessage({ videoFrame: 1, kept: true });
+}
+async function drain(): Promise<void> {
+  if (encoder && encoder.state === "configured") { try { await encoder.flush(); } catch { /* reported by its error callback */ } }
+}
+async function videoClose(m: Extract<Message, { op: "video-close" }>): Promise<void> {
+  await drain();
+  const seg = segment;
+  segment = null;
+  if (seg) {
+    seg.clusters.flush();
+    handles.delete(`${seg.dir}/${seg.file}`);
+    try { seg.h.close(); } catch { /* closed */ }
+  }
+  if (m.final) { try { encoder?.close(); } catch { /* closed */ } encoder = null; encoderSize = ""; lastPicture?.close(); lastPicture = null; }
+  scope.postMessage({ videoClosed: m.id, file: seg?.file ?? null, frames: seg?.frames ?? 0,
+    firstMs: seg?.origin ?? -1, lastMs: seg && seg.origin !== null ? seg.origin + seg.clusters.lastMs : -1 });
+}
+
 scope.onmessage = (e) => {
   const m = e.data;
+  // Video frames go through the same queue: a frame after a segment's close and the next one's open belongs to the new one.
+  if (m.op === "video-frame") { queue = queue.then(() => videoFrame(m)); return; }
   queue = queue.then(async () => {
     if (m.op === "append" || m.op === "put") {
-      const bytes = typeof m.data === "string" ? encoder.encode(m.data) : new Uint8Array(m.data);
+      const bytes = new Uint8Array(m.data);
       try {
         const h = await handle(m.dir, m.file);
         if (m.op === "put") h.truncate(0);
@@ -107,6 +218,16 @@ scope.onmessage = (e) => {
         const name = error instanceof DOMException ? error.name : "";
         scope.postMessage({ failed: m.file, bytes: bytes.length, quota: name === "QuotaExceededError", error: error instanceof Error ? error.message : String(error) });
       }
+    } else if (m.op === "barrier") {
+      scope.postMessage({ barrier: m.id });
+    } else if (m.op === "video-open") {
+      await videoOpen(m);
+    } else if (m.op === "video-flush") {
+      await drain();
+      segment?.clusters.flush();
+      scope.postMessage({ videoFlushed: m.id });
+    } else if (m.op === "video-close") {
+      await videoClose(m);
     } else if (m.op === "remove") {
       try {
         const target = m.file ? `${m.dir}/${m.file}` : m.dir;

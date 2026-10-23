@@ -602,8 +602,12 @@ export class SiltwakeApp {
     const { mode } = flightMode(now);
     if (this.flight && !now.enabled && this.flight.mode === "playtest") {
       this.flight.stop();
+      // The latest completed recording stays exportable; the one it supersedes is
+      // retired once it is finished and no export reads it (R2-5).
+      const superseded = this.flightDone;
       this.flightDone = this.flight;
       this.flight = null;
+      void superseded?.retire();
       if (this.renderer) this.renderer.timing = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
       this.view.notify("Flight recorder off. What it recorded can still be exported.", false, { channel: "system" });
       return;

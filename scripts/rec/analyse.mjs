@@ -220,24 +220,34 @@ export function streamingOver(e, limit) { return e.detail?.cause === "streaming"
 
 /** What the recording says it holds, against what it does hold (R1-F4). */
 export function integrityOf(r, events) {
-  const problems = [], h = r.header;
+  const problems = [], notes = [], h = r.header;
   let known = false;
   const lost = h.drained?.lost;
   if (lost) { known = true; for (const [k, n] of Object.entries(lost)) if (n > 0) problems.push(`${n} ${k} lost before the driver read them`); }
   if (h.drained?.snapshotsMissing) problems.push(`${h.drained.snapshotsMissing} pictures missing at drain`);
-  if (h.exported || h.retention) known = true;
-  for (const l of h.retention?.lost ?? []) problems.push(`${l.file ?? "a recording"} (${Math.round(l.bytes / 1024)} KiB): ${l.why}`);
+  // A playtest recording's ledger (R2-2): every ring's cumulative overwrites, this
+  // recording's own removals and refused writes, an early stop. A header
+  // without it (an older recording) leaves completeness unknown, never "nothing lost".
+  const ledger = h.retention;
+  if (ledger?.ringLost) {
+    known = true;
+    for (const [k, n] of Object.entries(ledger.ringLost)) if (n > 0) problems.push(`${n} ${k} overwritten in memory before they were written`);
+  }
+  for (const l of ledger?.lost ?? []) problems.push(`${l.file ?? "the recording"}${l.bytes ? ` (${Math.round(l.bytes / 1024)} KiB)` : ""}: ${l.why}`);
+  if (ledger?.removedOlder?.length) notes.push(`${ledger.removedOlder.length} files of older recordings removed for the storage budget (their history, not this recording)`);
+  for (const x of ledger?.exportOver ?? []) notes.push(`an export copy went ${Math.round(x.bytes / 1048576)} MiB over the budget while it was downloaded`);
   const rowsLost = r.events.filter((e) => e.kind === "warning" && /frame rows were lost/.test(e.text));
-  if (rowsLost.length) problems.push(rowsLost.map((e) => e.text.replace(/^warning: /, "")).join("; "));
-  // Every picture the index names that is not on disk, and every event pointing at a picture not in the index.
+  if (rowsLost.length && !ledger?.ringLost) problems.push(rowsLost.map((e) => e.text.replace(/^warning: /, "")).join("; "));
+  // Every picture the index names that is not on disk, and every event (up to an export's cutoff: later ones may still be encoding) pointing at a picture not in the index.
+  const cutoff = h.exported?.cutoff ?? Infinity;
   const listed = new Map(r.snapshots.map((s) => [s.seq, s]));
   const absent = r.snapshots.filter((s) => !s.missing && !existsSync(path.join(r.rec, s.file)));
   const declared = r.snapshots.filter((s) => s.missing);
-  const dangling = events.filter((e) => e.snap && !listed.has(e.snap));
+  const dangling = events.filter((e) => e.snap && e.t <= cutoff && !listed.has(e.snap));
   if (absent.length) problems.push(`${absent.length} pictures indexed but not in the recording (${absent.slice(0, 3).map((s) => s.file).join(", ")})`);
   if (declared.length) problems.push(`${declared.length} pictures recorded as missing (${[...new Set(declared.map((s) => s.missing))].slice(0, 2).join("; ")})`);
   if (dangling.length) problems.push(`${dangling.length} events name a picture the index lacks`);
-  return { known, problems, note: `${r.snapshots.length} pictures indexed, all present; nothing lost` };
+  return { known, problems, notes, note: `${r.snapshots.length} pictures indexed, all present; nothing lost${notes.length ? ` (${notes.join("; ")})` : ""}` };
 }
 
 /** How much of the measured window the video files cover (R1-F4): from their real durations, never the header alone. */

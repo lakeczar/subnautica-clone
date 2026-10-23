@@ -10,18 +10,32 @@ import { SERIES, INK, PACE } from "./charts.mjs";
 import { videoSegments } from "./analyse.mjs";
 
 const INLINE_VIDEO = 32 * 1024 * 1024;
+/** Points the page carries at most: a ten-hour campaign stays a few MB and draws at once (R2-4). */
+const FRAME_POINTS = 30_000, MEMORY_POINTS = 3_000;
 
 export function timelineHtml(r, a) {
   const h = r.header, t0 = a.t0, s = (pt) => +((pt - t0) / 1000).toFixed(2);
-  // Frame times: the worst gap per 100 ms (every long frame survives the reduction).
+  // Frame times: the worst gap per bin, 100 ms in an ordinary run, wider in a
+  // long one so a campaign stays near FRAME_POINTS (every long frame survives:
+  // a bin keeps its worst). Memory: at most MEMORY_POINTS per series, likewise.
+  const binS = Math.max(0.1, Math.ceil((a.durationS / FRAME_POINTS) * 10) / 10);
   const fr = [];
   for (const f of r.frames) {
     if (!(f.gap > 0) || f.t < t0) continue;
-    const x = Math.round(s(f.t) * 10) / 10;
-    if (fr.length && fr.at(-1)[0] === x) fr.at(-1)[1] = Math.max(fr.at(-1)[1], f.gap); else fr.push([x, +f.gap.toFixed(1)]);
+    const x = +(Math.floor(s(f.t) / binS) * binS).toFixed(1);
+    if (fr.length && fr.at(-1)[0] === x) fr.at(-1)[1] = Math.max(fr.at(-1)[1], +f.gap.toFixed(1)); else fr.push([x, +f.gap.toFixed(1)]);
   }
+  const memBin = Math.max(0.25, a.durationS / MEMORY_POINTS);
+  const reduce = (xs) => {
+    const out = [];
+    for (const p of xs) {
+      const x = +(Math.floor(s(p.t) / memBin) * memBin).toFixed(2);
+      if (out.length && out.at(-1)[0] === x) out.at(-1)[1] = Math.max(out.at(-1)[1], p.v); else out.push([x, p.v]);
+    }
+    return out;
+  };
   const mem = [["tab (renderer RSS)", a.series.tab], ["JS heap", a.series.heap], [a.series.vram.length ? "VRAM (this browser)" : "GPU in use (whole GPU)", a.series.vram.length ? a.series.vram : a.series.gpuUsed], ["streamed world, GPU estimate", a.series.resident]]
-    .filter(([, xs]) => xs.length).map(([label, xs]) => ({ label, pts: xs.map((p) => [s(p.t), p.v]) }));
+    .filter(([, xs]) => xs.length).map(([label, xs]) => ({ label, pts: reduce(xs) }));
   const attention = new Map(a.attention.map((e) => [e.t, e]));
   // The measured window only (the load before it is one line in story.md).
   const events = r.events.filter((e) => e.t >= t0 && !["action", "long-task", "session"].includes(e.kind) && !(e.kind === "save" && e.detail?.ok && !e.detail?.manual))
@@ -65,13 +79,19 @@ function setup(c){const h=+c.dataset.h,w=c.clientWidth||c.getBoundingClientRect(
 const L=44,R=10;
 function axes(g,top,unit){const{x,w,h}=g;x.fillStyle=D.ink.surface;x.fillRect(0,0,w,h);x.strokeStyle=D.ink.grid;x.fillStyle=D.ink.muted;x.font="11px system-ui";for(let i=0;i<=4;i++){const v=top*i/4,y=h-14-(h-24)*v/top;x.beginPath();x.moveTo(L,y);x.lineTo(w-R,y);x.stroke();x.fillText(Math.round(v)+unit,2,y+4)}}
 const X=(g,s)=>L+(g.w-L-R)*s/Math.max(1,D.end), Y=(g,top,v)=>g.h-14-(g.h-24)*Math.min(v,top)/top;
-function drawFrames(){const g=setup(document.getElementById("cf")),top=Math.min(250,Math.max(50,...D.fr.map(p=>p[1]))*1.05);axes(g,top," ms");const x=g.x;
+// Never spread a series into arguments (R2-4: a campaign's points exceed the engine's argument limit).
+function maxOf(pts,init){let m=init;for(const p of pts)if(p[1]>m)m=p[1];return m}
+// The worst value per pixel column: what a line of every point would show, drawn in one pass.
+function columns(g,pts){const n=Math.max(1,Math.round(g.w-L-R)),col=new Float64Array(n).fill(-1);for(const p of pts){const i=Math.min(n-1,Math.max(0,Math.floor((X(g,p[0])-L))));if(p[1]>col[i])col[i]=p[1]}return col}
+function line(g,top,pts){const col=columns(g,pts),x=g.x;let open=false;x.beginPath();for(let i=0;i<col.length;i++){if(col[i]<0)continue;const px=L+i+0.5,py=Y(g,top,col[i]);open?x.lineTo(px,py):x.moveTo(px,py);open=true}x.stroke()}
+function nearest(pts,s){let lo=0,hi=pts.length-1;if(hi<0)return [0,0];while(lo<hi){const m=(lo+hi)>>1;pts[m][0]<s?lo=m+1:hi=m}return lo>0&&Math.abs(pts[lo-1][0]-s)<Math.abs(pts[lo][0]-s)?pts[lo-1]:pts[lo]}
+function drawFrames(){const g=setup(document.getElementById("cf")),top=Math.min(250,maxOf(D.fr,50)*1.05);axes(g,top," ms");const x=g.x;
  x.strokeStyle="#c62f2f";x.setLineDash([4,3]);x.beginPath();x.moveTo(L,Y(g,top,33));x.lineTo(g.w-R,Y(g,top,33));x.stroke();x.setLineDash([]);
- x.strokeStyle=D.colors[0];x.lineWidth=1.5;x.beginPath();D.fr.forEach((p,i)=>{const px=X(g,p[0]),py=Y(g,top,p[1]);i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke();
+ x.strokeStyle=D.colors[0];x.lineWidth=1.5;line(g,top,D.fr);
  x.fillStyle=D.ink.primary;x.font="10px system-ui";for(const e of D.events) if(e.a){const px=X(g,e.s);x.fillRect(px-0.5,g.h-14,1,6);if(e.k==="long-frame"||e.k==="hold"||e.k==="error")x.fillText(e.a,px-8,12)}
  cursorLine(g);document.getElementById("lf").innerHTML='<span><i style="background:'+D.colors[0]+'"></i>frame time (worst per 100 ms)</span><span><i style="background:#c62f2f"></i>33 ms</span>'}
-function drawMem(){const g=setup(document.getElementById("cm")),all=D.mem.flatMap(m=>m.pts.map(p=>p[1])),top=(all.length?Math.max(...all):100)*1.1;axes(g,top,"");const x=g.x;
- D.mem.forEach((m,i)=>{x.strokeStyle=D.colors[i];x.lineWidth=2;x.beginPath();m.pts.forEach((p,j)=>{const px=X(g,p[0]),py=Y(g,top,p[1]);j?x.lineTo(px,py):x.moveTo(px,py)});x.stroke()});
+function drawMem(){const g=setup(document.getElementById("cm")),peak=D.mem.reduce((m,s)=>maxOf(s.pts,m),-Infinity),top=(peak>0?peak:100)*1.1;axes(g,top,"");const x=g.x;
+ D.mem.forEach((m,i)=>{x.strokeStyle=D.colors[i];x.lineWidth=2;line(g,top,m.pts)});
  cursorLine(g);document.getElementById("lm").innerHTML="Memory (MiB): "+D.mem.map((m,i)=>'<span><i style="background:'+D.colors[i]+'"></i>'+m.label+"</span>").join("")}
 function drawPace(){const g=setup(document.getElementById("cp")),x=g.x;x.fillStyle=D.ink.surface;x.fillRect(0,0,g.w,g.h);for(const [a,b,c] of D.spans){x.fillStyle=D.pace[c];x.fillRect(X(g,a),4,Math.max(0.5,X(g,b)-X(g,a)),20)}
  cursorLine(g);document.getElementById("lp").innerHTML="Activity: "+Object.entries(D.pace).map(([k,c])=>'<span><i style="background:'+c+'"></i>'+k+"</span>").join("")}
@@ -84,7 +104,7 @@ function load(i,at){if(!V||!D.videos[i])return;if(segI!==i){segI=i;V.src=D.video
 function seek(s){cursor=Math.max(0,s);if(V&&D.videos.length){const i=segFor(s);load(i,s-D.videos[i].start)}draw();highlight()}
 for(const id of ["cf","cm","cp"]){const c=document.getElementById(id);
  c.addEventListener("click",e=>{const r=c.getBoundingClientRect();seek((e.clientX-r.left-L)/(r.width-L-R)*D.end)});
- c.addEventListener("mousemove",e=>{const r=c.getBoundingClientRect(),s=(e.clientX-r.left-L)/(r.width-L-R)*D.end;const f=D.fr.reduce((b,p)=>Math.abs(p[0]-s)<Math.abs(b[0]-s)?p:b,D.fr[0]||[0,0]);
+ c.addEventListener("mousemove",e=>{const r=c.getBoundingClientRect(),s=(e.clientX-r.left-L)/(r.width-L-R)*D.end;const f=nearest(D.fr,s);
   const near=D.events.filter(ev=>Math.abs(ev.s-s)<D.end/200).slice(0,3).map(ev=>ev.k+": "+ev.x).join("<br>");tip.style.display="block";tip.style.left=e.clientX+12+"px";tip.style.top=e.clientY+12+"px";tip.innerHTML=fmt(s)+" · frame "+f[1]+" ms"+(near?"<br>"+near:"")});
  c.addEventListener("mouseleave",()=>tip.style.display="none")}
 const kinds=[...new Set(D.events.map(e=>e.k))],shown=new Set(kinds.filter(k=>k!=="notice"&&k!=="long-frame"));

@@ -4,7 +4,7 @@
 // recording at the end).
 //
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
-//     [--rec on|off|game-video] [--video on|off] [--seconds S] [--machine LABEL]
+//     [--rec on|off|playtest] [--video on|off] [--seconds S] [--machine LABEL]
 //     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
@@ -12,7 +12,6 @@
 //   exclusive performance run keeps snapshots only).
 // --rec off: the recorder is off (?rec=off) and nothing is captured, the
 //   baseline for the recorder's overhead.
-// --rec game-video: driver mode plus the in-game MediaRecorder video.
 // --rec playtest: exactly an owner's playtest (?rec=playtest: in-game video,
 //   spooled to private storage); nothing is drained, its overhead is read at the end.
 // Every mode installs the same small probe before the game loads: each rAF
@@ -32,7 +31,7 @@ const args = process.argv.slice(2);
 const arg = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
 const flag = (n) => args.includes(`--${n}`);
 const dist = arg("dist"), save = arg("save"), out = arg("out");
-if (!dist || !save || !out) { console.error("usage: run.mjs --dist DIST --save SAVE --out DIR [--plan PLAN --segment N] [--rec on|off|game-video] [--video on|off] [--seconds S]"); process.exit(2); }
+if (!dist || !save || !out) { console.error("usage: run.mjs --dist DIST --save SAVE --out DIR [--plan PLAN --segment N] [--rec on|off|playtest] [--video on|off] [--seconds S]"); process.exit(2); }
 if (process.env.SILTWAKE_GPU_LEASE === undefined && !flag("software")) {
   const { requireGpuLease } = await import("../heavy/gpu-lease.mjs");
   requireGpuLease("REC-1's recorded run");
@@ -51,21 +50,30 @@ const judged = (() => {
 })();
 const machine = arg("machine", hostname() === "factory-worker" ? "RTX 3090 (factory-worker)" : hostname());
 
-// The like-for-like probe (every mode): rAF gaps and the game's callback time.
+// The like-for-like probe (every mode): rAF gaps and the time of the frame's
+// rAF callbacks. One display frame runs every callback registered for it with
+// the same timestamp (the game's, and the soak's frame recorder that openGame
+// installs), so a frame is counted once per timestamp and its callbacks' time
+// summed (R2-6: counting callbacks doubled the frames and halved every
+// per-frame figure).
 function probeScript() {
   const gaps = [], work = [], raf = window.requestAnimationFrame.bind(window);
   let last = 0;
-  window.__recProbe = { gaps, work };
+  const probe = { gaps, work, since: performance.now(), reset() { gaps.length = 0; work.length = 0; probe.since = performance.now(); } };
+  window.__recProbe = probe;
   window.requestAnimationFrame = (cb) => raf((t) => {
-    if (last) gaps.push(t - last);
-    last = t;
+    if (t !== last || !work.length) {
+      if (t !== last && last) gaps.push(t - last);
+      last = t;
+      work.push(0);
+    }
     const s = performance.now();
-    try { cb(t); } finally { work.push(performance.now() - s); }
+    try { cb(t); } finally { work[work.length - 1] += performance.now() - s; }
   });
 }
 
 const gpu0 = gpuInfo();
-const query = mode === "off" ? "?rec=off" : mode === "game-video" ? "?rec=driver&recvideo=1" : mode === "playtest" ? "?rec=playtest" : "?rec=driver";
+const query = mode === "off" ? "?rec=off" : mode === "playtest" ? "?rec=playtest" : "?rec=driver";
 const result = { mode, video: videoOn, machine, commit, segment, errors: [], reached: [], skipped: [] };
 let exit = 0, g = null;
 try {
@@ -76,7 +84,7 @@ try {
   log("renderer", g.renderer);
   // Measured from here: the travel itself. Main-thread task time over the window
   // (CDP: every task, GC and the recorder's later tasks included) is the inclusive cost (R1-S1).
-  await g.page.evaluate(() => { window.__recProbe.gaps.length = 0; window.__recProbe.work.length = 0; });
+  await g.page.evaluate(() => window.__recProbe.reset());
   const metrics = async () => Object.fromEntries((await g.cdp.send("Performance.getMetrics")).metrics.map((m) => [m.name, m.value]));
   const m0 = await metrics();
   // Off, and an owner's playtest (it records itself, unread by any driver): nothing drains it.
@@ -97,14 +105,17 @@ try {
   await releaseAll(g);
   const m1 = await metrics();
   result.travelS = Math.round((Date.now() - started) / 1000);
-  const probe = await g.page.evaluate(() => window.__recProbe);
+  const probe = await g.page.evaluate(() => ({ gaps: window.__recProbe.gaps, work: window.__recProbe.work, seconds: (performance.now() - window.__recProbe.since) / 1000 }));
   const q = (xs, f) => { const s = [...xs].sort((a, b) => a - b); return s.length ? +s[Math.min(s.length - 1, Math.floor(s.length * f))].toFixed(2) : null; };
-  const per = (k) => (probe.gaps.length ? +(((m1[k] ?? 0) - (m0[k] ?? 0)) * 1000 / probe.gaps.length).toFixed(3) : null);
-  result.probe = { frames: probe.gaps.length, gap: { p50: q(probe.gaps, 0.5), p99: q(probe.gaps, 0.99), max: q(probe.gaps, 1) },
+  // Per display frame (one per rAF timestamp) and per measured second, both stated.
+  const per = (k) => (probe.work.length ? +(((m1[k] ?? 0) - (m0[k] ?? 0)) * 1000 / probe.work.length).toFixed(3) : null);
+  const perSecond = (k) => (probe.seconds > 0 ? +(((m1[k] ?? 0) - (m0[k] ?? 0)) * 1000 / probe.seconds).toFixed(2) : null);
+  result.probe = { frames: probe.work.length, seconds: +probe.seconds.toFixed(1), gap: { p50: q(probe.gaps, 0.5), p99: q(probe.gaps, 0.99), max: q(probe.gaps, 1) },
     work: { p50: q(probe.work, 0.5), p99: q(probe.work, 0.99), mean: +(probe.work.reduce((a, b) => a + b, 0) / Math.max(1, probe.work.length)).toFixed(3) },
     over33: probe.gaps.filter((x) => x > 33.4).length,
     // Inclusive main-thread time per frame: all tasks, and the script share of them.
-    mainThread: { taskMsPerFrame: per("TaskDuration"), scriptMsPerFrame: per("ScriptDuration"), heapMiBEnd: m1.JSHeapUsedSize ? +(m1.JSHeapUsedSize / 1048576).toFixed(1) : null } };
+    mainThread: { taskMsPerFrame: per("TaskDuration"), scriptMsPerFrame: per("ScriptDuration"), taskMsPerSecond: perSecond("TaskDuration"),
+      heapMiBEnd: m1.JSHeapUsedSize ? +(m1.JSHeapUsedSize / 1048576).toFixed(1) : null } };
   writeFileSync(path.join(out, "probe.json"), JSON.stringify({ gaps: probe.gaps.map((x) => +x.toFixed(2)), work: probe.work.map((w) => +w.toFixed(3)), metrics: { start: m0, end: m1 } }));
   if (rec) result.header = await rec.stop({ reached: result.reached, skipped: result.skipped, probe: result.probe, pageErrors: g.errors.length });
   else if (mode === "playtest") result.recorderOverhead = await g.page.evaluate(() => window.__siltwake.recorder?.overhead() ?? null);
