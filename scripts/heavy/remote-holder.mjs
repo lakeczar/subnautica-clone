@@ -27,7 +27,7 @@ import { createInterface } from "node:readline";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MACHINE_LABELS, plan } from "./policy.mjs";
-import { fetchArtifacts, refreshHealth, remoteConfig, remoteStop, remoteWatch, remoteYield, uploadWrapper, writeHealth } from "./remote.mjs";
+import { fetchArtifacts, refreshHealth, remoteCleanup, remoteConfig, remoteStop, remoteWatch, remoteYield, uploadWrapper, writeHealth } from "./remote.mjs";
 import { hostFor, jobDir, ledger, loadConfig, readJson, readState, self, transaction, alive } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -36,7 +36,14 @@ const id = process.argv[stopOnly ? 3 : 2];
 const cfg = loadConfig();
 const r = remoteConfig(cfg);
 const dir = jobDir(cfg, id);
-if (stopOnly) { await remoteStop(cfg, id); process.exit(0); }
+// --stop (from recovery) uses the lane the job was sent to, recorded at its
+// launch; without that record (the job never launched, or its files are gone)
+// there is nothing to stop.
+if (stopOnly) {
+  const lane = readJson(join(dir, "remote-config.json"));
+  if (lane) await remoteStop(cfg, id, lane);
+  process.exit(0);
+}
 
 const request = readJson(join(dir, "request.json"));
 const outPath = join(dir, "output.log");
@@ -133,6 +140,7 @@ let busyDog = false;
 function watchdog() { if (busyDog) return; busyDog = true; watchdogAsync().finally(() => { busyDog = false; }); }
 
 // 2. Launch.
+writeFileSync(join(dir, "remote-config.json"), JSON.stringify(r));
 const wrapper = await uploadWrapper(cfg);
 let rawCode, signal;
 if (!wrapper) { rawCode = 255; signal = null; note("could not reach the sandbox to upload the lane wrapper"); }
@@ -188,6 +196,7 @@ else if (sandboxLevel || lostMidRun) { label = "the connection to alickers was l
 
 const fetched = artifacts.length && testing ? await fetchArtifacts(cfg, id, artifacts, cwdRel) : [];
 for (const a of fetched) note(a.error ? `artifact ${a.remote}: not fetched (${a.error})` : `artifact ${a.remote} → ${a.local} (${a.bytes} bytes)`);
+if (testing && !(await remoteCleanup(cfg, id, fetched))) note("could not clean up the job's files on the sandbox");
 if (testing) await refreshHealth(cfg, { force: true }); // the slot is free again, unless a direct caller took it
 
 const result = {

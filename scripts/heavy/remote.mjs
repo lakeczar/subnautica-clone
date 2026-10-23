@@ -41,6 +41,9 @@ export function remoteConfig(cfg) {
     ...(cfg.remote ?? {}),
   };
   if (!r.transport) r.enabled = false;
+  // A private state directory (tests) never reaches the real sandbox unless
+  // its config.json names a remote.
+  if (!cfg.production && cfg.remote === undefined) { r.enabled = false; r.privateOff = true; }
   return r;
 }
 
@@ -67,7 +70,7 @@ const healthPath = (cfg) => join(cfg.dir, "remote.json");
 /** The cached health: { state: up|busy|paused|unreachable|unknown|off, at, failures, detail }. */
 export function readHealth(cfg) {
   const r = remoteConfig(cfg);
-  if (!r.enabled) return { state: "off", detail: r.transport ? "disabled in config.json" : "no transport (scripts/alickers-job.sh) installed" };
+  if (!r.enabled) return { state: "off", detail: r.privateOff ? "private state without a remote in config.json" : r.transport ? "disabled in config.json" : "no transport (scripts/alickers-job.sh) installed" };
   return readJson(healthPath(cfg)) ?? { state: "unknown", at: 0, failures: 0 };
 }
 export function writeHealth(cfg, state, detail = null) {
@@ -120,9 +123,10 @@ export async function uploadWrapper(cfg) {
 
 /** Stops a ticket's job on the sandbox: marks it cancelled (a job not started
  * yet never starts) and TERMs the wrapper if it runs, checked by PID and start
- * time. Returns { reached, stopped }. */
-export async function remoteStop(cfg, ticket) {
-  const r = remoteConfig(cfg), d = `${r.laneDir}/jobs/${ticket}`;
+ * time. `r` is the lane the job was sent to (its remote holder's snapshot).
+ * Returns { reached, stopped }. */
+export async function remoteStop(cfg, ticket, r = remoteConfig(cfg)) {
+  const d = `${r.laneDir}/jobs/${ticket}`;
   const res = await ssh(r, `d=${q(d)}; mkdir -p "$d" && : > "$d/cancelled"; if [ -f "$d/pid" ]; then set -- $(cat "$d/pid"); ` +
     `[ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] && kill -TERM "$1" && echo stopped; fi; true`, { timeoutS: 30 });
   return { reached: res.code === 0, stopped: /stopped/.test(res.out) };
@@ -137,6 +141,23 @@ export async function remoteWatch(cfg, ticket) {
   if (res.code !== 0) return null;
   const num = (k) => { const v = new RegExp(`^${k} (\\d+)$`, "m").exec(res.out)?.[1]; return v == null ? null : Number(v); };
   return { high: num("high"), beat: num("beat") };
+}
+
+/**
+ * After the job: its lane directory on the sandbox is removed, and so are
+ * artifacts it wrote inside the shared checkout (relative paths), which must
+ * not leak into the next job's tree. One that could not be fetched is moved to
+ * /work/results/lane-<ticket>/ on the sandbox instead, so nothing is lost.
+ */
+export async function remoteCleanup(cfg, ticket, fetched) {
+  const r = remoteConfig(cfg), parts = [`rm -rf ${q(`${r.laneDir}/jobs/${ticket}`)}`];
+  for (const a of fetched) {
+    if (!a.remote.startsWith(`${r.repo}/`)) continue; // outside the checkout: the job's own output place
+    const rel = a.remote.slice(r.repo.length + 1);
+    if (rel.split("/").includes("..")) continue;
+    parts.push(a.error ? `[ -e ${q(a.remote)} ] && mkdir -p ${q(`/work/results/lane-${ticket}`)} && mv ${q(a.remote)} ${q(`/work/results/lane-${ticket}/`)}` : `rm -rf ${q(a.remote)}`);
+  }
+  return (await ssh(r, `${parts.join("; ")}; true`, { timeoutS: 60 })).code === 0;
 }
 
 /** Asks a running soak to yield ($SILTWAKE_JOB_YIELD appears on the sandbox). */

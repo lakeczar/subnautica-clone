@@ -54,6 +54,9 @@ test("B1: an any job runs on alickers at its commit; the worktree stays free; an
   assert.equal(led.machine, REMOTE);
   assert.equal(led.artifacts[0].local, pack);
   assert.match(w.err, new RegExp(`on ${REMOTE.replace(/[()]/g, "\\$&")}; artifacts: ${pack}`));
+  // The sandbox's shared checkout is left clean, and the lane's files are gone.
+  assert.equal(git(join(c.fake.dir, "repo"), "status", "--porcelain").stdout, "");
+  assert.equal(existsSync(join(c.fake.dir, "lane", "jobs", id)), false);
 });
 
 test("B2: paused alickers: a 4070 job waits (remote-paused) and runs when it resumes; an any job runs here at once", async () => {
@@ -227,4 +230,22 @@ test("B10: a remote job's own exit codes pass through after 'testing'; units and
   assert.equal(left, "");
   assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(c.sched, "state.json"), "utf8")).tickets), []);
   void alive; void scopePopulated; void readdirSync;
+});
+
+test("B11: private state without a remote never reaches a sandbox; a recovery stop needs the lane the job was sent to", async () => {
+  const c = context("no-remote");
+  const { loadConfig } = await import("./state.mjs");
+  const { readHealth, remoteConfig } = await import("./remote.mjs");
+  const cfg = loadConfig(c.env);
+  assert.equal(remoteConfig(cfg).enabled, false);
+  assert.match(readHealth(cfg).detail, /private state without a remote/);
+  const a = submit(c, c.repo("r"), "--class", "playthrough", "--", "true");
+  assert.equal(waitFor(c, a).code, 0);
+  assert.equal(result(c, a).remote, undefined);
+  assert.match(hc(c, ["status"]).out, /alickers \(second worker\): off \(private state without a remote/);
+  // --stop for a ticket with no recorded lane does nothing (and exits at once).
+  const t0 = Date.now();
+  const s = spawnSync(process.execPath, [new URL("./remote-holder.mjs", import.meta.url).pathname, "--stop", "261023-000000-none"], { env: c.env, encoding: "utf8", timeout: 20000 });
+  assert.equal(s.status, 0, s.stderr);
+  assert.ok(Date.now() - t0 < 5000);
 });

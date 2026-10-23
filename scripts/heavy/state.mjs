@@ -279,13 +279,13 @@ export function sliceCheck(cfg, nproc) {
 export function hostFor(cfg, state) {
   const host = sampleHost(cfg, state);
   host.legacy = legacyLockInfo(cfg.legacyLock);
-  host.remote = readJson(join(cfg.dir, "remote-override.json")) && !cfg.production ? readJson(join(cfg.dir, "remote-override.json")) : remoteHealth(cfg);
+  host.remote = remoteHealth(cfg);
   return host;
 }
 /** The second worker's cached health for plan() (remote.mjs keeps it fresh). */
 function remoteHealth(cfg) {
-  const r = cfg.remote ?? {};
-  if (r.enabled === false) return { state: "off" };
+  // Off when disabled, and for a private state directory (tests) without a remote.
+  if (cfg.remote?.enabled === false || (!cfg.production && cfg.remote === undefined)) return { state: "off" };
   return readJson(join(cfg.dir, "remote.json")) ?? { state: "unknown" };
 }
 export function cpuContext() {
