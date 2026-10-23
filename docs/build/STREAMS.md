@@ -642,3 +642,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - v1 is deleted only after the same session's v2 head is durable;
     - reads are tri-state (unreadable never authorises a delete);
     - uncommitted garbage is reclaimed under Web Locks, behind a lock port.
+- **TST-16 done at `40fdc202`** (R4): static priority by placement. Exclusive payloads go into a top-level user slice, `siltwake_exclusive.slice`, with a fixed CPUWeight of 10000 and the heavy slice's caps, written once by install.sh. The handover, freeze, backstop, journal, runtime setter and `--rollback` are deleted (−427/+206 vs R3). A missing slice means `unavailable`, which is DISTURBED. Suites pass 23/23, 22/22 and 27/27, and the fast tier 1404/1404. Sol R5 running (`siltwake-tst16-review-r5-sol-40fdc20`).
