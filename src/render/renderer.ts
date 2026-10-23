@@ -98,6 +98,8 @@ export interface FrameParts {
   regions: number; lights: number; actors: number; chunks: number; caves: number; render: number;
   /** GPU time of a recent scene.render (timer queries resolve 1–3 frames late), ms; -1 when the browser exposes no GPU timer. */
   gpu: number;
+  /** The legacy per-frame `#ocean` counters (two reduces over every mesh), ms. */
+  dom?: number;
   lightScan: number; lightPlace: number; lightSelect: number; lightCount: number; evicted: number;
   buildMs: number; maxStepMs: number; uploadMs: number; uploads: number; caveBuildMs: number;
   /** A jump during play: from and to, metres. */
@@ -567,6 +569,9 @@ export function createRenderer(
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
           jump,
         };
+        // Legacy per-frame counters for older drivers (REC-1's test hook computes
+        // them only when asked); timed, so their cost is on every recording.
+        const tDom = timed ? performance.now() : 0;
         canvas.dataset.meshes = String(scene.meshes.length);
         canvas.dataset.vertices = String(scene.meshes.reduce((n, m) => n + m.getTotalVertices(), 0));
         canvas.dataset.triangles = String(scene.meshes.reduce((n, m) => n + m.getTotalIndices() / 3, 0));
@@ -574,6 +579,7 @@ export function createRenderer(
         canvas.dataset.materials = String(scene.materials.length);
         canvas.dataset.geometries = String(scene.geometries.length);
         canvas.dataset.textures = String(scene.textures.length);
+        if (parts) parts.dom = Math.round((performance.now() - tDom) * 1000) / 1000;
         // Ready: the scene's effects are compiled AND chunk residency has
         // settled (nothing left to build, upload or evict for this view, which
         // includes a stable degraded state under byte pressure). The app keeps

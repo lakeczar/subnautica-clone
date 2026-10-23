@@ -23,6 +23,7 @@ export const FRAME_COLUMNS = [
   "heapDrop", // MiB the JS heap shrank since the previous frame (a collection), when the browser exposes it; -1 unknown
   "hold", // cave admission state, HOLD_CODES index
   "gpu", // GPU time of a recent scene.render (timer queries resolve 1–3 frames late); -1 unknown
+  "dom", // the legacy per-frame #ocean counters (REC-1 compromise 1: their cost, measured)
 ] as const;
 export type FrameColumn = (typeof FRAME_COLUMNS)[number];
 const COLS = FRAME_COLUMNS.length;

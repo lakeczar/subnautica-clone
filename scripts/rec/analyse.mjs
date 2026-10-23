@@ -53,6 +53,8 @@ export function analyse(r, t = THRESHOLDS) {
   const played = frames.filter((f) => f.gap > 0);
   const gaps = played.map((f) => f.gap).sort((a, b) => a - b), work = played.map((f) => f.work).sort((a, b) => a - b);
   const recMs = played.map((f) => f.rec).sort((a, b) => a - b);
+  const domMs = played.filter((f) => f.dom != null).map((f) => f.dom).sort((a, b) => a - b);
+  const gpuMs = played.filter((f) => f.gpu != null && f.gpu >= 0).map((f) => f.gpu).sort((a, b) => a - b);
   const holdFrames = frames.filter((f) => HOLDING.has(HOLD_CODES[f.hold])).length;
   const durationS = frames.length ? (frames.at(-1).t - frames[0].t) / 1000 : 0;
   const tickAt = (pt) => { let best = null; for (const s of samples) { if (s.t > pt + 300) break; best = s; } return best?.tick ?? null; };
@@ -156,6 +158,8 @@ export function analyse(r, t = THRESHOLDS) {
     numbers: {
       frames: played.length, gap: { p50: r1(q(gaps, 0.5)), p99: r1(q(gaps, 0.99)), max: r1(gaps.at(-1) ?? null) }, over33: gaps.filter((g) => g > t.longFrameMs).length,
       work: { p50: r1(q(work, 0.5)), p99: r1(q(work, 0.99)) }, rec: { mean: recMs.length ? +(recMs.reduce((a, b) => a + b, 0) / recMs.length).toFixed(3) : null, p99: recMs.length ? +q(recMs, 0.99).toFixed(3) : null },
+      dom: domMs.length ? { mean: +(domMs.reduce((a, b) => a + b, 0) / domMs.length).toFixed(3), p99: +q(domMs, 0.99).toFixed(3) } : null,
+      gpu: gpuMs.length ? { p50: r1(q(gpuMs, 0.5)), p99: r1(q(gpuMs, 0.99)), frames: gpuMs.length } : null,
       holds: { frames: holdFrames, events: attention.filter((a) => a.kind === "hold").length },
       memory: { tabMiB: ends(tab), heapMiB: ends(heap), vramMiB: ends(vram), gpuUsedMiB: ends(gpuUsed), residentGpuMiB: ends(resident), trendMiBPerMin: trend(tab.length ? tab : heap) },
       errors: errs.length, warnings: events.filter((e) => e.kind === "warning").length, draws: { p50: q(draws, 0.5), max: draws.at(-1) ?? null },
