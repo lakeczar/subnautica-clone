@@ -38,7 +38,9 @@ Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordin
   - B5 stall after `testing`, heartbeats, waiting for the sandbox lock isn't silence; B6 memory.high throttling reported and stopped as `throttled`;
   - B7 cancel while running and while waiting for the lock (the command never runs); B8 remote holder SIGKILL, recovery and remote stop;
   - B9 soak on alickers yields to 4070, local while paused; B10 the job's own 7 and 255; B11 private state never reaches a sandbox.
-- **Policy units:** 30/30, including routing for every tag and state, and the eligibility rules. Soak units: 15/15, including the 4070 warning.
+- **Policy units:** 30/30, including routing for every tag and state, and the eligibility rules. Soak units: 25/25 (2a's contract, goals and runner tests plus the 4070 warning).
+- **Regression on this branch** at `4e18397`: SCHED-1 acceptance 23/23, SCHED-2 16/16, SCHED-2b 11/11; fast tier 1,342.
+- **A second real canary** (ticket `261023-080802-0984`, `--class playthrough`, a real `reverse` scenario) found alickers `busy` with another agent's direct job, so `any` correctly ran here, at once, and passed (15 saves reloaded; result bound to `bd577b1`). It showed one bug, now fixed: a local job's relative `--artifact` was checked against the holder's directory, not the job's.
 - **Real canary** on alickers (private local state, the real transport and sandbox), ticket `261023-075720-305e` at `99b65b6`, `--class gpu --machine 4070 --artifact canary-pack`:
   - `alickers-job: testing 99b65b6… on siltwake-alickers`; the job's scope is `/user.slice/…/app.slice/siltwake-job-33075.scope`;
   - `gpu-lease.mjs check` prints **`gpu-lease: ok`** there, which settles 2a's unverified point; the sandbox's GPU probe exits 0 with renderer **`ANGLE (Microsoft Corporation, D3D12 (NVIDIA GeForce RTX 4070 Laptop GPU), OpenGL 4.6)`**;

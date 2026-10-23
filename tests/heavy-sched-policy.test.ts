@@ -373,7 +373,7 @@ test("machine tags: defaults by class; exclusive is the 3090's; unknown tags ref
 
 const remote = (state: string) => idle({ remote: { state } });
 function rt(id: string, cls: string, machine: string, opts: { at?: number; state?: string; remote?: boolean; ok?: boolean; fellBack?: boolean; worktree?: string } = {}) {
-  const t = ticket(id, cls, { at: opts.at, state: opts.state, worktree: opts.worktree }) as Ticket & { remote?: boolean; fellBack?: object; goal: { machine: string; remoteOk: boolean; soak: boolean } };
+  const t = ticket(id, cls, { ...(opts.at != null ? { at: opts.at } : {}), ...(opts.state ? { state: opts.state } : {}), ...(opts.worktree ? { worktree: opts.worktree } : {}) }) as Ticket & { remote?: boolean; fellBack?: object; goal: { machine: string; remoteOk: boolean; soak: boolean } };
   t.goal = { ...t.goal, machine, remoteOk: opts.ok ?? true };
   if (opts.remote) t.remote = true;
   if (opts.fellBack) t.fellBack = { reason: "paused" };
