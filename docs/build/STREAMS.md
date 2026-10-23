@@ -576,3 +576,10 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 
   Builders were told to merge root and use `--machine`.
 - **TST-16 R1 rejected** (`81d6d83`): stuck clamps, escaped memory limits, a sticky slice cap, false-clean sampling, a missed final GPU scan. It's being redesigned (CPU-only deprioritisation within the caller's containment, or labelling only).
+
+### 2026-10-23 ~17:00Z — usage limit again; codebase audit in; steward verdict started
+- **Usage limit:** about 16:00–17:00Z. SIM-1, REC-1 and CW-1 failed with the rate limit and auto-resume at reset.
+- **Codebase health audit:** Sol `c912151` on `research/codebase-health` (28 findings, top 15). The Opus steward verdict (`siltwake-codebase-steward-opus-c912151`) is running.
+- **REC-1 R1** (`32d6ef3`): 4 P1s and 8 P2s, among them **no storage budget for the default playtest recording**, an incomplete export, and false streaming and stable passes. Fixes are in progress; also told to fix the audit's baseline hash/PNG defect and merge CW-1's latest.
+- **TST-16 R2** (`b3ecb67`): 2 P2s (a surviving apply re-boosts after recovery; rollback strands boost cleanup). Fixes are in progress, with a suggested backstop: reset the slice weight whenever no exclusive job is running.
+- **Memory corrected:** the 3090 frame-stall note now says the causes are mixed, game work included.
