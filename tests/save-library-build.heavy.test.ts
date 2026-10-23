@@ -12,6 +12,9 @@ import { buildManifest, readLibrary, sha256 } from "../scripts/playthrough/libra
 import { stateHash } from "../scripts/playthrough/persistence.js";
 import { emptyRun } from "../scripts/playthrough/timeline.js";
 import type { GameState } from "../src/sim/types.js";
+// Compiled into the test build for the spawns below (entry points no test imports).
+import type {} from "../scripts/playthrough/saves.js";
+import type {} from "../scripts/playthrough/run.js";
 
 const git = (...a: string[]): string => execFileSync("git", a, { encoding: "utf8" }).trim();
 const repo = git("rev-parse", "--show-toplevel"), head = git("rev-parse", "HEAD"), parent = git("rev-parse", "HEAD~1");

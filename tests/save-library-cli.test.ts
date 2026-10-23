@@ -12,6 +12,9 @@ import { buildManifest, codeCommit, publish, readLibrary, stagingDir } from "../
 import { stateHash } from "../scripts/playthrough/persistence.js";
 import { emptyRun } from "../scripts/playthrough/timeline.js";
 import type { GameState } from "../src/sim/types.js";
+// Compiled into the test build for the spawns below (entry points no test imports).
+import type {} from "../scripts/playthrough/saves.js";
+import type {} from "../scripts/playthrough/run.js";
 
 // SAVE-1 R1: the real CLI's exit codes and diagnostics, against real commits of this
 // repository, and publication by several processes at once.
