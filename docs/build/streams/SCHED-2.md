@@ -2,6 +2,22 @@
 
 Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 rule ("a job has a goal, not a time limit") and the 2a list in [DIRECTION](../DIRECTION.md), "Two test machines". SCHED-2b (the remote lane) and SAVE-1 follow after review. **Not installed:** the live queue still runs SCHED-1 `6824478b070f`; cut-over is below and waits for the coordinator.
 
+## R2 review responses
+
+Review: `e43761e` on `review/sched-2a-r2`, on `e85c8e3`, not accepted, with three P2s, all in the soak harness. The scheduler side passed. Each fix has a runner-level regression in `tests/soak-runner.test.ts`, using the real loop and the real providers; all three fail on `e85c8e3`'s soak code (checked by export).
+
+- **R2-F1, non-finite measurements could pass: fixed.**
+  - **At the provider boundary:** `createProbe` keeps only finite numbers in memory and graphics, and drops anything else with an `unavailable` entry naming the value. `cdpHeap` reports a missing `JSHeapUsedSize` as unavailable instead of dividing it into NaN.
+  - **Defensively in the goals:** only finite values count, and a zero memory baseline is no measurement. Growth from a zero count is unbounded, not 0%.
+  - **Regression:** a CDP that reports no metrics, through the real `cdpHeap`, gives a partial tour with the heap rule unavailable and the provider error listed. A NaN that bypasses the probe is unavailable too.
+- **R2-F2, a hold between polls was ignored: fixed.**
+  - **Holds are consumed:** the per-frame record's hold frames (`holdFrames`) are recorded, however short the hold, and any recorded hold fails.
+  - **"No hold" needs coverage:** a pass requires the per-frame record over the whole run (`holds.covered`); state polls alone can only find a hold, never prove there was none.
+  - **Regression:** one hold frame between two polls, with the current state clear, through the real `frames()` provider, gives `fail`. A clear run passes, and a build without the record is unavailable.
+- **R2-F3, missing timing hid a measured failure: fixed.**
+  - **Known violations first:** `frameRule` judges a measured violation before any coverage check. The autosave hitch rule fails on a measured over-budget autosave even when others lack a frame time; it is unavailable only when nothing measured broke. The runner stops on it.
+  - **Regression:** first autosave untimed, second at 70 ms, on a judged run: the dwell fails and stops. A streaming violation recorded before attribution was lost still fails.
+
 ## R1 review responses
 
 Review: `2d461de` on `review/sched-2a-r1` (`docs/build/reviews/SCHED-2A-SOL-XHIGH-R1.md`), on `8f702de`, not accepted. All eight findings are fixed with root fixes, each with a regression test that fails on `8f702de`'s behaviour.

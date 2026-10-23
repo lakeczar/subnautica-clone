@@ -35,7 +35,7 @@ export async function runSoak(opts, deps) {
   const run = {
     startedAt: 0, laps: [], samples: [], autosaves: [], saves: [], crash: null, travel: {}, yielded: false, providerErrors: {},
     frames: { judged: Boolean(opts.judged), machine: opts.machine ?? null, attributed: null, observed: 0, streamingOver: [], longOver: [] },
-    holds: { available: null, list: [] },
+    holds: { available: null, covered: null, list: [] },
   };
   let verdict = null, stopping = false, checking = false, where = "start", lastSave = null;
   const evaluate = () => (verdict = kind === "tour" ? evaluateTour(run, t.tour) : evaluateDwell({ ...run, now: now() }, t.dwell));
@@ -63,6 +63,12 @@ export async function runSoak(opts, deps) {
       else if (f.attributed === true && f.count > 0 && run.frames.attributed !== false) run.frames.attributed = true;
       for (const ms of f.streaming ?? []) run.frames.streamingOver.push({ ms, where });
       if (!f.attributed) for (const ms of f.over ?? []) run.frames.longOver.push({ ms, where });
+      // Holds the per-frame record saw since the last tick, however short (R2-F2);
+      // coverage holds only while every tick with frames had the record.
+      if (f.count > 0) {
+        if (Number.isFinite(f.holdFrames)) { if (run.holds.covered !== false) run.holds.covered = true; } else run.holds.covered = false;
+      }
+      if (f.holdFrames > 0) run.holds.list.push({ where, state: "recorded", frames: f.holdFrames, at: now() });
     }
     if (s.holds?.available === false) run.holds.available = false;
     else if (s.holds?.available === true) {
