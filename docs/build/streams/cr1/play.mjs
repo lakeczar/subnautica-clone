@@ -17,6 +17,9 @@ const { HUNTER_FEEDING_SPOT } = await import(path.join(build, "src/content/fauna
 const { sitePosition } = await import(path.join(build, "src/content/ecology/sites.js"));
 const { homeOf, layerY } = await import(path.join(build, "src/sim/ecology/agents.js"));
 const { FAUNA_SOURCES } = await import(path.join(build, "src/content/fauna/grounds.js"));
+const { THREAT_HOME } = await import(path.join(build, "src/content/registry.js"));
+const { windowOpen, windowSample } = await import(path.join(build, "src/sim/fauna/windows.js"));
+const PLANS = existsSync(path.join(saves, "approach-plans.json")) ? JSON.parse(readFileSync(path.join(saves, "approach-plans.json"), "utf8")) : {};
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json", ".wasm": "application/wasm", ".bin": "application/octet-stream" };
 const root = path.resolve(dist);
 const server = createServer((req, res) => {
@@ -113,6 +116,48 @@ async function load(name) {
 const begin = (name) => { scene = name; result.scenes[name] = { captions: [], banners: [], minHealth: Infinity, notes: {} }; };
 const button = (label) => page.locator(`button:has-text("${label}")`).first();
 
+/** The sim tick the page shows (canvas dataset), for timing a rhythm the way a watching player would. */
+const tickNow = async () => Number(await page.evaluate(() => document.querySelector("#ocean").dataset.tick ?? "0"));
+/** Watch (looking at `look`) until `ready(tick)` holds, at most `limit` seconds; returns the wait. */
+async function waitFor(ready, look, limit = 120) {
+  const t0 = performance.now();
+  for (;;) {
+    const s = await read(); await observe(s);
+    if (look) {
+      const p = pos(s), err = wrap(yawTo(p, look) - s.bearing * Math.PI / 180), wantPitch = pitchTo(p, look);
+      await key("ArrowRight", err > 0.04); await key("ArrowLeft", err < -0.04);
+      await key("ArrowUp", s.pitch < wantPitch - 3); await key("ArrowDown", s.pitch > wantPitch + 3);
+    }
+    if (ready(await tickNow())) break;
+    if (performance.now() - t0 > limit * 1000) { await releaseAll(); note("wait limit"); break; }
+    await page.waitForTimeout(80);
+  }
+  await releaseAll();
+  return (performance.now() - t0) / 1000;
+}
+/** Fly the planned legs, park, and step out (hold X). */
+async function flyAndExit(plan) {
+  if (plan.mode === "piloting") {
+    for (const [i, q] of (plan.route ?? []).entries()) await goto(q, { tol: 3, label: `leg ${i}`, timeout: 180 });
+    await page.keyboard.down("KeyX"); await page.waitForTimeout(700); await page.keyboard.up("KeyX"); await page.waitForTimeout(1200);
+    const s = await read(); eye = s.cam[1] + s.depth; result.scenes[scene].notes.exited = { at: pos(s), vitals: s.vitals };
+  }
+}
+/** One native approach: from where the bot's own play left the player, by keys, to the threat; wait and watch for its window; cross. */
+async function approach(name, crossing, look, windowId, before = []) {
+  const plan = PLANS[name]; if (!plan) throw new Error(`no native save for ${name}`);
+  result.scenes[scene].notes.start = { distance: plan.distance, mode: plan.mode, hull: plan.hull };
+  await load(`approach-${name}`); await shot("native-start");
+  await flyAndExit(plan);
+  for (const [i, q] of before.entries()) await goto(q, { tol: 2, label: `before ${i}`, timeout: 40 });
+  await shot("arrived-watching");
+  const waited = await waitFor((t) => windowOpen(windowId, t) && windowSample(windowId, t).elapsed > 2, look);
+  result.scenes[scene].notes.waited = waited; await shot("window-open");
+  await key("ShiftLeft", true);
+  for (const [i, q] of crossing.entries()) { await goto(q, { tol: 2, label: `cross ${i}`, keep: ["ShiftLeft"], timeout: 60 }); if (q.dwell) { await releaseAll(); await watch(q.dwell, look); await key("ShiftLeft", true); } }
+  await releaseAll(); await shot("crossed");
+}
+
 const SCENES = {
   async ribs() {
     const s0 = await load("ribs"), school = FAUNA_SOURCES.reef_fish_ribs.position, eyeAt = { x: s0.cam[0], y: s0.cam[1], z: s0.cam[2] };
@@ -177,6 +222,34 @@ const SCENES = {
     await releaseAll(); await shot("across-the-mirror");
     await goto({ x: h.x + 30, y: y + 12, z: h.z }, { label: "up and away", timeout: 20 });
     await shot("above-the-layer");
+  },
+  async "approach-rift"() {
+    const c = sitePosition({ site: "rift_split_chimney", offset: { x: 0, y: 0, z: 0 } });
+    await approach("rift", [{ x: c.x - 26, y: c.y + 8, z: c.z + 2, dwell: 5 }, { x: c.x - 64, y: c.y + 10, z: c.z }], { x: c.x - 8, y: c.y + 28, z: c.z }, "glare_stalker");
+  },
+  async "approach-divide"() {
+    const h = homeOf("divide_skate_saddle"), y = layerY("divide_dense_layer");
+    // Wait above the skates' reach; go down to the mirror only once they rest.
+    await approach("divide", [{ x: h.x - 44, y: y + 1.5, z: h.z }, { x: h.x + 30, y: y + 1.5, z: h.z }, { x: h.x + 30, y: y + 12, z: h.z }], { x: h.x, y, z: h.z }, "layer_skate",
+      [{ x: h.x - 44, y: y + 12, z: h.z }]);
+  },
+  async "approach-meridian"() {
+    const h = homeOf("district_choir_gallery");
+    await approach("meridian", [{ x: h.x + 26, y: h.y + 1.5, z: h.z }, { x: h.x + 44, y: h.y + 1.5, z: h.z }], { ...h, y: h.y + 2 }, "hollow_choir");
+  },
+  async "approach-canopy"() {
+    // The Dart as the bot left it on the Reef → Canopy route; on to the approach ring, watch, then on to the lab.
+    const plan = PLANS.canopy; if (!plan) throw new Error("no native save for canopy");
+    result.scenes[scene].notes.start = { distance: plan.distance, mode: plan.mode, hull: plan.hull };
+    await load("approach-canopy"); await shot("native-start");
+    const route = CANOPY_BASIN_ROUTE.upper.map((p) => ({ ...p })), here = pos(await read());
+    let i = route.reduce((b, q, k) => Math.hypot(q.x - here.x, q.z - here.z) < Math.hypot(route[b].x - here.x, route[b].z - here.z) ? k : b, 0);
+    for (; i < route.length && Math.hypot(route[i].x - THREAT_HOME.x, route[i].z - THREAT_HOME.z) > 110; i++) await goto(route[i], { tol: 3, label: `upper#${i}` });
+    await shot("at-the-approach-ring");
+    result.scenes[scene].notes.waited = await waitFor((t) => windowSample("canopy_sound_hunter", t).phase === "away", { ...THREAT_HOME });
+    await shot("hunter-gone-to-feed");
+    for (; i < route.length; i++) await goto(route[i], { tol: 3, label: `upper#${i}` });
+    await shot("lab-reached-loud-and-lit");
   },
   async meridian() {
     await load("meridian-gallery");

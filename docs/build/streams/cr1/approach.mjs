@@ -25,11 +25,12 @@ await (await import(B + "scripts/playthrough/content.js")).loadCampaign();
 const RANGE = 260;
 const chimney = sitePosition({ site: "rift_split_chimney", offset: { x: 0, y: 0, z: 0 } });
 // Each threat, where its window is crossed, and where a craft parks to let the diver out.
+// `range`: how near the bot's own play must bring the player; `hull`: only while piloting that hull.
 const TARGETS = {
-  canopy: { at: THREAT_HOME, park: null },
+  canopy: { at: THREAT_HOME, park: null, range: 150, hull: "dart" },
   rift: { at: chimney, park: { x: chimney.x - 64, y: chimney.y + 10, z: chimney.z } },
   divide: { at: homeOf("divide_skate_saddle"), park: { x: homeOf("divide_skate_saddle").x - 44, y: layerY("divide_dense_layer") + 14, z: homeOf("divide_skate_saddle").z } },
-  meridian: { at: homeOf("district_choir_gallery"), park: { x: homeOf("district_choir_gallery").x - 48, y: homeOf("district_choir_gallery").y + 6, z: homeOf("district_choir_gallery").z } },
+  meridian: { range: 120, at: homeOf("district_choir_gallery"), park: { x: homeOf("district_choir_gallery").x - 48, y: homeOf("district_choir_gallery").y + 6, z: homeOf("district_choir_gallery").z } },
 };
 const captured = new Map();
 const actor = (s) => s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId) ?? null;
@@ -39,7 +40,8 @@ Driver.prototype.tick = function (controls) {
   const events = original.call(this, controls), s = this.state, p = place(s);
   if (s.player.mode === "piloting" || s.player.mode === "swimming")
     for (const [name, t] of Object.entries(TARGETS)) {
-      if (captured.has(name) || Math.hypot(p.x - t.at.x, p.y - t.at.y, p.z - t.at.z) > RANGE) continue;
+      if (captured.has(name) || Math.hypot(p.x - t.at.x, p.y - t.at.y, p.z - t.at.z) > (t.range ?? RANGE)) continue;
+      if (t.hull && actor(s)?.hull !== t.hull) continue;
       captured.set(name, structuredClone(s));
     }
   return events;
@@ -54,7 +56,7 @@ const world = gameWorld(), plans = {};
 function legs(hull, a, b) {
   const shape = HULL_COLLIDERS[hull];
   if (sweptHullClearance(world, [a, b], shape)) return [b];
-  for (let lift = 15; lift <= 120; lift += 15) {
+  for (let lift = 15; lift <= 240; lift += 15) {
     const top = Math.min(-12, Math.max(a.y, b.y) + lift), up = { ...a, y: top }, over = { ...b, y: top };
     if (sweptHullClearance(world, [a, up], shape) && sweptHullClearance(world, [up, over], shape) && sweptHullClearance(world, [over, b], shape)) return [up, over, b];
   }
