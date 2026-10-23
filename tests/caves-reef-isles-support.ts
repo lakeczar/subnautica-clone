@@ -552,17 +552,37 @@ export function seamFailures(id: string): string[] {
   const out: string[] = [], { def } = kit(id), f = def.replacementFootprints[0]!;
   for (const n of caveNeighbours(def)) for (const span of sharedSpans(f, [n])) {
     for (const lod of ["fine", "coarse"] as const) {
-      const on = (m: MeshRecipe): string[] => {
-        const keys: string[] = [];
-        for (let v = 0; v < m.positions.length / 3; v++) {
-          const p = vertex(m, v), u = span.axis === "x" ? p.x : p.z, w = span.axis === "x" ? p.z : p.x;
-          if (Math.abs(u - span.at) < 1e-6 && w > span.lo + 1e-6 && w < span.hi - 1e-6) keys.push(`${w.toFixed(3)},${p.y.toFixed(3)}`);
+      // Watertight across the shared span: every open edge either shell has
+      // there is an edge of the other (open there too, or inside it where a
+      // face lies in the plane, which both clips keep). Vertices merely
+      // touching the plane from one side aren't seam; COL-1 R7's clip no
+      // longer pads them with null triangles, which once made the two
+      // shells' vertex sets agree there.
+      const edgesOn = (m: MeshRecipe): { open: Set<string>; all: Set<string> } => {
+        const I = m.indices, nv = m.positions.length / 3, uses = new Map<number, number>(), open = new Set<string>(), all = new Set<string>();
+        for (let t = 0; t < I.length; t += 3) for (let k = 0; k < 3; k++) {
+          const a = I[t + k]!, b = I[t + (k + 1) % 3]!, e = Math.min(a, b) * nv + Math.max(a, b);
+          uses.set(e, (uses.get(e) ?? 0) + 1);
         }
-        return [...new Set(keys)].sort();
+        const key = (v: number): string | null => {
+          const p = vertex(m, v), u = span.axis === "x" ? p.x : p.z, w = span.axis === "x" ? p.z : p.x;
+          return Math.abs(u - span.at) < 1e-6 && w >= span.lo - 1e-6 && w <= span.hi + 1e-6 ? `${w.toFixed(3)},${p.y.toFixed(3)}` : null;
+        };
+        const inside = (v: number): boolean => { const p = vertex(m, v), w = span.axis === "x" ? p.z : p.x; return w > span.lo + 1e-6 && w < span.hi - 1e-6; };
+        for (const [e, count] of uses) {
+          const a = key(Math.floor(e / nv)), b = key(e % nv);
+          if (!a || !b || a === b) continue;
+          const k = a < b ? `${a}|${b}` : `${b}|${a}`;
+          all.add(k);
+          // Strictly inside the span, as the vertex test was: where a span ends
+          // both caves' collars meet it (an edge there has never matched).
+          if (count === 1 && inside(Math.floor(e / nv)) && inside(e % nv)) open.add(k);
+        }
+        return { open, all };
       };
-      const mine = on(kit(id).shells[lod]), theirs = on(kit(n.id).shells[lod]);
-      const a = new Set(mine), b = new Set(theirs), missing = mine.filter(k => !b.has(k)).concat(theirs.filter(k => !a.has(k)));
-      if (missing.length) out.push(`${id}|${n.id} ${lod}: ${missing.length} of ${mine.length + theirs.length} seam vertices unmatched, first ${missing[0]}`);
+      const A = edgesOn(kit(id).shells[lod]), B = edgesOn(kit(n.id).shells[lod]);
+      const mine = [...A.open], missing = mine.filter(k => !B.all.has(k)).concat([...B.open].filter(k => !A.all.has(k)));
+      if (missing.length) out.push(`${id}|${n.id} ${lod}: ${missing.length} of ${A.open.size + B.open.size} open seam edges have no match, first ${missing[0]}`);
       if (!mine.length) out.push(`${id}|${n.id} ${lod}: no shell on the shared edge`);
     }
     const va = kit(id).volume, vb = kit(n.id).volume;
