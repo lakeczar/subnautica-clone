@@ -728,3 +728,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **REC-1 R2** (Sol on `f9c04948`, report on `review/rec-1-r2` `370f2dea`): REQUEST CHANGES, 7 P2s.
   - **Findings:** a telemetry budget exception; loss accounting says "nothing lost" when data is lost; Off discards an in-flight picture; a campaign-length timeline.html throws; Off/on leaks spool workers; the overhead probe divides by callbacks, so the queued A/B 261023-224654-17c1 is to be cancelled or discounted; the segment clock after a restart or long task.
   - **Status:** the ordinary path works. Sent back.
+- **STEW-1 done at `c5ab187`** (R3 fixes, code `762cf55`):
+  - **Guard:** inline `{ type X }` imports count as runtime edges; layering fails closed over the reachable closure in any directory, with an empty PORTABLE_PACKAGES allowlist. Root and all five merge trees pass.
+  - **Gate:** a new `--machine M` override. The gate passed 10/10 on the 4070, npm test 1,417/1,417.
+  - **Review:** short Sol R4 running (`siltwake-stew1-review-r4-sol-c5ab187`).
