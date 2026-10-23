@@ -71,13 +71,19 @@ export function carrierPanel(state: GameState, world: WorldQueries, button: Comm
   // The lock corridor, as the helm and the drawn corridor show it.
   const corridor = launchCorridorView(state, world);
   if (corridor) html += `<p class="carrier-corridor ${corridor.clear ? "clear" : "blocked"}">${escapeHtml(corridor.advice)}</p>`;
+  // A launch refused only for station keeping still names an obstructed corridor: that is the next thing to fix.
+  const launch = (v: VehicleState): string => {
+    const no = dryRun(state, world, "launch", v.id), label = `Launch ${HULLS[v.hull].label}`;
+    const reason = no && !d.stationKeeping && corridor && !corridor.clear && corridor.vehicleId === v.id ? `${corridor.advice} Then hold station.` : no;
+    return button(label, { type: "carrier", action: "launch", vehicleId: v.id }, no !== null, reason ?? undefined);
+  };
   // Berths and their craft.
   const slots: (0 | 1)[] = d.configuration === "medium" ? [0] : [0, 1];
   html += '<h3 class="carrier-heading">Berths</h3>';
   for (const slot of slots) {
     const v = state.fleet.vehicles.find((a) => a.berth?.carrierId === h.id && a.berth.slot === slot);
     html += `<article class="carrier-berth"><div class="vessel-line"><h4>${berthName(state, slot)} · ${v ? HULLS[v.hull].label : "empty"}</h4>`;
-    if (v) html += `<div class="service-actions">${act(`Launch ${HULLS[v.hull].label}`, "launch", v.id)}</div></div><p>${craftLine(state, v)}</p>`;
+    if (v) html += `<div class="service-actions">${launch(v)}</div></div><p>${craftLine(state, v)}</p>`;
     else html += "</div>";
     html += "</article>";
   }
