@@ -3,7 +3,7 @@
 Opus 5.5 high. Branch `t3/save-1-shared-library`, on root `009b244` (CR-1, UX-1, TT-1 and SCHED-1 merged). Head: see the report; each check names the commit it ran on. Story-neutral; `docs/spoilers/*` not read.
 
 ## Outcome
-After a root merge, **`scripts/saves-export.sh`** plays every playthrough scenario on siltwake-alickers and publishes every save the bot made, read-only, to **`/work/tmp/siltwake-saves/<sha>/`** on factory-worker: the bootstrap export at `0a464bc` holds 73 saves, about 2.5 MB. Tests, reviews, GPU drivers, soaks and MEM-1 start from any of them with one call (`saves.js pick KIND`, or `librarySave(KIND)` in code). Branch scenarios start from the library instead of replaying their parent (TST-21).
+After a root merge, **`scripts/saves-export.sh`** plays every playthrough scenario on siltwake-alickers and publishes every save the bot made, read-only, to **`/work/tmp/siltwake-saves/<sha>/`** on factory-worker: the export at the branch head `1d4d2c3` (after the SCHED-2a root merge) holds 73 saves, about 2.5 MB. So does a bootstrap export at `0a464bc`. Tests, reviews, GPU drivers, soaks and MEM-1 start from any of them with one call (`saves.js pick KIND`, or `librarySave(KIND)` in code). Branch scenarios start from the library instead of replaying their parent (TST-21).
 
 Every save is **earned by the bot** through `stepGame` and `executeCommand`; no state is edited. Each records the scenario, phase, branch point, minutes of play and the accepted commands since New Game, and was saved through the real `SaveRepository`, reloaded by a fresh one and matched to its state hash. The manifest records the commit, schema 6 and `expedition.7`.
 
@@ -94,6 +94,7 @@ Measured headless in the `tour` scenario (`manifest.measurements.tour`, at `0a46
   - 8 of 8 scenarios complete with no blockers, every milestone and capture reload matched;
   - 73 saves published and imported to factory-worker;
   - every save then decoded by a build of `0a464bc` (compiled from `git archive`) to its recorded hash, with every kind's facts holding.
+- **At the head, after merging root `a536775` (SCHED-2a):** `scripts/saves-export.sh` at `1d4d2c3`, exit 0. All 8 scenarios complete, 73 saves, imported and decoded on factory-worker by the head's own build; `saves.js verify HEAD` is clean. **All 73 are byte-identical to the `0a464bc` export.** `pick tour-ready` → `1d4d2c3`, same-commit.
 - **Deterministic:** all 66 saves that the partial export at `1333460` also made are byte-identical (SHA-256) in the `0a464bc` export: two runs, two commits, the same bytes.
 - **TST-21 path:** `--from-library` at `f1a48de` and `062d2b6` ran `low-air`, `tour` and `over-geared` from the `1333460` library.
 - **CLI at the head:** `saves.js pick tour-ready` → `0a464bc` (same-version, 40 commits back, after the root merge). `pick nope` → exit 3, listing the kinds. `pick dart --exact` → exit 3, "not the exact commit asked for".
