@@ -3,6 +3,7 @@
  * registry.ts yet; the coordinator merges these rows in one change (SYS-2.md).
  * Stable IDs only; labels are display text. Balance numbers are first proposals. */
 import type { CostKind, FabricationSite, RegionId } from "../registry.js";
+import { FAUNA_STACKABLE } from "../fauna/items.js";
 
 /** New item kinds. `cu` follows ITEMS. Socket modules and kits are single instances
  * (never stacked); seeds and produce stack like materials. */
@@ -17,6 +18,8 @@ export const SYS2_ITEMS = {
   mod_survey: { label: "Survey station module", cu: 3, stack: false },
   mod_fabricator: { label: "Small fabricator module", cu: 4, stack: false },
   mod_relay: { label: "Signal relay module", cu: 2, stack: false },
+  /** CR-1: a fish trap catches slowly in the background (content/fauna/items.ts TRAP). */
+  mod_fish_trap: { label: "Fish trap module", cu: 3, stack: false },
   nav_beacon: { label: "Navigation beacon", cu: 1, stack: true },
   seed_staple_cup: { label: "Staple cup cutting", cu: 1, stack: true },
   seed_ribbon_fan: { label: "Ribbon fan cutting", cu: 1, stack: true },
@@ -71,6 +74,8 @@ export const SYS2_RECIPES = {
   mod_survey: recipe("Survey station module", { structural_alloy: 1, silica_glass: 1, conductive_crust: 2 }, "bp_survey_station", "mod_survey", "island_workshop", 1, ["restore_workshop"]),
   mod_fabricator: recipe("Small fabricator module", { structural_alloy: 3, silica_glass: 1, conductive_crust: 2 }, "bp_small_fabricator", "mod_fabricator", "island_workshop", 1, ["restore_workshop"]),
   mod_relay: recipe("Signal relay module", { structural_alloy: 1, conductive_crust: 1, buoyant_resin: 1 }, "bp_signal_relay", "mod_relay", "island_workshop", 1, ["restore_workshop"]),
+  // CR-1: membrane mesh on an alloy frame, buoyed by resin; early, with the basic kit plans.
+  mod_fish_trap: recipe("Fish trap module", { structural_alloy: 1, flex_membrane: 2, buoyant_resin: 1 }, "bp_field_outpost", "mod_fish_trap"),
   nav_beacons: recipe("Navigation beacons ×3", { structural_alloy: 1, silica_glass: 1 }, "bp_field_outpost", "nav_beacon", "pod_fabricator", 3),
 } as const satisfies Record<string, Sys2Recipe>;
 export type Sys2RecipeId = keyof typeof SYS2_RECIPES;
@@ -156,4 +161,4 @@ export type Sys2TechRecordId = keyof typeof SYS2_TECH_RECORDS;
 /** Materials that stack with each other in addItem: registry materials plus SYS-2 seeds and produce. */
 export const stackable = (kind: string, materials: Readonly<Record<string, unknown>>): boolean =>
   Object.hasOwn(materials, kind) || kind === "meal" || kind === "tagged_frame" ||
-  (isSys2Item(kind) && SYS2_ITEMS[kind].stack);
+  (isSys2Item(kind) && SYS2_ITEMS[kind].stack) || (FAUNA_STACKABLE as readonly string[]).includes(kind);

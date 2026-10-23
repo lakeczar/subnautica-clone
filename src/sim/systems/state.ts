@@ -15,6 +15,7 @@ import { isSys2Item } from "../../content/systems/items.js";
 import { BEACON_CATEGORIES, BEACON_NAME_MAX } from "../../content/systems/navigation.js";
 import type { BeaconCategory } from "../../content/systems/navigation.js";
 import type { Vec3 } from "../types.js";
+import { TRAP } from "../../content/fauna/items.js";
 
 export type PowerSource = "solar" | "thermal" | "cells" | "plant";
 export interface OutpostState {
@@ -35,6 +36,9 @@ export interface PackedKit { itemId: string; tier: OutpostTier; name: string; la
 export interface DecodeJob { moduleId: string; decodable: DecodableId; progress: number }
 /** `progress` is grown seconds, capped at the seed's grow time. */
 export interface PlanterState { moduleId: string; seed: SeedKind; progress: number }
+/** CR-1: a fish trap's work, keyed by its module like a crop. `progress` is
+ * seconds toward the next fish; `held` is fish in the trap, at most TRAP.cap. */
+export interface TrapState { moduleId: string; progress: number; held: number }
 export interface BeaconState {
   id: string;
   name: string;
@@ -52,6 +56,8 @@ export interface SystemsState {
   decoded: DecodableId[];
   decodes: DecodeJob[];
   planters: PlanterState[];
+  /** CR-1: fish traps (sim/fauna/trap.ts). */
+  traps: TrapState[];
   beacons: BeaconState[];
   /** Individually switched-off beacon IDs (stored and derived beacons alike). */
   beaconsOff: string[];
@@ -62,7 +68,7 @@ export interface SystemsState {
 
 export function createSystems(): SystemsState {
   return {
-    outposts: [], packed: [], sockets: [], found: [], decoded: [], decodes: [], planters: [],
+    outposts: [], packed: [], sockets: [], found: [], decoded: [], decodes: [], planters: [], traps: [],
     beacons: [], beaconsOff: [], categoriesOff: [], chart: [],
   };
 }
@@ -80,7 +86,7 @@ const POWER: readonly string[] = ["solar", "thermal", "cells", "plant"];
 /** Strict shape check for the coordinator's save validation. Cross-references
  * against the inventory (module and kit IDs) belong to the composed validator. */
 export function validSystems(v: unknown): v is SystemsState {
-  if (!record(v) || !exactKeys(v, ["outposts", "packed", "sockets", "found", "decoded", "decodes", "planters",
+  if (!record(v) || !exactKeys(v, ["outposts", "packed", "sockets", "found", "decoded", "decodes", "planters", "traps",
     "beacons", "beaconsOff", "categoriesOff", "chart"])) return false;
   const arrays = Object.values(v);
   if (!arrays.every(Array.isArray)) return false;
@@ -102,6 +108,9 @@ export function validSystems(v: unknown): v is SystemsState {
   if (!unique(s.decodes.map((j) => j.moduleId)) || !unique(s.decodes.map((j) => j.decodable))) return false;
   if (!s.planters.every((p) => record(p) && exactKeys(p as never, ["moduleId", "seed", "progress"]) && id(p.moduleId) &&
     isSeed(p.seed) && finite(p.progress) && p.progress >= 0) || !unique(s.planters.map((p) => p.moduleId))) return false;
+  if (!s.traps.every((t) => record(t) && exactKeys(t as never, ["moduleId", "progress", "held"]) && id(t.moduleId) &&
+    finite(t.progress) && t.progress >= 0 && t.progress < TRAP.seconds && Number.isInteger(t.held) && t.held >= 0 && t.held <= TRAP.cap) ||
+    !unique(s.traps.map((t) => t.moduleId))) return false;
   if (!s.beacons.every((b) => record(b) && exactKeys(b as never, ["id", "name", "category", "position", "source"]) && id(b.id) &&
     name(b.name) && BEACON_CATEGORIES.includes(b.category) && vec(b.position) && (b.source === "player" || b.source === "decode")) ||
     !unique(s.beacons.map((b) => b.id))) return false;

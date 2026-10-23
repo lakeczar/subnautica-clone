@@ -231,7 +231,8 @@ test("smoke: watching the chimney logs it without gathering, a phase begun out o
   assert.ok(record(), "the record survives a reload");
   let live = creelFirst(); at(live, watch, "swimming");
   live = stepGame(live, [], world).state;
-  assert.equal(live.knowledge.cycles.length, 1, "a diver watching for a moment through the real step logs it");
+  // (CR-1: the stalkers' vent feeding is watched from here too, as its own record.)
+  assert.ok(live.knowledge.cycles.some((r) => r.cycleId === cycle.id), "a diver watching for a moment through the real step logs it");
   const bad = structuredClone(s); (bad.knowledge.cycles[0] as unknown as { measured: string[] }).measured = ["boiling"];
   assert.equal(validState(bad), false, "a tampered record is refused");
 });

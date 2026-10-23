@@ -8,6 +8,7 @@ import { sampleHazards } from "./hazards.js";
 import { ECOLOGY_DT } from "./types.js";
 import type { AgentMode, AgentState, DeployedDeterrent, EcologyCue, EcologyEvent, EcologyWorld, Stimulus } from "./types.js";
 import { add, clamp01, distance, finite, length, scale, sub, toward, yawToward } from "./vector.js";
+import { busyWindow, windowSpot } from "../fauna/windows.js";
 
 const DT = ECOLOGY_DT;
 export const INK_RADIUS = 6;
@@ -158,6 +159,33 @@ export function stepAgent(agent: AgentState, s: Stimulus, world: EcologyWorld, t
   };
   agent.modeSeconds += DT;
   agent.refractory = Math.max(0, agent.refractory - DT);
+  const window = busyWindow(species, tick);
+  if (window) {
+    // CR-1: its natural window (feeding, resting). It perceives nothing and
+    // never escalates; an encounter it was in breaks off, and afterwards it
+    // starts again from rest, so the whole warning ladder applies.
+    agent.awareness = Math.max(0, agent.awareness - def.awareness.decay * 3 * DT);
+    // Broken off to feed or rest, it is spent, as a lure spends the choir: it
+    // rests through its refractory before it hunts again. Engagement counts
+    // carry through a window and are never refreshed by it.
+    if (agent.mode === "alert" || agent.mode === "investigate" || agent.mode === "commit") {
+      agent.cycles = def.maxCycles;
+      change("withdraw", "feed", window.breakOff);
+    } else if (agent.mode === "withdraw" && agent.modeSeconds >= def.timing.withdraw) {
+      if (agent.cycles >= def.maxCycles) { agent.refractory = def.timing.refractory; agent.cycles = 0; agent.awareness = 0; }
+      change("rest", null);
+    }
+    const spot = windowSpot(agent.id, home, tick);
+    if (spot) {
+      // Feeding animals weave slowly around their spot; a resting skate holds still.
+      const sway = WINDOW_SPOTS_SWAY[species] ?? 0, a = tick / 60 * 0.7 + agent.id.length;
+      const target = sway && distance(agent.position, spot) < sway + 1
+        ? add(spot, { x: Math.cos(a) * sway, y: Math.sin(a * 1.3) * 0.6, z: Math.sin(a) * sway }) : spot;
+      moveAgent(agent, target, distance(agent.position, spot) > sway + 1 ? def.speed.withdraw : def.speed.withdraw * 0.4, world, tick);
+      agent.yaw = yawToward(agent.position, target, agent.yaw);
+    }
+    return out;
+  }
   const lure = attraction(agent, def, deterrents);
   const sensed = perceive(agent, s, world, tick, deterrents);
   const engaged = agent.mode === "investigate" || agent.mode === "commit";
@@ -180,8 +208,8 @@ export function stepAgent(agent: AgentState, s: Stimulus, world: EcologyWorld, t
     if (def.strike.kind === "pulse") {
       // A sessile chorus answers the decoy and spends itself there.
       agent.cycles = def.maxCycles;
-      change("withdraw", "lure", def.captions.lure);
-    } else if (agent.mode !== "investigate") change("investigate", "lure", def.captions.lure);
+      change("withdraw", "lure", lure.kind === "bait" ? def.captions.bait : def.captions.lure);
+    } else if (agent.mode !== "investigate") change("investigate", "lure", lure.kind === "bait" ? def.captions.bait : def.captions.lure);
   } else if (engaged && !sensed.reachable) change("withdraw", "leash", def.captions.leash);
   else switch (agent.mode) {
     case "rest":
@@ -247,6 +275,8 @@ export function stepAgent(agent: AgentState, s: Stimulus, world: EcologyWorld, t
   agent.yaw = yawToward(agent.position, face, agent.yaw);
   return out;
 }
+/** Metres a feeding animal weaves around its window spot (none: holds still). */
+const WINDOW_SPOTS_SWAY: Partial<Record<ThreatSpeciesId, number>> = { glare_stalker: 3 };
 /** Seconds past its investigation an unseen animal waits before it may lunge anyway. */
 export const UNSEEN_COMMIT_DELAY = 6;
 /** Half-angle of the view cone in which an investigating animal counts as seen. */

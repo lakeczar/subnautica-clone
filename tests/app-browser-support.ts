@@ -1,4 +1,4 @@
-import type { GameState, NoticeOptions, Vec3 } from "../src/sim/types.js";
+import type { GameCommand, GameState, NoticeOptions, Vec3 } from "../src/sim/types.js";
 import type { SaveSlot } from "../src/save/repository.js";
 export { deliberateExit, controlHasFocus, textEntryHasFocus } from "../src/runtime/input.js";
 import type { UiActions } from "../src/ui/view.js";
@@ -96,13 +96,15 @@ export class GameView {
   }
 }
 export class PlayerInput {
+  /** Controls every sample returns while set (UX-1's helm tests); none by default. */
+  static scripted: GameCommand[] | null = null;
   cruise = false;
   settings = { sensitivity: 1, invertY: false, keyTurnSpeed: 1 };
   clear(): void {
     this.cruise = false;
   }
-  sample(): [] {
-    return [];
+  sample(): GameCommand[] {
+    return PlayerInput.scripted ? PlayerInput.scripted.map((c) => ({ ...c })) : [];
   }
   dispose(): void {}
 }
@@ -116,8 +118,11 @@ export class TestRenderer {
   ) {
     TestRenderer.current = this;
   }
-  present(): void {
+  /** The helm head look of the latest present (UX-1). */
+  look: { yaw: number; pitch: number } | null = null;
+  present(_state?: unknown, overlay?: { look?: { yaw: number; pitch: number } }): void {
     this.presents++;
+    this.look = overlay?.look ? { ...overlay.look } : null;
     this.canvas.dataset.ready = "true";
   }
   /** Idle preparation calls; ticks with an active session must never prepare. */

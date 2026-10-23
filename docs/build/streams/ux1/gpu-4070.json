@@ -1,0 +1,159 @@
+{
+ "commit": "e48fb40",
+ "save": "docs/build/streams/ux1/saves/outside-vestibule.json",
+ "angle": "gl",
+ "segments": [
+  {
+   "label": "bridge at the helm, holding station (5 s)",
+   "seconds": 5,
+   "frames": 300,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  },
+  {
+   "label": "helm under way, turning (10 s)",
+   "seconds": 10,
+   "frames": 600,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  },
+  {
+   "label": "helm turning over the blocked slope (corridor search running)",
+   "seconds": 3.4,
+   "frames": 201,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  },
+  {
+   "label": "bridge on foot (3 s)",
+   "seconds": 3,
+   "frames": 180,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  }
+ ],
+ "shots": [
+  "/work/results/ux1-4070/01-outside-the-vestibule.png",
+  "/work/results/ux1-4070/02-board-prompt-at-hatch.png",
+  "/work/results/ux1-4070/03-aboard-vestibule.png",
+  "/work/results/ux1-4070/04-helm-prompt-on-the-bridge.png",
+  "/work/results/ux1-4070/05-helm-window-view.png",
+  "/work/results/ux1-4070/06-head-look-to-port-hull-unturned.png",
+  "/work/results/ux1-4070/07-under-way-window-view.png",
+  "/work/results/ux1-4070/08-corridor-obstructed-hint.png",
+  "/work/results/ux1-4070/09-console-launch-refused-with-reason.png",
+  "/work/results/ux1-4070/10-corridor-clear-after-turn.png",
+  "/work/results/ux1-4070/11-launched-mantle.png",
+  "/work/results/ux1-4070/12-after-launch-helm.png",
+  "/work/results/ux1-4070/13-mantle-recovered.png",
+  "/work/results/ux1-4070/14-left-the-helm.png"
+ ],
+ "errors": [
+  "HTTP 404 http://127.0.0.1:5580/terrain/t_4_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5580/terrain/t_5_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5580/terrain/t_5_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)"
+ ],
+ "notices": [
+  {
+   "t": 33.2,
+   "text": "|"
+  },
+  {
+   "t": 35.9,
+   "text": "Aboard the Hearthline. The bridge and helm are forward."
+  },
+  {
+   "t": 49.8,
+   "text": "At the Hearthline's helm. A/D turn, W/S ahead and astern; X holds station and leaves the helm."
+  },
+  {
+   "t": 49.8,
+   "text": "[Helm console wakes]"
+  },
+  {
+   "t": 85.2,
+   "text": "| Lock cycling: the Mantle moves down to the gate."
+  },
+  {
+   "t": 87.5,
+   "text": "Mantle launched under the bow. Board it from the water."
+  },
+  {
+   "t": 87.5,
+   "text": "[Launch lock flooding]"
+  },
+  {
+   "t": 91,
+   "text": "Mantle recovered. Clamps locked; the berth is dry."
+  },
+  {
+   "t": 91,
+   "text": "[Berth clamps lock]"
+  },
+  {
+   "t": 93.9,
+   "text": "Left the helm"
+  }
+ ],
+ "steps": {
+  "boardPrompt": "E Hearthline vestibule hatch Board",
+  "boarded": "interior",
+  "helmPrompt": "E Helm Take the helm",
+  "atHelm": {
+   "movement": "At the helm",
+   "helm": "HEARTHLINE \u00b7 HELM 180\u00b0 S Stopped 12 m 21 m under the keel Another craft obstructs the lock corridor under the bow. Move it clear, then launch.",
+   "guidance": "X Hold station and leave the helm",
+   "controls": "A/D turn \u00b7 W/S ahead / astern \u00b7 Space/C rise / dive \u00b7 mouse looks around \u00b7 V berths and lock",
+   "corridor": "shown"
+  },
+  "headLook": {
+   "bearingBefore": 180,
+   "bearingAfter": 180,
+   "cameraYaw": null
+  },
+  "underWay": "HEARTHLINE \u00b7 HELM 244\u00b0 SW 1.3 m/s ahead 12 m 21 m under the keel The lock corridor under the bow is obstructed. Turn about 20\u00b0 to port for clear water, then launch the Mantle.",
+  "blocked": {
+   "bearing": 150,
+   "helm": "HEARTHLINE \u00b7 HELM 150\u00b0 SE Stopped 28 m 6 m under the keel The lock corridor under the bow is obstructed. Turn about 30\u00b0 to port for clear water, then launch the Mantle.",
+   "corridor": "shown"
+  },
+  "consoleRefused": "Stopped, at the helm \u00b7 heading 150\u00b0 \u00b7 28 m \u00b7 Lock closed\n\nHold station\nLeave the helm\nHold station before leaving the helm.\n\nThe lock corridor under the bow is obstructed. Turn about 30\u00b0 to port for clear water, then launch the Mantle.\n\nBERTHS\nService berth \u00b7 Mantle\nLaunch Mantle\nThe lock corridor under the bow is obstructed. Turn about 30\u00b0 to port for clear water, then launch the Mantle. Then hold station.\n\nPower 96% \u00b7 hull 100% \u00b7 hold 0 / 32 CU\n\nNEAR THE LOCK MOUTH\nCreel \u00b7 56 m from the lock mouth\nRecover Creel\nThe Creel is 56 m from the lock mouth under the Hearthline's bow. Bring it within 13 m.\n\nPower 81% \u00b7 hull 100% \u00b7 hold 4 / 96 CU",
+  "launchAttempt": "disabled: The lock corridor under the bow is obstructed. Turn about 30\u00b0 to port for clear water, then launch the Mantle. Then hold station.",
+  "cleared": {
+   "bearing": 116,
+   "helm": "HEARTHLINE \u00b7 HELM 116\u00b0 SE Stopped 28 m 6 m under the keel Lock corridor clear under the bow for the Mantle.",
+   "corridor": "shown"
+  },
+  "hold": "clicked",
+  "launch": "clicked",
+  "consoleAfterLaunch": "Holding station \u00b7 heading 116\u00b0 \u00b7 28 m \u00b7 Lock cycling \u00b7 launching the Mantle\n\nLeave the helm\nStop the lock cycle\n\nLock corridor clear under the bow for the Mantle.\n\nBERTHS\nService berth \u00b7 Mantle\nLaunch Mantle\nThe lock is already cycling.\n\nPower 96% \u00b7 hull 100% \u00b7 hold 0 / 32 CU\n\nNEAR THE LOCK MOUTH\nCreel \u00b7 50 m from the lock mouth\nRecover Creel\nThe lock is already cycling.\n\nPower 81% \u00b7 hull 100% \u00b7 hold 4 / 96 CU",
+  "consoleRecover": "Holding station \u00b7 heading 116\u00b0 \u00b7 28 m \u00b7 Lock closed\n\nLeave the helm\nBERTHS\nService berth \u00b7 empty\nNEAR THE LOCK MOUTH\nCreel \u00b7 50 m from the lock mouth\nRecover Creel\nThe Creel is 50 m from the lock mouth under the Hearthline's bow. Bring it within 13 m.\n\nPower 81% \u00b7 hull 100% \u00b7 hold 4 / 96 CU\n\nMantle \u00b7 0 m from the lock mouth\nRecover Mantle\n\nPower 96% \u00b7 hull 100% \u00b7 hold 0 / 32 CU",
+  "recover": "clicked",
+  "consoleAfterRecover": "Holding station \u00b7 heading 116\u00b0 \u00b7 28 m \u00b7 Lock closed\n\nLeave the helm\n\nLock corridor clear under the bow for the Mantle.\n\nBERTHS\nService berth \u00b7 Mantle\nLaunch Mantle\n\nPower 96% \u00b7 hull 100% \u00b7 hold 0 / 32 CU\n\nNEAR THE LOCK MOUTH\nCreel \u00b7 50 m from the lock mouth\nRecover Creel\nThe Creel is 50 m from the lock mouth under the Hearthline's bow. Bring it within 13 m.\n\nPower 81% \u00b7 hull 100% \u00b7 hold 4 / 96 CU",
+  "leftHelm": {
+   "movement": "Dry interior",
+   "notice": "Left the helm | | | "
+  }
+ },
+ "renderer": "ANGLE (Microsoft Corporation, D3D12 (NVIDIA GeForce RTX 4070 Laptop GPU), OpenGL 4.6)",
+ "controlsList": "W A S DMove / swimMouse / \u2191 \u2193 \u2190 \u2192LookSpace / CRise or jump / diveShiftFasterRForward cruiseE / QInteract / scanB / F / GBuoy / meal / pulseL / T / YLamp / glow lure / startle inkTab or I / K / J / HCargo / fabricate / notebook / hintW / S \u00b7 A / DPilot thrust \u00b7 slideXExit craft (hold while moving)ZQuiet movementHearthline helmA / D turn \u00b7 W / S ahead or astern \u00b7 mouse looks around \u00b7 X hold station and leaveVHearthline berths and lock (aboard or at its hatch)Esc / F5Pause / save"
+}

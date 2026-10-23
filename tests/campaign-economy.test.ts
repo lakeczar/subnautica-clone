@@ -22,7 +22,8 @@ for (const strategy of STRATEGIES) {
       assert.equal((r.spent[kind] ?? 0) + left.exposed + left.reserve, total.exposed + total.reserve, `${kind}: every unit accounted`);
     }
     // Zero renewal: no living shed gave more than its original exposed stock plus its reserve.
-    for (const id of RENEWABLE_SOURCE_IDS) assert.ok(r.remaining[SOURCES[id].item]!.exposed >= 0);
+    // (CR-1's fish and roe are food, outside the materials ledger.)
+    for (const id of RENEWABLE_SOURCE_IDS) if (Object.hasOwn(r.remaining, SOURCES[id].item)) assert.ok(r.remaining[SOURCES[id].item]!.exposed >= 0);
   });
 
   test(`${strategy}: the failed rescue rebuilds the lost hull from its own canister`, () => {

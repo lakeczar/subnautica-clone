@@ -1,0 +1,45 @@
+{
+  "scenes": {
+    "approach-meridian": {
+      "captions": [
+        " | | | ",
+        " | The hollow choir rests at regular times: its rims dim and the bells fold shut. Closed bells barely hear. | | ",
+        " | The hollow choir rests at regular times: its rims dim and the bells fold shut. Closed bells barely hear. | Left the craft | ",
+        " | The hollow choir rests at regular times: its rims dim and the bells fold shut. Closed bells barely hear. | | ",
+        " | | | ",
+        " | | Hollow choir's rest · one phase timed in the journal. | ",
+        " | | | ",
+        " | | Hollow choir's rest · one phase timed in the journal. | ",
+        " | | | ",
+        " | | Hollow choir's rest · one phase timed in the journal. | ",
+        " | | | "
+      ],
+      "banners": [],
+      "minHealth": 100,
+      "notes": {
+        "start": {
+          "distance": 259.9742185264904,
+          "mode": "piloting",
+          "hull": "creel"
+        },
+        "exited": {
+          "at": {
+            "x": 1293.65,
+            "y": -583.1,
+            "z": -1192.982
+          },
+          "vitals": "O₂ 100% Suit air · 0 s HEALTH 100 FOOD 61 F · eat meal"
+        },
+        "waited": 2.4240289179999963
+      }
+    }
+  },
+  "shots": [
+    "/work/tmp/cr1/shots5/approach-meridian-01-native-start.png",
+    "/work/tmp/cr1/shots5/approach-meridian-02-arrived-watching.png",
+    "/work/tmp/cr1/shots5/approach-meridian-03-window-open.png",
+    "/work/tmp/cr1/shots5/approach-meridian-04-crossed.png"
+  ],
+  "errors": [],
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)"
+}

@@ -10,7 +10,7 @@ import type { AgentMode, EcologyState, Exposure } from "./types.js";
  * roster entries, out-of-range numbers and foreign IDs are all rejected. */
 const MODES: readonly AgentMode[] = ["rest", "alert", "investigate", "commit", "withdraw"];
 const SENSES: readonly Sense[] = ["noise", "light", "disturbance", "layer"];
-const KINDS: readonly Deterrent[] = ["acoustic", "lure", "ink"];
+const KINDS: readonly Deterrent[] = ["acoustic", "lure", "ink", "bait"];
 
 type Raw = Record<string, unknown>;
 const record = (x: unknown): x is Raw => typeof x === "object" && x !== null && !Array.isArray(x);

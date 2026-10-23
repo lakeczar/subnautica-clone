@@ -1,3 +1,4 @@
+import { FAUNA_RENEWAL } from "../src/content/fauna/grounds.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { RENEWABLE_SOURCE_IDS, SOURCE_RENEWAL, SOURCES, type SourceId } from "../src/content/registry.js";
@@ -33,9 +34,11 @@ const roundTrip = (s: GameState): GameState => {
   return back.value.state;
 };
 
-test("only the two reef ribbon catches and two Canopy cured-resin pockets renew, at the specified active rates", () => {
-  assert.deepEqual(RENEWABLE_SOURCE_IDS, ["reef_ribbon_catch_north", "reef_ribbon_catch_south", "canopy_resin_lee_upper", "canopy_resin_lee_lower"]);
-  for (const id of RENEWABLE_SOURCE_IDS) {
+test("only the two reef ribbon catches and two Canopy cured-resin pockets renew (plus CR-1's creature grounds), at the specified active rates", () => {
+  // CR-1's creature grounds follow, on their own regrowth (tests/cr-1-creatures.test.ts).
+  assert.deepEqual(RENEWABLE_SOURCE_IDS, ["reef_ribbon_catch_north", "reef_ribbon_catch_south", "canopy_resin_lee_upper", "canopy_resin_lee_lower",
+    ...Object.keys(FAUNA_RENEWAL)]);
+  for (const id of RENEWABLE_SOURCE_IDS.filter((id) => !Object.hasOwn(FAUNA_RENEWAL, id))) {
     const policy = SOURCE_RENEWAL[id];
     assert.equal(policy.quantity, 2);
     const minutes = SOURCES[id].item === "flex_membrane" ? 6 : 10;
@@ -62,7 +65,7 @@ test("finite sources never refill from active time; depleted living sheds regrow
   for (let i = 0; i < 80_000; i++) advanceRenewal(s);
   for (const id of finite) assert.deepEqual([node(s, id).stock, node(s, id).reserve], [0, 0], `${id} stays finite`);
   for (const id of RENEWABLE_SOURCE_IDS) {
-    assert.equal(node(s, id).stock, Math.min(renewalCap(id), Math.floor(80_000 / SOURCE_RENEWAL[id].intervalSteps) * 2), id);
+    assert.equal(node(s, id).stock, Math.min(renewalCap(id), Math.floor(80_000 / SOURCE_RENEWAL[id].intervalSteps) * SOURCE_RENEWAL[id].quantity), id);
     assert.equal(node(s, id).reserve, 0, "finite reserves are never replenished");
   }
   // The ordinary fixed step is the same rule: one step advances one unit of progress.

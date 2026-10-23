@@ -15,6 +15,8 @@ export const MODULES = {
   survey: { label: "Survey station", item: "mod_survey", needsPower: true },
   fabricator: { label: "Small fabricator", item: "mod_fabricator", needsPower: true },
   relay: { label: "Signal relay", item: "mod_relay", needsPower: true },
+  // CR-1: catches small fish in the background, without power (content/fauna/items.ts TRAP).
+  trap: { label: "Fish trap", item: "mod_fish_trap", needsPower: false },
 } as const satisfies Record<string, { label: string; item: Sys2ItemKind; needsPower: boolean; lockerCu?: number }>;
 export type ModuleKind = keyof typeof MODULES;
 export const MODULE_KINDS = Object.keys(MODULES) as ModuleKind[];
