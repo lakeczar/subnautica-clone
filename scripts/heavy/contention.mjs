@@ -1,5 +1,6 @@
 // Contention around an exclusive job (TST-16): whether something disturbed
-// the measurement, judged on the job's own cgroup, and the light-work clamp.
+// the measurement, judged on the job's own cgroup, and the CPU priority the
+// job gets while it runs.
 //
 // The old label used the host's /proc/pressure (cpu "some", memory "full"),
 // the maximum of avg10 sampled every 15 s. Those count any task on the
@@ -7,29 +8,41 @@
 // memory while the game idles between frames, and memory "full" rises with no
 // effect on the game at all. That is how a quiet run got labelled DISTURBED.
 //
-// Now the run is judged from the job scope's own cpu.pressure and
-// memory.pressure: the cumulative stall counters (microseconds), read every
-// windowS, so nothing between samples is missed. The worst window and the
-// whole run are both recorded. Also measured, from /proc/stat: hypervisor
-// steal (a VM's vCPU taken away underneath the guest, invisible to PSI) and
-// the CPU used outside the job. Host load and PSI stay as observations only.
-//
-// Swap (fleet's audit: the guest swaps, and a swap-in stalls 50–100 ms without
-// showing as steal): /proc/vmstat pswpin, pswpout and pgmajfault, and the
-// job cgroup's own memory.stat pgmajfault and workingset_refault_anon (its
-// swap-ins: anonymous pages it had to read back; the kernel keeps no
-// per-cgroup pswpin). A job with a warm page cache takes no major faults, so
-// any is a sign its memory or cache was evicted under pressure.
+// Measurement (R1-F4). The job's own cgroup counters: cpu.pressure and
+// memory.pressure stall totals (µs), memory.stat pgmajfault and
+// workingset_refault_anon (its swap-ins), cpu.stat usage; and the host's
+// /proc/stat (steal, CPU busy outside the job) and /proc/vmstat (swap,
+// major faults). scope-run.sh snapshots them just before the payload starts
+// and just after it ends, before the scope goes; the holder reads them every
+// second between. Every point carries /proc/uptime's clock (monotonic, the
+// same in every process). Windows are judged from windowS apart, the last,
+// shorter stretch merged into the window before it, so every observed delta
+// counts. A missing baseline or final snapshot, or a gap between points over
+// gapS, is missing coverage, and a run with missing coverage is never clean.
+// Unreadable counters are null, never zero. Raw points go to
+// <jobdir>/contention.jsonl and the windows into the context, for audit.
 //
 // DISTURBED, each with its reason in `reasons`:
 //   job CPU wait   the job's tasks waited for a CPU ≥ jobCpuSomePct of a window
 //   job memory     the job's tasks stalled on memory ≥ jobMemSomePct of a window
 //   job swap       the job's cgroup took ≥ jobMajorFaults major faults or
-//                  ≥ jobSwapIns swap-ins in a window
+//                  ≥ jobSwapIns swap-ins in a window (its memory or cache was
+//                  read back from disk; the guest swaps, fleet's audit)
 //   steal          the hypervisor took ≥ stealPct of the machine's CPU in a window
 //   GPU            a GPU client outside the lease shared the GPU (holder.mjs)
-//   unmeasured     the job's own counters could not be read (never taken as clean)
+//   unmeasured     coverage was missing (above), or the job was recovered
 // Thresholds: config.json `disturbed` over DISTURBED_DEFAULTS.
+//
+// Priority (R1-F2, F3): while an exclusive job runs, our own top-level slice
+// (siltwake.slice, the heavy slice's parent) gets CPUWeight exclusiveCpuWeight.
+// CPU is shared between top-level groups by weight (app.slice, where T3 runs
+// every agent and its tools, has 100), and T3's slices below enable no CPU
+// controller, so no lever inside them exists without changing them. Measured
+// (TST-16.md): a probe pinned to one CPU against four app.slice threads waited
+// 14–21% at weight 100, 0% at 10000. Nothing else changes: no process moves,
+// no caller's memory, swap or pids containment changes, and T3's slices are
+// never touched. Ownership is journalled in state.boost before the weight is
+// set, kept until a verified reset, and recovered by reconcile (R1-F1).
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
@@ -37,140 +50,148 @@ export const DISTURBED_DEFAULTS = Object.freeze({ jobCpuSomePct: 5, jobMemSomePc
 const HZ = 100; // USER_HZ: /proc/stat's unit is 10 ms on Linux
 
 const read = (p) => { try { return readFileSync(p, "utf8"); } catch { return null; } };
-/** A pressure file's cumulative stall totals in µs: { some, full }, or null. */
-export function pressureTotals(cgroup, resource) {
-  const text = cgroup ? read(`${cgroup}/${resource}.pressure`) : read(`/proc/pressure/${resource}`);
-  if (!text) return null;
-  const total = (kind) => Number(new RegExp(`^${kind} .*total=(\\d+)`, "m").exec(text)?.[1] ?? NaN);
-  const some = total("some"), full = total("full");
-  return Number.isFinite(some) ? { some, full: Number.isFinite(full) ? full : 0 } : null;
-}
-/** The host's avg10, as the old label read it (kept as an observation). */
-function avg10(resource, kind) {
-  return Number(new RegExp(`^${kind} avg10=([\\d.]+)`, "m").exec(read(`/proc/pressure/${resource}`) ?? "")?.[1] ?? 0);
-}
-/** /proc/stat's aggregate line, in jiffies: { busy, steal, total }. */
-export function hostCpu() {
-  const f = (read("/proc/stat") ?? "").split("\n")[0].trim().split(/\s+/).slice(1).map(Number);
-  const [user = 0, nice = 0, system = 0, idle = 0, iowait = 0, irq = 0, softirq = 0, steal = 0] = f;
+const num = (text, re) => { const v = re.exec(text ?? "")?.[1]; return v == null ? null : Number(v); };
+/** /proc/uptime in ms: monotonic, and the same clock in every process (scope-run.sh's too). */
+export function uptimeMs() { return Math.round(Number((read("/proc/uptime") ?? "0").split(" ")[0]) * 1000); }
+
+/** The host's /proc/stat aggregate line, in jiffies, from its numbers. */
+function statLine(fields) {
+  const [user = 0, nice = 0, system = 0, idle = 0, iowait = 0, irq = 0, softirq = 0, steal = 0] = fields;
   return { busy: user + nice + system + irq + softirq, steal, total: user + nice + system + idle + iowait + irq + softirq + steal };
 }
-/** /proc/vmstat's swap and major-fault counters (pages, faults). */
+/** /proc/stat's aggregate line: { busy, steal, total }. */
+export function hostCpu() { return statLine((read("/proc/stat") ?? "").split("\n")[0].trim().split(/\s+/).slice(1).map(Number)); }
+/** /proc/vmstat's swap and major-fault counters. */
 export function hostVm() {
-  const text = read("/proc/vmstat") ?? "", n = (k) => Number(new RegExp(`^${k} (\\d+)`, "m").exec(text)?.[1] ?? 0);
-  return { pswpin: n("pswpin"), pswpout: n("pswpout"), pgmajfault: n("pgmajfault") };
+  const t = read("/proc/vmstat");
+  return { pswpin: num(t, /^pswpin (\d+)/m), pswpout: num(t, /^pswpout (\d+)/m), pgmajfault: num(t, /^pgmajfault (\d+)/m) };
 }
-/** A cgroup's major faults and swap-ins (memory.stat, its subtree included), or null. */
-export function cgroupFaults(cgroup) {
-  const text = cgroup ? read(`${cgroup}/memory.stat`) : null;
-  if (!text) return null;
-  const n = (k) => Number(new RegExp(`^${k} (\\d+)`, "m").exec(text)?.[1] ?? NaN);
-  const majflt = n("pgmajfault"), swapIns = n("workingset_refault_anon");
-  return Number.isFinite(majflt) ? { majflt, swapIns: Number.isFinite(swapIns) ? swapIns : 0 } : null;
+/** A pressure file's cumulative stall totals in µs: { some, full }, or null. */
+export function pressureTotals(cgroup, resource) {
+  const t = cgroup ? read(`${cgroup}/${resource}.pressure`) : read(`/proc/pressure/${resource}`);
+  const some = num(t, /^some .*total=(\d+)/m);
+  return some == null ? null : { some, full: num(t, /^full .*total=(\d+)/m) };
 }
 /** A cgroup's CPU time in µs (cpu.stat usage_usec), or null. */
-export function cgroupCpuUsec(cgroup) {
-  const v = /^usage_usec (\d+)/m.exec((cgroup && read(`${cgroup}/cpu.stat`)) ?? "")?.[1];
-  return v == null ? null : Number(v);
+export function cgroupCpuUsec(cgroup) { return cgroup ? num(read(`${cgroup}/cpu.stat`), /^usage_usec (\d+)/m) : null; }
+
+/** One point: the job cgroup's counters and the host's, now. Unreadable parts are null. */
+export function snapshotNow(cgroup, { host = { cpu: hostCpu, vm: hostVm }, now = uptimeMs } = {}) {
+  const ms = cgroup ? read(`${cgroup}/memory.stat`) : null;
+  return {
+    t: now(), cpu: cgroup ? pressureTotals(cgroup, "cpu") : null, mem: cgroup ? pressureTotals(cgroup, "memory") : null,
+    jobMajflt: num(ms, /^pgmajfault (\d+)/m), jobSwapIns: num(ms, /^workingset_refault_anon (\d+)/m), jobUsec: cgroupCpuUsec(cgroup),
+    h: host.cpu(), vm: host.vm(),
+  };
+}
+/** A snapshot file written by scope-run.sh (`key value` lines), or null. */
+export function parseCounters(text) {
+  if (!text) return null;
+  const v = (k) => num(text, new RegExp(`^${k} ([\\d.]+)`, "m"));
+  const uptime = v("uptime"), stat = /^host_stat (.*)$/m.exec(text)?.[1];
+  if (uptime == null) return null;
+  return {
+    t: Math.round(uptime * 1000),
+    cpu: v("cpu_some") == null ? null : { some: v("cpu_some"), full: v("cpu_full") },
+    mem: v("mem_some") == null ? null : { some: v("mem_some"), full: v("mem_full") },
+    jobMajflt: v("job_majflt"), jobSwapIns: v("job_swapins"), jobUsec: v("job_usec"),
+    h: stat ? statLine(stat.trim().split(/\s+/).map(Number)) : null,
+    vm: { pswpin: v("pswpin"), pswpout: v("pswpout"), pgmajfault: v("pgmajfault") },
+  };
 }
 
-/** The host's readings (tests inject their own): /proc/stat, and the old label's observations. */
-const defaultHost = {
-  cpu: hostCpu,
-  vm: hostVm,
-  observed: () => ({ load1: Number((read("/proc/loadavg") ?? "0").split(" ")[0]), cpuSomeAvg10: avg10("cpu", "some"), memFullAvg10: avg10("memory", "full") }),
-};
-const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 10000) / 100 : 0);
+const round2 = (x) => Math.round(x * 100) / 100;
+const pct = (part, whole) => (whole > 0 ? round2((part / whole) * 100) : null);
+const d = (a, b) => (a == null || b == null ? null : b - a);
+/** The values over [a, b]: shares in %, counts as counts; null where either end lacks the counter. */
+function between(a, b, nproc) {
+  const dtUs = (b.t - a.t) * 1000, dJ = d(a.h?.total, b.h?.total);
+  const busyJ = d(a.h?.busy, b.h?.busy), jobUs = d(a.jobUsec, b.jobUsec);
+  return {
+    from: a.t, to: b.t,
+    cpuSome: d(a.cpu?.some, b.cpu?.some) == null ? null : pct(b.cpu.some - a.cpu.some, dtUs),
+    memSome: d(a.mem?.some, b.mem?.some) == null ? null : pct(b.mem.some - a.mem.some, dtUs),
+    memFull: d(a.mem?.full, b.mem?.full) == null ? null : pct(b.mem.full - a.mem.full, dtUs),
+    steal: dJ == null ? null : pct(b.h.steal - a.h.steal, dJ),
+    other: busyJ == null || jobUs == null ? null : pct(Math.max(0, busyJ * (1e6 / HZ) - jobUs), dtUs * nproc),
+    jobMajflt: d(a.jobMajflt, b.jobMajflt), jobSwapIns: d(a.jobSwapIns, b.jobSwapIns),
+    swapIn: d(a.vm?.pswpin, b.vm?.pswpin), swapOut: d(a.vm?.pswpout, b.vm?.pswpout), majflt: d(a.vm?.pgmajfault, b.vm?.pgmajfault),
+  };
+}
+const complete = (p) => Boolean(p && p.cpu && p.mem && p.jobMajflt != null && p.jobSwapIns != null);
 
 /**
- * The exclusive job's contention: call sample() every second from launch;
- * windows of windowS are judged from the moment the job's cgroup is known. jobCgroup(): the job scope's cgroup path or null (written
- * by scope-run.sh once the scope runs). lightCgroup: the light slice's.
- * finish({ gpuShared }) returns the context recorded in the result.
+ * The exclusive job's contention judgement from its points: `start` and `end`
+ * (scope-run.sh's snapshots, or null), the live points between, the GPU
+ * sharing seen, and the host observations (load and PSI maxima).
  */
-export function contentionSampler({ jobCgroup, lightCgroup = null, nproc, thresholds = {}, windowS = 5, now = () => Date.now(), host: hostRead = defaultHost }) {
+export function judge({ start, end, points = [], nproc, thresholds = {}, windowS = 5, gapS = 3, gpuShared = [], observed = null, boost = null }) {
   const t = { ...DISTURBED_DEFAULTS, ...thresholds };
-  let base = null, prev = null, last = null, samples = 0;
-  const worst = { cpuSome: 0, memSome: 0, memFull: 0, steal: 0, other: 0, jobMajflt: 0, jobSwapIns: 0, swapIn: 0, swapOut: 0, majflt: 0 };
-  const host = { load1Max: 0, cpuSomeAvg10Max: 0, memFullAvg10Max: 0 };
-  const take = () => {
-    const cg = jobCgroup();
-    const cpu = pressureTotals(cg, "cpu"), mem = pressureTotals(cg, "memory"), h = hostRead.cpu();
-    if (!cg || !cpu || !mem) return null;
-    return { at: now(), cpu, mem, h, vm: (hostRead.vm ?? hostVm)(), faults: cgroupFaults(cg) ?? { majflt: 0, swapIns: 0 }, jobUsec: cgroupCpuUsec(cg) ?? 0, lightUsec: cgroupCpuUsec(lightCgroup) };
-  };
-  const between = (a, b) => {
-    const dtUs = (b.at - a.at) * 1000, dJ = b.h.total - a.h.total;
-    return {
-      cpuSome: pct(b.cpu.some - a.cpu.some, dtUs), memSome: pct(b.mem.some - a.mem.some, dtUs), memFull: pct(b.mem.full - a.mem.full, dtUs),
-      steal: pct(b.h.steal - a.h.steal, dJ),
-      // CPU busy outside the job, as a share of the whole machine.
-      other: pct(Math.max(0, (b.h.busy - a.h.busy) * (1e6 / HZ) - (b.jobUsec - a.jobUsec)), dtUs * nproc),
-      // Counts (faults, pages), not shares.
-      jobMajflt: b.faults.majflt - a.faults.majflt, jobSwapIns: b.faults.swapIns - a.faults.swapIns,
-      swapIn: b.vm.pswpin - a.vm.pswpin, swapOut: b.vm.pswpout - a.vm.pswpout, majflt: b.vm.pgmajfault - a.vm.pgmajfault,
-    };
-  };
-  function sample() {
-    const o = hostRead.observed();
-    host.load1Max = Math.max(host.load1Max, o.load1);
-    host.cpuSomeAvg10Max = Math.max(host.cpuSomeAvg10Max, o.cpuSomeAvg10);
-    host.memFullAvg10Max = Math.max(host.memFullAvg10Max, o.memFullAvg10);
-    const s = take();
-    if (!s) return;
-    samples++;
-    last = s;
-    if (!base) { base = prev = s; return; }
-    if (s.at - prev.at >= windowS * 1000) window(s);
+  const missing = [];
+  if (!complete(start)) missing.push("no baseline from before the payload started");
+  if (!complete(end)) missing.push("no final counters from before the scope ended");
+  const lo = start?.t ?? -Infinity, hi = end?.t ?? Infinity;
+  const live = points.filter((p) => p.t > lo && p.t < hi).sort((a, b) => a.t - b.t);
+  const good = [start, ...live, end].filter(complete);
+  // Coverage: every stretch between complete points over gapS is a hole.
+  const holes = [];
+  for (let i = 1; i < good.length; i++) if (good[i].t - good[i - 1].t > gapS * 1000) holes.push([good[i - 1].t, good[i].t]);
+  // An unreadable stretch at either end, up to the first or last point seen at all.
+  const seen = [start, ...live, end].filter(Boolean).map((p) => p.t);
+  if (good.length && seen.length) {
+    if (good[0].t - Math.min(...seen) > gapS * 1000) holes.unshift([Math.min(...seen), good[0].t]);
+    if (Math.max(...seen) - good.at(-1).t > gapS * 1000) holes.push([good.at(-1).t, Math.max(...seen)]);
   }
-  const window = (s) => {
-    const w = between(prev, s);
-    for (const k of Object.keys(worst)) worst[k] = Math.max(worst[k], w[k]);
-    prev = s;
+  const holeS = holes.reduce((s, [a, b]) => s + (b - a) / 1000, 0);
+  if (holes.length) missing.push(`no readable counters for ${round2(holeS)} s (${holes.length} gap(s) over ${gapS} s)`);
+  // Windows of windowS between complete points; the last, shorter stretch is merged into the one before.
+  const marks = [];
+  for (const p of good) if (!marks.length || p.t - marks.at(-1).t >= windowS * 1000) marks.push(p);
+  if (good.length > 1 && marks.at(-1) !== good.at(-1)) { if (marks.length > 1) marks[marks.length - 1] = good.at(-1); else marks.push(good.at(-1)); }
+  const windows = marks.slice(1).map((b, i) => between(marks[i], b, nproc));
+  const whole = good.length > 1 ? between(good[0], good.at(-1), nproc) : null;
+  if (!whole) missing.push("fewer than two readable points");
+  const worst = (k) => { const xs = windows.map((w) => w[k]).filter((x) => x != null); return xs.length ? Math.max(...xs) : null; };
+  const W = Object.fromEntries(["cpuSome", "memSome", "memFull", "steal", "other", "jobMajflt", "jobSwapIns", "swapIn", "swapOut", "majflt"].map((k) => [k, worst(k)]));
+  const reasons = [];
+  if (W.cpuSome != null && W.cpuSome >= t.jobCpuSomePct) reasons.push(`the job waited for a CPU ${W.cpuSome}% of its worst window (≥ ${t.jobCpuSomePct}%)`);
+  if (W.memSome != null && W.memSome >= t.jobMemSomePct) reasons.push(`the job stalled on memory ${W.memSome}% of its worst window (≥ ${t.jobMemSomePct}%)`);
+  if ((W.jobMajflt ?? 0) >= t.jobMajorFaults || (W.jobSwapIns ?? 0) >= t.jobSwapIns)
+    reasons.push(`the job took ${W.jobMajflt} major faults and ${W.jobSwapIns} swap-ins in its worst window (≥ ${t.jobMajorFaults} or ≥ ${t.jobSwapIns}): its memory or cache was read back from disk`);
+  if (W.steal != null && W.steal >= t.stealPct) reasons.push(`the hypervisor took ${W.steal}% of the machine's CPU in the worst window (≥ ${t.stealPct}%)`);
+  if (gpuShared.length) reasons.push(`the GPU was shared outside the lease (pid ${gpuShared.map((u) => u.pid).join(", ")})`);
+  if (missing.length) reasons.push(`unmeasured: ${missing.join("; ")}`);
+  return {
+    v: 2, measured: missing.length === 0, missing, windowS, points: good.length, measuredS: whole ? round2((whole.to - whole.from) / 1000) : 0,
+    job: whole ? { cpuSomePct: whole.cpuSome, cpuSomeWorstPct: W.cpuSome, memSomePct: whole.memSome, memSomeWorstPct: W.memSome, memFullPct: whole.memFull, memFullWorstPct: W.memFull,
+      majorFaults: whole.jobMajflt, majorFaultsWorst: W.jobMajflt, swapIns: whole.jobSwapIns, swapInsWorst: W.jobSwapIns } : null,
+    host: { ...(observed ?? {}), stealPct: whole?.steal ?? null, stealWorstPct: W.steal, otherCpuPct: whole?.other ?? null, otherCpuWorstPct: W.other,
+      swapInPages: whole?.swapIn ?? null, swapInWorst: W.swapIn, swapOutPages: whole?.swapOut ?? null, swapOutWorst: W.swapOut, majorFaults: whole?.majflt ?? null, majorFaultsWorst: W.majflt },
+    windows, boost, thresholds: t, disturbed: reasons.length > 0, reasons,
+    // SCHED-1's fields (host values), for older readers.
+    load1Max: observed?.load1Max ?? null, cpuSomeMax: observed?.cpuSomeAvg10Max ?? null, memFullMax: observed?.memFullAvg10Max ?? null,
   };
-  function finish({ gpuShared = [], light = null } = {}) {
-    sample();
-    // The last, partial window counts if it is at least a second long (a short job is one window).
-    if (last && last !== prev && last.at - prev.at >= 1000) window(last);
-    const whole = base && prev !== base ? between(base, prev) : null;
-    const reasons = [];
-    // Unmeasured is never clean: without the job's own counters the run can't be shown undisturbed.
-    if (!whole) reasons.push("the job's own contention could not be measured (its cgroup's pressure was not read twice a second apart)");
-    else {
-      if (worst.cpuSome >= t.jobCpuSomePct) reasons.push(`the job waited for a CPU ${worst.cpuSome}% of its worst ${windowS} s (≥ ${t.jobCpuSomePct}%)`);
-      if (worst.memSome >= t.jobMemSomePct) reasons.push(`the job stalled on memory ${worst.memSome}% of its worst ${windowS} s (≥ ${t.jobMemSomePct}%)`);
-      if (worst.jobMajflt >= t.jobMajorFaults || worst.jobSwapIns >= t.jobSwapIns)
-        reasons.push(`the job took ${worst.jobMajflt} major faults and ${worst.jobSwapIns} swap-ins in its worst ${windowS} s (≥ ${t.jobMajorFaults} or ≥ ${t.jobSwapIns}): its memory or cache was read back from disk`);
-      if (worst.steal >= t.stealPct) reasons.push(`the hypervisor took ${worst.steal}% of the machine's CPU in the worst ${windowS} s (≥ ${t.stealPct}%)`);
-    }
-    if (gpuShared.length) reasons.push(`the GPU was shared outside the lease (pid ${gpuShared.map((u) => u.pid).join(", ")})`);
-    const lightS = base?.lightUsec != null && prev?.lightUsec != null ? Math.round((prev.lightUsec - base.lightUsec) / 1e4) / 100 : null;
-    return {
-      v: 2, samples, windowS, measuredS: whole ? Math.round((prev.at - base.at) / 100) / 10 : 0,
-      job: whole ? { cpuSomePct: whole.cpuSome, cpuSomeWorstPct: worst.cpuSome, memSomePct: whole.memSome, memSomeWorstPct: worst.memSome, memFullPct: whole.memFull, memFullWorstPct: worst.memFull,
-        majorFaults: whole.jobMajflt, majorFaultsWorst: worst.jobMajflt, swapIns: whole.jobSwapIns, swapInsWorst: worst.jobSwapIns } : null,
-      host: { ...host, stealPct: whole?.steal ?? null, stealWorstPct: whole ? worst.steal : null, otherCpuPct: whole?.other ?? null, otherCpuWorstPct: whole ? worst.other : null,
-        swapInPages: whole?.swapIn ?? null, swapInWorst: whole ? worst.swapIn : null, swapOutPages: whole?.swapOut ?? null, swapOutWorst: whole ? worst.swapOut : null,
-        majorFaults: whole?.majflt ?? null, majorFaultsWorst: whole ? worst.majflt : null },
-      light: light ? { ...light, cpuS: lightS } : null,
-      thresholds: t, disturbed: reasons.length > 0, reasons,
-      // SCHED-1's fields (host values), for older readers.
-      load1Max: host.load1Max, cpuSomeMax: host.cpuSomeAvg10Max, memFullMax: host.memFullAvg10Max,
-    };
-  }
-  return { sample, finish };
+}
+
+/** The host's load and PSI avg10, as the old label read them (observations only). */
+export function hostObserved() {
+  const avg10 = (r, k) => num(read(`/proc/pressure/${r}`), new RegExp(`^${k} avg10=([\\d.]+)`, "m")) ?? 0;
+  return { load1: Number((read("/proc/loadavg") ?? "0").split(" ")[0]), cpuSomeAvg10: avg10("cpu", "some"), memFullAvg10: avg10("memory", "full") };
+}
+
+/** The context of an exclusive job nobody observed to its end (reconcile's recovery). */
+export function unmeasuredContext(why) {
+  return { v: 2, measured: false, missing: [why], points: 0, measuredS: 0, job: null, host: null, windows: [], disturbed: true, reasons: [`unmeasured: ${why}`] };
 }
 
 /**
- * Clamps (or releases) the light-work slice: `siltwake-light.slice`, where
- * scripts/light-run.sh puts builders' npm test, typecheck and build. While an
- * exclusive job runs, that slice gets cpuQuotaPct of one CPU and idle weight
- * (cgroup cpu.idle), so outside light work can't take the exclusive job's CPU.
- * Runtime properties only. Returns { slice, clamped, cpuQuotaPct, ok, error }.
+ * The exclusive priority boost on `slice` (state.boost holds its ownership).
+ * on: CPUWeight=weight; off: CPUWeight reset. Verified by reading the
+ * property back. Returns { ok, verified, error }.
  */
-export function lightClamp(cfg, on) {
-  const quota = cfg.lightClampCpuPct ?? 100;
-  const props = on ? [`CPUQuota=${quota}%`, "CPUWeight=idle"] : ["CPUQuota=", "CPUWeight="];
-  const r = spawnSync("systemctl", ["--user", "set-property", "--runtime", cfg.lightSlice, ...props], { encoding: "utf8", timeout: 15000 });
-  return { slice: cfg.lightSlice, clamped: on, cpuQuotaPct: on ? quota : null, ok: r.status === 0, error: r.status === 0 ? null : (r.stderr || r.error?.message || `exit ${r.status}`).trim().slice(0, 200) };
+export function setBoost(slice, on, weight = 10000) {
+  const r = spawnSync("systemctl", ["--user", "set-property", "--runtime", slice, `CPUWeight=${on ? weight : ""}`], { encoding: "utf8", timeout: 15000 });
+  const shown = spawnSync("systemctl", ["--user", "show", "-p", "CPUWeight", "--value", slice], { encoding: "utf8", timeout: 15000 }).stdout?.trim();
+  const verified = r.status === 0 && (on ? shown === String(weight) : shown === "[not set]" || shown === "");
+  return { ok: r.status === 0, verified, error: verified ? null : (r.stderr || r.error?.message || `CPUWeight shows ${shown}`).trim().slice(0, 200) };
 }

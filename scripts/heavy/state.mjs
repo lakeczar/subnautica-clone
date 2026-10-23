@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { lightClamp } from "./contention.mjs";
+import { setBoost, unmeasuredContext } from "./contention.mjs";
 import { DEFAULTS, PROTOCOL, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 
@@ -38,10 +38,12 @@ export function loadConfig(env = process.env) {
   if (env.SILTWAKE_SCHED_UNIT_PREFIX) cfg.unitPrefix = env.SILTWAKE_SCHED_UNIT_PREFIX;
   if (env.SILTWAKE_SCHED_SUPERVISOR_PREFIX) cfg.supervisorPrefix = env.SILTWAKE_SCHED_SUPERVISOR_PREFIX;
   cfg.production = dir === PRODUCTION_DIR;
-  // The light-work slice an exclusive job clamps (TST-16, contention.mjs). A
-  // private state directory (tests) never touches the real one: it clamps
-  // only a slice its environment or config.json names.
-  cfg.lightSlice = env.SILTWAKE_SCHED_LIGHT_SLICE || fileCfg.lightSlice || (cfg.production ? "siltwake-light.slice" : null);
+  // The slice whose CPU weight an exclusive job raises while it runs (TST-16,
+  // contention.mjs): the heavy slice's top-level parent (siltwake.slice). A
+  // private state directory (tests) never touches the real one: it boosts only
+  // a slice its environment or config.json names.
+  cfg.boostSlice = env.SILTWAKE_SCHED_BOOST_SLICE || fileCfg.boostSlice || (cfg.production ? `${cfg.slice.split("-")[0].replace(/\.slice$/, "")}.slice` : null);
+  cfg.exclusiveCpuWeight = fileCfg.exclusiveCpuWeight ?? 10000;
   cfg.paths = {
     state: join(dir, "state.json"),
     lock: join(dir, "state.lock"),
@@ -353,6 +355,8 @@ export function reconcile(cfg, state) {
     }
     const dir = jobDir(cfg, t.id);
     const result = t.state === "running" ? orphanResult(dir, t) : { code: 75, label: "lost: supervisor died before admission" };
+    // Nobody observed an orphaned exclusive job to its end: its measurement is never clean (TST-16 R1-F4).
+    if (t.state === "running" && t.req.exclusive) result.context = unmeasuredContext("recovered: its holder died, so nobody judged the job's contention to its end");
     const marker = join(t.worktree, t.testBuild ?? ".test-build", ".heavy-job");
     if (readJson(marker)?.ticket === t.id) rmSync(marker, { force: true });
     // What was submitted, kept through recovery (R1 P3). Nobody checked the tree
@@ -370,12 +374,17 @@ export function reconcile(cfg, state) {
     delete state.tickets[t.id];
     changed = true;
   }
-  // A light-work clamp outlives only its exclusive job (its holder died before releasing it).
-  if (state.lightClamp && state.tickets[state.lightClamp.ticket]?.state !== "running") {
-    const r = lightClamp({ ...cfg, lightSlice: state.lightClamp.slice }, false);
-    ledger(cfg, { event: "light-unclamped", ticket: state.lightClamp.ticket, slice: state.lightClamp.slice, ok: r.ok, error: r.error });
-    delete state.lightClamp;
-    changed = true;
+  // The exclusive priority boost (TST-16 R1-F1) lasts only while its job runs
+  // under its live holder. Otherwise it is reset; the record stays until the
+  // reset is verified, so a failed one is retried by the next reconcile.
+  if (state.boost) {
+    const b = state.boost, tk = state.tickets[b.ticket];
+    if (b.state === "releasing" || tk?.state !== "running" || !alive(b.owner)) {
+      const r = setBoost(b.slice, false);
+      ledger(cfg, { event: "boost-reset", ticket: b.ticket, slice: b.slice, verified: r.verified, error: r.error, by: "reconcile" });
+      if (r.verified) delete state.boost; else Object.assign(b, { state: "releasing", failures: (b.failures ?? 0) + 1 });
+      changed = true;
+    }
   }
   return changed;
 }

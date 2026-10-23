@@ -1,101 +1,88 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
 // An exclusive job's contention (TST-16, scripts/heavy/contention.mjs): judged
-// on the job's own cgroup pressure and the host's steal, never on host-wide
-// PSI, with every observed value recorded.
+// on the job's own cgroup, steal and swap, never on host-wide PSI; every
+// observed delta counts, and missing coverage is never clean (R1-F4).
 const C = await import(pathToFileURL(resolve("scripts/heavy/contention.mjs")).href);
 const S = await import(pathToFileURL(resolve("scripts/heavy/state.mjs")).href);
 
-const dir = mkdtempSync(join(tmpdir(), "contention-"));
-test.after(() => rmSync(dir, { recursive: true, force: true }));
-
-/** A fake job cgroup and host whose counters advance per 5 s window as given. */
-function world(windows: { cpuWait?: number; memStall?: number; steal?: number; otherBusy?: number; jobCpu?: number; hostMemFull?: number; jobMajflt?: number; jobSwapIns?: number; hostSwapIn?: number }[], nproc = 8) {
-  const cg = mkdtempSync(join(dir, "cg-"));
-  let at = 0, cpuSome = 0, memSome = 0, memFull = 0, busy = 0, steal = 0, total = 0, jobUsec = 0, hostMemFull = 0, majflt = 0, swapIns = 0, pswpin = 0;
-  const write = () => {
-    writeFileSync(join(cg, "memory.stat"), `anon 1\npgmajfault ${majflt}\nworkingset_refault_anon ${swapIns}\n`);
-    writeFileSync(join(cg, "cpu.pressure"), `some avg10=0.00 avg60=0.00 avg300=0.00 total=${cpuSome}\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n`);
-    writeFileSync(join(cg, "memory.pressure"), `some avg10=0.00 avg60=0.00 avg300=0.00 total=${memSome}\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=${memFull}\n`);
-    writeFileSync(join(cg, "cpu.stat"), `usage_usec ${jobUsec}\n`);
-  };
-  write();
-  const s = C.contentionSampler({ jobCgroup: () => cg, nproc, now: () => at, host: { cpu: () => ({ busy, steal, total }), vm: () => ({ pswpin, pswpout: 0, pgmajfault: 0 }), observed: () => ({ load1: 2.5, cpuSomeAvg10: 0.5, memFullAvg10: hostMemFull }) } });
-  s.sample();
-  for (const w of windows) {
-    const us = 5e6, jiffies = 5 * 100 * nproc; // 5 s, all CPUs
-    at += 5000; cpuSome += (w.cpuWait ?? 0) / 100 * us; memSome += (w.memStall ?? 0) / 100 * us; memFull += (w.memStall ?? 0) / 200 * us;
-    const jobJ = ((w.jobCpu ?? 1) * us) / 1e4; jobUsec += (w.jobCpu ?? 1) * us; // jobCpu: CPUs busy in the job
-    busy += jobJ + ((w.otherBusy ?? 0) / 100) * jiffies; steal += ((w.steal ?? 0) / 100) * jiffies; total += jiffies;
-    hostMemFull = w.hostMemFull ?? 0; majflt += w.jobMajflt ?? 0; swapIns += w.jobSwapIns ?? 0; pswpin += w.hostSwapIn ?? 0;
-    write(); s.sample();
+type Step = { s?: number; cpuWait?: number; memStall?: number; steal?: number; otherBusy?: number; jobCpu?: number; majflt?: number; swapIns?: number; hostSwapIn?: number; unreadable?: boolean };
+/** Cumulative points from per-step deltas (s seconds each, default 1). */
+function series(steps: Step[], nproc = 8) {
+  let t = 1_000_000, cpu = 0, mem = 0, busy = 0, steal = 0, total = 0, usec = 0, maj = 0, sw = 0, pswpin = 0;
+  const point = (unreadable = false) => ({ t, cpu: unreadable ? null : { some: cpu, full: 0 }, mem: unreadable ? null : { some: mem, full: mem / 2 }, jobMajflt: unreadable ? null : maj, jobSwapIns: unreadable ? null : sw,
+    jobUsec: usec as number | null, h: { busy, steal, total }, vm: { pswpin, pswpout: 0, pgmajfault: 0 } });
+  const pts = [point()];
+  for (const w of steps) {
+    const sec = w.s ?? 1, us = sec * 1e6, j = sec * 100 * nproc;
+    t += sec * 1000; cpu += ((w.cpuWait ?? 0) / 100) * us; mem += ((w.memStall ?? 0) / 100) * us;
+    usec += (w.jobCpu ?? 1) * us; busy += ((w.jobCpu ?? 1) * us) / 1e4 + ((w.otherBusy ?? 0) / 100) * j; steal += ((w.steal ?? 0) / 100) * j; total += j;
+    maj += w.majflt ?? 0; sw += w.swapIns ?? 0; pswpin += w.hostSwapIn ?? 0;
+    pts.push(point(w.unreadable));
   }
-  return s;
+  return pts;
 }
+const judge = (pts: ReturnType<typeof series>, extra = {}) => C.judge({ start: pts[0], end: pts.at(-1), points: pts.slice(1, -1), nproc: 8, ...extra });
+const quiet = (n: number, w: Step = {}) => Array.from({ length: n }, () => ({ cpuWait: 0.2, ...w }));
 
-test("the CW-1 case: host memory 'full' high from another slice's throttling, the job itself unstalled: not disturbed, all of it recorded", () => {
-  const r = world([{ cpuWait: 0.3, hostMemFull: 32 }, { cpuWait: 0.5, hostMemFull: 29 }, { cpuWait: 0.2 }]).finish();
-  assert.equal(r.disturbed, false, JSON.stringify(r.reasons));
-  assert.deepEqual(r.reasons, []);
-  assert.deepEqual([r.job.cpuSomeWorstPct, r.job.memSomeWorstPct, r.host.memFullAvg10Max, r.memFullMax], [0.5, 0, 32, 32]);
-  assert.equal(r.measuredS, 15);
+test("the CW-1 case: a quiet job is clean, whatever the host's memory 'full' did; everything is recorded", () => {
+  const r = judge(series(quiet(15)), { observed: { load1Max: 2.5, cpuSomeAvg10Max: 0.5, memFullAvg10Max: 32 } });
+  assert.deepEqual([r.disturbed, r.measured, r.reasons], [false, true, []]);
+  assert.deepEqual([r.job.cpuSomeWorstPct, r.host.memFullAvg10Max, r.memFullMax, r.measuredS, r.windows.length], [0.2, 32, 32, 15, 3]);
 });
 
-test("the job waiting for a CPU, stalling on memory, hypervisor steal or a shared GPU: disturbed, each with its reason and value", () => {
-  const cpu = world([{ cpuWait: 1 }, { cpuWait: 12 }, { cpuWait: 1 }]).finish();
-  assert.equal(cpu.disturbed, true);
-  assert.match(cpu.reasons.join(), /the job waited for a CPU 12% of its worst 5 s \(≥ 5%\)/);
-  assert.equal(cpu.job.cpuSomePct, 4.67); // the whole run, recorded beside the worst window
-  const mem = world([{ memStall: 3 }]).finish();
-  assert.match(mem.reasons.join(), /stalled on memory 3% of its worst 5 s/);
-  const steal = world([{ steal: 8 }]).finish();
-  assert.match(steal.reasons.join(), /the hypervisor took 8% of the machine's CPU/);
-  const gpu = world([{}]).finish({ gpuShared: [{ pid: 42, cmd: "chrome" }] });
-  assert.match(gpu.reasons.join(), /GPU was shared outside the lease \(pid 42\)/);
+test("the job waiting for a CPU, stalling on memory, taking major faults or swap-ins, steal, a shared GPU: each disturbs it, with its value", () => {
+  const cpu = judge(series([...quiet(5), ...quiet(5, { cpuWait: 12 }), ...quiet(5)]));
+  assert.match(cpu.reasons.join(), /the job waited for a CPU 12% of its worst window \(≥ 5%\)/);
+  assert.equal(cpu.job.cpuSomePct, 4.13);
+  assert.match(judge(series(quiet(5, { memStall: 3 }))).reasons.join(), /stalled on memory 3% of its worst window/);
+  assert.match(judge(series([...quiet(5), { majflt: 2 }, ...quiet(4)])).reasons.join(), /took 2 major faults and 0 swap-ins/);
+  assert.match(judge(series(quiet(5, { swapIns: 8 }))).reasons.join(), /0 major faults and 40 swap-ins/);
+  assert.match(judge(series(quiet(5, { steal: 8 }))).reasons.join(), /the hypervisor took 8% of the machine's CPU/);
+  assert.match(judge(series(quiet(5)), { gpuShared: [{ pid: 42, cmd: "chrome" }] }).reasons.join(), /GPU was shared outside the lease \(pid 42\)/);
+  const host = judge(series(quiet(10, { hostSwapIn: 50, otherBusy: 50 })));
+  assert.equal(host.disturbed, false, "host swap and other CPU are recorded, not judged");
+  assert.deepEqual([host.host.swapInPages, host.host.otherCpuPct], [500, 50]);
 });
 
-test("CPU used outside the job is measured; just under each threshold is clean; thresholds come from config", () => {
-  const r = world([{ otherBusy: 50, jobCpu: 2, cpuWait: 4.9, memStall: 0.9, steal: 4.9 }]).finish();
-  assert.equal(r.disturbed, false, JSON.stringify(r.reasons));
-  assert.equal(r.host.otherCpuPct, 50);
-  const s = world([{ cpuWait: 3 }]);
-  assert.equal(s.finish().disturbed, false);
-  const cg = mkdtempSync(join(dir, "cg-"));
-  writeFileSync(join(cg, "cpu.pressure"), "some avg10=0 avg60=0 avg300=0 total=0\n");
-  writeFileSync(join(cg, "memory.pressure"), "some avg10=0 avg60=0 avg300=0 total=0\nfull avg10=0 avg60=0 avg300=0 total=0\n");
-  let at = 0;
-  const t = C.contentionSampler({ jobCgroup: () => cg, nproc: 8, thresholds: { jobCpuSomePct: 2 }, now: () => at, host: { cpu: () => ({ busy: 0, steal: 0, total: at }), observed: () => ({ load1: 0, cpuSomeAvg10: 0, memFullAvg10: 0 }) } });
-  t.sample(); at = 5000; writeFileSync(join(cg, "cpu.pressure"), "some avg10=0 avg60=0 avg300=0 total=150000\n"); t.sample();
-  assert.equal(t.finish().disturbed, true, "3% ≥ a configured 2%");
+test("R1-F4: every observed delta counts: a short tail with CPU wait is merged into the last window", () => {
+  // The reviewer's probe: clean to 5 s, then 900 ms of CPU wait in the 0.9 s tail.
+  const r = judge(series([{ s: 5, cpuWait: 0 }, { s: 0.9, cpuWait: 100 }]));
+  assert.equal(r.disturbed, true, JSON.stringify(r));
+  assert.ok(r.job.cpuSomeWorstPct >= 15, `${r.job.cpuSomeWorstPct}`);
+  assert.equal(r.measuredS, 5.9);
 });
 
-test("swap (fleet's audit): the job's own major faults or swap-ins in a window disturb it; host swap alone is recorded", () => {
-  const maj = world([{}, { jobMajflt: 3 }, {}]).finish();
-  assert.equal(maj.disturbed, true);
-  assert.match(maj.reasons.join(), /the job took 3 major faults and 0 swap-ins in its worst 5 s/);
-  assert.deepEqual([maj.job.majorFaults, maj.job.majorFaultsWorst], [3, 3]);
-  const sw = world([{ jobSwapIns: 40 }]).finish();
-  assert.match(sw.reasons.join(), /0 major faults and 40 swap-ins/);
-  const host = world([{ hostSwapIn: 500 }, { hostSwapIn: 20 }]).finish();
-  assert.equal(host.disturbed, false, JSON.stringify(host.reasons));
-  assert.deepEqual([host.host.swapInPages, host.host.swapInWorst], [520, 500]);
+test("R1-F4: missing coverage is never clean: unreadable counters for a stretch, no baseline, no final counters, recovery", () => {
+  // The reviewer's probe: clean to 5 s, then memory pressure unreadable to the end.
+  const r = judge(series([...quiet(5), ...quiet(10, { unreadable: true })]));
+  assert.equal(r.disturbed, true);
+  assert.match(r.reasons.join(), /unmeasured: no final counters from before the scope ended; no readable counters for/);
+  const s = series(quiet(5));
+  assert.match(C.judge({ start: null, end: s.at(-1), points: s.slice(0, -1), nproc: 8 }).reasons.join(), /no baseline from before the payload started/);
+  assert.match(C.judge({ start: s[0], end: null, points: s.slice(1), nproc: 8 }).reasons.join(), /no final counters/);
+  assert.match(judge(series([...quiet(3), { s: 6 }, ...quiet(3)])).reasons.join(), /no readable counters for 6 s \(1 gap\(s\) over 3 s\)/);
+  const rec = C.unmeasuredContext("recovered");
+  assert.deepEqual([rec.disturbed, rec.measured], [true, false]);
 });
 
-test("unmeasured is never clean: no job cgroup, or one read once only, is disturbed with that reason", () => {
-  const none = C.contentionSampler({ jobCgroup: () => null, nproc: 8 });
-  none.sample(); none.sample();
-  const r = none.finish();
-  assert.deepEqual([r.disturbed, r.job, r.measuredS], [true, null, 0]);
-  assert.match(r.reasons[0], /could not be measured/);
+test("unavailable counters stay null, never zero", () => {
+  const s = series(quiet(5));
+  for (const p of s) p.jobUsec = null;
+  const r = judge(s);
+  assert.equal(r.host.otherCpuPct, null);
+  assert.equal(r.disturbed, false);
 });
 
-test("the light slice: production clamps siltwake-light.slice; private state only a slice it names", () => {
-  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: "/work/tmp/siltwake-sched" }).lightSlice, "siltwake-light.slice");
-  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: join(dir, "private") }).lightSlice, null);
-  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: join(dir, "private"), SILTWAKE_SCHED_LIGHT_SLICE: "x-light.slice" }).lightSlice, "x-light.slice");
+test("scope-run.sh's snapshot format parses; the boost slice: production raises siltwake.slice, private state only one it names", () => {
+  const p = C.parseCounters("uptime 58550.80\ncpu_some 507557988\ncpu_full 223264398\nmem_some 1552\nmem_full 1466\njob_swapins 0\njob_majflt 1350\njob_usec 43540094850\nhost_stat 11321318 4 1539240 33672701 11869 0 678844 128739 0 0\npswpin 123056\npswpout 236994\npgmajfault 102077\n");
+  assert.deepEqual([p.t, p.cpu.some, p.mem.full, p.jobMajflt, p.jobSwapIns, p.h.steal, p.vm.pswpin], [58550800, 507557988, 1466, 1350, 0, 128739, 123056]);
+  assert.equal(C.parseCounters("garbage"), null);
+  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: "/work/tmp/siltwake-sched" }).boostSlice, "siltwake.slice");
+  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: join(tmpdir(), "private-x") }).boostSlice, null);
+  assert.equal(S.loadConfig({ SILTWAKE_SCHED_DIR: join(tmpdir(), "private-x"), SILTWAKE_SCHED_BOOST_SLICE: "x.slice" }).boostSlice, "x.slice");
 });

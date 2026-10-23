@@ -33,12 +33,12 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { contentionSampler, lightClamp } from "./contention.mjs";
+import { hostObserved, judge, parseCounters, setBoost, snapshotNow } from "./contention.mjs";
 import { MACHINE_LABELS, jobEnv, plan } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 import {
   cgroupRead, gitTree, gpuUsers, hostFor, jobDir, jobProcs, ledger, loadConfig, readFileSafe, readJson, readState, readStats,
-  releaseAnchorIfAlone, scopePopulated, self, sliceCgroup, sliceCheck, systemctl, transaction, unitFacts, writeJsonAtomic,
+  releaseAnchorIfAlone, scopePopulated, self, sliceCheck, systemctl, transaction, unitFacts, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -149,23 +149,26 @@ const args = [
   "sh", join(here, "scope-run.sh"), dir, String(goal.limitS), String(memBytes), ...t.argv,
 ];
 // An exclusive job's contention, judged on its own cgroup (contention.mjs,
-// TST-16); and outside light work clamped while it runs (released at the
-// result, or by reconcile if this holder dies).
-const context = req.exclusive ? contentionSampler({ jobCgroup: () => readFileSafe(join(dir, "cgroup")), lightCgroup: cfg.lightSlice ? sliceCgroup(cfg.lightSlice) : null,
-  nproc: t.hostAtAdmit.nproc, thresholds: cfg.disturbed }) : null;
-let light = null;
-if (req.exclusive && !rejected && cfg.lightSlice) {
-  light = lightClamp(cfg, true);
-  transaction(cfg, (state) => { state.lightClamp = { ticket: id, at: Date.now(), slice: cfg.lightSlice }; return { changed: true }; });
-  if (!light.ok) note(`could not clamp light work (${cfg.lightSlice}): ${light.error}`);
+// TST-16): scope-run.sh's snapshots before and after the payload, and a live
+// point every second between (raw in contention.jsonl). While it runs, our own
+// top-level slice gets a higher CPU weight; the boost is journalled before it
+// is applied and kept until a verified reset (R1-F1; reconcile recovers it).
+const exclusive = req.exclusive ? { points: [], observed: { load1Max: 0, cpuSomeAvg10Max: 0, memFullAvg10Max: 0 }, raw: join(dir, "contention.jsonl") } : null;
+let boost = null;
+if (req.exclusive && !rejected && cfg.boostSlice) {
+  transaction(cfg, (state) => { state.boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, ticket: id, owner: me, state: "applying", at: Date.now() }; return { changed: true }; });
+  const r = setBoost(cfg.boostSlice, true, cfg.exclusiveCpuWeight);
+  transaction(cfg, (state) => { if (state.boost?.ticket === id && r.verified) state.boost.state = "applied"; return { changed: true }; });
+  boost = { slice: cfg.boostSlice, weight: cfg.exclusiveCpuWeight, applied: r.verified, ...(r.verified ? {} : { error: r.error }) };
+  if (!r.verified) note(`could not raise ${cfg.boostSlice}'s CPU weight for this exclusive job: ${r.error}`);
 }
 // GPU jobs record any GPU client outside the lease that shared the GPU with
 // them (a driver run outside the queue): their screenshots stay functional,
 // but an exclusive measurement is then disturbed.
 const gpuShared = new Map();
 let gpuTicks = 0;
-const sampler = (context || req.gpu) && setInterval(() => sample(), context ? 1000 : 15000);
-sample();
+const sampler = (exclusive || req.gpu) && setInterval(() => sample(), exclusive ? 1000 : 15000);
+sample({ gpu: true });
 const started = Date.now();
 // Hard limit: the in-scope `timeout` ends the foreground at the deadline or
 // ceiling (plus 10 s to kill); this backstop stops everything in the scope if
@@ -269,7 +272,15 @@ for (let i = 1; scopePopulated(unit); i++) {
 clearTimeout(backstop);
 for (const timer of [stallWatch, soakWatch]) if (timer) clearInterval(timer);
 if (sampler) clearInterval(sampler);
-sample();
+sample({ gpu: true }); // the final GPU observation always runs (R1-F5)
+// The boost ends with the job: marked releasing, reset and verified before the
+// result; a failed reset leaves the record for reconcile to retry (R1-F1).
+if (boost) {
+  transaction(cfg, (state) => { if (state.boost?.ticket === id) state.boost.state = "releasing"; return { changed: true }; });
+  const r = setBoost(cfg.boostSlice, false);
+  boost.released = r.verified;
+  if (!r.verified) { boost.releaseError = r.error; note(`could not reset ${cfg.boostSlice}'s CPU weight (${r.error}); it is retried until it succeeds`); }
+}
 
 // 4. Account, label, free.
 const stats = readStats(dir);
@@ -305,7 +316,10 @@ else if (code === 137 || signal) { stopReason = "killed"; label = "killed"; }
 if (oomKills > 0 && !reservationOom) note(`${oomKills} process(es) were OOM-killed inside the job by a sub-limit (for example a heavy test file's budget), not by its ${req.memMiB} MiB reservation`);
 if (leftovers) note("processes left behind by the command were stopped");
 if (gpuShared.size) note(`the GPU was also used outside the lease by: ${[...gpuShared.values()].map((u) => `pid ${u.pid} (${u.cmd.slice(0, 60)})`).join("; ")}`);
-const contextResult = context ? context.finish({ gpuShared: [...gpuShared.values()], light }) : null;
+const contextResult = !exclusive || rejected ? null : judge({
+  start: parseCounters(readFileSafe(join(dir, "counters-start"))), end: parseCounters(readFileSafe(join(dir, "counters-end"))),
+  points: exclusive.points, nproc: t.hostAtAdmit.nproc, thresholds: cfg.disturbed, gpuShared: [...gpuShared.values()], observed: exclusive.observed, boost,
+});
 if (contextResult?.disturbed) note(`DISTURBED: ${contextResult.reasons.join("; ")}`);
 
 // Evidence binding: a result is evidence for a commit only if the tree was
@@ -345,16 +359,25 @@ if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: tru
 transaction(cfg, (state) => {
   writeJsonAtomic(join(dir, "exit.json"), result);
   delete state.tickets[id];
-  if (state.lightClamp?.ticket === id) { lightClamp(cfg, false); delete state.lightClamp; } // light work runs freely again
+  if (state.boost?.ticket === id && boost?.released) delete state.boost; // otherwise reconcile retries the reset
   if (req.exclusive && launched) state.lastExclusiveEnd = Date.now(); // exclusive turns (policy.mjs)
   ledger(cfg, { event: "job", ...result });
   return { changed: true };
 });
 process.exit(0); // releases the bridge (fd 3)
 
-function sample() {
-  if (context) context.sample();
-  if (!req.gpu || (context && ++gpuTicks % 15 !== 1)) return; // GPU scans stay at 15 s
+function sample({ gpu = false } = {}) {
+  if (exclusive) {
+    const p = snapshotNow(readFileSafe(join(dir, "cgroup")));
+    exclusive.points.push(p);
+    try { appendFileSync(exclusive.raw, `${JSON.stringify(p)}\n`); } catch { /* the audit copy only */ }
+    const o = hostObserved();
+    exclusive.observed.load1Max = Math.max(exclusive.observed.load1Max, o.load1);
+    exclusive.observed.cpuSomeAvg10Max = Math.max(exclusive.observed.cpuSomeAvg10Max, o.cpuSomeAvg10);
+    exclusive.observed.memFullAvg10Max = Math.max(exclusive.observed.memFullAvg10Max, o.memFullAvg10);
+  }
+  // GPU scans every 15 s, and always at the first and last observation (R1-F5).
+  if (!req.gpu || (!gpu && exclusive && ++gpuTicks % 15 !== 0)) return;
   for (const u of gpuUsers(cfg, readState(cfg))) {
     if (u.leased || gpuShared.has(u.pid)) continue;
     gpuShared.set(u.pid, { pid: u.pid, cmd: u.cmd });

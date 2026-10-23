@@ -1,6 +1,6 @@
-# TST-16: clean exclusive measurements (the light-work slice, and what DISTURBED means)
+# TST-16: clean exclusive measurements (what DISTURBED means, and CPU priority for exclusive runs)
 
-Builder: Opus 5.5, branch `t3/tst-16-light-slice`, from root `9ac573ec`. It doesn't depend on SCHED-2b, but it touches `scripts/heavy`, so it was checked with the full SCHED-1 and SCHED-2 suites. Asked for by the coordinator after CW-1's 3090 frame gate. That gate failed on 24 frames, mostly in runs labelled `DISTURBED`, and one quiet run was labelled `DISTURBED` too.
+Builder: Opus 5.5, branch `t3/tst-16-light-slice`, from root `9ac573ec`, with root `91dc1ab` (SCHED-2b and SAVE-1) merged in. It touches `scripts/heavy`, so it's checked with the full SCHED-1, SCHED-2 and SCHED-2b suites. Asked for by the coordinator after CW-1's 3090 frame gate. That gate failed on 24 frames, mostly in runs labelled `DISTURBED`, and one quiet run was labelled `DISTURBED` too.
 
 ## Why a quiet run was labelled DISTURBED
 
@@ -11,43 +11,73 @@ Builder: Opus 5.5, branch `t3/tst-16-light-slice`, from root `9ac573ec`. It does
 
 ## What changed
 
-- **The job's own contention** (`scripts/heavy/contention.mjs`):
-  - **What is sampled:** the exclusive job's own cgroup `cpu.pressure` and `memory.pressure`, using their cumulative stall totals in µs, so nothing between samples is lost.
-  - **How often:** every second, judged in 5 s windows (worst window and whole run). A run shorter than one window counts as one window.
-  - **Added from `/proc/stat`:** hypervisor steal (a VM's vCPU taken away underneath the guest, invisible to PSI) and the CPU used outside the job.
-- **Swap (fleet's host audit, 2026-10-23).** The vCPUs are pinned to dedicated host cores, so steal comes from Unraid's own work on those cores. The guest swaps (about 700 MB out), and a swap-in can stall a thread 50–100 ms without showing as steal.
-  - **Recorded:** `/proc/vmstat` `pswpin`, `pswpout` and `pgmajfault`, plus the job cgroup's own `memory.stat` `pgmajfault` and `workingset_refault_anon`. The kernel keeps no per-cgroup `pswpin`, so the anonymous refaults are the job's swap-ins.
-  - **Warm cache means zero:** a live 14-minute playthrough scope had 0 major faults and 0 refaults. Any major fault is therefore a sign the job's memory or cache was evicted.
-- **`DISTURBED`, with `reasons`:** in the worst window,
+- **The judgement** (`scripts/heavy/contention.mjs`) is on the exclusive job's **own cgroup**:
+  - **Pressure:** `cpu.pressure` and `memory.pressure` stall totals (µs).
+  - **Swap:** `memory.stat` `pgmajfault` and `workingset_refault_anon`, its swap-ins; the kernel keeps no per-cgroup `pswpin`.
+  - **Host, from `/proc/stat` and `/proc/vmstat`:** steal, CPU busy outside the job, swap-in, swap-out and major faults.
+- **Coverage (R1-F4):**
+  - **The ends:** `scope-run.sh` snapshots the counters just before the payload starts and just after it ends, while the scope still exists. The holder reads them every second in between.
+  - **One clock:** every point carries `/proc/uptime`, which is monotonic and the same in every process.
+  - **Windows** are 5 s. The last, shorter stretch is merged into the window before it, so every observed delta counts.
+  - **Missing coverage is never clean.** A missing baseline or final snapshot, a stretch over 3 s without readable counters (at either end too), or a recovered job counts as unmeasured, and so `DISTURBED`.
+  - **Unreadable counters are null,** never zero.
+  - **For audit:** raw points go to the job's `contention.jsonl`, and the windows into its `context`.
+- **`DISTURBED`, each with its `reason`:** in the worst window,
   - the job waited for a CPU ≥ 5% of the time;
   - stalled on memory ≥ 1%;
   - took ≥ 1 major fault or ≥ 1 swap-in in its own cgroup;
   - steal ≥ 5% of the machine's CPU;
-  - or the GPU was shared outside the lease.
+  - the GPU was shared outside the lease, scanned every 15 s and **always at the first and last observation** (R1-F5);
+  - or it was unmeasured.
 
-  A run whose own counters couldn't be read is `DISTURBED` too, because unmeasured is never clean. Thresholds: config.json `disturbed`.
-- **Recorded for audit** (`context` v2 in the result and the ledger; summarised in the final line): job values (whole run and worst window), steal, CPU used outside the job, host load and host PSI (the old fields stay, for older readers), and the light slice's CPU during the run.
-- **The light-work slice:**
-  - **`scripts/light-run.sh`** runs `npm test`, `typecheck`, `build` and `test:build` (package.json) in `siltwake-light.slice`. Inside a queue job or the sandbox's job it runs in place, so nothing is ever moved out of a job's limits; it also runs in place without a user manager.
-  - **Memory:** the slice inherits the caller's nearest memory caps (for an agent, its T3 slice's), so moving work there never escapes that budget.
-- **The clamp:**
-  - **While an exclusive job runs,** its holder sets the light slice to `CPUQuota=100%` (one of 8 CPUs) and `CPUWeight=idle`, runtime only, and releases it with the result.
-  - **If the holder dies,** reconcile releases the clamp once the job is gone (ledger `light-unclamped`).
-  - **Private state** (tests) never touches the real slice; it clamps only a slice its environment names.
-- **Install:** `install.sh` carries `contention.mjs` in both the version and the GPU guard. The first full run caught the guard breaking without it.
+  Host load and PSI, host swap and CPU used outside the job are recorded, never judged. Thresholds: config.json `disturbed`.
+- **Swap (fleet's host audit, 2026-10-23):** the vCPUs are pinned to dedicated host cores, so steal comes from Unraid's own work on those cores. The guest swaps (about 700 MB out), and a swap-in can stall a thread 50–100 ms without showing as steal. A live 14-minute playthrough scope had 0 major faults and 0 refaults, so any major fault in a job is a sign its memory or cache was evicted.
+- **CPU priority (R1 redesign; replaces the light-work slice):** while an exclusive job runs, our own top-level slice `siltwake.slice` (the heavy slice's parent) gets `CPUWeight=10000`; config `exclusiveCpuWeight`.
+  - **Why this lever:**
+    - **Weight is shared at the top level:** CPU is divided by weight between the top-level user groups. `app.slice`, where T3 runs every agent and its tools, has 100.
+    - **T3's slices can't be used:** they enable no CPU controller (`subtree_control` is `memory pids`), and T3's agent scope has its own `pids.max`. A CPU quota on any light unit inside them would make systemd enable the controller on T3's slices, and a sibling scope would escape the caller's `pids.max`.
+    - **Process priority doesn't work here:** lowering nice or `SCHED_IDLE` can't be undone without privileges (`RLIMIT_NICE` is 0). It also doesn't act across cgroup groups: a group's share is its weight, whatever its tasks' policies.
+  - **Measured** (`/work/tmp/tst16/weight-exp.sh`): a busy probe pinned to one CPU, in a private top-level slice, against four busy `app.slice` threads on that CPU. In three paired runs it waited **14–21%** of the time at weight 100 and **0%** at 10000, running 99–100%.
+  - **What changes:** one property of our own slice, for the job's duration. No process moves. No caller's memory, swap or pids containment changes, and T3's slices are never touched. Other work only yields the CPU the exclusive job actually wants; run A's job used about 1.1–1.6 of the 8 CPUs.
+  - **Crash-safe ownership (R1-F1):**
+    - **Journalled first:** `state.boost` records the slice, ticket and owner before the weight is set. The holder marks it `releasing`, resets the weight and reads it back; the record goes only after a **verified** reset.
+    - **Reconcile** resets a record whose owner is dead, whose job isn't running, or that is `releasing`, and keeps it until the reset is verified. `recover()` also reconciles with no tickets left.
+    - **Takeover:** the next exclusive job takes ownership of a pending record under the state lock, so nothing resets the boost under it.
+    - **Private state** boosts only a slice its environment names.
+- **Removed:** `scripts/light-run.sh`, the shared `siltwake-light.slice` and the package.json changes, which caused R1-F2 and F3. The npm scripts are back to root's.
+- **Install:** `contention.mjs` is in both the version and the GPU guard manifests, alongside SCHED-2b's remote modules.
+
+## R1 review responses
+
+Review `81d6d83` on `review/tst-16-r1`, on `312b1bed`: two P1s, three P2s.
+- **F1 (P1): crash-safe ownership.** Journal before applying; keep the record until a verified reset; recover with no tickets; serialise against the next exclusive job. **S18** proves both crash boundaries (a fault-injecting `systemctl` kills the holder just before and just after applying), a reset failing in the holder and then in reconcile, and the next exclusive job taking over a pending record without being reset under it.
+- **F2 (P1) and F3 (P2): containment.** Fixed by removing the design: no light work is moved or re-limited, and the shared slice is gone. Small-to-large, large-to-small and simultaneous callers no longer apply, because no caller's process or limits are touched. The boost is a CPU weight on our own slice.
+- **F4 (P2): coverage.**
+  - **Unit tests:** the reviewer's two probes (an unreadable tail is unmeasured; a 0.9 s tail with 900 ms of CPU wait now disturbs), a missing baseline or end, gaps (also at either end), recovery, and nulls.
+  - **S17:** the baseline before the payload's first line and the end after it, on one clock; raw points kept.
+  - **S18:** recovered results are unmeasured.
+- **F5 (P2): the GPU scan** is forced on the first and final observation. **S20**: a client opened after admission and outlasting the job is in `gpuShared` and the reasons.
+- **Composition with SCHED-2b:** merged root `91dc1ab`. The holder keeps 2b's machine and artifact fields and the v2 context together. `cpuContext` is gone. Reconcile keeps 2b's remote-recovery branch separate from the local boost, which is keyed to its own exclusive ticket, so a remote ticket's death can't release it. `install.sh` carries `contention.mjs` and 2b's modules and transport. The acceptance lib keeps 2b's sandbox seams.
 
 ## Checks
 
-- **Unit tests** (`tests/heavy-contention.test.ts`, 5): the CW-1 case (host memory "full" 32% with the job unstalled is clean, and recorded); each reason with its value; values just under the thresholds; configured thresholds; unmeasured is disturbed; the light-slice selection for production and private state.
-- **Acceptance:**
-  - **S17:** an exclusive job clamps the private light slice (1 s quota, idle weight). Light work started meanwhile lands in it. The context is v2, with the job measured and the clamp recorded. The clamp is released at the result, and also after a holder death, via reconcile.
-  - **S18:** private state without a named slice clamps nothing, and the real slice is untouched.
-  - **SCHED-1 test 7** now checks the job's own measurement.
-- **Full suites** at `a9a10ffb`: SCHED-1 **23/23**, SCHED-2 **18/18**, fast tier **1,364/1,364** (run through `light-run.sh` into a private slice).
+- **Unit tests** (`tests/heavy-contention.test.ts`, 6):
+  - the CW-1 case (host memory "full" 32% with the job unstalled is clean, and recorded);
+  - every reason with its value, and host swap and other CPU recorded but not judged;
+  - the tail merge;
+  - missing coverage of every kind, recovery, and nulls;
+  - snapshot parsing and the boost-slice selection.
+- **Acceptance (SCHED-2 suite):**
+  - **S17:** boost applied and reset, measured from before the payload to after it, raw points kept.
+  - **S18:** crash boundaries, reset failures, takeover.
+  - **S19:** private state without a named slice boosts nothing.
+  - **S20:** the late GPU client.
+  - **SCHED-1 test 7** checks the job's own measurement.
+- **Full suites** on the merged branch (root `91dc1ab` with this work): SCHED-1 **23/23**, SCHED-2 **20/20**, SCHED-2b **27/27**, fast tier **1,403/1,403**. No units or slices left behind.
 
 ## Validation (CW-1 segment 7, run A)
 
-Run A (unclamped). Approved scope: no clamp on T3's slice; run B waits for the merge.
+Run A (no priority boost; it ran before R1, on the live holder with the old rule). Approved scope: nothing on T3's slices; a boosted run waits for the install.
 - **Setup:** CW-1 tour segment 7, the "quiet" run labelled `DISTURBED`. CW-1's own dist, saves and harness at `cb8ae86`, exported to `/work/tmp/tst16/cw1run`, so CW-1's worktree is untouched.
 - **The run:** live-queue `exclusive` ticket `261023-133903-4bcd`, 323 s (the original took 678 s).
 - **Sampling:** a read-only sampler (`/work/tmp/tst16/sampler.mjs`) read the job's own cgroup pressure, `/proc/stat` and T3's agents slice every second. It also ran the new `contention.mjs` beside the installed holder, which still has the old rule. Evidence is in `/work/tmp/tst16/runA/`.
@@ -80,22 +110,24 @@ Run A (unclamped). Approved scope: no clamp on T3's slice; run B waits for the m
 | 250.3 | 50.1 |  | 17 / 34.7 | 8.7 | 0 | 0 | 1.28 | 6.67 | 5.68 | 51.4 | 0 |
 | 260.3 | 33.4 |  | 26.2 / 9.7 | 6.5 | 0 | 0.6 | 1.3 | 4.87 | 4.73 | 12.5 | 0.3 |
 
-- **What the long frames show** (one run; three different causes):
-  - **GC pauses lengthened by CPU contention, 4 frames (203–260 s), including the only streaming frame.** Each contains a V8 GC pause of 24–50 ms (the harness's `gcShaped`), and during it the renderer thread *waited for a CPU* 10–35 ms of the gap. The job's cgroup waited 9–15% of those seconds, while T3's agents slice used 5.7–6.8 of the 8 CPUs. The clamp addresses the waiting part once builders' work goes through `light-run.sh`; the pauses themselves are the game's.
-  - **Likely steal, 5 frames (117.5–184.5 s).** The thread was on-CPU for most of the gap (or off it without waiting), its own cgroup barely waited (0.4–7.7%), and steal in those seconds was 2.8–7.6% against a run median of 0.1%. This matches CW-1's "vCPU descheduled underneath the guest". Per fleet's audit, that's host work (Unraid) waking on the pinned cores. Nothing inside the VM can clamp it.
-  - **Neither contention nor steal, 4 frames (162.0, 164.1, 169.2, 174.0 s).** The thread was off-CPU without waiting (0.2–13.5 ms on-CPU of a 67–100 ms gap): blocked on something else. Fleet suggested swap-ins. The harness's per-frame counters show **0 major faults on the renderer main thread in all 13 long frames**, these 4 included, so the main thread didn't swap in. A swap-in in a process it waits on (the GPU process, say) can't be ruled out, because run A didn't sample `/proc/vmstat` (the context does now). Otherwise it's GPU or IPC: CW-1's profiling, which agrees with its reviewer's join (22 of 24 spikes with the renderer on-CPU and low PSI).
-- **So the clamp alone won't clear CW-1's gate,** as the coordinator expected. In this run it would have addressed the one frame that fails the gate, and 3 others. The rest are steal (fleet: keep host work off the pinned cores), GC pauses, or the game's own blocking (CW-1).
-- **The new label agrees with the old one here, for a reason that can be checked:** the job's own CPU wait, not host-wide PSI. On CW-1's quiet run it would have been driven by the job's own counters, not by another slice's memory stall. Run B (clamped) follows the merge.
+- **Measured facts:**
+  - **4 late frames (203–260 s), including the only streaming one:** the renderer thread spent 10–35 ms of the sampled span *waiting for a CPU*. The spans are 38–59 ms; they bound the frame gaps rather than matching them. The job's cgroup waited 9–15% of those seconds, and T3's agents slice used 5.7–6.8 of the 8 CPUs. Each of these frames also contains a 24–50 ms V8 GC pause.
+  - **5 frames (117.5–184.5 s):** the thread was on-CPU for most of the span. The job's own wait was low (0.4–7.7%). Machine-wide steal in those ±1 s windows reached 2.8–7.6%, against a run median of 0.1%.
+  - **4 frames (162.0, 164.1, 169.2, 174.0 s):** the thread was off-CPU without waiting (0.2–13.5 ms on-CPU), and machine steal was elevated around them too.
+  - **The renderer main thread took 0 major faults in all 13 long frames.**
+- **Hypotheses, not conclusions:**
+  - CPU contention probably contributed to the 4 late frames. Which agents' work it was, and which frames a boost would remove, isn't known.
+  - Steal is machine-wide and aligned to ±1 s, so it doesn't locate stolen time on the renderer's vCPU.
+  - The off-CPU frames may be blocking on the GPU or IPC, or something else; this run can't tell.
+- **What would settle it:** a boosted run with exact page-to-host clock alignment, after the install. CW-1 is profiling the frames.
+- **The new label agrees with the old one here, for a reason that can be checked:** the job's own CPU wait, not host-wide PSI.
 
 ## Compromises, limits and missing evidence
 
-- **Run B (light work clamped) is missing until this is merged and installed.**
-  - **Why:** the live queue's holder doesn't have the clamp yet, and builders' work goes through `light-run.sh` only after the merge. Until then it runs in T3's `app-t3code-agents.slice`, which we don't own and must not clamp (coordinator, 2026-10-23).
-  - **Then:** rerun CW-1's segment with the real clamp on `siltwake-light.slice`.
-- **Only the npm scripts are clamped.**
-  - **What escapes:** commands builders start directly (`npx tsc`, `node --test`, dev servers, previews) run in their T3 slices, unclamped.
-  - **Root fix:** T3 runs each agent's tool commands in a slice we may clamp, or exposes a hook to clamp its agents' slices during exclusive runs.
-  - **Cost:** a T3/fleet change, the owners' call.
-- **The thresholds (5%, 1%, 5%) are first values.** They are config, and run A's numbers (above) are the first real calibration. Tune them as more exclusive runs record v2 contexts.
-- **Steal is machine-wide.** A VM's steal can't be attributed to one cgroup. Fleet's audit found the vCPUs already pinned to dedicated host cores, so steal is Unraid's own work (Kopia, ZFS writes, the proxy, interrupts) waking on them. The root fix is fleet's: keep host work off those cores.
-- **Major faults include cold file reads,** not only swap. A run whose page cache was evicted (by memory pressure, or after a reboot) is marked `DISTURBED` for them. That's deliberate: its timings then include disk reads. The threshold is config (`disturbed.jobMajorFaults`).
+- **A boosted CW-1 run is missing until this is installed.** The live holder doesn't boost. Then rerun CW-1's segment, with exact clock alignment.
+- **The boost favours the exclusive job over all other user work,** not only light work.
+  - **When it matters:** only when they contend, and only for what the job uses.
+  - **What T3's agents feel:** their tools may run a little slower during an exclusive run. A boost that targets only light work would need a CPU controller inside T3's slices, which is T3's call.
+- **The thresholds (5%, 1%, 1 fault, 1 swap-in, 5%) are first values,** and they are config.
+  - **Major faults include cold file reads:** a run after page-cache eviction is marked `DISTURBED` for them, deliberately, because its timings include disk reads.
+- **Steal is machine-wide.** Fleet's audit found the vCPUs pinned, so steal is host work (Kopia, ZFS writes, the proxy, interrupts) waking on those cores. The root fix is fleet's: keep host work off them.
