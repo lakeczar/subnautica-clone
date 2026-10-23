@@ -189,6 +189,7 @@ export class SiltwakeApp {
   private flightTimeline = 0;
   private flightLast = 0;
   private flightHeap: number | null = null;
+  private flightHeapTurn = 0;
   private flightSampleAt = 0;
   private flightFrames = 0;
   private flightHidden = false;
@@ -523,9 +524,15 @@ export class SiltwakeApp {
     }
     this.flightLast = now;
     charge("frame");
-    const heap = fl.heapNow();
-    const heapDrop = heap !== null && this.flightHeap !== null ? Math.max(0, this.flightHeap - heap) : -1;
-    this.flightHeap = heap;
+    // The JS heap every fourth frame and on every long one: a collection shows as a drop
+    // there. (With the drivers' precise-memory flag each read computes real heap
+    // statistics; a player's Chrome caches it.)
+    let heapDrop = -1;
+    if (++this.flightHeapTurn % 4 === 0 || gap > 33) {
+      const heap = fl.heapNow();
+      heapDrop = heap !== null && this.flightHeap !== null ? Math.max(0, this.flightHeap - heap) : -1;
+      this.flightHeap = heap;
+    }
     charge("heap");
     const p = this.renderer?.parts;
     if (p?.gpuTimerMs) fl.recorder.charge(p.gpuTimerMs, "gpu-timer");

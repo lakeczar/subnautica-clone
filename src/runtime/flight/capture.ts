@@ -188,10 +188,17 @@ export class FlightCapture {
     v.pending--;
     if (this.disposed || this.video !== v || v.paused) { bitmap.close(); return; }
     if (v.canvas.width !== bitmap.width || v.canvas.height !== bitmap.height) { v.canvas.width = bitmap.width; v.canvas.height = bitmap.height; }
-    // Kept for frames with nothing drawn (idle): the video's clock keeps the page's.
-    void createImageBitmap(bitmap).then((copy) => { v.last?.close(); v.last = copy; }, () => {});
-    v.context.transferFromImageBitmap(bitmap);
-    v.track.requestFrame();
+    // The bitmap itself is kept for frames with nothing drawn (idle), and the video is
+    // handed a copy: transferring the original would detach it before a copy could be made.
+    v.last?.close();
+    v.last = bitmap;
+    v.pending++;
+    void createImageBitmap(bitmap).then((copy) => {
+      v.pending--;
+      if (this.disposed || this.video !== v || v.paused) { copy.close(); return; }
+      v.context.transferFromImageBitmap(copy);
+      v.track.requestFrame();
+    }, () => { v.pending--; });
     v.frames++;
     if (v.segment.start === null) {
       // This segment's time 0 on the page clock: the pack lines video and frames up by it.
