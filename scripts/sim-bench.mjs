@@ -8,7 +8,8 @@
  *     from each state, steps --ticks fixed steps of held controls (swim or
  *     pilot ahead, turning) and reports the median µs per step over --rounds
  *     fresh loads, for every step entry the tree has: `stepGame` (pure: clone
- *     plus step), `stepGameInPlace` and `StepGuard.step`; plus the clone alone.
+ *     plus step), `stepGameInPlace` and `StepGuard.step`; plus the clone alone
+ *     and the app's per-step timeline observation.
  *
  * DIR is a compiled tree root (`.test-build`). Trees are interleaved round by
  * round, so host drift hits them alike. Numbers count only from
@@ -47,10 +48,11 @@ const setups = await Promise.all(trees.map(async (tree) => {
   const step = await load(tree, "src/sim/step.js"), codec = await load(tree, "src/save/codec.js");
   const world = (await load(tree, "src/sim/world.js")).gameWorld();
   const guard = fs.existsSync(path.resolve(tree, "src/sim/stepGuard.js")) ? await load(tree, "src/sim/stepGuard.js") : null;
+  const timeline = await load(tree, "src/sim/timeline/recorder.js");
   const modes = { stepGame: (s, c) => step.stepGame(s, c, world).state };
   if (step.stepGameInPlace) modes.stepGameInPlace = (s, c) => { step.stepGameInPlace(s, c, world); return s; };
   if (guard) modes["StepGuard.step"] = (s, c, g) => { g.step(s, c, world); return s; };
-  return { tree, step, codec, world, modes, guard };
+  return { tree, step, codec, world, modes, guard, timeline };
 }));
 /** Held controls for tick t: ahead, with a slow turn and a gentle dive and rise. */
 const controls = (t) => [{ type: "look", yawDelta: 0.004, pitchDelta: t % 240 < 120 ? 0.002 : -0.002 },
@@ -77,6 +79,13 @@ for (const file of files) {
       for (let i = 0; i < n; i++) structuredClone(s);
       const key = `${setup.tree}\tclone alone`;
       (samples.get(key) ?? samples.set(key, []).get(key)).push((performance.now() - t0) * 1000 / n);
+      // The app's per-step timeline observation of this state (input held, nothing changing).
+      const rec = setup.timeline.createRecorder({ id: "bench", started: "2026-10-23T00:00:00.000Z" }), m = 2000;
+      for (let i = 0; i < 100; i++) { s.tick++; setup.timeline.observe(rec, s, { input: true, waiting: [] }); }
+      const t1 = performance.now();
+      for (let i = 0; i < m; i++) { s.tick++; setup.timeline.observe(rec, s, { input: true, waiting: [] }); }
+      const observeKey = `${setup.tree}\ttimeline observe`;
+      (samples.get(observeKey) ?? samples.set(observeKey, []).get(observeKey)).push((performance.now() - t1) * 1000 / m);
     }
   const bytes = JSON.stringify(JSON.parse(text).state).length, tick = JSON.parse(text).state.tick;
   for (const [key, xs] of samples) {
