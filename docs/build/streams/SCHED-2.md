@@ -4,7 +4,7 @@ Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 
 
 ## SCHED-2b: the remote lane (built on 2a; for review)
 
-Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordinator's calls on its four open points (2026-10-23). Branch `t3/sched-2b-remote-lane`, on 2a at `4f572b5` (R3 fixes merged).
+Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordinator's calls on its four open points (2026-10-23). Branch `t3/sched-2b-remote-lane`, on 2a at `1c62134` (R4 fixes merged).
 
 **Routing** (`policy.mjs`):
 - Machine tags `any|3090|4070|soak` sit in the ticket's goal. Defaults: playthrough and heavy-suite → `any`, soak → `soak`, the rest → `3090`. `exclusive` with a non-3090 tag is refused.
@@ -55,6 +55,25 @@ Design: [sched2/SCHED-2B-DESIGN.md](sched2/SCHED-2B-DESIGN.md), with the coordin
 - **Upload of the in-sandbox wrapper:** a file under `/work/tmp/siltwake-lane/bin/<hash>/`, like the transport's own bundle upload. It is not in the checkout.
 
 **Cut-over** (coordinator, after review): merge, `scripts/heavy/install.sh` (the transport is copied into the version), then update briefs to `--machine`. Nothing is needed on the sandbox.
+
+## R4 review responses
+
+Review: `7080616` on `review/sched-2a-r4`, on `4f572b5`, not accepted: three P2s on holds and timing windows. The contract itself stood. Still no change under `scripts/heavy`.
+
+- **R4-F1, the hold contract: fixed.** `measure.mjs` has one canonical hold observation, `holdObservation()`: `holding`, `clear` or `unknown`.
+  - **Mapping:** it adapts CW-1's real producer, the per-frame `hold: hold?.state ?? null` and `#ocean.dataset.caveHold`, both `CaveHold.state`. `clear`, `admitted` and `away` are clear; `loading`, `waiting`, `rescue` and `refuge` are holding; booleans keep their meaning.
+  - **Unknown:** absent, `null` (admission not evaluated) or a wrong type is `unknown`, never evidence of no hold. A wrong type is also a diagnostic.
+  - **Coverage:** a record covers its frame only with a known state. Holding records and holding polls are violations.
+- **R4-F2, polled holds inside a save or GC window: fixed.** Positive polls, recorded holds, streaming violations and hold coverage are all taken before any timing exclusion. Only gap timing is excluded.
+- **R4-F3, GC gaps admitted after the flag cleared: fixed, by interval.**
+  - **Tagging:** the page's recorder (`frameRecorderScript`) tags every rAF gap that overlapped an excluded window, the one spanning its end included: a gap is excluded if the window was open at any moment since the previous frame. The soak opens and closes windows around each GC and save check (`excludeTiming`).
+  - **Counting:** tagged gaps never count as timing, and an autosave interval that held one is incomplete. Its timing is unavailable, never a pass or a hitch.
+  - **Fallback:** without page tagging, every tick whose interval a window touched is excluded.
+- **Tests:** 29/29 soak tests, five runs in a row. The new regressions all fail on `4f572b5`:
+  - `tests/soak-measure.test.ts`: the hold observation over CW-1's real states, booleans, absent, null, unknown and wrong types, through CW-1's actual record shape and the `#ocean` poll; tagged and untagged gaps.
+  - `tests/soak-runner.test.ts`, R4-F1: the real frames provider with CW-1's records. Clear passes, one `loading` frame fails, a missing or `null` field is unproven.
+  - R4-F2: a `loading` poll only inside save checks, with no per-frame record, fails and stops at the first lap.
+  - R4-F3: the **real recorder** in Node under an rAF shim, with real event-loop stalls. A 120 ms GC pause before, during and after save ticks is never an autosave hitch (those intervals are incomplete); a 150 ms game pause outside any window, in a save's interval, fails the dwell.
 
 ## R3 review responses
 

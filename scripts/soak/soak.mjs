@@ -39,7 +39,7 @@ export async function runSoak(opts, deps) {
     frames: { judged: Boolean(opts.judged), machine: opts.machine ?? null, attributed: null, attributionIssue: null, observed: 0, invalid: 0, streamingOver: [], longOver: [] },
     holds: { available: null, covered: null, list: [] },
   };
-  let verdict = null, stopping = false, checking = false, where = "start", lastSave = null;
+  let verdict = null, stopping = false, where = "start", lastSave = null;
   const evaluate = () => (verdict = kind === "tour" ? evaluateTour(run, t.tour) : evaluateDwell({ ...run, now: now() }, t.dwell));
   const shouldStop = () => stopping;
   const noteErrors = (s) => {
@@ -60,50 +60,72 @@ export async function runSoak(opts, deps) {
     // Facts the measurement contract derived (measure.mjs): valid observations
     // only, with completeness kept apart from known violations.
     const f = s.frames;
-    // Holds and attributed streaming frames are the game's, whenever they
-    // happened: never dropped. Plain frame gaps while a GC or a save check
-    // runs are that work's, not the game's, and are left out.
+    // Holds and attributed streaming frames are the game's whenever they
+    // happened, inside a GC or save-check window too: never dropped, and hold
+    // coverage is kept apart from timing (R4-F2). Polled holds count as well.
     if (f) {
       for (const ms of f.streaming) run.frames.streamingOver.push({ ms, where });
       if (f.holdFrames > 0) run.holds.list.push({ where, state: "recorded", frames: f.holdFrames, at: now() });
-    }
-    if (checking) return;
-    if (f) {
-      run.frames.observed += f.count;
-      run.frames.invalid += f.invalidGaps;
-      if (f.count > 0 || f.invalidGaps > 0) {
-        if (f.attributed === false) { run.frames.attributed = false; run.frames.attributionIssue = f.attributionIssue; }
-        else if (f.attributed === true && run.frames.attributed === null) run.frames.attributed = true;
-        // "No hold" needs every interval with frames covered by the record (R2-F2).
-        if (f.holdsCovered) { if (run.holds.covered !== false) run.holds.covered = true; } else run.holds.covered = false;
+      const frames = f.count + f.excluded + f.invalidGaps;
+      if (frames > 0) {
+        if (f.holdsCovered) { if (run.holds.covered !== false) run.holds.covered = true; }
+        else { run.holds.covered = false; run.holds.issue ??= f.holdIssue ?? f.attributionIssue; }
       }
-      if (f.attributed !== true) for (const ms of f.over) run.frames.longOver.push({ ms, where });
     }
     if (s.holds?.available === false) run.holds.available = false;
     else if (s.holds?.available === true) {
       if (run.holds.available === null) run.holds.available = true;
       if (s.holds.held) run.holds.list.push({ where, state: s.holds.state, at: now() });
     }
+    // Timing: gaps that overlapped an excluded window were tagged in the page
+    // and are already out of f.count (measure.mjs). Without page tagging, the
+    // whole interval since the last tick is excluded when a window touched it.
+    const untagged = taintedTick();
+    if (f && !untagged) {
+      run.frames.observed += f.count;
+      run.frames.invalid += f.invalidGaps;
+      if (f.count > 0 || f.invalidGaps > 0) {
+        if (f.attributed === false) { run.frames.attributed = false; run.frames.attributionIssue = f.attributionIssue; }
+        else if (f.attributed === true && run.frames.attributed === null) run.frames.attributed = true;
+      }
+      if (f.attributed !== true) for (const ms of f.over) run.frames.longOver.push({ ms, where });
+    }
     if (s.lastSave?.savedAt && s.lastSave.savedAt !== lastSave?.savedAt) {
       // The worst valid gap around the save; an invalid one in the same
       // interval leaves the save incomplete, but never hides a known hitch (R3-F2).
-      if (lastSave) run.autosaves.push({ at: now(), tick: s.lastSave.tick, frameMs: f?.worstMs ?? null, complete: Boolean(f && f.count > 0 && f.invalidGaps === 0) });
+      // An autosave whose interval overlapped an excluded window without page
+      // tagging has no separable timing: unavailable, never a pass or a hitch.
+      if (lastSave) run.autosaves.push({ at: now(), tick: s.lastSave.tick, frameMs: untagged ? null : f?.worstMs ?? null,
+        complete: Boolean(f && !untagged && f.count > 0 && f.invalidGaps === 0 && f.excluded === 0) });
       lastSave = s.lastSave;
     }
     if (g.crash) run.crash = g.crash;
     if (env.SILTWAKE_JOB_YIELD && existsSync(env.SILTWAKE_JOB_YIELD)) run.yielded = true;
+  }
+  /** Excluded windows (R4-F3): the page tags the gaps that overlap them
+   * (probe.mjs frameRecorderScript). If it can't (no recorder), every tick
+   * whose interval a window touched is excluded instead. */
+  let windows = 0, touchedSinceTick = false, tagging = Boolean(deps.exclude);
+  async function exclude(on) {
+    if (on) { windows++; touchedSinceTick = true; } else windows = Math.max(0, windows - 1);
+    if (tagging) { try { if (!(await deps.exclude(g, on))) tagging = false; } catch { tagging = false; } }
+  }
+  function taintedTick() {
+    const tainted = !tagging && (touchedSinceTick || windows > 0);
+    touchedSinceTick = windows > 0;
+    return tainted;
   }
   /** Memory compared over time must be read the same way each time: a forced
    * full GC, a settle (a GC transiently grows RSS, then returns pages), then
    * the sample, so RSS and heap are the post-GC floor. Frames meanwhile are
    * the GC's, not the game's, and are left out. */
   async function gcSample(mark) {
-    checking = true;
+    await exclude(true);
     try {
       await deps.collectGarbage(g);
       await new Promise((r) => setTimeout(r, opts.gcSettleMs ?? 2000));
       return await fullSample({ afterGc: true, ...(mark ? { mark: { mark } } : {}) });
-    } finally { checking = false; }
+    } finally { await exclude(false); }
   }
   async function fullSample(extra = {}) {
     const s = await probe.sample({ at: now(), ...extra });
@@ -155,9 +177,9 @@ export async function runSoak(opts, deps) {
 
   /** A save made now, exported and loaded in a separate browser. */
   async function checkSave(label) {
-    checking = true;
+    await exclude(true);
     try { run.saves.push(await deps.saveAndCheck(g, { ...opts.browser }, join(out, "saves", `${label.replace(/\W+/g, "-")}.json`), label)); }
-    finally { checking = false; }
+    finally { await exclude(false); }
   }
 
   async function tour() {

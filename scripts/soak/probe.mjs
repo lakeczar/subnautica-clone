@@ -114,8 +114,7 @@ export function oceanDataset(page) {
         memory: { residentCpuMiB: n("residentCpu") != null ? n("residentCpu") / MiB : null, residentGpuMiB: n("residentGpu") != null ? n("residentGpu") / MiB : null },
         where: { camera: d.cameraPosition ?? null, cave: d.cave || null, region: d.regions ?? null },
       };
-      if (d.caveHold === undefined) out.holds = { available: false };
-      else out.holds = { available: true, state: d.caveHold, held: ["waiting", "loading"].includes(d.caveHold) };
+      out.holds = { state: d.caveHold }; // raw; measure.mjs holdObservation decides
       return out;
     },
   };
@@ -148,10 +147,21 @@ export function frames(page, { overMs = 33 } = {}) {
 export function frameRecorderScript() {
   window.__soakGaps = [];
   window.__siltwakePerf = [];
-  let last = 0;
-  const loop = (now) => { if (last) window.__soakGaps.push(now - last); last = now; requestAnimationFrame(loop); };
+  // Excluded windows (a GC, a save check: soak.mjs) tag every gap that overlaps
+  // them, the one spanning the window's end included (R4-F3): a gap is
+  // excluded if the window was open at any moment since the previous frame.
+  let last = 0, open = false, touched = false;
+  window.__soakExclude = (on) => { open = Boolean(on); if (open) touched = true; return true; };
+  const loop = (now) => {
+    if (last) window.__soakGaps.push({ ms: now - last, excluded: touched });
+    last = now; touched = open;
+    requestAnimationFrame(loop);
+  };
   requestAnimationFrame(loop);
 }
+
+/** Opens or closes an excluded window in the measured page (frameRecorderScript). */
+export const excludeTiming = (g, on) => g.page.evaluate((v) => window.__soakExclude?.(v) === true, on);
 
 /** The newest save the game committed (autosave or manual), from the save
  * journal in localStorage (src/save/repository.ts): its savedAt and tick. */
