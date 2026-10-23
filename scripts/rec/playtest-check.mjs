@@ -25,8 +25,8 @@ const result = { errors: [] };
 let exit = 0;
 try {
   b.page.on("pageerror", (e) => result.errors.push(e.message.slice(0, 300)));
-  // No ?rec: the default a player gets.
-  const open = await openGame(b.page, `http://127.0.0.1:${server.port}/`, arg("save"), { gpu: arg("gpu") });
+  // The player's default (a person's browser is not automated, so this one names it).
+  const open = await openGame(b.page, `http://127.0.0.1:${server.port}/?rec=playtest`, arg("save"), { gpu: arg("gpu") });
   result.renderer = open.renderer;
   result.mode = await b.page.evaluate(() => window.__siltwake.recorder?.mode ?? "off");
   if (result.mode !== "playtest") throw new Error(`the recorder is ${result.mode} by default, not playtest`);

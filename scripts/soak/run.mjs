@@ -4,7 +4,8 @@
 //   node scripts/soak/run.mjs tour  --dist DIST --save SAVE --plan PLAN --out DIR [--laps N]
 //   node scripts/soak/run.mjs dwell --dist DIST --save SAVE --out DIR [--at PLACE|X,Y,Z] [--autosaves N]
 //     PLACE: crown-station, dish-field (large-cave reports "not placed yet")
-//   common: [--thresholds FILE] [--port N] [--sample-s 10] [--software] [--gpu REGEX]
+//   common: [--thresholds FILE] [--port N] [--sample-s 10] [--software] [--gpu REGEX] [--no-record]
+//   (REC-1: the soak records its video and evidence pack in DIR/pack unless --no-record)
 //
 // Run it in the queue: `--class soak --gpu` (yields to waiting work) or
 // `--class gpu`. The soak ends when its goal is met (tour: laps in one game
@@ -26,9 +27,10 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadThresholds } from "./goals.mjs";
-import { cdpHeap, collectGarbage, createProbe, excludeTiming, frames, jobCgroup, oceanDataset, processRss, saveJournal } from "./probe.mjs";
+import { cdpHeap, collectGarbage, createProbe, excludeTiming, jobCgroup, oceanDataset, processRss, saveJournal } from "./probe.mjs";
 import { Blocked, goto, openGame, read, releaseAll, saveAndCheck } from "./browser.mjs";
 import { EXIT, readJsonFile, runSoak } from "./soak.mjs";
+import { flightFrames, flightRecorder, soakRecording } from "../rec/soak-provider.mjs";
 
 const [kind, ...rest] = process.argv.slice(2);
 const arg = (name, dflt) => { const i = rest.indexOf(`--${name}`); return i >= 0 ? rest[i + 1] : dflt; };
@@ -49,6 +51,9 @@ const commit = (() => { try { return readFileSync(join(arg("dist"), "COMMIT"), "
 const started = Date.now();
 const log = (...a) => console.log(`[${((Date.now() - started) / 1000).toFixed(0)}s] ${a.join(" ")}`);
 
+// REC-1: frame attribution, holds and scene counts from the game's flight
+// recorder; the soak's video and evidence pack in OUT/pack (--no-record: none).
+const recording = flag("no-record") ? null : soakRecording(join(arg("out"), "pack"), { commit, machine: process.env.SILTWAKE_SOAK_MACHINE ?? hostname() });
 let result;
 try {
   result = await runSoak({
@@ -60,13 +65,17 @@ try {
   }, {
     openGame, goto, read, releaseAll, saveAndCheck, Blocked, createProbe, collectGarbage, exclude: excludeTiming, log,
     providers: (g) => ({
-      full: [processRss(g.browserPid), jobCgroup(), oceanDataset(g.page), cdpHeap(g.cdp)],
-      tick: [frames(g.page, { overMs: kind === "tour" ? t.tour.streamingFrameMs : t.dwell.autosaveHitchMs }), saveJournal(g.page), oceanDataset(g.page)],
+      full: [processRss(g.browserPid), jobCgroup(), oceanDataset(g.page), cdpHeap(g.cdp), flightRecorder(g.page), ...(recording ? [recording.provider(g)] : [])],
+      tick: [flightFrames(g.page, { overMs: kind === "tour" ? t.tour.streamingFrameMs : t.dwell.autosaveHitchMs }), saveJournal(g.page), oceanDataset(g.page)],
     }),
   });
 } catch (e) {
   console.error(`soak setup failed: ${e.message}`);
   process.exit(2);
+}
+if (recording) {
+  try { const r = await recording.finish(); log(r.pack ? `pack ${r.pack.verdict.status}: ${join(arg("out"), "pack", "README.md")}` : `no pack: ${r.missing}`); }
+  catch (e) { log(`pack failed: ${e.message}`); }
 }
 const v = result.verdict;
 log(`${kind} soak ${v.status}${v.reason ? `: ${v.reason}` : ""}${v.unproven.length ? `; unproven: ${v.unproven.join(", ")}` : ""}; report ${join(arg("out"), "report.md")}`);

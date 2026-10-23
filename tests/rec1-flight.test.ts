@@ -113,12 +113,14 @@ test("game events map to damage, threat, refusal and notice; commands to actions
 });
 
 test("the recorder's mode: on by default for play, off or driver by URL, video by setting or URL", () => {
-  assert.deepEqual(flightMode({ enabled: true, video: true }, ""), { mode: "playtest", video: true });
-  assert.deepEqual(flightMode({ enabled: true, video: false }, ""), { mode: "playtest", video: false });
-  assert.deepEqual(flightMode({ enabled: false, video: true }, ""), { mode: "off", video: false });
+  assert.deepEqual(flightMode({ enabled: true, video: true }, "", false), { mode: "playtest", video: true });
+  assert.deepEqual(flightMode({ enabled: true, video: false }, "", false), { mode: "playtest", video: false });
+  assert.deepEqual(flightMode({ enabled: false, video: true }, "", false), { mode: "off", video: false });
   assert.deepEqual(flightMode({ enabled: true, video: true }, "?rec=off"), { mode: "off", video: false });
   assert.deepEqual(flightMode({ enabled: false, video: true }, "?rec=driver"), { mode: "driver", video: false });
   assert.deepEqual(flightMode({ enabled: true, video: true }, "?rec=driver&recvideo=1"), { mode: "driver", video: true });
+  assert.deepEqual(flightMode({ enabled: true, video: true }, "", true), { mode: "driver", video: false }, "an automated browser records cheaply unless told otherwise");
+  assert.deepEqual(flightMode({ enabled: true, video: true }, "?rec=playtest", true), { mode: "playtest", video: true });
 });
 
 test("the ZIP is a valid store-only archive with correct CRCs", async () => {

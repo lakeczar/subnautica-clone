@@ -13,11 +13,23 @@
 //   the polled hold state, where the player is, and the recorder's own
 //   overhead and lost-row counts (`recorder`), from its samples.
 //
-// Wiring (run.mjs, SCHED-2's): replace `frames(g.page, …)` with
-// `flightFrames(g.page, …)` in `tick`, and add `flightRecorder(g.page)` to
-// `full`; open the game with `?rec=driver`.
+// - soakRecording(out, meta): the soak's video (CDP screencast, 12 fps 720p)
+//   and an evidence pack of the whole soak in `out`, started on the first sample.
+// Wiring (scripts/soak/run.mjs): `flightFrames` in `tick` (in place of
+// `frames`), `flightRecorder` and the recording's provider in `full`, and
+// `finish()` after the soak. An automated browser runs the recorder in
+// driver mode unless the URL names another.
 export function flightFrames(page, { overMs = 33 } = {}) {
   let cursor = 0;
+  /** A build without the recorder: CW-1's per-frame array, as probe.mjs frames() reads it. */
+  const legacy = async () => {
+    const raw = await page.evaluate(() => {
+      const gaps = (window.__soakGaps ?? []).splice(0);
+      const perf = Array.isArray(window.__siltwakePerf) ? window.__siltwakePerf.splice(0) : null;
+      return { gaps, records: perf && perf.map((e) => ({ total: e?.total, hold: e?.hold, parts: e?.parts && { chunks: e.parts.chunks, caves: e.parts.caves, regions: e.parts.regions, lights: e.parts.lights } })) };
+    });
+    return { frames: { overMs, ...raw }, unavailable: ["flight-frames: no flight recorder in this build; read the legacy per-frame array"] };
+  };
   return {
     name: "flight-frames",
     async sample() {
@@ -30,7 +42,7 @@ export function flightFrames(page, { overMs = 33 } = {}) {
         const gaps = Array.isArray(window.__soakGaps) ? window.__soakGaps.splice(0) : null;
         return { f, gaps };
       }, cursor);
-      if (!got) return { unavailable: ["flight-frames: the game's flight recorder is off (open it with ?rec=driver)"] };
+      if (!got) return legacy();
       const { f, gaps } = got, col = Object.fromEntries(f.columns.map((c, i) => [c, i]));
       const HOLD = [null, "clear", "loading", "rescue", "refuge", "waiting", "away", "admitted"];
       cursor = f.next;
@@ -65,6 +77,35 @@ export function flightRecorder(page) {
       }
       out.holds = { state: got.read?.hold ?? null };
       return out;
+    },
+  };
+}
+
+/** The soak's own recording: started lazily from the first full sample (the
+ * page is open by then), finished after the soak with a pack. */
+export function soakRecording(out, meta = {}) {
+  let rec = null, starting = null, why = null;
+  return {
+    provider(g) {
+      return {
+        name: "flight-recording",
+        async sample() {
+          if (!rec && !starting && !why) {
+            const { startRecording, gpuInfo } = await import("./record.mjs");
+            starting = startRecording({ page: g.page, cdp: g.cdp, pid: g.browserPid, out, video: true, gpuBaseline: gpuInfo(), meta: { ...meta, mode: "soak" } })
+              .then((r) => { rec = r; }, (e) => { why = e.message; });
+            await starting;
+          }
+          return why ? { unavailable: [`flight-recording: ${why}`] } : {};
+        },
+      };
+    },
+    /** Stops the video, writes the header and builds the pack (the page may already be closed: the last second is lost then). */
+    async finish(opts = {}) {
+      if (!rec) return { missing: why ?? "never started" };
+      const header = await rec.stop();
+      const { buildPack } = await import("./pack.mjs");
+      return { header, pack: await buildPack(out, opts) };
     },
   };
 }

@@ -17,10 +17,16 @@ export type FlightMode = "off" | "driver" | "playtest";
 export interface FlightSettings { enabled: boolean; video: boolean }
 export const DEFAULT_FLIGHT_SETTINGS: FlightSettings = { enabled: true, video: true };
 
-/** `?rec=off|driver|playtest` overrides Settings; `?recvideo=0|1` the in-game video. */
-export function flightMode(settings: FlightSettings, search = globalThis.location?.search ?? ""): { mode: FlightMode; video: boolean } {
+/** `?rec=off|driver|playtest` overrides Settings; `?recvideo=0|1` the in-game video.
+ * An automated browser (`navigator.webdriver`: every test driver, soak and
+ * evidence run) that names no mode gets `driver`: bounded memory, readable
+ * through the test hook, no spool and no in-game video. A person's browser
+ * gets the playtest default (Settings can turn it off). */
+export function flightMode(settings: FlightSettings, search = globalThis.location?.search ?? "",
+  automated = globalThis.navigator?.webdriver === true): { mode: FlightMode; video: boolean } {
   const q = new URLSearchParams(search), rec = q.get("rec"), video = q.get("recvideo");
-  const mode: FlightMode = rec === "off" || rec === "0" ? "off" : rec === "driver" ? "driver" : rec === "playtest" ? "playtest" : settings.enabled ? "playtest" : "off";
+  const mode: FlightMode = rec === "off" || rec === "0" ? "off" : rec === "driver" ? "driver" : rec === "playtest" ? "playtest"
+    : automated ? "driver" : settings.enabled ? "playtest" : "off";
   return { mode, video: mode !== "off" && (video === null ? mode === "playtest" && settings.video : video === "1") };
 }
 
