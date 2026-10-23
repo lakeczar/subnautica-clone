@@ -38,6 +38,9 @@ export class GameView {
     GameView.current = this;
   }
   slot(_slot: SaveSlot, _hasSession: boolean): void {}
+  /** Whether the menu shows Repair play timeline. */
+  repairVisible = false;
+  timelineRepair(visible: boolean): void { this.repairVisible = visible; }
   persistence(
     _message: string,
     _automatic: boolean,

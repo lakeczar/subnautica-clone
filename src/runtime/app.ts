@@ -184,6 +184,7 @@ export class SiltwakeApp {
       exportTimeline: () => this.exportTimeline(),
       exportBackup: () => this.exportBackup(),
       exportRaw: () => this.exportRaw(),
+      repairTimeline: () => this.repairTimeline(),
       importFile: (file) =>
         this.requestEntry(() => {
           void this.session.importFile(file);
@@ -492,8 +493,26 @@ export class SiltwakeApp {
     try { storage = window.localStorage; } catch { /* memory only */ }
     this.live = LiveTimeline.open(storage, this.writerLock, { id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION },
       { regionAt: (x: number, z: number) => regionAtPoint(x, z) },
-      (message, error) => { if (!this.disposed) this.view.notify(message, error, { channel: "system" }); });
+      (message, error) => { if (!this.disposed) this.view.notify(message, error, { channel: "system" }); },
+      () => { if (!this.disposed) this.view.timelineRepair(this.live?.protected ?? false); });
+    this.view.timelineRepair(this.live.protected);
     this.timelineSaved = this.state.tick;
+  }
+  /** The menu's Repair play timeline: export the unreadable records first, explain, confirm, then replace. */
+  private repairTimeline(): void {
+    const live = this.live;
+    if (!live?.protected || !this.state) return;
+    const records = live.records();
+    if (typeof records === "string") {
+      this.view.notify(`The play-timeline store can't be repaired now: ${records}. Nothing was changed.`, true, { channel: "system" });
+      return;
+    }
+    this.download(JSON.stringify({ format: "siltwake.timeline.records", ...records }), "siltwake-timeline-record.json");
+    this.session.ask({
+      title: "Replace the local play-timeline store?",
+      detail: "The unreadable play-timeline record was just exported as siltwake-timeline-record.json. Replacing it stores this expedition's timeline in its place: the unreadable record, and any earlier timeline it held, are removed from this browser. Your game saves are not affected.",
+      accept: "Replace & save timeline",
+    }, () => { if (this.live === live && this.state) live.repair(this.state, records); });
   }
   /** N: a one-line feedback note stamped with play time and place. */
   private feedbackNote(): void {
@@ -501,8 +520,9 @@ export class SiltwakeApp {
     this.pause("", true);
     this.view.noteEntry((text) => {
       if (text && this.live && this.state) {
+        // "Saving note…", then "Note saved" once its commit succeeds, come from the timeline.
         const no = this.live.note(this.state, text);
-        this.view.notify(no ?? "Note saved to the play timeline.", !!no, { channel: "system" });
+        if (no) this.view.notify(no, true, { channel: "system" });
         this.timelineSaved = this.state.tick;
       }
       this.resume(true);

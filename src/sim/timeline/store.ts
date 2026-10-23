@@ -163,6 +163,10 @@ export class TimelineJournal {
     const others = [j.current, j.previous].filter((h): h is TimelineHead => !!h && h.session.id !== this.session);
     let previous: TimelineHead | null = others[0] ?? null;
     const displaced = others[1] ?? null, dropped: DroppedTimeline[] = [];
+    // A head about to go is read whole again now, never on an earlier verification's word.
+    const unreadable = (h: TimelineHead | null): string | null => { const r = h ? this.readHead(h) : null; return typeof r === "string" ? r : null; };
+    const gone = unreadable(displaced);
+    if (gone) return this.refuse(gone);
     let rotated = false, displacedGone = false;
     // Another expedition's version 1 timeline, before any journal: it migrates into previous.
     let migrate = !base && v1.kind === "present" && !j.current && !j.previous && v1.value.session.id !== this.session ? resumeRecorder(v1.value) : null;
@@ -189,6 +193,8 @@ export class TimelineJournal {
       if (migrate) { migrate = null; previous = null; continue; }   // the version 1 record then stays as it is
       if (rotateOldest(rec)) { rotated = true; continue; }
       if (!previous || base) return failed("write-refused", "the play timeline doesn't fit the browser's storage", dropped);
+      const victim = unreadable(previous);
+      if (victim) return this.refuse(victim);
       // Drop previous: a smaller journal first (the commit point), then its keys.
       const smaller: Journal = { ...j, current: own === j.current ? j.current : null, previous: own === j.previous ? j.previous : null };
       const text = JSON.stringify(smaller);

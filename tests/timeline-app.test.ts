@@ -118,21 +118,95 @@ test("R4-F2: importing the same expedition while a save waits: every note once",
   } finally { app.dispose(); f.restore(); }
 });
 
-test("R4-F2: closing the page while the lock is delayed loses no note", async () => {
+test("R5: a note says Saving note…, then Note saved only once its commit succeeds; a pending commit is said promptly", async (t) => {
+  const f = browserFixture(), app = await newGame(f);
+  try {
+    const seen = () => GameView.current.notices;
+    assert.equal(app.live.note(app.state, "first"), null);
+    assert.ok(seen().includes("Saving note…"));
+    await settled();
+    assert.ok(seen().includes("Note saved to the play timeline."));
+    // The lock is held: the note is pending, said within about two seconds, and never called saved.
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const gate = deferred();
+    f.lock.gate = gate.promise;
+    const before = seen().filter((n) => n === "Note saved to the play timeline.").length;
+    assert.equal(app.live.note(app.state, "second"), null);
+    await settled();
+    t.mock.timers.tick(2_000);
+    assert.ok(seen().some((n) => /^Waiting to save the play timeline/.test(n)), "the wait is said");
+    assert.equal(seen().filter((n) => n === "Note saved to the play timeline.").length, before, "not saved yet");
+    gate.resolve(); f.lock.gate = null;
+    await settled();
+    assert.equal(seen().filter((n) => n === "Note saved to the play timeline.").length, before + 1, "saved once it is");
+  } finally { app.dispose(); f.restore(); }
+});
+
+test("R5: closing the page during a pending note commit can lose that note, and the notices never claimed it saved", async () => {
   const f = browserFixture();
   let app = await newGame(f);
   try {
     const aid = app.session.envelope()!.meta.sessionId;
-    addNote(app.timeline, app.state, "committed"); await saveTimeline(app);
+    assert.equal(app.live.note(app.state, "committed"), null); await settled();
     f.lock.gate = new Promise(() => {});   // the lock never comes while this page lives
-    assert.equal(app.live.note(app.state, "written just before closing"), null);
+    const notices = GameView.current.notices.length;
+    assert.equal(app.live.note(app.state, "pending at close"), null);
+    assert.deepEqual(GameView.current.notices.slice(notices), ["Saving note…"]);
     f.window.dispatchEvent(Object.assign(new Event("pagehide"), { persisted: false }));
     f.lock.gate = null;
     app = seams(new SiltwakeApp({} as HTMLElement)); f.frames();
     GameView.current.actions.continueGame(); f.frames();
     assert.equal(app.session.envelope()?.meta.sessionId, aid);
-    assert.deepEqual(notes(app.timeline, app.state), ["committed", "written just before closing"]);
+    assert.deepEqual(notes(app.timeline, app.state), ["committed"], "the honest bound: durable once its commit returns");
   } finally { app.dispose(); f.restore(); }
+});
+
+test("R5: a conflicting note is said to be in memory only, with export", async () => {
+  const f = browserFixture(), app = await newGame(f);
+  try {
+    assert.equal(app.live.note(app.state, "first"), null); await settled();
+    // Another tab commits newer history for this expedition.
+    const other = new TimelineJournal(f.storage, f.lock, app.timeline.session.id), l = other.load();
+    const rec = (l as { recorder: TimelineRecorder }).recorder;
+    addNote(rec, app.state, "other tab");
+    assert.ok((await other.commit(rec, app.state, new AbortController().signal)).ok);
+    assert.equal(app.live.note(app.state, "this tab"), null); await settled();
+    assert.ok(GameView.current.notices.some((n) => /another tab.*memory only\. The note is in memory only\. Export the timeline/.test(n)), GameView.current.notices.join(" | "));
+  } finally { app.dispose(); f.restore(); }
+});
+
+test("R5: Repair play timeline exports the unreadable records, confirms, then replaces the store; a change meanwhile is a conflict", async () => {
+  for (const conflict of [false, true]) {
+    const f = browserFixture();
+    const downloads: { href: string; download: string }[] = [];
+    Object.assign(f.document, {
+      body: { append: (anchor: { href: string; download: string }) => downloads.push(anchor) },
+      createElement: () => ({ href: "", download: "", click() {}, remove() {} }),
+    });
+    Object.assign(f.window, { setTimeout: (callback: () => void) => { callback(); return 0; } });
+    f.storage.setItem(TIMELINE_JOURNAL_KEY, "{unreadable");
+    const app = await newGame(f);
+    try {
+      assert.equal(GameView.current.repairVisible, true, "the menu offers the repair");
+      assert.ok(GameView.current.notices.some((n) => /local play-timeline store can't be read/.test(n)));
+      GameView.current.actions.repairTimeline();
+      assert.deepEqual(downloads.map((d) => d.download), ["siltwake-timeline-record.json"], "exported first");
+      assert.match(app.session.confirmation?.title ?? "", /Replace the local play-timeline store/);
+      if (conflict) f.storage.setItem(TIMELINE_JOURNAL_KEY, "{changed in another tab");
+      GameView.current.actions.confirm();
+      await settled();
+      if (conflict) {
+        assert.equal(f.storage.getItem(TIMELINE_JOURNAL_KEY), "{changed in another tab", "nothing replaced");
+        assert.equal(GameView.current.repairVisible, true);
+      } else {
+        assert.equal(GameView.current.repairVisible, false);
+        assert.ok(GameView.current.notices.some((n) => /store was replaced/.test(n)));
+        assert.equal(stored(f, app.timeline.session.id).session.id, app.timeline.session.id);
+        assert.equal(app.live.note(app.state, "after the repair"), null); await settled();
+        assert.deepEqual(notes(stored(f, app.timeline.session.id), app.state), ["after the repair"]);
+      }
+    } finally { app.dispose(); f.restore(); }
+  }
 });
 
 test("R4-F5: a refused lock is said, and the timeline stays whole in memory", async () => {

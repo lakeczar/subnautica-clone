@@ -339,7 +339,7 @@ test("R4-F2: a replaced or disposed writer still waiting for the lock never writ
   assert.deepEqual(new Map(storage.data), before, "nothing mutated");
 });
 
-test("R4-F2: a same-session replacement mid-save: the old generation never writes, and its notes come back from the outbox", async () => {
+test("R4-F2: a same-session replacement mid-save: the old generation never writes", async () => {
   const storage = new Storage(), lock = new TestWriterLock(), x = session("A");
   x.add(100);
   const old = new TimelineJournal(storage, lock, "A");
@@ -349,36 +349,19 @@ test("R4-F2: a same-session replacement mid-save: the old generation never write
   lock.gate = gate.promise;
   const generation = new AbortController();
   addNote(x.rec, x.s, "old pending note");
-  old.stash(x.rec);
   const pending = commit(old, x.rec, x.s, generation.signal);
-  // The same expedition is imported: the old generation ends; a new one loads.
+  // The same expedition is imported: the old generation ends before the new one loads.
   generation.abort();
+  const before = new Map(storage.data);
   gate.resolve(); lock.gate = null;
-  assert.equal((await pending).ok, false);
+  assert.deepEqual([(await pending).ok], [false]);
+  assert.deepEqual(new Map(storage.data), before, "the old generation wrote nothing");
   const fresh = new TimelineJournal(storage, lock, "A"), l = fresh.load(), rec = (l as { recorder: TimelineRecorder }).recorder;
-  assert.ok(allNotes(rec, x.s).includes("old pending note"), "the outbox note is merged");
   addNote(rec, x.s, "new recorder note");
-  assert.ok((await commit(fresh, rec, x.s)).ok);
+  const r = await commit(fresh, rec, x.s);
+  assert.ok(r.ok && r.seq === rec.seq, "the commit says which sequence it made durable");
   const back = reloadsWhole(storage, rec, x.s, "after the replacement");
-  for (const n of ["old pending note", "new recorder note"]) assert.equal(allNotes(back, x.s).filter((m) => m === n).length, 1, n);
-  assert.deepEqual([...storage.data.keys()].filter((k) => k.startsWith("siltwake.timeline.v2.notes|")), [], "outboxes cleared once committed");
-});
-
-test("R4-F2: a note outlives a close before its commit (the outbox)", async () => {
-  const storage = new Storage(), x = session("A"), j = tab(storage, "A");
-  x.add(100);
-  assert.ok((await commit(j, x.rec, x.s)).ok);
-  addNote(x.rec, x.s, "written, then the page closed");
-  j.stash(x.rec);
-  // No commit: the page is gone. The next load has the note.
-  assert.ok(allNotes(loaded(storage, "A", "after the close"), x.s).includes("written, then the page closed"));
-  // So does a load where the expedition never committed at all.
-  const y = session("B"), jy = tab(storage, "B");
-  addNote(y.rec, y.s, "B's only note");
-  jy.stash(y.rec);
-  const fresh = createRecorder({ id: "B", started: STARTED });
-  new TimelineJournal(storage, new TestWriterLock(), "B").adopt(fresh);
-  assert.deepEqual(allNotes(fresh, y.s), ["B's only note"]);
+  assert.equal(allNotes(back, x.s).filter((m) => m === "new recorder note").length, 1);
 });
 
 test("R4-F5: a lock that rejects or stays pending is reported, and nothing is written; no lock API means read-only", async () => {
@@ -394,7 +377,7 @@ test("R4-F5: a lock that rejects or stays pending is reported, and nothing is wr
   const pendingLock: WriterLockPort = { runExclusive: () => new Promise(() => {}) };
   void commit(tab(storage, "A", pendingLock), x.rec, x.s).then(() => { settledCommit = true; });
   await new Promise((done) => setImmediate(done));
-  assert.equal(settledCommit, false, "a pending lock stays pending (the app says so once saves queue behind it)");
+  assert.equal(settledCommit, false, "a pending lock stays pending (the app says it is waiting)");
   assert.equal(storage.data.size, 0);
 });
 
@@ -459,5 +442,124 @@ test("R4-F6: version 1 migrates into current or previous by its session, and goe
     assert.ok(r.ok, r.ok ? "" : r.error);
     assert.equal(storage.data.get(TIMELINE_STORAGE_KEY), v1);
     assert.equal(allNotes(loaded(storage, "OLD", "still in v1"), legacy.s).length, 200);
+  }
+});
+
+// ---- SIM-1 R5 regressions -------------------------------------------------
+
+test("R5-F4: another expedition's unreadable head or chunk protects the store: never replaced or dropped, through the third-expedition transition", async () => {
+  for (const [label, damage] of [
+    ["malformed head events", (st: Storage) => { const j = JSON.parse(st.data.get(TIMELINE_JOURNAL_KEY)!); j.current.events = [{ kind: "teleport" }]; st.data.set(TIMELINE_JOURNAL_KEY, JSON.stringify(j)); }],
+    ["malformed head chunk list", (st: Storage) => { const j = JSON.parse(st.data.get(TIMELINE_JOURNAL_KEY)!); j.current.chunks = ["x"]; st.data.set(TIMELINE_JOURNAL_KEY, JSON.stringify(j)); }],
+    ["malformed chunk JSON", (st: Storage) => { for (const k of st.data.keys()) if (k.startsWith("siltwake.timeline.v2|A|")) st.data.set(k, "[{not json"); }],
+    ["missing chunk", (st: Storage) => { for (const k of [...st.data.keys()]) if (k.startsWith("siltwake.timeline.v2|A|")) st.data.delete(k); }],
+  ] as const) {
+    const storage = new Storage(), a = session("A"), b = session("B"), c = session("C");
+    a.add(TIMELINE_CHUNK_EVENTS + 100);
+    assert.ok((await commit(tab(storage, "A"), a.rec, a.s)).ok);
+    damage(storage);
+    const before = new Map(storage.data);
+    // B, a different expedition, loads protected and writes nothing.
+    const jb = new TimelineJournal(storage, new TestWriterLock(), "B");
+    assert.equal(jb.load().kind, "protected", `${label}: B loads protected`);
+    b.add(50);
+    const rb = await commit(jb, b.rec, b.s);
+    assert.deepEqual([rb.ok, rb.ok ? "" : rb.code], [false, "protected"], `${label}: B`);
+    // C, a third expedition, the same: A is never dropped.
+    const jc = new TimelineJournal(storage, new TestWriterLock(), "C");
+    assert.equal(jc.load().kind, "protected", `${label}: C loads protected`);
+    c.add(10);
+    assert.equal((await commit(jc, c.rec, c.s)).ok, false, `${label}: C`);
+    assert.deepEqual(new Map(storage.data), before, `${label}: nothing written`);
+  }
+});
+
+test("R5-F4: a head damaged after it was verified is read whole again before it can be dropped", async () => {
+  // Displacement (a third expedition), and a quota drop.
+  for (const how of ["displaced", "quota"] as const) {
+    const storage = new Storage(), a = session("A"), b = session("B"), c = session("C");
+    a.add(TIMELINE_CHUNK_EVENTS + 100);
+    assert.ok((await commit(tab(storage, "A"), a.rec, a.s)).ok);
+    b.add(100);   // nothing of B's own to fold: only dropping A could make room
+    const jb = tab(storage, "B");
+    assert.ok((await commit(jb, b.rec, b.s)).ok);
+    const jc = tab(storage, "C");
+    // A's chunk is damaged after B's and C's loads verified it.
+    for (const k of storage.data.keys()) if (k.startsWith("siltwake.timeline.v2|A|")) storage.data.set(k, "[{not json");
+    const before = new Map(storage.data);
+    if (how === "displaced") {
+      c.add(10);
+      const r = await commit(jc, c.rec, c.s);
+      assert.deepEqual([r.ok, r.ok ? "" : r.code], [false, "protected"], "C would displace A");
+    } else {
+      storage.quota = storage.used + 500;
+      for (let i = 0; i < 600; i++) addNote(b.rec, b.s, `B note ${i}`);
+      const r = await commit(jb, b.rec, b.s);
+      assert.deepEqual([r.ok, r.ok ? "" : r.code], [false, "protected"], "B would drop A for room");
+    }
+    assert.deepEqual(new Map(storage.data), before, `${how}: nothing written`);
+  }
+});
+
+test("R5-F6: a replaced timeline is reported only once a committed journal stops naming it; a quota drop is reported even if the final commit fails", async () => {
+  const storage = new Storage(), a = session("A"), b = session("B"), c = session("C");
+  a.add(TIMELINE_CHUNK_EVENTS + 50);
+  assert.ok((await commit(tab(storage, "A"), a.rec, a.s)).ok);
+  b.add(TIMELINE_CHUNK_EVENTS + 50);
+  assert.ok((await commit(tab(storage, "B"), b.rec, b.s)).ok);
+  // C's first write fails: nothing changed, so nothing is reported dropped.
+  c.add(50);
+  const jc = tab(storage, "C"), before = new Map(storage.data);
+  storage.failFrom(0, false, "SecurityError");
+  const failedCommit = await commit(jc, c.rec, c.s);
+  assert.deepEqual([failedCommit.ok, failedCommit.dropped], [false, []]);
+  assert.deepEqual(new Map(storage.data), before);
+  reloadsWhole(storage, a.rec, a.s, "A unchanged");
+  // Under a quota where only dropping B (previous after A goes) makes the smaller journal fit, and then
+  // C still can't: both drops committed, so both are reported, though C's commit fails.
+  storage.quota = storage.used + 1_000;
+  for (let i = 0; i < 5_000; i++) addNote(c.rec, c.s, `C note ${i}`);   // notes fold into summaries no smaller
+  const r = await commit(jc, c.rec, c.s);
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.dropped.map((d) => d.reason).sort(), ["replaced", "room"]);
+  assert.equal(new TimelineJournal(storage, new TestWriterLock(), "A").load().kind, "empty");
+  assert.equal(new TimelineJournal(storage, new TestWriterLock(), "B").load().kind, "empty");
+});
+
+test("R5: repair replaces a protected store with this timeline, only while its records are exactly the exported ones", async () => {
+  const x = session("A"), other = session("Z");
+  other.add(TIMELINE_CHUNK_EVENTS + 20);
+  for (const conflictFirst of [true, false]) {
+    const storage = new Storage();
+    assert.ok((await commit(tab(storage, "Z"), other.rec, other.s)).ok);
+    storage.data.set(TIMELINE_JOURNAL_KEY, "{not json");
+    storage.setItem(TIMELINE_STORAGE_KEY, "{also broken");
+    const j = new TimelineJournal(storage, new TestWriterLock(), "A");
+    assert.equal(j.load().kind, "protected");
+    x.add(TIMELINE_CHUNK_EVENTS + 30);
+    const exported = j.records();
+    assert.ok(typeof exported !== "string");
+    if (typeof exported === "string") return;
+    assert.deepEqual(exported, { journal: "{not json", v1: "{also broken" }, "the raw bytes, exported first");
+    if (conflictFirst) {
+      // Another tab changes the records after the export: the repair is a conflict and writes nothing.
+      storage.data.set(TIMELINE_JOURNAL_KEY, "{changed elsewhere");
+      const before = new Map(storage.data);
+      const r = await j.repair(x.rec, x.s, new AbortController().signal, exported);
+      assert.deepEqual([r.ok, r.ok ? "" : r.code], [false, "conflict"]);
+      assert.deepEqual(new Map(storage.data), before);
+      assert.notEqual(j.protection, null, "still protected");
+      continue;
+    }
+    const r = await j.repair(x.rec, x.s, new AbortController().signal, exported);
+    assert.ok(r.ok, r.ok ? "" : r.error);
+    assert.equal(j.protection, null);
+    assert.equal(storage.data.get(TIMELINE_STORAGE_KEY), undefined, "the exported version 1 record is gone");
+    reloadsWhole(storage, x.rec, x.s, "the repaired store");
+    noOrphans(storage, "the repaired store");
+    // And it commits as usual from then on.
+    x.add(100);
+    assert.ok((await commit(j, x.rec, x.s)).ok);
+    reloadsWhole(storage, x.rec, x.s, "after the repair");
   }
 });
