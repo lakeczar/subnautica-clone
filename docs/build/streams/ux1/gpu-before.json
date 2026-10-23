@@ -1,0 +1,65 @@
+{
+ "commit": "b33fea8",
+ "save": "/work/tmp/ux1/saves/outside-vestibule.json",
+ "segments": [
+  {
+   "label": "before: at the helm (5 s)",
+   "seconds": 5,
+   "frames": 300,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  }
+ ],
+ "shots": [
+  "/work/tmp/ux1/gpu-before/01-before-outside-the-vestibule.png",
+  "/work/tmp/ux1/gpu-before/02-before-v-panel.png",
+  "/work/tmp/ux1/gpu-before/03-before-helm-view.png",
+  "/work/tmp/ux1/gpu-before/04-before-look-left-swings-carrier.png",
+  "/work/tmp/ux1/gpu-before/05-before-launch-attempt.png",
+  "/work/tmp/ux1/gpu-before/06-before-leave-helm-message.png"
+ ],
+ "errors": [
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)"
+ ],
+ "notices": [
+  {
+   "t": 35.5,
+   "text": "|"
+  },
+  {
+   "t": 47.5,
+   "text": "| Transfer corridor obstructed. Vehicle identity, cargo, charge and damage are unchanged."
+  },
+  {
+   "t": 48.5,
+   "text": "| Station keeping engaged. Interior and launch controls available."
+  }
+ ],
+ "steps": {
+  "panel": "SEEDED FEASIBILITY \u00b7 no earned campaign progression \u00b7 station keeping only, no underway walking\n\nStation keeping \u00b7 medium configuration \u00b7 lock closed \u00b7 completed transactions 1\n\nEngage station keeping\nTake helm\nLeave helm\nLeave aft vestibule\nEnter exterior vestibule\nReconfigure empty supported berth\nToggle fixture obstruction\nInterrupt lock transaction\nFixture incapacity / refuge fallback\nDart \u00b7 world craft\n\nIdentity dart_24 \u00b7 power 99.6 \u00b7 damage 0.0 \u00b7 cargo 0 CU\n\nCapture from corridor\nCreel \u00b7 world craft\n\nIdentity creel_34 \u00b7 power 80.5 \u00b7 damage 0.0 \u00b7 cargo 4 CU\n\nCapture from corridor\nMantle \u00b7 dry isolated berth 0\n\nIdentity mantle_103 \u00b7 power 96.3 \u00b7 damage 0.0 \u00b7 cargo 0 CU\n\nLaunch through lock",
+  "enter": "clicked",
+  "helm": "clicked",
+  "atHelm": {
+   "movement": "Piloting",
+   "bearing": 321,
+   "guidance": "E Exit blocked Engage station keeping, then leave the helm into the dry interior."
+  },
+  "lookSwings": {
+   "before": 321,
+   "after": 242
+  },
+  "keep": "clicked",
+  "launch": "clicked",
+  "panelAfterLaunch": "Transfer corridor obstructed. Vehicle identity, cargo, charge and damage are unchanged.",
+  "leave": "clicked",
+  "leaveFeedback": "Station keeping engaged. Interior and launch controls available."
+ },
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "controlsList": "W A S DMove / swimMouse / \u2191 \u2193 \u2190 \u2192LookSpace / CRise or jump / diveShiftFasterRForward cruiseE / QInteract / scanB / F / GBuoy / meal / pulseL / T / YLamp / glow lure / startle inkTab or I / K / J / HCargo / fabricate / notebook / hintW / S \u00b7 A / DPilot thrust \u00b7 slideXExit craft (hold while moving)ZQuiet movementEsc / F5Pause / save"
+}

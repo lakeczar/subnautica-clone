@@ -311,7 +311,7 @@ export type GameEvent =
   | { type: "thrust-sample"; actorId: string; requested: number; actual: number; solidLimited: number; supportLimited: number }
   /** SYS-2 background work for the local play timeline (C4). Transient, never saved. */
   | { type: "systems"; event: SystemsEvent }
-  | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook" | "systems" | "journal"; targetId: string }
+  | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook" | "systems" | "journal" | "carrier"; targetId: string }
   | ({ type: "notice"; message: string; error?: boolean } & NoticeOptions)
   | {
       type: "sound";
