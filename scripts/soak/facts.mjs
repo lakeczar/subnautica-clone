@@ -13,7 +13,7 @@
 //   sample      { settled, memory, graphics }            a full probe sample (settled: after a GC)
 //   lap         { lap, memory, graphics }                a tour lap's settled sample
 //   autosave    { }                                      the game saved
-//   save        { ok, label, error? }                    a save checked in a separate browser
+//   save        { ok, label, error? }                    a save checked in a separate browser (ok false: a failure)
 //   start       { }                                      the dwell arrived (warm-up counts from here)
 //   blocked     { reason }   yielded { }                 the run could not go on
 //   end         { }                                      the run's declared end
@@ -59,6 +59,8 @@ export function rulesOf(kind, t) {
 /** Violations a sequence of measurement facts derives, checked at each fact (every prefix). */
 function derivedViolations(facts, kind, t) {
   const out = [];
+  // A checked save that did not reload is a failure on its own fact.
+  for (const f of facts) if (f.t === "save" && f.ok === false) out.push({ rule: "save-reload", at: f.at, detail: `save at ${f.label ?? "?"} did not reload: ${f.error ?? "?"}` });
   if (kind === "tour") {
     const laps = facts.filter((f) => f.t === "lap");
     const first = laps[0];
@@ -74,8 +76,11 @@ function derivedViolations(facts, kind, t) {
     }
     return out;
   }
-  // Dwell: settled samples after the warm-up from arrival; each against the
-  // first (flatness), and the trend over every prefix spanning the window (leak).
+  // Dwell: settled samples after the warm-up from arrival. Flatness compares
+  // each valid reading with the first, field by field, whatever the times do
+  // (R7-F2): a backward time leaves the trend unproven, never a proven breach.
+  // The leak is the trend over every prefix spanning the window, and needs
+  // monotonic times: it is judged up to the first backward step only.
   const start = facts.find((f) => f.t === "start");
   if (!start) return out;
   const from = start.at + t.warmupS;
@@ -84,7 +89,6 @@ function derivedViolations(facts, kind, t) {
     const xs = settled.filter((f) => valid("memoryMiB", f.memory?.[m])).map((f) => ({ at: f.at, v: f.memory[m] }));
     if (xs.length < 2) continue;
     for (let i = 1; i < xs.length; i++) {
-      if (xs[i].at < xs[i - 1].at) break; // not monotonic: nothing beyond this is judged
       const g = pct(xs[i].v, xs[0].v);
       if (Math.abs(g) > t.memoryFlatPct) { out.push({ rule: `memory-flat:${m}`, value: round(g), limit: t.memoryFlatPct, at: xs[i].at, detail: `first settled sample ${round(xs[0].v)} MiB, ${round(xs[i].v)} MiB at ${Math.round(xs[i].at)} s (${round(g)}%)` }); break; }
     }
@@ -124,7 +128,11 @@ export function verdict(facts, kind, t, { judged = false, machine = null } = {})
   const settledSpan = timesOk && settled.length >= 2 ? settled.at(-1).at - settled[0].at : 0;
   const dn = upToEnd.filter((f) => f.t === "daynight").at(-1);
   const goalMet = kind === "tour" ? laps.length >= t.laps : autosaves.length >= t.autosaves && settledSpan >= t.leakMinWindowS && (!dn || dn.cycles >= t.dayNightCycles);
-  const rules = rulesOf(kind, t).map((id) => {
+  // Every rule any fact names is judged: the kind's own, then any other a
+  // violation, gap or recording names (R7-F1), each with violation precedence.
+  const ids = rulesOf(kind, t);
+  for (const f of facts) if (f.rule != null && !ids.includes(f.rule) && (f.t === "violation" || ((f.t === "unavailable" || f.t === "recorded") && upToEnd.includes(f)))) ids.push(f.rule);
+  const rules = ids.map((id) => {
     const v = byRule.get(id);
     if (v && (id === "streaming-frame" || id === "autosave-hitch") && v.ms != null) {
       const all = violations.filter((x) => x.rule === id), worst = all.reduce((w, x) => Math.max(w, x.ms), 0);
@@ -132,10 +140,19 @@ export function verdict(facts, kind, t, { judged = false, machine = null } = {})
     }
     if (v) return { id, status: "fail", value: v.value, limit: v.limit, detail: v.detail };
     const gaps = of(id, "unavailable"), recs = of(id, "recorded");
-    // Any gap for any rule leaves it unproven, whatever else covers it.
-    if (gaps.length && !recs.length) return { id, status: "unavailable", detail: summarize(gaps) };
+    // Any gap or recording for any rule leaves it unproven, whatever else covers it.
+    if (recs.length) {
+      const over = recs.filter((r) => r.ms > r.limit), worst = recs.reduce((w, r) => Math.max(w, r.ms), 0);
+      return { id, status: "recorded", value: round(worst) || null, warning: over.length > 0,
+        detail: `${over.length} over the limit${over.length ? `, worst ${round(worst)} ms at ${over[0].where ?? "?"}` : ""}; ${machine ?? "a shared run"}: recorded, not frame-time evidence` };
+    }
+    if (gaps.length) return { id, status: "unavailable", detail: summarize(gaps) };
     if (id === "renderer" || id === "providers") return { id, status: "pass" };
-    if (id === "save-reload") return saves.length ? { id, status: "pass", value: saves.length, detail: `${saves.length} saves reloaded` } : { id, status: "unavailable", detail: "no save was checked" };
+    if (id === "save-reload") {
+      if (!saves.length) return { id, status: "unavailable", detail: "no save was checked" };
+      if (saves.some((f) => f.ok !== true)) return { id, status: "unavailable", detail: "a save check has no valid result" };
+      return { id, status: "pass", value: saves.length, detail: `${saves.length} saves reloaded` };
+    }
     if (id.startsWith("memory-growth:") || id.startsWith("graphics-growth:")) {
       const [group, m] = [id.startsWith("memory") ? "memory" : "graphics", id.split(":")[1]], type = group === "memory" ? "memoryMiB" : "count";
       const a = laps[0]?.[group]?.[m], b = laps.at(-1)?.[group]?.[m];
@@ -154,25 +171,14 @@ export function verdict(facts, kind, t, { judged = false, machine = null } = {})
       return dn && dn.cycles >= t.dayNightCycles ? { id, status: "pass", value: dn.cycles } : { id, status: "unavailable", detail: dn ? `${dn.cycles} of ${t.dayNightCycles} day–night cycles` : "the game has no day–night cycle yet; the dwell goal counts autosaves only" };
     }
     if (id === "autosave") return autosaves.length ? { id, status: "pass", value: autosaves.length } : { id, status: "unavailable", detail: "no autosave was seen" };
-    // Frame and hold rules: judged runs need coverage and no gap; others are recorded.
+    // Frame and hold rules: judged runs need coverage; frame times of others are recorded.
     const covered = of(id, "covered").length > 0;
-    if (recs.length || ((id === "streaming-frame" || id === "autosave-hitch") && !judged)) {
-      const over = recs.filter((r) => r.ms > r.limit), worst = recs.reduce((w, r) => Math.max(w, r.ms), 0);
-      return { id, status: "recorded", value: round(worst) || null, warning: over.length > 0,
-        detail: `${over.length} over the limit${over.length ? `, worst ${round(worst)} ms at ${over[0].where ?? "?"}` : ""}; ${machine ?? "a shared run"}: recorded, not frame-time evidence` };
-    }
-    if (gaps.length) return { id, status: "unavailable", detail: summarize(gaps) };
+    if ((id === "streaming-frame" || id === "autosave-hitch") && !judged)
+      return { id, status: "recorded", value: null, warning: false, detail: `0 over the limit; ${machine ?? "a shared run"}: recorded, not frame-time evidence` };
     if (!covered) return { id, status: "unavailable", detail: id === "loading-hold" ? "no per-frame hold record covered the run" : "no frames were measured (the frame provider failed or saw none)" };
     return { id, status: "pass" };
   });
 
-  // Gaps and recordings for a rule this kind doesn't list are reported too, never dropped.
-  const listed = new Set(rules.map((r) => r.id));
-  for (const f of upToEnd) if ((f.t === "unavailable" || f.t === "recorded") && !listed.has(f.rule)) {
-    listed.add(f.rule);
-    rules.push({ id: f.rule, status: f.t === "recorded" ? "recorded" : "unavailable", detail: summarize(upToEnd.filter((x) => x.rule === f.rule && x.t === f.t).map((x) => ({ reason: x.reason ?? "recorded" }))) });
-  }
-  for (const v of violations) if (!listed.has(v.rule)) { listed.add(v.rule); rules.push({ id: v.rule, status: "fail", value: v.value, limit: v.limit, detail: v.detail }); }
   const failed = rules.filter((r) => r.status === "fail");
   const unproven = rules.filter((r) => r.status === "unavailable" || r.status === "recorded");
   const blocked = upToEnd.find((f) => f.t === "blocked"), yielded = upToEnd.find((f) => f.t === "yielded");

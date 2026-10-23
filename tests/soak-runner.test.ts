@@ -485,3 +485,42 @@ test("R6-F2: a 70 ms frame with 70 ms in caves is streaming's whatever an unrela
   const valid = await run({ chunks: 0, caves: 10, regions: 0, lights: 0 });
   assert.equal(valid.verdict.rules.find((x: { id: string }) => x.id === "streaming-frame").status, "pass", "all valid zero-ish parts and a non-streaming 70 ms frame: no violation");
 });
+
+// SCHED-2a R7 -------------------------------------------------------------------
+
+test("R7-F1 (runner): a dwell's measured hold fails and stops it, though a companion record in the same interval is unknown", async () => {
+  const f = fake();
+  const base = f.deps.providers;
+  f.deps.providers = () => {
+    const ps = base();
+    // CW-1's records: one frame held ("loading"), one where admission wasn't evaluated (null).
+    return { ...ps, tick: [{ name: "frames", sample: async () => ({ frames: { overMs: 33, gaps: [16, 16], records: [rec(16, { hold: "loading" }), rec(16, { hold: null })] } }) }, ps.tick[2]!] };
+  };
+  const r = await S.runSoak(opts("dwell"), f.deps);
+  assert.equal(r.verdict.status, "fail", JSON.stringify(r.verdict.rules));
+  assert.ok(r.verdict.broken.includes("loading-hold"), JSON.stringify(r.verdict.broken));
+  assert.equal(r.run.saves.length, 0, "stopped at the hold, before the terminal save check");
+});
+
+test("R7-F2 (runner): after a backward sample time, a later valid 10% rise fails flatness and stops the dwell", async () => {
+  let clock = 0, settled = 0;
+  const memory = (v: number) => ({ rendererRssMiB: v, gpuRssMiB: 400, jsHeapAfterGcMiB: 120 });
+  const full = { name: "recorder-like-memory", sample: async (ctx: { afterGc?: boolean; at: number }) => {
+    clock += 300;
+    if (!ctx.afterGc) return { memory: memory(1000) };
+    settled++;
+    return { at: settled === 3 ? ctx.at - 450 : ctx.at, memory: memory(settled >= 4 ? 1100 : 1000) };
+  } };
+  let ticks = 0;
+  const tick = { name: "frames-and-save", sample: async () => ({ frames: { gaps: [16], records: [rec(16, { hold: "clear" })] }, lastSave: { savedAt: String(++ticks), tick: ticks } }) };
+  const deps = { env: {}, clock: () => clock, createProbe: P.createProbe, Blocked, openGame: async () => ({ renderer: "simulated", errors: [], close: async () => {} }),
+    // Bounded: a reducer that misses the rise must fail this test, not hang it (travel ends after two more readings).
+    read: async () => { if (settled >= 6) throw new Blocked("the test stops here"); return { cam: [0, 0, 0] }; }, goto: async () => true, releaseAll: async () => {}, exclude: async () => true, collectGarbage: async () => {},
+    saveAndCheck: async () => ({ ok: true }), providers: () => ({ full: [full], tick: [tick] }) };
+  const r = await S.runSoak({ ...opts("dwell"), tickMs: 5, sampleS: 0.005, gcEveryS: 0,
+    thresholds: { tour: G.DEFAULTS.tour, dwell: { ...G.DEFAULTS.dwell, autosaves: 100, warmupS: 0, autosaveMissingS: 1e9 } } }, deps);
+  assert.ok(r.facts.some((x: { t: string; settled?: boolean; memory?: { rendererRssMiB?: number } }) => x.t === "sample" && x.settled && x.memory?.rendererRssMiB === 1100));
+  assert.equal(r.verdict.status, "fail", JSON.stringify(r.verdict.rules));
+  assert.ok(r.verdict.broken.includes("memory-flat:rendererRssMiB"));
+  assert.equal(settled, 4, "stopped at the reading that proved it");
+});

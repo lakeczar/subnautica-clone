@@ -2,6 +2,43 @@
 
 Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 rule ("a job has a goal, not a time limit") and the 2a list in [DIRECTION](../DIRECTION.md), "Two test machines". SCHED-2b (the remote lane) and SAVE-1 follow after review. **Not installed:** the live queue still runs SCHED-1 `6824478b070f`; cut-over is below and waits for the coordinator.
 
+## R7 review responses: violation precedence everywhere, flatness after a backward time, an independent oracle
+
+Review: `7810194` on `review/sched-2a-soak-r7`, on `008ca104`: two P2s, and 3 of 6 reducer mutations evaded the property tests. Soak files only; `scripts/heavy` untouched.
+- **R7-F1, an unlisted rule's gap reserved its ID and hid its violation: fixed.** The reducer now judges every rule any fact names, the kind's own first, then any other a violation, gap or recording names, through one function with violation precedence. A gap or recording can never stop a rule from failing: both orders, listed or unlisted, before or after `end`.
+- **R7-F2, a backward timestamp stopped flatness checks: fixed.** Flatness compares each valid post-warm-up reading with the first, field by field, whatever the times do. The leak trend still needs monotonic times, so it is judged up to the first backward step and is otherwise left unproven (the gap is kept).
+- **Found by the strengthened properties**, both fixed:
+  - **A recording for a listed rule whose coverage the reducer derives was ignored.** For example, a `recorded` fact for `memory-growth:…` let it pass. Any gap or recording now leaves any rule unproven.
+  - **A checked save with `ok: false` passed** when no companion violation came with it (the loop always adds one; the reducer didn't need it to). The reducer now derives the failure from the save fact itself, and a non-boolean `ok` counts as missing evidence.
+- **Property-test strength** (`tests/soak-facts.test.ts`):
+  - **Violation dominance:** any explicit violation fact gives fail at every prefix that holds it, whatever its companions.
+  - **Fail exactly when proven:** at every prefix, `fail` holds exactly when an independent oracle proves a failure. The oracle has its own domains, its own growth arithmetic, its own graphics comparison and its own least-squares slope (the closed-sum formula, not the reducer's centred one). Values within 1e-6 of a limit are skipped as ambiguous.
+  - **Kept:** monotonicity, and pass soundness against the oracle's coverage rules.
+  - **Generators:**
+    - cross-kind and made-up rule IDs;
+    - a gap or recording companion before or after a violation;
+    - memory drift (0–120 MiB/h) and graphics growth per lap;
+    - a later 12% rise after a backward sample time;
+    - violations, gaps and recordings beyond `end`;
+    - failed and malformed saves;
+    - two dwell configurations (warm-up 0 or 120 s, window 300 or 600 s).
+
+    The tests assert that each derived failure kind is actually reached. The clean-biased generators add graphics leaks and slow leaks inside the flat band.
+  - **Mutants:** the reviewer's six, re-expressed for the new code, plus three more:
+    - flatness stopping at a backward time;
+    - recordings ignored;
+    - no derived save failure.
+
+    **All nine are killed by the property tests alone** (`/work/tmp/sched2/r7-mut/results.json`).
+- **The reviewer's reproductions are regressions:**
+  - R7-F1 at the reducer: every rule, companion, order and side of `end`, plus the late-hold dwell;
+  - R7-F1 through the real runner: a `loading` record beside a `null` one fails and stops the dwell before its save check;
+  - R7-F2 through the adapter: `60/360/300/660 s`, `1100 MiB` fails flatness, and the trend is unavailable;
+  - R7-F2 through the runner: a provider-timed backward sample, then the rise, fails and stops at that reading. It is bounded so that a regression fails rather than hangs.
+
+  All six, and both properties, fail on `008ca104`.
+- **Checks:** soak 42/42, three runs in a row; fast tier 1,370/1,370.
+
 ## R6 review responses: one verdict over append-only facts
 
 Review: `bf7bcb1` on `review/sched-2a-r6`, on `f91f0fc`: two P2s, both a later step overwriting or masking a measured failure. As the coordinator directed, the fix changes the harness's shape, not the two instances. Soak files only; `scripts/heavy` untouched.
