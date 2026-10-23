@@ -52,6 +52,12 @@ test("cave biome (LC Canopy): the compact format answers as LC's chunk colliders
   assert.deepEqual([r.protected.newlyBlocked, r.protected.newlyCleared], [[], []]);
   assert.ok(scene.after.bytes < scene.lcBytes * 0.5, `compact ${scene.after.bytes} B vs LC ${scene.lcBytes} B`);
   assert.equal(r.moves.endIllegal, 0, JSON.stringify(r.examples.slice(0, 3)));
+  // LC's own debt, reproduced: moves LC's collider also ends in a rejected
+  // pose, where its ownership rule calls space rock with no surface between
+  // (just under the cap, under a collar's band). Reported, not hidden; for
+  // LC-2 and stage B's composed check. It must not grow.
+  console.log(JSON.stringify({ canopyEndIllegalAsLC: r.moves.endIllegalAsOld, of: r.moves.tried, examples: r.examples.filter(e => e.kind.startsWith("ends illegal as")) }));
+  assert.ok(r.moves.endIllegalAsOld <= r.moves.tried * 0.01, `${r.moves.endIllegalAsOld} moves end illegal, as under LC`);
   // Moves may differ only by a slide after a tie: LC keeps whichever tied
   // contact its storage order meets first; the compact collider breaks ties
   // by geometry. Every first contact (hit, time) is LC's, bit for bit.

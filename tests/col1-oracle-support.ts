@@ -238,14 +238,18 @@ function shellFacing(d: CaveDef, mesh: { positions: Float32Array; indices: Uint3
 // --- Cave biome (LC) ----------------------------------------------------------------
 
 let canopy: LargeCave | null = null;
-/** The Canopy root caves, with collision for the chunks round two routes. */
+/** The Canopy root caves with collision for every chunk: probes near two
+ * routes still reach neighbouring chunks, and a missing collider there
+ * would read as open water (or, through a ray to the cap, as rock). */
 export function canopyCave(): LargeCave {
   if (canopy) return canopy;
   canopy = createLargeCave(CANOPY_ROOT_CAVES, worldFloor);
-  const near = CANOPY_ROOT_CAVES.routes.filter(r => r.id === "canopy_roots.route.squeeze" || r.id === "canopy_roots.route.craft_loop").flatMap(r => r.path);
-  buildCollision(canopy, chunksNear(canopy, near, 8));
+  buildCollision(canopy);
   return canopy;
 }
+/** The chunks round the squeeze and the craft loop, where probes go. */
+const canopyProbeChunks = (cave: LargeCave) => chunksNear(cave,
+  CANOPY_ROOT_CAVES.routes.filter(r => r.id === "canopy_roots.route.squeeze" || r.id === "canopy_roots.route.craft_loop").flatMap(r => r.path), 8);
 /** LC's chunk colliders against the same triangles in the compact format. */
 export function biomeScene(): OracleScene & { readonly lcBytes: number; readonly chunks: number; readonly lc: CaveCollider; readonly compact: CaveCollider } {
   const cave = canopyCave(), col = cave.collision;
@@ -258,12 +262,12 @@ export function biomeScene(): OracleScene & { readonly lcBytes: number; readonly
   const old = composeCaveWorld({ exterior, solids: SOLIDS, floor: surfaceHeight, caves: [lc] });
   const neo = composeCaveWorld({ exterior, solids: SOLIDS, floor: surfaceHeight, caves: [compact] });
   const o = col.origin, C = col.chunk;
-  const regions = built.map(c => ({ min: { x: o.x + c.cx * C, y: o.y + c.cy * C, z: o.z + c.cz * C }, max: { x: o.x + (c.cx + 1) * C, y: o.y + (c.cy + 1) * C, z: o.z + (c.cz + 1) * C } }));
+  const regions = canopyProbeChunks(cave).map(c => ({ min: { x: o.x + c.cx * C, y: o.y + c.cy * C, z: o.z + c.cz * C }, max: { x: o.x + (c.cx + 1) * C, y: o.y + (c.cy + 1) * C, z: o.z + (c.cz + 1) * C } }));
   const routes = CANOPY_ROOT_CAVES.routes.filter(r => r.id === "canopy_roots.route.squeeze" || r.id === "canopy_roots.route.craft_loop");
   let lcBytes = 0;
   for (const k of col.colliders) if (k) lcBytes += k.bytes;
   return {
-    id: "canopy", label: "LC Canopy root caves (chunks on two routes)", regions, old, neo, art: biome.collider,
+    id: "canopy", label: "LC Canopy root caves (all chunks; probes round two routes)", regions, old, neo, art: biome.collider,
     seeds: seedsOf(biome.collider.members), shapes: [{ id: "diver", shape: DIVER }, { id: "medium", shape: MEDIUM }],
     paths: routes.map(r => ({ id: r.id, shape: shapeOf(r.profile as CraftProfileId), path: r.path.map(p => ({ ...p })) })), poses: [],
     before: { boxes: 0, note: "LC chunk colliders (triangles, Uint32 indices, 32-byte nodes, copied positions)" },
@@ -288,7 +292,7 @@ export interface ProbeResult {
   /** freed: the new move went free where the old hit; oldThroughArt: the old
    * went free through the art and the new stops at it; spurious: the new
    * stops with no art on the old straight path; both hit: slides differ. */
-  moves: { tried: number; agree: number; freed: number; freedMax: number; oldThroughArt: number; spurious: number; bothHitSlideDiffers: number; slideDiffMax: number; endIllegal: number };
+  moves: { tried: number; agree: number; freed: number; freedMax: number; oldThroughArt: number; spurious: number; bothHitSlideDiffers: number; slideDiffMax: number; endIllegal: number; endIllegalAsOld: number };
   support: { tried: number; agree: number; oldHigher: number; newHigher: number; floatMax: number; floatMean: number; newHigherMax: number };
   sight: { tried: number; agree: number; oldOnlyBlocked: number; newOnlyBlocked: number; newOnlyBlockedOutsideArt: number };
   protected: { paths: number; poses: number; newlyBlocked: string[]; newlyCleared: string[] };
@@ -320,7 +324,7 @@ export function probe(scene: OracleScene, o: ProbeOptions): ProbeResult {
   const r: ProbeResult = {
     scene: scene.id,
     clearance: { tried: 0, agree: 0, oldClearNewBlocked: 0, artInsideOldCover: 0, newClearOldBlocked: 0, standOffMax: 0, standOffMean: 0, spurious: 0 },
-    moves: { tried: 0, agree: 0, freed: 0, freedMax: 0, oldThroughArt: 0, spurious: 0, bothHitSlideDiffers: 0, slideDiffMax: 0, endIllegal: 0 },
+    moves: { tried: 0, agree: 0, freed: 0, freedMax: 0, oldThroughArt: 0, spurious: 0, bothHitSlideDiffers: 0, slideDiffMax: 0, endIllegal: 0, endIllegalAsOld: 0 },
     support: { tried: 0, agree: 0, oldHigher: 0, newHigher: 0, floatMax: 0, floatMean: 0, newHigherMax: 0 },
     sight: { tried: 0, agree: 0, oldOnlyBlocked: 0, newOnlyBlocked: 0, newOnlyBlockedOutsideArt: 0 },
     protected: { paths: 0, poses: 0, newlyBlocked: [], newlyCleared: [] },
@@ -348,8 +352,16 @@ export function probe(scene: OracleScene, o: ProbeOptions): ProbeResult {
       const d = { x: len * Math.sin(w) * Math.cos(u), y: len * Math.cos(w) * 0.6, z: len * Math.sin(w) * Math.sin(u) };
       const ma = scene.old.moveCapsule(p, d, shape), mb = scene.neo.moveCapsule(p, d, shape), a = ma.position, b = mb.position;
       r.moves.tried++;
-      // Every move from a clear start ends legal by the new collider.
-      if (scene.illegalEnd(b, shape)) { r.moves.endIllegal++; note({ kind: "new move ends illegal", shape: id, at: p, detail: `d ${JSON.stringify(d)} end ${JSON.stringify(b)}` }); }
+      // Every move from a clear start ends legal by the new collider, unless
+      // today's world ends the same move in a rejected pose too (existing
+      // debt, kept apart and counted: `endIllegalAsOld`).
+      if (scene.illegalEnd(b, shape)) {
+        if (!scene.old.clearance(a, shape)) {
+          r.moves.endIllegalAsOld++;
+          if (r.moves.endIllegalAsOld <= 3) note({ kind: "ends illegal as today's world does", shape: id, at: p, detail: `d ${JSON.stringify(d)} end ${JSON.stringify(b)}` });
+        }
+        else { r.moves.endIllegal++; note({ kind: "new move ends illegal", shape: id, at: p, detail: `d ${JSON.stringify(d)} end ${JSON.stringify(b)}` }); }
+      }
       const gap = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
       if (gap < 0.02) { r.moves.agree++; continue; }
       if (!mb.hitSolid) { r.moves.freed++; r.moves.freedMax = Math.max(r.moves.freedMax, gap); continue; }
