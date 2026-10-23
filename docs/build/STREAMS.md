@@ -660,3 +660,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Docs:** the 4070 and remote-lane rules are documented.
   - **Evidence:** the gate passed 10/10 at 14136e8, npm test 1,410/1,410.
   - **Review:** Sol R2 running (`siltwake-stew1-review-r2-sol-d168cd6`).
+- **SIM-1 done at `3731a553`** (contract v2):
+  - **Built:** TimelineJournal, with a `{current, previous}` journal under `runExclusive`, conflict and abort, tri-state reads, v1 migration, quota drop-previous with an ID-free label; LiveTimeline, one per expedition entry; and a per-tab note outbox for close safety, an addition beyond the contract.
+  - **Deleted:** eviction, leases and the lock port.
+  - **Size:** store.ts 285 lines plus liveTimeline.ts 97.
+  - **Open gap:** no "replace protected timeline" action.
+  - **Review:** Sol R5 running (`siltwake-sim1-review-r5-sol-3731a55`), focused on the outbox and on contract conformance.
