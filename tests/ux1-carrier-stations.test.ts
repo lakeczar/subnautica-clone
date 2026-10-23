@@ -14,7 +14,7 @@ import { createWorldQueries } from "../src/sim/world.js";
 import type { GameCommand, GameEvent, GameState, Vec3, WorldQueries } from "../src/sim/types.js";
 import { HelmControl, HELM_LOOK, HELM_RUDDER } from "../src/runtime/helm.js";
 import { HELM_EYE, playerView } from "../src/render/camera.js";
-import { corridorDrawing, corridorLines } from "../src/render/fleet/corridor.js";
+import { corridorDrawing, corridorLines } from "../src/render/corridorView.js";
 import { helmGuidance, helmReading, HELM_CONTROLS } from "../src/ui/helmHud.js";
 import { PanelView } from "../src/ui/panels.js";
 

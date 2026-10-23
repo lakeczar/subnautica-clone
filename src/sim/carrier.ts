@@ -139,6 +139,12 @@ export function carrierTransferPath(s: GameState, v: VehicleState, slot: 0 | 1, 
  * structure or berthed craft, the seabed and rock, or another craft in the water. */
 export type TransferBlock = "test" | "structure" | "terrain" | "craft";
 
+/** The craft's rail-aligned envelope as a world-axis box at the carrier's yaw. */
+function worldEnvelope(shape: Capsule, yaw: number): Capsule {
+  const cos = Math.abs(Math.cos(yaw)), sin = Math.abs(Math.sin(yaw));
+  const rx = shape.halfWidth ?? shape.radius, rz = shape.halfLength ?? shape.radius;
+  return { ...shape, halfWidth: rx * cos + rz * sin, halfLength: rx * sin + rz * cos };
+}
 /** The lock corridor runs forward and down out of the gate under the bow, to the
  * launch point 17 m ahead of the keel datum and 3 m below it. */
 export function transferBlock(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture", world: WorldQueries,
@@ -159,9 +165,7 @@ export function transferBlock(s: GameState, v: VehicleState, slot: 0 | 1, type: 
     if (a.id !== v.id && a.berth?.carrierId === h.id)
       structure.push(envelopeSolid(`berth.${a.id}`, a.berth.pose.position, transferEnvelope(a)));
   const localWorld = createWorldQueries(structure, () => -200);
-  const cos = Math.abs(Math.cos(h.pose.yaw)), sin = Math.abs(Math.sin(h.pose.yaw));
-  const rx = shape.halfWidth ?? shape.radius, rz = shape.halfLength ?? shape.radius;
-  const worldShape = { ...shape, halfWidth: rx * cos + rz * sin, halfLength: rx * sin + rz * cos };
+  const worldShape = worldEnvelope(shape, h.pose.yaw);
   const obstacles = s.fleet.vehicles.filter((a) => a.id !== v.id && a.id !== h.id && !a.berth)
     .map((a) => envelopeSolid(`craft.${a.id}`, a.pose.position, HULL_COLLIDERS[a.hull]));
   // Other craft only, in world coordinates: no floor of its own (the composed world
@@ -184,9 +188,11 @@ export function transferBlock(s: GameState, v: VehicleState, slot: 0 | 1, type: 
 export function corridorRemedy(s: GameState, v: VehicleState, world: WorldQueries): { turn: number } | { rise: number } | null {
   const h = carrierHull(s), slot = v.berth?.slot;
   if (!h || slot === undefined) return null;
+  // Only the world leg depends on the pose: the carrier's own structure and
+  // other craft are separate refusals with their own advice.
   const at = (yaw: number, y: number): boolean => {
     const copy = { ...h, pose: { ...h.pose, yaw: ((yaw % TAU) + TAU) % TAU, position: { ...h.pose.position, y } } };
-    return transferBlock(s, v, slot, "launch", world, copy) !== "terrain";
+    return sweptHullClearance(world, carrierTransferPath(s, v, slot, "launch", copy), worldEnvelope(transferEnvelope(v), copy.pose.yaw));
   };
   const step = Math.PI / 36;
   for (let n = 1; n <= 36; n++)
