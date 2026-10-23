@@ -39,22 +39,42 @@ H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 
 **Heavy** means render/NullEngine tests, `npm run test:heavy`, playthroughs, terrain bake or `--verify`, GPU browser sessions, and anything that needs more than about 1 GiB or 2 cores. **Light** work runs directly, outside the queue: `npm test`, typecheck, compiles (`npm run test:build`, `npx tsc -p scripts/playthrough/tsconfig.json`), a warm `npm run build` and focused non-render tests. Never wrap `npm run test:heavy`, `build` or a typecheck in `$H`: `test:heavy` already queues itself.
 
-**Pick a class.** Each class has a reservation and a maximum run time:
+**A job has a goal, not a time limit** (owner, 2026-10-23; SCHED-2). It runs until its command ends. The queue stops it only when:
+- it **stalls**: nothing written to its output, and no touch of `$SILTWAKE_JOB_HEARTBEAT`, for the stall window (exit **123**, `stalled: no output for N min`, with what its processes were doing). A job that is legitimately quiet for long stretches touches the heartbeat file or passes `--stall S`;
+- it reaches a `--deadline S` that you chose (exit **124**, `deadline`);
+- it reaches its class's **runaway ceiling**, hours away (exit **124**, `runaway ceiling`).
 
-| Class | For | Reservation, max run |
-| --- | --- | --- |
-| `quick` | focused review checks, 1–3 heavy files, smokes | 1 cpu, 2 GiB, 10 min; may use the express slot |
-| `standard` (default) | anything else | 2 cpu, 3 GiB, 20 min |
-| `heavy-suite` | `npm run test:heavy` (already labelled) | 2–3 cpu, 3 GiB, 25 min |
-| `gpu` | task-owned GPU Chrome play, screenshots, functional GPU checks | 2 cpu, 3 GiB, the GPU lease, 25 min |
-| `playthrough` | the compiled playthrough (`--jobs` follows the grant) | 2–3 cpu, 2 GiB, 30 min |
-| `bake` | cold terrain bake, `bake-terrain --verify` | 2 cpu, 3 GiB, 15 min |
-| `exclusive` | frame-time and perf numbers, the large-cave lab bake, known-huge jobs | the whole lane and the GPU, 30 min |
+**Exclusive keeps a real 30-minute cap,** because it blocks everything.
+
+**Pick a class.** Each class has a reservation, a stall window and a ceiling:
+
+| Class | For | Reservation | Stall window, ceiling |
+| --- | --- | --- | --- |
+| `quick` | focused review checks, 1–3 heavy files, smokes | 1 cpu, 2 GiB; may use the express slot | 10 min, 2 h |
+| `standard` (default) | anything else | 2 cpu, 3 GiB | 15 min, 4 h |
+| `heavy-suite` | `npm run test:heavy` (already labelled) | 2–3 cpu, 3 GiB | 15 min, 4 h |
+| `gpu` | task-owned GPU Chrome play, screenshots, functional GPU checks | 2 cpu, 3 GiB, the GPU lease | 15 min, 4 h |
+| `playthrough` | the compiled playthrough (`--jobs` follows the grant) | 2–3 cpu, 2 GiB | 15 min, 6 h |
+| `bake` | cold terrain bake, `bake-terrain --verify` | 2 cpu, 3 GiB | 15 min, 2 h |
+| `soak` | long memory and streaming soaks (2–4 h sessions, ended by their goal) | idle CPU (no pool token), 3 GiB; `--gpu` adds the GPU lease | 15 min, 6 h |
+| `exclusive` | frame-time and perf numbers, the large-cave lab bake, known-huge jobs | the whole lane and the GPU | 10 min, **30 min cap** |
+
+**Exclusive is one measurement per ticket.** Submit each segment of a series (traversal segments, A/B variants) as its own ticket, all at once if you like; don't loop over them inside one job. After each exclusive run, the jobs that waited through it start before the next exclusive drains the lane (blocked reason `turn`), so a series never locks everyone else out.
+
+**Soaks take only leftover capacity:**
+- A soak starts only when nothing else is waiting. It never ages, and it never takes the express slot or the 10-minute reservation.
+- Its CPU runs at idle weight, so it never slows other jobs.
+- **Yielding:** when its memory or GPU is what keeps a waiting job out, `$SILTWAKE_JOB_YIELD` appears. A soak driver should then write its final sample and exit (`scripts/soak/run.mjs` reports `yielded` and exits 75). Five minutes later the soak is stopped anyway (exit **75**, `preempted`). Soak goals and pass rules: `scripts/soak/` (SCHED-2). A soak reports `pass` only when its goal is met *and* every rule was measured. If something couldn't be measured, such as frame times on a shared run, a build without streaming attribution, or a failed provider, it reports `partial` (exit 5), with the unmeasured rules listed.
+- Long soaks belong on quiet periods, or on the second worker (SCHED-2b).
 
 Options:
 - `--review`: Sol reviews and the coordinator's composed gate.
-- `--deadline S`: clamped to the class maximum.
+- `--stall S`: the stall window, at least 60 s.
+- `--deadline S`: a hard limit of your own, up to the ceiling (exclusive: the cap).
 - `--mem 4G` and `--cpus N`: up to the class maximum.
+- `--snapshot`: run on a private copy of the tree as submitted, so you can keep editing while the ticket waits and runs (below). In package scripts that queue themselves (`test:heavy`), set `HEAVY_SNAPSHOT=1`.
+- `--gpu`: for `soak` only.
+- `--no-test-build`: this job never reads the worktree's `.test-build` (GPU play from `dist`), so `npm test` there stays allowed while it runs.
 
 Commands that `heavy-check` recognises (a playthrough, the heavy tier, the terrain bake, the large-cave lab bake) get their class without `--class`.
 
@@ -79,9 +99,17 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
 - **A job runs detached.** A tool timeout or a killed call never loses it or its place in the queue.
 - **Repeats join the same ticket.** Running the same command again from the same worktree, with the tree unchanged, joins the existing ticket.
 - **One job per worktree runs at a time.**
-- **Watching and stopping.** `$H status` shows the queue and why each ticket waits (`cpu`, `memory`, `gpu`, `head`, `worktree`, `exclusive`, `lane`, `legacy` or `host-memory`). `$H cancel T` stops a ticket; cancel only your own.
-- **Commit before submitting** anything that will serve as handoff or review evidence. The final line prints the tested `HEAD` (plus a dirty hash) and warns if the tree changed between submit and admission.
-- **`.test-build` is in use while your job runs.** While a heavy job runs in your worktree, `npm test` and `npm run test:build` there refuse to rebuild `.test-build`, because the job is running those files. Wait, or edit in another worktree. The job itself may rebuild.
+- **Watching and stopping.** `$H status` shows the queue and why each ticket waits (`cpu`, `memory`, `gpu`, `head`, `worktree`, `exclusive`, `lane`, `turn`, `leftover`, `legacy` or `host-memory`), the live slice limits, and any GPU use outside the lease. `$H cancel T` stops a ticket; cancel only your own.
+- **Evidence is bound to a commit.** The final line says either `evidence for <sha>` or `NOT evidence for a commit: <why>` (uncommitted changes, or the worktree changed while the job ran). Commit before submitting anything that will serve as handoff or review evidence.
+- **A changed worktree is rejected, not silently tested** (exit **3**). If the tree (HEAD, tracked changes or untracked files) changed between submit and admission, the command does not run. Either don't edit that worktree while your ticket waits, or submit with `--snapshot`: the job then runs on a copy of the tree as submitted (about 0.3 s to make; `node_modules` is linked).
+  - A snapshot has no ignored build outputs, so the job compiles inside it. Package scripts like `npm run playthrough` and `test:heavy` already do; the terrain bake restores from the shared store.
+  - Write artifacts to absolute paths (`/work/tmp/...`). A snapshot the job wrote into is kept beside the job's log for 7 days.
+- **`.test-build` is in use while your job runs.** While a heavy job is *running* (admitted) in your worktree, `npm test` and `npm run test:build` there refuse to rebuild `.test-build`, because the job may be running those files; a *queued* ticket never blocks. The refusal names the ticket. Meanwhile:
+  - compile and test in a sibling directory: `SILTWAKE_TEST_BUILD=.test-build-2 npm test` (any `.test-build-<name>`; the first build is cold, then incremental; git ignores it);
+  - a heavy job submitted with `SILTWAKE_TEST_BUILD` set protects that directory instead;
+  - submit jobs that never read `.test-build`, such as GPU play from `dist`, with `--no-test-build`, or use `--snapshot`: neither takes the worktree's `.test-build`.
+
+  The job itself may rebuild.
 - **Playthroughs:** compile first, then queue only the run:
 
   ```sh
@@ -90,19 +118,25 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
   ```
 
   While iterating, run only the affected scenarios; run all five at handoff.
-- **New GPU drivers** call `requireGpuLease()` from `scripts/heavy/gpu-lease.mjs` before launching Chrome.
+- **The GPU lease covers every GPU driver.** Every Playwright Chrome on this machine is wrapped (`install.sh --gpu-guard`; the guard has its own install, so rolling the scheduler back or uninstalling it leaves the guard enforcing, and a missing guard refuses GPU launches): a launch that asks for the GPU (`--use-angle=gl-egl`, `--use-gl=…`, `--enable-gpu`, `--ignore-gpu-blocklist`, Vulkan) refuses to start unless it runs inside a `gpu`, `exclusive` or `soak --gpu` job. Software (SwiftShader) launches pass. Drivers may also call `requireGpuLease()` from `scripts/heavy/gpu-lease.mjs` for an earlier, clearer error.
+  - **Outside the queue:** any process holding the NVIDIA device without a lease is shown by `status`, recorded in the ledger (`unleased-gpu`) and on any GPU job that shared the GPU with it. An exclusive run that shared the GPU is marked `DISTURBED`.
+- **Machine-readable results:** `wait --json` ends with one JSON line: `{"pending":true,…}`, or the full result with `code`, `label`, `stopReason` (`stalled`, `deadline`, `ceiling`, `oom`, `killed`, `cancelled`, `preempted`, `rejected` or null) and `evidence`. Use it to tell a pending `99` from a job's own.
 
 **Exit codes:**
 - the job's own code;
-- **124**: the deadline passed;
-- **137**: OOM or killed. An OOM message names the class and reservation: rerun with `--class exclusive` or more `--mem`, and never just retry;
-- **75**: cancelled, or expired after the 2-hour queue limit (`--queue-timeout`);
+- **123**: stalled (no output and no heartbeat for the stall window);
+- **124**: your deadline, or the class's runaway ceiling (exclusive: the cap);
+- **137**: OOM or killed. An OOM message names the class and reservation: rerun with `--class exclusive` or more `--mem`, and never just retry. If no observer could read a counter, the result lists it under `unavailable` instead of reporting 0;
+- **75**: cancelled, expired after the 2-hour queue limit (`--queue-timeout`), or a soak preempted for waiting work;
+- **3**: rejected: the worktree changed before admission (resubmit, or use `--snapshot`);
 - **99**: still pending (`wait` only);
 - **2**: a usage error or a request that can never fit.
 
 ### Operating it (coordinator)
 
-State lives in `/work/tmp/siltwake-sched/` (the queue, `ledger.jsonl` and per-job logs under `jobs/`). The code is installed to `~/.local/share/siltwake-sched/current` by `scripts/heavy/install.sh`. Rollback is `echo serial > /work/tmp/siltwake-sched/mode`, which makes every job exclusive, as before. `scripts/heavy/install.sh --uninstall` puts every shim back on the v1 lock. Never delete or recreate `/work/tmp/siltwake-heavy-check.lock`: each v2 job holds it shared, through its holder and an anchor inside the job's own scope, until that cgroup is gone, so old v1 copies of the script still exclude them. During the cut-over, v1 goes first: any v1 holder or waiter pauses all v2 admissions. A finite v1 backlog drains, but a continuous one can hold v2 tickets until their queue timeout, so move callers to the shim promptly. Light checks of the scheduler itself (no systemd) are in `tests/heavy-sched-policy.test.ts`. Its acceptance tests are `node --test --test-concurrency=1 scripts/heavy/acceptance.test.mjs`, which uses private state only.
+State lives in `/work/tmp/siltwake-sched/` (the queue, `ledger.jsonl` and per-job logs under `jobs/`). The code is installed to `~/.local/share/siltwake-sched/current` by `scripts/heavy/install.sh`. Rollback is `echo serial > /work/tmp/siltwake-sched/mode`, which makes every job exclusive, as before. `scripts/heavy/install.sh --uninstall` puts every shim back on the v1 lock. Never delete or recreate `/work/tmp/siltwake-heavy-check.lock`: each v2 job holds it shared, through its holder and an anchor inside the job's own scope, until that cgroup is gone, so old v1 copies of the script still exclude them. During the cut-over, v1 goes first: any v1 holder or waiter pauses all v2 admissions. A finite v1 backlog drains, but a continuous one can hold v2 tickets until their queue timeout, so move callers to the shim promptly. Tuning lives in `/work/tmp/siltwake-sched/config.json` (read on every admission): `ceilings` (`{"playthrough": 21600}`), `stalls` (a class's default stall window, e.g. `{"playthrough": 2700}` while worktrees without the playthrough heartbeat remain), `soakYieldS` (300), `soakSlots` (1) and `poolMiB`. The GPU guard is `scripts/heavy/install.sh --gpu-guard` (re-run after `npx playwright install`; `--gpu-guard-remove` undoes it).
+
+Light checks of the scheduler itself (no systemd) are in `tests/heavy-sched-policy.test.ts`. Its acceptance tests use private state only: `node --test --test-concurrency=1 scripts/heavy/acceptance.test.mjs` (SCHED-1) and `scripts/heavy/acceptance-sched2.test.mjs` (SCHED-2).
 
 ## Second worker: siltwake-alickers (best-effort, added 2026-10-23)
 
