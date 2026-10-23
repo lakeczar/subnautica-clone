@@ -175,3 +175,11 @@ export function launchCorridorView(s: GameState, world: WorldQueries): CorridorS
   return memo!.status;
 }
 let memo: { structure: string; pose: string; tick: number; world: WorldQueries; status: CorridorStatus | null } | null = null;
+/** A paused decision (the console) or a new session needs the exact status: recompute
+ * now and share it with the HUD and the drawn corridor. */
+export function launchCorridorNow(s: GameState, world: WorldQueries): CorridorStatus | null {
+  memo = null;
+  return launchCorridorView(s, world);
+}
+/** Drop the cached status (a new or replaced expedition). */
+export function forgetCorridorView(): void { memo = null; }

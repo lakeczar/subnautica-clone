@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import {
   BERTH_LOCAL, CARRIER_LAYOUT, carrierCommand, carrierHull, corridorRemedy, fixtureGame, launchPoint, localToWorld, updateBerth,
 } from "../src/sim/carrier.js";
-import { aboardCarrier, atCarrierHelm, CARRIER_STATIONS, carrierInteractions, launchCorridor } from "../src/sim/carrierStations.js";
+import { aboardCarrier, atCarrierHelm, CARRIER_STATIONS, carrierInteractions, launchCorridor, launchCorridorNow, launchCorridorView } from "../src/sim/carrierStations.js";
 import { interactions } from "../src/sim/progression.js";
 import { aimedInteraction } from "../src/sim/targeting.js";
 import { executeCommand, stepGame } from "../src/sim/step.js";
@@ -297,4 +297,66 @@ test("loading a save starts the helm view level, not where the last session's he
   const loaded = structuredClone(s); loaded.tick += 5000;
   helm.apply(loaded, [{ type: "look", yawDelta: 0, pitchDelta: 0 }]);
   assert.deepEqual(helm.look, { yaw: 0, pitch: 0 });
+});
+
+/** One fixed step through the real helm controller, as the app runs it. */
+function helmStep(helm: HelmControl, s: GameState, move: Partial<Extract<GameCommand, { type: "move" }>> = {}, world: WorldQueries = open): GameState {
+  return stepGame(s, helm.apply(s, [{ type: "look", yawDelta: 0, pitchDelta: 0 },
+    { type: "move", forward: 0, right: 0, vertical: 0, sprint: false, ...move }]), world).state;
+}
+
+test("R1: full rudder, then Hold and Launch: the heading holds and the launch completes", () => {
+  let s = atHelm();
+  const helm = new HelmControl(), dart = s.fleet.vehicles.find((v) => v.hull === "dart")!;
+  for (let i = 0; i < 60; i++) s = helmStep(helm, s, { right: 1 });
+  assert.equal(carrierCommand(s, "station-keep", undefined, open), null);
+  assert.equal(carrierCommand(s, "launch", dart.id, open), null);
+  const held = carrierHull(s)!.pose.yaw;
+  for (let i = 0; i < 40; i++) s = helmStep(helm, s);
+  assert.equal(carrierHull(s)!.pose.yaw, held, "no retained rudder turns a held hull");
+  assert.equal(s.fleet.vehicles.find((v) => v.id === dart.id)!.berth, null, "the launch completed");
+});
+
+test("R1: A/D during a lock cycle neither turn the hull nor take the helm back; head look still works", () => {
+  let s = atHelm();
+  const helm = new HelmControl(), dart = s.fleet.vehicles.find((v) => v.hull === "dart")!;
+  assert.equal(carrierCommand(s, "station-keep", undefined, open), null);
+  assert.equal(carrierCommand(s, "launch", dart.id, open), null);
+  const held = carrierHull(s)!.pose.yaw;
+  for (let i = 0; s.fleet.docking!.transaction; i++) {
+    assert.ok(i < 60, "the lock cycle ends");
+    const out = helm.apply(s, [{ type: "look", yawDelta: 0.01, pitchDelta: 0 }, { type: "move", forward: 0, right: i % 2 ? 1 : -1, vertical: 0, sprint: false }]);
+    assert.ok(!out.some((c) => c.type === "carrier"), "no helm release during the cycle");
+    s = stepGame(s, out, open).state;
+  }
+  assert.equal(carrierHull(s)!.pose.yaw, held);
+  assert.ok(helm.look.yaw > 0.3, "the head look moved");
+  assert.equal(s.fleet.vehicles.find((v) => v.id === dart.id)!.berth, null, "the launch completed");
+  assert.equal(s.fleet.docking!.stationKeeping, true);
+});
+
+test("taking the helm from a console facing elsewhere keeps the carrier's heading", () => {
+  const s = aboard({ x: 4.6, y: 4, z: -5.2 }, CARRIER_STATIONS["carrier:stores"].center);
+  const heading = carrierHull(s)!.pose.yaw;
+  assert.ok(Math.abs(s.player.pose.yaw - heading) > 0.5, "the player faces the lock console, not ahead");
+  assert.equal(carrierCommand(s, "helm", undefined, open), null);
+  const after = stepGame(s, [{ type: "move", forward: 0, right: 0, vertical: 0, sprint: false }], open).state;
+  assert.ok(Math.abs(carrierHull(after)!.pose.yaw - heading) < 1e-12, "no swing to the player's old view");
+  assert.ok(Math.abs(after.player.pose.yaw - heading) < 1e-12);
+});
+
+test("the cached corridor refreshes within a second under way; the console's exact query refreshes at once", () => {
+  const s = atHelm(), world = rockWorld(s), h = carrierHull(s)!, dart = s.fleet.vehicles.find((v) => v.hull === "dart")!;
+  assert.equal(launchCorridorNow(s, world)!.clear, false);
+  const remedy = corridorRemedy(s, dart, world) as { turn: number };
+  h.pose.yaw = remedy.turn; updateBerth(s, world);
+  s.tick += 30;
+  assert.equal(launchCorridorView(s, world)!.clear, false, "half a second on, the cache still holds");
+  s.tick += 31;
+  assert.equal(launchCorridorView(s, world)!.clear, true, "past a second, it refreshes");
+  // Back to blocked, and a paused console (no ticks) asks exactly.
+  h.pose.yaw = 0; updateBerth(s, world);
+  assert.equal(launchCorridorView(s, world)!.clear, true, "the cache is stale");
+  assert.equal(launchCorridorNow(s, world)!.clear, false, "the console's exact query is not");
+  assert.equal(launchCorridorView(s, world)!.clear, false, "and the HUD shares it");
 });

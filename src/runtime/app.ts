@@ -15,6 +15,7 @@ import { createRenderer } from "../render/renderer.js";
 import type { GameRenderer, Quality } from "../render/renderer.js";
 import { PlayerInput, controlHasFocus, textEntryHasFocus, deliberateExit } from "./input.js";
 import { HelmControl } from "./helm.js";
+import { forgetCorridorView } from "../sim/carrierStations.js";
 import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
 import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY } from "../sim/timeline/recorder.js";
@@ -504,6 +505,9 @@ export class SiltwakeApp {
     this.resolutionPhase = this.state?.story.resolution.phase ?? null;
     this.resetAscent();
     this.cancelGesture();
+    // UX-1: a replaced session inherits no head look or rudder, before its first frame.
+    this.helm.clear();
+    forgetCorridorView();
     this.view.resetPresentation();
     if (this.state) this.view.update(this.state, false);
     const automatically = this.entryCanResume;

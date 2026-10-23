@@ -6,7 +6,7 @@
  * command would give. Developer tools appear only with `?dev`. */
 import { HULLS } from "../content/registry.js";
 import { captureApproach, carrierCommand, carrierHull, carrierInReach, launchPoint, localToWorld, CARRIER_LAYOUT } from "../sim/carrier.js";
-import { aboardCarrier, atCarrierHelm, carrierSpeed, HOLD_SPEED, launchCorridorView } from "../sim/carrierStations.js";
+import { aboardCarrier, atCarrierHelm, carrierSpeed, HOLD_SPEED, launchCorridorNow } from "../sim/carrierStations.js";
 import { distance, usedCapacity } from "../sim/inventory.js";
 import type { GameCommand, GameState, VehicleState, WorldQueries } from "../sim/types.js";
 import { escapeHtml, heading } from "./format.js";
@@ -69,7 +69,8 @@ export function carrierPanel(state: GameState, world: WorldQueries, button: Comm
   if (d.transaction) here.push(act("Stop the lock cycle", "interrupt"));
   html += `<div class="service-actions carrier-here">${here.join("")}</div>`;
   // The lock corridor, as the helm and the drawn corridor show it.
-  const corridor = launchCorridorView(state, world);
+  // The console is a paused decision beside exact dry-run buttons: an exact status, not the cached one.
+  const corridor = launchCorridorNow(state, world);
   if (corridor) html += `<p class="carrier-corridor ${corridor.clear ? "clear" : "blocked"}">${escapeHtml(corridor.advice)}</p>`;
   // A launch refused only for station keeping still names an obstructed corridor: that is the next thing to fix.
   const launch = (v: VehicleState): string => {
