@@ -374,3 +374,11 @@ Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the f
 
 ### 2026-10-22 22:20Z — VM back with 8 vCPU; builders resumed
 `nproc` is 8, about 15 GiB is visible, and the 3090 is OK. SCHED-1, CW-1, CR-1 and TT-1 are resumed through new tracked thread-send tasks, so their wakes work again. The fifth slot is held: OP-1 waits for CW-1 (shared island and cave streaming), and the `stepGame` speed-up waits for CR-1 and SCHED-1 (`step.ts` overlap).
+
+### 2026-10-23 — TT-1 merged
+- **Review:** TT-1 was accepted by Sol R3 (`review/tt-1-r3` `267bd0b`) after R1 Fix and R2 Fix.
+- **Merged into root:** fast tests pass 1,264/1,264 in 79 s from a cold cache; the build is OK.
+- **Effect:** `npm test` takes about 1 minute; the heavy tier runs 59 files, 440 tests, in about 5 minutes, with per-file cgroups.
+- **Follow-up:** apply `docs/build/streams/sched1/tt1-test-build-guard.patch` when SCHED-1 merges.
+- **CW-1 and CR-1** must merge root before handoff: TT-1 moved tests out of their files into `*.heavy.test.ts` and `*-support.ts`.
+- **SCHED-1:** in Sol R4 at `8759122`.
