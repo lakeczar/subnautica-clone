@@ -4,6 +4,7 @@
 // locker), then the Dart flown out to the head of the authored Reef → Canopy route.
 // No phase is replayed here; a missing or incompatible library save refuses loudly.
 const B = process.env.B ?? "/home/worker/.t3/worktrees/subnautica-clone/t3-208fe0c1/.test-build/";
+const OUT = process.env.OUT ?? "/work/tmp/enc1/saves";
 const fs = await import("node:fs");
 const { Driver } = await import(B + "scripts/playthrough/driver.js");
 const { boardAt } = await import(B + "scripts/playthrough/live.js");
@@ -20,7 +21,7 @@ reach(d, dart.id); boardAt(d, dart); fly(d, "dart_out");
 const v = d.vehicle("dart");
 const save = (name, state) => { const e = encodeSave(createEnvelope(state, { sessionId: "enc1-gpu-play", createdAt: "2026-10-21T00:00:00.000Z",
   savedAt: new Date(Date.parse("2026-10-21T00:00:00.000Z") + state.tick * 1000 / 60).toISOString() }));
-  if (!e.ok) throw new Error(e.error); fs.mkdirSync("/work/tmp/enc1/saves", { recursive: true }); fs.writeFileSync(`/work/tmp/enc1/saves/${name}.json`, e.value);
+  if (!e.ok) throw new Error(e.error); fs.mkdirSync(OUT, { recursive: true }); fs.writeFileSync(`${OUT}/${name}.json`, e.value);
   console.log(name, JSON.stringify(v.pose.position), "yaw", v.pose.yaw.toFixed(3), "hull", v.health.toFixed(1), "charge", v.charge.toFixed(1),
     "lamp", state.player.lamp, "cells", state.inventory.items.filter((i) => i.kind === "reserve_cell").map((i) => i.containerId).join(",")); };
 save("canopy-head", d.state);

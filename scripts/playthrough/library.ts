@@ -178,12 +178,13 @@ function versionCompatibility(m: Manifest): Compatibility | string {
 export function pickSave(kind: string, o: PickOptions = {}): Picked {
   const root = libraryRoot(o.root), git = o.git ?? gitPort();
   const target = git.resolve(o.commit ?? "HEAD");
-  const known = new Set([...KINDS.map((k) => k.kind)]);
+  const known = KINDS.map((k) => k.kind);
   const { manifests, rejected: unreadable } = readLibrary(root);
   const holding = manifests.filter((m) => m.saves.some((e) => e.kinds.includes(kind)));
   if (!holding.length) {
-    for (const m of manifests) for (const e of m.saves) for (const k of e.kinds) known.add(k);
-    throw new LibraryRefusal(`No save of kind "${kind}" in the library at ${root}. Known kinds: ${[...known].join(", ")}.`, unreadable);
+    const own = new Set(manifests.flatMap((m) => m.saves.map((e) => e.scenario)));
+    throw new LibraryRefusal(`No save of kind "${kind}" in the library at ${root}. Known kinds: ${[...known].join(", ")}; ` +
+      `and every save as scenario@label (scenarios here: ${[...own].join(", ") || "none"}; saves.js list).`, unreadable);
   }
   const rejected: Rejected[] = [...unreadable], ok: { m: Manifest; distance: number; compatibility: Compatibility }[] = [];
   for (const m of holding) {
