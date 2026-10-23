@@ -10,6 +10,10 @@
 #   scripts/heavy/install.sh --slice         also install the user slice unit
 #                                            (per-user config: coordinator approval)
 #   scripts/heavy/install.sh --uninstall     remove `current`: every shim falls back to v1
+#   scripts/heavy/install.sh --gpu-guard     wrap every Playwright Chrome binary so a GPU
+#                                            launch needs the GPU lease (chrome-guard.sh);
+#                                            per-user change: coordinator approval
+#   scripts/heavy/install.sh --gpu-guard-remove   put the real binaries back
 #
 # Idempotent. Installed versions are immutable, so running supervisors keep
 # their own code while `current` moves.
@@ -18,15 +22,28 @@ src=$(cd "$(dirname "$0")" && pwd)
 home="${SILTWAKE_SCHED_HOME:-$HOME/.local/share/siltwake-sched}"
 dir="${SILTWAKE_SCHED_DIR:-/work/tmp/siltwake-sched}"
 slice_name="${SILTWAKE_SCHED_SLICE:-siltwake-heavy.slice}"
-mode="" slice=0 uninstall=0
+pw="${SILTWAKE_PLAYWRIGHT_DIR:-$HOME/.cache/ms-playwright}"
+mode="" slice=0 uninstall=0 guard=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode) mode="$2"; shift 2 ;;
     --slice) slice=1; shift ;;
     --uninstall) uninstall=1; shift ;;
-    *) echo "usage: $0 [--mode serial|normal] [--slice] [--uninstall]" >&2; exit 2 ;;
+    --gpu-guard) guard=on; shift ;;
+    --gpu-guard-remove) guard=off; shift ;;
+    *) echo "usage: $0 [--mode serial|normal] [--slice] [--gpu-guard|--gpu-guard-remove] [--uninstall]" >&2; exit 2 ;;
   esac
 done
+
+# Playwright's Chrome binaries (full and headless shell), real ELF files or
+# ones already wrapped.
+browsers() {
+  find "$pw" -maxdepth 3 -type f \( -name chrome -o -name chrome-headless-shell -o -name headless_shell \) -path "$pw/chromium*" 2>/dev/null
+}
+if [[ $guard == off ]]; then
+  for b in $(browsers); do [[ -f "$b.siltwake-real" ]] && mv -f "$b.siltwake-real" "$b" && echo "unwrapped $b"; done
+  exit 0
+fi
 
 if [[ $uninstall == 1 ]]; then
   rm -f "$home/current"
@@ -34,7 +51,7 @@ if [[ $uninstall == 1 ]]; then
   exit 0
 fi
 
-files=(policy.mjs state.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs)
+files=(policy.mjs state.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh)
 version=$(cd "$src" && cat "${files[@]}" | sha256sum | cut -c1-12)
 if [[ ! -d "$home/$version" ]]; then
   [[ -d "$home/$version.tmp" ]] && chmod -R u+w "$home/$version.tmp" && rm -rf "$home/$version.tmp"
@@ -78,6 +95,29 @@ EOF
     c.manageSlice = true;
     fs.writeFileSync(p + ".tmp", JSON.stringify(c, null, 1)); fs.renameSync(p + ".tmp", p);
   ' "$dir/config.json"
+fi
+
+if [[ $guard == on ]]; then
+  # The wrapper takes the binary's place atomically: the real file gets a
+  # second name (a hard link, same inode), then the wrapper is renamed over the
+  # original name, so a concurrent launch always finds one or the other.
+  # Running browsers are unaffected. Re-run after `npx playwright install`.
+  for b in $(browsers); do
+    if [[ ! -f "$b.siltwake-real" ]]; then
+      [[ "$(head -c4 "$b" | od -An -c | tr -d ' ')" == '177ELF' ]] || { echo "skipping $b: not an ELF binary" >&2; continue; }
+      ln "$b" "$b.siltwake-real"
+    fi
+    {
+      echo '#!/bin/sh'
+      echo '# Siltwake GPU lease guard (scripts/heavy/install.sh --gpu-guard). The real'
+      echo '# binary is $0.siltwake-real; install.sh --gpu-guard-remove puts it back.'
+      echo "g=$home/current/chrome-guard.sh"
+      echo '[ -f "$g" ] && exec sh "$g" "$0.siltwake-real" "$@"'
+      echo 'exec "$0.siltwake-real" "$@"'
+    } >"$b.siltwake-tmp"
+    chmod 755 "$b.siltwake-tmp" && mv -f "$b.siltwake-tmp" "$b"
+    echo "wrapped $b"
+  done
 fi
 
 echo "heavy-check v2 $version installed at $home/current; state $dir; mode $(cat "$dir/mode")$([[ $slice == 1 ]] && echo "; slice $slice_name installed")"

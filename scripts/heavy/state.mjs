@@ -9,7 +9,7 @@
 // drops it if this process dies. The legacy bridge holds the v1 lock file the
 // same way, for the length of a job.
 import { spawnSync } from "node:child_process";
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
@@ -188,9 +188,12 @@ const parentOf = (pid) => {
  * rather than at the end of a stop grace (anchor.sh). The anchor is signalled
  * only if its recorded PID is in this job's cgroup. Returns true if it did. */
 export function releaseAnchorIfAlone(cfg, id) {
-  const anchor = Number(readFileSafe(join(jobDir(cfg, id), "anchor.pid")));
+  // "PID START" (SCHED-2; R4 P3 4): a PID reused inside the subtree after the
+  // anchor's death has another start time. SCHED-1 jobs wrote the PID alone.
+  const [anchor, start] = (readFileSafe(join(jobDir(cfg, id), "anchor.pid")) ?? "").split(/\s+/).map(Number);
   const procs = jobProcs(cfg, id);
   if (!anchor || !procs?.includes(anchor)) return false;
+  if (start && procStart(anchor) !== start) return false;
   if (!procs.every((pid) => pid === anchor || parentOf(pid) === anchor)) return false;
   try { process.kill(anchor, "SIGUSR1"); return true; } catch { return false; }
 }
@@ -248,6 +251,12 @@ export function sampleHost(cfg, state) {
   if (!cfg.production) Object.assign(host, readJson(cfg.paths.hostOverride) ?? {});
   return host;
 }
+/** sampleHost plus the legacy lock's holders and waiters: what plan() needs. */
+export function hostFor(cfg, state) {
+  const host = sampleHost(cfg, state);
+  host.legacy = legacyLockInfo(cfg.legacyLock);
+  return host;
+}
 export function cpuContext() {
   const load1 = Number(readFileSync("/proc/loadavg", "utf8").split(" ")[0]);
   return { load1, cpuSomeAvg10: psi("cpu", "some"), memFullAvg10: psi("memory", "full") };
@@ -292,29 +301,67 @@ export function reconcile(cfg, state) {
     const exitFile = join(dir, "exit.json");
     if (!existsSync(exitFile)) writeJsonAtomic(exitFile, { ticket: t.id, class: t.req.class, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), ...result });
     ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, ...result });
+    if (t.state === "running" && t.req.exclusive) state.lastExclusiveEnd = Date.now();
     delete state.tickets[t.id];
     changed = true;
   }
   return changed;
 }
 
-/** The result of a job whose supervisor died, from what the in-scope wrapper left. */
+/** The result of a job whose supervisor died, from what the in-scope wrapper
+ * left. Counters nobody could read are null with a reason in `unavailable`,
+ * never 0: a missing count is not proof that no OOM happened (R5 P3). */
 function orphanResult(dir, t) {
   if (existsSync(join(dir, "not-started"))) return { code: 75, label: "cancelled before start; the command did not run" };
-  if (existsSync(join(dir, "cancelled"))) return { code: 75, label: "cancelled" };
-  const stats = Object.fromEntries((readFileSafe(join(dir, "stats")) ?? "").split("\n").filter(Boolean).map((l) => l.split("=")));
+  if (existsSync(join(dir, "cancelled"))) return { code: 75, label: "cancelled", stopReason: "cancelled" };
+  const stats = readStats(dir);
   const facts = t.unit ? unitFacts(t.unit) : {};
   const oomLocal = readFileSafe(join(dir, "oom-local")); // what the holder saw before it died
-  if (stats.rc == null && oomLocal) // the whole job was OOM group-killed
-    return { code: 137, label: `oom: class ${t.req.class} reservation ${t.req.memMiB} MiB (holder died)`, reservationOom: true,
-      peakMiB: facts.memoryPeak != null ? Math.ceil(facts.memoryPeak / 1048576) : null };
-  if (stats.rc == null) return { code: 137, label: t.holder ? "killed: its holder died and the job did not finish" : "not started: its supervisor died during the handoff" };
+  const peakMiB = stats.peak ? Math.ceil(Number(stats.peak) / 1048576) : facts.memoryPeak != null ? Math.ceil(facts.memoryPeak / 1048576) : null;
+  const oomLabel = `oom: class ${t.req.class} reservation ${t.req.memMiB} MiB (holder died)`;
+  if (stats.rc == null) {
+    const unavailable = { oomKills: "the in-scope wrapper recorded no stats (killed with the job)", ...(oomLocal ? {} : { reservationOom: "no observer saw the scope's memory.events.local" }) };
+    if (oomLocal) return { code: 137, label: oomLabel, stopReason: "oom", reservationOom: true, oomEvidence: "memory.events.local (holder watch, before it died)", oomKills: null, peakMiB, unavailable };
+    return { code: 137, label: t.holder ? "killed: its holder died and the job did not finish" : "not started: its supervisor died during the handoff",
+      stopReason: "killed", reservationOom: null, oomKills: null, peakMiB, unavailable };
+  }
   const code = Number(stats.rc), oom = Number(stats.oom_local ?? 0) > 0 && code !== 0;
   return {
     code: oom ? 137 : code,
-    label: oom ? `oom: class ${t.req.class} reservation ${t.req.memMiB} MiB (holder died)` : "its holder died; the command ran to its end",
-    peakMiB: stats.peak ? Math.ceil(Number(stats.peak) / 1048576) : null,
+    label: oom ? oomLabel : "its holder died; the command ran to its end",
+    stopReason: oom ? "oom" : null, reservationOom: oom, oomEvidence: oom ? "memory.events.local (wrapper)" : null,
+    oomKills: stats.oom_kill != null ? Number(stats.oom_kill) : null, peakMiB,
   };
+}
+
+/** The in-scope wrapper's accounting (scope-run.sh), as strings; {} if none. */
+export function readStats(dir) {
+  return Object.fromEntries((readFileSafe(join(dir, "stats")) ?? "").split("\n").filter(Boolean).map((l) => l.split("=")));
+}
+
+/**
+ * Processes with an NVIDIA device open (/dev/nvidia0 …), which is what a GPU
+ * Chrome (ANGLE GL-EGL) or any other GPU client does; SwiftShader does not.
+ * Each is matched to the running ticket whose job scope contains it: `leased`
+ * when that ticket holds the GPU. A v1 scope (siltwake-heavy-*) is exclusive,
+ * so it counts as leased. Only this user's processes are readable. ~10 ms.
+ */
+export function gpuUsers(cfg, state) {
+  const scopes = Object.values(state?.tickets ?? {}).filter((t) => t.state === "running" && t.unit).map((t) => [`/${t.unit}.scope`, t]);
+  const users = [];
+  let pids = [];
+  try { pids = readdirSync("/proc").filter((p) => /^\d+$/.test(p)); } catch { return users; }
+  for (const pid of pids) {
+    let fds;
+    try { fds = readdirSync(`/proc/${pid}/fd`); } catch { continue; }
+    if (!fds.some((fd) => { try { return /^\/dev\/nvidia\d/.test(readlinkSync(`/proc/${pid}/fd/${fd}`)); } catch { return false; } })) continue;
+    const cgroup = readFileSafe(`/proc/${pid}/cgroup`) ?? "";
+    const owner = scopes.find(([s]) => cgroup.includes(s))?.[1];
+    const v1 = !owner && /\/siltwake-heavy-[^/]*\.scope/.test(cgroup) && !scopes.some(([s]) => cgroup.includes(s));
+    users.push({ pid: Number(pid), cmd: (readFileSafe(`/proc/${pid}/cmdline`) ?? "").replace(/\0/g, " ").slice(0, 160),
+      ticket: owner?.id ?? null, leased: Boolean(owner?.req.gpu) || v1 });
+  }
+  return users;
 }
 
 /** The git worktree root containing cwd, or cwd itself outside git. */
@@ -324,19 +371,22 @@ export function worktreeOf(cwd) {
 }
 
 /** What the job will test: HEAD plus a hash of uncommitted changes (tracked
- * diff and untracked files), "clean" when there are none. Null outside git. */
+ * diff and untracked files), "clean" when there are none, and `tracked`, the
+ * same for the tracked diff alone (a job writing new output files does not
+ * change it). Null outside git. */
 export function gitTree(cwd) {
   const git = (...args) => spawnSync("git", ["-C", cwd, ...args], { encoding: "buffer", maxBuffer: 512 * 1024 * 1024 });
   const head = git("rev-parse", "HEAD");
-  if (head.status !== 0) return { head: null, dirty: null };
+  if (head.status !== 0) return { head: null, dirty: null, tracked: null };
   const diff = git("diff", "HEAD", "--binary");
   const untracked = git("ls-files", "-o", "--exclude-standard", "-z").stdout;
   const hash = createHash("sha256").update(diff.stdout ?? "");
+  const tracked = diff.stdout?.length ? createHash("sha256").update(diff.stdout).digest("hex").slice(0, 12) : "clean";
   if (untracked?.length) {
     const names = untracked.toString().split("\0").filter(Boolean);
     const blobs = spawnSync("git", ["-C", cwd, "hash-object", "--stdin-paths"], { input: names.join("\n"), encoding: "utf8" }).stdout;
     hash.update(untracked).update(blobs ?? "");
   }
   const dirty = (diff.stdout?.length || untracked?.length) ? hash.digest("hex").slice(0, 12) : "clean";
-  return { head: head.stdout.toString().trim(), dirty };
+  return { head: head.stdout.toString().trim(), dirty, tracked };
 }

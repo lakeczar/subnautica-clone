@@ -72,7 +72,7 @@ export function parseMiB(value) {
  * Turns options into a reservation, or { error } for a request that can never
  * fit (exit 2 at submit). `mode` "serial" makes every request exclusive (v1).
  */
-export function resolveRequest(opts, { T, M, mode = "normal" }) {
+export function resolveRequest(opts, { T, M, mode = "normal", minStallS = 60 }) {
   const name = opts.class ?? "standard";
   const c = CLASSES[name];
   if (!c) return { error: `unknown class ${name} (${CLASS_NAMES.join(", ")})` };
@@ -101,7 +101,7 @@ export function resolveRequest(opts, { T, M, mode = "normal" }) {
   }
   let stallS = c.stallS;
   if (opts.stallS != null) {
-    if (!(Number.isInteger(opts.stallS) && opts.stallS >= 60)) return { error: `--stall must be whole seconds ≥ 60` };
+    if (!(Number.isInteger(opts.stallS) && opts.stallS >= minStallS)) return { error: `--stall must be whole seconds ≥ ${minStallS}` };
     stallS = Math.min(opts.stallS, deadline);
   }
   const serial = mode === "serial";
@@ -127,7 +127,7 @@ export function resolveRequest(opts, { T, M, mode = "normal" }) {
 
 /** A ticket's SCHED-2 goal. A SCHED-1 ticket has none: it keeps its old deadline. */
 export const goalOf = (t) => t.goal ?? null;
-const isSoak = (t) => Boolean(t.goal?.soak);
+const isSoak = (t) => Boolean(t.goal?.soak) && !t.req.exclusive; // serial mode makes a soak exclusive too
 
 /** Environment a job sees so its worker counts match its reservation. In serial
  * mode the job holds the whole lane, as in v1, so only the v1 variables are set

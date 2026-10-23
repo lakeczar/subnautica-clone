@@ -15,8 +15,8 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { plan, resolveRequest, tokensFor } from "./policy.mjs";
 import {
-  flockFd, jobDir, ledger, legacyLockInfo, loadConfig, readFileSafe, readJson,
-  readMode, reconcile, sampleHost, self, transaction, writeJsonAtomic,
+  flockFd, gpuUsers, hostFor, jobDir, ledger, loadConfig, readFileSafe, readJson,
+  readMode, reconcile, self, transaction, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,12 +33,14 @@ let bridgeFd = null, holderUnit = null;
 process.on("SIGTERM", () => process.exit(0)); // cancelled while queued; `cancel` already cleaned up
 process.on("SIGINT", () => {}); process.on("SIGHUP", () => {});
 
-/** Re-resolves every queued request with the current mode and machine, so a
- * mode switch or a vCPU change applies to tickets already waiting. */
+/** Re-resolves queued requests with the current mode and machine, so a mode
+ * switch or a vCPU change applies to tickets already waiting. Only this
+ * version's tickets (goal v2): a SCHED-1 ticket keeps the request its own
+ * code resolved, and the goal is never re-resolved. */
 function refreshRequests(state, T, mode) {
   for (const t of Object.values(state.tickets)) {
-    if (t.state !== "queued") continue;
-    const r = resolveRequest(t.opts, { T, M: cfg.poolMiB, mode });
+    if (t.state !== "queued" || t.goal?.v !== 2) continue;
+    const { goal, ...r } = resolveRequest(t.opts, { T, M: cfg.poolMiB, mode, minStallS: cfg.minStallS });
     if (!r.error) t.req = r;
   }
 }
@@ -49,9 +51,12 @@ const ack = transaction(cfg, (state) => {
   const match = Object.values(state.tickets).find((t) => t.key === request.key);
   if (match) return { changed, result: { joined: match.id } };
   state.seq += 1;
+  // The goal lives beside req, not in it: a SCHED-1 supervisor still queued
+  // during a migration re-resolves every queued req with its own code.
+  const { goal, ...req } = request.req;
   state.tickets[id] = {
     id, seq: state.seq, key: request.key, worktree: request.worktree, cwd: request.cwd, argv: request.argv,
-    opts: request.opts, req: request.req, state: "queued", submittedAt: request.submittedAt,
+    opts: request.opts, req, goal, state: "queued", submittedAt: request.submittedAt,
     queueTimeoutS: request.queueTimeoutS, supervisor: me,
   };
   return { changed: true, result: { ticket: id } };
@@ -88,8 +93,8 @@ function tryAdmit() {
       ledger(cfg, { event: "expired", ticket: id, worktree: t.worktree, class: t.req.class, waitedS: waited });
       return { changed: true, result: "gone" };
     }
-    const host = sampleHost(cfg, state);
-    host.legacy = legacyLockInfo(cfg.legacyLock);
+    const host = hostFor(cfg, state);
+    if (now - (state.gpuScanAt ?? 0) >= 60000) changed = scanGpu(state, now) || changed;
     const seen = new Set(state.legacySeen ?? []);
     const fresh = host.legacy.holders.filter((pid) => !seen.has(pid));
     if (fresh.length) {
@@ -114,6 +119,21 @@ function tryAdmit() {
     writeJsonAtomic(join(dir, "grant.json"), { ticket: id, unit, class: t.req.class, gpu: t.req.gpu, exclusive: t.req.exclusive, tokens: t.req.tokens, memMiB: t.req.memMiB, express: mine.express });
     return { changed: true, result: "admitted" };
   });
+}
+
+/** Records GPU clients outside any lease (a driver run outside the queue) in
+ * the ledger, once per process. Every queued supervisor may do it; the state
+ * keeps it to once a minute. */
+function scanGpu(state, now) {
+  state.gpuScanAt = now;
+  const seen = new Set((state.gpuSeen ?? []).map((u) => `${u.pid}:${u.cmd}`));
+  for (const u of gpuUsers(cfg, state)) {
+    if (u.leased || seen.has(`${u.pid}:${u.cmd}`)) continue;
+    ledger(cfg, { event: "unleased-gpu", pid: u.pid, cmd: u.cmd });
+    seen.add(`${u.pid}:${u.cmd}`);
+    state.gpuSeen = [...(state.gpuSeen ?? []), { pid: u.pid, cmd: u.cmd }].slice(-50);
+  }
+  return true;
 }
 
 // 3. Hand the admitted ticket to its holder, in its own scope, with the bridge
