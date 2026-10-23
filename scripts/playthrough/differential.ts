@@ -2,7 +2,9 @@
  * in-place step and, side by side, through a base commit's own compiled
  * simulation (its cloning `stepGame` and `executeCommand`, its own module
  * instances and world). States must match at every `--every` ticks, after
- * every command and at every save reload; each step's events must match.
+ * every command and at every save reload; each step's events must match. The
+ * base's play-timeline recorder watches the shadow and the new one the live
+ * state, observed as the app does; their timelines must match too.
  *
  *   node .test-build/scripts/playthrough/differential.js --base DIR [--scenario a,b] [--every 60] [--json out.json] [--verbose]
  *
@@ -14,6 +16,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { firstDifference } from "../../src/sim/stateDiff.js";
+import { regionAtPoint } from "../../src/content/regions/layout.js";
+import { controlsActive } from "../../src/sim/timeline/activity.js";
+import * as timeline from "../../src/sim/timeline/recorder.js";
+import type { TimelineExport } from "../../src/sim/timeline/report.js";
 import type { GameCommand, GameEvent, GameState, WorldQueries } from "../../src/sim/types.js";
 import { loadCampaign } from "./content.js";
 import { driverHooks } from "./driver.js";
@@ -33,15 +39,29 @@ const load = async <T>(file: string): Promise<T> => await import(pathToFileURL(p
 const old = {
   ...await load<{ stepGame: Step; executeCommand: Exec }>("src/sim/step.js"),
   world: (await load<{ gameWorld(): WorldQueries }>("src/sim/world.js")).gameWorld(),
+  timeline: await load<typeof timeline>("src/sim/timeline/recorder.js"),
 };
+type Recorder = ReturnType<typeof timeline.createRecorder>;
+/** The app's observation of one active step (`App.observeTimeline`). */
+function observe(t: typeof timeline, rec: Recorder, s: GameState, input: boolean, events: readonly GameEvent[]): void {
+  const waiting = [...(s.systems.decodes.length ? ["decode"] : []), ...(s.systems.planters.length ? ["growth"] : [])];
+  t.observe(rec, s, { input, waiting });
+  const systems = events.flatMap((e) => e.type === "systems" ? [e.event] : []);
+  if (systems.length) t.recordSystemsEvents(rec, s, systems);
+}
+/** A timeline's comparable content: every event (rotated chunks' kept ones too) and the open ledger. */
+const timelineOf = (x: TimelineExport): unknown => ({ end: x.session.end, pending: x.session.pending, dropped: x.dropped,
+  events: [...(x.rotated ?? []).flatMap((r) => r.kept), ...x.events].sort((a, b) => a.tick - b.tick) });
 
-interface Tally { scenario: string; ticks: number; commands: number; stateChecks: number; mismatch: string | null }
+interface Tally { scenario: string; ticks: number; commands: number; stateChecks: number; timelineChecks: number; timelineEvents: number; mismatch: string | null }
 const tallies: Tally[] = [];
+/** Each driver's last timeline comparison, run once its scenario ends. */
+const finals: (() => void)[] = [];
 /** Thrown into the scenario: a harness error, never a game Blocked finding. */
 class Divergence extends Error { override name = "Divergence"; }
 
 driverHooks.attach = (d: Driver) => {
-  const tally: Tally = { scenario: d.run.scenario, ticks: 0, commands: 0, stateChecks: 0, mismatch: null };
+  const tally: Tally = { scenario: d.run.scenario, ticks: 0, commands: 0, stateChecks: 0, timelineChecks: 0, timelineEvents: 0, mismatch: null };
   tallies.push(tally);
   // The base simulation's own copy, from the same starting state.
   let shadow = structuredClone(d.state), seen = d.state;
@@ -51,6 +71,17 @@ driverHooks.attach = (d: Driver) => {
     const difference = firstDifference(shadow, d.state);
     if (difference) fail(`${label}: base ≠ new at ${difference}`);
   };
+  const session = { id: `differential-${d.run.scenario}`, started: "2026-10-23T00:00:00.000Z" }, options = { regionAt: regionAtPoint };
+  const recs = { base: old.timeline.createRecorder(session, options), live: timeline.createRecorder(session, options) };
+  let activity = false;
+  const timelines = (label: string): void => {
+    tally.timelineChecks++;
+    const a = timelineOf(old.timeline.exportTimeline(recs.base, shadow)), b = timelineOf(timeline.exportTimeline(recs.live, d.state));
+    tally.timelineEvents = (b as { events: unknown[] }).events.length;
+    const difference = firstDifference(a, b, "timeline");
+    if (difference) fail(`${label}: base timeline ≠ new at ${difference}`);
+  };
+  finals.push(() => { try { timelines("scenario end"); } catch { /* recorded in the tally */ } });
   const events = (label: string, a: readonly GameEvent[], b: readonly GameEvent[]): void => {
     const x = JSON.stringify(a), y = JSON.stringify(b);
     if (x !== y) fail(`${label}: events differ\n  base ${x.slice(0, 400)}\n  new  ${y.slice(0, 400)}`);
@@ -65,7 +96,12 @@ driverHooks.attach = (d: Driver) => {
       shadow = r.state;
       tally.ticks++;
       events(`tick ${d.state.tick}`, r.events, live);
+      const input = controlsActive(controls) || activity;
+      activity = false;
+      observe(old.timeline, recs.base, shadow, input, r.events);
+      observe(timeline, recs.live, d.state, input, live);
       if (reloaded || d.state.tick % every === 0) compare(`tick ${d.state.tick}${reloaded ? " (first after a reload)" : ""}`);
+      if (reloaded || d.state.tick % (every * 60) === 0) timelines(`tick ${d.state.tick}`);
     },
     command(_d, command, result) {
       // The driver already holds the command's result as its state.
@@ -73,6 +109,7 @@ driverHooks.attach = (d: Driver) => {
       shadow = r.state;
       seen = result.state;
       tally.commands++;
+      activity = true;
       events(`command ${JSON.stringify(command)} at tick ${d.state.tick}`, r.events, result.events);
       compare(`command ${command.type} at tick ${d.state.tick}`);
     },
@@ -83,9 +120,11 @@ await loadCampaign();
 const t0 = performance.now();
 const runs = await playScenarios(ids, args.includes("--verbose"));
 const seconds = (performance.now() - t0) / 1000;
+for (const f of finals) f();
 for (const t of tallies)
   console.log(`${t.scenario.padEnd(12)} ${String(t.ticks).padStart(9)} ticks  ${String(t.commands).padStart(6)} commands  ` +
-    `${String(t.stateChecks).padStart(7)} state checks  ${t.mismatch ? `MISMATCH ${t.mismatch}` : "identical"}`);
+    `${String(t.stateChecks).padStart(7)} state checks  ${String(t.timelineChecks).padStart(5)} timeline checks (${t.timelineEvents} events)  ` +
+    `${t.mismatch ? `MISMATCH ${t.mismatch}` : "identical"}`);
 const failed = runs.filter((r) => r.outcome === "blocked" || r.checks.some((c) => !c.ok));
 for (const r of runs) {
   const blocked = r.phases.filter((p) => p.status === "blocked").map((p) => `${p.id}: ${(p.detail ?? []).join("; ")}`);
