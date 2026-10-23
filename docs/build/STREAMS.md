@@ -631,3 +631,14 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **P2s:** the gate trusts exit codes, not bound or undisturbed receipts; the guard misses dynamic imports and `.mts`; cycle allowances don't ratchet down; DOM detection isn't scope-aware. The fix for the last is to adopt the headless sim/content tsconfig now.
   - **P3s:** add `--review` to the gate's queued steps; add the missing `FORK(stream-drivers)` marker.
   - The HUD region naming is accepted. Sent back.
+- **SIM-1 R3** (Sol on `8eb5e374`, report on `review/sim-1-r3` `e69c771c`): REQUEST CHANGES. R2 is repaired. New findings:
+  - **P1:** the 10-minute collection deletes committed timelines of expeditions players return to (import, backup, Continue after a session-only play).
+  - **P1:** a swallowed read error lets cleanup delete a just-committed history.
+  - **P2:** cross-tab collection races a provisional retry.
+  - **Coordinator retention contract:**
+    - committed timelines are never age-collected;
+    - Continue and backup sessions are never evicted;
+    - eviction happens only under quota pressure, least-recently-written first, and is reported;
+    - v1 is deleted only after the same session's v2 head is durable;
+    - reads are tri-state (unreadable never authorises a delete);
+    - uncommitted garbage is reclaimed under Web Locks, behind a lock port.
