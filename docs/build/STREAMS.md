@@ -610,3 +610,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **SIM-1 done at `3b797af3`** (R1 fixes in `047846b4`): the head-as-commit-point store, fold-in-place compaction, one shared span-closing helper, and the `timelineSince` monotonic cursor for REC-1. A focused Sol R2 on the persistence paths is running (`siltwake-sim1-review-r2-sol-3b797af`).
 - **TST-16 done at `97e4f718`** (R3 fixes): a freeze/wait/certify handover inside transaction(), one shared `boostBackstop()`, unboosted admission under the freeze, which is labelled DISTURBED as "not boosted evidence", and an S22 rewrite against the real `95f340380c25`. Suites pass 23/23, 22/22 and 27/27, and the fast tier 1404/1404 (one soak-runner timing flake, passed on rerun). Sol R4 is running (`siltwake-tst16-review-r4-sol-97e4f71`).
 - **Follow-up (after TST-16 merges):** soak-runner test "R4-F3" flaked 1/1404 at 22% host CPU pressure (passed 5/5 alone). Make it deterministic rather than timing-sensitive; the owner is the SCHED-2/soak builder. Kept off the TST-16 branch so the R4 candidate doesn't move.
+- **SIM-1 R2** (Sol on `3b797af3`, report on `review/sim-1-r2` `7f4c9ae6`): REQUEST CHANGES. R1 F1 and F2 are resolved (2,711 fresh-reader snapshots). New findings in the store lifecycle:
+  - **P1:** cached chunk facts survive a session change, so a "saved" result reloads null;
+  - **P2:** a rotated export → resume duplicates chunk numbers;
+  - **P2:** orphans from interrupted saves can't be discovered after a restart and consume the quota;
+  - **P2:** the REC-1 cursor must be initialised from `seq` at every entry.
+  - **Decision:** the coordinator asked for the class to be removed rather than patched case by case: no trusted cross-save cache, read the head on each save, one owned key prefix, collection by enumeration. REC-1 was told to initialise its cursor from the head.
