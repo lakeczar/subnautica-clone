@@ -373,6 +373,8 @@ export function createRenderer(
         sky.setFloat("time", time);
         canvas.dataset.water = underwater ? "underwater" : "above";
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
+        // CR-1: the sim tick, for evidence drivers timing creature rhythms (as cameraPosition is for steering).
+        canvas.dataset.tick = String(state?.tick ?? 0);
         scene.render();
         canvas.dataset.meshes = String(scene.meshes.length);
         canvas.dataset.vertices = String(scene.meshes.reduce((n, m) => n + m.getTotalVertices(), 0));
