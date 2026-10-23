@@ -84,6 +84,8 @@ Collar float (straddling the footprint edge, resting drops):
 | colonnade.heightfield | 6.6 / 20.6 cm | 1.3 / 20.4 cm |
 | colonnade.shell | 6.6 / 20.6 cm | 0.5 / 3.7 cm |
 
+The heightfield variant's p95 comes from its rock boxes, not the collar: on the cave side of the seam the reference is the shell, which the boxes stand off.
+
 ## Findings stage B should act on
 - **No route, tether, park or work pose is newly blocked** in any scene. That covers every route, tether and site pose within 12 m of each scene, plus the colonnade's own routes and staging.
 - **The art is more faithful everywhere it differs.**
@@ -93,12 +95,15 @@ Collar float (straddling the footprint edge, resting drops):
   - **Old covers let you stand on air:** a diver stood on box tops up to 11–13 m above the next art surface below (slab corners beside tilted members).
 - **The shell as cave rock blocks 114 of 16,000 poses that the rock boxes allowed.** Each one is inside the drawn shell: the art stands up to 0.35 m in front of the boxes. It blocks no route.
   - **Stage B's call:** collide kit caves by their shell (exact art) or keep the boxes and only replace collars (`heightfield`, no new blocking at all).
-  - **I recommend the shell.** It is the art, it is faster, and it removes the 0.35 m art/collision gap the cave kit documents.
+  - **I recommend the shell.** It is the art and it removes the 0.35 m art/collision gap the cave kit documents. Per frame it is as fast as the boxes; its long moves are slower than the box variant's (25.6 against 9.9 µs), though still faster than today's.
 - **Ghost contacts on flat meshes (fixed here, and present in LC's composer).** A box resting exactly at the skin, sliding along a flat triangle grid, meets the edges of the coplanar neighbours as walls; picking a tied contact by storage order made it worse. Fixed at the root in this collider:
   - ties prefer a face contact, then the most head-on normal;
   - slides leave each contact 10 µm past the skin.
 
-  A layout test (the same triangles in any order, leaf size or split give the same moves) fails if either fix is removed (mutation checked). LC's own composer slide loop (`compose.ts`) has the same exposure: on the Canopy, 163 of 8,000 moves differ by slide after a tie. **Stage B should run cave slides through `slideMove`.**
+  A layout test (the same triangles in any order, leaf size or split give the same moves) fails if either fix is removed (mutation checked).
+  - **LC's composer.** Its slide loop (`compose.ts`) also rests exactly at the skin and takes whichever tied normal its collider reports, so it has the same exposure. I infer that from the code; it isn't measured separately.
+  - **Tie sensitivity, measured on the Canopy:** 22 normal ties in 7,266 sweeps already change 163 of 8,000 moves through it.
+  - **Stage B should run cave slides through `slideMove`.**
 - **Composer control (identical boxes): today's W1 composite vs LC's composer.** These aren't collider effects:
   - Clearance agrees on 16,000 of 16,000 poses.
   - 4 of 8,000 moves differ: half-millimetre near-misses at rock-box corners, which LC's 4 mm skin counts as contacts (one traced to `reef_bellhole.rock.0740`).
@@ -127,7 +132,7 @@ Collar float (straddling the footprint edge, resting drops):
   - **Oracle smoke,** plus DISH-1's own rim and bowl checks on the static world.
 - **Heavy oracle:** `col1-oracle.heavy.test.ts` passes **4 / 4** through the queue at `91b01cb` (49 s, peak 204 MiB).
 - **Whole heavy tier:** on the second worker at `ecf2467`, `npm run test:heavy` passes every file. `col1-oracle` took 61 s at 217 MiB. That run predates only the report's interleaved timing and a depenetration refactor, both covered by the queued run above.
-- **Build:** `npm run build` OK; `tsc --noEmit` clean. No app-graph change: nothing in the game imports `world/collision` yet.
+- **Build:** `npm run build` OK at `8451a32` (`tsc --noEmit` clean). No app-graph change: nothing in the game imports `world/collision` yet.
 - **Collar lift:** the conservative lift on the colonnade collars is at most **10.7 mm** (Archlet), against the old columns' blanket 2 cm plus nine-sample maximum.
 
 ## Adverse cases
