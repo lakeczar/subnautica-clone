@@ -484,3 +484,12 @@ LC's cap and collar boundaries need walls, as the COL-1 heightfield now has, so 
   - SCHED-2a R4 fixes (soak harness only), with the scheduler cut-over planned once CW-1's series ends;
   - SCHED-2b R1 (`c88bab6`).
 - **Builders:** COL-1 and SCHED-2/SAVE-1 are active, CW-1 is finishing, and 2 slots are free for REC-1 and OP-1 once CW-1 merges.
+
+### 2026-10-23 ~09:15Z — owner priority: testing infrastructure first
+The owner prioritised the recorder, testing, scheduling and the save library.
+- **SIM-1 paused** (in-place stepping; resumes next).
+- **SAVE-1** split out to its own builder: `siltwake-save1-library-opus-f025bf6`, branch `t3/save-1-shared-library`.
+- **REC-1 started**, based on CW-1's head `7dc9cc9`: `siltwake-rec1-recorder-opus-7dc9cc9`, branch `t3/rec-1-flight-recorder`.
+- **The SCHED-2 builder** keeps the scheduler only: 2b R1 fixes (F1/F2 structural: staged artifacts under the sandbox lock, a receipt file instead of log markers), then any 2a R5 follow-ups.
+- **SCHED-2a R5 is reviewing `919a372`:** the soak fixes, plus a 7-line per-class stall default, to set `{"stalls":{"playthrough":2700}}` until active worktrees have the heartbeat.
+- **Builders:** CW-1 (final exclusive series), COL-1 (A R4 in review), SCHED-2 (2b fixes), SAVE-1, REC-1. SIM-1 is paused.
