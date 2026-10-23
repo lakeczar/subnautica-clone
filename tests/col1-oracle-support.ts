@@ -178,9 +178,11 @@ export interface CaveScenes { readonly production: WorldQueries; readonly varian
  * - `columns`: today's rock boxes and collar columns, as static boxes (the
  *   composer control);
  * - `heightfield`: the same rock boxes, the collar as a heightfield;
- * - `shell`: the fine shell (the art) as rock, the collar as a heightfield. */
-export function caveScenes(ids: readonly string[] = ["reef_archlet", "reef_bellhole", "reef_wrackhollow"]): CaveScenes {
-  const defs = ids.map(id => caveDef(id, worldFloor));
+ * - `shell`: the fine shell (the art) as rock, the collar as a heightfield.
+ * `defOf` builds each cave (default: the authored registry's `caveDef`). */
+export function caveScenes(ids: readonly string[] = ["reef_archlet", "reef_bellhole", "reef_wrackhollow"],
+  defOf: (id: string) => CaveDef = id => caveDef(id, worldFloor)): CaveScenes {
+  const defs = ids.map(defOf);
   const production = createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: defs.map(caveOwner) });
   const exterior = productionWorld(), feet = defs.map(d => d.replacementFootprints[0]!);
   const shellMembers = (d: CaveDef): StaticMember[] => {
