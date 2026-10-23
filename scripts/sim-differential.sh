@@ -11,12 +11,14 @@
 set -euo pipefail
 sha="$(git rev-parse --verify "${1:?usage: $0 BASE_SHA [options]}^{commit}")"; shift
 dir="/work/tmp/sim1-base-${sha:0:12}"
-if [[ ! -f "$dir/.compiled" ]]; then
+# .compiled-2: the build also covers src/sim (the timeline recorder).
+if [[ ! -f "$dir/.compiled-2" ]]; then
   rm -rf "$dir" && mkdir -p "$dir"
   git archive "$sha" | tar -x -C "$dir"
   ln -s "$PWD/node_modules" "$dir/node_modules"
-  (cd "$dir" && node_modules/.bin/tsc -p scripts/playthrough/tsconfig.json)
-  touch "$dir/.compiled"
+  # The playthrough's graph, plus all of src/sim (the timeline recorder).
+  (cd "$dir" && node_modules/.bin/tsc -p scripts/playthrough/tsconfig.json && node_modules/.bin/tsc -p tsconfig.test.json)
+  touch "$dir/.compiled-2"
 fi
 node_modules/.bin/tsc -p scripts/playthrough/tsconfig.json
 exec node .test-build/scripts/playthrough/differential.js --base "$dir/.test-build" "$@"
