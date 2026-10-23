@@ -63,8 +63,15 @@ const DRIVER_PATTERNS = [
   ["gpu-prep", /gpu-prep/],
 ];
 const LOWER = /^src\/(sim|content)\//, UPPER = /^src\/(render|ui|audio)\//;
-/** Source files the guard analyses. */
-export const SOURCE = /^src\/.+(?<!\.d)\.(ts|mts|cts|tsx)$/;
+/** TypeScript's own source extensions (declaration files excluded), and the script ones the
+ * driver rule scans: one set, shared by collection and analysis (tsconfig.headless.json's
+ * recursive include roots use the compiler's own discovery for the same set). */
+export const TS_EXTENSIONS = [ts.Extension.Ts, ts.Extension.Tsx, ts.Extension.Mts, ts.Extension.Cts];
+const DECLARATION = [ts.Extension.Dts, ts.Extension.Dmts, ts.Extension.Dcts];
+const SCRIPT_EXTENSIONS = [...TS_EXTENSIONS, ".js", ".mjs", ".cjs", ".sh"];
+const hasExt = (f, exts) => exts.some((e) => f.endsWith(e)) && !DECLARATION.some((d) => f.endsWith(d));
+/** Is `f` a source the guard analyses? */
+export const isSource = (f) => f.startsWith("src/") && hasExt(f, TS_EXTENSIONS);
 /** The owner's lookups: a function whose whole body is one call to these delegates, it is no second lookup. */
 const REGION_DELEGATES = new Set(["regionAtPoint", "regionAtPosition"]);
 const REGION_LOOKUP = /^\w*region(At|Of|For)(Point|Position)?$/i;
@@ -170,13 +177,28 @@ function cycles(graph) {
 export function analyse(files, allow = ALLOW) {
   const failures = [], notes = [];
   const exists = (p) => files.has(p);
-  const sources = [...files.keys()].filter((f) => SOURCE.test(f)).sort();
+  const sources = [...files.keys()].filter(isSource).sort();
   const info = new Map(sources.map((f) => [f, analyseSource(f, files.get(f), exists)]));
   // 1. Layering.
+  // A barrel or helper outside sim and content can't launder a forbidden value: the
+  // check follows value edges (static and lazy, never type-only) through other layers.
+  const forbidden = (t) => UPPER.test(t) || t.startsWith("@babylonjs/");
+  const edges = (i) => [...i.imports.map((t) => [t, "imports"]), ...i.lazy.map((t) => [t, "lazily imports"])];
   for (const [f, i] of info) {
     if (!LOWER.test(f)) continue;
-    for (const [target, how] of [...i.imports.map((t) => [t, "imports"]), ...i.lazy.map((t) => [t, "lazily imports"])])
-      if (UPPER.test(target) || target.startsWith("@babylonjs/")) failures.push(`layering: ${f} ${how} ${target} (sim and content stay below render, UI, audio and Babylon)`);
+    for (const [target, how] of edges(i)) if (forbidden(target)) failures.push(`layering: ${f} ${how} ${target} (sim and content stay below render, UI, audio and Babylon)`);
+    const via = new Map(), queue = edges(i).map(([t]) => t).filter((t) => info.has(t) && !LOWER.test(t) && !forbidden(t));
+    for (const t of queue) via.set(t, null);
+    for (let k = 0; k < queue.length; k++) {
+      const at = queue[k];
+      for (const [next] of edges(info.get(at))) {
+        if (forbidden(next)) {
+          const chain = [at];
+          for (let p = via.get(at); p; p = via.get(p)) chain.unshift(p);
+          failures.push(`layering: ${f} reaches ${next} through ${chain.join(" → ")} (a value path from sim or content to render, UI, audio or Babylon)`);
+        } else if (info.has(next) && !LOWER.test(next) && !via.has(next)) { via.set(next, at); queue.push(next); }
+      }
+    }
     for (const c of i.computed) failures.push(`layering: ${f} loads a computed module (${c}); sim and content import by literal path only, so the rule can see it`);
   }
   // 2. Cycles, ratcheted by membership.
@@ -200,7 +222,7 @@ export function analyse(files, allow = ALLOW) {
   }
   // 3. Driver plumbing.
   for (const [f, text] of files) {
-    if (!/\.(mjs|js|cjs|ts|mts|sh)$/.test(f) || SELF.includes(f) || DRIVER_HOMES.some((d) => f.startsWith(d))) continue;
+    if (!hasExt(f, SCRIPT_EXTENSIONS) || SELF.includes(f) || DRIVER_HOMES.some((d) => f.startsWith(d))) continue;
     const found = DRIVER_PATTERNS.filter(([, re]) => re.test(text)).map(([name]) => name);
     if (found.length && !allow.drivers.includes(f))
       failures.push(`driver: ${f} has ${found.join(", ")}; browser, server and GPU plumbing lives in scripts/rec (write a scenario), scripts/heavy or scripts/soak`);
@@ -246,7 +268,7 @@ export function repositoryFiles(root = ROOT) {
       if (SKIP.has(e.name) || e.name.startsWith(".test-build")) continue;
       const rel = dir ? `${dir}/${e.name}` : e.name;
       if (e.isDirectory()) walk(rel);
-      else if (/\.(ts|mts|mjs|js|cjs|sh|html)$/.test(e.name) && !e.name.endsWith(".d.ts")) files.set(rel, fs.readFileSync(path.join(root, rel), "utf8"));
+      else if (hasExt(e.name, [...SCRIPT_EXTENSIONS, ".html"])) files.set(rel, fs.readFileSync(path.join(root, rel), "utf8"));
     }
   };
   for (const top of ["src", "tests", "scripts", "tools", "docs"]) if (fs.existsSync(path.join(root, top))) walk(top);

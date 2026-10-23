@@ -94,3 +94,20 @@ console.log(JSON.stringify({ code: 0, stopReason: null, context: null, evidence:
   assert.match(refused.stderr, /uncommitted changes; commit first/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("a good receipt from a waiter that then fails or is killed doesn't count", () => {
+  const dir = fs.mkdtempSync(join(tmpdir(), "siltwake-gate-waiter-")), queue = join(dir, "heavy-check");
+  fs.writeFileSync(queue, `#!/usr/bin/env node
+if (process.argv[2] === "submit") { console.log("261023-000000-wait"); process.exit(0); }
+console.log(process.env.GATE_RECEIPT);
+if (process.env.WAITER === "signal") process.kill(process.pid, "SIGTERM");
+else process.exit(7);
+`, { mode: 0o755 });
+  for (const [how, re] of [["exit", /the queue waiter exited 7/], ["signal", /the queue waiter was killed \(SIGTERM\)/]] as const) {
+    const r = spawnSync(process.execPath, ["scripts/gate.mjs", "--only", "bake", "--allow-dirty"],
+      { encoding: "utf8", env: { ...process.env, SILTWAKE_HEAVY_CHECK: queue, GATE_RECEIPT: JSON.stringify(good()), WAITER: how } });
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stdout, new RegExp(`^ {2}FAIL {2}bake .*${re.source}`, "m"), r.stdout);
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+});

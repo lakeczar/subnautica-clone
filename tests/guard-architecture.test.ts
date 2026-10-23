@@ -14,7 +14,7 @@ interface Allow { cycles: string[][]; drivers: string[]; recipeBuilders: string[
 interface Guard {
   ALLOW: Allow;
   analyse(files: Map<string, string>, allow?: Allow): { failures: string[]; report: { groups: string[][]; forks: { id: string }[]; forkIds: string[] } };
-  repositoryFiles(): Map<string, string>;
+  repositoryFiles(root?: string): Map<string, string>;
 }
 /** Planted sources spell their imports through these, so the fast tier's static import scan doesn't read them as this file's. */
 const from = (spec: string): string => `fr` + `om "${spec}"`;
@@ -142,4 +142,104 @@ test("tsconfig.headless.json: a DOM global in sim or content fails to typecheck;
   assert.ok(errors.some((e) => e.startsWith("/v/dom.ts") && /'window'/.test(e)), errors.join("\n"));
   assert.ok(errors.some((e) => e.startsWith("/v/dom.ts") && /'localStorage'/.test(e)), errors.join("\n"));
   assert.deepEqual(errors.filter((e) => !e.startsWith("/v/dom.ts")), [], "the parameter, the alias and the declared platform APIs typecheck");
+});
+
+/** A scratch repository on disk, so collection itself is under test. */
+function scratchRepo(store: Record<string, string>): string {
+  const dir = fs.mkdtempSync(join(tmpdir(), "siltwake-guard-disk-"));
+  for (const [rel, text] of Object.entries(store)) { fs.mkdirSync(join(dir, rel, ".."), { recursive: true }); fs.writeFileSync(join(dir, rel), text); }
+  return dir;
+}
+
+test("collection on disk takes every TypeScript source extension, and each is analysed", () => {
+  const dir = scratchRepo({
+    "src/render/art.ts": "export const art = 1;\nexport class RecipeBuilder {}\n",
+    "src/sim/module.mts": `import { art } ${from("../render/art.js")};\nexport const a = art;\n`,
+    "src/content/common.cts": `export const later = () => ${lazy("../render/art.js")};\n`,
+    "src/content/view.tsx": `export const later = () => ${lazy("../render/art.js")};\n`,
+    "src/render/builder.tsx": "export class RecipeBuilder {}\n",
+    "src/sim/types.d.mts": `import { art } ${from("../render/art.js")};\n`,
+  });
+  try {
+    const collected = G.repositoryFiles(dir);
+    for (const f of ["src/sim/module.mts", "src/content/common.cts", "src/content/view.tsx", "src/render/builder.tsx"]) assert.ok(collected.has(f), f);
+    assert.ok(!collected.has("src/sim/types.d.mts"), "declaration files are not sources");
+    const { failures } = G.analyse(collected, { ...none, recipeBuilders: ["src/render/art.ts"] });
+    for (const re of [/layering: src\/sim\/module\.mts imports/, /layering: src\/content\/common\.cts lazily imports/, /layering: src\/content\/view\.tsx lazily imports/,
+      /builder: src\/render\/builder\.tsx exports another class RecipeBuilder/])
+      assert.ok(failures.some((f) => re.test(f)), `${re}:\n${failures.join("\n")}`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a barrel outside sim and content can't launder a render or Babylon value; a type-only path stays exempt", () => {
+  const failures = failuresOf({
+    "src/render/regions.ts": "export const LIMIT = 4;\nexport interface Art { id: string }\n",
+    "src/world/barrel/index.ts": `export { LIMIT } ${from("../../render/regions.js")};\n`,
+    "src/world/babylon/index.ts": `export { Color3 as LIMIT } ${from("@babylonjs/core/Maths/math.color.js")};\n`,
+    "src/world/deep/a.ts": `export * ${from("./b.js")};\n`,
+    "src/world/deep/b.ts": `import { LIMIT } ${from("../../render/regions.js")};\nexport const twice = LIMIT * 2;\n`,
+    "src/world/types/index.ts": `export type { Art } ${from("../../render/regions.js")};\nexport const plain = 1;\n`,
+    "src/sim/viaBarrel.ts": `export { LIMIT } ${from("../world/barrel/index.js")};\n`,
+    "src/sim/viaBabylon.ts": `import { LIMIT } ${from("../world/babylon/index.js")};\nexport const c = LIMIT;\n`,
+    "src/content/viaDeep.ts": `import { twice } ${from("../world/deep/a.js")};\nexport const d = twice;\n`,
+    "src/sim/viaTypes.ts": `import { plain } ${from("../world/types/index.js")};\nimport type { Art } ${from("../world/types/index.js")};\nexport const e = plain;\nexport type F = Art;\n`,
+  });
+  assert.ok(failures.some((f) => /layering: src\/sim\/viaBarrel\.ts reaches src\/render\/regions\.ts through src\/world\/barrel\/index\.ts/.test(f)), failures.join("\n"));
+  assert.ok(failures.some((f) => /layering: src\/sim\/viaBabylon\.ts reaches @babylonjs\/core\/Maths\/math\.color\.js through src\/world\/babylon\/index\.ts/.test(f)), failures.join("\n"));
+  assert.ok(failures.some((f) => /layering: src\/content\/viaDeep\.ts reaches src\/render\/regions\.ts through src\/world\/deep\/a\.ts → src\/world\/deep\/b\.ts/.test(f)), failures.join("\n"));
+  assert.ok(!failures.some((f) => /viaTypes/.test(f)), failures.join("\n"));
+  assert.equal(failures.length, 3, failures.join("\n"));
+});
+
+test("the real tsconfig.headless.json roots every sim and content source extension, and rejects the DOM there, imported or not", () => {
+  const dir = scratchRepo({
+    "tsconfig.json": fs.readFileSync("tsconfig.json", "utf8"),
+    "tsconfig.headless.json": fs.readFileSync("tsconfig.headless.json", "utf8"),
+    "scripts/headless-platform.d.ts": fs.readFileSync("scripts/headless-platform.d.ts", "utf8"),
+    "src/sim/review-dom.mts": "export const width = (): number => window.innerWidth;\n",
+    "src/content/review-common.cts": "export const store = (): unknown => localStorage;\n",
+    "src/content/review-view.tsx": "export const title = (): string => document.title;\n",
+    "src/runtime/app.ts": `import { width } ${from("../sim/review-dom.mjs")};\nexport const w = width;\n`,
+  });
+  try {
+    const parsed = ts.getParsedCommandLineOfConfigFile(join(dir, "tsconfig.headless.json"), {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} })!;
+    for (const f of ["src/sim/review-dom.mts", "src/content/review-common.cts", "src/content/review-view.tsx"])
+      assert.ok(parsed.fileNames.includes(join(dir, f)), `${f} is a headless root: ${parsed.fileNames.join(", ")}`);
+    const program = ts.createProgram(parsed.fileNames, { ...parsed.options, noEmit: true });
+    const errors = ts.getPreEmitDiagnostics(program).filter((d) => d.file).map((d) => `${basename(d.file!.fileName)}: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
+    for (const [file, name] of [["review-dom.mts", "window"], ["review-common.cts", "localStorage"], ["review-view.tsx", "document"]] as [string, string][])
+      assert.ok(errors.some((e) => e.startsWith(file) && e.includes(`'${name}'`)), `${file}: ${errors.join("\n")}`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the declared platform APIs (TextEncoder, TextDecoder, AbortSignal) typecheck headless and behave so at runtime", () => {
+  const dir = scratchRepo({
+    "tsconfig.json": fs.readFileSync("tsconfig.json", "utf8"),
+    "tsconfig.headless.json": fs.readFileSync("tsconfig.headless.json", "utf8"),
+    "scripts/headless-platform.d.ts": fs.readFileSync("scripts/headless-platform.d.ts", "utf8"),
+    // CW-1's kit codec and SIM-1's cancellable writes use exactly these.
+    "src/sim/codec.ts": [
+      "export function roundTrip(header: object): object {",
+      "  const json = new TextEncoder().encode(JSON.stringify(header)), bytes = new Uint8Array(8 + json.length);",
+      "  bytes.set(json, 8);",
+      "  return JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + json.length))) as object;",
+      "}",
+      "export function cancelled(signal: AbortSignal): boolean { if (signal.aborted) return true; signal.throwIfAborted(); return false; }",
+      "export const aborted = (): AbortSignal => AbortSignal.abort(\"replaced\");",
+    ].join("\n") + "\n",
+  });
+  try {
+    const parsed = ts.getParsedCommandLineOfConfigFile(join(dir, "tsconfig.headless.json"), {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} })!;
+    const errors = ts.getPreEmitDiagnostics(ts.createProgram(parsed.fileNames, { ...parsed.options, noEmit: true })).map((d) => ts.flattenDiagnosticMessageText(d.messageText, " "));
+    assert.deepEqual(errors, []);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  // The runtime has them, with the declared members.
+  const header = { magic: "siltwake", n: 3, ü: "ß" };
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(new TextEncoder().encode(JSON.stringify(header)))), header);
+  assert.equal(new TextEncoder().encoding, "utf-8");
+  const signal = AbortSignal.abort("replaced");
+  assert.equal(signal.aborted, true);
+  assert.equal(signal.reason, "replaced");
+  assert.throws(() => signal.throwIfAborted());
+  assert.equal(typeof AbortSignal.timeout, "function");
 });

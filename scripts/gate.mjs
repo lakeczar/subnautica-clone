@@ -79,7 +79,11 @@ function queued(step, head) {
   try { receipt = JSON.parse(lines.at(-1) ?? ""); lines.pop(); } catch { /* reported by receiptProblems */ }
   process.stdout.write(`${lines.join("\n")}\n`);
   if (w.stderr) process.stderr.write(w.stderr);
-  return receiptProblems(receipt, head);
+  // The waiter itself must finish cleanly too: a good receipt from a waiter that then
+  // failed or was killed is no result.
+  const waiter = w.error ? [`the queue waiter failed: ${w.error.message}`] : w.signal ? [`the queue waiter was killed (${w.signal})`]
+    : w.status !== 0 ? [`the queue waiter exited ${w.status}`] : [];
+  return [...waiter, ...receiptProblems(receipt, head)];
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
