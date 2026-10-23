@@ -4,7 +4,8 @@ import { crc32 as nodeCrc32 } from "node:zlib";
 import { FlightRecorder, FRAME_COLUMNS, frameObject, HOLD_CODES, longFrameCause } from "../src/runtime/flight/recorder.js";
 import { crc32, zipBlob } from "../src/runtime/flight/zip.js";
 import { flightMode } from "../src/runtime/flight/capture.js";
-import { recordCommand, recordGameEvents, recordTimeline } from "../src/runtime/flight/game.js";
+import { recordCommand, recordGameEvents, recordTimeline, timelineHead, timelineSince } from "../src/runtime/flight/game.js";
+import { addNote, createRecorder, recordEvent } from "../src/sim/timeline/recorder.js";
 import { createGame } from "../src/sim/state.js";
 
 const frame = (t: number, extra: Record<string, number | string | null> = {}) => ({ t, gap: 16.7, work: 4, sim: 1, steps: 1, chunks: 0.5, caves: 0.2, render: 2, ...extra });
@@ -128,12 +129,13 @@ test("game events map to damage, threat, refusal and notice; commands to actions
     { type: "notice", message: "Oxygen low", error: true, channel: "hazard", context: "oxygen" },
   ]);
   recordCommand(r, s, { type: "scan" });
-  const next = recordTimeline(r, [
-    { kind: "new", what: "blueprint", id: "dart", tick: 10, play: 1 },
-    { kind: "gather", id: "x", tick: 11, play: 1 },
-    { kind: "note", text: "too dark here", tick: 12, play: 1 },
-  ], 0);
+  const timeline = createRecorder({ id: "t", started: "" });
+  recordEvent(timeline, s, { kind: "new", what: "blueprint", id: "dart" });
+  recordEvent(timeline, s, { kind: "gather", id: "x" });
+  addNote(timeline, s, "too dark here");
+  const next = recordTimeline(r, timeline, 0);
   assert.equal(next, 3);
+  assert.equal(recordTimeline(r, timeline, next), 3, "nothing new: the cursor stays");
   const kinds = r.events.since(0).items.map((x) => `${x.kind}:${x.text}`);
   assert.deepEqual(kinds, [
     "damage:hunter strike on the diver: -12.3, health 70", "refusal:refused: Cannot exit here", "notice:Saved locally", "threat:threat call", "threat:warning: Oxygen low",
@@ -245,4 +247,23 @@ test("R1-F9: survival injury becomes a damage episode: onset with a picture, an 
   assert.equal(damage[0]!.text, "oxygen damage to the diver");
   assert.match(damage[1]!.text, /oxygen damage to the diver ended: -6 over 0\.5 s/);
   assert.equal(r.wantSnapshot(1e9)!.reasons[0], damage[0]!.seq, "the onset asks for a picture");
+});
+
+// SIM-1 composition: the recorder reads the play timeline through a cursor that
+// counts entries ever recorded, never an index into the open chunk, so it
+// survives SIM-1 sealing a full chunk and resetting `events`. Whoever wires
+// SIM-1's `timelineSince` into the seam adds a burst-across-seal case here.
+test("the timeline cursor: a burst of notes is read once and whole; a new recording starts at the head", () => {
+  const r = new FlightRecorder(), s = createGame(), timeline = createRecorder({ id: "t", started: "" });
+  addNote(timeline, s, "before the recording");
+  let cursor = timelineHead(timeline);
+  assert.equal(timelineSince(timeline, cursor).events.length, 0);
+  for (let i = 0; i < 1001; i++) addNote(timeline, s, `n${i}`);
+  cursor = recordTimeline(r, timeline, cursor);
+  const notes = r.events.since(0).items.filter((e) => e.kind === "note").map((e) => e.text);
+  assert.equal(notes.length, 1001, "every note in the burst, the 1,000th included");
+  assert.equal(notes[999], "note: n999");
+  assert.ok(!notes.includes("note: before the recording"), "entries before the head are not replayed");
+  assert.equal(recordTimeline(r, timeline, cursor), cursor);
+  assert.equal(r.events.since(0).items.filter((e) => e.kind === "note").length, 1001, "read once");
 });

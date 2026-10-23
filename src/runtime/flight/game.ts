@@ -2,6 +2,7 @@
  * Simulation events, timeline milestones and the periodic sample. DOM-free. */
 import type { GameCommand, GameEvent, GameState, Vec3 } from "../../sim/types.js";
 import type { TimelineEvent } from "../../sim/timeline/report.js";
+import type { TimelineRecorder } from "../../sim/timeline/recorder.js";
 import { exposure } from "../../sim/survival.js";
 import { personalLimit } from "../../sim/capabilities.js";
 import { hullDepth } from "../../sim/vehicles.js";
@@ -63,17 +64,30 @@ export function recordCommand(rec: FlightRecorder, s: GameState | null, command:
   rec.event("action", command.type, { ...(s ? { tick: s.tick } : {}), detail: { command: command.type }, snapshot: false });
 }
 
+/** What the recorder reads of the play timeline: the entries after `cursor`,
+ * the cursor to pass next, and how many went before they were read. The cursor
+ * counts entries ever recorded, never an index into `events`, so it survives a
+ * timeline that seals and resets its open chunk (SIM-1). This is the one place
+ * that knows the timeline's layout: SIM-1's `timelineSince` replaces the body. */
+export function timelineSince(t: TimelineRecorder, cursor: number): { events: readonly TimelineEvent[]; cursor: number; missed: number } {
+  // Root's timeline only appends (past its cap it drops the new entry), so its length counts every entry it kept.
+  return { events: cursor < t.events.length ? t.events.slice(cursor) : [], cursor: t.events.length, missed: 0 };
+}
+/** The cursor at the timeline's present: a new session's recording starts there. */
+export const timelineHead = (t: TimelineRecorder): number => timelineSince(t, Number.MAX_SAFE_INTEGER).cursor;
+
 const MILESTONE_KINDS = new Set(["new", "death", "recovery", "system"]);
-/** New play-timeline entries since `from`: milestones (with a snapshot), the rest for pacing. Returns the new cursor. */
-export function recordTimeline(rec: FlightRecorder, events: readonly TimelineEvent[], from: number): number {
-  for (let i = from; i < events.length; i++) {
-    const e = events[i]!;
+/** New play-timeline entries since `cursor`: milestones (with a snapshot), the rest for pacing. Returns the new cursor. */
+export function recordTimeline(rec: FlightRecorder, t: TimelineRecorder, cursor: number): number {
+  const read = timelineSince(t, cursor);
+  if (read.missed > 0) rec.event("warning", `play timeline: ${read.missed} entries went before the recorder read them`, { detail: { missed: read.missed }, snapshot: false });
+  for (const e of read.events) {
     const detail: Record<string, unknown> = { timeline: e };
     if (e.kind === "note") rec.event("note", `note: ${e.text ?? ""}`, { tick: e.tick, detail });
     else if (MILESTONE_KINDS.has(e.kind)) rec.event("milestone", `${e.kind}${e.what ? ` ${e.what}` : ""}${e.id ? ` ${e.id}` : ""}${e.label ? ` (${e.label})` : ""}`, { tick: e.tick, detail });
     else rec.event("action", `${e.kind}${e.what ? ` ${e.what}` : ""}${e.id ? ` ${e.id}` : ""}${e.seconds !== undefined ? ` ${r1(e.seconds)} s` : ""}`, { tick: e.tick, detail, snapshot: false });
   }
-  return events.length;
+  return read.cursor;
 }
 
 /** The periodic sample: where the player is, how they are, what the renderer holds. */
