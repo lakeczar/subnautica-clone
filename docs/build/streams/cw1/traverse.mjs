@@ -7,6 +7,9 @@
 // Measured: cold start (navigation to playable), every rAF gap, every frame's
 // own work (`__siltwakePerf`: simulation, chunk streaming, cave streaming,
 // render), cave holds, streaming counters, resident bytes and JS heap.
+// Gate (STR-10, STR-11): during the travel itself no unsliced cave build (the
+// safety net, logged by the game as "unsliced cave build"), no hold frame and
+// no long frame attributed to streaming; the job exits 1 when it fails.
 // usage (frame times are performance evidence, so the exclusive class):
 //   $H --class exclusive -- node traverse.mjs <dist> <plan.json> <save.json> <segment> <outdir> <port>
 import { createRequire } from "node:module";
@@ -33,7 +36,8 @@ await new Promise((r) => server.listen(Number(port), "127.0.0.1", r));
 const log = [];
 const note = (...a) => { const line = `[${(performance.now() / 1000).toFixed(1)}s] ${a.join(" ")}`; log.push(line); console.log(line); };
 const result = { commit: readFileSync(path.join(dist, "COMMIT"), "utf8").trim(), segment, caves: points.filter(p => p.cave).map(p => p.cave),
-  reached: [], skipped: [], shots: [], errors: [], holds: [], long: [], recoveries: 0 };
+  reached: [], skipped: [], shots: [], views: [], errors: [], holds: [], long: [], unsliced: [], recoveries: 0 };
+let traveling = false;
 const browser = await chromium.launch({ executablePath: `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`,
   headless: true, args: ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist", "--enable-precise-memory-info", "--cw1-traverse"], timeout: 30000 });
 let page;
@@ -77,17 +81,33 @@ async function goto(t, { tol = 4, label = "", boost = true, timeout = 100 } = {}
     await page.waitForTimeout(40);
   }
 }
+/** Turn in place to face `t` (bearing and pitch from the camera), then let it settle. */
+async function face(t) {
+  const start = performance.now();
+  for (;;) {
+    const s = await read(), c = { x: s.cam[0], y: s.cam[1], z: s.cam[2] }, dx = t.x - c.x, dz = t.z - c.z;
+    const yawErr = wrap(Math.atan2(dx, -dz) - s.bearing * Math.PI / 180), pitch = Math.atan2(t.y - c.y, Math.hypot(dx, dz)) * 180 / Math.PI;
+    const done = Math.abs(yawErr) < 0.02 && Math.abs(s.pitch - pitch) < 1.5;
+    if (done || performance.now() - start > 12000) { await releaseAll(); await page.waitForTimeout(1500); return done; }
+    await key("ArrowRight", yawErr > 0.02); await key("ArrowLeft", yawErr < -0.02);
+    await key("ArrowUp", s.pitch < pitch - 1.5); await key("ArrowDown", s.pitch > pitch + 1.5);
+    await page.waitForTimeout(30);
+  }
+}
 async function shot(name) {
   const file = path.join(out, `s${segment}-${String(result.shots.length + 1).padStart(2, "0")}-${name}.jpg`);
   await page.screenshot({ path: file, type: "jpeg", quality: 82 }); result.shots.push(path.basename(file)); note("screenshot", file);
 }
 const quant = (s, f) => s.length ? +s[Math.min(s.length - 1, Math.floor(s.length * f))].toFixed(1) : null;
 try {
-  const context = await browser.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
   page = await context.newPage();
   page.on("pageerror", (e) => result.errors.push(e.message));
   page.on("response", (r) => { if (r.status() >= 400) result.errors.push(`HTTP ${r.status()} ${r.url()}`); });
-  page.on("console", (m) => { if (m.type() === "error") result.errors.push(m.text().slice(0, 300)); });
+  page.on("console", (m) => {
+    if (m.type() === "error") result.errors.push(m.text().slice(0, 300));
+    if (m.type() === "warning" && m.text().startsWith("unsliced cave build")) { result.unsliced.push({ traveling, text: m.text() }); note(traveling ? "UNSLICED" : "unsliced (load)", m.text()); }
+  });
   await page.addInitScript(() => {
     window.__siltwakePerf = []; window.__gaps = [];
     let last = 0; const loop = (now) => { if (last) window.__gaps.push([now, now - last]); last = now; requestAnimationFrame(loop); }; requestAnimationFrame(loop);
@@ -114,11 +134,20 @@ try {
   note("loaded", JSON.stringify({ cam: s.cam, depth: s.depth, vitals: s.vitals }));
   // Measured from here: the traversal itself.
   await page.evaluate(() => { window.__siltwakePerf.length = 0; window.__gaps.length = 0; });
-  const started = performance.now();
+  const started = performance.now(), syncAtStart = records.sync ?? 0;
+  traveling = true;
   let caveIndex = 0;
   for (const [i, p] of points.entries()) {
     if (i === 0) continue;
-    const ok = await goto(p, { tol: p.cave ? 4 : 7, label: p.cave ?? `cruise#${i}`, boost: !p.cave || true });
+    const ok = await goto(p, { tol: p.tol ?? (p.cave ? 4 : 7), label: p.cave ?? p.view ?? `cruise#${i}`, boost: !(p.view || p.tol) });
+    if (p.view) {
+      const faced = await face(p.look), s1 = await read(), far = await page.evaluate(() => Number(document.querySelector("#ocean").dataset.farLandmarks ?? -1));
+      const c = { x: s1.cam[0], y: s1.cam[1], z: s1.cam[2] };
+      await shot(p.view);
+      result.views.push({ view: p.view, shot: result.shots.at(-1), reached: ok, faced, camera: s1.cam.map(v => +v.toFixed(1)), bearing: s1.bearing, pitch: s1.pitch,
+        metresToTarget: +Math.hypot(p.look.x - c.x, p.look.y - c.y, p.look.z - c.z).toFixed(0), activeCaveLight: s1.cave || null, farLandmarksShown: far });
+      note("view", JSON.stringify(result.views.at(-1)));
+    }
     if (p.cave) {
       const q = pos(await read());
       if (ok) result.reached.push(p.cave); else result.skipped.push({ cave: p.cave, metres: +Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z).toFixed(1) });
@@ -128,6 +157,7 @@ try {
     }
   }
   result.seconds = +((performance.now() - started) / 1000).toFixed(1);
+  traveling = false;
   const data = await page.evaluate(() => ({ gaps: window.__gaps, perf: window.__siltwakePerf, stream: JSON.parse(document.querySelector("#ocean").dataset.caveStream ?? "{}"),
     cpu: Number(document.querySelector("#ocean").dataset.residentCpu ?? 0), gpu: Number(document.querySelector("#ocean").dataset.residentGpu ?? 0),
     regionBytes: Number(document.querySelector("#ocean").dataset.regionBytes ?? 0),
@@ -160,14 +190,25 @@ try {
   result.streamingMax = data.perf.reduce((m, e) => ({ chunks: Math.max(m.chunks, e.parts?.chunks ?? 0), caves: Math.max(m.caves, e.parts?.caves ?? 0) }), { chunks: 0, caves: 0 });
   result.holdFrames = data.perf.filter(e => e.hold && e.hold !== "clear").length;
   result.stream = data.stream;
+  // The gate: the travel's own unsliced builds (the counter, and the logged
+  // warnings that say where), holds and streaming-attributed long frames.
+  const travelSync = (data.stream.sync ?? 0) - syncAtStart;
+  const failures = [];
+  if (travelSync > 0 || result.unsliced.some(u => u.traveling)) failures.push(`${Math.max(travelSync, result.unsliced.filter(u => u.traveling).length)} unsliced cave build(s) in travel`);
+  if (result.holdFrames > 0) failures.push(`${result.holdFrames} hold frame(s)`);
+  if (result.longByCause.streamingOver34 > 0) failures.push(`${result.longByCause.streamingOver34} streaming frame(s) over 34 ms`);
+  result.gate = { pass: failures.length === 0, failures, travelSync, loadSync: syncAtStart };
   result.memory = { residentCpuMiB: +(data.cpu / 1048576).toFixed(1), residentGpuMiB: +(data.gpu / 1048576).toFixed(1), regionMiB: +(data.regionBytes / 1048576).toFixed(1),
     budgetMiB: 256, heapMiB: data.heap ? +(data.heap.used / 1048576).toFixed(1) : null };
+  note("gate", result.gate.pass ? "pass" : `FAIL: ${result.gate.failures.join("; ")}`);
   note("result", JSON.stringify({ frames: result.frames, longByCause: result.longByCause, work: result.work, holds: result.holdFrames, memory: result.memory, stream: result.stream }));
 } catch (error) {
   result.errors.push(String(error?.stack ?? error)); note("error", String(error));
+  result.gate ??= { pass: false, failures: ["the run did not finish"] };
 } finally {
   writeFileSync(path.join(out, `segment-${segment}.json`), JSON.stringify(result, null, 1));
   writeFileSync(path.join(out, `segment-${segment}.log`), log.join("\n"));
   await browser.close().catch(() => {});
   server.close();
+  process.exitCode = result.gate?.pass ? 0 : 1;
 }

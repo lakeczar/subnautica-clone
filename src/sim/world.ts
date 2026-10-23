@@ -761,8 +761,27 @@ export interface KitCaveStream {
   evict(cluster: number): void;
   /** Cave-inside water at `p` (current masking): false outside every footprint. */
   inside(p: Readonly<Vec3>): boolean;
+  /** The safety net (STR-10): build `cluster` now, unsliced, and log it. Never
+   * expected in ordinary travel, where the streamer builds ahead. */
+  finishNow(cluster: number, cause: UnslicedFinish["cause"]): void;
+  /** The last `UNSLICED_LOG` unsliced finishes, oldest first. */
+  readonly unsliced: readonly UnslicedFinish[];
+  /** Called on every unsliced finish (the browser warns). */
+  onUnsliced: ((finish: UnslicedFinish) => void) | null;
+  /** `syncBuilds` counts every unsliced finish, whatever its cause. */
   readonly stats: { syncBuilds: number; built: number; evicted: number; maxStepMs: number; residentBoxes: number };
 }
+/** One cluster built in a single unsliced pass: `query` when a collision query
+ * met a cluster the streamer had not built, `admission` when the cave runtime
+ * built one the actor reached before a frame stepped. */
+export interface UnslicedFinish {
+  readonly cluster: number;
+  readonly caves: readonly string[];
+  readonly cause: "query" | "admission";
+  readonly ms: number;
+}
+/** Unsliced finishes kept for inspection. */
+export const UNSLICED_LOG = 32;
 export interface CaveWorld extends WorldQueries {
   readonly kitCaves: KitCaveStream;
 }
@@ -942,9 +961,19 @@ export function kitCaveWorld(options: Omit<CaveWorldOptions, "caves"> & {
     for (let r = c.build.next(); ; r = c.build.next()) if (r.done) { c.world = r.value; break; }
     c.build = null; stats.built++; stats.residentBoxes += c.boxes;
   };
-  /** The cluster's composite, built now if the streamer has not (counted). */
+  const unsliced: UnslicedFinish[] = [];
+  const finishNow = (c: Cluster, cause: UnslicedFinish["cause"]): void => {
+    const started = performance.now();
+    finish(c);
+    const f: UnslicedFinish = { cluster: c.index, caves: c.caves, cause, ms: +(performance.now() - started).toFixed(2) };
+    stats.syncBuilds++;
+    unsliced.push(f);
+    if (unsliced.length > UNSLICED_LOG) unsliced.shift();
+    kitCaves.onUnsliced?.(f);
+  };
+  /** The cluster's composite, built now if the streamer has not (counted and logged). */
   const ready = (c: Cluster): WorldQueries => {
-    if (!c.world) { stats.syncBuilds++; finish(c); }
+    if (!c.world) finishNow(c, "query");
     return c.world!;
   };
   const halfExtent = (s: Capsule): number => Math.max(s.halfWidth ?? s.radius, s.halfLength ?? s.radius);
@@ -980,6 +1009,9 @@ export function kitCaveWorld(options: Omit<CaveWorldOptions, "caves"> & {
       const e = at(p.x, p.z);
       return !!e && p.y < e.ceiling && insideKitCave(records.record(e.id), p);
     },
+    finishNow(i, cause) { const c = clusters[i]!; if (!c.world) finishNow(c, cause); },
+    unsliced,
+    onUnsliced: null,
     stats,
   };
   return {

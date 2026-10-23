@@ -266,6 +266,9 @@ export function createRenderer(
     // terrain files fetched toward where the viewer is heading.
     const caveWorld = gameWorld();
     const streamer = createKitStreamer(caveWorld.kitCaves, new Map(CAVE_SOURCES.map(c => [c.id, c.footprint])));
+    // STR-10: every unsliced cluster build is a streaming miss; say where.
+    caveWorld.kitCaves.onUnsliced = (f) => console.warn(`unsliced cave build (${f.cause}): cluster ${f.cluster} [${f.caves.join(", ")}] in ${f.ms} ms ` +
+      `at ${camera.position.x.toFixed(0)},${camera.position.y.toFixed(0)},${camera.position.z.toFixed(0)}`);
     let lastStream: { at: Vector3; time: number } | null = null, velocity = Vector3.Zero(), streamFrames = 0;
     let streamFrame: KitStreamFrame | null = null, worstCaveBuildMs = 0;
     // Visible currents: grit streaks carried by the real flow field.

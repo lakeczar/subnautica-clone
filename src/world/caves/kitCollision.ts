@@ -168,25 +168,47 @@ export function decodeKitCave(bytes: Uint8Array): KitCaveCollision {
     collar: { ...h.collar, top, bottom }, inside: { ...h.inside, bits } };
 }
 
-/** Many records in one file: count, then length-prefixed records. */
-export function encodeKitCavePack(records: readonly KitCaveCollision[]): Uint8Array {
-  return packKitCaves(records.map(encodeKitCave));
+const PACK_MAGIC = 0x3150434b; // "KCP1"
+/** The bake's source hash: sha-256, hex. */
+const SOURCE_BYTES = 32;
+/** A pack baked from other sources than the running build's (STR-13). */
+export class StaleKitCavePack extends Error {
+  constructor(readonly found: string, readonly expected: string) {
+    super(`kit cave pack is stale: baked from ${found.slice(0, 12)}…, this build is ${expected.slice(0, 12)}…`);
+  }
+}
+
+/** Many records in one file: magic, the bake's source hash (the pack's
+ * provenance: decoding checks it against the running build's), count, then
+ * length-prefixed records. */
+export function encodeKitCavePack(records: readonly KitCaveCollision[], sourceHash: string): Uint8Array {
+  return packKitCaves(records.map(encodeKitCave), sourceHash);
 }
 /** The pack of already encoded records (the bake encodes them in workers). */
-export function packKitCaves(parts: readonly Uint8Array[]): Uint8Array {
-  const out = new Uint8Array(4 + parts.reduce((n, p) => n + 4 + p.length, 0));
+export function packKitCaves(parts: readonly Uint8Array[], sourceHash: string): Uint8Array {
+  if (!/^[0-9a-f]{64}$/.test(sourceHash)) throw new Error(`kit cave pack: source hash must be sha-256 hex, not ${sourceHash}`);
+  const head = 8 + SOURCE_BYTES;
+  const out = new Uint8Array(head + parts.reduce((n, p) => n + 4 + p.length, 0));
   const view = new DataView(out.buffer);
-  view.setUint32(0, parts.length, true);
-  let at = 4;
+  view.setUint32(0, PACK_MAGIC, true);
+  for (let i = 0; i < SOURCE_BYTES; i++) out[4 + i] = parseInt(sourceHash.slice(i * 2, i * 2 + 2), 16);
+  view.setUint32(4 + SOURCE_BYTES, parts.length, true);
+  let at = head;
   for (const p of parts) { view.setUint32(at, p.length, true); out.set(p, at + 4); at += 4 + p.length; }
   return out;
 }
-export function decodeKitCavePack(bytes: Uint8Array): KitCaveCollision[] {
+/** The pack's records, when it was baked from `expectedSource`; a pack from
+ * any other sources throws `StaleKitCavePack`, before any record is decoded. */
+export function decodeKitCavePack(bytes: Uint8Array, expectedSource: string): KitCaveCollision[] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), out: KitCaveCollision[] = [];
-  let at = 4;
-  for (let i = view.getUint32(0, true); i > 0; i--) {
+  if (bytes.byteLength < 8 + SOURCE_BYTES || view.getUint32(0, true) !== PACK_MAGIC) throw new Error("kit cave pack: bad magic");
+  const found = [...bytes.subarray(4, 4 + SOURCE_BYTES)].map(b => b.toString(16).padStart(2, "0")).join("");
+  if (found !== expectedSource) throw new StaleKitCavePack(found, expectedSource);
+  let at = 8 + SOURCE_BYTES;
+  for (let i = view.getUint32(4 + SOURCE_BYTES, true); i > 0; i--) {
     const n = view.getUint32(at, true);
     out.push(decodeKitCave(bytes.subarray(at + 4, at + 4 + n))); at += 4 + n;
   }
+  if (at !== bytes.byteLength) throw new Error(`kit cave pack: ${bytes.byteLength - at} trailing bytes`);
   return out;
 }

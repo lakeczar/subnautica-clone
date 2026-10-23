@@ -28,6 +28,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { deflateSync, inflateSync } from "node:zlib";
+import { BAKE_ENTRY, sourceHashOf } from "./bake-source-hash.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -52,12 +53,10 @@ const work = join(process.env.TMPDIR ?? tmpdir(), `siltwake-bake-${process.pid}`
 mkdirSync(work, { recursive: true });
 const bundle = join(work, "bake.mjs");
 const result = await build({
-  entryPoints: [join(root, "src/render/biomes/bake.ts")], bundle: true, platform: "node", format: "esm",
+  entryPoints: [join(root, BAKE_ENTRY)], bundle: true, platform: "node", format: "esm",
   outfile: bundle, metafile: true, logLevel: "warning", absWorkingDir: root,
 });
-const hash = createHash("sha256");
-for (const input of Object.keys(result.metafile.inputs).sort()) hash.update(input).update(readFileSync(join(root, input)));
-const sourceHash = hash.digest("hex");
+const sourceHash = sourceHashOf(root, result.metafile);
 const manifestPath = join(out, "manifest.json"), caveManifestPath = join(caveOut, "manifest.json");
 const read = (path) => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
 const old = read(manifestPath);
@@ -143,7 +142,7 @@ await Promise.all(Array.from({ length: n }, (_, w) => new Promise((done, fail) =
 rmSync(work, { recursive: true, force: true });
 
 // One collision pack, in `CAVE_SOURCES` order; one light field per cave.
-const collisionRaw = packKitCaves(caveIds.map(id => caves.get(id).collision));
+const collisionRaw = packKitCaves(caveIds.map(id => caves.get(id).collision), sourceHash);
 const lightFile = id => `light/${id}.bin`;
 
 if (args.has("--verify")) {

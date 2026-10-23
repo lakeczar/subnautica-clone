@@ -1,4 +1,4 @@
-import { decodeKitCavePack, type KitCaveCollision } from "../../world/caves/kitCollision.js";
+import { decodeKitCavePack, StaleKitCavePack, type KitCaveCollision } from "../../world/caves/kitCollision.js";
 import { inflate } from "../biomes/terrainAssets.js";
 import { decodeLightField, type CaveLightField } from "./lightField.js";
 
@@ -8,7 +8,12 @@ import { decodeLightField, type CaveLightField } from "./lightField.js";
  * by the streamer as the player approaches. Fetch and inflate are async
  * (`DecompressionStream`), so nothing here blocks a frame; decoding a
  * finished file is a copy. Absent or stale files leave the game on its live
- * fallback (generation), which only a dev build without a bake should see. */
+ * fallback (generation), which only a dev build without a bake should see.
+ *
+ * Provenance (STR-13): the build carries the bake's source hash. A manifest,
+ * or a collision pack, baked from any other sources is refused (logged; the
+ * live fallback), so a stale `public/caves/` can never collide differently
+ * from the code that runs. */
 export interface CaveStore {
   /** Decoded collision records once the pack has arrived and matches the
    * manifest, else null. */
@@ -21,6 +26,8 @@ export interface CaveStore {
   lightSettled(id: string): boolean;
   /** Decoded light fields to keep (the rest are dropped, nearest kept). */
   retainLight(ids: readonly string[]): void;
+  /** Why the bake was refused, when it was (stale provenance). */
+  readonly refused: string | null;
   readonly stats: { fetches: number; failures: number; lightBytes: number; collisionMs: number };
 }
 
@@ -30,7 +37,14 @@ interface Manifest {
   readonly light: Readonly<Record<string, { readonly file: string }>>;
 }
 
-export function httpCaveStore(base: string, options: { readonly keepLight?: number } = {}): CaveStore {
+export interface CaveStoreOptions {
+  /** The bake source hash this build was made from; null refuses every bake
+   * (nothing to check it against). */
+  readonly expectedSource: string | null;
+  readonly keepLight?: number;
+}
+
+export function httpCaveStore(base: string, options: CaveStoreOptions): CaveStore {
   const root = new URL(base, globalThis.location?.href ?? "http://localhost/");
   const keep = options.keepLight ?? 12;
   const stats = { fetches: 0, failures: 0, lightBytes: 0, collisionMs: 0 };
@@ -41,15 +55,21 @@ export function httpCaveStore(base: string, options: { readonly keepLight?: numb
     if (!r.ok || (r.headers.get("content-type") ?? "").includes("text/html")) return null;
     return new Uint8Array(await r.arrayBuffer());
   };
-  let manifest: Manifest | null = null, collision: Map<string, KitCaveCollision> | null = null, settled = false;
+  let manifest: Manifest | null = null, collision: Map<string, KitCaveCollision> | null = null, settled = false, refused: string | null = null;
+  const refuse = (why: string): void => { refused = why; console.warn(`cave bake refused, live fallback: ${why}`); };
   const started = performance.now();
   const ready = (async () => {
     const text = await fetchBytes("manifest.json");
     if (!text) return;
-    manifest = JSON.parse(new TextDecoder().decode(text)) as Manifest;
-    const packed = await fetchBytes(manifest.collision.file);
+    const read = JSON.parse(new TextDecoder().decode(text)) as Manifest;
+    if (!options.expectedSource) { refuse("this build carries no bake source hash"); return; }
+    if (read.sourceHash !== options.expectedSource) { refuse(`manifest baked from ${read.sourceHash?.slice(0, 12)}…, this build is ${options.expectedSource.slice(0, 12)}…`); return; }
+    manifest = read;
+    const packed = await fetchBytes(read.collision.file);
     if (!packed) return;
-    const records = decodeKitCavePack(await inflate(packed));
+    let records: KitCaveCollision[];
+    try { records = decodeKitCavePack(await inflate(packed), options.expectedSource); }
+    catch (e) { if (e instanceof StaleKitCavePack) { manifest = null; refuse(e.message); return; } throw e; }
     collision = new Map(records.map(r => [r.id, r]));
     stats.collisionMs = performance.now() - started;
   })().catch(() => { stats.failures++; }).finally(() => { settled = true; });
@@ -67,6 +87,7 @@ export function httpCaveStore(base: string, options: { readonly keepLight?: numb
   return {
     get collision() { return collision; },
     get settled() { return settled; },
+    get refused() { return refused; },
     light(id) { const f = fields.get(id); if (!f) start(id); return f ?? null; },
     lightSettled: id => fields.has(id) || absent.has(id),
     retainLight(ids) {
@@ -78,6 +99,8 @@ export function httpCaveStore(base: string, options: { readonly keepLight?: numb
   };
 }
 
+/** Set by the vite build (vite.config.ts); absent under Node. */
+declare const __BAKE_SOURCE_HASH__: string | undefined;
 let store: CaveStore | null | undefined;
 /** The game's cave store: the baked `caves/` beside the page in a browser,
  * none elsewhere (Node tests and tools generate live). */
@@ -86,7 +109,7 @@ export function gameCaveStore(): CaveStore | null {
     let base: string | null = null;
     // Only a real page with a usable base URL (not Node's test doubles).
     try { base = typeof document !== "undefined" && typeof fetch === "function" ? new URL("caves/", document.baseURI).href : null; } catch { base = null; }
-    store = base ? httpCaveStore(base) : null;
+    store = base ? httpCaveStore(base, { expectedSource: typeof __BAKE_SOURCE_HASH__ === "string" ? __BAKE_SOURCE_HASH__ : null }) : null;
   }
   return store;
 }

@@ -10,7 +10,8 @@ import type { AdmissionUpdate, CaveAdmission } from "./large/streaming.js";
  *
  * - **Kit caves** (small and medium). Before a frame steps, a player within
  *   reach of a cluster whose collision is not built gets it built now from
- *   its decoded records (a few milliseconds; counted, never expected). If the
+ *   its decoded records (a few milliseconds; counted and logged through the
+ *   stream's `finishNow`, never expected in ordinary travel). If the
  *   records have not arrived yet (the pack is still downloading), the frame
  *   holds instead: the clock pauses and "Loading cave…" shows.
  * - **Cave biomes** run LC's `CaveAdmission` (away, waiting, loading, rescue,
@@ -70,7 +71,7 @@ export function createCaveRuntime(o: CaveRuntimeOptions) {
       const clusters = near(actor);
       for (const i of clusters) {
         if (stream.ready(i)) continue;
-        if (stream.available(i) || o.canGenerate()) { stream.step([i], Infinity, () => 0); stats.admissionBuilds++; }
+        if (stream.available(i) || o.canGenerate()) { stream.finishNow(i, "admission"); stats.admissionBuilds++; }
         else { holding = true; message = "Loading cave…"; }
       }
       // Cave biomes (LC's contract).

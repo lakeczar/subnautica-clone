@@ -14,7 +14,9 @@ import { relocateForCave } from "../src/sim/step.js";
 import { createCaveWorldQueries, createWorldQueries, gameWorld, kitCaveWorld, surfaceHeight, type Solid } from "../src/sim/world.js";
 import type { Vec3 } from "../src/sim/types.js";
 import { createCaveRuntime } from "../src/world/caves/admission.js";
-import { decodeKitCave, decodeKitCavePack, encodeKitCave, encodeKitCavePack, insideKitCave, liveKitCave } from "../src/world/caves/kitCollision.js";
+import { decodeKitCave, decodeKitCavePack, encodeKitCave, encodeKitCavePack, insideKitCave, liveKitCave, StaleKitCavePack } from "../src/world/caves/kitCollision.js";
+import { httpCaveStore } from "../src/render/caves/caveStore.js";
+import { deflateSync } from "node:zlib";
 import { createKitStreamer } from "../src/world/caves/kitStream.js";
 import { createLargeCave } from "../src/world/caves/large/build.js";
 import { CaveAdmission, CaveArbiter, caveWorldMap } from "../src/world/caves/large/streaming.js";
@@ -42,12 +44,14 @@ test("the vertical test's premise: every cave's ground and terraces stay under i
   }
 });
 
+const SOURCE_A = "a".repeat(64), SOURCE_B = "b".repeat(64);
+
 test("bake codecs: a cave's collision record and light field decode to exactly what was generated", () => {
   const source = CAVE_SOURCES.find(s => s.id === "reef_pumphouse_undercut")!;
   const live = liveKitCave(source, worldFloor, surfaceHeight);
   const back = decodeKitCave(encodeKitCave(live));
   assert.deepEqual(back, live);
-  assert.deepEqual(decodeKitCavePack(encodeKitCavePack([live, live]))[1], live);
+  assert.deepEqual(decodeKitCavePack(encodeKitCavePack([live, live], SOURCE_A), SOURCE_A)[1], live);
   assert.ok(live.rock.length / 6 === caveDef(source.id, worldFloor).rock.length && live.ceiling === source.topY);
   const field = caveLightField(caveDef(source.id, worldFloor), worldFloor);
   assert.deepEqual(decodeLightField(encodeLightField(field)), field);
@@ -108,9 +112,13 @@ test("streaming: clusters build ahead by heading inside 360 m, in slices; behind
   f = streamer.update({ x: 1010, y: -50, z: -440 }, { x: 0, y: 0, z: 16 });
   assert.ok(f.wanted.includes(ib) && f.evicted.includes(ia), JSON.stringify(f));
   assert.ok(!world.kitCaves.ready(ia));
-  // A query there now rebuilds it on the spot: same answers, counted.
+  // A query there now rebuilds it on the spot: same answers, counted and logged (STR-10).
+  const heard: string[] = [];
+  world.kitCaves.onUnsliced = f => heard.push(`${f.cause}:${f.caves.join(",")}`);
   assert.equal(world.supportHeight(1010, -990, -61.5), -62);
   assert.equal(world.kitCaves.stats.syncBuilds, 1);
+  assert.deepEqual(heard, ["query:a"]);
+  assert.deepEqual(world.kitCaves.unsliced.map(f => [f.cluster, f.cause]), [[ia, "query"]]);
 });
 
 test("admission: a player beside a cave whose records have not arrived is held, then admitted at once when they land", () => {
@@ -123,6 +131,9 @@ test("admission: a player beside a cave whose records have not arrived is held, 
   canGenerate = true;
   const v = rt.update(actorBox(feet, DIVER), feet, feet, 16);
   assert.ok(!v.holding && v.state === "clear" && rt.stats.admissionBuilds === 1);
+  // The safety net is the stream's one unsliced path: counted and logged as admission's.
+  assert.deepEqual(world.kitCaves.unsliced.map(f => f.cause), ["admission"]);
+  assert.equal(world.kitCaves.stats.syncBuilds, 1);
   assert.ok(world.kitCaves.clusters.some(c => c.caves.includes("a") && world.kitCaves.ready(c.index)));
 });
 
@@ -194,4 +205,43 @@ test("CA-1 ground read: beside a cave, support is the exterior's own, not the co
     const x = f.minX - 7.2, z = f.minZ + (f.maxZ - f.minZ) * i / 20;
     assert.equal(world.supportHeight(x, z, 10), exterior.supportHeight(x, z, 10));
   }
+});
+
+test("STR-13 provenance: a collision pack or manifest baked from other sources is refused; the game stays on its live fallback", async () => {
+  const source = CAVE_SOURCES.find(s => s.id === "reef_pumphouse_undercut")!;
+  const live = liveKitCave(source, worldFloor, surfaceHeight);
+  // The codec: same IDs, same records, other sources: refused before decoding.
+  assert.throws(() => decodeKitCavePack(encodeKitCavePack([live], SOURCE_A), SOURCE_B), StaleKitCavePack);
+  // The store over HTTP, with a stub fetch serving one bake.
+  const serve = (manifestSource: string, packSource: string) => {
+    const files: Record<string, Uint8Array> = {
+      "manifest.json": new TextEncoder().encode(JSON.stringify({ codec: 1, sourceHash: manifestSource, collision: { file: "collision.bin" }, light: {} })),
+      "collision.bin": deflateSync(encodeKitCavePack([live], packSource)),
+    };
+    return (async (url: URL | string) => {
+      const body = files[new URL(String(url)).pathname.split("/caves/")[1]!];
+      return new Response(body ? body.slice() : null, { status: body ? 200 : 404 });
+    }) as typeof fetch;
+  };
+  const load = async (manifestSource: string, packSource: string, expected: string | null) => {
+    const saved = globalThis.fetch, warn = console.warn, warned: string[] = [];
+    globalThis.fetch = serve(manifestSource, packSource); console.warn = (m: string) => { warned.push(m); };
+    try {
+      const store = httpCaveStore("http://bake.test/caves/", { expectedSource: expected });
+      for (let i = 0; i < 200 && !store.settled; i++) await new Promise(r => setTimeout(r, 1));
+      assert.ok(store.settled);
+      return { store, warned };
+    } finally { globalThis.fetch = saved; console.warn = warn; }
+  };
+  const fresh = await load(SOURCE_A, SOURCE_A, SOURCE_A);
+  assert.deepEqual(fresh.store.collision?.get(source.id), live);
+  assert.equal(fresh.store.refused, null);
+  // A stale pack beside a fresh manifest (a partial copy): the pack's own header refuses it.
+  const stalePack = await load(SOURCE_B, SOURCE_A, SOURCE_B);
+  assert.equal(stalePack.store.collision, null);
+  assert.match(stalePack.store.refused ?? "", /stale/);
+  assert.match(stalePack.warned.join("\n"), /cave bake refused, live fallback/);
+  // A stale manifest, and a build without a hash, refuse the bake too.
+  assert.equal((await load(SOURCE_A, SOURCE_A, SOURCE_B)).store.collision, null);
+  assert.match((await load(SOURCE_A, SOURCE_A, null)).store.refused ?? "", /no bake source hash/);
 });
