@@ -734,3 +734,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Review:** short Sol R4 running (`siltwake-stew1-review-r4-sol-c5ab187`).
 - **SIM-1a done at `a6010a80`** (fixes `ff623989`): regions rebuilt from one restored partition; quota code 1014. Fast tier on the 4070. Short Sol re-check running (`siltwake-sim1a-review-r2-sol-a6010a8`); it is also asked to look for any other recorder index built from a mixed partition.
 - **TST-16 done at `028793ae`** (R9 fixes, code `110f12d4`): maintenance mode as specified. Admission is paused and submissions queue; the unit update runs outside the lock with bounded calls (reload 120 s); success means systemd's properties match; on failure, maintenance stays and the recovery is to rerun install; ENOENT-only absence; no rollback. Suites pass 23/23, 25/25 and 27/27, units 42/42, fast tier on the 4070. Sol R10 running (`siltwake-tst16-review-r10-sol-028793a`).
+- **SIM-1a ACCEPTED and MERGED** (Sol re-check `0d9b955d` on `review/sim-1a-r2`). Root `b54bfd92`.
+  - **Gate:** run on the 4070 via queue ticket 261023-233143-e0e4, bound to b54bfd92: npm test 1,417/1,417, build, all five economy scripts.
+  - **After:** saves export running. SIG-1 can start from this root. SIM-1b (incremental journal) is parked on `t3/sim-1b-timeline-journal`.
