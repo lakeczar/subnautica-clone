@@ -43,8 +43,12 @@ export function analyse(r, t = THRESHOLDS) {
   const { header } = r;
   // A driver run is judged from the moment travel starts (run.pageStart); the
   // load before it is summarised apart. An owner export is judged whole.
-  // An owner export has no driver mark: it is judged from entering the expedition (the load screen before it is not play).
-  const t0 = header.run?.pageStart ?? r.events.find((e) => e.kind === "load")?.t ?? r.frames[0]?.t ?? r.samples[0]?.t ?? 0;
+  // An owner export has no driver mark: it is judged from the first moment of play after
+  // entering the expedition. Entry itself (behind the load screen) admits nearby caves at once,
+  // by CW-1's design, and is summarised with the load, not judged.
+  const entered = r.events.find((e) => e.kind === "load")?.t;
+  const playing = entered == null ? null : r.samples.find((x) => x.t > entered && x.active)?.t ?? null;
+  const t0 = header.run?.pageStart ?? playing ?? entered ?? r.frames[0]?.t ?? r.samples[0]?.t ?? 0;
   const inWindow = (x) => x.t >= t0;
   const frames = r.frames.filter(inWindow), samples = r.samples.filter(inWindow), events = r.events.filter(inWindow), system = r.system.filter(inWindow);
   const early = r.frames.filter((f) => f.t < t0 && f.gap > 0);
