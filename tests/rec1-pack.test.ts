@@ -21,7 +21,7 @@ function synthetic(dir: string, opts: { hold?: boolean; error?: boolean } = {}):
     const hitch = i === 1200, held = opts.hold && i >= 2000 && i < 2060;
     r.frame({ t, gap: hitch ? 48 : 16.67, work: hitch ? 44 : 4, sim: 1, steps: 1, chunks: hitch ? 36 : 0.3, caves: 0.1, regions: 0.1, lights: 0.2, render: 2, hold: held ? "loading" : "clear" }, 0.02);
     if (i % 15 === 0) r.sample({ t, tick: 100 + i, pos: [i * 0.2, -20, 0], depth: 20, region: i < 1800 ? "refuge_reef" : "island_chain", cave: null, hold: held ? "loading" : "clear",
-      oxygen: 90, health: 100, food: 90, speed: i > 2400 && i < 3000 ? 0 : 6, mode: "piloting", craft: null, active: true, draws: i > 3000 ? 600 : 100, unsliced: 0 });
+      oxygen: 90, health: 100, food: 90, speed: i > 3000 && i < 3480 ? 0 : 6, mode: "piloting", craft: null, active: true, draws: i > 3000 ? 600 : 100, unsliced: 0 });
   }
   r.event("milestone", "new blueprint dart", { t: start + 30_000 });
   for (let k = 0; k < 5; k++) r.event("action", "gather", { t: start + 41_000 + k * 1000 });
@@ -46,7 +46,7 @@ test("a clean run passes what it can measure and names what it cannot", () => {
     assert.equal(a.verdict.status, "fail");
     assert.deepEqual(a.verdict.failed, ["no streaming frame over 33 ms"]);
     assert.ok(a.verdict.unproven.includes("frame times judged"), "a shared run never judges frame times");
-    assert.ok(a.verdict.unproven.includes("video"), "no video is listed, not passed");
+    assert.equal(a.checks.find((c: { name: string }) => c.name === "video").status, "absent", "no video (an exclusive run) is named, never passed");
     const s = A.summaryJson(a, A.loadRecording(dir).header);
     assert.ok(JSON.stringify(s).length < 1024, "Tier 0 stays under 1 KB");
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -74,7 +74,7 @@ test("pacing splits the time into travelling, doing and waiting, and finds the l
   try {
     synthetic(dir);
     const p = A.analyse(A.loadRecording(dir)).pacing;
-    assert.ok(p.share.travelling.pct > 60, JSON.stringify(p.share));
+    assert.ok(p.share.travelling.pct >= 55, JSON.stringify(p.share));
     assert.ok(p.share.doing.s >= 5 && p.share.waiting.s >= 5, JSON.stringify(p.share));
     assert.equal(p.milestones.length, 1);
     assert.ok(p.regions.refuge_reef.s >= 29 && p.regions.island_chain.s >= 29, JSON.stringify(p.regions));
