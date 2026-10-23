@@ -128,6 +128,13 @@ Measured headless in the `tour` scenario (`manifest.measurements.tour`, at `0a46
   - A lease-less `.new-staging-` older than ten minutes (a crash mid-creation) is also collected.
   - A lease-less `.staging-` from an older build is never collected automatically; delete it by hand.
   - Age alone never deletes anything. Tested: a live owner's staging backdated to 2000 survives `index`, and is collected once its owner is SIGKILLed.
+- **R2 evidence:**
+  - `npm test` passes 1,386 of 1,386 at `48d9029`, and the typecheck is clean.
+  - `save-library` and `save-library-cli` pass 16 of 16, repeated three times for the race and lease tests.
+  - Heavy tests on the queue: `save-library-build.heavy.test.ts` 3 of 3 at `2df921f` (ticket `261023-133641-aaee`), and 19 of 19 with the library files at `48d9029` (ticket `261023-133010-3da4`), except the one regex since fixed.
+  - **The real published exports through the new historical path:** `saves.js verify` on `0a464bc`, `1d4d2c3` and `dabaa79` decodes each with its own archived build's `verifyCommitDir`; all pass.
+  - **Full export at `48d9029`** on siltwake-alickers (`scripts/saves-export.sh`): exit 0, 8 of 8 complete, imported with flock publication, decoded in staging by its own build. All 73 saves are byte-identical to the factory `dabaa79` export.
+  - The root holds only commit directories, `index.json`, `.publish.lock` and its `.owner`: no staging left.
 
 ## Checks
 - **Fast:** `npm test` passes 1,328 of 1,328 at `0a464bc`. After the root merge, `save-library`, `playthrough` and `playthrough-parallel` pass 22 of 22 at the head. `tests/save-library.test.ts` takes 0.9 s CPU and covers:
