@@ -183,12 +183,19 @@ test("a barrel outside sim and content can't launder a render or Babylon value; 
     "src/sim/viaBabylon.ts": `import { LIMIT } ${from("../world/babylon/index.js")};\nexport const c = LIMIT;\n`,
     "src/content/viaDeep.ts": `import { twice } ${from("../world/deep/a.js")};\nexport const d = twice;\n`,
     "src/sim/viaTypes.ts": `import { plain } ${from("../world/types/index.js")};\nimport type { Art } ${from("../world/types/index.js")};\nexport const e = plain;\nexport type F = Art;\n`,
+    // A loop of barrels where only one member touches render: every entry into the loop is caught.
+    "src/world/loop/a.ts": `import { y } ${from("./b.js")};\nimport { LIMIT } ${from("../../render/regions.js")};\nexport const x = () => y() + LIMIT;\n`,
+    "src/world/loop/b.ts": `import { x } ${from("./a.js")};\nexport const y = () => 1;\nexport const z = () => x();\n`,
+    "src/sim/viaLoop.ts": `import { z } ${from("../world/loop/b.js")};\nexport const g = z;\n`,
   });
   assert.ok(failures.some((f) => /layering: src\/sim\/viaBarrel\.ts reaches src\/render\/regions\.ts through src\/world\/barrel\/index\.ts/.test(f)), failures.join("\n"));
   assert.ok(failures.some((f) => /layering: src\/sim\/viaBabylon\.ts reaches @babylonjs\/core\/Maths\/math\.color\.js through src\/world\/babylon\/index\.ts/.test(f)), failures.join("\n"));
   assert.ok(failures.some((f) => /layering: src\/content\/viaDeep\.ts reaches src\/render\/regions\.ts through src\/world\/deep\/a\.ts → src\/world\/deep\/b\.ts/.test(f)), failures.join("\n"));
+  assert.ok(failures.some((f) => /layering: src\/sim\/viaLoop\.ts reaches src\/render\/regions\.ts through src\/world\/loop\/b\.ts → src\/world\/loop\/a\.ts/.test(f)), failures.join("\n"));
   assert.ok(!failures.some((f) => /viaTypes/.test(f)), failures.join("\n"));
-  assert.equal(failures.length, 3, failures.join("\n"));
+  // The loop itself is a new (render-free-layer) cycle too.
+  assert.ok(failures.some((f) => /cycle: a new value-import cycle: src\/world\/loop\/a\.ts → src\/world\/loop\/b\.ts/.test(f)), failures.join("\n"));
+  assert.equal(failures.length, 5, failures.join("\n"));
 });
 
 test("the real tsconfig.headless.json roots every sim and content source extension, and rejects the DOM there, imported or not", () => {

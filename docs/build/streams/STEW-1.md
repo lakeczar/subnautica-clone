@@ -134,6 +134,22 @@ Opus 5.5 high. Branch `t3/stew-1-guard-rails`, on root `f0dc680` (SAVE-1 merged)
   - Guard 838 ms; headless typecheck 0.9 s incremental, 4.7 s cold.
 - **Docs:** WORKER_RESOURCE_LIMITS states that `--class exclusive` is refused off the 3090 (use `--class gpu --machine 4070`), and that commands reading `.test-build*` or `dist` can't go to alickers (compile inside the job).
 
+## R2 fixes (Sol 6.1 xhigh R2, `b6a03882`: two P2s and one P3)
+- **R2-1, extensions dropped from collection and headless roots.**
+  - One set, `TS_EXTENSIONS`, built from TypeScript's own `ts.Extension` values (`.ts`, `.tsx`, `.mts`, `.cts`; declaration files excluded), now drives collection, source analysis and the driver scan.
+  - `tsconfig.headless.json` roots sim and content with recursive includes (`src/sim/**/*`), so the compiler's own discovery picks every supported extension.
+  - **Tests:** a disk-backed scratch repository whose `.mts`, `.cts` and `.tsx` sources are collected (a `.d.mts` is not) and each fails as planted. The real headless config, copied into a scratch repository, roots a `.mts`, `.cts` and `.tsx` plant (one imported by an upper-layer `src/runtime/app.ts`) and rejects their `window`, `localStorage` and `document`.
+- **R2-2, a barrel outside sim and content laundered a forbidden value.**
+  - The layering check now follows value edges (static and lazy, never type-only) through every module outside sim and content. Any path to render, UI, audio or Babylon fails, naming the chain.
+  - It is a fixed point over the whole graph: each outside module's next hop toward a forbidden target. Cycles are handled, so the guard stays at about 0.9 s.
+  - **Tests:** a render barrel, a Babylon barrel, an `export *` two-hop chain, a loop of barrels where only one member touches render, and a type-only barrel that stays exempt.
+  - **No false positives:** root and the merge trees of CW-1, REC-1, COL-1, SIM-1 and TST-16 with this branch all pass.
+- **R2-3, the waiter's own status was ignored.** A queued step also fails when its waiter exits nonzero, is killed or fails to start, even after printing a good receipt. Tested with exit 7 and SIGTERM.
+- **Composition (coordinator's decision):**
+  - `scripts/headless-platform.d.ts` now declares `TextEncoder`, `TextDecoder` and `AbortSignal`: real in Node ≥ 22 and workers, with only the members code uses. `LockManager` is deliberately not declared.
+  - **Codec check:** CW-1's kit-codec pattern and SIM-1's cancellation pattern typecheck under the real headless config, and a UTF-8 round trip, `AbortSignal.abort`, `reason` and `throwIfAborted` behave so at runtime.
+  - With this branch, CW-1's merge tree passes the headless typecheck. SIM-1's fails only on `LockManager` in `src/save/writer-lock.ts`, which SIM-1 splits into a portable port and a browser adapter.
+
 ## Compromises (each with its root fix and cost)
 1. **The guard's region-lookup and driver rules are name and text patterns,** not semantics. A lookup named otherwise (`whereIs`), or a driver hidden behind a helper, passes; a delegating adapter must have the exact delegation shape.
    - **Root fix:** the per-wave review, and REC-2 moving every driver onto `scripts/rec`, which leaves nothing to hide.

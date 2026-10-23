@@ -184,20 +184,27 @@ export function analyse(files, allow = ALLOW) {
   // check follows value edges (static and lazy, never type-only) through other layers.
   const forbidden = (t) => UPPER.test(t) || t.startsWith("@babylonjs/");
   const edges = (i) => [...i.imports.map((t) => [t, "imports"]), ...i.lazy.map((t) => [t, "lazily imports"])];
+  // Every module outside sim and content that reaches a forbidden target, with its next hop
+  // toward it: grown to a fixed point over the whole graph (cycles included), so each lookup
+  // is a walk along next hops.
+  const hop = new Map();
+  const between = [...info].filter(([m]) => !LOWER.test(m) && !forbidden(m));
+  for (const [m, i] of between) { const t = edges(i).find(([next]) => forbidden(next)); if (t) hop.set(m, t[0]); }
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [m, i] of between) {
+      if (hop.has(m)) continue;
+      const t = edges(i).find(([next]) => hop.has(next));
+      if (t) { hop.set(m, t[0]); grew = true; }
+    }
+  }
+  const chainFrom = (m) => { const out = [m]; while (!forbidden(out.at(-1))) out.push(hop.get(out.at(-1))); return out; };
   for (const [f, i] of info) {
     if (!LOWER.test(f)) continue;
     for (const [target, how] of edges(i)) if (forbidden(target)) failures.push(`layering: ${f} ${how} ${target} (sim and content stay below render, UI, audio and Babylon)`);
-    const via = new Map(), queue = edges(i).map(([t]) => t).filter((t) => info.has(t) && !LOWER.test(t) && !forbidden(t));
-    for (const t of queue) via.set(t, null);
-    for (let k = 0; k < queue.length; k++) {
-      const at = queue[k];
-      for (const [next] of edges(info.get(at))) {
-        if (forbidden(next)) {
-          const chain = [at];
-          for (let p = via.get(at); p; p = via.get(p)) chain.unshift(p);
-          failures.push(`layering: ${f} reaches ${next} through ${chain.join(" → ")} (a value path from sim or content to render, UI, audio or Babylon)`);
-        } else if (info.has(next) && !LOWER.test(next) && !via.has(next)) { via.set(next, at); queue.push(next); }
-      }
+    for (const [target] of edges(i)) if (!forbidden(target) && hop.has(target)) {
+      const chain = chainFrom(target);
+      failures.push(`layering: ${f} reaches ${chain.at(-1)} through ${chain.slice(0, -1).join(" → ")} (a value path from sim or content to render, UI, audio or Babylon)`);
     }
     for (const c of i.computed) failures.push(`layering: ${f} loads a computed module (${c}); sim and content import by literal path only, so the rule can see it`);
   }
