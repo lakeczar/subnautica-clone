@@ -13,7 +13,7 @@ import type { ContactBox } from "../content/encounterGeometry.js";
 import { localToWorld } from "./carrier.js";
 import { eyeHeight } from "./state.js";
 import { HUNTER_ROUND_SPEED } from "../content/fauna/windows.js";
-import { hunterRoundPoint, windowSample } from "./fauna/windows.js";
+import { hunterRoundPath, hunterRoundPoint, windowSample } from "./fauna/windows.js";
 export { encounterRotation } from "./hunterQueries.js";
 
 interface ActorQuery {
@@ -291,7 +291,11 @@ export function moveHunter(s: GameState, world: WorldQueries): {
     target=a.pose.position;
     speed=length(sub(target,start))>E.warn.stopAt?E.warn.speed:0;
   }
-  if(t.mode==="idle")speed=roundPhase==="resident"?0:length(sub(round,start))>6?HUNTER_ROUND_SPEED:roundPhase==="returning"?Math.min(2,length(sub(round,start))):2;
+  // Idle, it swims onto its authored round (hunterEncounter.ts follows that path
+  // directly once on it): drifting home while resident, at round speed, which
+  // outpaces the path, while the round runs. Each step stops on the path's point.
+  if(t.mode==="idle"&&!t.distraction){target=hunterRoundPath(s.tick);speed=roundPhase==="resident"?2:HUNTER_ROUND_SPEED;}
+  else if(t.mode==="idle")speed=roundPhase==="resident"?0:length(sub(round,start))>6?HUNTER_ROUND_SPEED:roundPhase==="returning"?Math.min(2,length(sub(round,start))):2;
   else if(t.mode==="disengage"&&!t.distraction&&roundPhase!=="resident"&&length(sub(round,start))>6)speed=HUNTER_ROUND_SPEED;
   const sweep=(delta:Vec3):Vec3=>moveHull(world,start,delta,H.worldEnvelope,undefined,undefined,{separateBoxOverlaps:true}).position;
   let position={...start}, blocked=false;

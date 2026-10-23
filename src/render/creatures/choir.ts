@@ -48,6 +48,7 @@ export function createHollowChoir(scene: Scene, cel: Material, name: string, rea
   let open = 0, swell = 0, last = 0;
   return {
     root: parts.root,
+    setEnabled: parts.setEnabled,
     meshes: [base, ...bells.map(b => b.mesh), shell],
     update(a: ThreatPose, seconds: number) {
       const dt = Math.min(0.1, seconds - last); last = seconds;

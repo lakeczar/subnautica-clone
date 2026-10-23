@@ -164,7 +164,7 @@ export function createFauna(scene: Scene, cel: Material, parent?: TransformNode)
         const pose = layingPose(s.tick, i), seen = !!camera && !!forward && inCameraView(camera, forward, pose.position);
         present[i] = swapWhileUnseen(present[i]!, !!skates[i], seen);
         const shown = present[i]! && near(pose.position, camera);
-        v.root.setEnabled(shown);
+        v.setEnabled(shown);
         if (shown) v.update({ id: "divide_skate_saddle", species: "layer_skate", mode: "rest", position: pose.position, yaw: pose.yaw,
           warning: 0, cue: null, modeSeconds: 0, busy: true }, seconds);
       });

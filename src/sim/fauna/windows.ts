@@ -5,7 +5,7 @@ import { sitePosition } from "../../content/ecology/sites.js";
 import type { ThreatAgentId } from "../../content/ecology/species.js";
 import { THREAT_HOME } from "../../content/registry.js";
 import {
-  HUNTER_FEEDING_CIRCLE, HUNTER_FEEDING_SPOT, SKATE_LAYING_AWAY, SKATE_LAYING_RADIUS, SKATE_LAYING_SITE, SKATE_REST_UNDER_MIRROR,
+  HUNTER_FEEDING_CIRCLE, HUNTER_FEEDING_SPOT, HUNTER_ROUND_SPEED, SKATE_LAYING_AWAY, SKATE_LAYING_RADIUS, SKATE_LAYING_SITE, SKATE_REST_UNDER_MIRROR,
   THREAT_WINDOWS, WINDOW_IDS, WINDOW_SPOTS,
 } from "../../content/fauna/windows.js";
 import type { ThreatWindow, WindowId, WindowSpecies } from "../../content/fauna/windows.js";
@@ -45,12 +45,15 @@ export function layingSkates(tick: number): { position: Vec3; yaw: number }[] {
   if (!THREAT_WINDOWS.layer_skate_laying.busy.includes(s.phase)) return [];
   const span = s.elapsed + s.remaining;
   const arrive = s.phase === "leaving" ? s.elapsed / span : s.phase === "returning" ? s.remaining / span : 1;
-  return [0, Math.PI].map((phase) => {
-    const a = secondsAt(tick) * 0.35 + phase, away = 1 - arrive;
-    const position = { x: SKATE_LAYING_SITE.x + Math.cos(a) * SKATE_LAYING_RADIUS,
-      y: SKATE_LAYING_SITE.y + 1 - away * 6, z: SKATE_LAYING_SITE.z + Math.sin(a) * SKATE_LAYING_RADIUS - away * 45 };
-    return { position, yaw: Math.atan2(-Math.sin(a), -Math.cos(a)) };
-  });
+  return [0, 1].map((i) => layingAt(tick, i, 1 - arrive));
+}
+/** Skate `i` circling `away` (0 at the egg cases, 1 at the far end of its
+ * departure path, 45 m south and 6 m down). Its circle never stops turning. */
+function layingAt(tick: number, i: number, away: number): { position: Vec3; yaw: number } {
+  const a = secondsAt(tick) * 0.35 + (i ? Math.PI : 0);
+  return { position: { x: SKATE_LAYING_SITE.x + Math.cos(a) * SKATE_LAYING_RADIUS,
+    y: SKATE_LAYING_SITE.y + 1 - away * 6, z: SKATE_LAYING_SITE.z + Math.sin(a) * SKATE_LAYING_RADIUS - away * 45 },
+  yaw: Math.atan2(-Math.sin(a), -Math.cos(a)) };
 }
 
 /** The sound hunter's round: feeding (circling the east shoal) while it leaves
@@ -62,9 +65,13 @@ export function hunterRoundPoint(tick: number): Vec3 {
   return { x: HUNTER_FEEDING_SPOT.x + Math.cos(a) * r, y: HUNTER_FEEDING_SPOT.y + Math.sin(a * 2) * 0.8, z: HUNTER_FEEDING_SPOT.z + Math.sin(a) * r };
 }
 
-/** With no diver or craft within this many metres of it, the idle hunter's
- * round follows the authored path below without a swept move. */
+/** With no diver or craft within this many metres of it, an idle hunter already
+ * on its round follows the authored path below without a swept move. */
 export const HUNTER_ROUND_UNSWEPT = 30;
+/** On its round: within one step at round speed of the path's point. Off it
+ * (after a break-off or a lure), the swept move at round speed brings it there
+ * first; the path itself never moves farther than this in a step. */
+export const HUNTER_ROUND_JOIN = HUNTER_ROUND_SPEED / 60;
 /** The round's authored path as a pure function of the tick: home while
  * resident, the straight east leg out and back, and the feeding circle. The
  * leg and circle are open water (tests/cr-1-creatures.heavy.test.ts sweeps them). */
@@ -86,14 +93,12 @@ export function hunterRoundPath(tick: number): Vec3 {
  * only appear or leave while the player cannot see where they are, so no one
  * watches one pop in or out. Shown when wanted, but never switched in view. */
 export const swapWhileUnseen = (present: boolean, wanted: boolean, inView: boolean): boolean => inView ? present : wanted;
-/** A laying skate's pose: on its visit path, or (kept after the visit while
- * still in view) circling the egg cases until it can leave unseen. */
+/** A laying skate's pose at any tick, continuous across both ends of the
+ * visit: on its visit path, and otherwise holding at the far end of that path,
+ * still circling. A stand-in still in view when the visit ends holds there
+ * until it can leave unseen; one held into the next visit sets off from there. */
 export function layingPose(tick: number, i: number): { position: Vec3; yaw: number } {
-  const k = layingSkates(tick)[i];
-  if (k) return k;
-  const a = secondsAt(tick) * 0.35 + (i ? Math.PI : 0);
-  return { position: { x: SKATE_LAYING_SITE.x + Math.cos(a) * SKATE_LAYING_RADIUS, y: SKATE_LAYING_SITE.y + 1, z: SKATE_LAYING_SITE.z + Math.sin(a) * SKATE_LAYING_RADIUS },
-    yaw: Math.atan2(-Math.sin(a), -Math.cos(a)) };
+  return layingSkates(tick)[i] ?? layingAt(tick, i, 1);
 }
 /** Whether a point is in the view: inside a cone around the camera's forward
  * (wider than the screen) and nearer than the water lets anyone see. */

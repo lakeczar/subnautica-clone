@@ -175,7 +175,10 @@ test("the creature economy is capped and loop-free", () => {
   for (const [id, r] of Object.entries(RECIPES))
     assert.ok(r.output !== "small_fish" && r.output !== "roe_cluster" && r.output !== "planter_feed", `${id} makes a creature resource`);
   for (const seed of Object.values(SEEDS)) assert.ok(!["small_fish", "roe_cluster", "planter_feed"].includes(seed.produce));
-  // Per source, at its cap and best rate: no ground or trap feeds more than 8 meals an hour.
+  // A sustained production-rate cap, per source: once its starting stock is
+  // taken, no ground or trap regrows more than 8 meals' worth an hour. It does
+  // not limit the first harvest of a stocked ground, several sources together,
+  // or the planters' own economy; each source's cap (at most 4) bounds that burst.
   const mealsPerHour = (raw: "small_fish" | "roe_cluster", perHour: number): number => perHour / COOKING[raw].raw * COOKING[raw].meals;
   for (const [id, r] of Object.entries(FAUNA_RENEWAL)) {
     const g = GROUNDS[id as FaunaSourceId];
@@ -236,8 +239,16 @@ test("CRE-04 (interim): stand-in laying skates come and go only while unseen", (
   assert.equal(inCameraView(cam, ahead, { x: 0, y: 0, z: -30 }), true, "ahead and near");
   assert.equal(inCameraView(cam, ahead, { x: 0, y: 0, z: 30 }), false, "behind");
   assert.equal(inCameraView(cam, ahead, { x: 0, y: 0, z: -300 }), false, "beyond the water's range");
-  // After the visit a kept skate goes on circling the egg cases rather than freezing.
+  // The pose is continuous over a whole laying cycle, across both ends of the
+  // visit: a stand-in kept in view never jumps, and keeps circling while it holds.
+  const period = 360 * 60;
+  for (const i of [0, 1]) for (let tick = 1; tick <= period + 60; tick++) {
+    const a = layingPose(tick - 1, i).position, b = layingPose(tick, i).position;
+    assert.ok(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 0.1, `skate ${i} moves ${Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z).toFixed(3)} m at tick ${tick}`);
+  }
   let after = 60; while (!(windowOpen("layer_skate_laying", after - 1) && !windowOpen("layer_skate_laying", after))) after++;
-  const a = layingPose(after, 0).position, b = layingPose(after + 60, 0).position;
-  assert.ok(Math.hypot(a.x - SKATE_LAYING_SITE.x, a.z - SKATE_LAYING_SITE.z) < 6 && Math.hypot(a.x - b.x, a.z - b.z) > 0.5);
+  const held = layingPose(after, 0).position, later = layingPose(after + 60, 0).position;
+  assert.ok(Math.hypot(held.x - later.x, held.z - later.z) > 0.5, "a held stand-in keeps circling");
+  assert.ok(Math.hypot(layingPose(after + 600, 0).position.x - SKATE_LAYING_SITE.x, layingPose(after + 600, 0).position.z - SKATE_LAYING_SITE.z) > 40,
+    "between visits it holds at the far end of its departure path, not over the egg cases");
 });

@@ -49,7 +49,7 @@ Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `fa35339` (C4, CA-3, 
   - `agents.ts`: a busy branch, and break-off sets spent; engagement counts are never refreshed by a window.
   - `ecology.ts`: bait sinks; `EcologyView.threats[].busy`.
   - Deterrent `bait` added in `species.ts`, `persist.ts` and `equipment.ts`.
-  - `hunter.ts` and `hunterEncounter.ts`: the round's target and speed; no interest gain while feeding; break-off; the idle round's unswept path (below); CRE-03's visible pass point (`hunterPassPoint(s, at, world)` tries eight closer, higher or straighter variants until one has a clear sight line from the eye).
+  - `hunter.ts` and `hunterEncounter.ts`: the round's target and speed; no interest gain while feeding; break-off; the idle round's unswept path once the hunter is on it, and the swept move onto it after a break-off (below); CRE-03's visible pass point (`hunterPassPoint(s, at, world)` tries eight closer, higher or straighter variants until one has a clear sight line from the eye).
   - `choir.ts`, `stalker.ts` and `skate.ts` show the busy postures; `cues.ts` draws bait; `layer.ts` composes the fauna group.
 - **Minimal, additive edits in shared roots (please review):**
   - `content/registry.ts`: `FAUNA_ITEMS`, `FAUNA_RECIPES`, `FAUNA_SOURCES` and `FAUNA_RENEWAL` spreads; `SourceDefinition.item` adds `FaunaItemKind`.
@@ -65,6 +65,8 @@ Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `fa35339` (C4, CA-3, 
   - `runtime/app.ts`: `KeyM` releases bait.
   - `render/renderer.ts` passes `state` to the creature layer and sets `canvas.dataset.tick` (the sim tick, read only by evidence drivers to time windows).
   - `render/{expedition,environment}.ts` skip creature grounds in the legacy source art.
+  - `render/creatures/{kit,types}.ts` (Sol R1-3): `CreatureParts.setEnabled` and `CreatureView.setEnabled` show or hide a creature's root and its world-space cues together, and a world-space cue starts hidden. The layer and the laying stand-ins cull through it. This also hides the choir's pulse shell, which was created enabled at the origin under the same flaw.
+  - `tests/ecology-adverse.test.ts` (S4): phased, window-aware cases added beside the unchanged originals (see Adverse case).
   - `content/regions/terrain.ts` exports `brineSheetY(x, z)`, the drawn mirror's height (`BRINE_Y` ± 0.25 m). `render/biomes/terrain.ts` now builds the mirror from it, with identical vertices, and the rest outline sits on it.
 - **Saves:** no schema bump. New sources and renewal rows load as New Game's (additive content); `systems.traps` is filled as `[]`. `earned-c06.json` and `reef-rib-trap.json` were re-canonicalised by decode → encode; only rows were added.
 - **Test pins updated for additive content.** Each comment says why:
@@ -79,6 +81,13 @@ Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `fa35339` (C4, CA-3, 
 - **Playthrough harness:** `scenarios.ts` stops a parent scenario that wasn't requested at its branches' milestone (before, `--scenario creel-loss` also played creel to the end). Requested scenarios run as before.
 - **CB-2 lore edit:** `fieldGuide.ts`, `fieldNotes.ts` and `FIELD-GUIDE.md` now say the skates settle just under the mirror in slack water (was: sink into the brine), to match CRE-05. Flagged for CB.
 
+## Sol R1 (request changes, three P2): fixed at the root
+- **R1-1, laying skates jumped 45 m in view at the end of a visit.** `layingPose` is now one continuous function of the tick. Between visits each stand-in holds at the far end of its departure path, circling. The visit's path starts and ends there, so neither boundary moves it, and the view gate only switches visibility.
+- **R1-2, the hunter jumped up to 11 m rejoining its round.** The unswept path is taken only by a hunter already on it. Off it, the idle hunter's swept move targets the path's point at round speed, which outpaces the path (at most 7.2 m/s, against 8). Resident, it drifts home at 2 m/s.
+- **R1-3, dormant skate outlines were enabled beside the pod.** One visibility operation now covers each creature's root and its world-space cues, which start hidden.
+- **Also addressed:** the adverse bound is qualified with phased tests, the path test now sweeps every leg, and the meal-rate wording is precise.
+- **Still missing, not replaced by anything:** a 4070 WebGL session on the second worker (its heavy runs are NullEngine); human readability and frame-rate checks.
+
 ## Compromise verdict (CRE-03/04/05/08)
 - **CRE-05 (done):** a resting skate rises to 0.9 m under the mirror and lies still. Its rest outline (body, both wingtips, tail; wound both ways) sits on the drawn mirror sheet, just above its highest point under the outline, with low humps for the back and wingtips, so it reads from the crest and at a grazing angle. The patrol ripple stops while it rests. Test: `CRE-05` (fast).
 - **CRE-04 (interim, done):** the stand-in laying skates appear or leave only while their spot is out of the camera's view (a 1 rad cone, 140 m). One still in view after the visit keeps circling the egg cases until the camera turns away. Test: `CRE-04 (interim)` (fast).
@@ -88,8 +97,8 @@ Opus 5.5 high. Branch `t3/natural-threat-windows`, on root `fa35339` (C4, CA-3, 
 ## Compromises: root fix and cost
 | Compromise | Root fix | Cost until then |
 | --- | --- | --- |
-| **Laying visit uses stand-ins.** The roster skates sink away north under the mirror; two stand-in skates lay at the lee shelf, 340 m away. The sim can't path a skate over the crest, out of its brine habitat. | NAV-1 migration lanes: one skate agent paths mirror → crest → shelf and back. | Nobody sees a skate leave the mirror and arrive at the shelf. A player watching the shelf when the visit starts sees no arrival until they look away. Watching the empty mirror is the only cue to go to the shelf. |
-| **The idle hunter's round is unswept.** With no diver or craft within 30 m (`HUNTER_ROUND_UNSWEPT`), it follows an authored path (home, the east leg, the feeding circle) without a swept move. Per step: 808 µs → 193 µs, against root's 138–156 µs. | Make the swept move cheap enough for every agent every step (a broadphase for the world colliders). | The path is right only while the water along it stays open. A heavy test sweeps the whole path, so new geometry across it fails the test rather than clipping silently. Within 30 m, the swept move runs as before. |
+| **Laying visit uses stand-ins.** The roster skates sink away north under the mirror; two stand-in skates lay at the lee shelf, 340 m away. The sim can't path a skate over the crest, out of its brine habitat. | NAV-1 migration lanes: one skate agent paths mirror → crest → shelf and back. | Nobody sees a skate leave the mirror and arrive at the shelf. A player watching the shelf when the visit starts sees no arrival until they look away. Watching the empty mirror is the only cue to go to the shelf. Between visits, a stand-in still in view holds at the far end of its departure path, circling, until it is unseen (Sol R1-1). |
+| **The idle hunter's round is unswept.** An idle hunter already on its round (within one step of the path's point), with no diver or craft within 30 m (`HUNTER_ROUND_UNSWEPT`), follows an authored path (home, the east leg, the feeding circle) without a swept move. Off the path (after a break-off or a lure), the swept move at round speed brings it there first (Sol R1-2). Per step: 808 µs → 193 µs, against root's 138–156 µs (Sol measured +24.9 µs on another fixture). | Make the swept move cheap enough for every agent every step (a broadphase for the world colliders). | The path is right only while the water along it stays open. A heavy test sweeps the hull along the whole circle and every leg the round can take, 2° apart, so new geometry across it fails the test rather than clipping silently. 30 m is not out of sight (the hunter is seen from 90 m), but the motion is the same either way: the path is continuous and never moves farther in a step than the hunter can swim. |
 | **CRE-03 has a fallback.** If all eight variants are hidden, the pass takes the usual point. | Early NAV-1: plan the pass from what the eye can see. | A pass may still be unseen where the crowns enclose the diver on every side. Not measured across the Canopy. |
 | **The laying caption fires only at the shelf.** The visit is watched from the lee shelf, not from the saddle. | The same migration lanes: watch the moving skates. | The saddle shows the skates leaving, but the journal times nothing there. |
 | **`dataset.tick`** on the canvas, for drivers. | A test hook API (REC-1's recorder could own it). | One DOM attribute written per frame. |
@@ -100,7 +109,7 @@ The gate ran at `7515e1d` (root `fa35339` merged, UX-1 included; one `hud.ts` co
 - **`npm run test:fast`:** 1,317/1,317 pass at `7515e1d`. `enc-1-readable-threats` is over TT-1's 5 s target (6.1 s, warning; it fails at 10 s). It costs the same on a clean root export, so CR-1 didn't cause it. That includes `cr-1-creatures` (12 tests) and CB-2's `creature-lore` comparing my composed rows. The covered behaviour:
   - **Windows:** each one exists, the worst wait is about a minute or less, and each opens long enough to cross. The CRE-03, CRE-04 and CRE-05 tests are above.
   - **Conservation:** catching by hand and by net, regrowth to the cap, cooking ratios, trap catch, cap and emptying (through a save), feed once per crop.
-  - **Protection:** protected species are never harvested; nothing loops; no source feeds more than 8 meals an hour.
+  - **Protection:** protected species are never harvested; nothing loops. Once its starting stock is taken, no source regrows more than 8 meals' worth an hour. That caps each source's sustained rate; it doesn't limit a stocked ground's first harvest, several sources together, or the planters.
   - **Saves:** a pre-CR-1 save loads with New Game's grounds and empty traps.
 - **`npm run test:heavy`** on the second worker: 61 files, 456/456 pass at `40c18d6` (60 files, 455/455 at `de3d4f6`). `cr-1-creatures.heavy` (6.2 s) covers:
   - an animal engaged when its window opens breaks off, and nothing strikes inside the window;
@@ -110,7 +119,12 @@ The gate ran at `7515e1d` (root `fa35339` merged, UX-1 included; one `hud.ts` co
   - the hunter's round gives no warning or bite, and after it the 6% bump ladder resumes;
   - the laying visit; first sight; bait (on the stalker and the resident hunter, not the feeding one);
   - grounds on the floor outside caves, and falls at least 30 m off routes;
-  - the unswept round path is open water the whole way.
+  - the hunter's hull swept along the whole feeding circle and every leg of its round, 2° apart; the path never moves farther in a step than the hunter can follow, over all 909 s of relative phases;
+  - **Sol R1 fixes, each mutation-checked** (each test fails with its fix removed from the compiled output):
+    - a pursuing hunter breaking off as its round begins: three diver positions, every tick for 57 s, no step longer than its fastest swim (13 m/s); it joins its round and stays on it until the round ends; a diver crossing within 30 m and out again leaves it on its path;
+    - the same with 1 m of rock across the rejoin chord: no step crosses it;
+    - laying stand-ins in a NullEngine scene with a fixed watching camera: real transforms never move more than 0.1 m a tick across the end of a visit and the start of the next;
+    - the creature layer: nothing enabled by the pod at tick 0; a resting skate's outline shows from the crest, and disappears with the skate when it is culled.
 - **`npm run build`:** OK at `7515e1d`.
 - **Economy scripts:** `check-campaign-economy`, `check-m1-economy`, `check-m2-a-economy`, `check-m2-b1-economy`, `check-progression-curve` and `upgrade-economy` all exit 0 at `7515e1d`.
 - **`npm run playthrough`** on the second worker at `de3d4f6` and again at `40c18d6`, run whole (`--jobs 3`): all five scenarios complete with no blockers, and every milestone reload matched:
@@ -175,7 +189,13 @@ One per window, with no placement and no teleport. [`cr1/approach.mjs`](cr1/appr
   - In two Divide runs the outline hid under the drawn mirror sheet; that led to `brineSheetY`.
 
 ## Adverse case
-S4's real-world adverse case: a diver who lingers lit and loud in the stalkers' passage, then climbs out dark. When I first added windows, the busy branch reset the animal's strike count, so every feeding bout gave the stalkers a fresh engagement. The diver lost **229 HP** against S4's 60 HP bound. Fix: a window never refreshes an encounter, and an animal that breaks off to feed is spent through its refractory, as a lure spends the choir. The bound holds again (`ecology-world`, `ecology-adverse` and `ecology-agents` pass unchanged).
+S4's real-world adverse case: a diver who lingers lit and loud in the stalkers' passage, then climbs out dark. When I first added windows, the busy branch reset the animal's strike count, so every feeding bout gave the stalkers a fresh engagement. The diver lost **229 HP** against S4's 60 HP bound. Fix: a window never refreshes an encounter, and an animal that breaks off to feed is spent through its refractory, as a lure spends the choir. With that fix, S4's case passes unchanged (`ecology-world`, `ecology-adverse`, `ecology-agents`). That case starts at tick 0.
+
+**The bound, qualified (Sol R1):** Sol shifted the same case to arrive 17, 37 and 67 s into the cycles. Under S4's escape rule, a diver waits in the crevice until every engaged animal rests in its refractory; 9 of 12 shifted cases passed. The Rift routes from 37 s scored 566 and 603 HP of accumulated loss, and the skate from 67 s scored 84. These are damage totals past a real diver's death, not health remaining. That rule ignores the new windows: the diver sits through a whole feeding or rest that is a way out.
+- `ecology-adverse` keeps S4's four tick-0 cases unchanged.
+- It adds the same four arriving at 17, 37 and 67 s, where the diver also leaves while the animal is plainly busy in its window, engaged before or not.
+- All 12 pass the same assertions: no strike during the escape, at most 60 HP lost (at most 37.9), alive throughout, never inside rock, and the loss accounted exactly. Two premises apply only from tick 0, because at other phases the window may come first: the fixture produces contact, and the skate case includes brine harm.
+- This is an additive edit to S4's test file.
 
 ## Known limits and notes
 - **Bible conflict:** `meridian.choir_rest` was listed as "existing refractory, don't add a cycle". The owner's 2026-10-22 rule (every threat has a natural window) supersedes it. The owner accepted the choir's natural rest overriding the bible (2026-10-22).
@@ -185,6 +205,6 @@ S4's real-world adverse case: a diver who lingers lit and loud in the stalkers' 
   - fish regather 1 per 240–300 s (cap 3–4);
   - roe 1 per 15 min (cap 2);
   - a trap at most 7.5 meals an hour;
-  - no source feeds more than 8 meals an hour.
+  - each source regrows at most 8 meals' worth an hour once its starting stock is taken.
 
   Food was already non-scarce (the reef cups can always be tended), so these add options, not a required path.

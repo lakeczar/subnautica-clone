@@ -59,7 +59,7 @@ export function createCreatureLayer(scene: Scene, cel: Material, parent?: Transf
         const v = threats.get(pose.id);
         if (!v) continue;
         const visible = near(pose.position, camera);
-        v.root.setEnabled(visible);
+        v.setEnabled(visible);
         if (visible) v.update(pose, seconds);
       }
       const lip = cueHome("rift_mites_lip");

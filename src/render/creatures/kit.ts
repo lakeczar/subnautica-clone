@@ -15,9 +15,13 @@ export interface CreatureParts {
   /** Sibling of root in the parent's frame, for cues placed in world space
    * (a dimple on the mirror layer, a pulse shell). Disposed with the creature. */
   readonly world: TransformNode;
-  /** Batch whose finished mesh is parented to `parent` (default root) and left movable. */
+  /** Batch whose finished mesh is parented to `parent` (default root) and left
+   * movable. A world-space cue (parented to `world`) starts hidden; its view
+   * shows it when it poses it. */
   part(name: string, build: (b: ArtBatch) => void, parent?: TransformNode, contour?: number): Mesh;
   node(name: string, parent?: TransformNode): TransformNode;
+  /** Shows or hides everything the creature owns: its root and its world-space cues. */
+  setEnabled(enabled: boolean): void;
   dispose(): void;
 }
 export function creatureParts(scene: Scene, cel: Material, name: string, parent?: TransformNode): CreatureParts {
@@ -31,6 +35,7 @@ export function creatureParts(scene: Scene, cel: Material, name: string, parent?
       const mesh = b.finish(contour);
       mesh.unfreezeWorldMatrix();
       mesh.parent = owner;
+      if (owner === world) mesh.setEnabled(false);
       return mesh;
     },
     node(nodeName, owner = root) {
@@ -38,6 +43,7 @@ export function creatureParts(scene: Scene, cel: Material, name: string, parent?
       n.parent = owner;
       return n;
     },
+    setEnabled(enabled) { root.setEnabled(enabled); world.setEnabled(enabled); },
     dispose() { root.dispose(false, false); world.dispose(false, false); },
   };
 }

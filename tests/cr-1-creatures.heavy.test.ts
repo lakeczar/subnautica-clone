@@ -4,8 +4,19 @@
  * are never struck; the hunter's round, bait, first sight and the laying visit. */
 import test from "node:test";
 import { HUNTER_GEOMETRY } from "../src/content/encounterGeometry.js";
-import { hunterRoundPath } from "../src/sim/fauna/windows.js";
-import { hullClearance } from "../src/sim/world.js";
+import { hunterRoundPath, inCameraView, layingPose, windowSample, HUNTER_ROUND_JOIN } from "../src/sim/fauna/windows.js";
+import { SOLIDS, createWorldQueries, surfaceHeight, sweptHullClearance } from "../src/sim/world.js";
+import type { WorldQueries } from "../src/sim/types.js";
+import { secondsAt } from "../src/sim/cycles/cycle.js";
+import { HUNTER_ENCOUNTER } from "../src/content/ecology/encounter.js";
+import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { Scene } from "@babylonjs/core/scene.js";
+import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { createCelMaterial } from "../src/render/materials.js";
+import { createFauna } from "../src/render/creatures/fauna.js";
+import { CREATURE_CULL_DISTANCE, createCreatureLayer } from "../src/render/creatures/layer.js";
+import { ecologyView } from "../src/sim/ecology/ecology.js";
 import assert from "node:assert/strict";
 import { FIRST_STRIKE_SHARE } from "../src/content/ecology/encounter.js";
 import { sitePosition } from "../src/content/ecology/sites.js";
@@ -16,7 +27,7 @@ import {
   CARCASS_FALLS, FAUNA_IN_CAVE, FAUNA_SOURCES, GROUNDS, 
 } from "../src/content/fauna/grounds.js";
 import type { FaunaSourceId } from "../src/content/fauna/grounds.js";
-import { HUNTER_FEEDING_SPOT, SKATE_LAYING_SITE, THREAT_WINDOWS, WINDOW_SPOTS } from "../src/content/fauna/windows.js";
+import { HUNTER_FEEDING_CIRCLE, HUNTER_FEEDING_SPOT, HUNTER_ROUND_SPEED, SKATE_LAYING_SITE, THREAT_WINDOWS, WINDOW_SPOTS } from "../src/content/fauna/windows.js";
 import { AUTHORED_CAVE_SOURCES } from "../src/content/regions/caves.js";
 import { ROUTES } from "../src/content/regions/passages.js";
 import { PLACES, SOURCES, THREAT_HOME } from "../src/content/registry.js";
@@ -263,15 +274,161 @@ test("grounds sit on the composed floor outside every cave; carcass falls stand 
 });
 
 
-test("the idle hunter's unswept round is open water the whole way: home, the east leg and the feeding circle", () => {
+test("the hunter's authored round is open water: its hull swept along every leg it can take and the whole feeding circle", () => {
+  const world = gameWorld(), shape = HUNTER_GEOMETRY.worldEnvelope, r = HUNTER_FEEDING_CIRCLE.radius;
+  // The circle's point depends only on its angle, so one turn covers every phase of it.
+  const circle = (a: number): Vec3 => ({ x: HUNTER_FEEDING_SPOT.x + Math.cos(a) * r, y: HUNTER_FEEDING_SPOT.y + Math.sin(a * 2) * 0.8, z: HUNTER_FEEDING_SPOT.z + Math.sin(a) * r });
+  let away = 0; while (windowSample("canopy_sound_hunter", away).phase !== "away") away++;
+  const a0 = (secondsAt(away) / HUNTER_FEEDING_CIRCLE.period) * Math.PI * 2;
+  assert.ok(Math.hypot(circle(a0).x - hunterRoundPath(away).x, circle(a0).y - hunterRoundPath(away).y, circle(a0).z - hunterRoundPath(away).z) < 1e-9, "premise: the round's circle");
+  const angles = Array.from({ length: 181 }, (_, i) => (i / 180) * Math.PI * 2);
+  assert.ok(sweptHullClearance(world, angles.map(circle), shape), "the whole feeding circle");
+  // Each leg runs straight between home and wherever the circle is at the phase edge: every such leg, 2° apart.
+  for (const a of angles) assert.ok(sweptHullClearance(world, [THREAT_HOME, circle(a)], shape), `the leg to ${(a * 180 / Math.PI).toFixed(0)}°`);
+});
+
+test("the round's path never moves farther in a step than the hunter can follow it, over every phase of round and circle", () => {
+  // The 101 s round and the 9 s circle line up again after 909 s.
+  for (let tick = 1; tick <= 909 * 60; tick++) {
+    const a = hunterRoundPath(tick - 1), b = hunterRoundPath(tick), d = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+    assert.ok(d < HUNTER_ROUND_JOIN, `the path moves ${d.toFixed(3)} m at tick ${tick}`);
+  }
+});
+
+/** Ticks a pursuing hunter through its round's break-off from tick 2,699 for 57 s,
+ * as Sol R1 reproduced it. Returns every step and the tick it joined its round. */
+function rejoin(world: WorldQueries, offset: Vec3, near?: { from: number; to: number }) {
+  const s = opened(), p = { x: THREAT_HOME.x + offset.x, y: THREAT_HOME.y + offset.y, z: THREAT_HOME.z + offset.z };
+  s.player.mode = "swimming"; s.player.pose.position = { ...p }; s.player.lamp = true;
+  s.world.threat = { ...s.world.threat, mode: "pursue", position: { x: p.x + 8, y: p.y, z: p.z }, interest: 4, modeSeconds: 2.5, distraction: null, distractionSeconds: 0 };
+  s.tick = 45 * 60 - 1;
+  const events: GameEvent[] = [], steps: { tick: number; from: Vec3; to: Vec3; mode: string }[] = [];
+  let joined = -1;
+  for (let i = 0; i < 57 * 60; i++, s.tick++) {
+    // Optionally a diver comes within 20 m of the hunter on its round, then leaves again.
+    if (near && s.tick === near.from) s.player.pose.position = { ...s.world.threat.position, z: s.world.threat.position.z + 20 };
+    if (near && s.tick === near.to) s.player.pose.position = { ...p };
+    const from = { ...s.world.threat.position };
+    updateThreat(s, 0.9, events, world);
+    steps.push({ tick: s.tick, from, to: { ...s.world.threat.position }, mode: s.world.threat.mode });
+    const q = hunterRoundPath(s.tick), off = Math.hypot(q.x - s.world.threat.position.x, q.y - s.world.threat.position.y, q.z - s.world.threat.position.z);
+    if (joined < 0 && s.world.threat.mode === "idle" && off <= HUNTER_ROUND_JOIN) joined = s.tick;
+    // On its round until the round ends; home again, it hears the loud diver as usual.
+    if (joined >= 0 && windowBusy("canopy_sound_hunter", s.tick)) assert.ok(off <= HUNTER_ROUND_JOIN + 1e-9, `left its round by ${off.toFixed(3)} m at tick ${s.tick}`);
+  }
+  return { steps, joined, damage: events.filter((e) => e.type === "threat-damage") };
+}
+/** The fastest any swept hunter move goes in one step. */
+const HUNTER_STEP = Math.max(HUNTER_GEOMETRY.yieldSpeed, HUNTER_GEOMETRY.approachSpeed, HUNTER_ENCOUNTER.pass.closeSpeed, HUNTER_ROUND_SPEED) / 60 + 1e-6;
+
+test("a hunter breaking off as its round begins swims onto the round: never a step longer than its fastest swim, and on it until the round ends", () => {
   const world = gameWorld();
-  for (let tick = 0; tick < 101 * 60; tick += 15) {
-    const p = hunterRoundPath(tick);
-    assert.ok(hullClearance(world, p, HUNTER_GEOMETRY.worldEnvelope), `blocked at tick ${tick}: ${JSON.stringify(p)}`);
+  for (const offset of [{ x: -20, y: 0, z: 0 }, { x: 0, y: 5, z: 30 }, { x: 0, y: 10, z: -30 }]) {
+    const r = rejoin(world, offset);
+    for (const st of r.steps) {
+      const d = Math.hypot(st.to.x - st.from.x, st.to.y - st.from.y, st.to.z - st.from.z);
+      assert.ok(d <= HUNTER_STEP, `${JSON.stringify(offset)}: ${st.mode} step of ${d.toFixed(3)} m at tick ${st.tick}`);
+    }
+    assert.ok(r.steps.some((st) => st.mode === "disengage") && r.joined > 0, `${JSON.stringify(offset)}: broke off, then joined its round`);
+    assert.ok(windowSample("canopy_sound_hunter", r.joined).phase !== "returning", "it is on its round while still feeding");
+    assert.equal(r.damage.length, 0);
   }
-  // Consecutive path points never jump: the round reads as swimming, not teleporting.
-  for (let tick = 1; tick < 101 * 60; tick++) {
-    const a = hunterRoundPath(tick - 1), b = hunterRoundPath(tick);
-    assert.ok(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 12 / 60, `jump at tick ${tick}`);
+  // A diver crossing within 30 m of the joined hunter and out again: the swept
+  // move takes over and hands back, and the hunter never leaves its path.
+  const first = rejoin(world, { x: 0, y: 5, z: 30 });
+  const near = { from: first.joined + 120, to: first.joined + 240 };
+  assert.ok(windowSample("canopy_sound_hunter", near.to).phase === "away", "premise: crossing while it feeds");
+  const crossed = rejoin(world, { x: 0, y: 5, z: 30 }, near);
+  assert.equal(crossed.joined, first.joined);
+});
+
+test("rejoining its round, the hunter is swept: rock across the way stops it rather than being crossed", () => {
+  // Rock 1 m thick across the chord from where the hunter turns idle to its round's point then.
+  const open = rejoin(gameWorld(), { x: 0, y: 5, z: 30 }), idle = open.steps.find((st) => st.mode === "idle")!;
+  const q = hunterRoundPath(idle.tick), m = { x: (idle.from.x + q.x) / 2, y: (idle.from.y + q.y) / 2, z: (idle.from.z + q.z) / 2 };
+  const along = Math.abs(q.x - idle.from.x) >= Math.abs(q.z - idle.from.z) ? "x" : "z";
+  const half = { x: along === "x" ? 0.5 : 20, y: 20, z: along === "z" ? 0.5 : 20 };
+  const wall = { id: "test.rejoin_wall", min: { x: m.x - half.x, y: m.y - half.y, z: m.z - half.z }, max: { x: m.x + half.x, y: m.y + half.y, z: m.z + half.z } };
+  assert.ok(Math.hypot(q.x - idle.from.x, q.z - idle.from.z) > 2, "premise: the hunter turns idle off its round");
+  const walled = rejoin(createWorldQueries([...SOLIDS, wall], surfaceHeight), { x: 0, y: 5, z: 30 });
+  for (const st of walled.steps) {
+    const d = Math.hypot(st.to.x - st.from.x, st.to.y - st.from.y, st.to.z - st.from.z);
+    assert.ok(d <= HUNTER_STEP, `step of ${d.toFixed(3)} m at tick ${st.tick}`);
+    assert.ok(!segmentHitsBox(st.from, st.to, wall), `crossed the rock at tick ${st.tick}`);
   }
+});
+/** Whether the segment a→b passes through the box (slab test). */
+function segmentHitsBox(a: Vec3, b: Vec3, box: { min: Vec3; max: Vec3 }): boolean {
+  let t0 = 0, t1 = 1;
+  for (const k of ["x", "y", "z"] as const) {
+    const d = b[k] - a[k];
+    if (Math.abs(d) < 1e-12) { if (a[k] < box.min[k] || a[k] > box.max[k]) return false; continue; }
+    let lo = (box.min[k] - a[k]) / d, hi = (box.max[k] - a[k]) / d;
+    if (lo > hi) [lo, hi] = [hi, lo];
+    t0 = Math.max(t0, lo); t1 = Math.min(t1, hi);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
+test("laying stand-ins: their real transforms never jump while watched, across the end of a visit and into the next", () => {
+  const engine = new NullEngine();
+  try {
+    const scene = new Scene(engine), cel = createCelMaterial(scene), fauna = createFauna(scene, cel);
+    const eye = { x: 424, y: -375, z: -1080 }, cam = new FreeCamera("test.camera", new Vector3(eye.x, eye.y, eye.z), scene);
+    scene.activeCamera = cam;
+    const look = (dz: number): void => { cam.setTarget(new Vector3(eye.x, eye.y, eye.z + dz)); cam.getViewMatrix(true); };
+    const near = (p: Vec3, c: Vec3 | undefined): boolean => !c || Math.hypot(p.x - c.x, p.y - c.y, p.z - c.z) <= CREATURE_CULL_DISTANCE;
+    const s = opened(), node = scene.getTransformNodeByName("fauna.laying_skate.0")!;
+    let start = 60; while (!(windowOpen("layer_skate_laying", start) && !windowOpen("layer_skate_laying", start - 1))) start++;
+    let end = start; while (windowOpen("layer_skate_laying", end)) end++;
+    const next = start + 360 * 60;
+    const frame = (tick: number) => { s.tick = tick; fauna.update(s, tick / 60, eye, near); return { at: node.position.clone(), on: node.isEnabled() }; };
+    // Turned away as the visit begins: the stand-in comes in unseen. Then watch it.
+    look(50); assert.equal(frame(start).on, true, "it comes while unseen");
+    look(-50);
+    const watched = (from: number, to: number, label: string): void => {
+      let last = frame(from);
+      for (let tick = from + 1; tick <= to; tick++) {
+        const now = frame(tick);
+        assert.ok(now.on, `${label}: still shown at tick ${tick}`);
+        assert.ok(now.at.subtract(last.at).length() < 0.1, `${label}: moves ${now.at.subtract(last.at).length().toFixed(3)} m at tick ${tick}`);
+        last = now;
+      }
+    };
+    watched(start, end + 600, "the end of the visit");
+    assert.ok(inCameraView(eye, { x: 0, y: 0, z: -1 }, layingPose(end, 0).position), "premise: in view across the end");
+    for (let tick = end + 1200; tick < next - 600; tick += 1200) assert.ok(frame(tick).on, "held while in view");
+    watched(next - 600, next + 600, "the next visit");
+    assert.ok(inCameraView(eye, { x: 0, y: 0, z: -1 }, layingPose(next, 0).position), "premise: in view across the start");
+    // Turned away, the held stand-in goes; it never went in view.
+    look(50); assert.equal(frame(next + 360 * 60 - 1).on, false, "gone once unseen after its visit");
+    fauna.dispose(); scene.dispose();
+  } finally { engine.dispose(); }
+});
+
+test("creature cues show and hide with their animal: none by the pod, a resting skate's outline on the mirror, gone when culled", () => {
+  const engine = new NullEngine();
+  try {
+    const scene = new Scene(engine), cel = createCelMaterial(scene), layer = createCreatureLayer(scene, cel);
+    const s = opened(), pod = PLACES.home_pod.position;
+    const animal = (m: { name: string }): boolean => /^(creature\.(layer_skate|hollow_choir|glare_stalker)|fauna\.laying_skate)/.test(m.name);
+    const lit = (): string[] => layer.meshes.filter((m) => animal(m) && m.isEnabled()).map((m) => m.name);
+    // The pod at tick 0: no animal and no world-space cue anywhere (no laying visit has ever happened).
+    s.tick = 0; layer.update(ecologyView(s.world.ecology, 0, null), 0, pod, s);
+    assert.deepEqual(lit(), [], "nothing shows by the pod");
+    // A skate resting under the mirror, watched from the crest: its outline shows.
+    const { start } = windowAt("layer_skate");
+    const skate = s.world.ecology.agents.find((a) => a.id === "divide_skate_saddle")!, home = homeOf("divide_skate_saddle");
+    skate.position = windowSpot("divide_skate_saddle", home, start + 600)!;
+    const crest = { x: home.x - 30, y: layerY("divide_dense_layer") + 12, z: home.z };
+    for (let k = 0; k < 60; k++) { s.tick = start + 600 + k; layer.update(ecologyView(s.world.ecology, s.tick, null), s.tick / 60, crest, s); }
+    const outline = layer.meshes.find((m) => m.name === "creature.layer_skate.divide_skate_saddle.rest-outline")!;
+    assert.ok(outline.isEnabled(), "the resting skate's outline shows");
+    // Back at the pod: the culled skate takes its outline with it.
+    layer.update(ecologyView(s.world.ecology, s.tick, null), s.tick / 60, pod, s);
+    assert.equal(outline.isEnabled(), false, "culled with its animal");
+    assert.deepEqual(lit(), []);
+    layer.dispose(); scene.dispose();
+  } finally { engine.dispose(); }
 });

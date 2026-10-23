@@ -48,6 +48,7 @@ export function createGlareStalker(scene: Scene, cel: Material, name: string, pa
   let amp = 0.25, freq = 1.4, raise = 0, last = 0;
   return {
     root: parts.root,
+    setEnabled: parts.setEnabled,
     meshes: segments.map(s => s.mesh),
     update(a: ThreatPose, seconds: number) {
       const dt = Math.min(0.1, seconds - last); last = seconds;

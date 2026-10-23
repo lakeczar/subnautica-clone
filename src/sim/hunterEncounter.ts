@@ -16,7 +16,7 @@ import type { GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
 import { PULSE_CHARGE_COST } from "./vehicles.js";
 import { gameWorld, moveHull } from "./world.js";
 import { THREAT_WINDOWS } from "../content/fauna/windows.js";
-import { HUNTER_ROUND_UNSWEPT, hunterRoundPath, windowBusy } from "./fauna/windows.js";
+import { HUNTER_ROUND_JOIN, HUNTER_ROUND_UNSWEPT, hunterRoundPath, windowBusy } from "./fauna/windows.js";
 
 const DT = 1 / 60;
 /** Latest pursuit time before the warning bump: just inside cycle 0's contact phase. */
@@ -139,11 +139,12 @@ export function updateThreat(
     distance(t.position, THREAT_HOME) < 4
   )
     change("idle");
-  // CR-1: with nothing near it, the idle hunter's round is its authored, open
-  // path, so no swept move runs every step (each costs more than the rest of the step).
+  // CR-1: with nothing near it, an idle hunter already on its round follows
+  // the authored, open path, so no swept move runs every step (each costs more
+  // than the rest of the step). Off the path, the swept move brings it there.
   if (t.mode === "idle" && !t.distraction) {
     const next = hunterRoundPath(s.tick), clear = (q: Vec3): boolean => distance(q, t.position) > HUNTER_ROUND_UNSWEPT && distance(q, next) > HUNTER_ROUND_UNSWEPT;
-    if (clear(p) && s.fleet.vehicles.every((v) => clear(v.pose.position))) { t.position = next; return; }
+    if (distance(t.position, next) <= HUNTER_ROUND_JOIN && clear(p) && s.fleet.vehicles.every((v) => clear(v.pose.position))) { t.position = next; return; }
   }
   const motion = moveHunter(s, world);
   t.position = motion.position;

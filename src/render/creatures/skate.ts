@@ -71,6 +71,7 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
   let curl = 0, sweep = 0, dimpleScale = 0, bulge = 0, last = 0;
   return {
     root: parts.root,
+    setEnabled: parts.setEnabled,
     meshes: [body, ...wings.flatMap(w => [w.inner, w.outer]), dimple, outline],
     update(a: ThreatPose, seconds: number) {
       const dt = Math.min(0.1, seconds - last); last = seconds;
