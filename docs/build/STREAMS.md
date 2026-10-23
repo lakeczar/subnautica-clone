@@ -401,3 +401,15 @@ Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the f
   3. WK-1 builds it after CW-1.
   - **Rule:** workers build only rebuildable data, the sim never waits on them for correctness, and collision admission is kept.
 - **SCHED-1:** R4 found one P2 (an OOM can kill the anchor alone). The fix is under way: `OOMPolicy=kill` on the job scope.
+
+### 2026-10-23 ~02:20Z — SCHED-1 merged and live; audit verdict started
+- **Builders:** usage limit hit about 00:52Z; CW-1, CR-1 and UX-1 auto-resumed at 02:00Z.
+- **SCHED-1 accepted** by Sol R5 (`review/sched-1-r5` `59d2a4b`) after R1–R4 Fix rounds. Merged into root as `b03cb9d`: 1,286 fast tests pass in 63 s; the build is OK.
+- **Cut-over:**
+  - installed v2 `afad2b8a688f` with the user slice; serial first;
+  - acceptance 6, 6b, 6c and 15 rerun privately and pass;
+  - switched to **normal** mode.
+  - The v1 lock inode is preserved (527188).
+  - CW-1, CR-1 and UX-1 are told to merge root at a safe point and move to v2. v1 waiters pause v2 until they do.
+  - The 2 h canary observation is under way (ledger at `/work/tmp/siltwake-sched/ledger.jsonl`).
+- **Compromise audit:** Sol evidence `4e81ac9` on `research/compromise-audit` has 107 findings: A 30, B 32, C 19, D 26. The Opus verdict (`siltwake-compromise-verdict-opus-4e81ac9`) is running.

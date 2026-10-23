@@ -7,9 +7,20 @@
 //   node scripts/bake-terrain.mjs --force    rebake everything
 //   node scripts/bake-terrain.mjs --verify   rebake in memory and require every
 //                                            file to equal the live recipe bytes
-import { build } from "esbuild";
+//
+// Shared store: a finished bake is published, immutable, to
+// $SILTWAKE_TERRAIN_STORE (default /work/tmp/siltwake-terrain-store; "off"
+// disables it) under a key covering the bundled sources (relative paths), this
+// script, the codec and the Node, zlib and esbuild versions. A fresh worktree
+// with the same inputs restores by copy instead of baking (about 3 minutes);
+// every restored file is checked against the stored manifest's sha256 first.
+// Only a manifest carrying this exact key (a bake by this script and these
+// tools) is ever published or restored.
+// --force and --verify never use the store; the composed gate's --verify still
+// compares the restored files with the live recipe.
+import { build, version as esbuildVersion } from "esbuild";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -36,18 +47,68 @@ mkdirSync(work, { recursive: true });
 const bundle = join(work, "bake.mjs");
 const result = await build({
   entryPoints: [join(root, "src/render/biomes/bake.ts")], bundle: true, platform: "node", format: "esm",
-  outfile: bundle, metafile: true, logLevel: "warning",
+  outfile: bundle, metafile: true, logLevel: "warning", absWorkingDir: root,
 });
 const hash = createHash("sha256");
 for (const input of Object.keys(result.metafile.inputs).sort()) hash.update(input).update(readFileSync(join(root, input)));
 const sourceHash = hash.digest("hex");
 const manifestPath = join(out, "manifest.json");
 const old = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, "utf8")) : null;
-const fresh = old?.sourceHash === sourceHash && Object.values(old.chunks).every(c => existsSync(join(out, c.file)));
+const storeRoot = process.env.SILTWAKE_TERRAIN_STORE ?? "/work/tmp/siltwake-terrain-store";
+const useStore = storeRoot !== "off" && !args.has("--force") && !args.has("--verify");
+const storeKey = createHash("sha256").update(JSON.stringify({ codec: 1, sourceHash, script: createHash("sha256")
+  .update(readFileSync(fileURLToPath(import.meta.url))).digest("hex"), node: process.version, zlib: process.versions.zlib, esbuild: esbuildVersion }))
+  .digest("hex").slice(0, 32);
+const entry = join(storeRoot, storeKey);
+// The manifest records the full fingerprint (storeKey): output baked by another
+// script or toolchain is stale even when the sources match. A manifest from
+// before the store has only sourceHash; it stays locally fresh, as it always
+// was, but is never published, so it cannot seed a newer key with old bytes.
+const fresh = old?.sourceHash === sourceHash && (old.fingerprint == null || old.fingerprint === storeKey) &&
+  Object.values(old.chunks).every(c => existsSync(join(out, c.file)));
+/** Every file the manifest names exists in `dir` with its recorded sha256. */
+const intact = (dir, manifest) => Object.values(manifest.chunks).every((c) =>
+  existsSync(join(dir, c.file)) && createHash("sha256").update(readFileSync(join(dir, c.file))).digest("hex") === c.sha256);
+/** Publishes `dir` (a complete bake) to the store unless the key is there; atomic, never overwritten. */
+function publish(dir, manifest) {
+  if (!useStore || existsSync(entry)) return;
+  try {
+    const tmp = `${entry}.tmp-${process.pid}`;
+    mkdirSync(tmp, { recursive: true });
+    for (const c of Object.values(manifest.chunks)) copyFileSync(join(dir, c.file), join(tmp, c.file));
+    writeFileSync(join(tmp, "manifest.json"), JSON.stringify(manifest, null, 1) + "\n");
+    try { renameSync(tmp, entry); } catch { rmSync(tmp, { recursive: true, force: true }); } // another worktree won
+    // Keep the 20 newest entries.
+    const entries = readdirSync(storeRoot).filter((n) => /^[0-9a-f]{32}$/.test(n))
+      .map((n) => ({ n, t: statSync(join(storeRoot, n)).mtimeMs })).sort((a, b) => b.t - a.t);
+    for (const { n } of entries.slice(20)) rmSync(join(storeRoot, n), { recursive: true, force: true });
+  } catch (err) { console.warn(`bake-terrain: could not publish to the shared store (${err.message})`); }
+}
+
 if (fresh && !args.has("--force") && !args.has("--verify")) {
   console.log(`bake-terrain: up to date (${Object.keys(old.chunks).length} chunks, ${(old.totalBytes / 1048576).toFixed(2)} MiB)`);
+  if (useStore && old.fingerprint === storeKey && !existsSync(entry) && intact(out, old)) publish(out, old);
   rmSync(work, { recursive: true, force: true });
   process.exit(0);
+}
+const stored = useStore ? (() => { try { return JSON.parse(readFileSync(join(entry, "manifest.json"), "utf8")); } catch { return null; } })() : null;
+if (stored?.fingerprint === storeKey && stored.sourceHash === sourceHash) {
+  // Pin the entry against pruning, then check and copy it. Any failure (a
+  // concurrent prune, a bad file) is a cache miss: the bake below runs, and the
+  // manifest is written only after a complete restore or bake.
+  try {
+    utimesSync(entry, new Date(), new Date());
+    if (!intact(entry, stored)) throw new Error("checksum mismatch");
+    mkdirSync(out, { recursive: true });
+    for (const c of Object.values(stored.chunks)) copyFileSync(join(entry, c.file), join(out, c.file));
+    if (!intact(out, stored)) throw new Error("copy differs");
+    writeFileSync(manifestPath, JSON.stringify(stored, null, 1) + "\n");
+    console.log(`bake-terrain: restored ${Object.keys(stored.chunks).length} chunks from the shared store (${storeKey.slice(0, 12)}), no bake needed`);
+    rmSync(work, { recursive: true, force: true });
+    process.exit(0);
+  } catch (err) {
+    console.warn(`bake-terrain: shared store entry ${storeKey.slice(0, 12)} unusable (${err.message}); baking`);
+  }
 }
 
 const { bakeTargets } = await import(pathToFileURL(bundle).href);
@@ -83,6 +144,8 @@ for (const id of ids) {
   chunks[id] = { file, bytes: packed.length, rawBytes: raw.byteLength, sha256: createHash("sha256").update(packed).digest("hex") };
   totalBytes += packed.length; rawBytes += raw.byteLength;
 }
-writeFileSync(manifestPath, JSON.stringify({ codec: 1, sourceHash, totalBytes, rawBytes, chunks }, null, 1) + "\n");
+const manifest = { codec: 1, sourceHash, fingerprint: storeKey, totalBytes, rawBytes, chunks };
+writeFileSync(manifestPath, JSON.stringify(manifest, null, 1) + "\n");
+publish(out, manifest);
 console.log(`bake-terrain: ${ids.length} chunks in ${((Date.now() - started) / 1000).toFixed(1)} s, ` +
   `${(totalBytes / 1048576).toFixed(2)} MiB compressed (${(rawBytes / 1048576).toFixed(2)} MiB raw) -> public/terrain/`);

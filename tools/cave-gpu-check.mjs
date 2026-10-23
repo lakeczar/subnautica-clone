@@ -16,10 +16,12 @@
 import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
 import { createServer } from "vite";
+import { requireGpuLease } from "../scripts/heavy/gpu-lease.mjs";
 
 const port = Number(process.argv[2] ?? 5243), out = process.argv[3];
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.CAVE_GPU_PLAYWRIGHT ?? "/work/tmp/gpu-enable/node_modules/playwright-core");
+requireGpuLease("tools/cave-gpu-check.mjs");
 const chrome = process.env.CAVE_GPU_CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`;
 
 const server = await createServer({ server: { port, strictPort: true, host: "127.0.0.1" }, logLevel: "warn" });
