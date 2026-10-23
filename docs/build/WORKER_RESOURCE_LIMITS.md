@@ -57,7 +57,7 @@ H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 | `playthrough` | the compiled playthrough (`--jobs` follows the grant) | 2–3 cpu, 2 GiB | 15 min, 6 h |
 | `bake` | cold terrain bake, `bake-terrain --verify` | 2 cpu, 3 GiB | 15 min, 2 h |
 | `soak` | long memory and streaming soaks (2–4 h sessions, ended by their goal) | idle CPU (no pool token), 3 GiB; `--gpu` adds the GPU lease | 15 min, 6 h |
-| `exclusive` | frame-time and perf numbers, the large-cave lab bake, known-huge jobs | the whole lane and the GPU | 5 min, **30 min cap** |
+| `exclusive` | frame-time and perf numbers, the large-cave lab bake, known-huge jobs | the whole lane and the GPU | 10 min, **30 min cap** |
 
 **Exclusive is one measurement per ticket.** Submit each segment of a series (traversal segments, A/B variants) as its own ticket, all at once if you like; don't loop over them inside one job. After each exclusive run, the jobs that waited through it start before the next exclusive drains the lane (blocked reason `turn`), so a series never locks everyone else out.
 

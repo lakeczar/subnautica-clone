@@ -44,7 +44,7 @@ test("class reservations, runaway ceilings and stall windows match the SCHED-2 t
   assert.deepEqual(r("playthrough"), [2, 2048, false, 6 * H, 900, 3]);
   assert.deepEqual(r("bake"), [2, 3072, false, 2 * H, 900, 2]);
   assert.deepEqual(r("soak"), [1, 3072, false, 6 * H, 900, 9]);
-  assert.deepEqual(r("exclusive"), [4, 6144, true, 1800, 300, 3]); // the one real cap: it blocks everything
+  assert.deepEqual(r("exclusive"), [4, 6144, true, 1800, 600, 3]); // the one real cap: it blocks everything
   const g = P.resolveRequest({ class: "standard" }, { T: 4, M: 6144 }).goal;
   assert.equal(g.explicitDeadline, false);
   assert.equal(P.resolveRequest({ class: "soak", gpu: true }, { T: 4, M: 6144 }).gpu, true);

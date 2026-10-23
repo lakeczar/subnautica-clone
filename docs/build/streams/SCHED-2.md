@@ -6,7 +6,7 @@ Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 
 
 **Goals, not clocks** (`policy.mjs`, `holder.mjs`):
 - A job runs until its command ends. The holder stops it only when:
-  - it **stalls**: the job's output (minus the holder's own lines) and `$SILTWAKE_JOB_HEARTBEAT` don't move for the stall window. The default is 15 min (quick 10, exclusive 5), and `--stall S` overrides it. Before stopping, the holder writes each process's state, wait channel and command, and the CPU used while silent. Exit **123**, `stalled: no output for N min`;
+  - it **stalls**: the job's output (minus the holder's own lines) and `$SILTWAKE_JOB_HEARTBEAT` don't move for the stall window. The default is 15 min (quick and exclusive 10), and `--stall S` overrides it. Before stopping, the holder writes each process's state, wait channel and command, and the CPU used while silent. Exit **123**, `stalled: no output for N min`;
   - it reaches a caller's `--deadline` (124, `deadline`);
   - it reaches the class's **runaway ceiling** (124, `runaway ceiling`). Ceilings are quick 2 h; standard, heavy-suite and gpu 4 h; playthrough and soak 6 h; bake 2 h. **Exclusive keeps a 30-minute cap.**
 - Every result carries `stopReason`: `stalled`, `deadline`, `ceiling`, `oom`, `killed`, `cancelled`, `preempted`, `rejected` or null.

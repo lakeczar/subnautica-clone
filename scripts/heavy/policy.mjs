@@ -44,7 +44,7 @@ const CLASSES = {
   // idle weight and takes no pool token, and it is stopped (after a yield
   // notice) when its memory or GPU blocks anyone. --gpu adds the GPU lease.
   soak:          { cpus: () => 1, soak: true,  mem: 3 * GIB, maxCpus: () => 2, maxMiB: "M",   ceilingS: 6 * H, stallS: 900, base: 9, optionalGpu: true },
-  exclusive:     { cpus: (T) => T, gpu: true, exclusive: true, mem: "M", maxCpus: (T) => T, maxMiB: "M", ceilingS: 1800, stallS: 300, base: 3 },
+  exclusive:     { cpus: (T) => T, gpu: true, exclusive: true, mem: "M", maxCpus: (T) => T, maxMiB: "M", ceilingS: 1800, stallS: 600, base: 3 },
 };
 export const CLASS_NAMES = Object.keys(CLASSES);
 export const classInfo = (name) => CLASSES[name];
