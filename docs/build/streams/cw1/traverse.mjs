@@ -121,7 +121,7 @@ async function shot(name) {
  * on a CPU, time runnable but waiting for one, and page faults, so a long
  * frame can be told apart: our own work (on CPU), preemption (waiting), or a
  * blocked thread (neither: IPC, a lock, I/O). */
-const sched = { pid: null, samples: [] };
+const sched = { pid: null, gpu: null, samples: [] };
 function findRenderer() {
   const procs = readdirSync("/proc").filter(d => /^\d+$/.test(d)).map(pid => {
     try { return { pid, cmd: readFileSync(`/proc/${pid}/cmdline`, "utf8"), stat: readFileSync(`/proc/${pid}/stat`, "utf8") }; } catch { return null; }
@@ -132,6 +132,7 @@ function findRenderer() {
   const ours = new Set([root.pid]);
   for (let grew = true; grew;) { grew = false; for (const p of procs) if (!ours.has(p.pid) && ours.has(parent(p))) { ours.add(p.pid); grew = true; } }
   const cpu = (p) => { const f = p.stat.slice(p.stat.lastIndexOf(")") + 2).split(" "); return +f[11] + +f[12]; };
+  sched.gpu = procs.find(p => ours.has(p.pid) && p.cmd.includes("--type=gpu-process"))?.pid ?? null;
   return procs.filter(p => ours.has(p.pid) && p.cmd.includes("--type=renderer") && !p.cmd.includes("extension")).sort((a, b) => cpu(b) - cpu(a))[0]?.pid ?? null;
 }
 function sampleSched() {
@@ -139,7 +140,9 @@ function sampleSched() {
   try {
     const [run, wait] = readFileSync(`/proc/${sched.pid}/task/${sched.pid}/schedstat`, "utf8").split(" ").map(Number);
     const f = readFileSync(`/proc/${sched.pid}/task/${sched.pid}/stat`, "utf8"), rest = f.slice(f.lastIndexOf(")") + 2).split(" ");
-    sched.samples.push([performance.timeOrigin + performance.now(), run / 1e6, wait / 1e6, +rest[7], +rest[9], rest[0]]);
+    // The GPU process's main thread too: busy while the renderer is blocked means the renderer waits on it.
+    const g = sched.gpu ? readFileSync(`/proc/${sched.gpu}/task/${sched.gpu}/schedstat`, "utf8").split(" ").map(Number) : [0, 0];
+    sched.samples.push([performance.timeOrigin + performance.now(), run / 1e6, wait / 1e6, +rest[7], +rest[9], rest[0], g[0] / 1e6, g[1] / 1e6]);
   } catch { sched.pid = null; }
 }
 const quant = (s, f) => s.length ? +s[Math.min(s.length - 1, Math.floor(s.length * f))].toFixed(1) : null;
@@ -183,6 +186,9 @@ try {
   note("loaded", JSON.stringify({ cam: s.cam, depth: s.depth, vitals: s.vitals }));
   // Measured from here: the traversal itself.
   await browser.startTracing(page, { categories: ["disabled-by-default-v8.gc", "v8", "blink.user_timing"], screenshots: false });
+  // CW1_PROFILE=1 (diagnosis): a sampled CPU profile of the page over the travel.
+  const cdp = process.env.CW1_PROFILE ? await page.context().newCDPSession(page) : null;
+  if (cdp) { await cdp.send("Profiler.enable"); await cdp.send("Profiler.setSamplingInterval", { interval: 500 }); await cdp.send("Profiler.start"); }
   sched.pid = findRenderer();
   note("renderer main thread", sched.pid ?? "not found");
   const sampler = setInterval(sampleSched, 5);
@@ -216,9 +222,22 @@ try {
   clearInterval(sampler);
   result.seconds = +((performance.now() - started) / 1000).toFixed(1);
   traveling = false;
+  const profile = cdp ? (await cdp.send("Profiler.stop")).profile : null;
+  let profileAt = null;
   {
     const trace = JSON.parse((await browser.stopTracing()).toString()), events = trace.traceEvents ?? trace;
     const mark = events.find(e => e.name === "cw1-align");
+    // Profile samples on the page clock, each with its leaf and the nearest frames of our code.
+    if (profile && mark) {
+      const byId = new Map(profile.nodes.map(n => [n.id, n])), parentOf = new Map();
+      for (const n of profile.nodes) for (const c of n.children ?? []) parentOf.set(c, n.id);
+      const label = (n) => { const f = n.callFrame; return `${f.functionName || "(anonymous)"}${f.url ? ` ${f.url.split("/").pop()}:${f.lineNumber + 1}` : ""}`; };
+      const stackOf = new Map();
+      const stack = (id) => { let s = stackOf.get(id); if (s) return s; const out = []; for (let n = id; n !== undefined && out.length < 6; n = parentOf.get(n)) out.push(label(byId.get(n))); s = out.join(" < "); stackOf.set(id, s); return s; };
+      let t = profile.startTime; profileAt = [];
+      for (let i = 0; i < profile.samples.length; i++) { t += profile.timeDeltas[i]; profileAt.push([markAt + (t - mark.ts) / 1000, profile.samples[i]]); }
+      profileAt.stack = stack;
+    }
     // Top-level main-thread pauses: V8's MajorGC / MinorGC (and their finalizations).
     const top = events.filter(e => e.ph === "X" && /^(MajorGC|MinorGC|V8\.GCFinalizeMC|V8\.GCScavenger|V8\.GCCompactor|V8\.GCIncrementalMarkingFinalize|V8\.GC_MC_.*ATOMIC.*|V8\.GCMinorMS)$/.test(e.name) && e.dur > 0);
     if (mark) gcTrace = top.map(e => ({ at: markAt + (e.ts - mark.ts) / 1000, kind: e.name, pauseMs: +(e.dur / 1000).toFixed(2), tid: e.tid }));
@@ -244,8 +263,14 @@ try {
     // The main thread over the gap (epoch ms): on CPU, waiting to run, faults.
     const t1 = data.origin + at, t0 = t1 - g, first = sched.samples.findLast?.(x => x[0] <= t0) ?? null, last = sched.samples.find(x => x[0] >= t1) ?? null;
     const thread = first && last ? { spanMs: +(last[0] - first[0]).toFixed(1), onCpuMs: +(last[1] - first[1]).toFixed(1), waitingMs: +(last[2] - first[2]).toFixed(1),
-      minorFaults: last[3] - first[3], majorFaults: last[4] - first[4] } : null;
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+      minorFaults: last[3] - first[3], majorFaults: last[4] - first[4], gpuOnCpuMs: +(last[6] - first[6]).toFixed(1), gpuWaitingMs: +(last[7] - first[7]).toFixed(1) } : null;
+    let hot = null;
+    if (profileAt) {
+      const counts = new Map();
+      for (const [ts, id] of profileAt) if (ts > at - g && ts <= at) { const k = profileAt.stack(id); counts.set(k, (counts.get(k) ?? 0) + 0.5); }
+      hot = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, ms]) => `${ms} ms: ${k}`);
+    }
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of
@@ -267,6 +292,8 @@ try {
   result.streamingMax = data.perf.reduce((m, e) => ({ chunks: Math.max(m.chunks, e.parts?.chunks ?? 0), caves: Math.max(m.caves, e.parts?.caves ?? 0) }), { chunks: 0, caves: 0 });
   result.holdFrames = data.perf.filter(e => e.hold && e.hold !== "clear").length;
   result.stream = data.stream;
+  // The page clock's epoch origin: long gaps at origin + at line up with outside samples (PSI, ps).
+  result.pageOrigin = data.origin;
   result.thread = { pid: sched.pid, samples: sched.samples.length };
   result.gc = { collections: gcTrace.length, byKind: gcTrace.reduce((m, x) => ({ ...m, [x.kind]: (m[x.kind] ?? 0) + 1 }), {}),
     maxPauseMs: Math.max(0, ...gcTrace.map(x => x.pauseMs)), over16: gcTrace.filter(x => x.pauseMs > 16).map(x => `${x.kind} ${x.pauseMs} ms at ${x.at.toFixed(0)}`) };
