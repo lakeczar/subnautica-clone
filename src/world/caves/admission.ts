@@ -24,8 +24,9 @@ import type { AdmissionUpdate, CaveAdmission } from "./large/streaming.js";
  *
  * Composition: call `update` every frame before stepping, with the
  * controlled actor's box; keep the clock paused while `holding`; apply
- * `relocate` through the simulation (`relocateForCave`). On a save load run
- * it before the first tick: it holds until admitted. */
+ * `relocate` through the simulation (`relocateForCave`). On entering a save
+ * (New, import, Continue) call `reset`, then run it behind the load screen
+ * until it no longer holds, before the first tick or the HUD. */
 
 export type CaveRelocation = { readonly kind: "point"; readonly position: Vec3 } | { readonly kind: "refuge" };
 export interface CaveHold {
@@ -39,7 +40,7 @@ export interface CaveHold {
 /** One placed cave biome: its admission (LC) and owned-space test. */
 export interface BiomeRuntime {
   readonly id: string;
-  readonly admission: Pick<CaveAdmission, "update">;
+  readonly admission: Pick<CaveAdmission, "update" | "reset">;
 }
 export interface CaveRuntimeOptions {
   readonly world: CaveWorld;
@@ -58,12 +59,21 @@ export interface CaveRuntimeOptions {
 export function createCaveRuntime(o: CaveRuntimeOptions) {
   const stream = o.world.kitCaves, reach = o.reach ?? 3, refugeAfter = o.refugeAfterMs ?? 12000;
   let holdingSince = -1, lastSafe: Vec3 | null = null;
+  /** Lifetime diagnostics of this runtime (not reset with a session). */
   const stats = { holdFrames: 0, admissionBuilds: 0, rescues: 0, refuges: 0 };
   const near = (box: Aabb): number[] => stream.clusters.filter(c => c.rect.minX < box.max.x + reach && c.rect.maxX > box.min.x - reach &&
     c.rect.minZ < box.max.z + reach && c.rect.maxZ > box.min.z - reach).map(c => c.index);
   return {
     stats,
     get lastSafe(): Vec3 | null { return lastSafe; },
+    /** A new expedition replaced the old one (New, import, Continue; not a
+     * pause): forget the remembered safe pose and any running hold, so a
+     * recovery only ever uses the new expedition's own poses or its refuge,
+     * on a fresh timeout. The built collision is world data and stays. */
+    reset(): void {
+      lastSafe = null; holdingSince = -1;
+      for (const b of o.biomes ?? []) b.admission.reset();
+    },
     /** `actor`: the controlled actor's box; `feet` its pose; `eye` the camera. */
     update(actor: Aabb, feet: Vec3, eye: Vec3, now: number): CaveHold {
       let holding = false, message = "", relocate: CaveRelocation | null = null;
