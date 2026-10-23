@@ -42,6 +42,63 @@ These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.m
 - **No edits to B1-owned roots** until B1 is accepted and integrated. Those roots are `content/registry.ts`, `sim/types.ts`, `sim/step.ts`, `sim/survival.ts`, `sim/progression.ts`, `sim/world.ts`, `src/save/*`, `src/ui/*`, `render/expedition.ts`, `render/fleetArt.ts`, `render/renderer.ts`, `render/environment.ts`, `render/terrainSurface.ts`, `package.json` and `tests/*` support.
 - **Persisted state:** a new stream that needs saved data proposes the fields in its interface note. The coordinator adds them in one schema change at integration.
 - **Presentation is event-driven.** Simulation owns the truth, story owns the text, UI owns the display and audio consumes events.
-- **Resources:** heavy jobs are admitted through the heavy-check queue (`scripts/heavy-check.sh`; how to run and wait is in [WORKER_RESOURCE_LIMITS](WORKER_RESOURCE_LIMITS.md)). Play and screenshots from shared runs are functional evidence only; every frame-rate or performance number comes from `--class exclusive`. Follow [WORKER_RESOURCE_LIMITS](WORKER_RESOURCE_LIMITS.md) and the browser rules (`/work/repos/fleet/BROWSER_RULES.md`, `docs/BROWSER_RULES.md`). Each builder gets its own preview port.
+- **Resources:** heavy jobs are admitted through the heavy-check queue (`scripts/heavy-check.sh`; how to run and wait is in [WORKER_RESOURCE_LIMITS](WORKER_RESOURCE_LIMITS.md)). Play and screenshots from shared runs are functional evidence only; every frame-rate or performance number comes from `--class exclusive`. Follow [WORKER_RESOURCE_LIMITS](WORKER_RESOURCE_LIMITS.md) and the browser rules (`/work/repos/fleet/BROWSER_RULES.md`, `docs/BROWSER_RULES.md`). Each builder gets its own preview port. **Second worker (best-effort, since 2026-10-23):** `siltwake-alickers`, a WSL2 sandbox on the owner's PC with an RTX 4070 Laptop GPU, runs one pinned-commit job at a time through `scripts/alickers-job.sh`: whole playthroughs, `test:heavy` and 4070 WebGL sessions. Exit 75 or 255 means rerun on factory-worker. Its rules are in [WORKER_RESOURCE_LIMITS](WORKER_RESOURCE_LIMITS.md).
 
 **GPU browser (since 2026-10-20):** the shared T3 preview stays software-rendered (SwiftShader), so use it for looks and behaviour only. For frame-rate or GPU checks, launch a task-owned Chrome with `--use-gl=angle --use-angle=gl-egl --ignore-gpu-blocklist`, or run `docs/build/gpu-enablement/webgl-probe.mjs --candidate angle-gl-egl`. Avoid ANGLE-Vulkan, which loses the context at startup. Follow the browser rules and close what you open. GPU browser work runs through `scripts/heavy-check.sh --class gpu`, which holds the one GPU lease. Frame-rate or GPU-performance numbers only come from `--class exclusive`.
+
+## Root fixes over workarounds (owner, 2026-10-23)
+
+Adopted from the compromise verdict (`research/compromise-audit:docs/build/audits/COMPROMISE-VERDICT-OPUS.md`). This applies to every stream brief and handoff:
+- **Compromises:** a compromise made to fit memory, time, loading, test limits or another stream's boundary is filed in the handoff with its root fix and cost, never as a quiet "limit" or P3.
+- **Art:** don't reshape art to fit box collision or frozen paths. Until COL-1 stage B lands, keep the intended art, collide it with a conservative cover that blocks no route, and file the gap as COL-1 debt.
+- **Evidence:** evidence that couldn't be obtained is listed as missing, never replaced by a proxy (warm caches, partial traversals, teleports, software rendering).
+- **Restorations (owner-approved):** all of them, once COL-1 lands:
+  - the A1 bow and round sections;
+  - the standing dish feed tripods on the great and north dishes, with one deliberate rim breach;
+  - the dish bowls colliding exactly;
+  - the west sea cave's dry shelf (after OP-1);
+  - a visible skate rest.
+- **Order:**
+  1. COL-1, then lost sites;
+  2. LC-2, then cave biomes 2–4;
+  3. SIG-1, then the owner's playtest;
+  4. an early opening-hours playtest right after OP-1.
+
+## Two test machines: how work is planned (owner grill, 2026-10-23)
+
+- **factory-worker (RTX 3090):** builds, fast tests, focused heavy tests, reviewers' quick checks, every 3090 session and every **exclusive** performance measurement (the 60 fps target).
+- **siltwake-alickers (RTX 4070 Laptop, best-effort):**
+  - whole playthroughs, the full heavy tier and soaks;
+  - 4070 "player-class" sessions.
+
+  When it's paused or offline, its work falls back to factory-worker, except 4070 jobs, which wait for it. The owner uses the PC freely and pauses the sandbox when needed. 4070 frame-rate numbers are flagged as possibly disturbed.
+- **Routing:** SCHED-2b's remote lane routes each job by a machine tag:
+  - `any`: prefers alickers;
+  - `3090`;
+  - `4070`: waits for alickers, never faked on the 3090;
+  - `soak`: alickers first.
+
+  Until the lane exists, builders may call `scripts/alickers-job.sh` directly.
+- **Evidence:**
+  - Functional results count from either machine, bound to the exact SHA tested.
+  - 3090 exclusive numbers are the target.
+  - 4070 numbers are the player-floor check:
+    - one 4070 check at handoff for streams touching rendering, streaming, caves or UI;
+    - full 4070 runs in MEM-1 and PT-0;
+    - a 4070 check before every playtest.
+- **Soaks have goals.**
+  - **Tour soak:** 3 laps of every region and cave by ordinary travel. It passes if memory after lap 3 is within about 5% of lap 1, no streaming frame is over 33 ms, there's no loading hold, there's no growth in graphics objects, and every save reloads.
+  - **Dwell soak:** in the heaviest places, for set autosave and day–night cycles. It passes if memory stays flat, with no autosave hitch over budget and no leak.
+  - **Stopping:** both stop early, with a report, on a broken rule. Stall detection applies; the numbers get tuned from MEM-1.
+  - **When:** after each root merge that touches streaming, memory or saves, and a full soak before each playtest.
+- **Planning:**
+  - **Builders:** at most 5 Opus builders until the owner upgrades the subscription.
+  - **Slots:** filled from the compromise verdict's priority list by dependencies.
+  - **Owner updates:** at decisions, finished streams, problems, and with a roadmap update when each wave of work completes.
+- **Usage limits:**
+  - When usage runs low, pause lower-priority builders so the critical path keeps going.
+  - After any reset, Stop or compaction, the coordinator checks every outstanding task directly (`task_status`), because a finished agent's report can be delivered and never acted on.
+- **SCHED-2 order,** each step with its own Sol review:
+  1. **2a:** goals and stall detection, the soak class, the GPU lease for every driver, rejecting a changed worktree, and keeping the OOM label.
+  2. **2b:** the remote lane with machine tags.
+  3. **SAVE-1:** the save library, exporting on alickers.

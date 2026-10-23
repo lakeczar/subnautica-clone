@@ -29,7 +29,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { jobEnv, sliceLimits, tokensFor } from "./policy.mjs";
+import { jobEnv, sliceLimits } from "./policy.mjs";
 import {
   cgroupRead, cpuContext, gitTree, jobDir, ledger, loadConfig, readFileSafe, readJson, releaseAnchorIfAlone, scopePopulated,
   self, systemctl, transaction, unitFacts, writeJsonAtomic,
@@ -98,7 +98,7 @@ if (writesMarker) {
   writeJsonAtomic(marker, { ticket: id, units: [holderUnit, unit] });
 }
 
-if (cfg.manageSlice) ensureSlice(tokensFor(t.hostAtAdmit.nproc));
+if (cfg.manageSlice) ensureSlice(t.hostAtAdmit.nproc);
 
 // 2. Launch. No lock is passed to the job: its lifetime is its cgroup.
 const out = openSync(outPath, "a");
@@ -243,7 +243,10 @@ function ensureSlice(nproc) {
   const cg = readFileSync("/proc/self/cgroup", "utf8").trim().replace(/^0::/, "");
   const root = /^(.*\/user@\d+\.service)/.exec(cg)?.[1];
   if (!root) return;
-  const sliceCg = `/sys/fs/cgroup${root}/${cfg.slice}`;
+  // systemd nests "a-b.slice" under "a.slice": siltwake-heavy.slice lives at siltwake.slice/siltwake-heavy.slice.
+  const parts = cfg.slice.replace(/\.slice$/, "").split("-");
+  const nested = parts.map((_, i) => `${parts.slice(0, i + 1).join("-")}.slice`).join("/");
+  const sliceCg = `/sys/fs/cgroup${root}/${nested}`;
   const cpuMax = cgroupRead(sliceCg, "cpu.max"), memMax = cgroupRead(sliceCg, "memory.max");
   if (cpuMax === `${want.cpuQuotaPct * 1000} 100000` && memMax === String(want.memoryMaxMiB * 1048576)) return;
   spawnSync("systemctl", ["--user", "set-property", "--runtime", cfg.slice,
