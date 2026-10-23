@@ -183,3 +183,159 @@ export function seamGaps(mesh: TriangleMesh, foot: { minX: number; maxX: number;
   }
   return out;
 }
+
+type Footprint = { minX: number; maxX: number; minZ: number; maxZ: number };
+
+/** Faces crossed along the horizontal line through (y, w) parallel to `axis`
+ * (0 = X, 2 = Z; w is the other horizontal coordinate), sorted along it,
+ * each with the sign of its normal along the line and its triangle. Brute
+ * force; hits on a shared edge are counted once. */
+export function lineCrossings(mesh: TriangleMesh, axis: 0 | 2, y: number, w: number): { s: number; t: number; facing: number }[] {
+  const P = mesh.positions, I = mesh.indices, o = axis === 0 ? 2 : 0, out: { s: number; t: number; facing: number }[] = [];
+  for (let t = 0; t < I.length / 3; t++) {
+    const a = I[t * 3]! * 3, b = I[t * 3 + 1]! * 3, c = I[t * 3 + 2]! * 3;
+    if (Math.min(P[a + 1]!, P[b + 1]!, P[c + 1]!) > y || Math.max(P[a + 1]!, P[b + 1]!, P[c + 1]!) < y) continue;
+    if (Math.min(P[a + o]!, P[b + o]!, P[c + o]!) > w || Math.max(P[a + o]!, P[b + o]!, P[c + o]!) < w) continue;
+    const e1 = [P[b]! - P[a]!, P[b + 1]! - P[a + 1]!, P[b + 2]! - P[a + 2]!], e2 = [P[c]! - P[a]!, P[c + 1]! - P[a + 1]!, P[c + 2]! - P[a + 2]!];
+    const n = [e1[1]! * e2[2]! - e1[2]! * e2[1]!, e1[2]! * e2[0]! - e1[0]! * e2[2]!, e1[0]! * e2[1]! - e1[1]! * e2[0]!];
+    if (Math.abs(n[axis]!) < 1e-12) continue;
+    // Barycentric coordinates of (w, y) in the triangle's projection onto (o, y).
+    const ou = P[b + o]! - P[a + o]!, oy = P[b + 1]! - P[a + 1]!, vu = P[c + o]! - P[a + o]!, vy = P[c + 1]! - P[a + 1]!, pu = w - P[a + o]!, py = y - P[a + 1]!;
+    const den = ou * vy - oy * vu;
+    if (den === 0) continue;
+    const u = (pu * vy - py * vu) / den, v = (ou * py - oy * pu) / den;
+    if (u < 0 || v < 0 || u + v > 1) continue;
+    const s = P[a + axis]! + u * (P[b + axis]! - P[a + axis]!) + v * (P[c + axis]! - P[a + axis]!);
+    out.push({ s, t, facing: Math.sign(n[axis]!) });
+  }
+  out.sort((p, q) => p.s - q.s || p.facing - q.facing);
+  return out.filter((h, i) => i === 0 || !(Math.abs(h.s - out[i - 1]!.s) < 1e-9 && h.facing === out[i - 1]!.facing));
+}
+
+/** Horizontal wall-normal and occupancy control (COL-1 R7): along lines
+ * parallel to `axis` through the centroid of every face lying in a side
+ * plane across it, and along `lines` random ones, every face crossed (not
+ * grazing) must agree with the collider's own occupancy (`solidAt`, from
+ * vertical parity, which can't see vertical faces) on each side that lies in
+ * the footprint: a face whose normal points along the line has solid behind
+ * it and water ahead. Two opposite faces meeting the line at one place in
+ * one side plane (a zero-thickness sheet, R7-1) are reported outright. The
+ * vertical-column parity test can't see vertical faces at all. */
+export function wallContradictions(mesh: TriangleMesh, solidAt: (p: Vec3) => boolean, axis: 0 | 2, foot: Footprint,
+  lines = 1500, seed = 7, limit = 10): string[] {
+  const P = mesh.positions, o = axis === 0 ? 2 : 0, rnd = random(seed), out: string[] = [], d = 1e-3;
+  let y0 = Infinity, y1 = -Infinity;
+  for (let v = 0; v < P.length / 3; v++) { y0 = Math.min(y0, P[v * 3 + 1]!); y1 = Math.max(y1, P[v * 3 + 1]!); }
+  const lo = axis === 0 ? foot.minX : foot.minZ, hi = axis === 0 ? foot.maxX : foot.maxZ, wlo = o === 0 ? foot.minX : foot.minZ, whi = o === 0 ? foot.maxX : foot.maxZ;
+  const at = (s: number, y: number, w: number): Vec3 => axis === 0 ? { x: s, y, z: w } : { x: w, y, z: s };
+  // Lines through the centroid of every face lying in a side plane across
+  // this axis (each seam face, by construction), then random ones.
+  const I = mesh.indices, through: [number, number][] = [];
+  const inSide = (t: number): number | null => { for (const side of [lo, hi]) if ([0, 1, 2].every(k => P[I[t * 3 + k]! * 3 + axis] === side)) return side; return null; };
+  for (let t = 0; t < I.length / 3; t++) {
+    const vs = [I[t * 3]!, I[t * 3 + 1]!, I[t * 3 + 2]!];
+    if (![lo, hi].some(side => vs.every(v => P[v * 3 + axis] === side))) continue;
+    through.push([vs.reduce((m, v) => m + P[v * 3 + 1]!, 0) / 3 + 1.3e-7, vs.reduce((m, v) => m + P[v * 3 + o]!, 0) / 3 + 2.9e-7]);
+  }
+  for (let k = 0; k < through.length + lines && out.length < limit; k++) {
+    const [y, w] = k < through.length ? through[k]! : [y0 + (y1 - y0) * rnd() + 1.3e-6, wlo + (whi - wlo) * rnd() + 2.7e-6], hits = lineCrossings(mesh, axis, y, w);
+    for (let i = 0; i < hits.length && out.length < limit; i++) {
+      const h = hits[i]!, prev = hits[i - 1], next = hits[i + 1];
+      // Opposite faces in one side plane where the line meets both: a
+      // zero-thickness sheet (R7-1). Faces merely close (a wedge folding at a
+      // shared edge, thin by its tip) are a thin feature, skipped below.
+      if (next && next.s - h.s < 1e-5 && next.facing !== h.facing && inSide(h.t) !== null && inSide(h.t) === inSide(next.t)) {
+        out.push(`${axis === 0 ? "x" : "z"} line (y ${y.toFixed(3)}, ${w.toFixed(3)}): opposite faces ${h.t} and ${next.t} coincide in the plane at ${h.s.toFixed(5)}`);
+        continue;
+      }
+      if ((prev && h.s - prev.s < 2 * d) || (next && next.s - h.s < 2 * d)) continue;
+      for (const [side, want] of [[-1, h.facing > 0], [1, h.facing < 0]] as const) {
+        const s = h.s + side * d;
+        if (s <= lo || s >= hi) continue;
+        if (solidAt(at(s, y, w)) !== want) out.push(`${axis === 0 ? "x" : "z"} line (y ${y.toFixed(3)}, ${w.toFixed(3)}): face ${h.t} at ${h.s.toFixed(4)} faces ${h.facing > 0 ? "+" : "-"}, but the ${side < 0 ? "near" : "far"} side is ${want ? "water" : "solid"}`);
+      }
+    }
+  }
+  return out;
+}
+
+/** Independent audit of the faces lying in a shell's footprint side planes
+ * (COL-1 R7): no two overlap with positive area in their plane (sharing
+ * vertices doesn't excuse it), no other triangle passes through one, and
+ * each of their edges is used by at most two triangles, never twice in the
+ * same direction. */
+export function seamAudit(mesh: TriangleMesh, foot: Footprint, limit = 10): string[] {
+  const P = mesh.positions, I = mesh.indices, n = I.length / 3, nv = P.length / 3, out: string[] = [];
+  const planes: [0 | 2, number][] = [[0, foot.minX], [0, foot.maxX], [2, foot.minZ], [2, foot.maxZ]];
+  const directed = new Map<number, number>(), undirected = new Map<number, number>();
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) {
+    const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!;
+    directed.set(a * nv + b, (directed.get(a * nv + b) ?? 0) + 1);
+    undirected.set(Math.min(a, b) * nv + Math.max(a, b), (undirected.get(Math.min(a, b) * nv + Math.max(a, b)) ?? 0) + 1);
+  }
+  for (const [axis, at] of planes) {
+    const h = axis === 0 ? 2 : 0, on = (v: number): boolean => P[v * 3 + axis] === at;
+    const flat: number[] = [];
+    for (let t = 0; t < n; t++) if (on(I[t * 3]!) && on(I[t * 3 + 1]!) && on(I[t * 3 + 2]!)) flat.push(t);
+    const pt = (v: number): [number, number] => [P[v * 3 + h]!, P[v * 3 + 1]!];
+    const tri = (t: number): [number, number][] => [pt(I[t * 3]!), pt(I[t * 3 + 1]!), pt(I[t * 3 + 2]!)];
+    for (const t of flat) for (let k = 0; k < 3; k++) {
+      const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!;
+      if ((directed.get(a * nv + b) ?? 0) > 1 || (undirected.get(Math.min(a, b) * nv + Math.max(a, b)) ?? 0) > 2)
+        if (out.length < limit) out.push(`plane ${axis === 0 ? "x" : "z"} = ${at}: edge ${a}-${b} of face ${t} is shared incoherently`);
+    }
+    // Pairwise positive-area overlap, swept along the plane's horizontal axis.
+    const boxes = flat.map(t => { const q = tri(t); return { t, q, lo: Math.min(q[0]![0], q[1]![0], q[2]![0]), hi: Math.max(q[0]![0], q[1]![0], q[2]![0]) }; }).sort((p, q) => p.lo - q.lo);
+    for (let i = 0; i < boxes.length && out.length < limit; i++) for (let j = i + 1; j < boxes.length && boxes[j]!.lo < boxes[i]!.hi; j++) {
+      const area = convexOverlap(boxes[i]!.q, boxes[j]!.q);
+      if (area > 1e-9 && out.length < limit) out.push(`plane ${axis === 0 ? "x" : "z"} = ${at}: faces ${boxes[i]!.t} and ${boxes[j]!.t} overlap by ${area.toExponential(2)} m²`);
+    }
+    // Triangles touching the plane against its faces: no edge passes through a face.
+    const flatSet = new Set(flat);
+    for (let s = 0; s < n && out.length < limit; s++) {
+      if (flatSet.has(s) || ![0, 1, 2].some(k => Math.abs(P[I[s * 3 + k]! * 3 + axis]! - at) < 1e-3)) continue;
+      for (const t of flat) if (edgeThroughTriangle(P, I, s, t) || edgeThroughTriangle(P, I, t, s)) { out.push(`plane ${axis === 0 ? "x" : "z"} = ${at}: triangle ${s} passes through face ${t}`); break; }
+    }
+  }
+  return out;
+}
+
+/** Area of the overlap of two 2-D triangles (convex clipping). */
+function convexOverlap(a: readonly [number, number][], b: readonly [number, number][]): number {
+  const area2 = (p: readonly [number, number][]): number => { let s = 0; for (let i = 0; i < p.length; i++) { const q = p[i]!, r = p[(i + 1) % p.length]!; s += q[0] * r[1] - r[0] * q[1]; } return s; };
+  let poly: [number, number][] = area2(a) < 0 ? [...a].reverse() : [...a];
+  const clip = area2(b) < 0 ? [...b].reverse() : [...b];
+  for (let i = 0; i < 3 && poly.length; i++) {
+    const p0 = clip[i]!, p1 = clip[(i + 1) % 3]!, side = (q: [number, number]): number => (p1[0] - p0[0]) * (q[1] - p0[1]) - (p1[1] - p0[1]) * (q[0] - p0[0]);
+    const next: [number, number][] = [];
+    for (let k = 0; k < poly.length; k++) {
+      const q = poly[k]!, r = poly[(k + 1) % poly.length]!, sq = side(q), sr = side(r);
+      if (sq >= 0) next.push(q);
+      if ((sq >= 0) !== (sr >= 0)) { const f = sq / (sq - sr); next.push([q[0] + (r[0] - q[0]) * f, q[1] + (r[1] - q[1]) * f]); }
+    }
+    poly = next;
+  }
+  return poly.length < 3 ? 0 : Math.abs(area2(poly)) / 2;
+}
+
+/** Whether an edge of triangle s passes through the interior of triangle t
+ * (strictly: touching an edge or a vertex doesn't count). */
+function edgeThroughTriangle(P: ArrayLike<number>, I: ArrayLike<number>, s: number, t: number): boolean {
+  const v = (i: number): number[] => [P[i * 3]!, P[i * 3 + 1]!, P[i * 3 + 2]!];
+  const A = v(I[t * 3]!), B = v(I[t * 3 + 1]!), C = v(I[t * 3 + 2]!);
+  for (let k = 0; k < 3; k++) {
+    const p = v(I[s * 3 + k]!), q = v(I[s * 3 + (k + 1) % 3]!), d = [q[0]! - p[0]!, q[1]! - p[1]!, q[2]! - p[2]!];
+    const e1 = [B[0]! - A[0]!, B[1]! - A[1]!, B[2]! - A[2]!], e2 = [C[0]! - A[0]!, C[1]! - A[1]!, C[2]! - A[2]!];
+    const h = [d[1]! * e2[2]! - d[2]! * e2[1]!, d[2]! * e2[0]! - d[0]! * e2[2]!, d[0]! * e2[1]! - d[1]! * e2[0]!];
+    const det = e1[0]! * h[0]! + e1[1]! * h[1]! + e1[2]! * h[2]!;
+    if (Math.abs(det) < 1e-12) continue;
+    const sv = [p[0]! - A[0]!, p[1]! - A[1]!, p[2]! - A[2]!], u = (sv[0]! * h[0]! + sv[1]! * h[1]! + sv[2]! * h[2]!) / det;
+    if (u <= 1e-7 || u >= 1 - 1e-7) continue;
+    const qv = [sv[1]! * e1[2]! - sv[2]! * e1[1]!, sv[2]! * e1[0]! - sv[0]! * e1[2]!, sv[0]! * e1[1]! - sv[1]! * e1[0]!];
+    const w = (d[0]! * qv[0]! + d[1]! * qv[1]! + d[2]! * qv[2]!) / det;
+    if (w <= 1e-7 || u + w >= 1 - 1e-7) continue;
+    const r = (e2[0]! * qv[0]! + e2[1]! * qv[1]! + e2[2]! * qv[2]!) / det;
+    if (r > 1e-7 && r < 1 - 1e-7) return true;
+  }
+  return false;
+}

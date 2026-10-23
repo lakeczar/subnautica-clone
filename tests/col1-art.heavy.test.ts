@@ -14,7 +14,8 @@ import { compactBiome, LC_ORIENTATION } from "../src/world/collision/biome.js";
 import { artMembers, certifyOrientation, meshComponents } from "../src/world/collision/bake.js";
 import { KIT_SHELL_ORIENTATION, kitShellShapes } from "../src/world/collision/caveShapes.js";
 import { caveScenes, probe } from "./col1-oracle-support.js";
-import { parityContradictions, probeComponents, seamGaps } from "./col1-support.js";
+import { parityContradictions, probeComponents, seamAudit, seamGaps, wallContradictions } from "./col1-support.js";
+import { createStaticCollider } from "../src/world/collision/collider.js";
 
 /** COL-1 R4/R5: every shipped and authored shape bakes, oriented by its
  * producer's provenance and certified per connected component:
@@ -43,7 +44,7 @@ const voxelInside = (def: CaveDef) => {
   };
 };
 
-test("every kit cave's fine shell, in all three registries, bakes by provenance, has no fold or flip, meets the floor (and so does its coarse shell); the cross-check agrees per component", () => {
+test("every kit cave's fine shell, in all three registries, bakes by provenance, has no fold or flip, meets the floor (and so does its coarse shell), has embedded seam faces and walls that agree with occupancy; the cross-check agrees per component", () => {
   const list = kitDefs(), failures: string[] = [], notes: string[] = [];
   assert.equal(new Set(list.map(k => k.id)).size, 55, "55 distinct kit sources");
   let components = 0, contrary = 0, sampled = 0;
@@ -64,6 +65,12 @@ test("every kit cave's fine shell, in all three registries, bakes by provenance,
       const coarseGaps = seamGaps({ positions: co.positions, indices: Uint32Array.from(co.indices) }, f, shared, worldFloor, band);
       if (coarseGaps.length) failures.push(`${k.id} coarse: ${coarseGaps.length} seam vertices off or below the floor, e.g. ${JSON.stringify(coarseGaps[0])}`);
       for (const lod of ["fine", "coarse"] as const) failures.push(...shellSeamProblems(def, lod, worldFloor).slice(0, 1));
+      // R7: the faces in the side planes, audited independently at both LODs,
+      // and every wall along X and Z against the collider's own occupancy.
+      for (const [lod, m] of [["fine", mesh], ["coarse", { positions: co.positions, indices: Uint32Array.from(co.indices) }]] as const)
+        failures.push(...seamAudit(m, f, 2).map(p => `${k.id} ${lod}: ${p}`));
+      const col = createStaticCollider(def.id, shapes), solid = (p: Vec3): boolean => !!col.solidAt(p);
+      for (const axis of [0, 2] as const) failures.push(...wallContradictions(mesh, solid, axis, f, 300, 11, 2).map(p => `${k.id}: ${p}`));
       const { of, count } = meshComponents(mesh);
       components += count;
       for (const row of probeComponents(mesh, of, new Int8Array(count).fill(1), voxelInside(def))) {
