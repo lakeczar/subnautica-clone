@@ -690,3 +690,10 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **P2:** missing throttle counters certify clean.
   - **P3:** incomplete events text counts as empty.
   - All mechanical; sent back.
+- **SIM-1 done at `f6fee338`** (R5 fixes `85266cd7`):
+  - **Changes:** the outbox is removed and notes commit like game saves; both heads validated before any mutation; victims reported after commit; the timeline-scoped "Repair play timeline" action; the writer-lock split. store.ts is 318 lines plus liveTimeline.ts 138.
+  - **Review:** Sol R6 running (`siltwake-sim1-review-r6-sol-f6fee33`).
+- **TST-16 done at `1d1a1bfe`** (R7 fixes): the install check/write/reload is in the admission transaction; `sliceThrottle` and `populatedFromEvents` fail closed. Suites pass 23/23, 24/24 and 27/27. Sol R8 running (`siltwake-tst16-review-r8-sol-1d1a1bf`).
+- **CW-1 R1:** R1 and R2 are fixed (`477b2b4`); the frame work continues. Its last series lost 6 of 10 exclusives to the 7,200 s admission timeout.
+  - **3090 window:** granted for about 23:00–01:30 UTC, for 10 segments at `fd457d3` with `--queue-timeout 21600`.
+  - **Others:** REC-1 and COL-1 hold further exclusives, and builders route fast tiers to the 4070 meanwhile.
