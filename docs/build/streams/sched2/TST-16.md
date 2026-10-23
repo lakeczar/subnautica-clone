@@ -15,9 +15,13 @@ Builder: Opus 5.5, branch `t3/tst-16-light-slice`, from root `9ac573ec`. It does
   - **What is sampled:** the exclusive job's own cgroup `cpu.pressure` and `memory.pressure`, using their cumulative stall totals in µs, so nothing between samples is lost.
   - **How often:** every second, judged in 5 s windows (worst window and whole run). A run shorter than one window counts as one window.
   - **Added from `/proc/stat`:** hypervisor steal (a VM's vCPU taken away underneath the guest, invisible to PSI) and the CPU used outside the job.
+- **Swap (fleet's host audit, 2026-10-23).** The vCPUs are pinned to dedicated host cores, so steal comes from Unraid's own work on those cores. The guest swaps (about 700 MB out), and a swap-in can stall a thread 50–100 ms without showing as steal.
+  - **Recorded:** `/proc/vmstat` `pswpin`, `pswpout` and `pgmajfault`, plus the job cgroup's own `memory.stat` `pgmajfault` and `workingset_refault_anon`. The kernel keeps no per-cgroup `pswpin`, so the anonymous refaults are the job's swap-ins.
+  - **Warm cache means zero:** a live 14-minute playthrough scope had 0 major faults and 0 refaults. Any major fault is therefore a sign the job's memory or cache was evicted.
 - **`DISTURBED`, with `reasons`:** in the worst window,
   - the job waited for a CPU ≥ 5% of the time;
   - stalled on memory ≥ 1%;
+  - took ≥ 1 major fault or ≥ 1 swap-in in its own cgroup;
   - steal ≥ 5% of the machine's CPU;
   - or the GPU was shared outside the lease.
 
@@ -77,10 +81,10 @@ Run A (unclamped). Approved scope: no clamp on T3's slice; run B waits for the m
 | 260.3 | 33.4 |  | 26.2 / 9.7 | 6.5 | 0 | 0.6 | 1.3 | 4.87 | 4.73 | 12.5 | 0.3 |
 
 - **What the long frames show** (one run; three different causes):
-  - **Real CPU contention, 4 frames (203–260 s), including the only streaming frame.** The renderer thread *waited for a CPU* 10–35 ms of the gap. The job's cgroup waited 9–15% of those seconds, while T3's agents slice used 5.7–6.8 of the 8 CPUs. This is outside light work taking the machine, which the clamp addresses once builders' work goes through `light-run.sh`.
-  - **Likely hypervisor steal, 5 frames (117.5–184.5 s).** The thread was on-CPU for most of the gap (or off it without waiting), its own cgroup barely waited (0.4–7.7%), and steal in those seconds was 2.8–7.6% against a run median of 0.1%. This matches CW-1's "vCPU descheduled underneath the guest". Nothing inside the VM can clamp it.
-  - **Neither contention nor steal, 4 frames (162.0, 164.1, 169.2, 174.0 s).** The thread was off-CPU without waiting (0.2–13.5 ms on-CPU of a 67–100 ms gap): blocked on something else, such as GPU or IPC. That's for CW-1's profiling, which agrees with its reviewer's join (22 of 24 spikes with the renderer on-CPU and low PSI).
-- **So the clamp alone won't clear CW-1's gate,** as the coordinator expected. In this run it would have addressed the one frame that fails the gate, and 3 others. The rest are steal (fleet: pin or reserve the VM's vCPUs) or the game's own blocking (CW-1).
+  - **GC pauses lengthened by CPU contention, 4 frames (203–260 s), including the only streaming frame.** Each contains a V8 GC pause of 24–50 ms (the harness's `gcShaped`), and during it the renderer thread *waited for a CPU* 10–35 ms of the gap. The job's cgroup waited 9–15% of those seconds, while T3's agents slice used 5.7–6.8 of the 8 CPUs. The clamp addresses the waiting part once builders' work goes through `light-run.sh`; the pauses themselves are the game's.
+  - **Likely steal, 5 frames (117.5–184.5 s).** The thread was on-CPU for most of the gap (or off it without waiting), its own cgroup barely waited (0.4–7.7%), and steal in those seconds was 2.8–7.6% against a run median of 0.1%. This matches CW-1's "vCPU descheduled underneath the guest". Per fleet's audit, that's host work (Unraid) waking on the pinned cores. Nothing inside the VM can clamp it.
+  - **Neither contention nor steal, 4 frames (162.0, 164.1, 169.2, 174.0 s).** The thread was off-CPU without waiting (0.2–13.5 ms on-CPU of a 67–100 ms gap): blocked on something else. Fleet suggested swap-ins. The harness's per-frame counters show **0 major faults on the renderer main thread in all 13 long frames**, these 4 included, so the main thread didn't swap in. A swap-in in a process it waits on (the GPU process, say) can't be ruled out, because run A didn't sample `/proc/vmstat` (the context does now). Otherwise it's GPU or IPC: CW-1's profiling, which agrees with its reviewer's join (22 of 24 spikes with the renderer on-CPU and low PSI).
+- **So the clamp alone won't clear CW-1's gate,** as the coordinator expected. In this run it would have addressed the one frame that fails the gate, and 3 others. The rest are steal (fleet: keep host work off the pinned cores), GC pauses, or the game's own blocking (CW-1).
 - **The new label agrees with the old one here, for a reason that can be checked:** the job's own CPU wait, not host-wide PSI. On CW-1's quiet run it would have been driven by the job's own counters, not by another slice's memory stall. Run B (clamped) follows the merge.
 
 ## Compromises, limits and missing evidence
@@ -93,4 +97,5 @@ Run A (unclamped). Approved scope: no clamp on T3's slice; run B waits for the m
   - **Root fix:** T3 runs each agent's tool commands in a slice we may clamp, or exposes a hook to clamp its agents' slices during exclusive runs.
   - **Cost:** a T3/fleet change, the owners' call.
 - **The thresholds (5%, 1%, 5%) are first values.** They are config, and run A's numbers (above) are the first real calibration. Tune them as more exclusive runs record v2 contexts.
-- **Steal is machine-wide.** A VM's steal can't be attributed to one cgroup. The fleet-side fix for real vCPU contention is pinning or reserving the VM's vCPUs on the host.
+- **Steal is machine-wide.** A VM's steal can't be attributed to one cgroup. Fleet's audit found the vCPUs already pinned to dedicated host cores, so steal is Unraid's own work (Kopia, ZFS writes, the proxy, interrupts) waking on them. The root fix is fleet's: keep host work off those cores.
+- **Major faults include cold file reads,** not only swap. A run whose page cache was evicted (by memory pressure, or after a reboot) is marked `DISTURBED` for them. That's deliberate: its timings then include disk reads. The threshold is config (`disturbed.jobMajorFaults`).
