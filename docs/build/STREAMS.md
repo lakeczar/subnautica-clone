@@ -654,3 +654,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - no lock API means read and export only;
     - honest page-lifecycle bounds.
 - **TST-16 done at `b10aa825`** (R5): uninstall keeps the inert unit, and `--remove-exclusive-slice` is a separate step that refuses while tickets run. Kernel cgroup properties are read before and after each payload, and a mismatch means unavailable plus DISTURBED. New S23. Suites pass 23/23, 23/23 and 27/27, and the fast tier 1405/1405. Focused Sol R6 running (`siltwake-tst16-review-r6-sol-b10aa82`).
+- **STEW-1 done at `d168cd6`** (R1 fixes, code `14136e8`):
+  - **Gate:** judges bound, undisturbed receipts for the pinned commit, and fails if the tree changes.
+  - **Guard:** dynamic and require imports plus `.mts`/`.cts`/`.tsx`; exact-match cycle and driver allowances; a headless sim/content typecheck replaces the DOM name list; `--review` on queued steps; the FORK(stream-drivers) marker added; a tightened region exemption.
+  - **Docs:** the 4070 and remote-lane rules are documented.
+  - **Evidence:** the gate passed 10/10 at 14136e8, npm test 1,410/1,410.
+  - **Review:** Sol R2 running (`siltwake-stew1-review-r2-sol-d168cd6`).
