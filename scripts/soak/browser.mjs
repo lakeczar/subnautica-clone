@@ -25,7 +25,13 @@ export class Blocked extends Error {}
 export async function openGame(opts) {
   const { dist, save, port, software = false, log = () => {} } = opts;
   if (!software) requireGpuLease("the soak's browser");
-  const { chromium } = createRequire(opts.pw ?? process.env.SOAK_PW ?? "/work/tmp/gpu-prep/pw/")("playwright-core");
+  // On the second worker (siltwake-alickers) the browser is its Linux-only
+  // wrapper, which sets its own GPU flags (WORKER_RESOURCE_LIMITS, "Second
+  // worker"), and playwright-core is in /work/tmp/pw.
+  const sandboxChrome = "/usr/local/bin/siltwake-chrome";
+  const onSandbox = !opts.chrome && !software && existsSync(sandboxChrome);
+  const pw = opts.pw ?? process.env.SOAK_PW ?? ["/work/tmp/gpu-prep/pw/", "/work/tmp/pw/"].find((d) => existsSync(path.join(d, "node_modules", "playwright-core"))) ?? "/work/tmp/gpu-prep/pw/";
+  const { chromium } = createRequire(pw)("playwright-core");
   const root = path.resolve(dist);
   const server = createServer((req, res) => {
     const rel = decodeURIComponent((req.url ?? "/").split("?")[0]);
@@ -37,8 +43,8 @@ export async function openGame(opts) {
   await new Promise((r) => server.listen(Number(port), "127.0.0.1", r));
   const label = `${opts.label ?? "soak"}-${process.pid}`;
   const browser = await chromium.launch({
-    executablePath: opts.chrome ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`, headless: true, timeout: 30000,
-    args: [...(software ? ["--use-angle=swiftshader"] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", `--siltwake-soak=${label}`],
+    executablePath: opts.chrome ?? (onSandbox ? sandboxChrome : `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`), headless: true, timeout: 30000,
+    args: [...(software ? ["--use-angle=swiftshader"] : onSandbox ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", `--siltwake-soak=${label}`],
   });
   const g = { browser, server, errors: [], crash: null, label, held: new Set(), eye: 0 };
   g.browserPid = readdirSync("/proc").filter((d) => /^\d+$/.test(d)).map(Number).find((p) => {
