@@ -126,6 +126,12 @@ Opus 5.5 high. Branch `t3/stew-1-guard-rails`, on root `f0dc680` (SAVE-1 merged)
 - **R5:** both queued gate steps carry `--review`.
 - **R6:** `// FORK(stream-drivers)` marks the driver allowlist. The guard reports distinct fork IDs separately from markers: 5 forks in 6 markers, because `legacy-terrain` heads both legacy modules. A test ties the marker IDs to the register's rows.
 - **Optional, done:** the region-lookup exemption needs a real delegation shape: the whole body one call to `regionAtPoint` or `regionAtPosition`. A comment mentioning it, or a call plus a fallback, is a lookup again.
+- **R1 evidence:**
+  - **The fixed `npm run gate` at `14136e8`: exit 0, all 10 steps.** Both queued steps were judged on their receipts, each "evidence for `14136e89bd`" with `--review`:
+    - bake (`261023-183508-165d`, 3090; queued 20 min behind an exclusive series, ran 0 s, warm);
+    - playthrough (`261023-185606-d011`, routed by `--machine any` to the RTX 4070 on alickers, 19 min, 8 of 8 complete, no blockers).
+  - `npm test`: 1,410 of 1,410.
+  - Guard 838 ms; headless typecheck 0.9 s incremental, 4.7 s cold.
 - **Docs:** WORKER_RESOURCE_LIMITS states that `--class exclusive` is refused off the 3090 (use `--class gpu --machine 4070`), and that commands reading `.test-build*` or `dist` can't go to alickers (compile inside the job).
 
 ## Compromises (each with its root fix and cost)
