@@ -31,9 +31,9 @@
 // holds processes, the ticket is alive (state.mjs reconcile).
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { jobEnv, plan } from "./policy.mjs";
+import { MACHINE_LABELS, jobEnv, plan } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 import {
   cgroupRead, cpuContext, gitTree, gpuUsers, hostFor, jobDir, jobProcs, ledger, loadConfig, readFileSafe, readJson, readState, readStats,
@@ -321,6 +321,9 @@ const result = {
   head: tree.head, dirty: tree.dirty, headAtAdmit: treeAtAdmit.head, dirtyAtAdmit: treeAtAdmit.dirty,
   changedTree, changedDuringRun, evidence, snapshot: snap ? { root: snap.root, kept: Boolean(keptSnapshot) } : null,
   gpuShared: gpuShared.size ? [...gpuShared.values()] : undefined, context,
+  machine: MACHINE_LABELS.local, machineTag: goal.machine ?? null, fellBack: t.fellBack ?? undefined,
+  // --artifact paths of a job that ran here are where it wrote them.
+  artifacts: request.opts?.artifacts?.map((p) => { const at = resolve(runCwd, p); return { path: p, ...(existsSync(at) ? { local: at } : { error: "not written" }) }; }),
 };
 // The scope is empty: release the worktree's .test-build before anyone can see the result.
 if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: true });
@@ -374,6 +377,6 @@ function ensureSlice(nproc) {
 
 function fmt(ms) {
   const s = Math.round(ms / 1000);
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`;
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s` : `${Math.floor(s / 3600)}h${String(Math.floor(s / 60) % 60).padStart(2, "0")}m`;
 }
 function short(tr) { return tr.head ? `${tr.head.slice(0, 10)}${tr.dirty === "clean" ? "" : `+${tr.dirty}`}` : "(not git)"; }

@@ -51,7 +51,11 @@ if [[ $uninstall == 1 ]]; then
   exit 0
 fi
 
-files=(policy.mjs state.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh)
+files=(policy.mjs state.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
+  remote.mjs remote-holder.mjs lane-run.sh)
+# The remote lane's transport (SCHED-2b) is scripts/alickers-job.sh; each
+# version carries its own copy, so a running remote ticket keeps its transport.
+transport="$src/../alickers-job.sh"
 # The GPU lease checker has its own immutable install ($home/guard/<version>,
 # `guard/current`): the Chrome wrappers point there, never at the scheduler's
 # `current`, so installing an older scheduler (a rollback) or uninstalling it
@@ -71,11 +75,12 @@ install_guard() {
   ln -sfn "$gv" "$home/guard/current.tmp"
   mv -T "$home/guard/current.tmp" "$home/guard/current"
 }
-version=$(cd "$src" && cat "${files[@]}" | sha256sum | cut -c1-12)
+version=$(cd "$src" && cat "${files[@]}" "$transport" | sha256sum | cut -c1-12)
 if [[ ! -d "$home/$version" ]]; then
   [[ -d "$home/$version.tmp" ]] && chmod -R u+w "$home/$version.tmp" && rm -rf "$home/$version.tmp"
   mkdir -p "$home/$version.tmp"
   (cd "$src" && cp "${files[@]}" "$home/$version.tmp/")
+  cp "$transport" "$home/$version.tmp/alickers-job.sh"
   chmod -R a-w "$home/$version.tmp"
   mv -T "$home/$version.tmp" "$home/$version"
 fi

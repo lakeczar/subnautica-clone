@@ -107,3 +107,8 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
 - **Tiered evidence:** agents read `summary.json`, then `story.md` (with its attention list), then only the frame strips for flagged items. The budget is about 6–10 strips per review. Builders and reviewers look at frames themselves and report conclusions in text; the coordinator reads conclusions.
 - **Fixed-view visual regression** (REC-1): every run, or a short `gpu` job, captures a fixed set of camera views and compares them with the last accepted baseline per machine class. Changed views go on the attention list. Accepting a new baseline is a deliberate, recorded act.
 - **Taste review once per wave:** an Opus agent reviews the fixed-view contact sheet against GAME-DIRECTION after each wave of work, and the coordinator dispatches it. The owner's playtests remain the judge of feel.
+
+## Codebase stewardship (owner, 2026-10-23)
+- **Every review brief checks reuse and simplicity:** no new parallel implementation of something that already exists; shared helpers over copies; dead or legacy code removed when it's replaced; hot-path allocation justified; obvious names and one way to do each thing.
+- **An architecture review once per wave,** alongside the taste review: Sol gathers evidence, and an Opus steward rules.
+- **A one-off codebase health audit** (2026-10-23): Sol evidence at `research/codebase-health:docs/build/audits/CODEBASE-HEALTH-SOL.md`, then an Opus verdict and refactor plan, slotted into the waves.
