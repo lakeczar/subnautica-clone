@@ -92,7 +92,7 @@ export async function runSoak(opts, deps) {
     const s = await probe.sample({ at: now(), ...extra });
     noteErrors(s);
     run.samples.push({ at: s.at, memory: s.memory, graphics: s.graphics, afterGc: Boolean(extra.afterGc) });
-    appendFileSync(join(out, "samples.jsonl"), `${JSON.stringify({ ...s, ...extra.mark })}\n`);
+    appendFileSync(join(out, "samples.jsonl"), `${JSON.stringify({ ...s, afterGc: Boolean(extra.afterGc), ...extra.mark })}\n`);
     if (env.SILTWAKE_JOB_HEARTBEAT) { try { writeFileSync(env.SILTWAKE_JOB_HEARTBEAT, ""); } catch { /* best effort */ } }
     return s;
   }

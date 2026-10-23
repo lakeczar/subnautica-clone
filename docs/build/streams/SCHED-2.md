@@ -141,7 +141,10 @@ This is not the real tour. It's a 4-point surface swim loop by the start pod (`/
   - **First run (10-min window):** it "failed" on an artifact. The renderer RSS idling at the pod swings ±5–11% with GC timing (478–490 MiB, then 532 just after a forced GC), and a single post-GC sample was compared with samples taken without a GC.
   - **Fix:** memory compared over time is now read one way only: a forced GC, a 2 s settle, then RSS and heap. Tour laps already worked like that. Dwell flatness and leak are judged only on these settled samples, one a minute after a 60 s warm-up, and the goal requires them to span the leak window.
   - Regression: `tests/soak-goals.test.ts`, GC swings over a flat floor pass, a rising floor fails.
-  - **Rerun on the fixed code:** see the next point.
+  - **Rerun on the fixed code** (run5, at `da06145`, short check thresholds: 5 autosaves, a 3-min leak window): **fail**, on a finding rather than an artifact.
+    - Settled renderer RSS is flat: 367.4, 366.3, 366.4, 366.1 MiB. The heap after GC is 90–92 MiB.
+    - The **GPU process's RSS rises steadily:** 228.3 → 230.3 MiB in 3 min (`leak:gpuRssMiB`, 39.8 MiB/h). The first, 10-minute run shows the same, 228 → 234 MiB, about 34 MiB/h.
+    - So idling at the pod grows Chrome's GPU-process memory by about 35–40 MiB/h. It's for MEM-1 to attribute (the game's uploads, or Chrome's GPU process), and it's exactly what the dwell rule exists to catch. I haven't tuned the threshold around it.
 - **Observed for its owners:** every load requests terrain tiles `t_4_11`, `t_4_12`, `t_5_11` and `t_5_12`, which are not in the bake or its manifest, so each load logs four HTTP 404s. The soak's page-error list now names the resource.
 
 ## Compromises, limits and missing evidence
