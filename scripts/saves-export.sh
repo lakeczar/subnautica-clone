@@ -51,5 +51,6 @@ if [[ $here == 0 ]]; then
   [[ $rc == 75 || $rc == 255 ]] || { echo "saves-export: the export failed on siltwake-alickers (exit $rc); see its output above" >&2; exit "$rc"; }
   echo "saves-export: siltwake-alickers unavailable (exit $rc); exporting on factory-worker through the queue" >&2
 fi
-"$H" --class playthrough --deadline 1800 -- node .test-build/scripts/playthrough/run.js --quiet --export
+# Not --snapshot: the export reads git to tag the library, and the queue already rejects a changed tree.
+"$H" --class playthrough -- node .test-build/scripts/playthrough/run.js --quiet --export
 saves verify HEAD --root "$root"
