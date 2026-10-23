@@ -81,7 +81,7 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
 - **One job per worktree runs at a time.**
 - **Watching and stopping.** `$H status` shows the queue and why each ticket waits (`cpu`, `memory`, `gpu`, `head`, `worktree`, `exclusive`, `lane`, `legacy` or `host-memory`). `$H cancel T` stops a ticket; cancel only your own.
 - **Commit before submitting** anything that will serve as handoff or review evidence. The final line prints the tested `HEAD` (plus a dirty hash) and warns if the tree changed between submit and admission.
-- **`.test-build` is in use while your job runs.** While a heavy job runs in your worktree, don't rebuild that worktree's `.test-build` (`npm test`, `npm run test:build`): the job is running those files. Wait, or edit in another worktree. Once the TT-1 guard is applied ([SCHED-1](streams/SCHED-1.md), migration step 5), `npm test` refuses on its own.
+- **`.test-build` is in use while your job runs.** While a heavy job runs in your worktree, `npm test` and `npm run test:build` there refuse to rebuild `.test-build`, because the job is running those files. Wait, or edit in another worktree. The job itself may rebuild.
 - **Playthroughs:** compile first, then queue only the run:
 
   ```sh

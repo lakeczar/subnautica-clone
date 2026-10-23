@@ -137,13 +137,12 @@ Builder: Opus 5.5, branch `t3/sched-1-heavy-queue`. **R1 and R2 fixes applied:**
    - watch `scripts/heavy-check.sh status` and `/work/tmp/siltwake-sched/ledger.jsonl` for about 2 hours;
    - record p50/p95 queue time, peak slice memory, the `MemAvailable` floor and PSI.
 4. Paste the "How to run a heavy job" section of `WORKER_RESOURCE_LIMITS.md` into briefs.
-5. After TT-1 merges, run `git apply docs/build/streams/sched1/tt1-test-build-guard.patch`. It was checked against TT-1 `c16abca`:
-   - it refuses outside the job;
-   - inside the job, `--clean` succeeds and keeps the marker;
-   - after that, an outside rebuild is still refused;
-   - a stale marker is ignored.
+5. **Done in R4:** TT-1 has merged into the integration branch, which is merged here, and `docs/build/streams/sched1/tt1-test-build-guard.patch` is applied to `scripts/test-build.mjs`. In this worktree, with a private-state job:
+   - an outside `test-build` refuses while the job runs;
+   - the job's own build succeeds;
+   - after the job, rebuilding is allowed and the marker is gone.
 
-   Until it's applied, `npm test` does not refuse; the usage text says so.
+   `npm test` passes: 1,286 tests.
 6. After a week of ledger data:
    - calibrate reservations to cgroup p95 + 25%;
    - consider `{"poolMiB": 7168}` in `/work/tmp/siltwake-sched/config.json`;
@@ -262,6 +261,11 @@ The coordinator directed one scheduler-owned, cgroup-based lifetime mechanism in
   - **9e and 9f:** still pass.
 - **Correction to my R3 report:** my R3 claim that 9e failed on `c562bed` came from a mutation harness without the v1 source, so it may have been an artefact. Rechecked with the source available (`SCHED1_V1_REPO`): 9e does fail on `c562bed` for the real reason, "v1 entered 38 ms after the holder died, with the old payload alive". The tests now assert that the v1 source is present.
 
+**Also in R4: TT-1 is composed.** TT-1 merged into the integration branch, which I merged here.
+- **Conflicts:** `package.json` takes TT-1's `test:build` and `test:fast` lines, and this stream's `test:heavy` (now `node scripts/test-build.mjs` inside the `heavy-suite` job) and `check`. `scripts/heavy-check.sh` keeps this stream's shim; its v1 body already had TT-1's delegation lines.
+- **Guard:** the `.test-build` guard patch is applied, and checked end to end in this worktree.
+- **Fast tier:** `npm test` passes (1,286).
+
 **P3s from the R4 report (recorded, not built):**
 1. **A job deliberately killing its own anchor while its holder is also dead.** A compound, non-cooperative action. An ordinary reservation OOM is no longer in this class (R4-F1).
 2. **Anchor overhead:** an `sh` and a `sleep` (about 1.8 MiB RSS including shared pages) count against the reservation.
@@ -273,7 +277,6 @@ The coordinator directed one scheduler-owned, cgroup-based lifetime mechanism in
    - exit 99, told apart by the "still pending" line;
    - the GPU lease is enforced only in the wired drivers;
    - light work outside the lane can disturb a measurement;
-   - the TT-1 guard is a composition prerequisite;
    - an inferred OOM label when the holder's watch missed the event (`oomEvidence` says so).
 
 ## Cut-over checklist
@@ -282,7 +285,7 @@ This is the reviewer's checklist from R4, with the coordinator's added step 7. I
 
 1. **Accept and compose.**
    - Get a fresh ACCEPT on the corrected frozen source, plus coordinator inspection.
-   - Compose TT-1 and apply `docs/build/streams/sched1/tt1-test-build-guard.patch` to the integrated runner.
+   - TT-1 is composed here and the guard patch is applied (R4). Re-check it if the integration branch changes `scripts/test-build.mjs` again.
    - Verify that the marker survives `--clean`, that delegated containment works (now under the `job` cgroup), and the affected package scripts.
 2. **Install in serial.**
    - Update the integration and root checkouts and the active callers' shims.
@@ -333,10 +336,7 @@ This is the reviewer's checklist from R4, with the coordinator's added step 7. I
 - **The ledger has no report script yet.** Use `jq` on `ledger.jsonl`.
 - **Unlabelled GPU work isn't detected.** Only the four shared drivers enforce the lease; per-stream play scripts don't.
 - **Measurements are labelled, not protected.** Fast tiers outside the lane can still disturb an exclusive measurement. The run is marked `DISTURBED` (CPU PSI some ≥ 10%, or memory full ≥ 1%), not prevented.
-- **Until TT-1 merges:**
-  - `test:build` rebuilds `.test-build` clean, about 47 s, inside the lane;
-  - the clean rebuild deletes the marker;
-  - the `.test-build` guard isn't wired in.
+- **TT-1 is composed** (R4): `test:build` is incremental and the `.test-build` guard is wired in.
 - **Same-worktree `npm test` is blocked by design** while that worktree's heavy job runs.
 - **`wait`'s 99 can collide with a job's own exit 99.** The "still pending" line tells them apart.
 - **The legacy nested-call check trusts the `siltwake-heavy-*` scope name.**
