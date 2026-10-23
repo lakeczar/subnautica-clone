@@ -11,11 +11,11 @@ import { slotOf } from "../../src/sim/upgrades/fitting.js";
 import type { UpgradeId } from "../../src/content/upgrades/catalogue.js";
 import { airSupply } from "../../src/sim/survival.js";
 import { sweptHullClearance } from "../../src/sim/world.js";
-import { board, move, reach } from "./actions.js";
+import { board, eatIfHungry, move, reach } from "./actions.js";
 import { Blocked, where } from "./driver.js";
 import type { Driver } from "./driver.js";
 import { KINDS, LOW_AIR_PERCENT } from "./kinds.js";
-import { boardCraft } from "./later.js";
+import { boardCraft, provision } from "./later.js";
 import { dockAndService, ISLES, make, PUMPHOUSE_RUN, stowHold, workFrom } from "./live.js";
 import type { Phase } from "./live.js";
 import { breathe, enter, surface, surfaceTo } from "./nav.js";
@@ -100,6 +100,8 @@ export const tourFit: Phase = {
     const cores = TOUR_UPGRADES.reduce((n, k) => n + (RECIPES[k].cost.thermal_core ?? 0), 0);
     if (d.count("thermal_core", ["diver", "workshop_locker"]) < cores)
       throw new Blocked(`The tour upgrades need ${cores} thermal cores; home holds ${d.count("thermal_core", ["diver", "workshop_locker"])}`, where(d.state));
+    // The depletion laps run about three quarters of an hour: three meals aboard.
+    provision(d);
     crustByDart(d);
     const dart = d.vehicle("dart")!;
     // Free both sockets: whatever is socketed goes back to the workshop locker.
@@ -157,12 +159,13 @@ export const depleted: Phase = {
       d.legOf("pump-house laps until the battery is empty", "travel", () => {
         for (let guard = 0; v().charge > 0 && guard < 200; guard++) {
           const out = guard % 2 === 0;
+          eatIfHungry(d);
           try {
             travel(d, route(out ? "lap out" : "lap back", "craft", "harness: pump-house run, swept", out ? LAP_OUT : LAP_BACK));
             if (!out) laps++;
           } catch (e) {
             // A dead helm stalls the travel helper: that is this phase's outcome, not a finding.
-            if (!(e instanceof Blocked) || v().charge > 0) throw e;
+            if (!(e instanceof Blocked) || !/ stalled /.test(e.message) || (d.occupied()?.charge ?? 1) > 0) throw e;
           }
         }
         d.waitFor("the dead Dart to coast to a stop", 30, () => Math.hypot(v().velocity.x, v().velocity.y, v().velocity.z) < 0.05);

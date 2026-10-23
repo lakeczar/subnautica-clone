@@ -63,7 +63,7 @@ function followS2(d: Driver, id: string, reverse = false): void {
 }
 /** Long later phases (C3): eat at the workshop and carry three meals; eat()
  * reaches the diver hold anywhere, and followS2 eats between legs. */
-function provision(d: Driver): void {
+export function provision(d: Driver): void {
   ashoreFromCarrier(d);
   enter(d, "workshop");
   eatIfHungry(d, 70);
