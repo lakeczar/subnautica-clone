@@ -16,6 +16,8 @@ export interface SessionEvents {
   pause(): void;
   entered(): void;
   notify(message: string, error?: boolean, options?: NoticeOptions): void;
+  /** A save attempt finished (REC-1 records saves; silent autosaves included). */
+  saved?(outcome: { manual: boolean; ok: boolean; tick: number; ms: number; error?: string }): void;
 }
 export interface ImportFilePort {
   readonly size: number;
@@ -320,12 +322,14 @@ export class ExpeditionSession {
     const operation = this.begin();
     if (!operation) return;
     this.lastAutosaveTick = save.state.tick;
+    const started = performance.now();
     const result = await this.repository.commit(
       save,
       replaceProtected,
       operation.abort.signal,
     );
     if (!this.current(operation)) return;
+    this.events.saved?.({ manual, ok: result.ok, tick: save.state.tick, ms: performance.now() - started, ...(result.ok ? {} : { error: result.error }) });
     // A moment that fails validation is transient (C3-R1): keep automatic saving
     // on and retry soon; storage failures still disable it until a manual save.
     const invalid = !result.ok && result.code === "invalid", wasUnsaveable = this.unsaveable;

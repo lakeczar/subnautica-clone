@@ -53,9 +53,32 @@ export interface GameRenderer {
    * and the caller keeps the simulation clock paused. Never more than
    * `SETTLE_MAX_MS`. */
   readonly settling: boolean;
+  /** REC-1: time each present's parts (the flight recorder's frame split). */
+  timing: boolean;
+  /** The last timed present's split, ms; null when not timing. */
+  readonly parts: FrameParts | null;
+  /** Scene and streaming counters, computed when asked (the test hook, the recorder's samples). */
+  stats(): RendererStats;
   setQuality(quality: Quality): void;
   resize(): void;
   dispose(): void;
+}
+
+/** One present's time by part, ms (REC-1; CW-1's attribution). */
+export interface FrameParts {
+  regions: number; lights: number; actors: number; chunks: number; caves: number; render: number;
+  lightScan: number; lightPlace: number; lightSelect: number; lightCount: number; evicted: number;
+  buildMs: number; maxStepMs: number; uploadMs: number; uploads: number; caveBuildMs: number;
+  /** A jump during play: from and to, metres. */
+  jump: number[] | null;
+}
+export interface RendererStats {
+  meshes: number; triangles: number; vertices: number; draws: number; materials: number; textures: number; geometries: number;
+  /** The streamed world's own byte accounting (an estimate; browsers expose no VRAM figure). */
+  residentCpu: number; residentGpu: number; regionBytes: number;
+  regions: string[]; cave: string | null; settling: boolean; ready: boolean;
+  /** CW-1's cave streaming counters; `sync` counts unsliced builds. */
+  caveStream: { sync: number; built: number; evicted: number; boxes: number; pending: number; missing: number; uploads: number };
 }
 
 /** Byte budget of all world art: chunk residency plus the legacy region
@@ -323,6 +346,7 @@ export function createRenderer(
       available = true,
       generation = 0;
     let lastViewer: Vector3 | null = null, settleSince = -1;
+    let timing = false, parts: FrameParts | null = null, lastWorld: ReturnType<typeof art.stream> | null = null;
     let whenReady: (() => void) | null = null;
     const cancelReady = (): void => {
       if (whenReady) scene.onReadyObservable.removeCallback(whenReady);
@@ -354,11 +378,28 @@ export function createRenderer(
     });
     return {
       get settling() { return settleSince >= 0; },
+      get timing() { return timing; },
+      set timing(on: boolean) { timing = on; if (!on) parts = null; },
+      get parts() { return parts; },
+      stats() {
+        const ks = caveWorld.kitCaves.stats;
+        return {
+          meshes: scene.meshes.length,
+          triangles: scene.meshes.reduce((n, m) => n + m.getTotalIndices() / 3, 0),
+          vertices: scene.meshes.reduce((n, m) => n + m.getTotalVertices(), 0),
+          draws: instrumentation.drawCallsCounter.current, materials: scene.materials.length,
+          textures: scene.textures.length, geometries: scene.geometries.length,
+          residentCpu: lastWorld?.cpuBytes ?? 0, residentGpu: lastWorld?.gpuBytes ?? 0, regionBytes: art.regionBytes,
+          regions: [...art.active], cave: caveView.active ?? null, settling: settleSince >= 0, ready: canvas.dataset.ready === "true",
+          caveStream: { sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes, pending: streamFrame?.pending ?? -1,
+            missing: caveView.stats.missing, uploads: caveView.stats.uploads },
+        };
+      },
       present(state, overlay) {
         if (disposed || !available) return;
         const time = state ? state.tick / 60 : 0;
         const activationStart = performance.now();
-        const timedParts = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
+        const timedParts = timing;
         const priorRegions = art.active.join(",");
         art.update(state);
         const regionsMs = performance.now() - activationStart;
@@ -408,7 +449,7 @@ export function createRenderer(
         // caller, the near world built in bounded slices across frames. With
         // no expedition running (title, loading) or while settling,
         // construction gets more of each frame.
-        const timed = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
+        const timed = timing;
         const jumped = !lastViewer || Vector3.Distance(lastViewer, camera.position) > JUMP;
         const cinematic = !state || state.opening.phase < 4;
         if (jumped && lastViewer && !cinematic) settleSince = performance.now();
@@ -417,7 +458,7 @@ export function createRenderer(
         lastViewer = camera.position.clone();
         const extraMs = cinematic || settleSince >= 0 ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
         const tStream = timed ? performance.now() : 0;
-        const world = art.stream(camera.position, { ...(jumped && settleSince < 0 ? { nearRadius: NEAR_WORLD } : {}), extraMs });
+        const world = lastWorld = art.stream(camera.position, { ...(jumped && settleSince < 0 ? { nearRadius: NEAR_WORLD } : {}), extraMs });
         if (settleSince >= 0 && (art.residency.isReady(NEAR_WORLD) || performance.now() - settleSince > SETTLE_MAX_MS)) settleSince = -1;
         const chunkMs = timed ? performance.now() - tStream : 0;
         cue.update(state ? overlay?.target ?? overlay?.preview ?? null : null, camera.position, !!overlay?.target);
@@ -475,12 +516,10 @@ export function createRenderer(
         sky.setFloat("time", time);
         canvas.dataset.water = underwater ? "underwater" : "above";
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
-        // CR-1: the sim tick, for evidence drivers timing creature rhythms (as cameraPosition is for steering).
-        canvas.dataset.tick = String(state?.tick ?? 0);
         const tRender = timed ? performance.now() : 0;
         if (settleSince >= 0) { engine.clear(new Color4(0, 0, 0, 1), true, true); canvas.dataset.settling = "true"; }
         else { scene.render(); canvas.dataset.settling = "false"; }
-        if (timed) (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent = {
+        parts = !timed ? null : {
           regions: +regionsMs.toFixed(2), lights: +lightsMs.toFixed(2), actors: +actorsMs.toFixed(2),
           lightScan: +lights.stats.scanMs.toFixed(2), lightPlace: +lights.stats.placeMs.toFixed(2), lightSelect: +lights.stats.selectMs.toFixed(2),
           lightCount: lights.stats.placed, evicted: world?.totals.evicted ?? 0,

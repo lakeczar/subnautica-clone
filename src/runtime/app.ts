@@ -28,6 +28,11 @@ import { parseTimeline } from "../sim/timeline/report.js";
 import { controlsActive } from "../sim/timeline/activity.js";
 import { regionAtPoint } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
+import { DEFAULT_FLIGHT_SETTINGS, FlightCapture, flightMode, type FlightSettings } from "./flight/capture.js";
+import { gameSample, recordCommand, recordGameEvents, recordTimeline } from "./flight/game.js";
+import { installTestHook, type HookRead } from "./flight/hooks.js";
+import { exposure } from "../sim/survival.js";
+import { BAKE_SOURCE } from "../render/bakeSource.js";
 
 interface Settings {
   quality: Quality;
@@ -44,6 +49,16 @@ const DEFAULT_SETTINGS: Settings = {
   keyTurnSpeed: 1,
 };
 const SETTINGS_KEY = "siltwake.settings.v1";
+const FLIGHT_KEY = "siltwake.flight.v1";
+/** REC-1: samples per second of the player and the renderer. */
+const FLIGHT_SAMPLE_MS = 250;
+declare const __BUILD_COMMIT__: string;
+function readFlightSettings(): FlightSettings {
+  try {
+    const v = JSON.parse(localStorage.getItem(FLIGHT_KEY) ?? "null") as Partial<FlightSettings> | null;
+    return { enabled: v?.enabled !== false, video: v?.video !== false };
+  } catch { return { ...DEFAULT_FLIGHT_SETTINGS }; }
+}
 const BLOCKED_ASCENT_SECONDS = 0.45;
 /** The swimming diver's box (step.ts), for cave admission. */
 const DIVER_SHAPE = { radius: 0.34, height: 0.95 };
@@ -160,6 +175,18 @@ export class SiltwakeApp {
   /** Local-only play timeline (SYS-2, C4): never in the save, never sent. */
   private timeline: TimelineRecorder | null = null;
   private timelineSaved = 0;
+  /** REC-1 flight recorder (null when off) and its per-frame bookkeeping. */
+  private flight: FlightCapture | null = null;
+  private flightSettings = readFlightSettings();
+  private flightTimeline = 0;
+  private flightLast = 0;
+  private flightHeap: number | null = null;
+  private flightSampleAt = 0;
+  private flightFrames = 0;
+  private flightHidden = false;
+  /** Test hook: the simulation clock is held for a fixed-view capture. */
+  private frozen = false;
+  private readonly uninstallHook: () => void;
 
   constructor(root: HTMLElement) {
     this.session = new ExpeditionSession(this.repository, {
@@ -167,6 +194,8 @@ export class SiltwakeApp {
       pause: () => this.pause("", false),
       entered: () => this.entered(),
       notify: (message, error, options) => this.view.notify(message, error, options, this.state),
+      saved: (o) => this.flight?.recorder.event("save", `${o.manual ? "manual" : "auto"}save ${o.ok ? "ok" : `failed: ${o.error ?? ""}`} in ${o.ms.toFixed(0)} ms`,
+        { tick: o.tick, detail: { manual: o.manual, ok: o.ok, ms: Math.round(o.ms) }, snapshot: !o.ok }),
     });
     this.view = new GameView(root, {
       command: (command) => this.command(command),
@@ -196,6 +225,12 @@ export class SiltwakeApp {
       exportTimeline: () => this.exportTimeline(),
       exportBackup: () => this.exportBackup(),
       exportRaw: () => this.exportRaw(),
+      flight: (settings) => {
+        this.flightSettings = settings;
+        this.view.flightSettings(settings);
+        try { localStorage.setItem(FLIGHT_KEY, JSON.stringify(settings)); } catch {}
+      },
+      exportFlight: () => void this.exportFlight(),
       importFile: (file) =>
         this.requestEntry(() => {
           void this.session.importFile(file);
@@ -252,6 +287,14 @@ export class SiltwakeApp {
     } catch (error) {
       this.view.graphicsError(errorText(error));
     }
+    this.view.flightSettings(this.flightSettings);
+    this.startFlight();
+    this.uninstallHook = installTestHook({
+      read: () => this.hookRead(),
+      stats: () => this.renderer?.stats() ?? null,
+      freeze: (on) => { this.frozen = on; this.clock.reset(); this.dirty = true; },
+      capture: () => this.flight,
+    });
     const options = { signal: this.abort.signal };
     window.addEventListener(
       "resize",
@@ -269,8 +312,10 @@ export class SiltwakeApp {
     document.addEventListener(
       "visibilitychange",
       () => {
-        if (document.hidden)
+        if (document.hidden) {
+          this.flightHidden = true;
           this.pause("Paused while this tab is in the background.");
+        }
       },
       options,
     );
@@ -394,7 +439,8 @@ export class SiltwakeApp {
     // Frame timing for measurement harnesses only (CW-1 traversal): a page
     // that defines `__siltwakePerf` gets one entry per frame.
     const perf = (globalThis as { __siltwakePerf?: unknown[] }).__siltwakePerf;
-    const started = perf ? performance.now() : 0;
+    const timed = !!perf || !!this.flight;
+    const started = timed ? performance.now() : 0;
     let simMs = 0, steps = 0, saveMs = 0;
     // Baked cave records, once they land (the pack is fetched at start).
     if (!this.recordsSet && (!this.caveStore || this.caveStore.settled)) {
@@ -405,17 +451,104 @@ export class SiltwakeApp {
     // power or AI ticks); rendering carries on.
     const hold = this.active ? this.caveAdmission(now) : null;
     // Likewise while the view settles after a jump (respawn, refuge, rescue).
-    this.clock.advance(now, this.active && !hold?.holding && !this.renderer?.settling, () => {
+    this.clock.advance(now, this.active && !hold?.holding && !this.renderer?.settling && !this.frozen, () => {
       if (!this.state || !this.active) return;
-      const stepStart = perf ? performance.now() : 0;
-      try { this.step(now); } finally { if (perf) { simMs += performance.now() - stepStart; steps++; saveMs += this.lastSaveMs; } }
+      const stepStart = timed ? performance.now() : 0;
+      try { this.step(now); } finally { if (timed) { simMs += performance.now() - stepStart; steps++; saveMs += this.lastSaveMs; } }
     });
-    const presentStart = perf ? performance.now() : 0;
+    const presentStart = timed ? performance.now() : 0;
     this.present(now);
-    if (perf) perf.push({ at: now, total: performance.now() - started, sim: simMs, steps, save: saveMs, present: performance.now() - presentStart,
-      hud: this.lastHudMs,
-      parts: (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent ?? null, hold: hold?.state ?? null });
+    const presentEnd = timed ? performance.now() : 0;
+    if (this.flight) this.recordFrame(now, presentEnd - started, simMs, steps, saveMs, hold?.state ?? null);
+    if (perf) perf.push({ at: now, total: presentEnd - started, sim: simMs, steps, save: saveMs, present: presentEnd - presentStart,
+      hud: this.lastHudMs, parts: this.renderer?.parts ?? null, hold: hold?.state ?? null });
     this.frameId = requestAnimationFrame((time) => this.frame(time));
+  }
+
+  /** REC-1: this frame's row, the periodic sample, then the snapshot and video
+   * frame (after the render, while the drawing buffer is this frame's). */
+  private recordFrame(now: number, work: number, sim: number, steps: number, save: number, hold: string | null): void {
+    const fl = this.flight!, recStart = performance.now();
+    this.flightFrames++;
+    if (now >= this.flightSampleAt) {
+      this.flightSampleAt = now + FLIGHT_SAMPLE_MS;
+      const r = this.hookRead();
+      fl.sample(gameSample(now, this.state, this.renderer?.stats() ?? null, r?.camera ?? null, hold, this.active, this.flightFrames));
+      this.flightFrames = 0;
+    }
+    let gap = this.flightLast ? now - this.flightLast : 0;
+    if (this.flightHidden) {
+      // A hidden tab has no frames: its interval is not a frame time.
+      fl.recorder.event("session", `tab hidden for ${(gap / 1000).toFixed(1)} s`, { t: now, snapshot: false });
+      this.flightHidden = false;
+      gap = 0;
+    }
+    this.flightLast = now;
+    const heap = fl.heapNow();
+    const heapDrop = heap !== null && this.flightHeap !== null ? Math.max(0, this.flightHeap - heap) : undefined;
+    this.flightHeap = heap;
+    const p = this.renderer?.parts;
+    fl.recorder.frame({ t: now, gap, work, sim, steps, save, hud: this.lastHudMs, hold,
+      ...(p ? { chunks: p.chunks, caves: p.caves, regions: p.regions, lights: p.lights, actors: p.actors, render: p.render } : {}),
+      ...(heapDrop !== undefined ? { heapDrop } : {}) }, performance.now() - recStart);
+    // Pictures only from a frame that drew: otherwise the canvas holds nothing current.
+    if (this.drewFrame) fl.recorder.charge(fl.afterRender(now));
+    this.drewFrame = false;
+  }
+  private drewFrame = false;
+
+  /** The test hook's reading of the game (hooks.ts HookRead). */
+  private hookRead(): HookRead | null {
+    const s = this.state;
+    if (!s) return null;
+    const v = s.player.controlledVehicleId ? s.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId) ?? null : null;
+    const p = s.player.pose, vel = v ? v.velocity : s.player.velocity, feet = v ? v.pose.position : p.position;
+    const cam = (this.view.canvas.dataset.cameraPosition ?? "").split(",").map(Number);
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      tick: s.tick, phase: s.opening.phase, mode: s.player.mode, active: this.active, frozen: this.frozen,
+      ready: this.view.canvas.dataset.ready === "true", settling: !!this.renderer?.settling,
+      camera: cam.length === 3 && cam.every(Number.isFinite) ? cam as [number, number, number] : [feet.x, feet.y, feet.z],
+      feet: [r2(feet.x), r2(feet.y), r2(feet.z)],
+      yaw: r2(((p.yaw * 180) / Math.PI + 360) % 360), pitch: r2((p.pitch * 180) / Math.PI),
+      depth: s.opening.phase >= 4 ? r2(exposure(s).pressureDepth) : 0,
+      region: regionAtPoint(feet.x, feet.z), cave: this.view.canvas.dataset.cave || null,
+      hold: this.view.canvas.dataset.caveHold ?? null,
+      vitals: { health: s.player.vitals.health, oxygen: s.player.vitals.oxygen, food: s.player.vitals.food },
+      speed: r2(Math.hypot(vel.x, vel.y, vel.z)),
+      craft: v ? { id: v.id, hull: v.hull, charge: v.charge, health: v.health, disabled: v.disabled } : null,
+      lamp: s.player.lamp,
+    };
+  }
+
+  private startFlight(): void {
+    const { mode, video } = flightMode(this.flightSettings);
+    if (mode === "off" || !this.renderer) return;
+    try {
+      this.flight = new FlightCapture(this.view.canvas, mode, video, {
+        content: CONTENT_VERSION,
+        bake: BAKE_SOURCE ?? "",
+        commit: typeof __BUILD_COMMIT__ === "string" ? __BUILD_COMMIT__ : "",
+      });
+      this.renderer.timing = true;
+    } catch (error) {
+      console.warn(`flight recorder unavailable: ${errorText(error)}`);
+      this.flight = null;
+    }
+  }
+
+  private async exportFlight(): Promise<void> {
+    if (!this.flight) { this.view.notify("The flight recorder is off. Turn it on in Settings; it starts with the next load.", true, { channel: "system" }); return; }
+    this.view.notify("Preparing the flight recording…", false, { channel: "system" });
+    try {
+      const { blob, name } = await this.flight.exportZip();
+      const url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      this.view.notify(`Flight recording exported (${(blob.size / 1048576).toFixed(0)} MB). It stays on this computer unless you share the file.`, false, { channel: "system" });
+    } catch (error) {
+      this.view.notify(`The flight recording could not be exported: ${errorText(error)}`, true, { channel: "system" });
+    }
   }
 
   /** One fixed simulation step with this frame's input. */
@@ -432,6 +565,11 @@ export class SiltwakeApp {
     this.session.state = result.state;
     this.events(result.events);
     this.observeTimeline(result.state, [...controls, ...gesture], result.events);
+    if (this.flight) {
+      recordGameEvents(this.flight.recorder, result.state, result.events);
+      for (const c of gesture) recordCommand(this.flight.recorder, result.state, c);
+      if (this.timeline) this.flightTimeline = recordTimeline(this.flight.recorder, this.timeline.events, this.flightTimeline);
+    }
     this.observeAscent(result.events);
     this.observeThrust(result.events);
     this.view.presentationStep(result.state);
@@ -475,6 +613,7 @@ export class SiltwakeApp {
     ) {
       try {
         this.renderer.present(this.state, { target: target?.host ?? null, preview: preview?.host ?? null, look: this.helm.look });
+        this.drewFrame = true;
         this.dirty = false;
       } catch (error) {
         this.pause();
@@ -561,6 +700,7 @@ export class SiltwakeApp {
     this.view.noteEntry((text) => {
       if (text && this.timeline && this.state) {
         const no = addNote(this.timeline, this.state, text, new Date().toISOString());
+        if (this.flight) this.flightTimeline = recordTimeline(this.flight.recorder, this.timeline.events, this.flightTimeline);
         this.view.notify(no ?? "Note saved to the play timeline.", !!no, { channel: "system" });
         this.saveTimeline();
       }
@@ -577,6 +717,12 @@ export class SiltwakeApp {
     if (this.disposed) return;
     this.sessionGeneration++;
     this.startTimeline();
+    this.flightTimeline = this.timeline?.events.length ?? 0;
+    if (this.flight && this.state) {
+      const meta = this.session.envelope()?.meta;
+      this.flight.recorder.event("load", `expedition entered at tick ${this.state.tick}`, { tick: this.state.tick,
+        detail: { session: meta?.sessionId ?? null, savedAt: meta?.savedAt ?? null, scenario: this.state.scenario } });
+    }
     // A loaded save neither replays its history nor inherits old cooldowns.
     this.sound.reset();
     this.resolutionPhase = this.state?.story.resolution.phase ?? null;
@@ -754,6 +900,10 @@ export class SiltwakeApp {
     const actor = `${this.state.player.mode}/${this.state.player.controlledVehicleId ?? "diver"}`;
     const result = executeCommand(this.state, command, this.world);
     this.session.state = result.state;
+    if (this.flight) {
+      recordCommand(this.flight.recorder, result.state, command);
+      recordGameEvents(this.flight.recorder, result.state, result.events);
+    }
     if (actor !== `${result.state.player.mode}/${result.state.player.controlledVehicleId ?? "diver"}`) this.resetAscent();
     this.validateGesture();
     this.view.update(result.state, false);
@@ -962,6 +1112,8 @@ export class SiltwakeApp {
     this.input?.dispose();
     if (document.pointerLockElement === this.view.canvas)
       document.exitPointerLock();
+    this.flight?.dispose();
+    this.uninstallHook();
     this.renderer?.dispose();
     this.sound.dispose();
     this.view.dispose();

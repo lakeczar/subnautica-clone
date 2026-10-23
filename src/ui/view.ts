@@ -31,6 +31,9 @@ export interface UiActions {
   exportTimeline(): void;
   exportBackup(): void;
   exportRaw(): void;
+  /** REC-1: the flight recorder's settings (take effect on the next load) and its export. */
+  flight(settings: { enabled: boolean; video: boolean }): void;
+  exportFlight(): void;
   importFile(file: File): void;
   confirm(): void;
   cancelConfirm(): void;
@@ -106,6 +109,7 @@ export class GameView {
                 <label>Sensitivity <output id="sensitivity-value">1.0</output><input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label>Mouse look<select id="mouse-mode"><option value="captured">Captured</option><option value="drag">Drag</option></select></label><label>Key turn speed <output id="key-turn-value">1.0</output><input id="key-turn" type="range" min="0.5" max="2" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
                 <div class="settings"><label>Volume <output id="volume-value">55%</output><input id="volume" type="range" min="0" max="1" step="0.05" value="0.55" /></label><label class="check"><input id="muted" type="checkbox" /> Mute</label><label class="check"><input id="subtitles" type="checkbox" checked /> Opening captions</label><label class="check"><input id="hud-objective-toggle" type="checkbox" checked /> Objective on the HUD</label></div>
                 <div class="settings save-safety"><span>Autosave every 30 s of play · previous valid save kept</span><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></div>
+                <div class="settings flight-recorder"><label class="check"><input id="flight-enabled" type="checkbox" checked /> Flight recorder</label><label class="check"><input id="flight-video" type="checkbox" checked /> Record video (12 fps)</label><small>Frame times, events and pictures of your play, kept on this computer for playtest feedback. Changes apply when the page next loads.</small><div class="menu-tools"><button data-action="flight">Export flight recording</button></div></div>
               </div>
             </div>
           </section>
@@ -157,6 +161,7 @@ export class GameView {
       timeline: actions.exportTimeline,
       backup: actions.exportBackup,
       raw: actions.exportRaw,
+      flight: actions.exportFlight,
       confirm: actions.confirm,
       cancel: actions.cancelConfirm,
       lock: actions.lockMouse,
@@ -213,6 +218,10 @@ export class GameView {
           ),
         options,
       );
+    for (const id of ["flight-enabled", "flight-video"])
+      this.get(id).addEventListener("change", () => actions.flight({
+        enabled: this.get<HTMLInputElement>("flight-enabled").checked, video: this.get<HTMLInputElement>("flight-video").checked,
+      }), options);
     for (const id of ["volume", "muted", "subtitles"])
       this.get(id).addEventListener(
         id === "volume" ? "input" : "change",
@@ -320,6 +329,12 @@ export class GameView {
     this.get<HTMLSelectElement>("mouse-mode").value = mouseMode;
     this.get<HTMLInputElement>("key-turn").value = String(keyTurnSpeed);
     this.get("key-turn-value").textContent = keyTurnSpeed.toFixed(1);
+  }
+
+  flightSettings(settings: { enabled: boolean; video: boolean }): void {
+    this.get<HTMLInputElement>("flight-enabled").checked = settings.enabled;
+    this.get<HTMLInputElement>("flight-video").checked = settings.video;
+    this.get<HTMLInputElement>("flight-video").disabled = !settings.enabled;
   }
 
   slot(slot: SaveSlot, hasSession: boolean): void {
