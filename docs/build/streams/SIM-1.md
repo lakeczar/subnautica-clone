@@ -72,7 +72,60 @@ Every other identity-keyed cache is keyed by content.
 
 ## Evidence
 
-(Filled in below as each run finishes.)
+Unless noted otherwise, everything below was tested at `bebc19a4`. The base is root `887df90c`.
+
+**Determinism.** The differential is `scripts/sim-differential.sh 887df90c` on alickers at `bebc19a4`; the job exited 0 after 1,813 s, with results in `/work/results/sim1-diff-bebc19a4.json`.
+- **What it does:** each scenario's real command stream is fed to two sims side by side, the new in-place sim and the base commit's own compiled cloning sim (separate module instances and world).
+- **Coverage:**
+
+  | Scenario | Ticks | Commands | State checks | Timeline checks | Result |
+  | --- | --- | --- | --- | --- | --- |
+  | creel | 725,952 | 520 | 12,634 | 217 | identical |
+  | carrier | 1,158,144 | 616 | 19,921 | 325 | identical |
+  | creel-loss | 628,280 | 311 | 10,788 | 181 | identical |
+  | reverse | 744,078 | 522 | 12,938 | 222 | identical |
+  | no-optional | 723,107 | 509 | 12,575 | 216 | identical |
+
+  The branch scenarios count only their own ticks.
+- **What was compared:**
+  - **State:** compared structurally every 60 ticks, after every command and on the first step after every save reload. All 68,856 checks were equal.
+  - **Events:** every tick's events were equal.
+  - **Timeline:** the base and new timeline recorders were observed as the app does, and their timelines (events and death and recovery ledgers) matched at all 1,161 checks.
+- **Cross-commit milestones:** the plain playthroughs before (`887df90c`) and after (`bebc19a4`) were run on alickers, both with `--jobs 3`.
+  - In all 5 scenarios, every milestone's label, tick and state hash is identical (82 saves), and every reload matched.
+  - The whole run records (phases, legs, gathered and spent counts, hazards, discoveries) are identical apart from wall time, so the bots made the same decisions.
+
+**Full five-scenario playthrough wall time** (alickers, RTX 4070 Laptop on a shared desktop host; indicative):
+
+| | Total | creel | carrier | creel-loss | reverse | no-optional |
+| --- | --- | --- | --- | --- | --- | --- |
+| Before (`887df90c`) | **13 min 04 s** (user 21 min 05 s) | 226 s | 378 s | 172 s | 232 s | 225 s |
+| After (`bebc19a4`) | **6 min 04 s** | 101 s | 181 s | 74 s | 103 s | 101 s |
+
+That is about 2.2× faster.
+
+**Atomicity.** `tests/step-guard.test.ts` (fast tier) injects a throw at each of the faulting step's world queries, and at 8 fields only later parts of the step touch:
+- renewal progress;
+- the works gate;
+- decodes;
+- ecology;
+- threat interest;
+- the recovery operation;
+- food and oxygen.
+
+Each throw lands after `tick++` and movement have already mutated the state. Every case restores the exact pre-step state in the same object, raises `StepFault "exact"`, and resumes to the same next state as an untouched run. The other guard tests cover:
+- a failed replay falling back to the checkpoint;
+- journaled and refused commands;
+- a new state object;
+- drift detection when something writes outside the guard.
+
+**Checks:**
+- **Fast tier:** passed, 136 files (`npm test`, exit 0).
+- **Heavy tier:** passed on alickers at `bebc19a4` (fail 0 in every file; 894 s of file time in 329 s).
+- **Build:** `npm run build` passed.
+- **Economy scripts:** all five passed (`check-campaign-economy`, `check-m1-economy`, `check-m2-a-economy`, `check-m2-b1-economy`, `upgrade-economy`).
+
+**Where test time went** (attribution only, from the fast tier under its 5-way concurrency): 60,481 `stepGame` calls spent 18.5 s cloning and 33.3 s stepping, so cloning was about 6% of the tier's CPU. The converted loops remove most of it. The larger win is the playthrough and bots, above.
 
 ## Compromises and follow-ups
 
