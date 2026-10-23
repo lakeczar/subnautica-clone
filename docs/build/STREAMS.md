@@ -622,3 +622,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Review:** Sol R1 running (`siltwake-stew1-review-r1-sol-b7cb626`).
   - **After merge:** update the root-merge-gate memory to `npm run gate`.
 - **SIM-1 done at `8eb5e374`** (R2 fixes): a stateless store that reads the durable head on every save; one owned key prefix with per-session heads and provisional heads; collection by prefix enumeration, plus a 10-minute stale rule for other sessions; collision-free resume numbering; the cursor rule stated. Timeline tests 42/42, fast tier 140/140. Focused Sol R3 running (`siltwake-sim1-review-r3-sol-8eb5e37`); it is told to check whether collecting another session's committed timeline matches the game's session model.
+- **TST-16 R4** (Sol on `97e4f718`, report on `review/tst-16-r4` `4bae66a0`): REQUEST CHANGES, do not install. R3's races are fixed and the labelling is honest. New findings:
+  - **F1, P2:** concurrent installer operations clear a certified freeze, which strands a boost.
+  - **F2, P2:** a surviving reset child zeroes a later live job's boost while the result claims clean.
+  - **F3, P3:** an abandoned freeze is invisible in status.
+  - **Decision:** four rounds of lifetime races in runtime CPUWeight mutation. The builder is to first evaluate a static design: a dedicated slice with a fixed weight and limits that exclusive payloads are placed into, deleting the freeze/handover machinery. Only if R1's containment constraints forbid that is it to fix F1–F3 in place.
