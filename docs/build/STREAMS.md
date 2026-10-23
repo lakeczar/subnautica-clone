@@ -737,3 +737,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **SIM-1a ACCEPTED and MERGED** (Sol re-check `0d9b955d` on `review/sim-1a-r2`). Root `b54bfd92`.
   - **Gate:** run on the 4070 via queue ticket 261023-233143-e0e4, bound to b54bfd92: npm test 1,417/1,417, build, all five economy scripts.
   - **After:** saves export running. SIG-1 can start from this root. SIM-1b (incremental journal) is parked on `t3/sim-1b-timeline-journal`.
+- **SIG-1 started** in SIM-1's freed slot (`siltwake-sig1-signatures-opus-1662e5a`, branch `t3/sig-1-signatures`, from root `1662e5a0`). Stage 0 is F12 (one inventory authority, `planSpend`/`applySpend`, ledger fork deleted) and is reported separately; then the nine signature upgrades, host upgrades, visible outposts and fish trap, cargo filter, and the HUB-2-01 negative control. Builders: CW-1, COL-1, REC-1, STEW-1, TST-16 and SIG-1, with STEW-1 and TST-16 in review rounds.
