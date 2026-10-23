@@ -4,7 +4,7 @@
  * instances and world). States must match at every `--every` ticks, after
  * every command and at every save reload; each step's events must match.
  *
- *   node .test-build/scripts/playthrough/differential.js --base DIR [--scenario a,b] [--every 60] [--json out.json]
+ *   node .test-build/scripts/playthrough/differential.js --base DIR [--scenario a,b] [--every 60] [--json out.json] [--verbose]
  *
  * DIR is a compiled tree of the base commit (its `.test-build`; see
  * `scripts/sim-differential.sh`). Exit 0 only with no mismatch and every
@@ -55,16 +55,17 @@ driverHooks.attach = (d: Driver) => {
     const x = JSON.stringify(a), y = JSON.stringify(b);
     if (x !== y) fail(`${label}: events differ\n  base ${x.slice(0, 400)}\n  new  ${y.slice(0, 400)}`);
   };
-  /** A save reload (or any replacement) hands the driver a new object: it must equal the shadow. */
-  const reloaded = (): void => { if (d.state !== seen) { compare(`reload before tick ${d.state.tick}`); seen = d.state; } };
   return {
+    // Called after the live step: the shadow takes the same step, then they compare.
     tick(_d, controls, live) {
-      reloaded();
+      // A save reload (or any replacement) handed the driver a new object: check the step taken from it.
+      const reloaded = d.state !== seen;
+      seen = d.state;
       const r = old.stepGame(shadow, controls, old.world);
       shadow = r.state;
       tally.ticks++;
       events(`tick ${d.state.tick}`, r.events, live);
-      if (d.state.tick % every === 0) compare(`tick ${d.state.tick}`);
+      if (reloaded || d.state.tick % every === 0) compare(`tick ${d.state.tick}${reloaded ? " (first after a reload)" : ""}`);
     },
     command(_d, command, result) {
       // The driver already holds the command's result as its state.
@@ -80,7 +81,7 @@ driverHooks.attach = (d: Driver) => {
 
 await loadCampaign();
 const t0 = performance.now();
-const runs = await playScenarios(ids, false);
+const runs = await playScenarios(ids, args.includes("--verbose"));
 const seconds = (performance.now() - t0) / 1000;
 for (const t of tallies)
   console.log(`${t.scenario.padEnd(12)} ${String(t.ticks).padStart(9)} ticks  ${String(t.commands).padStart(6)} commands  ` +

@@ -1,16 +1,24 @@
 /** Local-only play timeline. The runtime calls `observe` once per active fixed
  * step with whether the player gave any input; the recorder diffs a few counters
  * and records new things, gathering, craft travel, idle waiting, death and
- * recovery. It never saves into the game save and never sends anything. */
+ * recovery. It never saves into the game save and never sends anything.
+ *
+ * Events append to an open chunk; a full chunk is sealed, unchanged from then
+ * on. The most recent `TIMELINE_RETAINED_CHUNKS` sealed chunks are kept in
+ * full; an older one rotates into a summary that keeps its feedback notes, new
+ * things, deaths and recoveries verbatim (SIM-05: no note is ever dropped). */
 import { SOURCES, techRecord } from "../../content/registry.js";
 import type { GameState } from "../types.js";
 import type { SystemsEvent } from "../systems/step.js";
-import { serializeTimeline, TIMELINE_FORMAT, TIMELINE_VERSION } from "./report.js";
-import type { PendingRecovery, TimelineEvent, TimelineExport } from "./report.js";
+import { serializeTimeline, summarizeChunk, TIMELINE_FORMAT, TIMELINE_VERSION } from "./report.js";
+import type { ChunkSummary, PendingRecovery, TimelineEvent, TimelineExport } from "./report.js";
 
 /** The runtime's localStorage key, separate from saves. */
 export const TIMELINE_STORAGE_KEY = "siltwake.timeline.v1";
-export const TIMELINE_EVENT_CAP = 20_000;
+/** Events per sealed chunk. */
+export const TIMELINE_CHUNK_EVENTS = 1_000;
+/** Sealed chunks kept in full (with the open chunk, the last ~20,000 events). */
+export const TIMELINE_RETAINED_CHUNKS = 20;
 export const NOTE_MAX = 500;
 const STEPS = 60;
 /** A craft moving slower than this (m/s) is stationary at the helm, not travelling. */
@@ -29,16 +37,31 @@ export interface ObserveContext {
   /** Background work running now (e.g. "decode", "growth"), tagged onto idle spans. */
   waiting?: readonly string[];
 }
+/** What the next observation diffs against. Observation is diff-based
+ * (SIM-02): exposed stock is copied into a reused buffer, and cache contents
+ * are read only when a death or an open recovery needs them. */
 interface Snapshot {
   blueprints: number; scans: number; evidence: number; discoveries: number; crafted: number;
   vehicles: string[]; collections: number; failures: number;
-  /** Visited caches (death caches and salvage canisters): their stacks by ID. */
-  caches: Map<string, Map<string, { kind: string; quantity: number }>>;
-  stocks: Map<string, number>;
+  /** Visited caches (death caches and salvage canisters) by ID. */
+  caches: readonly string[];
+  /** Their stacks by ID, when read this observation. */
+  contents: Map<string, Map<string, { kind: string; quantity: number }>> | null;
+  /** Exposed stock by index into `roster` (the resources array observed). */
+  stocks: number[];
+  roster: readonly { id: string }[];
 }
 export interface TimelineRecorder {
   session: { id: string; started: string; build?: string };
+  /** The open chunk, oldest first (the newest events). */
   events: TimelineEvent[];
+  /** Sealed chunks kept in full, oldest first; `n` numbers chunks from the session start. */
+  sealed: { n: number; events: TimelineEvent[] }[];
+  /** The number the open chunk will have when sealed. */
+  nextChunk: number;
+  /** Chunks rotated out of `sealed`, oldest first. */
+  rotated: ChunkSummary[];
+  /** Events a version 1 recorder dropped at its old cap (carried by resumed exports). */
   dropped: number;
   playTicks: number;
   idleTicks: number;
@@ -55,27 +78,33 @@ export interface TimelineRecorder {
   region: string | null;
   regions: string[];
   last: Snapshot | null;
+  /** The stock buffer the next observation fills (swapped with `last.stocks`). */
+  spare: number[];
   options: Required<Pick<RecorderOptions, "idleAfterSeconds">> & Pick<RecorderOptions, "regionAt">;
 }
 
 export function createRecorder(session: { id: string; started: string; build?: string }, options: RecorderOptions = {}): TimelineRecorder {
   return {
-    session: { ...session }, events: [], dropped: 0, playTicks: 0, idleTicks: 0, lastInputTick: -Infinity, idle: null, travel: null,
-    pending: [], region: null, regions: [], last: null,
+    session: { ...session }, events: [], sealed: [], nextChunk: 0, rotated: [], dropped: 0,
+    playTicks: 0, idleTicks: 0, lastInputTick: -Infinity, idle: null, travel: null,
+    pending: [], region: null, regions: [], last: null, spare: [],
     options: { idleAfterSeconds: options.idleAfterSeconds ?? 15, ...(options.regionAt ? { regionAt: options.regionAt } : {}) },
   };
 }
 /** Continues a stored timeline after a reload: play time and history carry on. */
 export function resumeRecorder(t: TimelineExport, options: RecorderOptions = {}): TimelineRecorder {
   const rec = createRecorder({ id: t.session.id, started: t.session.started, ...(t.session.build ? { build: t.session.build } : {}) }, options);
-  rec.events = [...t.events];
+  // Re-chunk what the export kept in full; its summaries carry on as they are.
+  for (const e of t.events) push(rec, e);
+  rec.rotated.unshift(...(t.rotated ?? []).map((r) => structuredClone(r)));
   rec.dropped = t.dropped;
   rec.playTicks = Math.round(t.session.end.play * STEPS);
   rec.idleTicks = Math.round(t.session.end.idle * STEPS);
   // The export carries the live recovery ledger: every open death, its losses
   // still out and the cargo it left, so a reload resumes it exactly.
   rec.pending = clonePending(t.session.pending ?? []);
-  rec.regions = [...new Set(t.events.filter((e) => (e.kind === "new" && e.what === "region") || e.kind === "region").map((e) => e.id ?? ""))];
+  rec.regions = [...new Set([...(t.rotated ?? []).flatMap((r) => r.regions),
+    ...t.events.filter((e) => (e.kind === "new" && e.what === "region") || e.kind === "region").map((e) => e.id ?? "")])];
   return rec;
 }
 
@@ -87,9 +116,23 @@ const at = (s: GameState): [number, number, number] => {
 function push(rec: TimelineRecorder, e: TimelineEvent): void {
   // A point of interest ends the current stretch of travel.
   if (BREAKS.includes(e.kind)) closePiece(rec);
-  if (rec.events.length >= TIMELINE_EVENT_CAP) { rec.dropped++; return; }
   rec.events.push(e);
+  if (rec.events.length < TIMELINE_CHUNK_EVENTS) return;
+  rec.sealed.push({ n: rec.nextChunk++, events: rec.events });
+  rec.events = [];
+  while (rec.sealed.length > TIMELINE_RETAINED_CHUNKS) rotateOldest(rec);
 }
+/** Folds the oldest sealed chunk into a summary (its kept events stay whole).
+ * Also the storage's answer to a full quota. Returns false with nothing to rotate. */
+export function rotateOldest(rec: TimelineRecorder): boolean {
+  const oldest = rec.sealed.shift();
+  if (!oldest) return false;
+  rec.rotated.push(summarizeChunk(oldest.events));
+  return true;
+}
+/** Every event kept in full, oldest first. */
+export const retainedEvents = (rec: TimelineRecorder): TimelineEvent[] => [...rec.sealed.flatMap((c) => c.events), ...rec.events];
+const NO_CACHES: readonly string[] = [];
 /** Stacks in each visited cache: stack ID → { kind, quantity }. */
 function cacheContents(s: GameState): Map<string, Map<string, { kind: string; quantity: number }>> {
   const byContainer = new Map(s.recovery.caches.map((c) => [c.containerId, new Map<string, { kind: string; quantity: number }>()]));
@@ -99,17 +142,33 @@ function cacheContents(s: GameState): Map<string, Map<string, { kind: string; qu
 const clonePending = (p: readonly PendingRecovery[]): PendingRecovery[] =>
   p.map((x) => ({ ...x, keys: [...x.keys], losses: [...x.losses], cargo: x.cargo.map((c) => ({ ...c })) }));
 /** The stacks a death (or a salvage canister) put in a cache: the death owes exactly these. */
-const cargoOf = (now: Snapshot, cache: string): PendingRecovery["cargo"] =>
-  [...(now.caches.get(cache) ?? [])].filter(([, x]) => x.quantity > 0)
+const cargoOf = (contents: NonNullable<Snapshot["contents"]>, cache: string): PendingRecovery["cargo"] =>
+  [...(contents.get(cache) ?? [])].filter(([, x]) => x.quantity > 0)
     .map(([item, x]) => ({ cache, item, kind: x.kind, quantity: x.quantity, last: x.quantity }));
-function snapshot(s: GameState): Snapshot {
+function snapshot(rec: TimelineRecorder, s: GameState): Snapshot {
+  const roster = s.world.resources, stocks = rec.spare;
+  stocks.length = roster.length;
+  for (let i = 0; i < roster.length; i++) stocks[i] = roster[i]!.stock;
+  rec.spare = rec.last?.stocks ?? [];
   return {
     blueprints: s.knowledge.blueprints.length, scans: s.knowledge.scans.length, evidence: s.knowledge.evidence.length,
     discoveries: s.story.discoveries.length, crafted: s.knowledge.crafted.length, vehicles: s.fleet.vehicles.map((v) => v.id),
     collections: s.metrics.collections, failures: s.metrics.failures,
-    caches: cacheContents(s),
-    stocks: new Map(s.world.resources.map((r) => [r.id, r.stock])),
+    caches: s.recovery.caches.length ? s.recovery.caches.map((c) => c.id) : NO_CACHES, contents: null,
+    stocks, roster,
   };
+}
+/** Sources whose exposed stock dropped since `was`, in roster order, with the drop. */
+function stockDrops(was: Snapshot, now: Snapshot): [string, number][] {
+  const out: [string, number][] = [];
+  // In place, the roster is the same array; after a command's copy, the same IDs in order.
+  const aligned = was.roster.length === now.roster.length && now.roster.every((r, i) => was.roster[i]!.id === r.id);
+  const before = aligned ? null : new Map(was.roster.map((r, i) => [r.id, was.stocks[i]!]));
+  for (let i = 0; i < now.roster.length; i++) {
+    const id = now.roster[i]!.id, n = now.stocks[i]!, prior = before ? before.get(id) ?? n : was.stocks[i]!;
+    if (n < prior) out.push([id, prior - n]);
+  }
+  return out;
 }
 
 /** Records one generic event stamped with the current tick, play time and place. */
@@ -188,7 +247,7 @@ export function observe(rec: TimelineRecorder, s: GameState, ctx: ObserveContext
     }
   }
 
-  const now = snapshot(s), was = rec.last;
+  const now = snapshot(rec, s), was = rec.last;
   rec.last = now;
   if (!was) return;
   const stamp = { tick: s.tick, play: play(rec), at: at(s), region: rec.region };
@@ -208,14 +267,17 @@ export function observe(rec: TimelineRecorder, s: GameState, ctx: ObserveContext
   for (const id of now.vehicles.filter((id) => !was.vehicles.includes(id)))
     push(rec, { kind: "new", what: "hull", id, label: s.fleet.vehicles.find((x) => x.id === id)!.hull, ...stamp });
   if (now.collections > was.collections) {
-    const drops = [...now.stocks].filter(([id, n]) => n < (was.stocks.get(id) ?? n));
+    const drops = stockDrops(was, now);
     if (!drops.length) push(rec, { kind: "gather", ...stamp });
-    for (const [id, n] of drops) {
+    for (const [id, quantity] of drops) {
       const item = SOURCES[id as keyof typeof SOURCES].item;
-      push(rec, { kind: "gather", id, what: item, quantity: (was.stocks.get(id) ?? n) - n, ...stamp });
+      push(rec, { kind: "gather", id, what: item, quantity, ...stamp });
     }
   }
-  const newCaches = [...now.caches.keys()].filter((id) => !was.caches.has(id));
+  const newCaches = now.caches.filter((id) => !was.caches.includes(id));
+  // Cache contents matter only to a death and to the open recoveries' ledgers.
+  if (!(now.failures > was.failures) && !rec.pending.length) return;
+  const contents = now.contents = cacheContents(s);
   if (now.failures > was.failures) {
     // What this death left behind: the caches it created (their exact contents),
     // and any craft loss no other open death already waits on.
@@ -223,9 +285,9 @@ export function observe(rec: TimelineRecorder, s: GameState, ctx: ObserveContext
     const caches = newCaches.splice(0), losses = s.recovery.losses.map((l) => l.vehicleId).filter((v) => !claimed.has(v));
     const keys = [...caches.map((c) => `cache:${c}`), ...losses.map((v) => `loss:${v}`)];
     push(rec, { kind: "death", keys, ...stamp });
-    rec.pending.push({ tick: s.tick, play: play(rec), keys, losses, cargo: caches.flatMap((c) => cargoOf(now, c)) });
+    rec.pending.push({ tick: s.tick, play: play(rec), keys, losses, cargo: caches.flatMap((c) => cargoOf(contents, c)) });
   }
-  settleRecoveries(rec, s, now, newCaches, stamp);
+  settleRecoveries(rec, s, contents, newCaches, stamp);
 }
 
 /** Moves each open death's ledger forward and closes those with nothing left.
@@ -242,16 +304,16 @@ export function observe(rec: TimelineRecorder, s: GameState, ctx: ObserveContext
  *   drop counts as retrieval.
  * Recovery time is play time, so idle waiting is excluded. A death that left
  * nothing closes at once as `nothing-lost`, counted apart from recovery times. */
-function settleRecoveries(rec: TimelineRecorder, s: GameState, now: Snapshot, fresh: string[], stamp: Omit<TimelineEvent, "kind">): void {
+function settleRecoveries(rec: TimelineRecorder, s: GameState, contents: NonNullable<Snapshot["contents"]>, fresh: string[], stamp: Omit<TimelineEvent, "kind">): void {
   const canisters = [...fresh];
   for (const p of [...rec.pending]) {
     for (const v of p.losses.filter((v) => !s.recovery.losses.some((l) => l.vehicleId === v))) {
       p.losses = p.losses.filter((x) => x !== v);
       const canister = canisters.shift();
-      if (canister) { p.keys.push(`cache:${canister}`); p.cargo.push(...cargoOf(now, canister)); }
+      if (canister) { p.keys.push(`cache:${canister}`); p.cargo.push(...cargoOf(contents, canister)); }
     }
     for (const line of p.cargo) {
-      const q = now.caches.get(line.cache)?.get(line.item)?.quantity ?? 0;
+      const q = contents.get(line.cache)?.get(line.item)?.quantity ?? 0;
       if (q < line.last) line.quantity = Math.max(0, line.quantity - (line.last - q));
       // A stack never owes more than it holds (this also clamps an inflated import).
       line.quantity = Math.min(line.quantity, q);
@@ -273,13 +335,15 @@ export function recordSystemsEvents(rec: TimelineRecorder, s: GameState, events:
 
 /** A detached export with any open travel or idle span closed as of now. */
 export function exportTimeline(rec: TimelineRecorder, s: GameState): TimelineExport {
-  const copy: TimelineRecorder = { ...rec, events: [...rec.events], pending: clonePending(rec.pending), travel: rec.travel && { ...rec.travel, piece: rec.travel.piece && { ...rec.travel.piece } }, idle: rec.idle && { ...rec.idle, waiting: new Set(rec.idle.waiting) } };
+  const copy: TimelineRecorder = { ...rec, events: [...rec.events], sealed: [...rec.sealed], rotated: [...rec.rotated],
+    pending: clonePending(rec.pending), travel: rec.travel && { ...rec.travel, piece: rec.travel.piece && { ...rec.travel.piece } },
+    idle: rec.idle && { ...rec.idle, waiting: new Set(rec.idle.waiting) } };
   closeTravel(copy);
   closeIdle(copy, s);
   return {
     format: TIMELINE_FORMAT, version: TIMELINE_VERSION,
     session: { ...copy.session, end: { tick: s.tick, play: copy.playTicks / STEPS, idle: copy.idleTicks / STEPS }, pending: clonePending(copy.pending) },
-    dropped: copy.dropped, events: copy.events,
+    dropped: copy.dropped, ...(copy.rotated.length ? { rotated: copy.rotated } : {}), events: retainedEvents(copy),
   };
 }
 export const exportTimelineText = (rec: TimelineRecorder, s: GameState): string => serializeTimeline(exportTimeline(rec, s));

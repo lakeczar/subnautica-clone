@@ -6,9 +6,11 @@ import { createGame, makeVehicle } from "../src/sim/state.js";
 import { addItem, transfer } from "../src/sim/inventory.js";
 import { incapacitate } from "../src/sim/recovery.js";
 import type { GameState } from "../src/sim/types.js";
-import { addNote, createRecorder, exportTimeline, exportTimelineText, NOTE_MAX, observe, recordSystemsEvents, resumeRecorder, TIMELINE_EVENT_CAP } from "../src/sim/timeline/recorder.js";
+import { addNote, createRecorder, exportTimeline, exportTimelineText, NOTE_MAX, observe, recordEvent, recordSystemsEvents, resumeRecorder,
+  TIMELINE_CHUNK_EVENTS, TIMELINE_RETAINED_CHUNKS } from "../src/sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../src/sim/timeline/recorder.js";
 import { analyseTimeline, parseTimeline } from "../src/sim/timeline/report.js";
+import type { TimelineEvent, TimelineExport } from "../src/sim/timeline/report.js";
 
 const SESSION = { id: "test-session", started: "2026-10-20T10:00:00.000Z", build: "test" };
 const regionAt = (x: number) => x > 100 ? "suspended_garden" : "refuge_reef";
@@ -153,12 +155,57 @@ test("export round-trips, closes open spans in a copy, and resumes after a reloa
   assert.equal(exportTimeline(resumed, s).events.length, parsed.value.events.length);
 });
 
-test("the recorder caps events and counts what it dropped", () => {
+test("a long session rotates old chunks into summaries without losing a note, and analyses as if nothing rotated", () => {
   const { s, rec } = setup();
   rec.events.length = 0;
-  for (let i = 0; i < TIMELINE_EVENT_CAP + 5; i++) addNote(rec, s, `n${i}`);
-  assert.equal(rec.events.length, TIMELINE_EVENT_CAP);
-  assert.equal(rec.dropped, 5);
+  const all: TimelineEvent[] = [];
+  const items = ["silica_glass", "structural_alloy", "meal"], hulls = ["dart", "creel"], regions = ["refuge_reef", "suspended_garden", "isles"];
+  // A deterministic mix of every kind over 26 chunks' worth of events.
+  for (let i = 0; i < TIMELINE_CHUNK_EVENTS * (TIMELINE_RETAINED_CHUNKS + 6); i++) {
+    s.tick += 37;
+    rec.playTicks += 37;
+    const k = (i * 7919) % 100;
+    if (k < 3) addNote(rec, s, `note ${i}`);
+    else if (k < 8) recordEvent(rec, s, { kind: "new", what: "blueprint", id: `bp${i}` });
+    else if (k < 40) recordEvent(rec, s, { kind: "gather", what: items[i % 3]!, id: `src${i % 5}`, quantity: 1 + (i % 3) });
+    else if (k < 60) recordEvent(rec, s, { kind: "travel", seconds: (i % 13) * 11, stationary: i % 4, metres: i % 200, hull: hulls[i % 2]!, id: "v" });
+    else if (k < 70) recordEvent(rec, s, { kind: "idle", seconds: (i % 9) * 15, waiting: i % 2 ? ["decode"] : [] });
+    else if (k < 71) recordEvent(rec, s, { kind: "death", keys: [`cache:c${i}`] });
+    else if (k < 72) recordEvent(rec, s, { kind: "recovery", of: s.tick - 600, keys: [`cache:c${i}`], seconds: 40 + (i % 50) });
+    else if (k < 80) recordEvent(rec, s, { kind: "region", id: regions[i % 3]! });
+    else recordEvent(rec, s, { kind: "poi", what: "source", id: `src${i % 5}` });
+    all.push(rec.events.at(-1) ?? rec.sealed.at(-1)!.events.at(-1)!);
+  }
+  assert.equal(rec.sealed.length, TIMELINE_RETAINED_CHUNKS);
+  assert.ok(rec.rotated.length >= 5, `${rec.rotated.length} chunks rotated`);
+  const exported = exportTimeline(rec, s);
+  const notes = (events: readonly TimelineEvent[]) => events.filter((e) => e.kind === "note").map((e) => e.text);
+  assert.deepEqual([...exported.rotated!.flatMap((r) => notes(r.kept)), ...notes(exported.events)], notes(all), "every note survives, in order");
+  // The same session, never rotated (a version 1 export of every event).
+  const whole: TimelineExport = { ...exported, version: 1, rotated: [], events: all };
+  const a = analyseTimeline(exported), b = analyseTimeline(whole);
+  const sorted = <T extends { play: number }>(xs: readonly T[]) => [...xs].sort((x, y) => x.play - y.play);
+  for (const key of ["newCount", "newByKind", "gaps", "longestGapMinutes", "gathering", "deaths", "notes"] as const)
+    assert.deepEqual(a[key], b[key], key);
+  assert.equal(a.travel.count, b.travel.count);
+  assert.ok(Math.abs(a.travel.minutes - b.travel.minutes) < 1e-6 && Math.abs(a.travel.stationaryMinutes - b.travel.stationaryMinutes) < 1e-6);
+  for (const h of Object.keys(b.travel.byHull)) assert.ok(Math.abs(a.travel.byHull[h]! - b.travel.byHull[h]!) < 1e-6, h);
+  assert.deepEqual(sorted(a.travel.emptyStretches), sorted(b.travel.emptyStretches));
+  assert.equal(a.idle.count, b.idle.count);
+  assert.ok(Math.abs(a.idle.minutes - b.idle.minutes) < 1e-6 && Math.abs(a.idle.waitingMinutes - b.idle.waitingMinutes) < 1e-6);
+  assert.deepEqual(sorted(a.idle.listed), sorted(b.idle.listed));
+  assert.equal(a.idle.longest?.seconds, b.idle.longest?.seconds);
+  assert.ok(a.rotated.chunks >= 5 && b.rotated.chunks === 0);
+  // Export, parse and resume keep the summaries and the kept events exactly.
+  const parsed = parseTimeline(exportTimelineText(rec, s));
+  assert.ok(parsed.ok, parsed.ok ? "" : parsed.error);
+  if (!parsed.ok) return;
+  assert.deepEqual(parsed.value.rotated, exported.rotated);
+  const resumed = resumeRecorder(parsed.value, { regionAt });
+  assert.deepEqual(exportTimeline(resumed, s).rotated, exported.rotated);
+  assert.deepEqual(exportTimeline(resumed, s).events, exported.events);
+  // Regions named only inside rotated chunks still count as visited after a reload.
+  assert.deepEqual(new Set(resumed.regions), new Set(regions));
 });
 
 test("local only: the timeline modules never reach the network", () => {
