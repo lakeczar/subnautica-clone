@@ -198,8 +198,9 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
   - **S24 (R6, R7):** neither removal nor a changing reinstall happens while the slice holds processes, also when systemd can't be asked or there's no unit file, nor while a ticket runs.
   - **S25 (R8, R9):** unit changes under maintenance: a held reload (queued work waits, none fails), a failed one (maintenance kept, rerun recovers), a stale manager with an equal file, an unreadable file, removal.
   - **SCHED-1 test 7** checks the job's own measurement.
-- **Full suites** after R8 at `2fe7aef1`: SCHED-1 **23/23**, SCHED-2 **25/25** (S25 new), SCHED-2b **27/27**, all local and sequential.
-  - **Fast tier:** passed through the queue on alickers (`--machine 4070`, ticket `261023-224619-c8b8`, exit 0, 138 files, evidence for `2fe7aef1`), not locally, during CW-1's 3090 exclusive window.
+- **Full suites** after R9 at `110f12d4`: SCHED-1 **23/23**, SCHED-2 **25/25**, SCHED-2b **27/27**, all local and sequential.
+  - **Fast tier:** passed through the queue on alickers (`--machine 4070`, ticket `261023-231913-e8b7`, exit 0, 138 files, evidence for `110f12d4`), during CW-1's 3090 exclusive window.
+  - **Units:** policy and contention units 42/42.
   - No units, slices, unit files or drop-ins left behind.
 
 ## Validation (CW-1 segment 7, run A)
