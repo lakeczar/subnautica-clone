@@ -37,6 +37,7 @@ export class MemoryStorage implements StoragePort {
     if (this.failWrite) throw new Error('quota');
     this.data.set(key, value);
   }
+  removeItem(key: string): void { this.data.delete(key); }
 }
 /** A shared exclusion fixture, not a production fallback. Gate lets tests queue
  * real repository/session operations without timers or scheduler assumptions. */

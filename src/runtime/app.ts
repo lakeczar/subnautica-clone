@@ -18,9 +18,9 @@ import { HelmControl } from "./helm.js";
 import { forgetCorridorView } from "../sim/carrierStations.js";
 import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
-import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY } from "../sim/timeline/recorder.js";
+import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents } from "../sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../sim/timeline/recorder.js";
-import { parseTimeline } from "../sim/timeline/report.js";
+import { TimelineStore } from "../sim/timeline/store.js";
 import { controlsActive } from "../sim/timeline/activity.js";
 import { regionAtPoint } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
@@ -145,6 +145,10 @@ export class SiltwakeApp {
   /** Local-only play timeline (SYS-2, C4): never in the save, never sent. */
   private timeline: TimelineRecorder | null = null;
   private timelineSaved = 0;
+  /** Append-only local storage for the timeline (SIM-05); null without localStorage. */
+  private readonly timelineStore = (() => { try { return new TimelineStore(window.localStorage); } catch { return null; } })();
+  /** A failed timeline save has been reported this session. */
+  private timelineWarned = false;
 
   constructor(root: HTMLElement) {
     this.session = new ExpeditionSession(this.repository, {
@@ -472,18 +476,20 @@ export class SiltwakeApp {
   private saveTimeline(): void {
     if (!this.timeline || !this.state) return;
     this.timelineSaved = this.state.tick;
-    try { localStorage.setItem(TIMELINE_STORAGE_KEY, exportTimelineText(this.timeline, this.state)); } catch {}
+    // A full quota rotates old chunks into summaries (notes kept); only an
+    // unusable store fails, and then the notes live on until exported.
+    if ((this.timelineStore?.save(this.timeline, this.state) ?? "failed") !== "failed" || this.timelineWarned) return;
+    this.timelineWarned = true;
+    this.view.notify("The play timeline can't be saved on this computer. Your notes are kept until you close the page: export the timeline from the menu to keep them.",
+      true, { channel: "system" });
   }
   /** Start or resume the timeline for the session just entered (same save session resumes). */
   private startTimeline(): void {
     const meta = this.session.envelope()?.meta;
     if (!meta || !this.state) { this.timeline = null; return; }
     const options = { regionAt: (x: number, z: number) => regionAtPoint(x, z) };
-    let stored: string | null = null;
-    try { stored = localStorage.getItem(TIMELINE_STORAGE_KEY); } catch {}
-    const parsed = stored ? parseTimeline(stored) : null;
-    this.timeline = parsed?.ok && parsed.value.session.id === meta.sessionId ? resumeRecorder(parsed.value, options)
-      : createRecorder({ id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION }, options);
+    this.timeline = this.timelineStore?.load(meta.sessionId, options)
+      ?? createRecorder({ id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION }, options);
     this.timelineSaved = this.state.tick;
   }
   /** N: a one-line feedback note stamped with play time and place. */
