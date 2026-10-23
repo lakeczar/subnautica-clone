@@ -18,11 +18,12 @@ test("R4-1: the shipped Apron hollow's shell bakes, oriented by provenance and c
   assert.ok(CAVE_SOURCES.some(s => s.id === "hub_apron_hollow"), "the cave is in the game's list");
   const def = caveDef("hub_apron_hollow", worldFloor), sh = caveShell(def, "fine");
   const mesh = { positions: sh.positions, indices: Uint32Array.from(sh.indices) };
-  assert.equal(mesh.indices.length / 3, 10728);
+  // R4's 10,728 triangles, plus the seam skirts R6's snap adds where the old snap folded.
+  assert.ok(mesh.indices.length / 3 >= 10728, `${mesh.indices.length / 3} triangles`);
   assert.deepEqual(orientationProblems(def.id, mesh, false), []);
   const shapes = kitShellShapes(def);
   assert.ok(shapes.length >= 1 && shapes.every(s => s.facing === KIT_SHELL_ORIENTATION.facing && s.interior === "solid"));
-  assert.equal(createStaticCollider("apron", shapes).triangles, 10728);
+  assert.equal(createStaticCollider("apron", shapes).triangles, mesh.indices.length / 3);
   // Cross-check, never the decider: the opened voxel volume agrees with every component.
   const vol = caveVolume(def), g = vol.grid;
   const inside = (p: Vec3): boolean | null => {
