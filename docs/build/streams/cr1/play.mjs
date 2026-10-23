@@ -119,7 +119,8 @@ const begin = (name) => { scene = name; result.scenes[name] = { captions: [], ba
 const button = (label) => page.locator(`button:has-text("${label}")`).first();
 
 /** The sim tick the page shows (canvas dataset), for timing a rhythm the way a watching player would. */
-const tickNow = async () => Number(await page.evaluate(() => document.querySelector("#ocean").dataset.tick ?? "0"));
+// REC-1's test hook replaced the canvas `dataset.tick` this driver first read.
+const tickNow = async () => Number(await page.evaluate(() => window.__siltwake?.read()?.tick ?? 0));
 /** Watch (looking at `look`) until `ready(tick)` holds, at most `limit` seconds; returns the wait. */
 async function waitFor(ready, look, limit = 120) {
   const t0 = performance.now();

@@ -97,13 +97,18 @@ export class FlightCapture {
       v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS);
       const size = this.scaled(VIDEO_SIZE.width);
       v.pending++;
+      const captured = now;
       void createImageBitmap(this.canvas, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: "low" }).then((bitmap) => {
         v.pending--;
         if (this.disposed) { bitmap.close(); return; }
         if (v.canvas.width !== bitmap.width || v.canvas.height !== bitmap.height) { v.canvas.width = bitmap.width; v.canvas.height = bitmap.height; }
         v.context.transferFromImageBitmap(bitmap);
         v.track.requestFrame();
-        v.frames++;
+        if (v.frames++ === 0) {
+          // The video's time 0 on the page clock: the pack lines video and frames up by it.
+          this.header.video = { ...(this.header.video as object), start: Math.round(captured) };
+          this.putHeader();
+        }
       }, () => { v.pending--; });
     }
     if (this.spool && now - this.spool.last >= SPOOL_EVERY_MS) this.flush(now);
@@ -216,7 +221,7 @@ export class FlightCapture {
     };
     recorder.start(SPOOL_EVERY_MS);
     this.video = { canvas, context, track, recorder, next: 0, frames: 0, pending: 0 };
-    this.header.video = { ...(this.header.video as object), mimeType, startedAt: performance.now(), bitsPerSecond: VIDEO_BITS };
+    this.header.video = { ...(this.header.video as object), mimeType, bitsPerSecond: VIDEO_BITS };
     this.recorder.event("session", `video started (${mimeType}, ${VIDEO_FPS} fps, ${VIDEO_SIZE.width}x${VIDEO_SIZE.height})`, { snapshot: false });
   }
   /** Video kept in memory when nothing spools (driver mode with in-game video, for its overhead). */
@@ -237,13 +242,15 @@ export class FlightCapture {
       if (e.data.error) this.recorder.event("warning", `warning: flight spool: ${e.data.error}`, { snapshot: false });
     };
     this.spool = { worker, cursors: { frames: 0, samples: 0, events: 0, snapshots: 0 }, last: performance.now(), closing, seq: 0 };
-    this.post("header.json", JSON.stringify(this.header, null, 1));
+    this.putHeader();
     void prune(this.session);
   }
-  private post(file: string, data: string | ArrayBuffer): void {
+  private post(file: string, data: string | ArrayBuffer, op: "append" | "put" = "append"): void {
     const transfer = typeof data === "string" ? [] : [data];
-    this.spool?.worker.postMessage({ op: "append", dir: `${SPOOL_ROOT}/${this.session}`, file, data }, transfer);
+    this.spool?.worker.postMessage({ op, dir: `${SPOOL_ROOT}/${this.session}`, file, data }, transfer);
   }
+  /** The header as it stands (it learns the video's start once the first frame is taken). */
+  private putHeader(): void { this.post("header.json", JSON.stringify(this.header, null, 1), "put"); }
   /** Appends everything recorded since the last flush. */
   flush(now = performance.now()): void {
     const s = this.spool;
@@ -292,6 +299,8 @@ export class FlightCapture {
     }
     this.flush();
     this.post("events.ndjson", `${JSON.stringify(end)}\n`);
+    this.header.exported = { at: new Date().toISOString(), overhead: this.recorder.overhead(), videoFrames: this.video?.frames ?? 0 };
+    this.putHeader();
     // Release the worker's handles so the files can be read, then gather them.
     const s = this.spool, id = ++s.seq;
     await new Promise<void>((resolve) => { s.closing.set(id, resolve); s.worker.postMessage({ op: "close", id }); });

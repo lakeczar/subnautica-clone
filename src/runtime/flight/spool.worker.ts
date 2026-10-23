@@ -1,19 +1,21 @@
 /** REC-1 playtest spool: appends the recording to the Origin Private File
  * System from a worker, with synchronous access handles, so every flush is
  * durable (a crashed tab keeps what was written) and the main thread never
- * waits on disk. Messages: { op: "append", dir, file, data } and
+ * waits on disk. Messages: { op: "append" | "put" (replace), dir, file, data } and
  * { op: "close", id } (releases every handle so the page can read the files;
  * the next append reopens them). Local only: nothing leaves the computer. */
 
 interface SyncHandle {
   getSize(): number;
   write(buffer: ArrayBufferView | ArrayBuffer, options?: { at?: number }): number;
+  truncate(size: number): void;
   flush(): void;
   close(): void;
 }
 interface SyncFileHandle extends FileSystemFileHandle { createSyncAccessHandle(): Promise<SyncHandle> }
 type Message =
   | { op: "append"; dir: string; file: string; data: ArrayBuffer | string }
+  | { op: "put"; dir: string; file: string; data: ArrayBuffer | string }
   | { op: "close"; id: number };
 
 const handles = new Map<string, SyncHandle>();
@@ -36,13 +38,15 @@ async function handle(dir: string, file: string): Promise<SyncHandle> {
 scope.onmessage = (e) => {
   const m = e.data;
   queue = queue.then(async () => {
-    if (m.op === "append") {
+    if (m.op === "append" || m.op === "put") {
       const h = await handle(m.dir, m.file);
+      // "put" replaces the file (the header, rewritten as it learns more).
+      if (m.op === "put") h.truncate(0);
       h.write(typeof m.data === "string" ? encoder.encode(m.data) : new Uint8Array(m.data), { at: h.getSize() });
       h.flush();
       // Snapshots are written once: release their handles at once.
       if (m.file.startsWith("snapshots/")) { h.close(); handles.delete(`${m.dir}/${m.file}`); }
-    } else {
+    } else if (m.op === "close") {
       for (const h of handles.values()) h.close();
       handles.clear();
       scope.postMessage({ closed: m.id });
