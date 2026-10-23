@@ -202,6 +202,16 @@ const scratch = mkdtempSync(join(tmpdir(), "siltwake-heavy-"));
 const cacheModule = pathToFileURL(join(root, "scripts", "test-build-cache.mjs")).href;
 const rows = [];
 let failed = false;
+/** Inside a heavy-check job: a file's test output, though held back until the
+ * file ends, is progress, so it beats the job's stall-detection heartbeat
+ * (SCHED-2). A hung file prints nothing and stops beating. */
+let lastBeat = 0;
+function heartbeat() {
+  const file = process.env.SILTWAKE_JOB_HEARTBEAT;
+  if (!file || Date.now() - lastBeat < 5000) return;
+  lastBeat = Date.now();
+  try { writeFileSync(file, ""); } catch { /* the queue's concern, not the tier's */ }
+}
 /** One heavy file and its whole process tree, contained at its budget; output held until it ends. */
 function runHeavy(file) {
   const budget = budgetMiB(file), started = Date.now();
@@ -209,8 +219,8 @@ function runHeavy(file) {
     ["--import", cacheModule, "--test", "--test-isolation=none", "--test-reporter=spec", file],
     { cwd: root, stdio: ["ignore", "pipe", "pipe"], env: process.env }, budget);
   const output = [];
-  run.child.stdout.on("data", (d) => output.push(d));
-  run.child.stderr.on("data", (d) => output.push(d));
+  run.child.stdout.on("data", (d) => { output.push(d); heartbeat(); });
+  run.child.stderr.on("data", (d) => { output.push(d); heartbeat(); });
   return new Promise((done) => {
     let exited = null, result = null;
     // Teardown starts when the file's process exits, not when its pipes close: a
