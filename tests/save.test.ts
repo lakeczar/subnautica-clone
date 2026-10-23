@@ -7,10 +7,8 @@ import { WORLD_VERTICAL_BOUNDS } from "../src/content/routes.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import type { CommitResult } from "../src/save/repository.js";
-import {
-  SAVE_WRITER_LOCK,
-  browserWriterLock,
-} from "../src/save/writer-lock.js";
+import { SAVE_WRITER_LOCK } from "../src/save/writer-lock.js";
+import { browserWriterLock } from "../src/runtime/browserLock.js";
 import {
   MemoryStorage,
   TestWriterLock,

@@ -141,9 +141,6 @@ function push(rec: TimelineRecorder, e: TimelineEvent): void {
   rec.events = [];
   while (rec.sealed.length > TIMELINE_RETAINED_CHUNKS) rotateOldest(rec);
 }
-/** Records an event that already carries its stamp (a note from the outbox of a
- * commit that never landed). */
-export function restoreEvent(rec: TimelineRecorder, e: TimelineEvent): void { push(rec, e); }
 /** Folds the oldest sealed chunk into a summary (its kept events stay whole).
  * Also the storage's answer to a full quota. Returns false with nothing to rotate. */
 export function rotateOldest(rec: TimelineRecorder): boolean {

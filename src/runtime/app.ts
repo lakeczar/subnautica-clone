@@ -9,7 +9,7 @@ import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
 import { encodeSave } from "../save/codec.js";
 import { SaveRepository } from "../save/repository.js";
 import type { StoragePort } from "../save/repository.js";
-import { browserWriterLock } from "../save/writer-lock.js";
+import { browserWriterLock } from "./browserLock.js";
 import { ExpeditionSession } from "./session.js";
 import { createRenderer } from "../render/renderer.js";
 import type { GameRenderer, Quality } from "../render/renderer.js";
