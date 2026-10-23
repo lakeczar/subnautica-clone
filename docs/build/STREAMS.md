@@ -712,3 +712,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **P3:** prefix counter parsing.
   - **P3:** an invalid throttle reading is still `measured:true`.
   - **Fix:** one checked, timed systemctl helper for install and removal that restores the prior unit on failure and exits before any switch.
+- **STEW-1 R3** (Sol on `1c17c4a`, report on `review/stew-1-r3` `763cbcc5`): REQUEST CHANGES. **P2:** inline `{ type X }` imports still emit a runtime edge. **P2:** the traversal fails open outside the TS-under-src graph (tools/ barrels, .js files, computed loads in helpers, unlisted packages). Decision: fail closed on any unanalysable reachable edge, with an explicit portable-package allowlist. After this the guard is complete enough to accept.
