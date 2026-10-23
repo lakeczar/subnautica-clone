@@ -1,12 +1,14 @@
 /** npm run playthrough [-- --scenario creel,carrier,...] [--json out.json] [--quiet]
- *   [--export [--library-root DIR] [--allow-dirty]] [--from-library [--library-root DIR]]
+ *   [--export --commit SHA [--library-root DIR]] [--from-library [--library-root DIR]]
  * Plays the scenarios through real simulation commands and prints the timeline.
  * Exit 0 when nothing is blocked, every check holds and the expected-pending list
  * is current (pending C3 phases are expected today); exit 1 otherwise, including any
  * crashed, killed or timed-out --jobs child. No Babylon.
  * --export (SAVE-1): also publish every save the scenarios made to the shared save
- * library at this commit (library.ts); it refuses a dirty tree and publishes nothing
- * unless every scenario completes and every kind holds its facts.
+ * library at SHA (library.ts). It runs only from code built by scripts/saves-build-at.sh
+ * from an archive of exactly SHA, so the saves and their label always come from the
+ * same source; it publishes nothing unless every scenario completes and every kind
+ * holds its facts. scripts/saves-export.sh is the way to run it.
  * --from-library (TST-21): a branch scenario whose parent is not requested starts
  * from the library's compatible milestone save instead of replaying its parent. */
 import { spawn } from "node:child_process";
@@ -23,7 +25,7 @@ import { formatRun } from "./report.js";
 import { EXPECTED_PENDING_BASE, malformedExpected, staleExpected } from "./pending.js";
 import { playScenarios, SCENARIOS } from "./scenarios.js";
 import type { PlayHooks } from "./scenarios.js";
-import { buildManifest, exportCommit, gitPort, libraryRoot, librarySave, publish, stagingDir } from "./library.js";
+import { buildManifest, codeCommit, CODE_ROOT, libraryRoot, librarySave, publish, SOURCE_MARKER, stagingDir, verifyCommitDir } from "./library.js";
 import type { Produced } from "./library.js";
 
 const args = process.argv.slice(2);
@@ -37,15 +39,18 @@ const quiet = args.includes("--quiet");
 const fault = args.includes("--child") ? process.env.SILTWAKE_PLAYTHROUGH_FAULT ?? "" : "";
 const exporting = args.includes("--export"), fromLibrary = args.includes("--from-library"), privateRoot = value("--library-root");
 if (exporting && fromLibrary) { console.error("--export earns every save from New Game; it cannot start from the library"); process.exit(2); }
-if (exporting && !privateRoot && (ids.length !== SCENARIOS.length || args.includes("--allow-dirty"))) {
-  console.error("A partial or dirty export goes to a private --library-root, never the shared library");
+if (exporting && !privateRoot && ids.length !== SCENARIOS.length) {
+  console.error("A partial export goes to a private --library-root, never the shared library");
   process.exit(2);
 }
 const fromOf = (id: string): string | null => { const f = SCENARIOS.find((s) => s.id === id)?.from; return f ? `${f.scenario}@${f.milestone}` : null; };
 const libraryParent = (id: string): boolean => { const f = SCENARIOS.find((s) => s.id === id)?.from; return fromLibrary && !!f && !ids.includes(f.scenario); };
 let commit = "", staging = "";
 if (exporting) {
-  try { commit = exportCommit(gitPort(), process.cwd(), args.includes("--allow-dirty")); } catch (e) { console.error((e as Error).message); process.exit(2); }
+  const built = codeCommit(), asked = value("--commit");
+  if (!built) { console.error(`--export runs only from code built by scripts/saves-build-at.sh (no ${SOURCE_MARKER} in ${CODE_ROOT}); use scripts/saves-export.sh`); process.exit(2); }
+  if (asked !== built) { console.error(`--export --commit ${asked ?? "(missing)"}: this code was built from ${built}`); process.exit(2); }
+  commit = built;
   staging = stagingDir(libraryRoot(privateRoot), commit);
 }
 const savesDir = value("--saves-dir") ?? (staging || undefined);
@@ -92,7 +97,7 @@ function exportLibrary(): number {
     fs.rmSync(staging, { recursive: true, force: true });
     return 1;
   }
-  const status = publish(libraryRoot(privateRoot), staging, manifest), z = manifest.sizes, k = (n: number): string => `${(n / 1024).toFixed(0)} KiB`;
+  const status = publish(libraryRoot(privateRoot), staging, manifest, (dir) => verifyCommitDir(dir, true)), z = manifest.sizes, k = (n: number): string => `${(n / 1024).toFixed(0)} KiB`;
   console.log(`\nSave library ${status} at ${libraryRoot(privateRoot)}/${commit} (${manifest.saves.length} saves):`);
   for (const e of manifest.saves.filter((e) => e.kinds.length > 1))
     console.log(`  ${e.kinds.slice(0, -1).join(", ").padEnd(22)} ${e.file.padEnd(30)} ${k(e.bytes).padStart(8)}  ${e.minutes} min, ${e.commands} commands`);

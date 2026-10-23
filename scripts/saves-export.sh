@@ -15,6 +15,7 @@
 #
 # When SCHED-2b's remote lane lands, remote_export becomes one call:
 #   $H --machine any --artifact /work/tmp/siltwake-saves/$sha -- <the same command>
+# Both paths run the export from scripts/saves-build-at.sh's archive build of the SHA.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 here=0 deadline=5400
@@ -26,37 +27,35 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || { echo "saves-export: commit first; a library is tagged by commit" >&2; exit 2; }
+# Everything below uses this one SHA, captured once: the export runs from an archive
+# build of it (scripts/saves-build-at.sh), never from this worktree's .test-build, so
+# a HEAD that moves meanwhile cannot change what is exported or how it is labelled.
 sha="$(git rev-parse HEAD)"
 root="${SILTWAKE_SAVES:-/work/tmp/siltwake-saves}"
 H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
-[[ -f "$root/$sha/manifest.json" ]] && { echo "saves-export: $root/$sha already exported"; exit 0; }
-npx tsc -p scripts/playthrough/tsconfig.json
-saves() { node .test-build/scripts/playthrough/saves.js "$@"; }
+build="$(mktemp -d "/work/tmp/siltwake-export-${sha:0:12}-XXXXXX")"
+trap 'rm -rf "$build"' EXIT
+scripts/saves-build-at.sh "$sha" "$build"
+# The SHA's own CLI: it decodes with the SHA's own code.
+saves() { node "$build/.test-build/scripts/playthrough/saves.js" "$@"; }
+if [[ -f "$root/$sha/manifest.json" ]]; then
+  saves verify "$sha" --root "$root" || { echo "saves-export: $root/$sha exists but does not verify; it is immutable, so investigate before removing it" >&2; exit 1; }
+  echo "saves-export: $root/$sha already exported and verifies"; exit 0
+fi
 
 remote="/work/tmp/siltwake-saves"   # the same default root on both machines
 remote_export() {
-  scripts/alickers-job.sh --sha "$sha" --deadline "$deadline" -- \
-    npm run playthrough -- --jobs 3 --quiet --export --library-root "$remote" --json "/work/results/siltwake-saves-$sha.json"
+  local rb="/work/tmp/siltwake-export-$sha"
+  scripts/alickers-job.sh --sha "$sha" --deadline "$deadline" -- bash -c \
+    "rm -rf $rb && scripts/saves-build-at.sh $sha $rb && node $rb/.test-build/scripts/playthrough/run.js --jobs 3 --quiet --export --commit $sha --library-root $remote --json /work/results/siltwake-saves-$sha.json; rc=\$?; rm -rf $rb; exit \$rc"
 }
 fetch() {
   local tmp; tmp="$(mktemp -d /work/tmp/siltwake-saves-incoming-XXXXXX)"
   /usr/bin/ssh -F "$HOME/.ssh/siltwake.conf" siltwake-alickers -n "tar -C $remote -cf - $sha" | tar -C "$tmp" -xf -
-  saves import "$tmp/$sha" --root "$root"
+  # Staged in the root, decoded by the SHA's build, and only then published.
+  local rc=0; saves import "$tmp/$sha" --root "$root" || rc=$?
   chmod -R u+w "$tmp"; rm -rf "$tmp"
-  [[ "$(git rev-parse HEAD)" == "$sha" ]] || verify_at_sha
-}
-# This worktree moved on while the export ran: decode every save with a build of
-# the exported commit itself, compiled from `git archive` in a scratch directory.
-verify_at_sha() {
-  local d rc=0; d="$(mktemp -d /work/tmp/siltwake-saves-verify-XXXXXX)"
-  git archive "$sha" | tar -x -C "$d"
-  ln -s "$PWD/node_modules" "$d/node_modules"
-  (cd "$d" && npx tsc -p scripts/playthrough/tsconfig.json &&
-    node --input-type=module -e "const L = await import('$d/.test-build/scripts/playthrough/library.js');
-      const p = L.verifyCommitDir('$root/$sha', true);
-      console.log(p.length ? p.join('\n') : 'saves-export: every save decoded by the $sha build');
-      process.exit(p.length ? 1 : 0);") || rc=$?
-  rm -rf "$d"; return $rc
+  return $rc
 }
 
 if [[ $here == 0 ]]; then
@@ -65,6 +64,6 @@ if [[ $here == 0 ]]; then
   [[ $rc == 75 || $rc == 255 ]] || { echo "saves-export: the export failed on siltwake-alickers (exit $rc); see its output above" >&2; exit "$rc"; }
   echo "saves-export: siltwake-alickers unavailable (exit $rc); exporting on factory-worker through the queue" >&2
 fi
-# Not --snapshot: the export reads git to tag the library, and the queue already rejects a changed tree.
-"$H" --class playthrough -- node .test-build/scripts/playthrough/run.js --quiet --export
-saves verify HEAD --root "$root"
+# --snapshot: the job doesn't depend on this worktree staying unchanged; it runs the archive build.
+"$H" --class playthrough --snapshot -- node "$build/.test-build/scripts/playthrough/run.js" --quiet --export --commit "$sha"
+saves verify "$sha" --root "$root"

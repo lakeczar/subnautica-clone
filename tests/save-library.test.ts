@@ -28,6 +28,8 @@ const git: GitPort = {
   distance: (a, b) => ORDER.indexOf(b) - ORDER.indexOf(a),
 };
 
+/** In-process decoding: these tests' saves come from this build. */
+const decode = (dir: string): string[] => verifyCommitDir(dir, true);
 const saveText = (s: GameState): string => {
   const e = encodeSave(createEnvelope(s, { sessionId: "library-test", createdAt: "2026-10-23T00:00:00.000Z", savedAt: "2026-10-23T00:00:00.000Z" }));
   assert.ok(e.ok, e.ok ? "" : e.error);
@@ -52,7 +54,7 @@ function library(): { root: string; text: string } {
     assert.ok(problems.every((p) => /was not produced/.test(p)), problems.join("; "));
     const staging = stagingDir(root, commit);
     fs.writeFileSync(path.join(staging, "creel@opening.json"), text);
-    assert.equal(publish(root, staging, manifest), "published");
+    assert.equal(publish(root, staging, manifest, decode), "published");
   }
   return { root, text };
 }
@@ -102,8 +104,8 @@ test("incompatible, missing, exact-only and damaged requests are refused loudly,
   assert.ok(verifyCommitDir(bDir, false).some((x) => /SHA-256 differs/.test(x)));
   // An import of a damaged directory is refused, and a clean one lands read-only.
   const other = fs.mkdtempSync(path.join(os.tmpdir(), "siltwake-library-import-"));
-  assert.throws(() => importCommitDir(bDir, other, true), /does not verify/);
-  assert.equal(importCommitDir(path.join(root, SHAS.a!), other, true).status, "published");
+  assert.throws(() => importCommitDir(bDir, other, decode), /does not verify/);
+  assert.equal(importCommitDir(path.join(root, SHAS.a!), other, decode).status, "published");
   assert.equal(fs.statSync(path.join(other, SHAS.a!, "creel@opening.json")).mode & 0o222, 0);
   assert.equal(readLibrary(other).manifests.length, 1);
 });
@@ -115,7 +117,7 @@ test("a commit's library is immutable: an identical re-export is recognised, a d
     const { manifest } = buildManifest(SHAS.a!, [run], [{ scenario: "creel", label: "opening", text: t }], () => null);
     const staging = stagingDir(root, SHAS.a!);
     fs.writeFileSync(path.join(staging, "creel@opening.json"), t);
-    return publish(root, staging, manifest);
+    return publish(root, staging, manifest, decode);
   };
   assert.equal(again(text), "identical");
   assert.throws(() => again(text.replace('"tick": 0', '"tick": 0 ')), /already holds a different export/);
@@ -187,4 +189,63 @@ test("a branch that cannot get its parent's save from the library is blocked wit
   assert.equal(run!.outcome, "blocked");
   assert.ok(run!.checks.some((c) => !c.ok && /from the save library/.test(c.name) && /compatible with 4444/.test(c.detail)));
   assert.equal(run!.phases.length, 0, "nothing was replayed");
+});
+
+/** One more commit directory, from any save text, with the manifest's hash as given. */
+function addCommit(root: string, commit: string, text: string, hash?: string): void {
+  const { manifest } = buildManifest(commit, [runWith("creel", [["opening", text]])], [{ scenario: "creel", label: "opening", text }], () => null);
+  if (hash) manifest.saves[0]!.hash = hash;
+  const staging = stagingDir(root, commit);
+  fs.writeFileSync(path.join(staging, "creel@opening.json"), text);
+  publish(root, staging, manifest, () => []);
+}
+const emptyRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "siltwake-library-test-"));
+
+test("R3: a recorded hash is checked against the saved state before any migration; real decoder changes still count as migrations", () => {
+  const root = emptyRoot(), text = saveText(createGame());
+  addCommit(root, SHAS.b!, text, "0".repeat(16));
+  // The decoder changes nothing here: the mismatch is damaged metadata, refused even for the same commit.
+  assert.throws(() => pickSave("pod-start", { root, commit: "b", git }), (e) => e instanceof LibraryRefusal && /not its recorded 0000000000000000/.test(e.message));
+  assert.ok(verifyCommitDir(path.join(root, SHAS.b!), false).some((p) => /not its recorded/.test(p)), "caught without decoding too");
+  // A save from a build before CR-1's fish traps: this build adds them on load, a genuine additive migration.
+  const old = JSON.parse(text) as { state: GameState };
+  delete (old.state.systems as Partial<GameState["systems"]>).traps;
+  const root2 = emptyRoot(), oldText = JSON.stringify(old, null, 2);
+  addCommit(root2, SHAS.a!, oldText, stateHash(old.state));
+  const p = pickSave("pod-start", { root: root2, commit: "head", git });
+  assert.equal(p.migrated, true);
+  assert.ok(Array.isArray(p.state.systems.traps));
+  assert.throws(() => pickSave("pod-start", { root: root2, commit: "a", exact: true, git }), /needs migration/);
+});
+
+test("R5: an unreadable nearest save is a refusal naming every candidate, and says why older compatible ones were not used", () => {
+  const root = emptyRoot(), text = saveText(createGame());
+  for (const c of ["a", "b", "x"]) addCommit(root, SHAS[c]!, text);
+  const bDir = path.join(root, SHAS.b!);
+  fs.chmodSync(bDir, 0o755);
+  fs.rmSync(path.join(bDir, "creel@opening.json"));
+  assert.throws(() => pickSave("pod-start", { root, commit: "head", git }), (e) => {
+    assert.ok(e instanceof LibraryRefusal);
+    assert.match(e.message, /cannot be read: ENOENT/);
+    assert.ok(e.rejected.some((r) => r.commit === SHAS.a && /compatible .* but not tried/.test(r.reason)), "the older compatible one is named");
+    assert.ok(e.rejected.some((r) => r.commit === SHAS.x && /history/.test(r.reason)), "other candidates keep their reasons");
+    return true;
+  });
+});
+
+test("R2: an import is decoded in staging before it is public; a failed decode leaves no directory, index entry or staging", () => {
+  const src = emptyRoot(), root = emptyRoot(), text = saveText(createGame());
+  addCommit(src, SHAS.a!, text);
+  addCommit(root, SHAS.b!, text);
+  const seen: string[] = [];
+  assert.throws(() => importCommitDir(path.join(src, SHAS.a!), root, (dir) => { seen.push(dir); return ["not JSON"]; }), /does not decode/);
+  assert.ok(seen.length === 1 && path.basename(seen[0]!).startsWith(".staging-") && path.dirname(seen[0]!) === root, "decoded while hidden in staging");
+  assert.equal(fs.existsSync(path.join(root, SHAS.a!)), false);
+  assert.deepEqual(fs.readdirSync(root).filter((f) => f.startsWith(".")), []);
+  const index = JSON.parse(fs.readFileSync(path.join(root, "index.json"), "utf8")) as { commits: { commit: string }[] };
+  assert.deepEqual(index.commits.map((c) => c.commit), [SHAS.b]);
+  // An existing directory must itself verify before an identical import is accepted.
+  assert.throws(() => importCommitDir(path.join(src, SHAS.a!), src, (dir) => path.basename(dir).startsWith(".staging-") ? [] : ["damaged"]), /already exists and does not verify/);
+  assert.equal(importCommitDir(path.join(src, SHAS.a!), root, decode).status, "published");
+  assert.equal(importCommitDir(path.join(src, SHAS.a!), root, decode).status, "identical");
 });

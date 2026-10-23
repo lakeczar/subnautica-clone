@@ -19,6 +19,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { CONTENT_VERSION } from "../../src/content/registry.js";
 import { decodeSave, MAX_SAVE_BYTES, SAVE_SCHEMA_VERSION } from "../../src/save/codec.js";
 import type { GameState } from "../../src/sim/types.js";
@@ -105,11 +106,17 @@ export function gitPort(cwd = process.cwd()): GitPort {
     distance: (a, b) => Number(git("rev-list", "--count", `${a}..${b}`)),
   };
 }
-/** The commit being exported, refusing a tree with uncommitted tracked changes. */
-export function exportCommit(git: GitPort, cwd = process.cwd(), allowDirty = false): string {
-  const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd, encoding: "utf8" }).trim();
-  if (dirty && !allowDirty) throw new Error(`The tree has uncommitted changes; a library is tagged by commit. Commit first.\n${dirty}`);
-  return git.resolve("HEAD");
+/** The directory this code was compiled in (…/.test-build/scripts/playthrough/library.js → …). */
+export const CODE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+export const SOURCE_MARKER = ".siltwake-source-commit";
+/** The commit this code was built from, when it was built by scripts/saves-build-at.sh
+ * (an archive of exactly that commit); null for code compiled in a worktree, whose
+ * compiled output may lag its source. Only marked code exports, or decodes an import. */
+export function codeCommit(root = CODE_ROOT): string | null {
+  try {
+    const sha = fs.readFileSync(path.join(root, SOURCE_MARKER), "utf8").trim();
+    return SHA.test(sha) ? sha : null;
+  } catch { return null; }
 }
 
 // ----------------------------------------------------------------------------- reading
@@ -120,7 +127,9 @@ const SHA = /^[0-9a-f]{40}$/;
 function readManifest(dir: string): Manifest {
   const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")) as Manifest;
   if (m.format !== LIBRARY_FORMAT || m.version !== 1) throw new Error(`not a ${LIBRARY_FORMAT} v1 manifest`);
-  if (m.commit !== path.basename(dir)) throw new Error(`manifest names commit ${m.commit}`);
+  // A commit directory is named by its commit; a staging directory is checked before it gets that name.
+  if (m.commit !== path.basename(dir) && !(path.basename(dir).startsWith(".staging-") && SHA.test(m.commit)))
+    throw new Error(`manifest names commit ${m.commit}`);
   if (!Array.isArray(m.saves) || !m.saves.every((e) => typeof e.file === "string" && Array.isArray(e.kinds) && typeof e.sha256 === "string"))
     throw new Error("malformed save entries");
   return m;
@@ -201,12 +210,24 @@ export function pickSave(kind: string, o: PickOptions = {}): Picked {
   const entry = best.m.saves.find((e) => e.kinds.includes(kind))!;
   const file = path.join(root, best.m.commit, entry.file);
   // The nearest compatible save must load. A failure here is loud: an older one is never tried instead.
-  const text = fs.readFileSync(file, "utf8");
-  if (sha256(text) !== entry.sha256) throw new LibraryRefusal(`${file} does not match its manifest (SHA-256 differs): the library copy is damaged.`, []);
+  const refuse = (why: string): never => {
+    const older = ok.slice(1).map((c) => ({ commit: c.m.commit,
+      reason: `compatible (${c.compatibility}, ${c.distance} commits back) but not tried: only the nearest compatible save may serve; repair or re-export ${best.m.commit.slice(0, 12)}` }));
+    throw new LibraryRefusal(`The nearest compatible save of kind "${kind}" (${best.m.commit.slice(0, 12)}, ${best.distance} commits back, ${file}) ${why}`,
+      [{ commit: best.m.commit, reason: why }, ...older, ...rejected]);
+  };
+  let text: string;
+  try { text = fs.readFileSync(file, "utf8"); } catch (e) { return refuse(`cannot be read: ${(e as Error).message}`); }
+  if (sha256(text) !== entry.sha256) refuse("does not match its manifest (SHA-256 differs): the library copy is damaged");
+  // The recorded hash is of the state as saved: check it before any migration.
+  let raw: unknown;
+  try { raw = (JSON.parse(text) as { state?: unknown }).state; } catch { return refuse("is not JSON"); }
+  if (stateHash(raw as GameState) !== entry.hash) refuse(`holds a state hashing to ${stateHash(raw as GameState)}, not its recorded ${entry.hash}: the manifest or file is damaged`);
   const decoded = decodeSave(text);
-  if (!decoded.ok) throw new LibraryRefusal(`The nearest compatible save of kind "${kind}" (${best.m.commit.slice(0, 12)}, ${best.distance} commits back) does not load in this build: ${decoded.error}`, []);
+  if (!decoded.ok) return refuse(`does not load in this build: ${decoded.error}`);
+  // Migrated only when this build's decoder actually changed the state (the schema 5 bridge, additive content).
   const migrated = stateHash(decoded.value.state) !== entry.hash;
-  if (o.exact && migrated) throw new LibraryRefusal(`The save of kind "${kind}" at ${target.slice(0, 12)} loads to a different hash than it was saved with.`, []);
+  if (o.exact && migrated) refuse("loads to a different hash than it was saved with (it needs migration in this build)");
   return { kind, path: file, text, state: decoded.value.state, manifest: best.m, entry, compatibility: best.compatibility, distance: best.distance, migrated,
     passed: rejected.filter((r) => holding.some((m) => m.commit === r.commit)) };
 }
@@ -237,7 +258,8 @@ export function buildManifest(commit: string, runs: readonly RunRecord[], produc
     if (!run || !record) { problems.push(`${p.scenario}@${p.label}: no save record`); continue; }
     const decoded = decodeSave(p.text);
     if (!decoded.ok) { problems.push(`${p.scenario}@${p.label} does not load: ${decoded.error}`); continue; }
-    const hash = stateHash(decoded.value.state);
+    const hash = stateHash((JSON.parse(p.text) as { state: GameState }).state);
+    if (stateHash(decoded.value.state) !== hash) problems.push(`${p.scenario}@${p.label} changes when its own build loads it (an export never needs a migration)`);
     if (hash !== record.hash || !record.equal) problems.push(`${p.scenario}@${p.label} reloads to ${hash}, not its recorded ${record.hash}`);
     const kinds = kindsOf(p.scenario, p.label);
     for (const spec of KINDS.filter((k) => kinds.includes(k.kind) && k.facts))
@@ -276,27 +298,67 @@ export function buildManifest(commit: string, runs: readonly RunRecord[], produc
 }
 
 export type PublishStatus = "published" | "identical";
-/** Move a finished staging directory into place as `<root>/<commit>`, read-only.
- * An existing directory is never replaced: an identical re-export is reported as
- * such, and a different one is an error (the bot is meant to be deterministic). */
-export function publish(root: string, staging: string, manifest: Manifest): PublishStatus {
-  fs.writeFileSync(path.join(staging, "manifest.json"), JSON.stringify(manifest, null, 1) + "\n");
+const files = (m: Manifest): string => m.saves.map((e) => `${e.file} ${e.sha256}`).sort().join("\n");
+/** Move a finished, verified staging directory into place as `<root>/<commit>`,
+ * read-only, under the library lock (one publisher and one index rebuild at a
+ * time). An existing directory is never replaced: it must itself verify
+ * (`verifyExisting`) and hold the same files, which makes a repeated or concurrent
+ * identical export "identical"; a different one is an error (the bot is meant to
+ * be deterministic). The staging directory is gone afterwards in every case. */
+export function publish(root: string, staging: string, manifest: Manifest, verifyExisting: (dir: string) => string[]): PublishStatus {
   const dir = path.join(root, manifest.commit);
-  if (fs.existsSync(dir)) {
-    const old = readManifest(dir), files = (m: Manifest) => m.saves.map((e) => `${e.file} ${e.sha256}`).sort().join("\n");
-    fs.rmSync(staging, { recursive: true, force: true });
-    if (files(old) === files(manifest)) return "identical";
-    const diff = manifest.saves.filter((e) => !old.saves.some((x) => x.file === e.file && x.sha256 === e.sha256)).map((e) => e.file);
-    throw new Error(`${dir} already holds a different export (${diff.join(", ") || "different file set"}). A library directory is immutable; investigate the nondeterminism.`);
-  }
-  for (const f of fs.readdirSync(staging)) fs.chmodSync(path.join(staging, f), 0o444);
-  fs.renameSync(staging, dir);
-  fs.chmodSync(dir, 0o555);
-  writeIndex(root);
-  return "published";
+  try {
+    fs.writeFileSync(path.join(staging, "manifest.json"), JSON.stringify(manifest, null, 1) + "\n");
+    return withLibraryLock(root, () => {
+      if (!fs.existsSync(dir)) {
+        for (const f of fs.readdirSync(staging)) fs.chmodSync(path.join(staging, f), 0o444);
+        try {
+          fs.renameSync(staging, dir);
+          fs.chmodSync(dir, 0o555);
+          writeIndexLocked(root);
+          return "published";
+        } catch (e) {
+          // A writer outside the lock (an older build) created it first: judge the winner below.
+          if (!["EEXIST", "ENOTEMPTY"].includes((e as NodeJS.ErrnoException).code ?? "")) throw e;
+        }
+      }
+      const problems = verifyExisting(dir);
+      if (problems.length) throw new Error(`${dir} already exists and does not verify:\n  ${problems.join("\n  ")}`);
+      const old = readManifest(dir);
+      if (files(old) !== files(manifest)) {
+        const diff = manifest.saves.filter((e) => !old.saves.some((x) => x.file === e.file && x.sha256 === e.sha256)).map((e) => e.file);
+        throw new Error(`${dir} already holds a different export (${diff.join(", ") || "different file set"}). A library directory is immutable; investigate the nondeterminism.`);
+      }
+      return "identical";
+    });
+  } finally { fs.rmSync(staging, { recursive: true, force: true }); }
 }
-/** Rewrite index.json (atomically) from the manifests. */
-export function writeIndex(root: string): void {
+
+const sleep = (ms: number): void => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
+const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; } };
+/** The library root's lock: a `.lock` directory (mkdir is atomic) naming its holder.
+ * A holder on this host that is no longer running is broken; any other wait gives
+ * up after `timeoutMs`. */
+export function withLibraryLock<T>(root: string, fn: () => T, timeoutMs = 120_000): T {
+  fs.mkdirSync(root, { recursive: true });
+  const lock = path.join(root, ".lock"), owner = path.join(lock, "owner"), me = `${os.hostname()} ${process.pid}`;
+  for (const t0 = Date.now(); ;) {
+    try { fs.mkdirSync(lock); fs.writeFileSync(owner, me); break; } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+    }
+    let holder = "", age = 0;
+    try { holder = fs.readFileSync(owner, "utf8"); } catch { /* being created or removed */ }
+    try { age = Date.now() - fs.statSync(lock).mtimeMs; } catch { continue; }
+    const [host, pid] = holder.split(" ");
+    if ((holder && host === os.hostname() && !alive(Number(pid))) || (!holder && age > 10_000)) { fs.rmSync(lock, { recursive: true, force: true }); continue; }
+    if (Date.now() - t0 > timeoutMs) throw new Error(`The save library lock ${lock} has been held by ${holder || "an unknown writer"} for over ${timeoutMs / 1000} s`);
+    sleep(50);
+  }
+  try { return fn(); } finally { fs.rmSync(lock, { recursive: true, force: true }); }
+}
+/** Rewrite index.json (atomically, under the lock) from the manifests. */
+export function writeIndex(root: string): void { withLibraryLock(root, () => writeIndexLocked(root)); }
+function writeIndexLocked(root: string): void {
   const { manifests } = readLibrary(root);
   const index = {
     format: `${LIBRARY_FORMAT}-index`, generatedAt: new Date().toISOString(),
@@ -315,9 +377,9 @@ export function stagingDir(root: string, commit: string): string {
   return fs.mkdtempSync(path.join(root, `.staging-${commit.slice(0, 12)}-`));
 }
 
-/** Check a commit directory against its manifest: every file's SHA-256, and, when
- * `decode` (this build is that commit), every save loading to its recorded hash
- * and every kind's facts. */
+/** Check a commit directory against its manifest: every file's SHA-256 and recorded
+ * state hash, and, when `decode` (this code was built from that commit), every save
+ * loading unchanged and every kind's facts. */
 export function verifyCommitDir(dir: string, decode: boolean): string[] {
   const problems: string[] = [];
   let m: Manifest;
@@ -327,6 +389,9 @@ export function verifyCommitDir(dir: string, decode: boolean): string[] {
     if (!fs.existsSync(file)) { problems.push(`${e.file} is missing`); continue; }
     const text = fs.readFileSync(file, "utf8");
     if (sha256(text) !== e.sha256) { problems.push(`${e.file}: SHA-256 differs from the manifest`); continue; }
+    let raw: GameState;
+    try { raw = (JSON.parse(text) as { state: GameState }).state; } catch { problems.push(`${e.file} is not JSON`); continue; }
+    if (stateHash(raw) !== e.hash) { problems.push(`${e.file} holds a state hashing to ${stateHash(raw)}, not its recorded ${e.hash}`); continue; }
     if (!decode) continue;
     const decoded = decodeSave(text);
     if (!decoded.ok) { problems.push(`${e.file} does not load: ${decoded.error}`); continue; }
@@ -336,11 +401,18 @@ export function verifyCommitDir(dir: string, decode: boolean): string[] {
   }
   return problems;
 }
-/** Bring a commit directory exported elsewhere (the second worker) into the root. */
-export function importCommitDir(source: string, root: string, decode: boolean): { status: PublishStatus; commit: string } {
-  const m = readManifest(source), problems = verifyCommitDir(source, decode);
-  if (problems.length) throw new Error(`${source} does not verify:\n  ${problems.join("\n  ")}`);
+/** Bring a commit directory exported elsewhere (the second worker) into the root:
+ * copied into a hidden staging directory, decoded there by `verify` (a build of
+ * that commit), and only then published. A failure publishes nothing. */
+export function importCommitDir(source: string, root: string, verify: (dir: string) => string[]): { status: PublishStatus; commit: string } {
+  const m = readManifest(source), files = verifyCommitDir(source, false);
+  if (files.length) throw new Error(`${source} does not verify:\n  ${files.join("\n  ")}`);
   const staging = stagingDir(root, m.commit);
-  for (const e of m.saves) fs.copyFileSync(path.join(source, e.file), path.join(staging, e.file));
-  return { status: publish(root, staging, m), commit: m.commit };
+  try {
+    for (const e of m.saves) fs.copyFileSync(path.join(source, e.file), path.join(staging, e.file));
+    fs.writeFileSync(path.join(staging, "manifest.json"), fs.readFileSync(path.join(source, "manifest.json")));
+    const problems = verify(staging);
+    if (problems.length) throw new Error(`${source} does not decode:\n  ${problems.join("\n  ")}`);
+  } catch (e) { fs.rmSync(staging, { recursive: true, force: true }); throw e; }
+  return { status: publish(root, staging, m, verify), commit: m.commit };
 }

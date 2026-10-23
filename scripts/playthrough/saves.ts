@@ -5,20 +5,42 @@
  *       what was chosen goes to stderr. Exit 3, naming every candidate's reason, if none is.
  *   ... list                      commits in the library and the kinds each holds
  *   ... kinds                     the standard kinds and where each comes from
- *   ... verify [REF]              re-check a commit's files; decode them too when REF is HEAD
- *   ... import DIR                bring in a commit directory exported elsewhere (the second worker)
+ *   ... verify [REF]              re-check a commit's files, and decode each with a build of REF
+ *   ... import DIR                bring in a commit directory exported elsewhere (the second worker):
+ *                                 staged, decoded by a build of its commit, then published
+ * Decoding uses this code when it was built from that commit (scripts/saves-build-at.sh),
+ * else a fresh build of the commit in a scratch directory.
  *   ... index                     rewrite index.json from the manifests
  * Every command takes --root DIR (default $SILTWAKE_SAVES or /work/tmp/siltwake-saves). */
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { KINDS } from "./kinds.js";
-import { describePick, gitPort, importCommitDir, LibraryRefusal, libraryRoot, pickSave, readLibrary, verifyCommitDir, writeIndex } from "./library.js";
+import { codeCommit, describePick, gitPort, importCommitDir, LibraryRefusal, libraryRoot, pickSave, readLibrary, verifyCommitDir, writeIndex } from "./library.js";
 
 const [command, ...rest] = process.argv.slice(2);
 const value = (flag: string): string | undefined => { const i = rest.indexOf(flag); return i >= 0 ? rest[i + 1] : undefined; };
 const positional = rest.filter((a, i) => !a.startsWith("--") && !(i > 0 && ["--root", "--commit"].includes(rest[i - 1]!)));
 const root = libraryRoot(value("--root"));
 const git = gitPort();
+
+/** A verifier that decodes with a build of `commit`: this code if it was built from
+ * it, else a scratch build (scripts/saves-build-at.sh) run as a child. */
+function decoderFor(commit: string): { verify: (dir: string) => string[]; done: () => void } {
+  if (codeCommit() === commit) return { verify: (dir) => verifyCommitDir(dir, true), done: () => {} };
+  const scratch = fs.existsSync("/work/tmp") ? "/work/tmp" : os.tmpdir();
+  const build = fs.mkdtempSync(path.join(scratch, `siltwake-decoder-${commit.slice(0, 12)}-`));
+  const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+  execFileSync("bash", [path.join(repo, "scripts/saves-build-at.sh"), commit, build], { stdio: ["ignore", process.stderr, "inherit"] });
+  return {
+    verify: (dir) => {
+      const r = spawnSync(process.execPath, [path.join(build, ".test-build/scripts/playthrough/saves.js"), "verify-dir", dir], { encoding: "utf8" });
+      return r.status === 0 ? [] : [`the ${commit.slice(0, 12)} build refused ${dir} (exit ${r.status}): ${(r.stdout + r.stderr).trim()}`];
+    },
+    done: () => fs.rmSync(build, { recursive: true, force: true }),
+  };
+}
 
 switch (command) {
   case "pick": {
@@ -54,21 +76,37 @@ switch (command) {
     console.log("Every save is also its own kind, scenario@label (for example creel@refits).");
     break;
   case "verify": {
-    const commit = git.resolve(positional[0] ?? "HEAD"), head = git.resolve("HEAD");
-    const problems = verifyCommitDir(path.join(root, commit), commit === head);
+    const commit = git.resolve(positional[0] ?? "HEAD"), dir = path.join(root, commit);
+    const decoder = decoderFor(commit);
+    let problems: string[];
+    try { problems = decoder.verify(dir); } finally { decoder.done(); }
     console.log(problems.length ? `${commit.slice(0, 12)}: ${problems.length} problems\n  ${problems.join("\n  ")}`
-      : `${commit.slice(0, 12)}: every file matches its manifest${commit === head ? ", loads to its hash and holds its kind's facts" : " (decoding needs a checkout at that commit)"}`);
+      : `${commit.slice(0, 12)}: every file matches its manifest and, decoded by a build of ${commit.slice(0, 12)}, loads unchanged and holds its kind's facts`);
+    process.exit(problems.length ? 1 : 0);
+    break;
+  }
+  case "verify-dir": {
+    // Internal: a decoder build checking a directory, for verify and import.
+    const dir = positional[0]!, m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")) as { commit: string };
+    if (codeCommit() !== m.commit) { console.error(`this code was built from ${codeCommit() ?? "a worktree"}, not ${m.commit}`); process.exit(2); }
+    const problems = verifyCommitDir(dir, true);
+    if (problems.length) console.error(problems.join("\n"));
     process.exit(problems.length ? 1 : 0);
     break;
   }
   case "import": {
     const dir = positional[0];
     if (!dir || !fs.existsSync(path.join(dir, "manifest.json"))) { console.error("usage: saves.js import DIR (a commit directory with manifest.json)"); process.exit(2); }
-    const commit = path.basename(path.resolve(dir));
+    const commit = (JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")) as { commit: string }).commit;
     try { git.resolve(commit); } catch { console.error(`${commit} is not a commit in this repository`); process.exit(2); }
-    const decode = git.resolve("HEAD") === commit;
-    const r = importCommitDir(dir, root, decode);
-    console.log(`${r.commit.slice(0, 12)}: ${r.status} at ${path.join(root, r.commit)}${decode ? " (decoded and checked here)" : " (files checked; decode with `verify` from a checkout at that commit)"}`);
+    const decoder = decoderFor(commit);
+    try {
+      const r = importCommitDir(dir, root, decoder.verify);
+      console.log(`${r.commit.slice(0, 12)}: ${r.status} at ${path.join(root, r.commit)}, decoded by a build of ${r.commit.slice(0, 12)} before publishing`);
+    } catch (e) {
+      console.error(`REFUSED: ${(e as Error).message}`);
+      process.exit(1);
+    } finally { decoder.done(); }
     break;
   }
   case "index":
