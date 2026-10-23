@@ -55,14 +55,21 @@ Every other identity-keyed cache is keyed by content.
 - **Chunks:** 1,000 events each. The newest 20 sealed chunks plus the open chunk stay whole, the same 20k window as before.
 - **Rotation:** an older chunk rotates into a `ChunkSummary` that keeps **notes, new things, deaths and recoveries verbatim**. Everything else becomes totals, and empty-travel and idle stretches are listed at the report's default thresholds.
 - **Analysis:** the analysis merges the summaries. The test shows a 26-chunk session analyses the same as its unrotated event list.
-- **`TimelineStore`** (`src/sim/timeline/store.ts`, redesigned in R1):
-  - **Keys:** each chunk has its own key, scoped by session, written once when sealed. When the chunk rotates, the same key is overwritten with its summary.
-  - **The head:** each 10-second save rewrites only the head (the session, the open chunk with open spans closed as of the save, and the chunk keys in order). Before, the whole history was re-serialised, up to about 2.4 MB. Summaries live in their chunk keys, so the head stays small however many notes accumulate.
-  - **Every failure leaves a readable, complete committed timeline:**
+- **`TimelineStore`** (`src/sim/timeline/store.ts`; redesigned in R1, made stateless in R2):
+  - **Keys:** everything lives under one owned prefix, `siltwake.timeline.v2|<session>|…`. Each session has a head (`|head`) and chunk keys (`|<n>`). A chunk is written once when it seals; when it rotates, the same key is overwritten with its summary.
+  - **The head:** each 10-second save rewrites only the head (the session, the open chunk with open spans closed as of the save, and the chunk keys in order, with which ones are folded). Before, the whole history was re-serialised, up to about 2.4 MB. Summaries live in their chunk keys, so the head stays small however many notes accumulate.
+  - **No remembered state.** The store keeps nothing between saves except the storage port and a clock. Each save reads the session's durable head first and treats only what that head names as committed.
+  - **Every failure or restart leaves a readable, complete committed timeline:**
     - the head is the commit point, written after the chunks it names;
-    - a chunk key is only ever replaced by its own summary, one atomic write that shrinks it, so a committed head naming it reads the same history;
-    - anything a new head no longer names (another session's timeline, the v1 record, the chunks of a commit that never landed) is removed only after that head is stored.
-  - **On a full quota,** the recorder rotates its oldest chunk, the store folds that key in place (freeing space) and the save retries. If nothing fits, the save fails, the app says so once, and every note stays in memory for export.
+    - a session with no head first gets a *provisional* head, so its keys can always be discovered and aged after a crash; readers ignore provisional heads, so a pending v1 migration still loads from v1;
+    - a chunk key is only ever replaced by its own summary, in one atomic write, so a head naming it reads the same history. A fold usually shrinks the key, which is how compaction frees space. A summary of a chunk made only of notes can be slightly larger than the chunk; then that fold can fail on a full quota, and the committed notes survive (tested);
+    - after a head is stored, the session's own prefix is enumerated, and every key the head doesn't name is removed: leftovers of an interrupted transaction or cleanup, found after any restart;
+    - another session's keys are removed only once its head is older than `STALE_MS` (10 min) or it has no head, chunks first and head last. A live game saves its timeline every 10 s of play; a paused game whose keys were collected rewrites them whole from memory at its next save;
+    - the v1 record is removed once any v2 head is stored.
+  - **One writer per session is assumed** (one tab per expedition), as for saves.
+  - **On a full quota,** the store first collects this session's unnamed keys. Then the recorder rotates its oldest chunk, the store folds that key in place, and the save retries. If nothing fits, the save fails, the app says so once, and every note stays in memory for export.
+  - **Restore numbering:** `resumeRecorder` from an export numbers summaries first, then the re-chunked events, with `nextChunk` beyond all of them. A commit refuses colliding or missing chunk numbers, loudly, instead of writing them.
+  - **Unreleased formats:** the R1-era keys (`siltwake.timeline.v2`, `siltwake.timeline.v2.<session>.<n>`) only ever existed in branch builds. They are not migrated or collected.
 - **Bridge:** the v1 single-key timeline migrates at the first save, and the v1 key stays until a v2 head is stored. v1 export files still parse.
 - **Spans:** exports and saves close the open travel and idle spans with `closingEvents`, the same pure helper the recorder uses to close them. They never seal or rotate the live history. That was the cause of R1 F1.
 
@@ -84,6 +91,7 @@ Every other identity-keyed cache is keyed by content.
     ```
 
     Whichever of SIM-1 and REC-1 merges second wires it.
+  - **Cursor initialisation (R2 C1):** the cursor comes from `seq` at every entry into an expedition and at every replacement of the timeline (a load, a new game, an import): `cursor = timeline?.seq ?? 0`. An old cursor is never carried across sessions; `seq` is monotonic only within one session's history. REC-1's `570c63bc` satisfies this. Its `timelineHead(t)` is `timelineSince(t, MAX_SAFE_INTEGER).cursor`, which equals `seq`, and it is set at `entered()` and when a recording starts mid-session. Its reads go through the same seam. REC-1 is adding tests for re-entry past a seal and for replacement by a shorter session.
 
 ## Evidence
 
@@ -175,7 +183,7 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
 
 **R1 (Sol 6.1 xhigh, `docs/build/reviews/SIM-1-SOL-XHIGH-R1.md` on `review/sim-1-r1`):**
 - **F1 (P1), fixed at the root:** the export closed spans on a copy, which could seal and rotate, and the store then sliced that copy by the live partition. Exports and the store now take the live partition as it stands, plus `closingEvents`, the one shared helper. No copy remains and nothing seals behind the writer's back. The regression covers 998 and 999 open events at the full 20-chunk window, closing idle, travel and both. Every note comes back exactly once, the analysis totals match, and the live partition is unchanged.
-- **F2 (P1), fixed at the root:** the store was redesigned as a commit protocol (above). Nothing a committed head names is ever deleted before a replacement head is stored. A rotated chunk is folded in place, which shrinks it, so compaction needs no free space. Regressions:
+- **F2 (P1), fixed at the root:** the store was redesigned as a commit protocol (above). Nothing a committed head names is ever deleted before a replacement head is stored. A rotated chunk is folded in place, which usually shrinks it, so compaction usually needs no free space (R2 corrected an overstatement here). Regressions:
   - exhaustive fault injection at every write of a save that seals chunks: one failing write and all later writes failing, with both a quota error and a non-quota error;
   - the review's quota-plus-100 case;
   - a failed v1 migration.
@@ -187,6 +195,18 @@ Each throw lands after `tick++` and movement have already mutated the state. Eve
   - bursts of 700 crossing seals;
   - a reload, including an idle span that closes into the stored timeline;
   - a lagging reader's `missed` count.
+
+**R2 (Sol 6.1 xhigh, `docs/build/reviews/SIM-1-SOL-XHIGH-R2.md` on `review/sim-1-r2`).** The common cause: the store trusted in-memory bookkeeping about durable storage. That whole class is gone. The store now holds no state between saves; it reads the durable head at each save and enumerates its owned prefix (store design, above).
+- **F1 (P1):** with no remembered `onDisk`/`committed`/`superseded`, a load or another instance can't leave stale facts behind. Regressions:
+  - one store: A then B, and A then C then A with no C save, with a failing write and its retry;
+  - two store instances alternating sessions over four rounds, each loading the other's session in turn.
+- **F2 (P2):** one collision-free restore numbering, plus a commit that refuses collisions. Regression: 23,000 notes, a rotated export, then parse, resume, save and load, then 1,500 more and save again. Numbers stay unique and every note comes back once.
+- **F3 (P2):** everything is discoverable by prefix, and a provisional head makes a session's keys ageable from its first write. Regressions:
+  - a restart after **every** storage step (writes and removals) of a save that writes two chunks, folds one and collects. Each restart reloads every committed note once; the resumed game then saves, reloads whole and leaves no orphan;
+  - four sessions that crash at their head write. They are kept inside the stale window (they may be another tab). Past it, on a quota of usage plus 100, a later session's 1,000-event save reclaims them and succeeds.
+- **C1 (P2):** the initialisation rule, above.
+- **The "every fold shrinks" claim** is corrected in the store design above.
+- **Every successful save in these tests** is checked by a fresh store that reloads every note exactly once, with matching analysis totals (new things, gathering, notes, deaths, travel, idle), unique chunk numbers and no orphaned keys.
 
 **Performance conventions** (`t3/stew-1-guard-rails` DIRECTION):
 - **#1:** the recorder's per-step stock copy uses a reused buffer, and `timelineSince` copies only the new events.

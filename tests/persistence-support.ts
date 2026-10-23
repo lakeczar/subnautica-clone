@@ -38,6 +38,8 @@ export class MemoryStorage implements StoragePort {
     this.data.set(key, value);
   }
   removeItem(key: string): void { this.data.delete(key); }
+  get length(): number { return this.data.size; }
+  key(index: number): string | null { return [...this.data.keys()][index] ?? null; }
 }
 /** A shared exclusion fixture, not a production fallback. Gate lets tests queue
  * real repository/session operations without timers or scheduler assumptions. */

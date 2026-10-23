@@ -100,13 +100,19 @@ export function createRecorder(session: { id: string; started: string; build?: s
 export function resumeRecorder(t: TimelineExport, options: RecorderOptions = {},
   stored?: { sealed: { n: number; events: TimelineEvent[] }[]; nextChunk: number }): TimelineRecorder {
   const rec = createRecorder({ id: t.session.id, started: t.session.started, ...(t.session.build ? { build: t.session.build } : {}) }, options);
+  const summaries = (t.rotated ?? []).map((r) => structuredClone(r));
   if (stored) {
     rec.sealed = stored.sealed.map((c) => ({ n: c.n, events: [...c.events] }));
     rec.events = [...t.events];
-    rec.nextChunk = stored.nextChunk;
-  } else for (const e of t.events) push(rec, e);
-  // Summaries carry on as they are, ahead of any this re-chunking rotated.
-  rec.rotated.unshift(...(t.rotated ?? []).map((r) => structuredClone(r)));
+    rec.nextChunk = Math.max(stored.nextChunk, ...summaries.map((r) => (r.n ?? -1) + 1), ...stored.sealed.map((c) => c.n + 1));
+  } else {
+    // One numbering (SIM-1 R2): the summaries first, in order, then the chunks re-chunked from the events.
+    summaries.forEach((r, i) => { r.n = i; });
+    rec.nextChunk = summaries.length;
+    for (const e of t.events) push(rec, e);
+  }
+  // Summaries come ahead of any that re-chunking rotated.
+  rec.rotated.unshift(...summaries);
   const kept = retainedEvents(rec);
   rec.seq = t.seq ?? rec.rotated.reduce((n, r) => n + Object.values(r.kinds).reduce((a, b) => a + b, 0), 0) + kept.length;
   rec.dropped = t.dropped;
