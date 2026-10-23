@@ -105,6 +105,8 @@ export interface FrameParts {
 }
 export interface RendererStats {
   meshes: number; triangles: number; vertices: number; draws: number; materials: number; textures: number; geometries: number;
+  /** Meshes drawn in the last frame (enabled, visible, in view). */
+  active: number;
   /** The streamed world's own byte accounting (an estimate; browsers expose no VRAM figure). */
   residentCpu: number; residentGpu: number; regionBytes: number;
   regions: string[]; cave: string | null; settling: boolean; ready: boolean;
@@ -418,7 +420,7 @@ export function createRenderer(
       stats() {
         const ks = caveWorld.kitCaves.stats;
         return {
-          meshes: scene.meshes.length,
+          meshes: scene.meshes.length, active: scene.getActiveMeshes().length,
           triangles: scene.meshes.reduce((n, m) => n + m.getTotalIndices() / 3, 0),
           vertices: scene.meshes.reduce((n, m) => n + m.getTotalVertices(), 0),
           draws: instrumentation.drawCallsCounter.current, materials: scene.materials.length,

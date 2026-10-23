@@ -28,7 +28,7 @@ const views = set.views.filter((v) => !only || only.has(v.id));
 const [width, height] = (set.defaults?.size ?? "1280x720").split("x").map(Number);
 mkdirSync(path.join(out, "views"), { recursive: true });
 const started = Date.now(), log = (...a) => console.log(`[${((Date.now() - started) / 1000).toFixed(0)}s] ${a.join(" ")}`);
-const SETTLE_MS = set.defaults?.settleMs ?? 1500, TIMEOUT_MS = 25000;
+const SETTLE_MS = set.defaults?.settleMs ?? 1500, TIMEOUT_MS = 25000, STABLE_MS = 500, STABLE_TRIES = 12;
 
 const server = await serve(dist, Number(arg("port", 0)));
 const b = await launch({ chrome: arg("chrome"), pw: arg("pw"), label: "rec1-views", width, height });
@@ -53,7 +53,7 @@ try {
         const r = window.__siltwake.read(), sc = window.__siltwake.scene();
         return { ready: r?.ready, settling: r?.settling, hold: r?.hold, feet: r?.feet, pending: sc?.caveStream.pending, lightsPending: sc?.lights?.pending,
           // Everything streaming or time-sliced work changes; settled when none of it moves.
-          scene: sc && JSON.stringify([sc.meshes, sc.triangles, sc.geometries, sc.textures, sc.regions, sc.cave, sc.caveStream, sc.lights, sc.residentGpu]) };
+          scene: sc && JSON.stringify([sc.meshes, sc.active, sc.triangles, sc.geometries, sc.textures, sc.regions, sc.cave, sc.caveStream, sc.lights, sc.residentGpu]) };
       });
       const calm = s.ready && !s.settling && (s.hold == null || ["clear", "admitted", "away"].includes(s.hold)) && (s.pending ?? 0) <= 0 && (s.lightsPending ?? 0) === 0
         && s.scene === last?.scene;
@@ -66,9 +66,15 @@ try {
     // A hold that outlasted LC-07's 12 s moves the diver to safety: then this is not the view.
     const moved = last?.feet ? Math.hypot(last.feet[0] - v.pos.x, last.feet[1] - v.pos.y, last.feet[2] - v.pos.z) : 0;
     const settled = since !== null && Date.now() - since >= SETTLE_MS && moved < 1;
-    const a = await b.page.evaluate(() => window.__siltwake.capture());
-    await b.page.waitForTimeout(400);
-    const c = await b.page.evaluate(() => window.__siltwake.capture());
+    // Settled for the picture itself: two captures STABLE_MS apart are the same pixels
+    // (content still activating or fading in shows here even when no counter moves).
+    let a = await b.page.evaluate(() => window.__siltwake.capture()), c = null, tries = 0;
+    for (; tries < STABLE_TRIES; tries++) {
+      await b.page.waitForTimeout(STABLE_MS);
+      c = await b.page.evaluate(() => window.__siltwake.capture());
+      if (c === a) break;
+      a = c;
+    }
     const file = `views/${v.id}.png`, png = Buffer.from(a, "base64");
     writeFileSync(path.join(out, file), png);
     // Diagnosis (--keep-pair): the second capture beside the first when they differ.
@@ -76,9 +82,9 @@ try {
     const sha = createHash("sha256").update(png).digest("hex");
     result.views.push({ id: v.id, group: v.group, label: v.label, file, sha256: sha, settled, settleMs: Date.now() - t0, hold: last?.hold ?? null,
       // A frozen view draws the same pixels twice; anything else animates outside the sim clock.
-      stable: a === c, ...(moved >= 1 ? { relocatedM: Math.round(moved * 10) / 10 } : {}), ...(settled ? {} : { unsettled: last }) });
+      stable: a === c, stableAfterMs: tries * STABLE_MS, ...(moved >= 1 ? { relocatedM: Math.round(moved * 10) / 10 } : {}), ...(settled ? {} : { unsettled: last }) });
     log(v.id, settled ? "settled" : `UNSETTLED ${JSON.stringify({ ...last, scene: undefined })}${moved >= 1 ? ` moved ${moved.toFixed(1)} m` : ""}`, `${Date.now() - t0} ms`,
-      a === c ? "stable" : `ANIMATES (${a.length} vs ${c.length} base64 chars)`);
+      a === c ? `stable after ${tries * STABLE_MS} ms` : `ANIMATES (${a.length} vs ${c.length} base64 chars)`);
   }
 } catch (e) {
   result.errors.push(String(e?.stack ?? e).slice(0, 1000));
