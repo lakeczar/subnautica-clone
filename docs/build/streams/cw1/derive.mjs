@@ -20,7 +20,7 @@ const SEGMENTS = segArg === "hops" ? 0 : Number(segArg ?? 8);
 mkdirSync(out, { recursive: true });
 const { CAVE_SOURCES } = await import(B + "src/content/regions/caves.js");
 const { worldFloor } = await import(B + "src/content/regions/worldFloor.js");
-const { gameWorld, hullClearance, sweptHullClearance } = await import(B + "src/sim/world.js");
+const { gameWorld, hullClearance, hullFloor, sweptHullClearance } = await import(B + "src/sim/world.js");
 const { HULL_COLLIDERS } = await import(B + "src/content/registry.js");
 const { decodeSave } = await import(B + "src/save/codec.js");
 const HULL = process.env.CW1_HULL ?? "dart", SAVE = process.env.CW1_SAVE ?? "tour-ready";
@@ -118,7 +118,19 @@ for (let i = 1; i < tour.length; i++) {
 // every link swept, then string-pulled; a blocked cruise point may move to a
 // clear cell within 12 m. What still has no path is reported (the driver
 // would stall there).
-const sweeps = (a, b) => sweptHullClearance(world, [a, b], DART);
+// The game's movement keeps the hull's keel over the highest floor under its
+// whole footprint (hullFloor), which the swept solid test does not model: a
+// leg must also keep a metre over that floor every 2 m along it.
+const KEEL = 1;
+const keelClear = (a, b) => {
+  const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 2));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+    if (p.y < hullFloor(world, p, DART) + KEEL) return false;
+  }
+  return true;
+};
+const sweeps = (a, b) => keelClear(a, b) && sweptHullClearance(world, [a, b], DART);
 // -1.5: awash, as the Dart runs on the surface (its cap is -0.9 m) over the Isles' shallows.
 const CELL = 8, LEVELS = [-1.5, -4, -8, -14, -22, -34, -50, -70, -100, -140, -200, -260, -340, -420, -520, -640, -760].filter(y => y >= DEEPEST);
 function plan(a, b, movableGoal) {
@@ -126,7 +138,7 @@ function plan(a, b, movableGoal) {
   const z0 = Math.max(EDGE.minZ - 30, Math.min(a.z, b.z) - pad), z1 = Math.min(EDGE.maxZ + 30, Math.max(a.z, b.z) + pad);
   const nx = Math.ceil((x1 - x0) / CELL), nz = Math.ceil((z1 - z0) / CELL), nl = LEVELS.length;
   const id = (i, k, l) => (k * nx + i) * nl + l, pos = (n) => { const l = n % nl, c = (n - l) / nl, i = c % nx, k = (c - i) / nx;
-    const x = x0 + (i + 0.5) * CELL, z = z0 + (k + 0.5) * CELL; return { x, z, y: Math.max(worldFloor(x, z) + 3, LEVELS[l]) }; };
+    const x = x0 + (i + 0.5) * CELL, z = z0 + (k + 0.5) * CELL, q = { x, z, y: 0 }; q.y = Math.max(hullFloor(world, { x, y: 0, z }, DART) + KEEL + 1.5, LEVELS[l]); return q; };
   const clear = new Map(), isClear = (n) => { let c = clear.get(n); if (c === undefined) { const p = pos(n); c = p.y <= -1.4 && hullClearance(world, p, DART); clear.set(n, c); } return c; };
   const cellOf = (p) => ({ i: Math.max(0, Math.min(nx - 1, Math.floor((p.x - x0) / CELL))), k: Math.max(0, Math.min(nz - 1, Math.floor((p.z - z0) / CELL))) });
   const near = (p) => { const { i, k } = cellOf(p), out = [];
@@ -171,6 +183,7 @@ function repair(points) {
 for (let i = 1; i < points.length; i++) {
   const a = points[i - 1], b = points[i];
   if (hullClearance(world, b, DART) && sweeps(a, b)) continue;
+  // The craft's own start (its berth) is where the game put it: legs from it are planned like any other.
   const movable = !!b.cruise;
   const via = plan(a, b, movable);
   // A cruise corner no path reaches (on land) is only a waypoint: drop it and plan to the next point.
