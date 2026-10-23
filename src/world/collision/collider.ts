@@ -1,14 +1,16 @@
 import type { Aabb, Vec3 } from "../types.js";
 import {
+  boxOverlapsTriangle, boxTriangleSeparation, segmentTriangle,
   boxBoxSeparation, createHit, createSeparation, mergeHit, segmentBox, sweepBoxBox, type Separation, type SweepHit,
 } from "./boxTriangle.js";
 import { buildBvh, isLeaf, leafCount, leafFirst } from "./bvh.js";
 import {
-  deepestHeightfieldContact, overlapsHeightfield, segmentClearHeightfield, supportHeightfield, sweepHeightfield,
+  deepestHeightfieldContact, heightfieldPushes, overlapsHeightfield, segmentClearHeightfield, supportHeightfield, sweepHeightfield,
   type StaticHeightfield,
 } from "./heightfield.js";
 import {
-  crossesShape, crossingsAbove, deepestShapeContact, insideShape, nearestSurface, segmentClearShape, supportShape, sweepShape,
+  candidate, candidates, crossesShape, crossingsAbove, deepestShapeContact, insideShape, nearestSurface, partsAt,
+  segmentClearShape, supportShape, sweepShape, triangleNormal, triangleVertex,
   type StaticShape,
 } from "./shape.js";
 
@@ -111,6 +113,15 @@ export interface StaticCollider {
   /** Triangle surfaces the vertical segment from (x, y, z) up to `top` crosses,
    * over every shape (for owners with their own interior rule: a biome's cap). */
   crossings(x: number, y: number, z: number, top: number): number;
+  // Recovery's parts (`depenetrate`), for worlds that compose this collider.
+  /** `sweep`, ignoring only the triangles of the `exempt` parts. */
+  sweepExcept(c: Vec3, e: Vec3, d: Vec3, skin: number, out: SweepHit, exempt?: readonly PartRef[]): boolean;
+  /** The closed parts whose interior holds p (watertight parity, per part and per split group). */
+  containing(p: Vec3): PartRef[];
+  /** Escape candidates (see `DepenetrationQueries.candidates`). */
+  escapeCandidates(c: Vec3, e: Vec3, inside: readonly PartRef[], reach: number, push: (x: number, y: number, z: number, distance: number) => void): void;
+  /** First parameter in (0, 1] where segment a -> b crosses the part's surface, or Infinity. */
+  leaves(part: PartRef, a: Vec3, b: Vec3): number;
   readonly triangles: number;
   readonly boxCount: number;
   readonly samples: number;
@@ -155,22 +166,29 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
   };
   // No query gathers again while it walks `near`, so it is reused.
 
-  function sweep(c: Vec3, e: Vec3, d: Vec3, skin: number, out: SweepHit): boolean {
-    const r = skin + 0.02;
-    const ms = gather(c.x - e.x + Math.min(0, d.x) - r, c.y - e.y + Math.min(0, d.y) - r, c.z - e.z + Math.min(0, d.z) - r,
-      c.x + e.x + Math.max(0, d.x) + r, c.y + e.y + Math.max(0, d.y) + r, c.z + e.z + Math.max(0, d.z) + r);
+  /** One member's earliest contact, into `hit` (triangles `skip` rejects left out). */
+  function sweepMember(m: StaticMember, c: Vec3, e: Vec3, d: Vec3, skin: number, skip?: (t: number) => boolean): boolean {
+    if (m.kind === "shape") return sweepShape(m, c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, skin, hit, skip);
+    if (m.kind === "heightfield") return sweepHeightfield(m, c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, skin, hit);
+    const r = skin + 0.02, one = createHit();
     let found = false;
-    const take = (): void => { found = mergeHit(hit, out, found, d.x, d.y, d.z); };
-    for (const m of ms) {
-      if (m.kind === "shape") { if (sweepShape(m, c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, skin, hit)) take(); }
-      else if (m.kind === "heightfield") { if (sweepHeightfield(m, c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, skin, hit)) take(); }
-      else forBoxes(m, c.x - e.x + Math.min(0, d.x) - r, c.y - e.y + Math.min(0, d.y) - r, c.z - e.z + Math.min(0, d.z) - r,
-        c.x + e.x + Math.max(0, d.x) + r, c.y + e.y + Math.max(0, d.y) + r, c.z + e.z + Math.max(0, d.z) + r, i => {
-          const B = m.boxes, o = i * 6;
-          if (sweepBoxBox(c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, B[o]!, B[o + 1]!, B[o + 2]!, B[o + 3]!, B[o + 4]!, B[o + 5]!, skin, hit)) take();
-          return false;
-        });
-    }
+    forBoxes(m, c.x - e.x + Math.min(0, d.x) - r, c.y - e.y + Math.min(0, d.y) - r, c.z - e.z + Math.min(0, d.z) - r,
+      c.x + e.x + Math.max(0, d.x) + r, c.y + e.y + Math.max(0, d.y) + r, c.z + e.z + Math.max(0, d.z) + r, i => {
+        const B = m.boxes, o = i * 6;
+        if (sweepBoxBox(c.x, c.y, c.z, e.x, e.y, e.z, d.x, d.y, d.z, B[o]!, B[o + 1]!, B[o + 2]!, B[o + 3]!, B[o + 4]!, B[o + 5]!, skin, one))
+          found = mergeHit(one, hit, found, d.x, d.y, d.z);
+        return false;
+      });
+    return found;
+  }
+  const sweptGather = (c: Vec3, e: Vec3, d: Vec3, skin: number): StaticMember[] => {
+    const r = skin + 0.02;
+    return gather(c.x - e.x + Math.min(0, d.x) - r, c.y - e.y + Math.min(0, d.y) - r, c.z - e.z + Math.min(0, d.z) - r,
+      c.x + e.x + Math.max(0, d.x) + r, c.y + e.y + Math.max(0, d.y) + r, c.z + e.z + Math.max(0, d.z) + r);
+  };
+  function sweep(c: Vec3, e: Vec3, d: Vec3, skin: number, out: SweepHit): boolean {
+    let found = false;
+    for (const m of sweptGather(c, e, d, skin)) if (sweepMember(m, c, e, d, skin)) found = mergeHit(hit, out, found, d.x, d.y, d.z);
     return found;
   }
 
@@ -240,7 +258,8 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
     touches: (minX, minY, minZ, maxX, maxY, maxZ) => gather(minX, minY, minZ, maxX, maxY, maxZ).length > 0,
     sweep, overlaps, support, segmentClear,
     move: (c, e, d, skin = SKIN) => slideMove((cc, rem, out) => sweep(cc, e, rem, skin, out), c, d),
-    depenetrate: (c, e, maxDistance) => depenetrate({ sweep, blocked: (p, x) => overlaps(p, x), deepest, inside: p => solidAt(p), surfaceNear }, c, e, maxDistance),
+    depenetrate: (c, e, maxDistance) => depenetrate({ sweep: sweepExcept, blocked: (p, x) => overlaps(p, x), containing, candidates: escapeCandidates, leaves }, c, e, maxDistance),
+    sweepExcept, containing, escapeCandidates, leaves,
     contact: (c, e, tolerance) => deepest(c, e, tolerance),
     solidAt: p => hasSolids ? solidAt(p) : null,
     surfaceNear: (solid, p, reach) => surfaceNear(solid, p, reach),
@@ -280,7 +299,111 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
     }
     return best;
   }
+
+  /** `sweep` with the triangles of the exempt parts left out. */
+  function sweepExcept(c: Vec3, e: Vec3, d: Vec3, skin: number, out: SweepHit, exempt: readonly PartRef[] = []): boolean {
+    if (!exempt.length) return sweep(c, e, d, skin, out);
+    let found = false;
+    for (const m of sweptGather(c, e, d, skin).slice()) {
+      const refs = m.kind === "shape" ? exempt.filter(x => x.shapes.includes(m)) : [];
+      if (refs.some(x => x.part === null)) continue;
+      const skip = refs.length && m.kind === "shape" ? ((parts, set) => (t: number) => set.has(parts ? parts[t]! : 0))(m.parts, new Set(refs.map(x => x.part!))) : undefined;
+      if (sweepMember(m, c, e, d, skin, skip)) found = mergeHit(hit, out, found, d.x, d.y, d.z);
+    }
+    return found;
+  }
+
+  /** Closed parts holding p: per part of standalone solid shapes, per group for split meshes. */
+  function containing(p: Vec3): PartRef[] {
+    if (!hasSolids) return [];
+    const out: PartRef[] = [], done = new Set<string>(), parts: number[] = [];
+    for (const m of gather(p.x, p.y, p.z, p.x, 1e6, p.z).slice()) {
+      if (m.kind !== "shape" || m.interior !== "solid") continue;
+      if (m.group === null) {
+        for (const k of partsAt(m, p.x, p.y, p.z, parts)) out.push({ key: `${m.id}#${k}`, shapes: [m], part: m.parts ? k : null });
+        continue;
+      }
+      if (done.has(m.group)) continue;
+      done.add(m.group);
+      const g = groups.get(m.group)!;
+      let n = 0;
+      for (const s of g) n += crossingsAbove(s, p.x, p.y, p.z, s.bounds.max.y + 1);
+      if (n % 2 === 1) out.push({ key: `group:${m.group}`, shapes: g, part: null });
+    }
+    return out;
+  }
+
+  const N3 = { x: 0, y: 0, z: 0 };
+  const supportOf = (e: Vec3, n: Vec3): number => e.x * Math.abs(n.x) + e.y * Math.abs(n.y) + e.z * Math.abs(n.z);
+  function escapeCandidates(c: Vec3, e: Vec3, inside: readonly PartRef[], reach: number,
+    push: (x: number, y: number, z: number, distance: number) => void): void {
+    const along = (n: Vec3, d: number): void => push(c.x + n.x * d, c.y + n.y * d, c.z + n.z * d, d);
+    // Exits through each face of the parts holding the centre: past the
+    // face's plane by the box's reach along its outward normal.
+    const ext = Math.max(e.x, e.y, e.z);
+    for (const ref of inside) for (const s of ref.shapes) {
+      const n = candidates(s, c.x - reach - ext, c.y - reach - ext, c.z - reach - ext, c.x + reach + ext, c.y + reach + ext, c.z + reach + ext);
+      const ts = Array.from({ length: n }, (_, i) => candidate(i));
+      for (const t of ts) {
+        if (ref.part !== null && s.parts && s.parts[t] !== ref.part) continue;
+        if (!triangleNormal(s, t, N3)) continue;
+        const v = triangleVertex(s, t), P = s.positions;
+        const plane = N3.x * (P[v]! - c.x) + N3.y * (P[v + 1]! - c.y) + N3.z * (P[v + 2]! - c.z);
+        if (plane >= 0) along(N3, plane + supportOf(e, N3) + SKIN);
+      }
+    }
+    // Push-outs from what the box overlaps.
+    for (const m of gather(c.x - e.x, c.y - e.y, c.z - e.z, c.x + e.x, c.y + e.y, c.z + e.z).slice()) {
+      if (m.kind === "heightfield") { heightfieldPushes(m, c.x, c.y, c.z, e.x, e.y, e.z, SKIN, push); continue; }
+      if (m.kind === "boxes") {
+        forBoxes(m, c.x - e.x, c.y - e.y, c.z - e.z, c.x + e.x, c.y + e.y, c.z + e.z, i => {
+          const B = m.boxes, o = i * 6;
+          boxPushes(c, e, B[o]!, B[o + 1]!, B[o + 2]!, B[o + 3]!, B[o + 4]!, B[o + 5]!, push);
+          return false;
+        });
+        continue;
+      }
+      const n = candidates(m, c.x - e.x, c.y - e.y, c.z - e.z, c.x + e.x, c.y + e.y, c.z + e.z);
+      const ts = Array.from({ length: n }, (_, i) => candidate(i)), P = m.positions;
+      for (const t of ts) {
+        const a = m.indices[t * 3]! * 3, b = m.indices[t * 3 + 1]! * 3, d = m.indices[t * 3 + 2]! * 3;
+        if (!boxOverlapsTriangle(c.x, c.y, c.z, e.x, e.y, e.z, P, a, b, d, OVERLAP_TOLERANCE)) continue;
+        // Its best separating axis, and clear of its plane (out of a
+        // solid; either way for skin).
+        boxTriangleSeparation(c.x, c.y, c.z, e.x, e.y, e.z, P, a, b, d, sep);
+        along({ x: sep.nx, y: sep.ny, z: sep.nz }, -sep.s + SKIN);
+        if (!triangleNormal(m, t, N3)) continue;
+        const plane = N3.x * (P[a]! - c.x) + N3.y * (P[a + 1]! - c.y) + N3.z * (P[a + 2]! - c.z), sup = supportOf(e, N3) + SKIN;
+        along(N3, plane + sup);
+        if (m.facing === 0) along({ x: -N3.x, y: -N3.y, z: -N3.z }, -plane + sup);
+      }
+    }
+  }
+
+  function leaves(part: PartRef, a: Vec3, b: Vec3): number {
+    let best = Infinity;
+    const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+    for (const s of part.shapes) {
+      const n = candidates(s, Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.y, b.y), Math.max(a.z, b.z));
+      for (let i = 0; i < n; i++) {
+        const t = candidate(i);
+        if (part.part !== null && s.parts && s.parts[t] !== part.part) continue;
+        const u = segmentTriangle(a.x, a.y, a.z, dx, dy, dz, s.positions, s.indices[t * 3]! * 3, s.indices[t * 3 + 1]! * 3, s.indices[t * 3 + 2]! * 3);
+        if (u > 0 && u < best) best = u;
+      }
+    }
+    return best;
+  }
   return collider;
+}
+
+/** The six push-outs of a box (centre c, half extents e) from a box obstacle. */
+export function boxPushes(c: Vec3, e: Vec3, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number,
+  push: (x: number, y: number, z: number, distance: number) => void): void {
+  const s = SKIN;
+  push(x0 - e.x - s, c.y, c.z, c.x - (x0 - e.x - s)); push(x1 + e.x + s, c.y, c.z, x1 + e.x + s - c.x);
+  push(c.x, y0 - e.y - s, c.z, c.y - (y0 - e.y - s)); push(c.x, y1 + e.y + s, c.z, y1 + e.y + s - c.y);
+  push(c.x, c.y, z0 - e.z - s, c.z - (z0 - e.z - s)); push(c.x, c.y, z1 + e.z + s, z1 + e.z + s - c.z);
 }
 
 // --- Slides --------------------------------------------------------------------------
@@ -334,13 +457,24 @@ export function slideMove(sweep: (c: Vec3, d: Vec3, out: SweepHit) => boolean, c
 
 // --- Depenetration (ART-07) -----------------------------------------------------------
 
+/** One closed part of the collider: the triangles of part `part` of the
+ * shapes (every triangle when `part` is null: a single-part shape, or a
+ * closed mesh split into a group). */
+export interface PartRef { readonly key: string; readonly shapes: readonly StaticShape[]; readonly part: number | null }
+
 export interface DepenetrationQueries {
-  sweep(c: Vec3, e: Vec3, d: Vec3, skin: number, out: SweepHit): boolean;
+  /** Earliest contact, ignoring only the triangles of the `exempt` parts. */
+  sweep(c: Vec3, e: Vec3, d: Vec3, skin: number, out: SweepHit, exempt?: readonly PartRef[]): boolean;
   /** Whether a box at this centre is not an acceptable pose. */
   blocked(c: Vec3, e: Vec3): boolean;
-  deepest(c: Vec3, e: Vec3, tolerance: number): Separation | null;
-  inside(p: Vec3): StaticShape | null;
-  surfaceNear(solid: StaticShape, p: Vec3, reach: number): { point: Vec3; distance: number } | null;
+  /** The closed parts whose interior holds p. */
+  containing(p: Vec3): PartRef[];
+  /** Candidate centres within `reach` of c: the exits through each face of
+   * the `inside` parts, and push-outs from every surface, box and wall the
+   * box overlaps. `push(x, y, z, distance)` each. */
+  candidates(c: Vec3, e: Vec3, inside: readonly PartRef[], reach: number, push: (x: number, y: number, z: number, distance: number) => void): void;
+  /** The first parameter in (0, 1] at which segment a -> b crosses the part's surface, or Infinity. */
+  leaves(part: PartRef, a: Vec3, b: Vec3): number;
 }
 const DIRECTIONS: readonly Vec3[] = (() => {
   const out: Vec3[] = [];
@@ -353,49 +487,48 @@ const DIRECTIONS: readonly Vec3[] = (() => {
   return out.sort((a, b) => b.y - a.y);
 })();
 
-/** The nearest centre within `maxDistance` that is clear and reachable from
- * c by **continuous escape**: a sweep from c to it that never closes on a
- * contact (the box may leave what it overlaps, never pass through anything
- * else). Candidates are the deepest contact's push-out, then 26 directions
- * at growing radii. A centre inside a closed solid first leaves along the
- * shortest way to its surface, inside the solid, and that distance counts.
- * Returns null when nothing qualifies: the caller rescues instead (a save
- * pose deep in new rock, a box wedged between walls). Never a teleport. */
+/** The shortest **validated** escape within `maxDistance`: a centre where
+ * the box is a legal pose, reached from c by **continuous escape**.
+ * - **Candidates**, tried shortest first: the exit through each face of every
+ *   closed part holding the centre (the face plane's distance plus the box's
+ *   reach along its normal: exact for leaving a convex part through a face),
+ *   push-outs from every overlapped surface, box and heightfield wall, and 26
+ *   directions at growing radii.
+ * - **Validation.** The endpoint must be a legal pose. The way there is swept:
+ *   while the centre is still inside the parts that held it, against
+ *   everything except those parts; from where it leaves them, against
+ *   everything. A contact the box starts in may only separate (sweeps block
+ *   closing start contacts), and nothing else may be met on the way. So the
+ *   box leaves what it was caught in and never passes through anything else.
+ *
+ * Best-effort, not a proof of the nearest pose: a shorter escape off every
+ * candidate is not found. Returns null when no candidate validates: the
+ * caller rescues (a save pose deep in new rock, a box wedged between walls).
+ * Never a teleport. */
 export function depenetrate(q: DepenetrationQueries, c: Vec3, e: Vec3, maxDistance: number): Depenetration | null {
   if (!q.blocked(c, e)) return { ...c, distance: 0 };
-  let from = { ...c }, spent = 0;
-  const solid = q.inside(c);
-  if (solid) {
-    const ext = Math.max(e.x, e.y, e.z);
-    const near = q.surfaceNear(solid, c, maxDistance + ext);
-    if (!near || near.distance < 1e-9) return null;
-    const ux = (near.point.x - c.x) / near.distance, uy = (near.point.y - c.y) / near.distance, uz = (near.point.z - c.z) / near.distance;
-    // Past the surface by the box's reach along that way, plus a skin.
-    const reach = e.x * Math.abs(ux) + e.y * Math.abs(uy) + e.z * Math.abs(uz) + SKIN;
-    from = { x: near.point.x + ux * reach, y: near.point.y + uy * reach, z: near.point.z + uz * reach };
-    spent = near.distance + reach;
-    if (spent > maxDistance) return null;
-    if (!q.blocked(from, e) && !q.inside(from)) return { ...from, distance: spent };
-  }
-  const hit = createHit();
-  const ok = (p: Vec3): boolean => !q.blocked(p, e) && !q.inside(p) &&
-    !q.sweep(from, e, { x: p.x - from.x, y: p.y - from.y, z: p.z - from.z }, 0, hit);
-  const left = maxDistance - spent;
-  // The deepest contact's own push-out, then rings of directions.
-  const deep = q.deepest(from, e, OVERLAP_TOLERANCE);
-  if (deep) {
-    for (const extra of [SKIN, 4 * SKIN, 0.05]) {
-      const k = -deep.s + extra;
-      if (k > left) break;
-      const p = { x: from.x + deep.nx * k, y: from.y + deep.ny * k, z: from.z + deep.nz * k };
-      if (ok(p)) return { ...p, distance: spent + k };
-    }
-  }
-  for (let r = 0.02; r <= left + 1e-9; r = r < 0.2 ? r + 0.02 : r * 1.25) {
-    for (const u of DIRECTIONS) {
-      const p = { x: from.x + u.x * r, y: from.y + u.y * r, z: from.z + u.z * r };
-      if (ok(p)) return { ...p, distance: spent + r };
-    }
-  }
+  const inside = q.containing(c), hit = createHit();
+  const legal = (p: Vec3): boolean => {
+    if (q.blocked(p, e)) return false;
+    if (!inside.length) return !q.sweep(c, e, { x: p.x - c.x, y: p.y - c.y, z: p.z - c.z }, 0, hit);
+    // Where the centre has left every part that held it.
+    let t = 0;
+    for (const part of inside) { const u = q.leaves(part, c, p); if (!(u <= 1)) return false; t = Math.max(t, u); }
+    const m = { x: c.x + (p.x - c.x) * t, y: c.y + (p.y - c.y) * t, z: c.z + (p.z - c.z) * t };
+    return !q.sweep(c, e, { x: m.x - c.x, y: m.y - c.y, z: m.z - c.z }, 0, hit, inside) &&
+      !q.sweep(m, e, { x: p.x - m.x, y: p.y - m.y, z: p.z - m.z }, 0, hit);
+  };
+  const found: { x: number; y: number; z: number; distance: number }[] = [], seen = new Set<string>();
+  const push = (x: number, y: number, z: number, distance: number): void => {
+    if (!(distance > 0 && distance <= maxDistance)) return;
+    const key = `${Math.round(x * 1e4)},${Math.round(y * 1e4)},${Math.round(z * 1e4)}`;
+    if (!seen.has(key)) { seen.add(key); found.push({ x, y, z, distance }); }
+  };
+  q.candidates(c, e, inside, maxDistance, push);
+  for (let r = 0.02; r <= maxDistance + 1e-9; r = r < 0.2 ? r + 0.02 : r * 1.25)
+    for (const u of DIRECTIONS) push(c.x + u.x * r, c.y + u.y * r, c.z + u.z * r, r);
+  // Shortest first; the sort is stable, so ties keep candidates' order.
+  found.sort((a, b) => a.distance - b.distance);
+  for (const p of found) if (legal(p)) return { x: p.x, y: p.y, z: p.z, distance: p.distance };
   return null;
 }

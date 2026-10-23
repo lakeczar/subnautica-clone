@@ -4,8 +4,8 @@ import type { CaveCollider } from "../caves/large/compose.js";
 import type { Aabb, Rect } from "../types.js";
 import { createSpatialIndex } from "../spatialIndex.js";
 import { solidEntries } from "../queries.js";
-import { boxBoxSeparation, createHit, createSeparation, mergeHit, sweepBoxBox, type Separation, type SweepHit } from "./boxTriangle.js";
-import { depenetrate, OVERLAP_TOLERANCE, SKIN, slideMove, type Depenetration, type StaticCollider } from "./collider.js";
+import { createHit, mergeHit, sweepBoxBox, type SweepHit } from "./boxTriangle.js";
+import { boxPushes, depenetrate, OVERLAP_TOLERANCE, SKIN, slideMove, type Depenetration, type StaticCollider } from "./collider.js";
 
 /** Static colliders in the world's query interface (COL-1 stage A; the
  * coordinator wires them in stage B). Two seams:
@@ -66,12 +66,20 @@ export interface StaticWorldOptions {
   /** That world's solids, swept as boxes beside the collider. */
   readonly solids: readonly Solid[];
   readonly collider: StaticCollider;
-  /** Horizontal bounds static moves clamp to (the exterior's own clamp). */
-  readonly bounds?: { readonly minX: number; readonly maxX: number; readonly minZ: number; readonly maxZ: number };
+  /** The exterior's own movement bounds, which a static move keeps exactly
+   * as the exterior does: X/Z the centre's (`WORLD_BOUNDS`), Y the pose
+   * datum's (`WORLD_VERTICAL_BOUNDS`). An ordinary move clamps its end and
+   * reports `hitBoundary`; `separateBoxOverlaps` clips the requested travel
+   * before sweeping (the shape's box kept inside) and never clamps an end. */
+  readonly bounds?: StaticBounds;
   /** Regions the collider must keep clear of: where the exterior world's
    * own guards live (the legacy preserve's terrain columns, bench walls and
    * capsule ribs), which a static move sweeps as plain boxes. Throws. */
   readonly guards?: readonly Rect[];
+}
+export interface StaticBounds {
+  readonly minX: number; readonly maxX: number; readonly minZ: number; readonly maxZ: number;
+  readonly minY?: number; readonly maxY?: number;
 }
 export interface StaticWorld extends WorldQueries {
   /** The nearest clear pose reachable by continuous escape within
@@ -113,12 +121,30 @@ export function composeStaticWorld(options: StaticWorldOptions): StaticWorld {
       found = mergeHit(hit, out, found, d.x, d.y, d.z);
     return found;
   };
+  const B = options.bounds;
+  /** The exterior's end clamp (centre X/Z, datum Y). */
   const clamp = (p: Vec3): { p: Vec3; clipped: boolean } => {
-    const b = options.bounds;
-    if (!b) return { p, clipped: false };
-    const x = Math.max(b.minX, Math.min(b.maxX, p.x)), z = Math.max(b.minZ, Math.min(b.maxZ, p.z));
-    return { p: { x, y: p.y, z }, clipped: x !== p.x || z !== p.z };
+    if (!B) return { p, clipped: false };
+    const x = Math.max(B.minX, Math.min(B.maxX, p.x)), z = Math.max(B.minZ, Math.min(B.maxZ, p.z));
+    const y = Math.max(B.minY ?? -Infinity, Math.min(B.maxY ?? Infinity, p.y));
+    return { p: { x, y, z }, clipped: x !== p.x || y !== p.y || z !== p.z };
   };
+  /** `separateBoxOverlaps`: the exterior's clip of requested travel, so the
+   * shape's box stays inside the bounds (a pose already outside may move inward). */
+  const clipTravel = (o: Vec3, d: Vec3, s: Capsule): { d: Vec3; clipped: boolean } => {
+    if (!B) return { d, clipped: false };
+    const hx = s.halfWidth ?? s.radius, hz = s.halfLength ?? s.radius, bottom = s.bottom ?? 0;
+    const lim = { x: [B.minX + hx, B.maxX - hx], y: [(B.minY ?? -Infinity) - bottom, (B.maxY ?? Infinity) - s.height], z: [B.minZ + hz, B.maxZ - hz] } as const;
+    const out = { ...d };
+    let clipped = false;
+    for (const a of ["x", "y", "z"] as const) {
+      const next = Math.max(Math.min(o[a], lim[a][0]), Math.min(Math.max(o[a], lim[a][1]), o[a] + d[a])) - o[a];
+      clipped ||= next !== d[a]; out[a] = next;
+    }
+    return { d: out, clipped };
+  };
+  const validShape = (s: Capsule): boolean => [s.radius, s.height, s.bottom ?? 0, s.halfWidth ?? s.radius, s.halfLength ?? s.radius].every(Number.isFinite) &&
+    s.radius >= 0 && (s.halfWidth ?? s.radius) >= 0 && (s.halfLength ?? s.radius) >= 0 && s.height >= (s.bottom ?? 0);
   const world: StaticWorld = {
     counters,
     waterHeight: exterior.waterHeight,
@@ -136,7 +162,8 @@ export function composeStaticWorld(options: StaticWorldOptions): StaticWorld {
       return exterior.lineOfSight(a, b, ignore) && (!finite(a) || !finite(b) || collider.segmentClear(a, b, ignore));
     },
     moveCapsule(origin: Vec3, delta: Vec3, shape: Capsule, opts?: MovementOptions): MoveResult {
-      const env = finite(origin) && finite(delta) ? envelope(origin, delta, shape) : null;
+      // Invalid input keeps the exterior's own answer (it refuses or throws).
+      const env = finite(origin) && finite(delta) && validShape(shape) ? envelope(origin, delta, shape) : null;
       if (!env || !touches(env)) {
         counters.exteriorSweeps++;
         return exterior.moveCapsule(origin, delta, shape, opts);
@@ -155,26 +182,33 @@ export function composeStaticWorld(options: StaticWorldOptions): StaticWorld {
       // further than |delta|, so the envelope bounds them).
       counters.staticSweeps++;
       const { c, e } = boxOf(origin, shape);
+      if (opts?.separateBoxOverlaps) {
+        const travel = clipTravel(origin, delta, shape), r = slideMove(sweepBoth(nearSolids(env), e), c, travel.d);
+        return { position: poseOf(r, shape), hitSolid: r.hit, hitBoundary: travel.clipped };
+      }
       const r = slideMove(sweepBoth(nearSolids(env), e), c, delta), next = clamp(poseOf(r, shape));
       return { position: next.p, hitSolid: r.hit, hitBoundary: next.clipped };
     },
     depenetrate(origin, shape, maxDistance) {
       const { c, e } = boxOf(origin, shape);
-      const sep = createSeparation();
+      // The collider's parts and candidates, plus every exterior solid near
+      // the way out (never exempt), judged by the world's own clearance.
       const r: Depenetration | null = depenetrate({
-        sweep: (cc, ee, dd, skin, out) => sweepBoth(nearSolids(envelope(poseOf(cc, shape), dd, shape)), ee, skin)(cc, dd, out),
-        blocked: cc => !world.clearance(poseOf(cc, shape), shape),
-        deepest(cc, ee, tolerance) {
-          let best: Separation | null = collider.contact(cc, ee, tolerance);
-          const b = { min: { x: cc.x - ee.x, y: cc.y - ee.y, z: cc.z - ee.z }, max: { x: cc.x + ee.x, y: cc.y + ee.y, z: cc.z + ee.z } };
-          for (const s of nearSolids(b)) {
-            boxBoxSeparation(cc.x, cc.y, cc.z, ee.x, ee.y, ee.z, s.min.x, s.min.y, s.min.z, s.max.x, s.max.y, s.max.z, sep);
-            if (sep.s < -tolerance && (!best || sep.s < best.s)) best = { ...sep };
-          }
-          return best;
+        sweep: (cc, ee, dd, skin, out, exempt) => {
+          let found = collider.sweepExcept(cc, ee, dd, skin, out, exempt);
+          for (const sd of nearSolids(envelope(poseOf(cc, shape), dd, shape)))
+            if (sweepBoxBox(cc.x, cc.y, cc.z, ee.x, ee.y, ee.z, dd.x, dd.y, dd.z, sd.min.x, sd.min.y, sd.min.z, sd.max.x, sd.max.y, sd.max.z, skin, hit))
+              found = mergeHit(hit, out, found, dd.x, dd.y, dd.z);
+          return found;
         },
-        inside: p => collider.solidAt(p),
-        surfaceNear: (solid, p, reach) => collider.surfaceNear(solid, p, reach),
+        blocked: cc => !world.clearance(poseOf(cc, shape), shape),
+        containing: p => collider.containing(p),
+        candidates(cc, ee, inside, reach, push) {
+          collider.escapeCandidates(cc, ee, inside, reach, push);
+          for (const sd of nearSolids({ min: { x: cc.x - ee.x, y: cc.y - ee.y, z: cc.z - ee.z }, max: { x: cc.x + ee.x, y: cc.y + ee.y, z: cc.z + ee.z } }))
+            boxPushes(cc, ee, sd.min.x, sd.min.y, sd.min.z, sd.max.x, sd.max.y, sd.max.z, push);
+        },
+        leaves: (part, a, b) => collider.leaves(part, a, b),
       }, c, e, maxDistance);
       return r ? { ...poseOf(r, shape), distance: r.distance } : null;
     },

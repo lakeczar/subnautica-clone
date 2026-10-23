@@ -19,10 +19,18 @@ import {
  *   highest sample, so a box above a tile skips all of its cells. Storage
  *   and cost follow the lattice size: no 3D grid, no per-cell objects.
  *
+ * **A volume, not a sheet.** Below the surface of every solid cell is solid,
+ * so a solid cell's edge that borders a hole or the lattice's edge is a
+ * vertical **wall**, from the surface down to the bounds' bottom. Sweeps
+ * meet the top triangles and the walls one-sided, by the solid's outward
+ * face: from above and from outside. A contact the box starts within blocks
+ * only motion into the solid, so a buried actor may rise or leave through a
+ * wall but never sink deeper. Sight is blocked wherever a segment is under
+ * a solid cell's surface, entered from above or through a wall.
+ *
  * A box with no crossing triangle lies wholly above or wholly below the
  * surface in each cell under it, so a buried box is found by its bottom
- * centre per cell. A sweep that starts buried keeps a contact facing up:
- * it may rise or slide, never sink deeper. */
+ * centre per cell. */
 
 export interface StaticHeightfield {
   readonly kind: "heightfield";
@@ -164,6 +172,37 @@ const cellMin = (h: StaticHeightfield, i: number, k: number): number => {
   return Math.min(H[i + r * k]!, H[i + 1 + r * k]!, H[i + r * (k + 1)]!, H[i + 1 + r * (k + 1)]!);
 };
 
+/** Whether cell (i, k) is solid below its surface: in the lattice, not a hole, every corner sampled. */
+export function solidCell(h: StaticHeightfield, i: number, k: number): boolean {
+  if (i < 0 || k < 0 || i >= h.nx || k >= h.nz || isHole(h, i, k)) return false;
+  const H = h.heights, r = h.nx + 1;
+  return !(Number.isNaN(H[i + r * k]!) || Number.isNaN(H[i + 1 + r * k]!) || Number.isNaN(H[i + r * (k + 1)]!) || Number.isNaN(H[i + 1 + r * (k + 1)]!));
+}
+/** Edges of a cell: west, east, south, north, as neighbour offset and outward normal. */
+const EDGES = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
+// Scratch wall triangles (0..8, 9..17).
+const W = new Float64Array(18);
+/** Writes the wall on edge `side` of solid cell (i, k) into W (two
+ * triangles, from the surface edge down to the bounds' bottom); false when
+ * the neighbour across it is solid too (no wall). */
+function cellWall(h: StaticHeightfield, i: number, k: number, side: number): boolean {
+  const [di, dk] = EDGES[side]!;
+  if (solidCell(h, i + di, k + dk)) return false;
+  const H = h.heights, r = h.nx + 1, c = h.cell, bottom = h.bounds.min.y;
+  // The edge's two corners (lattice indices), in a fixed order.
+  const [i0, k0, i1, k1] = side === 0 ? [i, k, i, k + 1] : side === 1 ? [i + 1, k, i + 1, k + 1] : side === 2 ? [i, k, i + 1, k] : [i, k + 1, i + 1, k + 1];
+  const x0 = h.x0 + i0 * c, z0 = h.z0 + k0 * c, x1 = h.x0 + i1 * c, z1 = h.z0 + k1 * c, y0 = H[i0 + r * k0]!, y1 = H[i1 + r * k1]!;
+  W[0] = x0; W[1] = bottom; W[2] = z0; W[3] = x1; W[4] = bottom; W[5] = z1; W[6] = x1; W[7] = y1; W[8] = z1;
+  W[9] = x0; W[10] = bottom; W[11] = z0; W[12] = x1; W[13] = y1; W[14] = z1; W[15] = x0; W[16] = y0; W[17] = z0;
+  return true;
+}
+/** Surface height of cell (i, k)'s own triangles at (x, z), clamped into the cell. */
+function cellHeightAt(h: StaticHeightfield, i: number, k: number, x: number, z: number): number {
+  const u = Math.max(0, Math.min(1, (x - h.x0) / h.cell - i)), w = Math.max(0, Math.min(1, (z - h.z0) / h.cell - k));
+  const H = h.heights, r = h.nx + 1, a = H[i + r * k]!, b = H[i + 1 + r * k]!, c = H[i + r * (k + 1)]!, d = H[i + 1 + r * (k + 1)]!;
+  return u >= w ? a + (b - a) * u + (d - b) * w : a + (d - c) * u + (c - a) * w;
+}
+
 /** Calls `visit(i, k)` for every cell under the X/Z box whose tile reaches
  * up to `topY` (the rest lie wholly below the box). Stops when it returns true. */
 function forCells(h: StaticHeightfield, minX: number, minZ: number, maxX: number, maxZ: number, bottomY: number,
@@ -180,6 +219,28 @@ function forCells(h: StaticHeightfield, minX: number, minZ: number, maxX: number
 }
 
 const HIT: SweepHit = { t: 0, nx: 0, ny: 0, nz: 0, start: false };
+/** One face of the solid (triangle `o` of `tri`, outward normal (ox, oy, oz),
+ * unnormalised) against the swept box, one-sided. A box that starts within
+ * the skin of the face is blocked only while moving into the solid along
+ * the face's outward normal (judged here, not by the kernel's best axis, so
+ * a mostly buried box cannot sink); otherwise a contact met from inside the
+ * solid is none. */
+function faceContact(tri: Float64Array, o: number, ox: number, oy: number, oz: number, cx: number, cy: number, cz: number,
+  ex: number, ey: number, ez: number, dx: number, dy: number, dz: number, skin: number, out: SweepHit, found: boolean): boolean {
+  const l = Math.hypot(ox, oy, oz);
+  if (l < 1e-18) return found;
+  const nx = ox / l, ny = oy / l, nz = oz / l;
+  if (boxOverlapsTriangle(cx, cy, cz, ex, ey, ez, tri, o, o + 3, o + 6, -skin)) {
+    const tau = 1e-9 * Math.hypot(dx, dy, dz) + 1e-15;
+    if (dx * nx + dy * ny + dz * nz >= -tau) return found;
+    HIT.t = 0; HIT.nx = nx; HIT.ny = ny; HIT.nz = nz; HIT.start = true; HIT.face = true;
+    return mergeHit(HIT, out, found, dx, dy, dz);
+  }
+  if (!sweepBoxTriangle(cx, cy, cz, ex, ey, ez, dx, dy, dz, tri, o, o + 3, o + 6, skin, HIT)) return found;
+  if (HIT.nx * nx + HIT.ny * ny + HIT.nz * nz <= 1e-9) return found;
+  return mergeHit(HIT, out, found, dx, dy, dz);
+}
+
 /** Earliest contact of a box (centre c, half extents e) moving by d. */
 export function sweepHeightfield(h: StaticHeightfield, cx: number, cy: number, cz: number, ex: number, ey: number, ez: number,
   dx: number, dy: number, dz: number, skin: number, out: SweepHit): boolean {
@@ -193,15 +254,44 @@ export function sweepHeightfield(h: StaticHeightfield, cx: number, cy: number, c
     if (cellMin(h, i, k) > top + skin && x < cx + ex && x + h.cell > cx - ex && z < cz + ez && z + h.cell > cz - ez) {
       const buried: SweepHit = { t: 0, nx: 0, ny: 1, nz: 0, start: true, face: true };
       if (dy < -1e-12) found = mergeHit(buried, out, found, dx, dy, dz);
-      return false;
+    } else for (const o of [0, 9]) {
+      // The top triangle's own up normal, (b - a) x (c - a).
+      const ux = T[o + 3]! - T[o]!, uy = T[o + 4]! - T[o + 1]!, uz = T[o + 5]! - T[o + 2]!, vx = T[o + 6]! - T[o]!, vy = T[o + 7]! - T[o + 1]!, vz = T[o + 8]! - T[o + 2]!;
+      found = faceContact(T, o, uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx, cx, cy, cz, ex, ey, ez, dx, dy, dz, skin, out, found);
     }
-    for (const o of [0, 9]) {
-      if (!sweepBoxTriangle(cx, cy, cz, ex, ey, ez, dx, dy, dz, T, o, o + 3, o + 6, skin, HIT)) continue;
-      found = mergeHit(HIT, out, found, dx, dy, dz);
+    // Walls where this solid cell meets a hole or the lattice's edge.
+    for (let side = 0; side < 4; side++) {
+      if (!cellWall(h, i, k, side)) continue;
+      const [ox, oz] = EDGES[side]!;
+      for (const o of [0, 9]) found = faceContact(W, o, ox, 0, oz, cx, cy, cz, ex, ey, ez, dx, dy, dz, skin, out, found);
     }
     return false;
   });
   return found;
+}
+
+/** Centres that push the box out of the heightfield's solid, within
+ * `reach`: up past the highest surface under it, and out through each wall
+ * of the solid cells it overlaps. Each `push(x, y, z, distance)`. */
+export function heightfieldPushes(h: StaticHeightfield, cx: number, cy: number, cz: number, ex: number, ey: number, ez: number,
+  skin: number, push: (x: number, y: number, z: number, distance: number) => void): void {
+  let top = -Infinity;
+  forCells(h, cx - ex, cz - ez, cx + ex, cz + ez, cy - ey, (i, k) => {
+    if (!solidCell(h, i, k)) return false;
+    const H = h.heights, r = h.nx + 1;
+    top = Math.max(top, H[i + r * k]!, H[i + 1 + r * k]!, H[i + r * (k + 1)]!, H[i + 1 + r * (k + 1)]!);
+    for (let side = 0; side < 4; side++) {
+      const [di, dk] = EDGES[side]!;
+      if (solidCell(h, i + di, k + dk)) continue;
+      // Across the wall: the box wholly on the hole's side of the edge line.
+      const edge = side === 0 ? h.x0 + i * h.cell : side === 1 ? h.x0 + (i + 1) * h.cell : side === 2 ? h.z0 + k * h.cell : h.z0 + (k + 1) * h.cell;
+      if (side < 2) { const x = di < 0 ? edge - ex - skin : edge + ex + skin; push(x, cy, cz, Math.abs(x - cx)); }
+      else { const z = dk < 0 ? edge - ez - skin : edge + ez + skin; push(cx, cy, z, Math.abs(z - cz)); }
+    }
+    return false;
+  });
+  const y = top + ey + skin;
+  if (top > -Infinity && y > cy) push(cx, y, cz, y - cy);
 }
 
 /** True when the box crosses the surface by more than `tolerance`, or lies
@@ -250,8 +340,8 @@ export function supportHeightfield(h: StaticHeightfield, x: number, z: number, f
   return y <= fromY ? y : -Infinity;
 }
 
-/** True when segment a -> b neither crosses the surface nor starts under it.
- * Walks the cells under the segment's X/Z projection (2D DDA). */
+/** True when segment a -> b is nowhere under a solid cell's surface. Walks
+ * the cells under the segment's X/Z projection (2D DDA). */
 export function segmentClearHeightfield(h: StaticHeightfield, a: Vec3, b: Vec3): boolean {
   const start = heightAt(h, a.x, a.z);
   if (start > a.y) return false;
@@ -277,8 +367,13 @@ export function segmentClearHeightfield(h: StaticHeightfield, a: Vec3, b: Vec3):
     const yLow = Math.min(a.y + dy * t, a.y + dy * tEnd);
     const H = h.heights, r = h.nx + 1;
     const cellTop = Math.max(H[i + r * k]!, H[i + 1 + r * k]!, H[i + r * (k + 1)]!, H[i + 1 + r * (k + 1)]!);
-    if (!(yLow > cellTop) && cellTriangles(h, i, k) &&
-      (segmentTriangle(a.x, a.y, a.z, dx, dy, dz, T, 0, 3, 6) >= 0 || segmentTriangle(a.x, a.y, a.z, dx, dy, dz, T, 9, 12, 15) >= 0)) return false;
+    if (!(yLow > cellTop) && cellTriangles(h, i, k)) {
+      // Under the surface where the segment enters this cell (from a hole,
+      // the lattice's edge or its start), or crossing its top: in the solid.
+      const px = a.x + dx * t, py = a.y + dy * t, pz = a.z + dz * t;
+      if (py < cellHeightAt(h, i, k, px, pz)) return false;
+      if (segmentTriangle(a.x, a.y, a.z, dx, dy, dz, T, 0, 3, 6) >= 0 || segmentTriangle(a.x, a.y, a.z, dx, dy, dz, T, 9, 12, 15) >= 0) return false;
+    }
     if (tEnd >= t1) break;
     t = tEnd;
     if (tx <= tz) { i += si; tx = nextX(); } else { k += sk; tz = nextZ(); }

@@ -240,3 +240,39 @@ export function triangleHeightAt(P: Positions, a: number, b: number, c: number, 
   UP.y = uz * vx - ux * vz;
   return l1 * P[a + 1]! + l2 * P[b + 1]! + l3 * P[c + 1]!;
 }
+
+/** Sign (+1 / -1, never 0) of the X/Z edge function of edge u -> v at
+ * (x, z), watertight: it is computed with the edge's endpoints in a fixed
+ * (lexicographic) order and negated for the other direction, so the two
+ * triangles sharing an edge see exactly opposite signs; on the edge's line
+ * it is the sign at the point nudged by (eps, eps^2), so a point on an edge
+ * or a vertex belongs to exactly one of the triangles round it. */
+function edgeSign(P: Positions, u: number, v: number, x: number, z: number): number {
+  let ux = P[u]!, uz = P[u + 2]!, vx = P[v]!, vz = P[v + 2]!, s = 1;
+  if (ux > vx || (ux === vx && uz > vz)) { let q = ux; ux = vx; vx = q; q = uz; uz = vz; vz = q; s = -1; }
+  const e = (vx - ux) * (z - uz) - (vz - uz) * (x - ux);
+  if (e !== 0) return e > 0 ? s : -s;
+  // d/dx of the edge function is -(vz - uz), d/dz is (vx - ux).
+  if (vz !== uz) return vz < uz ? s : -s;
+  return vx > ux ? s : -s;
+}
+
+/** Height at (x, z) where the vertical line there crosses triangle (a, b, c),
+ * or NaN, by a watertight half-open rule (`edgeSign`): over a closed mesh
+ * each vertical line crosses each surface exactly once, even through shared
+ * edges and vertices, whichever way the triangles are wound. Triangles with
+ * no X/Z area (vertical walls) are never crossed. Interior parity uses this. */
+export function verticalCrossing(P: Positions, a: number, b: number, c: number, x: number, z: number): number {
+  const ax = P[a]!, az = P[a + 2]!, bx = P[b]!, bz = P[b + 2]!, cx = P[c]!, cz = P[c + 2]!;
+  const det = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
+  if (det === 0) return NaN;
+  const s = edgeSign(P, a, b, x, z);
+  if (edgeSign(P, b, c, x, z) !== s || edgeSign(P, c, a, x, z) !== s) return NaN;
+  // Barycentric height, clamped to the triangle's own height range (the
+  // point may sit a rounding hair outside it on an owned edge).
+  const det2 = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+  const l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / det2, l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / det2;
+  const y = l1 * P[a + 1]! + l2 * P[b + 1]! + (1 - l1 - l2) * P[c + 1]!;
+  const lo = Math.min(P[a + 1]!, P[b + 1]!, P[c + 1]!), hi = Math.max(P[a + 1]!, P[b + 1]!, P[c + 1]!);
+  return Math.max(lo, Math.min(hi, y));
+}

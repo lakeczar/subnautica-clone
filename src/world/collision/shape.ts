@@ -1,6 +1,6 @@
 import type { Aabb, Vec3 } from "../types.js";
 import {
-  boxOverlapsTriangle, boxTriangleSeparation, segmentTriangle, mergeHit, sweepBoxTriangle, triangleHeightAt, UP,
+  boxOverlapsTriangle, boxTriangleSeparation, segmentTriangle, mergeHit, sweepBoxTriangle, triangleHeightAt, UP, verticalCrossing,
   type Separation, type SweepHit,
 } from "./boxTriangle.js";
 import { buildBvh, bvhDepth, isLeaf, leafCount, leafFirst, STACK_DEPTH } from "./bvh.js";
@@ -216,7 +216,7 @@ const HIT: SweepHit = { t: 0, nx: 0, ny: 0, nz: 0, start: false };
 
 /** Earliest contact of a box (centre c, half extents e) moving by d. */
 export function sweepShape(s: StaticShape, cx: number, cy: number, cz: number, ex: number, ey: number, ez: number,
-  dx: number, dy: number, dz: number, skin: number, out: SweepHit): boolean {
+  dx: number, dy: number, dz: number, skin: number, out: SweepHit, skip?: (t: number) => boolean): boolean {
   // The skin sphere fits in a cube of its radius; a centimetre more for rounding.
   const r = skin + 0.01;
   const n = sweptCandidates(s, cx, cy, cz, ex + r, ey + r, ez + r, dx, dy, dz);
@@ -224,11 +224,27 @@ export function sweepShape(s: StaticShape, cx: number, cy: number, cz: number, e
   const P = s.positions;
   for (let i = 0; i < n; i++) {
     const t = CAND[i]!;
+    if (skip?.(t)) continue;
     if (!sweepBoxTriangle(cx, cy, cz, ex, ey, ez, dx, dy, dz, P, vA(s, t), vB(s, t), vC(s, t), skin, HIT)) continue;
     found = mergeHit(HIT, out, found, dx, dy, dz);
   }
   return found;
 }
+
+/** Outward unit normal of triangle t of a facing shape (or its winding
+ * normal for skin), into `out`; false for a degenerate triangle. */
+export function triangleNormal(s: StaticShape, t: number, out: { x: number; y: number; z: number }): boolean {
+  const P = s.positions, a = vA(s, t), b = vB(s, t), c = vC(s, t);
+  const ux = P[b]! - P[a]!, uy = P[b + 1]! - P[a + 1]!, uz = P[b + 2]! - P[a + 2]!, vx = P[c]! - P[a]!, vy = P[c + 1]! - P[a + 1]!, vz = P[c + 2]! - P[a + 2]!;
+  let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+  const l = Math.hypot(nx, ny, nz) * (s.facing < 0 ? -1 : 1);
+  if (!(Math.abs(l) > 1e-18)) return false;
+  nx /= l; ny /= l; nz /= l;
+  out.x = nx; out.y = ny; out.z = nz;
+  return true;
+}
+/** Position offset of triangle t's first vertex (for plane distances). */
+export const triangleVertex = (s: StaticShape, t: number): number => vA(s, t);
 
 /** True when the box crosses a triangle by more than `tolerance`. With no
  * crossing, a closed part holds the box wholly or not at all, so the
@@ -260,43 +276,45 @@ export function deepestShapeContact(s: StaticShape, cx: number, cy: number, cz: 
   return out;
 }
 
-// A hair off any lattice, so a vertical ray never runs down a shared edge.
-const JX = 1.37e-7, JZ = 2.91e-7;
 let PARITY = new Uint8Array(16);
-/** Whether the point is inside a closed part of this shape alone (solid
- * shapes; a grouped shape's interior needs its whole group, see `collider.ts`). */
-export function insideShape(s: StaticShape, x: number, y: number, z: number): boolean {
-  if (s.interior !== "solid") return false;
+/** The closed parts of this shape whose interior holds the point (solid
+ * shapes, standalone or one part of a split group: a group's interior needs
+ * its whole group, see `collider.ts`). Parity of a vertical ray up from the
+ * point, per part, by the watertight crossing rule (`verticalCrossing`).
+ * Writes part indices into `out` and returns it. */
+export function partsAt(s: StaticShape, x: number, y: number, z: number, out: number[]): number[] {
+  out.length = 0;
+  if (s.interior !== "solid") return out;
   const b = s.bounds;
-  if (x < b.min.x || x > b.max.x || z < b.min.z || z > b.max.z || y > b.max.y) return false;
-  const px = x + JX, pz = z + JZ;
-  const n = candidates(s, px, y, pz, px, b.max.y + 1, pz);
+  if (x < b.min.x || x > b.max.x || z < b.min.z || z > b.max.z || y > b.max.y) return out;
+  const n = candidates(s, x, y, z, x, b.max.y + 1, z);
   if (PARITY.length < s.partCount) PARITY = new Uint8Array(s.partCount * 2);
   const P = s.positions, parts = s.parts;
-  let odd = 0;
   for (let i = 0; i < n; i++) {
-    const t = CAND[i]!, h = triangleHeightAt(P, vA(s, t), vB(s, t), vC(s, t), px, pz);
+    const t = CAND[i]!, h = verticalCrossing(P, vA(s, t), vB(s, t), vC(s, t), x, z);
     if (!(h >= y)) continue;
-    if (!parts) { odd ^= 1; continue; }
-    const p = parts[t]!;
+    const p = parts ? parts[t]! : 0;
     PARITY[p] = PARITY[p]! ^ 1;
   }
-  if (!parts) return odd === 1;
-  let inside = false;
-  for (let p = 0; p < s.partCount; p++) { if (PARITY[p]) inside = true; PARITY[p] = 0; }
-  return inside;
+  for (let p = 0; p < s.partCount; p++) { if (PARITY[p]) out.push(p); PARITY[p] = 0; }
+  return out;
 }
+const PARTS: number[] = [];
+/** Whether the point is inside a closed part of this shape alone. */
+export const insideShape = (s: StaticShape, x: number, y: number, z: number): boolean => partsAt(s, x, y, z, PARTS).length > 0;
 
-/** Surfaces crossed by the vertical segment from y up to `top` at (x, z)
- * (jittered off the lattice). Owners with their own interior rule (a cave
- * biome's cap) count parity with this. */
-export function crossingsAbove(s: StaticShape, x: number, y: number, z: number, top: number): number {
-  const px = x + JX, pz = z + JZ;
-  const n = candidates(s, px, y, pz, px, top, pz);
-  const P = s.positions;
+/** Surfaces crossed by the vertical segment from y up to `top` at (x, z),
+ * by the watertight rule, of one part (or all parts when `part` is null).
+ * Owners with their own interior rule (a split group, a cave biome's cap)
+ * count parity with this. */
+export function crossingsAbove(s: StaticShape, x: number, y: number, z: number, top: number, part: number | null = null): number {
+  const n = candidates(s, x, y, z, x, top, z);
+  const P = s.positions, parts = s.parts;
   let count = 0;
   for (let i = 0; i < n; i++) {
-    const t = CAND[i]!, h = triangleHeightAt(P, vA(s, t), vB(s, t), vC(s, t), px, pz);
+    const t = CAND[i]!;
+    if (part !== null && parts && parts[t] !== part) continue;
+    const h = verticalCrossing(P, vA(s, t), vB(s, t), vC(s, t), x, z);
     if (h >= y && h <= top) count++;
   }
   return count;

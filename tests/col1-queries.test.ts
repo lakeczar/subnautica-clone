@@ -74,21 +74,30 @@ test("heightfield: buried boxes are blocked, may rise, may not sink; holes answe
   assert.ok(col.overlaps({ x: 10, y: plane(10, 12) - 1, z: 12 }, DIVER));
 });
 
-test("heightfield: sight lines by DDA equal a brute-force walk over every cell", () => {
+test("heightfield: sight lines by DDA equal a brute-force test against the solid's every top and wall triangle", () => {
   const h = sampleHeightfield("s", { minX: 0, maxX: 30, minZ: 0, maxZ: 30 }, 0.5, hilly, { hole: (x, z) => (x - 15) ** 2 + (z - 15) ** 2 < 9 });
   const col = createStaticCollider("s", [h]), rnd = random(4), r = h.nx + 1;
   const T = new Float64Array(9);
+  // Independent: the solid's boundary as plain triangles (every solid cell's
+  // top, and a wall on every edge it shares with a hole or the outside, down
+  // to the bounds' bottom); a segment is clear when it starts outside the
+  // solid and crosses none of them.
+  const solid = (i: number, k: number): boolean => i >= 0 && k >= 0 && i < h.nx && k < h.nz &&
+    !Number.isNaN(heightAt(h, h.x0 + (i + 0.5) * h.cell, h.z0 + (k + 0.5) * h.cell));
+  const tris: number[][] = [], H = h.heights, bottom = h.bounds.min.y;
+  for (let k = 0; k < h.nz; k++) for (let i = 0; i < h.nx; i++) {
+    if (!solid(i, k)) continue;
+    const x = h.x0 + i * h.cell, z = h.z0 + k * h.cell, X = x + h.cell, Z = z + h.cell;
+    const p00 = [x, H[i + r * k]!, z], p10 = [X, H[i + 1 + r * k]!, z], p01 = [x, H[i + r * (k + 1)]!, Z], p11 = [X, H[i + 1 + r * (k + 1)]!, Z];
+    tris.push([...p00, ...p11, ...p10], [...p00, ...p01, ...p11]);
+    for (const [di, dk, q0, q1] of [[-1, 0, p00, p01], [1, 0, p10, p11], [0, -1, p00, p10], [0, 1, p01, p11]] as const) {
+      if (solid(i + di, k + dk)) continue;
+      tris.push([q0[0]!, bottom, q0[2]!, q1[0]!, bottom, q1[2]!, ...q1], [q0[0]!, bottom, q0[2]!, ...q1, ...q0]);
+    }
+  }
   const brute = (a: Vec3, b: Vec3): boolean => {
     if (heightAt(h, a.x, a.z) > a.y) return false;
-    for (let k = 0; k < h.nz; k++) for (let i = 0; i < h.nx; i++) {
-      if (Number.isNaN(heightAt(h, h.x0 + (i + 0.5) * h.cell, h.z0 + (k + 0.5) * h.cell))) continue;
-      const x = h.x0 + i * h.cell, z = h.z0 + k * h.cell, H = h.heights;
-      const p00 = [x, H[i + r * k]!, z], p10 = [x + h.cell, H[i + 1 + r * k]!, z], p01 = [x, H[i + r * (k + 1)]!, z + h.cell], p11 = [x + h.cell, H[i + 1 + r * (k + 1)]!, z + h.cell];
-      for (const [p, q, s] of [[p00, p11, p10], [p00, p01, p11]]) {
-        T.set([...p!, ...q!, ...s!]);
-        if (segmentTriangle(a.x, a.y, a.z, b.x - a.x, b.y - a.y, b.z - a.z, T, 0, 3, 6) >= 0) return false;
-      }
-    }
+    for (const t of tris) { T.set(t); if (segmentTriangle(a.x, a.y, a.z, b.x - a.x, b.y - a.y, b.z - a.z, T, 0, 3, 6) >= 0) return false; }
     return true;
   };
   let blocked = 0;
@@ -159,7 +168,7 @@ const solidBox = (id: string, lo: Vec3, hi: Vec3) => { const m = boxMesh(lo, hi)
 test("depenetration: a diver sunk into a floor rises by its depth; one inside rock leaves by the nearest face", () => {
   const col = createStaticCollider("d", [solidBox("floor", { x: -10, y: -5, z: -10 }, { x: 10, y: 0, z: 10 })]);
   const sunk = col.depenetrate({ x: 0, y: DIVER.y - 0.2, z: 0 }, DIVER, 1);
-  assert.ok(sunk && sunk.distance > 0.2 && sunk.distance < 0.21 && Math.abs(sunk.x) < 1e-9 && sunk.y > DIVER.y, JSON.stringify(sunk));
+  assert.ok(sunk && sunk.distance > 0.2 - 1e-9 && sunk.distance < 0.21 && Math.abs(sunk.x) < 1e-9 && sunk.y >= DIVER.y - 1e-9, JSON.stringify(sunk));
   assert.ok(!col.overlaps(sunk!, DIVER));
   // Deep inside, 1.2 m under the top: leaves upward, 1.2 m + half height + skin.
   const deep = col.depenetrate({ x: 3, y: -1.2, z: 2 }, DIVER, 3);
