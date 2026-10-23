@@ -64,7 +64,7 @@ H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 **Soaks take only leftover capacity:**
 - A soak starts only when nothing else is waiting. It never ages, and it never takes the express slot or the 10-minute reservation.
 - Its CPU runs at idle weight, so it never slows other jobs.
-- **Yielding:** when its memory or GPU is what keeps a waiting job out, `$SILTWAKE_JOB_YIELD` appears. A soak driver should then write its final sample and exit (`scripts/soak/run.mjs` reports `yielded` and exits 75). Five minutes later the soak is stopped anyway (exit **75**, `preempted`). Soak goals and pass rules: `scripts/soak/` (SCHED-2).
+- **Yielding:** when its memory or GPU is what keeps a waiting job out, `$SILTWAKE_JOB_YIELD` appears. A soak driver should then write its final sample and exit (`scripts/soak/run.mjs` reports `yielded` and exits 75). Five minutes later the soak is stopped anyway (exit **75**, `preempted`). Soak goals and pass rules: `scripts/soak/` (SCHED-2). A soak reports `pass` only when its goal is met *and* every rule was measured. If something couldn't be measured, such as frame times on a shared run, a build without streaming attribution, or a failed provider, it reports `partial` (exit 5), with the unmeasured rules listed.
 - Long soaks belong on quiet periods, or on the second worker (SCHED-2b).
 
 Options:
@@ -106,6 +106,7 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
   - Write artifacts to absolute paths (`/work/tmp/...`). A snapshot the job wrote into is kept beside the job's log for 7 days.
 - **`.test-build` is in use while your job runs.** While a heavy job is *running* (admitted) in your worktree, `npm test` and `npm run test:build` there refuse to rebuild `.test-build`, because the job may be running those files; a *queued* ticket never blocks. The refusal names the ticket. Meanwhile:
   - compile and test in a sibling directory: `SILTWAKE_TEST_BUILD=.test-build-2 npm test` (any `.test-build-<name>`; the first build is cold, then incremental; git ignores it);
+  - a heavy job submitted with `SILTWAKE_TEST_BUILD` set protects that directory instead;
   - submit jobs that never read `.test-build`, such as GPU play from `dist`, with `--no-test-build`, or use `--snapshot`: neither takes the worktree's `.test-build`.
 
   The job itself may rebuild.
@@ -117,7 +118,7 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
   ```
 
   While iterating, run only the affected scenarios; run all five at handoff.
-- **The GPU lease covers every GPU driver.** Every Playwright Chrome on this machine is wrapped (`install.sh --gpu-guard`): a launch that asks for the GPU (`--use-angle=gl-egl`, `--use-gl=…`, `--enable-gpu`, `--ignore-gpu-blocklist`, Vulkan) refuses to start unless it runs inside a `gpu`, `exclusive` or `soak --gpu` job. Software (SwiftShader) launches pass. Drivers may also call `requireGpuLease()` from `scripts/heavy/gpu-lease.mjs` for an earlier, clearer error.
+- **The GPU lease covers every GPU driver.** Every Playwright Chrome on this machine is wrapped (`install.sh --gpu-guard`; the guard has its own install, so rolling the scheduler back or uninstalling it leaves the guard enforcing, and a missing guard refuses GPU launches): a launch that asks for the GPU (`--use-angle=gl-egl`, `--use-gl=…`, `--enable-gpu`, `--ignore-gpu-blocklist`, Vulkan) refuses to start unless it runs inside a `gpu`, `exclusive` or `soak --gpu` job. Software (SwiftShader) launches pass. Drivers may also call `requireGpuLease()` from `scripts/heavy/gpu-lease.mjs` for an earlier, clearer error.
   - **Outside the queue:** any process holding the NVIDIA device without a lease is shown by `status`, recorded in the ledger (`unleased-gpu`) and on any GPU job that shared the GPU with it. An exclusive run that shared the GPU is marked `DISTURBED`.
 - **Machine-readable results:** `wait --json` ends with one JSON line: `{"pending":true,…}`, or the full result with `code`, `label`, `stopReason` (`stalled`, `deadline`, `ceiling`, `oom`, `killed`, `cancelled`, `preempted`, `rejected` or null) and `evidence`. Use it to tell a pending `99` from a job's own.
 

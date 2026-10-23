@@ -2,6 +2,28 @@
 
 Builder: Opus 5.5, branch `t3/sched-2-goal-jobs`. Scope: the owner's 2026-10-23 rule ("a job has a goal, not a time limit") and the 2a list in [DIRECTION](../DIRECTION.md), "Two test machines". SCHED-2b (the remote lane) and SAVE-1 follow after review. **Not installed:** the live queue still runs SCHED-1 `6824478b070f`; cut-over is below and waits for the coordinator.
 
+## R1 review responses
+
+Review: `2d461de` on `review/sched-2a-r1` (`docs/build/reviews/SCHED-2A-SOL-XHIGH-R1.md`), on `8f702de`, not accepted. All eight findings are fixed with root fixes, each with a regression test that fails on `8f702de`'s behaviour.
+
+- **R1-F1 (P1), an edited snapshot still bound evidence: fixed.** The holder checks the tree it ran in at the end, the snapshot included, against admission (HEAD and tracked diff). Drift unbinds the result ("the job changed its snapshot's tracked files or HEAD") and keeps the snapshot. S6 adds a tracked edit and a moved HEAD inside a snapshot; untracked output alone still binds.
+- **R1-F2 (P1), the reload between laps hid accumulation: fixed.** All laps run in one game lifetime. At each lap end, the save (F5) is exported from the measured page's journal and loaded in a **separate browser**, whose processes the probe doesn't measure, by `saveAndCheck`. Frames from that window are excluded. The measured page is never reloaded. Regression: `tests/soak-runner.test.ts`, where a per-visit leak shows at lap 2 and stops the soak, and nothing reset the page.
+- **R1-F3 (P1), failed providers gave passes: fixed.**
+  - **Availability:** frame attribution and hold state start *unknown*, and only an observation (frames counted, a hold state read) makes a rule measurable. Provider errors are counted, carried into the report (`providers` rule, `providerErrors`) and listed as missing.
+  - **Autosave hitch:** an autosave with no frame time is unavailable.
+  - **Verdicts:** a met goal is `pass` only if every rule was measured and passed; otherwise it is **`partial`** (exit 5), with `unproven` listed. Shared-run frame times are therefore `partial` too, per the evidence rule.
+  - **Tests:** the runner tests drive the real loop with throwing providers, and with a build without attribution.
+- **R1-F4 (P1), sibling build directories were unprotected: fixed.** `submit` records the build directory the job inherits (`SILTWAKE_TEST_BUILD`, validated) on the ticket. The holder writes the marker there, and recovery removes it from there. S15 covers a job building into `.test-build-review`: that directory refuses, while `.test-build` and other siblings stay free, and it still refuses after the holder is SIGKILLed while the job lingers. An invalid name is refused at submit.
+- **R1-F5 (P1), rollback silently disabled the Chrome guard: fixed at the root.**
+  - **The wrapper carries the guard:** `chrome-guard.sh` is now the wrapper's body, with no runtime lookup through the scheduler's `current`.
+  - **Its own install:** the lease checker has its own immutable install (`$home/guard/<version>`, `guard/current`). Scheduler installs, rollbacks and `--uninstall` never touch it, and a newer scheduler install refreshes it once present.
+  - **Fails closed:** a missing checker refuses GPU launches with a clear message. `--gpu-guard-remove` stays the deliberate removal.
+  - **Test:** S10 re-wraps, then runs SCHED-1's real installer (`1f31c87`). An unleased GPU launch is still refused, and a leased one still works. After uninstalling the scheduler it is still refused. With the checker removed, it's refused with "enforcement is unavailable". Software launches pass throughout.
+- **R1-F6 (P2), `dwell --at` hit the temporal dead zone: fixed.** The soak loop moved to `scripts/soak/soak.mjs` (browser and providers injected), and `PLACES` is a module constant. Runner tests cover a named place, coordinates, `large-cave` (incomplete: "not placed in the game yet") and an invalid place.
+- **R1-F7 (P2), a dwell could pass without the leak rule: fixed.** The dwell goal needs `leakMinWindowS` after warm-up, as well as the autosaves (and day–night once the game has it). Short of the window, the rule is listed as unmeasured. The runner stops on the evaluator's verdict, not on the autosave count, and the "autosaves stopped" clock starts on arrival. A runner test shows a slow leak fails before any pass, and a flat dwell is `partial` (day–night missing).
+- **R1-F8 (P2), soaks never yielded to same-worktree work: fixed.** The counterfactual yield also covers a waiting job blocked only by the soak's worktree. Unit test, plus S4b: a review queued in the soak's own worktree gets the soak preempted after its notice, and starts after the soak's cgroup is empty.
+- **R1 P3, recovery dropped identity: fixed.** Recovered results keep the submitted `head`/`dirty` and carry `evidence.bound: false` ("recovered: no observer checked the tree at the end"), and a recovered snapshot is dropped or kept by the same rule. S8 asserts it.
+
 ## What changed (`scripts/heavy/`)
 
 **Goals, not clocks** (`policy.mjs`, `holder.mjs`):
