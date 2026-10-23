@@ -29,6 +29,30 @@ At every phase end the harness saves through the real `SaveRepository`, reloads 
 - `npm run playthrough` runs all five scenarios, in about 3.3 min. Add `-- --jobs 3` to run the three New Game groups in parallel (about 1.7–2 min here). Other flags: `--scenario creel,carrier,creel-loss,reverse,no-optional` and `--json out.json` for the full timeline. No Babylon is loaded.
 - **Exit codes:** 0 means nothing is blocked, every check holds and the expected-pending list is current; pending is expected today. 1 means a blocker, a failed check, a stale or malformed list, or any `--jobs` child that exited nonzero (even after writing a complete result), was killed, timed out (`--child-timeout`, default 1800 s) or did not return every requested scenario exactly once.
 - **Fast tier:** `tests/playthrough.test.ts` plays New Game through the reef with exact reloads. It also covers the refusal contract, keyed content checks, abnormal child outcomes, a removed recipe blocking, the list being current, S5's works sites and hull ratings.
+- **SAVE-1 added three short library scenarios** (below): `low-air`, `tour` and `over-geared`, so a plain `npm run playthrough` now plays eight.
+
+## Save library (SAVE-1)
+After each root merge, the coordinator runs `scripts/saves-export.sh` on root. It plays every scenario and publishes **every save the bot made** (each milestone, plus the mid-phase captures) to an immutable directory per commit, `/work/tmp/siltwake-saves/<sha>/` (or `$SILTWAKE_SAVES`), with a `manifest.json` and an `index.json` beside it. Everything is earned through real commands; the export refuses a dirty tree and publishes nothing unless every scenario completes, every save reloads to its hash and every kind holds its facts.
+
+**Kinds** (`saves.js kinds` prints them; `kinds.ts` defines them). Every save is also its own kind, `scenario@label`, for example `creel@refits`.
+
+| Group | Kinds | Where from |
+| --- | --- | --- |
+| Milestones | `pod-start`, `dart`, `creel-basin-frames`, `creel-350`, `rift-450`, `creel-800`, `carrier-fitout`, `pre-ending`, `pre-ending-carrier` | Phase ends of `creel` and `carrier` |
+| Adverse | `low-air` (oxygen ≤ 20%, on suit air), `hull-damaged` (running, hull ≤ 50%), `craft-lost` (disabled at depth, the diver surfaced), `battery-depleted` (charge 0, helm dead, emergency air) | `low-air`, `creel-loss` captures, `tour` |
+| Gear | `canopy-min-gear` (180 m Dart, 150 m suit), `canopy-over-geared` (800 m Creel and suit) | First entry into the Canopy in `creel` and `over-geared` |
+| Tour | `tour-ready`: the 350 m Dart with the core cell bank and drive controller, full, two charged reserve cells aboard | `tour` |
+
+**Provenance**, per save in the manifest: scenario, label, phase, branch point (`from`), tick and minutes of play, accepted commands since New Game (a branch counts its parent's), bytes, journal bytes, state hash, the file's SHA-256 and a few readable facts (region, vitals, craft). The manifest also records the commit, schema and content versions, the machine, each scenario's outcome, the size summary (SAV-03) and measurements (the tour range).
+
+**Using it.** Build first (`npx tsc -p scripts/playthrough/tsconfig.json`), from a checkout at the commit you are testing:
+- **CLI:** `node .test-build/scripts/playthrough/saves.js pick tour-ready` prints the path of the newest compatible save; what it chose goes to stderr. `--commit REF`, `--exact` (that commit only), `--json`. Also `list`, `kinds`, `verify [REF]`, `import DIR`, `index`, and `--root DIR` everywhere.
+- **Code** (tests, GPU drivers): `const { librarySave } = await import(B + "scripts/playthrough/library.js")`; `librarySave("dart")` returns `{ path, text, state, entry, manifest, compatibility, distance, migrated, describe }`. Import `path` through the menu (`#import-file`) as the drivers do, or seed localStorage with `journalRecord(text)`. A worked consumer: [`enc1/derive.mjs`](../../docs/build/streams/enc1/derive.mjs) starts from `dart` instead of replaying three phases.
+- **Branch scenarios** (TST-21): `npm run playthrough -- --scenario carrier --from-library` starts `carrier` from the library's `creel@refits` instead of replaying the Creel run; every branch whose parent is not requested does the same, and each becomes its own `--jobs` group.
+
+**Compatibility.** A save suits a commit when its library commit is that commit or an ancestor, its schema and content versions are this build's (or schema 5 / expedition.6, which `bridge5.ts` converts), and this build's own `decodeSave` accepts it. The nearest such commit wins (`same-commit`, else `same-version` or `bridged`); `migrated` says additive content was filled in on load. Anything else is **refused** (exit 3) with every candidate's reason: another branch's commit, another schema, a damaged file, a kind no export has. If the nearest compatible save fails to load, that is refused too; an older one is never tried in its place.
+
+**The second worker.** `scripts/saves-export.sh` runs the export on siltwake-alickers (`alickers-job.sh`, into its own `/work/tmp/siltwake-saves/<sha>`, so jobs there find it too), copies the directory back over ssh, checks every file against the manifest, decodes every save on factory-worker and publishes it. Exit 75 or 255 falls back to factory-worker's queue (`--class playthrough`); `--here` goes straight there. When SCHED-2b's remote lane lands, its `remote_export` becomes `heavy-check --machine any --artifact <dir>`.
 
 ## Scenarios and status
 | Scenario | Root `a09968b` | C3 in progress `3c9a181` (export in `/work/tmp`) |

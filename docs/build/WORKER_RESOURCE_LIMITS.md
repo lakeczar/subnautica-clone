@@ -136,3 +136,17 @@ scripts/alickers-job.sh --deadline 1800 -- npm run test:heavy
 - **Performance numbers** from the sandbox are labelled **"RTX 4070 Laptop (alickers, shared desktop host)"**. The Windows host can be in use, so treat them as indicative, never as the 3090's exclusive-mode evidence. Functional evidence (play, screenshots, passes) counts like any other run at the recorded SHA.
 - **One job at a time** on the sandbox, and the checkout is shared. Don't leave long interactive sessions holding it, and don't edit files there; everything comes from commits.
 - **Coordination, provider logins and GitHub pushes stay on factory-worker.** The sandbox has no logins.
+
+## Shared save library (SAVE-1, 2026-10-23)
+
+Don't derive late saves in your own job. After each root merge the coordinator runs `scripts/saves-export.sh` on root: the whole playthrough runs on siltwake-alickers (factory-worker's queue if it is paused), and every bot-earned save lands, read-only, in **`/work/tmp/siltwake-saves/<sha>/`** on factory-worker, shared by every worktree. Kinds include pod start, the Dart, the Creel at 350 m, the Rift at 450 m, the 800 m Creel, the carrier fit-out, the pre-ending of both routes, low air, a damaged hull, a lost craft, a depleted battery, minimum gear and over-geared in the Canopy, and the tour-ready Dart. The details are in [the playthrough README](../../scripts/playthrough/README.md#save-library-save-1).
+
+```sh
+npx tsc -p scripts/playthrough/tsconfig.json                 # light; from your checkout
+node .test-build/scripts/playthrough/saves.js pick creel-350  # prints the save's path
+npm run playthrough -- --scenario carrier --from-library      # a branch without its parent's replay
+```
+
+- **Light:** `pick`, `list` and `verify` are light work; run them directly. Exporting is a playthrough: only through `scripts/saves-export.sh`, the second worker or the queue.
+- **Compatibility:** the newest export at your commit or one of its ancestors, with this build's schema and content versions (or the schema 5 bridge), that this build decodes. Anything else is refused with the reason (exit 3), never swapped for another save. Record the save's commit (stderr, or `--json`) with your evidence.
+- **On the second worker:** exports run there keep their copy in the same place, `/work/tmp/siltwake-saves`, so a job there finds every commit exported there. A commit exported on factory-worker isn't there; `pick` then refuses, and you copy the save you need in with the job.
