@@ -469,3 +469,6 @@ SCHED-2b's remote lane carries the packs back from alickers.
   - the GPU process's RSS grows about 35–40 MiB an hour idling at the pod (SCHED-2's 3090 dwell soak);
   - every load requests terrain tiles `t_4/5_11/12`, which aren't in the bake, giving four 404s. That's for the bake owner (WK-1), unless CW-1's terrain manifest check already fixes it.
 - **alickers-job:** clears compiled test output when the sandbox changes commit (`fa35339`).
+
+### 2026-10-23 — coordinator decision: LC endpoint debt is a COL-1 stage-B prerequisite
+LC's cap and collar boundaries need walls, as the COL-1 heightfield now has, so that no clear-start move ends in a pose LC rejects. Today 45 of 8,000 Canopy probe moves do. **COL-1 stage B can't be accepted until that's fixed** in whichever stream lands first, COL-1 B or LC-2. The oracle's 1% bound is only a regression alarm, not proof that the failures match LC's. In flight now: COL-1 A R3 (`e8ce814`), SCHED-2a R3 (`014f37b`), and CR-1 (fixes at `4c4c7eb`, heavy tier running).
