@@ -33,7 +33,12 @@ const r1 = (v) => Math.round(v * 10) / 10;
 /** Yaw and pitch (degrees, the HUD's convention: bearing from -Z, pitch up) from eye to target. */
 const aim = (e, t) => ({ yaw: deg((Math.atan2(t.x - e.x, -(t.z - e.z)) + Math.PI * 2) % (Math.PI * 2)), pitch: deg(Math.atan2(t.y - e.y, Math.hypot(t.x - e.x, t.z - e.z))) });
 const fits = (p) => p.y < -0.6 && world.clearance(p, DIVER);
-const sees = (e, t) => { try { return world.lineOfSight({ x: e.x, y: e.y + EYE, z: e.z }, t); } catch { return true; } };
+/** Sight from the eye to just in front of the target (a place's anchor often sits inside its own structure). */
+const sees = (e, t) => {
+  const eye = { x: e.x, y: e.y + EYE, z: e.z }, d = Math.hypot(eye.x - t.x, eye.y - t.y, eye.z - t.z), k = Math.min(0.9, 3 / Math.max(d, 1e-6));
+  const near = { x: t.x + (eye.x - t.x) * k, y: t.y + (eye.y - t.y) * k, z: t.z + (eye.z - t.z) * k };
+  try { return world.lineOfSight(eye, near); } catch { return true; }
+};
 
 /** A clear, seeing eye near `t`: around the preferred direction, nearer or further, higher or lower. */
 function standoff(t, dir, dist, rise, { surface = false } = {}) {
