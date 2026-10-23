@@ -44,7 +44,9 @@ const note = (...a) => { const line = `[${(performance.now() / 1000).toFixed(1)}
 const result = { commit: readFileSync(path.join(dist, "COMMIT"), "utf8").trim(), label: process.env.CW1_LABEL ?? "RTX 3090 (factory-worker)", segment, caves: points.filter(p => p.cave).map(p => p.cave),
   reached: [], skipped: [], shots: [], views: [], errors: [], holds: [], long: [], unsliced: [], recoveries: 0 };
 let traveling = false;
+// Playwright's default SwiftShader fallback flag is refused by a GPU wrapper (and must not apply on the GPU).
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, timeout: 30000,
+  ...(process.env.CW1_CHROME ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}),
   args: [...(process.env.CW1_CHROME ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", "--cw1-traverse"] });
 let page;
 const held = new Set();

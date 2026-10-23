@@ -22,7 +22,10 @@ assert.ok(driver.includes(marker));
 const version = (add: number) => add === 0 ? driver
   : driver.replace(marker, `const raw = Uint8Array.from(mod.bakeChunkBytes(byId.get(id)), (v) => v + ${add});`);
 const recipe = "export const bakeTargets = () => [{ id: 'one' }];\n" +
-  "export const terrainFileName = (id) => id + '.bin';\nexport const bakeChunkBytes = () => new Uint8Array([1]);\n";
+  "export const terrainFileName = (id) => id + '.bin';\nexport const bakeChunkBytes = () => new Uint8Array([1]);\n" +
+  // No caves: the driver still writes an (empty) collision pack and cave manifest.
+  "export const bakeCaveTargets = () => [];\nexport const bakeCaveBytes = () => ({ collision: new Uint8Array(0), light: new Uint8Array(0) });\n" +
+  "export const packKitCaves = () => new Uint8Array(4);\n";
 let n = 0;
 function worktree(add: number): string {
   const dir = join(base, `wt${n++}`);
@@ -30,6 +33,7 @@ function worktree(add: number): string {
   mkdirSync(join(dir, "src", "render", "biomes"), { recursive: true });
   writeFileSync(join(dir, "src", "render", "biomes", "bake.ts"), recipe);
   writeFileSync(join(dir, "scripts", "bake-terrain.mjs"), version(add));
+  writeFileSync(join(dir, "scripts", "bake-source-hash.mjs"), readFileSync(join(root, "scripts", "bake-source-hash.mjs")));
   symlinkSync(join(root, "node_modules"), join(dir, "node_modules"), "dir");
   return dir;
 }
@@ -44,9 +48,9 @@ const entries = () => readdirSync(store).filter((e) => /^[0-9a-f]{32}$/.test(e))
 
 test("a fresh worktree restores a bake by the same driver and tools", () => {
   const a = worktree(0);
-  assert.match(bake(a), /1 chunks in/);
+  assert.match(bake(a), /1 chunks and 0 caves in/);
   const b = worktree(0);
-  assert.match(bake(b), /restored 1 chunks from the shared store/);
+  assert.match(bake(b), /restored 1 chunks and 0 caves from the shared store/);
   assert.deepEqual(byte(b), [1]);
 });
 
@@ -54,7 +58,7 @@ test("after a driver change, local output is stale and old bytes never reach the
   const a = worktree(0);
   bake(a);
   writeFileSync(join(a, "scripts", "bake-terrain.mjs"), version(1)); // same sources, new driver
-  assert.match(bake(a), /1 chunks in/, "rebaked, not 'up to date'");
+  assert.match(bake(a), /1 chunks and 0 caves in/, "rebaked, not 'up to date'");
   assert.deepEqual(byte(a), [2]);
   const fresh = worktree(1);
   assert.match(bake(fresh), /restored/);
@@ -73,7 +77,7 @@ test("a manifest from before the store (sourceHash only) stays locally fresh but
   assert.match(bake(old), /up to date/);
   assert.equal(entries().length, keysBefore, "nothing published under version 5's key");
   const fresh = worktree(5);
-  assert.match(bake(fresh), /1 chunks in/, "a fresh worktree bakes rather than restoring legacy bytes");
+  assert.match(bake(fresh), /1 chunks and 0 caves in/, "a fresh worktree bakes rather than restoring legacy bytes");
   assert.deepEqual(byte(fresh), [6]);
 });
 
@@ -82,11 +86,11 @@ test("a damaged store entry is a cache miss, and --verify and --force never use 
   bake(a);
   const [entry] = entries().filter((e) => readFileSync(join(store, e, "manifest.json"), "utf8").includes(JSON.parse(
     readFileSync(join(a, "public", "terrain", "manifest.json"), "utf8")).fingerprint));
-  appendFileSync(join(store, entry!, "one.bin"), "x");
+  appendFileSync(join(store, entry!, "terrain", "one.bin"), "x");
   const b = worktree(7);
   const out = bake(b);
   assert.match(out, /unusable \(checksum mismatch\); baking/);
   assert.deepEqual(byte(b), [8]);
-  assert.match(bake(b, "--verify"), /verified 1\/1/);
-  assert.match(bake(b, "--force"), /1 chunks in/);
+  assert.match(bake(b, "--verify"), /verified 2\/2 files equal the live bytes \(1 chunks, 1 collision pack, 0 light fields\)/);
+  assert.match(bake(b, "--force"), /1 chunks and 0 caves in/);
 });

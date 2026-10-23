@@ -62,8 +62,10 @@ const read = (path) => existsSync(path) ? JSON.parse(readFileSync(path, "utf8"))
 const old = read(manifestPath);
 const storeRoot = process.env.SILTWAKE_TERRAIN_STORE ?? "/work/tmp/siltwake-terrain-store";
 const useStore = storeRoot !== "off" && !args.has("--force") && !args.has("--verify");
+// The driver is this script and the source-hash helper it imports.
 const storeKey = createHash("sha256").update(JSON.stringify({ codec: 1, sourceHash, script: createHash("sha256")
-  .update(readFileSync(fileURLToPath(import.meta.url))).digest("hex"), node: process.version, zlib: process.versions.zlib, esbuild: esbuildVersion }))
+  .update(readFileSync(fileURLToPath(import.meta.url))).update(readFileSync(fileURLToPath(new URL("./bake-source-hash.mjs", import.meta.url)))).digest("hex"),
+  node: process.version, zlib: process.versions.zlib, esbuild: esbuildVersion }))
   .digest("hex").slice(0, 32);
 const entry = join(storeRoot, storeKey);
 // The manifest records the full fingerprint (storeKey): output baked by another
