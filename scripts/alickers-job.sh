@@ -31,7 +31,8 @@ ssh_() { /usr/bin/ssh -F "$HOME/.ssh/siltwake.conf" siltwake-alickers "$@"; }
 repo=/work/repos/subnautica-clone
 
 rc=0
-ssh_ -n "cd $repo && { git cat-file -e $sha^{commit} 2>/dev/null || git fetch -q origin $sha 2>/dev/null; git cat-file -e $sha^{commit} 2>/dev/null; }" || rc=$?
+# Refresh origin first, so a thin bundle's prerequisites (pushed root commits) are present.
+ssh_ -n "cd $repo && git fetch -q origin 2>/dev/null; { git cat-file -e $sha^{commit} 2>/dev/null || git fetch -q origin $sha 2>/dev/null; git cat-file -e $sha^{commit} 2>/dev/null; }" || rc=$?
 [[ $rc == 255 ]] && { echo "alickers-job: worker unreachable (ssh 255); rerun on factory-worker" >&2; exit 255; }
 if [[ $rc != 0 ]]; then
   # A bundle needs a ref: use a throwaway one under refs/alickers/.
@@ -40,8 +41,14 @@ if [[ $rc != 0 ]]; then
   git bundle create -q "$bundle" "$ref" --not origin/feat/siltwake-first-expedition 2>/dev/null || git bundle create -q "$bundle" "$ref"
   git update-ref -d "$ref"
   ssh_ "cat > /work/tmp/incoming.bundle" < "$bundle"
+  if ! ssh_ -n "cd $repo && git fetch -q /work/tmp/incoming.bundle $ref 2>/dev/null"; then
+    # The sandbox lacks a prerequisite (for example, root not pushed yet): send the full history.
+    git update-ref "$ref" "$sha"; git bundle create -q "$bundle" "$ref"; git update-ref -d "$ref"
+    ssh_ "cat > /work/tmp/incoming.bundle" < "$bundle"
+    ssh_ -n "cd $repo && git fetch -q /work/tmp/incoming.bundle $ref"
+  fi
   rm -f "$bundle"
-  ssh_ -n "cd $repo && git fetch -q /work/tmp/incoming.bundle $ref && rm -f /work/tmp/incoming.bundle && git cat-file -e $sha^{commit}"
+  ssh_ -n "cd $repo && rm -f /work/tmp/incoming.bundle && git cat-file -e $sha^{commit}"
 fi
 
 quoted="$(printf '%q ' "$@")"
